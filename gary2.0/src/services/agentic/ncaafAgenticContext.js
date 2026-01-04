@@ -14,7 +14,7 @@ function getCurrentNcaafSeason() {
 }
 
 /**
- * NCAAF Conference Tier Mapping (2024-25 Season)
+ * NCAAF Conference Tier Mapping (Current Season)
  * Uses BDL conference IDs for accurate mapping
  * 
  * Tier 1: Elite Power 4 (SEC, Big Ten) - Top recruiting, NFL talent pipelines
@@ -387,7 +387,8 @@ export async function buildNcaafAgenticContext(game, options = {}) {
       total_listed: injuriesList.length
     },
     market_snapshot: marketSnapshot,
-    recent_form: recentForm
+    recent_form: recentForm,
+    rest_fatigue: restInfo  // Days rest, back-to-back, games in last 7 days
   };
 
   const records = (Array.isArray(standings)

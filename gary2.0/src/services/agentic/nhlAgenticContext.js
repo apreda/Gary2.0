@@ -4,7 +4,7 @@
  * Modeled after nbaAgenticContext.js
  */
 import { ballDontLieService } from '../ballDontLieService.js';
-import { getGroundedAdvancedStats, getGroundedRichContext } from './scoutReport/scoutReportBuilder.js';
+import { getGroundedAdvancedStats, getGroundedRichContext, geminiGroundingSearch } from './scoutReport/scoutReportBuilder.js';
 // Context sourced from Gemini 3 Flash Grounding
 import {
   formatGameTimeEST,
@@ -14,6 +14,131 @@ import {
   safeApiCallObject,
   getEstDate
 } from './sharedUtils.js';
+
+/**
+ * Fallback grounding search for missing NHL stats
+ * This runs a targeted query to recover specific missing data points
+ */
+async function groundingFallbackForMissingStats(homeTeam, awayTeam, missingFields, dateStr) {
+  if (!missingFields || missingFields.length === 0) return null;
+  
+  console.log(`[Agentic][NHL] ⚠️ Running fallback grounding for ${missingFields.length} missing fields: ${missingFields.join(', ')}`);
+  
+  // Build a targeted query for the missing fields
+  const fieldQueries = {
+    corsi_for_pct: `What is ${homeTeam}'s and ${awayTeam}'s current Corsi For % (CF%) at 5-on-5? Use MoneyPuck or Natural Stat Trick data.`,
+    xg_for_pct: `What is ${homeTeam}'s and ${awayTeam}'s current Expected Goals For % (xGF%) at 5-on-5?`,
+    goalie_starter: `Who are the confirmed starting goalies for ${awayTeam} at ${homeTeam} on ${dateStr}? Include their season save % and GAA.`,
+    gsax: `What is the Goals Saved Above Expected (GSAx) for the starting goalies of ${homeTeam} and ${awayTeam} this season?`,
+    save_pct: `What is the season save percentage for the starting goalies of ${homeTeam} and ${awayTeam}?`,
+    high_danger_pct: `What is ${homeTeam}'s and ${awayTeam}'s High-Danger Chances For % (HDCF%) at 5-on-5?`,
+    pdo: `What is ${homeTeam}'s and ${awayTeam}'s current PDO (shooting % + save %)?`
+  };
+  
+  // Select relevant queries based on missing fields
+  const queries = missingFields
+    .filter(f => fieldQueries[f])
+    .map(f => fieldQueries[f]);
+  
+  if (queries.length === 0) return null;
+  
+  const combinedQuery = `For the NHL game ${awayTeam} @ ${homeTeam} on ${dateStr}:
+
+PROVIDE THE FOLLOWING SPECIFIC STATS (use MoneyPuck, Natural Stat Trick, or Hockey-Reference):
+
+${queries.join('\n\n')}
+
+Be as specific as possible with numbers. If exact data isn't available, say "N/A".`;
+
+  try {
+    const result = await geminiGroundingSearch(combinedQuery, { temperature: 0.1, maxTokens: 1200 });
+    
+    if (result?.success && result?.data) {
+      console.log(`[Agentic][NHL] ✓ Fallback grounding recovered data`);
+      return parseGroundingFallbackResponse(result.data, homeTeam, awayTeam);
+    }
+  } catch (e) {
+    console.warn(`[Agentic][NHL] Fallback grounding failed:`, e.message);
+  }
+  
+  return null;
+}
+
+/**
+ * Parse the fallback grounding response and extract numeric values
+ */
+function parseGroundingFallbackResponse(text, homeTeam, awayTeam) {
+  if (!text) return null;
+  
+  const result = {
+    home_advanced: {},
+    away_advanced: {},
+    goalie_matchup: {},
+    _source: 'gemini_grounding_fallback'
+  };
+  
+  // Helper to extract a percentage value near a team name
+  const extractPercent = (teamName, statName) => {
+    // Look for patterns like "Team Name: 52.3%" or "Team Name has 52.3% CF"
+    const patterns = [
+      new RegExp(`${teamName}[^\\d]*${statName}[^\\d]*(\\d+\\.\\d+)\\s*%`, 'i'),
+      new RegExp(`${teamName}[^\\d]*(\\d+\\.\\d+)\\s*%[^\\n]*${statName}`, 'i'),
+      new RegExp(`${statName}[^\\d]*${teamName}[^\\d]*(\\d+\\.\\d+)`, 'i')
+    ];
+    
+    for (const pattern of patterns) {
+      const match = text.match(pattern);
+      if (match) return parseFloat(match[1]);
+    }
+    return null;
+  };
+  
+  // Extract goalie names
+  const goaliePattern = new RegExp(`(\\w+\\s+\\w+)(?:[^\\d]*(?:starter|starting|goalie|goaltender))`, 'gi');
+  const goalieMatches = [...text.matchAll(goaliePattern)];
+  
+  // Try to match goalies to teams
+  for (const match of goalieMatches) {
+    const goalieName = match[1];
+    const context = text.substring(Math.max(0, match.index - 100), match.index + 100);
+    if (context.toLowerCase().includes(homeTeam.toLowerCase())) {
+      result.goalie_matchup.home_starter = goalieName;
+    } else if (context.toLowerCase().includes(awayTeam.toLowerCase())) {
+      result.goalie_matchup.away_starter = goalieName;
+    }
+  }
+  
+  // Extract Corsi For %
+  result.home_advanced.corsi_for_pct = extractPercent(homeTeam, 'corsi|cf');
+  result.away_advanced.corsi_for_pct = extractPercent(awayTeam, 'corsi|cf');
+  
+  // Extract xGF %
+  result.home_advanced.expected_goals_for_pct = extractPercent(homeTeam, 'xgf|expected goals');
+  result.away_advanced.expected_goals_for_pct = extractPercent(awayTeam, 'xgf|expected goals');
+  
+  // Extract HDCF %
+  result.home_advanced.high_danger_chances_for_pct = extractPercent(homeTeam, 'hdcf|high-danger|high danger');
+  result.away_advanced.high_danger_chances_for_pct = extractPercent(awayTeam, 'hdcf|high-danger|high danger');
+  
+  // Extract save percentages
+  const svPctPattern = /(\d+\.\d{2,3})\s*(?:sv%|save\s*%|save\s*percentage)/gi;
+  const svMatches = [...text.matchAll(svPctPattern)];
+  
+  // Log what we recovered
+  const recoveredFields = [];
+  if (result.home_advanced.corsi_for_pct) recoveredFields.push('home_corsi');
+  if (result.away_advanced.corsi_for_pct) recoveredFields.push('away_corsi');
+  if (result.home_advanced.expected_goals_for_pct) recoveredFields.push('home_xgf');
+  if (result.away_advanced.expected_goals_for_pct) recoveredFields.push('away_xgf');
+  if (result.goalie_matchup.home_starter) recoveredFields.push('home_goalie');
+  if (result.goalie_matchup.away_starter) recoveredFields.push('away_goalie');
+  
+  if (recoveredFields.length > 0) {
+    console.log(`[Agentic][NHL] ✓ Recovered ${recoveredFields.length} fields: ${recoveredFields.join(', ')}`);
+  }
+  
+  return result;
+}
 
 const SPORT_KEY = 'icehockey_nhl';
 
@@ -149,18 +274,20 @@ function buildNhlTokenData(homeRates, awayRates, advancedStats, restInfo, recent
   return {
     // Player Streaks
     hot_players: {
-      home: homeHotPlayers,
-      away: awayHotPlayers
+      home: { team: homeTeam?.full_name, players: homeHotPlayers },
+      away: { team: awayTeam?.full_name, players: awayHotPlayers }
     },
     // League Ranks
     league_ranks: {
       home: {
+        team: homeTeam?.full_name,
         pp_rank: homeRanks.pp_rank || 'N/A',
         pk_rank: homeRanks.pk_rank || 'N/A',
         goals_for_rank: homeRanks.gf_rank || 'N/A',
         goals_against_rank: homeRanks.ga_rank || 'N/A'
       },
       away: {
+        team: awayTeam?.full_name,
         pp_rank: awayRanks.pp_rank || 'N/A',
         pk_rank: awayRanks.pk_rank || 'N/A',
         goals_for_rank: awayRanks.gf_rank || 'N/A',
@@ -179,46 +306,52 @@ function buildNhlTokenData(homeRates, awayRates, advancedStats, restInfo, recent
     // Corsi & Expected Goals (from Gemini Grounding advanced stats)
     corsi_xg: {
       home: {
-        corsiForPct: advancedStats?.home_advanced?.corsi_for_pct ?? null,
-        xGForPct: advancedStats?.home_advanced?.expected_goals_for_pct ?? null,
+        team: homeTeam?.full_name,
+        corsi_for_pct: advancedStats?.home_advanced?.corsi_for_pct ?? null,
+        xg_for_pct: advancedStats?.home_advanced?.expected_goals_for_pct ?? null,
         pdo: advancedStats?.home_advanced?.pdo ?? null,
-        highDangerPct: advancedStats?.home_advanced?.high_danger_chances_for_pct ?? null
+        high_danger_pct: advancedStats?.home_advanced?.high_danger_chances_for_pct ?? null
       },
       away: {
-        corsiForPct: advancedStats?.away_advanced?.corsi_for_pct ?? null,
-        xGForPct: advancedStats?.away_advanced?.expected_goals_for_pct ?? null,
+        team: awayTeam?.full_name,
+        corsi_for_pct: advancedStats?.away_advanced?.corsi_for_pct ?? null,
+        xg_for_pct: advancedStats?.away_advanced?.expected_goals_for_pct ?? null,
         pdo: advancedStats?.away_advanced?.pdo ?? null,
-        highDangerPct: advancedStats?.away_advanced?.high_danger_chances_for_pct ?? null
+        high_danger_pct: advancedStats?.away_advanced?.high_danger_chances_for_pct ?? null
       }
     },
     
     // Special Teams
     special_teams: {
       home: {
-        ppPct: homeRates?.ppPct ?? null,
-        pkPct: homeRates?.pkPct ?? null,
-        ppOpportunities: homeRates?.ppOpportunities ?? null
+        team: homeTeam?.full_name,
+        pp_pct: homeRates?.ppPct ?? null,
+        pk_pct: homeRates?.pkPct ?? null,
+        pp_opportunities: homeRates?.ppOpportunities ?? null
       },
       away: {
-        ppPct: awayRates?.ppPct ?? null,
-        pkPct: awayRates?.pkPct ?? null,
-        ppOpportunities: awayRates?.ppOpportunities ?? null
+        team: awayTeam?.full_name,
+        pp_pct: awayRates?.ppPct ?? null,
+        pk_pct: awayRates?.pkPct ?? null,
+        pp_opportunities: awayRates?.ppOpportunities ?? null
       }
     },
     
     // Goalie Matchup (from Gemini Grounding)
     goalie_matchup: {
       home: {
+        team: homeTeam?.full_name,
         starter: advancedStats?.goalie_matchup?.home_starter ?? null,
         record: advancedStats?.goalie_matchup?.home_record ?? null,
-        savePct: advancedStats?.goalie_matchup?.home_sv_pct ?? null,
+        save_pct: advancedStats?.goalie_matchup?.home_sv_pct ?? null,
         gaa: advancedStats?.goalie_matchup?.home_gaa ?? null,
         gsax: advancedStats?.goalie_matchup?.home_gsax ?? null
       },
       away: {
+        team: awayTeam?.full_name,
         starter: advancedStats?.goalie_matchup?.away_starter ?? null,
         record: advancedStats?.goalie_matchup?.away_record ?? null,
-        savePct: advancedStats?.goalie_matchup?.away_sv_pct ?? null,
+        save_pct: advancedStats?.goalie_matchup?.away_sv_pct ?? null,
         gaa: advancedStats?.goalie_matchup?.away_gaa ?? null,
         gsax: advancedStats?.goalie_matchup?.away_gsax ?? null
       }
@@ -227,16 +360,18 @@ function buildNhlTokenData(homeRates, awayRates, advancedStats, restInfo, recent
     // Shot Metrics
     shot_metrics: {
       home: {
-        shotsForPerGame: homeRates?.shotsForPerGame ?? null,
-        shotsAgainstPerGame: homeRates?.shotsAgainstPerGame ?? null,
-        shotDifferential: homeRates?.shotsForPerGame && homeRates?.shotsAgainstPerGame 
+        team: homeTeam?.full_name,
+        shots_for_pg: homeRates?.shotsForPerGame ?? null,
+        shots_against_pg: homeRates?.shotsAgainstPerGame ?? null,
+        shot_diff: homeRates?.shotsForPerGame && homeRates?.shotsAgainstPerGame 
           ? (homeRates.shotsForPerGame - homeRates.shotsAgainstPerGame).toFixed(1) 
           : null
       },
       away: {
-        shotsForPerGame: awayRates?.shotsForPerGame ?? null,
-        shotsAgainstPerGame: awayRates?.shotsAgainstPerGame ?? null,
-        shotDifferential: awayRates?.shotsForPerGame && awayRates?.shotsAgainstPerGame 
+        team: awayTeam?.full_name,
+        shots_for_pg: awayRates?.shotsForPerGame ?? null,
+        shots_against_pg: awayRates?.shotsAgainstPerGame ?? null,
+        shot_diff: awayRates?.shotsForPerGame && awayRates?.shotsAgainstPerGame 
           ? (awayRates.shotsForPerGame - awayRates.shotsAgainstPerGame).toFixed(1) 
           : null
       }
@@ -245,32 +380,42 @@ function buildNhlTokenData(homeRates, awayRates, advancedStats, restInfo, recent
     // Scoring Rates
     scoring: {
       home: {
-        goalsForPerGame: homeRates?.goalsForPerGame ?? null,
-        goalsAgainstPerGame: homeRates?.goalsAgainstPerGame ?? null
+        team: homeTeam?.full_name,
+        goals_for_pg: homeRates?.goalsForPerGame ?? null,
+        goals_against_pg: homeRates?.goalsAgainstPerGame ?? null
       },
       away: {
-        goalsForPerGame: awayRates?.goalsForPerGame ?? null,
-        goalsAgainstPerGame: awayRates?.goalsAgainstPerGame ?? null
+        team: awayTeam?.full_name,
+        goals_for_pg: awayRates?.goalsForPerGame ?? null,
+        goals_against_pg: awayRates?.goalsAgainstPerGame ?? null
       }
     },
     
     // Five-on-Five play (from Gemini Grounding)
     five_on_five: {
       home: { 
-        cfPct: advancedStats?.home_advanced?.corsi_for_pct ?? null, 
-        xgfPct: advancedStats?.home_advanced?.expected_goals_for_pct ?? null 
+        team: homeTeam?.full_name,
+        cf_pct: advancedStats?.home_advanced?.corsi_for_pct ?? null, 
+        xgf_pct: advancedStats?.home_advanced?.expected_goals_for_pct ?? null 
       },
       away: { 
-        cfPct: advancedStats?.away_advanced?.corsi_for_pct ?? null, 
-        xgfPct: advancedStats?.away_advanced?.expected_goals_for_pct ?? null 
+        team: awayTeam?.full_name,
+        cf_pct: advancedStats?.away_advanced?.corsi_for_pct ?? null, 
+        xgf_pct: advancedStats?.away_advanced?.expected_goals_for_pct ?? null 
       }
     },
     
     // Rest & Travel
-    rest_fatigue: restInfo,
+    rest_fatigue: {
+      home: { team: homeTeam?.full_name, ...restInfo.home },
+      away: { team: awayTeam?.full_name, ...restInfo.away }
+    },
     
     // Recent Form
-    recent_form: recentForm,
+    recent_form: {
+      home: { team: homeTeam?.full_name, ...recentForm.home },
+      away: { team: awayTeam?.full_name, ...recentForm.away }
+    },
     
     // Injuries
     injury_report: {
@@ -393,8 +538,8 @@ export async function buildNhlAgenticContext(game, options = {}) {
 
   // Fetch Gemini Grounding advanced stats (Corsi, xG, PDO, goalie matchup)
   let advancedStats = null;
+  const dateStr = getEstDate(commenceDate);
   try {
-    const dateStr = getEstDate(commenceDate);
     console.log('[Agentic][NHL] Fetching advanced stats via Gemini Grounding...');
     advancedStats = await getGroundedAdvancedStats(game.home_team, game.away_team, 'nhl', dateStr);
     if (advancedStats?._source === 'gemini_grounding') {
@@ -402,6 +547,73 @@ export async function buildNhlAgenticContext(game, options = {}) {
     }
   } catch (e) {
     console.warn('[Agentic][NHL] Grounding advanced stats failed:', e.message);
+  }
+  
+  // NEW: Fallback loop for missing critical NHL stats
+  // Check if key fields are null/missing and run targeted grounding search
+  const missingFields = [];
+  if (!advancedStats?.home_advanced?.corsi_for_pct && !advancedStats?.away_advanced?.corsi_for_pct) {
+    missingFields.push('corsi_for_pct');
+  }
+  if (!advancedStats?.home_advanced?.expected_goals_for_pct && !advancedStats?.away_advanced?.expected_goals_for_pct) {
+    missingFields.push('xg_for_pct');
+  }
+  if (!advancedStats?.goalie_matchup?.home_starter && !advancedStats?.goalie_matchup?.away_starter) {
+    missingFields.push('goalie_starter');
+  }
+  if (!advancedStats?.goalie_matchup?.home_gsax && !advancedStats?.goalie_matchup?.away_gsax) {
+    missingFields.push('gsax');
+  }
+  if (!advancedStats?.home_advanced?.high_danger_chances_for_pct) {
+    missingFields.push('high_danger_pct');
+  }
+  
+  // Run fallback grounding if there are missing fields
+  if (missingFields.length > 0) {
+    const fallbackData = await groundingFallbackForMissingStats(
+      homeTeam?.full_name || game.home_team,
+      awayTeam?.full_name || game.away_team,
+      missingFields,
+      dateStr
+    );
+    
+    // Merge fallback data into advancedStats
+    if (fallbackData) {
+      advancedStats = advancedStats || { home_advanced: {}, away_advanced: {}, goalie_matchup: {} };
+      
+      // Merge home_advanced (only if original is null/missing)
+      if (fallbackData.home_advanced) {
+        for (const [key, val] of Object.entries(fallbackData.home_advanced)) {
+          if (val !== null && !advancedStats.home_advanced?.[key]) {
+            advancedStats.home_advanced = advancedStats.home_advanced || {};
+            advancedStats.home_advanced[key] = val;
+          }
+        }
+      }
+      
+      // Merge away_advanced
+      if (fallbackData.away_advanced) {
+        for (const [key, val] of Object.entries(fallbackData.away_advanced)) {
+          if (val !== null && !advancedStats.away_advanced?.[key]) {
+            advancedStats.away_advanced = advancedStats.away_advanced || {};
+            advancedStats.away_advanced[key] = val;
+          }
+        }
+      }
+      
+      // Merge goalie_matchup
+      if (fallbackData.goalie_matchup) {
+        advancedStats.goalie_matchup = advancedStats.goalie_matchup || {};
+        for (const [key, val] of Object.entries(fallbackData.goalie_matchup)) {
+          if (val !== null && !advancedStats.goalie_matchup[key]) {
+            advancedStats.goalie_matchup[key] = val;
+          }
+        }
+      }
+      
+      advancedStats._source_fallback = 'gemini_grounding_fallback';
+      console.log('[Agentic][NHL] ✓ Merged fallback grounding data');
+    }
   }
 
   // Fetch rich context via Gemini Grounding (streaks, trends, injuries, narratives)

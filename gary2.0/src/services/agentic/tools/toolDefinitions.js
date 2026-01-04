@@ -46,7 +46,7 @@ const NFL_TOKENS = [
   // Line Play
   'OL_RANKINGS', 'DL_RANKINGS', 'PRESSURE_RATE', 'TIME_TO_THROW',
   // Turnover Analysis
-  'TURNOVER_MARGIN', 'TURNOVER_LUCK', 'FUMBLE_LUCK',
+  'TURNOVER_MARGIN', 'TURNOVER_LUCK', 'FUMBLE_LUCK', 'PENALTIES',
   // Situational
   'RED_ZONE_OFFENSE', 'RED_ZONE_DEFENSE', 'GOAL_LINE', 'TWO_MINUTE_DRILL',
   // Special Teams
@@ -102,6 +102,21 @@ const NCAAF_TOKENS = [
   'NCAAF_DEFENSE',            // BDL: opp_passing_yards, opp_rushing_yards
   'NCAAF_SCORING',            // BDL: calculated from TDs and game data
   'NCAAF_TURNOVER_MARGIN',    // BDL: passing_interceptions
+  'PENALTIES',
+  
+  // ===== ADVANCED ANALYTICS (via Gemini Grounding - NEW) =====
+  'NCAAF_SP_PLUS_RATINGS',    // SP+ offensive/defensive rankings
+  'NCAAF_FPI_RATINGS',        // ESPN FPI rankings and win probabilities
+  'NCAAF_EPA',                // Expected Points Added (EPA) data
+  'NCAAF_SUCCESS_RATE',       // Offensive/defensive success rates
+  'NCAAF_HAVOC',              // Havoc rate (TFLs, sacks, forced fumbles)
+  'NCAAF_EXPLOSIVE_PLAYS',    // Big play frequency (20+ yard gains)
+  'NCAAF_RUSH_EFFICIENCY',    // Opponent-adjusted rushing metrics
+  'NCAAF_PASS_EFFICIENCY',    // Opponent-adjusted passing metrics
+  'NCAAF_REDZONE',            // Red zone scoring and defense conversion %
+  'NCAAF_STRENGTH_OF_SCHEDULE', // Season-long schedule difficulty
+  'NCAAF_CONFERENCE_STRENGTH', // Relative strength of the team's conference
+  'NCAAF_VS_POWER_OPPONENTS', // Performance specifically against Power 4 teams
   
   // ===== GAME DATA (BDL games endpoint - WORKS) =====
   'RECENT_FORM',              // BDL: recent game results and scores
@@ -125,7 +140,7 @@ const NHL_TOKENS = [
   // Standings & Records
   'STANDINGS', 'TEAM_RECORD', 'CONFERENCE_STANDING', 'DIVISION_STANDING',
   // Special Teams (critical in hockey)
-  'POWER_PLAY_PCT', 'PENALTY_KILL_PCT', 'SPECIAL_TEAMS', 'PP_OPPORTUNITIES',
+  'POWER_PLAY_PCT', 'PENALTY_KILL_PCT', 'SPECIAL_TEAMS', 'PP_OPPORTUNITIES', 'PENALTIES',
   // Scoring
   'GOALS_FOR', 'GOALS_AGAINST', 'GOAL_DIFFERENTIAL', 'SCORING_FIRST',
   // Shot Metrics (Corsi proxy)

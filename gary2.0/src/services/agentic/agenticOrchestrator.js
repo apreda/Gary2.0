@@ -26,17 +26,52 @@ function getGemini() {
   return gemini;
 }
 
-// All sports now use Gemini 3 Deep Think
-// GPT-5.1 no longer needed
+// ═══════════════════════════════════════════════════════════════════════════
+// GEMINI MODEL POLICY (HARDCODED - DO NOT CHANGE)
+// ═══════════════════════════════════════════════════════════════════════════
+// ONLY Gemini 3 models are allowed. NEVER use Gemini 1.x or 2.x.
+// - Game Picks: gemini-3-pro-preview (Gemini 3 Pro Deep Think)
+// - Prop Picks: gemini-3-flash-preview (Gemini 3 Flash)
+// - High-volume sports (NCAAB): gemini-3-flash-preview
+// ═══════════════════════════════════════════════════════════════════════════
+const ALLOWED_GEMINI_MODELS = [
+  'gemini-3-pro-preview',    // Primary model for game picks
+  'gemini-3-flash-preview',  // For props and high-volume sports
+];
+
+function validateGeminiModel(model) {
+  if (!ALLOWED_GEMINI_MODELS.includes(model)) {
+    console.error(`[MODEL POLICY VIOLATION] Attempted to use "${model}" - ONLY Gemini 3 models allowed!`);
+    console.error(`[MODEL POLICY] Allowed models: ${ALLOWED_GEMINI_MODELS.join(', ')}`);
+    // Fall back to default rather than crash
+    return 'gemini-3-pro-preview';
+  }
+  return model;
+}
+
+// Game picks always use Gemini 3 Pro (Deep Think)
+// Props use Gemini 3 Flash (separate service)
 function getProviderForSport(sport) {
   return 'gemini';
 }
 
-function getModelForProvider(provider) {
+function getModelForProvider(provider, sport = null) {
   if (provider === 'openai') {
     return process.env.OPENAI_MODEL || 'gpt-5.1';
   }
-  return process.env.GEMINI_MODEL || 'gemini-3-pro-preview'; // Gemini 3 Pro for regular picks
+  
+  // Determine base model
+  let model;
+  if (sport === 'basketball_ncaab') {
+    // NCAAB uses Flash to avoid Pro rate limits (high game volume)
+    model = 'gemini-3-flash-preview';
+  } else {
+    // All other sports use Pro
+    model = process.env.GEMINI_MODEL || 'gemini-3-pro-preview';
+  }
+  
+  // VALIDATE: Ensure only Gemini 3 models are used (never 1.x or 2.x)
+  return validateGeminiModel(model);
 }
 
 // Base configuration - provider/model set dynamically per sport
@@ -45,7 +80,7 @@ const CONFIG = {
   maxTokens: 24000, // Increased to prevent truncation of detailed responses and Deep Think thoughts
   // Gemini 3 Deep Think settings
   gemini: {
-    temperature: 1.1, // Set between 1.0 and 1.2 for creative picks
+    temperature: 0.4, // Lower temperature for more consistent, grounded reasoning
     // Grounding with Google Search - enables live context searches
     grounding: {
       enabled: true,
@@ -104,13 +139,22 @@ export async function analyzeGame(game, sport, options = {}) {
     } : null;
 
     // Step 2: Get the constitution for this sport
-    const constitution = getConstitution(sport);
+    let constitution = getConstitution(sport);
+    
+    // Dynamically inject the current date into the constitution
+    const today = new Date().toLocaleDateString('en-US', { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+    constitution = constitution.replace(/{{CURRENT_DATE}}/g, today);
 
     // Step 3: Build the system prompt
     const systemPrompt = buildSystemPrompt(constitution, sport);
 
     // Step 4: Build the initial user message
-    const userMessage = buildUserMessage(scoutReport, homeTeam, awayTeam);
+    const userMessage = buildUserMessage(scoutReport, homeTeam, awayTeam, today);
 
     // Step 5: Run the agent loop
     // Include game time for weather forecasting (only fetch weather within 36h of game time)
@@ -140,15 +184,17 @@ export async function analyzeGame(game, sport, options = {}) {
     }
 
     // Add venue context (for NBA Cup, neutral site games, CFP games, etc.)
+    // Only add if not already present in result (prefer Gary's specific context)
     if (venueContext) {
-      result.venue = venueContext.venue;
-      result.isNeutralSite = venueContext.isNeutralSite;
-      result.tournamentContext = venueContext.tournamentContext;
-      result.gameSignificance = venueContext.gameSignificance;
+      result.venue = result.venue || venueContext.venue;
+      result.isNeutralSite = result.isNeutralSite ?? venueContext.isNeutralSite;
+      result.tournamentContext = result.tournamentContext || venueContext.tournamentContext;
+      result.gameSignificance = result.gameSignificance || venueContext.gameSignificance;
+      
       // CFP-specific fields for NCAAF
-      result.cfpRound = venueContext.cfpRound;
-      result.homeSeed = venueContext.homeSeed;
-      result.awaySeed = venueContext.awaySeed;
+      result.cfpRound = result.cfpRound || venueContext.cfpRound;
+      result.homeSeed = result.homeSeed || venueContext.homeSeed;
+      result.awaySeed = result.awaySeed || venueContext.awaySeed;
     }
 
     // Ensure result contains the canonical matchup strings used by the UI
@@ -212,15 +258,6 @@ the flow of the game, and explain WHY your pick is going to cash.
 
 5. **THE MARKET RESPECT**: If the books have made this team a +300 underdog, they are seeing something. Have I identified what that "something" is?
 
-## 🏹 SITUATIONAL & MOMENTUM SPOTS (THE SHARP EDGE)
-
-**Gary, don't just be a spreadsheet. Be a scout.**
-1. **MOMENTUM IS REAL**: A team on a "hot streak" (like the Jags vs Broncos) often has confidence that season-long stats haven't caught up to yet. 
-2. **THE 50/50 REALITY**: Every spread (e.g., +7.5 / -7.5) is the market's attempt to make the game a coin flip. 
-   - The favorite HAS better stats—that's why they are -7.5. 
-   - Your job is NOT to tell me the favorite is better. Your job is to tell me if they are -10.0 better or only -4.0 better.
-3. **SITUATIONAL SPOTS**: Look for "Great Spots"—a team playing at home after a long road trip, a "revenge game," or a "letdown spot" for a favorite who just won a huge emotional game.
-
 ## YOUR VOICE - NATURAL SPORTS ANALYSIS
 You MUST vary how you start each analysis. NEVER start two picks the same way.
 Write like an experienced sports analyst having a conversation - no formulaic prefaces.
@@ -241,15 +278,10 @@ Write like an experienced sports analyst having a conversation - no formulaic pr
 Your pick must be INDEPENDENTLY justified by statistics. Build your case with stats, THEN explain how the line offers value.
 
 ### THINK LIKE A SHARP
-- Obvious narratives are already priced in.
-- Look for structural edges, not meaningless trends.
-- The best picks often feel uncomfortable.
-- **Self-Interrogation**: You are your own harshest critic. Before finalizing, you must audit your own logic for "confident hallucinations."
+- **Self-Interrogation**: Audit your own logic for "confident hallucinations" before finalizing.
 
 ### 👤 PLAYER-SPECIFIC INVESTIGATION
-- **The "Game Log" Edge**: Use \`fetch_player_game_logs\` to see the last 5-10 games. A player averaging 20 PPG might have scored 35, 32, 28 in his last three. That's a "Hot Streak" that team-level season stats won't show you.
-- **The "Deep Drill"**: Use \`fetch_nba_player_stats\` (Advanced/Usage/Trends) or \`fetch_nfl_player_stats\` to see if a player's role has changed. If a star's Usage Rate jumped from 25% to 35% in the last week, they are the new focal point of the offense.
-- **Balance**: Individual spikes are "modifiers" to team success. Use them to validate your thesis or identify a hidden "angle."
+- **🚨 THE PLAYER STAT PROTOCOL**: You are FORBIDDEN from basing a player-specific edge solely on web snippets or grounding results. If you intend to reference a player's recent performance, you MUST call the appropriate BDL tools to get verified numbers. Use the web for *stories*, use Ball Don't Lie for *numbers*.
 
 ### ⚠️ CRITICAL FORMATTING RULES
 
@@ -270,7 +302,6 @@ When you have sufficient evidence and are ready to finalize, output this JSON:
   "type": "spread" or "moneyline",
   "odds": -150,
   "confidence": 0.XX,
-  "confidence_calc": "0.55 base + 0.06 (factor) - 0.05 (factor) = 0.XX",
   "thesis_type": "clear_read" or "found_angle" or "educated_lean" or "coin_flip",
   "thesis_mechanism": "One specific sentence explaining WHY this team wins/covers",
   "supporting_factors": ["factor1", "factor2", "factor3"],
@@ -278,6 +309,10 @@ When you have sufficient evidence and are ready to finalize, output this JSON:
   "contradicting_factors_minor": ["slight_pace_disadvantage"],
   "homeTeam": "Home Team Name",
   "awayTeam": "Away Team Name",
+  "tournamentContext": "CFP Quarterfinal" or "ReliaQuest Bowl" or "NFL Divisional" or null,
+  "cfpRound": "First Round" or "Quarterfinal" or "Semifinal" or "Championship" or null,
+  "homeSeed": 2,
+  "awaySeed": 10,
   "spread": -3.5,
   "spreadOdds": -110,
   "moneylineHome": -150,
@@ -288,151 +323,27 @@ When you have sufficient evidence and are ready to finalize, output this JSON:
 \`\`\`
 
 ### THESIS TYPE CATEGORIES (CRITICAL - BE HONEST)
+Your thesis_type reflects the QUALITY of your reasoning:
+- **clear_read**: 3+ key stats point in the same direction with a clear mechanism.
+- **found_angle**: Stats are mixed, but ONE specific factor (injury, matchup) tips the game.
+- **educated_lean**: Stats slightly favor one side, but no specific "killer" mechanism.
+- **coin_flip**: Stats are truly even; no strong read.
 
-Your thesis_type reflects the QUALITY of your reasoning, not your certainty about winning:
+**thesis_mechanism**: One sentence explaining WHY this team wins/covers.
 
-**clear_read** - Use when:
-- 3+ key stats all point the same direction
-- Large gaps in efficiency/record metrics
-- You can articulate a specific mechanism: "They win because X, Y, AND Z"
-- Example: "Houston's elite defense (110.0) meets New Orleans' worst-in-league offense (107.2). With Murray out, Pelicans have no answer."
+### CONTRA-FACTORS (HONESTY CHECK)
+- **supporting_factors**: List the stats/factors that support your pick.
+- **contradicting_factors_major**: List MAJOR factors that could flip the outcome (injuries, spots, streaks).
+- **contradicting_factors_minor**: List minor concerns unlikely to change the outcome.
 
-**found_angle** - Use when:
-- Stats are mixed or close overall
-- BUT you identified ONE specific factor that tips the game
-- Usually tied to: key injury, specific matchup, situational edge
-- Example: "Stats look even, but their backup center can't guard Wembanyama. That's the game."
+### CRITICAL ODDS RULES
+1. Use the EXACT odds from the "RAW ODDS VALUES" section.
+2. The "pick" field MUST include these EXACT odds.
+3. The "odds" field MUST match what you put in the pick string.
+4. **VALUE LIMIT**: Do NOT return a moneyline favorite pick priced worse than -150. If a favorite's ML is more expensive than -150, you MUST evaluate the spread or an underdog ML instead.
 
-**educated_lean** - Use when:
-- Stats slightly favor one side
-- No specific mechanism identified
-- You're essentially saying "they're probably better"
-- BE HONEST: If you cannot articulate WHY they win beyond "better numbers," this is you
-
-**coin_flip** - Use when:
-- Stats are truly even
-- You do not have a strong read
-- You are making a pick because you have to, not because you see something
-
-**thesis_mechanism** explains WHY this team wins/covers. Can be multi-factor - games are complex!
-- GOOD: "Boston's home court, turnover edge, and offensive rebounding combine against a Miami team on a back-to-back with a 1-4 skid."
-- GOOD: "Their 3PT defense is elite (32.1%) against an opponent that shoots 41% from deep, plus rest advantage."
-- BAD: "They are the better team and should cover." (Too vague - this is educated_lean territory)
-
-NOTE: If a player has been OUT for 3+ weeks, their absence is NOT an angle - the team's stats already reflect playing without them. Only RECENT injuries (last 1-2 weeks) create edges.
-
-**supporting_factors**: List the stats/factors that support your pick (e.g., "defensive_rating_gap", "key_injury", "home_record")
-
-**contradicting_factors_major**: List MAJOR factors that could flip the outcome:
-- Star player out (e.g., "trae_young_out", "mahomes_limited")
-- Back-to-back / severe rest disadvantage
-- Significant cold streak (5+ game losing streak)
-- Major injury to key position
-- Road favorite laying big points against desperate team
-
-**contradicting_factors_minor**: List minor concerns unlikely to change the outcome:
-- Single recent loss
-- Slight statistical disadvantages (turnover rate, pace mismatch)
-- Minor role player injuries
-- Small home/away splits difference
-
-Be HONEST about major contradictions - they help you (and us) gauge pick quality.
-
-**NOTE:** The stats will be extracted from your rationale's TALE OF THE TAPE section automatically.
-Do NOT include a "stats" field in your JSON - it causes parsing issues.
-
-⚠️ CRITICAL ODDS RULES:
-1. **LOOK AT THE "RAW ODDS VALUES" SECTION** in your scout report - it has the EXACT odds:
-   - For ML picks: Use "moneylineHome" or "moneylineAway" value (e.g., -192, +160)
-   - For spread picks: Use "spreadOdds" value (e.g., -105, -115)
-2. The "pick" field MUST include these EXACT odds: "Chiefs ML -192" NOT "Chiefs ML -110"
-3. The "odds" field MUST match what you put in the pick string
-4. **-110 is almost NEVER correct** - real odds vary: -105, -115, -120, +140, -192, etc.
-5. **NO HEAVY FAVORITES:** You CANNOT pick a moneyline at -200 or worse (-230, -300, etc.)
-6. You CAN pick any underdog ML (+100 or higher) - that's where value lives
-
-Example: If RAW ODDS shows "moneylineHome: -192", your pick is "Kansas City Chiefs ML -192"
-Example: If RAW ODDS shows "spreadOdds: -105", your pick is "Chiefs -3.5 -105"
-
-## 🚨 SPREAD SELECTION - MARGIN OF VICTORY MATTERS 🚨
-
-When you cannot take the ML (too juicy at -200+), you MUST evaluate WHICH SIDE of the spread:
-
-**THE CORE LOGIC:**
-1. Gary analyzes game → "Cowboys are better, they'll win"
-2. Sees Cowboys ML is -250 → "Can't take that juice"
-3. NOW Gary re-evaluates: "I think Cowboys win, but by how much?"
-   - If Gary thinks margin will be 10+ → Cowboys -8 makes sense
-   - If Gary thinks margin will be 3-7 → Commanders +8 is the smarter bet (they lose but cover)
-
-**STEP 1: Form your thesis** - "Who wins and why?"
-**STEP 2: Estimate the margin** - "By approximately how many points?"
-**STEP 3: Compare to the spread number** - "Is the spread larger or smaller than my estimated margin?"
-
-**DECISION RULE:**
-- Estimated margin > spread: Take the FAVORITE (e.g., Cowboys -8 if you think they win by 10+)
-- Estimated margin < spread: Take the UNDERDOG (e.g., Commanders +8 if you think Cowboys win by 3-7)
-
-**EXAMPLE:**
-- Spread: Cowboys -8 / Commanders +8
-- Your thesis: "Cowboys win, but Commanders keep it close. Final: 27-21"
-- Estimated margin: 6 points
-- 6 < 8, so take Commanders +8 (they LOSE but COVER)
-
-⚠️ NEVER just pick the "better team" on the spread. Ask: "Will they cover THIS specific number?"
-
-## BETTING DECISION FRAMEWORK - FIND THE BEST BET
-
-Don't think "ML blocked, now I take the spread." Think: "What's the BEST bet here?"
-
-**1. ANALYZE:** "Who wins? By how much? Why?"
-
-**2. EVALUATE ALL OPTIONS:**
-   - Favorite ML: Is the juice acceptable (-180 or better)?
-   - Underdog ML: Does the underdog have a real path to WINNING?
-   - Favorite spread: Can the favorite win by MORE than the spread?
-   - Underdog spread: Can the underdog keep it within the spread (or win)?
-
-**3. PICK THE OUTCOME MOST LIKELY TO HAPPEN:**
-   - Favorite wins BIG → Favorite spread
-   - Favorite wins CLOSE → Underdog spread (they lose but cover!)
-   - Underdog has real upset potential → Underdog ML (better payout)
-   - Favorite wins convincingly at good juice → Favorite ML
-
-**RISK-TAKING MINDSET (VALUE SEEKERS WIN LONG-TERM):**
-- A +150 underdog that wins 40% of the time is HUGELY profitable.
-- The spread is often the "comfortable" bet - but comfort doesn't pay bills.
-- **THE VALUE TEST:** If your analysis says "this team WINS," why are you taking +3.5 instead of +150?
-- Spread is for hedging uncertainty. ML is for conviction.
-- Books LOVE when you take the spread instead of ML - think about why.
-- If you believe a team wins outright, the ML is almost ALWAYS better EV than the spread.
-
-## 🧠 THE HUMAN BETTOR MINDSET (GAME SCRIPT LOGIC)
-
-**Forget the market spread for a moment. Before you look at the line, you MUST define the game script:**
-1. **PROJECTED WINNER**: Who wins this game?
-2. **PROJECTED MARGIN**: By exactly how many points?
-3. **VALUE HUNTING**: 
-   - If your Projected Margin is **SMALLER** than the Spread → **Take the Underdog +Points**.
-   - If you think the Underdog wins outright → **Take the Underdog ML**.
-   - If your Projected Margin is **MUCH LARGER** than the Spread → **Take the Favorite -Points**.
-
-**THE "PACERS +8.5" RULE:**
-If you think the Celtics win but in a close game (e.g., win by 4), and the spread is Celtics -8.5, you MUST take the Pacers +8.5. The "better team" winning the game does NOT mean they are the better bet.
-
-## 💰 THE BANKROLL MANAGER PERSONA (ROI & RISK)
-
-You have a daily bankroll of **$1,000 per sport**. Your goal is **NET PROFIT**, not just a high win percentage.
-
-**THE ROI RULES:**
-1. **THE SPREAD VS ML RATIO**: If an underdog spread is **+3.5 or less**, and you believe they can win, you MUST evaluate the **Moneyline (ML)**. Taking +2.5 at -110 is a "safe" bet; taking the ML at +125 is a "profitable" bet. **Don't be a coward—if you think they win, take the plus money.**
-2. **THE "DAY SAVER" (Value Hunting)**: Look for **"Value Dogs"** on the slate (ML odds +150 or much higher). These are the bets that can pay for your losses elsewhere, but only take them if the organic evidence supports a clear path to an upset. There is no ceiling on plus-money value if the edge is organic.
-3. **MATH CHECK**: 
-   - A -110 favorite needs a 52.4% win rate to break even.
-   - A +150 underdog only needs a 40% win rate to break even.
-   - If your "Vision" shows the underdog has a 45% chance to win, the ML is a better bet than any favorite.
-
-**THINK IN DOLLARS**: "If I bet $200 on this +180 underdog and it wins, I make $360. That covers my loss on a $300 favorite."
+## YOUR ROLE
+Your job is to simply pick a side of the spread or ML that you feel will occur. Use your expertise in Sports Betting, Game Theory, Statistical Analysis, and anything else that is relevant.
 
 ## RATIONALE FORMAT - USE THIS EXACT STRUCTURE:
 ═══════════════════════════════════════════════════════════════════════
@@ -455,7 +366,6 @@ Key Injuries           [names]              [names]
 4. Stats: Choose 4-6 most relevant stats. For NHL, include Special Teams or Goalie stats if relevant.
 
 Gary's Take
-🚨 **STORY MODE** 🚨
 Since stats are displayed above in Tale of the Tape, write a narrative section.
 
 RULES:
@@ -511,12 +421,14 @@ The Boston Celtics without Tatum are still a significantly better team than the 
 ═══════════════════════════════════════════════════════════════════════
 
 ### ⚠️ CRITICAL FORMATTING RULES
-1. NO markdown (**), NO emojis
-2. TALE OF THE TAPE must have aligned columns with EXACT team names as headers
-3. "Gary's Take" is the only section header allowed below the table
-4. Keep the table clean - use spaces to align columns
-5. Always include Key Injuries row in the tale of the tape
-6. 🚨 Gary's Take = STORYTELLING, not stat recitation! Users already see the numbers above.
+1. NO markdown (bolding, italics, etc.), NO emojis.
+2. NO all-caps headers or titles within the rationale.
+3. TALE OF THE TAPE must have aligned columns with EXACT team names as headers.
+4. "Gary's Take" is the only section header allowed below the table.
+5. Keep the table clean - use spaces to align columns.
+6. Always include Key Injuries row in the tale of the tape.
+7. Gary's Take = STORYTELLING, not stat recitation! Users already see the numbers above.
+8. Start your take with a natural opening, never a catchy title or headline.
 
 ═══════════════════════════════════════════════════════════════════════
 `.trim();
@@ -526,30 +438,22 @@ The Boston Celtics without Tatum are still a significantly better team than the 
  * Build the PASS 1 user message - Identify battlegrounds, DO NOT pick a side yet
  * Only gives instructions for the FIRST pass to prevent instruction contamination
  */
-function buildPass1Message(scoutReport, homeTeam, awayTeam) {
+function buildPass1Message(scoutReport, homeTeam, awayTeam, today) {
   return `
-## MATCHUP BRIEFING
+## MATCHUP BRIEFING (TODAY: ${today})
 
 ${scoutReport}
 
 ══════════════════════════════════════════════════════════════════════
-## YOUR TASK: PASS 1 - SCOUTING & BATTLEGROUND IDENTIFICATION
+## PASS 1 - SCOUTING & DATA GATHERING
 
-You have the scout report above. Your goal in this first pass is to identify the **3-4 key BATTLEGROUNDS** that will decide this game.
+You have the scout report above. Identify the key areas of interest for this game and request the necessary evidence.
 
 **INSTRUCTIONS:**
-1. **IDENTIFY BATTLEGROUNDS**: 
-   - Look for specific unit matchups (e.g., "Lions Offensive Line vs. Vikings Pass Rush").
-   - Identify situational factors (e.g., "Rams B2B travel fatigue vs. fresh Falcons").
-   - Note star player roles (e.g., "How does the Kings offense change without Sabonis?").
+1. **IDENTIFY KEY FACTORS**: Note the specific unit matchups, situational context, or player roles that will define this game.
+2. **REQUEST EVIDENCE**: Call the appropriate tools for any statistics or information you need to build a complete picture of the matchup. There is no limit on tool calls.
 
-2. **STAY NEUTRAL**: Do NOT form a hypothesis yet. Do NOT decide who is better. Simply identify where the conflict lies.
-
-3. **REQUEST EVIDENCE**: Call the get_stat tool for ALL the stat categories you need to build a complete picture of **BOTH SIDES** of your identified battlegrounds.
-   - Example: If the battleground is "Turnovers," request turnover stats for both teams.
-   - Example: If the battleground is "Recent Form," request Last 5 game stats for both teams.
-
-**CRITICAL:** You are a scout identifying the war zones. You are not a judge yet. Do NOT output a pick.
+**CRITICAL:** Do NOT output a final pick yet. Focus on gathering evidence.
 ══════════════════════════════════════════════════════════════════════
 `.trim();
 }
@@ -561,22 +465,15 @@ You have the scout report above. Your goal in this first pass is to identify the
 function buildPass2Message() {
   return `
 ══════════════════════════════════════════════════════════════════════
-## PASS 2 - EVIDENCE GATHERING & NEUTRAL AUDIT
+## PASS 2 - ANALYSIS & AUDIT
 
-You have your first wave of data. Now, conduct a neutral audit of the evidence.
+You have your first wave of data. Review the evidence and fill any remaining holes.
 
 **INSTRUCTIONS:**
-1. **THE "STEEL MAN" TEST**: 
-   - Look at the team that looks "better" on paper. Now find 2-3 stats or situational factors that suggest they could LOSE.
-   - Look at the "worse" team. Find 2-3 stats or situational factors that suggest they could WIN or COVER.
+1. **ANALYZE THE DATA**: Review the stats and situational context you've gathered.
+2. **REQUEST FINAL EVIDENCE**: If you need more data to finalize your decision, call the appropriate tools now.
 
-2. **IDENTIFY DATA GAPS**: 
-   - What is still missing? Do you need specific player game logs (\`fetch_player_game_logs\`) to see if a star is in a slump? 
-   - Do you need home/away splits to see if a team is a "Road Fraud"?
-
-3. **DO NOT COMMITT**: Resist the urge to pick a side. Focus on the "Case for Team A" and "Case for Team B" separately.
-
-**ACTION:** Request any additional stat categories or player logs needed to "Steel Man" both sides of the bet.
+**CRITICAL:** Focus on a complete understanding of the matchup before your final selection.
 ══════════════════════════════════════════════════════════════════════
 `.trim();
 }
@@ -588,35 +485,25 @@ You have your first wave of data. Now, conduct a neutral audit of the evidence.
 function buildPass3Message() {
   return `
 ══════════════════════════════════════════════════════════════════════
-## PASS 3 - FINAL SYNTHESIS & MARKET COMPARISON
+## PASS 3 - FINAL SELECTION
 
-You have all the evidence. Now, and only now, you are ready to make a decision.
+You have all the evidence. Now, you are ready to make your decision.
 
-**STEP 1: WEIGH THE EVIDENCE**
-- Which "Case" (Team A or Team B) is supported by the most RECENT and RELEVANT data?
-- How do the situational factors (rest, injuries, motivation) modify the raw stats?
+**STEP 1: SYNTHESIZE**
+- Weigh the stats and situational factors to determine your projected outcome.
 
-**STEP 2: COMPARE TO THE MARKET (THE VALUE AUDIT)**
-- Look at the Spread and Moneyline. 
-- **The Question**: Is the market "overvaluing" the favorite because of name recognition? 
-- **The Question**: Is the market "undervaluing" the underdog because of a recent bad loss?
-- Use the **Betting Decision Framework** and **Human Bettor Mindset** from your system prompt to find the most profitable bet.
+**STEP 2: MARKET COMPARISON**
+- Compare your projection to the Spread and Moneyline to find the best value.
 
-**STEP 3: THE SHARP'S SELF-INTERROGATION**
-Audit your own logic one last time:
-1. **Stat-Narrative Alignment**: Does my "Why" match the actual numbers I called?
-2. **The "Trap" Check**: If this looks like "easy money," what am I missing? 
-3. **The Value Test**: If I'm taking a favorite spread, is there actually more value in the underdog points?
-
-**STEP 4: OUTPUT YOUR FINAL PICK JSON**
+**STEP 3: OUTPUT FINAL JSON**
 (Refer to the RATIONALE FORMAT in the system prompt for the exact structure)
 ══════════════════════════════════════════════════════════════════════
 `.trim();
 }
 
 // Legacy function for backwards compatibility
-function buildUserMessage(scoutReport, homeTeam, awayTeam) {
-  return buildPass1Message(scoutReport, homeTeam, awayTeam);
+function buildUserMessage(scoutReport, homeTeam, awayTeam, today) {
+  return buildPass1Message(scoutReport, homeTeam, awayTeam, today);
 }
 
 /**
@@ -823,7 +710,7 @@ async function callGemini(messages, tools, modelName = 'gemini-3-pro-preview') {
 async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam, options = {}) {
   // Sport-based provider routing
   const provider = getProviderForSport(sport);
-  const model = getModelForProvider(provider);
+  const model = getModelForProvider(provider, sport);
   
   console.log(`[Orchestrator] Using ${provider.toUpperCase()} (${model}) for ${sport}`);
 
@@ -1886,6 +1773,18 @@ function normalizePickFormat(parsed, homeTeam, awayTeam, sport) {
     moneylineAway: parsed.moneylineAway,
     total: parsed.total,
     totalOdds: parsed.totalOdds || -110,
+    
+    // Pass through tournament/venue context from Gary's JSON
+    tournamentContext: parsed.tournamentContext || null,
+    gameSignificance: parsed.gameSignificance || null,
+    venue: parsed.venue || null,
+    isNeutralSite: parsed.isNeutralSite || false,
+    
+    // NCAAF/CFP specific
+    cfpRound: parsed.cfpRound || null,
+    homeSeed: parsed.homeSeed || null,
+    awaySeed: parsed.awaySeed || null,
+    
     agentic: true // Flag to identify agentic picks
   };
 }

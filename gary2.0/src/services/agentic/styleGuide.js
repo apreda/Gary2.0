@@ -63,7 +63,7 @@ const STYLE_GUIDES = {
       'PDO Regression: Team PDO > 102 with weak shot metrics = fade. PDO < 98 with strong Corsi = bounce-back candidate.',
       'Special Teams Edge: PP% > 24% vs PK% < 76% = serious scoring advantage. Check mismatch first.',
       'Back-to-Back Fade: Road team on B2B loses 0.5-1 goals of value. Home B2B is less impactful (~0.3 goals).',
-      'Avoid Juicy Lines: Never take puck line at -200 or worse odds—the juice kills long-term edge.'
+      'Avoid Juicy Lines: Never take puck line at -150 or worse odds—the juice kills long-term edge.'
     ]
   }
 };

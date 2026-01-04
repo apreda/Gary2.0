@@ -26,162 +26,14 @@ dotenv.config({ path: path.join(__dirname, '..', '.env.local'), override: true }
 
 // Now import modules that depend on env vars
 const { analyzeGame } = await import('../src/services/agentic/agenticOrchestrator.js');
-const { runAgenticNhlPipeline } = await import('../src/services/agentic/nhlAgenticRunner.js');
 const { oddsService } = await import('../src/services/oddsService.js');
 const { picksService } = await import('../src/services/picksService.js');
 const { getVenueForHomeTeam } = await import('../src/services/venueMapping.js');
 const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
 // Conviction filter removed - using simpler thesis-based filtering + confidence sorting
-
 // ═══════════════════════════════════════════════════════════════════════════
-// PRE-FLIGHT INJURY CHECK - Skip games with too many unknowns
+// GARY PICK GENERATION
 // ═══════════════════════════════════════════════════════════════════════════
-
-// Sport-specific key players - if questionable, skip due to uncertainty
-const KEY_PLAYERS_BY_SPORT = {
-  // NBA: Franchise stars whose absence changes everything
-  basketball_nba: [
-    'joel embiid', 'giannis antetokounmpo', 'luka doncic', 'nikola jokic', 
-    'jayson tatum', 'stephen curry', 'lebron james', 'kevin durant', 
-    'anthony edwards', 'shai gilgeous-alexander', 'victor wembanyama',
-    'donovan mitchell', 'jaylen brown', 'ja morant', 'damian lillard',
-    'devin booker', 'karl-anthony towns', 'anthony davis', 'zion williamson'
-  ],
-  
-  // NCAAF: Starting QBs are critical - backup QB = different team entirely
-  // Focus on CFP teams and top programs
-  americanfootball_ncaaf: [
-    // CFP & Top 10 QBs (2025)
-    'jalen milroe', 'carson beck', 'dillon gabriel', 'cam ward', 'shedeur sanders',
-    'jaxson dart', 'drew allar', 'quinn ewers', 'will howard', 'tyler shough',
-    'cade klubnik', 'kyle mccord', 'garrett nussmeier', 'conner weigman',
-    // Other impact QBs
-    'miller moss', 'sam hartman', 'riley leonard', 'avery johnson'
-  ],
-  
-  // NCAAB: Top players from ranked teams
-  basketball_ncaab: [
-    // 2024-25 top players
-    'cooper flagg', 'dylan harper', 'ace bailey', 'johni broome', 'mark sears',
-    'ryan kalkbrenner', 'hunter dickinson', 'tre johnson', 'kasparas jakucionis',
-    'tyler kolek', 'rj davis', 'matas buzelis', 'cam christie', 'vj edgecombe'
-  ],
-  
-  // NHL: Star goalies (GSAx leaders) - if starting goalie questionable, skip
-  // Backup goalie uncertainty is huge in hockey
-  icehockey_nhl: [
-    // Elite goalies - if questionable, who starts?
-    'igor shesterkin', 'connor hellebuyck', 'thatcher demko', 'juuse saros',
-    'sergei bobrovsky', 'ilya sorokin', 'jacob markstrom', 'linus ullmark',
-    'jake oettinger', 'stuart skinner', 'adin hill', 'logan thompson',
-    // Star skaters whose absence matters
-    'connor mcdavid', 'nathan mackinnon', 'auston matthews', 'nikita kucherov',
-    'leon draisaitl', 'david pastrnak', 'jack hughes', 'cale makar'
-  ]
-};
-
-/**
- * Check if a game should be skipped due to too many questionable players
- * Returns { skip: boolean, reason: string | null }
- */
-async function checkQuestionablePlayers(sportKey, homeTeam, awayTeam) {
-  try {
-    const keyPlayers = KEY_PLAYERS_BY_SPORT[sportKey];
-    if (!keyPlayers) {
-      return { skip: false, reason: null }; // Sport not configured for this check
-    }
-    
-    // Get teams
-    const teams = await ballDontLieService.getTeams(sportKey);
-    const home = teams?.find(t => 
-      t.full_name?.toLowerCase().includes(homeTeam.toLowerCase()) ||
-      t.name?.toLowerCase().includes(homeTeam.toLowerCase()) ||
-      homeTeam.toLowerCase().includes(t.name?.toLowerCase())
-    );
-    const away = teams?.find(t => 
-      t.full_name?.toLowerCase().includes(awayTeam.toLowerCase()) ||
-      t.name?.toLowerCase().includes(awayTeam.toLowerCase()) ||
-      awayTeam.toLowerCase().includes(t.name?.toLowerCase())
-    );
-    
-    if (!home || !away) return { skip: false, reason: null };
-    
-    // Fetch injuries for both teams
-    const injuries = await ballDontLieService.getInjuriesGeneric(sportKey, { team_ids: [home.id, away.id] });
-    if (!injuries || injuries.length === 0) return { skip: false, reason: null };
-    
-    // Count questionable players per team
-    let homeQuestionable = 0;
-    let awayQuestionable = 0;
-    let keyPlayerIssue = null;
-    let keyPlayerPosition = null;
-    let keyPlayerStatus = null;
-    
-    for (const injury of injuries) {
-      const status = (injury.status || '').toLowerCase();
-      const playerName = (injury.player?.first_name + ' ' + injury.player?.last_name || '').toLowerCase();
-      const position = (injury.player?.position || '').toLowerCase();
-      const teamId = injury.team?.id || injury.team_id;
-      
-      // ═══════════════════════════════════════════════════════════════════════════
-      // SPORT-SPECIFIC SKIP LOGIC
-      // ═══════════════════════════════════════════════════════════════════════════
-      
-      // NCAAF: Only skip for OUT/DOUBTFUL key players (not questionable)
-      // College rosters are different - only care about confirmed absences of key players
-      if (sportKey === 'americanfootball_ncaaf') {
-        const isKeyStatus = status.includes('out') || status.includes('doubtful');
-        const isKeyPlayer = keyPlayers.some(kp => playerName.includes(kp) || kp.includes(playerName));
-        const isQB = position === 'qb';
-        
-        // Only skip if key player (named or QB) is OUT or DOUBTFUL
-        if (isKeyStatus && (isKeyPlayer || isQB)) {
-          keyPlayerIssue = playerName;
-          keyPlayerPosition = isQB ? 'QB' : position;
-          keyPlayerStatus = status.toUpperCase();
-        }
-      }
-      // NBA/NCAAB/NHL: Use QUESTIONABLE logic (original behavior)
-      else if (status.includes('questionable') || status.includes('doubtful') || status.includes('day-to-day')) {
-        if (teamId === home.id) homeQuestionable++;
-        if (teamId === away.id) awayQuestionable++;
-        
-        // Check if it's a key player
-        if (keyPlayers.some(kp => playerName.includes(kp) || kp.includes(playerName))) {
-          keyPlayerIssue = playerName;
-          keyPlayerPosition = position;
-          keyPlayerStatus = 'QUESTIONABLE';
-        }
-        
-        // NFL: Any QB questionable is critical
-        if (sportKey === 'americanfootball_nfl' && position === 'qb') {
-          keyPlayerIssue = playerName;
-          keyPlayerPosition = 'QB';
-          keyPlayerStatus = 'QUESTIONABLE';
-        }
-        
-        // NHL: Any goalie questionable is critical
-        if (sportKey === 'icehockey_nhl' && (position === 'g' || position === 'goalie')) {
-          keyPlayerIssue = playerName;
-          keyPlayerPosition = 'Goalie';
-          keyPlayerStatus = 'QUESTIONABLE';
-        }
-      }
-    }
-    
-    // SKIP RULES (ORGANIC):
-    // We no longer force-skip games with questionable players.
-    // Instead, we pass the info to Gary and let him decide if the uncertainty is too high.
-    if (keyPlayerIssue) {
-      console.log(`[Questionable Check] ⚠️ Key player ${keyPlayerIssue} is ${keyPlayerStatus} - letting Gary evaluate organically.`);
-    }
-    
-    return { skip: false, reason: null };
-  } catch (error) {
-    console.warn(`[Questionable Check] Error checking injuries: ${error.message}`);
-    return { skip: false, reason: null }; // Don't skip on error
-  }
-}
 
 // Configuration
 // All US sports use EST-based "today" filtering - games happening today that haven't started yet
@@ -348,6 +200,133 @@ function rankAndFilterPicks(picks, sport) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// DYNAMIC SLATE REVIEWER (ORGANIC FILTERING)
+// ═══════════════════════════════════════════════════════════════════════════
+// 
+// Philosophy: Let Gary decide how many picks to release based on board quality.
+// Instead of a fixed confidence threshold, we use a dynamic approach:
+// 
+// 1. Calculate the "Board Quality Score" (average confidence across all games)
+// 2. Determine a target pick count based on games analyzed
+// 3. Select the top N picks where N scales with board quality
+// 4. Never release more than the "quality ceiling" even on great boards
+// 
+// This prevents forcing picks on bad boards and allows more picks on great ones.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Dynamic Slate Reviewer - Organically determines how many picks to release
+ * @param {Array} picks - All analyzed picks for a sport
+ * @param {string} sport - Sport name (NBA, NHL, etc.)
+ * @param {number} totalGames - Total games analyzed
+ * @returns {Array} - Filtered picks based on board quality
+ */
+function dynamicSlateReview(picks, sport, totalGames) {
+  if (picks.length === 0) return [];
+  
+  // Configuration per sport
+  const SPORT_CONFIG = {
+    'NBA': { minPicks: 1, maxPicks: 5, qualityFloor: 0.60, idealRatio: 0.35 },
+    'NHL': { minPicks: 1, maxPicks: 4, qualityFloor: 0.58, idealRatio: 0.30 },
+    'NFL': { minPicks: 1, maxPicks: 6, qualityFloor: 0.55, idealRatio: 0.40 },
+    'NCAAB': { minPicks: 1, maxPicks: 5, qualityFloor: 0.62, idealRatio: 0.25 },
+    'NCAAF': { minPicks: 0, maxPicks: 4, qualityFloor: 0.50, idealRatio: 0.50 }, // CFP - want all good picks
+    'EPL': { minPicks: 1, maxPicks: 3, qualityFloor: 0.55, idealRatio: 0.30 }
+  };
+  
+  const config = SPORT_CONFIG[sport] || { minPicks: 1, maxPicks: 4, qualityFloor: 0.55, idealRatio: 0.30 };
+  
+  // Step 1: Calculate Board Quality Score
+  const confidences = picks.map(p => typeof p.confidence === 'number' ? p.confidence : 0.5);
+  const avgConfidence = confidences.reduce((a, b) => a + b, 0) / confidences.length;
+  const maxConfidence = Math.max(...confidences);
+  const minConfidence = Math.min(...confidences);
+  const confidenceSpread = maxConfidence - minConfidence;
+  
+  // Board quality is weighted: avg confidence (60%) + max confidence (30%) + spread penalty (10%)
+  // Higher spread = less certainty about the board
+  const boardQuality = (avgConfidence * 0.6) + (maxConfidence * 0.3) - (confidenceSpread * 0.1);
+  
+  console.log(`\n[${sport}] 📊 DYNAMIC SLATE REVIEW`);
+  console.log(`   Board Stats: ${picks.length} picks, ${totalGames} games analyzed`);
+  console.log(`   Confidence: Avg=${avgConfidence.toFixed(2)}, Max=${maxConfidence.toFixed(2)}, Min=${minConfidence.toFixed(2)}`);
+  console.log(`   Board Quality Score: ${boardQuality.toFixed(3)}`);
+  
+  // Step 2: Determine target pick count based on board quality and game count
+  // Base target = games * idealRatio (e.g., 9 games * 0.35 = ~3 picks)
+  let baseTarget = Math.round(totalGames * config.idealRatio);
+  
+  // Adjust based on board quality
+  // If board quality is high (>0.70), allow more picks
+  // If board quality is low (<0.60), reduce picks
+  let qualityMultiplier = 1.0;
+  if (boardQuality >= 0.75) {
+    qualityMultiplier = 1.5; // Great board - allow 50% more picks
+  } else if (boardQuality >= 0.68) {
+    qualityMultiplier = 1.25; // Good board - allow 25% more picks
+  } else if (boardQuality < 0.58) {
+    qualityMultiplier = 0.75; // Weak board - reduce picks by 25%
+  } else if (boardQuality < 0.52) {
+    qualityMultiplier = 0.5; // Bad board - halve the picks
+  }
+  
+  let targetPicks = Math.round(baseTarget * qualityMultiplier);
+  
+  // Enforce min/max bounds
+  targetPicks = Math.max(config.minPicks, Math.min(config.maxPicks, targetPicks));
+  
+  // NFL SMALL SLATE RULE: If fewer than 4 games, keep ALL qualified picks
+  // On small NFL slates (like Saturday doubleheaders), we don't want to artificially limit
+  if (sport === 'NFL' && totalGames < 4) {
+    console.log(`   🏈 NFL SMALL SLATE (${totalGames} games < 4) - keeping all qualified picks`);
+    targetPicks = picks.length; // Keep all picks that pass quality floor
+  }
+  
+  console.log(`   Target Picks: ${targetPicks} (base=${baseTarget}, multiplier=${qualityMultiplier.toFixed(2)})`);
+  
+  // Step 3: Sort by confidence and select top N
+  const sortedPicks = [...picks].sort((a, b) => {
+    const confA = typeof a.confidence === 'number' ? a.confidence : 0.5;
+    const confB = typeof b.confidence === 'number' ? b.confidence : 0.5;
+    return confB - confA;
+  });
+  
+  // Step 4: Apply quality floor - don't release picks below the floor even if they'd be in top N
+  const selectedPicks = sortedPicks
+    .slice(0, targetPicks)
+    .filter(p => {
+      const conf = typeof p.confidence === 'number' ? p.confidence : 0;
+      if (conf < config.qualityFloor) {
+        console.log(`   ⚠️ Dropped: ${p.pick} (conf ${conf.toFixed(2)} below floor ${config.qualityFloor})`);
+        return false;
+      }
+      return true;
+    });
+  
+  // Step 5: Log final selection
+  console.log(`\n[${sport}] 🎯 SLATE SELECTION (${selectedPicks.length}/${picks.length} picks):`);
+  selectedPicks.forEach((p, i) => {
+    const conf = typeof p.confidence === 'number' ? p.confidence.toFixed(2) : '?';
+    console.log(`   ${i + 1}. ${p.pick.padEnd(35)} Conf: ${conf}`);
+  });
+  
+  // Log dropped picks for transparency
+  const droppedPicks = sortedPicks.slice(selectedPicks.length);
+  if (droppedPicks.length > 0) {
+    console.log(`\n[${sport}] 📉 DROPPED (below threshold or over limit):`);
+    droppedPicks.slice(0, 5).forEach((p, i) => {
+      const conf = typeof p.confidence === 'number' ? p.confidence.toFixed(2) : '?';
+      console.log(`   ${selectedPicks.length + i + 1}. ${p.pick.padEnd(35)} Conf: ${conf}`);
+    });
+    if (droppedPicks.length > 5) {
+      console.log(`   ... and ${droppedPicks.length - 5} more`);
+    }
+  }
+  
+  return selectedPicks;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 
 // In-memory tracking to prevent duplicate processing in same run session
 // This prevents race conditions where DB check passes but pick is already being generated
@@ -395,6 +374,8 @@ const matchupFilter = getArgValue('--matchup');
 const forceRerun = args.includes('--force');
 // --date flag to filter games to specific date(s) (e.g., "2025-12-25" or "2025-12-25,2025-12-26")
 const dateFilter = getArgValue('--date');
+// --dynamic flag to enable dynamic slate review (organic pick selection based on board quality)
+const useDynamicSlateReview = args.includes('--dynamic');
 
 if (runAll) {
   sportsToRun.push('nba', 'nfl', 'nhl', 'epl', 'ncaab', 'ncaaf');
@@ -425,9 +406,18 @@ if (sportsToRun.length === 0) {
 ║  Or combine sports:                                              ║
 ║    node scripts/run-agentic-picks.js --nba --nfl                 ║
 ║                                                                  ║
-║  NFL-specific options:                                           ║
+║  Advanced options:                                               ║
+║    --dynamic                   (organic pick selection)          ║
 ║    --date 2025-12-25           (filter to specific date)         ║
 ║    --date 2025-12-25,2025-12-26 (multiple dates)                 ║
+║    --force                     (skip deduplication)              ║
+║    --min-confidence 0.65       (override confidence threshold)   ║
+║    --store false               (analyze only, don't save)        ║
+║                                                                  ║
+║  Dynamic Slate Review (--dynamic):                               ║
+║    Organically selects picks based on board quality instead      ║
+║    of using fixed confidence thresholds. Gary decides how        ║
+║    many picks to release based on the overall slate strength.    ║
 ║                                                                  ║
 ╚══════════════════════════════════════════════════════════════════╝
 `);
@@ -912,23 +902,9 @@ async function main() {
         // Mark as being processed BEFORE we start (prevents race condition)
         processedGamesThisSession.add(gameKey);
 
-        // PRE-FLIGHT CHECK: Skip games with too many questionable players
-        const questionableCheck = await checkQuestionablePlayers(config.key, game.home_team, game.away_team);
-        if (questionableCheck.skip) {
-          console.log(`\n⏭️  SKIPPING: ${game.away_team} @ ${game.home_team}`);
-          console.log(`   Reason: ${questionableCheck.reason}`);
-          continue;
-        }
-
         // Run agentic analysis
-        let result;
-        if (config.name === 'NHL') {
-          console.log(`[NHL] Using 3-Stage Pipeline (Judge Audit enabled)`);
-          const runnerOptions = { nocache: process.argv.includes('--nocache') };
-          result = await runAgenticNhlPipeline(game, runnerOptions);
-        } else {
-          result = await analyzeGame(game, config.key);
-        }
+        const runnerOptions = { nocache: process.argv.includes('--nocache') };
+        const result = await analyzeGame(game, config.key, runnerOptions);
 
         if (result && !result.error && result.pick) {
           // Check minimum stats requirement (for NCAAB especially)
@@ -1028,6 +1004,7 @@ async function main() {
 
           // Human-readable names for common stat keys
           const statNameMap = {
+            // Football (NFL/NCAAF)
             'yards_per_game': 'Total YPG',
             'yards_per_play': 'Yards/Play',
             'points_per_game': 'PPG',
@@ -1076,6 +1053,60 @@ async function main() {
             'passing_ints': 'Pass INTs',
             'interceptions_thrown': 'INTs Thrown',
             'sacks': 'Sacks',
+            
+            // NHL - Special Teams
+            'pp_pct': 'Power Play %',
+            'pk_pct': 'Penalty Kill %',
+            'pp_opportunities': 'PP Ops',
+            'ppPct': 'Power Play %',
+            'pkPct': 'Penalty Kill %',
+            
+            // NHL - Advanced Analytics
+            'corsi_for_pct': 'Corsi For %',
+            'expected_goals_for_pct': 'xG For %',
+            'xg_for_pct': 'xG For %',
+            'cf_pct': 'Corsi For %',
+            'xgf_pct': 'xG For %',
+            'high_danger_pct': 'High Danger %',
+            'high_danger_chances_for_pct': 'HD Chances %',
+            'pdo': 'PDO',
+            
+            // NHL - Goalie Stats
+            'save_pct': 'Save %',
+            'gsax': 'GSAX',
+            'gaa': 'GAA',
+            'starter': 'Starting Goalie',
+            'record': 'Goalie Record',
+            
+            // NHL - Shots & Goals
+            'shots_for_pg': 'Shots For/G',
+            'shots_against_pg': 'Shots Against/G',
+            'goals_for_pg': 'Goals For/G',
+            'goals_against_pg': 'Goals Against/G',
+            'shot_diff': 'Shot Diff',
+            'shotsForPerGame': 'Shots For/G',
+            'shotsAgainstPerGame': 'Shots Against/G',
+            'goalsForPerGame': 'Goals For/G',
+            'goalsAgainstPerGame': 'Goals Against/G',
+            
+            // NHL - Rest & Form
+            'daysSinceLastGame': 'Days Rest',
+            'isBackToBack': 'Back-to-Back',
+            'gamesLast7Days': 'Games Last 7D',
+            'goalsPerGame': 'Goals/Game',
+            'goalsAgainstPerGame': 'GA/Game',
+            'last5': 'Last 5',
+            'last10': 'Last 10',
+            
+            // NHL - League Ranks
+            'pp_rank': 'PP Rank',
+            'pk_rank': 'PK Rank',
+            'gf_rank': 'GF Rank',
+            'ga_rank': 'GA Rank',
+            'goals_for_rank': 'GF Rank',
+            'goals_against_rank': 'GA Rank',
+            
+            // NCAAB
             'kenpom_rank': 'KenPom Rank',
             'adj_em': 'AdjEM',
             'adj_offense': 'AdjO',
@@ -1087,6 +1118,8 @@ async function main() {
             'conference_record': 'Conf Record',
             'conference_win_pct': 'Conf Win %',
             'tempo': 'Tempo',
+            
+            // Weather
             'temperature': 'Temperature',
             'feels_like': 'Feels Like',
             'wind_speed': 'Wind Speed',
@@ -1107,6 +1140,10 @@ async function main() {
             if (lower === 'ints' || lower === 'interceptions' || lower === 'interceptions_thrown' || lower === 'passing_interceptions') return 'ints';
             if (lower === 'recv_ypg' || lower === 'receiving_yards_per_game' || lower === 'receiving_ypg') return 'recv_ypg';
             if (lower === 'recv_tds' || lower === 'receiving_tds' || lower === 'receiving_touchdowns') return 'recv_tds';
+            if (lower === 'pp_pct' || lower === 'pppct' || lower === 'power_play_pct') return 'pp_pct';
+            if (lower === 'pk_pct' || lower === 'pkpct' || lower === 'penalty_kill_pct') return 'pk_pct';
+            if (lower === 'cf_pct' || lower === 'corsiforpct' || lower === 'corsi_for_pct') return 'cf_pct';
+            if (lower === 'xgf_pct' || lower === 'xgforpct' || lower === 'xg_for_pct') return 'xgf_pct';
             return lower;
           };
 
@@ -1339,15 +1376,15 @@ async function main() {
           const CONFIDENCE_BY_SPORT = {
             'NBA': 0.69,    // Targeting 3-4 quality picks per night
             'NCAAF': 0,     // Store all NCAAF picks (CFP games are limited, want all analysis)
-            'NCAAB': 0.64,  // Higher bar for college hoops
-            'NHL': 0.68,    // User requested 0.68 for NHL
+            'NCAAB': 0.72,  // Higher bar for college hoops (updated Dec 31, 2025)
+            'NHL': 0.67,    // User requested 0.67 for NHL
             'NFL': 0.63,    // Week 16: 0.63 threshold (quality over quantity)
             'EPL': 0.60     // Match calibration
           };
           
           // Use override if provided, otherwise sport-specific default
           const MIN_CONFIDENCE = minConfidenceOverride ?? (CONFIDENCE_BY_SPORT[config.name] ?? 0.64);
-          const MIN_CONFIDENCE_UNDERDOG = Math.min(MIN_CONFIDENCE, 0.60); // Underdogs always at least 0.60 or lower if min-confidence is lower
+          const MIN_CONFIDENCE_UNDERDOG = Math.min(MIN_CONFIDENCE, 0.69); // Raised from 0.60 to 0.69 per user request
           const MAX_FAVORITE_SPREAD = -10; // Filter out NBA double-digit spreads (-10.5, -11, etc.)
 
           const qualifiedPicks = sportPicks.filter(p => {
@@ -1355,9 +1392,9 @@ async function main() {
             const majorCount = p.contradicting_factors?.major?.length || 0;
             const trap = detectTrapSituation(p, config.name);
             
-            // Determine if this is an underdog pick (positive spread)
+            // Determine if this is an underdog pick (positive spread or plus money ML)
             const isUnderdogPick = 
-              (p.type === 'spread' && p.spread && parseFloat(p.spread) > 0) ||
+              (p.type === 'spread' && p.pick.includes('+')) ||
               (p.type === 'moneyline' && p.odds && (parseInt(p.odds) >= 100 || String(p.odds).startsWith('+')));
             const effectiveMinConfidence = isUnderdogPick ? MIN_CONFIDENCE_UNDERDOG : MIN_CONFIDENCE;
             
@@ -1381,66 +1418,13 @@ async function main() {
 
             // 4. TRAP DETECTION (B2B road favorite laying points)
             if (trap.isTrap) {
-              console.log(`  ❌ Filtered: ${p.pick} (TRAP: ${trap.trapReason})`);
-              return false;
+              console.log(`  ⚠️ Trap Warning: ${p.pick} (${trap.trapReason}) - Gary kept it with conf ${confidence.toFixed(2)}`);
+              // [AGENCY UPDATE] We no longer hard-filter traps. Gary's confidence is the final arbiter.
             }
 
-            // 4.5 BIG SPREAD SKEPTICISM - Favorites laying 7+ need 3+ supporting factors
-            // This combats the "favorite bias" where Gary picks "better teams" without sufficient edge
-            if (p.type === 'spread' && p.spread && parseFloat(p.spread) < -6.5) {
-              const supportingCount = p.supporting_factors?.length || 0;
-              const spreadValue = Math.abs(parseFloat(p.spread));
-              
-              // For spreads 7-9.5, need 3+ factors. For 10+, need 4+ factors.
-              const requiredFactors = spreadValue >= 10 ? 4 : 3;
-              
-              if (supportingCount < requiredFactors) {
-                console.log(`  ❌ Filtered: ${p.pick} (Big favorite -${spreadValue} lacks conviction - only ${supportingCount}/${requiredFactors} factors)`);
-                return false;
-              } else {
-                console.log(`  ⚠️ Big spread warning: ${p.pick} (-${spreadValue}) passed with ${supportingCount} factors`);
-              }
-            }
-
-            // 5. NBA: Filter out double-digit favorite spreads (-10 or more)
-            if (config.name === 'NBA' && p.type === 'spread') {
-              const spreadMatch = p.pick.match(/([+-]?\d+\.?\d*)\s*[+-]\d+$/);
-              if (spreadMatch) {
-                const spreadValue = parseFloat(spreadMatch[1]);
-                if (spreadValue < MAX_FAVORITE_SPREAD) {
-                  console.log(`  ❌ Filtered: ${p.pick} (spread ${spreadValue} is double-digit - too much variance)`);
-                  return false;
-                }
-              }
-            }
-
-            // 6. NHL: Filter out heavy favorite puck lines AND heavy ML favorites
-            if (config.name === 'NHL') {
-              // Filter heavy puck line favorites (-1.5 at -180 or worse)
-              if (p.type === 'spread') {
-                const oddsMatch = p.pick.match(/[+-]\d+\.?\d*\s*([+-]\d+)$/);
-                if (oddsMatch) {
-                  const oddsValue = parseFloat(oddsMatch[1]);
-                  if (p.pick.includes('-1.5') && oddsValue <= -180) {
-                    console.log(`  ❌ Filtered: ${p.pick} (puck line odds ${oddsValue} too heavy)`);
-                    return false;
-                  }
-                }
-              }
-              
-              // NEW: Filter heavy ML favorites (-165 or worse) - these lose at high rate
-              // Data shows ML favorites at -165+ losing consistently
-              if (p.type === 'moneyline') {
-                const mlOddsMatch = p.pick.match(/ML\s*([+-]\d+)/i);
-                if (mlOddsMatch) {
-                  const mlOdds = parseInt(mlOddsMatch[1], 10);
-                  if (mlOdds <= -165) {
-                    console.log(`  ❌ Filtered: ${p.pick} (heavy ML favorite ${mlOdds} - high variance trap)`);
-                    return false;
-                  }
-                }
-              }
-            }
+            // [AGENCY UPDATE] Removed rigid supporting factor counts and spread limits.
+            // Gary now has full agency to decide if a big spread or heavy favorite is worth the risk.
+            // His confidence score reflects his organic assessment of the value and conviction.
 
             // 7. Filter out totals (over/under) - game picks are spread/ML only
             if (p.type === 'total') {
@@ -1472,13 +1456,22 @@ async function main() {
           console.log(`[${config.name}] Smart filtering: ${qualifiedPicks.length}/${sportPicks.length} picks qualified (conf >= ${MIN_CONFIDENCE}, no traps)`)
 
           if (qualifiedPicks.length > 0) {
-            // SECOND STAGE: Quality ranking and archetype de-duplication
-            // This organically reduces picks to the strongest ones
-            let rankedPicks = rankAndFilterPicks(qualifiedPicks, config.name);
+            let finalPicks;
+            
+            if (useDynamicSlateReview) {
+              // NEW: Dynamic Slate Review - Organic pick selection based on board quality
+              // This replaces static confidence thresholds with board-aware selection
+              console.log(`\n[${config.name}] 🎲 Using DYNAMIC SLATE REVIEW (--dynamic flag enabled)`);
+              finalPicks = dynamicSlateReview(qualifiedPicks, config.name, finalGames.length);
+            } else {
+              // LEGACY: Quality ranking and archetype de-duplication
+              // This organically reduces picks to the strongest ones
+              finalPicks = rankAndFilterPicks(qualifiedPicks, config.name);
+            }
 
-            if (rankedPicks.length > 0) {
-              await storePicks(rankedPicks);
-              allPicks.push(...rankedPicks);
+            if (finalPicks.length > 0) {
+              await storePicks(finalPicks);
+              allPicks.push(...finalPicks);
             }
           }
         }
@@ -1487,9 +1480,8 @@ async function main() {
       const sportTime = ((Date.now() - sportStartTime) / 1000).toFixed(1);
       
       // Use the same thresholds we calculated during filtering
-      // Since they were inside the loop, we re-calculate here or just use a shared variable
       const SUMMARY_MIN_CONFIDENCE = minConfidenceOverride ?? (({
-        'NBA': 0.69, 'NCAAF': 0, 'NCAAB': 0.64, 'NHL': 0.68, 'NFL': 0.63, 'EPL': 0.60
+        'NBA': 0.69, 'NCAAF': 0, 'NCAAB': 0.72, 'NHL': 0.67, 'NFL': 0.63, 'EPL': 0.60
       })[config.name] ?? 0.64);
 
       // Count qualified picks - confidence-based filtering

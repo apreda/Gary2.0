@@ -361,7 +361,7 @@ async function storeDailyPicksInDatabase(picks) {
       return false;
     }
     
-    // Filter out picks with odds <= -200 (too juicy, not worth the risk)
+    // Filter out picks with odds <= -150 (too juicy, not worth the risk)
     let oddsRaw = pick.odds || pick.line_odds || 0;
     let oddsNum = 0;
     if (typeof oddsRaw === 'number') {
@@ -371,8 +371,8 @@ async function storeDailyPicksInDatabase(picks) {
       const parsed = parseInt(oddsRaw.replace(/[^0-9-+]/g, ''), 10);
       oddsNum = Number.isFinite(parsed) ? parsed : 0;
     }
-    if (oddsNum <= -200) {
-      console.log(`❌ FILTERING OUT ${sport} pick with odds ${oddsRaw} (≤ -200 too juicy)`);
+    if (oddsNum <= -150) {
+      console.log(`❌ FILTERING OUT ${sport} pick with odds ${oddsRaw} (≤ -150 too juicy)`);
       return false;
     }
     
@@ -380,7 +380,7 @@ async function storeDailyPicksInDatabase(picks) {
     return true;
   });
 
-  console.log(`After confidence/odds filter (>= 0.55, not ≤ -200), ${validPicks.length} picks remaining from ${picks.length} total`);
+  console.log(`After confidence/odds filter (>= 0.55, not ≤ -150), ${validPicks.length} picks remaining from ${picks.length} total`);
 
   // If no valid picks, exit early
   if (validPicks.length === 0) {
@@ -428,19 +428,23 @@ async function storeDailyPicksInDatabase(picks) {
         return `game|${p.league || ''}|${p.homeTeam || ''}|${p.awayTeam || ''}`;
       };
       
-      const seen = new Set(existingPicks.map(gameKey));
+      const seen = new Set(); // Removed existingPicks.map(gameKey) to allow overwriting with fresh data
       const toAppend = validPicks.filter(p => {
         const key = gameKey(p);
         if (seen.has(key)) {
-          console.log(`⚠️ BLOCKED DUPLICATE: Already have pick for this game - ${key}`);
+          console.log(`⚠️ BLOCKED DUPLICATE in current batch: ${key}`);
           return false;
         }
         seen.add(key);
         return true;
       });
 
+      // Filter out existing picks that match the new ones we are about to add
+      const newKeys = new Set(toAppend.map(gameKey));
+      const filteredExisting = existingPicks.filter(p => !newKeys.has(gameKey(p)));
+
       // Apply cap for props only on the combined set (keep existing first)
-      const combined = [...existingPicks, ...toAppend];
+      const combined = [...filteredExisting, ...toAppend];
       const props = combined.filter(checkIsProp);
       const nonProps = combined.filter(p => !checkIsProp(p));
       const cappedProps = props.slice(0, 10);
@@ -934,7 +938,7 @@ Make your picks for spread, moneyline, and total.`
     };
 
     const response = await openaiService.generateResponse([systemMessage, userMessage], {
-      temperature: 0.7,
+      temperature: 0.4,
       maxTokens: 300
     });
 
@@ -1034,9 +1038,13 @@ async function storeWeeklyNFLPicks(picks) {
   
   const weekStart = getNFLWeekStart();
   const weekNumber = getNFLWeekNumber();
-  const season = new Date().getFullYear();
   
-  console.log(`🏈 Storing ${picks.length} NFL picks for Week ${weekNumber} (${weekStart})`);
+  // NFL Season Logic: Jan-July games belong to the season that started the previous year
+  const now = new Date();
+  const currentMonth = now.getMonth() + 1; // 1-indexed
+  const season = currentMonth <= 7 ? now.getFullYear() - 1 : now.getFullYear();
+  
+  console.log(`🏈 Storing ${picks.length} NFL picks for Week ${weekNumber} (${weekStart}), Season ${season}`);
   
   try {
     // Check if we have existing picks for this week

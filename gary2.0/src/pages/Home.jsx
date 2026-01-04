@@ -630,9 +630,13 @@ function Home() {
         // Query Supabase for picks using the determined date
         // Check both daily_picks AND weekly_nfl_picks (NFL picks are in weekly table)
         console.log(`Home: Querying picks for date: ${queryDate}`);
+        
+        // Calculate NFL Season: Jan-July is previous year's season
+        const nflSeason = parseInt(month) <= 7 ? parseInt(year) - 1 : parseInt(year);
+        
         const [dailyResult, nflResult] = await Promise.all([
           supabase.from("daily_picks").select("picks, date").eq("date", queryDate).maybeSingle(),
-          supabase.from("weekly_nfl_picks").select("picks, week, season").eq("season", 2025).order("week", { ascending: false }).limit(1).maybeSingle()
+          supabase.from("weekly_nfl_picks").select("picks, week_number, season").eq("season", nflSeason).order("week_number", { ascending: false }).limit(1).maybeSingle()
         ]);
           
         if (dailyResult.error) {

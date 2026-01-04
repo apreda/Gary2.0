@@ -495,7 +495,7 @@ function fmtPct(val) {
 async function fetchNCAAFRedZoneFromGrounding(homeTeam, awayTeam) {
   try {
     const seasonString = getCurrentSeasonString();
-    const query = `What are the 2025 college football season red zone statistics for ${homeTeam} and ${awayTeam}?
+    const query = `What are the ${seasonString} college football season red zone statistics for ${homeTeam} and ${awayTeam} as of TODAY?
 
 For EACH team, provide:
 1. Red Zone TD Percentage (touchdowns scored when inside opponent's 20-yard line)
@@ -1903,10 +1903,12 @@ const FETCHERS = {
     try {
       const homeTeamName = home.full_name || home.name;
       const awayTeamName = away.full_name || away.name;
+      const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+      const seasonStr = getCurrentSeasonString();
       
       console.log(`[Stat Router] Fetching NCAAF SOS for ${awayTeamName} @ ${homeTeamName} via Gemini Grounding`);
       
-      const query = `What are the current Strength of Schedule (SOS) rankings for ${homeTeamName} and ${awayTeamName} college football teams in the ${getCurrentSeasonString()} season? 
+      const query = `What are the current Strength of Schedule (SOS) rankings for ${homeTeamName} and ${awayTeamName} college football teams as of TODAY, ${today} (for the ${seasonStr} season)? 
       
       For each team provide:
       1. SOS ranking (out of 134 FBS teams)
@@ -1915,7 +1917,7 @@ const FETCHERS = {
       4. Record vs Power 4 conference opponents (Big Ten, SEC, ACC, Big 12)
       5. Record vs Group of 5 opponents
       
-      SOS data sources include ESPN FPI, Sagarin, and NCAA official rankings.`;
+      SOS data for the ${seasonStr} season.`;
       
       const response = await geminiGroundingSearch(query, {
         temperature: 0.2,
@@ -1970,19 +1972,21 @@ const FETCHERS = {
     try {
       const homeTeamName = home.full_name || home.name;
       const awayTeamName = away.full_name || away.name;
+      const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+      const seasonStr = getCurrentSeasonString();
       
       console.log(`[Stat Router] Fetching Opponent-Adjusted Ratings for ${awayTeamName} @ ${homeTeamName} via Gemini Grounding`);
       
-      const query = `What are the current opponent-adjusted ratings for ${homeTeamName} and ${awayTeamName} college football teams? 
+      const query = `What are the current opponent-adjusted ratings for ${homeTeamName} and ${awayTeamName} college football teams as of TODAY, ${today}? 
       
-      Provide for each team:
+      Provide for each team for the ${seasonStr} season:
       1. ESPN FPI (Football Power Index) rating and rank
       2. SP+ overall, offense, and defense ratings
       3. Sagarin rating (if available)
       4. Success Rate (% of plays that count as successful)
       5. Expected Points Added (EPA) per play on offense and defense
       
-      These opponent-adjusted metrics account for quality of competition and are critical for CFP analysis.`;
+      These metrics must be for the ${seasonStr} season.`;
       
       const response = await geminiGroundingSearch(query, {
         temperature: 0.2,
@@ -2039,12 +2043,14 @@ const FETCHERS = {
     try {
       const homeTeamName = home.full_name || home.name;
       const awayTeamName = away.full_name || away.name;
+      const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+      const seasonStr = getCurrentSeasonString();
       
       console.log(`[Stat Router] Fetching Conference Strength for ${awayTeamName} @ ${homeTeamName} via Gemini Grounding`);
       
-      const query = `Provide conference context for ${homeTeamName} vs ${awayTeamName} college football matchup:
+      const query = `Provide conference context for ${homeTeamName} vs ${awayTeamName} college football matchup as of TODAY, ${today}:
       
-      For each team tell me:
+      For each team tell me for the ${seasonStr} season:
       1. Conference name (Big Ten, SEC, Sun Belt, etc.)
       2. Conference tier: Power 4 (Big Ten, SEC, ACC, Big 12) or Group of 5 (AAC, Sun Belt, MAC, MW, CUSA)
       3. Conference overall strength ranking (1-11)
@@ -2052,7 +2058,7 @@ const FETCHERS = {
       5. Average SP+ rating of their conference opponents
       6. Bowl eligibility % of conference teams
       
-      CRITICAL: This is essential for CFP analysis where Power 4 vs Group of 5 matchups have different talent levels.`;
+      CRITICAL: This is essential for CFP analysis for the ${seasonStr} season.`;
       
       const response = await geminiGroundingSearch(query, {
         temperature: 0.2,
@@ -2105,10 +2111,12 @@ const FETCHERS = {
     try {
       const homeTeamName = home.full_name || home.name;
       const awayTeamName = away.full_name || away.name;
+      const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+      const seasonStr = getCurrentSeasonString();
       
       console.log(`[Stat Router] Fetching vs Power Opponents data for ${awayTeamName} @ ${homeTeamName} via Gemini Grounding`);
       
-      const query = `How have ${homeTeamName} and ${awayTeamName} performed against Power 4 (Big Ten, SEC, ACC, Big 12) opponents this season?
+      const query = `How have ${homeTeamName} and ${awayTeamName} performed against Power 4 (Big Ten, SEC, ACC, Big 12) opponents as of TODAY, ${today} (for the ${seasonStr} season)?
       
       For each team provide:
       1. Record vs Power 4 opponents
@@ -2224,19 +2232,21 @@ const FETCHERS = {
     try {
       const homeTeamName = home.full_name || home.name;
       const awayTeamName = away.full_name || away.name;
+      const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+      const seasonStr = getCurrentSeasonString();
       
       console.log(`[Stat Router] Fetching SP+ ratings for ${awayTeamName} @ ${homeTeamName} via Gemini Grounding`);
       
-      const query = `What are the current SP+ ratings (Bill Connelly's efficiency metric) for ${homeTeamName} and ${awayTeamName} college football teams for the ${getCurrentSeasonString()} season?
+      const query = `Provide the current SP+ ratings (Bill Connelly's opponent-adjusted efficiency metrics) for ${homeTeamName} and ${awayTeamName} as of TODAY, ${today} (for the ${seasonStr} season).
       
       For each team provide:
-      1. Overall SP+ rating
+      1. Overall SP+ rating and national rank
       2. SP+ Offense rating and rank
-      3. SP+ Defense rating and rank (lower is better for defense)
-      4. SP+ Special Teams rating
-      5. Projected point margin vs average team
+      3. SP+ Defense rating and rank
+      4. SP+ Special Teams rating and rank
+      5. Projected point margin for this specific matchup based on SP+
       
-      SP+ is the gold standard for predicting college football outcomes.`;
+      Ensure ratings are for the ${seasonStr} season.`;
       
       const response = await geminiGroundingSearch(query, {
         temperature: 0.2,
@@ -2290,20 +2300,21 @@ const FETCHERS = {
     try {
       const homeTeamName = home.full_name || home.name;
       const awayTeamName = away.full_name || away.name;
+      const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+      const seasonStr = getCurrentSeasonString();
       
       console.log(`[Stat Router] Fetching ESPN FPI for ${awayTeamName} @ ${homeTeamName}`);
       
-      const query = `What are the ESPN Football Power Index (FPI) ratings for ${homeTeamName} and ${awayTeamName} college football teams in 2025?
+      const query = `What are the ESPN Football Power Index (FPI) ratings for ${homeTeamName} and ${awayTeamName} college football teams as of TODAY, ${today} (for the ${seasonStr} season)?
       
       For each team provide:
-      1. FPI rating (number, e.g., +15.2)
-      2. FPI national rank
-      3. Offensive efficiency rating
-      4. Defensive efficiency rating
-      5. Win probability for this matchup
-      6. Projected point spread
+      1. FPI rating (e.g., +15.2) and national rank
+      2. Offensive efficiency rating and rank
+      3. Defensive efficiency rating and rank
+      4. FPI Projected Win Probability for this specific matchup
+      5. FPI Projected point spread for this matchup
       
-      FPI is ESPN's predictive rating system.`;
+      FPI is ESPN's predictive rating system for the ${seasonStr} season.`;
       
       const response = await geminiGroundingSearch(query, {
         temperature: 0.2,
@@ -2357,20 +2368,21 @@ const FETCHERS = {
     try {
       const homeTeamName = home.full_name || home.name;
       const awayTeamName = away.full_name || away.name;
+      const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+      const seasonStr = getCurrentSeasonString();
       
       console.log(`[Stat Router] Fetching EPA (Expected Points Added) for ${awayTeamName} @ ${homeTeamName}`);
       
-      const query = `What are the Expected Points Added (EPA) metrics for ${homeTeamName} and ${awayTeamName} college football teams in 2025?
+      const query = `What are the Expected Points Added (EPA) metrics for ${homeTeamName} and ${awayTeamName} college football teams as of TODAY, ${today} (for the ${seasonStr} season)?
       
       For each team provide:
-      1. EPA per play on offense
-      2. EPA per play allowed on defense (lower is better)
-      3. EPA per rush
-      4. EPA per pass
-      5. National rank in EPA
-      6. Success rate (% of plays with positive EPA)
+      1. EPA per play on offense (national rank)
+      2. EPA per play allowed on defense (national rank)
+      3. Success rate (offense and defense)
+      4. EPA per rush and EPA per pass
+      5. Havoc rate allowed (offense)
       
-      EPA measures how much each play increases or decreases a team's expected points.`;
+      EPA data for the ${seasonStr} season.`;
       
       const response = await geminiGroundingSearch(query, {
         temperature: 0.2,
@@ -2422,22 +2434,21 @@ const FETCHERS = {
     try {
       const homeTeamName = home.full_name || home.name;
       const awayTeamName = away.full_name || away.name;
+      const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+      const seasonStr = getCurrentSeasonString();
       
       console.log(`[Stat Router] Fetching Havoc Rate for ${awayTeamName} @ ${homeTeamName}`);
       
-      const query = `What are the Havoc rates for ${homeTeamName} and ${awayTeamName} college football teams in 2025?
-      
-      Havoc = (TFLs + Forced Fumbles + INTs + PBUs) / Defensive Plays
+      const query = `Provide Havoc rate and defensive disruption stats for ${homeTeamName} and ${awayTeamName} as of TODAY, ${today}.
       
       For each team provide:
-      1. Defensive Havoc Rate (% of plays they create chaos)
-      2. Offensive Havoc Rate Allowed (% of plays their offense gets disrupted)
-      3. Tackles for Loss per game
-      4. Sacks per game
-      5. Turnovers forced this season
-      6. Turnover margin
+      1. Defensive Havoc Rate (% of plays resulting in TFL, sack, FF, INT, or PBU)
+      2. Front Seven Havoc Rate vs DB Havoc Rate
+      3. Tackles for Loss (TFL) per game and national rank
+      4. Sacks per game and national rank
+      5. Pressure Rate and Forced Turnover stats
       
-      High havoc teams can upset better opponents through disruption.`;
+      Focus on stats from the current ${seasonStr} season.`;
       
       const response = await geminiGroundingSearch(query, {
         temperature: 0.2,
@@ -2492,20 +2503,21 @@ const FETCHERS = {
     try {
       const homeTeamName = home.full_name || home.name;
       const awayTeamName = away.full_name || away.name;
+      const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+      const seasonStr = getCurrentSeasonString();
       
       console.log(`[Stat Router] Fetching Explosiveness for ${awayTeamName} @ ${homeTeamName}`);
       
-      const query = `What are the explosiveness and big play metrics for ${homeTeamName} and ${awayTeamName} college football teams in 2025?
+      const query = `What are the explosiveness and big play metrics for ${homeTeamName} and ${awayTeamName} as of TODAY, ${today}?
       
       For each team provide:
-      1. Explosive play rate (20+ yard plays per game)
-      2. Plays of 30+ yards this season
-      3. Plays of 50+ yards this season
-      4. Average yards per explosive play
-      5. Explosive plays allowed on defense
-      6. IsoPPP (Isolated Points Per Play on explosive plays only)
+      1. Explosive Play Rate (plays of 20+ yards per game)
+      2. Plays of 30+ yards and 50+ yards this season
+      3. Isolated Points Per Play (IsoPPP) on explosive plays
+      4. Explosive plays allowed on defense (national rank)
+      5. Big play potential comparison for this matchup
       
-      Explosiveness indicates "home run" potential - G5 teams often can't match P4 depth.`;
+      Focus on ${seasonStr} season data.`;
       
       const response = await geminiGroundingSearch(query, {
         temperature: 0.2,
@@ -2556,21 +2568,21 @@ const FETCHERS = {
     try {
       const homeTeamName = home.full_name || home.name;
       const awayTeamName = away.full_name || away.name;
+      const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+      const seasonStr = getCurrentSeasonString();
       
       console.log(`[Stat Router] Fetching Rushing Efficiency for ${awayTeamName} @ ${homeTeamName}`);
       
-      const query = `What are the rushing efficiency metrics for ${homeTeamName} and ${awayTeamName} college football teams in 2025?
+      const query = `Provide opponent-adjusted rushing efficiency metrics for ${homeTeamName} and ${awayTeamName} as of TODAY, ${today}.
       
       For each team provide:
-      1. Rushing yards per game
-      2. Yards per carry
-      3. Rushing success rate (% of carries with positive EPA)
-      4. Stuff rate (% of runs stopped at or behind LOS)
-      5. Line Yards (average yards attributable to OL)
-      6. Rushing touchdowns
-      7. Rushing yards allowed per game (defense)
+      1. Rushing Success Rate (% of runs with positive EPA)
+      2. Yards Per Carry (YPC) and Stuff Rate allowed
+      3. Offensive Line Yards per carry
+      4. Defensive Rushing Success Rate allowed
+      5. Defensive Stuff Rate (runs stopped at/behind LOS)
       
-      Running the ball effectively controls the clock and is crucial in playoff games.`;
+      Focus on ${seasonStr} season data.`;
       
       const response = await geminiGroundingSearch(query, {
         temperature: 0.2,
@@ -2622,21 +2634,21 @@ const FETCHERS = {
     try {
       const homeTeamName = home.full_name || home.name;
       const awayTeamName = away.full_name || away.name;
+      const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+      const seasonStr = getCurrentSeasonString();
       
       console.log(`[Stat Router] Fetching Passing Efficiency for ${awayTeamName} @ ${homeTeamName}`);
       
-      const query = `What are the passing efficiency metrics for ${homeTeamName} and ${awayTeamName} college football teams in 2025?
+      const query = `Provide opponent-adjusted passing efficiency metrics for ${homeTeamName} and ${awayTeamName} as of TODAY, ${today}.
       
       For each team provide:
-      1. Passing yards per game
-      2. QB rating/Passer efficiency rating
-      3. Completion percentage
-      4. Yards per attempt
-      5. TD/INT ratio
-      6. Sacks allowed
-      7. Passing yards allowed per game (defense)
+      1. Passing Success Rate (% of passes with positive EPA)
+      2. Yards Per Attempt (YPA) and Completion Percentage
+      3. QB Rating and TD/INT ratio
+      4. Defensive Passing Success Rate allowed
+      5. Pressure Rate allowed (offense) and Sack rate
       
-      QB play often determines CFP outcomes.`;
+      Focus on stats from the current ${seasonStr} season.`;
       
       const response = await geminiGroundingSearch(query, {
         temperature: 0.2,
@@ -2689,20 +2701,21 @@ const FETCHERS = {
     try {
       const homeTeamName = home.full_name || home.name;
       const awayTeamName = away.full_name || away.name;
+      const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+      const seasonStr = getCurrentSeasonString();
       
       console.log(`[Stat Router] Fetching Red Zone Efficiency for ${awayTeamName} @ ${homeTeamName}`);
       
-      const query = `What are the red zone efficiency metrics for ${homeTeamName} and ${awayTeamName} college football teams in 2025?
+      const query = `Provide red zone efficiency metrics for ${homeTeamName} and ${awayTeamName} as of TODAY, ${today} (for the ${seasonStr} season).
       
       For each team provide:
-      1. Red zone scoring percentage (offense)
-      2. Red zone TD percentage (offense) 
-      3. Red zone trips per game
-      4. Red zone defense scoring % allowed
-      5. Goal line efficiency
-      6. Points per red zone trip
+      1. Red Zone Scoring Percentage (offense) and national rank
+      2. Red Zone TD Percentage (offense) - crucial for separated quality
+      3. Points per Red Zone trip
+      4. Defensive Red Zone Scoring % allowed
+      5. Defensive Red Zone TD % allowed
       
-      Red zone efficiency separates good teams from great teams in tight games.`;
+      Focus on ${seasonStr} season data.`;
       
       const response = await geminiGroundingSearch(query, {
         temperature: 0.2,
@@ -3864,6 +3877,137 @@ const FETCHERS = {
         giveaways: fmtNum(awayStats?.misc_total_giveaways, 0)
       },
       interpretation: interpretTurnoverMargin(homeStats, awayStats)
+    };
+  },
+  
+  PENALTIES: async (bdlSport, home, away, season) => {
+    const isNFL = bdlSport === 'americanfootball_nfl';
+    const isNHL = bdlSport === 'hockey_nhl';
+    const isNCAAF = bdlSport === 'americanfootball_ncaaf';
+    
+    // ========== NFL: Full penalty data from team_season_stats ==========
+    if (isNFL) {
+      const [homeStatsArr, awayStatsArr] = await Promise.all([
+        ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
+        ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+      ]);
+      const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
+      const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
+      
+      const homeGP = homeStats?.games_played || 1;
+      const awayGP = awayStats?.games_played || 1;
+      
+      return {
+        category: 'Penalty Analysis (Season)',
+        home: {
+          team: home.full_name || home.name,
+          total_penalties: fmtNum(homeStats?.misc_total_penalties, 0),
+          penalty_yards: fmtNum(homeStats?.misc_total_penalty_yards, 0),
+          penalties_per_game: ((homeStats?.misc_total_penalties || 0) / homeGP).toFixed(1),
+          first_downs_by_penalty: fmtNum(homeStats?.misc_first_downs_penalty, 0)
+        },
+        away: {
+          team: away.full_name || away.name,
+          total_penalties: fmtNum(awayStats?.misc_total_penalties, 0),
+          penalty_yards: fmtNum(awayStats?.misc_total_penalty_yards, 0),
+          penalties_per_game: ((awayStats?.misc_total_penalties || 0) / awayGP).toFixed(1),
+          first_downs_by_penalty: fmtNum(awayStats?.misc_first_downs_penalty, 0)
+        },
+        interpretation: interpretPenalties(homeStats, awayStats, false)
+      };
+    }
+    
+    // ========== NHL: Use PK% and PP% from team_season_stats ==========
+    if (isNHL) {
+      const [homeStatsArr, awayStatsArr] = await Promise.all([
+        ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
+        ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+      ]);
+      
+      // NHL returns array of { name, value } objects
+      const extractStat = (statsArr, statName) => {
+        if (!Array.isArray(statsArr)) return null;
+        const found = statsArr.find(s => s.name === statName);
+        return found ? found.value : null;
+      };
+      
+      const homePK = extractStat(homeStatsArr, 'penalty_kill_percentage');
+      const homePP = extractStat(homeStatsArr, 'power_play_percentage');
+      const awayPK = extractStat(awayStatsArr, 'penalty_kill_percentage');
+      const awayPP = extractStat(awayStatsArr, 'power_play_percentage');
+      
+      return {
+        category: 'Special Teams Discipline (NHL)',
+        home: {
+          team: home.full_name || home.name,
+          penalty_kill_pct: homePK ? (homePK * 100).toFixed(1) + '%' : 'N/A',
+          power_play_pct: homePP ? (homePP * 100).toFixed(1) + '%' : 'N/A'
+        },
+        away: {
+          team: away.full_name || away.name,
+          penalty_kill_pct: awayPK ? (awayPK * 100).toFixed(1) + '%' : 'N/A',
+          power_play_pct: awayPP ? (awayPP * 100).toFixed(1) + '%' : 'N/A'
+        },
+        interpretation: interpretNHLSpecialTeams(homePK, homePP, awayPK, awayPP, home.full_name || home.name, away.full_name || away.name)
+      };
+    }
+    
+    // ========== NCAAF: Aggregate from per-game team_stats ==========
+    if (isNCAAF) {
+      const [homeGamesArr, awayGamesArr] = await Promise.all([
+        ballDontLieService.getTeamStats ? 
+          ballDontLieService.getTeamStats(bdlSport, { team_ids: [home.id], seasons: [season], per_page: 15 }) : [],
+        ballDontLieService.getTeamStats ? 
+          ballDontLieService.getTeamStats(bdlSport, { team_ids: [away.id], seasons: [season], per_page: 15 }) : []
+      ]);
+      
+      const aggregatePenalties = (games, teamId) => {
+        const teamGames = (games || []).filter(g => g.team?.id === teamId);
+        let totalPenalties = 0, totalYards = 0;
+        teamGames.forEach(g => {
+          totalPenalties += g.penalties || 0;
+          totalYards += g.penalty_yards || 0;
+        });
+        const gamesPlayed = teamGames.length || 1;
+        return {
+          total: totalPenalties,
+          yards: totalYards,
+          perGame: (totalPenalties / gamesPlayed).toFixed(1),
+          yardsPerGame: (totalYards / gamesPlayed).toFixed(1),
+          games: gamesPlayed
+        };
+      };
+      
+      const homePen = aggregatePenalties(homeGamesArr, home.id);
+      const awayPen = aggregatePenalties(awayGamesArr, away.id);
+      
+      return {
+        category: 'Penalty Analysis (NCAAF)',
+        home: {
+          team: home.full_name || home.name,
+          total_penalties: homePen.total.toString(),
+          penalty_yards: homePen.yards.toString(),
+          penalties_per_game: homePen.perGame,
+          yards_per_game: homePen.yardsPerGame
+        },
+        away: {
+          team: away.full_name || away.name,
+          total_penalties: awayPen.total.toString(),
+          penalty_yards: awayPen.yards.toString(),
+          penalties_per_game: awayPen.perGame,
+          yards_per_game: awayPen.yardsPerGame
+        },
+        note: `Aggregated from ${homePen.games} home games, ${awayPen.games} away games`,
+        interpretation: interpretNCAAFPenalties(homePen, awayPen, home.full_name || home.name, away.full_name || away.name)
+      };
+    }
+    
+    // Fallback for unsupported sports
+    return {
+      category: 'Penalty Analysis',
+      note: 'Penalty data not available for this sport via BDL.',
+      home: { team: home.full_name || home.name },
+      away: { team: away.full_name || away.name }
     };
   },
   
@@ -5703,6 +5847,67 @@ function interpretTurnoverMargin(homeStats, awayStats) {
   
   return parts.length > 0 ? parts.join('; ') : 'Both teams near expected turnover rates';
 }
+
+function interpretPenalties(homeStats, awayStats, isNHL) {
+  if (isNHL) return "Discipline is key in special teams matchups.";
+  
+  const homeAvg = (homeStats?.misc_total_penalties || 0) / (homeStats?.games_played || 1);
+  const awayAvg = (awayStats?.misc_total_penalties || 0) / (awayStats?.games_played || 1);
+  
+  if (homeAvg > 8 && awayAvg > 8) return "Both teams struggle with discipline; expect a yellow-heavy game.";
+  if (homeAvg < 4 && awayAvg < 4) return "Both teams are highly disciplined; clean game expected.";
+  
+  const gap = Math.abs(homeAvg - awayAvg);
+  if (gap > 3) {
+    const cleaner = homeAvg < awayAvg ? (homeStats?.team?.name || 'Home') : (awayStats?.team?.name || 'Away');
+    return `${cleaner} has a significant discipline advantage.`;
+  }
+  
+  return "Average penalty impact expected.";
+}
+
+function interpretNHLSpecialTeams(homePK, homePP, awayPK, awayPP, homeName, awayName) {
+  const parts = [];
+  
+  // PK analysis
+  if (homePK && awayPK) {
+    const homePKPct = homePK * 100;
+    const awayPKPct = awayPK * 100;
+    if (Math.abs(homePKPct - awayPKPct) > 5) {
+      const betterPK = homePKPct > awayPKPct ? homeName : awayName;
+      parts.push(`${betterPK} has a stronger penalty kill.`);
+    }
+  }
+  
+  // PP analysis
+  if (homePP && awayPP) {
+    const homePPPct = homePP * 100;
+    const awayPPPct = awayPP * 100;
+    if (Math.abs(homePPPct - awayPPPct) > 3) {
+      const betterPP = homePPPct > awayPPPct ? homeName : awayName;
+      parts.push(`${betterPP} has the edge on the power play.`);
+    }
+  }
+  
+  return parts.length > 0 ? parts.join(' ') : 'Special teams are evenly matched.';
+}
+
+function interpretNCAAFPenalties(homePen, awayPen, homeName, awayName) {
+  const homeAvg = parseFloat(homePen.perGame);
+  const awayAvg = parseFloat(awayPen.perGame);
+  
+  if (homeAvg > 7 && awayAvg > 7) return "Both teams are penalty-prone; expect flags to fly.";
+  if (homeAvg < 4 && awayAvg < 4) return "Both teams are well-disciplined.";
+  
+  const gap = Math.abs(homeAvg - awayAvg);
+  if (gap > 2) {
+    const cleaner = homeAvg < awayAvg ? homeName : awayName;
+    return `${cleaner} has a discipline advantage (${gap.toFixed(1)} fewer penalties/game).`;
+  }
+  
+  return "Average penalty impact expected.";
+}
+
 
 /**
  * Introspection helpers (used for debugging / smoke testing token menus)

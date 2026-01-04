@@ -1150,10 +1150,16 @@ function RealGaryPicks() {
 
       // Fetch weekly NFL picks - get the most recent week's picks
       // NFL picks persist for the whole week, and we should show them until new ones are generated
+      const now = new Date();
+      const estDate = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+      const estMonth = estDate.getMonth() + 1;
+      const estYear = estDate.getFullYear();
+      const nflSeason = estMonth <= 7 ? estYear - 1 : estYear;
+
       const { data: nflData } = await supabase
         .from('weekly_nfl_picks')
         .select('picks, week_start')
-        .eq('season', new Date().getFullYear())
+        .eq('season', nflSeason)
         .order('week_start', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -1642,7 +1648,7 @@ function RealGaryPicks() {
                     }}>
                       {filteredPicks.length === 0 ? (
                         <div className="w-full h-full flex items-center justify-center text-gray-400">
-                          No picks for {selectedSport} today.
+                          Daily {selectedSport} Picks Coming Soon
                         </div>
                       ) : filteredPicks.map((pick, index) => {
                         // Calculate position in stack relative to current index
