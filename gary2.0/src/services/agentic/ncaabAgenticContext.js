@@ -506,7 +506,8 @@ export async function buildNcaabAgenticContext(game, options = {}) {
       total_listed: injuriesList.length
     },
     market_snapshot: marketSnapshot,
-    recent_form: recentForm
+    recent_form: recentForm,
+    rest_fatigue: restInfo  // Days rest, back-to-back, games in last 7 days
   };
 
   const records = {

@@ -16,6 +16,8 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { ballDontLieService } from '../ballDontLieService.js';
 import { fetchDfsSalaries } from '../tank01DfsService.js';
 
+// SAFETY_SETTINGS and other constants remain same...
+
 // Get API key from environment
 function getGeminiApiKey() {
   return process.env.GEMINI_API_KEY || 
@@ -42,6 +44,24 @@ const SAFETY_SETTINGS = [
 ];
 
 /**
+ * Robust JSON cleaning for Gemini responses
+ * @param {string} text - Raw response text
+ * @returns {string} Cleaned JSON string
+ */
+function cleanJsonString(text) {
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) return null;
+  
+  return jsonMatch[0]
+    .replace(/[\u201C\u201D]/g, '"') // Smart quotes
+    .replace(/,\s*([\}\]])/g, '$1') // Trailing commas
+    .replace(/\/\/.*$/gm, '')      // Comments
+    .replace(/\r?\n|\r/g, ' ')     // Newlines to spaces
+    .replace(/\s+/g, ' ')          // Collapse extra whitespace
+    .trim();
+}
+
+/**
  * ═══════════════════════════════════════════════════════════════════════════
  * DFS MODEL CONFIGURATION - Gemini 3 Flash for Gary's Fantasy
  * ═══════════════════════════════════════════════════════════════════════════
@@ -61,7 +81,7 @@ const SAFETY_SETTINGS = [
  */
 const DFS_MODEL_CONFIG = {
   model: process.env.GEMINI_FLASH_MODEL || 'gemini-3-flash-preview',
-  temperature: 1.1,
+  temperature: 0.4,
   reasoningLevel: 'HIGH',
   grounding: 'ENABLED',
   maxOutputTokens: 8192,
@@ -74,6 +94,134 @@ console.log(`[DFS Context] Initialized with MODEL_CONFIG:`, {
   reasoning: DFS_MODEL_CONFIG.reasoningLevel,
   grounding: DFS_MODEL_CONFIG.grounding
 });
+
+/**
+ * Discover available DFS slates for a platform and date
+ * @param {string} platform - 'draftkings' or 'fanduel'
+ * @param {string} sport - 'NBA' or 'NFL'
+ * @param {string} slateDate - Date string
+ * @returns {Array} List of discovered slates
+ */
+export async function discoverDFSSlates(platform, sport, slateDate) {
+  // ⭐ Use Gemini Grounding for slate discovery (Industry Standard)
+  const genAI = getGeminiClient();
+  if (!genAI) {
+    console.log('[DFS Context] Gemini not available - returning default Main Slate');
+    return [{ id: 'main', name: 'Main Slate', gameCount: 0, startTime: 'TBD' }];
+  }
+
+    const platformName = platform === 'draftkings' ? 'DraftKings' : 'FanDuel';
+
+    try {
+      console.log(`[DFS Context] 🕵️ Discovering ${platformName} ${sport} slates for ${slateDate}`);
+      
+      const model = genAI.getGenerativeModel({
+        model: 'gemini-3-flash-preview', // Flash is faster and more reliable for simple grounding
+        tools: [{ google_search: {} }],
+        safetySettings: SAFETY_SETTINGS,
+        generationConfig: {
+          temperature: 0.1,
+          topP: 0.95,
+          maxOutputTokens: 2048
+        }
+      });
+
+      const prompt = `Search the web for the official ${platformName} ${sport} DFS slate schedule for today, ${slateDate}. 
+Check RotoWire or DraftKings. 
+
+I need to find the specific "Classic" slates. 
+Find the TEAMS included in the Main Slate (5 games), Turbo Slate (2 games), and Night Slate (2 games).
+
+Return ONLY valid JSON:
+{
+  "slates": [
+    {
+      "id": "slate-id",
+      "name": "Slate Name",
+      "startTime": "7:30 PM ET",
+      "gameCount": 5,
+      "games": ["PHI@NYK", "ATL@TOR", ...],
+      "teams": ["PHI", "NYK", "ATL", "TOR", ...]
+    }
+  ]
+}`;
+
+      const result = await model.generateContent(prompt);
+      const text = result.response.text();
+      
+      const cleanJson = cleanJsonString(text);
+      if (cleanJson) {
+        try {
+          const parsed = JSON.parse(cleanJson);
+          if (parsed.slates && Array.isArray(parsed.slates) && parsed.slates.length > 0) {
+            console.log(`[DFS Context] ✅ Discovered ${parsed.slates.length} slates via Grounding: ${parsed.slates.map(s => s.name).join(', ')}`);
+            return parsed.slates;
+          }
+        } catch (parseErr) {
+          console.warn(`[DFS Context] Slate JSON parse failed: ${parseErr.message}`);
+          console.debug(`[DFS Context] Problematic JSON snippet: ${cleanJson.substring(0, 100)}...`);
+        }
+      }
+      
+      // If grounding failed or returned empty, try to infer from BDL
+      console.log('[DFS Context] ⚠️ Grounding failed to find slates. Attempting to infer from BDL schedule...');
+      const bdlGames = await ballDontLieService.getGames(sport === 'NBA' ? 'basketball_nba' : 'americanfootball_nfl', { dates: [slateDate] });
+      
+      if (bdlGames && bdlGames.length > 0) {
+        const slates = [];
+        
+        // Sort games by time
+        const sortedGames = [...bdlGames].sort((a, b) => {
+          const timeA = a.status || 'ZZZ';
+          const timeB = b.status || 'ZZZ';
+          return timeA.localeCompare(timeB);
+        });
+
+        // "Full Day" Slate (All Games)
+        slates.push({
+          id: 'full-day',
+          name: 'Full Day (All Games)',
+          startTime: sortedGames[0]?.status || 'TBD',
+          gameCount: sortedGames.length,
+          games: sortedGames.map(g => `${g.visitor_team?.abbreviation}@${g.home_team?.abbreviation}`),
+          teams: sortedGames.flatMap(g => [g.visitor_team?.abbreviation, g.home_team?.abbreviation])
+        });
+
+        // Group into waves for inference
+        const waves = new Map();
+        sortedGames.forEach(game => {
+          let status = game.status || 'TBD';
+          if (status.includes('Final') || status.includes('1st') || status.includes('2nd')) return;
+          if (!waves.has(status)) waves.set(status, []);
+          waves.get(status).push(game);
+        });
+
+        const waveTimes = Array.from(waves.keys()).sort();
+        if (waveTimes.length > 1) {
+          waveTimes.forEach((time, idx) => {
+            const games = waves.get(time);
+            const name = idx === 0 ? 'Early Slate' : (idx === waveTimes.length - 1 ? 'Night Slate' : `Turbo Slate ${idx}`);
+            slates.push({
+              id: `inferred-${idx}`,
+              name: `${name} (${time})`,
+              startTime: time,
+              gameCount: games.length,
+              games: games.map(g => `${g.visitor_team?.abbreviation}@${g.home_team?.abbreviation}`),
+              teams: games.flatMap(g => [g.visitor_team?.abbreviation, g.home_team?.abbreviation])
+            });
+          });
+        }
+
+        console.log(`[DFS Context] ✅ Inferred ${slates.length} slates from schedule`);
+        return slates;
+      }
+
+      return [{ id: 'main', name: 'Main Slate (Default)', gameCount: 0, startTime: 'TBD' }];
+    } catch (error) {
+      console.error(`[DFS Context] Slate discovery failed: ${error.message}`);
+      return [{ id: 'main', name: 'Main Slate (Fallback)', gameCount: 0, startTime: 'TBD' }];
+    }
+}
 
 /**
  * Fetch DFS salaries and injury data using Gemini Grounding
@@ -99,8 +247,9 @@ export async function fetchDFSSalariesWithGrounding(platform, sport, slateDate, 
     console.log(`[DFS Context] MODEL_CONFIG: ${DFS_MODEL_CONFIG.model} | temp=${DFS_MODEL_CONFIG.temperature} | reasoning=${DFS_MODEL_CONFIG.reasoningLevel} | grounding=${DFS_MODEL_CONFIG.grounding}`);
     
     // For salary fetching with grounding - DO NOT use responseMimeType as it breaks grounding
+    // POLICY: Only Gemini 3 models allowed (never 1.x or 2.x)
     const model = genAI.getGenerativeModel({
-      model: 'gemini-2.0-flash', // Use stable model for structured data
+      model: 'gemini-3-flash-preview', // Gemini 3 Flash for grounding
       tools: [{
         google_search: {} // Grounding: ENABLED - Use Google Search for salaries
       }],
@@ -492,14 +641,42 @@ export async function fetchActivePlayersFromBDL(sport, teamIds = []) {
   try {
     console.log(`[DFS Context] 📋 Fetching ACTIVE ${sport} players from BDL (team_ids: ${teamIds.join(', ')})`);
     
-    // Use Active Players endpoint - this has CURRENT team assignments
-    const players = await ballDontLieService.getPlayersActive(sportKey, {
-      team_ids: teamIds,
-      per_page: 100
-    });
+    let allPlayers = [];
+    let nextCursor = undefined;
+    let pageCount = 0;
+    const maxPages = 20; // Increased to 20 for full coverage (approx 2000 players)
     
-    console.log(`[DFS Context] ✅ Found ${players?.length || 0} active players`);
-    return players || [];
+    do {
+      const params = {
+        team_ids: teamIds,
+        per_page: 100
+      };
+      if (nextCursor) params.cursor = nextCursor;
+      
+      const response = await ballDontLieService.getPlayersActive(sportKey, params);
+      
+      // BDL SDK/Service might return array directly or object with data/meta
+      // After our fix in ballDontLieService, it returns { data, meta } if meta exists
+      const players = Array.isArray(response) ? response : (response?.data || []);
+      const meta = response?.meta;
+      
+      allPlayers = allPlayers.concat(players);
+      nextCursor = meta?.next_cursor;
+      pageCount++;
+      
+      console.log(`[DFS Context]   - Page ${pageCount}: Got ${players.length} players (Total: ${allPlayers.length})`);
+      
+      // Fallback: If we got 100 players but no cursor, BDL might not be providing one
+      // but there's likely another page. Try to stop after 1000 players as safety.
+      if (!nextCursor && players.length === 100 && pageCount < 10) {
+        // Some endpoints use offset instead of cursor, but we'll stick to cursor for now
+        // since BDL v1 usually uses next_cursor.
+      }
+      
+    } while (nextCursor && pageCount < maxPages);
+    
+    console.log(`[DFS Context] ✅ Found ${allPlayers.length} total active players`);
+    return allPlayers;
   } catch (error) {
     console.error(`[DFS Context] Active players fetch failed: ${error.message}`);
     return [];
@@ -629,14 +806,24 @@ export async function fetchPlayerStatsFromBDL(sport, dateStr) {
       
       console.log(`[DFS Context] Fetching NBA season ${season}-${season + 1} stats`);
       
-      // Fetch season averages from BDL
-      const playerIds = players.map(p => p.id).filter(Boolean).slice(0, 100);
-      const seasonAverages = await ballDontLieService.getNbaSeasonAverages({
-        season,
-        player_ids: playerIds
-      });
+      // Fetch season averages from BDL for ALL players in batches
+      const playerIds = players.map(p => p.id).filter(Boolean);
+      let seasonAverages = [];
+      const statsBatchSize = 100;
       
-      console.log(`[DFS Context] Retrieved ${seasonAverages?.length || 0} player season averages`);
+      for (let i = 0; i < playerIds.length; i += statsBatchSize) {
+        const batchIds = playerIds.slice(i, i + statsBatchSize);
+        console.log(`[DFS Context] Fetching NBA season averages for batch ${Math.floor(i/statsBatchSize) + 1} (${batchIds.length} players)`);
+        const batchAverages = await ballDontLieService.getNbaSeasonAverages({
+          season,
+          player_ids: batchIds
+        });
+        if (Array.isArray(batchAverages)) {
+          seasonAverages.push(...batchAverages);
+        }
+      }
+      
+      console.log(`[DFS Context] Retrieved ${seasonAverages.length} total player season averages`);
       
       // ═══════════════════════════════════════════════════════════════════════════
       // FETCH L5 GAME LOGS FOR TREND ANALYSIS
@@ -646,9 +833,13 @@ export async function fetchPlayerStatsFromBDL(sport, dateStr) {
       const l5StatsMap = new Map();
       try {
         // Use getPlayerStats method which calls client.nba.getStats internally
+        // Increased limit from 30 to 50 players for better coverage
+        const trendBatchIds = playerIds.slice(0, 50); 
+        console.log(`[DFS Context] Fetching L5 trends for top ${trendBatchIds.length} players`);
+        
         const recentStats = await ballDontLieService.getPlayerStats('basketball_nba', {
           seasons: [season],
-          player_ids: playerIds.slice(0, 30), // Limit to top 30 to avoid rate limits
+          player_ids: trendBatchIds,
           per_page: 100
         });
         
@@ -777,14 +968,16 @@ export async function fetchPlayerStatsFromBDL(sport, dateStr) {
       
       // ⭐ Filter to ONLY games actually on this specific date
       // BDL returns all Week 17 games, but status field has actual date like "12/27 - 4:30 PM EST"
-      const targetMonth = dateStr.split('-')[1]; // "12"
-      const targetDay = dateStr.split('-')[2]; // "27"
-      const targetDateStr = `${targetMonth}/${targetDay}`; // "12/27"
+      const targetMonth = dateStr.split('-')[1].replace(/^0/, ''); // "1" instead of "01"
+      const targetDay = dateStr.split('-')[2].replace(/^0/, ''); // "4" instead of "04"
+      const targetDateStr = `${targetMonth}/${targetDay}`; // "1/4"
       
       const games = allGames.filter(game => {
-        // Check if status contains today's date (e.g., "12/27 - 4:30 PM EST")
+        // Check if game date matches dateStr (YYYY-MM-DD)
+        // Or if status contains today's date (e.g., "1/4 - 1:00 PM EST")
+        const gameDate = game.date || '';
         const status = game.status || '';
-        return status.includes(targetDateStr);
+        return gameDate.startsWith(dateStr) || status.includes(targetDateStr);
       });
       
       console.log(`[DFS Context] Filtered to ${games.length} NFL games actually on ${targetDateStr} (from ${allGames.length} total week games)`);
@@ -812,11 +1005,33 @@ export async function fetchPlayerStatsFromBDL(sport, dateStr) {
         if (game.away_team?.id) teamIds.add(game.away_team.id);
       }
       
-      // Fetch active players for these teams
-      const players = await ballDontLieService.getPlayersGeneric('americanfootball_nfl', {
-        team_ids: Array.from(teamIds),
-        per_page: 150
-      });
+      // Fetch active players for these teams with pagination
+      let allPlayers = [];
+      let nextCursor = undefined;
+      let pageCount = 0;
+      const maxPages = 5;
+      
+      do {
+        const params = {
+          team_ids: Array.from(teamIds),
+          per_page: 100
+        };
+        if (nextCursor) params.cursor = nextCursor;
+        
+        const response = await ballDontLieService.getPlayersGeneric('americanfootball_nfl', params);
+        
+        const players = Array.isArray(response) ? response : (response?.data || []);
+        const meta = response?.meta;
+        
+        allPlayers = allPlayers.concat(players);
+        nextCursor = meta?.next_cursor;
+        pageCount++;
+        
+        console.log(`[DFS Context]   - Page ${pageCount}: Got ${players.length} players (Total: ${allPlayers.length})`);
+        
+      } while (nextCursor && pageCount < maxPages);
+      
+      const players = allPlayers;
       
       // Get current NFL season (2025 season runs Sept 2025 - Feb 2026)
       // NFL season starts in September, so Sept-Dec = current year, Jan-Jul = previous year
@@ -831,12 +1046,14 @@ export async function fetchPlayerStatsFromBDL(sport, dateStr) {
       // Fetch NFL season stats from BDL
       // BDL NFL Season Stats provides: passing_yards, rushing_yards, receiving_yards, 
       // passing_touchdowns, rushing_touchdowns, receiving_touchdowns, receptions, etc.
-      const playerIds = players.map(p => p.id).filter(Boolean).slice(0, 50);
+      const playerIds = players.map(p => p.id).filter(Boolean);
       let seasonStats = [];
       
       try {
-        // BDL NFL season_stats endpoint - fetch in parallel batches
+        // BDL NFL season_stats endpoint - fetch in parallel batches for ALL players
         const batchSize = 10;
+        console.log(`[DFS Context] Fetching NFL season stats for ${playerIds.length} players in batches of ${batchSize}`);
+        
         for (let i = 0; i < playerIds.length; i += batchSize) {
           const batch = playerIds.slice(i, i + batchSize);
           const batchResults = await Promise.all(
@@ -1005,6 +1222,73 @@ function shouldExcludePlayer(status) {
  * @param {Array} groundedPlayers - Players with salaries from Grounding
  * @returns {Array} Merged player pool (excluding OUT/DOUBTFUL)
  */
+/**
+ * Fetch benchmark projections from the web using Gemini Grounding
+ * This replaces RotoWire projections for users without a key
+ * @param {string} sport - 'NBA' or 'NFL'
+ * @param {string} dateStr - Formatted date
+ * @param {Array} teams - Teams to search for
+ * @returns {Map} Map of player names to projections
+ */
+async function fetchBenchmarkProjections(sport, dateStr, teams = []) {
+  const genAI = getGeminiClient();
+  const benchmarkMap = new Map();
+  if (!genAI) return benchmarkMap;
+
+  try {
+    console.log(`[DFS Context] 📊 Fetching expert benchmark projections via Gemini Grounding...`);
+    
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-3-flash-preview',
+      tools: [{ google_search: {} }],
+      safetySettings: SAFETY_SETTINGS,
+      generationConfig: {
+        temperature: 0.1, // Very low temp for facts
+        maxOutputTokens: 2048
+      }
+    });
+
+    const prompt = `Search for today's (${dateStr}) expert ${sport} DFS projections for DraftKings/FanDuel.
+Check sites like RotoGrinders, FantasyLabs, or NumberFire.
+
+I need the projected fantasy points for the top 20-30 players in this slate: ${teams.join(', ')}.
+
+Return as JSON:
+{
+  "projections": [
+    { "name": "Player Name", "points": 45.2 },
+    ...
+  ]
+}
+Return ONLY valid JSON.`;
+
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
+    
+    const cleanJson = cleanJsonString(text);
+    if (cleanJson) {
+      try {
+        const parsed = JSON.parse(cleanJson);
+        if (parsed.projections && Array.isArray(parsed.projections)) {
+          parsed.projections.forEach(p => {
+            if (p.name && p.points) {
+              benchmarkMap.set(normalizePlayerName(p.name), parseFloat(p.points));
+            }
+          });
+          console.log(`[DFS Context] ✅ Integrated ${benchmarkMap.size} expert benchmark projections`);
+        }
+      } catch (parseErr) {
+        console.warn(`[DFS Context] Benchmark JSON parse failed: ${parseErr.message}`);
+        console.debug(`[DFS Context] Problematic JSON snippet: ${cleanJson.substring(0, 100)}...`);
+      }
+    }
+  } catch (error) {
+    console.warn(`[DFS Context] Benchmark projection fetch failed: ${error.message}`);
+  }
+  
+  return benchmarkMap;
+}
+
 export function mergePlayerData(bdlPlayers, groundedPlayers) {
   // Create lookup maps for grounded players - multiple keys for better matching
   const salaryMap = new Map();
@@ -1758,7 +2042,7 @@ export async function fetchOwnershipProjections(sport, platform, slateDate, team
       tools: [{ google_search: {} }], // Grounding: ENABLED
       safetySettings: SAFETY_SETTINGS,
       generationConfig: {
-        temperature: 0.7, // Lower temp for more factual ownership data
+        temperature: 0.4, // Lower temp for more factual ownership data
         topP: DFS_MODEL_CONFIG.topP,
         maxOutputTokens: 4096
       }
@@ -2098,11 +2382,12 @@ export async function getTeamsPlayingToday(sport, dateStr) {
  * @param {string} platform - 'draftkings' or 'fanduel'
  * @param {string} sport - 'NBA' or 'NFL'
  * @param {string} dateStr - Date YYYY-MM-DD
+ * @param {Object} slate - Optional slate info { teams: [], games: [], name: '' }
  * @returns {Object} Complete player pool with salaries and stats
  */
-export async function buildDFSContext(platform, sport, dateStr) {
+export async function buildDFSContext(platform, sport, dateStr, slate = null) {
   const start = Date.now();
-  console.log(`\n[DFS Context] Building ${platform} ${sport} context for ${dateStr}`);
+  console.log(`\n[DFS Context] Building ${platform} ${sport} context for ${dateStr} ${slate ? `(${slate.name})` : '(Main Slate)'}`);
   
   // Format date for display
   const dateObj = new Date(dateStr + 'T12:00:00');
@@ -2112,8 +2397,8 @@ export async function buildDFSContext(platform, sport, dateStr) {
     year: 'numeric' 
   });
   
-  // Get teams playing today
-  const teams = await getTeamsPlayingToday(sport, dateStr);
+  // Get teams playing today (use slate teams if provided, otherwise get all)
+  const teams = slate?.teams || await getTeamsPlayingToday(sport, dateStr);
   console.log(`[DFS Context] Teams playing: ${teams.join(', ') || 'None found'}`);
   
   if (teams.length === 0) {
@@ -2129,20 +2414,34 @@ export async function buildDFSContext(platform, sport, dateStr) {
   
   // Get game info for narrative context
   const sportKey = sport === 'NBA' ? 'basketball_nba' : 'americanfootball_nfl';
-  let games = await ballDontLieService.getGames(sportKey, { dates: [dateStr] }, 5) || [];
+  let allGames = await ballDontLieService.getGames(sportKey, { dates: [dateStr] }, 5) || [];
   
-  // For NFL, filter to only games actually on this date (BDL returns whole week)
-  if (sport === 'NFL' && games.length > 0) {
-    const targetMonth = dateStr.split('-')[1];
-    const targetDay = dateStr.split('-')[2];
-    const targetDateStr = `${targetMonth}/${targetDay}`;
-    
-    games = games.filter(game => {
-      const status = game.status || '';
-      return status.includes(targetDateStr);
+  // Filter games based on slate if provided, otherwise use date-based filtering
+  let games = [];
+  if (slate?.games) {
+    // If slate provides games (e.g. "LAL@BOS"), filter allGames to match
+    games = allGames.filter(g => {
+      const match1 = `${g.visitor_team?.abbreviation}@${g.home_team?.abbreviation}`;
+      const match2 = `${g.away_team?.abbreviation}@${g.home_team?.abbreviation}`;
+      return slate.games.includes(match1) || slate.games.includes(match2);
     });
-    console.log(`[DFS Context] Filtered to ${games.length} NFL games for ${targetDateStr}`);
+  } else {
+    // Default date-based filtering
+    if (sport === 'NFL' && allGames.length > 0) {
+      const targetMonth = dateStr.split('-')[1];
+      const targetDay = dateStr.split('-')[2];
+      const targetDateStr = `${targetMonth}/${targetDay}`;
+      
+      games = allGames.filter(game => {
+        const status = game.status || '';
+        return status.includes(targetDateStr);
+      });
+    } else {
+      games = allGames;
+    }
   }
+  
+  console.log(`[DFS Context] Filtered to ${games.length} games for this slate`);
   
   const gameList = games.map(g => ({
     home_team: g.home_team?.abbreviation || g.home_team?.name,
@@ -2154,10 +2453,11 @@ export async function buildDFSContext(platform, sport, dateStr) {
   // PARALLEL FETCH: Tank01 API salaries + BDL stats + Narrative context + Ownership
   // ═══════════════════════════════════════════════════════════════════════════
   // Tank01 API provides accurate, real-time DFS salaries (replaces Gemini Grounding)
-  // BDL provides player stats and team data
-  // Gemini Grounding still used for narrative context and ownership projections
-  const [bdlPlayers, salaryData, narrativeContext, ownershipData] = await Promise.all([
+  // BDL provides player stats, team data, and confirmed lineups
+  // Gemini Grounding used for narrative context, ownership, and benchmark projections
+  const [bdlPlayers, bdlLineups, salaryData, narrativeContext, ownershipData] = await Promise.all([
     fetchPlayerStatsFromBDL(sport, dateStr),
+    sport === 'NBA' ? ballDontLieService.getNbaLineups(gameList.map(g => g.id)) : Promise.resolve([]),
     fetchDfsSalaries(sport, dateStr, platform), // Tank01 API for real salaries
     fetchDFSNarrativeContext(sport, slateDate, gameList),
     fetchOwnershipProjections(sport, platform, slateDate, teams)
@@ -2166,22 +2466,55 @@ export async function buildDFSContext(platform, sport, dateStr) {
   const bdlCount = bdlPlayers.length;
   const salaryCount = salaryData.players?.length || 0;
   
-  console.log(`[DFS Context] BDL players: ${bdlCount}`);
-  console.log(`[DFS Context] Tank01 salary data: ${salaryCount} players (source: ${salaryData.source || 'unknown'})`);
-  console.log(`[DFS Context] Narratives: ${narrativeContext.narratives?.length || 0} games, ${narrativeContext.targetPlayers?.length || 0} targets`);
-  console.log(`[DFS Context] Ownership: ${ownershipData.chalk?.length || 0} chalk, ${ownershipData.contrarian?.length || 0} contrarian`);
+  console.log(`[DFS Context] BDL players: ${bdlCount}, Lineups: ${bdlLineups?.length || 0}`);
+  console.log(`[DFS Context] Tank01 salary data: ${salaryCount} players`);
   
-  // If Tank01 API failed, log the error
-  if (salaryCount === 0 && bdlCount > 0) {
-    console.warn(`[DFS Context] ⚠️ Tank01 API returned no players - salary data unavailable`);
-    if (salaryData.error) {
-      console.warn(`[DFS Context] ⚠️ Error: ${salaryData.error}`);
+  // Filter player stats and salaries to only include teams in this slate
+  const slateTeamSet = new Set(teams.map(t => t.toUpperCase()));
+  const filteredBdlPlayers = bdlPlayers.filter(p => slateTeamSet.has(p.team?.toUpperCase()));
+  const filteredSalaryPlayers = (salaryData.players || []).filter(p => slateTeamSet.has(p.team?.toUpperCase()));
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // INTEGRATE CONFIRMED STARTERS & BENCHMARKS
+  // ═══════════════════════════════════════════════════════════════════════════
+  const confirmedStarters = new Set();
+  
+  // Map BDL confirmed starters
+  (bdlLineups || []).forEach(entry => {
+    if (entry.starter === true && entry.player?.first_name) {
+      const name = `${entry.player.first_name} ${entry.player.last_name}`;
+      confirmedStarters.add(normalizePlayerName(name));
     }
-  }
+  });
+
+  // Fetch benchmark projections using Gemini Grounding (Industry Best Practice)
+  // This helps Gary double-check his AI math against "Vegas/Expert" consensus
+  const benchmarkProjections = await fetchBenchmarkProjections(sport, slateDate, teams);
+
+  console.log(`[DFS Context] Integrated: ${confirmedStarters.size} confirmed starters, ${benchmarkProjections.size} benchmarks`);
   
   // Merge data sources (Tank01 salaries + BDL stats)
-  const mergedPlayers = mergePlayerData(bdlPlayers, salaryData.players || []);
-  console.log(`[DFS Context] Merged player pool: ${mergedPlayers.length}`);
+  const mergedPlayers = mergePlayerData(filteredBdlPlayers, filteredSalaryPlayers);
+  
+  // Apply metadata to merged players
+  for (const player of mergedPlayers) {
+    const key = normalizePlayerName(player.name);
+    
+    // Confirmed Starter Lock (from BDL)
+    if (confirmedStarters.has(key)) {
+      player.isConfirmedStarter = true;
+      player.lockReason = 'Confirmed Starter (Ball Don\'t Lie)';
+    }
+
+    // Benchmark Projection (from Gemini Grounding)
+    if (benchmarkProjections.has(key)) {
+      player.benchmarkProjection = benchmarkProjections.get(key);
+    }
+  }
+
+  // ⚠️ Filter out late scratches
+  const finalMergedPlayers = mergedPlayers.filter(p => p.status !== 'OUT' && p.status !== 'INACTIVE');
+  console.log(`[DFS Context] Final slate player pool: ${finalMergedPlayers.length}`);
   
   // ═══════════════════════════════════════════════════════════════════════════
   // APPLY OWNERSHIP DATA TO PLAYERS

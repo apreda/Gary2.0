@@ -8,7 +8,8 @@ import {
   buildMarketSnapshot,
   calcRestInfo,
   calcRecentForm,
-  parseGameDate
+  parseGameDate,
+  fixBdlInjuryStatus
 } from './sharedUtils.js';
 
 const makeStatsMap = (rows = []) => {
@@ -321,37 +322,23 @@ export async function buildNbaAgenticContext(game, options = {}) {
     away: calcRecentForm(awayRecent, awayTeam.id, 5)
   };
 
-  // Long-term injuries that should NOT count as edges or contradictions
-  // (These are already priced in, not actionable for today's game)
-  const LONG_TERM_INJURY_KEYWORDS = [
-    'out for season', 'season-ending', 'out indefinitely', 'out all year',
-    'ruled out for 2025', 'not expected to return', 'out for the year'
-  ];
-
-  /**
-   * Check if an injury should be ignored (long-term, not an edge)
-   */
-  const isLongTermInjury = (injuryDescription) => {
-    if (!injuryDescription) return false;
-    const lower = injuryDescription.toLowerCase();
-    return LONG_TERM_INJURY_KEYWORDS.some(kw => lower.includes(kw));
-  };
-
   // Format injuries - filter out Available status and long-term injuries
   // (Only show actionable injuries that affect today's game)
   const notableInjuries = (injuries || [])
+    .map(fixBdlInjuryStatus)
     .filter((injury) => {
       // Exclude Available players
       if (!injury?.status || injury.status === 'Available') return false;
       // Exclude long-term injuries (season-ending, etc.) - these are already priced in
-      if (isLongTermInjury(injury.description)) return false;
+      if (injury.duration === 'SEASON-LONG') return false;
       return true;
     })
     .map((injury) => ({
       player: `${injury?.player?.first_name || ''} ${injury?.player?.last_name || ''}`.trim(),
       status: injury?.status,
       description: injury?.description || '',
-      team: injury?.team?.full_name || ''
+      team: injury?.team?.full_name || '',
+      duration: injury?.duration
     }))
     .slice(0, 8);
 

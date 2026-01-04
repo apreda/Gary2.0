@@ -7,6 +7,7 @@
 
 import { ballDontLieService } from '../../ballDontLieService.js';
 import { formatTokenMenu } from '../tools/toolDefinitions.js';
+import { fixBdlInjuryStatus } from '../sharedUtils.js';
 // All context comes from Gemini 3 Flash with Google Search Grounding
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import axios from 'axios';
@@ -312,13 +313,32 @@ Be specific and factual. If it's just a regular season game, say so clearly.`;
   // For NCAAF, fetch bowl game context if applicable (December-January games are likely bowls)
   let bowlGameContext = '';
   if (sportKey === 'NCAAF') {
-    bowlGameContext = await fetchBowlGameContext(homeTeam, awayTeam, game);
+    bowlGameContext = await fetchBowlGameContext(homeTeam, awayTeam, game, injuries?.narrativeContext);
   }
   
   // For NCAAB, fetch NET rankings and Quad records (critical for tournament context)
   let ncaabTournamentContext = '';
   if (sportKey === 'NCAAB') {
     ncaabTournamentContext = await fetchNcaabTournamentContext(homeTeam, awayTeam);
+  }
+
+  // NFL: Set tournamentContext for primetime or divisional games
+  if (sportKey === 'NFL') {
+    const gameDate = new Date(game.commence_time);
+    const day = gameDate.getUTCDay(); // 0=Sun, 1=Mon, 4=Thu
+    const hour = gameDate.getUTCHours(); // UTC hours
+    
+    // Simple primetime detection (games starting after 8pm ET / 1am UTC)
+    if (day === 1 && hour >= 0) game.tournamentContext = 'MNF';
+    else if (day === 4 && hour >= 0) game.tournamentContext = 'TNF';
+    else if (day === 0 && hour >= 23) game.tournamentContext = 'SNF';
+    
+    // Also check for "Divisional", "Wild Card", etc. in game name
+    const lowerName = (game.name || '').toLowerCase();
+    if (lowerName.includes('divisional')) game.tournamentContext = 'Divisional';
+    else if (lowerName.includes('wild card')) game.tournamentContext = 'Wild Card';
+    else if (lowerName.includes('championship')) game.tournamentContext = 'Championship';
+    else if (lowerName.includes('super bowl')) game.tournamentContext = 'Super Bowl';
   }
   
   // Format injuries for display
@@ -379,13 +399,10 @@ Be specific and factual. If it's just a regular season game, say so clearly.`;
   let gameContextSection = '';
   if (game.gameSignificance && game.tournamentContext) {
     gameContextSection = `
-🎯 GAME CONTEXT & SIGNIFICANCE (READ THIS - IMPORTANT)
+🎯 GAME CONTEXT & SIGNIFICANCE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${game.gameSignificance}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-⚠️ NOTE: This is NOT a regular season game. Factor in the tournament context,
-neutral site, and what's at stake when making your analysis.
 
 `;
   }
@@ -401,29 +418,20 @@ ${gameContextSection}${bowlGameContext}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${formatInjuryReport(homeTeam, awayTeam, injuries)}
 
-🚨 INJURY CONTEXT:
+🚨 INJURY DATA PROTOCOLS:
 1. Do NOT mention any player listed as OUT/DOUBTFUL/IR as if they are playing.
-2. RECENT injuries = Team is still adjusting to the absence.
-3. SEASON-LONG injuries = Team stats ALREADY reflect their absence - NOT a betting edge.
-4. QB on IR = Past records may be irrelevant if the QB changed mid-season.
+2. SEASON-LONG injuries (OUT 2+ weeks) = Team and player stats ALREADY reflect this absence. Do NOT cite these as "reasons" or "edges" for a pick.
+3. RECENT injuries = Use your expertise and tools to determine if the absence or return of these players is significant for this specific matchup.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${narrativeContext ? `
 🔍 LIVE CONTEXT FROM GOOGLE SEARCH (Gemini Grounding)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${narrativeContext}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-💡 NOTE: This is live context from real-time Google searches about this matchup.
-Use this to inform your analysis about player significance, narratives, and trends
-that might not be captured by raw statistics alone.
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ` : ''}
-🏃 REST & SCHEDULE SPOT (CRITICAL FOR BETTING)
+🏃 REST & SCHEDULE SPOT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${formatRestSituation(homeTeam, awayTeam, calculateRestSituation(recentHome, game.commence_time), calculateRestSituation(recentAway, game.commence_time))}
-
-⚠️ SPOT RULE: Back-to-backs and heavy schedules (3 games in 4 days) are 
-MAJOR factors. Teams on rest disadvantage often underperform, especially on the road.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ${nbaKeyPlayers ? formatNbaKeyPlayers(homeTeam, awayTeam, nbaKeyPlayers) : ''}${ncaabKeyPlayers ? formatNcaabKeyPlayers(homeTeam, awayTeam, ncaabKeyPlayers) : ''}${nhlKeyPlayers ? formatNhlKeyPlayers(homeTeam, awayTeam, nhlKeyPlayers) : ''}${eplKeyPlayers ? formatEplKeyPlayers(homeTeam, awayTeam, eplKeyPlayers) : ''}${keyPlayers ? formatKeyPlayers(homeTeam, awayTeam, keyPlayers) : ''}${startingQBs ? formatStartingQBs(homeTeam, awayTeam, startingQBs) : ''}${ncaafKeyPlayers ? formatNcaafKeyPlayers(homeTeam, awayTeam, ncaafKeyPlayers) : ''}
@@ -967,149 +975,18 @@ async function fetchInjuries(homeTeam, awayTeam, sport) {
         const injuries = await ballDontLieService.getInjuriesGeneric(bdlSport, { team_ids: teamIds });
         console.log(`[Scout Report] BDL returned ${injuries?.length || 0} total injuries for teams ${teamIds.join(', ')}`);
 
-        // Fix stale BDL statuses - check description for "questionable" when status says "Out"
-        // Also check if return_date is today (means they're likely playing)
-        // AND add duration context for betting edge detection
-        const today = new Date();
-        const todayStr = today.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        
-        // Helper to parse injury date from BDL description (e.g., "Oct 9: Tatum..." or "Dec 25: Herro...")
-        const parseInjuryDate = (description) => {
-          const dateMatch = description.match(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}):/i);
-          if (dateMatch) {
-            const monthMap = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
-            const month = monthMap[dateMatch[1].toLowerCase()];
-            const day = parseInt(dateMatch[2]);
-            const year = today.getFullYear();
-            // If month is in the future, assume previous year
-            const injuryDate = new Date(year, month, day);
-            if (injuryDate > today) {
-              injuryDate.setFullYear(year - 1);
-            }
-            return injuryDate;
-          }
-          return null;
-        };
-        
-        // Calculate days since injury
-        const getDaysSinceInjury = (description) => {
-          const injuryDate = parseInjuryDate(description);
-          if (!injuryDate) return null;
-          const diffMs = today - injuryDate;
-          return Math.floor(diffMs / (1000 * 60 * 60 * 24));
-        };
-        
-        const fixBdlStatus = (injury) => {
-          const desc = (injury.description || '').toLowerCase();
-          const rawDesc = injury.description || '';
-          const returnDate = injury.return_date || '';
-          const isReturnToday = returnDate.includes(todayStr.split(' ')[1]) && returnDate.includes(todayStr.split(' ')[0]);
-          
-          // Calculate days since injury was first reported
-          const daysSinceReport = getDaysSinceInjury(rawDesc);
-          injury.daysSinceReport = daysSinceReport;
-          
-          // If status is "Out" but description says "questionable" or "day-to-day", fix it
-          if (injury.status === 'Out') {
-            if (desc.includes('questionable') || desc.includes('game-time decision') || desc.includes('gtd')) {
-              console.log(`[Scout Report] BDL status fix: ${injury.player?.first_name} ${injury.player?.last_name} - Out → Questionable (desc: "${desc.substring(0, 50)}...")`);
-              injury.status = 'Questionable';
-            } else if (desc.includes('day-to-day') || desc.includes('day to day')) {
-              console.log(`[Scout Report] BDL status fix: ${injury.player?.first_name} ${injury.player?.last_name} - Out → Day-To-Day`);
-              injury.status = 'Day-To-Day';
-            } else if (isReturnToday) {
-              console.log(`[Scout Report] BDL status fix: ${injury.player?.first_name} ${injury.player?.last_name} - Out → Questionable (return_date is today)`);
-              injury.status = 'Questionable';
-            }
-          }
-          
-          // CRITICAL: Add duration context based on ACTUAL TIME since injury report
-          // This determines if injury is a betting edge or not
-          
-          // FIRST: Check for explicit season-long keywords (highest priority)
-          if (desc.includes('indefinitely') || desc.includes('no timetable') || desc.includes('no return') ||
-              desc.includes('season-ending') || desc.includes('out for the season') || desc.includes('out for season') ||
-              desc.includes('won\'t return') || desc.includes('will not return') || 
-              desc.includes('rest of the season') || desc.includes('remainder of the season') ||
-              desc.includes('acl') || desc.includes('achilles') || // Major surgeries
-              injury.status === 'Injured Reserve' || injury.status === 'IR' || injury.status === 'LTIR') {
-            injury.duration = 'SEASON-LONG';
-            injury.isEdge = false;
-            injury.durationReason = 'Season-ending keyword detected';
-            console.log(`[Scout Report] Duration tagged: ${injury.player?.first_name} ${injury.player?.last_name} - SEASON-LONG (keyword: "${desc.substring(0, 60)}...")`);
-          } 
-          // SECOND: Check for surgery (usually long-term)
-          else if (desc.includes('surgery') || desc.includes('underwent') || desc.includes('procedure')) {
-            injury.duration = 'SEASON-LONG';
-            injury.isEdge = false;
-            injury.durationReason = 'Surgery detected';
-            console.log(`[Scout Report] Duration tagged: ${injury.player?.first_name} ${injury.player?.last_name} - SEASON-LONG (surgery)`);
-          }
-          // THIRD: Use calculated days since report
-          else if (daysSinceReport !== null) {
-            if (daysSinceReport >= 42) { // 6+ weeks = SEASON-LONG
-              injury.duration = 'SEASON-LONG';
-              injury.isEdge = false;
-              injury.durationReason = `${daysSinceReport} days since report (team adjusted)`;
-              console.log(`[Scout Report] Duration tagged: ${injury.player?.first_name} ${injury.player?.last_name} - SEASON-LONG (${daysSinceReport} days ago - team has adjusted)`);
-            } else if (daysSinceReport >= 21) { // 3-6 weeks = MID-SEASON
-              injury.duration = 'MID-SEASON';
-              injury.isEdge = false;
-              injury.durationReason = `${daysSinceReport} days since report (team adjusting)`;
-              console.log(`[Scout Report] Duration tagged: ${injury.player?.first_name} ${injury.player?.last_name} - MID-SEASON (${daysSinceReport} days ago)`);
-            } else if (daysSinceReport <= 14) { // 0-2 weeks = RECENT
-              injury.duration = 'RECENT';
-              injury.isEdge = true;
-              injury.durationReason = `${daysSinceReport} days since report (team still adjusting!)`;
-              console.log(`[Scout Report] Duration tagged: ${injury.player?.first_name} ${injury.player?.last_name} - RECENT (${daysSinceReport} days ago)`);
-            } else { // 2-3 weeks = MID-SEASON
-              injury.duration = 'MID-SEASON';
-              injury.isEdge = false;
-              injury.durationReason = `${daysSinceReport} days since report`;
-            }
-          }
-          // FOURTH: Fall back to keyword detection for day-to-day
-          else if (desc.includes('day-to-day') || desc.includes('questionable') || desc.includes('this week') || 
-                   desc.includes('game-time') || isReturnToday) {
-            injury.duration = 'RECENT';
-            injury.isEdge = true;
-            injury.durationReason = 'Day-to-day keyword detected';
-          }
-          // FIFTH: Multi-week keywords
-          else if (desc.includes('several weeks') || desc.includes('multiple weeks') || desc.includes('extended')) {
-            injury.duration = 'MID-SEASON';
-            injury.isEdge = false;
-            injury.durationReason = 'Extended absence keyword detected';
-          }
-          // SIXTH: If status is "Out" with no clear timeline, assume NOT an edge (market has priced it in)
-          else if (injury.status === 'Out') {
-            injury.duration = 'MID-SEASON';
-            injury.isEdge = false;
-            injury.durationReason = 'Out status with unknown duration - assume market has priced in';
-            console.log(`[Scout Report] Duration tagged: ${injury.player?.first_name} ${injury.player?.last_name} - MID-SEASON (Out status, unknown duration - NOT an edge)`);
-          }
-          // DEFAULT: Mark as unknown but NOT an edge for conservative betting
-          else {
-            injury.duration = 'UNKNOWN';
-            injury.isEdge = false; // Default to NOT an edge - if we don't know, market probably does
-            injury.durationReason = 'Could not determine duration - assume market has priced in';
-          }
-          
-          return injury;
-        };
-
         // Filter by team and fix statuses
         bdlInjuries = {
           home: injuries?.filter(i =>
             i.player?.team?.id === home?.id ||
             i.player?.team_id === home?.id ||
             i.team_id === home?.id
-          ).map(fixBdlStatus) || [],
+          ).map(fixBdlInjuryStatus) || [],
           away: injuries?.filter(i =>
             i.player?.team?.id === away?.id ||
             i.player?.team_id === away?.id ||
             i.team_id === away?.id
-          ).map(fixBdlStatus) || []
+          ).map(fixBdlInjuryStatus) || []
         };
 
         console.log(`[Scout Report] BDL injuries filtered - Home: ${bdlInjuries.home.length}, Away: ${bdlInjuries.away.length}`);
@@ -1180,8 +1057,9 @@ async function fetchGroundedContext(homeTeam, awayTeam, sport, gameDate, options
   try {
     const today = gameDate || new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
     
-    // Use Flash for props (high volume, avoid quota issues) or Pro for regular picks (deep reasoning)
-    const modelName = options.useFlash 
+    // Use Flash for props (high volume, avoid quota issues), NCAAB (quota management), or Pro for regular picks (deep reasoning)
+    const isNCAAB = sport === 'basketball_ncaab' || sport === 'NCAAB';
+    const modelName = options.useFlash || isNCAAB
       ? (process.env.GEMINI_FLASH_MODEL || 'gemini-3-flash-preview')
       : (process.env.GEMINI_MODEL || 'gemini-3-pro-preview');
     
@@ -1356,36 +1234,52 @@ Be factual. Do NOT include any betting picks or predictions.
 3. YOUR OWN WORDS - Synthesize facts, do NOT plagiarize
 4. NO BETTING ADVICE - Gary makes his own picks`;
     } else if (sport === 'NCAAB' || sport === 'basketball_ncaab') {
-      prompt = `For the college basketball game ${awayTeam} @ ${homeTeam} on ${today}:
+      prompt = `CURRENT DATE: ${today}
+For the college basketball game ${awayTeam} @ ${homeTeam} on ${today}, provide UP-TO-DATE information:
 
-1. INJURIES: List ALL players OUT, QUESTIONABLE, or DAY-TO-DAY for each team
+1. INJURIES (as of ${today}):
+   - List ALL players OUT, QUESTIONABLE, or DAY-TO-DAY for each team
    - Include player name and position (G, F, C)
    - Mark if RECENT (last 2 weeks) or SEASON-LONG
    - College has fewer roster spots - each injury matters more
 
-2. STARTING LINEUP:
+2. STARTING LINEUP & ROSTER CONTINUITY:
    - Who are the expected starting 5 for ${homeTeam}?
    - Who are the expected starting 5 for ${awayTeam}?
-   - Any freshmen or transfers making major impact?
+   - ROSTER CONTINUITY: What % of minutes/scoring is returning from last season for each team?
+   - Are they a "veteran core" (3+ upperclassmen starters) or a "portal-heavy" new roster?
+   - Any freshmen or key transfers making major impact this season?
 
-3. KEY PLAYERS:
+3. COACHING & TACTICAL STYLE:
+   - Who are the head coaches for ${homeTeam} and ${awayTeam}?
+   - What is each coach's "signature" defensive style? (e.g., Pack-line, 2-3 Zone, Press, Man-to-man)
+   - What is each team's offensive identity? (e.g., Post-heavy, 3PT reliant, Transition-focused, Motion offense)
+   - Any notable coaching experience gaps or tournament pedigree differences?
+
+4. KEY PLAYERS:
    - Who are the leading scorers/stars for each team?
-   - Any players considering NBA draft (load management)?
-   - Any recent transfers portal entries/commitments?
+   - Any players considering NBA draft (potential load management)?
+   - Any recent transfer portal entries/commitments affecting the roster?
 
-4. ADVANCED ANALYTICS (CRITICAL):
+5. ADVANCED ANALYTICS (CRITICAL - current as of ${today}):
    - KenPom rankings and ratings for both teams (AdjEM, AdjO, AdjD, Tempo)
    - NET rankings for both teams
    - Strength of Schedule (SOS) rankings
-   - Quad 1/2/3/4 records if available (for NCAA Tournament context)
+   - Quad 1/2/3/4 records if available
    - Any notable efficiency metrics or statistical edges
 
-5. GAME CONTEXT:
+6. VENUE & ENVIRONMENT:
+   - Where is this game being played? (Arena name and capacity)
+   - Is this venue known for being particularly hostile? (e.g., Student section proximity, altitude, noise level)
+   - What is ${homeTeam}'s record AT HOME this season, specifically in conference play?
+   - Any unique venue factors? (e.g., Denver altitude, small gym, historic arena)
+
+7. GAME CONTEXT:
    - Is this a conference or non-conference game?
    - Tournament/conference tournament implications?
-   - Any revenge angle from earlier this season?
+   - Any revenge angle from earlier this season or last season?
    - Is this a rivalry game?
-   - March Madness or conference tournament implications?
+   - Any scheduling quirks? (e.g., first game back from break, end of road trip)
 
 Be factual. Do NOT include any betting picks or predictions.
 
@@ -1808,17 +1702,40 @@ Be factual. Format injuries clearly. NO betting predictions.
 4. NO BETTING ADVICE - Gary makes his own picks`;
     } else if (sport === 'NFL' || sport === 'americanfootball_nfl') {
     } else if (sport === 'NCAAF' || sport === 'americanfootball_ncaaf') {
-      query = `Current college football injuries for ${homeTeam} vs ${awayTeam} as of ${today}:
+      query = `For the college football game ${awayTeam} @ ${homeTeam} on ${today} (2025-26 Bowl Season):
 
-1. INJURIES: List ALL players OUT, DOUBTFUL, or QUESTIONABLE
-   Format: "PLAYER NAME (POSITION) - STATUS - INJURY"
+1. INJURIES & ROSTER ATTRITION - CRITICAL:
+   - List ALL players OUT, DOUBTFUL, or QUESTIONABLE for each team.
+   - Include player name, position, and impact (e.g., "Starting LT", "Leading Tackler").
+   - ⚠️ MUST IDENTIFY: NFL Draft Opt-outs, Transfer Portal entries, and Academically Ineligible players.
+   - For bowl games, distinguish between "Regular Season Starters" and "Bowl Game Starters".
 
-2. QB SITUATION: Starting QB for each team, any controversies
+2. QB SITUATION: 
+   - Who is the confirmed starting QB for each team? 
+   - If the regular starter is out (portal/opt-out), describe the backup's experience and style.
+   - Any QB controversies or split-snap situations?
 
-3. KEY PLAYERS: Top skill players and defensive playmakers
+3. COACHING & MOTIVATION:
+   - Are there any coaching changes? (Head Coach, OC, or DC leaving for other jobs/fired).
+   - Who is calling the plays for the bowl game?
+   - Motivation context: Is one team "happy to be there" vs. "disappointed to miss the playoff"? 
+   - Is this a "home" bowl for one team?
 
-${homeTeam} injuries:
-${awayTeam} injuries:`;
+4. WEATHER & VENUE:
+   - Current weather forecast for kickoff (Temp, Rain/Snow, Wind Speed).
+   - Is the game in a dome or outdoors?
+
+5. ADVANCED ANALYTICS (if found):
+   - Current FPI (Football Power Index) or S&P+ rankings for both teams.
+   - Strength of Schedule (SOS) and recent margin of victory/loss.
+
+Be factual and concise. Format injuries clearly. NO betting predictions.
+
+🚫 CRITICAL ANTI-OPINION RULES:
+1. FACTS ONLY - Do NOT include betting predictions from articles.
+2. NO OPINIONS - Extract FACTS only, ignore betting advice.
+3. YOUR OWN WORDS - Synthesize facts, do NOT plagiarize.
+4. NO BETTING ADVICE - Gary makes his own picks.`;
     } else {
       query = `Current injuries for ${sport} game ${awayTeam} vs ${homeTeam} as of ${today}. List all players OUT, DOUBTFUL, or QUESTIONABLE with their status and injury type.`;
     }
@@ -3933,10 +3850,9 @@ function parseInjuriesFromGrounding(content, homeTeam, awayTeam) {
 
 /**
  * 2025-26 College Football Playoff Seeding (12-team bracket)
- * Hardcoded as fallback since live data may not always have the latest bracket
- * Updated for the 2025-26 season (December 2025)
+ * Hardcoded for the CURRENT 2025-26 season only.
  */
-const CFP_2024_25_SEEDING = {
+const CFP_2025_26_SEEDING = {
   // 4 Byes (seeds 1-4) - Conference Champions
   'Indiana Hoosiers': 1,
   'Indiana': 1,
@@ -3946,7 +3862,7 @@ const CFP_2024_25_SEEDING = {
   'Georgia': 3,
   'Texas Tech Red Raiders': 4,
   'Texas Tech': 4,
-  // First Round (seeds 5-12)
+  // First Round Hosts (seeds 5-8)
   'Oregon Ducks': 5,
   'Oregon': 5,
   'Ole Miss Rebels': 6,
@@ -3955,6 +3871,7 @@ const CFP_2024_25_SEEDING = {
   'Texas A&M': 7,
   'Oklahoma Sooners': 8,
   'Oklahoma': 8,
+  // Remaining At-Large / G5 (seeds 9-12)
   'Alabama Crimson Tide': 9,
   'Alabama': 9,
   'Miami Hurricanes': 10,
@@ -3964,24 +3881,23 @@ const CFP_2024_25_SEEDING = {
   'Tulane': 11,
   'James Madison Dukes': 12,
   'James Madison': 12,
-  'JMU Dukes': 12,
   'JMU': 12
 };
 
 /**
- * Get CFP seeding from hardcoded bracket (fallback)
+ * Get CFP seeding from hardcoded bracket
  */
 function getCfpSeedingFromBracket(teamName) {
   if (!teamName) return null;
   
   // Direct match
-  if (CFP_2024_25_SEEDING[teamName]) {
-    return CFP_2024_25_SEEDING[teamName];
+  if (CFP_2025_26_SEEDING[teamName]) {
+    return CFP_2025_26_SEEDING[teamName];
   }
   
   // Try partial match (school name only)
   const teamLower = teamName.toLowerCase();
-  for (const [key, seed] of Object.entries(CFP_2024_25_SEEDING)) {
+  for (const [key, seed] of Object.entries(CFP_2025_26_SEEDING)) {
     if (teamLower.includes(key.toLowerCase()) || key.toLowerCase().includes(teamLower.split(' ')[0])) {
       return seed;
     }
@@ -4250,41 +4166,38 @@ function determineBowlTier(game, homeTeam, awayTeam) {
     'rose bowl', 'sugar bowl', 'orange bowl', 'cotton bowl', 'peach bowl', 'fiesta bowl'
   ];
   
-  // TIER 2: Major Conference Bowls - Generally motivated
-  const tier2Bowls = [
-    'citrus bowl', 'alamo bowl', 'holiday bowl', 'music city bowl', 'gator bowl',
-    'las vegas bowl', 'sun bowl', 'liberty bowl', 'texas bowl', 'mayo bowl',
-    'reliaquest bowl', 'pop-tarts bowl', 'duke\'s mayo bowl'
-  ];
-  
-  // TIER 3: Lower-tier bowls - Motivation asymmetry common
-  const tier3Bowls = [
-    'first responder', 'servpro', 'gasparilla', 'birmingham bowl', 'armed forces bowl',
-    'independence bowl', 'la bowl', 'new mexico bowl', 'bahamas bowl', 'cure bowl',
-    'famous idaho potato bowl', 'myrtle beach bowl', 'boca raton bowl', 'frisco bowl',
-    'new orleans bowl', 'camellia bowl', 'lending tree bowl'
-  ];
-  
+  // Check if both teams are in the CFP bracket - strongly suggests a TIER 1 game during bowl season
+  const isCfpMatchup = getCfpSeedingFromBracket(homeTeam) !== null && getCfpSeedingFromBracket(awayTeam) !== null;
+  const gameDate = new Date(game.commence_time || game.date);
+  const month = gameDate.getMonth();
+  const day = gameDate.getDate();
+  const isBowlSeason = (month === 11 && day >= 14) || (month === 0 && day <= 15);
+
   let tier = 3; // Default to tier 3 (common bowl game)
   let tierName = '';
   let motivationContext = '';
   
-  // Check for tier 1
+  // Force TIER 1 if it's a CFP matchup during bowl season
+  let identifiedAsTier1 = false;
   for (const bowl of tier1Bowls) {
     if (bowlName.includes(bowl) || venue.includes(bowl)) {
-      tier = 1;
-      tierName = 'TIER 1 (CFP/NY6)';
-      motivationContext = `
+      identifiedAsTier1 = true;
+      break;
+    }
+  }
+  
+  if (identifiedAsTier1 || (isCfpMatchup && isBowlSeason)) {
+    tier = 1;
+    tierName = 'TIER 1 (CFP/NY6)';
+    motivationContext = `
 ⚡ TIER 1 BOWL - HIGH STAKES
 • Both teams are highly motivated - significant program accomplishment at stake
 • Minimal opt-outs expected - players want to compete for major prizes
 • Transfer portal has limited impact - stars want to showcase on this stage
 • BETTING IMPLICATION: Base analysis on season-long metrics; rosters likely intact`;
-      break;
-    }
   }
   
-  // Check for tier 2
+  // Check for tier 2 if not already tier 1
   if (tier !== 1) {
     for (const bowl of tier2Bowls) {
       if (bowlName.includes(bowl) || venue.includes(bowl)) {
@@ -4344,7 +4257,7 @@ ${motivationContext}`;
  * Determines if this is a CFP game or bowl game and gets context
  * Also extracts and sets CFP seeding, venue, and round on the game object
  */
-async function fetchBowlGameContext(homeTeam, awayTeam, game) {
+async function fetchBowlGameContext(homeTeam, awayTeam, game, groundingText = null) {
   try {
     // Check if this is likely a bowl/CFP game (December 14 - January 15)
     const gameDate = new Date(game.commence_time || game.date);
@@ -4362,6 +4275,35 @@ async function fetchBowlGameContext(homeTeam, awayTeam, game) {
     
     // Determine bowl tier and motivation context
     const bowlTierInfo = determineBowlTier(game, homeTeam, awayTeam);
+    
+    // Set tournament context and CFP info on the game object for storage
+    if (bowlTierInfo) {
+      // Normalize bowl name for the badge
+      let bowlName = (game.name || game.title || game.bowl_name || '').trim();
+      
+      // If BDL name is missing, try to extract from grounding text
+      if (!bowlName && groundingText) {
+        const bowlNames = ['Rose Bowl', 'Sugar Bowl', 'Orange Bowl', 'Cotton Bowl', 'Peach Bowl', 'Fiesta Bowl', 
+                          'Citrus Bowl', 'ReliaQuest Bowl', 'Alamo Bowl', 'Sun Bowl', 'Music City Bowl', 'Gator Bowl'];
+        for (const name of bowlNames) {
+          if (groundingText.includes(name)) {
+            bowlName = name;
+            break;
+          }
+        }
+      }
+      
+      // Fallback to Tier Name if still no specific bowl name
+      game.tournamentContext = bowlName || bowlTierInfo.tierName;
+      
+      if (bowlTierInfo.tier === 1) {
+        // Use grounding text if available for more accurate round detection
+        const textForRoundDetection = (groundingText || '') + (game.name || '') + (game.title || '');
+        game.cfpRound = detectCfpRound(textForRoundDetection);
+        game.homeSeed = getCfpSeedingFromBracket(homeTeam);
+        game.awaySeed = getCfpSeedingFromBracket(awayTeam);
+      }
+    }
     
     // Bowl context now provided by Gemini Grounding
     // Bowl/CFP context is captured in the main Gemini Grounding search
@@ -4905,6 +4847,20 @@ function formatStartingQBs(homeTeam, awayTeam, qbs) {
  * @param {number} options.maxTokens - Max tokens for response (default 1000)
  * @returns {Object} - { success: boolean, data: string, raw: string }
  */
+// ═══════════════════════════════════════════════════════════════════════════
+// GEMINI MODEL POLICY (HARDCODED - DO NOT CHANGE)
+// ONLY Gemini 3 Flash allowed for grounding. NEVER use Gemini 1.x or 2.x.
+// ═══════════════════════════════════════════════════════════════════════════
+const ALLOWED_GROUNDING_MODELS = ['gemini-3-flash-preview', 'gemini-3-pro-preview'];
+
+function validateGroundingModel(model) {
+  if (!ALLOWED_GROUNDING_MODELS.includes(model)) {
+    console.error(`[GROUNDING MODEL POLICY VIOLATION] Attempted to use "${model}" - ONLY Gemini 3 allowed!`);
+    return 'gemini-3-flash-preview'; // Always fall back to Gemini 3 Flash
+  }
+  return model;
+}
+
 export async function geminiGroundingSearch(query, options = {}) {
   const genAI = getGeminiClient();
   if (!genAI) {
@@ -4913,7 +4869,9 @@ export async function geminiGroundingSearch(query, options = {}) {
   }
   
   try {
-    const modelName = process.env.GEMINI_FLASH_MODEL || 'gemini-3-flash-preview';
+    // POLICY: Only Gemini 3 Flash for grounding (never 1.x or 2.x)
+    const requestedModel = process.env.GEMINI_FLASH_MODEL || 'gemini-3-flash-preview';
+    const modelName = validateGroundingModel(requestedModel);
     
     const model = genAI.getGenerativeModel({
       model: modelName,
@@ -5224,8 +5182,9 @@ async function fetchComprehensivePropsNarrative(homeTeam, awayTeam, sport, gameD
   try {
     const today = gameDate || new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
     
-    // Use Flash for props to avoid quota issues
-    const modelName = options.useFlash 
+    // Use Flash for props to avoid quota issues (includes NCAAB for high volume)
+    const isNCAAB = sport === 'basketball_ncaab' || sport === 'NCAAB';
+    const modelName = options.useFlash || isNCAAB
       ? (process.env.GEMINI_FLASH_MODEL || 'gemini-3-flash-preview')
       : (process.env.GEMINI_MODEL || 'gemini-3-pro-preview');
     
@@ -5247,7 +5206,7 @@ async function fetchComprehensivePropsNarrative(homeTeam, awayTeam, sport, gameD
       prompt = `For the NBA game ${awayTeam} @ ${homeTeam} on ${today}, provide COMPREHENSIVE narrative context for player prop analysis:
 
 == SECTION 1: BREAKING NEWS & SITUATIONAL ==
-Search for the LATEST news (within 24-48 hours):
+Search for the ABSOLUTE LATEST news (within 24 hours):
 - LAST-MINUTE SCRATCHES: Any players ruled OUT after the official injury report?
 - TRADE RUMORS: Any active trade talks involving players on either team?
 - COACHING CHANGES: Any recent firings, interim coaches, or system changes?
@@ -5308,11 +5267,13 @@ For the TOP PLAYERS on each team:
 FORMAT YOUR RESPONSE with clear section headers. Be FACTUAL - if you can't find info, say "No data found" rather than guessing.
 
 🚫 CRITICAL RULES:
-1. FACTS ONLY - Do NOT include any betting predictions, picks, or analysis from articles
-2. NO OPINIONS - Do NOT copy predictions like "The Hawks will win because..." from any source
-3. YOUR OWN WORDS - Synthesize facts, do NOT plagiarize text from articles
-4. VERIFY STATS - Only include stats you can verify from official sources
-5. NO BETTING ADVICE - Gary will make his own decision - you just provide CONTEXT`;
+1. **ACCURACY IS PARAMOUNT**: Double-check all stats, scoring streaks, and injury updates from the last 24-48 hours. If a player had a game yesterday, ENSURE you have those stats.
+2. **NO HALLUCINATIONS**: Do NOT repeat narrative "streaks" (e.g., "11 straight games with 30 pts") unless you are 100% certain. If in doubt, stick to general trends.
+3. FACTS ONLY - Do NOT include any betting predictions, picks, or analysis from articles
+4. NO OPINIONS - Do NOT copy predictions like "The Hawks will win because..." from any source
+5. YOUR OWN WORDS - Synthesize facts, do NOT plagiarize text from articles
+6. VERIFY STATS - Only include stats you can verify from official sources
+7. NO BETTING ADVICE - Gary will make his own decision - you just provide CONTEXT`;
     }
     else if (sport === 'NHL' || sport === 'icehockey_nhl') {
       prompt = `For the NHL game ${awayTeam} @ ${homeTeam} on ${today}, provide COMPREHENSIVE narrative context for player prop analysis:

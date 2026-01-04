@@ -13,7 +13,16 @@
  */
 import { ballDontLieService } from '../ballDontLieService.js';
 // All context comes from Gemini 3 Flash with Google Search Grounding
-import { formatGameTimeEST, buildMarketSnapshot, parseGameDate, safeApiCallArray, safeApiCallObject, findBestPlayerMatch, checkDataAvailability } from './sharedUtils.js';
+import { 
+  formatGameTimeEST, 
+  buildMarketSnapshot, 
+  parseGameDate, 
+  safeApiCallArray, 
+  safeApiCallObject, 
+  findBestPlayerMatch, 
+  checkDataAvailability,
+  fixBdlInjuryStatus
+} from './sharedUtils.js';
 import { fetchComprehensivePropsNarrative } from './scoutReport/scoutReportBuilder.js';
 
 const SPORT_KEY = 'americanfootball_nfl';
@@ -163,9 +172,9 @@ function groupPropsByPlayer(props) {
 
 /**
  * Get top prop candidates based on line value and odds quality
- * Returns top N players PER TEAM (so 7 per team = 14 total for a game)
+ * Returns top N players PER TEAM (so 10 per team = 20 total for a game)
  */
-function getTopPropCandidates(props, maxPlayersPerTeam = 7) {
+function getTopPropCandidates(props, maxPlayersPerTeam = 10) {
   const grouped = groupPropsByPlayer(props);
   
   // Score each player by number of props and odds quality
@@ -224,14 +233,19 @@ function formatPropsInjuries(injuries = []) {
       // Focus on skill positions for props
       return ['QB', 'RB', 'WR', 'TE'].includes(pos);
     })
-    .slice(0, 12)
-    .map((injury) => ({
-      player: injury?.player?.full_name || `${injury?.player?.first_name || ''} ${injury?.player?.last_name || ''}`.trim(),
-      position: injury?.player?.position_abbreviation || injury?.player?.position || 'Unknown',
-      status: injury?.status || 'Unknown',
-      description: injury?.comment || injury?.description || '',
-      team: injury?.team?.full_name || injury?.player?.team?.full_name || ''
-    }));
+    .slice(0, 15) // Increased slice for more coverage
+    .map((injury) => {
+      const fixedInj = fixBdlInjuryStatus(injury);
+      return {
+        player: fixedInj?.player?.full_name || `${fixedInj?.player?.first_name || ''} ${fixedInj?.player?.last_name || ''}`.trim(),
+        position: fixedInj?.player?.position_abbreviation || fixedInj?.player?.position || 'Unknown',
+        status: fixedInj?.status || 'Unknown',
+        description: fixedInj?.comment || fixedInj?.description || '',
+        team: fixedInj?.team?.full_name || fixedInj?.player?.team?.full_name || '',
+        duration: fixedInj?.duration || 'UNKNOWN',
+        isEdge: fixedInj?.isEdge || false
+      };
+    });
 }
 
 /**
@@ -913,13 +927,16 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerIdMap, i
     for (const candidate of awayPlayers) {
       const logs = getPlayerLogs(candidate.player);
       const propsStr = candidate.props.map(p => `${p.type} ${p.line}`).join(', ');
-      const isInjured = injuredNames.has(candidate.player.toLowerCase());
-      const injuryContext = getPlayerInjuryContext(candidate.player);
-      const injuryFlag = isInjured ? ' ⚠️ INJURED' : '';
+      
+      const injuryRecord = injuries.find(i => i.player.toLowerCase() === candidate.player.toLowerCase());
+      const isInjured = !!injuryRecord;
+      const durationTag = injuryRecord?.duration ? ` [${injuryRecord.duration}]` : '';
+      const injuryFlag = isInjured ? ` ⚠️ INJURED${durationTag}` : '';
       
       statsText += `\n- **${candidate.player}**${injuryFlag}:\n`;
       
       // Add injury context if available (explains WHY stats might be affected)
+      const injuryContext = getPlayerInjuryContext(candidate.player);
       if (injuryContext.hasContext) {
         statsText += `  ⚠️ INJURY CONTEXT: ${injuryContext.status}${injuryContext.description ? ` - ${injuryContext.description}` : ''}\n`;
         statsText += `  (Stats below may be affected by this injury - consider if player is trending back to form or still limited)\n`;
@@ -1022,13 +1039,16 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerIdMap, i
     for (const candidate of homePlayers) {
       const logs = getPlayerLogs(candidate.player);
       const propsStr = candidate.props.map(p => `${p.type} ${p.line}`).join(', ');
-      const isInjured = injuredNames.has(candidate.player.toLowerCase());
-      const injuryContext = getPlayerInjuryContext(candidate.player);
-      const injuryFlag = isInjured ? ' ⚠️ INJURED' : '';
+      
+      const injuryRecord = injuries.find(i => i.player.toLowerCase() === candidate.player.toLowerCase());
+      const isInjured = !!injuryRecord;
+      const durationTag = injuryRecord?.duration ? ` [${injuryRecord.duration}]` : '';
+      const injuryFlag = isInjured ? ` ⚠️ INJURED${durationTag}` : '';
       
       statsText += `\n- **${candidate.player}**${injuryFlag}:\n`;
       
       // Add injury context if available (explains WHY stats might be affected)
+      const injuryContext = getPlayerInjuryContext(candidate.player);
       if (injuryContext.hasContext) {
         statsText += `  ⚠️ INJURY CONTEXT: ${injuryContext.status}${injuryContext.description ? ` - ${injuryContext.description}` : ''}\n`;
         statsText += `  (Stats below may be affected by this injury - consider if player is trending back to form or still limited)\n`;
@@ -1366,7 +1386,7 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
   // Note: In NFL, "Questionable" often still plays (~75% play rate), so we only exclude definite misses
   const riskyStatuses = ['doubtful', 'out'];
   const injuredPlayerNames = mergedInjuries
-    .filter(inj => riskyStatuses.some(status => (inj.status || '').toLowerCase() === status))
+    .filter(inj => riskyStatuses.some(status => (inj.status || '').toLowerCase().includes(status)))
     .map(inj => (inj.player || '').toLowerCase())
     .filter(name => name.length > 2);
 

@@ -11,7 +11,16 @@
  */
 import { ballDontLieService } from '../ballDontLieService.js';
 // All context comes from Gemini 3 Flash with Google Search Grounding
-import { formatGameTimeEST, buildMarketSnapshot, parseGameDate, safeApiCallArray, safeApiCallObject, findBestPlayerMatch, checkDataAvailability } from './sharedUtils.js';
+import { 
+  formatGameTimeEST, 
+  buildMarketSnapshot, 
+  parseGameDate, 
+  safeApiCallArray, 
+  safeApiCallObject, 
+  findBestPlayerMatch, 
+  checkDataAvailability,
+  fixBdlInjuryStatus
+} from './sharedUtils.js';
 import { fetchComprehensivePropsNarrative } from './scoutReport/scoutReportBuilder.js';
 
 const SPORT_KEY = 'icehockey_nhl';
@@ -105,14 +114,19 @@ function getTopPropCandidates(props, maxPlayersPerTeam = 7) {
 function formatPropsInjuries(injuries = []) {
   return (injuries || [])
     .filter(inj => inj?.player?.full_name || inj?.player?.first_name)
-    .slice(0, 12)
-    .map((injury) => ({
-      player: injury?.player?.full_name || `${injury?.player?.first_name || ''} ${injury?.player?.last_name || ''}`.trim(),
-      position: injury?.player?.position || 'Unknown',
-      status: injury?.status || 'Unknown',
-      description: injury?.description || '',
-      team: injury?.team?.full_name || ''
-    }));
+    .slice(0, 15) // Increased slice for more coverage
+    .map((injury) => {
+      const fixedInj = fixBdlInjuryStatus(injury);
+      return {
+        player: fixedInj?.player?.full_name || `${fixedInj?.player?.first_name || ''} ${fixedInj?.player?.last_name || ''}`.trim(),
+        position: fixedInj?.player?.position || 'Unknown',
+        status: fixedInj?.status || 'Unknown',
+        description: fixedInj?.description || '',
+        team: fixedInj?.team?.full_name || '',
+        duration: fixedInj?.duration || 'UNKNOWN',
+        isEdge: fixedInj?.isEdge || false
+      };
+    });
 }
 
 /**
@@ -475,8 +489,13 @@ function buildPlayerStatsText(homeTeam, awayTeam, advancedStats, propCandidates,
       const logs = getPlayerLogs(candidate.player);
       const propsStr = candidate.props.map(p => `${p.type} ${p.line}`).join(', ');
       
+      const injuryRecord = injuries.find(i => i.player.toLowerCase() === candidate.player.toLowerCase());
+      const isInjured = !!injuryRecord;
+      const durationTag = injuryRecord?.duration ? ` [${injuryRecord.duration}]` : '';
+      const injuryFlag = isInjured ? ` ⚠️ INJURED${durationTag}` : '';
+      
       if (stats) {
-        statsText += `- **${candidate.player}**:\n`;
+        statsText += `- **${candidate.player}**${injuryFlag}:\n`;
         statsText += `  Season: ${stats.games_played || 0} GP, SOG/G ${stats.shots_per_game || 'N/A'}, G/G ${stats.goals_per_game || 'N/A'}, A/G ${stats.assists_per_game || 'N/A'}, P/G ${stats.points_per_game || 'N/A'}, PP Pts ${stats.power_play_points || 0}, TOI/G ${stats.time_on_ice_per_game || 'N/A'}\n`;
         
         // Add recent form if available - show ALL stat types equally for organic analysis
@@ -535,8 +554,13 @@ function buildPlayerStatsText(homeTeam, awayTeam, advancedStats, propCandidates,
       const logs = getPlayerLogs(candidate.player);
       const propsStr = candidate.props.map(p => `${p.type} ${p.line}`).join(', ');
       
+      const injuryRecord = injuries.find(i => i.player.toLowerCase() === candidate.player.toLowerCase());
+      const isInjured = !!injuryRecord;
+      const durationTag = injuryRecord?.duration ? ` [${injuryRecord.duration}]` : '';
+      const injuryFlag = isInjured ? ` ⚠️ INJURED${durationTag}` : '';
+      
       if (stats) {
-        statsText += `- **${candidate.player}**:\n`;
+        statsText += `- **${candidate.player}**${injuryFlag}:\n`;
         statsText += `  Season: ${stats.games_played || 0} GP, SOG/G ${stats.shots_per_game || 'N/A'}, G/G ${stats.goals_per_game || 'N/A'}, A/G ${stats.assists_per_game || 'N/A'}, P/G ${stats.points_per_game || 'N/A'}, PP Pts ${stats.power_play_points || 0}, TOI/G ${stats.time_on_ice_per_game || 'N/A'}\n`;
         
         // Add recent form if available - show ALL stat types equally for organic analysis
@@ -764,16 +788,14 @@ export async function buildNhlPropsAgenticContext(game, playerProps, options = {
     console.log(`[NHL Props Context] Validated ${validatedCandidates.length}/${propCandidates.length} players (filtered out players not on ${game.away_team} or ${game.home_team})`);
   }
 
+  const formattedInjuries = formatPropsInjuries(injuries);
+
   // CRITICAL: Filter out players who are Doubtful or Day-To-Day to avoid void bets
   // If a player doesn't play, the bet is voided and we can't replace the pick in time
   const riskyStatuses = ['doubtful', 'day-to-day', 'day to day', 'questionable'];
-  const injuredPlayerNames = injuries
+  const injuredPlayerNames = formattedInjuries
     .filter(inj => riskyStatuses.some(status => (inj.status || '').toLowerCase().includes(status)))
-    .map(inj => {
-      const firstName = inj.player?.first_name || inj.first_name || '';
-      const lastName = inj.player?.last_name || inj.last_name || '';
-      return `${firstName} ${lastName}`.trim().toLowerCase();
-    })
+    .map(inj => inj.player.toLowerCase())
     .filter(name => name.length > 2);
 
   const availableCandidates = validatedCandidates.filter(c => {
@@ -818,7 +840,6 @@ export async function buildNhlPropsAgenticContext(game, playerProps, options = {
     console.log(`[NHL Props Context] B2B detected: Home=${b2bInfo.home ? 'YES' : 'no'}, Away=${b2bInfo.away ? 'YES' : 'no'}`);
   }
 
-  const formattedInjuries = formatPropsInjuries(injuries);
   const marketSnapshot = buildMarketSnapshot(game.bookmakers || [], 
     homeTeam?.full_name || game.home_team, 
     awayTeam?.full_name || game.away_team

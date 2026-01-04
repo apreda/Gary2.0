@@ -20,7 +20,17 @@
 import { ballDontLieService } from '../ballDontLieService.js';
 import axios from 'axios';
 // All context comes from Gemini 3 Flash with Google Search Grounding
-import { formatGameTimeEST, buildMarketSnapshot, parseGameDate, safeApiCallArray, safeApiCallObject, fuzzyMatchPlayerName, findBestPlayerMatch, checkDataAvailability } from './sharedUtils.js';
+import { 
+  formatGameTimeEST, 
+  buildMarketSnapshot, 
+  parseGameDate, 
+  safeApiCallArray, 
+  safeApiCallObject, 
+  fuzzyMatchPlayerName, 
+  findBestPlayerMatch, 
+  checkDataAvailability,
+  fixBdlInjuryStatus 
+} from './sharedUtils.js';
 import { fetchComprehensivePropsNarrative } from './scoutReport/scoutReportBuilder.js';
 
 const SPORT_KEY = 'basketball_nba';
@@ -218,9 +228,9 @@ function groupPropsByPlayer(props) {
 
 /**
  * Get top prop candidates based on line value and odds quality
- * Returns top N players PER TEAM (so 7 per team = 14 total for a game)
+ * Returns top N players PER TEAM (so 10 per team = 20 total for a game)
  */
-function getTopPropCandidates(props, maxPlayersPerTeam = 7) {
+function getTopPropCandidates(props, maxPlayersPerTeam = 10) {
   const grouped = groupPropsByPlayer(props);
   
   // Score each player by number of props and odds quality
@@ -276,13 +286,20 @@ function formatPropsInjuries(injuries = []) {
   // NO SLICE - include ALL injuries from BDL to prevent any truncation
   return (injuries || [])
     .filter(inj => inj?.player?.full_name || inj?.player?.first_name)
-    .map((injury) => ({
-      player: injury?.player?.full_name || `${injury?.player?.first_name || ''} ${injury?.player?.last_name || ''}`.trim(),
-      position: injury?.player?.position || 'Unknown',
-      status: injury?.status || 'Unknown',
-      description: injury?.description || '',
-      team: injury?.team?.full_name || ''
-    }));
+    .map((injury) => {
+      // Apply duration context logic
+      const fixedInj = fixBdlInjuryStatus(injury);
+      
+      return {
+        player: fixedInj?.player?.full_name || `${fixedInj?.player?.first_name || ''} ${fixedInj?.player?.last_name || ''}`.trim(),
+        position: fixedInj?.player?.position || 'Unknown',
+        status: fixedInj?.status || 'Unknown',
+        description: fixedInj?.description || '',
+        team: fixedInj?.team?.full_name || '',
+        duration: fixedInj?.duration || 'UNKNOWN',
+        isEdge: fixedInj?.isEdge || false
+      };
+    });
 }
 
 /**
@@ -617,8 +634,11 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerSeasonSt
       const stats = getPlayerStats(candidate.player);
       const logs = getPlayerLogs(candidate.player);
       const propsStr = candidate.props.map(p => `${p.type} ${p.line}`).join(', ');
-      const isInjured = injuredNames.has(candidate.player.toLowerCase());
-      const injuryFlag = isInjured ? ' ⚠️ INJURED' : '';
+      
+      const injuryRecord = injuries.find(i => i.player.toLowerCase() === candidate.player.toLowerCase());
+      const isInjured = !!injuryRecord;
+      const durationTag = injuryRecord?.duration ? ` [${injuryRecord.duration}]` : '';
+      const injuryFlag = isInjured ? ` ⚠️ INJURED${durationTag}` : '';
       
       if (stats) {
         statsText += `- **${candidate.player}** (${stats.position || 'N/A'})${injuryFlag}:\n`;
@@ -665,8 +685,11 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerSeasonSt
       const stats = getPlayerStats(candidate.player);
       const logs = getPlayerLogs(candidate.player);
       const propsStr = candidate.props.map(p => `${p.type} ${p.line}`).join(', ');
-      const isInjured = injuredNames.has(candidate.player.toLowerCase());
-      const injuryFlag = isInjured ? ' ⚠️ INJURED' : '';
+      
+      const injuryRecord = injuries.find(i => i.player.toLowerCase() === candidate.player.toLowerCase());
+      const isInjured = !!injuryRecord;
+      const durationTag = injuryRecord?.duration ? ` [${injuryRecord.duration}]` : '';
+      const injuryFlag = isInjured ? ` ⚠️ INJURED${durationTag}` : '';
       
       if (stats) {
         statsText += `- **${candidate.player}** (${stats.position || 'N/A'})${injuryFlag}:\n`;
@@ -706,7 +729,8 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerSeasonSt
   if (injuries.length > 0) {
     statsText += '\n### Injury Report (from BDL - SOURCE OF TRUTH)\n';
     injuries.forEach(inj => {
-      statsText += `- ${inj.player} (${inj.status}): ${inj.description?.slice(0, 100) || 'No details'}\n`;
+      const durationTag = inj.duration ? ` [${inj.duration}]` : '';
+      statsText += `- ${inj.player} (${inj.status}${durationTag}): ${inj.description?.slice(0, 100) || 'No details'}\n`;
     });
   }
   
@@ -911,15 +935,11 @@ export async function buildNbaPropsAgenticContext(game, playerProps, options = {
 
   // CRITICAL: Filter out players who are Doubtful or Day-To-Day to avoid void bets
   // If a player doesn't play, the bet is voided and we can't replace the pick in time
+  const formattedInjuries = formatPropsInjuries(injuries);
   const riskyStatuses = ['doubtful', 'day-to-day', 'day to day', 'questionable'];
-  const injuredPlayerNames = injuries
+  const injuredPlayerNames = formattedInjuries
     .filter(inj => riskyStatuses.some(status => (inj.status || '').toLowerCase().includes(status)))
-    .map(inj => {
-      // Handle different name formats from BDL
-      const firstName = inj.player?.first_name || inj.first_name || '';
-      const lastName = inj.player?.last_name || inj.last_name || '';
-      return `${firstName} ${lastName}`.trim().toLowerCase();
-    })
+    .map(inj => inj.player.toLowerCase())
     .filter(name => name.length > 2);
 
   const availableCandidates = validatedCandidates.filter(c => {
@@ -957,8 +977,6 @@ export async function buildNbaPropsAgenticContext(game, playerProps, options = {
   if (b2bInfo.home || b2bInfo.away) {
     console.log(`[NBA Props Context] ⚠️ B2B detected: Home=${b2bInfo.home ? 'YES' : 'no'}, Away=${b2bInfo.away ? 'YES' : 'no'}`);
   }
-
-  const formattedInjuries = formatPropsInjuries(injuries);
   
   // CRITICAL: Detect players likely injured but NOT in BDL injury report
   // This catches cases like Seth Curry (0 minutes since Dec 4, but not in BDL injury API)
