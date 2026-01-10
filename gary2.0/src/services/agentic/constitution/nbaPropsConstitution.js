@@ -38,7 +38,7 @@ If the player YOU ARE EVALUATING for a prop is listed as **QUESTIONABLE** → SK
 - Will they be on a minutes restriction?
 - Will they be less aggressive protecting an injury?
 
-**RULE**: Do NOT bet on players whose availability is uncertain. Move to the next candidate.
+**RULE**: Do NOT bet on players whose availability is uncertain (Questionable/GTD). Uncertain availability = uncertain minutes = uncertain output. Move to the next candidate.
 
 ---
 

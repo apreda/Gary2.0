@@ -2264,7 +2264,7 @@ function formatSituationalFactors(game, injuries, sport) {
   if (sportKey === 'americanfootball_ncaaf') {
     factors.push('');
     factors.push('🏈 NCAAF SHARP NOTES:');
-    factors.push('• QB STATUS IS CRITICAL: If starting QB is OUT/DOUBTFUL, the game is essentially unpredictable');
+    factors.push('• QB STATUS IS CRITICAL: If starting QB is OUT/DOUBTFUL, investigate how backup QB changes team dynamics');
     
     // CFP-specific context (Dec-Jan games)
     const currentMonth = new Date().getMonth(); // 0-indexed
@@ -4757,11 +4757,11 @@ function formatStartingQBs(homeTeam, awayTeam, qbs) {
     // Add experience warning for rookie/inexperienced QBs
     if (qb.experienceNote) {
       lines.push(`   ${qb.experienceNote}`);
-      lines.push(`   ⚠️ SIGNIFICANT: Factor this inexperience into your analysis - expect nerves, mistakes, and unpredictability.`);
+      lines.push(`   ⚠️ SIGNIFICANT: Factor this inexperience into your analysis - investigate how inexperience affects performance.`);
       homeQbChangeSituation = { name: qb.name, gamesPlayed: qb.gamesPlayed || 0, isBackup: qb.isBackup };
     } else if (qb.isBackup) {
-      lines.push(`   ⚠️ SIGNIFICANT: This is a backup QB - expect potential regression from normal team stats.`);
-      lines.push(`   Consider: limited experience, chemistry issues, possible game plan adjustments.`);
+      lines.push(`   ⚠️ SIGNIFICANT: This is a backup QB - investigate how this affects team performance vs normal stats.`);
+      lines.push(`   Investigate: limited experience, chemistry issues, possible game plan adjustments.`);
       homeQbChangeSituation = { name: qb.name, gamesPlayed: qb.gamesPlayed || 0, isBackup: true };
     } else if ((qb.gamesPlayed || 0) <= 5) {
       // Even if not flagged as backup, very few games = new starter this season
@@ -4779,11 +4779,11 @@ function formatStartingQBs(homeTeam, awayTeam, qbs) {
     // Add experience warning for rookie/inexperienced QBs
     if (qb.experienceNote) {
       lines.push(`   ${qb.experienceNote}`);
-      lines.push(`   ⚠️ SIGNIFICANT: Factor this inexperience into your analysis - expect nerves, mistakes, and unpredictability.`);
+      lines.push(`   ⚠️ SIGNIFICANT: Factor this inexperience into your analysis - investigate how inexperience affects performance.`);
       awayQbChangeSituation = { name: qb.name, gamesPlayed: qb.gamesPlayed || 0, isBackup: qb.isBackup };
     } else if (qb.isBackup) {
-      lines.push(`   ⚠️ SIGNIFICANT: This is a backup QB - expect potential regression from normal team stats.`);
-      lines.push(`   Consider: limited experience, chemistry issues, possible game plan adjustments.`);
+      lines.push(`   ⚠️ SIGNIFICANT: This is a backup QB - investigate how this affects team performance vs normal stats.`);
+      lines.push(`   Investigate: limited experience, chemistry issues, possible game plan adjustments.`);
       awayQbChangeSituation = { name: qb.name, gamesPlayed: qb.gamesPlayed || 0, isBackup: true };
     } else if ((qb.gamesPlayed || 0) <= 5) {
       // Even if not flagged as backup, very few games = new starter this season
@@ -4808,7 +4808,7 @@ function formatStartingQBs(homeTeam, awayTeam, qbs) {
       if (qb.gamesPlayed <= 2) {
         lines.push(`   📊 CRITICAL: This team's HOME RECORD and HISTORICAL STATS were built`);
         lines.push(`      with a DIFFERENT quarterback. Those records are NOT relevant.`);
-        lines.push(`   🎯 IGNORE their past home/away splits - this is essentially a NEW team.`);
+        lines.push(`   🎯 Investigate relevance of past home/away splits - this is essentially a NEW team.`);
       } else if (qb.gamesPlayed <= 5) {
         lines.push(`   📊 NOTE: Limited sample size with this QB - historical trends may not apply.`);
       }
@@ -4821,7 +4821,7 @@ function formatStartingQBs(homeTeam, awayTeam, qbs) {
       if (qb.gamesPlayed <= 2) {
         lines.push(`   📊 CRITICAL: This team's ROAD RECORD and HISTORICAL STATS were built`);
         lines.push(`      with a DIFFERENT quarterback. Those records are NOT relevant.`);
-        lines.push(`   🎯 IGNORE their past home/away splits - this is essentially a NEW team.`);
+        lines.push(`   🎯 Investigate relevance of past home/away splits - this is essentially a NEW team.`);
       } else if (qb.gamesPlayed <= 5) {
         lines.push(`   📊 NOTE: Limited sample size with this QB - historical trends may not apply.`);
       }
