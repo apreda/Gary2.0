@@ -271,8 +271,9 @@ async function storeDailyPicksInDatabase(picks) {
         momentum: openAIOutput.momentum || 0,
         rationale: openAIOutput.rationale || pick.rationale,
         trapAlert: openAIOutput.trapAlert || false,
-        confidence: openAIOutput.confidence || pick.confidence,
+        confidence: openAIOutput.confidence || pick.confidence || null,
         superstition: openAIOutput.superstition || false,
+        is_star: pick.is_star || false, // STAR pick = 2 units
         // Include sport for filtering
         sport: pick.sport,
         // Include agentic system fields (CRITICAL - was missing!)
@@ -289,11 +290,23 @@ async function storeDailyPicksInDatabase(picks) {
         cfpRound: pick.cfpRound || null,
         homeSeed: pick.homeSeed || null,
         awaySeed: pick.awaySeed || null,
+        // NCAAB conference data for app filtering
+        homeConference: pick.homeConference || null,
+        awayConference: pick.awayConference || null,
         // Thesis-based classification (new filtering system)
         thesis_type: pick.thesis_type || null,
         thesis_mechanism: pick.thesis_mechanism || null,
         supporting_factors: pick.supporting_factors || [],
-        contradicting_factors: pick.contradicting_factors || null
+        contradicting_factors: pick.contradicting_factors || null,
+        // Devil's Advocate metadata (for tracking multi-pass analysis)
+        devilsAdvocateResult: pick.devilsAdvocateResult || null,
+        wasRevised: pick.wasRevised || false,
+        originalPick: pick.originalPick || null,
+        iterations: pick.iterations || null,
+        toolCallsCount: pick.toolCallHistory?.length || null,
+        // Quantum filter tracking (for NCAAB/NCAAF/NFL tracking mode)
+        quantumStrength: pick.quantumStrength || null,
+        quantumSource: pick.quantumSource || null
       };
       
       // Add the generated pick ID
@@ -315,8 +328,9 @@ async function storeDailyPicksInDatabase(picks) {
       momentum: 0,
       rationale: pick.rationale,
       trapAlert: false,
-      confidence: pick.confidence || 0,
+      confidence: pick.confidence || null,
       superstition: false,
+      is_star: pick.is_star || false, // STAR pick = 2 units
       sport: pick.sport,
       // Include agentic system fields
       statsUsed: pick.statsUsed || [],
@@ -333,11 +347,23 @@ async function storeDailyPicksInDatabase(picks) {
       cfpRound: pick.cfpRound || null,
       homeSeed: pick.homeSeed || null,
       awaySeed: pick.awaySeed || null,
+      // NCAAB conference data for app filtering
+      homeConference: pick.homeConference || null,
+      awayConference: pick.awayConference || null,
       // Thesis-based classification (new filtering system)
       thesis_type: pick.thesis_type || null,
       thesis_mechanism: pick.thesis_mechanism || null,
       supporting_factors: pick.supporting_factors || [],
-      contradicting_factors: pick.contradicting_factors || null
+      contradicting_factors: pick.contradicting_factors || null,
+      // Devil's Advocate metadata (for tracking multi-pass analysis)
+      devilsAdvocateResult: pick.devilsAdvocateResult || null,
+      wasRevised: pick.wasRevised || false,
+      originalPick: pick.originalPick || null,
+      iterations: pick.iterations || null,
+      toolCallsCount: pick.toolCallHistory?.length || null,
+      // Quantum filter tracking (for NCAAB/NCAAF/NFL tracking mode)
+      quantumStrength: pick.quantumStrength || null,
+      quantumSource: pick.quantumSource || null
     };
     
     // Add the generated pick ID
@@ -345,23 +371,11 @@ async function storeDailyPicksInDatabase(picks) {
     
     return pickData;
   }).filter(pick => {
-    // Filter out picks with confidence below 0.55 threshold (all sports)
-    // Robust confidence parsing (handles string values like "0.66")
-    let confidence = 0;
-    if (typeof pick.confidence === 'number') {
-      confidence = pick.confidence;
-    } else if (typeof pick.confidence === 'string') {
-      const parsed = parseFloat(pick.confidence);
-      confidence = Number.isFinite(parsed) ? parsed : 0;
-    }
+    // NOTE: Confidence scores removed from Gary 2.0 - picks are now filtered organically via PASS option
+    // We only filter out heavy favorites (odds <= -200) which are low-value bets
     const sport = pick.sport || '';
-    const passesConfidence = confidence >= 0.55;
-    if (!passesConfidence) {
-      console.log(`❌ FILTERING OUT ${sport} pick with confidence ${confidence} (< 0.55)`);
-      return false;
-    }
     
-    // Filter out picks with odds <= -150 (too juicy, not worth the risk)
+    // Filter out picks with odds <= -200 (too juicy, not worth the risk)
     let oddsRaw = pick.odds || pick.line_odds || 0;
     let oddsNum = 0;
     if (typeof oddsRaw === 'number') {
@@ -371,16 +385,16 @@ async function storeDailyPicksInDatabase(picks) {
       const parsed = parseInt(oddsRaw.replace(/[^0-9-+]/g, ''), 10);
       oddsNum = Number.isFinite(parsed) ? parsed : 0;
     }
-    if (oddsNum <= -150) {
-      console.log(`❌ FILTERING OUT ${sport} pick with odds ${oddsRaw} (≤ -150 too juicy)`);
+    if (oddsNum <= -200) {
+      console.log(`❌ FILTERING OUT ${sport} pick with odds ${oddsRaw} (≤ -200 too juicy)`);
       return false;
     }
     
-    console.log(`✅ Including ${sport} pick with confidence ${confidence}, odds ${oddsRaw}`);
+    console.log(`✅ Including ${sport} pick, odds ${oddsRaw}`);
     return true;
   });
 
-  console.log(`After confidence/odds filter (>= 0.55, not ≤ -150), ${validPicks.length} picks remaining from ${picks.length} total`);
+  console.log(`After odds filter (not ≤ -200), ${validPicks.length} picks remaining from ${picks.length} total`);
 
   // If no valid picks, exit early
   if (validPicks.length === 0) {
@@ -938,7 +952,7 @@ Make your picks for spread, moneyline, and total.`
     };
 
     const response = await openaiService.generateResponse([systemMessage, userMessage], {
-      temperature: 0.4,
+      temperature: 0.7,
       maxTokens: 300
     });
 
@@ -1011,13 +1025,20 @@ function getNFLWeekStart(date = new Date()) {
 }
 
 /**
+ * Get the NFL season year (Sep-Dec = current year, Jan-Aug = previous year)
+ * Example: January 2026 → 2025 season, September 2025 → 2025 season
+ */
+function getNFLSeason(date = new Date()) {
+  const month = date.getMonth() + 1;
+  return month >= 9 ? date.getFullYear() : date.getFullYear() - 1;
+}
+
+/**
  * Get current NFL week number (approximate)
  * Dynamically calculates based on NFL season start (first week of September)
  */
 function getNFLWeekNumber(date = new Date()) {
-  // Calculate NFL season dynamically: Sep-Dec = current year, Jan-Aug = previous year
-  const month = date.getMonth() + 1;
-  const seasonYear = month >= 9 ? date.getFullYear() : date.getFullYear() - 1;
+  const seasonYear = getNFLSeason(date);
   // NFL season typically starts first Thursday after Labor Day (~Sep 5-11)
   // Use Sep 1 as approximation since exact date varies
   const seasonStart = new Date(`${seasonYear}-09-01`);
@@ -1038,13 +1059,9 @@ async function storeWeeklyNFLPicks(picks) {
   
   const weekStart = getNFLWeekStart();
   const weekNumber = getNFLWeekNumber();
+  const season = getNFLSeason(); // NFL season: Sep-Dec = current year, Jan-Aug = previous year
   
-  // NFL Season Logic: Jan-July games belong to the season that started the previous year
-  const now = new Date();
-  const currentMonth = now.getMonth() + 1; // 1-indexed
-  const season = currentMonth <= 7 ? now.getFullYear() - 1 : now.getFullYear();
-  
-  console.log(`🏈 Storing ${picks.length} NFL picks for Week ${weekNumber} (${weekStart}), Season ${season}`);
+  console.log(`🏈 Storing ${picks.length} NFL picks for Week ${weekNumber} (${weekStart})`);
   
   try {
     // Check if we have existing picks for this week
@@ -1109,7 +1126,7 @@ async function getWeeklyNFLPicks(weekStart = null) {
   await ensureValidSupabaseSession();
   
   const targetWeek = weekStart || getNFLWeekStart();
-  const season = new Date().getFullYear();
+  const season = getNFLSeason(); // NFL season: Sep-Dec = current year, Jan-Aug = previous year
   
   try {
     const { data, error } = await supabase
@@ -1160,6 +1177,7 @@ const picksService = {
   nflGameAlreadyHasPick,
   getNFLWeekStart,
   getNFLWeekNumber,
+  getNFLSeason,
   checkForExistingPicks,
   ensureValidSupabaseSession,
   validatePickConsistency,

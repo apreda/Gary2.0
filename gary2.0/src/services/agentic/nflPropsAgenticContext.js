@@ -396,6 +396,141 @@ function extractWeatherFromGrounding(groundedContext) {
 }
 
 /**
+ * Fetch player-level red zone and TD scoring data via Gemini Grounding
+ * CRITICAL for Anytime TD predictions - need to know WHO gets goal-line work
+ * 
+ * @param {string} homeTeam - Home team name
+ * @param {string} awayTeam - Away team name
+ * @param {string} dateStr - Game date
+ * @returns {Object} Red zone player data for both teams
+ */
+async function fetchRedZoneTDData(homeTeam, awayTeam, dateStr) {
+  try {
+    const { GoogleGenerativeAI } = await import('@google/generative-ai');
+    const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+    if (!apiKey) return null;
+    
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-3-flash-preview',
+      tools: [{ google_search: {} }],
+      generationConfig: { temperature: 0.1, maxOutputTokens: 4096 }
+    });
+    
+    console.log(`[NFL Props Context] 🎯 Fetching RED ZONE & TD DATA for ${awayTeam} @ ${homeTeam}...`);
+    
+    const prompt = `Search for NFL red zone and touchdown scoring data for ${homeTeam} and ${awayTeam} for the 2025 NFL season.
+
+I need PLAYER-LEVEL red zone stats for TD prediction:
+
+**FOR EACH TEAM, find:**
+1. **RED ZONE CARRIES LEADER** - Who gets the ball inside the 20? Inside the 10? Inside the 5?
+2. **RED ZONE TARGETS LEADER** - Which WR/TE gets targeted in the red zone?
+3. **GOAL LINE BACK** - Who gets the 1-2 yard line carries?
+4. **TOUCHDOWN LEADERS** - Who has the most TDs this season (rushing + receiving)?
+5. **RED ZONE TD RATE** - What % of their red zone touches convert to TDs?
+
+Also note:
+- Any recent TD droughts (player hasn't scored in X games)
+- Any recent TD streaks (player has scored in X straight)
+- Goal line role changes (new short-yardage back, etc.)
+
+Return JSON format:
+{
+  "homeTeam": {
+    "name": "${homeTeam}",
+    "redZoneCarriesLeader": { "name": "Player", "rzCarries": 30, "rzTDs": 8 },
+    "redZoneTargetsLeader": { "name": "Player", "rzTargets": 25, "rzTDs": 5 },
+    "goalLineBack": { "name": "Player", "note": "Gets 90% of carries inside the 5" },
+    "tdLeaders": [
+      { "name": "Player1", "totalTDs": 12, "rushTDs": 8, "recTDs": 4 },
+      { "name": "Player2", "totalTDs": 7, "rushTDs": 0, "recTDs": 7 }
+    ],
+    "tdStreaks": [{ "name": "Player", "streak": "TD in 5 straight games" }],
+    "tdDroughts": [{ "name": "Player", "drought": "0 TDs in last 3 games" }]
+  },
+  "awayTeam": {
+    "name": "${awayTeam}",
+    "redZoneCarriesLeader": { "name": "Player", "rzCarries": 28, "rzTDs": 7 },
+    "redZoneTargetsLeader": { "name": "Player", "rzTargets": 22, "rzTDs": 4 },
+    "goalLineBack": { "name": "Player", "note": "Short-yardage specialist" },
+    "tdLeaders": [
+      { "name": "Player1", "totalTDs": 10, "rushTDs": 10, "recTDs": 0 },
+      { "name": "Player2", "totalTDs": 6, "rushTDs": 0, "recTDs": 6 }
+    ],
+    "tdStreaks": [],
+    "tdDroughts": []
+  }
+}`;
+
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
+    
+    // Extract JSON
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      console.log(`[NFL Props Context] ✅ Got RED ZONE TD DATA for both teams`);
+      return parsed;
+    }
+    
+    return null;
+  } catch (e) {
+    console.warn(`[NFL Props Context] Red Zone TD fetch failed: ${e.message}`);
+    return null;
+  }
+}
+
+/**
+ * Format red zone TD data for player stats text
+ * NOTE: Red zone usage is ONE factor among many for TD scoring - not the only factor.
+ * TDs can come from: big plays, receiving TDs in open field, defensive matchups, game script, etc.
+ */
+function formatRedZoneTDContext(redZoneData, teamName) {
+  if (!redZoneData) return '';
+  
+  let text = `\n### 🎯 TD SCORING CONTEXT (${teamName}):\n`;
+  text += `*(Note: Red zone usage is ONE factor - TDs also come from big plays, matchups, game script)*\n`;
+  
+  // TD Leaders first (most important)
+  if (redZoneData.tdLeaders?.length > 0) {
+    text += `- **TD Leaders (Season)**: `;
+    text += redZoneData.tdLeaders.slice(0, 3).map(p => 
+      `${p.name} (${p.totalTDs} total: ${p.rushTDs}R/${p.recTDs}Rec)`
+    ).join(', ') + '\n';
+  }
+  
+  // Red zone context (informational, not prescriptive)
+  if (redZoneData.redZoneCarriesLeader?.name) {
+    const rz = redZoneData.redZoneCarriesLeader;
+    text += `- **RZ Carries Leader**: ${rz.name} (${rz.rzCarries} RZ carries, ${rz.rzTDs} TDs)\n`;
+  }
+  
+  if (redZoneData.redZoneTargetsLeader?.name) {
+    const rz = redZoneData.redZoneTargetsLeader;
+    text += `- **RZ Targets Leader**: ${rz.name} (${rz.rzTargets} RZ targets, ${rz.rzTDs} TDs)\n`;
+  }
+  
+  if (redZoneData.goalLineBack?.name) {
+    const gl = redZoneData.goalLineBack;
+    text += `- **Goal Line Role**: ${gl.name} - ${gl.note || 'Short-yardage situations'}\n`;
+  }
+  
+  // Streaks with AWARENESS language (investigate sustainability)
+  if (redZoneData.tdStreaks?.length > 0) {
+    text += `- **🔥 HOT (investigate sustainability)**: ${redZoneData.tdStreaks.map(s => `${s.name} - ${s.streak}`).join(', ')}\n`;
+    text += `  *(Hot streaks can continue OR regress - investigate WHY they're scoring: matchups, usage, or variance)*\n`;
+  }
+  
+  if (redZoneData.tdDroughts?.length > 0) {
+    text += `- **❄️ COLD (investigate if bounce-back likely)**: ${redZoneData.tdDroughts.map(d => `${d.name} - ${d.drought}`).join(', ')}\n`;
+    text += `  *(Cold streaks can continue OR reverse - investigate: tough matchups, reduced role, or bad luck?)*\n`;
+  }
+  
+  return text;
+}
+
+/**
  * Resolve player IDs and Teams from BDL for prop candidates by searching by name
  * Returns { playerIdMap, playerTeamMap } for resolving both IDs and teams
  * 
@@ -628,13 +763,13 @@ async function fetchDefensiveMatchups(homeTeamId, awayTeamId, homeTeamName, away
       const homeRushDef = homeStats.opp_rushing_yards_per_game || 0;
       const awayRushOff = awayStats.rushing_yards_per_game || 0;
       if (awayRushOff > homeRushDef + 20) {
-        insights.push(`${awayTeamName} rushing attack (${awayRushOff.toFixed(0)} yds/g) vs ${homeTeamName} rush D (allows ${homeRushDef.toFixed(0)} yds/g) - potential smash spot`);
+        insights.push(`${awayTeamName} rushing attack (${awayRushOff.toFixed(0)} yds/g) vs ${homeTeamName} rush D (allows ${homeRushDef.toFixed(0)} yds/g) - significant mismatch`);
       }
       
       const awayRushDef = awayStats.opp_rushing_yards_per_game || 0;
       const homeRushOff = homeStats.rushing_yards_per_game || 0;
       if (homeRushOff > awayRushDef + 20) {
-        insights.push(`${homeTeamName} rushing attack (${homeRushOff.toFixed(0)} yds/g) vs ${awayTeamName} rush D (allows ${awayRushDef.toFixed(0)} yds/g) - potential smash spot`);
+        insights.push(`${homeTeamName} rushing attack (${homeRushOff.toFixed(0)} yds/g) vs ${awayTeamName} rush D (allows ${awayRushDef.toFixed(0)} yds/g) - significant mismatch`);
       }
       
       // Sack pressure
@@ -689,6 +824,145 @@ async function fetchPlayerGameLogs(playerIdMap, season) {
 }
 
 /**
+ * Fetch BDL ADVANCED stats for prop candidates
+ * CRITICAL for props: separation, YAC, air yards, efficiency metrics
+ * 
+ * @param {Object} playerIdMap - Map of player names to BDL IDs
+ * @param {Array} propCandidates - Players to fetch advanced stats for
+ * @param {number} season - Season year
+ * @returns {Object} Advanced stats keyed by player ID
+ */
+async function fetchAdvancedStatsForProps(playerIdMap, propCandidates, season) {
+  const advancedStats = {};
+  
+  // Get unique player IDs with their positions
+  const playersWithPositions = [];
+  for (const candidate of propCandidates) {
+    const playerId = playerIdMap[(candidate.player || '').toLowerCase()];
+    if (playerId) {
+      // Determine position from prop types
+      const propTypes = Object.keys(candidate.propTypes || {});
+      let position = 'unknown';
+      if (propTypes.some(p => p.includes('pass'))) position = 'qb';
+      else if (propTypes.some(p => p.includes('rush'))) position = 'rb';
+      else if (propTypes.some(p => p.includes('rec') || p.includes('reception'))) position = 'wr';
+      
+      playersWithPositions.push({ id: playerId, name: candidate.player, position });
+    }
+  }
+  
+  if (playersWithPositions.length === 0) return advancedStats;
+  
+  console.log(`[NFL Props Context] 📊 Fetching ADVANCED STATS for ${playersWithPositions.length} players...`);
+  
+  // Fetch all three types of advanced stats in parallel
+  const [passingData, rushingData, receivingData] = await Promise.all([
+    safeApiCallArray(
+      () => ballDontLieService.getNflAdvancedPassingStats({ season, week: 0 }),
+      'NFL Props: Fetch advanced passing stats'
+    ),
+    safeApiCallArray(
+      () => ballDontLieService.getNflAdvancedRushingStats({ season, week: 0 }),
+      'NFL Props: Fetch advanced rushing stats'
+    ),
+    safeApiCallArray(
+      () => ballDontLieService.getNflAdvancedReceivingStats({ season, week: 0 }),
+      'NFL Props: Fetch advanced receiving stats'
+    )
+  ]);
+  
+  // Index by player ID for quick lookup
+  const passingById = new Map((passingData || []).map(p => [p.player?.id, p]));
+  const rushingById = new Map((rushingData || []).map(p => [p.player?.id, p]));
+  const receivingById = new Map((receivingData || []).map(p => [p.player?.id, p]));
+  
+  // Attach relevant advanced stats to each player
+  for (const { id, name, position } of playersWithPositions) {
+    const passing = passingById.get(id);
+    const rushing = rushingById.get(id);
+    const receiving = receivingById.get(id);
+    
+    const playerAdvanced = { playerId: id, name };
+    
+    // QB advanced stats
+    if (passing) {
+      playerAdvanced.passing = {
+        completionPctAboveExpected: passing.completion_percentage_above_expectation?.toFixed(1),
+        avgAirYards: passing.avg_intended_air_yards?.toFixed(1),
+        avgTimeToThrow: passing.avg_time_to_throw?.toFixed(2),
+        aggressiveness: passing.aggressiveness?.toFixed(1),
+        qbRating: passing.passer_rating?.toFixed(1)
+      };
+    }
+    
+    // RB advanced stats
+    if (rushing) {
+      playerAdvanced.rushing = {
+        rushYardsOverExpected: rushing.rush_yards_over_expected?.toFixed(1),
+        rushYardsOverExpectedPerAtt: rushing.rush_yards_over_expected_per_att?.toFixed(2),
+        efficiency: rushing.efficiency?.toFixed(2),
+        avgTimeToLOS: rushing.avg_time_to_los?.toFixed(2),
+        pctAttemptsVsStackedBox: rushing.percent_attempts_gte_eight_defenders?.toFixed(1)
+      };
+    }
+    
+    // WR/TE advanced stats
+    if (receiving) {
+      playerAdvanced.receiving = {
+        avgSeparation: receiving.avg_separation?.toFixed(2),
+        avgYAC: receiving.avg_yac?.toFixed(1),
+        avgYACAboveExpected: receiving.avg_yac_above_expectation?.toFixed(1),
+        catchPercentage: receiving.catch_percentage?.toFixed(1),
+        targetShare: receiving.percent_share_of_intended_air_yards?.toFixed(1),
+        avgCushion: receiving.avg_cushion?.toFixed(1)
+      };
+    }
+    
+    if (Object.keys(playerAdvanced).length > 2) { // Has more than just playerId and name
+      advancedStats[id] = playerAdvanced;
+    }
+  }
+  
+  console.log(`[NFL Props Context] ✅ Got ADVANCED STATS for ${Object.keys(advancedStats).length} players`);
+  return advancedStats;
+}
+
+/**
+ * Format advanced stats for player context
+ */
+function formatAdvancedStats(advancedStats, playerId, playerName) {
+  const stats = advancedStats[playerId];
+  if (!stats) return '';
+  
+  let text = `  📈 ADVANCED METRICS (NGS):\n`;
+  
+  if (stats.passing) {
+    const p = stats.passing;
+    text += `    QB: Comp% vs Expected: ${p.completionPctAboveExpected || 'N/A'}%, `;
+    text += `Avg Air Yards: ${p.avgAirYards || 'N/A'}, `;
+    text += `Time to Throw: ${p.avgTimeToThrow || 'N/A'}s, `;
+    text += `Aggressiveness: ${p.aggressiveness || 'N/A'}%\n`;
+  }
+  
+  if (stats.rushing) {
+    const r = stats.rushing;
+    text += `    RB: RYOE: ${r.rushYardsOverExpected || 'N/A'} total (${r.rushYardsOverExpectedPerAtt || 'N/A'}/att), `;
+    text += `Efficiency: ${r.efficiency || 'N/A'}, `;
+    text += `vs 8+ Box: ${r.pctAttemptsVsStackedBox || 'N/A'}%\n`;
+  }
+  
+  if (stats.receiving) {
+    const r = stats.receiving;
+    text += `    WR/TE: Separation: ${r.avgSeparation || 'N/A'} yds, `;
+    text += `YAC: ${r.avgYAC || 'N/A'} (${r.avgYACAboveExpected || 'N/A'} vs exp), `;
+    text += `Catch%: ${r.catchPercentage || 'N/A'}%, `;
+    text += `Target Share: ${r.targetShare || 'N/A'}%\n`;
+  }
+  
+  return text;
+}
+
+/**
  * Detect game day type and special circumstances
  * Recognizes Christmas Day, Thanksgiving, and other special NFL game days
  */
@@ -726,7 +1000,7 @@ function detectGameDayType(gameDate) {
       isShortWeek: true,
       type: 'TNF',
       restDays: 3,
-      impact: 'Both teams on short rest - simpler offensive schemes, more rushing expected'
+      impact: 'Both teams on short rest - investigate how short week affects play calling and player workloads'
     };
   }
   
@@ -761,14 +1035,21 @@ function detectGameDayType(gameDate) {
 
 /**
  * Build comprehensive player stats text with game logs, trends, and matchup context
+ * NOW INCLUDES: BDL Advanced Stats (NGS metrics: separation, YAC, RYOE, etc.)
  */
-function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerIdMap, injuries, playerGameLogs, defensiveMatchups) {
+function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerIdMap, injuries, playerGameLogs, defensiveMatchups, advancedStats = {}) {
   let statsText = '';
   
   // Helper to get game logs for a player
   const getPlayerLogs = (playerName) => {
     const playerId = playerIdMap[playerName.toLowerCase()];
     return playerId ? playerGameLogs[playerId] : null;
+  };
+  
+  // Helper to get advanced stats for a player
+  const getPlayerAdvanced = (playerName) => {
+    const playerId = playerIdMap[playerName.toLowerCase()];
+    return playerId ? advancedStats[playerId] : null;
   };
   
   // Helper to format recent games with FULL game-by-game breakdown
@@ -1011,6 +1292,12 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerIdMap, i
           statsText += `  Usage Trend: ${trendIcon} Recent: ${ut.l2Avg} touches vs Earlier: ${ut.l5Avg} touches (${ut.change >= 0 ? '+' : ''}${ut.change}%)\n`;
         }
         
+        // ADVANCED STATS (NGS metrics: separation, YAC, RYOE, etc.)
+        const playerAdvanced = getPlayerAdvanced(candidate.player);
+        if (playerAdvanced) {
+          statsText += formatAdvancedStats(advancedStats, playerIdMap[candidate.player.toLowerCase()], candidate.player);
+        }
+        
         // Hit rate analysis for each prop line (simplified - just hit count)
         if (candidate.props && candidate.props.length > 0) {
           statsText += `  Line performance:\n`;
@@ -1121,6 +1408,12 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerIdMap, i
           const ut = logs.usageTrend;
           const trendIcon = ut.trend === 'INCREASING' ? '⬆️' : ut.trend === 'DECREASING' ? '⬇️' : '➡️';
           statsText += `  Usage Trend: ${trendIcon} Recent: ${ut.l2Avg} touches vs Earlier: ${ut.l5Avg} touches (${ut.change >= 0 ? '+' : ''}${ut.change}%)\n`;
+        }
+        
+        // ADVANCED STATS (NGS metrics: separation, YAC, RYOE, etc.)
+        const playerAdvanced = getPlayerAdvanced(candidate.player);
+        if (playerAdvanced) {
+          statsText += formatAdvancedStats(advancedStats, playerIdMap[candidate.player.toLowerCase()], candidate.player);
         }
         
         // Hit rate analysis for each prop line (simplified - just hit count)
@@ -1286,11 +1579,11 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
   // STEP 2: Now group and select top candidates (with correct team assignments)
   const propCandidates = getTopPropCandidates(playerProps, 7);
 
-  // STEP 3: Parallel fetch - COMPREHENSIVE narrative context + BDL injuries
-  // IMPORTANT: Narrative context is fetched UPFRONT so Gary knows all factors BEFORE iterations
-  console.log('[NFL Props Context] Step 2: Fetching COMPREHENSIVE narrative + BDL injuries...');
+  // STEP 3: Parallel fetch - COMPREHENSIVE narrative context + BDL injuries + RED ZONE TD DATA
+  // IMPORTANT: Context is fetched UPFRONT so Gary knows all factors BEFORE iterations
+  console.log('[NFL Props Context] Step 2: Fetching COMPREHENSIVE narrative + injuries + RED ZONE TD DATA...');
   
-  const [bdlInjuries, comprehensiveNarrative] = await Promise.all([
+  const [bdlInjuries, comprehensiveNarrative, redZoneTDData] = await Promise.all([
     // BDL injuries as backup - with logging if fails
     teamIds.length > 0 
       ? safeApiCallArray(
@@ -1310,6 +1603,15 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
     // - Betting signals (line movement, public % - MINOR ONLY)
     fetchComprehensivePropsNarrative(game.home_team, game.away_team, 'NFL', dateStr, { useFlash: true }).catch(e => {
       console.warn('[NFL Props Context] Comprehensive narrative failed:', e.message);
+      return null;
+    }),
+    
+    // RED ZONE & TD DATA - CRITICAL for Anytime TD predictions
+    // - Who gets goal-line carries?
+    // - Who gets red zone targets?
+    // - TD leaders and streaks/droughts
+    fetchRedZoneTDData(game.home_team, game.away_team, dateStr).catch(e => {
+      console.warn('[NFL Props Context] Red Zone TD data failed:', e.message);
       return null;
     })
   ]);
@@ -1406,14 +1708,19 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
     console.log(`[NFL Props Context] Filtered out ${excluded} Doubtful/Out player(s) to avoid void bets`);
   }
 
-  // STEP 4: Fetch player game logs (requires player IDs)
-  console.log('[NFL Props Context] Step 3: Fetching BDL player game logs (L5)...');
-  const playerGameLogs = await fetchPlayerGameLogs(playerIdMap, season);
+  // STEP 4: Fetch player game logs + ADVANCED STATS (requires player IDs)
+  console.log('[NFL Props Context] Step 3: Fetching BDL player game logs (L5) + ADVANCED STATS...');
+  const [playerGameLogs, advancedStats] = await Promise.all([
+    fetchPlayerGameLogs(playerIdMap, season),
+    fetchAdvancedStatsForProps(playerIdMap, availableCandidates, season)
+  ]);
   
   // Log coverage stats
   const playersWithLogs = Object.keys(playerGameLogs).length;
+  const playersWithAdvanced = Object.keys(advancedStats).length;
   const totalCandidates = availableCandidates.length;
   console.log(`[NFL Props Context] Player game logs coverage: ${playersWithLogs}/${totalCandidates} players`);
+  console.log(`[NFL Props Context] Player ADVANCED stats coverage: ${playersWithAdvanced}/${totalCandidates} players`);
 
   const marketSnapshot = buildMarketSnapshot(game.bookmakers || [], 
     homeTeam?.full_name || game.home_team, 
@@ -1422,15 +1729,30 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
 
   // Build comprehensive player stats text with ALL context
   // Use availableCandidates to ensure only verified and available players are included
-  const playerStats = buildPlayerStatsText(
+  // NOW INCLUDES: Red Zone & TD data + ADVANCED STATS (separation, YAC, RYOE, etc.)
+  let playerStats = buildPlayerStatsText(
     game.home_team,
     game.away_team,
     availableCandidates,
     playerIdMap,
     mergedInjuries, // Use merged injuries from Grounding + BDL
     playerGameLogs,
-    defensiveMatchups
+    defensiveMatchups,
+    advancedStats // NEW: BDL Advanced Stats (NGS metrics)
   );
+  
+  // ADD TD SCORING CONTEXT (Anytime TD props awareness)
+  if (redZoneTDData) {
+    playerStats += '\n## 🎯 TOUCHDOWN SCORING CONTEXT\n';
+    playerStats += '**FOR ANYTIME TD ANALYSIS** - Multiple factors matter: red zone usage, big play ability, matchups, game script\n\n';
+    
+    if (redZoneTDData.awayTeam) {
+      playerStats += formatRedZoneTDContext(redZoneTDData.awayTeam, game.away_team);
+    }
+    if (redZoneTDData.homeTeam) {
+      playerStats += formatRedZoneTDContext(redZoneTDData.homeTeam, game.home_team);
+    }
+  }
 
   // Build token data with enhanced info
   // Use availableCandidates to ensure only verified and available players are included
@@ -1478,7 +1800,15 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
       wind: weather.wind_speed,
       conditions: weather.conditions,
       isDome: weather.is_dome
-    } : null
+    } : null,
+    // Red Zone & TD Data (Critical for Anytime TD props)
+    redZoneTD: redZoneTDData ? {
+      hasData: true,
+      homeGoalLineBack: redZoneTDData.homeTeam?.goalLineBack?.name || null,
+      awayGoalLineBack: redZoneTDData.awayTeam?.goalLineBack?.name || null,
+      homeTdLeader: redZoneTDData.homeTeam?.tdLeaders?.[0]?.name || null,
+      awayTdLeader: redZoneTDData.awayTeam?.tdLeaders?.[0]?.name || null
+    } : { hasData: false }
   };
 
   // Check data availability and flag any gaps for Gary
@@ -1497,6 +1827,9 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
   if (!weather) {
     dataGaps.push(`⚠️ NO WEATHER DATA: Weather context unavailable`);
   }
+  if (!redZoneTDData) {
+    dataGaps.push(`⚠️ NO RED ZONE TD DATA: Anytime TD analysis may be incomplete`);
+  }
   
   if (dataGaps.length > 0) {
     console.warn(`[NFL Props Context] ⚠️ DATA GAPS DETECTED - Gary should proceed with caution:`);
@@ -1510,6 +1843,7 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
   console.log(`   - Weather: ${weather ? `${weather.temperature}°F, ${weather.conditions}` : 'N/A'}`);
   console.log(`   - Game day: ${gameDayInfo.type}${gameDayInfo.isSpecialEvent ? ' (Special Event)' : ''}`);
   console.log(`   - Narrative context: ${narrativeContext ? 'YES' : 'NO'}`);
+  console.log(`   - Red Zone TD data: ${redZoneTDData ? 'YES (goal-line backs, TD leaders, streaks)' : 'NO'}`);
 
   return {
     gameSummary,
@@ -1542,16 +1876,22 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
       hasNarrativeContext: !!narrativeContext,
       hasWeather: !!weather,
       narrativeSectionsFetched: Object.keys(narrativeSections).filter(k => narrativeSections[k]?.length > 10),
-      // NEW: Data availability flags for Gary to see
+      // Data availability flags for Gary to see
       dataAvailability: {
         logsAvailable: playersWithLogs > 0,
         injuriesAvailable: mergedInjuries.length > 0,
         weatherAvailable: !!weather,
         narrativeAvailable: !!narrativeContext,
+        redZoneTDAvailable: !!redZoneTDData, // Red zone data for Anytime TD picks
+        advancedStatsAvailable: Object.keys(advancedStats).length > 0, // NGS metrics (separation, YAC, RYOE)
         dataGaps: dataGaps.length > 0 ? dataGaps : null,
         dataQuality: dataGaps.length === 0 ? 'HIGH' : dataGaps.length <= 1 ? 'MEDIUM' : 'LOW'
       }
-    }
+    },
+    // FULL RED ZONE TD DATA for Anytime TD analysis
+    redZoneTDData: redZoneTDData || null,
+    // BDL ADVANCED STATS (NGS metrics)
+    advancedStats: Object.keys(advancedStats).length > 0 ? advancedStats : null
   };
 }
 

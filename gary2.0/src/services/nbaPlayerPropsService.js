@@ -3,13 +3,14 @@
  * Provides player statistics for NBA prop bet analysis using Ball Don't Lie API
  */
 import { ballDontLieService } from './ballDontLieService.js';
+import { fixBdlInjuryStatus } from './agentic/sharedUtils.js';
 
 // Cache for team lookups
 const teamCache = new Map();
 
 /**
  * Get current NBA season
- * NBA season spans two years (e.g., 2024-25 season)
+ * NBA season spans two years
  * Season starts in October, so Oct-Dec = currentYear, Jan-Sep = previousYear
  */
 function getCurrentNBASeason() {
@@ -130,7 +131,8 @@ function formatPlayerStatsText(players, teamName) {
     
     // Add injury status if present
     if (player.injuryStatus) {
-      text += `   - ⚠️ Injury: ${player.injuryStatus}`;
+      const durationTag = player.injuryDuration ? ` [${player.injuryDuration}]` : '';
+      text += `   - ⚠️ Injury: ${player.injuryStatus}${durationTag}`;
       if (player.injuryDescription) text += ` (${player.injuryDescription})`;
       text += `\n`;
     }
@@ -272,7 +274,8 @@ export async function formatNBAPlayerStats(homeTeam, awayTeam) {
         .map(player => {
           const statsEntry = statsMap.get(player.id);
           const stats = statsEntry?.stats || {};
-          const injury = injuryMap.get(player.id);
+          const rawInjury = injuryMap.get(player.id);
+          const injury = rawInjury ? fixBdlInjuryStatus({ ...rawInjury, player }) : null;
           
           const minutes = Number(stats.min || stats.minutes || stats.minutes_per_game || 0);
           
@@ -295,7 +298,8 @@ export async function formatNBAPlayerStats(homeTeam, awayTeam) {
             },
             minutes,
             injuryStatus: injury?.status || null,
-            injuryDescription: injury?.description || null
+            injuryDescription: injury?.description || null,
+            injuryDuration: injury?.duration || null
           };
         })
         .filter(p => p.minutes > 0) // Only include players with meaningful minutes
@@ -332,7 +336,8 @@ export async function formatNBAPlayerStats(homeTeam, awayTeam) {
     if (injuredPlayers.length > 0) {
       output += `\n### ⚠️ Injury Report:\n`;
       injuredPlayers.forEach(p => {
-        output += `- ${p.name}: ${p.injuryStatus}`;
+        const durationTag = p.injuryDuration ? ` [${p.injuryDuration}]` : '';
+        output += `- ${p.name}: ${p.injuryStatus}${durationTag}`;
         if (p.injuryDescription) output += ` (${p.injuryDescription})`;
         output += `\n`;
       });

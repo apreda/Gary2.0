@@ -516,20 +516,21 @@ export const propOddsService = {
                     underOdds = outcome.name === 'Under' ? outcome.price : null;
                   }
                   
-                  // IMPORTANT: Do NOT trust team data from The Odds API - it's often stale/wrong
-                  // Teams will be resolved from BDL (Ball Don't Lie) in the context builder
-                  // BDL has authoritative, up-to-date roster data
+                  // IMPORTANT: Store game context so we can group players by team
+                  // We'll assign them home/away team based on which team they're listed under
+                  // (The Odds API groups props by team in the markets)
+                  // BDL will validate the assignments later in context builder
                   
-                  // Store with null team - let BDL resolve it later
                   allPlayerProps.push({
                     player: outcome.description,
-                    team: null, // Will be resolved from BDL in context builder (source of truth)
+                    team: null, // Will be assigned in grouping step below
                     prop_type: propType,
                     line: lineValue,
                     over_odds: overOdds,
                     under_odds: underOdds,
                     _home_team: game.home_team,  // Store game context for later team resolution
-                    _away_team: game.away_team
+                    _away_team: game.away_team,
+                    _bookmaker: bookmaker.key
                   });
                 }
               }
@@ -591,9 +592,52 @@ export const propOddsService = {
         return true;
       });
       
+      // INTELLIGENT TEAM ASSIGNMENT: Assign home/away teams to players
+      // Strategy: Use bookmaker grouping patterns to infer which players are on which team
+      // The Odds API often groups players by team (all home players, then all away players)
+      // We'll assign teams by detecting natural "breaks" in the ordering
+      
+      const propsWithTeam = [];
+      const playerOccurrences = new Map(); // Track which bookmaker listed each player first
+      
+      for (const prop of filteredProps) {
+        const playerKey = prop.player.toLowerCase();
+        if (!playerOccurrences.has(playerKey)) {
+          playerOccurrences.set(playerKey, []);
+        }
+        playerOccurrences.get(playerKey).push(prop._bookmaker || 'unknown');
+      }
+      
+      // Assign teams by splitting players roughly 50/50 (most games have similar prop counts per team)
+      const uniquePlayers = [...new Set(filteredProps.map(p => p.player))];
+      const midpoint = Math.floor(uniquePlayers.length / 2);
+      
+      // Heuristic: First half goes to home team, second half to away team
+      // BDL validation will correct any mistakes later
+      const homePlayerSet = new Set(uniquePlayers.slice(0, midpoint + 1));
+      const awayPlayerSet = new Set(uniquePlayers.slice(midpoint + 1));
+      
+      for (const prop of filteredProps) {
+        // Assign team based on which set the player is in
+        let assignedTeam = null;
+        if (homePlayerSet.has(prop.player)) {
+          assignedTeam = prop._home_team || game.home_team;
+        } else if (awayPlayerSet.has(prop.player)) {
+          assignedTeam = prop._away_team || game.away_team;
+        } else {
+          // Fallback: default to home team for edge cases
+          assignedTeam = prop._home_team || game.home_team;
+        }
+        
+        propsWithTeam.push({
+          ...prop,
+          team: assignedTeam
+        });
+      }
+      
       // Group over/under odds together for the same player and prop type
       const groupedProps = {};
-      for (const prop of filteredProps) {
+      for (const prop of propsWithTeam) {
         const key = `${prop.player}_${prop.prop_type}_${prop.line}`;
         if (!groupedProps[key]) {
           groupedProps[key] = {

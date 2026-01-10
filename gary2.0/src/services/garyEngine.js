@@ -382,12 +382,12 @@ export async function generateGaryAnalysis(gameData, options = {}) {
     const newsData = options.newsData || 'Using stats-only analysis.';
     
     // Generate analysis using OpenAI
-    console.log('Calling OpenAI for analysis with temperature:', options.temperature || 0.4);
+    console.log('Calling OpenAI for analysis with temperature:', options.temperature || 0.7);
     const rawOpenAIResponse = await openaiService.generateGaryAnalysis(
       formattedData, 
       newsData,
       {
-        temperature: options.temperature || 0.4,
+        temperature: options.temperature || 0.7,
         model: options.model
       }
     );
