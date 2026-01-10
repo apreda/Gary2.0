@@ -182,16 +182,16 @@ function getPaceAndTotalContext(marketSnapshot, homeTeamStats, awayTeamStats) {
   if (total) {
     if (total >= 235) {
       totalCategory = 'very_high';
-      scoringEnvironment = 'shootout expected - good for scoring props';
+      scoringEnvironment = 'shootout environment - investigate scoring prop implications';
     } else if (total >= 225) {
       totalCategory = 'high';
-      scoringEnvironment = 'above average scoring expected';
+      scoringEnvironment = 'above average scoring environment';
     } else if (total <= 210) {
       totalCategory = 'low';
-      scoringEnvironment = 'defensive game - consider unders';
+      scoringEnvironment = 'defensive game environment - investigate how this affects props';
     } else if (total <= 218) {
       totalCategory = 'below_average';
-      scoringEnvironment = 'slower pace expected';
+      scoringEnvironment = 'slower pace environment';
     }
   }
   
