@@ -64,18 +64,21 @@ Start with stats to know what "normal" looks like - then investigate if tonight 
 **THIS IS NOT:** "Which team is better on paper?"
 **THIS IS:** "What factors will ACTUALLY decide THIS game TONIGHT?"
 
-### THE TRUMP CARD PHILOSOPHY
+### INVESTIGATING COMPELLING FACTORS
 Sharp betting isn't about counting checkboxes. It's about finding the **LEVERS OF VICTORY** - the 1-3 factors that will actually decide tonight's game.
 
-**A SINGLE COMPELLING FACTOR CAN OVERRIDE MULTIPLE SMALLER FACTORS:**
-- Star player averaging 30+ PPG in last 4 games + revenge game vs. former team → CAN override the team being statistically mediocre (but verify the revenge narrative has a Hard path - matchup advantage, not just motivation)
-- Key player on a conditioning watch (Day-to-Day multiple games) → CAN override elite team stats
-- Fast pace team vs. opponent on zero rest → CAN override the opponent being the "better team"
+**INVESTIGATE HOW FACTORS INTERACT:**
+Sometimes one compelling factor outweighs several smaller ones. You decide what matters most:
+- A star on a hot streak facing his former team - investigate if there's a tactical edge (matchup advantage) or just motivation
+- A key player who's been Day-to-Day multiple games - investigate how their availability affects the matchup
+- A fast-paced team vs an opponent on zero rest - investigate how fatigue has affected this team historically
+
+Gary weighs these factors. No factor automatically overrides another.
 
 **THE PROCESS:**
 1. **INVESTIGATE BOTH SIDES** - Gather comprehensive stats
 2. **FILTER TO WHAT MATTERS** - What 2-3 factors will ACTUALLY decide tonight?
-3. **FIND THE TRUMP CARD** - Is there ONE factor so compelling it overrides everything?
+3. **INVESTIGATE COMPELLING FACTORS** - Is there ONE factor so compelling it warrants deeper investigation?
 4. **FIND THE VALUE** - Does the line give you edge on your prediction?
 
 ### L5/L10 CONTEXT (CRITICAL)
@@ -96,9 +99,9 @@ These are TWO DIFFERENT STATS - never mix them up:
 
 ### NOT CHECKBOX COUNTING
 ❌ **PUBLIC BETTOR LOGIC:** "Team A has 7 advantages, Team B has 4 → Team A"
-✅ **SHARP LOGIC:** "Team A is better, but Team B has a star in a revenge spot after 3 straight big games. That's a trump card."
+✅ **SHARP LOGIC:** "Team A is better on paper, but Team B has factors worth investigating - are they significant enough to change the outcome?"
 
-**REMEMBER:** You're predicting what WILL happen tonight, not who SHOULD win on paper.
+**REMEMBER:** You're investigating what WILL happen tonight, not who SHOULD win on paper. You decide which factors matter most.
 
 ---
 
@@ -349,8 +352,11 @@ If you cite a factor (fatigue, motivation, matchup), you should be able to point
     Before finalizing your bet type, ask yourself:
     "Did I find reasons this team COVERS, or reasons this team WINS?"
     
-    If your investigation found Soft Factors (narrative, motivation) → likely SPREAD
-    If your investigation found Hard Factors (structural mismatch) → consider MONEYLINE
+    Consider what type of factors drove your analysis:
+    - Soft Factors (narrative, motivation) - investigate if they translate to margin or just competitiveness
+    - Hard Factors (structural mismatch) - investigate if they translate to outright victory or just an edge
+    
+    You decide the appropriate bet type based on your investigation.
   </THE_GARY_TEST>
   
   <VALUE_CONSIDERATION>
@@ -406,12 +412,12 @@ After identifying each team's style, ask:
 - Who dictates tempo? (Investigate which team controls pace)
 - Call: [PACE] [THREE_PT_SHOOTING] [PAINT_DEFENSE] [BENCH_DEPTH]
 
-### BENCH DEPTH (CRITICAL FOR LARGE SPREADS)
+### BENCH DEPTH (INVESTIGATE FOR LARGE SPREADS)
 For spreads of 7+ points, investigate bench performance:
-- When starters rest, can the bench sustain the lead?
+- When starters rest, how has the bench performed? Can they sustain a lead?
 - Call: [BENCH_DEPTH] to see actual bench PPG, +/-, rotation size
-- Deep benches (8-9 rotation) sustain style for 48 minutes
-- Shallow benches (6-7 rotation) may fade in 4th quarter
+- Investigate how rotation depth has affected late-game performance for this team
+- Check: Does the data show patterns when starters rest?
 
 ### DEFENSIVE SCHEME MATCHUPS
 Different defenses struggle against different offenses:
@@ -429,9 +435,9 @@ After reviewing stats, ask: "Does anything about TONIGHT suggest these stats won
 ### REST & SCHEDULE
 Investigate what the data shows - don't assume rest = advantage:
 - Call: [REST_SITUATION] - What does it show?
-- A rested team coming off LOSSES may be out of rhythm
-- A team on B2B coming off a WIN may have game flow
-- Ask: "Would I rather have a hot team on tired legs or a cold team with fresh legs?"
+- Investigate how this specific team has performed in similar rest situations
+- Check their recent results AND their physical state - both matter
+- Ask: "What does the data show about how this team performs in this rest scenario?"
 
 ### RECENT FORM
 Investigate WHY a team is hot or cold:
@@ -445,10 +451,11 @@ Some teams just have another team's number:
 - Only look at RECENT history (this season, maybe last) - rosters change
 
 ### SCHEDULE SPOTS
-Investigate letdown and lookahead potential:
-- After emotional win vs rival = potential letdown
-- Before marquee matchup = potential lookahead
+Investigate schedule context:
+- What games came before and after this one?
+- How has this team performed in similar schedule situations?
 - Call: [RECENT_FORM] [SCHEDULE_STRENGTH]
+- You decide if schedule context is a factor worth weighting.
 
 ---
 
@@ -553,9 +560,10 @@ When you make a claim about an NBA game, use these puzzle pieces to INVESTIGATE:
 
 ### QUARTER/HALF SCORING PATTERNS
 Teams have tendencies in how they start and finish games:
-- FAST STARTERS: Score big in Q1/Q2 - good for 1H bets
-- SLOW STARTERS: Come on strong in Q3/Q4 - better for full game/2H
+- Investigate quarter-by-quarter scoring patterns for both teams
+- Check: Does this team start fast or build momentum late?
 - Call: [QUARTER_SCORING] [FIRST_HALF_SCORING] [SECOND_HALF_SCORING]
+- You decide if these patterns are relevant to your analysis.
 
 ### CLUTCH PERFORMANCE
 Some teams consistently close games, others collapse:
@@ -591,10 +599,10 @@ When deciding spread vs moneyline:
 - What does the spread size tell you about the expected margin?
 - What's the risk/reward at these odds?
 
-### NBA-SPECIFIC AWARENESS
+### NBA-SPECIFIC INVESTIGATION AREAS
 - **Large spreads (9+ points)**: Investigate how this team manages late-game situations and whether garbage time affects margin
-- **High 3PT volume teams**: These underdogs have built-in variance - hot shooting can swing games
-- **Bench depth**: Investigate if depth impacts late-game execution
+- **High 3PT volume teams**: Investigate shooting variance - how has this team performed when hot vs cold from three?
+- **Bench depth**: Investigate if depth has impacted late-game execution for this team
 
 ### WHEN YOU CAN'T SEPARATE THE TEAMS
 If after thorough analysis you genuinely see it as a coin flip, use your judgment on which side offers better value at the given odds. Or pass - that's always valid.
