@@ -25,12 +25,14 @@ dotenv.config({ path: path.join(__dirname, '..', '.env') });
 dotenv.config({ path: path.join(__dirname, '..', '.env.local'), override: true });
 
 // Now import modules that depend on env vars
-const { analyzeGame } = await import('../src/services/agentic/agenticOrchestrator.js');
+const { analyzeGame, buildSystemPrompt } = await import('../src/services/agentic/agenticOrchestrator.js');
 const { oddsService } = await import('../src/services/oddsService.js');
 const { picksService } = await import('../src/services/picksService.js');
 const { getVenueForHomeTeam } = await import('../src/services/venueMapping.js');
 const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
-// Conviction filter removed - using simpler thesis-based filtering + confidence sorting
+const { getConstitution } = await import('../src/services/agentic/constitution/index.js');
+const { applyQuantumFilter, isQuantumEnabled } = await import('../src/services/quantumService.js');
+// Simple system: Gary picks SPREAD, ML, or PASS.
 // ═══════════════════════════════════════════════════════════════════════════
 // GARY PICK GENERATION
 // ═══════════════════════════════════════════════════════════════════════════
@@ -41,7 +43,7 @@ const SPORT_CONFIG = {
   nba: { key: 'basketball_nba', name: 'NBA', emoji: '🏀', useToday: true }, // Today's games (EST)
   nfl: { key: 'americanfootball_nfl', name: 'NFL', emoji: '🏈', daysAhead: 7 }, // NFL is weekly
   nhl: { key: 'icehockey_nhl', name: 'NHL', emoji: '🏒', isBeta: true, useToday: true }, // Today's games (EST)
-  epl: { key: 'soccer_epl', name: 'EPL', emoji: '⚽', isBeta: true, daysAhead: 7, confidenceThreshold: 0.63 }, // EPL is weekly
+  epl: { key: 'soccer_epl', name: 'EPL', emoji: '⚽', isBeta: true, daysAhead: 7 }, // EPL is weekly
   ncaab: { key: 'basketball_ncaab', name: 'NCAAB', emoji: '🏀', minStats: 8, useToday: true }, // Today's games (EST)
   ncaaf: { key: 'americanfootball_ncaaf', name: 'NCAAF', emoji: '🏈', fbsOnly: true, useToday: true } // Today's games (EST)
 };
@@ -59,6 +61,26 @@ const FBS_CONFERENCE_IDS = [
   9,   // Pac-12 (mostly defunct, teams moved)
   10,  // SEC
   11,  // Sun Belt
+];
+
+// NCAAB: Only analyze top 7 conferences + elite teams
+// Top 7 conferences have best data, NBA talent, and most reliable betting markets
+const NCAAB_ELITE_CONFERENCE_IDS = [
+  1,   // ACC
+  6,   // Big 12
+  7,   // Big East
+  10,  // Big Ten
+  24,  // SEC
+  33,  // Pac-12
+  31,  // WCC (West Coast Conference - Gonzaga, Saint Mary's)
+];
+
+// Elite teams outside top 7 conferences to KEEP (by team name substring)
+const NCAAB_ELITE_TEAM_NAMES = [
+  'gonzaga', 'saint mary', 'memphis', 'uconn', 'connecticut',
+  'san diego state', 'nevada', 'new mexico', 'boise state', // Mountain West elites
+  'dayton', 'vcu', 'saint louis', // A-10 elites
+  'drake', 'indiana state', // MVC elites
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -85,7 +107,7 @@ const LONG_TERM_INJURY_KEYWORDS = [
 ];
 
 /**
- * Detect if a pick has a "trap" situation that should reduce confidence
+ * Detect if a pick has a "trap" situation (for logging/awareness only)
  * Returns { isTrap: boolean, trapReason: string | null }
  */
 function detectTrapSituation(pick, sportName) {
@@ -158,174 +180,6 @@ function extractBinaryFlags(pick) {
   };
 }
 
-/**
- * Rank and filter picks using smart confidence-based system
- */
-function rankAndFilterPicks(picks, sport) {
-  if (picks.length === 0) return [];
-
-  // Add binary flags to each pick
-  const picksWithFlags = picks.map(p => ({
-    ...p,
-    flags: extractBinaryFlags(p),
-    trap: detectTrapSituation(p, sport)
-  }));
-
-  // Sort by confidence descending (highest conviction first)
-  const sortedPicks = [...picksWithFlags].sort((a, b) => {
-    const confA = typeof a.confidence === 'number' ? a.confidence : 0.5;
-    const confB = typeof b.confidence === 'number' ? b.confidence : 0.5;
-    return confB - confA;
-  });
-
-  // Log confidence ranking with flags
-  console.log(`\n[${sport}] 📊 CONFIDENCE RANKING (with flags):`);
-  sortedPicks.forEach((p, i) => {
-    const conf = typeof p.confidence === 'number' ? p.confidence.toFixed(2) : '?';
-    const flags = p.flags;
-    const flagStr = [
-      flags.rest_advantage ? '💤REST' : '',
-      flags.back_to_back_disadvantage ? '⚠️B2B' : '',
-      flags.injury_edge ? '🏥INJ' : '',
-      flags.efficiency_edge ? '📊EFF' : '',
-      flags.goalie_edge ? '🥅GOALIE' : ''
-    ].filter(Boolean).join(' ') || 'none';
-    const trapStr = p.trap.isTrap ? `🚨TRAP: ${p.trap.trapReason}` : '';
-    console.log(`   ${i + 1}. ${p.pick.padEnd(35)} Conf: ${conf} | Flags: ${flagStr} ${trapStr}`);
-  });
-
-  console.log(`\n[${sport}] ✅ Final: ${sortedPicks.length} picks (sorted by confidence)`);
-
-  return sortedPicks;
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// DYNAMIC SLATE REVIEWER (ORGANIC FILTERING)
-// ═══════════════════════════════════════════════════════════════════════════
-// 
-// Philosophy: Let Gary decide how many picks to release based on board quality.
-// Instead of a fixed confidence threshold, we use a dynamic approach:
-// 
-// 1. Calculate the "Board Quality Score" (average confidence across all games)
-// 2. Determine a target pick count based on games analyzed
-// 3. Select the top N picks where N scales with board quality
-// 4. Never release more than the "quality ceiling" even on great boards
-// 
-// This prevents forcing picks on bad boards and allows more picks on great ones.
-// ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * Dynamic Slate Reviewer - Organically determines how many picks to release
- * @param {Array} picks - All analyzed picks for a sport
- * @param {string} sport - Sport name (NBA, NHL, etc.)
- * @param {number} totalGames - Total games analyzed
- * @returns {Array} - Filtered picks based on board quality
- */
-function dynamicSlateReview(picks, sport, totalGames) {
-  if (picks.length === 0) return [];
-  
-  // Configuration per sport
-  const SPORT_CONFIG = {
-    'NBA': { minPicks: 1, maxPicks: 5, qualityFloor: 0.60, idealRatio: 0.35 },
-    'NHL': { minPicks: 1, maxPicks: 4, qualityFloor: 0.58, idealRatio: 0.30 },
-    'NFL': { minPicks: 1, maxPicks: 6, qualityFloor: 0.55, idealRatio: 0.40 },
-    'NCAAB': { minPicks: 1, maxPicks: 5, qualityFloor: 0.62, idealRatio: 0.25 },
-    'NCAAF': { minPicks: 0, maxPicks: 4, qualityFloor: 0.50, idealRatio: 0.50 }, // CFP - want all good picks
-    'EPL': { minPicks: 1, maxPicks: 3, qualityFloor: 0.55, idealRatio: 0.30 }
-  };
-  
-  const config = SPORT_CONFIG[sport] || { minPicks: 1, maxPicks: 4, qualityFloor: 0.55, idealRatio: 0.30 };
-  
-  // Step 1: Calculate Board Quality Score
-  const confidences = picks.map(p => typeof p.confidence === 'number' ? p.confidence : 0.5);
-  const avgConfidence = confidences.reduce((a, b) => a + b, 0) / confidences.length;
-  const maxConfidence = Math.max(...confidences);
-  const minConfidence = Math.min(...confidences);
-  const confidenceSpread = maxConfidence - minConfidence;
-  
-  // Board quality is weighted: avg confidence (60%) + max confidence (30%) + spread penalty (10%)
-  // Higher spread = less certainty about the board
-  const boardQuality = (avgConfidence * 0.6) + (maxConfidence * 0.3) - (confidenceSpread * 0.1);
-  
-  console.log(`\n[${sport}] 📊 DYNAMIC SLATE REVIEW`);
-  console.log(`   Board Stats: ${picks.length} picks, ${totalGames} games analyzed`);
-  console.log(`   Confidence: Avg=${avgConfidence.toFixed(2)}, Max=${maxConfidence.toFixed(2)}, Min=${minConfidence.toFixed(2)}`);
-  console.log(`   Board Quality Score: ${boardQuality.toFixed(3)}`);
-  
-  // Step 2: Determine target pick count based on board quality and game count
-  // Base target = games * idealRatio (e.g., 9 games * 0.35 = ~3 picks)
-  let baseTarget = Math.round(totalGames * config.idealRatio);
-  
-  // Adjust based on board quality
-  // If board quality is high (>0.70), allow more picks
-  // If board quality is low (<0.60), reduce picks
-  let qualityMultiplier = 1.0;
-  if (boardQuality >= 0.75) {
-    qualityMultiplier = 1.5; // Great board - allow 50% more picks
-  } else if (boardQuality >= 0.68) {
-    qualityMultiplier = 1.25; // Good board - allow 25% more picks
-  } else if (boardQuality < 0.58) {
-    qualityMultiplier = 0.75; // Weak board - reduce picks by 25%
-  } else if (boardQuality < 0.52) {
-    qualityMultiplier = 0.5; // Bad board - halve the picks
-  }
-  
-  let targetPicks = Math.round(baseTarget * qualityMultiplier);
-  
-  // Enforce min/max bounds
-  targetPicks = Math.max(config.minPicks, Math.min(config.maxPicks, targetPicks));
-  
-  // NFL SMALL SLATE RULE: If fewer than 4 games, keep ALL qualified picks
-  // On small NFL slates (like Saturday doubleheaders), we don't want to artificially limit
-  if (sport === 'NFL' && totalGames < 4) {
-    console.log(`   🏈 NFL SMALL SLATE (${totalGames} games < 4) - keeping all qualified picks`);
-    targetPicks = picks.length; // Keep all picks that pass quality floor
-  }
-  
-  console.log(`   Target Picks: ${targetPicks} (base=${baseTarget}, multiplier=${qualityMultiplier.toFixed(2)})`);
-  
-  // Step 3: Sort by confidence and select top N
-  const sortedPicks = [...picks].sort((a, b) => {
-    const confA = typeof a.confidence === 'number' ? a.confidence : 0.5;
-    const confB = typeof b.confidence === 'number' ? b.confidence : 0.5;
-    return confB - confA;
-  });
-  
-  // Step 4: Apply quality floor - don't release picks below the floor even if they'd be in top N
-  const selectedPicks = sortedPicks
-    .slice(0, targetPicks)
-    .filter(p => {
-      const conf = typeof p.confidence === 'number' ? p.confidence : 0;
-      if (conf < config.qualityFloor) {
-        console.log(`   ⚠️ Dropped: ${p.pick} (conf ${conf.toFixed(2)} below floor ${config.qualityFloor})`);
-        return false;
-      }
-      return true;
-    });
-  
-  // Step 5: Log final selection
-  console.log(`\n[${sport}] 🎯 SLATE SELECTION (${selectedPicks.length}/${picks.length} picks):`);
-  selectedPicks.forEach((p, i) => {
-    const conf = typeof p.confidence === 'number' ? p.confidence.toFixed(2) : '?';
-    console.log(`   ${i + 1}. ${p.pick.padEnd(35)} Conf: ${conf}`);
-  });
-  
-  // Log dropped picks for transparency
-  const droppedPicks = sortedPicks.slice(selectedPicks.length);
-  if (droppedPicks.length > 0) {
-    console.log(`\n[${sport}] 📉 DROPPED (below threshold or over limit):`);
-    droppedPicks.slice(0, 5).forEach((p, i) => {
-      const conf = typeof p.confidence === 'number' ? p.confidence.toFixed(2) : '?';
-      console.log(`   ${selectedPicks.length + i + 1}. ${p.pick.padEnd(35)} Conf: ${conf}`);
-    });
-    if (droppedPicks.length > 5) {
-      console.log(`   ... and ${droppedPicks.length - 5} more`);
-    }
-  }
-  
-  return selectedPicks;
-}
-
 // ═══════════════════════════════════════════════════════════════════════════
 
 // In-memory tracking to prevent duplicate processing in same run session
@@ -360,13 +214,7 @@ function parseBoolish(val, defaultValue = true) {
   return defaultValue;
 }
 
-const limitArgRaw = getArgValue('--limit');
-const limitPicks = limitArgRaw ? Number.parseInt(limitArgRaw, 10) : undefined;
 const shouldStore = parseBoolish(getArgValue('--store'), true);
-const minConfidenceOverrideRaw = getArgValue('--min-confidence') ?? getArgValue('--minConfidence');
-const minConfidenceOverride = (minConfidenceOverrideRaw !== undefined && minConfidenceOverrideRaw !== null)
-  ? Number.parseFloat(String(minConfidenceOverrideRaw))
-  : undefined;
 
 // --matchup flag to run a single specific game (e.g., "Bengals @ Dolphins" or "Cincinnati")
 const matchupFilter = getArgValue('--matchup');
@@ -407,17 +255,14 @@ if (sportsToRun.length === 0) {
 ║    node scripts/run-agentic-picks.js --nba --nfl                 ║
 ║                                                                  ║
 ║  Advanced options:                                               ║
-║    --dynamic                   (organic pick selection)          ║
 ║    --date 2025-12-25           (filter to specific date)         ║
 ║    --date 2025-12-25,2025-12-26 (multiple dates)                 ║
 ║    --force                     (skip deduplication)              ║
-║    --min-confidence 0.65       (override confidence threshold)   ║
 ║    --store false               (analyze only, don't save)        ║
 ║                                                                  ║
-║  Dynamic Slate Review (--dynamic):                               ║
-║    Organically selects picks based on board quality instead      ║
-║    of using fixed confidence thresholds. Gary decides how        ║
-║    many picks to release based on the overall slate strength.    ║
+║  Gary's Pick System:                                             ║
+║    - SPREAD or MONEYLINE = picks stored                          ║
+║    - PASS = skip game (no pick stored)                           ║
 ║                                                                  ║
 ╚══════════════════════════════════════════════════════════════════╝
 `);
@@ -563,22 +408,37 @@ async function main() {
           }
         }
       } else if (config.useToday) {
-        // US sports: Get TODAY's games in EST timezone (games that haven't started yet)
-        // This is simple: if it's Dec 19 in EST, get all Dec 19 games that are still upcoming
-        const todayEST = now.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); // YYYY-MM-DD format
-        const tomorrowDate = new Date(now);
-        tomorrowDate.setDate(tomorrowDate.getDate() + 1);
-        const tomorrowEST = tomorrowDate.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-        
-        games = allGames?.filter(g => {
-          const gameTime = new Date(g.commence_time);
-          const gameDateEST = gameTime.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-          // Game is today in EST AND hasn't started yet
-          return gameDateEST === todayEST && gameTime >= now;
-        }) || [];
-        
-        timeLabel = `today (${todayEST})`;
-        console.log(`[${config.name}] EST date filter: today=${todayEST}, found ${games.length} upcoming games`);
+        // CHECK: If --date flag is provided, filter to specific date(s) instead of today
+        if (dateFilter) {
+          const targetDates = dateFilter.split(',').map(d => d.trim());
+          console.log(`[${config.name}] --date filter active: targeting ${targetDates.join(', ')}`);
+          
+          games = allGames?.filter(g => {
+            const gameTime = new Date(g.commence_time);
+            const gameDateEST = gameTime.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); // YYYY-MM-DD
+            // Game date matches one of the target dates
+            return targetDates.includes(gameDateEST);
+          }) || [];
+          
+          timeLabel = `${targetDates.join(' & ')}`;
+          console.log(`[${config.name}] Date filter: found ${games.length} games on ${targetDates.join(', ')}`);
+        } else {
+          // Default: Get TODAY's games in EST timezone (games that haven't started yet)
+          const todayEST = now.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); // YYYY-MM-DD format
+          const tomorrowDate = new Date(now);
+          tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+          const tomorrowEST = tomorrowDate.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+          
+          games = allGames?.filter(g => {
+            const gameTime = new Date(g.commence_time);
+            const gameDateEST = gameTime.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+            // Game is today in EST AND hasn't started yet
+            return gameDateEST === todayEST && gameTime >= now;
+          }) || [];
+          
+          timeLabel = `today (${todayEST})`;
+          console.log(`[${config.name}] EST date filter: today=${todayEST}, found ${games.length} upcoming games`);
+        }
       } else if (config.daysAhead) {
         // Weekly sports (EPL): Use days ahead
         const endTime = new Date(now.getTime() + config.daysAhead * 24 * 60 * 60 * 1000);
@@ -614,41 +474,41 @@ async function main() {
         console.log(`[${config.name}] FBS filter: ${beforeCount} → ${games.length} games (removed ${beforeCount - games.length} FCS games)`);
       }
 
-      // NCAAB: Filter to TOP 10 conferences only
+      // NCAAB: Filter to TOP 7 conferences only (Power 6 + WCC for Gonzaga)
       // BOTH teams must be from an approved conference
-      // Top 10: ACC, Big Ten, Big 12, SEC, Pac-12, Big East, AAC, A-10, Mountain West, WCC
+      // Top 7: ACC, Big Ten, Big 12, SEC, Big East, WCC (Gonzaga), AAC
       if (config.key === 'basketball_ncaab') {
-        console.log(`[${config.name}] Filtering to Top 10 conferences only (BOTH teams must qualify)...`);
+        console.log(`[${config.name}] Filtering to Top 7 conferences only (Power 6 + WCC)...`);
         const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
         const MIN_GAMES_FOR_ANALYSIS = 5;
 
-        // TOP 10 conference IDs from BDL (BOTH teams must be from one of these)
+        // TOP 7 conference IDs from BDL (BOTH teams must be from one of these)
         // Verified via BDL API:
-        //   1  = ACC (Duke, etc.)
-        //   4  = AAC (Memphis, etc.)
-        //   5  = A-10 (Dayton, etc.)
-        //   6  = Big 12 (Kansas, etc.)
-        //   7  = Big East (Villanova, etc.)
-        //   10 = Big Ten (Michigan, etc.)
-        //   20 = Mountain West (San Diego State, etc.)
-        //   24 = SEC (Kentucky, etc.)
-        //   31 = WCC (Gonzaga, etc.) - also includes remaining Pac-12 schools
+        //   1  = ACC (Duke, UNC, etc.)
+        //   4  = AAC (Memphis, Tulane, etc.)
+        //   6  = Big 12 (Kansas, Houston, etc.)
+        //   7  = Big East (Villanova, UConn, etc.)
+        //   10 = Big Ten (Michigan, Purdue, etc.)
+        //   24 = SEC (Kentucky, Auburn, etc.)
+        //   31 = WCC (Gonzaga, Saint Mary's, etc.)
+        // 
+        // REMOVED from previous Top 10:
+        //   5  = A-10 (Dayton, VCU) - good mid-major but not elite
+        //   20 = Mountain West (San Diego State) - solid but outside top 7
         const APPROVED_CONFERENCE_IDS = new Set([
           1,   // ACC
           4,   // AAC
-          5,   // A-10
           6,   // Big 12
           7,   // Big East
           10,  // Big Ten
-          20,  // Mountain West
           24,  // SEC
-          31   // WCC (and Pac-12 remnants)
+          31   // WCC (includes Gonzaga)
         ]);
 
         // Conference ID to name mapping for logging
         const CONF_ID_NAMES = {
-          1: 'ACC', 4: 'AAC', 5: 'A-10', 6: 'Big 12', 7: 'Big East',
-          10: 'Big Ten', 20: 'Mountain West', 24: 'SEC', 31: 'WCC/Pac-12'
+          1: 'ACC', 4: 'AAC', 6: 'Big 12', 7: 'Big East',
+          10: 'Big Ten', 24: 'SEC', 31: 'WCC'
         };
 
         const isApprovedConference = (confId) => {
@@ -712,7 +572,7 @@ async function main() {
               if (!awayApproved) issues.push(`${game.away_team} (${getConfName(awayConfId)})`);
               skippedNonApproved.push({ 
                 game, 
-                reason: `Not in Top 10: ${issues.join(', ')}` 
+                reason: `Not in Top 7: ${issues.join(', ')}` 
               });
               continue;
             }
@@ -858,6 +718,27 @@ async function main() {
 
       console.log(`[${config.name}] Found ${finalGames.length} games\n`);
 
+      // ═══════════════════════════════════════════════════════════════
+      // TRUE MEMORY SESSION: Gary maintains memory across all games
+      // ═══════════════════════════════════════════════════════════════
+      // Create a session that persists Gary's analysis memory across games.
+      // This enables organic ranking based on true conviction rather than
+      // re-reading summaries of his own picks.
+      // ═══════════════════════════════════════════════════════════════
+      
+      // Build system prompt for this sport
+      let constitution = getConstitution(config.key);
+      const today = new Date().toLocaleDateString('en-US', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      });
+      constitution = constitution.replace(/{{CURRENT_DATE}}/g, today);
+      const systemPrompt = buildSystemPrompt(constitution, config.key);
+      
+      console.log(`[${config.name}] 🎯 Processing ${finalGames.length} games - Spread, ML, or Pass`);
+
       // Process each game
       const sportPicks = [];
       let picksGenerated = 0;
@@ -902,9 +783,20 @@ async function main() {
         // Mark as being processed BEFORE we start (prevents race condition)
         processedGamesThisSession.add(gameKey);
 
-        // Run agentic analysis
-        const runnerOptions = { nocache: process.argv.includes('--nocache') };
-        const result = await analyzeGame(game, config.key, runnerOptions);
+        // Run agentic analysis (each game is independent)
+        const runnerOptions = { 
+          nocache: process.argv.includes('--nocache')
+        };
+        let result;
+        try {
+          result = await analyzeGame(game, config.key, runnerOptions);
+        } catch (err) {
+          if (err.message?.includes('USER_ABORTED') || err.message?.includes('aborted')) {
+            console.log(`\n⚠️  Request aborted for ${game.away_team} @ ${game.home_team}. Skipping...`);
+            continue;
+          }
+          throw err; // Re-throw other errors
+        }
 
         if (result && !result.error && result.pick) {
           // Check minimum stats requirement (for NCAAB especially)
@@ -962,10 +854,45 @@ async function main() {
           }
 
           console.log(`\n✅ PICK: ${result.pick}`);
-          console.log(`   Confidence: ${result.confidence}`);
           console.log(`   Type: ${result.type}`);
           if (result.toolCallHistory) {
             console.log(`   Stats Requested (${statsCount}): ${result.toolCallHistory.map(t => t.token).join(', ')}`);
+            
+            // 📊 INVESTIGATION AUDIT - Show what Gary actually investigated
+            const tokens = result.toolCallHistory.map(t => t.token);
+            // Count player stats: tokens containing PLAYER_, _PLAYER, GAME_LOGS, or specific player stat patterns
+            const playerStatsCount = tokens.filter(t => 
+              t.includes('PLAYER_') || 
+              t.includes('_PLAYER') || 
+              t.includes('GAME_LOGS') ||
+              t.match(/^(NBA|NFL|NHL|NCAAB|NCAAF)_PLAYER_STATS/)
+            ).length;
+            const teamStatsCount = tokens.filter(t => 
+              !t.includes('PLAYER_') && 
+              !t.includes('_PLAYER') && 
+              !t.includes('GAME_LOGS') &&
+              !t.match(/^(NBA|NFL|NHL|NCAAB|NCAAF)_PLAYER_STATS/)
+            ).length;
+            
+            // Check key investigation areas
+            const investigatedAreas = {
+              homeAwaySplits: tokens.some(t => t.includes('HOME_AWAY') || t.includes('SPLITS')),
+              recentForm: tokens.some(t => t.includes('RECENT_FORM') || t.includes('LAST_')),
+              h2hHistory: tokens.some(t => t.includes('H2H')),
+              pace: tokens.some(t => t.includes('PACE')),
+              efficiency: tokens.some(t => t.includes('RATING') || t.includes('EFG')),
+              clutchStats: tokens.some(t => t.includes('CLUTCH')),
+              benchDepth: tokens.some(t => t.includes('BENCH')),
+              playerLogs: playerStatsCount > 0
+            };
+            
+            const coveredCount = Object.values(investigatedAreas).filter(v => v).length;
+            const totalAreas = Object.keys(investigatedAreas).length;
+            
+            console.log(`\n📊 INVESTIGATION AUDIT:`);
+            console.log(`   Team Stats: ${teamStatsCount} | Player Stats: ${playerStatsCount}`);
+            console.log(`   Coverage: ${coveredCount}/${totalAreas} key areas`);
+            console.log(`   Areas: ${Object.entries(investigatedAreas).map(([k, v]) => `${v ? '✓' : '✗'}${k.replace(/([A-Z])/g, ' $1').trim()}`).join(' | ')}`);
           }
           // Log full rationale (no truncation - Gary is guided to keep it ~250-350 words)
           const rationale = result.rationale || result.analysis || '';
@@ -1288,7 +1215,6 @@ async function main() {
             pick: result.pick,
             type: result.type,
             odds: result.odds,
-            confidence: result.confidence,
             // Thesis-based classification (new filtering system)
             thesis_type: result.thesis_type || null,
             thesis_mechanism: result.thesis_mechanism || null,
@@ -1316,6 +1242,12 @@ async function main() {
             cfpRound: result.cfpRound || null,
             homeSeed: result.homeSeed || null,
             awaySeed: result.awaySeed || null,
+            // NCAAB AP Top 25 rankings
+            homeRanking: result.homeRanking || null,
+            awayRanking: result.awayRanking || null,
+            // NCAAB conference data for app filtering
+            homeConference: result.homeConference || null,
+            awayConference: result.awayConference || null,
             statsUsed: statsUsed, // Token names for backwards compatibility
             statsData: statsData, // Full stat data with values for Tale of the Tape
             injuries: result.injuries || null, // Structured injury data from BDL
@@ -1325,25 +1257,9 @@ async function main() {
               : null
           };
 
-          // Verbose logging for thesis fields
-          const majors = cleanPick.contradicting_factors?.major || [];
-          const minors = cleanPick.contradicting_factors?.minor || [];
-          console.log(`\n📋 THESIS DETAILS:`);
-          console.log(`   Type: ${cleanPick.thesis_type || 'NOT SET'}`);
-          console.log(`   Mechanism: ${cleanPick.thesis_mechanism || 'NOT SET'}`);
-          console.log(`   Supporting: [${(cleanPick.supporting_factors || []).join(', ')}]`);
-          console.log(`   Contradicting (MAJOR): [${majors.join(', ')}]`);
-          console.log(`   Contradicting (minor): [${minors.join(', ')}]`);
-
           // Add to picks
           sportPicks.push(cleanPick);
-
-          // Stop early if a pick limit is specified (counts generated picks, not games)
           picksGenerated += 1;
-          if (Number.isFinite(limitPicks) && limitPicks > 0 && picksGenerated >= limitPicks) {
-            console.log(`\n[${config.name}] ✅ Limit reached: generated ${picksGenerated}/${limitPicks} pick(s). Stopping early for this sport.`);
-            break;
-          }
         } else if (result.error) {
           console.log(`\n⚠️  Error: ${result.error}`);
         } else {
@@ -1361,150 +1277,123 @@ async function main() {
         if (!shouldStore) {
           console.log(`\n[${config.name}] Storage disabled (--store false). Generated ${sportPicks.length} pick(s) but will NOT write to Supabase.`);
         } else {
-          console.log(`\n[${config.name}] Storing ${sportPicks.length} picks...`);
+          console.log(`\n[${config.name}] Processing ${sportPicks.length} picks...`);
 
           // ═══════════════════════════════════════════════════════════════
-          // SMART CONFIDENCE-BASED FILTERING
+          // GARY'S PICKS SUMMARY
           // ═══════════════════════════════════════════════════════════════
-          // Philosophy: Confidence is king, with smart trap detection
-          // - Thesis types are logged but NOT used for filtering
-          // - Contradictions are logged but NOT hard-filtered (context matters)
-          // - Hard rules only for known statistical traps
+          console.log(`\n╔══════════════════════════════════════════════════════════════════╗`);
+          console.log(`║  🏈 GARY'S ${config.name} PICKS (${sportPicks.length} picks)                   `);
+          console.log(`╠══════════════════════════════════════════════════════════════════╣`);
+          for (let i = 0; i < sportPicks.length; i++) {
+            const p = sportPicks[i];
+            const typeTag = p.type === 'pass' ? 'PASS' : (p.type === 'moneyline' ? 'ML' : 'SPREAD');
+            const pickStr = (p.pick || 'PASS').slice(0, 30).padEnd(30);
+            console.log(`║  ${pickStr} | ${typeTag.padEnd(6)}`);
+          }
+          console.log(`╚══════════════════════════════════════════════════════════════════╝\n`);
+
           // ═══════════════════════════════════════════════════════════════
-          
-          // Sport-specific confidence thresholds (adjust as needed based on results)
-          const CONFIDENCE_BY_SPORT = {
-            'NBA': 0.69,    // Targeting 3-4 quality picks per night
-            'NCAAF': 0,     // Store all NCAAF picks (CFP games are limited, want all analysis)
-            'NCAAB': 0.72,  // Higher bar for college hoops (updated Dec 31, 2025)
-            'NHL': 0.67,    // User requested 0.67 for NHL
-            'NFL': 0.63,    // Week 16: 0.63 threshold (quality over quantity)
-            'EPL': 0.60     // Match calibration
-          };
-          
-          // Use override if provided, otherwise sport-specific default
-          const MIN_CONFIDENCE = minConfidenceOverride ?? (CONFIDENCE_BY_SPORT[config.name] ?? 0.64);
-          const MIN_CONFIDENCE_UNDERDOG = Math.min(MIN_CONFIDENCE, 0.69); // Raised from 0.60 to 0.69 per user request
-          const MAX_FAVORITE_SPREAD = -10; // Filter out NBA double-digit spreads (-10.5, -11, etc.)
+          // SIMPLE PASS FILTER (Gary has full agency)
+          // ═══════════════════════════════════════════════════════════════
+          // Gary decides what's worth betting. We just filter out PASS picks.
+          // No confidence thresholds, no quotas, no caps.
+          // If Gary picked it (spread or ML), we store it.
+          // ═══════════════════════════════════════════════════════════════
 
           const qualifiedPicks = sportPicks.filter(p => {
-            const confidence = typeof p.confidence === 'number' ? p.confidence : 0;
-            const majorCount = p.contradicting_factors?.major?.length || 0;
-            const trap = detectTrapSituation(p, config.name);
-            
-            // Determine if this is an underdog pick (positive spread or plus money ML)
-            const isUnderdogPick = 
-              (p.type === 'spread' && p.pick.includes('+')) ||
-              (p.type === 'moneyline' && p.odds && (parseInt(p.odds) >= 100 || String(p.odds).startsWith('+')));
-            const effectiveMinConfidence = isUnderdogPick ? MIN_CONFIDENCE_UNDERDOG : MIN_CONFIDENCE;
-            
-            // 1. PASS/COIN_FLIP CHECK - Gary explicitly passed on this game
-            if (p.pick === 'PASS' || p.thesis_type === 'coin_flip') {
-              console.log(`  ❌ Filtered: ${p.pick || 'PASS'} (Gary passed - ${p.thesis_type || 'no clear edge'})`);
+            // Filter out PASS picks
+            if (p.pick === 'PASS' || p.type === 'pass') {
+              console.log(`  ⏭️ PASS: ${p.homeTeam} vs ${p.awayTeam} - Gary moved on`);
+              if (p.thesis_mechanism) {
+                console.log(`     Reason: ${p.thesis_mechanism}`);
+              }
               return false;
             }
 
-            // 2. CONFIDENCE CHECK (primary filter) - Option A: Underdogs get lower threshold
-            if (confidence < effectiveMinConfidence) {
-              const dogNote = isUnderdogPick ? ' (underdog threshold)' : '';
-              console.log(`  ❌ Filtered: ${p.pick} (confidence ${confidence.toFixed(2)} < ${effectiveMinConfidence}${dogNote} for ${config.name})`);
-              return false;
-            }
-            
-            // 2.5 UNDERDOG BONUS LOG - highlight when underdogs pass through
-            if (isUnderdogPick) {
-              console.log(`  🐕 Underdog detected: ${p.pick} (conf: ${confidence.toFixed(2)}) - applying lower threshold`);
-            }
-
-            // 4. TRAP DETECTION (B2B road favorite laying points)
-            if (trap.isTrap) {
-              console.log(`  ⚠️ Trap Warning: ${p.pick} (${trap.trapReason}) - Gary kept it with conf ${confidence.toFixed(2)}`);
-              // [AGENCY UPDATE] We no longer hard-filter traps. Gary's confidence is the final arbiter.
-            }
-
-            // [AGENCY UPDATE] Removed rigid supporting factor counts and spread limits.
-            // Gary now has full agency to decide if a big spread or heavy favorite is worth the risk.
-            // His confidence score reflects his organic assessment of the value and conviction.
-
-            // 7. Filter out totals (over/under) - game picks are spread/ML only
+            // Filter out totals (over/under) - game picks are spread/ML only
             if (p.type === 'total') {
               console.log(`  ❌ Filtered: ${p.pick} (totals not included for game picks)`);
               return false;
             }
 
-            // QUALIFIED! Log with context (thesis/contradictions for reference, not filtering)
-            const flags = extractBinaryFlags(p);
-            const flagStr = [
-              flags.rest_advantage ? '💤REST' : '',
-              flags.back_to_back_disadvantage ? '⚠️B2B' : '',
-              flags.injury_edge ? '🏥INJ' : '',
-              flags.efficiency_edge ? '📊EFF' : '',
-              flags.goalie_edge ? '🥅GOALIE' : ''
-            ].filter(Boolean).join(' ') || 'none';
+            // Determine if this is an underdog pick
+            const isUnderdogPick = 
+              (p.type === 'spread' && p.pick.includes('+')) ||
+              (p.type === 'moneyline' && p.odds && (parseInt(p.odds) >= 100 || String(p.odds).startsWith('+')));
             
-            console.log(`  ✅ Qualified: ${p.pick} (conf: ${confidence.toFixed(2)}, thesis: ${p.thesis_type || 'N/A'}, flags: ${flagStr})`);
-            
-            // Log contradictions for awareness (not filtering)
-            if (majorCount > 0) {
-              console.log(`     📋 Contradictions noted: ${p.contradicting_factors.major.join(', ')}`);
+            // Log the pick Gary staked his name on
+            const pickType = p.type === 'moneyline' ? '💰ML' : '📊SPREAD';
+            const dogTag = isUnderdogPick ? '🐕DOG' : '🏆FAV';
+            console.log(`  ✅ PICK: ${p.pick} [${pickType}] [${dogTag}]`);
+            if (p.thesis_mechanism) {
+              console.log(`     Thesis: ${p.thesis_mechanism}`);
             }
 
             return true;
           });
 
           // Log filtering summary
-          console.log(`[${config.name}] Smart filtering: ${qualifiedPicks.length}/${sportPicks.length} picks qualified (conf >= ${MIN_CONFIDENCE}, no traps)`)
+          const passCount = sportPicks.filter(p => p.pick === 'PASS' || p.type === 'pass').length;
+          console.log(`\n[${config.name}] Gary's decisions: ${qualifiedPicks.length} PICKS, ${passCount} PASS`)
 
           if (qualifiedPicks.length > 0) {
-            let finalPicks;
+            // Quantum filter behavior by sport:
+            // - NBA/NHL: FILTER mode (only picks ≥0.80 stored)
+            // - NCAAB/NCAAF/NFL: TRACKING mode (all picks stored with quantum scores)
+            let picksToStore = qualifiedPicks;
             
-            if (useDynamicSlateReview) {
-              // NEW: Dynamic Slate Review - Organic pick selection based on board quality
-              // This replaces static confidence thresholds with board-aware selection
-              console.log(`\n[${config.name}] 🎲 Using DYNAMIC SLATE REVIEW (--dynamic flag enabled)`);
-              finalPicks = dynamicSlateReview(qualifiedPicks, config.name, finalGames.length);
+            const useQuantumFilter = ['basketball_nba', 'icehockey_nhl'].includes(config.key);
+            const useQuantumTracking = ['basketball_ncaab', 'americanfootball_ncaaf', 'americanfootball_nfl'].includes(config.key);
+            
+            if (isQuantumEnabled()) {
+              if (useQuantumTracking) {
+                // NCAAB/NCAAF/NFL: Store ALL picks but attach quantum scores for tracking
+                console.log(`\n[${config.name}] 📊 Tracking mode: Storing all picks with quantum scores`);
+                picksToStore = await applyQuantumFilter(qualifiedPicks, config.name, { storeAll: true });
+              } else if (useQuantumFilter) {
+                // NBA/NHL: Only picks with quantum strength >= 0.80 survive
+                picksToStore = await applyQuantumFilter(qualifiedPicks, config.name, { storeAll: false });
+                
+                if (picksToStore.length === 0) {
+                  console.log(`\n[${config.name}] 🌌 No picks passed quantum filter - nothing to store`);
+                }
+              }
             } else {
-              // LEGACY: Quality ranking and archetype de-duplication
-              // This organically reduces picks to the strongest ones
-              finalPicks = rankAndFilterPicks(qualifiedPicks, config.name);
+              console.log(`\n[${config.name}] ⚠️ Quantum filter disabled (--no-quantum flag)`);
             }
-
-            if (finalPicks.length > 0) {
-              await storePicks(finalPicks);
-              allPicks.push(...finalPicks);
+            
+            if (picksToStore.length > 0) {
+              const storageNote = useQuantumFilter ? 'quantum-filtered picks' : 'quantum-tracked picks';
+              console.log(`\n[${config.name}] 💾 Storing ${picksToStore.length} ${storageNote}`);
+              await storePicks(picksToStore);
+              allPicks.push(...picksToStore);
             }
+          } else {
+            console.log(`\n[${config.name}] ⏭️ Gary passed on all games - no picks to store`);
           }
         }
       }
 
       const sportTime = ((Date.now() - sportStartTime) / 1000).toFixed(1);
       
-      // Use the same thresholds we calculated during filtering
-      const SUMMARY_MIN_CONFIDENCE = minConfidenceOverride ?? (({
-        'NBA': 0.69, 'NCAAF': 0, 'NCAAB': 0.72, 'NHL': 0.67, 'NFL': 0.63, 'EPL': 0.60
-      })[config.name] ?? 0.64);
+      // Count picks vs passes
+      const pickCount = sportPicks.filter(p => p.pick !== 'PASS' && p.type !== 'pass').length;
+      const passCount = sportPicks.filter(p => p.pick === 'PASS' || p.type === 'pass').length;
 
-      // Count qualified picks - confidence-based filtering
-      const qualifiedCount = sportPicks.filter(p => {
-        const conf = typeof p.confidence === 'number' ? p.confidence : 0;
-        const trap = detectTrapSituation(p, config.name);
-        // Determine if this is an underdog pick (positive spread)
-        const isUnderdogPick = 
-          (p.type === 'spread' && p.spread && parseFloat(p.spread) > 0) ||
-          (p.type === 'moneyline' && p.odds && (parseInt(p.odds) >= 100 || String(p.odds).startsWith('+')));
-        const effectiveMin = isUnderdogPick ? Math.min(SUMMARY_MIN_CONFIDENCE, 0.60) : SUMMARY_MIN_CONFIDENCE;
-        
-        return conf >= effectiveMin && !trap.isTrap;
-      }).length;
-
+      // Track failed games for this sport (slateSession removed)
+      const failedCount = 0;
+      
       summary[config.name] = {
         games: finalGames.length,
-        picks: sportPicks.length,
-        qualified: qualifiedCount,
+        picks: pickCount,
+        passed: passCount,
+        failed: failedCount,
+        failedGames: [],
         time: sportTime
       };
 
-      console.log(`\n${config.emoji} ${config.name} COMPLETE: ${sportPicks.length} picks in ${sportTime}s`);
+      console.log(`\n${config.emoji} ${config.name} COMPLETE: ${sportPicks.length} picks (${failedCount} failed) in ${sportTime}s`);
 
     } catch (error) {
       console.error(`\n❌ Error processing ${config.name}:`, error.message);
@@ -1524,7 +1413,25 @@ async function main() {
     if (data.error) {
       console.log(`║  ${sport.padEnd(8)} ❌ Error: ${data.error.slice(0, 40)}`);
     } else {
-      console.log(`║  ${sport.padEnd(8)} ${String(data.games).padStart(3)} games → ${String(data.qualified || 0).padStart(2)} qualified picks (${data.time}s)`);
+      const failedStr = data.failed > 0 ? ` (${data.failed} failed)` : '';
+      console.log(`║  ${sport.padEnd(8)} ${String(data.games).padStart(3)} games → ${String(data.qualified || 0).padStart(2)} qualified picks${failedStr} (${data.time}s)`);
+    }
+  }
+
+  // Show details of any failed games
+  const allFailedGames = Object.entries(summary)
+    .filter(([_, data]) => data.failedGames && data.failedGames.length > 0)
+    .flatMap(([sport, data]) => data.failedGames.map(f => ({ sport, ...f })));
+  
+  if (allFailedGames.length > 0) {
+    console.log(`╠══════════════════════════════════════════════════════════════════╣`);
+    console.log(`║  ⚠️  FAILED GAMES (${allFailedGames.length}):                                       `);
+    for (const failed of allFailedGames.slice(0, 5)) {
+      console.log(`║    ${failed.game.slice(0, 35).padEnd(35)} | ${failed.statsGathered} stats | ${failed.iterations} iterations`);
+      console.log(`║      → ${failed.error.slice(0, 50)}`);
+    }
+    if (allFailedGames.length > 5) {
+      console.log(`║    ... and ${allFailedGames.length - 5} more`);
     }
   }
 
@@ -1537,6 +1444,19 @@ async function main() {
 ║                                                                  ║
 ╚══════════════════════════════════════════════════════════════════╝
 `);
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // GRACEFUL EXIT
+  // ═══════════════════════════════════════════════════════════════════════════
+  console.log('\n🐻 Gary is signing off. Session complete!');
+  console.log('═══════════════════════════════════════════════════════════════════════════\n');
+  
+  // Give time for any pending async operations (Supabase connections, etc.) to complete
+  await sleep(2000);
+  
+  // Explicitly exit with success code
+  console.log('✅ Process complete. Exiting cleanly...');
+  process.exit(0);
 }
 
 async function checkExistingPick(league, homeTeam, awayTeam) {
@@ -1605,6 +1525,16 @@ async function storePicks(picks) {
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// POST-ANALYSIS RANKING SYSTEM
+// ═══════════════════════════════════════════════════════════════════════════
+// 
+// Philosophy: Gary ranks his picks with TRUE MEMORY of all his analyses.
+// This enables organic ranking based on conviction rather than re-reading summaries.
+// The rankPicksInSession function is now imported from agenticOrchestrator.js.
+// 
+// ═══════════════════════════════════════════════════════════════════════════
 
 // Run
 main().catch(error => {

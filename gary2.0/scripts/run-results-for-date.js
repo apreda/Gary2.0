@@ -491,7 +491,21 @@ async function fetchScoreFromPerplexity(league, homeTeam, awayTeam, dateStr) {
  * Grade a spread pick
  */
 function gradeSpreadPick(pickText, homeTeam, awayTeam, homeScore, awayScore) {
-  const spreadMatch = pickText.match(/([+-]?\d+\.?\d*)/);
+  // Match spread pattern: +/- followed by number, with optional .5
+  // Must have a sign to distinguish from team numbers (49ers, 76ers) and odds (-102, -110)
+  // Spread format: "+2.5", "-3", "+7.5", "-6.5"
+  // Odds format: "-102", "-110", "+150" (typically 3 digits)
+  // We want spreads which are typically 1-2 digits before optional .5
+  
+  // First try to match spread with .5 (most specific)
+  let spreadMatch = pickText.match(/([+-]\d{1,2}\.5)/);
+  
+  // If no .5 spread, look for whole number spread (1-2 digits with sign, not 3 digits which are odds)
+  if (!spreadMatch) {
+    // Match +/- followed by 1-2 digits, not followed by more digits (to exclude odds like -102)
+    spreadMatch = pickText.match(/([+-]\d{1,2})(?!\d)/);
+  }
+  
   if (!spreadMatch) return null;
   
   const spread = parseFloat(spreadMatch[1]);
@@ -756,10 +770,11 @@ async function processWeeklyNFLPicks(dateStr) {
   
   console.log(`  Found ${picks.length} NFL picks for Week ${nflRow.week_number}`);
   
-  // Check existing results in nfl_results table
+  // Check existing results in game_results table (unified table)
   const { data: existingResults } = await supabase
-    .from('nfl_results')
+    .from('game_results')
     .select('pick_text')
+    .eq('league', 'NFL')
     .gte('game_date', weekStart);
   
   const existingPickTexts = new Set((existingResults || []).map(r => r.pick_text));
@@ -833,30 +848,20 @@ async function processWeeklyNFLPicks(dateStr) {
     const emoji = result === 'won' ? '✅' : result === 'push' ? '🟡' : '❌';
     console.log(`     Result: ${emoji} ${result.toUpperCase()}`);
     
-    // Insert result into nfl_results table (separate from game_results)
-    // Convert confidence to integer percentage (0.67 -> 67)
-    const confidenceInt = pick.confidence ? Math.round(parseFloat(pick.confidence) * 100) : null;
-    
+    // Insert result into game_results table (unified with daily picks)
     const { error: insertError } = await supabase
-      .from('nfl_results')
-      .upsert({
-        nfl_pick_id: nflRow.id,
+      .from('game_results')
+      .insert({
+        pick_id: nflRow.id,
         game_date: dateStr,
-        week_number: nflRow.week_number,
-        season: nflRow.season || 2025,
+        league: 'NFL',
         result: result,
         final_score: final_score,
         pick_text: pick.pick,
         matchup: `${pick.awayTeam} @ ${pick.homeTeam}`,
-        confidence: confidenceInt,
-        home_team: pick.homeTeam,
-        away_team: pick.awayTeam,
-        home_score: scoreData.homeScore,
-        away_score: scoreData.awayScore,
+        confidence: pick.confidence,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
-      }, {
-        onConflict: 'pick_text,game_date'
       });
     
     if (insertError) {

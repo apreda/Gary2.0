@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Agentic NHL Player Props Runner
- * Uses a 3-stage pipeline (Hypothesis → Investigator → Judge) for prop analysis
+ * Uses a full agentic iteration loop for NHL prop analysis
  * 
  * Usage:
  *   node scripts/run-agentic-nhl-props.js
@@ -15,12 +15,13 @@ runAgenticPropsCli({
   sportKey: 'icehockey_nhl',
   leagueLabel: 'NHL',
   buildContext: buildNhlPropsAgenticContext,
-  windowHours: 16,  // NHL daily schedule - today's games only
-  propsPerGame: 2,  // 2-per-game rule: exactly 2 most confident picks per game
-  limitDefault: 15  // Number of games to process (NHL can have many games per day)
+  windowHours: 48,  // Captures today + tomorrow's games
+  propsPerGame: 5,  // Gary shortlists 5; quantum filter decides survivors (0..5)
+  limitDefault: 15  
 })
   .then(() => process.exit(0))
   .catch((error) => {
     console.error('Agentic NHL Props runner crashed:', error);
     process.exit(1);
   });
+

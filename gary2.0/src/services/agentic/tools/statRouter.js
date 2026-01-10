@@ -179,25 +179,67 @@ async function fetchNBATeamAdvancedStats(teamId, season = null) {
     // Oct(10)-Dec = currentYear, Jan-Sep = previousYear
     season = month >= 10 ? year : year - 1;
   }
+  
   try {
     // Get active players for team
-    const playersUrl = `https://api.balldontlie.io/v1/players/active?team_ids[]=${teamId}&per_page=10`;
+    const playersUrl = `https://api.balldontlie.io/v1/players/active?team_ids[]=${teamId}&per_page=15`;
     const playersResp = await fetch(playersUrl, { headers: { Authorization: BDL_API_KEY } });
+    
+    if (!playersResp.ok) {
+      console.warn(`[Stat Router] Failed to fetch players for team ${teamId}: ${playersResp.status}`);
+      return null;
+    }
+    
     const playersJson = await playersResp.json();
     const players = playersJson.data || [];
     
-    if (players.length === 0) return null;
+    if (players.length === 0) {
+      console.warn(`[Stat Router] No active players found for team ${teamId}`);
+      return null;
+    }
     
-    // Get season averages (advanced) for top 10 players (increased from 5 to capture key rotation players)
+    // Get season averages (advanced) for top players
     const topPlayerIds = players.slice(0, 10).map(p => p.id);
     const playerIdParams = topPlayerIds.map(id => `player_ids[]=${id}`).join('&');
-    const seasonAvgUrl = `https://api.balldontlie.io/v1/season_averages/general?season=${season}&season_type=regular&type=advanced&${playerIdParams}`;
     
-    const resp = await fetch(seasonAvgUrl, { headers: { Authorization: BDL_API_KEY } });
-    const json = await resp.json();
-    const playerStats = json.data || [];
+    // Try advanced stats first, fall back to base stats if it fails
+    let playerStats = [];
     
-    if (playerStats.length === 0) return null;
+    // Attempt 1: Advanced stats
+    try {
+      const advancedUrl = `https://api.balldontlie.io/v1/season_averages/general?season=${season}&season_type=regular&type=advanced&${playerIdParams}`;
+      const advResp = await fetch(advancedUrl, { headers: { Authorization: BDL_API_KEY } });
+      
+      if (advResp.ok) {
+        const advJson = await advResp.json();
+        playerStats = advJson.data || [];
+      } else {
+        console.warn(`[Stat Router] Advanced stats returned ${advResp.status}, trying base stats...`);
+      }
+    } catch (advErr) {
+      console.warn(`[Stat Router] Advanced stats failed: ${advErr.message}, trying base stats...`);
+    }
+    
+    // Attempt 2: Base stats fallback
+    if (playerStats.length === 0) {
+      try {
+        const baseUrl = `https://api.balldontlie.io/v1/season_averages/general?season=${season}&season_type=regular&type=base&${playerIdParams}`;
+        const baseResp = await fetch(baseUrl, { headers: { Authorization: BDL_API_KEY } });
+        
+        if (baseResp.ok) {
+          const baseJson = await baseResp.json();
+          playerStats = baseJson.data || [];
+          console.log(`[Stat Router] Using base stats fallback for team ${teamId}`);
+        }
+      } catch (baseErr) {
+        console.warn(`[Stat Router] Base stats also failed: ${baseErr.message}`);
+      }
+    }
+    
+    if (playerStats.length === 0) {
+      console.warn(`[Stat Router] No season averages found for team ${teamId}`);
+      return null;
+    }
     
     // Aggregate team stats (weighted by minutes/games played)
     let totalMinutes = 0;
@@ -206,21 +248,25 @@ async function fetchNBATeamAdvancedStats(teamId, season = null) {
     let totalGames = 0;
     
     for (const ps of playerStats) {
-      const mins = ps.stats?.min || 0;
-      const gp = ps.stats?.gp || 1;
+      const stats = ps.stats || ps; // Handle both formats
+      const mins = stats.min || 0;
+      const gp = stats.gp || stats.games_played || 1;
       const weight = mins * gp;
       totalMinutes += weight;
       totalGames = Math.max(totalGames, gp);
       
-      weightedORtg += (ps.stats?.off_rating || 0) * weight;
-      weightedDRtg += (ps.stats?.def_rating || 0) * weight;
-      weightedNetRtg += (ps.stats?.net_rating || 0) * weight;
-      weightedEfg += (ps.stats?.efg_pct || 0) * weight;
-      weightedPace += (ps.stats?.pace || 0) * weight;
-      weightedTsPct += (ps.stats?.ts_pct || 0) * weight;
+      weightedORtg += (stats.off_rating || stats.offensive_rating || 0) * weight;
+      weightedDRtg += (stats.def_rating || stats.defensive_rating || 0) * weight;
+      weightedNetRtg += (stats.net_rating || 0) * weight;
+      weightedEfg += (stats.efg_pct || 0) * weight;
+      weightedPace += (stats.pace || 0) * weight;
+      weightedTsPct += (stats.ts_pct || 0) * weight;
     }
     
-    if (totalMinutes === 0) return null;
+    if (totalMinutes === 0) {
+      console.warn(`[Stat Router] No minutes data for team ${teamId}`);
+      return null;
+    }
     
     return {
       offensive_rating: (weightedORtg / totalMinutes).toFixed(1),
@@ -231,12 +277,15 @@ async function fetchNBATeamAdvancedStats(teamId, season = null) {
       true_shooting_pct: ((weightedTsPct / totalMinutes) * 100).toFixed(1),
       games_played: totalGames,
       players_sampled: playerStats.length,
-      top_players: playerStats.slice(0, 3).map(ps => ({
-        name: `${ps.player?.first_name} ${ps.player?.last_name}`,
-        off_rating: ps.stats?.off_rating,
-        def_rating: ps.stats?.def_rating,
-        usage: ((ps.stats?.usg_pct || 0) * 100).toFixed(1)
-      }))
+      top_players: playerStats.slice(0, 3).map(ps => {
+        const stats = ps.stats || ps;
+        return {
+          name: `${ps.player?.first_name || ''} ${ps.player?.last_name || ''}`.trim(),
+          off_rating: stats.off_rating || stats.offensive_rating,
+          def_rating: stats.def_rating || stats.defensive_rating,
+          usage: ((stats.usg_pct || 0) * 100).toFixed(1)
+        };
+      })
     };
   } catch (error) {
     console.warn('[Stat Router] BDL NBA advanced stats fetch failed:', error.message);
@@ -1661,6 +1710,157 @@ const FETCHERS = {
     }
   },
 
+  // ===== NCAAB HOME/AWAY SPLITS FROM BDL STANDINGS =====
+  // NOTE: BDL requires valid conference_id for NCAAB standings - we skip this to avoid 400 errors
+  
+  NCAAB_HOME_AWAY_SPLITS: async (bdlSport, home, away, season) => {
+    if (bdlSport !== 'basketball_ncaab') return null;
+    
+    try {
+      console.log(`[Stat Router] NCAAB Home/Away Splits - using team season stats (standings API requires conference_id)`);
+      
+      // BDL standings for NCAAB require conference_id which we don't reliably have
+      // Return guidance to use team stats instead
+      return {
+        category: 'Home/Away Splits (NCAAB)',
+        note: '⚠️ NCAAB standings API requires conference_id. Use team season stats for home/away record.',
+        home: { team: home.full_name || home.name, suggestion: 'Check TEAM_SEASON_STATS for home/away record' },
+        away: { team: away.full_name || away.name, suggestion: 'Check TEAM_SEASON_STATS for home/away record' }
+      };
+      
+      // DISABLED: This causes 400 errors when conference_id is not provided or invalid
+      // const standings = await ballDontLieService.getStandingsGeneric(bdlSport, { season });
+      
+      const homeStanding = (standings || []).find(s => s.team?.id === home.id);
+      const awayStanding = (standings || []).find(s => s.team?.id === away.id);
+      
+      if (!homeStanding && !awayStanding) {
+        return {
+          category: 'Home/Away Splits',
+          note: 'Standings data not available for these teams',
+          home: { team: home.full_name || home.name, home_record: 'N/A', away_record: 'N/A' },
+          away: { team: away.full_name || away.name, home_record: 'N/A', away_record: 'N/A' }
+        };
+      }
+      
+      return {
+        category: 'Home/Away Splits (NCAAB)',
+        home: {
+          team: home.full_name || home.name,
+          overall_record: homeStanding ? `${homeStanding.wins}-${homeStanding.losses}` : 'N/A',
+          home_record: homeStanding?.home_record || 'N/A',
+          away_record: homeStanding?.away_record || 'N/A',
+          conference_record: homeStanding?.conference_record || 'N/A',
+          win_pct: homeStanding?.win_percentage ? (homeStanding.win_percentage * 100).toFixed(1) + '%' : 'N/A'
+        },
+        away: {
+          team: away.full_name || away.name,
+          overall_record: awayStanding ? `${awayStanding.wins}-${awayStanding.losses}` : 'N/A',
+          home_record: awayStanding?.home_record || 'N/A',
+          away_record: awayStanding?.away_record || 'N/A',
+          conference_record: awayStanding?.conference_record || 'N/A',
+          win_pct: awayStanding?.win_percentage ? (awayStanding.win_percentage * 100).toFixed(1) + '%' : 'N/A'
+        },
+        context: 'Investigate home court advantage for this matchup. Compare home_record vs away_record for each team.'
+      };
+    } catch (error) {
+      console.warn('[Stat Router] NCAAB Home/Away Splits failed:', error.message);
+      return {
+        category: 'Home/Away Splits',
+        error: 'Data unavailable',
+        home: { team: home.full_name || home.name, home_record: 'N/A' },
+        away: { team: away.full_name || away.name, away_record: 'N/A' }
+      };
+    }
+  },
+
+  NCAAB_RECENT_FORM: async (bdlSport, home, away, season) => {
+    if (bdlSport !== 'basketball_ncaab') return null;
+    
+    try {
+      console.log(`[Stat Router] Fetching NCAAB Recent Form with opponent quality`);
+      
+      // Get last 30 days of games for both teams
+      const today = new Date();
+      const thirtyDaysAgo = new Date(today);
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      
+      const [homeGames, awayGames] = await Promise.all([
+        ballDontLieService.getGames(bdlSport, { 
+          team_ids: [home.id], 
+          seasons: [season],
+          per_page: 50
+        }),
+        ballDontLieService.getGames(bdlSport, { 
+          team_ids: [away.id], 
+          seasons: [season],
+          per_page: 50
+        })
+      ]);
+      
+      // Filter to completed games and get last 5
+      const filterCompleted = (games) => (games || [])
+        .filter(g => g.status === 'post' || g.period_detail === 'Final')
+        .sort((a, b) => new Date(b.date) - new Date(a.date))
+        .slice(0, 5);
+      
+      const homeL5 = filterCompleted(homeGames);
+      const awayL5 = filterCompleted(awayGames);
+      
+      const analyzeGames = (games, teamId, teamName) => {
+        let wins = 0, losses = 0;
+        const details = [];
+        let totalMargin = 0;
+        
+        for (const g of games) {
+          const isHome = g.home_team?.id === teamId;
+          const teamScore = isHome ? g.home_score : g.away_score;
+          const oppScore = isHome ? g.away_score : g.home_score;
+          const oppName = isHome ? g.visitor_team?.full_name : g.home_team?.full_name;
+          const margin = teamScore - oppScore;
+          const won = margin > 0;
+          
+          if (won) wins++;
+          else losses++;
+          totalMargin += margin;
+          
+          details.push({
+            opponent: oppName || 'Unknown',
+            result: won ? 'W' : 'L',
+            score: `${teamScore}-${oppScore}`,
+            margin: margin,
+            location: isHome ? 'HOME' : 'ROAD'
+          });
+        }
+        
+        const avgMargin = games.length > 0 ? (totalMargin / games.length).toFixed(1) : 0;
+        
+        return {
+          team: teamName,
+          l5_record: `${wins}-${losses}`,
+          avg_margin: avgMargin > 0 ? `+${avgMargin}` : avgMargin,
+          trend: wins >= 4 ? 'HOT' : wins <= 1 ? 'COLD' : 'MIXED',
+          games: details
+        };
+      };
+      
+      return {
+        category: 'Recent Form L5 (NCAAB)',
+        home: analyzeGames(homeL5, home.id, home.full_name || home.name),
+        away: analyzeGames(awayL5, away.id, away.full_name || away.name),
+        context: 'L5 record with margin and opponent context. Consider: Who did they play? Close games or blowouts?'
+      };
+    } catch (error) {
+      console.warn('[Stat Router] NCAAB Recent Form failed:', error.message);
+      return {
+        category: 'Recent Form L5',
+        error: 'Data unavailable',
+        home: { team: home.full_name || home.name, l5_record: 'N/A' },
+        away: { team: away.full_name || away.name, l5_record: 'N/A' }
+      };
+    }
+  },
+
   // ===== NCAAF BDL-BASED STATS (THESE WORK - use team_season_stats) =====
   
   NCAAF_PASSING_OFFENSE: async (bdlSport, home, away, season) => {
@@ -2193,7 +2393,7 @@ const FETCHERS = {
       5. Days rest since last game for each team
       6. Environment change (e.g., East Coast team going to Pacific time, warm weather team going to cold)
       
-      Travel fatigue is a real factor - teams crossing 2+ time zones historically underperform by 2-3 points.`;
+      Travel fatigue can be a factor - investigate how this specific team performs after significant travel.`;
       
       const response = await geminiGroundingSearch(query, {
         temperature: 0.2,
@@ -2211,7 +2411,7 @@ const FETCHERS = {
       return {
         category: 'Travel & Fatigue Analysis',
         source: 'Gemini Grounding analysis',
-        betting_note: 'Teams crossing 2+ time zones historically underperform by 2-3 points ATS',
+        betting_note: 'Travel fatigue can be a factor - investigate this team\'s road performance',
         distance_miles: distanceMatch ? distanceMatch[1].replace(',', '') : 'N/A',
         time_zones_crossed: timeZonesMatch ? timeZonesMatch[1] : 'N/A',
         away_road_record: roadRecordMatch ? roadRecordMatch[1] : 'N/A',
@@ -2542,7 +2742,7 @@ const FETCHERS = {
       return {
         category: 'Explosiveness & Big Play Potential',
         source: 'Gemini Grounding',
-        note: 'Big play ability separates P4 depth from G5 - expect Oregon to hit more explosive plays',
+        note: 'Big play ability can separate teams - investigate explosive play potential for both sides',
         home: {
           team: homeTeamName,
           ...extractExplosive(content, homeTeamName)
@@ -2920,52 +3120,76 @@ const FETCHERS = {
     };
   },
 
-  // ===== RECENT FORM =====
+  // ===== RECENT FORM (ENHANCED) =====
+  // Now includes margin analysis, opponent quality, and narrative context
   RECENT_FORM: async (bdlSport, home, away, season) => {
     const homeName = home.full_name || home.name || 'Home';
     const awayName = away.full_name || away.name || 'Away';
-    console.log(`[Stat Router] Fetching RECENT_FORM for ${awayName} @ ${homeName} (${bdlSport})`);
+    console.log(`[Stat Router] Fetching ENHANCED RECENT_FORM for ${awayName} @ ${homeName} (${bdlSport})`);
     
     // NFL uses seasons[] and team_ids[], not date ranges
     const isNFL = bdlSport === 'americanfootball_nfl';
     const isNCAA = bdlSport === 'americanfootball_ncaaf' || bdlSport === 'basketball_ncaab';
+    const isNBA = bdlSport === 'basketball_nba';
+    const isNHL = bdlSport === 'icehockey_nhl';
     
     let params;
     if (isNFL || isNCAA) {
-      // For football, use season filter - get all games this season
+      // For football, use season filter - get all games this season (need 10+ for L10)
       params = {
         seasons: [season],
-        per_page: 20 // Get more games to ensure we have enough
+        per_page: 25 // Get more games to ensure we have enough for L10
       };
     } else {
-      // For other sports, use date range
+      // For other sports (NBA, NHL), use date range - extend to 45 days to capture L10
       const today = new Date();
-      const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+      const fortyFiveDaysAgo = new Date(today.getTime() - 45 * 24 * 60 * 60 * 1000);
       params = {
-        start_date: thirtyDaysAgo.toISOString().split('T')[0],
+        start_date: fortyFiveDaysAgo.toISOString().split('T')[0],
         end_date: today.toISOString().split('T')[0],
-        per_page: 20
+        per_page: 25 // Need more for L10
       };
     }
     
     try {
-      const [homeGames, awayGames] = await Promise.all([
+      // Fetch games AND standings in parallel for opponent quality analysis
+      const [homeGames, awayGames, standings] = await Promise.all([
         ballDontLieService.getGames(bdlSport, { team_ids: [home.id], ...params }),
-        ballDontLieService.getGames(bdlSport, { team_ids: [away.id], ...params })
+        ballDontLieService.getGames(bdlSport, { team_ids: [away.id], ...params }),
+        // Fetch standings to assess opponent quality
+        (isNFL || isNBA || isNHL) ? ballDontLieService.getStandingsGeneric(bdlSport, { season }) : Promise.resolve([])
       ]);
       
-      console.log(`[Stat Router] Got ${homeGames?.length || 0} games for ${homeName}, ${awayGames?.length || 0} for ${awayName}`);
+      console.log(`[Stat Router] Got ${homeGames?.length || 0} games for ${homeName}, ${awayGames?.length || 0} for ${awayName}, ${standings?.length || 0} standings`);
+      
+      // Build standings map for quick opponent lookup
+      const standingsMap = new Map();
+      if (standings && standings.length > 0) {
+        for (const s of standings) {
+          const teamId = s.team?.id;
+          if (teamId) {
+            standingsMap.set(teamId, {
+              overall_record: s.overall_record || `${s.wins || 0}-${s.losses || 0}`,
+              wins: s.wins || 0,
+              losses: s.losses || 0,
+              point_differential: s.point_differential || 0
+            });
+          }
+        }
+        console.log(`[Stat Router] Built standings map with ${standingsMap.size} teams for opponent quality lookup`);
+      }
       
       // Sort by date descending (most recent first)
       const sortByDate = (a, b) => new Date(b.date) - new Date(a.date);
       const sortedHomeGames = (homeGames || []).sort(sortByDate);
       const sortedAwayGames = (awayGames || []).sort(sortByDate);
       
-      const homeForm = formatRecentGames(sortedHomeGames, homeName);
-      const awayForm = formatRecentGames(sortedAwayGames, awayName);
+      // Pass standings map for enhanced analysis
+      const homeForm = formatRecentGames(sortedHomeGames, homeName, standingsMap);
+      const awayForm = formatRecentGames(sortedAwayGames, awayName, standingsMap);
       
       return {
-        category: 'Recent Form (Last 5 Games)',
+        category: 'Recent Form - L5 + L10 Analysis',
         home: {
           team: home.full_name || home.name,
           ...homeForm
@@ -2974,7 +3198,22 @@ const FETCHERS = {
           team: away.full_name || away.name,
           ...awayForm
         },
-        IMPORTANT: '⚠️ These are VERIFIED game results from BDL. Use ONLY these records when citing "last 5 games" - DO NOT guess or estimate different records.',
+        IMPORTANT: '⚠️ These are VERIFIED game results from BDL with MARGIN, OPPONENT QUALITY, and TREND analysis.',
+        HOW_TO_USE: `
+📊 L5 vs L10 COMPARISON:
+   - L5 shows CURRENT form (last 5 games)
+   - L10 shows EXTENDED form (last 10 games)
+   - Compare L5 win% to L10 win% to see if team is TRENDING UP, DOWN, or STABLE
+   - A team 2-3 in L5 but 6-4 in L10 = concerning recent slide
+   - A team 4-1 in L5 but 5-5 in L10 = recent surge worth investigating
+        `.trim(),
+        INVESTIGATE_THE_WHY: `
+🔍 Before assuming a streak continues, ask:
+   - WHO did they play? (Check opponent records in each game)
+   - HOW did they lose/win? (Close games ≤7 pts vs Blowouts 14+ pts)
+   - A team 1-4 with 3 close losses to playoff teams is NOT "in freefall"
+   - A team 4-1 with 3 close wins over weak teams - investigate sustainability
+        `.trim(),
         note: 'If Scout Report grounding has more recent data, prefer that for accuracy.'
       };
     } catch (error) {
@@ -3278,6 +3517,57 @@ const FETCHERS = {
     const awayName = away.full_name || away.name || 'Away';
     console.log(`[Stat Router] Fetching H2H_HISTORY for ${awayName} @ ${homeName} (${bdlSport})`);
     
+    // Helper: Extract personnel notes from box score data
+    const extractPersonnelNote = (boxScore, homeTeamId, awayTeamId) => {
+      try {
+        if (!boxScore || !boxScore.home_team_stats || !boxScore.away_team_stats) {
+          return null;
+        }
+        
+        // Get top scorer from each team
+        const homeStats = boxScore.home_team_stats || [];
+        const awayStats = boxScore.away_team_stats || [];
+        
+        // Sort by points to find top performers
+        const homeTop = [...homeStats].sort((a, b) => (b.pts || 0) - (a.pts || 0))[0];
+        const awayTop = [...awayStats].sort((a, b) => (b.pts || 0) - (a.pts || 0))[0];
+        
+        // Find any key players who DNP (0 minutes or not in stats)
+        const homeDnp = homeStats.filter(p => (p.min === '0:00' || p.min === 0 || p.min === '00:00') && p.player?.first_name);
+        const awayDnp = awayStats.filter(p => (p.min === '0:00' || p.min === 0 || p.min === '00:00') && p.player?.first_name);
+        
+        let note = 'Key: ';
+        if (homeTop?.player) {
+          const name = `${homeTop.player.first_name?.[0] || ''}. ${homeTop.player.last_name || 'Unknown'}`;
+          note += `${name} ${homeTop.pts || 0}pts/${homeTop.min || '?'}min`;
+        }
+        if (awayTop?.player) {
+          const name = `${awayTop.player.first_name?.[0] || ''}. ${awayTop.player.last_name || 'Unknown'}`;
+          note += `; ${name} ${awayTop.pts || 0}pts/${awayTop.min || '?'}min`;
+        }
+        
+        // Add DNP notes for key players (if any)
+        const dnpNotes = [];
+        if (homeDnp.length > 0) {
+          const dnpNames = homeDnp.slice(0, 2).map(p => `${p.player?.last_name || 'Unknown'}`).join(', ');
+          dnpNotes.push(`${dnpNames} DNP`);
+        }
+        if (awayDnp.length > 0) {
+          const dnpNames = awayDnp.slice(0, 2).map(p => `${p.player?.last_name || 'Unknown'}`).join(', ');
+          dnpNotes.push(`${dnpNames} DNP`);
+        }
+        
+        if (dnpNotes.length > 0) {
+          note += ` | ${dnpNotes.join('; ')}`;
+        }
+        
+        return note;
+      } catch (e) {
+        console.log(`[Stat Router] Error extracting personnel note: ${e.message}`);
+        return null;
+      }
+    };
+    
     try {
       // Calculate dynamic season - NFL/NCAAF: Aug-Feb spans years
       // If season not provided, calculate based on current date
@@ -3318,7 +3608,39 @@ const FETCHERS = {
         };
       }
       
-      // Format H2H results with full date including year
+      // For NBA, try to fetch box scores to get personnel context
+      const isNba = bdlSport === 'basketball_nba';
+      let boxScoresByDate = {};
+      
+      if (isNba && h2hGames.length <= 3) {
+        // Only fetch box scores for recent H2H games (limit to avoid slowdown)
+        console.log(`[Stat Router] Fetching box scores for ${h2hGames.length} H2H game(s) to get personnel notes...`);
+        
+        for (const game of h2hGames.slice(0, 3)) {
+          try {
+            const gameDate = game.date?.split('T')[0]; // YYYY-MM-DD
+            if (gameDate && !boxScoresByDate[gameDate]) {
+              const boxScores = await ballDontLieService.getNbaBoxScores(gameDate, 30); // Cache 30 min
+              if (boxScores && boxScores.length > 0) {
+                // Find the box score that matches this game (by team IDs)
+                const matchingBox = boxScores.find(bs => {
+                  const bsHomeId = bs.game?.home_team?.id || bs.home_team?.id;
+                  const bsAwayId = bs.game?.visitor_team?.id || bs.visitor_team?.id;
+                  return (bsHomeId === home.id || bsHomeId === away.id) && 
+                         (bsAwayId === home.id || bsAwayId === away.id);
+                });
+                if (matchingBox) {
+                  boxScoresByDate[gameDate] = matchingBox;
+                }
+              }
+            }
+          } catch (e) {
+            console.log(`[Stat Router] Box score fetch failed for ${game.date}: ${e.message}`);
+          }
+        }
+      }
+      
+      // Format H2H results with full date including year AND personnel notes
       const h2hResults = h2hGames.slice(0, 5).map(game => {
         const isHomeTeamHome = (game.home_team?.id || game.home_team_id) === home.id;
         const homeScore = isHomeTeamHome ? game.home_team_score : game.visitor_team_score;
@@ -3326,14 +3648,20 @@ const FETCHERS = {
         const winner = homeScore > awayScore ? homeName : awayName;
         const margin = Math.abs(homeScore - awayScore);
         const gameDate = new Date(game.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        const gameDateKey = game.date?.split('T')[0];
         const week = game.week ? `Week ${game.week}` : '';
+        
+        // Get personnel note from box score if available
+        const boxScore = boxScoresByDate[gameDateKey];
+        const personnelNote = boxScore ? extractPersonnelNote(boxScore, home.id, away.id) : null;
         
         return {
           date: gameDate,
           week: week,
           result: `${winner} won by ${margin}`,
           score: `${homeName} ${homeScore} - ${awayScore} ${awayName}`,
-          home_won: homeScore > awayScore
+          home_won: homeScore > awayScore,
+          personnel_note: personnelNote || (isNba ? '(Box score unavailable)' : null)
         };
       });
       
@@ -3352,7 +3680,7 @@ const FETCHERS = {
         meetings_this_season: h2hResults,
         revenge_game: revengeGame,
         revenge_note: revengeGame ? `${awayName} lost the last meeting - potential revenge spot` : null,
-        IMPORTANT: `⚠️ This shows ONLY ${h2hGames.length} game(s) from the ${currentSeason} season. For multi-year H2H history, use Scout Report grounding. DO NOT claim historical streaks beyond this data.`
+        IMPORTANT: `⚠️ This shows ONLY ${h2hGames.length} game(s) from the ${currentSeason} season. Personnel notes show who PLAYED in each game. For multi-year H2H history, use Scout Report grounding. DO NOT claim historical streaks beyond this data.`
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching H2H history:`, error.message);
@@ -3525,7 +3853,7 @@ const FETCHERS = {
         
         // Luck factor: positive = lucky (winning more than expected), negative = unlucky
         const luckFactor = ((actualWinPct - expectedWinPct) * 100).toFixed(1);
-        const luckLabel = parseFloat(luckFactor) > 5 ? '⚠️ LUCKY (regression candidate)' :
+        const luckLabel = parseFloat(luckFactor) > 5 ? '⚠️ LUCKY (investigate sustainability)' :
                           parseFloat(luckFactor) < -5 ? '📈 UNLUCKY (improvement candidate)' :
                           'Normal variance';
         
@@ -3551,7 +3879,7 @@ const FETCHERS = {
           team: away.full_name || away.name,
           ...calcPythagorean(awayStanding, awayScoring)
         },
-        note: 'Teams outperforming expected wins by >5% may regress. Underperformers may improve.'
+        note: 'Teams with expected wins significantly different from actual wins - investigate sustainability.'
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching luck-adjusted stats:`, error.message);
@@ -3568,13 +3896,17 @@ const FETCHERS = {
     
     try {
       // Get roster for both teams
-      const [homePlayers, awayPlayers] = await Promise.all([
+      const [homePlayersRaw, awayPlayersRaw] = await Promise.all([
         ballDontLieService.getPlayersActive(bdlSport, { team_ids: [home.id], per_page: 15 }),
         ballDontLieService.getPlayersActive(bdlSport, { team_ids: [away.id], per_page: 15 })
       ]);
       
-      const homePlayerIds = (homePlayers || []).slice(0, 10).map(p => p.id);
-      const awayPlayerIds = (awayPlayers || []).slice(0, 10).map(p => p.id);
+      // Handle both array and {data: [...]} response formats
+      const homePlayers = Array.isArray(homePlayersRaw) ? homePlayersRaw : (homePlayersRaw?.data || []);
+      const awayPlayers = Array.isArray(awayPlayersRaw) ? awayPlayersRaw : (awayPlayersRaw?.data || []);
+      
+      const homePlayerIds = homePlayers.slice(0, 10).map(p => p.id);
+      const awayPlayerIds = awayPlayers.slice(0, 10).map(p => p.id);
       
       // Fetch base season averages (FGA, PTS, AST as usage proxies)
       const fetchBaseStats = async (playerIds, teamName) => {
@@ -3740,6 +4072,169 @@ const FETCHERS = {
     }
   },
 
+  // ===== BENCH DEPTH (NBA - Critical for Large Spreads) =====
+  BENCH_DEPTH: async (bdlSport, home, away, season) => {
+    // Only for NBA
+    if (bdlSport !== 'basketball_nba') {
+      return { category: 'Bench Depth', note: 'Only available for NBA', error: 'Sport not supported' };
+    }
+    
+    console.log(`[Stat Router] Fetching BENCH_DEPTH for ${away.name} @ ${home.name}`);
+    
+    try {
+      // Get recent games for both teams (last 10)
+      const seasonStart = new Date(season - 1, 9, 1); // Oct 1
+      const today = new Date();
+      
+      const [homeGames, awayGames] = await Promise.all([
+        ballDontLieService.getGames(bdlSport, {
+          team_ids: [home.id],
+          start_date: seasonStart.toISOString().split('T')[0],
+          end_date: today.toISOString().split('T')[0],
+          per_page: 15
+        }),
+        ballDontLieService.getGames(bdlSport, {
+          team_ids: [away.id],
+          start_date: seasonStart.toISOString().split('T')[0],
+          end_date: today.toISOString().split('T')[0],
+          per_page: 15
+        })
+      ]);
+      
+      // Get last 10 completed games for each team
+      const getCompletedGames = (games, limit = 10) => {
+        return (games || [])
+          .filter(g => g.status === 'Final' && (g.home_team_score || 0) > 0)
+          .sort((a, b) => new Date(b.date) - new Date(a.date))
+          .slice(0, limit);
+      };
+      
+      const recentHomeGames = getCompletedGames(homeGames);
+      const recentAwayGames = getCompletedGames(awayGames);
+      
+      if (recentHomeGames.length < 3 || recentAwayGames.length < 3) {
+        return { category: 'Bench Depth', error: 'Not enough games to calculate bench depth' };
+      }
+      
+      // Get player stats for these games
+      const homeGameIds = recentHomeGames.map(g => g.id);
+      const awayGameIds = recentAwayGames.map(g => g.id);
+      
+      const [homePlayerStats, awayPlayerStats] = await Promise.all([
+        ballDontLieService.getPlayerStats(bdlSport, { game_ids: homeGameIds, per_page: 100 }),
+        ballDontLieService.getPlayerStats(bdlSport, { game_ids: awayGameIds, per_page: 100 })
+      ]);
+      
+      // Calculate bench depth for a team
+      const calcBenchDepth = (playerStats, teamId, numGames) => {
+        // Filter to only this team's players
+        const teamStats = (playerStats || []).filter(s => s.team?.id === teamId);
+        
+        if (teamStats.length === 0) {
+          return { error: 'No player stats available' };
+        }
+        
+        // Aggregate stats by player
+        const playerAgg = {};
+        for (const stat of teamStats) {
+          const playerId = stat.player?.id;
+          if (!playerId) continue;
+          
+          if (!playerAgg[playerId]) {
+            playerAgg[playerId] = {
+              name: `${stat.player?.first_name || ''} ${stat.player?.last_name || ''}`.trim(),
+              games: 0,
+              minutes: 0,
+              points: 0,
+              plusMinus: 0
+            };
+          }
+          
+          // Parse minutes (format: "32" or "32:45")
+          const minStr = stat.min || '0';
+          const mins = parseInt(minStr.split(':')[0]) || 0;
+          
+          playerAgg[playerId].games++;
+          playerAgg[playerId].minutes += mins;
+          playerAgg[playerId].points += stat.pts || 0;
+          playerAgg[playerId].plusMinus += stat.plus_minus || 0;
+        }
+        
+        // Convert to array and sort by total minutes (most minutes = starter)
+        const players = Object.entries(playerAgg)
+          .map(([id, data]) => ({
+            id,
+            ...data,
+            mpg: data.games > 0 ? data.minutes / data.games : 0,
+            ppg: data.games > 0 ? data.points / data.games : 0,
+            avgPlusMinus: data.games > 0 ? data.plusMinus / data.games : 0
+          }))
+          .sort((a, b) => b.mpg - a.mpg);
+        
+        // Top 5 by minutes = starters, rest = bench
+        const starters = players.slice(0, 5);
+        const bench = players.slice(5);
+        
+        // Calculate aggregates
+        const starterPPG = starters.reduce((sum, p) => sum + p.ppg, 0);
+        const benchPPG = bench.reduce((sum, p) => sum + p.ppg, 0);
+        const starterMPG = starters.reduce((sum, p) => sum + p.mpg, 0);
+        const benchMPG = bench.reduce((sum, p) => sum + p.mpg, 0);
+        const starterPlusMinus = starters.reduce((sum, p) => sum + p.avgPlusMinus, 0) / Math.max(starters.length, 1);
+        const benchPlusMinus = bench.reduce((sum, p) => sum + p.avgPlusMinus, 0) / Math.max(bench.length, 1);
+        
+        // Identify top bench scorers
+        const topBench = bench.slice(0, 3).map(p => ({
+          name: p.name,
+          ppg: p.ppg.toFixed(1),
+          mpg: p.mpg.toFixed(1)
+        }));
+        
+        return {
+          starter_ppg: starterPPG.toFixed(1),
+          bench_ppg: benchPPG.toFixed(1),
+          starter_mpg: starterMPG.toFixed(1),
+          bench_mpg: benchMPG.toFixed(1),
+          bench_plus_minus: benchPlusMinus.toFixed(1),
+          starter_plus_minus: starterPlusMinus.toFixed(1),
+          rotation_size: players.filter(p => p.mpg >= 10).length,
+          top_bench_players: topBench,
+          games_analyzed: numGames
+        };
+      };
+      
+      const homeDepth = calcBenchDepth(homePlayerStats, home.id, recentHomeGames.length);
+      const awayDepth = calcBenchDepth(awayPlayerStats, away.id, recentAwayGames.length);
+      
+      // Determine which team has depth advantage
+      const homeBenchPPG = parseFloat(homeDepth.bench_ppg) || 0;
+      const awayBenchPPG = parseFloat(awayDepth.bench_ppg) || 0;
+      const depthEdge = homeBenchPPG > awayBenchPPG + 3 ? 'HOME' : 
+                        awayBenchPPG > homeBenchPPG + 3 ? 'AWAY' : 'EVEN';
+      
+      return {
+        category: 'Bench Depth Analysis (Last 10 Games)',
+        home: {
+          team: home.full_name || home.name,
+          ...homeDepth
+        },
+        away: {
+          team: away.full_name || away.name,
+          ...awayDepth
+        },
+        depth_edge: depthEdge,
+        insight: `⚠️ FOR LARGE SPREADS (7+): The bench must sustain leads. ${
+          depthEdge === 'HOME' ? home.name + ' has deeper bench scoring (+' + (homeBenchPPG - awayBenchPPG).toFixed(1) + ' PPG)' :
+          depthEdge === 'AWAY' ? away.name + ' has deeper bench scoring (+' + (awayBenchPPG - homeBenchPPG).toFixed(1) + ' PPG)' :
+          'Bench scoring is roughly even - starters will determine margin'
+        }`
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching bench depth:`, error.message);
+      return { category: 'Bench Depth', error: 'Data unavailable - ' + error.message };
+    }
+  },
+
   // ===== NFL SPECIFIC =====
   // Helper to extract first element from BDL team_season_stats array response
   _extractNflStats: (statsArray) => {
@@ -3877,137 +4372,6 @@ const FETCHERS = {
         giveaways: fmtNum(awayStats?.misc_total_giveaways, 0)
       },
       interpretation: interpretTurnoverMargin(homeStats, awayStats)
-    };
-  },
-  
-  PENALTIES: async (bdlSport, home, away, season) => {
-    const isNFL = bdlSport === 'americanfootball_nfl';
-    const isNHL = bdlSport === 'hockey_nhl';
-    const isNCAAF = bdlSport === 'americanfootball_ncaaf';
-    
-    // ========== NFL: Full penalty data from team_season_stats ==========
-    if (isNFL) {
-      const [homeStatsArr, awayStatsArr] = await Promise.all([
-        ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-        ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
-      ]);
-      const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
-      const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
-      
-      const homeGP = homeStats?.games_played || 1;
-      const awayGP = awayStats?.games_played || 1;
-      
-      return {
-        category: 'Penalty Analysis (Season)',
-        home: {
-          team: home.full_name || home.name,
-          total_penalties: fmtNum(homeStats?.misc_total_penalties, 0),
-          penalty_yards: fmtNum(homeStats?.misc_total_penalty_yards, 0),
-          penalties_per_game: ((homeStats?.misc_total_penalties || 0) / homeGP).toFixed(1),
-          first_downs_by_penalty: fmtNum(homeStats?.misc_first_downs_penalty, 0)
-        },
-        away: {
-          team: away.full_name || away.name,
-          total_penalties: fmtNum(awayStats?.misc_total_penalties, 0),
-          penalty_yards: fmtNum(awayStats?.misc_total_penalty_yards, 0),
-          penalties_per_game: ((awayStats?.misc_total_penalties || 0) / awayGP).toFixed(1),
-          first_downs_by_penalty: fmtNum(awayStats?.misc_first_downs_penalty, 0)
-        },
-        interpretation: interpretPenalties(homeStats, awayStats, false)
-      };
-    }
-    
-    // ========== NHL: Use PK% and PP% from team_season_stats ==========
-    if (isNHL) {
-      const [homeStatsArr, awayStatsArr] = await Promise.all([
-        ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-        ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
-      ]);
-      
-      // NHL returns array of { name, value } objects
-      const extractStat = (statsArr, statName) => {
-        if (!Array.isArray(statsArr)) return null;
-        const found = statsArr.find(s => s.name === statName);
-        return found ? found.value : null;
-      };
-      
-      const homePK = extractStat(homeStatsArr, 'penalty_kill_percentage');
-      const homePP = extractStat(homeStatsArr, 'power_play_percentage');
-      const awayPK = extractStat(awayStatsArr, 'penalty_kill_percentage');
-      const awayPP = extractStat(awayStatsArr, 'power_play_percentage');
-      
-      return {
-        category: 'Special Teams Discipline (NHL)',
-        home: {
-          team: home.full_name || home.name,
-          penalty_kill_pct: homePK ? (homePK * 100).toFixed(1) + '%' : 'N/A',
-          power_play_pct: homePP ? (homePP * 100).toFixed(1) + '%' : 'N/A'
-        },
-        away: {
-          team: away.full_name || away.name,
-          penalty_kill_pct: awayPK ? (awayPK * 100).toFixed(1) + '%' : 'N/A',
-          power_play_pct: awayPP ? (awayPP * 100).toFixed(1) + '%' : 'N/A'
-        },
-        interpretation: interpretNHLSpecialTeams(homePK, homePP, awayPK, awayPP, home.full_name || home.name, away.full_name || away.name)
-      };
-    }
-    
-    // ========== NCAAF: Aggregate from per-game team_stats ==========
-    if (isNCAAF) {
-      const [homeGamesArr, awayGamesArr] = await Promise.all([
-        ballDontLieService.getTeamStats ? 
-          ballDontLieService.getTeamStats(bdlSport, { team_ids: [home.id], seasons: [season], per_page: 15 }) : [],
-        ballDontLieService.getTeamStats ? 
-          ballDontLieService.getTeamStats(bdlSport, { team_ids: [away.id], seasons: [season], per_page: 15 }) : []
-      ]);
-      
-      const aggregatePenalties = (games, teamId) => {
-        const teamGames = (games || []).filter(g => g.team?.id === teamId);
-        let totalPenalties = 0, totalYards = 0;
-        teamGames.forEach(g => {
-          totalPenalties += g.penalties || 0;
-          totalYards += g.penalty_yards || 0;
-        });
-        const gamesPlayed = teamGames.length || 1;
-        return {
-          total: totalPenalties,
-          yards: totalYards,
-          perGame: (totalPenalties / gamesPlayed).toFixed(1),
-          yardsPerGame: (totalYards / gamesPlayed).toFixed(1),
-          games: gamesPlayed
-        };
-      };
-      
-      const homePen = aggregatePenalties(homeGamesArr, home.id);
-      const awayPen = aggregatePenalties(awayGamesArr, away.id);
-      
-      return {
-        category: 'Penalty Analysis (NCAAF)',
-        home: {
-          team: home.full_name || home.name,
-          total_penalties: homePen.total.toString(),
-          penalty_yards: homePen.yards.toString(),
-          penalties_per_game: homePen.perGame,
-          yards_per_game: homePen.yardsPerGame
-        },
-        away: {
-          team: away.full_name || away.name,
-          total_penalties: awayPen.total.toString(),
-          penalty_yards: awayPen.yards.toString(),
-          penalties_per_game: awayPen.perGame,
-          yards_per_game: awayPen.yardsPerGame
-        },
-        note: `Aggregated from ${homePen.games} home games, ${awayPen.games} away games`,
-        interpretation: interpretNCAAFPenalties(homePen, awayPen, home.full_name || home.name, away.full_name || away.name)
-      };
-    }
-    
-    // Fallback for unsupported sports
-    return {
-      category: 'Penalty Analysis',
-      note: 'Penalty data not available for this sport via BDL.',
-      home: { team: home.full_name || home.name },
-      away: { team: away.full_name || away.name }
     };
   },
   
@@ -4511,14 +4875,131 @@ const FETCHERS = {
   },
 
   // ===== SITUATIONAL =====
-  REST_SITUATION: async (bdlSport, home, away) => {
-    // This would need schedule analysis - for now return basic info
-    return {
-      category: 'Rest Situation',
-      note: 'Rest data requires schedule analysis',
-      home: { team: home.full_name || home.name, rest_days: 'Check scout report' },
-      away: { team: away.full_name || away.name, rest_days: 'Check scout report' }
-    };
+  REST_SITUATION: async (bdlSport, home, away, season, gameId, gameDate) => {
+    // Fetch recent games for both teams to calculate rest situation
+    console.log(`[Stat Router] Fetching REST_SITUATION for ${away.name} @ ${home.name}`);
+    
+    try {
+      // Determine date range - look back 7 days from game date
+      const targetDate = gameDate ? new Date(gameDate) : new Date();
+      const endDateStr = targetDate.toISOString().split('T')[0];
+      const startDate = new Date(targetDate);
+      startDate.setDate(startDate.getDate() - 10); // Look back 10 days
+      const startDateStr = startDate.toISOString().split('T')[0];
+      
+      // Fetch recent games for both teams
+      const [homeGames, awayGames] = await Promise.all([
+        ballDontLieService.getGames(bdlSport, { 
+          team_ids: [home.id], 
+          start_date: startDateStr,
+          end_date: endDateStr,
+          per_page: 10 
+        }),
+        ballDontLieService.getGames(bdlSport, { 
+          team_ids: [away.id], 
+          start_date: startDateStr,
+          end_date: endDateStr,
+          per_page: 10 
+        })
+      ]);
+      
+      // Calculate rest for each team
+      const calculateRest = (games, teamId, targetDateObj) => {
+        const targetDateStr = targetDateObj.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+        
+        // Helper to get game date (handles both NBA's "date" and NHL's "game_date")
+        const getGameDateStr = (g) => (g.game_date || g.date || '').split('T')[0];
+        
+        // Filter to completed games before today
+        const completedGames = (games || [])
+          .filter(g => {
+            const gameStr = getGameDateStr(g);
+            // NHL uses home_score/away_score, NBA/NFL use home_team_score/visitor_team_score
+            const hasScore = (g.home_team_score || g.home_score || 0) > 0 || (g.visitor_team_score || g.away_score || 0) > 0;
+            return gameStr < targetDateStr || (gameStr === targetDateStr && hasScore);
+          })
+          .sort((a, b) => new Date(getGameDateStr(b)) - new Date(getGameDateStr(a))); // Most recent first
+        
+        if (completedGames.length === 0) {
+          return { daysRest: null, isBackToBack: false, lastGameDate: null, gamesInLast4Days: 0 };
+        }
+        
+        const lastGame = completedGames[0];
+        const lastGameDateStr = getGameDateStr(lastGame);
+        const lastGameDate = new Date(lastGameDateStr + 'T12:00:00');
+        const targetMidnight = new Date(targetDateStr + 'T12:00:00');
+        
+        const diffDays = Math.round((targetMidnight - lastGameDate) / (1000 * 60 * 60 * 24));
+        const isBackToBack = diffDays <= 1;
+        
+        // Count games in last 4 days
+        const fourDaysAgo = new Date(targetMidnight);
+        fourDaysAgo.setDate(fourDaysAgo.getDate() - 4);
+        const gamesInLast4Days = completedGames.filter(g => {
+          const gDate = new Date(getGameDateStr(g) + 'T12:00:00');
+          return gDate >= fourDaysAgo;
+        }).length;
+        
+        return {
+          daysRest: diffDays,
+          isBackToBack,
+          isHeavySchedule: gamesInLast4Days >= 3,
+          gamesInLast4Days,
+          lastGameDate: lastGameDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+        };
+      };
+      
+      const homeRest = calculateRest(homeGames, home.id, targetDate);
+      const awayRest = calculateRest(awayGames, away.id, targetDate);
+      
+      // Determine rest advantage
+      let restAdvantage = 'EVEN';
+      if (homeRest.daysRest !== null && awayRest.daysRest !== null) {
+        if (homeRest.daysRest > awayRest.daysRest + 1) restAdvantage = 'HOME';
+        else if (awayRest.daysRest > homeRest.daysRest + 1) restAdvantage = 'AWAY';
+      }
+      
+      // Format status strings
+      const formatStatus = (rest) => {
+        if (rest.daysRest === null) return 'No recent games found';
+        if (rest.isBackToBack) return `⚠️ BACK-TO-BACK (played ${rest.lastGameDate})`;
+        if (rest.isHeavySchedule) return `⚠️ Heavy schedule (${rest.gamesInLast4Days} games in 4 days)`;
+        if (rest.daysRest >= 3) return `✅ Well-rested (${rest.daysRest} days)`;
+        return `${rest.daysRest} day(s) rest`;
+      };
+      
+      return {
+        category: 'Rest & Schedule Situation',
+        source: 'Ball Don\'t Lie API (calculated)',
+        home: {
+          team: home.full_name || home.name,
+          days_rest: homeRest.daysRest,
+          status: formatStatus(homeRest),
+          is_back_to_back: homeRest.isBackToBack,
+          is_heavy_schedule: homeRest.isHeavySchedule || false,
+          last_game: homeRest.lastGameDate
+        },
+        away: {
+          team: away.full_name || away.name,
+          days_rest: awayRest.daysRest,
+          status: formatStatus(awayRest),
+          is_back_to_back: awayRest.isBackToBack,
+          is_heavy_schedule: awayRest.isHeavySchedule || false,
+          last_game: awayRest.lastGameDate
+        },
+        rest_advantage: restAdvantage,
+        note: 'Back-to-backs and heavy schedules can impact performance - investigate how this specific team handles them.'
+      };
+      
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching REST_SITUATION:`, error.message);
+      return {
+        category: 'Rest & Schedule Situation',
+        error: 'Unable to calculate rest data',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name }
+      };
+    }
   },
 
   // ===== CATCH-ALL for unimplemented tokens =====
@@ -4825,6 +5306,426 @@ const FETCHERS = {
         ? `${home.name} has stronger goal differential (+${fmtNum(homeDiff - awayDiff, 2)}/game)`
         : `${away.name} has stronger goal differential (+${fmtNum(awayDiff - homeDiff, 2)}/game)`
     };
+  },
+
+  // ===== NHL ENHANCED FETCHERS =====
+  
+  // NHL Standings with home/road records, streak, and playoff position
+  NHL_STANDINGS: async (bdlSport, home, away, season) => {
+    if (bdlSport !== 'icehockey_nhl') return null;
+    
+    try {
+      const standings = await ballDontLieService.getStandingsGeneric(bdlSport, { season });
+      
+      const findTeam = (teamId) => standings.find(s => s.team?.id === teamId);
+      const homeStanding = findTeam(home.id);
+      const awayStanding = findTeam(away.id);
+      
+      const formatStanding = (standing, team) => {
+        if (!standing) return { team: team.full_name || team.name, error: 'Standings data unavailable' };
+        return {
+          team: team.full_name || team.name,
+          record: `${standing.wins}-${standing.losses}-${standing.ot_losses || 0}`,
+          points: standing.points || 0,
+          points_pct: standing.points_pctg ? fmtPct(standing.points_pctg) : 'N/A',
+          home_record: standing.home_record || 'N/A',
+          road_record: standing.road_record || 'N/A',
+          streak: standing.streak || 'N/A',
+          goal_differential: standing.goal_differential || 0,
+          division: standing.division_name || 'N/A',
+          conference: standing.conference_name || 'N/A'
+        };
+      };
+      
+      return {
+        category: 'NHL Standings & Records',
+        source: 'Ball Don\'t Lie API',
+        home: formatStanding(homeStanding, home),
+        away: formatStanding(awayStanding, away),
+        note: 'Home/road records and streaks are critical for NHL betting'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching NHL_STANDINGS:`, error.message);
+      return { category: 'NHL Standings', error: 'Data unavailable' };
+    }
+  },
+  
+  // NHL Home/Away Splits from standings
+  NHL_HOME_AWAY_SPLITS: async (bdlSport, home, away, season) => {
+    if (bdlSport !== 'icehockey_nhl') return null;
+    
+    try {
+      const standings = await ballDontLieService.getStandingsGeneric(bdlSport, { season });
+      
+      const findTeam = (teamId) => standings.find(s => s.team?.id === teamId);
+      const homeStanding = findTeam(home.id);
+      const awayStanding = findTeam(away.id);
+      
+      // Parse record strings like "27-13-1"
+      const parseRecord = (recordStr) => {
+        if (!recordStr || recordStr === 'N/A') return { wins: 0, losses: 0, otl: 0 };
+        const parts = recordStr.split('-').map(n => parseInt(n) || 0);
+        return { wins: parts[0] || 0, losses: parts[1] || 0, otl: parts[2] || 0 };
+      };
+      
+      const homeTeamHome = parseRecord(homeStanding?.home_record);
+      const homeTeamRoad = parseRecord(homeStanding?.road_record);
+      const awayTeamHome = parseRecord(awayStanding?.home_record);
+      const awayTeamRoad = parseRecord(awayStanding?.road_record);
+      
+      // Key insight: home team's HOME record vs away team's ROAD record
+      const homeAdvantage = homeTeamHome.wins - homeTeamHome.losses;
+      const awayRoadStruggle = awayTeamRoad.wins - awayTeamRoad.losses;
+      
+      let interpretation = '';
+      if (homeAdvantage > 5 && awayRoadStruggle < 0) {
+        interpretation = `STRONG HOME EDGE: ${home.name} is ${homeStanding?.home_record} at home vs ${away.name}'s ${awayStanding?.road_record} on road`;
+      } else if (awayRoadStruggle > 5) {
+        interpretation = `ROAD WARRIOR: ${away.name} is ${awayStanding?.road_record} on the road - home ice less impactful`;
+      } else {
+        interpretation = `Standard splits - evaluate other factors`;
+      }
+      
+      return {
+        category: 'Home/Away Splits',
+        source: 'Ball Don\'t Lie API',
+        home: {
+          team: home.full_name || home.name,
+          home_record: homeStanding?.home_record || 'N/A',
+          road_record: homeStanding?.road_record || 'N/A',
+          note: 'Playing at HOME tonight'
+        },
+        away: {
+          team: away.full_name || away.name,
+          home_record: awayStanding?.home_record || 'N/A',
+          road_record: awayStanding?.road_record || 'N/A',
+          note: 'Playing on ROAD tonight'
+        },
+        interpretation,
+        note: 'NHL home teams have last change advantage - investigate how each team performs home vs road'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching NHL_HOME_AWAY_SPLITS:`, error.message);
+      return { category: 'Home/Away Splits', error: 'Data unavailable' };
+    }
+  },
+  
+  // NHL Recent Form with L5/L10 analysis including opponent quality
+  NHL_RECENT_FORM: async (bdlSport, home, away, season) => {
+    if (bdlSport !== 'icehockey_nhl') return null;
+    
+    try {
+      // Get last 45 days of games for both teams
+      const today = new Date();
+      const dates = [];
+      for (let i = 0; i < 45; i++) {
+        const d = new Date(today);
+        d.setDate(d.getDate() - i);
+        dates.push(d.toISOString().split('T')[0]);
+      }
+      
+      // Get standings for opponent quality context
+      const standings = await ballDontLieService.getStandingsGeneric(bdlSport, { season });
+      const standingsMap = {};
+      (standings || []).forEach(s => {
+        if (s.team?.id) standingsMap[s.team.id] = s;
+      });
+      
+      // Fetch games for both teams
+      const [homeGames, awayGames] = await Promise.all([
+        ballDontLieService.getGames(bdlSport, { team_ids: [home.id], seasons: [season], per_page: 100 }),
+        ballDontLieService.getGames(bdlSport, { team_ids: [away.id], seasons: [season], per_page: 100 })
+      ]);
+      
+      const analyzeRecentForm = (games, teamId, teamName) => {
+        if (!games || games.length === 0) return { team: teamName, error: 'No recent games found' };
+        
+        // Sort by date descending and filter completed games
+        const completedGames = games
+          .filter(g => g.game_state === 'OFF' || g.game_state === 'FINAL' || g.status === 'Final')
+          .sort((a, b) => new Date(b.game_date || b.date) - new Date(a.game_date || a.date));
+        
+        const l5Games = completedGames.slice(0, 5);
+        const l10Games = completedGames.slice(0, 10);
+        
+        const analyzeGames = (gameList) => {
+          let wins = 0, losses = 0, otLosses = 0;
+          let goalsFor = 0, goalsAgainst = 0;
+          const gameDetails = [];
+          
+          gameList.forEach(g => {
+            const isHome = g.home_team?.id === teamId;
+            const teamScore = isHome ? g.home_score : g.away_score;
+            const oppScore = isHome ? g.away_score : g.home_score;
+            const oppTeam = isHome ? g.away_team : g.home_team;
+            const oppStanding = standingsMap[oppTeam?.id];
+            
+            goalsFor += teamScore || 0;
+            goalsAgainst += oppScore || 0;
+            
+            const margin = (teamScore || 0) - (oppScore || 0);
+            let result = 'W';
+            if (margin > 0) wins++;
+            else if (margin < 0) {
+              // Check if OT loss (need to infer from game data)
+              losses++;
+              result = 'L';
+            }
+            
+            gameDetails.push({
+              opponent: oppTeam?.full_name || oppTeam?.name || 'Unknown',
+              result: `${result} ${teamScore}-${oppScore}`,
+              margin,
+              opponent_record: oppStanding ? `${oppStanding.wins}-${oppStanding.losses}-${oppStanding.ot_losses || 0}` : 'N/A',
+              opponent_points: oppStanding?.points || 'N/A',
+              home_away: isHome ? 'H' : 'A'
+            });
+          });
+          
+          const record = `${wins}-${losses}${otLosses > 0 ? `-${otLosses}` : ''}`;
+          const avgGF = gameList.length > 0 ? (goalsFor / gameList.length).toFixed(1) : '0';
+          const avgGA = gameList.length > 0 ? (goalsAgainst / gameList.length).toFixed(1) : '0';
+          
+          // Calculate opponent quality
+          const avgOppPoints = gameDetails.reduce((sum, g) => sum + (g.opponent_points || 0), 0) / gameDetails.length;
+          let scheduleStrength = 'AVERAGE';
+          if (avgOppPoints > 90) scheduleStrength = 'TOUGH';
+          else if (avgOppPoints < 70) scheduleStrength = 'SOFT';
+          
+          return { record, wins, losses, avgGF, avgGA, scheduleStrength, games: gameDetails };
+        };
+        
+        const l5Analysis = analyzeGames(l5Games);
+        const l10Analysis = analyzeGames(l10Games);
+        
+        // Trend analysis
+        let trend = 'STABLE';
+        if (l5Analysis.wins >= 4) trend = 'HOT';
+        else if (l5Analysis.losses >= 4) trend = 'COLD';
+        else if (l5Analysis.wins > l10Analysis.wins / 2) trend = 'IMPROVING';
+        else if (l5Analysis.losses > l10Analysis.losses / 2) trend = 'DECLINING';
+        
+        return {
+          team: teamName,
+          l5: {
+            record: l5Analysis.record,
+            avg_goals_for: l5Analysis.avgGF,
+            avg_goals_against: l5Analysis.avgGA,
+            schedule_strength: l5Analysis.scheduleStrength,
+            recent_games: l5Analysis.games.slice(0, 5)
+          },
+          l10: {
+            record: l10Analysis.record,
+            avg_goals_for: l10Analysis.avgGF,
+            avg_goals_against: l10Analysis.avgGA,
+            schedule_strength: l10Analysis.scheduleStrength
+          },
+          trend
+        };
+      };
+      
+      const homeForm = analyzeRecentForm(homeGames, home.id, home.full_name || home.name);
+      const awayForm = analyzeRecentForm(awayGames, away.id, away.full_name || away.name);
+      
+      return {
+        category: 'Recent Form (L5 & L10)',
+        source: 'Ball Don\'t Lie API',
+        home: homeForm,
+        away: awayForm,
+        interpretation: `${home.name}: ${homeForm.trend} (L5: ${homeForm.l5?.record || 'N/A'}) | ${away.name}: ${awayForm.trend} (L5: ${awayForm.l5?.record || 'N/A'})`,
+        note: 'L5 trends with opponent quality context - investigate WHY not just WHAT'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching NHL_RECENT_FORM:`, error.message);
+      return { category: 'Recent Form', error: 'Data unavailable' };
+    }
+  },
+  
+  // NHL Hot Players using box scores
+  NHL_HOT_PLAYERS: async (bdlSport, home, away, season) => {
+    if (bdlSport !== 'icehockey_nhl') return null;
+    
+    try {
+      // Get last 14 days of box scores
+      const today = new Date();
+      const dates = [];
+      for (let i = 0; i < 14; i++) {
+        const d = new Date(today);
+        d.setDate(d.getDate() - i);
+        dates.push(d.toISOString().split('T')[0]);
+      }
+      
+      // Fetch box scores for both teams
+      const boxScores = await ballDontLieService.getNhlRecentBoxScores(dates, {
+        team_ids: [home.id, away.id]
+      });
+      
+      if (!boxScores || boxScores.length === 0) {
+        return { category: 'Hot Players', error: 'No recent box score data available' };
+      }
+      
+      // Aggregate player stats
+      const playerStats = {};
+      boxScores.forEach(bs => {
+        const playerId = bs.player?.id;
+        const teamId = bs.team?.id;
+        if (!playerId) return;
+        
+        if (!playerStats[playerId]) {
+          playerStats[playerId] = {
+            name: bs.player?.full_name || `${bs.player?.first_name} ${bs.player?.last_name}`,
+            position: bs.position || bs.player?.position_code,
+            teamId,
+            games: 0,
+            goals: 0,
+            assists: 0,
+            points: 0,
+            shots: 0,
+            plusMinus: 0
+          };
+        }
+        
+        playerStats[playerId].games++;
+        playerStats[playerId].goals += bs.goals || 0;
+        playerStats[playerId].assists += bs.assists || 0;
+        playerStats[playerId].points += bs.points || 0;
+        playerStats[playerId].shots += bs.shots_on_goal || 0;
+        playerStats[playerId].plusMinus += bs.plus_minus || 0;
+      });
+      
+      // Convert to array and calculate PPG
+      const players = Object.values(playerStats).map(p => ({
+        ...p,
+        ppg: p.games > 0 ? (p.points / p.games).toFixed(2) : '0.00'
+      }));
+      
+      // Filter by team and sort by points
+      const homeHotPlayers = players
+        .filter(p => p.teamId === home.id && p.games >= 3 && p.position !== 'G')
+        .sort((a, b) => parseFloat(b.ppg) - parseFloat(a.ppg))
+        .slice(0, 5);
+      
+      const awayHotPlayers = players
+        .filter(p => p.teamId === away.id && p.games >= 3 && p.position !== 'G')
+        .sort((a, b) => parseFloat(b.ppg) - parseFloat(a.ppg))
+        .slice(0, 5);
+      
+      const formatPlayer = (p) => ({
+        name: p.name,
+        position: p.position,
+        games: p.games,
+        goals: p.goals,
+        assists: p.assists,
+        points: p.points,
+        ppg: p.ppg,
+        plus_minus: p.plusMinus > 0 ? `+${p.plusMinus}` : p.plusMinus.toString()
+      });
+      
+      return {
+        category: 'Hot Players (Last 14 Days)',
+        source: 'Ball Don\'t Lie API (Box Scores)',
+        home: {
+          team: home.full_name || home.name,
+          hot_players: homeHotPlayers.map(formatPlayer),
+          note: homeHotPlayers.length > 0 && parseFloat(homeHotPlayers[0].ppg) >= 1.0 
+            ? `🔥 ${homeHotPlayers[0].name} is HOT (${homeHotPlayers[0].ppg} PPG)` 
+            : 'No standout hot players'
+        },
+        away: {
+          team: away.full_name || away.name,
+          hot_players: awayHotPlayers.map(formatPlayer),
+          note: awayHotPlayers.length > 0 && parseFloat(awayHotPlayers[0].ppg) >= 1.0 
+            ? `🔥 ${awayHotPlayers[0].name} is HOT (${awayHotPlayers[0].ppg} PPG)` 
+            : 'No standout hot players'
+        },
+        note: 'Players with 1.0+ PPG over last 14 days are considered "hot"'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching NHL_HOT_PLAYERS:`, error.message);
+      return { category: 'Hot Players', error: 'Data unavailable' };
+    }
+  },
+  
+  // NHL Head-to-Head History
+  NHL_H2H_HISTORY: async (bdlSport, home, away, season) => {
+    if (bdlSport !== 'icehockey_nhl') return null;
+    
+    try {
+      // Get games between these two teams (current + last season)
+      const seasons = [season, season - 1];
+      const games = await ballDontLieService.getGames(bdlSport, {
+        team_ids: [home.id],
+        seasons,
+        per_page: 100
+      });
+      
+      // Filter to only games between these two teams
+      const h2hGames = (games || [])
+        .filter(g => {
+          const isH2H = (g.home_team?.id === home.id && g.away_team?.id === away.id) ||
+                        (g.home_team?.id === away.id && g.away_team?.id === home.id);
+          const isComplete = g.game_state === 'OFF' || g.game_state === 'FINAL' || g.status === 'Final';
+          return isH2H && isComplete;
+        })
+        .sort((a, b) => new Date(b.game_date || b.date) - new Date(a.game_date || a.date))
+        .slice(0, 5);
+      
+      if (h2hGames.length === 0) {
+        return {
+          category: 'Head-to-Head History',
+          home: { team: home.full_name || home.name },
+          away: { team: away.full_name || away.name },
+          note: 'No recent head-to-head games found'
+        };
+      }
+      
+      let homeWins = 0, awayWins = 0;
+      const meetings = h2hGames.map(g => {
+        const homeInGame = g.home_team?.id === home.id;
+        const homeScore = homeInGame ? g.home_score : g.away_score;
+        const awayScore = homeInGame ? g.away_score : g.home_score;
+        
+        if (homeScore > awayScore) homeWins++;
+        else awayWins++;
+        
+        return {
+          date: g.game_date || g.date,
+          venue: homeInGame ? 'Home' : 'Away',
+          score: `${home.name} ${homeScore} - ${awayScore} ${away.name}`,
+          winner: homeScore > awayScore ? home.name : away.name,
+          margin: Math.abs(homeScore - awayScore)
+        };
+      });
+      
+      // Calculate average margin
+      const avgMargin = meetings.reduce((sum, m) => sum + m.margin, 0) / meetings.length;
+      
+      return {
+        category: 'Head-to-Head History',
+        source: 'Ball Don\'t Lie API',
+        home: {
+          team: home.full_name || home.name,
+          h2h_record: `${homeWins}-${awayWins}`,
+          h2h_wins: homeWins
+        },
+        away: {
+          team: away.full_name || away.name,
+          h2h_record: `${awayWins}-${homeWins}`,
+          h2h_wins: awayWins
+        },
+        recent_meetings: meetings,
+        avg_margin: avgMargin.toFixed(1),
+        interpretation: homeWins > awayWins 
+          ? `${home.name} has won ${homeWins} of last ${meetings.length} meetings`
+          : awayWins > homeWins 
+            ? `${away.name} has won ${awayWins} of last ${meetings.length} meetings`
+            : `Series is even at ${homeWins}-${awayWins}`,
+        note: 'Divisional matchups tend to be tighter regardless of record'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching NHL_H2H_HISTORY:`, error.message);
+      return { category: 'Head-to-Head History', error: 'Data unavailable' };
+    }
   },
 
   // ===== EPL SPECIFIC FETCHERS (BETA) =====
@@ -5485,7 +6386,7 @@ Be factual with historical stats where available.`;
 
 // Add aliases for tokens that use the same fetcher
 const ALIASES = {
-  // NHL Aliases
+  // NHL Aliases - Enhanced with new fetchers
   SHOT_METRICS: 'SHOT_DIFFERENTIAL',
   SHOT_QUALITY: 'SHOT_DIFFERENTIAL',
   SAVE_PCT: 'GOALIE_STATS',
@@ -5506,6 +6407,19 @@ const ALIASES = {
   LUCK_INDICATORS: 'RECENT_FORM',
   OVERTIME_RECORD: 'RECENT_FORM',
   DIVISION_STANDING: 'STANDINGS',
+  // NHL-specific aliases for new fetchers (auto-routed via sportSpecificToken)
+  NHL_HOME_ICE: 'NHL_HOME_AWAY_SPLITS',
+  NHL_ROAD_PERFORMANCE: 'NHL_HOME_AWAY_SPLITS',
+  NHL_BACK_TO_BACK: 'REST_SITUATION',
+  NHL_STREAK: 'NHL_STANDINGS',
+  NHL_RECORD: 'NHL_STANDINGS',
+  NHL_SCORING_LEADERS: 'NHL_HOT_PLAYERS',
+  NHL_POINT_LEADERS: 'NHL_HOT_PLAYERS',
+  NHL_HEAD_TO_HEAD: 'NHL_H2H_HISTORY',
+  NHL_SERIES_HISTORY: 'NHL_H2H_HISTORY',
+  NHL_L5: 'NHL_RECENT_FORM',
+  NHL_L10: 'NHL_RECENT_FORM',
+  NHL_MOMENTUM: 'NHL_RECENT_FORM',
   // EPL Aliases
   PASS_ACCURACY: 'POSSESSION_PCT',
   TOUCHES_IN_BOX: 'SHOTS_ON_TARGET',
@@ -5565,7 +6479,7 @@ const ALIASES = {
   CONFERENCE_STATS: 'HOME_AWAY_SPLITS',
   NON_CONF_STRENGTH: 'HOME_AWAY_SPLITS',
   EXPERIENCE: 'TOP_PLAYERS',
-  BENCH_DEPTH: 'TOP_PLAYERS',
+  // BENCH_DEPTH has its own fetcher now - no alias needed
   VS_RANKED: 'RECENT_FORM',
   CLOSE_GAME_RECORD: 'RECENT_FORM',
   EFFICIENCY_TREND: 'NET_RATING',
@@ -5735,7 +6649,7 @@ async function fetchTopPlayersForTeam(bdlSport, team, season) {
   }
 }
 
-function formatRecentGames(games, teamName) {
+function formatRecentGames(games, teamName, standingsMap = null) {
   if (!games || games.length === 0) {
     return { record: 'N/A', games: [], note: 'No recent game data available' };
   }
@@ -5760,62 +6674,181 @@ function formatRecentGames(games, teamName) {
     return { record: 'N/A', games: [], note: 'No completed games found' };
   }
   
-  let wins = 0, losses = 0, ties = 0;
-  const gameDetails = completedGames.slice(0, 5).map(g => {
-    // Handle both nested object and string team names
-    const homeTeamName = g.home_team?.name || g.home_team?.full_name || g.home_team;
-    const awayTeamName = g.visitor_team?.name || g.visitor_team?.full_name || g.away_team?.name || g.away_team;
+  // Helper function to process N games
+  const processGames = (gamesToProcess) => {
+    let wins = 0, losses = 0, ties = 0;
+    let closeWins = 0, closeLosses = 0, blowoutWins = 0, blowoutLosses = 0;
+    let totalOppWins = 0, oppsWithRecords = 0;
     
-    // Normalize for comparison
-    const normalizedTeamName = String(teamName).toLowerCase();
-    const normalizedHome = String(homeTeamName).toLowerCase();
-    const normalizedAway = String(awayTeamName).toLowerCase();
+    const gameDetails = gamesToProcess.map(g => {
+      // Handle both nested object and string team names
+      const homeTeamName = g.home_team?.name || g.home_team?.full_name || g.home_team;
+      const awayTeamName = g.visitor_team?.name || g.visitor_team?.full_name || g.away_team?.name || g.away_team;
+      const homeTeamId = g.home_team?.id;
+      const awayTeamId = g.visitor_team?.id || g.away_team?.id;
+      
+      // Normalize for comparison
+      const normalizedTeamName = String(teamName).toLowerCase();
+      const normalizedHome = String(homeTeamName).toLowerCase();
+      const normalizedAway = String(awayTeamName).toLowerCase();
+      
+      const isHome = normalizedHome.includes(normalizedTeamName) || normalizedTeamName.includes(normalizedHome);
+      
+      // Handle both NBA and NCAAB field names for scores
+      const homeScore = g.home_team_score ?? g.home_score ?? 0;
+      const awayScore = g.visitor_team_score ?? g.away_score ?? 0;
+      
+      const teamScore = isHome ? homeScore : awayScore;
+      const oppScore = isHome ? awayScore : homeScore;
+      const opponent = isHome ? awayTeamName : homeTeamName;
+      const opponentId = isHome ? awayTeamId : homeTeamId;
+      
+      // Calculate margin
+      const margin = teamScore - oppScore;
+      const absMargin = Math.abs(margin);
+      
+      // Classify game type
+      let gameType = 'comfortable';
+      if (absMargin <= 7) gameType = 'CLOSE';
+      else if (absMargin >= 14) gameType = 'BLOWOUT';
+      
+      let result = 'T';
+      if (teamScore > oppScore) {
+        wins++;
+        result = 'W';
+        if (gameType === 'CLOSE') closeWins++;
+        else if (gameType === 'BLOWOUT') blowoutWins++;
+      } else if (oppScore > teamScore) {
+        losses++;
+        result = 'L';
+        if (gameType === 'CLOSE') closeLosses++;
+        else if (gameType === 'BLOWOUT') blowoutLosses++;
+      } else {
+        ties++;
+      }
+      
+      // Get opponent record from standings if available
+      let oppRecord = null;
+      let oppWins = null;
+      if (standingsMap && opponentId) {
+        const oppStanding = standingsMap.get(opponentId);
+        if (oppStanding) {
+          oppRecord = oppStanding.overall_record || `${oppStanding.wins || 0}-${oppStanding.losses || 0}`;
+          oppWins = oppStanding.wins || 0;
+          totalOppWins += oppWins;
+          oppsWithRecords++;
+        }
+      }
+      
+      // Format date
+      const gameDate = g.date ? new Date(g.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+      
+      return {
+        result,
+        score: `${teamScore}-${oppScore}`,
+        margin: margin,
+        absMargin: absMargin,
+        gameType: gameType,
+        opponent: opponent || 'Unknown',
+        opponentRecord: oppRecord,
+        opponentWins: oppWins,
+        location: isHome ? 'Home' : 'Away',
+        date: gameDate,
+        week: g.week || null,
+        display: `${result} ${teamScore}-${oppScore} (${margin > 0 ? '+' : ''}${margin}) ${isHome ? 'vs' : '@'} ${opponent}${oppRecord ? ` (${oppRecord})` : ''}${gameDate ? ` - ${gameDate}` : ''}`
+      };
+    });
     
-    const isHome = normalizedHome.includes(normalizedTeamName) || normalizedTeamName.includes(normalizedHome);
+    const record = ties > 0 ? `${wins}-${losses}-${ties}` : `${wins}-${losses}`;
+    const streak = gameDetails.map(g => g.result).join('');
     
-    // Handle both NBA and NCAAB field names for scores
-    // NCAAB: home_score, away_score
-    // NBA: home_team_score, visitor_team_score
-    const homeScore = g.home_team_score ?? g.home_score ?? 0;
-    const awayScore = g.visitor_team_score ?? g.away_score ?? 0;
-    
-    const teamScore = isHome ? homeScore : awayScore;
-    const oppScore = isHome ? awayScore : homeScore;
-    const opponent = isHome ? awayTeamName : homeTeamName;
-    
-    let result = 'T';
-    if (teamScore > oppScore) {
-      wins++;
-      result = 'W';
-    } else if (oppScore > teamScore) {
-      losses++;
-      result = 'L';
-    } else {
-      ties++;
-    }
-    
-    // Format date
-    const gameDate = g.date ? new Date(g.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+    // Build enhanced analysis
+    const avgOppWins = oppsWithRecords > 0 ? (totalOppWins / oppsWithRecords).toFixed(1) : null;
+    const playoffCaliberOpps = gameDetails.filter(g => g.opponentWins && g.opponentWins >= 8).length;
     
     return {
-      result,
-      score: `${teamScore}-${oppScore}`,
-      opponent: opponent || 'Unknown',
-      location: isHome ? 'Home' : 'Away',
-      date: gameDate,
-      week: g.week || null,
-      display: `${result} ${teamScore}-${oppScore} ${isHome ? 'vs' : '@'} ${opponent}${gameDate ? ` (${gameDate})` : ''}`
+      record,
+      streak,
+      games: gameDetails,
+      analysis: {
+        wins, losses, ties,
+        closeWins,
+        closeLosses,
+        blowoutWins,
+        blowoutLosses,
+        avgOpponentWins: avgOppWins,
+        playoffCaliberOpponents: playoffCaliberOpps
+      }
     };
-  });
+  };
   
-  const record = ties > 0 ? `${wins}-${losses}-${ties}` : `${wins}-${losses}`;
-  const streak = gameDetails.slice(0, 5).map(g => g.result).join('');
+  // Process L5 and L10
+  const l5Games = completedGames.slice(0, 5);
+  const l10Games = completedGames.slice(0, 10);
+  
+  const l5Data = processGames(l5Games);
+  const l10Data = processGames(l10Games);
+  
+  // Build narrative context for Gary (based on L5)
+  const narrativeParts = [];
+  const { closeLosses, closeWins, blowoutLosses, losses, wins, avgOpponentWins } = l5Data.analysis;
+  
+  if (closeLosses >= 2) {
+    narrativeParts.push(`⚠️ ${closeLosses} of ${losses} L5 losses were CLOSE (≤7 pts) - NOT a freefall`);
+  }
+  if (closeWins >= 2) {
+    narrativeParts.push(`⚠️ ${closeWins} of ${wins} L5 wins were close - investigate sustainability`);
+  }
+  if (blowoutLosses >= 2) {
+    narrativeParts.push(`🚨 ${blowoutLosses} BLOWOUT losses (14+ pts) in L5 - concerning trend`);
+  }
+  if (avgOpponentWins && parseFloat(avgOpponentWins) >= 7) {
+    narrativeParts.push(`📊 Tough L5 schedule: avg opponent has ${avgOpponentWins} wins`);
+  }
+  if (avgOpponentWins && parseFloat(avgOpponentWins) <= 4) {
+    narrativeParts.push(`📊 Easy L5 schedule: avg opponent has only ${avgOpponentWins} wins`);
+  }
+  
+  // Compare L5 vs L10 trend
+  const l5WinPct = l5Data.analysis.wins / (l5Data.analysis.wins + l5Data.analysis.losses) || 0;
+  const l10WinPct = l10Data.analysis.wins / (l10Data.analysis.wins + l10Data.analysis.losses) || 0;
+  const trendDiff = l5WinPct - l10WinPct;
+  
+  if (trendDiff >= 0.2) {
+    narrativeParts.push(`📈 TRENDING UP: L5 (${l5Data.record}) is better than L10 (${l10Data.record})`);
+  } else if (trendDiff <= -0.2) {
+    narrativeParts.push(`📉 TRENDING DOWN: L5 (${l5Data.record}) is worse than L10 (${l10Data.record})`);
+  }
   
   return {
-    record,
-    last_5: streak,
-    games: gameDetails,
-    summary: gameDetails.map(g => g.display).join(', ')
+    // L5 Summary (primary)
+    record: l5Data.record,
+    last_5: l5Data.streak,
+    games: l5Data.games,
+    summary: l5Data.games.map(g => g.display).join(' | '),
+    analysis: l5Data.analysis,
+    
+    // L10 Summary (extended view)
+    L10: {
+      record: l10Data.record,
+      streak: l10Data.streak,
+      gamesPlayed: l10Data.games.length,
+      summary: l10Data.games.slice(0, 10).map(g => g.display).join(' | '),
+      analysis: l10Data.analysis
+    },
+    
+    // Trend comparison
+    trend: {
+      L5_win_pct: (l5WinPct * 100).toFixed(0) + '%',
+      L10_win_pct: (l10WinPct * 100).toFixed(0) + '%',
+      direction: trendDiff >= 0.2 ? 'UP' : trendDiff <= -0.2 ? 'DOWN' : 'STABLE',
+      note: trendDiff >= 0.2 ? 'Recent form better than extended form' : 
+            trendDiff <= -0.2 ? 'Recent form worse than extended form' : 
+            'Consistent performance over L5 and L10'
+    },
+    
+    narrative: narrativeParts.length > 0 ? narrativeParts.join('. ') : 'No significant patterns detected.',
+    CONTEXT: '🔍 INVESTIGATE THE WHY: A 1-4 team with 3 close losses to playoff teams is NOT the same as a 1-4 team with 3 blowout losses to weak teams.'
   };
 }
 
@@ -5839,75 +6872,14 @@ function interpretTurnoverMargin(homeStats, awayStats) {
   
   const parts = [];
   if (Math.abs(homeDiff) > 6) {
-    parts.push(`${homeStats?.team?.name || 'Home'}: ${homeDiff > 0 ? 'LUCKY' : 'UNLUCKY'} (regression likely)`);
+    parts.push(`${homeStats?.team?.name || 'Home'}: ${homeDiff > 0 ? 'LUCKY' : 'UNLUCKY'} (investigate sustainability)`);
   }
   if (Math.abs(awayDiff) > 6) {
-    parts.push(`${awayStats?.team?.name || 'Away'}: ${awayDiff > 0 ? 'LUCKY' : 'UNLUCKY'} (regression likely)`);
+    parts.push(`${awayStats?.team?.name || 'Away'}: ${awayDiff > 0 ? 'LUCKY' : 'UNLUCKY'} (investigate sustainability)`);
   }
   
   return parts.length > 0 ? parts.join('; ') : 'Both teams near expected turnover rates';
 }
-
-function interpretPenalties(homeStats, awayStats, isNHL) {
-  if (isNHL) return "Discipline is key in special teams matchups.";
-  
-  const homeAvg = (homeStats?.misc_total_penalties || 0) / (homeStats?.games_played || 1);
-  const awayAvg = (awayStats?.misc_total_penalties || 0) / (awayStats?.games_played || 1);
-  
-  if (homeAvg > 8 && awayAvg > 8) return "Both teams struggle with discipline; expect a yellow-heavy game.";
-  if (homeAvg < 4 && awayAvg < 4) return "Both teams are highly disciplined; clean game expected.";
-  
-  const gap = Math.abs(homeAvg - awayAvg);
-  if (gap > 3) {
-    const cleaner = homeAvg < awayAvg ? (homeStats?.team?.name || 'Home') : (awayStats?.team?.name || 'Away');
-    return `${cleaner} has a significant discipline advantage.`;
-  }
-  
-  return "Average penalty impact expected.";
-}
-
-function interpretNHLSpecialTeams(homePK, homePP, awayPK, awayPP, homeName, awayName) {
-  const parts = [];
-  
-  // PK analysis
-  if (homePK && awayPK) {
-    const homePKPct = homePK * 100;
-    const awayPKPct = awayPK * 100;
-    if (Math.abs(homePKPct - awayPKPct) > 5) {
-      const betterPK = homePKPct > awayPKPct ? homeName : awayName;
-      parts.push(`${betterPK} has a stronger penalty kill.`);
-    }
-  }
-  
-  // PP analysis
-  if (homePP && awayPP) {
-    const homePPPct = homePP * 100;
-    const awayPPPct = awayPP * 100;
-    if (Math.abs(homePPPct - awayPPPct) > 3) {
-      const betterPP = homePPPct > awayPPPct ? homeName : awayName;
-      parts.push(`${betterPP} has the edge on the power play.`);
-    }
-  }
-  
-  return parts.length > 0 ? parts.join(' ') : 'Special teams are evenly matched.';
-}
-
-function interpretNCAAFPenalties(homePen, awayPen, homeName, awayName) {
-  const homeAvg = parseFloat(homePen.perGame);
-  const awayAvg = parseFloat(awayPen.perGame);
-  
-  if (homeAvg > 7 && awayAvg > 7) return "Both teams are penalty-prone; expect flags to fly.";
-  if (homeAvg < 4 && awayAvg < 4) return "Both teams are well-disciplined.";
-  
-  const gap = Math.abs(homeAvg - awayAvg);
-  if (gap > 2) {
-    const cleaner = homeAvg < awayAvg ? homeName : awayName;
-    return `${cleaner} has a discipline advantage (${gap.toFixed(1)} fewer penalties/game).`;
-  }
-  
-  return "Average penalty impact expected.";
-}
-
 
 /**
  * Introspection helpers (used for debugging / smoke testing token menus)

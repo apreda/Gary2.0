@@ -32,10 +32,12 @@ function parseArgs(argv = defaultArgv) {
 }
 
 function getESTDate() {
+  // DST-safe: Use Intl with America/New_York timezone
   const now = new Date();
-  const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-  const est = new Date(utc + (3600000 * -5));
-  return est.toISOString().split('T')[0];
+  const options = { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' };
+  const estDate = new Intl.DateTimeFormat('en-US', options).format(now);
+  const [month, day, year] = estDate.split('/');
+  return `${year}-${month}-${day}`;
 }
 
 export async function runAgenticPropsCli({
@@ -54,7 +56,7 @@ export async function runAgenticPropsCli({
   const args = parseArgs();
   const limit = Number.parseInt(args.limit || process.env.AGENTIC_PROPS_LIMIT || String(limitDefault), 10);
   const nocache = args.nocache === '1' || args.nocache === 'true';
-  const shouldStore = args.store === '1' || args.store === 'true' || process.env.AGENTIC_STORE === '1';
+  const shouldStore = args.store !== '0' && args.store !== 'false'; // Default TRUE, pass --store=0 to skip
   const matchupFilter = args.matchup || null;
 
   console.log(`\n🏈 Agentic ${leagueLabel} Props Runner Starting...`);
@@ -160,43 +162,7 @@ export async function runAgenticPropsCli({
       });
 
       if (result.picks && result.picks.length > 0) {
-        console.log(`\n✅ Generated ${result.picks.length} prop picks:`);
-        result.picks.forEach((pick, i) => {
-          const conf = (pick.confidence * 100).toFixed(0);
-          const ev = pick.ev ? ` | EV: ${pick.ev > 0 ? '+' : ''}${pick.ev.toFixed(1)}%` : '';
-          console.log(`\n   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-          console.log(`   📊 PICK ${i + 1}: ${pick.player} (${pick.team})`);
-          console.log(`   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-          console.log(`   🎯 ${pick.bet.toUpperCase()} ${pick.prop} @ ${pick.odds}`);
-          console.log(`   📈 Confidence: ${conf}%${ev}`);
-          console.log(`   🏟️ Matchup: ${pick.matchup || matchup}`);
-          console.log(`   ⏰ Time: ${pick.time || gameTime}`);
-          
-          // Print rationale if available
-          if (pick.rationale) {
-            console.log(`\n   📝 ANALYSIS:`);
-            // Word wrap the rationale at ~80 chars per line with proper indentation
-            const words = pick.rationale.split(' ');
-            let line = '      ';
-            for (const word of words) {
-              if ((line + word).length > 90) {
-                console.log(line);
-                line = '      ' + word + ' ';
-              } else {
-                line += word + ' ';
-              }
-            }
-            if (line.trim()) console.log(line);
-          }
-          
-          // Print key stats if available
-          if (pick.key_stats && pick.key_stats.length > 0) {
-            console.log(`\n   📊 KEY STATS:`);
-            pick.key_stats.forEach(stat => {
-              console.log(`      • ${stat}`);
-            });
-          }
-        });
+        console.log(`✅ Generated ${result.picks.length} picks for ${matchup}`);
         allPropPicks.push(...result.picks);
       } else {
         console.log(`⚠️ No confident prop picks for this game`);
@@ -207,21 +173,14 @@ export async function runAgenticPropsCli({
     }
   }
 
-  // Summary and storage
-  console.log(`\n${'='.repeat(50)}`);
-  console.log(`📊 SUMMARY: ${allPropPicks.length} total prop picks generated`);
-  console.log(`${'='.repeat(50)}`);
-
+  // Deduplicate and Prepare Final Picks
   if (allPropPicks.length === 0) {
     console.log(`\n⚠️ No prop picks generated across all games.`);
     return;
   }
 
-  // CRITICAL: Deduplicate by player + prop_type to prevent multiple picks on same player/stat
-  // This happens when different sportsbooks offer different lines for the same prop
-  // Keep only the highest confidence pick for each player+prop combination
+  // CRITICAL: Deduplicate by player + prop_type
   const dedupeKey = (pick) => {
-    // Extract base prop type (e.g., "pass_yds" from "pass_yds 205.5")
     const propType = (pick.prop || '').split(' ')[0].toLowerCase();
     return `${(pick.player || '').toLowerCase()}_${propType}`;
   };
@@ -230,8 +189,6 @@ export async function runAgenticPropsCli({
   for (const pick of allPropPicks) {
     const key = dedupeKey(pick);
     const existing = deduped.get(key);
-    
-    // Keep the pick with higher confidence, or if equal, the one with better EV
     if (!existing || 
         (pick.confidence || 0) > (existing.confidence || 0) ||
         ((pick.confidence || 0) === (existing.confidence || 0) && (pick.ev || 0) > (existing.ev || 0))) {
@@ -239,65 +196,15 @@ export async function runAgenticPropsCli({
     }
   }
 
-  const dedupedPicks = Array.from(deduped.values());
-  
-  if (dedupedPicks.length < allPropPicks.length) {
-    console.log(`\n🔄 Deduplication: ${allPropPicks.length} → ${dedupedPicks.length} picks (removed ${allPropPicks.length - dedupedPicks.length} duplicates)`);
-  }
-
-  // Sort by confidence and EV
-  const sortedPicks = dedupedPicks.sort((a, b) => {
+  const sortedPicks = Array.from(deduped.values()).sort((a, b) => {
     const confDiff = (b.confidence || 0) - (a.confidence || 0);
     if (confDiff !== 0) return confDiff;
     return (b.ev || 0) - (a.ev || 0);
   });
 
-  // Use all picks from pipeline (NBA/NHL/EPL use 2-per-game rule, NFL uses confidence filter)
-  const topPicks = sortedPicks;
-
-  console.log(`\n🏆 ${topPicks.length} FINAL PICKS WITH ANALYSIS:`);
-  console.log(`${'='.repeat(60)}\n`);
-  
-  topPicks.forEach((pick, i) => {
-    const conf = (pick.confidence * 100).toFixed(0);
-    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-    console.log(`📊 PICK ${i + 1}: ${pick.player} (${pick.team || leagueLabel})`);
-    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-    console.log(`🎯 ${pick.bet.toUpperCase()} ${pick.prop} @ ${pick.odds}`);
-    console.log(`📈 Confidence: ${conf}%`);
-    console.log(`🏟️ Matchup: ${pick.matchup || 'N/A'}`);
-    console.log(`⏰ Time: ${pick.time || 'TBD'}`);
-    
-    // Print rationale
-    if (pick.rationale) {
-      console.log(`\n📝 ANALYSIS:`);
-      // Word wrap the rationale
-      const words = pick.rationale.split(' ');
-      let line = '   ';
-      for (const word of words) {
-        if ((line + word).length > 85) {
-          console.log(line);
-          line = '   ' + word + ' ';
-        } else {
-          line += word + ' ';
-        }
-      }
-      if (line.trim()) console.log(line);
-    }
-    
-    // Print key stats
-    if (pick.key_stats && pick.key_stats.length > 0) {
-      console.log(`\n📊 KEY STATS:`);
-      pick.key_stats.forEach(stat => {
-        console.log(`   • ${stat}`);
-      });
-    }
-    
-    console.log(''); // Empty line between picks
-  });
-
+  // STORAGE (Do this BEFORE the big summary print)
   if (shouldStore) {
-    console.log(`\n💾 Storing picks in Supabase...`);
+    console.log(`\n💾 Storing ${sortedPicks.length} picks in Supabase...`);
     
     const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
@@ -310,8 +217,6 @@ export async function runAgenticPropsCli({
       });
 
       const dateParam = getESTDate();
-
-      // First fetch existing picks for today
       const { data: existingData } = await supabase
         .from('prop_picks')
         .select('picks')
@@ -319,33 +224,47 @@ export async function runAgenticPropsCli({
         .single();
 
       let existingPicks = [];
+      const newMatchups = new Set(sortedPicks.map(p => p.matchup?.toLowerCase()).filter(Boolean));
+      
       if (existingData?.picks) {
-        existingPicks = existingData.picks.filter(p => p.sport !== leagueLabel);
+        existingPicks = existingData.picks.filter(p => {
+          if (p.sport !== leagueLabel) return true;
+          if (p.td_category) return true;
+          const pickMatchup = p.matchup?.toLowerCase();
+          return pickMatchup && !newMatchups.has(pickMatchup);
+        });
       }
 
-      // Merge with new picks
-      const mergedPicks = [...existingPicks, ...topPicks];
-
-      // Delete and re-insert
-      await supabase.from('prop_picks').delete().eq('date', dateParam);
+      const mergedPicks = [...existingPicks, ...sortedPicks];
       
-      const { error: insertError } = await supabase
+      // Use upsert instead of delete-then-insert (atomic, race-safe)
+      const { error: upsertError } = await supabase
         .from('prop_picks')
-        .insert({
+        .upsert({
           date: dateParam,
           picks: mergedPicks,
           created_at: new Date().toISOString()
+        }, {
+          onConflict: 'date'
         });
 
-      if (insertError) {
-        console.error(`❌ Insert error: ${insertError.message}`);
+      if (upsertError) {
+        console.error(`❌ Upsert error: ${upsertError.message}`);
       } else {
-        console.log(`✅ Stored ${topPicks.length} ${leagueLabel} prop picks for ${dateParam}`);
+        console.log(`✅ Successfully stored picks for ${dateParam}`);
       }
     }
-  } else {
-    console.log(`\nℹ️ Pass --store=1 to save picks to database.`);
   }
+
+  // FINAL SUMMARY
+  console.log(`\n${'='.repeat(50)}`);
+  console.log(`🏆 FINAL ${leagueLabel} PICKS SUMMARY`);
+  console.log(`${'='.repeat(50)}`);
+  
+  sortedPicks.forEach((pick, i) => {
+    const conf = (pick.confidence * 100).toFixed(0);
+    console.log(`${i + 1}. ${pick.player} (${pick.team}): ${pick.bet.toUpperCase()} ${pick.prop} @ ${pick.odds} (${conf}% confidence)`);
+  });
 
   console.log(`\n🏁 Agentic ${leagueLabel} Props Runner Complete.\n`);
 }
