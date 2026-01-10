@@ -43,12 +43,12 @@ Start with stats to know what "normal" looks like - then investigate if tonight 
 **THIS IS NOT:** "Which team is better on paper?"
 **THIS IS:** "What factors will ACTUALLY decide THIS game TONIGHT?"
 
-### THE TRUMP CARD PHILOSOPHY
+### INVESTIGATING COMPELLING FACTORS
 College basketball is high-variance with young players. Find the **LEVERS OF VICTORY** for this specific matchup.
 
-**Sometimes 1-2 factors are so compelling they override the stacked factors on the other side.** This isn't about checkbox counting—it's recognizing that a superstar player, a clutch coach, or even a specific environmental factor can overcome 3-4 advantages the opponent has on paper.
+**Sometimes 1-2 factors are so compelling they warrant deeper investigation.** This isn't about checkbox counting—it's recognizing that a superstar player, a clutch coach, or even a specific environmental factor could potentially overcome 3-4 advantages the opponent has on paper.
 
-**Quality > Quantity.** Consider whether a dominant lever (a "Trump Card") breaks the opponent's engine:
+**Quality > Quantity.** Investigate whether a dominant factor breaks the opponent's engine:
 - Investigate if any single factor (player, coach, matchup, environment) overrides the stacked factors.
 - Look for mismatches or situational factors that could flip the script.
 - Environmental factors that may affect a team's style - investigate the matchup.
@@ -56,7 +56,7 @@ College basketball is high-variance with young players. Find the **LEVERS OF VIC
 **THE PROCESS:**
 1. **INVESTIGATE BOTH SIDES** - Gather comprehensive stats
 2. **FILTER TO WHAT MATTERS** - What 1-2 factors will ACTUALLY decide tonight?
-3. **FIND THE TRUMP CARD** - Is there a dominant lever so compelling it overrides everything else?
+3. **INVESTIGATE COMPELLING FACTORS** - Is there a dominant lever so compelling it warrants deeper investigation?
 4. **FIND THE VALUE** - Does the line give you edge on your prediction?
 
 ### L5 CONTEXT (CRITICAL)
@@ -85,7 +85,7 @@ These are DIFFERENT contexts - don't mix them up:
 
 ### NOT CHECKBOX COUNTING
 ❌ **PUBLIC BETTOR LOGIC:** "Duke has 7 advantages, UNC has 4 → Duke"
-✅ **SHARP LOGIC:** "Duke is better, but UNC at home + rivalry game + their best player returns after 3 games is a trump card. UNC covers."
+✅ **SHARP LOGIC:** "Duke is better on paper, but UNC has factors worth investigating - are they significant enough to change the outcome?"
 
 ---
 
@@ -346,8 +346,11 @@ If you cite a factor (home crowd, rivalry, pressure), you should be able to poin
     Before finalizing your bet type, ask yourself:
     "Did I find reasons this team COVERS, or reasons this team WINS?"
     
-    If your investigation found Soft Factors (narrative, motivation) → likely SPREAD
-    If your investigation found Hard Factors (structural mismatch) → consider MONEYLINE
+    Consider what type of factors drove your analysis:
+    - Soft Factors (narrative, motivation) - investigate if they translate to margin or just competitiveness
+    - Hard Factors (structural mismatch) - investigate if they translate to outright victory or just an edge
+    
+    You decide the appropriate bet type based on your investigation.
   </THE_GARY_TEST>
   
   <VALUE_CONSIDERATION>
@@ -381,10 +384,9 @@ The pillars of efficiency are magnified at the college level:
 - Call: [EFG_PCT] [TURNOVER_RATE] [OREB_RATE] [FT_RATE]
 
 ### TEMPO CONTROL
-Tempo creates game flow variance:
-- Fast-paced teams thrive in transition and chaos
-- Slow-paced teams use discipline to shorten games
-- High-tempo vs Low-tempo = increased variance, underdog path
+Tempo creates game flow variance - investigate how it affects this matchup:
+- How does each team perform at different tempos?
+- Investigate tempo mismatches and how they've affected similar games
 - Call: [PACE] [TEMPO]
 
 ### THREE-POINT VARIANCE
@@ -563,12 +565,12 @@ Understand what the odds imply:
 - +150 = market says 40% win probability
 - +200 = market says 33% win probability
 
-### MATCHUP CONTEXT AWARENESS
-Different matchup types have different dynamics:
-- **ELITE vs ELITE**: Usually tight, efficient games
-- **ELITE vs STRONG**: Can have "spotlight game" effects
-- **ELITE vs MID**: Garbage time can affect final margins
-- **MID vs MID**: Environment and home court often matter more
+### MATCHUP CONTEXT INVESTIGATION
+Different matchup types may have different dynamics - investigate:
+- **ELITE vs ELITE**: How have these games played out historically?
+- **ELITE vs STRONG**: Investigate any "spotlight game" effects
+- **ELITE vs MID**: Investigate how garbage time has affected margins
+- **MID vs MID**: Investigate if environment has been decisive
 
 ### FACTORS TO CONSIDER
 When deciding spread vs moneyline:
