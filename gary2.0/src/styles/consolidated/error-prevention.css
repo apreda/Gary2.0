@@ -1,0 +1,17 @@
+/* error-prevention.css: Ensures dark background and prevents white flashes */
+:root, html, body {
+  background: #18181b !important;
+  color-scheme: dark;
+}
+
+body {
+  background-color: #18181b !important;
+  color: #fff;
+  min-height: 100vh;
+}
+
+#root, #app {
+  background: transparent;
+}
+
+/* Universal background inheritance rule removed to allow more design flexibility */

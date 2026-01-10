@@ -630,9 +630,13 @@ function Home() {
         // Query Supabase for picks using the determined date
         // Check both daily_picks AND weekly_nfl_picks (NFL picks are in weekly table)
         console.log(`Home: Querying picks for date: ${queryDate}`);
+        
+        // Calculate NFL Season: Jan-July is previous year's season
+        const nflSeason = parseInt(month) <= 7 ? parseInt(year) - 1 : parseInt(year);
+        
         const [dailyResult, nflResult] = await Promise.all([
           supabase.from("daily_picks").select("picks, date").eq("date", queryDate).maybeSingle(),
-          supabase.from("weekly_nfl_picks").select("picks, week, season").eq("season", 2025).order("week", { ascending: false }).limit(1).maybeSingle()
+          supabase.from("weekly_nfl_picks").select("picks, week_number, season").eq("season", nflSeason).order("week_number", { ascending: false }).limit(1).maybeSingle()
         ]);
           
         if (dailyResult.error) {
@@ -653,50 +657,52 @@ function Home() {
           allPicks = allPicks.concat(nflPicks);
         }
         
-        // If we have picks, get the Top Pick of the Day
-        // Priority: STAR picks with sport priority (NFL > NBA > NCAAF > NCAAB)
+        // If we have picks, get the top one based on thesis quality (new system)
+        // MANUAL OVERRIDE: If a pick has is_top_pick: true, use it first
+        // Otherwise: Priority: clear_read with fewest major contradictions > found_angle > confidence
         if (allPicks.length > 0) {
-          // Sport priority order for Top Pick of the Day
-          const SPORT_PRIORITY = ['NFL', 'NBA', 'NCAAF', 'NCAAB', 'NHL', 'EPL'];
-          
-          // 1. Find all STAR picks
-          const starPicks = allPicks.filter(pick => pick && pick.is_star === true);
-          
-          if (starPicks.length > 0) {
-            // Sort STAR picks by sport priority
-            const sortedStars = starPicks.sort((a, b) => {
-              const aIndex = SPORT_PRIORITY.indexOf(a.league || a.sport?.toUpperCase());
-              const bIndex = SPORT_PRIORITY.indexOf(b.league || b.sport?.toUpperCase());
-              return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
-            });
-            console.log(`⭐ Found ${starPicks.length} STAR pick(s), using ${sortedStars[0].league || sortedStars[0].sport} pick`);
-            setFeaturedPicks([sortedStars[0]]);
-            return;
-          }
-          
-          // 2. Check for manual override (is_top_pick)
+          // Check for manual override first (checks all picks from both sources)
           const manualTopPick = allPicks.find(pick => pick && pick.is_top_pick === true);
           if (manualTopPick) {
-            console.log('📌 Found manual top pick override');
             setFeaturedPicks([manualTopPick]);
             return;
           }
           
-          // 3. Fall back to first available non-PASS pick (sorted by sport priority)
-          const validPicks = allPicks
-            .filter(pick => pick && pick.pick && pick.pick !== 'PASS')
-            .sort((a, b) => {
-              const aIndex = SPORT_PRIORITY.indexOf(a.league || a.sport?.toUpperCase());
-              const bIndex = SPORT_PRIORITY.indexOf(b.league || b.sport?.toUpperCase());
-              return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
-            });
+          // Score picks based on thesis quality
+          const scorePick = (pick) => {
+            if (!pick) return -1;
+            const thesisType = pick.thesis_type;
+            const majorCount = pick.contradicting_factors?.major?.length || 0;
+            const confidence = typeof pick.confidence === 'number' ? pick.confidence : parseFloat(pick.confidence) || 0;
+            
+            // Priority scoring:
+            // clear_read with 0 majors = 1000
+            // clear_read with 1 major = 900
+            // clear_read with 2 majors = 800
+            // found_angle with 0 majors = 700
+            // found_angle with 1 major = 600
+            // found_angle with 2 majors = 500
+            // Then add confidence as tiebreaker (0-100)
+            
+            let baseScore = 0;
+            if (thesisType === 'clear_read') {
+              baseScore = 1000 - (majorCount * 100);
+            } else if (thesisType === 'found_angle') {
+              baseScore = 700 - (majorCount * 100);
+            } else {
+              // Fallback to confidence for old picks without thesis_type
+              baseScore = confidence * 10;
+            }
+            
+            return baseScore + confidence;
+          };
           
-          if (validPicks.length > 0) {
-            console.log('📋 Using first available pick by sport priority (no STAR pick today)');
-            setFeaturedPicks([validPicks[0]]);
-          } else {
-            setFeaturedPicks([]);
-          }
+          const topPicks = allPicks
+            .filter(pick => pick && (pick.confidence || pick.thesis_type))
+            .sort((a, b) => scorePick(b) - scorePick(a))
+            .slice(0, 1);
+          
+          setFeaturedPicks(topPicks);
         } else {
           // Use default picks if none found
           setFeaturedPicks([]);

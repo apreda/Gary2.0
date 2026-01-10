@@ -24,7 +24,6 @@ import {
   formatGameTimeEST, 
   buildMarketSnapshot, 
   parseGameDate, 
-  safeApiCall,
   safeApiCallArray, 
   safeApiCallObject, 
   fuzzyMatchPlayerName, 
@@ -119,28 +118,17 @@ function calculateHitRate(games, propType, line) {
  * @returns {Object|null} Teammate impact analysis
  */
 function analyzeTeammateImpact(playerName, team, injuries, playerSeasonStats) {
-  // ═══════════════════════════════════════════════════════════════════════════
-  // DYNAMIC STAR DETECTION - No Hardcoded Lists (Anti-Hallucination)
-  // ═══════════════════════════════════════════════════════════════════════════
-  // Instead of a hardcoded list (which could be outdated), we identify stars
-  // dynamically from the actual season stats data provided. A "star" is defined
-  // as a player averaging 20+ PPG based on CURRENT season data from BDL.
-  // ═══════════════════════════════════════════════════════════════════════════
+  // Key players by team whose absence would boost others' usage
+  const keyPlayers = {
+    // High usage players - their absence creates opportunity
+    'star_scorers': ['LeBron James', 'Stephen Curry', 'Kevin Durant', 'Giannis Antetokounmpo', 
+      'Luka Doncic', 'Jayson Tatum', 'Shai Gilgeous-Alexander', 'Anthony Edwards',
+      'Donovan Mitchell', 'Damian Lillard', 'Devin Booker', 'Trae Young', 'Ja Morant',
+      'De\'Aaron Fox', 'Tyrese Haliburton', 'Paolo Banchero', 'Cade Cunningham',
+      'Tyler Herro', 'Bam Adebayo', 'Jimmy Butler', 'Jalen Brunson', 'Karl-Anthony Towns']
+  };
   
-  // Build dynamic star list from actual season stats (not training data)
-  const dynamicStars = [];
-  if (playerSeasonStats && Array.isArray(playerSeasonStats)) {
-    playerSeasonStats.forEach(p => {
-      const ppg = p.pts || p.ppg || 0;
-      if (ppg >= 20) {
-        dynamicStars.push((p.player_name || p.name || '').toLowerCase());
-      }
-    });
-  }
-  
-  // Fallback: If no season stats available, use injured player's status/description
-  // to infer if they're a key player (BDL injury reports often note "star" players)
-  const allStars = dynamicStars.length > 0 ? dynamicStars : [];
+  const allStars = keyPlayers.star_scorers.map(n => n.toLowerCase());
   
   // Find injured stars on the same team
   const teamInjuries = injuries.filter(inj => {
@@ -182,16 +170,16 @@ function getPaceAndTotalContext(marketSnapshot, homeTeamStats, awayTeamStats) {
   if (total) {
     if (total >= 235) {
       totalCategory = 'very_high';
-      scoringEnvironment = 'shootout environment - investigate scoring prop implications';
+      scoringEnvironment = 'shootout expected - good for scoring props';
     } else if (total >= 225) {
       totalCategory = 'high';
-      scoringEnvironment = 'above average scoring environment';
+      scoringEnvironment = 'above average scoring expected';
     } else if (total <= 210) {
       totalCategory = 'low';
-      scoringEnvironment = 'defensive game environment - investigate how this affects props';
+      scoringEnvironment = 'defensive game - consider unders';
     } else if (total <= 218) {
       totalCategory = 'below_average';
-      scoringEnvironment = 'slower pace environment';
+      scoringEnvironment = 'slower pace expected';
     }
   }
   
@@ -245,27 +233,20 @@ function groupPropsByPlayer(props) {
 function getTopPropCandidates(props, maxPlayersPerTeam = 10) {
   const grouped = groupPropsByPlayer(props);
   
-  // Score players EQUALLY across prop types - no volume bias
-  // Strategy: Reward prop DIVERSITY and odds quality, not just raw prop count
+  // Score each player by number of props and odds quality
+  // NOTE: No bias toward any specific prop type - Gary decides organically
   const scored = grouped.map(player => {
     const avgOdds = player.props.reduce((sum, p) => {
       const odds = p.over_odds || p.under_odds || -110;
       return sum + odds;
     }, 0) / player.props.length;
     
-    // Count unique prop types (points, rebounds, assists, threes, steals, blocks, etc.)
+    // Prop variety bonus - reward players with multiple prop types available
     const uniquePropTypes = new Set(player.props.map(p => p.type)).size;
     
-    // UNBIASED SCORING: Diversity matters more than volume
-    // This ensures specialists (blocks, steals, assists) get equal consideration
     return {
       ...player,
-      score: (uniquePropTypes * 30) + (avgOdds > -110 ? 20 : 0) + (player.props.length * 2)
-      // 30 points per prop TYPE (rewards diversity)
-      // 20 points for good odds
-      // 2 points per individual prop (minor volume bonus)
-      // Result: Player with 3 prop types (steals/blocks/assists) scores similarly to 
-      //         star with 8 prop types, ensuring ALL prop types get explored
+      score: player.props.length * 10 + (avgOdds > -110 ? 20 : 0) + (uniquePropTypes * 5)
     };
   });
   
@@ -422,7 +403,6 @@ async function resolvePlayerIds(propCandidates, teamIds, season, homeTeamName, a
   const validTeamIds = new Set(teamIds);
   
   console.log(`[NBA Props Context] Searching BDL by player name for ${allPlayerNames.length} candidates...`);
-  console.log(`[NBA Props Context] Target teams: ${homeTeamName} (${homeNorm}) vs ${awayTeamName} (${awayNorm}). Valid IDs: ${Array.from(validTeamIds).join(', ')}`);
   
   // Search each player by name (batch in parallel, max 5 concurrent)
   const batchSize = 5;
@@ -438,16 +418,12 @@ async function resolvePlayerIds(propCandidates, teamIds, season, homeTeamName, a
         const lastName = nameParts[nameParts.length - 1];
         
         // Search by last name - with logging on failure
-        const searchResp = await safeApiCall(
+        const searchResults = await safeApiCallArray(
           () => ballDontLieService.getPlayersGeneric(SPORT_KEY, { search: lastName, per_page: 10 }),
-          [],
           `NBA Props: Search player "${candidateName}"`
         );
         
-        const searchResults = Array.isArray(searchResp) ? searchResp : searchResp?.data || [];
-        
         if (!searchResults || searchResults.length === 0) {
-          console.log(`[NBA Props Context] ⚠️ No BDL search results for "${candidateName}" (searched: "${lastName}")`);
           return { name: candidateName, found: false };
         }
         
@@ -455,7 +431,6 @@ async function resolvePlayerIds(propCandidates, teamIds, season, homeTeamName, a
         const match = findBestPlayerMatch(candidateName, searchResults);
         
         if (!match) {
-          console.log(`[NBA Props Context] ⚠️ No fuzzy match for "${candidateName}" in ${searchResults.length} results. BDL names: ${searchResults.slice(0, 3).map(p => `${p.first_name} ${p.last_name}`).join(', ')}`);
           return { name: candidateName, found: false };
         }
         
@@ -477,11 +452,9 @@ async function resolvePlayerIds(propCandidates, teamIds, season, homeTeamName, a
             team: playerTeamName
           };
         } else {
-          console.log(`[NBA Props Context] ✓ Found "${candidateName}" in BDL but on wrong team: ${playerTeamName} (ID: ${playerTeamId})`);
           return { name: candidateName, found: false, wrongTeam: playerTeamName };
         }
       } catch (e) {
-        console.error(`[NBA Props Context] Error searching for "${candidateName}": ${e.message}`);
         return { name: candidateName, found: false, error: e.message };
       }
     });
@@ -899,9 +872,8 @@ export async function buildNbaPropsAgenticContext(game, playerProps, options = {
   if (homeTeam?.id) teamIds.push(homeTeam.id);
   if (awayTeam?.id) teamIds.push(awayTeam.id);
 
-  // Process prop candidates first - limit to STARTERS ONLY (5-6 per team)
-  // This avoids bench players who may not play significant minutes
-  const propCandidates = getTopPropCandidates(playerProps, 6);
+  // Process prop candidates first - limit to top 7 players per team
+  const propCandidates = getTopPropCandidates(playerProps, 7);
   
   // Parallel fetch: injuries, player IDs, AND COMPREHENSIVE narrative context via Gemini Grounding
   // IMPORTANT: Narrative context is fetched UPFRONT so Gary knows all factors BEFORE iterations

@@ -124,14 +124,6 @@ function normalizeName(value) {
  */
 const ballDontLieService = {
   /**
-   * Clear all cached data - call at start of fresh runs
-   */
-  clearCache() {
-    cacheMap.clear();
-    console.log('[Ball Don\'t Lie] 🗑️ Cache cleared - all data will be fetched fresh');
-  },
-  
-  /**
    * Get sport-specific client from the SDK
    */
   _getSportClient(sportKey) {
@@ -742,7 +734,7 @@ const ballDontLieService = {
    * GET /nhl/v1/players?team_ids[]=<ID>&seasons[]=<season>
    * Returns players for a specific team in a specific season
    * @param {number} teamId - BDL team ID
-   * @param {number} season - Season year (e.g., 2025 for 2025-26 season)
+   * @param {number} season - Season year (e.g., 2024 for 2024-25 season)
    * @returns {Array} - Player objects with position, name, etc.
    */
   async getNhlTeamPlayers(teamId, season = getCurrentNhlSeason(), ttlMinutes = 30) {
@@ -947,10 +939,6 @@ const ballDontLieService = {
         if (!path) return [];
         const url = `${BALLDONTLIE_API_BASE_URL}/${path}${buildQuery(params)}`;
         const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
-        // Return full response if meta exists, for pagination
-        if (response.data?.meta) {
-          return { data: response.data.data || [], meta: response.data.meta };
-        }
         return response.data?.data || [];
       }, ttlMinutes);
     } catch (e) {
@@ -969,9 +957,6 @@ const ballDontLieService = {
         const sport = this._getSportClient(sportKey);
         if (sport?.getActivePlayers) {
           const resp = await sport.getActivePlayers(params);
-          if (resp?.meta) {
-            return { data: resp.data || [], meta: resp.meta };
-          }
           return resp?.data || [];
         }
         const endpointMap = {
@@ -993,10 +978,6 @@ const ballDontLieService = {
           throw new Error(`HTTP ${resp.status} ${text}`);
         }
         const json = await resp.json().catch(() => ({}));
-        // Return full response if meta exists, for pagination
-        if (json?.meta) {
-          return { data: json.data || [], meta: json.meta };
-        }
         return Array.isArray(json?.data) ? json.data : [];
       }, ttlMinutes);
     } catch (e) {
@@ -1135,7 +1116,7 @@ const ballDontLieService = {
    * Uses the season_averages/general endpoint with base type
    * Returns: pts, reb, ast, stl, blk, fg3m (threes), min, etc.
    * @param {Array<number>} playerIds - Array of player IDs
-   * @param {number} season - Season year (e.g., 2025 for 2025-26 season)
+   * @param {number} season - Season year (e.g., 2024 for 2024-25 season)
    * @returns {Promise<Object>} - Map of playerId to season stats
    */
   async getNbaPlayerSeasonStatsForProps(playerIds, season) {
@@ -2755,7 +2736,8 @@ const ballDontLieService = {
    * @returns {Promise<Array>} - Array of playoff games with stats
    */
   async getNbaPlayoffGames(season = new Date().getFullYear(), todayOnly = false) {
-    // NBA seasons span two years
+    // NBA seasons span two years (e.g., 2024-25 season)
+    // For 2025 playoffs, we need season=2024
     // If we're in early months (Jan-June), we're in the second half of the season
     const currentMonth = new Date().getMonth() + 1; // 1-12
     const currentYear = new Date().getFullYear();
@@ -2768,12 +2750,12 @@ const ballDontLieService = {
     try {
       const cacheKey = todayOnly ? `nba_playoff_games_today_${actualSeason}` : `nba_playoff_games_${actualSeason}`;
       return await getCachedOrFetch(cacheKey, async () => {
-        console.log(`🏀 Fetching NBA playoff games for ${actualSeason} season from Ball Don't Lie API${todayOnly ? ' - TODAY ONLY' : ''}`);
+        console.log(`🏀 Fetching NBA playoff games for ${actualSeason} season (${actualSeason}-${actualSeason + 1}) from Ball Don't Lie API${todayOnly ? ' - TODAY ONLY' : ''}`);
         
         const client = initApi();
         let apiParams = { 
           postseason: true, // Get playoff games only
-          seasons: [actualSeason], 
+          seasons: [actualSeason], // This was missing - now we get only 2024 season playoffs for 2025
           per_page: 100 // Max allowed
         };
         
@@ -2822,7 +2804,7 @@ const ballDontLieService = {
   },
 
   /**
-   * Get NBA season averages for playoff teams
+   * Get NBA season averages for playoff teams (2025 playoffs = 2024 season)
    * @param {number} season - Season year (defaults to current year)
    * @param {Array} teamIds - Array of team IDs to get averages for
    * @returns {Promise<Object>} - Season averages by team
@@ -3672,9 +3654,9 @@ const ballDontLieService = {
    */
   async getNhlTeams() {
     try {
-      // Use the generic function that supports NHL
-      const teams = await this.getTeamsGeneric('icehockey_nhl');
-      return Array.isArray(teams) ? teams : teams?.data || [];
+      // Ball Don't Lie API only supports NBA, not NHL
+      console.log('⚠️ Ball Don\'t Lie API does not support NHL - returning empty array');
+      return [];
     } catch (error) {
       console.error('Error fetching NHL teams:', error);
       return [];
@@ -3688,17 +3670,9 @@ const ballDontLieService = {
    */
   async getNhlTeamByName(nameOrId) {
     try {
-      const teams = await this.getNhlTeams();
-      const searchLower = String(nameOrId).toLowerCase();
-      
-      // Find by ID, name, or tricode
-      const team = teams.find(t => 
-        String(t.id) === String(nameOrId) ||
-        t.full_name?.toLowerCase().includes(searchLower) ||
-        t.tricode?.toLowerCase() === searchLower
-      );
-      
-      return team || null;
+      // Ball Don't Lie API only supports NBA, not NHL
+      console.log(`⚠️ Ball Don't Lie API does not support NHL - cannot find team: ${nameOrId}`);
+      return null;
     } catch (error) {
       console.error(`Error getting NHL team by name/id ${nameOrId}:`, error);
       return null;
@@ -3706,25 +3680,16 @@ const ballDontLieService = {
   },
 
   /**
-   * Get NHL playoff games for current season
+   * Get NHL playoff games for current season (2025 playoffs = 2024 season)
    * @param {number} season - Season year (defaults to current year)
    * @param {boolean} todayOnly - If true, only return today's games
    * @returns {Promise<Array>} - Array of playoff games
    */
   async getNhlPlayoffGames(season = new Date().getFullYear(), todayOnly = false) {
     try {
-      // NHL season parameter: Oct-Dec = current year, Jan-Sep = previous year
-      const month = new Date().getMonth() + 1;
-      const year = new Date().getFullYear();
-      const nhlSeason = month >= 10 ? year : year - 1;
-      
-      const params = { seasons: [season || nhlSeason], postseason: true };
-      if (todayOnly) {
-        params.dates = [new Date().toISOString().slice(0, 10)];
-      }
-      
-      const games = await this.getGamesGeneric('icehockey_nhl', params);
-      return Array.isArray(games) ? games : games?.data || [];
+      // Ball Don't Lie API only supports NBA, not NHL
+      console.log('⚠️ Ball Don\'t Lie API does not support NHL - returning empty array');
+      return [];
     } catch (error) {
       console.error('Error fetching NHL playoff games:', error);
       return [];
@@ -3737,7 +3702,9 @@ const ballDontLieService = {
    * @returns {Promise<Array>} - Array of today's playoff games
    */
   async getTodaysNhlPlayoffGames(season = new Date().getFullYear()) {
-    return this.getNhlPlayoffGames(season, true);
+    // Ball Don't Lie API only supports NBA, not NHL
+    console.log('⚠️ Ball Don\'t Lie API does not support NHL - returning empty array');
+    return [];
   },
 
   /**
@@ -3747,15 +3714,9 @@ const ballDontLieService = {
    */
   async getActiveNhlPlayoffTeams(season = new Date().getFullYear()) {
     try {
-      const playoffGames = await this.getNhlPlayoffGames(season);
-      const teamIds = new Set();
-      
-      for (const game of playoffGames) {
-        if (game.home_team?.id) teamIds.add(game.home_team.id);
-        if (game.away_team?.id) teamIds.add(game.away_team.id);
-      }
-      
-      return [...teamIds];
+      // Ball Don't Lie API only supports NBA, not NHL
+      console.log('⚠️ Ball Don\'t Lie API does not support NHL - returning empty array');
+      return [];
     } catch (error) {
       console.error('Error getting active NHL playoff teams:', error);
       return [];
@@ -3771,46 +3732,11 @@ const ballDontLieService = {
    */
   async getNhlPlayoffSeries(season = new Date().getFullYear(), teamA, teamB) {
     try {
-      // Get team IDs
-      const teamAInfo = await this.getNhlTeamByName(teamA);
-      const teamBInfo = await this.getNhlTeamByName(teamB);
-      
-      if (!teamAInfo || !teamBInfo) {
-        return { seriesFound: false, message: 'One or both teams not found' };
-      }
-      
-      // Fetch playoff games between these teams
-      const playoffGames = await this.getNhlPlayoffGames(season);
-      const seriesGames = playoffGames.filter(g => 
-        (g.home_team?.id === teamAInfo.id && g.away_team?.id === teamBInfo.id) ||
-        (g.home_team?.id === teamBInfo.id && g.away_team?.id === teamAInfo.id)
-      );
-      
-      if (seriesGames.length === 0) {
-        return { seriesFound: false, message: 'No playoff series found between these teams' };
-      }
-      
-      // Calculate series score
-      let teamAWins = 0, teamBWins = 0;
-      for (const game of seriesGames) {
-        if (game.game_state === 'OFF' || game.game_state === 'FINAL') {
-          const homeWon = game.home_score > game.away_score;
-          if ((game.home_team?.id === teamAInfo.id && homeWon) || (game.away_team?.id === teamAInfo.id && !homeWon)) {
-            teamAWins++;
-          } else {
-            teamBWins++;
-          }
-        }
-      }
-      
+      // Ball Don't Lie API only supports NBA, not NHL
+      console.log('⚠️ Ball Don\'t Lie API does not support NHL - returning no series found');
       return {
-        seriesFound: true,
-        teamA: teamAInfo.full_name,
-        teamB: teamBInfo.full_name,
-        teamAWins,
-        teamBWins,
-        games: seriesGames,
-        status: teamAWins >= 4 ? `${teamAInfo.full_name} wins` : teamBWins >= 4 ? `${teamBInfo.full_name} wins` : 'Series in progress'
+        seriesFound: false,
+        message: 'Ball Don\'t Lie API does not support NHL data'
       };
     } catch (error) {
       console.error('Error getting NHL playoff series:', error);
@@ -3825,9 +3751,9 @@ const ballDontLieService = {
    */
   async getNhlPlayoffGameStats(gameId) {
     try {
-      // Use the box scores endpoint with game_id
-      const boxScores = await this.getNhlRecentBoxScores([], { game_ids: [gameId] });
-      return boxScores || [];
+      // Ball Don't Lie API only supports NBA, not NHL
+      console.log('⚠️ Ball Don\'t Lie API does not support NHL - returning empty array');
+      return [];
     } catch (error) {
       console.error('Error fetching NHL playoff game stats:', error);
       return [];
@@ -3843,35 +3769,9 @@ const ballDontLieService = {
    */
   async getNhlPlayoffPlayerStats(homeTeam, awayTeam, season = new Date().getFullYear()) {
     try {
-      // Get team info
-      const homeTeamInfo = await this.getNhlTeamByName(homeTeam);
-      const awayTeamInfo = await this.getNhlTeamByName(awayTeam);
-      
-      if (!homeTeamInfo || !awayTeamInfo) {
-        console.warn(`[Ball Don't Lie] Could not find teams: ${homeTeam} or ${awayTeam}`);
+      // Ball Don't Lie API only supports NBA, not NHL
+      console.log(`⚠️ Ball Don't Lie API does not support NHL - cannot get stats for ${awayTeam} @ ${homeTeam}`);
       return { home: [], away: [] };
-      }
-      
-      // Get playoff games for this season with these teams
-      const playoffGames = await this.getNhlPlayoffGames(season);
-      const relevantGames = playoffGames.filter(g => 
-        g.home_team?.id === homeTeamInfo.id || g.away_team?.id === homeTeamInfo.id ||
-        g.home_team?.id === awayTeamInfo.id || g.away_team?.id === awayTeamInfo.id
-      );
-      
-      if (relevantGames.length === 0) {
-        return { home: [], away: [] };
-      }
-      
-      // Get box scores for these games
-      const gameIds = relevantGames.map(g => g.id);
-      const boxScores = await this.getNhlRecentBoxScores([], { game_ids: gameIds.slice(0, 10) });
-      
-      // Separate by team
-      const homeStats = boxScores.filter(bs => bs.team?.id === homeTeamInfo.id);
-      const awayStats = boxScores.filter(bs => bs.team?.id === awayTeamInfo.id);
-      
-      return { home: homeStats, away: awayStats };
     } catch (error) {
       console.error(`[Ball Don't Lie] Error getting NHL playoff player stats:`, error);
       return { home: [], away: [] };
@@ -3886,35 +3786,9 @@ const ballDontLieService = {
    */
   async getComprehensiveNhlPlayoffAnalysis(homeTeam, awayTeam) {
     try {
-      // Get team info
-      const homeTeamInfo = await this.getNhlTeamByName(homeTeam);
-      const awayTeamInfo = await this.getNhlTeamByName(awayTeam);
-      
-      if (!homeTeamInfo || !awayTeamInfo) {
-        console.warn(`[Ball Don't Lie] Could not find teams: ${homeTeam} or ${awayTeam}`);
+      // Ball Don't Lie API only supports NBA, not NHL
+      console.log(`⚠️ Ball Don't Lie API does not support NHL - cannot analyze ${awayTeam} @ ${homeTeam}`);
       return null;
-      }
-      
-      // Get season info
-      const month = new Date().getMonth() + 1;
-      const year = new Date().getFullYear();
-      const season = month >= 10 ? year : year - 1;
-      
-      // Fetch all relevant data in parallel
-      const [playoffStats, seriesData, standings] = await Promise.all([
-        this.getNhlPlayoffPlayerStats(homeTeam, awayTeam, season),
-        this.getNhlPlayoffSeries(season, homeTeam, awayTeam),
-        this.getStandingsGeneric('icehockey_nhl', { season }).catch(() => [])
-      ]);
-      
-      return {
-        homeTeam: homeTeamInfo,
-        awayTeam: awayTeamInfo,
-        season,
-        playoffStats,
-        series: seriesData,
-        standings: Array.isArray(standings) ? standings : standings?.data || []
-      };
     } catch (error) {
       console.error('Error getting comprehensive NHL playoff analysis:', error);
       return null;
@@ -4233,7 +4107,7 @@ const ballDontLieService = {
    * Endpoint: GET /nhl/v1/players/:id/season_stats?season=YYYY
    * Returns: goals, assists, points, shots, time_on_ice_per_game, power_play_points, etc.
    * @param {number} playerId - BDL player ID
-   * @param {number} season - Season year (e.g., 2025 for 2025-26 season)
+   * @param {number} season - Season year (e.g., 2024 for 2024-25 season)
    * @returns {Promise<Object>} - Player season stats as key-value object
    */
   async getNhlPlayerSeasonStats(playerId, season) {
@@ -4592,17 +4466,10 @@ const ballDontLieService = {
         if (allStats.length === 0) return null;
 
         // Sort by date (most recent first) and take last N
-        const sortedStats = allStats
+        const games = allStats
           .filter(g => g.min && parseInt(g.min) > 0) // Only games where player played
-          .sort((a, b) => new Date(b.game?.date) - new Date(a.game?.date));
-
-        if (sortedStats.length > 0) {
-          const latestGameDate = sortedStats[0].game?.date;
-          const todayStr = new Date().toISOString().slice(0, 10);
-          console.log(`[Ball Don't Lie] Player ${playerId} latest game: ${latestGameDate} (Today: ${todayStr})`);
-        }
-
-        const games = sortedStats.slice(0, numGames);
+          .sort((a, b) => new Date(b.game?.date) - new Date(a.game?.date))
+          .slice(0, numGames);
 
         if (games.length === 0) return null;
 
@@ -4755,176 +4622,6 @@ const ballDontLieService = {
    * @param {number} numGames - Number of recent games per player
    * @returns {Promise<Object>} - Map of playerId to game logs
    */
-  /**
-   * Get NCAAB player game logs with enhanced stats for analysis
-   * Uses NCAAB-specific endpoint (not NBA endpoint)
-   * @param {number} playerId - Player ID
-   * @param {number} numGames - Number of recent games (default 10)
-   * @returns {Promise<Object>} - Enhanced game log data
-   */
-  async getNcaabPlayerGameLogs(playerId, numGames = 10) {
-    try {
-      if (!playerId) return null;
-
-      const cacheKey = `ncaab_game_logs_${playerId}_${numGames}`;
-      return await getCachedOrFetch(cacheKey, async () => {
-        // Get stats for last 60 days to ensure we capture enough games (college schedule)
-        const endDate = new Date();
-        const startDate = new Date();
-        startDate.setDate(startDate.getDate() - 60);
-
-        // Determine current NCAAB season (Nov-Apr)
-        const month = endDate.getMonth() + 1;
-        const year = endDate.getFullYear();
-        const season = month >= 11 ? year + 1 : year; // 2024-25 season = 2025
-
-        const url = `${BALLDONTLIE_API_BASE_URL}/ncaab/v1/player_stats${buildQuery({
-          player_ids: [playerId],
-          seasons: [season],
-          per_page: 30
-        })}`;
-
-        const response = await axios.get(url, {
-          headers: { 'Authorization': API_KEY }
-        });
-
-        const allStats = response.data?.data || [];
-        if (allStats.length === 0) return null;
-
-        // Sort by date (most recent first) and take last N
-        const sortedStats = allStats
-          .filter(g => g.min && parseInt(g.min) > 0) // Only games where player played
-          .sort((a, b) => new Date(b.game?.date) - new Date(a.game?.date));
-
-        if (sortedStats.length > 0) {
-          const latestGameDate = sortedStats[0].game?.date;
-          const todayStr = new Date().toISOString().slice(0, 10);
-          console.log(`[Ball Don't Lie] NCAAB Player ${playerId} latest game: ${latestGameDate} (Today: ${todayStr})`);
-        }
-
-        const games = sortedStats.slice(0, numGames);
-
-        if (games.length === 0) return null;
-
-        // Extract individual game stats
-        const gameStats = games.map(g => ({
-          date: g.game?.date,
-          opponent: g.game?.home_team?.id === g.team?.id 
-            ? g.game?.visitor_team?.name 
-            : g.game?.home_team?.name,
-          isHome: g.game?.home_team?.id === g.team?.id,
-          pts: g.pts || 0,
-          reb: g.reb || 0,
-          ast: g.ast || 0,
-          stl: g.stl || 0,
-          blk: g.blk || 0,
-          fg3m: g.fg3m || 0,
-          min: parseInt(g.min) || 0,
-          pra: (g.pts || 0) + (g.reb || 0) + (g.ast || 0)
-        }));
-
-        // Calculate averages
-        const totals = { pts: 0, reb: 0, ast: 0, stl: 0, blk: 0, fg3m: 0, min: 0, pra: 0 };
-        for (const g of gameStats) {
-          totals.pts += g.pts;
-          totals.reb += g.reb;
-          totals.ast += g.ast;
-          totals.stl += g.stl;
-          totals.blk += g.blk;
-          totals.fg3m += g.fg3m;
-          totals.min += g.min;
-          totals.pra += g.pra;
-        }
-        const gp = gameStats.length;
-        const avgs = {
-          pts: totals.pts / gp,
-          reb: totals.reb / gp,
-          ast: totals.ast / gp,
-          stl: totals.stl / gp,
-          blk: totals.blk / gp,
-          fg3m: totals.fg3m / gp,
-          min: totals.min / gp,
-          pra: totals.pra / gp
-        };
-
-        // Calculate standard deviations for consistency
-        const calcStdDev = (values, mean) => {
-          const sqDiffs = values.map(v => Math.pow(v - mean, 2));
-          return Math.sqrt(sqDiffs.reduce((a, b) => a + b, 0) / values.length);
-        };
-
-        const stdDevs = {
-          pts: calcStdDev(gameStats.map(g => g.pts), avgs.pts),
-          reb: calcStdDev(gameStats.map(g => g.reb), avgs.reb),
-          ast: calcStdDev(gameStats.map(g => g.ast), avgs.ast),
-          fg3m: calcStdDev(gameStats.map(g => g.fg3m), avgs.fg3m),
-          pra: calcStdDev(gameStats.map(g => g.pra), avgs.pra)
-        };
-
-        // Calculate consistency scores (1 - CV, where CV = stdDev/mean)
-        const consistency = {
-          pts: avgs.pts > 0 ? Math.max(0, 1 - (stdDevs.pts / avgs.pts)).toFixed(2) : '0.00',
-          reb: avgs.reb > 0 ? Math.max(0, 1 - (stdDevs.reb / avgs.reb)).toFixed(2) : '0.00',
-          ast: avgs.ast > 0 ? Math.max(0, 1 - (stdDevs.ast / avgs.ast)).toFixed(2) : '0.00',
-          fg3m: avgs.fg3m > 0 ? Math.max(0, 1 - (stdDevs.fg3m / avgs.fg3m)).toFixed(2) : '0.00',
-          pra: avgs.pra > 0 ? Math.max(0, 1 - (stdDevs.pra / avgs.pra)).toFixed(2) : '0.00'
-        };
-
-        // Calculate home/away splits
-        const homeGames = gameStats.filter(g => g.isHome);
-        const awayGames = gameStats.filter(g => !g.isHome);
-        const splits = {
-          home: homeGames.length > 0 ? {
-            games: homeGames.length,
-            pts: (homeGames.reduce((s, g) => s + g.pts, 0) / homeGames.length).toFixed(1),
-            reb: (homeGames.reduce((s, g) => s + g.reb, 0) / homeGames.length).toFixed(1),
-            ast: (homeGames.reduce((s, g) => s + g.ast, 0) / homeGames.length).toFixed(1)
-          } : null,
-          away: awayGames.length > 0 ? {
-            games: awayGames.length,
-            pts: (awayGames.reduce((s, g) => s + g.pts, 0) / awayGames.length).toFixed(1),
-            reb: (awayGames.reduce((s, g) => s + g.reb, 0) / awayGames.length).toFixed(1),
-            ast: (awayGames.reduce((s, g) => s + g.ast, 0) / awayGames.length).toFixed(1)
-          } : null
-        };
-
-        console.log(`[Ball Don't Lie] Got ${gp} NCAAB game logs for player ${playerId}`);
-
-        return {
-          playerId,
-          gamesAnalyzed: gp,
-          games: gameStats,
-          averages: {
-            pts: avgs.pts.toFixed(1),
-            reb: avgs.reb.toFixed(1),
-            ast: avgs.ast.toFixed(1),
-            stl: avgs.stl.toFixed(1),
-            blk: avgs.blk.toFixed(1),
-            fg3m: avgs.fg3m.toFixed(1),
-            min: avgs.min.toFixed(1),
-            pra: avgs.pra.toFixed(1)
-          },
-          stdDevs: {
-            pts: stdDevs.pts.toFixed(1),
-            reb: stdDevs.reb.toFixed(1),
-            ast: stdDevs.ast.toFixed(1),
-            fg3m: stdDevs.fg3m.toFixed(1),
-            pra: stdDevs.pra.toFixed(1)
-          },
-          consistency,
-          splits,
-          lastGame: gameStats[0] || null,
-          formTrend: gameStats.length >= 5 
-            ? (avgs.pts > (gameStats.slice(-5).reduce((s, g) => s + g.pts, 0) / 5) ? 'hot' : 'cold')
-            : 'neutral'
-        };
-      }, 15); // Cache for 15 minutes
-    } catch (e) {
-      console.error('[Ball Don\'t Lie] getNcaabPlayerGameLogs error:', e.message);
-      return null;
-    }
-  },
-
   async getNbaPlayerGameLogsBatch(playerIds, numGames = 10) {
     try {
       if (!playerIds || playerIds.length === 0) return {};
@@ -5041,8 +4738,6 @@ const ballDontLieService = {
             points: g.points || 0,
             ppGoals: g.power_play_goals || 0,
             ppAssists: g.power_play_assists || 0,
-            ppPoints: (g.power_play_goals || 0) + (g.power_play_assists || 0),
-            saves: g.saves || 0,  // For goalies
             toi: toiMins
           };
         });

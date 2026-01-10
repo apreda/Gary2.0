@@ -175,8 +175,8 @@ If you cite a factor (fatigue, motivation, matchup), you should be able to point
     - Independent of luck or variance
     - Structural to how a team/player operates
     
-    Ask yourself: "If this game were played 100 times, would this factor 
-    consistently show up?" If yes, it's likely Hard.
+    Ask yourself: "Is this factor a structural reality for THIS matchup 
+    TONIGHT?" If yes, it's likely Hard.
     
     <SPORT_EXAMPLES note="Illustrative, not exhaustive">
       NBA examples: Rim protection, spacing gravity, lineup net ratings, 

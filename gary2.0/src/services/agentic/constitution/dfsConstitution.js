@@ -207,10 +207,10 @@ ${DFS_CONSTITUTION}
 
 ## NBA-SPECIFIC DFS HEURISTICS
 
-### PACE & ENVIRONMENT (INVESTIGATE)
-- High-pace matchups - investigate how pace has translated to fantasy production for these players
-- High totals - investigate if shootout potential creates stacking opportunities
-- Large spreads - investigate blowout patterns and how they've affected 4th quarter minutes
+### PACE & ENVIRONMENT
+- High-pace matchups (100+ possessions) = more fantasy opportunities
+- High totals (230+) = shootout potential, stack both sides
+- Large spreads (-12+) = blowout risk, monitor 4th quarter minutes
 
 ### NBA STACKING
 - Same-team stacks: Correlated ceiling (if one hits, others likely benefit)
@@ -222,10 +222,10 @@ ${DFS_CONSTITUTION}
 - **Wings**: Target share, defensive matchup (DvP rank)
 - **Bigs**: Rebounding matchup, paint defense rank, pace
 
-### MINUTES INVESTIGATION
-- Investigate minutes trends - how has this player's playing time affected fantasy production?
-- Lower minute players - investigate if efficiency compensates for volume
-- B2B games - investigate how this team has handled rest patterns
+### MINUTES ARE KING
+- 32+ minutes = volume floor
+- < 25 minutes = high variance (need efficiency)
+- B2B second night = vet rest risk
 `;
 
 export const NFL_DFS_CONSTITUTION = `
@@ -235,10 +235,10 @@ ${DFS_CONSTITUTION}
 
 ## NFL-SPECIFIC DFS HEURISTICS
 
-### GAME SCRIPT (INVESTIGATE)
-- Heavy favorites - investigate how this team has run the ball when protecting leads
-- Heavy underdogs - investigate passing volume when this team trails
-- Close games - investigate balanced opportunity distribution
+### GAME SCRIPT
+- Heavy favorites → RB volume (clock killing)
+- Heavy underdogs → WR/TE volume (passing to catch up)
+- Close games → balanced opportunity
 
 ### NFL STACKING (CRITICAL FOR GPP)
 - QB + WR1 is the core stack
@@ -253,10 +253,10 @@ ${DFS_CONSTITUTION}
 - **TE**: Red zone targets, blocking vs receiving TE
 - **DST**: Vegas implied points, turnover potential
 
-### WEATHER (INVESTIGATE IF RELEVANT)
-- Wind conditions - investigate how wind has affected this team's passing game
-- Rain/Snow - investigate how weather has impacted ground game vs passing
-- Indoor venues - investigate if controlled environment affects strategy
+### WEATHER MATTERS
+- Wind >15mph → Fade deep passing, boost RBs
+- Rain/Snow → Ground game boost, passing efficiency drops
+- Dome → Safe passing environment
 `;
 
 export default DFS_CONSTITUTION;

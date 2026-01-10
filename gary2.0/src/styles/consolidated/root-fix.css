@@ -1,0 +1,17 @@
+/* root-fix.css: Ensures that the app root and base elements always have a dark background and prevent white flashes. */
+:root, html, body {
+  background: #18181b !important;
+  color-scheme: dark;
+}
+
+body {
+  background-color: #18181b !important;
+  color: #fff;
+  min-height: 100vh;
+}
+
+#root, #app {
+  background: transparent !important;
+}
+
+/* Removed universal background inheritance rule to allow components to define their own backgrounds */

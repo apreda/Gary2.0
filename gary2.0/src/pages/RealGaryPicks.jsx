@@ -1096,7 +1096,6 @@ function RealGaryPicks() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [animating, setAnimating] = useState(false);
   const [selectedSport, setSelectedSport] = useState('NBA');
-  const [selectedConference, setSelectedConference] = useState(null); // NCAAB conference filter
   const sportsTabs = ['NBA', 'NFL', 'NHL', 'NCAAB', 'NCAAF', 'EPL', 'MLB', 'WNBA'];
 
   // Load decisions from localStorage
@@ -1151,10 +1150,16 @@ function RealGaryPicks() {
 
       // Fetch weekly NFL picks - get the most recent week's picks
       // NFL picks persist for the whole week, and we should show them until new ones are generated
+      const now = new Date();
+      const estDate = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+      const estMonth = estDate.getMonth() + 1;
+      const estYear = estDate.getFullYear();
+      const nflSeason = estMonth <= 7 ? estYear - 1 : estYear;
+
       const { data: nflData } = await supabase
         .from('weekly_nfl_picks')
         .select('picks, week_start')
-        .eq('season', new Date().getFullYear())
+        .eq('season', nflSeason)
         .order('week_start', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -1173,28 +1178,31 @@ function RealGaryPicks() {
       }
       
       // Add NFL picks from weekly table
-      // Filter out games that have already been played (game date < today)
+      // On Mondays, only show Monday Night Football (games happening today)
+      // Other days, show all NFL picks for the week
       if (nflData && nflData.picks) {
         let nflPicks = typeof nflData.picks === 'string' ? JSON.parse(nflData.picks) : nflData.picks;
         
+        // Check if today is Monday in EST (day 1 = Monday)
+        const now = new Date();
+        const estDate = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+        const dayOfWeek = estDate.getDay(); // 0 = Sunday, 1 = Monday
         const todayEST = getESTDate();
-        console.log(`[Picks] Today EST: ${todayEST}, filtering NFL picks to upcoming games only`);
         
-        // Filter out games that have already been played
-        nflPicks = nflPicks.filter(pick => {
-          // Check both gameTime and commence_time (Supabase uses commence_time)
-          const gameDateTime = pick.gameTime || pick.commence_time;
-          if (!gameDateTime) {
-            console.log(`[Picks] NFL game ${pick.awayTeam} @ ${pick.homeTeam}: No game time, hiding`);
-            return false;
-          }
-          const pickGameDate = toESTDate(gameDateTime);
-          // Show games that are today or in the future
-          const isUpcoming = pickGameDate >= todayEST;
-          console.log(`[Picks] NFL game ${pick.awayTeam} @ ${pick.homeTeam}: gameDate=${pickGameDate}, today=${todayEST}, showing=${isUpcoming}`);
-          return isUpcoming;
-        });
-        console.log(`[Picks] After date filter: ${nflPicks.length} NFL picks for today/future`);
+        if (dayOfWeek === 1) {
+          // It's Monday - only show games happening today (Monday Night Football)
+          console.log('[Picks] Monday detected - filtering NFL picks to today\'s games only');
+          nflPicks = nflPicks.filter(pick => {
+            // Check both gameTime and commence_time (Supabase uses commence_time)
+            const gameDateTime = pick.gameTime || pick.commence_time;
+            if (!gameDateTime) return false;
+            const pickGameDate = toESTDate(gameDateTime);
+            const isToday = pickGameDate === todayEST;
+            console.log(`[Picks] NFL game ${pick.awayTeam} @ ${pick.homeTeam}: gameDate=${pickGameDate}, today=${todayEST}, showing=${isToday}`);
+            return isToday;
+          });
+          console.log(`[Picks] After Monday filter: ${nflPicks.length} NFL picks for today`);
+        }
         
         picksArray = [...picksArray, ...nflPicks];
       }
@@ -1314,13 +1322,7 @@ function RealGaryPicks() {
               statsUsed: pick.statsUsed || [],
               statsData: pick.statsData || [], // Full stat values for Tale of the Tape
               injuries: pick.injuries || null, // Structured injury data from BDL
-              commence_time: pick.commence_time || null,
-              // Game context/significance for display
-              tournamentContext: pick.tournamentContext || null,
-              gameSignificance: pick.gameSignificance || null,
-              cfpRound: pick.cfpRound || null,
-              homeSeed: pick.homeSeed || null,
-              awaySeed: pick.awaySeed || null
+              commence_time: pick.commence_time || null
             };
 
             return simplePick;
@@ -1445,39 +1447,19 @@ function RealGaryPicks() {
 
   const isMobile = useIsMobile();
   const filteredPicks = React.useMemo(() => {
-    let result = picks.filter(p => (p.league || '').toUpperCase() === selectedSport);
-    
-    // Apply conference filter for NCAAB
-    if (selectedSport === 'NCAAB' && selectedConference) {
-      result = result.filter(p => 
-        p.homeConference === selectedConference || p.awayConference === selectedConference
-      );
-    }
-    
-    // Sort by game time (commence_time) - earliest games first
-    return result.sort((a, b) => {
-      const timeA = a.commence_time ? new Date(a.commence_time).getTime() : 0;
-      const timeB = b.commence_time ? new Date(b.commence_time).getTime() : 0;
-      return timeA - timeB;
-    });
-  }, [picks, selectedSport, selectedConference]);
-  
-  // Get available conferences from NCAAB picks
-  const availableConferences = React.useMemo(() => {
-    const ncaabPicks = picks.filter(p => (p.league || '').toUpperCase() === 'NCAAB');
-    const conferences = new Set();
-    ncaabPicks.forEach(p => {
-      if (p.homeConference) conferences.add(p.homeConference);
-      if (p.awayConference) conferences.add(p.awayConference);
-    });
-    return [...conferences].sort();
-  }, [picks]);
+    return picks
+      .filter(p => (p.league || '').toUpperCase() === selectedSport)
+      .sort((a, b) => {
+        // Sort by game time (commence_time) - earliest games first
+        const timeA = a.commence_time ? new Date(a.commence_time).getTime() : 0;
+        const timeB = b.commence_time ? new Date(b.commence_time).getTime() : 0;
+        return timeA - timeB;
+      });
+  }, [picks, selectedSport]);
 
   useEffect(() => {
     setCurrentIndex(0);
     setFlippedCards({});
-    // Always reset conference filter when switching sports (ensures NCAAB starts with "All Conferences")
-    setSelectedConference(null);
   }, [selectedSport]);
 
   const getSportAccentColor = (leagueRaw) => {
@@ -1623,30 +1605,6 @@ function RealGaryPicks() {
                       );
                     })}
                   </div>
-                  
-                  {/* NCAAB Conference Filter Dropdown */}
-                  {selectedSport === 'NCAAB' && availableConferences.length > 0 && (
-                    <div className="flex justify-center mb-6">
-                      <select
-                        value={selectedConference || ''}
-                        onChange={(e) => setSelectedConference(e.target.value || null)}
-                        className="px-4 py-2 rounded-md text-sm sm:text-base cursor-pointer"
-                        style={{
-                          background: selectedConference ? 'rgba(249, 115, 22, 0.15)' : 'rgba(255,255,255,0.04)',
-                          color: selectedConference ? '#F97316' : 'rgba(255,255,255,0.8)',
-                          border: selectedConference ? '1px solid #F97316' : '1px solid rgba(255,255,255,0.1)',
-                          minWidth: '180px',
-                        }}
-                      >
-                        <option value="" style={{ background: '#1a1a1a', color: '#fff' }}>All Conferences</option>
-                        {availableConferences.map(conf => (
-                          <option key={conf} value={conf} style={{ background: '#1a1a1a', color: '#fff' }}>
-                            {conf}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
                   
                   {/* Card Stack Interface */}
                   <div className="flex justify-center items-center relative py-4 pt-2">
@@ -1924,34 +1882,6 @@ function RealGaryPicks() {
                                                   </span>
                                                 )}
                                               </div>
-                                              {/* Game Significance Badge (NFL, NBA Cup, CFP, etc.) */}
-                                              {pick.tournamentContext && (
-                                                <div style={{
-                                                  fontSize: '0.65rem',
-                                                  fontWeight: 600,
-                                                  padding: '0.2rem 0.5rem',
-                                                  borderRadius: '4px',
-                                                  background: pick.tournamentContext?.toLowerCase()?.includes('playoff') || pick.tournamentContext?.toLowerCase()?.includes('division')
-                                                    ? 'rgba(74, 222, 128, 0.15)' // Green for playoff/division
-                                                    : pick.tournamentContext?.toLowerCase()?.includes('cfp') || pick.tournamentContext?.toLowerCase()?.includes('bowl') || pick.tournamentContext?.toLowerCase()?.includes('cup')
-                                                      ? 'rgba(255, 215, 0, 0.15)' // Gold for tournaments
-                                                      : pick.tournamentContext?.toLowerCase()?.includes('top') || pick.tournamentContext?.toLowerCase()?.includes('showdown')
-                                                        ? 'rgba(239, 68, 68, 0.15)' // Red for marquee matchups
-                                                        : 'rgba(255, 255, 255, 0.08)', // Subtle for conference/regular
-                                                  color: pick.tournamentContext?.toLowerCase()?.includes('playoff') || pick.tournamentContext?.toLowerCase()?.includes('division')
-                                                    ? '#4ade80'
-                                                    : pick.tournamentContext?.toLowerCase()?.includes('cfp') || pick.tournamentContext?.toLowerCase()?.includes('bowl') || pick.tournamentContext?.toLowerCase()?.includes('cup')
-                                                      ? '#FFD700'
-                                                      : pick.tournamentContext?.toLowerCase()?.includes('top') || pick.tournamentContext?.toLowerCase()?.includes('showdown')
-                                                        ? '#ef4444'
-                                                        : 'rgba(255, 255, 255, 0.7)',
-                                                  letterSpacing: '0.03em',
-                                                  marginTop: '0.35rem',
-                                                  display: 'inline-block'
-                                                }}>
-                                                  {pick.tournamentContext}
-                                                </div>
-                                              )}
                                             </div>
                                             
                                             {/* Odds - Fixed width */}

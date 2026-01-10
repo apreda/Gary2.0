@@ -2550,7 +2550,7 @@ Return as JSON:
     {
       "name": "Player Name",
       "team": "TM",
-      "reason": "Why to investigate negative factors TONIGHT (e.g., starter returns, role ended)",
+      "reason": "Why to fade TONIGHT (e.g., starter returns, role ended)",
       "rotation_status": "bench_return|diminished_role",
       "minutes_trend": "decreasing",
       "role_sustainability": "ended"
@@ -3106,8 +3106,8 @@ Identify and return as JSON:
 **CRITICAL: PREDICTIVE vs REACTIVE Logic (Same as NBA)**
 - ✅ Find players ABOUT TO have a big game (value BEFORE it pops)
 - ❌ Don't chase players who JUST HAD a big game (chasing after the pop)
-- Investigate if big games were due to temporary injuries/rest
-- If starter returns → Investigate if the backup's role reverts
+- Check if big games were due to temporary injuries/rest
+- If starter returns → fade the backup who had the big game
 
 Focus on:
 1. **PREDICTIVE Injury Impacts** (< 7 days): Starter JUST went OUT = backup gets elevated role TODAY
@@ -3116,8 +3116,8 @@ Focus on:
    - ❌ DO NOT mention season-long injuries - the season stats already reflect them
    - ✅ DO mention new injuries from this week (e.g., "Travis Kelce OUT - Noah Gray 5x targets expected")
 2. **Rotation Context**: If backup had big game last week due to injury, check if starter is back
-3. **Weather Impact**: Rain/Wind >15mph - investigate how this affects passing game
-4. **Game Script**: Investigate how game flow affects RB vs passing volume
+3. **Weather Impact**: Rain/Wind >15mph = run-heavy, fade passing
+4. **Game Script**: Heavy favorites = RB volume, underdogs = pass-heavy
 5. **Revenge Games**: Players facing former teams
 6. **Target Share Trends**: WR/TE seeing 20%+ target increase last 3 games
 7. **Matchup Exploits**: RB vs worst rush defense, WR vs worst pass defense`;
