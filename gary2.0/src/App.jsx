@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, Link } f
 import { useState, useEffect, lazy, Suspense } from "react";
 import { Navbar } from "./components/Navbar";
 import Home from "./pages/Home";
+import DFSLineups from "./pages/DFSLineups";
 import { TermsOfService } from "./pages/TermsOfService";
 import { PrivacyPolicy } from "./pages/PrivacyPolicy";
 import { Changelog } from "./pages/Changelog";
@@ -36,6 +37,9 @@ function AppContent() {
             <Routes>
               {/* Main landing page */}
               <Route path="/" element={<Home />} />
+              
+              {/* DFS Lineups page */}
+              <Route path="/dfs" element={<DFSLineups />} />
               
               {/* Legal pages (required) */}
               <Route path="/terms" element={<TermsOfService />} />

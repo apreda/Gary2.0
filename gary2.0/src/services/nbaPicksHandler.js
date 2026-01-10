@@ -1,5 +1,6 @@
 import { oddsService } from './oddsService.js';
 import { ballDontLieService } from './ballDontLieService.js';
+import { fixBdlInjuryStatus } from './agentic/sharedUtils.js';
 import { computeRecommendedSportsbook } from './recommendedSportsbook.js';
 import { makeGaryPick } from './garyEngine.js';
 import { processGameOnce, gameAlreadyHasPick } from './picksService.js'; // Import shared helper
@@ -265,12 +266,14 @@ export async function generateNBAPicks(options = {}) {
       // Map injuries by player for quick lookup
       const injuryMap = new Map();
       (injuries || []).forEach((inj) => {
-        const pid = inj?.player?.id;
+        const fixedInj = fixBdlInjuryStatus(inj);
+        const pid = fixedInj?.player?.id;
         if (pid) {
           injuryMap.set(pid, {
-            status: inj?.status || null,
-            description: inj?.description || null,
-            return_date: inj?.return_date || null
+            status: fixedInj?.status || null,
+            description: fixedInj?.description || null,
+            return_date: fixedInj?.return_date || null,
+            duration: fixedInj?.duration || null
           });
         }
       });

@@ -370,6 +370,8 @@ export function normalizePlayerName(name) {
   if (!name || typeof name !== 'string') return '';
   return name
     .toLowerCase()
+    .normalize('NFD') // Decompose accented characters (é -> e + ´)
+    .replace(/[\u0300-\u036f]/g, '') // Remove diacritical marks (Luka Dončić -> Luka Doncic)
     .replace(/[.']/g, '') // Remove periods and apostrophes: "D.J." -> "DJ", "O'Brien" -> "OBrien"
     .replace(/\s+jr\.?$/i, '') // Remove Jr suffix
     .replace(/\s+sr\.?$/i, '') // Remove Sr suffix
@@ -482,6 +484,45 @@ export function getDaysSinceInjury(description) {
 }
 
 /**
+ * Parse weeks from injury description (e.g., "out 7 weeks", "since November", etc.)
+ * @param {string} description - Injury description
+ * @returns {number|null} - Estimated weeks out or null
+ */
+function parseWeeksFromDescription(description) {
+  if (!description) return null;
+  const desc = description.toLowerCase();
+  
+  // Direct week mentions: "out 7 weeks", "missed 6 weeks", etc.
+  const weekMatch = desc.match(/(\d+)\s*weeks?/);
+  if (weekMatch) return parseInt(weekMatch[1]);
+  
+  // Month mentions: "since November", "out since October", etc.
+  const monthMatch = desc.match(/since\s+(january|february|march|april|may|june|july|august|september|october|november|december)/i);
+  if (monthMatch) {
+    const monthMap = { january: 0, february: 1, march: 2, april: 3, may: 4, june: 5, 
+                       july: 6, august: 7, september: 8, october: 9, november: 10, december: 11 };
+    const injuryMonth = monthMap[monthMatch[1].toLowerCase()];
+    const today = new Date();
+    const currentMonth = today.getMonth();
+    const currentYear = today.getFullYear();
+    
+    // Calculate weeks since that month (estimate mid-month)
+    let injuryYear = currentYear;
+    if (injuryMonth > currentMonth) injuryYear -= 1; // Must be last year
+    
+    const injuryDate = new Date(injuryYear, injuryMonth, 15);
+    const weeksDiff = Math.floor((today - injuryDate) / (7 * 24 * 60 * 60 * 1000));
+    return weeksDiff;
+  }
+  
+  // Day mentions: "out 51 days", "missed 45 days"
+  const dayMatch = desc.match(/(\d+)\s*days?/);
+  if (dayMatch) return Math.floor(parseInt(dayMatch[1]) / 7);
+  
+  return null;
+}
+
+/**
  * Fix BDL status inconsistencies and add duration context for betting analysis
  * This is the SOURCE OF TRUTH for Gary's understanding of injuries.
  * 
@@ -502,8 +543,18 @@ export function fixBdlInjuryStatus(injury) {
   const todayDay = todayStr.split(' ')[1];
   const isReturnToday = returnDate.includes(todayMonth) && returnDate.includes(todayDay);
   
-  // Calculate days since injury was first reported
-  const daysSinceReport = getDaysSinceInjury(rawDesc);
+  // Calculate days since injury was first reported (primary method)
+  let daysSinceReport = getDaysSinceInjury(rawDesc);
+  
+  // FALLBACK: If date parsing failed, try to extract weeks from description
+  if (daysSinceReport === null) {
+    const weeksFromDesc = parseWeeksFromDescription(rawDesc);
+    if (weeksFromDesc !== null) {
+      daysSinceReport = weeksFromDesc * 7;
+      console.log(`[Injury Duration] Parsed ${weeksFromDesc} weeks from description for ${injury?.player?.first_name || 'player'}`);
+    }
+  }
+  
   injury.daysSinceReport = daysSinceReport;
   
   // 1. Fix Status Inconsistencies (BDL often lists as 'Out' when they are GTD)
@@ -520,6 +571,7 @@ export function fixBdlInjuryStatus(injury) {
   // 2. Determine Duration Context
   
   // CATEGORY A: SEASON-LONG (Highest priority - NO EDGE)
+  // These keywords indicate the team has fully adjusted
   if (desc.includes('indefinitely') || desc.includes('no timetable') || desc.includes('no return') ||
       desc.includes('season-ending') || desc.includes('out for the season') || desc.includes('out for season') ||
       desc.includes('won\'t return') || desc.includes('will not return') || 
@@ -530,20 +582,24 @@ export function fixBdlInjuryStatus(injury) {
     injury.duration = 'SEASON-LONG';
     injury.isEdge = false;
   } 
-  // CATEGORY B: Based on time elapsed
+  // CATEGORY B: Based on time elapsed (most reliable when we have the data)
   else if (daysSinceReport !== null) {
-    if (daysSinceReport >= 42) { // 6+ weeks = SEASON-LONG (team stats have full baseline)
+    if (daysSinceReport >= 21) { // 3+ weeks = SEASON-LONG (team has FULLY adjusted)
       injury.duration = 'SEASON-LONG';
       injury.isEdge = false;
-    } else if (daysSinceReport >= 21) { // 3-6 weeks = MID-SEASON (team has mostly adjusted)
+      injury.durationNote = `Out ${Math.floor(daysSinceReport / 7)} weeks - team stats already reflect absence`;
+    } else if (daysSinceReport >= 14) { // 2-3 weeks = MID-SEASON (team has mostly adjusted)
       injury.duration = 'MID-SEASON';
       injury.isEdge = false;
-    } else if (daysSinceReport <= 14) { // 0-2 weeks = RECENT (This is the REAL EDGE)
+      injury.durationNote = `Out ${Math.floor(daysSinceReport / 7)} weeks - team adjusting`;
+    } else if (daysSinceReport <= 7) { // 0-1 week = RECENT (This is the REAL EDGE)
       injury.duration = 'RECENT';
       injury.isEdge = true;
-    } else { // 2-3 weeks = MID-SEASON
-      injury.duration = 'MID-SEASON';
-      injury.isEdge = false;
+      injury.durationNote = `Out ${daysSinceReport} days - genuine edge, market may not have adjusted`;
+    } else { // 1-2 weeks = Still somewhat recent
+      injury.duration = 'RECENT';
+      injury.isEdge = true;
+      injury.durationNote = `Out ${daysSinceReport} days - market adjusting`;
     }
   }
   // CATEGORY C: Keywords for recent/short-term
@@ -553,14 +609,17 @@ export function fixBdlInjuryStatus(injury) {
     injury.isEdge = true;
   }
   // CATEGORY D: Extended but not season-long
-  else if (desc.includes('several weeks') || desc.includes('multiple weeks') || desc.includes('extended')) {
+  else if (desc.includes('several weeks') || desc.includes('multiple weeks') || desc.includes('extended') ||
+           desc.includes('month') || desc.includes('weeks')) {
     injury.duration = 'MID-SEASON';
     injury.isEdge = false;
   }
-  // DEFAULT
+  // DEFAULT: For "Out" status with no duration info, assume MID-SEASON (safer assumption)
+  // Better to NOT treat an unknown injury as an edge than to wrongly exploit it
   else {
     injury.duration = injury.status === 'Out' ? 'MID-SEASON' : 'RECENT';
     injury.isEdge = injury.duration === 'RECENT';
+    injury.durationNote = 'Duration unknown - defaulting to not an edge';
   }
   
   return injury;

@@ -77,7 +77,7 @@ const TOKEN_DEFINITIONS = {
   turnover_luck: {
     id: 'turnover_luck',
     label: 'Turnover Luck',
-    description: 'Turnover differential trends that might regress to the mean.'
+    description: 'Turnover differential trends - investigate if sustainable or variance-driven.'
   },
   red_zone_efficiency: {
     id: 'red_zone_efficiency',
@@ -219,7 +219,7 @@ const TOKEN_DEFINITIONS = {
   pdo_luck: {
     id: 'pdo_luck',
     label: 'PDO Luck Indicator',
-    description: 'PDO (shooting% + save%) to identify regression candidates. League avg = 100.'
+    description: 'PDO (shooting% + save%) to investigate luck/sustainability. League avg = 100.'
   }
 };
 

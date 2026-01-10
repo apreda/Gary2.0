@@ -57,7 +57,7 @@ export default async function handler(req, res) {
 
   try {
     // Parse the request body - accept OpenAI-style format for compatibility
-    const { model, messages, temperature = 0.4, max_tokens, tools } = req.body;
+    const { model, messages, temperature = 1.0, max_tokens, tools } = req.body;
     
     // Validate required parameters
     if (!messages || !Array.isArray(messages) || messages.length === 0) {

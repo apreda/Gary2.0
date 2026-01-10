@@ -6,6 +6,7 @@
  * - DraftKings and FanDuel platforms
  * - NBA and NFL sports
  * - Optimal lineup with 3-tier pivot alternatives per position
+ * - GPP (Tournament) vs Cash (50/50) optimization modes
  * 
  * Security:
  * - Requires header `x-admin-token` to match env DFS_GEN_SECRET or ADMIN_TASK_TOKEN
@@ -14,6 +15,9 @@
  * - platform: 'draftkings' or 'fanduel' (default: both)
  * - sport: 'NBA' or 'NFL' (default: both active)
  * - date: YYYY-MM-DD (defaults to EST today)
+ * - contestType: 'gpp' or 'cash' (default: 'gpp')
+ *     - gpp: Optimize for ceiling (350+ pts), use stacking, apply chalk pivot
+ *     - cash: Optimize for floor (280 pts), prioritize consistency
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -106,6 +110,27 @@ export default async function handler(req, res) {
     return res.status(204).end();
   }
   
+  // Discovery mode (public)
+  if (req.method === 'GET' && req.query.action === 'discover') {
+    const { discoverDFSSlates } = await import('../src/services/agentic/dfsAgenticContext.js');
+    const dateParam = req.query.date || estToday();
+    const platform = req.query.platform || 'draftkings';
+    const sport = req.query.sport || 'NBA';
+    
+    try {
+      const slates = await discoverDFSSlates(sport, platform, dateParam);
+      return res.status(200).json({
+        ok: true,
+        date: dateParam,
+        platform,
+        sport,
+        slates
+      });
+    } catch (e) {
+      return res.status(500).json({ ok: false, error: e.message });
+    }
+  }
+
   // Health check
   if (req.method === 'GET' && !req.query.token) {
     return res.status(200).json({ 
@@ -147,12 +172,18 @@ export default async function handler(req, res) {
       });
     }
     
+    // Contest type - ALWAYS GPP (tournament mode to win)
+    // Gary doesn't do "safe mode" - we're here to win, not play it safe
+    const contestType = 'gpp';
+    const isGPP = true;
+    
     console.log(`[DFS] Generating lineups for ${dateParam}`);
     console.log(`[DFS] Platforms: ${platforms.join(', ')}`);
     console.log(`[DFS] Sports: ${sports.join(', ')}`);
+    console.log(`[DFS] Contest Type: GPP (TOURNAMENT MODE - Ceiling optimization, max upside to WIN)`);
     
     // Lazy import services
-    const { buildDFSContext } = await import('../src/services/agentic/dfsAgenticContext.js');
+    const { buildDFSContext, discoverDFSSlates } = await import('../src/services/agentic/dfsAgenticContext.js');
     const { generateDFSLineup, validateLineup, PLATFORM_CONSTRAINTS } = await import('../src/services/dfsLineupService.js');
     
     const results = [];
@@ -164,71 +195,134 @@ export default async function handler(req, res) {
         try {
           console.log(`\n[DFS] === ${platform.toUpperCase()} ${sport} ===`);
           
-          // Build context (BDL stats + Gemini Grounding salaries)
-          const context = await buildDFSContext(platform, sport, dateParam);
+          // STEP 1: Discover all available slates for today
+          console.log(`[DFS] 🔍 Discovering slates for ${dateParam}...`);
+          const slates = await discoverDFSSlates(sport, platform, dateParam);
           
-          if (!context.players || context.players.length === 0) {
-            console.log(`[DFS] No players found for ${platform} ${sport}`);
+          if (!slates || slates.length === 0) {
+            console.log(`[DFS] No slates found for ${platform} ${sport}`);
             errors.push({
               platform,
               sport,
-              error: 'No players with salaries found'
+              error: 'No slates available for this date'
             });
             continue;
           }
           
-          // Generate optimal lineup with pivots
-          const lineup = await generateDFSLineup({
-            platform,
-            sport,
-            players: context.players
-          });
+          console.log(`[DFS] ✅ Found ${slates.length} slate(s): ${slates.map(s => `${s.name} (${s.gameCount || 0} games)`).join(', ')}`);
           
-          // Validate lineup
-          const validation = validateLineup(lineup, platform, sport);
-          if (!validation.valid) {
-            console.warn(`[DFS] Lineup validation warnings: ${validation.errors.join(', ')}`);
-          }
-          
-          // Build Gary's notes
-          const garyNotes = buildGaryNotes(context, lineup);
-          
-          // Store in database
-          const lineupRecord = {
-            date: dateParam,
-            platform,
-            sport,
-            salary_cap: PLATFORM_CONSTRAINTS[platform][sport].salaryCap,
-            total_salary: lineup.total_salary,
-            projected_points: lineup.projected_points,
-            lineup: lineup.lineup,
-            gary_notes: garyNotes,
-            updated_at: new Date().toISOString()
-          };
-          
-          // Upsert (update if exists, insert if not)
-          const { error: upsertError } = await supabase
-            .from('dfs_lineups')
-            .upsert(lineupRecord, {
-              onConflict: 'date,platform,sport'
-            });
-          
-          if (upsertError) {
-            console.error(`[DFS] Upsert error: ${upsertError.message}`);
-            errors.push({
-              platform,
-              sport,
-              error: upsertError.message
-            });
-          } else {
-            console.log(`[DFS] ✅ Stored ${platform} ${sport} lineup: $${lineup.total_salary}/${PLATFORM_CONSTRAINTS[platform][sport].salaryCap}, ${lineup.projected_points} pts`);
-            results.push({
-              platform,
-              sport,
-              totalSalary: lineup.total_salary,
-              projectedPoints: lineup.projected_points,
-              playersCount: lineup.lineup.length
-            });
+          // STEP 2: Generate lineup for EACH slate
+          for (const slate of slates) {
+            try {
+              console.log(`\n[DFS] 🎰 Building lineup for: ${slate.name}`);
+              console.log(`[DFS] Games: ${slate.gameCount || 0}, Start: ${slate.startTime || 'TBD'}`);
+              
+              // Build context for this specific slate
+              const context = await buildDFSContext(platform, sport, dateParam, slate);
+              
+              if (!context.players || context.players.length === 0) {
+                console.log(`[DFS] No players found for ${slate.name}`);
+                errors.push({
+                  platform,
+                  sport,
+                  slate: slate.name,
+                  error: 'No players with salaries found'
+                });
+                continue;
+              }
+              
+              console.log(`[DFS] Player pool: ${context.players.length}`);
+              
+              // Generate optimal lineup with pivots
+              // Archetype selection: balanced_build (default), stars_and_scrubs, cash_safe
+              const archetype = req.query.archetype || 'balanced_build';
+              
+              const lineup = await generateDFSLineup({
+                platform,
+                sport,
+                players: context.players,
+                context: {
+                  contestType,
+                  archetype,
+                  fadePlayers: context.fadePlayers || [],
+                  targetPlayers: context.targetPlayers || [],
+                  games: context.games || [],
+                  ownershipData: context.ownershipData || {},
+                  slate: slate
+                }
+              });
+              
+              // Validate lineup
+              const validation = validateLineup(lineup, platform, sport);
+              if (!validation.valid) {
+                console.warn(`[DFS] Lineup validation warnings: ${validation.errors.join(', ')}`);
+              }
+              
+              // Gary's notes are now built inside generateDFSLineup
+              const garyNotes = lineup.gary_notes || buildGaryNotes(context, lineup, contestType);
+              
+              // Store in database with slate-specific info
+              const lineupRecord = {
+                date: dateParam,
+                platform,
+                sport,
+                slate_name: slate.name,
+                slate_start_time: slate.startTime,
+                slate_game_count: slate.gameCount || 0,
+                contest_type: contestType,
+                salary_cap: PLATFORM_CONSTRAINTS[platform][sport].salaryCap,
+                total_salary: lineup.total_salary,
+                projected_points: lineup.projected_points,
+                ceiling_projection: lineup.ceiling_projection,
+                floor_projection: lineup.floor_projection,
+                stack_info: lineup.stackInfo,
+                lineup: lineup.lineup,
+                gary_notes: garyNotes,
+                updated_at: new Date().toISOString()
+              };
+              
+              // Upsert (update if exists, insert if not)
+              const { error: upsertError } = await supabase
+                .from('dfs_lineups')
+                .upsert(lineupRecord, {
+                  onConflict: 'date,platform,sport,slate_name,contest_type'
+                });
+              
+              if (upsertError) {
+                console.error(`[DFS] Upsert error: ${upsertError.message}`);
+                errors.push({
+                  platform,
+                  sport,
+                  slate: slate.name,
+                  error: upsertError.message
+                });
+              } else {
+                const ceilingStr = lineup.ceiling_projection ? ` (ceiling: ${lineup.ceiling_projection})` : '';
+                console.log(`[DFS] ✅ Stored ${slate.name} lineup: $${lineup.total_salary}/${PLATFORM_CONSTRAINTS[platform][sport].salaryCap}, ${lineup.projected_points} pts${ceilingStr}`);
+                results.push({
+                  platform,
+                  sport,
+                  slate: slate.name,
+                  slateGameCount: slate.gameCount || 0,
+                  contestType,
+                  totalSalary: lineup.total_salary,
+                  projectedPoints: lineup.projected_points,
+                  ceilingProjection: lineup.ceiling_projection,
+                  floorProjection: lineup.floor_projection,
+                  stackInfo: lineup.stackInfo,
+                  playersCount: lineup.lineup.length
+                });
+              }
+              
+            } catch (slateErr) {
+              console.error(`[DFS] Error generating lineup for ${slate.name}: ${slateErr.message}`);
+              errors.push({
+                platform,
+                sport,
+                slate: slate.name,
+                error: slateErr.message
+              });
+            }
           }
           
         } catch (err) {
@@ -266,9 +360,44 @@ export default async function handler(req, res) {
 /**
  * Build Gary's commentary notes for the lineup
  * Includes narrative context - what makes Gary more than just a "math bot"
+ * 
+ * @param {Object} context - DFS context with narrative data
+ * @param {Object} lineup - Generated lineup
+ * @param {string} contestType - 'gpp' or 'cash'
  */
-function buildGaryNotes(context, lineup) {
+export function buildGaryNotes(context, lineup, contestType = 'gpp') {
   const notes = [];
+  
+  // GPP Tournament mode - we're here to WIN
+  notes.push(`🎰 TOURNAMENT LINEUP - Optimized for ceiling (max upside to win big)`);
+  if (lineup.ceiling_projection) {
+    notes.push(`📈 Ceiling projection: ${lineup.ceiling_projection} pts | Floor: ${lineup.floor_projection} pts`);
+  }
+  
+  // NFL Stacking info
+  if (lineup.stackInfo?.primaryStack) {
+    const stack = lineup.stackInfo;
+    notes.push(`🏈 Stack: ${stack.primaryStack.qb} + ${stack.primaryStack.receivers?.join(', ')} (${stack.primaryStack.team})`);
+    if (stack.bringback) {
+      notes.push(`↩️ Bringback: ${stack.bringback.player} (${stack.bringback.team})`);
+    }
+  }
+  
+  // Price Lag / Breakout plays
+  const priceLagPlayers = lineup.lineup.filter(p => p.isPriceLag || p.projectionBoosted);
+  if (priceLagPlayers.length > 0) {
+    notes.push(`🚀 Price Lag breakouts: ${priceLagPlayers.map(p => 
+      `${p.player} ($${p.salary?.toLocaleString() || 'N/A'})`
+    ).join(', ')}`);
+  }
+  
+  // Contrarian plays (tournament differentiation)
+  const contrarianPlayers = lineup.lineup.filter(p => p.isContrarian || (p.ownership && p.ownership < 10));
+  if (contrarianPlayers.length > 0) {
+    notes.push(`🎲 Contrarian edge: ${contrarianPlayers.map(p => 
+      `${p.player} (${p.ownership || '<10'}% owned)`
+    ).join(', ')}`);
+  }
   
   // Top narrative targets
   if (context.targetPlayers?.length > 0) {
@@ -277,7 +406,7 @@ function buildGaryNotes(context, lineup) {
       lineup.lineup.some(p => p.player.toLowerCase().includes(t.name?.toLowerCase()))
     );
     if (inLineup.length > 0) {
-      notes.push(`🎯 Narrative plays in lineup: ${inLineup.map(t => 
+      notes.push(`🎯 Narrative plays: ${inLineup.map(t => 
         `${t.name} (${t.reason})`
       ).join(', ')}`);
     }
@@ -286,14 +415,14 @@ function buildGaryNotes(context, lineup) {
   // Players to fade that we avoided
   if (context.fadePlayers?.length > 0) {
     const faded = context.fadePlayers.slice(0, 2);
-    notes.push(`⚠️ Fading today: ${faded.map(f => 
+    notes.push(`⚠️ Fading: ${faded.map(f => 
       `${f.name} (${f.reason})`
     ).join(', ')}`);
   }
   
   // Mention late scratches if any
   if (context.lateScratches?.length > 0) {
-    notes.push(`📝 Late scratches factored in: ${context.lateScratches.join(', ')}`);
+    notes.push(`📝 Late scratches: ${context.lateScratches.join(', ')}`);
   }
   
   // Mention weather if NFL
@@ -323,13 +452,14 @@ function buildGaryNotes(context, lineup) {
   , lineup.lineup[0]);
   
   if (cheapestStarter) {
-    notes.push(`💰 Value play: ${cheapestStarter.player} at $${cheapestStarter.salary.toLocaleString()} unlocks salary elsewhere`);
+    notes.push(`💰 Value play: ${cheapestStarter.player} at $${cheapestStarter.salary?.toLocaleString() || 'N/A'}`);
   }
   
   // Salary remaining
-  const remaining = (lineup.salary_cap || PLATFORM_CONSTRAINTS?.[context.platform]?.[context.sport]?.salaryCap || 50000) - lineup.total_salary;
+  const salaryCap = lineup.salary_cap || 50000;
+  const remaining = salaryCap - lineup.total_salary;
   if (remaining > 0) {
-    notes.push(`📊 $${remaining.toLocaleString()} remaining under cap - room for pivots`);
+    notes.push(`📊 $${remaining.toLocaleString()} under cap - room for pivots`);
   }
   
   return notes.join('\n');

@@ -280,6 +280,69 @@ If you cite a factor (B2B fatigue, goalie issues, travel), you should be able to
 
 ---
 
+## 🔄 ROSTER TRUTH AUDIT
+
+<ROSTER_TRUTH_AUDIT>
+  <PHILOSOPHY>
+    A losing streak is NOISE if the roster was broken.
+    A winning streak is NOISE if the goalie was resting.
+    The ACTIVE ROSTER TONIGHT is the only truth that matters.
+    This is a HARD FACTOR - roster composition is physical reality.
+  </PHILOSOPHY>
+  
+  <HEALTH_RESET_CHECK>
+    When you see a streak (hot or cold), INVESTIGATE:
+    1. Who was MISSING during that stretch? (Especially goaltending)
+    2. Who is RETURNING tonight?
+    3. How has performance differed WITH vs WITHOUT key players?
+    
+    If a key player is returning after extended absence:
+    - The team's recent record may not reflect tonight's strength
+    - Investigate their pre-injury performance as a comparison point
+    - This is a "roster version" change - treat it seriously
+  </HEALTH_RESET_CHECK>
+  
+  <RECENCY_GUIDANCE>
+    More recent data reflects the CURRENT team reality.
+    BUT context matters - investigate WHY recent results occurred.
+    If roster changed significantly, prioritize post-change data.
+  </RECENCY_GUIDANCE>
+</ROSTER_TRUTH_AUDIT>
+
+---
+
+## 💰 BET TYPE DECISION LOGIC
+
+<BET_TYPE_DECISION_LOGIC>
+  <PUCKLINE_VS_ML_FRAMEWORK>
+    PUCK LINE is for: "This team stays competitive, may not win outright"
+    - You believe in the floor, not the ceiling
+    - Your reasons explain how they COVER, not how they WIN
+    
+    MONEYLINE is for: "This team has a STRUCTURAL path to victory"
+    - You found Hard Factor advantages that BREAK the opponent's system
+    - Your reasons explain HOW they WIN, not just how they stay close
+  </PUCKLINE_VS_ML_FRAMEWORK>
+  
+  <THE_GARY_TEST>
+    Before finalizing your bet type, ask yourself:
+    "Did I find reasons this team COVERS, or reasons this team WINS?"
+    
+    If your investigation found Soft Factors (narrative, motivation) → likely PUCK LINE
+    If your investigation found Hard Factors (goaltending edge, structural mismatch) → consider MONEYLINE
+  </THE_GARY_TEST>
+  
+  <VALUE_CONSIDERATION>
+    For underdog ML, consider the implied probability.
+    If your structural analysis suggests higher win probability than the 
+    line implies, there may be value in ML over puck line.
+    
+    This is judgment, not formula - investigate and decide.
+  </VALUE_CONSIDERATION>
+</BET_TYPE_DECISION_LOGIC>
+
+---
+
 ## 📊 SECTION 1: STATISTICAL FOUNDATION (INVESTIGATE FIRST)
 
 Start here. These stats tell you who is the better team.

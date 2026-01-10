@@ -20,13 +20,22 @@ node scripts/pickManager.js
 - `SUPABASE_KEY`: Supabase API key
 - `GEMINI_API_KEY`: Gemini 3 Deep Think API key
 
-### `testPickGeneration.js`
-
-Test script to verify pick generation and storage.
-
-**Usage:**
+### `run-agentic-nba-props.js`
+Runs the 3-stage agentic pipeline for NBA player props.
 ```bash
-node scripts/testPickGeneration.js
+node scripts/run-agentic-nba-props.js --store=1
+```
+
+### `run-agentic-nhl-props.js`
+Runs the agentic pipeline for NHL player props.
+```bash
+node scripts/run-agentic-nhl-props.js --store=1
+```
+
+### `run-agentic-nfl-props.js`
+Runs the agentic pipeline for NFL player props.
+```bash
+node scripts/run-agentic-nfl-props.js --store=1
 ```
 
 ## Pick Generation Flow

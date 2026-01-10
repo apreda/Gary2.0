@@ -843,10 +843,11 @@ export const oddsService = {
     return dedupeRequest(cacheKey, async () => {
       console.log(`[Odds Service] Fetching upcoming games for ${sport}...`);
 
-      // NBA & NFL EXEMPTION: Use The Odds API directly for correct game IDs (needed for player props)
-      // This bypasses the BDL -> Fallback logic used for other sports.
-      if (sport === 'basketball_nba' || sport === 'americanfootball_nfl') {
-        console.log(`[Odds Service] ${sport}: Using The Odds API directly for correct game IDs.`);
+      // NBA, NFL, NCAAF EXEMPTION: Use The Odds API directly for ALL upcoming games
+      // This bypasses the BDL -> Fallback logic that filters by today's date
+      // Allows --date flag to work for future games (e.g., CFP on Jan 9)
+      if (sport === 'basketball_nba' || sport === 'americanfootball_nfl' || sport === 'americanfootball_ncaaf') {
+        console.log(`[Odds Service] ${sport}: Using The Odds API directly for all upcoming games.`);
         return fetchUpcomingOddsFallback(sport);
       }
 
