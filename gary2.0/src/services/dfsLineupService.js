@@ -93,6 +93,123 @@ const PIVOT_TIERS = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
+// DFS LINEUP VALIDATION RULES - Prevent "Fragile Floor" Disasters
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Punt salary thresholds - Below this = "minimum salary" or "punt play"
+ * These players are risky - bench warmers, fill-ins, or deep rotations
+ */
+const PUNT_SALARY_THRESHOLD = {
+  draftkings: 4500,  // DK: $4,500 or less = punt territory
+  fanduel: 4500      // FD: $4,500 or less = punt territory
+};
+
+/**
+ * Maximum punts allowed per lineup
+ * Too many punts = "Fragile Floor" (one dud kills the whole lineup)
+ */
+const MAX_PUNTS_PER_LINEUP = {
+  gpp: 2,   // Tournament: max 2 punts (high risk acceptable)
+  cash: 1   // Cash games: max 1 punt (need high floor)
+};
+
+/**
+ * Salary distribution archetypes for lineup construction
+ * Different strategies for different risk tolerance
+ */
+export const LINEUP_ARCHETYPES = {
+  'stars_and_scrubs': {
+    name: 'Stars & Scrubs',
+    description: 'High variance - 2 studs, rest value plays',
+    distribution: {
+      '$10k+': 2,
+      '$7k-$9k': 2,
+      '$5k-$7k': 2,
+      'under_$5k': 3
+    },
+    contestTypes: ['gpp'],
+    riskLevel: 'VERY_HIGH',
+    floorTarget: 260,
+    ceilingTarget: 400
+  },
+  
+  'balanced_build': {
+    name: 'Balanced Build',
+    description: 'Medium variance - spread salary across mid-tier stars',
+    distribution: {
+      '$10k+': 1,
+      '$7k-$9k': 4,   // Focus on proven mid-tier players
+      '$5k-$7k': 3,
+      'under_$5k': 1
+    },
+    contestTypes: ['gpp', 'cash'],
+    riskLevel: 'MEDIUM',
+    floorTarget: 300,
+    ceilingTarget: 380
+  },
+  
+  'cash_safe': {
+    name: 'Cash Safe',
+    description: 'Low variance - high floor, no punts',
+    distribution: {
+      '$8k-$10k': 3,
+      '$6k-$8k': 4,
+      '$5k-$6k': 2,
+      'under_$5k': 0  // NO PUNTS in cash games
+    },
+    contestTypes: ['cash'],
+    riskLevel: 'LOW',
+    floorTarget: 320,
+    ceilingTarget: 360
+  }
+};
+
+/**
+ * Anti-correlation rules - Detect conflicting player combinations
+ * Stacking players who compete for the same opportunities = bad strategy
+ */
+const ANTI_CORRELATION_RULES = {
+  'bench_conflict': {
+    name: 'Same-Team Bench Conflict',
+    check: (playerA, playerB) => {
+      return playerA.team === playerB.team &&
+             (playerA.seasonStats?.mpg || 0) < 25 && // Both bench players
+             (playerB.seasonStats?.mpg || 0) < 25 &&
+             playerA.position === playerB.position;
+    },
+    penalty: -15,
+    reason: 'Same-team bench players compete for minutes'
+  },
+  
+  'frontcourt_stack': {
+    name: 'Frontcourt Overlap',
+    check: (playerA, playerB) => {
+      return playerA.team === playerB.team &&
+             ['C', 'PF', 'F', 'F-C', 'C-F'].includes(playerA.position) &&
+             ['C', 'PF', 'F', 'F-C', 'C-F'].includes(playerB.position) &&
+             (playerA.seasonStats?.mpg || 0) < 30 && // Not both starters
+             (playerB.seasonStats?.mpg || 0) < 30;
+    },
+    penalty: -10,
+    reason: 'Frontcourt overlap - limited scoring opportunities'
+  },
+  
+  'backup_rb_stack': {
+    name: 'Backup RB Stack (NFL)',
+    check: (playerA, playerB) => {
+      return playerA.team === playerB.team &&
+             playerA.position === 'RB' &&
+             playerB.position === 'RB' &&
+             (playerA.seasonStats?.rushing_attempts || 0) < 15 && // Both backups
+             (playerB.seasonStats?.rushing_attempts || 0) < 15;
+    },
+    penalty: -20,
+    reason: 'Both backup RBs - one will dominate, other gets nothing'
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
 // DFS VALUE EQUATIONS - Key metrics for optimal lineup building
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -112,67 +229,180 @@ export function calculateValueScore(projectedPts, salary) {
 }
 
 /**
- * Calculate CEILING SCORE - Max upside potential
- * Based on best recent performance × situation multiplier
+ * ═══════════════════════════════════════════════════════════════════════════
+ * CEILING SCORE - 90th Percentile Upside (GPP Optimization)
+ * ═══════════════════════════════════════════════════════════════════════════
+ * 
+ * For GPP tournaments, we need to target 350+ point lineups.
+ * This means optimizing for CEILING, not median.
+ * 
+ * The formula uses:
+ * 1. Base projection as floor
+ * 2. Best recent game (L5 bestPts) as ceiling indicator
+ * 3. Situation multipliers (usage, matchup, revenge, etc.)
+ * 4. Volatility bonus for boom/bust players (GPP gold)
  * 
  * @param {Object} player - Player with recent game data
  * @param {Object} context - DFS context (matchup, usage, etc.)
- * @returns {number} Ceiling score
+ * @returns {number} Ceiling score (90th percentile outcome)
  */
 export function calculateCeilingScore(player, context = {}) {
   const baseProjection = player.projected_pts || player.projectedPts || 0;
+  const isGPP = context.contestType === 'gpp';
   
-  // Situation multipliers
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STEP 1: Use L5 best game as ceiling indicator (real data from BDL)
+  // ═══════════════════════════════════════════════════════════════════════════
+  // If we have L5 stats, use the best game as a ceiling anchor
+  // For GPP, we are more aggressive with the base multiplier (1.35x vs 1.15x)
+  const gppMultiplier = isGPP ? 1.35 : 1.15;
+  const l5BestPts = player.l5Stats?.bestPts || 0;
+  const ceilingAnchor = l5BestPts > baseProjection ? l5BestPts : baseProjection * gppMultiplier;
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STEP 2: Situation multipliers (context-based boosts)
+  // ═══════════════════════════════════════════════════════════════════════════
   let multiplier = 1.0;
   
-  // Hot streak boost (+15% ceiling)
+  // Hot streak boost (+15% ceiling) - player is exceeding averages
   if (context.recentForm === 'hot' || player.recentForm === 'hot') {
     multiplier += 0.15;
   }
   
-  // Revenge game boost (+10%)
+  // Revenge game boost (+10%) - extra motivation vs former team
   if (context.isRevenge || player.isRevenge) {
     multiplier += 0.10;
   }
   
-  // Usage spike boost (+20%)
+  // ═══════════════════════════════════════════════════════════════════════════
+  // USAGE SPIKE BOOST (+20-25%) - KEY GPP STRATEGY
+  // ═══════════════════════════════════════════════════════════════════════════
+  // When a star is OUT, their usage redistributes to teammates.
+  // This is the "Usage Vacuum" - the player's ceiling explodes.
+  // Example: If LeBron is OUT, Austin Reaves gets +15% usage → +25% ceiling
   if (context.usageBoost || player.usageBoost) {
-    multiplier += 0.20;
+    // Parse usage boost if it's a string like "+15% usage"
+    let usageMultiplier = 0.20; // Default 20% boost
+    const usageStr = player.usageBoost || context.usageBoost;
+    if (typeof usageStr === 'string') {
+      const match = usageStr.match(/\+(\d+)%/);
+      if (match) {
+        // Convert usage % increase to ceiling boost (roughly 1.5x)
+        usageMultiplier = Math.min(0.35, parseInt(match[1]) / 100 * 1.5);
+      }
+    }
+    multiplier += usageMultiplier;
   }
   
-  // Good DvP matchup boost (+10%)
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SNAP COUNT / OPPORTUNITY BOOST (+10-15%)
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Players with 85%+ snaps have higher floors AND ceilings
+  // They're on the field for more opportunities
+  const snapPct = player.snapPct || context.snapPct || 0;
+  if (snapPct >= 90) {
+    multiplier += 0.15; // Elite snap count
+  } else if (snapPct >= 85) {
+    multiplier += 0.10; // Very high snap count
+  } else if (snapPct >= 75) {
+    multiplier += 0.05; // Good snap count
+  }
+  
+  // Good DvP matchup boost (+10%) - facing weak defense at position
   if (context.dvpRank && context.dvpRank <= 8) {
     multiplier += 0.10;
+  } else if (context.dvpRank && context.dvpRank <= 5) {
+    multiplier += 0.15; // Top 5 matchup = even bigger boost
   }
   
-  // Back-to-back reduction (-10%)
+  // ═══════════════════════════════════════════════════════════════════════════
+  // VOLATILITY BONUS (GPP Gold)
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Players with high variance (big difference between best and worst games)
+  // are GREAT for GPPs because when they boom, they WIN you tournaments.
+  // Cash games want consistency; GPPs want upside.
+  if (player.l5Stats?.bestPts && player.l5Stats?.worstPts) {
+    const volatility = player.l5Stats.bestPts - player.l5Stats.worstPts;
+    const volatilityRatio = volatility / (baseProjection || 20);
+    
+    // High volatility (50%+ swing) = boom/bust = GPP gold
+    if (volatilityRatio >= 0.5) {
+      multiplier += 0.10; // Volatility bonus for GPP upside
+    }
+  }
+  
+  // Back-to-back reduction (-10%) - fatigue lowers ceiling
   if (context.isB2B || player.isB2B) {
     multiplier -= 0.10;
   }
   
-  return Math.round(baseProjection * multiplier * 10) / 10;
+  // ═══════════════════════════════════════════════════════════════════════════
+  // FINAL CEILING CALCULATION
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Use the higher of: adjusted base projection OR ceiling anchor
+  // This ensures we capture true upside potential
+  const adjustedProjection = baseProjection * multiplier;
+  const adjustedCeiling = ceilingAnchor * (multiplier * 0.9); // Slightly dampen ceiling anchor
+  
+  const finalCeiling = Math.max(adjustedProjection, adjustedCeiling);
+  
+  return Math.round(finalCeiling * 10) / 10;
 }
 
 /**
- * Calculate FLOOR SCORE - Minimum expected output
- * Based on worst recent performance (injury-adjusted)
+ * ═══════════════════════════════════════════════════════════════════════════
+ * FLOOR SCORE - Minimum Expected Output (Cash Game Optimization)
+ * ═══════════════════════════════════════════════════════════════════════════
+ * 
+ * For Cash games (50/50, Double-Ups), we need SAFE floors.
+ * Target 280 points with high probability of hitting.
+ * 
+ * The formula uses:
+ * 1. Base projection as anchor
+ * 2. Worst recent game (L5 worstPts) as floor indicator
+ * 3. Situation modifiers (snap count, blowout risk, weather)
  * 
  * @param {Object} player - Player with recent game data
  * @param {Object} context - DFS context
- * @returns {number} Floor score
+ * @returns {number} Floor score (10th percentile outcome)
  */
 export function calculateFloorScore(player, context = {}) {
   const baseProjection = player.projected_pts || player.projectedPts || 0;
   
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STEP 1: Use L5 worst game as floor anchor (real data from BDL)
+  // ═══════════════════════════════════════════════════════════════════════════
+  const l5WorstPts = player.l5Stats?.worstPts || 0;
+  const floorAnchor = l5WorstPts > 0 ? l5WorstPts : baseProjection * 0.65;
+  
   // Default floor is 70% of projection
   let floorPct = 0.70;
   
-  // High-volume players have higher floor (+10%)
-  if (player.snapPct && player.snapPct >= 85) {
-    floorPct += 0.10;
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SNAP COUNT FLOOR BOOST (+10-15%)
+  // ═══════════════════════════════════════════════════════════════════════════
+  // High snap count = more opportunities = higher floor
+  // This is the KEY metric for Cash games
+  const snapPct = player.snapPct || context.snapPct || 0;
+  if (snapPct >= 90) {
+    floorPct += 0.15; // Elite volume = very safe floor
+  } else if (snapPct >= 85) {
+    floorPct += 0.10; // High volume = safe floor
+  } else if (snapPct >= 75) {
+    floorPct += 0.05; // Good volume
+  } else if (snapPct > 0 && snapPct < 60) {
+    floorPct -= 0.10; // Low snap count = risky floor
   }
   
-  // Cold streak lowers floor (-10%)
+  // ═══════════════════════════════════════════════════════════════════════════
+  // USAGE SPIKE FLOOR BOOST (+5-10%)
+  // ═══════════════════════════════════════════════════════════════════════════
+  // If a star is OUT, the backup gets guaranteed volume = higher floor
+  if (context.usageBoost || player.usageBoost) {
+    floorPct += 0.08; // Usage spike = safer floor
+  }
+  
+  // Cold streak lowers floor (-10%) - player is underperforming
   if (context.recentForm === 'cold' || player.recentForm === 'cold') {
     floorPct -= 0.10;
   }
@@ -187,7 +417,15 @@ export function calculateFloorScore(player, context = {}) {
     floorPct -= 0.10;
   }
   
-  return Math.round(baseProjection * floorPct * 10) / 10;
+  // ═══════════════════════════════════════════════════════════════════════════
+  // FINAL FLOOR CALCULATION
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Use the higher of: percentage-based floor OR real L5 worst game
+  // This ensures we don't underestimate proven performers
+  const adjustedFloor = baseProjection * floorPct;
+  const finalFloor = Math.max(adjustedFloor, floorAnchor * 0.9);
+  
+  return Math.round(finalFloor * 10) / 10;
 }
 
 /**
@@ -225,25 +463,333 @@ export function determineRecentForm(last5Avg, seasonAvg) {
 }
 
 /**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * GPP VALUE TARGETS - Industry-Standard Multipliers
+ * ═══════════════════════════════════════════════════════════════════════════
+ * 
+ * To hit 350+ points in GPPs, you need players hitting these value targets:
+ * 
+ * NBA GPP Target: 7x value ($5K player needs 35 pts, $10K needs 70 pts)
+ * NBA Cash Target: 5x value (safer, hit 280 pts)
+ * 
+ * NFL GPP Target: 4x value ($6K player needs 24 pts)
+ * NFL Cash Target: 2.5x value (safer floor)
+ * 
+ * These targets help identify "smash spots" vs "chalk traps"
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export const GPP_VALUE_TARGETS = {
+  NBA: { gpp: 7.0, cash: 5.0 },
+  NFL: { gpp: 4.0, cash: 2.5 }
+};
+
+/**
+ * Calculate GPP Value Score - Points needed to hit GPP target
+ * @param {number} salary - Player salary
+ * @param {string} sport - 'NBA' or 'NFL'
+ * @param {string} contestType - 'gpp' or 'cash'
+ * @returns {number} Target points to hit value
+ */
+export function calculateGPPValueTarget(salary, sport, contestType = 'gpp') {
+  const target = GPP_VALUE_TARGETS[sport]?.[contestType] || 5.0;
+  return Math.round((salary / 1000) * target * 10) / 10;
+}
+
+/**
+ * Check if a player is a "Smash Spot" (ceiling > GPP target)
+ * @param {Object} player - Player with ceiling and salary
+ * @param {string} sport - 'NBA' or 'NFL'
+ * @returns {boolean} True if player can smash GPP value target
+ */
+export function isSmashSpot(player, sport) {
+  const ceilingScore = player.ceilingScore || calculateCeilingScore(player, {});
+  const gppTarget = calculateGPPValueTarget(player.salary || 5000, sport, 'gpp');
+  return ceilingScore >= gppTarget;
+}
+
+/**
  * Calculate all DFS metrics for a player
  * 
  * @param {Object} player - Player with projection and context
  * @param {Object} context - DFS context (matchup, form, etc.)
+ * @param {string} sport - 'NBA' or 'NFL' (for GPP targets)
  * @returns {Object} All DFS metrics
  */
-export function calculateDFSMetrics(player, context = {}) {
+export function calculateDFSMetrics(player, context = {}, sport = 'NBA') {
   const projectedPts = player.projected_pts || player.projectedPts || 0;
   const salary = player.salary || 0;
   
+  const ceilingScore = calculateCeilingScore(player, context);
+  const floorScore = calculateFloorScore(player, context);
+  const valueScore = calculateValueScore(projectedPts, salary);
+  
+  // GPP-specific metrics
+  const gppValueTarget = calculateGPPValueTarget(salary, sport, 'gpp');
+  const cashValueTarget = calculateGPPValueTarget(salary, sport, 'cash');
+  const isGppSmash = ceilingScore >= gppValueTarget;
+  const isCashSafe = floorScore >= cashValueTarget;
+  
   return {
-    valueScore: calculateValueScore(projectedPts, salary),
-    ceilingScore: calculateCeilingScore(player, context),
-    floorScore: calculateFloorScore(player, context),
+    valueScore,
+    ceilingScore,
+    floorScore,
+    // GPP optimization metrics
+    gppValueTarget,
+    cashValueTarget,
+    isGppSmash,      // True if ceiling can hit 7x (NBA) or 4x (NFL)
+    isCashSafe,      // True if floor hits 5x (NBA) or 2.5x (NFL)
     // Consistency requires historical data - estimate based on projection
     consistencyRating: player.consistencyRating || 0.75,
     // Form from context
     recentForm: context.recentForm || player.recentForm || 'neutral'
   };
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * OPPORTUNITY SCORE - Volume-Based Breakout Detection
+ * ═══════════════════════════════════════════════════════════════════════════
+ * 
+ * This identifies "Price Lag" players - high opportunity but low salary.
+ * DFS sites are slow to adjust salaries to new roles/volume.
+ * 
+ * NFL Opportunity Score uses:
+ * - Snap Count % (opportunity to produce)
+ * - Target Share (% of team targets for WR/TE)
+ * - Red Zone Targets (TD upside)
+ * - Air Yards (big play potential)
+ * 
+ * NBA Opportunity Score uses:
+ * - Minutes Per Game (opportunity)
+ * - Usage Rate Boost (from injuries)
+ * - L5 Hot Streak (recent form)
+ * 
+ * @param {Object} player - Player with opportunity metrics
+ * @param {string} sport - 'NBA' or 'NFL'
+ * @returns {Object} { score: number, isPriceLag: boolean, reason: string }
+ */
+export function calculateOpportunityScore(player, sport) {
+  let score = 50; // Base score (0-100 scale)
+  let reasons = [];
+  
+  if (sport === 'NFL') {
+    // ═══════════════════════════════════════════════════════════════════════
+    // NFL OPPORTUNITY SCORE
+    // ═══════════════════════════════════════════════════════════════════════
+    
+    const snapPct = player.snapPct || 0;
+    const targetShare = player.targetShare || 0;
+    const redZoneTargets = player.redZoneTargets || 0;
+    const position = (player.position || '').toUpperCase();
+    
+    // Snap Count Score (0-30 points)
+    // 90%+ snaps = 30 pts, 80% = 24 pts, 70% = 18 pts
+    if (snapPct >= 90) {
+      score += 30;
+      reasons.push(`Elite snap count (${snapPct}%)`);
+    } else if (snapPct >= 80) {
+      score += 24;
+      reasons.push(`High snap count (${snapPct}%)`);
+    } else if (snapPct >= 70) {
+      score += 18;
+    } else if (snapPct >= 60) {
+      score += 12;
+    }
+    
+    // Target Share Score for WR/TE (0-25 points)
+    if (['WR', 'TE'].includes(position) && targetShare > 0) {
+      if (targetShare >= 25) {
+        score += 25;
+        reasons.push(`Elite target share (${targetShare}%)`);
+      } else if (targetShare >= 20) {
+        score += 20;
+        reasons.push(`High target share (${targetShare}%)`);
+      } else if (targetShare >= 15) {
+        score += 15;
+      } else if (targetShare >= 10) {
+        score += 10;
+      }
+    }
+    
+    // Red Zone Targets Score (0-20 points) - TD upside
+    if (redZoneTargets >= 10) {
+      score += 20;
+      reasons.push(`Red zone threat (${redZoneTargets} RZ targets)`);
+    } else if (redZoneTargets >= 7) {
+      score += 15;
+    } else if (redZoneTargets >= 5) {
+      score += 10;
+    } else if (redZoneTargets >= 3) {
+      score += 5;
+    }
+    
+    // RB Rush Attempts Bonus (opportunity for RBs)
+    if (position === 'RB') {
+      const rushAttempts = player.seasonStats?.rushing_attempts || 0;
+      const gamesPlayed = player.seasonStats?.games_played || 1;
+      const attPerGame = rushAttempts / gamesPlayed;
+      
+      if (attPerGame >= 18) {
+        score += 20;
+        reasons.push(`Workhorse RB (${attPerGame.toFixed(1)} att/gm)`);
+      } else if (attPerGame >= 14) {
+        score += 15;
+      } else if (attPerGame >= 10) {
+        score += 10;
+      }
+    }
+    
+  } else {
+    // ═══════════════════════════════════════════════════════════════════════
+    // NBA OPPORTUNITY SCORE
+    // ═══════════════════════════════════════════════════════════════════════
+    
+    const mpg = player.seasonStats?.mpg || player.l5Stats?.mpg || 0;
+    const usageBoost = player.usageBoost || null;
+    const recentForm = player.recentForm || 'neutral';
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // ROTATION CONTEXT - Predictive vs Reactive
+    // ═══════════════════════════════════════════════════════════════════════
+    const rotationStatus = player.rotation_status || 'stable';
+    const minutesTrend = player.minutes_trend || 'stable';
+    const roleSustainability = player.role_sustainability || 'season_long';
+    const projectedMinutes = player.projected_minutes || mpg;
+    
+    // Minutes Per Game Score (0-30 points)
+    // Use PROJECTED minutes for tonight, not historical average
+    const tonightMinutes = projectedMinutes > 0 ? projectedMinutes : mpg;
+    
+    if (tonightMinutes >= 35) {
+      score += 30;
+      reasons.push(`Heavy minutes (${tonightMinutes.toFixed(1)} mpg)`);
+    } else if (tonightMinutes >= 32) {
+      score += 26;
+      reasons.push(`High minutes (${tonightMinutes.toFixed(1)} mpg)`);
+    } else if (tonightMinutes >= 28) {
+      score += 20;
+    } else if (tonightMinutes >= 24) {
+      score += 14;
+    } else if (tonightMinutes >= 20) {
+      score += 8;
+    }
+    
+    // Usage Boost Score (0-25 points) - Key injury impact
+    if (usageBoost) {
+      score += 25;
+      reasons.push(`Usage spike: ${usageBoost}`);
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // PREDICTIVE BREAKOUT BOOST (NEW!)
+    // ═══════════════════════════════════════════════════════════════════════
+    // Reward players whose role is EXPANDING (before they pop, not after)
+    if (rotationStatus === 'expanded_role' && minutesTrend === 'increasing') {
+      score += 20;
+      reasons.push('🚀 Breakout opportunity (role expanding)');
+    } else if (rotationStatus === 'breakout_candidate') {
+      score += 15;
+      reasons.push('Breakout candidate');
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // HOT STREAK LOGIC (REVISED) - Context-Aware
+    // ═══════════════════════════════════════════════════════════════════════
+    // Only reward hot streaks if the role is SUSTAINABLE
+    // Don't chase yesterday's outlier if it was a fill-in role that ended
+    if (recentForm === 'hot') {
+      // Check if this was a temporary fill-in role that has now ended
+      const isFillInEnded = rotationStatus === 'bench_return' || 
+                            rotationStatus === 'diminished_role' ||
+                            roleSustainability === 'ended' ||
+                            roleSustainability === 'one_game';
+      
+      if (isFillInEnded) {
+        // PENALIZE chasing yesterday's outlier when role ended
+        score -= 10;
+        reasons.push('❌ Hot streak (unsustainable - fill-in role ended)');
+      } else {
+        // Reward sustainable hot streaks
+        score += 15;
+        reasons.push('Hot streak (sustainable role)');
+      }
+    } else if (recentForm === 'cold') {
+      score -= 10; // Penalty for cold players
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // FADE DIMINISHED ROLES
+    // ═══════════════════════════════════════════════════════════════════════
+    // If a player's role just ended (starter returned), actively fade them
+    if (rotationStatus === 'diminished_role' || minutesTrend === 'decreasing') {
+      score -= 15;
+      reasons.push('Role diminished (starter returned)');
+    }
+    
+    // L5 Best Game Indicator (ceiling exists)
+    if (player.l5Stats?.bestPts) {
+      const seasonPpg = player.seasonStats?.ppg || 0;
+      const bestPts = player.l5Stats.bestPts;
+      if (bestPts >= seasonPpg * 1.5) {
+        score += 10;
+        reasons.push(`Proven ceiling (${bestPts} pts game)`);
+      }
+    }
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════════
+  // PRICE LAG DETECTION
+  // ═══════════════════════════════════════════════════════════════════════
+  // A player has "Price Lag" if their opportunity score is high but salary
+  // hasn't caught up yet. This is the GPP breakout sweet spot.
+  //
+  // High opportunity (score > 75) + below-average salary = Price Lag
+  const salary = player.salary || 5000;
+  const avgSalary = sport === 'NBA' ? 6500 : 5500;
+  const isPriceLag = score >= 75 && salary < avgSalary;
+  
+  if (isPriceLag) {
+    reasons.push(`PRICE LAG: High opportunity at $${salary}`);
+  }
+  
+  return {
+    score: Math.min(100, Math.max(0, score)),
+    isPriceLag,
+    reasons,
+    reasonSummary: reasons.slice(0, 2).join(', ') || 'Standard opportunity'
+  };
+}
+
+/**
+ * Apply Opportunity Score boost to player projection
+ * This is called during lineup optimization to identify breakouts
+ * 
+ * @param {Object} player - Player with stats
+ * @param {string} sport - 'NBA' or 'NFL'
+ * @returns {Object} Player with opportunityScore and boosted projection
+ */
+export function applyOpportunityBoost(player, sport) {
+  const opportunityData = calculateOpportunityScore(player, sport);
+  
+  // Copy player to avoid mutation
+  const boostedPlayer = { ...player };
+  boostedPlayer.opportunityScore = opportunityData.score;
+  boostedPlayer.isPriceLag = opportunityData.isPriceLag;
+  boostedPlayer.opportunityReasons = opportunityData.reasons;
+  
+  // Apply projection boost for Price Lag players
+  // These are the "Hidden Gems" - high opportunity, low salary
+  if (opportunityData.isPriceLag) {
+    const baseProjection = boostedPlayer.projected_pts || 0;
+    const boost = baseProjection * 0.15; // 15% boost for Price Lag
+    boostedPlayer.projected_pts = Math.round((baseProjection + boost) * 10) / 10;
+    boostedPlayer.projectionBoosted = true;
+    boostedPlayer.boostReason = opportunityData.reasonSummary;
+    
+    console.log(`[Opportunity] 🚀 PRICE LAG: ${player.name} boosted +${boost.toFixed(1)} pts (${opportunityData.reasonSummary})`);
+  }
+  
+  return boostedPlayer;
 }
 
 /**
@@ -253,7 +799,101 @@ export function calculateDFSMetrics(player, context = {}) {
  * @param {string} platform - 'draftkings' or 'fanduel'
  * @returns {number} Projected fantasy points
  */
-export function calculateProjectedPoints(player, sport, platform) {
+/**
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * SLATE CHARACTERISTIC ANALYSIS
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * Gary investigates the slate to determine the optimal strategy organically.
+ * This is AWARENESS - Gary looks at the data and decides, not a forced rule.
+ * 
+ * Factors Gary considers:
+ * - Elite value opportunities (high ceiling + reasonable salary)
+ * - Cheap chalk availability (low salary players with high floor)
+ * - Mid-tier depth (solid options in $5k-$8k range)
+ * - Injury landscape (usage opportunities)
+ * - Vegas totals (shootout potential)
+ * ═══════════════════════════════════════════════════════════════════════════════
+ */
+function analyzeSlateCharacteristics(players, constraints, sport, isGPP) {
+  const { salaryCap } = constraints;
+  
+  // Define salary tiers based on platform
+  const eliteThreshold = sport === 'NBA' ? 9000 : 7500;
+  const midTierMin = sport === 'NBA' ? 5500 : 5000;
+  const midTierMax = sport === 'NBA' ? 8500 : 7000;
+  const cheapThreshold = sport === 'NBA' ? 4500 : 4000;
+  
+  // Categorize players by tier
+  const elitePlayers = players.filter(p => (p.salary || 0) >= eliteThreshold);
+  const midTierPlayers = players.filter(p => {
+    const sal = p.salary || 0;
+    return sal >= midTierMin && sal < midTierMax;
+  });
+  const cheapPlayers = players.filter(p => (p.salary || 0) > 0 && (p.salary || 0) < cheapThreshold);
+  
+  // Calculate value scores for each tier
+  const eliteValue = elitePlayers.filter(p => {
+    const pts = p.projected_pts || 0;
+    const val = pts / ((p.salary || 9000) / 1000);
+    return val >= 5.0; // Elite player with 5x+ value is exceptional
+  });
+  
+  const cheapChalk = cheapPlayers.filter(p => {
+    const pts = p.projected_pts || 0;
+    const val = pts / ((p.salary || 4000) / 1000);
+    return val >= 5.5; // Cheap player with 5.5x+ value is chalk
+  });
+  
+  const midTierDepth = midTierPlayers.filter(p => {
+    const pts = p.projected_pts || 0;
+    const val = pts / ((p.salary || 6000) / 1000);
+    return val >= 4.5; // Solid mid-tier value
+  });
+  
+  // Check for injury-based opportunities
+  const usageOpportunities = players.filter(p => 
+    p.teammateOpportunity || p.rotation_status === 'expanded_role' || p.isBreakoutCandidate
+  );
+  
+  // Build analysis result
+  const analysis = {
+    hasEliteValue: eliteValue.length >= 2,
+    hasCheapChalk: cheapChalk.length >= 3,
+    hasMidTierDepth: midTierDepth.length >= 5,
+    hasUsageOpportunities: usageOpportunities.length >= 2,
+    eliteCount: eliteValue.length,
+    cheapChalkCount: cheapChalk.length,
+    midTierCount: midTierDepth.length,
+    usageCount: usageOpportunities.length,
+    reasoning: ''
+  };
+  
+  // Build reasoning string for logging
+  const reasons = [];
+  if (analysis.hasEliteValue && analysis.hasCheapChalk) {
+    reasons.push(`${analysis.eliteCount} elite values + ${analysis.cheapChalkCount} cheap chalk → Stars & Scrubs favored`);
+  }
+  if (analysis.hasMidTierDepth) {
+    reasons.push(`${analysis.midTierCount} quality mid-tier options → Balanced viable`);
+  }
+  if (analysis.hasUsageOpportunities) {
+    reasons.push(`${analysis.usageCount} injury-based opportunities detected`);
+  }
+  
+  analysis.reasoning = reasons.join(' | ') || 'Standard slate, balanced approach recommended';
+  
+  return analysis;
+}
+
+/**
+ * Calculate basic projected points for a player
+ * @param {Object} player - Player object
+ * @param {string} sport - 'NBA' or 'NFL'
+ * @param {string} platform - 'draftkings' or 'fanduel'
+ * @param {string} contestType - 'gpp' or 'cash'
+ * @returns {number} Projected fantasy points
+ */
+export function calculateProjectedPoints(player, sport, platform, contestType = 'cash') {
   // ⭐ If BDL already provided fantasy points, use them (most accurate)
   const bdlFpts = player.seasonStats?.fpts || player.fpts || 0;
   if (bdlFpts > 0) {
@@ -274,13 +914,13 @@ export function calculateProjectedPoints(player, sport, platform) {
     const projection = calculateNBAProjection(player, platform);
     // If no stats but has salary, estimate based on salary tier
     if (projection === 0 && player.salary > 0) {
-      return estimateProjectionFromSalary(player.salary, sport, platform);
+      return estimateProjectionFromSalary(player.salary, sport, platform, contestType);
     }
     return projection;
   } else if (sport === 'NFL') {
     const projection = calculateNFLProjection(player, platform);
     if (projection === 0 && player.salary > 0) {
-      return estimateProjectionFromSalary(player.salary, sport, platform);
+      return estimateProjectionFromSalary(player.salary, sport, platform, contestType);
     }
     return projection;
   }
@@ -301,16 +941,18 @@ export function calculateProjectedPoints(player, sport, platform) {
  * - $4,000 player = site expects ~20 fantasy points
  * - $3,000 player = site expects ~15 fantasy points (minimum)
  * 
- * This gives players with no stats a reasonable floor so they don't
- * drag down lineups when selected for positional needs.
+ * For GPP, we use a higher multiplier (6.5x for NBA) to reflect winning potential.
  * 
  * @param {number} salary - Player's DFS salary
  * @param {string} sport - 'NBA' or 'NFL'
  * @param {string} platform - 'draftkings' or 'fanduel'
+ * @param {string} contestType - 'gpp' or 'cash'
  * @returns {number} Estimated fantasy points
  */
-function estimateProjectionFromSalary(salary, sport, platform) {
+function estimateProjectionFromSalary(salary, sport, platform, contestType = 'cash') {
   if (!salary || salary <= 0) return 0;
+  
+  const isGPP = contestType === 'gpp';
   
   // Different salary ranges for each platform/sport
   let baseSalary, baseProjection, valueMultiplier;
@@ -318,38 +960,35 @@ function estimateProjectionFromSalary(salary, sport, platform) {
   if (sport === 'NBA') {
     if (platform === 'fanduel') {
       // FanDuel NBA: $3,500 min, $60,000 cap, 9 players
-      // Avg salary per player = $6,666
       baseSalary = 6000;
-      baseProjection = 30;
-      valueMultiplier = 5.0; // pts per $1000
+      baseProjection = isGPP ? 39 : 30; // 6.5x vs 5x for GPP vs Cash
+      valueMultiplier = isGPP ? 6.5 : 5.0; // pts per $1000
     } else {
       // DraftKings NBA: $3,000 min, $50,000 cap, 8 players
-      // Avg salary per player = $6,250
       baseSalary = 5000;
-      baseProjection = 25;
-      valueMultiplier = 5.0;
+      baseProjection = isGPP ? 32.5 : 25; // 6.5x vs 5x for GPP vs Cash
+      valueMultiplier = isGPP ? 6.5 : 5.0;
     }
   } else { // NFL
     if (platform === 'fanduel') {
       // FanDuel NFL: $60,000 cap, 10 players (incl kicker)
       baseSalary = 6000;
-      baseProjection = 12;
-      valueMultiplier = 2.0;
+      baseProjection = isGPP ? 24 : 12; // 4x vs 2x for GPP vs Cash
+      valueMultiplier = isGPP ? 4.0 : 2.0;
     } else {
       // DraftKings NFL: $50,000 cap, 9 players
       baseSalary = 5000;
-      baseProjection = 10;
-      valueMultiplier = 2.0;
+      baseProjection = isGPP ? 20 : 10; // 4x vs 2x for GPP vs Cash
+      valueMultiplier = isGPP ? 4.0 : 2.0;
     }
   }
   
   // Calculate estimated projection based on salary tier
-  // Higher salary = higher expectation from the site
   const salaryDiff = salary - baseSalary;
   const estimatedPts = baseProjection + (salaryDiff / 1000) * valueMultiplier;
   
-  // Ensure minimum floor (don't go below 10 for NBA, 5 for NFL)
-  const minFloor = sport === 'NBA' ? 10 : 5;
+  // Ensure minimum floor
+  const minFloor = sport === 'NBA' ? (isGPP ? 15 : 10) : (isGPP ? 8 : 5);
   
   return Math.round(Math.max(estimatedPts, minFloor) * 10) / 10;
 }
@@ -391,7 +1030,11 @@ function calculateNBAProjection(player, platform) {
   
   // If no stats at all, return 0 instead of negative
   if (!hasStats) {
-    console.warn(`[DFS] No stats for ${player.name} - cannot project`);
+    // Only log if it's not a rookie (since we know they won't have stats yet)
+    const isRookie = player.experience === '0' || player.experience === 'R';
+    if (!isRookie) {
+      console.log(`[DFS] Fallback: Using salary-based projection for ${player.name} (no historical stats)`);
+    }
     return 0;
   }
   
@@ -674,6 +1317,28 @@ export function optimizeLineup(players, constraints, sport, platform, context = 
   const { salaryCap, positions, positionRules } = constraints;
   
   // ═══════════════════════════════════════════════════════════════════════════
+  // GARY'S SHARP DFS FRAMEWORK
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Gary is a GAMBLER finding edges, not an optimizer outputting highest projections.
+  //
+  // HARD FACTORS Gary investigates:
+  // - Usage/target share, minutes/snap trends (opportunity)
+  // - DvP rankings, pace (matchup)
+  // - Salary efficiency (value per dollar)
+  //
+  // SOFT FACTORS Gary validates:
+  // - Narratives (revenge, hot streak) need data backing
+  // - Ownership is ONE data point, not a forced pivot trigger
+  //
+  // GARY'S APPROACH:
+  // Investigate the factors. Understand the opportunity. Build the lineup based on his analysis.
+  //
+  // SALARY LAG = where DFS value lives:
+  // - Player promoted to starter but salary hasn't adjusted
+  // - Player's teammate just went out creating usage vacuum
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  // ═══════════════════════════════════════════════════════════════════════════
   // NARRATIVE CONTEXT: Gary's intelligence beyond raw numbers
   // ═══════════════════════════════════════════════════════════════════════════
   // Extract narrative data for Gary to factor into decisions
@@ -725,13 +1390,47 @@ export function optimizeLineup(players, constraints, sport, platform, context = 
   };
   
   // ═══════════════════════════════════════════════════════════════════════════
-  // STEP 1: CALCULATE PROJECTED POINTS + APPLY NARRATIVE MODIFIERS
+  // STEP 1: CALCULATE PROJECTED POINTS + APPLY MODIFIERS
   // ═══════════════════════════════════════════════════════════════════════════
   // We need to calculate projections BEFORE sorting so we can rank by ceiling
-  // Gary's narrative intelligence can boost targets and deprioritize fades
+  // This includes:
+  // 1. Base projections from stats
+  // 2. Opportunity Score (volume-based breakout detection)
+  // 3. Narrative modifiers (targets/fades from Gemini)
+  // 4. Ceiling/Floor calculations for GPP/Cash optimization
+  
+  // Get contest type from context (default to 'gpp' for tournaments)
+  const contestType = context.contestType || 'gpp';
+  const isGPP = contestType === 'gpp';
+  
+  console.log(`[Optimizer] 🎰 Contest type: ${contestType.toUpperCase()} (${isGPP ? 'ceiling optimization' : 'floor optimization'})`);
+  
   for (const player of players) {
+    // Calculate base projection if missing
     if (!player.projected_pts || player.projected_pts === 0) {
-      player.projected_pts = calculateProjectedPoints(player, sport, platform);
+      player.projected_pts = calculateProjectedPoints(player, sport, platform, contestType);
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // OPPORTUNITY SCORE - Volume-Based Breakout Detection
+    // ═══════════════════════════════════════════════════════════════════════
+    // Identifies "Price Lag" players (high opportunity, low salary)
+    if (!player.opportunityScore && player.projected_pts > 0) {
+      const boostedPlayer = applyOpportunityBoost(player, sport);
+      Object.assign(player, boostedPlayer);
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // CEILING & FLOOR CALCULATION
+    // ═══════════════════════════════════════════════════════════════════════
+    // Calculate DFS metrics including ceiling/floor for GPP/Cash optimization
+    if (!player.ceilingScore) {
+      const metrics = calculateDFSMetrics(player, context, sport);
+      player.ceilingScore = metrics.ceilingScore;
+      player.floorScore = metrics.floorScore;
+      player.isGppSmash = metrics.isGppSmash;
+      player.isCashSafe = metrics.isCashSafe;
+      player.gppValueTarget = metrics.gppValueTarget;
     }
     
     const playerNameLower = player.name?.toLowerCase();
@@ -740,22 +1439,55 @@ export function optimizeLineup(players, constraints, sport, platform, context = 
     player.isTarget = targetSet.has(playerNameLower);
     player.isFade = fadeSet.has(playerNameLower);
     
+    // ═══════════════════════════════════════════════════════════════════════
+    // MERGE ROTATION CONTEXT from Narrative
+    // ═══════════════════════════════════════════════════════════════════════
+    // Extract rotation-aware fields from target/fade players
+    const targetPlayerData = targetPlayers.find(t => t.name?.toLowerCase() === playerNameLower);
+    const fadePlayerData = fadePlayers.find(f => f.name?.toLowerCase() === playerNameLower);
+    
+    if (targetPlayerData) {
+      player.rotation_status = targetPlayerData.rotation_status || player.rotation_status;
+      player.minutes_trend = targetPlayerData.minutes_trend || player.minutes_trend;
+      player.role_sustainability = targetPlayerData.role_sustainability || player.role_sustainability;
+      player.projected_minutes = targetPlayerData.projected_minutes || player.projected_minutes;
+    }
+    
+    if (fadePlayerData) {
+      player.rotation_status = fadePlayerData.rotation_status || player.rotation_status;
+      player.minutes_trend = fadePlayerData.minutes_trend || player.minutes_trend;
+      player.role_sustainability = fadePlayerData.role_sustainability || player.role_sustainability;
+      player.projected_minutes = fadePlayerData.projected_minutes || player.projected_minutes;
+    }
+    
     // Apply small narrative modifier to projections (organic, not forced)
-    // Target players get a small boost (~5% ceiling recognition)
-    // Fade players get a small penalty (~5% risk recognition)
-    // These are soft nudges, not hard rules - Gary still picks best players
-    if (player.isTarget && !player.narrativeModified) {
-      const boost = player.projected_pts * 0.05;
-      player.projected_pts += boost;
-      player.narrativeModified = true;
-      console.log(`[Optimizer] 🎯 Target boost: ${player.name} +${boost.toFixed(1)} pts (narrative upside)`);
+    // ═══════════════════════════════════════════════════════════════════════════
+    // NARRATIVE AWARENESS (NOT PRESCRIPTIVE)
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Gary sees narrative context as DATA, not COMMANDS. He makes his own decisions.
+    // We log the context for transparency but DON'T modify projections based on it.
+    // Gary's job is to analyze ALL factors and pick the best lineup himself.
+    // ═══════════════════════════════════════════════════════════════════════════
+    if (player.isTarget && !player.narrativeLogged) {
+      player.narrativeLogged = true;
+      console.log(`[Optimizer] 📖 Narrative context: ${player.name} identified as potential target (Gary will evaluate)`);
     }
-    if (player.isFade && !player.narrativeModified) {
-      const penalty = player.projected_pts * 0.05;
-      player.projected_pts -= penalty;
-      player.narrativeModified = true;
-      console.log(`[Optimizer] ⚠️ Fade penalty: ${player.name} -${penalty.toFixed(1)} pts (narrative risk)`);
+    if (player.isFade && !player.narrativeLogged) {
+      player.narrativeLogged = true;
+      console.log(`[Optimizer] 📖 Narrative context: ${player.name} identified as potential fade (Gary will evaluate)`);
     }
+  }
+  
+  // Log Opportunity Score findings (Price Lag players)
+  const priceLagPlayers = players.filter(p => p.isPriceLag);
+  if (priceLagPlayers.length > 0) {
+    console.log(`[Optimizer] 🚀 Price Lag breakouts found: ${priceLagPlayers.map(p => `${p.name} ($${p.salary})`).join(', ')}`);
+  }
+  
+  // Log GPP Smash Spots
+  const smashSpots = players.filter(p => p.isGppSmash);
+  if (smashSpots.length > 0 && isGPP) {
+    console.log(`[Optimizer] 💥 GPP Smash Spots: ${smashSpots.slice(0, 5).map(p => `${p.name} (ceiling: ${p.ceilingScore})`).join(', ')}`);
   }
   
   // Group players by ALL positions they can fill
@@ -764,8 +1496,12 @@ export function optimizeLineup(players, constraints, sport, platform, context = 
     const pos = player.position?.toUpperCase();
     if (!pos) continue;
     
-    // Get all slots this player can fill
-    const eligibleSlots = positionEligibility[pos] || [pos];
+    // ⭐ Use Tank01's platform-specific positions when available
+    // This ensures DK/FD position eligibility is accurate (they differ!)
+    const eligibleSlots = player.allPositions && player.allPositions.length > 0
+      ? getPlayerEligibleSlots(player, sport)
+      : positionEligibility[pos] || [pos];
+    
     for (const slot of eligibleSlots) {
       if (!playersByPosition[slot]) playersByPosition[slot] = [];
       playersByPosition[slot].push(player);
@@ -773,35 +1509,57 @@ export function optimizeLineup(players, constraints, sport, platform, context = 
   }
   
   // ═══════════════════════════════════════════════════════════════════════════
-  // STEP 2: SORT BY PROJECTED POINTS (Ownership + Value as Tie-Breakers)
+  // STEP 2: SORT BY OPTIMIZATION METRIC (GPP = Ceiling, Cash = Floor)
   // ═══════════════════════════════════════════════════════════════════════════
-  // Gary's goal is to build the highest-scoring lineup possible under the cap.
+  // GPP: Sort by CEILING score (target 350+ pts, boom/bust players)
+  // Cash: Sort by FLOOR score (target 280 pts, consistent performers)
   // 
   // TIE-BREAKER LOGIC (organic, not forced):
-  //   1. Similar projections (within 1.5 pts): Prefer lower ownership
-  //   2. Value contrarian (3-6 pts less): Consider if LOW ownership + saves $1500+
-  //      - The savings can upgrade other positions
-  //      - Low ownership means differentiation upside
-  //      - Gary only does this if he believes it could pan out
+  //   1. Similar scores (within 1.5 pts): Prefer lower ownership (GPP differentiation)
+  //   2. Value contrarian: Consider if LOW ownership + saves $1500+
+  //   3. Price Lag boost: Favor high opportunity + low salary players
   // ═══════════════════════════════════════════════════════════════════════════
   for (const pos in playersByPosition) {
     playersByPosition[pos].sort((a, b) => {
-      const ptsA = a.projected_pts || 0;
-      const ptsB = b.projected_pts || 0;
-      const ptsDiff = ptsB - ptsA;
+    // GPP: Use ceiling score | Cash: Use floor score
+    const scoreA = isGPP ? (a.ceilingScore || a.projected_pts || 0) : (a.floorScore || a.projected_pts * 0.7 || 0);
+    const scoreB = isGPP ? (b.ceilingScore || b.projected_pts || 0) : (b.floorScore || b.projected_pts * 0.7 || 0);
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // CONFIRMED STARTER PRIORITY (BDL/Vegas lock)
+    // ═══════════════════════════════════════════════════════════════════════
+    // If one player is a confirmed starter and the other isn't, prefer the starter
+    if (a.forcedLock && !b.forcedLock) return -1;
+    if (b.forcedLock && !a.forcedLock) return 1;
+
+    const scoreDiff = scoreB - scoreA;
+      
       const salaryA = a.salary || 5000;
       const salaryB = b.salary || 5000;
       const ownA = a.ownership || 15;
       const ownB = b.ownership || 15;
       
-      // If projections are similar (within 1.5 pts), prefer lower ownership
-      if (Math.abs(ptsDiff) <= 1.5) {
+      // ═══════════════════════════════════════════════════════════════════════
+      // PRICE LAG PRIORITY (GPP only)
+      // ═══════════════════════════════════════════════════════════════════════
+      // If one player is a Price Lag breakout, prioritize them
+      if (isGPP) {
+        if (a.isPriceLag && !b.isPriceLag && Math.abs(scoreDiff) <= 5) {
+          return -1; // Prefer Price Lag player A
+        }
+        if (b.isPriceLag && !a.isPriceLag && Math.abs(scoreDiff) <= 5) {
+          return 1; // Prefer Price Lag player B
+        }
+      }
+      
+      // If scores are similar (within 1.5 pts), prefer lower ownership (GPP differentiation)
+      if (Math.abs(scoreDiff) <= 1.5) {
         return ownA - ownB;
       }
       
       // VALUE CONTRARIAN: If player A is 3-6 pts less but saves $1500+ AND is low-owned (<12%),
       // consider them competitive (could be worth the savings to upgrade elsewhere)
-      if (ptsDiff > 0 && ptsDiff <= 6 && ptsDiff >= 3) {
+      if (scoreDiff > 0 && scoreDiff <= 6 && scoreDiff >= 3) {
         const salarySaved = salaryB - salaryA;
         if (salarySaved >= 1500 && ownA < 12) {
           // Player A is a "value contrarian" - bump them up in the sort
@@ -809,15 +1567,15 @@ export function optimizeLineup(players, constraints, sport, platform, context = 
           return -0.5; // Slight preference for value contrarian
         }
       }
-      if (ptsDiff < 0 && Math.abs(ptsDiff) <= 6 && Math.abs(ptsDiff) >= 3) {
+      if (scoreDiff < 0 && Math.abs(scoreDiff) <= 6 && Math.abs(scoreDiff) >= 3) {
         const salarySaved = salaryA - salaryB;
         if (salarySaved >= 1500 && ownB < 12) {
           return 0.5; // Slight preference for value contrarian
         }
       }
       
-      // Otherwise, sort by projected points (highest first)
-      return ptsDiff;
+      // Otherwise, sort by optimization score (highest first)
+      return scoreDiff;
     });
   }
   
@@ -949,56 +1707,105 @@ export function optimizeLineup(players, constraints, sport, platform, context = 
 
 /**
  * Generate rationale and supporting stats for a player pick
- * @param {Object} player - Player with stats and salary
+ * ═══════════════════════════════════════════════════════════════════════════
+ * BASKETBALL-FIRST RATIONALE - NOT salary-based
+ * ═══════════════════════════════════════════════════════════════════════════
+ * Gary explains WHY this player will perform well TONIGHT based on:
+ * - Matchup advantages (DVP, defensive weaknesses)
+ * - Usage/opportunity (injuries creating minutes)
+ * - Recent performance trends (hot streaks, L5 stats)
+ * - Game context (pace, revenge, rest advantage)
+ * 
+ * NOT based on: salary value, "unlocks spend", price efficiency
+ * ═══════════════════════════════════════════════════════════════════════════
+ * @param {Object} player - Player with stats and context
  * @param {string} sport - 'NBA' or 'NFL'
  * @param {string} platform - 'draftkings' or 'fanduel'
  * @returns {Object} { rationale: string, supportingStats: Array }
  */
 function generatePlayerRationale(player, sport, platform) {
   const stats = player.seasonStats || player;
-  const value = player.salary > 0 ? (player.projected_pts / (player.salary / 1000)).toFixed(2) : 0;
   const supportingStats = [];
   let rationale = '';
+  
+  // Game context for basketball-based rationales
+  const opponent = player.opponent || player.opp || '';
+  const dvpRank = player.dvpRank || null;
+  const usageBoost = player.usageBoost;
+  const narrativeNote = player.narrativeNote;
+  const recentForm = player.recentForm || null; // 'hot', 'cold', 'neutral'
+  const minutesTrend = player.minutesTrend || player.minutes_trend || null;
+  const rotationStatus = player.rotationStatus || player.rotation_status || null;
+  const isRevenge = player.isRevenge || false;
+  const l5BestPts = player.l5BestPts || 0;
+  const l5AvgPts = player.l5AvgPts || 0;
   
   if (sport === 'NBA') {
     const ppg = stats.ppg || stats.pts || 0;
     const rpg = stats.rpg || stats.reb || 0;
     const apg = stats.apg || stats.ast || 0;
-    const spg = stats.spg || stats.stl || 0;
-    const bpg = stats.bpg || stats.blk || 0;
-    const tpg = stats.tpg || stats.fg3m || 0;
+    const mpg = stats.mpg || stats.min || 0;
     
-    // Build supporting stats (top 3-4 relevant stats)
+    // Build supporting stats (basketball stats only, no value metrics)
     if (ppg > 0) supportingStats.push({ label: 'PPG', value: ppg.toFixed(1) });
     if (rpg > 0) supportingStats.push({ label: 'RPG', value: rpg.toFixed(1) });
     if (apg > 0) supportingStats.push({ label: 'APG', value: apg.toFixed(1) });
-    
-    // Add defensive stats if notable
-    if (spg >= 1.0) supportingStats.push({ label: 'SPG', value: spg.toFixed(1) });
-    if (bpg >= 1.0) supportingStats.push({ label: 'BPG', value: bpg.toFixed(1) });
-    
-    // Add 3PM for DraftKings bonus
-    if (platform === 'draftkings' && tpg >= 1.5) {
-      supportingStats.push({ label: '3PM', value: tpg.toFixed(1) });
-    }
+    if (mpg > 0) supportingStats.push({ label: 'MPG', value: mpg.toFixed(1) });
     
     // Trim to 4 max
     while (supportingStats.length > 4) supportingStats.pop();
     
-    // Add value score
-    supportingStats.push({ label: 'Value', value: `${value}x` });
+    // ═══════════════════════════════════════════════════════════════════════════
+    // BASKETBALL-BASED RATIONALE (NO SALARY MENTIONS)
+    // Priority: Narrative > Usage Opportunity > Matchup > Recent Form > Stats
+    // ═══════════════════════════════════════════════════════════════════════════
     
-    // Generate rationale based on player profile
-    if (ppg >= 25) {
-      rationale = `Elite scorer with consistent production. High floor and ceiling combo at this price point.`;
-    } else if (rpg >= 10 || apg >= 8) {
-      rationale = `Strong multi-category contributor. Stuff-the-stat-sheet upside provides safe floor.`;
-    } else if (spg + bpg >= 2.5) {
-      rationale = `Defensive specialist with ${platform === 'fanduel' ? 'FanDuel premium (3 pts per stl/blk)' : 'stocks upside'}. Sneaky value play.`;
-    } else if (parseFloat(value) >= 5.0) {
-      rationale = `Excellent value at salary. Strong per-dollar production unlocks spend elsewhere.`;
+    if (narrativeNote && narrativeNote.length > 10) {
+      // Use Gary's narrative context (should already be basketball-focused)
+      rationale = narrativeNote;
+    } else if (usageBoost) {
+      // Usage opportunity from teammate injury
+      rationale = `Elevated usage tonight with ${usageBoost} out. Should see increased touches and shot attempts.`;
+    } else if (rotationStatus === 'expanded_role' || minutesTrend === 'increasing') {
+      // Rising role/minutes
+      rationale = `Minutes trending up recently. Earning a bigger role in the rotation.`;
+    } else if (isRevenge && opponent) {
+      // Revenge game narrative
+      rationale = `Revenge game vs ${opponent}. Extra motivation facing former team.`;
+    } else if (dvpRank && dvpRank <= 5 && opponent) {
+      // Elite matchup
+      rationale = `${opponent} ranks bottom-5 defending ${player.position || 'this position'}. Favorable matchup tonight.`;
+    } else if (dvpRank && dvpRank <= 10 && opponent) {
+      // Good matchup
+      rationale = `Good matchup vs ${opponent} who struggle against ${player.position || 'this position'}.`;
+    } else if (recentForm === 'hot' || (l5AvgPts > 0 && l5AvgPts > ppg * 1.15)) {
+      // Hot streak
+      const hotStat = l5AvgPts > 0 ? ` averaging ${l5AvgPts.toFixed(1)} over last 5` : '';
+      rationale = `Hot streak${hotStat}. Confidence and rhythm are up.`;
+    } else if (l5BestPts >= 40) {
+      // Proven ceiling
+      rationale = `Showed ${l5BestPts.toFixed(0)}-point upside recently. Ceiling is real.`;
+    } else if (ppg >= 25) {
+      // Star production
+      rationale = `Averaging ${ppg.toFixed(1)} PPG this season. Consistent high-end production.`;
+    } else if (rpg >= 10 && apg >= 5) {
+      // Triple-double threat
+      rationale = `Putting up ${ppg.toFixed(1)}/${rpg.toFixed(1)}/${apg.toFixed(1)} per game. Multi-category contributor.`;
+    } else if (rpg >= 10) {
+      // Elite rebounder
+      rationale = `Averaging ${rpg.toFixed(1)} boards per game. Reliable rebounding production.`;
+    } else if (apg >= 8) {
+      // Elite playmaker
+      rationale = `Dishing ${apg.toFixed(1)} assists per game. Primary playmaker for his team.`;
+    } else if (mpg >= 30) {
+      // High minutes = opportunity
+      rationale = `Playing ${mpg.toFixed(0)}+ minutes per game. Heavy workload creates opportunity.`;
+    } else if (ppg >= 15) {
+      // Solid scorer
+      rationale = `Scoring ${ppg.toFixed(1)} PPG with consistent minutes. Reliable production.`;
     } else {
-      rationale = `Solid role player with consistent minutes. Safe floor at this price tier.`;
+      // Default - focus on role
+      rationale = `Filling a key role in tonight's rotation. Should see adequate minutes.`;
     }
     
   } else if (sport === 'NFL') {
@@ -1125,12 +1932,244 @@ export function addPivotsToLineup(lineup, playerPool, constraints, sport, platfo
 }
 
 /**
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * NFL STACKING ENGINE - Mandatory Correlation Rules for GPP
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * 
+ * You CANNOT win large NFL tournaments without proper stacking.
+ * This engine enforces three mandatory correlation rules:
+ * 
+ * RULE 1 - PRIMARY STACK: QB must be paired with 1-2 WR/TE from same team
+ *   - If QB is from Team A, at least 1 WR/TE must be from Team A
+ *   - This captures scoring correlation (QB throws → WR catches)
+ * 
+ * RULE 2 - BRINGBACK: Include 1 skill player from the opposing team
+ *   - If stacking Team A vs Team B, include 1 WR/RB/TE from Team B
+ *   - High-scoring games are shootouts where BOTH teams produce
+ * 
+ * RULE 3 - DEFENSIVE STACK (Optional): Pair DST with same-team RB
+ *   - If Team A is winning, RB gets more clock-killing carries
+ *   - Defense gets more sack/INT opportunities in positive game script
+ * 
+ * @param {Array} lineup - Current lineup (will be modified)
+ * @param {Array} playerPool - Full player pool for swaps
+ * @param {Object} constraints - Platform constraints
+ * @param {string} platform - 'draftkings' or 'fanduel'
+ * @param {Object} context - Context with game info
+ * @returns {Object} { lineup, stackInfo, changes }
+ */
+export function applyNFLStackingRules(lineup, playerPool, constraints, platform, context = {}) {
+  const changes = [];
+  let stackInfo = {
+    primaryStack: null,
+    bringback: null,
+    defensiveStack: null,
+    compliant: false
+  };
+  
+  // Find the QB in the lineup
+  const qbSlot = lineup.find(s => s.position === 'QB');
+  if (!qbSlot) {
+    console.log('[Stacking] ⚠️ No QB in lineup - cannot apply stacking');
+    return { lineup, stackInfo, changes };
+  }
+  
+  const qbTeam = qbSlot.team;
+  console.log(`[Stacking] 🏈 Building stack around ${qbSlot.player} (${qbTeam})`);
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // RULE 1: PRIMARY STACK - QB + WR/TE from same team
+  // ═══════════════════════════════════════════════════════════════════════════
+  const sameTeamReceivers = lineup.filter(s => 
+    ['WR', 'TE'].includes(s.position) && s.team === qbTeam
+  );
+  
+  if (sameTeamReceivers.length >= 1) {
+    stackInfo.primaryStack = {
+      qb: qbSlot.player,
+      receivers: sameTeamReceivers.map(r => r.player),
+      team: qbTeam
+    };
+    // Mark as stack players to prevent swapping in review
+    sameTeamReceivers.forEach(r => { r.isStack = true; });
+    qbSlot.isStack = true;
+    console.log(`[Stacking] ✅ Primary stack: ${qbSlot.player} + ${sameTeamReceivers.map(r => r.player).join(', ')}`);
+  } else {
+    // Need to swap in a WR/TE from QB's team
+    console.log(`[Stacking] ⚠️ No receivers from ${qbTeam} - looking for swap...`);
+    
+    // Find WR/TE from QB's team in player pool
+    const qbTeamReceivers = playerPool.filter(p => 
+      ['WR', 'TE'].includes(p.position?.toUpperCase()) &&
+      p.team === qbTeam &&
+      !lineup.some(s => s.player === p.name)
+    ).sort((a, b) => (b.ceilingScore || b.projected_pts || 0) - (a.ceilingScore || a.projected_pts || 0));
+    
+    if (qbTeamReceivers.length > 0) {
+      const bestReceiver = qbTeamReceivers[0];
+      
+      // Find the worst non-QB receiver to swap out
+      const nonQbTeamReceivers = lineup.filter(s => 
+        ['WR', 'TE'].includes(s.position) && s.team !== qbTeam
+      ).sort((a, b) => (a.projected_pts || 0) - (b.projected_pts || 0));
+      
+      if (nonQbTeamReceivers.length > 0) {
+        const swapOut = nonQbTeamReceivers[0];
+        const swapIdx = lineup.findIndex(s => s.player === swapOut.player);
+        
+        if (swapIdx !== -1) {
+          const oldPlayer = lineup[swapIdx].player;
+          lineup[swapIdx] = {
+            ...lineup[swapIdx],
+            player: bestReceiver.name,
+            team: bestReceiver.team,
+            salary: bestReceiver.salary,
+            projected_pts: bestReceiver.projected_pts || bestReceiver.ceilingScore,
+            stackSwap: true
+          };
+          
+          changes.push({
+            type: 'PRIMARY_STACK',
+            swappedOut: oldPlayer,
+            swappedIn: bestReceiver.name,
+            reason: `Stack ${bestReceiver.name} with QB ${qbSlot.player}`
+          });
+          
+          console.log(`[Stacking] 🔄 Swapped ${oldPlayer} → ${bestReceiver.name} (QB stack)`);
+          
+          stackInfo.primaryStack = {
+            qb: qbSlot.player,
+            receivers: [bestReceiver.name],
+            team: qbTeam
+          };
+        }
+      }
+    }
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // RULE 2: BRINGBACK - 1 skill player from opposing team
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Find the opponent of the QB's team from game context
+  const games = context.games || [];
+  let opponentTeam = null;
+  
+  for (const game of games) {
+    if (game.home_team === qbTeam) {
+      opponentTeam = game.visitor_team || game.away_team;
+      break;
+    } else if (game.visitor_team === qbTeam || game.away_team === qbTeam) {
+      opponentTeam = game.home_team;
+      break;
+    }
+  }
+  
+  if (opponentTeam) {
+    const opponentSkillPlayers = lineup.filter(s => 
+      ['WR', 'RB', 'TE'].includes(s.position) && s.team === opponentTeam
+    );
+    
+    if (opponentSkillPlayers.length >= 1) {
+      stackInfo.bringback = {
+        player: opponentSkillPlayers[0].player,
+        team: opponentTeam
+      };
+      opponentSkillPlayers[0].isStack = true;
+      console.log(`[Stacking] ✅ Bringback: ${opponentSkillPlayers[0].player} (${opponentTeam})`);
+    } else {
+      console.log(`[Stacking] ⚠️ No bringback from ${opponentTeam} - looking for swap...`);
+      
+      // Find skill player from opponent in player pool
+      const opponentPlayers = playerPool.filter(p => 
+        ['WR', 'RB', 'TE'].includes(p.position?.toUpperCase()) &&
+        p.team === opponentTeam &&
+        !lineup.some(s => s.player === p.name)
+      ).sort((a, b) => (b.ceilingScore || b.projected_pts || 0) - (a.ceilingScore || a.projected_pts || 0));
+      
+      if (opponentPlayers.length > 0) {
+        const bestBringback = opponentPlayers[0];
+        
+        // Find the worst skill player NOT from QB's team or opponent to swap out
+        const swappablePlayers = lineup.filter(s => 
+          ['WR', 'RB', 'TE'].includes(s.position) && 
+          s.team !== qbTeam && 
+          s.team !== opponentTeam
+        ).sort((a, b) => (a.projected_pts || 0) - (b.projected_pts || 0));
+        
+        if (swappablePlayers.length > 0) {
+          const swapOut = swappablePlayers[0];
+          const swapIdx = lineup.findIndex(s => s.player === swapOut.player);
+          
+          if (swapIdx !== -1) {
+            const oldPlayer = lineup[swapIdx].player;
+            lineup[swapIdx] = {
+              ...lineup[swapIdx],
+              player: bestBringback.name,
+              team: bestBringback.team,
+              salary: bestBringback.salary,
+              projected_pts: bestBringback.projected_pts || bestBringback.ceilingScore,
+              bringbackSwap: true
+            };
+            
+            changes.push({
+              type: 'BRINGBACK',
+              swappedOut: oldPlayer,
+              swappedIn: bestBringback.name,
+              reason: `Bringback from ${opponentTeam} (opponent of ${qbTeam})`
+            });
+            
+            console.log(`[Stacking] 🔄 Swapped ${oldPlayer} → ${bestBringback.name} (Bringback)`);
+            
+            stackInfo.bringback = {
+              player: bestBringback.name,
+              team: opponentTeam
+            };
+          }
+        }
+      }
+    }
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // RULE 3: DEFENSIVE STACK (Optional) - DST + RB from same team
+  // ═══════════════════════════════════════════════════════════════════════════
+  const dstSlot = lineup.find(s => s.position === 'DST');
+  if (dstSlot) {
+    const dstTeam = dstSlot.team;
+    const sameTeamRB = lineup.filter(s => s.position === 'RB' && s.team === dstTeam);
+    
+    if (sameTeamRB.length >= 1) {
+      stackInfo.defensiveStack = {
+        dst: dstSlot.player,
+        rb: sameTeamRB[0].player,
+        team: dstTeam
+      };
+      console.log(`[Stacking] ✅ Defensive stack: ${dstSlot.player} + ${sameTeamRB[0].player} (${dstTeam})`);
+    } else {
+      // Defensive stack is optional - just log for now
+      console.log(`[Stacking] ℹ️ No RB from ${dstTeam} for defensive stack (optional)`);
+    }
+  }
+  
+  // Check overall compliance
+  stackInfo.compliant = !!(stackInfo.primaryStack && stackInfo.bringback);
+  
+  if (stackInfo.compliant) {
+    console.log(`[Stacking] ✅ STACK COMPLETE: Primary=${stackInfo.primaryStack.team}, Bringback=${stackInfo.bringback?.team || 'none'}`);
+  } else {
+    console.log(`[Stacking] ⚠️ Stack incomplete - lineup may underperform in GPP`);
+  }
+  
+  return { lineup, stackInfo, changes };
+}
+
+/**
  * Main entry point: Generate complete DFS lineup with pivots
  * @param {Object} params - Generation parameters
  * @param {string} params.platform - 'draftkings' or 'fanduel'
  * @param {string} params.sport - 'NBA' or 'NFL'
  * @param {Array} params.players - Player pool with salaries and stats
- * @param {Object} params.context - Optional narrative context (fadePlayers, targetPlayers)
+ * @param {Object} params.context - Optional narrative context (fadePlayers, targetPlayers, contestType)
  * @returns {Object} Complete lineup object
  */
 export async function generateDFSLineup({ platform, sport, players, context = {} }) {
@@ -1139,31 +2178,202 @@ export async function generateDFSLineup({ platform, sport, players, context = {}
     throw new Error(`Unsupported platform/sport combination: ${platform}/${sport}`);
   }
   
-  // Calculate projections for all players
-  const playersWithProjections = players.map(p => ({
-    ...p,
-    projected_pts: p.projected_pts || calculateProjectedPoints(p, sport, platform)
-  }));
+  // Get contest type (GPP or Cash) from context
+  const contestType = context.contestType || 'gpp';
+  const isGPP = contestType === 'gpp';
   
-  // Step 1: Initial greedy optimization (with narrative context for Gary's intelligence)
+  // ═══════════════════════════════════════════════════════════════════════════
+  // GARY'S SHARP DFS PHILOSOPHY
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Gary is a GAMBLER who finds VALUE, not a MODEL that outputs highest projections.
+  //
+  // WHAT SEPARATES GARY FROM AN OPTIMIZER:
+  // - Optimizer: "Player A projects 48.5, Player B projects 47.2, pick A"
+  // - Gary: "Player B just got promoted to PP1 two days ago. His salary is still 
+  //          priced for PP2. The projection sites haven't updated. I'm taking B."
+  //
+  // GARY'S APPROACH:
+  // Investigate the factors. Understand the opportunity. Make the lineup based on his analysis.
+  //
+  // HARD FACTORS (Trust These): Usage, minutes, target share, DvP rankings
+  // SOFT FACTORS (Verify These): Narratives, ownership, "hot streaks"
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ARCHETYPE AWARENESS: Gary considers all strategies as data points
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Gary doesn't output multiple lineups. He internally analyzes the slate
+  // through all strategy lenses, then outputs his ONE best prediction.
+  // 
+  // Investigation questions Gary considers:
+  // - Is this a "stars & scrubs" slate? (1-2 elite values + cheap chalk)
+  // - Is this a "balanced" slate? (spread across mid-tier options)
+  // - What does the injury/value landscape suggest?
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  // Analyze slate characteristics to inform strategy
+  const slateAnalysis = analyzeSlateCharacteristics(players, constraints, sport, isGPP);
+  
+  // Gary's strategy selection based on slate analysis (awareness, not forced)
+  let recommendedArchetype = 'balanced_build';
+  if (slateAnalysis.hasEliteValue && slateAnalysis.hasCheapChalk) {
+    recommendedArchetype = 'stars_and_scrubs';
+  } else if (slateAnalysis.hasMidTierDepth) {
+    recommendedArchetype = 'balanced_build';
+  } else if (!isGPP) {
+    recommendedArchetype = 'cash_safe';
+  }
+  
+  // Use recommended unless context specifies otherwise
+  const archetypeName = context.archetype || recommendedArchetype;
+  const archetype = LINEUP_ARCHETYPES[archetypeName] || LINEUP_ARCHETYPES['balanced_build'];
+  
+  console.log(`\n[DFS Lineup] 🎰 Generating ${platform.toUpperCase()} ${sport} lineup (${contestType.toUpperCase()})`);
+  console.log(`[DFS Lineup] 📊 Strategy: ${archetype.name} (${archetype.description})`);
+  if (archetypeName !== 'balanced_build') {
+    console.log(`[DFS Lineup] 💡 Strategy Reasoning: ${slateAnalysis.reasoning}`);
+  }
+  console.log(`[DFS Lineup] 🎯 Targets: Floor ${archetype.floorTarget}+ | Ceiling ${archetype.ceilingTarget}+`);
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ROTOWIRE INTELLIGENCE: Benchmarking & Forced Locks
+  // ═══════════════════════════════════════════════════════════════════════════
+  const playersWithProjections = players.map(p => {
+    let projected_pts = p.projected_pts || calculateProjectedPoints(p, sport, platform, contestType);
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // GARY'S AUTONOMY - Trust His Analysis
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Gary makes his own decisions. Benchmark is INFORMATIONAL ONLY.
+    // We log the comparison for transparency but DON'T override Gary's projection.
+    // Gary's edge comes from independent analysis, not consensus-following.
+    // ═══════════════════════════════════════════════════════════════════════════
+    if (p.benchmarkProjection > 0) {
+      const garyDiff = projected_pts - p.benchmarkProjection;
+      const absDiff = Math.abs(garyDiff);
+      
+      // Log significant differences for transparency (no projection changes)
+      if (absDiff > 10) {
+        if (garyDiff > 0) {
+          console.log(`[DFS Lineup] 📊 Gary's edge: ${p.name} - Gary ${projected_pts.toFixed(1)} vs Market ${p.benchmarkProjection.toFixed(1)} (+${garyDiff.toFixed(1)})`);
+        } else {
+          console.log(`[DFS Lineup] 📊 Gary's fade: ${p.name} - Gary ${projected_pts.toFixed(1)} vs Market ${p.benchmarkProjection.toFixed(1)} (${garyDiff.toFixed(1)})`);
+        }
+      }
+      // Gary's projection stands - he makes his own decisions
+    }
+
+    return {
+      ...p,
+      projected_pts,
+      // Pass confirmed starter flag for locking
+      forcedLock: p.isConfirmedStarter || false
+    };
+  });
+
+  // Step 1: Initial greedy optimization
   const initialResult = optimizeLineup(
     playersWithProjections,
     constraints,
     sport,
     platform,
-    context  // Pass narrative context (fadePlayers, targetPlayers)
+    { ...context, contestType }
   );
   
-  // Step 2: Gary's 2-round self-review (salary efficiency + ownership)
+  // Step 2: Apply Sport-Specific Stacking Rules (GPP only)
+  let stackedResult = { lineup: initialResult.lineup, stackInfo: null, changes: [] };
+  
+  if (sport === 'NFL' && isGPP) {
+    console.log(`\n[DFS Lineup] 🏈 Applying NFL Stacking Rules...`);
+    stackedResult = applyNFLStackingRules(
+      [...initialResult.lineup], // Copy to avoid mutation
+      playersWithProjections,
+      constraints,
+      platform,
+      context
+    );
+    
+    if (stackedResult.changes.length > 0) {
+      console.log(`[DFS Lineup] 📋 Stacking changes: ${stackedResult.changes.length}`);
+      stackedResult.changes.forEach(c => {
+        console.log(`   - ${c.type}: ${c.swappedOut} → ${c.swappedIn}`);
+      });
+    }
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // NBA GAME CORRELATION ANALYSIS (GPP only)
+  // ═══════════════════════════════════════════════════════════════════════════
+  // In NBA GPP, winning lineups often have 2-3 players from the same high-total game.
+  // This captures "shootout" upside - if one player smashes, teammates likely benefit.
+  // 
+  // AWARENESS: Gary investigates correlation opportunities, doesn't force them.
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (sport === 'NBA' && isGPP) {
+    const currentLineup = stackedResult.lineup;
+    
+    // Analyze current team distribution
+    const teamCounts = {};
+    const gameTeams = {}; // Map teams to their opponents
+    
+    currentLineup.forEach(p => {
+      if (p.team) {
+        teamCounts[p.team] = (teamCounts[p.team] || 0) + 1;
+      }
+    });
+    
+    // Build game pairings from player pool (teams that play each other)
+    const teamsInPool = [...new Set(playersWithProjections.map(p => p.team).filter(Boolean))];
+    // Note: Game pairing info should come from context - this is awareness-based
+    
+    // Check for natural stacks (2+ from same team)
+    const naturalStacks = Object.entries(teamCounts).filter(([_, count]) => count >= 2);
+    
+    // Check for game stacks (players from both sides of a matchup)
+    const gameStacks = [];
+    if (context.games && Array.isArray(context.games)) {
+      context.games.forEach(game => {
+        const homeTeam = game.home_team?.abbreviation || game.home_team;
+        const awayTeam = game.visitor_team?.abbreviation || game.away_team || game.visitor_team;
+        
+        const homeCount = teamCounts[homeTeam] || 0;
+        const awayCount = teamCounts[awayTeam] || 0;
+        
+        if (homeCount > 0 && awayCount > 0) {
+          gameStacks.push({ home: homeTeam, away: awayTeam, total: homeCount + awayCount });
+        }
+      });
+    }
+    
+    // Log correlation analysis
+    if (naturalStacks.length > 0 || gameStacks.length > 0) {
+      console.log(`\n[DFS Correlation] 🎯 GPP Stack Analysis:`);
+      naturalStacks.forEach(([team, count]) => {
+        console.log(`   ✅ ${team}: ${count} players stacked (same-team correlation)`);
+      });
+      gameStacks.forEach(gs => {
+        console.log(`   ✅ ${gs.home} vs ${gs.away}: ${gs.total} players (game stack - shootout potential)`);
+      });
+      stackedResult.stackInfo = { naturalStacks, gameStacks };
+    } else {
+      // No correlation - flag for awareness (not automatic fix)
+      console.log(`\n[DFS Correlation] ⚠️ No game correlation detected - lineup is diversified`);
+      console.log(`   ℹ️ Diversification can cap ceiling in GPP. Consider if a game stack makes sense.`);
+      stackedResult.stackInfo = { warning: 'no_correlation', teams: Object.keys(teamCounts) };
+    }
+  }
+  
+  // Step 3: Gary's 2-round self-review (salary efficiency + ownership)
   const reviewedResult = selfReviewLineup(
-    initialResult.lineup,
+    stackedResult.lineup,
     playersWithProjections,
     constraints,
     sport,
-    platform
+    platform,
+    { contestType } // Pass contest type for ownership logic
   );
   
-  // Step 3: Add pivots to the reviewed lineup
+  // Step 4: Add pivots to the reviewed lineup
   const lineupWithPivots = addPivotsToLineup(
     reviewedResult.lineup,
     playersWithProjections,
@@ -1172,102 +2382,641 @@ export async function generateDFSLineup({ platform, sport, players, context = {}
     platform
   );
   
+  // Calculate ceiling-based projected points for GPP
+  const projectedPoints = isGPP
+    ? Math.round(lineupWithPivots.reduce((sum, p) => sum + (p.ceilingScore || p.projected_pts || 0), 0) * 10) / 10
+    : Math.round(reviewedResult.projectedPoints * 10) / 10;
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ⚠️ CRITICAL: HARD SALARY CAP ENFORCEMENT
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Fantasy contests CANNOT submit lineups over the cap - it's literally impossible
+  // If we somehow ended up over (due to stacking/review logic), we MUST fix it
+  // ═══════════════════════════════════════════════════════════════════════════
+  let finalTotalSalary = reviewedResult.totalSalary;
+  let finalLineup = lineupWithPivots;
+  
+  if (finalTotalSalary > constraints.salaryCap) {
+    console.log(`\n[DFS Lineup] 🚨 CRITICAL: Lineup exceeds salary cap by $${finalTotalSalary - constraints.salaryCap}!`);
+    console.log(`[DFS Lineup] 🔧 Applying emergency downgrade to meet cap...`);
+    
+    // Find the most expensive player and downgrade to next-best affordable option
+    // Sort lineup by salary (highest first)
+    const sortedByPrice = [...finalLineup].sort((a, b) => b.salary - a.salary);
+    
+    // Try to downgrade expensive players until we're under cap
+    for (const expensiveSlot of sortedByPrice) {
+      const overAmount = finalTotalSalary - constraints.salaryCap;
+      if (overAmount <= 0) break; // We're good now
+      
+      // Find cheaper alternative for this position
+      const position = expensiveSlot.position;
+      const usedNames = new Set(finalLineup.map(p => p.player));
+      usedNames.delete(expensiveSlot.player); // Allow replacing current player
+      
+      const alternatives = playersWithProjections.filter(p => {
+        if (usedNames.has(p.name)) return false;
+        if (p.status === 'OUT') return false;
+        if (p.salary <= 0) return false;
+        
+        // Check if player can fill this position
+        const pos = p.position?.toUpperCase();
+        const eligibleSlots = getEligibleSlots(pos, sport);
+        return eligibleSlots.includes(position);
+      }).sort((a, b) => b.projected_pts - a.projected_pts); // Best first
+      
+      // Find alternative that saves enough money
+      for (const alt of alternatives) {
+        const savingsNeeded = overAmount;
+        const actualSavings = expensiveSlot.salary - alt.salary;
+        
+        if (actualSavings >= savingsNeeded && alt.salary <= expensiveSlot.salary) {
+          // Swap it out
+          console.log(`[DFS Lineup] 💱 Downgrade: ${expensiveSlot.player} ($${expensiveSlot.salary}) → ${alt.name} ($${alt.salary}) | Saves $${actualSavings}`);
+          
+          const idx = finalLineup.findIndex(p => p.player === expensiveSlot.player);
+          finalLineup[idx] = {
+            position,
+            player: alt.name,
+            team: alt.team,
+            salary: alt.salary,
+            projected_pts: alt.projected_pts,
+            rationale: `Emergency downgrade to meet salary cap`,
+            supportingStats: [],
+            pivots: [],
+            ownership: alt.ownership,
+            recentForm: alt.recentForm,
+            dvpRank: alt.dvpRank
+          };
+          
+          finalTotalSalary = finalLineup.reduce((sum, p) => sum + p.salary, 0);
+          break;
+        }
+      }
+    }
+    
+    // Final verification
+    if (finalTotalSalary > constraints.salaryCap) {
+      console.error(`[DFS Lineup] ❌ FAILED TO FIX SALARY CAP! Still over by $${finalTotalSalary - constraints.salaryCap}`);
+      console.error(`[DFS Lineup] ❌ This lineup CANNOT be submitted to ${platform}!`);
+    } else {
+      console.log(`[DFS Lineup] ✅ Salary cap met: $${finalTotalSalary}/$${constraints.salaryCap}`);
+    }
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PHASE 1: VALIDATION & WARNINGS
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  // 1. Validate punt count
+  let puntValidation = validatePuntCount(finalLineup, platform, contestType);
+  let puntFixAttempted = false;
+  let puntFixSuccess = false;
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // FRAGILE FLOOR AWARENESS (Not Forced Auto-Fix)
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Having 3-4 punt plays isn't always bad - it depends on the slate:
+  // - If punts have high ceilings (breakout candidates), keep them
+  // - If punts are low-floor/low-ceiling, consider upgrading
+  // 
+  // Gary investigates whether the punts are intentional (Stars & Scrubs strategy)
+  // or accidental (optimizer couldn't find better options).
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (!puntValidation.valid) {
+    puntFixAttempted = true;
+    console.log(`[DFS Self-Heal] ⚠️ Fragile floor detected: ${puntValidation.puntCount} punts (max: 2)`);
+    
+    // INVESTIGATE: Are these punts intentional high-ceiling plays?
+    const puntPlayers = puntValidation.puntPlayers || [];
+    const intentionalPunts = puntPlayers.filter(p => {
+      const lineupPlayer = finalLineup.find(lp => lp.player === p.name);
+      // High ceiling OR narrative target = intentional
+      return (lineupPlayer?.ceilingScore || 0) > 25 || 
+             lineupPlayer?.isTarget || 
+             lineupPlayer?.narrativeModified ||
+             lineupPlayer?.teammateOpportunity;
+    });
+    
+    if (intentionalPunts.length >= puntValidation.puntCount - 1) {
+      // Most punts are intentional high-ceiling plays - this is Stars & Scrubs
+      console.log(`[DFS Self-Heal] ✅ ${intentionalPunts.length}/${puntValidation.puntCount} punts have ceiling upside - intentional strategy`);
+      puntFixSuccess = true; // Mark as "handled" even though we didn't change anything
+    } else {
+      // Some punts are unintentional low-floor plays - try to upgrade
+      const threshold = PUNT_SALARY_THRESHOLD[platform] || 4500;
+      const midRangeMin = threshold + 500; // Just above punt threshold
+      const midRangeMax = 7500; // More flexible range
+      const salaryCap = constraints.salaryCap;
+      
+      // Calculate current salary and remaining budget
+      const currentSalary = finalLineup.reduce((sum, p) => sum + (p.salary || 0), 0);
+      let remaining = salaryCap - currentSalary;
+      
+      // Only upgrade punts that aren't intentional ceiling plays
+      const puntsToUpgrade = puntPlayers
+        .filter(p => !intentionalPunts.some(ip => ip.name === p.name))
+        .sort((a, b) => a.salary - b.salary);
+      
+      // Only need to fix enough to get to max 2 punts
+      const puntsToFix = Math.max(0, puntValidation.puntCount - 2 - intentionalPunts.length);
+      let fixedCount = 0;
+      
+      if (puntsToFix === 0) {
+        console.log(`[DFS Self-Heal] ✅ Intentional punts bring count to acceptable level`);
+        puntFixSuccess = true;
+      } else {
+        // Need to upgrade some punts - try to find mid-range alternatives
+        for (let i = 0; i < Math.min(puntsToFix, puntsToUpgrade.length); i++) {
+      const puntPlayer = puntsToUpgrade[i];
+      const slotIndex = finalLineup.findIndex(s => s.player === puntPlayer.name);
+      if (slotIndex === -1) continue;
+      
+      const slot = finalLineup[slotIndex];
+      const maxUpgradeSpend = remaining + slot.salary;
+      
+      // Find mid-range alternatives for this position
+      const alternatives = players.filter(p => {
+        const playerPos = p.position || '';
+        const slotPos = slot.position || '';
+        const salary = p.salary || 0;
+        const alreadyUsed = finalLineup.some(s => s.player === p.name);
+        
+        // ⭐ Use Tank01's platform-specific positions when available
+        const eligible = sport === 'NBA' 
+          ? isPositionEligible(playerPos, slotPos, sport, p.allPositions)
+          : playerPos === slotPos || slotPos === 'FLEX';
+        
+        return eligible && 
+               !alreadyUsed && 
+               salary >= midRangeMin && 
+               salary <= Math.min(midRangeMax, maxUpgradeSpend);
+      }).sort((a, b) => {
+        // Sort by value (pts per $1k)
+        const aVal = (a.projection || 0) / ((a.salary || 5000) / 1000);
+        const bVal = (b.projection || 0) / ((b.salary || 5000) / 1000);
+        return bVal - aVal;
+      });
+      
+      if (alternatives.length > 0) {
+        const upgrade = alternatives[0];
+        const oldSalary = slot.salary;
+        const newSalary = upgrade.salary || 5000;
+        
+        console.log(`[DFS Self-Heal] 🔄 Upgrading ${slot.player} ($${oldSalary}) → ${upgrade.name} ($${newSalary})`);
+        
+        // Swap the player
+        finalLineup[slotIndex] = {
+          position: slot.position,
+          player: upgrade.name,
+          team: upgrade.team,
+          salary: newSalary,
+          projected_pts: upgrade.projection || 0,
+          ownership: upgrade.ownership || 15,
+          ...upgrade
+        };
+        
+        remaining -= (newSalary - oldSalary);
+          fixedCount++;
+        }
+        }
+        
+        if (fixedCount > 0) {
+          puntFixSuccess = true;
+          console.log(`[DFS Self-Heal] ✅ Fixed ${fixedCount} punt plays`);
+          // Re-validate after fixes
+          puntValidation = validatePuntCount(finalLineup, platform, contestType);
+        } else if (puntsToFix > 0) {
+          console.log(`[DFS Self-Heal] ℹ️ Could not find mid-range upgrades - punts may be intentional`);
+        }
+      } // end else (puntsToFix > 0)
+    } // end else (not all intentional)
+  }
+  
+  // 2. Check anti-correlation
+  const antiCorrelation = checkAntiCorrelation(finalLineup, sport);
+  
+  // 3. Check chalk fade opportunity
+  const chalkFade = applyChalkFadeStrategy(players, finalLineup, contestType);
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // BUILD GARY'S NOTES - Sharp-style basketball analysis
+  // ═══════════════════════════════════════════════════════════════════════════
+  const garyNotes = [];
+  
+  // Calculate lineup stats for insights
+  const totalProjection = finalLineup.reduce((sum, p) => sum + (p.projected_pts || 0), 0);
+  const totalSalary = finalLineup.reduce((sum, p) => sum + (p.salary || 0), 0);
+  const avgOwnership = finalLineup.reduce((sum, p) => sum + (p.ownership || 15), 0) / finalLineup.length;
+  
+  // Find key players for insights
+  const sortedByProjection = [...finalLineup].sort((a, b) => (b.projected_pts || 0) - (a.projected_pts || 0));
+  const topPlay = sortedByProjection[0];
+  const secondPlay = sortedByProjection[1];
+  const thirdPlay = sortedByProjection[2];
+  
+  // Find players with specific edges
+  const matchupPlays = finalLineup.filter(p => p.dvpRank && p.dvpRank <= 10);
+  const usageBoostPlays = finalLineup.filter(p => p.usageBoost || p.narrativeNote);
+  const hotPlays = finalLineup.filter(p => p.recentForm === 'hot' || (p.l5AvgPts && p.l5AvgPts > (p.ppg || 0) * 1.1));
+  const minutesPlays = finalLineup.filter(p => p.minutesTrend === 'increasing' || p.rotation_status === 'expanded_role');
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // GARY'S ANALYSIS - Write like a sharp
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  garyNotes.push(`LINEUP THESIS`);
+  garyNotes.push(``);
+  
+  // Build the main thesis paragraph
+  let thesis = `Tonight's build is anchored by `;
+  
+  if (topPlay) {
+    const topOpp = topPlay.opponent || topPlay.opp || '';
+    const topDvp = topPlay.dvpRank;
+    const topPpg = topPlay.ppg || topPlay.pts || 0;
+    
+    thesis += `${topPlay.player}`;
+    
+    if (topDvp && topDvp <= 8 && topOpp) {
+      thesis += ` in a premium spot against ${topOpp}, who rank bottom-${topDvp} defending ${topPlay.position || 'his position'}`;
+    } else if (topPlay.usageBoost) {
+      thesis += ` who should see elevated usage with ${topPlay.usageBoost} sidelined`;
+    } else if (topPpg >= 25) {
+      thesis += ` who's been averaging ${topPpg.toFixed(1)} points per game this season`;
+    }
+    thesis += `. `;
+  }
+  
+  // Add secondary anchor context
+  if (secondPlay && secondPlay.projected_pts >= 35) {
+    const secondOpp = secondPlay.opponent || secondPlay.opp || '';
+    const secondDvp = secondPlay.dvpRank;
+    
+    thesis += `I'm pairing him with ${secondPlay.player}`;
+    if (secondDvp && secondDvp <= 10 && secondOpp) {
+      thesis += ` who draws a favorable matchup against ${secondOpp}'s weak interior defense`;
+    } else if (secondPlay.usageBoost) {
+      thesis += ` stepping into a bigger role tonight`;
+    }
+    thesis += `. `;
+  }
+  
+  // Add the key edge explanation
+  if (usageBoostPlays.length > 0) {
+    const boostPlayer = usageBoostPlays[0];
+    thesis += `The key edge here is ${boostPlayer.player} - ${boostPlayer.usageBoost || boostPlayer.narrativeNote || 'expect increased opportunity'}. `;
+  } else if (matchupPlays.length >= 2) {
+    thesis += `This slate has multiple exploitable matchups, and I'm targeting the soft spots in tonight's defenses. `;
+  } else if (minutesPlays.length > 0) {
+    thesis += `I'm targeting players with expanding roles and minutes trending up. `;
+  }
+  
+  // Add pace/game environment context if available
+  const highPaceGames = finalLineup.filter(p => p.gamePace === 'fast' || p.vegas_total > 230);
+  if (highPaceGames.length >= 3) {
+    thesis += `Multiple players come from high-pace, high-total games which inflates fantasy production across the board.`;
+  }
+  
+  garyNotes.push(thesis);
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // KEY SITUATIONS
+  // ═══════════════════════════════════════════════════════════════════════════
+  const situations = [];
+  
+  // Usage opportunities
+  usageBoostPlays.forEach(p => {
+    situations.push(`${p.player}: ${p.usageBoost || p.narrativeNote || 'Elevated role'}`);
+  });
+  
+  // Matchup advantages
+  matchupPlays.filter(p => !usageBoostPlays.includes(p)).slice(0, 2).forEach(p => {
+    const opp = p.opponent || p.opp || 'opponent';
+    situations.push(`${p.player}: Favorable matchup vs ${opp} (bottom-${p.dvpRank} at ${p.position || 'position'})`);
+  });
+  
+  // Hot streaks
+  hotPlays.filter(p => !usageBoostPlays.includes(p) && !matchupPlays.includes(p)).slice(0, 1).forEach(p => {
+    const l5 = p.l5AvgPts || p.ppg || 0;
+    situations.push(`${p.player}: Hot streak, averaging ${l5.toFixed(1)} over last 5`);
+  });
+  
+  if (situations.length > 0) {
+    garyNotes.push(``);
+    garyNotes.push(`KEY SITUATIONS`);
+    situations.forEach(s => garyNotes.push(`- ${s}`));
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // INJURY MONITOR
+  // ═══════════════════════════════════════════════════════════════════════════
+  const highSalaryPlays = finalLineup.filter(p => (p.salary || 0) >= 7000).slice(0, 4);
+  if (highSalaryPlays.length > 0) {
+    garyNotes.push(``);
+    garyNotes.push(`MONITOR BEFORE LOCK`);
+    garyNotes.push(`Check status on ${highSalaryPlays.map(p => p.player).join(', ')} - any late scratch changes the build.`);
+  }
+  
+  // NFL Stacking info
+  if (stackedResult.stackInfo?.primaryStack) {
+    garyNotes.push(``);
+    garyNotes.push(`CORRELATION STACK`);
+    const stack = stackedResult.stackInfo;
+    garyNotes.push(`${stack.primaryStack.qb} paired with ${stack.primaryStack.receivers.join(' and ')} for correlated upside in what should be a pass-heavy game script.`);
+    if (stack.bringback) {
+      garyNotes.push(`Bringing back ${stack.bringback.player} from the opposing side to capture both ends of a potential shootout.`);
+    }
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SORT LINEUP BY PLATFORM POSITION ORDER
+  // ═══════════════════════════════════════════════════════════════════════════
+  // FanDuel NBA: PG, PG, SG, SG, SF, SF, PF, PF, C
+  // DraftKings NBA: PG, SG, SF, PF, C, G, F, UTIL
+  // Sort the final lineup to match the platform's expected roster order
+  // ═══════════════════════════════════════════════════════════════════════════
+  const positionOrder = constraints.positions;
+  const sortedLineup = [];
+  const positionCounts = {};
+  
+  // Sort lineup players into their correct roster slots
+  for (const pos of positionOrder) {
+    positionCounts[pos] = (positionCounts[pos] || 0) + 1;
+    
+    // Find the next player assigned to this position slot
+    const player = finalLineup.find(p => {
+      const matchesPosition = p.position === pos;
+      const notYetPlaced = !sortedLineup.some(s => s.player === p.player);
+      return matchesPosition && notYetPlaced;
+    });
+    
+    if (player) {
+      sortedLineup.push(player);
+    }
+  }
+  
+  // If some players weren't matched (edge case), append them
+  for (const player of finalLineup) {
+    if (!sortedLineup.some(s => s.player === player.player)) {
+      sortedLineup.push(player);
+    }
+  }
+  
   return {
     platform,
     sport,
+    contestType,
     salary_cap: constraints.salaryCap,
-    total_salary: reviewedResult.totalSalary,
-    projected_points: Math.round(reviewedResult.projectedPoints * 10) / 10,
-    lineup: lineupWithPivots
+    total_salary: finalTotalSalary,
+    projected_points: projectedPoints,
+    // GPP-specific: ceiling-based projection target
+    ceiling_projection: isGPP ? projectedPoints : null,
+    floor_projection: Math.round(sortedLineup.reduce((sum, p) => sum + (p.floorScore || p.projected_pts * 0.7 || 0), 0) * 10) / 10,
+    total_ceiling: Math.round(sortedLineup.reduce((sum, p) => sum + (p.ceiling_projection || p.projected_pts * 1.2 || 0), 0) * 10) / 10,
+    total_floor: Math.round(sortedLineup.reduce((sum, p) => sum + (p.floor_projection || p.projected_pts * 0.7 || 0), 0) * 10) / 10,
+    // Stacking info for NFL
+    stackInfo: stackedResult.stackInfo,
+    lineup: sortedLineup,
+    avg_ownership: sortedLineup.reduce((sum, p) => sum + (p.ownership || 15), 0) / sortedLineup.length,
+    // Validation results
+    puntValidation,
+    antiCorrelation,
+    chalkFade,
+    // Gary's notes
+    gary_notes: garyNotes.join('\n')
   };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PLATFORM-SPECIFIC POSITION ELIGIBILITY
+// ═══════════════════════════════════════════════════════════════════════════════
+// Tank01 API provides `allValidPositions` which are the ACTUAL positions the
+// player is eligible for on DraftKings/FanDuel. These can differ between platforms!
+// 
+// Example: Kevin Durant
+//   DK: ["SG", "SF"] 
+//   FD: ["SF", "PF"]
+// 
+// We prioritize Tank01's platform-specific positions, then fall back to generic mapping.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Helper function to check if a player position can fill a slot position
+// Now accepts optional allPositions array from Tank01 for platform-specific eligibility
+function isPositionEligible(playerPos, slotPos, sport = 'NBA', allPositions = null) {
+  // If we have Tank01's platform-specific positions, use them directly
+  if (allPositions && Array.isArray(allPositions) && allPositions.length > 0) {
+    // Check if the slot matches any of the player's valid positions
+    const normalizedSlot = slotPos.toUpperCase();
+    const normalizedPositions = allPositions.map(p => p.toUpperCase());
+    
+    // Direct match with any valid position
+    if (normalizedPositions.includes(normalizedSlot)) return true;
+    
+    // UTIL/FLEX slots accept anyone
+    if (normalizedSlot === 'UTIL' || normalizedSlot === 'FLEX') return true;
+    
+    // G slot accepts PG or SG
+    if (normalizedSlot === 'G' && normalizedPositions.some(p => ['PG', 'SG'].includes(p))) return true;
+    
+    // F slot accepts SF or PF
+    if (normalizedSlot === 'F' && normalizedPositions.some(p => ['SF', 'PF'].includes(p))) return true;
+    
+    return false;
+  }
+  
+  // Fallback to generic position mapping
+  const eligibleSlots = getEligibleSlots(playerPos, sport);
+  return eligibleSlots.includes(slotPos);
+}
+
+// Helper function to get eligible slots for a player position (fallback when Tank01 data unavailable)
+function getEligibleSlots(playerPosition, sport) {
+  const positionEligibility = {
+    // NBA - Standard positions
+    'PG': ['PG', 'G', 'UTIL'],
+    'SG': ['SG', 'G', 'UTIL'],
+    'SF': ['SF', 'F', 'UTIL'],
+    'PF': ['PF', 'F', 'UTIL'],
+    'C': ['C', 'UTIL'],
+    // NBA - Generic/combo positions (BDL format)
+    'G': ['PG', 'SG', 'G', 'UTIL'],
+    'F': ['SF', 'PF', 'F', 'UTIL'],
+    'G-F': ['PG', 'SG', 'SF', 'G', 'F', 'UTIL'],
+    'F-G': ['PG', 'SG', 'SF', 'G', 'F', 'UTIL'],
+    'F-C': ['PF', 'C', 'F', 'UTIL'],
+    'C-F': ['PF', 'C', 'F', 'UTIL'],
+    // NFL
+    'QB': ['QB'],
+    'RB': ['RB', 'FLEX'],
+    'WR': ['WR', 'FLEX'],
+    'TE': ['TE', 'FLEX'],
+    'K': ['K'],
+    'DST': ['DST'],
+    'DEF': ['DST']
+  };
+  
+  return positionEligibility[playerPosition] || [playerPosition];
+}
+
+// Helper to get all slots a player can fill, using platform-specific data when available
+function getPlayerEligibleSlots(player, sport = 'NBA') {
+  // Use Tank01's allPositions if available
+  if (player.allPositions && Array.isArray(player.allPositions) && player.allPositions.length > 0) {
+    const slots = new Set();
+    
+    player.allPositions.forEach(pos => {
+      const posUpper = pos.toUpperCase();
+      slots.add(posUpper);
+      
+      // Add generic slots based on position type
+      if (['PG', 'SG'].includes(posUpper)) slots.add('G');
+      if (['SF', 'PF'].includes(posUpper)) slots.add('F');
+    });
+    
+    // Everyone can fill UTIL/FLEX
+    slots.add('UTIL');
+    if (sport === 'NFL') slots.add('FLEX');
+    
+    return Array.from(slots);
+  }
+  
+  // Fallback to generic mapping
+  return getEligibleSlots(player.position, sport);
 }
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════════
- * GARY'S SELF-REVIEW OPTIMIZATION (2 Rounds)
+ * OWNERSHIP AWARENESS - GPP Tournament Leverage (AWARENESS, NOT PRESCRIPTIVE)
  * ═══════════════════════════════════════════════════════════════════════════════
  * 
- * After building the initial greedy lineup, Gary reviews it twice:
+ * Gary is AWARE that ownership matters in GPP tournaments:
+ * 
+ * HIGH OWNERSHIP (>25% "chalk"):
+ *   - Must SMASH projection to help you climb leaderboard (many competing lineups)
+ *   - Still pick if best play, but understand the leverage dynamics
+ * 
+ * LOW OWNERSHIP (<10% "contrarian"):
+ *   - Massive differentiation if player hits ceiling
+ *   - Can vault you up leaderboard with fewer competing lineups
+ * 
+ * Gary's Philosophy: 
+ *   1. Pick the lineup with HIGHEST EXPECTED SCORE
+ *   2. Use ownership as ONE data point (along with projection, ceiling, narrative)
+ *   3. Don't force pivots based on arbitrary caps
+ *   4. Be aware high ownership = need differentiation to win
+ * 
+ * CASH games don't need ownership awareness (consistency > differentiation)
+ * ═══════════════════════════════════════════════════════════════════════════════
+ */
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * GARY'S SELF-REVIEW OPTIMIZATION (3 Rounds)
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * 
+ * After building the initial greedy lineup, Gary reviews it:
  * 
  * ROUND 1: SALARY EFFICIENCY
  * - Check if money was left on the table
  * - Upgrade weak spots with remaining salary
  * - Ensure we're maximizing total projected points
  * 
- * ROUND 2: OWNERSHIP & CONTRARIAN VALUE  
- * - Identify chalk plays (high ownership)
- * - Consider swapping to similar-projected but lower-owned alternatives
- * - Balance ceiling vs floor based on contest type
+ * ROUND 2: OWNERSHIP AWARENESS
+ * - Calculate total lineup ownership FOR AWARENESS ONLY
+ * - Identify chalk plays (high ownership) and contrarian picks
+ * - Log ownership data as informational context
+ * - NO FORCED PIVOTS - Gary picks highest expected score lineup
+ * - Ownership is ONE data point among many (projection, ceiling, narrative)
  * 
  * ═══════════════════════════════════════════════════════════════════════════════
  */
-export function selfReviewLineup(lineup, playerPool, constraints, sport, platform) {
+export function selfReviewLineup(lineup, playerPool, constraints, sport, platform, context = {}) {
   const { salaryCap } = constraints;
+  const contestType = context.contestType || 'gpp';
+  const isGPP = contestType === 'gpp';
+  
   let currentLineup = [...lineup];
   let totalSalary = currentLineup.reduce((sum, p) => sum + (p.salary || 0), 0);
   let totalPts = currentLineup.reduce((sum, p) => sum + (p.projected_pts || 0), 0);
   
-  console.log(`\n[Gary Self-Review] 🔍 Starting review...`);
+  console.log(`\n[Gary Self-Review] 🔍 Starting review... (${contestType.toUpperCase()})`);
   console.log(`[Gary Self-Review] Initial: $${totalSalary}/${salaryCap} | ${totalPts.toFixed(1)} pts`);
   
   // ═══════════════════════════════════════════════════════════════════════════
-  // ROUND 1: SALARY EFFICIENCY - Upgrade weak spots with remaining salary
+  // ROUND 1: LINEUP QUALITY CHECK (Awareness, Not Forced Optimization)
+  // ═══════════════════════════════════════════════════════════════════════════
+  // The salary cap is a CEILING, not a target. Gary doesn't swap players just
+  // to use more salary. He only upgrades if there's a CLEARLY BETTER option
+  // that improves the lineup quality (value, ceiling, or narrative fit).
+  // 
+  // Philosophy: If Gary likes his lineup, leave money on the table.
   // ═══════════════════════════════════════════════════════════════════════════
   let remainingSalary = salaryCap - totalSalary;
+  
+  // Log remaining salary but don't force usage
   if (remainingSalary >= 500) {
-    console.log(`[Gary Self-Review] 💰 Round 1: $${remainingSalary} unspent - looking for upgrades...`);
+    console.log(`[Gary Self-Review] 💰 Round 1: $${remainingSalary} remaining under cap`);
     
-    // Sort lineup by projected points (lowest first = weakest spots)
-    const sortedByPts = [...currentLineup].sort((a, b) => 
-      (a.projected_pts || 0) - (b.projected_pts || 0)
-    );
+    // Only look for upgrades if there's a CLEAR improvement available
+    // "Clear" = better value (pts/$1k) AND better projection AND fits the narrative
+    const sortedByValue = [...currentLineup].sort((a, b) => {
+      const aVal = (a.projected_pts || 0) / ((a.salary || 5000) / 1000);
+      const bVal = (b.projected_pts || 0) / ((b.salary || 5000) / 1000);
+      return aVal - bVal; // Lowest value first
+    });
     
-    // Try to upgrade weakest positions
-    for (const weakSpot of sortedByPts.slice(0, 3)) { // Check 3 weakest spots
-      // Recalculate remaining salary after each potential upgrade
-      remainingSalary = salaryCap - totalSalary;
-      if (remainingSalary < 200) break; // Stop if we've used most of the cap
-      
-      const position = weakSpot.position;
-      const currentPts = weakSpot.projected_pts || 0;
-      const currentSalary = weakSpot.salary || 0;
+    // Only check the single worst-value spot (not 3 like before)
+    const worstValueSpot = sortedByValue[0];
+    const worstValue = (worstValueSpot.projected_pts || 0) / ((worstValueSpot.salary || 5000) / 1000);
+    
+    // Only consider upgrade if current spot has BAD value (< 4x on low salary)
+    const isBadValue = worstValue < 4.0 && worstValueSpot.salary < 6000;
+    
+    if (isBadValue) {
+      const position = worstValueSpot.position;
+      const currentPts = worstValueSpot.projected_pts || 0;
+      const currentSalary = worstValueSpot.salary || 0;
       const maxUpgradeSalary = currentSalary + remainingSalary;
       
-      // Find better player at same position within budget
+      // Find a CLEARLY better player (not just marginally better)
       const upgrades = playerPool.filter(p => {
-        if (p.name === weakSpot.player) return false; // Skip current player
-        if (currentLineup.some(l => l.player === p.name)) return false; // Already in lineup
+        if (p.name === worstValueSpot.player) return false;
+        if (currentLineup.some(l => l.player === p.name)) return false;
         if (p.status === 'OUT' || p.status === 'DOUBTFUL') return false;
         if (!p.salary || p.salary > maxUpgradeSalary) return false;
         
-        // Check position eligibility
-        const playerPos = (p.position || '').toUpperCase();
-        const slotPos = position.toUpperCase();
-        const canFill = playerPos === slotPos || 
-          (slotPos === 'FLEX' && ['RB', 'WR', 'TE'].includes(playerPos)) ||
-          (slotPos === 'UTIL' && ['PG', 'SG', 'SF', 'PF', 'C', 'G', 'F'].includes(playerPos)) ||
-          (slotPos === 'G' && ['PG', 'SG', 'G'].includes(playerPos)) ||
-          (slotPos === 'F' && ['SF', 'PF', 'F'].includes(playerPos));
+        // Protect stacks
+        const isStackPlayer = worstValueSpot.stackSwap || worstValueSpot.bringbackSwap || worstValueSpot.isStack;
+        if (isStackPlayer && p.team !== worstValueSpot.team) return false;
         
-        if (!canFill) return false;
+        // Check position eligibility (use platform-specific if available)
+        const eligible = isPositionEligible(p.position, position, sport, p.allPositions);
+        if (!eligible) return false;
         
-        const upgradePts = p.projected_pts || calculateProjectedPoints(p, sport, platform);
-        return upgradePts > currentPts + 1; // Must be at least 1pt better
-      }).sort((a, b) => (b.projected_pts || 0) - (a.projected_pts || 0));
+        const upgradePts = p.projected_pts || calculateProjectedPoints(p, sport, platform, contestType);
+        const upgradeValue = upgradePts / ((p.salary || 5000) / 1000);
+        
+        // CLEAR improvement = at least 3+ pts better AND better value
+        return upgradePts > currentPts + 3 && upgradeValue > worstValue + 0.5;
+      }).sort((a, b) => {
+        // Sort by value, not just raw points
+        const aVal = (a.projected_pts || 0) / ((a.salary || 5000) / 1000);
+        const bVal = (b.projected_pts || 0) / ((b.salary || 5000) / 1000);
+        return bVal - aVal;
+      });
       
       if (upgrades.length > 0) {
         const upgrade = upgrades[0];
-        const upgradePts = upgrade.projected_pts || calculateProjectedPoints(upgrade, sport, platform);
+        const upgradePts = upgrade.projected_pts || calculateProjectedPoints(upgrade, sport, platform, contestType);
         const ptsGain = upgradePts - currentPts;
         const costIncrease = upgrade.salary - currentSalary;
         
-        // Only upgrade if it's a meaningful improvement AND stays under cap
         const newTotalSalary = totalSalary + costIncrease;
-        if (ptsGain >= 2 && newTotalSalary <= salaryCap) {
-          console.log(`[Gary Self-Review] ⬆️ UPGRADE: ${weakSpot.player} → ${upgrade.name} (+${ptsGain.toFixed(1)} pts, +$${costIncrease})`);
+        if (newTotalSalary <= salaryCap) {
+          console.log(`[Gary Self-Review] ⬆️ CLEAR UPGRADE: ${worstValueSpot.player} → ${upgrade.name} (+${ptsGain.toFixed(1)} pts, +$${costIncrease})`);
           
-          // Apply upgrade
-          const idx = currentLineup.findIndex(p => p.player === weakSpot.player);
+          const idx = currentLineup.findIndex(p => p.player === worstValueSpot.player);
           if (idx !== -1) {
             currentLineup[idx] = {
               ...currentLineup[idx],
@@ -1285,47 +3034,346 @@ export function selfReviewLineup(lineup, playerPool, constraints, sport, platfor
   }
   
   // ═══════════════════════════════════════════════════════════════════════════
-  // ROUND 2: OWNERSHIP SUMMARY (Informational Only)
+  // ROUND 2: OWNERSHIP ANALYSIS
   // ═══════════════════════════════════════════════════════════════════════════
-  // Ownership is used as a TIE-BREAKER during optimization, not for forced swaps.
-  // If two players have similar projections, Gary prefers the lower-owned one
-  // because it differentiates AND is often cheaper (freeing salary elsewhere).
-  // This round just logs ownership info for transparency.
-  // ═══════════════════════════════════════════════════════════════════════════
-  console.log(`[Gary Self-Review] 🎯 Round 2: Ownership summary...`);
+  // Calculate total lineup ownership and identify chalk/contrarian plays
+  console.log(`[Gary Self-Review] 🎯 Round 2: Ownership analysis...`);
   
   // Get ownership data for current lineup players
   for (const lineupPlayer of currentLineup) {
     const poolPlayer = playerPool.find(p => p.name === lineupPlayer.player);
     if (poolPlayer) {
       lineupPlayer.ownership = poolPlayer.ownership || lineupPlayer.ownership || 15;
+      lineupPlayer.ceilingScore = poolPlayer.ceilingScore || lineupPlayer.ceilingScore || lineupPlayer.projected_pts * 1.2;
       lineupPlayer.isChalk = lineupPlayer.ownership >= 25;
       lineupPlayer.isContrarian = lineupPlayer.ownership < 10;
     }
   }
+  
+  // Calculate total lineup ownership
+  let totalOwnership = currentLineup.reduce((sum, p) => sum + (p.ownership || 15), 0);
   
   // Count ownership breakdown
   const chalkPlays = currentLineup.filter(p => (p.ownership || 15) >= 25);
   const contrarianPlays = currentLineup.filter(p => (p.ownership || 15) < 10);
   const rosterSize = currentLineup.length;
   
-  console.log(`[Gary Self-Review] Ownership breakdown: ${chalkPlays.length} chalk (>25%), ${contrarianPlays.length} contrarian (<10%), ${rosterSize - chalkPlays.length - contrarianPlays.length} moderate`);
+  console.log(`[Gary Self-Review] Total ownership: ${totalOwnership.toFixed(1)}%`);
+  console.log(`[Gary Self-Review] Breakdown: ${chalkPlays.length} chalk (>25%), ${contrarianPlays.length} contrarian (<10%), ${rosterSize - chalkPlays.length - contrarianPlays.length} moderate`);
+  
+  // Log ownership awareness for Gary
+  if (isGPP && totalOwnership > 130) {
+    console.log(`[Gary Self-Review] 📊 High ownership lineup (${totalOwnership.toFixed(1)}%) - these players must smash to differentiate`);
+  } else if (isGPP && totalOwnership < 100) {
+    console.log(`[Gary Self-Review] 🎲 Contrarian lineup (${totalOwnership.toFixed(1)}%) - high leverage if hits ceiling`);
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // OWNERSHIP AWARENESS (No Forced Pivots)
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Gary doesn't force pivots based on ownership caps. He simply logs the data
+  // for awareness. Ownership is ONE factor among many (projection, ceiling, etc.)
+  if (false) { // Disabled: No forced ownership pivots
+    console.log(`[Gary Self-Review] ⚠️ Round 3: CHALK PIVOT - ownership ${totalOwnership.toFixed(1)}% (DISABLED - awareness only)`);
+    
+    // Sort chalk plays by ownership (highest first = best to swap out)
+    const chalkSorted = [...chalkPlays]
+      .filter(p => !p.forcedLock) // 🛡️ NEVER pivot confirmed starters (BDL lock)
+      .sort((a, b) => (b.ownership || 0) - (a.ownership || 0));
+    
+    let pivotsMade = 0;
+    const maxPivots = 2; // Limit pivots to avoid over-optimization
+    
+    for (const chalkPlayer of chalkSorted) {
+      if (totalOwnership <= GPP_OWNERSHIP_CAP) break;
+      if (pivotsMade >= maxPivots) break;
+      
+      // Find lower-owned alternative with similar ceiling
+      const chalkCeiling = chalkPlayer.ceilingScore || chalkPlayer.projected_pts * 1.2;
+      const chalkSalary = chalkPlayer.salary || 5000;
+      const chalkOwnership = chalkPlayer.ownership || 25;
+      
+      // ═══════════════════════════════════════════════════════════════════════════
+      // FLEXIBLE PIVOT SEARCH - Willing to trade some ceiling for ownership leverage
+      // ═══════════════════════════════════════════════════════════════════════════
+      // GPP math: A 10% ownership advantage can be worth 3-5 projection points
+      // because you're sharing the win with fewer lineups if you hit.
+      // 
+      // The key insight: It's better to have a 45-ceiling player at 8% ownership
+      // than a 50-ceiling player at 30% ownership in large-field GPPs.
+      // ═══════════════════════════════════════════════════════════════════════════
+      const alternatives = playerPool.filter(p => {
+        if (p.name === chalkPlayer.player) return false;
+        if (currentLineup.some(l => l.player === p.name)) return false;
+        if (p.status === 'OUT' || p.status === 'DOUBTFUL') return false;
+        
+        const altOwnership = p.ownership || 15;
+        const altCeiling = p.ceilingScore || (p.projected_pts || 0) * 1.2;
+        const altSalary = p.salary || 5000;
+        
+        // Must be meaningfully lower ownership (at least 8% less)
+        const ownershipGain = chalkOwnership - altOwnership;
+        if (ownershipGain < 8) return false;
+        
+        // Allow ceiling tradeoff proportional to ownership gain
+        // For every 5% ownership saved, accept up to 2 pts of ceiling loss
+        const allowedCeilingLoss = (ownershipGain / 5) * 2;
+        const ceilingLoss = chalkCeiling - altCeiling;
+        if (ceilingLoss > allowedCeilingLoss) return false;
+        
+        // Must fit salary (more flexible - within $2500, or if cheaper that's fine)
+        const salaryDiff = altSalary - chalkSalary;
+        const currentTotal = currentLineup.reduce((sum, p) => sum + (p.salary || 0), 0);
+        const wouldExceedCap = currentTotal + salaryDiff > salaryCap;
+        if (salaryDiff > 2500 || wouldExceedCap) return false;
+        
+        // Check position eligibility (universal logic)
+        const playerPos = (p.position || '').toUpperCase();
+        const slotPos = chalkPlayer.position?.toUpperCase();
+        const canFill = playerPos === slotPos || 
+          (slotPos === 'FLEX' && ['RB', 'WR', 'TE'].includes(playerPos)) ||
+          (slotPos === 'UTIL') || // UTIL can take anyone
+          (slotPos === 'G' && ['PG', 'SG', 'G', 'G-F', 'F-G'].includes(playerPos)) ||
+          (slotPos === 'F' && ['SF', 'PF', 'F', 'F-G', 'G-F', 'F-C', 'C-F'].includes(playerPos));
+        
+        return canFill;
+      }).sort((a, b) => {
+        // Score = ceiling - (ownership * 0.3) - prioritize low ownership with good ceiling
+        const scoreA = (a.ceilingScore || (a.projected_pts || 0) * 1.2) - ((a.ownership || 15) * 0.3);
+        const scoreB = (b.ceilingScore || (b.projected_pts || 0) * 1.2) - ((b.ownership || 15) * 0.3);
+        return scoreB - scoreA;
+      });
+      
+      if (alternatives.length > 0) {
+        const alt = alternatives[0];
+        const altOwnership = alt.ownership || 15;
+        const ownershipSaved = chalkOwnership - altOwnership;
+        
+        // Apply the swap
+        const idx = currentLineup.findIndex(p => p.player === chalkPlayer.player);
+        if (idx !== -1) {
+          const oldPlayer = currentLineup[idx].player;
+          const salaryDiff = (alt.salary || 5000) - chalkSalary;
+          
+          currentLineup[idx] = {
+            ...currentLineup[idx],
+            player: alt.name,
+            team: alt.team,
+            salary: alt.salary || 5000,
+            projected_pts: alt.projected_pts || alt.ceilingScore,
+            ceilingScore: alt.ceilingScore,
+            ownership: altOwnership,
+            isChalk: false,
+            isContrarian: altOwnership < 10,
+            chalkPivot: true // Flag that this was a leverage swap
+          };
+          
+          totalOwnership -= ownershipSaved;
+          totalSalary += salaryDiff;
+          pivotsMade++;
+          
+          console.log(`[Gary Self-Review] 🔄 CHALK PIVOT: ${oldPlayer} (${chalkOwnership}%) → ${alt.name} (${altOwnership}%) | Saved ${ownershipSaved.toFixed(1)}% ownership`);
+        }
+      }
+    }
+    
+    if (pivotsMade > 0) {
+      console.log(`[Gary Self-Review] ✅ Made ${pivotsMade} chalk pivots, new ownership: ${totalOwnership.toFixed(1)}%`);
+    } else {
+      console.log(`[Gary Self-Review] ℹ️ No suitable chalk pivots found - lineup stays as-is`);
+    }
+  }
   
   // Log any contrarian picks Gary made organically (bonus for tournament differentiation)
-  if (contrarianPlays.length > 0) {
-    console.log(`[Gary Self-Review] 🎲 Contrarian picks: ${contrarianPlays.map(p => `${p.player} (${p.ownership || 15}%)`).join(', ')}`);
+  const finalContrarian = currentLineup.filter(p => (p.ownership || 15) < 10);
+  if (finalContrarian.length > 0) {
+    console.log(`[Gary Self-Review] 🎲 Contrarian picks: ${finalContrarian.map(p => `${p.player} (${p.ownership || 15}%)`).join(', ')}`);
   }
   
   // Recalculate totals
   totalSalary = currentLineup.reduce((sum, p) => sum + (p.salary || 0), 0);
   totalPts = currentLineup.reduce((sum, p) => sum + (p.projected_pts || 0), 0);
+  totalOwnership = currentLineup.reduce((sum, p) => sum + (p.ownership || 15), 0);
   
-  console.log(`[Gary Self-Review] ✅ Final: $${totalSalary}/${salaryCap} | ${totalPts.toFixed(1)} pts\n`);
+  console.log(`[Gary Self-Review] ✅ Final: $${totalSalary}/${salaryCap} | ${totalPts.toFixed(1)} pts | ${totalOwnership.toFixed(1)}% ownership\n`);
   
   return {
     lineup: currentLineup,
     totalSalary,
-    projectedPoints: totalPts
+    projectedPoints: totalPts,
+    totalOwnership
+  };
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * PUNT VALIDATION - Prevent "Fragile Floor" Lineups
+ * ═══════════════════════════════════════════════════════════════════════════
+ * 
+ * Validates that lineup doesn't have too many minimum-salary players.
+ * Too many punts = if one player duds (8 points), entire lineup collapses.
+ * 
+ * Example failure: 4 players at $3,800 = need 6.5x value from ALL to hit 390 pts
+ * If ONE gets 12 pts instead of 25, you need other players to score 95 each.
+ * 
+ * @param {Array} lineup - Lineup slots
+ * @param {string} platform - 'draftkings' or 'fanduel'
+ * @param {string} contestType - 'gpp' or 'cash'
+ * @returns {Object} { valid: boolean, error: string, puntPlayers: Array }
+ */
+export function validatePuntCount(lineup, platform, contestType = 'gpp') {
+  const threshold = PUNT_SALARY_THRESHOLD[platform] || 4500;
+  const maxPunts = MAX_PUNTS_PER_LINEUP[contestType] || 2;
+  
+  const puntPlayers = lineup.filter(slot => slot.salary < threshold);
+  const puntCount = puntPlayers.length;
+  
+  if (puntCount > maxPunts) {
+    return {
+      valid: false,
+      puntCount, // Include puntCount for self-heal logic
+      error: `FRAGILE FLOOR: ${puntCount} punt plays (max: ${maxPunts}). Replace cheap players with mid-range ($5k-$7k) for higher floor.`,
+      puntPlayers: puntPlayers.map(p => ({ name: p.player, salary: p.salary, position: p.position })),
+      suggestion: `Downgrade a star and upgrade ${puntCount - maxPunts} punt player(s)`
+    };
+  }
+  
+  return { 
+    valid: true, 
+    puntCount,
+    puntPlayers: puntPlayers.map(p => ({ name: p.player, salary: p.salary, position: p.position }))
+  };
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * ANTI-CORRELATION DETECTION - Identify Conflicting Player Combinations
+ * ═══════════════════════════════════════════════════════════════════════════
+ * 
+ * Detects when you've stacked players who compete for same opportunities.
+ * Example: Gui Santos + Trayce Jackson-Davis (both GSW bench)
+ * - If Santos gets hot, coach leaves him in → Jackson-Davis sits
+ * - If Jackson-Davis gets hot, Santos sits
+ * - You're betting against yourself
+ * 
+ * @param {Array} lineup - Lineup slots
+ * @param {string} sport - 'NBA' or 'NFL'
+ * @returns {Object} { conflictScore: number, conflicts: Array }
+ */
+export function checkAntiCorrelation(lineup, sport = 'NBA') {
+  let conflictScore = 0;
+  const conflicts = [];
+  
+  for (let i = 0; i < lineup.length; i++) {
+    for (let j = i + 1; j < lineup.length; j++) {
+      const playerA = lineup[i];
+      const playerB = lineup[j];
+      
+      for (const [ruleName, rule] of Object.entries(ANTI_CORRELATION_RULES)) {
+        // Skip NFL-specific rules if NBA, and vice versa
+        if (sport === 'NBA' && ruleName.includes('rb')) continue;
+        if (sport === 'NFL' && ruleName.includes('bench_conflict')) continue;
+        
+        if (rule.check(playerA, playerB)) {
+          conflictScore += rule.penalty;
+          conflicts.push({
+            players: [playerA.player, playerB.player],
+            teams: [playerA.team, playerB.team],
+            positions: [playerA.position, playerB.position],
+            penalty: rule.penalty,
+            reason: rule.reason,
+            ruleName: rule.name
+          });
+          
+          console.log(`[Anti-Correlation] ⚠️ ${rule.name}: ${playerA.player} + ${playerB.player} (${rule.reason})`);
+        }
+      }
+    }
+  }
+  
+  return { 
+    conflictScore, 
+    conflicts,
+    hasConflicts: conflicts.length > 0
+  };
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * CHALK FADE STRATEGY - Tournament Leverage Play
+ * ═══════════════════════════════════════════════════════════════════════════
+ * 
+ * In large tournaments, if everyone plays the same "chalk" (high-owned players),
+ * you can only win if EVERYONE in your lineup pops off.
+ * 
+ * Better strategy: Fade ONE chalk play for a contrarian alternative.
+ * - If chalk busts → you're ahead of 50% of field
+ * - If chalk hits → your contrarian better hit too, but you have differentiation
+ * 
+ * Example: Jalen Johnson at 50% ownership
+ * - If he scores 45 instead of 73 → 50% of field is eliminated
+ * - Pivoting to SGA (20% owned) creates leverage
+ * 
+ * @param {Array} playerPool - All available players
+ * @param {Array} lineup - Current lineup
+ * @param {string} contestType - 'gpp' or 'cash'
+ * @returns {Object} { shouldFade: boolean, fadeCandidate: Object, alternative: Object }
+ */
+export function applyChalkFadeStrategy(playerPool, lineup, contestType = 'gpp') {
+  if (contestType !== 'gpp') {
+    return { shouldFade: false, reason: 'Only for GPP tournaments' };
+  }
+  
+  // Find chalk players in lineup (>30% ownership)
+  const chalkPlayers = lineup.filter(slot => (slot.ownership || 0) > 30);
+  
+  if (chalkPlayers.length <= 1) {
+    return { shouldFade: false, reason: 'Acceptable chalk level (<= 1 player)' };
+  }
+  
+  console.log(`[Chalk Fade] ⚠️ ${chalkPlayers.length} chalk plays detected (>30% owned)`);
+  
+  // Sort chalk by ownership (highest first)
+  const highestChalk = chalkPlayers.sort((a, b) => (b.ownership || 0) - (a.ownership || 0))[0];
+  
+  // Find contrarian alternative (<15% owned, similar salary)
+  const contrarianAlternatives = playerPool.filter(p => 
+    p.position === highestChalk.position &&
+    Math.abs(p.salary - highestChalk.salary) < 1500 &&
+    (p.ownership || 15) < 15 &&
+    (p.projected_pts || 0) >= (highestChalk.projected_pts || 0) * 0.85 && // At least 85% projection
+    p.name !== highestChalk.player // Don't suggest swapping to same player
+  ).sort((a, b) => (b.projected_pts || 0) - (a.projected_pts || 0));
+  
+  if (contrarianAlternatives.length > 0) {
+    const alternative = contrarianAlternatives[0];
+    
+    console.log(`[Chalk Fade] 💡 LEVERAGE OPPORTUNITY:`);
+    console.log(`   Fade: ${highestChalk.player} (${highestChalk.ownership}% owned, ${highestChalk.projected_pts} pts)`);
+    console.log(`   Play: ${alternative.name} (${alternative.ownership || 'N/A'}% owned, ${alternative.projected_pts} pts)`);
+    
+    return {
+      shouldFade: true,
+      fadeCandidate: {
+        name: highestChalk.player,
+        salary: highestChalk.salary,
+        ownership: highestChalk.ownership,
+        projectedPts: highestChalk.projected_pts
+      },
+      alternative: {
+        name: alternative.name,
+        salary: alternative.salary,
+        ownership: alternative.ownership || 10,
+        projectedPts: alternative.projected_pts
+      },
+      leverageReason: `If ${highestChalk.player} has a mediocre game, ${Math.round(highestChalk.ownership)}% of field is eliminated. This pivot creates differentiation while maintaining similar ceiling.`
+    };
+  }
+  
+  return { 
+    shouldFade: false, 
+    reason: 'No suitable contrarian alternatives found',
+    chalkCount: chalkPlayers.length
   };
 }
 
@@ -1378,13 +3426,35 @@ export function validateLineup(lineup, platform, sport) {
   };
 }
 
+// Export position helpers for testing
+export { isPositionEligible, getPlayerEligibleSlots, getEligibleSlots };
+
 export default {
   PLATFORM_CONSTRAINTS,
+  LINEUP_ARCHETYPES,
+  GPP_VALUE_TARGETS,
   calculateProjectedPoints,
+  calculateCeilingScore,
+  calculateFloorScore,
+  calculateValueScore,
+  calculateDFSMetrics,
+  calculateOpportunityScore,
+  calculateGPPValueTarget,
+  applyOpportunityBoost,
+  isSmashSpot,
   findPivotAlternatives,
   optimizeLineup,
+  applyNFLStackingRules,
   addPivotsToLineup,
   generateDFSLineup,
-  validateLineup
+  selfReviewLineup,
+  validateLineup,
+  validatePuntCount,
+  checkAntiCorrelation,
+  applyChalkFadeStrategy,
+  // Position eligibility helpers
+  isPositionEligible,
+  getPlayerEligibleSlots,
+  getEligibleSlots
 };
 

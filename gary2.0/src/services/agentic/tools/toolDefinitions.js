@@ -46,7 +46,7 @@ const NFL_TOKENS = [
   // Line Play
   'OL_RANKINGS', 'DL_RANKINGS', 'PRESSURE_RATE', 'TIME_TO_THROW',
   // Turnover Analysis
-  'TURNOVER_MARGIN', 'TURNOVER_LUCK', 'FUMBLE_LUCK', 'PENALTIES',
+  'TURNOVER_MARGIN', 'TURNOVER_LUCK', 'FUMBLE_LUCK',
   // Situational
   'RED_ZONE_OFFENSE', 'RED_ZONE_DEFENSE', 'GOAL_LINE', 'TWO_MINUTE_DRILL',
   // Special Teams
@@ -102,7 +102,6 @@ const NCAAF_TOKENS = [
   'NCAAF_DEFENSE',            // BDL: opp_passing_yards, opp_rushing_yards
   'NCAAF_SCORING',            // BDL: calculated from TDs and game data
   'NCAAF_TURNOVER_MARGIN',    // BDL: passing_interceptions
-  'PENALTIES',
   
   // ===== ADVANCED ANALYTICS (via Gemini Grounding - NEW) =====
   'NCAAF_SP_PLUS_RATINGS',    // SP+ offensive/defensive rankings
@@ -140,7 +139,7 @@ const NHL_TOKENS = [
   // Standings & Records
   'STANDINGS', 'TEAM_RECORD', 'CONFERENCE_STANDING', 'DIVISION_STANDING',
   // Special Teams (critical in hockey)
-  'POWER_PLAY_PCT', 'PENALTY_KILL_PCT', 'SPECIAL_TEAMS', 'PP_OPPORTUNITIES', 'PENALTIES',
+  'POWER_PLAY_PCT', 'PENALTY_KILL_PCT', 'SPECIAL_TEAMS', 'PP_OPPORTUNITIES',
   // Scoring
   'GOALS_FOR', 'GOALS_AGAINST', 'GOAL_DIFFERENTIAL', 'SCORING_FIRST',
   // Shot Metrics (Corsi proxy)
@@ -413,7 +412,7 @@ Only use for NCAAF games when you need specific player analysis.`,
       description: `Fetches real-time narrative context, storylines, or player-specific news for the matchup.
 Use this to find the "why" behind the numbers, discover player significance (like high-impact rookies), 
 or identify narrative momentum (e.g., revenge spots, birthday performance, "hot streaks").
-Example queries: "Dallas Mavericks rookie Cooper Flagg impact", "Luka Doncic narrative momentum", "Revenge spot for team X vs team Y".`,
+Example queries: "player stepping up with star injured", "breakout performer recent games", "Revenge spot for team X vs team Y".`,
       parameters: {
         type: "object",
         properties: {

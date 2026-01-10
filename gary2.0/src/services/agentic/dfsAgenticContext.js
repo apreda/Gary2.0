@@ -3,18 +3,26 @@
  * 
  * Data Sources:
  * - Tank01 Fantasy Stats API (RapidAPI): Real DFS salaries for FanDuel/DraftKings
- * - Ball Don't Lie (BDL) API: Player stats, team data, and accurate rosters
- * - Gemini Grounding: Narrative context (targets/fades) and ownership projections
+ * - Ball Don't Lie (BDL) API: Player stats, team data, accurate rosters, and PROP LINES
+ * - Gemini Grounding: Narrative context and ownership projections
  * 
- * The Tank01 API provides accurate, real-time salary data that was previously
- * unreliable via Gemini Grounding search.
+ * PROP LINES INTEGRATION (2026 Enhancement):
+ * Prop lines are the SHARPEST projection source available - they represent real money
+ * being wagered on player performance. We now use BDL's player props API to get:
+ * - Points props → Direct fantasy point baseline
+ * - Assists props → Playmaking upside indicator
+ * - Rebounds props → Glass work for bigs
+ * - Threes props → Shooting upside for guards/wings
  * 
- * This bridges the gap between BDL historical stats and real-time DFS data
+ * This bridges the gap between DFS salaries and actual expected performance.
  */
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { ballDontLieService } from '../ballDontLieService.js';
-import { fetchDfsSalaries } from '../tank01DfsService.js';
+import { fetchDfsSalaries, fetchNbaGameTimes, buildSlatesFromGameTimes } from '../tank01DfsService.js';
+import { fetchSlatesFromRotoWire, populateSlateTeams } from '../rotowireSlateService.js';
+// Import DFS constitution for Sharp Gambler framework
+import { getConstitution as getConstitutionWithBaseRules } from './constitution/index.js';
 
 // SAFETY_SETTINGS and other constants remain same...
 
@@ -52,13 +60,135 @@ function cleanJsonString(text) {
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (!jsonMatch) return null;
   
-  return jsonMatch[0]
+  let cleaned = jsonMatch[0]
     .replace(/[\u201C\u201D]/g, '"') // Smart quotes
     .replace(/,\s*([\}\]])/g, '$1') // Trailing commas
     .replace(/\/\/.*$/gm, '')      // Comments
     .replace(/\r?\n|\r/g, ' ')     // Newlines to spaces
     .replace(/\s+/g, ' ')          // Collapse extra whitespace
     .trim();
+    
+  // Try to repair truncated JSON (common with Gemini responses)
+  cleaned = repairTruncatedJson(cleaned);
+  
+  return cleaned;
+}
+
+/**
+ * Repair truncated JSON that was cut off mid-stream
+ * Gary needs ALL the context - truncated responses lose critical info
+ * 
+ * Common truncation patterns:
+ * - {"projections": [{"name": "Player", "points": 45.2}, {"name": "Another...
+ * - {"game_narratives": [...], "target_players": [{"name": "P...
+ * 
+ * @param {string} json - Potentially truncated JSON string
+ * @returns {string} Repaired JSON string
+ */
+function repairTruncatedJson(json) {
+  if (!json) return json;
+  
+  try {
+    // First, try to parse as-is
+    JSON.parse(json);
+    return json; // Valid JSON, no repair needed
+  } catch (e) {
+    // JSON is malformed, attempt repair
+  }
+  
+  let repaired = json;
+  
+  // Step 1: Fix common Gemini issues
+  // Fix missing commas between array elements (common Gemini issue: }{  should be },{)
+  repaired = repaired.replace(/}\s*{/g, '},{');
+  
+  // Step 2: Count open/close brackets to find truncation point
+  let openBraces = 0;
+  let openBrackets = 0;
+  let inString = false;
+  let lastValidPos = 0;
+  
+  for (let i = 0; i < repaired.length; i++) {
+    const char = repaired[i];
+    const prevChar = i > 0 ? repaired[i - 1] : '';
+    
+    // Track string state (ignore escaped quotes)
+    if (char === '"' && prevChar !== '\\') {
+      inString = !inString;
+    }
+    
+    if (!inString) {
+      if (char === '{') openBraces++;
+      if (char === '}') openBraces--;
+      if (char === '[') openBrackets++;
+      if (char === ']') openBrackets--;
+      
+      // Track last position where JSON was potentially valid (after a complete value)
+      if (char === '}' || char === ']' || char === '"' || /\d/.test(char)) {
+        if (openBraces >= 0 && openBrackets >= 0) {
+          lastValidPos = i;
+        }
+      }
+    }
+  }
+  
+  // Step 3: If truncated mid-string, close the string
+  if (inString) {
+    repaired = repaired + '"';
+  }
+  
+  // Step 4: Close any open brackets/braces
+  // Remove any trailing incomplete element (e.g., {"name": "Play...)
+  const trailingIncomplete = repaired.match(/,\s*\{[^}]*$/);
+  if (trailingIncomplete) {
+    repaired = repaired.substring(0, repaired.length - trailingIncomplete[0].length);
+  }
+  
+  // Close arrays first, then objects
+  while (openBrackets > 0) {
+    repaired += ']';
+    openBrackets--;
+  }
+  while (openBraces > 0) {
+    repaired += '}';
+    openBraces--;
+  }
+  
+  // Step 5: Remove trailing comma before closing brackets (invalid JSON)
+  repaired = repaired.replace(/,\s*([\}\]])/g, '$1');
+  
+  // Step 6: Validate the repair worked
+  try {
+    JSON.parse(repaired);
+    console.log(`[DFS Context] ✅ JSON repair successful - recovered partial data`);
+    return repaired;
+  } catch (e2) {
+    // If repair failed, try a more aggressive approach: truncate at last valid position
+    if (lastValidPos > 0) {
+      let truncated = repaired.substring(0, lastValidPos + 1);
+      
+      // Re-count and close
+      openBraces = (truncated.match(/{/g) || []).length - (truncated.match(/}/g) || []).length;
+      openBrackets = (truncated.match(/\[/g) || []).length - (truncated.match(/]/g) || []).length;
+      
+      while (openBrackets > 0) { truncated += ']'; openBrackets--; }
+      while (openBraces > 0) { truncated += '}'; openBraces--; }
+      
+      truncated = truncated.replace(/,\s*([\}\]])/g, '$1');
+      
+      try {
+        JSON.parse(truncated);
+        console.log(`[DFS Context] ✅ JSON repair (aggressive) successful - recovered partial data`);
+        return truncated;
+      } catch (e3) {
+        // Give up, return original for debugging
+        console.warn(`[DFS Context] ⚠️ JSON repair failed - returning original for debugging`);
+        return json;
+      }
+    }
+    
+    return json;
+  }
 }
 
 /**
@@ -79,149 +209,552 @@ function cleanJsonString(text) {
  * 
  * ═══════════════════════════════════════════════════════════════════════════
  */
+// ═══════════════════════════════════════════════════════════════════════════
+// DFS MODEL CONFIG - Optimized for Contest Type
+// ═══════════════════════════════════════════════════════════════════════════
+// GPP (Tournaments): Higher temperature for differentiated, contrarian lineups
+// Cash (50/50s): Lower temperature for consistent, high-floor plays
+// ═══════════════════════════════════════════════════════════════════════════
 const DFS_MODEL_CONFIG = {
   model: process.env.GEMINI_FLASH_MODEL || 'gemini-3-flash-preview',
-  temperature: 0.4,
   reasoningLevel: 'HIGH',
   grounding: 'ENABLED',
   maxOutputTokens: 8192,
-  topP: 0.95
+  topP: 0.95,
+  // Contest-specific temperatures
+  temperature: {
+    gpp: 0.75,  // Higher creativity for tournament leverage and differentiation
+    cash: 0.5,  // Lower for consistent, high-floor selections
+    default: 0.6
+  }
 };
+
+// Helper to get temperature for contest type
+export function getDFSTemperature(contestType = 'gpp') {
+  return DFS_MODEL_CONFIG.temperature[contestType] || DFS_MODEL_CONFIG.temperature.default;
+}
+
+/**
+ * Get the DFS constitution for a sport (WITH BASE_RULES included)
+ * This ensures DFS gets the same core identity (INDEPENDENT THINKER), 
+ * data source rules, and external betting influence prohibition as game picks.
+ * 
+ * @param {string} sport - 'NBA' or 'NFL'
+ * @returns {string} Full constitution with BASE_RULES prepended
+ */
+export function getDFSConstitution(sport) {
+  const constitutionKey = sport === 'NFL' ? 'NFL_DFS' : 'NBA_DFS';
+  let constitution = getConstitutionWithBaseRules(constitutionKey);
+  
+  // Replace date template if present
+  const today = new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+  constitution = constitution.replace(/\{\{CURRENT_DATE\}\}/g, today);
+  
+  return constitution;
+}
 
 console.log(`[DFS Context] Initialized with MODEL_CONFIG:`, {
   model: DFS_MODEL_CONFIG.model,
-  temp: DFS_MODEL_CONFIG.temperature,
+  tempGPP: DFS_MODEL_CONFIG.temperature.gpp,
+  tempCash: DFS_MODEL_CONFIG.temperature.cash,
   reasoning: DFS_MODEL_CONFIG.reasoningLevel,
   grounding: DFS_MODEL_CONFIG.grounding
 });
 
 /**
- * Discover available DFS slates for a platform and date
- * @param {string} platform - 'draftkings' or 'fanduel'
- * @param {string} sport - 'NBA' or 'NFL'
- * @param {string} slateDate - Date string
- * @returns {Array} List of discovered slates
+ * ═══════════════════════════════════════════════════════════════════════════
+ * PROP LINES FOR DFS PROJECTIONS - The Sharpest Edge
+ * ═══════════════════════════════════════════════════════════════════════════
+ * 
+ * Prop lines are set by oddsmakers with real money on the line. They represent
+ * the market's consensus on player performance - much sharper than "expert"
+ * projections or historical averages.
+ * 
+ * DFS Fantasy Point Calculation (DraftKings):
+ * - Points: 1 pt per point scored
+ * - Rebounds: 1.25 pts per rebound
+ * - Assists: 1.5 pts per assist
+ * - Steals: 2 pts per steal
+ * - Blocks: 2 pts per block
+ * - Turnovers: -0.5 pts per turnover
+ * - 3PM: 0.5 bonus per three made
+ * - Double-Double: 1.5 bonus
+ * - Triple-Double: 3 bonus
+ * 
+ * By using prop lines, we can estimate floor/ceiling:
+ * - Points O/U 22.5 → baseline 22.5 fantasy pts just from scoring
+ * - Assists O/U 6.5 → +9.75 fantasy pts from assists
+ * - Rebounds O/U 8.5 → +10.6 fantasy pts from boards
+ * ═══════════════════════════════════════════════════════════════════════════
  */
-export async function discoverDFSSlates(platform, sport, slateDate) {
-  // ⭐ Use Gemini Grounding for slate discovery (Industry Standard)
-  const genAI = getGeminiClient();
-  if (!genAI) {
-    console.log('[DFS Context] Gemini not available - returning default Main Slate');
-    return [{ id: 'main', name: 'Main Slate', gameCount: 0, startTime: 'TBD' }];
+
+/**
+ * Fetch player prop lines for DFS projection enhancement
+ * @param {string} sport - 'NBA' or 'NFL'
+ * @param {Array} gameIds - Array of game IDs to fetch props for
+ * @returns {Object} Map of player names to prop-based projections
+ */
+export async function fetchPropLinesForDFS(sport, gameIds) {
+  if (!gameIds || gameIds.length === 0) {
+    console.log('[DFS Props] No game IDs provided - skipping prop lines');
+    return {};
   }
+  
+  const propProjections = {};
+  
+  try {
+    console.log(`[DFS Props] 📊 Fetching prop lines for ${gameIds.length} games to enhance DFS projections`);
+    
+    // Check if BDL service has player props method for this sport
+    // NOTE: BDL SDK currently only supports NHL/EPL props, not NBA
+    if (sport === 'NBA' && typeof ballDontLieService.getNbaPlayerProps !== 'function') {
+      console.log('[DFS Props] ⚠️ NBA player props not available via BDL SDK - using MCP tools would be required');
+      console.log('[DFS Props] ℹ️ Falling back to season stats for projections');
+      return {};
+    }
+    
+    // Fetch props for each game
+    for (const gameId of gameIds) {
+      try {
+        // Use BDL API to fetch player props (NHL/EPL supported, NBA not yet)
+        const propsMethod = sport === 'NBA' ? 'getNbaPlayerProps' : 
+                          sport === 'NHL' ? 'getNhlPlayerProps' : null;
+        
+        if (!propsMethod || typeof ballDontLieService[propsMethod] !== 'function') {
+          console.log(`[DFS Props] ⚠️ ${sport} props not available`);
+          continue;
+        }
+        
+        const props = await ballDontLieService[propsMethod](gameId);
+        
+        if (!props || props.length === 0) continue;
+        
+        // Group props by player
+        const playerProps = {};
+        for (const prop of props) {
+          const playerName = prop.player?.full_name || prop.player_name;
+          if (!playerName) continue;
+          
+          if (!playerProps[playerName]) {
+            playerProps[playerName] = {
+              name: playerName,
+              team: prop.team?.abbreviation || prop.team,
+              props: {}
+            };
+          }
+          
+          // Store the prop line (use the line value, not the odds)
+          const propType = prop.prop_type || prop.stat_type;
+          const line = prop.line || prop.over_under;
+          
+          if (propType && line) {
+            playerProps[playerName].props[propType] = line;
+          }
+        }
+        
+        // Calculate DFS projection from props
+        for (const [name, data] of Object.entries(playerProps)) {
+          const p = data.props;
+          
+          // DraftKings scoring
+          let projection = 0;
+          let components = [];
+          
+          // Points (1 pt per point)
+          if (p.points) {
+            projection += p.points * 1;
+            components.push(`${p.points} pts`);
+          }
+          
+          // Rebounds (1.25 pts per rebound)
+          if (p.rebounds) {
+            projection += p.rebounds * 1.25;
+            components.push(`${p.rebounds} reb`);
+          }
+          
+          // Assists (1.5 pts per assist)
+          if (p.assists) {
+            projection += p.assists * 1.5;
+            components.push(`${p.assists} ast`);
+          }
+          
+          // Threes (0.5 bonus per 3PM - already counted in points)
+          if (p.threes) {
+            projection += p.threes * 0.5;
+            components.push(`${p.threes} 3PM`);
+          }
+          
+          // PRA (Points + Rebounds + Assists combo)
+          if (p.points_rebounds_assists && !p.points && !p.rebounds && !p.assists) {
+            // If we have PRA but not individual lines, use it as a rough estimate
+            // PRA ≈ Points + Rebounds*1.25 + Assists*1.5 (but we only have raw total)
+            // Estimate: PRA line * 1.2 for DFS conversion
+            projection = p.points_rebounds_assists * 1.15;
+            components.push(`${p.points_rebounds_assists} PRA`);
+          }
+          
+          if (projection > 0) {
+            propProjections[name] = {
+              ...data,
+              propBasedProjection: Math.round(projection * 10) / 10,
+              propComponents: components.join(' + '),
+              confidence: components.length >= 3 ? 'HIGH' : components.length >= 2 ? 'MEDIUM' : 'LOW'
+            };
+          }
+        }
+        
+      } catch (gameError) {
+        console.warn(`[DFS Props] Failed to fetch props for game ${gameId}: ${gameError.message}`);
+      }
+    }
+    
+    const playerCount = Object.keys(propProjections).length;
+    console.log(`[DFS Props] ✅ Generated prop-based projections for ${playerCount} players`);
+    
+    return propProjections;
+    
+  } catch (error) {
+    console.error(`[DFS Props] Error fetching prop lines: ${error.message}`);
+    return {};
+  }
+}
 
-    const platformName = platform === 'draftkings' ? 'DraftKings' : 'FanDuel';
+/**
+ * Enhance DFS player data with prop-based projections
+ * @param {Array} players - Array of DFS players with salaries
+ * @param {Object} propProjections - Prop-based projections from fetchPropLinesForDFS
+ * @returns {Array} Enhanced player array with prop projections
+ */
+export function enhancePlayersWithProps(players, propProjections) {
+  if (!propProjections || Object.keys(propProjections).length === 0) {
+    return players;
+  }
+  
+  let enhancedCount = 0;
+  
+  const enhanced = players.map(player => {
+    const playerName = player.name || player.player;
+    
+    // Try exact match first, then fuzzy match
+    let propData = propProjections[playerName];
+    
+    if (!propData) {
+      // Try partial match (last name)
+      const lastName = playerName?.split(' ').pop()?.toLowerCase();
+      for (const [name, data] of Object.entries(propProjections)) {
+        if (name.toLowerCase().includes(lastName)) {
+          propData = data;
+          break;
+        }
+      }
+    }
+    
+    if (propData) {
+      enhancedCount++;
+      return {
+        ...player,
+        propProjection: propData.propBasedProjection,
+        propComponents: propData.propComponents,
+        propConfidence: propData.confidence,
+        // Use prop projection as floor/ceiling estimate
+        projectedFloor: Math.round(propData.propBasedProjection * 0.7 * 10) / 10,
+        projectedCeiling: Math.round(propData.propBasedProjection * 1.4 * 10) / 10,
+        valueScore: player.salary ? (propData.propBasedProjection / (player.salary / 1000)).toFixed(2) : null
+      };
+    }
+    
+    return player;
+  });
+  
+  console.log(`[DFS Props] Enhanced ${enhancedCount}/${players.length} players with prop-based projections`);
+  
+  return enhanced;
+}
 
-    try {
-      console.log(`[DFS Context] 🕵️ Discovering ${platformName} ${sport} slates for ${slateDate}`);
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * PRE-LOCK INJURY REFRESH - Last-Minute Status Check
+ * ═══════════════════════════════════════════════════════════════════════════
+ * 
+ * DFS lineups lock 5-15 minutes before game time. Players can be ruled OUT
+ * at any point leading up to lock. This function performs a FINAL injury
+ * check to prevent rostering players who are suddenly OUT.
+ * 
+ * CRITICAL: Run this 30-60 minutes before slate lock for final verification.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+
+/**
+ * Perform pre-lock injury refresh to catch last-minute scratches
+ * @param {string} sport - 'NBA' or 'NFL'
+ * @param {Array} lineup - Current lineup array
+ * @param {string} dateStr - Date string (YYYY-MM-DD)
+ * @returns {Object} { safe: boolean, warnings: Array, replacementSuggestions: Object }
+ */
+export async function preLockInjuryRefresh(sport, lineup, dateStr) {
+  console.log(`[Pre-Lock] 🏥 Performing final injury check for ${lineup.length} players...`);
+  
+  const warnings = [];
+  const replacementSuggestions = {};
+  const playerStatuses = {};
+  
+  try {
+    // Fetch latest injury data from BDL
+    const sportKey = sport === 'NBA' ? 'basketball_nba' : 'americanfootball_nfl';
+    const injuries = await ballDontLieService.getPlayerInjuries?.(sportKey) || [];
+    
+    // Build injury status map
+    for (const injury of injuries) {
+      const name = injury.player?.full_name || `${injury.player?.first_name} ${injury.player?.last_name}`;
+      if (name) {
+        playerStatuses[name.toLowerCase()] = {
+          status: injury.status,
+          comment: injury.comment,
+          returnDate: injury.return_date
+        };
+      }
+    }
+    
+    // Also use Gemini Grounding for real-time injury news (catches last-minute scratches)
+    const genAI = getGeminiClient();
+    if (genAI) {
+      const playerNames = lineup.map(p => p.player || p.name).filter(Boolean);
       
       const model = genAI.getGenerativeModel({
-        model: 'gemini-3-flash-preview', // Flash is faster and more reliable for simple grounding
+        model: 'gemini-3-flash-preview',
         tools: [{ google_search: {} }],
         safetySettings: SAFETY_SETTINGS,
-        generationConfig: {
-          temperature: 0.1,
-          topP: 0.95,
-          maxOutputTokens: 2048
-        }
+        generationConfig: { temperature: 0.1, maxOutputTokens: 2048 }
       });
+      
+      const prompt = `Search for the LATEST injury status for these ${sport} players playing TODAY (${dateStr}):
+${playerNames.join(', ')}
 
-      const prompt = `Search the web for the official ${platformName} ${sport} DFS slate schedule for today, ${slateDate}. 
-Check RotoWire or DraftKings. 
+I need ONLY players who are:
+- Ruled OUT
+- DOUBTFUL
+- GTD (Game-Time Decision)
+- Just ruled out in the last few hours
 
-I need to find the specific "Classic" slates. 
-Find the TEAMS included in the Main Slate (5 games), Turbo Slate (2 games), and Night Slate (2 games).
-
-Return ONLY valid JSON:
+Return JSON:
 {
-  "slates": [
-    {
-      "id": "slate-id",
-      "name": "Slate Name",
-      "startTime": "7:30 PM ET",
-      "gameCount": 5,
-      "games": ["PHI@NYK", "ATL@TOR", ...],
-      "teams": ["PHI", "NYK", "ATL", "TOR", ...]
-    }
+  "lastMinuteOuts": [
+    { "name": "Player Name", "status": "OUT", "reason": "Ankle", "announced": "1 hour ago" }
+  ],
+  "gtdWatch": [
+    { "name": "Player Name", "status": "GTD", "reason": "Illness", "expected": "Likely to play" }
   ]
-}`;
+}
 
-      const result = await model.generateContent(prompt);
-      const text = result.response.text();
-      
-      const cleanJson = cleanJsonString(text);
-      if (cleanJson) {
-        try {
-          const parsed = JSON.parse(cleanJson);
-          if (parsed.slates && Array.isArray(parsed.slates) && parsed.slates.length > 0) {
-            console.log(`[DFS Context] ✅ Discovered ${parsed.slates.length} slates via Grounding: ${parsed.slates.map(s => s.name).join(', ')}`);
-            return parsed.slates;
-          }
-        } catch (parseErr) {
-          console.warn(`[DFS Context] Slate JSON parse failed: ${parseErr.message}`);
-          console.debug(`[DFS Context] Problematic JSON snippet: ${cleanJson.substring(0, 100)}...`);
-        }
-      }
-      
-      // If grounding failed or returned empty, try to infer from BDL
-      console.log('[DFS Context] ⚠️ Grounding failed to find slates. Attempting to infer from BDL schedule...');
-      const bdlGames = await ballDontLieService.getGames(sport === 'NBA' ? 'basketball_nba' : 'americanfootball_nfl', { dates: [slateDate] });
-      
-      if (bdlGames && bdlGames.length > 0) {
-        const slates = [];
+If all players are healthy and playing, return: { "lastMinuteOuts": [], "gtdWatch": [] }`;
+
+      try {
+        const result = await model.generateContent(prompt);
+        const text = result.response.text();
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
         
-        // Sort games by time
-        const sortedGames = [...bdlGames].sort((a, b) => {
-          const timeA = a.status || 'ZZZ';
-          const timeB = b.status || 'ZZZ';
-          return timeA.localeCompare(timeB);
-        });
-
-        // "Full Day" Slate (All Games)
-        slates.push({
-          id: 'full-day',
-          name: 'Full Day (All Games)',
-          startTime: sortedGames[0]?.status || 'TBD',
-          gameCount: sortedGames.length,
-          games: sortedGames.map(g => `${g.visitor_team?.abbreviation}@${g.home_team?.abbreviation}`),
-          teams: sortedGames.flatMap(g => [g.visitor_team?.abbreviation, g.home_team?.abbreviation])
-        });
-
-        // Group into waves for inference
-        const waves = new Map();
-        sortedGames.forEach(game => {
-          let status = game.status || 'TBD';
-          if (status.includes('Final') || status.includes('1st') || status.includes('2nd')) return;
-          if (!waves.has(status)) waves.set(status, []);
-          waves.get(status).push(game);
-        });
-
-        const waveTimes = Array.from(waves.keys()).sort();
-        if (waveTimes.length > 1) {
-          waveTimes.forEach((time, idx) => {
-            const games = waves.get(time);
-            const name = idx === 0 ? 'Early Slate' : (idx === waveTimes.length - 1 ? 'Night Slate' : `Turbo Slate ${idx}`);
-            slates.push({
-              id: `inferred-${idx}`,
-              name: `${name} (${time})`,
-              startTime: time,
-              gameCount: games.length,
-              games: games.map(g => `${g.visitor_team?.abbreviation}@${g.home_team?.abbreviation}`),
-              teams: games.flatMap(g => [g.visitor_team?.abbreviation, g.home_team?.abbreviation])
-            });
-          });
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          
+          // Process last-minute outs
+          for (const out of (parsed.lastMinuteOuts || [])) {
+            const normalizedName = out.name?.toLowerCase();
+            if (normalizedName) {
+              playerStatuses[normalizedName] = { status: 'OUT', comment: out.reason, announced: out.announced };
+            }
+          }
+          
+          // Process GTD watch
+          for (const gtd of (parsed.gtdWatch || [])) {
+            const normalizedName = gtd.name?.toLowerCase();
+            if (normalizedName && !playerStatuses[normalizedName]) {
+              playerStatuses[normalizedName] = { status: 'GTD', comment: gtd.reason, expected: gtd.expected };
+            }
+          }
         }
+      } catch (groundingError) {
+        console.warn(`[Pre-Lock] Grounding search failed: ${groundingError.message}`);
+      }
+    }
+    
+    // Check each lineup player against status map
+    let safeCount = 0;
+    for (const player of lineup) {
+      const playerName = (player.player || player.name || '').toLowerCase();
+      const status = playerStatuses[playerName];
+      
+      if (status) {
+        const statusUpper = (status.status || '').toUpperCase();
+        
+        if (statusUpper === 'OUT' || statusUpper === 'DOUBTFUL') {
+          warnings.push({
+            player: player.player || player.name,
+            position: player.position,
+            salary: player.salary,
+            status: statusUpper,
+            reason: status.comment,
+            announced: status.announced,
+            severity: 'CRITICAL'
+          });
+          
+          // Suggest replacement would go here (from player pool)
+          replacementSuggestions[player.player || player.name] = {
+            reason: `${statusUpper} - ${status.comment || 'No reason given'}`,
+            suggestion: `Find replacement at ${player.position} with similar salary ($${player.salary})`
+          };
+          
+        } else if (statusUpper === 'GTD' || statusUpper === 'QUESTIONABLE') {
+          warnings.push({
+            player: player.player || player.name,
+            position: player.position,
+            salary: player.salary,
+            status: statusUpper,
+            reason: status.comment,
+            expected: status.expected,
+            severity: 'WARNING'
+          });
+        } else {
+          safeCount++;
+        }
+      } else {
+        safeCount++;
+      }
+    }
+    
+    const criticalCount = warnings.filter(w => w.severity === 'CRITICAL').length;
+    const warningCount = warnings.filter(w => w.severity === 'WARNING').length;
+    
+    console.log(`[Pre-Lock] ✅ ${safeCount}/${lineup.length} players confirmed safe`);
+    if (criticalCount > 0) console.log(`[Pre-Lock] ❌ ${criticalCount} CRITICAL: Players ruled OUT/DOUBTFUL`);
+    if (warningCount > 0) console.log(`[Pre-Lock] ⚠️ ${warningCount} WARNING: GTD/Questionable players`);
+    
+    return {
+      safe: criticalCount === 0,
+      safeCount,
+      criticalCount,
+      warningCount,
+      warnings,
+      replacementSuggestions,
+      checkedAt: new Date().toISOString()
+    };
+    
+  } catch (error) {
+    console.error(`[Pre-Lock] Error during injury refresh: ${error.message}`);
+    return {
+      safe: false,
+      error: error.message,
+      warnings: [{ severity: 'ERROR', message: 'Failed to check injuries - proceed with caution' }],
+      replacementSuggestions: {}
+    };
+  }
+}
 
-        console.log(`[DFS Context] ✅ Inferred ${slates.length} slates from schedule`);
+/**
+ * Discover DFS slates for a given sport and platform
+ * Uses RotoWire via Gemini Grounding as the SOURCE OF TRUTH for slate compositions
+ * 
+ * RotoWire gets their slate data directly from DraftKings/FanDuel, making it
+ * the most reliable source for which games are in each slate.
+ * 
+ * @param {string} sport - 'NBA' or 'NFL'
+ * @param {string} platform - 'draftkings' or 'fanduel'
+ * @param {string} slateDate - Date string (e.g., '2025-01-05')
+ * @returns {Array} List of discovered slates with teams
+ */
+export async function discoverDFSSlates(sport, platform, slateDate) {
+  const platformName = platform === 'draftkings' ? 'DraftKings' : 'FanDuel';
+  
+  console.log(`[DFS Context] 🕵️ Discovering ${platformName} ${sport} slates for ${slateDate}`);
+  
+  try {
+    // ═══════════════════════════════════════════════════════════════════════════
+    // PRIMARY: ROTOWIRE BROWSER SCRAPER
+    // ═══════════════════════════════════════════════════════════════════════════
+    // RotoWire gets slate data directly from DraftKings/FanDuel
+    // This is the SOURCE OF TRUTH for actual slate compositions each day
+    // Slates can vary day-to-day so we MUST get the real data
+    
+    if (sport === 'NBA') {
+      console.log(`[DFS Context] 🌐 Scraping actual slates from RotoWire...`);
+      let slates = await fetchSlatesFromRotoWire(platform, 'NBA', slateDate);
+      
+      if (slates && slates.length > 0) {
+        // Populate teams for slates that don't have them using Tank01 game times
+        slates = await populateSlateTeams(slates, slateDate);
+        
+        console.log(`[DFS Context] ✅ Got ${slates.length} slates from RotoWire:`);
+        slates.forEach(s => {
+          console.log(`   📋 ${s.name}: ${s.gameCount} games (${s.startTime})`);
+          console.log(`      Teams: ${s.teams?.join(', ') || 'None'}`);
+        });
+        
         return slates;
       }
-
-      return [{ id: 'main', name: 'Main Slate (Default)', gameCount: 0, startTime: 'TBD' }];
-    } catch (error) {
-      console.error(`[DFS Context] Slate discovery failed: ${error.message}`);
-      return [{ id: 'main', name: 'Main Slate (Fallback)', gameCount: 0, startTime: 'TBD' }];
     }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // FALLBACK: TANK01 GAME TIMES WITH 10PM CUTOFF
+    // ═══════════════════════════════════════════════════════════════════════════
+    // If RotoWire scraper fails, use Tank01 game times with the typical 10pm cutoff
+    // This is a heuristic based on common platform behavior
+    
+    console.log('[DFS Context] ⚠️ RotoWire scraper failed. Using Tank01 game times (10pm cutoff heuristic)...');
+    
+    if (sport === 'NBA') {
+      const games = await fetchNbaGameTimes(slateDate);
+      
+      if (games && games.length > 0) {
+        const slates = buildSlatesFromGameTimes(games, platform);
+        
+        console.log(`[DFS Context] ✅ Built ${slates.length} slates from Tank01:`);
+        slates.forEach(s => {
+          console.log(`   📋 ${s.name}: ${s.gameCount} games (${s.startTime})`);
+          console.log(`      Teams: ${s.teams?.join(', ')}`);
+        });
+        
+        return slates;
+      }
+    }
+    
+    // Final fallback: Use BDL schedule (all games as one slate)
+    console.log('[DFS Context] ⚠️ Tank01 unavailable. Falling back to BDL schedule...');
+    const bdlGames = await ballDontLieService.getGames(
+      sport === 'NBA' ? 'basketball_nba' : 'americanfootball_nfl', 
+      { dates: [slateDate] }
+    );
+    
+    if (bdlGames && bdlGames.length > 0) {
+      const teams = bdlGames.flatMap(g => [
+        g.visitor_team?.abbreviation, 
+        g.home_team?.abbreviation
+      ]).filter(Boolean);
+      
+      return [{
+        id: 'main',
+        name: platform === 'fanduel' ? 'Main' : 'All',
+        type: 'Classic',
+        startTime: 'TBD',
+        gameCount: bdlGames.length,
+        teams: teams,
+        games: bdlGames.map(g => `${g.visitor_team?.abbreviation}@${g.home_team?.abbreviation}`)
+      }];
+    }
+    
+    return [{ id: 'main', name: 'Main Slate (Default)', gameCount: 0, startTime: 'TBD', teams: [], games: [] }];
+    
+  } catch (error) {
+    console.error(`[DFS Context] Slate discovery failed: ${error.message}`);
+    return [{ id: 'main', name: 'Main Slate (Fallback)', gameCount: 0, startTime: 'TBD', teams: [], games: [] }];
+  }
 }
+
+// Note: fetchSlatesFromRotoWire is now imported from rotowireSlateService.js
+// which uses Puppeteer browser automation for reliable slate scraping
 
 /**
  * Fetch DFS salaries and injury data using Gemini Grounding
@@ -337,6 +870,11 @@ Search "NFL injury report ${slateDate}" for:
 - OUT = Will NOT play
 - DOUBTFUL = Unlikely to play  
 - QUESTIONABLE = Game-time decision
+
+**IMPORTANT: ONLY include NEW injuries from THIS WEEK (< 7 days)**
+- ❌ DO NOT list season-long injuries (e.g., player out 3+ months)
+- ✅ DO list recent injuries (e.g., "Kelce OUT tonight")
+- Season stats already reflect long-term absences - NOT an angle
 - HEALTHY = Playing
 
 Return this EXACT JSON format:
@@ -797,6 +1335,95 @@ export async function fetchPlayerStatsFromBDL(sport, dateStr) {
         console.log(`[DFS Context] ⚠️ RISKY PLAYERS (excluding from DFS): ${questionablePlayers.map(i => `${i.player?.first_name} ${i.player?.last_name} (${i.status})`).join(', ')}`);
       }
       
+      // ═══════════════════════════════════════════════════════════════════════════
+      // GEMINI GROUNDING INJURY CHECK - Catch last-minute scratches BDL might miss
+      // ═══════════════════════════════════════════════════════════════════════════
+      // BDL injury data can be stale. Use Gemini Grounding to search for TODAY's
+      // injury news and catch players who were just ruled OUT (like Moe Wagner)
+      // ═══════════════════════════════════════════════════════════════════════════
+      try {
+        const genAI = getGeminiClient();
+        if (genAI) {
+          console.log(`[DFS Context] 🔍 Searching for today's NBA injury updates via Gemini Grounding...`);
+          const model = genAI.getGenerativeModel({
+            model: GROUNDING_MODEL_ID,
+            generationConfig: { temperature: 0.3 },
+            tools: [{ googleSearchRetrieval: { dynamicRetrievalConfig: { mode: 'MODE_DYNAMIC' } } }]
+          });
+          
+          const teamsPlaying = [...teamAbbreviations.values()].join(', ');
+          const injuryPrompt = `Search for NBA injury report TODAY ${slateDate}. 
+
+Find ALL players ruled OUT or DOUBTFUL for tonight's games.
+Teams playing: ${teamsPlaying}
+
+Search: "NBA injury report ${slateDate}" "NBA players OUT tonight" "fantasy basketball injury news today"
+
+Return ONLY players confirmed OUT or DOUBTFUL for TONIGHT (not old injuries):
+{
+  "outPlayers": [
+    { "name": "Player Name", "team": "TM", "reason": "injury type", "source": "where you found this" }
+  ],
+  "doubtfulPlayers": [
+    { "name": "Player Name", "team": "TM", "reason": "injury type", "source": "where you found this" }
+  ]
+}`;
+          
+          const result = await model.generateContent(injuryPrompt);
+          const responseText = result.response?.text?.() || '';
+          const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+          
+          if (jsonMatch) {
+            try {
+              const injuryData = JSON.parse(jsonMatch[0]);
+              
+              // Add OUT players from Grounding to our injury map
+              for (const outPlayer of (injuryData.outPlayers || [])) {
+                const playerName = outPlayer.name?.toLowerCase();
+                if (playerName) {
+                  // Find matching player in our players array
+                  const matchedPlayer = players.find(p => {
+                    const pName = (p.first_name + ' ' + p.last_name).toLowerCase();
+                    return pName.includes(playerName) || playerName.includes(pName);
+                  });
+                  if (matchedPlayer) {
+                    if (!playerInjuryStatusMap.has(matchedPlayer.id)) {
+                      console.log(`[DFS Context] 🚨 Grounding found: ${outPlayer.name} (${outPlayer.team}) OUT - ${outPlayer.reason}`);
+                      playerInjuryStatusMap.set(matchedPlayer.id, 'OUT');
+                    }
+                  }
+                }
+              }
+              
+              // Add DOUBTFUL players
+              for (const doubtPlayer of (injuryData.doubtfulPlayers || [])) {
+                const playerName = doubtPlayer.name?.toLowerCase();
+                if (playerName) {
+                  const matchedPlayer = players.find(p => {
+                    const pName = (p.first_name + ' ' + p.last_name).toLowerCase();
+                    return pName.includes(playerName) || playerName.includes(pName);
+                  });
+                  if (matchedPlayer && !playerInjuryStatusMap.has(matchedPlayer.id)) {
+                    console.log(`[DFS Context] ⚠️ Grounding found: ${doubtPlayer.name} (${doubtPlayer.team}) DOUBTFUL - ${doubtPlayer.reason}`);
+                    playerInjuryStatusMap.set(matchedPlayer.id, 'DOUBTFUL');
+                  }
+                }
+              }
+              
+              const groundingOutCount = (injuryData.outPlayers || []).length;
+              const groundingDoubtCount = (injuryData.doubtfulPlayers || []).length;
+              if (groundingOutCount > 0 || groundingDoubtCount > 0) {
+                console.log(`[DFS Context] ✅ Grounding injury check: Found ${groundingOutCount} OUT, ${groundingDoubtCount} DOUBTFUL`);
+              }
+            } catch (parseErr) {
+              console.log(`[DFS Context] ⚠️ Could not parse Grounding injury response`);
+            }
+          }
+        }
+      } catch (groundingErr) {
+        console.log(`[DFS Context] ⚠️ Grounding injury check failed: ${groundingErr.message}`);
+      }
+      
       // Get current NBA season (consistent with rest of codebase: 1-indexed months)
       // NBA season starts in October: Oct(10)-Dec = currentYear, Jan-Sep = previousYear
       const now = new Date();
@@ -1239,28 +1866,30 @@ async function fetchBenchmarkProjections(sport, dateStr, teams = []) {
     console.log(`[DFS Context] 📊 Fetching expert benchmark projections via Gemini Grounding...`);
     
     const model = genAI.getGenerativeModel({
-      model: 'gemini-3-flash-preview',
+      model: DFS_MODEL_CONFIG.model,
       tools: [{ google_search: {} }],
       safetySettings: SAFETY_SETTINGS,
       generationConfig: {
         temperature: 0.1, // Very low temp for facts
-        maxOutputTokens: 2048
+        maxOutputTokens: 8192 // Increased from 2048 - Gary needs ALL projections, no truncation
       }
     });
 
     const prompt = `Search for today's (${dateStr}) expert ${sport} DFS projections for DraftKings/FanDuel.
-Check sites like RotoGrinders, FantasyLabs, or NumberFire.
+Check sites like RotoGrinders, FantasyLabs, Establish The Run, or NumberFire.
 
-I need the projected fantasy points for the top 20-30 players in this slate: ${teams.join(', ')}.
+I need the projected fantasy points for the top 40-50 players in this slate: ${teams.join(', ')}.
 
 Return as JSON:
 {
   "projections": [
     { "name": "Player Name", "points": 45.2 },
-    ...
+    { "name": "Another Player", "points": 42.1 }
   ]
 }
-Return ONLY valid JSON.`;
+
+CRITICAL: Return ONLY valid JSON. Complete ALL array elements before closing brackets.
+Do NOT truncate the response - Gary needs ALL player projections to build winning lineups.`;
 
     const result = await model.generateContent(prompt);
     const text = result.response.text();
@@ -1347,15 +1976,18 @@ export function mergePlayerData(bdlPlayers, groundedPlayers) {
       // This ensures we catch QUESTIONABLE/GTD players that Tank01 might miss
       const playerStatus = p.status || salaryData.status || 'HEALTHY';
       if (shouldExcludePlayer(playerStatus)) {
-        excludedPlayers.push({ name: p.name, status: playerStatus, reason: 'Injury status (BDL)' });
+        excludedPlayers.push({ name: p.name, team: p.team, status: playerStatus, reason: 'Injury status (BDL)' });
         continue; // Skip this player - too risky for DFS!
       }
       
       merged.push({
-        // BDL provides accurate: name, team, position, seasonStats
+        // BDL provides accurate: name, team, seasonStats
         name: p.name,
         team: p.team,  // ALWAYS use BDL team (accurate after trades)
-        position: p.position,
+        // ⭐ CRITICAL: Use Tank01/platform position FIRST (DK/FD have different positions than real life)
+        // Example: Jalen Williams is SF on DraftKings but may be SG in BDL
+        position: salaryData.position || p.position,
+        allPositions: salaryData.allPositions || [salaryData.position || p.position],
         seasonStats: p.seasonStats,
         id: p.id,
         // Grounding provides: salary and DFS context
@@ -1390,7 +2022,7 @@ export function mergePlayerData(bdlPlayers, groundedPlayers) {
     
     // ⭐ CHECK INJURY STATUS for grounded-only players too (in case Tank01 has status)
     if (shouldExcludePlayer(p.status)) {
-      excludedPlayers.push({ name: p.name, status: p.status, reason: 'Injury status (Tank01)' });
+      excludedPlayers.push({ name: p.name, team: p.team, status: p.status, reason: 'Injury status (Tank01)' });
       continue;
     }
     
@@ -1402,6 +2034,7 @@ export function mergePlayerData(bdlPlayers, groundedPlayers) {
         name: p.name,
         team: p.team,
         position: p.position,
+        allPositions: p.allPositions || [p.position], // Preserve multi-position eligibility
         salary: p.salary,
         status: p.status || 'HEALTHY',
         notes: p.notes || '',
@@ -1637,7 +2270,8 @@ export function mergePlayerData(bdlPlayers, groundedPlayers) {
     console.log(`[DFS Context] After salary estimation: ${merged.length} players`);
   }
   
-  return merged;
+  // Return both merged players AND excluded players for teammate opportunity analysis
+  return { merged, excludedPlayers };
 }
 
 /**
@@ -1788,7 +2422,7 @@ export async function fetchComprehensiveDFSContext(platform, sport, slateDate, t
       tools: [{ google_search: {} }],
       safetySettings: SAFETY_SETTINGS,
       generationConfig: {
-        temperature: DFS_MODEL_CONFIG.temperature,
+        temperature: getDFSTemperature('gpp'), // Use helper to get numeric temperature
         topP: DFS_MODEL_CONFIG.topP,
         maxOutputTokens: 16384, // Larger for comprehensive data
         thinkingConfig: { includeThoughts: true }
@@ -1797,11 +2431,43 @@ export async function fetchComprehensiveDFSContext(platform, sport, slateDate, t
 
     let prompt;
     if (sport === 'NBA') {
-      prompt = `You are Gary AI, an expert DFS analyst. Search for COMPREHENSIVE DFS data for ${platformName} NBA on ${slateDate}.
+      prompt = `You are Gary AI - an INDEPENDENT THINKER who investigates, understands, and decides on your own.
+
+You find VALUE where the market is wrong, not just highest projections. You don't follow consensus or copy what optimizers say.
+
+## GARY'S SHARP DFS FRAMEWORK
+
+**HARD FACTORS to INVESTIGATE:**
+- Usage rate, target share, minutes trends (L5 vs season)
+- Defense vs Position rankings (DvP)
+- Salary efficiency (projected points per $1K)
+- Confirmed starting lineups and role changes
+
+**GARY'S APPROACH:**
+Investigate the factors. Understand the opportunity. Make YOUR OWN recommendations based on YOUR analysis.
+
+Search for COMPREHENSIVE DFS data for ${platformName} NBA on ${slateDate}.
+
+🚨🚨🚨 ANTI-HALLUCINATION RULES (ABSOLUTE - ZERO TOLERANCE) 🚨🚨🚨
+
+1. **NO TRAINING DATA**: Your training data is OUTDATED. It is ${slateDate} - use ONLY what you find via search.
+2. **ROSTERS CHANGE DAILY**: Players are traded, injured, and signed constantly. DO NOT assume any player is on any team.
+3. **ONLY CITE SEARCHED DATA**: Every player name, salary, and projection MUST come from your search results.
+4. **IF NOT FOUND, SAY NULL**: If you cannot find data for a player, set their fields to null - DO NOT guess.
+5. **TEAMS CHANGE**: Player X may have been traded since your training cutoff. VERIFY via search.
+6. **NO INVENTED STATS**: If a stat (ownership %, projection, etc.) is not in search results, use null.
 
 Teams playing: ${teamsStr}
 
 **SEARCH FOR ALL OF THE FOLLOWING:**
+
+0. **STARTING LINEUPS & ROTATION** (search "Basketball Monster starting lineups ${slateDate}" OR "RotoGrinders NBA lineups ${slateDate}"):
+   ⚠️ MOST CRITICAL - Do this search FIRST
+   - Confirmed starting 5 for EACH game
+   - "Next Man Up": Which backups are starting due to injury?
+   - Bench players projected for 25+ minutes
+   - Minutes restrictions on injury returns
+   - Recent rotation changes (last 3 games)
 
 1. **PLAYER SALARIES & OWNERSHIP** (search "${platformName} NBA ownership projections ${slateDate}"):
    - Player salaries for today's slate
@@ -1840,6 +2506,12 @@ Teams playing: ${teamsStr}
    - Same-game parlay recommendations
    - High-scoring game stacks
 
+**CRITICAL: PREDICTIVE vs REACTIVE Logic**
+- ✅ Find players ABOUT TO have a big game (value BEFORE it pops) 
+- ❌ Don't chase players who JUST HAD a big game (chasing after the pop)
+- ✅ Check if hot streaks are SUSTAINABLE or just fill-in roles
+- ❌ Don't reward yesterday's outlier if the role ended today
+
 Return as JSON:
 {
   "players": [
@@ -1855,7 +2527,33 @@ Return as JSON:
       "isRevenge": false,
       "usageBoost": null,
       "blowoutRisk": false,
-      "notes": "Key context about this player"
+      "rotation_status": "expanded_role|ongoing_starter|breakout_candidate|bench_return|diminished_role|stable",
+      "minutes_trend": "increasing|stable|decreasing|volatile",
+      "role_sustainability": "one_game|short_term|season_long|ended",
+      "projected_minutes": 32,
+      "notes": "Key context about this player - include WHY role is expanding/diminishing"
+    }
+  ],
+  "target_players": [
+    {
+      "name": "Player Name",
+      "team": "TM",
+      "reason": "Why they're a strong play TONIGHT (predictive)",
+      "narrative_type": "injury_boost|revenge|matchup|breakout_spot",
+      "rotation_status": "expanded_role|breakout_candidate",
+      "minutes_trend": "increasing",
+      "role_sustainability": "ongoing|short_term",
+      "projected_minutes": 28
+    }
+  ],
+  "fade_players": [
+    {
+      "name": "Player Name",
+      "team": "TM",
+      "reason": "Why to fade TONIGHT (e.g., starter returns, role ended)",
+      "rotation_status": "bench_return|diminished_role",
+      "minutes_trend": "decreasing",
+      "role_sustainability": "ended"
     }
   ],
   "gameContext": [
@@ -1884,7 +2582,22 @@ Return as JSON:
 }`;
     } else {
       // NFL prompt
-      prompt = `You are Gary AI, an expert DFS analyst. Search for COMPREHENSIVE DFS data for ${platformName} NFL on ${slateDate}.
+      prompt = `You are Gary AI - an INDEPENDENT THINKER who investigates, understands, and decides on your own.
+
+You find VALUE where the market is wrong, not just highest projections. You don't follow consensus or copy what optimizers say.
+
+## GARY'S SHARP DFS FRAMEWORK
+
+**HARD FACTORS to INVESTIGATE:**
+- Target share, snap %, red zone opportunities
+- Defense vs Position rankings (DvP)
+- Game script implications (spread + total)
+- Weather impact on passing vs rushing
+
+**GARY'S APPROACH:**
+Investigate the factors. Understand the opportunity. Make YOUR OWN recommendations based on YOUR analysis.
+
+Search for COMPREHENSIVE DFS data for ${platformName} NFL on ${slateDate}.
 
 Teams playing: ${teamsStr}
 
@@ -1914,11 +2627,11 @@ Teams playing: ${teamsStr}
 
 6. **RECENT FORM (L3)** (search "NFL fantasy hot players December 2025"):
    - Players exceeding projections last 3 weeks
-   - Cold streaks to fade
+   - Cold streaks to investigate (sustainable or variance?)
 
 7. **WEATHER** (search "NFL weather ${slateDate}"):
-   - Wind >15mph = fade deep passers
-   - Rain/snow = boost RBs, fade WRs
+   - Wind >15mph = investigate impact on deep passing game
+   - Rain/snow = investigate impact on passing vs rushing efficiency
    - Dome games = safe passing
 
 8. **GAME SCRIPT** (search "NFL point spreads ${slateDate}"):
@@ -2042,7 +2755,7 @@ export async function fetchOwnershipProjections(sport, platform, slateDate, team
       tools: [{ google_search: {} }], // Grounding: ENABLED
       safetySettings: SAFETY_SETTINGS,
       generationConfig: {
-        temperature: 0.4, // Lower temp for more factual ownership data
+        temperature: 0.6, // Lower temp for more factual ownership data
         topP: DFS_MODEL_CONFIG.topP,
         maxOutputTokens: 4096
       }
@@ -2130,20 +2843,11 @@ Return ONLY valid JSON. Start with { and end with }.`;
       console.log(`[DFS Context] 🔍 Ownership searches: "${groundingMetadata.webSearchQueries.slice(0, 3).join('", "')}"`);
     }
     
-    // Parse JSON from response
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
+    // Parse JSON from response with repair for truncation
+    const cleanedJson = cleanJsonString(text);
+    if (cleanedJson) {
       try {
-        // Try to fix common JSON issues before parsing
-        let jsonStr = jsonMatch[0];
-        
-        // Fix trailing commas in arrays/objects
-        jsonStr = jsonStr.replace(/,\s*([}\]])/g, '$1');
-        
-        // Fix missing commas between array elements (common Gemini issue)
-        jsonStr = jsonStr.replace(/}\s*{/g, '},{');
-        
-        const parsed = JSON.parse(jsonStr);
+        const parsed = JSON.parse(cleanedJson);
         
         const chalkCount = parsed.chalk?.length || 0;
         const contrarianCount = parsed.contrarian?.length || 0;
@@ -2159,7 +2863,7 @@ Return ONLY valid JSON. Start with { and end with }.`;
           groundingUsed: !!groundingMetadata?.webSearchQueries?.length
         };
       } catch (parseErr) {
-        console.warn(`[DFS Context] Ownership JSON parse failed: ${parseErr.message}`);
+        console.warn(`[DFS Context] Ownership JSON parse failed after repair: ${parseErr.message}`);
         console.warn(`[DFS Context] Attempting to extract ownership from natural language...`);
         
         // Fallback: Extract ownership data from natural language
@@ -2210,14 +2914,14 @@ export async function fetchDFSNarrativeContext(sport, slateDate, games = []) {
   // Apply DFS_MODEL_CONFIG for narrative context
   try {
     console.log(`[DFS Context] 📖 Fetching narrative context for ${sport} games`);
-    console.log(`[DFS Context] MODEL_CONFIG: ${DFS_MODEL_CONFIG.model} | temp=${DFS_MODEL_CONFIG.temperature} | reasoning=${DFS_MODEL_CONFIG.reasoningLevel} | grounding=${DFS_MODEL_CONFIG.grounding}`);
+    console.log(`[DFS Context] MODEL_CONFIG: ${DFS_MODEL_CONFIG.model} | temp=${getDFSTemperature('gpp')} | reasoning=${DFS_MODEL_CONFIG.reasoningLevel} | grounding=${DFS_MODEL_CONFIG.grounding}`);
     
     const model = genAI.getGenerativeModel({
       model: DFS_MODEL_CONFIG.model,
       tools: [{ google_search: {} }], // Grounding: ENABLED
       safetySettings: SAFETY_SETTINGS,
       generationConfig: {
-        temperature: DFS_MODEL_CONFIG.temperature,
+        temperature: getDFSTemperature('gpp'), // Use helper to get numeric temperature
         topP: DFS_MODEL_CONFIG.topP,
         maxOutputTokens: DFS_MODEL_CONFIG.maxOutputTokens,
         // Reasoning_Level: HIGH - Enable thinking blocks
@@ -2228,8 +2932,37 @@ export async function fetchDFSNarrativeContext(sport, slateDate, games = []) {
     });
     
     const prompt = sport === 'NBA' 
-      ? `Search for DFS narrative context for tonight's NBA games on ${slateDate}:
+      ? `You are Gary - an INDEPENDENT THINKER who investigates, understands, and decides on your own.
+
+You find VALUE where the market is wrong, not chase yesterday's heroes. You don't follow consensus—you make YOUR OWN recommendations.
+
+## GARY'S SHARP DFS FRAMEWORK
+
+**HARD FACTORS (Investigable - Trust These):**
+- Usage rate, target share, minutes trends
+- Defense vs Position (DvP) rankings
+- Salary efficiency (points per $1K)
+
+**SOFT FACTORS (Need Verification):**
+- "Revenge game" → Need stats to back it
+- "Hot streak" → Is the role sustainable?
+- "Contract year" → Show elevated stats
+
+**KEY QUESTION FOR EVERY PLAYER:**
+"Is this player's SALARY priced for their role TONIGHT or their role from 2 weeks ago?"
+
+---
+
+Search Basketball Monster, RotoGrinders, or FantasyLabs for DFS context for tonight's NBA slate on ${slateDate}:
 ${gameDescriptions}
+
+⚠️ STARTING LINEUPS & ROTATION (CRITICAL - search lineup sources first):
+For EACH game, identify:
+1. **CONFIRMED STARTING 5**: Who are the confirmed starters for each team?
+2. **"NEXT MAN UP"**: Which backup is starting due to injury? (e.g., "Payton Pritchard starting for Jrue Holiday")
+3. **MINUTES PROJECTION**: Which bench players are projected for 25+ minutes tonight?
+4. **ROTATION CHANGES**: Any recent changes in last 3 games? (new starter, 6th man change)
+5. **MINUTES RESTRICTIONS**: Any stars on a minutes limit due to injury return?
 
 Identify and return as JSON:
 {
@@ -2239,6 +2972,14 @@ Identify and return as JSON:
       "vegas_total": 225.5,
       "narratives": [
         "Specific narrative (revenge game, injury impact, etc)"
+      ],
+      "starting_lineups": {
+        "home": ["Player1 (PG)", "Player2 (SG)", "Player3 (SF)", "Player4 (PF)", "Player5 (C)"],
+        "away": ["Player1 (PG)", "Player2 (SG)", "Player3 (SF)", "Player4 (PF)", "Player5 (C)"]
+      },
+      "rotation_changes": [
+        "Player X now starting for injured Player Y",
+        "Player Z back to bench after Player A returns"
       ]
     }
   ],
@@ -2246,29 +2987,83 @@ Identify and return as JSON:
     {
       "name": "Player Name",
       "team": "TM",
-      "reason": "Why they're a strong DFS play today",
-      "narrative_type": "injury_boost|revenge|hot_streak|usage_spike|matchup"
+      "reason": "Why they're a strong DFS play TONIGHT (be predictive, not reactive)",
+      "narrative_type": "injury_boost|revenge|breakout_spot|usage_spike|matchup",
+      "rotation_status": "expanded_role|breakout_candidate|ongoing_starter",
+      "minutes_trend": "increasing|stable",
+      "role_sustainability": "ongoing|short_term|season_long",
+      "projected_minutes": 32
     }
   ],
   "fade_players": [
     {
       "name": "Player Name", 
       "team": "TM",
-      "reason": "Why to avoid in DFS",
-      "narrative_type": "rest|blowout_risk|tough_matchup|cold_streak"
+      "reason": "Why to avoid in DFS TONIGHT (include if their role just ended)",
+      "narrative_type": "rest|blowout_risk|tough_matchup|cold_streak|role_ended",
+      "rotation_status": "bench_return|diminished_role|stable",
+      "minutes_trend": "decreasing|volatile",
+      "role_sustainability": "ended|one_game"
     }
   ]
 }
 
+**CRITICAL THINKING FRAMEWORK - Stock Trader Mindset:**
+
+🎯 **PREDICTIVE (Good)**: Find value BEFORE it pops
+   - ✅ "Starter OUT tonight → Backup will get 30+ min" (leading indicator)
+   - ✅ "Trade just happened → Player X now in starting role" (future opportunity)
+
+❌ **REACTIVE (Bad)**: Chase value AFTER it already popped
+   - ❌ "Backup had 25-point game yesterday" → Check: Was starter out? Is starter back tonight?
+   - ❌ "Player on hot streak" → Check: Was it sustainable role or fill-in duty?
+
 Focus on:
-1. **Usage Rate Spikes**: Key player OUT = teammate gets +15-25% usage boost
-2. **Revenge Games**: Players facing former teams (extra motivation)
-3. **Back-to-Backs**: 2nd night of B2B = fade veterans, target role players
-4. **Vegas Totals**: Games >230 = stack opportunities, <215 = lower ceilings
-5. **Hot Streaks**: Players exceeding season average by 20%+ in last 5 games
+1. **PREDICTIVE Injury Impacts** (< 7 days):
+   - ✅ "Starter OUT TONIGHT → Backup will play 30+ min" (future opportunity)
+   - ❌ "Backup scored 25 last game" → Check if starter is BACK tonight (role ended?)
+   - ❌ DO NOT mention season-long injuries (e.g., player out all year - stats already reflect this)
+   - ✅ DO mention NEW injuries (< 7 days) that create usage spikes TONIGHT
+
+2. **Rotation Context** (CRITICAL):
+   - If a role player had a career game, check: WHY did they get minutes?
+   - Were starters injured? Are those starters BACK tonight?
+   - If starters return → investigate if role player's opportunity has ended
+   - Example: "Kyle Anderson scored 22 on Jan 2 (Markkanen OUT). Markkanen returns tonight → investigate Anderson's expected minutes."
+
+3. **Sustainable vs Fill-In Roles**:
+   - ✅ Expanded Role: Backup → Starter due to injury/trade (ongoing opportunity)
+   - ❌ Fill-In Role: One-game spike due to rest/injury, then back to bench (don't chase)
+
+4. **Revenge Games**: Players facing former teams (extra motivation)
+
+5. **Back-to-Backs**: Investigate how teams perform on 2nd night of B2B - check veteran minutes and role player opportunities
+
+6. **Vegas Totals**: Games >230 = stack opportunities, <215 = lower ceilings
 6. **Minutes Trends**: Recent increases (30+ min last 3 games vs 25 season avg)`
 
-      : `Search for DFS narrative context for today's NFL games on ${slateDate}:
+      : `You are Gary - an INDEPENDENT THINKER who investigates, understands, and decides on your own.
+
+You find VALUE where the market is wrong, not chase yesterday's heroes. You don't follow consensus—you make YOUR OWN recommendations.
+
+## GARY'S SHARP DFS FRAMEWORK
+
+**HARD FACTORS (Investigable - Trust These):**
+- Target share, snap percentage, red zone opportunities
+- Defense vs Position (DvP) rankings
+- Game script implications (spread, total)
+
+**SOFT FACTORS (Need Verification):**
+- "Revenge game" → Need target share data to back it
+- "Weather boost" → Show actual weather impact stats
+- "Primetime" → Show actual primetime splits
+
+**KEY QUESTION FOR EVERY PLAYER:**
+"Is this player's SALARY priced for their role TODAY or their role from 2 weeks ago?"
+
+---
+
+Search for DFS narrative context for today's NFL games on ${slateDate}:
 ${gameDescriptions}
 
 Identify and return as JSON:
@@ -2288,27 +3083,44 @@ Identify and return as JSON:
       "name": "Player Name",
       "team": "TM",
       "position": "QB/RB/WR/TE",
-      "reason": "Why they're a strong DFS play today",
-      "narrative_type": "injury_boost|revenge|hot_streak|usage_spike|matchup|weather_benefit"
+      "reason": "Why they're a strong DFS play today (predictive, not reactive)",
+      "narrative_type": "injury_boost|revenge|usage_spike|matchup|weather_benefit|breakout_spot",
+      "rotation_status": "expanded_role|breakout_candidate|ongoing_starter",
+      "snap_trend": "increasing|stable",
+      "role_sustainability": "ongoing|short_term|season_long"
     }
   ],
   "fade_players": [
     {
       "name": "Player Name",
       "team": "TM", 
-      "reason": "Why to avoid in DFS",
-      "narrative_type": "weather|tough_matchup|game_script|cold_streak"
+      "reason": "Why to avoid in DFS (include if role just ended)",
+      "narrative_type": "weather|tough_matchup|game_script|cold_streak|role_ended",
+      "rotation_status": "bench_return|diminished_role",
+      "snap_trend": "decreasing",
+      "role_sustainability": "ended"
     }
   ]
 }
 
+**CRITICAL: PREDICTIVE vs REACTIVE Logic (Same as NBA)**
+- ✅ Find players ABOUT TO have a big game (value BEFORE it pops)
+- ❌ Don't chase players who JUST HAD a big game (chasing after the pop)
+- Check if big games were due to temporary injuries/rest
+- If starter returns → fade the backup who had the big game
+
 Focus on:
-1. **Injury Boosts**: WR1 OUT = WR2/WR3 target share spike
-2. **Weather**: Wind >15mph = fade deep passers, target RBs
-3. **Game Script**: Heavy favorites run more, trailing teams pass more
-4. **Red Zone Usage**: Who gets the TDs (goal-line backs, red zone WRs)
-5. **Revenge Games**: Players vs former teams
-6. **Vegas Totals**: Games >50 = shootout stacks, <40 = game stacks risky`;
+1. **PREDICTIVE Injury Impacts** (< 7 days): Starter JUST went OUT = backup gets elevated role TODAY
+   - ✅ "RB1 OUT tonight → RB2 will get 20+ touches" (future opportunity)
+   - ❌ "RB2 scored 3 TDs last week" → Check if RB1 is BACK tonight (role ended?)
+   - ❌ DO NOT mention season-long injuries - the season stats already reflect them
+   - ✅ DO mention new injuries from this week (e.g., "Travis Kelce OUT - Noah Gray 5x targets expected")
+2. **Rotation Context**: If backup had big game last week due to injury, check if starter is back
+3. **Weather Impact**: Rain/Wind >15mph = run-heavy, fade passing
+4. **Game Script**: Heavy favorites = RB volume, underdogs = pass-heavy
+5. **Revenge Games**: Players facing former teams
+6. **Target Share Trends**: WR/TE seeing 20%+ target increase last 3 games
+7. **Matchup Exploits**: RB vs worst rush defense, WR vs worst pass defense`;
 
     const startTime = Date.now();
     const result = await model.generateContent(prompt);
@@ -2318,15 +3130,27 @@ Focus on:
     
     const text = result.response.text();
     
-    // Parse JSON response
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
-      return {
-        narratives: parsed.game_narratives || [],
-        targetPlayers: parsed.target_players || [],
-        fadePlayers: parsed.fade_players || []
-      };
+    // Parse JSON response with repair for truncation
+    const cleanedJson = cleanJsonString(text);
+    if (cleanedJson) {
+      try {
+        const parsed = JSON.parse(cleanedJson);
+        const narrativeCount = parsed.game_narratives?.length || 0;
+        const targetCount = parsed.target_players?.length || 0;
+        const fadeCount = parsed.fade_players?.length || 0;
+        
+        console.log(`[DFS Context] 📖 Narrative context: ${narrativeCount} games, ${targetCount} targets, ${fadeCount} fades`);
+        
+        return {
+          narratives: parsed.game_narratives || [],
+          targetPlayers: parsed.target_players || [],
+          fadePlayers: parsed.fade_players || []
+        };
+      } catch (parseErr) {
+        console.warn(`[DFS Context] Narrative JSON parse failed after repair: ${parseErr.message}`);
+        // Try to extract partial data from the text using natural language parsing
+        return extractNarrativeFromText(text);
+      }
     }
     
     return { narratives: [], targetPlayers: [], fadePlayers: [] };
@@ -2335,6 +3159,50 @@ Focus on:
     console.error(`[DFS Context] Narrative context error: ${error.message}`);
     return { narratives: [], targetPlayers: [], fadePlayers: [] };
   }
+}
+
+/**
+ * Extract narrative context from natural language when JSON parsing fails
+ * Gary needs this context even if the JSON was truncated
+ */
+function extractNarrativeFromText(text) {
+  const result = { narratives: [], targetPlayers: [], fadePlayers: [] };
+  
+  // Extract target players from text mentions
+  const targetMatches = text.match(/(?:target|boost|smash|play|leverage|upside)[:\s]+([A-Z][a-z]+\s[A-Z][a-z]+)/gi);
+  if (targetMatches) {
+    targetMatches.forEach(match => {
+      const nameMatch = match.match(/([A-Z][a-z]+\s[A-Z][a-z]+)/);
+      if (nameMatch) {
+        result.targetPlayers.push({
+          name: nameMatch[1],
+          reason: 'Extracted from narrative context',
+          narrative_type: 'extracted'
+        });
+      }
+    });
+  }
+  
+  // Extract fade players
+  const fadeMatches = text.match(/(?:fade|avoid|skip|concern|risky)[:\s]+([A-Z][a-z]+\s[A-Z][a-z]+)/gi);
+  if (fadeMatches) {
+    fadeMatches.forEach(match => {
+      const nameMatch = match.match(/([A-Z][a-z]+\s[A-Z][a-z]+)/);
+      if (nameMatch) {
+        result.fadePlayers.push({
+          name: nameMatch[1],
+          reason: 'Extracted from narrative context',
+          narrative_type: 'extracted'
+        });
+      }
+    });
+  }
+  
+  if (result.targetPlayers.length > 0 || result.fadePlayers.length > 0) {
+    console.log(`[DFS Context] 📖 Extracted from text: ${result.targetPlayers.length} targets, ${result.fadePlayers.length} fades`);
+  }
+  
+  return result;
 }
 
 /**
@@ -2450,23 +3318,28 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
   }));
   
   // ═══════════════════════════════════════════════════════════════════════════
-  // PARALLEL FETCH: Tank01 API salaries + BDL stats + Narrative context + Ownership
+  // PARALLEL FETCH: Tank01 API salaries + BDL stats + Narrative context + Ownership + Props
   // ═══════════════════════════════════════════════════════════════════════════
   // Tank01 API provides accurate, real-time DFS salaries (replaces Gemini Grounding)
-  // BDL provides player stats, team data, and confirmed lineups
-  // Gemini Grounding used for narrative context, ownership, and benchmark projections
-  const [bdlPlayers, bdlLineups, salaryData, narrativeContext, ownershipData] = await Promise.all([
+  // BDL provides player stats, team data, and PROP LINES for projections
+  // Gemini Grounding used for narrative context, ownership, lineups, and projections
+  // NOTE: BDL lineups API only works AFTER game starts - useless for pregame DFS
+  
+  // Get game IDs for prop line fetching
+  const gameIds = games.map(g => g.id).filter(Boolean);
+  
+  const [bdlPlayers, salaryData, narrativeContext, ownershipData, propProjections] = await Promise.all([
     fetchPlayerStatsFromBDL(sport, dateStr),
-    sport === 'NBA' ? ballDontLieService.getNbaLineups(gameList.map(g => g.id)) : Promise.resolve([]),
     fetchDfsSalaries(sport, dateStr, platform), // Tank01 API for real salaries
     fetchDFSNarrativeContext(sport, slateDate, gameList),
-    fetchOwnershipProjections(sport, platform, slateDate, teams)
+    fetchOwnershipProjections(sport, platform, slateDate, teams),
+    fetchPropLinesForDFS(sport, gameIds) // NEW: Prop lines for sharp projections
   ]);
   
   const bdlCount = bdlPlayers.length;
   const salaryCount = salaryData.players?.length || 0;
   
-  console.log(`[DFS Context] BDL players: ${bdlCount}, Lineups: ${bdlLineups?.length || 0}`);
+  console.log(`[DFS Context] BDL players: ${bdlCount}`);
   console.log(`[DFS Context] Tank01 salary data: ${salaryCount} players`);
   
   // Filter player stats and salaries to only include teams in this slate
@@ -2479,13 +3352,8 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
   // ═══════════════════════════════════════════════════════════════════════════
   const confirmedStarters = new Set();
   
-  // Map BDL confirmed starters
-  (bdlLineups || []).forEach(entry => {
-    if (entry.starter === true && entry.player?.first_name) {
-      const name = `${entry.player.first_name} ${entry.player.last_name}`;
-      confirmedStarters.add(normalizePlayerName(name));
-    }
-  });
+  // Note: BDL lineups API only works AFTER game starts - useless for pregame DFS
+  // Confirmed starters will be populated from Gemini Grounding or narrative context
 
   // Fetch benchmark projections using Gemini Grounding (Industry Best Practice)
   // This helps Gary double-check his AI math against "Vegas/Expert" consensus
@@ -2494,7 +3362,18 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
   console.log(`[DFS Context] Integrated: ${confirmedStarters.size} confirmed starters, ${benchmarkProjections.size} benchmarks`);
   
   // Merge data sources (Tank01 salaries + BDL stats)
-  const mergedPlayers = mergePlayerData(filteredBdlPlayers, filteredSalaryPlayers);
+  // Also get excluded players for teammate opportunity analysis
+  const { merged: mergedPlayersRaw, excludedPlayers } = mergePlayerData(filteredBdlPlayers, filteredSalaryPlayers);
+  let mergedPlayers = mergedPlayersRaw;
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ENHANCE WITH PROP LINES - The Sharpest Projection Source
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Prop lines represent real money being wagered - sharper than "expert" projections
+  if (Object.keys(propProjections).length > 0) {
+    mergedPlayers = enhancePlayersWithProps(mergedPlayers, propProjections);
+    console.log(`[DFS Context] 📊 Enhanced players with prop-based projections`);
+  }
   
   // Apply metadata to merged players
   for (const player of mergedPlayers) {
@@ -2581,6 +3460,70 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
   const chalkInLineup = mergedPlayers.filter(p => p.isChalk).length;
   const contrarianInLineup = mergedPlayers.filter(p => p.isContrarian).length;
   console.log(`[DFS Context] Ownership applied: ${chalkInLineup} chalk, ${contrarianInLineup} contrarian players in pool`);
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // TEAMMATE USAGE CONTEXT - Dynamic Role Awareness
+  // ═══════════════════════════════════════════════════════════════════════════
+  // When high-usage players are OUT, their teammates inherit opportunity.
+  // Gary investigates who benefits rather than applying fixed rules.
+  // 
+  // This is AWARENESS not prescription - Gary knows to look for these situations:
+  // - Star PG out → backup PG and wing players see usage spike
+  // - Star scorer out → secondary options become primary
+  // - Big man out → small ball opportunities, guard rebounds
+  // ═══════════════════════════════════════════════════════════════════════════
+  const outPlayers = excludedPlayers.filter(p => 
+    p.status === 'OUT' || p.status === 'OUT FOR SEASON' || p.status === 'DOUBTFUL'
+  );
+  
+  // Group out players by team to find teammate opportunities
+  const outByTeam = {};
+  outPlayers.forEach(p => {
+    if (!outByTeam[p.team]) outByTeam[p.team] = [];
+    // Look up their projection/salary to estimate impact
+    const salaryPlayer = filteredSalaryPlayers.find(sp => 
+      normalizePlayerName(sp.name) === normalizePlayerName(p.name)
+    );
+    outByTeam[p.team].push({
+      name: p.name,
+      status: p.status,
+      salary: salaryPlayer?.salary || 0,
+      isHighUsage: (salaryPlayer?.salary || 0) >= 8000 // High-salary = high-usage assumption
+    });
+  });
+  
+  // For each team with high-usage players out, flag teammates for investigation
+  const teamsWithOpportunity = Object.entries(outByTeam)
+    .filter(([team, players]) => players.some(p => p.isHighUsage))
+    .map(([team, players]) => ({
+      team,
+      outStars: players.filter(p => p.isHighUsage).map(p => p.name),
+      totalOut: players.length
+    }));
+  
+  if (teamsWithOpportunity.length > 0) {
+    console.log(`[DFS Context] 🎯 USAGE OPPORTUNITY DETECTED:`);
+    teamsWithOpportunity.forEach(({ team, outStars, totalOut }) => {
+      console.log(`   ${team}: ${outStars.join(', ')} OUT - teammates may see usage spike`);
+      
+      // Flag active teammates with expanded role awareness
+      mergedPlayers.forEach(player => {
+        if (player.team === team && !player.status?.includes('OUT')) {
+          // Mark as potential expanded role - not automatic boost, just awareness
+          player.teammateOpportunity = {
+            outStars,
+            totalTeammatesOut: totalOut,
+            reason: `${outStars[0]} OUT - investigate usage redistribution`
+          };
+          // If player is already a target from narrative, reinforce it
+          if (player.narrative_type === 'injury_boost' || player.rotation_status === 'expanded_role') {
+            player.usageChange = (player.usageChange || 0) + 5; // Signal increased opportunity
+            player.isBreakoutCandidate = true;
+          }
+        }
+      });
+    });
+  }
   
   const duration = Date.now() - start;
   console.log(`[DFS Context] Context built in ${duration}ms`);

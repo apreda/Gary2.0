@@ -66,12 +66,10 @@ const GEMINI_CONTEXT_TOKENS = {
   // ---------------------------------------------------------------------------
   // BETTING MARKET SIGNALS (MINOR DATA POINTS ONLY)
   // ---------------------------------------------------------------------------
-  // ⚠️ IMPORTANT: These are SUPPLEMENTARY signals only.
-  // They should NEVER be the primary reason for a pick.
-  // Use as "interesting to note" context, not decisive factors.
+  // ⚠️ NOTE: Betting signals removed per user policy (no betting-market data).
+  // Gary focuses on player/team performance only, not market sentiment.
   BETTING_SIGNALS: [
-    'LINE_MOVEMENT',            // Sharp money signals (e.g., "line moved from -3 to -5.5")
-    'PUBLIC_BETTING_PCT',       // Fade the public opportunities (e.g., "85% on Lakers")
+    // Removed: LINE_MOVEMENT, PUBLIC_BETTING_PCT - per user policy
   ],
 };
 
@@ -159,11 +157,9 @@ const NBA_PROP_TOKENS = [
   'LOAD_MANAGEMENT_RISK',    // Stars who rest (Gemini)
   'MATCHUP_HISTORY',         // Player vs player (Gemini)
   'RECENT_QUOTES',           // Coach/player comments (Gemini)
-  'MINUTES_RESTRICTION',     // Injury return caps (Gemini)
+  'MINUTES_RESTRICTION'      // Injury return caps (Gemini)
   
-  // Betting Signals (MINOR DATA POINTS ONLY - never decisive)
-  'LINE_MOVEMENT',           // Sharp money signals (Gemini) ⚠️ SUPPLEMENTARY ONLY
-  'PUBLIC_BETTING_PCT'       // Fade the public (Gemini) ⚠️ SUPPLEMENTARY ONLY
+  // Betting Signals REMOVED per user policy (no betting-market data)
 ];
 
 // ============================================================================
