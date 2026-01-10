@@ -1,6 +1,5 @@
 import { oddsService } from './oddsService.js';
 import { ballDontLieService } from './ballDontLieService.js';
-import { fixBdlInjuryStatus } from './agentic/sharedUtils.js';
 import { computeRecommendedSportsbook } from './recommendedSportsbook.js';
 import { makeGaryPick } from './garyEngine.js';
 import { processGameOnce, gameAlreadyHasPick } from './picksService.js';
@@ -174,13 +173,11 @@ export async function generateNFLPicks(options = {}) {
       }
 
       // Fetch team stats and injuries (fail if no stats for both teams)
-      const [homeTeamStats, awayTeamStats, rawInjuries] = await Promise.all([
+      const [homeTeamStats, awayTeamStats, injuries] = await Promise.all([
         ballDontLieService.getTeamStats(SPORT_KEY, { seasons: [season], team_ids: [homeTeam.id], per_page: 100 }),
         ballDontLieService.getTeamStats(SPORT_KEY, { seasons: [season], team_ids: [awayTeam.id], per_page: 100 }),
         ballDontLieService.getInjuriesGeneric(SPORT_KEY, { team_ids: [homeTeam.id, awayTeam.id] })
       ]);
-
-      const injuries = (rawInjuries || []).map(fixBdlInjuryStatus);
 
       // Strictly scope any returned rows to the actual matchup teams
       const filterByTeamId = (rows, teamId) => {

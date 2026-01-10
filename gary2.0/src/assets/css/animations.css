@@ -1,0 +1,194 @@
+/* Import sleek, tech-company style fonts */
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@200;300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&display=swap');
+/* Import semi-cursive fonts */
+@import url('https://fonts.googleapis.com/css2?family=Satisfy&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Kaushan+Script&display=swap');
+
+/* High-tech animations for Gary A.I. */
+
+/* Custom Scrollbar for the Picks History */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #111;
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #d4af37;
+}
+
+/* Ticker Tape Animation */
+@keyframes marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-marquee {
+  display: inline-block;
+  animation: marquee 30s linear infinite;
+}
+
+.ticker-tape {
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.ticker-tape-content {
+  display: inline-block;
+  padding-left: 100%;
+  animation: marquee 30s linear infinite;
+}
+
+
+@keyframes glintEffect {
+  0% { 
+    opacity: 0; 
+    transform: translateX(-100%); 
+  }
+  10% { 
+    opacity: 0.9; 
+  }
+  60% { 
+    opacity: 0.7; 
+  }
+  100% { 
+    opacity: 0; 
+    transform: translateX(100%); 
+  }
+}
+
+@keyframes pulse {
+  0% { opacity: 0.8; }
+  50% { opacity: 1; }
+  100% { opacity: 0.8; }
+}
+
+@keyframes float {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+  100% { transform: translateY(0px); }
+}
+
+@keyframes techReveal {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+    filter: blur(8px);
+  }
+  40% {
+    opacity: 0.6;
+    filter: blur(4px);
+  }
+  80% {
+    opacity: 0.9;
+    transform: translateY(0);
+    filter: blur(1px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+@keyframes neonFlicker {
+  0%, 19%, 21%, 23%, 25%, 54%, 56%, 100% {
+    text-shadow:
+      0 0 5px #fff,
+      0 0 10px #fff,
+      0 0 15px #fff,
+      0 0 20px #ffd700,
+      0 0 35px #ffd700;
+  }
+  20%, 24%, 55% {
+    text-shadow: none;
+  }
+}
+
+@keyframes bounce {
+  0%, 20%, 50%, 80%, 100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-30px);
+  }
+  60% {
+    transform: translateY(-15px);
+  }
+}
+
+/* Tech grey effect */
+.tech-grey-text {
+  background: linear-gradient(135deg, 
+    #aaaaaa 0%, 
+    #777777 25%, 
+    #cccccc 50%,
+    #777777 75%, 
+    #aaaaaa 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 
+    0 0 2px rgba(120,120,120,0.3);
+  position: relative;
+  letter-spacing: 0.02em;
+}
+
+/* Digital typewriter effect */
+.cursor-effect::after {
+  content: '|';
+  display: inline-block;
+  opacity: 1;
+  animation: blink 1s infinite;
+  font-weight: 200;
+  margin-left: 2px;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.tech-text-container {
+  position: relative;
+  display: inline-block;
+  transition: all 0.5s cubic-bezier(0.2, 0, 0.3, 1);
+  filter: drop-shadow(0 0 15px rgba(255, 215, 0, 0.3));
+}
+
+.tech-text-container:hover {
+  transform: scale(1.02);
+  filter: drop-shadow(0 0 20px rgba(255, 215, 0, 0.5));
+}
+
+.tech-underline {
+  height: 3px;
+  background: linear-gradient(90deg, 
+    transparent 0%, 
+    rgba(255,215,0,0.6) 20%, 
+    rgba(255,223,0,0.9) 50%,
+    rgba(255,215,0,0.6) 80%,
+    transparent 100%);
+  border-radius: 9999px;
+  box-shadow: 
+    0 0 10px rgba(255,215,0,0.6),
+    0 0 20px rgba(255,215,0,0.3);
+  transition: width 0.2s cubic-bezier(0.6, -0.28, 0.735, 0.045);
+}

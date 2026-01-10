@@ -309,7 +309,7 @@ export default function GaryProps() {
         ) : picks.length === 0 ? (
               <div className="flex justify-center items-center min-h-[30vh]">
                 <div className="text-center">
-                  <div className="text-gray-300 text-xl mb-2">Daily {selectedSport} Prop Picks Coming Soon</div>
+                  <div className="text-gray-300 text-xl mb-2">No {selectedSport} prop picks available.</div>
                   <p className="text-gray-500 text-sm">
                     {selectedSport === 'NFL TDs'
                       ? 'NFL TD scorer picks are generated for game days.'

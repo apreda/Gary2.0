@@ -218,8 +218,8 @@ const TOKEN_DEFINITIONS = {
   },
   pdo_luck: {
     id: 'pdo_luck',
-    label: 'PDO Sustainability Indicator',
-    description: 'PDO (shooting% + save%) to investigate performance sustainability. League avg = 100.'
+    label: 'PDO Luck Indicator',
+    description: 'PDO (shooting% + save%) to identify regression candidates. League avg = 100.'
   }
 };
 

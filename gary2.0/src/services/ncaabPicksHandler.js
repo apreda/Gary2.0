@@ -65,10 +65,9 @@ export async function generateNCAABPicks(options = {}) {
         ballDontLieService.getInjuriesGeneric(SPORT_KEY, { team_ids: [homeTeam.id, awayTeam.id] }),
         ballDontLieService.getTeamSeasonStats(SPORT_KEY, { teamId: homeTeam.id, season }),
         ballDontLieService.getTeamSeasonStats(SPORT_KEY, { teamId: awayTeam.id, season }),
-        // NCAAB standings require valid integer conference_id - skip to avoid 400 errors
-        // BDL rejects string conference names, so we'll get Home/Away splits from team season stats instead
-        Promise.resolve([]),
-        Promise.resolve([])
+        // NCAAB standings require conference_id; map from team object
+        (homeTeam?.conference || homeTeam?.conference_id) ? ballDontLieService.getStandingsGeneric(SPORT_KEY, { season, conference_id: homeTeam.conference || homeTeam.conference_id }) : Promise.resolve([]),
+        (awayTeam?.conference || awayTeam?.conference_id) ? ballDontLieService.getStandingsGeneric(SPORT_KEY, { season, conference_id: awayTeam.conference || awayTeam.conference_id }) : Promise.resolve([])
       ]);
 
       const hasHome = Array.isArray(homeTeamStats) && homeTeamStats.length > 0;

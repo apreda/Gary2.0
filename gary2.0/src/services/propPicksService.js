@@ -342,7 +342,7 @@ Respond with ONLY a JSON array of your best prop picks in this format:
             
             // Always filter out very poor odds
             const odds = pick.odds || 0;
-            if (typeof odds === 'number' && odds <= -200) return false;
+            if (typeof odds === 'number' && odds <= -150) return false;
             return true;
           });
 
@@ -355,7 +355,7 @@ Respond with ONLY a JSON array of your best prop picks in this format:
         return entry;
       });
 
-      console.log(`Found ${data.length} entries for ${dateString}, filtered (2-per-game for NBA/NHL/EPL, 55%+ conf for others), excluding ≤-200 odds`);
+      console.log(`Found ${data.length} entries for ${dateString}, filtered (2-per-game for NBA/NHL/EPL, 55%+ conf for others), excluding ≤-150 odds`);
       return processedEntries;
     } catch (error) {
       console.error(`Error fetching for ${dateString}:`, error);
@@ -693,7 +693,7 @@ Respond with ONLY a JSON array of your best prop picks in this format:
       // Filter the picks:
       // - NBA/NHL/EPL: No confidence filter (2-per-game rule already applied during generation)
       // - NFL/other: Apply confidence threshold (0.55 minimum)
-      // - All sports: Exclude ≤-200 odds
+      // - All sports: Exclude ≤-150 odds
       const filteredData = data.map(record => {
         const filtered = record.picks.filter(pick => {
           const sport = pick.sport || 'unknown';
@@ -704,7 +704,7 @@ Respond with ONLY a JSON array of your best prop picks in this format:
           
           // Always filter out very poor odds
           const odds = pick.odds || 0;
-          if (typeof odds === 'number' && odds <= -200) return false;
+          if (typeof odds === 'number' && odds <= -150) return false;
           return true;
         });
         record.picks = filtered

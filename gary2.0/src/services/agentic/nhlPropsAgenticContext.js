@@ -15,7 +15,6 @@ import {
   formatGameTimeEST, 
   buildMarketSnapshot, 
   parseGameDate, 
-  safeApiCall,
   safeApiCallArray, 
   safeApiCallObject, 
   findBestPlayerMatch, 
@@ -25,123 +24,6 @@ import {
 import { fetchComprehensivePropsNarrative } from './scoutReport/scoutReportBuilder.js';
 
 const SPORT_KEY = 'icehockey_nhl';
-
-/**
- * Calculate hit rate for a specific prop line based on game logs
- * Returns the percentage of recent games where player exceeded the line
- * @param {Array} games - Recent game logs
- * @param {string} propType - Type of prop (shots_on_goal, points, goals, assists)
- * @param {number} line - The prop line to check against
- * @returns {Object} Hit rate data
- */
-function calculateHitRate(games, propType, line) {
-  if (!games || games.length === 0) return null;
-  
-  // Map prop types to game log fields (aligned with BDL NHL Player Props API)
-  const propToField = {
-    // Shots
-    'shots_on_goal': 'sog',
-    'player_shots_on_goal': 'sog',
-    'shots_on_goal_1p': 'sog',  // period-specific approximated by total
-    'shots_on_goal_2p': 'sog',
-    'shots_on_goal_3p': 'sog',
-    // Points
-    'points': 'points',
-    'player_points': 'points',
-    'points_1p': 'points',
-    'points_2p': 'points',
-    'points_3p': 'points',
-    'power_play_points': 'ppPoints',
-    // Goals
-    'goals': 'goals',
-    'player_goals': 'goals',
-    'anytime_goal': 'goals',
-    'anytime_goal_1p': 'goals',
-    'anytime_goal_2p': 'goals',
-    'anytime_goal_3p': 'goals',
-    'first_goal': 'goals',
-    'last_goal': 'goals',
-    // Assists
-    'assists': 'assists',
-    'player_assists': 'assists',
-    // Goalie saves
-    'saves': 'saves'
-  };
-  
-  const field = propToField[propType] || propType;
-  
-  let hitsOver = 0;
-  let hitsUnder = 0;
-  let pushes = 0;
-  const values = [];
-  
-  for (const game of games) {
-    const value = game[field];
-    if (value === undefined || value === null) continue;
-    
-    values.push(value);
-    if (value > line) hitsOver++;
-    else if (value < line) hitsUnder++;
-    else pushes++;
-  }
-  
-  const totalGames = values.length;
-  if (totalGames === 0) return null;
-  
-  const avgValue = values.reduce((a, b) => a + b, 0) / totalGames;
-  
-  return {
-    totalGames,
-    hitsOver,
-    hitsUnder,
-    pushes,
-    overRate: ((hitsOver / totalGames) * 100).toFixed(0),
-    underRate: ((hitsUnder / totalGames) * 100).toFixed(0),
-    avgValue: avgValue.toFixed(1),
-    values: values.slice(0, 5), // Last 5 values for display
-    recommendation: avgValue > line * 1.05 ? 'OVER' : avgValue < line * 0.95 ? 'UNDER' : 'CLOSE'
-  };
-}
-
-/**
- * Analyze impact of key teammate injuries on player usage (NHL edition)
- * @param {string} playerName - Player to analyze
- * @param {string} team - Team name
- * @param {Array} injuries - List of injuries
- * @returns {Object|null} Teammate impact analysis
- */
-function analyzeTeammateImpact(playerName, team, injuries) {
-  // Key NHL players by team whose absence would boost others' usage (top stars)
-  const keyPlayers = [
-    'Connor McDavid', 'Leon Draisaitl', 'Nathan MacKinnon', 'Nikita Kucherov', 
-    'Auston Matthews', 'Artemi Panarin', 'David Pastrnak', 'Jack Hughes',
-    'Kirill Kaprizov', 'Cale Makar', 'Quinn Hughes', 'Sidney Crosby',
-    'Alex Ovechkin', 'Mikko Rantanen', 'Matthew Tkachuk', 'Jason Robertson',
-    'Elias Pettersson', 'Connor Bedard', 'Jack Eichel', 'William Nylander'
-  ].map(n => n.toLowerCase());
-  
-  // Find injured stars on the same team
-  const teamInjuries = injuries.filter(inj => {
-    const injTeam = (inj.team || '').toLowerCase();
-    const injPlayer = (inj.player || '').toLowerCase();
-    const injStatus = (inj.status || '').toLowerCase();
-    
-    // Check if on same team and is a key player
-    const isTeammate = injTeam.includes(team.toLowerCase()) || team.toLowerCase().includes(injTeam.split(' ').pop());
-    const isKeyPlayer = keyPlayers.some(star => injPlayer.includes(star) || star.includes(injPlayer));
-    const isOut = ['out', 'doubtful', 'day-to-day'].some(s => injStatus.includes(s));
-    
-    return isTeammate && isKeyPlayer && isOut && injPlayer !== playerName.toLowerCase();
-  });
-  
-  if (teamInjuries.length === 0) return null;
-  
-  return {
-    injuredStars: teamInjuries.map(i => `${i.player} (${i.status})`),
-    usageBoostExpected: true,
-    reason: `With ${teamInjuries.map(i => i.player).join(', ')} out, expect increased TOI/offensive role`
-  };
-}
 
 /**
  * Group props by player for easier analysis
@@ -181,25 +63,20 @@ function groupPropsByPlayer(props) {
 function getTopPropCandidates(props, maxPlayersPerTeam = 7) {
   const grouped = groupPropsByPlayer(props);
   
-  // Score players EQUALLY across prop types - no volume bias
-  // Strategy: Reward prop DIVERSITY and odds quality, not just raw prop count
+  // Score each player by number of props and odds quality
+  // NOTE: No bias toward any specific prop type - Gary decides organically
   const scored = grouped.map(player => {
     const avgOdds = player.props.reduce((sum, p) => {
       const odds = p.over_odds || p.under_odds || -110;
       return sum + odds;
     }, 0) / player.props.length;
     
-    // Count unique prop types (SOG, goals, assists, points, etc.)
+    // Prop variety bonus - reward players with multiple prop types available
     const uniquePropTypes = new Set(player.props.map(p => p.type)).size;
     
-    // UNBIASED SCORING: Diversity matters more than volume
-    // This ensures all prop types (SOG, goals, assists, saves) get equal consideration
     return {
       ...player,
-      score: (uniquePropTypes * 30) + (avgOdds > -110 ? 20 : 0) + (player.props.length * 2)
-      // 30 points per prop TYPE (rewards diversity)
-      // 20 points for good odds
-      // 2 points per individual prop (minor volume bonus)
+      score: player.props.length * 10 + (avgOdds > -110 ? 20 : 0) + (uniquePropTypes * 5)
     };
   });
   
@@ -269,22 +146,12 @@ async function resolvePlayerIds(propCandidates, teamIds, season, homeTeamName, a
   }
   
   // Normalize team names for matching
-  const normalizeTeamNameLocal = (name) => {
-    let norm = (name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-    if (norm.includes('utah') || norm.includes('arizona') || norm.includes('coyotes') || norm.includes('mammoth')) return 'utah';
-    if (norm.includes('rangers')) return 'newyorkrangers';
-    if (norm.includes('islanders')) return 'newyorkislanders';
-    if (norm.includes('devils')) return 'newjerseydevils';
-    if (norm.includes('kings')) return 'losangeleskings';
-    return norm;
-  };
+  const normalizeTeamName = (name) => (name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const homeNorm = normalizeTeamName(homeTeamName);
+  const awayNorm = normalizeTeamName(awayTeamName);
+  const validTeamIds = new Set(teamIds);
   
-  const homeNorm = normalizeTeamNameLocal(homeTeamName);
-  const awayNorm = normalizeTeamNameLocal(awayTeamName);
-  // Ensure team IDs are compared as strings to avoid type issues
-  const validTeamIds = new Set(teamIds.map(id => String(id)));
-  
-  console.log(`[NHL Props Context] Resolving players for ${homeTeamName} (${homeNorm}) vs ${awayTeamName} (${awayNorm}). Valid IDs: ${Array.from(validTeamIds).join(', ')}`);
+  console.log(`[NHL Props Context] Searching BDL by player name for ${allPlayerNames.length} candidates...`);
   
   // Search each player by name (batch in parallel, max 5 concurrent)
   const batchSize = 5;
@@ -299,15 +166,11 @@ async function resolvePlayerIds(propCandidates, teamIds, season, homeTeamName, a
         const nameParts = candidateName.trim().split(' ');
         const lastName = nameParts[nameParts.length - 1];
         
-        // Search by last name - BDL search looks across all fields, so we need to use 'name' parameter
-        // Also filter by current season to get only active players
-        const searchResp = await safeApiCall(
-          () => ballDontLieService.getPlayersGeneric(SPORT_KEY, { name: lastName, seasons: [season], per_page: 50 }),
-          [],
+        // Search by last name - with logging on failure
+        const searchResults = await safeApiCallArray(
+          () => ballDontLieService.getPlayersGeneric(SPORT_KEY, { search: lastName, per_page: 10 }),
           `NHL Props: Search player "${candidateName}"`
         );
-        
-        const searchResults = Array.isArray(searchResp) ? searchResp : searchResp?.data || [];
         
         if (!searchResults || searchResults.length === 0) {
           return { name: candidateName, found: false };
@@ -317,38 +180,18 @@ async function resolvePlayerIds(propCandidates, teamIds, season, homeTeamName, a
         const match = findBestPlayerMatch(candidateName, searchResults);
         
         if (!match) {
-          console.log(`[NHL Props Context] ❌ No fuzzy match for "${candidateName}" in ${searchResults.length} results.`);
-          // Log first 3 player names to debug
-          const sampleNames = searchResults.slice(0, 3).map(p => {
-            const name = `${p.first_name || ''} ${p.last_name || ''}`.trim();
-            const teams = p.teams?.map(t => `${t.full_name}(${t.season})`).join(',') || 'no teams';
-            return `${name} [${teams}]`;
-          });
-          console.log(`[NHL Props Context] Sample search results: ${sampleNames.join(' | ')}`);
           return { name: candidateName, found: false };
         }
         
-        // NHL API returns teams as an array, not a single team object
-        // Get the current season's team from the teams array
-        const currentSeasonTeam = match.teams?.find(t => t.season === season) || match.teams?.[0];
-        
-        if (!currentSeasonTeam) {
-          console.log(`[NHL Props Context] ⚠️ Player "${candidateName}" (ID:${match.id}) has no team data for season ${season}`);
-          return { name: candidateName, found: false, noTeamData: true };
-        }
-        
-        const playerTeamId = String(currentSeasonTeam.id || '');
-        const playerTeamName = currentSeasonTeam.full_name || '';
-        const playerTeamNorm = normalizeTeamNameLocal(playerTeamName);
+        // Check if player is on one of the two teams in this game
+        const playerTeamId = match.team?.id || match.team_id;
+        const playerTeamName = match.team?.full_name || '';
+        const playerTeamNorm = normalizeTeamName(playerTeamName);
         
         // Validate team: check team_id match OR team name contains home/away
         const isOnValidTeam = validTeamIds.has(playerTeamId) ||
-          (playerTeamNorm && (playerTeamNorm.includes(homeNorm) || homeNorm.includes(playerTeamNorm))) ||
-          (playerTeamNorm && (playerTeamNorm.includes(awayNorm) || awayNorm.includes(playerTeamNorm)));
-        
-        if (!isOnValidTeam) {
-          console.log(`[NHL Props Context] ❌ Player "${candidateName}" found on "${playerTeamName}" (ID:${playerTeamId}), but expected ${homeTeamName} or ${awayTeamName} (Valid IDs: ${Array.from(validTeamIds).join(', ')})`);
-        }
+          playerTeamNorm.includes(homeNorm) || homeNorm.includes(playerTeamNorm) ||
+          playerTeamNorm.includes(awayNorm) || awayNorm.includes(playerTeamNorm);
         
         if (isOnValidTeam) {
           return {
@@ -358,7 +201,7 @@ async function resolvePlayerIds(propCandidates, teamIds, season, homeTeamName, a
             team: playerTeamName
           };
         } else {
-          return { name: candidateName, found: false, wrongTeam: playerTeamName, teamId: playerTeamId };
+          return { name: candidateName, found: false, wrongTeam: playerTeamName };
         }
       } catch (e) {
         return { name: candidateName, found: false, error: e.message };
@@ -371,10 +214,7 @@ async function resolvePlayerIds(propCandidates, teamIds, season, homeTeamName, a
       if (result.found) {
         playerIdMap[result.name.toLowerCase()] = { id: result.id, team: result.team };
       } else {
-        invalidPlayers.push({ 
-          name: result.name, 
-          reason: result.wrongTeam ? `on ${result.wrongTeam} (ID:${result.teamId})` : result.error || 'not found' 
-        });
+        invalidPlayers.push({ name: result.name, reason: result.wrongTeam ? `on ${result.wrongTeam}` : 'not found' });
       }
     }
   }
@@ -383,9 +223,9 @@ async function resolvePlayerIds(propCandidates, teamIds, season, homeTeamName, a
   
   // Log players that aren't on either team (will be filtered out)
   if (invalidPlayers.length > 0) {
-    const filtered = invalidPlayers.filter(p => p.reason !== 'not found' && !p.reason.includes('Error'));
+    const filtered = invalidPlayers.filter(p => p.reason !== 'not found');
     if (filtered.length > 0) {
-      console.log(`[NHL Props Context] ⚠️ FILTERED OUT ${filtered.length} players NOT on current teams: ${filtered.slice(0, 5).map(p => `${p.name} (${p.reason})`).join(', ')}${filtered.length > 5 ? '...' : ''}`);
+      console.log(`[NHL Props Context] ⚠️ FILTERED OUT ${filtered.length} players NOT on ${homeTeamName} or ${awayTeamName}: ${filtered.slice(0, 5).map(p => `${p.name} (${p.reason})`).join(', ')}${filtered.length > 5 ? '...' : ''}`);
     }
   }
   
@@ -591,21 +431,21 @@ async function detectBackToBack(teamIds, gameDate) {
 
 /**
  * Build comprehensive player stats text with actual BDL data
- * ENHANCED: Now includes hit rates, teammate impact, recent form, and home/away splits
+ * ENHANCED: Now includes recent form, consistency, and home/away splits
  */
-function buildPlayerStatsText(homeTeam, awayTeam, advancedStats, propCandidates, playerSeasonStats, playerIdMap, injuries, playerGameLogs = {}) {
+function buildPlayerStatsText(homeTeam, awayTeam, advancedStats, propCandidates, playerSeasonStats, playerIdMap, richContext, playerGameLogs = {}) {
   let statsText = '';
   
   // Helper to get stats for a player
   const getPlayerStats = (playerName) => {
     const playerId = playerIdMap[playerName.toLowerCase()];
-    return playerId ? (playerId.id ? playerSeasonStats[playerId.id] : playerSeasonStats[playerId]) : null;
+    return playerId ? playerSeasonStats[playerId] : null;
   };
   
   // Helper to get game logs for a player
   const getPlayerLogs = (playerName) => {
     const playerId = playerIdMap[playerName.toLowerCase()];
-    return playerId ? (playerId.id ? playerGameLogs[playerId.id] : playerGameLogs[playerId]) : null;
+    return playerId ? playerGameLogs[playerId] : null;
   };
   
   // Helper to format recent games
@@ -628,51 +468,62 @@ function buildPlayerStatsText(homeTeam, awayTeam, advancedStats, propCandidates,
   // Away team section
   statsText += `### ${awayTeam} Players\n`;
   
+  // Team-level context from Gemini Grounding
+  if (advancedStats?.away_advanced) {
+    const away = advancedStats.away_advanced;
+    statsText += `Team: CF% ${away.corsi_for_pct ?? 'N/A'}, xGF% ${away.expected_goals_for_pct ?? 'N/A'}, PDO ${away.pdo ?? 'N/A'}\n`;
+  }
+  if (advancedStats?.recent_form?.away_last_10) {
+    statsText += `Form: ${advancedStats.recent_form.away_last_10} (${advancedStats.recent_form.away_goals_per_game_l10 ?? 'N/A'} G/game L10)\n`;
+  }
+  if (advancedStats?.goalie_matchup?.away_starter) {
+    const g = advancedStats.goalie_matchup;
+    statsText += `Goalie: ${g.away_starter} (${g.away_sv_pct ?? 'N/A'} SV%)\n`;
+  }
+  
   // Individual player stats for away team
   if (awayPlayers.length > 0) {
     statsText += '\n**Player Season Stats & Recent Form:**\n';
     for (const candidate of awayPlayers) {
       const stats = getPlayerStats(candidate.player);
       const logs = getPlayerLogs(candidate.player);
+      const propsStr = candidate.props.map(p => `${p.type} ${p.line}`).join(', ');
       
       const injuryRecord = injuries.find(i => i.player.toLowerCase() === candidate.player.toLowerCase());
       const isInjured = !!injuryRecord;
       const durationTag = injuryRecord?.duration ? ` [${injuryRecord.duration}]` : '';
-      const injuryFlag = isInjured ? ` ⚠️ INJURED (${injuryRecord.status})${durationTag}` : '';
-      
-      // Teammate impact
-      const teammateImpact = analyzeTeammateImpact(candidate.player, candidate.team, injuries);
-      const impactFlag = teammateImpact ? ` 📈 RECENT EDGE: ${teammateImpact.reason}` : '';
+      const injuryFlag = isInjured ? ` ⚠️ INJURED${durationTag}` : '';
       
       if (stats) {
-        statsText += `- **${candidate.player}**${injuryFlag}${impactFlag}:\n`;
-        statsText += `  Season: SOG/G ${stats.shots_per_game || 'N/A'}, G/G ${stats.goals_per_game || 'N/A'}, A/G ${stats.assists_per_game || 'N/A'}, P/G ${stats.points_per_game || 'N/A'}, PP Pts ${stats.power_play_points || 0}, TOI/G ${stats.time_on_ice_per_game || 'N/A'}\n`;
+        statsText += `- **${candidate.player}**${injuryFlag}:\n`;
+        statsText += `  Season: ${stats.games_played || 0} GP, SOG/G ${stats.shots_per_game || 'N/A'}, G/G ${stats.goals_per_game || 'N/A'}, A/G ${stats.assists_per_game || 'N/A'}, P/G ${stats.points_per_game || 'N/A'}, PP Pts ${stats.power_play_points || 0}, TOI/G ${stats.time_on_ice_per_game || 'N/A'}\n`;
         
-        // Add recent form if available
+        // Add recent form if available - show ALL stat types equally for organic analysis
         if (logs) {
           const formIcon = logs.formTrend === 'hot' ? '🔥' : logs.formTrend === 'cold' ? '❄️' : '';
           statsText += `  L${logs.gamesAnalyzed} Avg: SOG ${logs.averages?.sog || 'N/A'}, PTS ${logs.averages?.points || 'N/A'}, G ${logs.averages?.goals || 'N/A'}, A ${logs.averages?.assists || 'N/A'} ${formIcon}\n`;
-          statsText += `  Recent: SOG [${formatRecentGames(logs, 'sog')}] | PTS [${formatRecentGames(logs, 'points')}]\n`;
           
+          // Show recent games for ALL prop types - no bias toward any stat
+          statsText += `  Recent: SOG [${formatRecentGames(logs, 'sog')}] | PTS [${formatRecentGames(logs, 'points')}] | G [${formatRecentGames(logs, 'goals')}] | A [${formatRecentGames(logs, 'assists')}]\n`;
+          
+          // Consistency scores for ALL stat types - Gary decides which matters
+          if (logs.consistency) {
+            const sogC = logs.consistency.sog ? (parseFloat(logs.consistency.sog) * 100).toFixed(0) : 'N/A';
+            const ptsC = logs.consistency.points ? (parseFloat(logs.consistency.points) * 100).toFixed(0) : 'N/A';
+            const goalsC = logs.consistency.goals ? (parseFloat(logs.consistency.goals) * 100).toFixed(0) : 'N/A';
+            statsText += `  Consistency: SOG ${sogC}% | PTS ${ptsC}% | G ${goalsC}%\n`;
+          }
+          
+          // Home/Away splits - show multiple stats
           if (logs.splits?.home && logs.splits?.away) {
-            statsText += `  Splits: Home ${logs.splits.home.sog} SOG | Away ${logs.splits.away.sog} SOG\n`;
+            statsText += `  Home: ${logs.splits.home.sog || 'N/A'} SOG, ${logs.splits.home.points || 'N/A'} PTS, ${logs.splits.home.goals || 'N/A'} G (${logs.splits.home.games}g)\n`;
+            statsText += `  Away: ${logs.splits.away.sog || 'N/A'} SOG, ${logs.splits.away.points || 'N/A'} PTS, ${logs.splits.away.goals || 'N/A'} G (${logs.splits.away.games}g)\n`;
           }
         }
         
-        // Add hit rates for props
-        const hitRateText = candidate.props.map(p => {
-          const hr = calculateHitRate(logs?.games || [], p.type, p.line);
-          if (!hr) return null;
-          return `${p.type} ${p.line}: ${hr.overRate}% over (L${hr.totalGames})`;
-        }).filter(Boolean).join(', ');
-        
-        if (hitRateText) {
-          statsText += `  Hit Rates: ${hitRateText}\n`;
-        }
-        
-        statsText += `  Lines: ${candidate.props.map(p => `${p.type} ${p.line}`).join(', ')}\n`;
+        statsText += `  Props: ${propsStr}\n`;
       } else {
-        statsText += `- ${candidate.player}${injuryFlag}${impactFlag}: (stats unavailable) | Lines: ${candidate.props.map(p => `${p.type} ${p.line}`).join(', ')}\n`;
+        statsText += `- ${candidate.player}: (stats unavailable) | Props: ${propsStr}\n`;
       }
     }
   }
@@ -682,90 +533,100 @@ function buildPlayerStatsText(homeTeam, awayTeam, advancedStats, propCandidates,
   // Home team section
   statsText += `### ${homeTeam} Players\n`;
   
+  // Team-level context from Gemini Grounding
+  if (advancedStats?.home_advanced) {
+    const home = advancedStats.home_advanced;
+    statsText += `Team: CF% ${home.corsi_for_pct ?? 'N/A'}, xGF% ${home.expected_goals_for_pct ?? 'N/A'}, PDO ${home.pdo ?? 'N/A'}\n`;
+  }
+  if (advancedStats?.recent_form?.home_last_10) {
+    statsText += `Form: ${advancedStats.recent_form.home_last_10} (${advancedStats.recent_form.home_goals_per_game_l10 ?? 'N/A'} G/game L10)\n`;
+  }
+  if (advancedStats?.goalie_matchup?.home_starter) {
+    const g = advancedStats.goalie_matchup;
+    statsText += `Goalie: ${g.home_starter} (${g.home_sv_pct ?? 'N/A'} SV%)\n`;
+  }
+  
   // Individual player stats for home team
   if (homePlayers.length > 0) {
     statsText += '\n**Player Season Stats & Recent Form:**\n';
     for (const candidate of homePlayers) {
       const stats = getPlayerStats(candidate.player);
       const logs = getPlayerLogs(candidate.player);
+      const propsStr = candidate.props.map(p => `${p.type} ${p.line}`).join(', ');
       
       const injuryRecord = injuries.find(i => i.player.toLowerCase() === candidate.player.toLowerCase());
       const isInjured = !!injuryRecord;
       const durationTag = injuryRecord?.duration ? ` [${injuryRecord.duration}]` : '';
-      const injuryFlag = isInjured ? ` ⚠️ INJURED (${injuryRecord.status})${durationTag}` : '';
-      
-      // Teammate impact
-      const teammateImpact = analyzeTeammateImpact(candidate.player, candidate.team, injuries);
-      const impactFlag = teammateImpact ? ` 📈 RECENT EDGE: ${teammateImpact.reason}` : '';
+      const injuryFlag = isInjured ? ` ⚠️ INJURED${durationTag}` : '';
       
       if (stats) {
-        statsText += `- **${candidate.player}**${injuryFlag}${impactFlag}:\n`;
-        statsText += `  Season: SOG/G ${stats.shots_per_game || 'N/A'}, G/G ${stats.goals_per_game || 'N/A'}, A/G ${stats.assists_per_game || 'N/A'}, P/G ${stats.points_per_game || 'N/A'}, PP Pts ${stats.power_play_points || 0}, TOI/G ${stats.time_on_ice_per_game || 'N/A'}\n`;
+        statsText += `- **${candidate.player}**${injuryFlag}:\n`;
+        statsText += `  Season: ${stats.games_played || 0} GP, SOG/G ${stats.shots_per_game || 'N/A'}, G/G ${stats.goals_per_game || 'N/A'}, A/G ${stats.assists_per_game || 'N/A'}, P/G ${stats.points_per_game || 'N/A'}, PP Pts ${stats.power_play_points || 0}, TOI/G ${stats.time_on_ice_per_game || 'N/A'}\n`;
         
+        // Add recent form if available - show ALL stat types equally for organic analysis
         if (logs) {
           const formIcon = logs.formTrend === 'hot' ? '🔥' : logs.formTrend === 'cold' ? '❄️' : '';
           statsText += `  L${logs.gamesAnalyzed} Avg: SOG ${logs.averages?.sog || 'N/A'}, PTS ${logs.averages?.points || 'N/A'}, G ${logs.averages?.goals || 'N/A'}, A ${logs.averages?.assists || 'N/A'} ${formIcon}\n`;
-          statsText += `  Recent: SOG [${formatRecentGames(logs, 'sog')}] | PTS [${formatRecentGames(logs, 'points')}]\n`;
           
+          // Show recent games for ALL prop types - no bias toward any stat
+          statsText += `  Recent: SOG [${formatRecentGames(logs, 'sog')}] | PTS [${formatRecentGames(logs, 'points')}] | G [${formatRecentGames(logs, 'goals')}] | A [${formatRecentGames(logs, 'assists')}]\n`;
+          
+          // Consistency scores for ALL stat types - Gary decides which matters
+          if (logs.consistency) {
+            const sogC = logs.consistency.sog ? (parseFloat(logs.consistency.sog) * 100).toFixed(0) : 'N/A';
+            const ptsC = logs.consistency.points ? (parseFloat(logs.consistency.points) * 100).toFixed(0) : 'N/A';
+            const goalsC = logs.consistency.goals ? (parseFloat(logs.consistency.goals) * 100).toFixed(0) : 'N/A';
+            statsText += `  Consistency: SOG ${sogC}% | PTS ${ptsC}% | G ${goalsC}%\n`;
+          }
+          
+          // Home/Away splits - show multiple stats
           if (logs.splits?.home && logs.splits?.away) {
-            statsText += `  Splits: Home ${logs.splits.home.sog} SOG | Away ${logs.splits.away.sog} SOG\n`;
+            statsText += `  Home: ${logs.splits.home.sog || 'N/A'} SOG, ${logs.splits.home.points || 'N/A'} PTS, ${logs.splits.home.goals || 'N/A'} G (${logs.splits.home.games}g)\n`;
+            statsText += `  Away: ${logs.splits.away.sog || 'N/A'} SOG, ${logs.splits.away.points || 'N/A'} PTS, ${logs.splits.away.goals || 'N/A'} G (${logs.splits.away.games}g)\n`;
           }
         }
         
-        const hitRateText = candidate.props.map(p => {
-          const hr = calculateHitRate(logs?.games || [], p.type, p.line);
-          if (!hr) return null;
-          return `${p.type} ${p.line}: ${hr.overRate}% over (L${hr.totalGames})`;
-        }).filter(Boolean).join(', ');
-        
-        if (hitRateText) {
-          statsText += `  Hit Rates: ${hitRateText}\n`;
-        }
-        
-        statsText += `  Lines: ${candidate.props.map(p => `${p.type} ${p.line}`).join(', ')}\n`;
+        statsText += `  Props: ${propsStr}\n`;
       } else {
-        statsText += `- ${candidate.player}${injuryFlag}${impactFlag}: (stats unavailable) | Lines: ${candidate.props.map(p => `${p.type} ${p.line}`).join(', ')}\n`;
+        statsText += `- ${candidate.player}: (stats unavailable) | Props: ${propsStr}\n`;
       }
     }
+  }
+  
+  // Key insights from Grounding
+  if (advancedStats?.key_analytics_insights?.length > 0) {
+    statsText += '\n### Key Insights\n';
+    advancedStats.key_analytics_insights.slice(0, 4).forEach((insight, i) => {
+      statsText += `${i + 1}. ${insight}\n`;
+    });
+  }
+  
+  // Player streaks from rich context
+  if (richContext?.player_streaks?.length > 0) {
+    statsText += '\n### Player Streaks & Trends\n';
+    richContext.player_streaks.slice(0, 5).forEach(streak => {
+      const text = typeof streak === 'string' ? streak : streak?.description || JSON.stringify(streak);
+      statsText += `- ${text}\n`;
+    });
   }
   
   return statsText;
 }
 
 /**
- * Build token slices for prop analysis - enhanced with player stats, game logs, and hit rates
+ * Build token slices for prop analysis - enhanced with player stats and game logs
  */
 function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnapshot, advancedStats, playerSeasonStats, playerIdMap, playerGameLogs = {}) {
-  // Enhance prop candidates with their season stats, recent form, AND hit rates
+  // Enhance prop candidates with their season stats and recent form
   const enhancedCandidates = propCandidates.map(p => {
     const playerId = playerIdMap[p.player.toLowerCase()];
     const stats = playerId ? playerSeasonStats[playerId] : null;
     const logs = playerId ? playerGameLogs[playerId] : null;
-    const games = logs?.games || [];
-    
-    // Calculate hit rate for each prop line
-    const propsWithHitRates = p.props.map(prop => {
-      const hitRate = calculateHitRate(games, prop.type, prop.line);
-      return {
-        ...prop,
-        hitRate: hitRate ? {
-          overRate: hitRate.overRate,
-          underRate: hitRate.underRate,
-          avgValue: hitRate.avgValue,
-          lastValues: hitRate.values,
-          recommendation: hitRate.recommendation,
-          gamesAnalyzed: hitRate.totalGames
-        } : null
-      };
-    });
-    
-    // Analyze teammate injury impact
-    const teammateImpact = analyzeTeammateImpact(p.player, p.team, injuries);
     
     return {
       player: p.player,
       team: p.team,
-      props: propsWithHitRates, // Now includes hit rates!
+      props: p.props,
       seasonStats: stats ? {
         gamesPlayed: stats.games_played,
         sogPerGame: stats.shots_per_game,
@@ -775,12 +636,12 @@ function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnap
         ppPoints: stats.power_play_points,
         toiPerGame: stats.time_on_ice_per_game
       } : null,
-      // Recent form data with home/away splits
+      // NEW: Recent form data
       recentForm: logs ? {
         gamesAnalyzed: logs.gamesAnalyzed,
         averages: logs.averages,
         consistency: logs.consistency,
-        splits: logs.splits, // Home/Away splits
+        splits: logs.splits,
         formTrend: logs.formTrend,
         lastGame: logs.lastGame,
         last5Games: logs.games?.slice(0, 5).map(g => ({
@@ -791,9 +652,7 @@ function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnap
           opponent: g.opponent,
           isHome: g.isHome
         }))
-      } : null,
-      // NEW: Teammate injury impact
-      teammateImpact: teammateImpact
+      } : null
     };
   });
   
@@ -807,7 +666,7 @@ function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnap
       totalProps: propCandidates.reduce((sum, p) => sum + p.props.length, 0)
     },
     injury_report: {
-      notable: injuries.slice(0, 15),
+      notable: injuries.slice(0, 10),
       total_listed: injuries.length
     },
     market_context: marketSnapshot,
@@ -818,53 +677,6 @@ function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnap
     goalie_matchup: advancedStats?.goalie_matchup || null,
     five_on_five: advancedStats?.five_on_five || null
   };
-}
-
-/**
- * Detect players who are likely injured but NOT in BDL injury report
- * Strategy: Players with props available but NO recent game logs are likely injured
- */
-function detectLikelyInjuredFromLogs(playerIdMap, injuries, propCandidates, playerGameLogs) {
-  const likelyInjured = [];
-  const injuredNames = new Set(injuries.map(i => i.player?.toLowerCase()));
-  
-  for (const candidate of propCandidates) {
-    const playerName = candidate.player.toLowerCase();
-    if (injuredNames.has(playerName)) continue;
-    
-    const playerData = playerIdMap[playerName];
-    const playerId = playerData?.id || playerData;
-    if (!playerId) continue;
-    
-    const logs = playerGameLogs[playerId];
-    // If no logs found OR last game was more than 10 days ago, consider likely out
-    if (!logs || !logs.games || logs.games.length === 0) {
-      likelyInjured.push({
-        player: candidate.player,
-        status: 'Likely Out (No recent games)',
-        description: 'No recent game logs found for this player - likely injured or scratched',
-        team: candidate.team || '',
-        detected: true
-      });
-      console.log(`[NHL Props Context] ⚠️ DETECTED likely injury: ${candidate.player} - no recent game logs`);
-    } else if (logs.lastGame) {
-      const lastGameDate = new Date(logs.lastGame);
-      const now = new Date();
-      const diffDays = (now - lastGameDate) / (1000 * 60 * 60 * 24);
-      if (diffDays > 10) {
-        likelyInjured.push({
-          player: candidate.player,
-          status: 'Likely Out (Long absence)',
-          description: `Last game was ${diffDays.toFixed(0)} days ago (${logs.lastGame})`,
-          team: candidate.team || '',
-          detected: true
-        });
-        console.log(`[NHL Props Context] ⚠️ DETECTED likely injury: ${candidate.player} - last game ${diffDays.toFixed(0)} days ago`);
-      }
-    }
-  }
-  
-  return likelyInjured;
 }
 
 /**
@@ -904,9 +716,7 @@ export async function buildNhlPropsAgenticContext(game, playerProps, options = {
   if (awayTeam?.id) teamIds.push(awayTeam.id);
 
   // Process prop candidates first - 7 players per team (14 total)
-  // Process prop candidates first - limit to STARTERS/TOP LINE ONLY (6 per team)
-  // This avoids 3rd/4th line players who may not play significant minutes
-  const propCandidates = getTopPropCandidates(playerProps, 6);
+  const propCandidates = getTopPropCandidates(playerProps, 7);
   
   // Parallel fetch: injuries, player ID resolution, BDL goalies, COMPREHENSIVE narrative context
   // IMPORTANT: Narrative context is fetched UPFRONT so Gary knows all factors BEFORE iterations
@@ -1011,11 +821,7 @@ export async function buildNhlPropsAgenticContext(game, playerProps, options = {
     fetchPlayerGameLogs(playerIdMap)
   ]);
   
-  // CRITICAL: Detect players likely injured but NOT in BDL injury report
-  const detectedInjuries = detectLikelyInjuredFromLogs(playerIdMap, formattedInjuries, validatedCandidates, playerGameLogs);
-  const allInjuries = [...formattedInjuries, ...detectedInjuries];
-
-  // Log stats coverage
+  // Log stats coverage (use available candidates - excludes Doubtful/Day-To-Day)
   const playersWithStats = Object.keys(playerSeasonStats).length;
   const playersWithLogs = Object.keys(playerGameLogs).length;
   const totalCandidates = availableCandidates.length;
@@ -1040,6 +846,7 @@ export async function buildNhlPropsAgenticContext(game, playerProps, options = {
   );
 
   // Build player stats text with REAL player data and recent form
+  // Build player stats text using available candidates only (excludes Doubtful/Day-To-Day)
   const playerStats = buildPlayerStatsText(
     game.home_team,
     game.away_team,
@@ -1047,7 +854,7 @@ export async function buildNhlPropsAgenticContext(game, playerProps, options = {
     availableCandidates,
     playerSeasonStats,
     playerIdMap,
-    allInjuries, // Use ALL injuries
+    richContext,
     playerGameLogs // Pass game logs for recent form
   );
 
@@ -1055,7 +862,7 @@ export async function buildNhlPropsAgenticContext(game, playerProps, options = {
   const tokenData = buildPropsTokenSlices(
     playerStats,
     availableCandidates,
-    allInjuries, // Use ALL injuries
+    formattedInjuries,
     marketSnapshot,
     advancedStats,
     playerSeasonStats,
@@ -1126,8 +933,8 @@ export async function buildNhlPropsAgenticContext(game, playerProps, options = {
   if (!narrativeContext) {
     dataGaps.push(`⚠️ NO NARRATIVE CONTEXT: Gemini Grounding failed - missing goalie confirmations, news, trends`);
   }
-  if (allInjuries.length === 0 && teamIds.length > 0) {
-    dataGaps.push(`⚠️ NO INJURIES RETURNED: Neither BDL nor game log detection found injuries`);
+  if (formattedInjuries.length === 0 && teamIds.length > 0) {
+    dataGaps.push(`⚠️ NO INJURIES RETURNED: BDL may have failed - injury context may be incomplete`);
   }
   
   if (dataGaps.length > 0) {
@@ -1139,7 +946,7 @@ export async function buildNhlPropsAgenticContext(game, playerProps, options = {
   console.log(`   - ${availableCandidates.length} player candidates (verified on team, excludes Doubtful/Day-To-Day)`);
   console.log(`   - ${playersWithStats} players with season stats (${(statsCoverage * 100).toFixed(0)}% coverage)`);
   console.log(`   - ${playersWithLogs} players with game logs (${(logsCoverage * 100).toFixed(0)}% coverage)`);
-  console.log(`   - ${allInjuries.length} injuries (${formattedInjuries.length} from BDL + ${detectedInjuries.length} detected from game logs)`);
+  console.log(`   - ${formattedInjuries.length} injuries`);
   console.log(`   - Advanced stats: ${advancedSource}`);
   console.log(`   - Rich context: ${richContextFound}`);
   console.log(`   - Narrative context: ${narrativeContext ? 'YES' : 'NO'}`);
@@ -1179,7 +986,7 @@ export async function buildNhlPropsAgenticContext(game, playerProps, options = {
       dataAvailability: {
         statsAvailable: playersWithStats > 0,
         logsAvailable: playersWithLogs > 0,
-        injuriesAvailable: allInjuries.length > 0,
+        injuriesAvailable: formattedInjuries.length > 0,
         narrativeAvailable: !!narrativeContext,
         dataGaps: dataGaps.length > 0 ? dataGaps : null,
         dataQuality: dataGaps.length === 0 ? 'HIGH' : dataGaps.length <= 1 ? 'MEDIUM' : 'LOW'
@@ -1191,4 +998,3 @@ export async function buildNhlPropsAgenticContext(game, playerProps, options = {
 export default {
   buildNhlPropsAgenticContext
 };
-

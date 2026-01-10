@@ -53,8 +53,8 @@ export const ensureAnonymousSession = async () => {
 }
 
 /**
- * FIXED: Merge picks instead of deleting existing picks
- * This ensures we don't lose NHL/NCAAB picks when NBA runs later
+ * CRITICAL FIX: Specialized function for directly storing picks in the daily_picks table
+ * Implementing direct API approach to bypass PostgreSQL JSON handling issues
  */
 export const storeDailyPicks = async (dateString, picksArray) => {
   if (!dateString || !picksArray) {
@@ -76,16 +76,14 @@ export const storeDailyPicks = async (dateString, picksArray) => {
   // Use service role key when available to bypass RLS on server
   const adminKey = supabaseServiceKey || supabaseKey;
 
-  // 1. Fetch existing picks for this date to MERGE instead of deleting
-  console.log(`STORAGE FIX: Fetching existing picks for ${dateString} to merge...`);
-  let existingPicks = [];
+  // 1. Delete any existing entry for this date
+  console.log(`STORAGE FIX: Removing existing daily picks for ${dateString}...`);
   try {
-    const response = await axios({
-      method: 'GET',
+    await axios({
+      method: 'DELETE',
       url: `${supabaseUrl}/rest/v1/daily_picks`,
       params: {
-        date: `eq.${dateString}`,
-        select: '*'
+        date: `eq.${dateString}`
       },
       headers: {
         'apikey': adminKey,
@@ -93,86 +91,63 @@ export const storeDailyPicks = async (dateString, picksArray) => {
         'Content-Type': 'application/json'
       }
     });
-    
-    if (response.data && response.data.length > 0) {
-      const existing = response.data[0];
-      existingPicks = Array.isArray(existing.picks) ? existing.picks : 
-                     (typeof existing.picks === 'string' ? JSON.parse(existing.picks) : []);
-      console.log(`Found ${existingPicks.length} existing picks to merge`);
-    } else {
-      console.log('No existing picks found, will create new entry');
-    }
-  } catch (fetchError) {
-    console.warn('Could not fetch existing picks, will insert as new:', fetchError.message);
+    console.log('Successfully deleted any existing records');
+  } catch (deleteError) {
+    console.warn('Delete operation warning:', deleteError.message);
+    // Continue anyway - the record might not exist yet
   }
 
-  // 2. MERGE: Dedupe by game (homeTeam + awayTeam + league), prefer new picks
-  const gameKey = (p) => {
-    if (p?.type === 'prop' || p?.pickType === 'prop') {
-      // Props: dedupe by player + prop
-      return `prop|${p.league || ''}|${p.player || ''}|${p.prop || p.statType || ''}`;
-    }
-    // Game picks: ONE per game
-    return `game|${p.league || ''}|${p.homeTeam || ''}|${p.awayTeam || ''}`;
-  };
-
-  const newKeys = new Set(sanitizedPicks.map(gameKey));
-  const filteredExisting = existingPicks.filter(p => !newKeys.has(gameKey(p)));
-  const mergedPicks = [...filteredExisting, ...sanitizedPicks];
-  
-  console.log(`MERGE: ${filteredExisting.length} kept + ${sanitizedPicks.length} new = ${mergedPicks.length} total`);
-
-  // 3. Store merged picks (upsert if exists, insert if new)
+  // 2. Add the new picks using direct REST endpoint
+  console.log(`STORAGE FIX: Storing ${sanitizedPicks.length} picks via direct API...`);
   try {
-    if (existingPicks.length > 0) {
-      // Update existing row
-      console.log(`STORAGE FIX: Updating existing row with ${mergedPicks.length} merged picks...`);
-      await axios({
-        method: 'PATCH',
-        url: `${supabaseUrl}/rest/v1/daily_picks`,
-        params: {
-          date: `eq.${dateString}`
-        },
-        data: {
-          picks: mergedPicks,
-          updated_at: new Date().toISOString()
-        },
-        headers: {
-          'apikey': adminKey,
-          'Authorization': `Bearer ${adminKey}`,
-          'Content-Type': 'application/json',
-          'Prefer': 'return=minimal'
-        }
-      });
-      console.log('STORAGE FIX: Successfully updated merged picks');
-    } else {
-      // Insert new row
-      console.log(`STORAGE FIX: Inserting new row with ${mergedPicks.length} picks...`);
+    // Create minimal record to avoid PostgreSQL JSON handling issues
+    const payload = {
+      date: dateString,
+      picks: sanitizedPicks // Pass as JSON array, not string
+    };
+
+    // Use axios for more reliable network handling
+    const response = await axios({
+      method: 'POST',
+      url: `${supabaseUrl}/rest/v1/daily_picks`,
+      data: payload,
+      headers: {
+        'apikey': adminKey,
+        'Authorization': `Bearer ${adminKey}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=minimal'
+      }
+    });
+
+    console.log('STORAGE FIX: Successfully stored picks via direct API');
+    return { success: true };
+  } catch (insertError) {
+    console.error('Direct API insert failed:', insertError.message);
+    
+    // Final attempt: try upserting using the same JSON shape
+    try {
+      console.log('STORAGE FIX: Trying upsert fallback...');
+      const upsertPayload = [{ date: dateString, picks: sanitizedPicks }];
       await axios({
         method: 'POST',
         url: `${supabaseUrl}/rest/v1/daily_picks`,
-        data: {
-          date: dateString,
-          picks: mergedPicks,
-          created_at: new Date().toISOString()
-        },
+        data: upsertPayload,
         headers: {
           'apikey': adminKey,
           'Authorization': `Bearer ${adminKey}`,
           'Content-Type': 'application/json',
-          'Prefer': 'return=minimal'
+          'Prefer': 'return=representation,resolution=merge-duplicates'
         }
       });
-      console.log('STORAGE FIX: Successfully inserted new picks');
+      console.log('STORAGE FIX: Upsert fallback succeeded');
+      return { success: true };
+    } catch (fallbackError) {
+      console.error('All storage approaches failed:', fallbackError.message);
+      return { 
+        error: 'All storage approaches failed', 
+        message: fallbackError.message, 
+        success: false 
+      };
     }
-
-    return { success: true, merged: mergedPicks.length };
-  } catch (storageError) {
-    console.error('Storage operation failed:', storageError.message);
-    return { 
-      error: 'Storage failed', 
-      message: storageError.message, 
-      success: false 
-    };
   }
 }

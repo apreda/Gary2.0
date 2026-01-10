@@ -648,9 +648,9 @@ const FETCHERS = {
         },
         projected_pace: avgPace > 0 ? avgPace.toFixed(1) : 'N/A',
         analysis: homePace > 100 && awayPace > 100 
-          ? 'Both teams play at a fast pace - investigate high possession implications'
+          ? 'Both teams play at a fast pace - expect high possession game'
           : homePace < 98 && awayPace < 98 
-            ? 'Both teams play slow - investigate low-possession game implications'
+            ? 'Both teams play slow - expect grinding, low-possession game'
             : `Pace mismatch: ${home.name} (${homePace.toFixed(1)}) vs ${away.name} (${awayPace.toFixed(1)})`
       };
     }
