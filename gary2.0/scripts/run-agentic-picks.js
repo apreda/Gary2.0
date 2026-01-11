@@ -224,6 +224,8 @@ const forceRerun = args.includes('--force');
 const dateFilter = getArgValue('--date');
 // --dynamic flag to enable dynamic slate review (organic pick selection based on board quality)
 const useDynamicSlateReview = args.includes('--dynamic');
+// --force-underdog flag to make Gary argue FOR the underdog (one-time use for testing value)
+const forceUnderdog = args.includes('--force-underdog');
 
 if (runAll) {
   sportsToRun.push('nba', 'nfl', 'nhl', 'epl', 'ncaab', 'ncaaf');
@@ -258,6 +260,7 @@ if (sportsToRun.length === 0) {
 ║    --date 2025-12-25           (filter to specific date)         ║
 ║    --date 2025-12-25,2025-12-26 (multiple dates)                 ║
 ║    --force                     (skip deduplication)              ║
+║    --force-underdog            (make Gary argue for underdog)    ║
 ║    --store false               (analyze only, don't save)        ║
 ║                                                                  ║
 ║  Gary's Pick System:                                             ║
@@ -453,6 +456,52 @@ async function main() {
         timeLabel = 'upcoming';
       }
 
+      // NFL: Enrich games with playoff round significance (Wild Card, Divisional, Championship, Super Bowl)
+      if (config.key === 'americanfootball_nfl' && games.length > 0) {
+        try {
+          console.log(`[${config.name}] Checking for postseason games via BDL...`);
+          const bdlGames = await ballDontLieService.getGames('americanfootball_nfl', {
+            postseason: true,
+            seasons: [new Date().getMonth() <= 2 ? new Date().getFullYear() - 1 : new Date().getFullYear()],
+            per_page: 100
+          });
+          
+          if (bdlGames && bdlGames.length > 0) {
+            // Create a map of BDL games by team matchup for quick lookup
+            const bdlGameMap = new Map();
+            for (const g of bdlGames) {
+              const homeKey = g.home_team?.full_name?.toLowerCase() || g.home_team?.name?.toLowerCase() || '';
+              const awayKey = g.visitor_team?.full_name?.toLowerCase() || g.visitor_team?.name?.toLowerCase() || '';
+              const key = `${homeKey}:${awayKey}`;
+              bdlGameMap.set(key, g);
+            }
+            
+            // Map postseason week to significance
+            const weekToSignificance = {
+              1: 'Wild Card',
+              2: 'Divisional Round',
+              3: 'Conference Championship',
+              4: 'Super Bowl'
+            };
+            
+            // Enrich each game with gameSignificance
+            for (const game of games) {
+              const homeKey = game.home_team?.toLowerCase() || '';
+              const awayKey = game.away_team?.toLowerCase() || '';
+              const key = `${homeKey}:${awayKey}`;
+              
+              const bdlGame = bdlGameMap.get(key);
+              if (bdlGame && bdlGame.postseason && bdlGame.week) {
+                game.gameSignificance = weekToSignificance[bdlGame.week] || 'Playoff';
+                console.log(`[${config.name}] ✓ ${game.away_team} @ ${game.home_team}: ${game.gameSignificance}`);
+              }
+            }
+          }
+        } catch (err) {
+          console.warn(`[${config.name}] Could not fetch postseason data from BDL:`, err.message);
+        }
+      }
+
       // NCAAF: Filter to FBS only (exclude FCS games)
       if (config.fbsOnly && config.key === 'americanfootball_ncaaf') {
         console.log(`[${config.name}] Filtering to FBS games only (excluding FCS)...`);
@@ -505,10 +554,10 @@ async function main() {
           31   // WCC (includes Gonzaga)
         ]);
 
-        // Conference ID to name mapping for logging
+        // Conference ID to name mapping for logging and storage
         const CONF_ID_NAMES = {
           1: 'ACC', 4: 'AAC', 6: 'Big 12', 7: 'Big East',
-          10: 'Big Ten', 24: 'SEC', 31: 'WCC'
+          10: 'Big Ten', 24: 'SEC', 31: 'WCC', 33: 'Pac-12'
         };
 
         const isApprovedConference = (confId) => {
@@ -562,7 +611,7 @@ async function main() {
             const homeConfId = homeTeam.conference_id;
             const awayConfId = awayTeam.conference_id;
 
-            // BOTH teams must be from an approved Top 10 conference
+            // BOTH teams must be from an approved Top 7 conference
             const homeApproved = isApprovedConference(homeConfId);
             const awayApproved = isApprovedConference(awayConfId);
             
@@ -598,6 +647,9 @@ async function main() {
             const awayHasData = awayGames >= MIN_GAMES_FOR_ANALYSIS && awayPts > 40 && awayFgPct > 30;
 
             if (homeHasData && awayHasData) {
+              // Attach conference names to game for storage (used by app for filtering)
+              game.homeConference = getConfName(homeConfId);
+              game.awayConference = getConfName(awayConfId);
               filteredGames.push(game);
             } else {
               const homeReason = !homeHasData ? `${homeGames}g/${homePts.toFixed(1)}ppg/${homeFgPct.toFixed(1)}%fg` : 'OK';
@@ -617,7 +669,7 @@ async function main() {
 
         // Log conference filter results
         if (skippedNonApproved.length > 0) {
-          console.log(`[${config.name}] 🚫 Skipped ${skippedNonApproved.length} games outside Top 10 conferences:`);
+          console.log(`[${config.name}] 🚫 Skipped ${skippedNonApproved.length} games outside Top 7 conferences:`);
           skippedNonApproved.slice(0, 5).forEach(({ game, reason }) => {
             console.log(`   - ${game.away_team} @ ${game.home_team}: ${reason}`);
           });
@@ -635,7 +687,7 @@ async function main() {
             console.log(`   ... and ${skippedGames.length - 5} more`);
           }
         }
-        console.log(`[${config.name}] Top 10 conference + data quality filter: ${beforeCount} → ${games.length} games`);
+        console.log(`[${config.name}] Top 7 conference + data quality filter: ${beforeCount} → ${games.length} games`);
 
         // NCAAB: Filter out extreme spreads (≥14 points)
         // These are unpredictable - will the favorite keep starters in? Garbage time variance is too high.
@@ -785,7 +837,8 @@ async function main() {
 
         // Run agentic analysis (each game is independent)
         const runnerOptions = { 
-          nocache: process.argv.includes('--nocache')
+          nocache: process.argv.includes('--nocache'),
+          forceUnderdog: forceUnderdog // Make Gary argue for the underdog
         };
         let result;
         try {
@@ -800,7 +853,10 @@ async function main() {
 
         if (result && !result.error && result.pick) {
           // Check minimum stats requirement (for NCAAB especially)
-          const statsCount = result.toolCallHistory?.length || 0;
+          // Use UNIQUE stats count (not duplicates across iterations)
+          const allTokens = result.toolCallHistory?.map(t => t.token) || [];
+          const uniqueTokens = [...new Set(allTokens)];
+          const statsCount = uniqueTokens.length;
           const minStatsRequired = config.minStats || 0;
 
           if (minStatsRequired > 0 && statsCount < minStatsRequired) {
@@ -856,19 +912,21 @@ async function main() {
           console.log(`\n✅ PICK: ${result.pick}`);
           console.log(`   Type: ${result.type}`);
           if (result.toolCallHistory) {
-            console.log(`   Stats Requested (${statsCount}): ${result.toolCallHistory.map(t => t.token).join(', ')}`);
+            // Show UNIQUE stats only (not duplicates)
+            console.log(`   Stats Requested (${statsCount} unique): ${uniqueTokens.join(', ')}`);
             
             // 📊 INVESTIGATION AUDIT - Show what Gary actually investigated
-            const tokens = result.toolCallHistory.map(t => t.token);
+            // Filter out undefined/empty tokens
+            const tokens = result.toolCallHistory.map(t => t.token).filter(t => t);
             // Count player stats: tokens containing PLAYER_, _PLAYER, GAME_LOGS, or specific player stat patterns
             const playerStatsCount = tokens.filter(t => 
-              t.includes('PLAYER_') || 
+              t && (t.includes('PLAYER_') || 
               t.includes('_PLAYER') || 
               t.includes('GAME_LOGS') ||
-              t.match(/^(NBA|NFL|NHL|NCAAB|NCAAF)_PLAYER_STATS/)
+              t.match(/^(NBA|NFL|NHL|NCAAB|NCAAF)_PLAYER_STATS/))
             ).length;
             const teamStatsCount = tokens.filter(t => 
-              !t.includes('PLAYER_') && 
+              t && !t.includes('PLAYER_') && 
               !t.includes('_PLAYER') && 
               !t.includes('GAME_LOGS') &&
               !t.match(/^(NBA|NFL|NHL|NCAAB|NCAAF)_PLAYER_STATS/)
@@ -876,13 +934,13 @@ async function main() {
             
             // Check key investigation areas
             const investigatedAreas = {
-              homeAwaySplits: tokens.some(t => t.includes('HOME_AWAY') || t.includes('SPLITS')),
-              recentForm: tokens.some(t => t.includes('RECENT_FORM') || t.includes('LAST_')),
-              h2hHistory: tokens.some(t => t.includes('H2H')),
-              pace: tokens.some(t => t.includes('PACE')),
-              efficiency: tokens.some(t => t.includes('RATING') || t.includes('EFG')),
-              clutchStats: tokens.some(t => t.includes('CLUTCH')),
-              benchDepth: tokens.some(t => t.includes('BENCH')),
+              homeAwaySplits: tokens.some(t => t && (t.includes('HOME_AWAY') || t.includes('SPLITS'))),
+              recentForm: tokens.some(t => t && (t.includes('RECENT_FORM') || t.includes('LAST_'))),
+              h2hHistory: tokens.some(t => t && t.includes('H2H')),
+              pace: tokens.some(t => t && t.includes('PACE')),
+              efficiency: tokens.some(t => t && (t.includes('RATING') || t.includes('EFG'))),
+              clutchStats: tokens.some(t => t && t.includes('CLUTCH')),
+              benchDepth: tokens.some(t => t && t.includes('BENCH')),
               playerLogs: playerStatsCount > 0
             };
             
@@ -1248,6 +1306,20 @@ async function main() {
             // NCAAB conference data for app filtering
             homeConference: result.homeConference || null,
             awayConference: result.awayConference || null,
+            // Single conference field for app filtering (based on which team is in the pick)
+            conference: (() => {
+              const pickText = result.pick || '';
+              const homeTeam = result.homeTeam || '';
+              const awayTeam = result.awayTeam || '';
+              // Check which team is in the pick and use their conference
+              if (homeTeam && pickText.includes(homeTeam.split(' ').slice(-1)[0])) {
+                return result.homeConference || null;
+              } else if (awayTeam && pickText.includes(awayTeam.split(' ').slice(-1)[0])) {
+                return result.awayConference || null;
+              }
+              // Fallback: use home conference if available
+              return result.homeConference || result.awayConference || null;
+            })(),
             statsUsed: statsUsed, // Token names for backwards compatibility
             statsData: statsData, // Full stat data with values for Tale of the Tape
             injuries: result.injuries || null, // Structured injury data from BDL

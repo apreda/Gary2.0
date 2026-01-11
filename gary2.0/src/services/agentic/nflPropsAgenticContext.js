@@ -39,31 +39,99 @@ function calculateHitRate(games, propType, line) {
   if (!games || games.length === 0) return null;
   
   // Map prop types to game log fields
+  // NOTE: This must handle BOTH raw Odds API names AND standardized names from propOddsService
   const propToField = {
+    // Passing - raw and standardized
     'pass_yds': 'pass_yds',
     'player_pass_yds': 'pass_yds',
     'passing_yards': 'pass_yds',
+    'pass_tds': 'pass_tds',
+    'player_pass_tds': 'pass_tds',
+    'pass_attempts': 'pass_att',
+    'player_pass_attempts': 'pass_att',
+    'pass_att': 'pass_att',  // Already standardized
+    'pass_completions': 'pass_comp',
+    'player_pass_completions': 'pass_comp',
+    'pass_comp': 'pass_comp',  // Already standardized
+    'interceptions': 'interceptions',
+    'pass_interceptions': 'interceptions',  // After prefix strip: player_pass_interceptions → pass_interceptions
+    'player_pass_interceptions': 'interceptions',
+    'longest_pass': 'longest_pass',
+    'pass_longest_completion': 'longest_pass',  // After prefix strip
+    'player_pass_longest_completion': 'longest_pass',
+    
+    // Rushing - raw and standardized
     'rush_yds': 'rush_yds',
     'player_rush_yds': 'rush_yds',
     'rushing_yards': 'rush_yds',
+    'rush_tds': 'rush_tds',
+    'player_rush_tds': 'rush_tds',
+    'rush_attempts': 'rush_att',
+    'player_rush_attempts': 'rush_att',
+    'rush_att': 'rush_att',  // Already standardized
+    'longest_rush': 'longest_rush',
+    'rush_longest': 'longest_rush',  // After prefix strip: player_rush_longest → rush_longest
+    'player_rush_longest': 'longest_rush',
+    
+    // Receiving - raw and standardized
     'reception_yds': 'rec_yds',
     'player_reception_yds': 'rec_yds',
     'receiving_yards': 'rec_yds',
+    'rec_yds': 'rec_yds',  // Already standardized - CRITICAL FIX
     'receptions': 'receptions',
     'player_receptions': 'receptions',
-    'pass_tds': 'pass_tds',
-    'player_pass_tds': 'pass_tds',
-    'rush_tds': 'rush_tds',
-    'player_rush_tds': 'rush_tds',
     'reception_tds': 'rec_tds',
     'player_reception_tds': 'rec_tds',
-    'pass_attempts': 'pass_att',
-    'player_pass_attempts': 'pass_att',
-    'pass_completions': 'pass_comp',
-    'player_pass_completions': 'pass_comp',
-    'rush_attempts': 'rush_att',
-    'player_rush_attempts': 'rush_att',
-    'rush_reception_yds': 'rush_rec_yds' // Combined
+    'rec_tds': 'rec_tds',  // Already standardized
+    'longest_reception': 'longest_reception',
+    'reception_longest': 'longest_reception',  // After prefix strip: player_reception_longest → reception_longest
+    'player_reception_longest': 'longest_reception',
+    
+    // Combined stats - raw and standardized
+    'rush_reception_yds': 'rush_rec_yds',
+    'player_rush_reception_yds': 'rush_rec_yds',
+    'rush_rec_yds': 'rush_rec_yds',  // Already standardized - CRITICAL FIX
+    'pass_rush_yds': 'pass_rush_yds',
+    'player_pass_rush_yds': 'pass_rush_yds',
+    'pass_rush_rec_yds': 'pass_rush_rec_yds',
+    'pass_rush_reception_yds': 'pass_rush_rec_yds',  // After prefix strip
+    'player_pass_rush_reception_yds': 'pass_rush_rec_yds',
+    
+    // TD props (binary - player either scored or didn't)
+    'anytime_td': 'total_tds',
+    'player_anytime_td': 'total_tds',
+    'first_td': 'total_tds',
+    '1st_td': 'total_tds',  // After prefix strip: player_1st_td → 1st_td
+    'player_1st_td': 'total_tds',
+    'last_td': 'total_tds',
+    'player_last_td': 'total_tds',
+    'tds_over': 'total_tds',
+    'player_tds_over': 'total_tds',
+    'rush_rec_tds': 'rush_rec_tds',
+    'rush_reception_tds': 'rush_rec_tds',  // After prefix strip
+    'player_rush_reception_tds': 'rush_rec_tds',
+    'pass_rush_reception_tds': 'pass_rush_rec_tds',  // After prefix strip
+    'player_pass_rush_reception_tds': 'pass_rush_rec_tds',
+    
+    // Targets (useful for receptions context)
+    'targets': 'targets',
+    'receiving_targets': 'targets',
+    
+    // Defensive props (if BDL game logs have this data)
+    'tackles_assists': 'tackles_assists',
+    'player_tackles_assists': 'tackles_assists',
+    'sacks': 'sacks',
+    'player_sacks': 'sacks',
+    'solo_tackles': 'solo_tackles',
+    'player_solo_tackles': 'solo_tackles',
+    
+    // Kicker props (if BDL game logs have this data)
+    'field_goals': 'field_goals',
+    'player_field_goals': 'field_goals',
+    'kicking_points': 'kicking_points',
+    'player_kicking_points': 'kicking_points',
+    'pats': 'pats',
+    'player_pats': 'pats'
   };
   
   const field = propToField[propType?.toLowerCase()] || propType;
@@ -76,10 +144,27 @@ function calculateHitRate(games, propType, line) {
   for (const game of games) {
     let value;
     
-    // Handle combined props
+    // Handle combined props and special calculations
     if (field === 'rush_rec_yds') {
+      // Rush + Receiving yards combined
       value = (game.rush_yds || 0) + (game.rec_yds || 0);
+    } else if (field === 'pass_rush_yds') {
+      // Pass + Rush yards combined (for mobile QBs)
+      value = (game.pass_yds || 0) + (game.rush_yds || 0);
+    } else if (field === 'pass_rush_rec_yds') {
+      // Pass + Rush + Receiving yards combined
+      value = (game.pass_yds || 0) + (game.rush_yds || 0) + (game.rec_yds || 0);
+    } else if (field === 'total_tds') {
+      // Total TDs (rush + receiving + passing) - for anytime TD props
+      value = (game.rush_tds || 0) + (game.rec_tds || 0) + (game.pass_tds || 0);
+    } else if (field === 'rush_rec_tds') {
+      // Rush + Receiving TDs only
+      value = (game.rush_tds || 0) + (game.rec_tds || 0);
+    } else if (field === 'pass_rush_rec_tds') {
+      // Pass + Rush + Receiving TDs combined
+      value = (game.pass_tds || 0) + (game.rush_tds || 0) + (game.rec_tds || 0);
     } else {
+      // Direct field lookup
       value = game[field];
     }
     
@@ -170,15 +255,58 @@ function groupPropsByPlayer(props) {
   return Object.values(grouped);
 }
 
+// TD prop types that should be excluded from regular props runs
+const TD_PROP_TYPES = [
+  'anytime_td', 'first_td', '1st_td', 'last_td', 'tds_over', 
+  'total_tds', 'rush_rec_tds', 'pass_rush_rec_tds', 'player_anytime_td',
+  'player_first_td', 'player_1st_td', 'player_last_td', 'player_tds_over'
+];
+
 /**
  * Get top prop candidates based on line value and odds quality
  * Returns top N players PER TEAM (so 10 per team = 20 total for a game)
+ * 
+ * IMPORTANT: Filters out heavy juice props (odds <= -150) BEFORE Gary sees them
+ * 
+ * @param {Array} props - All props for the game
+ * @param {number} maxPlayersPerTeam - Max players to return per team
+ * @param {Object} options - Additional options
+ * @param {boolean} options.excludeTdProps - If true, exclude all TD prop types (for regular props runs)
  */
-function getTopPropCandidates(props, maxPlayersPerTeam = 10) {
+function getTopPropCandidates(props, maxPlayersPerTeam = 10, options = {}) {
+  const { excludeTdProps = false } = options;
   const grouped = groupPropsByPlayer(props);
   
+  // CRITICAL: Filter out heavy juice props BEFORE Gary evaluates them
+  // Props with odds <= -150 are not worth the risk - filter them out entirely
+  const filteredGrouped = grouped.map(player => {
+    const goodOddsProps = player.props.filter(p => {
+      const overOdds = p.over_odds || -110;
+      const underOdds = p.under_odds || -110;
+      // At least one side must have odds > -150
+      const hasGoodOdds = overOdds > -150 || underOdds > -150;
+      if (!hasGoodOdds) {
+        console.log(`[NFL Props] Filtered out heavy juice prop: ${player.player} ${p.type} (${overOdds}/${underOdds})`);
+        return false;
+      }
+      
+      // If excludeTdProps is true, filter out all TD prop types
+      if (excludeTdProps && TD_PROP_TYPES.includes(p.type?.toLowerCase())) {
+        console.log(`[NFL Props] Filtered out TD prop (regular run): ${player.player} ${p.type}`);
+        return false;
+      }
+      
+      return true;
+    });
+    
+    return {
+      ...player,
+      props: goodOddsProps
+    };
+  }).filter(player => player.props.length > 0); // Remove players with no remaining props
+  
   // Score each player by number of props and odds quality
-  const scored = grouped.map(player => {
+  const scored = filteredGrouped.map(player => {
     const avgOdds = player.props.reduce((sum, p) => {
       const odds = p.over_odds || p.under_odds || -110;
       return sum + odds;
@@ -760,6 +888,305 @@ function detectGameDayType(gameDate) {
 }
 
 /**
+ * BUILD GAME SCRIPT CONTEXT - Critical for Sharp NFL Prop Betting
+ * 
+ * Sharps use spread/total to project game flow and player volume.
+ * This function calculates implied team totals and identifies game script edges.
+ * 
+ * @param {Object} marketSnapshot - Market data with spread and total
+ * @param {string} homeTeam - Home team name
+ * @param {string} awayTeam - Away team name
+ * @returns {Object} Game script analysis for prop betting
+ */
+function buildGameScriptContext(marketSnapshot, homeTeam, awayTeam) {
+  const spread = marketSnapshot?.spread?.home?.point;
+  const total = marketSnapshot?.total?.line;
+  
+  // Can't build game script without both spread and total
+  if (spread === null || spread === undefined || !total) {
+    return {
+      available: false,
+      reason: 'Spread or total not available'
+    };
+  }
+  
+  // Calculate implied team totals
+  // Formula: Home Implied = (Total + Spread) / 2, Away Implied = (Total - Spread) / 2
+  // Note: Spread is from home perspective (negative = home favored)
+  const homeImplied = (total - spread) / 2;
+  const awayImplied = (total + spread) / 2;
+  
+  // Determine favorite
+  const favorite = spread < 0 ? 'home' : spread > 0 ? 'away' : 'pick';
+  const favoriteTeam = favorite === 'home' ? homeTeam : favorite === 'away' ? awayTeam : 'Neither';
+  const underdogTeam = favorite === 'home' ? awayTeam : favorite === 'away' ? homeTeam : 'Neither';
+  const spreadAbs = Math.abs(spread);
+  
+  // Game script projections based on spread size
+  let gameScriptProjection = '';
+  let passVolumeImpact = '';
+  let rushVolumeImpact = '';
+  let garbageTimeRisk = false;
+  let starterMinutesRisk = false;
+  
+  if (spreadAbs >= 14) {
+    gameScriptProjection = 'BLOWOUT EXPECTED';
+    passVolumeImpact = `${underdogTeam} will be forced to throw early and often. ${favoriteTeam} may run clock in 2nd half.`;
+    rushVolumeImpact = `${favoriteTeam} heavy rush volume in 2nd half to kill clock. ${underdogTeam} RBs may get abandoned.`;
+    garbageTimeRisk = true;
+    starterMinutesRisk = true;
+  } else if (spreadAbs >= 10) {
+    gameScriptProjection = 'LIKELY COMFORTABLE WIN';
+    passVolumeImpact = `${underdogTeam} will likely trail and need to pass more. ${favoriteTeam} balanced but may lean run late.`;
+    rushVolumeImpact = `${favoriteTeam} should get positive game script for rushing. ${underdogTeam} may abandon run if behind.`;
+    garbageTimeRisk = true;
+    starterMinutesRisk = false;
+  } else if (spreadAbs >= 7) {
+    gameScriptProjection = 'FAVORITE SHOULD CONTROL';
+    passVolumeImpact = `Standard volume expected. ${underdogTeam} may need to throw more if trailing in 4th.`;
+    rushVolumeImpact = `${favoriteTeam} should get decent rushing opportunities with leads.`;
+    garbageTimeRisk = false;
+    starterMinutesRisk = false;
+  } else if (spreadAbs >= 3) {
+    gameScriptProjection = 'COMPETITIVE GAME EXPECTED';
+    passVolumeImpact = 'Both teams likely to stick to game plan. No major volume shifts expected from game script.';
+    rushVolumeImpact = 'Balanced approach likely for both teams throughout.';
+    garbageTimeRisk = false;
+    starterMinutesRisk = false;
+  } else {
+    gameScriptProjection = 'TOSS-UP GAME';
+    passVolumeImpact = 'Game script unpredictable. Focus on player baselines rather than game flow assumptions.';
+    rushVolumeImpact = 'Volume will depend on who takes early lead.';
+    garbageTimeRisk = false;
+    starterMinutesRisk = false;
+  }
+  
+  // Total-based scoring environment
+  let scoringEnvironment = '';
+  let passingGameOutlook = '';
+  
+  if (total >= 52) {
+    scoringEnvironment = 'SHOOTOUT EXPECTED';
+    passingGameOutlook = 'High total suggests both teams will be throwing. QB and WR props get a boost. Consider OVERS.';
+  } else if (total >= 47) {
+    scoringEnvironment = 'ABOVE AVERAGE SCORING';
+    passingGameOutlook = 'Good scoring environment. Passing game should be active for both teams.';
+  } else if (total >= 42) {
+    scoringEnvironment = 'AVERAGE SCORING';
+    passingGameOutlook = 'Standard NFL game. No major environmental boost or suppression.';
+  } else if (total >= 38) {
+    scoringEnvironment = 'LOWER SCORING';
+    passingGameOutlook = 'Defensive game or poor offenses. Consider UNDERs on passing props. Rushing may be emphasized.';
+  } else {
+    scoringEnvironment = 'DEFENSIVE STRUGGLE';
+    passingGameOutlook = 'Very low total suggests bad weather, elite defenses, or poor offenses. Heavy UNDER lean on passing.';
+  }
+  
+  return {
+    available: true,
+    spread: {
+      line: spread,
+      favorite: favoriteTeam,
+      underdog: underdogTeam,
+      size: spreadAbs,
+      isBlowoutRisk: spreadAbs >= 10
+    },
+    total: {
+      line: total,
+      environment: scoringEnvironment
+    },
+    impliedTotals: {
+      home: { team: homeTeam, points: parseFloat(homeImplied.toFixed(1)) },
+      away: { team: awayTeam, points: parseFloat(awayImplied.toFixed(1)) }
+    },
+    gameScript: {
+      projection: gameScriptProjection,
+      passVolumeImpact,
+      rushVolumeImpact,
+      garbageTimeRisk,
+      starterMinutesRisk
+    },
+    passingGameOutlook,
+    // Sharp betting edges from game script
+    edges: buildGameScriptEdges(spread, total, homeTeam, awayTeam)
+  };
+}
+
+/**
+ * Identify specific betting edges from game script
+ */
+function buildGameScriptEdges(spread, total, homeTeam, awayTeam) {
+  const edges = [];
+  const spreadAbs = Math.abs(spread);
+  const favorite = spread < 0 ? homeTeam : awayTeam;
+  const underdog = spread < 0 ? awayTeam : homeTeam;
+  
+  // Big underdog = passing volume spike
+  if (spreadAbs >= 10) {
+    edges.push({
+      type: 'UNDERDOG_PASS_VOLUME',
+      team: underdog,
+      edge: `${underdog} is a ${spreadAbs}-point underdog. Expect elevated passing attempts. QB pass attempts OVER, WR targets OVER.`,
+      confidence: spreadAbs >= 14 ? 'HIGH' : 'MEDIUM'
+    });
+  }
+  
+  // Big favorite = clock-killing rush volume
+  if (spreadAbs >= 10) {
+    edges.push({
+      type: 'FAVORITE_RUSH_VOLUME',
+      team: favorite,
+      edge: `${favorite} is a ${spreadAbs}-point favorite. Expect late-game rushing to kill clock. Lead RB rush attempts OVER.`,
+      confidence: spreadAbs >= 14 ? 'HIGH' : 'MEDIUM'
+    });
+  }
+  
+  // High total = shootout, pass-happy
+  if (total >= 50) {
+    edges.push({
+      type: 'SHOOTOUT',
+      edge: `Total of ${total} suggests a shootout. Both QBs and top receivers get volume boost. Consider passing OVERS.`,
+      confidence: total >= 54 ? 'HIGH' : 'MEDIUM'
+    });
+  }
+  
+  // Low total = defensive game
+  if (total <= 40) {
+    edges.push({
+      type: 'DEFENSIVE_GAME',
+      edge: `Total of ${total} suggests a defensive struggle. Consider passing UNDERS. Rushing may be safer for volume.`,
+      confidence: total <= 37 ? 'HIGH' : 'MEDIUM'
+    });
+  }
+  
+  // Garbage time risk for favorites
+  if (spreadAbs >= 14) {
+    edges.push({
+      type: 'GARBAGE_TIME_RISK',
+      team: favorite,
+      edge: `${favorite} starters may sit in 4th quarter if blowout materializes. Be cautious on high lines for ${favorite} skill players.`,
+      confidence: 'MEDIUM'
+    });
+  }
+  
+  return edges;
+}
+
+/**
+ * TRUMP CARD DETECTION - Identify Single Overriding Factors
+ * 
+ * A "trump card" is a single factor so compelling it overrides normal analysis.
+ * These are significant factors that directly impact player performance.
+ * 
+ * @param {Array} injuries - Merged injury list
+ * @param {Object} playerGameLogs - Player game logs
+ * @param {Array} propCandidates - Prop candidates
+ * @param {Object} narrativeSections - Parsed narrative sections
+ * @returns {Array} List of identified trump cards
+ */
+function detectTrumpCards(injuries, playerGameLogs, propCandidates, narrativeSections = {}) {
+  const trumpCards = [];
+  
+  // 1. TARGET VACUUM: Key receiver OUT for first time
+  // When WR1 or TE1 is newly out, WR2/WR3 get massive target boost
+  const outPlayers = injuries.filter(i => 
+    (i.status || '').toLowerCase().includes('out') &&
+    ['WR', 'TE', 'RB'].includes(i.position?.toUpperCase())
+  );
+  
+  for (const outPlayer of outPlayers) {
+    // Check if this is a RECENT injury (trump card) vs season-long (already priced in)
+    const isRecent = (i.duration || '').toUpperCase() !== 'SEASON-LONG' && 
+                     !(i.description || '').toLowerCase().includes('season');
+    
+    if (isRecent) {
+      // Find teammates at same position who might benefit
+      const team = outPlayer.team;
+      const position = outPlayer.position;
+      const beneficiaries = propCandidates.filter(c => 
+        c.team === team && 
+        c.player.toLowerCase() !== outPlayer.player.toLowerCase()
+      );
+      
+      if (beneficiaries.length > 0) {
+        trumpCards.push({
+          type: 'TARGET_VACUUM',
+          severity: 'HIGH',
+          player_out: outPlayer.player,
+          position: position,
+          team: team,
+          beneficiaries: beneficiaries.map(b => b.player).slice(0, 3),
+          edge: `${outPlayer.player} (${position}) is OUT. Target vacuum creates opportunity for ${beneficiaries.map(b => b.player).slice(0, 2).join(', ')}. RECENT injury = team still adjusting.`,
+          action: 'Consider OVERS on remaining pass catchers, especially in target share props.'
+        });
+      }
+    }
+  }
+  
+  // 2. QB CHANGE: Backup QB starting
+  // This completely changes the passing game - some receivers do better/worse with different QBs
+  const qbNews = narrativeSections?.qb_situation || '';
+  if (qbNews.toLowerCase().includes('backup') || 
+      qbNews.toLowerCase().includes('first start') ||
+      qbNews.toLowerCase().includes('making his first')) {
+    trumpCards.push({
+      type: 'BACKUP_QB',
+      severity: 'HIGH',
+      edge: 'Backup QB starting. Offensive scheme will simplify. Check targets go to safety valves (TEs, RBs). Deep shots may decrease.',
+      action: 'Consider TE receptions OVER, deep WR yards UNDER, RB targets OVER.'
+    });
+  }
+  
+  // 3. WEATHER: DO NOT USE AS A TRUMP CARD
+  // Weather forecasts are UNRELIABLE and change frequently.
+  // If Gary makes picks based on rain that doesn't happen, the pick is wrong.
+  // ONLY flag extreme, day-of confirmed conditions (25+ mph sustained wind)
+  // Rain/snow forecasts should be IGNORED - they're too uncertain.
+  // 
+  // NOTE: Weather is still passed as context but should NOT drive picks.
+  
+  // 4. REVENGE GAME: Player vs former team
+  // Only counts if explicitly mentioned with the player
+  const motivationSection = narrativeSections?.motivation || '';
+  if (motivationSection.toLowerCase().includes('revenge') ||
+      motivationSection.toLowerCase().includes('former team') ||
+      motivationSection.toLowerCase().includes('faces his old team')) {
+    trumpCards.push({
+      type: 'REVENGE_GAME',
+      severity: 'MEDIUM',
+      edge: 'Revenge game narrative detected. Historical data shows mixed results - validate with actual past performance vs this team.',
+      action: 'Soft factor - only actionable if Hard Factors (usage, matchup) also support.'
+    });
+  }
+  
+  // 5. USAGE SPIKE: Player's targets/touches trending sharply up in L2
+  for (const candidate of propCandidates) {
+    const playerId = Object.entries(playerGameLogs).find(([id, logs]) => 
+      logs?.playerName?.toLowerCase() === candidate.player.toLowerCase()
+    )?.[0];
+    
+    if (playerId) {
+      const logs = playerGameLogs[playerId];
+      if (logs?.targetTrend?.trend === 'SPIKE' || logs?.usageTrend?.trend === 'INCREASING') {
+        const changeVal = logs.targetTrend?.change || logs.usageTrend?.change || 0;
+        if (changeVal >= 30) {
+          trumpCards.push({
+            type: 'USAGE_SPIKE',
+            severity: 'MEDIUM',
+            player: candidate.player,
+            change: `+${changeVal}%`,
+            edge: `${candidate.player} has seen a ${changeVal}%+ increase in usage over last 2 games vs earlier games. Role may have expanded.`,
+            action: 'Strong OVER lean if the spike is due to opportunity (teammate injury) rather than random variance.'
+          });
+        }
+      }
+    }
+  }
+  
+  return trumpCards;
+}
+
+/**
  * Build comprehensive player stats text with game logs, trends, and matchup context
  */
 function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerIdMap, injuries, playerGameLogs, defensiveMatchups) {
@@ -1154,8 +1581,9 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerIdMap, i
 
 /**
  * Build comprehensive token slices for NFL prop analysis
+ * NOW INCLUDES: Game Script Context, Trump Cards, Position-Specific Defense
  */
-function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnapshot, playerIdMap, playerGameLogs, defensiveMatchups, shortWeekInfo, weather) {
+function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnapshot, playerIdMap, playerGameLogs, defensiveMatchups, shortWeekInfo, weather, gameScriptContext, trumpCards) {
   // Enhance prop candidates with their game log data
   const enhancedCandidates = propCandidates.map(p => {
     const playerId = playerIdMap[p.player.toLowerCase()];
@@ -1181,7 +1609,7 @@ function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnap
           opponent: g.opponent,
           isHome: g.isHome
         })),
-        // NEW: Target share trending
+        // Target share trending
         targetTrend: logs.targetTrend ? {
           l5Avg: logs.targetTrend.l5Avg,
           l2Avg: logs.targetTrend.l2Avg,
@@ -1189,7 +1617,7 @@ function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnap
           trend: logs.targetTrend.trend, // SPIKE, DECLINING, STABLE
           gameByGame: logs.targetTrend.gameByGame
         } : null,
-        // NEW: Usage/snap count proxy
+        // Usage/snap count proxy
         usageTrend: logs.usageTrend ? {
           l5Avg: logs.usageTrend.l5Avg,
           l2Avg: logs.usageTrend.l2Avg,
@@ -1219,7 +1647,21 @@ function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnap
     game_context: {
       shortWeek: shortWeekInfo,
       weather: weather
-    }
+    },
+    // NEW: Game Script Context - Critical for Sharp Prop Betting
+    game_script: gameScriptContext?.available ? {
+      spread: gameScriptContext.spread,
+      total: gameScriptContext.total,
+      impliedTotals: gameScriptContext.impliedTotals,
+      projection: gameScriptContext.gameScript.projection,
+      passVolumeImpact: gameScriptContext.gameScript.passVolumeImpact,
+      rushVolumeImpact: gameScriptContext.gameScript.rushVolumeImpact,
+      garbageTimeRisk: gameScriptContext.gameScript.garbageTimeRisk,
+      passingGameOutlook: gameScriptContext.passingGameOutlook,
+      edges: gameScriptContext.edges
+    } : { available: false },
+    // NEW: Trump Cards - Single Overriding Factors
+    trump_cards: trumpCards || []
   };
 }
 
@@ -1284,7 +1726,10 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
   }
 
   // STEP 2: Now group and select top candidates (with correct team assignments)
-  const propCandidates = getTopPropCandidates(playerProps, 7);
+  // If regularOnly option is set, exclude TD props (they're handled by separate TD script)
+  const propCandidates = getTopPropCandidates(playerProps, 7, { 
+    excludeTdProps: options.regularOnly || false 
+  });
 
   // STEP 3: Parallel fetch - COMPREHENSIVE narrative context + BDL injuries
   // IMPORTANT: Narrative context is fetched UPFRONT so Gary knows all factors BEFORE iterations
@@ -1420,6 +1865,40 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
     awayTeam?.full_name || game.away_team
   );
 
+  // NEW: Build Game Script Context - Critical for Sharp Prop Betting
+  // Calculates implied team totals and identifies game script edges
+  const gameScriptContext = buildGameScriptContext(
+    marketSnapshot,
+    homeTeam?.full_name || game.home_team,
+    awayTeam?.full_name || game.away_team
+  );
+  
+  if (gameScriptContext.available) {
+    console.log(`[NFL Props Context] 📊 Game Script: ${gameScriptContext.gameScript.projection}`);
+    console.log(`   - Spread: ${gameScriptContext.spread.favorite} -${gameScriptContext.spread.size}`);
+    console.log(`   - Total: ${gameScriptContext.total.line} (${gameScriptContext.total.environment})`);
+    console.log(`   - Implied: ${gameScriptContext.impliedTotals.home.team} ${gameScriptContext.impliedTotals.home.points} | ${gameScriptContext.impliedTotals.away.team} ${gameScriptContext.impliedTotals.away.points}`);
+    if (gameScriptContext.edges.length > 0) {
+      console.log(`   - Sharp Edges Identified: ${gameScriptContext.edges.length}`);
+    }
+  }
+
+  // NEW: Detect Trump Cards - Single Overriding Factors
+  // These are significant factors that directly impact player performance
+  const trumpCards = detectTrumpCards(
+    mergedInjuries,
+    playerGameLogs,
+    availableCandidates,
+    narrativeSections
+  );
+  
+  if (trumpCards.length > 0) {
+    console.log(`[NFL Props Context] 🃏 TRUMP CARDS DETECTED: ${trumpCards.length}`);
+    trumpCards.forEach(tc => {
+      console.log(`   - ${tc.type}: ${tc.edge.substring(0, 80)}...`);
+    });
+  }
+
   // Build comprehensive player stats text with ALL context
   // Use availableCandidates to ensure only verified and available players are included
   const playerStats = buildPlayerStatsText(
@@ -1432,7 +1911,7 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
     defensiveMatchups
   );
 
-  // Build token data with enhanced info
+  // Build token data with enhanced info - NOW INCLUDES Game Script & Trump Cards
   // Use availableCandidates to ensure only verified and available players are included
   const tokenData = buildPropsTokenSlices(
     playerStats,
@@ -1443,10 +1922,12 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
     playerGameLogs,
     defensiveMatchups,
     gameDayInfo, // Use gameDayInfo (Christmas Day, TNF, etc.)
-    weather
+    weather,
+    gameScriptContext, // NEW: Game script analysis
+    trumpCards // NEW: Trump card factors
   );
 
-  // Build game summary with all context
+  // Build game summary with all context - NOW INCLUDES Game Script & Trump Cards
   const gameSummary = {
     gameId: `nfl-props-${game.id}`,
     sport: SPORT_KEY,
@@ -1460,6 +1941,29 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
       total: marketSnapshot.total,
       moneyline: marketSnapshot.moneyline
     },
+    // NEW: Game Script Analysis - Critical for Sharp Props
+    gameScript: gameScriptContext?.available ? {
+      projection: gameScriptContext.gameScript.projection,
+      spread: {
+        line: gameScriptContext.spread.line,
+        favorite: gameScriptContext.spread.favorite,
+        underdog: gameScriptContext.spread.underdog,
+        isBlowoutRisk: gameScriptContext.spread.isBlowoutRisk
+      },
+      total: {
+        line: gameScriptContext.total.line,
+        environment: gameScriptContext.total.environment
+      },
+      impliedTotals: gameScriptContext.impliedTotals,
+      passVolumeImpact: gameScriptContext.gameScript.passVolumeImpact,
+      rushVolumeImpact: gameScriptContext.gameScript.rushVolumeImpact,
+      garbageTimeRisk: gameScriptContext.gameScript.garbageTimeRisk,
+      passingGameOutlook: gameScriptContext.passingGameOutlook,
+      // Sharp edges identified from game script
+      edges: gameScriptContext.edges
+    } : null,
+    // NEW: Trump Cards - Single Overriding Factors
+    trumpCards: trumpCards.length > 0 ? trumpCards : null,
     propCount: playerProps.length,
     topCandidates: availableCandidates.map(p => p.player).slice(0, 6),
     playerLogsAvailable: playersWithLogs > 0,

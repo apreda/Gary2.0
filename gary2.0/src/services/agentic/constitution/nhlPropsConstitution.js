@@ -76,6 +76,40 @@ Hard Factors are PHYSICAL, MEASURABLE, and REPEATABLE:
 - Goalie's recent form (L5 save %)
 - Goalie's performance vs this opponent historically
 
+**NHL ADVANCED STATS (PREDICTIVE - USE THESE)**
+When available in your context, advanced stats are your BEST predictive tools:
+
+For Goal Props:
+- **Individual Expected Goals (ixG)**: Shot quality metric - high ixG + low goals = UNLUCKY, due for regression UP
+- **Goals Above Expected (GAE)**: Positive = overperforming (may cool), Negative = underperforming (OVER value)
+- **High Danger Chances (HDC)**: Shots from slot/crease - most predictive of future goals
+- **Shooting %**: NHL average is ~10%. If player is at 5%, they're unlucky. If at 18%, may cool off.
+- **xG RULE**: Player with 2 goals but 5 ixG is due to score. Player with 5 goals but 2 ixG got lucky.
+
+For Assist/Points Props:
+- **Primary Assist %**: Primary assists are repeatable skill, secondary are often luck
+- **On-Ice xGF**: When this player is on ice, how much xG does team generate?
+- **PP Production %**: What % of points come from power play? PP1 = upside, PP2 = floor concerns
+- **Linemate xG**: Elite linemates = more assist opportunities
+
+For SOG (Shots on Goal) Props:
+- **Individual Corsi For (iCF)**: Total shot ATTEMPTS (includes misses/blocks) - leading indicator
+- **Shots Through %**: What % of attempts reach the net? High = consistent SOG
+- **Shot Rate/60**: Volume indicator normalized for ice time
+- **O-Zone Starts %**: More offensive starts = more shot opportunities
+
+For Regression Identification (KEY EDGE):
+- **PDO** (Team shooting % + save %): If > 102, team is running hot (expect regression). If < 98, running cold (expect bounce back)
+- **Goals vs ixG**: The gap tells you luck vs skill
+- **Save % vs xSave %**: Goalie over/under-performing? Affects scoring props
+
+**HOW TO USE NHL ADVANCED DATA:**
+- Sniper with 3 goals and 7 ixG → OVER value on goals/points (unlucky, due)
+- Player with 8 goals and 4 ixG → UNDER value (lucky, shooting 20%, will cool)
+- Defenseman with high iCF but low SOG → Check shots through % (if low, UNDER lean)
+- PP1 player vs team with 75% PK → Points/SOG OVER lean
+- Goalie with .920 SV% but .905 xSV% → Lucky, fade the shutout props
+
 These are your FOUNDATION. They tell you what SHOULD happen based on opportunity and matchup.
 </HARD_FACTORS_NHL_PROPS>
 
@@ -235,7 +269,20 @@ When you write your rationale, paint the picture:
 5. **STREAK VERIFICATION**: Do NOT repeat narrative "streaks" unless you can verify them game-by-game in the provided BDL recent game logs.
 
 ### SELECTION RULE: SHORTLIST 5
-**CRITICAL**: Scout the entire board and shortlist your TOP 5 prop picks for this game. We will sort them by confidence and surface the absolute best ones to the user. Do not settle for the first 2 you find.
+**CRITICAL**: Scout the entire board and shortlist your TOP 5 prop picks for this game. 
+
+**Selection criteria**:
+1. Strongest convergence of Advanced Stats (xG, ixG), Matchup Quality, AND Statistical Floor.
+2. **DIVERSITY REQUIREMENT**: Your 5 picks should include a MIX of:
+   - SOG (Shots on Goal) props - most consistent, use iCF/shot rate
+   - Points/Assists props - use PP unit, linemate quality
+   - Goals props - use ixG vs actual goals gap for regression plays
+3. **REGRESSION PLAYS**: Actively look for players whose production doesn't match their underlying metrics:
+   - Low goals + high ixG = OVER lean (unlucky shooter)
+   - High goals + low ixG = UNDER lean (will cool off)
+   - Low SOG + high iCF = OVER lean (puck luck will turn)
+
+We will sort them by confidence and surface the absolute best ones to the user. Do not settle for the first 2 you find.
 
 ### 📊 CONFIDENCE SCORING
 Your confidence score (0.50-1.0) reflects your conviction in this pick based on the alignment of statistical factors, matchup context, and situational edges.

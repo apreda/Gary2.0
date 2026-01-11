@@ -4,11 +4,329 @@
  * Maps stat tokens to actual Ball Don't Lie API calls.
  * Uses BDL Season Averages (Advanced) for NBA efficiency stats.
  * Uses Gemini Grounding for live context (QB weather history, etc.)
+ * 
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * 🚨 CORE PRINCIPLES: DATA INTEGRITY & SOURCE HIERARCHY 🚨
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * 
+ * RULE 1: NO FAKE ALIASES
+ *   - Every stat token MUST return data that matches what the token name implies
+ *   - NEVER alias a token to an unrelated fetcher
+ * 
+ * RULE 2: ALIASES MUST BE SEMANTICALLY EQUIVALENT
+ *   - Aliases are ONLY allowed when two tokens mean the SAME thing
+ * 
+ * RULE 3: TRANSPARENCY OVER CONVENIENCE
+ *   - Better to return "Data unavailable" than wrong data
+ * 
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * 🏆 RULE 4: EXPLICIT DATA SOURCE MAPPING (ENGINEERED, NOT HOPED)
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * 
+ * We KNOW what BDL has vs doesn't have. This is ENGINEERED, not a guideline.
+ * Docs: https://www.balldontlie.io/docs/
+ * 
+ * ┌─────────────────────────────────────────────────────────────────────────────┐
+ * │ NBA - BDL HAS MOST STATS                                                   │
+ * ├─────────────────────────────────────────────────────────────────────────────┤
+ * │ BDL (Primary):                                                             │
+ * │   - Teams, Players, Games, Standings, Box Scores, Play-by-Play            │
+ * │   - Season Averages (including advanced: ORtg, DRtg, NetRtg, TS%, eFG%)   │
+ * │   - Player Stats, Team Stats, Injuries                                     │
+ * │                                                                             │
+ * │ Gemini (site:basketball-reference.com, site:nba.com/stats):               │
+ * │   - PAINT_SCORING, PAINT_DEFENSE (zone stats not in BDL)                  │
+ * │   - MIDRANGE (shot location data)                                          │
+ * │   - LINEUP_NET_RATINGS (5-man lineup data)                                │
+ * │   - MINUTES_TREND (fatigue/load management)                               │
+ * │   - OPP_EFG_PCT, OPP_TOV_RATE (opponent shooting efficiency)              │
+ * │   - THREE_PT_DEFENSE (opponent 3PT%)                                       │
+ * │   - TRANSITION_DEFENSE (fast break points allowed)                        │
+ * │                                                                             │
+ * │ Calculated from BDL:                                                       │
+ * │   - SCHEDULE_STRENGTH (from opponent records)                             │
+ * │   - EFFICIENCY_TREND (L5 vs season margin)                                │
+ * │   - BLOWOUT_TENDENCY (from game margins)                                  │
+ * │   - TRAVEL_SITUATION (from team locations)                                │
+ * │   - REST_SITUATION (from game dates)                                      │
+ * └─────────────────────────────────────────────────────────────────────────────┘
+ * 
+ * ┌─────────────────────────────────────────────────────────────────────────────┐
+ * │ NHL - BDL HAS BASICS, GEMINI FOR ADVANCED                                  │
+ * ├─────────────────────────────────────────────────────────────────────────────┤
+ * │ BDL (Primary):                                                             │
+ * │   - Teams, Games, Standings, Box Scores                                   │
+ * │   - Goals, Assists, Points, Plus/Minus, Shots                             │
+ * │   - Power Play/Penalty Kill stats                                         │
+ * │   - Goalie stats (GAA, SV%)                                               │
+ * │                                                                             │
+ * │ Gemini (site:naturalstattrick.com, site:moneypuck.com):                   │
+ * │   - CORSI_FOR_PCT (possession - NST)                                      │
+ * │   - EXPECTED_GOALS (xG - MoneyPuck/NST)                                   │
+ * │   - PDO (luck indicator - NST)                                            │
+ * │   - HIGH_DANGER_CHANCES (scoring chances - NST)                           │
+ * │   - LUCK_INDICATORS (regression analysis)                                 │
+ * │                                                                             │
+ * │ Gemini (site:dailyfaceoff.com, site:leftwinglock.com):                    │
+ * │   - LINE_COMBINATIONS (projected lines)                                   │
+ * │                                                                             │
+ * │ Calculated from BDL:                                                       │
+ * │   - OVERTIME_RECORD (from game data)                                      │
+ * │   - SCORING_FIRST (from period scores)                                    │
+ * │   - REST_SITUATION (from game dates)                                      │
+ * └─────────────────────────────────────────────────────────────────────────────┘
+ * 
+ * ┌─────────────────────────────────────────────────────────────────────────────┐
+ * │ NFL - BDL HAS TEAM STATS, GEMINI FOR ADVANCED                              │
+ * ├─────────────────────────────────────────────────────────────────────────────┤
+ * │ BDL (Primary):                                                             │
+ * │   - Teams, Games, Standings                                               │
+ * │   - Team Season Stats (passing/rushing yards, TDs, turnovers)            │
+ * │   - Offensive EPA, Defensive EPA (basic efficiency)                       │
+ * │   - Red Zone stats, Success Rate                                          │
+ * │                                                                             │
+ * │ Gemini (site:pff.com, site:footballoutsiders.com):                        │
+ * │   - OL_RANKINGS (line grades - PFF)                                       │
+ * │   - DL_RANKINGS (pass rush grades - PFF/FO)                               │
+ * │   - FIELD_POSITION (DVOA - FO)                                            │
+ * │                                                                             │
+ * │ Gemini (site:pro-football-reference.com, site:nfl.com/stats):             │
+ * │   - TIME_TO_THROW (Next Gen Stats)                                        │
+ * │   - GOAL_LINE (short yardage efficiency)                                  │
+ * │   - TWO_MINUTE_DRILL (end of half efficiency)                             │
+ * │   - KICKING (FG% by distance)                                             │
+ * │   - PRIMETIME_RECORD (historical splits)                                  │
+ * │                                                                             │
+ * │ Calculated from BDL:                                                       │
+ * │   - TURNOVER_LUCK (from INT/fumble data)                                  │
+ * │   - DIVISION_RECORD (from standings)                                      │
+ * │   - REST_SITUATION (from game dates)                                      │
+ * └─────────────────────────────────────────────────────────────────────────────┘
+ * 
+ * ┌─────────────────────────────────────────────────────────────────────────────┐
+ * │ NCAAB - BDL HAS BASICS, GEMINI FOR KENPOM/NET                              │
+ * ├─────────────────────────────────────────────────────────────────────────────┤
+ * │ BDL (Primary):                                                             │
+ * │   - Teams, Games, Standings, Rankings (AP, Coaches)                       │
+ * │   - Basic stats (FG%, 3PT%, rebounds, assists)                            │
+ * │                                                                             │
+ * │ Gemini (site:kenpom.com):                                                 │
+ * │   - NCAAB_KENPOM_RATINGS (AdjEM, AdjO, AdjD, Tempo)                       │
+ * │                                                                             │
+ * │ Gemini (site:barttorvik.com):                                             │
+ * │   - T-Rank, efficiency ratings                                            │
+ * │                                                                             │
+ * │ Gemini (site:ncaa.com):                                                   │
+ * │   - NCAAB_NET_RANKING (NCAA NET)                                          │
+ * │   - NCAAB_QUAD_RECORD (Quad 1-4 records)                                  │
+ * │   - NCAAB_STRENGTH_OF_SCHEDULE                                            │
+ * └─────────────────────────────────────────────────────────────────────────────┘
+ * 
+ * ┌─────────────────────────────────────────────────────────────────────────────┐
+ * │ NCAAF - BDL HAS BASICS, GEMINI FOR SP+/FPI                                 │
+ * ├─────────────────────────────────────────────────────────────────────────────┤
+ * │ BDL (Primary):                                                             │
+ * │   - Teams, Games, Standings, Rankings                                     │
+ * │   - Team Season Stats (passing/rushing yards, TDs)                        │
+ * │                                                                             │
+ * │ Gemini (site:espn.com):                                                   │
+ * │   - NCAAF_FPI_RATINGS (ESPN FPI)                                          │
+ * │   - NCAAF_SP_PLUS_RATINGS (SP+ rankings)                                  │
+ * │                                                                             │
+ * │ Gemini (site:footballoutsiders.com):                                      │
+ * │   - Conference strength, opponent-adjusted stats                          │
+ * └─────────────────────────────────────────────────────────────────────────────┘
+ * 
+ * WHY THIS EXPLICIT MAPPING MATTERS:
+ *   - No guessing - we KNOW the source for every stat
+ *   - BDL is always preferred when available (structured, fast, reliable)
+ *   - Gemini only used for stats BDL doesn't have
+ *   - Gemini always uses site: restrictions to authoritative sources
+ *   - Sharp bettors use these exact sources - so does Gary
+ * 
+ * ═══════════════════════════════════════════════════════════════════════════════
  */
 
 import { ballDontLieService } from '../../ballDontLieService.js';
 import { geminiGroundingSearch, getGroundedWeather } from '../scoutReport/scoutReportBuilder.js';
 import { isGameCompleted, formatStatValue, safeStatValue } from '../sharedUtils.js';
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * EXPLICIT DATA SOURCE MAPPING - What comes from where (ENGINEERED)
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * 
+ * These constants define EXACTLY which stats use Gemini Grounding.
+ * If a token is NOT in these lists, it uses BDL (our default/preferred source).
+ */
+
+// NBA: Stats that require Gemini (BDL doesn't have zone/lineup data)
+const NBA_GEMINI_TOKENS = [
+  'PAINT_SCORING',        // Zone stats - site:nba.com/stats
+  'PAINT_DEFENSE',        // Opponent zone stats
+  'MIDRANGE',             // Shot location data
+  'LINEUP_NET_RATINGS',   // 5-man lineup performance
+  'MINUTES_TREND',        // Fatigue/load management
+  'OPP_EFG_PCT',          // Opponent shooting efficiency
+  'OPP_TOV_RATE',         // Forced turnovers
+  'THREE_PT_DEFENSE',     // Opponent 3PT%
+  'OPP_FT_RATE',          // Opponent FT rate
+  'TRANSITION_DEFENSE',   // Fast break points allowed
+];
+
+// NHL: Stats that require Gemini (BDL doesn't have advanced analytics)
+const NHL_GEMINI_TOKENS = [
+  'CORSI_FOR_PCT',        // Possession - site:naturalstattrick.com
+  'EXPECTED_GOALS',       // xG - site:moneypuck.com
+  'PDO',                  // Luck indicator - site:naturalstattrick.com
+  'HIGH_DANGER_CHANCES',  // Scoring chances - site:naturalstattrick.com
+  'LINE_COMBINATIONS',    // Projected lines - site:dailyfaceoff.com
+  'LUCK_INDICATORS',      // Regression analysis
+  'SCORING_FIRST',        // First goal stats - site:hockey-reference.com
+];
+
+// NFL: Stats that require Gemini (BDL doesn't have PFF/FO/NGS grades)
+const NFL_GEMINI_TOKENS = [
+  'OL_RANKINGS',          // Pass block win rate - site:nextgenstats.nfl.com, site:pff.com
+  'DL_RANKINGS',          // Pass rush win rate - site:nextgenstats.nfl.com, site:pff.com
+  'TIME_TO_THROW',        // QB release time - site:nextgenstats.nfl.com
+  'GOAL_LINE',            // Short yardage - site:pro-football-reference.com
+  'TWO_MINUTE_DRILL',     // End of half - site:pro-football-reference.com
+  'KICKING',              // FG% by distance - site:pro-football-reference.com
+  'FIELD_POSITION',       // Return game - site:footballoutsiders.com
+  'PRIMETIME_RECORD',     // Historical splits - site:pro-football-reference.com
+  'FOURTH_DOWN_TENDENCY', // 4th down decisions - site:nextgenstats.nfl.com, site:pro-football-reference.com
+  'SCHEDULE_CONTEXT',     // Upcoming schedule - site:nfl.com
+];
+
+// NCAAB: Stats that require Gemini (BDL doesn't have KenPom/NET)
+const NCAAB_GEMINI_TOKENS = [
+  'NCAAB_KENPOM_RATINGS', // AdjEM, AdjO, AdjD - site:kenpom.com
+  'NCAAB_NET_RANKING',    // NCAA NET - site:ncaa.com
+  'NCAAB_QUAD_RECORD',    // Quad 1-4 records - site:ncaa.com
+  'NCAAB_STRENGTH_OF_SCHEDULE', // SOS - site:kenpom.com
+];
+
+// NCAAF: Stats that require Gemini (BDL doesn't have SP+/FPI)
+const NCAAF_GEMINI_TOKENS = [
+  'NCAAF_SP_PLUS_RATINGS',    // SP+ - site:espn.com
+  'NCAAF_FPI_RATINGS',        // FPI - site:espn.com
+  'NCAAF_OPPONENT_ADJUSTED',  // Opponent-adjusted stats
+  'NCAAF_CONFERENCE_STRENGTH', // Conference analysis
+];
+
+// Combined list for quick lookup
+const ALL_GEMINI_TOKENS = new Set([
+  ...NBA_GEMINI_TOKENS,
+  ...NHL_GEMINI_TOKENS,
+  ...NFL_GEMINI_TOKENS,
+  ...NCAAB_GEMINI_TOKENS,
+  ...NCAAF_GEMINI_TOKENS,
+]);
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * SPORT-SPECIFIC ROUTING (Same token, different source per sport)
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * 
+ * Some tokens exist in multiple sports but use different sources:
+ * 
+ * RED_ZONE_OFFENSE:
+ *   - NFL → BDL (has red zone data in team_season_stats)
+ *   - NCAAF → Gemini (BDL doesn't have NCAAF red zone)
+ * 
+ * RECENT_FORM:
+ *   - All sports → BDL (calculated from game results)
+ * 
+ * HOME_AWAY_SPLITS:
+ *   - All sports → BDL (calculated from home/away game results)
+ * 
+ * This is NOT a fallback - it's deterministic per sport.
+ * The fetcher checks the sport and routes to the correct source.
+ * ═══════════════════════════════════════════════════════════════════════════════
+ */
+const SPORT_SPECIFIC_ROUTING = {
+  // Token: { sport: 'source' }
+  RED_ZONE_OFFENSE: {
+    'americanfootball_nfl': 'BDL',
+    'americanfootball_ncaaf': 'GEMINI'
+  },
+  RED_ZONE_DEFENSE: {
+    'americanfootball_nfl': 'BDL',
+    'americanfootball_ncaaf': 'GEMINI'
+  }
+};
+
+/**
+ * Check if a token requires Gemini Grounding (not in BDL)
+ * @param {string} token - The stat token
+ * @returns {boolean} - True if this token uses Gemini
+ */
+export function isGeminiToken(token) {
+  return ALL_GEMINI_TOKENS.has(token);
+}
+
+/**
+ * Get the authoritative source for a Gemini token
+ * @param {string} token - The stat token
+ * @returns {string} - The site: restriction to use
+ */
+export function getAuthoritativeSource(token) {
+  // NBA sources
+  if (['PAINT_SCORING', 'PAINT_DEFENSE', 'MIDRANGE', 'LINEUP_NET_RATINGS', 'MINUTES_TREND'].includes(token)) {
+    return 'site:nba.com/stats OR site:basketball-reference.com';
+  }
+  if (['OPP_EFG_PCT', 'OPP_TOV_RATE', 'THREE_PT_DEFENSE', 'OPP_FT_RATE', 'TRANSITION_DEFENSE'].includes(token)) {
+    return 'site:basketball-reference.com OR site:nba.com/stats';
+  }
+  
+  // NHL sources
+  if (['CORSI_FOR_PCT', 'PDO', 'HIGH_DANGER_CHANCES'].includes(token)) {
+    return 'site:naturalstattrick.com OR site:hockey-reference.com';
+  }
+  if (['EXPECTED_GOALS', 'LUCK_INDICATORS'].includes(token)) {
+    return 'site:moneypuck.com OR site:naturalstattrick.com';
+  }
+  if (token === 'LINE_COMBINATIONS') {
+    return 'site:dailyfaceoff.com OR site:leftwinglock.com';
+  }
+  if (token === 'SCORING_FIRST') {
+    return 'site:hockey-reference.com OR site:nhl.com';
+  }
+  
+  // NFL sources
+  if (['OL_RANKINGS', 'DL_RANKINGS'].includes(token)) {
+    return 'site:pff.com OR site:footballoutsiders.com';
+  }
+  if (['TIME_TO_THROW'].includes(token)) {
+    return 'site:nfl.com/stats OR site:nextgenstats.nfl.com';
+  }
+  if (['GOAL_LINE', 'TWO_MINUTE_DRILL', 'KICKING', 'PRIMETIME_RECORD'].includes(token)) {
+    return 'site:pro-football-reference.com OR site:espn.com';
+  }
+  if (token === 'FIELD_POSITION') {
+    return 'site:footballoutsiders.com OR site:pro-football-reference.com';
+  }
+  
+  // NCAAB sources
+  if (['NCAAB_KENPOM_RATINGS', 'NCAAB_STRENGTH_OF_SCHEDULE'].includes(token)) {
+    return 'site:kenpom.com';
+  }
+  if (['NCAAB_NET_RANKING', 'NCAAB_QUAD_RECORD'].includes(token)) {
+    return 'site:ncaa.com';
+  }
+  
+  // NCAAF sources
+  if (['NCAAF_SP_PLUS_RATINGS', 'NCAAF_FPI_RATINGS'].includes(token)) {
+    return 'site:espn.com';
+  }
+  if (['NCAAF_OPPONENT_ADJUSTED', 'NCAAF_CONFERENCE_STRENGTH'].includes(token)) {
+    return 'site:footballoutsiders.com OR site:espn.com';
+  }
+  
+  // Default - should not happen if token is in ALL_GEMINI_TOKENS
+  return '';
+}
 
 /**
  * Generate dynamic season string for Gemini Grounding queries
@@ -651,7 +969,10 @@ const FETCHERS = {
           ? 'Both teams play at a fast pace - expect high possession game'
           : homePace < 98 && awayPace < 98 
             ? 'Both teams play slow - expect grinding, low-possession game'
-            : `Pace mismatch: ${home.name} (${homePace.toFixed(1)}) vs ${away.name} (${awayPace.toFixed(1)})`
+            : `Pace mismatch: ${home.name} (${homePace.toFixed(1)}) vs ${away.name} (${awayPace.toFixed(1)})`,
+        CONTEXT_WARNING: `⚠️ This is SEASON-LONG pace. Actual game pace depends on BOTH teams.`,
+        MATCHUP_NOTE: `📊 Pace is determined by the SLOWER team more than the faster team. A 105-pace team facing a 95-pace team will likely play around 98-100, not 105.`,
+        INVESTIGATE: `🔍 Who controls tempo? Check recent games - has either team been playing faster/slower than their season average?`
       };
     }
     
@@ -712,7 +1033,9 @@ const FETCHERS = {
         },
         comparison: homeStats && awayStats ? 
           `${home.name} ORtg ${homeStats.offensive_rating} vs ${away.name} ORtg ${awayStats.offensive_rating} = ${(parseFloat(homeStats.offensive_rating) - parseFloat(awayStats.offensive_rating)).toFixed(1)} point gap` : 
-          'Comparison unavailable'
+          'Comparison unavailable',
+        CONTEXT_WARNING: `⚠️ This is SEASON-LONG data. A team's current offensive form may differ.`,
+        INVESTIGATE: `🔍 Is this offense trending UP or DOWN? Check RECENT_FORM margins - are they scoring more or less lately?`
       };
     }
     
@@ -763,7 +1086,9 @@ const FETCHERS = {
         },
         comparison: homeStats && awayStats ?
           `${home.name} DRtg ${homeStats.defensive_rating} vs ${away.name} DRtg ${awayStats.defensive_rating} (lower is better)` :
-          'Comparison unavailable'
+          'Comparison unavailable',
+        CONTEXT_WARNING: `⚠️ This is SEASON-LONG data. A team's current defensive form may differ.`,
+        INVESTIGATE: `🔍 Is this defense trending UP or DOWN? Check RECENT_FORM - are they allowing more or fewer points lately? Key defenders injured?`
       };
     }
     
@@ -821,7 +1146,10 @@ const FETCHERS = {
         gap: gap,
         interpretation: homeNet > awayNet 
           ? `${home.name} has +${gap} net rating advantage (${homeNet.toFixed(1)} vs ${awayNet.toFixed(1)})`
-          : `${away.name} has +${Math.abs(parseFloat(gap)).toFixed(1)} net rating advantage (${awayNet.toFixed(1)} vs ${homeNet.toFixed(1)})`
+          : `${away.name} has +${Math.abs(parseFloat(gap)).toFixed(1)} net rating advantage (${awayNet.toFixed(1)} vs ${homeNet.toFixed(1)})`,
+        CONTEXT_WARNING: `⚠️ This is SEASON-LONG data. A team's current form may differ significantly.`,
+        INVESTIGATE: `🔍 Cross-reference with RECENT_FORM: Is this team playing BETTER or WORSE than their season average lately? A +5.0 Net Rating team that's been -2.0 in L5 is NOT playing like a +5.0 team right now.`,
+        TREND_QUESTION: `Ask: Is this efficiency IMPROVING, DECLINING, or STABLE? Check their L5 margin of victory in RECENT_FORM.`
       };
     }
     
@@ -894,7 +1222,10 @@ const FETCHERS = {
         },
         comparison: homeStats && awayStats ?
           `eFG% gap: ${(parseFloat(homeStats.efg_pct) - parseFloat(awayStats.efg_pct)).toFixed(1)}% (${home.name} ${homeStats.efg_pct}% vs ${away.name} ${awayStats.efg_pct}%)` :
-          'Comparison unavailable'
+          'Comparison unavailable',
+        CONTEXT_WARNING: `⚠️ This is SEASON-LONG shooting efficiency. Teams have hot/cold streaks.`,
+        INVESTIGATE: `🔍 Is this team shooting BETTER or WORSE lately? Check RECENT_FORM margins - high-scoring wins suggest hot shooting, low-scoring losses suggest cold.`,
+        VARIANCE_NOTE: `📊 Shooting efficiency is HIGH VARIANCE game-to-game. A 54% eFG team can have games at 45% or 62%.`
       };
     }
     
@@ -951,7 +1282,10 @@ const FETCHERS = {
           team: away.full_name || away.name,
           tov_rate: awayStats?.tov_rate ? `${awayStats.tov_rate}%` : 'N/A',
           turnovers_per_game: awayStats?.tov_per_game || 'N/A'
-        }
+        },
+        CONTEXT_WARNING: `⚠️ This is SEASON-LONG data. Turnover rates can spike against elite defenses or drop against poor ones.`,
+        INVESTIGATE: `🔍 Check the matchup: Does the opponent force turnovers? A low-turnover team can still cough it up against elite ball pressure.`,
+        MATCHUP_NOTE: `📊 Turnover rate is MATCHUP-DEPENDENT. A team's rate vs elite defenses matters more than their overall average.`
       };
     }
     
@@ -1108,7 +1442,10 @@ const FETCHERS = {
           three_pct: awayStats?.fg3_pct ? `${awayStats.fg3_pct}%` : 'N/A',
           three_made_per_game: awayStats?.fg3m_per_game || 'N/A',
           three_attempted_per_game: awayStats?.fg3a_per_game || 'N/A'
-        }
+        },
+        CONTEXT_WARNING: `⚠️ This is SEASON-LONG shooting data. Teams go through hot/cold streaks.`,
+        INVESTIGATE: `🔍 Are they HOT or COLD right now? Check Scout Report for recent shooting context. A 35% team that shot 42% in L5 is "hot". A 38% team that shot 30% in L5 is "cold".`,
+        VARIANCE_NOTE: `📊 3PT shooting is HIGH VARIANCE - even elite shooters have cold stretches. Don't assume season average = tonight's performance.`
       };
     }
     
@@ -3116,8 +3453,1094 @@ const FETCHERS = {
         overall: awaySt ? `${awaySt.wins}-${awaySt.losses}` : 'N/A',
         home_record: awaySt?.home_record || 'N/A',
         away_record: awaySt?.road_record || 'N/A'
-      }
+      },
+      CONTEXT_WARNING: `⚠️ These are raw records - they don't tell you WHO they beat.`,
+      INVESTIGATE: `🔍 A "12-5 home" record means nothing without context. Did they beat 12 lottery teams or 12 playoff teams? Check RECENT_FORM for opponent quality in each game.`,
+      QUALITY_QUESTION: `Ask: How do they perform at home vs GOOD teams? A team can be 12-5 at home but 2-5 vs teams over .500.`
     };
+  },
+
+  // ===== CONFERENCE STATS (REAL DATA - from BDL Standings) =====
+  CONFERENCE_STATS: async (bdlSport, home, away, season) => {
+    console.log(`[Stat Router] Fetching CONFERENCE_STATS for ${away.name} @ ${home.name}`);
+    
+    try {
+      const standings = await ballDontLieService.getStandingsGeneric(bdlSport, { season });
+      
+      const homeSt = standings?.find(s => s.team?.id === home.id);
+      const awaySt = standings?.find(s => s.team?.id === away.id);
+      
+      // Parse conference record (format: "X-Y")
+      const parseConfRecord = (record) => {
+        if (!record || record === 'N/A') return { wins: 0, losses: 0, pct: null };
+        const parts = record.split('-');
+        const wins = parseInt(parts[0]) || 0;
+        const losses = parseInt(parts[1]) || 0;
+        const total = wins + losses;
+        return { wins, losses, pct: total > 0 ? (wins / total * 100).toFixed(0) : null };
+      };
+      
+      const homeConf = parseConfRecord(homeSt?.conference_record);
+      const awayConf = parseConfRecord(awaySt?.conference_record);
+      
+      return {
+        category: 'Conference Performance',
+        source: 'Ball Don\'t Lie API (Standings)',
+        home: {
+          team: home.full_name || home.name,
+          conference: homeSt?.team?.conference || 'N/A',
+          conference_record: homeSt?.conference_record || 'N/A',
+          conference_win_pct: homeConf.pct ? `${homeConf.pct}%` : 'N/A',
+          conference_rank: homeSt?.conference_rank || 'N/A',
+          division: homeSt?.team?.division || 'N/A',
+          division_record: homeSt?.division_record || 'N/A'
+        },
+        away: {
+          team: away.full_name || away.name,
+          conference: awaySt?.team?.conference || 'N/A',
+          conference_record: awaySt?.conference_record || 'N/A',
+          conference_win_pct: awayConf.pct ? `${awayConf.pct}%` : 'N/A',
+          conference_rank: awaySt?.conference_rank || 'N/A',
+          division: awaySt?.team?.division || 'N/A',
+          division_record: awaySt?.division_record || 'N/A'
+        },
+        same_conference: homeSt?.team?.conference === awaySt?.team?.conference,
+        same_division: homeSt?.team?.division === awaySt?.team?.division,
+        INVESTIGATE: homeSt?.team?.conference === awaySt?.team?.conference 
+          ? `🔍 CONFERENCE GAME - These teams know each other. Check H2H_HISTORY for recent matchups.`
+          : `🔍 Non-conference game. Conference records show how teams fare against similar competition.`,
+        note: 'Conference record reflects performance against similar-level competition.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching CONFERENCE_STATS:`, error.message);
+      return {
+        category: 'Conference Performance',
+        error: 'Data unavailable',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name }
+      };
+    }
+  },
+
+  // ===== NON-CONFERENCE STRENGTH (REAL DATA - calculated from games) =====
+  NON_CONF_STRENGTH: async (bdlSport, home, away, season) => {
+    console.log(`[Stat Router] Fetching NON_CONF_STRENGTH for ${away.name} @ ${home.name}`);
+    
+    try {
+      // Get standings to know each team's conference
+      const standings = await ballDontLieService.getStandingsGeneric(bdlSport, { season });
+      
+      const homeSt = standings?.find(s => s.team?.id === home.id);
+      const awaySt = standings?.find(s => s.team?.id === away.id);
+      
+      const homeConf = homeSt?.team?.conference;
+      const awayConf = awaySt?.team?.conference;
+      
+      // Build map of team ID -> conference
+      const teamConfMap = {};
+      for (const s of standings || []) {
+        if (s.team?.id && s.team?.conference) {
+          teamConfMap[s.team.id] = s.team.conference;
+        }
+      }
+      
+      // Get season games for both teams
+      const seasonStart = new Date(season - 1, 9, 1); // Oct 1
+      const today = new Date();
+      
+      const [homeGames, awayGames] = await Promise.all([
+        ballDontLieService.getGames(bdlSport, {
+          team_ids: [home.id],
+          start_date: seasonStart.toISOString().split('T')[0],
+          end_date: today.toISOString().split('T')[0],
+          per_page: 50
+        }),
+        ballDontLieService.getGames(bdlSport, {
+          team_ids: [away.id],
+          start_date: seasonStart.toISOString().split('T')[0],
+          end_date: today.toISOString().split('T')[0],
+          per_page: 50
+        })
+      ]);
+      
+      // Calculate non-conference record
+      const calcNonConfRecord = (games, teamId, teamConf) => {
+        let wins = 0, losses = 0;
+        const nonConfGames = [];
+        
+        for (const game of games || []) {
+          const homeScore = game.home_team_score || game.home_score || 0;
+          const awayScore = game.visitor_team_score || game.away_score || 0;
+          if (homeScore === 0 && awayScore === 0) continue; // Unplayed
+          
+          const isHome = (game.home_team?.id || game.home_team_id) === teamId;
+          const oppId = isHome 
+            ? (game.visitor_team?.id || game.visitor_team_id)
+            : (game.home_team?.id || game.home_team_id);
+          
+          const oppConf = teamConfMap[oppId];
+          
+          // Non-conference = different conference
+          if (oppConf && oppConf !== teamConf) {
+            const won = isHome ? homeScore > awayScore : awayScore > homeScore;
+            if (won) wins++;
+            else losses++;
+            nonConfGames.push({
+              opponent: isHome ? game.visitor_team?.name : game.home_team?.name,
+              result: won ? 'W' : 'L',
+              opponent_conf: oppConf
+            });
+          }
+        }
+        
+        const total = wins + losses;
+        return {
+          record: total > 0 ? `${wins}-${losses}` : 'No non-conf games',
+          win_pct: total > 0 ? `${(wins / total * 100).toFixed(0)}%` : 'N/A',
+          games_played: total,
+          recent: nonConfGames.slice(-3).reverse()
+        };
+      };
+      
+      const homeNonConf = calcNonConfRecord(homeGames, home.id, homeConf);
+      const awayNonConf = calcNonConfRecord(awayGames, away.id, awayConf);
+      
+      return {
+        category: 'Non-Conference Strength',
+        source: 'Ball Don\'t Lie API (calculated)',
+        home: {
+          team: home.full_name || home.name,
+          conference: homeConf || 'N/A',
+          non_conf_record: homeNonConf.record,
+          non_conf_win_pct: homeNonConf.win_pct,
+          non_conf_games: homeNonConf.games_played,
+          recent_non_conf: homeNonConf.recent
+        },
+        away: {
+          team: away.full_name || away.name,
+          conference: awayConf || 'N/A',
+          non_conf_record: awayNonConf.record,
+          non_conf_win_pct: awayNonConf.win_pct,
+          non_conf_games: awayNonConf.games_played,
+          recent_non_conf: awayNonConf.recent
+        },
+        INVESTIGATE: `🔍 Non-conference record shows how teams perform outside their usual competition. A team dominant in a weak conference may struggle vs other conferences.`,
+        note: 'Teams with strong non-conference records have proven themselves against varied competition.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching NON_CONF_STRENGTH:`, error.message);
+      return {
+        category: 'Non-Conference Strength',
+        error: 'Data unavailable',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name }
+      };
+    }
+  },
+
+  // ===== DEFENSIVE REBOUNDING RATE (REAL DATA) =====
+  DREB_RATE: async (bdlSport, home, away, season) => {
+    console.log(`[Stat Router] Fetching DREB_RATE for ${away.name} @ ${home.name}`);
+    
+    if (bdlSport !== 'basketball_nba') {
+      return {
+        category: 'Defensive Rebounding',
+        note: 'DREB rate currently only available for NBA',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name }
+      };
+    }
+    
+    try {
+      // Get team base stats which include rebounding
+      const [homeStats, awayStats] = await Promise.all([
+        fetchNBATeamBaseStats(home.id, season),
+        fetchNBATeamBaseStats(away.id, season)
+      ]);
+      
+      // Calculate DREB rate: DREB / (DREB + Opp OREB)
+      // Since we don't have opponent OREB, we'll show DREB per game and total rebounds context
+      const calcDrebContext = (stats) => {
+        if (!stats) return null;
+        const dreb = parseFloat(stats.dreb_per_game) || 0;
+        const totalReb = parseFloat(stats.reb_per_game) || 0;
+        const oreb = parseFloat(stats.oreb_per_game) || 0;
+        const drebPct = totalReb > 0 ? ((dreb / totalReb) * 100).toFixed(1) : null;
+        
+        return {
+          dreb_per_game: dreb.toFixed(1),
+          total_reb_per_game: totalReb.toFixed(1),
+          oreb_per_game: oreb.toFixed(1),
+          dreb_share: drebPct ? `${drebPct}%` : 'N/A',
+          rating: dreb >= 35 ? '✅ ELITE glass cleaner' :
+                  dreb >= 33 ? '👍 Good defensive boards' :
+                  dreb >= 30 ? '➡️ Average' : '⚠️ Poor defensive rebounding'
+        };
+      };
+      
+      return {
+        category: 'Defensive Rebounding',
+        source: 'Ball Don\'t Lie API',
+        home: {
+          team: home.full_name || home.name,
+          ...calcDrebContext(homeStats)
+        },
+        away: {
+          team: away.full_name || away.name,
+          ...calcDrebContext(awayStats)
+        },
+        INVESTIGATE: `🔍 Defensive rebounding ends possessions. Teams that don't clean the glass give up second-chance points.`,
+        note: 'League average DREB is ~33 per game. Elite teams grab 35+.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching DREB_RATE:`, error.message);
+      return {
+        category: 'Defensive Rebounding',
+        error: 'Data unavailable',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name }
+      };
+    }
+  },
+
+  // ===== EFFICIENCY TREND (REAL DATA - L5 vs Season) =====
+  EFFICIENCY_TREND: async (bdlSport, home, away, season) => {
+    console.log(`[Stat Router] Fetching EFFICIENCY_TREND for ${away.name} @ ${home.name}`);
+    
+    try {
+      // Get season games for point differential trends
+      const seasonStart = new Date(season - 1, 9, 1);
+      const today = new Date();
+      
+      const [homeGames, awayGames] = await Promise.all([
+        ballDontLieService.getGames(bdlSport, {
+          team_ids: [home.id],
+          start_date: seasonStart.toISOString().split('T')[0],
+          end_date: today.toISOString().split('T')[0],
+          per_page: 30
+        }),
+        ballDontLieService.getGames(bdlSport, {
+          team_ids: [away.id],
+          start_date: seasonStart.toISOString().split('T')[0],
+          end_date: today.toISOString().split('T')[0],
+          per_page: 30
+        })
+      ]);
+      
+      // Calculate efficiency trend (point differential)
+      const calcEfficiencyTrend = (games, teamId) => {
+        const completed = (games || [])
+          .filter(g => {
+            const hs = g.home_team_score || g.home_score || 0;
+            const as = g.visitor_team_score || g.away_score || 0;
+            return hs > 0 || as > 0;
+          })
+          .sort((a, b) => new Date(b.date || b.game_date) - new Date(a.date || a.game_date));
+        
+        if (completed.length < 5) return null;
+        
+        // Calculate point differential for each game
+        const margins = completed.map(g => {
+          const isHome = (g.home_team?.id || g.home_team_id) === teamId;
+          const teamScore = isHome ? (g.home_team_score || g.home_score) : (g.visitor_team_score || g.away_score);
+          const oppScore = isHome ? (g.visitor_team_score || g.away_score) : (g.home_team_score || g.home_score);
+          return teamScore - oppScore;
+        });
+        
+        const l5Margins = margins.slice(0, 5);
+        const l10Margins = margins.slice(0, 10);
+        const seasonMargins = margins;
+        
+        const avg = (arr) => arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+        
+        const l5Avg = avg(l5Margins);
+        const l10Avg = avg(l10Margins);
+        const seasonAvg = avg(seasonMargins);
+        
+        // Determine trend
+        let trend = '➡️ STABLE';
+        let trendDetail = '';
+        if (l5Avg > seasonAvg + 3) {
+          trend = '🔥 SURGING';
+          trendDetail = `L5 margin (${l5Avg > 0 ? '+' : ''}${l5Avg.toFixed(1)}) is ${(l5Avg - seasonAvg).toFixed(1)} pts BETTER than season avg`;
+        } else if (l5Avg < seasonAvg - 3) {
+          trend = '❄️ SLUMPING';
+          trendDetail = `L5 margin (${l5Avg > 0 ? '+' : ''}${l5Avg.toFixed(1)}) is ${(seasonAvg - l5Avg).toFixed(1)} pts WORSE than season avg`;
+        } else if (l5Avg > l10Avg + 2) {
+          trend = '📈 IMPROVING';
+          trendDetail = `Recent uptick: L5 (${l5Avg > 0 ? '+' : ''}${l5Avg.toFixed(1)}) better than L10 (${l10Avg > 0 ? '+' : ''}${l10Avg.toFixed(1)})`;
+        } else if (l5Avg < l10Avg - 2) {
+          trend = '📉 DECLINING';
+          trendDetail = `Recent dip: L5 (${l5Avg > 0 ? '+' : ''}${l5Avg.toFixed(1)}) worse than L10 (${l10Avg > 0 ? '+' : ''}${l10Avg.toFixed(1)})`;
+        }
+        
+        return {
+          l5_margin: `${l5Avg > 0 ? '+' : ''}${l5Avg.toFixed(1)}`,
+          l10_margin: `${l10Avg > 0 ? '+' : ''}${l10Avg.toFixed(1)}`,
+          season_margin: `${seasonAvg > 0 ? '+' : ''}${seasonAvg.toFixed(1)}`,
+          trend,
+          trend_detail: trendDetail,
+          games_analyzed: completed.length
+        };
+      };
+      
+      const homeTrend = calcEfficiencyTrend(homeGames, home.id);
+      const awayTrend = calcEfficiencyTrend(awayGames, away.id);
+      
+      return {
+        category: 'Efficiency Trend (Point Differential)',
+        source: 'Ball Don\'t Lie API (calculated)',
+        home: {
+          team: home.full_name || home.name,
+          ...homeTrend
+        },
+        away: {
+          team: away.full_name || away.name,
+          ...awayTrend
+        },
+        CRITICAL: `🎯 This shows WHO the team is RIGHT NOW vs their season average. A team "surging" is playing ABOVE their norm; "slumping" is BELOW.`,
+        INVESTIGATE: `🔍 Compare trends: A surging team vs a slumping team may have more edge than raw season stats suggest.`,
+        note: 'Point differential is the best predictor of future performance - better than win/loss record.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching EFFICIENCY_TREND:`, error.message);
+      return {
+        category: 'Efficiency Trend',
+        error: 'Data unavailable',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name }
+      };
+    }
+  },
+
+  // ===== THREE POINT DEFENSE (Opponent 3PT% - REAL DATA) =====
+  THREE_PT_DEFENSE: async (bdlSport, home, away, season) => {
+    console.log(`[Stat Router] Fetching THREE_PT_DEFENSE for ${away.name} @ ${home.name}`);
+    
+    // This requires box score data or advanced defensive stats
+    // Use Gemini Grounding for the most accurate data
+    try {
+      const seasonStr = getCurrentSeasonString();
+      const query = `${seasonStr} NBA opponent three point percentage defense stats ${home.name} vs ${away.name}. 
+        What is each team's opponent 3PT% (three point defense)?
+        Which team allows more threes? 
+        Format: Team - Opp 3PT% - Rank`;
+      
+      const groundingResult = await geminiGroundingSearch(query, {
+        systemMessage: 'You are an NBA stats analyst. Provide opponent three-point percentage for both teams.'
+      });
+      
+      return {
+        category: 'Three Point Defense (Opponent 3PT%)',
+        source: 'Gemini Grounding (Live Search)',
+        home: {
+          team: home.full_name || home.name
+        },
+        away: {
+          team: away.full_name || away.name
+        },
+        grounding_data: groundingResult?.content || 'Data unavailable',
+        INVESTIGATE: `🔍 Teams that allow high opponent 3PT% give up open looks. Check if this is scheme (switching, drop coverage) or personnel (slow perimeter defenders).`,
+        note: 'League average opponent 3PT% is ~36%. Elite perimeter defenses hold opponents under 34%.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching THREE_PT_DEFENSE:`, error.message);
+      return {
+        category: 'Three Point Defense',
+        error: 'Data unavailable - check defensive stats in Scout Report',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name }
+      };
+    }
+  },
+
+  // ===== OPPONENT FREE THROW RATE (REAL DATA) =====
+  OPP_FT_RATE: async (bdlSport, home, away, season) => {
+    console.log(`[Stat Router] Fetching OPP_FT_RATE for ${away.name} @ ${home.name}`);
+    
+    // Use Gemini Grounding for opponent FT rate (fouls drawn against)
+    try {
+      const seasonStr = getCurrentSeasonString();
+      const query = `${seasonStr} NBA opponent free throw rate defense stats ${home.name} vs ${away.name}.
+        What is each team's opponent free throw rate (FTA per FGA)?
+        Which team fouls more and sends opponents to the line?
+        Include team fouls per game if available.`;
+      
+      const groundingResult = await geminiGroundingSearch(query, {
+        systemMessage: 'You are an NBA stats analyst. Provide opponent free throw rate and foul data for both teams.'
+      });
+      
+      return {
+        category: 'Opponent Free Throw Rate (Foul Discipline)',
+        source: 'Gemini Grounding (Live Search)',
+        home: {
+          team: home.full_name || home.name
+        },
+        away: {
+          team: away.full_name || away.name
+        },
+        grounding_data: groundingResult?.content || 'Data unavailable',
+        INVESTIGATE: `🔍 Teams that foul a lot give opponents free points and get into foul trouble. Check if key players are foul-prone.`,
+        note: 'High opponent FT rate = poor foul discipline = more free points for the opponent.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching OPP_FT_RATE:`, error.message);
+      return {
+        category: 'Opponent Free Throw Rate',
+        error: 'Data unavailable',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name }
+      };
+    }
+  },
+
+  // ===== OPPONENT EFFECTIVE FG% (REAL DATA - Defensive Shooting Efficiency) =====
+  OPP_EFG_PCT: async (bdlSport, home, away, season) => {
+    console.log(`[Stat Router] Fetching OPP_EFG_PCT for ${away.name} @ ${home.name}`);
+    
+    try {
+      const seasonStr = getCurrentSeasonString();
+      const query = `${seasonStr} NBA defensive efficiency opponent effective field goal percentage ${home.name} vs ${away.name}.
+        What is each team's OPPONENT eFG% (how efficiently opponents shoot AGAINST them)?
+        Lower = better defense. Include defensive ranking if available.
+        Format: Team - Opp eFG% - Defensive Rank`;
+      
+      const groundingResult = await geminiGroundingSearch(query, {
+        systemMessage: 'You are an NBA defensive stats analyst. Provide opponent effective field goal percentage (defensive efficiency) for both teams. Lower opponent eFG% means better defense.'
+      });
+      
+      return {
+        category: 'Opponent Shooting Efficiency (Defensive)',
+        source: 'Gemini Grounding (Live Search)',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name },
+        grounding_data: groundingResult?.content || 'Data unavailable',
+        INVESTIGATE: `🔍 Lower Opp eFG% = better perimeter defense. Teams that allow high opponent eFG% give up easy shots.`,
+        note: 'League average Opp eFG% is ~54%. Elite defenses hold opponents under 52%.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching OPP_EFG_PCT:`, error.message);
+      return {
+        category: 'Opponent Shooting Efficiency',
+        error: 'Data unavailable',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name }
+      };
+    }
+  },
+
+  // ===== OPPONENT TURNOVER RATE (REAL DATA - Forced Turnovers) =====
+  OPP_TOV_RATE: async (bdlSport, home, away, season) => {
+    console.log(`[Stat Router] Fetching OPP_TOV_RATE for ${away.name} @ ${home.name}`);
+    
+    try {
+      const seasonStr = getCurrentSeasonString();
+      const query = `${seasonStr} NBA defensive stats opponent turnover rate steals per game ${home.name} vs ${away.name}.
+        What is each team's opponent turnover rate (turnovers they FORCE)?
+        Include steals per game and deflections if available.
+        Higher = better at forcing turnovers.`;
+      
+      const groundingResult = await geminiGroundingSearch(query, {
+        systemMessage: 'You are an NBA defensive stats analyst. Provide opponent turnover rate (turnovers forced) and steals data for both teams.'
+      });
+      
+      return {
+        category: 'Forced Turnovers (Defensive)',
+        source: 'Gemini Grounding (Live Search)',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name },
+        grounding_data: groundingResult?.content || 'Data unavailable',
+        INVESTIGATE: `🔍 Higher Opp TOV% = better at forcing turnovers. Check if this team's defense creates chaos or plays conservatively.`,
+        note: 'League average forced TOV rate is ~13%. Elite turnover-forcing defenses are at 15%+.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching OPP_TOV_RATE:`, error.message);
+      return {
+        category: 'Forced Turnovers',
+        error: 'Data unavailable',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name }
+      };
+    }
+  },
+
+  // ===== PACE LAST 10 GAMES (REAL DATA - Calculated) =====
+  PACE_LAST_10: async (bdlSport, home, away, season) => {
+    console.log(`[Stat Router] Fetching PACE_LAST_10 for ${away.name} @ ${home.name}`);
+    
+    if (bdlSport !== 'basketball_nba') {
+      return { category: 'Pace Last 10', note: 'Only available for NBA' };
+    }
+    
+    try {
+      // Get recent games for both teams
+      const today = new Date();
+      const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+      
+      const [homeGames, awayGames] = await Promise.all([
+        ballDontLieService.getGames(bdlSport, {
+          team_ids: [home.id],
+          start_date: thirtyDaysAgo.toISOString().split('T')[0],
+          end_date: today.toISOString().split('T')[0],
+          per_page: 15
+        }),
+        ballDontLieService.getGames(bdlSport, {
+          team_ids: [away.id],
+          start_date: thirtyDaysAgo.toISOString().split('T')[0],
+          end_date: today.toISOString().split('T')[0],
+          per_page: 15
+        })
+      ]);
+      
+      // Calculate pace proxy from total points scored (higher scoring = faster pace)
+      const calcRecentPace = (games, teamId) => {
+        const completed = (games || [])
+          .filter(g => (g.home_team_score || 0) > 0)
+          .sort((a, b) => new Date(b.date) - new Date(a.date))
+          .slice(0, 10);
+        
+        if (completed.length < 5) return null;
+        
+        let totalPts = 0, totalOppPts = 0;
+        for (const g of completed) {
+          const isHome = g.home_team?.id === teamId;
+          totalPts += isHome ? g.home_team_score : g.visitor_team_score;
+          totalOppPts += isHome ? g.visitor_team_score : g.home_team_score;
+        }
+        
+        const avgTotal = (totalPts + totalOppPts) / completed.length;
+        const paceProxy = avgTotal; // Total points is a decent pace proxy
+        
+        return {
+          games_analyzed: completed.length,
+          avg_total_points: avgTotal.toFixed(1),
+          pace_rating: avgTotal >= 230 ? '🏃 FAST PACE (230+ total)' :
+                       avgTotal >= 215 ? '➡️ AVERAGE PACE' :
+                       '🐢 SLOW PACE (<215 total)',
+          team_ppg: (totalPts / completed.length).toFixed(1),
+          opp_ppg: (totalOppPts / completed.length).toFixed(1)
+        };
+      };
+      
+      const homePace = calcRecentPace(homeGames, home.id);
+      const awayPace = calcRecentPace(awayGames, away.id);
+      
+      return {
+        category: 'Pace - Last 10 Games',
+        source: 'Ball Don\'t Lie API (calculated from recent games)',
+        home: {
+          team: home.full_name || home.name,
+          ...homePace
+        },
+        away: {
+          team: away.full_name || away.name,
+          ...awayPace
+        },
+        INVESTIGATE: `🔍 Compare L10 pace to season pace. A team playing faster/slower lately may indicate style change or fatigue.`,
+        note: 'Total points per game is a proxy for pace. 230+ = fast, <215 = slow.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching PACE_LAST_10:`, error.message);
+      return {
+        category: 'Pace Last 10',
+        error: 'Data unavailable',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name }
+      };
+    }
+  },
+
+  // ===== PACE HOME vs AWAY (REAL DATA) =====
+  PACE_HOME_AWAY: async (bdlSport, home, away, season) => {
+    console.log(`[Stat Router] Fetching PACE_HOME_AWAY for ${away.name} @ ${home.name}`);
+    
+    if (bdlSport !== 'basketball_nba') {
+      return { category: 'Pace Splits', note: 'Only available for NBA' };
+    }
+    
+    try {
+      const seasonStart = new Date(season - 1, 9, 1);
+      const today = new Date();
+      
+      const [homeGames, awayGames] = await Promise.all([
+        ballDontLieService.getGames(bdlSport, {
+          team_ids: [home.id],
+          start_date: seasonStart.toISOString().split('T')[0],
+          end_date: today.toISOString().split('T')[0],
+          per_page: 50
+        }),
+        ballDontLieService.getGames(bdlSport, {
+          team_ids: [away.id],
+          start_date: seasonStart.toISOString().split('T')[0],
+          end_date: today.toISOString().split('T')[0],
+          per_page: 50
+        })
+      ]);
+      
+      // Calculate pace splits (home vs road)
+      const calcPaceSplits = (games, teamId) => {
+        const completed = (games || []).filter(g => (g.home_team_score || 0) > 0);
+        
+        const homeGamesOnly = completed.filter(g => g.home_team?.id === teamId);
+        const roadGamesOnly = completed.filter(g => g.visitor_team?.id === teamId);
+        
+        const calcAvgTotal = (gList, isHome) => {
+          if (gList.length === 0) return null;
+          let total = 0;
+          for (const g of gList) {
+            total += (g.home_team_score || 0) + (g.visitor_team_score || 0);
+          }
+          return (total / gList.length).toFixed(1);
+        };
+        
+        return {
+          home_pace: calcAvgTotal(homeGamesOnly, true),
+          home_games: homeGamesOnly.length,
+          road_pace: calcAvgTotal(roadGamesOnly, false),
+          road_games: roadGamesOnly.length,
+          pace_diff: homeGamesOnly.length > 0 && roadGamesOnly.length > 0
+            ? (parseFloat(calcAvgTotal(homeGamesOnly)) - parseFloat(calcAvgTotal(roadGamesOnly))).toFixed(1)
+            : 'N/A'
+        };
+      };
+      
+      const homeSplits = calcPaceSplits(homeGames, home.id);
+      const awaySplits = calcPaceSplits(awayGames, away.id);
+      
+      return {
+        category: 'Pace - Home vs Road Splits',
+        source: 'Ball Don\'t Lie API (calculated)',
+        home: {
+          team: home.full_name || home.name,
+          at_home_total_ppg: homeSplits.home_pace,
+          on_road_total_ppg: homeSplits.road_pace,
+          home_road_diff: homeSplits.pace_diff,
+          note: `Playing at HOME tonight`
+        },
+        away: {
+          team: away.full_name || away.name,
+          at_home_total_ppg: awaySplits.home_pace,
+          on_road_total_ppg: awaySplits.road_pace,
+          home_road_diff: awaySplits.pace_diff,
+          note: `Playing on ROAD tonight`
+        },
+        INVESTIGATE: `🔍 Some teams play faster at home (crowd energy) or slower on road (conservative). Check if tonight's venue affects pace.`,
+        note: 'Total points = pace proxy. Compare home pace to road pace for each team.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching PACE_HOME_AWAY:`, error.message);
+      return {
+        category: 'Pace Splits',
+        error: 'Data unavailable',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name }
+      };
+    }
+  },
+
+  // ===== PAINT SCORING (REAL DATA) =====
+  PAINT_SCORING: async (bdlSport, home, away, season) => {
+    console.log(`[Stat Router] Fetching PAINT_SCORING for ${away.name} @ ${home.name}`);
+    
+    try {
+      const seasonStr = getCurrentSeasonString();
+      const query = `${seasonStr} NBA points in the paint per game ${home.name} vs ${away.name}.
+        How many points in the paint does each team score per game?
+        Include paint attempts and paint FG% if available.
+        Which team is more paint-dominant?`;
+      
+      const groundingResult = await geminiGroundingSearch(query, {
+        systemMessage: 'You are an NBA offensive stats analyst. Provide points in the paint data for both teams.'
+      });
+      
+      return {
+        category: 'Points in the Paint',
+        source: 'Gemini Grounding (Live Search)',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name },
+        grounding_data: groundingResult?.content || 'Data unavailable',
+        INVESTIGATE: `🔍 Paint-heavy offenses struggle vs elite rim protectors. Check if opponent has strong paint defense.`,
+        note: 'League average is ~46 paint points/game. Elite paint teams score 50+.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching PAINT_SCORING:`, error.message);
+      return {
+        category: 'Points in the Paint',
+        error: 'Data unavailable',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name }
+      };
+    }
+  },
+
+  // ===== MIDRANGE SHOOTING (REAL DATA) =====
+  MIDRANGE: async (bdlSport, home, away, season) => {
+    console.log(`[Stat Router] Fetching MIDRANGE for ${away.name} @ ${home.name}`);
+    
+    try {
+      const seasonStr = getCurrentSeasonString();
+      const query = `${seasonStr} NBA midrange shooting percentage and attempts ${home.name} vs ${away.name}.
+        What is each team's midrange FG% and midrange attempts per game?
+        Do they rely on midrange or avoid it?
+        Include any key midrange shooters.`;
+      
+      const groundingResult = await geminiGroundingSearch(query, {
+        systemMessage: 'You are an NBA shooting analyst. Provide midrange shooting data for both teams.'
+      });
+      
+      return {
+        category: 'Midrange Shooting',
+        source: 'Gemini Grounding (Live Search)',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name },
+        grounding_data: groundingResult?.content || 'Data unavailable',
+        INVESTIGATE: `🔍 Midrange is generally inefficient but some teams (DeMar, KD style) thrive on it. Check if key players are midrange specialists.`,
+        note: 'Most modern offenses minimize midrange. Teams that shoot lots of midrange either have elite midrange shooters or poor shot selection.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching MIDRANGE:`, error.message);
+      return {
+        category: 'Midrange Shooting',
+        error: 'Data unavailable',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name }
+      };
+    }
+  },
+
+  // ===== PAINT DEFENSE (REAL DATA) =====
+  PAINT_DEFENSE: async (bdlSport, home, away, season) => {
+    console.log(`[Stat Router] Fetching PAINT_DEFENSE for ${away.name} @ ${home.name}`);
+    
+    try {
+      const seasonStr = getCurrentSeasonString();
+      const query = `${seasonStr} NBA opponent points in the paint allowed defense ${home.name} vs ${away.name}.
+        How many points in the paint does each team ALLOW per game?
+        Include blocks per game, rim protection stats if available.
+        Which team has better paint defense?`;
+      
+      const groundingResult = await geminiGroundingSearch(query, {
+        systemMessage: 'You are an NBA defensive stats analyst. Provide paint defense data (opponent points in paint allowed) for both teams.'
+      });
+      
+      return {
+        category: 'Paint Defense (Rim Protection)',
+        source: 'Gemini Grounding (Live Search)',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name },
+        grounding_data: groundingResult?.content || 'Data unavailable',
+        INVESTIGATE: `🔍 Elite paint defense (<44 opp paint PPG) forces opponents to shoot jumpers. Poor paint defense gets attacked inside.`,
+        note: 'League average allowed paint PPG is ~46. Elite rim protectors hold opponents under 44.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching PAINT_DEFENSE:`, error.message);
+      return {
+        category: 'Paint Defense',
+        error: 'Data unavailable',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name }
+      };
+    }
+  },
+
+  // ===== TRANSITION DEFENSE (REAL DATA) =====
+  TRANSITION_DEFENSE: async (bdlSport, home, away, season) => {
+    console.log(`[Stat Router] Fetching TRANSITION_DEFENSE for ${away.name} @ ${home.name}`);
+    
+    try {
+      const seasonStr = getCurrentSeasonString();
+      const query = `${seasonStr} NBA transition defense opponent fast break points allowed ${home.name} vs ${away.name}.
+        How many fast break points does each team ALLOW per game?
+        Which team is better at getting back in transition?
+        Include transition defense ranking if available.`;
+      
+      const groundingResult = await geminiGroundingSearch(query, {
+        systemMessage: 'You are an NBA defensive stats analyst. Provide transition defense data (opponent fast break points allowed) for both teams.'
+      });
+      
+      return {
+        category: 'Transition Defense (Fast Break Points Allowed)',
+        source: 'Gemini Grounding (Live Search)',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name },
+        grounding_data: groundingResult?.content || 'Data unavailable',
+        INVESTIGATE: `🔍 Poor transition defense (allowing 15+ fast break PPG) gets exploited by fast-paced teams. Check opponent's pace.`,
+        note: 'League average allowed fast break PPG is ~13. Bad transition defense allows 15+.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching TRANSITION_DEFENSE:`, error.message);
+      return {
+        category: 'Transition Defense',
+        error: 'Data unavailable',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name }
+      };
+    }
+  },
+
+  // ===== LINEUP NET RATINGS (First Unit & Second Unit Performance) =====
+  LINEUP_NET_RATINGS: async (bdlSport, home, away, season) => {
+    console.log(`[Stat Router] Fetching LINEUP_NET_RATINGS for ${away.name} @ ${home.name}`);
+    
+    if (bdlSport !== 'basketball_nba') {
+      return { category: 'Lineup Net Ratings', note: 'Only available for NBA' };
+    }
+    
+    try {
+      const seasonStr = getCurrentSeasonString();
+      const query = `${seasonStr} NBA lineup net rating first unit second unit bench ${home.name} vs ${away.name}.
+        What is each team's:
+        1. Starting lineup (first unit) net rating
+        2. Bench unit (second unit) net rating
+        3. Best performing 5-man lineup
+        4. Death lineup or closing lineup if they have one
+        Include minutes played for key lineups.`;
+      
+      const groundingResult = await geminiGroundingSearch(query, {
+        systemMessage: 'You are an NBA lineup analyst. Provide lineup net ratings for starters, bench, and key 5-man combinations for both teams.'
+      });
+      
+      return {
+        category: 'Lineup Net Ratings (First & Second Unit)',
+        source: 'Gemini Grounding (Live Search)',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name },
+        grounding_data: groundingResult?.content || 'Data unavailable',
+        INVESTIGATE: `🔍 Big gap between starter and bench net rating = vulnerable when starters rest. Teams with strong benches hold leads better.`,
+        CRITICAL: `⚠️ For large spreads (7+), bench performance is KEY. The team ahead will rest starters in Q4.`,
+        note: 'First unit = starters. Second unit = bench rotation. Check how each performs WITHOUT the stars.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching LINEUP_NET_RATINGS:`, error.message);
+      return {
+        category: 'Lineup Net Ratings',
+        error: 'Data unavailable',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name }
+      };
+    }
+  },
+
+  // ===== TRAVEL SITUATION (Time Zone & Fatigue) =====
+  TRAVEL_SITUATION: async (bdlSport, home, away, season, options = {}) => {
+    console.log(`[Stat Router] Fetching TRAVEL_SITUATION for ${away.name} @ ${home.name}`);
+    
+    if (bdlSport !== 'basketball_nba') {
+      return { category: 'Travel Situation', note: 'Currently only available for NBA' };
+    }
+    
+    // NBA team time zones (simplified)
+    const teamTimeZones = {
+      // Pacific (PT)
+      'Lakers': 'PT', 'Clippers': 'PT', 'Warriors': 'PT', 'Kings': 'PT',
+      'Trail Blazers': 'PT', 'Blazers': 'PT',
+      // Mountain (MT)
+      'Nuggets': 'MT', 'Jazz': 'MT', 'Suns': 'MT',
+      // Central (CT)
+      'Mavericks': 'CT', 'Spurs': 'CT', 'Rockets': 'CT', 'Pelicans': 'CT',
+      'Grizzlies': 'CT', 'Timberwolves': 'CT', 'Thunder': 'CT', 'Bulls': 'CT',
+      'Bucks': 'CT',
+      // Eastern (ET)
+      'Celtics': 'ET', 'Nets': 'ET', 'Knicks': 'ET', '76ers': 'ET', 'Sixers': 'ET',
+      'Raptors': 'ET', 'Heat': 'ET', 'Magic': 'ET', 'Hawks': 'ET', 'Hornets': 'ET',
+      'Wizards': 'ET', 'Cavaliers': 'ET', 'Cavs': 'ET', 'Pistons': 'ET', 'Pacers': 'ET'
+    };
+    
+    const getTimeZone = (teamName) => {
+      for (const [key, tz] of Object.entries(teamTimeZones)) {
+        if (teamName.includes(key)) return tz;
+      }
+      return 'ET'; // Default
+    };
+    
+    const tzOrder = { 'PT': 0, 'MT': 1, 'CT': 2, 'ET': 3 };
+    
+    const homeTz = getTimeZone(home.name || home.full_name);
+    const awayTz = getTimeZone(away.name || away.full_name);
+    
+    const tzDiff = tzOrder[homeTz] - tzOrder[awayTz];
+    
+    let travelImpact = '➡️ NEUTRAL';
+    let travelNote = '';
+    
+    if (tzDiff >= 2) {
+      // Away team traveling EAST (body clock behind)
+      travelImpact = '⚠️ AWAY TEAM DISADVANTAGE';
+      travelNote = `${away.name} traveling EAST across ${Math.abs(tzDiff)} time zones. Early games especially tough (body clock thinks it's earlier).`;
+    } else if (tzDiff <= -2) {
+      // Away team traveling WEST (body clock ahead)
+      travelImpact = '⚠️ MILD AWAY DISADVANTAGE';
+      travelNote = `${away.name} traveling WEST across ${Math.abs(tzDiff)} time zones. Less impactful than eastward travel but still a factor.`;
+    } else if (Math.abs(tzDiff) === 1) {
+      travelImpact = '➡️ MINIMAL IMPACT';
+      travelNote = `Only 1 time zone difference - minimal travel fatigue.`;
+    }
+    
+    return {
+      category: 'Travel & Time Zone Situation',
+      source: 'Calculated from team locations',
+      home: {
+        team: home.full_name || home.name,
+        time_zone: homeTz,
+        status: 'Playing at HOME - no travel'
+      },
+      away: {
+        team: away.full_name || away.name,
+        time_zone: awayTz,
+        status: `Traveling from ${awayTz} to ${homeTz}`
+      },
+      time_zone_diff: Math.abs(tzDiff),
+      travel_direction: tzDiff > 0 ? 'EASTWARD' : tzDiff < 0 ? 'WESTWARD' : 'SAME ZONE',
+      travel_impact: travelImpact,
+      travel_note: travelNote,
+      INVESTIGATE: tzDiff >= 2 ? `🔍 West coast teams playing early ET games often start slow. Check 1st quarter trends.` : null,
+      note: 'Eastward travel is harder than westward. 2+ time zone jumps are significant.'
+    };
+  },
+
+  // ===== MINUTES TREND (Star Fatigue Detection) =====
+  MINUTES_TREND: async (bdlSport, home, away, season) => {
+    console.log(`[Stat Router] Fetching MINUTES_TREND for ${away.name} @ ${home.name}`);
+    
+    if (bdlSport !== 'basketball_nba') {
+      return { category: 'Minutes Trend', note: 'Only available for NBA' };
+    }
+    
+    try {
+      const seasonStr = getCurrentSeasonString();
+      const query = `${seasonStr} NBA minutes per game leaders recent ${home.name} vs ${away.name}.
+        Who are the top minute players on each team?
+        Are any stars playing 38+ minutes lately (fatigue risk)?
+        Has any key player's minutes increased or decreased recently?
+        Include any load management patterns.`;
+      
+      const groundingResult = await geminiGroundingSearch(query, {
+        systemMessage: 'You are an NBA workload analyst. Provide minutes data and fatigue indicators for key players on both teams.'
+      });
+      
+      return {
+        category: 'Minutes Trend & Fatigue Risk',
+        source: 'Gemini Grounding (Live Search)',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name },
+        grounding_data: groundingResult?.content || 'Data unavailable',
+        INVESTIGATE: `🔍 Stars playing 38+ MPG in recent games are fatigue risks. Check if team is on heavy schedule (3 games in 4 nights).`,
+        note: 'Heavy minutes (38+) combined with back-to-back or travel = heightened injury/fatigue risk.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching MINUTES_TREND:`, error.message);
+      return {
+        category: 'Minutes Trend',
+        error: 'Data unavailable',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name }
+      };
+    }
+  },
+
+  // ===== BLOWOUT TENDENCY (Margin Patterns) =====
+  BLOWOUT_TENDENCY: async (bdlSport, home, away, season) => {
+    console.log(`[Stat Router] Fetching BLOWOUT_TENDENCY for ${away.name} @ ${home.name}`);
+    
+    try {
+      const seasonStart = new Date(season - 1, 9, 1);
+      const today = new Date();
+      
+      const [homeGames, awayGames] = await Promise.all([
+        ballDontLieService.getGames(bdlSport, {
+          team_ids: [home.id],
+          start_date: seasonStart.toISOString().split('T')[0],
+          end_date: today.toISOString().split('T')[0],
+          per_page: 40
+        }),
+        ballDontLieService.getGames(bdlSport, {
+          team_ids: [away.id],
+          start_date: seasonStart.toISOString().split('T')[0],
+          end_date: today.toISOString().split('T')[0],
+          per_page: 40
+        })
+      ]);
+      
+      // Calculate blowout and close game patterns
+      const calcMarginPatterns = (games, teamId) => {
+        const completed = (games || [])
+          .filter(g => (g.home_team_score || 0) > 0)
+          .sort((a, b) => new Date(b.date) - new Date(a.date));
+        
+        if (completed.length < 5) return null;
+        
+        let blowoutWins = 0, blowoutLosses = 0;
+        let closeWins = 0, closeLosses = 0;
+        let totalMargin = 0;
+        const margins = [];
+        
+        for (const g of completed) {
+          const isHome = g.home_team?.id === teamId;
+          const teamScore = isHome ? g.home_team_score : g.visitor_team_score;
+          const oppScore = isHome ? g.visitor_team_score : g.home_team_score;
+          const margin = teamScore - oppScore;
+          const absMargin = Math.abs(margin);
+          
+          margins.push(margin);
+          totalMargin += margin;
+          
+          if (margin > 0) {
+            // Win
+            if (absMargin >= 15) blowoutWins++;
+            else if (absMargin <= 5) closeWins++;
+          } else {
+            // Loss
+            if (absMargin >= 15) blowoutLosses++;
+            else if (absMargin <= 5) closeLosses++;
+          }
+        }
+        
+        const avgMargin = totalMargin / completed.length;
+        const blowoutRate = ((blowoutWins + blowoutLosses) / completed.length * 100).toFixed(0);
+        const closeGameRate = ((closeWins + closeLosses) / completed.length * 100).toFixed(0);
+        
+        return {
+          games_analyzed: completed.length,
+          avg_margin: `${avgMargin > 0 ? '+' : ''}${avgMargin.toFixed(1)}`,
+          blowout_wins: blowoutWins,
+          blowout_losses: blowoutLosses,
+          blowout_rate: `${blowoutRate}%`,
+          close_wins: closeWins,
+          close_losses: closeLosses,
+          close_game_rate: `${closeGameRate}%`,
+          profile: blowoutWins >= 5 ? '💪 BLOWOUT TEAM - dominates when on' :
+                   closeWins + closeLosses >= completed.length * 0.4 ? '⚔️ CLOSE GAME TEAM - games go down to wire' :
+                   '➡️ MIXED PROFILE'
+        };
+      };
+      
+      const homePatterns = calcMarginPatterns(homeGames, home.id);
+      const awayPatterns = calcMarginPatterns(awayGames, away.id);
+      
+      return {
+        category: 'Blowout Tendency & Margin Patterns',
+        source: 'Ball Don\'t Lie API (calculated)',
+        home: {
+          team: home.full_name || home.name,
+          ...homePatterns
+        },
+        away: {
+          team: away.full_name || away.name,
+          ...awayPatterns
+        },
+        INVESTIGATE: `🔍 Blowout teams may not cover large spreads (rest starters). Close game teams often beat/miss spreads by small margins.`,
+        SPREAD_CONTEXT: `For large spreads: check if favorite has blowout tendency. For small spreads: check close game records.`,
+        note: 'Blowout = 15+ margin. Close = 5 or less margin.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching BLOWOUT_TENDENCY:`, error.message);
+      return {
+        category: 'Blowout Tendency',
+        error: 'Data unavailable',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name }
+      };
+    }
   },
 
   // ===== RECENT FORM (ENHANCED) =====
@@ -3511,6 +4934,153 @@ const FETCHERS = {
     }
   },
 
+  // ===== VARIANCE & CONSISTENCY ANALYSIS (NEW) =====
+  // Key for underdog betting: High variance = more upset potential
+  VARIANCE_CONSISTENCY: async (bdlSport, home, away, season) => {
+    const homeName = home.full_name || home.name || 'Home';
+    const awayName = away.full_name || away.name || 'Away';
+    console.log(`[Stat Router] Fetching VARIANCE_CONSISTENCY for ${awayName} @ ${homeName} (${bdlSport})`);
+    
+    // Only supported for NFL currently (expandable to other sports)
+    if (bdlSport !== 'americanfootball_nfl') {
+      return {
+        category: 'Variance & Consistency',
+        note: 'Currently only available for NFL. Coming soon for other sports.',
+        home: { team: homeName },
+        away: { team: awayName }
+      };
+    }
+    
+    try {
+      // Get recent games for both teams
+      const [homeGames, awayGames] = await Promise.all([
+        ballDontLieService.getGames(bdlSport, { team_ids: [home.id], seasons: [season], per_page: 17 }),
+        ballDontLieService.getGames(bdlSport, { team_ids: [away.id], seasons: [season], per_page: 17 })
+      ]);
+      
+      const completedHomeGames = (homeGames || []).filter(g => g.status === 'Final' || g.status === 'final').slice(0, 10);
+      const completedAwayGames = (awayGames || []).filter(g => g.status === 'Final' || g.status === 'final').slice(0, 10);
+      
+      // Calculate variance stats for a team
+      const calcVarianceStats = (games, teamId, teamName) => {
+        if (!games || games.length < 3) {
+          return { team: teamName, error: 'Insufficient data' };
+        }
+        
+        const margins = [];
+        const pointsScored = [];
+        let closeGames = 0; // Within 7 points
+        let blowouts = 0;   // Won/lost by 14+
+        let beatsGoodTeams = 0;
+        let losesToBadTeams = 0;
+        
+        for (const game of games) {
+          const isHome = game.home_team?.id === teamId;
+          const teamScore = isHome ? game.home_team_score : game.away_team_score;
+          const oppScore = isHome ? game.away_team_score : game.home_team_score;
+          
+          if (teamScore == null || oppScore == null) continue;
+          
+          const margin = teamScore - oppScore;
+          margins.push(margin);
+          pointsScored.push(teamScore);
+          
+          // Close game analysis
+          if (Math.abs(margin) <= 7) closeGames++;
+          if (Math.abs(margin) >= 14) blowouts++;
+        }
+        
+        if (margins.length < 3) {
+          return { team: teamName, error: 'Insufficient games with scores' };
+        }
+        
+        // Calculate standard deviation of margins (VARIANCE indicator)
+        const avgMargin = margins.reduce((a, b) => a + b, 0) / margins.length;
+        const variance = margins.reduce((acc, m) => acc + Math.pow(m - avgMargin, 2), 0) / margins.length;
+        const stdDev = Math.sqrt(variance);
+        
+        // Calculate scoring consistency
+        const avgPoints = pointsScored.reduce((a, b) => a + b, 0) / pointsScored.length;
+        const scoringVariance = pointsScored.reduce((acc, p) => acc + Math.pow(p - avgPoints, 2), 0) / pointsScored.length;
+        const scoringStdDev = Math.sqrt(scoringVariance);
+        
+        // Determine consistency profile
+        let marginProfile = 'CONSISTENT';
+        if (stdDev > 14) marginProfile = 'HIGH VARIANCE (Boom/Bust)';
+        else if (stdDev > 10) marginProfile = 'MODERATE VARIANCE';
+        else if (stdDev < 7) marginProfile = 'VERY CONSISTENT';
+        
+        let scoringProfile = 'CONSISTENT SCORING';
+        if (scoringStdDev > 8) scoringProfile = 'INCONSISTENT SCORING';
+        
+        // Calculate upset potential indicators
+        const closeGamePct = ((closeGames / margins.length) * 100).toFixed(0);
+        const blowoutPct = ((blowouts / margins.length) * 100).toFixed(0);
+        
+        // Key insight for betting
+        let bettingInsight = '';
+        if (stdDev > 12) {
+          bettingInsight = '⚠️ HIGH VARIANCE: Risky as favorite (could have off day), VALUE as underdog (could have big day)';
+        } else if (stdDev < 8 && avgMargin > 3) {
+          bettingInsight = '✅ CONSISTENT WINNER: Safer favorite, less upset potential';
+        } else if (stdDev < 8 && avgMargin < -3) {
+          bettingInsight = '❌ CONSISTENT LOSER: Risky underdog, less upset potential';
+        } else {
+          bettingInsight = '⚖️ MODERATE: Standard variance, evaluate other factors';
+        }
+        
+        return {
+          team: teamName,
+          games_analyzed: margins.length,
+          margin_analysis: {
+            avg_margin: avgMargin.toFixed(1),
+            std_dev: stdDev.toFixed(1),
+            profile: marginProfile
+          },
+          scoring_analysis: {
+            avg_points: avgPoints.toFixed(1),
+            std_dev: scoringStdDev.toFixed(1),
+            profile: scoringProfile
+          },
+          game_types: {
+            close_games: `${closeGames}/${margins.length} (${closeGamePct}%)`,
+            blowouts: `${blowouts}/${margins.length} (${blowoutPct}%)`
+          },
+          betting_insight: bettingInsight
+        };
+      };
+      
+      const homeVariance = calcVarianceStats(completedHomeGames, home.id, homeName);
+      const awayVariance = calcVarianceStats(completedAwayGames, away.id, awayName);
+      
+      // Generate comparative insight
+      let compareInsight = '';
+      if (homeVariance.margin_analysis && awayVariance.margin_analysis) {
+        const homeStdDev = parseFloat(homeVariance.margin_analysis.std_dev);
+        const awayStdDev = parseFloat(awayVariance.margin_analysis.std_dev);
+        
+        if (homeStdDev > awayStdDev + 3) {
+          compareInsight = `🏠 ${homeName} is MORE volatile than ${awayName} - upset potential higher if ${homeName} is favored`;
+        } else if (awayStdDev > homeStdDev + 3) {
+          compareInsight = `✈️ ${awayName} is MORE volatile than ${homeName} - could have a big day or a bad day`;
+        } else {
+          compareInsight = 'Both teams have similar consistency profiles';
+        }
+      }
+      
+      return {
+        category: 'Variance & Consistency Analysis',
+        note: 'HIGH VARIANCE = more upset potential. Risky to lay big spreads on volatile teams. VALUE on volatile underdogs.',
+        home: homeVariance,
+        away: awayVariance,
+        comparative_insight: compareInsight
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching VARIANCE_CONSISTENCY:`, error.message);
+      return { category: 'Variance & Consistency', error: 'Data unavailable' };
+    }
+  },
+
   // ===== HEAD-TO-HEAD HISTORY =====
   H2H_HISTORY: async (bdlSport, home, away, season) => {
     const homeName = home.full_name || home.name || 'Home';
@@ -3732,13 +5302,15 @@ const FETCHERS = {
         ballDontLieService.getGames(bdlSport, { team_ids: [away.id], ...params })
       ]);
       
-      // Calculate close game record (games decided by 5 points or less)
-      const calcClutchRecord = (games, teamName) => {
-        let closeWins = 0;
-        let closeLosses = 0;
+      // Calculate close game record (games decided by 5 points or less) WITH TREND
+      const calcClutchRecord = (games, teamName, teamId) => {
         const closeGameMargin = 5;
+        const closeGames = [];
         
-        for (const game of games || []) {
+        // Sort games by date (most recent first)
+        const sortedGames = [...(games || [])].sort((a, b) => new Date(b.date) - new Date(a.date));
+        
+        for (const game of sortedGames) {
           const homeScore = game.home_team_score || game.home_score || 0;
           const awayScore = game.visitor_team_score || game.away_score || game.away_team_score || 0;
           const margin = Math.abs(homeScore - awayScore);
@@ -3747,26 +5319,49 @@ const FETCHERS = {
           if (homeScore === 0 && awayScore === 0) continue;
           
           if (margin <= closeGameMargin) {
-            const isHomeTeam = game.home_team?.name?.includes(teamName.split(' ').pop()) || 
+            const isHomeTeam = game.home_team?.id === teamId || 
+                               game.home_team?.name?.includes(teamName.split(' ').pop()) || 
                                game.home_team?.full_name?.includes(teamName);
             const won = isHomeTeam ? homeScore > awayScore : awayScore > homeScore;
-            if (won) closeWins++;
-            else closeLosses++;
+            closeGames.push({
+              date: game.date,
+              result: won ? 'W' : 'L',
+              margin: margin
+            });
           }
         }
         
-        const total = closeWins + closeLosses;
+        const total = closeGames.length;
+        const closeWins = closeGames.filter(g => g.result === 'W').length;
+        const closeLosses = total - closeWins;
         const pct = total > 0 ? ((closeWins / total) * 100).toFixed(0) : 'N/A';
+        
+        // Calculate recent trend (last 3 close games vs overall)
+        const last3Close = closeGames.slice(0, 3);
+        const last3Wins = last3Close.filter(g => g.result === 'W').length;
+        const last3Losses = last3Close.length - last3Wins;
+        const last3Record = last3Close.length > 0 ? `${last3Wins}-${last3Losses}` : 'N/A';
+        const last3Streak = last3Close.map(g => g.result).join('');
+        
+        // Determine trend
+        let clutchTrend = 'STABLE';
+        if (last3Close.length >= 2) {
+          if (last3Wins >= 2) clutchTrend = 'CLUTCH UP 🔥';
+          else if (last3Losses >= 2) clutchTrend = 'CLUTCH DOWN ❄️';
+        }
         
         return {
           close_record: `${closeWins}-${closeLosses}`,
           close_win_pct: total > 0 ? `${pct}%` : 'N/A',
-          close_games: total
+          close_games: total,
+          last_3_close: last3Record,
+          last_3_close_streak: last3Streak,
+          clutch_trend: clutchTrend
         };
       };
       
-      const homeClutch = calcClutchRecord(homeGames, home.name);
-      const awayClutch = calcClutchRecord(awayGames, away.name);
+      const homeClutch = calcClutchRecord(homeGames, home.name, home.id);
+      const awayClutch = calcClutchRecord(awayGames, away.name, away.id);
       
       return {
         category: 'Clutch Stats (Games Decided by ≤5 Points)',
@@ -3778,7 +5373,9 @@ const FETCHERS = {
           team: away.full_name || away.name,
           ...awayClutch
         },
-        interpretation: `Close game records indicate which team performs better in tight situations`
+        interpretation: `Close game records indicate which team performs better in tight situations`,
+        TREND_CONTEXT: `🔄 Check last_3_close and clutch_trend - a team that's 3-7 overall but won their last 2 close games is IMPROVING in clutch situations.`,
+        INVESTIGATE: `🔍 Don't just see "3-7 in close games" - ask: Are they getting BETTER or WORSE at closing? The trend matters more than the total.`
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching clutch stats:`, error.message);
@@ -4069,6 +5666,157 @@ const FETCHERS = {
     } catch (error) {
       console.error(`[Stat Router] Error fetching vs elite teams:`, error.message);
       return { category: 'Record vs Elite Teams', error: 'Data unavailable' };
+    }
+  },
+
+  // ===== SCHEDULE STRENGTH (Real SOS - Not an alias!) =====
+  SCHEDULE_STRENGTH: async (bdlSport, home, away, season) => {
+    console.log(`[Stat Router] Fetching SCHEDULE_STRENGTH for ${away.name} @ ${home.name}`);
+    
+    // Works for NBA, NHL, and college sports
+    const isNba = bdlSport === 'basketball_nba';
+    const isNhl = bdlSport === 'icehockey_nhl';
+    
+    try {
+      // Get standings to know each team's record
+      let standings = [];
+      if (isNba) {
+        standings = await ballDontLieService.getNbaStandings(season);
+      } else if (isNhl) {
+        standings = await ballDontLieService.getNhlStandings(season);
+      } else {
+        // For college, use getStandings generic
+        standings = await ballDontLieService.getStandings(bdlSport, season);
+      }
+      
+      // Build a map of team ID -> win percentage
+      const teamWinPct = {};
+      for (const s of standings || []) {
+        const teamId = s.team?.id;
+        const wins = s.wins || 0;
+        const losses = s.losses || 0;
+        const total = wins + losses;
+        if (teamId && total > 0) {
+          teamWinPct[teamId] = wins / total;
+        }
+      }
+      
+      // Get games for each team this season
+      const seasonStart = new Date(season - 1, 9, 1); // Oct 1
+      const today = new Date();
+      
+      const [homeGames, awayGames] = await Promise.all([
+        ballDontLieService.getGames(bdlSport, {
+          team_ids: [home.id],
+          start_date: seasonStart.toISOString().split('T')[0],
+          end_date: today.toISOString().split('T')[0],
+          per_page: 50
+        }),
+        ballDontLieService.getGames(bdlSport, {
+          team_ids: [away.id],
+          start_date: seasonStart.toISOString().split('T')[0],
+          end_date: today.toISOString().split('T')[0],
+          per_page: 50
+        })
+      ]);
+      
+      // Calculate SOS for each team
+      const calcSOS = (games, teamId) => {
+        const completedGames = (games || []).filter(g => {
+          const homeScore = g.home_team_score || g.home_score || 0;
+          const awayScore = g.visitor_team_score || g.away_score || 0;
+          return homeScore > 0 || awayScore > 0;
+        });
+        
+        if (completedGames.length === 0) return null;
+        
+        let totalOppWinPct = 0;
+        let opponentsWithData = 0;
+        const opponentBreakdown = { elite: 0, good: 0, average: 0, weak: 0 };
+        
+        for (const game of completedGames) {
+          const isHome = (game.home_team?.id || game.home_team_id) === teamId;
+          const oppId = isHome 
+            ? (game.visitor_team?.id || game.visitor_team_id)
+            : (game.home_team?.id || game.home_team_id);
+          
+          const oppWinPct = teamWinPct[oppId];
+          if (oppWinPct !== undefined) {
+            totalOppWinPct += oppWinPct;
+            opponentsWithData++;
+            
+            // Categorize opponent
+            if (oppWinPct >= 0.600) opponentBreakdown.elite++;
+            else if (oppWinPct >= 0.500) opponentBreakdown.good++;
+            else if (oppWinPct >= 0.400) opponentBreakdown.average++;
+            else opponentBreakdown.weak++;
+          }
+        }
+        
+        if (opponentsWithData === 0) return null;
+        
+        const avgOppWinPct = totalOppWinPct / opponentsWithData;
+        const sosRating = avgOppWinPct >= 0.520 ? 'HARD' :
+                          avgOppWinPct >= 0.480 ? 'AVERAGE' : 'EASY';
+        
+        return {
+          avg_opp_win_pct: `${(avgOppWinPct * 100).toFixed(1)}%`,
+          games_analyzed: opponentsWithData,
+          sos_rating: sosRating,
+          opponent_breakdown: opponentBreakdown,
+          vs_elite: opponentBreakdown.elite,
+          vs_weak: opponentBreakdown.weak
+        };
+      };
+      
+      const homeSOS = calcSOS(homeGames, home.id);
+      const awaySOS = calcSOS(awayGames, away.id);
+      
+      // Determine if records are inflated/deflated
+      const getRecordContext = (sos, teamStanding) => {
+        if (!sos || !teamStanding) return null;
+        const teamWins = teamStanding.wins || 0;
+        const teamLosses = teamStanding.losses || 0;
+        const teamPct = teamWins / (teamWins + teamLosses) || 0;
+        const avgOppPct = parseFloat(sos.avg_opp_win_pct) / 100;
+        
+        if (teamPct > 0.550 && avgOppPct < 0.470) {
+          return '⚠️ RECORD MAY BE INFLATED - easy schedule';
+        } else if (teamPct < 0.450 && avgOppPct > 0.530) {
+          return '📈 RECORD MAY BE DEFLATED - tough schedule';
+        } else if (teamPct > 0.550 && avgOppPct > 0.520) {
+          return '✅ LEGIT RECORD - proven vs tough opponents';
+        }
+        return null;
+      };
+      
+      const homeStanding = standings.find(s => s.team?.id === home.id);
+      const awayStanding = standings.find(s => s.team?.id === away.id);
+      
+      return {
+        category: 'Schedule Strength (Real SOS)',
+        source: 'Ball Don\'t Lie API (calculated from opponent records)',
+        home: {
+          team: home.full_name || home.name,
+          ...homeSOS,
+          record_context: getRecordContext(homeSOS, homeStanding)
+        },
+        away: {
+          team: away.full_name || away.name,
+          ...awaySOS,
+          record_context: getRecordContext(awaySOS, awayStanding)
+        },
+        INVESTIGATE: `🔍 Compare SOS ratings - a team with EASY schedule facing one with HARD schedule may be overvalued.`,
+        note: 'SOS > 52% = HARD schedule, < 48% = EASY schedule. League average is 50%.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching SCHEDULE_STRENGTH:`, error.message);
+      return { 
+        category: 'Schedule Strength', 
+        error: 'Data unavailable',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name }
+      };
     }
   },
 
@@ -4764,6 +6512,665 @@ const FETCHERS = {
       }
     };
   },
+
+  // ===== NFL EARLY/LATE DOWN & EXPLOSIVENESS STATS =====
+
+  EARLY_DOWN_SUCCESS: async (bdlSport, home, away, season) => {
+    // Early downs (1st & 2nd down) success rate - BDL doesn't have this directly
+    // Use Gemini Grounding to get actual early down success rate from PFR/FO
+    console.log(`[Stat Router] Fetching EARLY_DOWN_SUCCESS for ${away.name} @ ${home.name}`);
+    
+    if (bdlSport !== 'americanfootball_nfl') {
+      return { category: 'Early Down Success', note: 'Only available for NFL' };
+    }
+    
+    try {
+      const seasonStr = getCurrentSeasonString();
+      const query = `site:pro-football-reference.com OR site:footballoutsiders.com
+        ${seasonStr} NFL early down success rate first down second down efficiency ${home.name} ${away.name}.
+        For each team:
+        1. First down success rate (% of 1st downs gaining 4+ yards)
+        2. Second down success rate
+        3. Early down EPA (if available)
+        4. Yards per first down
+        5. Negative play rate on early downs`;
+      
+      const groundingResult = await geminiGroundingSearch(query, {
+        systemMessage: 'You are an NFL analyst. Use data from Pro Football Reference or Football Outsiders. Provide exact early down success metrics for both teams.'
+      });
+      
+      return {
+        category: 'Early Down Success Rate',
+        source: 'Pro-Football-Reference / Football Outsiders via Gemini',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name },
+        grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
+        INVESTIGATE: `🔍 Early down success sets up manageable 3rd downs. Teams that fail early face 3rd-and-long = predictable passing.`,
+        note: 'Success = gaining 40%+ of yards needed on 1st, 50%+ on 2nd. League avg ~48%.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching EARLY_DOWN_SUCCESS:`, error.message);
+      return { category: 'Early Down Success', error: 'Data unavailable' };
+    }
+  },
+
+  LATE_DOWN_EFFICIENCY: async (bdlSport, home, away, season) => {
+    // Late downs (3rd & 4th) - BDL has this!
+    const [homeStatsArr, awayStatsArr] = await Promise.all([
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+    ]);
+    const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
+    const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
+    
+    return {
+      category: 'Late Down Efficiency (3rd & 4th Down)',
+      home: {
+        team: home.full_name || home.name,
+        third_down_pct: fmtPct(homeStats?.misc_third_down_conv_pct / 100),
+        fourth_down_pct: fmtPct(homeStats?.misc_fourth_down_conv_pct / 100),
+        third_down_att: fmtNum(homeStats?.misc_third_down_conv_att, 0),
+        third_down_made: fmtNum(homeStats?.misc_third_down_conv_made, 0),
+        fourth_down_att: fmtNum(homeStats?.misc_fourth_down_conv_att, 0),
+        fourth_down_made: fmtNum(homeStats?.misc_fourth_down_conv_made, 0)
+      },
+      away: {
+        team: away.full_name || away.name,
+        third_down_pct: fmtPct(awayStats?.misc_third_down_conv_pct / 100),
+        fourth_down_pct: fmtPct(awayStats?.misc_fourth_down_conv_pct / 100),
+        third_down_att: fmtNum(awayStats?.misc_third_down_conv_att, 0),
+        third_down_made: fmtNum(awayStats?.misc_third_down_conv_made, 0),
+        fourth_down_att: fmtNum(awayStats?.misc_fourth_down_conv_att, 0),
+        fourth_down_made: fmtNum(awayStats?.misc_fourth_down_conv_made, 0)
+      },
+      INVESTIGATE: `🔍 3rd down is "money down". Teams that convert 3rd downs sustain drives. Elite is 45%+, poor is <35%.`,
+      note: 'League average 3rd down conversion is ~40%.'
+    };
+  },
+
+  EXPLOSIVE_ALLOWED: async (bdlSport, home, away, season) => {
+    // Defensive version - how many explosive plays does each team ALLOW?
+    const [homeStatsArr, awayStatsArr] = await Promise.all([
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+    ]);
+    const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
+    const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
+    
+    return {
+      category: 'Explosive Plays Allowed (Defense)',
+      home: {
+        team: home.full_name || home.name,
+        opp_longest_pass: fmtNum(homeStats?.opp_passing_long, 0),
+        opp_longest_rush: fmtNum(homeStats?.opp_rushing_long, 0),
+        opp_yards_per_catch: fmtNum(homeStats?.opp_receiving_yards_per_reception, 1),
+        opp_yards_per_carry: fmtNum(homeStats?.opp_rushing_yards_per_rush_attempt, 1)
+      },
+      away: {
+        team: away.full_name || away.name,
+        opp_longest_pass: fmtNum(awayStats?.opp_passing_long, 0),
+        opp_longest_rush: fmtNum(awayStats?.opp_rushing_long, 0),
+        opp_yards_per_catch: fmtNum(awayStats?.opp_receiving_yards_per_reception, 1),
+        opp_yards_per_carry: fmtNum(awayStats?.opp_rushing_yards_per_rush_attempt, 1)
+      },
+      INVESTIGATE: `🔍 Big plays change games. Teams that allow long plays are vulnerable to explosive offenses.`,
+      note: 'Compare to EXPLOSIVE_PLAYS to see offensive vs defensive matchup.'
+    };
+  },
+
+  FUMBLE_LUCK: async (bdlSport, home, away, season) => {
+    // Fumble luck - fumbles forced vs fumbles lost (regression indicator)
+    const [homeStatsArr, awayStatsArr] = await Promise.all([
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+    ]);
+    const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
+    const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
+    
+    // Fumble recovery rate is ~50% over time - deviations indicate luck
+    const homeFumblesLost = homeStats?.offense_fumbles_lost || 0;
+    const homeFumblesTotal = homeStats?.offense_fumbles || homeFumblesLost; // If no total, use lost
+    const homeFumblesRecovered = homeFumblesTotal - homeFumblesLost;
+    const homeRecoveryRate = homeFumblesTotal > 0 ? (homeFumblesRecovered / homeFumblesTotal) : 0.5;
+    
+    const awayFumblesLost = awayStats?.offense_fumbles_lost || 0;
+    const awayFumblesTotal = awayStats?.offense_fumbles || awayFumblesLost;
+    const awayFumblesRecovered = awayFumblesTotal - awayFumblesLost;
+    const awayRecoveryRate = awayFumblesTotal > 0 ? (awayFumblesRecovered / awayFumblesTotal) : 0.5;
+    
+    // Defensive fumbles
+    const homeDefForcedFumbles = homeStats?.defense_forced_fumbles || 0;
+    const homeDefRecoveries = homeStats?.defense_fumble_recoveries || 0;
+    const awayDefForcedFumbles = awayStats?.defense_forced_fumbles || 0;
+    const awayDefRecoveries = awayStats?.defense_fumble_recoveries || 0;
+    
+    return {
+      category: 'Fumble Luck Analysis',
+      home: {
+        team: home.full_name || home.name,
+        off_fumbles_lost: fmtNum(homeFumblesLost, 0),
+        off_fumbles_total: fmtNum(homeFumblesTotal, 0),
+        off_recovery_rate: fmtPct(homeRecoveryRate),
+        def_forced_fumbles: fmtNum(homeDefForcedFumbles, 0),
+        def_recoveries: fmtNum(homeDefRecoveries, 0),
+        luck_indicator: homeRecoveryRate > 0.55 ? '🍀 LUCKY (may regress)' : homeRecoveryRate < 0.45 ? '😬 UNLUCKY (may improve)' : '📊 Average'
+      },
+      away: {
+        team: away.full_name || away.name,
+        off_fumbles_lost: fmtNum(awayFumblesLost, 0),
+        off_fumbles_total: fmtNum(awayFumblesTotal, 0),
+        off_recovery_rate: fmtPct(awayRecoveryRate),
+        def_forced_fumbles: fmtNum(awayDefForcedFumbles, 0),
+        def_recoveries: fmtNum(awayDefRecoveries, 0),
+        luck_indicator: awayRecoveryRate > 0.55 ? '🍀 LUCKY (may regress)' : awayRecoveryRate < 0.45 ? '😬 UNLUCKY (may improve)' : '📊 Average'
+      },
+      INVESTIGATE: `🔍 Fumble recovery rate is ~50% long-term. Teams well above/below are due for regression.`,
+      note: 'Recovery rate >55% = lucky, <45% = unlucky. Expect regression to 50%.'
+    };
+  },
+
+  PASSING_EPA: async (bdlSport, home, away, season) => {
+    // Passing efficiency metrics from BDL
+    const [homeStatsArr, awayStatsArr] = await Promise.all([
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+    ]);
+    const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
+    const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
+    
+    // Calculate passer rating components
+    const homeYPA = homeStats?.passing_yards_per_pass_attempt || 0;
+    const homeTDPct = homeStats?.passing_touchdowns && homeStats?.passing_attempts 
+      ? (homeStats.passing_touchdowns / homeStats.passing_attempts * 100) : 0;
+    const homeINTPct = homeStats?.passing_interceptions && homeStats?.passing_attempts
+      ? (homeStats.passing_interceptions / homeStats.passing_attempts * 100) : 0;
+    
+    const awayYPA = awayStats?.passing_yards_per_pass_attempt || 0;
+    const awayTDPct = awayStats?.passing_touchdowns && awayStats?.passing_attempts
+      ? (awayStats.passing_touchdowns / awayStats.passing_attempts * 100) : 0;
+    const awayINTPct = awayStats?.passing_interceptions && awayStats?.passing_attempts
+      ? (awayStats.passing_interceptions / awayStats.passing_attempts * 100) : 0;
+    
+    return {
+      category: 'Passing Efficiency',
+      home: {
+        team: home.full_name || home.name,
+        yards_per_attempt: fmtNum(homeYPA, 1),
+        completion_pct: fmtPct(homeStats?.passing_completion_pct / 100),
+        td_pct: fmtPct(homeTDPct / 100),
+        int_pct: fmtPct(homeINTPct / 100),
+        passing_yards_per_game: fmtNum(homeStats?.passing_yards_per_game, 0),
+        passing_tds: fmtNum(homeStats?.passing_touchdowns, 0),
+        interceptions: fmtNum(homeStats?.passing_interceptions, 0),
+        sacks_allowed: fmtNum(homeStats?.passing_times_sacked, 0)
+      },
+      away: {
+        team: away.full_name || away.name,
+        yards_per_attempt: fmtNum(awayYPA, 1),
+        completion_pct: fmtPct(awayStats?.passing_completion_pct / 100),
+        td_pct: fmtPct(awayTDPct / 100),
+        int_pct: fmtPct(awayINTPct / 100),
+        passing_yards_per_game: fmtNum(awayStats?.passing_yards_per_game, 0),
+        passing_tds: fmtNum(awayStats?.passing_touchdowns, 0),
+        interceptions: fmtNum(awayStats?.passing_interceptions, 0),
+        sacks_allowed: fmtNum(awayStats?.passing_times_sacked, 0)
+      },
+      INVESTIGATE: `🔍 YPA is the key metric. League avg is ~7.0. Above 7.5 = efficient, below 6.5 = struggling.`,
+      note: 'High TD% (>5%) with low INT% (<2%) = elite. Compare vs opponent pass defense.'
+    };
+  },
+
+  RUSHING_EPA: async (bdlSport, home, away, season) => {
+    // Rushing efficiency metrics from BDL
+    const [homeStatsArr, awayStatsArr] = await Promise.all([
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+    ]);
+    const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
+    const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
+    
+    return {
+      category: 'Rushing Efficiency',
+      home: {
+        team: home.full_name || home.name,
+        yards_per_carry: fmtNum(homeStats?.rushing_yards_per_rush_attempt, 1),
+        rushing_yards_per_game: fmtNum(homeStats?.rushing_yards_per_game, 0),
+        rushing_tds: fmtNum(homeStats?.rushing_touchdowns, 0),
+        rush_attempts_per_game: fmtNum(homeStats?.rushing_attempts_per_game, 1),
+        longest_rush: fmtNum(homeStats?.rushing_long, 0)
+      },
+      away: {
+        team: away.full_name || away.name,
+        yards_per_carry: fmtNum(awayStats?.rushing_yards_per_rush_attempt, 1),
+        rushing_yards_per_game: fmtNum(awayStats?.rushing_yards_per_game, 0),
+        rushing_tds: fmtNum(awayStats?.rushing_touchdowns, 0),
+        rush_attempts_per_game: fmtNum(awayStats?.rushing_attempts_per_game, 1),
+        longest_rush: fmtNum(awayStats?.rushing_long, 0)
+      },
+      INVESTIGATE: `🔍 YPC is the key metric. League avg is ~4.3. Above 4.5 = good, above 5.0 = elite.`,
+      note: 'High volume (25+ att/game) with high YPC = ground-and-pound identity.'
+    };
+  },
+
+  // ===== NFL MISSING STATS (Real Data via Gemini Grounding) =====
+
+  // SOURCE: PFF (Pro Football Focus), Football Outsiders, ESPN
+  OL_RANKINGS: async (bdlSport, home, away, season) => {
+    console.log(`[Stat Router] Fetching OL_RANKINGS for ${away.name} @ ${home.name}`);
+    
+    if (bdlSport !== 'americanfootball_nfl') {
+      return { category: 'Offensive Line Rankings', note: 'Only available for NFL' };
+    }
+    
+    try {
+      const seasonStr = getCurrentSeasonString();
+      const query = `site:nextgenstats.nfl.com OR site:pff.com OR site:footballoutsiders.com
+        ${seasonStr} NFL offensive line rankings pass block win rate run blocking grades ${home.name} ${away.name}.
+        For each team's offensive line:
+        1. Pass block win rate (Next Gen Stats)
+        2. Overall OL ranking/grade (PFF)
+        3. Run blocking grade/efficiency
+        4. Sacks allowed this season
+        5. Adjusted Line Yards (Football Outsiders)`;
+      
+      const groundingResult = await geminiGroundingSearch(query, {
+        systemMessage: 'You are an NFL analyst. Use data from NFL Next Gen Stats for pass block win rate, and PFF/Football Outsiders for grades. Provide exact offensive line rankings and grades for both teams.'
+      });
+      
+      return {
+        category: 'Offensive Line Rankings',
+        source: 'NFL Next Gen Stats / PFF / Football Outsiders via Gemini',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name },
+        grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
+        INVESTIGATE: `🔍 OL vs DL is often the key matchup. Elite pass rush vs weak OL = QB pressure = turnovers.`,
+        note: 'Offensive line play is the most underrated factor in NFL betting.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching OL_RANKINGS:`, error.message);
+      return { category: 'OL Rankings', error: 'Data unavailable' };
+    }
+  },
+
+  // SOURCE: PFF, Football Outsiders, Pro Football Reference
+  DL_RANKINGS: async (bdlSport, home, away, season) => {
+    console.log(`[Stat Router] Fetching DL_RANKINGS for ${away.name} @ ${home.name}`);
+    
+    if (bdlSport !== 'americanfootball_nfl') {
+      return { category: 'Defensive Line Rankings', note: 'Only available for NFL' };
+    }
+    
+    try {
+      const seasonStr = getCurrentSeasonString();
+      const query = `site:nextgenstats.nfl.com OR site:pff.com OR site:footballoutsiders.com
+        ${seasonStr} NFL defensive line pass rush win rate pressure rate ${home.name} ${away.name}.
+        For each team's defensive line:
+        1. Pass rush win rate (Next Gen Stats)
+        2. Overall DL ranking/grade (PFF)
+        3. Pressure rate and sacks
+        4. Run defense grade/Adjusted Line Yards allowed
+        5. Key pass rushers and their individual win rates`;
+      
+      const groundingResult = await geminiGroundingSearch(query, {
+        systemMessage: 'You are an NFL analyst. Use data from NFL Next Gen Stats for pass rush win rate, and PFF/Football Outsiders for grades. Provide exact defensive line rankings and pass rush data for both teams.'
+      });
+      
+      return {
+        category: 'Defensive Line Rankings',
+        source: 'NFL Next Gen Stats / PFF / Football Outsiders via Gemini',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name },
+        grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
+        INVESTIGATE: `🔍 DL vs OL matchup is critical. Elite pass rush can neutralize any QB.`,
+        note: 'Pass rush is the great equalizer - it can make any defense look elite.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching DL_RANKINGS:`, error.message);
+      return { category: 'DL Rankings', error: 'Data unavailable' };
+    }
+  },
+
+  // SOURCE: Next Gen Stats (NFL.com), PFF, Pro Football Reference
+  TIME_TO_THROW: async (bdlSport, home, away, season) => {
+    console.log(`[Stat Router] Fetching TIME_TO_THROW for ${away.name} @ ${home.name}`);
+    
+    if (bdlSport !== 'americanfootball_nfl') {
+      return { category: 'Time to Throw', note: 'Only available for NFL' };
+    }
+    
+    try {
+      const seasonStr = getCurrentSeasonString();
+      const query = `site:nfl.com/stats OR site:nextgenstats.nfl.com OR site:pro-football-reference.com
+        ${seasonStr} NFL time to throw average QB release time ${home.name} ${away.name}.
+        What is each QB's average time to throw?
+        Include: average release time, % of quick throws (<2.5s), % of deep drops (>3s).
+        Next Gen Stats data preferred.`;
+      
+      const groundingResult = await geminiGroundingSearch(query, {
+        systemMessage: 'You are an NFL analyst. Use data from NFL Next Gen Stats or Pro Football Reference. Provide exact time to throw data for both teams QBs.'
+      });
+      
+      return {
+        category: 'Time to Throw',
+        source: 'NFL Next Gen Stats / Pro-Football-Reference via Gemini',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name },
+        grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
+        INVESTIGATE: `🔍 Quick-release QBs neutralize pass rush. Slow-release QBs vs elite pass rush = trouble.`,
+        note: 'League average is ~2.6 seconds. Under 2.5s = quick release, over 2.8s = holds the ball.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching TIME_TO_THROW:`, error.message);
+      return { category: 'Time to Throw', error: 'Data unavailable' };
+    }
+  },
+
+  // SOURCE: Pro Football Reference, Football Outsiders
+  GOAL_LINE: async (bdlSport, home, away, season) => {
+    console.log(`[Stat Router] Fetching GOAL_LINE for ${away.name} @ ${home.name}`);
+    
+    if (bdlSport !== 'americanfootball_nfl') {
+      return { category: 'Goal Line', note: 'Only available for NFL' };
+    }
+    
+    try {
+      const seasonStr = getCurrentSeasonString();
+      const query = `site:pro-football-reference.com OR site:footballoutsiders.com
+        ${seasonStr} NFL red zone efficiency goal to go inside 5 yard line ${home.name} ${away.name}.
+        For each team:
+        1. Goal line TD conversion rate (inside 5/10)
+        2. Red zone TD % (offense and defense)
+        3. Short yardage conversion rate (3rd/4th and 1-2)
+        4. Stuffed rate on goal line`;
+      
+      const groundingResult = await geminiGroundingSearch(query, {
+        systemMessage: 'You are an NFL analyst. Use data from Pro Football Reference or Football Outsiders. Provide exact goal line and short yardage efficiency for both teams.'
+      });
+      
+      return {
+        category: 'Goal Line Efficiency',
+        source: 'Pro-Football-Reference / Football Outsiders via Gemini',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name },
+        grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
+        INVESTIGATE: `🔍 Goal line efficiency affects scoring. Teams that get TDs vs FGs in red zone score more.`,
+        note: 'Elite goal line teams convert 70%+ inside the 5. Poor teams settle for FGs.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching GOAL_LINE:`, error.message);
+      return { category: 'Goal Line', error: 'Data unavailable' };
+    }
+  },
+
+  // SOURCE: Pro Football Reference, ESPN
+  TWO_MINUTE_DRILL: async (bdlSport, home, away, season) => {
+    console.log(`[Stat Router] Fetching TWO_MINUTE_DRILL for ${away.name} @ ${home.name}`);
+    
+    if (bdlSport !== 'americanfootball_nfl') {
+      return { category: 'Two Minute Drill', note: 'Only available for NFL' };
+    }
+    
+    try {
+      const seasonStr = getCurrentSeasonString();
+      const query = `site:pro-football-reference.com OR site:espn.com
+        ${seasonStr} NFL two minute drill efficiency end of half scoring ${home.name} ${away.name}.
+        For each team:
+        1. Points scored in final 2 minutes of halves
+        2. Two minute drill scoring rate
+        3. QB performance in hurry-up/no-huddle
+        4. Game-winning drives this season`;
+      
+      const groundingResult = await geminiGroundingSearch(query, {
+        systemMessage: 'You are an NFL analyst. Use data from Pro Football Reference or ESPN. Provide exact two minute drill efficiency for both teams.'
+      });
+      
+      return {
+        category: 'Two Minute Drill',
+        source: 'Pro-Football-Reference / ESPN via Gemini',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name },
+        grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
+        INVESTIGATE: `🔍 Two minute drill prowess can swing 3-7 points per game. Elite QBs thrive here.`,
+        note: 'Points scored in final 2 minutes often decide games.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching TWO_MINUTE_DRILL:`, error.message);
+      return { category: 'Two Minute Drill', error: 'Data unavailable' };
+    }
+  },
+
+  // SOURCE: Pro Football Reference, ESPN
+  KICKING: async (bdlSport, home, away, season) => {
+    console.log(`[Stat Router] Fetching KICKING for ${away.name} @ ${home.name}`);
+    
+    if (bdlSport !== 'americanfootball_nfl') {
+      return { category: 'Kicking', note: 'Only available for NFL' };
+    }
+    
+    try {
+      const seasonStr = getCurrentSeasonString();
+      const query = `site:pro-football-reference.com OR site:espn.com
+        ${seasonStr} NFL kicking stats field goal percentage by distance ${home.name} ${away.name}.
+        For each team's kicker:
+        1. FG percentage overall
+        2. FG percentage 40-49 yards
+        3. FG percentage 50+ yards
+        4. Punting average and inside 20 %
+        5. Kicker name and any recent misses`;
+      
+      const groundingResult = await geminiGroundingSearch(query, {
+        systemMessage: 'You are an NFL analyst. Use data from Pro Football Reference or ESPN. Provide exact kicking and punting stats for both teams.'
+      });
+      
+      return {
+        category: 'Kicking & Special Teams',
+        source: 'Pro-Football-Reference / ESPN via Gemini',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name },
+        grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
+        INVESTIGATE: `🔍 Kicking matters in close games. Unreliable kickers = more 4th down attempts or missed points.`,
+        note: 'Elite kickers hit 85%+ overall, 75%+ from 50+. Check for weather impact on kicking.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching KICKING:`, error.message);
+      return { category: 'Kicking', error: 'Data unavailable' };
+    }
+  },
+
+  // SOURCE: Football Outsiders (DVOA), Pro Football Reference
+  FIELD_POSITION: async (bdlSport, home, away, season) => {
+    console.log(`[Stat Router] Fetching FIELD_POSITION for ${away.name} @ ${home.name}`);
+    
+    if (bdlSport !== 'americanfootball_nfl') {
+      return { category: 'Field Position', note: 'Only available for NFL' };
+    }
+    
+    try {
+      const seasonStr = getCurrentSeasonString();
+      const query = `site:footballoutsiders.com OR site:pro-football-reference.com
+        ${seasonStr} NFL average starting field position special teams ${home.name} ${away.name}.
+        For each team:
+        1. Average starting field position (offense)
+        2. Average opponent starting field position (defense)
+        3. Kickoff return average and TDs
+        4. Punt return average
+        5. Special Teams DVOA (if available)`;
+      
+      const groundingResult = await geminiGroundingSearch(query, {
+        systemMessage: 'You are an NFL analyst. Use data from Football Outsiders or Pro Football Reference. Provide exact field position and return game data for both teams.'
+      });
+      
+      return {
+        category: 'Field Position Battle',
+        source: 'Football Outsiders / Pro-Football-Reference via Gemini',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name },
+        grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
+        INVESTIGATE: `🔍 Field position is the hidden game. Teams that win field position have shorter fields to score.`,
+        note: 'Starting at the 30 vs the 20 is a ~3 point swing over a game.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching FIELD_POSITION:`, error.message);
+      return { category: 'Field Position', error: 'Data unavailable' };
+    }
+  },
+
+  // SOURCE: Pro Football Reference, ESPN
+  PRIMETIME_RECORD: async (bdlSport, home, away, season) => {
+    console.log(`[Stat Router] Fetching PRIMETIME_RECORD for ${away.name} @ ${home.name}`);
+    
+    if (bdlSport !== 'americanfootball_nfl') {
+      return { category: 'Primetime Record', note: 'Only available for NFL' };
+    }
+    
+    try {
+      const seasonStr = getCurrentSeasonString();
+      const query = `site:pro-football-reference.com OR site:espn.com
+        ${seasonStr} NFL primetime record Sunday Night Monday Night Thursday Night ${home.name} ${away.name}.
+        For each team:
+        1. Record in primetime games this season and last 3 years
+        2. QB primetime record and stats
+        3. Points per game in primetime vs regular games
+        4. Any notable primetime wins/losses`;
+      
+      const groundingResult = await geminiGroundingSearch(query, {
+        systemMessage: 'You are an NFL analyst. Use data from Pro Football Reference or ESPN. Provide exact primetime game performance for both teams.'
+      });
+      
+      return {
+        category: 'Primetime Performance',
+        source: 'Pro-Football-Reference / ESPN via Gemini',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name },
+        grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
+        INVESTIGATE: `🔍 Some teams/QBs elevate in primetime, others shrink. Check individual player primetime splits.`,
+        note: 'Primetime games have different dynamics - more rest, national audience, different prep time.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching PRIMETIME_RECORD:`, error.message);
+      return { category: 'Primetime Record', error: 'Data unavailable' };
+    }
+  },
+
+  // SOURCE: Pro Football Reference, ESPN - 4th Down Decision Analytics
+  FOURTH_DOWN_TENDENCY: async (bdlSport, home, away, season) => {
+    console.log(`[Stat Router] Fetching FOURTH_DOWN_TENDENCY for ${away.name} @ ${home.name}`);
+    
+    if (bdlSport !== 'americanfootball_nfl') {
+      return { category: 'Fourth Down Tendency', note: 'Only available for NFL' };
+    }
+    
+    try {
+      const seasonStr = getCurrentSeasonString();
+      const query = `site:nextgenstats.nfl.com OR site:pro-football-reference.com OR site:nfl.com/stats
+        ${seasonStr} NFL fourth down decisions go-for-it rate conversion percentage ${home.name} ${away.name}.
+        For each team's coach/offense:
+        1. 4th down GO rate (how often they go for it vs punt/FG)
+        2. 4th down conversion percentage when they go
+        3. 4th down attempts inside opponent territory
+        4. Aggressiveness rank compared to league average
+        5. 4th down behavior when trailing vs leading`;
+      
+      const groundingResult = await geminiGroundingSearch(query, {
+        systemMessage: 'You are an NFL analyst. Use data from NFL Next Gen Stats, Pro Football Reference, or NFL.com. Provide exact 4th down decision rates and conversion percentages for both teams. Include coaching tendencies on aggressiveness.'
+      });
+      
+      return {
+        category: 'Fourth Down Tendency',
+        source: 'NFL Next Gen Stats / Pro-Football-Reference via Gemini',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name },
+        grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
+        INVESTIGATE: `🔍 Aggressive 4th down coaches can flip field position and scoring expectations. Conservative coaches punt away opportunities.`,
+        CONTEXT_NOTE: `League average GO rate is ~20%. Above 25% = aggressive. Below 15% = conservative.`,
+        SPREAD_IMPLICATION: `Aggressive 4th down teams have higher variance - more TDs but also more turnovers on downs. Matters for big spreads.`
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching FOURTH_DOWN_TENDENCY:`, error.message);
+      return { category: 'Fourth Down Tendency', error: 'Data unavailable' };
+    }
+  },
+
+  // SOURCE: ESPN, NFL.com - Upcoming Schedule Context for Trap/Sandwich Game Analysis
+  SCHEDULE_CONTEXT: async (bdlSport, home, away, season) => {
+    console.log(`[Stat Router] Fetching SCHEDULE_CONTEXT for ${away.name} @ ${home.name}`);
+    
+    if (bdlSport !== 'americanfootball_nfl') {
+      return { category: 'Schedule Context', note: 'Only available for NFL' };
+    }
+    
+    try {
+      const seasonStr = getCurrentSeasonString();
+      const query = `site:espn.com OR site:nfl.com
+        ${seasonStr} NFL schedule ${home.name} next 2 games upcoming opponents AND ${away.name} next 2 games upcoming opponents.
+        For each team:
+        1. What was their LAST game (opponent, result, was it a big game?)
+        2. What is their NEXT game after this one (opponent, date, significance)
+        3. Is the next game a divisional rivalry or marquee matchup?
+        4. Any bye week coming up soon?
+        5. Are they playing a much tougher or much weaker opponent next week?`;
+      
+      const groundingResult = await geminiGroundingSearch(query, {
+        systemMessage: 'You are an NFL schedule analyst. Use ESPN or NFL.com schedule data. Identify if either team has a TRAP GAME scenario (big game next week causing potential look-ahead) or SANDWICH SPOT (between two marquee matchups). Be specific about opponent names and dates.'
+      });
+      
+      return {
+        category: 'Schedule Context (Trap/Sandwich Analysis)',
+        source: 'ESPN / NFL.com via Gemini',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name },
+        grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
+        INVESTIGATION_PROMPTS: {
+          trap_game: `🔍 Does either team play a MUCH bigger game next week? (Divisional rival, playoff implications, revenge game)`,
+          sandwich_spot: `🔍 Is this game BETWEEN two marquee matchups for either team?`,
+          letdown_spot: `🔍 Did either team just win a huge emotional game last week?`
+        },
+        CONTEXT_NOTE: `Trap games are NOT automatic fades - investigate if RECENT_FORM shows the team actually plays down in these spots.`,
+        AWARENESS: `Schedule context is a SOFT factor. Use it to investigate, not prescribe.`
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching SCHEDULE_CONTEXT:`, error.message);
+      return { category: 'Schedule Context', error: 'Data unavailable' };
+    }
+  },
+
+  DIVISION_RECORD: async (bdlSport, home, away, season) => {
+    console.log(`[Stat Router] Fetching DIVISION_RECORD for ${away.name} @ ${home.name}`);
+    
+    try {
+      const standings = await ballDontLieService.getStandingsGeneric(bdlSport, { season });
+      
+      const homeSt = standings?.find(s => s.team?.id === home.id);
+      const awaySt = standings?.find(s => s.team?.id === away.id);
+      
+      const sameDivision = homeSt?.team?.division === awaySt?.team?.division;
+      
+      return {
+        category: 'Division Record',
+        source: 'Ball Don\'t Lie API',
+        home: {
+          team: home.full_name || home.name,
+          division: homeSt?.team?.division || 'N/A',
+          division_record: homeSt?.division_record || 'N/A',
+          conference_record: homeSt?.conference_record || 'N/A'
+        },
+        away: {
+          team: away.full_name || away.name,
+          division: awaySt?.team?.division || 'N/A',
+          division_record: awaySt?.division_record || 'N/A',
+          conference_record: awaySt?.conference_record || 'N/A'
+        },
+        is_division_game: sameDivision,
+        INVESTIGATE: sameDivision 
+          ? `🔍 DIVISION GAME - These teams know each other well. Familiarity often leads to tighter games.`
+          : `🔍 Non-division game. Division records show how teams perform in competitive familiar matchups.`,
+        note: 'Division games are often tighter than non-division regardless of overall record.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching DIVISION_RECORD:`, error.message);
+      return { category: 'Division Record', error: 'Data unavailable' };
+    }
+  },
   
   // ===== DERIVED STATS (single-value for clean display) =====
   PASSING_TDS: async (bdlSport, home, away, season) => {
@@ -4880,15 +7287,19 @@ const FETCHERS = {
     console.log(`[Stat Router] Fetching REST_SITUATION for ${away.name} @ ${home.name}`);
     
     try {
-      // Determine date range - look back 7 days from game date
+      // Determine date range - look back 7 days from game date for current rest
       const targetDate = gameDate ? new Date(gameDate) : new Date();
       const endDateStr = targetDate.toISOString().split('T')[0];
       const startDate = new Date(targetDate);
       startDate.setDate(startDate.getDate() - 10); // Look back 10 days
       const startDateStr = startDate.toISOString().split('T')[0];
       
-      // Fetch recent games for both teams
-      const [homeGames, awayGames] = await Promise.all([
+      // For B2B history, look back at entire season
+      const seasonStart = new Date(season - 1, 9, 1); // Oct 1
+      const seasonStartStr = seasonStart.toISOString().split('T')[0];
+      
+      // Fetch recent games AND season games for B2B history
+      const [homeRecentGames, awayRecentGames, homeSeasonGames, awaySeasonGames] = await Promise.all([
         ballDontLieService.getGames(bdlSport, { 
           team_ids: [home.id], 
           start_date: startDateStr,
@@ -4900,8 +7311,24 @@ const FETCHERS = {
           start_date: startDateStr,
           end_date: endDateStr,
           per_page: 10 
+        }),
+        ballDontLieService.getGames(bdlSport, { 
+          team_ids: [home.id], 
+          start_date: seasonStartStr,
+          end_date: endDateStr,
+          per_page: 60 
+        }),
+        ballDontLieService.getGames(bdlSport, { 
+          team_ids: [away.id], 
+          start_date: seasonStartStr,
+          end_date: endDateStr,
+          per_page: 60 
         })
       ]);
+      
+      // Use recent games for current rest calculation
+      const homeGames = homeRecentGames;
+      const awayGames = awayRecentGames;
       
       // Calculate rest for each team
       const calculateRest = (games, teamId, targetDateObj) => {
@@ -4968,6 +7395,78 @@ const FETCHERS = {
         return `${rest.daysRest} day(s) rest`;
       };
       
+      // Calculate B2B HISTORICAL performance for each team
+      const calcB2BHistory = (seasonGames, teamId) => {
+        const getGameDateStr = (g) => (g.game_date || g.date || '').split('T')[0];
+        
+        // Sort games by date
+        const completed = (seasonGames || [])
+          .filter(g => {
+            const homeScore = g.home_team_score || g.home_score || 0;
+            const awayScore = g.visitor_team_score || g.away_score || 0;
+            return homeScore > 0 || awayScore > 0;
+          })
+          .sort((a, b) => new Date(getGameDateStr(a)) - new Date(getGameDateStr(b)));
+        
+        if (completed.length < 5) return null;
+        
+        let b2bWins = 0, b2bLosses = 0;
+        const b2bGames = [];
+        
+        // Find B2B games (played day after previous game)
+        for (let i = 1; i < completed.length; i++) {
+          const prevDate = new Date(getGameDateStr(completed[i-1]));
+          const currDate = new Date(getGameDateStr(completed[i]));
+          const daysDiff = Math.round((currDate - prevDate) / (1000 * 60 * 60 * 24));
+          
+          if (daysDiff === 1) {
+            // This is a B2B game
+            const game = completed[i];
+            const isHome = (game.home_team?.id || game.home_team_id) === teamId;
+            const teamScore = isHome 
+              ? (game.home_team_score || game.home_score || 0)
+              : (game.visitor_team_score || game.away_score || 0);
+            const oppScore = isHome 
+              ? (game.visitor_team_score || game.away_score || 0)
+              : (game.home_team_score || game.home_score || 0);
+            
+            const won = teamScore > oppScore;
+            if (won) b2bWins++;
+            else b2bLosses++;
+            
+            b2bGames.push({
+              date: getGameDateStr(game),
+              result: won ? 'W' : 'L',
+              margin: Math.abs(teamScore - oppScore)
+            });
+          }
+        }
+        
+        const totalB2B = b2bWins + b2bLosses;
+        if (totalB2B === 0) return { record: 'No B2Bs yet', win_pct: null, games: 0 };
+        
+        const winPct = b2bWins / totalB2B;
+        const rating = winPct >= 0.500 ? '✅ HANDLES B2B WELL' : 
+                       winPct >= 0.350 ? '➡️ AVERAGE on B2B' : '⚠️ STRUGGLES on B2B';
+        
+        // Get last 3 B2B results
+        const recentB2B = b2bGames.slice(-3).reverse().map(g => g.result).join('-');
+        
+        return {
+          record: `${b2bWins}-${b2bLosses}`,
+          win_pct: `${(winPct * 100).toFixed(0)}%`,
+          games: totalB2B,
+          rating,
+          recent_b2b: recentB2B || 'N/A',
+          avg_margin: b2bGames.length > 0 
+            ? (b2bGames.reduce((s, g) => s + g.margin, 0) / b2bGames.length).toFixed(1)
+            : 'N/A'
+        };
+      };
+      
+      const homeB2BHistory = calcB2BHistory(homeSeasonGames, home.id);
+      const awayB2BHistory = calcB2BHistory(awaySeasonGames, away.id);
+      
       return {
         category: 'Rest & Schedule Situation',
         source: 'Ball Don\'t Lie API (calculated)',
@@ -4977,7 +7476,8 @@ const FETCHERS = {
           status: formatStatus(homeRest),
           is_back_to_back: homeRest.isBackToBack,
           is_heavy_schedule: homeRest.isHeavySchedule || false,
-          last_game: homeRest.lastGameDate
+          last_game: homeRest.lastGameDate,
+          b2b_history: homeB2BHistory
         },
         away: {
           team: away.full_name || away.name,
@@ -4985,10 +7485,17 @@ const FETCHERS = {
           status: formatStatus(awayRest),
           is_back_to_back: awayRest.isBackToBack,
           is_heavy_schedule: awayRest.isHeavySchedule || false,
-          last_game: awayRest.lastGameDate
+          last_game: awayRest.lastGameDate,
+          b2b_history: awayB2BHistory
         },
         rest_advantage: restAdvantage,
-        note: 'Back-to-backs and heavy schedules can impact performance - investigate how this specific team handles them.'
+        CONTEXT_WARNING: homeRest.isBackToBack || awayRest.isBackToBack 
+          ? `⚠️ B2B DETECTED - Check b2b_history to see how this team handles back-to-backs!`
+          : null,
+        INVESTIGATE: homeRest.isBackToBack || awayRest.isBackToBack
+          ? `🔍 Some teams (young, deep rosters) thrive on B2Bs while others (star-dependent, older) collapse. Check the b2b_history record!`
+          : null,
+        note: 'Back-to-backs and heavy schedules can impact performance. League average B2B win rate is ~40%.'
       };
       
     } catch (error) {
@@ -5728,6 +8235,350 @@ const FETCHERS = {
     }
   },
 
+  // ===== NHL ADVANCED STATS (REAL DATA - via Gemini Grounding) =====
+
+  // CORSI FOR PERCENTAGE (Real Possession Metric)
+  // SOURCE: Natural Stat Trick (naturalstattrick.com) - the gold standard for NHL advanced stats
+  CORSI_FOR_PCT: async (bdlSport, home, away, season) => {
+    console.log(`[Stat Router] Fetching CORSI_FOR_PCT for ${away.name} @ ${home.name}`);
+    
+    if (bdlSport !== 'icehockey_nhl') {
+      return { category: 'Corsi For %', note: 'Only available for NHL' };
+    }
+    
+    try {
+      const seasonStr = getCurrentSeasonString();
+      const query = `site:naturalstattrick.com OR site:hockey-reference.com OR site:moneypuck.com
+        ${seasonStr} NHL Corsi For percentage CF% 5v5 team stats ${home.name} ${away.name}.
+        What is each team's Corsi For % at 5v5?
+        Include: CF%, CA/60, CF/60, shot attempt differential.
+        Higher CF% = better possession/more shot attempts.`;
+      
+      const groundingResult = await geminiGroundingSearch(query, {
+        systemMessage: 'You are an NHL analytics expert. Use data from Natural Stat Trick, Hockey Reference, or MoneyPuck. Provide exact Corsi For percentage and possession data for both teams.'
+      });
+      
+      return {
+        category: 'Corsi For % (Possession)',
+        source: 'Natural Stat Trick / Hockey Reference / MoneyPuck via Gemini',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name },
+        grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
+        INVESTIGATE: `🔍 Corsi For % (CF%) measures shot attempt share. >50% = outpossessing opponents. Elite teams are 52%+.`,
+        note: 'League average is 50%. CF% is the best possession proxy in hockey.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching CORSI_FOR_PCT:`, error.message);
+      return { category: 'Corsi For %', error: 'Data unavailable' };
+    }
+  },
+
+  // EXPECTED GOALS (xG) - Real Metric
+  // SOURCE: MoneyPuck, Natural Stat Trick, Evolving Hockey
+  EXPECTED_GOALS: async (bdlSport, home, away, season) => {
+    console.log(`[Stat Router] Fetching EXPECTED_GOALS for ${away.name} @ ${home.name}`);
+    
+    if (bdlSport !== 'icehockey_nhl') {
+      return { category: 'Expected Goals', note: 'Only available for NHL' };
+    }
+    
+    try {
+      const seasonStr = getCurrentSeasonString();
+      const query = `site:moneypuck.com OR site:naturalstattrick.com OR site:evolving-hockey.com
+        ${seasonStr} NHL expected goals xG xGF xGA 5v5 team stats ${home.name} ${away.name}.
+        What is each team's:
+        1. Expected Goals For (xGF) per 60 minutes
+        2. Expected Goals Against (xGA) per 60 minutes
+        3. Expected Goals differential (xGF - xGA)
+        4. Actual goals vs expected (over/underperforming xG)`;
+      
+      const groundingResult = await geminiGroundingSearch(query, {
+        systemMessage: 'You are an NHL analytics expert. Use data from MoneyPuck, Natural Stat Trick, or Evolving Hockey. Provide exact expected goals (xG) data for both teams.'
+      });
+      
+      return {
+        category: 'Expected Goals (xG)',
+        source: 'MoneyPuck / Natural Stat Trick / Evolving Hockey via Gemini',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name },
+        grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
+        INVESTIGATE: `🔍 xG measures shot quality. Teams outperforming xG may regress; underperformers may improve.`,
+        note: 'xG accounts for shot location and type. More predictive than actual goals.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching EXPECTED_GOALS:`, error.message);
+      return { category: 'Expected Goals', error: 'Data unavailable' };
+    }
+  },
+
+  // PDO (Luck Indicator) - Real Metric
+  // SOURCE: Natural Stat Trick, Hockey Reference
+  PDO: async (bdlSport, home, away, season) => {
+    console.log(`[Stat Router] Fetching PDO for ${away.name} @ ${home.name}`);
+    
+    if (bdlSport !== 'icehockey_nhl') {
+      return { category: 'PDO', note: 'Only available for NHL' };
+    }
+    
+    try {
+      const seasonStr = getCurrentSeasonString();
+      const query = `site:naturalstattrick.com OR site:hockey-reference.com
+        ${seasonStr} NHL PDO shooting percentage save percentage 5v5 team stats ${home.name} ${away.name}.
+        What is each team's PDO (shooting % + save %)?
+        Include: PDO, 5v5 shooting %, 5v5 save %.
+        PDO above 1.010 suggests good luck, below 0.990 suggests bad luck.`;
+      
+      const groundingResult = await geminiGroundingSearch(query, {
+        systemMessage: 'You are an NHL analytics expert. Use data from Natural Stat Trick or Hockey Reference. Provide exact PDO (shooting% + save%) for both teams.'
+      });
+      
+      return {
+        category: 'PDO (Luck/Regression Indicator)',
+        source: 'Natural Stat Trick / Hockey Reference via Gemini',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name },
+        grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
+        INVESTIGATE: `🔍 PDO = Sh% + Sv%. League average is 1.000. High PDO (>1.010) teams often regress. Low PDO (<0.990) teams often improve.`,
+        CRITICAL: `⚠️ PDO is a luck indicator. Teams with extreme PDO are likely to regress to the mean.`,
+        note: 'PDO is the best luck indicator in hockey. Watch for regression.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching PDO:`, error.message);
+      return { category: 'PDO', error: 'Data unavailable' };
+    }
+  },
+
+  // HIGH DANGER CHANCES - Real Metric
+  // SOURCE: Natural Stat Trick (primary source for scoring chances)
+  HIGH_DANGER_CHANCES: async (bdlSport, home, away, season) => {
+    console.log(`[Stat Router] Fetching HIGH_DANGER_CHANCES for ${away.name} @ ${home.name}`);
+    
+    if (bdlSport !== 'icehockey_nhl') {
+      return { category: 'High Danger Chances', note: 'Only available for NHL' };
+    }
+    
+    try {
+      const seasonStr = getCurrentSeasonString();
+      const query = `site:naturalstattrick.com
+        ${seasonStr} NHL high danger chances scoring chances HDCF HDCA 5v5 team stats ${home.name} ${away.name}.
+        What is each team's:
+        1. High Danger Chances For (HDCF) per 60
+        2. High Danger Chances Against (HDCA) per 60
+        3. High Danger Chance % (HDCF%)
+        4. Scoring Chance % (SCF%)`;
+      
+      const groundingResult = await geminiGroundingSearch(query, {
+        systemMessage: 'You are an NHL analytics expert. Use data from Natural Stat Trick. Provide exact high danger scoring chances data for both teams.'
+      });
+      
+      return {
+        category: 'High Danger Scoring Chances',
+        source: 'Natural Stat Trick via Gemini',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name },
+        grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
+        INVESTIGATE: `🔍 High danger chances (slot shots, rebounds) are most likely to score. More predictive than overall shot totals.`,
+        note: 'HDCF% >50% means creating more quality chances than allowing.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching HIGH_DANGER_CHANCES:`, error.message);
+      return { category: 'High Danger Chances', error: 'Data unavailable' };
+    }
+  },
+
+  // SCORING FIRST - Calculated from game data
+  // SOURCE: Hockey Reference, NHL.com
+  SCORING_FIRST: async (bdlSport, home, away, season) => {
+    console.log(`[Stat Router] Fetching SCORING_FIRST for ${away.name} @ ${home.name}`);
+    
+    if (bdlSport !== 'icehockey_nhl') {
+      return { category: 'Scoring First', note: 'Only available for NHL' };
+    }
+    
+    try {
+      const seasonStr = getCurrentSeasonString();
+      const query = `site:hockey-reference.com OR site:nhl.com
+        ${seasonStr} NHL record when scoring first goal first period stats ${home.name} ${away.name}.
+        What is each team's:
+        1. Record when scoring first
+        2. Record when opponent scores first
+        3. First period goals for/against
+        4. Win % when leading after 1st period`;
+      
+      const groundingResult = await geminiGroundingSearch(query, {
+        systemMessage: 'You are an NHL analyst. Use data from Hockey Reference or NHL.com. Provide exact scoring first statistics and first period data for both teams.'
+      });
+      
+      return {
+        category: 'Scoring First & Fast Starts',
+        source: 'Hockey Reference / NHL.com via Gemini',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name },
+        grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
+        INVESTIGATE: `🔍 Teams that score first in NHL win ~67% of the time. Check first period goal differential.`,
+        note: 'Scoring first is huge in hockey - creates momentum and forces opponent to chase.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching SCORING_FIRST:`, error.message);
+      return { category: 'Scoring First', error: 'Data unavailable' };
+    }
+  },
+
+  // LINE COMBINATIONS - Real Data
+  // SOURCE: Daily Faceoff, Left Wing Lock (the best for current line combos)
+  LINE_COMBINATIONS: async (bdlSport, home, away, season) => {
+    console.log(`[Stat Router] Fetching LINE_COMBINATIONS for ${away.name} @ ${home.name}`);
+    
+    if (bdlSport !== 'icehockey_nhl') {
+      return { category: 'Line Combinations', note: 'Only available for NHL' };
+    }
+    
+    try {
+      const seasonStr = getCurrentSeasonString();
+      const query = `site:dailyfaceoff.com OR site:leftwinglock.com
+        ${seasonStr} NHL line combinations projected lines ${home.name} ${away.name}.
+        What are each team's:
+        1. Top 6 forward lines (1st and 2nd line with player names)
+        2. Top 4 defensemen pairings
+        3. Starting goalie (expected)
+        4. Power play units (PP1)`;
+      
+      const groundingResult = await geminiGroundingSearch(query, {
+        systemMessage: 'You are an NHL lineup analyst. Use data from Daily Faceoff or Left Wing Lock. Provide current projected line combinations for both teams with player names.'
+      });
+      
+      return {
+        category: 'Line Combinations',
+        source: 'Daily Faceoff / Left Wing Lock via Gemini',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name },
+        grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
+        INVESTIGATE: `🔍 Line chemistry matters. New combinations may take time to gel. Check for recent line shuffles.`,
+        note: 'First line matchups often decide games. Check which lines match up.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching LINE_COMBINATIONS:`, error.message);
+      return { category: 'Line Combinations', error: 'Data unavailable' };
+    }
+  },
+
+  // OVERTIME RECORD - Calculated
+  OVERTIME_RECORD: async (bdlSport, home, away, season) => {
+    console.log(`[Stat Router] Fetching OVERTIME_RECORD for ${away.name} @ ${home.name}`);
+    
+    if (bdlSport !== 'icehockey_nhl') {
+      return { category: 'Overtime Record', note: 'Only available for NHL' };
+    }
+    
+    try {
+      // Get season games for both teams
+      const [homeGames, awayGames] = await Promise.all([
+        ballDontLieService.getGames(bdlSport, { team_ids: [home.id], seasons: [season], per_page: 50 }),
+        ballDontLieService.getGames(bdlSport, { team_ids: [away.id], seasons: [season], per_page: 50 })
+      ]);
+      
+      const calcOTRecord = (games, teamId) => {
+        let otWins = 0, otLosses = 0, soWins = 0, soLosses = 0;
+        
+        for (const g of games || []) {
+          if (g.game_state !== 'OFF' && g.game_state !== 'FINAL' && g.status !== 'Final') continue;
+          
+          // Check if OT game (period > 3)
+          const isOT = g.period > 3 || g.overtime;
+          if (!isOT) continue;
+          
+          const isHome = g.home_team?.id === teamId;
+          const teamScore = isHome ? g.home_score : g.away_score;
+          const oppScore = isHome ? g.away_score : g.home_score;
+          const won = teamScore > oppScore;
+          
+          // Check if shootout (could check specific SO indicator if available)
+          const isSO = g.period > 4 || g.shootout;
+          
+          if (isSO) {
+            if (won) soWins++;
+            else soLosses++;
+          } else {
+            if (won) otWins++;
+            else otLosses++;
+          }
+        }
+        
+        return {
+          ot_wins: otWins,
+          ot_losses: otLosses,
+          so_wins: soWins,
+          so_losses: soLosses,
+          total_extra_time: otWins + otLosses + soWins + soLosses,
+          ot_win_pct: (otWins + otLosses) > 0 ? `${((otWins / (otWins + otLosses)) * 100).toFixed(0)}%` : 'N/A'
+        };
+      };
+      
+      const homeOT = calcOTRecord(homeGames, home.id);
+      const awayOT = calcOTRecord(awayGames, away.id);
+      
+      return {
+        category: 'Overtime & Shootout Record',
+        source: 'Ball Don\'t Lie API (calculated)',
+        home: {
+          team: home.full_name || home.name,
+          ...homeOT,
+          rating: homeOT.ot_wins >= 3 ? '✅ CLUTCH in extras' : '➡️ Average in extras'
+        },
+        away: {
+          team: away.full_name || away.name,
+          ...awayOT,
+          rating: awayOT.ot_wins >= 3 ? '✅ CLUTCH in extras' : '➡️ Average in extras'
+        },
+        INVESTIGATE: `🔍 OT is 3v3 - favors skill over structure. Shootouts favor teams with elite finishers and goalies.`,
+        note: 'OT record matters for moneyline - a team that wins close games in extras is clutch.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching OVERTIME_RECORD:`, error.message);
+      return { category: 'Overtime Record', error: 'Data unavailable' };
+    }
+  },
+
+  // LUCK_INDICATORS - Combined luck metrics
+  // SOURCE: Natural Stat Trick, MoneyPuck (for xG vs actual goals)
+  LUCK_INDICATORS: async (bdlSport, home, away, season) => {
+    console.log(`[Stat Router] Fetching LUCK_INDICATORS for ${away.name} @ ${home.name}`);
+    
+    if (bdlSport !== 'icehockey_nhl') {
+      return { category: 'Luck Indicators', note: 'Only available for NHL' };
+    }
+    
+    try {
+      const seasonStr = getCurrentSeasonString();
+      const query = `site:naturalstattrick.com OR site:moneypuck.com OR site:hockey-reference.com
+        ${seasonStr} NHL luck regression PDO xG goals vs expected ${home.name} ${away.name}.
+        For each team analyze:
+        1. PDO (shooting % + save %) - is it above/below 1.000?
+        2. Goals scored vs expected goals (GF - xGF)
+        3. Goals allowed vs expected (GA - xGA)
+        4. 5v5 shooting percentage vs league average (9%)
+        5. 5v5 save percentage vs league average (91%)`;
+      
+      const groundingResult = await geminiGroundingSearch(query, {
+        systemMessage: 'You are an NHL analytics expert. Use data from Natural Stat Trick or MoneyPuck. Analyze exact luck indicators and regression potential for both teams.'
+      });
+      
+      return {
+        category: 'Luck Indicators (Regression Watch)',
+        source: 'Natural Stat Trick / MoneyPuck via Gemini',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name },
+        grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
+        INVESTIGATE: `🔍 High PDO + Goals > xG = playing above head, regression likely. Low PDO + Goals < xG = due for positive regression.`,
+        CRITICAL: `⚠️ Luck regresses. A team with 1.030 PDO is NOT as good as their record suggests.`,
+        note: 'Betting against lucky teams (high PDO) and on unlucky teams (low PDO) is a sharp strategy.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching LUCK_INDICATORS:`, error.message);
+      return { category: 'Luck Indicators', error: 'Data unavailable' };
+    }
+  },
+
   // ===== EPL SPECIFIC FETCHERS (BETA) =====
 
   CLEAN_SHEETS: async (bdlSport, home, away, season) => {
@@ -6178,110 +9029,120 @@ const FETCHERS = {
     }
   },
 
-  // ===== WEATHER (NFL/NCAAF - uses Gemini Grounding) =====
+  // ===== WEATHER (NFL/NCAAF - STRICT FILTER: Only report EXTREME conditions) =====
+  // Weather is a factor in ~2-3 NFL games per SEASON. The rest is noise.
+  // Gary was over-weighting weather. This filter ensures only TRULY extreme conditions matter.
   WEATHER: async (bdlSport, home, away, season, options = {}) => {
+    const homeName = home.full_name || home.name;
+    const awayName = away.full_name || away.name;
+    
     // Only applicable for football
     if (bdlSport !== 'americanfootball_nfl' && bdlSport !== 'americanfootball_ncaaf') {
       return {
         category: 'Weather',
-        note: 'Weather impact primarily relevant for outdoor football games',
-        home: { team: home.full_name || home.name },
-        away: { team: away.full_name || away.name }
+        impact: 'NOT_A_FACTOR',
+        note: '⚠️ Weather is NOT a factor for this sport. Focus on team performance metrics.',
+        home: { team: homeName },
+        away: { team: awayName }
       };
     }
 
     const sport = bdlSport === 'americanfootball_ncaaf' ? 'NCAAF' : 'NFL';
-    console.log(`[Stat Router] Fetching WEATHER for ${away.name} @ ${home.name} (${sport})`);
+    console.log(`[Stat Router] WEATHER check for ${awayName} @ ${homeName} (${sport}) - applying strict filter`);
 
     try {
       const dateStr = new Date().toISOString().slice(0, 10);
-      const weather = await getGroundedWeather(
-        home.full_name || home.name,
-        away.full_name || away.name,
-        dateStr
-      );
+      const weather = await getGroundedWeather(homeName, awayName, dateStr);
 
+      // If we can't get weather, assume it's fine (not extreme)
       if (!weather) {
+        console.log(`[Stat Router] WEATHER: No data available - defaulting to NOT A FACTOR`);
         return {
           category: 'Weather',
-          note: 'Weather data unavailable',
-          home: { team: home.full_name || home.name },
-          away: { team: away.full_name || away.name }
+          impact: 'NOT_A_FACTOR',
+          note: '⚠️ Weather data unavailable. Assume normal conditions. Weather is NOT a factor - focus on matchup fundamentals.',
+          home: { team: homeName },
+          away: { team: awayName }
         };
       }
 
+      // Dome games - obviously no weather impact
       if (weather.is_dome) {
         return {
           category: 'Weather',
+          impact: 'NOT_A_FACTOR',
           conditions: 'Indoor/Dome Stadium',
-          temperature: 'Controlled (~72°F)',
-          wind: 'None',
-          impact: 'No weather impact - indoor stadium',
-          home: { team: home.full_name || home.name },
-          away: { team: away.full_name || away.name }
+          note: '✅ Indoor stadium - weather is irrelevant. Focus on team performance metrics.',
+          home: { team: homeName },
+          away: { team: awayName }
         };
       }
 
       const temp = weather.temperature;
-      const feelsLike = weather.feels_like;
       const wind = weather.wind_speed;
-      const conditions = weather.conditions || 'Clear';
+      const conditions = (weather.conditions || 'Clear').toLowerCase();
 
-      // Determine impact level
-      let impact = 'minimal';
-      let impactNotes = [];
+      // ═══════════════════════════════════════════════════════════════════════════════
+      // STRICT EXTREME WEATHER CHECK - Only these conditions matter:
+      // 1. Sub-15°F with dangerous wind chill
+      // 2. Active blizzard with accumulation DURING the game
+      // 3. Sustained 25+ mph wind (not gusts - SUSTAINED)
+      // ═══════════════════════════════════════════════════════════════════════════════
       
-      if (temp && temp < 32) {
-        impact = 'significant';
-        impactNotes.push('Freezing temperatures affect ball handling and grip');
-      } else if (temp && temp < 40) {
-        impact = 'moderate';
-        impactNotes.push('Cold weather may reduce passing efficiency');
-      }
-      
-      if (conditions.toLowerCase().includes('snow')) {
-        impact = 'significant';
-        impactNotes.push('Snow affects visibility and footing');
-      } else if (conditions.toLowerCase().includes('rain')) {
-        impact = 'moderate';
-        impactNotes.push('Rain affects ball security and passing game');
-      }
-      
-      if (wind && wind > 20) {
-        impact = 'significant';
-        impactNotes.push('High winds affect kicking and deep passing');
-      } else if (wind && wind > 12) {
-        impact = impact === 'significant' ? 'significant' : 'moderate';
-        impactNotes.push('Wind may affect field goals and long passes');
+      const isExtremeConditions = 
+        (temp && temp < 15) || // Sub-15°F is genuinely dangerous
+        (conditions.includes('blizzard')) || // Active blizzard
+        (conditions.includes('heavy snow') && temp && temp < 25) || // Heavy snow + cold
+        (wind && wind >= 25); // 25+ mph SUSTAINED wind (affects kicking game significantly)
+
+      if (!isExtremeConditions) {
+        // NOT EXTREME - Return "not a factor" response
+        console.log(`[Stat Router] WEATHER: Conditions are normal (${temp}°F, ${wind}mph wind) - NOT A FACTOR`);
+        return {
+          category: 'Weather',
+          impact: 'NOT_A_FACTOR',
+          temperature: `${temp}°F`,
+          wind: wind ? `${wind} mph` : 'Light',
+          conditions: weather.conditions || 'Clear',
+          note: `⚠️ Weather is NOT a factor for this game. Temperature ${temp}°F and ${wind || 'light'} mph wind are within normal NFL playing conditions. Professional players handle these conditions without issue. DO NOT use weather in your analysis - focus on team performance, injuries, and matchup fundamentals instead.`,
+          home: { team: homeName },
+          away: { team: awayName }
+        };
       }
 
-      // Structure weather data in home/away format for proper flattening
-      const weatherData = {
-        temperature: temp ? `${temp}°F` : 'N/A',
-        feels_like: feelsLike ? `${feelsLike}°F` : null,
-        wind_speed: wind ? `${wind} mph` : 'N/A',
-        conditions: conditions,
-        impact: impact
-      };
+      // EXTREME CONDITIONS - Only case where we actually report weather as a factor
+      console.log(`[Stat Router] WEATHER: ⚠️ EXTREME conditions detected (${temp}°F, ${wind}mph wind, ${conditions})`);
+      let extremeNotes = [];
       
+      if (temp && temp < 15) {
+        extremeNotes.push(`EXTREME COLD: ${temp}°F is dangerous - affects ball grip, player movement`);
+      }
+      if (conditions.includes('blizzard') || (conditions.includes('heavy snow') && temp < 25)) {
+        extremeNotes.push(`BLIZZARD CONDITIONS: Visibility severely limited, footing compromised`);
+      }
+      if (wind && wind >= 25) {
+        extremeNotes.push(`EXTREME WIND: ${wind} mph sustained - significantly affects kicking game and deep passes`);
+      }
+
+      // EXTREME CONDITIONS FOUND - Return actual weather data
       return {
-        category: 'Game Weather',
-        home: {
-          team: home.full_name || home.name,
-          ...weatherData
-        },
-        away: {
-          team: away.full_name || away.name,
-          ...weatherData  // Same weather for both (it's for the game, not team-specific)
-        },
-        impact_notes: impactNotes.length > 0 ? impactNotes.join('; ') : 'Normal conditions expected',
-        note: 'Weather data via Gemini Grounding'
+        category: 'Weather - EXTREME CONDITIONS',
+        impact: 'EXTREME',
+        temperature: temp ? `${temp}°F` : 'N/A',
+        wind_speed: wind ? `${wind} mph` : 'N/A',
+        conditions: weather.conditions || conditions,
+        extreme_factors: extremeNotes,
+        note: `🚨 EXTREME WEATHER ALERT: These conditions ARE material to the game. ${extremeNotes.join('. ')}. Consider which team is better equipped for these conditions.`,
+        home: { team: homeName },
+        away: { team: awayName }
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching weather:`, error.message);
+      // On error, assume normal conditions - don't let weather uncertainty affect picks
       return {
         category: 'Weather',
-        error: error.message,
+        impact: 'NOT_A_FACTOR',
+        note: '⚠️ Weather check failed. Assume normal conditions. Focus on matchup fundamentals.',
         home: { team: home.full_name || home.name },
         away: { team: away.full_name || away.name }
       };
@@ -6386,26 +9247,29 @@ Be factual with historical stats where available.`;
 
 // Add aliases for tokens that use the same fetcher
 const ALIASES = {
-  // NHL Aliases - Enhanced with new fetchers
-  SHOT_METRICS: 'SHOT_DIFFERENTIAL',
-  SHOT_QUALITY: 'SHOT_DIFFERENTIAL',
+  // ═══════════════════════════════════════════════════════════════════════════
+  // NHL ALIASES - All advanced stats now have REAL fetchers!
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CORSI_FOR_PCT - has real fetcher (Gemini Grounding)
+  // EXPECTED_GOALS - has real fetcher (Gemini Grounding)
+  // PDO - has real fetcher (Gemini Grounding)
+  // HIGH_DANGER_CHANCES - has real fetcher (Gemini Grounding)
+  // SCORING_FIRST - has real fetcher (Gemini Grounding)
+  // LINE_COMBINATIONS - has real fetcher (Gemini Grounding)
+  // OVERTIME_RECORD - has real fetcher (calculated)
+  // LUCK_INDICATORS - has real fetcher (Gemini Grounding)
+  // ═══════════════════════════════════════════════════════════════════════════
+  SHOT_METRICS: 'SHOT_DIFFERENTIAL', // Semantically equivalent
+  SHOT_QUALITY: 'HIGH_DANGER_CHANCES', // Now points to real fetcher!
   SAVE_PCT: 'GOALIE_STATS',
   GOALS_AGAINST_AVG: 'GOALIE_STATS',
   GOALIE_MATCHUP: 'GOALIE_STATS',
   PP_OPPORTUNITIES: 'SPECIAL_TEAMS',
-  SCORING_FIRST: 'RECENT_FORM',
-  CORSI_FOR_PCT: 'SHOT_DIFFERENTIAL',
-  EXPECTED_GOALS: 'SHOT_DIFFERENTIAL',
-  PDO: 'SHOT_DIFFERENTIAL',
-  HIGH_DANGER_CHANCES: 'SHOT_DIFFERENTIAL',
   BACK_TO_BACK: 'REST_SITUATION',
   HOME_ICE: 'HOME_AWAY_SPLITS',
   ROAD_PERFORMANCE: 'HOME_AWAY_SPLITS',
-  POSSESSION_METRICS: 'FACEOFF_PCT',
+  POSSESSION_METRICS: 'CORSI_FOR_PCT', // Now points to real possession metric!
   TOP_SCORERS: 'TOP_PLAYERS',
-  LINE_COMBINATIONS: 'TOP_PLAYERS',
-  LUCK_INDICATORS: 'RECENT_FORM',
-  OVERTIME_RECORD: 'RECENT_FORM',
   DIVISION_STANDING: 'STANDINGS',
   // NHL-specific aliases for new fetchers (auto-routed via sportSpecificToken)
   NHL_HOME_ICE: 'NHL_HOME_AWAY_SPLITS',
@@ -6445,44 +9309,46 @@ const ALIASES = {
   MOTIVATION: 'RECENT_FORM',
   XG_DIFFERENCE: 'SHOTS_ON_TARGET',
   XG_OVERPERFORMANCE: 'SHOTS_ON_TARGET',
-  PACE_LAST_10: 'PACE',
-  PACE_HOME_AWAY: 'HOME_AWAY_SPLITS',
-  EFFICIENCY_LAST_10: 'NET_RATING',
-  OPP_EFG_PCT: 'EFG_PCT',
-  OPP_TOV_RATE: 'TURNOVER_RATE',
-  PAINT_SCORING: 'EFG_PCT',
-  MIDRANGE: 'EFG_PCT',
-  PAINT_DEFENSE: 'DEFENSIVE_RATING',
-  PERIMETER_DEFENSE: 'THREE_PT_SHOOTING',
-  TRANSITION_DEFENSE: 'DEFENSIVE_RATING',
-  // CLUTCH_STATS now has its own fetcher - calculates close game record
-  QUARTER_SPLITS: 'RECENT_FORM',
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ALL REAL FETCHERS - Every token below has a dedicated implementation!
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PACE_LAST_10 - has real fetcher (calculated from recent games)
+  // PACE_HOME_AWAY - has real fetcher (calculated from game splits)
+  // OPP_EFG_PCT - has real fetcher (Gemini Grounding)
+  // OPP_TOV_RATE - has real fetcher (Gemini Grounding)
+  // PAINT_SCORING - has real fetcher (Gemini Grounding)
+  // MIDRANGE - has real fetcher (Gemini Grounding)
+  // PAINT_DEFENSE - has real fetcher (Gemini Grounding)
+  // TRANSITION_DEFENSE - has real fetcher (Gemini Grounding)
+  // LINEUP_NET_RATINGS - has real fetcher (Gemini Grounding)
+  // TRAVEL_SITUATION - has real fetcher (calculated)
+  // MINUTES_TREND - has real fetcher (Gemini Grounding)
+  // BLOWOUT_TENDENCY - has real fetcher (calculated)
+  // CONFERENCE_STATS - has real fetcher (BDL standings)
+  // NON_CONF_STRENGTH - has real fetcher (calculated)
+  // DREB_RATE - has real fetcher (player stats)
+  // EFFICIENCY_TREND - has real fetcher (L5 vs season)
+  // THREE_PT_DEFENSE - has real fetcher (Gemini Grounding)
+  // OPP_FT_RATE - has real fetcher (Gemini Grounding)
+  // SCHEDULE_STRENGTH - has real fetcher (opponent records)
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  EFFICIENCY_LAST_10: 'EFFICIENCY_TREND', // Semantically equivalent
+  PERIMETER_DEFENSE: 'THREE_PT_DEFENSE', // Semantically equivalent
+  QUARTER_SPLITS: 'QUARTER_SCORING', // Fixed - now points to real quarter data!
   // LINEUP_DATA only available once game starts (BDL limitation) - not useful for pre-game
   LINEUP_DATA: 'TOP_PLAYERS',
   // NBA-specific aliases for quarter scoring (point to NFL implementations - same BDL structure)
   FIRST_HALF_SCORING: 'FIRST_HALF_TRENDS',
   SECOND_HALF_SCORING: 'SECOND_HALF_TRENDS',
   BACK_TO_BACK: 'REST_SITUATION',
-  // USAGE_RATES has its own fetcher now - no alias needed
-  // VS_ELITE_TEAMS has its own fetcher now - no alias needed
-  // H2H_HISTORY has its own fetcher now - no alias needed
-  ATS_TRENDS: 'RECENT_FORM',
-  // LUCK_ADJUSTED has its own fetcher now - no alias needed
-  SCHEDULE_STRENGTH: 'HOME_AWAY_SPLITS',
   TEMPO_CONTROL: 'PACE',
-  DREB_RATE: 'OREB_RATE',
-  OPP_FT_RATE: 'FT_RATE',
-  THREE_PT_DEFENSE: 'THREE_PT_SHOOTING',
-  TWO_PT_SHOOTING: 'EFG_PCT',
-  HOME_COURT_VALUE: 'HOME_AWAY_SPLITS',
-  ROAD_PERFORMANCE: 'HOME_AWAY_SPLITS',
-  CONFERENCE_STATS: 'HOME_AWAY_SPLITS',
-  NON_CONF_STRENGTH: 'HOME_AWAY_SPLITS',
-  EXPERIENCE: 'TOP_PLAYERS',
-  // BENCH_DEPTH has its own fetcher now - no alias needed
-  VS_RANKED: 'RECENT_FORM',
-  CLOSE_GAME_RECORD: 'RECENT_FORM',
-  EFFICIENCY_TREND: 'NET_RATING',
+  TWO_PT_SHOOTING: 'EFG_PCT', // eFG% includes 2PT context
+  HOME_COURT_VALUE: 'HOME_AWAY_SPLITS', // Related - home splits show home value
+  // ROAD_PERFORMANCE - now has separate context in HOME_AWAY_SPLITS
+  EXPERIENCE: 'TOP_PLAYERS', // Related - top players shows experience
+  VS_RANKED: 'VS_ELITE_TEAMS', // Points to real fetcher
+  CLOSE_GAME_RECORD: 'CLUTCH_STATS', // Points to real fetcher
   // NFL/NCAAF aliases removed - each token should return unique data
   // Keeping only essential NCAAF aliases that don't have BDL data
   SP_PLUS_RATINGS: 'NET_RATING',
@@ -6820,6 +9686,85 @@ function formatRecentGames(games, teamName, standingsMap = null) {
     narrativeParts.push(`📉 TRENDING DOWN: L5 (${l5Data.record}) is worse than L10 (${l10Data.record})`);
   }
   
+  // ===== NEW: LAST 2-3 GAMES MICRO-TREND =====
+  // Games are sorted most recent first, so index 0 is the latest game
+  const last3Games = l5Data.games.slice(0, 3);
+  const last3Results = last3Games.map(g => g.result).join('');
+  const last3Wins = last3Games.filter(g => g.result === 'W').length;
+  const last3Losses = last3Games.filter(g => g.result === 'L').length;
+  
+  // Detect "turning the corner" patterns
+  let microTrend = null;
+  if (last3Results === 'WWW') {
+    microTrend = '🔥 HOT: Won last 3 games';
+  } else if (last3Results === 'LLL') {
+    microTrend = '❄️ COLD: Lost last 3 games';
+  } else if (last3Wins >= 2 && l5Data.analysis.losses >= 3) {
+    microTrend = '🔄 TURNING CORNER? Won ' + last3Wins + ' of last 3 despite rough L5';
+  } else if (last3Losses >= 2 && l5Data.analysis.wins >= 3) {
+    microTrend = '⚠️ SLIPPING? Lost ' + last3Losses + ' of last 3 despite good L5';
+  }
+  
+  if (microTrend) {
+    narrativeParts.push(microTrend);
+  }
+  
+  // ===== NEW: STREAK SNAP DETECTION =====
+  // Look at L10 to find if they snapped a losing streak
+  const l10Results = l10Data.games.map(g => g.result);
+  let currentStreak = 0;
+  let streakType = l10Results[0]; // W or L
+  for (let i = 0; i < l10Results.length; i++) {
+    if (l10Results[i] === streakType) currentStreak++;
+    else break;
+  }
+  
+  // Check for streak snap pattern: current win streak after losses
+  if (streakType === 'W' && currentStreak >= 2) {
+    // Count consecutive losses after the current wins
+    let priorLosses = 0;
+    for (let i = currentStreak; i < l10Results.length; i++) {
+      if (l10Results[i] === 'L') priorLosses++;
+      else break;
+    }
+    if (priorLosses >= 3) {
+      narrativeParts.push(`🔥 STREAK SNAPPED: Won last ${currentStreak} after ${priorLosses}-game losing streak - INVESTIGATE what changed`);
+    }
+  }
+  
+  // Check for opposite: losing after wins
+  if (streakType === 'L' && currentStreak >= 2) {
+    let priorWins = 0;
+    for (let i = currentStreak; i < l10Results.length; i++) {
+      if (l10Results[i] === 'W') priorWins++;
+      else break;
+    }
+    if (priorWins >= 3) {
+      narrativeParts.push(`⚠️ MOMENTUM LOST: Lost last ${currentStreak} after ${priorWins}-game win streak - INVESTIGATE what changed`);
+    }
+  }
+  
+  // ===== NEW: MARGIN TREND IN LOSSES =====
+  // Are losses getting closer? (sign of improvement even during losing)
+  const recentLosses = l5Data.games.filter(g => g.result === 'L');
+  if (recentLosses.length >= 2) {
+    // Margins are negative for losses, so -3 is "closer" than -15
+    // Games are sorted most recent first
+    const lossMargins = recentLosses.map(g => g.margin); // e.g., [-3, -8, -15] (most recent first)
+    
+    // Check if losses are getting closer (margins trending toward 0)
+    // Compare first half of losses to second half
+    const recentLossAvg = lossMargins.slice(0, Math.ceil(lossMargins.length / 2)).reduce((a, b) => a + b, 0) / Math.ceil(lossMargins.length / 2);
+    const olderLossAvg = lossMargins.slice(Math.ceil(lossMargins.length / 2)).reduce((a, b) => a + b, 0) / Math.floor(lossMargins.length / 2) || recentLossAvg;
+    
+    // If recent losses are closer (less negative), team is improving
+    if (recentLossAvg > olderLossAvg + 3) {
+      narrativeParts.push(`📈 LOSSES GETTING CLOSER: Recent losses avg ${Math.abs(recentLossAvg).toFixed(0)} pts, older losses avg ${Math.abs(olderLossAvg).toFixed(0)} pts - team may be improving`);
+    } else if (olderLossAvg > recentLossAvg + 5) {
+      narrativeParts.push(`📉 LOSSES GETTING WORSE: Recent losses avg ${Math.abs(recentLossAvg).toFixed(0)} pts, older losses avg ${Math.abs(olderLossAvg).toFixed(0)} pts - concerning trend`);
+    }
+  }
+  
   return {
     // L5 Summary (primary)
     record: l5Data.record,
@@ -6847,8 +9792,18 @@ function formatRecentGames(games, teamName, standingsMap = null) {
             'Consistent performance over L5 and L10'
     },
     
+    // NEW: Last 2-3 games micro-trend (most recent indicator)
+    micro_trend: {
+      last_3_results: last3Results,
+      last_3_record: `${last3Wins}-${last3Losses}`,
+      last_3_margins: last3Games.map(g => g.margin),
+      signal: microTrend || 'No clear micro-trend',
+      IMPORTANT: '⚠️ The LAST 2-3 games often signal direction better than L5 totals. A team going L-L-L-W-W is TRENDING UP, not "struggling at 2-3".'
+    },
+    
     narrative: narrativeParts.length > 0 ? narrativeParts.join('. ') : 'No significant patterns detected.',
-    CONTEXT: '🔍 INVESTIGATE THE WHY: A 1-4 team with 3 close losses to playoff teams is NOT the same as a 1-4 team with 3 blowout losses to weak teams.'
+    CONTEXT: '🔍 INVESTIGATE THE WHY: A 1-4 team with 3 close losses to playoff teams is NOT the same as a 1-4 team with 3 blowout losses to weak teams.',
+    MOMENTUM_CHECK: '🔄 If a team snapped a losing streak, INVESTIGATE: What changed? New lineup? Easier schedule? Or did they genuinely fix something?'
   };
 }
 

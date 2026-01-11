@@ -47,7 +47,8 @@ export async function runAgenticPropsCli({
   windowHours = 24 * 7,
   propsPerGame = 5,
   limitDefault = 5,
-  useESTDayFiltering = false  // If true, filter by EST day instead of rolling window
+  useESTDayFiltering = false,  // If true, filter by EST day instead of rolling window
+  regularOnly = false  // If true for NFL, only generate yards/receptions props (no TDs - use when TDs already stored)
 }) {
   if (!sportKey || !buildContext) {
     throw new Error('runAgenticPropsCli requires sportKey and buildContext');
@@ -58,6 +59,8 @@ export async function runAgenticPropsCli({
   const nocache = args.nocache === '1' || args.nocache === 'true';
   const shouldStore = args.store !== '0' && args.store !== 'false'; // Default TRUE, pass --store=0 to skip
   const matchupFilter = args.matchup || null;
+  // CLI override for regularOnly: --regular=1 or --no-td=1
+  const cliRegularOnly = regularOnly || args.regular === '1' || args['no-td'] === '1';
 
   console.log(`\n🏈 Agentic ${leagueLabel} Props Runner Starting...`);
   console.log(`${'='.repeat(50)}`);
@@ -65,6 +68,7 @@ export async function runAgenticPropsCli({
   console.log(`🎯 Sport: ${leagueLabel}`);
   console.log(`📊 Games limit: ${limit}`);
   console.log(`💾 Store: ${shouldStore ? 'Yes' : 'No (pass --store=1 to save)'}`);
+  if (cliRegularOnly && leagueLabel === 'NFL') console.log(`🏈 Mode: Regular props only (yards/receptions - TDs handled separately)`);
   if (matchupFilter) console.log(`🔍 Matchup filter: ${matchupFilter}`);
   console.log(`${'='.repeat(50)}\n`);
 
@@ -158,7 +162,8 @@ export async function runAgenticPropsCli({
         buildContext,
         sportLabel: leagueLabel,
         propsPerGame,
-        options: { nocache }
+        options: { nocache },
+        regularOnly: cliRegularOnly  // NFL: if true, skip TD categories (TDs handled by separate script)
       });
 
       if (result.picks && result.picks.length > 0) {
@@ -225,13 +230,29 @@ export async function runAgenticPropsCli({
 
       let existingPicks = [];
       const newMatchups = new Set(sortedPicks.map(p => p.matchup?.toLowerCase()).filter(Boolean));
+      // Check if new picks include TD picks (for NFL categorized format)
+      const newHasTdPicks = sortedPicks.some(p => p.td_category);
       
       if (existingData?.picks) {
         existingPicks = existingData.picks.filter(p => {
+          // Always keep picks from other sports
           if (p.sport !== leagueLabel) return true;
-          if (p.td_category) return true;
+          
           const pickMatchup = p.matchup?.toLowerCase();
-          return pickMatchup && !newMatchups.has(pickMatchup);
+          const isSameMatchup = pickMatchup && newMatchups.has(pickMatchup);
+          
+          // For NFL: If new picks include TD picks, filter out existing TD picks for same matchup
+          // This prevents duplicates when running NFL props (which now outputs categorized TD picks)
+          if (leagueLabel === 'NFL' && p.td_category && newHasTdPicks && isSameMatchup) {
+            console.log(`[Storage] Replacing existing ${p.td_category} TD pick for ${pickMatchup}`);
+            return false;
+          }
+          
+          // Keep existing TD picks if new picks don't include TDs (standalone TD script didn't run yet)
+          if (p.td_category && !newHasTdPicks) return true;
+          
+          // Filter out existing regular props for same matchup
+          return !isSameMatchup;
         });
       }
 

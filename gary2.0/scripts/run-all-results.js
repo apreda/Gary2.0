@@ -1,900 +1,411 @@
 #!/usr/bin/env node
 /**
- * Script to run ALL results checking:
- * - Daily picks (NBA, NHL, NCAAB, etc.)
+ * Ultimate Results Script (Gary 2.0)
+ * - Daily picks (NBA, NHL, NFL, NCAAB, NCAAF)
  * - Weekly NFL picks
- * - Prop bets
+ * - Prop bets (NBA, NHL, NFL)
+ * - Uses BallDontLie (BDL) as primary source
+ * - Uses Gemini Grounding (Google Search) as fallback
  * 
  * Usage: node scripts/run-all-results.js [YYYY-MM-DD]
- * Defaults to yesterday if no date provided
  */
 
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const { createClient } = require('@supabase/supabase-js');
-import dotenv from 'dotenv';
-import path from 'path';
-import { fileURLToPath } from 'url';
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+const dotenv = require('dotenv');
+const path = require('path');
+const { fileURLToPath } = require('url');
 
-// Load environment variables FIRST
+// Robust environment variable loading
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-dotenv.config({ path: path.resolve(__dirname, '../.env') });
-dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
+const rootDir = path.resolve(__dirname, '..');
 
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
+// Try multiple .env locations
+[
+  path.join(rootDir, '.env'),
+  path.join(rootDir, '.env.local'),
+  path.join(process.cwd(), '.env'),
+  path.join(process.cwd(), '.env.local'),
+].forEach(p => dotenv.config({ path: p }));
+
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
-const PERPLEXITY_API_KEY = process.env.VITE_PERPLEXITY_API_KEY;
-const ODDS_API_KEY = process.env.VITE_ODDS_API_KEY || process.env.ODDS_API_KEY;
 const BDL_API_KEY = process.env.BALLDONTLIE_API_KEY || process.env.VITE_BALL_DONT_LIE_API_KEY || process.env.BALL_DONT_LIE_API_KEY;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
-  console.error('Missing Supabase credentials. Please check your .env file.');
+  console.error('❌ Missing Supabase credentials.');
   process.exit(1);
 }
 
-console.log(`🔑 Using ${process.env.SUPABASE_SERVICE_ROLE_KEY ? 'SERVICE_ROLE' : 'ANON'} key`);
-console.log(`📡 Perplexity API: ${PERPLEXITY_API_KEY ? '✅' : '❌'}`);
-console.log(`📡 Odds API: ${ODDS_API_KEY ? '✅' : '❌'}`);
-console.log(`📡 BallDontLie API: ${BDL_API_KEY ? '✅' : '❌'}`);
+if (!BDL_API_KEY) {
+  console.error('❌ Missing BallDontLie API key.');
+  process.exit(1);
+}
+
+console.log(`\n🚀 GARY'S ULTIMATE RESULTS ENGINE`);
+console.log(`════════════════════════════════════════`);
+console.log(`🔑 Supabase:  ✅ ${SUPABASE_URL}`);
+console.log(`📡 BDL API:   ✅`);
+console.log(`📡 Grounding: ${GEMINI_API_KEY ? '✅ (Gemini 3 Flash)' : '❌ (Missing API Key)'}`);
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false }
 });
 
-// Get date from command line or use yesterday
+let genAI = null;
+if (GEMINI_API_KEY) {
+  genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+}
+
+// Caching
+const cache = { games: new Map(), stats: new Map(), box: new Map() };
+
 const getTargetDate = () => {
   const args = process.argv.slice(2);
-  if (args.length > 0 && /^\d{4}-\d{2}-\d{2}$/.test(args[0])) {
-    return args[0];
-  }
-  // Use local date instead of UTC to avoid timezone issues
+  if (args.length > 0 && /^\d{4}-\d{2}-\d{2}$/.test(args[0])) return args[0];
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
-  const year = yesterday.getFullYear();
-  const month = String(yesterday.getMonth() + 1).padStart(2, '0');
-  const day = String(yesterday.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return yesterday.toISOString().split('T')[0];
 };
 
-// Cache for API scores to avoid repeated calls
-const scoresCache = new Map();
-const bdlScoresCache = new Map();
-
-/**
- * Fetch game scores from BallDontLie API for any sport
- */
-async function fetchScoresFromBDL(league, dateStr, checkAdjacentDays = true) {
-  const leagueUpper = league.toUpperCase();
-  const cacheKey = `${leagueUpper}-BDL-${dateStr}`;
-  
-  if (bdlScoresCache.has(cacheKey)) {
-    return bdlScoresCache.get(cacheKey);
-  }
-  
-  if (!BDL_API_KEY) {
-    return null;
-  }
-  
-  const endpointMap = {
-    'NBA': 'nba/v1/games',
-    'NHL': 'nhl/v1/games',
-    'NCAAB': 'ncaab/v1/games',
-    'NCAAF': 'ncaaf/v1/games',
-    'NFL': 'nfl/v1/games',
-    'MLB': 'mlb/v1/games'
-  };
-  
-  const endpoint = endpointMap[leagueUpper];
-  if (!endpoint) {
-    return null;
-  }
-  
-  try {
-    const datesToCheck = [dateStr];
-    if (checkAdjacentDays) {
-      const targetDate = new Date(dateStr);
-      const prevDate = new Date(targetDate);
-      prevDate.setDate(prevDate.getDate() - 1);
-      const nextDate = new Date(targetDate);
-      nextDate.setDate(nextDate.getDate() + 1);
-      
-      datesToCheck.push(
-        prevDate.toISOString().split('T')[0],
-        nextDate.toISOString().split('T')[0]
-      );
-    }
-    
-    const allGames = [];
-    for (const date of datesToCheck) {
-      let cursor = null;
-      let page = 0;
-      const maxPages = 10;
-      
-      do {
-        page++;
-        let url = `https://api.balldontlie.io/${endpoint}?dates[]=${date}&per_page=100`;
-        if (cursor) url += `&cursor=${cursor}`;
-        
-        const response = await fetch(url, {
-          headers: { 'Authorization': BDL_API_KEY }
-        });
-        
-        if (!response.ok) break;
-        
-        const data = await response.json();
-        
-        if (data.data && data.data.length > 0) {
-          const completed = data.data.filter(g => {
-            const status = (g.status || '').toLowerCase();
-            const hasTeamScores = (g.home_team_score !== null && g.home_team_score !== undefined && 
-                                  g.visitor_team_score !== null && g.visitor_team_score !== undefined);
-            const hasOtherScores = (g.home_score !== null && g.home_score !== undefined && 
-                                   g.away_score !== null && g.away_score !== undefined);
-            
-            return status === 'final' || status === 'post' || status === 'f' || 
-                   status.includes('final') || hasTeamScores || hasOtherScores;
-          });
-          allGames.push(...completed);
-        }
-        
-        cursor = data.meta?.next_cursor;
-        if (cursor) await new Promise(r => setTimeout(r, 100));
-        
-      } while (cursor && page < maxPages);
-    }
-    
-    if (allGames.length === 0) {
-      return null;
-    }
-    
-    const scores = allGames.map(game => {
-      const homeScore = (game.home_team_score !== undefined && game.home_team_score !== null) 
-                       ? game.home_team_score 
-                       : ((game.home_score !== undefined && game.home_score !== null) 
-                          ? game.home_score : 0);
-      const awayScore = (game.visitor_team_score !== undefined && game.visitor_team_score !== null) 
-                       ? game.visitor_team_score 
-                       : ((game.away_score !== undefined && game.away_score !== null) 
-                          ? game.away_score : 0);
-      
-      return {
-        home_team: game.home_team?.full_name || game.home_team?.name || '',
-        away_team: game.visitor_team?.full_name || game.visitor_team?.name || '',
-        homeScore: homeScore,
-        awayScore: awayScore,
-        game_id: game.id,
-        game_date: game.date
-      };
-    });
-    
-    bdlScoresCache.set(cacheKey, scores);
-    return scores;
-    
-  } catch (error) {
-    return null;
-  }
-}
-
-/**
- * Fetch scores from The Odds API for a given sport and date
- */
-async function fetchScoresFromOddsAPI(league, dateStr) {
-  const cacheKey = `${league}-${dateStr}`;
-  if (scoresCache.has(cacheKey)) {
-    return scoresCache.get(cacheKey);
-  }
-  
-  if (!ODDS_API_KEY) {
-    return [];
-  }
-  
-  const sportKeyMap = {
-    'NBA': 'basketball_nba',
-    'NHL': 'icehockey_nhl',
-    'MLB': 'baseball_mlb',
-    'NFL': 'americanfootball_nfl',
-    'NCAAF': 'americanfootball_ncaaf',
-    'NCAAB': 'basketball_ncaab'
-  };
-  
-  const sportKey = sportKeyMap[league.toUpperCase()];
-  if (!sportKey) {
-    return [];
-  }
-  
-  try {
-    const url = `https://api.the-odds-api.com/v4/sports/${sportKey}/scores?apiKey=${ODDS_API_KEY}&daysFrom=3`;
-    
-    const response = await fetch(url);
-    
-    if (!response.ok) {
-      return [];
-    }
-    
-    const data = await response.json();
-    
-    if (Array.isArray(data)) {
-      const scores = data
-        .filter(game => game.completed)
-        .map(game => {
-          let homeScore = 0, awayScore = 0;
-          if (game.scores && Array.isArray(game.scores)) {
-            for (const score of game.scores) {
-              if (score.name === game.home_team) {
-                homeScore = parseInt(score.score) || 0;
-              } else if (score.name === game.away_team) {
-                awayScore = parseInt(score.score) || 0;
-              }
-            }
-          }
-          return {
-            home_team: game.home_team,
-            away_team: game.away_team,
-            homeScore,
-            awayScore,
-            commence_time: game.commence_time
-          };
-        });
-      
-      scoresCache.set(cacheKey, scores);
-      return scores;
-    }
-    
-    return [];
-  } catch (error) {
-    return [];
-  }
-}
-
-/**
- * Normalize team name for matching
- */
-function normalizeTeamName(name) {
+function normalizeName(name) {
   if (!name) return '';
-  
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .replace(/\bstate\b/g, 'st')
-    .replace(/\buniversity\b/g, '')
-    .replace(/\bcollege\b/g, '')
-    .replace(/\buniv\b/g, '');
+  return name.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
 }
 
 /**
- * Extract unique identifiers from team name
+ * Gemini Grounding (Google Search) Fallback
  */
-function getTeamIdentifiers(name) {
-  if (!name) return { words: [], lastWord: '', allWords: [] };
-  
-  const words = name.toLowerCase().split(/\s+/).filter(w => w.length > 2);
-  return {
-    words: words,
-    lastWord: words[words.length - 1] || '',
-    allWords: words
-  };
+async function geminiGrounding(query) {
+  if (!genAI) return null;
+  try {
+    const model = genAI.getGenerativeModel({
+      model: "gemini-3-flash-preview", 
+      tools: [{ google_search: {} }]
+    });
+    const result = await model.generateContent(query);
+    const text = result.response.text();
+    console.log(`    [Grounding] Result: ${text.substring(0, 80)}...`);
+    return text;
+  } catch (e) {
+    console.warn(`    [Grounding] Error: ${e.message}`);
+    return null;
+  }
+}
+
+async function getScoreGrounding(league, home, away, date) {
+  const query = `What was the final score of the ${league} game: ${away} @ ${home} on ${date}? Respond ONLY as AwayScore-HomeScore (e.g. 102-115). If unknown, say "null".`;
+  const text = await geminiGrounding(query);
+  if (!text || text.toLowerCase().includes('null')) return null;
+  const match = text.match(/(\d+)-(\d+)/);
+  return match ? { v: parseInt(match[1]), h: parseInt(match[2]) } : null;
+}
+
+async function getPropGrounding(sport, player, type, date) {
+  const query = `In the ${sport} game on ${date}, what was ${player}'s exact total for ${type}? Respond ONLY with the number. If unknown, say "null".`;
+  const text = await geminiGrounding(query);
+  if (!text || text.toLowerCase().includes('null')) return null;
+  const num = parseFloat(text.replace(/[^0-9.]/g, ''));
+  return isNaN(num) ? null : num;
 }
 
 /**
- * Find matching game from scores array
+ * BDL API Helpers
  */
-function findMatchingGame(scores, homeTeam, awayTeam, logMatch = false) {
-  const homeIds = getTeamIdentifiers(homeTeam);
-  const awayIds = getTeamIdentifiers(awayTeam);
-  const normalizedHome = normalizeTeamName(homeTeam);
-  const normalizedAway = normalizeTeamName(awayTeam);
+async function bdlFetch(path, params = '') {
+  const url = `https://api.balldontlie.io/${path}${params ? '?' + params : ''}`;
+  try {
+    const res = await fetch(url, { headers: { 'Authorization': BDL_API_KEY } });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (e) {
+    return null;
+  }
+}
+
+async function fetchGames(league, date) {
+  const key = `${league}-${date}`;
+  if (cache.games.has(key)) return cache.games.get(key);
   
-  const matches = scores.map(game => {
-    const gameHomeIds = getTeamIdentifiers(game.home_team);
-    const gameAwayIds = getTeamIdentifiers(game.away_team);
-    const gameHomeNorm = normalizeTeamName(game.home_team);
-    const gameAwayNorm = normalizeTeamName(game.away_team);
-    
-    const exactHomeMatch = gameHomeNorm === normalizedHome;
-    const exactAwayMatch = gameAwayNorm === normalizedAway;
-    
-    const mascotHomeMatch = homeIds.lastWord && gameHomeIds.lastWord === homeIds.lastWord;
-    const mascotAwayMatch = awayIds.lastWord && gameAwayIds.lastWord === awayIds.lastWord;
-    
-    const containsHomeMatch = gameHomeNorm.includes(normalizedHome) || normalizedHome.includes(gameHomeNorm);
-    const containsAwayMatch = gameAwayNorm.includes(normalizedAway) || normalizedAway.includes(gameAwayNorm);
-    
-    const homeWordOverlap = homeIds.words.some(w => w.length > 3 && gameHomeIds.words.includes(w));
-    const awayWordOverlap = awayIds.words.some(w => w.length > 3 && gameAwayIds.words.includes(w));
-    
-    let homeScore = 0;
-    let awayScore = 0;
-    
-    if (exactHomeMatch) homeScore += 10;
-    else if (mascotHomeMatch) homeScore += 8;
-    else if (containsHomeMatch) homeScore += 5;
-    else if (homeWordOverlap) homeScore += 3;
-    
-    if (exactAwayMatch) awayScore += 10;
-    else if (mascotAwayMatch) awayScore += 8;
-    else if (containsAwayMatch) awayScore += 5;
-    else if (awayWordOverlap) awayScore += 3;
-    
-    return {
-      game,
-      homeScore,
-      awayScore,
-      totalScore: homeScore + awayScore,
-      homeMatch: homeScore > 0,
-      awayMatch: awayScore > 0,
-      bothMatch: homeScore > 0 && awayScore > 0
-    };
+  // NBA uses v1/ while others use league/v1/
+  const path = league.toUpperCase() === 'NBA' ? 'v1/games' : `${league.toLowerCase()}/v1/games`;
+  const data = await bdlFetch(path, `dates[]=${date}`);
+  const games = data?.data || [];
+  cache.games.set(key, games);
+  return games;
+}
+
+async function fetchBoxScores(league, date) {
+  const key = `${league}-${date}`;
+  if (cache.box.has(key)) return cache.box.get(key);
+  
+  const path = league.toUpperCase() === 'NBA' ? 'v1/box_scores' : `${league.toLowerCase()}/v1/box_scores`;
+  const data = await bdlFetch(path, `date=${date}&dates[]=${date}&per_page=100`);
+  const box = data?.data || [];
+  cache.box.set(key, box);
+  return box;
+}
+
+async function fetchNFLStats(gameIds) {
+  if (!gameIds.length) return [];
+  const key = gameIds.join(',');
+  if (cache.stats.has(key)) return cache.stats.get(key);
+  
+  const params = gameIds.map(id => `game_ids[]=${id}`).join('&') + '&per_page=100';
+  const data = await bdlFetch('nfl/v1/stats', params);
+  const stats = data?.data || [];
+  cache.stats.set(key, stats);
+  return stats;
+}
+
+/**
+ * Matching & Grading
+ */
+function matchGame(games, h, v) {
+  const hn = normalizeName(h), vn = normalizeName(v);
+  const hLast = hn.split(' ').pop(), vLast = vn.split(' ').pop();
+  return games.find(g => {
+    const gh = normalizeName(g.home_team?.full_name || g.home_team?.name || '');
+    const gv = normalizeName(g.visitor_team?.full_name || g.visitor_team?.name || g.away_team?.full_name || g.away_team?.name || '');
+    return (gh.includes(hn) || gh.includes(hLast)) && (gv.includes(vn) || gv.includes(vLast));
   });
+}
+
+function gradeGame(pickText, homeTeam, awayTeam, hScore, vScore) {
+  const pickLower = pickText.toLowerCase();
+  const hFull = homeTeam.toLowerCase(), vFull = awayTeam.toLowerCase();
+  const hMascot = hFull.split(' ').pop(), vMascot = vFull.split(' ').pop();
   
-  const bestMatch = matches
-    .filter(m => m.bothMatch)
-    .sort((a, b) => b.totalScore - a.totalScore)[0];
+  // Total
+  const totalMatch = pickText.match(/(over|under)\s+(\d+\.?\d*)/i);
+  if (totalMatch) {
+    const line = parseFloat(totalMatch[2]), actual = hScore + vScore;
+    if (actual === line) return 'push';
+    return (totalMatch[1].toLowerCase() === 'over' ? actual > line : actual < line) ? 'won' : 'lost';
+  }
+
+  // Spread
+  const spreadMatch = pickText.match(/([+-]\d+\.?\d*)/);
+  if (spreadMatch) {
+    const spread = parseFloat(spreadMatch[1]);
+    const isHome = pickLower.includes(hMascot) || pickLower.includes(hFull);
+    const isVisitor = pickLower.includes(vMascot) || pickLower.includes(vFull);
+    
+    // If we pick the home team
+    if (isHome && !isVisitor) {
+      const diff = hScore - vScore;
+      if (diff + spread === 0) return 'push';
+      return (diff + spread > 0) ? 'won' : 'lost';
+    }
+    // If we pick the visitor team
+    if (isVisitor && !isHome) {
+      const diff = vScore - hScore;
+      if (diff + spread === 0) return 'push';
+      return (diff + spread > 0) ? 'won' : 'lost';
+    }
+    // Fallback spread logic
+    const diff = pickLower.includes(hMascot) ? (hScore - vScore) : (vScore - hScore);
+    if (diff + spread === 0) return 'push';
+    return (diff + spread > 0) ? 'won' : 'lost';
+  }
+
+  // Moneyline
+  const isHomePick = pickLower.includes(hMascot) || pickLower.includes(hFull);
+  const isVisitorPick = pickLower.includes(vMascot) || pickLower.includes(vFull);
   
-  return bestMatch ? bestMatch.game : null;
+  if (isHomePick && !isVisitorPick) return (hScore > vScore) ? 'won' : 'lost';
+  if (isVisitorPick && !isHomePick) return (vScore > hScore) ? 'won' : 'lost';
+  
+  // Last resort fallback
+  if (isHomePick) return (hScore > vScore) ? 'won' : 'lost';
+  if (isVisitorPick) return (vScore > hScore) ? 'won' : 'lost';
+
+  return 'lost'; 
+}
+
+function gradeProp(actual, line, bet) {
+  if (actual === null) return null;
+  const b = bet.toLowerCase();
+  if (b === 'over' || b === 'yes' || b === 'anytime') {
+    return (actual > line || (b === 'anytime' && actual >= 1)) ? 'won' : 'lost';
+  }
+  return actual < line ? 'won' : 'lost';
 }
 
 /**
- * Find score for a specific game
+ * Prop Value Extraction
  */
-async function fetchGameScore(league, homeTeam, awayTeam, dateStr) {
-  const leagueUpper = league.toUpperCase();
-  
-  // Try BallDontLie first
-  const bdlScores = await fetchScoresFromBDL(leagueUpper, dateStr, true);
-  
-  if (bdlScores && bdlScores.length > 0) {
-    const matchedGame = findMatchingGame(bdlScores, homeTeam, awayTeam);
-    
-    if (matchedGame) {
-      return {
-        homeScore: matchedGame.homeScore,
-        awayScore: matchedGame.awayScore,
-        final_score: `${matchedGame.awayScore}-${matchedGame.homeScore}`,
-        source: 'BallDontLie'
-      };
+function getStatValue(sport, data, name, type) {
+  const target = normalizeName(name), t = type.toLowerCase();
+  if (sport === 'NBA') {
+    for (const g of data) {
+      const players = [...(g.home_team?.players || []), ...(g.visitor_team?.players || [])];
+      const p = players.find(ps => normalizeName(`${ps.player?.first_name} ${ps.player?.last_name}`) === target);
+      if (p) {
+        if (t.includes('point')) return p.pts ?? p.points ?? 0;
+        if (t.includes('rebound')) return p.reb ?? p.rebounds ?? 0;
+        if (t.includes('assist')) return p.ast ?? p.assists ?? 0;
+        if (t.includes('three')) return p.fg3m ?? 0;
+        if (t.includes('pra')) return (p.pts || 0) + (p.reb || 0) + (p.ast || 0);
+      }
+    }
+  } else if (sport === 'NHL') {
+    const p = data.find(bs => normalizeName(`${bs.player?.first_name} ${bs.player?.last_name}`) === target);
+    if (p) {
+      if (t.includes('goal')) return p.goals ?? 0;
+      if (t.includes('assist')) return p.assists ?? 0;
+      if (t.includes('point')) return (p.goals || 0) + (p.assists || 0);
+      if (t.includes('shot') || t.includes('sog')) return p.shots_on_goal ?? 0;
+      if (t.includes('save')) return p.saves ?? 0;
+    }
+  } else if (sport === 'NFL') {
+    const p = data.find(s => normalizeName(`${s.player?.first_name} ${s.player?.last_name}`) === target);
+    if (p) {
+      if (t.includes('passing yard')) return p.passing_yards ?? 0;
+      if (t.includes('passing td')) return p.passing_touchdowns ?? 0;
+      if (t.includes('rushing yard')) return p.rushing_yards ?? 0;
+      if (t.includes('rushing td')) return p.rushing_touchdowns ?? 0;
+      if (t.includes('receiving yard')) return p.receiving_yards ?? 0;
+      if (t.includes('receiving td')) return p.receiving_touchdowns ?? 0;
+      if (t.includes('reception')) return p.receptions ?? 0;
+      if (t.includes('anytime td') || t.includes('touchdown')) return (p.rushing_touchdowns || 0) + (p.receiving_touchdowns || 0) > 0 ? 1 : 0;
+      if (t.includes('interception')) return p.passing_interceptions ?? 0;
+      if (t.includes('completion')) return p.passing_completions ?? 0;
+      if (t.includes('attempt')) {
+        if (t.includes('rush')) return p.rushing_attempts ?? 0;
+        if (t.includes('pass')) return p.passing_attempts ?? 0;
+      }
     }
   }
-  
-  // Fallback to Odds API
-  const scores = await fetchScoresFromOddsAPI(league, dateStr);
-  
-  if (scores && scores.length > 0) {
-    const matchedGame = findMatchingGame(scores, homeTeam, awayTeam);
-    
-    if (matchedGame) {
-      return {
-        homeScore: matchedGame.homeScore,
-        awayScore: matchedGame.awayScore,
-        final_score: `${matchedGame.awayScore}-${matchedGame.homeScore}`,
-        source: 'OddsAPI'
-      };
-    }
-  }
-  
   return null;
 }
 
 /**
- * Fetch final score using Perplexity API as fallback
+ * Main Logic
  */
-async function fetchScoreFromPerplexity(league, homeTeam, awayTeam, dateStr) {
-  if (!PERPLEXITY_API_KEY) {
-    return null;
-  }
-  
-  const formattedDate = new Date(dateStr).toLocaleDateString('en-US', {
-    month: 'long', day: 'numeric', year: 'numeric'
-  });
-  
-  const query = `What was the final score of the ${league} game between ${awayTeam} and ${homeTeam} on ${formattedDate}? Respond with ONLY the format: [AwayTeam] [AwayScore] - [HomeTeam] [HomeScore]`;
-  
-  try {
-    const response = await fetch('https://api.perplexity.ai/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${PERPLEXITY_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: 'llama-3.1-sonar-small-128k-online',
-        messages: [{ role: 'user', content: query }],
-        temperature: 0.1
-      })
-    });
-    
-    if (!response.ok) {
-      return null;
-    }
-    
-    const data = await response.json();
-    const text = data.choices?.[0]?.message?.content || '';
-    
-    const scoreMatch = text.match(/(\d+)\s*[-–]\s*(\d+)/);
-    if (scoreMatch) {
-      const firstScore = parseInt(scoreMatch[1]);
-      const secondScore = parseInt(scoreMatch[2]);
-      const awayFirst = text.toLowerCase().indexOf(awayTeam.toLowerCase().split(' ')[0]) < 
-                       text.toLowerCase().indexOf(homeTeam.toLowerCase().split(' ')[0]);
-      
-      return {
-        awayScore: awayFirst ? firstScore : secondScore,
-        homeScore: awayFirst ? secondScore : firstScore,
-        final_score: `${awayFirst ? firstScore : secondScore}-${awayFirst ? secondScore : firstScore}`,
-        source: 'Perplexity'
-      };
-    }
-    
-    return null;
-  } catch (error) {
-    return null;
-  }
-}
+async function processGenericGames(table, date, leagueFilter = null) {
+  console.log(`\n📂 Processing ${table.toUpperCase()} for ${date}...`);
+  const query = supabase.from(table).select('*');
+  if (table === 'daily_picks') query.eq('date', date);
+  else query.eq('week_start', date);
 
-/**
- * Grade a spread pick
- */
-function gradeSpreadPick(pickText, homeTeam, awayTeam, homeScore, awayScore) {
-  let spreadMatch = pickText.match(/([+-]\d{1,2}\.5)/);
-  
-  if (!spreadMatch) {
-    spreadMatch = pickText.match(/([+-]\d{1,2})(?!\d)/);
-  }
-  
-  if (!spreadMatch) return null;
-  
-  const spread = parseFloat(spreadMatch[1]);
-  const pickLower = pickText.toLowerCase();
-  const homeLower = homeTeam.toLowerCase();
-  const awayLower = awayTeam.toLowerCase();
-  
-  const homeWords = homeLower.split(' ').filter(w => w.length > 2);
-  const awayWords = awayLower.split(' ').filter(w => w.length > 2);
-  const homeUnique = homeWords[homeWords.length - 1];
-  const awayUnique = awayWords[awayWords.length - 1];
-  
-  const isHomePick = pickLower.includes(homeUnique) && !pickLower.includes(awayUnique);
-  const isAwayPick = pickLower.includes(awayUnique) && !pickLower.includes(homeUnique);
-  
-  const finalIsHomePick = isHomePick || (!isAwayPick && pickLower.includes(homeLower));
-  
-  if (finalIsHomePick) {
-    const homeWithSpread = homeScore + spread;
-    if (homeWithSpread > awayScore) return 'won';
-    if (homeWithSpread < awayScore) return 'lost';
-    return 'push';
-  } else {
-    const awayWithSpread = awayScore + spread;
-    if (awayWithSpread > homeScore) return 'won';
-    if (awayWithSpread < homeScore) return 'lost';
-    return 'push';
-  }
-}
+  const { data: rows } = await query;
+  if (!rows?.length) return { w: 0, l: 0 };
 
-/**
- * Grade a moneyline pick
- */
-function gradeMoneylinePick(pickText, homeTeam, awayTeam, homeScore, awayScore) {
-  const pickLower = pickText.toLowerCase();
-  const homeLower = homeTeam.toLowerCase();
-  const awayLower = awayTeam.toLowerCase();
-  
-  const homeWords = homeLower.split(' ').filter(w => w.length > 2);
-  const awayWords = awayLower.split(' ').filter(w => w.length > 2);
-  const homeUnique = homeWords[homeWords.length - 1];
-  const awayUnique = awayWords[awayWords.length - 1];
-  
-  const isHomePick = pickLower.includes(homeUnique) && !pickLower.includes(awayUnique);
-  const isAwayPick = pickLower.includes(awayUnique) && !pickLower.includes(homeUnique);
-  
-  const finalIsHomePick = isHomePick || (!isAwayPick && pickLower.includes(homeLower));
-  
-  const homeWon = homeScore > awayScore;
-  
-  if (finalIsHomePick) {
-    return homeWon ? 'won' : 'lost';
-  } else {
-    return !homeWon ? 'won' : 'lost';
-  }
-}
-
-/**
- * Grade a total (over/under) pick
- */
-function gradeTotalPick(pickText, homeScore, awayScore) {
-  const totalMatch = pickText.match(/(?:over|under)\s+(\d+\.?\d*)/i);
-  if (!totalMatch) return null;
-  
-  const line = parseFloat(totalMatch[1]);
-  const actualTotal = homeScore + awayScore;
-  const isOver = pickText.toLowerCase().includes('over');
-  
-  if (isOver) {
-    if (actualTotal > line) return 'won';
-    if (actualTotal < line) return 'lost';
-    return 'push';
-  } else {
-    if (actualTotal < line) return 'won';
-    if (actualTotal > line) return 'lost';
-    return 'push';
-  }
-}
-
-/**
- * Process daily picks for a date
- */
-async function processDailyPicks(dateStr) {
-  console.log(`\n📋 Processing DAILY PICKS for ${dateStr}...`);
-  
-  const { data: dailyPicksRows, error: picksError } = await supabase
-    .from('daily_picks')
-    .select('*')
-    .eq('date', dateStr);
-  
-  if (picksError || !dailyPicksRows?.length) {
-    console.log(`  ❌ No daily picks found for ${dateStr}`);
-    return { processed: 0, won: 0, lost: 0, push: 0, errors: 0 };
-  }
-  
-  const { data: existingResults } = await supabase
-    .from('game_results')
-    .select('pick_text')
-    .eq('game_date', dateStr);
-  
-  const existingPickTexts = new Set((existingResults || []).map(r => r.pick_text));
-  
-  const results = { processed: 0, won: 0, lost: 0, push: 0, errors: 0, details: [] };
-  
-  for (const row of dailyPicksRows) {
-    const picks = typeof row.picks === 'string' ? JSON.parse(row.picks) : row.picks;
-    
+  const stats = { w: 0, l: 0, p: 0 };
+  for (const row of rows) {
+    const picks = typeof row.picks === 'string' ? JSON.parse(row.picks) : (row.picks || row.picks_array || []);
     for (const pick of picks) {
-      if (existingPickTexts.has(pick.pick)) {
-        console.log(`  ⏭️ Already recorded: ${pick.pick.slice(0, 50)}`);
-        continue;
+      if (leagueFilter && pick.league?.toUpperCase() !== leagueFilter) continue;
+      const league = pick.league || (table === 'weekly_nfl_picks' ? 'NFL' : 'UNKNOWN');
+      const games = await fetchGames(league, date);
+      const matched = matchGame(games, pick.homeTeam, pick.awayTeam);
+      let hs = matched?.home_team_score ?? matched?.home_score ?? null;
+      let vs = matched?.visitor_team_score ?? matched?.away_score ?? null;
+
+      if (hs === null) {
+        const g = await getScoreGrounding(league, pick.homeTeam, pick.awayTeam, date);
+        if (g) { hs = g.h; vs = g.v; }
       }
-      
-      if (!pick.homeTeam || !pick.awayTeam) {
-        console.log(`  ⚠️ Missing team info: ${pick.pick}`);
-        results.errors++;
-        continue;
+
+      if (hs !== null) {
+        const res = gradeGame(pick.pick, pick.homeTeam, pick.awayTeam, hs, vs);
+        const { data: exist } = await supabase.from('game_results').select('id').eq('pick_text', pick.pick).eq('game_date', date).maybeSingle();
+        if (!exist) {
+          await supabase.from('game_results').insert({
+            pick_id: row.id, game_date: date, league, result: res,
+            final_score: `${vs}-${hs}`, pick_text: pick.pick,
+            matchup: `${pick.awayTeam} @ ${pick.homeTeam}`
+          });
+        }
+        stats[res[0]]++; // w, l, or p
+        console.log(`  ✅ ${league}: ${pick.pick} -> ${res.toUpperCase()} (${vs}-${hs})`);
       }
-      
-      console.log(`\n  🔍 ${pick.league}: ${pick.awayTeam} @ ${pick.homeTeam}`);
-      console.log(`     Pick: ${pick.pick}`);
-      
-      let scoreData = await fetchGameScore(pick.league, pick.homeTeam, pick.awayTeam, dateStr);
-      
-      if (!scoreData) {
-        scoreData = await fetchScoreFromPerplexity(pick.league, pick.homeTeam, pick.awayTeam, dateStr);
-      }
-      
-      if (!scoreData) {
-        console.log(`  ❌ Could not find score`);
-        results.errors++;
-        continue;
-      }
-      
-      const { homeScore, awayScore, final_score, source } = scoreData;
-      
-      if (typeof homeScore !== 'number' || typeof awayScore !== 'number' || 
-          isNaN(homeScore) || isNaN(awayScore) || homeScore < 0 || awayScore < 0) {
-        console.log(`  ❌ Invalid scores: ${awayScore}-${homeScore} (from ${source || 'unknown'})`);
-        results.errors++;
-        continue;
-      }
-      
-      console.log(`     Score: ${pick.awayTeam} ${awayScore} - ${pick.homeTeam} ${homeScore} (${source})`);
-      
-      let result;
-      const pickLower = pick.pick.toLowerCase();
-      
-      if (pickLower.includes('ml') || pick.type === 'moneyline') {
-        result = gradeMoneylinePick(pick.pick, pick.homeTeam, pick.awayTeam, homeScore, awayScore);
-      } else if (pickLower.includes('over') || pickLower.includes('under')) {
-        result = gradeTotalPick(pick.pick, homeScore, awayScore);
-      } else if (pick.pick.match(/[+-]\d/)) {
-        result = gradeSpreadPick(pick.pick, pick.homeTeam, pick.awayTeam, homeScore, awayScore);
-      } else {
-        result = gradeSpreadPick(pick.pick, pick.homeTeam, pick.awayTeam, homeScore, awayScore);
-      }
-      
-      if (!result) {
-        console.log(`  ❌ Could not grade pick`);
-        results.errors++;
-        continue;
-      }
-      
-      const emoji = result === 'won' ? '✅' : result === 'push' ? '🟡' : '❌';
-      console.log(`     Result: ${emoji} ${result.toUpperCase()}`);
-      
-      const { error: insertError } = await supabase
-        .from('game_results')
-        .insert({
-          pick_id: row.id,
-          game_date: dateStr,
-          league: pick.league,
-          result: result,
-          final_score: final_score,
-          pick_text: pick.pick,
-          matchup: `${pick.awayTeam} @ ${pick.homeTeam}`,
-          confidence: pick.confidence,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        });
-      
-      if (insertError) {
-        console.log(`  ❌ DB Error: ${insertError.message}`);
-        results.errors++;
-        continue;
-      }
-      
-      results.processed++;
-      results[result]++;
-      results.details.push({ pick: pick.pick, result, score: final_score });
     }
   }
-  
-  return results;
+  return stats;
 }
 
-/**
- * Get NFL Week start (Monday) for a given date
- */
-function getNFLWeekStart(dateStr) {
-  const [year, month, day] = dateStr.split('-').map(Number);
-  const d = new Date(year, month - 1, day);
-  d.setHours(12, 0, 0, 0);
-  const dayOfWeek = d.getDay();
-  const daysToSubtract = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-  d.setDate(d.getDate() - daysToSubtract);
+async function processPropBets(date) {
+  console.log(`\n🎯 Processing PROP BETS for ${date}...`);
+  const next = new Date(date); next.setDate(next.getDate() + 1);
+  const nextStr = next.toISOString().split('T')[0];
   
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const dayNum = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${dayNum}`;
-}
+  const { data: rows } = await supabase.from('prop_picks').select('*').in('date', [date, nextStr]);
+  if (!rows?.length) return { w: 0, l: 0 };
 
-/**
- * Process weekly NFL picks
- */
-async function processWeeklyNFLPicks(dateStr) {
-  console.log(`\n🏈 Processing WEEKLY NFL PICKS...`);
-  
-  const weekStart = getNFLWeekStart(dateStr);
-  console.log(`  NFL Week starting: ${weekStart}`);
-  
-  const { data: nflRow, error: nflError } = await supabase
-    .from('weekly_nfl_picks')
-    .select('*')
-    .eq('week_start', weekStart)
-    .single();
-  
-  if (nflError || !nflRow) {
-    console.log(`  ❌ No NFL picks found for week starting ${weekStart}`);
-    return { processed: 0, won: 0, lost: 0, push: 0, errors: 0 };
-  }
-  
-  const picks = typeof nflRow.picks === 'string' ? JSON.parse(nflRow.picks) : nflRow.picks;
-  if (!picks || !Array.isArray(picks) || picks.length === 0) {
-    console.log(`  ❌ No valid NFL picks found for week starting ${weekStart}`);
-    return { processed: 0, won: 0, lost: 0, push: 0, errors: 0 };
-  }
-  
-  console.log(`  Found ${picks.length} NFL picks for Week ${nflRow.week_number}`);
-  
-  const { data: existingResults } = await supabase
-    .from('game_results')
-    .select('pick_text')
-    .eq('league', 'NFL')
-    .gte('game_date', weekStart);
-  
-  const existingPickTexts = new Set((existingResults || []).map(r => r.pick_text));
-  
-  const results = { processed: 0, won: 0, lost: 0, push: 0, errors: 0, skipped: 0, details: [] };
-  
-  for (const pick of picks) {
-    if (existingPickTexts.has(pick.pick)) {
-      console.log(`  ⏭️ Already recorded: ${pick.pick}`);
-      results.skipped++;
-      continue;
-    }
-    
-    if (!pick.homeTeam || !pick.awayTeam) {
-      console.log(`  ⚠️ Missing team info: ${pick.pick}`);
-      results.errors++;
-      continue;
-    }
-    
-    console.log(`\n  🔍 NFL: ${pick.awayTeam} @ ${pick.homeTeam}`);
-    console.log(`     Pick: ${pick.pick}`);
-    
-    let scoreData = await fetchGameScore('NFL', pick.homeTeam, pick.awayTeam, dateStr);
-    
-    if (!scoreData) {
-      scoreData = await fetchScoreFromPerplexity('NFL', pick.homeTeam, pick.awayTeam, dateStr);
-    }
-    
-    if (!scoreData) {
-      console.log(`  ⏳ Game not played yet or score not available`);
-      results.skipped++;
-      continue;
-    }
-    
-    const { homeScore, awayScore, final_score, source } = scoreData;
-    
-    if (typeof homeScore !== 'number' || typeof awayScore !== 'number' || 
-        isNaN(homeScore) || isNaN(awayScore) || homeScore < 0 || awayScore < 0) {
-      console.log(`  ❌ Invalid scores: ${awayScore}-${homeScore} (from ${source || 'unknown'})`);
-      results.errors++;
-      continue;
-    }
-    
-    console.log(`     Score: ${pick.awayTeam} ${awayScore} - ${pick.homeTeam} ${homeScore} (${source})`);
-    
-    let result;
-    const pickLower = pick.pick.toLowerCase();
-    
-    if (pickLower.includes('ml') || pick.type === 'moneyline') {
-      result = gradeMoneylinePick(pick.pick, pick.homeTeam, pick.awayTeam, homeScore, awayScore);
-    } else if (pickLower.includes('over') || pickLower.includes('under')) {
-      result = gradeTotalPick(pick.pick, homeScore, awayScore);
-    } else if (pick.pick.match(/[+-]\d/)) {
-      result = gradeSpreadPick(pick.pick, pick.homeTeam, pick.awayTeam, homeScore, awayScore);
-    } else {
-      result = gradeSpreadPick(pick.pick, pick.homeTeam, pick.awayTeam, homeScore, awayScore);
-    }
-    
-    if (!result) {
-      console.log(`  ❌ Could not grade pick`);
-      results.errors++;
-      continue;
-    }
-    
-    const emoji = result === 'won' ? '✅' : result === 'push' ? '🟡' : '❌';
-    console.log(`     Result: ${emoji} ${result.toUpperCase()}`);
-    
-    const { error: insertError } = await supabase
-      .from('game_results')
-      .insert({
-        pick_id: nflRow.id,
-        game_date: dateStr,
-        league: 'NFL',
-        result: result,
-        final_score: final_score,
-        pick_text: pick.pick,
-        matchup: `${pick.awayTeam} @ ${pick.homeTeam}`,
-        confidence: pick.confidence,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      });
-    
-    if (insertError) {
-      console.log(`  ⚠️ DB Error: ${insertError.message}`);
-      results.processed++;
-      results[result]++;
-      results.details.push({ pick: pick.pick, result, score: final_score, saved: false });
-      continue;
-    }
-    
-    results.processed++;
-    results[result]++;
-    results.details.push({ pick: pick.pick, result, score: final_score });
-  }
-  
-  return results;
-}
+  const dates = [date, nextStr];
+  const nbaBox = (await Promise.all(dates.map(d => fetchBoxScores('NBA', d)))).flat();
+  const nhlBox = (await Promise.all(dates.map(d => fetchBoxScores('NHL', d)))).flat();
+  const nflGames = (await Promise.all(dates.map(d => fetchGames('NFL', d)))).flat();
+  const nflStats = await fetchNFLStats([...new Set(nflGames.map(g => g.id))]);
 
-/**
- * Process prop bet results
- */
-async function processPropResults(dateStr) {
-  console.log(`\n🎯 Processing PROP BETS for ${dateStr}...`);
-  
-  const { data: propRows, error: propsError } = await supabase
-    .from('prop_picks')
-    .select('*')
-    .eq('date', dateStr);
-  
-  if (propsError || !propRows?.length) {
-    console.log(`  ℹ️ No prop picks found for ${dateStr}`);
-    return { processed: 0, won: 0, lost: 0, push: 0, errors: 0 };
-  }
-  
-  const { data: existingResults } = await supabase
-    .from('prop_results')
-    .select('pick_text')
-    .eq('game_date', dateStr);
-  
-  const existingPickTexts = new Set((existingResults || []).map(r => r.pick_text));
-  
-  const results = { processed: 0, won: 0, lost: 0, push: 0, errors: 0, skipped: 0, details: [] };
-  
-  for (const row of propRows) {
-    const props = typeof row.props === 'string' ? JSON.parse(row.props) : row.props;
-    if (!props || !Array.isArray(props)) continue;
-    
-    for (const prop of props) {
-      if (existingPickTexts.has(prop.pick || prop.description)) {
-        results.skipped++;
-        continue;
+  const stats = { w: 0, l: 0 };
+  const handled = new Set();
+
+  for (const row of rows) {
+    const picks = typeof row.props === 'string' ? JSON.parse(row.props) : (row.props || row.picks || []);
+    for (const p of picks) {
+      const name = p.player || p.player_name, type = p.prop || p.prop_type;
+      const line = p.line || p.line_value, bet = p.bet, sport = p.sport?.toUpperCase();
+      if (!name || !type || line === undefined) continue;
+
+      const key = `${normalizeName(name)}-${type}-${line}-${row.date}`;
+      if (handled.has(key)) continue; handled.add(key);
+
+      let actual = null;
+      if (sport === 'NBA') actual = getStatValue('NBA', nbaBox, name, type);
+      else if (sport === 'NHL') actual = getStatValue('NHL', nhlBox, name, type);
+      else if (sport === 'NFL') actual = getStatValue('NFL', nflStats, name, type);
+
+      if (actual === null) actual = await getPropGrounding(sport, name, type, row.date);
+
+      if (actual !== null) {
+        const res = gradeProp(actual, line, bet);
+        const { data: exist } = await supabase.from('prop_results').select('id').eq('player_name', name).eq('prop_type', type).eq('game_date', row.date).maybeSingle();
+        if (!exist) {
+          await supabase.from('prop_results').insert({
+            prop_pick_id: row.id, game_date: row.date, player_name: name,
+            prop_type: type, line_value: line, actual_value: actual,
+            result: res, pick_text: `${name} ${bet} ${line} ${type}`,
+            matchup: p.matchup, bet: bet
+          });
+        }
+        stats[res[0]]++;
+        console.log(`  🎯 ${sport}: ${name} ${type} ${bet} ${line} -> ${res.toUpperCase()} (${actual})`);
       }
-      
-      // Props require external stat lookup which is complex
-      // For now, just log them
-      console.log(`  📊 ${prop.league || 'UNKNOWN'}: ${prop.player_name || prop.pick || 'Unknown prop'}`);
     }
   }
-  
-  console.log(`  ℹ️ Prop results require manual verification or stat API integration`);
-  console.log(`  ℹ️ Found ${propRows.length} prop pick batches`);
-  
-  return results;
+  return stats;
 }
 
-/**
- * Main function
- */
 async function main() {
-  const dateStr = getTargetDate();
+  const date = getTargetDate();
+  console.log(`\n📅 TARGET DATE: ${date}`);
   
-  console.log(`\n${'═'.repeat(60)}`);
-  console.log(`🎯 GARY'S ALL RESULTS CHECKER`);
-  console.log(`📅 Target Date: ${dateStr}`);
-  console.log(`${'═'.repeat(60)}`);
+  const daily = await processGenericGames('daily_picks', date);
   
-  // Process daily picks
-  const dailyResults = await processDailyPicks(dateStr);
+  const d = new Date(date);
+  d.setDate(d.getDate() - (d.getDay() === 0 ? 6 : d.getDay() - 1));
+  const weekStart = d.toISOString().split('T')[0];
+  const weeklyNFL = await processGenericGames('weekly_nfl_picks', weekStart, 'NFL');
   
-  // Process NFL picks
-  const nflResults = await processWeeklyNFLPicks(dateStr);
+  const props = await processPropBets(date);
   
-  // Process prop bets
-  const propResults = await processPropResults(dateStr);
-  
-  // Summary
-  console.log(`\n${'═'.repeat(60)}`);
-  console.log(`📊 RESULTS SUMMARY`);
-  console.log(`${'═'.repeat(60)}`);
-  
-  console.log(`\n📋 Daily Picks:`);
-  console.log(`   Processed: ${dailyResults.processed}`);
-  console.log(`   Won: ${dailyResults.won} | Lost: ${dailyResults.lost} | Push: ${dailyResults.push}`);
-  console.log(`   Errors: ${dailyResults.errors}`);
-  
-  console.log(`\n🏈 NFL Picks:`);
-  console.log(`   Processed: ${nflResults.processed}`);
-  console.log(`   Won: ${nflResults.won} | Lost: ${nflResults.lost} | Push: ${nflResults.push}`);
-  console.log(`   Skipped (not played): ${nflResults.skipped || 0}`);
-  console.log(`   Errors: ${nflResults.errors}`);
-  
-  console.log(`\n🎯 Prop Bets:`);
-  console.log(`   Processed: ${propResults.processed}`);
-  console.log(`   Won: ${propResults.won} | Lost: ${propResults.lost} | Push: ${propResults.push}`);
-  
-  const totalProcessed = dailyResults.processed + nflResults.processed + propResults.processed;
-  const totalWon = dailyResults.won + nflResults.won + propResults.won;
-  const totalLost = dailyResults.lost + nflResults.lost + propResults.lost;
-  const totalPush = dailyResults.push + nflResults.push + propResults.push;
-  
-  console.log(`\n${'─'.repeat(60)}`);
-  console.log(`📈 TOTAL RECORD: ${totalWon}-${totalLost}${totalPush > 0 ? `-${totalPush}` : ''}`);
-  if (totalProcessed > 0 && (totalWon + totalLost) > 0) {
-    const winPct = ((totalWon / (totalWon + totalLost)) * 100).toFixed(1);
-    console.log(`   Win Rate: ${winPct}%`);
-  }
-  
-  console.log(`${'═'.repeat(60)}\n`);
-  
-  return { dailyResults, nflResults, propResults };
+  console.log(`\n════════════════════════════════════════`);
+  console.log(`🏁 SUMMARY FOR ${date}`);
+  console.log(`Daily:  ${daily.w}W - ${daily.l}L`);
+  console.log(`Weekly: ${weeklyNFL.w}W - ${weeklyNFL.l}L`);
+  console.log(`Props:  ${props.w}W - ${props.l}L`);
+  console.log(`TOTAL:  ${daily.w + weeklyNFL.w + props.w}W - ${daily.l + weeklyNFL.l + props.l}L`);
+  console.log(`════════════════════════════════════════\n`);
 }
 
-// Run
-main()
-  .then(() => process.exit(0))
-  .catch(err => {
-    console.error('Fatal error:', err);
-    process.exit(1);
-  });
+main().catch(err => {
+  console.error('\n❌ FATAL ERROR:', err);
+  process.exit(1);
+});

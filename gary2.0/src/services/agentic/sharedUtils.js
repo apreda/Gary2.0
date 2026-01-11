@@ -84,6 +84,8 @@ export function buildMarketSnapshot(bookmakers = [], homeTeamName = 'Home', away
 
   const spreads = [];
   const moneylines = [];
+  const totals = [];  // NEW: Track game totals (O/U)
+  
   (bookmakers || []).forEach((bookmaker) => {
     const markets = Array.isArray(bookmaker?.markets) ? bookmaker.markets : [];
     markets.forEach((market) => {
@@ -111,6 +113,18 @@ export function buildMarketSnapshot(bookmakers = [], homeTeamName = 'Home', away
           });
         });
       }
+      // NEW: Extract game totals (Over/Under)
+      if (market.key === 'totals') {
+        market.outcomes.forEach((outcome) => {
+          if (!outcome || typeof outcome.point !== 'number') return;
+          totals.push({
+            side: outcome.name, // 'Over' or 'Under'
+            point: outcome.point,
+            price: outcome.price || -110,
+            bookmaker: bookmaker.title || bookmaker.key
+          });
+        });
+      }
     });
   });
 
@@ -128,6 +142,11 @@ export function buildMarketSnapshot(bookmakers = [], homeTeamName = 'Home', away
   const awaySpread = pickBest(spreads, (row) => row.team === 'away');
   const homeMl = pickBest(moneylines, (row) => row.team === 'home');
   const awayMl = pickBest(moneylines, (row) => row.team === 'away');
+  
+  // NEW: Get the total line (prefer Over outcome for the line value)
+  const overTotal = totals.find(t => t.side === 'Over');
+  const underTotal = totals.find(t => t.side === 'Under');
+  const totalLine = overTotal?.point || underTotal?.point || null;
 
   return {
     spread: {
@@ -137,7 +156,13 @@ export function buildMarketSnapshot(bookmakers = [], homeTeamName = 'Home', away
     moneyline: {
       home: homeMl ? { ...homeMl, teamName: homeTeamName } : null,
       away: awayMl ? { ...awayMl, teamName: awayTeamName } : null
-    }
+    },
+    // NEW: Game total (O/U) for game script analysis
+    total: totalLine ? {
+      line: totalLine,
+      over: overTotal ? { price: overTotal.price, bookmaker: overTotal.bookmaker } : null,
+      under: underTotal ? { price: underTotal.price, bookmaker: underTotal.bookmaker } : null
+    } : null
   };
 }
 

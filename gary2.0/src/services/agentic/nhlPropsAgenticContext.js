@@ -433,7 +433,7 @@ async function detectBackToBack(teamIds, gameDate) {
  * Build comprehensive player stats text with actual BDL data
  * ENHANCED: Now includes recent form, consistency, and home/away splits
  */
-function buildPlayerStatsText(homeTeam, awayTeam, advancedStats, propCandidates, playerSeasonStats, playerIdMap, richContext, playerGameLogs = {}) {
+function buildPlayerStatsText(homeTeam, awayTeam, advancedStats, propCandidates, playerSeasonStats, playerIdMap, richContext, injuries = [], playerGameLogs = {}) {
   let statsText = '';
   
   // Helper to get stats for a player
@@ -855,6 +855,7 @@ export async function buildNhlPropsAgenticContext(game, playerProps, options = {
     playerSeasonStats,
     playerIdMap,
     richContext,
+    formattedInjuries, // Pass injuries for injury flagging
     playerGameLogs // Pass game logs for recent form
   );
 

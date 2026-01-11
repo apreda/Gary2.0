@@ -11,6 +11,7 @@ import { fixBdlInjuryStatus } from '../sharedUtils.js';
 // All context comes from Gemini 3 Flash with Google Search Grounding
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import axios from 'axios';
+import { fetchLineupsAndInjuries } from '../../rotowireSlateService.js';
 
 // Lazy-initialize Gemini for grounded searches
 let geminiClient = null;
@@ -386,6 +387,131 @@ Be specific and factual. If it's just a regular season game, say so clearly.`;
   };
   
   const injuriesForStorage = formatInjuriesForStorage(injuries);
+
+  // NBA IMMEDIATE PASS LOGIC
+  // Skip games where key player availability is uncertain to avoid wasting tokens
+  let immediatePass = false;
+  let passReason = '';
+  if (sportKey === 'NBA') {
+    // STAR PLAYERS MAP - Top 1-2 players per team (updated Jan 2026)
+    // If ANY of these are QUESTIONABLE, we PASS on the game
+    const NBA_STAR_PLAYERS = {
+      'atlanta hawks': ['trae young', 'jalen johnson', 'dejounte murray'],
+      'boston celtics': ['jayson tatum', 'jaylen brown', 'derrick white'],
+      'brooklyn nets': ['cam thomas', 'mikal bridges', 'ben simmons'],
+      'charlotte hornets': ['lamelo ball', 'brandon miller', 'miles bridges'],
+      'chicago bulls': ['zach lavine', 'demar derozan', 'coby white'],
+      'cleveland cavaliers': ['donovan mitchell', 'darius garland', 'evan mobley'],
+      'dallas mavericks': ['luka doncic', 'kyrie irving', 'pj washington'],
+      'denver nuggets': ['nikola jokic', 'jamal murray', 'michael porter jr'],
+      'detroit pistons': ['cade cunningham', 'jaden ivey', 'ausar thompson'],
+      'golden state warriors': ['stephen curry', 'draymond green', 'andrew wiggins'],
+      'houston rockets': ['jalen green', 'alperen sengun', 'fred vanvleet'],
+      'indiana pacers': ['tyrese haliburton', 'pascal siakam', 'myles turner'],
+      'la clippers': ['kawhi leonard', 'paul george', 'james harden'],
+      'los angeles clippers': ['kawhi leonard', 'paul george', 'james harden'],
+      'los angeles lakers': ['lebron james', 'anthony davis', 'austin reaves'],
+      'la lakers': ['lebron james', 'anthony davis', 'austin reaves'],
+      'memphis grizzlies': ['ja morant', 'desmond bane', 'jaren jackson jr'],
+      'miami heat': ['jimmy butler', 'bam adebayo', 'tyler herro'],
+      'milwaukee bucks': ['giannis antetokounmpo', 'damian lillard', 'khris middleton'],
+      'minnesota timberwolves': ['anthony edwards', 'karl-anthony towns', 'rudy gobert', 'julius randle'],
+      'new orleans pelicans': ['zion williamson', 'brandon ingram', 'cj mccollum', 'trey murphy iii'],
+      'new york knicks': ['jalen brunson', 'julius randle', 'og anunoby', 'karl-anthony towns'],
+      'oklahoma city thunder': ['shai gilgeous-alexander', 'chet holmgren', 'jalen williams'],
+      'orlando magic': ['paolo banchero', 'franz wagner', 'jalen suggs'],
+      'philadelphia 76ers': ['joel embiid', 'tyrese maxey', 'paul george'],
+      'phoenix suns': ['kevin durant', 'devin booker', 'bradley beal'],
+      'portland trail blazers': ['anfernee simons', 'scoot henderson', 'jerami grant'],
+      'sacramento kings': ['domantas sabonis', "de'aaron fox", 'keegan murray'],
+      'san antonio spurs': ['victor wembanyama', 'devin vassell', 'keldon johnson'],
+      'toronto raptors': ['scottie barnes', 'rj barrett', 'immanuel quickley'],
+      'utah jazz': ['lauri markkanen', 'collin sexton', 'jordan clarkson'],
+      'washington wizards': ['jordan poole', 'kyle kuzma', 'deni avdija']
+    };
+
+    const checkTeam = (teamInjuries, teamLineup, teamName) => {
+      // Normalize team name for lookup
+      const teamKey = teamName.toLowerCase().trim();
+      
+      // Get star players from Rotowire lineup (top 2-3 starters) or fall back to static list
+      let starPlayers = [];
+      
+      if (teamLineup && teamLineup.length >= 2) {
+        // USE ROTOWIRE LINEUP DATA - the first 2-3 starters are the stars
+        starPlayers = teamLineup.slice(0, 3).map(p => p.name?.toLowerCase().trim()).filter(Boolean);
+        console.log(`[Scout Report] 🏀 Using Rotowire lineup for ${teamName} stars: ${starPlayers.join(', ')}`);
+      }
+      
+      // ALWAYS merge with static list (Rotowire might not have data)
+      const staticStars = NBA_STAR_PLAYERS[teamKey] || [];
+      if (staticStars.length > 0) {
+        // Combine both sources, dedupe
+        const combined = new Set([...starPlayers, ...staticStars]);
+        starPlayers = [...combined];
+        console.log(`[Scout Report] 📋 Combined stars for ${teamName}: ${starPlayers.join(', ')}`);
+      }
+      
+      if (starPlayers.length === 0) {
+        console.log(`[Scout Report] ⚠️ No star players found for "${teamName}" - skipping star check`);
+      }
+      
+      // Check if any star player is Questionable or Day-To-Day
+      const riskyStatuses = ['questionable', 'day-to-day', 'day to day', 'gtd', 'game-time', 'q', 'gtd'];
+      
+      // Log all injuries for debugging
+      if ((teamInjuries || []).length > 0) {
+        console.log(`[Scout Report] 🏥 ${teamName} injuries: ${teamInjuries.map(i => `${i.player?.first_name} ${i.player?.last_name} (${i.status})`).join(', ')}`);
+      }
+      
+      for (const injury of (teamInjuries || [])) {
+        const playerName = `${injury.player?.first_name || ''} ${injury.player?.last_name || ''}`.toLowerCase().trim();
+        const status = (injury.status || '').toLowerCase();
+        
+        // Check if this player is a star AND has risky status
+        const isStar = starPlayers.some(star => {
+          // Exact match
+          if (playerName === star || star === playerName) return true;
+          // Contains match (either direction)
+          if (playerName.includes(star) || star.includes(playerName)) return true;
+          // Last name match for common cases
+          const playerLast = playerName.split(' ').pop();
+          const starLast = star.split(' ').pop();
+          if (playerLast && starLast && playerLast.length > 3 && playerLast === starLast) return true;
+          return false;
+        });
+        
+        const isRiskyStatus = riskyStatuses.some(s => status.includes(s));
+        
+        if (isStar && isRiskyStatus) {
+          immediatePass = true;
+          passReason = `Star player QUESTIONABLE for ${teamName}: ${injury.player?.first_name} ${injury.player?.last_name} (${injury.status})`;
+          console.log(`[Scout Report] 🚨 IMMEDIATE PASS TRIGGERED: ${passReason}`);
+          return true;
+        }
+      }
+
+      // 2. 3+ Rotation Players Questionable (regardless of star status)
+      const questionablePlayers = (teamInjuries || []).filter(i => 
+        riskyStatuses.some(s => (i.status || '').toLowerCase().includes(s))
+      );
+      if (questionablePlayers.length >= 3) {
+        immediatePass = true;
+        passReason = `3+ players questionable for ${teamName}: ${questionablePlayers.map(i => `${i.player?.first_name} ${i.player?.last_name}`).join(', ')}`;
+        console.log(`[Scout Report] 🚨 IMMEDIATE PASS TRIGGERED: ${passReason}`);
+        return true;
+      }
+      return false;
+    };
+
+    // Check both teams - pass lineups from Rotowire if available
+    const homeLineup = injuries.lineups?.home || [];
+    const awayLineup = injuries.lineups?.away || [];
+    
+    if (!checkTeam(injuries.home, homeLineup, homeTeam)) {
+      checkTeam(injuries.away, awayLineup, awayTeam);
+    }
+  }
   
   // Extract narrative context from Gemini Grounding (valuable even if injury parsing returned 0)
   const narrativeContext = injuries?.narrativeContext || null;
@@ -417,6 +543,7 @@ ${gameContextSection}${bowlGameContext}
 ⚠️⚠️⚠️ INJURY REPORT (READ THIS FIRST - CRITICAL) ⚠️⚠️⚠️
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${formatInjuryReport(homeTeam, awayTeam, injuries)}
+${formatStartingLineups(homeTeam, awayTeam, injuries.lineups)}
 
 🚨 INJURY DATA PROTOCOLS:
 1. Do NOT mention any player listed as OUT/DOUBTFUL/IR as if they are playing.
@@ -468,6 +595,8 @@ ${formatTokenMenu(sportKey)}
   return {
     text: report,
     injuries: injuriesForStorage,
+    immediatePass,
+    passReason,
     // Venue context for NBA Cup, neutral site games, CFP games, etc.
     venue: game.venue || null,
     isNeutralSite: game.isNeutralSite || false,
@@ -477,7 +606,10 @@ ${formatTokenMenu(sportKey)}
     // CFP-specific fields for NCAAF
     cfpRound: game.cfpRound || null,
     homeSeed: game.homeSeed || null,
-    awaySeed: game.awaySeed || null
+    awaySeed: game.awaySeed || null,
+    // NCAAB conference data for app filtering (attached by run-agentic-picks.js)
+    homeConference: game.homeConference || null,
+    awayConference: game.awayConference || null
   };
 }
 
@@ -960,12 +1092,18 @@ async function fetchInjuries(homeTeam, awayTeam, sport) {
     
     // Fetch from BDL
     let bdlInjuries = { home: [], away: [] };
+    let homeAbbr = null;
+    let awayAbbr = null;
+
     if (bdlSport) {
       const teams = await ballDontLieService.getTeams(bdlSport);
       const home = findTeam(teams, homeTeam);
       const away = findTeam(teams, awayTeam);
       
-      console.log(`[Scout Report] Looking for injuries - Home: ${homeTeam} (ID: ${home?.id}), Away: ${awayTeam} (ID: ${away?.id})`);
+      if (home) homeAbbr = home.abbreviation;
+      if (away) awayAbbr = away.abbreviation;
+      
+      console.log(`[Scout Report] Looking for injuries - Home: ${homeTeam} (ID: ${home?.id}, Abbr: ${homeAbbr}), Away: ${awayTeam} (ID: ${away?.id}, Abbr: ${awayAbbr})`);
       
       const teamIds = [];
       if (home) teamIds.push(home.id);
@@ -988,18 +1126,98 @@ async function fetchInjuries(homeTeam, awayTeam, sport) {
             i.team_id === away?.id
           ).map(fixBdlInjuryStatus) || []
         };
-
-        console.log(`[Scout Report] BDL injuries filtered - Home: ${bdlInjuries.home.length}, Away: ${bdlInjuries.away.length}`);
-        if (bdlInjuries.home.length > 0) {
-          console.log(`[Scout Report] Home injuries:`, bdlInjuries.home.map(i => `${i.player?.first_name} ${i.player?.last_name} (${i.status})`));
-        }
-        if (bdlInjuries.away.length > 0) {
-          console.log(`[Scout Report] Away injuries:`, bdlInjuries.away.map(i => `${i.player?.first_name} ${i.player?.last_name} (${i.status})`));
-        }
       }
     }
+
+    // Fetch from RotoWire (Lineups + Injuries)
+    let rotowireInjuries = { home: [], away: [] };
+    let rotowireLineups = { home: [], away: [] };
     
-    // Fetch Gemini Grounding for narrative context (and injuries for sports without BDL support)
+    // Only fetch for NBA/NFL/NHL (other sports don't have lineup pages)
+    const rwSport = sport === 'basketball_nba' || sport === 'NBA' ? 'NBA' :
+                    sport === 'americanfootball_nfl' || sport === 'NFL' ? 'NFL' :
+                    sport === 'icehockey_nhl' || sport === 'NHL' ? 'NHL' : null;
+    
+    if (rwSport && homeAbbr && awayAbbr) {
+      try {
+        const rwData = await fetchLineupsAndInjuries(rwSport);
+        
+        // Find by abbreviation
+        const homeData = homeAbbr ? rwData[homeAbbr] : null;
+        const awayData = awayAbbr ? rwData[awayAbbr] : null;
+        
+        if (homeData) {
+          rotowireInjuries.home = (homeData.injuries || []).map(i => ({
+            player: { first_name: i.name.split(' ').slice(0, -1).join(' '), last_name: i.name.split(' ').slice(-1)[0] },
+            status: i.status === 'Q' ? 'Questionable' : i.status === 'O' ? 'Out' : i.status,
+            description: `RotoWire status: ${i.status}`,
+            source: 'RotoWire'
+          }));
+          rotowireLineups.home = homeData.lineups || [];
+        }
+        
+        if (awayData) {
+          rotowireInjuries.away = (awayData.injuries || []).map(i => ({
+            player: { first_name: i.name.split(' ').slice(0, -1).join(' '), last_name: i.name.split(' ').slice(-1)[0] },
+            status: i.status === 'Q' ? 'Questionable' : i.status === 'O' ? 'Out' : i.status,
+            description: `RotoWire status: ${i.status}`,
+            source: 'RotoWire'
+          }));
+          rotowireLineups.away = awayData.lineups || [];
+        }
+        
+        if (homeData || awayData) {
+          console.log(`[Scout Report] ✅ RotoWire data integrated: ${homeData?.injuries?.length || 0} home injuries, ${awayData?.injuries?.length || 0} away injuries`);
+        } else {
+          console.log(`[Scout Report] ⚠️ RotoWire: Teams ${homeAbbr}/${awayAbbr} not found in scraped data`);
+        }
+      } catch (e) {
+        console.warn(`[Scout Report] ⚠️ RotoWire scraper failed (${e.message})`);
+        console.log(`[Scout Report] ℹ️ Fallback: Gemini Grounding will search RotoWire directly via Google`);
+      }
+    } else {
+      console.log(`[Scout Report] ℹ️ RotoWire scraper not applicable for ${sport} (or missing team abbrs)`);
+    }
+
+    // Log data source summary for transparency
+    const bdlInjuryCount = (bdlInjuries.home?.length || 0) + (bdlInjuries.away?.length || 0);
+    const rwInjuryCount = (rotowireInjuries.home?.length || 0) + (rotowireInjuries.away?.length || 0);
+    const rwLineupCount = (rotowireLineups.home?.length || 0) + (rotowireLineups.away?.length || 0);
+    
+    if (rwLineupCount === 0 && rwInjuryCount === 0) {
+      console.log(`[Scout Report] 📊 Data Sources: BDL injuries (${bdlInjuryCount}) + Gemini Grounding (searching RotoWire)`);
+    } else {
+      console.log(`[Scout Report] 📊 Data Sources: BDL injuries (${bdlInjuryCount}) + RotoWire scraper (${rwInjuryCount} injuries, ${rwLineupCount} starters) + Gemini Grounding`);
+    }
+
+    // Merge Injuries (RotoWire takes precedence for status if conflict)
+    const mergeInjuries = (bdl, rw) => {
+      const merged = [...bdl];
+      rw.forEach(rwInj => {
+        const rwName = `${rwInj.player.first_name} ${rwInj.player.last_name}`.toLowerCase();
+        const existingIdx = merged.findIndex(i => 
+          `${i.player?.first_name} ${i.player?.last_name}`.toLowerCase().includes(rwName) ||
+          rwName.includes(`${i.player?.first_name} ${i.player?.last_name}`.toLowerCase())
+        );
+        
+        if (existingIdx !== -1) {
+          // Update status if RotoWire is more specific (Q vs Out)
+          if (rwInj.status === 'Questionable' && merged[existingIdx].status === 'Out') {
+            merged[existingIdx].status = 'Questionable';
+            merged[existingIdx].description = `${merged[existingIdx].description} (RotoWire says Q)`;
+          }
+        } else {
+          // Add new injury from RotoWire
+          merged.push(rwInj);
+        }
+      });
+      return merged;
+    };
+
+    const finalHomeInjuries = mergeInjuries(bdlInjuries.home, rotowireInjuries.home);
+    const finalAwayInjuries = mergeInjuries(bdlInjuries.away, rotowireInjuries.away);
+    
+    // Fetch Gemini Grounding for narrative context
     let liveContextInjuries = await fetchGroundedContext(homeTeam, awayTeam, sport);
     
     // ALWAYS preserve the raw grounding context for Gary's organic reading
@@ -1009,21 +1227,19 @@ async function fetchInjuries(homeTeam, awayTeam, sport) {
       liveContextInjuries = { home: [], away: [] };
     }
     
-    // DECISION: Use BDL injuries for NBA/NFL, Gemini Grounding for NHL/NCAAF/NCAAB
-    if (hasBdlInjuries) {
-      // NBA/NFL: Use BDL as single source of truth (reliable, no hallucinations)
-      console.log(`[Scout Report] Using BDL injuries for ${sport} (${bdlInjuries.home?.length || 0} home, ${bdlInjuries.away?.length || 0} away)`);
+    // DECISION: Use BDL+RotoWire for NBA/NFL/NHL, Gemini Grounding for others
+    if (hasBdlInjuries || rwSport) {
+      console.log(`[Scout Report] Using merged BDL+RotoWire injuries for ${sport} (${finalHomeInjuries.length} home, ${finalAwayInjuries.length} away)`);
       return {
-        home: bdlInjuries.home || [],
-        away: bdlInjuries.away || [],
+        home: finalHomeInjuries,
+        away: finalAwayInjuries,
+        lineups: rotowireLineups,
         narrativeContext
       };
     } else {
-      // NHL/NCAAF/NCAAB: Use Gemini Grounding (BDL doesn't have injury endpoints)
-      // Parse injuries from the grounding context
+      // NCAAF/NCAAB: Use Gemini Grounding (BDL doesn't have injury endpoints)
       const groundingInjuries = await fetchGroundingInjuries(homeTeam, awayTeam, sport);
       console.log(`[Scout Report] Using Gemini Grounding injuries for ${sport} (BDL has no endpoint)`);
-      console.log(`[Scout Report] Grounding injuries: ${groundingInjuries.home?.length || 0} home, ${groundingInjuries.away?.length || 0} away`);
       return {
         home: groundingInjuries.home || [],
         away: groundingInjuries.away || [],
@@ -1082,24 +1298,43 @@ async function fetchGroundedContext(homeTeam, awayTeam, sport, gameDate, options
     if (sport === 'NFL' || sport === 'americanfootball_nfl') {
       prompt = `For the NFL game ${awayTeam} @ ${homeTeam} on ${today}:
 
-1. INJURIES (CRITICAL - INCLUDE GAMES MISSED):
-   List ALL players OUT, QUESTIONABLE, DOUBTFUL, or on IR for each team:
-   - Player name, position, injury type
-   - GAMES MISSED: How many games has this player missed this season?
-   - INJURY DATE: When did they get injured? (Week # and approximate date)
-   - Duration: RECENT (1-2 weeks), MID-SEASON (3-6 weeks), or SEASON-LONG (7+ weeks / most of season)
-   - For SEASON-LONG injuries: Team stats ALREADY reflect their absence - NOT a betting edge
-   
-   Format example: "Jayden Daniels (QB) - IR - rib/knee - MISSED 8 GAMES (since Week 7) - SEASON-LONG"
+🔴 SOURCE OF TRUTH: Search https://www.rotowire.com/football/lineups.php for CONFIRMED starting lineups and injury statuses.
+This page shows the actual game-day starters and inactives. Use this as the primary source.
 
-2. QB SITUATION: 
-   - Who is the STARTING QB for ${homeTeam}?
-   - Who is the STARTING QB for ${awayTeam}?
+1. INJURIES & CONTEXT (CRITICAL - from RotoWire):
+   List ALL players with game-day statuses for each team:
+   - OUT: Confirmed not playing
+   - DOUBTFUL: Unlikely to play (75% chance OUT)
+   - QUESTIONABLE: Game-time decision (50/50)
+   - IR: Injured Reserve
+   
+   **FOR EACH INJURY, PROVIDE:**
+   - Player name, position, injury type
+   - When did they get injured? (Week # or date)
+   - How many games have they missed?
+   - Team's record in games they missed
+   - Who has been filling their role?
+   
+   Format example: "Jayden Daniels (QB) - IR - rib/knee - Out since Week 7 (8 games) - Team is 5-3 in those games - Marcus Mariota starting"
+   Format example: "Lane Johnson (OT) - QUESTIONABLE - foot - Missed Week 17 - Team allowed 4 sacks that game - Mekhi Becton filled in"
+
+2. QB SITUATION (from RotoWire): 
+   - Who is the CONFIRMED STARTING QB for ${homeTeam}?
+   - Who is the CONFIRMED STARTING QB for ${awayTeam}?
    - Are any QBs on IR? When did they get injured and how many games missed?
    - Did either team change QBs mid-season? Who was the previous starter?
    - If a backup/3rd-string QB is starting, what is their experience level?
 
-3. WEATHER: Current forecast for game time at the stadium
+3. WEATHER & TEMPERATURE:
+   - ALWAYS include: Game-time temperature (°F)
+   - ALWAYS include: Is this a dome/indoor stadium? (If yes, skip weather entirely)
+   - ONLY include precipitation/wind details if conditions are CONFIRMED SEVERE:
+     * Active blizzard with accumulation during the game
+     * Sustained wind 25+ mph (not gusts - sustained)
+     * Sub-15°F with dangerous wind chill
+   - If conditions are NOT severe, just state: "Temperature: X°F. No severe weather expected."
+   - DO NOT include: forecasted rain chances, light snow predictions, or "might rain" language
+   - Weather forecasts are unreliable - only report CONFIRMED current/imminent severe conditions
 
 4. DYNAMIC MATCHUP NARRATIVES & NEWS:
    - Any breaking team news, drama, or major storylines?
@@ -1125,17 +1360,44 @@ async function fetchGroundedContext(homeTeam, awayTeam, sport, gameDate, options
    - What is each team's record in their last 5 games? (e.g., "3-2" or "1-4")
    ⚠️ Be PRECISE. Include Week numbers and exact scores. If unsure, say "unable to verify" - DO NOT GUESS.
 
-8. ROSTER MOVES (CRITICAL FOR PLAYER PROPS - 2025 SEASON):
-   List ANY players who changed teams in 2025 via trade, free agency, or waiver:
-   - For ${homeTeam}: List players acquired AND players who left (with destination team)
-   - For ${awayTeam}: List players acquired AND players who left (with destination team)
-   - Include position and when the move happened (month/date if available)
-   - ⚠️ This is CRITICAL - player prop odds often show outdated team assignments
+8. EFFICIENCY BASELINE (NGS/EPA - WHO SHOULD WIN):
+   Search nextgenstats.nfl.com, pro-football-reference.com, or footballoutsiders.com for these team-level metrics:
    
-   Format example: "George Pickens (WR) - Traded from Steelers to Cowboys (May 2025)"
-   Format example: "Javonte Williams (RB) - Signed with Cowboys as FA (March 2025)"
+   ${homeTeam}:
+   - Offensive EPA per play (or EPA rank): How efficient is the offense?
+   - Defensive EPA per play (or EPA rank): How efficient is the defense?
+   - Pass Block Win Rate: How well does OL protect the QB?
+   - Pass Rush Win Rate: How well does DL generate pressure?
+   - Success Rate: % of plays gaining "expected" yards
+   
+   ${awayTeam}:
+   - Offensive EPA per play (or EPA rank): How efficient is the offense?
+   - Defensive EPA per play (or EPA rank): How efficient is the defense?
+   - Pass Block Win Rate: How well does OL protect the QB?
+   - Pass Rush Win Rate: How well does DL generate pressure?
+   - Success Rate: % of plays gaining "expected" yards
+   
+   ⚠️ This tells Gary WHO SHOULD WIN based on process metrics. He then investigates what might change that picture for THIS game.
+   ⚠️ Just provide the NUMBERS - Gary interprets. No opinions.
 
-9. KEY PLAYER STATS (LAST 5 GAMES - CRITICAL FOR PROPS):
+9. REVENGE GAME CONTEXT (Only if applicable):
+   Is any player in THIS GAME facing their FORMER TEAM today?
+   
+   **ONLY REPORT IF:**
+   - A player on ${homeTeam} used to play for ${awayTeam} (or vice versa)
+   - They are ACTIVE and expected to play in THIS game
+   
+   **IF YES, PROVIDE:**
+   - Player name, position, current team
+   - When did they leave their former team?
+   - How did they leave? (Traded, released, free agency)
+   - Any notable storyline? (Bitter departure, fan favorite returning, etc.)
+   
+   **IF NO REVENGE GAMES:** Simply state "No revenge game storylines for this matchup."
+   
+   ⚠️ DO NOT list general offseason trades or roster moves. Only report if a player is facing their former team TODAY.
+
+10. KEY PLAYER STATS (LAST 5 GAMES - CRITICAL FOR PROPS):
    For EACH team, provide game-by-game stats for the last 5 games for these key players:
    
    ${homeTeam} KEY PLAYERS:
@@ -1168,26 +1430,68 @@ Be factual. Do NOT include any betting picks or predictions.
     } else if (sport === 'NBA' || sport === 'basketball_nba') {
       prompt = `For the NBA game ${awayTeam} @ ${homeTeam} on ${today}:
 
-1. INJURIES: List ALL players OUT, QUESTIONABLE, DOUBTFUL, or SIDELINED for each team
-   - Include player name and position (G, F, C)
-   - Mark if RECENT injury (last 2 weeks) or SEASON-LONG (out most of season)
-   - Note any INDEFINITE absences (no timetable)
-   - For SEASON-LONG injuries, team stats already reflect their absence
+🔴 SOURCE OF TRUTH: Search "site:rotowire.com NBA lineups" for the most accurate lineup and injury data.
+RotoWire is the industry standard for game-day statuses - prioritize their information over other sources.
 
-2. DEPTH CHART / STARTING LINEUP:
-   - Who is the CURRENT starting 5 for ${homeTeam}? (PG, SG, SF, PF, C)
-   - Who is the CURRENT starting 5 for ${awayTeam}? (PG, SG, SF, PF, C)
-   - Any rotation changes due to injuries?
-   - Who are the key bench players seeing minutes?
+1. INJURIES (from RotoWire) - List ALL players with game-day statuses for each team:
+   
+   📋 STATUS DEFINITIONS:
+   - OUT: Confirmed not playing
+   - DOUBTFUL: Unlikely to play (75% chance OUT)
+   - QUESTIONABLE (Q): Game-time decision - CRITICAL for betting (50/50)
+   - PROBABLE: Expected to play but worth monitoring
+   
+   For EACH injured player, include:
+   - Player name, position (G, F, C), and injury description
+   - DATE INJURED: When did this injury occur? (approximate date or "since [date]")
+   - GAMES MISSED: How many games have they missed?
+   
+   🏷️ DURATION CATEGORY (CRITICAL for analysis):
+   - 🔴 RECENT (0-7 days): Team is STILL ADJUSTING - investigate rotation impact
+   - 🟡 SHORT-TERM (1-3 weeks): Team has started adapting - check recent performance without them
+   - ⚪ SEASON-LONG (4+ weeks / most of season): Team stats ALREADY REFLECT their absence
+     → The team that won 2 nights ago IS the team playing tonight - this injury is BAKED IN
+   
+   Format: "Player (Pos) - STATUS - Injury - Since [date] - [X] games missed - [RECENT/SHORT-TERM/SEASON-LONG]"
 
-3. KEY PLAYERS & NARRATIVE CONTEXT:
+2. STARTING LINEUP (from RotoWire "NBA Lineups" page):
+   - Who is the CONFIRMED starting 5 for ${homeTeam}? (PG, SG, SF, PF, C)
+   - Who is the CONFIRMED starting 5 for ${awayTeam}? (PG, SG, SF, PF, C)
+   - If lineup not yet confirmed, note "PROJECTED" and when confirmation expected
+   - Any RECENT rotation changes (last 1-2 weeks) due to injuries?
+   - Who are the key bench players seeing increased minutes?
+
+3. RECENT INJURY IMPACT (CRITICAL - only for 🔴 RECENT injuries):
+   - For players injured in the last 7 days: How has the team performed WITHOUT them?
+   - Who stepped up? Who is getting extra minutes?
+   - Is the team still figuring out rotations, or have they stabilized?
+
+4. KEY PLAYERS & NARRATIVE CONTEXT:
    - Who are the top scorers/stars CONFIRMED playing tonight?
    - ROOKIE UPDATES: Any high-impact 2025 rookies (e.g., Cooper Flagg) or young players whose significance is rising?
    - STORYLINES: Any recent performance milestones, "revenge games", or player momentum shifts?
    - LOAD MANAGEMENT: Any concerns about stars resting?
    - TRADES: Any players recently traded or released from either team?
 
-4. DYNAMIC MATCHUP FACTORS:
+5. EFFICIENCY BASELINE (WHO SHOULD WIN):
+   Search nba.com/stats or basketball-reference.com for these team-level metrics:
+   
+   ${homeTeam}:
+   - Offensive Rating (ORtg): Points per 100 possessions (league avg ~115)
+   - Defensive Rating (DRtg): Points allowed per 100 possessions (lower = better)
+   - Net Rating: ORtg - DRtg (positive = outscoring opponents)
+   - Pace: Possessions per game (affects total, stat inflation)
+   
+   ${awayTeam}:
+   - Offensive Rating (ORtg): Points per 100 possessions
+   - Defensive Rating (DRtg): Points allowed per 100 possessions
+   - Net Rating: ORtg - DRtg
+   - Pace: Possessions per game
+   
+   ⚠️ This tells Gary WHO SHOULD WIN based on efficiency. He then investigates what might change that picture tonight.
+   ⚠️ Just provide the NUMBERS - Gary interprets. No opinions.
+
+6. DYNAMIC MATCHUP FACTORS:
    - Any back-to-back situations?
    - Team drama, coaching changes, or locker room energy?
    - Playoff race implications or "must-win" narratives?
@@ -1203,28 +1507,74 @@ Be factual. Do NOT include any betting picks or predictions.
     } else if (sport === 'NHL' || sport === 'icehockey_nhl') {
       prompt = `For the NHL game ${awayTeam} @ ${homeTeam} on ${today}:
 
-1. INJURIES: List ALL players OUT, INJURED, or DAY-TO-DAY for each team
-   - Include player name, position (C, W, D, G)
-   - Mark if RECENT (last 2 weeks) or SEASON-LONG
-   - Note any players on LTIR (Long-Term Injured Reserve)
+🔴 SOURCE OF TRUTH: Search "site:rotowire.com NHL lineups" for the most accurate lineup and injury data.
+RotoWire is the industry standard for game-day statuses - prioritize their information over other sources.
 
-2. GOALIE SITUATION - CRITICAL:
+1. INJURIES (from RotoWire) - List ALL players with game-day statuses for each team:
+   
+   📋 STATUS DEFINITIONS:
+   - OUT: Confirmed not playing tonight
+   - IR: Injured Reserve (minimum 7 days)
+   - LTIR: Long-Term Injured Reserve (minimum 24 days)
+   - DAY-TO-DAY: Game-time decision - CRITICAL for betting
+   
+   For EACH injured player, include:
+   - Player name, position (C, W, D, G), and injury description
+   - DATE INJURED: When did this injury occur? (approximate date or "since [date]")
+   - GAMES MISSED: How many games have they missed?
+   
+   🏷️ DURATION CATEGORY (CRITICAL for analysis):
+   - 🔴 RECENT (0-7 days): Team is STILL ADJUSTING - investigate line/rotation impact
+   - 🟡 SHORT-TERM (1-3 weeks): Team has started adapting - check recent performance without them
+   - ⚪ SEASON-LONG/IR/LTIR (4+ weeks / most of season): Team stats ALREADY REFLECT their absence
+     → The team that won 2 nights ago IS the team playing tonight - this injury is BAKED IN
+   
+   Format: "Player (Pos) - STATUS - Injury - Since [date] - [X] games missed - [RECENT/SHORT-TERM/SEASON-LONG]"
+
+2. GOALIE SITUATION - CRITICAL (from RotoWire "NHL Lineups" page):
    - Who is the CONFIRMED starting goalie for ${homeTeam}?
    - Who is the CONFIRMED starting goalie for ${awayTeam}?
-   - Include their current season save percentage if available
+   - If not yet confirmed, note "EXPECTED" vs "PROJECTED" and when confirmation expected
+   - Include their current season save percentage and goals-against average
    - Is either team on a back-to-back? (affects goalie choice)
+   - Any goalie controversies or hot streaks?
 
-3. LINE COMBINATIONS & STORYLINES:
-   - Who are the top-line forwards for each team?
-   - Any recent line changes or call-ups from AHL?
+3. LINE COMBINATIONS (from RotoWire):
+   - Who are the top-line forwards (1st line) for each team?
+   - Who are the top defensive pairings?
+   - Any RECENT line changes (last 1-2 weeks) or call-ups from AHL?
    - NARRATIVES: Any "revenge spots" for traded players, milestones, or team momentum shifts?
    - ROOKIE IMPACT: Any young players making a sudden impact?
 
-4. RECENT NEWS & DYNAMIC FACTORS:
-   - Any trades, waiver claims, or roster moves?
+4. RECENT INJURY IMPACT (CRITICAL - only for 🔴 RECENT injuries):
+   - For players injured in the last 7 days: How has the team performed WITHOUT them?
+   - Who moved up in the lineup? Any AHL call-ups filling in?
+   - Is the team still figuring out line combinations, or have they stabilized?
+
+5. RECENT NEWS & DYNAMIC FACTORS (last 2 weeks only):
+   - Any MID-SEASON trades or waiver claims (not offseason moves)?
    - Team drama, coaching hot seat, or playoff race?
    - Is this a rivalry or divisional game?
-   - Narrative context not captured by BDL stats?
+   - REVENGE GAME: Is any player facing their FORMER TEAM today?
+   ⚠️ DO NOT report offseason roster moves. Only report if directly relevant to THIS game.
+
+6. EFFICIENCY BASELINE (WHO SHOULD WIN):
+   Search moneypuck.com or naturalstattrick.com for these team-level metrics:
+   
+   ${homeTeam}:
+   - Expected Goals For (xGF) per 60: Offensive shot quality
+   - Expected Goals Against (xGA) per 60: Defensive quality
+   - Corsi For % (CF%): Shot attempt differential (>50% = controlling play)
+   - PDO: Shooting % + Save % (100 = average, >102 = lucky, <98 = unlucky)
+   
+   ${awayTeam}:
+   - Expected Goals For (xGF) per 60: Offensive shot quality
+   - Expected Goals Against (xGA) per 60: Defensive quality
+   - Corsi For % (CF%): Shot attempt differential
+   - PDO: Shooting % + Save % (regression indicator)
+   
+   ⚠️ This tells Gary WHO SHOULD WIN based on process metrics. He then investigates what might change that picture tonight (goalie, B2B, etc).
+   ⚠️ Just provide the NUMBERS - Gary interprets. No opinions.
 
 Be factual. Do NOT include any betting picks or predictions.
 
@@ -2195,6 +2545,27 @@ function formatInjuryReport(homeTeam, awayTeam, injuries) {
   renderTeam(homeTeam, homeCats, '🏠');
   renderTeam(awayTeam, awayCats, '✈️');
   
+  return lines.join('\n');
+}
+
+/**
+ * Format starting lineups for the scout report
+ */
+function formatStartingLineups(homeTeam, awayTeam, lineups) {
+  if (!lineups || (!lineups.home?.length && !lineups.away?.length)) return '';
+
+  const lines = ['🏀 STARTING LINEUPS (PROBABLE/CONFIRMED)'];
+  lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  
+  if (lineups.away?.length) {
+    lines.push(`✈️ ${awayTeam}: ${lineups.away.map(p => `${p.name}${p.position ? ` (${p.position})` : ''}`).join(', ')}`);
+  }
+  
+  if (lineups.home?.length) {
+    lines.push(`🏠 ${homeTeam}: ${lineups.home.map(p => `${p.name}${p.position ? ` (${p.position})` : ''}`).join(', ')}`);
+  }
+  
+  lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   return lines.join('\n');
 }
 
@@ -3503,15 +3874,20 @@ async function fetchNcaabKeyPlayers(homeTeam, awayTeam, sport) {
       // Map players with their stats
       const playersWithStats = players.map(p => {
         const playerStats = statsById[p.id] || {};
+        const gamesPlayed = parseFloat(playerStats.games_played) || 0;
+        // CRITICAL: pts/reb/ast are TOTAL season stats, must divide by games_played to get per-game averages
+        const totalPts = parseFloat(playerStats.pts) || 0;
+        const totalReb = parseFloat(playerStats.reb) || 0;
+        const totalAst = parseFloat(playerStats.ast) || 0;
         return {
           name: `${p.first_name} ${p.last_name}`,
           position: p.position || 'N/A',
           jerseyNumber: p.jersey_number,
           id: p.id,
-          ppg: parseFloat(playerStats.pts) || 0,
-          rpg: parseFloat(playerStats.reb) || 0,
-          apg: parseFloat(playerStats.ast) || 0,
-          gamesPlayed: playerStats.games_played || 0
+          ppg: gamesPlayed > 0 ? totalPts / gamesPlayed : 0,
+          rpg: gamesPlayed > 0 ? totalReb / gamesPlayed : 0,
+          apg: gamesPlayed > 0 ? totalAst / gamesPlayed : 0,
+          gamesPlayed: gamesPlayed
         };
       });
       
@@ -5258,7 +5634,46 @@ For the TOP PLAYERS on each team:
 - PRIMETIME PERFORMANCE: Is this a nationally televised game (ESPN/TNT)? Some players elevate on big stages.
 - CONSISTENCY/FLOOR-CEILING: Which players have high variance (boom-or-bust) vs consistent outputs?
 
-== SECTION 8: BETTING MARKET SIGNALS ==
+== SECTION 8: NBA ADVANCED STATS (PREDICTIVE METRICS) ==
+Search nba.com/stats and basketball-reference.com for tracking data that PREDICTS future performance:
+
+**For Scorers on ${homeTeam} and ${awayTeam}:**
+- USAGE RATE: % of team plays used when on court (high usage 28%+ = volume scorer, more FGA)
+- TRUE SHOOTING % (TS%): Efficiency accounting for 3s and FTs (elite is 60%+)
+- POINTS PER POSSESSION: How efficient is the player in isolation/P&R?
+- SHOT DISTRIBUTION: What % of shots are at rim vs mid-range vs 3? (affects consistency)
+- FREE THROW RATE: Does this player get to the line? (boosts points floor)
+
+**For Playmakers on ${homeTeam} and ${awayTeam}:**
+- ASSIST %: % of teammate FGs assisted while on court (high = true playmaker)
+- POTENTIAL ASSISTS: Passes that should be assists if teammates hit shots
+- TIME OF POSSESSION: Ball-dominant guards hold ball longer = more assist opportunities
+- PICK & ROLL FREQUENCY: How often do they run P&R? (affects assist upside)
+
+**For Rebounders on ${homeTeam} and ${awayTeam}:**
+- REBOUND %: % of available rebounds grabbed (offensive vs defensive split)
+- CONTESTED REBOUND %: How many of their boards are contested?
+- BOX OUT RATE: Do they create opportunities or just clean up?
+
+**For 3-Point Shooters:**
+- 3PA PER GAME: Volume of attempts (more attempts = more variance)
+- CATCH & SHOOT %: Are they better spot-up or off-dribble?
+- CORNER 3 %: Corner is highest % shot - do they get corner looks?
+- WIDE OPEN 3% (defender 6+ feet): How do they shoot when open?
+
+**PACE & ENVIRONMENT FACTORS:**
+- TEAM PACE: Possessions per 48 minutes (fast pace 102+ = stat inflation)
+- OPPONENT PACE: Will this game be fast or slow?
+- DEFENSIVE RATING vs POSITION: How does opponent defend this position?
+- MINUTES PROJECTION: Based on rotation, blowout risk, back-to-back status
+
+**MATCHUP-SPECIFIC (Critical for Props):**
+- How does ${homeTeam} defense rank in POINTS ALLOWED to guards/forwards/centers?
+- How does ${awayTeam} defense rank vs 3-point shooters?
+- Any player whose USAGE is spiking due to teammate injuries?
+- Any player whose efficiency (TS%) is unsustainably high/low? (regression candidate)
+
+== SECTION 9: BETTING MARKET SIGNALS ==
 ⚠️ NOTE: These are SUPPLEMENTARY data points only - NOT decisive factors for picks.
 - LINE MOVEMENT: Has the spread moved significantly? (e.g., opened -3, now -5.5)
 - PUBLIC BETTING %: What percentage of public is on each team? (Note if lopsided, like 85%)
@@ -5272,8 +5687,9 @@ FORMAT YOUR RESPONSE with clear section headers. Be FACTUAL - if you can't find 
 3. FACTS ONLY - Do NOT include any betting predictions, picks, or analysis from articles
 4. NO OPINIONS - Do NOT copy predictions like "The Hawks will win because..." from any source
 5. YOUR OWN WORDS - Synthesize facts, do NOT plagiarize text from articles
-6. VERIFY STATS - Only include stats you can verify from official sources
-7. NO BETTING ADVICE - Gary will make his own decision - you just provide CONTEXT`;
+6. VERIFY STATS - Only include stats you can verify from official sources (including nba.com/stats)
+7. NO BETTING ADVICE - Gary will make his own decision - you just provide CONTEXT
+8. ADVANCED STATS: Prioritize tracking data from nba.com/stats for predictive metrics`;
     }
     else if (sport === 'NHL' || sport === 'icehockey_nhl') {
       prompt = `For the NHL game ${awayTeam} @ ${homeTeam} on ${today}, provide COMPREHENSIVE narrative context for player prop analysis:
@@ -5320,7 +5736,48 @@ For top scorers/players:
 - SPREAD & GAME SCRIPT: What is the spread? Trailing team may pull goalie late.
 - CONSISTENCY: Which players have high floor vs boom-or-bust tendencies?
 
-== SECTION 8: BETTING MARKET SIGNALS ==
+== SECTION 8: NHL ADVANCED STATS (PREDICTIVE METRICS) ==
+Search moneypuck.com, naturalstattrick.com, and nhl.com/stats for tracking data that PREDICTS future performance:
+
+**For Skaters on ${homeTeam} and ${awayTeam}:**
+- INDIVIDUAL EXPECTED GOALS (ixG): Shot quality - are they getting HIGH DANGER chances?
+- GOALS ABOVE EXPECTED (GAE): Positive = finishing above expected, Negative = unlucky/due for goals
+- HIGH DANGER CHANCES (HDC): Scoring chances from slot/crease area (most predictive of goals)
+- SHOOTING %: Is it unsustainably high (15%+) or low (<5%)? NHL average is ~10%
+- INDIVIDUAL CORSI FOR (iCF): Total shot attempts - volume indicator
+
+**For Goal Scorers:**
+- ixG vs ACTUAL GOALS: If ixG >> goals, they're UNLUCKY and due for regression UP
+- ixG vs ACTUAL GOALS: If goals >> ixG, they're LUCKY and may regress DOWN
+- HDC/60: High danger chances per 60 minutes - who's getting quality looks?
+- SHOOTING % TREND: Compare career avg to current season (regression candidate?)
+
+**For Assist/Points Props:**
+- PRIMARY ASSISTS: More valuable than secondary assists (repeatable skill)
+- 5v5 vs PP PRODUCTION: What % comes from power play? (PP1 = high upside)
+- ON-ICE xGF: When this player is on ice, how much xG does the team generate?
+- LINEMATE QUALITY: Who are they playing with? Elite center = more assists
+
+**For SOG (Shots on Goal) Props:**
+- iCF (Individual Corsi For): Total shot ATTEMPTS (more predictive than SOG)
+- SHOTS THROUGH %: What % of attempts reach the net? (consistency indicator)
+- SHOT RATE/60: Shots per 60 minutes of ice time
+- O-ZONE STARTS %: More offensive zone starts = more shot opportunities
+
+**Team-Level Predictive Metrics:**
+- ${homeTeam} xGF/60 (expected goals for per 60): Offensive generation quality
+- ${awayTeam} xGF/60: Offensive generation quality
+- ${homeTeam} xGA/60 (expected goals against per 60): Defensive quality
+- ${awayTeam} xGA/60: Defensive quality
+- PDO: Team shooting % + save %. If > 102, regression DOWN likely. If < 98, regression UP likely.
+
+**MATCHUP-SPECIFIC (Critical for Props):**
+- ${homeTeam} goalie xSV% (expected save %): Is goalie over/under-performing?
+- ${awayTeam} goalie xSV%: Is goalie over/under-performing?
+- Any player whose GOALS >> ixG? (lucky, may regress down)
+- Any player whose ixG >> GOALS? (unlucky, due for regression up - TARGET THESE)
+
+== SECTION 9: BETTING MARKET SIGNALS ==
 ⚠️ SUPPLEMENTARY DATA ONLY - not decisive:
 - LINE MOVEMENT: Significant spread/total movement?
 - PUBLIC %: Lopsided public betting?
@@ -5331,7 +5788,8 @@ FORMAT with clear section headers. Be FACTUAL - say "No data found" if unsure.
 1. FACTS ONLY - Do NOT include any betting predictions, picks, or analysis from articles
 2. NO OPINIONS - Do NOT copy predictions from any source
 3. YOUR OWN WORDS - Synthesize facts, do NOT plagiarize
-4. NO BETTING ADVICE - Gary will make his own decision - you just provide CONTEXT`;
+4. NO BETTING ADVICE - Gary will make his own decision - you just provide CONTEXT
+5. ADVANCED STATS: Prioritize xG data from moneypuck.com or naturalstattrick.com`;
     }
     else if (sport === 'NFL' || sport === 'americanfootball_nfl') {
       prompt = `For the NFL game ${awayTeam} @ ${homeTeam} on ${today}, provide COMPREHENSIVE narrative context for player prop analysis:
@@ -5380,27 +5838,89 @@ For TOP skill players (QB, RB1, WR1, TE1):
 - RECENT QUOTES: Coach comments about game plan or player usage?
 - WEATHER PERFORMANCE: Any players known to struggle/excel in expected conditions?
 
-== SECTION 7: INJURY CONTEXT (BEYOND REPORT) ==
+== SECTION 7: RED ZONE & TD DATA (CRITICAL FOR TD PROPS) ==
+
+**Team Red Zone Efficiency (ANYTIME TD):**
+- ${homeTeam}: Red zone TD % (how often do they score TDs vs FGs when inside 20?)
+- ${awayTeam}: Red zone TD % (how often do they score TDs vs FGs when inside 20?)
+- ${homeTeam}: Red zone DEFENSE - TD % allowed (do they bend but don't break, or give up TDs?)
+- ${awayTeam}: Red zone DEFENSE - TD % allowed
+
+**Red Zone Target/Touch Leaders for ${homeTeam}:**
+- Who leads in RED ZONE TARGETS? (often different than overall target share)
+- Who gets GOAL LINE CARRIES? (inside 5 yards - is there a "vulture"?)
+- Who is the preferred red zone TE? (TEs often spike in red zone usage)
+
+**Red Zone Target/Touch Leaders for ${awayTeam}:**
+- Who leads in RED ZONE TARGETS?
+- Who gets GOAL LINE CARRIES?
+- Who is the preferred red zone TE?
+
+**TD Rate Context:**
+- Any players with unusually HIGH TD rate that may regress? (lucky TDs)
+- Any players with unusually LOW TD rate despite high usage? (unlucky, due for TDs)
+- Goal line back vs committee situation for each team
+
+**FIRST TD SCORER DATA (CRITICAL FOR 1ST TD PROPS):**
+- ${homeTeam} "Scores First" %: How often does this team score the first TD of the game?
+- ${awayTeam} "Scores First" %: How often does this team score the first TD of the game?
+- ${homeTeam} 1st Drive TD %: How often do they score a TD on their opening drive?
+- ${awayTeam} 1st Drive TD %: How often do they score a TD on their opening drive?
+- ${homeTeam} 1st Quarter TD Leaders: Who has scored the most 1st quarter TDs this season?
+- ${awayTeam} 1st Quarter TD Leaders: Who has scored the most 1st quarter TDs this season?
+- Opening script tendencies: Any coach known for scripted opening drives that feature specific players?
+- Historical 1st TD scorers: Any players on either team with notably high 1st TD rate this season?
+
+== SECTION 8: INJURY CONTEXT (BEYOND REPORT) ==
 - Players returning from multi-week absences?
 - Players "questionable" who are expected to play?
 - Any injuries that affect other players' usage (e.g., WR1 out = WR2 boost)?
 
-== SECTION 8: TEAM TRENDS ==
+== SECTION 9: TEAM TRENDS ==
 - WIN/LOSE STREAKS: Current streak with context
 - HOME/ROAD SPLITS: Significant home/road performance difference?
 - DIVISION RIVALRY: Are these division rivals?
 
-== SECTION 9: GAME ENVIRONMENT (AFFECTS PROP CEILINGS) ==
+== SECTION 10: GAME ENVIRONMENT (AFFECTS PROP CEILINGS) ==
 - GAME TOTAL (O/U): What is the over/under? (High O/U 48+ = shootout, more pass yards)
 - SPREAD & GAME SCRIPT: What is the spread? Large favorites (-10+) may run clock late, affecting pass yards.
 - PROJECTED GAME FLOW: Will trailing team need to throw more? (Good for pass/receiving props)
 - PRIMETIME FACTOR: Is this SNF/MNF/TNF? National TV can affect player performance.
 
-== SECTION 10: HISTORICAL PATTERNS (PLAYER-SPECIFIC) ==
+== SECTION 11: HISTORICAL PATTERNS (PLAYER-SPECIFIC) ==
 - PLAYER VS OPPONENT: Any notable player vs this defense history?
 - CONSISTENCY: Which players have high floor (reliable) vs boom-or-bust (high variance)?
 
-== SECTION 11: BETTING MARKET SIGNALS ==
+== SECTION 12: NFL NEXT GEN STATS (PREDICTIVE METRICS) ==
+Search nextgenstats.nfl.com for player tracking data that PREDICTS future performance:
+
+**For WRs/TEs on ${homeTeam} and ${awayTeam}:**
+- SEPARATION: Average yards of separation from defenders (higher = more open targets)
+- CATCH RATE OVER EXPECTED (CROE): Are they elite at contested catches?
+- AVERAGE DEPTH OF TARGET (aDOT): Deep threat (15+ yards) vs possession/slot (under 10)?
+- CUSHION: How much space do defenders give them at snap?
+- TARGET SHARE: % of team targets - who is the alpha?
+
+**For RBs on ${homeTeam} and ${awayTeam}:**
+- YARDS BEFORE CONTACT: How much is O-line creating vs RB creating?
+- EXPECTED RUSHING YARDS: Based on blockers and defenders - are they over/under-performing?
+- RUSH YARDS OVER EXPECTED (RYOE): Positive = creating, Negative = scheme-dependent
+- 8+ DEFENDERS IN BOX %: How often are defenses stacking against them?
+
+**For QBs on ${homeTeam} and ${awayTeam}:**
+- COMPLETION % OVER EXPECTED (CPOE): Positive = accurate, Negative = inflated by scheme
+- TIME TO THROW: Quick release (<2.5s) vs deep passer (>3.0s)?
+- AGGRESSIVENESS: % of throws into tight windows
+- PRESSURE RATE: How often is the O-line giving them time?
+- CLEAN POCKET PASSER RATING vs UNDER PRESSURE RATING
+
+**MATCHUP-SPECIFIC (Critical for Props):**
+- How does ${homeTeam} defense rank in SEPARATION ALLOWED to WRs? (High = good for WR props)
+- How does ${awayTeam} defense rank in PRESSURE RATE? (High = bad for QB/WR props)
+- Any player whose EXPECTED production is much higher than ACTUAL? (regression candidate)
+- Any player whose ACTUAL is much higher than EXPECTED? (due for correction)
+
+== SECTION 13: BETTING MARKET SIGNALS ==
 ⚠️ SUPPLEMENTARY DATA ONLY - not decisive:
 - LINE MOVEMENT: Has spread moved significantly?
 - PUBLIC %: Lopsided public betting?
@@ -5411,8 +5931,10 @@ FORMAT with clear section headers. Be FACTUAL - say "No data found" if unsure.
 1. FACTS ONLY - Do NOT include any betting predictions, picks, or analysis from articles
 2. NO OPINIONS - Do NOT copy predictions like "The Cowboys will cover because..." from any source
 3. YOUR OWN WORDS - Synthesize facts, do NOT plagiarize text from articles
-4. VERIFY STATS - Only include stats you can verify from official sources
-5. NO BETTING ADVICE - Gary will make his own decision - you just provide CONTEXT`;
+4. VERIFY STATS - Only include stats you can verify from official sources (including nextgenstats.nfl.com)
+5. NO BETTING ADVICE - Gary will make his own decision - you just provide CONTEXT
+6. NEXT GEN STATS: Prioritize data from nextgenstats.nfl.com for player tracking metrics
+7. RED ZONE DATA: Prioritize red zone target/touch leaders for TD prop context`;
     }
     else {
       // Generic fallback for other sports

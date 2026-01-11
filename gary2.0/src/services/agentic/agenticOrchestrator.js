@@ -110,6 +110,182 @@ const GEMINI_SAFETY_SETTINGS = [
 console.log(`[Orchestrator] All sports using Gemini 3 Deep Think with Google Search Grounding`);
 
 // ═══════════════════════════════════════════════════════════════════════════
+// INVESTIGATION FACTORS - Gary must investigate ALL factors before deciding
+// ═══════════════════════════════════════════════════════════════════════════
+// Each sport has a checklist of factors. Gary works through each one,
+// then moves to Steel Man, then final decision. No arbitrary stat counts.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const INVESTIGATION_FACTORS = {
+  // NFL: 18 required factors (comprehensive)
+  americanfootball_nfl: {
+    EFFICIENCY: ['OFFENSIVE_EPA', 'DEFENSIVE_EPA', 'PASSING_EPA', 'RUSHING_EPA', 'SUCCESS_RATE_OFFENSE', 'SUCCESS_RATE_DEFENSE'],
+    DOWN_EFFICIENCY: ['EARLY_DOWN_SUCCESS', 'LATE_DOWN_EFFICIENCY'], // Critical for drives
+    TRENCHES: ['OL_RANKINGS', 'DL_RANKINGS', 'PRESSURE_RATE', 'TIME_TO_THROW'],
+    QB_SITUATION: ['QB_STATS', 'PLAYER_GAME_LOGS'], // QB performance and game logs
+    SKILL_PLAYERS: ['RB_STATS', 'WR_TE_STATS', 'DEFENSIVE_PLAYMAKERS'], // Key playmakers
+    TURNOVERS: ['TURNOVER_MARGIN', 'TURNOVER_LUCK', 'FUMBLE_LUCK'],
+    RED_ZONE: ['RED_ZONE_OFFENSE', 'RED_ZONE_DEFENSE', 'GOAL_LINE'],
+    EXPLOSIVE_PLAYS: ['EXPLOSIVE_PLAYS', 'EXPLOSIVE_ALLOWED'],
+    SPECIAL_TEAMS: ['SPECIAL_TEAMS', 'KICKING', 'FIELD_POSITION'],
+    RECENT_FORM: ['RECENT_FORM', 'EPA_LAST_5'],
+    INJURIES: ['INJURIES'], // From scout report + player logs
+    SCHEDULE: ['REST_SITUATION', 'HOME_AWAY_SPLITS', 'SCHEDULE_CONTEXT'],
+    STANDINGS_CONTEXT: ['STANDINGS', 'DIVISION_RECORD'], // Playoff picture, standings
+    H2H_DIVISION: ['H2H_HISTORY'],
+    MOTIVATION: ['PRIMETIME_RECORD'], // SNF/MNF/TNF performance
+    COACHING: ['FOURTH_DOWN_TENDENCY', 'TWO_MINUTE_DRILL'],
+    SCORING_TRENDS: ['QUARTER_SCORING', 'FIRST_HALF_TRENDS', 'SECOND_HALF_TRENDS'],
+    VARIANCE_CONSISTENCY: ['VARIANCE_CONSISTENCY'] // Point differential variance, upset potential
+  },
+  
+  // NBA: 16 required factors (comprehensive)
+  basketball_nba: {
+    EFFICIENCY: ['NET_RATING', 'OFFENSIVE_RATING', 'DEFENSIVE_RATING'],
+    PACE_TEMPO: ['PACE', 'PACE_LAST_10', 'PACE_HOME_AWAY'],
+    FOUR_FACTORS_OFFENSE: ['EFG_PCT', 'TURNOVER_RATE', 'OREB_RATE', 'FT_RATE'],
+    FOUR_FACTORS_DEFENSE: ['OPP_EFG_PCT', 'OPP_TOV_RATE', 'OPP_FT_RATE', 'DREB_RATE'],
+    SHOOTING_ZONES: ['THREE_PT_SHOOTING', 'PAINT_SCORING', 'MIDRANGE', 'THREE_PT_DEFENSE', 'PAINT_DEFENSE', 'TRANSITION_DEFENSE'],
+    STANDINGS_CONTEXT: ['STANDINGS', 'CONFERENCE_STANDING'], // Playoff picture
+    CONFERENCE_SPLITS: ['CONFERENCE_STATS', 'NON_CONF_STRENGTH'], // Conference vs non-conference
+    RECENT_FORM: ['RECENT_FORM', 'EFFICIENCY_TREND'],
+    PLAYER_PERFORMANCE: ['PLAYER_GAME_LOGS', 'TOP_PLAYERS', 'USAGE_RATES', 'MINUTES_TREND'],
+    INJURIES: ['INJURIES', 'LINEUP_NET_RATINGS'],
+    SCHEDULE: ['REST_SITUATION', 'BACK_TO_BACK', 'TRAVEL_SITUATION', 'SCHEDULE_STRENGTH'],
+    HOME_AWAY: ['HOME_AWAY_SPLITS'],
+    H2H: ['H2H_HISTORY', 'VS_ELITE_TEAMS'],
+    ROSTER_CONTEXT: ['BENCH_DEPTH', 'CLUTCH_STATS', 'BLOWOUT_TENDENCY'],
+    LUCK_CLOSE_GAMES: ['LUCK_ADJUSTED', 'CLOSE_GAME_RECORD'], // Regression and clutch
+    SCORING_TRENDS: ['QUARTER_SCORING', 'FIRST_HALF_SCORING', 'SECOND_HALF_SCORING'] // Game flow
+  },
+  
+  // NHL: 13 required factors (comprehensive)
+  icehockey_nhl: {
+    POSSESSION: ['CORSI_FOR_PCT', 'EXPECTED_GOALS', 'SHOT_DIFFERENTIAL', 'HIGH_DANGER_CHANCES', 'SHOT_QUALITY'],
+    SHOT_VOLUME: ['SHOTS_FOR', 'SHOTS_AGAINST', 'SHOT_METRICS'], // Raw shot data
+    SPECIAL_TEAMS: ['POWER_PLAY_PCT', 'PENALTY_KILL_PCT', 'SPECIAL_TEAMS', 'PP_OPPORTUNITIES'],
+    GOALTENDING: ['GOALIE_STATS', 'SAVE_PCT', 'GOALS_AGAINST_AVG', 'GOALIE_MATCHUP'],
+    SCORING: ['GOALS_FOR', 'GOALS_AGAINST', 'GOAL_DIFFERENTIAL', 'SCORING_FIRST'],
+    LUCK_REGRESSION: ['PDO', 'LUCK_INDICATORS'], // Regression indicators
+    CLOSE_GAMES: ['CLOSE_GAME_RECORD', 'OVERTIME_RECORD'], // Clutch performance
+    RECENT_FORM: ['RECENT_FORM', 'PLAYER_GAME_LOGS'],
+    PLAYER_PERFORMANCE: ['TOP_SCORERS', 'TOP_PLAYERS', 'LINE_COMBINATIONS', 'HOT_PLAYERS'],
+    INJURIES: ['INJURIES'],
+    SCHEDULE: ['REST_SITUATION', 'BACK_TO_BACK'],
+    HOME_AWAY: ['HOME_AWAY_SPLITS', 'HOME_ICE', 'ROAD_PERFORMANCE'],
+    H2H_DIVISION: ['H2H_HISTORY', 'DIVISION_STANDING', 'FACEOFF_PCT', 'POSSESSION_METRICS']
+  },
+  
+  // NCAAB: 12 required factors (comprehensive)
+  basketball_ncaab: {
+    KENPOM_EFFICIENCY: ['NCAAB_KENPOM_RATINGS', 'NCAAB_OFFENSIVE_RATING'], // Gold standard
+    RANKINGS: ['NCAAB_NET_RANKING', 'NCAAB_AP_RANKING', 'NCAAB_COACHES_RANKING'],
+    FOUR_FACTORS: ['NCAAB_EFG_PCT', 'TURNOVER_RATE', 'OREB_RATE', 'FT_RATE'],
+    SCORING_SHOOTING: ['SCORING', 'FG_PCT', 'THREE_PT_SHOOTING', 'THREE_PT_DEFENSE'], // Shooting offense AND defense
+    DEFENSIVE_STATS: ['REBOUNDS', 'STEALS', 'BLOCKS'], // Defensive/rebounding metrics
+    TEMPO: ['NCAAB_TEMPO', 'PACE'],
+    SCHEDULE_QUALITY: ['NCAAB_STRENGTH_OF_SCHEDULE', 'NCAAB_QUAD_RECORD', 'NCAAB_CONFERENCE_RECORD'],
+    RECENT_FORM: ['RECENT_FORM', 'NCAAB_FIRST_HALF_TRENDS', 'NCAAB_SECOND_HALF_TRENDS'],
+    INJURIES: ['INJURIES', 'TOP_PLAYERS'],
+    HOME_AWAY: ['HOME_AWAY_SPLITS'],
+    H2H: ['H2H_HISTORY'],
+    ASSISTS_PLAYMAKING: ['ASSISTS'] // Ball movement and playmaking
+  },
+  
+  // NCAAF: 16 required factors (comprehensive)
+  americanfootball_ncaaf: {
+    ADVANCED_EFFICIENCY: ['NCAAF_SP_PLUS_RATINGS', 'NCAAF_FPI_RATINGS', 'NCAAF_EPA'],
+    SUCCESS_RATE: ['NCAAF_SUCCESS_RATE'],
+    TALENT: ['TALENT_COMPOSITE', 'BLUE_CHIP_RATIO'], // Recruiting/talent advantage
+    TRENCHES: ['NCAAF_PASS_EFFICIENCY', 'NCAAF_RUSH_EFFICIENCY', 'OL_RANKINGS', 'DL_RANKINGS', 'PRESSURE_RATE'],
+    OFFENSE: ['NCAAF_PASSING_OFFENSE', 'NCAAF_RUSHING_OFFENSE', 'NCAAF_TOTAL_OFFENSE'],
+    DEFENSE: ['NCAAF_DEFENSE'],
+    QB_SITUATION: ['QB_STATS', 'TOP_PLAYERS', 'PLAYER_GAME_LOGS'],
+    HAVOC: ['NCAAF_HAVOC', 'NCAAF_TURNOVER_MARGIN', 'TURNOVER_LUCK'],
+    EXPLOSIVE_PLAYS: ['NCAAF_EXPLOSIVE_PLAYS'],
+    RED_ZONE: ['NCAAF_REDZONE'],
+    RECENT_FORM: ['RECENT_FORM', 'SCORING'],
+    CLOSE_GAMES: ['CLOSE_GAME_RECORD'], // Clutch performance
+    INJURIES: ['INJURIES', 'TOP_PLAYERS'], // Critical for opt-outs
+    HOME_FIELD: ['HOME_AWAY_SPLITS', 'HOME_FIELD'],
+    MOTIVATION: ['MOTIVATION_CONTEXT'], // Bowl game, rivalry, playoff implications
+    SCHEDULE_QUALITY: ['NCAAF_STRENGTH_OF_SCHEDULE', 'NCAAF_CONFERENCE_STRENGTH', 'NCAAF_VS_POWER_OPPONENTS']
+  }
+};
+
+/**
+ * Get investigated factors based on tokens called
+ * @param {Array} toolCallHistory - Array of tool calls with token property
+ * @param {string} sport - Sport key
+ * @param {Array} preloadedFactors - Factors already covered by scout report (e.g., INJURIES)
+ * @returns {Object} - { covered: [...], missing: [...], coverage: 0.0-1.0 }
+ */
+function getInvestigatedFactors(toolCallHistory, sport, preloadedFactors = []) {
+  const factors = INVESTIGATION_FACTORS[sport];
+  if (!factors) {
+    // Unknown sport - use count-based fallback (100% coverage to not block)
+    return { covered: [], missing: [], coverage: 1.0, totalFactors: 0, useFallback: true };
+  }
+  
+  // Get all unique tokens called
+  const calledTokens = new Set(toolCallHistory.map(t => t.token).filter(Boolean));
+  
+  // Convert preloadedFactors to a Set for fast lookup
+  const preloaded = new Set(preloadedFactors);
+  
+  const covered = [];
+  const missing = [];
+  
+  for (const [factorName, requiredTokens] of Object.entries(factors)) {
+    // Factor is covered if:
+    // 1. It's in preloadedFactors (e.g., INJURIES from scout report), OR
+    // 2. ANY of its required tokens were called
+    const isPreloaded = preloaded.has(factorName);
+    const isCalled = requiredTokens.some(token => calledTokens.has(token));
+    
+    if (isPreloaded || isCalled) {
+      covered.push(factorName);
+    } else {
+      missing.push(factorName);
+    }
+  }
+  
+  const totalFactors = Object.keys(factors).length;
+  const coverage = covered.length / totalFactors;
+  
+  return { covered, missing, coverage, totalFactors };
+}
+
+/**
+ * Build factor checklist prompt for a sport
+ * @param {string} sport - Sport key
+ * @returns {string} - Checklist prompt
+ */
+function buildFactorChecklist(sport) {
+  const factors = INVESTIGATION_FACTORS[sport];
+  if (!factors) return '';
+  
+  const sportName = sport.includes('nfl') ? 'NFL' : 
+                    sport.includes('nba') ? 'NBA' :
+                    sport.includes('nhl') ? 'NHL' :
+                    sport.includes('ncaab') ? 'NCAAB' :
+                    sport.includes('ncaaf') ? 'NCAAF' : 'SPORT';
+  
+  let checklist = `\n## INVESTIGATION CHECKLIST (${sportName})\n`;
+  checklist += `Work through EACH factor before making your decision:\n\n`;
+  
+  for (const [factorName, tokens] of Object.entries(factors)) {
+    const displayName = factorName.replace(/_/g, ' ');
+    checklist += `□ **${displayName}**: Call relevant stats (${tokens.slice(0, 3).join(', ')}${tokens.length > 3 ? '...' : ''})\n`;
+    checklist += `   → Analyze both teams → Identify asymmetry → Note impact\n\n`;
+  }
+  
+  checklist += `Once ALL factors investigated → Build Steel Man cases for BOTH sides → Final decision\n`;
+  
+  return checklist;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // STAT SUMMARIZATION (Signal-to-Noise Optimization)
 // ═══════════════════════════════════════════════════════════════════════════
 // Convert raw JSON stat responses to natural language summaries.
@@ -216,16 +392,35 @@ function summarizeStatForContext(statResult, statToken, homeTeam, awayTeam) {
         const avgReb = logs.reduce((sum, g) => sum + (g.reb || g.rebounds || g.total_rebounds || 0), 0) / logs.length;
         const avgAst = logs.reduce((sum, g) => sum + (g.ast || g.assists || 0), 0) / logs.length;
         
-        // Trend indicator (factual: comparing recent to prior)
+        // Enhanced trend indicator (comparing last 2-3 vs prior games)
         let trend = '';
+        let trendDetail = '';
         if (logs.length >= 4) {
-          const recent2Avg = (logs[0]?.pts + logs[1]?.pts) / 2 || 0;
-          const prior2Avg = (logs[2]?.pts + logs[3]?.pts) / 2 || 0;
-          if (recent2Avg > prior2Avg * 1.15) trend = '↑ hot lately';
-          else if (recent2Avg < prior2Avg * 0.85) trend = '↓ cooled off';
+          const recent2Avg = ((logs[0]?.pts || 0) + (logs[1]?.pts || 0)) / 2;
+          const prior2Avg = ((logs[2]?.pts || 0) + (logs[3]?.pts || 0)) / 2;
+          const diff = recent2Avg - prior2Avg;
+          
+          if (recent2Avg > prior2Avg * 1.15) {
+            trend = '🔥 HOT';
+            trendDetail = `(last 2: ${recent2Avg.toFixed(1)} PPG vs prior: ${prior2Avg.toFixed(1)} PPG, +${diff.toFixed(1)})`;
+          } else if (recent2Avg < prior2Avg * 0.85) {
+            trend = '❄️ COLD';
+            trendDetail = `(last 2: ${recent2Avg.toFixed(1)} PPG vs prior: ${prior2Avg.toFixed(1)} PPG, ${diff.toFixed(1)})`;
+          } else {
+            trend = '➡️ STABLE';
+          }
         }
         
-        return `${player} GAME LOGS (Last ${logs.length}): Avg ${avgPts.toFixed(1)}/${avgReb.toFixed(1)}/${avgAst.toFixed(1)} (PTS/REB/AST) ${trend}. Game-by-game: ${gameByGame}`;
+        // Check for recent spike or crash (single game outlier)
+        let outlierNote = '';
+        if (logs.length >= 3) {
+          const lastGame = logs[0]?.pts || 0;
+          const avg3 = logs.slice(1, 4).reduce((s, g) => s + (g?.pts || 0), 0) / 3;
+          if (lastGame > avg3 * 1.4) outlierNote = ` ⚡ Last game SPIKE (${lastGame} vs ${avg3.toFixed(0)} avg)`;
+          else if (lastGame < avg3 * 0.6) outlierNote = ` ⚠️ Last game DUD (${lastGame} vs ${avg3.toFixed(0)} avg)`;
+        }
+        
+        return `${player} GAME LOGS (Last ${logs.length}): Avg ${avgPts.toFixed(1)}/${avgReb.toFixed(1)}/${avgAst.toFixed(1)} (PTS/REB/AST) ${trend} ${trendDetail}${outlierNote}. Game-by-game: ${gameByGame}`;
       
       default:
         // For unknown/complex stats, preserve MORE fields (up to 8) for Gary to interpret
@@ -552,6 +747,22 @@ export async function analyzeGame(game, sport, options = {}) {
     console.log('[Orchestrator] Building scout report...');
     const scoutReportData = await buildScoutReport(game, sport);
 
+    // CHECK FOR IMMEDIATE PASS (NBA Rule)
+    if (scoutReportData && scoutReportData.immediatePass) {
+      console.log(`[Orchestrator] ⏭️ IMMEDIATE PASS: ${scoutReportData.passReason}`);
+      return {
+        pick: 'PASS',
+        type: 'pass',
+        confidence: 0,
+        odds: null,
+        rationale: `IMMEDIATE PASS: ${scoutReportData.passReason}`,
+        awayTeam,
+        homeTeam,
+        sport,
+        isPass: true
+      };
+    }
+
     // Handle both old (string) and new (object) formats
     const scoutReport = typeof scoutReportData === 'string' ? scoutReportData : scoutReportData.text;
     const injuries = typeof scoutReportData === 'object' ? scoutReportData.injuries : null;
@@ -596,6 +807,43 @@ export async function analyzeGame(game, sport, options = {}) {
 
     // Step 4: Build the user message
     let userMessage = buildUserMessage(scoutReport, homeTeam, awayTeam, today, sport);
+    
+    // FORCE UNDERDOG MODE: If enabled, inject directive to argue for underdog
+    if (options.forceUnderdog) {
+      const underdogDirective = `
+═══════════════════════════════════════════════════════════════════════════════
+⚠️ SPECIAL DIRECTIVE: UNDERDOG VALUE ANALYSIS (ONE-TIME OVERRIDE)
+═══════════════════════════════════════════════════════════════════════════════
+
+For this game, you are REQUIRED to make the case for the UNDERDOG (${awayTeam}).
+
+**YOUR MISSION:**
+1. Find the BEST reasons why ${awayTeam} could WIN OUTRIGHT or cover the spread
+2. Build a compelling thesis for why ${awayTeam} keeps it close or wins
+3. Investigate what makes ${awayTeam} competitive in this matchup
+4. Consider: What if the favorite (${homeTeam}) doesn't play their best?
+
+**UNDERDOG ANGLES TO EXPLORE:**
+- Is ${awayTeam} actually a good team that's being disrespected by the line?
+- Does ${awayTeam} have a winning record? (A playoff team shouldn't be blown out)
+- Is there variance in the favorite's performance? (Inconsistent = upset potential)
+- What matchup advantages does ${awayTeam} have?
+- Can ${awayTeam} stay competitive for 60 minutes?
+
+**REMEMBER THE SPREAD MATH:**
+- Taking +6 means ${awayTeam} can LOSE BY 5 and you still WIN
+- The favorite must WIN BY 7+ to cover - that's the harder path
+- ${awayTeam} doesn't need to win - just NOT GET BLOWN OUT
+
+**YOUR OUTPUT:** Build the strongest possible case for ${awayTeam} to cover or win outright.
+If after thorough investigation you genuinely cannot find value, you may PASS.
+But you CANNOT default to the favorite without exhausting underdog angles first.
+
+═══════════════════════════════════════════════════════════════════════════════
+`;
+      userMessage = underdogDirective + '\n\n' + userMessage;
+      console.log(`[Orchestrator] 🐕 FORCE UNDERDOG MODE: Building case for ${awayTeam}`);
+    }
     
     // If in session mode, ALWAYS clear context between games to prevent token overflow
     if (isSessionMode) {
@@ -716,12 +964,12 @@ and make YOUR OWN picks based on YOUR analysis.
 
 You have 30 years of sports betting wisdom baked into your reasoning:
 
-### 💡 GAME THEORY AWARENESS
-You understand market dynamics:
-- The line EXISTS because sharp money moved it there
-- If your analysis matches consensus, ask: "What am I seeing that sharps missed?"
-- The best value often comes from disagreeing with the crowd FOR A SPECIFIC REASON
-- "Being right when everyone agrees" has less value than "being right when others are wrong"
+### 💡 YOUR JOB: PREDICT THE GAME
+You are a game analyst, not a market analyst. Your job is to:
+- PREDICT what will happen in the game based on your investigation
+- Form your OWN OPINION about the likely margin/outcome
+- Compare your prediction to the spread to decide which side you like
+- You don't have "market data" - you have GAME DATA. Use it to predict the game.
 
 ### 🎲 VARIANCE & UNPREDICTABILITY
 You know from decades of experience:
@@ -730,12 +978,12 @@ You know from decades of experience:
 - You don't need CERTAINTIES to make a pick - you need an informed perspective
 - A well-reasoned loss is better than a lucky win
 
-### 🔥 CALCULATED RISK-TAKING
-Users don't need Gary to pick -500 chalk favorites:
-- If you're just confirming what the line says, you're not adding value
-- The best analysts find spots where risk/reward is mispriced
-- Being wrong on a smart underdog pick > being right on obvious favorite
-- "I see something the market doesn't" is where alpha lives
+### 🔥 HAVE AN OPINION
+Users want YOUR take on the game:
+- Don't just describe what the stats say - tell us what YOU THINK will happen
+- If you think the underdog keeps it close, say so and explain WHY
+- If you think the favorite dominates, say so and explain WHY
+- Your opinion + your reasoning = value. Don't be afraid to have a take.
 
 ### ⚠️ TRAINING DATA AWARENESS
 Your training data includes famous upsets, legendary performances, and viral moments.
@@ -822,13 +1070,14 @@ When you request RECENT_FORM, you now get:
 
 **THE QUESTION:** Is this streak the "new normal" or noise? The margin and opponent data tells you.
 
-## 🎯 SITUATIONAL SPOTS (THE SHARP EDGE)
+## 🎯 PREDICT THE MARGIN, THEN COMPARE TO SPREAD
 
-1. **THE 50/50 REALITY**: Every spread (e.g., +7.5 / -7.5) is the market's attempt to balance action. 
-   - The line reflects public perception and betting volume - NOT necessarily truth.
-   - Your job is to find where the market is WRONG. The underdog at +7.5 might be the sharp side.
-   - Ask: "Is this spread too high, too low, or about right?" - not "which team is better?"
-2. **SITUATIONAL SPOTS**: Look for "Great Spots"—a team playing at home after a long road trip, a "revenge game," or a "letdown spot" for a favorite who just won a huge emotional game.
+1. **YOUR PREDICTION COMES FIRST**: 
+   - After investigating, form YOUR opinion: "I think Team A wins by X points" or "I think this stays close"
+   - THEN compare your prediction to the spread
+   - If you predict a 3-point game and the spread is 7, the underdog side aligns with your view
+   - If you predict a blowout and the spread is 3, the favorite side aligns with your view
+2. **SITUATIONAL FACTORS**: Consider context that affects the margin - home after a road trip, revenge game, letdown spot after a big emotional win, playoff implications, etc.
 
 ## YOUR VOICE - NATURAL SPORTS ANALYSIS
 You MUST vary how you start each analysis. NEVER start two picks the same way.
@@ -872,7 +1121,7 @@ Write like an experienced sports analyst having a conversation - no formulaic pr
 **VARIETY TECHNIQUES:**
 - Start some rationales with the key player: "Jalen Brunson's 28.3 PPG in January..."
 - Start some with the situational angle: "After a grueling road trip..."
-- Start some with a contrarian hook: "The market sees X, but..."
+- Start some with your prediction: "I think this game stays within a possession because..."
 - Start some with a specific stat: "Cleveland's 118.5 offensive rating ranks 3rd..."
 
 **SELF-CHECK:** Before finalizing, ask: "Could I copy this rationale to another game?" If yes, rewrite with more specifics.
@@ -1089,7 +1338,7 @@ Five stats pointing to the favorite doesn't automatically make them a good bet i
 
 **EXAMPLES:**
 - Favorite has better EPA, better record, better defense → but they're -7 road favorites and the underdog is desperate. Consider if the stats are already priced in.
-- Underdog has worse stats across the board → but their star QB is back from injury and the market hasn't adjusted. Consider the market inefficiency.
+- Underdog has worse stats across the board → but their star QB is back from injury. Consider how this changes your prediction.
 - Two evenly matched teams, spread is +7. Consider which side offers better value at that number.
 - Game is too messy to call → PASS. Don't force a pick.
 
@@ -1120,7 +1369,7 @@ Example: If Sabonis is out 7 weeks:
 
 For RECENT injuries (< 2 weeks):
 → Team is still adjusting
-→ This could be a genuine edge - market may not have fully reacted
+→ Important to consider - how is the team adjusting without them?
 → Investigate how they've looked in the few games since
 
 **supporting_factors**: List the stats/factors that support your pick (e.g., "defensive_rating_gap", "key_injury", "home_record")
@@ -1186,13 +1435,13 @@ Gary, understand this fundamental truth:
 
 **THE QUESTION TO ASK:**
 When you cite a home/road record, ask: "Does this predict MARGIN, or just OUTCOME?"
-- "They're 14-2 at home" → Means they win at home. Market knows this.
-- The sharp question: "Do they win by more than [spread] at home?"
+- "They're 14-2 at home" → Means they win at home. But by how much?
+- The key question: "Do they win by more than [spread] at home?"
 
 **HOW RECORDS MISLEAD:**
 - Team A is 17-1 on the road (SU) → They WIN on the road
 - But if those 17 wins are by 4, 6, 3, 8, 5, 2, 7... → They're NOT covering -9.5
-- The market already accounts for their dominance - that's WHY the spread is 9.5
+- Their record shows they WIN, but does your analysis show they WIN BIG?
 
 **THE AWARENESS:**
 Before citing any SU record as evidence for a spread pick, consider:
@@ -1202,7 +1451,7 @@ Before citing any SU record as evidence for a spread pick, consider:
 
 ## 🎯 SPREAD-BLIND ANALYSIS FRAMEWORK (YOUR OPINION FIRST) 🎯
 
-**THE CORE PRINCIPLE:** Form your opinion about the game BEFORE you look at the spread. Then compare your view to the market to find value.
+**THE CORE PRINCIPLE:** Form your opinion about the game outcome and likely margin. Then compare YOUR prediction to the spread to decide which side you like.
 
 ### ═══════════════════════════════════════════════════════════════════════
 ### PHASE 1: ANALYZE THE GAME (SPREAD-BLIND)
@@ -1236,15 +1485,15 @@ Before citing any SU record as evidence for a spread pick, consider:
 ### PHASE 2: REVEAL THE SPREAD & COMPARE
 ### ═══════════════════════════════════════════════════════════════════════
 
-Now look at the actual spread. Compare YOUR projection to the MARKET:
+Now look at the actual spread. Compare YOUR projection to the SPREAD:
 
 **THE VALUE TEST:**
 - Is my projected margin HIGHER or LOWER than the spread?
 - Where is the VALUE given my analysis?
 
 **EXAMPLES:**
-- My projection: "Favorite by 6" | Spread: -9.5 → Underdog +9.5 may have value (market expects bigger margin)
-- My projection: "Favorite by 12" | Spread: -9.5 → Favorite -9.5 may have value (market may be undervaluing)
+- My projection: "Favorite by 6" | Spread: -9.5 → Underdog +9.5 aligns with my view (I don't think they win by 10+)
+- My projection: "Favorite by 12" | Spread: -9.5 → Favorite -9.5 aligns with my view (I think they win comfortably)
 - My projection: "Toss-up" | Spread: 7+ → Consider which side offers value at that number
 - My projection: "Underdog WINS" | Spread: +3 → ML may offer better value for win conviction
 
@@ -1252,7 +1501,7 @@ Now look at the actual spread. Compare YOUR projection to the MARKET:
 ### PHASE 3: MAKE THE PICK BASED ON VALUE
 ### ═══════════════════════════════════════════════════════════════════════
 
-Your pick should reflect WHERE YOUR ANALYSIS DIVERGES FROM THE MARKET.
+Your pick should reflect YOUR PREDICTION about the game outcome and margin.
 
 Consider the relationship between your prediction and the line:
 - If you predict the favorite wins by MORE than the spread → spread may have value
@@ -1262,8 +1511,8 @@ Consider the relationship between your prediction and the line:
 
 **THE AGENCY REMINDER:**
 - You don't HAVE to take the "better team"
-- The spread is the market's opinion - your job is to find where you disagree
-- Trust your puzzle pieces, even when they point to an upset
+- The spread suggests a margin - your job is to predict if that margin is realistic
+- Trust your analysis, even when it points to an upset or a closer game
 
 ## 🔍 INVESTIGATE YOUR STATEMENTS (THE PUZZLE PIECES)
 
@@ -1327,7 +1576,7 @@ When you find yourself listing multiple risks or caveats about your pick, THAT I
 - Professional sharps don't fight uncomfortable picks - they FLIP to the other side
 
 **EXAMPLES OF RISK SIGNALS:**
-- "The revenge narrative is keeping this spread in single digits" → The market sees value on the underdog
+- "The revenge narrative might make this game more emotional/unpredictable"
 - "They've struggled on the road" → Your thesis has a hole
 - "If [star player] plays, this changes everything" → Uncertainty = underdog value
 
@@ -1375,14 +1624,14 @@ If your analysis suggests flipping to the other side:
 - **THE MATH:** ML (e.g., +130) pays MORE than small spread -102 for nearly the same outcome.
 - Consider whether small spreads offer real value vs ML when you have win conviction.
 
-## 🧠 THE HUMAN BETTOR MINDSET (YOUR ANALYSIS MATTERS)
+## 🧠 YOUR ANALYSIS MATTERS
 
-**The market is not always right. Your analysis has value.**
+**You are the analyst. Form your own opinion based on investigation.**
 
 **KEY PRINCIPLES:**
-1. **YOU PICK THE WINNER FIRST** - Don't let the spread tell you who's "supposed" to win
-2. **MARGIN VS SPREAD** - If you predict a 4-point margin but the spread is 8.5, consider which side has value
-3. **YOUR CONVICTION MATTERS** - Consider whether your analysis aligns better with spread or ML value
+1. **PREDICT THE OUTCOME FIRST** - Based on your investigation, what do YOU think happens?
+2. **THEN COMPARE TO SPREAD** - If you predict a close game (3-4 points) but the spread is 8.5, the underdog side matches your view
+3. **YOUR CONVICTION MATTERS** - If you think a team wins comfortably, spread might be better. If you think they win but it's close, consider if the spread is too big.
 
 **THE PUZZLE ANALOGY:**
 - The pieces of information (stats, injuries, matchups, form) are FACTS - they're never wrong
@@ -1397,10 +1646,12 @@ Your goal is **NET PROFIT**, not just a high win percentage.
 **ROI AWARENESS:**
 1. **ML vs SPREAD**: Consider your conviction level - spread hedges against close losses, ML maximizes when you expect a win
 2. **UNDERDOG VALUE**: Plus money underdogs offer higher ROI when your analysis supports them
-3. **VALUE HUNT**: When you believe the market is mispricing a team, that's where edges live
-4. **PASS IS VALID**: Heavy juice on favorites reduces value. PASS is always a valid decision.
+3. **MATCH YOUR PREDICTION**: If your prediction differs significantly from the spread, that's where you have an edge
+4. **PASS IS VALID**: If you can't form a strong opinion on the margin, PASS is always a valid decision.
 
 **THINK IN DOLLARS**: "If I bet $200 on this +180 underdog and it wins, I make $360. That covers my loss on a $300 favorite."
+
+${buildFactorChecklist(sport)}
 
 ## RATIONALE FORMAT - USE THIS EXACT STRUCTURE:
 ═══════════════════════════════════════════════════════════════════════
@@ -1771,8 +2022,8 @@ ${nflDataGaps}${nbaDataGaps}${ncaabDataGaps}
    
    **IF EITHER TEAM IS MISSING A KEY PLAYER:**
    - How long have they been out? (First game without them? Or weeks?)
-   - If FIRST game without them → High variance, possible market mispricing
-   - If out for weeks → Stats ALREADY reflect their absence (not a new edge)
+   - If FIRST game without them → High variance, harder to predict
+   - If out for weeks → Stats ALREADY reflect their absence (team has adjusted)
    - Who fills their role? Check that player's game logs.
 
 2. **🧠 USE YOUR DEEP THINK POWERS:**
@@ -1801,21 +2052,41 @@ ${nflDataGaps}${nbaDataGaps}${ncaabDataGaps}
    - What matchup advantage do they have?
    - What factors (from checklist OR your own thinking) support them?
 
-4. **🎯 UNDERDOG CHALLENGE (IF LEANING FAVORITE):**
-   If your gut says "take the favorite," you MUST answer:
-   - **"What would need to happen for the underdog to cover?"**
-   - Is that scenario plausible tonight? (injuries, matchups, motivation)
-   - The underdog doesn't need to WIN - just stay within the spread
-   - A 3-point underdog losing by 2 is a WINNER
+4. **🎯 UNDERDOG VALUE CHECK (CRITICAL - DO NOT SKIP):**
    
-   If you cannot articulate a SPECIFIC path for the underdog to cover, 
-   your favorite lean may be correct. But if the path exists, ask:
-   **"Is the spread accounting for this, or is there value on the dog?"**
+   **THE SPREAD MATH (UNDERSTAND THIS):**
+   - Taking +6 does NOT mean "they'll lose by 6" - it means "they won't get blown out"
+   - A 12-5 team getting +6 only needs to NOT GET BLOWN OUT to cash
+   - The FAVORITE must WIN BY 7+ to cover - a much harder path
+   
+   **MANDATORY QUESTIONS BEFORE TAKING ANY FAVORITE:**
+   1. "Can this favorite WIN BY [SPREAD+1] POINTS?" (Not just win - DOMINATE)
+   2. "What's the underdog's realistic path to cover?"
+      - Do they WIN OUTRIGHT? (instant cash)
+      - Do they LOSE BY LESS THAN THE SPREAD? (still cash)
+      - Can they stay competitive for 60 minutes?
+   3. "Is the spread inflated by public perception/name recognition?"
+   
+   **UNDERDOG PATH EXAMPLES (+6 underdog):**
+   - They lose 24-21 → YOU WIN
+   - They lose 28-24 → YOU WIN  
+   - They lose 31-27 → YOU WIN
+   - They WIN outright → YOU WIN (bonus)
+   - ONLY lose by 7+ → You lose
+   
+   **FAVORITE PATH EXAMPLES (-6 favorite):**
+   - They win 31-27 → YOU LOSE (only won by 4)
+   - They win 28-24 → YOU LOSE (only won by 4)
+   - They win 35-24 → YOU WIN (won by 11)
+   - MUST win by 7+ → Much harder path
+   
+   **IF YOU CANNOT EXPLAIN WHY THE FAVORITE WILL DOMINATE (not just win), 
+   THE UNDERDOG IS OFTEN THE SHARPER PLAY.**
 
 5. **DISCOVERY CHECK:**
    - Did you discover anything surprising? (e.g., "This is their first game without [Star]")
-   - Did you find a style mismatch the market might be missing?
-   - Did YOUR OWN REASONING uncover an edge not on the checklist?
+   - Did you find a style mismatch that affects your prediction?
+   - Did YOUR OWN REASONING uncover something not on the checklist?
 
 6. **DO NOT COMMIT**: Pick a side ONLY after you've built genuine cases for BOTH teams.
 
@@ -1827,13 +2098,13 @@ ${nflDataGaps}${nbaDataGaps}${ncaabDataGaps}
 }
 
 /**
- * Build the PASS 3 message - Final Synthesis & Market Comparison
+ * Build the PASS 3 message - Final Synthesis & Pick Decision
  * Injected AFTER Gary has all the stats he needs
  */
 function buildPass3Message() {
   return `
 ══════════════════════════════════════════════════════════════════════
-## PASS 3 - FINAL SYNTHESIS & MARKET COMPARISON
+## PASS 3 - FINAL SYNTHESIS & PICK DECISION
 
 You've gathered substantial evidence. Before making your pick, do a final check:
 
@@ -1851,16 +2122,23 @@ You've gathered substantial evidence. Before making your pick, do a final check:
 - Which team's case is supported by the most RECENT and RELEVANT data?
 - How do situational factors (rest, injuries, motivation) modify the raw stats?
 
-**STEP 2: COMPARE TO THE MARKET (VALUE AUDIT)**
-- Look at the Spread and Moneyline.
-- Is the market overvaluing one side based on name/narrative?
-- Is there a VALUE gap between your analysis and the line?
+**STEP 2: COMPARE YOUR PREDICTION TO THE SPREAD**
+- What margin do YOU predict? (e.g., "I think this is a 3-point game")
+- Does the spread match your prediction? 
+- If spread is bigger than your predicted margin → underdog side aligns with your view
+- If spread is smaller than your predicted margin → favorite side aligns with your view
 
 **STEP 3: SELF-INTERROGATION**
 1. **Roster Check**: Did I only mention players in the CURRENT ROSTERS section?
 2. **Stat-Narrative Alignment**: Does my "Why" match the actual numbers I called?
 3. **Trap Check**: If this looks like "easy money," what am I missing?
 4. **Value Test**: If taking the favorite, is there more value on the underdog?
+
+**⚠️ FAVORITE SPREAD CHECK (If picking favorite -3 or bigger):**
+- "Will they win by MORE than the spread?" (Not just win - WIN BIG)
+- "Why will the underdog NOT keep it close?"
+- "The underdog's path to cover: lose by less than [SPREAD]. Is that likely?"
+- **If the underdog is a playoff team or has a winning record, they're capable of staying competitive**
 
 **STEP 4: OUTPUT YOUR FINAL PICK JSON**
 (Refer to the RATIONALE FORMAT in the system prompt)
@@ -2402,6 +2680,39 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
 
           try {
             const { geminiGroundingSearch } = await import('./scoutReport/scoutReportBuilder.js');
+            
+            // WEATHER FILTER: Prevent Gary from using normal weather as a factor
+            // Weather is a factor in ~5% of NFL games - only truly extreme conditions matter
+            const queryLower = (args.query || '').toLowerCase();
+            const isWeatherQuery = [
+              'weather', 'wind', 'rain', 'snow', 'cold', 'temperature', 'mph', 
+              'forecast', 'conditions', 'freezing', 'ice', 'sleet', 'storm'
+            ].some(keyword => queryLower.includes(keyword));
+            
+            // Only filter for outdoor sports (NFL/NCAAF)
+            const isOutdoorSport = sport === 'americanfootball_nfl' || sport === 'americanfootball_ncaaf';
+            
+            // Check if query is asking about EXTREME weather (let these through)
+            const isExtremeWeatherQuery = [
+              'blizzard', 'severe', 'dangerous', 'hurricane', 'tornado', 
+              'postponed', 'delayed', 'cancelled', 'sub-zero', 'historic'
+            ].some(keyword => queryLower.includes(keyword));
+            
+            if (isWeatherQuery && isOutdoorSport && !isExtremeWeatherQuery) {
+              console.log(`    ⚠️ Weather query blocked - weather rarely matters. Only extreme conditions are relevant.`);
+              const toolResponse = {
+                role: 'tool',
+                tool_call_id: toolCall.id,
+                name: functionName,
+                content: JSON.stringify({
+                  query: args.query,
+                  results: 'Weather conditions are within normal range. Modern NFL players and equipment handle standard cold, wind, or light precipitation without significant performance impact. Weather is NOT a factor for this game. Focus on team performance metrics, injuries, and matchup advantages instead.'
+                })
+              };
+              messages.push(toolResponse);
+              continue;
+            }
+            
             const searchResult = await geminiGroundingSearch(args.query, {
               temperature: 0.1,
               maxTokens: 1000
@@ -3110,63 +3421,81 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
       // CONTEXT PRUNING: Prevent attention decay on long investigations
       messages = pruneContextIfNeeded(messages, iteration);
 
-      // STATE-BASED PROMPTING: Inject pass instructions based on PROGRESS, not iteration count
-      // This prevents premature finalization pressure
+      // STATE-BASED PROMPTING: Inject pass instructions based on FACTOR COVERAGE
+      // Gary works through a checklist of investigation factors, not arbitrary stat counts
       
-      const statsCalledSoFar = toolCallHistory.length;
-      const MIN_STATS_BEFORE_STEEL_MAN = 8;  // Minimum before Pass 2
-      const MIN_STATS_BEFORE_SYNTHESIS = 12; // Mid-investigation synthesis point
-      const MIN_STATS_BEFORE_FINALIZE = 18;  // Minimum before Pass 3 (both teams investigated)
+      // Count UNIQUE stats for logging
+      const uniqueStats = new Set(toolCallHistory.map(t => t.token).filter(Boolean));
+      const uniqueStatsCount = uniqueStats.size;
+      
+      // PRELOADED FACTORS: These are already covered by the Scout Report
+      // - INJURIES: Scout report always includes injury data for NFL/NBA/NHL/NCAAB/NCAAF
+      // Gary doesn't need to call INJURIES token explicitly - data is already in context
+      const preloadedFactors = ['INJURIES'];
+      
+      // FACTOR-BASED PROGRESS: Check which investigation factors Gary has covered
+      const factorStatus = getInvestigatedFactors(toolCallHistory, sport, preloadedFactors);
+      const { covered, missing, coverage, totalFactors } = factorStatus;
       
       // Track if we've already injected certain passes
       const pass2AlreadyInjected = messages.some(m => m.content?.includes('PASS 2 - EVIDENCE GATHERING'));
       const synthAlreadyInjected = messages.some(m => m.content?.includes('MID-INVESTIGATION SYNTHESIS'));
       const pass3AlreadyInjected = messages.some(m => m.content?.includes('PASS 3 - FINAL SYNTHESIS'));
       
-      if (iteration === 1 && statsCalledSoFar >= MIN_STATS_BEFORE_STEEL_MAN) {
-        // After first tool calls, inject Pass 2 instructions (Steel Man)
+      // Log factor coverage
+      console.log(`[Orchestrator] Factor Coverage: ${covered.length}/${totalFactors} (${(coverage * 100).toFixed(0)}%)`);
+      if (missing.length > 0 && missing.length <= 4) {
+        console.log(`[Orchestrator] Missing factors: ${missing.join(', ')}`);
+      }
+      
+      // FACTOR-BASED PHASE TRIGGERS (not arbitrary counts):
+      // - <50% coverage: Keep investigating
+      // - 50-80% coverage: Can start Steel Man analysis while continuing
+      // - 80%+ coverage: Should be wrapping up investigation
+      // - 100% coverage: Ready for final synthesis
+      
+      if (iteration === 1 && coverage >= 0.5) {
+        // Covered at least half the factors - inject Pass 2 (Steel Man)
         messages.push({
           role: 'user',
           content: buildPass2Message(sport, homeTeam, awayTeam)
         });
-        console.log(`[Orchestrator] Injected Pass 2 instructions (${statsCalledSoFar} stats called)`);
-      } else if (iteration === 1 && statsCalledSoFar < MIN_STATS_BEFORE_STEEL_MAN) {
-        // Not enough stats yet - nudge Gary to investigate more
+        console.log(`[Orchestrator] Injected Pass 2 instructions (${covered.length}/${totalFactors} factors covered)`);
+      } else if (iteration === 1 && coverage < 0.5) {
+        // Haven't covered enough factors - tell Gary what's missing
+        const missingDisplay = missing.slice(0, 5).map(f => f.replace(/_/g, ' ')).join(', ');
         messages.push({
           role: 'user',
-          content: `You've only called ${statsCalledSoFar} stats so far. Continue investigating BOTH teams thoroughly before moving to analysis. Call more stats for player game logs, home/away splits, bench depth, etc.`
+          content: `You've covered ${covered.length}/${totalFactors} investigation factors. Continue investigating BOTH teams. Uncovered factors: ${missingDisplay}${missing.length > 5 ? '...' : ''}. Call stats for each factor before moving to analysis.`
         });
-        console.log(`[Orchestrator] Nudged for more stats (only ${statsCalledSoFar} so far)`);
-      } else if (statsCalledSoFar >= MIN_STATS_BEFORE_SYNTHESIS && statsCalledSoFar < MIN_STATS_BEFORE_FINALIZE && !synthAlreadyInjected && iteration >= 2) {
-        // Mid-investigation synthesis - prevent context overload
+        console.log(`[Orchestrator] Nudged to cover more factors (${covered.length}/${totalFactors} covered)`);
+      } else if (coverage >= 0.8 && coverage < 1.0 && !synthAlreadyInjected && iteration >= 2) {
+        // Near-complete investigation - offer synthesis point
+        const finalMissing = missing.map(f => f.replace(/_/g, ' ')).join(', ');
         messages.push({
           role: 'user',
-          content: buildMidInvestigationSynthesis(statsCalledSoFar, homeTeam, awayTeam)
+          content: buildMidInvestigationSynthesis(uniqueStatsCount, homeTeam, awayTeam) + 
+            `\n\nRemaining factors to check: ${finalMissing}`
         });
-        console.log(`[Orchestrator] Injected Mid-Investigation Synthesis (${statsCalledSoFar} stats - forcing focus)`);
-      } else if (statsCalledSoFar >= MIN_STATS_BEFORE_FINALIZE && iteration >= 2 && !pass3AlreadyInjected) {
-        // Sufficient investigation done - NOW inject Pass 3
+        console.log(`[Orchestrator] Injected Mid-Investigation Synthesis (${covered.length}/${totalFactors} factors)`);
+      } else if (coverage >= 1.0 && iteration >= 2 && !pass3AlreadyInjected) {
+        // ALL factors covered - NOW inject Pass 3 (final decision)
         messages.push({
           role: 'user',
           content: buildPass3Message()
         });
-        console.log(`[Orchestrator] Injected Pass 3 (Final) - ${statsCalledSoFar} stats gathered, ready to decide`);
-      } else if (iteration >= 2 && statsCalledSoFar < MIN_STATS_BEFORE_FINALIZE) {
-        // Iteration 2+ but not enough stats - encourage more investigation
-        if (!pass2AlreadyInjected) {
+        console.log(`[Orchestrator] Injected Pass 3 (Final) - ALL ${totalFactors} factors investigated`);
+      } else if (iteration >= 2 && coverage < 1.0) {
+        // Iteration 2+ with incomplete factor coverage - let Gary continue at his own pace
+        if (!pass2AlreadyInjected && coverage >= 0.5) {
+          // Has enough for Steel Man but not complete
           messages.push({
             role: 'user',
             content: buildPass2Message(sport, homeTeam, awayTeam)
           });
-          console.log(`[Orchestrator] Injected Pass 2 (delayed) - only ${statsCalledSoFar} stats, need ${MIN_STATS_BEFORE_FINALIZE}`);
-        } else {
-          // Pass 2 already given, but still not enough stats
-          messages.push({
-            role: 'user',
-            content: `You've called ${statsCalledSoFar} stats but haven't fully investigated both teams. Continue calling stats for:\n- Player game logs for key players on BOTH teams\n- BENCH_DEPTH if relevant\n- Any factors from the Steel Man checklist you haven't verified\n\nThere is NO RUSH. Investigate thoroughly before deciding.`
-          });
-          console.log(`[Orchestrator] Extended investigation (${statsCalledSoFar}/${MIN_STATS_BEFORE_FINALIZE} stats)`);
+          console.log(`[Orchestrator] Injected Pass 2 (delayed) - ${covered.length}/${totalFactors} factors covered`);
         }
+        // No aggressive nudging - Gary decides when he's done investigating
       }
 
       // Continue the loop for Gary to process the stats
@@ -3248,7 +3577,7 @@ Remember: Forcing a pick when there's no edge is NOT sharp betting.
 The best handicappers pass on 30-40% of games. That's discipline.
 
 **KEY STATS GATHERED:**
-${toolCallHistory.slice(-15).map(t => `- ${t.stat}: ${t.summary || 'data received'}`).join('\n')}
+${toolCallHistory.slice(-15).map(t => `- ${t.token}: ${t.summary || 'data received'}`).join('\n')}
 
 Provide your decision in valid JSON format (pick can be "PASS" if no edge found).`;
 
@@ -3529,6 +3858,8 @@ function normalizePickFormat(parsed, homeTeam, awayTeam, sport) {
     pick: pickText.trim(),
     type: parsed.type || 'spread',
     odds: odds,
+    // CONFIDENCE - Gary's conviction in the bet (0.50-1.00)
+    confidence: parsed.confidence || 0.65, // Default to 0.65 if not provided
     // Thesis-based classification (new system)
     thesis_type: parsed.thesis_type || null,
     thesis_mechanism: parsed.thesis_mechanism || null,
@@ -3546,6 +3877,11 @@ function normalizePickFormat(parsed, homeTeam, awayTeam, sport) {
     moneylineAway: parsed.moneylineAway,
     total: parsed.total,
     totalOdds: parsed.totalOdds || -110,
+    // Additional judge fields
+    trapAlert: parsed.trapAlert || false,
+    revenge: parsed.revenge || false,
+    superstition: parsed.superstition || false,
+    momentum: parsed.momentum || 0.5,
     agentic: true // Flag to identify agentic picks
   };
 }
