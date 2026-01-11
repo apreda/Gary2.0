@@ -58,34 +58,63 @@ const nbaBoxScoresCache = new Map();
 const nhlBoxScoresCache = new Map();
 
 /**
- * Fetch NBA box scores for a date
+ * Fetch NBA box scores for a date (checks adjacent dates for timezone issues)
  */
 async function fetchNBABoxScores(dateStr) {
   if (nbaBoxScoresCache.has(dateStr)) {
     return nbaBoxScoresCache.get(dateStr);
   }
   
+  // Check target date and next day (games played late evening are often recorded next day)
+  const targetDate = new Date(dateStr);
+  const nextDate = new Date(targetDate);
+  nextDate.setDate(nextDate.getDate() + 1);
+  const nextDateStr = nextDate.toISOString().split('T')[0];
+  
+  const datesToCheck = [dateStr, nextDateStr];
+  const allBoxScores = [];
+  
   try {
-    console.log(`  📡 Fetching NBA box scores for ${dateStr}...`);
-    const url = `https://api.balldontlie.io/nba/v1/box_scores?date=${dateStr}`;
-    
-    const response = await fetch(url, {
-      headers: { 'Authorization': BDL_API_KEY }
-    });
-    
-    if (!response.ok) {
-      console.log(`  ⚠️ NBA box scores error: ${response.status}`);
-      return [];
+    for (const date of datesToCheck) {
+      console.log(`  📡 Fetching NBA box scores for ${date}...`);
+      
+      // Fetch with pagination
+      let cursor = null;
+      let page = 0;
+      const maxPages = 10;
+      
+      do {
+        page++;
+        let url = `https://api.balldontlie.io/nba/v1/box_scores?date=${date}&per_page=100`;
+        if (cursor) url += `&cursor=${cursor}`;
+        
+        const response = await fetch(url, {
+          headers: { 'Authorization': BDL_API_KEY }
+        });
+        
+        if (!response.ok) {
+          console.log(`  ⚠️ NBA box scores error for ${date}: ${response.status}`);
+          break;
+        }
+        
+        const data = await response.json();
+        
+        if (data.data && data.data.length > 0) {
+          allBoxScores.push(...data.data);
+        }
+        
+        cursor = data.meta?.next_cursor;
+        if (cursor) await new Promise(r => setTimeout(r, 100));
+        
+      } while (cursor && page < maxPages);
     }
     
-    const data = await response.json();
-    const boxScores = data.data || [];
-    console.log(`  ✅ Found ${boxScores.length} NBA box score entries`);
-    nbaBoxScoresCache.set(dateStr, boxScores);
-    return boxScores;
+    console.log(`  ✅ Found ${allBoxScores.length} total NBA box score entries`);
+    nbaBoxScoresCache.set(dateStr, allBoxScores);
+    return allBoxScores;
   } catch (error) {
     console.log(`  ⚠️ NBA box scores fetch error: ${error.message}`);
-    return [];
+    return allBoxScores;
   }
 }
 
@@ -135,41 +164,50 @@ function normalizePlayerName(name) {
 
 /**
  * Find player stats in NBA box scores
+ * Box scores structure: array of games, each with home_team.players and visitor_team.players
  */
 function findNBAPlayerStats(boxScores, playerName) {
   const normalizedSearch = normalizePlayerName(playerName);
   const searchParts = normalizedSearch.split(' ');
   
-  for (const entry of boxScores) {
-    const player = entry.player;
-    if (!player) continue;
+  for (const game of boxScores) {
+    // Check both home and visitor team players
+    const allPlayers = [
+      ...(game.home_team?.players || []),
+      ...(game.visitor_team?.players || [])
+    ];
     
-    const fullName = `${player.first_name || ''} ${player.last_name || ''}`.trim();
-    const normalizedFull = normalizePlayerName(fullName);
-    
-    // Exact match
-    if (normalizedFull === normalizedSearch) {
-      return {
-        player: fullName,
-        stats: entry,
-        game: entry.game
-      };
-    }
-    
-    // Last name match (if search has 2+ parts)
-    if (searchParts.length >= 2) {
-      const lastName = normalizePlayerName(player.last_name || '');
-      const searchLast = searchParts[searchParts.length - 1];
-      if (lastName === searchLast) {
-        // Check first name initial or partial match
-        const firstName = normalizePlayerName(player.first_name || '');
-        const searchFirst = searchParts[0];
-        if (firstName.startsWith(searchFirst) || searchFirst.startsWith(firstName)) {
-          return {
-            player: fullName,
-            stats: entry,
-            game: entry.game
-          };
+    for (const playerStats of allPlayers) {
+      const player = playerStats.player;
+      if (!player) continue;
+      
+      const fullName = `${player.first_name || ''} ${player.last_name || ''}`.trim();
+      const normalizedFull = normalizePlayerName(fullName);
+      
+      // Exact match
+      if (normalizedFull === normalizedSearch) {
+        return {
+          player: fullName,
+          stats: playerStats,
+          game: game
+        };
+      }
+      
+      // Last name match (if search has 2+ parts)
+      if (searchParts.length >= 2) {
+        const lastName = normalizePlayerName(player.last_name || '');
+        const searchLast = searchParts[searchParts.length - 1];
+        if (lastName === searchLast) {
+          // Check first name initial or partial match
+          const firstName = normalizePlayerName(player.first_name || '');
+          const searchFirst = searchParts[0];
+          if (firstName.startsWith(searchFirst) || searchFirst.startsWith(firstName)) {
+            return {
+              player: fullName,
+              stats: playerStats,
+              game: game
+            };
+          }
         }
       }
     }

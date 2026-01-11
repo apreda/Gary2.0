@@ -47,26 +47,65 @@ function calculateHitRate(games, propType, line) {
   if (!games || games.length === 0) return null;
   
   // Map prop types to game log fields
+  // NOTE: This must handle BOTH raw Odds API names AND standardized names from propOddsService
   const propToField = {
+    // Points - raw and standardized
     'points': 'pts',
     'player_points': 'pts',
+    'pts': 'pts',  // Already standardized - CRITICAL FIX
+    
+    // Rebounds - raw and standardized
     'rebounds': 'reb',
     'player_rebounds': 'reb',
+    'reb': 'reb',  // Already standardized - CRITICAL FIX
+    
+    // Assists - raw and standardized
     'assists': 'ast',
     'player_assists': 'ast',
+    'ast': 'ast',  // Already standardized - CRITICAL FIX
+    
+    // Threes - raw and standardized
     'threes': 'fg3m',
     'player_threes': 'fg3m',
+    'fg3m': 'fg3m',  // Already standardized - CRITICAL FIX
+    '3pm': 'fg3m',
+    'three_pointers_made': 'fg3m',
+    
+    // Blocks - raw and standardized
     'blocks': 'blk',
     'player_blocks': 'blk',
+    'blk': 'blk',  // Already standardized - CRITICAL FIX
+    
+    // Steals - raw and standardized
     'steals': 'stl',
     'player_steals': 'stl',
+    'stl': 'stl',  // Already standardized - CRITICAL FIX
+    
+    // Combined stats - raw and standardized
     'points_rebounds_assists': 'pra',
     'player_points_rebounds_assists': 'pra',
+    'pra': 'pra',  // Already standardized
     'points_rebounds': 'pr',
-    'player_points_rebounds': 'pr'
+    'player_points_rebounds': 'pr',
+    'pr': 'pr',  // Already standardized
+    'points_assists': 'pa',
+    'player_points_assists': 'pa',
+    'pa': 'pa',
+    'rebounds_assists': 'ra',
+    'player_rebounds_assists': 'ra',
+    'ra': 'ra',
+    
+    // Turnovers
+    'turnovers': 'turnover',
+    'player_turnovers': 'turnover',
+    'tov': 'turnover',
+    
+    // Minutes (useful for context)
+    'minutes': 'min',
+    'min': 'min'
   };
   
-  const field = propToField[propType] || propType;
+  const field = propToField[propType?.toLowerCase()] || propType;
   
   let hitsOver = 0;
   let hitsUnder = 0;
@@ -75,11 +114,21 @@ function calculateHitRate(games, propType, line) {
   
   for (const game of games) {
     let value;
+    // Handle combined stats
     if (field === 'pra') {
+      // Points + Rebounds + Assists
       value = (game.pts || 0) + (game.reb || 0) + (game.ast || 0);
     } else if (field === 'pr') {
+      // Points + Rebounds
       value = (game.pts || 0) + (game.reb || 0);
+    } else if (field === 'pa') {
+      // Points + Assists
+      value = (game.pts || 0) + (game.ast || 0);
+    } else if (field === 'ra') {
+      // Rebounds + Assists
+      value = (game.reb || 0) + (game.ast || 0);
     } else {
+      // Direct field lookup
       value = game[field];
     }
     

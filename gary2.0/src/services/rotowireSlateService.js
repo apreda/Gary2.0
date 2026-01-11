@@ -15,11 +15,155 @@
  */
 
 import puppeteer from 'puppeteer';
-import { fetchNbaGameTimes } from './tank01DfsService.js';
 
 // Cache slates for 1 hour to avoid excessive scraping
 const slateCache = new Map();
+const injuryCache = new Map();
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+const INJURY_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes for injuries as they change fast
+
+/**
+ * Fetch lineups and injuries from RotoWire lineups page
+ * 
+ * @param {string} sport - 'NBA', 'NFL', 'NHL'
+ * @returns {Promise<Object>} Object with lineups and injuries per team
+ */
+export async function fetchLineupsAndInjuries(sport = 'NBA') {
+  const sportUpper = sport.toUpperCase();
+  const cacheKey = `lineups-${sportUpper}`;
+  
+  // Check cache
+  const cached = injuryCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < INJURY_CACHE_TTL_MS) {
+    console.log(`[RotoWire] 📦 Using cached lineups/injuries for ${sportUpper}`);
+    return cached.data;
+  }
+  
+  let sportPath = 'basketball';
+  let pagePath = 'nba-lineups.php';
+  
+  if (sportUpper === 'NFL') {
+    sportPath = 'football';
+    pagePath = 'nfl-lineups.php';
+  } else if (sportUpper === 'NHL') {
+    sportPath = 'hockey';
+    pagePath = 'nhl-lineups.php';
+  }
+  
+  const url = `https://www.rotowire.com/${sportPath}/${pagePath}`;
+  console.log(`[RotoWire] 🌐 Scraping lineups/injuries from: ${url}`);
+  
+  let browser = null;
+  
+  // Wrap entire scraping in a timeout promise (max 20 seconds)
+  const scrapePromise = (async () => {
+    try {
+      browser = await puppeteer.launch({
+        headless: 'new',
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+      });
+      
+      const page = await browser.newPage();
+      await page.setViewport({ width: 1280, height: 1200 });
+      
+      // Use faster 'domcontentloaded' instead of 'networkidle2' and shorter timeout
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 }).catch(e => {
+        console.warn(`[RotoWire] Page load slow/failed: ${e.message}`);
+        // Continue anyway - page may have partially loaded
+      });
+      
+      // Give page a moment to render
+      await new Promise(r => setTimeout(r, 2000));
+    
+    const data = await page.evaluate((sportName) => {
+      const results = {};
+      
+      // Select all game boxes
+      const gameBoxes = document.querySelectorAll('.lineups, .lineup-box, .lineup__box');
+      
+      gameBoxes.forEach(box => {
+        // Find team names
+        const teams = Array.from(box.querySelectorAll('.lineup__abbr, .lineup__team-name, [class*="team-name"]'))
+          .map(el => el.textContent?.trim().toUpperCase());
+        
+        if (teams.length >= 2) {
+          const awayTeam = teams[0];
+          const homeTeam = teams[1];
+          
+          results[awayTeam] = { opponent: homeTeam, lineups: [], injuries: [] };
+          results[homeTeam] = { opponent: awayTeam, lineups: [], injuries: [] };
+          
+          // Find starters/lineups
+          const lineupLists = box.querySelectorAll('.lineup__list, .lineup__main');
+          lineupLists.forEach((list, idx) => {
+            const teamKey = idx === 0 ? awayTeam : homeTeam;
+            const players = Array.from(list.querySelectorAll('.lineup__player, [class*="player"]'));
+            players.forEach(p => {
+              const name = p.querySelector('a')?.textContent?.trim() || p.textContent?.trim();
+              const pos = p.querySelector('.lineup__pos')?.textContent?.trim() || '';
+              if (name) {
+                results[teamKey].lineups.push({ name, position: pos, isStarter: true });
+              }
+            });
+          });
+          
+          // Find injuries
+          const injuryLists = box.querySelectorAll('.lineup__injuries, .lineup__injury');
+          injuryLists.forEach((list, idx) => {
+            const teamKey = idx === 0 ? awayTeam : homeTeam;
+            const players = Array.from(list.querySelectorAll('li, .lineup__player'));
+            players.forEach(p => {
+              const name = p.querySelector('a')?.textContent?.trim() || p.textContent?.trim();
+              const status = p.querySelector('.lineup__status, .lineup__inj')?.textContent?.trim() || '';
+              if (name && name.length > 2) {
+                // Clean up name (often contains status at the end like "LeBron James (Q)")
+                let cleanName = name.split('(')[0].trim();
+                let cleanStatus = status || '';
+                
+                if (!cleanStatus && name.includes('(')) {
+                  const match = name.match(/\(([^)]+)\)/);
+                  if (match) cleanStatus = match[1];
+                }
+                
+                results[teamKey].injuries.push({ 
+                  name: cleanName, 
+                  status: cleanStatus.toUpperCase() 
+                });
+              }
+            });
+          });
+        }
+      });
+      
+      return results;
+    }, sportUpper);
+    
+    console.log(`[RotoWire] ✅ Found lineups/injuries for ${Object.keys(data).length} teams`);
+    
+    // Cache result
+    injuryCache.set(cacheKey, { data, timestamp: Date.now() });
+    
+    return data;
+  } catch (error) {
+    console.error(`[RotoWire] ❌ Lineup scraping failed: ${error.message}`);
+    return {};
+  } finally {
+    if (browser) {
+      await browser.close().catch(e => console.warn(`[RotoWire] Browser close error: ${e.message}`));
+    }
+  }
+  })();
+
+  // Race the scrape against a 20-second timeout
+  const timeoutPromise = new Promise((resolve) => {
+    setTimeout(() => {
+      console.warn(`[RotoWire] ⏱️ Scraping timeout (20s) - returning empty data`);
+      resolve({});
+    }, 20000);
+  });
+
+  return Promise.race([scrapePromise, timeoutPromise]);
+}
 
 /**
  * Fetch DFS slates from RotoWire by scraping their optimizer page
@@ -338,15 +482,13 @@ export async function getTeamsForSlate(platform, sport, slateName) {
 }
 
 /**
- * Populate teams for slates using Tank01 game times
- * For slates without team data, we infer teams based on:
- * - Slate start time
- * - Slate game count
- * - Tank01 game schedule with times
+ * Populate teams for slates using game data
+ * For slates without team data, we log a warning since the game times
+ * function was removed from tank01DfsService.
  * 
  * @param {Array} slates - Slates from RotoWire (may have empty teams)
  * @param {string} dateStr - Date string (YYYY-MM-DD)
- * @returns {Promise<Array>} Slates with teams populated
+ * @returns {Promise<Array>} Slates with teams populated (or as-is if can't populate)
  */
 export async function populateSlateTeams(slates, dateStr) {
   if (!slates || slates.length === 0) return slates;
@@ -355,60 +497,12 @@ export async function populateSlateTeams(slates, dateStr) {
   const needsTeams = slates.some(s => !s.teams || s.teams.length === 0);
   if (!needsTeams) return slates;
   
-  console.log('[RotoWire] 🔍 Fetching game times from Tank01 to populate slate teams...');
+  console.log('[RotoWire] ℹ️ Some slates missing team data - returning as-is');
+  console.log('[RotoWire] 💡 RotoWire scraper should populate teams directly');
   
-  try {
-    const games = await fetchNbaGameTimes(dateStr);
-    if (!games || games.length === 0) {
-      console.log('[RotoWire] ⚠️ No games from Tank01, cannot populate teams');
-      return slates;
-    }
-    
-    // Parse start times to minutes for comparison
-    const parseTime = (timeStr) => {
-      if (!timeStr) return 9999;
-      const match = timeStr.match(/(\d+):?(\d*)\s*(PM|AM|p|a)?/i);
-      if (!match) return 9999;
-      let hours = parseInt(match[1], 10);
-      const minutes = parseInt(match[2] || '0', 10);
-      const isPM = match[3]?.toLowerCase().startsWith('p');
-      if (isPM && hours !== 12) hours += 12;
-      if (!isPM && hours === 12) hours = 0;
-      return hours * 60 + minutes;
-    };
-    
-    // Sort games by time
-    games.sort((a, b) => parseTime(a.gameTime) - parseTime(b.gameTime));
-    
-    // For each slate without teams, find matching games
-    for (const slate of slates) {
-      if (slate.teams && slate.teams.length > 0) continue;
-      
-      const slateStartMins = parseTime(slate.startTime);
-      const targetGameCount = slate.gameCount || 0;
-      
-      // Find games that start at or after the slate start time
-      const eligibleGames = games.filter(g => {
-        const gameMins = parseTime(g.gameTime);
-        return gameMins >= slateStartMins;
-      });
-      
-      // Take the first N games matching the game count
-      const slateGames = eligibleGames.slice(0, targetGameCount);
-      
-      // Extract teams
-      slate.teams = slateGames.flatMap(g => [g.away, g.home]);
-      slate.games = slateGames.map(g => `${g.away}@${g.home}`);
-      
-      console.log(`[RotoWire] 📋 ${slate.name}: Inferred ${slate.teams.length} teams from ${slateGames.length} games`);
-    }
-    
-    return slates;
-    
-  } catch (error) {
-    console.warn(`[RotoWire] ⚠️ Failed to populate teams: ${error.message}`);
-    return slates;
-  }
+  // Return slates as-is - the RotoWire scraper should have already populated teams
+  // If not, the calling code should handle the fallback
+  return slates;
 }
 
 /**
@@ -423,5 +517,6 @@ export default {
   fetchSlatesFromRotoWire,
   getTeamsForSlate,
   populateSlateTeams,
-  clearSlateCache
+  clearSlateCache,
+  fetchLineupsAndInjuries
 };

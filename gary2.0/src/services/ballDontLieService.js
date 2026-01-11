@@ -1850,6 +1850,93 @@ const ballDontLieService = {
   },
 
   /**
+   * NCAAB player game logs - returns season stats for a player
+   * Note: BDL NCAAB API doesn't have game-by-game stats endpoint like NBA
+   * So we use player_season_stats and return averages instead
+   * @param {number} playerId - BDL player ID
+   * @param {number} numGames - Ignored for NCAAB (API limitation)
+   * @returns {Promise<Object|null>} - Player season averages (not individual games)
+   */
+  async getNcaabPlayerGameLogs(playerId, numGames = 10) {
+    try {
+      if (!playerId) return null;
+
+      const cacheKey = `ncaab_game_logs_${playerId}_${numGames}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        // Calculate NCAAB season: Nov-Mar = current academic year, Apr-Oct = next academic year
+        const now = new Date();
+        const month = now.getMonth() + 1;
+        const year = now.getFullYear();
+        // NCAAB season typically runs Nov-Apr, use academic year format
+        const season = month >= 11 || month <= 4 ? (month >= 11 ? year : year - 1) : year;
+
+        // Use player_season_stats endpoint (NCAAB doesn't have per-game stats like NBA)
+        const url = `${BALLDONTLIE_API_BASE_URL}/ncaab/v1/player_season_stats${buildQuery({
+          player_ids: [playerId],
+          season: season,
+          per_page: 10
+        })}`;
+
+        const response = await axios.get(url, {
+          headers: { 'Authorization': API_KEY }
+        });
+
+        const stats = response.data?.data || [];
+        if (stats.length === 0) {
+          console.log(`[Ball Don't Lie] No NCAAB season stats found for player ${playerId}`);
+          return null;
+        }
+
+        // Get the first (current season) stats
+        const s = stats[0];
+        const gp = s.games_played || 0;
+        
+        if (gp === 0) return null;
+
+        // Calculate per-game averages from season totals
+        const avgs = {
+          pts: gp > 0 ? (s.pts || 0) / gp : 0,
+          reb: gp > 0 ? (s.reb || 0) / gp : 0,
+          ast: gp > 0 ? (s.ast || 0) / gp : 0,
+          stl: gp > 0 ? (s.stl || 0) / gp : 0,
+          blk: gp > 0 ? (s.blk || 0) / gp : 0,
+          fg3m: gp > 0 ? (s.fg3m || 0) / gp : 0,
+          min: gp > 0 ? (s.min || 0) / gp : 0,
+          pra: gp > 0 ? ((s.pts || 0) + (s.reb || 0) + (s.ast || 0)) / gp : 0
+        };
+
+        console.log(`[Ball Don't Lie] Got NCAAB season stats for player ${playerId}: ${gp} games, ${avgs.pts.toFixed(1)} PPG`);
+
+        return {
+          playerId,
+          gamesAnalyzed: gp,
+          games: [], // No individual games available for NCAAB
+          averages: {
+            pts: avgs.pts.toFixed(1),
+            reb: avgs.reb.toFixed(1),
+            ast: avgs.ast.toFixed(1),
+            stl: avgs.stl.toFixed(1),
+            blk: avgs.blk.toFixed(1),
+            fg3m: avgs.fg3m.toFixed(1),
+            min: avgs.min.toFixed(1),
+            pra: avgs.pra.toFixed(1)
+          },
+          // Season stats don't have game-by-game data for stdDev/consistency
+          stdDevs: { pts: 'N/A', reb: 'N/A', ast: 'N/A', pra: 'N/A' },
+          consistency: { pts: 'N/A', reb: 'N/A', ast: 'N/A', pra: 'N/A' },
+          splits: { home: null, away: null }, // Not available for NCAAB season stats
+          lastGame: null,
+          formTrend: 'N/A', // Can't calculate without game-by-game data
+          note: 'NCAAB API provides season totals only, not individual game logs'
+        };
+      }, 15); // Cache for 15 minutes
+    } catch (e) {
+      console.error('[Ball Don\'t Lie] getNcaabPlayerGameLogs error:', e.message);
+      return null;
+    }
+  },
+
+  /**
    * NCAAF player season stats (single season, optional player filter)
    */
   async getNcaafPlayerSeasonStats({ playerIds, playerId, teamIds, teamId, season } = {}, ttlMinutes = 10) {

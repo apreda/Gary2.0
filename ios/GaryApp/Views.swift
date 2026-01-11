@@ -2510,16 +2510,29 @@ struct PickCardMobile: View {
         return "Playoff"
     }
     
-    /// Check if this is an NFL special game (divisional, primetime, etc.)
+    /// Check if this is an NFL special game (playoff round, primetime, etc.)
     private var nflGameContext: String? {
-        guard isNFL, let ctx = pick.tournamentContext, !ctx.isEmpty else { return nil }
-        return ctx
+        guard isNFL else { return nil }
+        // First check gameSignificance for playoff rounds (Wild Card, Divisional, etc.)
+        if let significance = pick.gameSignificance, !significance.isEmpty {
+            return significance
+        }
+        // Fall back to tournamentContext for primetime games (TNF, SNF, MNF)
+        if let ctx = pick.tournamentContext, !ctx.isEmpty {
+            return ctx
+        }
+        return nil
     }
     
     /// Get appropriate icon for NFL game context
     private var nflContextIcon: String {
         guard let ctx = nflGameContext?.lowercased() else { return "football.fill" }
+        // Playoff rounds
+        if ctx.contains("super bowl") { return "trophy.fill" }
+        if ctx.contains("championship") || ctx.contains("conference") { return "trophy.fill" }
         if ctx.contains("divisional") { return "flag.2.crossed.fill" }
+        if ctx.contains("wild card") { return "star.fill" }
+        // Primetime games
         if ctx.contains("tnf") || ctx.contains("thursday") { return "moon.stars.fill" }
         if ctx.contains("snf") || ctx.contains("sunday night") { return "moon.fill" }
         if ctx.contains("mnf") || ctx.contains("monday") { return "moon.fill" }

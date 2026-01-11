@@ -10,27 +10,47 @@
 const NBA_TOKENS = [
   // Standings & Records
   'STANDINGS', 'TEAM_RECORD', 'CONFERENCE_STANDING',
+  'CONFERENCE_STATS',     // Conference record and performance
+  'NON_CONF_STRENGTH',    // Non-conference record
   // Pace & Tempo
   'PACE', 'PACE_LAST_10', 'PACE_HOME_AWAY',
   // Efficiency
-  'OFFENSIVE_RATING', 'DEFENSIVE_RATING', 'NET_RATING', 'EFFICIENCY_LAST_10',
-  // Four Factors
+  'OFFENSIVE_RATING', 'DEFENSIVE_RATING', 'NET_RATING', 
+  'EFFICIENCY_LAST_10',   // Points to EFFICIENCY_TREND
+  'EFFICIENCY_TREND',     // L5 vs L10 vs season point differential
+  // Four Factors (Offense)
   'EFG_PCT', 'TURNOVER_RATE', 'OREB_RATE', 'FT_RATE',
-  'OPP_EFG_PCT', 'OPP_TOV_RATE',
-  // Shooting Zones
+  // Four Factors (Defense) - Real opponent stats!
+  'OPP_EFG_PCT',          // Opponent shooting efficiency (how well opponents shoot AGAINST them)
+  'OPP_TOV_RATE',         // Forced turnovers (how many turnovers they CAUSE)
+  'OPP_FT_RATE',          // Opponent free throw rate (foul discipline)
+  'DREB_RATE',            // Defensive rebounding
+  // Shooting Zones (Offense)
   'THREE_PT_SHOOTING', 'PAINT_SCORING', 'MIDRANGE',
-  // Defense
-  'PAINT_DEFENSE', 'PERIMETER_DEFENSE', 'TRANSITION_DEFENSE',
+  // Defense (Zone-Specific)
+  'THREE_PT_DEFENSE',     // Opponent 3PT% allowed
+  'PAINT_DEFENSE',        // Opponent paint points allowed
+  'PERIMETER_DEFENSE',    // Points to THREE_PT_DEFENSE
+  'TRANSITION_DEFENSE',   // Fast break points allowed
   // Situational
-  'REST_SITUATION', 'CLUTCH_STATS', 'BACK_TO_BACK',
-  // Players (TOP_PLAYERS includes scoring which reflects usage)
-  'TOP_PLAYERS', 'INJURIES',
-  // History (only tokens with real data)
+  'REST_SITUATION',       // Now includes B2B historical performance!
+  'CLUTCH_STATS',         // Close game record with trend
+  'BACK_TO_BACK',
+  'TRAVEL_SITUATION',     // Time zone and travel fatigue (NEW)
+  // Players
+  'TOP_PLAYERS', 'INJURIES', 'USAGE_RATES',
+  'MINUTES_TREND',        // Star fatigue detection (NEW)
+  // Lineups (NEW)
+  'LINEUP_NET_RATINGS',   // First unit vs second unit performance
+  'BENCH_DEPTH',          // Bench contribution
+  // History
   'H2H_HISTORY', 'RECENT_FORM', 'HOME_AWAY_SPLITS', 'VS_ELITE_TEAMS',
-  // Quarter/Half Scoring Trends (NEW - same as NFL)
-  'QUARTER_SCORING',      // Q1, Q2, Q3, Q4 scoring breakdown - fast starters vs closers
-  'FIRST_HALF_SCORING',   // 1st half scoring patterns - teams that jump out early
-  'SECOND_HALF_SCORING',  // 2nd half/4th quarter scoring - teams that close strong
+  // Patterns
+  'BLOWOUT_TENDENCY',     // Margin patterns - blowouts vs close games (NEW)
+  // Quarter/Half Scoring Trends
+  'QUARTER_SCORING',      // Q1, Q2, Q3, Q4 scoring breakdown
+  'FIRST_HALF_SCORING',   // 1st half scoring patterns
+  'SECOND_HALF_SCORING',  // 2nd half/4th quarter scoring
   // Advanced
   'LUCK_ADJUSTED', 'SCHEDULE_STRENGTH'
 ];
@@ -43,25 +63,41 @@ const NFL_TOKENS = [
   'SUCCESS_RATE_OFFENSE', 'SUCCESS_RATE_DEFENSE', 'EARLY_DOWN_SUCCESS', 'LATE_DOWN_EFFICIENCY',
   // Explosiveness
   'EXPLOSIVE_PLAYS', 'EXPLOSIVE_ALLOWED',
-  // Line Play
-  'OL_RANKINGS', 'DL_RANKINGS', 'PRESSURE_RATE', 'TIME_TO_THROW',
+  // Line Play (ALL REAL FETCHERS!)
+  'OL_RANKINGS',          // Offensive line rankings and grades
+  'DL_RANKINGS',          // Defensive line rankings and pass rush
+  'PRESSURE_RATE',        // QB pressure rate
+  'TIME_TO_THROW',        // QB release time
   // Turnover Analysis
   'TURNOVER_MARGIN', 'TURNOVER_LUCK', 'FUMBLE_LUCK',
-  // Situational
-  'RED_ZONE_OFFENSE', 'RED_ZONE_DEFENSE', 'GOAL_LINE', 'TWO_MINUTE_DRILL',
-  // Special Teams
-  'SPECIAL_TEAMS', 'KICKING', 'FIELD_POSITION',
+  // Situational (ALL REAL FETCHERS!)
+  'RED_ZONE_OFFENSE', 'RED_ZONE_DEFENSE',
+  'GOAL_LINE',            // Goal line and short yardage efficiency
+  'TWO_MINUTE_DRILL',     // End of half efficiency
+  // Special Teams (ALL REAL FETCHERS!)
+  'SPECIAL_TEAMS',
+  'KICKING',              // FG% and punting stats
+  'FIELD_POSITION',       // Starting field position and returns
   // Players
   'QB_STATS', 'RB_STATS', 'WR_TE_STATS', 'DEFENSIVE_PLAYMAKERS', 'INJURIES',
-  // Context
-  'WEATHER', 'QB_WEATHER_HISTORY', 'REST_SITUATION', 'DIVISION_RECORD', 'PRIMETIME_RECORD',
-  // Historical (real game data only - NO betting stats like ATS)
+  // Context (ALL REAL FETCHERS!)
+  'WEATHER', 'QB_WEATHER_HISTORY', 'REST_SITUATION',
+  'DIVISION_RECORD',      // Division and conference record
+  'PRIMETIME_RECORD',     // SNF/MNF/TNF performance
+  // Coaching & Situational (ALL REAL FETCHERS!)
+  'FOURTH_DOWN_TENDENCY', // 4th down aggressiveness - go rate, conversion %
+  'SCHEDULE_CONTEXT',     // Upcoming schedule for trap/sandwich game analysis
+  // Historical
   'H2H_HISTORY', 'RECENT_FORM',
-  // Quarter/Half Scoring Trends (NEW)
-  'QUARTER_SCORING',      // Q1, Q2, Q3, Q4 scoring breakdown - fast starters vs closers
-  'FIRST_HALF_TRENDS',    // 1st half scoring patterns - teams that start hot/cold
-  'SECOND_HALF_TRENDS',   // 2nd half/4th quarter scoring - closers vs faders
-  'HOME_AWAY_SPLITS'      // Home vs road performance
+  // Quarter/Half Scoring Trends
+  'QUARTER_SCORING',      // Q1, Q2, Q3, Q4 scoring breakdown
+  'FIRST_HALF_TRENDS',    // 1st half scoring patterns
+  'SECOND_HALF_TRENDS',   // 2nd half/4th quarter scoring
+  'HOME_AWAY_SPLITS',     // Home vs road performance
+  // Standings (from BDL)
+  'STANDINGS',            // Full standings, conference/division records
+  // Variance/Consistency Analysis (NEW - for underdog value)
+  'VARIANCE_CONSISTENCY'  // Point differential variance, QB consistency, upset potential
 ];
 
 // NCAAB Stat Tokens - unique fetchers with calculated values + Gemini Grounding advanced stats
@@ -141,23 +177,30 @@ const NHL_TOKENS = [
   // Special Teams (critical in hockey)
   'POWER_PLAY_PCT', 'PENALTY_KILL_PCT', 'SPECIAL_TEAMS', 'PP_OPPORTUNITIES',
   // Scoring
-  'GOALS_FOR', 'GOALS_AGAINST', 'GOAL_DIFFERENTIAL', 'SCORING_FIRST',
-  // Shot Metrics (Corsi proxy)
+  'GOALS_FOR', 'GOALS_AGAINST', 'GOAL_DIFFERENTIAL',
+  'SCORING_FIRST',        // Real fetcher - first goal stats
+  // Shot Metrics
   'SHOTS_FOR', 'SHOTS_AGAINST', 'SHOT_DIFFERENTIAL', 'SHOT_QUALITY',
-  // Advanced (via Gemini Grounding)
-  'CORSI_FOR_PCT', 'EXPECTED_GOALS', 'PDO', 'HIGH_DANGER_CHANCES',
+  // Advanced Analytics (ALL REAL FETCHERS via Gemini!)
+  'CORSI_FOR_PCT',        // Real possession metric (CF%)
+  'EXPECTED_GOALS',       // Real xG data
+  'PDO',                  // Real luck indicator (Sh% + Sv%)
+  'HIGH_DANGER_CHANCES',  // Real scoring chance quality
   // Goaltending
   'GOALIE_STATS', 'SAVE_PCT', 'GOALS_AGAINST_AVG', 'GOALIE_MATCHUP',
   // Situational
   'REST_SITUATION', 'BACK_TO_BACK', 'HOME_ICE', 'ROAD_PERFORMANCE',
   // Faceoffs & Possession
   'FACEOFF_PCT', 'POSSESSION_METRICS',
-  // Players
-  'TOP_SCORERS', 'TOP_PLAYERS', 'INJURIES', 'LINE_COMBINATIONS',
-  // Historical (real game data only - NO betting stats like ATS)
+  // Players & Lineups
+  'TOP_SCORERS', 'TOP_PLAYERS', 'INJURIES',
+  'LINE_COMBINATIONS',    // Real fetcher - forward lines and D pairings
+  // Historical
   'H2H_HISTORY', 'RECENT_FORM', 'HOME_AWAY_SPLITS',
-  // Luck/Regression
-  'LUCK_INDICATORS', 'CLOSE_GAME_RECORD', 'OVERTIME_RECORD'
+  // Luck/Regression (ALL REAL FETCHERS!)
+  'LUCK_INDICATORS',      // Real luck analysis (PDO, xG diff)
+  'CLOSE_GAME_RECORD',    // Points to CLUTCH_STATS
+  'OVERTIME_RECORD'       // Real OT/SO record calculated
 ];
 
 // EPL Stat Tokens (BETA - uses BDL + Gemini Grounding for advanced analytics)

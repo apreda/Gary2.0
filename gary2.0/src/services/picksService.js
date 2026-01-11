@@ -345,8 +345,9 @@ async function storeDailyPicksInDatabase(picks) {
     
     return pickData;
   }).filter(pick => {
-    // Filter out picks with confidence below 0.55 threshold (all sports)
-    // Robust confidence parsing (handles string values like "0.66")
+    // NO CONFIDENCE FILTER - Store ALL picks regardless of confidence
+    // Gary's picks get stored whether confidence is 0 or 0.9
+    const sport = pick.sport || '';
     let confidence = 0;
     if (typeof pick.confidence === 'number') {
       confidence = pick.confidence;
@@ -354,33 +355,12 @@ async function storeDailyPicksInDatabase(picks) {
       const parsed = parseFloat(pick.confidence);
       confidence = Number.isFinite(parsed) ? parsed : 0;
     }
-    const sport = pick.sport || '';
-    const passesConfidence = confidence >= 0.55;
-    if (!passesConfidence) {
-      console.log(`❌ FILTERING OUT ${sport} pick with confidence ${confidence} (< 0.55)`);
-      return false;
-    }
     
-    // Filter out picks with odds <= -150 (too juicy, not worth the risk)
-    let oddsRaw = pick.odds || pick.line_odds || 0;
-    let oddsNum = 0;
-    if (typeof oddsRaw === 'number') {
-      oddsNum = oddsRaw;
-    } else if (typeof oddsRaw === 'string') {
-      // Handle string odds like "-245", "+105", "-110"
-      const parsed = parseInt(oddsRaw.replace(/[^0-9-+]/g, ''), 10);
-      oddsNum = Number.isFinite(parsed) ? parsed : 0;
-    }
-    if (oddsNum <= -150) {
-      console.log(`❌ FILTERING OUT ${sport} pick with odds ${oddsRaw} (≤ -150 too juicy)`);
-      return false;
-    }
-    
-    console.log(`✅ Including ${sport} pick with confidence ${confidence}, odds ${oddsRaw}`);
+    console.log(`✅ Including ${sport} pick with confidence ${confidence}`);
     return true;
   });
 
-  console.log(`After confidence/odds filter (>= 0.55, not ≤ -150), ${validPicks.length} picks remaining from ${picks.length} total`);
+  console.log(`After mapping, ${validPicks.length} picks remaining from ${picks.length} total (no confidence filter)`);
 
   // If no valid picks, exit early
   if (validPicks.length === 0) {
@@ -1109,7 +1089,10 @@ async function getWeeklyNFLPicks(weekStart = null) {
   await ensureValidSupabaseSession();
   
   const targetWeek = weekStart || getNFLWeekStart();
-  const season = new Date().getFullYear();
+  // NFL Season Logic: Jan-July games belong to the season that started the previous year
+  const now = new Date();
+  const currentMonth = now.getMonth() + 1; // 1-indexed
+  const season = currentMonth <= 7 ? now.getFullYear() - 1 : now.getFullYear();
   
   try {
     const { data, error } = await supabase

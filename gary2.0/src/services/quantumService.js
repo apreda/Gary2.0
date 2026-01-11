@@ -132,20 +132,21 @@ async function fetchQuantumNumbers(count) {
  * @param {Array} picks - Array of pick objects from Gary
  * @param {string} sport - Sport name for logging
  * @param {Object} options - Optional configuration
- * @param {boolean} options.storeAll - DEPRECATED: Now always true. All picks stored with quantum scores.
- * @returns {Promise<Array>} - ALL picks with quantumStrength attached (no filtering)
+ * @param {boolean} options.storeAll - If true, store ALL picks with quantum scores. If false, filter to HIGH only (>=0.80).
+ * @returns {Promise<Array>} - Picks with quantumStrength attached (filtered if storeAll=false)
  */
 async function applyQuantumFilter(picks, sport, options = {}) {
   if (!picks || picks.length === 0) {
     return [];
   }
 
-  // ALWAYS store all picks - quantum filtering disabled as of Jan 2026
-  // We still generate and attach quantum scores for future analysis
-  const storeAll = true; // Force storeAll mode - no filtering
+  // Respect the storeAll option from caller
+  // NBA/NHL PROPS use storeAll=false (filter to >=0.80)
+  // Game picks and tracking sports use storeAll=true
+  const storeAll = options.storeAll !== false; // Default true, but false if explicitly set
   
-  console.log(`\n[Quantum] 🌌 Applying quantum tagging to ${picks.length} ${sport} picks...`);
-  console.log(`[Quantum] 📊 Quantum filtering DISABLED - storing ALL picks with quantum scores for tracking`);
+  console.log(`\n[Quantum] 🌌 Applying quantum ${storeAll ? 'tagging' : 'FILTER'} to ${picks.length} ${sport} picks...`);
+  console.log(`[Quantum] 📊 Mode: ${storeAll ? 'TRACKING (store all)' : 'FILTER (only >=0.80 survive)'}`);
 
   // Fetch quantum numbers - one per pick
   const { numbers, source } = await fetchQuantumNumbers(picks.length);
@@ -179,19 +180,27 @@ async function applyQuantumFilter(picks, sport, options = {}) {
     console.log(`      Quantum: ${score.toFixed(3)} → ${status}${storeAll ? ' (stored for tracking)' : ''}`);
   });
 
-  // Return ALL picks with quantum scores attached (no filtering)
+  // Count picks by quantum category
   const highCount = picksWithQuantum.filter(p => p.quantumStrength >= QUANTUM_THRESHOLD).length;
   const neutralCount = picksWithQuantum.filter(p => p.quantumStrength >= 0.25 && p.quantumStrength < QUANTUM_THRESHOLD).length;
   const lowCount = picksWithQuantum.filter(p => p.quantumStrength < 0.25).length;
 
-  console.log(`\n[Quantum] 📊 ${sport} Quantum Distribution (ALL STORED - NO FILTERING):`);
+  console.log(`\n[Quantum] 📊 ${sport} Quantum Distribution:`);
   console.log(`   ✅ HIGH (≥0.80):      ${highCount} picks`);
   console.log(`   ⚪ NEUTRAL (0.25-0.79): ${neutralCount} picks`);
   console.log(`   🔴 LOW (<0.25):       ${lowCount} picks`);
   console.log(`   Source: ${source === 'qrng' ? '🌌 Quantum (Outshift QRNG)' : '⚠️ Fallback (Math.random)'}`);
-  console.log(`\n[Quantum] ✅ Storing ALL ${picksWithQuantum.length} ${sport} picks with quantum scores for tracking`);
 
-  return picksWithQuantum;
+  // FILTER or STORE ALL based on storeAll option
+  if (storeAll) {
+    console.log(`\n[Quantum] ✅ Storing ALL ${picksWithQuantum.length} ${sport} picks with quantum scores for tracking`);
+    return picksWithQuantum;
+  } else {
+    // FILTER MODE: Only return HIGH quantum picks (>=0.80)
+    const survivors = picksWithQuantum.filter(p => p.quantumStrength >= QUANTUM_THRESHOLD);
+    console.log(`\n[Quantum] 🎯 FILTER RESULT: ${survivors.length}/${picksWithQuantum.length} ${sport} picks survived (≥0.80 threshold)`);
+    return survivors;
+  }
 }
 
 /**

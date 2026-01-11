@@ -307,6 +307,52 @@ const TabbedAnalysis = ({ rationale, accentColor, pick }) => {
         display: 'flex',
         flexDirection: 'column'
       }}>
+        {/* Game Context Badge - Shows tournament/playoff context when available */}
+        {(pick?.tournamentContext || pick?.gameSignificance) && (
+          <div style={{
+            marginBottom: '0.75rem',
+            padding: '0.4rem 0.6rem',
+            background: 'linear-gradient(135deg, rgba(191, 161, 66, 0.15) 0%, rgba(191, 161, 66, 0.05) 100%)',
+            borderLeft: '2px solid #bfa142',
+            borderRadius: '0 4px 4px 0',
+            fontSize: '0.72rem',
+            lineHeight: 1.4
+          }}>
+            {pick.tournamentContext && (
+              <div style={{ 
+                fontWeight: 700, 
+                color: '#bfa142',
+                marginBottom: pick.gameSignificance ? '0.25rem' : 0
+              }}>
+                🏆 {pick.tournamentContext}
+              </div>
+            )}
+            {pick.gameSignificance && (
+              <div style={{ 
+                color: 'rgba(255, 255, 255, 0.7)',
+                fontSize: '0.68rem'
+              }}>
+                {/* Extract first 1-2 sentences as summary */}
+                {(() => {
+                  const text = pick.gameSignificance;
+                  // Find game type and significance
+                  const typeMatch = text.match(/(?:This is (?:a|an) )?([\w\s]+(?:game|matchup|playoff|tournament))/i);
+                  const significanceMatch = text.match(/(?:significance|carries|important)[:\s]+([^.]+)/i);
+                  
+                  if (typeMatch || significanceMatch) {
+                    const parts = [];
+                    if (typeMatch) parts.push(typeMatch[1].trim());
+                    if (significanceMatch) parts.push(significanceMatch[1].trim());
+                    return parts.join(' • ') || text.split('.')[0];
+                  }
+                  // Fallback to first sentence
+                  return text.split('.')[0] + '.';
+                })()}
+              </div>
+            )}
+          </div>
+        )}
+        
         {/* Gary's Take Header */}
         <div style={{ 
           fontSize: '0.7rem', 
@@ -1322,7 +1368,13 @@ function RealGaryPicks() {
               statsUsed: pick.statsUsed || [],
               statsData: pick.statsData || [], // Full stat values for Tale of the Tape
               injuries: pick.injuries || null, // Structured injury data from BDL
-              commence_time: pick.commence_time || null
+              commence_time: pick.commence_time || null,
+              // Game context fields
+              gameSignificance: pick.gameSignificance || null,
+              tournamentContext: pick.tournamentContext || null,
+              cfpRound: pick.cfpRound || null,
+              homeSeed: pick.homeSeed || null,
+              awaySeed: pick.awaySeed || null
             };
 
             return simplePick;

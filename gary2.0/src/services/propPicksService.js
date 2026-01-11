@@ -11,6 +11,7 @@ import { debugUtils } from '../utils/debugUtils.js';
 import { supabase } from '../supabaseClient.js';
 import { propUtils } from './propUtils.js';
 import { generatePropBets } from './propGenerator.js';
+import { fetchLineupsAndInjuries } from './rotowireSlateService.js';
 // NBA player props service for fetching NBA player stats
 import { formatNBAPlayerStats } from './nbaPlayerPropsService.js';
 // NFL player props service for fetching NFL player stats
@@ -236,7 +237,6 @@ Respond with ONLY a JSON array of your best prop picks in this format:
               bet: (item.bet || 'over').toLowerCase(),
               odds: item.odds || 100,
               confidence: item.confidence || 0.7,
-              ev: item.ev || null,
               rationale: item.rationale || item.reasoning || 'Analysis based on recent performance and matchup data.',
               pick: `${item.player} ${(item.bet || 'OVER').toUpperCase()} ${item.prop} ${item.odds}`
             };
@@ -268,7 +268,6 @@ Respond with ONLY a JSON array of your best prop picks in this format:
                 bet: betType.toLowerCase(),
                 odds: parseInt(cleanOdds) || 100,
                 confidence: item.confidence || 0.7,
-                ev: null, // Will be calculated later
                 rationale: item.reasoning || item.rationale || 'Analysis based on recent performance and matchup data.',
                 pick: item.pick
               };
@@ -283,7 +282,6 @@ Respond with ONLY a JSON array of your best prop picks in this format:
                 bet: 'over',
                 odds: 100,
                 confidence: item.confidence || 0.7,
-                ev: null,
                 rationale: item.reasoning || item.rationale || 'Analysis not available',
                 pick: item.pick || 'Invalid pick format'
               };
@@ -324,23 +322,25 @@ Respond with ONLY a JSON array of your best prop picks in this format:
         throw error;
       }
 
-      // Sports that use 2-per-game rule (no confidence filtering needed)
-      const twoPerGameSports = ['NBA', 'NHL', 'EPL'];
+      // Sports that use curated selection (no confidence filtering needed)
+      // - NBA/NHL/EPL: 2-per-game rule
+      // - NFL: Top 3 rule
+      const curatedSports = ['NBA', 'NHL', 'EPL', 'NFL'];
       
       // Process existing entries
       const processedEntries = data.map(entry => {
         if (entry.picks && Array.isArray(entry.picks) && entry.picks.length > 0) {
           // Filter picks based on sport-specific rules:
-          // - NBA/NHL/EPL: No confidence filter (2-per-game rule)
-          // - NFL/other: Apply 0.55 confidence threshold
+          // - NBA/NHL/EPL/NFL: No confidence filter (curated selection)
+          // - Other sports: Apply 0.55 confidence threshold
           const filteredPicks = entry.picks.filter(pick => {
             const sport = pick.sport || 'unknown';
-            const usesTwoPerGame = twoPerGameSports.includes(sport);
+            const isCurated = curatedSports.includes(sport);
             
-            // Skip confidence filter for 2-per-game sports
-            if (!usesTwoPerGame && pick.confidence < 0.55) return false;
+            // Skip confidence filter for curated sports
+            if (!isCurated && pick.confidence < 0.55) return false;
             
-            // Always filter out very poor odds
+            // Always filter out very poor odds (safety check)
             const odds = pick.odds || 0;
             if (typeof odds === 'number' && odds <= -150) return false;
             return true;
@@ -355,7 +355,7 @@ Respond with ONLY a JSON array of your best prop picks in this format:
         return entry;
       });
 
-      console.log(`Found ${data.length} entries for ${dateString}, filtered (2-per-game for NBA/NHL/EPL, 55%+ conf for others), excluding ≤-150 odds`);
+      console.log(`Found ${data.length} entries for ${dateString}, filtered (curated for NBA/NHL/EPL/NFL, 55%+ conf for others), excluding ≤-150 odds`);
       return processedEntries;
     } catch (error) {
       console.error(`Error fetching for ${dateString}:`, error);
@@ -462,16 +462,46 @@ Respond with ONLY a JSON array of your best prop picks in this format:
 
       console.log(`Using ${filteredProps.length} filtered props for analysis`);
 
+      // 1.7. Fetch RotoWire Lineups and Injuries for better filtering
+      let rotowireData = {};
+      try {
+        const rwSport = sportKey === 'basketball_nba' ? 'NBA' :
+                        sportKey === 'americanfootball_nfl' ? 'NFL' :
+                        sportKey === 'icehockey_nhl' ? 'NHL' : null;
+        if (rwSport) {
+          rotowireData = await fetchLineupsAndInjuries(rwSport);
+        }
+      } catch (rwError) {
+        console.warn('[Props] RotoWire fetch failed, continuing without it');
+      }
+
+      // Filter out players who are OUT according to RotoWire
+      let finalProps = filteredProps;
+      const outPlayers = new Set();
+      
+      Object.entries(rotowireData).forEach(([team, data]) => {
+        (data.injuries || []).forEach(inj => {
+          if (inj.status === 'O' || inj.status === 'OUT') {
+            outPlayers.add(inj.name.toLowerCase());
+          }
+        });
+      });
+
+      if (outPlayers.size > 0) {
+        finalProps = filteredProps.filter(p => !outPlayers.has(p.player.toLowerCase()));
+        console.log(`[Props] Filtered out ${filteredProps.length - finalProps.length} props for players marked OUT by RotoWire`);
+      }
+
       // Create a map of player to team from the prop data
       const playerTeamMap = {};
-      filteredProps.forEach(prop => {
+      finalProps.forEach(prop => {
         if (prop.player && prop.team) {
           playerTeamMap[prop.player] = prop.team;
         }
       });
 
       // 2. Format props and stats
-      const formattedProps = filteredProps.map(p => {
+      const formattedProps = finalProps.map(p => {
         // Format each prop with both over and under options if available
         const props = [];
         if (p.over_odds) {
@@ -523,8 +553,17 @@ Respond with ONLY a JSON array of your best prop picks in this format:
         playerStatsText = `Analyzing ${gameData.homeTeam} vs ${gameData.awayTeam} matchup. Using available prop data for analysis.`;
       }
 
+      // Build out players context for usage redistribution investigation
+      let outPlayersContext = '';
+      if (outPlayers.size > 0) {
+        outPlayersContext = `\n### 🔍 INJURY INVESTIGATION TRIGGER - PLAYERS RULED OUT:\n`;
+        outPlayers.forEach(name => {
+          outPlayersContext += `- ${name} is OUT. INVESTIGATE: How does this absence redistribute usage, targets, or minutes? Analyze if current prop lines for teammates have correctly adjusted or if an edge (Over OR Under) exists.\n`;
+        });
+      }
+
       // 3. Create the prompt for OpenAI (sport-aware)
-      const prompt = propPicksService.createPropPicksPrompt(formattedProps, playerStatsText, sportKey);
+      const prompt = propPicksService.createPropPicksPrompt(formattedProps, playerStatsText + outPlayersContext, sportKey);
 
       // 4. Call the OpenAI API with retry logic for rate limits
       console.log('Calling OpenAI to generate prop picks...');
@@ -589,8 +628,9 @@ Respond with ONLY a JSON array of your best prop picks in this format:
 
       // Sport-specific selection rules:
       // - NBA/NHL/EPL: 2-per-game rule (exactly 2 most confident picks, no confidence threshold)
-      // - NFL: Use confidence threshold (0.55 minimum) and take top 5
+      // - NFL: Categorized picks (already filtered by runner - 3 regular + 2 regular TD + 1 value TD + 1 first TD)
       const usesTwoPerGame = ['basketball_nba', 'icehockey_nhl', 'soccer_epl'].includes(sportKey);
+      const isNFL = sportKey === 'americanfootball_nfl';
       
       let selectedPicks;
       if (usesTwoPerGame) {
@@ -598,8 +638,20 @@ Respond with ONLY a JSON array of your best prop picks in this format:
         const sortedByConfidence = [...validOdds].sort((a, b) => b.confidence - a.confidence);
         selectedPicks = sortedByConfidence.slice(0, 2);
         console.log(`Using 2-per-game rule for ${sportKey}: selecting top 2 from ${validOdds.length} valid props`);
+      } else if (isNFL) {
+        // NFL: Picks are already categorized and filtered by the runner
+        // Format: 3 regular (no td_category) + 2 standard TD + 1 underdog TD + 1 first TD = 7 max
+        // Just pass them through - don't re-filter
+        selectedPicks = validOdds;
+        const counts = {
+          regular_props: validOdds.filter(p => !p.td_category).length,
+          standard_td: validOdds.filter(p => p.td_category === 'standard').length,
+          underdog_td: validOdds.filter(p => p.td_category === 'underdog').length,
+          first_td: validOdds.filter(p => p.td_category === 'first_td').length
+        };
+        console.log(`NFL categorized props: ${JSON.stringify(counts)} (${validOdds.length} total)`);
       } else {
-        // NFL/other sports: Filter by confidence threshold (0.55 minimum) and take top 5
+        // Other sports: Filter by confidence threshold (0.55 minimum) and take top 5
         const highConf = validOdds.filter(p => p.confidence >= 0.55);
         const sortedByConfidence = [...highConf].sort((a, b) => b.confidence - a.confidence);
         selectedPicks = sortedByConfidence.slice(0, 5);
@@ -614,21 +666,11 @@ Respond with ONLY a JSON array of your best prop picks in this format:
           : sportKey === 'americanfootball_nfl' ? 'NFL'
           : 'MLB';
         
-        // Calculate EV properly using confidence as estimated win probability
-        // EV% = (TrueProbability × DecimalOdds) - 1
         const odds = pick.odds || 100;
         const confidence = pick.confidence || 0.7;
         
-        // Convert American odds to decimal odds
-        let decimalOdds;
-        if (odds < 0) {
-          decimalOdds = 1 + (100 / Math.abs(odds));
-        } else {
-          decimalOdds = 1 + (odds / 100);
-        }
-        
-        // Calculate EV as percentage
-        const calculatedEV = ((confidence * decimalOdds) - 1) * 100;
+        // NOTE: No EV calculation for props - EV is a long-run concept for repeated bets
+        // Props are one-time bets on specific players, so EV doesn't apply
         
         return {
           // Core fields from OpenAI
@@ -638,14 +680,17 @@ Respond with ONLY a JSON array of your best prop picks in this format:
           line: pick.line || '',
           bet: pick.bet || 'over',
           odds: odds,
-          confidence: confidence,
-          ev: Math.round(calculatedEV * 10) / 10, // Round to 1 decimal place
+          confidence: confidence, // Gary's conviction level (still useful)
           rationale: pick.rationale || pick.reasoning || 'Analysis not available',
           
           // Additional fields
           sport: leagueLabel,
           time: propPicksService.formatGameTime(actualGameTime),
           commence_time: actualGameTime || null, // ISO format for sorting/grouping
+          
+          // NFL TD category for frontend display (standard, underdog, first_td)
+          // This is set by propsAgenticRunner for TD props only
+          td_category: pick.td_category || null,
           
           // Keep the original pick string for backwards compatibility
           pick: pick.pick || `${pick.player} ${(pick.bet || 'OVER').toUpperCase()} ${pick.prop} ${pick.odds}`
@@ -687,28 +732,30 @@ Respond with ONLY a JSON array of your best prop picks in this format:
       
       console.log(`Found ${data?.length || 0} prop pick records for today`);
       
-      // Sports that use 2-per-game rule (no confidence filtering needed - already curated)
-      const twoPerGameSports = ['NBA', 'NHL', 'EPL'];
+      // Sports that use curated selection (no confidence filtering needed)
+      // - NBA/NHL/EPL: 2-per-game rule
+      // - NFL: Top 3 rule
+      const curatedSports = ['NBA', 'NHL', 'EPL', 'NFL'];
       
       // Filter the picks:
-      // - NBA/NHL/EPL: No confidence filter (2-per-game rule already applied during generation)
-      // - NFL/other: Apply confidence threshold (0.55 minimum)
-      // - All sports: Exclude ≤-150 odds
+      // - NBA/NHL/EPL/NFL: No confidence filter (already curated during generation)
+      // - Other sports: Apply confidence threshold (0.55 minimum)
+      // - All sports: Exclude ≤-150 odds (should already be filtered, but double-check)
       const filteredData = data.map(record => {
         const filtered = record.picks.filter(pick => {
           const sport = pick.sport || 'unknown';
-          const usesTwoPerGame = twoPerGameSports.includes(sport);
+          const isCurated = curatedSports.includes(sport);
           
-          // Skip confidence filter for 2-per-game sports
-          if (!usesTwoPerGame && pick.confidence < 0.55) return false;
+          // Skip confidence filter for curated sports (NBA, NHL, EPL, NFL)
+          if (!isCurated && pick.confidence < 0.55) return false;
           
-          // Always filter out very poor odds
+          // Always filter out very poor odds (safety check - should already be filtered)
           const odds = pick.odds || 0;
           if (typeof odds === 'number' && odds <= -150) return false;
           return true;
         });
         record.picks = filtered
-          .sort((a, b) => (b.confidence !== a.confidence ? b.confidence - a.confidence : (b.ev || 0) - (a.ev || 0)));
+          .sort((a, b) => (b.confidence || 0) - (a.confidence || 0)); // Sort by confidence only
         return record;
       }).filter(record => record.picks.length > 0);
       

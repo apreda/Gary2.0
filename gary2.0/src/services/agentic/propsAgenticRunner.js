@@ -47,39 +47,80 @@ function getGeminiForProps() {
 // SPORT-SPECIFIC PROP TOOL DEFINITIONS (Like the stat menu for game picks)
 // ============================================================================
 
-// Common tools available for all sports
+// Common pick schema for all prop types
+const PICK_SCHEMA = {
+  type: 'object',
+  properties: {
+    player: { type: 'string' },
+    team: { type: 'string' },
+    prop: { type: 'string', description: 'e.g., "rec_yds 68.5" or "anytime_td" or "first_td"' },
+    line: { type: 'number', description: 'The line value (use 0.5 for TD props)' },
+    bet: { type: 'string', enum: ['over', 'under', 'yes'] },
+    odds: { type: 'number' },
+    confidence: { type: 'number', description: 'Your confidence level (0.50-1.0).' },
+    rationale: { type: 'string', description: '5-7 sentences explaining why you like this pick.' },
+    key_stats: { type: 'array', items: { type: 'string' }, description: 'Key stats supporting your pick with source attribution.' }
+  },
+  required: ['player', 'team', 'prop', 'line', 'bet', 'odds', 'confidence', 'rationale', 'key_stats']
+};
+
+// Common tools available for all sports (non-NFL)
 const FINALIZE_TOOL = {
   type: 'function',
   function: {
     name: 'finalize_props',
-    description: 'Output your final prop picks. CRITICAL: Use Gary\'s organic storytelling voice for the rationale. Weave stats into a narrative about matchup, motivation, and game flow.',
+    description: 'Output your final prop picks. CRITICAL: Each rationale MUST follow the 5-part structure: (1) Why the line is wrong, (2) Your specific edge, (3) Game script alignment, (4) The risk, (5) Why bet anyway. NO generic phrases like "should be able to" or "good matchup" - be SPECIFIC.',
     parameters: {
       type: 'object',
       properties: {
         picks: {
           type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              player: { type: 'string' },
-              team: { type: 'string' },
-              prop: { type: 'string', description: 'e.g., "pts 25.5" or "shots_on_goal 3.5"' },
-              line: { type: 'number' },
-              bet: { type: 'string', enum: ['over', 'under'] },
-              odds: { type: 'number' },
-              confidence: { type: 'number', description: 'Your confidence level for this pick (0.50-1.0 scale)' },
-              rationale: { type: 'string', description: '5-7 sentences in GARY\'S VOICE. Tell the STORY of why this happens. No dry stat-dumps.' },
-              key_stats: { 
-                type: 'array', 
-                items: { type: 'string' }, 
-                description: 'REQUIRED FORMAT: Each stat MUST end with source in parentheses. Examples: "L5 receptions: 7, 1, 5, 4, 9 (from game_logs)", "Season avg: 4.5 (from season_stats)".'
-              }
-            },
-            required: ['player', 'team', 'prop', 'line', 'bet', 'odds', 'confidence', 'rationale', 'key_stats']
-          }
+          items: PICK_SCHEMA
         }
       },
       required: ['picks']
+    }
+  }
+};
+
+// NFL-specific finalize tool with 4 categories
+const NFL_FINALIZE_TOOL = {
+  type: 'function',
+  function: {
+    name: 'finalize_props',
+    description: `Output your final NFL prop picks in 4 SEPARATE CATEGORIES. Each category has different rules:
+    
+1. regular_props (Shortlist 5): Yards, receptions, attempts - NO TDs. Odds > -150.
+2. regular_td (Shortlist 4): Anytime TD with odds -200 to +200. Likely scorers.
+3. value_td (Pick 1): Anytime TD with odds +200 or higher. Can include 2+ TDs. NOT 1st TD.
+4. first_td (Pick 1): First TD scorer only. Lottery pick.
+
+CRITICAL: Do NOT mix categories. Each array should only contain picks for that specific category.`,
+    parameters: {
+      type: 'object',
+      properties: {
+        regular_props: {
+          type: 'array',
+          description: 'Shortlist 5 regular props (yards, receptions, attempts). NO TD props. Odds must be > -150.',
+          items: PICK_SCHEMA
+        },
+        regular_td: {
+          type: 'array', 
+          description: 'Shortlist 4 Anytime TD props with odds between -200 and +200.',
+          items: PICK_SCHEMA
+        },
+        value_td: {
+          type: 'array',
+          description: 'Pick 1 Anytime TD or 2+ TDs prop with odds +200 or higher. NOT 1st TD.',
+          items: PICK_SCHEMA
+        },
+        first_td: {
+          type: 'array',
+          description: 'Pick 1 First TD scorer. This is a lottery pick.',
+          items: PICK_SCHEMA
+        }
+      },
+      required: ['regular_props', 'regular_td', 'value_td', 'first_td']
     }
   }
 };
@@ -101,7 +142,58 @@ const SEARCH_TOOL = {
 
 const COMMON_PROP_TOOLS = [SEARCH_TOOL, FINALIZE_TOOL];
 
-// NFL-specific prop tools
+// NFL REGULAR props only (yards, receptions, etc. - NO TDs)
+// Used when TD picks are already stored from separate run
+const NFL_REGULAR_PROP_TOOLS = [
+  {
+    type: 'function',
+    function: {
+      name: 'fetch_player_game_logs',
+      description: 'Fetch last 5 NFL game logs for a player (passing yards, rushing yards, receiving yards, receptions)',
+      parameters: {
+        type: 'object',
+        properties: {
+          player_name: { type: 'string', description: 'Full player name (e.g., "George Pickens", "Jared Goff")' },
+          stat_type: { type: 'string', enum: ['receiving', 'rushing', 'passing', 'all'], description: 'Type of stats to fetch' }
+        },
+        required: ['player_name']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'fetch_player_season_stats',
+      description: 'Fetch NFL season stats for a player',
+      parameters: {
+        type: 'object',
+        properties: {
+          player_name: { type: 'string', description: 'Full player name' }
+        },
+        required: ['player_name']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'fetch_player_vs_opponent',
+      description: 'Fetch a player\'s career stats vs a specific opponent team',
+      parameters: {
+        type: 'object',
+        properties: {
+          player_name: { type: 'string', description: 'Full player name' },
+          opponent_name: { type: 'string', description: 'Opponent team name (e.g., "Chiefs", "Bills")' }
+        },
+        required: ['player_name', 'opponent_name']
+      }
+    }
+  },
+  SEARCH_TOOL,
+  FINALIZE_TOOL  // Standard finalize tool (not categorized)
+];
+
+// NFL-specific prop tools (full categorized - includes TDs)
 const NFL_PROP_TOOLS = [
   {
     type: 'function',
@@ -132,7 +224,24 @@ const NFL_PROP_TOOLS = [
       }
     }
   },
-  ...COMMON_PROP_TOOLS
+  // NEW: Historical vs Opponent Tool - For validating revenge games and matchup history
+  {
+    type: 'function',
+    function: {
+      name: 'fetch_player_vs_opponent',
+      description: 'Fetch a player\'s historical performance against a specific opponent team. Use this to validate revenge game narratives or find matchup-specific edges. Returns stats from past games vs this opponent.',
+      parameters: {
+        type: 'object',
+        properties: {
+          player_name: { type: 'string', description: 'Full player name (e.g., "George Pickens")' },
+          opponent_team: { type: 'string', description: 'Opponent team name (e.g., "Ravens", "Baltimore Ravens")' }
+        },
+        required: ['player_name', 'opponent_team']
+      }
+    }
+  },
+  SEARCH_TOOL,
+  NFL_FINALIZE_TOOL  // NFL uses categorized finalize tool
 ];
 
 // NBA-specific prop tools (NO WEB SEARCH - all data in context)
@@ -232,6 +341,7 @@ const NHL_PROP_TOOLS = [
 // Map sport labels to their tool definitions
 const SPORT_PROP_TOOLS = {
   'NFL': NFL_PROP_TOOLS,
+  'NFL_REGULAR': NFL_REGULAR_PROP_TOOLS,  // Regular props only (no TDs)
   'NBA': NBA_PROP_TOOLS,
   'NHL': NHL_PROP_TOOLS,
   'NCAAB': NBA_PROP_TOOLS,  // College basketball uses NBA-style tools
@@ -239,7 +349,11 @@ const SPORT_PROP_TOOLS = {
 };
 
 // Get tools for a specific sport
-function getPropsToolsForSport(sportLabel) {
+function getPropsToolsForSport(sportLabel, regularOnly = false) {
+  // If regularOnly is true and sport is NFL, use the non-TD tools
+  if (regularOnly && sportLabel === 'NFL') {
+    return SPORT_PROP_TOOLS['NFL_REGULAR'];
+  }
   return SPORT_PROP_TOOLS[sportLabel] || COMMON_PROP_TOOLS;
 }
 
@@ -757,6 +871,152 @@ async function handlePropsToolCall(toolCall, sportKey, sportLabel) {
   }
 
   // ============================================================================
+  // FETCH_PLAYER_VS_OPPONENT - NFL Historical Matchup Data
+  // Use this to validate revenge game narratives or find matchup-specific edges
+  // ============================================================================
+  if (functionName === 'fetch_player_vs_opponent') {
+    console.log(`  → [PLAYER_VS_OPPONENT] ${args.player_name} vs ${args.opponent_team}`);
+    try {
+      // Only supported for NFL currently
+      if (!isNFL) {
+        return { error: `fetch_player_vs_opponent only supported for NFL currently` };
+      }
+
+      // Search for player
+      const nameParts = args.player_name.trim().split(' ');
+      const lastName = nameParts[nameParts.length - 1];
+      const playersResp = await ballDontLieService.getPlayersGeneric(sportKey, { search: lastName, per_page: 10 });
+      const players = Array.isArray(playersResp) ? playersResp : playersResp?.data || [];
+      
+      const player = players.find(p => 
+        `${p.first_name} ${p.last_name}`.toLowerCase() === args.player_name.toLowerCase() ||
+        p.last_name?.toLowerCase() === lastName.toLowerCase()
+      );
+
+      if (!player) {
+        return { error: `Player "${args.player_name}" not found` };
+      }
+
+      // Search for opponent team
+      const teamsResp = await ballDontLieService.getTeamsGeneric(sportKey);
+      const teams = Array.isArray(teamsResp) ? teamsResp : teamsResp?.data || [];
+      const opponentLower = args.opponent_team.toLowerCase().replace(/[^a-z]/g, '');
+      const opponentTeam = teams.find(t => 
+        t.full_name?.toLowerCase().includes(opponentLower) ||
+        t.name?.toLowerCase().includes(opponentLower) ||
+        t.full_name?.toLowerCase().replace(/[^a-z]/g, '').includes(opponentLower)
+      );
+
+      if (!opponentTeam) {
+        return { error: `Opponent team "${args.opponent_team}" not found` };
+      }
+
+      // Calculate NFL season (current and previous for more history)
+      const nflMonth = new Date().getMonth() + 1;
+      const nflYear = new Date().getFullYear();
+      const currentSeason = nflMonth <= 7 ? nflYear - 1 : nflYear;
+      const previousSeason = currentSeason - 1;
+
+      // Fetch game logs for both seasons
+      const [currentLogs, previousLogs] = await Promise.all([
+        ballDontLieService.getNflPlayerGameLogs([player.id], currentSeason, 20).catch(() => []),
+        ballDontLieService.getNflPlayerGameLogs([player.id], previousSeason, 20).catch(() => [])
+      ]);
+
+      // Combine and filter for games vs opponent
+      const allLogs = [...(currentLogs || []), ...(previousLogs || [])];
+      const gamesVsOpponent = allLogs.filter(game => {
+        const opp = game.opponent?.toLowerCase() || '';
+        const oppTeamName = opponentTeam.full_name?.toLowerCase() || '';
+        const oppNickname = opponentTeam.name?.toLowerCase() || '';
+        return opp.includes(oppNickname) || opp.includes(oppTeamName) || 
+               oppTeamName.includes(opp) || oppNickname.includes(opp);
+      });
+
+      if (gamesVsOpponent.length === 0) {
+        return {
+          player: args.player_name,
+          opponent: opponentTeam.full_name,
+          games_found: 0,
+          message: `No games found vs ${opponentTeam.full_name} in last 2 seasons. This may be due to limited matchup history or different conferences.`
+        };
+      }
+
+      // Calculate summary stats
+      const position = player.position || player.position_abbreviation || '';
+      const isQB = position.toUpperCase() === 'QB';
+      const isRB = position.toUpperCase() === 'RB';
+      const isWR = ['WR', 'TE'].includes(position.toUpperCase());
+
+      let summary = {};
+      if (isQB) {
+        const passYds = gamesVsOpponent.map(g => g.pass_yds || 0);
+        const passTds = gamesVsOpponent.map(g => g.pass_tds || 0);
+        summary = {
+          type: 'QB',
+          avg_pass_yds: (passYds.reduce((a, b) => a + b, 0) / passYds.length).toFixed(1),
+          total_pass_tds: passTds.reduce((a, b) => a + b, 0),
+          game_by_game: gamesVsOpponent.map(g => ({
+            date: g.date,
+            pass_yds: g.pass_yds,
+            pass_tds: g.pass_tds,
+            interceptions: g.interceptions
+          }))
+        };
+      } else if (isRB) {
+        const rushYds = gamesVsOpponent.map(g => g.rush_yds || 0);
+        const rushTds = gamesVsOpponent.map(g => g.rush_tds || 0);
+        const recYds = gamesVsOpponent.map(g => g.rec_yds || 0);
+        summary = {
+          type: 'RB',
+          avg_rush_yds: (rushYds.reduce((a, b) => a + b, 0) / rushYds.length).toFixed(1),
+          avg_rec_yds: (recYds.reduce((a, b) => a + b, 0) / recYds.length).toFixed(1),
+          total_rush_tds: rushTds.reduce((a, b) => a + b, 0),
+          game_by_game: gamesVsOpponent.map(g => ({
+            date: g.date,
+            rush_yds: g.rush_yds,
+            rec_yds: g.rec_yds,
+            receptions: g.receptions,
+            tds: (g.rush_tds || 0) + (g.rec_tds || 0)
+          }))
+        };
+      } else {
+        // WR/TE
+        const recYds = gamesVsOpponent.map(g => g.rec_yds || 0);
+        const receptions = gamesVsOpponent.map(g => g.receptions || 0);
+        const recTds = gamesVsOpponent.map(g => g.rec_tds || 0);
+        summary = {
+          type: 'WR/TE',
+          avg_rec_yds: (recYds.reduce((a, b) => a + b, 0) / recYds.length).toFixed(1),
+          avg_receptions: (receptions.reduce((a, b) => a + b, 0) / receptions.length).toFixed(1),
+          total_rec_tds: recTds.reduce((a, b) => a + b, 0),
+          game_by_game: gamesVsOpponent.map(g => ({
+            date: g.date,
+            rec_yds: g.rec_yds,
+            receptions: g.receptions,
+            targets: g.targets,
+            tds: g.rec_tds
+          }))
+        };
+      }
+
+      return {
+        player: args.player_name,
+        position: position,
+        opponent: opponentTeam.full_name,
+        games_found: gamesVsOpponent.length,
+        seasons_searched: `${previousSeason}-${currentSeason}`,
+        summary,
+        insight: gamesVsOpponent.length >= 2 
+          ? `${args.player_name} has ${gamesVsOpponent.length} games vs ${opponentTeam.full_name} in the last 2 seasons. Use the summary stats to validate any matchup narrative.`
+          : `Limited sample size (${gamesVsOpponent.length} game). Be cautious with matchup-specific conclusions.`
+      };
+    } catch (e) {
+      return { error: e.message };
+    }
+  }
+
+  // ============================================================================
   // SEARCH_PLAYER_CONTEXT - Common for all sports
   // ============================================================================
   if (functionName === 'search_player_context') {
@@ -773,10 +1033,58 @@ async function handlePropsToolCall(toolCall, sportKey, sportLabel) {
   }
 
   // ============================================================================
-  // FINALIZE_PROPS - Common for all sports
+  // FINALIZE_PROPS - Handles both regular and NFL categorized format
   // ============================================================================
   if (functionName === 'finalize_props') {
-    // This signals completion - return the picks
+    // Check if this is NFL categorized format (has regular_props, regular_td, etc.)
+    if (args.regular_props || args.regular_td || args.value_td || args.first_td) {
+      // NFL categorized format - combine all categories with metadata
+      const allPicks = [];
+      
+      // Regular props (shortlist 5 → we take top 3)
+      if (args.regular_props && Array.isArray(args.regular_props)) {
+        args.regular_props.forEach(pick => {
+          allPicks.push({ ...pick, category: 'regular_props' });
+        });
+      }
+      
+      // Regular TD (shortlist 4 → we take top 2, odds -200 to +200)
+      if (args.regular_td && Array.isArray(args.regular_td)) {
+        args.regular_td.forEach(pick => {
+          allPicks.push({ ...pick, category: 'regular_td' });
+        });
+      }
+      
+      // Value TD (pick 1, odds +200 or higher)
+      if (args.value_td && Array.isArray(args.value_td)) {
+        args.value_td.forEach(pick => {
+          allPicks.push({ ...pick, category: 'value_td' });
+        });
+      }
+      
+      // First TD (pick 1, lottery)
+      if (args.first_td && Array.isArray(args.first_td)) {
+        args.first_td.forEach(pick => {
+          allPicks.push({ ...pick, category: 'first_td' });
+        });
+      }
+      
+      console.log(`[NFL Props] Categorized finalize: ${args.regular_props?.length || 0} regular, ${args.regular_td?.length || 0} regular TD, ${args.value_td?.length || 0} value TD, ${args.first_td?.length || 0} first TD`);
+      
+      return { 
+        finalized: true, 
+        picks: allPicks,
+        categorized: true,
+        categories: {
+          regular_props: args.regular_props || [],
+          regular_td: args.regular_td || [],
+          value_td: args.value_td || [],
+          first_td: args.first_td || []
+        }
+      };
+    }
+    
+    // Standard format (non-NFL sports) - return picks as-is
     return { finalized: true, picks: args.picks };
   }
 
@@ -802,6 +1110,68 @@ function calibrateConfidence(rawConfidence) {
   if (!rawConfidence || rawConfidence < 0.5) return 0.5;
   if (rawConfidence > 1.0) return 1.0;
   return rawConfidence;
+}
+
+/**
+ * Check rationale quality for sharp betting standards
+ * Returns warnings for generic or low-quality rationales
+ */
+function checkRationaleQuality(rationale, player) {
+  const warnings = [];
+  const rationaleLower = (rationale || '').toLowerCase();
+  
+  // BANNED GENERIC PHRASES - These signal lazy analysis
+  const bannedPhrases = [
+    { phrase: 'should be able to', reason: 'Generic prediction language' },
+    { phrase: 'look for him to', reason: 'Generic prediction language' },
+    { phrase: 'i expect him to', reason: 'Generic prediction language' },
+    { phrase: 'expect him to', reason: 'Generic prediction language' },
+    { phrase: "he's due", reason: 'Gambling fallacy' },
+    { phrase: 'due for a big', reason: 'Gambling fallacy' },
+    { phrase: 'volume play', reason: 'Needs specific volume data' },
+    { phrase: 'ceiling game', reason: 'Needs specific ceiling driver' },
+    { phrase: 'should hit', reason: 'Generic prediction language' },
+    { phrase: 'should cash', reason: 'Generic prediction language' },
+    { phrase: 'good spot', reason: 'Needs specific reasoning' },
+  ];
+  
+  // VAGUE PHRASES that need specificity
+  const vaguePatterns = [
+    { pattern: /good matchup(?! against| vs| with \d)/i, reason: 'Says "good matchup" without specifics - needs defensive rank or yards allowed' },
+    { pattern: /been hot(?! with \d| averaging| l[35])/i, reason: 'Says "been hot" without specifics - needs L3/L5 numbers' },
+    { pattern: /favorable(?! \d| rank| allow)/i, reason: 'Says "favorable" without specifics - needs data backing' },
+  ];
+  
+  // Check for banned phrases
+  for (const { phrase, reason } of bannedPhrases) {
+    if (rationaleLower.includes(phrase)) {
+      warnings.push(`[${player}] Banned phrase detected: "${phrase}" - ${reason}`);
+    }
+  }
+  
+  // Check for vague patterns
+  for (const { pattern, reason } of vaguePatterns) {
+    if (pattern.test(rationaleLower)) {
+      warnings.push(`[${player}] Vague language: ${reason}`);
+    }
+  }
+  
+  // Check for required elements (5-part structure)
+  const hasLineAnalysis = rationaleLower.includes('line') || rationaleLower.includes('set at') || rationaleLower.includes('priced');
+  const hasRisk = rationaleLower.includes('risk') || rationaleLower.includes('concern') || rationaleLower.includes('worry') || rationaleLower.includes('could go wrong');
+  const hasGameScript = rationaleLower.includes('spread') || rationaleLower.includes('underdog') || rationaleLower.includes('favorite') || rationaleLower.includes('implied') || rationaleLower.includes('game script');
+  
+  if (!hasLineAnalysis) {
+    warnings.push(`[${player}] Missing "why line is wrong" analysis`);
+  }
+  if (!hasRisk) {
+    warnings.push(`[${player}] Missing risk acknowledgment`);
+  }
+  if (!hasGameScript) {
+    warnings.push(`[${player}] Missing game script context (spread/total/implied)`);
+  }
+  
+  return warnings;
 }
 
 function validatePropsAgainstToolHistory(picks, toolCallHistory) {
@@ -890,6 +1260,12 @@ function validatePropsAgainstToolHistory(picks, toolCallHistory) {
     const originalConfidence = pick.confidence;
     const calibratedConfidence = calibrateConfidence(originalConfidence);
     
+    // Check rationale quality for sharp betting standards
+    const rationaleWarnings = checkRationaleQuality(pick.rationale, pick.player);
+    if (rationaleWarnings.length > 0) {
+      warnings.push(...rationaleWarnings);
+    }
+    
     return {
       ...pick,
       confidence: calibratedConfidence,
@@ -897,10 +1273,18 @@ function validatePropsAgainstToolHistory(picks, toolCallHistory) {
       key_stats: validatedKeyStats,
       _validation: {
         hasToolData: Object.keys(toolData.gameLogs).length > 0 || Object.keys(toolData.seasonStats).length > 0,
-        warningCount: warnings.filter(w => w.includes(pick.player)).length
+        warningCount: warnings.filter(w => w.includes(pick.player)).length,
+        rationaleQuality: rationaleWarnings.length === 0 ? 'SHARP' : 'NEEDS_IMPROVEMENT'
       }
     };
   });
+  
+  // Log rationale quality summary
+  const sharpCount = validatedPicks.filter(p => p._validation?.rationaleQuality === 'SHARP').length;
+  const needsWorkCount = validatedPicks.filter(p => p._validation?.rationaleQuality === 'NEEDS_IMPROVEMENT').length;
+  if (needsWorkCount > 0) {
+    console.log(`[Props Validation] 📝 Rationale quality: ${sharpCount} sharp, ${needsWorkCount} need improvement`);
+  }
   
   return { validatedPicks, warnings, invalidStats };
 }
@@ -909,13 +1293,15 @@ function validatePropsAgainstToolHistory(picks, toolCallHistory) {
  * Run full iteration loop for props using PERSISTENT chat session
  * The chat session manages its own history, avoiding thoughtSignature issues
  */
-async function runPropsIterationLoop({ systemPrompt, userMessage, sportKey, sportLabel = 'NFL', maxIterations = 8 }) {
+async function runPropsIterationLoop({ systemPrompt, userMessage, sportKey, sportLabel = 'NFL', maxIterations = 8, regularOnly = false }) {
   const gemini = getGeminiForProps();
   
   // Get sport-specific tools
-  const sportTools = getPropsToolsForSport(sportLabel);
+  // regularOnly=true for NFL uses non-TD tools (when TDs are handled separately)
+  const sportTools = getPropsToolsForSport(sportLabel, regularOnly);
   const functionDeclarations = convertToolsForGemini(sportTools);
-  console.log(`[Props] Using ${sportLabel} tools: ${sportTools.map(t => t.function.name).join(', ')}`);
+  const toolMode = regularOnly && sportLabel === 'NFL' ? '(regular props only - no TDs)' : '';
+  console.log(`[Props] Using ${sportLabel} tools ${toolMode}: ${sportTools.map(t => t.function.name).join(', ')}`);
   
   // Get the right model for this sport (Pro for NFL, Flash for others)
   const propsModel = getPropsModelForSport(sportLabel);
@@ -940,6 +1326,7 @@ async function runPropsIterationLoop({ systemPrompt, userMessage, sportKey, spor
   let iteration = 0;
   const toolCallHistory = [];
   let didDirectionBalanceCheck = false;
+  let consecutiveEmptyResponses = 0; // Track consecutive empty responses
 
   // Send initial user message
   console.log(`\n[Props Iteration ${sportLabel}] 1/${maxIterations} (initial)`);
@@ -1084,16 +1471,69 @@ async function runPropsIterationLoop({ systemPrompt, userMessage, sportKey, spor
     // CRITICAL: Handle empty response (no function calls AND no text)
     // This prevents infinite loops when Gemini returns nothing
     if (functionCallParts.length === 0 && textParts.length === 0) {
-      console.log(`[Props] ⚠️ Empty response from Gemini - nudging for finalization`);
+      consecutiveEmptyResponses++;
+      console.log(`[Props] ⚠️ Empty response from Gemini (${consecutiveEmptyResponses} consecutive)`);
+      
+      // After 3 consecutive empties, force finalization with explicit context
+      if (consecutiveEmptyResponses >= 3) {
+        console.log(`[Props] ⚠️ Too many empty responses - forcing explicit finalization request`);
+        
+        // Build context from tool history for Gary to work with
+        const playerDataSummary = toolCallHistory
+          .filter(t => t.tool === 'fetch_player_game_logs' || t.tool === 'fetch_player_season_stats')
+          .slice(0, 5)
+          .map(t => {
+            try {
+              const data = typeof t.result === 'string' ? JSON.parse(t.result) : t.result;
+              return data.player || 'Unknown player';
+            } catch { return 'player data'; }
+          })
+          .join(', ');
+        
+        const forcePrompt = `
+CRITICAL: You have stopped responding. This is your FINAL chance to produce picks.
+
+You have gathered data on: ${playerDataSummary || 'multiple players'}.
+
+You MUST now call finalize_props with 3-5 prop picks. Pick format:
+{
+  "picks": [
+    { "player": "NAME", "prop": "pass_yds", "line": 250.5, "odds": -110, "bet": "OVER", "confidence": 0.7, "rationale": "Why..." }
+  ]
+}
+
+DO NOT request more tools. CALL finalize_props NOW.`;
+
+        iteration++;
+        result = await chat.sendMessage(forcePrompt);
+        response = result.response;
+        
+        // If still empty after force, give up
+        const forcedParts = response.candidates?.[0]?.content?.parts || [];
+        if (forcedParts.length === 0) {
+          console.log(`[Props] ❌ Gemini unresponsive after force prompt - aborting`);
+          break;
+        }
+        consecutiveEmptyResponses = 0; // Reset if we got a response
+        continue;
+      }
+      
       iteration++;
       if (iteration >= maxIterations) {
         console.log(`[Props] ❌ Max iterations reached with empty responses`);
         break;
       }
+      
+      // Add small delay before retry (helps with API stability)
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
       result = await chat.sendMessage('You returned an empty response. Please call finalize_props NOW with your best picks based on all data gathered.');
       response = result.response;
       continue;
     }
+    
+    // Reset empty counter on successful response
+    consecutiveEmptyResponses = 0;
     
     // Nudge when approaching max iterations
     if (iteration >= maxIterations - 1 && functionCallParts.length === 0) {
@@ -1654,10 +2094,10 @@ function formatGameTime(timeString) {
 /**
  * Build system prompt for props iteration loop
  */
-function buildPropsIterationPrompt(gameSummary, propCandidates, narrativeContext, sportLabel) {
+function buildPropsIterationPrompt(gameSummary, propCandidates, narrativeContext, sportLabel, regularOnly = false) {
   const constitution = getConstitution(sportLabel);
-  // We force Gary to shortlist 5 so quantum can filter the survivors
-  const pickCount = 5;
+  // Pick count depends on mode
+  const pickCount = (regularOnly && sportLabel === 'NFL') ? 3 : 5;
 
   const now = new Date();
   const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
@@ -1668,8 +2108,22 @@ function buildPropsIterationPrompt(gameSummary, propCandidates, narrativeContext
     ? (month >= 10 ? `${year}-${year + 1}` : `${year - 1}-${year}`)
     : `${year}`;
 
+  // Add NFL regular-only restrictions when TDs are handled separately
+  const nflRegularOnlyInstructions = (regularOnly && sportLabel === 'NFL') ? `
+## 🚨 IMPORTANT: REGULAR PROPS ONLY - NO TDs 🚨
+TD props (anytime TD, first TD, 2+ TDs) are handled by a SEPARATE process.
+Your picks MUST be from these categories ONLY:
+- Passing yards, passing attempts, passing TDs (QB stats)
+- Rushing yards, rushing attempts  
+- Receiving yards, receptions
+- Tackles, sacks (defensive props)
+
+DO NOT pick any touchdown scorer props. Focus on yards, attempts, and receptions only.
+` : '';
+
   return `
 You are GARY - the grizzled sports betting sharp with 30 years in the game. You're now powered by elite reasoning to find the "hidden angles" in player props.
+${nflRegularOnlyInstructions}
 
 ## CURRENT DATE & SEASON
 Current Date: ${dateStr}
@@ -1773,17 +2227,44 @@ Before calling finalize_props, mentally verify:
 "Is every number in my key_stats an EXACT copy from a tool response?"
 If you can't trace a stat to a specific tool call, DELETE IT.
 
-## RATIONALE STYLE
-Write 5-7 sentences explaining your pick:
-- Reference EXACT stats from tool calls
-- Explain the matchup context
-- End with why this pick will hit
+## 📝 RATIONALE STRUCTURE (MANDATORY - FOLLOW THIS ORDER)
+
+Your rationale MUST include these 5 elements in 5-7 sentences:
+
+**1. YOUR PREDICTION** - Start with what YOU expect to happen:
+   "The line of 68.5 is based on his season average, but that includes games with a different QB..."
+
+**2. THE SPECIFIC EDGE** - What YOU see that creates value:
+   "With Wilson at QB, his L5 is 78, 92, 65, 88, 101 yards (84.8 avg)..."
+
+**3. GAME SCRIPT ALIGNMENT** - Use the gameScript data provided:
+   "As +7 underdogs with implied 19 points, Pittsburgh will throw 40+ times chasing..."
+
+**4. THE RISK** - Name what could go wrong (honest assessment):
+   "The risk is if they fall behind 21+ early and abandon balance..."
+
+**5. WHY BET ANYWAY** - Why the edge outweighs the risk:
+   "But the spread suggests a close game, and his target share is locked in at 28%..."
+
+## 🚫 BANNED PHRASES (Never use these)
+❌ "He should be able to..." / "Look for him to..." / "I expect him to..."
+❌ "Good matchup" (say WHY: "Defense allows X yards, ranked Yth")
+❌ "He's been hot" (say HOW: "L3 avg of 95 vs season 68")
+❌ "Volume play" / "Ceiling game" (explain the SPECIFIC driver)
+❌ "He's due" (gambling fallacy)
+
+## 🎯 USE THE DATA YOU HAVE
+- Check \`gameScript.impliedTotals\` - tells you expected points per team
+- Check \`trumpCards\` array - if one exists, make it central to your thesis
+- Check \`gameScript.edges\` - pre-identified sharp edges
+- Use \`fetch_player_vs_opponent\` for revenge game validation
 
 ${narrativeContext ? `\n## LIVE CONTEXT (from Gemini Search)\n${narrativeContext.substring(0, 8000)}` : ''}
 
 ## 🚨 FINALIZATION REMINDER 🚨
 - After 3 tool call rounds, you MUST call finalize_props
 - Pick TOP ${pickCount} props (your shortlist). Do NOT stop at 2.
+- Include at least ONE contrarian pick (UNDER or fade) if the data supports it
 - Don't over-research - make decisions with available data
 
 Start by identifying top candidates, fetch their stats, then FINALIZE.
@@ -1811,32 +2292,50 @@ export async function runAgenticPropsPipeline({
   buildContext,
   sportLabel = 'NFL',
   propsPerGame = 5,
-  options = {}
+  options = {},
+  regularOnly = false  // If true for NFL, only generate yards/receptions props (no TDs)
 }) {
   const start = Date.now();
 
   console.log(`\n[Agentic Props][${sportLabel}] Building context...`);
-  const context = await buildContext(game, playerProps, options);
+  // Pass regularOnly to context builder so it can filter out TD props when needed
+  const contextOptions = { ...options, regularOnly };
+  const context = await buildContext(game, playerProps, contextOptions);
   const matchup = `${game.away_team} @ ${game.home_team}`;
 
   // Use iteration loop for NFL, NBA, NHL (full agentic with BDL MCP tools)
   if (ITERATION_SPORTS.includes(sportLabel)) {
-    console.log(`[Agentic Props][${sportLabel}] Using full iteration loop with BDL MCP tools`);
+    const modeLabel = regularOnly && sportLabel === 'NFL' ? ' (regular props only - TDs handled separately)' : '';
+    console.log(`[Agentic Props][${sportLabel}] Using full iteration loop with BDL MCP tools${modeLabel}`);
 
     const systemPrompt = buildPropsIterationPrompt(
       context.gameSummary,
       context.propCandidates,
       context.narrativeContext,
-      sportLabel
+      sportLabel,
+      regularOnly  // Pass through to inform Gary about prop restrictions
     );
 
     const userMessage = JSON.stringify({
       matchup: context.gameSummary.matchup,
       tipoff: context.gameSummary.tipoff,
+      // GAME SCRIPT CONTEXT - Critical for sharp prop betting
+      gameScript: context.gameSummary.gameScript || null,
+      // TRUMP CARDS - Pre-identified overriding factors
+      trumpCards: context.gameSummary.trumpCards || [],
+      // WEATHER - Can impact props significantly
+      weather: context.gameSummary.weather || null,
+      // PROP CANDIDATES with recent form
       prop_candidates: context.propCandidates.slice(0, 14).map(p => ({
         player: p.player,
         team: p.team,
-        props: p.props
+        props: p.props,
+        // Include recent form if available
+        recentForm: p.recentForm ? {
+          targetTrend: p.recentForm.targetTrend,
+          usageTrend: p.recentForm.usageTrend,
+          formTrend: p.recentForm.formTrend
+        } : null
       })),
       available_lines: playerProps.slice(0, 50).map(p => ({
         player: p.player,
@@ -1854,7 +2353,8 @@ export async function runAgenticPropsPipeline({
       sportKey, 
       sportLabel, 
       // Give room for the direction-bias recheck pass + finalization nudge
-      maxIterations: 8 
+      maxIterations: 8,
+      regularOnly  // Pass through for NFL regular-only mode
     });
 
     console.log(`[Agentic Props][${sportLabel}] Completed: ${result.iterations} iterations, ${result.toolCalls} tool calls`);
@@ -1960,14 +2460,92 @@ export async function runAgenticPropsPipeline({
       };
     }
 
-    // Other sports: Sort by confidence and keep top N
+    // NFL CATEGORIZED: Handle 4 separate categories
+    // CRITICAL: Map internal categories to td_category values expected by GaryProps.jsx
+    // - 'regular_props' → no td_category (regular props)
+    // - 'regular_td' → td_category: 'standard' (chalk TD picks)
+    // - 'value_td' → td_category: 'underdog' (longshot TD picks)
+    // - 'first_td' → td_category: 'first_td' (first TD scorer)
+    if (sportLabel === 'NFL' && result.categorized) {
+      const finalPicks = [];
+      
+      // Category 1: Regular Props - Shortlist 5 → Top 3 (NO td_category - these are NOT TD props)
+      const regularProps = allPicks.filter(p => p.category === 'regular_props')
+        .sort((a, b) => (b.confidence || 0) - (a.confidence || 0))
+        .slice(0, 3)
+        .map(p => {
+          // Remove internal category, keep as regular prop (no td_category)
+          const { category, ...rest } = p;
+          return rest;
+        });
+      finalPicks.push(...regularProps);
+      console.log(`[NFL Props] Regular Props: ${regularProps.length}/3 (from ${allPicks.filter(p => p.category === 'regular_props').length} shortlisted)`);
+      
+      // Category 2: Regular TD - Shortlist 4 → Top 2 (odds -200 to +200) → td_category: 'standard'
+      const regularTd = allPicks.filter(p => p.category === 'regular_td')
+        .filter(p => p.odds >= -200 && p.odds <= 200) // Enforce odds range
+        .sort((a, b) => (b.confidence || 0) - (a.confidence || 0))
+        .slice(0, 2)
+        .map(p => {
+          // Map to td_category: 'standard' for frontend display
+          const { category, ...rest } = p;
+          return { ...rest, td_category: 'standard' };
+        });
+      finalPicks.push(...regularTd);
+      console.log(`[NFL Props] Regular TD: ${regularTd.length}/2 (from ${allPicks.filter(p => p.category === 'regular_td').length} shortlisted)`);
+      
+      // Category 3: Value TD - Pick 1 (odds +200 or higher) → td_category: 'underdog'
+      const valueTd = allPicks.filter(p => p.category === 'value_td')
+        .filter(p => p.odds >= 200) // Enforce odds range
+        .sort((a, b) => (b.confidence || 0) - (a.confidence || 0))
+        .slice(0, 1)
+        .map(p => {
+          // Map to td_category: 'underdog' for frontend display
+          const { category, ...rest } = p;
+          return { ...rest, td_category: 'underdog' };
+        });
+      finalPicks.push(...valueTd);
+      console.log(`[NFL Props] Value TD: ${valueTd.length}/1 (from ${allPicks.filter(p => p.category === 'value_td').length} shortlisted)`);
+      
+      // Category 4: First TD - Pick 1 → td_category: 'first_td'
+      const firstTd = allPicks.filter(p => p.category === 'first_td')
+        .sort((a, b) => (b.confidence || 0) - (a.confidence || 0))
+        .slice(0, 1)
+        .map(p => {
+          // Map to td_category: 'first_td' for frontend display
+          const { category, ...rest } = p;
+          return { ...rest, td_category: 'first_td' };
+        });
+      finalPicks.push(...firstTd);
+      console.log(`[NFL Props] First TD: ${firstTd.length}/1 (from ${allPicks.filter(p => p.category === 'first_td').length} shortlisted)`);
+      
+      console.log(`[NFL Props] TOTAL: ${finalPicks.length} picks (3 regular + 2 regular TD + 1 value TD + 1 first TD = 7 max)`);
+      
+      return {
+        picks: finalPicks,
+        iterations: result.iterations,
+        toolCalls: result.toolCalls,
+        elapsedMs: Date.now() - start
+      };
+    }
+    
+    // Other sports (or NFL without categories): Sort by confidence and keep top N
     const sortedPicks = allPicks.sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
-    const topPicks = sortedPicks.slice(0, propsPerGame);
-
-    // Apply confidence filter for non NBA/NHL
-    const minConfidence = sportLabel === 'NFL' ? 0.65 : 0.60;
-    const finalPicks = topPicks.filter(p => p.confidence >= minConfidence);
-    console.log(`[Agentic Props][${sportLabel}] Sorted by confidence: Top ${propsPerGame} of ${allPicks.length}, filtered to ${finalPicks.length} picks (>=${minConfidence})`);
+    
+    // NFL fallback (non-categorized): Take top 3
+    // Other sports: Take top N with confidence filter
+    let finalPicks;
+    if (sportLabel === 'NFL') {
+      // NFL fallback: Simply take the top 3 by confidence
+      finalPicks = sortedPicks.slice(0, 3);
+      console.log(`[Agentic Props][${sportLabel}] Taking TOP 3 from ${allPicks.length} shortlisted picks (fallback mode)`);
+    } else {
+      // Other sports: Apply confidence filter
+      const topPicks = sortedPicks.slice(0, propsPerGame);
+      const minConfidence = 0.60;
+      finalPicks = topPicks.filter(p => p.confidence >= minConfidence);
+      console.log(`[Agentic Props][${sportLabel}] Sorted by confidence: Top ${propsPerGame} of ${allPicks.length}, filtered to ${finalPicks.length} picks (>=${minConfidence})`);
+    }
 
     return {
       picks: finalPicks,
