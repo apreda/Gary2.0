@@ -184,12 +184,13 @@ export const propOddsService = {
       if (sport === 'icehockey_nhl') {
         console.log(`[PropOdds] Using Ball Don't Lie for NHL player props`);
         
-        // Get today's date in YYYY-MM-DD format (EST)
+        // Get today's date in YYYY-MM-DD format (EST) - DST-safe
         const now = new Date();
-        const estOffset = -5 * 60; // EST is UTC-5
-        const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-        const est = new Date(utc + (estOffset * 60000));
-        const dateStr = est.toISOString().split('T')[0];
+        const estOptions = { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' };
+        const estDate = new Intl.DateTimeFormat('en-US', estOptions).format(now);
+        const [month, day, year] = estDate.split('/');
+        const dateStr = `${year}-${month}-${day}`;
+        console.log(`[PropOdds] NHL: Searching for games on EST date: ${dateStr}`);
         
         // Find the game ID from BDL
         const nhlGames = await ballDontLieService.getNhlGamesForDate(dateStr);

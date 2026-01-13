@@ -25,7 +25,7 @@ dotenv.config({ path: path.join(__dirname, '..', '.env') });
 dotenv.config({ path: path.join(__dirname, '..', '.env.local'), override: true });
 
 // Now import modules that depend on env vars
-const { analyzeGame, buildSystemPrompt } = await import('../src/services/agentic/agenticOrchestrator.js');
+const { analyzeGame, buildSystemPrompt, selectBestSlate } = await import('../src/services/agentic/agenticOrchestrator.js');
 const { oddsService } = await import('../src/services/oddsService.js');
 const { picksService } = await import('../src/services/picksService.js');
 const { getVenueForHomeTeam } = await import('../src/services/venueMapping.js');
@@ -226,6 +226,8 @@ const dateFilter = getArgValue('--date');
 const useDynamicSlateReview = args.includes('--dynamic');
 // --force-underdog flag to make Gary argue FOR the underdog (one-time use for testing value)
 const forceUnderdog = args.includes('--force-underdog');
+// --slate flag to enable Slate Selector (filters to top picks and runs Stress Test)
+const useSlateSelector = args.includes('--slate');
 
 if (runAll) {
   sportsToRun.push('nba', 'nfl', 'nhl', 'epl', 'ncaab', 'ncaaf');
@@ -262,6 +264,7 @@ if (sportsToRun.length === 0) {
 ║    --force                     (skip deduplication)              ║
 ║    --force-underdog            (make Gary argue for underdog)    ║
 ║    --store false               (analyze only, don't save)        ║
+║    --slate                     (Slate Selector: top 4 + Stress)  ║
 ║                                                                  ║
 ║  Gary's Pick System:                                             ║
 ║    - SPREAD or MONEYLINE = picks stored                          ║
@@ -1409,34 +1412,64 @@ async function main() {
           const passCount = sportPicks.filter(p => p.pick === 'PASS' || p.type === 'pass').length;
           console.log(`\n[${config.name}] Gary's decisions: ${qualifiedPicks.length} PICKS, ${passCount} PASS`)
 
-          if (qualifiedPicks.length > 0) {
-            // Quantum filter behavior by sport:
-            // - NBA/NHL: FILTER mode (only picks ≥0.80 stored)
-            // - NCAAB/NCAAF/NFL: TRACKING mode (all picks stored with quantum scores)
-            let picksToStore = qualifiedPicks;
+          // ═══════════════════════════════════════════════════════════════
+          // SLATE SELECTOR (--slate flag)
+          // Filters to top picks by conviction, runs Stress Test
+          // ═══════════════════════════════════════════════════════════════
+          let finalQualifiedPicks = qualifiedPicks;
+          let slateResult = null;
+          
+          if (useSlateSelector && qualifiedPicks.length > 2) {
+            console.log(`\n[${config.name}] 🎯 Running Slate Selector on ${qualifiedPicks.length} picks...`);
             
-            const useQuantumFilter = ['basketball_nba', 'icehockey_nhl'].includes(config.key);
-            const useQuantumTracking = ['basketball_ncaab', 'americanfootball_ncaaf', 'americanfootball_nfl'].includes(config.key);
+            try {
+              slateResult = await selectBestSlate(qualifiedPicks, config.key);
+              
+              if (slateResult.finalSlate && slateResult.finalSlate.length > 0) {
+                // Replace qualifiedPicks with the stress-tested slate
+                finalQualifiedPicks = slateResult.finalSlate;
+                
+                console.log(`\n╔══════════════════════════════════════════════════════════════════╗`);
+                console.log(`║  🎯 GARY'S EXECUTIVE SLATE (${finalQualifiedPicks.length} picks)                        `);
+                console.log(`╠══════════════════════════════════════════════════════════════════╣`);
+                finalQualifiedPicks.forEach((p, i) => {
+                  const sideTag = p.side === 'UNDERDOG' ? '🐕' : '🏆';
+                  console.log(`║  #${p.rank}. ${(p.pick || '').slice(0, 25).padEnd(25)} | Gap: ${(p.gap || 0).toFixed(1)} ${sideTag}`);
+                  if (p.riskNote) {
+                    console.log(`║      ⚠️ Risk: ${p.riskNote.slice(0, 45)}...`);
+                  }
+                });
+                console.log(`╠══════════════════════════════════════════════════════════════════╣`);
+                console.log(`║  Balance: ${slateResult.balance.favorites} Favorites, ${slateResult.balance.underdogs} Underdogs`);
+                console.log(`║  Sweep Confidence: ${slateResult.sweepConfidence}/10`);
+                if (slateResult.stressTestResult?.weakestLink) {
+                  console.log(`║  Weakest Link: ${slateResult.stressTestResult.weakestLink}`);
+                }
+                console.log(`╚══════════════════════════════════════════════════════════════════╝\n`);
+              } else {
+                console.log(`[${config.name}] ⚠️ Slate Selector returned no picks, using original ${qualifiedPicks.length} picks`);
+              }
+            } catch (slateError) {
+              console.error(`[${config.name}] ❌ Slate Selector error:`, slateError.message);
+              console.log(`[${config.name}] Falling back to original ${qualifiedPicks.length} picks`);
+            }
+          }
+
+          if (finalQualifiedPicks.length > 0) {
+            // Quantum behavior: ALL sports use TRACKING mode
+            // Store all picks with quantum scores attached (no filtering)
+            let picksToStore = finalQualifiedPicks;
             
             if (isQuantumEnabled()) {
-              if (useQuantumTracking) {
-                // NCAAB/NCAAF/NFL: Store ALL picks but attach quantum scores for tracking
-                console.log(`\n[${config.name}] 📊 Tracking mode: Storing all picks with quantum scores`);
-                picksToStore = await applyQuantumFilter(qualifiedPicks, config.name, { storeAll: true });
-              } else if (useQuantumFilter) {
-                // NBA/NHL: Only picks with quantum strength >= 0.80 survive
-                picksToStore = await applyQuantumFilter(qualifiedPicks, config.name, { storeAll: false });
-                
-                if (picksToStore.length === 0) {
-                  console.log(`\n[${config.name}] 🌌 No picks passed quantum filter - nothing to store`);
-                }
-              }
+              // All sports: Store ALL picks with quantum scores for tracking
+              console.log(`\n[${config.name}] 📊 Tracking mode: Storing all picks with quantum scores`);
+              picksToStore = await applyQuantumFilter(qualifiedPicks, config.name, { storeAll: true });
             } else {
-              console.log(`\n[${config.name}] ⚠️ Quantum filter disabled (--no-quantum flag)`);
+              console.log(`\n[${config.name}] ⚠️ Quantum disabled (--no-quantum flag)`);
             }
             
             if (picksToStore.length > 0) {
-              const storageNote = useQuantumFilter ? 'quantum-filtered picks' : 'quantum-tracked picks';
+              const storageNote = 'quantum-tracked picks';
               console.log(`\n[${config.name}] 💾 Storing ${picksToStore.length} ${storageNote}`);
               await storePicks(picksToStore);
               allPicks.push(...picksToStore);

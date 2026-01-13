@@ -514,7 +514,11 @@ Be specific and factual. If it's just a regular season game, say so clearly.`;
   }
   
   // Extract narrative context from Gemini Grounding (valuable even if injury parsing returned 0)
-  const narrativeContext = injuries?.narrativeContext || null;
+  // Limit character count to avoid data noise/API blocks
+  let narrativeContext = injuries?.narrativeContext || null;
+  if (narrativeContext && narrativeContext.length > 4000) {
+    narrativeContext = narrativeContext.substring(0, 4000) + '... [TRUNCATED DUE TO LENGTH]';
+  }
   
   // Build the scout report
   const matchupLabel = game.isNeutralSite ? `${awayTeam} vs ${homeTeam}` : `${awayTeam} @ ${homeTeam}`;
@@ -545,10 +549,15 @@ ${gameContextSection}${bowlGameContext}
 ${formatInjuryReport(homeTeam, awayTeam, injuries)}
 ${formatStartingLineups(homeTeam, awayTeam, injuries.lineups)}
 
-🚨 INJURY DATA PROTOCOLS:
-1. Do NOT mention any player listed as OUT/DOUBTFUL/IR as if they are playing.
-2. SEASON-LONG injuries (OUT 2+ weeks) = Team and player stats ALREADY reflect this absence. Do NOT cite these as "reasons" or "edges" for a pick.
-3. RECENT injuries = Use your expertise and tools to determine if the absence or return of these players is significant for this specific matchup.
+🚨 INJURY EDGE RULES (CRITICAL FOR YOUR ANALYSIS):
+1. Do NOT mention any player listed as OUT/DOUBTFUL as if they are playing.
+2. **INJURIES ARE ONLY EDGE IF THEY'RE NEW:**
+   - Out <7 days → ✅ POSSIBLE EDGE (line may not have fully adjusted)
+   - Out 1-2 weeks → ⚠️ PROBABLY PRICED IN (proceed with caution)
+   - Out 2+ weeks → ❌ FULLY PRICED IN (oddsmakers have seen 5-10+ games without them)
+   - Out months → ❌ NOT A FACTOR (the line was set KNOWING this)
+3. If you cite "without [Player X]" and they've been out 2+ weeks, that's NOT edge - that's explaining WHY the line is what it is.
+4. The oddsmakers watch games too. If a player has been out for weeks, they've SEEN how the team plays without them.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${narrativeContext ? `
 🔍 LIVE CONTEXT FROM GOOGLE SEARCH (Gemini Grounding)
@@ -1113,19 +1122,48 @@ async function fetchInjuries(homeTeam, awayTeam, sport) {
         const injuries = await ballDontLieService.getInjuriesGeneric(bdlSport, { team_ids: teamIds });
         console.log(`[Scout Report] BDL returned ${injuries?.length || 0} total injuries for teams ${teamIds.join(', ')}`);
 
-        // Filter by team and fix statuses
+        // Filter out SEASON-LONG injuries (IR all season, haven't played this year)
+        // These are NOT factors - the team has already adjusted
+        const filterSeasonLong = (injuryList) => {
+          return injuryList.filter(i => {
+            const status = (i.status || '').toLowerCase();
+            const comment = (i.comment || i.description || '').toLowerCase();
+            
+            // Filter out players on IR/NFI all season
+            const isSeasonLongIR = status.includes('injured reserve') || 
+                                   status === 'ir' ||
+                                   status === 'nfi' ||  // Non-Football Injury list (like Mixon)
+                                   status.includes('out for season') ||
+                                   status.includes('out for the season') ||
+                                   comment.includes('out for season') ||
+                                   comment.includes('out for the season') ||
+                                   comment.includes('season-ending') ||
+                                   comment.includes('all season');
+            
+            if (isSeasonLongIR) {
+              const playerName = `${i.player?.first_name || ''} ${i.player?.last_name || ''}`.trim();
+              console.log(`[Scout Report] ❌ Filtering out season-long injury: ${playerName} (${status})`);
+              return false;
+            }
+            return true;
+          });
+        };
+
+        // Filter by team, fix statuses, and remove season-long injuries
         bdlInjuries = {
-          home: injuries?.filter(i =>
+          home: filterSeasonLong(injuries?.filter(i =>
             i.player?.team?.id === home?.id ||
             i.player?.team_id === home?.id ||
             i.team_id === home?.id
-          ).map(fixBdlInjuryStatus) || [],
-          away: injuries?.filter(i =>
+          ).map(fixBdlInjuryStatus) || []),
+          away: filterSeasonLong(injuries?.filter(i =>
             i.player?.team?.id === away?.id ||
             i.player?.team_id === away?.id ||
             i.team_id === away?.id
-          ).map(fixBdlInjuryStatus) || []
+          ).map(fixBdlInjuryStatus) || [])
         };
+        
+        console.log(`[Scout Report] After filtering season-long: ${bdlInjuries.home.length} home, ${bdlInjuries.away.length} away`);
       }
     }
 
@@ -1302,21 +1340,31 @@ async function fetchGroundedContext(homeTeam, awayTeam, sport, gameDate, options
 This page shows the actual game-day starters and inactives. Use this as the primary source.
 
 1. INJURIES & CONTEXT (CRITICAL - from RotoWire):
-   List ALL players with game-day statuses for each team:
-   - OUT: Confirmed not playing
+   
+   ⚠️⚠️⚠️ SEASON-LONG EXCLUSION RULE ⚠️⚠️⚠️
+   DO NOT MENTION players who:
+   - Have been OUT ALL SEASON (e.g., Joe Mixon, Tank Dell if out since preseason)
+   - Have been on IR since before or early in the season
+   - Have NOT PLAYED A SINGLE GAME this year
+   These players are NOT FACTORS - the team's entire season stats reflect their absence.
+   ONLY mention injuries from the LAST 4-6 WEEKS that affect TONIGHT'S game.
+   
+   List RECENT injuries with game-day statuses:
+   - OUT: Confirmed not playing (if recent - last few weeks)
    - DOUBTFUL: Unlikely to play (75% chance OUT)
    - QUESTIONABLE: Game-time decision (50/50)
-   - IR: Injured Reserve
    
-   **FOR EACH INJURY, PROVIDE:**
+   **FOR EACH RECENT INJURY, PROVIDE:**
    - Player name, position, injury type
    - When did they get injured? (Week # or date)
    - How many games have they missed?
-   - Team's record in games they missed
    - Who has been filling their role?
    
-   Format example: "Jayden Daniels (QB) - IR - rib/knee - Out since Week 7 (8 games) - Team is 5-3 in those games - Marcus Mariota starting"
-   Format example: "Lane Johnson (OT) - QUESTIONABLE - foot - Missed Week 17 - Team allowed 4 sacks that game - Mekhi Becton filled in"
+   Format example: "Lane Johnson (OT) - QUESTIONABLE - foot - Missed Week 17 - Mekhi Becton filled in"
+   
+   ❌ DO NOT list: Players on IR all year, preseason injuries, or anyone who hasn't played this season
+   
+   ⚠️ NO EDITORIAL COMMENTS - Just list the facts. Do NOT add "huge impact" or "critical loss" - Gary will investigate the impact himself.
 
 2. QB SITUATION (from RotoWire): 
    - Who is the CONFIRMED STARTING QB for ${homeTeam}?
@@ -1433,26 +1481,29 @@ Be factual. Do NOT include any betting picks or predictions.
 🔴 SOURCE OF TRUTH: Search "site:rotowire.com NBA lineups" for the most accurate lineup and injury data.
 RotoWire is the industry standard for game-day statuses - prioritize their information over other sources.
 
-1. INJURIES (from RotoWire) - List ALL players with game-day statuses for each team:
+1. INJURIES (from RotoWire) - RECENT INJURIES ONLY:
+   
+   ⚠️⚠️⚠️ SEASON-LONG EXCLUSION RULE ⚠️⚠️⚠️
+   DO NOT MENTION players who have been out 4+ weeks or most of the season.
+   These are NOT FACTORS - the team already adjusted. Only list RECENT injuries (last 2-3 weeks).
    
    📋 STATUS DEFINITIONS:
-   - OUT: Confirmed not playing
+   - OUT: Confirmed not playing (only if RECENT injury)
    - DOUBTFUL: Unlikely to play (75% chance OUT)
    - QUESTIONABLE (Q): Game-time decision - CRITICAL for betting (50/50)
    - PROBABLE: Expected to play but worth monitoring
    
-   For EACH injured player, include:
+   For EACH RECENT injured player (last 2-3 weeks only):
    - Player name, position (G, F, C), and injury description
-   - DATE INJURED: When did this injury occur? (approximate date or "since [date]")
+   - DATE INJURED: When did this injury occur?
    - GAMES MISSED: How many games have they missed?
    
-   🏷️ DURATION CATEGORY (CRITICAL for analysis):
-   - 🔴 RECENT (0-7 days): Team is STILL ADJUSTING - investigate rotation impact
-   - 🟡 SHORT-TERM (1-3 weeks): Team has started adapting - check recent performance without them
-   - ⚪ SEASON-LONG (4+ weeks / most of season): Team stats ALREADY REFLECT their absence
-     → The team that won 2 nights ago IS the team playing tonight - this injury is BAKED IN
+   ❌ DO NOT list season-long injuries (4+ weeks out) - the team has already adjusted
+   ❌ Example: If "Walker Kessler out since November" → DO NOT MENTION
    
-   Format: "Player (Pos) - STATUS - Injury - Since [date] - [X] games missed - [RECENT/SHORT-TERM/SEASON-LONG]"
+   Format: "Player (Pos) - STATUS - Injury - Since [date] - [X] games missed"
+   
+   ⚠️ NO EDITORIAL COMMENTS - Just list the facts. Do NOT add "huge impact" or "major loss" - Gary will investigate the impact himself.
 
 2. STARTING LINEUP (from RotoWire "NBA Lineups" page):
    - Who is the CONFIRMED starting 5 for ${homeTeam}? (PG, SG, SF, PF, C)
@@ -1510,26 +1561,26 @@ Be factual. Do NOT include any betting picks or predictions.
 🔴 SOURCE OF TRUTH: Search "site:rotowire.com NHL lineups" for the most accurate lineup and injury data.
 RotoWire is the industry standard for game-day statuses - prioritize their information over other sources.
 
-1. INJURIES (from RotoWire) - List ALL players with game-day statuses for each team:
+1. INJURIES (from RotoWire) - RECENT INJURIES ONLY:
+   
+   ⚠️⚠️⚠️ SEASON-LONG EXCLUSION RULE ⚠️⚠️⚠️
+   DO NOT MENTION players on LTIR or IR for 4+ weeks. These are NOT FACTORS.
+   The team already adjusted - only list RECENT injuries (last 2-3 weeks).
    
    📋 STATUS DEFINITIONS:
-   - OUT: Confirmed not playing tonight
-   - IR: Injured Reserve (minimum 7 days)
-   - LTIR: Long-Term Injured Reserve (minimum 24 days)
+   - OUT: Confirmed not playing tonight (only if RECENT)
    - DAY-TO-DAY: Game-time decision - CRITICAL for betting
    
-   For EACH injured player, include:
+   For EACH RECENT injured player (last 2-3 weeks only):
    - Player name, position (C, W, D, G), and injury description
-   - DATE INJURED: When did this injury occur? (approximate date or "since [date]")
+   - DATE INJURED: When did this injury occur?
    - GAMES MISSED: How many games have they missed?
    
-   🏷️ DURATION CATEGORY (CRITICAL for analysis):
-   - 🔴 RECENT (0-7 days): Team is STILL ADJUSTING - investigate line/rotation impact
-   - 🟡 SHORT-TERM (1-3 weeks): Team has started adapting - check recent performance without them
-   - ⚪ SEASON-LONG/IR/LTIR (4+ weeks / most of season): Team stats ALREADY REFLECT their absence
-     → The team that won 2 nights ago IS the team playing tonight - this injury is BAKED IN
+   ❌ DO NOT list LTIR/IR players who have been out 4+ weeks - team stats reflect their absence
    
-   Format: "Player (Pos) - STATUS - Injury - Since [date] - [X] games missed - [RECENT/SHORT-TERM/SEASON-LONG]"
+   Format: "Player (Pos) - STATUS - Injury - Since [date] - [X] games missed"
+   
+   ⚠️ NO EDITORIAL COMMENTS - Just list the facts. Do NOT add "huge impact" or "major loss" - Gary will investigate the impact himself.
 
 2. GOALIE SITUATION - CRITICAL (from RotoWire "NHL Lineups" page):
    - Who is the CONFIRMED starting goalie for ${homeTeam}?
@@ -2496,18 +2547,18 @@ function formatInjuryReport(homeTeam, awayTeam, injuries) {
     const daysText = days !== null && days !== undefined ? ` (${days}d ago)` : '';
     
     if (i.duration === 'SEASON-LONG' || i.status === 'Injured Reserve' || i.status === 'IR' || i.status === 'LTIR') {
-      durationTag = ` [SEASON-LONG${daysText} - team stats already reflect absence]`;
+      durationTag = ` [SEASON-LONG${daysText} - ⚠️ PRICED IN - NOT EDGE]`;
     } else if (i.duration === 'MID-SEASON') {
-      durationTag = ` [MID-SEASON${daysText}]`;
+      durationTag = ` [MID-SEASON${daysText} - ⚠️ LIKELY PRICED IN]`;
     } else if (i.duration === 'RECENT' || i.isEdge === true) {
-      durationTag = ` [RECENT${daysText}]`;
+      durationTag = ` [RECENT${daysText} - ✅ POSSIBLE EDGE]`;
     } else if (i.duration === 'UNKNOWN') {
-      durationTag = ` [UNKNOWN DURATION]`;
+      durationTag = ` [UNKNOWN DURATION - verify before citing]`;
     }
     
     if (!durationTag && (i.status === 'IR' || i.status === 'Injured Reserve' || i.status === 'LTIR' || 
         (i.description && i.description.toLowerCase().includes('injured reserve')))) {
-      durationTag = ' [IR - SEASON-LONG - team stats already reflect absence]';
+      durationTag = ' [IR - SEASON-LONG - ⚠️ PRICED IN - NOT EDGE]';
     }
     
     return `  • ${name}${pos ? ` (${pos})` : ''} (${i.status || 'Unknown'})${shortReason}${durationTag}`;
@@ -2521,24 +2572,39 @@ function formatInjuryReport(homeTeam, awayTeam, injuries) {
       cats.critical.forEach(i => lines.push(formatPlayer(i)));
     }
     
-    if (cats.out.length > 0) {
-      lines.push(`  ❌ OUT / IR:`);
-      cats.out.forEach(i => lines.push(formatPlayer(i)));
-  }
+    // ONLY show RECENT OUT players (not season-long IR/LTIR)
+    // Season-long absences are already reflected in team stats - no analytical value
+    const recentOut = cats.out.filter(i => {
+      const days = i.daysSinceReport;
+      const isSeasonLong = i.duration === 'SEASON-LONG' || 
+        i.status === 'IR' || i.status === 'LTIR' || i.status === 'Injured Reserve' ||
+        (days !== null && days !== undefined && days > 21); // Out 3+ weeks = season-long
+      return !isSeasonLong;
+    });
+    
+    if (recentOut.length > 0) {
+      lines.push(`  ❌ RECENTLY OUT:`);
+      recentOut.forEach(i => lines.push(formatPlayer(i)));
+    }
     
     if (cats.others.length > 0) {
       lines.push(`  ⚠️ OTHER (Doubtful/Questionable):`);
       cats.others.forEach(i => lines.push(formatPlayer(i)));
-  }
+    }
 
-    if (cats.seasonal.length > 0) {
-      lines.push(`  ℹ️ SEASON-LONG (team stats already reflect absence):`);
-      cats.seasonal.forEach(i => lines.push(formatPlayer(i)));
-  }
+    // REMOVED: Season-long injuries section
+    // Gary should NOT see players out all season - they are NOT factors in today's game
+    // The team has already adjusted, and citing them is lazy analysis
+    
+    // Count hidden season-long injuries for transparency
+    const hiddenSeasonLong = cats.out.length - recentOut.length + cats.seasonal.length;
+    if (hiddenSeasonLong > 0) {
+      lines.push(`  📋 (${hiddenSeasonLong} season-long absences hidden - team already adjusted)`);
+    }
 
-    if (!cats.critical.length && !cats.out.length && !cats.others.length && !cats.seasonal.length) {
-    lines.push(`  ✅ No significant injuries reported`);
-  }
+    if (!cats.critical.length && !recentOut.length && !cats.others.length) {
+      lines.push(`  ✅ No recent injuries affecting tonight's game`);
+    }
     lines.push('');
   };
 

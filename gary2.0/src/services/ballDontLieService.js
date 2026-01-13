@@ -2142,13 +2142,14 @@ const ballDontLieService = {
           return resp?.data || [];
         }
         // HTTP fallback for sports with documented player_stats endpoints
+        // NOTE: NHL does not have a player_stats endpoint in BDL API - uses game logs instead
         const endpointMap = {
           basketball_nba: 'nba/v1/player_stats',
           basketball_wnba: 'wnba/v1/player_stats',
           basketball_ncaab: 'ncaab/v1/player_stats',
           americanfootball_nfl: 'nfl/v1/player_stats',
-          americanfootball_ncaaf: 'ncaaf/v1/player_stats',
-          icehockey_nhl: 'nhl/v1/player_stats'
+          americanfootball_ncaaf: 'ncaaf/v1/player_stats'
+          // icehockey_nhl: NOT AVAILABLE - use getPlayerGameLogs instead
         };
         const path = endpointMap[sportKey];
         if (!path) {

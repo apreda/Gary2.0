@@ -1,34 +1,22 @@
 /**
  * Gary Picks Service - Fully Integrated
- * Handles MLB (normal + props), NBA, and NHL pick generation and storage
+ * Handles NBA, NFL, NHL, NCAAF, NCAAB pick generation and storage
  */
 import { makeGaryPick } from './garyEngine.js';
 import { oddsService } from './oddsService.js';
 import { supabase, storeDailyPicks } from '../supabaseClient.js';
 import { ballDontLieService } from './ballDontLieService.js';
-import { nhlPlayoffService } from './nhlPlayoffService.js';
-import { picksService as enhancedPicksService } from './picksService.enhanced.js';
-import { combinedMlbService } from './combinedMlbService.js';
-import { mlbPicksGenerationService } from './mlbPicksGenerationService.js';
 import { openaiService } from './openaiService.js';
 import { getESTDate } from '../utils/dateUtils.js';
 import { generateNBAPicks } from './nbaPicksHandler.js';
-import { generateMLBPicks } from './mlbPicksHandler.js';
-// NHL disabled
 import { generateNFLPicks } from './nflPicksHandler.js';
-import { generateWNBAPicks } from './wnbaPicksHandler.js';
 import { generateNCAAFPicks } from './ncaafPicksHandler.js';
 import { generateNCAABPicks } from './ncaabPicksHandler.js';
-import { generateEPLPicks } from './eplPicksHandler.js';
 
 // Global processing state to prevent multiple simultaneous generations
 let isCurrentlyGeneratingPicks = false;
-// NHL disabled
-let isProcessingEPL = false;
 let isProcessingNBA = false;
-let isProcessingMLB = false;
 let isProcessingNFL = false;
-let isProcessingWNBA = false;
 let isProcessingNCAAF = false;
 let isProcessingNCAAB = false;
 let isStoringPicks = false;
@@ -561,12 +549,9 @@ async function generateDailyPicks() {
   try {
     const sportsToAnalyze = [
       'basketball_nba',
-      'baseball_mlb',
       'americanfootball_nfl',
-      'basketball_wnba',
       'americanfootball_ncaaf',
-      'basketball_ncaab',
-      'soccer_epl'
+      'basketball_ncaab'
     ];
     let allPicks = [];
 
@@ -574,21 +559,12 @@ async function generateDailyPicks() {
       let sportPicks = [];
       
       // Sport-specific processing locks to prevent duplication
-      if (sport === 'baseball_mlb' && isProcessingMLB) {
-        console.log('🛑 MLB picks already being processed, skipping...');
-        continue;
-      }
       if (sport === 'basketball_nba' && isProcessingNBA) {
         console.log('🛑 NBA picks already being processed, skipping...');
         continue;
       }
-      // NHL disabled
       if (sport === 'americanfootball_nfl' && isProcessingNFL) {
         console.log('🛑 NFL picks already being processed, skipping...');
-        continue;
-      }
-      if (sport === 'basketball_wnba' && isProcessingWNBA) {
-        console.log('🛑 WNBA picks already being processed, skipping...');
         continue;
       }
       if (sport === 'americanfootball_ncaaf' && isProcessingNCAAF) {
@@ -600,11 +576,7 @@ async function generateDailyPicks() {
         continue;
       }
       
-      if (sport === 'baseball_mlb') {
-        isProcessingMLB = true;
-        sportPicks = await generateMLBPicks();
-        isProcessingMLB = false;
-      } else if (sport === 'basketball_nba') {
+      if (sport === 'basketball_nba') {
         isProcessingNBA = true;
         sportPicks = await generateNBAPicks();
         isProcessingNBA = false;
@@ -612,10 +584,6 @@ async function generateDailyPicks() {
         isProcessingNFL = true;
         sportPicks = await generateNFLPicks();
         isProcessingNFL = false;
-      } else if (sport === 'basketball_wnba') {
-        isProcessingWNBA = true;
-        sportPicks = await generateWNBAPicks();
-        isProcessingWNBA = false;
       } else if (sport === 'americanfootball_ncaaf') {
         isProcessingNCAAF = true;
         sportPicks = await generateNCAAFPicks();
@@ -624,10 +592,6 @@ async function generateDailyPicks() {
         isProcessingNCAAB = true;
         sportPicks = await generateNCAABPicks();
         isProcessingNCAAB = false;
-      } else if (sport === 'soccer_epl') {
-        isProcessingEPL = true;
-        sportPicks = await generateEPLPicks();
-        isProcessingEPL = false;
       }
 
       // Add for this sport
@@ -645,11 +609,8 @@ async function generateDailyPicks() {
   } finally {
     isCurrentlyGeneratingPicks = false;
     // Release all sport-specific locks in case of error
-    isProcessingMLB = false;
     isProcessingNBA = false;
-    // NHL disabled
     isProcessingNFL = false;
-    isProcessingWNBA = false;
     isProcessingNCAAF = false;
     isProcessingNCAAB = false;
     isStoringPicks = false;
@@ -667,7 +628,7 @@ async function generateWhatGaryThinks() {
   
   try {
     const allGames = [];
-    const sports = ['baseball_mlb', 'basketball_nba', 'icehockey_nhl'];
+    const sports = ['basketball_nba', 'icehockey_nhl'];
     
     for (let sportIndex = 0; sportIndex < sports.length; sportIndex++) {
       const sport = sports[sportIndex];
@@ -811,10 +772,7 @@ function extractOddsData(game) {
  */
 async function getGameStatsForThoughts(game, sport) {
   // Reuse existing stats gathering logic but simplified
-  if (sport === 'baseball_mlb') {
-    // Get MLB stats
-    return await combinedMlbService.getComprehensiveGameData(game.home_team, game.away_team);
-  } else if (sport === 'basketball_nba') {
+  if (sport === 'basketball_nba') {
     // Get NBA stats
     const playoffAnalysis = await ballDontLieService.getNbaPlayoffPlayerStats(
       game.home_team,

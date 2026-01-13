@@ -24,10 +24,12 @@ const { fetchGroundedContext } = await import('../src/services/agentic/scoutRepo
 const SPORT_KEY = 'americanfootball_nfl';
 
 function getESTDate() {
+  // DST-safe: Use Intl with America/New_York timezone
   const now = new Date();
-  const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-  const est = new Date(utc + (3600000 * -5));
-  return est.toISOString().split('T')[0];
+  const options = { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' };
+  const estDate = new Intl.DateTimeFormat('en-US', options).format(now);
+  const [month, day, year] = estDate.split('/');
+  return `${year}-${month}-${day}`;
 }
 
 // Format game time to readable EST string
@@ -748,16 +750,36 @@ IMPORTANT:
     maxTokens: 12000  // High limit to handle detailed rationales for 13 picks
   });
 
-  // Parse response
+  // Parse response - sanitize control characters that Gemini sometimes includes
   let parsed;
   try {
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
-      parsed = JSON.parse(jsonMatch[0]);
+      // Sanitize control characters (except newlines/tabs which are valid in strings)
+      let cleanJson = jsonMatch[0]
+        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') // Remove control chars except \t \n \r
+        .replace(/\n\s*\n/g, '\n') // Collapse multiple newlines
+        .replace(/\\n/g, ' ') // Replace literal \n in strings with space
+        .replace(/\r/g, ''); // Remove carriage returns
+      parsed = JSON.parse(cleanJson);
     }
   } catch (e) {
     console.error('Failed to parse Gary response:', e.message);
-    return null;
+    // Try one more time with aggressive sanitization
+    try {
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        // More aggressive: replace ALL problematic characters in string values
+        let cleanJson = jsonMatch[0]
+          .replace(/[\x00-\x1F\x7F]/g, ' ') // Replace all control chars with space
+          .replace(/\s+/g, ' '); // Collapse whitespace
+        parsed = JSON.parse(cleanJson);
+        console.log('✓ Parsed JSON after aggressive sanitization');
+      }
+    } catch (e2) {
+      console.error('Failed to parse even after sanitization:', e2.message);
+      return null;
+    }
   }
 
   return parsed;
