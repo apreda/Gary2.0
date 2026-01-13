@@ -9029,9 +9029,7 @@ const FETCHERS = {
     }
   },
 
-  // ===== WEATHER (NFL/NCAAF - STRICT FILTER: Only report EXTREME conditions) =====
-  // Weather is a factor in ~2-3 NFL games per SEASON. The rest is noise.
-  // Gary was over-weighting weather. This filter ensures only TRULY extreme conditions matter.
+  // ===== WEATHER (NFL/NCAAF) - Returns weather data for Gary to evaluate =====
   WEATHER: async (bdlSport, home, away, season, options = {}) => {
     const homeName = home.full_name || home.name;
     const awayName = away.full_name || away.name;
@@ -9040,39 +9038,35 @@ const FETCHERS = {
     if (bdlSport !== 'americanfootball_nfl' && bdlSport !== 'americanfootball_ncaaf') {
       return {
         category: 'Weather',
-        impact: 'NOT_A_FACTOR',
-        note: '⚠️ Weather is NOT a factor for this sport. Focus on team performance metrics.',
+        note: 'Weather data is primarily relevant for outdoor football games.',
         home: { team: homeName },
         away: { team: awayName }
       };
     }
 
     const sport = bdlSport === 'americanfootball_ncaaf' ? 'NCAAF' : 'NFL';
-    console.log(`[Stat Router] WEATHER check for ${awayName} @ ${homeName} (${sport}) - applying strict filter`);
+    console.log(`[Stat Router] WEATHER check for ${awayName} @ ${homeName} (${sport})`);
 
     try {
       const dateStr = new Date().toISOString().slice(0, 10);
       const weather = await getGroundedWeather(homeName, awayName, dateStr);
 
-      // If we can't get weather, assume it's fine (not extreme)
       if (!weather) {
-        console.log(`[Stat Router] WEATHER: No data available - defaulting to NOT A FACTOR`);
+        console.log(`[Stat Router] WEATHER: No data available`);
         return {
           category: 'Weather',
-          impact: 'NOT_A_FACTOR',
-          note: '⚠️ Weather data unavailable. Assume normal conditions. Weather is NOT a factor - focus on matchup fundamentals.',
+          note: 'Weather data unavailable for this game.',
           home: { team: homeName },
           away: { team: awayName }
         };
       }
 
-      // Dome games - obviously no weather impact
+      // Dome games
       if (weather.is_dome) {
         return {
           category: 'Weather',
-          impact: 'NOT_A_FACTOR',
           conditions: 'Indoor/Dome Stadium',
-          note: '✅ Indoor stadium - weather is irrelevant. Focus on team performance metrics.',
+          note: 'Indoor stadium - controlled environment.',
           home: { team: homeName },
           away: { team: awayName }
         };
@@ -9082,67 +9076,40 @@ const FETCHERS = {
       const wind = weather.wind_speed;
       const conditions = (weather.conditions || 'Clear').toLowerCase();
 
-      // ═══════════════════════════════════════════════════════════════════════════════
-      // STRICT EXTREME WEATHER CHECK - Only these conditions matter:
-      // 1. Sub-15°F with dangerous wind chill
-      // 2. Active blizzard with accumulation DURING the game
-      // 3. Sustained 25+ mph wind (not gusts - SUSTAINED)
-      // ═══════════════════════════════════════════════════════════════════════════════
-      
-      const isExtremeConditions = 
-        (temp && temp < 15) || // Sub-15°F is genuinely dangerous
-        (conditions.includes('blizzard')) || // Active blizzard
-        (conditions.includes('heavy snow') && temp && temp < 25) || // Heavy snow + cold
-        (wind && wind >= 25); // 25+ mph SUSTAINED wind (affects kicking game significantly)
-
-      if (!isExtremeConditions) {
-        // NOT EXTREME - Return "not a factor" response
-        console.log(`[Stat Router] WEATHER: Conditions are normal (${temp}°F, ${wind}mph wind) - NOT A FACTOR`);
-        return {
-          category: 'Weather',
-          impact: 'NOT_A_FACTOR',
-          temperature: `${temp}°F`,
-          wind: wind ? `${wind} mph` : 'Light',
-          conditions: weather.conditions || 'Clear',
-          note: `⚠️ Weather is NOT a factor for this game. Temperature ${temp}°F and ${wind || 'light'} mph wind are within normal NFL playing conditions. Professional players handle these conditions without issue. DO NOT use weather in your analysis - focus on team performance, injuries, and matchup fundamentals instead.`,
-          home: { team: homeName },
-          away: { team: awayName }
-        };
+      // Flag notably cold or windy conditions for context
+      const notableConditions = [];
+      if (temp && temp < 25) notableConditions.push(`Cold: ${temp}°F`);
+      if (wind && wind >= 15) notableConditions.push(`Wind: ${wind} mph`);
+      if (conditions.includes('snow') || conditions.includes('rain') || conditions.includes('storm')) {
+        notableConditions.push(`Precipitation: ${weather.conditions}`);
       }
 
-      // EXTREME CONDITIONS - Only case where we actually report weather as a factor
-      console.log(`[Stat Router] WEATHER: ⚠️ EXTREME conditions detected (${temp}°F, ${wind}mph wind, ${conditions})`);
-      let extremeNotes = [];
-      
-      if (temp && temp < 15) {
-        extremeNotes.push(`EXTREME COLD: ${temp}°F is dangerous - affects ball grip, player movement`);
-      }
-      if (conditions.includes('blizzard') || (conditions.includes('heavy snow') && temp < 25)) {
-        extremeNotes.push(`BLIZZARD CONDITIONS: Visibility severely limited, footing compromised`);
-      }
-      if (wind && wind >= 25) {
-        extremeNotes.push(`EXTREME WIND: ${wind} mph sustained - significantly affects kicking game and deep passes`);
-      }
+      console.log(`[Stat Router] WEATHER: ${temp}°F, ${wind || 'light'} mph wind, ${conditions}`);
 
-      // EXTREME CONDITIONS FOUND - Return actual weather data
+      // Determine forecast certainty based on conditions
+      // Rain/snow forecasts are less reliable than temperature/wind
+      const isPrecipitationForecast = conditions.includes('rain') || conditions.includes('snow') || conditions.includes('storm');
+      const forecastNote = isPrecipitationForecast 
+        ? '⚠️ FORECAST UNCERTAINTY: Precipitation forecasts can change. If your analysis relies heavily on rain/snow, acknowledge this uncertainty - conditions may differ at game time.'
+        : 'Current forecast for game time. Temperature and wind forecasts are generally more reliable than precipitation.';
+
+      // Return weather data for Gary to evaluate
       return {
-        category: 'Weather - EXTREME CONDITIONS',
-        impact: 'EXTREME',
+        category: 'Weather',
         temperature: temp ? `${temp}°F` : 'N/A',
-        wind_speed: wind ? `${wind} mph` : 'N/A',
-        conditions: weather.conditions || conditions,
-        extreme_factors: extremeNotes,
-        note: `🚨 EXTREME WEATHER ALERT: These conditions ARE material to the game. ${extremeNotes.join('. ')}. Consider which team is better equipped for these conditions.`,
+        wind_speed: wind ? `${wind} mph` : 'Light',
+        conditions: weather.conditions || 'Clear',
+        notable_conditions: notableConditions.length > 0 ? notableConditions : null,
+        forecast_reliability: isPrecipitationForecast ? 'UNCERTAIN' : 'MODERATE',
+        note: forecastNote,
         home: { team: homeName },
         away: { team: awayName }
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching weather:`, error.message);
-      // On error, assume normal conditions - don't let weather uncertainty affect picks
       return {
         category: 'Weather',
-        impact: 'NOT_A_FACTOR',
-        note: '⚠️ Weather check failed. Assume normal conditions. Focus on matchup fundamentals.',
+        note: 'Weather data unavailable.',
         home: { team: home.full_name || home.name },
         away: { team: away.full_name || away.name }
       };

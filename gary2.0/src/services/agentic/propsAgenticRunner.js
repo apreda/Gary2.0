@@ -58,10 +58,20 @@ const PICK_SCHEMA = {
     bet: { type: 'string', enum: ['over', 'under', 'yes'] },
     odds: { type: 'number' },
     confidence: { type: 'number', description: 'Your confidence level (0.50-1.0).' },
+    // Thesis Gate fields - forces dual-scenario thinking before picking a side
+    over_thesis: { type: 'string', description: '2 sentences max: The game script where the OVER/YES hits. What has to happen?' },
+    under_thesis: { type: 'string', description: '2 sentences max: The game script where the UNDER/NO hits. What kills the OVER?' },
+    thesis_lean: { type: 'string', enum: ['OVER', 'UNDER', 'COIN-FLIP'], description: 'Which thesis is more believable given the matchup?' },
+    edge_type: { 
+      type: 'string', 
+      enum: ['USAGE_SHIFT', 'MATCHUP_MISMATCH', 'GAME_SCRIPT', 'RECENT_FORM', 'LINE_SOFT', 'NEXT_GEN_EDGE'],
+      description: 'Primary edge type: USAGE_SHIFT (teammate out), MATCHUP_MISMATCH (defender weakness), GAME_SCRIPT (pace/blowout), RECENT_FORM (hot streak), LINE_SOFT (book mistake), NEXT_GEN_EDGE (advanced stats)' 
+    },
+    confidence_tier: { type: 'string', enum: ['MAX', 'CORE', 'SPECULATIVE'], description: 'MAX (2 units, elite edge), CORE (1 unit, solid), SPECULATIVE (0.5 units, value shot)' },
     rationale: { type: 'string', description: '5-7 sentences explaining why you like this pick.' },
     key_stats: { type: 'array', items: { type: 'string' }, description: 'Key stats supporting your pick with source attribution.' }
   },
-  required: ['player', 'team', 'prop', 'line', 'bet', 'odds', 'confidence', 'rationale', 'key_stats']
+  required: ['player', 'team', 'prop', 'line', 'bet', 'odds', 'confidence', 'over_thesis', 'under_thesis', 'thesis_lean', 'edge_type', 'confidence_tier', 'rationale', 'key_stats']
 };
 
 // Common tools available for all sports (non-NFL)
@@ -1290,6 +1300,113 @@ function validatePropsAgainstToolHistory(picks, toolCallHistory) {
 }
 
 /**
+ * Build the PASS 2.5 message for props - Conviction Assessment before finalizing
+ * This forces Gary to evaluate each prop's edge potential before committing
+ * 
+ * @param {Array} picks - The shortlisted picks Gary wants to finalize
+ * @param {string} sportLabel - Sport identifier
+ * @returns {string} - The Pass 2.5 prompt
+ */
+function buildPropsPass25Message(picks, sportLabel = 'NFL') {
+  const pickSummary = picks.map((p, i) => 
+    `${i + 1}. ${p.player} ${p.bet?.toUpperCase() || 'OVER'} ${p.prop || p.prop_type} ${p.line} @ ${p.odds}`
+  ).join('\n');
+
+  return `
+══════════════════════════════════════════════════════════════════════
+## PASS 2.5 - PROPS CONVICTION ASSESSMENT
+
+You've shortlisted these ${picks.length} prop picks. BEFORE finalizing, rate your EDGE POTENTIAL on each.
+
+**YOUR SHORTLIST:**
+${pickSummary}
+
+**🎯 THE ONLY QUESTION THAT MATTERS FOR EACH PICK:**
+
+> "What does this line assume, and why might that assumption be wrong?"
+
+The line is NOT a puzzle to solve. It already reflects:
+- Season averages, recent form, opponent defense, game script expectations
+- If your thesis is based on publicly known info → it's already priced in
+
+**RATE EACH PICK ON EDGE POTENTIAL (1-10):**
+
+- 9-10: Clear mispricing. You've identified something specific the line doesn't reflect (injury news, usage shift, matchup the book missed).
+- 7-8: Strong edge. One or two factors the market may be underweighting.
+- 5-6: Mixed. Some public info, but situational factors may not be fully priced.
+- 3-4: Weak edge. Mostly explaining why this player is good. That's already in the price.
+- 1-2: No edge. Just saying "he's been playing well" or "good matchup." The book knows this.
+
+**THE "TOO EASY" TEST:**
+> "Could I explain this pick in 30 seconds to a casual fan?"
+> If YES → The market already knows it. Low edge rating.
+
+**FOR EACH PICK, ALSO IDENTIFY:**
+- **Edge Type**: USAGE_SHIFT, MATCHUP_MISMATCH, GAME_SCRIPT, RECENT_FORM, LINE_SOFT, or NEXT_GEN_EDGE
+- **What specific thing might the line NOT reflect?** If you can't name it, the pick is weak.
+- **Downside Risk**: What's the realistic scenario where this DOESN'T hit?
+
+**OUTPUT FORMAT (strict JSON):**
+\`\`\`json
+{
+  "conviction_ratings": [
+    {
+      "player": "Player Name",
+      "prop": "prop_type line",
+      "edge_rating": 7,
+      "edge_type": "USAGE_SHIFT",
+      "what_line_misses": "Specific factor the book may not have priced",
+      "downside_risk": "What could make this miss",
+      "keep_pick": true
+    }
+  ],
+  "overall_slate_conviction": "HIGH" | "MEDIUM" | "LOW",
+  "drops": ["Player Name - reason for dropping"],
+  "final_count": 3
+}
+\`\`\`
+
+**RULES:**
+1. Rate EVERY pick in your shortlist
+2. DROP any pick with edge_rating below 5 - it's not worth the risk
+3. If you can't articulate what the line is missing, drop it
+4. Be HONEST - sharps don't bet on "he's been playing well"
+
+**After rating, call finalize_props with ONLY the picks you rated 5+.**
+══════════════════════════════════════════════════════════════════════
+`.trim();
+}
+
+/**
+ * Parse Gary's Props Pass 2.5 conviction ratings
+ * @param {string} content - Gary's response content
+ * @returns {object|null} - Parsed ratings or null
+ */
+function parsePropsPass25Ratings(content) {
+  if (!content) return null;
+  
+  try {
+    const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/) || content.match(/\{[\s\S]*?"conviction_ratings"[\s\S]*?\}/);
+    if (jsonMatch) {
+      const jsonStr = jsonMatch[1] || jsonMatch[0];
+      const parsed = JSON.parse(jsonStr.replace(/[\x00-\x1F\x7F]/g, ' ')); // Sanitize
+      if (parsed.conviction_ratings) {
+        return {
+          ratings: parsed.conviction_ratings,
+          slateConviction: parsed.overall_slate_conviction || 'MEDIUM',
+          drops: parsed.drops || [],
+          finalCount: parsed.final_count || parsed.conviction_ratings.filter(r => r.keep_pick !== false && r.edge_rating >= 5).length
+        };
+      }
+    }
+    return null;
+  } catch (e) {
+    console.log(`[Props Pass 2.5] Failed to parse ratings: ${e.message}`);
+    return null;
+  }
+}
+
+/**
  * Run full iteration loop for props using PERSISTENT chat session
  * The chat session manages its own history, avoiding thoughtSignature issues
  */
@@ -1326,6 +1443,7 @@ async function runPropsIterationLoop({ systemPrompt, userMessage, sportKey, spor
   let iteration = 0;
   const toolCallHistory = [];
   let didDirectionBalanceCheck = false;
+  let didPass25ConvictionCheck = false; // NEW: Track if Pass 2.5 was done
   let consecutiveEmptyResponses = 0; // Track consecutive empty responses
 
   // Send initial user message
@@ -1347,13 +1465,69 @@ async function runPropsIterationLoop({ systemPrompt, userMessage, sportKey, spor
     // Check for finalize_props in function calls FIRST
     for (const fc of functionCallParts) {
       if (fc.functionCall?.name === 'finalize_props') {
-        const picks = fc.functionCall.args?.picks || [];
-        console.log(`[Props] ✓ Gary finalized ${picks.length} picks`);
+        const args = fc.functionCall.args || {};
+        
+        // Handle NFL categorized format (regular_props, regular_td, value_td, first_td)
+        // vs standard format (picks array)
+        let picks = [];
+        let isCategorized = false;
+        if (args.regular_props || args.regular_td || args.value_td || args.first_td) {
+          // NFL categorized format - combine all categories
+          isCategorized = true;
+          if (Array.isArray(args.regular_props)) picks.push(...args.regular_props.map(p => ({ ...p, category: 'regular_props' })));
+          if (Array.isArray(args.regular_td)) picks.push(...args.regular_td.map(p => ({ ...p, category: 'regular_td' })));
+          if (Array.isArray(args.value_td)) picks.push(...args.value_td.map(p => ({ ...p, category: 'value_td' })));
+          if (Array.isArray(args.first_td)) picks.push(...args.first_td.map(p => ({ ...p, category: 'first_td' })));
+          console.log(`[Props] ✓ NFL Categorized: ${args.regular_props?.length || 0} regular, ${args.regular_td?.length || 0} regular TD, ${args.value_td?.length || 0} value TD, ${args.first_td?.length || 0} first TD = ${picks.length} total`);
+        } else {
+          // Standard format
+          picks = args.picks || [];
+          console.log(`[Props] ✓ Gary finalized ${picks.length} picks`);
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        // PASS 2.5 CONVICTION ASSESSMENT - Inject BEFORE accepting picks
+        // Forces Gary to rate each pick's edge potential before committing
+        // ══════════════════════════════════════════════════════════════════
+        if (!didPass25ConvictionCheck && Array.isArray(picks) && picks.length > 0 && iteration < maxIterations - 2) {
+          didPass25ConvictionCheck = true;
+          console.log(`[Props] 📊 Injecting Pass 2.5 Conviction Assessment for ${picks.length} picks...`);
+          
+          iteration++;
+          console.log(`\n[Props Iteration ${sportLabel}] ${iteration}/${maxIterations} (PASS 2.5 - Conviction Check)`);
+          
+          const pass25Message = buildPropsPass25Message(picks, sportLabel);
+          result = await chat.sendMessage(pass25Message);
+          response = result.response;
+          
+          // Check if Gary responded with conviction ratings
+          const textContent = response.candidates?.[0]?.content?.parts?.filter(p => p.text).map(p => p.text).join('') || '';
+          const pass25Ratings = parsePropsPass25Ratings(textContent);
+          
+          if (pass25Ratings) {
+            console.log(`[Props Pass 2.5] 📊 Conviction Assessment Complete:`);
+            console.log(`   Slate conviction: ${pass25Ratings.slateConviction}`);
+            console.log(`   Drops: ${pass25Ratings.drops.length > 0 ? pass25Ratings.drops.join(', ') : 'None'}`);
+            
+            // Log individual ratings
+            for (const r of pass25Ratings.ratings || []) {
+              const keepIcon = r.edge_rating >= 5 ? '✓' : '✗';
+              console.log(`   ${keepIcon} ${r.player}: ${r.edge_rating}/10 (${r.edge_type || 'N/A'})`);
+            }
+            
+            // If low conviction slate, warn but continue
+            if (pass25Ratings.slateConviction === 'LOW') {
+              console.log(`[Props Pass 2.5] ⚠️ LOW conviction slate - picks may have weak edges`);
+            }
+          }
+          
+          continue; // Go back to check if Gary calls finalize_props again with filtered picks
+        }
 
         // Direction balance check: if Gary returns ALL overs/ALL unders,
         // force a quick second pass to ensure we are not being driven by narrative.
         // We don't force unders, we force consideration of both sides.
-        if (!didDirectionBalanceCheck && Array.isArray(picks) && picks.length > 0) {
+        if (!didDirectionBalanceCheck && Array.isArray(picks) && picks.length > 0 && iteration < maxIterations - 1) {
           const normalizedBets = picks
             .map(p => (p?.bet || '').toString().trim().toLowerCase())
             .filter(b => b === 'over' || b === 'under');
@@ -1361,7 +1535,7 @@ async function runPropsIterationLoop({ systemPrompt, userMessage, sportKey, spor
           const uniqueDirections = new Set(normalizedBets);
           const isAllOneSide = normalizedBets.length === picks.length && uniqueDirections.size === 1;
 
-          if (isAllOneSide && iteration < maxIterations - 1) {
+          if (isAllOneSide) {
             didDirectionBalanceCheck = true;
             const onlySide = normalizedBets[0];
             console.log(`[Props] ⚠️ All picks were "${onlySide}". Triggering balance re-check pass...`);
@@ -1397,7 +1571,7 @@ async function runPropsIterationLoop({ systemPrompt, userMessage, sportKey, spor
           console.log(`[Props Validation] ❌ ${invalidStats.length} unverifiable stat(s) detected`);
         }
         
-        return { picks: validatedPicks, iterations: iteration, toolCalls: toolCallHistory.length, warnings };
+        return { picks: validatedPicks, iterations: iteration, toolCalls: toolCallHistory.length, warnings, categorized: isCategorized };
       }
     }
 
@@ -2169,6 +2343,50 @@ Sometimes ONE factor is so compelling it overrides everything:
 
 You are a GAMBLER finding edges, not a MODEL outputting averages.
 
+## 🚪 THE THESIS GATE (MANDATORY BEFORE EVERY PICK)
+
+Before you pick OVER or UNDER on ANY prop, you MUST complete the dual-scenario analysis. This prevents you from just finding reasons to support your initial gut feeling.
+
+**FOR EACH PROP YOU CONSIDER:**
+
+**OVER THESIS (2 sentences max):** The game script where this player goes OVER the line. What has to happen?
+
+**UNDER THESIS (2 sentences max):** The game script where this player stays UNDER the line. What kills the OVER?
+
+**WHICH IS MORE BELIEVABLE?** Rate as OVER, UNDER, or COIN-FLIP based on the matchup/context.
+
+If COIN-FLIP, you must look at the odds to determine value. Otherwise, pick the side your thesis supports.
+
+**EXAMPLE:**
+- OVER THESIS: "Eagles trail early, Hurts throws 45+ times. Smith's 28% target share in negative scripts puts him at 9+ targets."
+- UNDER THESIS: "Eagles control the game, run-heavy script. Smith sees 5-6 targets as Barkley dominates."
+- MORE BELIEVABLE: OVER - Eagles are 3-point underdogs, likely chasing.
+
+## 🏷️ EDGE TYPE CLASSIFICATION
+
+For EVERY pick, identify the PRIMARY edge type. This helps track what kinds of edges actually win.
+
+| Edge Type | Description | Example |
+|-----------|-------------|---------|
+| USAGE_SHIFT | Teammate injury/absence creates opportunity | "WR1 out, WR2 gets +30% target share" |
+| MATCHUP_MISMATCH | Specific defender/scheme weakness | "Speed WR vs slow CB, 3.5 separation avg" |
+| GAME_SCRIPT | Pace/blowout/shootout projection | "+10 underdog will throw 45+ times" |
+| RECENT_FORM | Hot streak the line hasn't caught up to | "L3 avg 95 yards, line still at 68.5" |
+| LINE_SOFT | Book made a pricing mistake | "Line at 4.5 rec but he's averaged 7 since trade" |
+| NEXT_GEN_EDGE | Advanced stats show hidden value | "Elite separation (3.5 yds) but only 60 yards - due for breakout" |
+
+## 🎖️ CONFIDENCE TIERS
+
+Assign a tier to each pick based on edge strength:
+
+| Tier | Units | When to Use |
+|------|-------|-------------|
+| MAX | 2 units | Elite edge, multiple factors align, high confidence |
+| CORE | 1 unit | Solid edge, standard play |
+| SPECULATIVE | 0.5 units | Value shot, TD lottery, higher variance |
+
+**TD Props should rarely be MAX** - the variance is too high. Most TDs should be CORE or SPECULATIVE.
+
 ${constitution}
 
 ## YOUR TASK: THE "WIDE NET" SCOUTING METHOD
@@ -2430,7 +2648,13 @@ export async function runAgenticPropsPipeline({
       confidence: pick.confidence || 0.6,
       rationale: cleanSourceTags(pick.rationale) || 'Analysis based on matchup data.',
       key_stats: cleanKeyStats(pick.key_stats),
-      analysis: cleanSourceTags(pick.rationale) || 'Analysis based on matchup data.'
+      analysis: cleanSourceTags(pick.rationale) || 'Analysis based on matchup data.',
+      // Thesis Gate fields - preserve from Gary's output
+      over_thesis: pick.over_thesis || null,
+      under_thesis: pick.under_thesis || null,
+      thesis_lean: pick.thesis_lean || null,
+      edge_type: pick.edge_type || null,
+      confidence_tier: pick.confidence_tier || 'CORE'  // Default to CORE if not specified
     }));
 
     // NBA/NHL PROPS: Mirror NBA/NHL game-picks quantum behavior
@@ -2635,7 +2859,13 @@ export async function runAgenticPropsPipeline({
       confidence: pick.confidence || 0.6,
       rationale: cleanSourceTagsLegacy(pick.rationale) || 'Analysis based on matchup data.',
       key_stats: cleanKeyStatsLegacy(pick.key_stats),
-      analysis: cleanSourceTagsLegacy(pick.rationale) || 'Analysis based on matchup data.'
+      analysis: cleanSourceTagsLegacy(pick.rationale) || 'Analysis based on matchup data.',
+      // Thesis Gate fields - preserve from Gary's output
+      over_thesis: pick.over_thesis || null,
+      under_thesis: pick.under_thesis || null,
+      thesis_lean: pick.thesis_lean || null,
+      edge_type: pick.edge_type || null,
+      confidence_tier: pick.confidence_tier || 'CORE'  // Default to CORE if not specified
   }));
 
   // Sport-specific filtering

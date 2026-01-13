@@ -27,11 +27,46 @@ const SPORT_KEY = 'icehockey_nhl';
 
 /**
  * Group props by player for easier analysis
+ * FILTERS OUT unpredictable prop types (second_goal, first_goal, etc.)
  */
 function groupPropsByPlayer(props) {
   const grouped = {};
   
+  // Props we CAN analyze (skill-based, predictable with data)
+  const VALID_PROP_TYPES = [
+    'shots_on_goal', 'sog', 'shots',
+    'points', 'player_points',
+    'goals', 'player_goals', 'anytime_goal', 'anytime_scorer',
+    'assists', 'player_assists',
+    'saves', 'goalie_saves',
+    'power_play_points', 'pp_points',
+    'blocked_shots', 'blocks',
+    'hits'
+  ];
+  
+  // Props we CANNOT analyze (random/luck-based - who scores first/second is not predictable)
+  const INVALID_PROP_TYPES = [
+    'first_goal', 'first_scorer', '1st_goal',
+    'second_goal', 'second_scorer', '2nd_goal',
+    'third_goal', 'third_scorer', '3rd_goal',
+    'last_goal', 'last_scorer'
+  ];
+  
   for (const prop of props) {
+    const propType = (prop.prop_type || '').toLowerCase();
+    
+    // Skip unpredictable prop types
+    if (INVALID_PROP_TYPES.some(invalid => propType.includes(invalid))) {
+      continue; // Skip this prop entirely
+    }
+    
+    // Only include if it's a valid analyzable prop type
+    const isValidType = VALID_PROP_TYPES.some(valid => propType.includes(valid));
+    if (!isValidType && propType) {
+      console.log(`[NHL Props] Skipping unknown prop type: ${propType}`);
+      continue;
+    }
+    
     const playerName = prop.player || 'Unknown';
     if (!grouped[playerName]) {
       grouped[playerName] = {

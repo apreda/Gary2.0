@@ -98,11 +98,13 @@ async function geminiGrounding(query) {
 }
 
 async function getScoreGrounding(league, home, away, date) {
-  const query = `What was the final score of the ${league} game: ${away} @ ${home} on ${date}? Respond ONLY as AwayScore-HomeScore (e.g. 102-115). If unknown, say "null".`;
+  // FIXED: Query format now matches parameter order (home, away)
+  const query = `What was the final score of the ${league} game: ${away} @ ${home} on ${date}? Respond ONLY as HomeScore-AwayScore with HOME team score first (e.g. 115-102 means home won 115-102). If unknown, say "null".`;
   const text = await geminiGrounding(query);
   if (!text || text.toLowerCase().includes('null')) return null;
   const match = text.match(/(\d+)-(\d+)/);
-  return match ? { v: parseInt(match[1]), h: parseInt(match[2]) } : null;
+  // Parse as HomeScore-AwayScore now (h first, v second)
+  return match ? { h: parseInt(match[1]), v: parseInt(match[2]) } : null;
 }
 
 async function getPropGrounding(sport, player, type, date) {
@@ -314,13 +316,26 @@ async function processGenericGames(table, date, leagueFilter = null) {
 
       if (hs !== null) {
         const res = gradeGame(pick.pick, pick.homeTeam, pick.awayTeam, hs, vs);
-        const { data: exist } = await supabase.from('game_results').select('id').eq('pick_text', pick.pick).eq('game_date', date).maybeSingle();
-        if (!exist) {
-          await supabase.from('game_results').insert({
-            pick_id: row.id, game_date: date, league, result: res,
-            final_score: `${vs}-${hs}`, pick_text: pick.pick,
-            matchup: `${pick.awayTeam} @ ${pick.homeTeam}`
-          });
+        
+        // NFL picks go to nfl_results table, others go to game_results
+        if (league === 'NFL' && table === 'weekly_nfl_picks') {
+          const { data: exist } = await supabase.from('nfl_results').select('id').eq('pick_text', pick.pick).eq('game_date', date).maybeSingle();
+          if (!exist) {
+            await supabase.from('nfl_results').insert({
+              nfl_pick_id: row.id, game_date: date, result: res,
+              final_score: `${vs}-${hs}`, pick_text: pick.pick,
+              matchup: `${pick.awayTeam} @ ${pick.homeTeam}`
+            });
+          }
+        } else {
+          const { data: exist } = await supabase.from('game_results').select('id').eq('pick_text', pick.pick).eq('game_date', date).maybeSingle();
+          if (!exist) {
+            await supabase.from('game_results').insert({
+              pick_id: row.id, game_date: date, league, result: res,
+              final_score: `${vs}-${hs}`, pick_text: pick.pick,
+              matchup: `${pick.awayTeam} @ ${pick.homeTeam}`
+            });
+          }
         }
         stats[res[0]]++; // w, l, or p
         console.log(`  ✅ ${league}: ${pick.pick} -> ${res.toUpperCase()} (${vs}-${hs})`);
