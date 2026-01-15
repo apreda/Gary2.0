@@ -277,7 +277,8 @@ export default async function handler(req, res) {
                 floor_projection: lineup.floor_projection,
                 stack_info: lineup.stackInfo,
                 lineup: lineup.lineup,
-                gary_notes: garyNotes,
+                gary_notes: lineup.gary_notes,
+                harmony_reasoning: lineup.harmony_reasoning,
                 updated_at: new Date().toISOString()
               };
               
@@ -285,7 +286,7 @@ export default async function handler(req, res) {
               const { error: upsertError } = await supabase
                 .from('dfs_lineups')
                 .upsert(lineupRecord, {
-                  onConflict: 'date,platform,sport,slate_name,contest_type'
+                  onConflict: ['date', 'platform', 'sport', 'slate_name', 'slate_start_time']
                 });
               
               if (upsertError) {

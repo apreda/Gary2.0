@@ -15,8 +15,9 @@ runAgenticPropsCli({
   sportKey: 'basketball_nba',
   leagueLabel: 'NBA',
   buildContext: buildNbaPropsAgenticContext,
-  windowHours: 48,  // Extended window to capture all upcoming games (today + tomorrow)
-  propsPerGame: 5,  // Gary shortlists 5; quantum filter decides survivors (0..5)
+  windowHours: 24,  // Only today's games (props aren't available for tomorrow)
+  useESTDayFiltering: true,  // Filter by EST day - only games starting TODAY in EST
+  propsPerGame: 5,  // Gary shortlists 5; 2 survive per game after constraint
   limitDefault: 15  // Increased to 15 to cover even the busiest NBA days (max 15 games)
 })
   .then(() => process.exit(0))

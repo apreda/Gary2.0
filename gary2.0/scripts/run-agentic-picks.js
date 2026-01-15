@@ -228,6 +228,10 @@ const useDynamicSlateReview = args.includes('--dynamic');
 const forceUnderdog = args.includes('--force-underdog');
 // --slate flag to enable Slate Selector (filters to top picks and runs Stress Test)
 const useSlateSelector = args.includes('--slate');
+// --test flag to store picks in test_daily_picks table instead of production (for testing)
+const useTestTable = args.includes('--test');
+// --test-name flag to label the test run (e.g., "Sharp Betting Reference Test")
+const testName = getArgValue('--test-name');
 
 if (runAll) {
   sportsToRun.push('nba', 'nfl', 'nhl', 'epl', 'ncaab', 'ncaaf');
@@ -265,6 +269,9 @@ if (sportsToRun.length === 0) {
 ║    --force-underdog            (make Gary argue for underdog)    ║
 ║    --store false               (analyze only, don't save)        ║
 ║    --slate                     (Slate Selector: top 4 + Stress)  ║
+║    --test                      (store to test_daily_picks table) ║
+║    --test-name "My Test"       (label the test run)              ║
+║    --matchup "Chicago"         (run single game only)            ║
 ║                                                                  ║
 ║  Gary's Pick System:                                             ║
 ║    - SPREAD or MONEYLINE = picks stored                          ║
@@ -575,10 +582,38 @@ async function main() {
         const filteredGames = [];
         const skippedGames = [];
         const skippedNonApproved = [];
+        
+        // DEBUG: Check if UCLA/Penn State are in the raw games list
+        const uclaGame = games.find(g => 
+          g.home_team?.toLowerCase().includes('ucla') || 
+          g.away_team?.toLowerCase().includes('ucla') ||
+          g.home_team?.toLowerCase().includes('penn state') || 
+          g.away_team?.toLowerCase().includes('penn state')
+        );
+        if (uclaGame) {
+          console.log(`[${config.name}] 🔍 DEBUG: Found UCLA/Penn State game in raw list: ${uclaGame.away_team} @ ${uclaGame.home_team}`);
+          console.log(`[${config.name}] 🔍 DEBUG: Game time: ${uclaGame.commence_time}`);
+        } else {
+          console.log(`[${config.name}] ⚠️ DEBUG: UCLA/Penn State NOT found in ${games.length} raw games`);
+        }
 
         // Pre-fetch all teams once to optimize lookup
         const ncaabTeams = await ballDontLieService.getTeams('basketball_ncaab');
         const normalize = (name) => name?.toLowerCase().replace(/[^a-z0-9]/g, '').trim();
+        
+        // DEBUG: Check UCLA/Penn State conference IDs in BDL
+        if (uclaGame) {
+          const uclaTeam = ncaabTeams.find(t => 
+            t.name?.toLowerCase().includes('ucla') || 
+            t.full_name?.toLowerCase().includes('ucla')
+          );
+          const pennStateTeam = ncaabTeams.find(t => 
+            t.name?.toLowerCase().includes('penn state') || 
+            t.full_name?.toLowerCase().includes('penn state')
+          );
+          console.log(`[${config.name}] 🔍 DEBUG: UCLA in BDL: ${uclaTeam ? `ID=${uclaTeam.id}, conference_id=${uclaTeam.conference_id}, name=${uclaTeam.full_name}` : 'NOT FOUND'}`);
+          console.log(`[${config.name}] 🔍 DEBUG: Penn State in BDL: ${pennStateTeam ? `ID=${pennStateTeam.id}, conference_id=${pennStateTeam.conference_id}, name=${pennStateTeam.full_name}` : 'NOT FOUND'}`);
+        }
         
         const teamMap = new Map();
         ncaabTeams.forEach(t => {
@@ -613,6 +648,11 @@ async function main() {
 
             const homeConfId = homeTeam.conference_id;
             const awayConfId = awayTeam.conference_id;
+
+            // Attach conference names to game EARLY (before any validation)
+            // This ensures conference data is always available for storage
+            game.homeConference = getConfName(homeConfId);
+            game.awayConference = getConfName(awayConfId);
 
             // BOTH teams must be from an approved Top 7 conference
             const homeApproved = isApprovedConference(homeConfId);
@@ -650,9 +690,7 @@ async function main() {
             const awayHasData = awayGames >= MIN_GAMES_FOR_ANALYSIS && awayPts > 40 && awayFgPct > 30;
 
             if (homeHasData && awayHasData) {
-              // Attach conference names to game for storage (used by app for filtering)
-              game.homeConference = getConfName(homeConfId);
-              game.awayConference = getConfName(awayConfId);
+              // Conference already attached above - just push to filtered games
               filteredGames.push(game);
             } else {
               const homeReason = !homeHasData ? `${homeGames}g/${homePts.toFixed(1)}ppg/${homeFgPct.toFixed(1)}%fg` : 'OK';
@@ -691,6 +729,17 @@ async function main() {
           }
         }
         console.log(`[${config.name}] Top 7 conference + data quality filter: ${beforeCount} → ${games.length} games`);
+        
+        // DEBUG: Check if UCLA made it through
+        const uclaInFiltered = games.find(g => 
+          g.home_team?.toLowerCase().includes('ucla') || 
+          g.away_team?.toLowerCase().includes('ucla')
+        );
+        console.log(`[${config.name}] 🔍 DEBUG: UCLA in filtered games: ${uclaInFiltered ? 'YES ✅' : 'NO ❌'}`);
+        if (uclaInFiltered) {
+          const idx = games.indexOf(uclaInFiltered);
+          console.log(`[${config.name}] 🔍 DEBUG: UCLA game position: #${idx + 1} of ${games.length}`);
+        }
 
         // NCAAB: Filter out extreme spreads (≥14 points)
         // These are unpredictable - will the favorite keep starters in? Garbage time variance is too high.
@@ -1276,6 +1325,7 @@ async function main() {
             pick: result.pick,
             type: result.type,
             odds: result.odds,
+            confidence: result.confidence || 0.65, // Gary's conviction in the bet (0.50-1.00)
             // Thesis-based classification (new filtering system)
             thesis_type: result.thesis_type || null,
             thesis_mechanism: result.thesis_mechanism || null,
@@ -1594,6 +1644,22 @@ async function storePicks(picks) {
   // DRY RUN MODE - skip storage if --dry-run flag is passed
   if (process.argv.includes('--dry-run')) {
     console.log(`🧪 DRY RUN MODE - Skipping storage of ${picks.length} picks`);
+    return;
+  }
+
+  // TEST MODE - store to test_daily_picks instead of production tables
+  if (useTestTable) {
+    console.log(`🧪 TEST MODE - Storing ${picks.length} picks to test_daily_picks table`);
+    try {
+      const result = await picksService.storeTestPicks(picks, testName, `Test run at ${new Date().toISOString()}`);
+      if (result.success) {
+        console.log(`✅ TEST: Stored ${result.count} picks in test_daily_picks (mode: ${result.mode})`);
+      } else {
+        console.error(`⚠️  TEST storage issue:`, result.error || result.message);
+      }
+    } catch (error) {
+      console.error(`❌ Error storing test picks:`, error.message);
+    }
     return;
   }
 

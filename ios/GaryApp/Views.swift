@@ -5221,6 +5221,7 @@ struct GaryFantasyView: View {
     @State private var loading = true
     @State private var selectedPlatform: DFSPlatform = .draftkings
     @State private var selectedSport: String = "NBA"
+    @State private var selectedSlate: String = "Main"
     @State private var expandedPositions: Set<String> = []
     
     // Available sports based on loaded lineups
@@ -5229,9 +5230,22 @@ struct GaryFantasyView: View {
         return Array(sports).sorted()
     }
     
-    // Current lineup for selected platform/sport
+    // Available slates for selected platform/sport
+    private var availableSlates: [String] {
+        let slates = Set(lineups.filter { 
+            $0.platform == selectedPlatform.rawValue && 
+            $0.sport == selectedSport 
+        }.compactMap { $0.slate_name ?? "Main" })
+        return Array(slates).sorted()
+    }
+    
+    // Current lineup for selected platform/sport/slate
     private var currentLineup: DFSLineup? {
-        lineups.first { $0.platform == selectedPlatform.rawValue && $0.sport == selectedSport }
+        lineups.first { 
+            $0.platform == selectedPlatform.rawValue && 
+            $0.sport == selectedSport &&
+            ($0.slate_name ?? "Main") == selectedSlate
+        }
     }
     
     var body: some View {
@@ -5263,7 +5277,16 @@ struct GaryFantasyView: View {
                 // Sport Filter (NBA / NFL)
                 if !availableSports.isEmpty {
                     DFSSportFilter(selected: $selectedSport, available: availableSports)
+                        .padding(.bottom, 8)
+                }
+                
+                // Slate Filter (Main / Turbo / Night)
+                if availableSlates.count > 1 {
+                    DFSSlateFilter(selected: $selectedSlate, available: availableSlates)
                         .padding(.bottom, 16)
+                } else if !availableSlates.isEmpty {
+                    // Just a small spacer if only one slate
+                    Spacer().frame(height: 8)
                 }
                 
                 // Content
@@ -5338,6 +5361,12 @@ struct GaryFantasyView: View {
                 selectedSport = first
             }
         }
+        .onChange(of: selectedSport) { _ in
+            // Auto-select first available slate when sport changes
+            if let first = availableSlates.first, !availableSlates.contains(selectedSlate) {
+                selectedSlate = first
+            }
+        }
     }
     
     private func loadLineups() async {
@@ -5351,10 +5380,17 @@ struct GaryFantasyView: View {
             }
             await MainActor.run {
                 lineups = fetched
+                
                 // Auto-select first available sport
-                if let first = availableSports.first, !availableSports.contains(selectedSport) {
-                    selectedSport = first
+                if let firstSport = availableSports.first, !availableSports.contains(selectedSport) {
+                    selectedSport = firstSport
                 }
+                
+                // Auto-select first available slate
+                if let firstSlate = availableSlates.first, !availableSlates.contains(selectedSlate) {
+                    selectedSlate = firstSlate
+                }
+                
                 loading = false
             }
         } catch {
@@ -5461,6 +5497,44 @@ struct DFSSportFilter: View {
         case "NBA": return "basketball.fill"
         case "NFL": return "football.fill"
         default: return "sportscourt.fill"
+        }
+    }
+}
+
+// MARK: - DFS Slate Filter
+
+struct DFSSlateFilter: View {
+    @Binding var selected: String
+    let available: [String]
+    
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(available, id: \.self) { slate in
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            selected = slate
+                        }
+                    } label: {
+                        Text(slate.uppercased())
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(selected == slate ? .white : .secondary)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background {
+                                if selected == slate {
+                                    Capsule()
+                                        .fill(Color.white.opacity(0.15))
+                                } else {
+                                    Capsule()
+                                        .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
+                                }
+                            }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 20)
         }
     }
 }

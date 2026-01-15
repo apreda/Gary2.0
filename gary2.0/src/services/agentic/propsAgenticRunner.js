@@ -79,7 +79,13 @@ const FINALIZE_TOOL = {
   type: 'function',
   function: {
     name: 'finalize_props',
-    description: 'Output your final prop picks. CRITICAL: Each rationale MUST follow the 5-part structure: (1) Why the line is wrong, (2) Your specific edge, (3) Game script alignment, (4) The risk, (5) Why bet anyway. NO generic phrases like "should be able to" or "good matchup" - be SPECIFIC.',
+    description: `Output your final prop picks. CRITICAL: Before finalizing, run THE FOUR INVESTIGATIONS for each pick:
+1. INVESTIGATE THE MISMATCH: What structural game factor exists tonight that the line hasn't captured?
+2. INVESTIGATE THE GAME LOGIC: Why did the books set this line here? What game factor are they respecting?
+3. INVESTIGATE THE MECHANISM: HOW does this player hit tonight? (Not rankings - the actual on-court/ice action)
+4. INVESTIGATE THE FLOOR: What happens in the worst-case scenario?
+
+Your rationale MUST be SPECIFIC with receipts (usage jumped from 22% to 31%, not "his role has grown"). NO generic phrases. If your thesis is just "average > line", you don't have edge.`,
     parameters: {
       type: 'object',
       properties: {
@@ -98,20 +104,25 @@ const NFL_FINALIZE_TOOL = {
   type: 'function',
   function: {
     name: 'finalize_props',
-    description: `Output your final NFL prop picks in 4 SEPARATE CATEGORIES. Each category has different rules:
-    
-1. regular_props (Shortlist 5): Yards, receptions, attempts - NO TDs. Odds > -150.
+    description: `Output your final NFL prop picks in 4 SEPARATE CATEGORIES. Run THE FOUR INVESTIGATIONS for each pick:
+1. INVESTIGATE THE MISMATCH: What structural game factor (game script, role change, matchup) hasn't the line captured?
+2. INVESTIGATE THE GAME LOGIC: What is the line respecting? Why do you disagree?
+3. INVESTIGATE THE MECHANISM: HOW does this player produce? (Not "they're 27th against WRs" - that's noise)
+4. INVESTIGATE THE FLOOR: What happens if game script goes against you?
+
+CATEGORIES:
+1. regular_props (Shortlist 5): Yards, receptions, attempts - NO TDs. Odds range: -200 to +250.
 2. regular_td (Shortlist 4): Anytime TD with odds -200 to +200. Likely scorers.
 3. value_td (Pick 1): Anytime TD with odds +200 or higher. Can include 2+ TDs. NOT 1st TD.
 4. first_td (Pick 1): First TD scorer only. Lottery pick.
 
-CRITICAL: Do NOT mix categories. Each array should only contain picks for that specific category.`,
+CRITICAL: Each rationale MUST be SPECIFIC with receipts. NO generic phrases.`,
     parameters: {
       type: 'object',
       properties: {
         regular_props: {
           type: 'array',
-          description: 'Shortlist 5 regular props (yards, receptions, attempts). NO TD props. Odds must be > -150.',
+          description: 'Shortlist 5 regular props (yards, receptions, attempts). NO TD props. Odds range: -200 to +250.',
           items: PICK_SCHEMA
         },
         regular_td: {
@@ -1123,6 +1134,198 @@ function calibrateConfidence(rawConfidence) {
 }
 
 /**
+ * Apply 2-props-per-game constraint with player diversification
+ * 
+ * RULES:
+ * 1. Maximum 2 props per game (can be from 2 different players)
+ * 2. The 2 props should be from DIFFERENT players for diversification
+ * 3. EXCEPTION: If 2 props on the same player are both elite AND positively correlated,
+ *    a 3rd "Gary Special" pick can be added
+ * 
+ * @param {Array} picks - All validated picks
+ * @param {string} gameId - The game identifier (e.g., "away_team @ home_team")
+ * @returns {Object} - { constrainedPicks, droppedPicks, garySpecials }
+ */
+function applyPropsPerGameConstraint(picks, gameId) {
+  if (!picks || picks.length === 0) {
+    return { constrainedPicks: [], droppedPicks: [], garySpecials: [] };
+  }
+  
+  // Group picks by GAME (using matchup field) - NOT by team!
+  // This ensures 2 picks total per game across BOTH teams
+  const picksByGame = {};
+  
+  for (const pick of picks) {
+    // Use matchup to identify game (e.g., "Vegas Golden Knights @ Los Angeles Kings")
+    const matchup = (pick.matchup || '').toLowerCase();
+    if (!matchup) continue;
+    
+    if (!picksByGame[matchup]) {
+      picksByGame[matchup] = [];
+    }
+    picksByGame[matchup].push(pick);
+  }
+  
+  const constrainedPicks = [];
+  const droppedPicks = [];
+  const garySpecials = [];
+  
+  for (const matchup of Object.keys(picksByGame)) {
+    const gamePicks = picksByGame[matchup];
+    
+    if (gamePicks.length <= 2) {
+      // Already within constraint
+      constrainedPicks.push(...gamePicks);
+      continue;
+    }
+    
+    // Sort by confidence (descending) to keep the best picks
+    gamePicks.sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
+    
+    // Group by player
+    const picksByPlayer = {};
+    for (const pick of gamePicks) {
+      const player = (pick.player || '').toLowerCase();
+      if (!picksByPlayer[player]) {
+        picksByPlayer[player] = [];
+      }
+      picksByPlayer[player].push(pick);
+    }
+    
+    const players = Object.keys(picksByPlayer);
+    
+    // Strategy: Pick best from 2 different players (diversification)
+    if (players.length >= 2) {
+      // Take the best pick from the top 2 players by confidence
+      const playersByTopConfidence = players
+        .map(p => ({ player: p, topConfidence: Math.max(...picksByPlayer[p].map(pk => pk.confidence || 0)) }))
+        .sort((a, b) => b.topConfidence - a.topConfidence);
+      
+      const alphaPick = picksByPlayer[playersByTopConfidence[0].player][0]; // Best pick from best player
+      const betaPick = picksByPlayer[playersByTopConfidence[1].player][0]; // Best pick from second player
+      
+      constrainedPicks.push(alphaPick, betaPick);
+      
+      // Check for Gary Special: If the alpha player has a 2nd elite pick that's correlated
+      const alphaPicks = picksByPlayer[playersByTopConfidence[0].player];
+      if (alphaPicks.length >= 2) {
+        const secondPick = alphaPicks[1];
+        
+        // Check if it's elite (confidence >= 0.70) AND potentially correlated
+        const isElite = (secondPick.confidence || 0) >= 0.70;
+        const prop1 = (alphaPick.prop || '').toLowerCase();
+        const prop2 = (secondPick.prop || '').toLowerCase();
+        
+        // Check for positive correlation (both benefit from same game flow)
+        // e.g., Points + Assists (high usage game), Rushing + Receiving yards (workload), SOG + Points (PP1)
+        const isCorrelated = checkPropCorrelation(prop1, prop2);
+        
+        if (isElite && isCorrelated) {
+          console.log(`[Props Constraint] 🌟 Gary Special: Adding 3rd pick for ${secondPick.player} (${prop2} correlated with ${prop1})`);
+          constrainedPicks.push({ ...secondPick, isGarySpecial: true });
+          garySpecials.push(secondPick);
+        } else {
+          droppedPicks.push(secondPick);
+        }
+      }
+      
+      // Track dropped picks
+      for (const player of players) {
+        for (const pick of picksByPlayer[player]) {
+          if (!constrainedPicks.includes(pick) && !garySpecials.includes(pick)) {
+            droppedPicks.push(pick);
+          }
+        }
+      }
+    } else {
+      // Only 1 player with multiple picks - take top 2 from that player
+      const soloPlayerPicks = gamePicks.slice(0, 2);
+      constrainedPicks.push(...soloPlayerPicks);
+      
+      // Check for Gary Special on 3rd pick
+      if (gamePicks.length >= 3) {
+        const thirdPick = gamePicks[2];
+        const isElite = (thirdPick.confidence || 0) >= 0.70;
+        const prop1 = (soloPlayerPicks[0].prop || '').toLowerCase();
+        const prop3 = (thirdPick.prop || '').toLowerCase();
+        const isCorrelated = checkPropCorrelation(prop1, prop3);
+        
+        if (isElite && isCorrelated) {
+          console.log(`[Props Constraint] 🌟 Gary Special: Adding 3rd pick for ${thirdPick.player} (correlated props)`);
+          constrainedPicks.push({ ...thirdPick, isGarySpecial: true });
+          garySpecials.push(thirdPick);
+        } else {
+          droppedPicks.push(thirdPick);
+        }
+      }
+      
+      // Track remaining dropped picks
+      for (let i = 3; i < gamePicks.length; i++) {
+        if (!garySpecials.includes(gamePicks[i])) {
+          droppedPicks.push(gamePicks[i]);
+        }
+      }
+    }
+  }
+  
+  if (droppedPicks.length > 0) {
+    console.log(`[Props Constraint] Applied 2-per-game constraint: ${constrainedPicks.length} kept, ${droppedPicks.length} dropped, ${garySpecials.length} Gary Specials`);
+  }
+  
+  return { constrainedPicks, droppedPicks, garySpecials };
+}
+
+/**
+ * Check if two prop types are positively correlated
+ * (both benefit from the same game script / player usage pattern)
+ */
+function checkPropCorrelation(prop1, prop2) {
+  // Normalize prop names
+  const normalize = (p) => p.replace(/[_\s]/g, '').toLowerCase();
+  const p1 = normalize(prop1);
+  const p2 = normalize(prop2);
+  
+  // Correlated prop pairs (both spike in same scenario)
+  const correlatedPairs = [
+    // NBA: High usage game
+    ['pts', 'ast'],
+    ['points', 'assists'],
+    ['pts', 'pra'],
+    ['points', 'pra'],
+    
+    // NBA: Inside game
+    ['pts', 'reb'],
+    ['points', 'rebounds'],
+    
+    // NFL: Workload
+    ['rushyds', 'recyds'],
+    ['rushingyards', 'receivingyards'],
+    
+    // NFL: Target hog
+    ['receptions', 'recyds'],
+    ['receptions', 'receivingyards'],
+    
+    // NHL: PP1 usage
+    ['sog', 'points'],
+    ['shots', 'points'],
+    ['shotsongoal', 'points'],
+    
+    // NHL: Scorer
+    ['goals', 'points'],
+    ['goals', 'sog'],
+    ['goals', 'shots']
+  ];
+  
+  for (const [a, b] of correlatedPairs) {
+    if ((p1.includes(a) && p2.includes(b)) || (p1.includes(b) && p2.includes(a))) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+/**
  * Check rationale quality for sharp betting standards
  * Returns warnings for generic or low-quality rationales
  */
@@ -1331,11 +1534,9 @@ The line is NOT a puzzle to solve. It already reflects:
 
 **RATE EACH PICK ON EDGE POTENTIAL (1-10):**
 
-- 9-10: Clear mispricing. You've identified something specific the line doesn't reflect (injury news, usage shift, matchup the book missed).
-- 7-8: Strong edge. One or two factors the market may be underweighting.
-- 5-6: Mixed. Some public info, but situational factors may not be fully priced.
-- 3-4: Weak edge. Mostly explaining why this player is good. That's already in the price.
-- 1-2: No edge. Just saying "he's been playing well" or "good matchup." The book knows this.
+Rate based on how strongly you believe you've identified something the line might be missing.
+Use your judgment - higher = specific edge the market may have missed, lower = mostly describing public info.
+Investigate each factor for THIS specific player and matchup.
 
 **THE "TOO EASY" TEST:**
 > "Could I explain this pick in 30 seconds to a casual fan?"
@@ -1424,14 +1625,22 @@ async function runPropsIterationLoop({ systemPrompt, userMessage, sportKey, spor
   const propsModel = getPropsModelForSport(sportLabel);
   
   // Create model with tools
+  // GEMINI 3 FLASH SETTINGS FOR PROPS (Updated per Google best practices):
+  // - temperature: 1.0 (Google's recommended default - lower causes looping/degraded math)
+  // - thinkingLevel: "high" for deep reasoning (replaces legacy thinkingBudget)
   const model = gemini.getGenerativeModel({
     model: propsModel,
     safetySettings: GEMINI_SAFETY_SETTINGS,
     tools: [{ functionDeclarations }],
     generationConfig: {
-      temperature: 0.65, // Aligned with game picks: creative connections while maintaining precision
-      topP: 0.95, // Include plausible longshots in reasoning - helps Gary find non-obvious edges
-      maxOutputTokens: 8000
+      temperature: 1.0, // Gemini 3 optimized default - DO NOT lower (causes looping on math tasks)
+      topP: 0.95,
+      maxOutputTokens: 8000,
+      // Gemini 3 thinkingConfig - use thinkingLevel (replaces legacy thinkingBudget)
+      thinkingConfig: {
+        includeThoughts: true,
+        thinkingLevel: 'high' // "high" = deep reasoning for volume math, mismatch hunting
+      }
     }
   });
 
@@ -1525,9 +1734,9 @@ async function runPropsIterationLoop({ systemPrompt, userMessage, sportKey, spor
         }
 
         // Direction balance check: if Gary returns ALL overs/ALL unders,
-        // force a quick second pass to ensure we are not being driven by narrative.
-        // We don't force unders, we force consideration of both sides.
-        if (!didDirectionBalanceCheck && Array.isArray(picks) && picks.length > 0 && iteration < maxIterations - 1) {
+        // log a warning but ACCEPT the picks - don't block on this
+        // Sharp bettors often have slate-wide directional leans based on market conditions
+        if (!didDirectionBalanceCheck && Array.isArray(picks) && picks.length > 0) {
           const normalizedBets = picks
             .map(p => (p?.bet || '').toString().trim().toLowerCase())
             .filter(b => b === 'over' || b === 'under');
@@ -1538,24 +1747,8 @@ async function runPropsIterationLoop({ systemPrompt, userMessage, sportKey, spor
           if (isAllOneSide) {
             didDirectionBalanceCheck = true;
             const onlySide = normalizedBets[0];
-            console.log(`[Props] ⚠️ All picks were "${onlySide}". Triggering balance re-check pass...`);
-
-            iteration++;
-            console.log(`\n[Props Iteration ${sportLabel}] ${iteration}/${maxIterations} (direction balance check)`);
-            result = await chat.sendMessage(
-              [
-                `You finalized ${picks.length} prop picks and they are ALL "${onlySide.toUpperCase()}".`,
-                '',
-                'This is a bias risk. You MUST re-check your shortlist using BOTH stats AND narrative:',
-                '- Compare season + recent form vs the line, and consider game environment (pace/total), fatigue, blowout risk, and role.',
-                '- Explicitly look for at least one UNDER candidate where the baseline is below the line or the situation caps volume (minutes risk, elite defense, pace-down).',
-                "- You are NOT forced to include an under if there's truly no value, but you MUST only keep all-overs/all-unders if you can justify why the other side has NO value today.",
-                '',
-                'Now CALL finalize_props again with your revised picks (same pick count). Do NOT request more data.'
-              ].join('\n')
-            );
-            response = result.response;
-            continue;
+            console.log(`[Props] ℹ️ All picks are "${onlySide}" - accepting (sharp slates often lean one way)`);
+            // Don't block - proceed with validation and return picks
           }
         }
         
@@ -1571,7 +1764,36 @@ async function runPropsIterationLoop({ systemPrompt, userMessage, sportKey, spor
           console.log(`[Props Validation] ❌ ${invalidStats.length} unverifiable stat(s) detected`);
         }
         
-        return { picks: validatedPicks, iterations: iteration, toolCalls: toolCallHistory.length, warnings, categorized: isCategorized };
+        // Apply 2-props-per-game constraint with player diversification
+        // NOTE: For NBA/NHL, constraint is applied LATER (after matchup field is added)
+        // This ensures we can properly group picks by game across both teams
+        const isNbaOrNhl = sportLabel === 'NBA' || sportLabel === 'NHL';
+        
+        if (isNbaOrNhl) {
+          // Skip constraint here - will be applied in post-processing after matchup is added
+          return { 
+            picks: validatedPicks, 
+            iterations: iteration, 
+            toolCalls: toolCallHistory.length, 
+            warnings, 
+            categorized: isCategorized,
+            droppedByConstraint: 0,
+            garySpecials: 0
+          };
+        }
+        
+        // For NFL, apply constraint now (uses team-based grouping)
+        const { constrainedPicks, droppedPicks, garySpecials } = applyPropsPerGameConstraint(validatedPicks, `${sportLabel}-${iteration}`);
+        
+        return { 
+          picks: constrainedPicks, 
+          iterations: iteration, 
+          toolCalls: toolCallHistory.length, 
+          warnings, 
+          categorized: isCategorized,
+          droppedByConstraint: droppedPicks.length,
+          garySpecials: garySpecials.length
+        };
       }
     }
 
@@ -1629,7 +1851,32 @@ async function runPropsIterationLoop({ systemPrompt, userMessage, sportKey, spor
             if (warnings.length > 0) {
               console.log(`[Props Validation] ⚠️ ${warnings.length} warning(s)`);
             }
-            return { picks: validatedPicks, iterations: iteration, toolCalls: toolCallHistory.length, warnings };
+            
+            // Apply 2-props-per-game constraint with player diversification
+            // NOTE: For NBA/NHL, constraint is applied LATER (after matchup field is added)
+            const isNbaOrNhl = sportLabel === 'NBA' || sportLabel === 'NHL';
+            
+            if (isNbaOrNhl) {
+              return { 
+                picks: validatedPicks, 
+                iterations: iteration, 
+                toolCalls: toolCallHistory.length, 
+                warnings,
+                droppedByConstraint: 0,
+                garySpecials: 0
+              };
+            }
+            
+            const { constrainedPicks, droppedPicks, garySpecials } = applyPropsPerGameConstraint(validatedPicks, `${sportLabel}-${iteration}`);
+            
+            return { 
+              picks: constrainedPicks, 
+              iterations: iteration, 
+              toolCalls: toolCallHistory.length, 
+              warnings,
+              droppedByConstraint: droppedPicks.length,
+              garySpecials: garySpecials.length
+            };
           }
         } catch {}
       }
@@ -2314,53 +2561,67 @@ You aren't a spreadsheet. You're a scout. You see the game before it happens. Yo
 - **Confident but not cocky**: You've done the work, you trust your eyes.
 - **Natural**: Sound like a real analyst having a conversation, not an AI with canned phrases.
 
-## 🎯 THE SHARP GAMBLER FRAMEWORK FOR PROPS
+## 🎯 THE FOUR INVESTIGATIONS (Your Core Framework)
 
-Before you pick ANY prop, apply this lens:
+You are a GAME ANALYST, not a betting market analyst. You investigate GAME INFO.
+Before finalizing ANY prop, run these investigations (in whatever order makes sense):
 
-**1. HARD vs SOFT FACTORS**
-- HARD FACTORS: Usage rate, TOI, target share, matchup efficiency, minutes trend (DATA you can verify)
-- SOFT FACTORS: Revenge game, contract year, primetime performer (NARRATIVES that need backing)
-- RULE: If a Soft Factor doesn't have Hard Factor backing, acknowledge it's higher variance
+**1. INVESTIGATE THE MISMATCH**
+What structural factor exists TONIGHT that the line hasn't captured?
+- Role change? Injury vacuum? Scheme vulnerability? Minutes situation?
+- If you can't identify a specific mismatch, you might just be agreeing with the market.
 
-**2. STRUCTURAL INVESTIGATION**
-Ask: "Is there a PHYSICAL or SCHEMATIC mismatch that creates edge?"
-- Player archetype vs defender archetype
-- Shooter style vs goalie weakness
-- Speed receiver vs slow corner
+**2. INVESTIGATE THE GAME LOGIC**
+Why did the books set this line where it is? What game factor are they respecting?
+- If you see "obvious" value, ask: "What GAME FACTOR is the line respecting that I'm challenging?"
+- Example: "Murray's line is 8.5 assists. The line respects it's a small sample against weak opponents. MY view is the role change is real."
 
-**3. ROSTER CONTEXT**
-Ask: "Are this player's stats from a SIMILAR CONTEXT to tonight?"
-- If teammate just went out → Recent games matter more than season average
-- If player got promoted to PP1 → Season average is outdated
-- Context changes = opportunity changes
+**3. INVESTIGATE THE MECHANISM**
+HOW does this player hit tonight? Not rankings - the actual on-court/ice ACTION.
+🚩 "They're 27th against centers" = Ranking (noise - reflects schedule and variance)
+✅ "They lack a vertical rim protector since the starter went down. He scores 68% of points in the paint." = Mechanism (signal)
+- If your only support is a positional ranking, dig deeper or lower conviction.
 
-**4. THE TRUMP CARD**
-Sometimes ONE factor is so compelling it overrides everything:
-- Key teammate OUT for first time → Usage vacuum is REAL and unpriced
-- Backup goalie starting → Goal props get structural boost
-- Player promoted to 1st unit → Line hasn't adjusted
+**4. INVESTIGATE THE FLOOR**
+What happens when things go wrong? Sharps think about downside before committing.
+- "Even if he only plays 28 minutes, at his rate he still projects to..."
+- "Even if the game becomes a blowout, his first-half production should..."
+- If the floor doesn't support the line, no mismatch saves you.
 
-You are a GAMBLER finding edges, not a MODEL outputting averages.
+## 🧠 SHARP WISDOM (How to Think)
 
-## 🚪 THE THESIS GATE (MANDATORY BEFORE EVERY PICK)
+**MEDIAN VS MEAN TRAP:** High-variance players have averages that lie. If 2 monster games pull up the average, the UNDER is often undervalued.
 
-Before you pick OVER or UNDER on ANY prop, you MUST complete the dual-scenario analysis. This prevents you from just finding reasons to support your initial gut feeling.
+**DERIVATIVE LAZINESS:** Books model star props carefully. Backup/role player props often get lazy formula adjustments. The vacuum isn't fully priced.
 
-**FOR EACH PROP YOU CONSIDER:**
+**PUBLIC OVER BIAS:** Casual bettors love overs. Would this be promoted on a sportsbook's social media? If yes, ask where YOUR edge is.
 
-**OVER THESIS (2 sentences max):** The game script where this player goes OVER the line. What has to happen?
+**SPECIFICITY OVER GENERALITY:** Sharps have receipts.
+- Hand-wavy: "His role has grown significantly"  
+- Specific: "His usage jumped from 22% to 31% since the trade, and he's seeing 4 more FGA per game"
 
-**UNDER THESIS (2 sentences max):** The game script where this player stays UNDER the line. What kills the OVER?
+## 🚪 THE SELF-EVALUATION MIRROR (Before Finalizing)
 
-**WHICH IS MORE BELIEVABLE?** Rate as OVER, UNDER, or COIN-FLIP based on the matchup/context.
+Before finalizing ANY pick, hold your reasoning up to this mirror:
 
-If COIN-FLIP, you must look at the odds to determine value. Otherwise, pick the side your thesis supports.
+**✅ SHARP RATIONALE CHARACTERISTICS:**
+- SPECIFICITY: Did you anchor with specific numbers (rates, minutes, usage shifts)? Not hand-wavy.
+- VOLUME FLOOR ADDRESSED: Did you think through the downside scenario?
+- EDGE IS GAME-SPECIFIC: About TONIGHT's game, not just general ability.
+- MECHANISM IS SPECIFIC: WHY this player produces, not just rankings.
+- LOSS SCENARIO IS CONCRETE: The specific game situation where this loses.
+- GAME LOGIC ADDRESSED: What the line respects and why your view differs.
 
-**EXAMPLE:**
-- OVER THESIS: "Eagles trail early, Hurts throws 45+ times. Smith's 28% target share in negative scripts puts him at 9+ targets."
-- UNDER THESIS: "Eagles control the game, run-heavy script. Smith sees 5-6 targets as Barkley dominates."
-- MORE BELIEVABLE: OVER - Eagles are 3-point underdogs, likely chasing.
+**🚩 RED FLAGS (Lower your conviction if you trigger these):**
+- Your thesis is "average > line" (that's what the line already reflects)
+- Your mechanism is a ranking ("5th most to PGs") without explaining WHY
+- Your evidence is one game from months ago
+- Your loss scenario is generic ("they could play well")
+- You didn't address what the line is respecting
+- You're taking the "sexy" public side without a specific edge
+
+**THE SHARP TEST:** Can you state your mismatch in ONE sentence?
+If you can't, you might not have edge - you might have an opinion that agrees with the market.
 
 ## 🏷️ EDGE TYPE CLASSIFICATION
 
@@ -2643,7 +2904,8 @@ export async function runAgenticPropsPipeline({
       player: pick.player || 'Unknown',
       team: pick.team || sportLabel,
       prop: formatProp(pick),
-      bet: (pick.bet || 'over').toLowerCase(),
+      // Normalize 'yes' to 'over' for UI consistency (anytime goal = over 0.5 goals)
+      bet: (pick.bet || 'over').toLowerCase() === 'yes' ? 'over' : (pick.bet || 'over').toLowerCase(),
       odds: pick.odds || -110,
       confidence: pick.confidence || 0.6,
       rationale: cleanSourceTags(pick.rationale) || 'Analysis based on matchup data.',
@@ -2662,22 +2924,61 @@ export async function runAgenticPropsPipeline({
     // - Quantum filter keeps only picks with quantumStrength >= 0.80
     // - This can yield 0..5 surviving props per game
     if (sportLabel === 'NBA' || sportLabel === 'NHL') {
+      
+      // NHL-SPECIFIC: Filter out invalid prop types that Gary might have picked
+      // Period-specific props (1p, 2p, 3p) and random goal props are NOT analyzable
+      let validPicks = allPicks;
+      if (sportLabel === 'NHL') {
+        const INVALID_NHL_PROP_PATTERNS = [
+          '_1p', '_2p', '_3p',           // Period-specific: anytime_goal_2p, points_3p
+          '1p_', '2p_', '3p_',           // Alternative format
+          'first_goal', 'second_goal', 'third_goal', 'last_goal', 'overtime_goal',
+          'first_scorer', 'second_scorer', 'third_scorer', 'last_scorer'
+        ];
+        
+        const originalCount = allPicks.length;
+        validPicks = allPicks.filter(pick => {
+          const propType = (pick.prop || pick.prop_type || '').toLowerCase();
+          const isInvalid = INVALID_NHL_PROP_PATTERNS.some(pattern => propType.includes(pattern));
+          if (isInvalid) {
+            console.log(`[NHL Props] ⚠️ Filtering out invalid prop: ${pick.player} ${propType} (period-specific or random)`);
+          }
+          return !isInvalid;
+        });
+        
+        if (validPicks.length < originalCount) {
+          console.log(`[NHL Props] Filtered ${originalCount - validPicks.length} invalid prop type(s) from Gary's picks`);
+        }
+      }
+      
+      // Apply 2-per-game constraint NOW (after matchup is available on picks)
+      // This ensures we get exactly 2 props per game across both teams
+      const { constrainedPicks, droppedPicks, garySpecials } = applyPropsPerGameConstraint(validPicks, `${sportLabel}-post`);
+      validPicks = constrainedPicks;
+      
+      if (droppedPicks.length > 0 || garySpecials.length > 0) {
+        console.log(`[Props Constraint] Applied 2-per-game: ${validPicks.length} kept, ${droppedPicks.length} dropped, ${garySpecials.length} Gary Specials`);
+      }
+      
       if (isQuantumEnabled()) {
-        console.log(`[Agentic Props][${sportLabel}] 🌌 Applying quantum filter to ${allPicks.length} shortlisted props (>=0.80 survive)`);
-        const quantumFiltered = await applyQuantumFilter(allPicks, `${sportLabel} PROPS`, { storeAll: false });
-        console.log(`[Agentic Props][${sportLabel}] 🌌 Quantum survivors: ${quantumFiltered.length}/${allPicks.length}`);
+        // NBA/NHL PROPS: Mirror game-picks "Tracking Mode" (v2.1 update)
+        // - We attach quantum scores for research, but DON'T filter picks
+        // - This ensures the user gets 2 props per game as requested
+        console.log(`[Agentic Props][${sportLabel}] 🌌 Applying quantum tagging to ${validPicks.length} shortlisted props`);
+        const quantumTracked = await applyQuantumFilter(validPicks, `${sportLabel} PROPS`, { storeAll: true });
+        console.log(`[Agentic Props][${sportLabel}] 🌌 Quantum tagging complete for ${quantumTracked.length} picks`);
 
         return {
-          picks: quantumFiltered,
+          picks: quantumTracked,
           iterations: result.iterations,
           toolCalls: result.toolCalls,
           elapsedMs: Date.now() - start
         };
       }
 
-      console.log(`[Agentic Props][${sportLabel}] ⚠️ Quantum filter disabled (--no-quantum flag) - returning full shortlist (${allPicks.length})`);
+      console.log(`[Agentic Props][${sportLabel}] ⚠️ Quantum filter disabled (--no-quantum flag) - returning full shortlist (${validPicks.length})`);
       return {
-        picks: allPicks,
+        picks: validPicks,
         iterations: result.iterations,
         toolCalls: result.toolCalls,
         elapsedMs: Date.now() - start
@@ -2854,7 +3155,8 @@ export async function runAgenticPropsPipeline({
       player: pick.player || 'Unknown',
       team: pick.team || sportLabel,
       prop: formatPropLegacy(pick),
-      bet: (pick.bet || 'over').toLowerCase(),
+      // Normalize 'yes' to 'over' for UI consistency (anytime goal = over 0.5 goals)
+      bet: (pick.bet || 'over').toLowerCase() === 'yes' ? 'over' : (pick.bet || 'over').toLowerCase(),
       odds: pick.odds || -110,
       confidence: pick.confidence || 0.6,
       rationale: cleanSourceTagsLegacy(pick.rationale) || 'Analysis based on matchup data.',

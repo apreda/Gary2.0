@@ -11,8 +11,8 @@ import { createClient } from '@supabase/supabase-js';
 import { generateDFSLineup, PLATFORM_CONSTRAINTS, validateLineup } from './src/services/dfsLineupService.js';
 import { buildDFSContext, discoverDFSSlates } from './src/services/agentic/dfsAgenticContext.js';
 
-// Get today's date
-const TODAY = new Date().toISOString().split('T')[0];
+// Jan 14, 2026 - Real lineup generation
+const TODAY = '2026-01-14';
 
 // Initialize Supabase
 function getSupabaseAdmin() {
@@ -129,13 +129,14 @@ async function generateLineups() {
           stack_info: lineup.stackInfo || null,
           lineup: lineup.lineup,
           gary_notes: lineup.gary_notes,
+          harmony_reasoning: lineup.harmony_reasoning,
           updated_at: new Date().toISOString()
         };
         
         const { error } = await supabase
           .from('dfs_lineups')
           .upsert(lineupRecord, {
-            onConflict: 'date,platform,sport,slate_name,contest_type'
+            onConflict: ['date', 'platform', 'sport', 'slate_name', 'slate_start_time']
           });
         
         if (error) {
@@ -220,6 +221,13 @@ function displayLineup(lineup, platform, slate) {
     console.log('📝 GARY\'S NOTES:');
     console.log('─'.repeat(100));
     console.log(lineup.gary_notes);
+  }
+  
+  if (lineup.harmony_reasoning) {
+    console.log(`\n${'─'.repeat(100)}`);
+    console.log('🤝 HARMONY & STRATEGY:');
+    console.log('─'.repeat(100));
+    console.log(lineup.harmony_reasoning);
   }
 }
 

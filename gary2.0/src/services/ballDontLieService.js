@@ -939,7 +939,11 @@ const ballDontLieService = {
         if (!path) return [];
         const url = `${BALLDONTLIE_API_BASE_URL}/${path}${buildQuery(params)}`;
         const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
-        return response.data?.data || [];
+        // ⭐ FIX: Return BOTH data and meta for pagination support
+        return { 
+          data: response.data?.data || [],
+          meta: response.data?.meta
+        };
       }, ttlMinutes);
     } catch (e) {
       console.error(`[Ball Don't Lie] ${sportKey} getPlayers error:`, e.message);
@@ -978,7 +982,11 @@ const ballDontLieService = {
           throw new Error(`HTTP ${resp.status} ${text}`);
         }
         const json = await resp.json().catch(() => ({}));
-        return Array.isArray(json?.data) ? json.data : [];
+        // ⭐ FIX: Return BOTH data and meta for pagination support
+        return { 
+          data: Array.isArray(json?.data) ? json.data : [],
+          meta: json?.meta
+        };
       }, ttlMinutes);
     } catch (e) {
       console.error(`[Ball Don't Lie] ${sportKey} getPlayersActive error:`, e.message);
@@ -2123,6 +2131,8 @@ const ballDontLieService = {
           throw new Error(`HTTP ${resp.status} ${text}`);
         }
         const json = await resp.json().catch(() => ({}));
+        // ⭐ FIX: Return array consistently (matching SDK behavior)
+        // Most code expects getGames to return an array, not {data, meta}
         return Array.isArray(json?.data) ? json.data : [];
       }, ttlMinutes);
     } catch (e) {
@@ -2144,10 +2154,10 @@ const ballDontLieService = {
         // HTTP fallback for sports with documented player_stats endpoints
         // NOTE: NHL does not have a player_stats endpoint in BDL API - uses game logs instead
         const endpointMap = {
-          basketball_nba: 'nba/v1/player_stats',
+          basketball_nba: 'nba/v1/stats', // ⭐ FIX: Use correct endpoint per BDL docs
           basketball_wnba: 'wnba/v1/player_stats',
           basketball_ncaab: 'ncaab/v1/player_stats',
-          americanfootball_nfl: 'nfl/v1/player_stats',
+          americanfootball_nfl: 'nfl/v1/stats',
           americanfootball_ncaaf: 'ncaaf/v1/player_stats'
           // icehockey_nhl: NOT AVAILABLE - use getPlayerGameLogs instead
         };
@@ -2157,6 +2167,7 @@ const ballDontLieService = {
         }
         const url = `${BALLDONTLIE_API_BASE_URL}/${path}${buildQuery(params)}`;
         const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        // ⭐ FIX: Always return data array, not object with data/meta
         return response.data?.data || [];
       }, ttlMinutes);
     } catch (e) {
@@ -2930,21 +2941,66 @@ const ballDontLieService = {
    */
   async getNbaPlayerInjuries(teamIds = []) {
     try {
-      const cacheKey = `nba_player_injuries_${teamIds.join('_')}`;
+      const cacheKey = `nba_player_injuries_${teamIds.join('_') || 'all'}`;
       return await getCachedOrFetch(cacheKey, async () => {
-        console.log(`🏀 Fetching NBA player injuries for teams: ${teamIds.join(', ')}`);
-        const client = initApi();
+        console.log(`🏀 Fetching NBA player injuries for teams: ${teamIds.length > 0 ? teamIds.join(', ') : 'ALL'}`);
         
-        const response = await client.nba.getPlayerInjuries({
-          team_ids: teamIds,
-          per_page: 100
-        });
+        // ⭐ SDK has bug with team_ids parameter - use HTTP fallback
+        // Error: "Cannot read properties of null (reading 'toString')"
+        let allInjuries = [];
+        let cursor = null;
+        let page = 1;
+        const maxPages = 10;
         
-        const injuries = response.data || [];
-        console.log(`🏀 Found ${injuries.length} player injuries`);
+        do {
+          const params = new URLSearchParams();
+          params.append('per_page', '100');
+          if (cursor) params.append('cursor', cursor);
+          // Add team_ids if specified
+          for (const tid of teamIds) {
+            params.append('team_ids[]', tid);
+          }
+          
+          const url = `https://api.balldontlie.io/v1/player_injuries?${params.toString()}`;
+          const resp = await fetch(url, { headers: { Authorization: API_KEY } });
+          
+          if (!resp.ok) {
+            console.error(`🏀 Injuries API error: HTTP ${resp.status}`);
+            break;
+          }
+          
+          const json = await resp.json().catch(() => ({}));
+          const injuries = Array.isArray(json.data) ? json.data : [];
+          allInjuries.push(...injuries);
+          
+          cursor = json.meta?.next_cursor;
+          page++;
+          
+          if (page > maxPages) {
+            console.warn(`🏀 Hit max pages (${maxPages}) for injuries - stopping pagination`);
+            break;
+          }
+        } while (cursor);
         
-        return injuries;
-      }, 15); // Cache for 15 minutes since injury status changes frequently
+        console.log(`🏀 Found ${allInjuries.length} player injuries (${page - 1} pages)`);
+        
+        // ⭐ Log OUT and DOUBTFUL players for debugging
+        const outPlayers = allInjuries.filter(i => i.status?.toUpperCase() === 'OUT');
+        const doubtfulPlayers = allInjuries.filter(i => i.status?.toUpperCase() === 'DOUBTFUL');
+        const questionablePlayers = allInjuries.filter(i => i.status?.toUpperCase() === 'QUESTIONABLE');
+        
+        if (outPlayers.length > 0) {
+          console.log(`🏀 OUT (${outPlayers.length}): ${outPlayers.slice(0, 10).map(i => `${i.player?.first_name} ${i.player?.last_name}`).join(', ')}${outPlayers.length > 10 ? '...' : ''}`);
+        }
+        if (doubtfulPlayers.length > 0) {
+          console.log(`🏀 DOUBTFUL (${doubtfulPlayers.length}): ${doubtfulPlayers.map(i => `${i.player?.first_name} ${i.player?.last_name}`).join(', ')}`);
+        }
+        if (questionablePlayers.length > 0) {
+          console.log(`🏀 QUESTIONABLE (${questionablePlayers.length}): ${questionablePlayers.slice(0, 5).map(i => `${i.player?.first_name} ${i.player?.last_name}`).join(', ')}${questionablePlayers.length > 5 ? '...' : ''}`);
+        }
+        
+        return allInjuries;
+      }, 10); // Cache for 10 minutes since injury status changes frequently
     } catch (error) {
       console.error('Error fetching NBA player injuries:', error);
       return [];
@@ -3022,6 +3078,29 @@ const ballDontLieService = {
       }, 60); // Cache for 60 minutes
     } catch (error) {
       console.error('Error fetching NBA standings:', error);
+      return [];
+    }
+  },
+
+  /**
+   * Get NHL team standings for current season
+   * Uses BDL's /nhl/v1/standings endpoint
+   * @param {number} season - Season year (defaults to current NHL season)
+   * @returns {Promise<Array>} - Array of team standings with points, record, streaks
+   */
+  async getNhlStandings(season = getCurrentNhlSeason()) {
+    try {
+      const cacheKey = `nhl_standings_${season}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        console.log(`🏒 Fetching NHL standings for ${season} season`);
+        
+        const url = `${BALLDONTLIE_API_BASE_URL}/nhl/v1/standings${buildQuery({ season })}`;
+        const response = await axios.get(url, { headers: { Authorization: API_KEY } });
+        
+        return response.data?.data || [];
+      }, 60); // Cache for 60 minutes
+    } catch (error) {
+      console.error('Error fetching NHL standings:', error.message);
       return [];
     }
   },

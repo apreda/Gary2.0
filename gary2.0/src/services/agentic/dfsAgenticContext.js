@@ -19,10 +19,43 @@
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { ballDontLieService } from '../ballDontLieService.js';
-import { fetchDfsSalaries, fetchNbaGameTimes, buildSlatesFromGameTimes } from '../tank01DfsService.js';
+import { fetchDfsSalaries } from '../tank01DfsService.js';
 import { fetchSlatesFromRotoWire, populateSlateTeams } from '../rotowireSlateService.js';
+import { discoverDFSSlates as discoverSlatesWithService } from './dfsSlateDiscoveryService.js';
 // Import DFS constitution for Sharp Gambler framework
 import { getConstitution as getConstitutionWithBaseRules } from './constitution/index.js';
+import { inferPlayerRole } from './nbaStackingRules.js';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MODULE-LEVEL INJURY CACHE
+// ═══════════════════════════════════════════════════════════════════════════
+// This cache allows mergePlayerData to check injury status by name
+// It's populated when fetchInjuriesFromBDL is called and persists for the session
+// This is necessary because Tank01 and BDL may use different player IDs
+// ═══════════════════════════════════════════════════════════════════════════
+let _injuryNameCache = new Map(); // normalized name -> { status, description }
+
+export function setInjuryNameCache(injuries) {
+  _injuryNameCache = new Map();
+  for (const inj of injuries) {
+    const playerName = `${inj.player?.first_name || ''} ${inj.player?.last_name || ''}`.trim();
+    const normalizedName = normalizePlayerName(playerName);
+    const status = (inj.status || '').toUpperCase();
+    if (normalizedName && status) {
+      _injuryNameCache.set(normalizedName, { 
+        status, 
+        description: inj.description || '',
+        returnDate: inj.return_date 
+      });
+    }
+  }
+  console.log(`[DFS Context] 📋 Injury name cache populated with ${_injuryNameCache.size} entries`);
+}
+
+export function getInjuryByName(playerName) {
+  const normalizedName = normalizePlayerName(playerName);
+  return _injuryNameCache.get(normalizedName);
+}
 
 // SAFETY_SETTINGS and other constants remain same...
 
@@ -210,28 +243,31 @@ function repairTruncatedJson(json) {
  * ═══════════════════════════════════════════════════════════════════════════
  */
 // ═══════════════════════════════════════════════════════════════════════════
-// DFS MODEL CONFIG - Optimized for Contest Type
+// DFS MODEL CONFIG - Optimized for Gemini 3 Best Practices
 // ═══════════════════════════════════════════════════════════════════════════
-// GPP (Tournaments): Higher temperature for differentiated, contrarian lineups
-// Cash (50/50s): Lower temperature for consistent, high-floor plays
+// GEMINI 3 UPDATE: Temperature MUST be 1.0 per Google's recommendation
+// "Setting it below 1.0 may lead to unexpected behavior, such as looping 
+// or degraded performance, particularly in complex mathematical or reasoning tasks."
+// DFS involves salary math, so this is critical.
 // ═══════════════════════════════════════════════════════════════════════════
+const GROUNDING_MODEL_ID = process.env.GEMINI_FLASH_MODEL || 'gemini-3-flash-preview';
+
 const DFS_MODEL_CONFIG = {
-  model: process.env.GEMINI_FLASH_MODEL || 'gemini-3-flash-preview',
+  model: GROUNDING_MODEL_ID,
   reasoningLevel: 'HIGH',
   grounding: 'ENABLED',
   maxOutputTokens: 8192,
   topP: 0.95,
-  // Contest-specific temperatures
-  temperature: {
-    gpp: 0.75,  // Higher creativity for tournament leverage and differentiation
-    cash: 0.5,  // Lower for consistent, high-floor selections
-    default: 0.6
-  }
+  // Gemini 3: Temperature fixed at 1.0 per Google's recommendation
+  // Lower temps cause looping/degraded math in DFS salary calculations
+  temperature: 1.0,
+  // thinkingLevel replaces legacy thinkingBudget
+  thinkingLevel: 'high' // "high" = deep reasoning for salary optimization
 };
 
-// Helper to get temperature for contest type
+// Helper to get temperature (now returns fixed 1.0 for Gemini 3)
 export function getDFSTemperature(contestType = 'gpp') {
-  return DFS_MODEL_CONFIG.temperature[contestType] || DFS_MODEL_CONFIG.temperature.default;
+  return DFS_MODEL_CONFIG.temperature; // Fixed at 1.0 per Google recommendation
 }
 
 /**
@@ -656,10 +692,7 @@ If all players are healthy and playing, return: { "lastMinuteOuts": [], "gtdWatc
 
 /**
  * Discover DFS slates for a given sport and platform
- * Uses RotoWire via Gemini Grounding as the SOURCE OF TRUTH for slate compositions
- * 
- * RotoWire gets their slate data directly from DraftKings/FanDuel, making it
- * the most reliable source for which games are in each slate.
+ * Uses the DFS Slate Discovery Service which prioritizes Gemini Grounding
  * 
  * @param {string} sport - 'NBA' or 'NFL'
  * @param {string} platform - 'draftkings' or 'fanduel'
@@ -667,90 +700,7 @@ If all players are healthy and playing, return: { "lastMinuteOuts": [], "gtdWatc
  * @returns {Array} List of discovered slates with teams
  */
 export async function discoverDFSSlates(sport, platform, slateDate) {
-  const platformName = platform === 'draftkings' ? 'DraftKings' : 'FanDuel';
-  
-  console.log(`[DFS Context] 🕵️ Discovering ${platformName} ${sport} slates for ${slateDate}`);
-  
-  try {
-    // ═══════════════════════════════════════════════════════════════════════════
-    // PRIMARY: ROTOWIRE BROWSER SCRAPER
-    // ═══════════════════════════════════════════════════════════════════════════
-    // RotoWire gets slate data directly from DraftKings/FanDuel
-    // This is the SOURCE OF TRUTH for actual slate compositions each day
-    // Slates can vary day-to-day so we MUST get the real data
-    
-    if (sport === 'NBA') {
-      console.log(`[DFS Context] 🌐 Scraping actual slates from RotoWire...`);
-      let slates = await fetchSlatesFromRotoWire(platform, 'NBA', slateDate);
-      
-      if (slates && slates.length > 0) {
-        // Populate teams for slates that don't have them using Tank01 game times
-        slates = await populateSlateTeams(slates, slateDate);
-        
-        console.log(`[DFS Context] ✅ Got ${slates.length} slates from RotoWire:`);
-        slates.forEach(s => {
-          console.log(`   📋 ${s.name}: ${s.gameCount} games (${s.startTime})`);
-          console.log(`      Teams: ${s.teams?.join(', ') || 'None'}`);
-        });
-        
-        return slates;
-      }
-    }
-    
-    // ═══════════════════════════════════════════════════════════════════════════
-    // FALLBACK: TANK01 GAME TIMES WITH 10PM CUTOFF
-    // ═══════════════════════════════════════════════════════════════════════════
-    // If RotoWire scraper fails, use Tank01 game times with the typical 10pm cutoff
-    // This is a heuristic based on common platform behavior
-    
-    console.log('[DFS Context] ⚠️ RotoWire scraper failed. Using Tank01 game times (10pm cutoff heuristic)...');
-    
-    if (sport === 'NBA') {
-      const games = await fetchNbaGameTimes(slateDate);
-      
-      if (games && games.length > 0) {
-        const slates = buildSlatesFromGameTimes(games, platform);
-        
-        console.log(`[DFS Context] ✅ Built ${slates.length} slates from Tank01:`);
-        slates.forEach(s => {
-          console.log(`   📋 ${s.name}: ${s.gameCount} games (${s.startTime})`);
-          console.log(`      Teams: ${s.teams?.join(', ')}`);
-        });
-        
-        return slates;
-      }
-    }
-    
-    // Final fallback: Use BDL schedule (all games as one slate)
-    console.log('[DFS Context] ⚠️ Tank01 unavailable. Falling back to BDL schedule...');
-    const bdlGames = await ballDontLieService.getGames(
-      sport === 'NBA' ? 'basketball_nba' : 'americanfootball_nfl', 
-      { dates: [slateDate] }
-    );
-    
-    if (bdlGames && bdlGames.length > 0) {
-      const teams = bdlGames.flatMap(g => [
-        g.visitor_team?.abbreviation, 
-        g.home_team?.abbreviation
-      ]).filter(Boolean);
-      
-      return [{
-        id: 'main',
-        name: platform === 'fanduel' ? 'Main' : 'All',
-        type: 'Classic',
-        startTime: 'TBD',
-        gameCount: bdlGames.length,
-        teams: teams,
-        games: bdlGames.map(g => `${g.visitor_team?.abbreviation}@${g.home_team?.abbreviation}`)
-      }];
-    }
-    
-    return [{ id: 'main', name: 'Main Slate (Default)', gameCount: 0, startTime: 'TBD', teams: [], games: [] }];
-    
-  } catch (error) {
-    console.error(`[DFS Context] Slate discovery failed: ${error.message}`);
-    return [{ id: 'main', name: 'Main Slate (Fallback)', gameCount: 0, startTime: 'TBD', teams: [], games: [] }];
-  }
+  return await discoverSlatesWithService(sport, platform, slateDate);
 }
 
 // Note: fetchSlatesFromRotoWire is now imported from rotowireSlateService.js
@@ -1309,11 +1259,18 @@ export async function fetchPlayerStatsFromBDL(sport, dateStr) {
       // ⚠️ FOR DFS: Track ALL risky statuses (OUT, DOUBTFUL, QUESTIONABLE, GTD)
       const injuries = await fetchInjuriesFromBDL('NBA', teamIds);
       
-      // Create a map of player ID -> injury status for ALL injuries
-      const playerInjuryStatusMap = new Map();
+      // ⭐ CRITICAL: Populate module-level injury cache for use in mergePlayerData
+      // This allows Tank01 players to be checked by name even if their IDs don't match BDL
+      setInjuryNameCache(injuries);
+      
+      // Create ID-based injury map for fast lookup
+      const playerInjuryStatusMap = new Map(); // ID -> status
+      const playerInjuryNameMap = _injuryNameCache; // Use the module cache
+      
       for (const inj of injuries) {
         const pid = inj.player?.id;
         const status = (inj.status || '').toUpperCase();
+        
         if (pid && status) {
           playerInjuryStatusMap.set(pid, status);
         }
@@ -1325,6 +1282,12 @@ export async function fetchPlayerStatsFromBDL(sport, dateStr) {
       const doubtfulCount = [...playerInjuryStatusMap.values()].filter(s => s === 'DOUBTFUL').length;
       
       console.log(`[DFS Context] 🏥 Injuries: ${outCount} OUT, ${doubtfulCount} DOUBTFUL, ${questionableCount} QUESTIONABLE/GTD`);
+      
+      // Log OUT players specifically (these are CRITICAL to exclude)
+      const outPlayers = injuries.filter(i => (i.status || '').toUpperCase() === 'OUT');
+      if (outPlayers.length > 0) {
+        console.log(`[DFS Context] 🚫 OUT PLAYERS (will exclude): ${outPlayers.map(i => `${i.player?.first_name} ${i.player?.last_name}`).join(', ')}`);
+      }
       
       // Log questionable players specifically (for DFS these are risky!)
       const questionablePlayers = injuries.filter(i => {
@@ -1348,26 +1311,30 @@ export async function fetchPlayerStatsFromBDL(sport, dateStr) {
           const model = genAI.getGenerativeModel({
             model: GROUNDING_MODEL_ID,
             generationConfig: { temperature: 0.3 },
-            tools: [{ googleSearchRetrieval: { dynamicRetrievalConfig: { mode: 'MODE_DYNAMIC' } } }]
+            tools: [{ google_search: {} }] // Gemini 3: Use google_search instead of deprecated googleSearchRetrieval
           });
           
           const teamsPlaying = [...teamAbbreviations.values()].join(', ');
-          const injuryPrompt = `Search for NBA injury report TODAY ${slateDate}. 
-
-Find ALL players ruled OUT or DOUBTFUL for tonight's games.
-Teams playing: ${teamsPlaying}
-
-Search: "NBA injury report ${slateDate}" "NBA players OUT tonight" "fantasy basketball injury news today"
-
-Return ONLY players confirmed OUT or DOUBTFUL for TONIGHT (not old injuries):
-{
-  "outPlayers": [
-    { "name": "Player Name", "team": "TM", "reason": "injury type", "source": "where you found this" }
-  ],
-  "doubtfulPlayers": [
-    { "name": "Player Name", "team": "TM", "reason": "injury type", "source": "where you found this" }
-  ]
-}`;
+          const injuryPrompt = `Search for NBA injury report and rotation news TODAY ${dateStr}. 
+          
+          Check for:
+          1. Players ruled OUT or DOUBTFUL for tonight's games.
+          2. Players removed from the rotation (DNP-CD risks).
+          3. Players who are "weeks away" or have extended injuries not yet updated in databases.
+          
+          Teams to check: ${teamsPlaying}
+          
+          Focus on finding recent news for these players specifically: ${players.slice(0, 20).map(p => p.name).join(', ')}
+          
+          Return ONLY confirmed news as JSON:
+          {
+            "outPlayers": [
+              { "name": "Player Name", "team": "TM", "reason": "e.g., oblique strain", "source": "RotoWire/Twitter" }
+            ],
+            "rotationRisks": [
+              { "name": "Player Name", "team": "TM", "reason": "e.g., out of rotation", "source": "Coach quote" }
+            ]
+          }`;
           
           const result = await model.generateContent(injuryPrompt);
           const responseText = result.response?.text?.() || '';
@@ -1395,25 +1362,25 @@ Return ONLY players confirmed OUT or DOUBTFUL for TONIGHT (not old injuries):
                 }
               }
               
-              // Add DOUBTFUL players
-              for (const doubtPlayer of (injuryData.doubtfulPlayers || [])) {
-                const playerName = doubtPlayer.name?.toLowerCase();
+              // Add rotation risks
+              for (const riskPlayer of (injuryData.rotationRisks || [])) {
+                const playerName = riskPlayer.name?.toLowerCase();
                 if (playerName) {
                   const matchedPlayer = players.find(p => {
                     const pName = (p.first_name + ' ' + p.last_name).toLowerCase();
                     return pName.includes(playerName) || playerName.includes(pName);
                   });
                   if (matchedPlayer && !playerInjuryStatusMap.has(matchedPlayer.id)) {
-                    console.log(`[DFS Context] ⚠️ Grounding found: ${doubtPlayer.name} (${doubtPlayer.team}) DOUBTFUL - ${doubtPlayer.reason}`);
-                    playerInjuryStatusMap.set(matchedPlayer.id, 'DOUBTFUL');
+                    console.log(`[DFS Context] ⚠️ Grounding found rotation risk: ${riskPlayer.name} (${riskPlayer.team}) - ${riskPlayer.reason}`);
+                    playerInjuryStatusMap.set(matchedPlayer.id, 'DNP-CD');
                   }
                 }
               }
               
               const groundingOutCount = (injuryData.outPlayers || []).length;
-              const groundingDoubtCount = (injuryData.doubtfulPlayers || []).length;
-              if (groundingOutCount > 0 || groundingDoubtCount > 0) {
-                console.log(`[DFS Context] ✅ Grounding injury check: Found ${groundingOutCount} OUT, ${groundingDoubtCount} DOUBTFUL`);
+              const groundingRiskCount = (injuryData.rotationRisks || []).length;
+              if (groundingOutCount > 0 || groundingRiskCount > 0) {
+                console.log(`[DFS Context] ✅ Grounding found ${groundingOutCount} OUT, ${groundingRiskCount} rotation risks`);
               }
             } catch (parseErr) {
               console.log(`[DFS Context] ⚠️ Could not parse Grounding injury response`);
@@ -1459,20 +1426,40 @@ Return ONLY players confirmed OUT or DOUBTFUL for TONIGHT (not old injuries):
       // This provides REAL data instead of relying on Gemini search
       const l5StatsMap = new Map();
       try {
-        // Use getPlayerStats method which calls client.nba.getStats internally
-        // Increased limit from 30 to 50 players for better coverage
-        const trendBatchIds = playerIds.slice(0, 50); 
-        console.log(`[DFS Context] Fetching L5 trends for top ${trendBatchIds.length} players`);
+        // ⭐ FIX: Use start_date instead of seasons to get RECENT games only
+        // Query last 14 days to ensure we capture at least 5 games per player
+        // NOTE: `dateStr` is the parameter passed to fetchPlayerStatsFromBDL (YYYY-MM-DD format)
+        const targetDate = new Date(dateStr + 'T12:00:00'); // Parse the date string
+        const fourteenDaysAgo = new Date(targetDate);
+        fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+        const l5StartDate = fourteenDaysAgo.toISOString().split('T')[0]; // YYYY-MM-DD
         
-        const recentStats = await ballDontLieService.getPlayerStats('basketball_nba', {
-          seasons: [season],
-          player_ids: trendBatchIds,
-          per_page: 100
-        });
+        // ⭐ FIX: Fetch L5 for ALL players, not just top 60
+        // Gary needs complete data to evaluate EVERY player in the pool
+        // Without L5 data, Gary can't properly assess recent form/trends
+        const trendBatchIds = playerIds; // ALL players get L5 data
+        const L5_BATCH_SIZE = 15; // 15 players * ~6 games = ~90 records per batch
+        console.log(`[DFS Context] Fetching L5 trends for ALL ${trendBatchIds.length} players (from ${l5StartDate} to ${dateStr})`);
+        
+        const allRecentStats = [];
+        for (let i = 0; i < trendBatchIds.length; i += L5_BATCH_SIZE) {
+          const batchIds = trendBatchIds.slice(i, i + L5_BATCH_SIZE);
+          const batchStats = await ballDontLieService.getPlayerStats('basketball_nba', {
+            player_ids: batchIds,
+            start_date: l5StartDate,
+            end_date: dateStr,
+            per_page: 100
+          });
+          if (Array.isArray(batchStats)) {
+            allRecentStats.push(...batchStats);
+          }
+        }
+        
+        console.log(`[DFS Context] Retrieved ${allRecentStats.length} recent game stats`);
         
         // Group by player and take last 5 games
         const playerGames = new Map();
-        (recentStats || []).forEach(stat => {
+        allRecentStats.forEach(stat => {
           const pid = stat.player?.id;
           if (!pid) return;
           if (!playerGames.has(pid)) playerGames.set(pid, []);
@@ -1523,9 +1510,19 @@ Return ONLY players confirmed OUT or DOUBTFUL for TONIGHT (not old injuries):
         const stats = statsMap.get(p.id) || {};
         const l5 = l5StatsMap.get(p.id);
         
-        // ⭐ Get injury status from BDL injury report
+        // ⭐ Get injury status from BDL injury report - check BOTH ID and NAME
         // This includes OUT, DOUBTFUL, QUESTIONABLE, GTD - all risky for DFS
-        const bdlInjuryStatus = playerInjuryStatusMap.get(p.id) || null;
+        let bdlInjuryStatus = playerInjuryStatusMap.get(p.id) || null;
+        
+        // Fallback: check by name if ID didn't match (covers Tank01/BDL ID mismatches)
+        if (!bdlInjuryStatus) {
+          const normalizedName = normalizePlayerName(p.name);
+          const nameInjury = playerInjuryNameMap.get(normalizedName);
+          if (nameInjury) {
+            bdlInjuryStatus = nameInjury.status;
+            console.log(`[DFS Context] 🏥 Injury found by name: ${p.name} → ${bdlInjuryStatus}`);
+          }
+        }
         
         // ⭐ FIX: Map position for DFS flex slots
         // NBA positions: PG, SG, SF, PF, C
@@ -1828,13 +1825,66 @@ Return ONLY players confirmed OUT or DOUBTFUL for TONIGHT (not old injuries):
 const EXCLUDED_INJURY_STATUSES = ['OUT', 'DOUBTFUL', 'QUESTIONABLE', 'GTD', 'DTD', 'DAY-TO-DAY', 'IR', 'PUP', 'SUSPENDED'];
 
 /**
+ * Check if a player should be excluded based on rotation risk (DNP-CD)
+ * Gary hates "dead air" - players who haven't played in weeks but still have a salary.
+ * 
+ * Third-string players are DFS poison:
+ * - They need TWO injuries to become relevant
+ * - Their upside is capped by garbage time only
+ * - Example: Kevon Looney (3rd string behind Derik Queen and Yves Missi)
+ * 
+ * @param {Object} p - The player object with stats
+ * @returns {Object} { exclude: boolean, reason: string }
+ */
+function checkRotationRisk(p) {
+  // If no stats at all, it's a new player or deep bench
+  const hasNoStats = !p.seasonStats || Object.keys(p.seasonStats).length === 0 || (p.seasonStats.mpg === 0 && p.seasonStats.ppg === 0);
+  
+  // NBA-specific rotation logic
+  const l5Games = p.l5Stats?.games || 0;
+  const l5Mpg = p.l5Stats?.mpg || 0;
+  const seasonMpg = p.seasonStats?.mpg || 0;
+  const seasonPpg = p.seasonStats?.ppg || 0;
+  const salary = p.salary || 0;
+  
+  // Case 1: Deep bench player who hasn't played in last 5 games
+  if (l5Games === 0 && seasonMpg < 12 && !hasNoStats && p.l5Stats !== undefined) {
+    return { exclude: true, reason: 'DNP-CD Risk (Out of rotation - 0 games in L5)' };
+  }
+  
+  // Case 2: Deep bench player with effectively 0 minutes
+  if (seasonMpg < 5 && l5Mpg < 5 && !hasNoStats) {
+    return { exclude: true, reason: 'Deep Bench (Insufficient minutes)' };
+  }
+  
+  // Case 3: Third-string player - low minutes AND low production
+  // These players only see garbage time and shouldn't be in optimal lineups
+  // Threshold: <15 MPG season AND <8 PPG = backup's backup territory
+  // Looney (2026): 14.2 MPG, 2.6 PPG -> This will now catch him
+  if (seasonMpg < 15 && seasonPpg < 8 && salary < 4500 && !hasNoStats) {
+    return { exclude: true, reason: 'Third-String Risk (Low MPG + Low PPG at punt salary)' };
+  }
+  
+  // Case 4: Minutes trending DOWN - player losing rotation spot
+  // If L5 MPG is significantly less than season MPG, they're being phased out
+  if (l5Mpg > 0 && seasonMpg > 0 && l5Mpg < seasonMpg * 0.6 && seasonMpg < 20) {
+    return { exclude: true, reason: 'Rotation Shrinking (L5 MPG down 40%+ from season)' };
+  }
+
+  return { exclude: false };
+}
+
+/**
  * Check if a player should be excluded based on injury status
- * @param {string} status - Player injury status
- * @returns {boolean} True if player should be excluded
  */
 function shouldExcludePlayer(status) {
   if (!status) return false;
   const upperStatus = status.toUpperCase();
+  
+  // Catch phrases like "Two weeks away" or "Out for season"
+  const specialOutPhrases = ['WEEKS AWAY', 'FOR SEASON', 'INDEFINITE', 'SURGERY'];
+  if (specialOutPhrases.some(phrase => upperStatus.includes(phrase))) return true;
+  
   return EXCLUDED_INJURY_STATUSES.some(excluded => upperStatus.includes(excluded));
 }
 
@@ -1926,10 +1976,23 @@ export function mergePlayerData(bdlPlayers, groundedPlayers) {
   // Track excluded players for logging
   const excludedPlayers = [];
   
+  // ⭐ CRITICAL: Check injury status by name for Tank01 players
+  // This catches players like Josh Giddey who may have different IDs in Tank01 vs BDL
+  // Uses the module-level injury cache populated during fetchInjuriesFromBDL
+  const checkInjuryByName = (playerName) => {
+    const injury = getInjuryByName(playerName);
+    if (injury && injury.status) {
+      return injury.status.toUpperCase();
+    }
+    return null;
+  };
+  
   for (const p of groundedPlayers) {
     const key = normalizePlayerName(p.name);
     const salaryEntry = {
       salary: p.salary,
+      position: p.position,
+      allPositions: p.allPositions,
       status: p.status,
       notes: p.notes,
       ownership: p.ownership,
@@ -1980,23 +2043,38 @@ export function mergePlayerData(bdlPlayers, groundedPlayers) {
         continue; // Skip this player - too risky for DFS!
       }
       
+      // ⭐ CHECK ROTATION RISK - Catch players like Hunter Tyson who don't play
+      const rotationRisk = checkRotationRisk(p);
+      if (rotationRisk.exclude) {
+        excludedPlayers.push({ name: p.name, team: p.team, status: playerStatus, reason: rotationRisk.reason });
+        continue;
+      }
+      
+      const playerWithSalary = {
+        ...p,
+        salary: salaryData.salary,
+        position: salaryData.position || p.position,
+        allPositions: salaryData.allPositions || [salaryData.position || p.position]
+      };
+      
       merged.push({
-        // BDL provides accurate: name, team, seasonStats
+        // BDL provides accurate: name, team, seasonStats, l5Stats
         name: p.name,
         team: p.team,  // ALWAYS use BDL team (accurate after trades)
         // ⭐ CRITICAL: Use Tank01/platform position FIRST (DK/FD have different positions than real life)
-        // Example: Jalen Williams is SF on DraftKings but may be SG in BDL
         position: salaryData.position || p.position,
         allPositions: salaryData.allPositions || [salaryData.position || p.position],
+        role: inferPlayerRole(playerWithSalary),
         seasonStats: p.seasonStats,
+        l5Stats: p.l5Stats,  // ⭐ PRESERVE L5 data from BDL
+        recentForm: p.recentForm || salaryData.recentForm,  // Use BDL's hot/cold calc
         id: p.id,
         // Grounding provides: salary and DFS context
         salary: salaryData.salary,
         status: playerStatus,
         notes: salaryData.notes || '',
         ownership: salaryData.ownership,
-        dvpRank: salaryData.dvpRank,
-        recentForm: salaryData.recentForm
+        dvpRank: salaryData.dvpRank
       });
     }
   }
@@ -2020,6 +2098,14 @@ export function mergePlayerData(bdlPlayers, groundedPlayers) {
       continue;
     }
     
+    // ⭐ DOUBLE-CHECK: Look up injury by name (catches ID mismatches)
+    const injuryByName = checkInjuryByName(p.name);
+    if (injuryByName && shouldExcludePlayer(injuryByName)) {
+      console.log(`[DFS Context] 🚫 Skipping ${p.name} from Tank01 - BDL injury by name: ${injuryByName}`);
+      excludedPlayers.push({ name: p.name, team: p.team, status: injuryByName, reason: 'Injury status (BDL by name)' });
+      continue;
+    }
+    
     // ⭐ CHECK INJURY STATUS for grounded-only players too (in case Tank01 has status)
     if (shouldExcludePlayer(p.status)) {
       excludedPlayers.push({ name: p.name, team: p.team, status: p.status, reason: 'Injury status (Tank01)' });
@@ -2027,9 +2113,11 @@ export function mergePlayerData(bdlPlayers, groundedPlayers) {
     }
     
     // ⭐ EXPANDED: Add ANY player with salary who isn't in BDL
-    // This ensures we have enough PF/SF players (positions that share eligibility)
-    // dfsLineupService will estimate projections based on salary tier
+    // But ONLY if they are not clear rotation risks
     if (!exists && p.salary > 0 && p.position) {
+      // If we don't have BDL stats for them, they are likely deep bench
+      // We only want them if they are clear value plays or injury replacements
+      // For now, let's flag them and let the Audit handle it if they are punts
       merged.push({
         name: p.name,
         team: p.team,
@@ -2039,7 +2127,7 @@ export function mergePlayerData(bdlPlayers, groundedPlayers) {
         status: p.status || 'HEALTHY',
         notes: p.notes || '',
         ownership: p.ownership,
-        seasonStats: {}, // No BDL stats - will use salary-based projection
+        seasonStats: { mpg: 0, ppg: 0 }, // Force zero stats for fallback
         fromSalaryDataOnly: true // Flag that this player needs estimated projection
       });
       addedFromSalaryData++;
@@ -2422,10 +2510,13 @@ export async function fetchComprehensiveDFSContext(platform, sport, slateDate, t
       tools: [{ google_search: {} }],
       safetySettings: SAFETY_SETTINGS,
       generationConfig: {
-        temperature: getDFSTemperature('gpp'), // Use helper to get numeric temperature
+        temperature: getDFSTemperature('gpp'), // Fixed at 1.0 per Gemini 3 best practices
         topP: DFS_MODEL_CONFIG.topP,
         maxOutputTokens: 16384, // Larger for comprehensive data
-        thinkingConfig: { includeThoughts: true }
+        thinkingConfig: { 
+          includeThoughts: true,
+          thinkingLevel: DFS_MODEL_CONFIG.thinkingLevel // "high" for deep reasoning
+        }
       }
     });
 
@@ -2755,7 +2846,7 @@ export async function fetchOwnershipProjections(sport, platform, slateDate, team
       tools: [{ google_search: {} }], // Grounding: ENABLED
       safetySettings: SAFETY_SETTINGS,
       generationConfig: {
-        temperature: 0.6, // Lower temp for more factual ownership data
+        temperature: 1.0, // High temperature for creative searching and diverse data points
         topP: DFS_MODEL_CONFIG.topP,
         maxOutputTokens: 4096
       }
@@ -2921,12 +3012,13 @@ export async function fetchDFSNarrativeContext(sport, slateDate, games = []) {
       tools: [{ google_search: {} }], // Grounding: ENABLED
       safetySettings: SAFETY_SETTINGS,
       generationConfig: {
-        temperature: getDFSTemperature('gpp'), // Use helper to get numeric temperature
+        temperature: getDFSTemperature('gpp'), // Fixed at 1.0 per Gemini 3 best practices
         topP: DFS_MODEL_CONFIG.topP,
         maxOutputTokens: DFS_MODEL_CONFIG.maxOutputTokens,
-        // Reasoning_Level: HIGH - Enable thinking blocks
+        // Gemini 3 thinkingConfig - use thinkingLevel (replaces legacy thinkingBudget)
         thinkingConfig: {
-          includeThoughts: true
+          includeThoughts: true,
+          thinkingLevel: DFS_MODEL_CONFIG.thinkingLevel // "high" for deep reasoning
         }
       }
     });

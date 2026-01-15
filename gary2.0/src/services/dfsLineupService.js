@@ -8,6 +8,8 @@
  * - 3-tier pivot alternatives per position (direct, mid, budget)
  */
 
+import { runSharpAuditCycle } from './agentic/dfsLineupAuditIntegration.js';
+
 // Platform constraints - hard-coded rules for each platform/sport
 export const PLATFORM_CONSTRAINTS = {
   draftkings: {
@@ -16,14 +18,17 @@ export const PLATFORM_CONSTRAINTS = {
       rosterSize: 8,
       positions: ['PG', 'SG', 'SF', 'PF', 'C', 'G', 'F', 'UTIL'],
       positionRules: {
-        // BDL uses "G" for guards, "F" for forwards - map accordingly
-        PG: { count: 1, eligible: ['PG', 'G'] },
-        SG: { count: 1, eligible: ['SG', 'G'] },
+        // Specific slots accept their position OR generic fallbacks (G/F)
+        PG: { count: 1, eligible: ['PG', 'G', 'G-F', 'F-G'] },
+        SG: { count: 1, eligible: ['SG', 'G', 'G-F', 'F-G'] },
         SF: { count: 1, eligible: ['SF', 'F', 'G-F', 'F-G'] },
         PF: { count: 1, eligible: ['PF', 'F', 'F-C', 'C-F'] },
         C: { count: 1, eligible: ['C', 'F-C', 'C-F'] },
+        // Guard slot accepts PG or SG or G
         G: { count: 1, eligible: ['PG', 'SG', 'G', 'G-F', 'F-G'] },
+        // Forward slot accepts SF or PF or F
         F: { count: 1, eligible: ['SF', 'PF', 'F', 'F-C', 'C-F', 'G-F', 'F-G'] },
+        // UTIL slot accepts anyone
         UTIL: { count: 1, eligible: ['PG', 'SG', 'SF', 'PF', 'C', 'G', 'F', 'G-F', 'F-G', 'F-C', 'C-F'] }
       }
     },
@@ -41,18 +46,18 @@ export const PLATFORM_CONSTRAINTS = {
       }
     }
   },
-  fanduel: {
+    fanduel: {
     NBA: {
       salaryCap: 60000,
       rosterSize: 9,
       positions: ['PG', 'PG', 'SG', 'SG', 'SF', 'SF', 'PF', 'PF', 'C'],
       positionRules: {
-        // BDL uses "G" for guards, "F" for forwards - map accordingly
-        PG: { count: 2, eligible: ['PG', 'G'] },
-        SG: { count: 2, eligible: ['SG', 'G'] },
-        SF: { count: 2, eligible: ['SF', 'F', 'G-F', 'F-G'] },
-        PF: { count: 2, eligible: ['PF', 'F', 'F-C', 'C-F'] },
-        C: { count: 1, eligible: ['C', 'F-C', 'C-F'] }
+        // FanDuel is STRICT: Slots only accept their specific positions
+        PG: { count: 2, eligible: ['PG'] },
+        SG: { count: 2, eligible: ['SG'] },
+        SF: { count: 2, eligible: ['SF'] },
+        PF: { count: 2, eligible: ['PF'] },
+        C: { count: 1, eligible: ['C'] }
       }
     },
     NFL: {
@@ -91,6 +96,34 @@ const PIVOT_TIERS = {
     salaryRange: { min: -Infinity, max: -1500 }
   }
 };
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SALARY TIER THRESHOLDS - Absolute salary determines player tier, not just diff
+// ═══════════════════════════════════════════════════════════════════════════
+// A $9K player is NEVER a "punt spot" regardless of who they're replacing
+const SALARY_TIER_LABELS = {
+  anchor: { min: 9000, label: 'Star Pivot', description: 'Premium anchor option' },
+  core: { min: 7000, label: 'Core Alternative', description: 'Solid production floor' },
+  mid: { min: 5000, label: 'Mid-Tier Value', description: 'Balanced value play' },
+  value: { min: 4000, label: 'Value Play', description: 'Upside at lower cost' },
+  punt: { min: 0, label: 'Budget Punt', description: 'High-risk punt spot' }
+};
+
+/**
+ * Get appropriate tier label based on player's absolute salary
+ * Prevents calling $9K players "punt spots"
+ */
+function getSalaryAwareTierLabel(salary, defaultTier, defaultLabel, defaultDescription) {
+  // Override "Budget Play" labels for expensive players
+  if (defaultTier === 'budget') {
+    for (const [tierName, config] of Object.entries(SALARY_TIER_LABELS)) {
+      if (salary >= config.min) {
+        return { label: config.label, description: config.description };
+      }
+    }
+  }
+  return { label: defaultLabel, description: defaultDescription };
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // DFS LINEUP VALIDATION RULES - Prevent "Fragile Floor" Disasters
@@ -254,8 +287,9 @@ export function calculateCeilingScore(player, context = {}) {
   // STEP 1: Use L5 best game as ceiling indicator (real data from BDL)
   // ═══════════════════════════════════════════════════════════════════════════
   // If we have L5 stats, use the best game as a ceiling anchor
-  // For GPP, we are more aggressive with the base multiplier (1.35x vs 1.15x)
-  const gppMultiplier = isGPP ? 1.35 : 1.15;
+  // For GPP, we are MORE AGGRESSIVE - ceiling wins tournaments!
+  // 10 COMMANDMENTS: "THOU SHALT NOT BUILD FOR FLOOR IN GPPS"
+  const gppMultiplier = isGPP ? 1.50 : 1.15; // Increased from 1.35 to 1.50 for GPP
   const l5BestPts = player.l5Stats?.bestPts || 0;
   const ceilingAnchor = l5BestPts > baseProjection ? l5BestPts : baseProjection * gppMultiplier;
   
@@ -334,6 +368,49 @@ export function calculateCeilingScore(player, context = {}) {
   // Back-to-back reduction (-10%) - fatigue lowers ceiling
   if (context.isB2B || player.isB2B) {
     multiplier -= 0.10;
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // GAME ENVIRONMENT BOOST (10 COMMANDMENTS: Target 235+ Total Games)
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Players in high-total games have more scoring opportunity
+  // "THOU SHALT TARGET GAME ENVIRONMENTS"
+  const gameTotal = player.gameTotal || context.gameTotal || 0;
+  if (gameTotal >= 240) {
+    multiplier += 0.20; // Elite shootout environment
+  } else if (gameTotal >= 235) {
+    multiplier += 0.15; // High-total game - target these
+  } else if (gameTotal >= 230) {
+    multiplier += 0.08; // Above average
+  } else if (gameTotal < 215) {
+    multiplier -= 0.10; // Low-total slog - avoid these in GPP
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PACE BOOST - Position-Weighted (FIBLE Research)
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Guards are HIGHLY correlated with pace, bigs are NOT.
+  // PG in a fast game = huge boost. Center in fast game = minor boost.
+  const PACE_WEIGHTS = {
+    'PG': 1.0,   // Full pace boost - guards run the offense
+    'SG': 0.7,   // Moderate boost - shooting guards benefit
+    'G': 0.85,   // Average of PG/SG
+    'SF': 0.3,   // Minimal - wings less affected
+    'PF': 0.3,   // Minimal - bigs less affected
+    'F': 0.3,    // Average of SF/PF
+    'C': 0.2     // Almost ignore pace - centers are matchup-dependent
+  };
+  
+  const pace = player.teamPace || context.pace || 0;
+  const playerPosition = (player.position || 'G').toUpperCase();
+  const paceWeight = PACE_WEIGHTS[playerPosition] || 0.5;
+  
+  if (pace >= 102) {
+    multiplier += 0.12 * paceWeight; // Fast-paced team (position-weighted)
+  } else if (pace >= 100) {
+    multiplier += 0.06 * paceWeight; // Above average pace
+  } else if (pace <= 96) {
+    multiplier -= 0.05 * paceWeight; // Slow-paced team
   }
   
   // ═══════════════════════════════════════════════════════════════════════════
@@ -955,30 +1032,37 @@ function estimateProjectionFromSalary(salary, sport, platform, contestType = 'ca
   const isGPP = contestType === 'gpp';
   
   // Different salary ranges for each platform/sport
+  // ═══════════════════════════════════════════════════════════════════════════
+  // VALUE MULTIPLIER FIX: NBA players typically return 4-6x their salary in FPTS
+  // Example: $8,000 player should project for ~40-48 FPTS (5x-6x)
+  // Previous formula was using 2x which severely undervalued all players
+  // ═══════════════════════════════════════════════════════════════════════════
   let baseSalary, baseProjection, valueMultiplier;
   
   if (sport === 'NBA') {
     if (platform === 'fanduel') {
       // FanDuel NBA: $3,500 min, $60,000 cap, 9 players
-      baseSalary = 6000;
-      baseProjection = isGPP ? 39 : 30; // 6.5x vs 5x for GPP vs Cash
-      valueMultiplier = isGPP ? 6.5 : 5.0; // pts per $1000
+      // Average salary per player: ~$6,666 → should produce ~33 FPTS (5x)
+      baseSalary = 4000;
+      baseProjection = isGPP ? 18 : 16; // Min-salary players produce ~15-20 FPTS
+      valueMultiplier = isGPP ? 5.0 : 4.5; // Sharp players hit 5x+ value
     } else {
       // DraftKings NBA: $3,000 min, $50,000 cap, 8 players
-      baseSalary = 5000;
-      baseProjection = isGPP ? 32.5 : 25; // 6.5x vs 5x for GPP vs Cash
-      valueMultiplier = isGPP ? 6.5 : 5.0;
+      // Average salary per player: ~$6,250 → should produce ~31 FPTS (5x)
+      baseSalary = 3500;
+      baseProjection = isGPP ? 15 : 12; // Min-salary players produce ~12-15 FPTS
+      valueMultiplier = isGPP ? 5.0 : 4.5; // Sharp players hit 5x+ value
     }
   } else { // NFL
     if (platform === 'fanduel') {
       // FanDuel NFL: $60,000 cap, 10 players (incl kicker)
       baseSalary = 6000;
-      baseProjection = isGPP ? 24 : 12; // 4x vs 2x for GPP vs Cash
+      baseProjection = isGPP ? 24 : 12; 
       valueMultiplier = isGPP ? 4.0 : 2.0;
     } else {
       // DraftKings NFL: $50,000 cap, 9 players
       baseSalary = 5000;
-      baseProjection = isGPP ? 20 : 10; // 4x vs 2x for GPP vs Cash
+      baseProjection = isGPP ? 20 : 10;
       valueMultiplier = isGPP ? 4.0 : 2.0;
     }
   }
@@ -987,8 +1071,8 @@ function estimateProjectionFromSalary(salary, sport, platform, contestType = 'ca
   const salaryDiff = salary - baseSalary;
   const estimatedPts = baseProjection + (salaryDiff / 1000) * valueMultiplier;
   
-  // Ensure minimum floor
-  const minFloor = sport === 'NBA' ? (isGPP ? 15 : 10) : (isGPP ? 8 : 5);
+  // Ensure minimum floor (cheap players still produce something)
+  const minFloor = sport === 'NBA' ? (isGPP ? 12.0 : 8.0) : (isGPP ? 5.0 : 3.0);
   
   return Math.round(Math.max(estimatedPts, minFloor) * 10) / 10;
 }
@@ -1261,10 +1345,19 @@ export function findPivotAlternatives(starter, playerPool, sport, platform) {
     
     if (candidate) {
       usedPlayers.add(candidate.name); // Mark as used
+      
+      // Get salary-aware label (prevents calling $9K players "punt spots")
+      const { label: tierLabel, description: tierDescription } = getSalaryAwareTierLabel(
+        candidate.salary, 
+        tier, 
+        config.label, 
+        config.description
+      );
+      
       pivots.push({
         tier,
-        tierLabel: config.label,
-        tierDescription: config.description,
+        tierLabel,
+        tierDescription,
         player: candidate.name,
         team: candidate.team,
         salary: candidate.salary,
@@ -1379,6 +1472,7 @@ export function optimizeLineup(players, constraints, sport, platform, context = 
     'F-G': ['SG', 'SF', 'G', 'F', 'UTIL'],  // Combo forward-guard
     'F-C': ['PF', 'C', 'F', 'UTIL'],  // Combo forward-center
     'C-F': ['PF', 'C', 'F', 'UTIL'],  // Combo center-forward
+    'UTIL': ['PG', 'SG', 'SF', 'PF', 'C', 'G', 'F', 'UTIL'],
     // NFL
     'QB': ['QB'],
     'RB': ['RB', 'FLEX'],
@@ -1386,7 +1480,8 @@ export function optimizeLineup(players, constraints, sport, platform, context = 
     'TE': ['TE', 'FLEX'],
     'K': ['K'],
     'DST': ['DST'],
-    'DEF': ['DST']
+    'DEF': ['DST'],
+    'FLEX': ['RB', 'WR', 'TE', 'FLEX']
   };
   
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1499,8 +1594,12 @@ export function optimizeLineup(players, constraints, sport, platform, context = 
     // ⭐ Use Tank01's platform-specific positions when available
     // This ensures DK/FD position eligibility is accurate (they differ!)
     const eligibleSlots = player.allPositions && player.allPositions.length > 0
-      ? getPlayerEligibleSlots(player, sport)
+      ? getPlayerEligibleSlots(player, sport, platform)
       : positionEligibility[pos] || [pos];
+    
+    if (player.name?.includes('Grayson Allen')) {
+      console.log(`[DEBUG] Grayson Allen Eligible Slots:`, eligibleSlots);
+    }
     
     for (const slot of eligibleSlots) {
       if (!playersByPosition[slot]) playersByPosition[slot] = [];
@@ -1879,8 +1978,8 @@ export function addPivotsToLineup(lineup, playerPool, constraints, sport, platfo
     
     // Get all players eligible for this position (excluding those already in lineup)
     const eligiblePlayers = playerPool.filter(p => {
-      const playerPos = p.position?.toUpperCase();
-      const isEligible = rule.eligible.includes(playerPos);
+      const pSlots = getPlayerEligibleSlots(p, sport, platform);
+      const isEligible = pSlots.includes(slot.position.toUpperCase());
       const notInLineup = !lineupPlayers.has(p.name);
       return isEligible && notInLineup;
     });
@@ -1900,8 +1999,8 @@ export function addPivotsToLineup(lineup, playerPool, constraints, sport, platfo
     // Show them as alternatives with note that it requires a lineup rearrangement.
     if (pivots.length === 0) {
       const lineupAlternatives = playerPool.filter(p => {
-        const playerPos = p.position?.toUpperCase();
-        const isEligible = rule.eligible.includes(playerPos);
+        const pSlots = getPlayerEligibleSlots(p, sport, platform);
+        const isEligible = pSlots.includes(slot.position.toUpperCase());
         const inLineup = lineupPlayers.has(p.name);
         const notSelf = p.name !== slot.player;
         return isEligible && inLineup && notSelf;
@@ -2158,6 +2257,98 @@ export function applyNFLStackingRules(lineup, playerPool, constraints, platform,
     console.log(`[Stacking] ✅ STACK COMPLETE: Primary=${stackInfo.primaryStack.team}, Bringback=${stackInfo.bringback?.team || 'none'}`);
   } else {
     console.log(`[Stacking] ⚠️ Stack incomplete - lineup may underperform in GPP`);
+  }
+  
+  return { lineup, stackInfo, changes };
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * NBA GAME STACKING - 10 COMMANDMENTS ENFORCEMENT
+ * ═══════════════════════════════════════════════════════════════════════════
+ * "THOU SHALT CORRELATE THY LINEUP - 4-5 players from 1-2 games"
+ * 
+ * This function enforces game-based correlation for NBA GPPs.
+ * Unlike NFL where we stack QB+WR, NBA stacking is about:
+ * 1. Game stacks (players from both sides of a high-total game)
+ * 2. Team stacks (2-3 from same team in good matchup)
+ * 
+ * @param {Array} lineup - Current lineup slots
+ * @param {Array} players - Full player pool
+ * @param {Object} context - Game context with Vegas lines
+ * @returns {Object} Stacked lineup with correlation info
+ */
+function enforceNBAGameStacking(lineup, players, context = {}) {
+  const stackInfo = { gameStacks: [], teamStacks: [], correlationScore: 0 };
+  const changes = [];
+  
+  // Count players per game
+  const gamesInLineup = {};
+  const teamsInLineup = {};
+  
+  lineup.forEach(slot => {
+    const gameId = slot.gameId || `${slot.team}_game`;
+    const team = slot.team;
+    
+    gamesInLineup[gameId] = (gamesInLineup[gameId] || 0) + 1;
+    teamsInLineup[team] = (teamsInLineup[team] || 0) + 1;
+  });
+  
+  // Find games with multiple players (good correlation)
+  const correlatedGames = Object.entries(gamesInLineup).filter(([, count]) => count >= 2);
+  const totalCorrelatedPlayers = correlatedGames.reduce((sum, [, count]) => sum + count, 0);
+  
+  console.log(`\n[DFS Correlation] 🎯 GPP Stack Analysis:`);
+  
+  // Log team stacks
+  Object.entries(teamsInLineup).filter(([, count]) => count >= 2).forEach(([team, count]) => {
+    console.log(`   ✅ ${team}: ${count} players stacked (same-team correlation)`);
+    stackInfo.teamStacks.push({ team, count });
+  });
+  
+  // Log game stacks (players from both sides)
+  const games = context.games || [];
+  games.forEach(game => {
+    const homeCount = teamsInLineup[game.homeTeam] || 0;
+    const awayCount = teamsInLineup[game.awayTeam] || 0;
+    if (homeCount >= 1 && awayCount >= 1) {
+      const total = homeCount + awayCount;
+      console.log(`   ✅ ${game.awayTeam} vs ${game.homeTeam}: ${total} players (game stack - shootout potential)`);
+      stackInfo.gameStacks.push({
+        game: `${game.awayTeam}@${game.homeTeam}`,
+        homeCount,
+        awayCount,
+        total: game.total || 220
+      });
+    }
+  });
+  
+  // Calculate correlation score (0-100)
+  // Target: 4-5 players from 1-2 games
+  const distinctGames = Object.keys(gamesInLineup).length;
+  const maxTeamStack = Math.max(...Object.values(teamsInLineup));
+  
+  let correlationScore = 50; // Base score
+  
+  // Bonus for concentrated lineup (fewer games = more correlation)
+  if (distinctGames <= 3) correlationScore += 20;
+  else if (distinctGames <= 4) correlationScore += 10;
+  else if (distinctGames >= 6) correlationScore -= 15; // Too spread out
+  
+  // Bonus for team stacks
+  if (maxTeamStack >= 3) correlationScore += 15;
+  else if (maxTeamStack >= 2) correlationScore += 5;
+  
+  // Bonus for game stacks (both sides of a game)
+  if (stackInfo.gameStacks.length >= 1) correlationScore += 15;
+  
+  stackInfo.correlationScore = Math.min(100, Math.max(0, correlationScore));
+  
+  // If correlation is weak, log warning
+  if (totalCorrelatedPlayers < 4) {
+    console.log(`   ⚠️ LOW CORRELATION: Only ${totalCorrelatedPlayers} players correlated. GPPs need 4-5.`);
+  } else {
+    console.log(`   ✅ CORRELATION OK: ${totalCorrelatedPlayers} players correlated across ${correlatedGames.length} games`);
   }
   
   return { lineup, stackInfo, changes };
@@ -2763,7 +2954,8 @@ export async function generateDFSLineup({ platform, sport, players, context = {}
     }
   }
   
-  return {
+  // Final Lineup Object
+  const finalLineupData = {
     platform,
     sport,
     contestType,
@@ -2786,6 +2978,33 @@ export async function generateDFSLineup({ platform, sport, players, context = {}
     // Gary's notes
     gary_notes: garyNotes.join('\n')
   };
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // GARY'S SHARP AUDIT - The Final Polish
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Gary grades his own work against sharp gambler principles.
+  // If the grade is low, he applies sharp fixes before presentation.
+  // ═══════════════════════════════════════════════════════════════════════════
+  try {
+    const auditedResult = await runSharpAuditCycle(finalLineupData, context, {
+      sport,
+      platform,
+      contestType,
+      originalPlayers: players // The full pool for fixes
+    });
+    
+    // Merge Gary's notes with Audit insights if needed
+    if (auditedResult.audit?.weaknesses?.length > 0) {
+      const auditNotes = `\n\nSHARP AUDIT (Gary's Self-Correction):\n` + 
+        auditedResult.audit.weaknesses.map(w => `• ${w}`).join('\n');
+      auditedResult.gary_notes += auditNotes;
+    }
+
+    return auditedResult;
+  } catch (err) {
+    console.error(`[Sharp Audit] Error during audit cycle: ${err.message}`);
+    return finalLineupData; // Return unaudited if it fails
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2860,29 +3079,67 @@ function getEligibleSlots(playerPosition, sport) {
 }
 
 // Helper to get all slots a player can fill, using platform-specific data when available
-function getPlayerEligibleSlots(player, sport = 'NBA') {
-  // Use Tank01's allPositions if available
-  if (player.allPositions && Array.isArray(player.allPositions) && player.allPositions.length > 0) {
-    const slots = new Set();
-    
-    player.allPositions.forEach(pos => {
-      const posUpper = pos.toUpperCase();
-      slots.add(posUpper);
-      
-      // Add generic slots based on position type
-      if (['PG', 'SG'].includes(posUpper)) slots.add('G');
-      if (['SF', 'PF'].includes(posUpper)) slots.add('F');
-    });
-    
-    // Everyone can fill UTIL/FLEX
-    slots.add('UTIL');
-    if (sport === 'NFL') slots.add('FLEX');
-    
-    return Array.from(slots);
+function getPlayerEligibleSlots(player, sport = 'NBA', platform = 'draftkings') {
+  const slots = new Set();
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // TANK01 POSITIONS ARE SOURCE OF TRUTH - NO FALLBACKS
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Tank01 returns `allValidPositions` which is the EXACT list of slots
+  // a player can fill on DraftKings or FanDuel. 
+  // 
+  // NO FALLBACKS: If Tank01 doesn't provide positions, the player cannot
+  // be used in lineups. We cannot guess at DFS positions.
+  // 
+  // DRAFTKINGS FLEX RULES (applied on top of Tank01 positions):
+  // - G slot accepts: PG, SG (guards)
+  // - F slot accepts: SF, PF (forwards)
+  // - UTIL accepts: everyone
+  // 
+  // This is NOT expansion - this is DraftKings roster rules.
+  // A PG can fill PG or G or UTIL. But G does NOT mean they can fill PG.
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  if (!player.allPositions || !Array.isArray(player.allPositions) || player.allPositions.length === 0) {
+    // NO TANK01 POSITION DATA = PLAYER CANNOT BE USED
+    // Return empty array - this player won't be eligible for any slots
+    console.warn(`[Position] ⚠️ ${player.name} has no Tank01 position data - cannot be used in lineup`);
+    return [];
   }
   
-  // Fallback to generic mapping
-  return getEligibleSlots(player.position, sport);
+  // Use Tank01's platform-specific positions EXACTLY as provided
+  player.allPositions.forEach(pos => {
+    if (pos) slots.add(pos.toUpperCase());
+  });
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // DRAFTKINGS FLEX SLOT RULES (not expansion - actual DK roster rules)
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (sport === 'NBA' && platform === 'draftkings') {
+    // G slot accepts PG or SG
+    if (slots.has('PG') || slots.has('SG')) {
+      slots.add('G');
+    }
+    // F slot accepts SF or PF
+    if (slots.has('SF') || slots.has('PF')) {
+      slots.add('F');
+    }
+  }
+  
+  // UTIL is always valid for NBA
+  if (sport === 'NBA' && !slots.has('UTIL')) {
+    slots.add('UTIL');
+  }
+  
+  // FLEX is always valid for NFL skill positions
+  if (sport === 'NFL') {
+    const hasSkillPos = ['RB', 'WR', 'TE'].some(p => slots.has(p));
+    if (hasSkillPos && !slots.has('FLEX')) {
+      slots.add('FLEX');
+    }
+  }
+  
+  return Array.from(slots);
 }
 
 /**

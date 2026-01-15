@@ -23,9 +23,122 @@ import {
   checkDataAvailability,
   fixBdlInjuryStatus
 } from './sharedUtils.js';
-import { fetchComprehensivePropsNarrative } from './scoutReport/scoutReportBuilder.js';
+import { fetchComprehensivePropsNarrative, fetchPropLineMovement, getPlayerPropMovement } from './scoutReport/scoutReportBuilder.js';
 
 const SPORT_KEY = 'americanfootball_nfl';
+
+/**
+ * Calculate NFL volume metrics for kill condition analysis
+ * Different metrics for WR/TE vs RB
+ * @param {Object} playerStats - Player season stats from BDL
+ * @param {Array} gameLogs - Recent game logs
+ * @param {string} position - Player position (WR, TE, RB, QB)
+ * @returns {Object} Volume metrics for this player
+ */
+function calculateNflVolumeMetrics(playerStats, gameLogs, position) {
+  if (!gameLogs || gameLogs.length === 0) {
+    return { hasData: false };
+  }
+  
+  const l3Games = gameLogs.slice(0, 3);
+  const l5Games = gameLogs.slice(0, 5);
+  
+  if (['WR', 'TE'].includes(position)) {
+    // Calculate target share metrics for receivers
+    const totalTeamTargets = l3Games.reduce((sum, g) => sum + (g.team_targets || 30), 0); // Default 30 if not available
+    const playerTargets = l3Games.reduce((sum, g) => sum + (g.targets || 0), 0);
+    const targetShareL3 = totalTeamTargets > 0 ? ((playerTargets / totalTeamTargets) * 100).toFixed(1) : null;
+    
+    // Air yards share (for understanding target quality)
+    const playerAirYards = l3Games.reduce((sum, g) => sum + (g.air_yards || 0), 0);
+    const teamAirYards = l3Games.reduce((sum, g) => sum + (g.team_air_yards || 150), 0); // Default 150
+    const airYardsShareL3 = teamAirYards > 0 ? ((playerAirYards / teamAirYards) * 100).toFixed(1) : null;
+    
+    // Route participation (if available)
+    const routeParticipation = playerStats?.route_participation || null;
+    const snapPct = playerStats?.snap_pct || null;
+    
+    // Calculate targets per game L3
+    const targetsPerGameL3 = (playerTargets / l3Games.length).toFixed(1);
+    
+    // Kill condition check: Target share < 15% over L3
+    const killTriggered = targetShareL3 !== null && parseFloat(targetShareL3) < 15;
+    
+    return {
+      hasData: true,
+      position,
+      snapPct,
+      routeParticipation,
+      targetShareL3: parseFloat(targetShareL3) || null,
+      targetsPerGameL3: parseFloat(targetsPerGameL3),
+      airYardsShareL3: parseFloat(airYardsShareL3) || null,
+      killCondition: {
+        triggered: killTriggered,
+        reason: killTriggered 
+          ? `Target share L3 (${targetShareL3}%) < 15% threshold`
+          : null
+      }
+    };
+  }
+  
+  if (position === 'RB') {
+    // Calculate carry share metrics for running backs
+    const totalTeamCarries = l3Games.reduce((sum, g) => sum + (g.team_rush_att || 25), 0); // Default 25
+    const playerCarries = l3Games.reduce((sum, g) => sum + (g.rush_att || 0), 0);
+    const carryShareL3 = totalTeamCarries > 0 ? ((playerCarries / totalTeamCarries) * 100).toFixed(1) : null;
+    
+    // Red zone opportunity share (for TD props)
+    const rzOpportunities = playerStats?.rz_opportunities || null;
+    const goalLineCarries = playerStats?.goal_line_carries || null;
+    
+    // Receiving involvement
+    const targetsL3 = l3Games.reduce((sum, g) => sum + (g.targets || 0), 0);
+    const targetsPerGameL3 = (targetsL3 / l3Games.length).toFixed(1);
+    
+    // Carries per game L3
+    const carriesPerGameL3 = (playerCarries / l3Games.length).toFixed(1);
+    
+    // Kill condition check: Carry share < 50% in committee backfield
+    const isCommittee = parseFloat(carryShareL3) < 60;
+    const killTriggered = carryShareL3 !== null && parseFloat(carryShareL3) < 50;
+    
+    return {
+      hasData: true,
+      position,
+      snapPct: playerStats?.snap_pct || null,
+      carryShareL3: parseFloat(carryShareL3) || null,
+      carriesPerGameL3: parseFloat(carriesPerGameL3),
+      isCommittee,
+      rzOpportunityShare: rzOpportunities,
+      goalLineCarryShare: goalLineCarries,
+      receivingInvolvement: parseFloat(targetsPerGameL3),
+      killCondition: {
+        triggered: killTriggered,
+        reason: killTriggered 
+          ? `Carry share L3 (${carryShareL3}%) < 50% threshold (committee backfield)`
+          : null
+      }
+    };
+  }
+  
+  if (position === 'QB') {
+    // QBs have different volume metrics
+    const passAttempts = l3Games.reduce((sum, g) => sum + (g.pass_att || 0), 0);
+    const passAttemptsPerGame = (passAttempts / l3Games.length).toFixed(1);
+    
+    return {
+      hasData: true,
+      position,
+      passAttemptsPerGameL3: parseFloat(passAttemptsPerGame),
+      killCondition: {
+        triggered: false, // QBs typically don't have volume kill conditions
+        reason: null
+      }
+    };
+  }
+  
+  return { hasData: false, position };
+}
 
 /**
  * Calculate hit rate for a specific prop line based on game logs
@@ -266,7 +379,8 @@ const TD_PROP_TYPES = [
  * Get top prop candidates based on line value and odds quality
  * Returns top N players PER TEAM (so 10 per team = 20 total for a game)
  * 
- * IMPORTANT: Filters out heavy juice props (odds <= -150) BEFORE Gary sees them
+ * IMPORTANT: Filters props to acceptable odds range (-200 to +250) BEFORE Gary sees them
+ * No heavy juice (-201 and worse), no lottery tickets (+251 and higher)
  * 
  * @param {Array} props - All props for the game
  * @param {number} maxPlayersPerTeam - Max players to return per team
@@ -277,16 +391,18 @@ function getTopPropCandidates(props, maxPlayersPerTeam = 10, options = {}) {
   const { excludeTdProps = false } = options;
   const grouped = groupPropsByPlayer(props);
   
-  // CRITICAL: Filter out heavy juice props BEFORE Gary evaluates them
-  // Props with odds <= -150 are not worth the risk - filter them out entirely
+  // CRITICAL: Filter props to acceptable odds range BEFORE Gary evaluates them
+  // Acceptable range: -200 to +250 (no heavy juice, no lottery tickets)
+  const isOddsAcceptable = (odds) => odds >= -200 && odds <= 250;
+  
   const filteredGrouped = grouped.map(player => {
     const goodOddsProps = player.props.filter(p => {
       const overOdds = p.over_odds || -110;
       const underOdds = p.under_odds || -110;
-      // At least one side must have odds > -150
-      const hasGoodOdds = overOdds > -150 || underOdds > -150;
+      // At least one side must have acceptable odds
+      const hasGoodOdds = isOddsAcceptable(overOdds) || isOddsAcceptable(underOdds);
       if (!hasGoodOdds) {
-        console.log(`[NFL Props] Filtered out heavy juice prop: ${player.player} ${p.type} (${overOdds}/${underOdds})`);
+        console.log(`[NFL Props] Filtered out bad odds prop: ${player.player} ${p.type} (${overOdds}/${underOdds}) - outside -200 to +250 range`);
         return false;
       }
       
@@ -1581,18 +1697,52 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerIdMap, i
 
 /**
  * Build comprehensive token slices for NFL prop analysis
- * NOW INCLUDES: Game Script Context, Trump Cards, Position-Specific Defense
+ * NOW INCLUDES: Game Script Context, Trump Cards, Position-Specific Defense,
+ * VOLUME METRICS (target share, carry share), and LINE MOVEMENT
  */
-function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnapshot, playerIdMap, playerGameLogs, defensiveMatchups, shortWeekInfo, weather, gameScriptContext, trumpCards) {
-  // Enhance prop candidates with their game log data
+function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnapshot, playerIdMap, playerGameLogs, defensiveMatchups, shortWeekInfo, weather, gameScriptContext, trumpCards, lineMovements = {}, playerSeasonStats = {}) {
+  // Enhance prop candidates with their game log data, VOLUME METRICS, and LINE MOVEMENT
   const enhancedCandidates = propCandidates.map(p => {
     const playerId = playerIdMap[p.player.toLowerCase()];
     const logs = playerId ? playerGameLogs[playerId] : null;
+    const stats = playerId ? playerSeasonStats[playerId] : null;
+    const games = logs?.games || [];
+    
+    // Determine player position from props (RB, WR, TE, QB)
+    const position = inferPositionFromProps(p.props);
+    
+    // Calculate NFL-specific volume metrics
+    const volumeMetrics = calculateNflVolumeMetrics(stats, games, position);
+    
+    // Calculate hit rate AND line movement for each prop
+    const propsWithContext = p.props.map(prop => {
+      // Look up line movement for this player + prop
+      const propKey = `${p.player}_${prop.type}`.toLowerCase().replace(/\s+/g, '_');
+      const movement = lineMovements[propKey] || getPlayerPropMovement(lineMovements, p.player, prop.type);
+      
+      return {
+        ...prop,
+        // LINE MOVEMENT DATA - for Tier 2 Kill Condition analysis
+        lineMovement: movement ? {
+          open: movement.open,
+          current: movement.current,
+          direction: movement.direction, // "UP" | "DOWN"
+          magnitude: movement.magnitude,
+          signal: movement.signal, // "MOVED_UP" | "MOVED_DOWN" | "STABLE"
+          movementNote: movement.magnitude >= 2.0 
+            ? `Line moved ${movement.direction} ${Math.abs(movement.magnitude)} ${prop.type.includes('yds') ? 'yards' : 'points'} (${movement.open} -> ${movement.current})`
+            : null
+        } : { source: 'NOT_FOUND' }
+      };
+    });
     
     return {
       player: p.player,
       team: p.team,
-      props: p.props,
+      position: position,
+      props: propsWithContext, // Now includes line movement!
+      // VOLUME METRICS - for Tier 1 Kill Condition analysis
+      volumeMetrics: volumeMetrics,
       recentForm: logs ? {
         gamesAnalyzed: logs.gamesAnalyzed,
         averages: logs.averages,
@@ -1629,6 +1779,15 @@ function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnap
     };
   });
   
+  // Count any kill conditions triggered
+  const killConditionsTriggered = enhancedCandidates.filter(c => 
+    c.volumeMetrics?.killCondition?.triggered
+  ).length;
+  
+  if (killConditionsTriggered > 0) {
+    console.log(`[NFL Props Context] ⚠️ ${killConditionsTriggered} players have Tier 1 Kill Conditions triggered (volume floor)`);
+  }
+  
   return {
     player_stats: {
       summary: playerStats.substring(0, 6000), // Increased for comprehensive context
@@ -1636,7 +1795,8 @@ function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnap
     },
     prop_lines: {
       candidates: enhancedCandidates,
-      totalProps: propCandidates.reduce((sum, p) => sum + p.props.length, 0)
+      totalProps: propCandidates.reduce((sum, p) => sum + p.props.length, 0),
+      killConditionsTriggered: killConditionsTriggered
     },
     injury_report: {
       notable: injuries.slice(0, 10),
@@ -1648,7 +1808,7 @@ function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnap
       shortWeek: shortWeekInfo,
       weather: weather
     },
-    // NEW: Game Script Context - Critical for Sharp Prop Betting
+    // Game Script Context - Critical for Sharp Prop Betting
     game_script: gameScriptContext?.available ? {
       spread: gameScriptContext.spread,
       total: gameScriptContext.total,
@@ -1660,9 +1820,44 @@ function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnap
       passingGameOutlook: gameScriptContext.passingGameOutlook,
       edges: gameScriptContext.edges
     } : { available: false },
-    // NEW: Trump Cards - Single Overriding Factors
-    trump_cards: trumpCards || []
+    // Trump Cards - Single Overriding Factors
+    trump_cards: trumpCards || [],
+    // LINE MOVEMENT SUMMARY
+    lineMovementSummary: {
+      totalFound: Object.keys(lineMovements).length,
+      significantMoves: Object.values(lineMovements).filter(m => Math.abs(m.magnitude) >= 2.0).length
+    }
   };
+}
+
+/**
+ * Infer player position from their prop types
+ */
+function inferPositionFromProps(props) {
+  const propTypes = (props || []).map(p => p.type?.toLowerCase() || '');
+  
+  // QB indicators
+  if (propTypes.some(t => t.includes('pass_yds') || t.includes('pass_tds') || t.includes('pass_attempts'))) {
+    return 'QB';
+  }
+  
+  // RB indicators (rush without receiving primary)
+  if (propTypes.some(t => t.includes('rush_yds') || t.includes('rush_att'))) {
+    // Check if mostly rushing props
+    const rushProps = propTypes.filter(t => t.includes('rush'));
+    const recProps = propTypes.filter(t => t.includes('rec') || t.includes('reception'));
+    if (rushProps.length >= recProps.length) {
+      return 'RB';
+    }
+  }
+  
+  // WR/TE indicators (receiving dominant)
+  if (propTypes.some(t => t.includes('rec_yds') || t.includes('reception'))) {
+    // Could be WR or TE, default to WR (more common)
+    return 'WR';
+  }
+  
+  return 'UNKNOWN';
 }
 
 /**
@@ -1731,11 +1926,11 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
     excludeTdProps: options.regularOnly || false 
   });
 
-  // STEP 3: Parallel fetch - COMPREHENSIVE narrative context + BDL injuries
-  // IMPORTANT: Narrative context is fetched UPFRONT so Gary knows all factors BEFORE iterations
-  console.log('[NFL Props Context] Step 2: Fetching COMPREHENSIVE narrative + BDL injuries...');
+  // STEP 3: Parallel fetch - COMPREHENSIVE narrative context + BDL injuries + LINE MOVEMENT
+  // IMPORTANT: All context is fetched UPFRONT so Gary knows all factors BEFORE iterations
+  console.log('[NFL Props Context] Step 2: Fetching COMPREHENSIVE narrative + BDL injuries + LINE MOVEMENT...');
   
-  const [bdlInjuries, comprehensiveNarrative] = await Promise.all([
+  const [bdlInjuries, comprehensiveNarrative, lineMovementData] = await Promise.all([
     // BDL injuries as backup - with logging if fails
     teamIds.length > 0 
       ? safeApiCallArray(
@@ -1756,8 +1951,24 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
     fetchComprehensivePropsNarrative(game.home_team, game.away_team, 'NFL', dateStr, { useFlash: true }).catch(e => {
       console.warn('[NFL Props Context] Comprehensive narrative failed:', e.message);
       return null;
+    }),
+    
+    // LINE MOVEMENT - Queries ScoresAndOdds/BettingPros for opening vs current lines
+    // This enables Tier 2 Kill Conditions (detecting public chase vs sharp steam)
+    fetchPropLineMovement('NFL', dateStr, game.home_team, game.away_team).catch(e => {
+      console.warn('[NFL Props Context] Line movement fetch failed:', e.message);
+      return { movements: {}, source: 'ERROR' };
     })
   ]);
+  
+  // Log line movement results
+  const lineMovements = lineMovementData?.movements || {};
+  const lineMovementCount = Object.keys(lineMovements).length;
+  if (lineMovementCount > 0) {
+    console.log(`[NFL Props Context] ✓ Found ${lineMovementCount} prop line movements from ${lineMovementData.source}`);
+  } else {
+    console.log(`[NFL Props Context] No line movement data available (source: ${lineMovementData?.source || 'UNKNOWN'})`);
+  }
   
   // Extract narrative context - now includes structured sections
   const narrativeContext = comprehensiveNarrative?.raw || null;
@@ -1911,7 +2122,7 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
     defensiveMatchups
   );
 
-  // Build token data with enhanced info - NOW INCLUDES Game Script & Trump Cards
+  // Build token data with enhanced info - NOW INCLUDES Game Script, Trump Cards, LINE MOVEMENT
   // Use availableCandidates to ensure only verified and available players are included
   const tokenData = buildPropsTokenSlices(
     playerStats,
@@ -1923,8 +2134,10 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
     defensiveMatchups,
     gameDayInfo, // Use gameDayInfo (Christmas Day, TNF, etc.)
     weather,
-    gameScriptContext, // NEW: Game script analysis
-    trumpCards // NEW: Trump card factors
+    gameScriptContext, // Game script analysis
+    trumpCards, // Trump card factors
+    lineMovements, // Line movement data for Tier 2 Kill Conditions
+    {} // Player season stats (populated in NFL separately)
   );
 
   // Build game summary with all context - NOW INCLUDES Game Script & Trump Cards
@@ -2014,6 +2227,7 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
   console.log(`   - Weather: ${weather ? `${weather.temperature}°F, ${weather.conditions}` : 'N/A'}`);
   console.log(`   - Game day: ${gameDayInfo.type}${gameDayInfo.isSpecialEvent ? ' (Special Event)' : ''}`);
   console.log(`   - Narrative context: ${narrativeContext ? 'YES' : 'NO'}`);
+  console.log(`   - Line movement data: ${lineMovementCount > 0 ? `${lineMovementCount} props tracked` : 'NOT AVAILABLE'}`);
 
   return {
     gameSummary,
@@ -2024,7 +2238,14 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
     playerGameLogs,
     injuries: mergedInjuries, // Include merged injuries
     narrativeContext, // CRITICAL: Full raw narrative from Gemini
-    // NEW: Structured narrative sections for easy access
+    // LINE MOVEMENT DATA - for Tier 2 Kill Condition analysis
+    lineMovementData: {
+      movements: lineMovements,
+      count: lineMovementCount,
+      source: lineMovementData?.source || 'UNKNOWN',
+      significantMoves: Object.values(lineMovements).filter(m => Math.abs(m.magnitude) >= 2.0)
+    },
+    // Structured narrative sections for easy access
     narrativeSections: {
       breakingNews: narrativeSections.breakingNews || null,   // Gameday inactives, trade rumors
       motivation: narrativeSections.motivation || null,       // Revenge games, milestones, contract years
@@ -2045,13 +2266,15 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
       gameDayType: gameDayInfo.type,
       hasNarrativeContext: !!narrativeContext,
       hasWeather: !!weather,
+      hasLineMovementData: lineMovementCount > 0,
       narrativeSectionsFetched: Object.keys(narrativeSections).filter(k => narrativeSections[k]?.length > 10),
-      // NEW: Data availability flags for Gary to see
+      // Data availability flags for Gary to see
       dataAvailability: {
         logsAvailable: playersWithLogs > 0,
         injuriesAvailable: mergedInjuries.length > 0,
         weatherAvailable: !!weather,
         narrativeAvailable: !!narrativeContext,
+        lineMovementAvailable: lineMovementCount > 0,
         dataGaps: dataGaps.length > 0 ? dataGaps : null,
         dataQuality: dataGaps.length === 0 ? 'HIGH' : dataGaps.length <= 1 ? 'MEDIUM' : 'LOW'
       }
