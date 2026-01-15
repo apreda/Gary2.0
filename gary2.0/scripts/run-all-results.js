@@ -115,6 +115,25 @@ async function getPropGrounding(sport, player, type, date) {
   return isNaN(num) ? null : num;
 }
 
+function normalizeToETDate(matchedGame) {
+  // Prefer the full UTC timestamp if available (datetime)
+  const utcString = matchedGame.datetime;
+  if (utcString) {
+    const date = new Date(utcString);
+    // Convert to America/New_York
+    const etDate = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/New_York',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).format(date);
+    return etDate; // format: YYYY-MM-DD
+  }
+  
+  // If no timestamp, trust the API's date string directly
+  return matchedGame.date || null;
+}
+
 /**
  * BDL API Helpers
  */
@@ -182,7 +201,10 @@ function gradeGame(pickText, homeTeam, awayTeam, hScore, vScore) {
   const hFull = homeTeam.toLowerCase(), vFull = awayTeam.toLowerCase();
   const hMascot = hFull.split(' ').pop(), vMascot = vFull.split(' ').pop();
   
-  // Total
+  // 1. Moneyline Detection (Prioritize this)
+  const isML = pickLower.includes(' ml') || pickLower.includes('moneyline');
+  
+  // 2. Total (Over/Under)
   const totalMatch = pickText.match(/(over|under)\s+(\d+\.?\d*)/i);
   if (totalMatch) {
     const line = parseFloat(totalMatch[2]), actual = hScore + vScore;
@@ -190,39 +212,28 @@ function gradeGame(pickText, homeTeam, awayTeam, hScore, vScore) {
     return (totalMatch[1].toLowerCase() === 'over' ? actual > line : actual < line) ? 'won' : 'lost';
   }
 
-  // Spread
-  const spreadMatch = pickText.match(/([+-]\d+\.?\d*)/);
-  if (spreadMatch) {
-    const spread = parseFloat(spreadMatch[1]);
-    const isHome = pickLower.includes(hMascot) || pickLower.includes(hFull);
-    const isVisitor = pickLower.includes(vMascot) || pickLower.includes(vFull);
-    
-    // If we pick the home team
-    if (isHome && !isVisitor) {
-      const diff = hScore - vScore;
+  // 3. Spread (Only if not a Moneyline pick)
+  if (!isML) {
+    const spreadMatch = pickText.match(/([+-][1-9]\d{0,1}(\.\d)?)(?!\d)/);
+    if (spreadMatch) {
+      const spread = parseFloat(spreadMatch[1]);
+      const isHome = pickLower.includes(hMascot) || pickLower.includes(hFull);
+      const isVisitor = pickLower.includes(vMascot) || pickLower.includes(vFull);
+      
+      const diff = isHome ? (hScore - vScore) : (vScore - hScore);
       if (diff + spread === 0) return 'push';
       return (diff + spread > 0) ? 'won' : 'lost';
     }
-    // If we pick the visitor team
-    if (isVisitor && !isHome) {
-      const diff = vScore - hScore;
-      if (diff + spread === 0) return 'push';
-      return (diff + spread > 0) ? 'won' : 'lost';
-    }
-    // Fallback spread logic
-    const diff = pickLower.includes(hMascot) ? (hScore - vScore) : (vScore - hScore);
-    if (diff + spread === 0) return 'push';
-    return (diff + spread > 0) ? 'won' : 'lost';
   }
 
-  // Moneyline
+  // 4. Moneyline Logic (Fallback)
   const isHomePick = pickLower.includes(hMascot) || pickLower.includes(hFull);
   const isVisitorPick = pickLower.includes(vMascot) || pickLower.includes(vFull);
   
   if (isHomePick && !isVisitorPick) return (hScore > vScore) ? 'won' : 'lost';
   if (isVisitorPick && !isHomePick) return (vScore > hScore) ? 'won' : 'lost';
   
-  // Last resort fallback
+  // Final fallback
   if (isHomePick) return (hScore > vScore) ? 'won' : 'lost';
   if (isVisitorPick) return (vScore > hScore) ? 'won' : 'lost';
 
@@ -304,10 +315,37 @@ async function processGenericGames(table, date, leagueFilter = null) {
     for (const pick of picks) {
       if (leagueFilter && pick.league?.toUpperCase() !== leagueFilter) continue;
       const league = pick.league || (table === 'weekly_nfl_picks' ? 'NFL' : 'UNKNOWN');
-      const games = await fetchGames(league, date);
-      const matched = matchGame(games, pick.homeTeam, pick.awayTeam);
-      let hs = matched?.home_team_score ?? matched?.home_score ?? null;
-      let vs = matched?.visitor_team_score ?? matched?.away_score ?? null;
+      
+      // For weekly NFL, search a range around the date to handle UTC and different game days
+      let gameDate = date;
+      let hs = null, vs = null;
+      let matchedGame = null;
+
+      if (table === 'weekly_nfl_picks') {
+        const dateObj = new Date(date);
+        for (let i = 0; i <= 7; i++) {
+          const checkDate = new Date(dateObj);
+          checkDate.setDate(dateObj.getDate() + i);
+          const dStr = checkDate.toISOString().split('T')[0];
+          const games = await fetchGames(league, dStr);
+          const matched = matchGame(games, pick.homeTeam, pick.awayTeam);
+          if (matched && matched.status === 'Final') {
+            matchedGame = matched;
+            gameDate = dStr;
+            break;
+          }
+        }
+      } else {
+        const games = await fetchGames(league, date);
+        matchedGame = matchGame(games, pick.homeTeam, pick.awayTeam);
+      }
+
+      if (matchedGame) {
+        hs = matchedGame.home_team_score ?? matchedGame.home_score ?? null;
+        vs = matchedGame.visitor_team_score ?? matchedGame.away_score ?? matchedGame.visitor_score ?? null;
+        // Normalize the game date to ET to ensure it aligns with app's "Yesterday" view
+        gameDate = normalizeToETDate(matchedGame) || gameDate;
+      }
 
       if (hs === null) {
         const g = await getScoreGrounding(league, pick.homeTeam, pick.awayTeam, date);
@@ -318,27 +356,27 @@ async function processGenericGames(table, date, leagueFilter = null) {
         const res = gradeGame(pick.pick, pick.homeTeam, pick.awayTeam, hs, vs);
         
         // NFL picks go to nfl_results table, others go to game_results
-        if (league === 'NFL' && table === 'weekly_nfl_picks') {
-          const { data: exist } = await supabase.from('nfl_results').select('id').eq('pick_text', pick.pick).eq('game_date', date).maybeSingle();
+        if (league === 'NFL') {
+          const { data: exist } = await supabase.from('nfl_results').select('id').eq('pick_text', pick.pick).eq('game_date', gameDate).maybeSingle();
           if (!exist) {
             await supabase.from('nfl_results').insert({
-              nfl_pick_id: row.id, game_date: date, result: res,
+              nfl_pick_id: row.id, game_date: gameDate, result: res,
               final_score: `${vs}-${hs}`, pick_text: pick.pick,
               matchup: `${pick.awayTeam} @ ${pick.homeTeam}`
             });
           }
         } else {
-          const { data: exist } = await supabase.from('game_results').select('id').eq('pick_text', pick.pick).eq('game_date', date).maybeSingle();
+          const { data: exist } = await supabase.from('game_results').select('id').eq('pick_text', pick.pick).eq('game_date', gameDate).maybeSingle();
           if (!exist) {
             await supabase.from('game_results').insert({
-              pick_id: row.id, game_date: date, league, result: res,
+              pick_id: row.id, game_date: gameDate, league, result: res,
               final_score: `${vs}-${hs}`, pick_text: pick.pick,
               matchup: `${pick.awayTeam} @ ${pick.homeTeam}`
             });
           }
         }
         stats[res[0]]++; // w, l, or p
-        console.log(`  ✅ ${league}: ${pick.pick} -> ${res.toUpperCase()} (${vs}-${hs})`);
+        console.log(`  ✅ ${league}: ${pick.pick} -> ${res.toUpperCase()} (${vs}-${hs}) on ${gameDate}`);
       }
     }
   }
@@ -399,20 +437,25 @@ async function processPropBets(date) {
 }
 
 async function main() {
-  const date = getTargetDate();
-  console.log(`\n📅 TARGET DATE: ${date}`);
+  const targetDate = getTargetDate();
+  console.log(`\n📅 TARGET DATE: ${targetDate}`);
   
-  const daily = await processGenericGames('daily_picks', date);
+  const daily = await processGenericGames('daily_picks', targetDate);
   
-  const d = new Date(date);
-  d.setDate(d.getDate() - (d.getDay() === 0 ? 6 : d.getDay() - 1));
-  const weekStart = d.toISOString().split('T')[0];
+  // Weekly NFL - find the Monday of the target date's week
+  const dateParts = targetDate.split('-').map(Number);
+  const d = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
+  const day = d.getDay(); // 0 = Sunday, 1 = Monday...
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  const weekDay = new Date(d.setDate(diff));
+  const weekStart = weekDay.toISOString().split('T')[0];
+  
   const weeklyNFL = await processGenericGames('weekly_nfl_picks', weekStart, 'NFL');
   
-  const props = await processPropBets(date);
+  const props = await processPropBets(targetDate);
   
   console.log(`\n════════════════════════════════════════`);
-  console.log(`🏁 SUMMARY FOR ${date}`);
+  console.log(`🏁 SUMMARY FOR ${targetDate}`);
   console.log(`Daily:  ${daily.w}W - ${daily.l}L`);
   console.log(`Weekly: ${weeklyNFL.w}W - ${weeklyNFL.l}L`);
   console.log(`Props:  ${props.w}W - ${props.l}L`);

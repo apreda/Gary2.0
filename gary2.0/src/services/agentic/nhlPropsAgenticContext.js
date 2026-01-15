@@ -21,18 +21,96 @@ import {
   checkDataAvailability,
   fixBdlInjuryStatus
 } from './sharedUtils.js';
-import { fetchComprehensivePropsNarrative } from './scoutReport/scoutReportBuilder.js';
+import { fetchComprehensivePropsNarrative, fetchPropLineMovement, getPlayerPropMovement } from './scoutReport/scoutReportBuilder.js';
 
 const SPORT_KEY = 'icehockey_nhl';
 
 /**
+ * Calculate NHL volume metrics for kill condition analysis
+ * Focus on PP1 status, TOI, and iCF (individual Corsi For)
+ * @param {Object} playerStats - Player season stats from BDL
+ * @param {Array} gameLogs - Recent game logs
+ * @returns {Object} Volume metrics for this player
+ */
+function calculateNhlVolumeMetrics(playerStats, gameLogs) {
+  if (!playerStats && (!gameLogs || gameLogs.length === 0)) {
+    return { hasData: false };
+  }
+  
+  const l5Games = (gameLogs || []).slice(0, 5);
+  
+  // Total TOI (Time on Ice)
+  const toi = playerStats?.toi_per_game || playerStats?.toi || null;
+  const toiMinutes = toi ? parseFloat(toi) : null;
+  
+  // Power Play TOI - this is the KEY metric for NHL props
+  const ppToi = playerStats?.pp_toi_per_game || playerStats?.pp_toi || null;
+  const ppToiMinutes = ppToi ? parseFloat(ppToi) : null;
+  
+  // PP1 Status (binary - are they on the first power play unit?)
+  // PP1 = ~3+ minutes of PP time typically
+  const isPP1 = ppToiMinutes !== null && ppToiMinutes >= 3.0;
+  
+  // Individual Corsi For (shot attempts, not just SOG)
+  // Calculate from game logs if available
+  let icfL5 = null;
+  if (l5Games.length > 0) {
+    const totalShotAttempts = l5Games.reduce((sum, g) => {
+      // iCF includes shots on goal + missed shots + blocked shots
+      const sog = g.shots || g.sog || 0;
+      const missed = g.missed_shots || 0;
+      const blocked = g.blocked_shots || 0;
+      return sum + sog + missed + blocked;
+    }, 0);
+    icfL5 = (totalShotAttempts / l5Games.length).toFixed(1);
+  } else if (playerStats?.sog_per_game) {
+    // Estimate iCF from SOG (typically SOG is ~50-60% of shot attempts)
+    icfL5 = (parseFloat(playerStats.sog_per_game) * 1.7).toFixed(1);
+  }
+  
+  // Shots on goal per game from stats or logs
+  const sogPerGame = playerStats?.sog_per_game || null;
+  
+  // Kill condition checks:
+  // 1. For SOG props: Not PP1 AND iCF < 5.0 = ABANDON
+  // 2. For Points props: Not PP1 AND TOI < 16 min = ABANDON
+  const sogKillTriggered = !isPP1 && icfL5 !== null && parseFloat(icfL5) < 5.0;
+  const pointsKillTriggered = !isPP1 && toiMinutes !== null && toiMinutes < 16;
+  
+  return {
+    hasData: true,
+    toi: toiMinutes,
+    ppToi: ppToiMinutes,
+    isPP1: isPP1,
+    icfL5: icfL5 !== null ? parseFloat(icfL5) : null,
+    sogPerGame: sogPerGame ? parseFloat(sogPerGame) : null,
+    // Kill conditions for different prop types
+    killConditions: {
+      sog: {
+        triggered: sogKillTriggered,
+        reason: sogKillTriggered 
+          ? `Not PP1 AND iCF L5 (${icfL5}) < 5.0 threshold`
+          : null
+      },
+      points: {
+        triggered: pointsKillTriggered,
+        reason: pointsKillTriggered 
+          ? `Not PP1 AND TOI (${toiMinutes?.toFixed(1)} min) < 16 min threshold`
+          : null
+      }
+    }
+  };
+}
+
+/**
  * Group props by player for easier analysis
- * FILTERS OUT unpredictable prop types (second_goal, first_goal, etc.)
+ * FILTERS OUT unpredictable prop types (second_goal, first_goal, period-specific, etc.)
  */
 function groupPropsByPlayer(props) {
   const grouped = {};
   
   // Props we CAN analyze (skill-based, predictable with data)
+  // EXACT MATCH ONLY - no partial matching to avoid period-specific props slipping through
   const VALID_PROP_TYPES = [
     'shots_on_goal', 'sog', 'shots',
     'points', 'player_points',
@@ -44,18 +122,25 @@ function groupPropsByPlayer(props) {
     'hits'
   ];
   
-  // Props we CANNOT analyze (random/luck-based - who scores first/second is not predictable)
+  // Props we CANNOT analyze (random/luck-based OR period-specific)
+  // Period-specific props are unpredictable because timing of goals is random
   const INVALID_PROP_TYPES = [
+    // First/second/third/last goal - completely random
     'first_goal', 'first_scorer', '1st_goal',
     'second_goal', 'second_scorer', '2nd_goal',
     'third_goal', 'third_scorer', '3rd_goal',
-    'last_goal', 'last_scorer'
+    'last_goal', 'last_scorer',
+    'overtime_goal',
+    // Period-specific props - timing is random
+    '_1p', '_2p', '_3p',  // e.g., anytime_goal_1p, shots_on_goal_2p
+    '1p_', '2p_', '3p_',  // alternative format
+    'first_period', 'second_period', 'third_period'
   ];
   
   for (const prop of props) {
     const propType = (prop.prop_type || '').toLowerCase();
     
-    // Skip unpredictable prop types
+    // Skip unpredictable prop types (includes period-specific like anytime_goal_2p)
     if (INVALID_PROP_TYPES.some(invalid => propType.includes(invalid))) {
       continue; // Skip this prop entirely
     }
@@ -649,19 +734,65 @@ function buildPlayerStatsText(homeTeam, awayTeam, advancedStats, propCandidates,
 }
 
 /**
- * Build token slices for prop analysis - enhanced with player stats and game logs
+ * Build token slices for prop analysis - enhanced with player stats, game logs,
+ * VOLUME METRICS (PP1, TOI, iCF), and LINE MOVEMENT
  */
-function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnapshot, advancedStats, playerSeasonStats, playerIdMap, playerGameLogs = {}) {
-  // Enhance prop candidates with their season stats and recent form
+function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnapshot, advancedStats, playerSeasonStats, playerIdMap, playerGameLogs = {}, lineMovements = {}) {
+  // Enhance prop candidates with their season stats, recent form, VOLUME METRICS, and LINE MOVEMENT
   const enhancedCandidates = propCandidates.map(p => {
     const playerId = playerIdMap[p.player.toLowerCase()];
     const stats = playerId ? playerSeasonStats[playerId] : null;
     const logs = playerId ? playerGameLogs[playerId] : null;
+    const games = logs?.games || [];
+    
+    // Calculate NHL-specific volume metrics (PP1, TOI, iCF)
+    const volumeMetrics = calculateNhlVolumeMetrics(stats, games);
+    
+    // Calculate line movement for each prop
+    const propsWithContext = p.props.map(prop => {
+      // Look up line movement for this player + prop
+      const propKey = `${p.player}_${prop.type}`.toLowerCase().replace(/\s+/g, '_');
+      const movement = lineMovements[propKey] || getPlayerPropMovement(lineMovements, p.player, prop.type);
+      
+      // Determine which kill condition applies to this prop type
+      const propType = (prop.type || '').toLowerCase();
+      let killCondition = null;
+      if (propType.includes('sog') || propType.includes('shot')) {
+        killCondition = volumeMetrics.killConditions?.sog;
+      } else if (propType.includes('points') || propType.includes('goals') || propType.includes('assists')) {
+        killCondition = volumeMetrics.killConditions?.points;
+      }
+      
+      return {
+        ...prop,
+        // LINE MOVEMENT DATA - for Tier 2 Kill Condition analysis
+        lineMovement: movement ? {
+          open: movement.open,
+          current: movement.current,
+          direction: movement.direction,
+          magnitude: movement.magnitude,
+          signal: movement.signal,
+          movementNote: movement.magnitude >= 1.5 
+            ? `Line moved ${movement.direction} ${Math.abs(movement.magnitude)} (${movement.open} -> ${movement.current})`
+            : null
+        } : { source: 'NOT_FOUND' },
+        // Prop-specific kill condition
+        killCondition: killCondition || { triggered: false, reason: null }
+      };
+    });
     
     return {
       player: p.player,
       team: p.team,
-      props: p.props,
+      props: propsWithContext, // Now includes line movement and kill conditions!
+      // VOLUME METRICS - for Tier 1 Kill Condition analysis
+      volumeMetrics: volumeMetrics.hasData ? {
+        isPP1: volumeMetrics.isPP1,
+        toi: volumeMetrics.toi,
+        ppToi: volumeMetrics.ppToi,
+        icfL5: volumeMetrics.icfL5,
+        sogPerGame: volumeMetrics.sogPerGame
+      } : null,
       seasonStats: stats ? {
         gamesPlayed: stats.games_played,
         sogPerGame: stats.shots_per_game,
@@ -671,7 +802,7 @@ function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnap
         ppPoints: stats.power_play_points,
         toiPerGame: stats.time_on_ice_per_game
       } : null,
-      // NEW: Recent form data
+      // Recent form data
       recentForm: logs ? {
         gamesAnalyzed: logs.gamesAnalyzed,
         averages: logs.averages,
@@ -691,14 +822,24 @@ function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnap
     };
   });
   
+  // Count any kill conditions triggered
+  const killConditionsTriggered = enhancedCandidates.filter(c => 
+    c.props.some(p => p.killCondition?.triggered)
+  ).length;
+  
+  if (killConditionsTriggered > 0) {
+    console.log(`[NHL Props Context] ⚠️ ${killConditionsTriggered} players have Kill Conditions triggered (PP1/TOI)`);
+  }
+  
   return {
     player_stats: {
-      summary: playerStats.substring(0, 5000), // Increased for more context
-      playerCount: (playerStats.match(/\*\*/g) || []).length / 2 // Count bold player names
+      summary: playerStats.substring(0, 5000),
+      playerCount: (playerStats.match(/\*\*/g) || []).length / 2
     },
     prop_lines: {
       candidates: enhancedCandidates,
-      totalProps: propCandidates.reduce((sum, p) => sum + p.props.length, 0)
+      totalProps: propCandidates.reduce((sum, p) => sum + p.props.length, 0),
+      killConditionsTriggered: killConditionsTriggered
     },
     injury_report: {
       notable: injuries.slice(0, 10),
@@ -710,7 +851,12 @@ function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnap
       away: advancedStats?.away_advanced || null
     },
     goalie_matchup: advancedStats?.goalie_matchup || null,
-    five_on_five: advancedStats?.five_on_five || null
+    five_on_five: advancedStats?.five_on_five || null,
+    // LINE MOVEMENT SUMMARY
+    lineMovementSummary: {
+      totalFound: Object.keys(lineMovements).length,
+      significantMoves: Object.values(lineMovements).filter(m => Math.abs(m.magnitude) >= 1.5).length
+    }
   };
 }
 
@@ -753,10 +899,10 @@ export async function buildNhlPropsAgenticContext(game, playerProps, options = {
   // Process prop candidates first - 7 players per team (14 total)
   const propCandidates = getTopPropCandidates(playerProps, 7);
   
-  // Parallel fetch: injuries, player ID resolution, BDL goalies, COMPREHENSIVE narrative context
-  // IMPORTANT: Narrative context is fetched UPFRONT so Gary knows all factors BEFORE iterations
-  console.log('[NHL Props Context] Fetching injuries, player IDs, goalies, and COMPREHENSIVE narrative...');
-  const [injuries, playerIdMap, bdlGoalieData, comprehensiveNarrative] = await Promise.all([
+  // Parallel fetch: injuries, player ID resolution, BDL goalies, narrative context, LINE MOVEMENT
+  // IMPORTANT: All context is fetched UPFRONT so Gary knows all factors BEFORE iterations
+  console.log('[NHL Props Context] Fetching injuries, player IDs, goalies, narrative, and LINE MOVEMENT...');
+  const [injuries, playerIdMap, bdlGoalieData, comprehensiveNarrative, lineMovementData] = await Promise.all([
     // Injuries from BDL - with logging if fails
     teamIds.length > 0 
       ? safeApiCallArray(
@@ -787,8 +933,24 @@ export async function buildNhlPropsAgenticContext(game, playerProps, options = {
     fetchComprehensivePropsNarrative(game.home_team, game.away_team, 'NHL', dateStr, { useFlash: true }).catch(e => {
       console.warn('[NHL Props Context] Comprehensive narrative failed:', e.message);
       return null;
+    }),
+    
+    // LINE MOVEMENT - Queries ScoresAndOdds/BettingPros for opening vs current lines
+    // This enables Tier 2 Kill Conditions (detecting public chase vs sharp steam)
+    fetchPropLineMovement('NHL', dateStr, game.home_team, game.away_team).catch(e => {
+      console.warn('[NHL Props Context] Line movement fetch failed:', e.message);
+      return { movements: {}, source: 'ERROR' };
     })
   ]);
+  
+  // Log line movement results
+  const lineMovements = lineMovementData?.movements || {};
+  const lineMovementCount = Object.keys(lineMovements).length;
+  if (lineMovementCount > 0) {
+    console.log(`[NHL Props Context] ✓ Found ${lineMovementCount} prop line movements from ${lineMovementData.source}`);
+  } else {
+    console.log(`[NHL Props Context] No line movement data available (source: ${lineMovementData?.source || 'UNKNOWN'})`);
+  }
   
   // Advanced stats placeholder (Gemini Grounding provides narrative context)
   const advancedStats = null;
@@ -894,7 +1056,7 @@ export async function buildNhlPropsAgenticContext(game, playerProps, options = {
     playerGameLogs // Pass game logs for recent form
   );
 
-  // Build token data with enhanced player info and game logs
+  // Build token data with enhanced player info, game logs, and LINE MOVEMENT
   const tokenData = buildPropsTokenSlices(
     playerStats,
     availableCandidates,
@@ -903,7 +1065,8 @@ export async function buildNhlPropsAgenticContext(game, playerProps, options = {
     advancedStats,
     playerSeasonStats,
     playerIdMap,
-    playerGameLogs // Pass game logs
+    playerGameLogs, // Pass game logs
+    lineMovements   // Pass line movement data for Tier 2 Kill Conditions
   );
 
   // Build game summary with enhanced goalie and B2B info
@@ -986,6 +1149,7 @@ export async function buildNhlPropsAgenticContext(game, playerProps, options = {
   console.log(`   - Advanced stats: ${advancedSource}`);
   console.log(`   - Rich context: ${richContextFound}`);
   console.log(`   - Narrative context: ${narrativeContext ? 'YES' : 'NO'}`);
+  console.log(`   - Line movement data: ${lineMovementCount > 0 ? `${lineMovementCount} props tracked` : 'NOT AVAILABLE'}`);
 
   return {
     gameSummary,
@@ -996,7 +1160,14 @@ export async function buildNhlPropsAgenticContext(game, playerProps, options = {
     playerSeasonStats,
     playerGameLogs, // Include game logs in return
     narrativeContext, // CRITICAL: Full raw narrative from Gemini
-    // NEW: Structured narrative sections for easy access
+    // LINE MOVEMENT DATA - for Tier 2 Kill Condition analysis
+    lineMovementData: {
+      movements: lineMovements,
+      count: lineMovementCount,
+      source: lineMovementData?.source || 'UNKNOWN',
+      significantMoves: Object.values(lineMovements).filter(m => Math.abs(m.magnitude) >= 1.5)
+    },
+    // Structured narrative sections for easy access
     narrativeSections: {
       breakingNews: narrativeSections.breakingNews || null,   // Last-minute scratches, trade rumors
       motivation: narrativeSections.motivation || null,       // Revenge games, milestones, contract years
@@ -1017,13 +1188,15 @@ export async function buildNhlPropsAgenticContext(game, playerProps, options = {
       playerStatsCoverage: `${playersWithStats}/${totalCandidates}`,
       playerLogsCoverage: `${playersWithLogs}/${totalCandidates}`,
       hasNarrativeContext: !!narrativeContext,
+      hasLineMovementData: lineMovementCount > 0,
       narrativeSectionsFetched: Object.keys(narrativeSections).filter(k => narrativeSections[k]?.length > 10),
-      // NEW: Data availability flags for Gary to see
+      // Data availability flags for Gary to see
       dataAvailability: {
         statsAvailable: playersWithStats > 0,
         logsAvailable: playersWithLogs > 0,
         injuriesAvailable: formattedInjuries.length > 0,
         narrativeAvailable: !!narrativeContext,
+        lineMovementAvailable: lineMovementCount > 0,
         dataGaps: dataGaps.length > 0 ? dataGaps : null,
         dataQuality: dataGaps.length === 0 ? 'HIGH' : dataGaps.length <= 1 ? 'MEDIUM' : 'LOW'
       }

@@ -168,6 +168,16 @@ export async function runAgenticPropsCli({
 
       if (result.picks && result.picks.length > 0) {
         console.log(`✅ Generated ${result.picks.length} picks for ${matchup}`);
+        
+        // DEBUG: Print full pick details with rationale
+        for (const pick of result.picks) {
+          console.log(`\n📊 PICK: ${pick.player} (${pick.team})`);
+          console.log(`   Prop: ${pick.bet?.toUpperCase()} ${pick.prop} @ ${pick.odds}`);
+          console.log(`   Confidence: ${Math.round((pick.confidence || 0) * 100)}%`);
+          console.log(`   Gary's Take: ${pick.rationale || pick.analysis || 'N/A'}`);
+          if (pick.key_stats) console.log(`   Key Stats: ${JSON.stringify(pick.key_stats)}`);
+        }
+        
         allPropPicks.push(...result.picks);
       } else {
         console.log(`⚠️ No confident prop picks for this game`);

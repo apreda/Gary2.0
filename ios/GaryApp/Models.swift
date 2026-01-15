@@ -861,13 +861,15 @@ struct DFSLineup: Identifiable, Decodable {
     let date: String
     let platform: String  // "draftkings" or "fanduel"
     let sport: String     // "NBA" or "NFL"
+    let slate_name: String?      // NEW: "Main", "Turbo", "Night"
+    let slate_start_time: String? // NEW: "7:00 PM ET"
     let salary_cap: Int
     let total_salary: Int
     let projected_points: Double
     let lineup: [DFSPlayer]
     let gary_notes: String?
     
-    var displayId: String { id ?? "\(platform)-\(sport)-\(date)" }
+    var displayId: String { id ?? "\(platform)-\(sport)-\(date)-\(slate_name ?? "Main")" }
     
     /// Formatted salary display (e.g., "$49,700 / $50,000")
     var salaryDisplay: String {
@@ -911,6 +913,8 @@ struct DFSLineup: Identifiable, Decodable {
             date: date,
             platform: platform,
             sport: sport,
+            slate_name: dict["slate_name"] as? String,
+            slate_start_time: dict["slate_start_time"] as? String,
             salary_cap: salaryCap,
             total_salary: totalSalary,
             projected_points: projectedPoints,

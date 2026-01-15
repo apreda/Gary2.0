@@ -31,9 +31,99 @@ import {
   checkDataAvailability,
   fixBdlInjuryStatus 
 } from './sharedUtils.js';
-import { fetchComprehensivePropsNarrative } from './scoutReport/scoutReportBuilder.js';
+import { fetchComprehensivePropsNarrative, fetchPropLineMovement, getPlayerPropMovement } from './scoutReport/scoutReportBuilder.js';
 
 const SPORT_KEY = 'basketball_nba';
+
+/**
+ * Calculate scenario projections for kill condition analysis
+ * Pre-calculates baseline, blowout, and competitive scenarios so Gary doesn't do LLM math
+ * @param {Object} playerStats - Player season stats from BDL
+ * @param {Array} props - Player's prop lines [{type, line}]
+ * @param {number} gameSpread - Game spread (positive = underdog, negative = favorite)
+ * @returns {Object} Scenario projections for each prop type
+ */
+function calculateScenarioProjections(playerStats, props, gameSpread) {
+  if (!playerStats || !playerStats.mpg || playerStats.mpg === 0) {
+    return null;
+  }
+  
+  const mpg = parseFloat(playerStats.mpg) || 32;
+  const blowoutMinutes = 28; // Starters in blowout scenario
+  const competitiveMinutes = Math.min(mpg + 2, 38); // Close game = full run
+  
+  // Calculate per-minute rates
+  const ppm = (parseFloat(playerStats.ppg) || 0) / mpg; // Points per minute
+  const rpm = (parseFloat(playerStats.rpg) || 0) / mpg; // Rebounds per minute
+  const apm = (parseFloat(playerStats.apg) || 0) / mpg; // Assists per minute
+  const tpm = (parseFloat(playerStats.tpg) || 0) / mpg; // Threes per minute
+  
+  // Is this team at blowout risk? (spread >= 10)
+  const isBlowoutRisk = Math.abs(parseFloat(gameSpread) || 0) >= 10;
+  const isOnFavorite = (parseFloat(gameSpread) || 0) < 0; // Negative spread = favorite
+  
+  const projections = {};
+  
+  // Calculate for each prop type
+  const propTypes = {
+    'points': { rate: ppm, avg: playerStats.ppg },
+    'pts': { rate: ppm, avg: playerStats.ppg },
+    'rebounds': { rate: rpm, avg: playerStats.rpg },
+    'reb': { rate: rpm, avg: playerStats.rpg },
+    'assists': { rate: apm, avg: playerStats.apg },
+    'ast': { rate: apm, avg: playerStats.apg },
+    'threes': { rate: tpm, avg: playerStats.tpg },
+    'fg3m': { rate: tpm, avg: playerStats.tpg },
+    'pra': { rate: ppm + rpm + apm, avg: playerStats.pra },
+    'points_rebounds_assists': { rate: ppm + rpm + apm, avg: playerStats.pra },
+    'pr': { rate: ppm + rpm, avg: (parseFloat(playerStats.ppg) || 0) + (parseFloat(playerStats.rpg) || 0) },
+    'points_rebounds': { rate: ppm + rpm, avg: (parseFloat(playerStats.ppg) || 0) + (parseFloat(playerStats.rpg) || 0) }
+  };
+  
+  for (const prop of (props || [])) {
+    const propType = (prop.type || prop.prop_type || '').toLowerCase();
+    const line = parseFloat(prop.line) || 0;
+    const rateData = propTypes[propType];
+    
+    if (!rateData) continue;
+    
+    const baselineProj = parseFloat((mpg * rateData.rate).toFixed(1));
+    const blowoutProj = parseFloat((blowoutMinutes * rateData.rate).toFixed(1));
+    const competitiveProj = parseFloat((competitiveMinutes * rateData.rate).toFixed(1));
+    
+    // Kill condition: If blowout projection < line AND team is favorite (will sit if up big)
+    const killTriggered = isBlowoutRisk && isOnFavorite && blowoutProj < line;
+    
+    projections[propType] = {
+      baseline: { minutes: mpg, projection: baselineProj },
+      blowout: { minutes: blowoutMinutes, projection: blowoutProj },
+      competitive: { minutes: competitiveMinutes, projection: competitiveProj },
+      line: line,
+      perMinuteRate: parseFloat(rateData.rate.toFixed(3)),
+      killCondition: {
+        triggered: killTriggered,
+        reason: killTriggered 
+          ? `Blowout projection (${blowoutProj}) < line (${line}) - spread is ${gameSpread}`
+          : null
+      },
+      // Quick reference for Gary
+      blowoutVsLine: parseFloat((blowoutProj - line).toFixed(1)),
+      baselineVsLine: parseFloat((baselineProj - line).toFixed(1))
+    };
+  }
+  
+  return {
+    projections,
+    meta: {
+      mpg,
+      blowoutMinutes,
+      competitiveMinutes,
+      isBlowoutRisk,
+      isOnFavorite,
+      gameSpread: parseFloat(gameSpread) || 0
+    }
+  };
+}
 
 /**
  * Calculate hit rate for a specific prop line based on game logs
@@ -787,13 +877,16 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerSeasonSt
 }
 
 /**
- * Build token slices for prop analysis - enhanced with player stats, game logs, and hit rates
+ * Build token slices for prop analysis - enhanced with player stats, game logs, hit rates,
+ * SCENARIO PROJECTIONS, and LINE MOVEMENT data for Kill Condition analysis
  */
-function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnapshot, playerSeasonStats, playerIdMap, playerGameLogs = {}) {
+function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnapshot, playerSeasonStats, playerIdMap, playerGameLogs = {}, lineMovements = {}) {
   // Get pace/total environment context
   const paceContext = getPaceAndTotalContext(marketSnapshot, null, null);
+  const gameSpread = paceContext.spread || 0;
   
-  // Enhance prop candidates with their season stats, recent form, AND hit rates
+  // Enhance prop candidates with their season stats, recent form, hit rates, 
+  // SCENARIO PROJECTIONS, and LINE MOVEMENT
   const enhancedCandidates = propCandidates.map(p => {
     const playerId = playerIdMap[p.player.toLowerCase()];
     const stats = playerId ? playerSeasonStats[playerId] : null;
@@ -803,6 +896,11 @@ function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnap
     // Calculate hit rate for each prop line
     const propsWithHitRates = p.props.map(prop => {
       const hitRate = calculateHitRate(games, prop.type, prop.line);
+      
+      // Look up line movement for this player + prop
+      const propKey = `${p.player}_${prop.type}`.toLowerCase().replace(/\s+/g, '_');
+      const movement = lineMovements[propKey] || getPlayerPropMovement(lineMovements, p.player, prop.type);
+      
       return {
         ...prop,
         hitRate: hitRate ? {
@@ -812,9 +910,24 @@ function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnap
           lastValues: hitRate.values,
           recommendation: hitRate.recommendation,
           gamesAnalyzed: hitRate.totalGames
-        } : null
+        } : null,
+        // LINE MOVEMENT DATA - for Tier 2 Kill Condition analysis
+        lineMovement: movement ? {
+          open: movement.open,
+          current: movement.current,
+          direction: movement.direction, // "UP" | "DOWN"
+          magnitude: movement.magnitude,
+          signal: movement.signal, // "MOVED_UP" | "MOVED_DOWN" | "STABLE"
+          // Pre-formatted for Gary's analysis
+          movementNote: movement.magnitude >= 2.0 
+            ? `Line moved ${movement.direction} ${Math.abs(movement.magnitude)} points (${movement.open} -> ${movement.current})`
+            : null
+        } : { source: 'NOT_FOUND' }
       };
     });
+    
+    // Calculate SCENARIO PROJECTIONS for this player (for Tier 1 Kill Conditions)
+    const scenarioData = stats ? calculateScenarioProjections(stats, p.props, gameSpread) : null;
     
     // Analyze teammate injury impact
     const teammateImpact = analyzeTeammateImpact(p.player, p.team, injuries, playerSeasonStats);
@@ -822,7 +935,7 @@ function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnap
     return {
       player: p.player,
       team: p.team,
-      props: propsWithHitRates, // Now includes hit rates!
+      props: propsWithHitRates, // Now includes hit rates AND line movement!
       seasonStats: stats ? {
         ppg: stats.ppg,
         rpg: stats.rpg,
@@ -837,6 +950,9 @@ function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnap
         mpg: stats.mpg,
         position: stats.position
       } : null,
+      // SCENARIO PROJECTIONS - for Tier 1 Kill Condition math (pre-calculated, no LLM arithmetic)
+      scenarioProjections: scenarioData?.projections || null,
+      scenarioMeta: scenarioData?.meta || null,
       // Recent form data with home/away splits
       recentForm: logs ? {
         gamesAnalyzed: logs.gamesAnalyzed,
@@ -854,10 +970,19 @@ function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnap
           isHome: g.isHome
         }))
       } : null,
-      // NEW: Teammate injury impact
+      // Teammate injury impact
       teammateImpact: teammateImpact
     };
   });
+  
+  // Count any kill conditions triggered
+  const killConditionsTriggered = enhancedCandidates.filter(c => 
+    c.scenarioProjections && Object.values(c.scenarioProjections).some(p => p.killCondition?.triggered)
+  ).length;
+  
+  if (killConditionsTriggered > 0) {
+    console.log(`[NBA Props Context] ⚠️ ${killConditionsTriggered} players have Tier 1 Kill Conditions triggered (blowout risk)`);
+  }
   
   return {
     player_stats: {
@@ -866,9 +991,10 @@ function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnap
     },
     prop_lines: {
       candidates: enhancedCandidates,
-      totalProps: propCandidates.reduce((sum, p) => sum + p.props.length, 0)
+      totalProps: propCandidates.reduce((sum, p) => sum + p.props.length, 0),
+      killConditionsTriggered: killConditionsTriggered
     },
-    // NEW: Game environment context
+    // Game environment context
     game_environment: {
       total: paceContext.total,
       totalCategory: paceContext.totalCategory,
@@ -878,10 +1004,15 @@ function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnap
       blowoutNote: paceContext.blowoutNote
     },
     injury_report: {
-      notable: injuries, // NO SLICE - include ALL injuries from BDL
+      notable: injuries,
       total_listed: injuries.length
     },
-    market_context: marketSnapshot
+    market_context: marketSnapshot,
+    // LINE MOVEMENT SUMMARY
+    lineMovementSummary: {
+      totalFound: Object.keys(lineMovements).length,
+      significantMoves: Object.values(lineMovements).filter(m => Math.abs(m.magnitude) >= 2.0).length
+    }
   };
 }
 
@@ -924,10 +1055,10 @@ export async function buildNbaPropsAgenticContext(game, playerProps, options = {
   // Process prop candidates first - limit to top 7 players per team
   const propCandidates = getTopPropCandidates(playerProps, 7);
   
-  // Parallel fetch: injuries, player IDs, AND COMPREHENSIVE narrative context via Gemini Grounding
-  // IMPORTANT: Narrative context is fetched UPFRONT so Gary knows all factors BEFORE iterations
-  console.log('[NBA Props Context] Fetching injuries, player IDs, and COMPREHENSIVE narrative context...');
-  const [injuries, playerIdMap, comprehensiveNarrative] = await Promise.all([
+  // Parallel fetch: injuries, player IDs, narrative context, AND LINE MOVEMENT via Gemini Grounding
+  // IMPORTANT: All context is fetched UPFRONT so Gary knows all factors BEFORE iterations
+  console.log('[NBA Props Context] Fetching injuries, player IDs, narrative context, and LINE MOVEMENT...');
+  const [injuries, playerIdMap, comprehensiveNarrative, lineMovementData] = await Promise.all([
     // Injuries from BDL - with logging if fails
     teamIds.length > 0 
       ? safeApiCallArray(
@@ -949,8 +1080,24 @@ export async function buildNbaPropsAgenticContext(game, playerProps, options = {
     fetchComprehensivePropsNarrative(game.home_team, game.away_team, 'NBA', dateStr, { useFlash: true }).catch(e => {
       console.warn('[NBA Props Context] Comprehensive narrative failed:', e.message);
       return null;
+    }),
+    
+    // LINE MOVEMENT - Queries ScoresAndOdds/BettingPros for opening vs current lines
+    // This enables Tier 2 Kill Conditions (detecting public chase vs sharp steam)
+    fetchPropLineMovement('NBA', dateStr, game.home_team, game.away_team).catch(e => {
+      console.warn('[NBA Props Context] Line movement fetch failed:', e.message);
+      return { movements: {}, source: 'ERROR' };
     })
   ]);
+  
+  // Log line movement results
+  const lineMovements = lineMovementData?.movements || {};
+  const lineMovementCount = Object.keys(lineMovements).length;
+  if (lineMovementCount > 0) {
+    console.log(`[NBA Props Context] ✓ Found ${lineMovementCount} prop line movements from ${lineMovementData.source}`);
+  } else {
+    console.log(`[NBA Props Context] No line movement data available (source: ${lineMovementData?.source || 'UNKNOWN'})`);
+  }
   
   // Extract narrative context - now includes structured sections
   const narrativeContext = comprehensiveNarrative?.raw || null;
@@ -1070,7 +1217,7 @@ export async function buildNbaPropsAgenticContext(game, playerProps, options = {
     playerGameLogs // Pass game logs for recent form
   );
 
-  // Build token data with enhanced player info and game logs
+  // Build token data with enhanced player info, game logs, and LINE MOVEMENT
   const tokenData = buildPropsTokenSlices(
     playerStats,
     availableCandidates,
@@ -1078,7 +1225,8 @@ export async function buildNbaPropsAgenticContext(game, playerProps, options = {
     marketSnapshot,
     playerSeasonStats,
     playerIdMap,
-    playerGameLogs // Pass game logs
+    playerGameLogs, // Pass game logs
+    lineMovements   // Pass line movement data for Tier 2 Kill Conditions
   );
 
   // Build game summary with B2B info
@@ -1134,6 +1282,7 @@ export async function buildNbaPropsAgenticContext(game, playerProps, options = {
   console.log(`   - ${playersWithLogs} players with game logs (${(logsCoverage * 100).toFixed(0)}% coverage)`);
   console.log(`   - ${allInjuries.length} injuries (${formattedInjuries.length} from BDL + ${detectedInjuries.length} detected from game logs)`);
   console.log(`   - Narrative context: ${narrativeContext ? 'YES' : 'NO'}`);
+  console.log(`   - Line movement data: ${lineMovementCount > 0 ? `${lineMovementCount} props tracked` : 'NOT AVAILABLE'}`);
 
   return {
     gameSummary,
@@ -1144,7 +1293,14 @@ export async function buildNbaPropsAgenticContext(game, playerProps, options = {
     playerSeasonStats,
     playerGameLogs, // Include game logs in return
     narrativeContext, // CRITICAL: Full raw narrative from Gemini
-    // NEW: Structured narrative sections for easy access
+    // LINE MOVEMENT DATA - for Tier 2 Kill Condition analysis
+    lineMovementData: {
+      movements: lineMovements,
+      count: lineMovementCount,
+      source: lineMovementData?.source || 'UNKNOWN',
+      significantMoves: Object.values(lineMovements).filter(m => Math.abs(m.magnitude) >= 2.0)
+    },
+    // Structured narrative sections for easy access
     narrativeSections: {
       breakingNews: narrativeSections.breakingNews || null,   // Last-minute scratches, trade rumors, drama
       motivation: narrativeSections.motivation || null,       // Revenge games, milestones, contract years
@@ -1162,13 +1318,15 @@ export async function buildNbaPropsAgenticContext(game, playerProps, options = {
       playerStatsCoverage: `${playersWithStats}/${totalCandidates}`,
       playerLogsCoverage: `${playersWithLogs}/${totalCandidates}`,
       hasNarrativeContext: !!narrativeContext,
+      hasLineMovementData: lineMovementCount > 0,
       narrativeSectionsFetched: Object.keys(narrativeSections).filter(k => narrativeSections[k]?.length > 10),
-      // NEW: Data availability flags for Gary to see
+      // Data availability flags for Gary to see
       dataAvailability: {
         statsAvailable: playersWithStats > 0,
         logsAvailable: playersWithLogs > 0,
         injuriesAvailable: allInjuries.length > 0,
         narrativeAvailable: !!narrativeContext,
+        lineMovementAvailable: lineMovementCount > 0,
         dataGaps: dataGaps.length > 0 ? dataGaps : null,
         dataQuality: dataGaps.length === 0 ? 'HIGH' : dataGaps.length <= 1 ? 'MEDIUM' : 'LOW'
       }

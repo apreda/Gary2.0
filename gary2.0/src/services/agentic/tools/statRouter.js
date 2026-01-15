@@ -205,6 +205,7 @@ const NCAAB_GEMINI_TOKENS = [
   'NCAAB_NET_RANKING',    // NCAA NET - site:ncaa.com
   'NCAAB_QUAD_RECORD',    // Quad 1-4 records - site:ncaa.com
   'NCAAB_STRENGTH_OF_SCHEDULE', // SOS - site:kenpom.com
+  'NCAAB_BARTTORVIK',     // T-Rank, tempo-free stats - barttorvik.com (2026 season)
 ];
 
 // NCAAF: Stats that require Gemini (BDL doesn't have SP+/FPI)
@@ -314,6 +315,9 @@ export function getAuthoritativeSource(token) {
   }
   if (['NCAAB_NET_RANKING', 'NCAAB_QUAD_RECORD'].includes(token)) {
     return 'site:ncaa.com';
+  }
+  if (token === 'NCAAB_BARTTORVIK') {
+    return 'site:barttorvik.com'; // Defaults to 2026 season
   }
   
   // NCAAF sources
@@ -2043,6 +2047,86 @@ const FETCHERS = {
         error: 'Quad data unavailable',
         home: { team: home.full_name || home.name, quad_1: 'N/A' },
         away: { team: away.full_name || away.name, quad_1: 'N/A' }
+      };
+    }
+  },
+
+  // ===== NCAAB BARTTORVIK T-RANK AND TEMPO-FREE STATS =====
+  // Uses barttorvik.com which defaults to 2026 season
+  NCAAB_BARTTORVIK: async (bdlSport, home, away, season) => {
+    try {
+      const homeTeamName = home.full_name || home.name;
+      const awayTeamName = away.full_name || away.name;
+      
+      console.log(`[Stat Router] Fetching Barttorvik T-Rank for ${awayTeamName} @ ${homeTeamName} via Gemini Grounding`);
+      
+      // Note: barttorvik.com/# defaults to 2026 season
+      const query = `Search barttorvik.com for the 2026 college basketball season stats for ${homeTeamName} and ${awayTeamName}. 
+      
+      For EACH team provide from Barttorvik's T-Rank data:
+      - T-Rank (overall ranking)
+      - AdjOE (Adjusted Offensive Efficiency)
+      - AdjDE (Adjusted Defensive Efficiency)
+      - Barthag (win probability vs average team)
+      - EFG% (Effective Field Goal %)
+      - Tempo (possessions per game)
+      - WAB (Wins Above Bubble) if available
+      - 3P Rate and 3P% if available
+      
+      Use the 2026 season data from barttorvik.com. Format as structured data with actual numbers.`;
+      
+      const response = await geminiGroundingSearch(query, {
+        temperature: 0.2,
+        maxTokens: 2000,
+        systemMessage: 'You are a college basketball analytics expert. Search barttorvik.com for accurate T-Rank and tempo-free statistics for the 2026 season. Provide exact numbers from the site.'
+      });
+      
+      const content = response?.content || response?.choices?.[0]?.message?.content || '';
+      
+      // Extract Barttorvik data
+      const extractBarttorvik = (text, teamName) => {
+        const rankMatch = text.match(new RegExp(`${teamName}[^\\d]*(\\d{1,3})(?:st|nd|rd|th)?`, 'i')) ||
+                         text.match(/t-rank[^\d]*(\d{1,3})/i) ||
+                         text.match(/rank[^\d]*(\d{1,3})/i);
+        const adjOeMatch = text.match(/adj(?:usted)?\.?\s*o(?:ffensive)?(?:\s*e(?:fficiency)?)?[^\d]*(\d+\.?\d*)/i);
+        const adjDeMatch = text.match(/adj(?:usted)?\.?\s*d(?:efensive)?(?:\s*e(?:fficiency)?)?[^\d]*(\d+\.?\d*)/i);
+        const barthagMatch = text.match(/barthag[^\d]*\.?(\d+\.?\d*)/i);
+        const tempoMatch = text.match(/tempo[^\d]*(\d+\.?\d*)/i);
+        const efgMatch = text.match(/efg[^\d]*(\d+\.?\d*)/i);
+        const wabMatch = text.match(/wab[^\d]*([+-]?\d+\.?\d*)/i);
+        
+        return {
+          t_rank: rankMatch ? rankMatch[1] : 'N/A',
+          adj_oe: adjOeMatch ? adjOeMatch[1] : 'N/A',
+          adj_de: adjDeMatch ? adjDeMatch[1] : 'N/A',
+          barthag: barthagMatch ? barthagMatch[1] : 'N/A',
+          tempo: tempoMatch ? tempoMatch[1] : 'N/A',
+          efg_pct: efgMatch ? efgMatch[1] : 'N/A',
+          wab: wabMatch ? wabMatch[1] : 'N/A'
+        };
+      };
+      
+      return {
+        category: 'Barttorvik T-Rank (2026 Season)',
+        source: 'barttorvik.com via Gemini Grounding',
+        season: '2026',
+        home: {
+          team: homeTeamName,
+          ...extractBarttorvik(content, homeTeamName)
+        },
+        away: {
+          team: awayTeamName,
+          ...extractBarttorvik(content, awayTeamName)
+        },
+        raw_response: content.substring(0, 1500)
+      };
+    } catch (error) {
+      console.warn('[Stat Router] Barttorvik fetch failed:', error.message);
+      return {
+        category: 'Barttorvik T-Rank',
+        error: 'Barttorvik data unavailable',
+        home: { team: home.full_name || home.name, t_rank: 'N/A' },
+        away: { team: away.full_name || away.name, t_rank: 'N/A' }
       };
     }
   },
@@ -5160,8 +5244,14 @@ const FETCHERS = {
         const gameHomeId = game.home_team?.id || game.home_team_id;
         const gameAwayId = game.visitor_team?.id || game.visitor_team_id;
         const isH2H = (gameHomeId === away.id || gameAwayId === away.id);
-        // Per BDL docs: NFL uses status='Final', NCAAB uses 'post'
-        const isCompleted = game.status === 'Final' || game.status === 'post';
+        // BDL status values vary by sport:
+        // NBA: has home_team_score > 0 means completed
+        // NFL: status='Final'
+        // NCAAB: status='Final' or 'post'
+        // NHL: status='Final' or game_state='OFF'
+        const hasScores = (game.home_team_score > 0 || game.visitor_team_score > 0);
+        const statusFinal = game.status === 'Final' || game.status === 'post' || game.status === 'final';
+        const isCompleted = hasScores || statusFinal;
         // Also ensure game date is in the past
         const gameDate = new Date(game.date);
         const isPast = gameDate < new Date();
@@ -5172,9 +5262,10 @@ const FETCHERS = {
         return {
           category: `Head-to-Head History (${currentSeason} Season)`,
           games_found: 0,
-          note: `No previous matchups between ${homeName} and ${awayName} in the ${currentSeason} season yet.`,
+          h2h_available: false,
+          note: `⚠️ NO H2H DATA: ${homeName} and ${awayName} have NOT played each other in the ${currentSeason} season.`,
           revenge_game: false,
-          IMPORTANT: '⚠️ For historical H2H (prior seasons), check the Scout Report grounding data. DO NOT guess or claim winning streaks.'
+          ANTI_HALLUCINATION: `🚫 CRITICAL: You have ZERO H2H data for this matchup. DO NOT claim any historical records, winning streaks, or "Team A owns Team B" narratives. If you don't have H2H data, simply don't mention H2H in your analysis.`
         };
       }
       
@@ -5230,6 +5321,7 @@ const FETCHERS = {
           week: week,
           result: `${winner} won by ${margin}`,
           score: `${homeName} ${homeScore} - ${awayScore} ${awayName}`,
+          margin: margin, // Store margin for sweep context analysis
           home_won: homeScore > awayScore,
           personnel_note: personnelNote || (isNba ? '(Box score unavailable)' : null)
         };
@@ -5243,21 +5335,314 @@ const FETCHERS = {
       const lastMeeting = h2hResults[0];
       const revengeGame = lastMeeting && !lastMeeting.home_won;
       
+      // ===== NBA SWEEP CONTEXT DETECTION (NBA-SPECIFIC) =====
+      // Detects when one team is about to sweep an elite opponent 4-0
+      // This is historically very rare and should prompt investigation
+      let sweepContext = null;
+      
+      if (isNba && h2hGames.length >= 3) {
+        const gamesPlayed = h2hGames.length;
+        const isCompleteSweep = (homeWins === gamesPlayed) || (awayWins === gamesPlayed);
+        
+        if (isCompleteSweep) {
+          try {
+            // Determine dominant and swept teams
+            const dominantTeam = homeWins === gamesPlayed ? home : away;
+            const dominantTeamName = homeWins === gamesPlayed ? homeName : awayName;
+            const sweptTeam = homeWins === gamesPlayed ? away : home;
+            const sweptTeamName = homeWins === gamesPlayed ? awayName : homeName;
+            
+            // Fetch standings to get win percentages and division info
+            const standings = await ballDontLieService.getNbaStandings(currentSeason);
+            
+            // Get swept team's standing (with null checks)
+            const sweptTeamStanding = standings?.find(s => s.team?.id === sweptTeam.id);
+            const dominantTeamStanding = standings?.find(s => s.team?.id === dominantTeam.id);
+            
+            if (sweptTeamStanding?.wins !== undefined && sweptTeamStanding?.losses !== undefined) {
+              const sweptWins = sweptTeamStanding.wins;
+              const sweptLosses = sweptTeamStanding.losses;
+              const sweptTotal = sweptWins + sweptLosses;
+              
+              if (sweptTotal > 0) {
+                const sweptWinPct = (sweptWins / sweptTotal) * 100;
+                
+                // Check if division rivals (same division = extra pride factor)
+                const sweptDivision = sweptTeamStanding?.team?.division;
+                const dominantDivision = dominantTeamStanding?.team?.division;
+                const isDivisionRival = sweptDivision && dominantDivision && sweptDivision === dominantDivision;
+                
+                // Calculate average margin of H2H wins
+                const margins = h2hResults.map(r => r.margin || 0);
+                const avgMargin = margins.reduce((sum, m) => sum + m, 0) / margins.length;
+                
+                // Determine margin context
+                let marginNote = '';
+                if (avgMargin >= 15) {
+                  marginNote = `Blowout dominance (avg +${avgMargin.toFixed(0)}) — but elite teams adjust schemes after exposure.`;
+                } else if (avgMargin >= 8) {
+                  marginNote = `Solid margins (avg +${avgMargin.toFixed(0)}) — real edge, but not overwhelming.`;
+                } else {
+                  marginNote = `Close wins (avg +${avgMargin.toFixed(0)}) — barely dominance, regression more likely.`;
+                }
+                
+                // Sliding scale alert levels:
+                // - 70%+ win rate: STRONG trap alert
+                // - 60-70% (or 60%+ for division rivals): CAUTION flag
+                // - Below 60%: Proceed (H2H trend likely real)
+                let alertLevel = null;
+                let sweepNote = null;
+                
+                // Division rivals trigger caution at lower threshold (60% vs 70%)
+                const strongThreshold = 70;
+                const cautionThreshold = isDivisionRival ? 60 : 70;
+                
+                if (sweptWinPct >= strongThreshold) {
+                  alertLevel = 'STRONG';
+                  sweepNote = `🔍 SWEEP CONTEXT: ${sweptTeamName} is ${sweptWins}-${sweptLosses} (${sweptWinPct.toFixed(1)}%)${isDivisionRival ? ' and a division rival' : ''}. Sweeping an elite team 4-0 is historically very rare. The combination of roster quality, coaching adjustments, and pride makes clean sweeps against top-tier opponents a statistical anomaly. Ask yourself: "Am I betting that an elite team will accept being swept 4-0?" Investigate whether non-H2H factors (injuries, rest, scheme advantages) justify betting the sweep.`;
+                } else if (sweptWinPct >= cautionThreshold) {
+                  alertLevel = 'CAUTION';
+                  sweepNote = `🔍 SWEEP CONTEXT: ${sweptTeamName} is ${sweptWins}-${sweptLosses} (${sweptWinPct.toFixed(1)}%)${isDivisionRival ? ' — a division rival with extra motivation' : ''}. 4-0 sweeps against playoff-caliber teams are uncommon. Consider the "pride factor" before betting the sweep.`;
+                }
+                
+                if (alertLevel) {
+                  sweepContext = {
+                    triggered: true,
+                    alert_level: alertLevel,
+                    games_in_sweep: gamesPlayed,
+                    dominant_team: dominantTeamName,
+                    swept_team: sweptTeamName,
+                    swept_team_record: `${sweptWins}-${sweptLosses}`,
+                    swept_team_win_pct: `${sweptWinPct.toFixed(1)}%`,
+                    is_division_rival: isDivisionRival,
+                    division: isDivisionRival ? sweptDivision : null,
+                    avg_margin: avgMargin.toFixed(1),
+                    margin_context: marginNote,
+                    sweep_note: sweepNote
+                  };
+                  console.log(`[Stat Router] SWEEP CONTEXT ALERT (${alertLevel}): ${dominantTeamName} is ${gamesPlayed}-0 vs ${sweptTeamName} (${sweptWinPct.toFixed(1)}% win rate${isDivisionRival ? ', division rival' : ''})`);
+                }
+              }
+            }
+          } catch (sweepErr) {
+            console.log(`[Stat Router] Sweep context check failed (non-fatal): ${sweepErr.message}`);
+            // Non-fatal - just skip sweep context if standings unavailable
+          }
+        }
+      }
+      
+      // ===== NFL REVENGE CONTEXT DETECTION (NFL-SPECIFIC) =====
+      // In NFL, elite teams don't lose twice to the same opponent, especially after a blowout
+      const isNfl = bdlSport === 'americanfootball_nfl';
+      
+      if (isNfl && h2hGames.length >= 1 && !sweepContext) {
+        try {
+          // Get the previous meeting details
+          const lastGame = h2hResults[0];
+          const lastMargin = lastGame?.margin || 0;
+          
+          // Determine winner and loser of last meeting
+          const lastWinnerIsHome = lastGame?.home_won;
+          const losingTeam = lastWinnerIsHome ? away : home;
+          const losingTeamName = lastWinnerIsHome ? awayName : homeName;
+          const winningTeam = lastWinnerIsHome ? home : away;
+          const winningTeamName = lastWinnerIsHome ? homeName : awayName;
+          
+          // Fetch standings to get win percentages and division info
+          const standings = await ballDontLieService.getStandingsGeneric(bdlSport, { season: currentSeason });
+          
+          const losingTeamStanding = standings?.find(s => s.team?.id === losingTeam.id);
+          const winningTeamStanding = standings?.find(s => s.team?.id === winningTeam.id);
+          
+          if (losingTeamStanding?.wins !== undefined && losingTeamStanding?.losses !== undefined) {
+            const losingWins = losingTeamStanding.wins;
+            const losingLosses = losingTeamStanding.losses;
+            const losingTotal = losingWins + losingLosses;
+            
+            if (losingTotal > 0) {
+              const losingWinPct = (losingWins / losingTotal) * 100;
+              
+              // Check if division rivals
+              const losingDivision = losingTeamStanding?.team?.division;
+              const winningDivision = winningTeamStanding?.team?.division;
+              const isDivisionRival = losingDivision && winningDivision && losingDivision === winningDivision;
+              
+              // NFL Revenge Context: Division rival lost by 14+ points AND is 70%+ win rate
+              // In NFL, 14+ points is a convincing win (2+ TDs)
+              if (isDivisionRival && losingWinPct >= 70 && lastMargin >= 14) {
+                sweepContext = {
+                  triggered: true,
+                  alert_level: 'REVENGE',
+                  sport: 'NFL',
+                  games_played: h2hGames.length,
+                  losing_team: losingTeamName,
+                  winning_team: winningTeamName,
+                  losing_team_record: `${losingWins}-${losingLosses}`,
+                  losing_team_win_pct: `${losingWinPct.toFixed(1)}%`,
+                  is_division_rival: true,
+                  division: losingDivision,
+                  last_margin: lastMargin,
+                  sweep_note: `🔍 NFL REVENGE CONTEXT: ${losingTeamName} is ${losingWins}-${losingLosses} (${losingWinPct.toFixed(1)}%) and lost by ${lastMargin} points to division rival ${winningTeamName} earlier this season. Elite NFL teams (70%+) rarely lose twice to the same division opponent, especially after a blowout (14+ points). Coaching staffs game-plan specifically for revenge. Ask yourself: "Am I betting that a 70%+ team will lose twice to the same division rival after a ${lastMargin}-point loss?"`
+                };
+                console.log(`[Stat Router] NFL REVENGE CONTEXT: ${losingTeamName} (${losingWinPct.toFixed(1)}%) lost by ${lastMargin} to division rival ${winningTeamName}`);
+              }
+            }
+          }
+        } catch (nflErr) {
+          console.log(`[Stat Router] NFL revenge context check failed (non-fatal): ${nflErr.message}`);
+        }
+      }
+      
+      // ===== NCAAB SWEEP CONTEXT DETECTION (NCAAB-SPECIFIC) =====
+      // In NCAAB, conference rivals play 2x per year; 2-0 sweeps trigger caution for elite/ranked teams
+      const isNcaab = bdlSport === 'basketball_ncaab';
+      
+      if (isNcaab && h2hGames.length >= 2 && !sweepContext) {
+        const gamesPlayed = h2hGames.length;
+        const isCompleteSweep = (homeWins === gamesPlayed) || (awayWins === gamesPlayed);
+        
+        if (isCompleteSweep) {
+          try {
+            // Determine dominant and swept teams
+            const dominantTeam = homeWins === gamesPlayed ? home : away;
+            const dominantTeamName = homeWins === gamesPlayed ? homeName : awayName;
+            const sweptTeam = homeWins === gamesPlayed ? away : home;
+            const sweptTeamName = homeWins === gamesPlayed ? awayName : homeName;
+            
+            // Fetch standings to get win percentages and conference info
+            const standings = await ballDontLieService.getStandingsGeneric(bdlSport, { season: currentSeason });
+            
+            const sweptTeamStanding = standings?.find(s => s.team?.id === sweptTeam.id);
+            const dominantTeamStanding = standings?.find(s => s.team?.id === dominantTeam.id);
+            
+            if (sweptTeamStanding?.wins !== undefined && sweptTeamStanding?.losses !== undefined) {
+              const sweptWins = sweptTeamStanding.wins;
+              const sweptLosses = sweptTeamStanding.losses;
+              const sweptTotal = sweptWins + sweptLosses;
+              
+              if (sweptTotal > 0) {
+                const sweptWinPct = (sweptWins / sweptTotal) * 100;
+                
+                // Check if conference rivals
+                const sweptConference = sweptTeamStanding?.team?.conference;
+                const dominantConference = dominantTeamStanding?.team?.conference;
+                const isConferenceRival = sweptConference && dominantConference && sweptConference === dominantConference;
+                
+                // Check if swept team is ranked (Top 25 indicator)
+                const sweptRanking = sweptTeamStanding?.ranking || sweptTeamStanding?.ap_rank || null;
+                const isRanked = sweptRanking && sweptRanking <= 25;
+                
+                // Calculate average margin
+                const margins = h2hResults.map(r => r.margin || 0);
+                const avgMargin = margins.reduce((sum, m) => sum + m, 0) / margins.length;
+                
+                // NCAAB Sweep Context: Conference rival is 0-2 AND is 70%+ OR ranked
+                if (isConferenceRival && (sweptWinPct >= 70 || isRanked)) {
+                  const rankNote = isRanked ? ` (Ranked #${sweptRanking})` : '';
+                  const marginNote = avgMargin >= 10 
+                    ? `Dominant margins (avg +${avgMargin.toFixed(0)}) — but elite programs adjust for conference rivals.`
+                    : `Close games (avg +${avgMargin.toFixed(0)}) — series has been competitive despite the sweep.`;
+                  
+                  sweepContext = {
+                    triggered: true,
+                    alert_level: sweptWinPct >= 70 ? 'STRONG' : 'CAUTION',
+                    sport: 'NCAAB',
+                    games_in_sweep: gamesPlayed,
+                    dominant_team: dominantTeamName,
+                    swept_team: sweptTeamName,
+                    swept_team_record: `${sweptWins}-${sweptLosses}`,
+                    swept_team_win_pct: `${sweptWinPct.toFixed(1)}%`,
+                    swept_team_ranking: sweptRanking,
+                    is_conference_rival: true,
+                    conference: sweptConference,
+                    avg_margin: avgMargin.toFixed(1),
+                    margin_context: marginNote,
+                    sweep_note: `🔍 NCAAB SWEEP CONTEXT: ${sweptTeamName}${rankNote} is ${sweptWins}-${sweptLosses} (${sweptWinPct.toFixed(1)}%) and 0-${gamesPlayed} vs conference rival ${dominantTeamName}. Elite/ranked conference teams rarely get swept 3-0 — coaching staffs adjust for familiar opponents, and pride is maximal in conference play. ${marginNote} Ask yourself: "Am I betting that ${isRanked ? 'a ranked team' : 'a 70%+ team'} will go 0-${gamesPlayed + 1} against the same conference opponent?"`
+                  };
+                  console.log(`[Stat Router] NCAAB SWEEP CONTEXT: ${sweptTeamName} (${sweptWinPct.toFixed(1)}%${isRanked ? ', #' + sweptRanking : ''}) is 0-${gamesPlayed} vs conference rival ${dominantTeamName}`);
+                }
+              }
+            }
+          } catch (ncaabErr) {
+            console.log(`[Stat Router] NCAAB sweep context check failed (non-fatal): ${ncaabErr.message}`);
+          }
+        }
+      }
+      
+      // ===== CONDITIONS CHANGED CONTEXT (1-2 GAME H2H) =====
+      // For small sample H2H (1-2 games), check if conditions have significantly changed
+      // This helps Gary understand that a single game result may not be representative
+      let conditionsChangedContext = null;
+      
+      if (isNba && h2hGames.length <= 2 && h2hResults.length > 0) {
+        try {
+          // Check for DNPs in previous H2H games (from personnel notes)
+          const dnpMatches = [];
+          for (const result of h2hResults) {
+            if (result.personnel_note) {
+              // Look for DNP patterns like "DNP: Embiid" or "Embiid (0 min)"
+              const dnpPattern = /DNP:\s*([^|,]+)|(\w+)\s*\(0\s*min\)/gi;
+              let match;
+              while ((match = dnpPattern.exec(result.personnel_note)) !== null) {
+                const playerName = (match[1] || match[2] || '').trim();
+                if (playerName && playerName.length > 2) {
+                  dnpMatches.push({
+                    player: playerName,
+                    date: result.date,
+                    result: result.result
+                  });
+                }
+              }
+            }
+          }
+          
+          // If we found DNPs, flag that conditions may have changed
+          if (dnpMatches.length > 0) {
+            const dnpList = dnpMatches.map(d => `${d.player} (out ${d.date})`).join(', ');
+            const gamesText = h2hGames.length === 1 ? 'the only H2H game' : `${h2hGames.length} H2H games`;
+            
+            conditionsChangedContext = {
+              triggered: true,
+              dnp_players: dnpMatches,
+              sample_size: h2hGames.length,
+              note: `🔍 CONDITIONS CHANGED: In ${gamesText} this season, key player(s) were OUT: ${dnpList}. This result happened under DIFFERENT circumstances. Ask yourself: "What's different tonight?" Check current injury report — if these players are now available, the previous result may not be representative. 1-game H2H is CONTEXT (for narrative), not EVIDENCE (for conviction).`
+            };
+            console.log(`[Stat Router] CONDITIONS CHANGED: Found DNP(s) in H2H: ${dnpList}`);
+          } else if (h2hGames.length === 1) {
+            // Even without detected DNPs, flag that 1-game H2H is anecdotal
+            conditionsChangedContext = {
+              triggered: true,
+              dnp_players: [],
+              sample_size: 1,
+              note: `🔍 SAMPLE SIZE WARNING: Only 1 H2H game this season. One game is ANECDOTAL, not predictive. Use for narrative ("revenge spot", "what's different tonight") but don't lean on it for conviction. Ask: "What's DIFFERENT tonight?" (health, venue, rest, roster changes)`
+            };
+          }
+        } catch (condErr) {
+          console.log(`[Stat Router] Conditions changed check failed (non-fatal): ${condErr.message}`);
+        }
+      }
+      
       return {
         category: `Head-to-Head History (${currentSeason} Season ONLY)`,
         games_found: h2hGames.length,
+        h2h_available: true,
         this_season_record: `${homeName} ${homeWins}-${awayWins} ${awayName}`,
         meetings_this_season: h2hResults,
         revenge_game: revengeGame,
         revenge_note: revengeGame ? `${awayName} lost the last meeting - potential revenge spot` : null,
-        IMPORTANT: `⚠️ This shows ONLY ${h2hGames.length} game(s) from the ${currentSeason} season. Personnel notes show who PLAYED in each game. For multi-year H2H history, use Scout Report grounding. DO NOT claim historical streaks beyond this data.`
+        sweep_context: sweepContext,
+        SWEEP_CONTEXT_NOTE: sweepContext?.sweep_note || null,
+        conditions_changed_context: conditionsChangedContext,
+        CONDITIONS_CHANGED_NOTE: conditionsChangedContext?.note || null,
+        ANTI_HALLUCINATION: `🚫 DATA BOUNDARY: You have ONLY ${h2hGames.length} verified H2H game(s) from the ${currentSeason} season. You may cite these specific games. DO NOT claim historical streaks, prior season records, or "all-time" H2H records that are not shown here.`
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching H2H history:`, error.message);
       return {
         category: 'Head-to-Head History',
+        h2h_available: false,
         error: 'Data unavailable',
-        IMPORTANT: '⚠️ H2H data unavailable. Check Scout Report grounding for this info. DO NOT guess.'
+        ANTI_HALLUCINATION: '🚫 CRITICAL: H2H data fetch FAILED. You have ZERO verified H2H data. DO NOT mention H2H history at all - focus on other factors instead.'
       };
     }
   },
@@ -8180,9 +8565,11 @@ const FETCHERS = {
       if (h2hGames.length === 0) {
         return {
           category: 'Head-to-Head History',
+          h2h_available: false,
           home: { team: home.full_name || home.name },
           away: { team: away.full_name || away.name },
-          note: 'No recent head-to-head games found'
+          note: `⚠️ NO H2H DATA: ${home.full_name || home.name} and ${away.full_name || away.name} have no recent H2H games in our data.`,
+          ANTI_HALLUCINATION: '🚫 CRITICAL: You have ZERO H2H data. DO NOT claim historical records, winning streaks, or dominance narratives.'
         };
       }
       
@@ -8207,9 +8594,99 @@ const FETCHERS = {
       // Calculate average margin
       const avgMargin = meetings.reduce((sum, m) => sum + m.margin, 0) / meetings.length;
       
+      // ===== NHL SWEEP CONTEXT DETECTION =====
+      // Detect when one team is sweeping an elite opponent (3-0 or better)
+      // Uses points percentage instead of win% (NHL has OT losses worth 1 point)
+      let sweepContext = null;
+      const gamesPlayed = meetings.length;
+      const isCompleteSweep = (homeWins === gamesPlayed && gamesPlayed >= 3) || 
+                              (awayWins === gamesPlayed && gamesPlayed >= 3);
+      
+      if (isCompleteSweep) {
+        try {
+          // Determine dominant and swept teams
+          const dominantTeam = homeWins === gamesPlayed ? home : away;
+          const dominantTeamName = homeWins === gamesPlayed ? home.full_name || home.name : away.full_name || away.name;
+          const sweptTeam = homeWins === gamesPlayed ? away : home;
+          const sweptTeamName = homeWins === gamesPlayed ? away.full_name || away.name : home.full_name || home.name;
+          
+          // Fetch NHL standings to get points percentage
+          const standings = await ballDontLieService.getNhlStandings(season);
+          
+          const sweptTeamStanding = standings?.find(s => s.team?.id === sweptTeam.id);
+          const dominantTeamStanding = standings?.find(s => s.team?.id === dominantTeam.id);
+          
+          if (sweptTeamStanding) {
+            // NHL uses points percentage: points / (games * 2) * 100
+            // Some APIs provide points directly, others provide wins/losses/ot_losses
+            const sweptPoints = sweptTeamStanding.points || 
+              ((sweptTeamStanding.wins || 0) * 2 + (sweptTeamStanding.ot_losses || 0));
+            const sweptGamesPlayed = sweptTeamStanding.games_played || 
+              ((sweptTeamStanding.wins || 0) + (sweptTeamStanding.losses || 0) + (sweptTeamStanding.ot_losses || 0));
+            
+            if (sweptGamesPlayed > 0) {
+              const sweptPointsPct = (sweptPoints / (sweptGamesPlayed * 2)) * 100;
+              const sweptRecord = `${sweptTeamStanding.wins || 0}-${sweptTeamStanding.losses || 0}-${sweptTeamStanding.ot_losses || 0}`;
+              
+              // Check if division rivals
+              const sweptDivision = sweptTeamStanding?.division_name || sweptTeamStanding?.team?.division;
+              const dominantDivision = dominantTeamStanding?.division_name || dominantTeamStanding?.team?.division;
+              const isDivisionRival = sweptDivision && dominantDivision && sweptDivision === dominantDivision;
+              
+              // NHL Sweep Context thresholds:
+              // - 65%+ points pct: STRONG trap alert
+              // - 58-65% (or 58%+ for division rivals): CAUTION flag
+              const strongThreshold = 65;
+              const cautionThreshold = isDivisionRival ? 58 : 65;
+              
+              // Margin context for NHL (goals, not points)
+              const marginNote = avgMargin >= 3 
+                ? `Dominant margins (avg +${avgMargin.toFixed(1)} goals) — but goaltending variance and line adjustments typically intervene.`
+                : avgMargin >= 1.5
+                ? `Solid margins (avg +${avgMargin.toFixed(1)} goals) — real edge, but NHL games are tight.`
+                : `Close games (avg +${avgMargin.toFixed(1)} goals) — series has been competitive.`;
+              
+              let alertLevel = null;
+              let sweepNote = null;
+              
+              if (sweptPointsPct >= strongThreshold) {
+                alertLevel = 'STRONG';
+                sweepNote = `🔍 NHL SWEEP CONTEXT: ${sweptTeamName} is ${sweptRecord} (${sweptPointsPct.toFixed(1)}% points)${isDivisionRival ? ' and a division rival' : ''} but 0-${gamesPlayed} vs ${dominantTeamName}. Sweeping an elite NHL team is historically rare — goaltending variance, line adjustments, and division pride typically intervene. ${marginNote} Ask yourself: "Am I betting that an elite team will get swept ${gamesPlayed + 1}-0?"`;
+              } else if (sweptPointsPct >= cautionThreshold) {
+                alertLevel = 'CAUTION';
+                sweepNote = `🔍 NHL SWEEP CONTEXT: ${sweptTeamName} is ${sweptRecord} (${sweptPointsPct.toFixed(1)}% points)${isDivisionRival ? ' — a division rival' : ''} and 0-${gamesPlayed} vs ${dominantTeamName}. Playoff-caliber teams rarely get swept. ${marginNote}`;
+              }
+              
+              if (alertLevel) {
+                sweepContext = {
+                  triggered: true,
+                  alert_level: alertLevel,
+                  sport: 'NHL',
+                  games_in_sweep: gamesPlayed,
+                  dominant_team: dominantTeamName,
+                  swept_team: sweptTeamName,
+                  swept_team_record: sweptRecord,
+                  swept_team_points_pct: `${sweptPointsPct.toFixed(1)}%`,
+                  is_division_rival: isDivisionRival,
+                  division: isDivisionRival ? sweptDivision : null,
+                  avg_margin: avgMargin.toFixed(1),
+                  margin_context: marginNote,
+                  sweep_note: sweepNote
+                };
+                console.log(`[Stat Router] NHL SWEEP CONTEXT (${alertLevel}): ${dominantTeamName} is ${gamesPlayed}-0 vs ${sweptTeamName} (${sweptPointsPct.toFixed(1)}% points${isDivisionRival ? ', division rival' : ''})`);
+              }
+            }
+          }
+        } catch (sweepErr) {
+          console.log(`[Stat Router] NHL sweep context check failed (non-fatal): ${sweepErr.message}`);
+        }
+      }
+      
       return {
         category: 'Head-to-Head History',
         source: 'Ball Don\'t Lie API',
+        h2h_available: true,
+        games_found: meetings.length,
         home: {
           team: home.full_name || home.name,
           h2h_record: `${homeWins}-${awayWins}`,
@@ -8222,16 +8699,24 @@ const FETCHERS = {
         },
         recent_meetings: meetings,
         avg_margin: avgMargin.toFixed(1),
+        sweep_context: sweepContext,
+        SWEEP_CONTEXT_NOTE: sweepContext?.sweep_note || null,
         interpretation: homeWins > awayWins 
           ? `${home.name} has won ${homeWins} of last ${meetings.length} meetings`
           : awayWins > homeWins 
             ? `${away.name} has won ${awayWins} of last ${meetings.length} meetings`
             : `Series is even at ${homeWins}-${awayWins}`,
-        note: 'Divisional matchups tend to be tighter regardless of record'
+        note: 'Divisional matchups tend to be tighter regardless of record',
+        ANTI_HALLUCINATION: `🚫 DATA BOUNDARY: You have ONLY ${meetings.length} verified H2H game(s). You may cite these specific games. DO NOT claim historical streaks or multi-year records beyond this data.`
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching NHL_H2H_HISTORY:`, error.message);
-      return { category: 'Head-to-Head History', error: 'Data unavailable' };
+      return { 
+        category: 'Head-to-Head History', 
+        h2h_available: false,
+        error: 'Data unavailable',
+        ANTI_HALLUCINATION: '🚫 CRITICAL: H2H fetch FAILED. DO NOT mention H2H in your analysis.'
+      };
     }
   },
 
@@ -8576,6 +9061,352 @@ const FETCHERS = {
     } catch (error) {
       console.error(`[Stat Router] Error fetching LUCK_INDICATORS:`, error.message);
       return { category: 'Luck Indicators', error: 'Data unavailable' };
+    }
+  },
+
+  // ===== NEW NHL FETCHERS (Standings Context, Depth, Variance) =====
+
+  // POINTS_PCT - Points percentage from BDL standings
+  POINTS_PCT: async (bdlSport, home, away, season) => {
+    console.log(`[Stat Router] Fetching POINTS_PCT for ${away.name} @ ${home.name}`);
+    
+    if (bdlSport !== 'icehockey_nhl') {
+      return { category: 'Points Percentage', note: 'Only available for NHL' };
+    }
+    
+    try {
+      const standings = await ballDontLieService.getStandingsGeneric(bdlSport, { season });
+      
+      const findTeam = (teamId) => standings.find(s => s.team?.id === teamId);
+      const homeStanding = findTeam(home.id);
+      const awayStanding = findTeam(away.id);
+      
+      const formatStanding = (standing, team) => {
+        if (!standing) return { team: team.name, error: 'Standing not found' };
+        const pointsPct = standing.points_pctg || standing.points_pct || 
+          (standing.points / ((standing.games_played || 82) * 2));
+        return {
+          team: team.full_name || team.name,
+          points: standing.points,
+          points_pct: `${(pointsPct * 100).toFixed(1)}%`,
+          games_played: standing.games_played,
+          regulation_wins: standing.regulation_wins,
+          ot_losses: standing.ot_losses,
+          goal_diff: standing.goal_differential || (standing.goals_for - standing.goals_against),
+          playoff_position: pointsPct >= 0.550 ? '✅ Playoff pace' : pointsPct >= 0.500 ? '⚠️ Bubble' : '❌ Below playoff line'
+        };
+      };
+      
+      return {
+        category: 'Points Percentage (Playoff Context)',
+        source: 'Ball Don\'t Lie API',
+        home: formatStanding(homeStanding, home),
+        away: formatStanding(awayStanding, away),
+        INVESTIGATE: `🔍 Points% > 55% = playoff caliber, > 60% = contender, < 50% = lottery team.`,
+        note: 'NHL uses points percentage (not win%) due to OT losses worth 1 point.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching POINTS_PCT:`, error.message);
+      return { category: 'Points Percentage', error: 'Data unavailable' };
+    }
+  },
+
+  // STREAK - Current win/loss streak
+  STREAK: async (bdlSport, home, away, season) => {
+    console.log(`[Stat Router] Fetching STREAK for ${away.name} @ ${home.name}`);
+    
+    if (bdlSport !== 'icehockey_nhl') {
+      return { category: 'Current Streak', note: 'Only available for NHL' };
+    }
+    
+    try {
+      const standings = await ballDontLieService.getStandingsGeneric(bdlSport, { season });
+      
+      const findTeam = (teamId) => standings.find(s => s.team?.id === teamId);
+      const homeStanding = findTeam(home.id);
+      const awayStanding = findTeam(away.id);
+      
+      return {
+        category: 'Current Streak',
+        source: 'Ball Don\'t Lie API',
+        home: {
+          team: home.full_name || home.name,
+          streak: homeStanding?.streak || 'N/A',
+          hot_cold: homeStanding?.streak?.startsWith('W') && parseInt(homeStanding?.streak?.slice(1)) >= 3 
+            ? '🔥 HOT' : homeStanding?.streak?.startsWith('L') && parseInt(homeStanding?.streak?.slice(1)) >= 3 
+            ? '❄️ COLD' : '➡️ Neutral'
+        },
+        away: {
+          team: away.full_name || away.name,
+          streak: awayStanding?.streak || 'N/A',
+          hot_cold: awayStanding?.streak?.startsWith('W') && parseInt(awayStanding?.streak?.slice(1)) >= 3 
+            ? '🔥 HOT' : awayStanding?.streak?.startsWith('L') && parseInt(awayStanding?.streak?.slice(1)) >= 3 
+            ? '❄️ COLD' : '➡️ Neutral'
+        },
+        note: 'Streaks can indicate momentum but regress - investigate WHY they\'re hot/cold.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching STREAK:`, error.message);
+      return { category: 'Current Streak', error: 'Data unavailable' };
+    }
+  },
+
+  // PLAYOFF_POSITION - Playoff race context
+  PLAYOFF_POSITION: async (bdlSport, home, away, season) => {
+    console.log(`[Stat Router] Fetching PLAYOFF_POSITION for ${away.name} @ ${home.name}`);
+    
+    if (bdlSport !== 'icehockey_nhl') {
+      return { category: 'Playoff Position', note: 'Only available for NHL' };
+    }
+    
+    try {
+      const standings = await ballDontLieService.getStandingsGeneric(bdlSport, { season });
+      
+      // Group by division/conference for playoff context
+      const divisionGroups = {};
+      for (const s of standings) {
+        const div = s.division_name || 'Unknown';
+        if (!divisionGroups[div]) divisionGroups[div] = [];
+        divisionGroups[div].push(s);
+      }
+      
+      // Sort each division by points
+      for (const div of Object.keys(divisionGroups)) {
+        divisionGroups[div].sort((a, b) => (b.points || 0) - (a.points || 0));
+      }
+      
+      const getPlayoffContext = (teamId) => {
+        for (const [div, teams] of Object.entries(divisionGroups)) {
+          const idx = teams.findIndex(t => t.team?.id === teamId);
+          if (idx !== -1) {
+            const team = teams[idx];
+            const rank = idx + 1;
+            const pointsBehind = rank > 1 ? (teams[0].points || 0) - (team.points || 0) : 0;
+            return {
+              division: div,
+              division_rank: rank,
+              points_behind_leader: pointsBehind,
+              playoff_spot: rank <= 3 ? '✅ Division spot' : rank <= 5 ? '⚠️ Wild card race' : '❌ Outside looking in',
+              home_record: team.home_record,
+              road_record: team.road_record
+            };
+          }
+        }
+        return { error: 'Team not found in standings' };
+      };
+      
+      return {
+        category: 'Playoff Position Context',
+        source: 'Ball Don\'t Lie API',
+        home: { team: home.full_name || home.name, ...getPlayoffContext(home.id) },
+        away: { team: away.full_name || away.name, ...getPlayoffContext(away.id) },
+        INVESTIGATE: `🔍 Teams fighting for playoff spots may have extra motivation. Teams locked in may rest players.`,
+        note: 'Top 3 in each division + 2 wild cards per conference make playoffs.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching PLAYOFF_POSITION:`, error.message);
+      return { category: 'Playoff Position', error: 'Data unavailable' };
+    }
+  },
+
+  // ONE_GOAL_GAMES - Close game record (1-goal margins)
+  ONE_GOAL_GAMES: async (bdlSport, home, away, season) => {
+    console.log(`[Stat Router] Fetching ONE_GOAL_GAMES for ${away.name} @ ${home.name}`);
+    
+    if (bdlSport !== 'icehockey_nhl') {
+      return { category: 'One-Goal Games', note: 'Only available for NHL' };
+    }
+    
+    try {
+      const [homeGames, awayGames] = await Promise.all([
+        ballDontLieService.getGames(bdlSport, { team_ids: [home.id], seasons: [season], per_page: 50 }),
+        ballDontLieService.getGames(bdlSport, { team_ids: [away.id], seasons: [season], per_page: 50 })
+      ]);
+      
+      const calcOneGoalRecord = (games, teamId) => {
+        let wins = 0, losses = 0, total = 0;
+        
+        for (const g of games || []) {
+          if (g.game_state !== 'OFF' && g.game_state !== 'FINAL' && g.status !== 'Final') continue;
+          
+          const margin = Math.abs((g.home_score || 0) - (g.away_score || 0));
+          if (margin !== 1) continue; // Only 1-goal games
+          
+          total++;
+          const isHome = g.home_team?.id === teamId;
+          const teamScore = isHome ? g.home_score : g.away_score;
+          const oppScore = isHome ? g.away_score : g.home_score;
+          
+          if (teamScore > oppScore) wins++;
+          else losses++;
+        }
+        
+        const winPct = total > 0 ? ((wins / total) * 100).toFixed(0) : 0;
+        return {
+          one_goal_record: `${wins}-${losses}`,
+          one_goal_games: total,
+          one_goal_win_pct: `${winPct}%`,
+          clutch_rating: winPct >= 60 ? '✅ CLUTCH' : winPct <= 40 ? '❌ Struggles in close games' : '➡️ Average'
+        };
+      };
+      
+      return {
+        category: 'One-Goal Game Record',
+        source: 'Ball Don\'t Lie API (calculated)',
+        home: { team: home.full_name || home.name, ...calcOneGoalRecord(homeGames, home.id) },
+        away: { team: away.full_name || away.name, ...calcOneGoalRecord(awayGames, away.id) },
+        INVESTIGATE: `🔍 Teams with high 1-goal win % are clutch. Low % teams may be due for regression.`,
+        note: '50% is expected. High deviations often regress to mean over time.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching ONE_GOAL_GAMES:`, error.message);
+      return { category: 'One-Goal Games', error: 'Data unavailable' };
+    }
+  },
+
+  // REGULATION_WIN_PCT - Regulation wins vs total wins
+  REGULATION_WIN_PCT: async (bdlSport, home, away, season) => {
+    console.log(`[Stat Router] Fetching REGULATION_WIN_PCT for ${away.name} @ ${home.name}`);
+    
+    if (bdlSport !== 'icehockey_nhl') {
+      return { category: 'Regulation Win %', note: 'Only available for NHL' };
+    }
+    
+    try {
+      const standings = await ballDontLieService.getStandingsGeneric(bdlSport, { season });
+      
+      const findTeam = (teamId) => standings.find(s => s.team?.id === teamId);
+      const homeStanding = findTeam(home.id);
+      const awayStanding = findTeam(away.id);
+      
+      const calcRegWinPct = (standing, team) => {
+        if (!standing) return { team: team.name, error: 'Standing not found' };
+        const regWins = standing.regulation_wins || 0;
+        const totalWins = standing.wins || 0;
+        const otLosses = standing.ot_losses || 0;
+        const regWinPct = totalWins > 0 ? ((regWins / totalWins) * 100).toFixed(0) : 0;
+        
+        return {
+          team: team.full_name || team.name,
+          regulation_wins: regWins,
+          total_wins: totalWins,
+          ot_losses: otLosses,
+          reg_win_pct: `${regWinPct}%`,
+          dominance: regWinPct >= 75 ? '✅ Dominant - wins in regulation' : 
+                    regWinPct <= 50 ? '⚠️ Relies on extras' : '➡️ Average'
+        };
+      };
+      
+      return {
+        category: 'Regulation Win Percentage',
+        source: 'Ball Don\'t Lie API',
+        home: calcRegWinPct(homeStanding, home),
+        away: calcRegWinPct(awayStanding, away),
+        INVESTIGATE: `🔍 High reg win % = team closes out games. Low % = relies on OT/SO luck.`,
+        note: 'ROW (Regulation + OT Wins) is used as playoff tiebreaker.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching REGULATION_WIN_PCT:`, error.message);
+      return { category: 'Regulation Win %', error: 'Data unavailable' };
+    }
+  },
+
+  // MARGIN_VARIANCE - Goal differential consistency
+  MARGIN_VARIANCE: async (bdlSport, home, away, season) => {
+    console.log(`[Stat Router] Fetching MARGIN_VARIANCE for ${away.name} @ ${home.name}`);
+    
+    if (bdlSport !== 'icehockey_nhl') {
+      return { category: 'Margin Variance', note: 'Only available for NHL' };
+    }
+    
+    try {
+      const [homeGames, awayGames] = await Promise.all([
+        ballDontLieService.getGames(bdlSport, { team_ids: [home.id], seasons: [season], per_page: 30 }),
+        ballDontLieService.getGames(bdlSport, { team_ids: [away.id], seasons: [season], per_page: 30 })
+      ]);
+      
+      const calcVariance = (games, teamId) => {
+        const margins = [];
+        let blowoutWins = 0, blowoutLosses = 0;
+        
+        for (const g of games || []) {
+          if (g.game_state !== 'OFF' && g.game_state !== 'FINAL' && g.status !== 'Final') continue;
+          
+          const isHome = g.home_team?.id === teamId;
+          const teamScore = isHome ? g.home_score : g.away_score;
+          const oppScore = isHome ? g.away_score : g.home_score;
+          const margin = teamScore - oppScore;
+          margins.push(margin);
+          
+          if (margin >= 3) blowoutWins++;
+          else if (margin <= -3) blowoutLosses++;
+        }
+        
+        if (margins.length === 0) return { error: 'No games found' };
+        
+        const avgMargin = margins.reduce((a, b) => a + b, 0) / margins.length;
+        const variance = margins.reduce((sum, m) => sum + Math.pow(m - avgMargin, 2), 0) / margins.length;
+        const stdDev = Math.sqrt(variance);
+        
+        return {
+          avg_margin: avgMargin.toFixed(1),
+          std_deviation: stdDev.toFixed(2),
+          blowout_wins: blowoutWins,
+          blowout_losses: blowoutLosses,
+          games_analyzed: margins.length,
+          profile: stdDev >= 2.5 ? '🎰 HIGH VARIANCE - boom or bust' : 
+                  stdDev <= 1.5 ? '📊 CONSISTENT - tight margins' : '➡️ Average variance'
+        };
+      };
+      
+      return {
+        category: 'Margin Variance (Consistency)',
+        source: 'Ball Don\'t Lie API (calculated)',
+        home: { team: home.full_name || home.name, ...calcVariance(homeGames, home.id) },
+        away: { team: away.full_name || away.name, ...calcVariance(awayGames, away.id) },
+        INVESTIGATE: `🔍 High variance teams are harder to predict. Low variance teams are more reliable for spreads.`,
+        note: 'Std dev > 2.5 = volatile. < 1.5 = predictable. Consider this for puck line bets.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching MARGIN_VARIANCE:`, error.message);
+      return { category: 'Margin Variance', error: 'Data unavailable' };
+    }
+  },
+
+  // SHOOTING_REGRESSION - Player shooting % regression indicators
+  SHOOTING_REGRESSION: async (bdlSport, home, away, season) => {
+    console.log(`[Stat Router] Fetching SHOOTING_REGRESSION for ${away.name} @ ${home.name}`);
+    
+    if (bdlSport !== 'icehockey_nhl') {
+      return { category: 'Shooting Regression', note: 'Only available for NHL' };
+    }
+    
+    try {
+      const seasonStr = getCurrentSeasonString();
+      const query = `site:naturalstattrick.com OR site:hockey-reference.com
+        ${seasonStr} NHL shooting percentage team stats ${home.name} ${away.name}.
+        What is each team's:
+        1. 5v5 shooting percentage (league avg is ~9%)
+        2. 5v5 save percentage (league avg is ~91%)
+        3. Any players with unsustainably high (>15%) or low (<5%) shooting %
+        4. Goals vs expected goals (over/underperforming)`;
+      
+      const groundingResult = await geminiGroundingSearch(query, {
+        systemMessage: 'You are an NHL analytics expert. Identify shooting percentage regression candidates for both teams.'
+      });
+      
+      return {
+        category: 'Shooting % Regression Watch',
+        source: 'Natural Stat Trick / Hockey Reference via Gemini',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name },
+        grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
+        INVESTIGATE: `🔍 League avg shooting % is ~9%. Players shooting 15%+ are due for regression. Below 5% = positive regression coming.`,
+        note: 'Individual shooting % is highly volatile. Team-level is more stable but still regresses.'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching SHOOTING_REGRESSION:`, error.message);
+      return { category: 'Shooting Regression', error: 'Data unavailable' };
     }
   },
 

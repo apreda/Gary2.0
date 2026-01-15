@@ -15,8 +15,9 @@ runAgenticPropsCli({
   sportKey: 'icehockey_nhl',
   leagueLabel: 'NHL',
   buildContext: buildNhlPropsAgenticContext,
-  windowHours: 48,  // Captures today + tomorrow's games
-  propsPerGame: 5,  // Gary shortlists 5; quantum filter decides survivors (0..5)
+  windowHours: 24,  // Only today's games (props aren't available for tomorrow)
+  useESTDayFiltering: true,  // Filter by EST day - only games starting TODAY in EST
+  propsPerGame: 5,  // Gary shortlists 5; 2 survive per game after constraint
   limitDefault: 15  
 })
   .then(() => process.exit(0))

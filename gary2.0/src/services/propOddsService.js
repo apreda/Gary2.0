@@ -109,12 +109,34 @@ const PROP_MARKETS = {
   ]
 };
 
+// ============================================================================
+// ODDS FILTER CONSTANTS
+// ============================================================================
+// Only accept odds in a reasonable range for night-in-night-out picks:
+// - No heavy juice (worse than -200) - the vig kills long-term edge
+// - No lottery tickets (better than +250) - hat tricks, multi-goal, etc.
+const MIN_ACCEPTABLE_ODDS = -200;  // -200 OK, -201 filtered
+const MAX_ACCEPTABLE_ODDS = 250;   // +250 OK, +251 filtered
+
+/**
+ * Check if odds are within acceptable range
+ * @param {number} odds - American odds value
+ * @returns {boolean} - True if odds are acceptable
+ */
+const isOddsAcceptable = (odds) => {
+  if (odds === null || odds === undefined) return false;
+  return odds >= MIN_ACCEPTABLE_ODDS && odds <= MAX_ACCEPTABLE_ODDS;
+};
+
 export const propOddsService = {
   /**
-   * Filter out player props with odds of -150 or worse
+   * Filter out player props with odds outside acceptable range
+   * Range: -200 to +250 (inclusive)
+   * - Filters out heavy juice (-201 and worse)
+   * - Filters out lottery tickets (+251 and higher)
    * @private
    * @param {Array} props - Array of player prop data
-   * @returns {Array} - Filtered props with odds better than -150, split into separate over/under entries
+   * @returns {Array} - Filtered props with odds in acceptable range, split into separate over/under entries
    */
   filterPropsByOddsValue: (props) => {
     if (!props || !Array.isArray(props)) {
@@ -126,8 +148,8 @@ export const propOddsService = {
     
     // Process each prop to split into separate over/under entries and filter by odds
     for (const prop of props) {
-      // Only include the OVER side if odds are better than -150
-      if (prop.over_odds !== null && prop.over_odds > -150) {
+      // Only include the OVER side if odds are in acceptable range (-200 to +250)
+      if (prop.over_odds !== null && isOddsAcceptable(prop.over_odds)) {
         splitProps.push({
           player: prop.player,
           team: prop.team,
@@ -139,11 +161,14 @@ export const propOddsService = {
           under_odds: null  // Not relevant for this entry
         });
       } else if (prop.over_odds !== null) {
-        console.log(`Filtering out OVER side for ${prop.player} ${prop.prop_type} ${prop.line} (odds: ${prop.over_odds} is worse than -150)`);
+        const reason = prop.over_odds < MIN_ACCEPTABLE_ODDS 
+          ? `heavy juice (${prop.over_odds} worse than ${MIN_ACCEPTABLE_ODDS})`
+          : `lottery ticket (${prop.over_odds} exceeds +${MAX_ACCEPTABLE_ODDS})`;
+        console.log(`Filtering out OVER side for ${prop.player} ${prop.prop_type} ${prop.line}: ${reason}`);
       }
       
-      // Only include the UNDER side if odds are better than -150
-      if (prop.under_odds !== null && prop.under_odds > -150) {
+      // Only include the UNDER side if odds are in acceptable range (-200 to +250)
+      if (prop.under_odds !== null && isOddsAcceptable(prop.under_odds)) {
         splitProps.push({
           player: prop.player,
           team: prop.team,
@@ -155,11 +180,14 @@ export const propOddsService = {
           under_odds: prop.under_odds
         });
       } else if (prop.under_odds !== null) {
-        console.log(`Filtering out UNDER side for ${prop.player} ${prop.prop_type} ${prop.line} (odds: ${prop.under_odds} is worse than -150)`);
+        const reason = prop.under_odds < MIN_ACCEPTABLE_ODDS 
+          ? `heavy juice (${prop.under_odds} worse than ${MIN_ACCEPTABLE_ODDS})`
+          : `lottery ticket (${prop.under_odds} exceeds +${MAX_ACCEPTABLE_ODDS})`;
+        console.log(`Filtering out UNDER side for ${prop.player} ${prop.prop_type} ${prop.line}: ${reason}`);
       }
     }
     
-    console.log(`Filtered props by odds value: ${originalCount} original props → ${splitProps.length} valid sides (removing odds of -150 or worse)`);
+    console.log(`Filtered props by odds value: ${originalCount} original props → ${splitProps.length} valid sides (range: ${MIN_ACCEPTABLE_ODDS} to +${MAX_ACCEPTABLE_ODDS})`);
     
     return splitProps;
   },
@@ -619,9 +647,9 @@ export const propOddsService = {
       const result = Object.values(groupedProps);
       console.log(`Found ${result.length} player props for ${homeTeam} vs ${awayTeam}`);
       
-      // Filter out props with odds of -150 or worse
+      // Filter props to acceptable odds range: -200 to +250
       const filteredByOddsResult = propOddsService.filterPropsByOddsValue(result);
-      console.log(`Final filtered prop count: ${filteredByOddsResult.length} props with odds better than -150`);
+      console.log(`Final filtered prop count: ${filteredByOddsResult.length} props (odds range: -200 to +250)`);
       
       return filteredByOddsResult;
     } catch (error) {

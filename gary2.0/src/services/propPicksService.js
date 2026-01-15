@@ -11,7 +11,8 @@ import { debugUtils } from '../utils/debugUtils.js';
 import { supabase } from '../supabaseClient.js';
 import { propUtils } from './propUtils.js';
 import { generatePropBets } from './propGenerator.js';
-import { fetchLineupsAndInjuries } from './rotowireSlateService.js';
+// NOTE: RotoWire Puppeteer scraper removed - injury filtering now relies on BDL API
+// The scraper is kept only for DFS (dfsAgenticContext.js)
 // NBA player props service for fetching NBA player stats
 import { formatNBAPlayerStats } from './nbaPlayerPropsService.js';
 // NFL player props service for fetching NFL player stats
@@ -340,9 +341,10 @@ Respond with ONLY a JSON array of your best prop picks in this format:
             // Skip confidence filter for curated sports
             if (!isCurated && pick.confidence < 0.55) return false;
             
-            // Always filter out very poor odds (safety check)
+            // Filter odds outside acceptable range: -200 to +250
+            // No heavy juice (-201 and worse), no lottery tickets (+251 and higher)
             const odds = pick.odds || 0;
-            if (typeof odds === 'number' && odds <= -150) return false;
+            if (typeof odds === 'number' && (odds < -200 || odds > 250)) return false;
             return true;
           });
 
@@ -355,7 +357,7 @@ Respond with ONLY a JSON array of your best prop picks in this format:
         return entry;
       });
 
-      console.log(`Found ${data.length} entries for ${dateString}, filtered (curated for NBA/NHL/EPL/NFL, 55%+ conf for others), excluding ≤-150 odds`);
+      console.log(`Found ${data.length} entries for ${dateString}, filtered (curated for NBA/NHL/EPL/NFL, 55%+ conf for others), odds range: -200 to +250`);
       return processedEntries;
     } catch (error) {
       console.error(`Error fetching for ${dateString}:`, error);
@@ -425,16 +427,18 @@ Respond with ONLY a JSON array of your best prop picks in this format:
         // Fallback to include everything moderately common
         priorityPropTypes = ['points', 'rebounds', 'assists', 'threes', 'hits', 'strikeouts', 'total_bases', 'receptions', 'rec_yds', 'rush_yds'];
       }
+      // Acceptable odds range: -200 to +250 (no heavy juice, no lottery tickets)
+      const isOddsAcceptable = (odds) => odds >= -200 && odds <= 250;
+      
       let filteredProps = playerProps.filter(p => {
-        // Filter out props with odds worse than -150
         const overOdds = p.over_odds || 0;
         const underOdds = p.under_odds || 0;
         
-        // Check if either over or under odds are acceptable (better than -150)
-        const hasAcceptableOdds = (overOdds > -150) || (underOdds > -150);
+        // Check if either over or under odds are in acceptable range
+        const hasAcceptableOdds = isOddsAcceptable(overOdds) || isOddsAcceptable(underOdds);
         
         if (!hasAcceptableOdds) {
-          return false; // Skip props where both sides are worse than -150
+          return false; // Skip props outside -200 to +250 range
         }
         
         // Check if prop type contains any of our priority types
@@ -455,42 +459,16 @@ Respond with ONLY a JSON array of your best prop picks in this format:
           .filter(p => {
             const overOdds = p.over_odds || 0;
             const underOdds = p.under_odds || 0;
-            return (overOdds > -150) || (underOdds > -150);
+            return isOddsAcceptable(overOdds) || isOddsAcceptable(underOdds);
           })
           .slice(0, 100);
       }
 
       console.log(`Using ${filteredProps.length} filtered props for analysis`);
 
-      // 1.7. Fetch RotoWire Lineups and Injuries for better filtering
-      let rotowireData = {};
-      try {
-        const rwSport = sportKey === 'basketball_nba' ? 'NBA' :
-                        sportKey === 'americanfootball_nfl' ? 'NFL' :
-                        sportKey === 'icehockey_nhl' ? 'NHL' : null;
-        if (rwSport) {
-          rotowireData = await fetchLineupsAndInjuries(rwSport);
-        }
-      } catch (rwError) {
-        console.warn('[Props] RotoWire fetch failed, continuing without it');
-      }
-
-      // Filter out players who are OUT according to RotoWire
+      // NOTE: RotoWire scraper removed - injury filtering handled by agentic props runner
+      // which uses Gemini Grounding with site:rotowire.com for lineup/injury data
       let finalProps = filteredProps;
-      const outPlayers = new Set();
-      
-      Object.entries(rotowireData).forEach(([team, data]) => {
-        (data.injuries || []).forEach(inj => {
-          if (inj.status === 'O' || inj.status === 'OUT') {
-            outPlayers.add(inj.name.toLowerCase());
-          }
-        });
-      });
-
-      if (outPlayers.size > 0) {
-        finalProps = filteredProps.filter(p => !outPlayers.has(p.player.toLowerCase()));
-        console.log(`[Props] Filtered out ${filteredProps.length - finalProps.length} props for players marked OUT by RotoWire`);
-      }
 
       // Create a map of player to team from the prop data
       const playerTeamMap = {};
@@ -615,13 +593,17 @@ Respond with ONLY a JSON array of your best prop picks in this format:
         return hasRequiredFields;
       });
 
-      // Filter by odds quality (prefer +EV bets)
+      // Filter by odds quality - acceptable range: -200 to +250
+      // No heavy juice (-201 and worse), no lottery tickets (+251 and higher)
       const validOdds = valid.filter(p => {
         // Use the odds field directly if it exists, otherwise parse from pick string
         const odds = p.odds || 100;
-        const oddsOK = odds > -150;
+        const oddsOK = odds >= -200 && odds <= 250;
         if (!oddsOK) {
-          console.log(`Filtering out prop pick with poor odds: ${p.player} ${p.prop} (${odds} is worse than -150)`);
+          const reason = odds < -200 
+            ? `heavy juice (${odds} worse than -200)` 
+            : `lottery ticket (${odds} exceeds +250)`;
+          console.log(`Filtering out prop pick: ${p.player} ${p.prop} - ${reason}`);
         }
         return oddsOK;
       });
@@ -749,9 +731,9 @@ Respond with ONLY a JSON array of your best prop picks in this format:
           // Skip confidence filter for curated sports (NBA, NHL, EPL, NFL)
           if (!isCurated && pick.confidence < 0.55) return false;
           
-          // Always filter out very poor odds (safety check - should already be filtered)
+          // Filter odds outside acceptable range: -200 to +250 (safety check)
           const odds = pick.odds || 0;
-          if (typeof odds === 'number' && odds <= -150) return false;
+          if (typeof odds === 'number' && (odds < -200 || odds > 250)) return false;
           return true;
         });
         record.picks = filtered

@@ -1,0 +1,626 @@
+# How Sharps Actually Think
+
+## This Is Not a Rulebook
+
+> "This book is not a get-rich-quick vehicle. If you are looking for a magic formula in which you input data and grind out numbers that will tell you who will win tomorrow's games, you might be disappointed."
+> — Stanford Wong, *Sharp Sports Betting*
+
+Rules decay. The moment a betting angle becomes known, the market prices it in. Any list of "profitable situations" becomes unprofitable the instant it's widely shared.
+
+> "There's no list of recommended specific strategies... anything like that that really did work would almost certainly be obsolete by the time you read the book."
+> — Ed Miller & Matthew Davidow, *The Logic of Sports Betting*
+
+So what follows is NOT a list of rules. It's a way of thinking. Apply it fresh to every single game.
+
+---
+
+## The Only Question That Matters
+
+For any game you're analyzing, there is exactly one question:
+
+**"What does the line assume, and why might that assumption be wrong?"**
+
+That's it. Everything else is noise.
+
+The spread is not a puzzle to solve. It's not wrong by default. The spread represents the market's best estimate of the outcome, incorporating:
+- Team quality
+- Injuries (known ones)
+- Home field
+- Recent performance
+- Historical matchups
+- Public betting patterns
+- Sharp money that's already hit the line
+
+Your job is NOT to figure out who wins. Your job is to find a SPECIFIC reason the market's estimate is off.
+
+---
+
+## Spanky's Top-Down Principle
+
+> "There is the bottom-up approach to sports betting - creating a computer model, coming up with a number and executing a bet if your number is better than the bookmaker's. We use the top-down approach. We assume that the market number is correct. But we still look for missing pieces of the puzzle."
+> — Gadoon "Spanky" Kyrollos
+
+Start by assuming the line is RIGHT.
+
+Then ask: What might the market be missing? What piece of information:
+- Isn't reflected yet?
+- Is being weighted incorrectly?
+- Creates a situation the market hasn't fully priced?
+
+If you can't identify a specific "missing piece," you don't have a bet. You have an opinion.
+
+---
+
+## Rufus Peabody's Simplicity
+
+> "My strategy is simple: To bet when we have an advantage."
+> — Rufus Peabody
+
+Notice what he DOESN'T say:
+- "Bet when I think a team will win"
+- "Bet when the stats favor one side"
+- "Bet when I have a strong feeling"
+
+He says: bet when you have an ADVANTAGE. Not an opinion. An advantage.
+
+An advantage means you've identified something the market price doesn't reflect.
+
+---
+
+## What Sharps DON'T Do
+
+**They don't prove the line is right.**
+
+If your analysis explains WHY the spread is what it is, you haven't found edge. You've confirmed the market is efficient.
+
+Example of proving the line right:
+> "Lakers -9.5 is justified because the Lakers are better, Sabonis is out, and Sacramento's defense is bad."
+
+This isn't analysis. This is explaining why -9.5 exists. If all your reasons are already known to the market, the market has already priced them in.
+
+**They don't confuse team quality with spread accuracy.**
+
+The spread already accounts for team quality. Saying "the better team will win" says nothing about whether they'll cover.
+
+**They don't use season-long stats when recent form differs.**
+
+If a team's season numbers don't match their last 10 games, the recent form is more predictive for THIS game. But check: has the market already adjusted?
+
+**They don't treat one game as a data point.**
+
+"They beat them by 20 last time" is noise. One game is not a sample. Schemes change, personnel changes, circumstances change.
+
+---
+
+## What Creates Actual Edge
+
+Edge comes from information asymmetry or interpretation asymmetry:
+
+**Information Asymmetry** (you know something the market doesn't fully reflect):
+- Breaking injury news (hours old, not days)
+- Lineup info not yet incorporated
+- Situational factors that aren't obvious (travel, scheduling quirks, motivation)
+
+**Interpretation Asymmetry** (you interpret known info differently):
+- The market is overreacting to recent results
+- The market is underreacting to a significant change
+- Public money has pushed the line past fair value
+- A narrative is driving the line more than fundamentals
+
+Note: Interpretation asymmetry is much harder to identify than most bettors think. The market is very good at interpreting information. Be humble about claiming you see something it doesn't.
+
+---
+
+## The "Missing Piece" Framework
+
+For every game, ask:
+
+1. **What does this line assume?**
+   - About team strength
+   - About key players
+   - About situational factors
+   - About recent form
+
+2. **Is there anything the line might NOT fully reflect?**
+   - New information (last 24-48 hours)
+   - Situational factors that are hard to quantify
+   - A team playing better/worse than their record indicates
+   - Public perception that's moved the line away from true value
+
+3. **If I can't identify a specific missing piece, do I actually have a bet?**
+   - "I think this team wins" is not a bet
+   - "This line is wrong because X" is a bet
+
+---
+
+## On Individual Games vs. Long-Term Thinking
+
+The sharps quoted above all emphasize process over outcomes because THEY are making thousands of bets. They can afford to think in terms of hit rates and ROI.
+
+But for analyzing a single game, the question is simpler:
+
+**Can I identify a specific reason this line is wrong?**
+
+Not "will my approach work over 1,000 bets." Not "am I following the right process." Just: **for THIS game, is there a concrete edge?**
+
+If yes, bet it and explain why.
+If no, pass.
+
+Don't force it. Don't manufacture reasoning to justify a pick. Either you see something or you don't.
+
+---
+
+## Common Traps
+
+**The "Better Team" Trap**
+> "The Lakers are the better team, so Lakers -9.5."
+
+The spread exists BECAUSE the Lakers are better. You've explained the line, not beaten it.
+
+**The "Narrative" Trap**
+> "They'll want revenge after last game" or "This is a must-win."
+
+Professional athletes try to win every game. Narrative-based motivation is either already priced in or doesn't matter as much as you think.
+
+**The "Stats" Trap**
+> "They're ranked 5th in offensive efficiency and 8th in defensive rating."
+
+Season-long stats are public information. The market has them. Unless you've found a specific stat the market is misweighting, this isn't edge.
+
+**The "Recency" Trap**
+> "They've won 5 straight" or "They're playing their best basketball."
+
+Winning streaks and hot streaks are visible to everyone. Has the line moved to reflect this? If so, you're betting on stale information.
+
+**The "Reverse Logic" Trap**
+> "Everyone expects X, so Y will happen."
+
+Contrarian for its own sake isn't edge. The public is wrong often, but not always. You need a specific reason, not just "because everyone else is betting it."
+
+---
+
+## What Good Analysis Looks Like
+
+**Bad:**
+> "I like the Lakers -9.5. They're the better team, they beat the Kings by 24 last time, Sabonis is out, and the Kings have the worst net rating in the league. Lakers are rested and Sacramento is on a back-to-back."
+
+Why it's bad: Every single point is public information the line already reflects. This explains why -9.5 exists, not why it's wrong.
+
+**Better:**
+> "I'm passing on this game. The line looks right. The Lakers are clearly better, and the Sabonis absence is baked in after 3 games without him. I don't see what the market is missing."
+
+Why it's better: Acknowledges the line is probably accurate. Doesn't force a pick without edge.
+
+**Best:**
+> "Kings +9.5. The market is pricing Sacramento's recent struggles, but those games were against elite competition (Celtics, Thunder, Nuggets). Against non-elite teams, they've been competitive. The Lakers have covered large spreads only twice this season despite being favored by 7+ six times - they tend to take their foot off the gas. This line moved from -8 to -9.5 on public money, pushing it past where sharps originally set it."
+
+Why it's best: Identifies SPECIFIC reasons the line might be off - the competition level context, the Lakers' tendency to not cover large spreads, and line movement driven by public money. These are concrete "missing pieces."
+
+---
+
+## A Final Word From Rufus
+
+> "Gambling for a living for 12.5 years hasn't just made me see the world in a different way, it's made me a better person. Don't stress over what you can't control. Focus on the process of being the person you want to be. You can't control the externals. Focus on the internal."
+
+The outcome of any single game is outside your control. Bad beats happen. Good analysis loses to variance.
+
+What you CAN control is the quality of your thinking. Did you identify a real edge, or did you manufacture reasons to justify a pick you wanted to make?
+
+Be honest with yourself. That's the only process that matters.
+
+---
+
+## The Contrarian Trigger (Critical for AI Analysis)
+
+### Why "Obvious" Picks Are Dangerous
+
+Here's something important to understand about how you (an AI) process information:
+
+You're trained on consensus. When you analyze a game and one side feels "obvious" - the reasons flow easily, the case builds naturally, everything points one direction - that's a WARNING SIGN, not confirmation.
+
+Why? Because if it's obvious to you, it's obvious to:
+- Every bettor with an internet connection
+- Every talking head on ESPN
+- Every gambling podcast
+- The sportsbook setting the line
+
+**The line already reflects the obvious case.**
+
+When a pick feels like it "writes itself," you're not finding edge. You're describing why the line exists.
+
+---
+
+### The "Too Easy" Test
+
+Before committing to any pick, ask:
+
+> "Is this too easy? Could I make this case in 30 seconds to someone who knows nothing about sports?"
+
+If yes, the market has already made that case. You need something MORE than the obvious narrative.
+
+**Examples of "too easy" reasoning:**
+- "Chiefs are better than the Bengals" → That's why they're favored
+- "Sabonis is out, Kings are screwed" → That's in the line
+- "Lakers are on a 5-game win streak, they're hot" → Public knows this
+- "Home team in a rivalry game" → Already priced
+- "Team A just beat Team B by 20" → Everyone saw that game
+
+**The contrarian question:**
+> "What would I need to believe to bet the OTHER side?"
+
+Force yourself to make the opposite case. If you can't construct ANY reasonable argument for the other side, you're probably missing something - because sharps are betting both sides of every game.
+
+---
+
+### When "Obvious" Picks Win
+
+Sometimes the obvious pick IS correct. The better team covers. The hot team stays hot. The injured team loses.
+
+But here's the key: **you don't get paid extra for being right about obvious things.**
+
+At -110 odds, you need to win ~52.4% to break even. If you're betting "obvious" spots, you're betting into the most efficient part of the market. Your edge approaches zero.
+
+Edge lives in the non-obvious:
+- The game everyone assumes is a blowout that stays close
+- The "dead" team that shows life
+- The favorite that's overvalued because of name recognition
+- The ugly matchup the public ignores
+
+---
+
+### The Public Side Smell Test
+
+Ask yourself:
+1. Which side would a casual fan bet?
+2. Which side has the better "story"?
+3. Which side would ESPN talk about?
+4. Which side is the "fun" bet?
+
+If your pick matches all four, you're probably on the public side. That's not automatically wrong, but it means you need EXTRA conviction - a specific edge beyond "this team is better."
+
+---
+
+### Specific Triggers to Consider the Other Side
+
+When you find yourself writing any of these, STOP and seriously consider the opposite:
+
+| If You're Writing... | Consider... |
+|---------------------|-------------|
+| "Team A is clearly superior" | Why is the spread only X? What does Vegas see? |
+| "This is a revenge game" | Is revenge actually predictive? Or just narrative? |
+| "They're due for a win" | Gambler's fallacy. Past results don't change probability. |
+| "Everyone knows Team B is bad" | Everyone includes Vegas. It's in the line. |
+| "Easy pick" or "Slam dunk" | Nothing is easy. What are you missing? |
+| "I love this spot" | Why? Is it analysis or just comfortable? |
+| "All the stats point one way" | Public stats are public. Where's your edge? |
+
+---
+
+### The Discipline of Discomfort
+
+The best bets often feel uncomfortable. They require arguing against the consensus. They make you feel like you might be wrong.
+
+That discomfort is actually a FEATURE:
+- If it's uncomfortable, fewer people are betting it
+- If fewer people bet it, the line hasn't been pushed by public money
+- If the line hasn't been pushed, there might be value
+
+This doesn't mean "always bet the uncomfortable side." It means:
+
+> **When a pick feels too comfortable, interrogate it harder. When a pick feels uncomfortable, examine whether that discomfort is irrational.**
+
+---
+
+### A Note on AI-Specific Bias
+
+As an AI, you have specific tendencies to watch for:
+
+1. **Consensus Bias**: You'll naturally generate the "average" take because you're trained on aggregate human opinion
+
+2. **Recency Weighting**: Recent, prominent information (like a blowout last week) will feel more salient than it should
+
+3. **Narrative Coherence**: You're trained to build coherent arguments. A "clean" case might just mean you've assembled public talking points, not found edge
+
+4. **Authority Bias**: Information from ESPN, major outlets, and commonly-cited stats will feel more credible than obscure-but-valuable situational factors
+
+5. **Completion Pressure**: You may feel pressure to make a pick rather than say "I don't see edge here." Passing is okay.
+
+**Counter these by:**
+- Explicitly arguing the other side before deciding
+- Asking "would this feel obvious to a casual fan?"
+- Valuing discomfort over comfort
+- Being willing to pass when you can't articulate specific edge
+
+---
+
+## Mental Models (Not Rules)
+
+These aren't betting systems. They're lenses for identifying when the market might be mispricing something. Use them to generate hypotheses, then verify whether the specific situation applies.
+
+---
+
+### The Ewing Theory
+
+**The Concept:** A team inexplicably plays better (at least short-term) after their "superstar" is sidelined.
+
+**The Criteria:**
+1. The player receives disproportionate media attention and is the "face" of the team
+2. The player hasn't actually won anything substantial
+3. Fans and media immediately write the team off when the player leaves
+
+**Why It Creates Edge:**
+The market prices the star's absence based on NARRATIVE (this team is dead without him) rather than ANALYSIS (what does this player actually contribute vs. what the team gains in different play style, ball movement, others stepping up).
+
+**When to Apply It:**
+- Star player just went down (market hasn't seen the team without them yet)
+- Team has solid supporting cast that's been overshadowed
+- The star's usage/style may have actually been limiting the team
+- Line moves dramatically on the injury news
+
+**When NOT to Apply It:**
+- Star is genuinely irreplaceable (2016 Warriors without Curry ≠ Ewing Theory)
+- Team has already played multiple games without the star (market has adjusted)
+- Supporting cast is actually weak, not just underrated
+
+**The Key Insight:** The market often overprices star power and underprices team depth and system. When a star goes down, ask: "Is this team actually worse, or does the market just ASSUME they're worse?"
+
+---
+
+### The Letdown Spot
+
+**The Concept:** Teams underperform after emotional peaks - big wins, rivalry games, statement games.
+
+**Why It Creates Edge:**
+Human psychology. Players aren't robots. After an emotionally draining win (especially against a rival or in a nationally televised game), it's hard to maintain intensity against a "lesser" opponent.
+
+**When to Apply It:**
+- Team just had a massive emotional win
+- Now facing a less glamorous opponent
+- Line doesn't seem to account for the letdown potential
+- Especially relevant for favorites laying big numbers
+
+**When NOT to Apply It:**
+- Professional teams are professional (this is overrated as a factor)
+- The market already knows the schedule
+- Big spreads already account for talent gap
+
+**The Key Insight:** The question isn't "will they let down?" It's "has the market priced in the possibility?"
+
+---
+
+### The Lookahead Spot
+
+**The Concept:** Teams underperform when they have a huge game on deck.
+
+**Why It Creates Edge:**
+Coaches and players are human. When you play a scrub team on Sunday but face your rival on Thursday, some mental energy leaks forward.
+
+**When to Apply It:**
+- Clear "trap game" setup (cupcake before a monster)
+- Team is favored by a lot
+- The market seems to be pricing the team as if this game matters equally
+
+**When NOT to Apply It:**
+- Pro teams with veteran coaches know better
+- Short weeks make this less relevant (no time to look ahead)
+- The market has this calendar too
+
+---
+
+### The Zigzag Theory (Playoff Specific)
+
+**The Concept:** In playoff series, bet on the team that lost the previous game.
+
+**Why It Might Create Edge:**
+- Losing team makes adjustments
+- Winning team gets overconfident or the market overreacts to one game
+- Series tend to zigzag rather than sweep
+
+**Reality Check:**
+This was a known system for decades. The market has priced it in. It may still have *some* value in specific situations (Game 2 after a blowout Game 1), but blindly betting it no longer works.
+
+**The Key Insight:** Any system that can be described in one sentence has been arbitraged away. The question is whether THIS specific situation has additional factors the market hasn't priced.
+
+---
+
+### Reverse Line Movement
+
+**The Concept:** When the line moves OPPOSITE to where the public money is going.
+
+**Example:** 70% of bets are on the Lakers -9.5, but the line moves to Lakers -9. Why would the book move the line toward the popular side?
+
+**Why It Creates Edge:**
+Because the 30% betting the other way is SHARP MONEY - bigger bets from respected accounts. The book is more afraid of the sharps than the public.
+
+**When to Apply It:**
+- Verified data showing lopsided public betting
+- Line moving against that public action
+- Suggests sharps see something the public doesn't
+
+**Caution:**
+- Need actual public betting % data (not just vibes)
+- Small moves could be noise
+- Sharps aren't always right, just more often right
+
+---
+
+### The "Dead Cat Bounce"
+
+**The Concept:** A bad team that's been getting crushed will occasionally "show life" - especially at home, after a brutal stretch, when the market has completely written them off.
+
+**Why It Creates Edge:**
+When spreads get to double digits against struggling teams, the market sometimes overcorrects. Even bad teams have professional athletes who occasionally play with pride.
+
+**When to Apply It:**
+- Team has been getting blown out
+- Spread is massive (10+ points)
+- Home game after brutal road trip
+- Some "reason to care" (division game, last home game, etc.)
+
+**When NOT to Apply It:**
+- Team is actively tanking
+- No discernible reason for effort
+- Star players are sitting
+
+---
+
+### Totals Wisdom
+
+**"The Under Is Undefeated"** - A joking saying, but with truth:
+- Public loves overs (more fun to root for points)
+- This pushes totals slightly high
+- Weather, injuries, and game script often suppress scoring
+
+**But Also:**
+- The market knows this bias and adjusts
+- Blindly betting unders doesn't work
+- The edge is in specific situations where the total is clearly too high
+
+**Garbage Time Consideration (NBA):**
+- Blowouts often end closer than the actual game was
+- A team up 25 in the 4th might win by 12
+- This affects spread more than you'd think
+
+---
+
+## Reference Data (Use Sparingly)
+
+These are NOT rules. They're context. The market knows all of this.
+
+| Factor | What Research Shows | What This Means |
+|--------|---------------------|-----------------|
+| NFL Key Numbers | 3 (15%) and 7 (10%) are most common margins | Half-points around these numbers matter more |
+| NFL Home Field | ~1.5-2 points currently (down from 3 historically) | Don't over-value home field |
+| NBA Home Court | ~2 points on average | Similar - don't over-value |
+| NFL Favorites ATS | ~48% historically | Being better doesn't mean covering |
+| Known Injuries | Priced in after 2-3 games | If everyone knows, line reflects it |
+| Weather (NFL) | Wind over 15mph affects passing, under hits more | But market knows weather forecasts too |
+
+Use these as sanity checks, not as betting systems. The moment you turn them into rules, you've stopped thinking.
+
+---
+
+## Sport-Specific Reference (Context the Market Already Knows)
+
+This section contains situational factors organized by sport. **The market knows all of this.** These are not edges - they're baseline knowledge to make sure you're not missing something obvious. Use them as checklists, not strategies.
+
+---
+
+### NBA Quick Reference
+
+**Things to check:**
+- Is either team on a back-to-back? (Market adjusts, but check if adjustment is enough)
+- Any late scratch or minutes restriction? (Check closer to game time)
+- Is this a pace mismatch? (Slow team usually controls tempo)
+- Playoff implications? (Teams fighting for seeding vs. locked in vs. tanking)
+- Is a blowout likely? (Garbage time compresses margins - 20-point leads become 12-point wins)
+
+**Garbage time reality:** NBA blowouts rarely stay blowouts. When a team is up 20+ in the 4th, benches empty, intensity drops, and the final margin shrinks. If you're betting a big favorite, understand you need them to maintain the lead through garbage time - which is rare.
+
+**Three-point variance:** A team can shoot 40% from three one night and 28% the next with identical shot quality. If your thesis depends on shooting well, that's hope, not analysis.
+
+**Playoff vs. Regular Season:** Different sport. Rotations shorten (7-8 players), pace slows, defense intensifies, stars play 40+ minutes. Regular season trends don't carry over cleanly.
+
+---
+
+### NFL Quick Reference
+
+**Things to check:**
+- Key numbers: Is the line on or near 3 or 7? (Most common margins)
+- Weather: Wind over 15 MPH? Rain? Snow? (Affects passing, kicking, totals)
+- Short week? (Thursday games = sloppier football, less preparation time)
+- Divisional game? (Familiarity breeds closer games)
+- Lookahead spot? (Big game next week = potential trap this week)
+- Coming off bye? (Rested, but market knows this)
+
+**Key numbers matter more in NFL than any other sport.** The difference between -2.5 and -3.5 is massive. The difference between +6.5 and +7.5 is massive. Know what you're giving up or getting.
+
+**Weather specifics:** Wind over 15 MPH significantly impacts passing and kicking. Wind over 20 MPH can make passing games nearly impossible. Check weather closer to game time, not days before.
+
+**Primetime games:** SNF, MNF, TNF get the most public action. Lines are sharper. Finding edge is harder.
+
+---
+
+### NHL Quick Reference
+
+**Things to check:**
+- Who is starting in goal? (This is everything in hockey)
+- Is either team on a back-to-back? (Usually means backup goalie plays one game)
+- What's the travel situation? (West coast team flying east for early start = compromised)
+- Recent goalie performance? (Last 5-7 starts matter more than season averages)
+
+**Goalie is everything:** A hot goalie can steal games against superior teams. A cold goalie can sink a favorite. Never bet an NHL game without knowing who's in net.
+
+**Back-to-back goalie rotation:** Most teams play their backup in one game of a B2B. Know which game. The line should reflect this, but sometimes doesn't fully.
+
+**Puck luck and variance:** Hockey has massive variance. A team can dominate possession and lose 1-0 on a weird bounce. Expected goals (xG) shows who *should* have won. Look for teams due for regression in either direction.
+
+**Playoff hockey:** Different sport. Refs swallow whistles (fewer power plays), intensity spikes, goalies face more shots. Unders hit more often.
+
+---
+
+### College Sports Quick Reference
+
+**Things to check:**
+- Is this conference play or non-conference? (Different levels of competition)
+- Any travel disadvantage? (College kids handle travel worse than pros)
+- Lookahead spot? (Young players are emotional - rivalry game next week matters)
+- Motivation factor? (Bowl eligibility, rivalry, senior day)
+- Roster turnover? (Who left to draft/transfer portal?)
+
+**Home field worth more:** College home field is worth more than pros - approximately 3-4 points in football, 4-5 in basketball. Student sections, unfamiliar environments matter more for 19-year-olds.
+
+**Brand name bias:** Public overvalues Alabama, Ohio State, Duke, Kentucky regardless of current form. Creates potential value on opponents when blue bloods are struggling.
+
+**Line movement means more:** College lines are softer (less betting volume). Sharp money moves college lines more significantly. A 2+ point move with no news = someone knows something.
+
+---
+
+## Player Props Reference
+
+Props require different thinking than sides and totals. You're betting on one player for one game - high variance, but also opportunity for edge.
+
+**The core question for props:**
+> "What is this player's opportunity tonight, and does the line reflect it?"
+
+**Things to check:**
+
+1. **Game script projection:** If this game is a blowout, does your player benefit or suffer? Stars on winning teams might sit the 4th quarter. Players on losing teams might get extra volume chasing.
+
+2. **Matchup:** Who is defending this player tonight? A receiver against a lockdown corner is different than in the slot against a weak nickel. A running back against the #1 run defense is different than against the #31.
+
+3. **Usage context:** Is anyone else out? A player's usage can spike when teammates are injured. Check the injury report for opportunity, not just for the player himself.
+
+4. **Minutes/snap projection:** Any restriction? Coming off injury? Blowout risk reducing playing time?
+
+5. **Correlation to game outcome:** If you think a team wins big, their star probably scores (points over) but might not play the 4th (minutes under). Think about how props connect to your game view.
+
+**Line shopping is critical for props:** Prop lines vary significantly across books. One book might have 22.5 points, another 24.5. That's a huge edge just from finding the best number.
+
+**Variance warning:** Props are high variance. A player can average 25 points but score 15 or 35 on any given night. One bad night doesn't mean your analysis was wrong. Don't chase.
+
+---
+
+## Live Betting Reference
+
+Live betting is a different skill. You're not predicting outcomes - you're identifying when the live line has overreacted to recent events.
+
+**When to live bet:**
+- New information emerges (injury during game)
+- The line has overreacted to a score or momentum shift
+- You see something in the game flow the line doesn't reflect
+
+**When NOT to live bet:**
+- You missed the pregame line and want to chase
+- You're tilted from a bad beat
+- You don't have a specific reason - just a feeling
+
+**The overreaction principle:** Live lines overreact to recent events. A team scores twice quickly and suddenly they're huge favorites - but the underlying play might not have changed. A team falls behind early and their line balloons - but good teams come back. Look for overreactions and bet against them.
+
+**The window:** The best live bets come immediately after big events, before the line fully adjusts. If a starting QB gets hurt, the line adjusts within seconds - but there's often a brief window. Be ready. Know what you're looking for. Don't hesitate.
+
+**The trap:** Live betting feels actionable and exciting. This is dangerous. Most live bets are bad bets made emotionally. Only live bet when you have a specific, articulable edge - not just because you want action.
+
+---
+
+*Remember: The goal isn't to follow a system. The goal is to think clearly about THIS game and identify whether the market has made a specific, identifiable mistake. If you can't find one, that's okay. Pass and wait for a game where you can.*

@@ -170,10 +170,13 @@ const NCAAF_TOKENS = [
   // in the Scout Report, not via stat tokens.
 ];
 
-// NHL Stat Tokens (BETA - uses BDL + Gemini Grounding for advanced stats)
+// NHL Stat Tokens (uses BDL + Gemini Grounding for advanced stats)
 const NHL_TOKENS = [
-  // Standings & Records
+  // Standings & Records (from BDL standings endpoint)
   'STANDINGS', 'TEAM_RECORD', 'CONFERENCE_STANDING', 'DIVISION_STANDING',
+  'POINTS_PCT',           // Points percentage from BDL standings
+  'STREAK',               // Current win/loss streak from BDL standings
+  'PLAYOFF_POSITION',     // Playoff race context from standings
   // Special Teams (critical in hockey)
   'POWER_PLAY_PCT', 'PENALTY_KILL_PCT', 'SPECIAL_TEAMS', 'PP_OPPORTUNITIES',
   // Scoring
@@ -181,7 +184,7 @@ const NHL_TOKENS = [
   'SCORING_FIRST',        // Real fetcher - first goal stats
   // Shot Metrics
   'SHOTS_FOR', 'SHOTS_AGAINST', 'SHOT_DIFFERENTIAL', 'SHOT_QUALITY',
-  // Advanced Analytics (ALL REAL FETCHERS via Gemini!)
+  // Advanced Analytics (via Gemini Grounding)
   'CORSI_FOR_PCT',        // Real possession metric (CF%)
   'EXPECTED_GOALS',       // Real xG data
   'PDO',                  // Real luck indicator (Sh% + Sv%)
@@ -192,15 +195,30 @@ const NHL_TOKENS = [
   'REST_SITUATION', 'BACK_TO_BACK', 'HOME_ICE', 'ROAD_PERFORMANCE',
   // Faceoffs & Possession
   'FACEOFF_PCT', 'POSSESSION_METRICS',
-  // Players & Lineups
+  // Players & Lineups (from BDL box_scores and player_season_stats)
   'TOP_SCORERS', 'TOP_PLAYERS', 'INJURIES',
-  'LINE_COMBINATIONS',    // Real fetcher - forward lines and D pairings
+  'LINE_COMBINATIONS',    // Forward lines and D pairings
+  'HOT_PLAYERS',          // Players on hot streaks
   // Historical
   'H2H_HISTORY', 'RECENT_FORM', 'HOME_AWAY_SPLITS',
-  // Luck/Regression (ALL REAL FETCHERS!)
+  // Luck/Regression (from BDL + computed)
   'LUCK_INDICATORS',      // Real luck analysis (PDO, xG diff)
-  'CLOSE_GAME_RECORD',    // Points to CLUTCH_STATS
-  'OVERTIME_RECORD'       // Real OT/SO record calculated
+  'SHOOTING_REGRESSION',  // Player shooting % regression indicators
+  'CLOSE_GAME_RECORD',    // One-goal game record
+  'ONE_GOAL_GAMES',       // 1-goal game win/loss record (from BDL games)
+  'OVERTIME_RECORD',      // Real OT/SO record calculated
+  // NEW: Period Scoring Trends (from BDL play-by-play)
+  'PERIOD_SCORING',       // Period-by-period goal patterns
+  'FIRST_PERIOD_TRENDS',  // 1st period scoring tendencies
+  'THIRD_PERIOD_TRENDS',  // 3rd period scoring (close game finishes)
+  // NEW: Roster Depth (from BDL box_scores - time_on_ice distribution)
+  'DEPTH_SCORING',        // Bottom-6/bottom-pair contribution
+  'TOP_SIX_PRODUCTION',   // Top-6 forward production
+  'FOURTH_LINE_IMPACT',   // 4th line energy/physicality
+  // NEW: Variance/Consistency (from BDL standings + games)
+  'REGULATION_WIN_PCT',   // Regulation wins vs total wins
+  'OT_LOSS_RATE',         // OT loss rate (luck indicator)
+  'MARGIN_VARIANCE'       // Goal differential variance
 ];
 
 // EPL Stat Tokens (BETA - uses BDL + Gemini Grounding for advanced analytics)

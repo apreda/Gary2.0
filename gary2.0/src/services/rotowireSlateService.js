@@ -78,62 +78,206 @@ export async function fetchLineupsAndInjuries(sport = 'NBA') {
     const data = await page.evaluate((sportName) => {
       const results = {};
       
-      // Select all game boxes
-      const gameBoxes = document.querySelectorAll('.lineups, .lineup-box, .lineup__box');
+      // ═══════════════════════════════════════════════════════════════════════════
+      // NHL-specific parsing with multiple selector strategies
+      // ═══════════════════════════════════════════════════════════════════════════
+      
+      // Strategy 1: Find game containers (works for NBA/NHL lineup pages)
+      let gameBoxes = document.querySelectorAll('.lineup, .lineups, .lineup-box, .lineup__box, [class*="lineup"][class*="card"], [class*="matchup"]');
+      
+      // Strategy 2: If no game boxes, try to find by team abbreviations pattern
+      if (gameBoxes.length === 0) {
+        gameBoxes = document.querySelectorAll('section, article, .game, [class*="game"]');
+      }
       
       gameBoxes.forEach(box => {
-        // Find team names
-        const teams = Array.from(box.querySelectorAll('.lineup__abbr, .lineup__team-name, [class*="team-name"]'))
-          .map(el => el.textContent?.trim().toUpperCase());
+        // Find team abbreviations (3-letter codes like "CGY", "VAN", "OTT")
+        const abbrs = Array.from(box.querySelectorAll('[class*="abbr"], [class*="team-name"], .lineup__abbr, abbr'))
+          .map(el => el.textContent?.trim().toUpperCase())
+          .filter(t => t && t.length >= 2 && t.length <= 4 && /^[A-Z]+$/.test(t));
         
-        if (teams.length >= 2) {
-          const awayTeam = teams[0];
-          const homeTeam = teams[1];
+        // Extract unique team abbreviations (first two are usually away, home)
+        const uniqueTeams = [...new Set(abbrs)].slice(0, 2);
+        
+        if (uniqueTeams.length >= 2) {
+          const awayTeam = uniqueTeams[0];
+          const homeTeam = uniqueTeams[1];
           
-          results[awayTeam] = { opponent: homeTeam, lineups: [], injuries: [] };
-          results[homeTeam] = { opponent: awayTeam, lineups: [], injuries: [] };
+          results[awayTeam] = { opponent: homeTeam, lineups: [], injuries: [], goalie: null, goalieStatus: null };
+          results[homeTeam] = { opponent: awayTeam, lineups: [], injuries: [], goalie: null, goalieStatus: null };
           
-          // Find starters/lineups
-          const lineupLists = box.querySelectorAll('.lineup__list, .lineup__main');
-          lineupLists.forEach((list, idx) => {
-            const teamKey = idx === 0 ? awayTeam : homeTeam;
-            const players = Array.from(list.querySelectorAll('.lineup__player, [class*="player"]'));
+          // ═══════════════════════════════════════════════════════════════════════════
+          // NHL: Find starting goalies (Confirmed/Expected)
+          // ═══════════════════════════════════════════════════════════════════════════
+          const findGoalies = (container, teamKey) => {
+            // Look for goalie names near "Expected" or "Confirmed" text
+            const allText = container.textContent || '';
+            
+            // Pattern: "Goalie Name Expected" or "Goalie Name Confirmed"
+            const goalieMatches = allText.match(/([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+(Expected|Confirmed)/g);
+            if (goalieMatches && goalieMatches.length > 0) {
+              const match = goalieMatches[0].match(/([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+(Expected|Confirmed)/);
+              if (match) {
+                return { name: match[1], status: match[2] };
+              }
+            }
+            return null;
+          };
+          
+          // Split box into two halves for away/home
+          const boxHtml = box.innerHTML || '';
+          const midPoint = Math.floor(boxHtml.length / 2);
+          
+          // ═══════════════════════════════════════════════════════════════════════════
+          // Find lineup players (forwards, defensemen) - handle two-column layout
+          // ═══════════════════════════════════════════════════════════════════════════
+          
+          // Look for team-specific sections (RotoWire uses left/right or columns)
+          const teamSections = box.querySelectorAll('[class*="team"], [class*="lineup__team"], [class*="column"], [class*="half"]');
+          
+          // Helper to extract players from a section
+          const extractPlayers = (container, teamKey) => {
+            if (!results[teamKey]) return;
+            const seenPlayers = new Set(results[teamKey].lineups.map(p => p.name));
+            
+            const players = Array.from(container.querySelectorAll('a[href*="player"], .lineup__player a, li a'));
             players.forEach(p => {
-              const name = p.querySelector('a')?.textContent?.trim() || p.textContent?.trim();
-              const pos = p.querySelector('.lineup__pos')?.textContent?.trim() || '';
-              if (name) {
+              let name = p.textContent?.trim() || '';
+              
+              // Clean up name: remove newlines, position prefixes, extra whitespace
+              name = name.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
+              // Remove position prefix like "C " or "LW " at start
+              name = name.replace(/^(C|LW|RW|LD|RD|G|D|F)\s+/i, '');
+              
+              // Get position from nearby element or parent
+              const parent = p.closest('li, div, span');
+              const posEl = parent?.querySelector('[class*="pos"]');
+              const pos = posEl?.textContent?.trim() || '';
+              
+              // Skip invalid entries
+              const skipPatterns = ['POWER PLAY', 'INJURIES', 'Expected', 'Confirmed', 'IR', 'OUT', 'DTD'];
+              const isSkippable = skipPatterns.some(skip => name.toUpperCase().includes(skip));
+              
+              if (name && name.length > 2 && !isSkippable && !seenPlayers.has(name)) {
+                seenPlayers.add(name);
                 results[teamKey].lineups.push({ name, position: pos, isStarter: true });
               }
             });
-          });
+          };
           
-          // Find injuries
-          const injuryLists = box.querySelectorAll('.lineup__injuries, .lineup__injury');
-          injuryLists.forEach((list, idx) => {
-            const teamKey = idx === 0 ? awayTeam : homeTeam;
-            const players = Array.from(list.querySelectorAll('li, .lineup__player'));
-            players.forEach(p => {
-              const name = p.querySelector('a')?.textContent?.trim() || p.textContent?.trim();
-              const status = p.querySelector('.lineup__status, .lineup__inj')?.textContent?.trim() || '';
-              if (name && name.length > 2) {
-                // Clean up name (often contains status at the end like "LeBron James (Q)")
-                let cleanName = name.split('(')[0].trim();
-                let cleanStatus = status || '';
-                
-                if (!cleanStatus && name.includes('(')) {
-                  const match = name.match(/\(([^)]+)\)/);
-                  if (match) cleanStatus = match[1];
+          if (teamSections.length >= 2) {
+            // Found separate team sections
+            extractPlayers(teamSections[0], awayTeam);
+            extractPlayers(teamSections[1], homeTeam);
+          } else {
+            // Fallback: split box by position (left half = away, right half = home)
+            // Get all player links and sort by their horizontal position
+            const allPlayerLinks = Array.from(box.querySelectorAll('a[href*="player"], .lineup__player a, li a'));
+            const boxRect = box.getBoundingClientRect();
+            const midX = boxRect.left + boxRect.width / 2;
+            
+            const awayPlayers = [];
+            const homePlayers = [];
+            
+            allPlayerLinks.forEach(link => {
+              const rect = link.getBoundingClientRect();
+              let name = link.textContent?.trim() || '';
+              name = name.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
+              name = name.replace(/^(C|LW|RW|LD|RD|G|D|F)\s+/i, '');
+              
+              const skipPatterns = ['POWER PLAY', 'INJURIES', 'Expected', 'Confirmed', 'IR', 'OUT', 'DTD'];
+              const isSkippable = skipPatterns.some(skip => name.toUpperCase().includes(skip));
+              
+              if (name && name.length > 2 && !isSkippable) {
+                if (rect.left < midX) {
+                  awayPlayers.push({ name, position: '', isStarter: true });
+                } else {
+                  homePlayers.push({ name, position: '', isStarter: true });
                 }
-                
-                results[teamKey].injuries.push({ 
-                  name: cleanName, 
-                  status: cleanStatus.toUpperCase() 
-                });
+              }
+            });
+            
+            // Dedupe and add to results
+            const addUnique = (target, source) => {
+              const seen = new Set(target.lineups.map(p => p.name));
+              source.forEach(p => {
+                if (!seen.has(p.name)) {
+                  target.lineups.push(p);
+                  seen.add(p.name);
+                }
+              });
+            };
+            
+            if (results[awayTeam]) addUnique(results[awayTeam], awayPlayers);
+            if (results[homeTeam]) addUnique(results[homeTeam], homePlayers);
+          }
+          
+          // ═══════════════════════════════════════════════════════════════════════════
+          // Find injuries (OUT, IR, DTD, IR-LT, IR-NR)
+          // ═══════════════════════════════════════════════════════════════════════════
+          const injuryContainers = box.querySelectorAll('.lineup__injuries, [class*="injuries"], .injuries');
+          injuryContainers.forEach((list, idx) => {
+            const teamKey = idx === 0 ? awayTeam : homeTeam;
+            const injuryItems = Array.from(list.querySelectorAll('li, [class*="player"], [class*="injury-item"]'));
+            
+            injuryItems.forEach(item => {
+              const nameEl = item.querySelector('a');
+              const name = nameEl?.textContent?.trim() || '';
+              
+              // Look for status (OUT, IR, DTD, etc.)
+              const itemText = item.textContent || '';
+              let status = '';
+              const statusMatch = itemText.match(/(OUT|IR|DTD|IR-LT|IR-NR|Questionable|Q|Probable|P|Doubtful|D)/i);
+              if (statusMatch) {
+                status = statusMatch[1].toUpperCase();
+              }
+              
+              if (name && name.length > 2) {
+                results[teamKey].injuries.push({ name, status });
               }
             });
           });
+          
+          // ═══════════════════════════════════════════════════════════════════════════
+          // Fallback: Parse injuries from raw text (e.g., "* C B. Coleman DTD")
+          // ═══════════════════════════════════════════════════════════════════════════
+          const fullText = box.textContent || '';
+          const injuryPattern = /([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?(?:\s+[A-Z][a-z]+)?)\s+(OUT|IR|DTD|IR-LT|IR-NR)/g;
+          let injMatch;
+          while ((injMatch = injuryPattern.exec(fullText)) !== null) {
+            const injName = injMatch[1].trim();
+            const injStatus = injMatch[2];
+            
+            // Add to both teams if we can't determine which (will dedupe later)
+            if (injName.length > 3) {
+              [awayTeam, homeTeam].forEach(team => {
+                const existing = results[team].injuries.find(i => i.name === injName);
+                if (!existing) {
+                  results[team].injuries.push({ name: injName, status: injStatus });
+                }
+              });
+            }
+          }
         }
       });
+      
+      // ═══════════════════════════════════════════════════════════════════════════
+      // Strategy 3: If still no results, try parsing from page-level structure
+      // ═══════════════════════════════════════════════════════════════════════════
+      if (Object.keys(results).length === 0) {
+        // Look for any team abbreviations in headers/titles
+        const allHeaders = document.querySelectorAll('h2, h3, h4, .game-header, [class*="matchup"]');
+        allHeaders.forEach(header => {
+          const text = header.textContent || '';
+          const teamMatch = text.match(/([A-Z]{2,4})\s+(?:@|vs\.?|at)\s+([A-Z]{2,4})/i);
+          if (teamMatch) {
+            const away = teamMatch[1].toUpperCase();
+            const home = teamMatch[2].toUpperCase();
+            if (!results[away]) results[away] = { opponent: home, lineups: [], injuries: [] };
+            if (!results[home]) results[home] = { opponent: away, lineups: [], injuries: [] };
+          }
+        });
+      }
       
       return results;
     }, sportUpper);

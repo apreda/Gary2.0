@@ -472,23 +472,28 @@ export function findBestPlayerMatch(targetName, players) {
 /**
  * Helper to parse injury date from BDL description (e.g., "Oct 9: Tatum..." or "Dec 25: Herro...")
  * @param {string} description - BDL injury description
- * @returns {Date|null} - Parsed date or null
+ * @returns {{ date: Date, dateStr: string } | null} - Parsed date and original string, or null
  */
 export function parseInjuryDate(description) {
   if (!description || typeof description !== 'string') return null;
   const today = new Date();
+  
+  // Pattern 1: "Dec 25:" at start of description (most common BDL format)
   const dateMatch = description.match(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}):/i);
   if (dateMatch) {
     const monthMap = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
     const month = monthMap[dateMatch[1].toLowerCase()];
     const day = parseInt(dateMatch[2]);
     const year = today.getFullYear();
-    // If month is in the future, assume previous year
     const injuryDate = new Date(year, month, day);
+    // If month is in the future, assume previous year (season wrap-around)
     if (injuryDate > today) {
       injuryDate.setFullYear(year - 1);
     }
-    return injuryDate;
+    return { 
+      date: injuryDate, 
+      dateStr: `${dateMatch[1]} ${dateMatch[2]}` // e.g., "Dec 25"
+    };
   }
   return null;
 }
@@ -499,11 +504,21 @@ export function parseInjuryDate(description) {
  * @returns {number|null} - Days or null
  */
 export function getDaysSinceInjury(description) {
-  const injuryDate = parseInjuryDate(description);
-  if (!injuryDate) return null;
+  const parsed = parseInjuryDate(description);
+  if (!parsed) return null;
   const today = new Date();
-  const diffMs = today - injuryDate;
+  const diffMs = today - parsed.date;
   return Math.floor(diffMs / (1000 * 60 * 60 * 24));
+}
+
+/**
+ * Get human-readable injury report date string
+ * @param {string} description - BDL injury description
+ * @returns {string|null} - Date string like "Jan 8" or null
+ */
+export function getInjuryReportDateStr(description) {
+  const parsed = parseInjuryDate(description);
+  return parsed ? parsed.dateStr : null;
 }
 
 /**
@@ -511,7 +526,7 @@ export function getDaysSinceInjury(description) {
  * This is the SOURCE OF TRUTH for Gary's understanding of injuries.
  * 
  * @param {Object} injury - Raw BDL injury object
- * @returns {Object} - Enhanced injury object with 'duration' and 'isEdge'
+ * @returns {Object} - Enhanced injury object with 'duration', 'isEdge', 'reportDateStr', and 'daysSinceReport'
  */
 export function fixBdlInjuryStatus(injury) {
   if (!injury) return injury;
@@ -527,9 +542,11 @@ export function fixBdlInjuryStatus(injury) {
   const todayDay = todayStr.split(' ')[1];
   const isReturnToday = returnDate.includes(todayMonth) && returnDate.includes(todayDay);
   
-  // Calculate days since injury was first reported
+  // Calculate days since injury was first reported AND extract the actual date string
   const daysSinceReport = getDaysSinceInjury(rawDesc);
+  const reportDateStr = getInjuryReportDateStr(rawDesc);
   injury.daysSinceReport = daysSinceReport;
+  injury.reportDateStr = reportDateStr; // e.g., "Jan 8" - the actual date for Gary to see
   
   // 1. Fix Status Inconsistencies (BDL often lists as 'Out' when they are GTD)
   if (injury.status === 'Out') {

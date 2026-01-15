@@ -1091,11 +1091,90 @@ async function nflGameAlreadyHasPick(homeTeam, awayTeam) {
   return { exists: false };
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// TEST PICKS STORAGE - Stores to test_daily_picks table (not displayed in app)
+// ═══════════════════════════════════════════════════════════════════════════
+async function storeTestPicks(picks, testName = null, testNotes = null) {
+  if (!picks || !Array.isArray(picks) || picks.length === 0)
+    return { success: false, message: 'No picks provided' };
+
+  // Get current EST date
+  const estDate = new Date().toLocaleString('en-US', { 
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  });
+  const [month, day, year] = estDate.split('/');
+  const currentDateString = `${year}-${month}-${day}`;
+
+  await ensureValidSupabaseSession();
+  
+  try {
+    // Check for existing test picks for today
+    const { data: existingRows, error: selectError } = await supabase
+      .from('test_daily_picks')
+      .select('id, picks')
+      .eq('date', currentDateString)
+      .limit(1);
+
+    if (selectError) {
+      console.error('Error selecting existing test_daily_picks row:', selectError);
+    }
+
+    const existing = existingRows?.[0];
+    
+    if (existing) {
+      // Append to existing test picks
+      const existingPicks = Array.isArray(existing.picks) ? existing.picks : [];
+      const mergedPicks = [...existingPicks, ...picks];
+      
+      const { error: updateError } = await supabase
+        .from('test_daily_picks')
+        .update({ 
+          picks: mergedPicks,
+          test_name: testName || existing.test_name,
+          test_notes: testNotes || existing.test_notes,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', existing.id);
+
+      if (updateError) {
+        throw new Error(`Failed to update test picks: ${updateError.message}`);
+      }
+
+      console.log(`✅ Successfully appended ${picks.length} picks to test_daily_picks (total: ${mergedPicks.length})`);
+      return { success: true, count: picks.length, mode: 'append', total: mergedPicks.length };
+    } else {
+      // Insert new test picks row
+      const { error: insertError } = await supabase
+        .from('test_daily_picks')
+        .insert({
+          date: currentDateString,
+          picks: picks,
+          test_name: testName,
+          test_notes: testNotes
+        });
+
+      if (insertError) {
+        throw new Error(`Failed to insert test picks: ${insertError.message}`);
+      }
+
+      console.log(`✅ Successfully inserted ${picks.length} test picks for ${currentDateString}`);
+      return { success: true, count: picks.length, mode: 'insert' };
+    }
+  } catch (error) {
+    console.error('❌ Error storing test picks:', error.message);
+    return { success: false, error: error.message };
+  }
+}
+
 // Export both styles!
 const picksService = {
   generateDailyPicks,
   generateWhatGaryThinks,
   storeDailyPicksInDatabase,
+  storeTestPicks,
   storeWeeklyNFLPicks,
   getWeeklyNFLPicks,
   nflGameAlreadyHasPick,
@@ -1109,5 +1188,5 @@ const picksService = {
 };
 
 export { processGameOnce, cachedApiCall, _teamNameMatch, gameAlreadyHasPick, nflGameAlreadyHasPick };
-export { picksService, generateDailyPicks, logAgenticRun, storeWeeklyNFLPicks, getWeeklyNFLPicks };
+export { picksService, generateDailyPicks, logAgenticRun, storeWeeklyNFLPicks, getWeeklyNFLPicks, storeTestPicks };
 export default picksService;
