@@ -148,49 +148,256 @@ const MAX_PUNTS_PER_LINEUP = {
 };
 
 /**
- * Salary distribution archetypes for lineup construction
- * Different strategies for different risk tolerance
+ * ═══════════════════════════════════════════════════════════════════════════
+ * GARY'S SHARP KNOWLEDGE BASE
+ * ═══════════════════════════════════════════════════════════════════════════
+ * 
+ * This is what Gary KNOWS as a sharp DFS player - NOT rules he must follow.
+ * Gary uses this knowledge to THINK, then makes his OWN decisions.
+ * 
+ * The system identifies what Gary built and surfaces relevant considerations
+ * from this knowledge base. Gary decides if his conviction justifies the risk.
+ * 
+ * PHILOSOPHY: Gary is the decision maker. We provide awareness, not rules.
  */
+export const GARY_SHARP_KNOWLEDGE = {
+  
+  // ═══════════════════════════════════════════════════════════════════════
+  // BUILD ARCHETYPES - Patterns Gary recognizes and their trade-offs
+  // ═══════════════════════════════════════════════════════════════════════
+  archetypes: {
+    'mini_max': {
+      name: 'Mini-Max',
+      pattern: '3+ premium plays ($9K+) via 1-2 extreme punts',
+      when_it_works: 'Punts have ESTABLISHED roles (injury boost, confirmed starter, 20+ MPG)',
+      when_it_fails: 'Punts are dart throws without clear minutes path',
+      ceiling: 'Very high - three studs can all pop',
+      floor: 'Very low - punt bust tanks lineup',
+      key_question: 'Do your punts have real paths to production or are they lottery tickets?'
+    },
+    
+    'balanced': {
+      name: 'Balanced Build',
+      pattern: 'Spread salary across proven mid-tier ($7-9K)',
+      when_it_works: 'Mid-tier has multiple smash spots, no clear alpha dominates',
+      when_it_fails: 'One alpha dominates slate and you missed them',
+      ceiling: 'Moderate - harder to separate from field',
+      floor: 'High - multiple paths to hitting',
+      key_question: 'Is this slate truly balanced or did you miss an alpha opportunity?'
+    },
+    
+    'alpha_anchor': {
+      name: 'Alpha Anchor',
+      pattern: 'One $11K+ true superstar + quality throughout',
+      when_it_works: 'Clear alpha situation (injury boost + pace + matchup alignment)',
+      when_it_fails: 'Alpha underperforms and you have no pivot',
+      ceiling: 'High - alpha alone can carry to cash',
+      floor: 'Moderate - alpha provides production base',
+      key_question: 'Is your alpha truly in a smash spot or just expensive?'
+    },
+    
+    'stars_and_scrubs': {
+      name: 'Stars & Scrubs',
+      pattern: '2 true studs ($10K+) + value plays throughout',
+      when_it_works: 'Two clear alpha situations, cheap chalk hits',
+      when_it_fails: 'Either stud busts or value tier zeros out',
+      ceiling: 'Very high - two alphas popping = tournament winner',
+      floor: 'Low - high variance by design',
+      key_question: 'Do both studs have independent paths to smashing?'
+    },
+    
+    'leverage_contrarian': {
+      name: 'Leverage/Contrarian',
+      pattern: '5+ players under 10% ownership',
+      when_it_works: 'Chalk has red flags and your fades are reasoned',
+      when_it_fails: 'Chalk hits anyway and you have zero equity',
+      ceiling: 'Massive - if your reads are right, field is dead',
+      floor: 'Very low - fighting against consensus',
+      key_question: 'Are you contrarian for a reason or just being different?'
+    },
+    
+    'game_stack': {
+      name: 'Game Stack',
+      pattern: '3-4 players from one high-total game',
+      when_it_works: 'Vegas total 235+, close spread, pace-up matchup',
+      when_it_fails: 'Game goes under or wrong side dominates',
+      ceiling: 'Massive - correlated upside in shootout',
+      floor: 'Very low - correlated downside if game busts',
+      key_question: 'Does game environment support a shootout?'
+    },
+    
+    'injury_stack': {
+      name: 'Injury Replacement Stack',
+      pattern: 'Stack multiple beneficiaries of same star OUT',
+      when_it_works: 'Star OUT creates 30+ usage/minutes to redistribute',
+      when_it_fails: 'Coach goes random rotation or blowout kills minutes',
+      ceiling: 'High - multiple players popping from same source',
+      floor: 'Moderate - usage has to go somewhere',
+      key_question: 'Is this fresh injury or has market already adjusted?'
+    },
+    
+    'ceiling_chase': {
+      name: 'Ceiling Chase',
+      pattern: 'Maximum upside build, accept high bust rate',
+      when_it_works: 'Massive GPP (50K+ entries) where you need 400+ to cash big',
+      when_it_fails: 'Small field where consistency wins',
+      ceiling: 'Maximum - built to win tournaments',
+      floor: 'Minimum - will bust frequently',
+      key_question: 'Is this field size large enough to need a ceiling build?'
+    },
+    
+    'anti_fragile': {
+      name: 'Anti-Fragile',
+      pattern: 'High floor + moderate ceiling - survives variance',
+      when_it_works: 'Small-field GPP, single entry, or cash game',
+      when_it_fails: 'Large GPP where you need ceiling to separate',
+      ceiling: 'Moderate - not built to win big',
+      floor: 'Very high - rarely busts completely',
+      key_question: 'Is this the right build for this contest size?'
+    },
+    
+    'run_it_back': {
+      name: 'Run It Back Stack',
+      pattern: 'Primary stack + opposing players for game correlation',
+      when_it_works: 'High total (235+) with close spread (under 5 points)',
+      when_it_fails: 'One team dominates and your bring-back is useless',
+      ceiling: 'Massive - both sides of shootout',
+      floor: 'Low - double correlation risk',
+      key_question: 'Is spread tight enough that both teams will score?'
+    },
+    
+    'pace_up_spot': {
+      name: 'Pace Up Spot',
+      pattern: 'Target players facing faster pace than usual',
+      when_it_works: 'Slow team faces top-5 pace team',
+      when_it_fails: 'Blowout kills pace-up opportunity',
+      ceiling: 'High - more possessions = more production',
+      floor: 'Moderate - pace boost has floor',
+      key_question: 'Will game script allow full pace-up benefit?'
+    }
+  },
+  
+  // ═══════════════════════════════════════════════════════════════════════
+  // PRO CONCEPTS - Mental models Gary uses when thinking
+  // ═══════════════════════════════════════════════════════════════════════
+  concepts: {
+    'ownership_leverage': {
+      principle: 'Your edge = (your_exposure - field_exposure) × player_outperformance',
+      insight: 'Being 10% overweight on player who beats projection by 15pts = massive equity gain'
+    },
+    
+    'correlation_theory': {
+      principle: 'Correlated players rise/fall together - amplifies upside AND downside',
+      insight: 'Use correlation when game environment supports. Avoid when forcing.'
+    },
+    
+    'slate_size_adjustment': {
+      small_slate: 'Chalk is more acceptable, correlation matters more, fewer unique paths',
+      large_slate: 'Uniqueness matters more, contrarian builds gain equity'
+    },
+    
+    'positional_scarcity': {
+      principle: 'When a position is thin, chalk is forced',
+      insight: 'Accept chalk at scarce positions. Fight ownership battles elsewhere.'
+    },
+    
+    'game_theory': {
+      principle: 'Sometimes play chalk BECAUSE others are fading it',
+      insight: 'If 25% owned chalk hits, all faders lose equity to you'
+    },
+    
+    'value_vs_dart_throw': {
+      value_play: 'Cheap player with ESTABLISHED role - clear path to production',
+      dart_throw: 'Cheap player without clear minutes - pure lottery ticket',
+      insight: 'Value plays win lineups. Dart throws are for ceiling chasing only.'
+    },
+    
+    'ceiling_gap': {
+      principle: 'Gap between projection and ceiling reveals upside potential',
+      gpp_target: 'GPP lineups should have 15-20%+ ceiling gap',
+      cash_target: 'Cash lineups should have 5-10% ceiling gap (floor matters more)'
+    }
+  },
+  
+  // ═══════════════════════════════════════════════════════════════════════
+  // SHARP DATA POINTS - What Gary investigates for each player
+  // ═══════════════════════════════════════════════════════════════════════
+  data_points: {
+    'minutes_volatility': 'High volatility = GPP only (boom/bust profile)',
+    'usage_in_close_games': 'Does coach trust them in crunch time? (floor indicator)',
+    'garbage_time_equity': 'Do they play when down 20? (blowout hedge)',
+    'pace_adjusted_stats': 'Raw stats lie - pace context matters',
+    'home_vs_away_splits': 'Some players have massive home/road gaps',
+    'vs_top_defense': 'Do they maintain production against elite D?',
+    'back_to_back_impact': 'Vets often rest, young guys get extra run'
+  },
+  
+  // ═══════════════════════════════════════════════════════════════════════
+  // WINNING SCORE TARGETS - What Gary needs to hit to actually WIN
+  // ═══════════════════════════════════════════════════════════════════════
+  // Gary builds lineups that CAN WIN, not lineups that merely "cash"
+  // These are targets for first-place finishes in each contest type
+  winning_targets: {
+    NBA: {
+      draftkings: {
+        // DraftKings NBA: 8 players, $50K cap
+        gpp_small: { win: 350, cash: 280, description: 'Small GPP (50-500 entries) - ~350 wins' },
+        gpp_medium: { win: 370, cash: 280, description: 'Medium GPP (500-5K entries) - ~370 wins' },
+        gpp_large: { win: 400, cash: 280, description: 'Large GPP (5K+ entries) - 400+ needed for 1st' },
+        gpp_milly: { win: 420, cash: 280, description: 'Milly Maker (50K+ entries) - 420+ for top spots' },
+        cash: { win: 280, cash: 280, description: 'Cash games (50/50, H2H) - 280+ is safe' },
+        avg_per_player: { gpp_win: 45, cash: 35, description: 'GPP winner averages 45+ FPTS/player' }
+      },
+      fanduel: {
+        // FanDuel NBA: 9 players, $60K cap
+        gpp_small: { win: 340, cash: 270, description: 'Small GPP - ~340 wins' },
+        gpp_medium: { win: 360, cash: 270, description: 'Medium GPP - ~360 wins' },
+        gpp_large: { win: 380, cash: 270, description: 'Large GPP - 380+ for 1st' },
+        cash: { win: 270, cash: 270, description: 'Cash games - 270+ is safe' },
+        avg_per_player: { gpp_win: 40, cash: 30, description: 'GPP winner averages 40+ FPTS/player' }
+      }
+    },
+    NFL: {
+      draftkings: {
+        // DraftKings NFL: 9 players, $50K cap
+        gpp_small: { win: 180, cash: 130, description: 'Small GPP - ~180 wins' },
+        gpp_medium: { win: 200, cash: 130, description: 'Medium GPP - ~200 wins' },
+        gpp_large: { win: 220, cash: 130, description: 'Large GPP - 220+ for 1st' },
+        gpp_milly: { win: 250, cash: 130, description: 'Milly Maker - 250+ for top spots' },
+        cash: { win: 130, cash: 130, description: 'Cash games - 130+ is safe' }
+      },
+      fanduel: {
+        // FanDuel NFL: 9 players, $60K cap  
+        gpp_small: { win: 170, cash: 120, description: 'Small GPP - ~170 wins' },
+        gpp_medium: { win: 190, cash: 120, description: 'Medium GPP - ~190 wins' },
+        gpp_large: { win: 210, cash: 120, description: 'Large GPP - 210+ for 1st' },
+        cash: { win: 120, cash: 120, description: 'Cash games - 120+ is safe' }
+      }
+    }
+  }
+};
+
+// Legacy export for backward compatibility
 export const LINEUP_ARCHETYPES = {
   'stars_and_scrubs': {
     name: 'Stars & Scrubs',
     description: 'High variance - 2 studs, rest value plays',
-    distribution: {
-      '$10k+': 2,
-      '$7k-$9k': 2,
-      '$5k-$7k': 2,
-      'under_$5k': 3
-    },
     contestTypes: ['gpp'],
     riskLevel: 'VERY_HIGH',
     floorTarget: 260,
     ceilingTarget: 400
   },
-  
   'balanced_build': {
     name: 'Balanced Build',
     description: 'Medium variance - spread salary across mid-tier stars',
-    distribution: {
-      '$10k+': 1,
-      '$7k-$9k': 4,   // Focus on proven mid-tier players
-      '$5k-$7k': 3,
-      'under_$5k': 1
-    },
     contestTypes: ['gpp', 'cash'],
     riskLevel: 'MEDIUM',
     floorTarget: 300,
     ceilingTarget: 380
   },
-  
   'cash_safe': {
     name: 'Cash Safe',
     description: 'Low variance - high floor, no punts',
-    distribution: {
-      '$8k-$10k': 3,
-      '$6k-$8k': 4,
-      '$5k-$6k': 2,
-      'under_$5k': 0  // NO PUNTS in cash games
-    },
     contestTypes: ['cash'],
     riskLevel: 'LOW',
     floorTarget: 320,
@@ -239,8 +446,370 @@ const ANTI_CORRELATION_RULES = {
     },
     penalty: -20,
     reason: 'Both backup RBs - one will dominate, other gets nothing'
+  },
+  
+  'ball_dominant_guards': {
+    name: 'Ball-Dominant Guard Overlap',
+    check: (playerA, playerB) => {
+      // List of ball-dominant guards who cannibalize each other's usage
+      const BALL_DOMINANT_GUARDS = [
+        'james harden', 'tyrese maxey', 'luka doncic', 'trae young',
+        'damian lillard', 'ja morant', 'shai gilgeous-alexander', 'de\'aaron fox',
+        'kyrie irving', 'donovan mitchell', 'jalen brunson', 'cade cunningham',
+        'lamelo ball', 'darius garland', 'tyrese haliburton', 'anthony edwards',
+        'stephen curry', 'fred vanvleet', 'devin booker', 'russell westbrook'
+      ];
+      
+      const aName = (playerA.player || playerA.name || '').toLowerCase();
+      const bName = (playerB.player || playerB.name || '').toLowerCase();
+      
+      const aIsBallDominant = BALL_DOMINANT_GUARDS.some(g => aName.includes(g) || g.includes(aName.split(' ').pop()));
+      const bIsBallDominant = BALL_DOMINANT_GUARDS.some(g => bName.includes(g) || g.includes(bName.split(' ').pop()));
+      
+      // Only flag if BOTH are ball-dominant AND on the same team
+      return aIsBallDominant && bIsBallDominant && playerA.team === playerB.team;
+    },
+    penalty: -12,
+    reason: 'Ball-dominant guards cannibalize each other\'s usage - limit ceiling in GPPs'
+  },
+  
+  'star_returning_beneficiary': {
+    name: 'Star Returning - Beneficiary Loses Value',
+    check: (playerA, playerB) => {
+      // Check if one player is marked as losing value due to star returning
+      const aLosesValue = playerA.starReturning || playerA.roleEnded || playerA.usageChange < -5;
+      const bLosesValue = playerB.starReturning || playerB.roleEnded || playerB.usageChange < -5;
+      
+      // Flag if EITHER player has reduced opportunity
+      return (aLosesValue || bLosesValue) && playerA.team === playerB.team;
+    },
+    penalty: -8,
+    reason: 'Star returning reduces role player\'s value - ceiling capped'
   }
 };
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BUILD IDENTIFICATION & REFLECTION - Non-Prescriptive Awareness
+// ═══════════════════════════════════════════════════════════════════════════
+// 
+// Gary builds whatever lineup HE thinks wins. These functions identify what
+// he built and surface relevant considerations from his sharp knowledge base.
+// 
+// This is REFLECTION, not rules. Gary decides if his conviction holds.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Identify what type of build Gary created based on salary distribution
+ * This is DETECTION, not prescription - we're observing what Gary chose
+ * 
+ * @param {Array} lineup - The lineup Gary built
+ * @param {string} platform - 'draftkings' or 'fanduel'
+ * @returns {Object} Build identification with type and tier breakdown
+ */
+export function identifyBuildType(lineup, platform = 'draftkings') {
+  // Platform-specific salary thresholds
+  const thresholds = platform === 'fanduel' 
+    ? { alpha: 9500, star: 8500, mid: 5500, value: 4000 }
+    : { alpha: 10000, star: 9000, mid: 6000, value: 4000 };
+  
+  // Categorize players into tiers
+  const alphas = lineup.filter(s => (s.salary || 0) >= thresholds.alpha);
+  const stars = lineup.filter(s => (s.salary || 0) >= thresholds.star && (s.salary || 0) < thresholds.alpha);
+  const mids = lineup.filter(s => (s.salary || 0) >= thresholds.mid && (s.salary || 0) < thresholds.star);
+  const values = lineup.filter(s => (s.salary || 0) >= thresholds.value && (s.salary || 0) < thresholds.mid);
+  const punts = lineup.filter(s => (s.salary || 0) < thresholds.value);
+  
+  const premiumCount = alphas.length + stars.length;
+  const totalPremiumSalary = [...alphas, ...stars].reduce((sum, s) => sum + (s.salary || 0), 0);
+  
+  // Identify build type based on distribution pattern
+  let buildType = 'balanced'; // Default
+  let confidence = 'medium';
+  
+  // Check for game stack (3+ from same team)
+  const teamCounts = {};
+  lineup.forEach(s => {
+    teamCounts[s.team] = (teamCounts[s.team] || 0) + 1;
+  });
+  const maxTeamStack = Math.max(...Object.values(teamCounts));
+  const stackedTeam = Object.keys(teamCounts).find(t => teamCounts[t] === maxTeamStack);
+  
+  // Check for correlation (players from same game)
+  const hasGameStack = maxTeamStack >= 3;
+  
+  // Identify injury stack (multiple players with injury boost from same team)
+  const injuryBoosts = lineup.filter(s => s.usageBoost || s.teammateOpportunity || s.injuryBeneficiary);
+  const injuryByTeam = {};
+  injuryBoosts.forEach(s => {
+    injuryByTeam[s.team] = (injuryByTeam[s.team] || 0) + 1;
+  });
+  const hasInjuryStack = Object.values(injuryByTeam).some(c => c >= 2);
+  
+  // Identify dart throws vs value plays
+  const dartThrows = lineup.filter(s => {
+    const mpg = s.mpg || s.seasonStats?.mpg || 0;
+    const gamesPlayed = s.seasonStats?.gamesPlayed || s.seasonStats?.games || 0;
+    const hasBoost = s.usageBoost || s.teammateOpportunity || s.injuryBeneficiary;
+    const salary = s.salary || 0;
+    
+    // Dart throw = cheap + low minutes + no boost
+    return salary < thresholds.value && mpg < 20 && gamesPlayed < 30 && !hasBoost;
+  });
+  
+  // Determine build type
+  if (alphas.length >= 1 && premiumCount >= 3 && punts.length >= 2) {
+    buildType = 'mini_max';
+    confidence = punts.length > 2 ? 'high' : 'medium';
+  } else if (alphas.length >= 1 && mids.length >= 4) {
+    buildType = 'alpha_anchor';
+    confidence = 'high';
+  } else if (premiumCount >= 2 && values.length + punts.length >= 4) {
+    buildType = 'stars_and_scrubs';
+    confidence = 'medium';
+  } else if (hasGameStack) {
+    buildType = 'game_stack';
+    confidence = maxTeamStack >= 4 ? 'high' : 'medium';
+  } else if (hasInjuryStack) {
+    buildType = 'injury_stack';
+    confidence = 'medium';
+  } else if (punts.length === 0 && values.length <= 2) {
+    buildType = 'anti_fragile';
+    confidence = 'high';
+  } else if (mids.length >= 5) {
+    buildType = 'balanced';
+    confidence = 'high';
+  }
+  
+  // Check for contrarian build (low ownership)
+  const avgOwnership = lineup.reduce((sum, s) => sum + (s.ownership || 10), 0) / lineup.length;
+  const lowOwnedCount = lineup.filter(s => (s.ownership || 10) < 10).length;
+  if (lowOwnedCount >= 5) {
+    buildType = 'leverage_contrarian';
+    confidence = 'medium';
+  }
+  
+  return {
+    buildType,
+    confidence,
+    tiers: {
+      alphas: alphas.map(s => ({ name: s.player, salary: s.salary, team: s.team })),
+      stars: stars.map(s => ({ name: s.player, salary: s.salary, team: s.team })),
+      mids: mids.map(s => ({ name: s.player, salary: s.salary, team: s.team })),
+      values: values.map(s => ({ name: s.player, salary: s.salary, team: s.team })),
+      punts: punts.map(s => ({ name: s.player, salary: s.salary, team: s.team }))
+    },
+    metrics: {
+      premiumCount,
+      totalPremiumSalary,
+      dartThrowCount: dartThrows.length,
+      dartThrows: dartThrows.map(s => s.player),
+      maxTeamStack,
+      stackedTeam: maxTeamStack >= 3 ? stackedTeam : null,
+      avgOwnership,
+      lowOwnedCount
+    }
+  };
+}
+
+/**
+ * Reflect on Gary's build and surface relevant considerations
+ * This is AWARENESS, not prescription - Gary decides what to do
+ * 
+ * @param {Array} lineup - The lineup Gary built
+ * @param {Object} context - Contest context (contestType, etc.)
+ * @param {string} platform - 'draftkings' or 'fanduel'
+ * @returns {Object} Reflection with considerations for Gary to evaluate
+ */
+export function reflectOnBuild(lineup, context = {}, platform = 'draftkings') {
+  const contestType = context.contestType || 'gpp';
+  const buildInfo = identifyBuildType(lineup, platform);
+  const archetype = GARY_SHARP_KNOWLEDGE.archetypes[buildInfo.buildType];
+  
+  const reflection = {
+    buildType: buildInfo.buildType,
+    buildName: archetype?.name || 'Custom Build',
+    confidence: buildInfo.confidence,
+    tiers: buildInfo.tiers,
+    considerations: [],
+    questions: [],
+    metrics: buildInfo.metrics
+  };
+  
+  // ═══════════════════════════════════════════════════════════════════════
+  // Surface considerations based on what Gary built
+  // These are QUESTIONS for Gary to answer, not rules to follow
+  // ═══════════════════════════════════════════════════════════════════════
+  
+  if (archetype) {
+    reflection.considerations.push({
+      type: 'build_profile',
+      message: `BUILD: ${archetype.name} - ${archetype.pattern}`,
+      detail: `This build works when: ${archetype.when_it_works}`
+    });
+    
+    reflection.questions.push(archetype.key_question);
+  }
+  
+  // Dart throw awareness
+  if (buildInfo.metrics.dartThrowCount >= 3) {
+    reflection.considerations.push({
+      type: 'dart_throw_concentration',
+      severity: 'investigate',
+      message: `${buildInfo.metrics.dartThrowCount} players appear to be dart throws`,
+      players: buildInfo.metrics.dartThrows
+    });
+    reflection.questions.push('Do these dart throws have clear paths to minutes (injury boost) or are they lottery tickets?');
+  }
+  
+  // Ceiling gap check for GPPs
+  const totalProjected = lineup.reduce((sum, s) => sum + (s.projected_pts || 0), 0);
+  const totalCeiling = lineup.reduce((sum, s) => {
+    const baseProj = s.projected_pts || 0;
+    const mpg = s.mpg || s.seasonStats?.mpg || 20;
+    const upsideMultiplier = mpg >= 32 ? 1.35 : mpg >= 25 ? 1.25 : 1.4; // Dart throws have high variance
+    return sum + (baseProj * upsideMultiplier);
+  }, 0);
+  const ceilingGap = ((totalCeiling - totalProjected) / totalProjected) * 100;
+  
+  reflection.metrics.projected = totalProjected;
+  reflection.metrics.ceiling = totalCeiling;
+  reflection.metrics.ceilingGapPercent = ceilingGap;
+  
+  if (contestType === 'gpp' && ceilingGap < 12) {
+    reflection.considerations.push({
+      type: 'narrow_ceiling',
+      severity: 'investigate',
+      message: `Ceiling gap is ${ceilingGap.toFixed(0)}% (GPPs typically need 15-20%+)`,
+      detail: `Projected: ${totalProjected.toFixed(0)} | Ceiling: ${totalCeiling.toFixed(0)}`
+    });
+    reflection.questions.push('Is this ceiling enough to win this GPP, or do you need more upside players?');
+  }
+  
+  // Mini-Max specific checks
+  if (buildInfo.buildType === 'mini_max') {
+    const puntQuality = buildInfo.tiers.punts.filter(p => {
+      const slot = lineup.find(s => s.player === p.name);
+      const mpg = slot?.mpg || slot?.seasonStats?.mpg || 0;
+      const hasBoost = slot?.usageBoost || slot?.teammateOpportunity;
+      return mpg >= 20 || hasBoost;
+    });
+    
+    if (puntQuality.length < buildInfo.tiers.punts.length) {
+      const riskyPunts = buildInfo.tiers.punts.filter(p => !puntQuality.find(q => q.name === p.name));
+      reflection.considerations.push({
+        type: 'punt_quality',
+        severity: 'investigate',
+        message: `Mini-Max needs established role punts. ${riskyPunts.length} punt(s) look like dart throws.`,
+        players: riskyPunts.map(p => p.name)
+      });
+      reflection.questions.push('Mini-Max risk without Mini-Max quality - is your conviction on these punts strong enough?');
+    }
+  }
+  
+  // Game stack awareness
+  if (buildInfo.metrics.maxTeamStack >= 3) {
+    reflection.considerations.push({
+      type: 'game_stack',
+      severity: 'awareness',
+      message: `${buildInfo.metrics.maxTeamStack}-man stack from ${buildInfo.metrics.stackedTeam}`,
+      detail: 'Correlation amplifies upside AND downside'
+    });
+    reflection.questions.push('Does game environment (total, pace, spread) support a shootout for this stack?');
+  }
+  
+  // Ownership awareness
+  if (buildInfo.metrics.avgOwnership > 20) {
+    reflection.considerations.push({
+      type: 'chalky_build',
+      severity: 'awareness',
+      message: `Average ownership is ${buildInfo.metrics.avgOwnership.toFixed(0)}% - this is a chalky build`,
+      detail: 'Fine for cash games, but limits GPP equity if chalk busts'
+    });
+  } else if (buildInfo.metrics.lowOwnedCount >= 4) {
+    reflection.considerations.push({
+      type: 'contrarian_build',
+      severity: 'awareness',
+      message: `${buildInfo.metrics.lowOwnedCount} players under 10% ownership - highly contrarian`,
+      detail: 'Massive upside if reads are right, but fighting consensus'
+    });
+    reflection.questions.push('Are you contrarian for a specific reason or just being different?');
+  }
+  
+  // Always end with Gary's agency
+  reflection.garyDecides = true;
+  reflection.reminder = 'Gary: You built this for a reason. Trust your thesis or adjust specific spots.';
+  
+  return reflection;
+}
+
+/**
+ * Generate reflection notes for Gary's lineup
+ * Returns formatted strings for inclusion in gary_notes
+ */
+export function generateReflectionNotes(lineup, context = {}, platform = 'draftkings') {
+  const reflection = reflectOnBuild(lineup, context, platform);
+  const notes = [];
+  
+  notes.push(``);
+  notes.push(`═══════════════════════════════════════════════════════════`);
+  notes.push(`🔍 BUILD ANALYSIS - What Gary Built`);
+  notes.push(`═══════════════════════════════════════════════════════════`);
+  notes.push(``);
+  
+  // Build identification
+  notes.push(`BUILD TYPE: ${reflection.buildName.toUpperCase()}`);
+  notes.push(`Confidence: ${reflection.confidence}`);
+  notes.push(``);
+  
+  // Tier breakdown
+  notes.push(`TIER BREAKDOWN:`);
+  if (reflection.tiers.alphas.length > 0) {
+    notes.push(`  Alphas ($10K+): ${reflection.tiers.alphas.map(p => `${p.name} ($${(p.salary/1000).toFixed(1)}K)`).join(', ')}`);
+  }
+  if (reflection.tiers.stars.length > 0) {
+    notes.push(`  Stars ($9K+):   ${reflection.tiers.stars.map(p => `${p.name} ($${(p.salary/1000).toFixed(1)}K)`).join(', ')}`);
+  }
+  if (reflection.tiers.mids.length > 0) {
+    notes.push(`  Mid ($6-9K):    ${reflection.tiers.mids.map(p => `${p.name} ($${(p.salary/1000).toFixed(1)}K)`).join(', ')}`);
+  }
+  if (reflection.tiers.values.length > 0) {
+    notes.push(`  Value ($4-6K):  ${reflection.tiers.values.map(p => `${p.name} ($${(p.salary/1000).toFixed(1)}K)`).join(', ')}`);
+  }
+  if (reflection.tiers.punts.length > 0) {
+    notes.push(`  Punts (<$4K):   ${reflection.tiers.punts.map(p => `${p.name} ($${(p.salary/1000).toFixed(1)}K)`).join(', ')}`);
+  }
+  
+  // Metrics
+  notes.push(``);
+  notes.push(`METRICS:`);
+  notes.push(`  Projected: ${reflection.metrics.projected?.toFixed(0) || 'N/A'} | Ceiling: ${reflection.metrics.ceiling?.toFixed(0) || 'N/A'} | Gap: ${reflection.metrics.ceilingGapPercent?.toFixed(0) || 'N/A'}%`);
+  notes.push(`  Avg Ownership: ${reflection.metrics.avgOwnership?.toFixed(0) || 'N/A'}% | Dart Throws: ${reflection.metrics.dartThrowCount || 0}`);
+  
+  // Considerations
+  if (reflection.considerations.length > 0) {
+    notes.push(``);
+    notes.push(`⚠️ CONSIDERATIONS:`);
+    reflection.considerations.forEach(c => {
+      notes.push(`  • ${c.message}`);
+      if (c.detail) notes.push(`    → ${c.detail}`);
+    });
+  }
+  
+  // Questions for Gary
+  if (reflection.questions.length > 0) {
+    notes.push(``);
+    notes.push(`❓ QUESTIONS FOR GARY:`);
+    reflection.questions.forEach((q, i) => {
+      notes.push(`  ${i + 1}. ${q}`);
+    });
+  }
+  
+  // Gary's agency reminder
+  notes.push(``);
+  notes.push(`💡 ${reflection.reminder}`);
+  
+  return notes;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // DFS VALUE EQUATIONS - Key metrics for optimal lineup building
@@ -971,33 +1540,69 @@ function analyzeSlateCharacteristics(players, constraints, sport, isGPP) {
  * @returns {number} Projected fantasy points
  */
 export function calculateProjectedPoints(player, sport, platform, contestType = 'cash') {
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STAR RETURNING USAGE REDUCTION
+  // ═══════════════════════════════════════════════════════════════════════════
+  // When a star returns from injury, role players who benefited LOSE usage.
+  // Example: Embiid returns → Maxey's usage drops from 35% to 28%
+  // This is the OPPOSITE of injury boost - we must reduce projections
+  // ═══════════════════════════════════════════════════════════════════════════
+  let usageMultiplier = 1.0;
+  
+  if (player.starReturning) {
+    usageMultiplier = player.starReturning.usageMultiplier || 0.85; // Default 15% reduction
+    const reductionPct = ((1 - usageMultiplier) * 100).toFixed(0);
+    const restrictionInfo = player.starReturning.minutesRestriction 
+      ? ` [${player.starReturning.minutesRestriction}]` 
+      : player.starReturning.impactSeverity === 'partial' 
+        ? ' [expected ramping]' 
+        : '';
+    console.log(`[Projection] ⚠️ ${player.name}: Star returning (${player.starReturning.star})${restrictionInfo} → usage reduction ${reductionPct}%`);
+  }
+  
+  if (player.roleEnded) {
+    usageMultiplier = 0.75; // 25% reduction for ended roles
+    console.log(`[Projection] ⚠️ ${player.name}: Role ended → ${player.roleEnded.reason}`);
+  }
+  
   // ⭐ If BDL already provided fantasy points, use them (most accurate)
   const bdlFpts = player.seasonStats?.fpts || player.fpts || 0;
   if (bdlFpts > 0) {
     // BDL uses DraftKings scoring - adjust for FanDuel if needed
+    let baseProjection = bdlFpts;
     if (platform === 'fanduel' && sport === 'NBA') {
       // FanDuel values steals/blocks higher (3 pts vs 2 pts)
       // Rough adjustment: +5% for defensive players
       const spg = player.seasonStats?.spg || 0;
       const bpg = player.seasonStats?.bpg || 0;
       if (spg + bpg >= 2) {
-        return Math.round(bdlFpts * 1.05 * 10) / 10;
+        baseProjection = bdlFpts * 1.05;
       }
     }
-    return Math.round(bdlFpts * 10) / 10;
+    // Apply usage multiplier for star returning scenarios
+    return Math.round(baseProjection * usageMultiplier * 10) / 10;
   }
   
   if (sport === 'NBA') {
     const projection = calculateNBAProjection(player, platform);
-    // If no stats but has salary, estimate based on salary tier
+    // ═══════════════════════════════════════════════════════════════════════════
+    // NO FALLBACKS - BDL has stats for ALL players including rookies
+    // If projection is 0, it's a BUG in our code that needs fixing
+    // ═══════════════════════════════════════════════════════════════════════════
     if (projection === 0 && player.salary > 0) {
-      return estimateProjectionFromSalary(player.salary, sport, platform, contestType);
+      // This is a BUG - BDL has stats for everyone. Log for debugging.
+      console.error(`[Projection] 🐛 BUG: ${player.name} (${player.team}) has $${player.salary} salary but 0 projection!`);
+      console.error(`[Projection]    → Check: 1) Player name matching  2) BDL fetch logic  3) Season param`);
+      console.error(`[Projection]    → Stats: ppg=${player.seasonStats?.ppg}, mpg=${player.seasonStats?.mpg}`);
+      // Return 0 - don't use this player until the bug is fixed
+      return 0;
     }
     return projection;
   } else if (sport === 'NFL') {
     const projection = calculateNFLProjection(player, platform);
     if (projection === 0 && player.salary > 0) {
-      return estimateProjectionFromSalary(player.salary, sport, platform, contestType);
+      console.error(`[Projection] 🐛 BUG: ${player.name} (${player.team}) has $${player.salary} salary but 0 projection!`);
+      return 0;
     }
     return projection;
   }
@@ -1042,28 +1647,32 @@ function estimateProjectionFromSalary(salary, sport, platform, contestType = 'ca
   if (sport === 'NBA') {
     if (platform === 'fanduel') {
       // FanDuel NBA: $3,500 min, $60,000 cap, 9 players
-      // Average salary per player: ~$6,666 → should produce ~33 FPTS (5x)
-      baseSalary = 4000;
-      baseProjection = isGPP ? 18 : 16; // Min-salary players produce ~15-20 FPTS
-      valueMultiplier = isGPP ? 5.0 : 4.5; // Sharp players hit 5x+ value
+      // GPP WINNING TARGET: 360+ points → 40 FPTS/player average
+      // Cash TARGET: 270 points → 30 FPTS/player average
+      baseSalary = 3500;
+      baseProjection = isGPP ? 20 : 15; // Min-salary punt plays: 15-20 FPTS
+      valueMultiplier = isGPP ? 6.5 : 5.0; // GPP winners average 6-7x value
     } else {
       // DraftKings NBA: $3,000 min, $50,000 cap, 8 players
-      // Average salary per player: ~$6,250 → should produce ~31 FPTS (5x)
-      baseSalary = 3500;
-      baseProjection = isGPP ? 15 : 12; // Min-salary players produce ~12-15 FPTS
-      valueMultiplier = isGPP ? 5.0 : 4.5; // Sharp players hit 5x+ value
+      // GPP WINNING TARGET: 370+ points → 46 FPTS/player average
+      // Cash TARGET: 280 points → 35 FPTS/player average
+      baseSalary = 3000;
+      baseProjection = isGPP ? 18 : 12; // Min-salary punt plays: 12-18 FPTS
+      valueMultiplier = isGPP ? 7.0 : 5.5; // GPP winners average 6-7x value
     }
   } else { // NFL
     if (platform === 'fanduel') {
-      // FanDuel NFL: $60,000 cap, 10 players (incl kicker)
-      baseSalary = 6000;
-      baseProjection = isGPP ? 24 : 12; 
-      valueMultiplier = isGPP ? 4.0 : 2.0;
+      // FanDuel NFL: $60,000 cap, 9 players
+      // GPP WINNING TARGET: 200+ points
+      baseSalary = 5000;
+      baseProjection = isGPP ? 15 : 10; 
+      valueMultiplier = isGPP ? 4.5 : 3.0;
     } else {
       // DraftKings NFL: $50,000 cap, 9 players
-      baseSalary = 5000;
-      baseProjection = isGPP ? 20 : 10;
-      valueMultiplier = isGPP ? 4.0 : 2.0;
+      // GPP WINNING TARGET: 220+ points
+      baseSalary = 4000;
+      baseProjection = isGPP ? 14 : 8;
+      valueMultiplier = isGPP ? 5.0 : 3.5;
     }
   }
   
@@ -1112,13 +1721,12 @@ function calculateNBAProjection(player, platform) {
   const topg = hasStats ? (stats.topg || stats.turnover || 1.5) : 0;
   const tpm = stats.tpg || stats.fg3m || 0; // 3-pointers made per game
   
-  // If no stats at all, return 0 instead of negative
+  // If no stats at all, this is a DATA BUG - BDL has stats for all NBA players
+  // including rookies (via Game Player Stats endpoint)
   if (!hasStats) {
-    // Only log if it's not a rookie (since we know they won't have stats yet)
-    const isRookie = player.experience === '0' || player.experience === 'R';
-    if (!isRookie) {
-      console.log(`[DFS] Fallback: Using salary-based projection for ${player.name} (no historical stats)`);
-    }
+    // Don't silently return 0 - flag this as a bug to investigate
+    console.error(`[DFS] 🐛 NO STATS: ${player.name} (${player.team}) - BDL should have game logs for everyone!`);
+    console.error(`[DFS]    → Check: getPlayerStats/getSeasonAverages, player ID matching, season=2025`);
     return 0;
   }
   
@@ -1792,7 +2400,23 @@ export function optimizeLineup(players, constraints, sport, platform, context = 
         // Include DFS context data
         ownership: bestPlayer.ownership,
         recentForm: bestPlayer.recentForm,
-        dvpRank: bestPlayer.dvpRank
+        dvpRank: bestPlayer.dvpRank,
+        // Carry over ALL stats for deep reasoning
+        seasonStats: bestPlayer.seasonStats,
+        l5Stats: bestPlayer.l5Stats,
+        ppg: bestPlayer.seasonStats?.ppg || bestPlayer.ppg,
+        mpg: bestPlayer.seasonStats?.mpg || bestPlayer.mpg,
+        apg: bestPlayer.seasonStats?.apg || bestPlayer.apg,
+        rpg: bestPlayer.seasonStats?.rpg || bestPlayer.rpg,
+        usage: bestPlayer.usage || bestPlayer.seasonStats?.usage,
+        l5AvgPts: bestPlayer.l5Stats?.ppg || bestPlayer.l5AvgPts,
+        // Narrative context
+        usageBoost: bestPlayer.usageBoost,
+        injuryBeneficiary: bestPlayer.injuryBeneficiary,
+        narrativeNote: bestPlayer.narrativeNote,
+        opponent: bestPlayer.opponent || bestPlayer.opp,
+        rotation_status: bestPlayer.rotation_status,
+        teammateOpportunity: bestPlayer.teammateOpportunity
       });
     }
   }
@@ -2391,40 +3015,27 @@ export async function generateDFSLineup({ platform, sport, players, context = {}
   // ═══════════════════════════════════════════════════════════════════════════
   
   // ═══════════════════════════════════════════════════════════════════════════
-  // ARCHETYPE AWARENESS: Gary considers all strategies as data points
+  // GARY'S AUTONOMY: No prescribed strategy - Gary builds what he believes wins
   // ═══════════════════════════════════════════════════════════════════════════
-  // Gary doesn't output multiple lineups. He internally analyzes the slate
-  // through all strategy lenses, then outputs his ONE best prediction.
-  // 
-  // Investigation questions Gary considers:
-  // - Is this a "stars & scrubs" slate? (1-2 elite values + cheap chalk)
-  // - Is this a "balanced" slate? (spread across mid-tier options)
-  // - What does the injury/value landscape suggest?
+  // Gary uses his own DFS expertise and reasoning to build the optimal lineup.
+  // He naturally considers all available data: usage, value, correlations, 
+  // ownership, matchups, injuries, pace - and synthesizes his own strategy.
+  //
+  // We trust Gary's natural understanding of DFS construction. His edge comes
+  // from independent analysis and conviction, not following preset archetypes.
+  //
+  // Build type identification happens AFTER Gary builds (for reporting only).
   // ═══════════════════════════════════════════════════════════════════════════
   
-  // Analyze slate characteristics to inform strategy
-  const slateAnalysis = analyzeSlateCharacteristics(players, constraints, sport, isGPP);
-  
-  // Gary's strategy selection based on slate analysis (awareness, not forced)
-  let recommendedArchetype = 'balanced_build';
-  if (slateAnalysis.hasEliteValue && slateAnalysis.hasCheapChalk) {
-    recommendedArchetype = 'stars_and_scrubs';
-  } else if (slateAnalysis.hasMidTierDepth) {
-    recommendedArchetype = 'balanced_build';
-  } else if (!isGPP) {
-    recommendedArchetype = 'cash_safe';
-  }
-  
-  // Use recommended unless context specifies otherwise
-  const archetypeName = context.archetype || recommendedArchetype;
-  const archetype = LINEUP_ARCHETYPES[archetypeName] || LINEUP_ARCHETYPES['balanced_build'];
+  // Get winning targets for this contest type
+  const winningTargets = GARY_SHARP_KNOWLEDGE.winning_targets[sport]?.[platform] || {};
+  const contestSize = context.contestSize || 'gpp_medium'; // Default to medium GPP
+  const targetInfo = winningTargets[contestSize] || winningTargets['gpp_medium'] || { win: 350, cash: 280 };
+  const winTarget = isGPP ? targetInfo.win : targetInfo.cash;
   
   console.log(`\n[DFS Lineup] 🎰 Generating ${platform.toUpperCase()} ${sport} lineup (${contestType.toUpperCase()})`);
-  console.log(`[DFS Lineup] 📊 Strategy: ${archetype.name} (${archetype.description})`);
-  if (archetypeName !== 'balanced_build') {
-    console.log(`[DFS Lineup] 💡 Strategy Reasoning: ${slateAnalysis.reasoning}`);
-  }
-  console.log(`[DFS Lineup] 🎯 Targets: Floor ${archetype.floorTarget}+ | Ceiling ${archetype.ceilingTarget}+`);
+  console.log(`[DFS Lineup] 🎯 Winning Target: ${winTarget}+ pts ${isGPP ? '(GPP 1st place)' : '(cash line)'}`);
+  console.log(`[DFS Lineup] 🧠 Gary building lineup based on his analysis...`);
   
   // ═══════════════════════════════════════════════════════════════════════════
   // ROTOWIRE INTELLIGENCE: Benchmarking & Forced Locks
@@ -2791,16 +3402,33 @@ export async function generateDFSLineup({ platform, sport, players, context = {}
   const chalkFade = applyChalkFadeStrategy(players, finalLineup, contestType);
   
   // ═══════════════════════════════════════════════════════════════════════════
-  // BUILD GARY'S NOTES - Sharp-style basketball analysis
+  // BUILD GARY'S NOTES - Deep statistical analysis with narrative context
   // ═══════════════════════════════════════════════════════════════════════════
   const garyNotes = [];
+  
+  // Helper to get player stats from context or player object
+  const getPlayerStats = (p) => {
+    const stats = p.seasonStats || {};
+    const l5 = p.l5Stats || {};
+    return {
+      ppg: stats.ppg || p.ppg || 0,
+      mpg: stats.mpg || p.mpg || 0,
+      apg: stats.apg || p.apg || 0,
+      rpg: stats.rpg || p.rpg || 0,
+      usage: stats.usage || p.usage || 0,
+      l5Ppg: l5.ppg || p.l5AvgPts || 0,
+      l5Mpg: l5.mpg || 0,
+      l5FPts: l5.fpts || p.l5AvgFpts || 0,
+      recentForm: p.recentForm || (l5.ppg > (stats.ppg || 0) * 1.1 ? 'hot' : 'neutral')
+    };
+  };
   
   // Calculate lineup stats for insights
   const totalProjection = finalLineup.reduce((sum, p) => sum + (p.projected_pts || 0), 0);
   const totalSalary = finalLineup.reduce((sum, p) => sum + (p.salary || 0), 0);
   const avgOwnership = finalLineup.reduce((sum, p) => sum + (p.ownership || 15), 0) / finalLineup.length;
   
-  // Find key players for insights
+  // Sort players by projection for analysis
   const sortedByProjection = [...finalLineup].sort((a, b) => (b.projected_pts || 0) - (a.projected_pts || 0));
   const topPlay = sortedByProjection[0];
   const secondPlay = sortedByProjection[1];
@@ -2808,115 +3436,134 @@ export async function generateDFSLineup({ platform, sport, players, context = {}
   
   // Find players with specific edges
   const matchupPlays = finalLineup.filter(p => p.dvpRank && p.dvpRank <= 10);
-  const usageBoostPlays = finalLineup.filter(p => p.usageBoost || p.narrativeNote);
-  const hotPlays = finalLineup.filter(p => p.recentForm === 'hot' || (p.l5AvgPts && p.l5AvgPts > (p.ppg || 0) * 1.1));
+  const usageBoostPlays = finalLineup.filter(p => 
+    p.usageBoost || 
+    p.narrativeNote || 
+    p.injuryBeneficiary || 
+    p.teammateOpportunity // From injury context
+  );
+  const hotPlays = finalLineup.filter(p => {
+    const stats = getPlayerStats(p);
+    return p.recentForm === 'hot' || (stats.l5Ppg > stats.ppg * 1.1);
+  });
   const minutesPlays = finalLineup.filter(p => p.minutesTrend === 'increasing' || p.rotation_status === 'expanded_role');
+  const puntPlays = finalLineup.filter(p => (p.salary || 0) < 4500);
+  const coreStars = finalLineup.filter(p => (p.salary || 0) >= 8000);
   
   // ═══════════════════════════════════════════════════════════════════════════
-  // GARY'S ANALYSIS - Write like a sharp
+  // CONCISE GARY'S NOTES - Just the key facts
   // ═══════════════════════════════════════════════════════════════════════════
   
-  garyNotes.push(`LINEUP THESIS`);
-  garyNotes.push(``);
+  // Team stacks
+  const teamCounts = {};
+  finalLineup.forEach(p => {
+    teamCounts[p.team] = (teamCounts[p.team] || 0) + 1;
+  });
+  const stacks = Object.entries(teamCounts).filter(([_, count]) => count >= 2).sort((a, b) => b[1] - a[1]);
   
-  // Build the main thesis paragraph
-  let thesis = `Tonight's build is anchored by `;
+  // Ownership stats
+  const chalkPlays = finalLineup.filter(p => (p.ownership || 15) > 25);
+  const contrarianPlays = finalLineup.filter(p => (p.ownership || 15) < 10);
   
+  // Build concise notes
+  
+  // 1. CORE PLAYS (top 2 by salary)
   if (topPlay) {
-    const topOpp = topPlay.opponent || topPlay.opp || '';
-    const topDvp = topPlay.dvpRank;
-    const topPpg = topPlay.ppg || topPlay.pts || 0;
-    
-    thesis += `${topPlay.player}`;
-    
-    if (topDvp && topDvp <= 8 && topOpp) {
-      thesis += ` in a premium spot against ${topOpp}, who rank bottom-${topDvp} defending ${topPlay.position || 'his position'}`;
-    } else if (topPlay.usageBoost) {
-      thesis += ` who should see elevated usage with ${topPlay.usageBoost} sidelined`;
-    } else if (topPpg >= 25) {
-      thesis += ` who's been averaging ${topPpg.toFixed(1)} points per game this season`;
+    const topStats = getPlayerStats(topPlay);
+    let topReason = '';
+    if (topPlay.usageBoost || topPlay.injuryBeneficiary) {
+      topReason = ` - ${topPlay.usageBoost || topPlay.injuryBeneficiary}`;
+    } else if (topStats.l5Ppg > topStats.ppg * 1.1 && topStats.ppg > 0) {
+      topReason = ` - Hot (${topStats.l5Ppg.toFixed(0)} L5 vs ${topStats.ppg.toFixed(0)} season)`;
+    } else if (topPlay.dvpRank && topPlay.dvpRank <= 8) {
+      topReason = ` - Elite matchup (#${topPlay.dvpRank} DvP)`;
     }
-    thesis += `. `;
+    garyNotes.push(`🎯 ANCHOR: ${topPlay.player} $${(topPlay.salary/1000).toFixed(1)}K${topReason}`);
   }
   
-  // Add secondary anchor context
-  if (secondPlay && secondPlay.projected_pts >= 35) {
-    const secondOpp = secondPlay.opponent || secondPlay.opp || '';
-    const secondDvp = secondPlay.dvpRank;
-    
-    thesis += `I'm pairing him with ${secondPlay.player}`;
-    if (secondDvp && secondDvp <= 10 && secondOpp) {
-      thesis += ` who draws a favorable matchup against ${secondOpp}'s weak interior defense`;
-    } else if (secondPlay.usageBoost) {
-      thesis += ` stepping into a bigger role tonight`;
+  if (secondPlay && secondPlay.projected_pts >= 30) {
+    const secStats = getPlayerStats(secondPlay);
+    let secReason = '';
+    if (secondPlay.usageBoost) {
+      secReason = ` - ${secondPlay.usageBoost}`;
+    } else if (secStats.l5Ppg > secStats.ppg * 1.1 && secStats.ppg > 0) {
+      secReason = ` - Trending up`;
     }
-    thesis += `. `;
+    garyNotes.push(`🎯 SECONDARY: ${secondPlay.player} $${(secondPlay.salary/1000).toFixed(1)}K${secReason}`);
   }
   
-  // Add the key edge explanation
-  if (usageBoostPlays.length > 0) {
-    const boostPlayer = usageBoostPlays[0];
-    thesis += `The key edge here is ${boostPlayer.player} - ${boostPlayer.usageBoost || boostPlayer.narrativeNote || 'expect increased opportunity'}. `;
-  } else if (matchupPlays.length >= 2) {
-    thesis += `This slate has multiple exploitable matchups, and I'm targeting the soft spots in tonight's defenses. `;
-  } else if (minutesPlays.length > 0) {
-    thesis += `I'm targeting players with expanding roles and minutes trending up. `;
+  // 2. USAGE BOOST (if any key injury plays)
+  const keyUsagePlays = usageBoostPlays.slice(0, 2);
+  if (keyUsagePlays.length > 0) {
+    const usageNote = keyUsagePlays.map(p => {
+      const outStar = p.teammateOpportunity?.outStars?.[0] || '';
+      return `${p.player}${outStar ? ` (${outStar} OUT)` : ''}`;
+    }).join(', ');
+    garyNotes.push(`🚀 USAGE BOOST: ${usageNote}`);
   }
   
-  // Add pace/game environment context if available
-  const highPaceGames = finalLineup.filter(p => p.gamePace === 'fast' || p.vegas_total > 230);
-  if (highPaceGames.length >= 3) {
-    thesis += `Multiple players come from high-pace, high-total games which inflates fantasy production across the board.`;
+  // 3. STACKS (one line)
+  if (stacks.length > 0) {
+    const stackNote = stacks.map(([team, count]) => `${team} x${count}`).join(', ');
+    garyNotes.push(`📊 STACKS: ${stackNote}`);
   }
   
-  garyNotes.push(thesis);
+  // 4. VALUE PLAYS (punts under $4.5K)
+  if (puntPlays.length > 0) {
+    const puntNote = puntPlays.slice(0, 3).map(p => {
+      const val = ((p.projected_pts || 0) / ((p.salary || 4000) / 1000)).toFixed(1);
+      return `${p.player} (${val}x)`;
+    }).join(', ');
+    garyNotes.push(`💎 VALUE: ${puntNote}`);
+  }
   
-  // ═══════════════════════════════════════════════════════════════════════════
-  // KEY SITUATIONS
-  // ═══════════════════════════════════════════════════════════════════════════
-  const situations = [];
+  // 5. OWNERSHIP (one line)
+  const ownNote = chalkPlays.length > 2 
+    ? `Chalky build (${chalkPlays.length} over 25%)`
+    : contrarianPlays.length >= 3
+      ? `Contrarian (${contrarianPlays.length} under 10%)`
+      : `Balanced (${avgOwnership.toFixed(0)}% avg)`;
+  garyNotes.push(`📈 OWNERSHIP: ${ownNote}`);
   
-  // Usage opportunities
-  usageBoostPlays.forEach(p => {
-    situations.push(`${p.player}: ${p.usageBoost || p.narrativeNote || 'Elevated role'}`);
+  // 6. STARS RETURNING (if impacts lineup)
+  const playersWithStarReturning = finalLineup.filter(p => p.starReturning);
+  if (playersWithStarReturning.length > 0) {
+    const stars = [...new Set(playersWithStarReturning.map(p => p.starReturning?.star))];
+    const restrictions = playersWithStarReturning[0]?.starReturning?.minutesRestriction;
+    const note = restrictions ? ` (${restrictions})` : '';
+    garyNotes.push(`⚠️ MONITOR: ${stars.join(', ')} returning${note}`);
+  }
+  
+  // 7. KEY RISK (if fragile build)
+  if (puntPlays.length >= 3) {
+    garyNotes.push(`⚠️ RISK: ${puntPlays.length} punts - needs stars to hit`);
+  }
+  
+  // 8. INVESTIGATE FLAGS - Gary should verify large stacks
+  const largeStacks = stacks.filter(([team, count]) => count >= 4);
+  
+  if (largeStacks.length > 0) {
+    const stackNote = largeStacks.map(([team, count]) => `${team} x${count}`).join(', ');
+    garyNotes.push(`🔍 STACK CHECK: ${stackNote} - verify game total/pace supports`);
+  }
+  
+  // 9. PUNT INVESTIGATION - Flag punts that need verification
+  const riskyPunts = puntPlays.filter(p => {
+    const stats = getPlayerStats(p);
+    // Flag punts with low MPG or no recent form data
+    return stats.mpg < 20 || !p.l5Stats;
   });
-  
-  // Matchup advantages
-  matchupPlays.filter(p => !usageBoostPlays.includes(p)).slice(0, 2).forEach(p => {
-    const opp = p.opponent || p.opp || 'opponent';
-    situations.push(`${p.player}: Favorable matchup vs ${opp} (bottom-${p.dvpRank} at ${p.position || 'position'})`);
-  });
-  
-  // Hot streaks
-  hotPlays.filter(p => !usageBoostPlays.includes(p) && !matchupPlays.includes(p)).slice(0, 1).forEach(p => {
-    const l5 = p.l5AvgPts || p.ppg || 0;
-    situations.push(`${p.player}: Hot streak, averaging ${l5.toFixed(1)} over last 5`);
-  });
-  
-  if (situations.length > 0) {
-    garyNotes.push(``);
-    garyNotes.push(`KEY SITUATIONS`);
-    situations.forEach(s => garyNotes.push(`- ${s}`));
+  if (riskyPunts.length > 0) {
+    const puntNames = riskyPunts.map(p => p.player).join(', ');
+    garyNotes.push(`🔍 PUNT CHECK: ${puntNames} - low floor, verify minutes`);
   }
   
-  // ═══════════════════════════════════════════════════════════════════════════
-  // INJURY MONITOR
-  // ═══════════════════════════════════════════════════════════════════════════
-  const highSalaryPlays = finalLineup.filter(p => (p.salary || 0) >= 7000).slice(0, 4);
-  if (highSalaryPlays.length > 0) {
-    garyNotes.push(``);
-    garyNotes.push(`MONITOR BEFORE LOCK`);
-    garyNotes.push(`Check status on ${highSalaryPlays.map(p => p.player).join(', ')} - any late scratch changes the build.`);
-  }
-  
-  // NFL Stacking info
+  // NFL Stack info (if present)
   if (stackedResult.stackInfo?.primaryStack) {
-    garyNotes.push(``);
-    garyNotes.push(`CORRELATION STACK`);
     const stack = stackedResult.stackInfo;
-    garyNotes.push(`${stack.primaryStack.qb} paired with ${stack.primaryStack.receivers.join(' and ')} for correlated upside in what should be a pass-heavy game script.`);
+    garyNotes.push(`🏈 STACK: ${stack.primaryStack.qb} + ${stack.primaryStack.receivers?.slice(0, 2).join(', ')}`);
     if (stack.bringback) {
-      garyNotes.push(`Bringing back ${stack.bringback.player} from the opposing side to capture both ends of a potential shootout.`);
+      garyNotes.push(`↩️ BRINGBACK: ${stack.bringback.player}`);
     }
   }
   
@@ -2954,6 +3601,18 @@ export async function generateDFSLineup({ platform, sport, players, context = {}
     }
   }
   
+  // ═══════════════════════════════════════════════════════════════════════════
+  // WINNING TARGET VALIDATION
+  // ═══════════════════════════════════════════════════════════════════════════
+  const winTargetMet = projectedPoints >= winTarget;
+  const shortfall = winTargetMet ? 0 : Math.round(winTarget - projectedPoints);
+  
+  if (winTargetMet) {
+    console.log(`[DFS Lineup] ✅ Winning range achieved: ${projectedPoints.toFixed(1)} pts (target: ${winTarget}+)`);
+  } else {
+    console.log(`[DFS Lineup] ⚠️ Below winning range: ${projectedPoints.toFixed(1)} pts (need ${winTarget}+, short by ${shortfall})`);
+  }
+  
   // Final Lineup Object
   const finalLineupData = {
     platform,
@@ -2962,6 +3621,10 @@ export async function generateDFSLineup({ platform, sport, players, context = {}
     salary_cap: constraints.salaryCap,
     total_salary: finalTotalSalary,
     projected_points: projectedPoints,
+    // Winning target info
+    winning_target: winTarget,
+    winning_target_met: winTargetMet,
+    shortfall: shortfall,
     // GPP-specific: ceiling-based projection target
     ceiling_projection: isGPP ? projectedPoints : null,
     floor_projection: Math.round(sortedLineup.reduce((sum, p) => sum + (p.floorScore || p.projected_pts * 0.7 || 0), 0) * 10) / 10,
@@ -3481,24 +4144,56 @@ export function selfReviewLineup(lineup, playerPool, constraints, sport, platfor
 export function validatePuntCount(lineup, platform, contestType = 'gpp') {
   const threshold = PUNT_SALARY_THRESHOLD[platform] || 4500;
   const maxPunts = MAX_PUNTS_PER_LINEUP[contestType] || 2;
+  const MIN_MPG_FOR_PUNTS = 18; // Punts must have 18+ MPG unless injury boost
   
   const puntPlayers = lineup.filter(slot => slot.salary < threshold);
   const puntCount = puntPlayers.length;
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // MPG FILTER: Flag punts with insufficient minutes history
+  // A player averaging <18 MPG with no injury boost = high bust risk
+  // ═══════════════════════════════════════════════════════════════════════════
+  const riskyPunts = puntPlayers.filter(p => {
+    const mpg = p.mpg || p.seasonStats?.mpg || 0;
+    const hasInjuryBoost = p.usageBoost || p.teammateOpportunity || p.injuryBeneficiary;
+    const isRookie = !p.seasonStats?.ppg && !p.l5Stats?.ppg; // No historical stats = rookie
+    
+    // Risky if: low MPG AND no injury boost AND not a known quantity
+    return mpg < MIN_MPG_FOR_PUNTS && !hasInjuryBoost && isRookie;
+  });
+  
+  if (riskyPunts.length > 0) {
+    console.log(`[Punt Validation] ⚠️ RISKY PUNTS (${riskyPunts.length}): ${riskyPunts.map(p => `${p.player} (${(p.mpg || p.seasonStats?.mpg || 0).toFixed(0)} MPG)`).join(', ')}`);
+  }
   
   if (puntCount > maxPunts) {
     return {
       valid: false,
       puntCount, // Include puntCount for self-heal logic
       error: `FRAGILE FLOOR: ${puntCount} punt plays (max: ${maxPunts}). Replace cheap players with mid-range ($5k-$7k) for higher floor.`,
-      puntPlayers: puntPlayers.map(p => ({ name: p.player, salary: p.salary, position: p.position })),
-      suggestion: `Downgrade a star and upgrade ${puntCount - maxPunts} punt player(s)`
+      puntPlayers: puntPlayers.map(p => ({ 
+        name: p.player, 
+        salary: p.salary, 
+        position: p.position,
+        mpg: p.mpg || p.seasonStats?.mpg || 0,
+        isRisky: riskyPunts.some(rp => rp.player === p.player)
+      })),
+      riskyPunts: riskyPunts.map(p => p.player),
+      suggestion: `Downgrade a star and upgrade ${puntCount - maxPunts} punt player(s)${riskyPunts.length > 0 ? ` - prioritize replacing: ${riskyPunts.map(p => p.player).join(', ')}` : ''}`
     };
   }
   
   return { 
     valid: true, 
     puntCount,
-    puntPlayers: puntPlayers.map(p => ({ name: p.player, salary: p.salary, position: p.position }))
+    puntPlayers: puntPlayers.map(p => ({ 
+      name: p.player, 
+      salary: p.salary, 
+      position: p.position,
+      mpg: p.mpg || p.seasonStats?.mpg || 0,
+      isRisky: riskyPunts.some(rp => rp.player === p.player)
+    })),
+    riskyPunts: riskyPunts.map(p => p.player)
   };
 }
 
@@ -3689,6 +4384,7 @@ export { isPositionEligible, getPlayerEligibleSlots, getEligibleSlots };
 export default {
   PLATFORM_CONSTRAINTS,
   LINEUP_ARCHETYPES,
+  GARY_SHARP_KNOWLEDGE,
   GPP_VALUE_TARGETS,
   calculateProjectedPoints,
   calculateCeilingScore,
@@ -3709,6 +4405,10 @@ export default {
   validatePuntCount,
   checkAntiCorrelation,
   applyChalkFadeStrategy,
+  // Build analysis (non-prescriptive awareness)
+  identifyBuildType,
+  reflectOnBuild,
+  generateReflectionNotes,
   // Position eligibility helpers
   isPositionEligible,
   getPlayerEligibleSlots,

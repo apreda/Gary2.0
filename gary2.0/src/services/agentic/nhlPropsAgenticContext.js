@@ -153,17 +153,20 @@ function groupPropsByPlayer(props) {
     }
     
     const playerName = prop.player || 'Unknown';
+    // Handle both snake_case (player_id from propOddsService) and camelCase (playerId)
+    const propPlayerId = prop.player_id || prop.playerId || null;
+    
     if (!grouped[playerName]) {
       grouped[playerName] = {
         player: playerName,
         team: prop.team || 'Unknown',
-        playerId: prop.player_id || null,
+        playerId: propPlayerId,
         props: []
       };
     }
-    // Store player_id if available
-    if (prop.player_id && !grouped[playerName].playerId) {
-      grouped[playerName].playerId = prop.player_id;
+    // Store player_id if available (and not already set)
+    if (propPlayerId && !grouped[playerName].playerId) {
+      grouped[playerName].playerId = propPlayerId;
     }
     grouped[playerName].props.push({
       type: prop.prop_type,
@@ -177,11 +180,118 @@ function groupPropsByPlayer(props) {
 }
 
 /**
+ * Get NHL game total context for prop analysis
+ * Categorizes the game total and provides prop implications
+ * NHL totals typically range from 5.0 to 7.5
+ * 
+ * @param {Object} marketSnapshot - Market data with spread and total
+ * @param {string} homeTeam - Home team name
+ * @param {string} awayTeam - Away team name
+ * @returns {Object} Game environment analysis for props
+ */
+function getNhlGameTotalContext(marketSnapshot, homeTeam = '', awayTeam = '') {
+  const total = parseFloat(marketSnapshot?.total?.line) || null;
+  const spread = parseFloat(marketSnapshot?.spread?.home?.point) || 
+                 parseFloat(marketSnapshot?.spread?.line) || null;
+  
+  if (!total) {
+    return { 
+      available: false, 
+      reason: 'Total not available',
+      total: null,
+      totalCategory: 'UNKNOWN',
+      scoringEnvironment: 'unknown - no total line available',
+      propImplications: 'Cannot assess game environment without total.'
+    };
+  }
+  
+  // Categorize NHL game total (5.0 - 7.5 typical range)
+  let totalCategory = 'AVERAGE';
+  let scoringEnvironment = 'standard';
+  let propImplications = '';
+  
+  if (total >= 7.0) {
+    totalCategory = 'SHOOTOUT';
+    scoringEnvironment = 'high scoring expected - offensive players get boost';
+    propImplications = 'Points/assists props favorable for top-6 forwards. Goalie saves could go OVER due to shot volume. Consider OVERS on elite scorers.';
+  } else if (total >= 6.5) {
+    totalCategory = 'ABOVE_AVERAGE';
+    scoringEnvironment = 'above average scoring expected';
+    propImplications = 'Good environment for offensive props. SOG overs for volume shooters. Top-6 forwards and PP1 players favored.';
+  } else if (total >= 6.0) {
+    totalCategory = 'AVERAGE';
+    scoringEnvironment = 'standard NHL scoring environment';
+    propImplications = 'No strong environmental lean. Focus on matchup-specific edges and role changes.';
+  } else if (total >= 5.5) {
+    totalCategory = 'BELOW_AVERAGE';
+    scoringEnvironment = 'slower/tighter game expected';
+    propImplications = 'Be cautious with offensive props. SOG props may be safer than points. Consider UNDERs on fringe players.';
+  } else {
+    totalCategory = 'LOW';
+    scoringEnvironment = 'defensive game expected - goaltending battle likely';
+    propImplications = 'Points/assists UNDERS in play. Elite goalie saves may go UNDER (fewer total shots). Focus on volume metrics like SOG for safe floor plays.';
+  }
+  
+  // Calculate implied team goals (like NFL/NBA)
+  // Formula: Home Implied = (Total - Spread) / 2, Away Implied = (Total + Spread) / 2
+  // (NHL spread is puckline, usually -1.5/+1.5, but for implied goals we use spread)
+  let homeImplied = total / 2;
+  let awayImplied = total / 2;
+  
+  if (spread !== null) {
+    homeImplied = (total - spread) / 2;
+    awayImplied = (total + spread) / 2;
+  }
+  
+  // Favorite determination
+  let favorite = null;
+  let underdog = null;
+  if (spread !== null) {
+    if (spread < 0) {
+      favorite = homeTeam || 'Home';
+      underdog = awayTeam || 'Away';
+    } else if (spread > 0) {
+      favorite = awayTeam || 'Away';
+      underdog = homeTeam || 'Home';
+    }
+  }
+  
+  return {
+    available: true,
+    total,
+    totalCategory,
+    scoringEnvironment,
+    propImplications,
+    spread: spread || null,
+    favorite,
+    underdog,
+    impliedGoals: {
+      home: { team: homeTeam || 'Home', goals: parseFloat(homeImplied.toFixed(2)) },
+      away: { team: awayTeam || 'Away', goals: parseFloat(awayImplied.toFixed(2)) }
+    },
+    // Sharp betting context
+    sharpContext: total >= 6.5 
+      ? 'High total favors offensive players. Volume (SOG) correlates with opportunity.'
+      : total <= 5.5
+        ? 'Low total suggests tight checking. Defensive forwards and shutdown matchups matter more.'
+        : 'Average total - look for player-specific edges rather than environmental plays.'
+  };
+}
+
+/**
  * Get top prop candidates based on line value and odds quality
  * Returns top N players PER TEAM (so 7 per team = 14 total for a game)
+ * 
+ * FIXED: Now filters to only players on homeTeam or awayTeam
+ * This prevents pulling in players from other games when odds API returns multiple games
  */
-function getTopPropCandidates(props, maxPlayersPerTeam = 7) {
+function getTopPropCandidates(props, maxPlayersPerTeam = 7, homeTeamName = null, awayTeamName = null) {
   const grouped = groupPropsByPlayer(props);
+  
+  // Normalize team name for matching
+  const normalizeTeam = (name) => (name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const homeNorm = normalizeTeam(homeTeamName);
+  const awayNorm = normalizeTeam(awayTeamName);
   
   // Score each player by number of props and odds quality
   // NOTE: No bias toward any specific prop type - Gary decides organically
@@ -200,10 +310,27 @@ function getTopPropCandidates(props, maxPlayersPerTeam = 7) {
     };
   });
   
+  // CRITICAL FIX: Filter to only players on the two teams in this game
+  // The odds API sometimes returns props for multiple games
+  let filteredPlayers = scored;
+  if (homeNorm && awayNorm) {
+    filteredPlayers = scored.filter(player => {
+      const playerTeamNorm = normalizeTeam(player.team);
+      // Check if player's team matches or contains home/away team name
+      return playerTeamNorm.includes(homeNorm) || homeNorm.includes(playerTeamNorm) ||
+             playerTeamNorm.includes(awayNorm) || awayNorm.includes(playerTeamNorm);
+    });
+    
+    const filteredOut = scored.length - filteredPlayers.length;
+    if (filteredOut > 0) {
+      console.log(`[NHL Props] Filtered out ${filteredOut} players not on ${homeTeamName} or ${awayTeamName}`);
+    }
+  }
+  
   // Group by team and take top N from each
   // Normalize team names to handle variations
   const byTeam = {};
-  for (const player of scored) {
+  for (const player of filteredPlayers) {
     const teamRaw = player.team || 'Unknown';
     const teamKey = teamRaw.toLowerCase().replace(/[^a-z0-9]/g, '');
     if (!byTeam[teamKey]) byTeam[teamKey] = { name: teamRaw, players: [] };
@@ -250,18 +377,18 @@ function formatPropsInjuries(injuries = []) {
 }
 
 /**
- * Resolve player IDs from prop data by searching BDL by name
- * CRITICAL: Uses player search (not team roster) because BDL roster endpoint returns stale data
- * NOTE: BDL /players?team_ids[]=X returns outdated rosters, but /players?search=name returns current teams
+ * Resolve player IDs from prop data
+ * 
+ * FIXED: Use the player_id that's already embedded in prop data from BDL.
+ * The BDL NHL player search endpoint doesn't work reliably, but the props
+ * endpoint returns player IDs directly, so we use those instead of searching.
+ * 
  * Returns: { playerName: { id, team } }
  */
 async function resolvePlayerIds(propCandidates, teamIds, season, homeTeamName, awayTeamName) {
   const playerIdMap = {}; // name -> { id, team }
   
-  // Get all player names - we'll search each one individually
-  const allPlayerNames = propCandidates.map(c => c.player);
-  
-  if (allPlayerNames.length === 0) {
+  if (propCandidates.length === 0) {
     return playerIdMap;
   }
   
@@ -271,82 +398,42 @@ async function resolvePlayerIds(propCandidates, teamIds, season, homeTeamName, a
   const awayNorm = normalizeTeamName(awayTeamName);
   const validTeamIds = new Set(teamIds);
   
-  console.log(`[NHL Props Context] Searching BDL by player name for ${allPlayerNames.length} candidates...`);
+  // FIXED: Use player IDs that are already in the prop data
+  // The BDL NHL player search endpoint returns 0 results, but props have player_id embedded
+  let playersWithIds = 0;
+  let playersValidated = 0;
   
-  // Search each player by name (batch in parallel, max 5 concurrent)
-  const batchSize = 5;
-  const invalidPlayers = [];
-  
-  for (let i = 0; i < allPlayerNames.length; i += batchSize) {
-    const batch = allPlayerNames.slice(i, i + batchSize);
+  for (const candidate of propCandidates) {
+    const playerName = candidate.player;
+    const playerId = candidate.playerId;
+    const playerTeam = candidate.team || '';
+    const playerTeamNorm = normalizeTeamName(playerTeam);
     
-    const searchPromises = batch.map(async (candidateName) => {
-      try {
-        // Extract last name for search (more reliable)
-        const nameParts = candidateName.trim().split(' ');
-        const lastName = nameParts[nameParts.length - 1];
-        
-        // Search by last name - with logging on failure
-        const searchResults = await safeApiCallArray(
-          () => ballDontLieService.getPlayersGeneric(SPORT_KEY, { search: lastName, per_page: 10 }),
-          `NHL Props: Search player "${candidateName}"`
-        );
-        
-        if (!searchResults || searchResults.length === 0) {
-          return { name: candidateName, found: false };
-        }
-        
-        // Find match using fuzzy matching to handle name variations (P.K. vs PK, etc.)
-        const match = findBestPlayerMatch(candidateName, searchResults);
-        
-        if (!match) {
-          return { name: candidateName, found: false };
-        }
-        
-        // Check if player is on one of the two teams in this game
-        const playerTeamId = match.team?.id || match.team_id;
-        const playerTeamName = match.team?.full_name || '';
-        const playerTeamNorm = normalizeTeamName(playerTeamName);
-        
-        // Validate team: check team_id match OR team name contains home/away
-        const isOnValidTeam = validTeamIds.has(playerTeamId) ||
-          playerTeamNorm.includes(homeNorm) || homeNorm.includes(playerTeamNorm) ||
-          playerTeamNorm.includes(awayNorm) || awayNorm.includes(playerTeamNorm);
-        
-        if (isOnValidTeam) {
-          return {
-            name: candidateName,
-            found: true,
-            id: match.id,
-            team: playerTeamName
-          };
-        } else {
-          return { name: candidateName, found: false, wrongTeam: playerTeamName };
-        }
-      } catch (e) {
-        return { name: candidateName, found: false, error: e.message };
-      }
-    });
+    // Skip if no player ID from props
+    if (!playerId) {
+      continue;
+    }
+    playersWithIds++;
     
-    const results = await Promise.all(searchPromises);
+    // Validate team: check if player is on home or away team
+    const isOnValidTeam = 
+      playerTeamNorm.includes(homeNorm) || homeNorm.includes(playerTeamNorm) ||
+      playerTeamNorm.includes(awayNorm) || awayNorm.includes(playerTeamNorm);
     
-    for (const result of results) {
-      if (result.found) {
-        playerIdMap[result.name.toLowerCase()] = { id: result.id, team: result.team };
-      } else {
-        invalidPlayers.push({ name: result.name, reason: result.wrongTeam ? `on ${result.wrongTeam}` : 'not found' });
-      }
+    if (isOnValidTeam) {
+      playerIdMap[playerName.toLowerCase()] = { id: playerId, team: playerTeam };
+      playersValidated++;
     }
   }
   
-  console.log(`[NHL Props Context] Validated ${Object.keys(playerIdMap).length}/${allPlayerNames.length} players against ${homeTeamName} + ${awayTeamName}`);
+  console.log(`[NHL Props Context] Validated ${playersValidated}/${propCandidates.length} players against ${homeTeamName} + ${awayTeamName}`);
+  console.log(`[NHL Props Context] Players with BDL IDs: ${playersWithIds}/${propCandidates.length}`);
   
-  // Log players that aren't on either team (will be filtered out)
-  if (invalidPlayers.length > 0) {
-    const filtered = invalidPlayers.filter(p => p.reason !== 'not found');
-    if (filtered.length > 0) {
-      console.log(`[NHL Props Context] ⚠️ FILTERED OUT ${filtered.length} players NOT on ${homeTeamName} or ${awayTeamName}: ${filtered.slice(0, 5).map(p => `${p.name} (${p.reason})`).join(', ')}${filtered.length > 5 ? '...' : ''}`);
-    }
+  // If we got 0 validated players but had IDs, log the issue
+  if (playersValidated === 0 && playersWithIds > 0) {
+    const samplePlayers = propCandidates.slice(0, 3).map(c => `${c.player} (${c.team})`).join(', ');
+    console.log(`[NHL Props Context] ⚠️ Team matching failed. Sample: ${samplePlayers}`);
+    console.log(`[NHL Props Context] ⚠️ Looking for: "${homeTeamName}" or "${awayTeamName}"`);
   }
   
   return playerIdMap;
@@ -497,24 +584,41 @@ function processGoalieData(bdlGoalieData, advancedStats, homeTeam, awayTeam) {
 
 /**
  * Detect if either team is on a back-to-back (played yesterday)
- * B2B significantly impacts player fatigue and performance
- * @param {Array<number>} teamIds - Team IDs
+ * 
+ * CRITICAL: Only ROAD B2B (away team on second night) significantly impacts props
+ * - Away team on B2B = SIGNIFICANT (traveled yesterday, playing again tonight)
+ * - Home team on B2B = MINOR (rested at home, just played yesterday)
+ * 
+ * @param {Array<number>} teamIds - Team IDs [homeTeamId, awayTeamId]
  * @param {string} gameDate - Game date string (YYYY-MM-DD)
- * @returns {Object} - { home: boolean, away: boolean }
+ * @returns {Object} - { home: boolean, away: boolean, awayRoadB2B: boolean, significant: boolean }
  */
 async function detectBackToBack(teamIds, gameDate) {
-  const result = { home: false, away: false, homeLastGame: null, awayLastGame: null };
+  const result = { 
+    home: false, 
+    away: false, 
+    homeLastGame: null, 
+    awayLastGame: null,
+    awayRoadB2B: false,  // TRUE if away team played yesterday AND is away again today
+    homeRoadB2B: false,  // TRUE if home team played away yesterday (less common)
+    significant: false   // Only true for road B2B situations
+  };
 
   if (!teamIds || teamIds.length === 0) return result;
 
   try {
-    // Get yesterday's date
-    const gameDateObj = new Date(gameDate);
-    const yesterday = new Date(gameDateObj);
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().slice(0, 10);
+    // Get yesterday's date in EST timezone to match NHL schedule
+    const [year, month, day] = gameDate.split('-').map(Number);
+    const gameDateEST = new Date(Date.UTC(year, month - 1, day, 12, 0, 0)); // Noon UTC = morning EST
+    
+    // Yesterday is one day before the game date
+    const yesterdayEST = new Date(gameDateEST);
+    yesterdayEST.setDate(yesterdayEST.getDate() - 1);
+    const yesterdayStr = yesterdayEST.toISOString().slice(0, 10);
+    
+    console.log(`[NHL Props Context] B2B check: Game date=${gameDate}, checking yesterday=${yesterdayStr}`);
 
-    // Check recent box scores for both teams - with logging on failure
+    // Check recent box scores for both teams
     const recentDates = [yesterdayStr];
     const boxScores = await safeApiCallArray(
       () => ballDontLieService.getNhlRecentBoxScores(recentDates, { team_ids: teamIds }),
@@ -522,24 +626,45 @@ async function detectBackToBack(teamIds, gameDate) {
     );
 
     if (boxScores.length > 0) {
-      console.log(`[NHL Props Context] Found ${boxScores.length} box scores from yesterday for B2B check`);
+      console.log(`[NHL Props Context] Found ${boxScores.length} box scores from ${yesterdayStr} involving these teams`);
 
       for (const box of boxScores) {
         const homeId = box.game?.home_team?.id;
         const awayId = box.game?.away_team?.id;
+        
+        // Today's game: teamIds[0] = home team, teamIds[1] = away team
+        const todayHomeId = teamIds[0];
+        const todayAwayId = teamIds[1];
 
-        // Check if our home team played yesterday
-        if (teamIds[0] && (homeId === teamIds[0] || awayId === teamIds[0])) {
+        // Check if today's HOME team played yesterday
+        if (todayHomeId && (homeId === todayHomeId || awayId === todayHomeId)) {
           result.home = true;
           result.homeLastGame = yesterdayStr;
+          // Check if they were AWAY yesterday
+          if (awayId === todayHomeId) {
+            result.homeRoadB2B = true;
+          }
+          console.log(`[NHL Props Context] Home team (ID:${todayHomeId}) played yesterday - ${awayId === todayHomeId ? 'AWAY' : 'HOME'}`);
         }
 
-        // Check if our away team played yesterday
-        if (teamIds[1] && (homeId === teamIds[1] || awayId === teamIds[1])) {
+        // Check if today's AWAY team played yesterday - THIS IS THE SIGNIFICANT ONE
+        if (todayAwayId && (homeId === todayAwayId || awayId === todayAwayId)) {
           result.away = true;
           result.awayLastGame = yesterdayStr;
+          // Away team is on the road TONIGHT, so any B2B is a road B2B for them
+          result.awayRoadB2B = true;
+          console.log(`[NHL Props Context] ⚠️ AWAY team (ID:${todayAwayId}) on ROAD B2B - played yesterday, traveling again tonight`);
         }
       }
+      
+      // Only mark as significant if AWAY team is on a road B2B
+      result.significant = result.awayRoadB2B;
+      
+      if (result.home && !result.away) {
+        console.log(`[NHL Props Context] Home team B2B only - minimal impact (home rest advantage)`);
+      }
+    } else {
+      console.log(`[NHL Props Context] No games found on ${yesterdayStr} - no B2B situation`);
     }
 
     return result;
@@ -551,9 +676,9 @@ async function detectBackToBack(teamIds, gameDate) {
 
 /**
  * Build comprehensive player stats text with actual BDL data
- * ENHANCED: Now includes recent form, consistency, and home/away splits
+ * ENHANCED: Now includes recent form, consistency, home/away splits, and LEAGUE RANKINGS
  */
-function buildPlayerStatsText(homeTeam, awayTeam, advancedStats, propCandidates, playerSeasonStats, playerIdMap, richContext, injuries = [], playerGameLogs = {}) {
+function buildPlayerStatsText(homeTeam, awayTeam, advancedStats, propCandidates, playerSeasonStats, playerIdMap, richContext, injuries = [], playerGameLogs = {}, playerLeaderRankings = {}) {
   let statsText = '';
   
   // Helper to get stats for a player
@@ -566,6 +691,24 @@ function buildPlayerStatsText(homeTeam, awayTeam, advancedStats, propCandidates,
   const getPlayerLogs = (playerName) => {
     const playerId = playerIdMap[playerName.toLowerCase()];
     return playerId ? playerGameLogs[playerId] : null;
+  };
+  
+  // Helper to get league rankings for a player (ENHANCED)
+  const getPlayerRankings = (playerName) => {
+    const playerId = playerIdMap[playerName.toLowerCase()];
+    return playerId ? playerLeaderRankings[playerId] : null;
+  };
+  
+  // Helper to format rankings into a readable string
+  const formatRankings = (rankings) => {
+    if (!rankings?.rankings) return '';
+    const r = rankings.rankings;
+    const parts = [];
+    if (r.goals?.isTopTen) parts.push(`#${r.goals.rank} goals`);
+    if (r.points?.isTopTen) parts.push(`#${r.points.rank} points`);
+    if (r.assists?.isTopTen) parts.push(`#${r.assists.rank} assists`);
+    if (r.shots?.isTopTen) parts.push(`#${r.shots.rank} shots`);
+    return parts.length > 0 ? `  League Rankings: ${parts.join(', ')}\n` : '';
   };
   
   // Helper to format recent games
@@ -607,6 +750,7 @@ function buildPlayerStatsText(homeTeam, awayTeam, advancedStats, propCandidates,
     for (const candidate of awayPlayers) {
       const stats = getPlayerStats(candidate.player);
       const logs = getPlayerLogs(candidate.player);
+      const rankings = getPlayerRankings(candidate.player);
       const propsStr = candidate.props.map(p => `${p.type} ${p.line}`).join(', ');
       
       const injuryRecord = injuries.find(i => i.player.toLowerCase() === candidate.player.toLowerCase());
@@ -617,6 +761,9 @@ function buildPlayerStatsText(homeTeam, awayTeam, advancedStats, propCandidates,
       if (stats) {
         statsText += `- **${candidate.player}**${injuryFlag}:\n`;
         statsText += `  Season: ${stats.games_played || 0} GP, SOG/G ${stats.shots_per_game || 'N/A'}, G/G ${stats.goals_per_game || 'N/A'}, A/G ${stats.assists_per_game || 'N/A'}, P/G ${stats.points_per_game || 'N/A'}, PP Pts ${stats.power_play_points || 0}, TOI/G ${stats.time_on_ice_per_game || 'N/A'}\n`;
+        
+        // ENHANCED: Show league rankings if player is top-10 in any category
+        statsText += formatRankings(rankings);
         
         // Add recent form if available - show ALL stat types equally for organic analysis
         if (logs) {
@@ -672,6 +819,7 @@ function buildPlayerStatsText(homeTeam, awayTeam, advancedStats, propCandidates,
     for (const candidate of homePlayers) {
       const stats = getPlayerStats(candidate.player);
       const logs = getPlayerLogs(candidate.player);
+      const rankings = getPlayerRankings(candidate.player);
       const propsStr = candidate.props.map(p => `${p.type} ${p.line}`).join(', ');
       
       const injuryRecord = injuries.find(i => i.player.toLowerCase() === candidate.player.toLowerCase());
@@ -682,6 +830,9 @@ function buildPlayerStatsText(homeTeam, awayTeam, advancedStats, propCandidates,
       if (stats) {
         statsText += `- **${candidate.player}**${injuryFlag}:\n`;
         statsText += `  Season: ${stats.games_played || 0} GP, SOG/G ${stats.shots_per_game || 'N/A'}, G/G ${stats.goals_per_game || 'N/A'}, A/G ${stats.assists_per_game || 'N/A'}, P/G ${stats.points_per_game || 'N/A'}, PP Pts ${stats.power_play_points || 0}, TOI/G ${stats.time_on_ice_per_game || 'N/A'}\n`;
+        
+        // ENHANCED: Show league rankings if player is top-10 in any category
+        statsText += formatRankings(rankings);
         
         // Add recent form if available - show ALL stat types equally for organic analysis
         if (logs) {
@@ -737,7 +888,7 @@ function buildPlayerStatsText(homeTeam, awayTeam, advancedStats, propCandidates,
  * Build token slices for prop analysis - enhanced with player stats, game logs,
  * VOLUME METRICS (PP1, TOI, iCF), and LINE MOVEMENT
  */
-function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnapshot, advancedStats, playerSeasonStats, playerIdMap, playerGameLogs = {}, lineMovements = {}) {
+function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnapshot, advancedStats, playerSeasonStats, playerIdMap, playerGameLogs = {}, lineMovements = {}, homeTeamName = 'Home', awayTeamName = 'Away') {
   // Enhance prop candidates with their season stats, recent form, VOLUME METRICS, and LINE MOVEMENT
   const enhancedCandidates = propCandidates.map(p => {
     const playerId = playerIdMap[p.player.toLowerCase()];
@@ -846,6 +997,9 @@ function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnap
       total_listed: injuries.length
     },
     market_context: marketSnapshot,
+    // GAME ENVIRONMENT - Critical for understanding scoring context
+    // Similar to NBA's pace/total context and NFL's game script
+    game_environment: getNhlGameTotalContext(marketSnapshot, homeTeamName, awayTeamName),
     team_analytics: {
       home: advancedStats?.home_advanced || null,
       away: advancedStats?.away_advanced || null
@@ -897,7 +1051,8 @@ export async function buildNhlPropsAgenticContext(game, playerProps, options = {
   if (awayTeam?.id) teamIds.push(awayTeam.id);
 
   // Process prop candidates first - 7 players per team (14 total)
-  const propCandidates = getTopPropCandidates(playerProps, 7);
+  // FIXED: Pass team names to filter out players from other games
+  const propCandidates = getTopPropCandidates(playerProps, 7, game.home_team, game.away_team);
   
   // Parallel fetch: injuries, player ID resolution, BDL goalies, narrative context, LINE MOVEMENT
   // IMPORTANT: All context is fetched UPFRONT so Gary knows all factors BEFORE iterations
@@ -1011,19 +1166,23 @@ export async function buildNhlPropsAgenticContext(game, playerProps, options = {
     console.log(`[NHL Props Context] Filtered out ${excluded} Doubtful/Day-To-Day player(s) to avoid void bets`);
   }
 
-  // NOW fetch player season stats AND game logs in parallel (requires player IDs)
-  console.log('[NHL Props Context] Fetching BDL player season stats and game logs...');
-  const [playerSeasonStats, playerGameLogs] = await Promise.all([
+  // NOW fetch player season stats, game logs, AND leader rankings in parallel (requires player IDs)
+  console.log('[NHL Props Context] Fetching BDL player season stats, game logs, and leader rankings...');
+  const playerIds = Object.values(playerIdMap).map(p => p?.id || p).filter(id => id);
+  const [playerSeasonStats, playerGameLogs, playerLeaderRankings] = await Promise.all([
     fetchPlayerSeasonStats(playerIdMap, season),
-    fetchPlayerGameLogs(playerIdMap)
+    fetchPlayerGameLogs(playerIdMap),
+    ballDontLieService.getNhlPlayerStatsLeaders(season, playerIds)
   ]);
   
   // Log stats coverage (use available candidates - excludes Doubtful/Day-To-Day)
   const playersWithStats = Object.keys(playerSeasonStats).length;
   const playersWithLogs = Object.keys(playerGameLogs).length;
+  const playersWithRankings = Object.keys(playerLeaderRankings).length;
   const totalCandidates = availableCandidates.length;
   console.log(`[NHL Props Context] Player stats coverage: ${playersWithStats}/${totalCandidates} players`);
   console.log(`[NHL Props Context] Player game logs coverage: ${playersWithLogs}/${totalCandidates} players`);
+  console.log(`[NHL Props Context] Player leader rankings: ${playersWithRankings} players have league rankings`);
 
   // Process BDL goalie data - prioritize BDL (concrete stats) but include Grounding for context
   const goalieInfo = processGoalieData(bdlGoalieData, advancedStats, homeTeam, awayTeam);
@@ -1031,10 +1190,14 @@ export async function buildNhlPropsAgenticContext(game, playerProps, options = {
     console.log(`[NHL Props Context] Goalie info: Home=${goalieInfo.home?.name || 'Unknown'} (${goalieInfo.home?.save_pct || 'N/A'} SV%), Away=${goalieInfo.away?.name || 'Unknown'} (${goalieInfo.away?.save_pct || 'N/A'} SV%)`);
   }
 
-  // B2B (back-to-back) detection - check if either team played yesterday
-  const b2bInfo = await detectBackToBack(teamIds, dateStr, bdlGoalieData);
-  if (b2bInfo.home || b2bInfo.away) {
-    console.log(`[NHL Props Context] B2B detected: Home=${b2bInfo.home ? 'YES' : 'no'}, Away=${b2bInfo.away ? 'YES' : 'no'}`);
+  // B2B (back-to-back) detection - ONLY road B2B is significant for props
+  const b2bInfo = await detectBackToBack(teamIds, dateStr);
+  if (b2bInfo.significant) {
+    // Road B2B - away team traveled yesterday, traveling again tonight
+    console.log(`[NHL Props Context] ⚠️ ROAD B2B DETECTED: Away team played yesterday and traveling again tonight`);
+  } else if (b2bInfo.home && !b2bInfo.away) {
+    // Home team B2B only - minimal impact
+    console.log(`[NHL Props Context] ℹ️ Home team B2B (minimal impact - home rest advantage)`);
   }
 
   const marketSnapshot = buildMarketSnapshot(game.bookmakers || [], 
@@ -1053,7 +1216,8 @@ export async function buildNhlPropsAgenticContext(game, playerProps, options = {
     playerIdMap,
     richContext,
     formattedInjuries, // Pass injuries for injury flagging
-    playerGameLogs // Pass game logs for recent form
+    playerGameLogs, // Pass game logs for recent form
+    playerLeaderRankings // ENHANCED: League rankings for context
   );
 
   // Build token data with enhanced player info, game logs, and LINE MOVEMENT
@@ -1066,7 +1230,9 @@ export async function buildNhlPropsAgenticContext(game, playerProps, options = {
     playerSeasonStats,
     playerIdMap,
     playerGameLogs, // Pass game logs
-    lineMovements   // Pass line movement data for Tier 2 Kill Conditions
+    lineMovements,  // Pass line movement data for Tier 2 Kill Conditions
+    game.home_team, // Team names for game environment context
+    game.away_team
   );
 
   // Build game summary with enhanced goalie and B2B info

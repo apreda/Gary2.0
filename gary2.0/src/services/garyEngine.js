@@ -345,14 +345,9 @@ export async function generateGaryAnalysis(gameData, options = {}) {
         const tpAway = sr?.topPlayers?.away || [];
         if (!Array.isArray(tpHome) || tpHome.length === 0) miss.push('NCAAB top-3 players (home)');
         if (!Array.isArray(tpAway) || tpAway.length === 0) miss.push('NCAAB top-3 players (away)');
-      } else if (sportKey.includes('nba') || sportKey.includes('wnba')) {
+      } else if (sportKey.includes('nba')) {
         // We don't yet inject an explicit basics block for these; warn if missing to surface gaps
         if (!sr?.basics) miss.push('Basketball basics (record/streak/PPG/Opp PPG)');
-      } else if (sportKey.includes('epl')) {
-        // EPL has season stats + 3-way ML; warn if odds lack draw side
-        const hasDraw = Array.isArray(formattedData?.odds?.markets)
-          && formattedData.odds.markets.some(m => m.key === 'h2h' && m.outcomes?.some(o => String(o?.name).toLowerCase() === 'draw'));
-        if (!hasDraw) miss.push('EPL draw moneyline');
       }
       if (miss.length) {
         console.warn(`Stats visibility: missing → ${miss.join(', ')}`);
@@ -381,13 +376,13 @@ export async function generateGaryAnalysis(gameData, options = {}) {
     // Simple placeholder for news data
     const newsData = options.newsData || 'Using stats-only analysis.';
     
-    // Generate analysis using OpenAI
-    console.log('Calling OpenAI for analysis with temperature:', options.temperature || 0.4);
+    // Generate analysis using Gemini 3 Flash
+    console.log('Calling Gemini for analysis with temperature: 1.0 (Gemini 3 required)');
     const rawOpenAIResponse = await openaiService.generateGaryAnalysis(
       formattedData, 
       newsData,
       {
-        temperature: options.temperature || 0.4,
+        temperature: 1.0, // Gemini 3: MUST be 1.0 per Google recommendation
         model: options.model
       }
     );

@@ -32,32 +32,27 @@ This document contains betting principles backed by verified data and industry r
 
 ### NFL Home Field Advantage Has Declined
 
-**Historical (pre-2016):** ~3 points  
-**Current (2019-present):** ~1.5-2 points
-
-**Verified Data:**
+**Historical Context:**
 - From 1970 through the early 2010s, NFL home teams won 57-60% of games
 - Since 2019, that number has dropped to 52-53%
-- The traditional 3-point home field advantage is now closer to 1.5-2 points
 - Home teams are no longer automatically profitable to bet
+- The line ALREADY reflects home field advantage
 
 **Sources:** nfeloapp.com, Covers.com, VSiN analysis (2023-2025)
 
-**Key Insight:** Oddsmakers once routinely gave home teams 3 points. Today that figure is often 1.5-2 points. If you're adding 3 points for home field in your mental calculations, you're using outdated numbers.
+**Key Insight:** The line already prices in home field. Don't mentally "add points" - instead, investigate THIS specific team's home record and whether their venue creates any edge beyond what's priced in.
 
 ### NBA Home Court Advantage
 
-**Current Value:** ~2-2.1 points on average
-
-**Verified Data:**
-- Bookmakers assign approximately 2.05 points to NBA home teams (2.5-year study)
-- Home court advantage varies significantly by team (from -1.7 to +7.0 points)
-- Oklahoma City, Denver, Memphis show highest home court edges
+**Historical Context:**
+- Home court advantage varies SIGNIFICANTLY by team
+- Some teams (Denver altitude, etc.) have higher home edges than others
 - Since COVID, NBA home teams win only about 54% (down from 58% historically)
+- The line ALREADY reflects home court advantage
 
 **Source:** VSiN analysis (February 2025), Yahoo Sports research
 
-**Key Insight:** NBA home court is worth less than most casual bettors assume. Altitude (Denver) and specific stadium effects matter more than generic "home team" status.
+**Key Insight:** The line already prices in home court. Investigate THIS specific team's home/away splits to see if there's any deviation from what the line implies.
 
 ---
 
@@ -221,6 +216,38 @@ When analyzing a game, ask: "When did this injury happen?"
 
 **Key Insight:** Check who's starting in net. Back-to-backs usually mean backup plays one game. A team with their backup in net against an opponent's starter is a significant factor.
 
+### The Goalie-Streak Golden Rule
+
+**"Ride the streak until the goalie changes."**
+
+Unlike NBA/NFL where streaks are often shooting variance or turnover luck, NHL streaks with goalie continuity have STRUCTURAL support:
+- A hot goalie stays hot (confidence, rhythm, team plays in front of him differently)
+- A cold goalie can sink a team for weeks
+- Betting AGAINST a hot team with the same goalie = fighting structure, not exploiting regression
+
+**Key Questions:**
+1. Is the same goalie starting tonight who played during the streak?
+2. What are the goalie's numbers DURING the streak vs. season average?
+3. If betting against a streak, has the goalie changed or shown signs of cooling?
+
+### Home Ice: The "Last Change" Factor
+
+**Why NHL home ice is different:**
+- Home coach gets final substitution on every whistle
+- This allows dictating matchups: shelter weak defenders, target opponent weaknesses
+- A tactical advantage that doesn't exist in NBA/NFL
+
+**Key Insight:** Home underdogs with exploitable matchup advantages can leverage last change. "Home ice" alone is weak (~0.15-0.2 goals), but "home ice with last change to neutralize their top line" is tactical analysis.
+
+### The Puck Line Trap (-1.5)
+
+**The Reality:**
+- Most NHL games are 1-goal games until the final 2 minutes
+- Puck line covers come from EMPTY NET GOALS, not just dominance
+- Only bet puck line on teams with elite power play (top 10) that can convert empty nets
+
+**Key Insight:** A dominant team with a mediocre PP can win 3-2 and not cover -1.5. An elite PP team winning 2-1 can score the empty netter to cover.
+
 ### NHL Variance (Puck Luck)
 
 **The Principle:**
@@ -228,6 +255,7 @@ When analyzing a game, ask: "When did this injury happen?"
 - Expected goals (xG) can diverge significantly from actual goals
 - A team dominating possession can lose 1-0 on a weird bounce
 - Look for teams consistently outperforming or underperforming their xG for regression plays
+- **⚠️ BUT:** Regression arguments are weaker when the same goalie is starting - goalie momentum is real
 
 ---
 
@@ -290,21 +318,19 @@ Before finalizing analysis, ask:
 
 ---
 
-## SUMMARY: THE CORE PRINCIPLES
+## SUMMARY: THINGS THE LINE ALREADY KNOWS
 
-| Principle | Key Number/Fact |
+| Factor | Market Reality |
 |-----------|-----------------|
-| NFL home field | 1.5-2 points (not 3) |
-| NBA home court | ~2 points average |
-| NFL favorites ATS | 48% (not profitable) |
-| NFL underdogs ATS | 52% (slight edge) |
-| NFL key numbers | 3 (15%), 7 (10%), 10 (8%) |
-| Divisional underdogs | 71% ATS (strong edge) |
-| Week 1 underdogs | 53% ATS |
-| Wind over 20 mph | 54% under |
-| Bye week favorites | 64% ATS |
-| B2B NBA teams | 49% ATS (slight fade) |
-| Injury priced in after | 2-3 games |
+| NFL home field | Already priced in - investigate THIS team's actual home record |
+| NBA home court | Already priced in - investigate THIS team's actual home/away splits |
+| NFL favorites ATS | Historically close to 50% - being better doesn't mean covering |
+| NFL underdogs ATS | Historically close to 50% - no automatic edge |
+| NFL key numbers | 3 and 7 are common margins (scoring increments) - half-points matter near these |
+| Divisional games | Familiarity often produces closer games - investigate the specific rivalry |
+| Weather | Market sees forecasts too - investigate if THIS game has extreme conditions |
+| B2B NBA teams | Market adjusts for rest - investigate THIS team's actual B2B performance |
+| Injury priced in | Market adjusts quickly - investigate how team has ACTUALLY performed since injury |
 
 ---
 

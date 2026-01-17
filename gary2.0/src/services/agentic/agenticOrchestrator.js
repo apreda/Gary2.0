@@ -34,48 +34,97 @@ function getGemini() {
 //
 // 2026 Update: Flash OUTPERFORMS Pro for agentic tasks (78% vs 76.2% benchmark)
 // ═══════════════════════════════════════════════════════════════════════════
-// GEMINI 3 FLASH MIGRATION (2026 Agentic Optimization + Quota Management)
+// GEMINI 3 MODEL STRATEGY (2026 - Persistent Sessions + Thought Signatures)
 // ═══════════════════════════════════════════════════════════════════════════
-// ALL PICKS NOW USE FLASH to avoid quota issues.
-// Flash is faster, more precise with tools, and better at underdog value hunting.
+// FLASH: Investigation + Steel Man building (Pass 1-2)
+//   - Better at tool calling and data gathering
+//   - Faster response times
+//   - Used for ALL sports during investigation phase
 //
-// GAME PICKS & PROPS: gemini-3-flash-preview (all sports)
+// PRO: Grading + Final Decision (Pass 2.5-3) for NBA, NFL, NHL only
+//   - Deep reasoning with thinking_level: 'high'
+//   - Better at complex judgment and case evaluation
+//   - NCAAB stays on Flash (high volume)
+//
+// IMPORTANT: Thought signatures are model-specific!
+//   - Cannot pass Flash signatures to Pro (causes 400 error)
+//   - When switching models, pass only textual summary
 // ═══════════════════════════════════════════════════════════════════════════
 const ALLOWED_GEMINI_MODELS = [
-  'gemini-3-flash-preview',  // Primary model for all picks
+  'gemini-3-flash-preview',  // Investigation + Steel Man (all sports)
+  'gemini-3-pro-preview',    // Grading + Final Decision (NBA, NFL, NHL)
 ];
 
 function validateGeminiModel(model) {
   if (!ALLOWED_GEMINI_MODELS.includes(model)) {
-    console.error(`[MODEL POLICY VIOLATION] Attempted to use "${model}" - ONLY Gemini 3 Flash allowed!`);
+    console.error(`[MODEL POLICY VIOLATION] Attempted to use "${model}" - not in allowed list!`);
     console.error(`[MODEL POLICY] Allowed models: ${ALLOWED_GEMINI_MODELS.join(', ')}`);
-    // Fall back to default rather than crash
+    // Fall back to Flash rather than crash
     return 'gemini-3-flash-preview';
   }
   return model;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// GEMINI 3 FLASH FOR ALL SPORTS
+// MODEL SELECTION HELPERS
 // ═══════════════════════════════════════════════════════════════════════════
-// Using Flash for all sports to avoid quota issues and maintain consistent
-// performance across all picks.
+
+/**
+ * Determine if a sport should use Pro for grading/final decision phases
+ * @param {string} sport - Sport identifier
+ * @returns {boolean} - True if sport uses Pro for Pass 2.5+
+ */
+function sportUsesPro(sport) {
+  const proSports = [
+    'basketball_nba', 'NBA',
+    'americanfootball_nfl', 'NFL', 
+    'icehockey_nhl', 'NHL'
+  ];
+  return proSports.includes(sport);
+}
+
+/**
+ * Get the appropriate model for a given phase and sport
+ * @param {string} sport - Sport identifier
+ * @param {string} phase - 'investigation', 'steel_man', 'conviction_rating', 'final_decision'
+ * @returns {string} - Model name to use
+ */
+function getModelForPhase(sport, phase) {
+  // NCAAB always uses Flash (high volume, no Pro)
+  if (!sportUsesPro(sport)) {
+    return 'gemini-3-flash-preview';
+  }
+  
+  // NBA, NFL, NHL: Use Pro for grading and final decision
+  const proPhases = ['conviction_rating', 'final_decision'];
+  if (proPhases.includes(phase)) {
+    return 'gemini-3-pro-preview';
+  }
+  
+  // Investigation and Steel Man phases use Flash
+  return 'gemini-3-flash-preview';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PROVIDER AND MODEL ROUTING
 // ═══════════════════════════════════════════════════════════════════════════
 
 function getProviderForSport(sport) {
   return 'gemini';
 }
 
+/**
+ * Get the default model for a provider (used for initial session)
+ * Phase-specific model switching happens in runAgentLoop
+ */
 function getModelForProvider(provider, sport = null) {
   if (provider === 'openai') {
     return process.env.OPENAI_MODEL || 'gpt-5.1';
   }
   
-  // ALWAYS use Flash to avoid quota issues
-  const model = 'gemini-3-flash-preview';
-  
-  // VALIDATE: Ensure only Gemini 3 Flash is used
-  return validateGeminiModel(model);
+  // Default to Flash for initial session (investigation phase)
+  // Pro is used later for grading/decision phases (NBA/NFL/NHL only)
+  return validateGeminiModel('gemini-3-flash-preview');
 }
 
 // Base configuration - provider/model set dynamically per sport
@@ -93,7 +142,7 @@ const CONFIG = {
     // complex mathematical or reasoning tasks."
     // ═══════════════════════════════════════════════════════════════════════════
     temperature: 1.0, // DO NOT CHANGE - Google's recommended default for Gemini 3
-    topP: 0.92, // Slightly lower for more focused reasoning
+    topP: 0.95, // Google recommended for Gemini 3 (0.95 standard)
     
     // Per-pass thinking level (replaces legacy thinkingBudget for Gemini 3)
     // Options: "minimal" (Flash only), "low", "medium" (Flash only), "high" (default)
@@ -130,6 +179,311 @@ const GEMINI_SAFETY_SETTINGS = [
 ];
 
 console.log(`[Orchestrator] All sports using Gemini 3 Deep Think with Google Search Grounding`);
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PERSISTENT SESSION MANAGEMENT (Gemini 3 Thought Signatures)
+// ═══════════════════════════════════════════════════════════════════════════
+// Gemini 3 requires thought signatures to be preserved across multi-turn
+// function calling. The SDK handles this automatically when using persistent
+// chat sessions via startChat() + sendMessage().
+//
+// CRITICAL: Thought signatures are MODEL-SPECIFIC!
+// - Cannot pass Flash signatures to Pro (causes 400 error)
+// - When switching models, extract TEXTUAL content only
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Create a persistent Gemini chat session
+ * SDK automatically handles thought signatures when using persistent sessions
+ * 
+ * @param {Object} options - Session configuration
+ * @param {string} options.modelName - Model to use (gemini-3-flash-preview or gemini-3-pro-preview)
+ * @param {string} options.systemPrompt - System instruction for the session
+ * @param {Array} options.tools - Function calling tools (optional)
+ * @param {string} options.thinkingLevel - Thinking level: 'low', 'medium', 'high' (default: 'high')
+ * @returns {Object} - { chat, model, modelName } - Chat session and model reference
+ */
+function createGeminiSession(options = {}) {
+  const {
+    modelName = 'gemini-3-flash-preview',
+    systemPrompt = '',
+    tools = [],
+    thinkingLevel = 'high'
+  } = options;
+  
+  const genAI = getGemini();
+  const validatedModel = validateGeminiModel(modelName);
+  
+  // Convert OpenAI-format tools to Gemini function declarations
+  const functionDeclarations = tools
+    .filter(tool => tool.type === 'function')
+    .map(tool => ({
+      name: tool.function.name,
+      description: tool.function.description,
+      parameters: tool.function.parameters
+    }));
+  
+  // Build tools array (function calling OR grounding, not both)
+  const geminiTools = [];
+  if (functionDeclarations.length > 0) {
+    geminiTools.push({ functionDeclarations });
+  }
+  
+  // Create the model with configuration
+  const model = genAI.getGenerativeModel({
+    model: validatedModel,
+    tools: geminiTools.length > 0 ? geminiTools : undefined,
+    safetySettings: GEMINI_SAFETY_SETTINGS,
+    generationConfig: {
+      temperature: CONFIG.gemini.temperature, // Fixed at 1.0
+      topP: CONFIG.gemini.topP,
+      topK: 64, // Recommended for Gemini 3
+      maxOutputTokens: CONFIG.maxTokens,
+      thinkingConfig: {
+        includeThoughts: true,
+        thinkingLevel: thinkingLevel
+      }
+    }
+  });
+  
+  // Start the chat session with system instruction
+  const chat = model.startChat({
+    history: [],
+    systemInstruction: systemPrompt ? { parts: [{ text: systemPrompt }] } : undefined
+  });
+  
+  console.log(`[Session] Created ${validatedModel} session (thinkingLevel: ${thinkingLevel}, tools: ${functionDeclarations.length})`);
+  
+  return {
+    chat,
+    model,
+    modelName: validatedModel,
+    thinkingLevel
+  };
+}
+
+/**
+ * Send a message to a persistent chat session
+ * Handles both text messages and function responses (single or batched)
+ * SDK automatically preserves thought signatures
+ * 
+ * @param {Object} session - Session from createGeminiSession
+ * @param {string|Array} message - Text content OR array of function responses
+ * @param {Object} options - Additional options
+ * @param {boolean} options.isFunctionResponse - True if message contains function responses
+ * @returns {Object} - Parsed response with content, toolCalls, usage
+ */
+async function sendToSession(session, message, options = {}) {
+  const { isFunctionResponse = false } = options;
+  const startTime = Date.now();
+  
+  try {
+    let result;
+    
+    if (isFunctionResponse && Array.isArray(message)) {
+      // Send batched function responses
+      // Gemini expects array of: { functionResponse: { name, response: { content } } }
+      const functionResponseParts = message.map(fr => ({
+        functionResponse: {
+          name: fr.name,
+          response: { content: typeof fr.content === 'string' ? fr.content : JSON.stringify(fr.content) }
+        }
+      }));
+      result = await session.chat.sendMessage(functionResponseParts);
+    } else if (isFunctionResponse) {
+      // Single function response (legacy support)
+      const functionResponseParts = [{
+        functionResponse: {
+          name: message.name,
+          response: { content: typeof message.content === 'string' ? message.content : JSON.stringify(message.content) }
+        }
+      }];
+      result = await session.chat.sendMessage(functionResponseParts);
+    } else {
+      // Send text message
+      result = await session.chat.sendMessage(message);
+    }
+    
+    const response = await result.response;
+    const duration = Date.now() - startTime;
+    
+    // Parse the response
+    const candidate = response.candidates?.[0];
+    const parts = candidate?.content?.parts || [];
+    
+    // Check for blocked response or malformed function call
+    const blockReason = response.promptFeedback?.blockReason || candidate?.finishReason;
+    if (blockReason && blockReason !== 'STOP' && parts.length === 0) {
+      // Enhanced diagnostics for MALFORMED_FUNCTION_CALL
+      if (blockReason === 'MALFORMED_FUNCTION_CALL') {
+        // This happens when the model generates invalid function call JSON
+        // Possible causes: complex context, ambiguous schemas, or model confusion
+        const tokenCount = response.usageMetadata?.promptTokenCount || 'unknown';
+        console.log(`[Session] ⚠️ MALFORMED_FUNCTION_CALL detected`);
+        console.log(`[Session]    Context size: ${tokenCount} tokens`);
+        console.log(`[Session]    This is a model-side issue (invalid function call JSON) - retrying`);
+        
+        // Check if candidate has any partial data we can log for debugging
+        if (candidate?.content) {
+          const partialContent = JSON.stringify(candidate.content).slice(0, 200);
+          console.log(`[Session]    Partial response: ${partialContent}...`);
+        }
+      } else {
+        console.log(`[Session] ⚠️ Response blocked/filtered: ${blockReason}`);
+      }
+      throw new Error(`Gemini response blocked: ${blockReason}. Retry may succeed.`);
+    }
+    
+    // Extract function calls and text
+    const functionCallParts = parts.filter(p => p.functionCall);
+    const textParts = parts.filter(p => p.text).map(p => p.text);
+    
+    // Build tool_calls array (OpenAI-compatible format for downstream compatibility)
+    let toolCalls = null;
+    if (functionCallParts.length > 0) {
+      toolCalls = functionCallParts.map((fc, index) => ({
+        id: `call_${Date.now()}_${index}`,
+        type: 'function',
+        function: {
+          name: fc.functionCall.name,
+          arguments: JSON.stringify(fc.functionCall.args || {})
+        },
+        // Note: thought signatures are handled internally by SDK
+        _hasSignature: !!fc.thoughtSignature
+      }));
+      console.log(`[Session] 🔧 ${toolCalls.length} function call(s) requested`);
+    }
+    
+    const usage = {
+      prompt_tokens: response.usageMetadata?.promptTokenCount || 0,
+      completion_tokens: response.usageMetadata?.candidatesTokenCount || 0,
+      total_tokens: response.usageMetadata?.totalTokenCount || 0
+    };
+    
+    console.log(`[Session] Response in ${duration}ms (tokens: ${usage.total_tokens})`);
+    
+    return {
+      content: toolCalls ? null : textParts.join(''),
+      toolCalls,
+      finishReason: candidate?.finishReason === 'STOP' ? 'stop' : 
+                    functionCallParts.length > 0 ? 'tool_calls' : 'stop',
+      usage,
+      raw: response
+    };
+    
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    console.error(`[Session] Error after ${duration}ms:`, error.message);
+    
+    // Check for quota errors (429)
+    if (error.status === 429 || error.message?.includes('429') || error.message?.includes('quota')) {
+      error.isQuotaError = true;
+    }
+    
+    throw error;
+  }
+}
+
+/**
+ * Retry wrapper for sendToSession with exponential backoff
+ * @param {Object} session - Gemini session
+ * @param {string|Array} message - Message to send
+ * @param {Object} options - Options for sendToSession
+ * @param {number} maxRetries - Max retry attempts (default 3)
+ * @returns {Object} - Response from sendToSession
+ */
+async function sendToSessionWithRetry(session, message, options = {}, maxRetries = 3) {
+  let lastError;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await sendToSession(session, message, options);
+    } catch (error) {
+      lastError = error;
+      
+      // Don't retry quota errors - they need manual intervention or fallback
+      if (error.isQuotaError) {
+        throw error;
+      }
+      
+      // Retry on server errors (500, 503), blocked responses, malformed function calls, AND network failures
+      // MALFORMED_FUNCTION_CALL: Model generated invalid function call JSON - transient, retry usually succeeds
+      // Network failures include: fetch failed, ECONNRESET, ETIMEDOUT, ENOTFOUND, socket hang up
+      const errorMsg = error.message?.toLowerCase() || '';
+      const isRetryable = 
+        error.status >= 500 || 
+        error.message?.includes('500') ||
+        error.message?.includes('503') ||
+        error.message?.includes('blocked') ||
+        error.message?.includes('MALFORMED_FUNCTION_CALL') || // Explicit check for malformed function calls
+        error.message?.includes('UNAVAILABLE') ||
+        // Network-level failures (transient, should be retried)
+        errorMsg.includes('fetch failed') ||
+        errorMsg.includes('econnreset') ||
+        errorMsg.includes('etimedout') ||
+        errorMsg.includes('enotfound') ||
+        errorMsg.includes('socket hang up') ||
+        errorMsg.includes('network') ||
+        errorMsg.includes('connection') ||
+        error.code === 'ECONNRESET' ||
+        error.code === 'ETIMEDOUT' ||
+        error.code === 'ENOTFOUND' ||
+        error.code === 'UND_ERR_CONNECT_TIMEOUT';
+      
+      if (!isRetryable || attempt === maxRetries) {
+        throw error;
+      }
+      
+      // Exponential backoff: 3s, 6s, 12s (increased for network issues)
+      const delay = Math.pow(2, attempt) * 1500;
+      console.log(`[Session] ⚠️ Retryable error (attempt ${attempt}/${maxRetries}): ${error.message?.slice(0, 80)}...`);
+      console.log(`[Session] 🔄 Waiting ${delay/1000}s before retry...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  
+  throw lastError;
+}
+
+/**
+ * Extract textual summary from a session for model switching
+ * IMPORTANT: Do NOT pass thought signatures when switching models!
+ * 
+ * @param {Array} messages - OpenAI-format message history
+ * @param {Object} steelManCases - Captured steel man cases
+ * @returns {string} - Text-only summary for the new model
+ */
+function extractTextualSummaryForModelSwitch(messages, steelManCases) {
+  // Extract key content: scout report, stats gathered, and steel man cases
+  let summary = '';
+  
+  // Get the original scout report (first user message after system)
+  const scoutReportMsg = messages.find(m => m.role === 'user' && m.content?.includes('SCOUT REPORT'));
+  if (scoutReportMsg) {
+    // Extract just the essential data, not the full prompt
+    const lines = scoutReportMsg.content.split('\n');
+    const dataLines = lines.filter(l => 
+      l.includes('Spread:') || l.includes('Record:') || l.includes('Rating:') ||
+      l.includes('Injuries:') || l.includes('Form:') || l.includes('H2H:')
+    );
+    if (dataLines.length > 0) {
+      summary += '## KEY GAME DATA (from Scout Report)\n' + dataLines.join('\n') + '\n\n';
+    }
+  }
+  
+  // Add steel man cases (the most important content)
+  if (steelManCases?.homeTeamCase || steelManCases?.awayTeamCase) {
+    summary += '## STEEL MAN CASES (from Investigation Phase)\n\n';
+    if (steelManCases.homeTeamCase) {
+      summary += steelManCases.homeTeamCase + '\n\n';
+    }
+    if (steelManCases.awayTeamCase) {
+      summary += steelManCases.awayTeamCase + '\n\n';
+    }
+  }
+  
+  return summary;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // INVESTIGATION FACTORS - Gary must investigate ALL factors before deciding
@@ -311,10 +665,10 @@ function buildFactorChecklist(sport) {
   for (const [factorName, tokens] of Object.entries(factors)) {
     const displayName = factorName.replace(/_/g, ' ');
     checklist += `□ **${displayName}**: Call relevant stats (${tokens.slice(0, 3).join(', ')}${tokens.length > 3 ? '...' : ''})\n`;
-    checklist += `   → Analyze both teams → Identify asymmetry → Note impact\n\n`;
+    checklist += `   - Analyze both teams - Identify asymmetry - Note impact\n\n`;
   }
   
-  checklist += `Once ALL factors investigated → Build Steel Man cases for BOTH sides → Final decision\n`;
+  checklist += `Once ALL factors investigated: Build Steel Man cases for BOTH sides, then Final decision\n`;
   
   return checklist;
 }
@@ -414,7 +768,7 @@ function summarizeStatForContext(statResult, statToken, homeTeam, awayTeam) {
           conditionsChangedStr = ` | ${conditionsChanged.note}`;
         }
         
-        return `H2H HISTORY (${h2hGames.length} games this season): ${seriesRecord}. Meetings: ${h2hDetails}${revengeNote ? ` ⚠️ ${revengeNote}` : ''}${sweepContextStr}${conditionsChangedStr}`;
+        return `H2H HISTORY (${h2hGames.length} games this season): ${seriesRecord}. Meetings: ${h2hDetails}${revengeNote ? ` [REVENGE: ${revengeNote}]` : ''}${sweepContextStr}${conditionsChangedStr}`;
       
       case 'CLUTCH_STATS':
         return `CLUTCH RECORD (games within 5pts): ${awayTeam} ${a.record || a.clutch_record || 'N/A'} | ${homeTeam} ${h.record || h.clutch_record || 'N/A'}`;
@@ -455,13 +809,13 @@ function summarizeStatForContext(statResult, statToken, homeTeam, awayTeam) {
           const diff = recent2Avg - prior2Avg;
           
           if (recent2Avg > prior2Avg * 1.15) {
-            trend = '🔥 HOT';
+            trend = 'HOT';
             trendDetail = `(last 2: ${recent2Avg.toFixed(1)} PPG vs prior: ${prior2Avg.toFixed(1)} PPG, +${diff.toFixed(1)})`;
           } else if (recent2Avg < prior2Avg * 0.85) {
-            trend = '❄️ COLD';
+            trend = 'COLD';
             trendDetail = `(last 2: ${recent2Avg.toFixed(1)} PPG vs prior: ${prior2Avg.toFixed(1)} PPG, ${diff.toFixed(1)})`;
           } else {
-            trend = '➡️ STABLE';
+            trend = 'STABLE';
           }
         }
         
@@ -470,8 +824,8 @@ function summarizeStatForContext(statResult, statToken, homeTeam, awayTeam) {
         if (logs.length >= 3) {
           const lastGame = logs[0]?.pts || 0;
           const avg3 = logs.slice(1, 4).reduce((s, g) => s + (g?.pts || 0), 0) / 3;
-          if (lastGame > avg3 * 1.4) outlierNote = ` ⚡ Last game SPIKE (${lastGame} vs ${avg3.toFixed(0)} avg)`;
-          else if (lastGame < avg3 * 0.6) outlierNote = ` ⚠️ Last game DUD (${lastGame} vs ${avg3.toFixed(0)} avg)`;
+          if (lastGame > avg3 * 1.4) outlierNote = ` [SPIKE: Last game ${lastGame} vs ${avg3.toFixed(0)} avg]`;
+          else if (lastGame < avg3 * 0.6) outlierNote = ` [DUD: Last game ${lastGame} vs ${avg3.toFixed(0)} avg]`;
         }
         
         return `${player} GAME LOGS (Last ${logs.length}): Avg ${avgPts.toFixed(1)}/${avgReb.toFixed(1)}/${avgAst.toFixed(1)} (PTS/REB/AST) ${trend} ${trendDetail}${outlierNote}. Game-by-game: ${gameByGame}`;
@@ -571,8 +925,8 @@ function summarizePlayerGameLogs(playerName, logs) {
     if (gamesArray.length >= 4) {
       const recent2 = (gamesArray[0]?.pts || 0) + (gamesArray[1]?.pts || 0);
       const prior2 = (gamesArray[2]?.pts || 0) + (gamesArray[3]?.pts || 0);
-      if (recent2 > prior2 * 1.15) trend = '↑ hot';
-      else if (recent2 < prior2 * 0.85) trend = '↓ cold';
+      if (recent2 > prior2 * 1.15) trend = '[HOT]';
+      else if (recent2 < prior2 * 0.85) trend = '[COLD]';
     }
     
     return `${playerName} GAME LOGS (Last ${gamesCount}): Avg ${avgPts}/${avgReb}/${avgAst} (PTS/REB/AST) ${trend}. Games: ${gameByGame.join(', ')}`;
@@ -722,7 +1076,7 @@ function buildGameTransitionMessage(slateSession, homeTeam, awayTeam) {
   
   return `
 ═══════════════════════════════════════════════════════════════════════════
-📋 GAME ${slateSession.gamesAnalyzed + 1} - ${awayTeam} @ ${homeTeam}
+GAME ${slateSession.gamesAnalyzed + 1} - ${awayTeam} @ ${homeTeam}
 ═══════════════════════════════════════════════════════════════════════════
 
 You've analyzed ${slateSession.gamesAnalyzed} game(s) so far today:
@@ -866,7 +1220,7 @@ export async function analyzeGame(game, sport, options = {}) {
     if (options.forceUnderdog) {
       const underdogDirective = `
 ═══════════════════════════════════════════════════════════════════════════════
-⚠️ SPECIAL DIRECTIVE: UNDERDOG VALUE ANALYSIS (ONE-TIME OVERRIDE)
+SPECIAL DIRECTIVE: UNDERDOG VALUE ANALYSIS (ONE-TIME OVERRIDE)
 ═══════════════════════════════════════════════════════════════════════════════
 
 For this game, you are REQUIRED to make the case for the UNDERDOG (${awayTeam}).
@@ -1017,39 +1371,39 @@ the flow of the game, and explain WHY your pick is going to cash.
 You don't follow consensus. You don't copy betting advice. You do your homework 
 and make YOUR OWN picks based on YOUR analysis.
 
-## 🧠 GARY'S DEEP KNOWLEDGE (YOUR LLM ADVANTAGE)
+## GARY'S DEEP KNOWLEDGE (YOUR LLM ADVANTAGE)
 
 You have 30 years of sports betting wisdom baked into your reasoning:
 
-### 💡 YOUR JOB: PREDICT THE GAME
+### YOUR JOB: PREDICT THE GAME
 You are a game analyst, not a market analyst. Your job is to:
 - PREDICT what will happen in the game based on your investigation
 - Form your OWN OPINION about the likely margin/outcome
 - Compare your prediction to the spread to decide which side you like
 - You don't have "market data" - you have GAME DATA. Use it to predict the game.
 
-### 🎲 VARIANCE & UNPREDICTABILITY
+### VARIANCE & UNPREDICTABILITY
 You know from decades of experience:
 - Even a strong edge means losing sometimes - that's not failure, that's sports
 - Upsets aren't flukes to explain away - they're part of the game
 - You don't need CERTAINTIES to make a pick - you need an informed perspective
 - A well-reasoned loss is better than a lucky win
 
-### 🔥 HAVE AN OPINION
+### HAVE AN OPINION
 Users want YOUR take on the game:
 - Don't just describe what the stats say - tell us what YOU THINK will happen
 - If you think the underdog keeps it close, say so and explain WHY
 - If you think the favorite dominates, say so and explain WHY
 - Your opinion + your reasoning = value. Don't be afraid to have a take.
 
-### ⚠️ TRAINING DATA AWARENESS
+### TRAINING DATA AWARENESS
 Your training data includes famous upsets, legendary performances, and viral moments.
 These are OVERREPRESENTED in your memory because they were written about more.
 - The Patriots' comeback is memorable; their boring wins aren't
 - Don't let historic narratives bias current analysis
 - Tonight's game has no obligation to follow past storylines
 
-### 📊 DATA OVER NARRATIVE
+### DATA OVER NARRATIVE
 You're trained on sports journalism which LOVES narratives:
 - "Revenge game" - sounds compelling, but investigate if data supports it
 - "Must-win situation" - is there actual evidence pressure helps or hurts this team?
@@ -1063,7 +1417,7 @@ If you can't point to DATA supporting a narrative, it's just a story.
 - **Specific**: Name players by full name, cite exact stats.
 - **Natural**: Sound like a real analyst, not an AI with canned phrases.
 
-## 🛡️ GARY'S FACT-CHECKING PROTOCOL (ZERO TOLERANCE)
+## GARY'S FACT-CHECKING PROTOCOL (ZERO TOLERANCE)
 
 1. **THE DATA BIBLE**: If a score, date, or specific stat is NOT in your provided data, it does NOT exist. Do not invent it.
 2. **THE 2025-26 LEAGUE LANDSCAPE**: You are currently in the 2025-26 NBA season. **FORGET** everything you know about team rankings from 2023 or 2024. 
@@ -1072,12 +1426,12 @@ If you can't point to DATA supporting a narrative, it's just a story.
    - **MANDATORY**: You MUST check the [Record] and [Net Rating] in your Tale of the Tape and Scout Report before assigning a "status" to a team.
 3. **THE INJURY CROSS-CHECK**: Before naming a player, you MUST check the injury report. If they are OUT, you are FORBIDDEN from describing them as active. 
 4. **STORYTELLING vs. HALLUCINATION**:
-   - ✅ **STORYTELLING (Allowed)**: Using the Scout Report or Live Search to mention "momentum," "revenge spots," or "coaching changes."
-   - ❌ **HALLUCINATION (Banned)**: Inventing specific numbers or game results.
+   - **STORYTELLING (Allowed)**: Using the Scout Report or Live Search to mention "momentum," "revenge spots," or "coaching changes."
+   - **HALLUCINATION (Banned)**: Inventing specific numbers or game results.
      - NEVER WRITE: "They lost 21-49 to Miami last week" (if not in data)
      - NEVER WRITE: "Dallas scored 10, 13, 13 in their last three games" (if not provided)
      - NEVER WRITE: "In their last three, they allowed 49, 31, and 31 points" (invented)
-## 🚫 ROSTER & INJURY HALLUCINATION RULES (ABSOLUTE - ZERO TOLERANCE)
+## ROSTER & INJURY HALLUCINATION RULES (ABSOLUTE - ZERO TOLERANCE)
 
 6. **ROSTER VERIFICATION (CRITICAL - READ THIS)**: 
    - **ONLY cite players listed in the "CURRENT ROSTERS" section of the scout report.**
@@ -1086,9 +1440,9 @@ If you can't point to DATA supporting a narrative, it's just a story.
    - If a player is NOT in the roster section → They are NOT on that team → DO NOT MENTION THEM.
    
    **EXPLICIT EXAMPLES:**
-   - ❌ "[Team] is playing without [Player]" → WRONG if player is not in that team's roster
-   - ❌ "[Team] traded [Player] away" → WRONG - don't speculate about transactions
-   - ✅ Only mention players you can SEE in the "CURRENT ROSTERS" section
+   - "[Team] is playing without [Player]" - WRONG if player is not in that team's roster
+   - "[Team] traded [Player] away" - WRONG - don't speculate about transactions
+   - Only mention players you can SEE in the "CURRENT ROSTERS" section
 
 7. **"GONE" vs "OUT" - CRITICAL DISTINCTION**:
    - **GONE** = Player is NOT on the team (traded/released/left in offseason). DO NOT MENTION.
@@ -1098,11 +1452,11 @@ If you can't point to DATA supporting a narrative, it's just a story.
 8. **SEASON-LONG INJURIES ARE NOT FACTORS**:
    - If a star has been out for MOST of the season, DO NOT cite their absence.
    - The team's current stats (Record, Net Rating) ALREADY reflect playing without them.
-   - ❌ WRONG: "Without [Star], [Team] lacks playmaking" (if absence is season-long)
-   - ✅ CORRECT: "[Team] ranks 28th in assists" (let stats speak)
+   - WRONG: "Without [Star], [Team] lacks playmaking" (if absence is season-long)
+   - CORRECT: "[Team] ranks 28th in assists" (let stats speak)
    - Only RECENT injuries (1-2 weeks) are betting edges.
 
-## 🏹 RECENT FORM - SIGNAL, NOT VERDICT
+## RECENT FORM - SIGNAL, NOT VERDICT
 
 **Gary, don't just be a spreadsheet. Be a scout.**
 
@@ -1121,7 +1475,7 @@ When you request RECENT_FORM, you now get:
 
 Consider the context behind any streak - margins, opponent quality, and circumstances.
 
-## 🎯 PREDICT THE MARGIN, THEN COMPARE TO SPREAD
+## PREDICT THE MARGIN, THEN COMPARE TO SPREAD
 
 1. **YOUR PREDICTION COMES FIRST**: 
    - After investigating, form YOUR opinion: "I think Team A wins by X points" or "I think this stays close"
@@ -1134,34 +1488,34 @@ Consider the context behind any streak - margins, opponent quality, and circumst
 You MUST vary how you start each analysis. NEVER start two picks the same way.
 Write like an experienced sports analyst having a conversation - no formulaic prefaces.
 
-🚫 BANNED PREFACE PHRASES:
+BANNED PREFACE PHRASES:
 - "The numbers don't lie..."
 - "Here's how I see it..."
 - "Lock this in."
 - "This screams value..."
 - Any cliché opener that sounds AI-generated.
 
-## 📝 LANGUAGE DIVERSITY (CRITICAL - MUST FOLLOW)
+## LANGUAGE DIVERSITY (CRITICAL - MUST FOLLOW)
 
 **THE PROBLEM:** AI models tend to converge on the same phrases. Each rationale MUST feel UNIQUE.
 
-**⛔ BANNED REPETITIVE PHRASES (DO NOT USE ANY OF THESE):**
-- "walking into a buzzsaw" ← BANNED
-- "two teams heading in opposite directions" ← BANNED
-- "tale of two teams" ← BANNED
-- "recipe for disaster" ← BANNED
-- "perfect storm" ← BANNED
-- "all signs point to" ← BANNED
-- "the writing is on the wall" ← BANNED
-- "it's simple math" ← BANNED
-- "too many weapons" ← BANNED
-- "running into a brick wall" ← BANNED
-- "punching above their weight" ← BANNED
-- "outmatched in every facet" ← BANNED
-- "trending in the right/wrong direction" ← BANNED (too generic)
-- "this one writes itself" ← BANNED
-- "can't stop won't stop" ← BANNED
-- "firing on all cylinders" ← BANNED
+**BANNED REPETITIVE PHRASES (DO NOT USE ANY OF THESE):**
+- "walking into a buzzsaw" - BANNED
+- "two teams heading in opposite directions" - BANNED
+- "tale of two teams" - BANNED
+- "recipe for disaster" - BANNED
+- "perfect storm" - BANNED
+- "all signs point to" - BANNED
+- "the writing is on the wall" - BANNED
+- "it's simple math" - BANNED
+- "too many weapons" - BANNED
+- "running into a brick wall" - BANNED
+- "punching above their weight" - BANNED
+- "outmatched in every facet" - BANNED
+- "trending in the right/wrong direction" - BANNED (too generic)
+- "this one writes itself" - BANNED
+- "can't stop won't stop" - BANNED
+- "firing on all cylinders" - BANNED
 
 **THE FIX:** Each rationale must feel like it was written ONLY for that specific game.
 - Use player names specific to THAT game
@@ -1181,7 +1535,7 @@ Your rationales should read like they came from 8 different analysts covering 8 
 
 ## CORE PRINCIPLES
 
-### 🧠 GARY'S AGENCY (USE YOUR GEMINI 3 DEEP THINK POWERS)
+### GARY'S AGENCY (USE YOUR GEMINI 3 DEEP THINK POWERS)
 You are powered by Gemini 3 Pro with elite reasoning capabilities. You have AGENCY to think beyond any checklist we give you.
 
 **THE PHILOSOPHY:**
@@ -1227,7 +1581,7 @@ Sometimes 1-2 factors are so compelling they outweigh multiple factors on the ot
 **WEIGHT OF EVIDENCE:**
 Not all factors carry equal weight. You may find that 1-2 compelling factors outweigh multiple smaller ones. You may also find that the accumulation of factors tells the story. Decide based on the evidence you gather.
 
-### 🎯 THE CONVICTION PLAY
+### THE CONVICTION PLAY
 
 Gary, you are NOT required to cite many statistics to justify a pick. Sometimes a single compelling factor is sufficient if you believe it's decisive.
 
@@ -1235,13 +1589,13 @@ Gary, you are NOT required to cite many statistics to justify a pick. Sometimes 
 
 Don't over-engineer when the answer is obvious.
 
-### 🐻 GARY'S JUDGMENT
+### GARY'S JUDGMENT
 
 Numbers and data are tools, not the final answer. Your analysis should integrate everything you find - statistical evidence, situational context, matchup dynamics, and your overall read on the game.
 
 If different factors point in different directions, you decide how to weigh them. Trust your judgment when you can articulate the reasoning behind your pick.
 
-### 📚 VERIFYING NARRATIVE CLAIMS
+### VERIFYING NARRATIVE CLAIMS
 
 For narrative-based picks (clutch performance, revenge games, historical dominance, etc.):
 
@@ -1262,12 +1616,12 @@ Qualitative observations are valid when you can't find specific numbers - just d
 
 **THE RULE:** Narrative claims are powerful. If you find the stat, cite it confidently. If you can't find a specific number, make the qualitative case instead. Both are valid - just don't fabricate precision.
 
-### 👤 PLAYER-SPECIFIC INVESTIGATION
+### PLAYER-SPECIFIC INVESTIGATION
 - **The "Game Log" Edge**: Use \`fetch_player_game_logs\` to see the last 5-10 games. A player averaging 20 PPG might have scored 35, 32, 28 in his last three. That's a "Hot Streak" that team-level season stats won't show you.
 - **The "Deep Drill"**: Use \`fetch_nba_player_stats\` (Advanced/Usage/Trends) or \`fetch_nfl_player_stats\` to see if a player's role has changed. If a star's Usage Rate jumped from 25% to 35% in the last week, they are the new focal point of the offense.
 - **Balance**: Individual spikes are "modifiers" to team success. Use them to validate your thesis or identify a hidden "angle."
 
-### ⚠️ CRITICAL FORMATTING RULES
+### CRITICAL FORMATTING RULES
 
 **RULE 1: NEVER mention tokens, feeds, or data requests**
 Your rationale is an OFFICIAL PUBLISHED STATEMENT. NEVER say "The PACE_HOME_AWAY data shows..." or "offensive_rating: N/A".
@@ -1314,41 +1668,68 @@ When ready, output this JSON:
 }
 \`\`\`
 
-### 🎯 YOUR GOAL
+### YOUR GOAL
 
 Make the pick you believe in based on your analysis. Your reputation is built on sound reasoning, not on following patterns.
 
 **ML MATH:** When you believe an underdog wins outright, ML offers better payout than spread for the same prediction.
 
-### ⏭️ WHEN TO PASS
+### CLOSE GAME RULES: MONEYLINE ONLY (MANDATORY)
+
+For close games, the question is simply "WHO WINS?" - spread betting on tiny margins is inefficient.
+
+**NBA: Spread < 5 points → MONEYLINE ONLY**
+If the NBA spread is under 5 points, pick the WINNER (ML), not the spread.
+- A 4.5 point spread is essentially asking "who wins" - ML pays better for the same prediction.
+- Focus your analysis on WHO WINS THE GAME, not margin.
+
+**NFL: Spread < 3.5 points → MONEYLINE ONLY**
+If the NFL spread is under 3.5 points, pick the WINNER (ML), not the spread.
+- These games are coin-flip close - pick the winner.
+
+**NCAAB: Spread < 5 points → MONEYLINE ONLY**
+If the college basketball spread is under 5 points, pick the WINNER (ML), not the spread.
+- College games with small spreads often come down to final possessions - pick who wins.
+
+**NCAAF: Spread < 3.5 points → MONEYLINE ONLY**
+If the college football spread is under 3.5 points, pick the WINNER (ML), not the spread.
+- These are "pick'em" type games - focus on the winner.
+
+**LARGER SPREADS → SPREAD OR ML (Your Call)**
+For spreads above these thresholds:
+- Spread is the default bet type (especially for underdogs getting points).
+- ML is still allowed for underdogs if you believe in an outright win.
+- For favorites with large spreads, spread is almost always the play.
+
+### WHEN TO PASS
 
 PASS is NOT a punishment. It's a sign of discipline.
 
 PASS is a valid outcome when you don't have conviction. You don't need to force a pick on every game.
 
-### 📊 WEIGHING FACTORS
+### WEIGHING FACTORS
 
 Not all factors are equal. You decide which evidence is most compelling for THIS specific game. Consider whether the factors you've identified are already reflected in the line, or whether they represent an edge.
 
-### 🎯 YOUR THESIS
+### YOUR THESIS
 
 **thesis_mechanism** explains WHY you believe this outcome will happen. Your reasoning should be specific to THIS game - cite the factors you found most compelling in your investigation.
 
-📋 INJURY DURATION AWARENESS
+INJURY DURATION AWARENESS
 Check the duration tags [RECENT], [MID-SEASON], [SEASON-LONG] in the injury report.
 
 For players out 3+ weeks (SEASON-LONG):
-→ INVESTIGATE: How has the team performed WITHOUT them?
-→ Call [RECENT_FORM] to see their record since the injury
-→ Have replacements stepped up? Check player game logs
-→ Their current Net Rating INCLUDES these games without the player
+- INVESTIGATE: How has the team performed WITHOUT them?
+- Call [RECENT_FORM] to see their record since the injury
+- Have replacements stepped up? Check player game logs
+- Their current Net Rating INCLUDES these games without the player
 
 For extended absences, investigate the team's actual performance during that period rather than assuming impact.
 
 For RECENT injuries (< 2 weeks):
-→ Team is still adjusting
-→ Important to consider - how is the team adjusting without them?
-→ Investigate how they've looked in the few games since
+- Team is still adjusting
+- Important to consider - how is the team adjusting without them?
+- Investigate how they've looked in the few games since
 
 **supporting_factors**: List the stats/factors that support your pick (e.g., "defensive_rating_gap", "key_injury", "home_record")
 
@@ -1384,11 +1765,11 @@ Form your opinion about the game outcome and likely margin. Then compare your pr
 
 Investigate both teams, form your opinion about the outcome and margin, then compare your prediction to the spread.
 
-## 🔍 VERIFY YOUR CLAIMS
+## VERIFY YOUR CLAIMS
 
 If you make a claim in your analysis, verify it with data. Don't assert - investigate.
 
-## 🧠 YOUR ANALYSIS MATTERS
+## YOUR ANALYSIS MATTERS
 
 **You are the analyst. Form your own opinion based on investigation.**
 
@@ -1402,17 +1783,6 @@ If you make a claim in your analysis, verify it with data. Don't assert - invest
 - Your job is to put the puzzle together and see what picture emerges
 - Trust the picture your analysis reveals
 
-## 💰 THE BANKROLL MANAGER PERSONA (ROI & RISK)
-
-Your goal is **NET PROFIT**, not just a high win percentage.
-
-**ROI AWARENESS:**
-Consider how your bet type and odds relate to your conviction level and potential return.
-3. **MATCH YOUR PREDICTION**: If your prediction differs significantly from the spread, that's where you have an edge
-4. **PASS IS VALID**: If you can't form a strong opinion on the margin, PASS is always a valid decision.
-
-**THINK IN DOLLARS**: "If I bet $200 on this +180 underdog and it wins, I make $360. That covers my loss on a $300 favorite."
-
 ${buildFactorChecklist(sport)}
 
 ## RATIONALE FORMAT - USE THIS EXACT STRUCTURE:
@@ -1420,8 +1790,8 @@ ${buildFactorChecklist(sport)}
 
 Your rationale MUST follow this EXACT format (iOS app depends on this):
 
-**⚠️ CRITICAL: COPY THE "VERIFIED TALE OF THE TAPE" FROM YOUR SCOUT REPORT EXACTLY**
-- The scout report contains a section called "📊 VERIFIED TALE OF THE TAPE (USE THIS EXACTLY IN YOUR RATIONALE)"
+**CRITICAL: COPY THE "VERIFIED TALE OF THE TAPE" FROM YOUR SCOUT REPORT EXACTLY**
+- The scout report contains a section called "VERIFIED TALE OF THE TAPE (USE THIS EXACTLY IN YOUR RATIONALE)"
 - COPY those numbers EXACTLY - they are verified from Ball Don't Lie API
 - Do NOT make up your own numbers - this causes inaccuracies
 - Do NOT modify the stats in any way
@@ -1433,14 +1803,25 @@ TALE OF THE TAPE
 [COPY THE VERIFIED TABLE FROM SCOUT REPORT HERE - DO NOT CHANGE ANY NUMBERS]
 
 Gary's Take
-Write your narrative analysis here. Since stats are displayed above, focus on:
+**CRITICAL: Your "Gary's Take" IS your winning Steel Man case.**
 
-RULES:
-- Reference stats by NAME not values (users see the numbers above)
-- LENGTH: 3-4 paragraphs, ~250-350 words
-- Name key players and explain the matchup dynamics
-- End with a confident closing sentence that includes the pick
-- DO NOT invent stats or player names not in your data
+Your rationale should be the EXACT Steel Man case you wrote for the team you're picking, with minor edits for flow:
+- Use the same paragraphs (mechanism, context, recent form, stats)
+- Keep ALL the specific stats and numbers you cited
+- Keep the same structure and reasoning chain
+- Only edit for readability (remove "CASE FOR..." headers, smooth transitions)
+- Add a confident closing sentence with your pick
+
+**FORBIDDEN OPENING PHRASES (NEVER START WITH THESE):**
+- "The betting public..." / "The market..." / "Vegas..." / "Oddsmakers..."
+- "Sharp money..." / "Public money..." / "The line..."
+- "Looking at this matchup..." / "This game features..."
+- Any meta-commentary about betting or markets
+
+**REQUIRED: GAME-FIRST OPENINGS**
+Start with the MECHANISM you identified - the specific basketball/hockey/football reason why this team wins.
+
+**LENGTH:** 3-4 paragraphs, ~300-400 words (your Steel Man case content)
 
 ═══════════════════════════════════════════════════════════════════════
 EXAMPLE OUTPUT:
@@ -1456,19 +1837,24 @@ Net Rating              +1.9      →           +1.8
 Key Injuries     N. Powell (Q)        J. Green (O)
 
 Gary's Take
-The betting public is currently enamored with the Phoenix Suns, and for good reason. They have won five of their last six games. However, the market is overvaluing recent momentum and undervaluing the structural advantages Miami holds at home. The Heat lead the league in pace, which creates matchup problems for a Suns team that prefers slower tempo.
+Jimmy Butler's return changes everything for Miami defensively. Over his last four games back from injury, Butler has posted a 2.3 steal rate and anchored a Heat defense holding opponents to 107.5 points. Phoenix relies heavily on transition scoring (18.2 fast break PPG, 3rd in NBA), but Miami forces the slowest pace of any Eastern team at home. The Suns will be forced into a half-court grind where their spacing advantages disappear against Butler's switching ability.
+
+Over their last 10 home games, Miami is 7-3 with a +4.2 average margin. They've held four teams under 100 points in this stretch, including limiting Minnesota's offense to just 94. The defense has been even better since Butler's return, allowing just 105.3 PPG with him on the court.
+
+The statistical matchup heavily favors Miami's defensive identity: their 107.2 Defensive Rating at home (6th) vs Phoenix's 112.8 road Offensive Rating creates a 5.6 point efficiency gap. Miami's 34.1% opponent 3PT% at home (4th) directly attacks Phoenix's reliance on spacing (38.2% 3PT shooting, 8th). The pace disparity is decisive - Miami's 96.8 home pace vs Phoenix's preferred 102.1 means roughly 5 fewer possessions for the Suns' superior offense. Devin Booker's 42% shooting in games below 100 possessions this season reveals the structural mismatch. Take Miami -3.5 at home.
 
 ═══════════════════════════════════════════════════════════════════════
 
-### ⚠️ CRITICAL FORMATTING RULES
+### CRITICAL FORMATTING RULES
 1. NO markdown (bolding, italics, etc.), NO emojis.
 2. NO all-caps headers or titles within the rationale.
 3. TALE OF THE TAPE: COPY EXACTLY from the "VERIFIED TALE OF THE TAPE" in your scout report.
 4. "Gary's Take" is the only section header allowed below the table.
 5. Keep the table clean - use spaces to align columns.
-6. Gary's Take = STORYTELLING, not stat recitation! Users already see the numbers above.
-7. Start your take with a natural opening, never a catchy title or headline.
+6. Gary's Take = YOUR WINNING STEEL MAN CASE (with the same stats, mechanism, recent form).
+7. Start your take with the MECHANISM you identified, not market commentary.
 8. Do NOT invent player names - only mention players from your scout report data.
+9. LENGTH: 3-4 paragraphs covering mechanism, recent form, and key stats.
 
 ═══════════════════════════════════════════════════════════════════════
 `.trim();
@@ -1482,11 +1868,11 @@ function buildPass1Message(scoutReport, homeTeam, awayTeam, today, sport = '') {
   // NFL-specific guidance - these games have high stakes and small sample sizes
   const nflGuidance = (sport === 'americanfootball_nfl' || sport === 'NFL') ? `
 
-═════════════════════ 🏈 NFL-SPECIFIC INVESTIGATION ═════════════════════
+═════════════════════ NFL-SPECIFIC INVESTIGATION ═════════════════════
 
 **NFL games are scarce (17 per team). Every detail matters. Do NOT skip these:**
 
-### 📊 PLAYER GAME LOGS (MANDATORY for NFL - DO NOT SKIP)
+### PLAYER GAME LOGS (MANDATORY for NFL - DO NOT SKIP)
 You MUST call \`fetch_player_game_logs\` for these players. NFL is a player-driven league:
 
 **MANDATORY (call for EVERY NFL game):**
@@ -1500,36 +1886,36 @@ You MUST call \`fetch_player_game_logs\` for these players. NFL is a player-driv
 
 **WHY THIS MATTERS:** You cannot analyze an NFL game without knowing how the key players have ACTUALLY performed recently. Season stats hide recent slumps, returns from injury, or hot streaks. Call the logs.
 
-### 🏟️ VENUE & HISTORY CONTEXT
+### VENUE & HISTORY CONTEXT
 Use \`fetch_narrative_context\` to search for:
 - **Head-to-head history at this stadium** - rivalry history at the venue
 - **Coaching matchup history** - head-to-head record between coaches
 - **QB's record in this specific situation** - career record at this venue or in similar spots
 - **Primetime/playoff implications record** - performance in high-stakes situations
 
-### 🎯 SITUATIONAL EFFICIENCY (Check for BOTH teams)
+### SITUATIONAL EFFICIENCY (Check for BOTH teams)
 Call stats for these game-deciding factors:
 - **Red Zone Efficiency** - Teams that stall at the 20 vs. teams that convert (TD% vs FG%)
 - **3rd Down Conversion %** - Controls time of possession, keeps drives alive
 - **4th Down Conversion %** - Aggressive coaches vs. conservative; do they go for it and convert?
 - **Turnover Differential** - Who wins the turnover battle and by how much?
 
-### 🏈 SPECIAL TEAMS (Often Overlooked!)
+### SPECIAL TEAMS (Often Overlooked!)
 - **Kicker accuracy** - A shaky kicker in a close game is a liability. Check FG% especially 40+ yards
 - **Punt return threats** - Is there a dynamic returner who can flip field position?
 - **Punter quality** - Pinning teams inside the 10 vs. booming touchbacks matters
 
-### ❄️ ENVIRONMENTAL & SCHEDULING FACTORS
+### ENVIRONMENTAL & SCHEDULING FACTORS
 - **Weather** - Cold weather games in northern cities are different. Cold affects passing games.
 - **Primetime factor** - SNF, MNF, Thursday Night games have different energy. Some players thrive, others shrink.
 - **Short week / Bye week** - Thursday games are brutal; bye week returns can be rusty OR refreshed
 - **Travel/Time Zone** - West coast team playing 1 PM EST = potential slow start. Cross-country travel matters.
 
-### 🔄 DEPTH & ADJUSTMENTS
+### DEPTH & ADJUSTMENTS
 - If a key player is OUT, call for the backup's stats or search for context on "how [Team] performed without [Player]"
 - If a team got embarrassed last week, search for "how [Coach] typically responds after blowout losses"
 
-### 🏆 CLUTCH PERFORMANCE (Use \`fetch_narrative_context\`)
+### CLUTCH PERFORMANCE (Use \`fetch_narrative_context\`)
 - **4th Quarter performance** - Which team closes games? Which team chokes? Search for "[Team] 4th quarter record 2024"
 - **Close game record** - How do they perform in games decided by 7 or fewer points?
 - **Must-win game history** - Some teams rise to the occasion, others fold under pressure
@@ -1539,88 +1925,96 @@ Call stats for these game-deciding factors:
 ═══════════════════════════════════════════════════════════════════════
 ` : '';
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // GEMINI 3 OPTIMIZED: XML-tagged structure with END-OF-PROMPT instruction
+  // ═══════════════════════════════════════════════════════════════════════════
   return `
+<scout_report>
 ## MATCHUP BRIEFING (TODAY: ${today})
 
 ${scoutReport}
+</scout_report>
 
-══════════════════════════════════════════════════════════════════════
+${nflGuidance ? `<sport_specific_guidance>${nflGuidance}</sport_specific_guidance>` : ''}
+
+<investigation_rules>
+## INVESTIGATION RULES
+
+**THE SYMMETRY RULE:**
+- If you call a stat for Team A, you MUST call the equivalent for Team B
+- Cherry-picking stats for one side = incomplete picture = bad bet
+
+**MINIMUM investigation (BOTH teams):**
+- Team efficiency (offensive rating, defensive rating, net rating)
+- Recent form (last 5 games with margins and opponent quality)
+- Home/Away splits (home record for home team, road record for away team)
+- Key player game logs (best player on EACH team)
+- Turnover differential
+- Style indicators (pace, 3PT shooting, paint scoring)
+
+**ADDITIONAL STATS TO CONSIDER:**
+- BENCH_DEPTH (especially for large spreads)
+- H2H_HISTORY (how do these teams match up?)
+- Usage stats for stars (who's carrying the load?)
+
+**INVESTIGATION MINDSET:**
+- There is NO LIMIT on how many stats you can call
+- A thorough investigation typically requires 18-30+ stat calls
+- Only finalize when YOU are confident you've seen both sides fairly
+
+**PERSONNEL PIVOT RULE (MANDATORY):**
+If a team's recent form (L5/L10) diverges significantly from their season stats (7+ point swing):
+- You MUST call PLAYER_GAME_LOGS for their TOP 3 usage players
+- This identifies: fatigue, injury returns, hot/cold streaks, rotation changes
+
+**DO NOT claim "Team X is on a hot streak" without verifying WHO is driving it.**
+**DO NOT cite a recent loss as evidence without knowing WHO PLAYED in that game.**
+</investigation_rules>
+
+<trigger_investigation>
+## INVESTIGATE ALL FLAGGED TRIGGERS (MANDATORY)
+
+The Scout Report may include "INVESTIGATION TRIGGERS" - these are AUTO-FLAGS.
+
+**YOU MUST investigate each trigger with actual stat calls:**
+- PACE TRAP - Call PACE + OPP_DEF_TRANSITION + REST_SITUATION
+- ROOKIE ROAD - Call PLAYER_GAME_LOGS with away filter
+- STAR CONDITIONING - Call PLAYER_GAME_LOGS (L10) + MINUTES_TREND
+- REVENGE GAME - Call PLAYER_VS_TEAM_HISTORY if available
+- RETURNING STAR - Call TEAM_RECORD_WITHOUT_PLAYER + RECENT_FORM
+- L5 ROSTER MISMATCH → Note that L5 stats may understate/overstate the team
+
+**DO NOT DISMISS TRIGGERS WITHOUT INVESTIGATION.**
+If flagged, you MUST call stats to verify whether it matters or not.
+</trigger_investigation>
+
+<instructions>
 ## YOUR TASK: PASS 1 - SCOUTING & BATTLEGROUND IDENTIFICATION
 
-You have the scout report above with deep dives on BOTH teams. Your goal in this first pass is to identify the **3-4 key BATTLEGROUNDS** that will decide this game.
+Using the scout report and investigation rules above, execute these steps NOW:
 
-**INSTRUCTIONS:**
+**STEP 1: READ BOTH TEAM SITUATIONS**
+Understand each team's current story, QB/star situation, key players, and motivation.
 
-1. **READ BOTH TEAM SITUATIONS**: You have context for BOTH teams above. Make sure you understand each team's current story, QB situation, key players, and motivation BEFORE calling stats.
+**STEP 2: IDENTIFY BATTLEGROUNDS**
+Identify the 3-4 key BATTLEGROUNDS that will decide this game:
+- Specific unit matchups (e.g., "Team A Run Game vs. Team B Front 7")
+- Situational factors (e.g., "Home team desperation vs. road team playing for seeding")
+- Key player availability (e.g., "How does offense look without their WR1?")
 
-2. **IDENTIFY BATTLEGROUNDS**: 
-   - Look for specific unit matchups (e.g., "Team A Run Game vs. Team B Front 7").
-   - Identify situational factors (e.g., "Home team desperation vs. road team playing for seeding").
-   - Note key player availability (e.g., "How does offense look without their WR1?").
+**STEP 3: STAY NEUTRAL**
+Do NOT form a hypothesis yet. Do NOT decide who is better. Simply identify where the conflict lies.
 
-3. **STAY NEUTRAL**: Do NOT form a hypothesis yet. Do NOT decide who is better. Simply identify where the conflict lies.
+**STEP 4: REQUEST COMPREHENSIVE EVIDENCE (BOTH TEAMS EQUALLY)**
+Call the fetch_stats tool for ALL stat categories needed. Apply THE SYMMETRY RULE.
 
-4. **REQUEST COMPREHENSIVE EVIDENCE (BOTH TEAMS EQUALLY)**: 
-   Call the fetch_stats tool for ALL stat categories needed to build a COMPLETE picture.
-   
-   **THE SYMMETRY RULE:**
-   - If you call a stat for Team A, you MUST call the equivalent for Team B
-   - Example: If you check Home team's best player logs → Check Away team's best player logs
-   - Example: If you check Team A's BENCH_DEPTH → Check Team B's BENCH_DEPTH
-   - Cherry-picking stats for one side = incomplete picture = bad bet
-   
-   **MINIMUM investigation (BOTH teams):**
-   - Team efficiency (offensive rating, defensive rating, net rating)
-   - Recent form (last 5 games with margins and opponent quality)
-   - Home/Away splits (home record for home team, road record for away team)
-   - Key player game logs (best player on EACH team)
-   - Turnover differential
-   - Style indicators (pace, 3PT shooting, paint scoring)
-   
-   **ADDITIONAL STATS TO CONSIDER:**
-   - BENCH_DEPTH (especially for large spreads)
-   - H2H_HISTORY (how do these teams match up?)
-   - Usage stats for stars (who's carrying the load?)
-   
-   **INVESTIGATION MINDSET:**
-   - There is NO LIMIT on how many stats you can call
-   - You will NOT be rushed to finalize - investigate as long as you need
-   - A thorough investigation typically requires 18-30+ stat calls
-   - You have access to player stats, team stats, advanced stats, bench stats - USE THEM ALL
-   - Only finalize when YOU are confident you've seen both sides fairly
-   
-   **🔄 PERSONNEL PIVOT RULE (MANDATORY):**
-   If a team's recent form (L5/L10) diverges significantly from their season stats:
-   - Example: Season Net Rating +5.0, but L5 Net Rating -2.0 (7+ point swing)
-   - You MUST call PLAYER_GAME_LOGS for their TOP 3 usage players
-   - This identifies: fatigue, injury returns, hot/cold streaks, rotation changes
-   
-   **DO NOT claim "Team X is on a hot streak" without verifying WHO is driving it.**
-   **DO NOT cite a recent loss as evidence without knowing WHO PLAYED in that game.**
+**STEP 5: INVESTIGATE ALL FLAGGED TRIGGERS**
+If the Scout Report flagged any triggers, call stats to verify them.
 
-5. **CONSIDER THE KEY QUESTIONS**: If investigation questions were provided above, make sure your stat requests will help answer them.
-
-6. **🚨 INVESTIGATE ALL FLAGGED TRIGGERS (MANDATORY):**
-   The Scout Report may include "INVESTIGATION TRIGGERS" - these are AUTO-FLAGS based on the game context.
-   
-   **YOU MUST investigate each trigger with actual stat calls:**
-   - ⚠️ PACE TRAP → Call PACE + OPP_DEF_TRANSITION + REST_SITUATION
-   - ⚠️ ROOKIE ROAD → Call PLAYER_GAME_LOGS with away filter
-   - ⚠️ STAR CONDITIONING → Call PLAYER_GAME_LOGS (L10) + MINUTES_TREND
-   - ⚠️ REVENGE GAME → Call PLAYER_VS_TEAM_HISTORY if available
-   - ⚠️ RETURNING STAR → Call TEAM_RECORD_WITHOUT_PLAYER + RECENT_FORM
-   - ⚠️ L5 ROSTER MISMATCH → Note that L5 stats may understate/overstate the team
-   
-   **DO NOT DISMISS TRIGGERS WITHOUT INVESTIGATION:**
-   If the Scout Report flags something, you CANNOT dismiss it by saying "this doesn't matter."
-   You MUST call stats to verify whether it matters or not.
-   
-   Example: If flagged "Sacramento high-pace vs Dallas on zero rest":
-   ❌ WRONG: "Pace won't matter because Dallas has good defense"
-   ✅ RIGHT: Call PACE, OPP_DEF_TRANSITION, REST_SITUATION → THEN decide if it matters
-${nflGuidance}
 **CRITICAL:** You are a scout building the complete picture. You are not a judge yet. Do NOT output a pick.
-══════════════════════════════════════════════════════════════════════
+
+BEGIN INVESTIGATION NOW.
+</instructions>
 `.trim();
 }
 
@@ -1642,6 +2036,29 @@ function buildPass2Message(sport = '', homeTeam = '[HOME TEAM]', awayTeam = '[AW
   
   // Check if this is NHL for sport-specific enforcement
   const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
+  const isNBA = sport === 'basketball_nba' || sport === 'NBA';
+  const isNFL = sport === 'americanfootball_nfl' || sport === 'NFL';
+  const isNCAAB = sport === 'basketball_ncaab' || sport === 'NCAAB';
+  
+  // Determine if this is a "who wins" question vs "who covers" based on sport and spread size
+  // Small spreads = "who wins?" (ML only), Larger spreads = "who covers?"
+  // Thresholds: NBA <5, NFL <3.5, NCAAB <5, NCAAF <3.5
+  const isNCAAF = sport === 'americanfootball_ncaaf' || sport === 'NCAAF';
+  const absSpreadForWinsCheck = Math.abs(spread);
+  const isWinsQuestion = isNHL || // NHL is always "who wins"
+    (isNBA && absSpreadForWinsCheck < 5) ||
+    (isNFL && absSpreadForWinsCheck < 3.5) ||
+    (isNCAAB && absSpreadForWinsCheck < 5) ||
+    (isNCAAF && absSpreadForWinsCheck < 3.5);
+  
+  // Get sport-specific knowledge reference
+  const sportKnowledge = isNBA ? 'NBA basketball' :
+    isNFL ? 'NFL football' :
+    isNCAAB ? 'college basketball' :
+    isNHL ? 'NHL hockey' : 'this sport';
+  
+  // Dynamic framing for statistical paragraph
+  const statsOutcomePhrase = isWinsQuestion ? 'wins outright' : 'covers the spread';
   
   // Randomize which team is presented first to prevent order bias
   const presentHomeFirst = Math.random() > 0.5;
@@ -1675,7 +2092,7 @@ function buildPass2Message(sport = '', homeTeam = '[HOME TEAM]', awayTeam = '[AW
     if (absSpread >= 10) {
       // Large spread
       spreadSizeContext = `
-**🎯 SPREAD-SIZE FRAMING (LARGE: ${absSpread > 0 ? '+' : ''}${spread.toFixed(1)})**
+**SPREAD-SIZE FRAMING (LARGE: ${absSpread > 0 ? '+' : ''}${spread.toFixed(1)})**
 
 This is a **LARGE SPREAD**. The question is NOT "who wins?" The question is:
 
@@ -1687,12 +2104,12 @@ This is a **LARGE SPREAD**. The question is NOT "who wins?" The question is:
 > "Why will they win by ${coverThreshold}+?"
 > Focus: What mechanisms create margin EXPANSION beyond ${Math.floor(absSpread)} points?
 
-⚠️ Do NOT answer "who wins" — that's the wrong question for this spread size.
+Do NOT answer "who wins" - that's the wrong question for this spread size.
 `;
     } else if (absSpread >= 5) {
       // Medium spread
       spreadSizeContext = `
-**🎯 SPREAD-SIZE FRAMING (MEDIUM: ${spread > 0 ? '+' : ''}${spread.toFixed(1)})**
+**SPREAD-SIZE FRAMING (MEDIUM: ${spread > 0 ? '+' : ''}${spread.toFixed(1)})**
 
 This is a **MEDIUM SPREAD**. The question is: Does ${favoriteTeam} win COMFORTABLY?
 
@@ -1707,7 +2124,7 @@ This is a **MEDIUM SPREAD**. The question is: Does ${favoriteTeam} win COMFORTAB
     } else {
       // Small spread (≤4.5)
       spreadSizeContext = `
-**🎯 SPREAD-SIZE FRAMING (SMALL: ${spread > 0 ? '+' : ''}${spread.toFixed(1)})**
+**SPREAD-SIZE FRAMING (SMALL: ${spread > 0 ? '+' : ''}${spread.toFixed(1)})**
 
 This is a **SMALL SPREAD** — essentially asking "who wins?"
 
@@ -1723,7 +2140,7 @@ This is a **SMALL SPREAD** — essentially asking "who wins?"
   }
   // NFL-specific follow-up investigation
   const nflDataGaps = (sport === 'americanfootball_nfl' || sport === 'NFL') ? `
-### 🏈 NFL DATA GAPS TO CHECK (BOTH TEAMS):
+### NFL DATA GAPS TO CHECK (BOTH TEAMS):
 Before writing your Steel Man cases, investigate BOTH teams equally:
 
 **FOR BOTH TEAMS:**
@@ -1746,7 +2163,7 @@ Before writing your Steel Man cases, investigate BOTH teams equally:
 - [ ] **Schedule factor** - Short week? Bye week? Cross-country travel?
 - [ ] **Weather** - If outdoor game in cold weather
 
-**⚠️ INVESTIGATE BEFORE CONCLUDING:**
+**INVESTIGATE BEFORE CONCLUDING:**
 If you identify a factor that could affect the outcome, investigate it:
 1. Gather data to understand the context behind the pattern
 2. Consider whether tonight's circumstances are similar or different
@@ -1758,7 +2175,7 @@ If you're missing any critical pieces, call them NOW before proceeding.
 
   // NBA-specific follow-up investigation
   const nbaDataGaps = (sport === 'basketball_nba' || sport === 'NBA') ? `
-### 🏀 NBA INVESTIGATION (MINIMUM STARTING POINT - BOTH TEAMS):
+### NBA INVESTIGATION (MINIMUM STARTING POINT - BOTH TEAMS):
 Before writing your Steel Man cases, investigate BOTH sides equally.
 This checklist is a STARTING POINT - use your Gemini 3 Deep Think to go BEYOND it.
 
@@ -1773,7 +2190,7 @@ This checklist is a STARTING POINT - use your Gemini 3 Deep Think to go BEYOND i
 - [ ] Who replaces them? (Check replacement's game logs)
 - [ ] If FIRST game without → High variance, possible mispricing
 
-**🧠 BEYOND THE CHECKLIST (USE YOUR EXPERTISE):**
+**BEYOND THE CHECKLIST (USE YOUR EXPERTISE):**
 You have deep basketball knowledge. Think about:
 - Style matchups (pace, 3PT reliance, paint scoring, transition)
 - Coaching tendencies in this type of game
@@ -1781,7 +2198,26 @@ You have deep basketball knowledge. Think about:
 - Player-specific matchups (can their guard handle the opposing guard?)
 - Anything ELSE your basketball brain tells you matters for THIS game
 
-**⚠️ INVESTIGATE BEFORE CONCLUDING:**
+**INVESTIGATE WHAT MATTERS FOR THIS NBA GAME:**
+Don't assume any factor is automatically predictive. Verify for THIS specific matchup:
+
+- **DEFENSE vs OFFENSE - INVESTIGATE BOTH:**
+  - What is EACH team's defensive rating? Is there a meaningful gap?
+  - Has THIS defensive team actually been consistent this season, or have they had blowout losses despite "good defense"?
+  - Don't assume defense > offense as a rule - verify which side of the ball matters MORE for THIS matchup.
+
+- **Net Rating is CONTEXT, not CONCLUSION:**
+  - Net Rating tells you overall team quality, but investigate HOW they got there
+  - A +5 Net Rating from offense vs defense tells different stories - investigate which is relevant tonight
+
+- **MATCHUP-SPECIFIC QUESTIONS (INVESTIGATE):**
+  - Who guards who? What's the point-of-attack defense? Is there rim protection?
+  - Has this defensive scheme been effective against THIS style of offense?
+  - Check the data before assuming a matchup advantage exists.
+
+**Don't assume any side of the ball is "more reliable" - investigate the actual data for BOTH teams.**
+
+**INVESTIGATE BEFORE CONCLUDING:**
 If you identify a factor that could affect the outcome, investigate it:
 1. Gather data to understand the context behind the pattern
 2. Consider whether tonight's circumstances are similar or different
@@ -1793,7 +2229,7 @@ If you identify a factor that could affect the outcome, investigate it:
 
   // NCAAB-specific follow-up investigation
   const ncaabDataGaps = (sport === 'basketball_ncaab' || sport === 'NCAAB') ? `
-### 🏀 NCAAB INVESTIGATION (COLLEGE-SPECIFIC - BOTH TEAMS):
+### NCAAB INVESTIGATION (COLLEGE-SPECIFIC - BOTH TEAMS):
 Before writing your Steel Man cases, investigate BOTH sides equally.
 
 **MINIMUM FOR BOTH TEAMS:**
@@ -1802,55 +2238,55 @@ Before writing your Steel Man cases, investigate BOTH sides equally.
 - [ ] **KenPom/NET Ranking Quality** - Are they #30 because they beat #300 teams?
 - [ ] **Best player's game logs** - Are they a high-usage freshman prone to road slumps?
 
-**📊 STRENGTH OF SCHEDULE CONTEXT (CRITICAL):**
+**STRENGTH OF SCHEDULE CONTEXT (CRITICAL):**
 - [ ] **Check BOTH teams' SOS** - A 15-3 record vs SOS #200 ≠ 12-6 vs SOS #20
 - [ ] **Quad Records** - How did they perform against Q1/Q2 opponents?
 - [ ] **Conference Strength** - Big Ten #8 faced tougher competition than mid-major #8
 - Ask: "Is this team's record/efficiency real or inflated by weak opponents?"
 
-**🏥 INJURY DURATION CHECK:**
+**INJURY DURATION CHECK:**
 - [ ] **How long out?** (First game without them? 2 weeks? Season-long?)
 - [ ] If **2+ weeks out** → Stats ALREADY reflect the absence. This is CONTEXT, not edge.
-- [ ] If **recent (< 2 weeks)** → Team may still be adjusting. Investigate recent form.
+- [ ] If **recent (< 2 weeks)** - Team may still be adjusting. Investigate recent form.
 - [ ] **Replacement performance** - Check the 6th man's recent game logs.
 
-**📰 VERIFY WHAT YOU READ:**
+**VERIFY WHAT YOU READ:**
 - If you see a ranking like "top 5 defense," find the ACTUAL number (e.g., "AdjD 92.5")
 - If you see a player name in a blog, verify they're actually playing (check Rotowire/roster)
 - Blog opinions are context, not facts. Form your OWN thesis from verified data.
 
-**⚠️ VERIFY BEFORE DISMISS:**
+**VERIFY BEFORE DISMISS:**
 If you see "Team X is 2-8 on the road," you MUST investigate WHY. Was it injuries? 
 A gauntlet of Top-25 opponents? Or just poor road shooting?
 ` : '';
 
   // NHL-specific follow-up investigation
   const nhlDataGaps = (sport === 'icehockey_nhl' || sport === 'NHL') ? `
-### 🏒 NHL INVESTIGATION (HOCKEY-SPECIFIC - BOTH TEAMS):
+### NHL INVESTIGATION (HOCKEY-SPECIFIC - BOTH TEAMS):
 Before writing your Steel Man cases, investigate BOTH sides equally.
 
-**🥅 GOALTENDING (THE #1 FACTOR - INVESTIGATE FIRST):**
+**GOALTENDING (THE #1 FACTOR - INVESTIGATE FIRST):**
 - [ ] **Who is starting tonight?** - Confirmed starter vs backup?
 - [ ] **Starter's GAA and SV%** - Include actual numbers
 - [ ] **Starter's recent form (L5)** - Record and performance
 - [ ] **Head-to-head goalie comparison table** - REQUIRED for your case
 
-**📊 POSSESSION METRICS (MUST INCLUDE NUMBERS):**
+**POSSESSION METRICS (MUST INCLUDE NUMBERS):**
 - [ ] **CF% (Corsi For %)** - Both teams' 5v5 possession rate
 - [ ] **xGF/60 and xGA/60** - Expected goals for/against
 - [ ] **High-Danger Chances For/Against** - Quality scoring opportunities
 - [ ] **PDO** - If >102 or <98, note regression potential
 
-**🔄 KEY ABSENCE IMPACT (IF ANY):**
+**KEY ABSENCE IMPACT (IF ANY):**
 - [ ] **How long out?** - Fresh (<7 days) vs baked in (2+ weeks)?
 - [ ] **Quantify their impact** - TOI, FO%, points/60, defensive metrics
 - [ ] **Who replaces them?** - Replacement's stats for comparison
 
-**📋 SPECIAL TEAMS:**
+**SPECIAL TEAMS:**
 - [ ] **PP% and PK%** - Both teams
 - [ ] **How many PP opportunities per game?** - Volume matters
 
-**⚠️ NHL-SPECIFIC RULES:**
+**NHL-SPECIFIC RULES:**
 1. Every case MUST include a goalie comparison table with actual stats
 2. "Possession disaster" must be backed by CF% numbers
 3. "Hot streak" must be backed by xG data, not just W-L
@@ -1863,263 +2299,201 @@ Before writing your Steel Man cases, investigate BOTH sides equally.
 - Goalie edge → Check if goalie-specific line reflects it
 ` : '';
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // GEMINI 3 OPTIMIZED: XML-tagged structure with END-OF-PROMPT instruction
+  // ═══════════════════════════════════════════════════════════════════════════
   return `
-══════════════════════════════════════════════════════════════════════
-## PASS 2 - PATTERN CHECK + STEEL MAN ANALYSIS
+<pass_context>
+## PASS 2 - STEEL MAN ANALYSIS (PURE ADVOCACY)
 
-You have your first wave of data. Before building cases, scan for known market inefficiency patterns.
+You have your first wave of data. Your job is to be a GENUINE ADVOCATE for BOTH sides.
+Do NOT evaluate, judge, or indicate which side you prefer. Grading happens in Pass 2.5.
+</pass_context>
 
----
+${spreadSizeContext ? `<spread_context>${spreadSizeContext}</spread_context>` : ''}
 
-## 🔍 STEP 1: PATTERN CHECK (OUTPUT THIS FIRST)
-
-**Purpose:** Identify situations where the LINE might be systematically off. This frames your Steel Man analysis.
-
-**Run through each pattern and mark YES/NO/UNKNOWN:**
-
-**PATTERNS THAT MAY FAVOR UNDERDOG:**
-1. **Dead Cat Bounce?** - Did this team lose by 30+ recently? Is line overreacting to one catastrophic result?
-2. **Roster Discontinuity?** - Key players in/out since the game driving the narrative? Is line anchored to different roster?
-3. **Public Side Inflation?** - Heavy public money on favorite? Obvious ESPN pick? Is line pushed past fair value?
-4. **Double-Digit Dog?** - Spread 10+? Garbage time compression + market overcorrection territory?
-
-**PATTERNS THAT MAY FAVOR FAVORITE:**
-5. **Letdown Spot?** - Underdog coming off emotional peak? (Use sparingly - pros stay professional)
-6. **Lookahead Spot?** - Underdog has marquee game next? Mental preparation split?
-7. **Scheduling Disadvantage?** - Either team on B2B, cross-country travel, time zone issues?
-
-**OTHER:**
-8. **Reverse Line Movement?** - Line moving opposite public money? (If unknown, mark UNKNOWN)
-9. **Key Number?** (NFL only) - Line on/near 3 or 7?
-10. **Weather?** (Outdoor only) - Wind 15+, rain, snow affecting play?
-
-**OUTPUT FORMAT:**
-\`\`\`
-PATTERN CHECK:
-├── Dead Cat Bounce? [YES/NO] - [reason]
-├── Roster Discontinuity? [YES/NO] - [reason]
-├── Public Side Inflation? [YES/NO] - [reason]
-├── Double-Digit Dog? [YES/NO] - [reason]
-├── Letdown Spot? [YES/NO] - [reason]
-├── Lookahead Spot? [YES/NO] - [reason]
-├── Scheduling Disadvantage? [YES/NO] - [reason]
-├── Reverse Line Movement? [YES/NO/UNKNOWN] - [reason]
-├── Key Number? [YES/NO/N/A] - [reason]
-├── Weather? [YES/NO/N/A] - [reason]
-
-PATTERNS TRIGGERED: [X] favor [UNDERDOG], [Y] favor [FAVORITE]
-
-PATTERN VERDICT:
-[If 2+ patterns favor one side]: "Multiple patterns suggest [side] value. 
-To bet [other side], must identify specific edge that OVERCOMES these indicators.
-'Team quality' is not sufficient - that's already in the spread."
-
-[If balanced/none]: "No strong pattern indicators. Evaluate cases on merits."
-\`\`\`
-
-**⚠️ CRITICAL:** If patterns favor one side, the OTHER side needs SPECIFIC counter-evidence to overcome them. "They're the better team" is not enough - that's why the spread exists.
-
----
-
-## 🔍 STEP 2: INVESTIGATION
+<investigation_checklist>
+## INVESTIGATION CHECKLIST (Fill gaps for BOTH teams)
 ${nflDataGaps}${nbaDataGaps}${ncaabDataGaps}${nhlDataGaps}
 
-**INSTRUCTIONS:**
+**MINIMUM INVESTIGATION:**
+- Best player's recent game logs (hot or cold?)
+- Home/away record specifically for this scenario
+- Recent game margins (close games? blowouts?)
+- Any key players recently OUT or RETURNING?
 
-1. **🚨 EQUAL INVESTIGATION (BOTH TEAMS):**
-   You've likely gathered stats that show one team is "better." That's expected.
-   But the spread exists because the game isn't that simple.
-   
-   **MINIMUM INVESTIGATION (STARTING POINT - NOT EXHAUSTIVE):**
-   - Best player's recent game logs (hot or cold?)
-   - Home/away record specifically for this scenario
-   - Recent game margins (close games? blowouts?)
-   - Any key players recently OUT or RETURNING?
-   
-   **IF EITHER TEAM IS MISSING A KEY PLAYER:**
-   - How long have they been out? (First game without them? Or weeks?)
-   - If FIRST game without them → High variance, harder to predict
-   - If out for weeks → Stats ALREADY reflect their absence (team has adjusted)
-   - Who fills their role? Check that player's game logs.
+**INJURY CONTEXT RULE:**
+- First game without them → High variance
+- Out 3+ weeks AND team competitive → Market has priced it in, not edge
+- Investigate: How has team performed SINCE the absence?
 
-2. **📊 BILATERAL ANALYSIS (Stats Only Matter in Context):**
-   A stat for one team only becomes meaningful when compared to the opponent.
-   
-   **INVESTIGATION QUESTIONS:**
-   - "Team A shoots 36% from 3" → How does Team B defend the 3? What does Team B shoot?
-   - "Team A ranks 15th in defense" → Where does Team B rank? Is there a meaningful gap or same tier?
-   - "Team A has a +5 Net Rating" → What's Team B's Net Rating? What's the differential?
-   
-   **THE TEST:** Before citing any stat as evidence, ask:
-   > "Compared to what? And is the gap meaningful for THIS matchup?"
-   
-   If two teams are in the same general tier on a metric, that metric doesn't differentiate them - investigate elsewhere for edge.
+**BUILDING CASES AROUND INJURIES:**
+An opponent's injury is NOT a positive factor by itself.
+Your case must explain HOW your team EXPLOITS the opportunity.
+Check Roster Depth in scout report before assuming injury is decisive.
+</investigation_checklist>
 
-3. **🧠 USE YOUR DEEP THINK POWERS:**
-   You are powered by Gemini 3 Pro with elite reasoning. The checklist above is a STARTING POINT.
-   
-   **THINK BEYOND THE CHECKLIST:**
-   - What OTHER factors might matter for THIS specific matchup?
-   - Is there a coaching angle? A historical pattern? A matchup-specific edge?
-   - Does this game have unusual context (rivalry, playoff implications, travel)?
-   - Is there something about this team's STYLE that creates a unique edge?
-   
-   **YOUR EXPERTISE:** You have deep knowledge of basketball strategy, player tendencies, 
-   coaching styles, and situational factors. USE IT - but only cite facts you can VERIFY 
-   with tool calls or the scout report. Never invent stats or cite outdated info.
+<investigation_quality_gate>
+## INVESTIGATION QUALITY GATE
 
----
-
-## 🔍 STEP 3: INVESTIGATION QUALITY GATE (Before building cases)
-
-Before citing ANY fact in your Steel Man cases, ask: **"Can I explain WHY this matters for THIS specific game?"**
-
-**Quick checks - if you're about to cite any of these, apply the filter:**
+Before citing ANY fact, ask: "Can I explain WHY this matters for THIS specific game?"
 
 | Fact Type | Filter Question | If Fails |
 |-----------|-----------------|----------|
-| **Injury out 3+ weeks** | Is the absence still news, or has the team adjusted? | Investigate adjustment, not absence |
-| **Season-long stat** | Does it match recent form (last 10-15 games)? | Use recent form instead |
-| **Home/Road record** | What's behind it? (margins, injuries, schedule) | Investigate the WHY |
-| **H2H history** | Same players/coaches/schemes as those games? | Only cite if rosters comparable |
-| **Single game result** | Outlier or trend? What drove it? | Check if sustainable |
-| **Hot/cold streak** | How does it compare to baseline? Sustainable cause? | Consider regression |
-| **Opponent result** | What was the context of that game? | Check if comparable to tonight |
+| Injury out 3+ weeks | Has the team adjusted? | Investigate adjustment, not absence |
+| Season-long stat | Does it match recent form? | Use recent form instead |
+| Home/Road record | What's behind it? | Investigate the WHY |
+| H2H history | Same rosters/coaches? | Only cite if rosters comparable |
+| Hot/cold streak | Sustainable cause? | Consider regression |
 
-**The Universal Filter:**
-> "Is this fact relevant to the team taking the floor TONIGHT, or am I citing context as if it's analysis?"
+**Universal Filter:** "Is this fact relevant to TONIGHT, or am I citing context as if it's analysis?"
+</investigation_quality_gate>
 
-**If you can't pass the filter → investigate deeper or don't use the fact.**
+<variance_check>
+## VARIANCE CHECK (Apply to ALL Stats)
 
-**Example - BAD vs GOOD:**
-- ❌ BAD: "Kessler is out" (He's been out since November - that's context, not analysis)
-- ✅ GOOD: "Since Kessler's November injury, Utah has dropped from 22nd to 30th in DRtg with no signs of adjusting"
+**PRINCIPLE:** Small gaps within same performance tier are NOISE.
 
----
+| Stat | Gap | Verdict |
+|------|-----|---------|
+| eFG% 55.9% vs 54.0% (1.9%) | NOISE |
+| eFG% 58.2% vs 52.1% (6.1%) | SIGNAL |
+| Net Rating +2.1 vs +1.8 | NOISE |
+| Net Rating +8.5 vs +1.2 | SIGNAL |
+| Def Rating 112.5 vs 113.1 | NOISE |
+| Def Rating 106.2 vs 114.8 | SIGNAL (elite vs poor) |
 
-## 🔍 STEP 4: FRESH INFO CHECK (Before building cases)
+If gap is marginal: don't cite it, OR acknowledge it's a minor edge.
+</variance_check>
 
-All your data should be accurate. Now ask: **does any of it represent EDGE?**
+<stylistic_matchup_philosophy>
+## STYLISTIC MATCHUP CONSIDERATION (The "Rock-Paper-Scissors" Factor)
 
-"What FRESH information (last 24-48 hours) exists for each side?"
+In the regular season, teams rely on their "system" — they don't create bespoke game plans for every opponent.
+This creates natural stylistic advantages when one team's STRENGTH directly attacks another's WEAKNESS.
 
-**${firstTeam} FRESH INFO:**
-[List anything that became known in the last 24-48 hours - or write "Nothing fresh"]
+**THE VECTOR QUESTION (Investigate if relevant):**
+Beyond "who is better overall," ask: Does one team's primary mechanism EXPLOIT the opponent's specific vulnerability?
 
-**${secondTeam} FRESH INFO:**
-[List anything that became known in the last 24-48 hours - or write "Nothing fresh"]
+${isNFL ? `**NFL STYLISTIC ARCHETYPES (Use Stats to Identify):**
+Teams often exhibit tendencies that create natural matchup advantages. A team may be one archetype, a hybrid, or none - let the data tell you.
 
-⚠️ **These are accurate but NOT fresh (do not list them):**
-- Rest/schedule advantage (on the calendar for months)
-- Injuries out 2+ weeks (market has watched 5-10+ games without them)
-- Team quality differences (that's what the spread reflects)
-- Season-long stats (public knowledge)
-- "Motivated" or "revenge" without data (narrative, not information)
+**ARCHETYPE INDICATORS (investigate via stats):**
+- **Run-Heavy Identity:** Look at Rush Attempt %, Run EPA, early-down run rate, personnel groupings (12/13 personnel usage)
+- **Pass-First/Explosive Identity:** Look at Pass EPA, explosive play rate (20+ yard plays), early-down pass rate, air yards
+- **Defensive Philosophy:** Look at Defensive EPA, explosive plays allowed, blitz rate, coverage scheme tendencies
 
-**Now build your cases using all available information from your investigation.**
+**POTENTIAL MATCHUP VECTORS TO INVESTIGATE:**
+- High rush attempt % team vs defense that struggles against the run (Def Rush EPA, stuffed run rate)
+- Explosive pass offense vs defense that allows big plays (explosive play % allowed)
+- Elite pass rush (pressure rate, sack rate) vs struggling offensive line (pressure rate allowed, sacks allowed)
+- Ball-control offense (TOP, 3rd down %) vs defense that tires late or lacks depth
+- Red zone efficiency gaps (TD% vs FG% for both sides)
 
----
+**PLAYOFF CONTEXT (Consider if applicable):**
+In high-stakes games, coaching adjustments intensify. A schematic advantage that worked in the regular season may be specifically game-planned against. Consider whether the edge is "solvable" with film study or structural (e.g., elite pass rush vs backup tackle is harder to scheme away).` : ''}${isNBA ? `**NBA EXAMPLE VECTORS TO CONSIDER:**
+- Elite rebounding team vs passive/weak rebounding opponent
+- Transition-heavy offense vs slow defensive transition team  
+- Paint-dominant scoring vs interior-weak defense
+- 3PT-reliant offense vs weak perimeter defense
+- Grinding half-court team vs team that struggles in slow pace` : ''}${isNCAAB ? `**NCAAB EXAMPLE VECTORS TO CONSIDER:**
+- Elite rebounding team vs passive/weak rebounding opponent
+- Tempo-pushing offense vs team that struggles in transition defense
+- Interior-dominant scoring vs undersized frontcourt
+- 3PT-reliant offense vs weak perimeter closeouts
+- Half-court grinding team vs team that needs pace to score` : ''}${isNHL ? `**NHL EXAMPLE VECTORS TO CONSIDER:**
+- Heavy forecheck team vs poor puck-moving defense
+- Speed/transition team vs slow-footed D-pairs
+- Physical grinding team vs skill-reliant finesse team
+- Strong penalty kill vs power play dependent offense` : ''}
 
-${spreadSizeContext}
----
+**THE PRINCIPLE:**
+A team with a lower "power rating" can still win if their STYLE creates a hard counter.
+This is about HOW Team A's specific strengths hit Team B's specific weaknesses — not just who is "better."
 
-## ⚠️ CASE QUALITY REMINDERS (Before Building Cases)
+**WHEN BUILDING YOUR CASE:** If you identify a stylistic vector, explain the mechanism:
+- Not just "Team A is better" but "Team A's strength meets Team B's weakness HERE"
+- Cite the specific metrics that show the mismatch (e.g., rank vs rank, rate vs rate)
+</stylistic_matchup_philosophy>
 
-**1. BILATERAL COMPARISON:**
-Every strength you cite should be compared to the opponent. "Team A is good at X" is not edge - "Team A is good at X AND Team B is vulnerable to X" might be.
+<case_structure>
+## STEEL MAN CASE STRUCTURE
 
-**2. MEANINGFUL GAPS:**
-Small differences aren't edges. If both teams are in the same tier on a metric (e.g., 38th vs 42nd), that's not a differentiator - it's a wash. Investigate what ACTUALLY separates them.
+${isNHL ? `**NHL CASE STRUCTURE (MANDATORY):**
+Each case MUST BEGIN with GOALIE COMPARISON and POSSESSION METRICS tables.
+CASE FAILS WITHOUT THESE TABLES.
 
-**3. CHECKLISTS ARE STARTING POINTS:**
-The investigation checklist above is a STARTING POINT, not an exhaustive list. Use your judgment about what matters for THIS specific matchup. Some factors on the checklist may not matter tonight. Other factors not on the checklist might be decisive.
+**NHL BANNED PHRASES:** "Hot gloves," "scheduling trap," "mud fight," "backs against the wall"` : ''}
 
-**THE STANDARD:** A strong steel man case identifies specific mechanisms where one team's strength exploits the other team's weakness - not just "they're better at X."
+**MANDATORY: Each case MUST start with a TEAM SNAPSHOT (factual, no commentary):**
 
----
+${isNBA ? `**NBA TEAM SNAPSHOT FORMAT:**
+\`\`\`
+[TEAM NAME] SNAPSHOT:
+- Rest: [X days rest, B2B status if applicable, last game home/away]
+- ORTG: [value] (rank) | DRTG: [value] (rank) | Net: [+/-value]
+- Pace: [value] | Recent Form: [L5 record, avg margin]
+\`\`\`` : ''}${isNFL ? `**NFL TEAM SNAPSHOT FORMAT:**
+\`\`\`
+[TEAM NAME] SNAPSHOT:
+- Rest: [X days rest, short week/long week, last game home/away]
+- Off EPA/Play: [value] | Def EPA/Play: [value]
+- Rushing: [YPC, rank] | Passing: [completion %, rank]
+- Recent Form: [L3-5 record, avg margin]
+\`\`\`` : ''}${isNCAAB ? `**NCAAB TEAM SNAPSHOT FORMAT:**
+\`\`\`
+[TEAM NAME] SNAPSHOT:
+- Rest: [X days rest, B2B status if applicable, last game home/away]
+- KenPom: #[rank] | AdjO: [value] | AdjD: [value] | AdjEM: [+/-value]
+- SOS: [rank/value] | Recent Form: [L5 record, avg margin]
+\`\`\`` : ''}${isNHL ? `**NHL TEAM SNAPSHOT FORMAT:**
+\`\`\`
+[TEAM NAME] SNAPSHOT:
+- Rest: [X days rest, B2B status if applicable, last game home/away]
+- Goalie: [Name] | SV%: [value] | GAA: [value]
+- xGF%: [value] | Corsi%: [value] | PP%/PK%: [values]
+- Recent Form: [L5 record, avg margin]
+\`\`\`` : ''}
 
-## 🏗️ STEP 5: STEEL MAN CASES (BUILD GENUINE ARGUMENTS FOR BOTH SIDES)
+Fill in ACTUAL VALUES from your investigation. This grounds your case in data.
 
-**Your task:** Build the STRONGEST POSSIBLE CASE for EACH side. Be a genuine advocate for both teams.
+**Then write 3-4 detailed paragraphs (not bullet points) for EACH case:**
 
-⚠️ **CRITICAL: Write SUBSTANTIVE arguments, NOT bullet point summaries.**
-Each case should be 2-3 PARAGRAPHS explaining the full reasoning chain, not just listing facts.
+- **PARAGRAPH 1-2 (MECHANISM/DATA/CONTEXT):** How does their strength exploit opponent weakness? Include numbers.
+- **PARAGRAPH 3 (RECENT FORM - REQUIRED):** L5-10 game results, margins, opponent quality, context.
+- **PARAGRAPH 4 (STATISTICAL MATCHUP - REQUIRED):** Pure data-driven argument with ACTUAL NUMBERS. No narratives.
 
-**DO NOT GRADE YOUR CASES.** Just build them. Grading happens in Pass 2.5.
-${isNHL ? `
-   **🏒 NHL CASE STRUCTURE (MANDATORY - Case is INVALID without these):**
-   
-   Each NHL case MUST BEGIN with this structured data header:
-   
-   \`\`\`
-   GOALIE COMPARISON:
-   | Goalie | GAA | SV% | L5 Record | xG Saved Above Expected |
-   |--------|-----|-----|-----------|-------------------------|
-   | [Home Starter] | X.XX | .XXX | X-X-X | +/- X.X |
-   | [Away Starter] | X.XX | .XXX | X-X-X | +/- X.X |
-   
-   POSSESSION METRICS:
-   | Team | CF% | xGF/60 | xGA/60 | PDO |
-   |------|-----|--------|--------|-----|
-   | [Home] | XX.X% | X.XX | X.XX | XXX |
-   | [Away] | XX.X% | X.XX | X.XX | XXX |
-   \`\`\`
-   
-   ⚠️ **CASE FAILS WITHOUT THESE TABLES.** Do not write narrative about "hot goalies" or "possession advantage" without the numbers.
-   
-   **🚫 NHL BANNED PHRASES (Auto-fail if used without data):**
-   - "Hot gloves" / "hot streak" → Must show xG saved above expected
-   - "Scheduling trap" / "tired legs" → Must show B2B record + recent minutes data
-   - "Mud fight" / "grind game" → Must show CF% and pace data
-   - "Backs against the wall" / "motivated" → NARRATIVE, not analysis - DELETE IT
-   
-` : ''}
-   **CASE FOR ${firstTeam} ${firstTeamSpread}:**
-   *(Why ${firstTeam} will cover — they need to ${firstTeamCoverDesc})*
-${isNHL ? `
-   **[NHL: Insert GOALIE COMPARISON and POSSESSION METRICS tables HERE before your paragraphs]**
-` : ''}
-   Write 3-4 detailed paragraphs (not bullet points) that explain:
-   - The MECHANISM: How does their strength specifically exploit the opponent's weakness? Show the causal chain.
-   - The DATA: What specific stats support this? Include the actual numbers, not just "they're good at X."
-   - The CONTEXT: What's different about THIS game that makes this edge relevant?
-   - The MARGIN PATH: How does this translate to covering ${firstTeamSpread} specifically?
-${isNHL ? `
-   **🏒 NHL-SPECIFIC MECHANISM EXAMPLES:**
-   - ✅ GOOD: "Seattle's CF% of 48.2% vs Boston's 53.1% creates a 4.9% possession gap. At ~60 shot attempts per game, that's ~3 fewer shots for Seattle. Combined with Swayman's .924 SV% vs Daccord's .902, Seattle needs to be significantly more efficient per shot to compete."
-   - ❌ BAD: "Seattle is hot right now and their goalie has been standing on his head."
-` : `
-   **Example of GOOD steel man paragraph:**
-   "Houston's interior defense creates a structural mismatch against Chicago's paint-dependent offense. The Rockets rank 4th in opponent paint points allowed (42.1 PPG) while the Bulls generate 52.3% of their scoring in the paint - the 6th highest rate in the league. With Sengun and Amen Thompson's rim protection, Chicago will be forced into mid-range jumpers where they shoot just 38.2% (27th in NBA). This isn't just 'Houston is better' - it's a specific mechanism where Chicago's primary scoring avenue gets shut down, forcing them into their weakest shots. That's how Houston builds margin."
-`}
-   ---
-   
-   **CASE FOR ${secondTeam} ${secondTeamSpread}:**
-   *(Why ${secondTeam} will cover — they need to ${secondTeamCoverDesc})*
-${isNHL ? `
-   **[NHL: Insert GOALIE COMPARISON and POSSESSION METRICS tables HERE before your paragraphs]**
-` : ''}
-   Write 3-4 detailed paragraphs (not bullet points) that explain:
-   - The MECHANISM: How does their strength specifically exploit the opponent's weakness? Show the causal chain.
-   - The DATA: What specific stats support this? Include the actual numbers, not just "they're good at X."
-   - The CONTEXT: What's different about THIS game that makes this edge relevant?
-   - The MARGIN PATH: How does this translate to covering ${secondTeamSpread} specifically?
-   
-   (Same quality standard as the first case - full paragraphs with data)
+${isNHL ? '' : `**Good Recent Form example:**
+"Over their last 10 games, Houston is 8-2 with a +9.3 average margin. They've beaten three playoff teams during this stretch..."
 
----
+**Good Statistical Matchup example:**
+"Cleveland holds meaningful statistical advantages: their 113.4 Offensive Rating (5th) vs Philadelphia's 108.9 Defensive Rating (18th) creates a +4.5 efficiency gap..."`}
 
-## 📋 ACTION STEPS:
+**CASE FOR ${firstTeam} ${firstTeamSpread}:**
+*(They need to ${firstTeamCoverDesc})*
 
-1. **⚠️ FIRST:** Output your **PATTERN CHECK** (Step 1 above) with Pattern Verdict
-2. Call any missing stats for BOTH teams
-3. **🆕 FRESH INFO CHECK:** List what's FRESH (last 24-48 hours) for EACH side
-4. Write **CASE FOR ${firstTeam}** (2-3 substantive paragraphs)
-5. Write **CASE FOR ${secondTeam}** (2-3 substantive paragraphs)
+**CASE FOR ${secondTeam} ${secondTeamSpread}:**
+*(They need to ${secondTeamCoverDesc})*
+</case_structure>
 
-**DO NOT GRADE OR RATE YOUR CASES.** Just build them. Grading happens in Pass 2.5.
+<instructions>
+## YOUR TASK
 
-══════════════════════════════════════════════════════════════════════
+Using the investigation checklist, quality gate, and variance check above, execute these steps NOW:
+
+**STEP 1:** Call any missing stats for BOTH teams (investigate equally)
+
+**STEP 2:** Note RECENT UPDATES for each team (last 24-48 hours)
+
+**STEP 3:** Write **CASE FOR ${firstTeam}** (3-4 paragraphs with mechanism, recent form, stats)
+
+**STEP 4:** Write **CASE FOR ${secondTeam}** (3-4 paragraphs with mechanism, recent form, stats)
+
+**CRITICAL:** Do NOT indicate which side you prefer. Do NOT grade or evaluate your cases.
+Be a genuine advocate for BOTH sides. Grading happens in Pass 2.5 AFTER your cases are written.
+
+BEGIN STEEL MAN ANALYSIS NOW.
+</instructions>
 `.trim();
 }
 
@@ -2158,12 +2532,15 @@ function getSpreadContext(sport, absSpread) {
 }
 
 /**
- * Build the PASS 2.5 message - Case Grading & Conviction Assessment
- * Injected AFTER Gary completes Steel Man analysis, BEFORE final pick
+ * Build the PASS 2.5 message - Case Grading, Stress Test & Final Decision
+ * Injected AFTER Gary completes Steel Man analysis
  * 
- * CRITICAL: This is where the Sharp Betting Reference is injected.
- * Gary builds cases in Pass 2 WITHOUT knowing how they'll be graded.
- * Now in Pass 2.5, he grades his own cases against the rubric.
+ * RESTRUCTURED FLOW:
+ * Step 1: Case Grading (Editor mode - grade both cases)
+ * Step 2: Tentative Pick (stronger case becomes working hypothesis)
+ * Step 3: Stress Test (full stress test of tentative pick only)
+ * Step 4: Sanity Check (lightweight check of alternative - missed factors)
+ * Step 5: Final Decision + Confidence Score
  * 
  * @param {string} homeTeam - Home team name
  * @param {string} awayTeam - Away team name
@@ -2171,140 +2548,319 @@ function getSpreadContext(sport, absSpread) {
  * @param {number} spread - The spread value (e.g., -13.5)
  */
 function buildPass25Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', sport = '', spread = 0) {
-  // Randomize presentation order to prevent bias
-  const presentHomeFirst = Math.random() > 0.5;
-  const firstTeam = presentHomeFirst ? homeTeam : awayTeam;
-  const secondTeam = presentHomeFirst ? awayTeam : homeTeam;
-  
   // Get spread context if applicable
   const absSpread = Math.abs(spread);
   const spreadContext = sport && absSpread > 0 ? getSpreadContext(sport, absSpread) : '';
   
   // Load the Sharp Reference for grading (sport-specific)
-  // This is where the grading rubric is introduced - AFTER cases are built
   const sharpReference = getSteelManGradingReference(sport);
   
-  return `
-══════════════════════════════════════════════════════════════════════
-## PASS 2.5 - CASE GRADING & CONVICTION ASSESSMENT
+  // Determine if this is a "who wins" question (small spread) for sanity check section
+  const isNBA = sport === 'basketball_nba' || sport === 'NBA';
+  const isNFL = sport === 'americanfootball_nfl' || sport === 'NFL';
+  const isNCAAB = sport === 'basketball_ncaab' || sport === 'NCAAB';
+  const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
+  
+  const isNCAAF = sport === 'americanfootball_ncaaf' || sport === 'NCAAF';
+  
+  // Thresholds for "who wins" question: NBA <5, NFL <3.5, NCAAB <5, NCAAF <3.5
+  const isWhoWinsQuestion = isNHL || // NHL is always "who wins"
+    (isNBA && absSpread < 5) ||
+    (isNFL && absSpread < 3.5) ||
+    (isNCAAB && absSpread < 5) ||
+    (isNCAAF && absSpread < 3.5);
+  
+  // Build the key player dynamics section with Star Power Audit (only for small spreads / who wins questions)
+  const keyPlayerSection = isWhoWinsQuestion ? `
+**B. STAR POWER AUDIT (The "Closer Effect" - Critical for Close Games)**
 
-You've just built Steel Man cases for both sides. Now, step back and **GRADE YOUR OWN ARGUMENTS** using the Sharp Betting Reference below.
+Since this is a "WHO WINS?" question (spread < ${isNBA || isNCAAB ? '5' : '3.5'} points), investigate the CLOSING dynamic:
+
+${isNFL ? `**NFL CLOSING DYNAMICS (Investigate via Stats):**
+In close NFL games, late-game execution often determines the outcome. Consider these factors:
+
+**QB CLUTCH PERFORMANCE (Look up the data):**
+- 4th quarter passer rating and EPA in close games (within 7 points)
+- Game-winning drive history and success rate
+- Performance under pressure (when blitzed, when trailing)
+- Playoff/primetime track record if applicable
+
+**STRUCTURAL vs INDIVIDUAL:**
+- Some matchup advantages are "schemeable" (can be adjusted at halftime with film study)
+- Some are structural and harder to overcome (e.g., dominant pass rush vs weak OL depth)
+- In close games, individual execution often matters more than schematic advantages
+
+**QUESTIONS TO INVESTIGATE:**
+- If this game is within 3 points in the 4th quarter, which QB has historically performed better?
+- Is there a matchup advantage that can't be schemed away (pass rush vs personnel, not scheme)?
+- Does either team have a late-game identity that shows up in the data (clock management, red zone efficiency)?` : `**THE CLOSER EFFECT:**
+In the final 5 minutes of a close game, coaches "shorten the playbook" and give the ball to their best player.
+Structural matchups (pace, rebounding, defensive schemes) matter LESS in crunch time.
+Individual star ability to "create a shot out of nothing" can override structural advantages.
+
+**INVESTIGATE:**
+- Who is the primary "closer" for each team? (High usage in 4th quarter, clutch performance)
+- Does one team have a CLEAR advantage in "give the ball to our guy" situations?
+- Has either star struggled/excelled in clutch situations THIS SEASON?`}
+
+**THE PIVOT RULE:**
+If your case relies on a STRUCTURAL mismatch (style, defense, pace):
+- Ask: "What happens in the last 5 minutes when both teams abandon their system?"
+- Does the other team have a star who can OVERRIDE the structural advantage?
+
+**NOT "this player is great"** (already priced in)
+**BUT "when this game is close in the 4th, who has the Diamond?"**
+` : `
+**B. KEY PLAYER DYNAMICS:**
+For large spreads (margin question), individual star closers don't create 10+ point swings — schemes and depth do.
+Star power matters less when the question is "who wins by 10?" rather than "who wins?"
+Skip this section unless there's a specific matchup advantage not captured in your case.
+`;
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // GEMINI 3 OPTIMIZED: XML-tagged structure with END-OF-PROMPT instruction
+  // ═══════════════════════════════════════════════════════════════════════════
+  return `
+<game_context>
+## PASS 2.5 - CASE GRADING, STRESS TEST & FINAL DECISION
+
+You've just built Steel Man cases for both sides.
 
 ${spreadContext}
+</game_context>
 
----
+<prescriptive_rules>
+## IMPORTANT CONTEXT (Factor into your analysis)
 
-## 📚 SHARP BETTING REFERENCE (Use this to grade your cases)
+**1. BACK-TO-BACK & TRAVEL:**
+- **ROAD B2B = Real fatigue factor** (travel + game + travel + game)
+- **HOME B2B = Minimal impact** on performance
+- **Circadian factor:** West Coast team playing 7:30 PM EST = 4:30 PM body time (peak window, don't auto-fade for "travel"). West Coast playing 1:00 PM EST = 10:00 AM body time (biological low, shooting drops).
+- **Eastward overnight travel + early game** = "Zombie team" risk, especially 1H.
+
+**2. RETURNING PLAYERS → HIGH UNCERTAINTY:**
+- Star player's FIRST game back = Chemistry disruption, rust, minutes limits
+- Multiple players returning OR 3-4 role players integrating = Lineup chaos, hard to predict
+- **This uncertainty applies to PICKING that team** - the opponent (without the variable) is MORE predictable
+${isNFL ? '- For NFL: Factor this uncertainty into your confidence level, but always make a pick' : '- If your edge relies on the team with returning players → Consider PASS'}
+- Exception: Betting AGAINST that team is acceptable (you're betting on the predictable unit)
+</prescriptive_rules>
+
+<sharp_reference>
+## SHARP BETTING REFERENCE (Use During Grading)
 
 ${sharpReference}
+</sharp_reference>
 
----
+<grading_criteria>
+## CASE GRADING CRITERIA
 
-## 🔍 AUDIT EACH CASE (REQUIRED)
+**Take a beat.** You just wrote both Steel Man cases as an advocate. Now shift gears — you are the EDITOR.
 
-Now audit each Steel Man case you wrote. For each case, complete this evaluation:
+**Evaluate BOTH cases using these criteria:**
 
-### 🔍 AUDIT - ${firstTeam} CASE:
+**A. MECHANISM QUALITY (Paragraphs 1-3):**
+- Does the case explain HOW this team wins/covers against THIS opponent?
+- Is the logic forward ("Team A does X → exploits Y") or backward ("Team B can't do Z")?
+- Strip the narratives (pride, revenge, momentum) - does it still stand?
 
-**TRAP CHECK:**
-- ⚠️ Priced-in injury? If a player has been out 2+ weeks → NOT edge (line already reflects it)
-- ⚠️ Season-long stat when recent form differs?
-- ⚠️ Single game sample as key evidence?
-- ⚠️ Narrative without data? (revenge, motivation, must-win)
+**B. RECENT FORM QUALITY (Paragraph 4):**
+- Does the documented form SUPPORT or CONTRADICT the case?
+- Are the margins and opponent quality meaningful?
 
-**BIAS CHECK:**
-- Would ESPN talk about this side?
-- Would a casual fan bet this side?
-- Can I explain this in 30 seconds? (If yes = probably no edge)
+**C. STATISTICAL ARGUMENT QUALITY (Paragraph 5):**
+- How many claims are backed by ACTUAL NUMBERS?
+- Are the stats PREDICTIVE (efficiency gaps, opponent-adjusted) or just DESCRIPTIVE (raw totals)?
+- Would a sharp find this statistical argument compelling?
 
-**EDGE CHECK:**
-- What SPECIFIC thing might NOT be priced into this line?
-- If I can't name something concrete → this case has NO EDGE
+**D. MARKET ABSORPTION CHECK (CRITICAL):**
+Most factors are already BAKED INTO the spread. The question isn't "why does Team X cover" but "why is the spread WRONG?"
 
-**📚 CROSS-REFERENCE CHECK (Against Sharp Betting Reference):**
+- Has the market already priced in the key factors you're citing?
+- Injury announced 3+ weeks ago? → Market has adjusted. Not an edge.
+- Fresh news (last 24-48 hours)? → Potential mispricing.
+- Is your mechanism OBVIOUS (already in the line) or SPECIFIC (market might miss it)?
 
-| Factor I Cited | What Reference Says | Holds Up? |
-|----------------|---------------------|-----------|
-| [Factor 1] | [trap/priced-in/legitimate?] | ✅/❌ |
-| [Factor 2] | [trap/priced-in/legitimate?] | ✅/❌ |
-| [Factor 3] | [trap/priced-in/legitimate?] | ✅/❌ |
+**For each case, identify:** What is the market potentially MISSING or UNDERWEIGHTING?
+- A 7.0 case with a clear "line is wrong because..." beats an 8.0 case citing priced-in factors.
 
-**🔬 FACT vs MECHANISM CHECK:**
-| Surviving Factor | Fact or Mechanism? | If Mechanism: Exploitation Chain |
-|------------------|-------------------|----------------------------------|
-| [Factor] | FACT / MECHANISM | [strength → opponent weakness → margin] |
+**GRADING SCALE (1.0 - 10.0):**
+| Team | Case Strength | Strongest Element | Weakest Element |
+|------|---------------|-------------------|-----------------|
+| ${homeTeam} | [X.X] | [brief note] | [brief note] |
+| ${awayTeam} | [X.X] | [brief note] | [brief note] |
 
-- FACT alone: "They're fast" / "Star is out" / "Good home record" → Market knows this
-- MECHANISM: Shows HOW a strength exploits a specific weakness → Potential edge
+**IF both cases are within ~0.5 points:** This game may be close to a toss-up.
+</grading_criteria>
 
-**→ How many factors survived? [X of Y]**
-**→ Of survivors, how many are MECHANISMS? [X of Y]**
+<tentative_pick_guidance>
+## TENTATIVE PICK
+Based on your grading, which case has the stronger foundation?
+**TENTATIVE PICK:** [Team] [spread/ML] - your working hypothesis before stress testing.
+</tentative_pick_guidance>
 
-**${firstTeam} EDGE RATING: ___/10**
+<stress_test_patterns>
+## STRESS TEST PATTERNS
 
----
+**TRAP PATTERNS (Check your tentative pick):**
 
-### 🔍 AUDIT - ${secondTeam} CASE:
+1. **Returning Players FIRST Game Back?**
+   - ONLY applies to literally the FIRST game back from injury
+   - If already played a game since returning, this does NOT apply
+   - Investigate: Chemistry disruption and rust vs motivated return
 
-[Complete the same audit for the second team's case]
+2. **Schedule/Travel Situation?**
+   - Road B2B with significant travel = real fatigue factor
+   - Home B2B = minimal impact
+   - Investigate the actual travel schedule, not just "B2B"
 
-**${secondTeam} EDGE RATING: ___/10**
+3. **Public/Market Perception?**
+   - Is EITHER side getting disproportionate attention?
+   - Favorites can be over-bet (line too big) OR under-bet (line too small)
+   - Underdogs can be over-bet (contrarian overcorrection) OR under-bet (true value)
+   - Investigate: Where is the line moving, and why?
 
----
+4. **Emotional/Situational Spot? (CAUTION - UNVERIFIABLE)**
+   - "Letdown," "bounce-back," "trap game," "lookahead" are NARRATIVE CONSTRUCTS
+   - You CANNOT know a team's psychological state before the game
+   - These factors should NEVER be a primary thesis pillar
+   - ONLY cite if you have THIS specific team's historical data in similar spots
 
-## 📊 FINAL RATINGS
+5. **Regression Check (EITHER DIRECTION)?**
+   - Betting ON an outlier high performance - Investigate if sustainable
+   - Betting AGAINST an outlier bad performance - Investigate if truly an outlier
 
-**RATE 1-10:**
-Rate each case based on how strongly you believe it identifies something the line might be missing.
-Use your judgment based on the Sharp Reference principles you just applied in your audit.
-Higher = stronger edge identified. Lower = mostly describing why the line exists.
+6. **Star Absence Impact? (NBA vs NCAAB - DIFFERENT RULES)**
+   
+   **NBA - USAGE REDISTRIBUTES:**
+   - Star's 25-30% usage distributed to capable rotation players
+   - NBA rosters DEEP (8-10 players) - secondary players often increase efficiency
+   - INVESTIGATE: How has team actually performed? Check Recent Form.
+   
+   **NCAAB - PRODUCTION LOSS IS REAL:**
+   - College rosters SHALLOW (6-7 capable players)
+   - Backups may be freshmen or walk-ons who can't absorb usage
+   - INVESTIGATE: Does team have capable depth?
+   
+   **RETURNING PLAYER = HIGH UNCERTAINTY:**
+   - First game back = rust, minutes restriction, chemistry disruption possible
+   - Second game+ = INVESTIGATE actual performance in return games
 
-**GRADING CONTEXT:**
-The Sharp Reference above provides examples and investigation questions - not scoring formulas.
-Use your judgment to evaluate each case based on the principles, not by checking boxes.
+7. **H2H Personnel Check?**
+   - If citing H2H results, verify rosters were similar
+   - Missing players can change relevance of H2H
 
-**🔍 FACTORS TO INVESTIGATE (Not automatic penalties - use judgment):**
-- Injuries that have been known for weeks - has market fully adjusted?
-- "Better team" without explaining WHY the line might be wrong
-- Rest/schedule/home court - investigate if it actually matters for THIS matchup
-- Season-long stats when recent form tells a different story
+8. **Information Age?**
+   - Is your "edge" fresh news or already reflected in the line?
 
-Evaluate each factor in context. What matters depends on the question being asked.
-For moneylines/small spreads, factors affecting WIN PROBABILITY may be more relevant.
+**PICK-LEVEL CONCERNS:**
+- Line movement: Has the line moved away from your side?
+- Sharp money signals: Any indication sharps are opposite your pick?
 
-**CHAOS/VARIANCE CHECK:**
-Based on your investigation, how predictable is this game?
-- HIGH: Multiple unknowns make this volatile
-- MEDIUM: Some uncertainty exists
-- LOW: Clear picture - matchup dynamics well-established
+9. **Structure vs Star Power Check (For Close Games):**
+   - If your edge is STRUCTURAL (style mismatch, pace advantage, defensive scheme):
+     - Structural edges work best in the FIRST HALF before halftime adjustments
+     - In the 4th quarter of close games, coaches "shorten the playbook" and rely on star execution
+   - Ask: "If this game is within 5 points in the 4th, does my team have the CLOSER to finish it?"
+   - A structural mismatch gets a team the lead in the 1st half
+   - Star power keeps or steals the lead in the 2nd half
+</stress_test_patterns>
 
-**THE "OUTRIGHT WIN" QUESTION:**
-Could the underdog WIN THIS GAME OUTRIGHT? Not just cover - actually WIN.
+<sanity_check_guidance>
+## SANITY CHECK (Alternative Side)
 
-**OUTPUT FORMAT (strict JSON):**
+Quick check on the side you DIDN'T pick:
+
+**A. STRUCTURAL FACTORS:**
+- Did grading miss any matchup advantages?
+- Situational factors (rest, travel, altitude, weather)?
+- Lineup change that shifts the calculus?
+- Market signals (sharp money opposite, line moving against)?
+
+${keyPlayerSection}
+
+**YOUR ASSESSMENT:** (2-3 sentences)
+If any reveal a material edge for the other side, reconsider.
+If not, proceed with confidence.
+</sanity_check_guidance>
+
+<decision_logic>
+## FINAL DECISION LOGIC
+
+**DECISION RULES:**
+- IF tentative pick survives stress test → Proceed with that pick
+- IF HIGH severity patterns AND sanity check shows other side is materially better → Consider flipping
+- Trust your case grading and stress test analysis to determine final pick
+
+**CONFIDENCE DETERMINATION:**
+Your confidence_score (0.50-0.95) and confidence_label reflect your conviction based on the analysis you just completed.
+${isNFL ? `
+**NFL RULE:** Always make a pick. NFL games are limited and high-value - no PASS option.` : `
+**PASS OPTION (NBA/NCAAB/NHL only):**
+If both cases are weak AND stress test reveals significant patterns AND you have low conviction → PASS is acceptable.
+NFL never passes due to limited game volume.`}
+</decision_logic>
+
+<output_format>
+## OUTPUT FORMAT (strict JSON)
+
 \`\`\`json
 {
-  "favorite_path_rating": [number],
-  "underdog_path_rating": [number],
-  "favorite_team": "[team name]",
-  "underdog_team": "[team name]",
-  "rating_reasoning": "Brief explanation of why you rated them this way - what factors survived the audit?",
+  "case_grades": {
+    "home_team": { "name": "${homeTeam}", "strength": [X.X] },
+    "away_team": { "name": "${awayTeam}", "strength": [X.X] }
+  },
+  "tentative_pick": "[Team] [spread/ML]",
+  "stress_test": {
+    "patterns_found": ["list", "patterns"] or [],
+    "severity": "HIGH" | "MEDIUM" | "LOW" | "NONE"
+  },
+  "sanity_check_summary": "Brief assessment of alternative side",
+  "final_pick": "[Team] [spread/ML]",
+  "pick_flipped": true | false,
+  "confidence_score": [0.50-0.95],
+  "confidence_label": "[Your label based on your analysis]",
+  "confidence_reasoning": "Why you have this level of confidence based on case strength and stress test",
   "variance_indicator": "HIGH" | "MEDIUM" | "LOW",
-  "variance_reasoning": "What factors make this game predictable or chaotic?",
   "underdog_can_win_outright": true | false,
-  "outright_win_reasoning": "If true, explain the path to an outright win. If false, explain why they'll stay close but probably lose."
+  "market_inefficiency": "What specific factor is the line missing or underweighting?",
+  "rationale": "The mechanism I identified that the line might be missing..."
 }
 \`\`\`
+</output_format>
 
-**⚠️ THE DISCOMFORT SIGNAL:**
-If one side feels "uncomfortable" (e.g., betting on a team that just lost badly), ask: Is my discomfort based on reasoning, or just consensus pull? Discomfort is a signal to EXAMINE closer, not a reason to rate lower.
+<instructions>
+## YOUR TASK (Execute in Order)
 
-══════════════════════════════════════════════════════════════════════
+NOW execute these steps IN ORDER:
+
+**STEP 1: GRADE YOUR CASES**
+Using the grading criteria above, evaluate BOTH Steel Man cases you wrote.
+Grade each case 1.0-10.0 based on mechanism quality, form, stats, and market absorption.
+
+**STEP 2: MAKE TENTATIVE PICK**
+Pick the team with the stronger case. This is your working hypothesis.
+
+**STEP 3: STRESS TEST**
+Apply the stress test patterns to your tentative pick.
+Document which patterns apply (if any) and their severity.
+
+**STEP 4: SANITY CHECK**
+Quick check: Is there anything material on the OTHER side you missed?
+
+**STEP 5: FINAL DECISION**
+Apply the decision logic.
+Set your confidence score using the calibration table.
+Output your decision in the strict JSON format above.
+
+BEGIN YOUR ANALYSIS NOW.
+</instructions>
 `.trim();
 }
 
 /**
- * Parse Gary's Pass 2.5 conviction ratings from his response
+ * Parse Gary's Pass 2.5 output from his response
+ * Handles both new format (case_grades, confidence_score) and legacy format (favorite_path_rating)
  * @param {string} content - Gary's response content
  * @returns {object|null} - Parsed ratings or null if not found
  */
@@ -2316,47 +2872,131 @@ function parsePass25Ratings(content) {
     const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[1]);
+      
+      // NEW FORMAT: Check for case_grades structure
+      if (parsed.case_grades && parsed.final_pick) {
+        console.log(`[Pass 2.5] ✅ New format detected via JSON code block`);
+        
+        // Extract case grades
+        const homeGrade = parsed.case_grades.home_team?.strength || 5.0;
+        const awayGrade = parsed.case_grades.away_team?.strength || 5.0;
+        const homeName = parsed.case_grades.home_team?.name || 'Home';
+        const awayName = parsed.case_grades.away_team?.name || 'Away';
+        
+        return {
+          // Legacy fields for backwards compatibility
+          favoriteRating: Math.max(homeGrade, awayGrade),
+          underdogRating: Math.min(homeGrade, awayGrade),
+          favoriteTeam: homeGrade > awayGrade ? homeName : awayName,
+          underdogTeam: homeGrade > awayGrade ? awayName : homeName,
+          reasoning: parsed.confidence_reasoning || parsed.rationale || '',
+          varianceIndicator: parsed.variance_indicator || 'MEDIUM',
+          varianceReasoning: '',
+          underdogCanWinOutright: parsed.underdog_can_win_outright === true,
+          outrightWinReasoning: '',
+          // New fields
+          caseGrades: parsed.case_grades,
+          tentativePick: parsed.tentative_pick,
+          stressTest: parsed.stress_test,
+          sanityCheckSummary: parsed.sanity_check_summary,
+          finalPick: parsed.final_pick,
+          pickFlipped: parsed.pick_flipped === true,
+          confidenceScore: parseFloat(parsed.confidence_score) || 0.65,
+          confidenceLabel: parsed.confidence_label || 'CONFIDENT',
+          confidenceReasoning: parsed.confidence_reasoning || '',
+          rationale: parsed.rationale || ''
+        };
+      }
+      
+      // LEGACY FORMAT: Check for favorite_path_rating structure
       if (parsed.favorite_path_rating && parsed.underdog_path_rating) {
-        console.log(`[Pass 2.5] ✅ Ratings found via JSON code block`);
+        console.log(`[Pass 2.5] ✅ Legacy format detected via JSON code block`);
         return {
           favoriteRating: parseFloat(parsed.favorite_path_rating),
           underdogRating: parseFloat(parsed.underdog_path_rating),
           favoriteTeam: parsed.favorite_team || 'Favorite',
           underdogTeam: parsed.underdog_team || 'Underdog',
           reasoning: parsed.rating_reasoning || '',
-          // New fields for variance and outright win
           varianceIndicator: parsed.variance_indicator || 'MEDIUM',
           varianceReasoning: parsed.variance_reasoning || '',
           underdogCanWinOutright: parsed.underdog_can_win_outright === true,
-          outrightWinReasoning: parsed.outright_win_reasoning || ''
+          outrightWinReasoning: parsed.outright_win_reasoning || '',
+          // Set new fields with defaults for legacy format
+          confidenceScore: 0.65,
+          confidenceLabel: 'CONFIDENT',
+          finalPick: null,
+          pickFlipped: false
         };
       }
     }
     
-    // Method 2: Fallback - try to parse raw JSON without code blocks
+    // Method 2: Fallback - try to parse raw JSON without code blocks (new format)
+    const newFormatMatch = content.match(/\{[\s\S]*?"case_grades"[\s\S]*?"final_pick"[\s\S]*?\}/);
+    if (newFormatMatch) {
+      try {
+        const parsed = JSON.parse(newFormatMatch[0]);
+        if (parsed.case_grades && parsed.final_pick) {
+          console.log(`[Pass 2.5] ✅ New format found via raw JSON`);
+          const homeGrade = parsed.case_grades.home_team?.strength || 5.0;
+          const awayGrade = parsed.case_grades.away_team?.strength || 5.0;
+          const homeName = parsed.case_grades.home_team?.name || 'Home';
+          const awayName = parsed.case_grades.away_team?.name || 'Away';
+          
+          return {
+            favoriteRating: Math.max(homeGrade, awayGrade),
+            underdogRating: Math.min(homeGrade, awayGrade),
+            favoriteTeam: homeGrade > awayGrade ? homeName : awayName,
+            underdogTeam: homeGrade > awayGrade ? awayName : homeName,
+            reasoning: parsed.confidence_reasoning || parsed.rationale || '',
+            varianceIndicator: parsed.variance_indicator || 'MEDIUM',
+            varianceReasoning: '',
+            underdogCanWinOutright: parsed.underdog_can_win_outright === true,
+            outrightWinReasoning: '',
+            caseGrades: parsed.case_grades,
+            tentativePick: parsed.tentative_pick,
+            stressTest: parsed.stress_test,
+            sanityCheckSummary: parsed.sanity_check_summary,
+            finalPick: parsed.final_pick,
+            pickFlipped: parsed.pick_flipped === true,
+            confidenceScore: parseFloat(parsed.confidence_score) || 0.65,
+            confidenceLabel: parsed.confidence_label || 'CONFIDENT',
+            confidenceReasoning: parsed.confidence_reasoning || '',
+            rationale: parsed.rationale || ''
+          };
+        }
+      } catch (e) {
+        // Continue to next method
+      }
+    }
+    
+    // Method 3: Fallback - try to parse raw JSON without code blocks (legacy format)
     const rawJsonMatch = content.match(/\{[\s\S]*?"favorite_path_rating"[\s\S]*?\}/);
     if (rawJsonMatch) {
       const parsed = JSON.parse(rawJsonMatch[0]);
       if (parsed.favorite_path_rating && parsed.underdog_path_rating) {
-        console.log(`[Pass 2.5] ✅ Ratings found via raw JSON`);
+        console.log(`[Pass 2.5] ✅ Legacy format found via raw JSON`);
         return {
           favoriteRating: parseFloat(parsed.favorite_path_rating),
           underdogRating: parseFloat(parsed.underdog_path_rating),
           favoriteTeam: parsed.favorite_team || 'Favorite',
           underdogTeam: parsed.underdog_team || 'Underdog',
           reasoning: parsed.rating_reasoning || '',
-          // New fields for variance and outright win
           varianceIndicator: parsed.variance_indicator || 'MEDIUM',
           varianceReasoning: parsed.variance_reasoning || '',
           underdogCanWinOutright: parsed.underdog_can_win_outright === true,
-          outrightWinReasoning: parsed.outright_win_reasoning || ''
+          outrightWinReasoning: parsed.outright_win_reasoning || '',
+          confidenceScore: 0.65,
+          confidenceLabel: 'CONFIDENT',
+          finalPick: null,
+          pickFlipped: false
         };
       }
     }
     
-    // Method 3: Fallback - try to extract ratings from text patterns
-    // Look for "Rate 1-10: X" or "Rating: X/10" patterns after team names
+    // Method 4: Fallback - try to extract ratings from text patterns
     const textPatterns = [
+      // New format: Case strength in table
+      /\|\s*([^|]+)\s*\|\s*(\d+(?:\.\d+)?)\s*\|/gi,
       // "CASE FOR [Team] TO COVER:" followed by "Rate 1-10: X"
       /CASE FOR\s+([^:]+)\s+TO COVER[\s\S]*?Rate\s*(?:1-10)?[:\s]*(\d+(?:\.\d+)?)/gi,
       // "[Team] PRELIMINARY EDGE RATING: X/10"
@@ -2369,17 +3009,19 @@ function parsePass25Ratings(content) {
     for (const pattern of textPatterns) {
       const matches = [...content.matchAll(pattern)];
       for (const match of matches) {
-        foundRatings.push({
-          team: match[1].trim(),
-          rating: parseFloat(match[2])
-        });
+        const rating = parseFloat(match[2]);
+        if (!isNaN(rating) && rating >= 1 && rating <= 10) {
+          foundRatings.push({
+            team: match[1].trim(),
+            rating: rating
+          });
+        }
       }
       if (foundRatings.length >= 2) break;
     }
     
     if (foundRatings.length >= 2) {
       console.log(`[Pass 2.5] ✅ Ratings found via text pattern fallback: ${foundRatings.map(r => `${r.team}: ${r.rating}`).join(', ')}`);
-      // Determine which is favorite/underdog based on context or order
       return {
         favoriteRating: foundRatings[0].rating,
         underdogRating: foundRatings[1].rating,
@@ -2389,7 +3031,11 @@ function parsePass25Ratings(content) {
         varianceIndicator: 'MEDIUM',
         varianceReasoning: '',
         underdogCanWinOutright: false,
-        outrightWinReasoning: ''
+        outrightWinReasoning: '',
+        confidenceScore: 0.65,
+        confidenceLabel: 'CONFIDENT',
+        finalPick: null,
+        pickFlipped: false
       };
     }
     
@@ -2443,312 +3089,93 @@ You've gathered substantial evidence. Before making your pick, do a final check:
 }
 
 /**
- * Build the PASS 3 TOSS-UP message - For when conviction ratings are close
- * Injected when the gap between favorite/underdog ratings is ≤ 1.5
+ * Build the unified PASS 3 message - Simplified Final Output
+ * Most decision logic has moved to Pass 2.5
+ * Pass 3 now just confirms the decision and outputs final JSON
  * 
- * @param {object} ratings - The parsed Pass 2.5 ratings
+ * @param {object} ratings - The parsed Pass 2.5 ratings (now includes confidence_score)
  * @param {string} homeTeam - Home team name
  * @param {string} awayTeam - Away team name
  */
-function buildPass3TossUpMessage(ratings, homeTeam = '[HOME]', awayTeam = '[AWAY]') {
-  const gap = Math.abs(ratings.favoriteRating - ratings.underdogRating);
-  const favoriteTeam = ratings.favoriteTeam || 'Favorite';
-  const underdogTeam = ratings.underdogTeam || 'Underdog';
+function buildPass3Unified(ratings, homeTeam = '[HOME]', awayTeam = '[AWAY]') {
+  // Extract values from the new Pass 2.5 format
+  const finalPick = ratings.finalPick || ratings.tentativePick || 'Your pick';
+  const confidenceScore = ratings.confidenceScore || 0.65;
+  const confidenceLabel = ratings.confidenceLabel || 'CONFIDENT';
+  const pickFlipped = ratings.pickFlipped || false;
   
-  // Build ML consideration section if underdog can win outright
-  const mlSection = ratings.underdogCanWinOutright ? `
-**🎯 MONEYLINE OPTION:**
-You indicated that ${underdogTeam} can WIN THIS GAME OUTRIGHT.
-Your reasoning: "${ratings.outrightWinReasoning || 'Path to outright win exists.'}"
-
-Since this is a toss-up AND you see an outright win path, consider:
-- **Spread:** Safe play. Covers more scenarios. Lower upside.
-- **Moneyline:** Bold play. If they WIN (which you believe is possible), ML pays significantly more.
-- **Both:** Split your bet - some on spread for safety, some on ML for upside.
+  const flipNote = pickFlipped ? `
+**NOTE:** You flipped from your tentative pick based on the stress test and sanity check.
+Make sure your rationale reflects why the NEW pick is stronger, not just why the old pick had issues.
 ` : '';
 
-  // Build variance section if high chaos
-  const varianceSection = ratings.varianceIndicator === 'HIGH' ? `
-**⚡ HIGH VARIANCE GAME:**
-You identified this as chaotic: "${ratings.varianceReasoning || 'Multiple chaos factors.'}"
-Consider how this uncertainty affects your prediction.
+  const passConsideration = confidenceScore < 0.55 ? `
+**LOW CONFIDENCE (${confidenceScore}):**
+Your confidence is in PASS territory. If you proceed, make sure you have a specific reason.
+PASS is a valid decision when you don't have edge.
 ` : '';
   
+  // ═══════════════════════════════════════════════════════════════════════════
+  // GEMINI 3 OPTIMIZED: XML-tagged structure with END-OF-PROMPT instruction
+  // ═══════════════════════════════════════════════════════════════════════════
   return `
-══════════════════════════════════════════════════════════════════════
-## PASS 3 - FINAL DECISION (TOSS-UP DETECTED)
+<pass_context>
+## PASS 3 - FINAL OUTPUT
 
-Your conviction ratings were close: **${favoriteTeam}: ${ratings.favoriteRating}/10** vs **${underdogTeam}: ${ratings.underdogRating}/10** (Gap: ${gap.toFixed(1)})
+You've completed case grading, stress test, and sanity check in Pass 2.5.
 
-**TIEBREAKER: WHICH CASE HAS MORE EDGE?**
+**Your Decision:**
+- **Final Pick:** ${finalPick}
+- **Confidence:** ${confidenceScore} (${confidenceLabel})
+${flipNote}${passConsideration}
+</pass_context>
 
-When ratings are close, the question becomes: **Which case identifies something the line might be MISSING?**
-${varianceSection}${mlSection}
-**TO BREAK THE TIE:**
+<rationale_constraints>
+## RATIONALE CONSTRAINTS
 
-1. **Edge Comparison:**
-   - Does the ${favoriteTeam} case just explain why they're favored? (No edge)
-   - Does the ${underdogTeam} case identify a specific reason the line might be wrong? (Edge)
-   - **The case with actual edge wins the tiebreaker.**
+Your final rationale should be built from the case you graded higher.
+- Use the factors you already vetted in your Steel Man case
+- Do NOT introduce new claims that weren't investigated
+- Answer: "Here's the mechanism I identified that the line might be missing."
+</rationale_constraints>
 
-2. **The Public Side Default:**
-   - If neither case has clear edge, the ${underdogTeam} is often sharper because:
-   - Public money pushes favorite lines past fair value
-   - Getting points has inherent value in close games
+<closing_ability_check>
+## FINAL CHECK: Who Closes Games? (Structure vs Star)
 
-3. **Your Margin Prediction:**
-   - What margin do you actually predict?
-   - How does that compare to the spread?
+Before finalizing, consider this one last time:
 
-**🚨 RATIONALE EXCLUSION:** Do NOT mention priced-in injuries (players out for weeks/months) in your rationale. These are context, not edge.
+**If your edge is STRUCTURAL** (style matchup, pace, defensive scheme):
+- Structure gets a team the lead in the 1st half
+- But in the 4th quarter of close games, coaches abandon systems and give it to their best player
+- Does your team have the CLOSER to finish what Structure started?
 
-**YOUR REASONING:**
-You rated both paths similarly because: "${ratings.reasoning || 'Both sides have valid arguments'}"
+**If your edge is STAR POWER** (elite closer, clutch performer):
+- Star power keeps or steals the lead in the 2nd half
+- But stars can't overcome massive structural mismatches if the game is never close
+- Does your team have enough structure to KEEP IT CLOSE until crunch time?
 
-**CONFIDENCE TIER:**
-Assign a confidence level to this pick:
-- **MAX:** Very high conviction
-- **CORE:** Standard conviction  
-- **SPECULATIVE:** Lower conviction
+**The "Winning DNA" Question:**
+If this game comes down to the final 5 minutes within 5 points, which team has the higher "probability of closing"?
+- Factor this into your confidence score
+- If your structural edge relies on a team WITHOUT closing ability, lower confidence
+- If your star power edge relies on a team that can't stay close, lower confidence
+</closing_ability_check>
 
-**Now commit.** Make your pick based on your analysis.
+<output_requirements>
+## OUTPUT REQUIREMENTS
 
-**OUTPUT YOUR FINAL PICK JSON with confidence_tier field**
-(Refer to the RATIONALE FORMAT in the system prompt)
-══════════════════════════════════════════════════════════════════════
-`.trim();
-}
+Include all fields from your Pass 2.5 analysis plus final rationale.
+The confidence_score (0.50-0.95) replaces old confidence_tier (MAX/CORE/SPECULATIVE).
+</output_requirements>
 
-/**
- * Build the PASS 3 UNDERDOG CONVICTION message - For when Gary leans underdog
- * Injected when Underdog rating is significantly higher (Gap < -1.5)
- * 
- * @param {object} ratings - The parsed Pass 2.5 ratings
- * @param {string} homeTeam - Home team name
- * @param {string} awayTeam - Away team name
- */
-function buildPass3UnderdogConviction(ratings, homeTeam = '[HOME]', awayTeam = '[AWAY]') {
-  const favoriteTeam = ratings.favoriteTeam || 'Favorite';
-  const underdogTeam = ratings.underdogTeam || 'Underdog';
-  const gap = ratings.underdogRating - ratings.favoriteRating;
-  
-  // Build ML consideration section if underdog can win outright
-  const mlSection = ratings.underdogCanWinOutright ? `
-**🎯 MONEYLINE CONSIDERATION:**
-You indicated that ${underdogTeam} can WIN THIS GAME OUTRIGHT.
-Your reasoning: "${ratings.outrightWinReasoning || 'Path to outright win exists.'}"
+<instructions>
+## YOUR TASK
 
-**THE VALUE QUESTION: SPREAD OR MONEYLINE?**
-- **The Spread:** Insurance policy. You win if they win OR lose close. Lower payout.
-- **The Moneyline:** Bold play. If you believe they WIN, ML pays significantly more.
+OUTPUT YOUR FINAL PICK JSON NOW.
 
-**YOUR THESIS:**
-- If your case is "they stay competitive" → Take the Spread
-- If your case is "the favorite fails structurally" → Take the Moneyline
-
-You rated them ${ratings.underdogRating}/10. Consider whether your thesis is "they stay competitive" (spread) or "they win" (ML).
-` : '';
-
-  // Build variance section if high chaos
-  const varianceSection = ratings.varianceIndicator === 'HIGH' ? `
-**⚡ HIGH VARIANCE GAME:**
-You identified this as a chaotic, unpredictable matchup: "${ratings.varianceReasoning || 'Multiple chaos factors.'}"
-Consider how this uncertainty affects your conviction.
-` : '';
-  
-  return `
-══════════════════════════════════════════════════════════════════════
-## PASS 3 - FINAL DECISION (UNDERDOG CONVICTION)
-
-Your ratings show a clear lean: **${underdogTeam}: ${ratings.underdogRating}/10** vs ${favoriteTeam}: ${ratings.favoriteRating}/10 (Gap: +${gap.toFixed(1)} for underdog)
-
-**✅ GOOD - YOU FOUND EDGE ON THE UNCOMFORTABLE SIDE**
-
-Your analysis identified that the ${underdogTeam} case has more edge potential than the ${favoriteTeam} case. This is sharp thinking:
-- The favorite case likely just explains why the spread exists (public info)
-- The underdog case identifies something the line might be missing
-
-**YOUR REASONING:** "${ratings.reasoning || ''}"
-${varianceSection}${mlSection}
-
-**CONFIRMATION CHECK:**
-1. Does your ${underdogTeam} case identify a specific "missing piece"? (roster change, market overreaction, stale pricing)
-2. Is the ${favoriteTeam} case just "they're better" reasoning that's already in the spread?
-
-If YES to both → **You have the sharper side. Commit with conviction.**
-
-**🚨 CRITICAL - RATIONALE EXCLUSION RULE:**
-Your final rationale CANNOT include factors you flagged as "priced-in" in your audit:
-- If you flagged an injury as priced-in (out for weeks/months) → DO NOT mention it in your rationale
-- Example: If "Mixon out all season" was flagged → DO NOT write "without Mixon to stabilize..."
-- Example: If "Kessler out since November" was flagged → DO NOT write "without Kessler's rim protection..."
-- **These are CONTEXT, not reasons.** The line already accounts for them.
-- Your rationale should focus on the EDGE you identified, not priced-in factors.
-
-**CONFIDENCE TIER:**
-- **MAX:** Your case identifies SPECIFIC edge the line is missing (roster discontinuity, clear mispricing)
-- **CORE:** Strong edge hypothesis, some uncertainty
-- **SPECULATIVE:** Edge is possible but thesis is softer
-
-**FINAL COMMITMENT:**
-You identified edge on the uncomfortable side. That's where value lives. Make your pick.
-
-**OUTPUT YOUR FINAL PICK JSON with confidence_tier field**
-(Refer to the RATIONALE FORMAT in the system prompt)
-══════════════════════════════════════════════════════════════════════
-`.trim();
-}
-
-/**
- * Build the PASS 3 FAVORITE CONVICTION message - For when Gary leans favorite
- * Injected when Favorite rating is significantly higher (Gap > 1.5)
- * 
- * @param {object} ratings - The parsed Pass 2.5 ratings
- * @param {string} homeTeam - Home team name
- * @param {string} awayTeam - Away team name
- */
-function buildPass3FavoriteConviction(ratings, homeTeam = '[HOME]', awayTeam = '[AWAY]') {
-  const favoriteTeam = ratings.favoriteTeam || 'Favorite';
-  const underdogTeam = ratings.underdogTeam || 'Underdog';
-  const gap = ratings.favoriteRating - ratings.underdogRating;
-  
-  return `
-══════════════════════════════════════════════════════════════════════
-## PASS 3 - FINAL DECISION (FAVORITE CONVICTION)
-
-Your ratings lean toward the favorite: **${favoriteTeam}: ${ratings.favoriteRating}/10** vs ${underdogTeam}: ${ratings.underdogRating}/10 (Gap: ${gap.toFixed(1)})
-
-**🚨 BEFORE YOU COMMIT - THE SHARP THINKING CHECK:**
-
-You rated the favorite higher. This is the "comfortable" pick. Before committing, answer honestly:
-
-1. **Edge Check:** Is your ${favoriteTeam} case EXPLAINING the spread (public info) or FINDING edge against it?
-   - If your reasons are "they're better, opponent is bad, star player is good" → That's WHY the spread exists, not why it's wrong.
-
-2. **The 30-Second Test:** Could you explain this pick to a casual fan in 30 seconds?
-   - If YES → The market already knows this. Where's YOUR edge?
-
-3. **Compare the Cases:** Look back at BOTH Steel Man cases:
-   - Which case identifies a specific "missing piece" the line might not reflect?
-   - Which case just describes team quality everyone knows?
-   - **The sharper case wins** - even if it's the uncomfortable side.
-
-4. **Discomfort Audit:** Is the ${underdogTeam} case actually sharper but you rated it lower because betting on them feels wrong?
-   - If your ${underdogTeam} case identifies roster changes, market overreaction, or specific mispricing → that's sharper than "favorite is better."
-
-**🚨 CRITICAL - RATIONALE EXCLUSION RULE:**
-Your final rationale CANNOT include factors you flagged as "priced-in" in your audit:
-- If you flagged an injury as priced-in (out for weeks/months) → DO NOT mention it in your rationale
-- Example: "Mixon out all season" → DO NOT write "without Mixon..."
-- Example: "Kessler out since November" → DO NOT write "without Kessler..."
-- **These are CONTEXT, not reasons.** The line already accounts for them.
-
-**IF YOUR FAVORITE CASE IS JUST EXPLAINING THE SPREAD:**
-→ Consider whether the underdog case actually has more edge potential
-→ It's okay to change your pick if the sharper reasoning is on the other side
-
-**CONFIDENCE TIER:**
-- **MAX:** Your case identifies SPECIFIC edge the line is missing
-- **CORE:** Strong case, some edge potential  
-- **SPECULATIVE:** Mostly public info, limited edge
-
-**OUTPUT YOUR FINAL PICK JSON with confidence_tier field**
-(Refer to the RATIONALE FORMAT in the system prompt)
-══════════════════════════════════════════════════════════════════════
-`.trim();
-}
-
-/**
- * Build the PASS 3 LOW CONVICTION message - When neither path is believable
- * Injected when both ratings are < 5
- * 
- * @param {object} ratings - The parsed Pass 2.5 ratings
- * @param {string} homeTeam - Home team name
- * @param {string} awayTeam - Away team name
- */
-function buildPass3ConsiderPass(ratings, homeTeam = '[HOME]', awayTeam = '[AWAY]') {
-  const favoriteTeam = ratings.favoriteTeam || 'Favorite';
-  const underdogTeam = ratings.underdogTeam || 'Underdog';
-  
-  // High variance might still be playable
-  const varianceSection = ratings.varianceIndicator === 'HIGH' ? `
-**⚡ HIGH VARIANCE NOTE:**
-You marked this as a chaotic game. In chaos, the underdog often has hidden value even when neither side looks "good." Consider a small SPECULATIVE play on the dog.
-` : '';
-  
-  return `
-══════════════════════════════════════════════════════════════════════
-## PASS 3 - FINAL DECISION (LOW CONVICTION DETECTED)
-
-You rated both paths below 5/10 (**${favoriteTeam}: ${ratings.favoriteRating}** and **${underdogTeam}: ${ratings.underdogRating}**). 
-
-This means your investigation has uncovered significant flaws or high volatility for BOTH sides. You don't truly believe in either "Story."
-
-**YOUR OPTIONS:** 
-${varianceSection}
-1. **PASS:** If you don't have conviction, PASS is valid.
-2. **Pick a side:** If you see a reason to pick despite low ratings, explain your reasoning.
-
-**YOUR TASK:**
-Decide if there is a "hidden" factor you missed, or if this game is simply too unpredictable. If you choose to pick a side, explain why you are overriding your low conviction.
-
-**🚨 RATIONALE EXCLUSION:** Do NOT mention priced-in injuries (players out for weeks/months) in your rationale.
-
-**OUTPUT YOUR FINAL JSON (Pick can be "PASS")**
-If betting, set confidence_tier to "SPECULATIVE" and explain the chaos play.
-(Refer to the RATIONALE FORMAT in the system prompt)
-══════════════════════════════════════════════════════════════════════
-`.trim();
-}
-
-/**
- * Build the PASS 3 message when favorite has clear edge (gap > 1.5)
- * This is the standard Pass 3 but acknowledges Gary's conviction
- * 
- * @param {object} ratings - The parsed Pass 2.5 ratings
- * @param {string} homeTeam - Home team name
- * @param {string} awayTeam - Away team name
- */
-function buildPass3WithConviction(ratings, homeTeam = '[HOME]', awayTeam = '[AWAY]') {
-  const favoriteTeam = ratings.favoriteTeam || 'Favorite';
-  const underdogTeam = ratings.underdogTeam || 'Underdog';
-  const gap = Math.abs(ratings.favoriteRating - ratings.underdogRating);
-  const strongerSide = ratings.favoriteRating > ratings.underdogRating ? favoriteTeam : underdogTeam;
-  const strongerRating = Math.max(ratings.favoriteRating, ratings.underdogRating);
-  const weakerRating = Math.min(ratings.favoriteRating, ratings.underdogRating);
-  
-  return `
-══════════════════════════════════════════════════════════════════════
-## PASS 3 - FINAL DECISION (CONVICTION DETECTED)
-
-Your conviction ratings show a clear lean: **${favoriteTeam}: ${ratings.favoriteRating}/10** vs **${underdogTeam}: ${ratings.underdogRating}/10** (Gap: ${gap.toFixed(1)})
-
-You believe **${strongerSide}** has the more believable path (${strongerRating}/10 vs ${weakerRating}/10).
-
-**YOUR REASONING:** "${ratings.reasoning || 'One side has clearer advantages'}"
-
-**BEFORE YOU COMMIT - FINAL CHECKS:**
-
-1. **SPREAD VALUE CHECK:**
-   - If backing the favorite: Is a ${gap.toFixed(1)}-point conviction gap worth giving up points?
-   - If backing the underdog: Does their path hold up even with less conviction?
-
-2. **DOMINATION CHECK (if picking favorite):**
-   - Will they win by MORE than the spread?
-   - Can the underdog really not stay competitive?
-
-3. **PRIMARY DRIVER CHECK:**
-   - Is there ONE factor that you believe is most decisive in this game?
-   - Did you account for that in your ratings?
-
-**THE DECISION:**
-Your analysis points toward **${strongerSide}**. If that aligns with your gut AND the spread value, commit fully.
-
-If something feels off, explain what it is. Trust your process.
-
-**OUTPUT YOUR FINAL PICK JSON**
-(Refer to the RATIONALE FORMAT in the system prompt)
-══════════════════════════════════════════════════════════════════════
+Use the format from the system prompt's RATIONALE FORMAT section.
+All analysis is complete - just finalize and output.
+</instructions>
 `.trim();
 }
 
@@ -2757,13 +3184,18 @@ If something feels off, explain what it is. Trust your process.
  * Injected at iteration 3-4 to force Gary to synthesize before context overload
  */
 function buildMidInvestigationSynthesis(statsCalledSoFar, homeTeam, awayTeam) {
+  // ═══════════════════════════════════════════════════════════════════════════
+  // GEMINI 3 OPTIMIZED: XML-tagged structure with END-OF-PROMPT instruction
+  // ═══════════════════════════════════════════════════════════════════════════
   return `
-══════════════════════════════════════════════════════════════════════
-## MID-INVESTIGATION SYNTHESIS (PREVENT CONTEXT OVERLOAD)
+<synthesis_context>
+## MID-INVESTIGATION SYNTHESIS
 
-You've called ${statsCalledSoFar} stats. Before continuing, take a moment to SYNTHESIZE.
+You've called ${statsCalledSoFar} stats. Time to synthesize before context overload.
+</synthesis_context>
 
-**ANSWER THESE QUESTIONS (in your thinking):**
+<synthesis_questions>
+## QUESTIONS TO ANSWER (in your thinking)
 
 1. **WHAT FACTORS WILL ACTUALLY DECIDE THIS GAME TONIGHT?**
    - Not "who is the better team on paper"
@@ -2771,106 +3203,27 @@ You've called ${statsCalledSoFar} stats. Before continuing, take a moment to SYN
    - These are your "LEVERS OF VICTORY" - could be 1, could be 5
 
 2. **WHAT IS THE STRONGEST CASE FOR EACH SIDE?**
-   - ${homeTeam}: What factors are most compelling for this side?
-   - ${awayTeam}: What factors are most compelling for this side?
+   - ${homeTeam}: What factors are most compelling?
+   - ${awayTeam}: What factors are most compelling?
 
 3. **WHAT QUESTIONS REMAIN UNANSWERED?**
    - Is there a trigger you haven't investigated yet?
    - Is there a key player log you need?
    - Is there a matchup detail you're missing?
+</synthesis_questions>
 
-**ACTION:**
-- If you have unanswered questions → Call more stats
-- If you feel confident you've identified the key drivers → Proceed to build your case
-- Consider: Not all factors are equal - decide which ones matter most for THIS game
+<instructions>
+## YOUR TASK
+
+Using your synthesis above, decide your next action:
+
+- **IF unanswered questions remain** - Call more stats NOW
+- **IF you've identified the key drivers** → Proceed to build your Steel Man cases
 
 **THE QUESTION:** What do you predict will happen tonight?
-══════════════════════════════════════════════════════════════════════
-`.trim();
-}
 
-/**
- * Build the DEVIL'S ADVOCATE message - Self-fact-check after picking
- * Forces Gary to argue against his own conclusion before finalizing
- * 
- * CRITICAL: Includes current date context so Gemini uses TODAY's data,
- * not training data from past seasons
- */
-function buildDevilsAdvocateMessage(pick, homeTeam, awayTeam, sport = 'NBA', toolCallHistory = []) {
-  const pickSide = pick.pick || 'UNKNOWN';
-  const rationale = (pick.rationale || '').substring(0, 400);
-  
-  // Get current date for context
-  const today = new Date().toLocaleDateString('en-US', { 
-    weekday: 'long', 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric' 
-  });
-  
-  // Build list of stats already called for reference
-  const statsAlreadyCalled = toolCallHistory.length > 0 
-    ? toolCallHistory.map(t => t.token).join(', ')
-    : 'No stats recorded';
-  
-  return `
-══════════════════════════════════════════════════════════════════════
-## DEVIL'S ADVOCATE SELF-CHECK (FINAL STEP)
-
-⚠️ **CRITICAL CONTEXT: Today is ${today}. This is the 2025-26 ${sport} season.**
-Use ONLY the data you gathered from stat calls in this analysis. 
-DO NOT use training data or past season information.
-
-**Game:** ${awayTeam} @ ${homeTeam}
-**Your Pick:** ${pickSide}
-**Your Rationale:** "${rationale}..."
-
-**STATS YOU'VE ALREADY CALLED:** ${statsAlreadyCalled}
-
-**NOW ARGUE AGAINST YOURSELF:**
-
-1. **STRONGEST COUNTER-ARGUMENT:**
-   What is the BEST argument that ${pickSide} is WRONG?
-   - Not a weak strawman - the REAL risk that could sink this bet
-   - Did you investigate this concern with actual stat calls?
-
-2. **THE "TRAP" CHECK:**
-   - If everyone would pick ${pickSide}, why is the line where it is?
-   - What does the other side see that you might be missing?
-
-3. **🎯 THE KEY FACTOR TEST:**
-   - Are there factors on the other side compelling enough to flip your pick?
-   - **YOU CAN CALL STATS** to verify concerns
-
-4. **INVESTIGATE OR CONFIRM:**
-   - If you find a concern you DIDN'T investigate → **Call that stat NOW** (tools are available!)
-   - If you investigated and dismissed it → Explain WHY it's noise, not signal
-
-**RESPOND WITH:**
-- **"VALIDATED"** + brief explanation if your pick stands after this self-check
-- **"REVISED"** + new pick JSON **ONLY IF** you can cite the stat that justifies the flip
-
-═══════════════════════════════════════════════════════════════════════
-⚠️ **CRITICAL: DATA-BACKED FLIPS ONLY**
-═══════════════════════════════════════════════════════════════════════
-If you want to REVISE your pick, you MUST include:
-  "data_citation": "STAT_NAME: [specific value] justifies flip"
-
-Examples of VALID revisions:
-  - "REVISED - PLAYER_GAME_LOGS shows Banchero averaging 28.5 PPG L5, justifies -7.5"
-  - "REVISED - H2H_HISTORY shows Team A is 4-0 vs Team B this season"
-  - "REVISED - NET_RATING shows +8.2 differential, trumps injury concerns"
-
-Examples of INVALID revisions (will be REJECTED):
-  - "REVISED - Banchero is too talented" (NO DATA CITED)
-  - "REVISED - I feel the other side has value" (NO DATA CITED)
-  - "REVISED - Star power advantage" (NARRATIVE, NOT DATA)
-
-**If you cannot cite a specific stat, you CANNOT flip. VALIDATED is the default.**
-═══════════════════════════════════════════════════════════════════════
-
-⚠️ **USE ONLY 2025-26 SEASON DATA FROM YOUR STAT CALLS. NO TRAINING DATA.**
-══════════════════════════════════════════════════════════════════════
+CONTINUE YOUR ANALYSIS NOW.
+</instructions>
 `.trim();
 }
 
@@ -3167,18 +3520,17 @@ async function callGeminiWithRetry(messages, tools, modelName, maxRetries = 3, c
  */
 function determineCurrentPass(messages) {
   // Check from most recent to oldest
+  // FIXED: Check for both "FINAL DECISION" (old) and "FINAL OUTPUT" (new buildPass3Unified format)
   const hasPass3 = messages.some(m => 
-    m.content?.includes('PASS 3 - FINAL') || 
-    m.content?.includes('TOSS-UP DETECTED') || 
-    m.content?.includes('CONVICTION DETECTED') ||
-    m.content?.includes('LOW CONVICTION DETECTED')
+    m.content?.includes('PASS 3 - FINAL DECISION') || m.content?.includes('PASS 3 - FINAL OUTPUT')
   );
   if (hasPass3) return 'final_decision';
   
   const hasPass25 = messages.some(m => m.content?.includes('PASS 2.5 - CONVICTION ASSESSMENT'));
   if (hasPass25) return 'conviction_rating';
   
-  const hasPass2 = messages.some(m => m.content?.includes('PASS 2 - EVIDENCE GATHERING'));
+  // FIXED: Check for actual output string from buildPass2Message
+  const hasPass2 = messages.some(m => m.content?.includes('PASS 2 - STEEL MAN') || m.content?.includes('PASS 2 - EVIDENCE GATHERING'));
   if (hasPass2) return 'steel_man';
   
   // Default to investigation (Pass 1)
@@ -3187,7 +3539,12 @@ function determineCurrentPass(messages) {
 
 /**
  * Run the agent loop - handles tool calls and conversation flow
- * Uses sport-based provider routing: NBA→GPT-5.1, Others→Gemini 3 Deep Think
+ * 
+ * GEMINI 3 ARCHITECTURE (2026 Update):
+ * - Uses PERSISTENT chat sessions for automatic thought signature handling
+ * - Flash session for Investigation + Steel Man (Pass 1-2)
+ * - Pro session for Grading + Final Decision (Pass 2.5-3) for NBA/NFL/NHL
+ * - NCAAB stays on Flash throughout (high volume)
  * 
  * @param {string} systemPrompt - The system prompt
  * @param {string} userMessage - The user message (scout report + game context)
@@ -3200,18 +3557,45 @@ function determineCurrentPass(messages) {
 async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam, options = {}) {
   // Sport-based provider routing
   const provider = getProviderForSport(sport);
-  const model = getModelForProvider(provider, sport);
+  const initialModel = getModelForProvider(provider, sport);
   
   // Check if we're using shared messages (session mode for true memory)
   const isSessionMode = !!options.sharedMessages;
   
-  console.log(`[Orchestrator] Using ${provider.toUpperCase()} (${model}) for ${sport}${isSessionMode ? ' [SESSION MODE]' : ''}`);
+  // Determine if this sport uses Pro for grading/decision phases
+  const useProForGrading = sportUsesPro(sport);
+  
+  const isNFLSport = sport === 'americanfootball_nfl' || sport === 'NFL';
+  console.log(`[Orchestrator] Using ${provider.toUpperCase()} for ${sport}${isSessionMode ? ' [SESSION MODE]' : ''}`);
+  console.log(`[Orchestrator] Model strategy: Flash for investigation${isNFLSport && useProForGrading ? ', Pro for Steel Man + grading/decision' : useProForGrading ? ', Pro for grading/decision' : ' (all phases)'}`);
 
-  // In session mode, append to shared history; otherwise create fresh
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PERSISTENT SESSION SETUP (Gemini 3 Thought Signature Compliance)
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Create Flash session for investigation phase
+  // SDK automatically handles thought signatures when using persistent sessions
+  let currentSession = null;
+  let currentModelName = initialModel;
+  let hasSwichedToPro = false;
+  
+  if (provider === 'gemini') {
+    // OPTIMIZATION: Use 'low' thinking for investigation (tool calling)
+    // Save 'high' reasoning for Steel Man, Pass 2.5 grading, and final decision
+    currentSession = createGeminiSession({
+      modelName: 'gemini-3-flash-preview',
+      systemPrompt: systemPrompt,
+      tools: toolDefinitions,
+      thinkingLevel: 'low'  // Low reasoning for stat fetching - no deep thinking needed
+    });
+    currentModelName = currentSession.modelName;
+    console.log(`[Orchestrator] 🚀 Flash session created for investigation phase (low reasoning)`);
+  }
+
+  // Messages array for state tracking (pass detection, steel man capture)
+  // Note: For Gemini, actual API calls go through the persistent session
   let messages;
   if (isSessionMode) {
     messages = options.sharedMessages;
-    // Only add user message (system already in session)
     messages.push({ role: 'user', content: userMessage });
     console.log(`[Orchestrator] Session history: ${messages.length} messages`);
   } else {
@@ -3223,94 +3607,279 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
 
   let iteration = 0;
   const toolCallHistory = [];
+  
+  // Store full steel man cases for transparency/debugging
+  let steelManCases = {
+    homeTeamCase: null,
+    awayTeamCase: null,
+    capturedAt: null
+  };
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PERSISTENT SESSION STATE TRACKING
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Track what message to send next (for persistent session approach)
+  // First iteration: send userMessage
+  // Subsequent: send function responses OR pass transition messages
+  let nextMessageToSend = userMessage;
+  let pendingFunctionResponses = []; // Batched function responses to send
 
   while (iteration < CONFIG.maxIterations) {
     iteration++;
-    console.log(`\n[Orchestrator] Iteration ${iteration}/${CONFIG.maxIterations} (${provider})`);
+    console.log(`\n[Orchestrator] Iteration ${iteration}/${CONFIG.maxIterations} (${provider}, ${currentModelName})`);
     
     // Get the spread for Pass 2/2.5 context injection (available throughout loop)
     const gameSpread = options.spread || 0;
 
     let response;
+    let message;
+    let finishReason;
     
-    if (provider === 'gemini') {
-      // Determine current pass for temperature selection
+    if (provider === 'gemini' && currentSession) {
+      // ═══════════════════════════════════════════════════════════════════════
+      // PERSISTENT SESSION API CALL (Gemini 3 with thought signature handling)
+      // ═══════════════════════════════════════════════════════════════════════
       const currentPass = determineCurrentPass(messages);
-      // Call Gemini 3 Deep Think with tools (with retry for transient server errors)
-      response = await callGeminiWithRetry(messages, toolDefinitions, model, 3, currentPass);
+      
+      try {
+        let sessionResponse;
+        
+        if (pendingFunctionResponses.length > 0) {
+          // Step 1: Send batched function responses
+          console.log(`[Orchestrator] Sending ${pendingFunctionResponses.length} function response(s) to session`);
+          sessionResponse = await sendToSessionWithRetry(
+            currentSession, 
+            pendingFunctionResponses, 
+            { isFunctionResponse: true }
+          );
+          pendingFunctionResponses = []; // Clear after sending
+          
+          // Step 2: Check if Gary responded without tool calls AND we have a pass message queued
+          // If so, send the pass message immediately as a follow-up
+          const hasQueuedPassMessage = nextMessageToSend && nextMessageToSend !== userMessage && 
+            (nextMessageToSend.includes('PASS 2') || nextMessageToSend.includes('STEEL MAN') || 
+             nextMessageToSend.includes('PASS 2.5') || nextMessageToSend.includes('CASE GRADING'));
+          
+          if (!sessionResponse.toolCalls && hasQueuedPassMessage) {
+            console.log(`[Orchestrator] 📝 Sending queued pass message after function responses`);
+            // Send the pass message as follow-up
+            sessionResponse = await sendToSessionWithRetry(currentSession, nextMessageToSend);
+            nextMessageToSend = null; // Clear after sending
+          }
+          
+        } else {
+          // Send text message (user message or pass transition)
+          if (!nextMessageToSend) {
+            console.log(`[Orchestrator] ⚠️ No message to send - using fallback prompt`);
+            nextMessageToSend = `Continue with your analysis. If you have enough data, proceed to write your Steel Man cases or provide your final pick.`;
+          }
+          sessionResponse = await sendToSessionWithRetry(currentSession, nextMessageToSend);
+        }
+        
+        // Convert session response to OpenAI-compatible format for downstream code
+        message = {
+          role: 'assistant',
+          content: sessionResponse.content,
+          tool_calls: sessionResponse.toolCalls
+        };
+        finishReason = sessionResponse.finishReason;
+        
+        // Log token usage
+        if (sessionResponse.usage) {
+          console.log(`[Orchestrator] Tokens - Prompt: ${sessionResponse.usage.prompt_tokens}, Completion: ${sessionResponse.usage.completion_tokens}`);
+        }
+        
+        // Add assistant message to messages array for state tracking
+        if (message.content || message.tool_calls) {
+          messages.push(message);
+        }
+        
+      } catch (error) {
+        // Handle quota errors with Flash fallback (for Pro)
+        if (error.isQuotaError && currentModelName === 'gemini-3-pro-preview') {
+          console.log(`[Orchestrator] ⚠️ Pro quota exceeded - falling back to Flash`);
+          
+          // Extract textual context to pass to Flash
+          const textualContext = extractTextualSummaryForModelSwitch(messages, steelManCases);
+          
+          // Create new Flash session for fallback
+          currentSession = createGeminiSession({
+            modelName: 'gemini-3-flash-preview',
+            systemPrompt: systemPrompt + '\n\n' + textualContext,
+            tools: currentPass === 'conviction_rating' || currentPass === 'final_decision' ? [] : toolDefinitions,
+            thinkingLevel: 'high'
+          });
+          currentModelName = 'gemini-3-flash-preview';
+          hasSwichedToPro = false; // Went back to Flash
+          
+          console.log(`[Orchestrator] 🔄 Created fallback Flash session, retrying...`);
+          
+          // Retry with new session
+          const retryResponse = await sendToSessionWithRetry(currentSession, nextMessageToSend);
+          message = {
+            role: 'assistant',
+            content: retryResponse.content,
+            tool_calls: retryResponse.toolCalls
+          };
+          finishReason = retryResponse.finishReason;
+          
+          if (message.content || message.tool_calls) {
+            messages.push(message);
+          }
+        } else {
+          throw error;
+        }
+      }
+      
+    } else if (provider === 'gemini') {
+      // Fallback to old method if session not available (shouldn't happen)
+      const currentPass = determineCurrentPass(messages);
+      response = await callGeminiWithRetry(messages, toolDefinitions, currentModelName, 3, currentPass);
+      message = response.choices[0].message;
+      finishReason = response.choices[0].finish_reason;
+      
+      if (response.usage) {
+        console.log(`[Orchestrator] Tokens - Prompt: ${response.usage.prompt_tokens}, Completion: ${response.usage.completion_tokens}`);
+      }
     } else {
       // Call OpenAI/GPT-5.1 with tools
       response = await getOpenAI().chat.completions.create({
-        model: model,
+        model: currentModelName,
         messages,
         tools: toolDefinitions,
         tool_choice: 'auto',
         max_completion_tokens: CONFIG.maxTokens,
         reasoning_effort: CONFIG.openai.reasoning.effort
       });
+      message = response.choices[0].message;
+      finishReason = response.choices[0].finish_reason;
+      
+      if (response.usage) {
+        console.log(`[Orchestrator] Tokens - Prompt: ${response.usage.prompt_tokens}, Completion: ${response.usage.completion_tokens}`);
+      }
     }
 
-    const message = response.choices[0].message;
-    const finishReason = response.choices[0].finish_reason;
-
-    // Log token usage
-    if (response.usage) {
-      console.log(`[Orchestrator] Tokens - Prompt: ${response.usage.prompt_tokens}, Completion: ${response.usage.completion_tokens}`);
-    }
-
-    // STEEL MAN LOGGING: After Pass 2, log Gary's bilateral analysis
-    if (iteration === 2 && message.content) {
+    // STEEL MAN CAPTURE: Extract and store Gary's bilateral analysis when it appears
+    // Cases can appear in any iteration (typically around iteration 4-5), not just iteration 2
+    if (message.content && !steelManCases.capturedAt) {
       const content = message.content;
       
-      // Extract "Case for [Team]" sections
-      const homeMatch = content.match(/(?:Case for|CASE FOR)[:\s]+([^\n]+)[\s\S]*?(?=(?:Case for|CASE FOR)|$)/i);
-      const awayMatch = content.match(/(?:Case for|CASE FOR)[:\s]+([^\n]+)[\s\S]*?(?=(?:Case for|CASE FOR)|$)/gi);
+      // Extract FULL "Case for [Team]" sections using improved regex
+      // Match "CASE FOR [Team Name]" followed by content until the next "CASE FOR" or end markers
+      const casePattern = /(?:\*\*)?(?:Case for|CASE FOR)[:\s*]+([^\n*]+)[\s\S]*?(?=(?:\*\*)?(?:Case for|CASE FOR)|###|---|\n## |$)/gi;
+      const caseMatches = [...content.matchAll(casePattern)];
       
-      if (homeMatch || awayMatch) {
+      if (caseMatches.length >= 2) {
         console.log(`\n┌─────────────────────────────────────────────────────────────────┐`);
-        console.log(`│  📊 STEEL MAN ANALYSIS (Pass 2)                                 │`);
+        console.log(`│  📊 STEEL MAN CASES CAPTURED (Iteration ${iteration})                      │`);
         console.log(`├─────────────────────────────────────────────────────────────────┤`);
         
-        // Extract both cases from content
-        const caseMatches = content.match(/(?:Case for|CASE FOR)[:\s]+[^\n]+[\s\S]*?(?=(?:Case for|CASE FOR)|###|$)/gi);
-        if (caseMatches) {
-          caseMatches.slice(0, 2).forEach((caseText, idx) => {
-            const teamLabel = idx === 0 ? '🏠 HOME' : '✈️ AWAY';
-            const preview = caseText.substring(0, 300).replace(/\n/g, ' ').trim();
-            console.log(`│  ${teamLabel}: ${preview}...`);
-            console.log(`│`);
-          });
-        }
+        // Determine which case is home vs away based on team names
+        const fullCases = caseMatches.slice(0, 2).map(match => match[0].trim());
         
+        // Try to identify which is home/away by checking team names
+        const case1Lower = fullCases[0].toLowerCase();
+        const case2Lower = fullCases[1].toLowerCase();
+        const homeTeamLower = homeTeam.toLowerCase();
+        const awayTeamLower = awayTeam.toLowerCase();
+        
+        // Check which case mentions which team in the header
+        const case1IsHome = case1Lower.includes(homeTeamLower.split(' ').pop()) || 
+                           (homeTeamLower.split(' ').some(w => w.length > 3 && case1Lower.substring(0, 100).includes(w)));
+        
+        if (case1IsHome) {
+          steelManCases.homeTeamCase = fullCases[0];
+          steelManCases.awayTeamCase = fullCases[1];
+        } else {
+          steelManCases.awayTeamCase = fullCases[0];
+          steelManCases.homeTeamCase = fullCases[1];
+        }
+        steelManCases.capturedAt = new Date().toISOString();
+        
+        // Log preview of each case
+        console.log(`│  🏠 ${homeTeam}: ${steelManCases.homeTeamCase?.substring(0, 150).replace(/\n/g, ' ')}...`);
+        console.log(`│`);
+        console.log(`│  ✈️ ${awayTeam}: ${steelManCases.awayTeamCase?.substring(0, 150).replace(/\n/g, ' ')}...`);
+        console.log(`│`);
+        console.log(`│  ✅ Full cases captured (${steelManCases.homeTeamCase?.length || 0} + ${steelManCases.awayTeamCase?.length || 0} chars)`);
         console.log(`└─────────────────────────────────────────────────────────────────┘\n`);
-      } else {
-        console.log(`[Pass 2] ⚠️ Steel Man cases not found in response - Gary may have skipped bilateral analysis`);
       }
     }
 
     // Handle empty response from Gemini (common when model is confused)
     if (provider === 'gemini' && !message.content && !message.tool_calls) {
-      console.log(`[Orchestrator] ⚠️ Gemini returned empty response - prompting for more stats`);
+      // Check what pass we're in to provide appropriate nudge
+      const pass2WasInjected = messages.some(m => m.content?.includes('PASS 2 - STEEL MAN') || m.content?.includes('STEEL MAN ANALYSIS'));
+      const pass25WasInjected = messages.some(m => m.content?.includes('PASS 2.5') || m.content?.includes('CASE GRADING'));
       
-      // Add a nudge to get Gemini back on track
-      messages.push({
-        role: 'user',
-        content: `I notice you didn't respond. Please use the get_stat tool to request stats for this matchup. You've gathered ${toolCallHistory.length} stats so far. Request more stats like PACE, RECENT_FORM, or TURNOVER_STATS to complete your analysis.`
-      });
+      let nudgeContent;
+      
+      if (pass25WasInjected) {
+        // Pass 2.5 already sent - need ratings/decision, not stats
+        console.log(`[Orchestrator] ⚠️ Gemini returned empty response after Pass 2.5 - requesting grading output`);
+        nudgeContent = `You didn't provide a response. Please complete your Pass 2.5 analysis NOW:
+
+1. Grade BOTH Steel Man cases (1.0-10.0 scale)
+2. Complete the stress test
+3. Output your final_pick JSON with confidence_score
+
+Do NOT call any more stats. Provide your analysis and pick NOW.`;
+      } else if (pass2WasInjected) {
+        // Pass 2 already sent - need Steel Man cases, not stats
+        console.log(`[Orchestrator] ⚠️ Gemini returned empty response after Pass 2 - requesting Steel Man cases`);
+        nudgeContent = `You didn't provide a response. You have enough data (${toolCallHistory.length} stats gathered).
+
+**WRITE YOUR STEEL MAN CASES NOW:**
+1. **CASE FOR ${homeTeam}:** 3-4 paragraphs with mechanism, data, and path to covering
+2. **CASE FOR ${awayTeam}:** 3-4 paragraphs with mechanism, data, and path to covering
+
+Do NOT request more stats. Write your analysis NOW using the data you already have.`;
+      } else {
+        // Still in investigation phase - okay to request more stats
+        console.log(`[Orchestrator] ⚠️ Gemini returned empty response - prompting for more stats`);
+        nudgeContent = `I notice you didn't respond. Please use the get_stat tool to request stats for this matchup. You've gathered ${toolCallHistory.length} stats so far. Request more stats like PACE, RECENT_FORM, or TURNOVER_STATS to complete your analysis.`;
+      }
+      
+      messages.push({ role: 'user', content: nudgeContent });
+      
+      // For persistent session, set next message to send
+      nextMessageToSend = nudgeContent;
       continue;
     }
 
     // Check if Gary requested tool calls
     if (message.tool_calls && message.tool_calls.length > 0) {
-      // Deduplicate tool calls - Gemini sometimes requests the same stat multiple times
+      // Build set of ALREADY FETCHED stats from history (across all iterations)
+      const alreadyFetchedStats = new Set(
+        toolCallHistory.map(t => {
+          // Create key from token or player stat type
+          const token = t.token || '';
+          // Extract base token (e.g., "NHL_PLAYER_STATS:goals" -> "NHL_PLAYER_STATS:goals")
+          return token.split(':')[0] || token;
+        }).filter(Boolean)
+      );
+      
+      // Deduplicate tool calls - both within this batch AND against history
       const seenStats = new Set();
+      const skippedDuplicates = [];
+      
       const uniqueToolCalls = message.tool_calls.filter(tc => {
         try {
           const args = JSON.parse(tc.function.arguments);
           // Key based on function name + stat identifier (token for fetch_stats, stat_type for player stats)
-          const key = `${tc.function.name}:${args.token || args.stat_type || 'unknown'}`;
+          const token = args.token || args.stat_type || 'unknown';
+          const key = `${tc.function.name}:${token}`;
+          
+          // Check if already fetched in previous iterations
+          if (alreadyFetchedStats.has(token) || alreadyFetchedStats.has(key)) {
+            skippedDuplicates.push(token);
+            return false; // Skip - already have this data
+          }
+          
+          // Check if duplicate within this batch
           if (seenStats.has(key)) {
-            return false; // Skip duplicate
+            skippedDuplicates.push(token);
+            return false; // Skip duplicate in batch
           }
           seenStats.add(key);
           return true;
@@ -3321,13 +3890,12 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
       
       const dupeCount = message.tool_calls.length - uniqueToolCalls.length;
       if (dupeCount > 0) {
-        console.log(`[Orchestrator] Deduplicated ${dupeCount} duplicate stat request(s)`);
+        console.log(`[Orchestrator] Deduplicated ${dupeCount} duplicate stat request(s): ${skippedDuplicates.slice(0, 5).join(', ')}${skippedDuplicates.length > 5 ? '...' : ''}`);
       }
       
       console.log(`[Orchestrator] Gary requested ${uniqueToolCalls.length} stat(s):`);
 
-      // Add Gary's message to history (with all calls for context)
-      messages.push(message);
+      // Note: Assistant message already added to messages array after API call (for session tracking)
 
       // Process each unique tool call
       for (const toolCall of uniqueToolCalls) {
@@ -3345,7 +3913,7 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
             // Gary decides what matters based on the data returned
             
             const searchResult = await geminiGroundingSearch(args.query, {
-              temperature: 0.1,
+              temperature: 1.0,
               maxTokens: 1000
             });
 
@@ -3961,7 +4529,6 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
           if (v.includes('nfl')) return 'NFL';
           if (v.includes('nba')) return 'NBA';
           if (v.includes('nhl')) return 'NHL';
-          if (v.includes('epl')) return 'EPL';
           // Tool schema uses these values; fall back to NBA
           return 'NBA';
         };
@@ -4069,10 +4636,12 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
       const { covered, missing, coverage, totalFactors } = factorStatus;
       
       // Track if we've already injected certain passes
-      const pass2AlreadyInjected = messages.some(m => m.content?.includes('PASS 2 - EVIDENCE GATHERING'));
-      const pass25AlreadyInjected = messages.some(m => m.content?.includes('PASS 2.5 - CONVICTION ASSESSMENT'));
+      // FIXED: Check for actual output string from buildPass2Message
+      const pass2AlreadyInjected = messages.some(m => m.content?.includes('PASS 2 - STEEL MAN') || m.content?.includes('PASS 2 - EVIDENCE GATHERING'));
+      const pass25AlreadyInjected = messages.some(m => m.content?.includes('PASS 2.5 - CASE GRADING') || m.content?.includes('PASS 2.5 - CONVICTION ASSESSMENT'));
       const synthAlreadyInjected = messages.some(m => m.content?.includes('MID-INVESTIGATION SYNTHESIS'));
-      const pass3AlreadyInjected = messages.some(m => m.content?.includes('PASS 3 - FINAL') || m.content?.includes('TOSS-UP DETECTED') || m.content?.includes('CONVICTION DETECTED'));
+      // FIXED: Check for both "FINAL DECISION" (old) and "FINAL OUTPUT" (new buildPass3Unified format)
+      const pass3AlreadyInjected = messages.some(m => m.content?.includes('PASS 3 - FINAL DECISION') || m.content?.includes('PASS 3 - FINAL OUTPUT'));
       
       // Check if Gary completed Steel Man analysis (look for bilateral case sections in recent assistant messages)
       const recentAssistantMessages = messages.filter(m => m.role === 'assistant' && m.content).slice(-5);
@@ -4101,7 +4670,7 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
       let pass25Ratings = null;
       if (pass25AlreadyInjected && !pass3AlreadyInjected) {
         // Look for ratings in Gary's responses AFTER Pass 2.5 was injected
-        const pass25Index = messages.findIndex(m => m.content?.includes('PASS 2.5 - CONVICTION ASSESSMENT'));
+        const pass25Index = messages.findIndex(m => m.content?.includes('PASS 2.5 - CASE GRADING') || m.content?.includes('PASS 2.5 - CONVICTION ASSESSMENT'));
         if (pass25Index > -1) {
           const responsesAfter25 = messages.slice(pass25Index + 1).filter(m => m.role === 'assistant' && m.content);
           for (const response of responsesAfter25) {
@@ -4121,44 +4690,65 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
         console.log(`[Orchestrator] Missing factors: ${missing.join(', ')}`);
       }
       
-      // FACTOR-BASED PHASE TRIGGERS (not arbitrary counts):
-      // - <50% coverage: Keep investigating
-      // - 50-80% coverage: Can start Steel Man analysis while continuing
-      // - 80%+ coverage: Should be wrapping up investigation
+      // FACTOR-BASED PHASE TRIGGERS (80% minimum before Steel Man):
+      // - <80% coverage: Keep investigating, nudge for more
+      // - 80%+ coverage: Ready for Steel Man analysis
       // - 100% coverage: Ready for final synthesis
       
-      if (iteration === 1 && coverage >= 0.5) {
-        // Covered at least half the factors - inject Pass 2 (Steel Man)
+      if (coverage >= 0.8 && !pass2AlreadyInjected && !steelManCompleted) {
+        // 80%+ coverage reached - NOW inject Pass 2 (Steel Man)
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // NFL SPECIAL: Switch to Pro for Steel Man cases (not just grading)
+        // NFL games are high-stakes and limited - use Pro's deep reasoning for case building
+        // ═══════════════════════════════════════════════════════════════════════
+        const isNFLForProSwitch = sport === 'americanfootball_nfl' || sport === 'NFL';
+        if (provider === 'gemini' && isNFLForProSwitch && useProForGrading && !hasSwichedToPro) {
+          console.log(`[Orchestrator] 🏈 NFL: Switching to Pro model for Steel Man cases (deep reasoning)`);
+          
+          // Build textual summary of investigation for Pro context
+          const textualSummary = buildTextualSummary(toolCallHistory.slice(-30));
+          
+          try {
+            currentSession = createProSessionWithContext({
+              systemPrompt,
+              textualContext: textualSummary,
+              thinkingLevel: 'high'
+            });
+            currentModelName = currentSession.modelName;
+            hasSwichedToPro = true;
+            
+            console.log(`[Orchestrator] 🧠 NFL Pro session created for Steel Man analysis`);
+          } catch (proError) {
+            console.warn(`[Orchestrator] ⚠️ Failed to switch to Pro for NFL Steel Man, continuing with Flash:`, proError.message);
+          }
+        }
+        
         messages.push({
           role: 'user',
           content: buildPass2Message(sport, homeTeam, awayTeam, gameSpread)
         });
-        console.log(`[Orchestrator] Injected Pass 2 instructions (${covered.length}/${totalFactors} factors covered, spread: ${gameSpread})`);
-      } else if (coverage < 0.5) {
-        // Haven't covered enough factors - tell Gary what's missing
-        const missingDisplay = missing.slice(0, 5).map(f => f.replace(/_/g, ' ')).join(', ');
-        messages.push({
-          role: 'user',
-          content: `You've covered ${covered.length}/${totalFactors} investigation factors. Continue investigating BOTH teams. Uncovered factors: ${missingDisplay}${missing.length > 5 ? '...' : ''}. Call stats for each factor before moving to analysis.`
-        });
-        console.log(`[Orchestrator] Nudged to cover more factors (${covered.length}/${totalFactors} covered)`);
-      } else if (coverage >= 0.5 && coverage < 0.8 && iteration >= 2 && !pass2AlreadyInjected) {
-        // Between 50-80% coverage - remind Gary about missing factors while injecting Pass 2
-        const missingDisplay = missing.map(f => f.replace(/_/g, ' ')).join(', ');
-        messages.push({
-          role: 'user',
-          content: buildPass2Message(sport, homeTeam, awayTeam, gameSpread) + 
-            `\n\n**BEFORE YOUR STEEL MAN ANALYSIS:** You've only covered ${covered.length}/${totalFactors} factors. These areas are UNINVESTIGATED: ${missingDisplay}. Request these stats FIRST, then proceed with your Steel Man cases.`
-        });
-        console.log(`[Orchestrator] Injected Pass 2 with missing factors reminder (${covered.length}/${totalFactors} covered, spread: ${gameSpread})`);
-      } else if (coverage >= 0.5 && coverage < 0.8 && iteration >= 3 && pass2AlreadyInjected) {
-        // Still stuck between 50-80% after Pass 2 - strongly nudge missing factors
-        const missingDisplay = missing.map(f => f.replace(/_/g, ' ')).join(', ');
-        messages.push({
-          role: 'user',
-          content: `⚠️ **INVESTIGATION INCOMPLETE (${covered.length}/${totalFactors} factors)** - You're missing critical data:\n\n**UNINVESTIGATED:** ${missingDisplay}\n\nCall these stats NOW before making your final pick. Do NOT re-request stats you already have.`
-        });
-        console.log(`[Orchestrator] Strong nudge for missing factors (${covered.length}/${totalFactors} covered, iteration ${iteration})`);
+        console.log(`[Orchestrator] Injected Pass 2 instructions (${covered.length}/${totalFactors} = ${(coverage * 100).toFixed(0)}% coverage, spread: ${gameSpread})`);
+      } else if (coverage < 0.8) {
+        // FIXED: Require 80% minimum coverage before Steel Man
+        // Under 80% - tell Gary what's missing and nudge for more investigation
+        const missingDisplay = missing.slice(0, 6).map(f => f.replace(/_/g, ' ')).join(', ');
+        const coveragePct = (coverage * 100).toFixed(0);
+        
+        if (iteration >= 4 && coverage >= 0.6) {
+          // After several iterations with decent coverage, give a stronger nudge
+          messages.push({
+            role: 'user',
+            content: `**INVESTIGATION AT ${coveragePct}% (need 80% minimum)** - You're still missing critical data:\n\n**UNINVESTIGATED:** ${missingDisplay}${missing.length > 6 ? '...' : ''}\n\nCall these stats NOW. Do NOT proceed to Steel Man cases until you reach 80% coverage.`
+          });
+          console.log(`[Orchestrator] Strong nudge for 80% coverage (${covered.length}/${totalFactors} = ${coveragePct}% covered)`);
+        } else {
+          messages.push({
+            role: 'user',
+            content: `You've covered ${covered.length}/${totalFactors} investigation factors (${coveragePct}%). Continue investigating BOTH teams to reach 80% minimum. Uncovered factors: ${missingDisplay}${missing.length > 6 ? '...' : ''}. Call stats for each factor.`
+          });
+          console.log(`[Orchestrator] Nudged to reach 80% coverage (${covered.length}/${totalFactors} = ${coveragePct}% covered)`);
+        }
       } else if (coverage >= 0.8 && iteration >= 2 && !pass3AlreadyInjected) {
         // 80%+ factors covered - decide between Pass 2.5, Steel Man enforcement, or Mid-Investigation Synthesis
         // Priority: Steel Man enforcement > Pass 2.5 (if Steel Man done) > Mid-Investigation Synthesis
@@ -4166,93 +4756,137 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
         if (!steelManCompleted && pass2AlreadyInjected) {
           // STEEL MAN ENFORCEMENT: Pass 2 was injected but Gary hasn't written cases yet
           // Force Gary to stop calling stats and write his Steel Man analysis NOW
+          // GEMINI 3 OPTIMIZED: XML-tagged structure with END-OF-PROMPT instruction
           messages.push({
             role: 'user',
             content: `
-══════════════════════════════════════════════════════════════════════
-⚠️ **STEEL MAN ANALYSIS REQUIRED** ⚠️
+<enforcement_context>
+## STEEL MAN ANALYSIS REQUIRED
 
-You have gathered ${covered.length}/${totalFactors} investigation factors (${(coverage * 100).toFixed(0)}% coverage). 
+You have gathered ${covered.length}/${totalFactors} investigation factors (${(coverage * 100).toFixed(0)}% coverage).
 This is SUFFICIENT data to proceed.
+</enforcement_context>
 
-**STOP calling more stats.** You MUST now write your Steel Man analysis.
+<case_requirements>
+## REQUIRED OUTPUT
 
-**REQUIRED OUTPUT (write this NOW):**
-
-⚠️ Write SUBSTANTIVE PARAGRAPHS, not bullet point summaries.
+Write SUBSTANTIVE PARAGRAPHS, not bullet point summaries.
 
 **CASE FOR ${homeTeam} TO COVER:**
-Write 3-4 detailed paragraphs explaining the MECHANISM (how their strength exploits opponent weakness), 
-the DATA (specific numbers), and the MARGIN PATH (how this covers the spread).
+Write 3-4 detailed paragraphs explaining:
+- MECHANISM (how their strength exploits opponent weakness)
+- DATA (specific numbers)
+- MARGIN PATH (how this covers the spread)
 
 **CASE FOR ${awayTeam} TO COVER:**
-Write 3-4 detailed paragraphs with the same depth - mechanisms, specific data, margin path.
+Write 3-4 detailed paragraphs with the same depth.
 
-**DO NOT make a final pick yet.** Just write the substantive cases for BOTH sides.
+**DO NOT make a final pick yet.** Just write cases for BOTH sides.
 After you write these cases, I will ask you to rate them.
-══════════════════════════════════════════════════════════════════════
+</case_requirements>
+
+<instructions>
+## YOUR TASK
+
+Using the data you've gathered, STOP calling more stats and execute NOW:
+
+1. Write **CASE FOR ${homeTeam}** (3-4 substantive paragraphs)
+2. Write **CASE FOR ${awayTeam}** (3-4 substantive paragraphs)
+
+BEGIN WRITING YOUR STEEL MAN CASES NOW.
+</instructions>
 `
           });
-          console.log(`[Orchestrator] ⚠️ STEEL MAN ENFORCEMENT - Gary must write cases before proceeding (${covered.length}/${totalFactors} factors)`);
+          console.log(`[Orchestrator] STEEL MAN ENFORCEMENT - Gary must write cases before proceeding (${covered.length}/${totalFactors} factors)`);
         } else if (!pass25AlreadyInjected && steelManCompleted) {
-          // Steel Man done, inject Pass 2.5 (Conviction Assessment) first
+          // ═══════════════════════════════════════════════════════════════════════
+          // PASS 2.5 INJECTION + PRO MODEL SWITCH (NBA/NFL/NHL only)
+          // ═══════════════════════════════════════════════════════════════════════
+          // Steel Man done, inject Pass 2.5 (Conviction Assessment)
+          // For NBA/NFL/NHL: Switch to Pro model for deep reasoning on grading
           const missingNote = missing.length > 0 
             ? `\n\n(Note: ${missing.length} factors were not investigated: ${missing.slice(0, 4).map(f => f.replace(/_/g, ' ')).join(', ')}${missing.length > 4 ? '...' : ''} - proceed with your conviction assessment based on the evidence you gathered.)`
             : '';
+          const pass25Content = buildPass25Message(homeTeam, awayTeam, sport, gameSpread) + missingNote;
+          
           // gameSpread already defined at loop scope
-          messages.push({
-            role: 'user',
-            content: buildPass25Message(homeTeam, awayTeam, sport, gameSpread) + missingNote
-          });
-          console.log(`[Orchestrator] Injected Pass 2.5 (Conviction Assessment) - ${covered.length}/${totalFactors} factors, Steel Man complete, spread: ${gameSpread}`);
+          messages.push({ role: 'user', content: pass25Content });
+          
+          // ═══════════════════════════════════════════════════════════════════════
+          // PRO MODEL SWITCH for grading phase (NBA/NFL/NHL only)
+          // ═══════════════════════════════════════════════════════════════════════
+          if (provider === 'gemini' && useProForGrading && !hasSwichedToPro) {
+            console.log(`[Orchestrator] 🔄 Switching to Pro model for grading/decision phases`);
+            
+            // Create new Pro session
+            // IMPORTANT: Don't pass thought signatures from Flash to Pro!
+            // Extract textual summary of what Flash learned
+            const textualSummary = extractTextualSummaryForModelSwitch(messages, steelManCases);
+            
+            try {
+              currentSession = createGeminiSession({
+                modelName: 'gemini-3-pro-preview',
+                systemPrompt: systemPrompt + '\n\n' + textualSummary,
+                tools: [], // No tools needed for grading/decision
+                thinkingLevel: 'high'
+              });
+              currentModelName = currentSession.modelName;
+              hasSwichedToPro = true;
+              
+              console.log(`[Orchestrator] 🧠 Pro session created for deep reasoning`);
+              console.log(`[Orchestrator] Context passed: ${textualSummary.length} chars of textual summary`);
+            } catch (proError) {
+              // If Pro fails to initialize, continue with Flash
+              console.error(`[Orchestrator] ⚠️ Pro initialization failed: ${proError.message}`);
+              console.log(`[Orchestrator] Continuing with Flash for grading`);
+            }
+          }
+          
+          console.log(`[Orchestrator] Injected Pass 2.5 (Case Grading & Decision) - ${covered.length}/${totalFactors} factors, Steel Man complete, spread: ${gameSpread}`);
         } else if (!steelManCompleted && !pass2AlreadyInjected) {
           // Neither Pass 2 nor Steel Man - inject Pass 2 with urgency
+          
+          // NFL SPECIAL: Switch to Pro for Steel Man cases
+          const isNFLForProSwitch = sport === 'americanfootball_nfl' || sport === 'NFL';
+          if (provider === 'gemini' && isNFLForProSwitch && useProForGrading && !hasSwichedToPro) {
+            console.log(`[Orchestrator] 🏈 NFL: Switching to Pro model for Steel Man cases (urgent path)`);
+            const textualSummary = buildTextualSummary(toolCallHistory.slice(-30));
+            try {
+              currentSession = createProSessionWithContext({
+                systemPrompt,
+                textualContext: textualSummary,
+                thinkingLevel: 'high'
+              });
+              currentModelName = currentSession.modelName;
+              hasSwichedToPro = true;
+              console.log(`[Orchestrator] 🧠 NFL Pro session created for Steel Man analysis`);
+            } catch (proError) {
+              console.warn(`[Orchestrator] ⚠️ Failed to switch to Pro, continuing with Flash:`, proError.message);
+            }
+          }
+          
           messages.push({
             role: 'user',
             content: buildPass2Message(sport, homeTeam, awayTeam, gameSpread) + 
-              `\n\n**⚠️ CRITICAL:** You have ${(coverage * 100).toFixed(0)}% factor coverage. Write your Steel Man cases NOW before making any pick.`
+              `\n\n**CRITICAL:** You have ${(coverage * 100).toFixed(0)}% factor coverage. Write your Steel Man cases NOW before making any pick.`
           });
           console.log(`[Orchestrator] Injected Pass 2 (urgent) - ${covered.length}/${totalFactors} factors, spread: ${gameSpread}, Steel Man required`);
         } else if (pass25AlreadyInjected && pass25Ratings) {
-          // Pass 2.5 complete with ratings - inject appropriate Pass 3
+          // Pass 2.5 complete with ratings - inject unified Pass 3 (non-prescriptive)
           const rawGap = pass25Ratings.favoriteRating - pass25Ratings.underdogRating;
           
-          if (pass25Ratings.favoriteRating < 5 && pass25Ratings.underdogRating < 5) {
-            // Low conviction - nudge toward PASS
-            messages.push({
-              role: 'user',
-              content: buildPass3ConsiderPass(pass25Ratings, homeTeam, awayTeam)
-            });
-            console.log(`[Orchestrator] Injected Pass 3 (LOW CONVICTION) - Both ratings < 5, suggesting PASS`);
-          } else if (rawGap < -1.5) {
-            // Underdog conviction
-            messages.push({
-              role: 'user',
-              content: buildPass3UnderdogConviction(pass25Ratings, homeTeam, awayTeam)
-            });
-            console.log(`[Orchestrator] Injected Pass 3 (UNDERDOG CONVICTION) - Gap ${rawGap.toFixed(1)} < -1.5`);
-          } else if (Math.abs(rawGap) <= 1.5) {
-            // Close game - use Toss-Up protocol
-            messages.push({
-              role: 'user',
-              content: buildPass3TossUpMessage(pass25Ratings, homeTeam, awayTeam)
-            });
-            console.log(`[Orchestrator] Injected Pass 3 (TOSS-UP) - Gap ${rawGap.toFixed(1)} within 1.5, encouraging value consideration`);
-          } else {
-            // Favorite conviction
-            messages.push({
-              role: 'user',
-              content: buildPass3FavoriteConviction(pass25Ratings, homeTeam, awayTeam)
-            });
-            console.log(`[Orchestrator] Injected Pass 3 (FAVORITE CONVICTION) - Gap ${rawGap.toFixed(1)} > 1.5`);
-          }
+          messages.push({
+            role: 'user',
+            content: buildPass3Unified(pass25Ratings, homeTeam, awayTeam)
+          });
+          console.log(`[Orchestrator] Injected Pass 3 - Ratings: Fav ${pass25Ratings.favoriteRating}/10, Dog ${pass25Ratings.underdogRating}/10 (Gap: ${rawGap.toFixed(1)})`);
         } else if (pass25AlreadyInjected && !pass25Ratings) {
           // Pass 2.5 was injected but no ratings yet - nudge Gary to provide them
           messages.push({
             role: 'user',
-            content: `Please provide your conviction ratings in the JSON format specified. Rate the believability of each path 1-10, then I'll help you make your final decision.`
+            content: `Please complete your Pass 2.5 analysis with the JSON format specified. Include case_grades for both teams (1.0-10.0 scale), your stress_test results, and your final_pick with confidence_score (0.50-0.95).`
           });
-          console.log(`[Orchestrator] Nudged for Pass 2.5 ratings (awaiting JSON response)`);
+          console.log(`[Orchestrator] Nudged for Pass 2.5 JSON (awaiting case_grades/confidence response)`);
         }
         // NOTE: Removed the fallback that injected Pass 3 directly without Steel Man/Pass 2.5
         // The Steel Man Enforcement above will handle cases where Gary hasn't written his cases
@@ -4269,6 +4903,45 @@ After you write these cases, I will ask you to rate them.
         // No aggressive nudging - Gary decides when he's done investigating
       }
 
+      // ═══════════════════════════════════════════════════════════════════════
+      // PREPARE FUNCTION RESPONSES FOR PERSISTENT SESSION
+      // ═══════════════════════════════════════════════════════════════════════
+      // Extract tool responses added to messages array during this iteration
+      // Convert to format needed for sendToSession
+      if (provider === 'gemini' && currentSession) {
+        // Find tool responses added this iteration
+        // They're the messages with role: 'tool' after the last assistant message
+        const lastAssistantIdx = messages.findLastIndex(m => m.role === 'assistant');
+        const toolResponses = messages.slice(lastAssistantIdx + 1).filter(m => m.role === 'tool');
+        
+        if (toolResponses.length > 0) {
+          // Convert to Gemini function response format
+          pendingFunctionResponses = toolResponses.map(tr => ({
+            name: tr.name || 'tool_response',
+            content: tr.content
+          }));
+          console.log(`[Orchestrator] Prepared ${pendingFunctionResponses.length} function response(s) for session`);
+        }
+        
+        // Check if a pass transition message was injected after tool responses
+        // Find user messages added after all tool responses
+        const lastToolIdx = messages.findLastIndex(m => m.role === 'tool');
+        const userMsgsAfterTools = messages.slice(lastToolIdx + 1).filter(m => m.role === 'user');
+        
+        if (userMsgsAfterTools.length > 0) {
+          // There's a user message (pass transition) that needs to be sent
+          // For persistent session: we need to send function responses first,
+          // then the session processes them, then we send the pass message
+          // This requires a two-step flow on next iteration
+          const passMessage = userMsgsAfterTools[userMsgsAfterTools.length - 1].content;
+          
+          // Store the pass message to send after function responses are processed
+          // We'll handle this in the main API call section
+          nextMessageToSend = passMessage;
+          console.log(`[Orchestrator] Pass transition queued (will send after function responses processed)`);
+        }
+      }
+      
       // Continue the loop for Gary to process the stats
       continue;
     }
@@ -4277,8 +4950,9 @@ After you write these cases, I will ask you to rate them.
     // The prompts encourage comprehensive stat gathering naturally
 
     // Check if Gary just responded to Pass 2.5 with ratings (not a final pick)
-    const pass25WasInjected = messages.some(m => m.content?.includes('PASS 2.5 - CONVICTION ASSESSMENT'));
-    const pass3WasInjected = messages.some(m => m.content?.includes('PASS 3 - FINAL') || m.content?.includes('TOSS-UP DETECTED') || m.content?.includes('CONVICTION DETECTED'));
+    const pass25WasInjected = messages.some(m => m.content?.includes('PASS 2.5 - CASE GRADING') || m.content?.includes('PASS 2.5 - CONVICTION ASSESSMENT'));
+    // FIXED: Check for both "FINAL DECISION" (old) and "FINAL OUTPUT" (new buildPass3Unified format)
+    const pass3WasInjected = messages.some(m => m.content?.includes('PASS 3 - FINAL DECISION') || m.content?.includes('PASS 3 - FINAL OUTPUT'));
     
     if (pass25WasInjected && !pass3WasInjected && iteration < CONFIG.maxIterations) {
       // Gary responded to Pass 2.5 - check for ratings
@@ -4298,35 +4972,12 @@ After you write these cases, I will ask you to rate them.
           content: message.content
         });
         
-        if (ratings.favoriteRating < 5 && ratings.underdogRating < 5) {
-          // Low conviction - nudge toward PASS
-          messages.push({
-            role: 'user',
-            content: buildPass3ConsiderPass(ratings, homeTeam, awayTeam)
-          });
-          console.log(`[Orchestrator] Injected Pass 3 (LOW CONVICTION) - Both ratings < 5, suggesting PASS`);
-        } else if (rawGap < -1.5) {
-          // Underdog conviction
-          messages.push({
-            role: 'user',
-            content: buildPass3UnderdogConviction(ratings, homeTeam, awayTeam)
-          });
-          console.log(`[Orchestrator] Injected Pass 3 (UNDERDOG CONVICTION) - Gap ${rawGap.toFixed(1)} < -1.5`);
-        } else if (Math.abs(rawGap) <= 1.5) {
-          // Close game - use Toss-Up protocol
-          messages.push({
-            role: 'user',
-            content: buildPass3TossUpMessage(ratings, homeTeam, awayTeam)
-          });
-          console.log(`[Orchestrator] Injected Pass 3 (TOSS-UP) - Gap ${rawGap.toFixed(1)} within 1.5, encouraging value consideration`);
-        } else {
-          // Favorite conviction
-          messages.push({
-            role: 'user',
-            content: buildPass3FavoriteConviction(ratings, homeTeam, awayTeam)
-          });
-          console.log(`[Orchestrator] Injected Pass 3 (FAVORITE CONVICTION) - Gap ${rawGap.toFixed(1)} > 1.5`);
-        }
+        // Inject unified Pass 3 (non-prescriptive - no gap-based conditional logic)
+        messages.push({
+          role: 'user',
+          content: buildPass3Unified(ratings, homeTeam, awayTeam)
+        });
+        console.log(`[Orchestrator] Injected Pass 3 - Ratings: Fav ${ratings.favoriteRating}/10, Dog ${ratings.underdogRating}/10 (Gap: ${rawGap.toFixed(1)})`)
         
         iteration++;
         continue; // Continue to get final pick
@@ -4363,8 +5014,9 @@ After you write these cases, I will ask you to rate them.
     console.log(`[Orchestrator] Gary finished analysis (${finishReason})`);
     
     // Check if Steel Man was just completed and Pass 2.5 hasn't been done yet
-    const pass25Done = messages.some(m => m.content?.includes('PASS 2.5 - CONVICTION ASSESSMENT'));
-    const pass3Done = messages.some(m => m.content?.includes('PASS 3 - FINAL') || m.content?.includes('TOSS-UP DETECTED') || m.content?.includes('CONVICTION DETECTED'));
+    const pass25Done = messages.some(m => m.content?.includes('PASS 2.5 - CASE GRADING') || m.content?.includes('PASS 2.5 - CONVICTION ASSESSMENT'));
+    // FIXED: Check for both "FINAL DECISION" (old) and "FINAL OUTPUT" (new buildPass3Unified format)
+    const pass3Done = messages.some(m => m.content?.includes('PASS 3 - FINAL DECISION') || m.content?.includes('PASS 3 - FINAL OUTPUT'));
     
     // Detect Steel Man in current response
     const currentContent = message.content || '';
@@ -4378,7 +5030,7 @@ After you write these cases, I will ask you to rate them.
       console.log(`\n📋 GARY'S STEEL MAN ANALYSIS (Both Sides):\n${'─'.repeat(60)}`);
       console.log(currentContent);
       console.log(`${'─'.repeat(60)}\n`);
-      console.log(`[Orchestrator] Injecting Pass 2.5 (Conviction Assessment) - Steel Man just completed`);
+      console.log(`[Orchestrator] Injecting Pass 2.5 (Case Grading & Decision) - Steel Man just completed`);
       
       messages.push({
         role: 'assistant',
@@ -4386,10 +5038,43 @@ After you write these cases, I will ask you to rate them.
       });
       
       // gameSpread already defined at loop scope
+      const pass25Content = buildPass25Message(homeTeam, awayTeam, sport, gameSpread);
       messages.push({
         role: 'user',
-        content: buildPass25Message(homeTeam, awayTeam, sport, gameSpread)
+        content: pass25Content
       });
+      
+      // ═══════════════════════════════════════════════════════════════════════
+      // PRO MODEL SWITCH for grading phase (NBA/NFL/NHL only)
+      // Steel Man is done on Flash, now switch to Pro for grading/decision
+      // ═══════════════════════════════════════════════════════════════════════
+      if (provider === 'gemini' && useProForGrading && !hasSwichedToPro) {
+        console.log(`[Orchestrator] 🔄 Switching to Pro model for grading/decision phases`);
+        
+        // Extract textual summary of what Flash learned
+        const textualSummary = extractTextualSummaryForModelSwitch(messages, steelManCases);
+        
+        try {
+          currentSession = createGeminiSession({
+            modelName: 'gemini-3-pro-preview',
+            systemPrompt: systemPrompt + '\n\n' + textualSummary,
+            tools: [], // No tools needed for grading/decision
+            thinkingLevel: 'high'
+          });
+          currentModelName = currentSession.modelName;
+          hasSwichedToPro = true;
+          
+          console.log(`[Orchestrator] 🧠 Pro session created for deep reasoning`);
+          console.log(`[Orchestrator] Context passed: ${textualSummary.length} chars of textual summary`);
+        } catch (proError) {
+          // If Pro fails to initialize, continue with Flash
+          console.error(`[Orchestrator] ⚠️ Pro initialization failed: ${proError.message}`);
+          console.log(`[Orchestrator] Continuing with Flash for grading`);
+        }
+      }
+      
+      // CRITICAL: Set nextMessageToSend so the session knows what to send next
+      nextMessageToSend = pass25Content;
       
       iteration++;
       continue; // Go back to get Pass 2.5 response
@@ -4431,8 +5116,18 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
       pick.iterations = iteration;
       pick.rawAnalysis = message.content;
       
+      // Attach full steel man cases for transparency
+      if (steelManCases.homeTeamCase || steelManCases.awayTeamCase) {
+        pick.steelManCases = {
+          homeTeam: steelManCases.homeTeamCase,
+          awayTeam: steelManCases.awayTeamCase,
+          capturedAt: steelManCases.capturedAt
+        };
+        console.log(`[Orchestrator] 📝 Steel Man cases attached to pick`);
+      }
+      
       // Diagnostic: Check if Pass 2.5 was injected during this analysis
-      const pass25WasInjected = messages.some(m => m.content?.includes('PASS 2.5 - CONVICTION ASSESSMENT'));
+      const pass25WasInjected = messages.some(m => m.content?.includes('PASS 2.5 - CASE GRADING') || m.content?.includes('PASS 2.5 - CONVICTION ASSESSMENT'));
       const steelManDetected = messages.some(m => {
         const content = m.content || '';
         const caseForCount = (content.match(/(?:Case for|CASE FOR|case for)/gi) || []).length;
@@ -4462,10 +5157,9 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
             // Outright win assessment
             underdogCanWinOutright: ratings.underdogCanWinOutright || false,
             outrightWinReasoning: ratings.outrightWinReasoning || '',
-            // Scenario classification
-            scenario: (ratings.favoriteRating < 5 && ratings.underdogRating < 5) ? 'LOW_CONVICTION' :
-                      (rawGap < -1.5) ? 'UNDERDOG_CONVICTION' :
-                      (Math.abs(rawGap) <= 1.5) ? 'TOSS_UP' : 'FAVORITE_CONVICTION',
+            // Simple gap info (no prescriptive scenario labels)
+            gap: rawGap,
+            higherRatedSide: rawGap < 0 ? 'underdog' : rawGap > 0 ? 'favorite' : 'even',
             // Diagnostic info
             _diagnostic: {
               pass25Injected: pass25WasInjected,
@@ -4474,15 +5168,10 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
             }
           };
           
-          // Log comprehensive conviction info
-          const scenarioEmoji = {
-            'LOW_CONVICTION': '⚠️',
-            'UNDERDOG_CONVICTION': '🐕',
-            'TOSS_UP': '⚖️',
-            'FAVORITE_CONVICTION': '⭐'
-          };
+          // Log conviction info (simplified - no prescriptive scenario labels)
+          const leanEmoji = rawGap < 0 ? '🐕' : rawGap > 0 ? '⭐' : '⚖️';
           console.log(`[Orchestrator] 📊 Final Pick Conviction Ratings:`);
-          console.log(`  ${scenarioEmoji[pick.convictionRatings.scenario]} Scenario: ${pick.convictionRatings.scenario}`);
+          console.log(`  ${leanEmoji} Higher Rated: ${rawGap < 0 ? 'Underdog' : rawGap > 0 ? 'Favorite' : 'Even'}`);
           console.log(`  📈 Ratings: Favorite ${ratings.favoriteRating}/10 vs Underdog ${ratings.underdogRating}/10 (Gap: ${rawGap.toFixed(1)})`);
           console.log(`  🎲 Variance: ${ratings.varianceIndicator || 'MEDIUM'}`);
           if (ratings.underdogCanWinOutright) {
@@ -4537,46 +5226,169 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
   // IMPORTANT: Still require Steel Man + Conviction Assessment even at max iterations
   console.log(`[Orchestrator] ⚠️ Max iterations (${CONFIG.maxIterations}) reached - requesting FULL synthesis with Steel Man + Conviction...`);
   
+  // Build spread-size specific framing (CRITICAL - same as buildPass2Message)
+  // NOTE: gameSpread needs to be extracted from options here since we're outside the loop scope
+  const gameSpread = options.spread || 0;
+  const absSpread = Math.abs(gameSpread);
+  const homeIsFavorite = gameSpread < 0;
+  const favoriteTeam = homeIsFavorite ? homeTeam : awayTeam;
+  const underdogTeam = homeIsFavorite ? awayTeam : homeTeam;
+  const coverThreshold = Math.floor(absSpread) + 1;
+  
+  // Determine if this is "who wins" vs "who covers" based on sport and spread
+  const isNFL = sport === 'americanfootball_nfl' || sport === 'NFL';
+  const isNBA = sport === 'basketball_nba' || sport === 'NBA';
+  const isNCAAB = sport === 'basketball_ncaab' || sport === 'NCAAB';
+  const isNCAAF = sport === 'americanfootball_ncaaf' || sport === 'NCAAF';
+  const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
+  
+  const isWinsQuestion = isNHL || 
+    (isNBA && absSpread < 5) ||
+    (isNFL && absSpread < 3.5) ||
+    (isNCAAB && absSpread < 5) ||
+    (isNCAAF && absSpread < 3.5);
+  
+  // Build spread-size framing
+  let spreadSizeFraming = '';
+  if (!isWinsQuestion && absSpread > 0) {
+    if (absSpread >= 10) {
+      spreadSizeFraming = `
+**SPREAD-SIZE FRAMING (LARGE: ${gameSpread.toFixed(1)})**
+
+This is a LARGE SPREAD. The question is NOT "who wins?" The question is:
+
+**FOR ${underdogTeam} +${absSpread.toFixed(1)}:**
+> "Why won't they lose by ${coverThreshold}+?"
+> Focus: What mechanisms keep the margin under ${coverThreshold} points?
+
+**FOR ${favoriteTeam} -${absSpread.toFixed(1)}:**
+> "Why will they win by ${coverThreshold}+?"
+> Focus: What mechanisms create margin EXPANSION beyond ${Math.floor(absSpread)} points?
+
+Do NOT answer "who wins" - that's the wrong question for this spread size.`;
+    } else if (absSpread >= 5) {
+      spreadSizeFraming = `
+**SPREAD-SIZE FRAMING (MEDIUM: ${gameSpread.toFixed(1)})**
+
+This is a MEDIUM SPREAD. The question is: Does ${favoriteTeam} win COMFORTABLY?
+
+**FOR ${underdogTeam} +${absSpread.toFixed(1)}:**
+> "Why won't they lose by ${coverThreshold}+?"
+> Focus: What keeps this competitive? Tempo control, defensive floor, matchup parity?
+
+**FOR ${favoriteTeam} -${absSpread.toFixed(1)}:**
+> "Why will they win by ${coverThreshold}+?"
+> Focus: What creates separation? Depth advantage, pace control, 3rd quarter/2nd half dominance?`;
+    } else {
+      spreadSizeFraming = `
+**SPREAD-SIZE FRAMING (SMALL: ${gameSpread.toFixed(1)})**
+
+This is a SMALL SPREAD - essentially asking "who wins?"
+
+**FOR ${underdogTeam} +${absSpread.toFixed(1)}:**
+> "Why do they WIN or lose by fewer than ${coverThreshold}?"
+> Focus: Clutch execution, best closer, late-game coaching, close-game patterns.
+
+**FOR ${favoriteTeam} -${absSpread.toFixed(1)}:**
+> "Why do they win by ${coverThreshold}+?"
+> Focus: Why do they pull away instead of staying close? Closing ability?`;
+    }
+  }
+  
   // Request synthesis WITH Steel Man and Conviction Assessment (compressed into one prompt)
   const MAX_SYNTHESIS_ATTEMPTS = 3;
   for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt++) {
     try {
       const synthesisPrompt = `You've gathered ${toolCallHistory.length} stats across ${iteration} iterations for ${awayTeam} @ ${homeTeam}.
+${spreadSizeFraming}
 
 **STEP 1: STEEL MAN BOTH SIDES (Required)**
 Write SUBSTANTIVE PARAGRAPHS (not bullet summaries) for each team:
 
-**CASE FOR ${homeTeam} TO COVER:**
-Write 3-4 detailed paragraphs explaining the MECHANISM (how their strength exploits opponent weakness), 
-the DATA (specific numbers, not just "they're good"), and the MARGIN PATH (how this covers the spread).
+**CASE FOR ${homeTeam} (${homeIsFavorite ? `-${absSpread.toFixed(1)}` : `+${absSpread.toFixed(1)}`}):**
+Write 3-4 detailed paragraphs explaining:
+- MECHANISM: How their strength exploits opponent weakness
+- DATA: Specific numbers (not just "they're good")
+- MARGIN PATH: How this ${homeIsFavorite ? `covers the -${absSpread.toFixed(1)} spread (win by ${coverThreshold}+)` : `covers the +${absSpread.toFixed(1)} spread (keep it close or win)`}
 
-**CASE FOR ${awayTeam} TO COVER:**
+**CASE FOR ${awayTeam} (${!homeIsFavorite ? `-${absSpread.toFixed(1)}` : `+${absSpread.toFixed(1)}`}):**
 Write 3-4 detailed paragraphs with the same depth - mechanisms, specific data, margin path.
 
 **STEP 2: RATE YOUR OWN CASES (1-10)**
-After writing both cases, rate each path based on the strength of the reasoning.
-Use your judgment - higher = stronger case with real edge, lower = weaker case or just describing the line.
+Grade each case based on:
+- Mechanism quality (Is there a real edge the line might be missing?)
+- Form & recency (Is the data recent enough to matter?)
+- Market absorption (Is this edge already priced in?)
 
-**STEP 3: FINAL DECISION**
-Use your ratings to inform your decision. PASS is valid if you don't have conviction.
+**STEP 3: STRESS TEST YOUR TENTATIVE PICK**
+Before finalizing, check your stronger case against these patterns:
+- **Returning Players:** First game back from injury = high variance${isNFL ? ', factor into confidence' : ', consider PASS'}
+- **Travel/Rest Disadvantage:** Cross-country travel + short rest = 2nd half fade
+- **Structure vs Star Power:** Structural edges work in 1st half; star power decides 4th quarter
+${isNFL ? '- **Playoff Context:** Coaching schemes get "solved" - does the QB have closer ability?' : ''}
+
+**STEP 4: SANITY CHECK (Alternative Side)**
+Quick check on the side you DIDN'T pick:
+- Did you miss any matchup advantages for the other team?
+- Any recent result AGAINST your direction you're ignoring?
+- If the underdog, could they actually WIN OUTRIGHT? What's the mechanism?
+
+**STEP 5: FINAL DECISION**
+You graded the cases. You ran the stress test. You checked the alternative.
+
+**DECISION RULES:**
+- IF tentative pick survives stress test → Proceed with that pick
+- IF HIGH severity patterns AND sanity check shows other side is materially better → Consider flipping
+
+**CONFIDENCE DETERMINATION:**
+Your confidence_score (0.50-0.95) and confidence_label reflect your conviction based on the analysis you just completed.
+${isNFL ? `
+**NFL RULE:** Always make a pick. NFL games are limited - no PASS option.` : `
+**PASS OPTION (NBA/NCAAB/NHL only):**
+If both cases are weak AND stress test reveals significant patterns → PASS is acceptable.`}
 
 **KEY STATS GATHERED:**
 ${toolCallHistory.slice(-15).map(t => `- ${t.token}: ${t.summary || 'data received'}`).join('\n')}
 
-**OUTPUT FORMAT:**
-Include both your Steel Man cases AND your final pick JSON with:
-- "favorite_rating": [1-10]
-- "underdog_rating": [1-10]
-- "pick": "[team] [spread/ML] [odds]" or "PASS"
-- "rationale": "Full Tale of the Tape + Gary's Take"
-- "confidence_tier": "MAX" | "CORE" | "SPECULATIVE"`;
+**GRADING REMINDER - WHY IS THE SPREAD WRONG?**
+Most factors are already "baked into" the spread. Your case must identify:
+- What the MARKET is MISSING or UNDERWEIGHTING
+- A mechanism that isn't fully priced in (injury impact, matchup specific, situational)
+- NOT just "Team X is good" - that's already in the line
+
+**OUTPUT FORMAT (JSON):**
+\`\`\`json
+{
+  "favorite_rating": [1.0-10.0],
+  "underdog_rating": [1.0-10.0],
+  "tentative_pick": "[Team] [spread/ML]",
+  "stress_test_patterns": ["list any patterns found"] or [],
+  "stress_test_severity": "HIGH" | "MEDIUM" | "LOW" | "NONE",
+  "sanity_check_summary": "Brief assessment of alternative side",
+  "pick": "[Team] [spread/ML] [odds]"${isNFL ? '' : ' or "PASS"'},
+  "pick_flipped": true | false,
+  "confidence_score": [0.50-0.95],
+  "confidence_label": "[Your label based on your analysis]",
+  "confidence_reasoning": "Why you have this level of confidence",
+  "underdog_can_win_outright": true | false,
+  "market_inefficiency": "What the line is missing or underweighting",
+  "rationale": "Full Tale of the Tape + Gary's Take explaining the MARGIN PATH"
+}
+\`\`\`
+
+**CRITICAL REMINDER:** ${isWinsQuestion ? 'This spread is small enough that "who wins" is the right question.' : `This is a ${absSpread >= 10 ? 'LARGE' : 'MEDIUM'} spread - your rationale MUST explain why ${favoriteTeam} wins by ${coverThreshold}+ (or why ${underdogTeam} keeps it closer than ${Math.floor(absSpread)}). Focus on what the MARKET IS MISSING, not just why the team is good.`}`;
 
       messages.push({
         role: 'user',
         content: synthesisPrompt
       });
 
-      const finalResponse = await callGeminiWithRetry(messages, [], model, 3, 'final_decision');
+      // For synthesis, use Pro model for NBA/NFL/NHL (same as grading/decision phases)
+      // NCAAB stays on Flash
+      const synthesisModel = useProForGrading ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview';
+      console.log(`[Orchestrator] Using ${synthesisModel} for synthesis (sport: ${sport}, useProForGrading: ${useProForGrading})`);
+      
+      const finalResponse = await callGeminiWithRetry(messages, [], synthesisModel, 3, 'final_decision');
       const finalMessage = finalResponse.choices?.[0]?.message;
       
       if (finalMessage?.content) {
@@ -4586,6 +5398,15 @@ Include both your Steel Man cases AND your final pick JSON with:
           synthesizedPick.toolCallHistory = toolCallHistory;
           synthesizedPick.iterations = iteration + attempt;
           synthesizedPick.rawAnalysis = finalMessage.content;
+          
+          // Attach steel man cases if captured earlier
+          if (steelManCases.homeTeamCase || steelManCases.awayTeamCase) {
+            synthesizedPick.steelManCases = {
+              homeTeam: steelManCases.homeTeamCase,
+              awayTeam: steelManCases.awayTeamCase,
+              capturedAt: steelManCases.capturedAt
+            };
+          }
           return synthesizedPick;
         }
         
@@ -4617,49 +5438,13 @@ Include both your Steel Man cases AND your final pick JSON with:
 
 /**
  * Parse Gary's response to extract the pick JSON
+ * 
+ * IMPORTANT: We try to extract a valid pick from JSON FIRST.
+ * Pass indicators are only checked if no valid pick is found in JSON.
+ * This prevents false positives like "moving on" in analysis from triggering PASS.
  */
 function parseGaryResponse(content, homeTeam, awayTeam, sport) {
   if (!content) return null;
-
-  // First, check if Gary is explicitly passing on this game
-  // AWARENESS-BASED: Capture natural language expressions of uncertainty/no edge
-  const lowerContent = content.toLowerCase();
-  const passIndicators = [
-    // Explicit pass statements
-    'i\'m passing', 'im passing', 'i am passing',
-    'no pick', 'passing on this', 'pass on this',
-    'sitting this one out', 'sit this one out',
-    // JSON indicators
-    '"type": "pass"', '"pick": "pass"', '"pick":"pass"',
-    // Coin flip / no edge language
-    'too close to call', 'genuine coin flip', 'true coin flip',
-    'cannot separate', 'can\'t separate these teams',
-    'no clear edge', 'no discernible edge', 'can\'t find an edge',
-    // Recommendation hesitation
-    'cannot recommend', 'can\'t recommend',
-    'wouldn\'t bet this', 'would not bet this',
-    'stay away', 'staying away',
-    // Sharp bettor language
-    'this is a pass', 'move on', 'moving on',
-    'not enough edge', 'insufficient edge',
-    'could go either way', 'goes either way'
-  ];
-  
-  const isPass = passIndicators.some(indicator => lowerContent.includes(indicator));
-  if (isPass) {
-    console.log('[Orchestrator] ⏭️ Gary PASSED on this game');
-    // Return a PASS pick with type: 'pass' - will be filtered before storage
-    return {
-      pick: 'PASS',
-      type: 'pass',
-      odds: null,
-      thesis_mechanism: 'Gary passed - moving on to next game',
-      supporting_factors: [],
-      contradicting_factors_major: [],
-      contradicting_factors_minor: [],
-      rationale: content.substring(0, 3000)
-    };
-  }
 
   // Helper to fix common JSON issues from Gemini
   const fixJsonString = (jsonStr) => {
@@ -4678,6 +5463,36 @@ function parseGaryResponse(content, homeTeam, awayTeam, sport) {
     // Fix 4: Handle cases where Gary puts a + sign right before a number without a colon
     // e.g. "moneylineAway":+130
     fixed = fixed.replace(/([:,\[])\+([-+]?\d*\.?\d+)/g, '$1$2');
+    
+    // Fix 5: Replace unescaped newlines in string values with spaces
+    // This handles "Unterminated string" errors from newlines in rationale text
+    fixed = fixed.replace(/"([^"]*)\n([^"]*)"/g, (match, p1, p2) => {
+      // Recursively replace all newlines within string values
+      return `"${p1.replace(/\n/g, ' ')} ${p2.replace(/\n/g, ' ')}"`;
+    });
+    
+    // Fix 6: Handle truncated JSON by attempting to close it properly
+    // Count open/close braces and brackets
+    const openBraces = (fixed.match(/\{/g) || []).length;
+    const closeBraces = (fixed.match(/\}/g) || []).length;
+    const openBrackets = (fixed.match(/\[/g) || []).length;
+    const closeBrackets = (fixed.match(/\]/g) || []).length;
+    
+    // If JSON appears truncated, try to close it
+    if (openBraces > closeBraces || openBrackets > closeBrackets) {
+      // Remove trailing incomplete content (like partial strings)
+      fixed = fixed.replace(/,\s*"[^"]*$/, ''); // Remove trailing partial key
+      fixed = fixed.replace(/:\s*"[^"]*$/, ': null'); // Close partial string value
+      fixed = fixed.replace(/,\s*$/, ''); // Remove trailing comma
+      
+      // Add missing closing brackets/braces
+      for (let i = 0; i < openBrackets - closeBrackets; i++) {
+        fixed += ']';
+      }
+      for (let i = 0; i < openBraces - closeBraces; i++) {
+        fixed += '}';
+      }
+    }
     
     return fixed;
   };
@@ -4726,13 +5541,65 @@ function parseGaryResponse(content, homeTeam, awayTeam, sport) {
     }
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PASS DETECTION - Only check AFTER JSON parsing fails to find a valid pick
+  // This prevents false positives from phrases like "moving on" in analysis
+  // ═══════════════════════════════════════════════════════════════════════════
+  const lowerContent = content.toLowerCase();
+  const passIndicators = [
+    // Explicit pass statements (high confidence)
+    'i\'m passing', 'im passing', 'i am passing',
+    'no pick', 'passing on this', 'pass on this',
+    'sitting this one out', 'sit this one out',
+    // JSON indicators
+    '"type": "pass"', '"pick": "pass"', '"pick":"pass"',
+    // Coin flip / no edge language (moderate confidence)
+    'too close to call', 'genuine coin flip', 'true coin flip',
+    'cannot separate', 'can\'t separate these teams',
+    'no clear edge', 'no discernible edge', 'can\'t find an edge',
+    // Recommendation hesitation (moderate confidence)
+    'cannot recommend', 'can\'t recommend',
+    'wouldn\'t bet this', 'would not bet this',
+    'stay away', 'staying away',
+    // Sharp bettor language (lower confidence - only check if no JSON pick)
+    'this is a pass',
+    'not enough edge', 'insufficient edge',
+    'could go either way', 'goes either way'
+    // REMOVED: 'move on', 'moving on' - these trigger false positives in analysis
+  ];
+  
+  const isPass = passIndicators.some(indicator => lowerContent.includes(indicator));
+  if (isPass) {
+    console.log('[Orchestrator] ⏭️ Gary PASSED on this game (no valid JSON pick + pass indicator found)');
+    return {
+      pick: 'PASS',
+      type: 'pass',
+      odds: null,
+      thesis_mechanism: 'Gary passed - no compelling edge found',
+      supporting_factors: [],
+      contradicting_factors_major: [],
+      contradicting_factors_minor: [],
+      rationale: content.substring(0, 3000)
+    };
+  }
+
+  // No valid JSON pick found and no clear pass indicators - return null to trigger retry
+  console.log('[Orchestrator] ⚠️ No valid pick JSON found in response');
   return null;
 }
 
 /**
  * Normalize pick format for storage
+ * Handles both legacy format (parsed.pick) and new format (parsed.final_pick)
  */
 function normalizePickFormat(parsed, homeTeam, awayTeam, sport) {
+  // CRITICAL: Support both legacy format (pick) and new format (final_pick)
+  // The new Pass 2.5 format uses "final_pick" instead of "pick"
+  if (!parsed.pick && parsed.final_pick) {
+    parsed.pick = parsed.final_pick;
+    console.log(`[Orchestrator] 📋 Using final_pick as pick: "${parsed.pick}"`);
+  }
+  
   // Check if this is a PASS pick
   const isPassPick = parsed.type === 'pass' || 
                      (parsed.pick && parsed.pick.toUpperCase() === 'PASS');
@@ -4753,6 +5620,91 @@ function normalizePickFormat(parsed, homeTeam, awayTeam, sport) {
       rationale: parsed.rationale || parsed.thesis_mechanism || 'No compelling edge found',
       agentic: true
     };
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CLOSE GAME SPREAD/ML ENFORCEMENT: Small spreads = FORCE MONEYLINE
+  // Thresholds: NBA <5, NFL <3.5, NCAAB <5, NCAAF <3.5
+  // ═══════════════════════════════════════════════════════════════════════════
+  const isNBA = sport === 'basketball_nba' || sport === 'NBA';
+  const isNFL = sport === 'americanfootball_nfl' || sport === 'NFL';
+  const isNCAAB = sport === 'basketball_ncaab' || sport === 'NCAAB';
+  const isNCAAF = sport === 'americanfootball_ncaaf' || sport === 'NCAAF';
+  const absSpread = Math.abs(parseFloat(parsed.spread) || 0);
+  
+  // Determine threshold based on sport
+  const mlOnlyThreshold = (isNBA || isNCAAB) ? 5 : (isNFL || isNCAAF) ? 3.5 : 0;
+  const sportLabel = isNBA ? 'NBA' : isNFL ? 'NFL' : isNCAAB ? 'NCAAB' : isNCAAF ? 'NCAAF' : '';
+  
+  if (mlOnlyThreshold > 0 && absSpread > 0 && absSpread < mlOnlyThreshold && parsed.type === 'spread') {
+    console.log(`[Orchestrator] ${sportLabel} CLOSE GAME RULE: Converting spread to ML (spread was ${parsed.spread}, threshold <${mlOnlyThreshold})`);
+    
+    // Determine which team was picked based on pick text
+    const pickLower = (parsed.pick || '').toLowerCase();
+    const homeTeamLower = (homeTeam || '').toLowerCase();
+    const awayTeamLower = (awayTeam || '').toLowerCase();
+    
+    let pickedTeam = '';
+    let mlOdds = null;
+    
+    if (pickLower.includes(homeTeamLower.split(' ')[0]) || pickLower.includes(homeTeamLower.split(' ').pop())) {
+      pickedTeam = homeTeam;
+      mlOdds = parsed.moneylineHome;
+    } else if (pickLower.includes(awayTeamLower.split(' ')[0]) || pickLower.includes(awayTeamLower.split(' ').pop())) {
+      pickedTeam = awayTeam;
+      mlOdds = parsed.moneylineAway;
+    } else {
+      // Fallback: use the team name from the pick
+      pickedTeam = parsed.homeTeam || parsed.awayTeam || homeTeam;
+      mlOdds = parsed.moneylineHome || parsed.moneylineAway;
+    }
+    
+    // Convert to ML
+    parsed.type = 'moneyline';
+    const mlOddsStr = mlOdds > 0 ? `+${mlOdds}` : `${mlOdds}`;
+    parsed.pick = `${pickedTeam} ML ${mlOddsStr}`;
+    parsed.odds = mlOdds;
+    
+    console.log(`[Orchestrator] ${sportLabel} Converted to: ${parsed.pick}`);
+  }
+  
+  // NHL: ALWAYS moneyline (no puck line, no totals - Gary picks winners)
+  const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
+  if (isNHL) {
+    parsed.type = 'moneyline';
+    console.log(`[Orchestrator] 🏒 NHL: Forcing type to moneyline (ML-only sport)`);
+  }
+  // DETECT TYPE FROM PICK TEXT if not explicitly provided (non-NHL)
+  else if (!parsed.type && parsed.pick) {
+    const pickLower = parsed.pick.toLowerCase();
+    if (pickLower.includes(' ml ') || pickLower.includes(' moneyline') || pickLower.endsWith(' ml')) {
+      parsed.type = 'moneyline';
+      console.log(`[Orchestrator] 📋 Detected type: moneyline (from pick text)`);
+    } else if (/[+-]\d+\.?\d*/.test(parsed.pick) && !pickLower.includes(' ml ')) {
+      // Has a spread number like +3.5 or -5.5 but not ML
+      parsed.type = 'spread';
+      console.log(`[Orchestrator] 📋 Detected type: spread (from pick text)`);
+    } else {
+      // Default to moneyline as general default
+      parsed.type = 'moneyline';
+      console.log(`[Orchestrator] 📋 Defaulting type to: moneyline`);
+    }
+  }
+  
+  // EXTRACT ODDS FROM PICK TEXT if not explicitly provided
+  // E.g., "Detroit Red Wings ML -185" → odds = -185
+  if (!parsed.odds && parsed.pick) {
+    const oddsMatch = parsed.pick.match(/([+-]\d{3,4})(?:\s*$|\s)/);
+    if (oddsMatch) {
+      parsed.odds = parseInt(oddsMatch[1], 10);
+      console.log(`[Orchestrator] 📋 Extracted odds from pick text: ${parsed.odds}`);
+    }
+  }
+  
+  // EXTRACT CONFIDENCE from parsed data if available
+  if (!parsed.confidence && parsed.confidence_score) {
+    parsed.confidence = parsed.confidence_score;
+    console.log(`[Orchestrator] 📋 Using confidence_score: ${parsed.confidence}`);
   }
   
   // Clean up pick text - remove placeholder patterns like -X.X
@@ -4786,19 +5738,76 @@ function normalizePickFormat(parsed, homeTeam, awayTeam, sport) {
 
   // Final validation: if pick text is too short or missing team name, reconstruct it
   if (pickText.length < 10 || !pickText.match(/[A-Za-z]{3,}/)) {
-    // Reconstruct pick text from available data
-    const team = parsed.homeTeam || homeTeam || parsed.awayTeam || awayTeam || 'Unknown Team';
+    console.log(`[Orchestrator] ⚠️ Pick text too short or missing team name: "${pickText}" - attempting reconstruction`);
+    
+    // CRITICAL FIX: Try to extract team from rationale before falling back to homeTeam
+    // The rationale often ends with "Take [Team] ML" or "Take [Team] +X.X"
+    let team = null;
+    const rationale = parsed.rationale || '';
+    const homeTeamName = parsed.homeTeam || homeTeam || '';
+    const awayTeamName = parsed.awayTeam || awayTeam || '';
+    
+    // Check rationale for "Take [Team]" pattern - this is the most reliable indicator
+    const takePattern = /take\s+(?:the\s+)?([A-Za-z]+(?:\s+[A-Za-z]+)*)\s+(?:ML|moneyline|\+|\-)/i;
+    const takeMatch = rationale.match(takePattern);
+    
+    if (takeMatch) {
+      const mentionedTeam = takeMatch[1].toLowerCase();
+      const homeWords = homeTeamName.toLowerCase().split(' ');
+      const awayWords = awayTeamName.toLowerCase().split(' ');
+      
+      // Check if the mentioned team matches home or away
+      if (homeWords.some(w => w.length > 3 && mentionedTeam.includes(w)) || 
+          mentionedTeam.includes(homeWords[homeWords.length - 1])) {
+        team = homeTeamName;
+        console.log(`[Orchestrator] ✅ Extracted HOME team from rationale: ${team}`);
+      } else if (awayWords.some(w => w.length > 3 && mentionedTeam.includes(w)) ||
+                 mentionedTeam.includes(awayWords[awayWords.length - 1])) {
+        team = awayTeamName;
+        console.log(`[Orchestrator] ✅ Extracted AWAY team from rationale: ${team}`);
+      }
+    }
+    
+    // If still no team, check if rationale mentions one team more favorably at the end
+    if (!team) {
+      const lastSentences = rationale.slice(-300).toLowerCase();
+      const homeMentions = homeTeamName.split(' ').filter(w => w.length > 3 && lastSentences.includes(w.toLowerCase())).length;
+      const awayMentions = awayTeamName.split(' ').filter(w => w.length > 3 && lastSentences.includes(w.toLowerCase())).length;
+      
+      if (awayMentions > homeMentions) {
+        team = awayTeamName;
+        console.log(`[Orchestrator] ✅ Inferred AWAY team from rationale mentions: ${team}`);
+      } else if (homeMentions > awayMentions) {
+        team = homeTeamName;
+        console.log(`[Orchestrator] ✅ Inferred HOME team from rationale mentions: ${team}`);
+      }
+    }
+    
+    // Final fallback - but log a warning
+    if (!team) {
+      team = homeTeamName || awayTeamName || 'Unknown Team';
+      console.log(`[Orchestrator] ⚠️ WARNING: Could not determine team from rationale, falling back to: ${team}`);
+    }
+    
     const type = parsed.type || 'spread';
     if (type === 'moneyline' || type === 'ml') {
-      const mlOdds = parsed.moneylineHome || parsed.moneylineAway || odds;
+      // Determine correct ML odds based on which team was picked
+      let mlOdds;
+      if (team === homeTeamName) {
+        mlOdds = parsed.moneylineHome || parsed.moneylineAway || odds;
+      } else {
+        mlOdds = parsed.moneylineAway || parsed.moneylineHome || odds;
+      }
       const mlOddsStr = mlOdds > 0 ? `+${mlOdds}` : `${mlOdds}`;
       pickText = `${team} ML ${mlOddsStr}`;
+      console.log(`[Orchestrator] Reconstructed ML pick: ${pickText}`);
     } else if (parsed.spread) {
       const spreadNum = parseFloat(parsed.spread);
       const spreadStr = spreadNum > 0 ? `+${spreadNum}` : `${spreadNum}`;
       const spreadOdds = parsed.spreadOdds || -110;
       const spreadOddsStr = spreadOdds > 0 ? `+${spreadOdds}` : `${spreadOdds}`;
       pickText = `${team} ${spreadStr} ${spreadOddsStr}`;
+      console.log(`[Orchestrator] Reconstructed spread pick: ${pickText}`);
     }
   }
 
@@ -4819,8 +5828,27 @@ function normalizePickFormat(parsed, homeTeam, awayTeam, sport) {
     contradictions.minor = parsed.contradicting_factors;
   }
 
-  // Get rationale and validate it
-  let rationale = parsed.rationale || parsed.analysis || '';
+  // Get rationale and validate it - try multiple fields as fallbacks
+  let rationale = parsed.rationale || parsed.analysis || parsed.reasoning || '';
+  
+  // If rationale is still empty, try to construct one from other available data
+  if (!rationale || rationale.length < 50) {
+    // Try thesis_mechanism first (it often contains the core reasoning)
+    if (parsed.thesis_mechanism && parsed.thesis_mechanism.length > 20) {
+      rationale = parsed.thesis_mechanism;
+      console.log(`[Orchestrator] Using thesis_mechanism as rationale fallback (${rationale.length} chars)`);
+    }
+    // Try supporting_factors as a fallback
+    else if (parsed.supporting_factors && Array.isArray(parsed.supporting_factors) && parsed.supporting_factors.length > 0) {
+      rationale = `Key factors: ${parsed.supporting_factors.join(', ')}`;
+      console.log(`[Orchestrator] Using supporting_factors as rationale fallback (${rationale.length} chars)`);
+    }
+    // Try to find rationale in the raw response if we have Gary's full output
+    else if (parsed.gary_take || parsed.analysis_summary) {
+      rationale = parsed.gary_take || parsed.analysis_summary;
+      console.log(`[Orchestrator] Using gary_take/analysis_summary as rationale fallback (${rationale.length} chars)`);
+    }
+  }
   
   // Check for placeholder/invalid rationales - these should NOT happen
   const invalidRationales = [
@@ -4835,13 +5863,22 @@ function normalizePickFormat(parsed, homeTeam, awayTeam, sport) {
   ];
   
   const lowerRationale = rationale.toLowerCase().trim();
-  const isInvalidRationale = invalidRationales.some(inv => lowerRationale.includes(inv)) || 
-                             rationale.length < 100; // Must be at least 100 chars for a real analysis
+  const isPlaceholderRationale = invalidRationales.some(inv => lowerRationale.includes(inv));
   
-  // Flag invalid rationales - the retry logic in runAgentLoop will handle this
-  if (isInvalidRationale) {
-    console.log(`[Orchestrator] ⚠️ Invalid rationale detected (length: ${rationale.length}) - will retry`);
+  // Reduced minimum length from 100 to 50 chars to be more lenient
+  // The key insight is that having SOME rationale is better than retrying
+  const isTooShort = rationale.length < 50;
+  
+  // Only retry if rationale is a placeholder OR completely missing (length 0)
+  // Don't retry for short but meaningful rationales
+  if (isPlaceholderRationale || rationale.length === 0) {
+    console.log(`[Orchestrator] ⚠️ Invalid rationale detected (length: ${rationale.length}, placeholder: ${isPlaceholderRationale}) - will retry`);
     return null; // Return null to trigger retry
+  }
+  
+  // Log warning for short rationales but don't retry
+  if (isTooShort) {
+    console.log(`[Orchestrator] ⚠️ Short rationale (${rationale.length} chars) - proceeding anyway`);
   }
 
   return {
@@ -4925,7 +5962,7 @@ export async function rankPicksInSession(slateSession) {
   
   const rankingPrompt = `
 ═══════════════════════════════════════════════════════════════════════════
-🏆 FINAL STEP: RANK YOUR PICKS
+FINAL STEP: RANK YOUR PICKS
 ═══════════════════════════════════════════════════════════════════════════
 
 You've analyzed all ${slateSession.gamesAnalyzed} games today. Here are your picks:

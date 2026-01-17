@@ -11,8 +11,8 @@ import { createClient } from '@supabase/supabase-js';
 import { generateDFSLineup, PLATFORM_CONSTRAINTS, validateLineup } from './src/services/dfsLineupService.js';
 import { buildDFSContext, discoverDFSSlates } from './src/services/agentic/dfsAgenticContext.js';
 
-// Jan 14, 2026 - Real lineup generation
-const TODAY = '2026-01-14';
+// Jan 16, 2026 - Real lineup generation
+const TODAY = '2026-01-16';
 
 // Initialize Supabase
 function getSupabaseAdmin() {

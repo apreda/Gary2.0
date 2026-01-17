@@ -1,5 +1,46 @@
 # How Sharps Actually Think
 
+---
+
+## 🧠 WHAT GOOD ANALYSIS LOOKS LIKE
+
+Before you build or grade any case, understand the difference between real analysis and rationalization.
+
+**✅ THE GOLD STANDARD (OKC -4.5):**
+> "Houston's defensive identity is fractured following the fresh losses of Tari Eason and Dorian Finney-Smith — the two primary 'stoppers' usually tasked with containing elite scoring guards. Without them, the Rockets lack the lateral quickness to prevent Shai Gilgeous-Alexander from living in the paint."
+
+**Why it works:**
+- Fresh information (specific injuries announced recently) tied to specific matchup (SGA vs perimeter D)
+- Forward mechanism: No stoppers → SGA in paint → margin expansion
+- Answers "How does OKC win by 5+ against THIS opponent?"
+
+**❌ THE TRAP (Utah Example):**
+> "Utah's defensive rating is famously the worst in the league, but Dallas currently lacks the offensive firepower to exploit it."
+
+**Why it fails:**
+- Backward logic: Bad defense doesn't become good because the opponent is also struggling
+- No mechanism for how Utah actually wins — it just hopes Dallas fails
+- The question is "How does Utah cover?" not "Why can't Dallas cover?"
+
+**❌ THE "PATTERN ONLY" TRAP:**
+> "I am banking on the Bucks' pride and the return of their defensive anchor to keep this within the number."
+
+**Why it fails:**
+- "Pride" is not a basketball mechanism
+- Pattern (bounce back) without tactical explanation against THIS specific opponent
+- Narrative words ("pride," "desperation," "revenge") can't carry a thesis
+
+**THE BACKWARD LOGIC TRAP:**
+"Team B has weakness X, but Team A can't exploit it" is not analysis.
+This bets on a negative rather than identifying a positive.
+
+The question is always: **"How does MY pick win/cover?"**
+Not: "Why can't the OTHER team succeed?"
+
+*These are illustrative examples of reasoning quality. Apply the same principles to ANY matchup — the pattern matters, not the specific teams.*
+
+---
+
 ## This Is Not a Rulebook
 
 > "This book is not a get-rich-quick vehicle. If you are looking for a magic formula in which you input data and grind out numbers that will tell you who will win tomorrow's games, you might be disappointed."
@@ -171,6 +212,8 @@ Season-long stats are public information. The market has them. Unless you've fou
 > "They've won 5 straight" or "They're playing their best basketball."
 
 Winning streaks and hot streaks are visible to everyone. Has the line moved to reflect this? If so, you're betting on stale information.
+
+**⚠️ NHL EXCEPTION:** This trap applies differently to NHL moneylines. NHL bets ask "who wins?" not "who covers a spread." A hot streak with the same goalie starting is a STRUCTURAL factor (goalie confidence, team rhythm) - not just public noise. In NHL, the question isn't "is this priced in?" but "is the same goalie starting?" If yes, the streak has legitimate structural support. See NHL Constitution for details.
 
 **The "Reverse Logic" Trap**
 > "Everyone expects X, so Y will happen."
@@ -368,42 +411,45 @@ The market prices the star's absence based on NARRATIVE (this team is dead witho
 
 ### The Letdown Spot
 
-**The Concept:** Teams underperform after emotional peaks - big wins, rivalry games, statement games.
+**The Concept:** A THEORY that teams underperform after emotional peaks - big wins, rivalry games.
 
-**Why It Creates Edge:**
-Human psychology. Players aren't robots. After an emotionally draining win (especially against a rival or in a nationally televised game), it's hard to maintain intensity against a "lesser" opponent.
+**⚠️ REALITY CHECK - THIS IS UNVERIFIABLE:**
+You cannot know a team's psychological state. "Letdown" is a narrative applied AFTER the fact to explain unexpected losses. Before the game, you have no way to know if a team will "let down" or "stay focused."
 
-**When to Apply It:**
-- Team just had a massive emotional win
-- Now facing a less glamorous opponent
-- Line doesn't seem to account for the letdown potential
-- Especially relevant for favorites laying big numbers
+**The Evidence Problem:**
+- Research on letdown spots is mixed at best
+- Professional teams have coaching staffs specifically to prevent this
+- The market sees the schedule too - if letdowns were predictable, they'd be priced in
+- Confirmation bias: We remember the letdowns, forget the focused performances
 
-**When NOT to Apply It:**
-- Professional teams are professional (this is overrated as a factor)
-- The market already knows the schedule
-- Big spreads already account for talent gap
+**If You MUST Consider This Factor:**
+- You need THIS specific team's historical data in similar spots (not general "letdown" theory)
+- Acknowledge this is speculative, not a thesis pillar
+- Ask: "Has the market already priced in letdown risk?"
 
-**The Key Insight:** The question isn't "will they let down?" It's "has the market priced in the possibility?"
+**The Key Insight:** Betting on "psychological factors" is betting on something you cannot verify. Stick to measurable factors unless you have specific historical data for THIS team.
 
 ---
 
 ### The Lookahead Spot
 
-**The Concept:** Teams underperform when they have a huge game on deck.
+**The Concept:** A THEORY that teams underperform when they have a big game coming up.
 
-**Why It Creates Edge:**
-Coaches and players are human. When you play a scrub team on Sunday but face your rival on Thursday, some mental energy leaks forward.
+**⚠️ REALITY CHECK - THIS IS UNVERIFIABLE:**
+"Trap game" and "lookahead" are narrative constructs, not measurable factors. You cannot know what a team is thinking about. Professional athletes and coaches are paid to focus on the game in front of them.
 
-**When to Apply It:**
-- Clear "trap game" setup (cupcake before a monster)
-- Team is favored by a lot
-- The market seems to be pricing the team as if this game matters equally
+**The Evidence Problem:**
+- The market sees the schedule - everyone knows when the "trap" is
+- If trap games were predictable, they'd be priced into the line
+- We remember the "trap game" upsets, forget the hundreds of times favorites covered comfortably
+- Coaches specifically game-plan against lookahead - it's their job
 
-**When NOT to Apply It:**
-- Pro teams with veteran coaches know better
-- Short weeks make this less relevant (no time to look ahead)
-- The market has this calendar too
+**If You MUST Consider This Factor:**
+- You need THIS specific team's historical data showing they actually fall into this pattern
+- Consider whether the market has ALREADY priced in the "trap" narrative
+- This should NEVER be a primary thesis - at best, a minor supporting point
+
+**The Key Insight:** Every "trap game" that hits gets remembered. Every one that doesn't gets forgotten. This is textbook confirmation bias. Stick to measurable factors.
 
 ---
 
@@ -444,23 +490,57 @@ Because the 30% betting the other way is SHARP MONEY - bigger bets from respecte
 
 ---
 
-### The "Dead Cat Bounce"
+### Returning Players Caution
 
-**The Concept:** A bad team that's been getting crushed will occasionally "show life" - especially at home, after a brutal stretch, when the market has completely written them off.
+**The Concept:** When a starter or key player returns from injury for their FIRST game back, this creates HIGH UNCERTAINTY - not automatic improvement.
 
-**Why It Creates Edge:**
-When spreads get to double digits against struggling teams, the market sometimes overcorrects. Even bad teams have professional athletes who occasionally play with pride.
+**Why It Creates Caution:**
+- Teams often struggle to mesh when players return - chemistry disruption is real
+- Players need time to regain rhythm, conditioning, and timing with teammates
+- **Returning ≠ Full Strength** - minutes may be limited, rust is real
+- If multiple players return simultaneously, uncertainty compounds
 
-**When to Apply It:**
-- Team has been getting blown out
-- Spread is massive (10+ points)
-- Home game after brutal road trip
-- Some "reason to care" (division game, last home game, etc.)
+**When to Be Cautious:**
+- First game back from injury (especially 2+ weeks out)
+- Multiple players returning at once
+- Player returning from significant injury (ACL, major surgery, etc.)
+- No practice time with team before return
 
-**When NOT to Apply It:**
-- Team is actively tanking
-- No discernible reason for effort
-- Star players are sitting
+**When It May Be Less Concerning:**
+- Player has had several practices with team
+- Minor injury with short absence (1-2 games)
+- Player explicitly cleared for full minutes
+- Team has shown they can integrate players smoothly
+
+**Key Point:** Wait for 2-3 games of data before trusting "full strength" narratives. The market often overreacts to "Player X is back!" headlines.
+
+---
+
+### Long-Term Injury Context (PRESCRIPTIVE)
+
+**⚠️ This is one of the few hard rules because it's factual, not judgmental.**
+
+A player who has been out for 3+ weeks is **NOT a fresh factor**:
+- If the team is still winning/competitive → they have adjusted
+- If the line hasn't moved in weeks → the market has fully priced it in
+- Do NOT cite long-term absences as edge — they explain why the line exists, not why it's wrong
+
+**Example of the trap:**
+> "Without Jayson Tatum to bail them out of late-clock situations..."
+
+If Tatum has been out all season and Boston is still a playoff team with Jaylen Brown having a historic year, this is NOT fresh information. The team has adapted. The market knows.
+
+**Fresh injury edge ONLY exists when:**
+- Injury announced in the last 24-48 hours
+- Player's status changed today (upgraded/downgraded to OUT/GTD)
+- First game without the player (team hasn't adjusted yet)
+
+**What IS interesting about long-term injuries:**
+- How has the team performed SINCE the injury? (This shows adjustment)
+- Is there a specific matchup where the absence matters more? (e.g., missing rim protector vs elite driver)
+- Is the player returning soon? (Creates uncertainty, see Returning Players Caution above)
+
+The absence itself is not edge. How the team plays without them — and whether the market has correctly priced that — might be.
 
 ---
 
@@ -489,12 +569,12 @@ These are NOT rules. They're context. The market knows all of this.
 
 | Factor | What Research Shows | What This Means |
 |--------|---------------------|-----------------|
-| NFL Key Numbers | 3 (15%) and 7 (10%) are most common margins | Half-points around these numbers matter more |
-| NFL Home Field | ~1.5-2 points currently (down from 3 historically) | Don't over-value home field |
-| NBA Home Court | ~2 points on average | Similar - don't over-value |
-| NFL Favorites ATS | ~48% historically | Being better doesn't mean covering |
-| Known Injuries | Priced in after 2-3 games | If everyone knows, line reflects it |
-| Weather (NFL) | Wind over 15mph affects passing, under hits more | But market knows weather forecasts too |
+| NFL Key Numbers | 3 and 7 are most common margins (scoring increments) | Half-points around these numbers matter more |
+| NFL Home Field | Line already includes home field | Don't add mental points - investigate THIS team's home record |
+| NBA Home Court | Line already includes home court | Investigate THIS team's actual home/away splits |
+| NFL Favorites ATS | Historically close to 50% | Being better doesn't mean covering |
+| Known Injuries | Priced in after initial adjustment | If everyone knows, line reflects it |
+| Weather (NFL) | Wind over 15mph affects passing | But market knows weather forecasts too |
 
 Use these as sanity checks, not as betting systems. The moment you turn them into rules, you've stopped thinking.
 
@@ -514,6 +594,30 @@ This section contains situational factors organized by sport. **The market knows
 - Is this a pace mismatch? (Slow team usually controls tempo)
 - Playoff implications? (Teams fighting for seeding vs. locked in vs. tanking)
 - Is a blowout likely? (Garbage time compresses margins - 20-point leads become 12-point wins)
+
+**REST + HOME/ROAD CONTEXT (Investigate, Don't Assume):**
+Not all rest is equal. Where a team rests matters as much as how long they rest:
+- **Home rest is "clean rest"** — Players sleep in their own beds, follow their normal routines, no travel fatigue, familiar environment
+- **Road rest is "dirty rest"** — Days off are partially negated by travel to/from the game, hotel beds, disrupted routines, unfamiliar environment
+- **2 days rest at HOME ≥ 3 days rest on the ROAD** — The home team's shorter rest at home is often more valuable than the road team's longer rest followed by travel
+- **Never cite "rest edge" for the road team without acknowledging they still had to travel** — A team with 3 days off but flying cross-country doesn't have a rest advantage over a team with 2 days off at home
+
+**Investigate the actual travel schedule:**
+- Where did the road team come from? (Cross-country flight vs short hop matters)
+- Did they play the night before in a nearby city, or fly in from 3 time zones away?
+- Is this the start of a road trip, middle, or end? (Fatigue accumulates)
+
+**Returning players have DIFFERENT rest than the team:**
+- If a player is returning from injury and the team is on a B2B, that player is NOT on a B2B — they didn't play yesterday
+- A returning star on a "tired" team might actually be the freshest player on the court
+- Investigate: When did this player last play? How many days of true rest do THEY have?
+
+**The questions to ask:**
+- "Is this team actually more rested, or do they just have more days between games?"
+- "What's the travel schedule look like — where did they come from?"
+- "If a key player is returning, what's THEIR rest situation vs the team's?"
+
+Days ≠ Rest when travel is involved. Team rest ≠ Individual player rest when returns are involved.
 
 **Garbage time reality:** NBA blowouts rarely stay blowouts. When a team is up 20+ in the 4th, benches empty, intensity drops, and the final margin shrinks. If you're betting a big favorite, understand you need them to maintain the lead through garbage time - which is rare.
 
@@ -541,6 +645,39 @@ This section contains situational factors organized by sport. **The market knows
 
 ---
 
+### NFL Playoffs — A Different Sport
+
+Playoff football changes the game. Single elimination shifts incentives, preparation, and intensity in ways that regular season stats don't capture.
+
+**The key question shifts:**
+> "How does this team win a low-margin, high-pressure, single-elimination game against THIS specific opponent with 1-2 weeks of dedicated game-planning?"
+
+Regular season blowouts and efficiency metrics are context, not destiny. Playoff games are often decided by:
+- Who handles pressure better (exotic blitzes, high-stakes moments)
+- Who makes fewer critical mistakes (one turnover can end a season)
+- Who adjusts better at halftime (coaches scheme specifically for one opponent)
+- Who wins the physical battle (run game, stopping the run, time of possession)
+
+**Factors to investigate MORE deeply in playoffs:**
+- **Quarterback under pressure** — How does this QB perform against playoff-caliber defenses showing exotic looks? Check pressure rate stats, but also: has he been HERE before?
+- **Coaching adjustments** — Does this staff have a track record of halftime adjustments? Of out-scheming opponents in elimination games?
+- **Turnover margin** — Always matters, but in single elimination, one pick-six ends seasons. Who protects the ball? Who forces mistakes?
+- **Run game / Run defense** — Playoff football tends toward physical, conservative play. Can they run it? Can they stop the run?
+- **Genuine playoff experience** — Not narrative "veteran leadership." Actual reps: Has this QB seen these defensive schemes before? Has this coach managed a 4th quarter playoff situation?
+
+**Factors that matter LESS in playoffs:**
+- Season-long efficiency metrics against different opponents (teams play differently now)
+- "Momentum" narratives from regular season finish
+- Trap games, lookahead spots, motivation questions — everyone is locked in, WIN OR GO HOME
+
+**Home field in playoffs:**
+Investigate it, don't assume it. January weather in Buffalo or Green Bay is real. Loud crowds in Kansas City are real. But road teams in playoffs are battle-tested — they earned the right to be there. The market knows home field matters; the question is whether THIS specific home environment creates edge the line doesn't reflect.
+
+**The "toss-up" recognition:**
+If two evenly-matched playoff teams can't be separated — and you genuinely believe neither team gives an inch — that's useful information. In a coin-flip elimination game, having points on your side is valuable. Don't force a pick on "who wins" if the honest answer is "this will be decided by a play or two." Take the points and the team getting them.
+
+---
+
 ### NHL Quick Reference
 
 **Things to check:**
@@ -548,6 +685,7 @@ This section contains situational factors organized by sport. **The market knows
 - Is either team on a back-to-back? (Usually means backup goalie plays one game)
 - What's the travel situation? (West coast team flying east for early start = compromised)
 - Recent goalie performance? (Last 5-7 starts matter more than season averages)
+- **Home rest vs road rest:** Same principle as NBA — 2 days rest at home beats 3 days rest with travel. The road team's "rest advantage" is partially negated by the flight and hotel.
 
 **Goalie is everything:** A hot goalie can steal games against superior teams. A cold goalie can sink a favorite. Never bet an NHL game without knowing who's in net.
 
@@ -568,7 +706,7 @@ This section contains situational factors organized by sport. **The market knows
 - Motivation factor? (Bowl eligibility, rivalry, senior day)
 - Roster turnover? (Who left to draft/transfer portal?)
 
-**Home field worth more:** College home field is worth more than pros - approximately 3-4 points in football, 4-5 in basketball. Student sections, unfamiliar environments matter more for 19-year-olds.
+**Home field matters more in college:** Student sections and unfamiliar environments affect young players more than pros. The line reflects this - investigate whether THIS specific venue creates additional pressure beyond what's priced in.
 
 **Brand name bias:** Public overvalues Alabama, Ohio State, Duke, Kentucky regardless of current form. Creates potential value on opponents when blue bloods are struggling.
 

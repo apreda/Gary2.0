@@ -640,6 +640,67 @@ function extractWeatherFromGrounding(groundedContext) {
 }
 
 /**
+ * Extract team standings context for both teams in the game
+ * ENHANCED: Provides momentum/strength context (win streak, point differential, records)
+ * @param {Array} standings - NFL standings array from BDL
+ * @param {string} homeTeamName - Home team name
+ * @param {string} awayTeamName - Away team name
+ * @returns {Object} - { home: {...}, away: {...} } or nulls if not found
+ */
+function extractTeamStandingsContext(standings, homeTeamName, awayTeamName) {
+  const result = { home: null, away: null };
+  
+  if (!standings || standings.length === 0) {
+    return result;
+  }
+  
+  // Normalize team name for matching
+  const normalizeTeam = (name) => (name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const homeNorm = normalizeTeam(homeTeamName);
+  const awayNorm = normalizeTeam(awayTeamName);
+  
+  for (const standing of standings) {
+    const teamName = standing.team?.full_name || '';
+    const teamNorm = normalizeTeam(teamName);
+    
+    // Check if this standing matches home or away team
+    const isHome = teamNorm === homeNorm || homeNorm.includes(teamNorm) || teamNorm.includes(homeNorm);
+    const isAway = teamNorm === awayNorm || awayNorm.includes(teamNorm) || teamNorm.includes(awayNorm);
+    
+    if (isHome || isAway) {
+      const standingData = {
+        team: teamName,
+        record: standing.overall_record || `${standing.wins || 0}-${standing.losses || 0}`,
+        wins: standing.wins || 0,
+        losses: standing.losses || 0,
+        ties: standing.ties || 0,
+        homeRecord: standing.home_record || 'N/A',
+        roadRecord: standing.road_record || 'N/A',
+        divisionRecord: standing.division_record || 'N/A',
+        conferenceRecord: standing.conference_record || 'N/A',
+        winStreak: standing.win_streak || 0,
+        pointsFor: standing.points_for || 0,
+        pointsAgainst: standing.points_against || 0,
+        pointDifferential: standing.point_differential || (standing.points_for || 0) - (standing.points_against || 0),
+        playoffSeed: standing.playoff_seed || null
+      };
+      
+      if (isHome && !result.home) {
+        result.home = standingData;
+      }
+      if (isAway && !result.away) {
+        result.away = standingData;
+      }
+    }
+    
+    // Stop if we found both
+    if (result.home && result.away) break;
+  }
+  
+  return result;
+}
+
+/**
  * Resolve player IDs and Teams from BDL for prop candidates by searching by name
  * Returns { playerIdMap, playerTeamMap } for resolving both IDs and teams
  * 
@@ -1700,7 +1761,7 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerIdMap, i
  * NOW INCLUDES: Game Script Context, Trump Cards, Position-Specific Defense,
  * VOLUME METRICS (target share, carry share), and LINE MOVEMENT
  */
-function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnapshot, playerIdMap, playerGameLogs, defensiveMatchups, shortWeekInfo, weather, gameScriptContext, trumpCards, lineMovements = {}, playerSeasonStats = {}) {
+function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnapshot, playerIdMap, playerGameLogs, defensiveMatchups, shortWeekInfo, weather, gameScriptContext, trumpCards, lineMovements = {}, playerSeasonStats = {}, teamStandings = {}) {
   // Enhance prop candidates with their game log data, VOLUME METRICS, and LINE MOVEMENT
   const enhancedCandidates = propCandidates.map(p => {
     const playerId = playerIdMap[p.player.toLowerCase()];
@@ -1826,7 +1887,28 @@ function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnap
     lineMovementSummary: {
       totalFound: Object.keys(lineMovements).length,
       significantMoves: Object.values(lineMovements).filter(m => Math.abs(m.magnitude) >= 2.0).length
-    }
+    },
+    // ENHANCED: Team Standings for momentum/strength context
+    team_standings: teamStandings?.home || teamStandings?.away ? {
+      home: teamStandings.home ? {
+        team: teamStandings.home.team,
+        record: teamStandings.home.record,
+        homeRecord: teamStandings.home.homeRecord,
+        roadRecord: teamStandings.home.roadRecord,
+        winStreak: teamStandings.home.winStreak,
+        pointDifferential: teamStandings.home.pointDifferential,
+        momentum: teamStandings.home.winStreak >= 3 ? 'HOT' : teamStandings.home.winStreak === 0 && teamStandings.home.losses > teamStandings.home.wins ? 'COLD' : 'NEUTRAL'
+      } : null,
+      away: teamStandings.away ? {
+        team: teamStandings.away.team,
+        record: teamStandings.away.record,
+        homeRecord: teamStandings.away.homeRecord,
+        roadRecord: teamStandings.away.roadRecord,
+        winStreak: teamStandings.away.winStreak,
+        pointDifferential: teamStandings.away.pointDifferential,
+        momentum: teamStandings.away.winStreak >= 3 ? 'HOT' : teamStandings.away.winStreak === 0 && teamStandings.away.losses > teamStandings.away.wins ? 'COLD' : 'NEUTRAL'
+      } : null
+    } : { available: false }
   };
 }
 
@@ -1926,11 +2008,11 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
     excludeTdProps: options.regularOnly || false 
   });
 
-  // STEP 3: Parallel fetch - COMPREHENSIVE narrative context + BDL injuries + LINE MOVEMENT
+  // STEP 3: Parallel fetch - COMPREHENSIVE narrative context + BDL injuries + LINE MOVEMENT + STANDINGS
   // IMPORTANT: All context is fetched UPFRONT so Gary knows all factors BEFORE iterations
-  console.log('[NFL Props Context] Step 2: Fetching COMPREHENSIVE narrative + BDL injuries + LINE MOVEMENT...');
+  console.log('[NFL Props Context] Step 2: Fetching COMPREHENSIVE narrative + BDL injuries + LINE MOVEMENT + STANDINGS...');
   
-  const [bdlInjuries, comprehensiveNarrative, lineMovementData] = await Promise.all([
+  const [bdlInjuries, comprehensiveNarrative, lineMovementData, teamStandings] = await Promise.all([
     // BDL injuries as backup - with logging if fails
     teamIds.length > 0 
       ? safeApiCallArray(
@@ -1958,6 +2040,13 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
     fetchPropLineMovement('NFL', dateStr, game.home_team, game.away_team).catch(e => {
       console.warn('[NFL Props Context] Line movement fetch failed:', e.message);
       return { movements: {}, source: 'ERROR' };
+    }),
+    
+    // ENHANCED: Team Standings - Win streak, point differential, records
+    // Helps Gary understand team momentum and strength for prop context
+    ballDontLieService.getNflStandings(season).catch(e => {
+      console.warn('[NFL Props Context] Team standings fetch failed:', e.message);
+      return [];
     })
   ]);
   
@@ -1968,6 +2057,22 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
     console.log(`[NFL Props Context] ✓ Found ${lineMovementCount} prop line movements from ${lineMovementData.source}`);
   } else {
     console.log(`[NFL Props Context] No line movement data available (source: ${lineMovementData?.source || 'UNKNOWN'})`);
+  }
+  
+  // ENHANCED: Process team standings for momentum/strength context
+  const teamStandingsContext = extractTeamStandingsContext(
+    teamStandings,
+    homeTeam?.full_name || game.home_team,
+    awayTeam?.full_name || game.away_team
+  );
+  if (teamStandingsContext.home || teamStandingsContext.away) {
+    console.log(`[NFL Props Context] 📊 Team Standings Context:`);
+    if (teamStandingsContext.home) {
+      console.log(`   - ${teamStandingsContext.home.team}: ${teamStandingsContext.home.record} (${teamStandingsContext.home.homeRecord} home, ${teamStandingsContext.home.roadRecord} road), Streak: ${teamStandingsContext.home.winStreak > 0 ? `W${teamStandingsContext.home.winStreak}` : 'No streak'}, Diff: ${teamStandingsContext.home.pointDifferential > 0 ? '+' : ''}${teamStandingsContext.home.pointDifferential}`);
+    }
+    if (teamStandingsContext.away) {
+      console.log(`   - ${teamStandingsContext.away.team}: ${teamStandingsContext.away.record} (${teamStandingsContext.away.homeRecord} home, ${teamStandingsContext.away.roadRecord} road), Streak: ${teamStandingsContext.away.winStreak > 0 ? `W${teamStandingsContext.away.winStreak}` : 'No streak'}, Diff: ${teamStandingsContext.away.pointDifferential > 0 ? '+' : ''}${teamStandingsContext.away.pointDifferential}`);
+    }
   }
   
   // Extract narrative context - now includes structured sections
@@ -2122,7 +2227,7 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
     defensiveMatchups
   );
 
-  // Build token data with enhanced info - NOW INCLUDES Game Script, Trump Cards, LINE MOVEMENT
+  // Build token data with enhanced info - NOW INCLUDES Game Script, Trump Cards, LINE MOVEMENT, STANDINGS
   // Use availableCandidates to ensure only verified and available players are included
   const tokenData = buildPropsTokenSlices(
     playerStats,
@@ -2137,7 +2242,8 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
     gameScriptContext, // Game script analysis
     trumpCards, // Trump card factors
     lineMovements, // Line movement data for Tier 2 Kill Conditions
-    {} // Player season stats (populated in NFL separately)
+    {}, // Player season stats (populated in NFL separately)
+    teamStandingsContext // ENHANCED: Team standings for momentum/strength context
   );
 
   // Build game summary with all context - NOW INCLUDES Game Script & Trump Cards

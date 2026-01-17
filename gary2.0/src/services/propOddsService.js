@@ -96,16 +96,6 @@ const PROP_MARKETS = {
     'player_goals',
     'player_total_saves'
     // Goal scorer props removed to reduce token usage
-  ],
-  soccer_epl: [
-    // Soccer player props - shots, goals, assists
-    'player_shots',
-    'player_shots_on_target',
-    'player_goal_scorer_anytime',
-    'player_first_goal_scorer',
-    'player_last_goal_scorer',
-    'player_to_score_2_or_more',
-    'player_assists'
   ]
 };
 
@@ -152,6 +142,7 @@ export const propOddsService = {
       if (prop.over_odds !== null && isOddsAcceptable(prop.over_odds)) {
         splitProps.push({
           player: prop.player,
+          player_id: prop.player_id,  // FIXED: Preserve player_id for context building
           team: prop.team,
           prop_type: prop.prop_type,
           line: prop.line,
@@ -171,6 +162,7 @@ export const propOddsService = {
       if (prop.under_odds !== null && isOddsAcceptable(prop.under_odds)) {
         splitProps.push({
           player: prop.player,
+          player_id: prop.player_id,  // FIXED: Preserve player_id for context building
           team: prop.team,
           prop_type: prop.prop_type,
           line: prop.line,
@@ -298,116 +290,6 @@ export const propOddsService = {
         }
       }
       
-      // ============ EPL: Use Ball Don't Lie Player Props API ============
-      if (sport === 'soccer_epl') {
-        console.log(`[PropOdds] Using Ball Don't Lie for EPL player props`);
-        
-        // Get today's date in YYYY-MM-DD format (EST)
-        const now = new Date();
-        const estOffset = -5 * 60; // EST is UTC-5
-        const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-        const est = new Date(utc + (estOffset * 60000));
-        const dateStr = est.toISOString().split('T')[0];
-        
-        // Find the game ID from BDL
-        const eplGames = await ballDontLieService.getEplGamesForDate(dateStr);
-        
-        // Get all EPL teams for ID-to-name mapping
-        const eplTeams = await ballDontLieService.getTeams('soccer_epl');
-        const teamMap = {};
-        (eplTeams || []).forEach(t => {
-          teamMap[t.id] = t;
-        });
-        
-        // Find matching game by resolving team IDs to names
-        const matchingGame = eplGames.find(g => {
-          // BDL EPL games use home_team_id/away_team_id (integers)
-          const homeTeamObj = teamMap[g.home_team_id] || {};
-          const awayTeamObj = teamMap[g.away_team_id] || {};
-          const homeTeamName = homeTeamObj.name || homeTeamObj.short_name || '';
-          const awayTeamName = awayTeamObj.name || awayTeamObj.short_name || '';
-          
-          const homeMatch = normalizeTeamName(homeTeamName) === normalizedHomeTeam ||
-                           normalizeTeamName(homeTeamName).includes(normalizedHomeTeam) ||
-                           normalizedHomeTeam.includes(normalizeTeamName(homeTeamName));
-          const awayMatch = normalizeTeamName(awayTeamName) === normalizedAwayTeam ||
-                           normalizeTeamName(awayTeamName).includes(normalizedAwayTeam) ||
-                           normalizedAwayTeam.includes(normalizeTeamName(awayTeamName));
-          return homeMatch && awayMatch;
-        });
-        
-        if (!matchingGame) {
-          console.warn(`[PropOdds] No BDL EPL game found for ${homeTeam} vs ${awayTeam} on ${dateStr}`);
-          console.log(`[PropOdds] Available EPL games:`, eplGames.map(g => {
-            const h = teamMap[g.home_team_id]?.name || g.home_team_id;
-            const a = teamMap[g.away_team_id]?.name || g.away_team_id;
-            return `${h} vs ${a}`;
-          }));
-          // Fall through to Odds API fallback below
-        } else {
-          console.log(`✅ Found BDL EPL game ID: ${matchingGame.id}`);
-          
-          // Fetch player props from BDL
-          const bdlProps = await ballDontLieService.getEplPlayerProps(matchingGame.id);
-          
-          if (bdlProps && bdlProps.length > 0) {
-            // Get unique player IDs to resolve names
-            const playerIds = [...new Set(bdlProps.map(p => p.player_id).filter(Boolean))];
-            const playerMap = await ballDontLieService.getEplPlayersByIds(playerIds);
-            
-            // Transform BDL format to our standard format
-            // BDL EPL props have: { market: { type: 'milestone' | 'over_under', odds, over_odds, under_odds } }
-            const transformedProps = bdlProps.map(prop => {
-              const isOverUnder = prop.market?.type === 'over_under';
-              const isMilestone = prop.market?.type === 'milestone';
-              const playerInfo = playerMap[prop.player_id] || {};
-              
-              return {
-                player: playerInfo.name || `Player ${prop.player_id}`,
-                player_id: prop.player_id,
-                team: playerInfo.team || 'EPL',
-                prop_type: prop.prop_type,
-                line: parseFloat(prop.line_value) || 0.5,
-                over_odds: isOverUnder ? prop.market?.over_odds : (isMilestone ? prop.market?.odds : null),
-                under_odds: isOverUnder ? prop.market?.under_odds : null,
-                vendor: prop.vendor
-              };
-            });
-            
-            // Group by player and prop type to consolidate odds from different vendors
-            const grouped = {};
-            for (const prop of transformedProps) {
-              const key = `${prop.player}_${prop.prop_type}_${prop.line}`;
-              if (!grouped[key]) {
-                grouped[key] = { ...prop };
-              } else {
-                // Merge odds from different vendors - take best odds
-                if (prop.over_odds && (!grouped[key].over_odds || prop.over_odds > grouped[key].over_odds)) {
-                  grouped[key].over_odds = prop.over_odds;
-                }
-                if (prop.under_odds && (!grouped[key].under_odds || prop.under_odds > grouped[key].under_odds)) {
-                  grouped[key].under_odds = prop.under_odds;
-                }
-              }
-            }
-            
-            const result = Object.values(grouped);
-            
-            // Log prop type breakdown
-            const propTypes = {};
-            result.forEach(p => { propTypes[p.prop_type] = (propTypes[p.prop_type] || 0) + 1; });
-            console.log(`[PropOdds] BDL EPL props breakdown:`, propTypes);
-            console.log(`[PropOdds] BDL returned ${result.length} unique EPL player props`);
-            
-            // Filter by odds value
-            const filtered = propOddsService.filterPropsByOddsValue(result);
-            return filtered;
-          } else {
-            console.log(`[PropOdds] BDL returned no EPL props for game ${matchingGame.id}, falling back to Odds API`);
-          }
-        }
-      }
-      
       // ============ Other Sports: Use The Odds API ============
       let apiKey = null;
       try {
@@ -418,34 +300,6 @@ export const propOddsService = {
       const useOddsApi = Boolean(apiKey);
       
       let game = null;
-      
-      // For sports where we need The Odds API game IDs directly (if BDL fails for EPL), fetch from Odds API
-      const needsOddsApiGameId = ['soccer_epl'].includes(sport);
-      
-      if (needsOddsApiGameId && useOddsApi) {
-        try {
-          console.log(`[PropOdds] Fetching game ID directly from The Odds API for ${sport}...`);
-          const oddsApiGames = await axios.get(`${ODDS_API_BASE_URL}/sports/${sport}/odds`, {
-            params: { apiKey, regions: 'us', markets: 'h2h' }
-          });
-          
-          if (oddsApiGames.data && oddsApiGames.data.length > 0) {
-            // Find matching game by team names
-            game = oddsApiGames.data.find(g => {
-              const normalizedGameHome = normalizeTeamName(g.home_team);
-              const normalizedGameAway = normalizeTeamName(g.away_team);
-              return (normalizedGameHome === normalizedHomeTeam && normalizedGameAway === normalizedAwayTeam) ||
-                     (normalizedGameHome === normalizedAwayTeam && normalizedGameAway === normalizedHomeTeam);
-            });
-            
-            if (game) {
-              console.log(`✅ Found matching game from Odds API with ID: ${game.id}`);
-            }
-          }
-        } catch (e) {
-          console.warn(`[PropOdds] Could not fetch from Odds API directly: ${e.message}`);
-        }
-      }
       
       // Fallback to BDL-backed oddsService for other sports or if Odds API lookup failed
       if (!game) {

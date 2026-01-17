@@ -195,7 +195,7 @@ IMPORTANT:
   console.log(`\n🤖 Gary analyzing MNF TD scorers...`);
   
   const raw = await openaiService.generateResponse(messages, {
-    temperature: 0.5,
+    temperature: 1.0,
     maxTokens: 1800
   });
 

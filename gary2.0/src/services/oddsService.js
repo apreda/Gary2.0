@@ -44,6 +44,21 @@ const PROP_MARKETS = {
 };
 
 /**
+ * Get game markets to fetch based on sport
+ * Game picks = Spread/ML ONLY (no totals - totals are for props)
+ * NHL: Moneyline ONLY (no puck line) - Gary picks winners
+ * Other sports: Moneyline + Spreads
+ */
+const getMarketsForSport = (sport) => {
+  // NHL: Moneyline ONLY - Gary picks who wins, no puck line
+  if (sport === 'icehockey_nhl') {
+    return 'h2h';
+  }
+  // All other sports: Moneyline + Spreads (NO TOTALS - totals are for props only)
+  return 'h2h,spreads';
+};
+
+/**
  * Get API key from environment or config
  */
 const getApiKey = async () => {
@@ -221,8 +236,8 @@ const extractOddsFromBookmakers = (bookmakers, homeTeam, awayTeam) => {
 
   if (!bookmakers || !bookmakers.length) return result;
 
-  // Prioritize DraftKings and FanDuel for consistency
-  const preferredKeys = ['draftkings', 'fanduel'];
+  // ONLY use FanDuel and DraftKings - no fallback to other bookmakers
+  const preferredKeys = ['fanduel', 'draftkings'];
   let bookmaker = null;
   
   for (const key of preferredKeys) {
@@ -230,14 +245,18 @@ const extractOddsFromBookmakers = (bookmakers, homeTeam, awayTeam) => {
     if (bookmaker) break;
   }
   
-  // Fallback to first available if no preferred bookmaker found
+  // If neither FanDuel nor DraftKings found, return empty result
+  // We do NOT fall back to other bookmakers for consistency
   if (!bookmaker) {
-    bookmaker = bookmakers[0];
+    console.warn('[Odds Service] No FanDuel or DraftKings odds found - skipping game');
+    return result;
   }
+
+  console.log(`[Odds Service] Using ${bookmaker.key} for game odds (standard spreads/ML only)`);
 
   if (!bookmaker?.markets) return result;
 
-  // Extract spreads
+  // Extract spreads (standard only, no alternates)
   const spreadsMarket = bookmaker.markets.find(m => m.key === 'spreads');
   if (spreadsMarket?.outcomes) {
     for (const outcome of spreadsMarket.outcomes) {
@@ -289,14 +308,15 @@ const fetchUpcomingOddsFallback = async (sport) => {
       params: {
         apiKey,
         regions: 'us',
-        markets: 'h2h,spreads,totals',
+        markets: getMarketsForSport(sport), // NHL: no puck line
         oddsFormat: 'american',
-        dateFormat: 'iso'
+        dateFormat: 'iso',
+        bookmakers: 'fanduel,draftkings' // Only use FanDuel and DraftKings for consistency
       },
       timeout: 10000
     });
     const events = Array.isArray(response?.data) ? response.data : [];
-    console.log(`[Odds Service] ${sport}: Generic Odds API fallback returned ${events.length} upcoming games.`);
+    console.log(`[Odds Service] ${sport}: Generic Odds API fallback returned ${events.length} upcoming games (markets: ${getMarketsForSport(sport)})`);
     return events.map(event => normalizeOddsApiGame(event, sport));
   } catch (error) {
     console.warn(`[Odds Service] ${sport}: Generic Odds API fallback failed:`, error?.message || error);
@@ -317,9 +337,10 @@ const fetchOddsFromOddsApiByDate = async (sport, dateStr) => {
       params: {
         apiKey,
         regions: 'us',
-        markets: 'h2h,spreads,totals',
+        markets: getMarketsForSport(sport), // NHL: no puck line
         oddsFormat: 'american',
-        dateFormat: 'iso'
+        dateFormat: 'iso',
+        bookmakers: 'fanduel,draftkings' // Only use FanDuel and DraftKings
       },
       timeout: 10000
     });
@@ -781,7 +802,9 @@ export const oddsService = {
           params: {
             apiKey,
             regions: 'us',
-            oddsFormat: 'american'
+            oddsFormat: 'american',
+            markets: getMarketsForSport(sport),
+            bookmakers: 'fanduel,draftkings' // Only use FanDuel and DraftKings
           }
         })
           .then(response => ({ sport, data: response.data }))
@@ -803,7 +826,7 @@ export const oddsService = {
     }
   },
 
-  getGameOdds: async (gameId, { useCache = true } = {}) => {
+  getGameOdds: async (gameId, { useCache = true, sport = null } = {}) => {
     try {
       const apiKey = await getApiKey();
       if (!apiKey) {
@@ -811,15 +834,19 @@ export const oddsService = {
       }
 
       const cacheKey = `game-odds:${gameId}`;
+      
+      // Determine markets based on sport (if provided) or default to full markets
+      // NHL: No puck line - only moneyline and totals
+      const markets = sport ? getMarketsForSport(sport) : 'h2h,spreads,totals';
 
       return dedupeRequest(cacheKey, async () => {
         const response = await axios.get(`${ODDS_API_BASE_URL}/sports/upcoming/events/${gameId}/odds`, {
           params: {
             apiKey,
             regions: 'us',
-            markets: 'h2h,spreads,totals',
+            markets,
             oddsFormat: 'american',
-            bookmakers: 'fanduel,draftkings,williamhill_us,pointsbetus'
+            bookmakers: 'fanduel,draftkings'
           },
           timeout: 10000
         });
@@ -1121,7 +1148,8 @@ export const oddsService = {
           apiKey,
           regions: 'us',
           oddsFormat: 'american',
-          markets: 'h2h,spreads,totals'
+          markets: getMarketsForSport(sport), // NHL: no puck line
+          bookmakers: 'fanduel,draftkings' // Only use FanDuel and DraftKings
         }
       });
 
@@ -1134,23 +1162,17 @@ export const oddsService = {
 
       const game = response.data;
 
-      const bookmakers = [
-        'fanduel',
-        'draftkings',
-        'betmgm',
-        'caesars',
-        'pointsbetus',
-        'superbook'
-      ];
+      // Only use FanDuel and DraftKings for consistency
+      const preferredBookmakers = ['fanduel', 'draftkings'];
 
       const filteredBookmakers = game.bookmakers.filter(b =>
-        bookmakers.includes(b.key.toLowerCase())
+        preferredBookmakers.includes(b.key.toLowerCase())
       );
 
-      if (filteredBookmakers.length < 2) {
+      if (filteredBookmakers.length === 0) {
         return {
           success: false,
-          message: 'Not enough bookmakers available for meaningful analysis'
+          message: 'No FanDuel or DraftKings odds available for this event'
         };
       }
 
@@ -1276,7 +1298,8 @@ export const oddsService = {
               regions: 'us',
               markets: market,
               oddsFormat: 'american',
-              dateFormat: 'iso'
+              dateFormat: 'iso',
+              bookmakers: 'fanduel,draftkings' // Only use FanDuel and DraftKings
             }
           });
 

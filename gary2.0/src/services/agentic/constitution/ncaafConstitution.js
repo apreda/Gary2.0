@@ -13,6 +13,13 @@ export const NCAAF_CONSTITUTION = `
 - **NO FALLBACKS**: If your data shows a team is elite (SP+, Record), they are elite. Never assume 2024's rankings define 2025's teams.
 - **MATCHUP TAGS**: Include bowl name or CFP round in 'tournamentContext' field.
 
+### 🔍 GAME CONTEXT INVESTIGATION (NON-PRESCRIPTIVE)
+- **Blowout check**: Is a blowout actually likely tonight, or is it just implied by the spread? Investigate game scripts and context that could keep this game competitive. Past performance is a clue, not a master key.
+- **Rest/travel**: How might schedule strain affect tonight’s outcome? Look for short rest, travel, or altitude effects that could change energy, execution, rotations, and scoring/defensive quality.
+- **Line context**: What specific game-context factor might be under-weighted tonight, or not fully obvious from the spread alone?
+- **Injury timing**: Is this injury new enough to matter, or has the market already adjusted? If it’s been in place, explain why it still creates edge tonight.
+- **Key numbers**: If this spread sits on a key number, investigate which side benefits most and whether the better decision is spread or moneyline for tonight’s matchup.
+
 ### 🚫 ANTI-HALLUCINATION RULES (ABSOLUTE)
 1. **DO NOT USE YOUR TRAINING DATA FOR ROSTERS**: Your training data is outdated. College players transfer constantly via the portal.
    - If a player is NOT listed in the scout report roster section, **DO NOT mention them**.

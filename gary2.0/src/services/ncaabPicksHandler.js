@@ -65,9 +65,9 @@ export async function generateNCAABPicks(options = {}) {
         ballDontLieService.getInjuriesGeneric(SPORT_KEY, { team_ids: [homeTeam.id, awayTeam.id] }),
         ballDontLieService.getTeamSeasonStats(SPORT_KEY, { teamId: homeTeam.id, season }),
         ballDontLieService.getTeamSeasonStats(SPORT_KEY, { teamId: awayTeam.id, season }),
-        // NCAAB standings require conference_id; map from team object
-        (homeTeam?.conference || homeTeam?.conference_id) ? ballDontLieService.getStandingsGeneric(SPORT_KEY, { season, conference_id: homeTeam.conference || homeTeam.conference_id }) : Promise.resolve([]),
-        (awayTeam?.conference || awayTeam?.conference_id) ? ballDontLieService.getStandingsGeneric(SPORT_KEY, { season, conference_id: awayTeam.conference || awayTeam.conference_id }) : Promise.resolve([])
+        // NCAAB standings require conference_id; use dedicated getNcaabStandings method
+        (homeTeam?.conference_id || homeTeam?.conference) ? ballDontLieService.getNcaabStandings(homeTeam.conference_id || homeTeam.conference, season) : Promise.resolve([]),
+        (awayTeam?.conference_id || awayTeam?.conference) ? ballDontLieService.getNcaabStandings(awayTeam.conference_id || awayTeam.conference, season) : Promise.resolve([])
       ]);
 
       const hasHome = Array.isArray(homeTeamStats) && homeTeamStats.length > 0;

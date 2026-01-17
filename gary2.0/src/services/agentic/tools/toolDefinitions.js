@@ -221,42 +221,13 @@ const NHL_TOKENS = [
   'MARGIN_VARIANCE'       // Goal differential variance
 ];
 
-// EPL Stat Tokens (BETA - uses BDL + Gemini Grounding for advanced analytics)
-const EPL_TOKENS = [
-  // Standings & Records
-  'STANDINGS', 'TEAM_RECORD', 'LEAGUE_POSITION', 'HOME_RECORD', 'AWAY_RECORD',
-  // Goals & Scoring
-  'GOALS_FOR', 'GOALS_AGAINST', 'GOAL_DIFFERENTIAL', 'CLEAN_SHEETS',
-  // Advanced Metrics (via Gemini Grounding)
-  'EXPECTED_GOALS', 'XG_DIFFERENCE', 'XG_OVERPERFORMANCE', 'SHOT_QUALITY',
-  // Possession & Passing
-  'POSSESSION_PCT', 'PASS_ACCURACY', 'TOUCHES_IN_BOX', 'CROSSES',
-  // Defensive Metrics
-  'TACKLES', 'INTERCEPTIONS', 'CLEARANCES', 'SAVES',
-  // Attack Metrics
-  'SHOTS_ON_TARGET', 'SHOTS_TOTAL', 'BIG_CHANCES_CREATED', 'BIG_CHANCES_MISSED',
-  // Set Pieces
-  'CORNERS', 'FREE_KICKS', 'PENALTIES_WON', 'PENALTIES_CONCEDED',
-  // Discipline
-  'YELLOW_CARDS', 'RED_CARDS', 'FOULS',
-  // Form & Momentum
-  'RECENT_FORM', 'HOME_FORM', 'AWAY_FORM', 'LAST_5_RESULTS',
-  // Players
-  'TOP_SCORERS', 'TOP_ASSISTS', 'INJURIES', 'KEY_PLAYERS',
-  // Historical
-  'H2H_HISTORY', 'HEAD_TO_HEAD', 'DRAW_FREQUENCY',
-  // Context
-  'FIXTURE_CONGESTION', 'EUROPEAN_FOOTBALL', 'MOTIVATION'
-];
-
 // Combine all tokens by sport
 const ALL_TOKENS_BY_SPORT = {
   NBA: NBA_TOKENS,
   NFL: NFL_TOKENS,
   NCAAB: NCAAB_TOKENS,
   NCAAF: NCAAF_TOKENS,
-  NHL: NHL_TOKENS,
-  EPL: EPL_TOKENS
+  NHL: NHL_TOKENS
 };
 
 // Get all unique tokens across all sports
@@ -265,8 +236,7 @@ const ALL_TOKENS = [...new Set([
   ...NFL_TOKENS,
   ...NCAAB_TOKENS,
   ...NCAAF_TOKENS,
-  ...NHL_TOKENS,
-  ...EPL_TOKENS
+  ...NHL_TOKENS
 ])];
 
 /**
@@ -287,7 +257,7 @@ Typical analysis needs 2-5 stat categories.`,
         properties: {
           sport: {
             type: "string",
-            enum: ["NBA", "NFL", "NCAAB", "NCAAF", "NHL", "EPL"],
+            enum: ["NBA", "NFL", "NCAAB", "NCAAF", "NHL"],
             description: "The sport league"
           },
           token: {

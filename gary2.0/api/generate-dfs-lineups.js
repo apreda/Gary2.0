@@ -15,9 +15,8 @@
  * - platform: 'draftkings' or 'fanduel' (default: both)
  * - sport: 'NBA' or 'NFL' (default: both active)
  * - date: YYYY-MM-DD (defaults to EST today)
- * - contestType: 'gpp' or 'cash' (default: 'gpp')
- *     - gpp: Optimize for ceiling (350+ pts), use stacking, apply chalk pivot
- *     - cash: Optimize for floor (280 pts), prioritize consistency
+ * - contestType: (removed) — GPP only
+ *   Gary's Fantasy always generates tournament (GPP) lineups.
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -25,9 +24,10 @@ import { createClient } from '@supabase/supabase-js';
 // Get current date in EST
 function estToday() {
   const now = new Date();
-  const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-  const est = new Date(utc + (3600000 * -5));
-  return est.toISOString().split('T')[0];
+  const options = { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' };
+  const estDate = new Intl.DateTimeFormat('en-US', options).format(now);
+  const [month, day, year] = estDate.split('/');
+  return `${year}-${month}-${day}`;
 }
 
 // Initialize Supabase admin client

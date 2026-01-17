@@ -876,7 +876,7 @@ Make your picks for spread, moneyline, and total.`
     };
 
     const response = await openaiService.generateResponse([systemMessage, userMessage], {
-      temperature: 0.4,
+      temperature: 1.0, // Gemini 3: MUST be 1.0 per Google recommendation
       maxTokens: 300
     });
 

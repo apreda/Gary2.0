@@ -2,12 +2,15 @@
  * Quantum Random Number Service
  * 
  * Uses Outshift/Cisco's Quantum Random Number Generator (QRNG) to generate
- * truly random numbers from quantum phenomena. Used to filter Gary's picks
- * in a non-biased, non-confidence-based way.
+ * truly random numbers from quantum phenomena.
+ * 
+ * TRACKING MODE (Jan 2026): Quantum scores are attached to picks for RESEARCH ONLY.
+ * They are NOT used to filter or affect picks. All picks are stored with their
+ * quantum scores so we can analyze correlation over time, but quantum scores
+ * do NOT affect which picks survive or their confidence levels.
  * 
  * IMPORTANT: The quantum numbers have NO predictive power about sports outcomes.
- * This is random selection, not "universe alignment" - but it provides an unbiased
- * way to reduce pick count without using confidence scores.
+ * This is purely for research/tracking purposes.
  */
 
 import dotenv from 'dotenv';
