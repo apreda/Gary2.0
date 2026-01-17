@@ -10,8 +10,8 @@ import { requestQueue } from '../utils/requestQueue.js';
 
 // LLM provider - Gemini 3 Deep Think
 const LLM_PROVIDER = 'gemini';
-// Gemini 3 Pro (default for regular picks) - can be overridden per request
-const GEMINI_MODEL_DEFAULT = process.env.GEMINI_MODEL || 'gemini-3-pro-preview';
+// Gemini 3 Flash (default for all picks) - POLICY: Always use Flash, never Pro
+const GEMINI_MODEL_DEFAULT = 'gemini-3-flash-preview';
 // Gemini 3 Flash - Pro-grade at lightning speeds (for props when Pro has quota issues)
 const GEMINI_MODEL_FLASH = 'gemini-3-flash-preview';
 
@@ -75,7 +75,7 @@ const openaiServiceInstance = {
    * Default model - varies by provider
    */
   DEFAULT_MODEL: LLM_PROVIDER === 'gemini'
-    ? ((typeof process !== 'undefined' && process.env && process.env.GEMINI_MODEL) || 'gemini-3-pro-preview')
+    ? 'gemini-3-flash-preview' // POLICY: Always use Gemini 3 Flash, never Pro
     : ((typeof process !== 'undefined' && process.env && process.env.OPENAI_MODEL) || 'gpt-5.1'),
   
   /**
@@ -88,8 +88,10 @@ const openaiServiceInstance = {
     try {
       const provider = options.provider || LLM_PROVIDER;
       
-      // Gemini prefers lower temperature for Deep Think logic
-      const defaultTemp = provider === 'gemini' ? 0.4 : 0.5;
+      // Gemini 3: Temperature MUST be 1.0 per Google's recommendation
+      // "Changing the temperature (setting it below 1.0) may lead to unexpected 
+      // or degraded performance, particularly in complex mathematical or reasoning tasks."
+      const defaultTemp = provider === 'gemini' ? 1.0 : 0.5;
       const { temperature = defaultTemp, maxTokens = 16000 } = options;
       
       // Allow model override (e.g., props use Flash when Pro has quota issues)
@@ -441,7 +443,7 @@ PICK DECISION:
   "momentum": 0.0–1.0,
   "homeTeam": "Full home team name",
   "awayTeam": "Full away team name", 
-  "league": "NFL" or "NBA" or "MLB" or "WNBA" or "NCAAF" or "NCAAB" or "EPL",
+  "league": "NFL" or "NBA" or "MLB" or "NCAAF" or "NCAAB",
   "time": "COPY EXACTLY the game time provided - never use 'TBD' unless no time was given",
   "rationale": "HYPOTHESIS: ...\\nEVIDENCE: ...\\nCONVERGENCE (0.74): ...\\nIF WRONG: ..."
 }
@@ -1185,7 +1187,7 @@ Provide your betting analysis in the exact JSON format specified. Remember to ON
       
       // Use our standard generateResponse method to make the API call
       return await this.generateResponse([systemMessage, userPrompt], {
-        temperature: options.temperature || 0.7,
+        temperature: 1.0, // Gemini 3: MUST be 1.0 per Google recommendation
         maxTokens: options.maxTokens || 3200,
         model: options.model || this.DEFAULT_MODEL
       });
@@ -1286,7 +1288,7 @@ IMPORTANT: Always use the full team name (e.g., 'Cleveland Guardians') rather th
       
       // Use our standard generateResponse method to make the API call
       return await this.generateResponse([systemMessage, userMessage], {
-        temperature: options.temperature || 0.7,
+        temperature: 1.0, // Gemini 3: MUST be 1.0 per Google recommendation
         maxTokens: options.maxTokens || 1500,
         model: options.model || this.DEFAULT_MODEL
       });

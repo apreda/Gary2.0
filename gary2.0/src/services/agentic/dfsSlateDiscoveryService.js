@@ -157,7 +157,7 @@ Return ONLY valid JSON in this exact format with no additional text:
 `.trim();
 
   const response = await geminiGroundingSearch(groundingPrompt, {
-    temperature: 0.1,
+    temperature: 1.0,
     maxTokens: 2048
   });
 

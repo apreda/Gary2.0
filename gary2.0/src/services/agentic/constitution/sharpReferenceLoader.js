@@ -79,8 +79,25 @@ export function getSteelManGradingReference(sport) {
 📚 SHARP BETTING REFERENCE (Cross-Reference During Steel Man Grading)
 ═══════════════════════════════════════════════════════════════════════════════
 
-⚠️ THIS IS REFERENCE MATERIAL, NOT FORMULAS TO APPLY.
-The market knows all of this. Use it to CHECK your reasoning, not to BUILD your reasoning.
+## 🧠 WHAT GOOD ANALYSIS LOOKS LIKE (Read This First)
+
+**✅ THE GOLD STANDARD:**
+> "Houston's defensive identity is fractured following the fresh losses of Tari Eason and Dorian Finney-Smith — the two primary 'stoppers' usually tasked with containing elite scoring guards. Without them, the Rockets lack the lateral quickness to prevent Shai Gilgeous-Alexander from living in the paint."
+
+Why it works: Fresh information → tied to specific matchup → forward mechanism (no stoppers → SGA in paint → margin expansion)
+
+**❌ THE TRAP:**
+> "Utah's defensive rating is famously the worst in the league, but Dallas currently lacks the offensive firepower to exploit it."
+
+Why it fails: Backward logic ("Team B can't exploit it" is not how Team A wins)
+
+**THE BACKWARD LOGIC TRAP:**
+"Team B has weakness X, but Team A can't exploit it" is NOT analysis.
+The question is always: **"How does MY pick win/cover?"** — not "Why can't the other team succeed?"
+
+*These are illustrative examples of reasoning quality. Apply the same principles to ANY matchup.*
+
+---
 
 ## THE ONLY QUESTION THAT MATTERS
 
@@ -121,6 +138,72 @@ When grading each factor in a steel man case, investigate:
 - A team undefeated at home with everyone healthy vs good competition - home court might be real
 - A team 5-5 at home vs weak competition - maybe not
 - Don't auto-dismiss. Don't auto-accept. Investigate.
+
+---
+
+## BASELINE vs FRESH EDGE (Context-Dependent)
+
+When evaluating factors, understand their role - but don't auto-dismiss either type:
+
+**BASELINE FACTORS:**
+- Things that are ALWAYS true about this team (ORtg, DRtg, pace, scheme, etc.)
+- These form the foundation of the line
+
+**FRESH FACTORS:**
+- Things that are NEW or recent (injuries, lineup changes, form shifts)
+- Situational factors (rest, travel, schedule spots)
+
+**⚠️ IMPORTANT: The Value of Each Depends on Spread Size:**
+
+| Spread Size | Baseline Value | Fresh Factor Value |
+|-------------|----------------|-------------------|
+| **Small (≤5)** | HIGH - "Who wins?" is largely about team quality. If Team A is simply better and the spread is -3, baseline superiority might BE the edge. | MEDIUM - Can shift "who wins" but team quality still matters most |
+| **Medium (5-9)** | MEDIUM - Quality matters but need mechanism for comfortable margin | HIGH - Fresh factors can swing the margin |
+| **Large (10+)** | LOWER - Need specific mechanism for margin expansion | HIGH - Margin requires fresh factors beyond "better team" |
+
+**The Key Insight:**
+- A case built on baseline for a SMALL spread might identify real edge (market undervaluing dominance)
+- A case built on baseline for a LARGE spread needs more (how does baseline create 10+ point win?)
+- Fresh factors matter more as spread size increases
+
+Investigate whether the line accurately reflects BOTH baseline quality AND fresh factors.
+
+---
+
+## REST/SCHEDULE FACTORS (For Grading)
+
+**What Research Shows:**
+- Back-to-backs WITH significant travel have historically shown performance decline - verify for THIS team's actual B2B record to see the actual impact
+- Back-to-backs without travel show minimal statistical impact
+- Rest beyond 3 days can lead to "rust" rather than advantage
+- 2 days rest appears to be the optimal recovery window
+
+**Home Rest vs Road Rest (Critical Distinction):**
+- **Home rest is "clean rest"** — own beds, normal routines, no travel fatigue
+- **Road rest is "dirty rest"** — days off partially negated by travel, hotels, disrupted routines
+- **2 days at HOME ≥ 3 days on the ROAD** — don't cite "rest edge" for road team without acknowledging travel
+
+**When Evaluating Rest/Schedule Arguments:**
+
+Ask: Does this case explain WHY rest/travel matters for THIS specific matchup, 
+or is it just citing the schedule?
+
+- "They're on a B2B" alone is weak — the market sees schedules
+- "They're on a B2B after cross-country travel, vs a team with 2 days rest at home" is more specific
+- "They have 3 days rest" could be advantage OR rust — investigate which
+
+**Investigate the actual travel schedule:**
+- Where did the road team come from? Cross-country vs short hop matters
+- Start of road trip vs end? (Fatigue accumulates)
+- Time zone changes?
+
+**Returning Players Have DIFFERENT Rest Than the Team:**
+- If a player is returning and the team is on a B2B, that player is NOT on a B2B — they didn't play yesterday
+- A returning star on a "tired" team might be the freshest player on the court
+- Investigate: What's THIS PLAYER's rest situation, not just the team's?
+
+**The Core Question:** Schedules are public. What makes THIS situation 
+different from what the market expects? Investigate, don't assume.
 
 ---
 
@@ -214,6 +297,128 @@ If your answer identifies something specific about THIS matchup, you may have ed
 4. **Can I explain WHY the line might be wrong, not just why the team is good?**
 5. **Does my reasoning hold up under scrutiny?**
 
+---
+
+## 🧠 MENTAL MODELS (Check If Any Apply to THIS Game - EITHER SIDE)
+
+These are lenses for identifying when the market might be mispricing. Each model can work FOR or AGAINST either side - investigate which applies to THIS specific game:
+
+| Model | Possible Underdog Angle | Possible Favorite Angle | What to Investigate |
+|-------|-------------------------|-------------------------|---------------------|
+| **Star Absence (NBA)** | Team has adjusted; usage redistributed to capable players | Backups exposed in specific matchups; team hasn't found rhythm | How has team ACTUALLY performed since the absence? In NBA, usage redistributes - it doesn't disappear. Check real results, not assumptions. |
+| **Star Absence (NCAAB)** | Team has adjusted; scheme simplified | Shallow roster truly suffers; can't replace production | NCAAB rosters are shallower - production loss is more real. Investigate if team has capable depth. |
+| **Returning Player** | Rust on return; chemistry disruption; minutes restriction | Player integrated smoothly after 2+ games back | First game back = HIGH uncertainty (either direction). Don't assume "motivated" or "rusty" - investigate actual return performance if available. |
+| **Emotional Spot** | Unknown - could go either way | Unknown - could go either way | "Letdown" and "bounce-back" are UNVERIFIABLE. You cannot know a team's psychological state. Only cite if you have THIS team's historical data in similar spots. |
+| **Schedule Spot** | Unknown - could go either way | Unknown - could go either way | "Trap games" and "lookahead" are narrative constructs. Pros play every game. Only cite if you have THIS team's specific historical pattern AND the market hasn't priced it. |
+| **Public Perception** | Heavy public money inflated favorite | Contrarian money overcorrected; line now too generous to underdog | Where is the money actually? Is the line moving toward or away from the public side? |
+
+**⚠️ CRITICAL - PSYCHOLOGICAL FACTORS ARE UNVERIFIABLE:**
+You cannot know if a team is "motivated," "focused," "locked in," or "looking ahead." These are narratives, not facts. If you want to cite emotional/situational factors:
+1. You MUST have historical data for THIS specific team in similar spots
+2. Acknowledge this is speculative, not a thesis pillar
+3. Consider that the market sees these narratives too and may have priced them in
+
+**How to Use:** These models identify POTENTIAL mispricing on EITHER side. Don't assume the model applies - investigate whether the conditions actually exist for THIS game. The market adapts, so patterns that worked historically may already be priced in.
+
+---
+
+## 📉 REGRESSION SPOTS (Outlier Performance Recognition)
+
+**The Concept:** A team coming off an outlier performance (unusually high or low) is a candidate for regression to their baseline.
+
+**What Makes a Strong Regression Argument:**
+
+| Element | Why It Matters | Example |
+|---------|----------------|---------|
+| **Outlier performance identified** | Score/stats significantly above/below baseline | "141 points vs ATL is an outlier - they average 112" |
+| **Baseline comparison provided** | Shows what "normal" looks like | "Net Rating is +0.7, not a dominant team" |
+| **Luck metrics support it** | Unsustainable factors (3PT%, turnover luck, etc.) | "Luck factor: +13.6% suggests outperforming underlying metrics" |
+| **Opponent context** | Who was the outlier against? | "Atlanta has worst defense in league - inflated the number" |
+
+**When Evaluating Regression Arguments:**
+
+✅ **STRONG regression case:**
+> "Lakers coming off 141 points against Atlanta (worst defense). Their Net Rating is +0.7, nearly identical to Charlotte's +0.4. The market may be inflating LA based on one outlier game."
+
+❌ **WEAK regression case:**
+> "They scored a lot last game so they'll score less tonight." (No baseline comparison, no luck metrics, no mechanism)
+
+**The Key Insight:** Regression works BOTH ways - investigate both sides:
+
+| Scenario | What to Investigate | Could Favor |
+|----------|---------------------|-------------|
+| Team coming off outlier HIGH | Is market inflated? Did they beat weak opponent? Shooting luck? | Opponent (fade the hot team) |
+| Team coming off outlier LOW | Is market deflated? Did they face elite defense? Bad luck? | That team (buy low) |
+| Line seems too small | Did market overreact to underdog's recent good play? | Favorite |
+| Line seems too large | Did market overreact to underdog's recent bad play? | Underdog |
+
+**Combining Regression with Other Factors:**
+A regression spot is STRONGEST when combined with:
+- Net Rating shows teams are closer (or further apart) than record suggests
+- Luck factor disparity (one team running hot/cold unsustainably)
+- Matchup-specific factors that amplify the regression
+- Rest/home factors that compound the effect
+
+**The Question:** "Is the market pricing EITHER team based on their BASELINE or an OUTLIER?" Check both sides.
+
+---
+
+## 📊 HISTORICAL REFERENCE (Context for THIS Matchup, NOT Formulas)
+
+⚠️ **The market knows all of this. DO NOT apply as rules.**
+Use to sanity-check your grading for THIS specific game.
+
+| Principle | Historical Data | What This Means for Grading |
+|-----------|-----------------|----------------------------|
+| NFL favorites ATS | 48% cover rate | "Better team" alone isn't edge |
+| NFL underdogs ATS | 52% cover rate | Slight historical edge to dogs |
+| NFL key numbers | 3 (15%), 7 (10%) margins | Half-points around 3/7 matter significantly |
+| Divisional underdogs | 71% ATS | Familiarity breeds closer games |
+| NBA home court | Line already includes it | Investigate THIS team's actual home/away performance |
+| Wind over 20 mph | 54% under | Weather impacts totals/passing |
+| Injury priced in | After 2-3 games | Fresh injury ≠ known absence |
+
+**How to Use:** This is historical context, not a formula. Investigate each game individually.
+- Favorites CAN have edge (when market undervalues dominance for small spreads)
+- Underdogs CAN have edge (when market overvalues favorites for large spreads)
+- The question is always: "What does THIS specific matchup suggest?"
+
+---
+
+## 🧠 BIAS CHECK (Counter ALL Natural Tendencies)
+
+Before finalizing grades, check yourself against tendencies that affect BOTH sides:
+
+| Bias | How It Might Affect Grading | Counter |
+|------|----------------------------|---------|
+| **Consensus Bias** | Favorite case sounds "too obvious" | Obvious doesn't mean wrong - investigate substance |
+| **Contrarian Bias** | Underdog case feels edgy/smart | Contrarian isn't automatically edge - investigate substance |
+| **Recency Weighting** | Overweighting last game for either team | Check baseline form, not just last result |
+| **Narrative Coherence** | Case sounds "clean" but lacks data | Require stats regardless of how good the story sounds |
+| **Completion Pressure** | Forcing a pick when no edge exists | PASS is valid for BOTH sides if you don't see clear edge |
+
+**The Key:** Grade the SUBSTANCE of each case, not how it makes you feel.
+
+---
+
+## ✅ THE "OBVIOUS" CHECK
+
+Before grading each case, ask:
+
+> **"Does this case sound like the obvious ESPN take?"**
+
+**If YES → Investigate WHY it sounds obvious:**
+- Is it obvious because the market already has it? (Investigate if the line reflects this)
+- Is it obvious because the team is genuinely dominant and the market is undervaluing it? (Small spread + clear superiority could be edge)
+- Is it obvious because it's a narrative trap that sounds good but isn't supported by data?
+
+**If NO → Investigate WHY it's contrarian:**
+- Is it contrarian because you found something the market missed? (Potential edge)
+- Is it contrarian just for the sake of being contrarian? (Not edge - "fade the public" alone isn't analysis)
+
+**The Key Insight:** "Obvious" picks can be right. "Contrarian" picks can be wrong. 
+Investigate the substance of each case, not how it sounds.
+
 ═══════════════════════════════════════════════════════════════════════════════
 `;
 
@@ -268,6 +473,32 @@ CASE FOR [FAVORITE] -X.X:
 - **Small (≤4.5)**: "Who wins?" - Clutch execution, best closer, late-game sets
 - **Medium (5-9.5)**: "Comfortable win?" - Which team controls 3rd quarter? Bench rotation edge?
 - **Large (10+)**: "Double-digit win?" - Starters' minutes, garbage time compression, blowout patterns
+
+---
+
+## NBA REGRESSION SPOT RECOGNITION (BOTH DIRECTIONS)
+
+**Regression works BOTH ways - check for outliers on EITHER team:**
+
+| Outlier Type | What to Investigate | Potential Edge |
+|--------------|---------------------|----------------|
+| **Scoring explosion (130+)** | Opponent defense? Shooting luck? Baseline? | Fade that team (market inflated) |
+| **Defensive collapse (120+ allowed)** | Opponent offense? Own defensive baseline? | Back that team (market deflated) |
+| **Blowout loss** | Were they outclassed or unlucky? What's baseline? | Back that team (line too big) |
+| **Blowout win** | Were they dominant or lucky? What's baseline? | Fade that team (line too small) |
+
+**Example - Regression DOWN (Fade Hot Team):**
+> "Lakers scored 141 against Atlanta (worst defense). Net Rating is only +0.7. Market may be inflating LA based on one outlier."
+
+**Example - Regression UP (Buy Cold Team):**
+> "Celtics lost by 25 to Denver but Denver is elite and Celtics shot 22% from 3 (season avg 38%). Net Rating is +8.5. Market may be deflating BOS based on one bad night vs the best team."
+
+**When Grading Regression Cases, Look For:**
+- Net Rating vs record disconnect (underlying quality differs from perception)
+- Luck factor disparity (3PT%, turnovers unsustainable either direction)
+- Context of the outlier game (opponent quality, travel, missing players)
+
+**The Key Insight:** Markets overreact to recent performance BOTH directions. A blowout loss can make a line too generous just as a blowout win can make it too stingy.
 
 ═══════════════════════════════════════════════════════════════════════════════
 `;
@@ -394,7 +625,13 @@ CASE FOR [UNDERDOG] ML/PL:
 ❌ "Backs against the wall" → This is motivation narrative with no data
 ❌ "Recipe for disaster" → Replace with specific xG or CF% differential
 ❌ "Overwhelming advantage" → Replace with: "CF% gap of X.X% translates to Y extra shot attempts"
-❌ "Hot streak / on fire" → Replace with: "X-X-X in L5 with X.XX xGF/game"
+
+**⚠️ STREAK LANGUAGE IN NHL - DIFFERENT RULES:**
+Unlike NBA/NFL, NHL streaks with goalie continuity are VALID arguments:
+✅ "W5 streak with same goalie (.935 SV% during stretch)" → Valid structural argument
+❌ "They're hot / on fire" without goalie context → Still banned (no mechanism)
+✅ "Cold streak (L4) with struggling goalie (.889 SV%)" → Valid structural problem
+❌ "Due for regression" against a hot goalie → Goalie momentum is real in NHL
 
 ---
 
@@ -407,7 +644,14 @@ Before finalizing each case, answer:
 | Team A is better | YES - that's why they're favored | Line reflects talent gap |
 | Goalie A > Goalie B | MAYBE - check goalie-specific props | Compare ML to goalie GAA gap |
 | Player X is out | If out 5+ days, YES | Team has played X games without them |
-| Recent form (W4) | PARTIALLY | Line moves with public, but xG may differ |
+| Streak WITH same goalie | PARTIALLY - but still valid | Goalie momentum is structural, not just public noise |
+| Streak with DIFFERENT goalie tonight | YES - market adjusts for goalie changes | Check if backup is starting |
+
+**NHL-SPECIFIC: Streaks Are NOT "Stale Information"**
+Unlike spread betting where "everyone knows the streak," NHL moneyline betting asks WHO WINS.
+A hot goalie on a winning streak is a STRUCTURAL factor, not public noise.
+- The line may move with the streak, but goalie confidence and team rhythm persist
+- Betting AGAINST a hot team with the same goalie is fighting structure, not exploiting regression
 
 **The edge must be something the market HASN'T fully absorbed.**
 
@@ -420,15 +664,70 @@ Before finalizing each case, answer:
 - One bad bounce, one hot goalie run can decide it
 - This is NOT a margin question - it's a win probability question
 
-**WHAT TO EVALUATE (Examples, not a checklist):**
-- Goaltending matchup (often the biggest single factor)
-- When goalies are CLOSE → what else differentiates?
-- Special teams (PP% vs PK%) - can swing 1-2 goals
-- Home ice (last change advantage, crowd energy)
-- Rest/travel in a physically demanding sport
-- Lineup confirmations vs projections
+**⚠️ KEY DIFFERENCE FROM OTHER SPORTS:**
+NHL moneyline asks WHO WINS, not who covers a spread. This means:
+- Streaks are NOT "stale information" - they're structural when goalie-driven
+- Home ice has TACTICAL value (last change), not just crowd noise
+- "Regression" arguments are WEAKER when same goalie is starting
 
-**GRADING NHL CASES:**
+---
+
+### 🏒 GRADING STREAK-BASED CASES (NHL-SPECIFIC)
+
+**THE GOLDEN RULE:** "Ride the streak until the goalie changes."
+
+| Case Type | How to Grade |
+|-----------|--------------|
+| Betting WITH hot team, same goalie starting | VALID structural argument - grade higher |
+| Betting AGAINST hot team, same goalie starting | WEAK unless goalie is injured/tired - grade lower |
+| Betting on cold team to "regress up," same struggling goalie | WEAK - fighting structure, not exploiting variance |
+| Betting on cold team with NEW goalie tonight | Investigate the new goalie - could break slump |
+
+**INVESTIGATION QUESTIONS:**
+1. Is the same goalie starting who played during the streak?
+2. What are the goalie's numbers DURING the streak vs. season average?
+3. Is the "regression" argument actually valid, or is it fighting goalie momentum?
+
+---
+
+### 🏠 GRADING HOME ICE CASES (Last Change Factor - EITHER SIDE)
+
+**NHL home ice is TACTICAL:** The home coach controls matchups via "last change."
+
+| Case Type | How to Grade |
+|-----------|--------------|
+| "Home team has home ice advantage" alone | WEAK - only ~0.15-0.2 goals raw |
+| "Home team can shelter specific weakness via matchups" | STRONGER - tactical analysis |
+| "Home team's top line can dominate opponent's weak pairing" | STRONG - specific matchup edge |
+| "Road team's elite depth neutralizes last change" | STRONG - shows why home edge doesn't apply here |
+
+**INVESTIGATION QUESTIONS (Ask for BOTH sides):**
+1. Does the home team have specific matchup advantages to exploit?
+2. Does the road team have depth that makes last change irrelevant?
+3. Is either team significantly better home vs road? Why?
+4. Can the road favorite impose their style regardless of matchups?
+
+---
+
+### 🎯 GRADING PUCK LINE CASES (-1.5)
+
+**The Reality:** Most NHL games are 1-goal games until empty net time.
+
+| Case Type | How to Grade |
+|-----------|--------------|
+| "They're dominant, take the puck line" | WEAK - dominance ≠ 2-goal margin |
+| "Elite PP (top 10), opponent pulls goalie early" | STRONGER - empty net conversion |
+| "Strong defensive team, protects leads in 3rd" | STRONGER - closer mentality |
+| "Mediocre PP, team tends to sit on leads" | WEAK puck line case |
+
+**INVESTIGATION QUESTIONS:**
+1. Does the favorite have an elite power play (top 10)?
+2. What's their empty net goal rate / closing record?
+3. Does the opponent chase aggressively (pull goalie early)?
+
+---
+
+**GENERAL NHL GRADING PRINCIPLES:**
 - Do NOT auto-penalize factors like home ice or rest as "priced in"
 - For moneylines, these affect WIN PROBABILITY, which IS the question
 - But Gary must explain WHY a factor matters for THIS specific matchup
@@ -442,12 +741,26 @@ If CF%, xG, and goaltending are all similar - what breaks the tie?
 
 ---
 
-## NHL PUCK LINE GRADING (-1.5)
+## NHL PUCK LINE GRADING (-1.5) - DETAILED
 
 **The Question:** "Can they win by 2+ goals?"
 - This IS a margin question - different from moneyline
 - Empty net factor inflates late margins
-- Requires sustained offensive pressure
+- **Key insight:** Puck line covers come from EMPTY NET GOALS, not just dominance
+
+**THE PUCK LINE TRAP:**
+Most NHL games are 1-goal games until the final 2 minutes. Betting -1.5 requires:
+1. **Elite power play (top 10)** - Empty net = power play situation
+2. **Closer mentality** - Team that holds leads, not collapses
+3. **Opponent that chases** - Pulls goalie early, takes risks
+
+**GRADING FRAMEWORK:**
+| Argument | Grade |
+|----------|-------|
+| "They're dominant" | WEAK alone - dominance ≠ margin |
+| "Top-5 PP%, 8-2 protecting 3rd period leads" | STRONG |
+| "Opponent aggressive, pulls goalie at 3:00" | STRENGTHENS case |
+| "Mediocre PP, team plays conservative with leads" | WEAKENS case |
 
 **TOTALS:** Different analysis (pace + goaltending combined)
 

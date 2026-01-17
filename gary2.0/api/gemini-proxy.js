@@ -77,8 +77,8 @@ export default async function handler(req, res) {
       });
     }
     
-    // Resolve model - default to Gemini 3 Pro Preview (Deep Think)
-    const resolvedModel = model || process.env.GEMINI_MODEL || 'gemini-3-pro-preview';
+    // Resolve model - POLICY: Always Gemini 3 Flash, never Pro
+    const resolvedModel = 'gemini-3-flash-preview';
     
     // Convert OpenAI-style messages to Gemini format
     // Gemini uses 'contents' array with 'role' and 'parts'

@@ -86,7 +86,7 @@ const changelogEntries = [
     title: "🚀 Gary A.I. Official Launch",
     changes: [
       "Initial release of Gary A.I. - Your AI-powered sports betting companion",
-      "Support for 7 sports: NFL, NBA, NCAAF, NCAAB, NHL, MLB, EPL",
+      "Support for 6 sports: NFL, NBA, NCAAF, NCAAB, NHL, MLB",
       "Daily AI-generated picks with detailed analysis",
       "GPT-5.1 powered reasoning engine",
       "Perplexity integration for real-time data",

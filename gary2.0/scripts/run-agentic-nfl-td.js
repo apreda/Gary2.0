@@ -746,7 +746,7 @@ IMPORTANT:
   
   const raw = await openaiService.generateResponse(messages, {
     model: GEMINI_FLASH_MODEL, // Use Flash for TD props (high volume)
-    temperature: 0.5,
+    temperature: 1.0,
     maxTokens: 12000  // High limit to handle detailed rationales for 13 picks
   });
 

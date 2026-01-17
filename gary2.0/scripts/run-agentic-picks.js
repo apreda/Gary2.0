@@ -7,7 +7,6 @@
  *   node scripts/run-agentic-picks.js --nba
  *   node scripts/run-agentic-picks.js --nfl
  *   node scripts/run-agentic-picks.js --nhl
- *   node scripts/run-agentic-picks.js --epl
  *   node scripts/run-agentic-picks.js --ncaab
  *   node scripts/run-agentic-picks.js --ncaaf
  *   node scripts/run-agentic-picks.js --all
@@ -43,7 +42,6 @@ const SPORT_CONFIG = {
   nba: { key: 'basketball_nba', name: 'NBA', emoji: '🏀', useToday: true }, // Today's games (EST)
   nfl: { key: 'americanfootball_nfl', name: 'NFL', emoji: '🏈', daysAhead: 7 }, // NFL is weekly
   nhl: { key: 'icehockey_nhl', name: 'NHL', emoji: '🏒', isBeta: true, useToday: true }, // Today's games (EST)
-  epl: { key: 'soccer_epl', name: 'EPL', emoji: '⚽', isBeta: true, daysAhead: 7 }, // EPL is weekly
   ncaab: { key: 'basketball_ncaab', name: 'NCAAB', emoji: '🏀', minStats: 8, useToday: true }, // Today's games (EST)
   ncaaf: { key: 'americanfootball_ncaaf', name: 'NCAAF', emoji: '🏈', fbsOnly: true, useToday: true } // Today's games (EST)
 };
@@ -64,50 +62,42 @@ const FBS_CONFERENCE_IDS = [
 ];
 
 // NCAAB: Only analyze top 7 conferences + elite teams
-// Top 7 conferences have best data, NBA talent, and most reliable betting markets
+// Power 6 + Atlantic 10 have best data, NBA talent, and most reliable betting markets
 const NCAAB_ELITE_CONFERENCE_IDS = [
   1,   // ACC
+  5,   // Atlantic 10 (A-10)
   6,   // Big 12
   7,   // Big East
   10,  // Big Ten
   24,  // SEC
   33,  // Pac-12
-  31,  // WCC (West Coast Conference - Gonzaga, Saint Mary's)
 ];
 
 // Elite teams outside top 7 conferences to KEEP (by team name substring)
 const NCAAB_ELITE_TEAM_NAMES = [
-  'gonzaga', 'saint mary', 'memphis', 'uconn', 'connecticut',
+  'memphis', 'uconn', 'connecticut',
   'san diego state', 'nevada', 'new mexico', 'boise state', // Mountain West elites
-  'dayton', 'vcu', 'saint louis', // A-10 elites
   'drake', 'indiana state', // MVC elites
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════
-// SMART CONFIDENCE-BASED FILTERING
+// PICK LOGGING & TRANSPARENCY
 // ═══════════════════════════════════════════════════════════════════════════
 // 
-// Philosophy: Confidence is king, with smart trap detection.
-// 
-// Gary still uses ALL his factors (stats, injuries, spots, etc.) in analysis.
-// But we filter using simple, proven rules:
-// 
-// 1. Confidence >= 0.62 (Gary's true conviction)
-// 2. Hard rules for known traps (B2B road favorites laying points)
-// 3. Skip games with too many unknowns (>2 questionable starters)
-// 4. Long-term injuries (3+ weeks) are NOT edges - ignore as contradictions
-// 
-// Binary flags added for transparency on key factors.
+// Gary evaluates the full slate and decides PASS vs PICK.
+// We do not filter by confidence or apply hard rules here.
+// This section only provides transparency tags (e.g., rest, injuries, traps).
 // ═══════════════════════════════════════════════════════════════════════════
 
-// Long-term injuries that should NOT count as edges or contradictions
+// Long-term injury keywords for context only (market may already price these in).
+// Gary should still investigate if the absence changes tonight's matchup.
 const LONG_TERM_INJURY_KEYWORDS = [
   'out for season', 'season-ending', 'out indefinitely', 'out all year',
   'ruled out for 2025', 'not expected to return', 'out for the year'
 ];
 
 /**
- * Detect if a pick has a "trap" situation (for logging/awareness only)
+ * Detect if a pick has a "trap" situation (for logging/awareness only; NOT a filter)
  * Returns { isTrap: boolean, trapReason: string | null }
  */
 function detectTrapSituation(pick, sportName) {
@@ -142,7 +132,8 @@ function detectTrapSituation(pick, sportName) {
 }
 
 /**
- * Check if an injury should be ignored (long-term, not an edge)
+ * Identify likely long-term injuries for context.
+ * Not a hard rule — use for investigation, not auto-ignore.
  */
 function isLongTermInjury(injuryDescription) {
   if (!injuryDescription) return false;
@@ -232,14 +223,17 @@ const useSlateSelector = args.includes('--slate');
 const useTestTable = args.includes('--test');
 // --test-name flag to label the test run (e.g., "Sharp Betting Reference Test")
 const testName = getArgValue('--test-name');
+// --limit flag to limit number of games to analyze (useful for testing)
+const gameLimit = parseInt(getArgValue('--limit'), 10) || null;
+// --time flag to filter games by start time in EST (e.g., "12" for 12pm, "12,1" for 12pm and 1pm)
+const timeFilter = getArgValue('--time');
 
 if (runAll) {
-  sportsToRun.push('nba', 'nfl', 'nhl', 'epl', 'ncaab', 'ncaaf');
+  sportsToRun.push('nba', 'nfl', 'nhl', 'ncaab', 'ncaaf');
 } else {
   if (args.includes('--nba')) sportsToRun.push('nba');
   if (args.includes('--nfl')) sportsToRun.push('nfl');
   if (args.includes('--nhl')) sportsToRun.push('nhl');
-  if (args.includes('--epl')) sportsToRun.push('epl');
   if (args.includes('--ncaab')) sportsToRun.push('ncaab');
   if (args.includes('--ncaaf')) sportsToRun.push('ncaaf');
 }
@@ -254,7 +248,6 @@ if (sportsToRun.length === 0) {
 ║    node scripts/run-agentic-picks.js --nba                       ║
 ║    node scripts/run-agentic-picks.js --nfl                       ║
 ║    node scripts/run-agentic-picks.js --nhl   (BETA)              ║
-║    node scripts/run-agentic-picks.js --epl   (BETA)              ║
 ║    node scripts/run-agentic-picks.js --ncaab                     ║
 ║    node scripts/run-agentic-picks.js --ncaaf                     ║
 ║    node scripts/run-agentic-picks.js --all                       ║
@@ -265,6 +258,9 @@ if (sportsToRun.length === 0) {
 ║  Advanced options:                                               ║
 ║    --date 2025-12-25           (filter to specific date)         ║
 ║    --date 2025-12-25,2025-12-26 (multiple dates)                 ║
+║    --time 12                   (filter to 12pm EST games)        ║
+║    --time 12,13                (filter to 12pm and 1pm EST)      ║
+║    --limit 5                   (limit to N games)                ║
 ║    --force                     (skip deduplication)              ║
 ║    --force-underdog            (make Gary argue for underdog)    ║
 ║    --store false               (analyze only, don't save)        ║
@@ -272,6 +268,7 @@ if (sportsToRun.length === 0) {
 ║    --test                      (store to test_daily_picks table) ║
 ║    --test-name "My Test"       (label the test run)              ║
 ║    --matchup "Chicago"         (run single game only)            ║
+║    --fresh                     (clear cache for fresh data)      ║
 ║                                                                  ║
 ║  Gary's Pick System:                                             ║
 ║    - SPREAD or MONEYLINE = picks stored                          ║
@@ -328,11 +325,11 @@ async function main() {
 
   checkEnv();
 
-  // Clear cache if --nocache flag is passed
-  if (process.argv.includes('--nocache')) {
-    console.log('🔄 Clearing all caches for fresh run...');
+  // Clear cache if --nocache or --fresh flag is passed (ensures fresh injury/lineup data)
+  if (process.argv.includes('--nocache') || process.argv.includes('--fresh')) {
+    console.log('🔄 Clearing all caches for fresh injury/lineup data...');
     ballDontLieService.clearCache();
-    console.log('✅ Cache cleared\n');
+    console.log('✅ Cache cleared - fetching fresh data from APIs\n');
   }
 
   const startTime = Date.now();
@@ -453,7 +450,7 @@ async function main() {
           console.log(`[${config.name}] EST date filter: today=${todayEST}, found ${games.length} upcoming games`);
         }
       } else if (config.daysAhead) {
-        // Weekly sports (EPL): Use days ahead
+        // Weekly sports: Use days ahead
         const endTime = new Date(now.getTime() + config.daysAhead * 24 * 60 * 60 * 1000);
         games = allGames?.filter(g => {
           const gameTime = new Date(g.commence_time);
@@ -799,17 +796,50 @@ async function main() {
           // Match if filter appears in either team name
           return homeTeam.includes(filterLower) || awayTeam.includes(filterLower);
         });
-        console.log(`[${config.name}] Matchup filter "${matchupFilter}": ${beforeMatchupFilter} → ${games.length} games`);
+        console.log(`[${config.name}] Matchup filter "${matchupFilter}": ${beforeMatchupFilter} -> ${games.length} games`);
         if (games.length === 0) {
-          console.log(`[${config.name}] ⚠️ No games found matching "${matchupFilter}"`);
+          console.log(`[${config.name}] No games found matching "${matchupFilter}"`);
+        }
+      }
+
+      // Apply --time filter to filter games by start time in EST (e.g., "12" for 12pm, "12,1" for 12pm and 1pm)
+      if (timeFilter) {
+        const targetHours = timeFilter.split(',').map(h => parseInt(h.trim(), 10));
+        const beforeTimeFilter = games.length;
+        games = games.filter(game => {
+          const gameTime = new Date(game.commence_time);
+          // Convert to EST hour (12-hour format for easier matching)
+          const estHour = parseInt(gameTime.toLocaleString('en-US', { 
+            timeZone: 'America/New_York', 
+            hour: 'numeric', 
+            hour12: false 
+          }), 10);
+          // Match if game hour matches any of the target hours
+          return targetHours.includes(estHour);
+        });
+        const hoursDisplay = targetHours.map(h => `${h > 12 ? h - 12 : h}${h >= 12 ? 'pm' : 'am'}`).join(', ');
+        console.log(`[${config.name}] Time filter (${hoursDisplay} EST): ${beforeTimeFilter} -> ${games.length} games`);
+        if (games.length > 0) {
+          games.forEach(g => {
+            const gameTime = new Date(g.commence_time);
+            const estTimeStr = gameTime.toLocaleString('en-US', { 
+              timeZone: 'America/New_York', 
+              hour: 'numeric', 
+              minute: '2-digit',
+              hour12: true 
+            });
+            console.log(`   - ${g.away_team} @ ${g.home_team} (${estTimeStr} EST)`);
+          });
         }
       }
 
       // Apply max games limit if specified (for NCAAB which can have 70+ games)
-      const MAX_GAMES = config.maxGames || 100;
+      // --limit flag overrides config.maxGames for testing
+      const MAX_GAMES = gameLimit || config.maxGames || 100;
       const limitedGames = games.slice(0, MAX_GAMES);
 
-      console.log(`[${config.name}] Found ${allGames?.length || 0} total games, ${games.length} ${timeLabel}${games.length > MAX_GAMES ? ` (limited to ${MAX_GAMES})` : ''}`);
+      const limitNote = gameLimit ? ` (--limit ${gameLimit})` : (games.length > MAX_GAMES ? ` (limited to ${MAX_GAMES})` : '');
+      console.log(`[${config.name}] Found ${allGames?.length || 0} total games, ${games.length} ${timeLabel}${limitNote}`);
 
       // Replace games with limited version
       const finalGames = limitedGames;
@@ -1463,10 +1493,55 @@ async function main() {
           console.log(`\n[${config.name}] Gary's decisions: ${qualifiedPicks.length} PICKS, ${passCount} PASS`)
 
           // ═══════════════════════════════════════════════════════════════
+          // NHL SPECIAL FILTERING - MONEYLINE ONLY
+          // Gary picks WINNERS (ML only, no puck line, no totals)
+          // Output: Top 2 favorites + Top 1 underdog (by confidence)
+          // ═══════════════════════════════════════════════════════════════
+          let nhlFilteredPicks = qualifiedPicks;
+          
+          if (config.key === 'icehockey_nhl' && qualifiedPicks.length > 0) {
+            console.log(`\n[${config.name}] 🏒 NHL ML-Only Filtering: Top 2 Favorites + Top 1 Underdog`);
+            
+            // All NHL picks are ML - separate by odds (negative = favorite, positive = underdog)
+            const favorites = qualifiedPicks.filter(p => {
+              const odds = parseInt(p.odds) || 0;
+              return odds < 0; // Negative odds = favorite
+            });
+            
+            const underdogs = qualifiedPicks.filter(p => {
+              const odds = parseInt(p.odds) || 0;
+              return odds >= 100; // Positive odds = underdog
+            });
+            
+            // Sort by confidence (highest first)
+            const sortByConfidence = (a, b) => (b.confidence || 0.5) - (a.confidence || 0.5);
+            favorites.sort(sortByConfidence);
+            underdogs.sort(sortByConfidence);
+            
+            // Take top 2 favorites
+            const topFavorites = favorites.slice(0, 2);
+            console.log(`   🏆 Top 2 Favorites: ${topFavorites.map(p => `${p.pick} (${((p.confidence || 0.5) * 100).toFixed(0)}%)`).join(', ') || 'None'}`);
+            
+            // Take top 1 underdog
+            const topUnderdog = underdogs.slice(0, 1);
+            console.log(`   🐕 Top Underdog: ${topUnderdog.map(p => `${p.pick} (${((p.confidence || 0.5) * 100).toFixed(0)}%)`).join(', ') || 'None'}`);
+            
+            // Combine
+            nhlFilteredPicks = [...topFavorites, ...topUnderdog];
+            
+            // Log what was filtered out
+            const filteredOut = qualifiedPicks.length - nhlFilteredPicks.length;
+            if (filteredOut > 0) {
+              console.log(`   📋 Filtered out ${filteredOut} lower-confidence picks`);
+            }
+            console.log(`   ✅ Final NHL picks: ${nhlFilteredPicks.length} (all ML)`);
+          }
+
+          // ═══════════════════════════════════════════════════════════════
           // SLATE SELECTOR (--slate flag)
           // Filters to top picks by conviction, runs Stress Test
           // ═══════════════════════════════════════════════════════════════
-          let finalQualifiedPicks = qualifiedPicks;
+          let finalQualifiedPicks = nhlFilteredPicks;
           let slateResult = null;
           
           if (useSlateSelector && qualifiedPicks.length > 2) {

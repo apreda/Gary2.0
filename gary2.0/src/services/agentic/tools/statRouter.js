@@ -386,7 +386,7 @@ export async function fetchStats(sport, token, homeTeam, awayTeam, options = {})
   } else if (normalizedSportForSeason.includes('mlb')) {
     defaultSeason = currentMonth <= 3 ? currentYear - 1 : currentYear;
   } else {
-    // Default fallback for other sports (EPL, etc.) - calendar year
+    // Default fallback for other sports - calendar year
     defaultSeason = currentMonth >= 10 ? currentYear : currentYear - 1;
   }
   const season = options.season || defaultSeason;
@@ -409,7 +409,7 @@ export async function fetchStats(sport, token, homeTeam, awayTeam, options = {})
   }
   
   try {
-    // Check for sport-specific fetcher first (e.g., EPL_TOP_SCORERS for EPL)
+    // Check for sport-specific fetcher first
     let fetcher = null;
     if (FETCHERS[sportSpecificToken]) {
       fetcher = FETCHERS[sportSpecificToken];
@@ -462,8 +462,7 @@ function sportToBdlKey(sport) {
     'NFL': 'americanfootball_nfl',
     'NCAAB': 'basketball_ncaab',
     'NCAAF': 'americanfootball_ncaaf',
-    'NHL': 'icehockey_nhl',
-    'EPL': 'soccer_epl'
+    'NHL': 'icehockey_nhl'
   };
   return mapping[sport] || sport;
 }
@@ -478,13 +477,11 @@ function normalizeSportName(sport) {
     'basketball_ncaab': 'NCAAB',
     'americanfootball_ncaaf': 'NCAAF',
     'icehockey_nhl': 'NHL',
-    'soccer_epl': 'EPL',
     'NBA': 'NBA',
     'NFL': 'NFL',
     'NCAAB': 'NCAAB',
     'NCAAF': 'NCAAF',
-    'NHL': 'NHL',
-    'EPL': 'EPL'
+    'NHL': 'NHL'
   };
   return mapping[sport] || sport;
 }
@@ -876,7 +873,7 @@ For EACH team, provide:
 Be specific with actual percentages (e.g., "85.7%"). If exact stats unavailable, provide team's general scoring efficiency context.
 Focus on the ${seasonString} season only - do NOT use stats from previous years.`;
 
-    const result = await geminiGroundingSearch(query, { temperature: 0.1, maxTokens: 600 });
+    const result = await geminiGroundingSearch(query, { temperature: 1.0, maxTokens: 600 });
     
     if (result?.success && result?.data) {
       const responseText = result.data;
@@ -1848,7 +1845,7 @@ const FETCHERS = {
         Provide the exact numbers from kenpom.com. Format as structured data.`;
       
       const response = await geminiGroundingSearch(query, {
-        temperature: 0.2,
+        temperature: 1.0,
         maxTokens: 1500,
         systemMessage: 'You are a college basketball analytics expert. Provide accurate KenPom statistics from the current season. Return data in a structured format with exact numbers.'
       });
@@ -1909,7 +1906,7 @@ const FETCHERS = {
       const query = `What are the current NCAA NET rankings for ${homeTeamName} and ${awayTeamName} college basketball teams? Include their NET ranking number and any Quad 1/2/3/4 record information. NET rankings are from ncaa.com and used for NCAA tournament selection.`;
       
       const response = await geminiGroundingSearch(query, {
-        temperature: 0.2,
+        temperature: 1.0,
         maxTokens: 1500,
         systemMessage: 'You are a college basketball expert. Provide accurate NET rankings and Quad records from the current season.'
       });
@@ -1957,7 +1954,7 @@ const FETCHERS = {
       const query = `What is the current strength of schedule (SOS) ranking for ${homeTeamName} and ${awayTeamName} college basketball teams in the ${getCurrentSeasonString()} season? Include their SOS rank and any notable wins or losses against ranked teams.`;
       
       const response = await geminiGroundingSearch(query, {
-        temperature: 0.2,
+        temperature: 1.0,
         maxTokens: 1500,
         systemMessage: 'You are a college basketball analytics expert. Provide strength of schedule information.'
       });
@@ -2005,7 +2002,7 @@ const FETCHERS = {
       const query = `What are the current Quad 1, Quad 2, Quad 3, and Quad 4 records for ${homeTeamName} and ${awayTeamName} college basketball teams in the ${getCurrentSeasonString()} season? Quad records are based on opponent NET ranking and game location (home/away/neutral). Format as wins-losses for each quad.`;
       
       const response = await geminiGroundingSearch(query, {
-        temperature: 0.2,
+        temperature: 1.0,
         maxTokens: 1500,
         systemMessage: 'You are a college basketball expert specializing in NCAA tournament metrics. Provide accurate Quad records.'
       });
@@ -2076,7 +2073,7 @@ const FETCHERS = {
       Use the 2026 season data from barttorvik.com. Format as structured data with actual numbers.`;
       
       const response = await geminiGroundingSearch(query, {
-        temperature: 0.2,
+        temperature: 1.0,
         maxTokens: 2000,
         systemMessage: 'You are a college basketball analytics expert. Search barttorvik.com for accurate T-Rank and tempo-free statistics for the 2026 season. Provide exact numbers from the site.'
       });
@@ -2541,7 +2538,7 @@ const FETCHERS = {
       SOS data for the ${seasonStr} season.`;
       
       const response = await geminiGroundingSearch(query, {
-        temperature: 0.2,
+        temperature: 1.0,
         maxTokens: 1500,
         systemMessage: 'You are a college football analytics expert. Provide accurate Strength of Schedule data. Be specific about Power 4 vs Group of 5 opponent breakdowns.'
       });
@@ -2610,7 +2607,7 @@ const FETCHERS = {
       These metrics must be for the ${seasonStr} season.`;
       
       const response = await geminiGroundingSearch(query, {
-        temperature: 0.2,
+        temperature: 1.0,
         maxTokens: 1500,
         systemMessage: 'You are a college football analytics expert specializing in advanced metrics. Provide accurate opponent-adjusted ratings. FPI, SP+, and EPA are opponent-adjusted metrics that are more predictive than raw stats.'
       });
@@ -2682,7 +2679,7 @@ const FETCHERS = {
       CRITICAL: This is essential for CFP analysis for the ${seasonStr} season.`;
       
       const response = await geminiGroundingSearch(query, {
-        temperature: 0.2,
+        temperature: 1.0,
         maxTokens: 1500,
         systemMessage: 'You are a college football expert. Provide detailed conference context. Clearly distinguish between Power 4 and Group of 5 conferences.'
       });
@@ -2750,7 +2747,7 @@ const FETCHERS = {
       If a team hasn't played Power 4 opponents, note this as "NO P4 GAMES" - this is a major red flag for CFP analysis.`;
       
       const response = await geminiGroundingSearch(query, {
-        temperature: 0.2,
+        temperature: 1.0,
         maxTokens: 1500,
         systemMessage: 'You are a college football expert. Focus on performance against Power 4 teams. If a team has zero P4 games, emphasize this limitation.'
       });
@@ -2817,7 +2814,7 @@ const FETCHERS = {
       Travel fatigue can be a factor - investigate how this specific team performs after significant travel.`;
       
       const response = await geminiGroundingSearch(query, {
-        temperature: 0.2,
+        temperature: 1.0,
         maxTokens: 1500,
         systemMessage: 'You are a sports analyst. Provide travel and rest analysis for college football games.'
       });
@@ -2870,7 +2867,7 @@ const FETCHERS = {
       Ensure ratings are for the ${seasonStr} season.`;
       
       const response = await geminiGroundingSearch(query, {
-        temperature: 0.2,
+        temperature: 1.0,
         maxTokens: 1500,
         systemMessage: 'You are a college football analytics expert. Provide SP+ ratings from Bill Connelly. Be specific with numbers and rankings.'
       });
@@ -2938,7 +2935,7 @@ const FETCHERS = {
       FPI is ESPN's predictive rating system for the ${seasonStr} season.`;
       
       const response = await geminiGroundingSearch(query, {
-        temperature: 0.2,
+        temperature: 1.0,
         maxTokens: 1500,
         systemMessage: 'You are a college football analytics expert. Provide ESPN FPI data with specific numbers.'
       });
@@ -3006,7 +3003,7 @@ const FETCHERS = {
       EPA data for the ${seasonStr} season.`;
       
       const response = await geminiGroundingSearch(query, {
-        temperature: 0.2,
+        temperature: 1.0,
         maxTokens: 1500,
         systemMessage: 'You are a college football analytics expert. EPA is a critical advanced metric. Provide specific numbers.'
       });
@@ -3072,7 +3069,7 @@ const FETCHERS = {
       Focus on stats from the current ${seasonStr} season.`;
       
       const response = await geminiGroundingSearch(query, {
-        temperature: 0.2,
+        temperature: 1.0,
         maxTokens: 1500,
         systemMessage: 'You are a college football analytics expert. Havoc rate is crucial for upset potential. Provide specific numbers.'
       });
@@ -3141,7 +3138,7 @@ const FETCHERS = {
       Focus on ${seasonStr} season data.`;
       
       const response = await geminiGroundingSearch(query, {
-        temperature: 0.2,
+        temperature: 1.0,
         maxTokens: 1500,
         systemMessage: 'You are a college football analytics expert. Big play ability is a key separator in talent mismatches.'
       });
@@ -3206,7 +3203,7 @@ const FETCHERS = {
       Focus on ${seasonStr} season data.`;
       
       const response = await geminiGroundingSearch(query, {
-        temperature: 0.2,
+        temperature: 1.0,
         maxTokens: 1500,
         systemMessage: 'You are a college football analytics expert. Rushing efficiency is key in bowl games.'
       });
@@ -3272,7 +3269,7 @@ const FETCHERS = {
       Focus on stats from the current ${seasonStr} season.`;
       
       const response = await geminiGroundingSearch(query, {
-        temperature: 0.2,
+        temperature: 1.0,
         maxTokens: 1500,
         systemMessage: 'You are a college football analytics expert. QB efficiency metrics are critical for CFP analysis.'
       });
@@ -3339,7 +3336,7 @@ const FETCHERS = {
       Focus on ${seasonStr} season data.`;
       
       const response = await geminiGroundingSearch(query, {
-        temperature: 0.2,
+        temperature: 1.0,
         maxTokens: 1500,
         systemMessage: 'You are a college football analytics expert. Red zone efficiency is critical in close CFP games.'
       });
@@ -5367,7 +5364,7 @@ const FETCHERS = {
               if (sweptTotal > 0) {
                 const sweptWinPct = (sweptWins / sweptTotal) * 100;
                 
-                // Check if division rivals (same division = extra pride factor)
+                // Check if division rivals (same division = more film study and adjustment opportunities)
                 const sweptDivision = sweptTeamStanding?.team?.division;
                 const dominantDivision = dominantTeamStanding?.team?.division;
                 const isDivisionRival = sweptDivision && dominantDivision && sweptDivision === dominantDivision;
@@ -5399,10 +5396,10 @@ const FETCHERS = {
                 
                 if (sweptWinPct >= strongThreshold) {
                   alertLevel = 'STRONG';
-                  sweepNote = `🔍 SWEEP CONTEXT: ${sweptTeamName} is ${sweptWins}-${sweptLosses} (${sweptWinPct.toFixed(1)}%)${isDivisionRival ? ' and a division rival' : ''}. Sweeping an elite team 4-0 is historically very rare. The combination of roster quality, coaching adjustments, and pride makes clean sweeps against top-tier opponents a statistical anomaly. Ask yourself: "Am I betting that an elite team will accept being swept 4-0?" Investigate whether non-H2H factors (injuries, rest, scheme advantages) justify betting the sweep.`;
+                  sweepNote = `🔍 SWEEP CONTEXT: ${sweptTeamName} is ${sweptWins}-${sweptLosses} (${sweptWinPct.toFixed(1)}%)${isDivisionRival ? ' and a division rival' : ''}. Sweeping an elite team 4-0 is historically very rare. The combination of roster quality, coaching adjustments, and statistical variance makes clean sweeps against top-tier opponents a statistical anomaly. Ask yourself: "Am I betting that an elite team will get swept 4-0?" Investigate whether non-H2H factors (injuries, rest, scheme advantages) justify betting the sweep.`;
                 } else if (sweptWinPct >= cautionThreshold) {
                   alertLevel = 'CAUTION';
-                  sweepNote = `🔍 SWEEP CONTEXT: ${sweptTeamName} is ${sweptWins}-${sweptLosses} (${sweptWinPct.toFixed(1)}%)${isDivisionRival ? ' — a division rival with extra motivation' : ''}. 4-0 sweeps against playoff-caliber teams are uncommon. Consider the "pride factor" before betting the sweep.`;
+                  sweepNote = `🔍 SWEEP CONTEXT: ${sweptTeamName} is ${sweptWins}-${sweptLosses} (${sweptWinPct.toFixed(1)}%)${isDivisionRival ? ' — a division rival with more film study opportunities' : ''}. 4-0 sweeps against playoff-caliber teams are uncommon due to coaching adjustments and statistical variance.`;
                 }
                 
                 if (alertLevel) {
@@ -5557,7 +5554,7 @@ const FETCHERS = {
                     conference: sweptConference,
                     avg_margin: avgMargin.toFixed(1),
                     margin_context: marginNote,
-                    sweep_note: `🔍 NCAAB SWEEP CONTEXT: ${sweptTeamName}${rankNote} is ${sweptWins}-${sweptLosses} (${sweptWinPct.toFixed(1)}%) and 0-${gamesPlayed} vs conference rival ${dominantTeamName}. Elite/ranked conference teams rarely get swept 3-0 — coaching staffs adjust for familiar opponents, and pride is maximal in conference play. ${marginNote} Ask yourself: "Am I betting that ${isRanked ? 'a ranked team' : 'a 70%+ team'} will go 0-${gamesPlayed + 1} against the same conference opponent?"`
+                    sweep_note: `🔍 NCAAB SWEEP CONTEXT: ${sweptTeamName}${rankNote} is ${sweptWins}-${sweptLosses} (${sweptWinPct.toFixed(1)}%) and 0-${gamesPlayed} vs conference rival ${dominantTeamName}. Elite/ranked conference teams rarely get swept 3-0 — coaching staffs adjust for familiar opponents through repeated film study. ${marginNote} Ask yourself: "Am I betting that ${isRanked ? 'a ranked team' : 'a 70%+ team'} will go 0-${gamesPlayed + 1} against the same conference opponent?"`
                   };
                   console.log(`[Stat Router] NCAAB SWEEP CONTEXT: ${sweptTeamName} (${sweptWinPct.toFixed(1)}%${isRanked ? ', #' + sweptRanking : ''}) is 0-${gamesPlayed} vs conference rival ${dominantTeamName}`);
                 }
@@ -8651,7 +8648,7 @@ const FETCHERS = {
               
               if (sweptPointsPct >= strongThreshold) {
                 alertLevel = 'STRONG';
-                sweepNote = `🔍 NHL SWEEP CONTEXT: ${sweptTeamName} is ${sweptRecord} (${sweptPointsPct.toFixed(1)}% points)${isDivisionRival ? ' and a division rival' : ''} but 0-${gamesPlayed} vs ${dominantTeamName}. Sweeping an elite NHL team is historically rare — goaltending variance, line adjustments, and division pride typically intervene. ${marginNote} Ask yourself: "Am I betting that an elite team will get swept ${gamesPlayed + 1}-0?"`;
+                sweepNote = `🔍 NHL SWEEP CONTEXT: ${sweptTeamName} is ${sweptRecord} (${sweptPointsPct.toFixed(1)}% points)${isDivisionRival ? ' and a division rival' : ''} but 0-${gamesPlayed} vs ${dominantTeamName}. Sweeping an elite NHL team is historically rare — goaltending variance and coaching line adjustments typically intervene. ${marginNote} Ask yourself: "Am I betting that an elite team will get swept ${gamesPlayed + 1}-0?"`;
               } else if (sweptPointsPct >= cautionThreshold) {
                 alertLevel = 'CAUTION';
                 sweepNote = `🔍 NHL SWEEP CONTEXT: ${sweptTeamName} is ${sweptRecord} (${sweptPointsPct.toFixed(1)}% points)${isDivisionRival ? ' — a division rival' : ''} and 0-${gamesPlayed} vs ${dominantTeamName}. Playoff-caliber teams rarely get swept. ${marginNote}`;
@@ -8725,7 +8722,10 @@ const FETCHERS = {
   // CORSI FOR PERCENTAGE (Real Possession Metric)
   // SOURCE: Natural Stat Trick (naturalstattrick.com) - the gold standard for NHL advanced stats
   CORSI_FOR_PCT: async (bdlSport, home, away, season) => {
-    console.log(`[Stat Router] Fetching CORSI_FOR_PCT for ${away.name} @ ${home.name}`);
+    // Use full_name with fallback to name to prevent "undefined @ undefined" logs
+    const homeName = home?.full_name || home?.name || 'Unknown Home';
+    const awayName = away?.full_name || away?.name || 'Unknown Away';
+    console.log(`[Stat Router] Fetching CORSI_FOR_PCT for ${awayName} @ ${homeName}`);
     
     if (bdlSport !== 'icehockey_nhl') {
       return { category: 'Corsi For %', note: 'Only available for NHL' };
@@ -8733,21 +8733,25 @@ const FETCHERS = {
     
     try {
       const seasonStr = getCurrentSeasonString();
-      const query = `site:naturalstattrick.com OR site:hockey-reference.com OR site:moneypuck.com
-        ${seasonStr} NHL Corsi For percentage CF% 5v5 team stats ${home.name} ${away.name}.
-        What is each team's Corsi For % at 5v5?
+      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+      // Use specific site searches as recommended for best results
+      const query = `"Natural Stat Trick" OR "MoneyPuck" ${seasonStr} NHL season team stats.
+        Search for: ${homeName} and ${awayName} Corsi For percentage CF% 5v5.
+        What is each team's Corsi For % at 5v5 for the current season?
         Include: CF%, CA/60, CF/60, shot attempt differential.
-        Higher CF% = better possession/more shot attempts.`;
+        Higher CF% = better possession/more shot attempts.
+        Return ONLY factual data, no internal reasoning.`;
       
       const groundingResult = await geminiGroundingSearch(query, {
-        systemMessage: 'You are an NHL analytics expert. Use data from Natural Stat Trick, Hockey Reference, or MoneyPuck. Provide exact Corsi For percentage and possession data for both teams.'
+        systemMessage: 'You are an NHL analytics expert. Use data from Natural Stat Trick or MoneyPuck. Provide exact Corsi For percentage and possession data for both teams. Return ONLY the data, no chain-of-thought reasoning.',
+        maxTokens: 1500
       });
       
       return {
         category: 'Corsi For % (Possession)',
-        source: 'Natural Stat Trick / Hockey Reference / MoneyPuck via Gemini',
-        home: { team: home.full_name || home.name },
-        away: { team: away.full_name || away.name },
+        source: 'Natural Stat Trick / MoneyPuck via Gemini',
+        home: { team: homeName },
+        away: { team: awayName },
         grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
         INVESTIGATE: `🔍 Corsi For % (CF%) measures shot attempt share. >50% = outpossessing opponents. Elite teams are 52%+.`,
         note: 'League average is 50%. CF% is the best possession proxy in hockey.'
@@ -8761,7 +8765,9 @@ const FETCHERS = {
   // EXPECTED GOALS (xG) - Real Metric
   // SOURCE: MoneyPuck, Natural Stat Trick, Evolving Hockey
   EXPECTED_GOALS: async (bdlSport, home, away, season) => {
-    console.log(`[Stat Router] Fetching EXPECTED_GOALS for ${away.name} @ ${home.name}`);
+    const homeName = home?.full_name || home?.name || 'Unknown Home';
+    const awayName = away?.full_name || away?.name || 'Unknown Away';
+    console.log(`[Stat Router] Fetching EXPECTED_GOALS for ${awayName} @ ${homeName}`);
     
     if (bdlSport !== 'icehockey_nhl') {
       return { category: 'Expected Goals', note: 'Only available for NHL' };
@@ -8769,23 +8775,25 @@ const FETCHERS = {
     
     try {
       const seasonStr = getCurrentSeasonString();
-      const query = `site:moneypuck.com OR site:naturalstattrick.com OR site:evolving-hockey.com
-        ${seasonStr} NHL expected goals xG xGF xGA 5v5 team stats ${home.name} ${away.name}.
+      const query = `"MoneyPuck" OR "Natural Stat Trick" ${seasonStr} NHL season expected goals xG team stats.
+        Search for: ${homeName} and ${awayName} expected goals xGF xGA 5v5.
         What is each team's:
         1. Expected Goals For (xGF) per 60 minutes
         2. Expected Goals Against (xGA) per 60 minutes
         3. Expected Goals differential (xGF - xGA)
-        4. Actual goals vs expected (over/underperforming xG)`;
+        4. Actual goals vs expected (over/underperforming xG)
+        Return ONLY factual data, no internal reasoning.`;
       
       const groundingResult = await geminiGroundingSearch(query, {
-        systemMessage: 'You are an NHL analytics expert. Use data from MoneyPuck, Natural Stat Trick, or Evolving Hockey. Provide exact expected goals (xG) data for both teams.'
+        systemMessage: 'You are an NHL analytics expert. Use data from MoneyPuck or Natural Stat Trick. Provide exact expected goals (xG) data for both teams. Return ONLY the data, no chain-of-thought reasoning.',
+        maxTokens: 1500
       });
       
       return {
         category: 'Expected Goals (xG)',
-        source: 'MoneyPuck / Natural Stat Trick / Evolving Hockey via Gemini',
-        home: { team: home.full_name || home.name },
-        away: { team: away.full_name || away.name },
+        source: 'MoneyPuck / Natural Stat Trick via Gemini',
+        home: { team: homeName },
+        away: { team: awayName },
         grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
         INVESTIGATE: `🔍 xG measures shot quality. Teams outperforming xG may regress; underperformers may improve.`,
         note: 'xG accounts for shot location and type. More predictive than actual goals.'
@@ -8799,7 +8807,9 @@ const FETCHERS = {
   // PDO (Luck Indicator) - Real Metric
   // SOURCE: Natural Stat Trick, Hockey Reference
   PDO: async (bdlSport, home, away, season) => {
-    console.log(`[Stat Router] Fetching PDO for ${away.name} @ ${home.name}`);
+    const homeName = home?.full_name || home?.name || 'Unknown Home';
+    const awayName = away?.full_name || away?.name || 'Unknown Away';
+    console.log(`[Stat Router] Fetching PDO for ${awayName} @ ${homeName}`);
     
     if (bdlSport !== 'icehockey_nhl') {
       return { category: 'PDO', note: 'Only available for NHL' };
@@ -8807,21 +8817,23 @@ const FETCHERS = {
     
     try {
       const seasonStr = getCurrentSeasonString();
-      const query = `site:naturalstattrick.com OR site:hockey-reference.com
-        ${seasonStr} NHL PDO shooting percentage save percentage 5v5 team stats ${home.name} ${away.name}.
-        What is each team's PDO (shooting % + save %)?
-        Include: PDO, 5v5 shooting %, 5v5 save %.
-        PDO above 1.010 suggests good luck, below 0.990 suggests bad luck.`;
+      const query = `"Natural Stat Trick" ${seasonStr} NHL season PDO team stats.
+        Search for: ${homeName} and ${awayName} PDO shooting percentage save percentage 5v5.
+        What is each team's PDO (shooting % + save %) for the CURRENT ${seasonStr} season?
+        Include: PDO value, 5v5 shooting %, 5v5 save %.
+        PDO above 1.010 suggests good luck, below 0.990 suggests bad luck.
+        Return ONLY factual data for the current season, no internal reasoning or old data.`;
       
       const groundingResult = await geminiGroundingSearch(query, {
-        systemMessage: 'You are an NHL analytics expert. Use data from Natural Stat Trick or Hockey Reference. Provide exact PDO (shooting% + save%) for both teams.'
+        systemMessage: 'You are an NHL analytics expert. Use ONLY Natural Stat Trick data for the CURRENT season. Provide exact PDO (shooting% + save%) for both teams. Return ONLY the data, no chain-of-thought reasoning. Do not include data from previous seasons.',
+        maxTokens: 1500
       });
       
       return {
         category: 'PDO (Luck/Regression Indicator)',
-        source: 'Natural Stat Trick / Hockey Reference via Gemini',
-        home: { team: home.full_name || home.name },
-        away: { team: away.full_name || away.name },
+        source: 'Natural Stat Trick via Gemini',
+        home: { team: homeName },
+        away: { team: awayName },
         grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
         INVESTIGATE: `🔍 PDO = Sh% + Sv%. League average is 1.000. High PDO (>1.010) teams often regress. Low PDO (<0.990) teams often improve.`,
         CRITICAL: `⚠️ PDO is a luck indicator. Teams with extreme PDO are likely to regress to the mean.`,
@@ -8836,7 +8848,9 @@ const FETCHERS = {
   // HIGH DANGER CHANCES - Real Metric
   // SOURCE: Natural Stat Trick (primary source for scoring chances)
   HIGH_DANGER_CHANCES: async (bdlSport, home, away, season) => {
-    console.log(`[Stat Router] Fetching HIGH_DANGER_CHANCES for ${away.name} @ ${home.name}`);
+    const homeName = home?.full_name || home?.name || 'Unknown Home';
+    const awayName = away?.full_name || away?.name || 'Unknown Away';
+    console.log(`[Stat Router] Fetching HIGH_DANGER_CHANCES for ${awayName} @ ${homeName}`);
     
     if (bdlSport !== 'icehockey_nhl') {
       return { category: 'High Danger Chances', note: 'Only available for NHL' };
@@ -8844,23 +8858,25 @@ const FETCHERS = {
     
     try {
       const seasonStr = getCurrentSeasonString();
-      const query = `site:naturalstattrick.com
-        ${seasonStr} NHL high danger chances scoring chances HDCF HDCA 5v5 team stats ${home.name} ${away.name}.
+      const query = `"Natural Stat Trick" ${seasonStr} NHL season high danger chances team stats.
+        Search for: ${homeName} and ${awayName} HDCF HDCA 5v5 scoring chances.
         What is each team's:
         1. High Danger Chances For (HDCF) per 60
         2. High Danger Chances Against (HDCA) per 60
         3. High Danger Chance % (HDCF%)
-        4. Scoring Chance % (SCF%)`;
+        4. Scoring Chance % (SCF%)
+        Return ONLY factual data, no internal reasoning.`;
       
       const groundingResult = await geminiGroundingSearch(query, {
-        systemMessage: 'You are an NHL analytics expert. Use data from Natural Stat Trick. Provide exact high danger scoring chances data for both teams.'
+        systemMessage: 'You are an NHL analytics expert. Use data from Natural Stat Trick. Provide exact high danger scoring chances data for both teams. Return ONLY the data, no chain-of-thought reasoning.',
+        maxTokens: 1500
       });
       
       return {
         category: 'High Danger Scoring Chances',
         source: 'Natural Stat Trick via Gemini',
-        home: { team: home.full_name || home.name },
-        away: { team: away.full_name || away.name },
+        home: { team: homeName },
+        away: { team: awayName },
         grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
         INVESTIGATE: `🔍 High danger chances (slot shots, rebounds) are most likely to score. More predictive than overall shot totals.`,
         note: 'HDCF% >50% means creating more quality chances than allowing.'
@@ -8874,7 +8890,9 @@ const FETCHERS = {
   // SCORING FIRST - Calculated from game data
   // SOURCE: Hockey Reference, NHL.com
   SCORING_FIRST: async (bdlSport, home, away, season) => {
-    console.log(`[Stat Router] Fetching SCORING_FIRST for ${away.name} @ ${home.name}`);
+    const homeName = home?.full_name || home?.name || 'Unknown Home';
+    const awayName = away?.full_name || away?.name || 'Unknown Away';
+    console.log(`[Stat Router] Fetching SCORING_FIRST for ${awayName} @ ${homeName}`);
     
     if (bdlSport !== 'icehockey_nhl') {
       return { category: 'Scoring First', note: 'Only available for NHL' };
@@ -8882,23 +8900,25 @@ const FETCHERS = {
     
     try {
       const seasonStr = getCurrentSeasonString();
-      const query = `site:hockey-reference.com OR site:nhl.com
-        ${seasonStr} NHL record when scoring first goal first period stats ${home.name} ${away.name}.
+      const query = `"Hockey Reference" OR "NHL.com" ${seasonStr} NHL season scoring first stats.
+        Search for: ${homeName} and ${awayName} record when scoring first goal.
         What is each team's:
         1. Record when scoring first
         2. Record when opponent scores first
         3. First period goals for/against
-        4. Win % when leading after 1st period`;
+        4. Win % when leading after 1st period
+        Return ONLY factual data, no internal reasoning.`;
       
       const groundingResult = await geminiGroundingSearch(query, {
-        systemMessage: 'You are an NHL analyst. Use data from Hockey Reference or NHL.com. Provide exact scoring first statistics and first period data for both teams.'
+        systemMessage: 'You are an NHL analyst. Use data from Hockey Reference or NHL.com. Provide exact scoring first statistics and first period data for both teams. Return ONLY the data, no chain-of-thought reasoning.',
+        maxTokens: 1500
       });
       
       return {
         category: 'Scoring First & Fast Starts',
         source: 'Hockey Reference / NHL.com via Gemini',
-        home: { team: home.full_name || home.name },
-        away: { team: away.full_name || away.name },
+        home: { team: homeName },
+        away: { team: awayName },
         grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
         INVESTIGATE: `🔍 Teams that score first in NHL win ~67% of the time. Check first period goal differential.`,
         note: 'Scoring first is huge in hockey - creates momentum and forces opponent to chase.'
@@ -8912,7 +8932,9 @@ const FETCHERS = {
   // LINE COMBINATIONS - Real Data
   // SOURCE: Daily Faceoff, Left Wing Lock (the best for current line combos)
   LINE_COMBINATIONS: async (bdlSport, home, away, season) => {
-    console.log(`[Stat Router] Fetching LINE_COMBINATIONS for ${away.name} @ ${home.name}`);
+    const homeName = home?.full_name || home?.name || 'Unknown Home';
+    const awayName = away?.full_name || away?.name || 'Unknown Away';
+    console.log(`[Stat Router] Fetching LINE_COMBINATIONS for ${awayName} @ ${homeName}`);
     
     if (bdlSport !== 'icehockey_nhl') {
       return { category: 'Line Combinations', note: 'Only available for NHL' };
@@ -8920,23 +8942,25 @@ const FETCHERS = {
     
     try {
       const seasonStr = getCurrentSeasonString();
-      const query = `site:dailyfaceoff.com OR site:leftwinglock.com
-        ${seasonStr} NHL line combinations projected lines ${home.name} ${away.name}.
+      const query = `"Daily Faceoff" OR "Left Wing Lock" ${seasonStr} NHL line combinations projected lines.
+        Search for: ${homeName} and ${awayName} forward lines defense pairings.
         What are each team's:
         1. Top 6 forward lines (1st and 2nd line with player names)
         2. Top 4 defensemen pairings
         3. Starting goalie (expected)
-        4. Power play units (PP1)`;
+        4. Power play units (PP1)
+        Return ONLY factual lineup data, no internal reasoning.`;
       
       const groundingResult = await geminiGroundingSearch(query, {
-        systemMessage: 'You are an NHL lineup analyst. Use data from Daily Faceoff or Left Wing Lock. Provide current projected line combinations for both teams with player names.'
+        systemMessage: 'You are an NHL lineup analyst. Use data from Daily Faceoff or Left Wing Lock. Provide current projected line combinations for both teams with player names. Return ONLY the data, no chain-of-thought reasoning.',
+        maxTokens: 2000
       });
       
       return {
         category: 'Line Combinations',
         source: 'Daily Faceoff / Left Wing Lock via Gemini',
-        home: { team: home.full_name || home.name },
-        away: { team: away.full_name || away.name },
+        home: { team: homeName },
+        away: { team: awayName },
         grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
         INVESTIGATE: `🔍 Line chemistry matters. New combinations may take time to gel. Check for recent line shuffles.`,
         note: 'First line matchups often decide games. Check which lines match up.'
@@ -8949,7 +8973,9 @@ const FETCHERS = {
 
   // OVERTIME RECORD - Calculated
   OVERTIME_RECORD: async (bdlSport, home, away, season) => {
-    console.log(`[Stat Router] Fetching OVERTIME_RECORD for ${away.name} @ ${home.name}`);
+    const homeNameOT = home?.full_name || home?.name || 'Unknown Home';
+    const awayNameOT = away?.full_name || away?.name || 'Unknown Away';
+    console.log(`[Stat Router] Fetching OVERTIME_RECORD for ${awayNameOT} @ ${homeNameOT}`);
     
     if (bdlSport !== 'icehockey_nhl') {
       return { category: 'Overtime Record', note: 'Only available for NHL' };
@@ -9027,7 +9053,9 @@ const FETCHERS = {
   // LUCK_INDICATORS - Combined luck metrics
   // SOURCE: Natural Stat Trick, MoneyPuck (for xG vs actual goals)
   LUCK_INDICATORS: async (bdlSport, home, away, season) => {
-    console.log(`[Stat Router] Fetching LUCK_INDICATORS for ${away.name} @ ${home.name}`);
+    const homeName = home?.full_name || home?.name || 'Unknown Home';
+    const awayName = away?.full_name || away?.name || 'Unknown Away';
+    console.log(`[Stat Router] Fetching LUCK_INDICATORS for ${awayName} @ ${homeName}`);
     
     if (bdlSport !== 'icehockey_nhl') {
       return { category: 'Luck Indicators', note: 'Only available for NHL' };
@@ -9035,8 +9063,8 @@ const FETCHERS = {
     
     try {
       const seasonStr = getCurrentSeasonString();
-      const query = `site:naturalstattrick.com OR site:moneypuck.com OR site:hockey-reference.com
-        ${seasonStr} NHL luck regression PDO xG goals vs expected ${home.name} ${away.name}.
+      const query = `"Natural Stat Trick" OR "MoneyPuck" ${seasonStr} NHL luck regression PDO xG.
+        Search for: ${homeName} and ${awayName} goals vs expected.
         For each team analyze:
         1. PDO (shooting % + save %) - is it above/below 1.000?
         2. Goals scored vs expected goals (GF - xGF)
@@ -9068,7 +9096,9 @@ const FETCHERS = {
 
   // POINTS_PCT - Points percentage from BDL standings
   POINTS_PCT: async (bdlSport, home, away, season) => {
-    console.log(`[Stat Router] Fetching POINTS_PCT for ${away.name} @ ${home.name}`);
+    const homeName = home?.full_name || home?.name || 'Unknown Home';
+    const awayName = away?.full_name || away?.name || 'Unknown Away';
+    console.log(`[Stat Router] Fetching POINTS_PCT for ${awayName} @ ${homeName}`);
     
     if (bdlSport !== 'icehockey_nhl') {
       return { category: 'Points Percentage', note: 'Only available for NHL' };
@@ -9113,7 +9143,9 @@ const FETCHERS = {
 
   // STREAK - Current win/loss streak
   STREAK: async (bdlSport, home, away, season) => {
-    console.log(`[Stat Router] Fetching STREAK for ${away.name} @ ${home.name}`);
+    const homeName = home?.full_name || home?.name || 'Unknown Home';
+    const awayName = away?.full_name || away?.name || 'Unknown Away';
+    console.log(`[Stat Router] Fetching STREAK for ${awayName} @ ${homeName}`);
     
     if (bdlSport !== 'icehockey_nhl') {
       return { category: 'Current Streak', note: 'Only available for NHL' };
@@ -9153,7 +9185,9 @@ const FETCHERS = {
 
   // PLAYOFF_POSITION - Playoff race context
   PLAYOFF_POSITION: async (bdlSport, home, away, season) => {
-    console.log(`[Stat Router] Fetching PLAYOFF_POSITION for ${away.name} @ ${home.name}`);
+    const homeName = home?.full_name || home?.name || 'Unknown Home';
+    const awayName = away?.full_name || away?.name || 'Unknown Away';
+    console.log(`[Stat Router] Fetching PLAYOFF_POSITION for ${awayName} @ ${homeName}`);
     
     if (bdlSport !== 'icehockey_nhl') {
       return { category: 'Playoff Position', note: 'Only available for NHL' };
@@ -9211,7 +9245,9 @@ const FETCHERS = {
 
   // ONE_GOAL_GAMES - Close game record (1-goal margins)
   ONE_GOAL_GAMES: async (bdlSport, home, away, season) => {
-    console.log(`[Stat Router] Fetching ONE_GOAL_GAMES for ${away.name} @ ${home.name}`);
+    const homeName = home?.full_name || home?.name || 'Unknown Home';
+    const awayName = away?.full_name || away?.name || 'Unknown Away';
+    console.log(`[Stat Router] Fetching ONE_GOAL_GAMES for ${awayName} @ ${homeName}`);
     
     if (bdlSport !== 'icehockey_nhl') {
       return { category: 'One-Goal Games', note: 'Only available for NHL' };
@@ -9266,7 +9302,9 @@ const FETCHERS = {
 
   // REGULATION_WIN_PCT - Regulation wins vs total wins
   REGULATION_WIN_PCT: async (bdlSport, home, away, season) => {
-    console.log(`[Stat Router] Fetching REGULATION_WIN_PCT for ${away.name} @ ${home.name}`);
+    const homeName = home?.full_name || home?.name || 'Unknown Home';
+    const awayName = away?.full_name || away?.name || 'Unknown Away';
+    console.log(`[Stat Router] Fetching REGULATION_WIN_PCT for ${awayName} @ ${homeName}`);
     
     if (bdlSport !== 'icehockey_nhl') {
       return { category: 'Regulation Win %', note: 'Only available for NHL' };
@@ -9313,7 +9351,9 @@ const FETCHERS = {
 
   // MARGIN_VARIANCE - Goal differential consistency
   MARGIN_VARIANCE: async (bdlSport, home, away, season) => {
-    console.log(`[Stat Router] Fetching MARGIN_VARIANCE for ${away.name} @ ${home.name}`);
+    const homeName = home?.full_name || home?.name || 'Unknown Home';
+    const awayName = away?.full_name || away?.name || 'Unknown Away';
+    console.log(`[Stat Router] Fetching MARGIN_VARIANCE for ${awayName} @ ${homeName}`);
     
     if (bdlSport !== 'icehockey_nhl') {
       return { category: 'Margin Variance', note: 'Only available for NHL' };
@@ -9375,7 +9415,9 @@ const FETCHERS = {
 
   // SHOOTING_REGRESSION - Player shooting % regression indicators
   SHOOTING_REGRESSION: async (bdlSport, home, away, season) => {
-    console.log(`[Stat Router] Fetching SHOOTING_REGRESSION for ${away.name} @ ${home.name}`);
+    const homeName = home?.full_name || home?.name || 'Unknown Home';
+    const awayName = away?.full_name || away?.name || 'Unknown Away';
+    console.log(`[Stat Router] Fetching SHOOTING_REGRESSION for ${awayName} @ ${homeName}`);
     
     if (bdlSport !== 'icehockey_nhl') {
       return { category: 'Shooting Regression', note: 'Only available for NHL' };
@@ -9383,8 +9425,8 @@ const FETCHERS = {
     
     try {
       const seasonStr = getCurrentSeasonString();
-      const query = `site:naturalstattrick.com OR site:hockey-reference.com
-        ${seasonStr} NHL shooting percentage team stats ${home.name} ${away.name}.
+      const query = `"Natural Stat Trick" ${seasonStr} NHL shooting percentage team stats.
+        Search for: ${homeName} and ${awayName} shooting percentage stats.
         What is each team's:
         1. 5v5 shooting percentage (league avg is ~9%)
         2. 5v5 save percentage (league avg is ~91%)
@@ -9410,6 +9452,7 @@ const FETCHERS = {
     }
   },
 
+  /*
   // ===== EPL SPECIFIC FETCHERS (BETA) =====
 
   CLEAN_SHEETS: async (bdlSport, home, away, season) => {
@@ -9860,6 +9903,7 @@ const FETCHERS = {
     }
   },
 
+  */
   // ===== WEATHER (NFL/NCAAF) - Returns weather data for Gary to evaluate =====
   WEATHER: async (bdlSport, home, away, season, options = {}) => {
     const homeName = home.full_name || home.name;
@@ -10015,7 +10059,7 @@ For each team's starting QB:
 
 Be factual with historical stats where available.`;
 
-      const qbResult = await geminiGroundingSearch(qbQuery, { temperature: 0.2, maxTokens: 1500 });
+      const qbResult = await geminiGroundingSearch(qbQuery, { temperature: 1.0, maxTokens: 1500 });
 
       return {
         category: 'QB Cold/Adverse Weather History',
@@ -10082,31 +10126,6 @@ const ALIASES = {
   NHL_L5: 'NHL_RECENT_FORM',
   NHL_L10: 'NHL_RECENT_FORM',
   NHL_MOMENTUM: 'NHL_RECENT_FORM',
-  // EPL Aliases
-  PASS_ACCURACY: 'POSSESSION_PCT',
-  TOUCHES_IN_BOX: 'SHOTS_ON_TARGET',
-  CROSSES: 'CORNERS',
-  INTERCEPTIONS: 'TACKLES',
-  CLEARANCES: 'TACKLES',
-  SAVES: 'CLEAN_SHEETS',
-  SHOTS_TOTAL: 'SHOTS_ON_TARGET',
-  BIG_CHANCES_CREATED: 'SHOTS_ON_TARGET',
-  BIG_CHANCES_MISSED: 'SHOTS_ON_TARGET',
-  FREE_KICKS: 'CORNERS',
-  PENALTIES_WON: 'CORNERS',
-  PENALTIES_CONCEDED: 'CORNERS',
-  RED_CARDS: 'YELLOW_CARDS',
-  FOULS: 'YELLOW_CARDS',
-  HOME_FORM: 'HOME_RECORD',
-  AWAY_FORM: 'AWAY_RECORD',
-  LAST_5_RESULTS: 'LEAGUE_POSITION',
-  HEAD_TO_HEAD: 'RECENT_FORM',
-  DRAW_FREQUENCY: 'RECENT_FORM',
-  FIXTURE_CONGESTION: 'RECENT_FORM',
-  EUROPEAN_FOOTBALL: 'RECENT_FORM',
-  MOTIVATION: 'RECENT_FORM',
-  XG_DIFFERENCE: 'SHOTS_ON_TARGET',
-  XG_OVERPERFORMANCE: 'SHOTS_ON_TARGET',
   // ═══════════════════════════════════════════════════════════════════════════
   // ALL REAL FETCHERS - Every token below has a dedicated implementation!
   // ═══════════════════════════════════════════════════════════════════════════

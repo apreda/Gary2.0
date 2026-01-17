@@ -455,7 +455,7 @@ async function fetchScoreFromPerplexity(league, homeTeam, awayTeam, dateStr) {
       body: JSON.stringify({
         model: 'llama-3.1-sonar-small-128k-online',
         messages: [{ role: 'user', content: query }],
-        temperature: 0.1
+        temperature: 1.0
       })
     });
     

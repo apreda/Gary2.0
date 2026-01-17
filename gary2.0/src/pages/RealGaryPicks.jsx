@@ -1142,7 +1142,7 @@ function RealGaryPicks() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [animating, setAnimating] = useState(false);
   const [selectedSport, setSelectedSport] = useState('NBA');
-  const sportsTabs = ['NBA', 'NFL', 'NHL', 'NCAAB', 'NCAAF', 'EPL', 'MLB', 'WNBA'];
+  const sportsTabs = ['NBA', 'NFL', 'NHL', 'NCAAB', 'NCAAF', 'MLB'];
 
   // Load decisions from localStorage
   const loadLocalDecisions = () => {
@@ -1518,12 +1518,10 @@ function RealGaryPicks() {
     const league = (leagueRaw || '').toUpperCase();
     switch (league) {
       case 'NBA': return '#3B82F6';      // Blue
-      case 'WNBA': return '#F97316';     // Orange
       case 'NFL': return '#22C55E';      // Green (same as prop picks)
       case 'NHL': return '#00A3E0';      // Ice Blue
       case 'NCAAB': return '#F97316';    // Orange
       case 'NCAAF': return '#DC2626';    // Red
-      case 'EPL': return '#8B5CF6';      // Purple
       case 'MLB': return '#0EA5E9';      // Sky Blue
       default: return '#bfa142';         // Fallback to original gold
     }
@@ -1919,7 +1917,7 @@ function RealGaryPicks() {
                                                 gap: '0.4rem'
                                               }}>
                                                 {pick.league || 'MLB'}
-                                                {(pick.isBeta || pick.league === 'NHL' || pick.league === 'EPL') && (
+                                                {(pick.isBeta || pick.league === 'NHL') && (
                                                   <span style={{
                                                     fontSize: '0.6rem',
                                                     fontWeight: 700,

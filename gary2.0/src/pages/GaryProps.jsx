@@ -197,6 +197,18 @@ export default function GaryProps() {
     // Extract just the prop type without the line value
     const propOnly = propType.replace(/\s+[\d.]+$/, '');
     
+    // SPECIAL HANDLING FOR TD PROPS - Remove line numbers, show clean labels
+    const propLower = propOnly.toLowerCase();
+    if (propLower === 'anytime_td' || propLower === 'anytime td' || propLower === 'player_anytime_td') {
+      return 'Anytime TD'; // No line number needed
+    }
+    if (propLower.includes('tds_over') || propLower.includes('2_plus') || propLower.includes('2+')) {
+      return '2 Plus TDs'; // Clean label for 2+ TDs
+    }
+    if (propLower === 'first_td' || propLower === '1st_td' || propLower === 'player_1st_td') {
+      return 'First TD';
+    }
+    
     // If it's already properly formatted (like "Anytime TD"), return as-is
     if (propOnly.includes('TD') || propOnly.includes('TDs')) {
       return propOnly;
@@ -367,11 +379,14 @@ export default function GaryProps() {
                                 <div style={{ fontSize: '0.7rem', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>Gary's Pick</div>
                                 <div style={{ fontSize: '1.15rem', fontWeight: 700, lineHeight: 1.2, color: '#bfa142', wordWrap: 'break-word', wordBreak: 'break-word'}}>
                                   {pick.td_category ? (
-                                    // TD scorer picks - show appropriate label
+                                    // TD scorer picks - show appropriate label (no line numbers for TDs)
                                     pick.td_category === 'first_td' 
                                       ? `${pick.player} First TD Scorer`
-                                      : `${pick.player} to Score TD`
+                                      : pick.td_category === 'underdog'
+                                      ? `${pick.player} 2+ TDs`
+                                      : `${pick.player} Anytime TD`
                                   ) : pick.player && pick.bet && pick.prop ? (
+                                    // For non-TD props, include line number; for TD props it's already handled above
                                     `${pick.player} ${pick.bet.toUpperCase()} ${formatPropType(pick.prop)} ${pick.line || ''}`.trim()
                                   ) : (
                                     '(No pick available)'

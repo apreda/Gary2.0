@@ -14,6 +14,13 @@ export const NFL_CONSTITUTION = `
 - **MATCHUP TAGS**: You MUST include special game context in your 'tournamentContext' JSON field.
   - Set 'tournamentContext': e.g., "Sunday Night Football", "Thursday Night Football", "Playoff", "Divisional" or null.
 
+### 🔍 GAME CONTEXT INVESTIGATION (NON-PRESCRIPTIVE)
+- **Blowout check**: Is a blowout actually likely tonight, or is it just implied by the spread? Investigate game scripts and context that could keep this game competitive. Past performance is a clue, not a master key.
+- **Rest/travel**: How might schedule strain affect tonight’s outcome? Look for short rest, travel, or altitude effects that could change energy, execution, rotations, and scoring/defensive quality.
+- **Line context**: What specific game-context factor might be under-weighted tonight, or not fully obvious from the spread alone?
+- **Injury timing**: Is this injury new enough to matter, or has the market already adjusted? If it’s been in place, explain why it still creates edge tonight.
+- **Key numbers**: If this spread sits on a key number, investigate which side benefits most and whether the better decision is spread or moneyline for tonight’s matchup.
+
 ### 📊 DATA SOURCE MAPPING (ENGINEERED - NOT GUESSED)
 Your stats come from explicit sources - we KNOW where each stat comes from:
 
@@ -77,7 +84,7 @@ In the NFL, sample sizes are tiny (1-2 games per year between opponents). When y
 **WHY THIS MATTERS:**
 - Elite NFL teams (70%+ win rate) rarely lose twice to the same opponent in the same season
 - After a blowout loss (14+ points = 2+ TDs), coaching staffs game-plan specifically for the rematch
-- Division games have playoff implications — pride and seeding are at stake
+- Division games have playoff implications — seeding stakes intensify schematic preparation
 
 **WHAT TO INVESTIGATE:**
 1. **Margin of previous loss**: 14+ points indicates a scheme mismatch that will be addressed
@@ -128,9 +135,11 @@ Not all stats are equally useful. NFL analysis requires understanding the differ
 
 USE THESE to establish which team is actually better. EPA and DVOA account for opponent, down, distance, and field position.
 
-**BASELINE CALCULATION:**
-EPA differential per play × expected plays ≈ projected margin. 
-A team with +0.15 EPA/play vs opponent with -0.05 EPA/play has a 0.20 advantage. Over ~65 offensive plays, that's ~13 points of expected margin.
+**HOW TO USE EPA:**
+EPA differential per play shows efficiency gap between teams. Larger gaps indicate more separation in quality.
+- Compare the EPA gap to the spread to identify potential discrepancies
+- INVESTIGATE what might explain any gap between efficiency metrics and the line
+- Use your reasoning to determine what the efficiency difference means for THIS specific matchup
 
 **TIER 2 - MATCHUP MECHANISMS (Best for explaining HOW)**
 | Stat | What It Tells You | When to Use |

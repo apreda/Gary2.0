@@ -673,49 +673,93 @@ async function fetchPlayerGameLogs(playerIdMap) {
 
 /**
  * Detect if either team is on a back-to-back (played yesterday)
- * B2B significantly impacts NBA player fatigue and performance
- * @param {Array<number>} teamIds - Team IDs
+ * 
+ * CRITICAL: Only ROAD B2B (away team on second night) significantly impacts props
+ * - Away team on B2B = SIGNIFICANT (traveled yesterday, playing again tonight)
+ * - Home team on B2B = MINOR (rested at home, just played yesterday)
+ * 
+ * @param {Array<number>} teamIds - Team IDs [homeTeamId, awayTeamId]
  * @param {string} gameDate - Game date string (YYYY-MM-DD)
- * @returns {Object} - { home: boolean, away: boolean }
+ * @returns {Object} - { home: boolean, away: boolean, awayRoadB2B: boolean, significant: boolean }
  */
 async function detectBackToBack(teamIds, gameDate) {
-  const result = { home: false, away: false, homeLastGame: null, awayLastGame: null };
+  const result = { 
+    home: false, 
+    away: false, 
+    homeLastGame: null, 
+    awayLastGame: null,
+    awayRoadB2B: false,  // TRUE if away team played yesterday AND is away again today
+    homeRoadB2B: false,  // TRUE if home team played away yesterday (less common)
+    significant: false   // Only true for road B2B situations
+  };
 
   if (!teamIds || teamIds.length === 0) return result;
 
   try {
-    // Get yesterday's date
-    const gameDateObj = new Date(gameDate);
-    const yesterday = new Date(gameDateObj);
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().slice(0, 10);
+    // Get yesterday's date in EST timezone to match NBA schedule
+    // Use explicit EST calculation to avoid timezone issues
+    const now = new Date();
+    const estOffset = -5; // EST is UTC-5 (ignore DST for simplicity, NBA season is mostly EST)
+    const todayEST = new Date(now.getTime() + (estOffset * 60 * 60 * 1000));
+    
+    // Parse the game date properly
+    const [year, month, day] = gameDate.split('-').map(Number);
+    const gameDateEST = new Date(Date.UTC(year, month - 1, day, 12, 0, 0)); // Noon UTC = morning EST
+    
+    // Yesterday is one day before the game date
+    const yesterdayEST = new Date(gameDateEST);
+    yesterdayEST.setDate(yesterdayEST.getDate() - 1);
+    const yesterdayStr = yesterdayEST.toISOString().slice(0, 10);
+    
+    console.log(`[NBA Props Context] B2B check: Game date=${gameDate}, checking yesterday=${yesterdayStr}`);
 
     // Check recent games for both teams using BDL
-    // NBA uses getGames with date filter - with logging on failure
     const recentGames = await safeApiCallArray(
       () => ballDontLieService.getGames(SPORT_KEY, { dates: [yesterdayStr], team_ids: teamIds }),
       `NBA Props: B2B detection games for ${yesterdayStr}`
     );
 
     if (recentGames.length > 0) {
-      console.log(`[NBA Props Context] Found ${recentGames.length} games from yesterday for B2B check`);
+      console.log(`[NBA Props Context] Found ${recentGames.length} games from ${yesterdayStr} involving these teams`);
 
       for (const game of recentGames) {
         const homeId = game.home_team?.id;
         const awayId = game.visitor_team?.id;
+        
+        // Today's game: teamIds[0] = home team, teamIds[1] = away team
+        const todayHomeId = teamIds[0];
+        const todayAwayId = teamIds[1];
 
-        // Check if our home team played yesterday
-        if (teamIds[0] && (homeId === teamIds[0] || awayId === teamIds[0])) {
+        // Check if today's HOME team played yesterday
+        if (todayHomeId && (homeId === todayHomeId || awayId === todayHomeId)) {
           result.home = true;
           result.homeLastGame = yesterdayStr;
+          // Check if they were AWAY yesterday (road trip into home game - rare but possible)
+          if (awayId === todayHomeId) {
+            result.homeRoadB2B = true; // They traveled yesterday, now home
+          }
+          console.log(`[NBA Props Context] Home team (ID:${todayHomeId}) played yesterday - ${awayId === todayHomeId ? 'AWAY' : 'HOME'}`);
         }
 
-        // Check if our away team played yesterday
-        if (teamIds[1] && (homeId === teamIds[1] || awayId === teamIds[1])) {
+        // Check if today's AWAY team played yesterday - THIS IS THE SIGNIFICANT ONE
+        if (todayAwayId && (homeId === todayAwayId || awayId === todayAwayId)) {
           result.away = true;
           result.awayLastGame = yesterdayStr;
+          // Away team is on the road TONIGHT, so any B2B is a road B2B for them
+          result.awayRoadB2B = true; // They're away tonight = road B2B
+          console.log(`[NBA Props Context] ⚠️ AWAY team (ID:${todayAwayId}) on ROAD B2B - played yesterday, traveling again tonight`);
         }
       }
+      
+      // Only mark as significant if AWAY team is on a road B2B
+      // Home team B2B is much less impactful (they slept in their own beds)
+      result.significant = result.awayRoadB2B;
+      
+      if (result.home && !result.away) {
+        console.log(`[NBA Props Context] Home team B2B only - minimal impact (home rest advantage)`);
+      }
+    } else {
+      console.log(`[NBA Props Context] No games found on ${yesterdayStr} - no B2B situation`);
     }
 
     return result;
@@ -783,6 +827,11 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerSeasonSt
         statsText += `- **${candidate.player}** (${stats.position || 'N/A'})${injuryFlag}:\n`;
         statsText += `  Season: PPG ${stats.ppg || 'N/A'}, RPG ${stats.rpg || 'N/A'}, APG ${stats.apg || 'N/A'}, 3PG ${stats.tpg || 'N/A'}, PRA ${stats.pra || 'N/A'}, MPG ${stats.mpg || 'N/A'}\n`;
         
+        // ENHANCED: Show usage & efficiency metrics for prop context
+        if (stats.usagePct || stats.trueShooting) {
+          statsText += `  Usage: USG% ${stats.usagePct || 'N/A'}, TS% ${stats.trueShooting || 'N/A'}, EFG% ${stats.effectiveFgPct || 'N/A'}\n`;
+        }
+        
         // Add recent form if available - show ALL stat types equally for organic analysis
         if (logs) {
           const formIcon = logs.formTrend === 'hot' ? '🔥' : logs.formTrend === 'cold' ? '❄️' : '';
@@ -833,6 +882,11 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerSeasonSt
       if (stats) {
         statsText += `- **${candidate.player}** (${stats.position || 'N/A'})${injuryFlag}:\n`;
         statsText += `  Season: PPG ${stats.ppg || 'N/A'}, RPG ${stats.rpg || 'N/A'}, APG ${stats.apg || 'N/A'}, 3PG ${stats.tpg || 'N/A'}, PRA ${stats.pra || 'N/A'}, MPG ${stats.mpg || 'N/A'}\n`;
+        
+        // ENHANCED: Show usage & efficiency metrics for prop context
+        if (stats.usagePct || stats.trueShooting) {
+          statsText += `  Usage: USG% ${stats.usagePct || 'N/A'}, TS% ${stats.trueShooting || 'N/A'}, EFG% ${stats.effectiveFgPct || 'N/A'}\n`;
+        }
         
         // Add recent form if available - show ALL stat types equally for organic analysis
         if (logs) {
@@ -1168,10 +1222,14 @@ export async function buildNbaPropsAgenticContext(game, playerProps, options = {
   console.log(`[NBA Props Context] Player stats coverage: ${playersWithStats}/${totalCandidates} players`);
   console.log(`[NBA Props Context] Player game logs coverage: ${playersWithLogs}/${totalCandidates} players`);
 
-  // B2B (back-to-back) detection - important for NBA fatigue
+  // B2B (back-to-back) detection - ONLY road B2B is significant for props
   const b2bInfo = await detectBackToBack(teamIds, dateStr);
-  if (b2bInfo.home || b2bInfo.away) {
-    console.log(`[NBA Props Context] ⚠️ B2B detected: Home=${b2bInfo.home ? 'YES' : 'no'}, Away=${b2bInfo.away ? 'YES' : 'no'}`);
+  if (b2bInfo.significant) {
+    // Road B2B - away team traveled yesterday, traveling again tonight
+    console.log(`[NBA Props Context] ⚠️ ROAD B2B DETECTED: Away team played yesterday and traveling again tonight`);
+  } else if (b2bInfo.home && !b2bInfo.away) {
+    // Home team B2B only - minimal impact (they rested at home)
+    console.log(`[NBA Props Context] ℹ️ Home team B2B (minimal impact - home rest advantage)`);
   }
   
   // CRITICAL: Detect players likely injured but NOT in BDL injury report
@@ -1246,10 +1304,12 @@ export async function buildNbaPropsAgenticContext(game, playerProps, options = {
     propCount: playerProps.length,
     topCandidates: availableCandidates.map(p => p.player).slice(0, 6),
     playerStatsAvailable: playersWithStats > 0,
-    // B2B detection - important for fatigue impact on props
+    // B2B detection - ONLY road B2B (away team) is significant for props
     backToBack: {
-      home: b2bInfo.home,
-      away: b2bInfo.away
+      home: b2bInfo.home,                    // Home team played yesterday (minimal impact)
+      away: b2bInfo.away,                    // Away team played yesterday
+      awayRoadB2B: b2bInfo.awayRoadB2B,      // Away team on road B2B (SIGNIFICANT)
+      significant: b2bInfo.significant       // TRUE only if away team on road B2B
     }
   };
 

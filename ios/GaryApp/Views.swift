@@ -5125,12 +5125,12 @@ struct GaryFantasyViewComingSoon: View {
                     
                     // Title
                     VStack(spacing: 8) {
-                        Text("Gary's Fantasy")
+                        Text("Gary's Daily Fantasy")
                             .font(.system(size: 28, weight: .heavy))
                             .tracking(-0.5)
                             .foregroundStyle(GaryColors.goldGradient)
                         
-                        Text("Daily Fantasy Lineups")
+                        Text("AI-Powered Lineup Optimization")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
@@ -5248,6 +5248,8 @@ struct GaryFantasyView: View {
         }
     }
     
+    @State private var showMenu = false
+    
     var body: some View {
         ZStack {
             // Background
@@ -5255,39 +5257,80 @@ struct GaryFantasyView: View {
             
             // Content
             VStack(spacing: 0) {
-                // Header
-                VStack(spacing: 8) {
-                    Text("Gary's Fantasy")
-                        .font(.system(size: 28, weight: .heavy))
-                        .tracking(-0.5)
-                        .foregroundStyle(GaryColors.goldGradient)
+                // Header with menu button
+                HStack(alignment: .center) {
+                    Spacer()
                     
-                    Text("Daily Fantasy Lineups")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                    VStack(spacing: 4) {
+                        Text("Gary's Daily Fantasy")
+                            .font(.system(size: 28, weight: .heavy))
+                            .tracking(-0.5)
+                            .foregroundStyle(GaryColors.goldGradient)
+                        
+                        Text("AI-Powered Lineup Optimization")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    // Menu button
+                    Button {
+                        showMenu = true
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 44, height: 44)
+                            .background(
+                                Circle()
+                                    .fill(Color.white.opacity(0.05))
+                                    .overlay(
+                                        Circle()
+                                            .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
+                                    )
+                            )
+                    }
+                    .buttonStyle(.plain)
                 }
+                .padding(.horizontal, 16)
                 .padding(.top, 8)
                 .padding(.bottom, 12)
                 
-                // Platform Toggle (DraftKings / FanDuel)
-                DFSPlatformToggle(selected: $selectedPlatform)
-                    .padding(.horizontal, 20)
+                // Sport Filter (NBA / NFL) - Always show both
+                DFSSportFilter(selected: $selectedSport, available: ["NBA", "NFL"])
                     .padding(.bottom, 12)
                 
-                // Sport Filter (NBA / NFL)
-                if !availableSports.isEmpty {
-                    DFSSportFilter(selected: $selectedSport, available: availableSports)
-                        .padding(.bottom, 8)
+                // Platform Toggle + Slate Dropdown Row with accent outline
+                HStack(spacing: 12) {
+                    // Platform Toggle (DraftKings / FanDuel)
+                    DFSPlatformToggle(selected: $selectedPlatform)
+                    
+                    // Slate Dropdown
+                    if availableSlates.count > 0 {
+                        DFSSlateDropdown(
+                            selected: $selectedSlate, 
+                            available: availableSlates,
+                            currentLineup: currentLineup
+                        )
+                    }
                 }
-                
-                // Slate Filter (Main / Turbo / Night)
-                if availableSlates.count > 1 {
-                    DFSSlateFilter(selected: $selectedSlate, available: availableSlates)
-                        .padding(.bottom, 16)
-                } else if !availableSlates.isEmpty {
-                    // Just a small spacer if only one slate
-                    Spacer().frame(height: 8)
-                }
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color.clear)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(
+                                    selectedPlatform == .draftkings 
+                                        ? Color(hex: "#53D337").opacity(0.4)
+                                        : Color(hex: "#1493FF").opacity(0.4),
+                                    lineWidth: 1.5
+                                )
+                        )
+                )
+                .padding(.horizontal, 16)
+                .padding(.bottom, 16)
                 
                 // Content
                 if loading {
@@ -5501,7 +5544,7 @@ struct DFSSportFilter: View {
     }
 }
 
-// MARK: - DFS Slate Filter
+// MARK: - DFS Slate Filter (Pills - Legacy)
 
 struct DFSSlateFilter: View {
     @Binding var selected: String
@@ -5536,6 +5579,71 @@ struct DFSSlateFilter: View {
             }
             .padding(.horizontal, 20)
         }
+    }
+}
+
+// MARK: - DFS Slate Dropdown (New Design)
+
+struct DFSSlateDropdown: View {
+    @Binding var selected: String
+    let available: [String]
+    let currentLineup: DFSLineup?
+    @State private var showPicker = false
+    
+    // Get start time from current lineup
+    private var startTime: String {
+        if let time = currentLineup?.slate_start_time {
+            return time
+        }
+        return ""
+    }
+    
+    var body: some View {
+        Menu {
+            ForEach(available, id: \.self) { slate in
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        selected = slate
+                    }
+                } label: {
+                    HStack {
+                        Text(slate)
+                        if selected == slate {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(selected)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white)
+                    
+                    if !startTime.isEmpty {
+                        Text(startTime)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(GaryColors.gold)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(hex: "#1A1A1C"))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.white.opacity(0.15), lineWidth: 0.5)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -5996,31 +6104,242 @@ struct PivotRow: View {
 struct GaryNotesCard: View {
     let notes: String
     
+    // Parse notes into sections
+    private var sections: [NoteSection] {
+        parseNotesIntoSections(notes)
+    }
+    
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 12) {
+            // Header
             HStack {
                 Image(systemName: "lightbulb.fill")
-                    .font(.system(size: 12))
+                    .font(.system(size: 14))
                     .foregroundStyle(GaryColors.gold)
                 Text("GARY'S NOTES")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.system(size: 12, weight: .bold))
                     .foregroundStyle(GaryColors.gold)
             }
             
-            Text(notes)
-                .font(.system(size: 13))
-                .foregroundStyle(.secondary)
-                .lineSpacing(4)
+            // Rendered sections
+            ForEach(sections.indices, id: \.self) { index in
+                NoteSectionView(section: sections[index])
+            }
         }
-        .padding(14)
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(Color(hex: "#0D0D0F"))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .stroke(GaryColors.gold.opacity(0.15), lineWidth: 0.5)
                 )
         )
+    }
+    
+    // Parse the notes string into structured sections
+    private func parseNotesIntoSections(_ text: String) -> [NoteSection] {
+        var sections: [NoteSection] = []
+        var currentSection: NoteSection? = nil
+        var currentContent: [String] = []
+        
+        let lines = text.components(separatedBy: "\n")
+        
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            
+            // Skip separator lines (═══, ───, etc.)
+            if trimmed.allSatisfy({ $0 == "═" || $0 == "─" || $0 == "▓" }) && !trimmed.isEmpty {
+                continue
+            }
+            
+            // Skip empty lines at section boundaries
+            if trimmed.isEmpty {
+                if !currentContent.isEmpty {
+                    currentContent.append("")
+                }
+                continue
+            }
+            
+            // Check if this is a section header
+            if let sectionType = detectSectionHeader(trimmed) {
+                // Save previous section
+                if let section = currentSection {
+                    var s = section
+                    s.content = currentContent.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !s.content.isEmpty {
+                        sections.append(s)
+                    }
+                }
+                
+                // Start new section
+                currentSection = NoteSection(
+                    type: sectionType,
+                    title: cleanSectionTitle(trimmed),
+                    content: "",
+                    icon: sectionIcon(for: sectionType)
+                )
+                currentContent = []
+            } else if currentSection != nil {
+                // Add line to current section content
+                currentContent.append(trimmed)
+            } else {
+                // Content before any section header - create intro section
+                if sections.isEmpty && currentSection == nil {
+                    currentSection = NoteSection(type: .intro, title: "", content: "", icon: nil)
+                }
+                currentContent.append(trimmed)
+            }
+        }
+        
+        // Save final section
+        if let section = currentSection {
+            var s = section
+            s.content = currentContent.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !s.content.isEmpty || !s.title.isEmpty {
+                sections.append(s)
+            }
+        }
+        
+        return sections
+    }
+    
+    private func detectSectionHeader(_ line: String) -> NoteSectionType? {
+        let upper = line.uppercased()
+        
+        if upper.contains("LINEUP THESIS") { return .thesis }
+        if upper.contains("USAGE OPPORTUNITY") { return .usageOpportunity }
+        if upper.contains("VALUE PLAYS") { return .valuePlays }
+        if upper.contains("HOT STREAK") { return .hotStreak }
+        if upper.contains("CORRELATION STRUCTURE") { return .correlation }
+        if upper.contains("OWNERSHIP PROFILE") { return .ownership }
+        if upper.contains("MONITOR BEFORE LOCK") { return .monitor }
+        if upper.contains("BUILD ANALYSIS") { return .buildAnalysis }
+        if upper.contains("STARS RETURNING") { return .starsReturning }
+        if upper.contains("QUESTIONS FOR GARY") { return .questions }
+        if upper.contains("SHARP AUDIT") { return .sharpAudit }
+        if upper.contains("HARMONY") || upper.contains("STRATEGY") { return .harmony }
+        
+        return nil
+    }
+    
+    private func cleanSectionTitle(_ line: String) -> String {
+        var cleaned = line
+        // Remove emoji prefixes for cleaner display (we add our own icons)
+        let emojis = ["🚀", "💎", "🔥", "📊", "📈", "⏰", "🔍", "⚠️", "❓", "💡", "🤝"]
+        for emoji in emojis {
+            cleaned = cleaned.replacingOccurrences(of: emoji, with: "").trimmingCharacters(in: .whitespaces)
+        }
+        return cleaned
+    }
+    
+    private func sectionIcon(for type: NoteSectionType) -> String {
+        switch type {
+        case .intro: return "doc.text"
+        case .thesis: return "target"
+        case .usageOpportunity: return "arrow.up.right.circle.fill"
+        case .valuePlays: return "diamond.fill"
+        case .hotStreak: return "flame.fill"
+        case .correlation: return "chart.bar.fill"
+        case .ownership: return "chart.pie.fill"
+        case .monitor: return "clock.fill"
+        case .buildAnalysis: return "magnifyingglass"
+        case .starsReturning: return "exclamationmark.triangle.fill"
+        case .questions: return "questionmark.circle.fill"
+        case .sharpAudit: return "checkmark.shield.fill"
+        case .harmony: return "hand.thumbsup.fill"
+        }
+    }
+}
+
+// MARK: - Note Section Types
+
+enum NoteSectionType {
+    case intro
+    case thesis
+    case usageOpportunity
+    case valuePlays
+    case hotStreak
+    case correlation
+    case ownership
+    case monitor
+    case buildAnalysis
+    case starsReturning
+    case questions
+    case sharpAudit
+    case harmony
+}
+
+struct NoteSection {
+    var type: NoteSectionType
+    var title: String
+    var content: String
+    var icon: String?
+}
+
+// MARK: - Note Section View
+
+struct NoteSectionView: View {
+    let section: NoteSection
+    
+    private var sectionColor: Color {
+        switch section.type {
+        case .thesis: return GaryColors.gold
+        case .usageOpportunity: return Color.green
+        case .valuePlays: return Color.cyan
+        case .hotStreak: return Color.orange
+        case .correlation: return Color.purple
+        case .ownership: return Color.pink
+        case .monitor: return Color.yellow
+        case .buildAnalysis: return Color.blue
+        case .starsReturning: return Color.red
+        case .questions: return Color.orange
+        case .sharpAudit: return Color.green
+        case .harmony: return Color.teal
+        case .intro: return .secondary
+        }
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Section header (if has title)
+            if !section.title.isEmpty {
+                HStack(spacing: 6) {
+                    if let icon = section.icon {
+                        Image(systemName: icon)
+                            .font(.system(size: 12))
+                            .foregroundStyle(sectionColor)
+                    }
+                    Text(section.title)
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(sectionColor)
+                }
+                .padding(.top, 4)
+                
+                // Subtle divider
+                Rectangle()
+                    .fill(sectionColor.opacity(0.2))
+                    .frame(height: 1)
+            }
+            
+            // Section content
+            if !section.content.isEmpty {
+                Text(parseContentWithFormatting(section.content))
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+                    .lineSpacing(5)
+            }
+        }
+    }
+    
+    // Parse content to handle special formatting
+    private func parseContentWithFormatting(_ text: String) -> AttributedString {
+        var result = AttributedString(text)
+        
+        // Make player names and key terms slightly brighter
+        // This is a simplified version - full implementation would parse more
+        
+        return result
     }
 }

@@ -289,7 +289,7 @@ Respond with VALID JSON ONLY in this exact format:
         }
       ], {
         model: 'gpt-3.5-turbo-0125',
-        temperature: 0.1,
+        temperature: 1.0,
         maxTokens: 500
       });
       

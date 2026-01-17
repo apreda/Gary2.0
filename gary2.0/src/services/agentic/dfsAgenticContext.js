@@ -347,7 +347,7 @@ export async function fetchPropLinesForDFS(sport, gameIds) {
     console.log(`[DFS Props] 📊 Fetching prop lines for ${gameIds.length} games to enhance DFS projections`);
     
     // Check if BDL service has player props method for this sport
-    // NOTE: BDL SDK currently only supports NHL/EPL props, not NBA
+    // NOTE: BDL SDK currently only supports NHL props, not NBA
     if (sport === 'NBA' && typeof ballDontLieService.getNbaPlayerProps !== 'function') {
       console.log('[DFS Props] ⚠️ NBA player props not available via BDL SDK - using MCP tools would be required');
       console.log('[DFS Props] ℹ️ Falling back to season stats for projections');
@@ -357,7 +357,7 @@ export async function fetchPropLinesForDFS(sport, gameIds) {
     // Fetch props for each game
     for (const gameId of gameIds) {
       try {
-        // Use BDL API to fetch player props (NHL/EPL supported, NBA not yet)
+        // Use BDL API to fetch player props (NHL supported, NBA not yet)
         const propsMethod = sport === 'NBA' ? 'getNbaPlayerProps' : 
                           sport === 'NHL' ? 'getNhlPlayerProps' : null;
         
@@ -565,7 +565,7 @@ export async function preLockInjuryRefresh(sport, lineup, dateStr) {
         model: 'gemini-3-flash-preview',
         tools: [{ google_search: {} }],
         safetySettings: SAFETY_SETTINGS,
-        generationConfig: { temperature: 0.1, maxOutputTokens: 2048 }
+        generationConfig: { temperature: 1.0, maxOutputTokens: 2048 } // Gemini 3: Keep at 1.0
       });
       
       const prompt = `Search for the LATEST injury status for these ${sport} players playing TODAY (${dateStr}):
@@ -738,7 +738,7 @@ export async function fetchDFSSalariesWithGrounding(platform, sport, slateDate, 
       }],
       safetySettings: SAFETY_SETTINGS,
       generationConfig: {
-        temperature: 0.5, // Slightly higher temp for better grounding results
+        temperature: 1.0, // Gemini 3: MUST be 1.0 per Google recommendation
         topP: 0.95,
         maxOutputTokens: DFS_MODEL_CONFIG.maxOutputTokens
         // Note: responseMimeType: 'application/json' breaks grounding - don't use it here
@@ -1310,7 +1310,7 @@ export async function fetchPlayerStatsFromBDL(sport, dateStr) {
           console.log(`[DFS Context] 🔍 Searching for today's NBA injury updates via Gemini Grounding...`);
           const model = genAI.getGenerativeModel({
             model: GROUNDING_MODEL_ID,
-            generationConfig: { temperature: 0.3 },
+            generationConfig: { temperature: 1.0 }, // Gemini 3: Keep at 1.0
             tools: [{ google_search: {} }] // Gemini 3: Use google_search instead of deprecated googleSearchRetrieval
           });
           
@@ -1837,9 +1837,6 @@ const EXCLUDED_INJURY_STATUSES = ['OUT', 'DOUBTFUL', 'QUESTIONABLE', 'GTD', 'DTD
  * @returns {Object} { exclude: boolean, reason: string }
  */
 function checkRotationRisk(p) {
-  // If no stats at all, it's a new player or deep bench
-  const hasNoStats = !p.seasonStats || Object.keys(p.seasonStats).length === 0 || (p.seasonStats.mpg === 0 && p.seasonStats.ppg === 0);
-  
   // NBA-specific rotation logic
   const l5Games = p.l5Stats?.games || 0;
   const l5Mpg = p.l5Stats?.mpg || 0;
@@ -1847,21 +1844,29 @@ function checkRotationRisk(p) {
   const seasonPpg = p.seasonStats?.ppg || 0;
   const salary = p.salary || 0;
   
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CASE 0: ZERO MINUTES PLAYED - Player exists in BDL but has NEVER played
+  // These are roster players who haven't seen the court (DNP-CD every game)
+  // Examples: Enrique Freeman, Rocco Zikarsky, Tristen Newton
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (seasonMpg === 0 && l5Mpg === 0) {
+    return { exclude: true, reason: 'DNP-CD (0 minutes played this season)' };
+  }
+  
   // Case 1: Deep bench player who hasn't played in last 5 games
-  if (l5Games === 0 && seasonMpg < 12 && !hasNoStats && p.l5Stats !== undefined) {
+  if (l5Games === 0 && seasonMpg < 12 && p.l5Stats !== undefined) {
     return { exclude: true, reason: 'DNP-CD Risk (Out of rotation - 0 games in L5)' };
   }
   
   // Case 2: Deep bench player with effectively 0 minutes
-  if (seasonMpg < 5 && l5Mpg < 5 && !hasNoStats) {
+  if (seasonMpg < 5 && l5Mpg < 5 && (seasonMpg > 0 || l5Mpg > 0)) {
     return { exclude: true, reason: 'Deep Bench (Insufficient minutes)' };
   }
   
   // Case 3: Third-string player - low minutes AND low production
   // These players only see garbage time and shouldn't be in optimal lineups
-  // Threshold: <15 MPG season AND <8 PPG = backup's backup territory
-  // Looney (2026): 14.2 MPG, 2.6 PPG -> This will now catch him
-  if (seasonMpg < 15 && seasonPpg < 8 && salary < 4500 && !hasNoStats) {
+  // Threshold: <12 MPG season AND <6 PPG = backup's backup territory
+  if (seasonMpg < 12 && seasonPpg < 6 && salary < 4500 && seasonMpg > 0) {
     return { exclude: true, reason: 'Third-String Risk (Low MPG + Low PPG at punt salary)' };
   }
   
@@ -1920,7 +1925,7 @@ async function fetchBenchmarkProjections(sport, dateStr, teams = []) {
       tools: [{ google_search: {} }],
       safetySettings: SAFETY_SETTINGS,
       generationConfig: {
-        temperature: 0.1, // Very low temp for facts
+        temperature: 1.0, // Gemini 3: Keep at 1.0 - lower values cause looping/degraded performance
         maxOutputTokens: 8192 // Increased from 2048 - Gary needs ALL projections, no truncation
       }
     });
@@ -2112,30 +2117,93 @@ export function mergePlayerData(bdlPlayers, groundedPlayers) {
       continue;
     }
     
-    // ⭐ EXPANDED: Add ANY player with salary who isn't in BDL
-    // But ONLY if they are not clear rotation risks
+    // ⭐ EXPANDED: Add ANY player with salary who isn't in BDL merged list
+    // Try to find their BDL stats first - NEVER fall back to salary-based projections
     if (!exists && p.salary > 0 && p.position) {
-      // If we don't have BDL stats for them, they are likely deep bench
-      // We only want them if they are clear value plays or injury replacements
-      // For now, let's flag them and let the Audit handle it if they are punts
-      merged.push({
-        name: p.name,
-        team: p.team,
-        position: p.position,
-        allPositions: p.allPositions || [p.position], // Preserve multi-position eligibility
-        salary: p.salary,
-        status: p.status || 'HEALTHY',
-        notes: p.notes || '',
-        ownership: p.ownership,
-        seasonStats: { mpg: 0, ppg: 0 }, // Force zero stats for fallback
-        fromSalaryDataOnly: true // Flag that this player needs estimated projection
-      });
-      addedFromSalaryData++;
+      // ═══════════════════════════════════════════════════════════════════════
+      // 🔍 BDL LOOKUP: Search for this player in BDL by name (fuzzy match)
+      // Use their REAL stats instead of salary-based fallback
+      // ═══════════════════════════════════════════════════════════════════════
+      let validatedTeam = p.team;
+      let foundStats = null;
+      
+      // Look for this player name in BDL data - try multiple matching strategies
+      const pNameLower = p.name?.toLowerCase() || '';
+      const pNameParts = pNameLower.split(' ');
+      const pFirstName = pNameParts[0] || '';
+      const pLastName = pNameParts[pNameParts.length - 1] || '';
+      
+      // Strategy 1: Exact normalized name match
+      let bdlMatch = bdlPlayers.find(b => normalizePlayerName(b.name) === normalizePlayerName(p.name));
+      
+      // Strategy 2: First 2 chars of first name + full last name
+      if (!bdlMatch && pFirstName.length >= 2 && pLastName.length >= 3) {
+        bdlMatch = bdlPlayers.find(b => {
+          const bName = (b.name || '').toLowerCase();
+          const bParts = bName.split(' ');
+          const bFirstName = bParts[0] || '';
+          const bLastName = bParts[bParts.length - 1] || '';
+          return bFirstName.startsWith(pFirstName.slice(0, 2)) && bLastName === pLastName;
+        });
+      }
+      
+      // Strategy 3: Last name + same team
+      if (!bdlMatch && pLastName.length >= 3) {
+        bdlMatch = bdlPlayers.find(b => {
+          const bName = (b.name || '').toLowerCase();
+          const bLastName = bName.split(' ').pop() || '';
+          return bLastName === pLastName && (b.team || '').toUpperCase() === (p.team || '').toUpperCase();
+        });
+      }
+      
+      if (bdlMatch) {
+        // ⭐ CRITICAL: Use BDL's REAL stats, not salary-based fallback!
+        console.log(`[DFS Context] ✅ Found BDL match for ${p.name} → ${bdlMatch.name} (${bdlMatch.team})`);
+        validatedTeam = bdlMatch.team || p.team;
+        foundStats = bdlMatch.seasonStats;
+        
+        // Add with REAL BDL stats
+        merged.push({
+          id: bdlMatch.id,
+          name: p.name,
+          team: validatedTeam,
+          position: p.position || bdlMatch.position,
+          allPositions: p.allPositions || [p.position || bdlMatch.position],
+          salary: p.salary,
+          status: bdlMatch.status || p.status || 'HEALTHY',
+          notes: p.notes || '',
+          ownership: p.ownership,
+          // ⭐ Use REAL BDL stats
+          seasonStats: foundStats || bdlMatch.seasonStats || { mpg: 0, ppg: 0 },
+          l5Stats: bdlMatch.l5Stats, // Include L5 if available
+          recentForm: bdlMatch.recentForm,
+          fromSalaryDataOnly: false, // Has REAL stats
+          teamValidated: true
+        });
+        addedFromSalaryData++;
+      } else {
+        // ═══════════════════════════════════════════════════════════════════════
+        // 🐛 BUG: NO BDL MATCH - This should NOT happen
+        // BDL has stats for ALL players including rookies (via Game Player Stats)
+        // This is a name matching bug that needs fixing
+        // ═══════════════════════════════════════════════════════════════════════
+        console.error(`[DFS Context] 🐛 BUG: Cannot find ${p.name} (${p.team}) in BDL!`);
+        console.error(`[DFS Context]    → Tank01 has: "${p.name}" salary=$${p.salary}`);
+        console.error(`[DFS Context]    → Check: 1) Name spelling  2) Team abbreviation  3) BDL search`);
+        
+        // ⚠️ DO NOT add this player to the pool - we cannot use players without real stats
+        // Log what we would have added so developers can debug
+        console.error(`[DFS Context]    → SKIPPING this player until BDL matching is fixed`);
+        // Count as skipped, not added
+        // merged.push() intentionally omitted - don't add players without stats
+      }
     }
   }
   
+  // Log stats coverage - ALL players should have real BDL stats now
+  console.log(`[DFS Context] 📊 Stats coverage: ${merged.length} players with REAL BDL stats`);
   if (addedFromSalaryData > 0) {
-    console.log(`[DFS Context] Added ${addedFromSalaryData} players from Tank01 without BDL stats (will use salary-based projections)`);
+    console.log(`[DFS Context] ✅ Added ${addedFromSalaryData} Tank01 players with BDL stats matched`);
   }
   
   // Log excluded players
@@ -2360,6 +2428,90 @@ export function mergePlayerData(bdlPlayers, groundedPlayers) {
   
   // Return both merged players AND excluded players for teammate opportunity analysis
   return { merged, excludedPlayers };
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * SMART OWNERSHIP ESTIMATION - Salary-Based Model
+ * ═══════════════════════════════════════════════════════════════════════════
+ * 
+ * When Gemini Grounding doesn't find real ownership data, we use a 
+ * salary-based estimation model. This is what sharps use:
+ * 
+ * - High salary ($10K+) → Higher ownership (people pay up for studs)
+ * - Mid salary ($6-9K) → Moderate ownership
+ * - Low salary ($4-6K) → Lower ownership (value plays)
+ * - Punts (< $4K) → Very low ownership (dart throws)
+ * 
+ * Modifiers:
+ * - Recent hot streak → +5-10% ownership (recency bias)
+ * - Injury replacement → +8-15% ownership (obvious value)
+ * - Tough matchup → -3-5% ownership (faded)
+ * - Back-to-back → -5-8% ownership (rest concerns)
+ * 
+ * @param {Object} player - Player object with salary and stats
+ * @param {string} platform - 'draftkings' or 'fanduel'
+ * @param {string} sport - 'NBA' or 'NFL'
+ * @returns {number} Estimated ownership percentage
+ */
+function estimateOwnershipFromSalary(player, platform = 'draftkings', sport = 'NBA') {
+  const salary = player.salary || 0;
+  
+  // Platform-specific salary thresholds
+  const thresholds = platform === 'fanduel' 
+    ? { elite: 9500, high: 7500, mid: 5500, value: 4000 }
+    : { elite: 10000, high: 8000, mid: 6000, value: 4000 };
+  
+  // Base ownership by salary tier
+  let baseOwnership;
+  if (salary >= thresholds.elite) {
+    // Elite tier: 22-35% base
+    baseOwnership = 22 + Math.random() * 13;
+  } else if (salary >= thresholds.high) {
+    // High tier: 15-25% base
+    baseOwnership = 15 + Math.random() * 10;
+  } else if (salary >= thresholds.mid) {
+    // Mid tier: 10-18% base
+    baseOwnership = 10 + Math.random() * 8;
+  } else if (salary >= thresholds.value) {
+    // Value tier: 5-12% base
+    baseOwnership = 5 + Math.random() * 7;
+  } else {
+    // Punt tier: 1-6% base
+    baseOwnership = 1 + Math.random() * 5;
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════════
+  // MODIFIERS - Adjust based on context
+  // ═══════════════════════════════════════════════════════════════════════
+  
+  // Hot streak modifier (+5-10%)
+  if (player.recentForm === 'hot' || (player.l5Stats?.ppg > (player.seasonStats?.ppg || 0) * 1.15)) {
+    baseOwnership += 5 + Math.random() * 5;
+  }
+  
+  // Injury replacement / usage boost (+8-15%)
+  if (player.usageBoost || player.teammateOpportunity || player.injuryBeneficiary) {
+    baseOwnership += 8 + Math.random() * 7;
+  }
+  
+  // Clear breakout candidate (+5%)
+  if (player.isBreakoutCandidate || player.rotation_status === 'expanded_role') {
+    baseOwnership += 5;
+  }
+  
+  // Back-to-back fade (-5%)
+  if (player.isB2B || player.isSecondOfB2B) {
+    baseOwnership -= 5;
+  }
+  
+  // Star returning / role diminished (-8%)
+  if (player.starReturning || player.roleEnded) {
+    baseOwnership -= 8;
+  }
+  
+  // Ensure within valid range (1-50%)
+  return Math.max(1, Math.min(50, Math.round(baseOwnership * 10) / 10));
 }
 
 /**
@@ -2995,7 +3147,7 @@ export async function fetchDFSNarrativeContext(sport, slateDate, games = []) {
   const genAI = getGeminiClient();
   if (!genAI) {
     console.log('[DFS Context] Gemini not available - skipping narrative context');
-    return { narratives: [], targetPlayers: [], fadePlayers: [] };
+    return { narratives: [], targetPlayers: [], fadePlayers: [], starsReturning: [] };
   }
   
   const gameDescriptions = games.map(g => 
@@ -3097,8 +3249,28 @@ Identify and return as JSON:
       "minutes_trend": "decreasing|volatile",
       "role_sustainability": "ended|one_game"
     }
+  ],
+  "stars_returning": [
+    {
+      "name": "Star Player Name",
+      "team": "TM",
+      "returning_from": "injury description (e.g., 'knee injury - missed 5 games')",
+      "games_missed": 5,
+      "minutes_restriction": null | "15-20 min limit" | "no restriction",
+      "restriction_confidence": "confirmed" | "expected" | "unknown",
+      "impact_players": ["Player A", "Player B"],
+      "impact_reason": "Why teammates lose usage (e.g., 'Embiid back = Maxey usage drops from 35% to 28%')",
+      "impact_severity": "full" | "partial" | "minimal"
+    }
   ]
 }
+
+**MINUTES RESTRICTION AWARENESS (CRITICAL):**
+When a star returns, INVESTIGATE if they're on a minutes limit:
+- "Full return" = teammates lose significant usage (impact_severity: "full")
+- "Minutes restriction" (15-20 min) = teammates only lose SOME usage (impact_severity: "partial")  
+- "First game back from extended injury" = expect caution, may not play 4th quarter (impact_severity: "partial")
+- Example: Sabonis returning from 27-game absence → likely capped at 20-24 min = Achiuwa still has value
 
 **CRITICAL THINKING FRAMEWORK - Stock Trader Mindset:**
 
@@ -3233,10 +3405,20 @@ Focus on:
         
         console.log(`[DFS Context] 📖 Narrative context: ${narrativeCount} games, ${targetCount} targets, ${fadeCount} fades`);
         
+        // Extract stars returning context
+        const starsReturning = parsed.stars_returning || [];
+        if (starsReturning.length > 0) {
+          console.log(`[DFS Context] 🔄 STARS RETURNING DETECTED: ${starsReturning.map(s => `${s.name} (${s.team})`).join(', ')}`);
+          starsReturning.forEach(star => {
+            console.log(`   → ${star.name}: ${star.impact_reason || 'Teammates lose usage'}`);
+          });
+        }
+        
         return {
           narratives: parsed.game_narratives || [],
           targetPlayers: parsed.target_players || [],
-          fadePlayers: parsed.fade_players || []
+          fadePlayers: parsed.fade_players || [],
+          starsReturning: starsReturning
         };
       } catch (parseErr) {
         console.warn(`[DFS Context] Narrative JSON parse failed after repair: ${parseErr.message}`);
@@ -3245,11 +3427,11 @@ Focus on:
       }
     }
     
-    return { narratives: [], targetPlayers: [], fadePlayers: [] };
+    return { narratives: [], targetPlayers: [], fadePlayers: [], starsReturning: [] };
     
   } catch (error) {
     console.error(`[DFS Context] Narrative context error: ${error.message}`);
-    return { narratives: [], targetPlayers: [], fadePlayers: [] };
+    return { narratives: [], targetPlayers: [], fadePlayers: [], starsReturning: [] };
   }
 }
 
@@ -3258,7 +3440,7 @@ Focus on:
  * Gary needs this context even if the JSON was truncated
  */
 function extractNarrativeFromText(text) {
-  const result = { narratives: [], targetPlayers: [], fadePlayers: [] };
+  const result = { narratives: [], targetPlayers: [], fadePlayers: [], starsReturning: [] };
   
   // Extract target players from text mentions
   const targetMatches = text.match(/(?:target|boost|smash|play|leverage|upside)[:\s]+([A-Z][a-z]+\s[A-Z][a-z]+)/gi);
@@ -3539,16 +3721,22 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
       player.isContrarian = false;
       player.ownershipNote = lowOwnedInfo.reason;
     }
-    // Default: estimate ownership based on projection ranking
+    // Default: estimate ownership using SMART SALARY-BASED MODEL
+    // This is what sharps use when no grounding data is available
     else if (!player.ownership) {
-      // Players not in ownership data default to moderate ownership estimate
-      player.ownership = 15; // Default moderate ownership
-      player.isChalk = false;
-      player.isContrarian = false;
+      player.ownership = estimateOwnershipFromSalary(player, platform, sport);
+      player.isChalk = player.ownership >= 25;
+      player.isContrarian = player.ownership < 10;
+      player.ownershipNote = 'Estimated from salary tier';
+      player.ownershipEstimated = true; // Flag that this is an estimate
     }
   }
   
   // Log ownership integration results
+  const estimatedCount = mergedPlayers.filter(p => p.ownershipEstimated).length;
+  if (estimatedCount > 0) {
+    console.log(`[DFS Context] ⚠️ ${estimatedCount} players have estimated ownership (Grounding didn't find real data)`);
+  }
   const chalkInLineup = mergedPlayers.filter(p => p.isChalk).length;
   const contrarianInLineup = mergedPlayers.filter(p => p.isContrarian).length;
   console.log(`[DFS Context] Ownership applied: ${chalkInLineup} chalk, ${contrarianInLineup} contrarian players in pool`);
@@ -3617,6 +3805,132 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
     });
   }
   
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STARS RETURNING DETECTION - THE OPPOSITE OF INJURY BOOST
+  // ═══════════════════════════════════════════════════════════════════════════
+  // When high-usage stars RETURN from injury, their teammates LOSE opportunity.
+  // This is critical because:
+  // - Maxey's usage drops when Embiid/PG return
+  // - Role players who "broke out" during star absence go back to bench
+  // - Salaries haven't adjusted yet = overpriced players
+  // 
+  // SIGNAL: Star was OUT recently (< 7 days) but is NOW PLAYING
+  // This means teammates who benefited from their absence now lose usage
+  // ═══════════════════════════════════════════════════════════════════════════
+  const starsReturning = narrativeContext.starsReturning || [];
+  
+  if (starsReturning.length > 0) {
+    console.log(`[DFS Context] 🔄 STARS RETURNING - USAGE REDUCTION:`);
+    starsReturning.forEach(star => {
+      // ═══════════════════════════════════════════════════════════════════════════
+      // MINUTES RESTRICTION AWARENESS - Critical for accurate impact assessment
+      // ═══════════════════════════════════════════════════════════════════════════
+      // If returning star is on a minutes restriction, the impact on teammates is REDUCED
+      // - Full return (30+ min): Full impact (15% reduction)
+      // - Partial (20-28 min restriction): Moderate impact (8% reduction)
+      // - Limited (<20 min restriction): Minimal impact (3% reduction)
+      // - Unknown: Assume moderate (8% reduction) with flag to monitor
+      // ═══════════════════════════════════════════════════════════════════════════
+      
+      const hasMinutesRestriction = star.minutes_restriction && star.minutes_restriction !== 'no restriction';
+      const impactSeverity = star.impact_severity || (hasMinutesRestriction ? 'partial' : 'full');
+      const gamesMissed = star.games_missed || 0;
+      
+      // Determine usage multiplier based on restriction
+      let usageMultiplier, usageChangeAmount, restrictionNote;
+      
+      if (impactSeverity === 'minimal' || (hasMinutesRestriction && star.minutes_restriction?.includes('15'))) {
+        // Minimal impact - star is severely limited
+        usageMultiplier = 0.97; // Only 3% reduction
+        usageChangeAmount = -3;
+        restrictionNote = `⏱️ MINUTES LIMIT: ${star.minutes_restriction} - minimal impact on teammates`;
+      } else if (impactSeverity === 'partial' || hasMinutesRestriction || gamesMissed >= 15) {
+        // Partial impact - star is on some restriction or returning from extended absence
+        usageMultiplier = 0.92; // 8% reduction (was 15%)
+        usageChangeAmount = -5;
+        restrictionNote = hasMinutesRestriction 
+          ? `⏱️ MINUTES LIMIT: ${star.minutes_restriction} - partial impact on teammates`
+          : gamesMissed >= 15
+            ? `⏱️ EXTENDED ABSENCE (${gamesMissed} games) - expect ramping minutes, partial impact`
+            : `⏱️ RETURNING - partial impact expected`;
+      } else {
+        // Full impact - star is back without restriction
+        usageMultiplier = 0.85; // Full 15% reduction
+        usageChangeAmount = -10;
+        restrictionNote = `✅ FULL RETURN - teammates lose significant usage`;
+      }
+      
+      const restrictionStatus = hasMinutesRestriction ? ` [${star.minutes_restriction}]` : '';
+      console.log(`   ${star.team}: ${star.name} returning${restrictionStatus} → ${(star.impact_players || []).join(', ')} lose usage`);
+      console.log(`      ${restrictionNote}`);
+      
+      // Find and mark affected teammates
+      const impactedNames = (star.impact_players || []).map(n => n.toLowerCase());
+      
+      mergedPlayers.forEach(player => {
+        const playerNameLower = player.name?.toLowerCase() || '';
+        const isImpacted = impactedNames.some(impName => 
+          playerNameLower.includes(impName) || impName.includes(playerNameLower)
+        );
+        
+        if (isImpacted || (player.team === star.team && !playerNameLower.includes(star.name.toLowerCase()))) {
+          // Mark as having reduced opportunity due to star returning
+          player.starReturning = {
+            star: star.name,
+            impact: star.impact_reason || `${star.name} returning - usage redistribution away from role players`,
+            usageMultiplier,
+            minutesRestriction: star.minutes_restriction,
+            impactSeverity,
+            gamesMissed,
+            restrictionNote
+          };
+          player.usageChange = (player.usageChange || 0) + usageChangeAmount;
+          
+          // Only downgrade expanded role players if it's a FULL return
+          if (impactSeverity === 'full' && (player.isBreakoutCandidate || player.rotation_status === 'expanded_role')) {
+            player.rotation_status = 'role_ending';
+            player.isBreakoutCandidate = false;
+            console.log(`      ⚠️ ${player.name}: Downgraded - ${star.name} FULL return ends expanded role`);
+          } else if (impactSeverity === 'partial' && (player.isBreakoutCandidate || player.rotation_status === 'expanded_role')) {
+            // Partial return - don't fully downgrade, just note the situation
+            player.starReturningPartial = true;
+            console.log(`      ℹ️ ${player.name}: Still has value - ${star.name} on minutes restriction`);
+          }
+        }
+      });
+    });
+  }
+  
+  // Also check fade_players for "role_ended" or "bench_return" status
+  const roleFades = (narrativeContext.fadePlayers || []).filter(f => 
+    f.rotation_status === 'bench_return' || 
+    f.rotation_status === 'diminished_role' ||
+    f.role_sustainability === 'ended' ||
+    f.narrative_type === 'role_ended'
+  );
+  
+  if (roleFades.length > 0) {
+    console.log(`[DFS Context] ⚠️ ROLE ENDED FADES DETECTED:`);
+    roleFades.forEach(fade => {
+      console.log(`   ${fade.name} (${fade.team}): ${fade.reason}`);
+      
+      // Find and mark this player
+      const fadeNameLower = fade.name?.toLowerCase() || '';
+      mergedPlayers.forEach(player => {
+        const playerNameLower = player.name?.toLowerCase() || '';
+        if (playerNameLower.includes(fadeNameLower) || fadeNameLower.includes(playerNameLower)) {
+          player.roleEnded = {
+            reason: fade.reason,
+            newStatus: fade.rotation_status
+          };
+          player.usageChange = (player.usageChange || 0) - 15; // Strong negative signal
+          player.isFade = true;
+          console.log(`   ⚠️ ${player.name}: Marked as FADE - role ended`);
+        }
+      });
+    });
+  }
+  
   const duration = Date.now() - start;
   console.log(`[DFS Context] Context built in ${duration}ms`);
   
@@ -3651,6 +3965,7 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
     narratives: narrativeContext.narratives || [],
     targetPlayers: narrativeContext.targetPlayers || [],
     fadePlayers: narrativeContext.fadePlayers || [],
+    starsReturning: narrativeContext.starsReturning || [],
     // Ownership intelligence for tournament strategy
     ownershipData: {
       chalk: ownershipData.chalk || [],

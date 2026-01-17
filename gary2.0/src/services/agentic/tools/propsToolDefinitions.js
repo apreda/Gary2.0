@@ -309,32 +309,6 @@ const NFL_PROP_TOKENS = [
 ];
 
 // ============================================================================
-// EPL PROP STAT TOKENS
-// ============================================================================
-const EPL_PROP_TOKENS = [
-  // Core Stats
-  'PLAYER_GOALS',            // Goals scored
-  'PLAYER_ASSISTS',          // Assists
-  'PLAYER_SHOTS',            // Shots per game
-  'PLAYER_SOT',              // Shots on target
-  
-  // Attacking
-  'PLAYER_CHANCES_CREATED',  // Big chances created
-  'PLAYER_TOUCHES_BOX',      // Touches in the box
-  
-  // Defensive
-  'PLAYER_TACKLES',          // Tackles per game
-  'PLAYER_SAVES',            // Goalkeeper saves
-  
-  // Game Logs
-  'PLAYER_GAME_LOGS',        // Recent games with stats
-  
-  // Context
-  'TEAM_INJURIES',           // Team injury report
-  'FIXTURE_CONGESTION'       // Recent/upcoming fixtures
-];
-
-// ============================================================================
 // NCAAB PROP STAT TOKENS (College Basketball - BDL 2025)
 // ============================================================================
 const NCAAB_PROP_TOKENS = [
@@ -421,7 +395,6 @@ const ALL_PROP_TOKENS_BY_SPORT = {
   NBA: NBA_PROP_TOKENS,
   NHL: NHL_PROP_TOKENS,
   NFL: NFL_PROP_TOKENS,
-  EPL: EPL_PROP_TOKENS,
   NCAAB: NCAAB_PROP_TOKENS,  // Dedicated college basketball tokens
   NCAAF: NCAAF_PROP_TOKENS   // Dedicated college football tokens
 };
@@ -431,7 +404,6 @@ const ALL_PROP_TOKENS = [...new Set([
   ...NBA_PROP_TOKENS,
   ...NHL_PROP_TOKENS,
   ...NFL_PROP_TOKENS,
-  ...EPL_PROP_TOKENS,
   ...NCAAB_PROP_TOKENS,
   ...NCAAF_PROP_TOKENS
 ])];
@@ -1069,7 +1041,6 @@ export {
   NBA_PROP_TOKENS, 
   NHL_PROP_TOKENS, 
   NFL_PROP_TOKENS, 
-  EPL_PROP_TOKENS,
   NCAAB_PROP_TOKENS,
   NCAAF_PROP_TOKENS,
   ALL_PROP_TOKENS,

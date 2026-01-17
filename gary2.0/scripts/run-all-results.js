@@ -410,6 +410,13 @@ async function processPropBets(date) {
       const key = `${normalizeName(name)}-${type}-${line}-${row.date}`;
       if (handled.has(key)) continue; handled.add(key);
 
+      // Check if result already exists before processing
+      const { data: exist } = await supabase.from('prop_results').select('id').eq('player_name', name).eq('prop_type', type).eq('game_date', row.date).maybeSingle();
+      if (exist) {
+        console.log(`  ⏩ Skipping ${sport}: ${name} ${type} (Already exists)`);
+        continue;
+      }
+
       let actual = null;
       if (sport === 'NBA') actual = getStatValue('NBA', nbaBox, name, type);
       else if (sport === 'NHL') actual = getStatValue('NHL', nhlBox, name, type);

@@ -4,12 +4,12 @@
 
 > **Everything in this document is REFERENCE MATERIAL, not rules to apply.**
 > 
-> The market knows all of this. Vegas knows home court is worth ~3 points. Vegas knows KenPom rankings. Vegas knows tempo effects.
+> The market knows all of this. Vegas knows home court matters. Vegas knows KenPom rankings. Vegas knows tempo effects.
 >
 > **DO NOT:**
-> - "Add 3 points for home court" → The line ALREADY includes home court
-> - "Subtract points for back-to-back" → The line ALREADY adjusts for rest
-> - "Apply the tempo compression formula" → The line ALREADY factors tempo
+> - Mentally "add points" for home court → The line ALREADY includes it
+> - Mentally "subtract points" for back-to-back → The line ALREADY adjusts for rest
+> - Apply any formula → The line ALREADY factors these things in
 >
 > **DO:**
 > - Use this as context to understand what the line ASSUMES
@@ -82,8 +82,8 @@ Approximate: (Team A AdjEM - Team B AdjEM) + Home Court adjustment = Line
 **This is NOT for you to calculate your own line.** Vegas does this with better data, more factors, and sharper models.
 
 **This IS for you to understand:** When you see Iowa State -4 at Kansas, the line already incorporates:
-- The AdjEM gap (~12 points favoring ISU)
-- Kansas home court (~3-4 points)
+- The AdjEM gap between the teams
+- Kansas home court advantage
 - Any other factors Vegas weighs
 
 Your job is to ask: "Is there something about THIS game that the line's calculation might miss?"
@@ -95,7 +95,7 @@ Your job is to ask: "Is there something about THIS game that the line's calculat
 - Bench scoring / depth metrics
 
 **TIER 3 - CONTEXT FACTORS:**
-- Home court advantage (3-3.5 points average, can be 5+ at elite venues)
+- Home court advantage (already in line - investigate THIS venue's actual impact)
 - Quad records (Q1 wins matter, Q3/Q4 losses are red flags)
 - Conference vs Non-conference performance
 - Experience / minutes returned
@@ -144,13 +144,12 @@ Always ask: "Would these teams be in different tiers in a tournament bracket?" I
 
 This section exists so you understand what the line ASSUMES about home court - and can identify when that assumption might be wrong.
 
-### What The Market Typically Prices
+### What The Market Already Prices In
 
-**Approximate values (FOR REFERENCE ONLY):**
-- National average: ~3.0-3.5 points
-- Elite hostile environments: 4-5+ points (Cameron Indoor, Allen Fieldhouse, Phog, Mackey)
-- Conference play: ~2.9 points
-- Non-conference: ~3.3 points
+**The line already reflects home court.** Do NOT mentally add points. Instead:
+- Investigate THIS team's actual home vs road performance
+- Investigate whether THIS venue has above or below average impact
+- Elite hostile environments (Cameron, Allen Fieldhouse, Phog, Mackey) may affect young teams more
 
 **Why College > NBA:**
 - 18-22 year olds more affected by hostile crowds
@@ -321,7 +320,7 @@ A team has a massive game next week and overlooks a "lesser" opponent this week.
 ### Conference Tournament Betting
 
 **WHAT CHANGES:**
-- Neutral site reduces home court to ~1-2 points
+- Neutral site significantly reduces home court advantage
 - Teams have played twice already - film is extensive
 - Motivation varies wildly (bubble team vs locked seed)
 - Fatigue accumulates for teams playing multiple days
@@ -336,7 +335,7 @@ A team has a massive game next week and overlooks a "lesser" opponent this week.
 → That's WHY they're -13.5 favorites
 
 ❌ "Kansas has elite home court at Allen Fieldhouse"
-→ That's WHY they're getting 3-4 points in the spread
+→ That's WHY the spread is set where it is - the line already reflects home court
 
 ❌ "Iowa State has the #2 defense in the country"
 → That's WHY they're favorites on the road
@@ -348,7 +347,7 @@ A team has a massive game next week and overlooks a "lesser" opponent this week.
 
 ✅ "The line assumes standard home court, but THIS venue has poor attendance and a neutral-site feel. The 3-point home adjustment is too generous."
 
-✅ "Claude was ruled OUT this morning. The line moved 2 points but his 14.5 PPG + floor general role suggests 3-4 point impact. Market hasn't fully adjusted."
+✅ "Claude was ruled OUT this morning. The line moved but his 14.5 PPG + floor general role and the team's actual performance without him suggests the market may not have fully adjusted."
 
 ✅ "The line assumes Purdue's frontcourt dominates, but Iowa's defensive efficiency (#20) is virtually identical to Purdue's (#21). The blowout mechanism isn't there."
 
@@ -426,7 +425,7 @@ If your answer is:
 > "Desmond Claude ruled OUT today (14.5 PPG void). Line hasn't fully adjusted yet."
 
 ✅ **Why the LINE is Wrong (not why the team is good):**
-> "The line assumes Purdue wins by 11+ based on home court and frontcourt advantage. But the defensive efficiency parity and tempo suppression suggest 7-9 point margin is more likely."
+> "The line assumes Purdue wins by a significant margin based on home court and frontcourt advantage. But the defensive efficiency parity and tempo suppression suggest a closer game than the spread implies."
 
 ---
 
@@ -548,24 +547,24 @@ Before finalizing, ask:
 
 ---
 
-## PART 17: REFERENCE DATA (Market Already Knows All Of This)
+## PART 17: WHAT THE LINE ALREADY KNOWS
 
-### ⚠️ DO NOT USE THESE AS FORMULAS
+### ⚠️ DO NOT MENTALLY ADD OR SUBTRACT POINTS
 
-These numbers exist for CONTEXT. They help you understand what the line assumes. They are NOT edges to exploit.
+The line ALREADY incorporates these factors. Do NOT mentally add point values for anything.
 
-**Wrong approach:** "Home court is 3.5 points, so I'll adjust my projection by 3.5"
-**Right approach:** "The line assumes ~3.5 for home court. Is THIS venue/team above or below that assumption?"
+**Wrong approach:** "Home court matters, so I'll mentally add points to my projection"
+**Right approach:** "The line already includes home court. I need to investigate if THIS specific venue/team shows performance above or below what the line implies."
 
-### Approximate Values (For Reference Only)
+### What To Investigate Instead
 
-| Factor | Typical Range | What This Means |
-|--------|---------------|-----------------|
-| Average home court | 3.0-3.5 points | Line already includes this |
-| Elite venues | 4-5+ points | Line usually (but not always) reflects this |
-| Typical game margin | 6-10 points | Most games land here regardless of spread |
-| Large spread threshold | 10+ points | Requires specific blowout mechanism |
-| Meaningful KenPom gap | 30+ positions | Smaller gaps = noise in mid-range |
+| Factor | What To Do |
+|--------|------------|
+| Home court | Investigate THIS team's actual home vs road splits and performance |
+| Elite venues | Investigate if THIS specific venue creates additional pressure beyond what's priced in |
+| Game margins | Investigate THIS matchup's likely competitiveness based on efficiency metrics |
+| Large spreads | Investigate what specific mechanism would create a blowout |
+| KenPom gaps | Investigate whether teams are in different tiers or effectively equivalent |
 
 ### Quad System Reference
 

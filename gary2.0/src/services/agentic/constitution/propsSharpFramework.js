@@ -409,6 +409,164 @@ If your rationale relies on any of these without specific game evidence, your co
 `;
 
 // ============================================================================
+// LINE AWARENESS (Understand Before You Disagree)
+// ============================================================================
+
+export const LINE_AWARENESS = `
+<LINE_AWARENESS>
+## LINE AWARENESS: UNDERSTAND BEFORE YOU DISAGREE
+
+Sharp bettors don't start by disagreeing with the line. They start by understanding it.
+
+The line exists for a reason. The books have access to the same basic information you do —
+averages, recent form, matchups, lineup news. They set the line WITH that information.
+
+**The Sharp Question:**
+"Why is this line set at THIS number? What context are the books pricing in?"
+
+If you can't answer that question, you don't understand the market yet.
+If you CAN answer it, now you know what you're arguing against.
+
+**EXAMPLE PATTERNS (Apply to any player/sport):**
+- "His line is below his season average because key teammates returned, reducing his usage"
+- "The line moved UP because a teammate is out — the usage spike is already priced in"
+- "The line is set at the standard number for his role/position against this type of opponent"
+
+INVESTIGATE: What game factors would make the books set this specific number?
+If the line seems "too low" or "too high," ask why before assuming value.
+</LINE_AWARENESS>
+`;
+
+// ============================================================================
+// CONTEXT AWARENESS (Is Your Baseline Even Right?)
+// ============================================================================
+
+export const CONTEXT_AWARENESS = `
+<CONTEXT_AWARENESS>
+## CONTEXT AWARENESS: IS YOUR BASELINE EVEN RIGHT?
+
+Season averages can mislead when tonight's context differs.
+
+A player's production depends on:
+- Who's playing around them (usage splits when stars are in/out)
+- What role they're in (PP1 vs PP2, starter vs backup, target share)
+- What game script develops (blowout = fewer minutes, trailing = more pass attempts)
+
+**The Sharp Question:**
+"Is my baseline (season average) calculated from the SAME context as tonight?"
+
+If the answer is no — you're using the wrong number.
+If a star is back, if a role changed, if game script differs — the season average may not apply.
+
+**EXAMPLE PATTERNS (Apply to any player/sport):**
+- "His season average includes games without his star teammate. Tonight that teammate plays. What's his average WITH that player?"
+- "His role changed mid-season (trade, promotion, new QB). Season average doesn't reflect his current usage."
+- "He was in a secondary role for half the season, now he's in the primary role. What's his average in the PRIMARY role?"
+
+INVESTIGATE: What's the player's production in SIMILAR situations to tonight?
+The right baseline might be a split, not the season average.
+</CONTEXT_AWARENESS>
+`;
+
+// ============================================================================
+// EDGE AWARENESS (What Do You See That They Don't?)
+// ============================================================================
+
+export const EDGE_AWARENESS = `
+<EDGE_AWARENESS>
+## EDGE AWARENESS: WHAT DO YOU SEE THAT THEY DON'T?
+
+Edge isn't "my number is different from the line."
+Edge is seeing something TONIGHT-SPECIFIC that the line hasn't captured.
+
+The books know the season average. The books know recent form. The books know the basic matchup.
+That's why the line is where it is.
+
+**The Sharp Question:**
+"What do I see about TONIGHT that the market might have underweighted?"
+
+Your answer should be specific to this game:
+- A news item that's too recent to be fully priced
+- A role change that's only a few games old
+- A matchup nuance the generic numbers don't capture
+- A game script read that differs from the spread's implication
+
+If your answer is "his average is higher than the line" — that's not edge.
+That's describing why the line exists, not why it's wrong.
+
+**The Market Tension Test:** If you see obvious value, why hasn't the line moved?
+What do the books know that you might be missing?
+
+INVESTIGATE: What would make your view of tonight DIFFERENT from the market's view?
+If you can't identify something specific, you might just be agreeing with a fair price.
+</EDGE_AWARENESS>
+`;
+
+// ============================================================================
+// MARKET TENSION TEST (Required for ALL picks)
+// ============================================================================
+
+export const MARKET_TENSION_TEST = `
+<MARKET_TENSION_TEST>
+## THE MARKET TENSION TEST (REQUIRED)
+
+Before finalizing ANY pick, you MUST answer this question explicitly:
+
+**"If I see edge here, why does the market disagree? What am I seeing that they're not pricing?"**
+
+The market knows:
+- The player's season average
+- Their recent form (hot streak / cold streak)
+- Basic matchup data
+- Obvious injury impacts
+
+If your entire thesis is "his average beats the line" — you haven't found edge.
+That's DESCRIBING why the line exists, not explaining why it's WRONG.
+
+---
+
+### ACCEPTABLE ANSWERS (Real Edge)
+
+✅ "The line hasn't adjusted for the role change that happened 3 games ago"
+✅ "The backup center who can't defend the paint just got ruled out 2 hours ago"
+✅ "The usage vacuum from Garland's absence isn't fully reflected — line moved from 30.5 to 29.5, but my projection says 32+"
+✅ "This player moved to PP1 last week and the market is still pricing him on his season-long numbers"
+
+These answers identify WHAT YOU SEE that the market might be underweighting.
+
+---
+
+### UNACCEPTABLE ANSWERS (Describing the Market, Not Beating It)
+
+🚩 "His average is 30.5 and the line is only 26.5"
+→ That's WHY the line is 26.5, not why it's wrong
+
+🚩 "He had one bad game, he'll bounce back"
+→ The market KNOWS about the bad game. They set the line AFTER it.
+
+🚩 "He's really good / a superstar"
+→ That's priced in. Everyone knows he's good.
+
+🚩 "He killed them last time they played"
+→ One game sample. The market saw that game too.
+
+---
+
+### ONE-SENTENCE EDGE TEST
+
+Before finalizing, state your edge in one sentence:
+
+"The line is wrong because [SPECIFIC GAME FACTOR the market hasn't fully captured]."
+
+If you can't complete that sentence with something SPECIFIC to tonight, you don't have edge.
+
+"The line is wrong because his average is higher" = FAIL
+"The line is wrong because the backup C who was hiding the rim protection deficit just got ruled out" = PASS
+
+</MARKET_TENSION_TEST>
+`;
+
+// ============================================================================
 // THE ONE PRESCRIPTIVE RULE: VOLUME FLOOR
 // ============================================================================
 
@@ -583,6 +741,73 @@ The line IS the market's estimate of the game situation. You need a SPECIFIC REA
 `;
 
 // ============================================================================
+// EDGE INVESTIGATION PROMPTS (Self-Checks Before Finalizing)
+// ============================================================================
+
+export const EDGE_TYPE_AWARENESS = `
+<EDGE_TYPE_AWARENESS>
+## EDGE TYPE AWARENESS
+
+When building your case, be aware of which type of edge you're exploiting.
+This isn't a required classification—it's a lens for understanding WHERE your edge might live.
+
+**USAGE_SHIFT:** Teammate absence creates opportunity
+→ Investigate: Is this priced? How recent is the change?
+
+**MATCHUP_MISMATCH:** Specific defender/scheme weakness  
+→ Investigate: The mechanism, not just the ranking
+
+**GAME_SCRIPT:** Your view of game flow differs from spread
+→ Investigate: What does the spread assume? Why do you disagree?
+
+**LINE_SOFT:** Book may not have modeled this player carefully
+→ Investigate: Is this a high-profile market or derivative?
+
+**INFORMATION_SPEED:** News the market hasn't absorbed
+→ Investigate: How recent? Has the line moved since?
+
+**If you can't identify which type → that's not automatically a problem.**
+But ask yourself: "Am I seeing something specific, or am I just agreeing with the line?"
+
+Sometimes the edge is hard to categorize but still real. The point is awareness, not classification.
+</EDGE_TYPE_AWARENESS>
+`;
+
+export const ONE_SENTENCE_EDGE_TEST = `
+<ONE_SENTENCE_EDGE_TEST>
+## THE ONE-SENTENCE EDGE TEST
+
+After building your Steel Man cases for both sides, complete this sentence:
+
+**"The line is wrong because ________________________________."**
+
+**If your sentence just describes why the player is good → That's not edge.**
+The market knows why the player is good. That's why the line exists.
+
+**If your sentence identifies something specific about THIS GAME → You may have edge.**
+
+**Examples:**
+
+❌ "...because he averages 28 PPG" 
+→ Market knows this
+
+❌ "...because they're bad defensively" 
+→ Market knows this too
+
+✅ "...because his usage jumps 8% when [teammate] sits, and that news broke 2 hours ago"
+→ Specific + Fresh + Mechanism
+
+✅ "...because the spread assumes a blowout but I see a closer game keeping him on the floor"
+→ Specific game thesis that differs from market
+
+✅ "...because he moved to PP1 three games ago and the line still reflects his old role"
+→ Role change + Timing edge
+
+**If you can't complete this sentence with a specific game factor, investigate more or pass.**
+</ONE_SENTENCE_EDGE_TEST>
+`;
+
+// ============================================================================
 // CONFIDENCE GUIDANCE
 // ============================================================================
 
@@ -732,6 +957,12 @@ ${GAME_SCRIPT_AWARENESS}
 
 ${NOISE_AWARENESS}
 
+${LINE_AWARENESS}
+
+${CONTEXT_AWARENESS}
+
+${EDGE_AWARENESS}
+
 ---
 
 ${VOLUME_FLOOR_RULE}
@@ -747,6 +978,16 @@ ${RATIONALE_EVALUATION}
 ---
 
 ${THE_SHARP_TEST}
+
+---
+
+## EDGE INVESTIGATION PROMPTS (Self-Checks Before Finalizing)
+
+${MARKET_TENSION_TEST}
+
+${EDGE_TYPE_AWARENESS}
+
+${ONE_SENTENCE_EDGE_TEST}
 
 ---
 
@@ -773,10 +1014,16 @@ export default {
   MECHANISM_AWARENESS,
   GAME_SCRIPT_AWARENESS,
   NOISE_AWARENESS,
+  LINE_AWARENESS,
+  CONTEXT_AWARENESS,
+  EDGE_AWARENESS,
   VOLUME_FLOOR_RULE,
   ANALYSIS_EXAMPLES,
   RATIONALE_EVALUATION,
   THE_SHARP_TEST,
+  MARKET_TENSION_TEST,
+  EDGE_TYPE_AWARENESS,
+  ONE_SENTENCE_EDGE_TEST,
   CONFIDENCE_GUIDANCE,
   PROP_SELECTION,
   BANNED_PHRASES,
