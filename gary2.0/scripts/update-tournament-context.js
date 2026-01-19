@@ -10,6 +10,8 @@
  * - NFL_WEEK_NUMBER (default: 18)
  * - NFL_SEASON (optional; filters weekly rows)
  * - DAILY_PICKS_DATE (default: 2026-01-19)
+ * - NFL_TOURNAMENT_CONTEXT (default: Playoffs)
+ * - NCAAF_TOURNAMENT_CONTEXT (default: National Championship)
  * - DRY_RUN (set to "true" to skip updates)
  */
 import { createRequire } from 'module';
@@ -38,7 +40,8 @@ const WEEK_NUMBER = Number(process.env.NFL_WEEK_NUMBER || 18);
 const SEASON = process.env.NFL_SEASON ? Number(process.env.NFL_SEASON) : null;
 const DAILY_DATE = process.env.DAILY_PICKS_DATE || '2026-01-19';
 const DRY_RUN = ['true', '1', 'yes'].includes((process.env.DRY_RUN || '').toLowerCase());
-const TARGET_CONTEXT = 'Playoffs';
+const NFL_TARGET_CONTEXT = process.env.NFL_TOURNAMENT_CONTEXT || 'Playoffs';
+const NCAAF_TARGET_CONTEXT = process.env.NCAAF_TOURNAMENT_CONTEXT || 'National Championship';
 
 const NFL_TARGETS = [
   { label: 'Patriots -3.5', regex: /(?:new england\s+)?patriots\s*-3\.5\b/i },
@@ -74,7 +77,7 @@ const leagueMatches = (pick, leagueTag) => {
   return true;
 };
 
-const applyTournamentContext = (picks, targets, leagueTag) => {
+const applyTournamentContext = (picks, targets, leagueTag, targetContext) => {
   let updates = 0;
   const matches = new Map();
   const updatedPicks = picks.map((pick) => {
@@ -87,12 +90,12 @@ const applyTournamentContext = (picks, targets, leagueTag) => {
 
     matches.set(target.label, (matches.get(target.label) || 0) + 1);
     const currentContext = `${pick.tournamentContext || pick.tournament_context || ''}`.toLowerCase();
-    if (currentContext === TARGET_CONTEXT.toLowerCase()) return pick;
+    if (currentContext === targetContext.toLowerCase()) return pick;
 
     updates += 1;
-    const updatedPick = { ...pick, tournamentContext: TARGET_CONTEXT };
+    const updatedPick = { ...pick, tournamentContext: targetContext };
     if (Object.prototype.hasOwnProperty.call(pick, 'tournament_context')) {
-      updatedPick.tournament_context = TARGET_CONTEXT;
+      updatedPick.tournament_context = targetContext;
     }
     return updatedPick;
   });
@@ -139,7 +142,12 @@ const updateWeeklyNFLPicks = async () => {
       continue;
     }
 
-    const { updatedPicks, updates, matches } = applyTournamentContext(row.picks, NFL_TARGETS, 'NFL');
+    const { updatedPicks, updates, matches } = applyTournamentContext(
+      row.picks,
+      NFL_TARGETS,
+      'NFL',
+      NFL_TARGET_CONTEXT
+    );
     console.log(`Weekly NFL row: week ${row.week_number}, season ${row.season}`);
     logMatches(matches);
 
@@ -193,7 +201,12 @@ const updateDailyPicks = async () => {
       continue;
     }
 
-    const { updatedPicks, updates, matches } = applyTournamentContext(row.picks, NCAAF_TARGETS, 'NCAAF');
+    const { updatedPicks, updates, matches } = applyTournamentContext(
+      row.picks,
+      NCAAF_TARGETS,
+      'NCAAF',
+      NCAAF_TARGET_CONTEXT
+    );
     console.log(`Daily picks row: ${row.date}`);
     logMatches(matches);
 
