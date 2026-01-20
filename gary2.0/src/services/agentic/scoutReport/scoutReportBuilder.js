@@ -55,7 +55,8 @@ async function fetchStandingsSnapshot(sport, homeTeam = null, awayTeam = null, n
       const east = standings.filter(s => (s.conference === 'East' || s.team?.conference === 'East')).sort((a, b) => a.conference_rank - b.conference_rank);
       const west = standings.filter(s => (s.conference === 'West' || s.team?.conference === 'West')).sort((a, b) => a.conference_rank - b.conference_rank);
 
-      const formatRec = (s) => `${s.wins}-${s.losses}`;
+      // Use ?? to coerce null to 0 (BDL can return null for 0 wins/losses)
+      const formatRec = (s) => `${s.wins ?? 0}-${s.losses ?? 0}`;
       
       // TONIGHT'S MATCHUP - Team-specific standings with conference_rank
       // This helps Gary understand where each team sits in the league right now
@@ -178,8 +179,9 @@ ${snapshot.join('\n')}
         return ''; // Can't fetch NCAAB standings without conference IDs
       }
       
-      const formatRec = (s) => `${s.wins}-${s.losses}`;
-      const formatConfRec = (s) => s.conference_record || `${s.wins}-${s.losses}`;
+      // Use ?? to coerce null to 0 (BDL can return null for 0 wins/losses)
+      const formatRec = (s) => `${s.wins ?? 0}-${s.losses ?? 0}`;
+      const formatConfRec = (s) => s.conference_record || `${s.wins ?? 0}-${s.losses ?? 0}`;
       
       // Find teams in standings
       const findTeam = (standings, teamName) => {
@@ -245,7 +247,8 @@ ${snapshot.join('\n')}
       const afc = standings.filter(s => s.team?.conference === 'AFC').sort((a, b) => (b.wins || 0) - (a.wins || 0));
       const nfc = standings.filter(s => s.team?.conference === 'NFC').sort((a, b) => (b.wins || 0) - (a.wins || 0));
 
-      const formatRec = (s) => s.overall_record || `${s.wins}-${s.losses}${s.ties ? `-${s.ties}` : ''}`;
+      // Use ?? to coerce null to 0 (BDL can return null for 0 wins/losses)
+      const formatRec = (s) => s.overall_record || `${s.wins ?? 0}-${s.losses ?? 0}${s.ties ? `-${s.ties}` : ''}`;
       
       // Find teams in standings
       const findTeam = (teamName) => {
@@ -295,7 +298,8 @@ ${snapshot.join('\n')}
     
     // General top 5 for other sports (fallback)
       const top5 = [...standings].sort((a, b) => (b.wins || 0) - (a.wins || 0)).slice(0, 5);
-      const formatRec = (s) => s.overall_record || `${s.wins}-${s.losses}`;
+      // Use ?? to coerce null to 0 (BDL returns null for 0 losses)
+      const formatRec = (s) => s.overall_record || `${s.wins ?? 0}-${s.losses ?? 0}`;
       snapshot.push('LEAGUE TOP 5: ' + top5.map(s => `${s.team.name} (${formatRec(s)})`).join(', '));
 
     return `
@@ -390,15 +394,15 @@ export async function buildScoutReport(game, sport) {
   const awayTeam = game.away_team;
   const sportKey = normalizeSport(sport);
   
-  // Fetch basic data in parallel (including headlines for narrative context)
-  const [homeProfile, awayProfile, injuries, recentHome, recentAway, standingsSnapshot, gameHeadlines] = await Promise.all([
+  // Fetch basic data in parallel
+  // NOTE: Headlines/storylines now come from fetchCurrentState (narrativeContext) - no separate fetchGameHeadlines needed
+  const [homeProfile, awayProfile, injuries, recentHome, recentAway, standingsSnapshot] = await Promise.all([
     fetchTeamProfile(homeTeam, sportKey),
     fetchTeamProfile(awayTeam, sportKey),
     fetchInjuries(homeTeam, awayTeam, sportKey),
     fetchRecentGames(homeTeam, sportKey, 5),
     fetchRecentGames(awayTeam, sportKey, 5),
-    fetchStandingsSnapshot(sportKey, homeTeam, awayTeam),
-    fetchGameHeadlines(homeTeam, awayTeam, sportKey, game.commence_time)
+    fetchStandingsSnapshot(sportKey, homeTeam, awayTeam)
   ]);
   
   // For NBA, fetch game context using Gemini Grounding (venue, tournament context, game significance)
@@ -594,6 +598,7 @@ Be specific and factual. If it's just a regular season game, say so clearly.`;
     ]);
     nbaKeyPlayers = keyPlayers;
     nbaRosterDepth = rosterDepth;
+    // Note: fetchNbaKeyPlayers now throws on roster failure - no need for immediatePass check
   }
   
   // For NHL, fetch key players (roster + stats) to prevent hallucinations
@@ -717,6 +722,13 @@ Be specific and factual. If it's just a regular season game, say so clearly.`;
     bowlGameContext = await fetchBowlGameContext(homeTeam, awayTeam, game, injuries?.narrativeContext);
   }
   
+  // For NCAAF CFP games, fetch each team's road to the championship
+  // This provides full playoff journey context for steel man cases
+  let cfpJourneyContext = '';
+  if (sportKey === 'NCAAF') {
+    cfpJourneyContext = await fetchCfpJourneyContext(homeTeam, awayTeam, game);
+  }
+  
   // For NCAAB, fetch NET rankings and Quad records (critical for tournament context)
   let ncaabTournamentContext = '';
   if (sportKey === 'NCAAB') {
@@ -798,6 +810,105 @@ Be specific and factual. If it's just a regular season game, say so clearly.`;
   
   const injuriesForStorage = formatInjuriesForStorage(injuries);
 
+  // Narrative Scrubbing: Remove "ghost" players from the grounding narrative
+  // This ensures Gary never even sees names of players who are not in the active stats or filtered injuries.
+  if (injuries?.narrativeContext) {
+    const allowedNames = new Set();
+    
+    // 1. Add names from BDL roster depth (primary source of truth for active players)
+    const roster = nbaRosterDepth || nhlRosterDepth || ncaabRosterDepth || nflRosterDepth;
+    
+    // Helper to add names from different roster/keyPlayer formats
+    const addNamesFromSource = (teamData) => {
+      if (!teamData) return;
+      if (Array.isArray(teamData)) {
+        teamData.forEach(p => { if (p.name) allowedNames.add(p.name.trim()); });
+      } else {
+        // Handle NHL-style object structures
+        // Roster depth: { skaters: [], goalies: [] }
+        // Key players: { forwards: [], defensemen: [], goalies: [] }
+        // Support common collection names in sports data
+        const collectionKeys = [
+          'skaters', 'goalies', 'forwards', 'defensemen', 
+          'players', 'roster', 'active_players', 'depth_chart',
+          'skater_stats', 'goalie_stats'
+        ];
+        
+        collectionKeys.forEach(key => {
+          const coll = teamData[key];
+          if (Array.isArray(coll)) {
+            coll.forEach(p => { 
+              if (p.name) allowedNames.add(p.name.trim()); 
+              else if (p.player?.first_name) {
+                const name = `${p.player.first_name} ${p.player.last_name || ''}`.trim();
+                allowedNames.add(name);
+              }
+            });
+          }
+        });
+        
+        // Also check if the object itself has name/player properties (if it's a single player object)
+        if (teamData.name) allowedNames.add(teamData.name.trim());
+        else if (teamData.player?.first_name) {
+          const name = `${teamData.player.first_name} ${teamData.player.last_name || ''}`.trim();
+          allowedNames.add(name);
+        }
+      }
+    };
+
+    if (roster) {
+      addNamesFromSource(roster.home);
+      addNamesFromSource(roster.away);
+    }
+    
+    // 2. Add names from key players/QBs if available
+    const keyP = nbaKeyPlayers || nhlKeyPlayers || ncaabKeyPlayers || ncaafKeyPlayers || keyPlayers;
+    if (keyP) {
+      addNamesFromSource(keyP.home);
+      addNamesFromSource(keyP.away);
+    }
+    
+    // 3. Add names from structured injury list (which already has hard filters applied)
+    [...(injuries.home || []), ...(injuries.away || [])].forEach(i => {
+      const name = i.name || `${i.player?.first_name || ''} ${i.player?.last_name || ''}`.trim();
+      if (name && name.length > 3) allowedNames.add(name);
+    });
+
+    // 4. Add names from starting lineups
+    if (injuries.lineups) {
+      if (injuries.lineups.home) injuries.lineups.home.forEach(p => { if (p.name) allowedNames.add(p.name.trim()); });
+      if (injuries.lineups.away) injuries.lineups.away.forEach(p => { if (p.name) allowedNames.add(p.name.trim()); });
+    }
+
+    // Collect long-term injured players to EXCLUDE from narrative
+    // These players should not appear in the narrative even if on the roster
+    const excludedLongTerm = new Set(injuries.filteredLongTerm || []);
+    
+    // Also scan the narrative for long-term injury indicators and add those players
+    const narrativeText = injuries.narrativeContext || '';
+    const longTermPatterns = [
+      /\*?\*?([A-Z][a-z]+ [A-Z][a-z]+)[^-]*(?:OUT|out)[^-]*(?:since (?:Oct|Nov|Dec|Sep)|missed (?:\d{2,}|\d+ games)|season-ending|out for (?:the )?(?:season|year)|ACL|surgery)/gi,
+      /([A-Z][a-z]+ [A-Z][a-z]+)[^-]*(?:LONG-TERM|long-term|ADJUSTED)/gi
+    ];
+    longTermPatterns.forEach(pattern => {
+      let match;
+      while ((match = pattern.exec(narrativeText)) !== null) {
+        const name = match[1]?.trim();
+        if (name && name.length > 5) excludedLongTerm.add(name);
+      }
+    });
+    
+    if (excludedLongTerm.size > 0) {
+      console.log(`[Scout Report] Excluding ${excludedLongTerm.size} long-term injured players from narrative: ${Array.from(excludedLongTerm).join(', ')}`);
+    }
+    
+    if (allowedNames.size > 0) {
+      console.log(`[Scout Report] Scrubbing ${sportKey} narrative with ${allowedNames.size} allowed player names...`);
+      const scrubbed = await scrubNarrative(injuries.narrativeContext, Array.from(allowedNames), homeTeam, awayTeam, Array.from(excludedLongTerm));
+      injuries.narrativeContext = scrubbed;
+    }
+  }
+
   // NBA IMMEDIATE PASS LOGIC
   // Skip games where key player availability is uncertain to avoid wasting tokens
   // DYNAMIC KEY PLAYER DETECTION: Uses top 3 usage rate players from BDL data
@@ -833,10 +944,12 @@ Be specific and factual. If it's just a regular season game, say so clearly.`;
         const playerIds = players.slice(0, 12).map(p => p.id);
         const playerMap = Object.fromEntries(players.map(p => [p.id, `${p.first_name} ${p.last_name}`.toLowerCase().trim()]));
         
-        // Fetch season averages
-        const url = `https://api.balldontlie.io/v1/season_averages?season=${season}&player_ids[]=${playerIds.join('&player_ids[]=')}`;
+        // Fetch season averages using correct BDL API v1 endpoint
+        // Format: /nba/v1/season_averages/{category}?type={type}&season={season}&player_ids[]=...
+        const playerIdsParam = playerIds.map(id => `player_ids[]=${id}`).join('&');
+        const url = `https://api.balldontlie.io/nba/v1/season_averages/general?type=base&season=${season}&season_type=regular&${playerIdsParam}`;
         const response = await fetch(url, {
-          headers: { 'Authorization': process.env.BALL_DONT_LIE_API_KEY }
+          headers: { 'Authorization': process.env.BALLDONTLIE_API_KEY }
         });
         
         if (!response.ok) {
@@ -845,7 +958,15 @@ Be specific and factual. If it's just a regular season game, say so clearly.`;
         }
         
         const data = await response.json();
-        const statsData = data.data || [];
+        // New API format returns stats nested under each player object
+        const statsData = (data.data || []).map(d => ({
+          player_id: d.player?.id,
+          pts: d.stats?.pts || 0,
+          fga: d.stats?.fga || 0,
+          fta: d.stats?.fta || 0,
+          turnover: d.stats?.tov || 0,
+          min: d.stats?.min || 0
+        }));
         
         // Calculate usage proxy and sort by highest usage
         const playersWithUsage = statsData
@@ -895,22 +1016,23 @@ Be specific and factual. If it's just a regular season game, say so clearly.`;
       // ONLY risky statuses - these create true uncertainty for betting
       // "Questionable" = 50/50 chance = TRUE UNCERTAINTY = PASS
       // "GTD" = Game-time decision = TRUE UNCERTAINTY = PASS
+      // "Doubtful" = ~25% chance to play = Mostly OUT, but still carries more uncertainty than confirmed OUT
       const riskyStatuses = ['questionable', 'day-to-day', 'day to day', 'gtd', 'game-time'];
       
-      // These are NOT risky - line already reflects these confirmed/near-confirmed statuses:
-      // "Out" = confirmed out, "Doubtful" = ~75% likely OUT, "Probable" = ~75% likely to play
-      const nonRiskyStatuses = ['out', 'ofs', 'ir', 'injured reserve', 'out for season', 'doubtful', 'probable', 'available', 'active'];
+      // These are NOT risky for the PASS trigger - line already reflects these confirmed/near-confirmed statuses:
+      // "Out" = confirmed out. Gary handles confirmed absences fine.
+      const nonRiskyStatuses = ['out', 'ofs', 'ir', 'injured reserve', 'out for season', 'doubtful', 'prob', 'probable', 'available', 'active', 'unknown'];
       
       // Log all injuries for debugging
       if ((teamInjuries || []).length > 0) {
-        console.log(`[Scout Report] ${teamName} injuries: ${teamInjuries.map(i => `${i.player?.first_name} ${i.player?.last_name} (${i.status})`).join(', ')}`);
+        console.log(`[Scout Report] ${teamName} injuries for pass check: ${teamInjuries.map(i => `${i.player?.first_name} ${i.player?.last_name} (${i.status})`).join(', ')}`);
       }
       
       for (const injury of (teamInjuries || [])) {
         const playerName = `${injury.player?.first_name || ''} ${injury.player?.last_name || ''}`.toLowerCase().trim();
         const status = (injury.status || '').toLowerCase();
         
-        // Check if this player is a key player (top 3 usage) AND has risky status
+        // Check if this player is a key player (top 3 usage)
         const isKeyPlayer = keyPlayers.some(keyPlayer => {
           // Exact match
           if (playerName === keyPlayer || keyPlayer === playerName) return true;
@@ -937,7 +1059,8 @@ Be specific and factual. If it's just a regular season game, say so clearly.`;
         
         // Log if a key player is confirmed out (for visibility, but NOT a pass reason)
         if (isKeyPlayer && isNonRiskyStatus) {
-          console.log(`[Scout Report] Key player status KNOWN for ${teamName}: ${injury.player?.first_name} ${injury.player?.last_name} (${injury.status}) - NOT passing (status is confirmed)`);
+          const statusNote = status.includes('out') ? 'CONFIRMED OUT' : 'CONFIRMED/LIKELY PLAYING';
+          console.log(`[Scout Report] Key player status ${statusNote} for ${teamName}: ${injury.player?.first_name} ${injury.player?.last_name} (${injury.status}) - NOT passing (status is confirmed)`);
         }
       }
 
@@ -1588,57 +1711,37 @@ MATCHUP: ${matchupLabel}
 Sport: ${sportKey} | ${game.commence_time ? formatGameTime(game.commence_time) : 'Time TBD'}
 ${game.venue ? `Venue: ${venueLabel}` : ''}${tournamentLabel ? `\n${tournamentLabel}` : ''}
 ══════════════════════════════════════════════════════════════════════
-${gameContextSection}${bowlGameContext}${ncaabStandingsSnapshot || standingsSnapshot || ''}
+${gameContextSection}${bowlGameContext}${cfpJourneyContext}${ncaabStandingsSnapshot || standingsSnapshot || ''}
 *** INJURY REPORT (READ THIS FIRST - CRITICAL) ***
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${formatInjuryReport(homeTeam, awayTeam, injuries)}
+${formatInjuryReport(homeTeam, awayTeam, injuries, sportKey)}
 ${formatStartingLineups(homeTeam, awayTeam, injuries.lineups)}
 
-INJURY EDGE RULES (CRITICAL FOR YOUR ANALYSIS):
+INJURY CITATION RULES (CRITICAL - READ CAREFULLY):
 1. Do NOT mention any player listed as OUT/DOUBTFUL as if they are playing.
-2. **INJURIES ARE ONLY EDGE IF THEY'RE NEW:**
-   - Out <7 days: POSSIBLE EDGE (line may not have fully adjusted)
-   - Out 1-2 weeks: PROBABLY PRICED IN (proceed with caution)
-   - Out 2+ weeks: FULLY PRICED IN (oddsmakers have seen 5-10+ games without them)
-   - Out months: NOT A FACTOR (the line was set KNOWING this)
-3. If you cite "without [Player X]" and they've been out 2+ weeks, that's NOT edge - that's explaining WHY the line is what it is.
-4. The oddsmakers watch games too. If a player has been out for weeks, they've SEEN how the team plays without them.
+2. **NBA INJURY FRESHNESS (GAMES-BASED):**
+   - Out 1-2 games: FRESH - you MAY cite this as a factor
+   - Out 3+ games: PRICED IN - do NOT cite as an edge or factor
+   - Out weeks/months: FULLY ABSORBED - do NOT mention at all
+3. **HARD RULE:** If a player has missed 3+ games, the team has ALREADY shown how they play without them. The line reflects this. Do NOT cite these injuries.
+4. **YOUR JOB:** Focus on who IS playing tonight, not who has been missing for weeks.
+5. If the injury section shows [PRICED IN] or [LONG-TERM] → DO NOT CITE IT IN YOUR ANALYSIS.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${narrativeContext ? `
-LIVE CONTEXT FROM GOOGLE SEARCH (Gemini Grounding)
+CURRENT STATE & CONTEXT (PRIMARY INJURY SOURCE)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-NOTE: Only use info from LAST 24 HOURS. Verify article dates before citing.
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+This is what a knowledgeable fan would know about each team heading into this game.
+
+[IMPORTANT] INJURY CITATION FILTER (APPLY BEFORE CITING ANY INJURY):
+When you see an injury mentioned below, ASK YOURSELF:
+- Has this player missed 3+ games already? → DO NOT CITE (priced in)
+- Has this player been out for weeks? → DO NOT CITE (team has adjusted)
+- Is this a FRESH absence (1-2 games max)? → You MAY cite if relevant
+
+The CURRENT STATE below may mention players who've been out for weeks.
+That's context for YOU to understand, but do NOT cite stale injuries as factors in your pick.
+
 ${narrativeContext}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-` : ''}${gameHeadlines ? `
-RECENT HEADLINES & STORYLINES (MINOR - INVESTIGATE BEFORE USING)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-*** CRITICAL WARNING: This section is for AWARENESS ONLY ***
-
-These headlines are RAW CONTEXT from recent news. You must:
-1. **INVESTIGATE** if any of this is STATISTICALLY SIGNIFICANT
-2. **ASSUME** most of it is FAN DRAMA or MEDIA NOISE until proven otherwise
-3. **DO NOT** cite these storylines as evidence without verifying with stats
-4. **ASK YOURSELF**: "Does this ACTUALLY show up in the data?"
-
-**STALE NEWS CHECK (CRITICAL):**
-- Only use information from the LAST 24 HOURS
-- If an article says "Player X is returning" but is dated 3+ days ago, they may have ALREADY played
-- If news is about an upcoming game that already happened, IGNORE IT
-- Check article dates before citing any news as "fresh"
-
-Examples of NOISE vs SIGNAL:
-- "Team on 4-game win streak" - NOISE unless margins/opponent quality support it
-- "Coach fired 2 days ago" - SIGNAL - roster/scheme disruption is real
-- "Revenge game vs former team" - NOISE - pros don't care about narratives like fans do
-- "Buzzer-beater loss last game" - NOISE for outcome, but investigate: Was it fluky or sustainable?
-- "Player returning from injury" (3 days old) - STALE - verify if they already played
-
-THE RULE: Narratives are STARTING POINTS for investigation, NOT conclusions.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${gameHeadlines}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ` : ''}
 REST & SCHEDULE SITUATION
@@ -1646,19 +1749,17 @@ REST & SCHEDULE SITUATION
 ${formatRestSituation(homeTeam, awayTeam, calculateRestSituation(recentHome, game.commence_time, homeTeam), calculateRestSituation(recentAway, game.commence_time, awayTeam))}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-${nbaKeyPlayers ? formatNbaKeyPlayers(homeTeam, awayTeam, nbaKeyPlayers) : ''}${nbaRosterDepth ? formatNbaRosterDepth(homeTeam, awayTeam, nbaRosterDepth, injuries) : ''}${ncaabKeyPlayers ? formatNcaabKeyPlayers(homeTeam, awayTeam, ncaabKeyPlayers) : ''}${ncaabRosterDepth ? formatNcaabRosterDepth(homeTeam, awayTeam, ncaabRosterDepth, injuries) : ''}${nhlKeyPlayers ? formatNhlKeyPlayers(homeTeam, awayTeam, nhlKeyPlayers) : ''}${nhlRosterDepth ? formatNhlRosterDepth(homeTeam, awayTeam, nhlRosterDepth, injuries) : ''}${keyPlayers ? formatKeyPlayers(homeTeam, awayTeam, keyPlayers) : ''}${startingQBs ? formatStartingQBs(homeTeam, awayTeam, startingQBs) : ''}${nflRosterDepth ? formatNflRosterDepth(homeTeam, awayTeam, nflRosterDepth, injuries) : ''}${nflPlayoffHistory ? formatNflPlayoffHistory(homeTeam, awayTeam, nflPlayoffHistory, nflHomeTeamId, nflAwayTeamId) : ''}${ncaafKeyPlayers ? formatNcaafKeyPlayers(homeTeam, awayTeam, ncaafKeyPlayers) : ''}
+${nbaRosterDepth ? formatNbaRosterDepth(homeTeam, awayTeam, nbaRosterDepth, injuries) : ''}${ncaabKeyPlayers ? formatNcaabKeyPlayers(homeTeam, awayTeam, ncaabKeyPlayers) : ''}${ncaabRosterDepth ? formatNcaabRosterDepth(homeTeam, awayTeam, ncaabRosterDepth, injuries) : ''}${nhlKeyPlayers ? formatNhlKeyPlayers(homeTeam, awayTeam, nhlKeyPlayers) : ''}${nhlRosterDepth ? formatNhlRosterDepth(homeTeam, awayTeam, nhlRosterDepth, injuries) : ''}${keyPlayers ? formatKeyPlayers(homeTeam, awayTeam, keyPlayers) : ''}${startingQBs ? formatStartingQBs(homeTeam, awayTeam, startingQBs) : ''}${nflRosterDepth ? formatNflRosterDepth(homeTeam, awayTeam, nflRosterDepth, injuries) : ''}${nflPlayoffHistory ? formatNflPlayoffHistory(homeTeam, awayTeam, nflPlayoffHistory, nflHomeTeamId, nflAwayTeamId) : ''}${ncaafKeyPlayers ? formatNcaafKeyPlayers(homeTeam, awayTeam, ncaafKeyPlayers) : ''}
 
 TEAM IDENTITIES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${formatTeamIdentity(homeTeam, homeProfile, 'Home')}
 ${formatTeamIdentity(awayTeam, awayProfile, 'Away')}
 ${conferenceTierSection}${ncaabTournamentContext}
-VERIFIED TALE OF THE TAPE (USE THIS EXACTLY IN YOUR RATIONALE)
+TALE OF THE TAPE (VERIFIED FROM BDL)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayProfile, sportKey, injuries)}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-CRITICAL: Copy this TALE OF THE TAPE exactly into your rationale.
-Do NOT modify the numbers. These are verified from Ball Don't Lie API.
 
 RECENT FORM (Last 5 Games)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1786,9 +1887,26 @@ async function fetchTeamProfile(teamName, sport) {
     const currentSeason = currentMonth <= 6 ? currentYear - 1 : currentYear;
     
     // Get season stats
-    const seasonStats = await ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: team.id, season: currentSeason, postseason: false });
+    let seasonStats = await ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: team.id, season: currentSeason, postseason: false });
     
-    // Fetch standings - NCAAB requires conference_id from the team data
+    // NCAAF: BDL returns an array of stats, extract the team's stats object
+    // The array may contain stats for the specific team we queried
+    if (bdlSport === 'americanfootball_ncaaf' && Array.isArray(seasonStats)) {
+      if (seasonStats.length > 0) {
+        // Find the stats for our team (in case multiple returned) or use first
+        const teamStats = seasonStats.find(s => s.team?.id === team.id) || seasonStats[0];
+        seasonStats = teamStats;
+        // Log actual NCAAF fields (BDL doesn't have PPG for NCAAF)
+        console.log(`[Scout Report] NCAAF ${teamName} season stats:`, 
+          `Pass YPG=${seasonStats.passing_yards_per_game || 'N/A'}, ` +
+          `Rush YPG=${seasonStats.rushing_yards_per_game || 'N/A'}`);
+      } else {
+        seasonStats = null;
+        console.log(`[Scout Report] NCAAF ${teamName} - no team season stats from BDL`);
+      }
+    }
+    
+    // Fetch standings - NCAAB and NCAAF require conference_id from the team data
     let standings = [];
     let teamStanding = null;
     if (bdlSport === 'basketball_ncaab') {
@@ -1798,25 +1916,66 @@ async function fetchTeamProfile(teamName, sport) {
         standings = await ballDontLieService.getNcaabStandings(team.conference_id, currentSeason);
         teamStanding = standings?.find(s => s.team?.id === team.id || s.team?.name === teamName);
       }
-    } else if (bdlSport !== 'americanfootball_ncaaf') {
-      // NBA, NHL, etc - no conference_id needed
+    } else if (bdlSport === 'americanfootball_ncaaf') {
+      // NCAAF: Requires conference_id - get from team.conference field
+      const conferenceId = team.conference;
+      if (conferenceId) {
+        try {
+          console.log(`[Scout Report] Fetching NCAAF standings for ${teamName} (conference: ${conferenceId})`);
+          const standingsData = await ballDontLieService.getStandingsGeneric(bdlSport, { 
+            conference_id: conferenceId, 
+            season: currentSeason 
+          });
+          standings = standingsData || [];
+          teamStanding = standings?.find(s => s.team?.id === team.id || s.team?.full_name === teamName);
+          if (teamStanding) {
+            // BDL can return null for 0 losses/wins - coerce to 0
+            const w = teamStanding.wins ?? 0;
+            const l = teamStanding.losses ?? 0;
+            console.log(`[Scout Report] NCAAF ${teamName} standings: ${w}-${l}`);
+          }
+        } catch (e) {
+          console.warn(`[Scout Report] NCAAF standings fetch failed for ${teamName}:`, e.message);
+        }
+      }
+    } else {
+      // NBA, NHL, NFL - no conference_id needed
       standings = await ballDontLieService.getStandingsGeneric(bdlSport, { season: currentSeason });
       teamStanding = standings?.find(s => s.team?.id === team.id || s.team?.name === teamName);
     }
     
     // BDL standings return wins/losses separately, not as "overall_record"
     // Use BDL as primary source, Gemini grounding as fallback when BDL fails
+    // Note: BDL may return null for 0 wins/losses, so use ?? to coerce to 0
     let record = 'N/A';
     let homeRecord = teamStanding?.home_record || 'N/A';
     let awayRecord = teamStanding?.road_record || 'N/A';
     let conferenceRecord = teamStanding?.conference_record || 'N/A';
     
-    // Try BDL first
-    if (teamStanding?.wins !== undefined && teamStanding?.losses !== undefined) {
-      record = `${teamStanding.wins}-${teamStanding.losses}`;
+    // Try BDL first - check that wins exists (can be 0, which is falsy but valid)
+    const standingWins = teamStanding?.wins;
+    const standingLosses = teamStanding?.losses;
+    const statsWins = seasonStats?.wins;
+    const statsLosses = seasonStats?.losses;
+    
+    const isNHL = sport === 'NHL' || bdlSport === 'icehockey_nhl';
+    
+    if (standingWins !== undefined || standingLosses !== undefined) {
+      // Use ?? to coerce null to 0 (BDL returns null for teams with 0 losses)
+      if (isNHL) {
+        const otLosses = teamStanding?.ot_losses ?? 0;
+        record = `${standingWins ?? 0}-${standingLosses ?? 0}-${otLosses}`;
+      } else {
+        record = `${standingWins ?? 0}-${standingLosses ?? 0}`;
+      }
       console.log(`[Scout Report] ${teamName} record from BDL standings: ${record}, conf: ${conferenceRecord}`);
-    } else if (seasonStats?.wins !== undefined && seasonStats?.losses !== undefined) {
-      record = `${seasonStats.wins}-${seasonStats.losses}`;
+    } else if (statsWins !== undefined || statsLosses !== undefined) {
+      if (isNHL) {
+        const otLosses = seasonStats?.ot_losses ?? 0;
+        record = `${statsWins ?? 0}-${statsLosses ?? 0}-${otLosses}`;
+      } else {
+        record = `${statsWins ?? 0}-${statsLosses ?? 0}`;
+      }
       console.log(`[Scout Report] ${teamName} record from BDL season stats: ${record}`);
     }
     
@@ -1828,18 +1987,25 @@ async function fetchTeamProfile(teamName, sport) {
         const seasonStr = `${seasonYear}-${nextYear}`;
         const sportName = sport === 'NBA' || bdlSport === 'basketball_nba' ? 'NBA' : 
                          sport === 'NCAAB' || bdlSport === 'basketball_ncaab' ? 'NCAAB' :
-                         sport === 'NHL' || bdlSport === 'icehockey_nhl' ? 'NHL' : sport;
+                         isNHL ? 'NHL' : sport;
         
         const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-        const recordQuery = `What is the current ${seasonStr} ${sportName} season record (wins-losses) for the ${teamName} as of ${today}? Return ONLY the record in format "X-Y" (e.g., "22-17").`;
+        const formatStr = isNHL ? '"W-L-OTL" (e.g., "28-13-9")' : '"W-L" (e.g., "22-17")';
+        const recordQuery = `What is the current ${seasonStr} ${sportName} season record for the ${teamName} as of ${today}? Return ONLY the record in format ${formatStr}.`;
         
-        console.log(`[Scout Report] Fetching ${teamName} record via Gemini grounding (BDL fallback)...`);
+        console.log(`[Scout Report] Fetching ${teamName} record via Gemini grounding (BDL unavailable)...`);
         const recordResult = await geminiGroundingSearch(recordQuery, { temperature: 1.0, maxTokens: 100 });
         
         if (recordResult?.success && recordResult?.data) {
-          const recordMatch = recordResult.data.match(/(\d{1,2})\s*[-–]\s*(\d{1,2})/);
+          // Flexible match for X-Y or X-Y-Z
+          const recordMatch = isNHL 
+            ? recordResult.data.match(/(\d{1,2})\s*[-–]\s*(\d{1,2})\s*[-–]\s*(\d{1,2})/)
+            : recordResult.data.match(/(\d{1,2})\s*[-–]\s*(\d{1,2})/);
+            
           if (recordMatch) {
-            record = `${recordMatch[1]}-${recordMatch[2]}`;
+            record = isNHL 
+              ? `${recordMatch[1]}-${recordMatch[2]}-${recordMatch[3]}`
+              : `${recordMatch[1]}-${recordMatch[2]}`;
             console.log(`[Scout Report] ${teamName} record from Gemini grounding: ${record}`);
           }
         }
@@ -1986,23 +2152,25 @@ async function fetchRecentGames(teamName, sport, count = 5) {
     const team = findTeam(teams, teamName);
     if (!team) return [];
     
-    // Build params based on sport - NFL/NCAAF use seasons[], other sports use date range
-    // Per BDL API docs: NFL games endpoint does NOT support start_date/end_date
-    const isFootball = bdlSport === 'americanfootball_nfl' || bdlSport === 'americanfootball_ncaaf';
+    // Build params based on sport - NFL/NCAAF/NHL use seasons[], other sports use date range
+    // Per BDL API docs: NFL/NHL games endpoint does NOT support start_date/end_date (documented for NBA)
+    const usesSeasonParam = bdlSport === 'americanfootball_nfl' || 
+                           bdlSport === 'americanfootball_ncaaf' ||
+                           bdlSport === 'icehockey_nhl';
     
     let params;
-    if (isFootball) {
-      // NFL/NCAAF: Use seasons parameter - calculate dynamically
-      const fbMonth = new Date().getMonth() + 1;
-      const fbYear = new Date().getFullYear();
-      const fbSeason = fbMonth <= 7 ? fbYear - 1 : fbYear;
+    if (usesSeasonParam) {
+      // NFL/NCAAF/NHL: Use seasons parameter - calculate dynamically
+      const month = new Date().getMonth() + 1;
+      const year = new Date().getFullYear();
+      const season = month <= 7 ? year - 1 : year;
       params = {
         team_ids: [team.id],
-        seasons: [fbSeason],
+        seasons: [season],
         per_page: 20
       };
     } else {
-      // NBA/NHL/etc: Use date range filtering
+      // NBA/etc: Use date range filtering
       const today = new Date();
       const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
       params = {
@@ -2016,16 +2184,18 @@ async function fetchRecentGames(teamName, sport, count = 5) {
     const recentGames = await ballDontLieService.getGames(bdlSport, params);
     
     // Sort by date descending and return the requested count
-    // For football, also filter to only completed games
+    // For sports with season fetch, also filter to only completed games
     const today = new Date();
     const sorted = (recentGames || [])
       .filter(g => {
         const hasDate = g.date || g.datetime;
         const gameDate = new Date(g.date || g.datetime);
         const isPast = gameDate < today;
-        // For football, also check status is Final
-        if (isFootball) {
-          return hasDate && isPast && (g.status === 'Final' || g.status === 'post');
+        // For season-based fetch, also check status is Final (if available)
+        if (usesSeasonParam) {
+          const status = (g.status || '').toLowerCase();
+          const isFinished = status === 'final' || status === 'post' || status === 'off';
+          return hasDate && isPast && isFinished;
         }
         return hasDate;
       })
@@ -2289,17 +2459,25 @@ async function fetchH2HData(homeTeam, awayTeam, sport, recentHome, recentAway) {
       per_page: 100
     });
     
+    console.log(`[Scout Report] H2H: Found ${homeSeasonGames?.length || 0} total games for ${homeTeam} in ${currentSeason} season`);
+    
     // Filter to only H2H games between these two teams
     const h2hGames = (homeSeasonGames || []).filter(game => {
       const gameHomeId = game.home_team?.id || game.home_team_id;
       const gameAwayId = game.visitor_team?.id || game.visitor_team_id;
-      const isH2H = (gameHomeId === home.id && gameAwayId === away.id) ||
-                    (gameHomeId === away.id && gameAwayId === home.id);
+      
+      const isMatch = (gameHomeId === home.id && gameAwayId === away.id) ||
+                      (gameHomeId === away.id && gameAwayId === home.id);
+      
+      if (isMatch) {
+        console.log(`[Scout Report] H2H Match found: ${game.date} - ${game.home_team?.full_name || game.home_team_id} vs ${game.visitor_team?.full_name || game.visitor_team_id} (Score: ${game.home_team_score}-${game.visitor_team_score})`);
+      }
+      
       const hasScores = (game.home_team_score > 0 || game.visitor_team_score > 0);
       // Ensure game is in the past (completed)
       const gameDate = new Date(game.date);
       const isPast = gameDate < new Date();
-      return isH2H && hasScores && isPast;
+      return isMatch && hasScores && isPast;
     }).sort((a, b) => new Date(b.date) - new Date(a.date));
     
     // Deduplicate by date (in case of data issues)
@@ -2407,71 +2585,15 @@ async function fetchInjuries(homeTeam, awayTeam, sport) {
                        bdlSport === 'americanfootball_nfl' || bdlSport === 'americanfootball_ncaaf';
     
     // =============================================================================
-    // NFL/NCAAF: Use BDL as PRIMARY source (reliable weekly practice reports)
+    // NFL/NCAAF: Use currentState (Gemini Grounding) as PRIMARY source
+    // BDL injury data can be stale (showing injuries from weeks ago)
+    // The currentState fetch provides game-day accurate "OUT/LIMITED" info
     // =============================================================================
     if (isFootball && bdlSport) {
-      console.log(`[Scout Report] Fetching ${sport} injuries from BDL (primary source for football)`);
+      console.log(`[Scout Report] NFL/NCAAF: Using currentState (Gemini Grounding) for game-day injury info`);
+      console.log(`[Scout Report] Skipping BDL injury fetch (can include stale injuries from weeks ago)`);
       
-      const teams = await ballDontLieService.getTeams(bdlSport);
-      const home = findTeam(teams, homeTeam);
-      const away = findTeam(teams, awayTeam);
-      
-      const teamIds = [];
-      if (home) teamIds.push(home.id);
-      if (away) teamIds.push(away.id);
-      
-      let bdlInjuries = { home: [], away: [] };
-      
-      if (teamIds.length > 0) {
-        const injuries = await ballDontLieService.getInjuriesGeneric(bdlSport, { team_ids: teamIds });
-        
-        if (injuries?.length > 0) {
-          console.log(`[Scout Report] BDL returned ${injuries.length} ${sport} injuries`);
-          
-          // Filter out SEASON-LONG injuries (IR, NFI, etc.)
-          const filterSeasonLong = (injuryList) => {
-            return injuryList.filter(i => {
-              const status = (i.status || '').toLowerCase();
-              const comment = (i.comment || i.description || '').toLowerCase();
-              
-              const isSeasonLongIR = status.includes('injured reserve') || 
-                                     status === 'ir' ||
-                                     status === 'nfi' ||
-                                     status.includes('out for season') ||
-                                     status.includes('out for the season') ||
-                                     comment.includes('out for season') ||
-                                     comment.includes('out for the season') ||
-                                     comment.includes('season-ending') ||
-                                     comment.includes('all season');
-              
-              if (isSeasonLongIR) {
-                const playerName = `${i.player?.first_name || ''} ${i.player?.last_name || ''}`.trim();
-                console.log(`[Scout Report] Filtering out season-long injury: ${playerName} (${status})`);
-                return false;
-              }
-              return true;
-            });
-          };
-          
-          bdlInjuries = {
-            home: filterSeasonLong(injuries?.filter(i =>
-              i.player?.team?.id === home?.id ||
-              i.player?.team_id === home?.id ||
-              i.team_id === home?.id
-            ).map(fixBdlInjuryStatus) || []),
-            away: filterSeasonLong(injuries?.filter(i =>
-              i.player?.team?.id === away?.id ||
-              i.player?.team_id === away?.id ||
-              i.team_id === away?.id
-            ).map(fixBdlInjuryStatus) || [])
-          };
-        }
-      }
-      
-      const bdlHomeCount = bdlInjuries.home?.length || 0;
-      const bdlAwayCount = bdlInjuries.away?.length || 0;
-      
-      // Still fetch grounded context for narratives (but NOT as injury source)
+      // Fetch grounded context for narratives - this is the PRIMARY injury source for NFL now
       let narrativeContext = null;
       try {
         const liveContextInjuries = await fetchGroundedContext(homeTeam, awayTeam, sport);
@@ -2480,15 +2602,12 @@ async function fetchInjuries(homeTeam, awayTeam, sport) {
         console.log(`[Scout Report] Failed to fetch ${sport} narrative context: ${e.message}`);
       }
       
-      if (bdlHomeCount > 0 || bdlAwayCount > 0) {
-        console.log(`[Scout Report] Using BDL ${sport} injuries (${bdlHomeCount} home, ${bdlAwayCount} away)`);
-      } else {
-        console.log(`[Scout Report] No active ${sport} injuries found in BDL`);
-      }
-      
+      // Return empty injury arrays - injury data comes from currentState (OUT/LIMITED section)
+      // This is the same pattern used for NBA to avoid stale BDL data
+      console.log(`[Scout Report] NFL/NCAAF: Injury data will come from "OUT/LIMITED" in currentState (game-day accurate)`);
       return {
-        home: bdlInjuries.home,
-        away: bdlInjuries.away,
+        home: [],
+        away: [],
         lineups: { home: [], away: [] },
         narrativeContext
       };
@@ -2532,89 +2651,26 @@ async function fetchInjuries(homeTeam, awayTeam, sport) {
         return {
           home: narrativeParsed.home || [],
           away: narrativeParsed.away || [],
+          filteredLongTerm: narrativeParsed.filteredLongTerm || [],
           lineups: { home: [], away: [] },
           narrativeContext
         };
       }
     }
     
-    // FALLBACK 2: If narrative parsing also failed, try BDL as backup
-    // This handles edge cases where all Grounding parsing fails
-    console.log(`[Scout Report] Narrative context parsing failed, checking BDL as fallback...`);
+    // NO BDL FALLBACK - BDL injury data is stale and lacks context
+    // If Gemini Grounding failed to provide injury data, we proceed without it
+    // The currentState grounded context is the ONLY source of truth for injuries
+    console.log(`[Scout Report] Grounding parsing did not extract structured injuries`);
+    console.log(`[Scout Report] Injury data will come from narrative context in currentState (Rotowire/grounding)`);
+    console.log(`[Scout Report] BDL injury fallback DISABLED - BDL data is stale and lacks game-day context`);
     
-    let bdlInjuries = { home: [], away: [] };
-
-    if (bdlSport) {
-      const teams = await ballDontLieService.getTeams(bdlSport);
-      const home = findTeam(teams, homeTeam);
-      const away = findTeam(teams, awayTeam);
-      
-      const teamIds = [];
-      if (home) teamIds.push(home.id);
-      if (away) teamIds.push(away.id);
-      
-      if (teamIds.length > 0) {
-        const injuries = await ballDontLieService.getInjuriesGeneric(bdlSport, { team_ids: teamIds });
-        
-        if (injuries?.length > 0) {
-          console.log(`[Scout Report] BDL fallback returned ${injuries.length} injuries`);
-          
-          // Filter out SEASON-LONG injuries
-        const filterSeasonLong = (injuryList) => {
-          return injuryList.filter(i => {
-            const status = (i.status || '').toLowerCase();
-            const comment = (i.comment || i.description || '').toLowerCase();
-            
-            const isSeasonLongIR = status.includes('injured reserve') || 
-                                   status === 'ir' ||
-                                     status === 'nfi' ||
-                                   status.includes('out for season') ||
-                                   status.includes('out for the season') ||
-                                   comment.includes('out for season') ||
-                                   comment.includes('out for the season') ||
-                                   comment.includes('season-ending') ||
-                                   comment.includes('all season');
-            
-            if (isSeasonLongIR) {
-              const playerName = `${i.player?.first_name || ''} ${i.player?.last_name || ''}`.trim();
-              console.log(`[Scout Report] Filtering out season-long injury: ${playerName} (${status})`);
-              return false;
-            }
-            return true;
-          });
-        };
-
-        bdlInjuries = {
-          home: filterSeasonLong(injuries?.filter(i =>
-            i.player?.team?.id === home?.id ||
-            i.player?.team_id === home?.id ||
-            i.team_id === home?.id
-          ).map(fixBdlInjuryStatus) || []),
-          away: filterSeasonLong(injuries?.filter(i =>
-            i.player?.team?.id === away?.id ||
-            i.player?.team_id === away?.id ||
-            i.team_id === away?.id
-          ).map(fixBdlInjuryStatus) || [])
-        };
-        }
-      }
-    }
-    
-    const bdlHomeCount = bdlInjuries.home?.length || 0;
-    const bdlAwayCount = bdlInjuries.away?.length || 0;
-    
-    if (bdlHomeCount > 0 || bdlAwayCount > 0) {
-      console.log(`[Scout Report] Using BDL fallback injuries (${bdlHomeCount} home, ${bdlAwayCount} away)`);
-    } else {
-      console.log(`[Scout Report] No injuries found from either source`);
-    }
-    
-      return {
-        home: bdlInjuries.home,
-        away: bdlInjuries.away,
-        lineups: { home: [], away: [] },
-        narrativeContext
-      };
+    return {
+      home: [],
+      away: [],
+      lineups: { home: [], away: [] },
+      narrativeContext
+    };
     
   } catch (error) {
     console.warn(`[Scout Report] Error fetching injuries:`, error.message);
@@ -2623,34 +2679,27 @@ async function fetchInjuries(homeTeam, awayTeam, sport) {
 }
 
 /**
- * Fetch live context using Gemini 3 with Google Search Grounding
- * This is the PRIMARY source for live context
+ * Fetch CURRENT STATE of each team using simple, natural Gemini grounding
+ * This replaces the complex structured prompts with a simple "fan awareness" query
  * @param {string} homeTeam - Home team name
  * @param {string} awayTeam - Away team name
  * @param {string} sport - Sport key (NFL, NBA, NHL, etc.)
  * @param {string} gameDate - Game date string
- * @param {object} options - Optional configuration
- * @param {boolean} options.useFlash - Use Flash model instead of Pro (for props to avoid quota)
  */
-async function fetchGroundedContext(homeTeam, awayTeam, sport, gameDate, options = {}) {
+async function fetchCurrentState(homeTeam, awayTeam, sport, gameDate) {
   const genAI = getGeminiClient();
   if (!genAI) {
-    console.log('[Scout Report] Gemini not available');
+    console.log('[Scout Report] Gemini not available for current state');
     return null;
   }
   
   try {
     const today = gameDate || new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
     
-    // POLICY: Always use Gemini 3 Flash, never Pro
-    const modelName = 'gemini-3-flash-preview';
-    
     // Configure model with Google Search Grounding
     const model = genAI.getGenerativeModel({
-      model: modelName,
-      tools: [{
-        google_search: {}  // Gemini 3 uses simplified google_search tool
-      }],
+      model: 'gemini-3-flash-preview',
+      tools: [{ google_search: {} }],
       safetySettings: [
         { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
         { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
@@ -2659,542 +2708,78 @@ async function fetchGroundedContext(homeTeam, awayTeam, sport, gameDate, options
       ]
     });
     
-    // Sport-specific context queries
-    let prompt;
-    if (sport === 'NFL' || sport === 'americanfootball_nfl') {
-      prompt = `For the NFL game ${awayTeam} @ ${homeTeam} on ${today}:
-
-SOURCE OF TRUTH: Search https://www.rotowire.com/football/lineups.php for CONFIRMED starting lineups and injury statuses.
-This page shows the actual game-day starters and inactives. Use this as the primary source.
-
-1. INJURIES & CONTEXT (CRITICAL - from RotoWire):
-   
-   *** SEASON-LONG EXCLUSION RULE ***
-   DO NOT MENTION players who:
-   - Have been OUT ALL SEASON (e.g., Joe Mixon, Tank Dell if out since preseason)
-   - Have been on IR since before or early in the season
-   - Have NOT PLAYED A SINGLE GAME this year
-   These players are NOT FACTORS - the team's entire season stats reflect their absence.
-   ONLY mention injuries from the LAST 4-6 WEEKS that affect TONIGHT'S game.
-   
-   List RECENT injuries with game-day statuses:
-   - OUT: Confirmed not playing (if recent - last few weeks)
-   - DOUBTFUL: Unlikely to play (75% chance OUT)
-   - QUESTIONABLE: Game-time decision (50/50)
-   
-   **FOR EACH RECENT INJURY, PROVIDE:**
-   - Player name, position, injury type
-   - When did they get injured? (Week # or date)
-   - How many games have they missed?
-   - Who has been filling their role?
-   
-   Format example: "Lane Johnson (OT) - QUESTIONABLE - foot - Missed Week 17 - Mekhi Becton filled in"
-   
-   DO NOT list: Players on IR all year, preseason injuries, or anyone who hasn't played this season
-
-1b. PLAYING THROUGH INJURY - INSIDER QUOTES (CRITICAL FOR PLAYOFFS):
-   Search recent news articles for players who ARE EXPECTED TO PLAY but may be LIMITED:
-   
-   **FOR EACH TEAM, IDENTIFY:**
-   - QBs playing through injuries: Any ribs, shoulder, elbow, hand, ankle issues?
-   - Skill players playing hurt: WRs, RBs, TEs with lingering injuries?
-   - Key linemen playing through injuries?
-   
-   **FOR EACH "PLAYING THROUGH INJURY" PLAYER, SEARCH FOR:**
-   - Player name, position, injury type
-   - When did they get hurt? (Week # or date)
-   - Was there any doubt about them playing? (Search: "[player name] game-time decision" or "[player name] close to not playing")
-   - INSIDER QUOTES: What are reporters/insiders saying about their health? Search for:
-     * "[player name] injury update"
-     * "[player name] practice report"
-     * "[player name] limited"
-     * "[player name] health percentage"
-   - Any mention of: "gutting it out", "not 100%", "limited mobility", "snap count", "pain management"?
-   - Stats comparison: Performance BEFORE injury vs AFTER injury (if available)
-   
-   **EXAMPLE FORMAT:**
-   "Sam Darnold (QB, SEA) - Oblique injury since Jan 15
-    - PRACTICE: Limited participant Wed/Thurs, Full Friday
-    - INSIDER: 'He's going to play but he's clearly not 100%' - Adam Schefter
-    - CLOSE CALL: Was questionable until Friday, team 'concerned' early in week
-    - IMPACT: Threw for 180 yds in Wild Card vs 280 avg before injury
-    - MOBILITY: 'Won't be able to scramble like usual' - team source"
-   
-   **ANOTHER EXAMPLE:**
-   "Ricky Pearsall (WR, SF) - Knee sprain since Wild Card
-    - PRACTICE: Did not practice Wed, Limited Thurs/Fri
-    - INSIDER: 'He's expected to play but may be on a pitch count' - Matt Barrows
-    - SNAP COUNT: Team says 'we'll manage his reps'
-    - CLOSE CALL: Was listed as doubtful before upgrading to questionable"
-   
-   This is CRITICAL for playoff games where stars often play hurt. Gary needs the FULL PICTURE of who is playing at less than 100%.
-   
-   NO EDITORIAL COMMENTS - Just report the facts and quotes. Do NOT add "huge impact" or "critical loss" - Gary will assess.
-
-2. QB SITUATION (from RotoWire): 
-   - Who is the CONFIRMED STARTING QB for ${homeTeam}?
-   - Who is the CONFIRMED STARTING QB for ${awayTeam}?
-   - Are any QBs on IR? When did they get injured and how many games missed?
-   - Did either team change QBs mid-season? Who was the previous starter?
-   - If a backup/3rd-string QB is starting, what is their experience level?
-
-3. WEATHER & TEMPERATURE:
-   - ALWAYS include: Game-time temperature (°F)
-   - ALWAYS include: Is this a dome/indoor stadium? (If yes, skip weather entirely)
-   - ONLY include precipitation/wind details if conditions are CONFIRMED SEVERE:
-     * Active blizzard with accumulation during the game
-     * Sustained wind 25+ mph (not gusts - sustained)
-     * Sub-15°F with dangerous wind chill
-   - If conditions are NOT severe, just state: "Temperature: X°F. No severe weather expected."
-   - DO NOT include: forecasted rain chances, light snow predictions, or "might rain" language
-   - Weather forecasts are unreliable - only report CONFIRMED current/imminent severe conditions
-
-4. DYNAMIC MATCHUP NARRATIVES & NEWS:
-   - Any breaking team news, drama, or major storylines?
-   - Key player significance: Are any stars or high-impact rookies reaching milestones, returning from injury, or on a "hot streak"?
-   - Matchup specific context: Is this a "revenge spot", a rivalry, or a game with unique psychological factors?
-   - Narrative momentum: Does either team have a storyline edge not captured by raw season stats?
-
-5. GAME CONTEXT (CRITICAL):
-   - GAME TYPE: Is this Thursday Night Football (TNF), Sunday Night Football (SNF), Monday Night Football (MNF), Saturday game, or regular Sunday?
-   - DIVISIONAL: Are ${homeTeam} and ${awayTeam} in the same NFL division? If yes, which division (NFC East, AFC North, etc.)?
-   - PLAYOFF IMPLICATIONS: What are the current playoff standings for both teams? Is either team fighting for a playoff spot, division title, or first-round bye?
-
-6. HEAD-TO-HEAD HISTORY (2025-26 NFL SEASON ONLY - NO GUESSING):
-   - Have ${homeTeam} and ${awayTeam} played each other in the 2025 NFL season? 
-   - If yes, when did they play and what was the score?
-   - If this is a divisional matchup, they may have played earlier in the season
-   ONLY cite games from the 2025 NFL season that you can verify with dates and scores.
-   If you cannot find data, say "No 2025 H2H found" - DO NOT GUESS or claim historical streaks.
-
-7. RECENT FORM (LAST 5 GAMES - CRITICAL):
-   - ${homeTeam}: List their LAST 5 GAMES from the 2025 season with Week #, opponent, score, and W/L
-   - ${awayTeam}: List their LAST 5 GAMES from the 2025 season with Week #, opponent, score, and W/L
-   - What is each team's record in their last 5 games? (e.g., "3-2" or "1-4")
-   Be PRECISE. Include Week numbers and exact scores. If unsure, say "unable to verify" - DO NOT GUESS.
-
-8. EFFICIENCY BASELINE (NGS/EPA - WHO SHOULD WIN):
-   Search nextgenstats.nfl.com, pro-football-reference.com, or footballoutsiders.com for these team-level metrics:
-   
-   ${homeTeam}:
-   - Offensive EPA per play (or EPA rank): How efficient is the offense?
-   - Defensive EPA per play (or EPA rank): How efficient is the defense?
-   - Pass Block Win Rate: How well does OL protect the QB?
-   - Pass Rush Win Rate: How well does DL generate pressure?
-   - Success Rate: % of plays gaining "expected" yards
-   
-   ${awayTeam}:
-   - Offensive EPA per play (or EPA rank): How efficient is the offense?
-   - Defensive EPA per play (or EPA rank): How efficient is the defense?
-   - Pass Block Win Rate: How well does OL protect the QB?
-   - Pass Rush Win Rate: How well does DL generate pressure?
-   - Success Rate: % of plays gaining "expected" yards
-   
-   This tells Gary WHO SHOULD WIN based on process metrics. He then investigates what might change that picture for THIS game.
-   Just provide the NUMBERS - Gary interprets. No opinions.
-
-9. REVENGE GAME CONTEXT (Only if applicable):
-   Is any player in THIS GAME facing their FORMER TEAM today?
-   
-   **ONLY REPORT IF:**
-   - A player on ${homeTeam} used to play for ${awayTeam} (or vice versa)
-   - They are ACTIVE and expected to play in THIS game
-   
-   **IF YES, PROVIDE:**
-   - Player name, position, current team
-   - When did they leave their former team?
-   - How did they leave? (Traded, released, free agency)
-   - Any notable storyline? (Bitter departure, fan favorite returning, etc.)
-   
-   **IF NO REVENGE GAMES:** Simply state "No revenge game storylines for this matchup."
-   
-   DO NOT list general offseason trades or roster moves. Only report if a player is facing their former team TODAY.
-
-10. KEY PLAYER STATS (LAST 5 GAMES - CRITICAL FOR PROPS):
-   For EACH team, provide game-by-game stats for the last 5 games for these key players:
-   
-   ${homeTeam} KEY PLAYERS:
-   - Starting QB: Pass yards per game for last 5 games (list each game: Week X vs OPP: XXX yards)
-   - RB1 (lead back): Rush yards per game for last 5 games (list each game)
-   - WR1: Receiving yards per game for last 5 games (list each game)
-   - TE1 (if relevant): Receiving yards per game for last 5 games
-   
-   ${awayTeam} KEY PLAYERS:
-   - Starting QB: Pass yards per game for last 5 games (list each game: Week X vs OPP: XXX yards)
-   - RB1 (lead back): Rush yards per game for last 5 games (list each game)
-   - WR1: Receiving yards per game for last 5 games (list each game)
-   - TE1 (if relevant): Receiving yards per game for last 5 games
-   
-   CRITICAL: List ACTUAL verified stats only. If you cannot find exact game-by-game data, say "Stats unavailable" - DO NOT GUESS or invent numbers.
-   
-   Format example:
-   "George Pickens (DAL WR) - Last 5 games receiving yards:
-    Week 12 vs NYG: 130 yds | Week 13 vs WAS: 33 yds | Week 14 vs CIN: 37 yds | Week 15 vs CAR: 88 yds | Week 16 vs TB: 146 yds
-    5-game average: 86.8 yards"
-
-Be factual. Do NOT include any betting picks or predictions.
-
-CRITICAL ANTI-OPINION RULES:
-1. FACTS ONLY - Do NOT include any betting predictions, picks, or analysis from articles
-2. NO OPINIONS - If an article says "Cowboys will win by 10" - IGNORE that, only extract FACTS
-3. YOUR OWN WORDS - Synthesize facts, do NOT plagiarize text from articles
-4. VERIFY STATS - Only include stats you can verify. Say "unable to verify" rather than guessing.
-5. NO BETTING ADVICE - Gary makes his own picks - you just provide CONTEXT`;
-    } else if (sport === 'NBA' || sport === 'basketball_nba') {
-      prompt = `For the NBA game ${awayTeam} @ ${homeTeam} on ${today}:
-
-SOURCE OF TRUTH: Search "site:rotowire.com NBA lineups" for the most accurate lineup and injury data.
-RotoWire is the industry standard for game-day statuses - prioritize their information over other sources.
-
-1. INJURIES (from RotoWire) - RECENT INJURIES ONLY:
-   
-   *** SEASON-LONG EXCLUSION RULE ***
-   DO NOT MENTION players who have been out 4+ weeks or most of the season.
-   These are NOT FACTORS - the team already adjusted. Only list RECENT injuries (last 2-3 weeks).
-   
-   STATUS DEFINITIONS:
-   - OUT: Confirmed not playing (only if RECENT injury)
-   - DOUBTFUL: Unlikely to play (75% chance OUT)
-   - QUESTIONABLE (Q): Game-time decision - CRITICAL for betting (50/50)
-   - PROBABLE: Expected to play but worth monitoring
-   
-   For EACH RECENT injured player (last 2-3 weeks only):
-   - Player name, position (G, F, C), and injury description
-   - DATE INJURED: When did this injury occur?
-   - GAMES MISSED: How many games have they missed?
-   
-   DO NOT list season-long injuries (4+ weeks out) - the team has already adjusted
-   Example: If "Walker Kessler out since November" - DO NOT MENTION
-   
-   Format: "Player (Pos) - STATUS - Injury - Since [date] - [X] games missed"
-   
-   NO EDITORIAL COMMENTS - Just list the facts. Do NOT add "huge impact" or "major loss" - Gary will investigate the impact himself.
-
-2. STARTING LINEUP (from RotoWire "NBA Lineups" page):
-   - Who is the CONFIRMED starting 5 for ${homeTeam}? (PG, SG, SF, PF, C)
-   - Who is the CONFIRMED starting 5 for ${awayTeam}? (PG, SG, SF, PF, C)
-   - If lineup not yet confirmed, note "PROJECTED" and when confirmation expected
-   - Any RECENT rotation changes (last 1-2 weeks) due to injuries?
-   - Who are the key bench players seeing increased minutes?
-
-3. RECENT INJURY IMPACT (CRITICAL - only for RECENT injuries):
-   - For players injured in the last 7 days: How has the team performed WITHOUT them?
-   - Who stepped up? Who is getting extra minutes?
-   - Is the team still figuring out rotations, or have they stabilized?
-
-4. KEY PLAYERS & NARRATIVE CONTEXT:
-   - Who are the top scorers/stars CONFIRMED playing tonight?
-   - ROOKIE UPDATES: Any high-impact 2025 rookies (e.g., Cooper Flagg) or young players whose significance is rising?
-   - STORYLINES: Any recent performance milestones, "revenge games", or player momentum shifts?
-   - LOAD MANAGEMENT: Any concerns about stars resting?
-   - TRADES: Any players recently traded or released from either team?
-
-5. EFFICIENCY BASELINE (WHO SHOULD WIN):
-   Search nba.com/stats or basketball-reference.com for these team-level metrics:
-   
-   ${homeTeam}:
-   - Offensive Rating (ORtg): Points per 100 possessions (league avg ~115)
-   - Defensive Rating (DRtg): Points allowed per 100 possessions (lower = better)
-   - Net Rating: ORtg - DRtg (positive = outscoring opponents)
-   - Pace: Possessions per game (affects total, stat inflation)
-   
-   ${awayTeam}:
-   - Offensive Rating (ORtg): Points per 100 possessions
-   - Defensive Rating (DRtg): Points allowed per 100 possessions
-   - Net Rating: ORtg - DRtg
-   - Pace: Possessions per game
-   
-   This tells Gary WHO SHOULD WIN based on efficiency. He then investigates what might change that picture tonight.
-   Just provide the NUMBERS - Gary interprets. No opinions.
-
-6. DYNAMIC MATCHUP FACTORS:
-   - Any back-to-back situations?
-   - Team drama, coaching changes, or locker room energy?
-   - Playoff race implications or "must-win" narratives?
-   - Any game-specific context not reflected in season averages?
-
-Be factual. Do NOT include any betting picks or predictions.
-
-CRITICAL ANTI-OPINION RULES:
-1. FACTS ONLY - Do NOT include betting predictions or analysis from articles
-2. NO OPINIONS - Extract FACTS only, ignore any betting advice you find
-3. YOUR OWN WORDS - Synthesize facts, do NOT plagiarize
-4. NO BETTING ADVICE - Gary makes his own picks - you provide CONTEXT only`;
-    } else if (sport === 'NHL' || sport === 'icehockey_nhl') {
-      prompt = `For the NHL game ${awayTeam} @ ${homeTeam} on ${today}:
-
-SOURCE OF TRUTH: Search "site:rotowire.com NHL lineups" for the most accurate lineup and injury data.
-RotoWire is the industry standard for game-day statuses - prioritize their information over other sources.
-
-1. INJURIES (from RotoWire) - RECENT INJURIES ONLY:
-   
-   *** SEASON-LONG EXCLUSION RULE ***
-   DO NOT MENTION players on LTIR or IR for 4+ weeks. These are NOT FACTORS.
-   The team already adjusted - only list RECENT injuries (last 2-3 weeks).
-   
-   STATUS DEFINITIONS:
-   - OUT: Confirmed not playing tonight (only if RECENT)
-   - DAY-TO-DAY: Game-time decision - CRITICAL for betting
-   
-   For EACH RECENT injured player (last 2-3 weeks only):
-   - Player name, position (C, W, D, G), and injury description
-   - DATE INJURED: When did this injury occur?
-   - GAMES MISSED: How many games have they missed?
-   
-   DO NOT list LTIR/IR players who have been out 4+ weeks - team stats reflect their absence
-   
-   Format: "Player (Pos) - STATUS - Injury - Since [date] - [X] games missed"
-   
-   NO EDITORIAL COMMENTS - Just list the facts. Do NOT add "huge impact" or "major loss" - Gary will investigate the impact himself.
-
-2. GOALIE SITUATION - CRITICAL (from RotoWire "NHL Lineups" page):
-   - Who is the CONFIRMED starting goalie for ${homeTeam}?
-   - Who is the CONFIRMED starting goalie for ${awayTeam}?
-   - If not yet confirmed, note "EXPECTED" vs "PROJECTED" and when confirmation expected
-   - Include their current season save percentage and goals-against average
-   - Is either team on a back-to-back? (affects goalie choice)
-   - Any goalie controversies or hot streaks?
-
-3. LINE COMBINATIONS (from RotoWire):
-   - Who are the top-line forwards (1st line) for each team?
-   - Who are the top defensive pairings?
-   - Any RECENT line changes (last 1-2 weeks) or call-ups from AHL?
-   - NARRATIVES: Any "revenge spots" for traded players, milestones, or team momentum shifts?
-   - ROOKIE IMPACT: Any young players making a sudden impact?
-
-4. RECENT INJURY IMPACT (CRITICAL - only for RECENT injuries):
-   - For players injured in the last 7 days: How has the team performed WITHOUT them?
-   - Who moved up in the lineup? Any AHL call-ups filling in?
-   - Is the team still figuring out line combinations, or have they stabilized?
-
-5. RECENT NEWS & DYNAMIC FACTORS (last 2 weeks only):
-   - Any MID-SEASON trades or waiver claims (not offseason moves)?
-   - Team drama, coaching hot seat, or playoff race?
-   - Is this a rivalry or divisional game?
-   - REVENGE GAME: Is any player facing their FORMER TEAM today?
-   DO NOT report offseason roster moves. Only report if directly relevant to THIS game.
-
-6. EFFICIENCY BASELINE (WHO SHOULD WIN):
-   Search moneypuck.com or naturalstattrick.com for these team-level metrics:
-   
-   ${homeTeam}:
-   - Expected Goals For (xGF) per 60: Offensive shot quality
-   - Expected Goals Against (xGA) per 60: Defensive quality
-   - Corsi For % (CF%): Shot attempt differential (>50% = controlling play)
-   - PDO: Shooting % + Save % (100 = average, >102 = lucky, <98 = unlucky)
-   
-   ${awayTeam}:
-   - Expected Goals For (xGF) per 60: Offensive shot quality
-   - Expected Goals Against (xGA) per 60: Defensive quality
-   - Corsi For % (CF%): Shot attempt differential
-   - PDO: Shooting % + Save % (regression indicator)
-   
-   This tells Gary WHO SHOULD WIN based on process metrics. He then investigates what might change that picture tonight (goalie, B2B, etc).
-   Just provide the NUMBERS - Gary interprets. No opinions.
-
-Be factual. Do NOT include any betting picks or predictions.
-
-CRITICAL ANTI-OPINION RULES:
-1. FACTS ONLY - Do NOT include betting predictions or analysis from articles
-2. NO OPINIONS - Extract FACTS only, ignore any betting advice
-3. YOUR OWN WORDS - Synthesize facts, do NOT plagiarize
-4. NO BETTING ADVICE - Gary makes his own picks`;
-    } else if (sport === 'NCAAB' || sport === 'basketball_ncaab') {
-      prompt = `CURRENT DATE: ${today}
-For the college basketball game ${awayTeam} @ ${homeTeam} on ${today}, provide UP-TO-DATE information:
-
-SOURCE OF TRUTH: Search https://www.rotowire.com/daily/ncaab/lineups.php for confirmed starting lineups and injury statuses.
-RotoWire is the industry standard for game-day statuses - prioritize their information over other sources.
-
-1. INJURIES (as of ${today}) - from RotoWire:
-   - List ALL players OUT, QUESTIONABLE, or DAY-TO-DAY for each team
-   - Include player name and position (G, F, C)
-   - Mark if RECENT (last 2 weeks) or SEASON-LONG
-   - College has fewer roster spots - each injury matters more
-
-2. STARTING LINEUP (from RotoWire "CBB Lineups" page):
-   - Who are the expected starting 5 for ${homeTeam}?
-   - Who are the expected starting 5 for ${awayTeam}?
-   - ROSTER CONTINUITY: What % of minutes/scoring is returning from last season for each team?
-   - Are they a "veteran core" (3+ upperclassmen starters) or a "portal-heavy" new roster?
-   - Any freshmen or key transfers making major impact this season?
-
-3. COACHING & TACTICAL STYLE:
-   - Who are the head coaches for ${homeTeam} and ${awayTeam}?
-   - What is each coach's "signature" defensive style? (e.g., Pack-line, 2-3 Zone, Press, Man-to-man)
-   - What is each team's offensive identity? (e.g., Post-heavy, 3PT reliant, Transition-focused, Motion offense)
-   - Any notable coaching experience gaps or tournament pedigree differences?
-
-4. KEY PLAYERS:
-   - Who are the leading scorers/stars for each team?
-   - Any players considering NBA draft (potential load management)?
-   - Any recent transfer portal entries/commitments affecting the roster?
-
-5. ADVANCED ANALYTICS (CRITICAL - current as of ${today}):
-   - KenPom rankings and ratings for both teams (AdjEM, AdjO, AdjD, Tempo)
-   - NET rankings for both teams
-   - Strength of Schedule (SOS) rankings
-   - Quad 1/2/3/4 records if available
-   - Any notable efficiency metrics or statistical edges
-
-6. VENUE & ENVIRONMENT:
-   - Where is this game being played? (Arena name and capacity)
-   - Is this venue known for being particularly hostile? (e.g., Student section proximity, altitude, noise level)
-   - What is ${homeTeam}'s record AT HOME this season, specifically in conference play?
-   - Any unique venue factors? (e.g., Denver altitude, small gym, historic arena)
-
-7. GAME CONTEXT:
-   - Is this a conference or non-conference game?
-   - Tournament/conference tournament implications?
-   - Any revenge angle from earlier this season or last season?
-   - Is this a rivalry game?
-   - Any scheduling quirks? (e.g., first game back from break, end of road trip)
-
-Be factual. Do NOT include any betting picks or predictions.
-
-CRITICAL ANTI-OPINION RULES:
-1. FACTS ONLY - Do NOT include betting predictions or analysis
-2. NO OPINIONS - Extract FACTS only, ignore betting advice
-3. YOUR OWN WORDS - Synthesize facts, do NOT plagiarize
-4. NO BETTING ADVICE - Gary makes his own picks`;
-    } else if (sport === 'NCAAF' || sport === 'americanfootball_ncaaf') {
-      // Detect if this is bowl season (Dec 14 - Jan 15)
-      // Use 'today' which is the parsed date string passed to this function
-      const parsedDate = new Date(today);
-      const month = parsedDate.getMonth ? parsedDate.getMonth() : 11; // Default to December
-      const day = parsedDate.getDate ? parsedDate.getDate() : 20;
-      const isBowlSeason = (month === 11 && day >= 14) || (month === 0 && day <= 15);
-      
-      if (isBowlSeason) {
-        // BOWL GAME PROMPT - Emphasize player opt-outs which are CRITICAL
-        prompt = `For the college football BOWL GAME ${awayTeam} @ ${homeTeam} on ${today}:
-
-🔴 SOURCE OF TRUTH: Search https://www.rotowire.com/cfootball/lineups.php for confirmed starting lineups and injury statuses.
-RotoWire is the industry standard for game-day statuses - prioritize their information over other sources.
-
-CRITICAL: PLAYER OPT-OUTS FOR NFL DRAFT PREPARATION
-This is a BOWL GAME. Many top players sit out to prepare for NFL Draft/Combine.
-1. LIST ALL CONFIRMED PLAYER OPT-OUTS for both teams (from RotoWire):
-   - Include player name, position, and NFL draft projection (if known)
-   - Star players who declared for NFL Draft and are NOT playing
-   - Key playmakers who announced they are skipping the bowl
-   - CRITICAL: These opt-outs DRASTICALLY change team capability
-
-2. QB SITUATION - CRITICAL (from RotoWire "CFB Lineups" page):
-   - Is the STARTING QB playing or has he opted out?
-   - Who is the STARTING QB for ${homeTeam}?
-   - Who is the STARTING QB for ${awayTeam}?
-   - Backup QB experience level if starter opted out?
-
-3. INJURIES (from RotoWire): List ALL players OUT, QUESTIONABLE, or DOUBTFUL for each team
-   - Include player name, position
-   - These are SEPARATE from opt-outs
-
-4. KEY REMAINING PLAYERS:
-   - Top RBs, WRs, and defensive playmakers who ARE playing
-   - Transfer portal entries who may have reduced motivation
-
-5. COACHING STATUS:
-   - Has either coach accepted a new job? (MAJOR distraction)
-   - Any coordinator departures?
-   - Team motivation level for this game?
-
-6. BOWL GAME CONTEXT:
-   - Bowl name and location
-   - Is this a neutral site or at one team's home stadium?
-   - Historical significance of this bowl
-
-7. WEATHER (if outdoor venue): Forecast for game time
-
-REMINDER: Player opt-outs are the #1 factor in bowl game betting. A team without 3-4 key starters is a COMPLETELY different team. Be thorough.`;
-      } else {
-        // Regular season prompt
-        prompt = `For the college football game ${awayTeam} @ ${homeTeam} on ${today}:
-
-🔴 SOURCE OF TRUTH: Search https://www.rotowire.com/cfootball/lineups.php for confirmed starting lineups and injury statuses.
-RotoWire is the industry standard for game-day statuses - prioritize their information over other sources.
-
-1. INJURIES (from RotoWire): List ALL players OUT, QUESTIONABLE, or DOUBTFUL for each team
-   - Include player name, position
-   - Mark if RECENT (last 2 weeks) or SEASON-LONG
-
-2. QB SITUATION - CRITICAL (from RotoWire "CFB Lineups" page):
-   - Who is the STARTING QB for ${homeTeam}?
-   - Who is the STARTING QB for ${awayTeam}?
-   - Any QB controversies or recent changes?
-   - Backup QB experience level?
-
-3. KEY PLAYER STATUS (from RotoWire):
-   - Top RBs, WRs, and defensive playmakers
-   - Any NFL draft prospects sitting out?
-   - Transfer portal impacts?
-
-4. GAME CONTEXT:
-   - Bowl game, conference championship, or CFP game?
-   - Conference or non-conference matchup?
-   - Rivalry significance?
-   - Coaching changes or hot seats?
-   - Is either team on upset alert?
-
-5. WEATHER (if applicable): Forecast for game time
-
-Be factual. Do NOT include any betting picks or predictions.
-
-CRITICAL ANTI-OPINION RULES:
-1. FACTS ONLY - Do NOT include betting predictions from articles
-2. NO OPINIONS - Extract FACTS only, ignore betting advice
-3. YOUR OWN WORDS - Synthesize facts, do NOT plagiarize
-4. NO BETTING ADVICE - Gary makes his own picks`;
-      }
-    } else if (sportKey === 'NHL') {
-      prompt = `For the NHL game ${awayTeam} @ ${homeTeam} on ${today}:
-
-1. STARTING GOALIES - CRITICAL:
-   - Who is the CONFIRMED or PROJECTED starting goalie for each team?
-   - What are their recent stats (SV%, GAA)?
-
-2. INJURIES - List SEPARATELY for each team:
-   
-   ${awayTeam} Injuries:
-   - List each player: "Player Name (POS) - Status - Injury details"
-   - Mark if RECENT (last 2 weeks) or SEASON-LONG (LTIR)
-   
-   ${homeTeam} Injuries:
-   - List each player: "Player Name (POS) - Status - Injury details"
-   - Mark if RECENT (last 2 weeks) or SEASON-LONG (LTIR)
-
-3. LINE COMBINATIONS:
-   - Current top 6 forwards for each team
-   - Any AHL call-ups or recent trades?
-
-4. KEY STORYLINES: Playoff positioning, recent form, back-to-back fatigue, revenge games.
-
-Be factual. Format injuries clearly with player names, positions, and status.
-
-🚫 CRITICAL: FACTS ONLY - No betting predictions or opinions from articles.`;
-    } else if (sportKey === 'NBA') {
-      prompt = `For the NBA game ${awayTeam} @ ${homeTeam} on ${today}:
-
-1. STARTING LINEUP:
-   - Who is the projected STARTING 5 for each team?
-2. INJURIES: Who is OUT, QUESTIONABLE, or DOUBTFUL for each team?
-   - Mark if RECENT (last 2 weeks) or SEASON-LONG (team stats already reflect absence)
-3. KEY PLAYER STATUS (Depth Chart):
-   - Status of top 3 scorers for each team.
-   - Any recent rotation changes or trades?
-4. GAME CONTEXT: Revenge games, rest situation (B2B), or playoff implications.
-
-Be factual. Do NOT include any betting picks or predictions.
-
-CRITICAL ANTI-OPINION RULES:
-1. FACTS ONLY - Do NOT include betting predictions from articles
-2. NO OPINIONS - Extract FACTS only, ignore betting advice
-3. YOUR OWN WORDS - Synthesize facts, do NOT plagiarize
-4. NO BETTING ADVICE - Gary makes his own picks`;
-    } else {
-    }
+    // Simple, natural prompt - like asking a knowledgeable fan
+    const sportName = {
+      'NFL': 'NFL', 'americanfootball_nfl': 'NFL',
+      'NBA': 'NBA', 'basketball_nba': 'NBA',
+      'NHL': 'NHL', 'icehockey_nhl': 'NHL',
+      'NCAAB': 'college basketball', 'basketball_ncaab': 'college basketball',
+      'NCAAF': 'college football', 'americanfootball_ncaaf': 'college football'
+    }[sport] || sport;
     
-    console.log(`[Scout Report] 🔍 Using Gemini Grounding for live context: ${awayTeam} @ ${homeTeam}`);
+    const isNFL = sport === 'NFL' || sport === 'americanfootball_nfl';
+    const isNCAAF = sport === 'NCAAF' || sport === 'americanfootball_ncaaf';
+    
+    // NFL/NCAAF-specific sections for weather and game context
+    const footballSpecificSections = (isNFL || isNCAAF) ? `
+
+**WEATHER & TEMPERATURE:**
+- ALWAYS include: Game-time temperature (°F)
+- ALWAYS include: Is this a dome/indoor stadium? (If yes, skip weather entirely)
+- ONLY include precipitation/wind details if conditions are CONFIRMED SEVERE:
+  * Active blizzard with accumulation during the game
+  * Sustained wind 25+ mph (not gusts - sustained)
+  * Sub-15°F with dangerous wind chill
+- If conditions are NOT severe, just state: "Temperature: X°F. No severe weather expected."
+- DO NOT include: forecasted rain chances, light snow predictions, or "might rain" language
+- Weather forecasts are unreliable - only report CONFIRMED current/imminent severe conditions
+
+**GAME CONTEXT:**
+- GAME TYPE: Is this Thursday Night Football (TNF), Sunday Night Football (SNF), Monday Night Football (MNF), Saturday game, or regular Sunday?${isNCAAF ? ' Or is this a bowl game, conference championship, or CFP game?' : ''}
+- DIVISIONAL: Are ${homeTeam} and ${awayTeam} in the same ${isNFL ? 'NFL division' : 'conference'}? If yes, which one?
+- PLAYOFF IMPLICATIONS: What are the current standings for both teams? Is either team fighting for a playoff spot, division title, or first-round bye?
+` : '';
+    
+    const prompt = `For the ${sportName} game ${awayTeam} @ ${homeTeam} on ${today}:
+
+What is the CURRENT STATE of each team heading into this game?
+
+### SEARCH & DATA INTEGRITY RULES (CRITICAL):
+1. **24-HOUR WINDOW**: ONLY use news, reports, and injury updates published within the last 24 hours of ${today}. 
+2. **STALE INJURY DETECTION**: If a report says a player "remains out", "continues to be sidelined", or "is still missing", this is a STALE injury. 
+3. **ORIGINAL DATE**: Aggressively look for the *original* date of injury or the *total games missed*. 
+   - If a player has been out for 10+ days or 4+ games, note it as "LONG-TERM / ADJUSTED".
+   - If a player got hurt 1-2 days ago, note it as "FRESH / NEW".
+
+**${homeTeam}:**
+- How have they been playing lately? (momentum - last 5-10 games, are they hot/cold?)
+- **LAST GAME STORY:** What happened in their most recent game? (Like a beat writer would describe it - was it a blowout, a close win, a buzzer beater, a defensive grind, a collapse? What was the narrative?)
+- **INJURIES FOR THIS GAME:** Who's currently OUT, DOUBTFUL, QUESTIONABLE, or LIMITED?
+  * For EACH injured player, include: (1) their status, (2) the injury type, (3) ORIGINAL DATE of injury (when they first went out), (4) TOTAL GAMES MISSED this season.
+  * Example format: "Player Name (Position) - OUT (knee) - out since Dec 12 (missed 15 games) - ADJUSTED" or "Player Name - OUT (ankle) - injured Jan 18 (missed 0 games) - FRESH"
+  * This timing context is CRITICAL - a player missing their first game is different from one who's been out 5 games
+- Any recent storylines? (who's stepped up, breakout performances, key headlines from last week)
+- What would a fan who watches them regularly know about their current situation?
+
+**${awayTeam}:**
+- How have they been playing lately? (momentum - last 5-10 games, are they hot/cold?)
+- **LAST GAME STORY:** What happened in their most recent game? (Like a beat writer would describe it - was it a blowout, a close win, a buzzer beater, a defensive grind, a collapse? What was the narrative?)
+- **INJURIES FOR THIS GAME:** Who's currently OUT, DOUBTFUL, QUESTIONABLE, or LIMITED?
+  * For EACH injured player, include: (1) their status, (2) the injury type, (3) ORIGINAL DATE of injury (when they first went out), (4) TOTAL GAMES MISSED this season.
+  * Example format: "Player Name (Position) - OUT (knee) - out since Dec 12 (missed 15 games) - ADJUSTED" or "Player Name - OUT (ankle) - injured Jan 18 (missed 0 games) - FRESH"
+  * This timing context is CRITICAL - a player missing their first game is different from one who's been out 5 games
+- Any recent storylines? (who's stepped up, breakout performances, key headlines from last week)
+- What would a fan who watches them regularly know about their current situation?
+${footballSpecificSections}
+**IMPORTANT GUIDELINES:**
+- Today is ${today}. Use only information from the LAST 7 DAYS for momentum, but use the FULL SEASON for injury history.
+- If a player has been out ALL SEASON or for months, note that it's NOT new - the team has already adjusted.
+- Focus on CURRENT momentum and recent developments, not season-long narratives.
+- A knowledgeable fan should recognize this as accurate, up-to-date context.
+
+Be factual and current. No betting predictions or opinions.`;
+
+    console.log(`[Scout Report] Fetching CURRENT STATE for ${awayTeam} @ ${homeTeam}...`);
     const startTime = Date.now();
     
     const result = await model.generateContent(prompt);
@@ -3202,36 +2787,145 @@ CRITICAL ANTI-OPINION RULES:
     const text = response.text();
     
     const duration = Date.now() - startTime;
-    console.log(`[Scout Report] Gemini Grounding response in ${duration}ms`);
+    console.log(`[Scout Report] Current state fetched in ${duration}ms`);
     
-    // Debug log: Show first 500 chars of raw response to verify content is being retrieved
+    // ═══════════════════════════════════════════════════════════════════════════
+    // VALIDATION: Ensure grounding response is valid and game-specific
+    // If grounding returns garbage, we FAIL HARD rather than proceed with bad data
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    // Check 1: Response must have minimum length (garbage responses are often <100 chars)
+    const MIN_RESPONSE_LENGTH = 200;
+    if (!text || text.length < MIN_RESPONSE_LENGTH) {
+      const errorMsg = `Grounding response too short (${text?.length || 0} chars, minimum ${MIN_RESPONSE_LENGTH}). Response: "${text?.substring(0, 100) || 'empty'}"`;
+      console.error(`[Scout Report] [GROUNDING FAIL] ${errorMsg}`);
+      throw new Error(`Current state grounding failed: ${errorMsg}`);
+    }
+    
+    // Check 2: Response must mention at least one of the teams (validates it's about THIS game)
+    const textLower = text.toLowerCase();
+    const homeTeamLower = homeTeam.toLowerCase();
+    const awayTeamLower = awayTeam.toLowerCase();
+    const homeMascot = homeTeam.split(' ').pop().toLowerCase();
+    const awayMascot = awayTeam.split(' ').pop().toLowerCase();
+    
+    const mentionsHome = textLower.includes(homeTeamLower) || textLower.includes(homeMascot);
+    const mentionsAway = textLower.includes(awayTeamLower) || textLower.includes(awayMascot);
+    
+    if (!mentionsHome && !mentionsAway) {
+      const errorMsg = `Grounding response does not mention either team. Expected "${homeTeam}" or "${awayTeam}" in response.`;
+      console.error(`[Scout Report] [GROUNDING FAIL] ${errorMsg}`);
+      console.error(`[Scout Report] Response preview: ${text.substring(0, 300)}`);
+      throw new Error(`Current state grounding failed: ${errorMsg}`);
+    }
+    
+    // Check 3: Response should not look like an error message or refusal
+    const errorIndicators = [
+      'i cannot', 'i\'m unable', 'i don\'t have', 'no information available',
+      'unable to find', 'could not find', 'error:', 'sorry,', 'i apologize'
+    ];
+    const looksLikeError = errorIndicators.some(indicator => textLower.includes(indicator));
+    if (looksLikeError && text.length < 500) {
+      const errorMsg = `Grounding response looks like an error or refusal: "${text.substring(0, 200)}"`;
+      console.error(`[Scout Report] [GROUNDING FAIL] ${errorMsg}`);
+      throw new Error(`Current state grounding failed: ${errorMsg}`);
+    }
+    
+    // Validation passed - log and return
+    console.log(`[Scout Report] [GROUNDING OK] Response validated (${text.length} chars, mentions teams: home=${mentionsHome}, away=${mentionsAway})`);
+    
     if (text) {
-      const preview = text.substring(0, 500).replace(/\n/g, ' ');
-      console.log(`[Scout Report] 📄 Grounding raw preview: ${preview}...`);
+      const preview = text.substring(0, 300).replace(/\n/g, ' ');
+      console.log(`[Scout Report] Current state preview: ${preview}...`);
+      // Log full current state for debugging
+      console.log(`[Scout Report] === FULL CURRENT STATE START ===`);
+      console.log(text);
+      console.log(`[Scout Report] === FULL CURRENT STATE END ===`);
     }
     
-    // Log grounding metadata if available
-    const candidate = response.candidates?.[0];
-    const groundingMetadata = candidate?.groundingMetadata;
-    if (groundingMetadata?.webSearchQueries?.length > 0) {
-      console.log(`[Scout Report] 🔍 Grounded searches: "${groundingMetadata.webSearchQueries.join('", "')}"`);
-    }
-    
-    // Parse the response to extract injury information
-    const groundedInjuries = parseGroundedInjuries(text, homeTeam, awayTeam);
-    
-    // Create an enhanced object that includes the raw text for Gary's organic reading
     return {
-      home: groundedInjuries.home,
-      away: groundedInjuries.away,
-      groundedRaw: text, // Gary gets the FULL text of the search results
-      groundingUsed: !!groundingMetadata?.webSearchQueries?.length
+      groundedRaw: text,
+      groundingUsed: true
     };
     
   } catch (error) {
-    console.warn(`[Scout Report] Gemini Grounding failed: ${error.message}`);
+    console.warn(`[Scout Report] Current state fetch failed: ${error.message}`);
     return null;
   }
+}
+
+/**
+ * Scrub mentions of "ghost" players and long-term injured players from the grounding narrative
+ * @param {string} narrative - The narrative to clean
+ * @param {string[]} allowedPlayers - Players allowed to be mentioned
+ * @param {string} homeTeam - Home team name
+ * @param {string} awayTeam - Away team name  
+ * @param {string[]} excludedPlayers - Players to ALWAYS remove (long-term injuries)
+ */
+async function scrubNarrative(narrative, allowedPlayers, homeTeam, awayTeam, excludedPlayers = []) {
+  if (!narrative || !allowedPlayers || allowedPlayers.length === 0) return narrative;
+
+  const genAI = getGeminiClient();
+  if (!genAI) return narrative;
+
+  try {
+    const model = genAI.getGenerativeModel({ 
+      model: 'gemini-3-flash-preview',
+      safetySettings: [
+        { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+        { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+        { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+      ]
+    });
+    
+    const excludedSection = excludedPlayers.length > 0 
+      ? `\n### EXCLUDED PLAYERS (LONG-TERM INJURIES - ALWAYS REMOVE):\n${excludedPlayers.join(', ')}\n`
+      : '';
+    
+    const prompt = `You are a data integrity tool. I will provide a news report about a sports matchup.
+
+### TASK: 
+1. Remove any mentions of players in the EXCLUDED list (long-term injuries - team has adjusted, not relevant)
+2. Remove any mentions of players NOT in the VALID list
+${excludedSection}
+### VALID PLAYERS:
+${allowedPlayers.join(', ')}
+
+### NEWS REPORT TO CLEAN:
+${narrative}
+
+### STRICT RULES:
+1. PRIORITY: If a sentence/bullet mentions ANY player in the EXCLUDED list, DELETE the entire sentence/bullet.
+2. If a sentence mentions a player NOT in the VALID list, DELETE the entire sentence.
+3. If a bullet point discusses a "ghost" player or long-term injury, DELETE the entire bullet.
+4. If a paragraph discusses the impact of an EXCLUDED player, DELETE that paragraph.
+5. DO NOT add any new info.
+6. DO NOT explain your changes.
+7. Return ONLY the cleaned text.
+8. Preserve the headers and bullets for players who ARE in the valid list and NOT in excluded.
+
+Cleaned Report:`;
+
+    const result = await model.generateContent(prompt);
+    const cleaned = (result.response?.text() || narrative).trim();
+    
+    if (cleaned.length < 50 && narrative.length > 500) {
+      console.warn(`[Scout Report] Scrubbing was too aggressive, falling back to original narrative`);
+      return narrative;
+    }
+    
+    return cleaned;
+  } catch (e) {
+    console.warn(`[Scout Report] Narrative scrubbing failed: ${e.message}`);
+    return narrative;
+  }
+}
+
+// Keep fetchGroundedContext as a deprecated alias for backward compatibility
+async function fetchGroundedContext(homeTeam, awayTeam, sport, gameDate, options = {}) {
+  // Redirect to the new simple function
+  return fetchCurrentState(homeTeam, awayTeam, sport, gameDate);
 }
 
 /**
@@ -3278,19 +2972,27 @@ function parseGroundedInjuries(content, homeTeam, awayTeam) {
     // Skip if name is too short or looks like a position
     if (playerName.length < 4 || /^[A-Z]{1,3}$/.test(playerName)) return;
     
-    // CRITICAL: Skip if name looks like duration/date text instead of a player name
-    // This prevents "until Feb", "Reserve Dec", "at least Dec" from being stored as player names
-    const lowerName = playerName.toLowerCase();
+    // CRITICAL: Skip if name looks like duration/date text or status instead of a player name
+    // This prevents "until Feb", "Reserve Dec", "at least Dec", "QUESTIONABLE" from being stored as player names
+    const lowerName = playerName.toLowerCase().trim();
+    
+    // Skip injury status words that might get parsed as names
+    const statusWords = ['questionable', 'doubtful', 'probable', 'out', 'injured', 'day-to-day', 'gtd', 'ir', 'pup'];
+    if (statusWords.includes(lowerName)) {
+      // Silent skip for common status words (not worth logging)
+      return;
+    }
+    
     const durationPatterns = [
       'until', 'reserve', 'at least', 'through', 'expected', 'return',
       'january', 'february', 'march', 'april', 'may', 'june', 'july', 
       'august', 'september', 'october', 'november', 'december',
       'jan', 'feb', 'mar', 'apr', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec',
       'week', 'weeks', 'month', 'day', 'days', 'indefinitely', 'tbd',
-      ' and ', 'with ', 'note:', 'context:'
+      ' and ', 'with ', 'note:', 'context:', 'status:', 'injury:'
     ];
     if (durationPatterns.some(pattern => lowerName.includes(pattern))) {
-      console.log(`[Scout Report] Parser: Skipping invalid player name (looks like duration): "${playerName}"`);
+      // Silent skip for obvious non-names
       return;
     }
     
@@ -3449,39 +3151,35 @@ async function fetchGroundingInjuries(homeTeam, awayTeam, sport) {
     // Sport-specific queries for Gemini Grounding
     let query;
     if (sport === 'NHL' || sport === 'icehockey_nhl') {
-      // NHL-specific query - FOCUSED ON INJURIES ONLY (lineups fetched separately)
-      // Query EACH team separately to avoid truncation
-      const makeNhlInjuryQuery = (teamName, opponentName, statusFocus) => `Search site:rotowire.com/nhl/lineups.php for the matchup ${teamName} vs ${opponentName} on ${today}
-
-IMPORTANT: Extract the INJURIES section from Rotowire for ${teamName} ONLY. List EVERY player shown there (no omissions).
-FOCUS: Only include players with status ${statusFocus} from Rotowire.
-
-Return in this EXACT format:
-
-INJURIES - ${teamName}:
-- [Full Player Name] | [Position: LW/RW/C/D/G] | [Status]
-
-CRITICAL REQUIREMENTS:
-1. Include ALL players listed under "INJURIES" on Rotowire for ${teamName} (no summarizing)
-2. ONLY include players whose status matches: ${statusFocus}
-3. Use the EXACT status from Rotowire:
-   - DTD = Day-to-Day (use "DTD")
-   - OUT = Out for game
-   - IR = Injured Reserve
-   - IR-LT = Long-Term Injured Reserve
-4. Do NOT convert DTD to OUT - keep DTD as DTD
-5. Use FULL player names (e.g., "Max McCormick" not "M. McCormick")
-6. If more than 5 injuries, list ALL of them (do NOT stop early, do NOT use "etc")`;
-
+      // NHL-specific: Search rotowire.com/hockey/nhl-lineups.php directly
+      // This page ALWAYS shows TODAY's lineups and injuries by default
       console.log(`[Scout Report] Using Gemini Grounding for injury data: ${homeTeam} vs ${awayTeam}`);
 
-      const [awayOutResponse, awayIrResponse, awayDefenseResponse, homeOutResponse, homeIrResponse, homeDefenseResponse] = await Promise.all([
-        geminiGroundingSearch(makeNhlInjuryQuery(awayTeam, homeTeam, 'OUT or DTD'), { temperature: 1.0, maxTokens: 3000 }),
-        geminiGroundingSearch(makeNhlInjuryQuery(awayTeam, homeTeam, 'IR or IR-LT'), { temperature: 1.0, maxTokens: 3000 }),
-        geminiGroundingSearch(makeNhlInjuryQuery(awayTeam, homeTeam, 'Defensemen (D) only'), { temperature: 1.0, maxTokens: 3000 }),
-        geminiGroundingSearch(makeNhlInjuryQuery(homeTeam, awayTeam, 'OUT or DTD'), { temperature: 1.0, maxTokens: 3000 }),
-        geminiGroundingSearch(makeNhlInjuryQuery(homeTeam, awayTeam, 'IR or IR-LT'), { temperature: 1.0, maxTokens: 3000 }),
-        geminiGroundingSearch(makeNhlInjuryQuery(homeTeam, awayTeam, 'Defensemen (D) only'), { temperature: 1.0, maxTokens: 3000 })
+      // SIMPLE DIRECT QUERY: Just search the Rotowire NHL lineups page for the matchup
+      // The page shows today's games by default - no need for complex date logic
+      const makeNhlInjuryQuery = (teamName, opponentName) => `Search rotowire.com/hockey/nhl-lineups.php for the ${teamName} vs ${opponentName} game.
+
+Look at the INJURIES section listed under the ${teamName} lineup card on that page.
+
+Return in this EXACT format:
+INJURIES - ${teamName}:
+- [Full Name] | [Position] | [Status]
+
+Example format:
+- Marcus Johansson | LW | OUT
+- Jonas Brodin | D | IR
+- Matt Boldy | LW | IR
+
+RULES:
+1. List ALL players shown in the INJURIES section for ${teamName} on that page
+2. Use FULL player names (Marcus Johansson, not M. Johansson)
+3. Use the EXACT status shown: OUT, IR, IR-LT, IR-NR, or DTD
+4. If no injuries are listed, return "INJURIES - ${teamName}: None"
+5. Do NOT add players that aren't listed on the page`;
+
+      const [awayResponse, homeResponse] = await Promise.all([
+        geminiGroundingSearch(makeNhlInjuryQuery(awayTeam, homeTeam), { temperature: 0.3, maxTokens: 1500 }),
+        geminiGroundingSearch(makeNhlInjuryQuery(homeTeam, awayTeam), { temperature: 0.3, maxTokens: 1500 })
       ]);
 
       const combined = {
@@ -3495,10 +3193,18 @@ CRITICAL REQUIREMENTS:
         const parsed = parseGroundingInjuries(response.data, homeTeam, awayTeam, sport);
         const list = side === 'home' ? (parsed.home || []) : (parsed.away || []);
         const existing = side === 'home' ? combined.home : combined.away;
-        const seen = new Set(existing.map(i => (i.player || '').toLowerCase()));
+        
+        // Helper to get player name as string (handles both string and object formats)
+        const getPlayerKey = (p) => {
+          if (!p) return '';
+          if (typeof p === 'string') return p.toLowerCase();
+          return `${p.first_name || ''} ${p.last_name || ''}`.trim().toLowerCase();
+        };
+        
+        const seen = new Set(existing.map(i => getPlayerKey(i.player)));
         for (const item of list) {
-          const key = (item.player || '').toLowerCase();
-          if (!seen.has(key)) {
+          const key = getPlayerKey(item.player);
+          if (key && !seen.has(key)) {
             existing.push(item);
             seen.add(key);
           }
@@ -3506,12 +3212,9 @@ CRITICAL REQUIREMENTS:
         combined.groundingRaw = `${combined.groundingRaw || ''}\n${response.data}`.trim();
       };
 
-      mergeParsed(awayOutResponse, 'away');
-      mergeParsed(awayIrResponse, 'away');
-      mergeParsed(awayDefenseResponse, 'away');
-      mergeParsed(homeOutResponse, 'home');
-      mergeParsed(homeIrResponse, 'home');
-      mergeParsed(homeDefenseResponse, 'home');
+      // Parse the 2 comprehensive responses (one per team)
+      mergeParsed(awayResponse, 'away');
+      mergeParsed(homeResponse, 'home');
 
       console.log(`[Scout Report] Grounding injuries: ${combined.home.length} for ${homeTeam}, ${combined.away.length} for ${awayTeam}`);
       return combined;
@@ -3586,16 +3289,19 @@ CRITICAL ANTI-OPINION RULES:
 Return in this EXACT format (no extra injuries, no commentary):
 
 MAY NOT PLAY - ${awayTeam}:
-- [Player Name] | [Status: Out/Ques/Prob/Doubt/GTD/OFS]
+- [Player Name] | [Status: Out/Ques/Prob/Doubt/GTD/OFS] | [Duration: e.g. out since Dec 12, missed 15 games]
 
 MAY NOT PLAY - ${homeTeam}:
-- [Player Name] | [Status: Out/Ques/Prob/Doubt/GTD/OFS]
+- [Player Name] | [Status: Out/Ques/Prob/Doubt/GTD/OFS] | [Duration: e.g. out since Dec 12, missed 15 games]
 
 STARTING LINEUPS:
 ${awayTeam}: PG [Name], SG [Name], SF [Name], PF [Name], C [Name]
 ${homeTeam}: PG [Name], SG [Name], SF [Name], PF [Name], C [Name]
 
-CRITICAL: Use EXACT statuses from Rotowire. "Out" means confirmed out, "Ques" means questionable.`;
+CRITICAL: 
+1. Use EXACT statuses from Rotowire. "Out" means confirmed out, "Ques" means questionable.
+2. Aggressively look for the ORIGINAL injury date or TOTAL games missed for each player. 
+3. If no duration is found, just leave that part empty.`;
 
     } else {
       query = `Current injuries for ${sport} game ${awayTeam} vs ${homeTeam} as of ${today}. List all players OUT, DOUBTFUL, or QUESTIONABLE with their status and injury type.`;
@@ -3626,13 +3332,16 @@ CRITICAL: Use EXACT statuses from Rotowire. "Out" means confirmed out, "Ques" me
 
 /**
  * Parse Gemini Grounding response to extract injury information
+ * Returns: { home: [], away: [], filteredLongTerm: [] } - filteredLongTerm contains names of players
+ * filtered out due to 14+ day absence (for narrative scrubbing)
  */
 function parseGroundingInjuries(content, homeTeam, awayTeam, sport = '') {
-  const injuries = { home: [], away: [] };
+  const injuries = { home: [], away: [], filteredLongTerm: [] };
   const foundPlayers = new Set(); // Prevent duplicates
   
   // Normalize status to standard format
   // CRITICAL: Preserve GTD (Game Time Decision) as distinct from Questionable
+  // CRITICAL: Handle Prob/Probable correctly - these players are EXPECTED TO PLAY
   const normalizeStatus = (status) => {
     const s = status.toLowerCase().trim();
     if (s.includes('ltir') || s.includes('long-term') || s.includes('long term')) return 'LTIR';
@@ -3640,15 +3349,26 @@ function parseGroundingInjuries(content, homeTeam, awayTeam, sport = '') {
     if (s.includes('ofs') || s.includes('out for season')) return 'OFS';
     // GTD is a specific status - game time decision, preserve it
     if (s === 'gtd' || s.includes('gtd') || s.includes('game-time decision') || s.includes('game time decision')) return 'GTD';
+    // Probable = ~75% chance to play (expected to play) - NOT a concern
+    if (s.includes('prob') || s.includes('probable')) return 'Prob';
     if (s.includes('out') || s.includes('ruled out')) return 'Out';
-    if (s.includes('doubtful')) return 'Doubtful';
-    if (s.includes('questionable') || s.includes('day-to-day')) return 'Questionable';
-    return 'Out'; // Default to Out for unknown statuses
+    if (s.includes('doubtful') || s.includes('doubt')) return 'Doubtful';
+    if (s.includes('questionable') || s.includes('ques') || s.includes('day-to-day')) return 'Questionable';
+    return 'Unknown'; // Default to Unknown for unrecognized statuses (don't assume Out)
   };
   
   // Extract duration context from injury text
   const extractDuration = (text) => {
     const t = text.toLowerCase();
+    
+    // Detect "missed X games" - if X >= 6 (NBA), it's likely 14+ days
+    const gamesMatch = t.match(/missed\s+(\d+)\s+games/);
+    if (gamesMatch) {
+      const games = parseInt(gamesMatch[1], 10);
+      if (games >= 6) return { duration: 'SEASON-LONG', isEdge: false, note: `Missed ${games} games` };
+      if (games >= 3) return { duration: 'MID-SEASON', isEdge: false, note: `Missed ${games} games` };
+    }
+
     // SEASON-LONG indicators - team stats already reflect their absence
     if (t.includes('season-long') || t.includes('all season') || t.includes('since week 1') || 
         t.includes('since week 2') || t.includes('since week 3') || t.includes('most of the season') ||
@@ -3656,7 +3376,8 @@ function parseGroundingInjuries(content, homeTeam, awayTeam, sport = '') {
         t.includes('indefinitely') || t.includes('no timetable') || t.includes('no return') ||
         t.includes('season-ending') || t.includes('out for season') ||
         t.includes('won\'t return') || t.includes('will not return') ||
-        t.includes('since october') || t.includes('since november') || t.includes('since the start')) {
+        t.includes('since october') || t.includes('since november') || t.includes('since december') ||
+        t.includes('since the start') || t.includes('long-term') || t.includes('long term')) {
       return { duration: 'SEASON-LONG', isEdge: false, note: '' };
     }
     if (t.includes('mid-season') || t.includes('since week 4') || t.includes('since week 5') ||
@@ -3675,7 +3396,7 @@ function parseGroundingInjuries(content, homeTeam, awayTeam, sport = '') {
     // Default: check if IR (usually long-term)
     return { duration: 'UNKNOWN', isEdge: null, note: '' };
   };
-  
+
   // NBA-specific: Prefer strict parsing from "MAY NOT PLAY" sections
   const parseNbaMayNotPlay = () => {
     const result = { home: [], away: [] };
@@ -3706,11 +3427,26 @@ function parseGroundingInjuries(content, homeTeam, awayTeam, sport = '') {
       if (!name || name.length < 3) return;
       const playerKey = name.toLowerCase();
       if (foundPlayers.has(playerKey)) return;
-      foundPlayers.add(playerKey);
 
-      const nameParts = name.split(' ');
       const durationInfo = extractDuration(rawLine);
       const normalizedStatus = normalizeStatus(status);
+
+      // NBA & NHL HARD FILTER: 14-day rule
+      // If the injury is SEASON-LONG or MID-SEASON (based on missed games/keywords),
+      // and it's an "OUT" status, filter it out.
+      // We keep Questionable/Doubtful even if long-term because they represent a POTENTIAL RETURN.
+      const isNBA = sport === 'NBA' || sport === 'basketball_nba';
+      const isNHL = sport === 'NHL' || sport === 'icehockey_nhl';
+      if ((isNBA || isNHL) && normalizedStatus === 'Out' && 
+          (durationInfo.duration === 'SEASON-LONG' || durationInfo.duration === 'MID-SEASON')) {
+        console.log(`[Scout Report] Filtering long-term ${sport} injury: ${name} (${durationInfo.duration})`);
+        // Track filtered player name for narrative scrubbing
+        result.filteredLongTerm.push(name);
+        return;
+      }
+
+      foundPlayers.add(playerKey);
+      const nameParts = name.split(' ');
 
       result[team].push({
         player: {
@@ -3728,16 +3464,31 @@ function parseGroundingInjuries(content, homeTeam, awayTeam, sport = '') {
 
     const parseInjuryLine = (line, team) => {
       const patterns = [
+        // Triple Pipe (New): - Name | Status | Duration
+        /[-•*]\s*([A-Z][a-z'.-]+(?:\s+[A-Z][a-z'.-]+)+)\s*\|\s*(Out|Ques|Questionable|Prob|Probable|Doubt|Doubtful|GTD|OFS|IR|LTIR)\s*\|\s*([^|\n]+)/i,
+        // Standard: - Name (Pos) - Status
         /[-•*]\s*([A-Z][a-z'.-]+(?:\s+[A-Z][a-z'.-]+)+)\s*(?:\([^)]+\))?\s*[-–:|]\s*(Out|Ques|Questionable|Prob|Probable|Doubt|Doubtful|GTD|OFS|IR|LTIR)\b/i,
-        /[-•*]\s*([A-Z]\.\s*[A-Z][a-z'.-]+)\s*(?:\([^)]+\))?\s*[-–:|]?\s*(Out|Ques|Questionable|Prob|Probable|Doubt|Doubtful|GTD|OFS|IR|LTIR)\b/i,
-        /([A-Z][a-z'.-]+(?:\s+[A-Z][a-z'.-]+)+)\s+(Out|Ques|Questionable|Prob|Probable|Doubt|Doubtful|GTD|OFS|IR|LTIR)\b/i,
-        /([A-Z]\.\s*[A-Z][a-z'.-]+)\s+(Out|Ques|Questionable|Prob|Probable|Doubt|Doubtful|GTD|OFS|IR|LTIR)\b/i
+        // Status First: - Status: Name
+        /[-•*]\s*(Out|Ques|Questionable|Prob|Probable|Doubt|Doubtful|GTD|OFS|IR|LTIR)\s*[:]\s*([A-Z][a-z'.-]+(?:\s+[A-Z][a-z'.-]+)+)/i,
+        // Pipe format: - Name | Status: Status
+        /[-•*]\s*([A-Z][a-z'.-]+(?:\s+[A-Z][a-z'.-]+)+)\s*\|\s*Status:\s*(Out|Ques|Questionable|Prob|Probable|Doubt|Doubtful|GTD|OFS|IR|LTIR)\b/i,
+        // Simple Pipe: Name | Status
+        /([A-Z][a-z'.-]+(?:\s+[A-Z][a-z'.-]+)+)\s*\|\s*(Out|Ques|Questionable|Prob|Probable|Doubt|Doubtful|GTD|OFS|IR|LTIR)\b/i,
+        // No bullet: Name (Pos) Status
+        /([A-Z][a-z'.-]+(?:\s+[A-Z][a-z'.-]+)+)\s*(?:\([^)]+\))?\s+(Out|Ques|Questionable|Prob|Probable|Doubt|Doubtful|GTD|OFS|IR|LTIR)\b/i
       ];
 
       for (const pattern of patterns) {
         const match = line.match(pattern);
         if (match) {
-          addParsedInjury(team, match[1], match[2], line);
+          // Special handling for triple pipe to capture duration context
+          if (pattern.source.includes('\\|\\s*([^|\\n]+)')) {
+            addParsedInjury(team, match[1], match[2], line);
+          } else if (pattern.source.startsWith('[-•*]\\s*(Out|Ques')) {
+            addParsedInjury(team, match[2], match[1], line);
+          } else {
+            addParsedInjury(team, match[1], match[2], line);
+          }
           return true;
         }
       }
@@ -3851,8 +3602,13 @@ function parseGroundingInjuries(content, homeTeam, awayTeam, sport = '') {
       else if (normalizedStatus.includes('OUT') || normalizedStatus === 'O') normalizedStatus = 'OUT';
       else normalizedStatus = status; // Preserve original if unknown
 
+      const nameParts = playerName.split(' ');
       result[team].push({
-        player: playerName,
+        player: {
+          first_name: nameParts[0],
+          last_name: nameParts.slice(1).join(' '),
+          position: ''
+        },
         status: normalizedStatus,
         source: 'rotowire'
       });
@@ -4399,7 +4155,7 @@ async function mergeInjuries(bdlInjuries, groundingInjuries, homeTeamName, awayT
  * Format comprehensive injury report - this goes at the TOP of the scout report
  * Now includes duration context to distinguish RECENT vs MID-SEASON vs SEASON-LONG
  */
-function formatInjuryReport(homeTeam, awayTeam, injuries) {
+function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey) {
   const lines = [];
   
   // Categorize injuries by importance/duration
@@ -4469,12 +4225,17 @@ function formatInjuryReport(homeTeam, awayTeam, injuries) {
     }
     
     // ONLY show RECENT OUT players (not season-long IR/LTIR)
-    // Season-long absences are already reflected in team stats - no analytical value
+    // NBA & NHL: Filter out players out for 14+ days (approx 6 games)
+    // These absences are already reflected in team stats and identities.
     const recentOut = cats.out.filter(i => {
       const days = i.daysSinceReport;
+      const isNBA = sportKey === 'NBA';
+      const isNHL = sportKey === 'NHL';
+      const threshold = (isNBA || isNHL) ? 14 : 21; // 14 days for NBA/NHL (~6 games), 21 for others
+      
       const isSeasonLong = i.duration === 'SEASON-LONG' || 
         i.status === 'IR' || i.status === 'LTIR' || i.status === 'Injured Reserve' ||
-        (days !== null && days !== undefined && days > 21); // Out 3+ weeks = season-long
+        (days !== null && days !== undefined && days > threshold);
       return !isSeasonLong;
     });
     
@@ -4502,10 +4263,31 @@ function formatInjuryReport(homeTeam, awayTeam, injuries) {
       lines.push(`  No recent injuries affecting tonight's game`);
     }
     lines.push('');
+    
+    // Return the names of filtered season-long injuries for the explicit warning
+    const filteredNames = [...cats.out.filter(i => !recentOut.includes(i)), ...cats.seasonal]
+      .map(i => {
+        const name = `${i.player?.first_name || ''} ${i.player?.last_name || ''}`.trim() || i.name;
+        return name;
+      })
+      .filter(n => n);
+    return filteredNames;
   };
 
-  renderTeam(homeTeam, homeCats, '[HOME]');
-  renderTeam(awayTeam, awayCats, '[AWAY]');
+  const homeFiltered = renderTeam(homeTeam, homeCats, '[HOME]');
+  const awayFiltered = renderTeam(awayTeam, awayCats, '[AWAY]');
+  
+  // Add explicit "DO NOT CITE" warning for season-long injuries
+  const allFiltered = [...(homeFiltered || []), ...(awayFiltered || [])];
+  if (allFiltered.length > 0) {
+    lines.push('');
+    lines.push('[IMPORTANT] PRICED-IN ABSENCES (DO NOT CITE AS EDGES):');
+    lines.push(`   The following players have been out 3+ weeks. The team made the playoffs without them.`);
+    lines.push(`   Their absence is ALREADY REFLECTED in team stats and the betting line.`);
+    lines.push(`   → ${allFiltered.join(', ')}`);
+    lines.push(`   Focus on WHO IS PLAYING tonight, not who has been gone for weeks.`);
+    lines.push('');
+  }
   
   return lines.join('\n');
 }
@@ -4817,11 +4599,12 @@ function findTeam(teams, teamName) {
 
 /**
  * Calculate record from season stats
+ * Note: BDL can return null for 0 wins/losses, so we use ?? to coerce to 0
  */
 function calculateRecord(stats) {
   if (!stats) return 'N/A';
-  if (stats.wins !== undefined && stats.losses !== undefined) {
-    return `${stats.wins}-${stats.losses}`;
+  if (stats.wins !== undefined || stats.losses !== undefined) {
+    return `${stats.wins ?? 0}-${stats.losses ?? 0}`;
   }
   return 'N/A';
 }
@@ -4934,6 +4717,10 @@ async function fetchQBStatsByName(qbName, teamName) {
       console.log(`[Scout Report] ✓ Found BDL stats for ${qbName}: ${passingYards} yds, ${qb.passing_touchdowns || 0} TDs, ${gamesPlayed} GP`);
     }
     
+    // Get the OFFICIAL experience from BDL (e.g., "2nd Season", "7th Season")
+    // This is authoritative - do NOT use games_played to infer rookie status
+    const officialExperience = qb.player?.experience || null;
+    
     return {
       id: qb.player?.id,
       firstName: qb.player?.first_name,
@@ -4943,6 +4730,8 @@ async function fetchQBStatsByName(qbName, teamName) {
       team: qb.player?.team?.full_name || qb.player?.team?.name,
       teamAbbr: qb.player?.team?.abbreviation,
       jerseyNumber: qb.player?.jersey_number,
+      experience: officialExperience, // BDL authoritative: "2nd Season", "7th Season", etc.
+      age: qb.player?.age,
       passingYards: passingYards,
       passingTds: qb.passing_touchdowns || 0,
       passingInterceptions: qb.passing_interceptions || 0,
@@ -5043,18 +4832,20 @@ async function fetchStartingQBs(homeTeam, awayTeam, sport, injuries = null) {
       }
     }
     
-    // Log results
+    // Log results - INCLUDE EXPERIENCE to prevent training data leakage (e.g., calling a 2nd-year QB a "rookie")
     if (homeQB && homeQB.name !== 'See grounded context') {
       const backupNote = homeQB.isBackup ? ' [BACKUP - starter injured]' : '';
       const injuryNote = homeQB.injuryStatus ? ` (${homeQB.injuryStatus})` : '';
-      console.log(`[Scout Report] Home QB: ${homeQB.name} (${homeQB.passingYards || 0} yds, ${homeQB.passingTds || 0} TDs, ${homeQB.gamesPlayed || 0} GP)${backupNote}${injuryNote}`);
+      const expLabel = homeQB.experience ? ` [${homeQB.experience}]` : '';
+      console.log(`[Scout Report] Home QB: ${homeQB.name}${expLabel} (${homeQB.passingYards || 0} yds, ${homeQB.passingTds || 0} TDs, ${homeQB.gamesPlayed || 0} GP)${backupNote}${injuryNote}`);
     } else if (isNCAAF) {
       console.log(`[Scout Report] ℹ️ Home QB: Retrieved via Gemini Grounding (BDL depth chart unavailable)`);
     }
     if (awayQB && awayQB.name !== 'See grounded context') {
       const backupNote = awayQB.isBackup ? ' [BACKUP - starter injured]' : '';
       const injuryNote = awayQB.injuryStatus ? ` (${awayQB.injuryStatus})` : '';
-      console.log(`[Scout Report] Away QB: ${awayQB.name} (${awayQB.passingYards || 0} yds, ${awayQB.passingTds || 0} TDs, ${awayQB.gamesPlayed || 0} GP)${backupNote}${injuryNote}`);
+      const expLabel = awayQB.experience ? ` [${awayQB.experience}]` : '';
+      console.log(`[Scout Report] Away QB: ${awayQB.name}${expLabel} (${awayQB.passingYards || 0} yds, ${awayQB.passingTds || 0} TDs, ${awayQB.gamesPlayed || 0} GP)${backupNote}${injuryNote}`);
     } else if (isNCAAF) {
       console.log(`[Scout Report] ℹ️ Away QB: Retrieved via Gemini Grounding (BDL depth chart unavailable)`);
     }
@@ -5075,101 +4866,96 @@ async function fetchNCAAFStartingQBFromStats(teamId, teamName) {
   try {
     if (!teamId) return null;
     
-    // Fetch player season stats for the team
-    const stats = await ballDontLieService.getNcaafPlayerSeasonStats(teamId, 2025);
+    // Calculate NCAAF season: Jan-Jul = previous year, Aug-Dec = current year
+    const month = new Date().getMonth() + 1;
+    const year = new Date().getFullYear();
+    const season = month <= 7 ? year - 1 : year;
+    
+    // Fetch player season stats for the team - use OPTIONS OBJECT format
+    console.log(`[Scout Report] Fetching NCAAF QB stats from BDL for ${teamName} (teamId: ${teamId}, season: ${season})`);
+    const stats = await ballDontLieService.getNcaafPlayerSeasonStats({ teamId, season });
+    console.log(`[Scout Report] BDL returned ${stats?.length || 0} player stats for ${teamName}`);
+    
     if (stats && stats.length > 0) {
       // Filter to QBs and sort by passing yards
       const qbStats = stats.filter(p => 
-        (p.player?.position === 'Quarterback' || p.player?.position === 'QB') &&
+        (p.player?.position === 'Quarterback' || p.player?.position === 'QB' || 
+         p.player?.position_abbreviation === 'QB') &&
         (p.passing_yards || 0) > 0
       ).sort((a, b) => (b.passing_yards || 0) - (a.passing_yards || 0));
+      
+      console.log(`[Scout Report] Found ${qbStats.length} QB(s) with passing yards for ${teamName}`);
       
       if (qbStats.length > 0) {
         const startingQB = qbStats[0];
         const qbName = `${startingQB.player?.first_name || ''} ${startingQB.player?.last_name || ''}`.trim();
+        const qbId = startingQB.player?.id;
+        
+        console.log(`[Scout Report] ✓ BDL Starting QB for ${teamName}: ${qbName} (${startingQB.passing_yards} yds, ${startingQB.passing_touchdowns} TDs)`);
+        
+        // Fetch game-by-game stats for this QB (last 5 games)
+        let gameLogs = [];
+        if (qbId) {
+          try {
+            const gameStats = await ballDontLieService.getNcaafPlayerGameStats({ playerId: qbId, season });
+            if (gameStats && gameStats.length > 0) {
+              // Sort by game date (most recent first) and take last 5
+              gameLogs = gameStats
+                .filter(g => g.passing_yards !== null || g.passing_touchdowns !== null)
+                .sort((a, b) => new Date(b.game?.date || 0) - new Date(a.game?.date || 0))
+                .slice(0, 5)
+                .map(g => ({
+                  date: g.game?.date ? new Date(g.game.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'N/A',
+                  week: g.game?.week || 'N/A',
+                  opponent: g.game?.home_team?.full_name === teamName ? g.game?.visitor_team?.full_name : g.game?.home_team?.full_name,
+                  result: g.game?.home_score !== undefined && g.game?.away_score !== undefined 
+                    ? `${g.game.home_score}-${g.game.away_score}` : 'N/A',
+                  completions: g.passing_completions || 0,
+                  attempts: g.passing_attempts || 0,
+                  yards: g.passing_yards || 0,
+                  tds: g.passing_touchdowns || 0,
+                  ints: g.passing_interceptions || 0,
+                  rating: g.passing_rating || g.passing_qbr || 0
+                }));
+              console.log(`[Scout Report] ✓ Fetched ${gameLogs.length} game logs for ${qbName}`);
+            }
+          } catch (e) {
+            console.warn(`[Scout Report] Could not fetch game logs for ${qbName}:`, e.message);
+          }
+        }
+        
+        // Calculate games played from game logs if BDL doesn't provide it
+        // BDL NCAAF player_season_stats doesn't include games_played field
+        // Use game logs count - we fetch game-by-game stats so this is accurate
+        let gamesPlayed = startingQB.games_played || 0;
+        if (!gamesPlayed && gameLogs && gameLogs.length > 0) {
+          gamesPlayed = gameLogs.length;
+          console.log(`[Scout Report] Games played from game logs: ${gamesPlayed} for ${qbName}`);
+        }
         
         return {
           name: qbName,
+          playerId: qbId,
           passingYards: startingQB.passing_yards || 0,
           passingTds: startingQB.passing_touchdowns || 0,
-          gamesPlayed: startingQB.games_played || 0,
+          passingInts: startingQB.passing_interceptions || 0,
+          passingRating: startingQB.passing_rating || 0,
+          completionPct: startingQB.passing_attempts > 0 
+            ? ((startingQB.passing_completions / startingQB.passing_attempts) * 100).toFixed(1) 
+            : 0,
+          gamesPlayed: gamesPlayed,
+          gameLogs: gameLogs,
           source: 'bdl_stats'
         };
       }
     }
     
-    // BDL returned empty - use Gemini Grounding to get QB info
-    console.log(`[Scout Report] BDL empty for ${teamName} - using Gemini Grounding for QB verification`);
-    const qbFromGrounding = await fetchNCAAFQBFromGrounding(teamName);
-    return qbFromGrounding;
+    // BDL returned empty - no QB stats available
+    console.log(`[Scout Report] BDL empty for ${teamName} - no QB stats available from BDL`);
+    return null;
     
   } catch (e) {
     console.warn(`[Scout Report] NCAAF QB stats fallback failed for ${teamName}:`, e.message);
-    return null;
-  }
-}
-
-/**
- * NCAAF: Get QB info from Gemini Grounding when BDL has no data
- * This provides QB name and basic context even for lower-tier teams
- */
-async function fetchNCAAFQBFromGrounding(teamName) {
-  try {
-    const query = `Who is the starting quarterback for ${teamName} college football team in the 2025 season? 
-Answer with ONLY the QB's full name first (e.g., "Owen McCown" or "Keyone Jenkins"), then their class year and stats.`;
-
-    const result = await geminiGroundingSearch(query, { temperature: 1.0, maxTokens: 500 });
-    
-    if (result?.success && result?.data) {
-      const responseText = result.data;
-      
-      // Try multiple patterns to extract QB name
-      // Pattern 1: Name at the very start of response
-      let name = null;
-      const startMatch = responseText.match(/^([A-Z][a-z]+(?:\s+[A-Z][a-zA-Z'-]+)+)/);
-      if (startMatch) {
-        name = startMatch[1].trim();
-      }
-      
-      // Pattern 2: "quarterback is [Name]" or "QB is [Name]"
-      if (!name) {
-        const isMatch = responseText.match(/(?:quarterback|QB|starter)\s+is\s+([A-Z][a-z]+\s+[A-Z][a-zA-Z'-]+)/i);
-        if (isMatch) name = isMatch[1].trim();
-      }
-      
-      // Pattern 3: "[Name] is the starting quarterback"
-      if (!name) {
-        const reverseMatch = responseText.match(/([A-Z][a-z]+\s+[A-Z][a-zA-Z'-]+)\s+is\s+the\s+(?:starting\s+)?(?:quarterback|QB)/i);
-        if (reverseMatch) name = reverseMatch[1].trim();
-      }
-      
-      // Pattern 4: Just find the first proper name (First Last format) in the response
-      if (!name) {
-        const namePattern = responseText.match(/\b([A-Z][a-z]{2,})\s+([A-Z][a-zA-Z'-]{2,})\b/);
-        if (namePattern) name = `${namePattern[1]} ${namePattern[2]}`.trim();
-      }
-      
-      // Try to extract stats
-      const yardsMatch = responseText.match(/(\d{1,4})\s*(?:passing\s*)?yards/i);
-      const tdsMatch = responseText.match(/(\d{1,2})\s*(?:passing\s*)?(?:touchdowns?|TDs?)/i);
-      
-      if (name && name.length > 4 && !name.includes('the ')) {
-        console.log(`[Scout Report] NCAAF QB from Grounding: ${name} for ${teamName}`);
-        return {
-          name: name,
-          passingYards: yardsMatch ? parseInt(yardsMatch[1]) : 0,
-          passingTds: tdsMatch ? parseInt(tdsMatch[1]) : 0,
-          gamesPlayed: 0,
-          source: 'grounding',
-          rawContext: responseText.substring(0, 200)
-        };
-      }
-    }
-    
-    console.log(`[Scout Report] Could not extract NCAAF QB from Grounding for ${teamName}`);
-    return null;
-  } catch (e) {
-    console.warn(`[Scout Report] NCAAF QB Grounding failed for ${teamName}:`, e.message);
     return null;
   }
 }
@@ -5470,227 +5256,232 @@ async function fetchNhlKeyPlayers(homeTeam, awayTeam, sport) {
     
     let rotoWireLineups = null;
     try {
-      const makeLineupQuery = (teamName, opponentName, strict = false) => `Search site:rotowire.com/nhl/lineups.php for ${teamName} vs ${opponentName} on ${today}
+      // Use the correct Rotowire NHL lineups URL - this page shows TODAY's games by default
+      const makeNhlMegaQuery = (teamName, opponentName) => `Search rotowire.com/hockey/nhl-lineups.php for the ${teamName} vs ${opponentName} game.
 
-Return ONLY the ${teamName} GOALIE and STARTING LINEUP in this EXACT format:
+Extract these THREE sections for ${teamName} from that page:
 
-TEAM: ${teamName}
-GOALIE:
-${teamName}: [Goalie Name] | [Confirmed/Expected/Unconfirmed]
+1. GOALIE & LINEUP:
+- [Goalie Name] | [Confirmed/Expected]
+- Starting Lineup: C:[Name], LW:[Name], RW:[Name], LD:[Name], RD:[Name]
 
-STARTING LINEUP:
-C: [Name]
-LW: [Name]
-RW: [Name]
-LD: [Name]
-RD: [Name]
+2. POWER PLAY:
+- PP1: C:[Name], LW:[Name], RW:[Name], LD:[Name], RD:[Name]
+- PP2: C:[Name], LW:[Name], RW:[Name], LD:[Name], RD:[Name]
 
-CRITICAL:
-1. Use the EXACT information from Rotowire's NHL Lineups page.
-2. NO commentary or extra sentences.
-3. Each header must be on its own line.
-4. If a line is not shown on Rotowire, still include the header and write "UNKNOWN" for names.
-${strict ? '5. Output ONLY the lines shown above. Do not include any other text.' : ''}`;
+3. INJURIES:
+- List ALL players shown under "INJURIES" for ${teamName}: [Name] | [Position] | [Status]
 
-      const makePowerPlayQuery = (teamName, opponentName, strict = false) => `Search site:rotowire.com/nhl/lineups.php for ${teamName} vs ${opponentName} on ${today}
+Use EXACT player names as shown on the page. No commentary.`;
 
-Return ONLY the ${teamName} POWER PLAY units in this EXACT format:
-
-TEAM: ${teamName}
-POWER PLAY #1:
-C: [Name], LW: [Name], RW: [Name], LD: [Name], RD: [Name]
-
-POWER PLAY #2:
-C: [Name], LW: [Name], RW: [Name], LD: [Name], RD: [Name]
-
-CRITICAL:
-1. Use the EXACT information from Rotowire's NHL Lineups page.
-2. DO NOT omit POWER PLAY #2.
-3. NO commentary or extra sentences.
-4. Each header must be on its own line.
-5. If a unit is not shown on Rotowire, still include the header and write "UNKNOWN" for names.
-${strict ? '6. Output ONLY the lines shown above. Do not include any other text.' : ''}`;
-
-      const makeInjuriesQuery = (teamName, opponentName) => `Search site:rotowire.com/nhl/lineups.php for ${teamName} vs ${opponentName} on ${today}
-
-Return ONLY the ${teamName} INJURIES section in this EXACT format:
-
-TEAM: ${teamName}
-INJURIES:
-- [Player Name] | [Position] | [OUT/IR/IR-LT/DTD]
-
-CRITICAL:
-1. Include ALL injuries listed for ${teamName} (no omissions).
-2. Preserve the EXACT status from Rotowire.
-3. NO commentary or extra sentences.
-4. Each header must be on its own line.`;
-
-      const [
-        awayLineupResponse,
-        homeLineupResponse,
-        awayPowerPlayResponse,
-        homePowerPlayResponse,
-        awayInjuriesResponse,
-        homeInjuriesResponse
-      ] = await Promise.all([
-        geminiGroundingSearch(makeLineupQuery(awayTeam, homeTeam), { temperature: 1.0, maxTokens: 1600 }),
-        geminiGroundingSearch(makeLineupQuery(homeTeam, awayTeam), { temperature: 1.0, maxTokens: 1600 }),
-        geminiGroundingSearch(makePowerPlayQuery(awayTeam, homeTeam), { temperature: 1.0, maxTokens: 1600 }),
-        geminiGroundingSearch(makePowerPlayQuery(homeTeam, awayTeam), { temperature: 1.0, maxTokens: 1600 }),
-        geminiGroundingSearch(makeInjuriesQuery(awayTeam, homeTeam), { temperature: 1.0, maxTokens: 1600 }),
-        geminiGroundingSearch(makeInjuriesQuery(homeTeam, awayTeam), { temperature: 1.0, maxTokens: 1600 })
+      const [awayMegaResponse, homeMegaResponse] = await Promise.all([
+        geminiGroundingSearch(makeNhlMegaQuery(awayTeam, homeTeam), { temperature: 1.0, maxTokens: 3000 }),
+        geminiGroundingSearch(makeNhlMegaQuery(homeTeam, awayTeam), { temperature: 1.0, maxTokens: 3000 })
       ]);
 
-      const normalizeSectionText = (text) => {
-        return (text || '')
-          .replace(/TEAM\s*:\s*/gi, 'TEAM: ')
-          .replace(/\bGOALIE\b\s*:?/gi, '\nGOALIE:')
-          .replace(/\bSTARTING LINEUP\b\s*:?/gi, '\nSTARTING LINEUP:')
-          .replace(/\bPOWER PLAY #1\b\s*:?/gi, '\nPOWER PLAY #1:')
-          .replace(/\bPOWER PLAY #2\b\s*:?/gi, '\nPOWER PLAY #2:')
-          .replace(/\bINJURIES\b\s*:?/gi, '\nINJURIES:')
-          .replace(/\s{2,}/g, ' ')
-          .trim();
+      const parseLineupOnly = (text, teamName) => {
+        if (!text) return null;
+        const lineupSectionRegex = /1\.\s*GOALIE\s*&\s*LINEUP:?(.*?)(?=2\.\s*POWER\s*PLAY|3\.\s*INJURIES|$)/is;
+        const match = text.match(lineupSectionRegex);
+        return match ? match[1].trim() : text;
       };
 
-      const parseTeamLineup = (text, teamName) => {
+      const parsePPOnly = (text, teamName) => {
         if (!text) return null;
-        const normalized = normalizeSectionText(text);
-        const lines = normalized.split('\n').map(l => l.trim()).filter(Boolean);
-        const upperLines = lines.map(l => l.toUpperCase());
-
-        const sectionIndices = {
-          goalie: upperLines.findIndex(l => l.startsWith('GOALIE')),
-          lineup: upperLines.findIndex(l => l.startsWith('STARTING LINEUP'))
-        };
-
-        const sliceSection = (startIdx, nextIdxCandidates) => {
-          if (startIdx === -1) return [];
-          const nextIdx = nextIdxCandidates
-            .filter(i => i !== -1 && i > startIdx)
-            .sort((a, b) => a - b)[0];
-          return lines.slice(startIdx + 1, nextIdx ?? lines.length);
-        };
-
-        const goalieLines = sliceSection(sectionIndices.goalie, Object.values(sectionIndices));
-        const lineupLines = sliceSection(sectionIndices.lineup, Object.values(sectionIndices));
-
-        const fallbackGoalieMatch = normalized.match(new RegExp(`${teamName}:\\s*[^\\n]+`, 'i'));
-        const goalieLine = goalieLines.find(l => l.includes(teamName)) || goalieLines[0] || fallbackGoalieMatch?.[0] || `${teamName}: UNKNOWN | [Status]`;
-        let lineup = lineupLines.filter(l => /^[A-Z]{1,2}\s*:?\s/.test(l));
-
-        if (!lineup.length) {
-          const extractPos = (pos) => {
-            const match = normalized.match(new RegExp(`${pos}\\s*:??\\s*([^,\\n]+)`, 'i'));
-            return match ? match[1].trim() : 'UNKNOWN';
-          };
-          lineup = [
-            `C: ${extractPos('C')}`,
-            `LW: ${extractPos('LW')}`,
-            `RW: ${extractPos('RW')}`,
-            `LD: ${extractPos('LD')}`,
-            `RD: ${extractPos('RD')}`
-          ];
-        }
-
-        if (!lineup.length) {
-          console.warn(`[Scout Report] NHL lineup missing for ${teamName}`);
-        }
-
-        return {
-          goalieLine,
-          lineup
-        };
-      };
-
-      const parsePowerPlay = (text, teamName) => {
-        if (!text) return null;
-        const normalized = normalizeSectionText(text);
-        const lines = normalized.split('\n').map(l => l.trim()).filter(Boolean);
-        const upperLines = lines.map(l => l.toUpperCase());
-        const pp1Index = upperLines.findIndex(l => l.startsWith('POWER PLAY #1'));
-        const pp2Index = upperLines.findIndex(l => l.startsWith('POWER PLAY #2'));
-        const sliceSection = (startIdx, nextIdxCandidates) => {
-          if (startIdx === -1) return [];
-          const nextIdx = nextIdxCandidates
-            .filter(i => i !== -1 && i > startIdx)
-            .sort((a, b) => a - b)[0];
-          return lines.slice(startIdx + 1, nextIdx ?? lines.length);
-        };
-        const pp1Lines = sliceSection(pp1Index, [pp2Index]);
-        const pp2Lines = sliceSection(pp2Index, []);
-        const normalizeLine = (sectionLines) => sectionLines.join(' ').replace(/\s+/g, ' ').trim();
-        const extractPos = (line, pos) => {
-          const match = line.match(new RegExp(`${pos}\\s*:??\\s*([^,]+)`, 'i'));
-          return match ? match[1].trim() : 'UNKNOWN';
-        };
-        const formatPPLine = (line) => {
-          const normalized = normalizeLine(line ? [line] : []);
-          return `C: ${extractPos(normalized, 'C')}, LW: ${extractPos(normalized, 'LW')}, RW: ${extractPos(normalized, 'RW')}, LD: ${extractPos(normalized, 'LD')}, RD: ${extractPos(normalized, 'RD')}`;
-        };
-        const pp1Text = pp1Lines.length ? normalizeLine(pp1Lines) : normalizeLine([normalized]);
-        const pp2Text = pp2Lines.length ? normalizeLine(pp2Lines) : normalizeLine([normalized]);
-        const pp1Line = pp1Text ? formatPPLine(pp1Text) : 'C: UNKNOWN, LW: UNKNOWN, RW: UNKNOWN, LD: UNKNOWN, RD: UNKNOWN';
-        const pp2Line = pp2Text ? formatPPLine(pp2Text) : 'C: UNKNOWN, LW: UNKNOWN, RW: UNKNOWN, LD: UNKNOWN, RD: UNKNOWN';
-        if (!pp1Lines.length) console.warn(`[Scout Report] NHL PP#1 missing for ${teamName}`);
-        if (!pp2Lines.length) console.warn(`[Scout Report] NHL PP#2 missing for ${teamName}`);
-        return { pp1Line, pp2Line };
+        const ppSectionRegex = /2\.\s*POWER\s*PLAY:?(.*?)(?=3\.\s*INJURIES|1\.\s*GOALIE|$)/is;
+        const match = text.match(ppSectionRegex);
+        return match ? match[1].trim() : text;
       };
 
       const parseInjuries = (text, teamName) => {
         if (!text) return [];
-        const normalized = normalizeSectionText(text);
-        const lines = normalized.split('\n').map(l => l.trim()).filter(Boolean);
-        const upperLines = lines.map(l => l.toUpperCase());
-        const injuriesIndex = upperLines.findIndex(l => l.startsWith('INJURIES'));
-        if (injuriesIndex === -1) {
-          // Try to parse inline injuries on a single line
-          const inlineMatches = [];
-          const inlineRegex = /-\s*([^|]+)\|\s*([^|]+)\|\s*([A-Za-z\-]+)/g;
-          let match;
-          while ((match = inlineRegex.exec(normalized)) !== null) {
-            inlineMatches.push(`- ${match[1].trim()} | ${match[2].trim()} | ${match[3].trim()}`);
-          }
-          if (!inlineMatches.length) {
-            console.warn(`[Scout Report] NHL injuries missing for ${teamName}`);
-          }
-          return inlineMatches;
-        }
-        return lines.slice(injuriesIndex + 1).filter(l => l.startsWith('-'));
+        const teamSectionRegex = /3\.\s*INJURIES:?(.*?)(?=1\.\s*GOALIE|2\.\s*POWER\s*PLAY|$)/is;
+        const teamSectionMatch = text.match(teamSectionRegex);
+        const sectionText = teamSectionMatch ? teamSectionMatch[1] : text;
+        const lines = sectionText.split('\n').map(l => l.trim()).filter(l => l.startsWith('-') && !l.toLowerCase().includes('no injuries reported'));
+        return lines;
       };
 
-      let awayParsed = awayLineupResponse?.success ? parseTeamLineup(awayLineupResponse.data, awayTeam) : null;
-      let homeParsed = homeLineupResponse?.success ? parseTeamLineup(homeLineupResponse.data, homeTeam) : null;
-      let awayPP = awayPowerPlayResponse?.success ? parsePowerPlay(awayPowerPlayResponse.data, awayTeam) : null;
-      let homePP = homePowerPlayResponse?.success ? parsePowerPlay(homePowerPlayResponse.data, homeTeam) : null;
-      const awayInjuriesRaw = awayInjuriesResponse?.success ? parseInjuries(awayInjuriesResponse.data, awayTeam) : [];
-      const homeInjuriesRaw = homeInjuriesResponse?.success ? parseInjuries(homeInjuriesResponse.data, homeTeam) : [];
+      // Parse goalie and starting lineup from mega-query response
+      const parseTeamLineup = (text, teamName) => {
+        if (!text) return null;
+        
+        // Extract goalie line: "- GoalieName | Confirmed/Expected"
+        const goalieMatch = text.match(/-\s*([^|]+)\s*\|\s*(Confirmed|Expected|Unconfirmed)/i);
+        const goalieName = goalieMatch ? goalieMatch[1].trim() : 'UNKNOWN';
+        const goalieStatus = goalieMatch ? goalieMatch[2].trim() : 'Unknown';
+        const goalieLine = `${teamName}: ${goalieName} | ${goalieStatus}`;
+        
+        // Extract starting lineup: "Starting Lineup: C:Name, LW:Name, RW:Name, LD:Name, RD:Name"
+        const lineupMatch = text.match(/Starting\s*Lineup:?\s*(.+)/i);
+        const lineup = [];
+        
+        if (lineupMatch) {
+          const lineupText = lineupMatch[1];
+          const positions = ['C', 'LW', 'RW', 'LD', 'RD'];
+          for (const pos of positions) {
+            const posMatch = lineupText.match(new RegExp(`${pos}:\\s*([^,]+)`, 'i'));
+            const playerName = posMatch ? posMatch[1].trim() : 'UNKNOWN';
+            lineup.push(`${pos}: ${playerName}`);
+          }
+        } else {
+          // Fallback: return UNKNOWNs
+          lineup.push('C: UNKNOWN', 'LW: UNKNOWN', 'RW: UNKNOWN', 'LD: UNKNOWN', 'RD: UNKNOWN');
+        }
+        
+        return { goalieLine, lineup };
+      };
+
+      // Parse power play units from mega-query response
+      // Handles various formats: "PP1: C:Name", "**PP1:** C: Name", "- PP1: C:Name", etc.
+      const parsePowerPlay = (text, teamName) => {
+        if (!text) return null;
+        
+        const positions = ['C', 'LW', 'RW', 'LD', 'RD'];
+        
+        // Helper to extract a PP unit - handles markdown and various formats
+        const extractPPUnit = (fullText, ppNum) => {
+          const players = [];
+          let complete = false;
+          
+          // Find the PP section - handle markdown: **PP1:**, *PP1:*, -PP1:, PP1:
+          // Capture everything until PP2 (for PP1) or end of relevant section
+          const ppPattern = ppNum === 1
+            ? /\*?\*?PP1\*?\*?:?\s*([\s\S]*?)(?=\*?\*?PP2|POWER\s*PLAY\s*#?2|$)/i
+            : /\*?\*?PP2\*?\*?:?\s*([\s\S]*?)(?=\*?\*?PP1|INJURIES|$)/i;
+          
+          const sectionMatch = fullText.match(ppPattern);
+          if (!sectionMatch) {
+            return { players: [], line: 'C: UNKNOWN, LW: UNKNOWN, RW: UNKNOWN, LD: UNKNOWN, RD: UNKNOWN', complete: false };
+          }
+          
+          const sectionText = sectionMatch[1];
+          
+          // Extract each position - handle various formats:
+          // "C:Name", "C: Name", "C  Name", "* C  Name", "C - Name"
+          for (const pos of positions) {
+            // Try multiple patterns for position extraction
+            const patterns = [
+              new RegExp(`\\b${pos}[:\\s]+([A-Z][a-z]+(?:\\s+[A-Z][a-z'\\-]+)+|[A-Z]\\.\\s*[A-Z][a-z'\\-]+)`, 'i'),  // C: First Last or C: F. Last
+              new RegExp(`\\*\\s*${pos}\\s+([A-Z][a-z]+(?:\\s+[A-Z][a-z'\\-]+)+|[A-Z]\\.\\s*[A-Z][a-z'\\-]+)`, 'i'), // * C  First Last
+              new RegExp(`${pos}[:\\-]\\s*([^,\\n\\*]+)`, 'i'), // Fallback: C: anything until comma/newline
+            ];
+            
+            let playerName = 'UNKNOWN';
+            for (const pattern of patterns) {
+              const match = sectionText.match(pattern);
+              if (match && match[1]) {
+                playerName = match[1].trim().replace(/[\*\|,]+$/, '').trim(); // Clean trailing punctuation
+                if (playerName && playerName.length > 1 && !playerName.toLowerCase().includes('unknown')) {
+                  break;
+                }
+              }
+            }
+            players.push(`${pos}:${playerName}`);
+          }
+          
+          complete = !players.some(p => p.includes('UNKNOWN'));
+          const line = players.join(', ');
+          
+          return { players, line, complete };
+        };
+        
+        const pp1Result = extractPPUnit(text, 1);
+        const pp2Result = extractPPUnit(text, 2);
+        
+        console.log(`[PP Parser] PP1 complete: ${pp1Result.complete}, PP2 complete: ${pp2Result.complete}`);
+        if (!pp1Result.complete) console.log(`[PP Parser] PP1 missing positions in: ${pp1Result.line}`);
+        if (!pp2Result.complete) console.log(`[PP Parser] PP2 missing positions in: ${pp2Result.line}`);
+        
+        return {
+          pp1Line: pp1Result.line,
+          pp2Line: pp2Result.line,
+          pp1Complete: pp1Result.complete,
+          pp2Complete: pp2Result.complete,
+          isComplete: pp1Result.complete && pp2Result.complete
+        };
+      };
+
+      // Retry query for lineup (used when initial mega-query has unknowns)
+      const makeLineupQuery = (teamName, opponentName, isRetry = false) => 
+        `Search rotowire.com/hockey/nhl-lineups.php for the ${teamName} vs ${opponentName} game.
+Return ONLY the starting goalie and starting lineup for ${teamName}:
+- [Goalie Name] | [Confirmed/Expected]
+- Starting Lineup: C:[Name], LW:[Name], RW:[Name], LD:[Name], RD:[Name]
+Use EXACT player names as shown on the page.`;
+
+      // Retry query for power play (used when initial mega-query is incomplete)
+      // PP1 is critical (gets 60-70% of PP time), PP2 is secondary
+      const makePowerPlayQuery = (teamName, opponentName, isRetry = false) =>
+        `${teamName} power play units TODAY from rotowire.com/hockey/nhl-lineups.php:
+PP1: C:[Name], LW:[Name], RW:[Name], LD:[Name], RD:[Name]
+PP2: C:[Name], LW:[Name], RW:[Name], LD:[Name], RD:[Name]
+NO introduction. NO explanation. ONLY the format above with exact player names.`;
+
+      let awayParsed = awayMegaResponse?.success ? parseTeamLineup(parseLineupOnly(awayMegaResponse.data, awayTeam), awayTeam) : null;
+      let homeParsed = homeMegaResponse?.success ? parseTeamLineup(parseLineupOnly(homeMegaResponse.data, homeTeam), homeTeam) : null;
+      let awayPP = awayMegaResponse?.success ? parsePowerPlay(parsePPOnly(awayMegaResponse.data, awayTeam), awayTeam) : null;
+      let homePP = homeMegaResponse?.success ? parsePowerPlay(homeMegaResponse.data, homeTeam) : null;
+      const awayInjuriesRaw = awayMegaResponse?.success ? parseInjuries(awayMegaResponse.data, awayTeam) : [];
+      const homeInjuriesRaw = homeMegaResponse?.success ? parseInjuries(homeMegaResponse.data, homeTeam) : [];
 
       const hasUnknownLineup = (parsed) => {
         if (!parsed) return true;
         return parsed.lineup?.some(line => line.includes('UNKNOWN')) || parsed.goalieLine?.includes('UNKNOWN');
       };
-      const hasUnknownPP = (pp) => {
-        if (!pp) return true;
-        return pp.pp1Line.includes('UNKNOWN') || pp.pp2Line.includes('UNKNOWN');
+      
+      // Check if PP response is complete (all 5 positions for both units)
+      const isPPComplete = (pp) => {
+        return pp && pp.isComplete === true;
       };
 
       if (hasUnknownLineup(awayParsed)) {
-        const retry = await geminiGroundingSearch(makeLineupQuery(awayTeam, homeTeam, true), { temperature: 1.0, maxTokens: 1200 });
+        const retry = await geminiGroundingSearch(makeLineupQuery(awayTeam, homeTeam, true), { temperature: 1.0, maxTokens: 2000 });
         awayParsed = retry?.success ? parseTeamLineup(retry.data, awayTeam) : awayParsed;
       }
       if (hasUnknownLineup(homeParsed)) {
-        const retry = await geminiGroundingSearch(makeLineupQuery(homeTeam, awayTeam, true), { temperature: 1.0, maxTokens: 1200 });
+        const retry = await geminiGroundingSearch(makeLineupQuery(homeTeam, awayTeam, true), { temperature: 1.0, maxTokens: 2000 });
         homeParsed = retry?.success ? parseTeamLineup(retry.data, homeTeam) : homeParsed;
       }
-      if (hasUnknownPP(awayPP)) {
-        const retry = await geminiGroundingSearch(makePowerPlayQuery(awayTeam, homeTeam, true), { temperature: 1.0, maxTokens: 1200 });
-        awayPP = retry?.success ? parsePowerPlay(retry.data, awayTeam) : awayPP;
+      
+      // Retry PP grounding up to 2 times if PP1 incomplete
+      // PP1 is critical, PP2 is nice-to-have (PP1 gets 60-70% of PP time)
+      const MAX_PP_RETRIES = 2;
+      const isPP1Complete = (pp) => pp?.pp1Complete === true;
+      
+      for (let attempt = 1; attempt <= MAX_PP_RETRIES && !isPP1Complete(awayPP); attempt++) {
+        console.log(`[Scout Report] PP1 incomplete for ${awayTeam} - retry ${attempt}/${MAX_PP_RETRIES}...`);
+        const retry = await geminiGroundingSearch(makePowerPlayQuery(awayTeam, homeTeam, true), { temperature: 0.3, maxTokens: 2000 });
+        if (retry?.success) {
+          awayPP = parsePowerPlay(retry.data, awayTeam);
+        }
       }
-      if (hasUnknownPP(homePP)) {
-        const retry = await geminiGroundingSearch(makePowerPlayQuery(homeTeam, awayTeam, true), { temperature: 1.0, maxTokens: 1200 });
-        homePP = retry?.success ? parsePowerPlay(retry.data, homeTeam) : homePP;
+      for (let attempt = 1; attempt <= MAX_PP_RETRIES && !isPP1Complete(homePP); attempt++) {
+        console.log(`[Scout Report] PP1 incomplete for ${homeTeam} - retry ${attempt}/${MAX_PP_RETRIES}...`);
+        const retry = await geminiGroundingSearch(makePowerPlayQuery(homeTeam, awayTeam, true), { temperature: 0.3, maxTokens: 2000 });
+        if (retry?.success) {
+          homePP = parsePowerPlay(retry.data, homeTeam);
+        }
       }
+      
+      // HARD FAIL: If PP1 is still incomplete after retries, throw error
+      // PP1 is required (critical for analysis), PP2 is optional
+      if (!isPP1Complete(awayPP)) {
+        const errorMsg = `[Scout Report] HARD FAIL: Could not get complete PP1 for ${awayTeam} after ${MAX_PP_RETRIES} retries. PP1: ${awayPP?.pp1Complete}`;
+        console.error(errorMsg);
+        throw new Error(errorMsg);
+      }
+      if (!isPP1Complete(homePP)) {
+        const errorMsg = `[Scout Report] HARD FAIL: Could not get complete PP1 for ${homeTeam} after ${MAX_PP_RETRIES} retries. PP1: ${homePP?.pp1Complete}`;
+        console.error(errorMsg);
+        throw new Error(errorMsg);
+      }
+      
+      // Log if PP2 is incomplete (warning, not failure)
+      if (!awayPP?.pp2Complete) console.log(`[Scout Report] PP2 partial for ${awayTeam} (non-critical): ${awayPP?.pp2Line}`);
+      if (!homePP?.pp2Complete) console.log(`[Scout Report] PP2 partial for ${homeTeam} (non-critical): ${homePP?.pp2Line}`);
+      
+      console.log(`[Scout Report] PP data complete for both teams`)
 
       // Normalize injury statuses using the main Rotowire injuries fetcher
       const rotowireInjuries = await fetchGroundingInjuries(homeTeam, awayTeam, sport);
@@ -5781,6 +5572,10 @@ CRITICAL:
           };
       }
     } catch (groundingError) {
+      // Re-throw hard fail errors - these should stop the pick
+      if (groundingError.message.includes('HARD FAIL')) {
+        throw groundingError;
+      }
       console.warn(`[Scout Report] Gemini Grounding for NHL lineups failed: ${groundingError.message}`);
     }
     
@@ -6058,12 +5853,27 @@ CRITICAL for injuries:
     console.log(`[Scout Report] Fetching NBA stats from BDL for ${homeTeam} (ID: ${homeTeamData?.id}) and ${awayTeam} (ID: ${awayTeamData?.id})`);
 
     // Fetch active players for each team
-    const [homePlayers, awayPlayers] = await Promise.all([
-      homeTeamData ? ballDontLieService.getPlayersActive(bdlSport, { team_ids: [homeTeamData.id], per_page: 20 }) : [],
-      awayTeamData ? ballDontLieService.getPlayersActive(bdlSport, { team_ids: [awayTeamData.id], per_page: 20 }) : []
+    const [homePlayersRaw, awayPlayersRaw] = await Promise.all([
+      homeTeamData ? ballDontLieService.getPlayersActive(bdlSport, { team_ids: [homeTeamData.id], per_page: 20 }) : null,
+      awayTeamData ? ballDontLieService.getPlayersActive(bdlSport, { team_ids: [awayTeamData.id], per_page: 20 }) : null
     ]);
     
+    // ⭐ CRITICAL FIX: getPlayersActive returns {data: [], meta: {}} NOT a plain array
+    // Extract the actual player arrays from the response object
+    const homePlayers = Array.isArray(homePlayersRaw) ? homePlayersRaw : 
+                        (homePlayersRaw?.data && Array.isArray(homePlayersRaw.data)) ? homePlayersRaw.data : [];
+    const awayPlayers = Array.isArray(awayPlayersRaw) ? awayPlayersRaw : 
+                        (awayPlayersRaw?.data && Array.isArray(awayPlayersRaw.data)) ? awayPlayersRaw.data : [];
+    
     console.log(`[Scout Report] NBA roster: ${homeTeam} (${homePlayers.length} players), ${awayTeam} (${awayPlayers.length} players)`);
+    
+    // ⭐ HARD FAIL: If we can't get roster data, we CANNOT make picks (prevents hallucination)
+    // CRITICAL: Throw error to CRASH the process - do NOT silently pass
+    if (homePlayers.length === 0 || awayPlayers.length === 0) {
+      const errorMsg = `CRITICAL ROSTER FAILURE: Missing NBA roster data! Home ${homeTeam}: ${homePlayers.length} players, Away ${awayTeam}: ${awayPlayers.length} players. Gary would hallucinate player names without real roster data. FIX THE BDL API ISSUE.`;
+      console.error(`[Scout Report] ❌ ${errorMsg}`);
+      throw new Error(errorMsg);
+    }
     
     // Get current season for stats lookup
     // BDL API convention: season=2025 means the 2025-26 NBA season
@@ -6259,44 +6069,62 @@ function formatNbaRosterDepth(homeTeam, awayTeam, rosterDepth, injuries) {
     return null;
   };
   
+  // Helper to check if player is OUT (not just questionable)
+  const isPlayerOut = (playerName) => {
+    const injury = getInjuryStatus(playerName);
+    if (!injury) return false;
+    const status = injury.status?.toUpperCase() || '';
+    // Only filter out players who are definitively OUT, not questionable/GTD
+    return status.includes('OUT') || status.includes('INJURED') || status.includes('IR');
+  };
+  
   // Helper to format a single player row
   const formatPlayerRow = (player, index) => {
     const injury = getInjuryStatus(player.name);
-    const status = injury ? '[OUT]' : '[ACTIVE]';
-    const injuryNote = injury ? ` - ${injury.status.toUpperCase()}` : '';
+    // Show questionable status if applicable
+    const statusNote = injury ? ` [${injury.status.toUpperCase()}]` : '';
     
     // Format shooting percentages (show as whole numbers with %)
     const fgPct = player.fg_pct ? `${(player.fg_pct * 100).toFixed(1)}%` : 'N/A';
     const fg3Pct = player.fg3_pct ? `${(player.fg3_pct * 100).toFixed(1)}%` : 'N/A';
     
     // Format stats - only show if player has meaningful minutes
+    const usageStr = player.usg_pct ? ` | USG: ${(player.usg_pct * 100).toFixed(1)}%` : '';
     const stats = player.min > 5 
-      ? `${player.pts.toFixed(1)} PPG | ${player.reb.toFixed(1)} REB | ${player.ast.toFixed(1)} AST | FG: ${fgPct} | 3PT: ${fg3Pct} | ${player.min.toFixed(1)} MIN`
-      : `${player.pts.toFixed(1)} PPG | Limited role`;
+      ? `${player.pts.toFixed(1)} PPG | ${player.reb.toFixed(1)} REB | ${player.ast.toFixed(1)} AST | FG: ${fgPct} | 3PT: ${fg3Pct} | ${player.min.toFixed(1)} MIN${usageStr}`
+      : `${player.pts.toFixed(1)} PPG | Limited role${usageStr}`;
     
-    return `  ${status} ${player.name}${injuryNote} - ${stats}`;
+    return `  ${player.name}${statusNote} - ${stats}`;
   };
+  
+  // Filter out players who are definitively OUT
+  const availableHomePlayers = (rosterDepth.home || []).filter(p => !isPlayerOut(p.name));
+  const availableAwayPlayers = (rosterDepth.away || []).filter(p => !isPlayerOut(p.name));
+  
+  // Count how many players were filtered out
+  const homeOutCount = (rosterDepth.home?.length || 0) - availableHomePlayers.length;
+  const awayOutCount = (rosterDepth.away?.length || 0) - availableAwayPlayers.length;
   
   // Format team rosters
   const lines = [
     '',
-    'ROSTER DEPTH — FULL ROTATION (TOP 9 BY MINUTES FROM BDL)',
+    'AVAILABLE ROSTER — PLAYERS EXPECTED TO PLAY TONIGHT (BY MINUTES)',
     '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-    'This shows WHO is on each team and their season averages.',
-    '   Use this to understand team depth — one player out ≠ team collapse.',
+    'Players marked OUT/IR are excluded. Questionable players are shown.',
     '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
     ''
   ];
   
   // Home team
-  if (rosterDepth.home?.length > 0) {
+  if (availableHomePlayers.length > 0) {
     const homeTeamName = rosterDepth.homeTeamName || homeTeam;
-    lines.push(`[HOME] ${homeTeamName.toUpperCase()} (sorted by minutes):`);
+    const outNote = homeOutCount > 0 ? ` (${homeOutCount} player${homeOutCount > 1 ? 's' : ''} OUT)` : '';
+    lines.push(`[HOME] ${homeTeamName.toUpperCase()}${outNote}:`);
     
-    rosterDepth.home.forEach((player, index) => {
+    availableHomePlayers.forEach((player, index) => {
       lines.push(formatPlayerRow(player, index));
       // Add visual separator between starters and bench (after top 5)
-      if (index === 4 && rosterDepth.home.length > 5) {
+      if (index === 4 && availableHomePlayers.length > 5) {
         lines.push('  ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ (BENCH) ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─');
       }
     });
@@ -6304,14 +6132,15 @@ function formatNbaRosterDepth(homeTeam, awayTeam, rosterDepth, injuries) {
   }
   
   // Away team
-  if (rosterDepth.away?.length > 0) {
+  if (availableAwayPlayers.length > 0) {
     const awayTeamName = rosterDepth.awayTeamName || awayTeam;
-    lines.push(`[AWAY]  ${awayTeamName.toUpperCase()} (sorted by minutes):`);
+    const outNote = awayOutCount > 0 ? ` (${awayOutCount} player${awayOutCount > 1 ? 's' : ''} OUT)` : '';
+    lines.push(`[AWAY] ${awayTeamName.toUpperCase()}${outNote}:`);
     
-    rosterDepth.away.forEach((player, index) => {
+    availableAwayPlayers.forEach((player, index) => {
       lines.push(formatPlayerRow(player, index));
       // Add visual separator between starters and bench (after top 5)
-      if (index === 4 && rosterDepth.away.length > 5) {
+      if (index === 4 && availableAwayPlayers.length > 5) {
         lines.push('  ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ (BENCH) ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─');
       }
     });
@@ -6320,25 +6149,30 @@ function formatNbaRosterDepth(homeTeam, awayTeam, rosterDepth, injuries) {
   
   // Add context note
   lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  lines.push('ROSTER DEPTH CONTEXT (INVESTIGATE, DON\'T ASSUME):');
+  lines.push('2026 CONTEXTUAL GUIDE (NBA ONLY):');
+  lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  lines.push('It is January 2026. Note that player rotations and team identities may');
+  lines.push('have shifted significantly from your initial training data (2024/2025).');
+  lines.push('  • Review the provided USG% and PPG to understand each player\'s current role.');
+  lines.push('  • It is the 2025-26 Season. 2024 rookies (e.g., Sarr, George) are now Sophomores.');
+  lines.push('  • Use this 2026 data to verify if a player is a primary option or role player.');
+  lines.push('  • Combine these stats with your broader understanding of matchups to');
+  lines.push('    reach your conclusion.');
+  lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   lines.push('');
-  lines.push('A team losing ONE player doesn\'t collapse if they have 3-4 other quality');
-  lines.push('contributors. Before citing an injury as decisive:');
+  lines.push('AVAILABLE ROSTER CONTEXT:');
   lines.push('');
-  lines.push('  • How many double-digit scorers remain available?');
-  lines.push('  • How has the team ACTUALLY performed without this player? (Recent Form)');
-  lines.push('  • Does your case explain what YOUR PICK does well — not just what the');
-  lines.push('    opponent is missing?');
+  lines.push('This shows ONLY players expected to play tonight (OUT players filtered).');
+  lines.push('Use this to evaluate actual available depth:');
   lines.push('');
-  lines.push('The opponent\'s injury might CREATE an opportunity, but your Steel Man case');
-  lines.push('must explain HOW your team EXPLOITS it with specific advantages.');
+  lines.push('  • How many double-digit scorers are AVAILABLE tonight?');
+  lines.push('  • Does the remaining roster still have quality depth?');
+  lines.push('  • Does your case explain what YOUR PICK does well with who\'s playing?');
   lines.push('');
-  lines.push('📌 REFERENCE THIS SECTION when building AND grading Steel Man cases:');
-  lines.push('   - If you claim a team will "struggle offensively" without Player X,');
-  lines.push('     verify it against THIS roster — do they have 3-4 other capable scorers?');
-  lines.push('   - If you cite a player\'s injury as a key factor, check who ELSE is on');
-  lines.push('     the roster and what they contribute.');
-  lines.push('   - Your claims must be verifiable against this data, not assumptions.');
+  lines.push('[NOTE] REFERENCE THIS when evaluating injury impact:');
+  lines.push('   - Look at WHO REMAINS, not just who\'s missing');
+  lines.push('   - A team with 3-4 capable scorers available doesn\'t collapse');
+  lines.push('   - Your claims must be verifiable against this available roster');
   lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   lines.push('');
   
@@ -6493,7 +6327,7 @@ function formatNhlRosterDepth(homeTeam, awayTeam, rosterDepth, injuries) {
   lines.push('  • A team missing their top scorer still has depth if others produce');
   lines.push('  • Check GAA and SV% for goalie quality, not just W-L record');
   lines.push('');
-  lines.push('📌 REFERENCE THIS SECTION when building AND grading Steel Man cases:');
+  lines.push('[NOTE] REFERENCE THIS SECTION when building AND grading Steel Man cases:');
   lines.push('   - If you cite a goalie\'s stats, verify them HERE');
   lines.push('   - If you claim a team will struggle without a skater, check who else');
   lines.push('     is producing (look at their points totals)');
@@ -6599,7 +6433,7 @@ function formatNcaabRosterDepth(homeTeam, awayTeam, rosterDepth, injuries) {
   lines.push('  • Transfer portal means rosters change — verify players are CURRENT');
   lines.push('  • A team losing their best player has fewer quality replacements than NBA');
   lines.push('');
-  lines.push('📌 REFERENCE THIS SECTION when building AND grading Steel Man cases:');
+  lines.push('[NOTE] REFERENCE THIS SECTION when building AND grading Steel Man cases:');
   lines.push('   - If you claim a team will struggle without a star, check the depth');
   lines.push('   - College teams often have 1-2 key scorers — losing them is more impactful');
   lines.push('   - Your claims must be verifiable against this data');
@@ -6704,7 +6538,7 @@ function formatNflRosterDepth(homeTeam, awayTeam, rosterDepth, injuries) {
   lines.push('  • Check WR1/WR2 availability — passing game depends on them');
   lines.push('  • RB depth matters less in modern NFL (RBBC is common)');
   lines.push('');
-  lines.push('📌 REFERENCE THIS SECTION when building AND grading Steel Man cases:');
+  lines.push('[NOTE] REFERENCE THIS SECTION when building AND grading Steel Man cases:');
   lines.push('   - If a key player is OUT, check who steps up from the depth chart');
   lines.push('   - NFL injuries are public (Wed-Fri practice reports) — market has time to adjust');
   lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -6755,7 +6589,7 @@ function formatNflPlayoffHistory(homeTeam, awayTeam, playoffHistory, homeTeamId,
       const redZone = stats.red_zone_scores && stats.red_zone_attempts 
         ? `${stats.red_zone_scores}/${stats.red_zone_attempts} (${Math.round(stats.red_zone_scores / stats.red_zone_attempts * 100)}%)`
         : '?';
-      const winnerMark = isWinner ? ' ✓' : '';
+      const winnerMark = isWinner ? ' [W]' : '';
       return `   ${teamName}${winnerMark}: ${yards} yds | ${firstDowns} 1st | ${turnovers} TO | ${redZone} RZ | ${possession} TOP`;
     };
     
@@ -6977,7 +6811,7 @@ function formatNflPlayoffHistory(homeTeam, awayTeam, playoffHistory, homeTeamId,
   lines.push('  • Any weaknesses exposed? (Turnovers? Red zone struggles?)');
   lines.push('  • Can TONIGHT\'S opponent exploit what the previous opponent could not?');
   lines.push('');
-  lines.push('📌 Playoff football is different — use this data to understand playoff-tested performance,');
+  lines.push('[NOTE] Playoff football is different - use this data to understand playoff-tested performance,');
   lines.push('   not regular season stats that may not translate to elimination games.');
   lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   lines.push('');
@@ -7939,6 +7773,158 @@ ${bowlTierInfo.section}
 }
 
 /**
+ * Fetch CFP Road to Championship context for NCAAF playoff games
+ * Uses Gemini Grounding to research each team's playoff journey
+ * CRITICAL: Only uses web search data (no training data) for accurate 2025-26 CFP info
+ * 
+ * This provides Gary with full context of how each team reached the championship:
+ * - Each playoff game result and score
+ * - Key storylines from each game  
+ * - Momentum and narrative heading into the final
+ */
+async function fetchCfpJourneyContext(homeTeam, awayTeam, game) {
+  try {
+    // Only fetch for CFP games (championship/semifinal/quarterfinal)
+    const gameDate = new Date(game.commence_time || game.date);
+    const month = gameDate.getMonth(); // 0-indexed
+    const day = gameDate.getDate();
+    
+    // CFP games are typically Jan 1 - Jan 20
+    // Skip if not in CFP window
+    const isCfpWindow = (month === 0 && day >= 1 && day <= 20) || (month === 11 && day >= 20);
+    if (!isCfpWindow) {
+      return '';
+    }
+    
+    // Check if this looks like a CFP game based on game name/context
+    const gameName = (game.name || game.title || '').toLowerCase();
+    const isCfpGame = gameName.includes('championship') || 
+                      gameName.includes('semifinal') || 
+                      gameName.includes('cfp') ||
+                      gameName.includes('playoff') ||
+                      gameName.includes('quarterfinal');
+    
+    // Also check if teams are ranked (likely CFP teams)
+    // For now, fetch for any Jan game between ranked/notable teams
+    
+    console.log(`[Scout Report] 🏈 Fetching CFP Road to Championship for ${awayTeam} vs ${homeTeam}`);
+    
+    // Use explicit date context to ensure Gemini uses web search, not training data
+    const today = new Date();
+    const todayStr = today.toLocaleDateString('en-US', { 
+      weekday: 'long', 
+      month: 'long', 
+      day: 'numeric', 
+      year: 'numeric' 
+    });
+    
+    // Fetch journey for both teams in parallel
+    const [homeJourney, awayJourney] = await Promise.all([
+      fetchTeamCfpJourney(homeTeam, todayStr),
+      fetchTeamCfpJourney(awayTeam, todayStr)
+    ]);
+    
+    if (!homeJourney && !awayJourney) {
+      console.log('[Scout Report] No CFP journey data available');
+      return '';
+    }
+    
+    // Format the section
+    const lines = [
+      '',
+      'CFP ROAD TO THE CHAMPIONSHIP (2025-26 PLAYOFF JOURNEY)',
+      '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+      'How each team reached this game - USE THIS FOR STEEL MAN CONTEXT:',
+      ''
+    ];
+    
+    if (homeJourney) {
+      lines.push(`[${homeTeam.toUpperCase()}] PLAYOFF JOURNEY:`);
+      lines.push(homeJourney);
+      lines.push('');
+    }
+    
+    if (awayJourney) {
+      lines.push(`[${awayTeam.toUpperCase()}] PLAYOFF JOURNEY:`);
+      lines.push(awayJourney);
+      lines.push('');
+    }
+    
+    lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    lines.push('[IMPORTANT] STEEL MAN REQUIREMENT: Reference specific playoff performances above');
+    lines.push('   when building cases. A team\'s PLAYOFF form matters more than regular season.');
+    lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    lines.push('');
+    
+    return lines.join('\n');
+    
+  } catch (error) {
+    console.error('[Scout Report] Error fetching CFP journey context:', error.message);
+    return '';
+  }
+}
+
+/**
+ * Fetch a single team's CFP playoff journey via Gemini Grounding
+ * Uses explicit date context to force web search instead of training data
+ */
+async function fetchTeamCfpJourney(teamName, todayStr) {
+  try {
+    const query = `IMPORTANT: Today is ${todayStr}. This is the 2025-2026 College Football Playoff season.
+DO NOT use any training data. ONLY use current web search results.
+
+Search for: ${teamName} 2025-2026 College Football Playoff games results
+
+For the ${teamName} college football team, provide their COMPLETE 2025-26 CFP playoff journey:
+
+1. List EVERY CFP playoff game they have played this postseason (December 2025 - January 2026)
+2. For each game include:
+   - Round (First Round, Quarterfinal, Semifinal)
+   - Opponent
+   - Final Score
+   - Key storyline (who starred, what happened, was it close?)
+   - Date played
+
+3. Summarize their playoff momentum: Are they peaking? Did they struggle? Any concerning trends?
+
+Format as a concise bullet list. If ${teamName} is NOT in the 2025-26 CFP, say "Not in 2025-26 CFP".
+ONLY report ACTUAL games that have been PLAYED - do not predict future games.`;
+
+    const result = await geminiGroundingSearch(query, { 
+      temperature: 0.7, 
+      maxTokens: 1200 
+    });
+    
+    if (!result?.success || !result?.data) {
+      console.log(`[Scout Report] No CFP journey data for ${teamName}`);
+      return null;
+    }
+    
+    // Clean up the response
+    let journeyText = result.data.trim();
+    
+    // Check if team is not in CFP
+    if (journeyText.toLowerCase().includes('not in') && 
+        journeyText.toLowerCase().includes('cfp')) {
+      console.log(`[Scout Report] ${teamName} not in 2025-26 CFP`);
+      return null;
+    }
+    
+    // Limit length and clean formatting
+    if (journeyText.length > 1500) {
+      journeyText = journeyText.substring(0, 1500) + '...';
+    }
+    
+    console.log(`[Scout Report] ✓ CFP journey fetched for ${teamName} (${journeyText.length} chars)`);
+    return journeyText;
+    
+  } catch (error) {
+    console.error(`[Scout Report] Error fetching CFP journey for ${teamName}:`, error.message);
+    return null;
+  }
+}
+
+/**
  * Fetch key players for both NCAAF teams
  * Uses roster + season stats to show who's on the team
  * This prevents hallucinations about players who've transferred
@@ -8363,8 +8349,25 @@ function formatStartingQBs(homeTeam, awayTeam, qbs) {
   if (qbs.home) {
     const qb = qbs.home;
     const backupLabel = qb.isBackup ? ' BACKUP STARTING (starter injured)' : '';
-    lines.push(`[HOME] ${homeTeam}: ${qb.name} (#${qb.jerseyNumber || '?'})${backupLabel}`);
-    lines.push(`   ${qb.gamesPlayed || '?'} GP | ${qb.passingYards || 0} yds | ${qb.passingTds || 0} TD / ${qb.passingInterceptions || 0} INT | ${qb.passingCompletionPct ? qb.passingCompletionPct.toFixed(1) : '?'}% | Rating: ${qb.qbRating ? qb.qbRating.toFixed(1) : '?'}`);
+    // Include official BDL experience (e.g., "2nd Season") to prevent training data hallucinations
+    const expLabel = qb.experience ? ` (${qb.experience})` : '';
+    // Handle both old (passingInterceptions) and new (passingInts) property names
+    const ints = qb.passingInterceptions || qb.passingInts || 0;
+    const compPct = qb.passingCompletionPct || qb.completionPct || '?';
+    const rating = qb.qbRating || qb.passingRating || '?';
+    lines.push(`[HOME] ${homeTeam}: ${qb.name}${expLabel} (#${qb.jerseyNumber || '?'})${backupLabel}`);
+    lines.push(`   Season: ${qb.gamesPlayed || '?'} GP | ${qb.passingYards || 0} yds | ${qb.passingTds || 0} TD / ${ints} INT | ${typeof compPct === 'number' ? compPct.toFixed(1) : compPct}% | Rating: ${typeof rating === 'number' ? rating.toFixed(1) : rating}`);
+    
+    // Add game logs if available (NCAAF enhanced QB data)
+    if (qb.gameLogs && qb.gameLogs.length > 0) {
+      lines.push(`   RECENT GAMES (L${qb.gameLogs.length}):`);
+      qb.gameLogs.forEach((g, i) => {
+        const compAtt = g.attempts > 0 ? `${g.completions}/${g.attempts}` : 'N/A';
+        const pct = g.attempts > 0 ? ((g.completions / g.attempts) * 100).toFixed(0) : '?';
+        lines.push(`     ${g.date || 'Game ' + (i+1)}: ${g.yards} yds, ${g.tds} TD/${g.ints} INT (${compAtt}, ${pct}%)${g.rating ? ` Rating: ${g.rating.toFixed(1)}` : ''}`);
+      });
+    }
+    
     // Add experience warning for rookie/inexperienced QBs
     if (qb.experienceNote) {
       lines.push(`   ${qb.experienceNote}`);
@@ -8385,8 +8388,25 @@ function formatStartingQBs(homeTeam, awayTeam, qbs) {
   if (qbs.away) {
     const qb = qbs.away;
     const backupLabel = qb.isBackup ? ' BACKUP STARTING (starter injured)' : '';
-    lines.push(`[AWAY] ${awayTeam}: ${qb.name} (#${qb.jerseyNumber || '?'})${backupLabel}`);
-    lines.push(`   ${qb.gamesPlayed || '?'} GP | ${qb.passingYards || 0} yds | ${qb.passingTds || 0} TD / ${qb.passingInterceptions || 0} INT | ${qb.passingCompletionPct ? qb.passingCompletionPct.toFixed(1) : '?'}% | Rating: ${qb.qbRating ? qb.qbRating.toFixed(1) : '?'}`);
+    // Include official BDL experience (e.g., "2nd Season") to prevent training data hallucinations
+    const expLabel = qb.experience ? ` (${qb.experience})` : '';
+    // Handle both old (passingInterceptions) and new (passingInts) property names
+    const ints = qb.passingInterceptions || qb.passingInts || 0;
+    const compPct = qb.passingCompletionPct || qb.completionPct || '?';
+    const rating = qb.qbRating || qb.passingRating || '?';
+    lines.push(`[AWAY] ${awayTeam}: ${qb.name}${expLabel} (#${qb.jerseyNumber || '?'})${backupLabel}`);
+    lines.push(`   Season: ${qb.gamesPlayed || '?'} GP | ${qb.passingYards || 0} yds | ${qb.passingTds || 0} TD / ${ints} INT | ${typeof compPct === 'number' ? compPct.toFixed(1) : compPct}% | Rating: ${typeof rating === 'number' ? rating.toFixed(1) : rating}`);
+    
+    // Add game logs if available (NCAAF enhanced QB data)
+    if (qb.gameLogs && qb.gameLogs.length > 0) {
+      lines.push(`   RECENT GAMES (L${qb.gameLogs.length}):`);
+      qb.gameLogs.forEach((g, i) => {
+        const compAtt = g.attempts > 0 ? `${g.completions}/${g.attempts}` : 'N/A';
+        const pct = g.attempts > 0 ? ((g.completions / g.attempts) * 100).toFixed(0) : '?';
+        lines.push(`     ${g.date || 'Game ' + (i+1)}: ${g.yards} yds, ${g.tds} TD/${g.ints} INT (${compAtt}, ${pct}%)${g.rating ? ` Rating: ${g.rating.toFixed(1)}` : ''}`);
+      });
+    }
+    
     // Add experience warning for rookie/inexperienced QBs
     if (qb.experienceNote) {
       lines.push(`   ${qb.experienceNote}`);
@@ -8548,6 +8568,38 @@ QUERY: ${query}`;
       // Debug log: Show first 200 chars of grounding response
       if (text) {
         console.log(`[Grounding Search] Response received (${text.length} chars). Preview: ${text.substring(0, 200).replace(/\n/g, ' ')}...`);
+      }
+      
+      // VALIDATION: Check for garbage/truncated responses
+      // Allow short responses if they look like valid data (e.g., "13-2" for a record, "72°F" for weather)
+      const MIN_USEFUL_LENGTH = 50;
+      const looksLikeValidShortResponse = text && (
+        /^\d{1,2}\s*[-–]\s*\d{1,2}/.test(text.trim()) ||  // Record format: "13-2", "15-0"
+        /^\d+°?F?\s*$/.test(text.trim()) ||                // Temperature: "72", "72°F"
+        /^[A-Z][a-z]+ [A-Z][a-z]+/.test(text.trim())       // Player name: "Fernando Mendoza"
+      );
+      
+      if (!text || (text.length < MIN_USEFUL_LENGTH && !looksLikeValidShortResponse)) {
+        console.warn(`[Grounding Search] [WARNING] Response too short (${text?.length || 0} chars). May be garbage or truncated.`);
+        return {
+          success: false,
+          data: null,
+          error: `Response too short: ${text?.length || 0} chars (expected at least ${MIN_USEFUL_LENGTH})`,
+          raw: text
+        };
+      }
+      
+      // Check for common error patterns in response
+      const textLower = (text || '').toLowerCase();
+      const errorPatterns = ['i cannot', 'i\'m unable', 'no information', 'unable to find', 'error:'];
+      if (text.length < 200 && !looksLikeValidShortResponse && errorPatterns.some(p => textLower.includes(p))) {
+        console.warn(`[Grounding Search] [WARNING] Response looks like an error/refusal: "${text.substring(0, 100)}"`);
+        return {
+          success: false,
+          data: null,
+          error: `Response appears to be an error or refusal`,
+          raw: text
+        };
       }
       
       return {
@@ -8782,17 +8834,46 @@ Format as structured data. Use current ${getCurrentSeasonString()} season data.`
  * @param {string} dateStr - Game date string
  * @returns {Object} - Weather object
  */
-export async function getGroundedWeather(homeTeam, awayTeam, dateStr) {
-  const query = `What is the weather forecast for the NFL game ${awayTeam} @ ${homeTeam} on ${dateStr}?
+export async function getGroundedWeather(homeTeam, awayTeam, dateStr, gameTime = null) {
+  // Get current time for staleness check
+  const now = new Date();
+  const currentTimeStr = now.toLocaleTimeString('en-US', { 
+    timeZone: 'America/New_York', 
+    hour: 'numeric', 
+    minute: '2-digit',
+    hour12: true 
+  });
+  const currentDateStr = now.toLocaleDateString('en-US', {
+    timeZone: 'America/New_York',
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric'
+  });
+  
+  // Game time context for query
+  const gameTimeContext = gameTime ? ` at ${gameTime}` : '';
+  
+  const query = `IMPORTANT: Current time is ${currentTimeStr} EST on ${currentDateStr}.
+
+What is the CURRENT weather forecast for the NFL game ${awayTeam} @ ${homeTeam} on ${dateStr}${gameTimeContext}?
+
+STRICT REQUIREMENTS:
+1. Only use weather forecasts published TODAY (${currentDateStr}) or within the last 2 hours
+2. Provide the forecast specifically for GAME TIME${gameTimeContext}, not current conditions
+3. If the game is more than 12 hours away, note that forecasts may change
+4. For precipitation forecasts (rain/snow), indicate the PROBABILITY PERCENTAGE if available
+
 Include:
-1. Temperature (in Fahrenheit)
-2. Conditions (sunny, cloudy, rain, snow)
-3. Wind speed and direction
+1. Temperature at game time (in Fahrenheit)
+2. Conditions at game time (sunny, cloudy, rain, snow) - with probability if precipitation
+3. Wind speed and direction at game time
 4. Is this a dome/indoor stadium? (if so, weather is controlled)
+5. Forecast confidence: HIGH (clear skies), MODERATE (temperature/wind only), LOW (precipitation forecast)
 
-Be specific and factual.`;
+Be specific and factual. Only report what current forecasts actually say.`;
 
-  const result = await geminiGroundingSearch(query, { temperature: 1.0, maxTokens: 1200 });
+  const result = await geminiGroundingSearch(query, { temperature: 1.0, maxTokens: 1500 });
   
   if (result.success && result.data) {
     return parseWeatherFromText(result.data);
@@ -8811,7 +8892,10 @@ function parseWeatherFromText(text) {
       temperature: 72,
       conditions: 'Indoor/Dome',
       wind: 'N/A',
-      isDome: true
+      wind_speed: 0,
+      isDome: true,
+      is_dome: true,
+      forecast_confidence: 'HIGH'
     };
   }
   
@@ -8823,23 +8907,57 @@ function parseWeatherFromText(text) {
   
   // Extract conditions
   let conditions = 'Clear';
-  if (lower.includes('rain')) conditions = 'Rain';
-  else if (lower.includes('snow')) conditions = 'Snow';
-  else if (lower.includes('cloud')) conditions = 'Cloudy';
-  else if (lower.includes('partly cloudy')) conditions = 'Partly Cloudy';
-  else if (lower.includes('sunny') || lower.includes('clear')) conditions = 'Clear';
+  let precipProbability = null;
+  
+  // Check for precipitation with probability
+  const precipProbMatch = text.match(/(\d+)\s*%\s*(?:chance|probability|likelihood)\s*(?:of\s*)?(?:rain|snow|precipitation)/i) ||
+                          text.match(/(?:rain|snow|precipitation)[^.]*?(\d+)\s*%/i);
+  if (precipProbMatch) {
+    precipProbability = parseInt(precipProbMatch[1], 10);
+  }
+  
+  if (lower.includes('snow')) conditions = precipProbability ? `Snow (${precipProbability}% chance)` : 'Snow';
+  else if (lower.includes('rain') || lower.includes('showers')) conditions = precipProbability ? `Rain (${precipProbability}% chance)` : 'Rain';
+  else if (lower.includes('storm') || lower.includes('thunder')) conditions = precipProbability ? `Storms (${precipProbability}% chance)` : 'Storms';
   else if (lower.includes('overcast')) conditions = 'Overcast';
+  else if (lower.includes('partly cloudy')) conditions = 'Partly Cloudy';
+  else if (lower.includes('cloud')) conditions = 'Cloudy';
+  else if (lower.includes('sunny') || lower.includes('clear')) conditions = 'Clear';
   
   // Extract wind
   const windMatch = text.match(/wind[:\s]+(\d+)\s*(?:mph|miles)/i) ||
-                    text.match(/(\d+)\s*mph\s*wind/i);
-  const wind = windMatch ? `${windMatch[1]} mph` : null;
+                    text.match(/(\d+)\s*mph\s*wind/i) ||
+                    text.match(/winds?\s*(?:of\s*)?(\d+)/i);
+  const windSpeed = windMatch ? parseInt(windMatch[1], 10) : null;
+  const wind = windSpeed ? `${windSpeed} mph` : null;
+  
+  // Determine forecast confidence
+  let forecastConfidence = 'HIGH';
+  const hasPrecip = lower.includes('rain') || lower.includes('snow') || lower.includes('storm');
+  const isFarOut = lower.includes('may change') || lower.includes('could change') || lower.includes('uncertain');
+  
+  if (hasPrecip && precipProbability && precipProbability < 50) {
+    forecastConfidence = 'LOW';
+  } else if (hasPrecip) {
+    forecastConfidence = 'MODERATE';
+  } else if (isFarOut) {
+    forecastConfidence = 'MODERATE';
+  }
+  
+  // Extract explicit confidence if stated
+  if (lower.includes('confidence: high') || lower.includes('high confidence')) forecastConfidence = 'HIGH';
+  else if (lower.includes('confidence: moderate') || lower.includes('moderate confidence')) forecastConfidence = 'MODERATE';
+  else if (lower.includes('confidence: low') || lower.includes('low confidence')) forecastConfidence = 'LOW';
   
   return {
     temperature,
     conditions,
     wind,
-    isDome: false
+    wind_speed: windSpeed,
+    isDome: false,
+    is_dome: false,
+    forecast_confidence: forecastConfidence,
+    precipitation_probability: precipProbability
   };
 }
 
@@ -9965,8 +10083,8 @@ export function buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayPro
     // Add NHL-specific note about goalie comparison
     // (Actual goalie stats come from Scout Report RotoWire grounding)
     
-  } else if (sport === 'NFL' || sport === 'americanfootball_nfl' || sport === 'NCAAF' || sport === 'americanfootball_ncaaf') {
-    // Football stats
+  } else if (sport === 'NFL' || sport === 'americanfootball_nfl') {
+    // NFL stats - has points per game fields
     const record = formatStat(homeProfile?.record, awayProfile?.record, true);
     const ppg = formatStat(
       homeStats.total_points_per_game?.toFixed?.(1) || homeStats.total_points_per_game,
@@ -9995,6 +10113,51 @@ export function buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayPro
       { label: 'Opp Pts/Gm', ...oppPpg },
       { label: 'Rush Yds/Gm', ...rushYpg },
       { label: 'Pass Yds/Gm', ...passYpg },
+      { label: 'Key Injuries', home: homeInjuries, away: awayInjuries, arrow: '' }
+    ];
+    
+  } else if (sport === 'NCAAF' || sport === 'americanfootball_ncaaf') {
+    // NCAAF stats - BDL provides different fields than NFL
+    // Available: passing_yards_per_game, rushing_yards_per_game, opp_passing_yards, opp_rushing_yards
+    // NOT available: total_points_per_game, opp_total_points_per_game
+    const record = formatStat(homeProfile?.record, awayProfile?.record, true);
+    const passYpg = formatStat(
+      homeStats.passing_yards_per_game?.toFixed?.(1) || homeStats.passing_yards_per_game,
+      awayStats.passing_yards_per_game?.toFixed?.(1) || awayStats.passing_yards_per_game,
+      true
+    );
+    const rushYpg = formatStat(
+      homeStats.rushing_yards_per_game?.toFixed?.(1) || homeStats.rushing_yards_per_game,
+      awayStats.rushing_yards_per_game?.toFixed?.(1) || awayStats.rushing_yards_per_game,
+      true
+    );
+    // Calculate total yards per game
+    const homeTotalYpg = (parseFloat(homeStats.passing_yards_per_game) || 0) + (parseFloat(homeStats.rushing_yards_per_game) || 0);
+    const awayTotalYpg = (parseFloat(awayStats.passing_yards_per_game) || 0) + (parseFloat(awayStats.rushing_yards_per_game) || 0);
+    const totalYpg = formatStat(
+      homeTotalYpg > 0 ? homeTotalYpg.toFixed(1) : null,
+      awayTotalYpg > 0 ? awayTotalYpg.toFixed(1) : null,
+      true
+    );
+    // Opp yards (total season, not per game - but useful for comparison)
+    const oppPassYds = formatStat(
+      homeStats.opp_passing_yards,
+      awayStats.opp_passing_yards,
+      false // Lower is better
+    );
+    const oppRushYds = formatStat(
+      homeStats.opp_rushing_yards,
+      awayStats.opp_rushing_yards,
+      false // Lower is better
+    );
+    
+    rows = [
+      { label: 'Record', ...record },
+      { label: 'Pass Yds/Gm', ...passYpg },
+      { label: 'Rush Yds/Gm', ...rushYpg },
+      { label: 'Total Yds/Gm', ...totalYpg },
+      { label: 'Opp Pass Yds', ...oppPassYds },
+      { label: 'Opp Rush Yds', ...oppRushYds },
       { label: 'Key Injuries', home: homeInjuries, away: awayInjuries, arrow: '' }
     ];
     
