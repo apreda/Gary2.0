@@ -870,12 +870,9 @@ export const oddsService = {
     return dedupeRequest(cacheKey, async () => {
       console.log(`[Odds Service] Fetching upcoming games for ${sport}...`);
 
-      // NBA & NFL EXEMPTION: Use The Odds API directly for correct game IDs (needed for player props)
-      // This bypasses the BDL -> Fallback logic used for other sports.
-      if (sport === 'basketball_nba' || sport === 'americanfootball_nfl') {
-        console.log(`[Odds Service] ${sport}: Using The Odds API directly for correct game IDs.`);
-        return fetchUpcomingOddsFallback(sport);
-      }
+      // ALL SPORTS NOW USE BDL AS PRIMARY SOURCE (no more Odds API exemption)
+      // BDL has comprehensive odds coverage for NBA, NFL, NHL, NCAAB, NCAAF
+      // Fallback to The Odds API only if BDL fails
 
       let dates = [];
       const isNfl = sport === 'americanfootball_nfl';

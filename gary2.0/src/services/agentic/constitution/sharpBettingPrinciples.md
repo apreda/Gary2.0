@@ -109,13 +109,17 @@ This document contains betting principles backed by verified data and industry r
 
 ## PART 5: WEATHER (NFL)
 
-### Wind Is The Most Important Weather Factor
+### Wind Investigation
 
-**Verified Data:**
-- Under hits in 54% of games with winds over 20 mph (since 2015)
-- Completion percentages drop 2-3% for every 5 mph above 15 mph
-- At 15+ mph winds, passing games are significantly disrupted
-- Interception rates increase up to 8% in very windy conditions
+**Questions to Investigate:**
+- What are the wind conditions for THIS game?
+- Investigate: How have THESE specific teams performed in similar wind conditions?
+- Historical data shows wind can affect passing - what do the specific conditions and THESE teams' passing games suggest?
+
+**Reference Data Points (for context, not conclusions):**
+- High wind games (20+ mph) have historically seen different under/over patterns
+- Passing efficiency can be affected by wind speed
+- Check: What are the actual conditions and how might THESE teams be affected?
 
 **Sources:** FOX Sports research, Sharp Football Analysis, Covers.com
 
@@ -214,16 +218,16 @@ When analyzing a game, ask: "When did this injury happen?"
 
 **Source:** ESPN betting analysis (November 2024)
 
-**Key Insight:** Check who's starting in net. Back-to-backs usually mean backup plays one game. A team with their backup in net against an opponent's starter is a significant factor.
+**Key Insight:** Investigate who's starting in net. On back-to-backs, check THIS team's goalie rotation pattern - which goalie are they starting tonight?
 
-### The Goalie-Streak Golden Rule
+### The Goalie-Streak Investigation
 
-**"Ride the streak until the goalie changes."**
+**Investigate the goalie's role in the streak:**
 
-Unlike NBA/NFL where streaks are often shooting variance or turnover luck, NHL streaks with goalie continuity have STRUCTURAL support:
-- A hot goalie stays hot (confidence, rhythm, team plays in front of him differently)
-- A cold goalie can sink a team for weeks
-- Betting AGAINST a hot team with the same goalie = fighting structure, not exploiting regression
+When analyzing NHL streaks, goalie continuity is a key factor to investigate:
+- Investigate: Is the same goalie starting tonight who played during the streak?
+- Investigate: What does THIS goalie's recent form look like (SV%, GSAx)?
+- Investigate: Is the streak goalie-driven or team-driven (check CF%, xG)?
 
 **Key Questions:**
 1. Is the same goalie starting tonight who played during the streak?

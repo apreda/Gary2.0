@@ -4,7 +4,7 @@
  * Exports all agentic functionality for use by other modules.
  */
 
-export { analyzeGame, analyzeGames } from './agenticOrchestrator.js';
+export { analyzeGame } from './agenticOrchestrator.js';
 export { toolDefinitions, formatTokenMenu, getTokensForSport } from './tools/toolDefinitions.js';
 export { fetchStats } from './tools/statRouter.js';
 export { getConstitution } from './constitution/index.js';

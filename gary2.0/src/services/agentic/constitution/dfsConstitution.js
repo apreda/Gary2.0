@@ -122,14 +122,14 @@ The best DFS value comes from finding players whose:
 - Need to DIFFERENTIATE from the field to win
 - High ownership = need player to SMASH to gain ground
 - Low ownership = massive leverage if player hits
-- CEILING matters more than floor
+- Investigate: What's THIS player's ceiling? What's their upside scenario tonight?
 - Correlation (stacks) can multiply upside
 
 **CASH (50/50, Double-Ups):**
 - Need to beat ~50% of field
-- CONSISTENCY matters more than ceiling
-- Avoid low-floor punts
-- Proven volume > upside
+- Investigate: What's THIS player's floor? How consistent is their production?
+- Investigate: Does THIS player have risk of a zero or very low score?
+- Investigate: What's THIS player's volume history?
 
 **GARY'S APPROACH:**
 - For GPP: Find structural edges others miss, accept variance

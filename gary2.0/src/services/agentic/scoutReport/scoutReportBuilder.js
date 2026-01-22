@@ -318,74 +318,6 @@ ${snapshot.join('\n')}
 }
 
 /**
- * Fetch recent headlines, storylines, and narrative context for a game
- * This is MINOR context for Gary to investigate - not to take at face value
- * 
- * Includes: win streaks, buzzer beaters, coaching changes, press conferences,
- * rivalry context, motivation factors, dramatic finishes, player milestones
- */
-async function fetchGameHeadlines(homeTeam, awayTeam, sport, gameDate) {
-  try {
-    const genAI = getGeminiClient();
-    if (!genAI) return null;
-    
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-3-flash-preview', // Updated to Gemini 3 (policy: only Gemini 3 allowed)
-      generationConfig: { temperature: 1.0 }, // Gemini 3: Keep at 1.0
-      tools: [{ google_search: {} }]
-    });
-    
-    const dateStr = gameDate ? new Date(gameDate).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) : new Date().toISOString().slice(0, 10);
-    
-    // Sport-specific query adjustments
-    const sportContext = {
-      'NBA': 'NBA basketball',
-      'NFL': 'NFL football',
-      'NHL': 'NHL hockey',
-      'NCAAB': 'college basketball NCAAB',
-      'NCAAF': 'college football NCAAF'
-    }[sport] || sport;
-    
-    const query = `Search for recent ${sportContext} news and headlines about ${awayTeam} vs ${homeTeam} game on ${dateStr}.
-
-Look for ANY of the following storylines or context (if they exist):
-
-1. **RECENT DRAMA/NEWS:** Coaching changes, firings, press conference quotes, locker room issues, trades
-2. **STREAKS & MOMENTUM:** Win streaks, losing streaks, buzzer beaters, dramatic finishes in recent games
-3. **RIVALRY/HISTORY:** Is this a rivalry game? Any historical context between these teams?
-4. **MOTIVATION FACTORS:** Revenge spots (former players/coaches), playoff implications, must-win situations
-5. **PLAYER STORYLINES:** Milestones (career points, etc.), returns from injury, contract year players
-6. **SCHEDULE CONTEXT:** Coming off a big win/loss, lookahead to next game, back-to-back fatigue
-
-IMPORTANT: Only report FACTUAL headlines and news. If you can't find recent news about these teams, say "No significant headlines found."
-
-Format: Brief bullet points for each relevant storyline found.`;
-
-    console.log(`[Scout Report] Fetching game headlines via Gemini Grounding for ${awayTeam} @ ${homeTeam}...`);
-    
-    const result = await model.generateContent(query);
-    const responseText = (result.response?.text() || '').trim();
-    
-    if (!responseText || responseText.toLowerCase().includes('no significant headlines') || responseText.length < 50) {
-      console.log(`[Scout Report] No significant headlines found for this matchup`);
-      return null;
-    }
-    
-    console.log(`[Scout Report] Found game headlines (${responseText.length} chars)`);
-    
-    // Truncate if too long
-    const truncated = responseText.length > 2500 
-      ? responseText.substring(0, 2500) + '... [TRUNCATED]'
-      : responseText;
-    
-    return truncated;
-  } catch (error) {
-    console.warn(`[Scout Report] Headlines fetch failed:`, error.message);
-    return null;
-  }
-}
-
-/**
  * Build a scout report for a game
  * This gives Gary enough context to think, not just react to odds.
  */
@@ -395,7 +327,7 @@ export async function buildScoutReport(game, sport) {
   const sportKey = normalizeSport(sport);
   
   // Fetch basic data in parallel
-  // NOTE: Headlines/storylines now come from fetchCurrentState (narrativeContext) - no separate fetchGameHeadlines needed
+  // Headlines/storylines come from fetchCurrentState via narrativeContext
   const [homeProfile, awayProfile, injuries, recentHome, recentAway, standingsSnapshot] = await Promise.all([
     fetchTeamProfile(homeTeam, sportKey),
     fetchTeamProfile(awayTeam, sportKey),
@@ -1705,8 +1637,26 @@ ${game.gameSignificance}
 `;
   }
   
+  // Build BANNED PLAYERS section if we have long-term filtered injuries
+  // This goes at the VERY TOP of the scout report - before anything else
+  const filteredPlayers = injuries?.filteredLongTerm || [];
+  const bannedPlayersSection = filteredPlayers.length > 0 ? `
+<banned_players>
+BANNED PLAYERS - DO NOT MENTION IN YOUR ANALYSIS
+
+The following players have been OUT for WEEKS/MONTHS (season-long injuries).
+The team has ALREADY ADJUSTED. The betting line ALREADY REFLECTS their absence.
+
+DO NOT MENTION THESE PLAYERS: ${filteredPlayers.join(', ')}
+
+If you mention ANY of these players in your rationale, your analysis is invalid.
+Focus on who is playing tonight, not who has been gone for months.
+</banned_players>
+
+` : '';
+
   const report = `
-══════════════════════════════════════════════════════════════════════
+${bannedPlayersSection}══════════════════════════════════════════════════════════════════════
 MATCHUP: ${matchupLabel}
 Sport: ${sportKey} | ${game.commence_time ? formatGameTime(game.commence_time) : 'Time TBD'}
 ${game.venue ? `Venue: ${venueLabel}` : ''}${tournamentLabel ? `\n${tournamentLabel}` : ''}
@@ -2566,7 +2516,7 @@ IMPORTANT: Since there are NO H2H games, DO NOT mention H2H history in your anal
   });
   
   lines.push('');
-  lines.push(`🚫 DATA BOUNDARY: You may ONLY cite the ${h2hData.gamesFound} game(s) shown above.`);
+  lines.push(`[DATA BOUNDARY]: You may ONLY cite the ${h2hData.gamesFound} game(s) shown above.`);
   lines.push(`   DO NOT claim historical streaks or records beyond this data.`);
   
   return lines.join('\n');
@@ -2593,13 +2543,13 @@ async function fetchInjuries(homeTeam, awayTeam, sport) {
       console.log(`[Scout Report] NFL/NCAAF: Using currentState (Gemini Grounding) for game-day injury info`);
       console.log(`[Scout Report] Skipping BDL injury fetch (can include stale injuries from weeks ago)`);
       
-      // Fetch grounded context for narratives - this is the PRIMARY injury source for NFL now
+      // Fetch current state for narratives - this is the PRIMARY injury source for NFL now
       let narrativeContext = null;
       try {
-        const liveContextInjuries = await fetchGroundedContext(homeTeam, awayTeam, sport);
-        narrativeContext = liveContextInjuries?.groundedRaw || null;
+        const currentState = await fetchCurrentState(homeTeam, awayTeam, sport);
+        narrativeContext = currentState?.groundedRaw || null;
       } catch (e) {
-        console.log(`[Scout Report] Failed to fetch ${sport} narrative context: ${e.message}`);
+        console.log(`[Scout Report] Failed to fetch ${sport} current state: ${e.message}`);
       }
       
       // Return empty injury arrays - injury data comes from currentState (OUT/LIMITED section)
@@ -2615,15 +2565,15 @@ async function fetchInjuries(homeTeam, awayTeam, sport) {
     
     // =============================================================================
     // NBA/NHL/NCAAB: Use Gemini Grounding as PRIMARY source (game-day status)
+    // SINGLE GROUNDING CALL: fetchGroundingInjuries returns both structured data AND groundingRaw
     // =============================================================================
     console.log(`[Scout Report] Fetching injuries from Rotowire (via Gemini Grounding) for ${awayTeam} @ ${homeTeam}`);
-    
-    // PRIMARY: Fetch from Rotowire via Gemini Grounding (most current game-day status)
+
+    // PRIMARY: Fetch from Rotowire via Gemini Grounding (returns structured injuries + raw narrative)
     const groundingInjuries = await fetchGroundingInjuries(homeTeam, awayTeam, sport);
-    
-    // ALWAYS preserve the raw grounding context for Gary's organic reading
-    let liveContextInjuries = await fetchGroundedContext(homeTeam, awayTeam, sport);
-    const narrativeContext = liveContextInjuries?.groundedRaw || groundingInjuries?.groundingRaw || null;
+
+    // Use groundingRaw from the single call (no duplicate fetchGroundedContext call needed)
+    const narrativeContext = groundingInjuries?.groundingRaw || null;
     
     const groundingHomeCount = groundingInjuries?.home?.length || 0;
     const groundingAwayCount = groundingInjuries?.away?.length || 0;
@@ -2694,12 +2644,21 @@ async function fetchCurrentState(homeTeam, awayTeam, sport, gameDate) {
   }
   
   try {
-    const today = gameDate || new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 2026 GROUNDING FRESHNESS PROTOCOL FOR CURRENT STATE
+    // ═══════════════════════════════════════════════════════════════════════════
+    const now = new Date();
+    const today = gameDate || now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    const todayFull = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+    const currentMonth = now.getMonth() + 1;
+    const currentYear = now.getFullYear();
+    const seasonContext = currentMonth >= 10 ? `${currentYear}-${currentYear + 1}` : `${currentYear - 1}-${currentYear}`;
+
     // Configure model with Google Search Grounding
     const model = genAI.getGenerativeModel({
       model: 'gemini-3-flash-preview',
       tools: [{ google_search: {} }],
+      generationConfig: { temperature: 1.0 }, // Gemini 3: Keep at 1.0
       safetySettings: [
         { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
         { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
@@ -2707,8 +2666,7 @@ async function fetchCurrentState(homeTeam, awayTeam, sport, gameDate) {
         { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
       ]
     });
-    
-    // Simple, natural prompt - like asking a knowledgeable fan
+
     const sportName = {
       'NFL': 'NFL', 'americanfootball_nfl': 'NFL',
       'NBA': 'NBA', 'basketball_nba': 'NBA',
@@ -2716,68 +2674,71 @@ async function fetchCurrentState(homeTeam, awayTeam, sport, gameDate) {
       'NCAAB': 'college basketball', 'basketball_ncaab': 'college basketball',
       'NCAAF': 'college football', 'americanfootball_ncaaf': 'college football'
     }[sport] || sport;
-    
+
     const isNFL = sport === 'NFL' || sport === 'americanfootball_nfl';
     const isNCAAF = sport === 'NCAAF' || sport === 'americanfootball_ncaaf';
-    
-    // NFL/NCAAF-specific sections for weather and game context
-    const footballSpecificSections = (isNFL || isNCAAF) ? `
 
+    // NFL/NCAAF-specific sections
+    const footballSpecificSections = (isNFL || isNCAAF) ? `
 **WEATHER & TEMPERATURE:**
-- ALWAYS include: Game-time temperature (°F)
-- ALWAYS include: Is this a dome/indoor stadium? (If yes, skip weather entirely)
-- ONLY include precipitation/wind details if conditions are CONFIRMED SEVERE:
-  * Active blizzard with accumulation during the game
-  * Sustained wind 25+ mph (not gusts - sustained)
-  * Sub-15°F with dangerous wind chill
-- If conditions are NOT severe, just state: "Temperature: X°F. No severe weather expected."
-- DO NOT include: forecasted rain chances, light snow predictions, or "might rain" language
-- Weather forecasts are unreliable - only report CONFIRMED current/imminent severe conditions
+- Game-time temperature (°F) - skip if dome/indoor stadium
+- Only report SEVERE conditions: blizzard, sustained 25+ mph wind, sub-15°F
 
 **GAME CONTEXT:**
-- GAME TYPE: Is this Thursday Night Football (TNF), Sunday Night Football (SNF), Monday Night Football (MNF), Saturday game, or regular Sunday?${isNCAAF ? ' Or is this a bowl game, conference championship, or CFP game?' : ''}
-- DIVISIONAL: Are ${homeTeam} and ${awayTeam} in the same ${isNFL ? 'NFL division' : 'conference'}? If yes, which one?
-- PLAYOFF IMPLICATIONS: What are the current standings for both teams? Is either team fighting for a playoff spot, division title, or first-round bye?
+- GAME TYPE: TNF/SNF/MNF/Saturday${isNCAAF ? '/Bowl/CFP' : ''}?
+- DIVISIONAL: Same ${isNFL ? 'division' : 'conference'}?
+- PLAYOFF IMPLICATIONS: Current standings, what's at stake?
 ` : '';
-    
-    const prompt = `For the ${sportName} game ${awayTeam} @ ${homeTeam} on ${today}:
+
+    const prompt = `<date_anchor>
+  System Date: ${todayFull}
+  Season: ${seasonContext} ${sportName}
+</date_anchor>
+
+<grounding_instructions>
+  GROUND TRUTH HIERARCHY:
+  1. PRIMARY: This System Date + Search Tool results = absolute "Present"
+  2. SECONDARY: Your training data = "Historical Archive" (2024 or earlier)
+  3. CONFLICT: If training says Player X on Team A but Search shows trade to Team B, USE SEARCH
+
+  EVIDENCE SUPREMACY: You MUST use Google Search. DO NOT skip the search or rely on training data.
+  Your 2024 training data is OUTDATED for current rosters, injuries, and team performance.
+</grounding_instructions>
+
+<query>
+For the ${sportName} game ${awayTeam} @ ${homeTeam} on ${today}:
 
 What is the CURRENT STATE of each team heading into this game?
 
-### SEARCH & DATA INTEGRITY RULES (CRITICAL):
-1. **24-HOUR WINDOW**: ONLY use news, reports, and injury updates published within the last 24 hours of ${today}. 
-2. **STALE INJURY DETECTION**: If a report says a player "remains out", "continues to be sidelined", or "is still missing", this is a STALE injury. 
-3. **ORIGINAL DATE**: Aggressively look for the *original* date of injury or the *total games missed*. 
-   - If a player has been out for 10+ days or 4+ games, note it as "LONG-TERM / ADJUSTED".
-   - If a player got hurt 1-2 days ago, note it as "FRESH / NEW".
+### FRESHNESS RULES (MANDATORY):
+1. **SEARCH FIRST**: Use Google Search for current info - do NOT assume from training data
+2. **24-48 HOUR WINDOW**: Prefer news/reports from past 24-48 hours for injuries
+3. **STALE INJURY DETECTION**: "remains out" or "continues sidelined" = STALE injury
+4. **ORIGINAL DATE**: Find when injury FIRST occurred + total games missed:
+   - 10+ days or 4+ games out = "LONG-TERM / ADJUSTED"
+   - 1-2 days ago = "FRESH / NEW"
 
 **${homeTeam}:**
-- How have they been playing lately? (momentum - last 5-10 games, are they hot/cold?)
-- **LAST GAME STORY:** What happened in their most recent game? (Like a beat writer would describe it - was it a blowout, a close win, a buzzer beater, a defensive grind, a collapse? What was the narrative?)
-- **INJURIES FOR THIS GAME:** Who's currently OUT, DOUBTFUL, QUESTIONABLE, or LIMITED?
-  * For EACH injured player, include: (1) their status, (2) the injury type, (3) ORIGINAL DATE of injury (when they first went out), (4) TOTAL GAMES MISSED this season.
-  * Example format: "Player Name (Position) - OUT (knee) - out since Dec 12 (missed 15 games) - ADJUSTED" or "Player Name - OUT (ankle) - injured Jan 18 (missed 0 games) - FRESH"
-  * This timing context is CRITICAL - a player missing their first game is different from one who's been out 5 games
-- Any recent storylines? (who's stepped up, breakout performances, key headlines from last week)
-- What would a fan who watches them regularly know about their current situation?
+- Momentum (last 5-10 games - hot/cold?)
+- **LAST GAME:** What happened? (Beat writer narrative - blowout, close, buzzer beater?)
+- **INJURIES:** OUT/DOUBTFUL/QUESTIONABLE/LIMITED players with:
+  * Status, injury type, ORIGINAL DATE, GAMES MISSED
+  * Format: "Player (Pos) - OUT (knee) - since Dec 12 (missed 15 games) - ADJUSTED"
+- Recent storylines (breakout performances, key headlines)
 
 **${awayTeam}:**
-- How have they been playing lately? (momentum - last 5-10 games, are they hot/cold?)
-- **LAST GAME STORY:** What happened in their most recent game? (Like a beat writer would describe it - was it a blowout, a close win, a buzzer beater, a defensive grind, a collapse? What was the narrative?)
-- **INJURIES FOR THIS GAME:** Who's currently OUT, DOUBTFUL, QUESTIONABLE, or LIMITED?
-  * For EACH injured player, include: (1) their status, (2) the injury type, (3) ORIGINAL DATE of injury (when they first went out), (4) TOTAL GAMES MISSED this season.
-  * Example format: "Player Name (Position) - OUT (knee) - out since Dec 12 (missed 15 games) - ADJUSTED" or "Player Name - OUT (ankle) - injured Jan 18 (missed 0 games) - FRESH"
-  * This timing context is CRITICAL - a player missing their first game is different from one who's been out 5 games
-- Any recent storylines? (who's stepped up, breakout performances, key headlines from last week)
-- What would a fan who watches them regularly know about their current situation?
+- Momentum (last 5-10 games - hot/cold?)
+- **LAST GAME:** What happened? (Beat writer narrative)
+- **INJURIES:** Same format as above with ORIGINAL DATE + GAMES MISSED
+- Recent storylines
 ${footballSpecificSections}
-**IMPORTANT GUIDELINES:**
-- Today is ${today}. Use only information from the LAST 7 DAYS for momentum, but use the FULL SEASON for injury history.
-- If a player has been out ALL SEASON or for months, note that it's NOT new - the team has already adjusted.
-- Focus on CURRENT momentum and recent developments, not season-long narratives.
-- A knowledgeable fan should recognize this as accurate, up-to-date context.
+### CRITICAL REMINDERS:
+- Today is ${today}. VERIFY all info via Search - your training is outdated.
+- Players out ALL SEASON = team has ADJUSTED (not fresh news)
+- Focus on CURRENT state, not season-long narratives
+</query>
 
-Be factual and current. No betting predictions or opinions.`;
+Be factual. Use Search Tool. No betting predictions.`;
 
     console.log(`[Scout Report] Fetching CURRENT STATE for ${awayTeam} @ ${homeTeam}...`);
     const startTime = Date.now();
@@ -2920,12 +2881,6 @@ Cleaned Report:`;
     console.warn(`[Scout Report] Narrative scrubbing failed: ${e.message}`);
     return narrative;
   }
-}
-
-// Keep fetchGroundedContext as a deprecated alias for backward compatibility
-async function fetchGroundedContext(homeTeam, awayTeam, sport, gameDate, options = {}) {
-  // Redirect to the new simple function
-  return fetchCurrentState(homeTeam, awayTeam, sport, gameDate);
 }
 
 /**
@@ -8526,18 +8481,51 @@ export async function geminiGroundingSearch(query, options = {}) {
         ]
       });
       
-      // Add today's date context to prevent stale data (e.g., "Embiid back tonight" from Wednesday articles)
+      // ═══════════════════════════════════════════════════════════════════════════
+      // 2026 GROUNDING FRESHNESS PROTOCOL
+      // Prevents "Concept Drift" where Gemini's training data clashes with 2026 reality
+      // ═══════════════════════════════════════════════════════════════════════════
       const today = new Date();
       const todayStr = today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-      
-      // Date-aware query: Prepend date context and instruct to use only current sources
-      const dateAwareQuery = `TODAY IS ${todayStr}.
+      const todayISO = today.toISOString().slice(0, 10); // YYYY-MM-DD for filtering
 
-CRITICAL: Only use information from articles published TODAY (${todayStr}). 
-If an article says a player is "returning tonight" or "back tonight", verify the article is from TODAY, not a previous day.
-Ignore older articles that may have stale information about "tonight's game" from previous days.
+      // Calculate current season context
+      const currentMonth = today.getMonth() + 1;
+      const currentYear = today.getFullYear();
+      const seasonContext = currentMonth >= 10 ? `${currentYear}-${currentYear + 1}` : `${currentYear - 1}-${currentYear}`;
 
-QUERY: ${query}`;
+      // Build the Freshness Protocol query with XML anchoring
+      const dateAwareQuery = `<date_anchor>
+  System Date: ${todayStr}
+  ISO Date: ${todayISO}
+  Season Context: ${seasonContext} (NBA/NHL mid-season, NFL playoffs)
+</date_anchor>
+
+<grounding_instructions>
+  GROUND TRUTH HIERARCHY (MANDATORY):
+  1. PRIMARY TRUTH: This System Date and Search Tool results are the absolute "Present"
+  2. SECONDARY TRUTH: Your internal training data is a "Historical Archive" from 2024 or earlier
+  3. CONFLICT RESOLUTION: If your training says Player X is on Team A, but Search shows a trade to Team B,
+     your training is an "Amnesia Gap" - USE THE SEARCH RESULT
+
+  FRESHNESS RULES:
+  1. Initialize Google Search for this query - DO NOT skip the search
+  2. ONLY use search results from the past 7 days (preferably past 24-48 hours)
+  3. If a search result is dated prior to January 2026, flag it as "Historical" and DO NOT use for current analysis
+  4. EVIDENCE SUPREMACY: Surrender intuition to Search Tool results. Search results ARE the facts.
+
+  ANTI-LAZY VERIFICATION:
+  - Do NOT assume you know current rosters, injuries, or stats from training data
+  - VERIFY claims using Search - if you can't find verification, say "unverified"
+  - For injuries: Look for articles from the LAST 24 HOURS specifically
+  - If an article says "tonight" or "returns tonight", verify the article date matches ${todayStr}
+</grounding_instructions>
+
+<query>
+${query}
+</query>
+
+CRITICAL REMINDER: Today is ${todayStr}. Use ONLY fresh search results. Your 2024 training data is outdated.`;
       
       const result = await model.generateContent(dateAwareQuery);
       const response = result.response;
@@ -9105,7 +9093,7 @@ NOTE: These are SUPPLEMENTARY data points only - NOT decisive factors for picks.
 
 FORMAT YOUR RESPONSE with clear section headers. Be FACTUAL - if you can't find info, say "No data found" rather than guessing.
 
-🚫 CRITICAL RULES:
+CRITICAL RULES:
 1. **ACCURACY IS PARAMOUNT**: Double-check all stats, scoring streaks, and injury updates from the last 24-48 hours. If a player had a game yesterday, ENSURE you have those stats.
 2. **NO HALLUCINATIONS**: Do NOT repeat narrative "streaks" (e.g., "11 straight games with 30 pts") unless you are 100% certain. If in doubt, stick to general trends.
 3. FACTS ONLY - Do NOT include any betting predictions, picks, or analysis from articles
@@ -9208,7 +9196,7 @@ SUPPLEMENTARY DATA ONLY - not decisive:
 
 FORMAT with clear section headers. Be FACTUAL - say "No data found" if unsure.
 
-🚫 CRITICAL RULES:
+CRITICAL RULES:
 1. FACTS ONLY - Do NOT include any betting predictions, picks, or analysis from articles
 2. NO OPINIONS - Do NOT copy predictions from any source
 3. YOUR OWN WORDS - Synthesize facts, do NOT plagiarize
@@ -9351,7 +9339,7 @@ SUPPLEMENTARY DATA ONLY - not decisive:
 
 FORMAT with clear section headers. Be FACTUAL - say "No data found" if unsure.
 
-🚫 CRITICAL RULES:
+CRITICAL RULES:
 1. FACTS ONLY - Do NOT include any betting predictions, picks, or analysis from articles
 2. NO OPINIONS - Do NOT copy predictions like "The Cowboys will cover because..." from any source
 3. YOUR OWN WORDS - Synthesize facts, do NOT plagiarize text from articles
@@ -10186,10 +10174,10 @@ ${headerLine}
 ${rowLines.join('\n')}`;
 }
 
-export { fetchGroundedContext, fetchComprehensivePropsNarrative };
-export default { 
-  buildScoutReport, 
-  fetchGroundedContext,
+export { fetchCurrentState, fetchComprehensivePropsNarrative };
+export default {
+  buildScoutReport,
+  fetchCurrentState,
   fetchComprehensivePropsNarrative,
   fetchPropLineMovement,
   getPlayerPropMovement,

@@ -79,14 +79,14 @@ export function getSteelManGradingReference(sport) {
 📚 SHARP BETTING REFERENCE (Cross-Reference During Steel Man Grading)
 ═══════════════════════════════════════════════════════════════════════════════
 
-## 🧠 WHAT GOOD ANALYSIS LOOKS LIKE (Read This First)
+## WHAT GOOD ANALYSIS LOOKS LIKE (Read This First)
 
-**✅ THE GOLD STANDARD:**
+**GOLD STANDARD:**
 > "Houston's defensive identity is fractured following the fresh losses of Tari Eason and Dorian Finney-Smith — the two primary 'stoppers' usually tasked with containing elite scoring guards. Without them, the Rockets lack the lateral quickness to prevent Shai Gilgeous-Alexander from living in the paint."
 
 Why it works: Fresh information → tied to specific matchup → forward mechanism (no stoppers → SGA in paint → margin expansion)
 
-**❌ THE TRAP:**
+**THE TRAP:**
 > "Utah's defensive rating is famously the worst in the league, but Dallas currently lacks the offensive firepower to exploit it."
 
 Why it fails: Backward logic ("Team B can't exploit it" is not how Team A wins)
@@ -153,7 +153,7 @@ When evaluating factors, understand their role - but don't auto-dismiss either t
 - Things that are NEW or recent (injuries, lineup changes, form shifts)
 - Situational factors (rest, travel, schedule spots)
 
-**⚠️ IMPORTANT: The Value of Each Depends on Spread Size:**
+**IMPORTANT: The Value of Each Depends on Spread Size:**
 
 | Spread Size | Baseline Value | Fresh Factor Value |
 |-------------|----------------|-------------------|
@@ -178,10 +178,10 @@ Investigate whether the line accurately reflects BOTH baseline quality AND fresh
 - Rest beyond 3 days can lead to "rust" rather than advantage
 - 2 days rest appears to be the optimal recovery window
 
-**Home Rest vs Road Rest (Critical Distinction):**
-- **Home rest is "clean rest"** — own beds, normal routines, no travel fatigue
-- **Road rest is "dirty rest"** — days off partially negated by travel, hotels, disrupted routines
-- **2 days at HOME ≥ 3 days on the ROAD** — don't cite "rest edge" for road team without acknowledging travel
+**Home Rest vs Road Rest (Investigate the Difference):**
+- Investigate: What is THIS team's actual performance on home rest vs road rest this season?
+- Investigate: Does the data show travel/hotel disruption affected THIS team's efficiency?
+- Investigate: If citing a "rest edge" for a road team, does their actual road-rest performance support it?
 
 **When Evaluating Rest/Schedule Arguments:**
 
@@ -258,24 +258,24 @@ Don't auto-dismiss. Don't auto-accept. Investigate.
 ### Steel Man Structure:
 
 **FOR UNDERDOG +10.5:**
-❌ Wrong question: "Can they win?"
-✅ Right question: "Can they lose by 10 or fewer? What prevents a blowout?"
+WRONG question: "Can they win?"
+RIGHT question: "Can they lose by 10 or fewer? What prevents a blowout?"
 
 **FOR FAVORITE -10.5:**
-❌ Wrong question: "Will they win?"
-✅ Right question: "Will they win by 11+? What's the mechanism for margin EXPANSION?"
+WRONG question: "Will they win?"
+RIGHT question: "Will they win by 11+? What's the mechanism for margin EXPANSION?"
 
 ---
 
 ## PROHIBITED REASONING (Do NOT Cite as Edge):
 
-🚫 Historical ATS trends ("They've covered 19 straight at home")
-🚫 Line movement analysis ("Reverse line movement suggests...")
-🚫 Public betting percentages ("80% on one side")
-🚫 Sharp money claims ("Sharps are on...")
-🚫 One previous matchup result ("They beat them by 20 last time")
-🚫 Season-long stats as sole evidence (market has these)
-🚫 Injuries older than 2 weeks (fully priced in)
+[BANNED]Historical ATS trends ("They've covered 19 straight at home")
+[BANNED]Line movement analysis ("Reverse line movement suggests...")
+[BANNED]Public betting percentages ("80% on one side")
+[BANNED]Sharp money claims ("Sharps are on...")
+[BANNED]One previous matchup result ("They beat them by 20 last time")
+[BANNED]Season-long stats as sole evidence (market has these)
+[BANNED]Injuries older than 2 weeks (fully priced in)
 
 ---
 
@@ -299,20 +299,20 @@ If your answer identifies something specific about THIS matchup, you may have ed
 
 ---
 
-## 🧠 MENTAL MODELS (Check If Any Apply to THIS Game - EITHER SIDE)
+## MENTAL MODELS (Check If Any Apply to THIS Game - EITHER SIDE)
 
 These are lenses for identifying when the market might be mispricing. Each model can work FOR or AGAINST either side - investigate which applies to THIS specific game:
 
 | Model | Possible Underdog Angle | Possible Favorite Angle | What to Investigate |
 |-------|-------------------------|-------------------------|---------------------|
 | **Star Absence (NBA)** | Team has adjusted; usage redistributed to capable players | Backups exposed in specific matchups; team hasn't found rhythm | How has team ACTUALLY performed since the absence? In NBA, usage redistributes - it doesn't disappear. Check real results, not assumptions. |
-| **Star Absence (NCAAB)** | Team has adjusted; scheme simplified | Shallow roster truly suffers; can't replace production | NCAAB rosters are shallower - production loss is more real. Investigate if team has capable depth. |
+| **Star Absence (NCAAB)** | Team has adjusted; scheme simplified | Roster lacks depth to replace production | Investigate THIS team's roster depth - who are the backups and what's their experience level? How has the team actually performed since the absence? |
 | **Returning Player** | Rust on return; chemistry disruption; minutes restriction | Player integrated smoothly after 2+ games back | First game back = HIGH uncertainty (either direction). Don't assume "motivated" or "rusty" - investigate actual return performance if available. |
 | **Emotional Spot** | Unknown - could go either way | Unknown - could go either way | "Letdown" and "bounce-back" are UNVERIFIABLE. You cannot know a team's psychological state. Only cite if you have THIS team's historical data in similar spots. |
 | **Schedule Spot** | Unknown - could go either way | Unknown - could go either way | "Trap games" and "lookahead" are narrative constructs. Pros play every game. Only cite if you have THIS team's specific historical pattern AND the market hasn't priced it. |
 | **Public Perception** | Heavy public money inflated favorite | Contrarian money overcorrected; line now too generous to underdog | Where is the money actually? Is the line moving toward or away from the public side? |
 
-**⚠️ CRITICAL - PSYCHOLOGICAL FACTORS ARE UNVERIFIABLE:**
+**CRITICAL - PSYCHOLOGICAL FACTORS ARE UNVERIFIABLE:**
 You cannot know if a team is "motivated," "focused," "locked in," or "looking ahead." These are narratives, not facts. If you want to cite emotional/situational factors:
 1. You MUST have historical data for THIS specific team in similar spots
 2. Acknowledge this is speculative, not a thesis pillar
@@ -337,10 +337,10 @@ You cannot know if a team is "motivated," "focused," "locked in," or "looking ah
 
 **When Evaluating Regression Arguments:**
 
-✅ **STRONG regression case:**
+**STRONG regression case:**
 > "Lakers coming off 141 points against Atlanta (worst defense). Their Net Rating is +0.7, nearly identical to Charlotte's +0.4. The market may be inflating LA based on one outlier game."
 
-❌ **WEAK regression case:**
+**WEAK regression case:**
 > "They scored a lot last game so they'll score less tonight." (No baseline comparison, no luck metrics, no mechanism)
 
 **The Key Insight:** Regression works BOTH ways - investigate both sides:
@@ -363,9 +363,9 @@ A regression spot is STRONGEST when combined with:
 
 ---
 
-## 📊 HISTORICAL REFERENCE (Context for THIS Matchup, NOT Formulas)
+## HISTORICAL REFERENCE (Context for THIS Matchup, NOT Formulas)
 
-⚠️ **The market knows all of this. DO NOT apply as rules.**
+**The market knows all of this. DO NOT apply as rules.**
 Use to sanity-check your grading for THIS specific game.
 
 | Principle | Historical Data | What This Means for Grading |
@@ -385,7 +385,7 @@ Use to sanity-check your grading for THIS specific game.
 
 ---
 
-## 🧠 BIAS CHECK (Counter ALL Natural Tendencies)
+## BIAS CHECK (Counter ALL Natural Tendencies)
 
 Before finalizing grades, check yourself against tendencies that affect BOTH sides:
 
@@ -401,7 +401,7 @@ Before finalizing grades, check yourself against tendencies that affect BOTH sid
 
 ---
 
-## ✅ THE "OBVIOUS" CHECK
+## THE OBVIOUS CHECK
 
 Before grading each case, ask:
 
@@ -564,7 +564,7 @@ Every NHL steel man case MUST include a goalie comparison table:
 | [Away] | X.XX | .XXX | +/-X.X | X-X-X L5 |
 \`\`\`
 
-**Without this comparison, you cannot grade the case.** Goalie is the biggest single factor.
+**Without this comparison, you cannot grade the case.** Investigate each goalie's form and how it affects the matchup.
 
 ---
 
@@ -619,19 +619,19 @@ CASE FOR [UNDERDOG] ML/PL:
 
 ---
 
-## 🚫 NHL BANNED PHRASES (These are narratives, NOT mechanisms)
+## [BANNED]NHL BANNED PHRASES (These are narratives, NOT mechanisms)
 
-❌ "Mud fight" → Replace with: "Both teams average <28 shots/game, creating a low-event environment"
-❌ "Backs against the wall" → This is motivation narrative with no data
-❌ "Recipe for disaster" → Replace with specific xG or CF% differential
-❌ "Overwhelming advantage" → Replace with: "CF% gap of X.X% translates to Y extra shot attempts"
+[BANNED] "Mud fight" → Replace with: "Both teams average <28 shots/game, creating a low-event environment"
+[BANNED] "Backs against the wall" → This is motivation narrative with no data
+[BANNED] "Recipe for disaster" → Replace with specific xG or CF% differential
+[BANNED] "Overwhelming advantage" → Replace with: "CF% gap of X.X% translates to Y extra shot attempts"
 
-**⚠️ STREAK LANGUAGE IN NHL - DIFFERENT RULES:**
+**STREAK LANGUAGE IN NHL - DIFFERENT RULES:**
 Unlike NBA/NFL, NHL streaks with goalie continuity are VALID arguments:
-✅ "W5 streak with same goalie (.935 SV% during stretch)" → Valid structural argument
-❌ "They're hot / on fire" without goalie context → Still banned (no mechanism)
-✅ "Cold streak (L4) with struggling goalie (.889 SV%)" → Valid structural problem
-❌ "Due for regression" against a hot goalie → Goalie momentum is real in NHL
+[VALID] "W5 streak with same goalie (.935 SV% during stretch)" → Valid structural argument
+[BANNED] "They're hot / on fire" without goalie context → Still banned (no mechanism)
+[VALID] "Cold streak (L4) with struggling goalie (.889 SV%)" → Valid structural problem
+[BANNED] "Due for regression" against a hot goalie → Goalie momentum is real in NHL
 
 ---
 
@@ -664,7 +664,7 @@ A hot goalie on a winning streak is a STRUCTURAL factor, not public noise.
 - One bad bounce, one hot goalie run can decide it
 - This is NOT a margin question - it's a win probability question
 
-**⚠️ KEY DIFFERENCE FROM OTHER SPORTS:**
+**KEY DIFFERENCE FROM OTHER SPORTS:**
 NHL moneyline asks WHO WINS, not who covers a spread. This means:
 - Streaks are NOT "stale information" - they're structural when goalie-driven
 - Home ice has TACTICAL value (last change), not just crowd noise

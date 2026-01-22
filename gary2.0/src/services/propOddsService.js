@@ -290,7 +290,183 @@ export const propOddsService = {
         }
       }
       
-      // ============ Other Sports: Use The Odds API ============
+      // ============ NFL: Use Ball Don't Lie Player Props API ============
+      if (sport === 'americanfootball_nfl') {
+        console.log(`[PropOdds] Using Ball Don't Lie for NFL player props`);
+
+        // Get today's date in YYYY-MM-DD format (EST) - DST-safe
+        const now = new Date();
+        const estOptions = { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' };
+        const estDate = new Intl.DateTimeFormat('en-US', estOptions).format(now);
+        const [month, day, year] = estDate.split('/');
+        const dateStr = `${year}-${month}-${day}`;
+        console.log(`[PropOdds] NFL: Searching for games on EST date: ${dateStr}`);
+
+        // Find the game ID from BDL
+        const nflGames = await ballDontLieService.getNflGamesForDate(dateStr);
+
+        // Find matching game
+        const matchingGame = nflGames.find(g => {
+          const homeMatch = normalizeTeamName(g.home_team?.full_name || g.home_team?.name || '') === normalizedHomeTeam ||
+                           normalizeTeamName(g.home_team?.full_name || g.home_team?.name || '').includes(normalizedHomeTeam) ||
+                           normalizedHomeTeam.includes(normalizeTeamName(g.home_team?.full_name || g.home_team?.name || ''));
+          const awayMatch = normalizeTeamName(g.away_team?.full_name || g.away_team?.name || g.visitor_team?.name || '') === normalizedAwayTeam ||
+                           normalizeTeamName(g.away_team?.full_name || g.away_team?.name || g.visitor_team?.name || '').includes(normalizedAwayTeam) ||
+                           normalizedAwayTeam.includes(normalizeTeamName(g.away_team?.full_name || g.away_team?.name || g.visitor_team?.name || ''));
+          return homeMatch && awayMatch;
+        });
+
+        if (!matchingGame) {
+          console.warn(`[PropOdds] No BDL game found for ${homeTeam} vs ${awayTeam}`);
+        } else {
+          console.log(`✅ Found BDL NFL game ID: ${matchingGame.id}`);
+
+          // Fetch player props from BDL
+          const bdlProps = await ballDontLieService.getNflPlayerProps(matchingGame.id);
+
+          if (bdlProps && bdlProps.length > 0) {
+            // Get unique player IDs to resolve names
+            const playerIds = [...new Set(bdlProps.map(p => p.player_id).filter(Boolean))];
+            const playerMap = await ballDontLieService.getNflPlayersByIds(playerIds);
+
+            // Transform BDL format to our standard format
+            const transformedProps = bdlProps.map(prop => {
+              const isOverUnder = prop.market?.type === 'over_under';
+              const isMilestone = prop.market?.type === 'milestone';
+              const playerInfo = playerMap[prop.player_id] || {};
+
+              return {
+                player: playerInfo.name || `Player ${prop.player_id}`,
+                player_id: prop.player_id,
+                team: playerInfo.team || 'NFL',
+                prop_type: prop.prop_type,
+                line: parseFloat(prop.line_value) || 0.5,
+                over_odds: isOverUnder ? prop.market?.over_odds : (isMilestone ? prop.market?.odds : null),
+                under_odds: isOverUnder ? prop.market?.under_odds : null,
+                vendor: prop.vendor
+              };
+            });
+
+            // Group by player and prop type
+            const grouped = {};
+            for (const prop of transformedProps) {
+              const key = `${prop.player}_${prop.prop_type}_${prop.line}`;
+              if (!grouped[key]) {
+                grouped[key] = { ...prop };
+              } else {
+                if (prop.over_odds && (!grouped[key].over_odds || prop.over_odds > grouped[key].over_odds)) {
+                  grouped[key].over_odds = prop.over_odds;
+                }
+                if (prop.under_odds && (!grouped[key].under_odds || prop.under_odds > grouped[key].under_odds)) {
+                  grouped[key].under_odds = prop.under_odds;
+                }
+              }
+            }
+
+            const result = Object.values(grouped);
+
+            // Log prop type breakdown
+            const propTypes = {};
+            result.forEach(p => { propTypes[p.prop_type] = (propTypes[p.prop_type] || 0) + 1; });
+            console.log(`[PropOdds] BDL NFL props breakdown:`, propTypes);
+            console.log(`[PropOdds] BDL returned ${result.length} unique NFL player props`);
+
+            // Filter by odds value
+            const filtered = propOddsService.filterPropsByOddsValue(result);
+            return filtered;
+          }
+        }
+      }
+
+      // ============ NBA: Use Ball Don't Lie Player Props API ============
+      if (sport === 'basketball_nba') {
+        console.log(`[PropOdds] Using Ball Don't Lie for NBA player props`);
+
+        // Get today's date in YYYY-MM-DD format (EST) - DST-safe
+        const now = new Date();
+        const estOptions = { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' };
+        const estDate = new Intl.DateTimeFormat('en-US', estOptions).format(now);
+        const [month, day, year] = estDate.split('/');
+        const dateStr = `${year}-${month}-${day}`;
+        console.log(`[PropOdds] NBA: Searching for games on EST date: ${dateStr}`);
+
+        // Find the game ID from BDL
+        const nbaGames = await ballDontLieService.getNbaGamesForDate(dateStr);
+
+        // Find matching game
+        const matchingGame = nbaGames.find(g => {
+          const homeMatch = normalizeTeamName(g.home_team?.full_name || g.home_team?.name || '') === normalizedHomeTeam ||
+                           normalizeTeamName(g.home_team?.full_name || g.home_team?.name || '').includes(normalizedHomeTeam) ||
+                           normalizedHomeTeam.includes(normalizeTeamName(g.home_team?.full_name || g.home_team?.name || ''));
+          const awayMatch = normalizeTeamName(g.visitor_team?.full_name || g.visitor_team?.name || '') === normalizedAwayTeam ||
+                           normalizeTeamName(g.visitor_team?.full_name || g.visitor_team?.name || '').includes(normalizedAwayTeam) ||
+                           normalizedAwayTeam.includes(normalizeTeamName(g.visitor_team?.full_name || g.visitor_team?.name || ''));
+          return homeMatch && awayMatch;
+        });
+
+        if (!matchingGame) {
+          console.warn(`[PropOdds] No BDL game found for ${homeTeam} vs ${awayTeam}`);
+        } else {
+          console.log(`✅ Found BDL NBA game ID: ${matchingGame.id}`);
+
+          // Fetch player props from BDL
+          const bdlProps = await ballDontLieService.getNbaPlayerProps(matchingGame.id);
+
+          if (bdlProps && bdlProps.length > 0) {
+            // Get unique player IDs to resolve names
+            const playerIds = [...new Set(bdlProps.map(p => p.player_id).filter(Boolean))];
+            const playerMap = await ballDontLieService.getNbaPlayersByIds(playerIds);
+
+            // Transform BDL format to our standard format
+            const transformedProps = bdlProps.map(prop => {
+              const isOverUnder = prop.market?.type === 'over_under';
+              const isMilestone = prop.market?.type === 'milestone';
+              const playerInfo = playerMap[prop.player_id] || {};
+
+              return {
+                player: playerInfo.name || `Player ${prop.player_id}`,
+                player_id: prop.player_id,
+                team: playerInfo.team || 'NBA',
+                prop_type: prop.prop_type,
+                line: parseFloat(prop.line_value) || 0.5,
+                over_odds: isOverUnder ? prop.market?.over_odds : (isMilestone ? prop.market?.odds : null),
+                under_odds: isOverUnder ? prop.market?.under_odds : null,
+                vendor: prop.vendor
+              };
+            });
+
+            // Group by player and prop type
+            const grouped = {};
+            for (const prop of transformedProps) {
+              const key = `${prop.player}_${prop.prop_type}_${prop.line}`;
+              if (!grouped[key]) {
+                grouped[key] = { ...prop };
+              } else {
+                if (prop.over_odds && (!grouped[key].over_odds || prop.over_odds > grouped[key].over_odds)) {
+                  grouped[key].over_odds = prop.over_odds;
+                }
+                if (prop.under_odds && (!grouped[key].under_odds || prop.under_odds > grouped[key].under_odds)) {
+                  grouped[key].under_odds = prop.under_odds;
+                }
+              }
+            }
+
+            const result = Object.values(grouped);
+
+            // Log prop type breakdown
+            const propTypes = {};
+            result.forEach(p => { propTypes[p.prop_type] = (propTypes[p.prop_type] || 0) + 1; });
+            console.log(`[PropOdds] BDL NBA props breakdown:`, propTypes);
+            console.log(`[PropOdds] BDL returned ${result.length} unique NBA player props`);
+
+            // Filter by odds value
+            const filtered = propOddsService.filterPropsByOddsValue(result);
+            return filtered;
+          }
+        }
+      }
+
+      // ============ Fallback: Use The Odds API (for other sports or if BDL fails) ============
       let apiKey = null;
       try {
         apiKey = await configLoader.getOddsApiKey();
