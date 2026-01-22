@@ -337,16 +337,16 @@ Before you lock in your 2 picks, ask:
 - **Pace:** High-pace games = more possessions = volume boost for everyone.
 
 ### NFL PROPS
-- **Game Script:** Trailing teams pass more. Leading teams run more. Critical for RB/WR props.
-- **Weather:** Wind kills passing. Rain helps rushing. Check conditions.
-- **Target Share:** More stable than raw yards. Better predictor.
-- **Touchdown Props:** High variance. Red zone share matters more than volume.
+- **Game Script:** Investigate: What's the projected game script? How does THIS player's usage change when their team is trailing vs leading?
+- **Weather:** Investigate: What are the conditions? How has THIS player performed in similar conditions?
+- **Target Share:** Investigate: What's THIS player's target share vs raw yards? Which metric is more consistent for them?
+- **Touchdown Props:** Investigate: What's THIS player's red zone usage? How many red zone opportunities does their offense create?
 
 ### NHL PROPS
-- **Blowout Impact:** MINIMAL. No garbage time in hockey.
-- **PP TOI:** Critical for points/SOG props. PP1 status matters.
-- **Goalie:** Backup goalie affects both teams' offensive props.
-- **Back-to-Back:** Less impactful than NBA but still relevant for goalies.
+- **Blowout Impact:** Investigate: How does THIS player's ice time change in blowout situations?
+- **PP TOI:** Investigate: Is THIS player on PP1? What's their PP time on ice?
+- **Goalie:** Investigate: Who's starting in goal for the opponent? How does that affect offensive opportunities?
+- **Back-to-Back:** Investigate: Is THIS player affected by B2Bs? What does their data show?
 
 ---
 
@@ -421,21 +421,20 @@ Denver (5,280 ft) and Utah (4,226 ft) create real physiological effects. Theory:
 - Visiting stars might hit first half numbers but fade
 - High-minute players struggle most
 
-**THE BACK-TO-BACK REALITY**
-Second game of a back-to-back, especially with travel. Well-documented performance drop.
+**THE BACK-TO-BACK INVESTIGATION**
+Second game of a back-to-back, especially with travel.
 
-*Application to Props:*
-- Veterans affected more than young players
-- Minutes drop predictably (2-4 minutes typically)
-- Efficiency drops more than volume
-- If volume stays same but efficiency drops → Unders
+*Investigate for Props:*
+- How does THIS player perform on B2Bs? What does their actual data show?
+- What's THIS player's minutes differential on B2Bs vs rest?
+- Does THIS player's efficiency or volume drop more on short rest?
 
-**THE "4 IN 5 NIGHTS" FATIGUE**
-Four games in five nights is brutal. Often worse than a single B2B.
+**THE "4 IN 5 NIGHTS" FATIGUE INVESTIGATION**
+Four games in five nights is a heavy load.
 
-*Application to Props:*
-- Check schedule context, not just "B2B or not"
-- Cumulative fatigue is real
+*Investigate for Props:*
+- What's THIS team's full schedule context, not just "B2B or not"?
+- How has THIS specific player performed in similar schedule crunches this season?
 - Third and fourth games in stretch are danger zones
 
 **THE TIME ZONE THEORY**

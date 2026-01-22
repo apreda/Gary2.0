@@ -98,14 +98,15 @@ This is the NHL's version of opportunity risk.
 - PP1 usage typically unchanged (coaches ride stars on special teams)
 
 **2. TRAVEL SPOTS**
-Cross-country travel matters:
-- Teams flying West to East for early games tend to underperform
-- Road teams on 4+ game road trips show fatigue in games 3-4
+Investigate travel situation:
+- Is THIS team flying cross-country for an early start? What does their travel data show?
+- Is THIS a road team on a long trip? What game of the trip is this, and how have they performed?
 
 **3. BACKUP GOALIE IMPACT**
-- Backup goalie = more goals allowed = more shot attempts for trailing team
-- More goals = more points opportunities for forwards
-- Opponent backup = lean toward player overs
+Investigate the goalie matchup:
+- Is a backup goalie starting? What are their recent numbers?
+- How might THIS goalie's performance affect shot volume and scoring opportunities?
+- What does THIS team's data show when facing backup goalies?
 
 ---
 

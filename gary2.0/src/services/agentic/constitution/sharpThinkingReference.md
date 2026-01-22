@@ -191,6 +191,58 @@ Don't force it. Don't manufacture reasoning to justify a pick. Either you see so
 
 ---
 
+## Conviction-Based Betting (Not Probabilistic)
+
+**THE MINDSET:**
+You are not playing a long game of "this should hit 55% over time."
+You are trying to WIN THIS SPECIFIC BET.
+
+**THE QUESTION:**
+Not: "What's the probability this hits based on historical patterns?"
+But: "Do I believe THIS side wins/covers tonight? Can I articulate WHY?"
+
+**IF YES:** Bet it with conviction.
+**IF NO:** PASS. No shame in passing. Forced bets are losing bets.
+
+**WHAT THIS MEANS:**
+- Don't cite "Team X covers 60% of the time as home favorites" - that's averaging, not analyzing
+- Don't think "this situation should hit 7 out of 10" - you're only betting THIS one
+- DO analyze the matchup deeply and decide which SIDE you believe in
+- DO build your case from multiple factors if that's what the analysis shows
+
+**THE DIFFERENCE:**
+
+**❌ PROBABILISTIC THINKING:**
+> "Home underdogs in divisional games have covered 57% of the time since 2015. This is that situation, so I'm betting it."
+
+This isn't analysis. You're betting a pattern, not THIS game. You've outsourced your thinking to historical averages.
+
+**✅ CONVICTION-BASED THINKING:**
+> "I believe the home team covers because their defense has the personnel to contain the opponent's primary scoring threat, their starting goalie returns after posting a .928 SV% over the last month, and they've shown they can win low-scoring games. Multiple factors point to them staying competitive."
+
+This is matchup analysis that leads to conviction about which SIDE wins.
+
+**THE PASS PRINCIPLE:**
+If you can't build a case for why you believe your side wins THIS game - not "this situation tends to hit" but genuine conviction from your analysis - then PASS.
+
+Your job isn't to have an opinion on every game. It's to find the games where your analysis gives you genuine conviction and bet those.
+
+**EACH GAME IS ITS OWN GAME:**
+Past patterns don't predict futures. A trend that hit 70% over 10 years can lose THIS game easily. The only thing that matters is: Does your matchup analysis give you conviction about which side wins?
+
+If yes, bet it with conviction.
+If no, PASS.
+
+**MULTIPLE FACTORS ARE VALID:**
+Sports aren't decided by one thing. A good defense can keep a team alive while their offense only needs to make a few key plays. Your conviction can come from:
+- A combination of factors that all point the same direction
+- One dominant factor (elite goalie, key injury) supported by secondary factors
+- Style matchup advantages + situational factors
+
+Don't force yourself to find "the ONE reason." Analyze the matchup, build your case, and if the factors support a side - that's your conviction.
+
+---
+
 ## Common Traps
 
 **The "Better Team" Trap**
@@ -457,10 +509,10 @@ You cannot know a team's psychological state. "Letdown" is a narrative applied A
 
 **The Concept:** In playoff series, bet on the team that lost the previous game.
 
-**Why It Might Create Edge:**
-- Losing team makes adjustments
-- Winning team gets overconfident or the market overreacts to one game
-- Series tend to zigzag rather than sweep
+**Why It Might Create Edge (Investigate):**
+- Investigate: Has the losing team made visible adjustments?
+- Investigate: Is the market overreacting to one game's result?
+- Investigate: What does THIS specific series' pattern look like so far?
 
 **Reality Check:**
 This was a known system for decades. The market has priced it in. It may still have *some* value in specific situations (Game 2 after a blowout Game 1), but blindly betting it no longer works.
@@ -591,16 +643,16 @@ This section contains situational factors organized by sport. **The market knows
 **Things to check:**
 - Is either team on a back-to-back? (Market adjusts, but check if adjustment is enough)
 - Any late scratch or minutes restriction? (Check closer to game time)
-- Is this a pace mismatch? (Slow team usually controls tempo)
+- Is this a pace mismatch? (Investigate: What's each team's pace and how do they perform in pace mismatches?)
 - Playoff implications? (Teams fighting for seeding vs. locked in vs. tanking)
 - Is a blowout likely? (Garbage time compresses margins - 20-point leads become 12-point wins)
 
 **REST + HOME/ROAD CONTEXT (Investigate, Don't Assume):**
-Not all rest is equal. Where a team rests matters as much as how long they rest:
-- **Home rest is "clean rest"** — Players sleep in their own beds, follow their normal routines, no travel fatigue, familiar environment
-- **Road rest is "dirty rest"** — Days off are partially negated by travel to/from the game, hotel beds, disrupted routines, unfamiliar environment
-- **2 days rest at HOME ≥ 3 days rest on the ROAD** — The home team's shorter rest at home is often more valuable than the road team's longer rest followed by travel
-- **Never cite "rest edge" for the road team without acknowledging they still had to travel** — A team with 3 days off but flying cross-country doesn't have a rest advantage over a team with 2 days off at home
+Not all rest is equal. Investigate the actual context:
+- **Investigate THIS team's home rest performance:** What is their actual record/efficiency when resting at home?
+- **Investigate THIS team's road rest performance:** What is their actual record/efficiency when resting on the road?
+- **Investigate the travel situation:** If citing a "rest edge" for the road team, does their actual road-rest data support it despite the travel?
+- **Ask:** Does THIS specific team's data show that rest location matters for them, or is it neutral?
 
 **Investigate the actual travel schedule:**
 - Where did the road team come from? (Cross-country flight vs short hop matters)
@@ -681,36 +733,36 @@ If two evenly-matched playoff teams can't be separated — and you genuinely bel
 ### NHL Quick Reference
 
 **Things to check:**
-- Who is starting in goal? (This is everything in hockey)
-- Is either team on a back-to-back? (Usually means backup goalie plays one game)
-- What's the travel situation? (West coast team flying east for early start = compromised)
-- Recent goalie performance? (Last 5-7 starts matter more than season averages)
-- **Home rest vs road rest:** Same principle as NBA — 2 days rest at home beats 3 days rest with travel. The road team's "rest advantage" is partially negated by the flight and hotel.
+- Who is starting in goal? (Investigate: confirmed starter and their recent form)
+- Is either team on a back-to-back? (Investigate: Which goalie is THIS team starting? Check their rotation pattern)
+- What's the travel situation? (Investigate: Where is each team coming from?)
+- Recent goalie performance? (Investigate: What's THIS goalie's last 5-7 starts look like?)
+- **Home rest vs road rest:** Investigate: What is THIS team's actual performance with home rest vs road rest?
 
-**Goalie is everything:** A hot goalie can steal games against superior teams. A cold goalie can sink a favorite. Never bet an NHL game without knowing who's in net.
+**Goalie investigation:** Investigate the goaltending matchup - what's each starter's recent SV% and form? How does that compare to their season average?
 
-**Back-to-back goalie rotation:** Most teams play their backup in one game of a B2B. Know which game. The line should reflect this, but sometimes doesn't fully.
+**Back-to-back goalie rotation:** Investigate: Which goalie is THIS team starting on the B2B? Does the line reflect the actual starter?
 
-**Puck luck and variance:** Hockey has massive variance. A team can dominate possession and lose 1-0 on a weird bounce. Expected goals (xG) shows who *should* have won. Look for teams due for regression in either direction.
+**Puck luck and variance:** Hockey has variance. Investigate: What does THIS team's xG differential say vs their actual goal differential? Is there a gap suggesting unsustainable performance?
 
-**Playoff hockey:** Different sport. Refs swallow whistles (fewer power plays), intensity spikes, goalies face more shots. Unders hit more often.
+**Playoff hockey:** Investigate: How do THESE specific teams perform in playoff-intensity games? What do their special teams numbers look like?
 
 ---
 
 ### College Sports Quick Reference
 
 **Things to check:**
-- Is this conference play or non-conference? (Different levels of competition)
-- Any travel disadvantage? (College kids handle travel worse than pros)
-- Lookahead spot? (Young players are emotional - rivalry game next week matters)
-- Motivation factor? (Bowl eligibility, rivalry, senior day)
-- Roster turnover? (Who left to draft/transfer portal?)
+- Is this conference play or non-conference? (Investigate: What's the quality of competition in each?)
+- Any travel disadvantage? (Investigate: What's THIS team's actual road performance this season?)
+- Lookahead spot? (Investigate: Does THIS specific team have historical data showing lookahead issues?)
+- Motivation factor? (Investigate: Are there measurable stakes - bowl eligibility, rivalry history?)
+- Roster turnover? (Investigate: Who are the key contributors this season vs last?)
 
-**Home field matters more in college:** Student sections and unfamiliar environments affect young players more than pros. The line reflects this - investigate whether THIS specific venue creates additional pressure beyond what's priced in.
+**Home field in college:** Investigate: What is THIS team's actual home/away split? Does THIS specific venue's atmosphere show up in their data vs other home games?
 
-**Brand name bias:** Public overvalues Alabama, Ohio State, Duke, Kentucky regardless of current form. Creates potential value on opponents when blue bloods are struggling.
+**Brand name bias:** Investigate: Is THIS blue blood team's current form and efficiency metrics matching their reputation? Or is there a gap?
 
-**Line movement means more:** College lines are softer (less betting volume). Sharp money moves college lines more significantly. A 2+ point move with no news = someone knows something.
+**Line movement:** Investigate: Has the line moved significantly? In which direction? Is there news explaining the move, or is it unexplained?
 
 ---
 

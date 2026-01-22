@@ -6031,6 +6031,230 @@ const ballDontLieService = {
     }
   },
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // NFL PLAYER PROPS (Ball Don't Lie API)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Get NFL player props from Ball Don't Lie API
+   * Supports: passing_yards, rushing_yards, receiving_yards, receptions, anytime_td, etc.
+   * @param {number} gameId - BDL game ID
+   * @param {Object} options - Optional filters (player_id, prop_type, vendors)
+   * @returns {Promise<Array>} - Array of player prop objects
+   */
+  async getNflPlayerProps(gameId, options = {}) {
+    try {
+      if (!gameId) {
+        console.warn('[Ball Don\'t Lie] NFL player props requires game_id');
+        return [];
+      }
+
+      const cacheKey = `nfl_player_props_${gameId}_${JSON.stringify(options)}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const params = { game_id: gameId };
+        if (options.player_id) params.player_id = options.player_id;
+        if (options.prop_type) params.prop_type = options.prop_type;
+        if (options.vendors) params.vendors = options.vendors;
+
+        const url = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/odds/player_props${buildQuery(params)}`;
+        console.log(`[Ball Don't Lie] Fetching NFL player props: ${url}`);
+
+        const response = await axios.get(url, {
+          headers: { 'Authorization': API_KEY }
+        });
+
+        const props = response.data?.data || [];
+        console.log(`[Ball Don't Lie] Retrieved ${props.length} NFL player props for game ${gameId}`);
+        return props;
+      }, 2); // Cache for 2 minutes since props are live
+    } catch (error) {
+      const status = error?.response?.status;
+      const msg = error?.response?.data?.error || error.message;
+      console.error(`[Ball Don't Lie] NFL player props error: ${status} - ${msg}`);
+      return [];
+    }
+  },
+
+  /**
+   * Get NFL games for a specific date to find game IDs
+   * @param {string} dateStr - Date in YYYY-MM-DD format
+   * @returns {Promise<Array>} - Array of NFL game objects with IDs
+   */
+  async getNflGamesForDate(dateStr) {
+    try {
+      const cacheKey = `nfl_games_${dateStr}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const url = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/games${buildQuery({ dates: [dateStr], per_page: 50 })}`;
+        console.log(`[Ball Don't Lie] Fetching NFL games for ${dateStr}`);
+
+        const response = await axios.get(url, {
+          headers: { 'Authorization': API_KEY }
+        });
+
+        const games = response.data?.data || [];
+        console.log(`[Ball Don't Lie] Found ${games.length} NFL games for ${dateStr}`);
+        return games;
+      }, 5); // Cache for 5 minutes
+    } catch (error) {
+      console.error(`[Ball Don't Lie] NFL games error:`, error?.response?.data || error.message);
+      return [];
+    }
+  },
+
+  /**
+   * Get NFL players by IDs to resolve player names
+   * @param {Array<number>} playerIds - Array of player IDs
+   * @returns {Promise<Object>} - Map of player_id to player info
+   */
+  async getNflPlayersByIds(playerIds) {
+    try {
+      if (!playerIds || playerIds.length === 0) return {};
+
+      const uniqueIds = [...new Set(playerIds)].slice(0, 100);
+      const cacheKey = `nfl_players_${uniqueIds.sort().join(',')}`;
+
+      return await getCachedOrFetch(cacheKey, async () => {
+        const url = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/players${buildQuery({ player_ids: uniqueIds, per_page: 100 })}`;
+        console.log(`[Ball Don't Lie] Fetching ${uniqueIds.length} NFL players`);
+
+        const response = await axios.get(url, {
+          headers: { 'Authorization': API_KEY }
+        });
+
+        const players = response.data?.data || [];
+
+        // Build lookup map
+        const playerMap = {};
+        for (const player of players) {
+          playerMap[player.id] = {
+            id: player.id,
+            name: player.full_name || `${player.first_name} ${player.last_name}`,
+            position: player.position,
+            team: player.team?.full_name || player.team?.name || 'Unknown'
+          };
+        }
+
+        console.log(`[Ball Don't Lie] Resolved ${Object.keys(playerMap).length} NFL player names`);
+        return playerMap;
+      }, 60); // Cache for 60 minutes
+    } catch (error) {
+      console.error(`[Ball Don't Lie] NFL players error:`, error?.response?.data || error.message);
+      return {};
+    }
+  },
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // NBA PLAYER PROPS (Ball Don't Lie API)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Get NBA player props from Ball Don't Lie API
+   * Supports: points, rebounds, assists, threes, blocks, steals, etc.
+   * @param {number} gameId - BDL game ID
+   * @param {Object} options - Optional filters (player_id, prop_type, vendors)
+   * @returns {Promise<Array>} - Array of player prop objects
+   */
+  async getNbaPlayerProps(gameId, options = {}) {
+    try {
+      if (!gameId) {
+        console.warn('[Ball Don\'t Lie] NBA player props requires game_id');
+        return [];
+      }
+
+      const cacheKey = `nba_player_props_${gameId}_${JSON.stringify(options)}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const params = { game_id: gameId };
+        if (options.player_id) params.player_id = options.player_id;
+        if (options.prop_type) params.prop_type = options.prop_type;
+        if (options.vendors) params.vendors = options.vendors;
+
+        const url = `${BALLDONTLIE_API_BASE_URL}/nba/v1/odds/player_props${buildQuery(params)}`;
+        console.log(`[Ball Don't Lie] Fetching NBA player props: ${url}`);
+
+        const response = await axios.get(url, {
+          headers: { 'Authorization': API_KEY }
+        });
+
+        const props = response.data?.data || [];
+        console.log(`[Ball Don't Lie] Retrieved ${props.length} NBA player props for game ${gameId}`);
+        return props;
+      }, 2); // Cache for 2 minutes since props are live
+    } catch (error) {
+      const status = error?.response?.status;
+      const msg = error?.response?.data?.error || error.message;
+      console.error(`[Ball Don't Lie] NBA player props error: ${status} - ${msg}`);
+      return [];
+    }
+  },
+
+  /**
+   * Get NBA games for a specific date to find game IDs
+   * @param {string} dateStr - Date in YYYY-MM-DD format
+   * @returns {Promise<Array>} - Array of NBA game objects with IDs
+   */
+  async getNbaGamesForDate(dateStr) {
+    try {
+      const cacheKey = `nba_games_${dateStr}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const url = `${BALLDONTLIE_API_BASE_URL}/nba/v1/games${buildQuery({ dates: [dateStr], per_page: 50 })}`;
+        console.log(`[Ball Don't Lie] Fetching NBA games for ${dateStr}`);
+
+        const response = await axios.get(url, {
+          headers: { 'Authorization': API_KEY }
+        });
+
+        const games = response.data?.data || [];
+        console.log(`[Ball Don't Lie] Found ${games.length} NBA games for ${dateStr}`);
+        return games;
+      }, 5); // Cache for 5 minutes
+    } catch (error) {
+      console.error(`[Ball Don't Lie] NBA games error:`, error?.response?.data || error.message);
+      return [];
+    }
+  },
+
+  /**
+   * Get NBA players by IDs to resolve player names
+   * @param {Array<number>} playerIds - Array of player IDs
+   * @returns {Promise<Object>} - Map of player_id to player info
+   */
+  async getNbaPlayersByIds(playerIds) {
+    try {
+      if (!playerIds || playerIds.length === 0) return {};
+
+      const uniqueIds = [...new Set(playerIds)].slice(0, 100);
+      const cacheKey = `nba_players_${uniqueIds.sort().join(',')}`;
+
+      return await getCachedOrFetch(cacheKey, async () => {
+        const url = `${BALLDONTLIE_API_BASE_URL}/players${buildQuery({ player_ids: uniqueIds, per_page: 100 })}`;
+        console.log(`[Ball Don't Lie] Fetching ${uniqueIds.length} NBA players`);
+
+        const response = await axios.get(url, {
+          headers: { 'Authorization': API_KEY }
+        });
+
+        const players = response.data?.data || [];
+
+        // Build lookup map
+        const playerMap = {};
+        for (const player of players) {
+          playerMap[player.id] = {
+            id: player.id,
+            name: `${player.first_name} ${player.last_name}`,
+            position: player.position,
+            team: player.team?.full_name || 'Unknown'
+          };
+        }
+
+        console.log(`[Ball Don't Lie] Resolved ${Object.keys(playerMap).length} NBA player names`);
+        return playerMap;
+      }, 60); // Cache for 60 minutes
+    } catch (error) {
+      console.error(`[Ball Don't Lie] NBA players error:`, error?.response?.data || error.message);
+      return {};
+    }
+  },
+
 };
 
 // Initialize on import

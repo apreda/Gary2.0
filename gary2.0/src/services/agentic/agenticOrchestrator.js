@@ -1375,12 +1375,12 @@ and make YOUR OWN picks based on YOUR analysis.
 
 You have 30 years of sports betting wisdom baked into your reasoning:
 
-### YOUR JOB: PREDICT THE GAME
-You are a game analyst, not a market analyst. Your job is to:
-- PREDICT what will happen in the game based on your investigation
-- Form your OWN OPINION about the likely margin/outcome
-- Compare your prediction to the spread to decide which side you like
-- You don't have "market data" - you have GAME DATA. Use it to predict the game.
+### YOUR JOB: ANALYZE THE MATCHUP
+You are a game analyst. Your job is to:
+- INVESTIGATE both teams deeply using your tools
+- UNDERSTAND how this specific matchup plays out
+- DECIDE which side you believe wins or covers based on your analysis
+- Your conviction comes from your investigation, not from predicting specific numbers
 
 ### VARIANCE & UNPREDICTABILITY
 You know from decades of experience:
@@ -1433,7 +1433,14 @@ If you can't point to DATA supporting a narrative, it's just a story.
      - NEVER WRITE: "In their last three, they allowed 49, 31, and 31 points" (invented)
 ## ROSTER & INJURY HALLUCINATION RULES (ABSOLUTE - ZERO TOLERANCE)
 
-6. **ROSTER VERIFICATION (CRITICAL - READ THIS)**: 
+5. **🚫 BANNED PLAYERS LIST (CHECK THE TOP OF SCOUT REPORT)**:
+   - If the scout report has a "BANNED PLAYERS" section at the top, those players are OUT FOR THE SEASON
+   - **DO NOT MENTION THESE PLAYERS AT ALL** - not even to say they're injured
+   - The team has played WITHOUT them for MONTHS. The line ALREADY REFLECTS their absence.
+   - Citing a season-long injury shows you didn't read the scout report warning
+   - If you mention a banned player, your entire analysis credibility is compromised
+
+6. **ROSTER VERIFICATION (CRITICAL - READ THIS)**:
    - **ONLY cite players listed in the "CURRENT ROSTERS" section of the scout report.**
    - Your training data is OUTDATED. Players are traded, released, and signed constantly.
    - **BEFORE mentioning ANY player by name, CHECK the roster section.**
@@ -1475,14 +1482,17 @@ When you request RECENT_FORM, you now get:
 
 Consider the context behind any streak - margins, opponent quality, and circumstances.
 
-## PREDICT THE MARGIN, THEN COMPARE TO SPREAD
+## INVESTIGATE, THEN DECIDE
 
-1. **YOUR PREDICTION COMES FIRST**: 
-   - After investigating, form YOUR opinion: "I think Team A wins by X points" or "I think this stays close"
-   - THEN compare your prediction to the spread
-   - If you predict a 3-point game and the spread is 7, the underdog side aligns with your view
-   - If you predict a blowout and the spread is 3, the favorite side aligns with your view
-2. **SITUATIONAL FACTORS**: Consider context that affects the margin - home after a road trip, revenge game, letdown spot after a big emotional win, playoff implications, etc.
+1. **INVESTIGATION FIRST**:
+   - Use your tools to understand both teams thoroughly
+   - Consider all relevant factors: matchups, injuries, form, situational context
+   - Build your understanding of how this game plays out
+
+2. **YOUR CONVICTION**:
+   - Based on your investigation, which side do you believe wins or covers?
+   - Multiple factors can support your pick - defense keeps them alive, offense makes plays, etc.
+   - If you can't build conviction for either side, PASS is always valid
 
 ## YOUR VOICE - NATURAL SPORTS ANALYSIS
 You MUST vary how you start each analysis. NEVER start two picks the same way.
@@ -1756,15 +1766,6 @@ Do NOT include a "stats" field in your JSON - it causes parsing issues.
 Example: If RAW ODDS shows "moneylineHome: -192", your pick is "[Home Team] ML -192"
 Example: If RAW ODDS shows "spreadOdds: -105", your pick is "[Team] -3.5 -105"
 
-## SPREAD SELECTION - MARGIN OF VICTORY MATTERS
-
-When you take a spread, you MUST evaluate WHICH SIDE based on margin:
-
-**THE APPROACH:**
-Form your opinion about the game outcome and likely margin. Then compare your prediction to the spread.
-
-Investigate both teams, form your opinion about the outcome and margin, then compare your prediction to the spread.
-
 ## VERIFY YOUR CLAIMS
 
 If you make a claim in your analysis, verify it with data. Don't assert - investigate.
@@ -1773,10 +1774,12 @@ If you make a claim in your analysis, verify it with data. Don't assert - invest
 
 **You are the analyst. Form your own opinion based on investigation.**
 
-**KEY PRINCIPLES:**
-1. **PREDICT THE OUTCOME FIRST** - Based on your investigation, what do YOU think happens?
-2. **THEN COMPARE TO SPREAD** - If you predict a close game (3-4 points) but the spread is 8.5, the underdog side matches your view
-3. **YOUR CONVICTION MATTERS** - If you think a team wins comfortably, spread might be better. If you think they win but it's close, consider if the spread is too big.
+**YOUR APPROACH:**
+1. **INVESTIGATE BOTH TEAMS** - Use your tools to understand the matchup deeply
+2. **BUILD YOUR CASE** - What factors support each side? Which case is stronger?
+3. **DECIDE WITH CONVICTION** - Based on your analysis, which side do you believe in?
+
+Your pick comes from your investigation and reasoning - not from a formula. If multiple factors point to one side, that's your conviction. If you can't build a strong case, PASS.
 
 **THE PUZZLE ANALOGY:**
 - The pieces of information (stats, injuries, matchups, form) are data points
@@ -2684,6 +2687,12 @@ Most factors are already BAKED INTO the spread. The question isn't "why does Tea
 **For each case, identify:** What is the market potentially MISSING or UNDERWEIGHTING?
 - A 7.0 case with a clear "line is wrong because..." beats an 8.0 case citing priced-in factors.
 
+**E. BANNED PLAYER CHECK (MANDATORY):**
+- Did either Steel Man case mention a player from the BANNED PLAYERS section at the top of the scout report?
+- If YES: That case is FLAWED - you cited a season-long injury as if it matters
+- Those players have been out for MONTHS - the team has fully adjusted
+- REMOVE any reference to banned players from your final rationale
+
 **GRADING SCALE (1.0 - 10.0):**
 | Team | Case Strength | Strongest Element | Weakest Element |
 |------|---------------|-------------------|-----------------|
@@ -2702,68 +2711,108 @@ Based on your grading, which case has the stronger foundation?
 <stress_test_patterns>
 ## STRESS TEST PATTERNS
 
-**TRAP PATTERNS (Check your tentative pick):**
+**A trap is an OVERREACTION to a visible factor.** Investigate if the visible factor (blowout, injury news, streak) has been OVER-weighted by the market.
 
-1. **Returning Players FIRST Game Back?**
-   - ONLY applies to literally the FIRST game back from injury
-   - If already played a game since returning, this does NOT apply
-   - Investigate: Chemistry disruption and rust vs motivated return
+---
 
-2. **Schedule/Travel Situation?**
-   - Road B2B with significant travel = real fatigue factor
-   - Home B2B = minimal impact
-   - Investigate the actual travel schedule, not just "B2B"
+### TRAP PATTERNS (Check your tentative pick):
 
-3. **Public/Market Perception?**
-   - Is EITHER side getting disproportionate attention?
-   - Favorites can be over-bet (line too big) OR under-bet (line too small)
-   - Underdogs can be over-bet (contrarian overcorrection) OR under-bet (true value)
-   - Investigate: Where is the line moving, and why?
+**1. Blowout Recency Gap?**
+   - Condition: Team won/lost by >15 points in their last game
+   - Investigate: Was this a structural mismatch or shooting variance?
+   - Investigate: Was blowout margin inflated by garbage time?
+   - Investigate: Is the public overreacting to ONE result?
 
-4. **Emotional/Situational Spot? (CAUTION - UNVERIFIABLE)**
-   - "Letdown," "bounce-back," "trap game," "lookahead" are NARRATIVE CONSTRUCTS
-   - You CANNOT know a team's psychological state before the game
-   - These factors should NEVER be a primary thesis pillar
-   - ONLY cite if you have THIS specific team's historical data in similar spots
+**2. Ewing Effect (Injury Overreaction)?**
+   - Condition: Top usage player is OUT and public assumes guaranteed loss
+   - Investigate: Compare team's Net Rating WITH vs WITHOUT that player
+   - Investigate: Has bench stepped up? Could "next man up" improve spacing/ball movement?
+   - Investigate: Has line already adjusted, or is there still overreaction?
 
-5. **Regression Check (EITHER DIRECTION)?**
-   - Betting ON an outlier high performance - Investigate if sustainable
-   - Betting AGAINST an outlier bad performance - Investigate if truly an outlier
+**3. Regression Check?**
+   - Condition: Team's recent eFG% is >5% above their season average
+   - Investigate: Is shooting spike structural (new personnel, shot selection) or variance?
+   - Investigate: Are they shooting MORE threes (sustainable volume) or just making MORE (unsustainable %)?
+   - Investigate: Does tonight's opponent defense allow the streak to continue?
 
-6. **Star Absence Impact? (NBA vs NCAAB - DIFFERENT RULES)**
-   
-   **NBA - USAGE REDISTRIBUTES:**
-   - Star's 25-30% usage distributed to capable rotation players
-   - NBA rosters DEEP (8-10 players) - secondary players often increase efficiency
-   - INVESTIGATE: How has team actually performed? Check Recent Form.
-   
-   **NCAAB - PRODUCTION LOSS IS REAL:**
-   - College rosters SHALLOW (6-7 capable players)
-   - Backups may be freshmen or walk-ons who can't absorb usage
-   - INVESTIGATE: Does team have capable depth?
-   
-   **RETURNING PLAYER = HIGH UNCERTAINTY:**
-   - First game back = rust, minutes restriction, chemistry disruption possible
-   - Second game+ = INVESTIGATE actual performance in return games
+**4. Overlook/Lookahead Trigger?**
+   - Condition: Dominant favorite plays high-stakes rival in NEXT game
+   - Investigate: Check schedule - is next game a rivalry, playoff battle, or national TV?
+   - Investigate: Does underdog have defensive depth to keep it close if effort dips?
 
-7. **H2H Personnel Check?**
-   - If citing H2H results, verify rosters were similar
-   - Missing players can change relevance of H2H
+**5. Desperation Flip (Losing Streak Value)?**
+   - Condition: Team on long losing streak (market has "bottomed out")
+   - Investigate: Is Net Rating actually IMPROVING despite the losses?
+   - Investigate: Are they losing close games to elite teams (bad luck) vs blown out (bad team)?
+   - Investigate: Check point differential trends - is the gap closing?
 
-8. **Information Age?**
-   - Is your "edge" fresh news or already reflected in the line?
+**6. Divisional Grinders?**
+   - Condition: Large favorite spread (8.5+) in divisional/conference game
+   - Investigate: Division rivals play 4x/season - does familiarity shrink the talent gap here?
+   - Investigate: Does favorite have significant bench advantage (>10 PPG) to cover margin?
 
-**PICK-LEVEL CONCERNS:**
-- Line movement: Has the line moved away from your side?
-- Sharp money signals: Any indication sharps are opposite your pick?
+**7. Line Inflation ("Begging for a Bet")?**
+   - Condition: Elite team is suspiciously NARROW favorite vs bad team
+   - Investigate: What hidden factor might oddsmakers be pricing in?
+   - Investigate: Rest disadvantage? Key player GTD trending OUT? Travel trap?
 
-9. **Structure vs Star Power Check (For Close Games):**
-   - If your edge is STRUCTURAL (style mismatch, pace advantage, defensive scheme):
-     - Structural edges work best in the FIRST HALF before halftime adjustments
-     - In the 4th quarter of close games, coaches "shorten the playbook" and rely on star execution
-   - Ask: "If this game is within 5 points in the 4th, does my team have the CLOSER to finish it?"
-   - A structural mismatch gets a team the lead in the 1st half
-   - Star power keeps or steals the lead in the 2nd half
+**8. Narrative Vacuum (Returning Star)?**
+   - Condition: Star player returns after missing 3+ games
+   - Investigate: Minutes restriction? Conditioning rust?
+   - Investigate: Does return DISRUPT a bench rhythm that was working?
+   - Investigate: Check team's record/efficiency WITHOUT the star - were they actually fine?
+
+---
+
+### SITUATIONAL FACTORS (Investigate, don't assume):
+
+**9. Schedule/Travel Situation?**
+   - Investigate: What is the actual travel distance and timezone situation for each team?
+   - Investigate: What is THIS team's record/performance on back-to-backs this season?
+   - Investigate: What is THIS team's record/performance with this specific rest situation?
+   - Investigate: Does the data show a pattern, or is the sample too small to matter?
+
+**10. Public/Market Perception?**
+   - Investigate: Where has the line moved since open, and in which direction?
+   - Investigate: What might be driving the movement (news, sharp action, public money)?
+   - Investigate: Is the current line different from what efficiency metrics suggest?
+
+**11. Emotional/Situational Spot?**
+   - Investigate: If citing "letdown," "bounce-back," or "trap game" - what does THIS team's historical data show in similar spots?
+   - Investigate: Is there structural evidence (rotation changes, effort metrics, pace changes) that supports the narrative?
+   - Investigate: Can you find data to back up the storyline, or is it just a storyline?
+
+**12. Star Absence Impact?**
+   - Investigate: How has THIS team actually performed since the absence? Check Recent Form.
+   - Investigate: Who has absorbed the usage, and how have they performed?
+   - Investigate: What does THIS team's roster depth look like - who are the backups and what's their experience level?
+   - Investigate: Has the team's style/identity changed with the absence?
+
+**13. H2H Personnel Check?**
+   - Investigate: If citing H2H results, who was playing in those games vs who plays tonight?
+   - Investigate: Were the circumstances similar (rest, injuries, home/away)?
+
+**14. Information Age?**
+   - Investigate: When did the key news (injury, lineup change) become public?
+   - Investigate: Has the line moved since that news broke?
+   - Investigate: What was the line BEFORE vs AFTER the news?
+
+---
+
+### PICK-LEVEL CONCERNS:
+
+- **Line movement:** Investigate - has the line moved away from your side? Why?
+- **Sharp money signals:** Investigate - any indication sharps are opposite your pick?
+
+---
+
+### STRUCTURE vs STAR POWER (For Close Games):
+
+If your edge is STRUCTURAL (style mismatch, pace advantage, defensive scheme):
+- Investigate: How has THIS team's structural advantage held up in close games this season?
+- Investigate: When games get tight in the 4th, who does THIS team go to?
+- Investigate: Does my team have a go-to closer, and what's their 4th quarter/clutch performance?
+- Ask yourself: "If this game is within 5 points in the 4th, what does the data say about how each team finishes?"
 </stress_test_patterns>
 
 <sanity_check_guidance>
@@ -3071,16 +3120,16 @@ You've gathered substantial evidence. Before making your pick, do a final check:
 - Which team's case is supported by the most RECENT and RELEVANT data?
 - How do situational factors (rest, injuries, motivation) modify the raw stats?
 
-**STEP 2: COMPARE YOUR PREDICTION TO THE SPREAD**
-- What margin do YOU predict? (e.g., "I think this is a 3-point game")
-- Does the spread match your prediction? 
-- If spread is bigger than your predicted margin → underdog side aligns with your view
-- If spread is smaller than your predicted margin → favorite side aligns with your view
+**STEP 2: CONFIRM YOUR CONVICTION**
+- Based on your investigation, which side do you believe wins or covers?
+- What factors support your pick? (Can be multiple - defense, matchups, situational, etc.)
+- Is your conviction strong enough to bet, or should you PASS?
 
 **STEP 3: SELF-INTERROGATION**
-1. **Roster Check**: Did I only mention players in the CURRENT ROSTERS section?
-2. **Stat-Narrative Alignment**: Does my reasoning match the data I found?
-3. **Margin Check**: What margin do I predict? Does that align with the spread?
+1. **Banned Player Check**: Did I mention ANY player from the BANNED PLAYERS section at the top of the scout report? If yes, REMOVE them from your rationale immediately. Those players have been out for MONTHS - citing them is wrong.
+2. **Roster Check**: Did I only mention players in the CURRENT ROSTERS section?
+3. **Stat-Narrative Alignment**: Does my reasoning match the data I found?
+4. **Conviction Check**: Do I genuinely believe this side wins/covers based on my analysis?
 
 **STEP 4: OUTPUT YOUR FINAL PICK JSON**
 (Refer to the RATIONALE FORMAT in the system prompt)
@@ -5930,768 +5979,4 @@ function normalizeSportToLeague(sport) {
   return mapping[sport] || sport;
 }
 
-/**
- * Rank picks organically within a slate session
- * Gary has full memory of all his analyses and can rank by true conviction
- * 
- * @param {Object} slateSession - The slate session with all analyzed games
- * @returns {Array} Ranked picks with rank and reason fields
- */
-export async function rankPicksInSession(slateSession) {
-  if (!slateSession || slateSession.picks.length === 0) {
-    console.log('[rankPicksInSession] No picks to rank');
-    return [];
-  }
-  
-  if (slateSession.picks.length === 1) {
-    slateSession.picks[0].rank = 1;
-    slateSession.picks[0].rank_reason = 'Only pick in slate';
-    return slateSession.picks;
-  }
-  
-  console.log(`\n${'═'.repeat(70)}`);
-  console.log(`🏆 GARY ORGANIC RANKING: ${slateSession.picks.length} picks`);
-  console.log(`Gary has full memory of all ${slateSession.gamesAnalyzed} game analyses`);
-  console.log(`${'═'.repeat(70)}\n`);
-  
-  // Build the ranking prompt - Gary already has context from the session
-  const pickList = slateSession.picks.map((p, i) => {
-    const odds = p.odds || p.spreadOdds || 'N/A';
-    return `${i + 1}. ${p.pick || 'PASS'} (odds: ${odds})`;
-  }).join('\n');
-  
-  const rankingPrompt = `
-═══════════════════════════════════════════════════════════════════════════
-FINAL STEP: RANK YOUR PICKS
-═══════════════════════════════════════════════════════════════════════════
-
-You've analyzed all ${slateSession.gamesAnalyzed} games today. Here are your picks:
-
-${pickList}
-
-**NOW RANK THEM from BEST BET (1) to WORST BET (${slateSession.picks.length}).**
-
-You have FULL MEMORY of why you made each pick. Use that conviction.
-
-**THE RANKING QUESTION:**
-"If I could only bet ${Math.ceil(slateSession.picks.length * 0.35)} of these, which ones am I MOST SURE will win?"
-
-**RANK BY CONVICTION:**
-Rank by how confident you were in your original reasoning.
-
-**OUTPUT FORMAT (strict JSON):**
-{
-  "rankings": [
-    { "pick_number": 1, "rank": 1, "reason": "High conviction in this analysis" },
-    { "pick_number": 3, "rank": 2, "reason": "Solid thesis" },
-    ...
-  ]
-}
-
-pick_number = the original number (1-${slateSession.picks.length}) from above
-rank = your ranking (1 = BEST BET, ${slateSession.picks.length} = weakest bet)
-reason = WHY this rank based on your memory of the analysis
-
-Now rank all ${slateSession.picks.length} picks with full conviction:`;
-
-  // Add ranking prompt to session messages
-  slateSession.messages.push({ role: 'user', content: rankingPrompt });
-  
-  try {
-    // Use the same provider/model as analysis for consistency
-    const provider = getProviderForSport(slateSession.sport);
-    const model = getModelForProvider(provider, slateSession.sport);
-    
-    console.log(`[rankPicksInSession] Using ${model} for ranking (session mode)`);
-    
-    // Call Gemini with full session history (Gary has memory!)
-    // Use retry wrapper for transient server errors
-    // Use 'final_decision' temp since ranking is a decisional task
-    const response = await callGeminiWithRetry(slateSession.messages, [], model, 3, 'final_decision');
-    
-    const message = response.choices[0]?.message;
-    const content = message?.content || '';
-    
-    // Add response to session for completeness
-    slateSession.messages.push({ role: 'assistant', content });
-    
-    // Parse the ranking JSON - use robust extraction
-    let parsed = extractRankingJson(content, slateSession.picks.length);
-    
-    if (!parsed) {
-      console.log('[rankPicksInSession] First extraction failed, trying retry with simpler prompt...');
-      
-      // Retry with simpler prompt
-      const retryPrompt = `Return ONLY this JSON, no other text:
-{
-  "rankings": [
-${slateSession.picks.map((p, i) => `    { "pick_number": ${i + 1}, "rank": ?, "reason": "your reason" }`).join(',\n')}
-  ]
-}
-
-Replace ? with your rankings 1-${slateSession.picks.length}. 1 = best bet. DO NOT add any text before or after the JSON.`;
-      
-      slateSession.messages.push({ role: 'user', content: retryPrompt });
-      
-      try {
-        const retryResponse = await callGeminiWithRetry(slateSession.messages, [], model, 3, 'final_decision');
-        const retryContent = retryResponse.choices[0]?.message?.content || '';
-        parsed = extractRankingJson(retryContent, slateSession.picks.length);
-      } catch (retryError) {
-        console.log('[rankPicksInSession] Retry also failed:', retryError.message);
-      }
-    }
-    
-    if (!parsed) {
-      console.error('[rankPicksInSession] ❌ All extraction attempts failed - NO FALLBACK, ranking FAILED');
-      console.error('[rankPicksInSession] Picks will be stored WITHOUT rankings - manual review required');
-      // NO FALLBACK - return picks without rankings applied
-      // The calling code should handle unranked picks appropriately
-      return slateSession.picks.map((p, i) => ({
-        ...p,
-        rank: null,
-        rank_reason: 'RANKING_FAILED: Organic ranking could not be completed - review manually'
-      }));
-    }
-    
-    const rankings = parsed.rankings || [];
-    
-    // Apply rankings to picks
-    const rankedPicks = [...slateSession.picks];
-    for (const r of rankings) {
-      const pickIndex = (r.pick_number || 0) - 1;
-      if (pickIndex >= 0 && pickIndex < rankedPicks.length) {
-        rankedPicks[pickIndex].rank = r.rank;
-        rankedPicks[pickIndex].rank_reason = r.reason;
-      }
-    }
-    
-    // Fill in any missing ranks
-    rankedPicks.forEach((p, i) => {
-      if (!p.rank) {
-        p.rank = rankedPicks.length;
-        p.rank_reason = 'Unranked by Gary';
-      }
-    });
-    
-    // Sort by rank
-    rankedPicks.sort((a, b) => (a.rank || 999) - (b.rank || 999));
-    
-    // Log the ranking
-    console.log(`\n[rankPicksInSession] 🏆 Gary's organic ranking:`);
-    rankedPicks.forEach((p, i) => {
-      console.log(`   #${p.rank}. ${p.pick} - ${p.rank_reason || 'No reason'}`);
-    });
-    
-    return rankedPicks;
-    
-  } catch (error) {
-    console.error('[rankPicksInSession] ❌ Critical error during ranking:', error.message);
-    console.error('[rankPicksInSession] NO FALLBACK - picks will be stored WITHOUT rankings');
-    // NO FALLBACK - return picks without rankings
-    return slateSession.picks.map((p, i) => ({
-      ...p,
-      rank: null,
-      rank_reason: `RANKING_ERROR: ${error.message}`
-    }));
-  }
-}
-
-/**
- * Robust JSON extraction for ranking response
- * Handles common Gemini issues: text after JSON, +signs, truncation, various formats
- */
-function extractRankingJson(content, numPicks) {
-  if (!content) return null;
-  
-  console.log(`[extractRankingJson] Attempting to extract rankings from ${content.length} chars...`);
-  
-  try {
-    // STRATEGY 1: Look for proper {"rankings": [...]} format
-    let startPos = -1;
-    const patterns = [
-      '{"rankings"',
-      '{ "rankings"',
-      '{\n"rankings"',
-      '{\n  "rankings"',
-      '{\r\n"rankings"'
-    ];
-    
-    for (const pattern of patterns) {
-      const idx = content.indexOf(pattern);
-      if (idx !== -1) {
-        startPos = idx;
-        break;
-      }
-    }
-    
-    // If no rankings wrapper found, try to find "rankings" and backtrack
-    if (startPos === -1) {
-      const rankingsIdx = content.indexOf('"rankings"');
-      if (rankingsIdx !== -1) {
-        // Find the opening brace before "rankings"
-        const priorContent = content.substring(0, rankingsIdx);
-        const lastBrace = priorContent.lastIndexOf('{');
-        if (lastBrace !== -1) {
-          startPos = lastBrace;
-          console.log(`[extractRankingJson] Found "rankings" at ${rankingsIdx}, using brace at ${lastBrace}`);
-        }
-      }
-    }
-    
-    if (startPos === -1) {
-      console.log('[extractRankingJson] No rankings structure found in response');
-      
-      // STRATEGY 2: Try to extract array of ranking objects directly
-      // Gemini might return just the array: [{"pick_number": 1, "rank": 1, ...}, ...]
-      const arrayMatch = content.match(/\[\s*\{[^[\]]*"pick_number"[^[\]]*"rank"[^[\]]*\}[\s\S]*?\]/);
-      if (arrayMatch) {
-        console.log('[extractRankingJson] Found array format, wrapping in rankings object');
-        let arrayStr = arrayMatch[0];
-        arrayStr = arrayStr.replace(/([:,\[])\s*\+(\d+)/g, '$1$2');
-        arrayStr = arrayStr.replace(/,\s*([\]}])/g, '$1');
-        try {
-          const arr = JSON.parse(arrayStr);
-          if (Array.isArray(arr) && arr.length > 0 && arr[0].rank !== undefined) {
-            console.log(`[extractRankingJson] ✓ Extracted ${arr.length} rankings from array format`);
-            return { rankings: arr };
-          }
-        } catch (e) {
-          console.log(`[extractRankingJson] Array parse failed: ${e.message}`);
-        }
-      }
-      
-      return null;
-    }
-    
-    // STRATEGY 3: Use brace counting to find complete JSON object
-    let braceCount = 0;
-    let inString = false;
-    let escapeNext = false;
-    let endPos = -1;
-    
-    for (let i = startPos; i < content.length; i++) {
-      const char = content[i];
-      
-      if (escapeNext) {
-        escapeNext = false;
-        continue;
-      }
-      
-      if (char === '\\' && inString) {
-        escapeNext = true;
-        continue;
-      }
-      
-      if (char === '"' && !escapeNext) {
-        inString = !inString;
-        continue;
-      }
-      
-      if (!inString) {
-        if (char === '{') braceCount++;
-        if (char === '}') {
-          braceCount--;
-          if (braceCount === 0) {
-            endPos = i;
-            break;
-          }
-        }
-      }
-    }
-    
-    if (endPos === -1) {
-      console.log('[extractRankingJson] Could not find balanced closing brace - JSON may be truncated');
-      
-      // Try to salvage truncated JSON by finding last complete ranking object
-      const partialContent = content.substring(startPos);
-      const lastCompleteObj = partialContent.lastIndexOf('"}');
-      if (lastCompleteObj > 0) {
-        // Try to close the array and object
-        let salvaged = partialContent.substring(0, lastCompleteObj + 2);
-        // Count open brackets/braces
-        const openBrackets = (salvaged.match(/\[/g) || []).length;
-        const closeBrackets = (salvaged.match(/\]/g) || []).length;
-        const openBraces = (salvaged.match(/\{/g) || []).length;
-        const closeBraces = (salvaged.match(/\}/g) || []).length;
-        
-        // Add closing brackets/braces as needed
-        salvaged += ']'.repeat(Math.max(0, openBrackets - closeBrackets));
-        salvaged += '}'.repeat(Math.max(0, openBraces - closeBraces));
-        
-        console.log(`[extractRankingJson] Attempting to salvage truncated JSON...`);
-        salvaged = salvaged.replace(/([:,\[])\s*\+(\d+)/g, '$1$2');
-        salvaged = salvaged.replace(/,\s*([\]}])/g, '$1');
-        
-        try {
-          const parsed = JSON.parse(salvaged);
-          if (parsed.rankings && Array.isArray(parsed.rankings) && parsed.rankings.length > 0) {
-            console.log(`[extractRankingJson] ✓ Salvaged ${parsed.rankings.length} rankings from truncated JSON`);
-            return parsed;
-          }
-        } catch (e) {
-          console.log(`[extractRankingJson] Salvage failed: ${e.message}`);
-        }
-      }
-      
-      return null;
-    }
-    
-    // Extract and sanitize JSON
-    let jsonStr = content.substring(startPos, endPos + 1);
-    
-    // Fix common Gemini issues
-    jsonStr = jsonStr.replace(/([:,\[])\s*\+(\d+)/g, '$1$2');  // +190 → 190
-    jsonStr = jsonStr.replace(/,\s*([\]}])/g, '$1');           // Trailing commas
-    jsonStr = jsonStr.replace(/(\{|,)\s*(\w+)\s*:/g, '$1"$2":'); // Unquoted keys
-    
-    // Parse
-    const parsed = JSON.parse(jsonStr);
-    
-    if (!parsed.rankings || !Array.isArray(parsed.rankings)) {
-      console.log('[extractRankingJson] Parsed but no rankings array found');
-      return null;
-    }
-    
-    if (parsed.rankings.length === 0) {
-      console.log('[extractRankingJson] Rankings array is empty');
-      return null;
-    }
-    
-    // Validate ranking structure
-    const validRankings = parsed.rankings.filter(r => 
-      r.pick_number !== undefined && r.rank !== undefined
-    );
-    
-    if (validRankings.length === 0) {
-      console.log('[extractRankingJson] No valid ranking objects found (missing pick_number or rank)');
-      return null;
-    }
-    
-    if (validRankings.length < parsed.rankings.length) {
-      console.log(`[extractRankingJson] Warning: ${parsed.rankings.length - validRankings.length} invalid ranking objects filtered out`);
-      parsed.rankings = validRankings;
-    }
-    
-    console.log(`[extractRankingJson] ✓ Successfully extracted ${parsed.rankings.length} rankings`);
-    return parsed;
-    
-  } catch (error) {
-    console.log('[extractRankingJson] Parse error:', error.message);
-    console.log('[extractRankingJson] Content preview:', content.substring(0, 500));
-    return null;
-  }
-}
-
-/**
- * Fallback ranking if organic ranking fails - preserve original order
- */
-function fallbackRankByConfidence(picks) {
-  console.log('[fallbackRankByConfidence] Using original order fallback ranking');
-  return [...picks]
-    .map((p, i) => ({
-      ...p,
-      rank: i + 1,
-      rank_reason: 'Fallback: original order'
-    }));
-}
-
-/**
- * Batch analyze multiple games
- */
-export async function analyzeGames(games, sport, options = {}) {
-  const results = [];
-
-  for (let i = 0; i < games.length; i++) {
-    const game = games[i];
-    console.log(`\n[${i + 1}/${games.length}] Processing: ${game.away_team} @ ${game.home_team}`);
-
-    const result = await analyzeGame(game, sport, options);
-    results.push(result);
-
-    // Small delay between games to avoid rate limits
-    if (i < games.length - 1) {
-      await sleep(1000);
-    }
-  }
-
-  return results;
-}
-
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// SLATE SELECTOR - Filter to best picks and run Stress Test
-// ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * Build the Slate Stress Test prompt
- * Gary sees his top picks and decides whether to keep, drop, or swap
- * 
- * @param {Array} topPicks - Top picks ranked by conviction gap
- * @param {Object|null} bestUnderdog - Best underdog if all top picks are favorites
- * @returns {string} The stress test prompt
- */
-function buildSlateStressTest(topPicks, bestUnderdog) {
-  const pickCount = topPicks.length;
-  const sweepOdds = Math.pow(0.5, pickCount) * 100;
-  
-  const allFavorites = topPicks.every(p => {
-    const gap = p.convictionRatings?.rawGap || 0;
-    return gap > 0; // Positive gap = favorite conviction
-  });
-  
-  // Build pick list with thesis summaries
-  const pickList = topPicks.map((p, i) => {
-    const gap = Math.abs(p.convictionRatings?.rawGap || 0).toFixed(1);
-    const thesis = extractThesisSummary(p.rationale);
-    const side = (p.convictionRatings?.rawGap || 0) > 0 ? 'FAV' : 'DOG';
-    return `${i + 1}. ${p.pick} (Gap: ${gap}, ${side}) - "${thesis}"`;
-  }).join('\n');
-  
-  // Balance context only if all favorites
-  let balanceContext = '';
-  if (allFavorites && bestUnderdog) {
-    const dogGap = Math.abs(bestUnderdog.convictionRatings?.rawGap || 0).toFixed(1);
-    const dogThesis = extractThesisSummary(bestUnderdog.rationale);
-    
-    balanceContext = `
-**BALANCE CHECK:**
-All ${pickCount} of your picks are favorites. Your highest-conviction underdog is:
-- ${bestUnderdog.pick} (Gap: ${dogGap}) - "${dogThesis}"
-
-Going ${pickCount}-0 is hard. If each pick is a 50/50 coin flip, 
-that's a ${sweepOdds.toFixed(1)}% chance of a clean sweep.
-`;
-  }
-  
-  return `
-═══════════════════════════════════════════════════════════════════════════
-## THE SLATE STRESS TEST
-═══════════════════════════════════════════════════════════════════════════
-
-You've identified your top picks for today's slate.
-Imagine you MUST go ${pickCount}-0 to survive.
-
-**YOUR PICKS:**
-${pickList}
-${balanceContext}
-**DECISIONS:**
-
-1. **DROP OR KEEP?**
-   If you must drop ONE pick because you're worried about a trap, which one?
-   Or keep all ${pickCount} if you'd bet your career on the sweep.
-
-2. **BALANCE SWAP?** (only if balance check shown above)
-   Should the underdog replace your weakest favorite? Yes or No, with reasoning.
-
-3. **FAILURE ANALYSIS**
-   If tomorrow's headline reads "Gary Goes 1-${pickCount - 1}", which pick failed and why?
-   Identify the most likely failure scenario for your weakest link.
-
-4. **SWEEP CONFIDENCE**
-   Rate your confidence in a clean sweep (1-10).
-
-**OUTPUT FORMAT (strict JSON):**
-\`\`\`json
-{
-  "drop_decision": "KEEP_ALL" or "DROP:[pick name]",
-  "drop_reasoning": "Why you kept all or why you dropped one",
-  "balance_swap": "NO" or "YES:[underdog pick name]",
-  "balance_reasoning": "Why you kept favorites or swapped",
-  "weakest_link": "[pick name]",
-  "failure_scenario": "How this pick could fail",
-  "sweep_confidence": [1-10],
-  "final_slate": ["pick1", "pick2", "pick3", ...]
-}
-\`\`\`
-═══════════════════════════════════════════════════════════════════════════
-`.trim();
-}
-
-/**
- * Extract a short thesis summary from the full rationale
- * @param {string} rationale - Full rationale text
- * @returns {string} Short thesis (max 60 chars)
- */
-function extractThesisSummary(rationale) {
-  if (!rationale) return 'No thesis available';
-  
-  // Try to find "Gary's Take" section first
-  const garysTakeMatch = rationale.match(/Gary's Take[:\s]*([^.]+\.)/i);
-  if (garysTakeMatch) {
-    return garysTakeMatch[1].substring(0, 60).trim() + (garysTakeMatch[1].length > 60 ? '...' : '');
-  }
-  
-  // Otherwise, take first sentence after removing common headers
-  const cleaned = rationale
-    .replace(/TALE OF THE TAPE[\s\S]*?Gary's Take/i, '')
-    .replace(/\n+/g, ' ')
-    .trim();
-  
-  const firstSentence = cleaned.match(/^[^.!?]+[.!?]/);
-  if (firstSentence) {
-    return firstSentence[0].substring(0, 60).trim() + (firstSentence[0].length > 60 ? '...' : '');
-  }
-  
-  return cleaned.substring(0, 60) + '...';
-}
-
-/**
- * Select the best slate from all picks using conviction gap ranking
- * Then run the Stress Test for final validation
- * 
- * @param {Array} allPicks - All picks from the sport's analysis
- * @param {string} sport - Sport identifier
- * @param {Object} options - Optional settings (slateSession for memory mode)
- * @returns {Object} Final slate with stress test results
- */
-export async function selectBestSlate(allPicks, sport, options = {}) {
-  const slateSession = options.slateSession;
-  console.log(`\n${'═'.repeat(70)}`);
-  console.log(`🎯 SLATE SELECTOR: Filtering ${allPicks.length} picks to best slate`);
-  console.log(`${'═'.repeat(70)}\n`);
-  
-  // Step 1: Filter to non-PASS picks with conviction ratings
-  const qualifyingPicks = allPicks.filter(p => {
-    if (p.type === 'pass' || p.pick === 'PASS') return false;
-    if (!p.convictionRatings?.rawGap) return false;
-    
-    const absGap = Math.abs(p.convictionRatings.rawGap);
-    return absGap >= 1.5; // Minimum conviction threshold
-  });
-  
-  console.log(`[SlateSelector] ${qualifyingPicks.length}/${allPicks.length} picks qualify (gap ≥ 1.5, non-PASS)`);
-  
-  if (qualifyingPicks.length === 0) {
-    console.log(`[SlateSelector] ⚠️ No qualifying picks - returning empty slate`);
-    return {
-      finalSlate: [],
-      stressTestResult: null,
-      balance: { favorites: 0, underdogs: 0 },
-      sweepConfidence: 0
-    };
-  }
-  
-  // Step 2: Rank by absolute gap (pure conviction strength)
-  const rankedPicks = [...qualifyingPicks].sort((a, b) => {
-    const gapA = Math.abs(a.convictionRatings?.rawGap || 0);
-    const gapB = Math.abs(b.convictionRatings?.rawGap || 0);
-    return gapB - gapA; // Descending by conviction
-  });
-  
-  console.log(`[SlateSelector] Ranked picks by conviction gap:`);
-  rankedPicks.forEach((p, i) => {
-    const gap = p.convictionRatings?.rawGap || 0;
-    const side = gap > 0 ? 'FAV' : 'DOG';
-    console.log(`   ${i + 1}. ${p.pick} (Gap: ${gap.toFixed(1)}, ${side})`);
-  });
-  
-  // Step 3: Take top 4 (or fewer if not enough)
-  const topPicks = rankedPicks.slice(0, Math.min(4, rankedPicks.length));
-  
-  // Step 4: Find best underdog if all top picks are favorites
-  const allFavorites = topPicks.every(p => (p.convictionRatings?.rawGap || 0) > 0);
-  let bestUnderdog = null;
-  
-  if (allFavorites) {
-    // Find highest conviction underdog from remaining picks
-    bestUnderdog = rankedPicks.find(p => {
-      const gap = p.convictionRatings?.rawGap || 0;
-      return gap < 0 && !topPicks.includes(p);
-    });
-    
-    // If no underdog in remaining, check if any underdog exists at all
-    if (!bestUnderdog) {
-      bestUnderdog = rankedPicks.find(p => (p.convictionRatings?.rawGap || 0) < 0);
-    }
-    
-    if (bestUnderdog) {
-      console.log(`[SlateSelector] All ${topPicks.length} picks are favorites. Best underdog: ${bestUnderdog.pick}`);
-    }
-  }
-  
-  // Step 5: Run the Stress Test
-  console.log(`\n[SlateSelector] Running Stress Test on ${topPicks.length} picks...`);
-  
-  const stressTestPrompt = buildSlateStressTest(topPicks, bestUnderdog);
-  
-  // Build messages array - use session if available, otherwise standalone
-  let messages;
-  if (slateSession?.messages) {
-    slateSession.messages.push({ role: 'user', content: stressTestPrompt });
-    messages = slateSession.messages;
-  } else {
-    // Standalone mode - create minimal context
-    messages = [
-      { role: 'system', content: 'You are Gary, a sharp sports analyst. Evaluate your picks critically.' },
-      { role: 'user', content: stressTestPrompt }
-    ];
-  }
-  
-  try {
-    const provider = getProviderForSport(sport);
-    const model = getModelForProvider(provider, sport);
-    
-    const response = await callGeminiWithRetry(messages, [], model, 3, 'final_decision');
-    const content = response.choices[0]?.message?.content || '';
-    
-    // Add response to session if available
-    if (slateSession?.messages) {
-      slateSession.messages.push({ role: 'assistant', content });
-    }
-    
-    // Parse the stress test response
-    const stressResult = parseStressTestResponse(content, topPicks, bestUnderdog);
-    
-    // Log the results
-    console.log(`\n[SlateSelector] 🎯 Stress Test Results:`);
-    console.log(`   Drop Decision: ${stressResult.dropDecision}`);
-    console.log(`   Balance Swap: ${stressResult.balanceSwap}`);
-    console.log(`   Weakest Link: ${stressResult.weakestLink}`);
-    console.log(`   Sweep Confidence: ${stressResult.sweepConfidence}/10`);
-    console.log(`   Final Slate: ${stressResult.finalSlate.length} picks`);
-    
-    // Build final output
-    const favorites = stressResult.finalSlate.filter(p => (p.convictionRatings?.rawGap || 0) > 0).length;
-    const underdogs = stressResult.finalSlate.filter(p => (p.convictionRatings?.rawGap || 0) < 0).length;
-    
-    return {
-      finalSlate: stressResult.finalSlate.map((p, i) => ({
-        rank: i + 1,
-        pick: p.pick,
-        odds: p.odds,
-        gap: p.convictionRatings?.rawGap || 0,
-        thesis: extractThesisSummary(p.rationale),
-        side: (p.convictionRatings?.rawGap || 0) > 0 ? 'FAVORITE' : 'UNDERDOG',
-        riskNote: p.pick === stressResult.weakestLink ? stressResult.failureScenario : null,
-        ...p // Include all original pick data
-      })),
-      stressTestResult: {
-        dropDecision: stressResult.dropDecision,
-        dropReasoning: stressResult.dropReasoning,
-        balanceSwap: stressResult.balanceSwap,
-        balanceReasoning: stressResult.balanceReasoning,
-        weakestLink: stressResult.weakestLink,
-        failureScenario: stressResult.failureScenario
-      },
-      balance: { favorites, underdogs },
-      sweepConfidence: stressResult.sweepConfidence
-    };
-    
-  } catch (error) {
-    console.error(`[SlateSelector] ❌ Stress Test failed:`, error.message);
-    
-    // Return top picks without stress test if it fails
-    const favorites = topPicks.filter(p => (p.convictionRatings?.rawGap || 0) > 0).length;
-    const underdogs = topPicks.filter(p => (p.convictionRatings?.rawGap || 0) < 0).length;
-    
-    return {
-      finalSlate: topPicks.map((p, i) => ({
-        rank: i + 1,
-        pick: p.pick,
-        odds: p.odds,
-        gap: p.convictionRatings?.rawGap || 0,
-        thesis: extractThesisSummary(p.rationale),
-        side: (p.convictionRatings?.rawGap || 0) > 0 ? 'FAVORITE' : 'UNDERDOG',
-        ...p
-      })),
-      stressTestResult: null,
-      stressTestError: error.message,
-      balance: { favorites, underdogs },
-      sweepConfidence: null
-    };
-  }
-}
-
-/**
- * Parse Gary's stress test response
- */
-function parseStressTestResponse(content, topPicks, bestUnderdog) {
-  // Try to extract JSON from the response
-  const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/) || 
-                    content.match(/\{[\s\S]*"drop_decision"[\s\S]*\}/);
-  
-  let parsed = null;
-  if (jsonMatch) {
-    try {
-      const jsonStr = jsonMatch[1] || jsonMatch[0];
-      parsed = JSON.parse(jsonStr);
-    } catch (e) {
-      console.log(`[SlateSelector] JSON parse failed, using regex extraction`);
-    }
-  }
-  
-  // Build result from parsed JSON or extract from text
-  let dropDecision = 'KEEP_ALL';
-  let dropReasoning = '';
-  let balanceSwap = 'NO';
-  let balanceReasoning = '';
-  let weakestLink = topPicks[topPicks.length - 1]?.pick || '';
-  let failureScenario = '';
-  let sweepConfidence = 5;
-  let finalSlate = [...topPicks];
-  
-  if (parsed) {
-    dropDecision = parsed.drop_decision || 'KEEP_ALL';
-    dropReasoning = parsed.drop_reasoning || '';
-    balanceSwap = parsed.balance_swap || 'NO';
-    balanceReasoning = parsed.balance_reasoning || '';
-    weakestLink = parsed.weakest_link || topPicks[topPicks.length - 1]?.pick || '';
-    failureScenario = parsed.failure_scenario || '';
-    sweepConfidence = parseInt(parsed.sweep_confidence) || 5;
-    
-    // Process drop decision
-    if (dropDecision.startsWith('DROP:')) {
-      const dropPick = dropDecision.replace('DROP:', '').trim().toLowerCase();
-      finalSlate = topPicks.filter(p => {
-        const pickLower = (p.pick || '').toLowerCase();
-        // Match if the drop name is contained in the pick OR vice versa
-        return !pickLower.includes(dropPick) && !dropPick.includes(pickLower);
-      });
-    }
-    
-    // Process balance swap
-    if (balanceSwap.startsWith('YES:') && bestUnderdog) {
-      const swapIn = balanceSwap.replace('YES:', '').trim();
-      // Remove weakest favorite and add the underdog
-      if (finalSlate.length > 0) {
-        finalSlate = finalSlate.slice(0, -1); // Remove last (weakest)
-        finalSlate.push(bestUnderdog);
-      }
-    }
-  } else {
-    // Fallback: extract from text
-    const confidenceMatch = content.match(/sweep_confidence['":\s]+(\d+)/i) ||
-                           content.match(/confidence[:\s]+(\d+)/i);
-    if (confidenceMatch) {
-      sweepConfidence = parseInt(confidenceMatch[1]);
-    }
-    
-    const weakestMatch = content.match(/weakest[_\s]link['":\s]+["']?([^"'\n,}]+)/i);
-    if (weakestMatch) {
-      weakestLink = weakestMatch[1].trim();
-    }
-    
-    const failureMatch = content.match(/failure[_\s]scenario['":\s]+["']?([^"'\n}]+)/i);
-    if (failureMatch) {
-      failureScenario = failureMatch[1].trim();
-    }
-  }
-  
-  return {
-    dropDecision,
-    dropReasoning,
-    balanceSwap,
-    balanceReasoning,
-    weakestLink,
-    failureScenario,
-    sweepConfidence,
-    finalSlate
-  };
-}
-
-export default { analyzeGame, analyzeGames, createSlateSession, rankPicksInSession, selectBestSlate, buildSystemPrompt };
-
+export default { analyzeGame, buildSystemPrompt };

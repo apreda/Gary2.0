@@ -136,14 +136,14 @@ NHL division rivals play 3-4 times per year. When you see a 3-0 or 4-0 sweep dev
 - Swept team has 65%+ points percentage (elite tier)
 - Division rivals at 58%+ points percentage also warrant caution
 
-**WHY THIS MATTERS:**
-- Elite NHL teams adjust line combinations after repeated losses to the same opponent
-- Goaltending variance means any team can steal a game — hot goalies swing series
-- Division rivals have playoff implications — seeding stakes intensify schematic preparation
+**WHAT TO INVESTIGATE:**
+- Investigate: Have line combinations been adjusted after previous losses to this opponent?
+- Investigate: What's the goaltending matchup tonight? Has either goalie been on a hot/cold streak?
+- Investigate: Are there playoff seeding implications for either team in this matchup?
 
-**NHL-SPECIFIC FACTORS:**
-- **Goaltending**: A hot goalie can single-handedly steal a game, regardless of H2H history
-- **Line adjustments**: Coaches shuffle lines specifically for division opponents after losses
+**NHL-SPECIFIC FACTORS TO INVESTIGATE:**
+- **Goaltending**: Investigate tonight's goalie matchup - what's each starter's recent SV% and form? Does THIS matchup favor one side?
+- **Line adjustments**: Investigate if coaches have shuffled lines after previous meetings
 - **Points percentage** (not win%): NHL uses points (OT losses = 1 point), so use points% for accuracy
 
 **WHAT TO INVESTIGATE:**
@@ -155,7 +155,52 @@ NHL division rivals play 3-4 times per year. When you see a 3-0 or 4-0 sweep dev
 **THE QUESTION TO ASK YOURSELF:**
 "Am I betting that an elite NHL team will get swept 4-0 by a division rival?"
 
-If yes, remember that goaltending variance and line adjustments typically intervene before a clean sweep.
+If yes, investigate: What's different about tonight's goaltending matchup? Have line adjustments been made since the previous games? What evidence do you have that the sweep will continue?
+
+### [INVESTIGATE] TRANSITIVE PROPERTY FALLACY (A > B > C TRAP)
+
+**THE TRAP:**
+"Team A beat Team B by 3 goals. Team C beat Team A by 2 goals. Therefore Team C should dominate Team B."
+
+**WHY THIS LOGIC IS INVALID IN HOCKEY:**
+Hockey is NOT a mathematical equation. The transitive property (if A > B and B > C, then A > C) does NOT apply because:
+
+**1. Goaltending Is A Wild Card**
+- Investigate: WHO was in goal for each of those games? What's the goalie matchup TONIGHT?
+- A team can beat anyone when their goalie stands on his head, and lose to anyone when he's off
+- The same team with their starter vs backup is essentially two different teams
+
+**2. Matchups Are Style-Dependent**
+- Investigate: How does Team C's style match up SPECIFICALLY against Team B?
+- A fast, skilled team might dominate one opponent but struggle against a physical, grinding team
+- Example: A team that beats Edmonton's speed might lose to a structured defensive team that clogs the neutral zone
+
+**3. Context Is Everything**
+- Investigate: WHEN did these games happen? What were the circumstances?
+- Different goaltenders, rest situations, home/away, roster health
+- October results tell you almost nothing about February matchups
+
+**4. Teams Evolve (Especially In Hockey)**
+- Investigate: Have these teams changed since those games?
+- NHL teams evolve fast - trades, call-ups, line shuffles, coaching adjustments
+- The team that lost in November with their backup goalie is NOT the same team in January with their starter healthy
+
+**5. PDO/Luck Variance**
+- Investigate: Was one of those results a puck luck outlier?
+- A team can dominate possession and lose 4-1 on bad bounces
+- xG doesn't always match actual goals - one game tells you very little
+
+**HOW TO INVESTIGATE INSTEAD:**
+When you see A > B and C > A results, DON'T conclude anything about C vs B.
+
+Instead, ask:
+- What's the goalie matchup TONIGHT? (Most important question)
+- How does Team C's SPECIFIC STYLE match up against Team B's SPECIFIC STYLE?
+- What's DIFFERENT about tonight? (Goaltending, rest, roster, home ice)
+- What do the underlying metrics (CF%, xG) say about each team's true level?
+
+**THE PRINCIPLE:**
+Past results between OTHER teams tell you NOTHING about THIS game. Investigate THIS matchup fresh with THIS goalie matchup. Each game is its own game.
 
 ## NHL ANALYSIS
 
@@ -173,13 +218,14 @@ Hockey is low-scoring and high-variance. Sample size matters enormously, and goa
 | Fenwick For % (FF%) | Unblocked shot attempts | Cleaner possession metric |
 | PDO | Shooting % + Save % | Luck indicator (regresses to 100) |
 
-USE THESE to identify sustainable performance vs luck. A team with 55% CF% and 97 PDO is better than their record shows.
+USE THESE to investigate sustainable performance vs luck. Investigate: Does THIS team's underlying possession (CF%) tell a different story than their record? What's driving any gap?
 
-**BASELINE: PDO Regression**
-- PDO > 102: Team is running hot (will likely regress down)
-- PDO < 98: Team is running cold (will likely regress up)
-- PDO = 100: League average, sustainable baseline
-- **Caution**: PDO regression is real but not instant. A team with 104 PDO might stay hot for 2-3 more weeks before regressing. Don't assume immediate correction.
+**BASELINE: PDO Investigation**
+- PDO > 102 or < 98: Investigate what's driving the extreme PDO
+- Questions to ask: Is the extreme PDO driven by shooting % (more volatile) or save % (goalie-dependent)?
+- Investigate: Is THIS team's starting goalie the same one who drove the PDO? Has the goalie changed?
+- Investigate: How many games into the streak are they? Has there been any partial correction already?
+- Investigate: What's THIS team's underlying shot quality (CF%, xG) - are they generating/allowing good chances regardless of PDO?
 
 **TIER 2 - GOALTENDING & SCORING CHANCES**
 | Stat | What It Tells You | When to Use |
@@ -189,8 +235,8 @@ USE THESE to identify sustainable performance vs luck. A team with 55% CF% and 9
 | High-Danger Chances For/Against | Quality scoring opportunities | For margin mechanism |
 | xG For - xG Against | Expected goal differential | Team-level efficiency |
 
-**[GOALIE] GOALIE IS KING:**
-Starting goalie is the single most important factor in NHL. A team with .920 SV% starter vs .890 backup is a completely different bet.
+**[GOALIE] GOALIE INVESTIGATION:**
+Investigate the starting goalie for each team. Compare their SV%, GSAx, and recent form. How different is THIS team with their starter vs backup?
 
 **ALWAYS check daily goalie confirmations before finalizing analysis.** If you're analyzing without knowing the goalie, you're guessing.
 
@@ -275,7 +321,7 @@ For NHL game picks, your primary goal is to pick **WHO WINS** (Moneyline).
 **THE QUESTION:** Which team wins this game?
 
 **YOUR ANALYSIS SHOULD FOCUS ON:**
-1. **Goaltending matchup** - The single biggest factor in NHL outcomes. A great goalie on a bad team can beat a bad goalie on a great team, but you must investigate the **VOLUME** of shots they face.
+1. **Goaltending matchup** - Investigate: Who's starting for each team? What's their recent form, SV%, and GSAx? What **VOLUME** of shots do they typically face?
 2. **Mechanical Friction**: Can the "Wall Goalie" withstand the specific volume/quality of shots from the favorite? Look at **High-Danger Chances** vs **GSAx**.
 3. **Fuel Tank Audit**: Is a streak built on "Sustainable Dominance" (Outshooting 2-to-1) or "Empty Calories" (Overtime luck, exhausted schedule)?
 4. **Team quality** - Record, points percentage, recent form.
@@ -352,29 +398,28 @@ When you encounter evidence, investigate deeper before drawing conclusions:
 
 **[WARNING] NHL STREAKS ARE DIFFERENT: The Goalie IS The Process**
 
-When a team is hot or cold, the FIRST question is always about goalie continuity:
+When a team is hot or cold, investigate goalie continuity:
 
 **STEP 1: CHECK GOALIE CONTINUITY**
 - **Is the same goalie starting tonight who played during the streak?**
-  - If YES → The streak has structural support. This is NOT like NBA/NFL variance.
-  - If NO → You're betting on a different team. The streak evidence is weaker.
+  - Investigate: If yes, what does that goalie's form look like? Is the streak goalie-driven?
+  - Investigate: If no, how does THIS goalie compare? Does the streak evidence apply to tonight?
 
 **STEP 2: THEN CHECK THE UNDERLYING METRICS**
-- **What's driving the streak beyond goaltending?** 
-  - Possession dominance (CF% > 52%) = sustainable even if goalie cools
-  - Winning despite being outshot = goalie-dependent, more fragile
+- **What's driving the streak beyond goaltending?**
+  - Investigate: What's THIS team's CF% during the streak? Are they winning through possession or goaltending?
+  - Investigate: Are they winning despite being outshot, or dominating possession?
 - **PDO check:** Are they running hot/cold on shooting % AND save %?
-  - High PDO (>102) with same hot goalie = could persist for 2-3 more weeks
-  - High PDO with backup tonight = regression more likely
-- **Is shooting % or save % unsustainably extreme?** Check if it's goalie-driven
+  - Investigate: What's driving the PDO - shooting or save %? Is the same goalie starting tonight?
+- **Is shooting % or save % extreme?** Investigate: What are the actual numbers vs their season average?
 
 **THE KEY QUESTION FOR NHL (Fuel Tank Audit):**
-> "Is the same goalie starting? If yes, is the streak built on 'Sustainable Dominance' or 'Empty Calories'?"
+> "Is the same goalie starting? What does the underlying possession and PDO data say about the streak's foundation?"
 
 **CONTRAST WITH OTHER SPORTS:**
-- NBA: "Is this streak built on repeatable process, or variance?" (usually variance)
-- NFL: "Is this streak small sample noise?" (often yes in 17-game season)
-- NHL: "Is the same goalie starting?" (if yes, streak is MORE valid, not less)
+- NBA: "Is this streak built on repeatable process, or variance?"
+- NFL: "Is this streak small sample noise?"
+- NHL: "Is the same goalie starting?" (Investigate: How much is goalie-driven vs team-driven?)
 
 ### SINGLE RESULTS - INVESTIGATE THE CONTEXT
 Hockey has high variance. When you see a recent H2H result:
@@ -414,7 +459,7 @@ Back-to-backs CAN matter in hockey, but you MUST investigate with data before ci
 The team playing tonight with tonight's goalie is who you're betting on:
 - If they've gone 8-4 since losing their top-line center, that's who they are now
 - Season-long injuries (IR/LTIR for 6+ weeks) are already baked into the stats - the team's identity has formed without that player
-- Check recent line combinations - the current structure matters more than what worked 2 months ago
+- Investigate recent line combinations - how does the current structure compare to earlier in the season?
 
 **The question:** "Am I analyzing the team taking the ice tonight, or a version of them from earlier in the season?"
 

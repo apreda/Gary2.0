@@ -221,11 +221,11 @@ Low-possession games have less variance in outcomes. This is math, not edge:
 
 ### Reference: Tempo Impact Concept
 
-| Scenario | General Effect | But Remember |
-|----------|----------------|--------------|
-| Both fast | More possessions, more variance | Line accounts for this |
-| Both slow | Fewer possessions, tighter margins | Line accounts for this |
-| Mismatch | Slower team usually controls | Line accounts for this |
+| Scenario | What to Investigate |
+|----------|---------------------|
+| Both fast | More possessions - investigate how each team performs in high-possession games |
+| Both slow | Fewer possessions - investigate how each team performs in grind-it-out games |
+| Mismatch | Investigate: What does each team's data show when facing opposite-tempo opponents? |
 
 **The edge is NOT in knowing tempo matters. The edge is in finding where the line's tempo assumption is WRONG for this specific game.**
 
@@ -262,11 +262,11 @@ Many teams build records against weak opposition, then get exposed in conference
 | Star out 1-2 games | ADJUSTING | Some edge may remain |
 | Star out 3+ games | PRICED IN | Team's recent record reflects this |
 
-**COLLEGE-SPECIFIC FACTORS:**
-- Depth is thinner than NBA - one injury matters more
-- Freshman replacements have higher variance
-- Transfer portal players may need adjustment time
-- "Questionable" players often play at 70-80%
+**COLLEGE-SPECIFIC FACTORS TO INVESTIGATE:**
+- Investigate THIS team's roster depth - who are the backups and what's their experience?
+- Investigate: If a freshman is stepping into a larger role, what does their recent performance show?
+- Investigate: If a transfer is involved, how have they performed since joining the team?
+- Investigate: If a player is questionable, what does THIS player's history show when playing through injuries?
 
 **THE KEY QUESTION:**
 > "When did this injury happen, and has the line fully adjusted?"
@@ -285,10 +285,10 @@ If Desmond Claude has been out for 3 weeks, the line reflects Washington without
 - Senior Day (last home game motivation)
 - Teams fighting for conference tournament seeding
 
-**OVERRATED:**
-- "They want revenge from last game" (they always want to win)
-- "Must-win game" (every game matters to players)
-- "Statement game" (narrative, not mechanism)
+**INVESTIGATE BEFORE CITING:**
+- "Revenge" narrative: Does THIS team have historical data showing they perform differently in revenge spots?
+- "Must-win" narrative: Is there structural evidence (different rotations, effort metrics) beyond the label?
+- "Statement game" narrative: What specific data supports this beyond the storyline?
 
 ### Lookahead Spots
 

@@ -236,6 +236,45 @@ If your thesis relies purely on "they've won 3 straight," investigate deeper. Th
 - Different rest/schedule context
 - Different point in season (early season vs playoff push)
 
+### [INVESTIGATE] TRANSITIVE PROPERTY FALLACY (A > B > C TRAP)
+
+**THE TRAP:**
+"Team A beat Team B by 10. Team C beat Team A by 15. Therefore Team C should crush Team B by 25+."
+
+**WHY THIS LOGIC IS INVALID IN SPORTS:**
+Sports are NOT mathematical equations. The transitive property (if A > B and B > C, then A > C) does NOT apply because:
+
+**1. Matchups Are Style-Dependent ("Styles Make Fights")**
+- Investigate: How does Team C's style match up SPECIFICALLY against Team B?
+- Team B might play a style that Team C struggles with, even if Team A handled Team B easily
+- Example: A slow, defensive team might frustrate a fast-paced opponent, even though another fast-paced team crushed them
+
+**2. Context Is Everything**
+- Investigate: WHEN did these games happen? What were the circumstances?
+- Different injuries, rest situations, home/away, motivation levels
+- A result from October tells you nothing about a January matchup
+
+**3. Teams Evolve**
+- Investigate: Have these teams changed since those games?
+- Coaching adjustments, injuries healing, rotations settling
+- The team that lost weeks ago is NOT the same team tonight
+
+**4. Motivation Varies**
+- Investigate: What was at stake in each game?
+- A team coasting after clinching vs. a desperate must-win effort
+- Rivalry games produce different intensity than random matchups
+
+**HOW TO INVESTIGATE INSTEAD:**
+When you see "A beat B" and "C beat A" results, DON'T conclude anything about C vs B.
+
+Instead, ask:
+- How does Team C's SPECIFIC STYLE match up against Team B's SPECIFIC STYLE?
+- What's DIFFERENT about tonight? (Injuries, rest, venue, motivation)
+- What structural evidence exists for THIS specific matchup?
+
+**THE PRINCIPLE:**
+Past results between OTHER teams tell you NOTHING about THIS game. Investigate THIS matchup fresh. Each game is its own game.
+
 ## NBA ANALYSIS
 
 You are analyzing an NBA game. Investigate the factors you find relevant and decide what matters most for THIS game.
@@ -333,6 +372,14 @@ Consider roster context when evaluating recent form - who was playing during tha
 
 ---
 
+## [NOTE] TRAP PATTERNS - SEE STRESS TEST PHASE
+
+Common trap patterns (blowout recency, injury overreaction, regression, lookahead, etc.) will be evaluated during the STRESS TEST phase after you build your Steel Man cases.
+
+During investigation, focus on gathering data. Trap analysis happens in Pass 2.5.
+
+---
+
 ## [BET] SPREAD ANALYSIS: MARGIN DYNAMICS FRAMEWORK
 Analyze the SPREAD as a mechanical hurdle, not just a number to beat. Do NOT attempt to "guess" a final margin (e.g., "I think they win by 10"). Instead, evaluate the friction and separation forces in the matchup.
 
@@ -367,10 +414,10 @@ When you encounter evidence, investigate deeper before drawing conclusions:
 
 ### RECENT FORM - INVESTIGATE THE "WHY"
 When a team is hot or cold, ask:
-- **What's driving the streak?** Is it shooting variance (3PT% spikes regress), defensive improvement (sustainable), or opponent quality (schedule noise)?
+- **What's driving the streak?** Investigate: Is it shooting improvement, defensive improvement, or opponent quality during the streak?
 - **What do the margins look like?** Winning by 2 points every game vs winning by 15 tells different stories
 - **Is the roster the same?** A 4-game win streak with the star back ≠ the same team that lost 5 straight without him
-- **Could this regress?** Teams shooting 45% from 3 over 5 games will likely regress. Teams with elite defensive rating are more stable.
+- **Could this regress?** Investigate: Is THIS team's recent 3PT% significantly above their season average? Are they shooting MORE threes (volume change) or just making MORE (percentage spike)? What quality of defense have they faced?
 
 **The question:** "Is this streak evidence of a real change, or variance that will correct?"
 

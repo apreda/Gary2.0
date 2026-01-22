@@ -24,7 +24,7 @@ dotenv.config({ path: path.join(__dirname, '..', '.env') });
 dotenv.config({ path: path.join(__dirname, '..', '.env.local'), override: true });
 
 // Now import modules that depend on env vars
-const { analyzeGame, buildSystemPrompt, selectBestSlate } = await import('../src/services/agentic/agenticOrchestrator.js');
+const { analyzeGame, buildSystemPrompt } = await import('../src/services/agentic/agenticOrchestrator.js');
 const { oddsService } = await import('../src/services/oddsService.js');
 const { picksService } = await import('../src/services/picksService.js');
 const { getVenueForHomeTeam } = await import('../src/services/venueMapping.js');
@@ -217,8 +217,6 @@ const dateFilter = getArgValue('--date');
 const useDynamicSlateReview = args.includes('--dynamic');
 // --force-underdog flag to make Gary argue FOR the underdog (one-time use for testing value)
 const forceUnderdog = args.includes('--force-underdog');
-// --slate flag to enable Slate Selector (filters to top picks and runs Stress Test)
-const useSlateSelector = args.includes('--slate');
 // --test flag to store picks in test_daily_picks table instead of production (for testing)
 const useTestTable = args.includes('--test');
 // --test-name flag to label the test run (e.g., "Sharp Betting Reference Test")
@@ -264,7 +262,6 @@ if (sportsToRun.length === 0) {
 ║    --force                     (skip deduplication)              ║
 ║    --force-underdog            (make Gary argue for underdog)    ║
 ║    --store false               (analyze only, don't save)        ║
-║    --slate                     (Slate Selector: top 4 + Stress)  ║
 ║    --test                      (store to test_daily_picks table) ║
 ║    --test-name "My Test"       (label the test run)              ║
 ║    --matchup "Chicago"         (run single game only)            ║
@@ -1493,112 +1490,21 @@ async function main() {
           console.log(`\n[${config.name}] Gary's decisions: ${qualifiedPicks.length} PICKS, ${passCount} PASS`)
 
           // ═══════════════════════════════════════════════════════════════
-          // NHL SPECIAL FILTERING - MONEYLINE ONLY
-          // Gary picks WINNERS (ML only, no puck line, no totals)
-          // Output: Top 2 favorites + Top 1 underdog (by confidence)
+          // STORE ALL PICKS FROM PASS 3
+          // No filtering - all Gary's picks go directly to Supabase
           // ═══════════════════════════════════════════════════════════════
-          let nhlFilteredPicks = qualifiedPicks;
-          
-          if (config.key === 'icehockey_nhl' && qualifiedPicks.length > 0) {
-            console.log(`\n[${config.name}] 🏒 NHL ML-Only Filtering: Top 2 Favorites + Top 1 Underdog`);
-            
-            // All NHL picks are ML - separate by odds (negative = favorite, positive = underdog)
-            const favorites = qualifiedPicks.filter(p => {
-              const odds = parseInt(p.odds) || 0;
-              return odds < 0; // Negative odds = favorite
-            });
-            
-            const underdogs = qualifiedPicks.filter(p => {
-              const odds = parseInt(p.odds) || 0;
-              return odds >= 100; // Positive odds = underdog
-            });
-            
-            // Sort by confidence (highest first)
-            const sortByConfidence = (a, b) => (b.confidence || 0.5) - (a.confidence || 0.5);
-            favorites.sort(sortByConfidence);
-            underdogs.sort(sortByConfidence);
-            
-            // Take top 2 favorites
-            const topFavorites = favorites.slice(0, 2);
-            console.log(`   🏆 Top 2 Favorites: ${topFavorites.map(p => `${p.pick} (${((p.confidence || 0.5) * 100).toFixed(0)}%)`).join(', ') || 'None'}`);
-            
-            // Take top 1 underdog
-            const topUnderdog = underdogs.slice(0, 1);
-            console.log(`   🐕 Top Underdog: ${topUnderdog.map(p => `${p.pick} (${((p.confidence || 0.5) * 100).toFixed(0)}%)`).join(', ') || 'None'}`);
-            
-            // Combine
-            nhlFilteredPicks = [...topFavorites, ...topUnderdog];
-            
-            // Log what was filtered out
-            const filteredOut = qualifiedPicks.length - nhlFilteredPicks.length;
-            if (filteredOut > 0) {
-              console.log(`   📋 Filtered out ${filteredOut} lower-confidence picks`);
-            }
-            console.log(`   ✅ Final NHL picks: ${nhlFilteredPicks.length} (all ML)`);
-          }
+          if (qualifiedPicks.length > 0) {
+            let picksToStore = qualifiedPicks;
 
-          // ═══════════════════════════════════════════════════════════════
-          // SLATE SELECTOR (--slate flag)
-          // Filters to top picks by conviction, runs Stress Test
-          // ═══════════════════════════════════════════════════════════════
-          let finalQualifiedPicks = nhlFilteredPicks;
-          let slateResult = null;
-          
-          if (useSlateSelector && qualifiedPicks.length > 2) {
-            console.log(`\n[${config.name}] 🎯 Running Slate Selector on ${qualifiedPicks.length} picks...`);
-            
-            try {
-              slateResult = await selectBestSlate(qualifiedPicks, config.key);
-              
-              if (slateResult.finalSlate && slateResult.finalSlate.length > 0) {
-                // Replace qualifiedPicks with the stress-tested slate
-                finalQualifiedPicks = slateResult.finalSlate;
-                
-                console.log(`\n╔══════════════════════════════════════════════════════════════════╗`);
-                console.log(`║  🎯 GARY'S EXECUTIVE SLATE (${finalQualifiedPicks.length} picks)                        `);
-                console.log(`╠══════════════════════════════════════════════════════════════════╣`);
-                finalQualifiedPicks.forEach((p, i) => {
-                  const sideTag = p.side === 'UNDERDOG' ? '🐕' : '🏆';
-                  console.log(`║  #${p.rank}. ${(p.pick || '').slice(0, 25).padEnd(25)} | Gap: ${(p.gap || 0).toFixed(1)} ${sideTag}`);
-                  if (p.riskNote) {
-                    console.log(`║      ⚠️ Risk: ${p.riskNote.slice(0, 45)}...`);
-                  }
-                });
-                console.log(`╠══════════════════════════════════════════════════════════════════╣`);
-                console.log(`║  Balance: ${slateResult.balance.favorites} Favorites, ${slateResult.balance.underdogs} Underdogs`);
-                console.log(`║  Sweep Confidence: ${slateResult.sweepConfidence}/10`);
-                if (slateResult.stressTestResult?.weakestLink) {
-                  console.log(`║  Weakest Link: ${slateResult.stressTestResult.weakestLink}`);
-                }
-                console.log(`╚══════════════════════════════════════════════════════════════════╝\n`);
-              } else {
-                console.log(`[${config.name}] ⚠️ Slate Selector returned no picks, using original ${qualifiedPicks.length} picks`);
-              }
-            } catch (slateError) {
-              console.error(`[${config.name}] ❌ Slate Selector error:`, slateError.message);
-              console.log(`[${config.name}] Falling back to original ${qualifiedPicks.length} picks`);
-            }
-          }
-
-          if (finalQualifiedPicks.length > 0) {
-            // Quantum behavior: ALL sports use TRACKING mode
-            // Store all picks with quantum scores attached (no filtering)
-            let picksToStore = finalQualifiedPicks;
-            
             if (isQuantumEnabled()) {
-              // All sports: Store ALL picks with quantum scores for tracking
-              console.log(`\n[${config.name}] 📊 Tracking mode: Storing all picks with quantum scores`);
+              // Attach quantum scores for tracking (no filtering)
+              console.log(`\n[${config.name}] 🌌 Attaching quantum scores to ${qualifiedPicks.length} picks`);
               picksToStore = await applyQuantumFilter(qualifiedPicks, config.name, { storeAll: true });
-            } else {
-              console.log(`\n[${config.name}] ⚠️ Quantum disabled (--no-quantum flag)`);
             }
-            
-            if (picksToStore.length > 0) {
-              const storageNote = 'quantum-tracked picks';
-              console.log(`\n[${config.name}] 💾 Storing ${picksToStore.length} ${storageNote}`);
-              await storePicks(picksToStore);
-              allPicks.push(...picksToStore);
-            }
+
+            console.log(`\n[${config.name}] 💾 Storing ${picksToStore.length} picks`);
+            await storePicks(picksToStore);
+            allPicks.push(...picksToStore);
           } else {
             console.log(`\n[${config.name}] ⏭️ Gary passed on all games - no picks to store`);
           }
@@ -1771,16 +1677,6 @@ async function storePicks(picks) {
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
-
-// ═══════════════════════════════════════════════════════════════════════════
-// POST-ANALYSIS RANKING SYSTEM
-// ═══════════════════════════════════════════════════════════════════════════
-// 
-// Philosophy: Gary ranks his picks with TRUE MEMORY of all his analyses.
-// This enables organic ranking based on conviction rather than re-reading summaries.
-// The rankPicksInSession function is now imported from agenticOrchestrator.js.
-// 
-// ═══════════════════════════════════════════════════════════════════════════
 
 // Run
 main().catch(error => {
