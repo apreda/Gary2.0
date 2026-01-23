@@ -751,19 +751,14 @@ export const oddsService = {
           dates.push(new Date(t).toISOString().slice(0, 10));
         }
       } else {
-        // Use the strict EST date string from computeWindow or regenerate
+        // Use TODAY's EST date ONLY
+        // BDL stores game dates in their local schedule date, not UTC
+        // So querying for "2026-01-23" will return games scheduled for Jan 23
         const estFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' });
         const todayEst = estFormatter.format(new Date());
 
-        // We MUST ask for today AND tomorrow to handle UTC drift.
-        // BDL stores times in UTC. 7pm EST on Nov 21 is 00:00 UTC on Nov 22.
-        // So if we only ask for Nov 21, we miss the evening games!
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const tomorrowEst = estFormatter.format(tomorrow);
-
-        dates = [todayEst, tomorrowEst];
-        console.log(`[Odds Service] ${sport}: Fetching [${dates.join(', ')}] to handle UTC offsets (will filter strictly to EST today)`);
+        dates = [todayEst];
+        console.log(`[Odds Service] ${sport}: Fetching games for TODAY only: ${todayEst}`);
       }
 
       // Fetch games+odds for each day in parallel and merge
@@ -810,41 +805,17 @@ export const oddsService = {
         return [];
       }
 
-      // Filter games to only include TODAY's games in EST
-      // We fetched both today AND tomorrow (for UTC drift handling), but we must filter out tomorrow's games
-      const estFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' });
-      const todayEstStr = estFormatter.format(new Date());
-
-      // Filter: game must be scheduled for TODAY in EST
-      // Game datetime in UTC, convert to EST date and compare
-      const todayGames = combined.filter(g => {
-        if (!g || !g.commence_time) return false;
-
-        try {
-          const gameDate = new Date(g.commence_time);
-          const gameEstDate = estFormatter.format(gameDate);
-
-          const isToday = gameEstDate === todayEstStr;
-          if (!isToday) {
-            console.log(`[Odds Service] Filtering out game ${g.away_team} @ ${g.home_team} - scheduled for ${gameEstDate}, not today (${todayEstStr})`);
-          }
-          return isToday;
-        } catch {
-          return true; // Keep if we can't parse
-        }
-      });
-
-      console.log(`[Odds Service] ${sport}: Filtered to ${todayGames.length} games for today (${todayEstStr}) from ${combined.length} total`);
-
-      // Deduplicate
+      // Deduplicate games
       const seen = new Set();
       const unique = [];
-      for (const g of todayGames) {
+      for (const g of combined) {
         if (!g || g.id == null) continue;
         if (seen.has(g.id)) continue;
         seen.add(g.id);
         unique.push(g);
       }
+
+      console.log(`[Odds Service] ${sport}: Found ${unique.length} games for today`)
 
       // First pass: extract odds from BDL bookmakers
       let processedGames = unique.map(game => {
