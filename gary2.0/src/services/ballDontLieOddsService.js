@@ -147,7 +147,9 @@ async function getNbaGamesWithOdds(dateStr) {
       sport_key: 'basketball_nba',
       home_team: g.home_team?.full_name || g.home_team?.name || '',
       away_team: g.visitor_team?.full_name || g.visitor_team?.name || '',
-      commence_time: g.date,
+      // Use datetime (actual game time in UTC) over date string to avoid timezone bugs
+      // g.date is just "YYYY-MM-DD" which when parsed becomes midnight UTC, causing EST filter issues
+      commence_time: g.datetime || g.date,
       bookmakers
     };
   });
@@ -251,7 +253,7 @@ export const ballDontLieOddsService = {
           sport_key: sportKey,
           home_team: mapTeamName(g.home_team),
           away_team: mapTeamName(g.visitor_team || g.away_team),
-          commence_time: g.date || g.commence_time || new Date().toISOString(),
+          commence_time: g.datetime || g.date || g.commence_time || new Date().toISOString(),
           bookmakers
         };
       });
@@ -330,7 +332,7 @@ export const ballDontLieOddsService = {
           sport_key: sportKey,
           home_team: mapTeamName(g.home_team),
           away_team: mapTeamName(g.visitor_team || g.away_team),
-          commence_time: g.date || g.commence_time || new Date().toISOString(),
+          commence_time: g.datetime || g.date || g.commence_time || new Date().toISOString(),
           bookmakers
         };
       });
@@ -529,8 +531,33 @@ export const ballDontLieOddsService = {
       // Normalize away/visitor for non-NBA sports
       const awayTeamName = mapTeamName(g.visitor_team || g.away_team);
       const homeTeamName = mapTeamName(g.home_team);
-      // NHL uses start_time_utc, other sports use date/commence_time/game_time
-      const commenceTime = g.start_time_utc || g.date || g.commence_time || g.game_time || new Date().toISOString();
+
+      // Debug: log available time fields on first game
+      if (g === games[0]) {
+        console.log(`[BDL Odds] DEBUG game time fields: date="${g.date}", datetime="${g.datetime}", status="${g.status}", start_time_utc="${g.start_time_utc}"`);
+      }
+
+      // Use proper datetime fields for accurate timezone handling
+      // BDL returns: date="YYYY-MM-DD" (local schedule date), datetime="ISO8601" (actual UTC time)
+      // The "status" field for upcoming games contains the ISO datetime (e.g., "2026-01-24T00:00:00Z")
+      // Priority: datetime > status (if ISO format) > start_time_utc > date with time adjustment
+      let commenceTime = g.datetime || g.start_time_utc;
+
+      // If no datetime, check if status contains the game time (BDL uses status for scheduled time)
+      if (!commenceTime && g.status && g.status.includes('T')) {
+        commenceTime = g.status;
+      }
+
+      // Last resort: use date but add a reasonable game time (7pm EST = midnight UTC next day)
+      if (!commenceTime && g.date) {
+        // Convert date string to a reasonable game time (assume 7pm EST = 00:00 UTC next day)
+        const dateParts = g.date.split('-');
+        const gameDate = new Date(Date.UTC(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]) + 1, 0, 0, 0));
+        commenceTime = gameDate.toISOString();
+        console.log(`[BDL Odds] WARNING: No datetime for game, using date+offset: ${g.date} -> ${commenceTime}`);
+      }
+
+      commenceTime = commenceTime || new Date().toISOString();
 
       const result = {
         id: g.id,
