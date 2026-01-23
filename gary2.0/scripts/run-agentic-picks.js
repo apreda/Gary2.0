@@ -31,6 +31,10 @@ const { getVenueForHomeTeam } = await import('../src/services/venueMapping.js');
 const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
 const { getConstitution } = await import('../src/services/agentic/constitution/index.js');
 const { applyQuantumFilter, isQuantumEnabled } = await import('../src/services/quantumService.js');
+const { fetchSportsbookOdds, formatOddsForStorage } = await import('../src/services/sportsbookOddsService.js');
+const { filterNBAPicks, clearFilterCache } = await import('../src/services/nbaPickFilter.js');
+const { filterNHLPicks } = await import('../src/services/nhlPickFilter.js');
+const { filterNCAABPicks } = await import('../src/services/ncaabPickFilter.js');
 // Simple system: Gary picks SPREAD, ML, or PASS.
 // ═══════════════════════════════════════════════════════════════════════════
 // GARY PICK GENERATION
@@ -336,6 +340,11 @@ async function main() {
   for (const sportShort of sportsToRun) {
     const config = SPORT_CONFIG[sportShort];
     const sportStartTime = Date.now();
+
+    // Clear NBA filter cache at start of each NBA run
+    if (config.name === 'NBA') {
+      clearFilterCache();
+    }
 
     console.log(`\n${'═'.repeat(70)}`);
     console.log(`${config.emoji} STARTING ${config.name} ANALYSIS`);
@@ -1347,6 +1356,23 @@ async function main() {
             ? result.toolCallHistory.map(t => t.token)
             : [];
 
+          // Fetch sportsbook odds for this game (ML and Spread comparison)
+          let sportsbookOdds = null;
+          try {
+            const gameId = game.id || game.bdl_game_id;
+            if (gameId) {
+              console.log(`   📊 Fetching sportsbook odds comparison...`);
+              const rawOdds = await fetchSportsbookOdds(config.key, gameId, result.homeTeam, result.awayTeam);
+              if (rawOdds && rawOdds.length > 0) {
+                // Format odds for the picked team
+                sportsbookOdds = formatOddsForStorage(rawOdds, result.pick, result.homeTeam, result.awayTeam);
+                console.log(`   ✓ Found odds from ${sportsbookOdds?.length || 0} sportsbooks`);
+              }
+            }
+          } catch (oddsErr) {
+            console.log(`   ⚠️ Could not fetch sportsbook odds: ${oddsErr.message}`);
+          }
+
           // Create clean pick object without large/unnecessary fields
           const cleanPick = {
             pick: result.pick,
@@ -1403,6 +1429,7 @@ async function main() {
             statsUsed: statsUsed, // Token names for backwards compatibility
             statsData: statsData, // Full stat data with values for Tale of the Tape
             injuries: result.injuries || null, // Structured injury data from BDL
+            sportsbook_odds: sportsbookOdds, // Multi-book odds comparison (ML + Spread)
             isBeta: config.isBeta || false, // Beta flag for sports with limited data
             dataLimitationNote: config.isBeta
               ? `${config.name} picks use supplemental web-sourced analytics. Confidence may be lower than NBA/NFL.`
@@ -1425,6 +1452,9 @@ async function main() {
       }
 
       // Store picks for this sport
+      let storedPicksCount = 0;
+      let filteredOutCount = 0;
+
       if (sportPicks.length > 0) {
         if (!shouldStore) {
           console.log(`\n[${config.name}] Storage disabled (--store false). Generated ${sportPicks.length} pick(s) but will NOT write to Supabase.`);
@@ -1490,46 +1520,115 @@ async function main() {
           console.log(`\n[${config.name}] Gary's decisions: ${qualifiedPicks.length} PICKS, ${passCount} PASS`)
 
           // ═══════════════════════════════════════════════════════════════
-          // STORE ALL PICKS FROM PASS 3
-          // No filtering - all Gary's picks go directly to Supabase
+          // NBA PICK FILTER (Post-Filter)
+          // Applies rule-based filtering to NBA picks only
           // ═══════════════════════════════════════════════════════════════
-          if (qualifiedPicks.length > 0) {
-            let picksToStore = qualifiedPicks;
+          let finalPicks = qualifiedPicks;
+
+          if (config.name === 'NBA' && qualifiedPicks.length > 0) {
+            console.log(`\n[NBA] Applying post-filter rules...`);
+            const filterResult = await filterNBAPicks(qualifiedPicks);
+            finalPicks = filterResult.kept;
+
+            // Log removed picks
+            if (filterResult.removed.length > 0) {
+              console.log(`\n[NBA] Filtered out ${filterResult.removed.length} picks:`);
+              for (const { pick, reason } of filterResult.removed) {
+                console.log(`  - ${pick.pick} | ${reason}`);
+              }
+            }
+          }
+
+          // ═══════════════════════════════════════════════════════════════
+          // NHL PICK FILTER (Confidence Trimming)
+          // Removes top 2 and bottom 2 confidence picks (overconfidence + low conviction)
+          // Max 5 picks, Min 3 picks. NHL is ML-only (no puck lines)
+          // ═══════════════════════════════════════════════════════════════
+          if (config.name === 'NHL' && qualifiedPicks.length > 0) {
+            console.log(`\n[NHL] Applying confidence trimming filter...`);
+            const filterResult = await filterNHLPicks(qualifiedPicks);
+            finalPicks = filterResult.kept;
+
+            // Log removed picks
+            if (filterResult.removed.length > 0) {
+              console.log(`\n[NHL] Filtered out ${filterResult.removed.length} picks:`);
+              for (const { pick, reason } of filterResult.removed) {
+                console.log(`  - ${pick.pick} | ${reason}`);
+              }
+            }
+          }
+
+          // ═══════════════════════════════════════════════════════════════
+          // NCAAB PICK FILTER (Conference Diversity)
+          // Per conference: 1 ML, 1 underdog spread, 1 favorite spread
+          // Removes top/bottom confidence first
+          // ═══════════════════════════════════════════════════════════════
+          if (config.name === 'NCAAB' && qualifiedPicks.length > 0) {
+            console.log(`\n[NCAAB] Applying conference diversity filter...`);
+            const filterResult = await filterNCAABPicks(qualifiedPicks);
+            finalPicks = filterResult.kept;
+
+            // Log removed picks
+            if (filterResult.removed.length > 0) {
+              console.log(`\n[NCAAB] Filtered out ${filterResult.removed.length} picks:`);
+              for (const { pick, reason } of filterResult.removed) {
+                console.log(`  - ${pick.pick} | ${reason}`);
+              }
+            }
+          }
+
+          // ═══════════════════════════════════════════════════════════════
+          // STORE FILTERED PICKS
+          // NBA: Rule-based filtering (home favorites, standings, etc.)
+          // NHL: Confidence trimming (remove top 2 + bottom 2, max 5)
+          // NCAAB: Conference diversity (1 ML, 1 dog, 1 fav per conf)
+          // Other sports: All Gary's picks go directly to Supabase
+          // ═══════════════════════════════════════════════════════════════
+          if (finalPicks.length > 0) {
+            let picksToStore = finalPicks;
 
             if (isQuantumEnabled()) {
               // Attach quantum scores for tracking (no filtering)
-              console.log(`\n[${config.name}] 🌌 Attaching quantum scores to ${qualifiedPicks.length} picks`);
-              picksToStore = await applyQuantumFilter(qualifiedPicks, config.name, { storeAll: true });
+              console.log(`\n[${config.name}] Attaching quantum scores to ${finalPicks.length} picks`);
+              picksToStore = await applyQuantumFilter(finalPicks, config.name, { storeAll: true });
             }
 
-            console.log(`\n[${config.name}] 💾 Storing ${picksToStore.length} picks`);
+            filteredOutCount = qualifiedPicks.length - finalPicks.length;
+            const filterNote = (config.name === 'NBA' || config.name === 'NHL' || config.name === 'NCAAB') && filteredOutCount > 0 ? ` (${filteredOutCount} filtered out)` : '';
+            console.log(`\n[${config.name}] Storing ${picksToStore.length} picks${filterNote}`);
             await storePicks(picksToStore);
             allPicks.push(...picksToStore);
+            storedPicksCount = picksToStore.length;
           } else {
-            console.log(`\n[${config.name}] ⏭️ Gary passed on all games - no picks to store`);
+            filteredOutCount = qualifiedPicks.length;
+            const filterMsg = (config.name === 'NBA' || config.name === 'NHL' || config.name === 'NCAAB') ? ' (all filtered out)' : '';
+            console.log(`\n[${config.name}] No picks to store${filterMsg}`);
           }
         }
       }
 
       const sportTime = ((Date.now() - sportStartTime) / 1000).toFixed(1);
-      
+
       // Count picks vs passes
       const pickCount = sportPicks.filter(p => p.pick !== 'PASS' && p.type !== 'pass').length;
       const passCount = sportPicks.filter(p => p.pick === 'PASS' || p.type === 'pass').length;
 
       // Track failed games for this sport (slateSession removed)
       const failedCount = 0;
-      
+
       summary[config.name] = {
         games: finalGames.length,
         picks: pickCount,
         passed: passCount,
+        stored: storedPicksCount,
+        filtered: filteredOutCount,
         failed: failedCount,
         failedGames: [],
         time: sportTime
       };
 
-      console.log(`\n${config.emoji} ${config.name} COMPLETE: ${sportPicks.length} picks (${failedCount} failed) in ${sportTime}s`);
+      const filterNote = filteredOutCount > 0 ? `, ${filteredOutCount} filtered` : '';
+      console.log(`\n${config.emoji} ${config.name} COMPLETE: ${storedPicksCount} stored (${pickCount} picks${filterNote}) in ${sportTime}s`);
 
     } catch (error) {
       console.error(`\n❌ Error processing ${config.name}:`, error.message);
@@ -1547,10 +1646,11 @@ async function main() {
 
   for (const [sport, data] of Object.entries(summary)) {
     if (data.error) {
-      console.log(`║  ${sport.padEnd(8)} ❌ Error: ${data.error.slice(0, 40)}`);
+      console.log(`║  ${sport.padEnd(8)} Error: ${data.error.slice(0, 40)}`);
     } else {
+      const filteredStr = data.filtered > 0 ? `, ${data.filtered} filtered` : '';
       const failedStr = data.failed > 0 ? ` (${data.failed} failed)` : '';
-      console.log(`║  ${sport.padEnd(8)} ${String(data.games).padStart(3)} games → ${String(data.qualified || 0).padStart(2)} qualified picks${failedStr} (${data.time}s)`);
+      console.log(`║  ${sport.padEnd(8)} ${String(data.games).padStart(3)} games -> ${String(data.stored || 0).padStart(2)} stored (${data.picks} picks${filteredStr})${failedStr} (${data.time}s)`);
     }
   }
 
