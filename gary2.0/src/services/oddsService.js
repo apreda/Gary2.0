@@ -1,17 +1,30 @@
 /**
- * Service for fetching betting data (now using Ball Don't Lie for odds)
+ * Service for fetching betting data (using Ball Don't Lie as primary source)
+ * Falls back to The Odds API if BDL doesn't return FanDuel/DraftKings odds
  */
 import axios from 'axios';
-import { configLoader } from './configLoader.js';
 import { ballDontLieService } from './ballDontLieService.js';
 import { ballDontLieOddsService } from './ballDontLieOddsService.js';
-
-const ODDS_API_BASE_URL = 'https://api.the-odds-api.com/v4'; // kept for legacy props endpoints if needed
 
 // Track in-flight requests to prevent duplicates and cache API responses
 const inFlightRequests = new Map();
 const oddsCache = new Map();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+// The Odds API configuration (fallback)
+const ODDS_API_BASE = 'https://api.the-odds-api.com/v4';
+
+function getOddsApiKey() {
+  try {
+    return (
+      (typeof process !== 'undefined' && process?.env?.ODDS_API_KEY) ||
+      (typeof import.meta !== 'undefined' && import.meta?.env?.VITE_ODDS_API_KEY) ||
+      ''
+    );
+  } catch {
+    return '';
+  }
+}
 
 // Player prop markets by sport
 const PROP_MARKETS = {
@@ -59,101 +72,101 @@ const getMarketsForSport = (sport) => {
 };
 
 /**
- * Get API key from environment or config
+ * Fetch odds from The Odds API (fallback when BDL doesn't have FanDuel/DraftKings)
+ * @param {string} sport - Sport key (e.g., 'basketball_nba')
+ * @param {string} markets - Markets to fetch (e.g., 'h2h,spreads')
+ * @returns {Promise<Array>} Games with odds from The Odds API
  */
-const getApiKey = async () => {
-  let apiKey = '';
-
-  // Safe process.env access (Node.js)
-  if (typeof process !== 'undefined' && process.env?.ODDS_API_KEY) {
-    apiKey = process.env.ODDS_API_KEY;
-  }
-
-  // Safe import.meta.env access (Vite)
+async function fetchFromTheOddsApi(sport, markets = 'h2h,spreads') {
+  const apiKey = getOddsApiKey();
   if (!apiKey) {
-    try {
-      // @ts-ignore
-      if (typeof import.meta !== 'undefined' && import.meta.env) {
-        apiKey = import.meta.env.VITE_ODDS_API_KEY;
-      }
-    } catch (e) {
-      // Ignore errors accessing import.meta.env in non-module environments
-    }
+    console.warn('[Odds API Fallback] No ODDS_API_KEY configured');
+    return [];
   }
 
-  if (!apiKey) {
-    try {
-      apiKey = await configLoader.getOddsApiKey();
-    } catch (error) {
-      console.warn('Could not load ODDS_API_KEY from config:', error);
-    }
-  }
+  try {
+    console.log(`[Odds API Fallback] Fetching ${sport} odds from The Odds API...`);
+    const response = await axios.get(`${ODDS_API_BASE}/sports/${sport}/odds`, {
+      params: {
+        apiKey,
+        regions: 'us',
+        markets,
+        oddsFormat: 'american',
+        bookmakers: 'fanduel,draftkings'
+      },
+      timeout: 15000
+    });
 
-  if (!apiKey) {
-    console.error('ODDS_API_KEY is not configured');
+    const games = response.data || [];
+    console.log(`[Odds API Fallback] Got ${games.length} games from The Odds API`);
+    return games;
+  } catch (error) {
+    console.warn(`[Odds API Fallback] Failed to fetch from The Odds API:`, error?.response?.data || error?.message);
+    return [];
   }
-
-  return apiKey;
-};
+}
 
 /**
- * Fetches completed games from The Odds API for a specific date and sport
+ * Match a game from The Odds API to a BDL game by team names
+ */
+function matchOddsApiGameToBdl(oddsApiGame, bdlGames) {
+  const normalize = (name) => name?.toLowerCase().replace(/[^a-z]/g, '') || '';
+
+  const oaHome = normalize(oddsApiGame.home_team);
+  const oaAway = normalize(oddsApiGame.away_team);
+
+  return bdlGames.find(bdlGame => {
+    const bdlHome = normalize(bdlGame.home_team);
+    const bdlAway = normalize(bdlGame.away_team);
+
+    // Check for partial matches (city or team name)
+    const homeMatch = bdlHome.includes(oaHome) || oaHome.includes(bdlHome) ||
+                      bdlHome.split(' ').some(w => oaHome.includes(w) && w.length > 3);
+    const awayMatch = bdlAway.includes(oaAway) || oaAway.includes(bdlAway) ||
+                      bdlAway.split(' ').some(w => oaAway.includes(w) && w.length > 3);
+
+    return homeMatch && awayMatch;
+  });
+}
+
+/**
+ * Fetches completed games from Ball Don't Lie API for a specific date and sport
+ * NOTE: The Odds API has been deprecated - using BDL for all data
  */
 const getCompletedGamesByDate = async (sport, date) => {
-  const apiKey = await getApiKey();
-  if (!apiKey) {
-    throw new Error('Odds API key not configured');
-  }
-
   const sportKeyMap = {
     'nba': 'basketball_nba',
     'nhl': 'icehockey_nhl',
-    'mlb': 'baseball_mlb'
+    'mlb': 'baseball_mlb',
+    'nfl': 'americanfootball_nfl'
   };
 
   const sportKey = sportKeyMap[sport.toLowerCase()] || sport;
 
   try {
-    const apiDate = new Date(date);
-    apiDate.setUTCHours(0, 0, 0, 0);
-    const commenceDateFrom = apiDate.toISOString();
+    console.log(`Fetching scores from Ball Don't Lie for ${sport} on ${date}`);
+    const games = await ballDontLieService.getGames(sportKey, { dates: [date], per_page: 100 }, 10);
 
-    const endDate = new Date(apiDate);
-    endDate.setDate(endDate.getDate() + 1);
-    const commenceDateTo = endDate.toISOString();
-
-    const url = `${ODDS_API_BASE_URL}/sports/${sportKey}/scores`;
-    const params = {
-      apiKey,
-      daysFrom: 1,
-      commenceTimeFrom: commenceDateFrom,
-      commenceTimeTo: commenceDateTo
-    };
-
-    console.log(`Fetching scores from The Odds API for ${sport} on ${date}`);
-    const response = await axios.get(url, { params });
-
-    if (response.data && Array.isArray(response.data)) {
-      return response.data
-        .filter(game => game.completed || game.completed_at)
+    if (Array.isArray(games)) {
+      return games
+        .filter(game => game.status === 'Final' || game.home_team_score > 0 || game.visitor_team_score > 0)
         .map(game => ({
           id: game.id,
-          sport_key: game.sport_key,
-          home_team: game.home_team,
-          away_team: game.away_team,
+          sport_key: sportKey,
+          home_team: game.home_team?.full_name || game.home_team?.name || game.home_team,
+          away_team: game.visitor_team?.full_name || game.visitor_team?.name || game.visitor_team,
           scores: {
-            home: game.scores?.[0]?.score || 0,
-            away: game.scores?.[1]?.score || 0
+            home: game.home_team_score || 0,
+            away: game.visitor_team_score || 0
           },
           completed: true,
-          commence_time: game.commence_time,
-          completed_at: game.completed_at
+          commence_time: game.date || game.start_time_utc
         }));
     }
 
     return [];
   } catch (error) {
-    console.error(`Error fetching ${sport} scores from The Odds API:`, error);
+    console.error(`Error fetching ${sport} scores from Ball Don't Lie:`, error);
     return [];
   }
 };
@@ -216,7 +229,7 @@ const normalizeOddsApiGame = (event, sportKey) => {
     total: extractedOdds.total,
     total_over_odds: extractedOdds.total_over_odds,
     total_under_odds: extractedOdds.total_under_odds,
-    source: 'odds_api_fallback'
+    source: 'bdl_normalized'
   };
 };
 
@@ -298,62 +311,8 @@ const extractOddsFromBookmakers = (bookmakers, homeTeam, awayTeam) => {
   return result;
 };
 
-const fetchUpcomingOddsFallback = async (sport) => {
-  const apiKey = await getApiKey();
-  if (!apiKey) return [];
-
-  try {
-    const url = `${ODDS_API_BASE_URL}/sports/${sport}/odds`;
-    const response = await axios.get(url, {
-      params: {
-        apiKey,
-        regions: 'us',
-        markets: getMarketsForSport(sport), // NHL: no puck line
-        oddsFormat: 'american',
-        dateFormat: 'iso',
-        bookmakers: 'fanduel,draftkings' // Only use FanDuel and DraftKings for consistency
-      },
-      timeout: 10000
-    });
-    const events = Array.isArray(response?.data) ? response.data : [];
-    console.log(`[Odds Service] ${sport}: Generic Odds API fallback returned ${events.length} upcoming games (markets: ${getMarketsForSport(sport)})`);
-    return events.map(event => normalizeOddsApiGame(event, sport));
-  } catch (error) {
-    console.warn(`[Odds Service] ${sport}: Generic Odds API fallback failed:`, error?.message || error);
-    return [];
-  }
-};
-
-const fetchOddsFromOddsApiByDate = async (sport, dateStr) => {
-  // Legacy strict-date fetcher kept if needed, but upcoming is preferred for fallbacks
-  const apiKey = await getApiKey();
-  if (!apiKey) return [];
-  // ... (rest of existing function if needed)
-  // But we'll replace usage in getUpcomingGames with the new helper
-  try {
-    // ...
-    const url = `${ODDS_API_BASE_URL}/sports/${sport}/odds`;
-    const response = await axios.get(url, {
-      params: {
-        apiKey,
-        regions: 'us',
-        markets: getMarketsForSport(sport), // NHL: no puck line
-        oddsFormat: 'american',
-        dateFormat: 'iso',
-        bookmakers: 'fanduel,draftkings' // Only use FanDuel and DraftKings
-      },
-      timeout: 10000
-    });
-    const events = Array.isArray(response?.data) ? response.data : [];
-    const toEstDate = (iso) => {
-      try {
-        return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date(iso));
-      } catch (e) { return ''; }
-    };
-    const filtered = events.filter(event => toEstDate(event.commence_time) === dateStr);
-    return filtered.map(event => normalizeOddsApiGame(event, sport));
-  } catch (e) { return []; }
-};
+// NOTE: fetchUpcomingOddsFallback and fetchOddsFromOddsApiByDate removed
+// All odds now come from Ball Don't Lie via ballDontLieOddsService
 
 // Bet analysis helper functions
 const analyzeBettingMarkets = (game) => {
@@ -726,141 +685,38 @@ const analyzeLineMovement = (historicalData) => {
 };
 
 export const oddsService = {
+  // DEPRECATED: These methods used The Odds API which has been removed
+  // All odds now come from Ball Don't Lie - use getUpcomingGames instead
   getSports: async () => {
-    try {
-      const apiKey = await getApiKey();
-      if (!apiKey) {
-        throw new Error('Odds API key not configured');
-      }
-
-      const url = `${ODDS_API_BASE_URL}/sports`;
-      const response = (await axios.get(url, {
-        params: {
-          apiKey,
-          all: true
-        }
-      }));
-
-      if (response.data) {
-        return response.data.map(sport => ({
-          key: sport.key,
-          group: sport.group,
-          title: sport.title,
-          description: sport.description,
-          active: sport.active,
-          has_outrights: sport.has_outrights
-        }));
-      }
-
-      return [];
-    } catch (error) {
-      console.error('Error fetching sports from The Odds API:', error);
-      return [];
-    }
+    console.warn('[oddsService.getSports] DEPRECATED - The Odds API removed. Use BDL for sports data.');
+    return [
+      { key: 'basketball_nba', title: 'NBA', active: true },
+      { key: 'americanfootball_nfl', title: 'NFL', active: true },
+      { key: 'icehockey_nhl', title: 'NHL', active: true },
+      { key: 'basketball_ncaab', title: 'NCAAB', active: true },
+      { key: 'americanfootball_ncaaf', title: 'NCAAF', active: true }
+    ];
   },
 
   getOdds: async (sport) => {
-    try {
-      const apiKey = await getApiKey();
-      if (!apiKey) {
-        throw new Error('Odds API key not configured');
-      }
-
-      const url = `${ODDS_API_BASE_URL}/sports/${sport}/odds`;
-      const response = await axios.get(url, {
-        params: {
-          apiKey,
-          regions: 'us',
-          oddsFormat: 'american'
-        }
-      });
-
-      if (response.data) {
-        return response.data;
-      }
-
-      return [];
-    } catch (error) {
-      console.error(`Error fetching odds for ${sport} from The Odds API:`, error);
-      return [];
-    }
+    console.warn(`[oddsService.getOdds] DEPRECATED - use getUpcomingGames('${sport}') instead`);
+    return oddsService.getUpcomingGames(sport);
   },
 
   getBatchOdds: async (sports) => {
-    try {
-      if (!Array.isArray(sports) || sports.length === 0) {
-        return {};
-      }
-
-      const apiKey = await getApiKey();
-      if (!apiKey) {
-        throw new Error('Odds API key not configured');
-      }
-
-      const promises = sports.map(sport =>
-        axios.get(`${ODDS_API_BASE_URL}/sports/${sport}/odds`, {
-          params: {
-            apiKey,
-            regions: 'us',
-            oddsFormat: 'american',
-            markets: getMarketsForSport(sport),
-            bookmakers: 'fanduel,draftkings' // Only use FanDuel and DraftKings
-          }
-        })
-          .then(response => ({ sport, data: response.data }))
-          .catch(error => {
-            console.error(`Error fetching odds for ${sport}:`, error);
-            return { sport, data: [] };
-          })
-      );
-
-      const results = await Promise.all(promises);
-
-      return results.reduce((acc, { sport, data }) => {
-        acc[sport] = data;
-        return acc;
-      }, {});
-    } catch (error) {
-      console.error('Error fetching batch odds:', error);
-      return {};
+    console.warn('[oddsService.getBatchOdds] DEPRECATED - use getUpcomingGames for each sport');
+    if (!Array.isArray(sports) || sports.length === 0) return {};
+    const results = {};
+    for (const sport of sports) {
+      results[sport] = await oddsService.getUpcomingGames(sport);
     }
+    return results;
   },
 
   getGameOdds: async (gameId, { useCache = true, sport = null } = {}) => {
-    try {
-      const apiKey = await getApiKey();
-      if (!apiKey) {
-        throw new Error('No API key available for The Odds API');
-      }
-
-      const cacheKey = `game-odds:${gameId}`;
-      
-      // Determine markets based on sport (if provided) or default to full markets
-      // NHL: No puck line - only moneyline and totals
-      const markets = sport ? getMarketsForSport(sport) : 'h2h,spreads,totals';
-
-      return dedupeRequest(cacheKey, async () => {
-        const response = await axios.get(`${ODDS_API_BASE_URL}/sports/upcoming/events/${gameId}/odds`, {
-          params: {
-            apiKey,
-            regions: 'us',
-            markets,
-            oddsFormat: 'american',
-            bookmakers: 'fanduel,draftkings'
-          },
-          timeout: 10000
-        });
-
-        if (!response.data) {
-          throw new Error('No data received from odds API');
-        }
-
-        return response.data;
-      });
-    } catch (error) {
-      console.error(`[OddsService] Error getting game odds for ${gameId}:`, error.message);
-      throw error;
-    }
+    // DEPRECATED: The Odds API has been removed - use getUpcomingGames and filter by game ID
+    console.warn('[oddsService.getGameOdds] DEPRECATED - The Odds API removed. Use getUpcomingGames instead.');
+    return null;
   },
 
   getCompletedGamesByDate,
@@ -924,129 +780,20 @@ export const oddsService = {
               console.warn(`[Odds Service] ${sport}: Failed fetching odds for ${d}:`, err?.message || err);
             }
 
-            // Check if BDL returned games but they are missing bookmakers (odds)
-            // Or if the bookmakers array exists but contains no valid markets
-            // The structure is game.bookmakers[].markets[]
-            const missingOdds = Array.isArray(dayGames) && dayGames.some(g => {
-              if (!g.bookmakers || g.bookmakers.length === 0) return true;
-              // Check if bookmakers have actual markets
-              const hasMarkets = g.bookmakers.some(b => b.markets && b.markets.length > 0);
-              return !hasMarkets;
-            });
-
-            if (!Array.isArray(dayGames) || dayGames.length === 0 || missingOdds) {
-              if (missingOdds) {
-                console.log(`[Odds Service] ${sport}: BDL returned games but some are missing valid odds. Attempting Odds API fallback for ${d}.`);
-              } else {
-                console.log(`[Odds Service] ${sport}: No games/odds from BDL. Attempting Odds API fallback for ${d}.`);
-              }
-
-              // FALLBACK SOURCE: The Odds API
-              // Use the generic upcoming fallback instead of strict date matching
-              // This allows us to find games that might have slightly different dates in different APIs
-              const fallbackGames = await fetchUpcomingOddsFallback(sport);
-
-              if (fallbackGames.length) {
-                // console.log(`[Odds Service] ${sport}: Odds API fallback returned ${fallbackGames.length} games for ${d}`);
-
-                if (!Array.isArray(dayGames) || dayGames.length === 0) {
-                  // Filter fallback games to match the requested date 'd' (EST)
-                  // Only if we are replacing the entire list.
-                  // But if BDL returned nothing, we should trust the fallback's list for that day.
-                  const toEstDate = (iso) => {
-                    try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date(iso)); } catch (e) { return ''; }
-                  };
-                  dayGames = fallbackGames.filter(g => toEstDate(g.commence_time) === d);
-                } else {
-                  // Merge fallback odds into BDL games where missing
-                  // Robust team matching logic
-                  const normalizeTeamForMatch = (name) => {
-                    if (!name || typeof name !== 'string') return '';
-                    return name.toLowerCase()
-                      .replace(/\./g, '') // remove dots (L.A. -> LA)
-                      .replace(/'/g, '')  // remove apostrophes (76ers -> 76ers)
-                      .replace(/[^a-z0-9]/g, ''); // remove spaces and other chars
-                  };
-
-                  dayGames = dayGames.map(bdlGame => {
-                    // If we already have valid markets, keep it
-                    if (bdlGame.bookmakers && bdlGame.bookmakers.length > 0 && bdlGame.bookmakers.some(b => b.markets && b.markets.length > 0)) {
-                      return bdlGame;
-                    }
-
-                    // Find matching game in fallback
-                    const match = fallbackGames.find(fb => {
-                      // Normalization 1: Simple remove non-alphanumeric
-                      const h1 = normalizeTeamForMatch(bdlGame.home_team);
-                      const a1 = normalizeTeamForMatch(bdlGame.away_team);
-                      const h2 = normalizeTeamForMatch(fb.home_team);
-                      const a2 = normalizeTeamForMatch(fb.away_team);
-
-                      // Check 1: Direct match of normalized strings
-                      let isMatch = (h1 === h2 && a1 === a2) || (h1 === a2 && a1 === h2);
-
-                      // Check 2: Inclusion (handles "LA Clippers" vs "Los Angeles Clippers")
-                      if (!isMatch) {
-                        // Check if the shorter one is contained in the longer one (e.g. "laclippers" in "losangelesclippers" is FALSE)
-                        // But "clippers" in "losangelesclippers" is TRUE.
-                        // Let's try matching just the last significant part (mascot)
-                        const getMascotClean = (n) => {
-                          const parts = n.trim().split(' ');
-                          return parts[parts.length - 1].toLowerCase().replace(/[^a-z]/g, '');
-                        };
-                        const mH1 = getMascotClean(bdlGame.home_team);
-                        const mA1 = getMascotClean(bdlGame.away_team);
-                        const mH2 = getMascotClean(fb.home_team);
-                        const mA2 = getMascotClean(fb.away_team);
-
-                        isMatch = (mH1 === mH2 && mA1 === mA2) || (mH1 === mA2 && mA1 === mH2);
-                      }
-
-                      // Check 3: Specific hardcoded fixes for known issues
-                      if (!isMatch) {
-                        const fix = (n) => n.replace('losangeles', 'la').replace('trailblazers', 'blazers');
-                        if ((fix(h1) === fix(h2) && fix(a1) === fix(a2))) isMatch = true;
-                      }
-
-                      if (!isMatch && (bdlGame.home_team.includes('Clippers') || bdlGame.away_team.includes('Clippers'))) {
-                        // console.log(`[Merge Debug] Comparing BDL '${bdlGame.home_team}' vs OddsAPI '${fb.home_team}'`);
-                      }
-
-                      return isMatch;
-                    });
-
-                    if (match && match.bookmakers && match.bookmakers.length > 0) {
-                      console.log(`[Odds Service] Merged Odds API odds into BDL game: ${bdlGame.home_team} vs ${bdlGame.away_team} (Matched via mascot)`);
-                      
-                      // CRITICAL: Re-extract odds using BDL team names as reference
-                      // Odds API may have home/away in different order than BDL
-                      const extractedOdds = extractOddsFromBookmakers(
-                        match.bookmakers, 
-                        bdlGame.home_team,  // Use BDL's home team
-                        bdlGame.away_team   // Use BDL's away team
-                      );
-                      
-                      return {
-                        ...bdlGame,
-                        bookmakers: match.bookmakers,
-                        // Use re-extracted odds with correct team order
-                        moneyline_home: extractedOdds.moneyline_home,
-                        moneyline_away: extractedOdds.moneyline_away,
-                        spread_home: extractedOdds.spread_home,
-                        spread_away: extractedOdds.spread_away,
-                        spread_home_odds: extractedOdds.spread_home_odds,
-                        spread_away_odds: extractedOdds.spread_away_odds,
-                        total: extractedOdds.total,
-                        total_over_odds: extractedOdds.total_over_odds,
-                        total_under_odds: extractedOdds.total_under_odds,
-                        source: 'merged_odds_api'
-                      };
-                    }
-                    return bdlGame;
-                  });
-                }
-              } else {
-                console.log(`[Odds Service] ${sport}: Odds API fallback returned 0 upcoming games. Cannot fill gaps.`);
+            // Note: If BDL returns games without odds, we still keep them.
+            // Gary can work with games even when odds are missing.
+            // The Odds API fallback has been removed (deprecated).
+            if (!Array.isArray(dayGames) || dayGames.length === 0) {
+              console.log(`[Odds Service] ${sport}: No games from BDL for ${d}.`);
+            } else {
+              // Log if some games are missing odds (informational only - we keep them)
+              const gamesWithoutOdds = dayGames.filter(g => {
+                if (!g.bookmakers || g.bookmakers.length === 0) return true;
+                const hasMarkets = g.bookmakers.some(b => b.markets && b.markets.length > 0);
+                return !hasMarkets;
+              });
+              if (gamesWithoutOdds.length > 0) {
+                console.log(`[Odds Service] ${sport}: ${gamesWithoutOdds.length} of ${dayGames.length} games have missing odds (keeping them anyway).`);
               }
             }
 
@@ -1080,15 +827,16 @@ export const oddsService = {
         unique.push(g);
       }
 
-      const processedGames = unique.map(game => {
+      // First pass: extract odds from BDL bookmakers
+      let processedGames = unique.map(game => {
         const bestOpportunity = analyzeBettingMarkets(game);
-        
+
         // Extract odds from bookmakers if not already present
         let extractedOdds = {};
         if (game.moneyline_home === undefined && game.bookmakers?.length > 0) {
           extractedOdds = extractOddsFromBookmakers(game.bookmakers, game.home_team, game.away_team);
         }
-        
+
         return {
           ...game,
           // Include extracted odds if they weren't already set
@@ -1105,157 +853,99 @@ export const oddsService = {
         };
       });
 
+      // Check which games are missing FanDuel/DraftKings odds
+      const gamesMissingOdds = processedGames.filter(g =>
+        g.moneyline_home === null && g.moneyline_away === null &&
+        g.spread_home === null && g.spread_away === null
+      );
+
+      // FALLBACK: If games are missing odds, try The Odds API
+      if (gamesMissingOdds.length > 0) {
+        console.log(`[Odds Service] ${sport}: ${gamesMissingOdds.length} games missing FanDuel/DraftKings odds - trying The Odds API fallback...`);
+
+        try {
+          const markets = getMarketsForSport(sport);
+          const oddsApiGames = await fetchFromTheOddsApi(sport, markets);
+
+          if (oddsApiGames.length > 0) {
+            let matchedCount = 0;
+
+            // For each game missing odds, try to match it to an Odds API game
+            processedGames = processedGames.map(game => {
+              // Skip if game already has odds
+              if (game.moneyline_home !== null || game.spread_home !== null) {
+                return game;
+              }
+
+              // Find matching game from The Odds API
+              const oddsApiMatch = matchOddsApiGameToBdl({ home_team: game.home_team, away_team: game.away_team }, oddsApiGames);
+
+              if (oddsApiMatch && oddsApiMatch.bookmakers?.length > 0) {
+                matchedCount++;
+                console.log(`[Odds API Fallback] Matched: ${game.away_team} @ ${game.home_team}`);
+
+                // Merge The Odds API bookmakers into this game
+                const mergedBookmakers = [...(game.bookmakers || []), ...normalizeOddsApiBookmakers(oddsApiMatch.bookmakers)];
+                const extractedOdds = extractOddsFromBookmakers(mergedBookmakers, game.home_team, game.away_team);
+
+                return {
+                  ...game,
+                  bookmakers: mergedBookmakers,
+                  moneyline_home: extractedOdds.moneyline_home,
+                  moneyline_away: extractedOdds.moneyline_away,
+                  spread_home: extractedOdds.spread_home,
+                  spread_away: extractedOdds.spread_away,
+                  spread_home_odds: extractedOdds.spread_home_odds,
+                  spread_away_odds: extractedOdds.spread_away_odds,
+                  total: extractedOdds.total,
+                  total_over_odds: extractedOdds.total_over_odds,
+                  total_under_odds: extractedOdds.total_under_odds,
+                  source: 'bdl_with_odds_api_fallback'
+                };
+              }
+
+              return game;
+            });
+
+            console.log(`[Odds API Fallback] Matched ${matchedCount} of ${gamesMissingOdds.length} games with missing odds`);
+          }
+        } catch (fallbackError) {
+          console.warn(`[Odds API Fallback] Error during fallback:`, fallbackError?.message || fallbackError);
+        }
+      }
+
       console.log(`[Odds Service] ${sport}: Final result - ${processedGames.length} games ready for analysis`);
       return processedGames;
     });
   },
 
   getAllSports: async () => {
-    try {
-      const apiKey = await getApiKey();
-      if (!apiKey) {
-        throw new Error('Odds API key not configured');
-      }
-
-      const url = `${ODDS_API_BASE_URL}/sports`;
-      const response = await axios.get(url, {
-        params: {
-          apiKey,
-          all: true
-        }
-      });
-
-      return response.data || [];
-    } catch (error) {
-      console.error('Error fetching sports list:', error);
-      return [];
-    }
+    // DEPRECATED: The Odds API removed - return static list of supported sports
+    console.warn('[oddsService.getAllSports] DEPRECATED - The Odds API removed');
+    return [
+      { key: 'basketball_nba', title: 'NBA', active: true },
+      { key: 'americanfootball_nfl', title: 'NFL', active: true },
+      { key: 'icehockey_nhl', title: 'NHL', active: true },
+      { key: 'basketball_ncaab', title: 'NCAAB', active: true },
+      { key: 'americanfootball_ncaaf', title: 'NCAAF', active: true }
+    ];
   },
 
   getLineMovement: async (sport, eventId) => {
-    try {
-      const apiKey = await getApiKey();
-      if (!apiKey) {
-        throw new Error('Odds API key not configured');
-      }
-
-      const url = `${ODDS_API_BASE_URL}/sports/${sport}/events/${eventId}/odds`;
-      const response = await axios.get(url, {
-        params: {
-          apiKey,
-          regions: 'us',
-          oddsFormat: 'american',
-          markets: getMarketsForSport(sport), // NHL: no puck line
-          bookmakers: 'fanduel,draftkings' // Only use FanDuel and DraftKings
-        }
-      });
-
-      if (!response.data || !response.data.bookmakers || response.data.bookmakers.length === 0) {
-        return {
-          success: false,
-          message: 'No odds data available for this event'
-        };
-      }
-
-      const game = response.data;
-
-      // Only use FanDuel and DraftKings for consistency
-      const preferredBookmakers = ['fanduel', 'draftkings'];
-
-      const filteredBookmakers = game.bookmakers.filter(b =>
-        preferredBookmakers.includes(b.key.toLowerCase())
-      );
-
-      if (filteredBookmakers.length === 0) {
-        return {
-          success: false,
-          message: 'No FanDuel or DraftKings odds available for this event'
-        };
-      }
-
-      const markets = {
-        moneyline: {
-          key: 'h2h',
-          title: 'Moneyline',
-          bookmakerData: {}
-        },
-        spreads: {
-          key: 'spreads',
-          title: 'Point Spread',
-          bookmakerData: {}
-        },
-        totals: {
-          key: 'totals',
-          title: 'Game Total (Over/Under)',
-          bookmakerData: {}
-        }
-      };
-
-      filteredBookmakers.forEach(bookmaker => {
-        const bookmakerName = bookmaker.title;
-
-        for (const marketType in markets) {
-          const market = bookmaker.markets.find(m => m.key === markets[marketType].key);
-          if (!market) continue;
-
-          if (!markets[marketType].bookmakerData[bookmakerName]) {
-            markets[marketType].bookmakerData[bookmakerName] = [];
-          }
-
-          markets[marketType].bookmakerData[bookmakerName] = market.outcomes.map(outcome => ({
-            name: outcome.name,
-            price: outcome.price,
-            point: outcome.point
-          }));
-        }
-      });
-
-      const analysisResults = {
-        event: {
-          id: game.id,
-          sport: game.sport_key,
-          homeTeam: game.home_team,
-          awayTeam: game.away_team,
-          commenceTime: game.commence_time
-        },
-        moneyline: analyzeLineMovement(markets.moneyline),
-        spreads: analyzeLineMovement(markets.spreads),
-        totals: analyzeLineMovement(markets.totals),
-        recommendedBets: []
-      };
-
-      for (const marketType in markets) {
-        const analysis = analysisResults[marketType];
-
-        if (analysis.discrepancy > 0.15) {
-          analysisResults.recommendedBets.push({
-            market: marketType,
-            recommendation: `Consider ${analysis.bestOption.name} ${marketType === 'spreads' ? analysis.bestOption.point : ''} @ ${analysis.bestOption.price} with ${analysis.bestOption.bookmaker}`,
-            reason: `${analysis.discrepancy.toFixed(2) * 100}% discrepancy between bookmakers`,
-            confidence: Math.min(analysis.discrepancy * 2, 0.9).toFixed(2)
-          });
-        }
-      }
-
-      return analysisResults;
-    } catch (error) {
-      console.error('Error analyzing line movement:', error);
-      return {
-        success: false,
-        message: `Error analyzing line movement: ${error.message}`
-      };
-    }
+    // DEPRECATED: The Odds API removed - line movement tracking not available
+    console.warn('[oddsService.getLineMovement] DEPRECATED - The Odds API removed');
+    return {
+      success: false,
+      message: 'Line movement tracking not available (The Odds API deprecated)'
+    };
   },
 
   analyzeLineMovement,
 
   getPlayerPropOdds: async (sport, homeTeam, awayTeam) => {
+    // DEPRECATED: The Odds API removed - use BDL player props via ballDontLieOddsService
+    console.warn('[oddsService.getPlayerPropOdds] DEPRECATED - use ballDontLieOddsService for player props');
     try {
-      const apiKey = await getApiKey();
-      if (!apiKey) {
-        throw new Error('Odds API key not configured');
-      }
-
       const upcomingGames = await oddsService.getUpcomingGames(sport);
 
       const game = upcomingGames.find(game => {
@@ -1277,81 +967,16 @@ export const oddsService = {
 
       console.log(`Found matching game with ID: ${game.id}`);
 
-      const marketsList = sport in PROP_MARKETS ?
-        PROP_MARKETS[sport] :
-        ['player_points'];
-
-      console.log(`Will fetch individual prop markets for ${sport}: ${marketsList.join(', ')}`);
-
-      const allPlayerProps = [];
-
-      for (const market of marketsList) {
-        console.log(`Fetching ${sport} player props for market: ${market}`);
-
-        try {
-          const propResponse = await axios.get(`${ODDS_API_BASE_URL}/sports/${sport}/events/${game.id}/odds`, {
-            params: {
-              apiKey,
-              regions: 'us',
-              markets: market,
-              oddsFormat: 'american',
-              dateFormat: 'iso',
-              bookmakers: 'fanduel,draftkings' // Only use FanDuel and DraftKings
-            }
-          });
-
-          if (propResponse.data &&
-            propResponse.data.bookmakers &&
-            propResponse.data.bookmakers.length > 0) {
-
-            const bookmakers = propResponse.data.bookmakers;
-            const marketProps = processMarketData(bookmakers, market, game);
-            allPlayerProps.push(...marketProps);
-          }
-        } catch (err) {
-          if (err.response && err.response.status === 404) {
-            console.warn(`No data available for ${market} in game ${game.id}, continuing to next market`);
-            continue;
-          } else if (err.response && err.response.status === 422) {
-            console.warn(`API cannot process ${market} market request (422 error), continuing to next market`);
-            continue;
-          } else {
-            console.error(`Error fetching ${market} data:`, err);
-          }
-        }
+      // Use BDL for player props based on sport
+      if (sport === 'basketball_nba') {
+        return await ballDontLieOddsService.getNbaPlayerProps(game.id);
+      } else if (sport === 'americanfootball_nfl') {
+        return await ballDontLieOddsService.getNflPlayerProps(game.id);
+      } else if (sport === 'icehockey_nhl') {
+        return await ballDontLieOddsService.getNhlPlayerProps(game.id);
       }
 
-      if (allPlayerProps.length === 0) {
-        console.warn('No player prop data found from The Odds API after trying all markets');
-        return [];
-      }
-
-      const groupedProps = {};
-      for (const prop of allPlayerProps) {
-        const key = `${prop.player}_${prop.prop_type}_${prop.line}`;
-        if (!groupedProps[key]) {
-          groupedProps[key] = {
-            player: prop.player,
-            team: prop.team,
-            prop_type: prop.prop_type,
-            line: prop.line,
-            over_odds: null,
-            under_odds: null
-          };
-        }
-
-        if (prop.over_odds !== null) {
-          groupedProps[key].over_odds = prop.over_odds;
-        }
-        if (prop.under_odds !== null) {
-          groupedProps[key].under_odds = prop.under_odds;
-        }
-      }
-
-      const result = Object.values(groupedProps);
-      console.log(`Found ${result.length} player props for ${homeTeam} vs ${awayTeam}`);
-
-      return result;
+      return [];
     } catch (error) {
       console.error('Error fetching player prop odds:', error);
       return [];
