@@ -441,17 +441,14 @@ async function main() {
         } else {
           // Default: Get TODAY's games in EST timezone (games that haven't started yet)
           const todayEST = now.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); // YYYY-MM-DD format
-          const tomorrowDate = new Date(now);
-          tomorrowDate.setDate(tomorrowDate.getDate() + 1);
-          const tomorrowEST = tomorrowDate.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-          
+
           games = allGames?.filter(g => {
             const gameTime = new Date(g.commence_time);
             const gameDateEST = gameTime.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
             // Game is today in EST AND hasn't started yet
             return gameDateEST === todayEST && gameTime >= now;
           }) || [];
-          
+
           timeLabel = `today (${todayEST})`;
           console.log(`[${config.name}] EST date filter: today=${todayEST}, found ${games.length} upcoming games`);
         }
