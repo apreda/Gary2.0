@@ -532,11 +532,6 @@ export const ballDontLieOddsService = {
       const awayTeamName = mapTeamName(g.visitor_team || g.away_team);
       const homeTeamName = mapTeamName(g.home_team);
 
-      // Debug: log available time fields on first game
-      if (g === games[0]) {
-        console.log(`[BDL Odds] DEBUG game time fields: date="${g.date}", datetime="${g.datetime}", status="${g.status}", start_time_utc="${g.start_time_utc}"`);
-      }
-
       // Use proper datetime fields for accurate timezone handling
       // BDL returns: date="YYYY-MM-DD" (local schedule date), datetime="ISO8601" (actual UTC time)
       // The "status" field for upcoming games contains the ISO datetime (e.g., "2026-01-24T00:00:00Z")
