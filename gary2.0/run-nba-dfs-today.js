@@ -11,8 +11,8 @@ import { createClient } from '@supabase/supabase-js';
 import { generateDFSLineup, PLATFORM_CONSTRAINTS, validateLineup } from './src/services/dfsLineupService.js';
 import { buildDFSContext, discoverDFSSlates } from './src/services/agentic/dfsAgenticContext.js';
 
-// Jan 16, 2026 - Real lineup generation
-const TODAY = '2026-01-16';
+// Get today's date in YYYY-MM-DD format (EST timezone)
+const TODAY = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 
 // Initialize Supabase
 function getSupabaseAdmin() {
