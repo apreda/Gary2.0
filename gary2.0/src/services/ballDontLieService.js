@@ -3875,24 +3875,37 @@ const ballDontLieService = {
   },
 
   /**
-   * Get advanced stats for playoff games
-   * @param {Array} gameIds - Array of game IDs to get advanced stats for
+   * Get advanced stats - supports filtering by game_ids, player_ids, seasons
+   * @param {Object|Array} options - Options object or legacy array of game IDs
+   * @param {Array} options.game_ids - Array of game IDs
+   * @param {Array} options.player_ids - Array of player IDs
+   * @param {Array} options.seasons - Array of seasons
+   * @param {number} options.per_page - Results per page (default 25)
    * @returns {Promise<Array>} - Array of advanced stats
    */
-  async getNbaAdvancedStats(gameIds = []) {
+  async getNbaAdvancedStats(options = {}) {
     try {
-      const cacheKey = `nba_advanced_stats_${gameIds.join('_')}`;
+      // Handle legacy call format (just an array of game IDs)
+      if (Array.isArray(options)) {
+        options = { game_ids: options };
+      }
+
+      const { game_ids = [], player_ids = [], seasons = [], per_page = 25 } = options;
+      const cacheKey = `nba_advanced_stats_g${game_ids.join('_')}_p${player_ids.join('_')}_s${seasons.join('_')}`;
+
       return await getCachedOrFetch(cacheKey, async () => {
-        console.log(`🏀 Fetching NBA advanced stats for ${gameIds.length} games`);
+        console.log(`🏀 Fetching NBA advanced stats - games: ${game_ids.length}, players: ${player_ids.length}, seasons: ${seasons.length}`);
         const client = initApi();
-        
-        const response = await client.nba.getAdvancedStats({
-          game_ids: gameIds,
-          per_page: 100
-        });
-        
+
+        const params = { per_page };
+        if (game_ids.length > 0) params.game_ids = game_ids;
+        if (player_ids.length > 0) params.player_ids = player_ids;
+        if (seasons.length > 0) params.seasons = seasons;
+
+        const response = await client.nba.getAdvancedStats(params);
+
         return response.data || [];
-      });
+      }, 10); // 10 min cache
     } catch (error) {
       console.error('Error fetching NBA advanced stats:', error);
       return [];

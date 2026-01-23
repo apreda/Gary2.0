@@ -259,7 +259,49 @@ extension View {
             }
         }
     }
-    
+
+    /// Accent-colored glass effect for badges (uses sport accent color instead of gold)
+    func accentGlass(color: Color, cornerRadius: CGFloat = 8) -> some View {
+        self.background {
+            if PerformanceMode.current.useExpensiveEffects {
+                // Full design for iOS 16+
+                ZStack {
+                    // Accent gradient background
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    color.opacity(0.25),
+                                    color.opacity(0.12)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+
+                    // Subtle border with accent color
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .strokeBorder(
+                            LinearGradient(
+                                colors: [color.opacity(0.5), color.opacity(0.25)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 0.8
+                        )
+                }
+            } else {
+                // Lighter version for iOS 15 and below
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(color.opacity(0.15))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                            .stroke(color.opacity(0.4), lineWidth: 0.8)
+                    )
+            }
+        }
+    }
+
     /// Premium liquid glass button - Full design on iOS 16+, lighter on older
     func liquidGlassButton(cornerRadius: CGFloat = 12) -> some View {
         self.background {
@@ -269,7 +311,7 @@ extension View {
                     // 1. Base glass with subtle gold tint
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .fill(.ultraThinMaterial)
-                    
+
                     // 2. Gold-tinted overlay
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .fill(
@@ -282,7 +324,7 @@ extension View {
                                 endPoint: .bottomTrailing
                             )
                         )
-                    
+
                     // 3. Liquid shine (top highlight)
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .fill(
@@ -969,7 +1011,7 @@ enum Sport: String, CaseIterable {
     /// Whether this sport is in beta (limited data/analytics)
     var isBeta: Bool {
         switch self {
-        case .nhl, .epl, .ncaab: return true
+        case .epl: return true
         default: return false
         }
     }
@@ -1322,7 +1364,7 @@ struct GaryPicksView: View {
                     }
                     // Pull-to-refresh only on the picks ScrollView, not the filter bar
                     .refreshable {
-                        await loadPicks()
+                        await loadPicks(forceRefresh: true)
                     }
                 }
             }
@@ -1332,24 +1374,24 @@ struct GaryPicksView: View {
         }
     }
     
-    private func loadPicks() async {
+    private func loadPicks(forceRefresh: Bool = false) async {
         await MainActor.run {
             loading = true
         }
-        
+
         let date = SupabaseAPI.todayEST()
-        
+
         // Use a timeout to prevent infinite loading
         var picks: [GaryPick] = []
         do {
             let arr = try await withTimeout(seconds: 15) {
-                try await SupabaseAPI.fetchAllPicks(date: date)
+                try await SupabaseAPI.fetchAllPicks(date: date, forceRefresh: forceRefresh)
             }
             picks = arr.filter { !($0.pick ?? "").isEmpty && !($0.rationale ?? "").isEmpty }
         } catch {
             // Silent fail - empty state will show
         }
-        
+
         await MainActor.run {
             allPicks = picks
             loading = false
@@ -1611,7 +1653,7 @@ struct GaryPropsView: View {
                     }
                     // Pull-to-refresh only on the props ScrollView, not the filter bar
                     .refreshable {
-                        await loadProps()
+                        await loadProps(forceRefresh: true)
                     }
                 }
             }
@@ -1621,24 +1663,24 @@ struct GaryPropsView: View {
         }
     }
     
-    private func loadProps() async {
+    private func loadProps(forceRefresh: Bool = false) async {
         await MainActor.run {
             loading = true
         }
-        
+
         let date = SupabaseAPI.todayEST()
-        
+
         // Use a timeout to prevent infinite loading
         let props: [PropPick]
         do {
             props = try await withTimeout(seconds: 15) {
-                try await SupabaseAPI.fetchPropPicks(date: date)
+                try await SupabaseAPI.fetchPropPicks(date: date, forceRefresh: forceRefresh)
             }
         } catch {
             // Silent fail - empty state will show
             props = []
         }
-        
+
         await MainActor.run {
             allProps = props
             loading = false
@@ -2465,6 +2507,7 @@ struct MockPickCard: View {
 struct PickCardMobile: View {
     let pick: GaryPick
     @State private var showAnalysis = false
+    @State private var showSportsbookOdds = false
     @State private var isPressed = false
     
     private var accentColor: Color {
@@ -2595,6 +2638,38 @@ struct PickCardMobile: View {
     
     // MARK: - Extracted Sub-Views (fixes type-checking timeout)
     
+    /// Generic game significance for any sport (Division Rivals, Top 5 Battle, etc.)
+    private var genericGameSignificance: String? {
+        // Skip if NFL (has its own handler) or NBA Cup (has its own badge)
+        if isNFL || isNBACup { return nil }
+        // Use gameSignificance if it's a short, meaningful label
+        if let sig = pick.gameSignificance, !sig.isEmpty, sig.count < 30 {
+            return sig
+        }
+        return nil
+    }
+
+    /// Get appropriate icon for game significance
+    private func significanceIcon(for significance: String) -> String {
+        let sig = significance.lowercased()
+        // Rivalries and heated matchups
+        if sig.contains("rivalry") || sig.contains("battle") || sig.contains("clash") || sig.contains("iron bowl") || sig.contains("the game") { return "flame.fill" }
+        // Conference/Division matchups (college and pro)
+        if sig.contains("rivals") || sig.contains("big ten") || sig.contains("sec ") || sig.contains("acc ") || sig.contains("big 12") || sig.contains("big east") || sig.contains("pac-12") { return "flag.2.crossed.fill" }
+        // Famous college rivalries
+        if sig.contains("tobacco") || sig.contains("bluegrass") || sig.contains("red river") || sig.contains("cocktail") || sig.contains("army-navy") { return "flame.fill" }
+        // Rankings-based matchups
+        if sig.contains("top") || sig.contains("elite") || sig.contains("#1") || sig.contains("#2") || sig.contains("ranked") { return "star.fill" }
+        if sig.contains("division") { return "flag.2.crossed.fill" }
+        if sig.contains("playoff") || sig.contains("contender") { return "trophy.fill" }
+        if sig.contains("conference") { return "sportscourt.fill" }
+        // International games
+        if sig.contains("london") || sig.contains("paris") || sig.contains("mexico") || sig.contains("tokyo") || sig.contains("munich") { return "globe.americas.fill" }
+        // Default fallbacks
+        if sig.contains("regular season") { return "calendar" }
+        return "sportscourt.fill"
+    }
+
     @ViewBuilder
     private var headerBadges: some View {
         // NBA CUP badge
@@ -2611,7 +2686,7 @@ struct PickCardMobile: View {
             .background(GaryColors.gold.opacity(0.2))
             .clipShape(RoundedRectangle(cornerRadius: 4))
         }
-        
+
         // NFL game context badge
         if let nflContext = nflGameContext {
             HStack(spacing: 5) {
@@ -2658,17 +2733,25 @@ struct PickCardMobile: View {
     private var headerRow: some View {
         HStack {
             HStack(spacing: 8) {
-                Image(systemName: Sport.from(league: pick.league).icon)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(Color.white.opacity(0.75))
-                    .padding(10)
-                    .goldGlassCircle()
-                
+                // Game significance badge in left corner (replaces sport icon)
+                if let significance = genericGameSignificance {
+                    HStack(spacing: 5) {
+                        Image(systemName: significanceIcon(for: significance))
+                            .font(.system(size: 10, weight: .semibold))
+                        Text(significance)
+                            .font(.system(size: 11, weight: .semibold))
+                    }
+                    .foregroundStyle(GaryColors.gold)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .goldGlass(cornerRadius: 8)
+                }
+
                 headerBadges
             }
-            
+
             Spacer()
-            
+
             if let time = pick.displayTime {
                 Text(Formatters.formatCommenceTime(time))
                     .font(.system(size: 12, weight: .medium))
@@ -2814,7 +2897,39 @@ struct PickCardMobile: View {
             
             // Pick Text with Odds
             pickTextSection
-            
+
+            // Sportsbook Odds Comparison (expandable)
+            if let odds = pick.sportsbook_odds, !odds.isEmpty {
+                VStack(spacing: 8) {
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            showSportsbookOdds.toggle()
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "chart.bar.doc.horizontal")
+                                .font(.system(size: 11, weight: .semibold))
+                            Text("View Sportsbook Odds")
+                                .font(.system(size: 12, weight: .semibold))
+                            Spacer()
+                            Image(systemName: showSportsbookOdds ? "chevron.up" : "chevron.down")
+                                .font(.system(size: 10, weight: .bold))
+                        }
+                        .foregroundStyle(accentColor.opacity(0.85))
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 12)
+                        .background(accentColor.opacity(0.08))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                    .buttonStyle(.plain)
+
+                    if showSportsbookOdds {
+                        SportsbookOddsTable(odds: odds)
+                            .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .top)))
+                    }
+                }
+            }
+
             // Confidence Bar
             confidenceBar
             
@@ -2890,6 +3005,103 @@ struct PerformanceOptimizer: ViewModifier {
                 .compositingGroup()
                 .drawingGroup()
         }
+    }
+}
+
+// MARK: - Sportsbook Odds Comparison Table
+struct SportsbookOddsTable: View {
+    let odds: [SportsbookOdds]
+
+    /// Find the best spread odds (highest/least negative)
+    private var bestSpreadBook: String? {
+        odds.compactMap { o -> (String, Int)? in
+            guard let book = o.book, let oddsStr = o.spread_odds else { return nil }
+            let numOdds = Int(oddsStr.replacingOccurrences(of: "+", with: "")) ?? -999
+            return (book, numOdds)
+        }
+        .max(by: { $0.1 < $1.1 })?.0
+    }
+
+    /// Find the best ML odds (highest/least negative)
+    private var bestMLBook: String? {
+        odds.compactMap { o -> (String, Int)? in
+            guard let book = o.book, let mlStr = o.ml else { return nil }
+            let numOdds = Int(mlStr.replacingOccurrences(of: "+", with: "")) ?? -999
+            return (book, numOdds)
+        }
+        .max(by: { $0.1 < $1.1 })?.0
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header Row
+            HStack {
+                Text("Sportsbook")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Text("Spread")
+                    .frame(width: 80)
+                Text("ML")
+                    .frame(width: 60)
+            }
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(Color.white.opacity(0.5))
+            .textCase(.uppercase)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+
+            Divider().background(Color.white.opacity(0.15))
+
+            // Odds Rows
+            ForEach(odds) { o in
+                HStack {
+                    Text(o.book ?? "-")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .foregroundStyle(Color.white.opacity(0.9))
+
+                    // Spread column
+                    if let spread = o.spread, let spreadOdds = o.spread_odds {
+                        let isBestSpread = o.book == bestSpreadBook
+                        Text("\(spread >= 0 ? "+" : "")\(String(format: "%.1f", spread)) (\(spreadOdds))")
+                            .foregroundStyle(isBestSpread ? Color.green : Color.white.opacity(0.8))
+                            .fontWeight(isBestSpread ? .bold : .regular)
+                            .frame(width: 80)
+                    } else {
+                        Text("-")
+                            .foregroundStyle(Color.white.opacity(0.4))
+                            .frame(width: 80)
+                    }
+
+                    // ML column
+                    if let ml = o.ml, ml != "-" {
+                        let isBestML = o.book == bestMLBook
+                        Text(ml)
+                            .foregroundStyle(isBestML ? Color.green : Color.white.opacity(0.8))
+                            .fontWeight(isBestML ? .bold : .regular)
+                            .frame(width: 60)
+                    } else {
+                        Text("-")
+                            .foregroundStyle(Color.white.opacity(0.4))
+                            .frame(width: 60)
+                    }
+                }
+                .font(.system(size: 12, weight: .medium))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+
+                if o.id != odds.last?.id {
+                    Divider().background(Color.white.opacity(0.08))
+                }
+            }
+
+            // Footer hint
+            Text("Best odds highlighted in green")
+                .font(.system(size: 10))
+                .foregroundStyle(Color.white.opacity(0.4))
+                .padding(.top, 8)
+                .padding(.bottom, 4)
+        }
+        .background(Color.black.opacity(0.3))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 }
 
@@ -5374,7 +5586,7 @@ struct GaryFantasyView: View {
                         .padding(.bottom, 100) // Space for tab bar
                     }
                     .refreshable {
-                        await loadLineups()
+                        await loadLineups(forceRefresh: true)
                     }
                 } else {
                     // No lineup available
@@ -5412,14 +5624,14 @@ struct GaryFantasyView: View {
         }
     }
     
-    private func loadLineups() async {
+    private func loadLineups(forceRefresh: Bool = false) async {
         await MainActor.run { loading = true }
-        
+
         let date = SupabaseAPI.todayEST()
-        
+
         do {
             let fetched = try await withTimeout(seconds: 15) {
-                try await SupabaseAPI.fetchDFSLineups(date: date)
+                try await SupabaseAPI.fetchDFSLineups(date: date, forceRefresh: forceRefresh)
             }
             await MainActor.run {
                 lineups = fetched
@@ -6335,11 +6547,11 @@ struct NoteSectionView: View {
     
     // Parse content to handle special formatting
     private func parseContentWithFormatting(_ text: String) -> AttributedString {
-        var result = AttributedString(text)
-        
+        let result = AttributedString(text)
+
         // Make player names and key terms slightly brighter
         // This is a simplified version - full implementation would parse more
-        
+
         return result
     }
 }

@@ -1,6 +1,6 @@
 /**
  * Sharp Reference Loader
- * Loads reference documents for Gary to use during steel man grading.
+ * Loads reference documents for Gary to use during steel man evaluation.
  * These are REFERENCE materials, not formulas to apply.
  */
 
@@ -65,7 +65,7 @@ export function getNcaabSharpPrinciples() {
 }
 
 /**
- * Get a condensed version of the key principles for steel man grading.
+ * Get a condensed version of the key principles for steel man evaluation.
  * This is what gets injected into Pass 2 for cross-referencing.
  */
 export function getSteelManGradingReference(sport) {
@@ -76,10 +76,13 @@ export function getSteelManGradingReference(sport) {
   // Core philosophy (applies to all sports) - condensed key points
   const corePhilosophy = `
 ═══════════════════════════════════════════════════════════════════════════════
-📚 SHARP BETTING REFERENCE (Cross-Reference During Steel Man Grading)
+[REFERENCE] SHARP THINKING REFERENCE
 ═══════════════════════════════════════════════════════════════════════════════
 
-## WHAT GOOD ANALYSIS LOOKS LIKE (Read This First)
+Use this as a REFERENCE when evaluating your Steel Man cases - like a lawyer uses case law.
+It helps you identify what's real vs fluff, what's relevant vs noise, so YOU can decide which side to take.
+
+## WHAT GOOD ANALYSIS LOOKS LIKE (Examples to Reference)
 
 **GOLD STANDARD:**
 > "Houston's defensive identity is fractured following the fresh losses of Tari Eason and Dorian Finney-Smith — the two primary 'stoppers' usually tasked with containing elite scoring guards. Without them, the Rockets lack the lateral quickness to prevent Shai Gilgeous-Alexander from living in the paint."
@@ -95,47 +98,93 @@ Why it fails: Backward logic ("Team B can't exploit it" is not how Team A wins)
 "Team B has weakness X, but Team A can't exploit it" is NOT analysis.
 The question is always: **"How does MY pick win/cover?"** — not "Why can't the other team succeed?"
 
-*These are illustrative examples of reasoning quality. Apply the same principles to ANY matchup.*
+---
+
+## RATIONALE QUALITY EXAMPLES (Reference These)
+
+**BAD RATIONALE:**
+> "I like the Lakers -9.5. They're the better team, they beat the Kings by 24 last time, Sabonis is out, and the Kings have the worst net rating in the league. Lakers are rested and Sacramento is on a back-to-back."
+
+Why it's bad: Every point is public information the line already reflects. This explains why -9.5 EXISTS, not why it's WRONG.
+
+**BETTER RATIONALE:**
+> "I'm passing on this game. The line looks right. The Lakers are clearly better, and the Sabonis absence is baked in after 3 games without him. I don't see what the market is missing."
+
+Why it's better: Acknowledges the line is probably accurate. Doesn't force a pick without edge.
+
+**BEST RATIONALE:**
+> "Kings +9.5. The market is pricing Sacramento's recent struggles, but those games were against elite competition (Celtics, Thunder, Nuggets). Against non-elite teams, they've been competitive - 4 of their last 5 losses to non-top-10 teams were by single digits. The Lakers have covered large spreads only twice this season despite being favored by 7+ six times - they tend to take their foot off the gas."
+
+Why it's best: Identifies SPECIFIC reasons the line might be off - opponent quality context for the form, specific data about margin tendencies. These are concrete factors, not narratives.
+
+*Use these as your quality standard when writing your rationale.*
 
 ---
 
-## THE ONLY QUESTION THAT MATTERS
+## THE QUESTION DEPENDS ON THE BET TYPE
 
-**"What does the line assume, and why might that assumption be WRONG?"**
+### FOR SPREAD BETS:
+**"What does the spread assume, and why might it be wrong?"**
 
-The spread is not wrong by default. It represents the market's best estimate.
+The spread is the market's estimate of margin. It reflects public information. Your job for spread bets is to find a SPECIFIC reason the spread is off.
 
-The market prices in public information - but WHAT is "priced in" depends on the 
-specific situation. A factor that's fully absorbed for one matchup might not be 
-for another. Investigate each factor for THIS specific game.
+- Old injuries (2+ weeks) → Already reflected in the spread
+- Team quality differences → Already reflected in the spread
+- Schedules, travel → Already reflected in the spread
 
-**Your job is to find a SPECIFIC reason the market's estimate is off.**
+Edge on spreads comes from: What has the spread NOT fully absorbed?
 
-Note: For LARGE SPREADS, the question is about margin, not just who wins.
-For SMALL SPREADS / MONEYLINES, the question IS "who wins?" - different analysis may apply.
+### FOR MONEYLINE BETS:
+**"Who wins this game?"**
+
+Moneyline is simpler: you're betting on WHO WINS, not the margin. The "baked in" concept is less relevant because:
+- You're not claiming the market mispriced the margin
+- You're predicting the winner based on matchup factors
+- Team quality, home ice, rest - these matter for WHO WINS even if the line "knows" them
+
+For ML, don't apply the same "has market priced this in?" scrutiny. Focus on:
+- Which team is actually better positioned to WIN tonight?
+- What matchup factors favor one side?
+- Goaltending, form, home/road performance (especially NHL)
 
 ---
 
-## EVALUATING EDGE (Ask These Questions)
+## EVALUATING CASES (Spread vs Moneyline)
 
-When grading each factor in a steel man case, investigate:
+### FOR SPREAD BETS - Ask These Questions:
 
-**1. Does this explain why the line EXISTS, or why it might be WRONG?**
-- "They're the better team" describes WHY they're favored - investigate further
-- Is there something about THIS specific matchup the line might miss?
+**1. Does this explain why the spread EXISTS, or why it might be WRONG?**
+- "They're the better team" describes WHY they're favored - that's not edge on a spread
+- Edge = something about THIS specific matchup the spread doesn't fully reflect
 
-**2. Has the market had time to price this in?**
-- An injury from 3 weeks ago → Market has seen many games without that player
-- A lineup change from this morning → Market may not have fully adjusted
-- Investigate the timing and market reaction for THIS situation
+**2. Has the market had time to price this in? (SPREAD-SPECIFIC)**
+- An injury from 3 weeks ago → Spread already reflects it. Not fresh.
+- A lineup change from this morning → Spread may not have fully adjusted. Fresh.
+- For spreads, stale information isn't edge.
 
-**3. Is this factor actually relevant to the QUESTION being asked?**
-- For large spreads: Does it affect MARGIN?
-- For small spreads/moneylines: Does it affect WIN PROBABILITY?
-- A factor irrelevant to margin might still matter for who wins (and vice versa)
+**3. Does this factor affect MARGIN (not just winning)?**
+- For large spreads: Does it create/prevent a blowout?
+- "Better team" affects who wins, but spreads ask about margin.
 
-**4. Does this factor actually matter for THIS specific matchup?**
-- A team undefeated at home with everyone healthy vs good competition - home court might be real
+### FOR MONEYLINE BETS - Different Questions:
+
+**1. Who is better positioned to WIN tonight?**
+- You're not claiming the market mispriced the margin - you're picking a winner
+- Team quality, form, home ice/court - these matter even if "public"
+
+**2. What factors favor one side in THIS specific matchup?**
+- Goaltending matchup (especially NHL)
+- Matchup-specific advantages
+- Recent form and home/road performance
+
+**3. Is there a clear winner, or is this a coin flip?**
+- If factors point both ways equally, it's a PASS
+- If one side has clear advantages for winning, that's your pick
+
+### FOR BOTH:
+
+**Does this factor actually matter for THIS specific matchup?**
+- A team undefeated at home vs good competition - home court might be real
 - A team 5-5 at home vs weak competition - maybe not
 - Don't auto-dismiss. Don't auto-accept. Investigate.
 
@@ -170,7 +219,7 @@ Investigate whether the line accurately reflects BOTH baseline quality AND fresh
 
 ---
 
-## REST/SCHEDULE FACTORS (For Grading)
+## REST/SCHEDULE FACTORS (For Evaluation)
 
 **What Research Shows:**
 - Back-to-backs WITH significant travel have historically shown performance decline - verify for THIS team's actual B2B record to see the actual impact
@@ -279,17 +328,25 @@ RIGHT question: "Will they win by 11+? What's the mechanism for margin EXPANSION
 
 ---
 
-## THE EDGE STATEMENT TEST
+## THE CONVICTION TEST (Depends on Bet Type)
 
-Before every pick, complete this sentence:
-> "The line is wrong because ________________________________."
+### FOR SPREAD BETS:
+Complete this sentence:
+> "The spread is wrong because ________________________________."
 
-If your answer just describes why the team is good, investigate further.
-If your answer identifies something specific about THIS matchup, you may have edge.
+If your answer just describes why the team is good, that's not spread edge.
+If your answer identifies something the SPREAD doesn't reflect, you may have edge.
+
+### FOR MONEYLINE BETS:
+Complete this sentence:
+> "I believe _________ wins tonight because ________________________________."
+
+You're not claiming the market is wrong - you're predicting a winner.
+If your answer identifies clear factors favoring one side to WIN, that's your pick.
 
 ---
 
-## QUESTIONS TO ASK WHEN GRADING EACH CASE:
+## QUESTIONS TO ASK WHEN EVALUATING EACH CASE:
 
 1. **Am I answering the right QUESTION for this bet type?** (Margin vs. win probability)
 2. **Have I investigated whether each factor is actually relevant to THIS matchup?**
@@ -322,7 +379,7 @@ You cannot know if a team is "motivated," "focused," "locked in," or "looking ah
 
 ---
 
-## 📉 REGRESSION SPOTS (Outlier Performance Recognition)
+## [REGRESSION] REGRESSION SPOTS (Outlier Performance Recognition)
 
 **The Concept:** A team coming off an outlier performance (unusually high or low) is a candidate for regression to their baseline.
 
@@ -366,9 +423,9 @@ A regression spot is STRONGEST when combined with:
 ## HISTORICAL REFERENCE (Context for THIS Matchup, NOT Formulas)
 
 **The market knows all of this. DO NOT apply as rules.**
-Use to sanity-check your grading for THIS specific game.
+Use to sanity-check your evaluation for THIS specific game.
 
-| Principle | Historical Data | What This Means for Grading |
+| Principle | Historical Data | What This Means for Evaluation |
 |-----------|-----------------|----------------------------|
 | NFL favorites ATS | 48% cover rate | "Better team" alone isn't edge |
 | NFL underdogs ATS | 52% cover rate | Slight historical edge to dogs |
@@ -387,9 +444,9 @@ Use to sanity-check your grading for THIS specific game.
 
 ## BIAS CHECK (Counter ALL Natural Tendencies)
 
-Before finalizing grades, check yourself against tendencies that affect BOTH sides:
+Before finalizing your evaluation, check yourself against tendencies that affect BOTH sides:
 
-| Bias | How It Might Affect Grading | Counter |
+| Bias | How It Might Affect Evaluation | Counter |
 |------|----------------------------|---------|
 | **Consensus Bias** | Favorite case sounds "too obvious" | Obvious doesn't mean wrong - investigate substance |
 | **Contrarian Bias** | Underdog case feels edgy/smart | Contrarian isn't automatically edge - investigate substance |
@@ -397,13 +454,13 @@ Before finalizing grades, check yourself against tendencies that affect BOTH sid
 | **Narrative Coherence** | Case sounds "clean" but lacks data | Require stats regardless of how good the story sounds |
 | **Completion Pressure** | Forcing a pick when no edge exists | PASS is valid for BOTH sides if you don't see clear edge |
 
-**The Key:** Grade the SUBSTANCE of each case, not how it makes you feel.
+**The Key:** Evaluate the SUBSTANCE of each case, not how it makes you feel.
 
 ---
 
 ## THE OBVIOUS CHECK
 
-Before grading each case, ask:
+Before evaluating each case, ask:
 
 > **"Does this case sound like the obvious ESPN take?"**
 
@@ -493,7 +550,7 @@ CASE FOR [FAVORITE] -X.X:
 **Example - Regression UP (Buy Cold Team):**
 > "Celtics lost by 25 to Denver but Denver is elite and Celtics shot 22% from 3 (season avg 38%). Net Rating is +8.5. Market may be deflating BOS based on one bad night vs the best team."
 
-**When Grading Regression Cases, Look For:**
+**When Evaluating Regression Cases, Look For:**
 - Net Rating vs record disconnect (underlying quality differs from perception)
 - Luck factor disparity (3PT%, turnovers unsustainable either direction)
 - Context of the outlier game (opponent quality, travel, missing players)
@@ -554,7 +611,7 @@ Rule: Ranking gaps < 30-40 positions in the 30-150 range = NEUTRAL
     const nhlAddendum = `
 ## NHL-SPECIFIC: STEEL MAN CASE STRUCTURE
 
-**🥅 GOALTENDING IS KING IN NHL**
+**[GOALIE] GOALTENDING IS KING IN NHL**
 Every NHL steel man case MUST include a goalie comparison table:
 
 \`\`\`
@@ -672,7 +729,7 @@ NHL moneyline asks WHO WINS, not who covers a spread. This means:
 
 ---
 
-### 🏒 GRADING STREAK-BASED CASES (NHL-SPECIFIC)
+### [NHL] GRADING STREAK-BASED CASES (NHL-SPECIFIC)
 
 **THE GOLDEN RULE:** "Ride the streak until the goalie changes."
 
@@ -690,7 +747,7 @@ NHL moneyline asks WHO WINS, not who covers a spread. This means:
 
 ---
 
-### 🏠 GRADING HOME ICE CASES (Last Change Factor - EITHER SIDE)
+### [HOME] GRADING HOME ICE CASES (Last Change Factor - EITHER SIDE)
 
 **NHL home ice is TACTICAL:** The home coach controls matchups via "last change."
 
@@ -709,7 +766,7 @@ NHL moneyline asks WHO WINS, not who covers a spread. This means:
 
 ---
 
-### 🎯 GRADING PUCK LINE CASES (-1.5)
+### [KEY] GRADING PUCK LINE CASES (-1.5)
 
 **The Reality:** Most NHL games are 1-goal games until empty net time.
 

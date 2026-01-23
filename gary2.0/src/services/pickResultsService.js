@@ -142,14 +142,14 @@ const pickResultsService = {
     console.log(`Fetching final score for ${league} game: ${awayTeam} @ ${homeTeam} on ${date}`);
     
     try {
-      // 1. Try The Odds API via the shared oddsService helper
+      // 1. Try Ball Don't Lie via the shared oddsService helper
       try {
         const completedGames = await oddsService.getCompletedGamesByDate(league, date);
         if (Array.isArray(completedGames) && completedGames.length > 0) {
           const normalize = (team) => (team || '').toLowerCase().replace(/[^a-z0-9]/g, '');
           const normalizedHome = normalize(homeTeam);
           const normalizedAway = normalize(awayTeam);
-          
+
           const matchedGame = completedGames.find(game => {
             const gameHome = normalize(game.home_team);
             const gameAway = normalize(game.away_team);
@@ -158,57 +158,27 @@ const pickResultsService = {
               (gameAway.includes(normalizedAway) || normalizedAway.includes(gameAway))
             );
           });
-          
+
           if (matchedGame) {
             const homeScore = Number(matchedGame.scores?.home ?? 0);
             const awayScore = Number(matchedGame.scores?.away ?? 0);
-            
-            console.log(`Found score from The Odds API helper: ${awayTeam} ${awayScore}, ${homeTeam} ${homeScore}`);
+
+            console.log(`Found score from BDL: ${awayTeam} ${awayScore}, ${homeTeam} ${homeScore}`);
             return {
               homeScore,
               awayScore,
               winner: homeScore > awayScore ? homeTeam : awayTeam,
               final_score: `${homeScore}-${awayScore}`,
-              source: 'TheOddsAPI'
+              source: 'BallDontLie'
             };
           }
         }
-      } catch (oddsError) {
-        console.error('Error fetching scores from oddsService:', oddsError);
+      } catch (bdlError) {
+        console.error('Error fetching scores from BDL:', bdlError);
       }
-      
-      // 2. Try Ball Don't Lie for NBA games
-      if (league.toUpperCase() === 'NBA') {
-        try {
-          console.log('Trying Ball Don\'t Lie API for NBA scores');
-          const nbaGames = await ballDontLieService.getNbaGamesByDate(date);
-          if (nbaGames) {
-            const gameKey = Object.keys(nbaGames).find(key => {
-              return (
-                key.toLowerCase().includes(homeTeam.toLowerCase().split(' ')[0]) &&
-                key.toLowerCase().includes(awayTeam.toLowerCase().split(' ')[0])
-              );
-            });
-            
-            if (gameKey && nbaGames[gameKey]) {
-              const [awayScore, homeScore] = nbaGames[gameKey].split('-').map(Number);
-              return {
-                homeScore,
-                awayScore,
-                winner: homeScore > awayScore ? homeTeam : awayTeam,
-                final_score: `${awayScore}-${homeScore}`,
-                source: 'BallDontLie'
-              };
-            }
-          }
-        } catch (error) {
-          console.error('Ball Don\'t Lie API error:', error);
-        }
-      }
-      
-      // Primary sources (Odds API and BDL) did not have the result
-      // Note: Using only Odds API and BDL for score lookups
-      console.log(`Could not find score from primary sources for ${league} game: ${awayTeam} @ ${homeTeam}`);
+
+      // Ball Don't Lie did not have the result
+      console.log(`Could not find score from BDL for ${league} game: ${awayTeam} @ ${homeTeam}`);
       return null;
     } catch (error) {
       console.error(`Error fetching game result: ${error.message}`);

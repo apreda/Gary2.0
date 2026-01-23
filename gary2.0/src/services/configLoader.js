@@ -21,53 +21,19 @@ function getEnvVar(key, defaultValue = '') {
 /**
  * Config loading service to ensure API keys are available in all environments
  * Note: LLM keys (GEMINI_API_KEY) are loaded server-side only
+ * Note: Ball Don't Lie API is now the primary source for all odds/stats (The Odds API deprecated)
  */
 export const configLoader = {
-  // Variables to hold API credentials
-  odds_api_key: getEnvVar('VITE_ODDS_API_KEY', ''),
   loaded: false,
 
   /**
    * Load API configuration from either environment or API endpoint
    */
   load: async function() {
-    // Don't reload if already loaded
-    if (this.loaded && this.odds_api_key) {
+    if (this.loaded) {
       return;
     }
-
-    // If we already have the odds (client-safe) key, just use it
-    const oddsApiKey = getEnvVar('VITE_ODDS_API_KEY');
-    
-    if (oddsApiKey) {
-      this.odds_api_key = oddsApiKey;
-      this.loaded = true;
-      console.log('Using environment variables for non-sensitive API keys');
-      return;
-    }
-
-    // Try to load from API endpoint
-    try {
-      console.log('Loading API configuration from endpoint...');
-      const response = await axios.get('/api/config');
-      if (response.data) {
-        this.odds_api_key = response.data.odds_api_key || this.odds_api_key;
-        
-        // All providers loaded
-        this.loaded = true;
-        console.log('Successfully loaded API configuration from endpoint');
-      }
-    } catch (error) {
-      console.error('Failed to load API configuration from endpoint:', error);
-      // Continue with whatever keys we have
-    }
-  },
-
-  /**
-   * Get the Odds API key
-   */
-  getOddsApiKey: async function() {
-    await this.load();
-    return this.odds_api_key;
+    this.loaded = true;
+    console.log('Config loader initialized (BDL is primary data source)');
   }
 };

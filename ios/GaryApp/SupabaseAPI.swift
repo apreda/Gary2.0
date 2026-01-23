@@ -1,12 +1,45 @@
 import Foundation
 import SwiftUI
 
+// MARK: - Smart Cache for Performance
+// Caches data for 60 seconds to make tab switching instant
+// Pull-to-refresh always bypasses cache for fresh data
+// Manual Supabase edits appear after 60s OR on pull-to-refresh
+
+actor APICache {
+    static let shared = APICache()
+
+    private var cache: [String: (data: Any, timestamp: Date)] = [:]
+    private let ttl: TimeInterval = 60 // 60 second cache
+
+    func get<T>(_ key: String) -> T? {
+        guard let entry = cache[key],
+              Date().timeIntervalSince(entry.timestamp) < ttl,
+              let data = entry.data as? T else {
+            return nil
+        }
+        return data
+    }
+
+    func set<T>(_ key: String, value: T) {
+        cache[key] = (data: value, timestamp: Date())
+    }
+
+    func invalidate(_ key: String) {
+        cache.removeValue(forKey: key)
+    }
+
+    func invalidateAll() {
+        cache.removeAll()
+    }
+}
+
 // MARK: - Supabase API Client
 
 enum SupabaseAPI {
-    
+
     // MARK: - Configuration
-    
+
     private static var baseURL: URL {
         Secrets.supabaseURL.appendingPathComponent("/rest/v1")
     }
@@ -277,43 +310,65 @@ enum SupabaseAPI {
     }
     
     // MARK: - Combined Picks
-    
+
     /// Fetch all picks: non-NFL from daily_picks + NFL from weekly_nfl_picks
-    static func fetchAllPicks(date: String) async throws -> [GaryPick] {
+    /// - Parameter forceRefresh: Set to true for pull-to-refresh to bypass cache
+    static func fetchAllPicks(date: String, forceRefresh: Bool = false) async throws -> [GaryPick] {
+        let cacheKey = "allPicks_\(date)"
+
+        // Check cache first (unless forcing refresh)
+        if !forceRefresh, let cached: [GaryPick] = await APICache.shared.get(cacheKey) {
+            return cached
+        }
+
+        // Fetch fresh data
         async let dailyTask = fetchDailyPicks(date: date)
         async let nflTask = fetchWeeklyNFLPicks()
-        
+
         let dailyPicks = (try? await dailyTask) ?? []
         let nflPicks = (try? await nflTask) ?? []
-        
+
         // Filter out NFL from daily picks (they come from weekly_nfl_picks)
         let nonNFLPicks = dailyPicks.filter { ($0.league ?? "").uppercased() != "NFL" }
-        
-        return nonNFLPicks + nflPicks
+
+        let result = nonNFLPicks + nflPicks
+
+        // Store in cache
+        await APICache.shared.set(cacheKey, value: result)
+
+        return result
     }
     
     // MARK: - Prop Picks
-    
+
     /// Fetch prop picks for a specific date
+    /// - Parameter forceRefresh: Set to true for pull-to-refresh to bypass cache
     /// Returns empty array if no picks exist for the given date - NO FALLBACK
-    static func fetchPropPicks(date: String) async throws -> [PropPick] {
+    static func fetchPropPicks(date: String, forceRefresh: Bool = false) async throws -> [PropPick] {
+        let cacheKey = "propPicks_\(date)"
+
+        // Check cache first (unless forcing refresh)
+        if !forceRefresh, let cached: [PropPick] = await APICache.shared.get(cacheKey) {
+            return cached
+        }
+
         let url = buildURL(table: "prop_picks", query: [
             URLQueryItem(name: "select", value: "*"),
             URLQueryItem(name: "date", value: "eq.\(date)")
         ])
-        
+
         let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
-        
+
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return [] }
-        
+
         // Parse as array of dictionaries
         guard let jsonArray = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return [] }
-        
+
         var allPicks: [PropPick] = []
-        
+
         for row in jsonArray {
             let rowLeague = row["league"] as? String
-            
+
             // Get picks from the row
             var picksData: [[String: Any]] = []
             if let picksArray = row["picks"] as? [[String: Any]] {
@@ -323,7 +378,7 @@ enum SupabaseAPI {
                       let parsed = try? JSONSerialization.jsonObject(with: pData) as? [[String: Any]] {
                 picksData = parsed
             }
-            
+
             // Parse each pick
             for var pickDict in picksData {
                 if pickDict["league"] == nil && pickDict["sport"] == nil {
@@ -334,7 +389,10 @@ enum SupabaseAPI {
                 }
             }
         }
-        
+
+        // Store in cache
+        await APICache.shared.set(cacheKey, value: allPicks)
+
         return allPicks
     }
     
@@ -431,24 +489,37 @@ enum SupabaseAPI {
     }
     
     // MARK: - DFS Lineups (Gary's Fantasy)
-    
+
     /// Fetch DFS lineups for a specific date
+    /// - Parameter forceRefresh: Set to true for pull-to-refresh to bypass cache
     /// Returns lineups for both platforms (DraftKings, FanDuel) and available sports
-    static func fetchDFSLineups(date: String) async throws -> [DFSLineup] {
+    static func fetchDFSLineups(date: String, forceRefresh: Bool = false) async throws -> [DFSLineup] {
+        let cacheKey = "dfsLineups_\(date)"
+
+        // Check cache first (unless forcing refresh)
+        if !forceRefresh, let cached: [DFSLineup] = await APICache.shared.get(cacheKey) {
+            return cached
+        }
+
         let url = buildURL(table: "dfs_lineups", query: [
             URLQueryItem(name: "select", value: "*"),
             URLQueryItem(name: "date", value: "eq.\(date)"),
             URLQueryItem(name: "order", value: "platform.asc,sport.asc")
         ])
-        
+
         let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
-        
+
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return [] }
-        
+
         // Parse as array of dictionaries
         guard let jsonArray = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return [] }
-        
-        return jsonArray.compactMap { DFSLineup.from(dict: $0) }
+
+        let result = jsonArray.compactMap { DFSLineup.from(dict: $0) }
+
+        // Store in cache
+        await APICache.shared.set(cacheKey, value: result)
+
+        return result
     }
     
     /// Fetch DFS lineups for a specific platform

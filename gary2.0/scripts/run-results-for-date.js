@@ -21,7 +21,7 @@ dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 const PERPLEXITY_API_KEY = process.env.VITE_PERPLEXITY_API_KEY;
-const ODDS_API_KEY = process.env.VITE_ODDS_API_KEY || process.env.ODDS_API_KEY;
+// NOTE: The Odds API has been deprecated - all data now comes from Ball Don't Lie
 const BDL_API_KEY = process.env.BALLDONTLIE_API_KEY || process.env.VITE_BALL_DONT_LIE_API_KEY || process.env.BALL_DONT_LIE_API_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
@@ -31,7 +31,6 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 
 console.log(`Using ${process.env.SUPABASE_SERVICE_ROLE_KEY ? 'SERVICE_ROLE' : 'ANON'} key`);
 console.log(`Perplexity API: ${PERPLEXITY_API_KEY ? 'Available' : 'Not configured'}`);
-console.log(`Odds API: ${ODDS_API_KEY ? 'Available' : 'Not configured'}`);
 console.log(`BallDontLie API: ${BDL_API_KEY ? 'Available' : 'Not configured'}`);
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
@@ -53,8 +52,7 @@ const getTargetDate = () => {
   return `${year}-${month}-${day}`;
 };
 
-// Cache for API scores to avoid repeated calls
-const scoresCache = new Map();
+// Cache for BDL scores to avoid repeated calls
 const bdlScoresCache = new Map();
 
 /**
@@ -196,91 +194,8 @@ async function fetchScoresFromBDL(league, dateStr, checkAdjacentDays = true) {
   }
 }
 
-/**
- * Fetch scores from The Odds API for a given sport and date
- */
-async function fetchScoresFromOddsAPI(league, dateStr) {
-  const cacheKey = `${league}-${dateStr}`;
-  if (scoresCache.has(cacheKey)) {
-    return scoresCache.get(cacheKey);
-  }
-  
-  if (!ODDS_API_KEY) {
-    console.log('  ⚠️ Odds API key not configured');
-    return [];
-  }
-  
-  const sportKeyMap = {
-    'NBA': 'basketball_nba',
-    'NHL': 'icehockey_nhl',
-    'MLB': 'baseball_mlb',
-    'NFL': 'americanfootball_nfl',
-    'NCAAF': 'americanfootball_ncaaf',
-    'NCAAB': 'basketball_ncaab'
-  };
-  
-  const sportKey = sportKeyMap[league.toUpperCase()];
-  if (!sportKey) {
-    console.log(`  ⚠️ Unknown league: ${league}`);
-    return [];
-  }
-  
-  try {
-    const apiDate = new Date(dateStr);
-    apiDate.setUTCHours(0, 0, 0, 0);
-    const commenceDateFrom = apiDate.toISOString();
-    
-    const endDate = new Date(apiDate);
-    endDate.setDate(endDate.getDate() + 1);
-    const commenceDateTo = endDate.toISOString();
-    
-    const url = `https://api.the-odds-api.com/v4/sports/${sportKey}/scores?apiKey=${ODDS_API_KEY}&daysFrom=3`;
-    console.log(`  📡 Fetching ${league} scores from Odds API...`);
-    
-    const response = await fetch(url);
-    
-    if (!response.ok) {
-      console.log(`  ⚠️ Odds API error: ${response.status}`);
-      return [];
-    }
-    
-    const data = await response.json();
-    
-    if (Array.isArray(data)) {
-      const scores = data
-        .filter(game => game.completed)
-        .map(game => {
-          // The Odds API returns scores array with team names
-          let homeScore = 0, awayScore = 0;
-          if (game.scores && Array.isArray(game.scores)) {
-            for (const score of game.scores) {
-              if (score.name === game.home_team) {
-                homeScore = parseInt(score.score) || 0;
-              } else if (score.name === game.away_team) {
-                awayScore = parseInt(score.score) || 0;
-              }
-            }
-          }
-          return {
-            home_team: game.home_team,
-            away_team: game.away_team,
-            homeScore,
-            awayScore,
-            commence_time: game.commence_time
-          };
-        });
-      
-      scoresCache.set(cacheKey, scores);
-      console.log(`  📊 Found ${scores.length} completed ${league} games`);
-      return scores;
-    }
-    
-    return [];
-  } catch (error) {
-    console.log(`  ⚠️ Odds API error: ${error.message}`);
-    return [];
-  }
-}
+// NOTE: fetchScoresFromOddsAPI has been removed - The Odds API is deprecated
+// All scores now come from Ball Don't Lie via fetchScoresFromBDL
 
 /**
  * Normalize team name for matching - improved to handle more cases
@@ -408,26 +323,8 @@ async function fetchGameScore(league, homeTeam, awayTeam, dateStr) {
       console.log(`     ⚠️ BDL found ${bdlScores.length} games but none matched "${awayTeam}" @ "${homeTeam}"`);
     }
   }
-  
-  // Step 2: Fallback to Odds API
-  const scores = await fetchScoresFromOddsAPI(league, dateStr);
-  
-  if (scores && scores.length > 0) {
-    const matchedGame = findMatchingGame(scores, homeTeam, awayTeam, true);
-    
-    if (matchedGame) {
-      console.log(`     ✅ Score from Odds API: ${matchedGame.awayScore}-${matchedGame.homeScore}`);
-      return {
-        homeScore: matchedGame.homeScore,
-        awayScore: matchedGame.awayScore,
-        final_score: `${matchedGame.awayScore}-${matchedGame.homeScore}`,
-        source: 'OddsAPI'
-      };
-    } else {
-      console.log(`     ⚠️ Odds API found ${scores.length} games but none matched "${awayTeam}" @ "${homeTeam}"`);
-    }
-  }
-  
+
+  // NOTE: The Odds API fallback has been removed - all data comes from BDL
   return null;
 }
 

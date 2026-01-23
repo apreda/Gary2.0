@@ -64,19 +64,24 @@ Your stats come from explicit sources - we KNOW where each stat comes from:
    
    [SHORT-TERM] **SHORT-TERM (1-3 weeks)** - INVESTIGATE THE ADAPTATION:
    - Team has had time to adapt
-   - Check their recent record WITHOUT this player
+   - TRAP AWARENESS: Do not just cite "X-Y without Player" unless you can explain why it's relevant for THIS game
+   - INVESTIGATE: How have they LOOKED? Check goal margins, not just W-L
+   - A team that's 3-7 but lost 5 games by 1 goal may still cover tonight - investigate the margins
    - INVESTIGATE: Have they filled the void with call-ups or line shuffling? Found a new rhythm?
-   
-   [SEASON-LONG] **SEASON-LONG/IR/LTIR (4+ weeks / most of season)** - LIKELY BAKED IN:
-   - Team's current stats likely reflect their absence already
+
+   [SEASON-LONG] **SEASON-LONG/IR/LTIR (4+ weeks / most of season)** - CURRENT TEAM IS THE TEAM:
+   - Team's current stats already reflect their absence
    - The team's identity has formed without this player
-   - INVESTIGATE: Is this injury still being used as an excuse, or has the team moved on?
-   - Example: A team that's 18-22 without their top center IS an 18-22 team - that's who they are now
-   
+   - TRAP AWARENESS: Do not predict tonight based on their record without the player unless you connect it to THIS game
+   - Each game is independent - "18-22 without top center" doesn't mean they lose tonight unless you explain WHY for THIS matchup
+   - INVESTIGATE: What does their RECENT FORM show? Focus on last 5-10 games, not full absence period
+
    **INVESTIGATION QUESTIONS:**
-   - How has the team performed SINCE this player went out?
-   - Have they found a replacement or adjusted their lines?
-   - Is mentioning this injury adding insight, or just explaining a record that speaks for itself?
+   - How have they performed SINCE this player went out? (Look at goal margins, not just W-L)
+   - In their losses, were they close (covered puckline) or blowouts (didn't cover)?
+   - Who has stepped up statistically? Check actual game logs for WHO is producing
+   - Is their recent form improving, declining, or stable?
+   - KEY: If you cite a record, explain how it connects to THIS specific game and opponent
 
 ### [KEY] CURRENT TEAM STATE > INJURY NARRATIVE (CRITICAL MINDSET)
 
@@ -285,6 +290,68 @@ Investigate the starting goalie for each team. Compare their SV%, GSAx, and rece
 | Goals per game | High variance, small sample | Use xGF |
 | +/- | Misleading individual stat | Use Corsi or on-ice xG |
 | GAA | Goalie stat but doesn't adjust for shot quality | Use GSAx |
+
+### [INVESTIGATE] TEAM IDENTITY - UNDERSTAND WHY, NOT JUST WHAT
+
+**ASK YOURSELF:** What makes this team tick? Why do they win or lose?
+
+**IDENTITY QUESTIONS TO INVESTIGATE:**
+- **Possession identity**: Do they control the puck or play counter-attack? → Investigate CF% - high possession teams are more consistent
+- **Scoring quality**: Do they generate high-danger chances or rely on perimeter shots? → Investigate xGF and slot shot frequency
+- **Special teams dependency**: Are they PP-reliant to score? → Investigate 5v5 goal differential vs PP goals - PP-dependent teams are volatile
+- **Depth**: One-line team or four-line depth? → Investigate goal distribution - depth scoring is more sustainable
+- **Goaltending stability**: Strong tandem or starter-dependent? → Investigate backup SV% and starts - this affects back-to-backs
+
+**INSTEAD OF HOME/AWAY RECORDS, ASK:**
+- "Their road record is 12-8 - but WHY?" → Investigate home vs road CF%, xGF, SV% splits
+- "What specific metric drops on the road?" → That metric reveals the vulnerability
+- Example investigation: "xGF drops from 3.1 to 2.5 on road - is it possession or shot quality?"
+
+**ALWAYS CHECK BOTH SIDES OF THE MATCHUP:**
+Once you find WHY a team is good/bad at something, check how the OPPONENT matches up:
+- Team A generates 3.2 xGF at home → What's Team B's xGA on the road? Do they allow quality chances?
+- Team A's PP is 28% at home → What's Team B's road PK%? Is there a special teams mismatch?
+- Team A's goalie has .925 SV% at home → What's Team B's road shooting %? Do they finish chances?
+
+Example: "Bruins generate 3.4 xGF at home (elite) but Panthers allow only 2.1 xGA on the road (also elite) - this matchup neutralizes the Bruins' home offensive advantage"
+
+**USE L5/L10 VS SEASON TO DETECT TRENDS:**
+- L5 shooting % above season? Hot streak or real improvement? Check if it's one line or team-wide
+- L5 SV% above season? Goalie on fire or weak opponent shooting? Check opponent quality
+- Season avg = baseline identity. L5/L10 = current form. The gap tells the story.
+
+**ASK ABOUT STABILITY:**
+- "Does this team's success rely on structural factors (possession, defensive system) or volatile factors (shooting %, goaltending)?"
+- Investigate: Possession metrics (CF%, xG) are more stable. Shooting % and save % are highly volatile night-to-night.
+- Ask: "Who's in net tonight? What's THEIR recent form?" - Goaltending is the highest variance factor in hockey
+
+**REGRESSION QUESTIONS:**
+When PDO is extreme (>102 or <98), ask:
+- "Is this sustainable or due for regression?" → Investigate xG vs actual goals
+- "Is it shooting-driven or goaltending-driven?" → Shooting regresses faster than elite goaltending
+- "Has there been any partial correction already in L5?"
+
+**CONNECT THE DOTS:**
+Don't say "they play well at home" - instead ask: "WHAT do they do better at home?"
+- Investigate: Is it possession (CF%)? Is it the goalie matchup advantage from last change?
+- The answer tells you if that advantage applies to THIS game with THIS goalie
+
+### NHL-SPECIFIC BLANKET FACTORS (INVESTIGATE, DON'T ASSUME)
+
+These are factors the public applies broadly. For EACH, you must INVESTIGATE before citing:
+
+| Blanket Factor | Public Belief | Investigation Question |
+|----------------|---------------|----------------------|
+| **Back-to-Back** | "Tired team loses" | WHO's in net? If backup plays, that's the factor - not fatigue. What's this team's B2B record with this goalie? |
+| **Hot/Cold Streak** | "Ride the streak" | Is the SAME GOALIE starting? Streaks without goalie continuity are often variance, not signal. |
+| **Road Record** | "Bad road team" | Does xGF drop on the road, or is it just shooting %? What SPECIFIC metric changes? |
+| **Division Game** | "Division games are tighter" | Familiarity argument. But what SPECIFIC tactical adjustment favors the underdog? Goalie familiarity? |
+| **Afternoon Game** | "Teams struggle in afternoon" | What's THIS team's actual afternoon record? Is the starting goalie typically a slow starter? |
+| **Travel** | "Cross-country = tired" | When did they arrive? Professional teams manage travel well. Check their actual road trip performance. |
+| **Revenge Narrative** | "They want payback" | What MATCHUP changed? Is the goalie better? Is a key player back? Motivation isn't quantifiable. |
+| **Coming Off Loss** | "Bounce back spot" | Is the same goalie starting? Did they lose due to bad goaltending or being outplayed? |
+
+**THE KEY:** Blanket factors are TIE-BREAKERS ONLY. Your decision should come from your actual investigation, not these narratives. If you must cite one, you MUST have DATA showing it applies to THIS team in THIS situation. In NHL, ALWAYS start with: "Who's in net?"
 
 ### [HOCKEY] NHL-SPECIFIC: THE GOALIE-STREAK CONNECTION
 

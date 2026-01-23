@@ -2,13 +2,14 @@
  * Player Prop Odds Service
  * Specialized service for fetching and processing player prop odds
  * This is separate from the main oddsService to avoid affecting the regular picks system
+ * NOTE: The Odds API has been deprecated - all props now come from Ball Don't Lie
  */
 import axios from 'axios';
-import { configLoader } from './configLoader.js';
 import { oddsService } from './oddsService.js';
 import { ballDontLieService } from './ballDontLieService.js';
+import { ballDontLieOddsService } from './ballDontLieOddsService.js';
 
-const ODDS_API_BASE_URL = 'https://api.the-odds-api.com/v4';
+// NOTE: The Odds API deprecated - BDL is now the primary source for all player props
 
 // Only fetch from major US sportsbooks to reduce API token usage
 const ALLOWED_BOOKMAKERS = ['draftkings', 'fanduel'];
@@ -466,222 +467,11 @@ export const propOddsService = {
         }
       }
 
-      // ============ Fallback: Use The Odds API (for other sports or if BDL fails) ============
-      let apiKey = null;
-      try {
-        apiKey = await configLoader.getOddsApiKey();
-      } catch (e) {
-        apiKey = null;
-      }
-      const useOddsApi = Boolean(apiKey);
-      
-      let game = null;
-      
-      // Fallback to BDL-backed oddsService for other sports or if Odds API lookup failed
-      if (!game) {
-        const games = await oddsService.getUpcomingGames(sport);
-        console.log(`Found ${games.length} upcoming ${sport} games.`);
-        
-        // Try exact match first
-        game = games.find(g => 
-          (g.home_team === homeTeam && g.away_team === awayTeam) || 
-          (g.home_team === awayTeam && g.away_team === homeTeam)
-        );
-        
-        // If exact match fails, try normalized match
-        if (!game) {
-          game = games.find(g => {
-            const normalizedGameHome = normalizeTeamName(g.home_team);
-            const normalizedGameAway = normalizeTeamName(g.away_team);
-            
-            return (normalizedGameHome === normalizedHomeTeam && normalizedGameAway === normalizedAwayTeam) ||
-                   (normalizedGameHome === normalizedAwayTeam && normalizedGameAway === normalizedHomeTeam);
-          });
-        }
-        
-        // Log all available games if we can't find a match
-        if (!game) {
-          console.error(`❌ No game found matching ${homeTeam} vs ${awayTeam} for ${sport} today.`);
-          console.log('Available games:');
-          games.forEach(g => console.log(`- ${g.home_team} vs ${g.away_team}`));
-          throw new Error(`No game found for ${homeTeam} vs ${awayTeam} in today's schedule.`);
-        }
-      }
-      
-      console.log(`✅ Found matching game with ID: ${game.id}, scheduled for ${new Date(game.commence_time).toLocaleString()}`);
-      
-      // If no Odds API key, return empty array
-      if (!useOddsApi) {
-        console.log('⚠️ No Odds API key configured. Cannot fetch player props.');
-        return [];
-      }
-      
-      // Odds API path (only if key is available)
-      // Get the appropriate prop markets for this sport
-      const marketsList = PROP_MARKETS[sport] || ['player_points'];
-      console.log(`Will fetch ${marketsList.length} markets individually for ${sport}`);
-      
-      // Fetch each market type individually to avoid 404 errors
-      const allPlayerProps = [];
-      const marketStats = {};
-      
-      console.log(`========= PROP MARKET ANALYSIS FOR ${sport}: ${homeTeam} vs ${awayTeam} =========`);
-      
-      for (const market of marketsList) {
-        const startTime = Date.now();
-        const startingPropsCount = allPlayerProps.length;
-        
-        console.log(`🔍 Fetching ${sport} player props for market: ${market}`);
-        
-        try {
-          const propResponse = await axios.get(`${ODDS_API_BASE_URL}/sports/${sport}/events/${game.id}/odds`, {
-            params: {
-              apiKey,
-              regions: 'us',
-              markets: market, // Just one market at a time
-              oddsFormat: 'american',
-              dateFormat: 'iso',
-              bookmakers: ALLOWED_BOOKMAKERS.join(',')  // Only DraftKings & FanDuel
-            }
-          });
-          
-          if (propResponse.data && 
-              propResponse.data.bookmakers && 
-              propResponse.data.bookmakers.length > 0) {
-            // Filter to only allowed bookmakers (belt & suspenders - API param should handle this)
-            const bookmakers = propResponse.data.bookmakers.filter(
-              bk => ALLOWED_BOOKMAKERS.includes(bk.key)
-            );
-            for (const bookmaker of bookmakers) {
-              for (const bkMarket of bookmaker.markets) {
-                if (bkMarket.key !== market) continue;
-                const propType = bkMarket.key
-                  .replace('player_', '')
-                  .replace('batter_', '')
-                  .replace('pitcher_', '');
-                
-                for (const outcome of bkMarket.outcomes) {
-                  const isYesNoProp = ['Yes', 'No'].includes(outcome.name);
-                  let overOdds = null;
-                  let underOdds = null;
-                  let lineValue = outcome.point;
-                  
-                  if (isYesNoProp) {
-                    lineValue = 0.5;
-                    if (outcome.name === 'Yes') overOdds = outcome.price;
-                    else if (outcome.name === 'No') underOdds = outcome.price;
-                  } else {
-                    overOdds = outcome.name === 'Over' ? outcome.price : null;
-                    underOdds = outcome.name === 'Under' ? outcome.price : null;
-                  }
-                  
-                  // IMPORTANT: Do NOT trust team data from The Odds API - it's often stale/wrong
-                  // Teams will be resolved from BDL (Ball Don't Lie) in the context builder
-                  // BDL has authoritative, up-to-date roster data
-                  
-                  // Store with null team - let BDL resolve it later
-                  allPlayerProps.push({
-                    player: outcome.description,
-                    team: null, // Will be resolved from BDL in context builder (source of truth)
-                    prop_type: propType,
-                    line: lineValue,
-                    over_odds: overOdds,
-                    under_odds: underOdds,
-                    _home_team: game.home_team,  // Store game context for later team resolution
-                    _away_team: game.away_team
-                  });
-                }
-              }
-            }
-          }
-        } catch (err) {
-          if (err.response && err.response.status === 404) {
-            console.warn(`❌ No data available for ${market} in game ${game.id}, continuing to next market`);
-            marketStats[market] = { success: false, count: 0, error: '404 Not Found' };
-            continue;
-          } else if (err.response && err.response.status === 422) {
-            console.warn(`❌ API cannot process ${market} market request (422 error), continuing to next market`);
-            marketStats[market] = { success: false, count: 0, error: '422 Unprocessable Entity' };
-            continue;
-          } else {
-            console.error(`❌ Error fetching ${market} data:`, err);
-            marketStats[market] = { success: false, count: 0, error: err.message || 'Unknown error' };
-          }
-        }
-        
-        const endTime = Date.now();
-        const propsAdded = allPlayerProps.length - startingPropsCount;
-        marketStats[market] = {
-          success: propsAdded > 0,
-          count: propsAdded,
-          timeMs: endTime - startTime
-        };
-        if (propsAdded > 0) {
-          console.log(`✅ Successfully added ${propsAdded} props for market: ${market}`);
-        } else {
-          console.log(`⚠️ No props added for market: ${market} (API returned data but no valid props found)`);
-        }
-      }
-      
-      console.log('\n📊 MARKET RETRIEVAL SUMMARY:');
-      for (const market in marketStats) {
-        const stats = marketStats[market];
-        if (stats.success) {
-          console.log(`  ✅ ${market}: ${stats.count} props retrieved in ${stats.timeMs}ms`);
-        } else {
-          console.log(`  ❌ ${market}: Failed - ${stats.error || 'No props found'}`);
-        }
-      }
-      console.log(`Total props retrieved: ${allPlayerProps.length}`);
-      console.log(`==================================================`);
-      
-      if (allPlayerProps.length === 0) {
-        console.log('❌ No player prop data found via Odds API. Returning empty.');
-        return [];
-      }
-      
-      // Filter out any alternate props that might have been returned by the API
-      const filteredProps = allPlayerProps.filter(prop => {
-        // Check if this is an MLB alternate prop type
-        if (sport === 'baseball_mlb' && prop.prop_type.includes('alternate')) {
-          console.log(`🔍 Filtering out alternate MLB prop: ${prop.player} - ${prop.prop_type}`);
-          return false;
-        }
-        return true;
-      });
-      
-      // Group over/under odds together for the same player and prop type
-      const groupedProps = {};
-      for (const prop of filteredProps) {
-        const key = `${prop.player}_${prop.prop_type}_${prop.line}`;
-        if (!groupedProps[key]) {
-          groupedProps[key] = {
-            player: prop.player,
-            team: prop.team,
-            prop_type: prop.prop_type,
-            line: prop.line,
-            over_odds: null,
-            under_odds: null
-          };
-        }
-        
-        if (prop.over_odds !== null) {
-          groupedProps[key].over_odds = prop.over_odds;
-        }
-        if (prop.under_odds !== null) {
-          groupedProps[key].under_odds = prop.under_odds;
-        }
-      }
-      
-      // Convert back to array
-      const result = Object.values(groupedProps);
-      console.log(`Found ${result.length} player props for ${homeTeam} vs ${awayTeam}`);
-      
-      // Filter props to acceptable odds range: -200 to +250
-      const filteredByOddsResult = propOddsService.filterPropsByOddsValue(result);
-      console.log(`Final filtered prop count: ${filteredByOddsResult.length} props (odds range: -200 to +250)`);
-      
-      return filteredByOddsResult;
+      // ============ Unsupported sport - BDL does not have props ============
+      // The Odds API has been deprecated - only NHL, NFL, NBA props are supported via BDL
+      console.warn(`[PropOdds] Sport '${sport}' player props not supported. BDL only has NHL, NFL, NBA props.`);
+      console.log(`⚠️ No player props available for ${sport}. Returning empty.`);
+      return [];
     } catch (error) {
       console.error(`❌ Error fetching player prop odds for ${homeTeam} vs ${awayTeam}: ${error.message}`);
       throw error;

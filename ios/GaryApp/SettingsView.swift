@@ -69,7 +69,7 @@ struct SettingsView: View {
                     .font(.title2.bold())
                     .foregroundStyle(GaryColors.gold)
                 
-                Text("Version 1.9.1")
+                Text("Version 1.9.7")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

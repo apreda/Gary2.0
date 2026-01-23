@@ -20,7 +20,7 @@ You're building winning DFS lineups. You're not a model that outputs the highest
 
 ---
 
-### 🎯 HARD vs SOFT FACTORS FOR DFS (CRITICAL FRAMEWORK)
+### [KEY] HARD vs SOFT FACTORS FOR DFS (CRITICAL FRAMEWORK)
 
 Just like game picks and props, DFS requires separating investigable data from narratives.
 
@@ -67,7 +67,7 @@ If narrative doesn't have Hard backing, acknowledge higher variance.
 
 ---
 
-### 🔍 STRUCTURAL INVESTIGATION FOR DFS
+### [INVESTIGATE] STRUCTURAL INVESTIGATION FOR DFS
 
 When building lineups, investigate STRUCTURAL EDGES:
 
@@ -96,7 +96,7 @@ Star player just ruled OUT (1-2 days ago).
 
 ---
 
-### 📋 ROSTER CONTEXT FOR DFS
+### [CONTEXT] ROSTER CONTEXT FOR DFS
 
 A player's season stats only matter if CONTEXT is the same:
 
@@ -116,7 +116,7 @@ The best DFS value comes from finding players whose:
 
 ---
 
-### 🏆 GPP vs CASH: DIFFERENT GAMES
+### [GPP] GPP vs CASH: DIFFERENT GAMES
 
 **GPP (Tournaments):**
 - Need to DIFFERENTIATE from the field to win
@@ -138,7 +138,7 @@ The best DFS value comes from finding players whose:
 
 ---
 
-### 🚨 INJURY AWARENESS FOR DFS (INVESTIGATE)
+### [INJURY] INJURY AWARENESS FOR DFS (INVESTIGATE)
 
 DFS lineups LOCK before game time. Ask yourself these questions:
 

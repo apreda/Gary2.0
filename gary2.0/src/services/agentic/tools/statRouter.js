@@ -517,34 +517,47 @@ async function fetchNBATeamAdvancedStats(teamId, season = null) {
       return null;
     }
     
-    // Get season averages (advanced) for top players
+    // Get season averages (advanced, usage, scoring) for top players - BDL v2
     const topPlayerIds = players.slice(0, 10).map(p => p.id);
     const playerIdParams = topPlayerIds.map(id => `player_ids[]=${id}`).join('&');
-    
-    // Try advanced stats first, fall back to base stats if it fails
+
+    // Fetch advanced, usage, and scoring stats in parallel (BDL v2)
     let playerStats = [];
-    
-    // Attempt 1: Advanced stats
+    let usageStats = [];
+    let scoringStats = [];
+
     try {
-      const advancedUrl = `https://api.balldontlie.io/v1/season_averages/general?season=${season}&season_type=regular&type=advanced&${playerIdParams}`;
-      const advResp = await fetch(advancedUrl, { headers: { Authorization: BDL_API_KEY } });
-      
+      const [advResp, usageResp, scoringResp] = await Promise.all([
+        fetch(`https://api.balldontlie.io/v1/season_averages/general?season=${season}&season_type=regular&type=advanced&${playerIdParams}`,
+          { headers: { Authorization: BDL_API_KEY } }),
+        fetch(`https://api.balldontlie.io/v1/season_averages/general?season=${season}&season_type=regular&type=usage&${playerIdParams}`,
+          { headers: { Authorization: BDL_API_KEY } }),
+        fetch(`https://api.balldontlie.io/v1/season_averages/general?season=${season}&season_type=regular&type=scoring&${playerIdParams}`,
+          { headers: { Authorization: BDL_API_KEY } })
+      ]);
+
       if (advResp.ok) {
         const advJson = await advResp.json();
         playerStats = advJson.data || [];
-      } else {
-        console.warn(`[Stat Router] Advanced stats returned ${advResp.status}, trying base stats...`);
       }
-    } catch (advErr) {
-      console.warn(`[Stat Router] Advanced stats failed: ${advErr.message}, trying base stats...`);
+      if (usageResp.ok) {
+        const usageJson = await usageResp.json();
+        usageStats = usageJson.data || [];
+      }
+      if (scoringResp.ok) {
+        const scoringJson = await scoringResp.json();
+        scoringStats = scoringJson.data || [];
+      }
+    } catch (err) {
+      console.warn(`[Stat Router] BDL v2 parallel fetch failed: ${err.message}`);
     }
-    
-    // Attempt 2: Base stats fallback
+
+    // Fallback to base stats if advanced failed
     if (playerStats.length === 0) {
       try {
         const baseUrl = `https://api.balldontlie.io/v1/season_averages/general?season=${season}&season_type=regular&type=base&${playerIdParams}`;
         const baseResp = await fetch(baseUrl, { headers: { Authorization: BDL_API_KEY } });
-        
+
         if (baseResp.ok) {
           const baseJson = await baseResp.json();
           playerStats = baseJson.data || [];
@@ -554,39 +567,98 @@ async function fetchNBATeamAdvancedStats(teamId, season = null) {
         console.warn(`[Stat Router] Base stats also failed: ${baseErr.message}`);
       }
     }
-    
+
     if (playerStats.length === 0) {
       console.warn(`[Stat Router] No season averages found for team ${teamId}`);
       return null;
     }
-    
+
+    // Build lookup maps for usage and scoring by player_id
+    const usageMap = new Map(usageStats.map(u => [u.player_id, u]));
+    const scoringMap = new Map(scoringStats.map(s => [s.player_id, s]));
+
     // Aggregate team stats (weighted by minutes/games played)
     let totalMinutes = 0;
     let weightedORtg = 0, weightedDRtg = 0, weightedNetRtg = 0;
     let weightedEfg = 0, weightedPace = 0, weightedTsPct = 0;
     let totalGames = 0;
-    
+
+    // Usage concentration tracking
+    const playerUsages = [];
+
+    // Scoring profile tracking (weighted)
+    let weightedPctPaint = 0, weightedPctMidrange = 0, weightedPct3pt = 0, weightedPctFastbreak = 0;
+    let scoringWeightTotal = 0;
+
     for (const ps of playerStats) {
-      const stats = ps.stats || ps; // Handle both formats
+      const stats = ps.stats || ps;
+      const playerId = ps.player_id || ps.player?.id;
       const mins = stats.min || 0;
       const gp = stats.gp || stats.games_played || 1;
       const weight = mins * gp;
       totalMinutes += weight;
       totalGames = Math.max(totalGames, gp);
-      
+
       weightedORtg += (stats.off_rating || stats.offensive_rating || 0) * weight;
       weightedDRtg += (stats.def_rating || stats.defensive_rating || 0) * weight;
       weightedNetRtg += (stats.net_rating || 0) * weight;
       weightedEfg += (stats.efg_pct || 0) * weight;
       weightedPace += (stats.pace || 0) * weight;
       weightedTsPct += (stats.ts_pct || 0) * weight;
+
+      // Get usage data for this player
+      const usage = usageMap.get(playerId);
+      if (usage) {
+        const usgPct = usage.usg_pct || usage.usage_pct || 0;
+        playerUsages.push({
+          name: `${ps.player?.first_name || ''} ${ps.player?.last_name || ''}`.trim(),
+          usage: usgPct * 100,
+          mins: mins
+        });
+      }
+
+      // Get scoring profile for this player
+      const scoring = scoringMap.get(playerId);
+      if (scoring && weight > 0) {
+        weightedPctPaint += (scoring.pct_pts_paint || 0) * weight;
+        weightedPctMidrange += (scoring.pct_pts_mid_range_2 || 0) * weight;
+        weightedPct3pt += (scoring.pct_pts_3pt || 0) * weight;
+        weightedPctFastbreak += (scoring.pct_pts_fb || 0) * weight;
+        scoringWeightTotal += weight;
+      }
     }
-    
+
     if (totalMinutes === 0) {
       console.warn(`[Stat Router] No minutes data for team ${teamId}`);
       return null;
     }
-    
+
+    // Calculate usage concentration (star-heavy vs balanced)
+    playerUsages.sort((a, b) => b.usage - a.usage);
+    const top2Usage = playerUsages.slice(0, 2).reduce((sum, p) => sum + p.usage, 0);
+    const top3Usage = playerUsages.slice(0, 3).reduce((sum, p) => sum + p.usage, 0);
+
+    // Determine team structure
+    let teamStructure = 'balanced';
+    let structureNote = '';
+    if (top2Usage >= 55) {
+      teamStructure = 'star-heavy';
+      structureNote = `Top 2 players control ${top2Usage.toFixed(0)}% of usage - offense concentrated`;
+    } else if (top3Usage >= 70) {
+      teamStructure = 'top-heavy';
+      structureNote = `Top 3 players control ${top3Usage.toFixed(0)}% of usage`;
+    } else {
+      structureNote = `Balanced attack - top 3 at ${top3Usage.toFixed(0)}% combined usage`;
+    }
+
+    // Calculate team scoring profile
+    const scoringProfile = scoringWeightTotal > 0 ? {
+      pct_paint: ((weightedPctPaint / scoringWeightTotal) * 100).toFixed(1) + '%',
+      pct_midrange: ((weightedPctMidrange / scoringWeightTotal) * 100).toFixed(1) + '%',
+      pct_3pt: ((weightedPct3pt / scoringWeightTotal) * 100).toFixed(1) + '%',
+      pct_fastbreak: ((weightedPctFastbreak / scoringWeightTotal) * 100).toFixed(1) + '%'
+    } : null;
+
     return {
       offensive_rating: (weightedORtg / totalMinutes).toFixed(1),
       defensive_rating: (weightedDRtg / totalMinutes).toFixed(1),
@@ -596,15 +668,20 @@ async function fetchNBATeamAdvancedStats(teamId, season = null) {
       true_shooting_pct: ((weightedTsPct / totalMinutes) * 100).toFixed(1),
       games_played: totalGames,
       players_sampled: playerStats.length,
-      top_players: playerStats.slice(0, 3).map(ps => {
-        const stats = ps.stats || ps;
-        return {
-          name: `${ps.player?.first_name || ''} ${ps.player?.last_name || ''}`.trim(),
-          off_rating: stats.off_rating || stats.offensive_rating,
-          def_rating: stats.def_rating || stats.defensive_rating,
-          usage: ((stats.usg_pct || 0) * 100).toFixed(1)
-        };
-      })
+      // NEW: Usage concentration (BDL v2)
+      usage_concentration: {
+        structure: teamStructure,
+        top_2_usage: top2Usage.toFixed(1) + '%',
+        top_3_usage: top3Usage.toFixed(1) + '%',
+        note: structureNote
+      },
+      // NEW: Scoring profile (BDL v2)
+      scoring_profile: scoringProfile,
+      top_players: playerUsages.slice(0, 3).map(p => ({
+        name: p.name,
+        usage: p.usage.toFixed(1) + '%',
+        mins: p.mins.toFixed(1)
+      }))
     };
   } catch (error) {
     console.warn('[Stat Router] BDL NBA advanced stats fetch failed:', error.message);
@@ -1118,17 +1195,17 @@ const FETCHERS = {
   },
   
   NET_RATING: async (bdlSport, home, away, season) => {
-    // For NBA, use BDL Season Averages (Advanced)
+    // For NBA, use BDL Season Averages (Advanced) with BDL v2 usage/scoring data
     if (bdlSport === 'basketball_nba') {
       const [homeStats, awayStats] = await Promise.all([
         fetchNBATeamAdvancedStats(home.id, season),
         fetchNBATeamAdvancedStats(away.id, season)
       ]);
-      
+
       const homeNet = homeStats?.net_rating ? parseFloat(homeStats.net_rating) : 0;
       const awayNet = awayStats?.net_rating ? parseFloat(awayStats.net_rating) : 0;
       const gap = (homeNet - awayNet).toFixed(1);
-      
+
       return {
         category: 'Net Rating Comparison (BDL Advanced)',
         source: 'Ball Don\'t Lie API',
@@ -1136,21 +1213,33 @@ const FETCHERS = {
           team: home.full_name || home.name,
           net_rating: homeStats?.net_rating || 'N/A',
           offensive_rating: homeStats?.offensive_rating || 'N/A',
-          defensive_rating: homeStats?.defensive_rating || 'N/A'
+          defensive_rating: homeStats?.defensive_rating || 'N/A',
+          // BDL v2: Usage concentration
+          usage_concentration: homeStats?.usage_concentration || null,
+          // BDL v2: Scoring profile (where they score)
+          scoring_profile: homeStats?.scoring_profile || null,
+          top_players: homeStats?.top_players || []
         },
         away: {
           team: away.full_name || away.name,
           net_rating: awayStats?.net_rating || 'N/A',
           offensive_rating: awayStats?.offensive_rating || 'N/A',
-          defensive_rating: awayStats?.defensive_rating || 'N/A'
+          defensive_rating: awayStats?.defensive_rating || 'N/A',
+          usage_concentration: awayStats?.usage_concentration || null,
+          scoring_profile: awayStats?.scoring_profile || null,
+          top_players: awayStats?.top_players || []
         },
         gap: gap,
-        interpretation: homeNet > awayNet 
+        interpretation: homeNet > awayNet
           ? `${home.name} has +${gap} net rating advantage (${homeNet.toFixed(1)} vs ${awayNet.toFixed(1)})`
           : `${away.name} has +${Math.abs(parseFloat(gap)).toFixed(1)} net rating advantage (${awayNet.toFixed(1)} vs ${homeNet.toFixed(1)})`,
-        CONTEXT_WARNING: `⚠️ This is SEASON-LONG data. A team's current form may differ significantly.`,
-        INVESTIGATE: `🔍 Cross-reference with RECENT_FORM: Is this team playing BETTER or WORSE than their season average lately? A +5.0 Net Rating team that's been -2.0 in L5 is NOT playing like a +5.0 team right now.`,
-        TREND_QUESTION: `Ask: Is this efficiency IMPROVING, DECLINING, or STABLE? Check their L5 margin of victory in RECENT_FORM.`
+        // CLAUDE.md: Awareness prompts, not decisions
+        CONTEXT_WARNING: `This is SEASON-LONG data. A team's current form may differ significantly.`,
+        INVESTIGATE: `Cross-reference with RECENT_FORM: Is this team playing BETTER or WORSE than their season average lately? A +5.0 Net Rating team that's been -2.0 in L5 is NOT playing like a +5.0 team right now.`,
+        // NEW: Usage concentration guidance (awareness, not rules)
+        USAGE_AWARENESS: `Notice the usage_concentration for each team. "star-heavy" teams (top 2 control 55%+) are MORE affected by star injuries/rest. "balanced" teams maintain production when a player is out. Investigate: If a key player is out, how does this team's structure handle it?`,
+        // NEW: Scoring profile guidance (awareness, not rules)
+        SCORING_PROFILE_AWARENESS: `Notice where each team scores (scoring_profile). High paint % = vulnerable to rim protection. High 3pt % = vulnerable to perimeter D. Investigate: Does THIS opponent's defense match up well or poorly against this scoring style?`
       };
     }
     
@@ -2862,7 +2951,6 @@ const FETCHERS = {
       2. SP+ Offense rating and rank
       3. SP+ Defense rating and rank
       4. SP+ Special Teams rating and rank
-      5. Projected point margin for this specific matchup based on SP+
       
       Ensure ratings are for the ${seasonStr} season.`;
       
@@ -2929,8 +3017,7 @@ const FETCHERS = {
       1. FPI rating (e.g., +15.2) and national rank
       2. Offensive efficiency rating and rank
       3. Defensive efficiency rating and rank
-      4. FPI Projected Win Probability for this specific matchup
-      5. FPI Projected point spread for this matchup
+      4. FPI Projected Win Probability for this specific matchup (percentage only)
       
       FPI is ESPN's predictive rating system for the ${seasonStr} season.`;
       
@@ -2953,14 +3040,13 @@ const FETCHERS = {
         };
       };
       
-      // Extract win probability
+      // Extract win probability (not spread - we don't want to show Gary a predicted margin)
       const winProbMatch = content.match(/(\d{1,2}(?:\.\d)?)\s*%?\s*(?:win|probability|chance)/i);
-      const spreadMatch = content.match(/(?:spread|line)[^\d]*([+-]?\d+\.?\d*)/i);
-      
+
       return {
         category: 'ESPN FPI (Football Power Index)',
         source: 'ESPN via Gemini Grounding',
-        predicted_spread: spreadMatch ? spreadMatch[1] : 'N/A',
+        win_probability: winProbMatch ? `${winProbMatch[1]}%` : 'N/A',
         home: {
           team: homeTeamName,
           ...extractFPI(content, homeTeamName)

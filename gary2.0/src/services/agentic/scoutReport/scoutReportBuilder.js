@@ -1079,16 +1079,23 @@ Return ONLY the 5 player names in the Expected Lineup for ${teamName}. Format: N
           }
         }
         
-        // Track key players who are confirmed OUT/OFS - Gary should INVESTIGATE the impact
-        // These don't trigger a pass, but Gary needs to analyze how team adjusts
+        // Track key players who are confirmed OUT/OFS - but ONLY for RECENT injuries (< 10 days)
+        // Older injuries are already priced in and reflected in team stats
+        // Gary gets injury context from the formatted injury section with duration tags
         if (isKeyPlayer && isNonRiskyStatus) {
           const statusLower = status.toLowerCase();
-          const isRecentOut = statusLower.includes('out') || statusLower.includes('ofs') || statusLower.includes('ir');
+          const isOutStatus = statusLower.includes('out') || statusLower.includes('ofs') || statusLower.includes('ir');
 
-          if (isRecentOut) {
-            // Add to investigation flags - Gary should analyze the impact
+          // Only flag as "KEY PLAYER OUT" if it's a RECENT injury (within 10 days)
+          // Older injuries are already baked into team performance - not newsworthy
+          const daysSinceOut = injury.daysSinceReport;
+          const isRecentInjury = daysSinceOut !== null && daysSinceOut !== undefined && daysSinceOut <= 10;
+          const durationUnknown = daysSinceOut === null || daysSinceOut === undefined;
+
+          if (isOutStatus && isRecentInjury) {
+            // RECENT key player out - this is worth flagging
             const playerName = `${injury.player?.first_name} ${injury.player?.last_name}`;
-            const injuryNote = injury.return_date ? `since ${injury.return_date}` : (injury.comment || '');
+            const injuryNote = injury.reportDateStr ? `since ${injury.reportDateStr} (${daysSinceOut}d ago)` : '';
 
             keyPlayerOutFlags.push({
               player: playerName,
@@ -1097,7 +1104,15 @@ Return ONLY the 5 player names in the Expected Lineup for ${teamName}. Format: N
               note: injuryNote
             });
 
-            console.log(`[Scout Report] ⚠️ KEY PLAYER OUT for ${teamName}: ${playerName} (${injury.status}) - INVESTIGATE IMPACT (who absorbs usage? how has team adjusted?)`);
+            console.log(`[Scout Report] ⚠️ KEY PLAYER RECENTLY OUT for ${teamName}: ${playerName} (${injury.status}) - ${daysSinceOut} days - INVESTIGATE IMPACT`);
+          } else if (isOutStatus && durationUnknown) {
+            // Duration unknown - log for monitoring but don't flag (injury section shows this)
+            const playerName = `${injury.player?.first_name} ${injury.player?.last_name}`;
+            console.log(`[Scout Report] Key player OUT (duration unknown) for ${teamName}: ${playerName} (${injury.status}) - Gary will see in injury section`);
+          } else if (isOutStatus) {
+            // Older injury (> 10 days) - team has adapted, not worth flagging
+            const playerName = `${injury.player?.first_name} ${injury.player?.last_name}`;
+            console.log(`[Scout Report] Key player OUT (${daysSinceOut}d - priced in) for ${teamName}: ${playerName} (${injury.status})`);
           } else {
             console.log(`[Scout Report] Key player CONFIRMED/LIKELY PLAYING for ${teamName}: ${injury.player?.first_name} ${injury.player?.last_name} (${injury.status})`);
           }
@@ -3344,19 +3359,22 @@ Look at the INJURIES section listed under the ${teamName} lineup card on that pa
 
 Return in this EXACT format:
 INJURIES - ${teamName}:
-- [Full Name] | [Position] | [Status]
+- [Full Name] | [Position] | [Status] | [since Month Day] or [missed X games]
 
 Example format:
-- Marcus Johansson | LW | OUT
-- Jonas Brodin | D | IR
-- Matt Boldy | LW | IR
+- Marcus Johansson | LW | OUT | since Jan 5
+- Jonas Brodin | D | IR | missed 12 games
+- Matt Boldy | LW | IR | since Dec 18
 
 RULES:
 1. List ALL players shown in the INJURIES section for ${teamName} on that page
 2. Use FULL player names (Marcus Johansson, not M. Johansson)
 3. Use the EXACT status shown: OUT, IR, IR-LT, IR-NR, or DTD
-4. If no injuries are listed, return "INJURIES - ${teamName}: None"
-5. Do NOT add players that aren't listed on the page`;
+4. For DURATION, include how long the player has been out:
+   - "since [Month] [Day]" format (e.g., "since Dec 18", "since January 5")
+   - OR "missed [X] games" format (e.g., "missed 5 games")
+5. If no injuries are listed, return "INJURIES - ${teamName}: None"
+6. Do NOT add players that aren't listed on the page`;
 
       const [awayResponse, homeResponse] = await Promise.all([
         geminiGroundingSearch(makeNhlInjuryQuery(awayTeam, homeTeam), { temperature: 0.3, maxTokens: 1500 }),
@@ -3407,26 +3425,33 @@ CRITICAL: Get the EXACT injury statuses from RotoWire's lineup page:
 
 1. STARTING LINEUPS - For EACH team, list the starting 5:
    - PG: [Name]
-   - SG: [Name] 
+   - SG: [Name]
    - SF: [Name]
    - PF: [Name]
    - C: [Name]
-   
+
 2. INJURIES - Use EXACT statuses from RotoWire:
    - "GTD" = Game Time Decision (CRITICAL - means uncertain if playing)
    - "Out" = Confirmed out
    - "OFS" = Out For Season
-   
-   Format each injury as: "[Name] ([Position]) - [EXACT STATUS: GTD/Out/OFS]"
-   
+
+   Format each injury as: "[Name] ([Position]) - [EXACT STATUS: GTD/Out/OFS] - [since Month Day] or [missed X games]"
+
    ${awayTeam} INJURIES:
    ${homeTeam} INJURIES:
+
+DURATION FORMAT (REQUIRED):
+- Include how long the player has been out
+- Use "since [Month] [Day]" format (e.g., "since Dec 18", "since January 5")
+- OR "missed [X] games" format (e.g., "missed 5 games")
 
 PRESERVE THE EXACT GTD STATUS - Do NOT convert GTD to "Questionable" or "Out"
 A player marked GTD on RotoWire means game-time decision - report it as "GTD"
 
-Be factual. List injuries with EXACT RotoWire statuses.`;
+Be factual. List injuries with EXACT RotoWire statuses and duration.`;
     } else if (sport === 'NFL' || sport === 'americanfootball_nfl') {
+      // NFL uses official injury reports - this is a placeholder
+      query = `Search for ${awayTeam} vs ${homeTeam} NFL injury report ${today}. List all injured players with status and duration.`;
     } else if (sport === 'NCAAF' || sport === 'americanfootball_ncaaf') {
       query = `For the college football game ${awayTeam} @ ${homeTeam} on ${today} (2025-26 Bowl Season):
 
@@ -3435,6 +3460,7 @@ Be factual. List injuries with EXACT RotoWire statuses.`;
    - Include player name, position, and impact (e.g., "Starting LT", "Leading Tackler").
    - MUST IDENTIFY: NFL Draft Opt-outs, Transfer Portal entries, and Academically Ineligible players.
    - For bowl games, distinguish between "Regular Season Starters" and "Bowl Game Starters".
+   - For DURATION, include "since [Month] [Day]" or "missed [X] games" when available.
 
 2. QB SITUATION: 
    - Who is the confirmed starting QB for each team? 
@@ -3476,10 +3502,10 @@ Return the MAY NOT PLAY section with EXACT status abbreviations as shown on Roto
 - "GTD" = Game Time Decision
 
 MAY NOT PLAY - ${awayTeam}:
-- [Player Name] | [EXACT status: Out/Prob/Doubt/Ques/OFS/GTD] | [Duration if known]
+- [Player Name] | [EXACT status: Out/Prob/Doubt/Ques/OFS/GTD] | [since Month Day] or [missed X games] or [X consecutive games]
 
 MAY NOT PLAY - ${homeTeam}:
-- [Player Name] | [EXACT status: Out/Prob/Doubt/Ques/OFS/GTD] | [Duration if known]
+- [Player Name] | [EXACT status: Out/Prob/Doubt/Ques/OFS/GTD] | [since Month Day] or [missed X games] or [X consecutive games]
 
 EXPECTED STARTING LINEUPS:
 ${awayTeam}: PG [Name], SG [Name], SF [Name], PF [Name], C [Name]
@@ -3488,7 +3514,11 @@ ${homeTeam}: PG [Name], SG [Name], SF [Name], PF [Name], C [Name]
 CRITICAL:
 1. Copy the EXACT status abbreviation shown on Rotowire (Prob, Doubt, Ques, Out, OFS, GTD)
 2. Do NOT convert statuses - "Doubt" stays "Doubt", "Prob" stays "Prob"
-3. Include duration/injury date if shown`;
+3. For DURATION, use one of these formats:
+   - "since [Month] [Day]" (e.g., "since Dec 18", "since January 5")
+   - "missed [X] games" (e.g., "missed 5 games")
+   - "[X] consecutive games" (e.g., "10 consecutive games")
+4. Search for when the player was FIRST reported injured/out`;
 
     } else {
       query = `Current injuries for ${sport} game ${awayTeam} vs ${homeTeam} as of ${today}. List all players OUT, DOUBTFUL, or QUESTIONABLE with their status and injury type.`;
@@ -4474,7 +4504,7 @@ function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey) {
     } else if (i.duration === 'MID-SEASON') {
       durationTag = ` [MID-SEASON${timeInfo} - LIKELY PRICED IN]`;
     } else if (i.duration === 'RECENT' || i.isEdge === true) {
-      durationTag = ` [RECENT${timeInfo} - POSSIBLE EDGE]`;
+      durationTag = ` [RECENT${timeInfo} - investigate impact]`;
     } else if (i.duration === 'UNKNOWN') {
       durationTag = ` [DATE UNKNOWN - verify freshness before citing as edge]`;
     }

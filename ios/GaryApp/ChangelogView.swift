@@ -53,6 +53,19 @@ struct ChangelogEntry: Identifiable {
 
 let changelogEntries: [ChangelogEntry] = [
     ChangelogEntry(
+        version: "1.9.7",
+        date: "January 22, 2026",
+        type: .feature,
+        title: "Sportsbook Odds Comparison",
+        changes: [
+            "Compare odds across multiple sportsbooks (DraftKings, FanDuel, Caesars, BetMGM, etc.)",
+            "Find the best price for Gary's picks with one tap",
+            "Best odds highlighted in green for easy identification",
+            "Migrated from The Odds API to Ball Don't Lie for faster, more reliable data",
+            "Sport-specific sportsbook support for NBA, NFL, NHL, and college sports"
+        ]
+    ),
+    ChangelogEntry(
         version: "1.9.1",
         date: "December 23, 2025",
         type: .improvement,

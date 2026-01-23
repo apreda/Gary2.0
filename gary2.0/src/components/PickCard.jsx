@@ -1,4 +1,5 @@
 import React from 'react';
+import { SportsbookOdds } from './SportsbookOdds';
 
 export function PickCard({ pick, isFlipped, toggleFlip, isMobile, userDecision, handleDecision, processing, formatPropType, getTeamNickname }) {
   // Default implementations for prop-specific functions
@@ -25,10 +26,21 @@ export function PickCard({ pick, isFlipped, toggleFlip, isMobile, userDecision, 
           {/* Front */}
           <div style={{ position: 'absolute', width: '100%', height: '100%', backfaceVisibility: 'hidden', background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)', borderRadius: isMobile ? '12px' : '16px', fontFamily: 'Inter, system-ui, sans-serif', overflow: 'hidden', boxShadow: '0 10px 25px rgba(0, 0, 0, 0.4)', color: '#ffffff' }}>
             {isMobile ? (
-              <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: '1.5rem', textAlign: 'center', height: '100%' }}>
-                <div style={{ fontSize: '1.75rem', fontWeight: 700, lineHeight: 1.1, color: '#bfa142', wordBreak: 'break-word', maxHeight: '3rem', overflow: 'hidden', display: '-webkit-box', 'WebkitLineClamp': 2, 'WebkitBoxOrient': 'vertical', marginBottom: '1.25rem' }}>
-                  {pick.pick ? pick.pick.replace(/([-+]\d+)$/, '').trim() : 'MISSING PICK'}
+              <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', padding: '1rem', height: 'calc(100% - 60px)', overflow: 'auto' }}>
+                <div style={{ textAlign: 'center', marginBottom: '0.5rem' }}>
+                  <div style={{ fontSize: '1.5rem', fontWeight: 700, lineHeight: 1.1, color: '#bfa142', wordBreak: 'break-word' }}>
+                    {pick.pick ? pick.pick.replace(/([-+]\d+)$/, '').trim() : 'MISSING PICK'}
+                  </div>
                 </div>
+                {/* Sportsbook Odds Comparison */}
+                {pick.sportsbook_odds && pick.sportsbook_odds.length > 0 && (
+                  <SportsbookOdds
+                    oddsData={pick.sportsbook_odds}
+                    pickTeam={pick.pick}
+                    betType={pick.bet_type}
+                    isMobile={true}
+                  />
+                )}
               </div>
             ) : (
               <div style={{ height: '100%', padding: '1.25rem', display: 'flex', flexDirection: 'column', position: 'relative' }}>
@@ -37,13 +49,23 @@ export function PickCard({ pick, isFlipped, toggleFlip, isMobile, userDecision, 
                   <div style={{ width: '35%' }}><div style={{ fontSize: '0.7rem', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Game</div><div style={{ fontSize: '0.9rem', fontWeight: 600, lineHeight: 1.2 }}>{pick.game || 'TBD'}</div></div>
                   <div style={{ width: '30%' }}><div style={{ fontSize: '0.7rem', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Time</div><div style={{ fontSize: '0.9rem', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{pick.time || 'TBD'}</div></div>
                 </div>
-                <div style={{ padding: '0.5rem 0', borderTop: '1px solid rgba(255,255,255,0.1)', borderBottom: '1px solid rgba(255,255,255,0.1)', marginBottom: '0.75rem', minHeight: '80px' }}>
+                <div style={{ padding: '0.5rem 0', borderTop: '1px solid rgba(255,255,255,0.1)', borderBottom: '1px solid rgba(255,255,255,0.1)', marginBottom: '0.5rem' }}>
                   <div style={{ fontSize: '0.7rem', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>Gary's Pick</div>
                   <div style={{ fontSize: '1.15rem', fontWeight: 700, lineHeight: 1.2, color: '#bfa142', wordWrap: 'break-word', wordBreak: 'break-word' }}>
                     {pick.player ? `${pick.player} to ${formatProp(pick.prop_type)}` : (pick.pick ? pick.pick.replace(/([-+]\d+)$/, '').trim() : 'MISSING PICK')}
                   </div>
                 </div>
-                {/* Add more desktop front content as in original */}
+                {/* Sportsbook Odds Comparison */}
+                {pick.sportsbook_odds && pick.sportsbook_odds.length > 0 && (
+                  <div style={{ flex: 1, overflow: 'auto' }}>
+                    <SportsbookOdds
+                      oddsData={pick.sportsbook_odds}
+                      pickTeam={pick.pick}
+                      betType={pick.bet_type}
+                      isMobile={false}
+                    />
+                  </div>
+                )}
               </div>
             )}
             {/* Decision buttons */}

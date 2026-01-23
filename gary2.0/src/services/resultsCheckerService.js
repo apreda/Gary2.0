@@ -170,14 +170,14 @@ export const resultsCheckerService = {
     console.log(`Fetching final score for ${league} game: ${awayTeam} @ ${homeTeam} on ${date}`);
     
     try {
-      // 1. Try The Odds API via the shared oddsService helper
+      // 1. Try Ball Don't Lie via the shared oddsService helper
       try {
         const completedGames = await oddsService.getCompletedGamesByDate(league, date);
         if (Array.isArray(completedGames) && completedGames.length > 0) {
           const normalize = (team) => (team || '').toLowerCase().replace(/[^a-z0-9]/g, '');
           const normalizedHome = normalize(homeTeam);
           const normalizedAway = normalize(awayTeam);
-          
+
           const matchedGame = completedGames.find(game => {
             const gameHome = normalize(game.home_team);
             const gameAway = normalize(game.away_team);
@@ -186,22 +186,23 @@ export const resultsCheckerService = {
               (gameAway.includes(normalizedAway) || normalizedAway.includes(gameAway))
             );
           });
-          
+
           if (matchedGame) {
             const homeScore = Number(matchedGame.scores?.home ?? 0);
             const awayScore = Number(matchedGame.scores?.away ?? 0);
-            
+
+            console.log(`Found score from BDL: ${awayTeam} ${awayScore}, ${homeTeam} ${homeScore}`);
             return {
               homeScore,
               awayScore,
               winner: homeScore > awayScore ? homeTeam : awayTeam,
               final_score: `${homeScore}-${awayScore}`,
-              source: 'TheOddsAPI'
+              source: 'BallDontLie'
             };
           }
         }
       } catch (oddsError) {
-        console.error('Odds API helper error:', oddsError);
+        console.error('BDL scores helper error:', oddsError);
       }
       
       // 2. Try Ball Don't Lie for NBA games
@@ -232,8 +233,8 @@ export const resultsCheckerService = {
         }
       }
       
-      // Using only Odds API and BDL for scores
-      console.log(`Could not find score for ${league} game: ${awayTeam} @ ${homeTeam} from Odds API or BDL`);
+      // Using Ball Don't Lie for scores
+      console.log(`Could not find score for ${league} game: ${awayTeam} @ ${homeTeam} from BDL`);
       return null;
     } catch (error) {
       console.error(`Error fetching game result: ${error.message}`);
@@ -411,10 +412,10 @@ export const resultsCheckerService = {
       const scores = {};
       let missingGames = [];
 
-      // 1. Try Odds API first
+      // 1. Try Ball Don't Lie scores first
       try {
-        // Use direct method call with proper reference - this now uses Odds API internally
-        const apiScores = await resultsCheckerService.getScoresFromOddsApi(date, picks);
+        // Use direct method call with proper reference - this now uses BDL internally
+        const apiScores = await resultsCheckerService.getScoresFromBDL(date, picks);
         if (apiScores?.success && Object.keys(apiScores.scores || {}).length > 0) {
           Object.assign(scores, apiScores.scores);
           const foundPicks = new Set(Object.keys(scores));
@@ -426,7 +427,7 @@ export const resultsCheckerService = {
           missingGames = [...picks];
         }
       } catch (err) {
-        console.error('Odds API score fetch failed', err);
+        console.error('BDL score fetch failed', err);
         missingGames = [...picks];
       }
 
@@ -468,7 +469,7 @@ export const resultsCheckerService = {
 
       // Log any missing games (no additional fallback available)
       if (missingGames.length > 0) {
-        console.log(`⚠️ Still missing scores for ${missingGames.length} games after Odds API and BDL lookups`);
+        console.log(`⚠️ Still missing scores for ${missingGames.length} games after BDL lookups`);
         missingGames.forEach(pick => {
           console.log(`  - ${pick.pick || pick.originalPick} (${pick.league || 'Unknown'})`);
         });
@@ -501,33 +502,34 @@ export const resultsCheckerService = {
     return `What was the final score of the game between ${awayTeam} and ${homeTeam} on ${formattedMonth} ${formattedDay}, ${year}?`;
   },
 
-  getScoresFromOddsApi: async (date, picks) => {
+  // NOTE: Renamed from getScoresFromOddsApi - now uses Ball Don't Lie via oddsService
+  getScoresFromBDL: async (date, picks) => {
     const scores = {};
-    
-    // Get scores from The Odds API
-    console.log('Getting scores from The Odds API...');
-    let oddsApiScores = {};
-    
+
+    // Get scores from Ball Don't Lie
+    console.log('Getting scores from Ball Don\'t Lie...');
+    let bdlScores = {};
+
     try {
-      // Fetch from The Odds API for supported leagues
+      // Fetch from BDL for supported leagues
       const leagues = ['nba', 'nhl', 'mlb', 'nfl'];
       for (const league of leagues) {
         try {
-          console.log(`Fetching ${league.toUpperCase()} scores from The Odds API for ${date}`);
+          console.log(`Fetching ${league.toUpperCase()} scores from BDL for ${date}`);
           const gameResults = await oddsService.getCompletedGamesByDate(league, date);
-          
+
           if (gameResults && Array.isArray(gameResults)) {
-            console.log(`Found ${gameResults.length} ${league.toUpperCase()} games from The Odds API`);
-            
+            console.log(`Found ${gameResults.length} ${league.toUpperCase()} games from BDL`);
+
             gameResults.forEach(game => {
               if (game.completed) {
                 const homeTeam = game.home_team;
                 const awayTeam = game.away_team;
                 const matchup = `${awayTeam} @ ${homeTeam}`;
-                
+
                 const homeScore = game.scores?.home || 0;
                 const awayScore = game.scores?.away || 0;
-                
+
                 const scoreData = {
                   home_team: homeTeam,
                   away_team: awayTeam,
@@ -535,35 +537,35 @@ export const resultsCheckerService = {
                   away_score: awayScore,
                   league: league.toUpperCase(),
                   final: true,
-                  source: 'TheOddsAPI'
+                  source: 'BallDontLie'
                 };
-                
+
                 // Store by matchup and team names for easier lookup
-                oddsApiScores[matchup] = scoreData;
-                oddsApiScores[homeTeam] = scoreData;
-                oddsApiScores[awayTeam] = scoreData;
-                
+                bdlScores[matchup] = scoreData;
+                bdlScores[homeTeam] = scoreData;
+                bdlScores[awayTeam] = scoreData;
+
                 // Also store normalized team names (lowercase)
-                oddsApiScores[homeTeam.toLowerCase()] = scoreData;
-                oddsApiScores[awayTeam.toLowerCase()] = scoreData;
+                bdlScores[homeTeam.toLowerCase()] = scoreData;
+                bdlScores[awayTeam.toLowerCase()] = scoreData;
               }
             });
           }
         } catch (leagueError) {
-          console.warn(`Error fetching ${league.toUpperCase()} scores from The Odds API:`, leagueError);
+          console.warn(`Error fetching ${league.toUpperCase()} scores from BDL:`, leagueError);
         }
       }
-      
-      if (Object.keys(oddsApiScores).length > 0) {
-        console.log(`Found ${Object.keys(oddsApiScores).length} total game entries from The Odds API`);
+
+      if (Object.keys(bdlScores).length > 0) {
+        console.log(`Found ${Object.keys(bdlScores).length} total game entries from BDL`);
       } else {
-        console.log('No games found from The Odds API');
+        console.log('No games found from BDL');
       }
-    } catch (oddsApiError) {
-      console.error('Error fetching from The Odds API:', oddsApiError.message);
+    } catch (bdlError) {
+      console.error('Error fetching from BDL:', bdlError.message);
     }
 
-    // Process each pick and match to Odds API scores
+    // Process each pick and match to BDL scores
     for (const pick of picks) {
       const pickText = pick.pick || '';
       const league = pick.league || 'NHL';
@@ -574,19 +576,19 @@ export const resultsCheckerService = {
         const homeTeam = teams[1].trim();
         const awayTeam = teams[0].trim();
         const matchupKey = `${awayTeam} @ ${homeTeam}`;
-        
-        // Try to find in oddsApiScores
-        if (oddsApiScores[matchupKey]) {
-          scores[pickText] = oddsApiScores[matchupKey];
+
+        // Try to find in bdlScores
+        if (bdlScores[matchupKey]) {
+          scores[pickText] = bdlScores[matchupKey];
           console.log(`Found score for ${matchupKey}`);
-        } else if (oddsApiScores[homeTeam]) {
-          scores[pickText] = oddsApiScores[homeTeam];
+        } else if (bdlScores[homeTeam]) {
+          scores[pickText] = bdlScores[homeTeam];
           console.log(`Found score by home team: ${homeTeam}`);
-        } else if (oddsApiScores[awayTeam]) {
-          scores[pickText] = oddsApiScores[awayTeam];
+        } else if (bdlScores[awayTeam]) {
+          scores[pickText] = bdlScores[awayTeam];
           console.log(`Found score by away team: ${awayTeam}`);
         } else {
-          console.log(`No score found for ${matchupKey} in Odds API data`);
+          console.log(`No score found for ${matchupKey} in BDL data`);
         }
       } else {
         // Extract team name from formatted pick
@@ -599,20 +601,20 @@ export const resultsCheckerService = {
           .trim();
           
         // Try to match team name
-        if (oddsApiScores[teamName]) {
-          scores[pickText] = oddsApiScores[teamName];
+        if (bdlScores[teamName]) {
+          scores[pickText] = bdlScores[teamName];
           console.log(`Found score for ${teamName}`);
-        } else if (oddsApiScores[teamName.toLowerCase()]) {
-          scores[pickText] = oddsApiScores[teamName.toLowerCase()];
+        } else if (bdlScores[teamName.toLowerCase()]) {
+          scores[pickText] = bdlScores[teamName.toLowerCase()];
           console.log(`Found score for ${teamName} (normalized)`);
         } else {
           // Try partial match
-          const matchingKey = Object.keys(oddsApiScores).find(key => 
+          const matchingKey = Object.keys(bdlScores).find(key => 
             key.toLowerCase().includes(teamName.toLowerCase()) ||
             teamName.toLowerCase().includes(key.toLowerCase())
           );
           if (matchingKey) {
-            scores[pickText] = oddsApiScores[matchingKey];
+            scores[pickText] = bdlScores[matchingKey];
             console.log(`Found score for ${teamName} via partial match: ${matchingKey}`);
           } else {
             console.log(`No score found for ${teamName}`);
