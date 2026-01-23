@@ -1,10 +1,10 @@
 name: Daily Results Check
 
-# Runs at 5am EST (10:00 UTC standard time, 9:00 UTC during DST)
+# Runs at 4am EST (9:00 UTC standard time, 8:00 UTC during DST)
 # Adjust cron if daylight saving time matters
 on:
   schedule:
-    - cron: '0 10 * * *'  # 5am EST (standard time)
+    - cron: '0 9 * * *'  # 4am EST (standard time)
   workflow_dispatch:  # Allow manual trigger
 
 jobs:
