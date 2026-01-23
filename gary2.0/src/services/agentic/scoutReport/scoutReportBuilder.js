@@ -3719,9 +3719,11 @@ function parseGroundingInjuries(content, homeTeam, awayTeam, sport = '') {
 
       const patterns = [
         // Rotowire format: Position Initial. LastName Status (e.g., "C S. Adams Out", "G F. VanVleet Out")
-        /^[PGCSF]+\s+([A-Z]\.\s*[A-Z][a-z'.-]+)\s+(Out|Ques|Questionable|Prob|Probable|Doubt|Doubtful|GTD|OFS|IR|LTIR)\b/i,
+        /[PGCSF]+\s+([A-Z]\.\s*[A-Z][a-z'.-]+)\s+(Out|Ques|Questionable|Prob|Probable|Doubt|Doubtful|GTD|OFS|IR|LTIR)\b/i,
         // Rotowire format with full position: PG/SG/SF/PF/C Initial. LastName Status
-        /^(?:PG|SG|SF|PF|C|G|F)\s+([A-Z]\.\s*[A-Z][a-z'.-]+(?:\s+[A-Z][a-z'.-]+)?)\s+(Out|Ques|Questionable|Prob|Probable|Doubt|Doubtful|GTD|OFS|IR|LTIR)\b/i,
+        /(?:PG|SG|SF|PF|C|G|F)\s+([A-Z]\.\s*[A-Z][a-z'.-]+(?:\s+[A-Z][a-z'.-]+)?)\s+(Out|Ques|Questionable|Prob|Probable|Doubt|Doubtful|GTD|OFS|IR|LTIR)\b/i,
+        // Full name with position in parens: Steven Adams (C) - Out
+        /([A-Z][a-z'.-]+(?:\s+[A-Z][a-z'.-]+)+)\s*\([PGCSF]+\)\s*[-–:]\s*(Out|Ques|Questionable|Prob|Probable|Doubt|Doubtful|GTD|OFS|IR|LTIR)\b/i,
         // Triple Pipe (New): - Name | Status | Duration
         /[-•*]\s*([A-Z][a-z'.-]+(?:\s+[A-Z][a-z'.-]+)+)\s*\|\s*(Out|Ques|Questionable|Prob|Probable|Doubt|Doubtful|GTD|OFS|IR|LTIR)\s*\|\s*([^|\n]+)/i,
         // Standard: - Name (Pos) - Status
@@ -3737,11 +3739,13 @@ function parseGroundingInjuries(content, homeTeam, awayTeam, sport = '') {
         // Markdown style: Name - Status (reason)
         /([A-Z][a-z'.-]+(?:\s+[A-Z][a-z'.-]+)+)\s*[-–]\s*(Out|Ques|Questionable|Prob|Probable|Doubt|Doubtful|GTD|OFS|IR|LTIR)\b/i,
         // Simple: Initial. LastName Status (no position prefix)
-        /([A-Z]\.\s*[A-Z][a-z'.-]+)\s+(Out|Ques|Questionable|Prob|Probable|Doubt|Doubtful|GTD|OFS|IR|LTIR)\b/i
+        /([A-Z]\.\s*[A-Z][a-z'.-]+)\s+(Out|Ques|Questionable|Prob|Probable|Doubt|Doubtful|GTD|OFS|IR|LTIR)\b/i,
+        // "Name is out" format
+        /([A-Z][a-z'.-]+(?:\s+[A-Z][a-z'.-]+)+)\s+is\s+(out|questionable|probable|doubtful)\b/i
       ];
 
       for (const pattern of patterns) {
-        const match = line.match(pattern);
+        const match = cleanLine.match(pattern);
         if (match) {
           // Special handling for triple pipe to capture duration context
           if (pattern.source.includes('\\|\\s*([^|\\n]+)')) {
