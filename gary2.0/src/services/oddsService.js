@@ -810,17 +810,36 @@ export const oddsService = {
         return [];
       }
 
-      // Filter out games that are not within the strict EST window (if not NFL)
-      // User request: "only get games happening in the next 16 hours... never do anything that is tomorrow"
-      // We rely on 'dates' being strictly today's date string for BDL, but let's ensure we don't include late-night games that spill over if not desired.
-      // Actually, the user said "happening in the next 16 hours... never do anything that is tomorrow".
-      // Since we query by date=TODAY, we should only get today's games.
-      // But let's double check the game times against the window if needed.
-      // For now, just deduplication.
+      // Filter games to only include TODAY's games in EST
+      // We fetched both today AND tomorrow (for UTC drift handling), but we must filter out tomorrow's games
+      const estFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' });
+      const todayEstStr = estFormatter.format(new Date());
 
+      // Filter: game must be scheduled for TODAY in EST
+      // Game datetime in UTC, convert to EST date and compare
+      const todayGames = combined.filter(g => {
+        if (!g || !g.commence_time) return false;
+
+        try {
+          const gameDate = new Date(g.commence_time);
+          const gameEstDate = estFormatter.format(gameDate);
+
+          const isToday = gameEstDate === todayEstStr;
+          if (!isToday) {
+            console.log(`[Odds Service] Filtering out game ${g.away_team} @ ${g.home_team} - scheduled for ${gameEstDate}, not today (${todayEstStr})`);
+          }
+          return isToday;
+        } catch {
+          return true; // Keep if we can't parse
+        }
+      });
+
+      console.log(`[Odds Service] ${sport}: Filtered to ${todayGames.length} games for today (${todayEstStr}) from ${combined.length} total`);
+
+      // Deduplicate
       const seen = new Set();
       const unique = [];
-      for (const g of combined) {
+      for (const g of todayGames) {
         if (!g || g.id == null) continue;
         if (seen.has(g.id)) continue;
         seen.add(g.id);
