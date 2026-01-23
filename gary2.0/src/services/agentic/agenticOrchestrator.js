@@ -3406,6 +3406,26 @@ CRITICAL CONSTRAINTS (Gemini 3 prioritizes these):
     - DO NOT use "case_grades" format - use "case_summaries" format ONLY
     - Case summaries contain TEXT descriptions (core_argument, key_factors), NOT numerical scores
     - Your decision comes from conviction based on analysis, not comparing numbers
+
+14. USE ACTUAL TEAM NAMES (ABSOLUTE - RATIONALE FORMAT):
+    - ALWAYS use the actual team names: "Detroit Pistons", "Houston Rockets"
+    - NEVER use generic terms: "the home team", "the away team", "the favorite", "the underdog"
+    - Your rationale should read like a sports analyst who knows the teams, not a template
+    - WRONG: "The home team has a rest advantage over the away team"
+    - RIGHT: "Detroit has been resting for two days while Houston played last night"
+
+15. RECORDS ARE DESCRIPTIVE, NOT PREDICTIVE (CRITICAL):
+    - Records (17-4 at home, 11-13 on the road) describe what happened - they don't predict tonight
+    - If you cite a record, you MUST explain WHY with actual stats: What were the margins? Who did they play?
+    - WRONG: "Detroit is 17-4 at home so they'll cover"
+    - RIGHT: "Detroit's 17-4 home record is backed by a +5.7 Net Rating at home, holding opponents to 107.6 Def Rating"
+    - A team that went 15-5 losing all 5 by 3 points covered most spreads - investigate the MARGINS
+
+16. "SCHEDULE SPOT" / "TEXTBOOK SPOT" IS NOT AN ARGUMENT:
+    - Never use phrases like "textbook schedule spot" or "classic letdown spot" as primary reasoning
+    - These are narrative crutches that bypass actual analysis
+    - If you believe rest/travel matters, PROVE IT with data: "Houston shot 31% from 3PT on their last 3 B2Bs vs 38% rested"
+    - The market prices in schedule factors. To use them, show specific data proving THIS team is affected.
 </negative_constraints>
 
 BEGIN YOUR ANALYSIS NOW.
