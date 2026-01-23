@@ -48,6 +48,26 @@ struct WeeklyNFLPicksRow: Decodable {
     let picks: PicksValue<GaryPick>?
 }
 
+// MARK: - Sportsbook Odds (multi-book comparison)
+struct SportsbookOdds: Codable, Identifiable {
+    let book: String?
+    let spread: Double?
+    let spread_odds: String?
+    let ml: String?
+
+    var id: String { book ?? UUID().uuidString }
+
+    /// Parse from dictionary
+    static func from(dict: [String: Any]) -> SportsbookOdds? {
+        return SportsbookOdds(
+            book: dict["book"] as? String,
+            spread: (dict["spread"] as? NSNumber)?.doubleValue,
+            spread_odds: dict["spread_odds"] as? String,
+            ml: dict["ml"] as? String
+        )
+    }
+}
+
 // MARK: - Pick Models
 
 struct GaryPick: Identifiable, Codable {
@@ -81,7 +101,9 @@ struct GaryPick: Identifiable, Codable {
     let contradicting_factors: ContradictingFactors?
     // Manual Top Pick override
     let is_top_pick: Bool?
-    
+    // Multi-sportsbook odds comparison (ML + Spread)
+    let sportsbook_odds: [SportsbookOdds]?
+
 // MARK: - Contradicting Factors (major/minor categorization)
 struct ContradictingFactors: Codable {
     let major: [String]?
@@ -161,7 +183,13 @@ struct ContradictingFactors: Codable {
         if let injuriesRaw = dict["injuries"] as? [String: Any] {
             injuriesData = TeamInjuries.from(dict: injuriesRaw)
         }
-        
+
+        // Parse sportsbook odds
+        var sportsbookOddsArray: [SportsbookOdds]? = nil
+        if let oddsRaw = dict["sportsbook_odds"] as? [[String: Any]] {
+            sportsbookOddsArray = oddsRaw.compactMap { SportsbookOdds.from(dict: $0) }
+        }
+
         return GaryPick(
             pick_id: dict["pick_id"] as? String,
             pick: dict["pick"] as? String,
@@ -188,7 +216,8 @@ struct ContradictingFactors: Codable {
             thesis_mechanism: dict["thesis_mechanism"] as? String,
             supporting_factors: dict["supporting_factors"] as? [String],
             contradicting_factors: ContradictingFactors.from(value: dict["contradicting_factors"]),
-            is_top_pick: dict["is_top_pick"] as? Bool
+            is_top_pick: dict["is_top_pick"] as? Bool,
+            sportsbook_odds: sportsbookOddsArray
         )
     }
 }

@@ -746,37 +746,84 @@ async function handlePropsToolCall(toolCall, sportKey, sportLabel) {
         return { error: `Player "${args.player_name}" not found in ${sportLabel}` };
       }
 
-      // NBA-specific season stats
+      // NBA-specific season stats - Enhanced with BDL v2 advanced stats
       if (isNBA) {
         const currentMonth = new Date().getMonth() + 1;
         const currentYear = new Date().getFullYear();
         // NBA season starts in October: Oct(10)-Dec = currentYear, Jan-Sep = previousYear
         const season = currentMonth >= 10 ? currentYear : currentYear - 1;
-        const seasonStats = await ballDontLieService.getNbaSeasonAverages({
-          category: 'general',
-          type: 'base',
-          season,
-          player_ids: [player.id]
-        });
-        const stats = seasonStats?.[0]?.stats;
-        
+
+        // Fetch base, usage, advanced, and scoring stats in parallel (BDL v2)
+        const [baseStatsResp, usageStatsResp, advancedStatsResp, scoringStatsResp] = await Promise.all([
+          ballDontLieService.getNbaSeasonAverages({
+            category: 'general',
+            type: 'base',
+            season,
+            player_ids: [player.id]
+          }),
+          ballDontLieService.getNbaSeasonAverages({
+            category: 'general',
+            type: 'usage',
+            season,
+            player_ids: [player.id]
+          }),
+          ballDontLieService.getNbaSeasonAverages({
+            category: 'general',
+            type: 'advanced',
+            season,
+            player_ids: [player.id]
+          }),
+          ballDontLieService.getNbaSeasonAverages({
+            category: 'general',
+            type: 'scoring',
+            season,
+            player_ids: [player.id]
+          })
+        ]);
+
+        const baseStats = baseStatsResp?.[0]?.stats;
+        const usageStats = usageStatsResp?.[0]?.stats;
+        const advancedStats = advancedStatsResp?.[0]?.stats;
+        const scoringStats = scoringStatsResp?.[0]?.stats;
+
         return {
           player: args.player_name,
           team: player.team?.full_name,
-          season_stats: stats ? {
-            games_played: stats.gp,
-            ppg: stats.pts,
-            rpg: stats.reb,
-            apg: stats.ast,
-            fg_pct: (stats.fg_pct * 100).toFixed(1) + '%',
-            fg3_pct: (stats.fg3_pct * 100).toFixed(1) + '%',
-            ft_pct: (stats.ft_pct * 100).toFixed(1) + '%',
-            mpg: stats.min,
-            steals: stats.stl,
-            blocks: stats.blk,
-            turnovers: stats.tov,
-            threes_per_game: stats.fg3m
-          } : { message: 'No season stats available' }
+          season_stats: baseStats ? {
+            games_played: baseStats.gp,
+            ppg: baseStats.pts,
+            rpg: baseStats.reb,
+            apg: baseStats.ast,
+            // UPGRADED: TS% and eFG% instead of raw FG%
+            true_shooting_pct: advancedStats?.ts_pct ? (advancedStats.ts_pct * 100).toFixed(1) + '%' : 'N/A',
+            effective_fg_pct: advancedStats?.efg_pct ? (advancedStats.efg_pct * 100).toFixed(1) + '%' : 'N/A',
+            fg3_pct: (baseStats.fg3_pct * 100).toFixed(1) + '%',
+            ft_pct: (baseStats.ft_pct * 100).toFixed(1) + '%',
+            mpg: baseStats.min,
+            steals: baseStats.stl,
+            blocks: baseStats.blk,
+            turnovers: baseStats.tov,
+            threes_per_game: baseStats.fg3m
+          } : { message: 'No season stats available' },
+          // BDL v2 GOLD: Usage and role share metrics
+          usage_stats: usageStats ? {
+            usage_percentage: usageStats.usage_pct ? (usageStats.usage_pct * 100).toFixed(1) + '%' : 'N/A',
+            touches: usageStats.touches,
+            pct_of_team_points: usageStats.pct_pts ? (usageStats.pct_pts * 100).toFixed(1) + '%' : 'N/A',
+            pct_of_team_fga: usageStats.pct_fga ? (usageStats.pct_fga * 100).toFixed(1) + '%' : 'N/A',
+            pct_of_team_rebounds: usageStats.pct_reb ? (usageStats.pct_reb * 100).toFixed(1) + '%' : 'N/A',
+            pct_of_team_assists: usageStats.pct_ast ? (usageStats.pct_ast * 100).toFixed(1) + '%' : 'N/A'
+          } : null,
+          // BDL v2 GOLD: Shot creation & scoring profile
+          scoring_profile: scoringStats ? {
+            pct_unassisted: scoringStats.pct_uast_fgm ? (scoringStats.pct_uast_fgm * 100).toFixed(1) + '%' : 'N/A',
+            pct_assisted: scoringStats.pct_ast_fgm ? (scoringStats.pct_ast_fgm * 100).toFixed(1) + '%' : 'N/A',
+            pct_pts_paint: scoringStats.pct_pts_paint ? (scoringStats.pct_pts_paint * 100).toFixed(1) + '%' : 'N/A',
+            pct_pts_midrange: scoringStats.pct_pts_mid_range_2 ? (scoringStats.pct_pts_mid_range_2 * 100).toFixed(1) + '%' : 'N/A',
+            pct_pts_3pt: scoringStats.pct_pts_3pt ? (scoringStats.pct_pts_3pt * 100).toFixed(1) + '%' : 'N/A',
+            pct_pts_fastbreak: scoringStats.pct_pts_fb ? (scoringStats.pct_pts_fb * 100).toFixed(1) + '%' : 'N/A'
+          } : null,
+          note: 'TS% = true efficiency (includes FTs). Unassisted % = creates own shot (high = reliable volume). Paint % = scoring location.'
         };
       }
 
@@ -864,6 +911,207 @@ async function handlePropsToolCall(toolCall, sportKey, sportLabel) {
       };
     } catch (e) {
       return { error: e.message };
+    }
+  }
+
+  // ============================================================================
+  // FETCH_ADVANCED_PASSING_STATS - NFL BDL v2 Advanced Passing (QB Props)
+  // ============================================================================
+  if (functionName === 'fetch_advanced_passing_stats') {
+    console.log(`  → [ADVANCED_PASSING] ${args.player_name} (NFL)`);
+    try {
+      if (!isNFL) {
+        return { error: `fetch_advanced_passing_stats only supported for NFL` };
+      }
+
+      // Search for player
+      const nameParts = args.player_name.trim().split(' ');
+      const lastName = nameParts[nameParts.length - 1];
+      const playersResp = await ballDontLieService.getPlayersGeneric(sportKey, { search: lastName, per_page: 10 });
+      const players = Array.isArray(playersResp) ? playersResp : playersResp?.data || [];
+
+      const player = players.find(p =>
+        `${p.first_name} ${p.last_name}`.toLowerCase() === args.player_name.toLowerCase()
+      );
+
+      if (!player) {
+        return { error: `Player "${args.player_name}" not found` };
+      }
+
+      // Calculate NFL season
+      const nflMonth = new Date().getMonth() + 1;
+      const nflYear = new Date().getFullYear();
+      const season = nflMonth <= 7 ? nflYear - 1 : nflYear;
+
+      const advancedStats = await ballDontLieService.getNflAdvancedPassingStats({
+        season,
+        player_id: player.id,
+        week: args.week || 0 // 0 = full season
+      });
+
+      if (!advancedStats || advancedStats.length === 0) {
+        return { player: args.player_name, stats: { message: 'No advanced passing stats available' } };
+      }
+
+      const stats = advancedStats[0];
+      return {
+        player: args.player_name,
+        team: player.team?.full_name,
+        advanced_passing: {
+          // Accuracy & Decision Making
+          completion_pct: stats.completion_percentage ? (stats.completion_percentage * 100).toFixed(1) + '%' : 'N/A',
+          completion_pct_above_expected: stats.completion_percentage_above_expectation ? (stats.completion_percentage_above_expectation * 100).toFixed(1) + '%' : 'N/A',
+          aggressiveness: stats.aggressiveness ? (stats.aggressiveness * 100).toFixed(1) + '%' : 'N/A',
+          // Air Yards & Depth
+          avg_air_yards: stats.avg_air_yards_differential,
+          avg_intended_air_yards: stats.avg_intended_air_yards,
+          avg_completed_air_yards: stats.avg_completed_air_yards,
+          // Timing
+          avg_time_to_throw: stats.avg_time_to_throw ? stats.avg_time_to_throw.toFixed(2) + 's' : 'N/A',
+          // Efficiency
+          passer_rating: stats.passer_rating,
+          max_air_distance: stats.max_air_distance,
+          // Volume
+          attempts: stats.attempts,
+          pass_yards: stats.pass_yards
+        },
+        note: 'Completion % above expected = accuracy vs difficulty. Aggressiveness = deep throws. Avg time to throw indicates pocket awareness.'
+      };
+    } catch (e) {
+      console.error(`    ❌ Error:`, e.message);
+      return { error: e.message, player_name: args.player_name };
+    }
+  }
+
+  // ============================================================================
+  // FETCH_ADVANCED_RUSHING_STATS - NFL BDL v2 Advanced Rushing (RB Props)
+  // ============================================================================
+  if (functionName === 'fetch_advanced_rushing_stats') {
+    console.log(`  → [ADVANCED_RUSHING] ${args.player_name} (NFL)`);
+    try {
+      if (!isNFL) {
+        return { error: `fetch_advanced_rushing_stats only supported for NFL` };
+      }
+
+      // Search for player
+      const nameParts = args.player_name.trim().split(' ');
+      const lastName = nameParts[nameParts.length - 1];
+      const playersResp = await ballDontLieService.getPlayersGeneric(sportKey, { search: lastName, per_page: 10 });
+      const players = Array.isArray(playersResp) ? playersResp : playersResp?.data || [];
+
+      const player = players.find(p =>
+        `${p.first_name} ${p.last_name}`.toLowerCase() === args.player_name.toLowerCase()
+      );
+
+      if (!player) {
+        return { error: `Player "${args.player_name}" not found` };
+      }
+
+      // Calculate NFL season
+      const nflMonth = new Date().getMonth() + 1;
+      const nflYear = new Date().getFullYear();
+      const season = nflMonth <= 7 ? nflYear - 1 : nflYear;
+
+      const advancedStats = await ballDontLieService.getNflAdvancedRushingStats({
+        season,
+        player_id: player.id,
+        week: args.week || 0
+      });
+
+      if (!advancedStats || advancedStats.length === 0) {
+        return { player: args.player_name, stats: { message: 'No advanced rushing stats available' } };
+      }
+
+      const stats = advancedStats[0];
+      return {
+        player: args.player_name,
+        team: player.team?.full_name,
+        advanced_rushing: {
+          // Efficiency (GOLD for props)
+          efficiency: stats.efficiency ? stats.efficiency.toFixed(2) : 'N/A',
+          rush_yards_over_expected: stats.rush_yards_over_expected,
+          rush_yards_over_expected_per_att: stats.rush_yards_over_expected_per_att ? stats.rush_yards_over_expected_per_att.toFixed(2) : 'N/A',
+          pct_over_expected: stats.percent_rush_yards_over_expected ? (stats.percent_rush_yards_over_expected * 100).toFixed(1) + '%' : 'N/A',
+          // Speed & Explosiveness
+          avg_time_to_los: stats.avg_time_to_los ? stats.avg_time_to_los.toFixed(2) + 's' : 'N/A',
+          // Box Count (GOLD - shows offensive line + game script)
+          pct_8_plus_box: stats.percent_attempts_gte_eight_defenders ? (stats.percent_attempts_gte_eight_defenders * 100).toFixed(1) + '%' : 'N/A',
+          // Volume
+          rush_attempts: stats.rush_attempts,
+          rush_yards: stats.rush_yards
+        },
+        note: 'Yards over expected = performance vs opportunity. High 8+ box % = stacked boxes = harder rushing. Efficiency = yards per expected yard.'
+      };
+    } catch (e) {
+      console.error(`    ❌ Error:`, e.message);
+      return { error: e.message, player_name: args.player_name };
+    }
+  }
+
+  // ============================================================================
+  // FETCH_ADVANCED_RECEIVING_STATS - NFL BDL v2 Advanced Receiving (WR/TE Props)
+  // ============================================================================
+  if (functionName === 'fetch_advanced_receiving_stats') {
+    console.log(`  → [ADVANCED_RECEIVING] ${args.player_name} (NFL)`);
+    try {
+      if (!isNFL) {
+        return { error: `fetch_advanced_receiving_stats only supported for NFL` };
+      }
+
+      // Search for player
+      const nameParts = args.player_name.trim().split(' ');
+      const lastName = nameParts[nameParts.length - 1];
+      const playersResp = await ballDontLieService.getPlayersGeneric(sportKey, { search: lastName, per_page: 10 });
+      const players = Array.isArray(playersResp) ? playersResp : playersResp?.data || [];
+
+      const player = players.find(p =>
+        `${p.first_name} ${p.last_name}`.toLowerCase() === args.player_name.toLowerCase()
+      );
+
+      if (!player) {
+        return { error: `Player "${args.player_name}" not found` };
+      }
+
+      // Calculate NFL season
+      const nflMonth = new Date().getMonth() + 1;
+      const nflYear = new Date().getFullYear();
+      const season = nflMonth <= 7 ? nflYear - 1 : nflYear;
+
+      const advancedStats = await ballDontLieService.getNflAdvancedReceivingStats({
+        season,
+        player_id: player.id,
+        week: args.week || 0
+      });
+
+      if (!advancedStats || advancedStats.length === 0) {
+        return { player: args.player_name, stats: { message: 'No advanced receiving stats available' } };
+      }
+
+      const stats = advancedStats[0];
+      return {
+        player: args.player_name,
+        team: player.team?.full_name,
+        advanced_receiving: {
+          // Separation & Skill (GOLD for props)
+          avg_separation: stats.avg_separation ? stats.avg_separation.toFixed(2) + ' yds' : 'N/A',
+          avg_cushion: stats.avg_cushion ? stats.avg_cushion.toFixed(2) + ' yds' : 'N/A',
+          catch_percentage: stats.catch_percentage ? (stats.catch_percentage * 100).toFixed(1) + '%' : 'N/A',
+          // YAC (GOLD for yards props)
+          avg_yac: stats.avg_yac ? stats.avg_yac.toFixed(1) : 'N/A',
+          avg_expected_yac: stats.avg_expected_yac ? stats.avg_expected_yac.toFixed(1) : 'N/A',
+          avg_yac_above_expectation: stats.avg_yac_above_expectation ? stats.avg_yac_above_expectation.toFixed(1) : 'N/A',
+          // Target Share (GOLD - role indicator)
+          pct_team_air_yards: stats.percent_share_of_intended_air_yards ? (stats.percent_share_of_intended_air_yards * 100).toFixed(1) + '%' : 'N/A',
+          // Volume
+          targets: stats.targets,
+          receptions: stats.receptions,
+          receiving_yards: stats.receiving_yards
+        },
+        note: 'Separation = getting open. YAC above expected = skill after catch. Target share = role in passing game. High separation + high target share = reliable volume.'
+      };
+    } catch (e) {
+      console.error(`    ❌ Error:`, e.message);
+      return { error: e.message, player_name: args.player_name };
     }
   }
 
@@ -1049,6 +1297,256 @@ async function handlePropsToolCall(toolCall, sportKey, sportLabel) {
       };
     } catch (e) {
       return { error: e.message };
+    }
+  }
+
+  // ============================================================================
+  // FETCH_PLAYER_ADVANCED_STATS - NBA BDL v2 Advanced Stats (PROPS GOLD)
+  // Categories: general, clutch, defense, shooting
+  // Types: base, advanced, usage, scoring, defense, misc, etc.
+  // ============================================================================
+  if (functionName === 'fetch_player_advanced_stats') {
+    console.log(`  → [PLAYER_ADVANCED_STATS] ${args.player_name} (${args.category}/${args.type})`);
+    try {
+      if (!isNBA) {
+        return { error: `fetch_player_advanced_stats only supported for NBA` };
+      }
+
+      // Search for player
+      const nameParts = args.player_name.trim().split(' ');
+      const lastName = nameParts[nameParts.length - 1];
+      const playersResp = await ballDontLieService.getPlayersGeneric(sportKey, { search: lastName, per_page: 10 });
+      const players = Array.isArray(playersResp) ? playersResp : playersResp?.data || [];
+
+      const player = players.find(p =>
+        `${p.first_name} ${p.last_name}`.toLowerCase() === args.player_name.toLowerCase()
+      );
+
+      if (!player) {
+        return { error: `Player "${args.player_name}" not found` };
+      }
+
+      // Calculate NBA season
+      const currentMonth = new Date().getMonth() + 1;
+      const currentYear = new Date().getFullYear();
+      const season = currentMonth >= 10 ? currentYear : currentYear - 1;
+
+      // Fetch advanced stats from BDL v2 API
+      const category = args.category || 'general';
+      const type = args.type || 'advanced';
+
+      const advancedStats = await ballDontLieService.getNbaSeasonAverages({
+        category,
+        type,
+        season,
+        player_ids: [player.id]
+      });
+
+      const playerStats = advancedStats?.[0];
+      if (!playerStats?.stats) {
+        return {
+          player: args.player_name,
+          team: player.team?.full_name,
+          category,
+          type,
+          stats: { message: 'No advanced stats available for this category/type' }
+        };
+      }
+
+      const stats = playerStats.stats;
+
+      // Format response based on category/type - expose the BDL v2 gold fields
+      let formattedStats = {};
+
+      if (category === 'general' && type === 'usage') {
+        // GOLD for Props: Usage and role share metrics
+        formattedStats = {
+          usage_percentage: stats.usage_pct ? (stats.usage_pct * 100).toFixed(1) + '%' : 'N/A',
+          touches: stats.touches,
+          pct_of_team_points: stats.pct_pts ? (stats.pct_pts * 100).toFixed(1) + '%' : 'N/A',
+          pct_of_team_fga: stats.pct_fga ? (stats.pct_fga * 100).toFixed(1) + '%' : 'N/A',
+          pct_of_team_fg3a: stats.pct_fg3a ? (stats.pct_fg3a * 100).toFixed(1) + '%' : 'N/A',
+          pct_of_team_fta: stats.pct_fta ? (stats.pct_fta * 100).toFixed(1) + '%' : 'N/A',
+          pct_of_team_oreb: stats.pct_oreb ? (stats.pct_oreb * 100).toFixed(1) + '%' : 'N/A',
+          pct_of_team_dreb: stats.pct_dreb ? (stats.pct_dreb * 100).toFixed(1) + '%' : 'N/A',
+          pct_of_team_reb: stats.pct_reb ? (stats.pct_reb * 100).toFixed(1) + '%' : 'N/A',
+          pct_of_team_ast: stats.pct_ast ? (stats.pct_ast * 100).toFixed(1) + '%' : 'N/A',
+          pct_of_team_tov: stats.pct_tov ? (stats.pct_tov * 100).toFixed(1) + '%' : 'N/A',
+          pct_of_team_stl: stats.pct_stl ? (stats.pct_stl * 100).toFixed(1) + '%' : 'N/A',
+          pct_of_team_blk: stats.pct_blk ? (stats.pct_blk * 100).toFixed(1) + '%' : 'N/A',
+          games_played: stats.gp
+        };
+      } else if (category === 'general' && type === 'advanced') {
+        // Advanced efficiency metrics
+        formattedStats = {
+          offensive_rating: stats.off_rating || stats.offensive_rating,
+          defensive_rating: stats.def_rating || stats.defensive_rating,
+          net_rating: stats.net_rating,
+          assist_percentage: stats.ast_pct ? (stats.ast_pct * 100).toFixed(1) + '%' : 'N/A',
+          assist_to_turnover: stats.ast_to_tov,
+          assist_ratio: stats.ast_ratio,
+          offensive_rebound_pct: stats.oreb_pct ? (stats.oreb_pct * 100).toFixed(1) + '%' : 'N/A',
+          defensive_rebound_pct: stats.dreb_pct ? (stats.dreb_pct * 100).toFixed(1) + '%' : 'N/A',
+          rebound_pct: stats.reb_pct ? (stats.reb_pct * 100).toFixed(1) + '%' : 'N/A',
+          turnover_ratio: stats.tov_ratio ? (stats.tov_ratio * 100).toFixed(1) + '%' : 'N/A',
+          effective_fg_pct: stats.efg_pct ? (stats.efg_pct * 100).toFixed(1) + '%' : 'N/A',
+          true_shooting_pct: stats.ts_pct ? (stats.ts_pct * 100).toFixed(1) + '%' : 'N/A',
+          pace: stats.pace,
+          pie: stats.pie ? (stats.pie * 100).toFixed(1) + '%' : 'N/A',
+          games_played: stats.gp
+        };
+      } else if (category === 'defense' && type === 'overall') {
+        // GOLD for Props: Defensive pressure (use for opposing player UNDERs)
+        formattedStats = {
+          // PRIMARY: Matchup efficiency (lower = better defender)
+          matchup_fg_pct: stats.matchup_fg_pct ? (stats.matchup_fg_pct * 100).toFixed(1) + '%' : 'N/A',
+          matchup_3pt_pct: stats.matchup_fg3_pct ? (stats.matchup_fg3_pct * 100).toFixed(1) + '%' : 'N/A', // GOLD: 3PT% when guarded
+          defended_at_rim_fg_pct: stats.def_at_rim_fg_pct ? (stats.def_at_rim_fg_pct * 100).toFixed(1) + '%' : 'N/A', // Rim protection
+          // Contested shooting (skill indicator)
+          contested_fg_pct: stats.contested_fg_pct ? (stats.contested_fg_pct * 100).toFixed(1) + '%' : 'N/A', // GOLD: makes contested shots
+          contested_shots: stats.contested_shots,
+          contested_2pt: stats.contested_2pt,
+          contested_3pt: stats.contested_3pt,
+          // Volume
+          matchup_fg_made: stats.matchup_fg_made,
+          matchup_fg_missed: stats.matchup_fg_missed,
+          // Activity
+          deflections: stats.deflections,
+          charges_drawn: stats.charges_drawn,
+          loose_balls_recovered: stats.loose_balls_recovered,
+          games_played: stats.gp
+        };
+      } else if (category === 'shooting') {
+        // Shooting zones - useful for 3PT props
+        formattedStats = {
+          fg_pct: stats.fg_pct ? (stats.fg_pct * 100).toFixed(1) + '%' : 'N/A',
+          fg_made: stats.fgm,
+          fg_attempted: stats.fga,
+          fg3_pct: stats.fg3_pct ? (stats.fg3_pct * 100).toFixed(1) + '%' : 'N/A',
+          fg3_made: stats.fg3m,
+          fg3_attempted: stats.fg3a,
+          // Zone-specific if available
+          paint_fg_pct: stats.paint_fg_pct ? (stats.paint_fg_pct * 100).toFixed(1) + '%' : 'N/A',
+          midrange_fg_pct: stats.midrange_fg_pct ? (stats.midrange_fg_pct * 100).toFixed(1) + '%' : 'N/A',
+          corner_3_pct: stats.corner_3_pct ? (stats.corner_3_pct * 100).toFixed(1) + '%' : 'N/A',
+          above_break_3_pct: stats.above_break_3_pct ? (stats.above_break_3_pct * 100).toFixed(1) + '%' : 'N/A',
+          games_played: stats.gp
+        };
+      } else {
+        // Default: return all available stats
+        formattedStats = stats;
+      }
+
+      return {
+        player: args.player_name,
+        team: player.team?.full_name,
+        category,
+        type,
+        stats: formattedStats,
+        note: category === 'general' && type === 'usage'
+          ? 'Usage % = share of team possessions used. Touches = ball handles. pct_* = share of team totals.'
+          : category === 'defense'
+            ? 'Matchup FG%/3PT% = opponent efficiency when guarded (lower = better defender). Contested FG% = skill at making contested shots (higher = better). Use matchup stats for opposing player UNDERs.'
+            : null
+      };
+    } catch (e) {
+      console.error(`    ❌ Error:`, e.message);
+      return { error: e.message, player_name: args.player_name };
+    }
+  }
+
+  // ============================================================================
+  // FETCH_PLAYER_GAME_ADVANCED - Per-Game Advanced Stats (L5 Trends)
+  // Gets PIE, net rating, usage per game for recent games
+  // ============================================================================
+  if (functionName === 'fetch_player_game_advanced') {
+    console.log(`  → [PLAYER_GAME_ADVANCED] ${args.player_name} (last ${args.num_games || 5} games)`);
+    try {
+      if (!isNBA) {
+        return { error: `fetch_player_game_advanced only supported for NBA` };
+      }
+
+      // Search for player
+      const nameParts = args.player_name.trim().split(' ');
+      const lastName = nameParts[nameParts.length - 1];
+      const playersResp = await ballDontLieService.getPlayersGeneric(sportKey, { search: lastName, per_page: 10 });
+      const players = Array.isArray(playersResp) ? playersResp : playersResp?.data || [];
+
+      const player = players.find(p =>
+        `${p.first_name} ${p.last_name}`.toLowerCase() === args.player_name.toLowerCase()
+      );
+
+      if (!player) {
+        return { error: `Player "${args.player_name}" not found` };
+      }
+
+      const numGames = args.num_games || 5;
+
+      // Get recent game stats using BDL stats endpoint with player filter
+      const currentMonth = new Date().getMonth() + 1;
+      const currentYear = new Date().getFullYear();
+      const season = currentMonth >= 10 ? currentYear : currentYear - 1;
+
+      // Fetch advanced per-game stats
+      const advancedStats = await ballDontLieService.getNbaAdvancedStats({
+        player_ids: [player.id],
+        seasons: [season],
+        per_page: numGames
+      });
+
+      if (!advancedStats || advancedStats.length === 0) {
+        return {
+          player: args.player_name,
+          team: player.team?.full_name,
+          games: [],
+          message: 'No per-game advanced stats available'
+        };
+      }
+
+      // Format each game's advanced stats
+      const games = advancedStats.slice(0, numGames).map(g => ({
+        date: g.game?.date,
+        opponent: g.game?.home_team?.id === player.team?.id
+          ? g.game?.visitor_team?.abbreviation
+          : g.game?.home_team?.abbreviation,
+        minutes: g.min,
+        // Efficiency
+        offensive_rating: g.off_rating || g.offensive_rating,
+        defensive_rating: g.def_rating || g.defensive_rating,
+        net_rating: g.net_rating,
+        // Role
+        usage_pct: g.usage_pct ? (g.usage_pct * 100).toFixed(1) + '%' : 'N/A',
+        pie: g.pie ? (g.pie * 100).toFixed(1) + '%' : 'N/A',
+        // Passing
+        assist_pct: g.ast_pct ? (g.ast_pct * 100).toFixed(1) + '%' : 'N/A',
+        assist_to_tov: g.ast_to_tov,
+        // Rebounding
+        reb_pct: g.reb_pct ? (g.reb_pct * 100).toFixed(1) + '%' : 'N/A',
+        // Shooting
+        ts_pct: g.ts_pct ? (g.ts_pct * 100).toFixed(1) + '%' : 'N/A',
+        efg_pct: g.efg_pct ? (g.efg_pct * 100).toFixed(1) + '%' : 'N/A'
+      }));
+
+      // Calculate averages for the period
+      const avgUsage = games.filter(g => g.usage_pct !== 'N/A')
+        .reduce((sum, g) => sum + parseFloat(g.usage_pct), 0) / games.length;
+      const avgNetRtg = games.filter(g => g.net_rating)
+        .reduce((sum, g) => sum + g.net_rating, 0) / games.length;
+
+      return {
+        player: args.player_name,
+        team: player.team?.full_name,
+        games_analyzed: games.length,
+        games,
+        averages: {
+          avg_usage_pct: avgUsage ? avgUsage.toFixed(1) + '%' : 'N/A',
+          avg_net_rating: avgNetRtg ? avgNetRtg.toFixed(1) : 'N/A'
+        },
+        note: 'Per-game advanced stats show role consistency. High usage variance = unpredictable. Stable usage = reliable volume.'
+      };
+    } catch (e) {
+      console.error(`    ❌ Error:`, e.message);
+      return { error: e.message, player_name: args.player_name };
     }
   }
 
@@ -1565,21 +2063,138 @@ function validatePropsAgainstToolHistory(picks, toolCallHistory) {
 }
 
 /**
- * Build the PASS 2 message for props - Steel Man Bilateral Analysis (NEW)
- * Forces Gary to build genuine cases for BOTH sides of each prop before picking.
- * This mirrors the game picks Steel Man system that makes them rigorous.
- * 
+ * Build the GAME STEEL MAN message for props - Team A vs Team B analysis
+ * Gary understands how the GAME will play out before deciding which props benefit.
+ * This mirrors game picks Steel Man cases but focuses on game flow for prop selection.
+ *
+ * @param {string} homeTeam - Home team name
+ * @param {string} awayTeam - Away team name
+ * @param {object} gameSummary - Game context (spread, totals, etc.)
+ * @param {string} sportLabel - Sport identifier
+ * @returns {string} - The Game Steel Man prompt
+ */
+function buildGameSteelManForProps(homeTeam, awayTeam, gameSummary, sportLabel = 'NFL') {
+  const spread = gameSummary?.spread || 0;
+  const total = gameSummary?.total || 0;
+  const homeImplied = gameSummary?.gameScript?.impliedTotals?.home || Math.round((total - spread) / 2);
+  const awayImplied = gameSummary?.gameScript?.impliedTotals?.away || Math.round((total + spread) / 2);
+
+  return `## GAME STEEL MAN - UNDERSTAND THE GAME BEFORE PICKING PROPS
+
+Before you pick ANY props, you need to understand HOW this game will play out.
+Build Steel Man cases for BOTH teams. This tells you which players benefit.
+
+**${awayTeam} @ ${homeTeam}**
+Spread: ${homeTeam} ${spread > 0 ? '+' : ''}${spread} | Total: ${total}
+Implied Points: ${awayTeam} ${awayImplied} | ${homeTeam} ${homeImplied}
+
+---
+
+## WRITE YOUR GAME ANALYSIS
+
+**CASE FOR ${homeTeam} (Home Team):**
+Write 2-3 paragraphs explaining:
+- What is ${homeTeam}'s path to winning/covering? What strengths show up?
+- How does ${homeTeam} attack ${awayTeam}'s weaknesses?
+- What's the game script if ${homeTeam} is winning? (Who gets volume? Who rests?)
+
+**CASE FOR ${awayTeam} (Away Team):**
+Write 2-3 paragraphs explaining:
+- What is ${awayTeam}'s path to winning/covering? What strengths show up?
+- How does ${awayTeam} attack ${homeTeam}'s weaknesses?
+- What's the game script if ${awayTeam} is winning? (Who gets volume? Who rests?)
+
+**YOUR GAME READ:**
+After writing both cases, state YOUR belief about how this game plays out:
+- Which team's strengths are more likely to show up tonight?
+- Is this a blowout, close game, or shootout?
+- What's the expected game flow? (Early lead? Comeback? Back-and-forth?)
+
+---
+
+## WHY THIS MATTERS FOR PROPS
+
+Your game read tells you which props benefit:
+- If you expect ${homeTeam} to dominate → ${homeTeam} players get more opportunity, ${awayTeam} may chase
+- If you expect ${awayTeam} to control → ${awayTeam} players get more opportunity
+- If you expect a shootout → Passing props benefit, game stays close
+- If you expect a blowout → Starters may rest, garbage time distorts stats
+- If you expect a close game → Stars play full minutes, crunch time usage matters
+
+**DO NOT SKIP THIS STEP.** Your prop picks should FLOW from your game analysis.
+A prop pick that contradicts your game read is a prop pick without conviction.
+
+---
+
+Write your Game Steel Man analysis now. NO tool calls - text analysis only.`;
+}
+
+/**
+ * Build the PROP INVESTIGATION message - Player stats based on game read
+ * After Gary understands the game, he investigates players who benefit from his read.
+ *
+ * @param {string} gameRead - Gary's game analysis/read
+ * @param {Array} propCandidates - Available prop candidates
+ * @param {string} sportLabel - Sport identifier
+ * @returns {string} - The Prop Investigation prompt
+ */
+function buildPropInvestigationMessage(gameRead, propCandidates, sportLabel = 'NFL') {
+  const candidateList = propCandidates.slice(0, 10).map((p, i) =>
+    `${i + 1}. ${p.player} (${p.team}) - ${p.props?.map(pr => `${pr.type} ${pr.line}`).join(', ') || 'Available'}`
+  ).join('\n');
+
+  return `## PROP INVESTIGATION - FIND PLAYERS WHO BENEFIT FROM YOUR GAME READ
+
+You've completed your Game Steel Man analysis. Now investigate which players benefit.
+
+**YOUR GAME READ:**
+${gameRead.substring(0, 2000)}
+
+---
+
+**AVAILABLE PROP CANDIDATES:**
+${candidateList}
+
+---
+
+## YOUR TASK
+
+Based on your game read, identify 4-6 players who benefit most from the game script you expect.
+
+For each player you're interested in, call the BDL tools to investigate:
+- \`fetch_player_game_logs\` - Recent performance (L5-10 games)
+- \`fetch_player_season_stats\` - Season averages
+- \`fetch_player_vs_opponent\` - How they perform vs this opponent
+
+**INVESTIGATION QUESTIONS:**
+1. Which players benefit from YOUR expected game script?
+2. Do their recent numbers support the props available?
+3. Is there a mismatch the line hasn't captured?
+
+**AFTER INVESTIGATION:**
+Pick your 2 BEST props that:
+- Align with your game read
+- Have statistical support from your investigation
+- Show a clear edge (not just "average beats line")
+
+Call the BDL tools NOW to investigate your top candidates.`;
+}
+
+/**
+ * Build the PASS 2 message for props - Steel Man Bilateral Analysis (LEGACY - kept for backwards compatibility)
+ * This is now secondary to the Game Steel Man approach but kept for fallback.
+ *
  * @param {Array} candidates - The shortlisted prop candidates to analyze
  * @param {string} sportLabel - Sport identifier
  * @returns {string} - The Pass 2 Steel Man prompt
  */
 function buildPropsPass2SteelManMessage(candidates, sportLabel = 'NFL') {
   // GEMINI 3 OPTIMIZED: Simple, direct prompts work best
-  // "Gemini 3 responds best to direct, clear instructions. It may over-analyze 
+  // "Gemini 3 responds best to direct, clear instructions. It may over-analyze
   // verbose or overly complex prompt engineering techniques."
   // "By default, Gemini 3 is less verbose - you must explicitly request detailed output"
-  
-  const candidateList = candidates.slice(0, 5).map((p, i) => 
+
+  const candidateList = candidates.slice(0, 5).map((p, i) =>
     `${i + 1}. ${p.player} - ${p.props?.map(pr => `${pr.type} ${pr.line}`).join(', ') || 'TBD'}`
   ).join('\n');
 
@@ -1950,13 +2565,16 @@ async function runPropsIterationLoop({ systemPrompt, userMessage, sportKey, spor
   let iteration = 0;
   const toolCallHistory = [];
   let didDirectionBalanceCheck = false;
-  // Pass 2 tracking - SPLIT into injection vs completion to prevent skipping
-  let didInjectPass2 = false;    // Track if Pass 2 message was SENT
-  let didCompletePass2 = false;  // Track if Gary COMPLETED bilateral analysis (text response with FOR/AGAINST)
-  let didPass25ConvictionCheck = false; // Track if Pass 2.5 grading was done
-  let pass2BypassAttempts = 0;   // Track how many times Gary tried to bypass bilateral analysis
+  // GAME STEEL MAN tracking - Gary must understand the game BEFORE picking props
+  let didInjectGameSteelMan = false;    // Track if Game Steel Man message was SENT
+  let didCompleteGameSteelMan = false;  // Track if Gary COMPLETED game analysis (Team A vs Team B cases)
+  let gameSteelManText = '';            // Store Gary's game analysis for prop investigation
+  // PROP INVESTIGATION tracking - After game read, Gary investigates players
+  let didInjectPropInvestigation = false; // Track if Prop Investigation message was SENT
+  let didCompletePropInvestigation = false; // Track if Gary investigated players (tool calls for stats)
+  let gameSteelManBypassAttempts = 0;   // Track how many times Gary tried to bypass game analysis
   let consecutiveEmptyResponses = 0; // Track consecutive empty responses
-  let propCandidatesForSteelMan = []; // Store candidates for Steel Man analysis
+  let propCandidatesForInvestigation = []; // Store candidates for player investigation
 
   // Send initial user message
   console.log(`\n[Props Iteration ${sportLabel}] 1/${maxIterations} (initial)`);
@@ -1998,157 +2616,104 @@ async function runPropsIterationLoop({ systemPrompt, userMessage, sportKey, spor
         }
 
         // ══════════════════════════════════════════════════════════════════
-        // PASS 2 STEEL MAN ENFORCEMENT - HARD GATE, NO BYPASS ALLOWED
-        // The process IS the point. Bilateral prose analysis is where thinking happens.
-        // The tool call fields are just summaries - Gary MUST do the investigation first.
+        // GAME STEEL MAN ENFORCEMENT - HARD GATE, NO BYPASS ALLOWED
+        // Props flow from understanding the GAME. Gary MUST analyze the game first.
         // ══════════════════════════════════════════════════════════════════
-        
-        // CRITICAL FIX: Check if Gary wrote bilateral text WITH the finalize_props call
-        // Gemini 3 often combines text + tool call in one response
-        // We should detect bilateral analysis even when it comes with a tool call
-        if (didInjectPass2 && !didCompletePass2 && textParts.length > 0) {
-          const combinedText = textParts.join('');
-          if (combinedText.length > 150) {
-            const textLower = combinedText.toLowerCase();
-            const hasOverCase = textLower.includes('case for over') || textLower.includes('over:') || textLower.includes('bull case');
-            const hasUnderCase = textLower.includes('case for under') || textLower.includes('under:') || textLower.includes('bear case') || textLower.includes('risk:');
-            const hasVerdict = textLower.includes('verdict') || textLower.includes('lean') || textLower.includes('favor');
-            
-            if (hasOverCase && hasUnderCase) {
-              console.log(`[Props] ✓ Bilateral text detected WITH finalize_props call`);
-              console.log(`[Props] 📝 GARY'S BILATERAL ANALYSIS (combined with tool call):`);
-              console.log(`════════════════════════════════════════════════════════════════`);
-              console.log(combinedText.substring(0, 2000));
-              console.log(`════════════════════════════════════════════════════════════════`);
-              didCompletePass2 = true;
-            }
+
+        // Extract team names from userMessage context for detection
+        // Look for patterns like "Team @ Team" or team-specific case markers
+        const combinedText = textParts.join('');
+
+        // Check if Gary wrote Game Steel Man analysis WITH the finalize_props call
+        // Look for game-level analysis (CASE FOR [TEAM], game read, etc.)
+        if (!didCompleteGameSteelMan && textParts.length > 0 && combinedText.length > 300) {
+          const textLower = combinedText.toLowerCase();
+          // Detect game-level Steel Man (Team vs Team analysis)
+          const hasTeamCase = textLower.includes('case for') && !textLower.includes('case for over') && !textLower.includes('case for under');
+          const hasGameRead = textLower.includes('game read') || textLower.includes('game script') || textLower.includes('expect the game') || textLower.includes('game flow');
+          const hasTeamAnalysis = textLower.includes('path to winning') || textLower.includes('path to covering') || textLower.includes('how they win') || textLower.includes('strengths show up');
+          const hasBlowoutShootout = textLower.includes('blowout') || textLower.includes('shootout') || textLower.includes('close game');
+
+          if ((hasTeamCase || hasGameRead || hasTeamAnalysis) && hasBlowoutShootout) {
+            console.log(`[Props] ✓ Game Steel Man detected WITH finalize_props call`);
+            console.log(`[Props] GARY'S GAME ANALYSIS:`);
+            console.log(`════════════════════════════════════════════════════════════════`);
+            console.log(combinedText.substring(0, 2000));
+            console.log(`════════════════════════════════════════════════════════════════`);
+            didCompleteGameSteelMan = true;
+            gameSteelManText = combinedText;
           }
         }
-        
-        if (!didCompletePass2 && Array.isArray(picks) && picks.length > 0) {
-          // Track bypass attempts for logging (but we NEVER accept without bilateral)
-          pass2BypassAttempts++;
-          
-          // NO BYPASS - Gary MUST complete bilateral analysis, period.
-          // The answer to "Gary keeps bypassing X" is never "let him bypass X"
-          // The answer is: fix the enforcement so he can't.
-          
-          if (!didInjectPass2) {
-            // First time - inject Pass 2 with full requirements
-            didInjectPass2 = true;
-            console.log(`[Props] ⛔ REJECTED - Gary tried to finalize without bilateral investigation`);
-            
-            // Build candidates from the picks Gary proposed
-            const candidatesFromPicks = picks.map(p => ({
-              player: p.player,
-              team: p.team || 'Unknown',
-              props: [{ type: p.prop || p.prop_type, line: p.line }]
-            }));
-            propCandidatesForSteelMan = candidatesFromPicks;
-            
+
+        if (!didCompleteGameSteelMan && Array.isArray(picks) && picks.length > 0) {
+          // Track bypass attempts
+          gameSteelManBypassAttempts++;
+
+          // NO BYPASS - Gary MUST complete Game Steel Man analysis first
+          if (!didInjectGameSteelMan) {
+            // First time - inject Game Steel Man requirements
+            didInjectGameSteelMan = true;
+            console.log(`[Props] REJECTED - Gary tried to finalize without GAME ANALYSIS`);
+
             iteration++;
-            console.log(`\n[Props Iteration ${sportLabel}] ${iteration}/${maxIterations} (PASS 2 - Bilateral Investigation REQUIRED) [HIGH THINKING]`);
-            
-            // Use HIGH-THINKING reasoningModel for Steel Man bilateral analysis
-            const pass2Message = buildPropsPass2SteelManMessage(candidatesFromPicks, sportLabel);
-            const pass2Result = await reasoningModel.generateContent(pass2Message);
-            const pass2Response = pass2Result.response;
-            const pass2Text = pass2Response.text() || '';
-            
-            // Log the bilateral analysis
-            if (pass2Text.length > 100) {
-              console.log(`[Props] HIGH-THINKING bilateral analysis (${pass2Text.length} chars)`);
+            console.log(`\n[Props Iteration ${sportLabel}] ${iteration}/${maxIterations} (GAME STEEL MAN REQUIRED) [HIGH THINKING]`);
+
+            // Extract team names from the userMessage (look for @ pattern)
+            const matchMatch = userMessage.match(/"matchup":\s*"([^"]+)\s*@\s*([^"]+)"/);
+            const awayTeam = matchMatch?.[1] || 'Away Team';
+            const homeTeam = matchMatch?.[2] || 'Home Team';
+
+            // Use HIGH-THINKING reasoningModel for Game Steel Man
+            const gameSteelManMessage = buildGameSteelManForProps(homeTeam, awayTeam, {}, sportLabel);
+            const gameSteelManResult = await reasoningModel.generateContent(gameSteelManMessage);
+            const gameSteelManResponse = gameSteelManResult.response;
+            gameSteelManText = gameSteelManResponse.text() || '';
+
+            if (gameSteelManText.length > 100) {
+              console.log(`[Props] HIGH-THINKING Game Steel Man (${gameSteelManText.length} chars)`);
+              console.log(`[Props] GAME ANALYSIS:`);
+              console.log(`════════════════════════════════════════════════════════════════`);
+              console.log(gameSteelManText.substring(0, 1500));
+              console.log(`════════════════════════════════════════════════════════════════`);
             }
-            
-            // Inject the bilateral analysis back into main chat for context continuity
-            result = await chat.sendMessage(`BILATERAL ANALYSIS COMPLETE:\n\n${pass2Text}\n\nNow call finalize_props with your picks based on this analysis.`);
+
+            didCompleteGameSteelMan = true;
+
+            // Inject the game analysis back into chat and ask for prop investigation
+            result = await chat.sendMessage(`GAME STEEL MAN COMPLETE:\n\n${gameSteelManText}\n\nBased on this game analysis, now INVESTIGATE the players who benefit from your game read. Call BDL tools for 4-6 players, then finalize_props with your 2 best picks that FLOW from your game analysis.`);
             response = result.response;
-            continue; // Loop back to check response
+            continue;
           } else {
-            // Already injected Pass 2 but Gary is trying to finalize again without completing bilateral
-            // KEEP BLOCKING - No bypass allowed
-            console.log(`[Props] ⛔ BLOCKED (attempt ${pass2BypassAttempts}) - Bilateral analysis INCOMPLETE`);
+            // Already injected but Gary tried again without proper investigation
+            console.log(`[Props] BLOCKED (attempt ${gameSteelManBypassAttempts}) - Need player investigation based on game read`);
             iteration++;
-            console.log(`\n[Props Iteration ${sportLabel}] ${iteration}/${maxIterations} (PASS 2 - Bilateral REQUIRED)`);
-            
-            // GEMINI 3 OPTIMIZED: Simple, direct messages work best
-            const topPick = picks[0];
-            const reminderMessage = pass2BypassAttempts === 2 
-              ? `finalize_props BLOCKED. Write bilateral analysis first.
 
-For ${topPick?.player || 'your pick'} - ${topPick?.prop || 'prop'} ${topPick?.line || ''}:
+            const reminderMessage = `Your game analysis is complete. Now:
 
-CASE FOR OVER: [3+ sentences - specific mechanism, not "average > line"]
-CASE FOR UNDER: [3+ sentences - genuine risk, not "might play badly"]
-VERDICT: [OVER/UNDER] because [which case is stronger]
+1. INVESTIGATE players who benefit from your game read (call BDL tools for 4-6 players)
+2. Pick 2 props that FLOW from your game analysis
 
-Write this as text now. No tool calls.`
-              : `BLOCKED (attempt ${pass2BypassAttempts}). Write text analysis, no tools.
+Which players benefit from the game script you expect? Call fetch_player_game_logs or fetch_player_season_stats for those players.`;
 
-${topPick?.player || 'Player'} - ${topPick?.prop || 'prop'} ${topPick?.line || ''}:
-
-CASE FOR OVER: [mechanism]
-CASE FOR UNDER: [risk]
-VERDICT: [decision]
-
-Write for your top 3 picks. Text only.`;
-            
             result = await chat.sendMessage(reminderMessage);
             response = result.response;
             continue;
           }
         }
-        
+
         // ══════════════════════════════════════════════════════════════════
-        // PASS 2.5 STEEL MAN GRADING - Inject AFTER Steel Man COMPLETED, BEFORE accepting
-        // Forces Gary to grade his bilateral cases using sharp principles
-        // Requires didCompletePass2 = true (Gary must have done bilateral analysis)
+        // PROP COUNT ENFORCEMENT - Only accept 2 props per game (quality over quantity)
         // ══════════════════════════════════════════════════════════════════
-        if (!didPass25ConvictionCheck && didCompletePass2 && Array.isArray(picks) && picks.length > 0 && iteration < maxIterations - 1) {
-          didPass25ConvictionCheck = true;
-          console.log(`[Props] Injecting Pass 2.5 Steel Man GRADING for ${picks.length} picks...`);
-          
-          iteration++;
-          console.log(`\n[Props Iteration ${sportLabel}] ${iteration}/${maxIterations} (PASS 2.5 - Conviction Check) [HIGH THINKING]`);
-          
-          // Use HIGH-THINKING reasoningModel for conviction grading
-          const pass25Message = buildPropsPass25Message(picks, sportLabel);
-          const pass25Result = await reasoningModel.generateContent(pass25Message);
-          const pass25Response = pass25Result.response;
-          const pass25Text = pass25Response.text() || '';
-          
-          // Log the conviction analysis
-          if (pass25Text.length > 100) {
-            console.log(`[Props] HIGH-THINKING conviction grading (${pass25Text.length} chars)`);
-          }
-          
-          // Inject the grading back into main chat for context continuity
-          result = await chat.sendMessage(`CONVICTION GRADING COMPLETE:\n\n${pass25Text}\n\nNow call finalize_props with your final picks based on this grading.`);
-          response = result.response;
-          
-          // Check if Gary responded with conviction ratings
-          const textContent = pass25Text;
-          const pass25Ratings = parsePropsPass25Ratings(textContent);
-          
-          if (pass25Ratings) {
-            console.log(`[Props Pass 2.5] 📊 Conviction Assessment Complete:`);
-            console.log(`   Slate conviction: ${pass25Ratings.slateConviction}`);
-            console.log(`   Drops: ${pass25Ratings.drops.length > 0 ? pass25Ratings.drops.join(', ') : 'None'}`);
-            
-            // Log individual ratings
-            for (const r of pass25Ratings.ratings || []) {
-              const keepIcon = r.edge_rating >= 5 ? '✓' : '✗';
-              console.log(`   ${keepIcon} ${r.player}: ${r.edge_rating}/10 (${r.edge_type || 'N/A'})`);
-            }
-            
-            // If low conviction slate, warn but continue
-            if (pass25Ratings.slateConviction === 'LOW') {
-              console.log(`[Props Pass 2.5] ⚠️ LOW conviction slate - picks may have weak edges`);
-            }
-          }
-          
-          continue; // Go back to check if Gary calls finalize_props again with filtered picks
+        if (didCompleteGameSteelMan && Array.isArray(picks) && picks.length > 2) {
+          console.log(`[Props] Gary submitted ${picks.length} picks - trimming to top 2 by confidence`);
+          // Sort by confidence and take top 2
+          picks.sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
+          picks = picks.slice(0, 2);
+          console.log(`[Props] Kept: ${picks.map(p => `${p.player} ${p.prop}`).join(', ')}`);
         }
+
+        // NOTE: We removed the Pass 2.5 grading phase since props now flow from game analysis
+        // The game Steel Man IS the reasoning phase - no separate grading needed
 
         // Direction balance check: if Gary returns ALL overs/ALL unders,
         // log a warning but ACCEPT the picks - don't block on this
@@ -2220,65 +2785,31 @@ Write for your top 3 picks. Text only.`;
     // Handle other tool calls
     if (functionCallParts.length > 0) {
       // ══════════════════════════════════════════════════════════════════
-      // CRITICAL FIX: Block ALL tool calls during bilateral phase
-      // Gary was exploiting a loophole by calling data tools instead of finalize_props
-      // to "run out the clock" without writing bilateral analysis
-      // 
-      // GEMINI 3 FIX: Check if Gary wrote bilateral text WITH the tool call
-      // Gemini 3 often combines text + tool call in one response
+      // NEW GAME STEEL MAN FLOW:
+      // 1. Game Steel Man first (Team A vs Team B)
+      // 2. Then prop investigation (call stats for players who benefit from game read)
+      // 3. Then finalize with 2 props that flow from game analysis
       // ══════════════════════════════════════════════════════════════════
-      if (didInjectPass2 && !didCompletePass2) {
-        // FIRST: Check if Gary wrote bilateral text with this tool call
-        if (textParts.length > 0) {
-          const combinedText = textParts.join('');
-          if (combinedText.length > 150) {
-            const textLower = combinedText.toLowerCase();
-            const hasOverCase = textLower.includes('case for over') || textLower.includes('over:') || textLower.includes('bull case');
-            const hasUnderCase = textLower.includes('case for under') || textLower.includes('under:') || textLower.includes('bear case') || textLower.includes('risk:');
-            
-            if (hasOverCase && hasUnderCase) {
-              console.log(`[Props] ✓ Bilateral text detected WITH tool call - accepting`);
-              console.log(`[Props] 📝 GARY'S BILATERAL ANALYSIS:`);
-              console.log(`════════════════════════════════════════════════════════════════`);
-              console.log(combinedText.substring(0, 2000));
-              console.log(`════════════════════════════════════════════════════════════════`);
-              didCompletePass2 = true;
-              // Now process the tool call normally (don't block)
-            }
+
+      // Check if Gary wrote Game Steel Man analysis WITH tool calls
+      if (!didCompleteGameSteelMan && textParts.length > 0) {
+        const combinedText = textParts.join('');
+        if (combinedText.length > 300) {
+          const textLower = combinedText.toLowerCase();
+          const hasTeamCase = textLower.includes('case for') && !textLower.includes('case for over') && !textLower.includes('case for under');
+          const hasGameRead = textLower.includes('game read') || textLower.includes('game script') || textLower.includes('expect the game');
+          const hasBlowoutShootout = textLower.includes('blowout') || textLower.includes('shootout') || textLower.includes('close game');
+
+          if ((hasTeamCase || hasGameRead) && hasBlowoutShootout) {
+            console.log(`[Props] ✓ Game Steel Man detected WITH tool call`);
+            didCompleteGameSteelMan = true;
+            gameSteelManText = combinedText;
           }
         }
       }
-      
-      // If still not complete, block the tool call
-      if (didInjectPass2 && !didCompletePass2) {
-        const toolNames = functionCallParts.map(fc => fc.functionCall?.name).join(', ');
-        pass2BypassAttempts++;
-        console.log(`[Props] ⛔ ALL TOOLS BLOCKED during bilateral phase (attempted: ${toolNames})`);
-        
-        iteration++;
-        console.log(`\n[Props Iteration ${sportLabel}] ${iteration}/${maxIterations} (BILATERAL MODE - tools blocked)`);
-        
-        // GEMINI 3 OPTIMIZED: Simple, direct message
-        const topCandidate = propCandidatesForSteelMan[0];
-        const blockMessage = `TOOL CALL BLOCKED. Write text analysis now.
 
-Your tool call (${toolNames}) was rejected. No tools allowed until you write bilateral analysis.
-
-For ${topCandidate?.player || 'your top pick'}:
-
-CASE FOR OVER: [3+ sentences - specific mechanism]
-CASE FOR UNDER: [3+ sentences - genuine risk]
-VERDICT: [Which side wins and why]
-
-Write this as text. No tool calls.`;
-
-        result = await chat.sendMessage(blockMessage);
-        response = result.response;
-        continue;
-      }
-      
       console.log(`[Props] Gary requested ${functionCallParts.length} tool(s):`);
-      
+
       // Process all tool calls and collect responses
       const functionResponses = [];
       for (const fc of functionCallParts) {
@@ -2299,70 +2830,72 @@ Write this as text. No tool calls.`;
           }
         });
       }
-      
+
+      // Track prop investigation progress (players with stats fetched)
+      if (!didCompletePropInvestigation) {
+        const playersWithStats = new Set();
+        for (const { tool, result: toolResult } of toolCallHistory) {
+          if ((tool === 'fetch_player_game_logs' || tool === 'fetch_player_season_stats') && toolResult?.player) {
+            playersWithStats.add(toolResult.player);
+          }
+        }
+        if (playersWithStats.size >= 3) {
+          didCompletePropInvestigation = true;
+          console.log(`[Props] ✓ Prop investigation complete: ${playersWithStats.size} players investigated`);
+        }
+      }
+
       // Send all function responses at once to continue the chat
       iteration++;
       console.log(`\n[Props Iteration ${sportLabel}] ${iteration}/${maxIterations}`);
       result = await chat.sendMessage(functionResponses);
       response = result.response;
-      
+
       // ══════════════════════════════════════════════════════════════════
-      // PASS 2 STEEL MAN INJECTION - After sufficient tool calls
-      // Forces Gary to build bilateral cases BEFORE finalizing picks
-      // NOTE: Uses didInjectPass2 (not didCompletePass2) - we inject once, then track completion
+      // GAME STEEL MAN INJECTION - After initial tool calls, before prop finalization
+      // Forces Gary to understand the GAME before picking props
       // ══════════════════════════════════════════════════════════════════
-      if (!didInjectPass2 && toolCallHistory.length >= 3 && iteration >= 2 && iteration < maxIterations - 3) {
-        didInjectPass2 = true;
-        
-        // Extract player names from tool history to build candidate list
-        const playersInvestigated = [];
-        for (const { tool, result: toolResult } of toolCallHistory) {
-          if ((tool === 'fetch_player_game_logs' || tool === 'fetch_player_season_stats') && toolResult?.player) {
-            const existing = playersInvestigated.find(p => p.player === toolResult.player);
-            if (!existing) {
-              playersInvestigated.push({
-                player: toolResult.player,
-                team: toolResult.team || 'Unknown',
-                props: [] // Will be filled from context
-              });
-            }
-          }
+      if (!didInjectGameSteelMan && toolCallHistory.length >= 2 && iteration >= 2 && iteration < maxIterations - 3) {
+        didInjectGameSteelMan = true;
+
+        // Extract team names from the userMessage
+        const matchMatch = userMessage.match(/"matchup":\s*"([^"]+)\s*@\s*([^"]+)"/);
+        const awayTeam = matchMatch?.[1] || 'Away Team';
+        const homeTeam = matchMatch?.[2] || 'Home Team';
+
+        console.log(`[Props] Injecting GAME STEEL MAN for ${awayTeam} @ ${homeTeam}...`);
+        iteration++;
+        console.log(`\n[Props Iteration ${sportLabel}] ${iteration}/${maxIterations} (GAME STEEL MAN) [HIGH THINKING]`);
+
+        // Use HIGH-THINKING reasoningModel for Game Steel Man
+        const gameSteelManMessage = buildGameSteelManForProps(homeTeam, awayTeam, {}, sportLabel);
+        const gameSteelManResult = await reasoningModel.generateContent(gameSteelManMessage);
+        const gameSteelManResponse = gameSteelManResult.response;
+        gameSteelManText = gameSteelManResponse.text() || '';
+
+        if (gameSteelManText.length > 100) {
+          console.log(`[Props] HIGH-THINKING Game Steel Man (${gameSteelManText.length} chars)`);
         }
-        
-        if (playersInvestigated.length >= 2) {
-          propCandidatesForSteelMan = playersInvestigated;
-          console.log(`[Props] Injecting PASS 2 - Steel Man Analysis for ${playersInvestigated.length} players...`);
-          
-          iteration++;
-          console.log(`\n[Props Iteration ${sportLabel}] ${iteration}/${maxIterations} (PASS 2 - Steel Man) [HIGH THINKING]`);
-          
-          // Use HIGH-THINKING reasoningModel for Steel Man bilateral analysis
-          const pass2Message = buildPropsPass2SteelManMessage(playersInvestigated, sportLabel);
-          const pass2Result = await reasoningModel.generateContent(pass2Message);
-          const pass2Response = pass2Result.response;
-          const pass2Text = pass2Response.text() || '';
-          
-          // Log the bilateral analysis
-          if (pass2Text.length > 100) {
-            console.log(`[Props] HIGH-THINKING bilateral analysis (${pass2Text.length} chars)`);
-          }
-          
-          // Inject the bilateral analysis back into main chat for context continuity
-          result = await chat.sendMessage(`BILATERAL ANALYSIS COMPLETE:\n\n${pass2Text}\n\nNow call finalize_props with your picks based on this analysis.`);
-          response = result.response;
-          continue;
-        }
+
+        didCompleteGameSteelMan = true;
+
+        // Inject the game analysis and prompt for prop investigation
+        result = await chat.sendMessage(`GAME STEEL MAN COMPLETE:\n\n${gameSteelManText}\n\nBased on this game analysis, now call BDL tools to investigate 4-6 players who BENEFIT from your game read. Then finalize_props with your 2 best picks that FLOW from your game analysis.`);
+        response = result.response;
+        continue;
       }
-      
-      // Add urgency nudge on later iterations - send as separate follow-up
+
+      // Add urgency nudge on later iterations
       if (iteration >= maxIterations - 2) {
         console.log(`[Props] Sending finalization nudge...`);
-        // MODIFIED: Nudge still mentions bilateral requirement
-        result = await chat.sendMessage(`⚠️ TIME CHECK: You have ${maxIterations - iteration} rounds left. 
+        const nudgeMessage = didCompleteGameSteelMan
+          ? `TIME CHECK: You have ${maxIterations - iteration} rounds left.
 
-If you haven't yet: Write your BILATERAL STEEL MAN analysis (CASE FOR OVER and CASE FOR UNDER for each candidate).
+Based on your game analysis, finalize_props with your 2 best props that flow from your game read.`
+          : `TIME CHECK: You have ${maxIterations - iteration} rounds left.
 
-Then call finalize_props with your ${sportLabel === 'NBA' || sportLabel === 'NHL' ? '5' : '3-5'} best picks where one side clearly dominates.`);
+Complete your Game Steel Man analysis (how will this game play out?), then pick 2 props that benefit from that game script.`;
+        result = await chat.sendMessage(nudgeMessage);
         response = result.response;
       }
       continue;
@@ -2370,135 +2903,32 @@ Then call finalize_props with your ${sportLabel === 'NBA' || sportLabel === 'NHL
 
     // Check for picks in text response (fallback)
     const textContent = textParts.join('');
-    
+
     // ══════════════════════════════════════════════════════════════════
-    // BILATERAL ANALYSIS COMPLETION DETECTION - STRICT VALIDATION
-    // The prose analysis is WHERE THE THINKING HAPPENS. Not optional.
-    // Requires: Line Awareness + Over Case + Under Case + Verdict
+    // GAME STEEL MAN COMPLETION DETECTION
+    // Gary must understand the GAME (Team A vs Team B) before picking props
     // ══════════════════════════════════════════════════════════════════
-    if (didInjectPass2 && !didCompletePass2 && textContent && textContent.length > 200) {
-      // LOG GARY'S STEEL MAN ANALYSIS SO WE CAN SEE IT
-      console.log(`\n[Props] 📝 GARY'S BILATERAL ANALYSIS:`);
-      console.log(`════════════════════════════════════════════════════════════════`);
-      console.log(textContent);
-      console.log(`════════════════════════════════════════════════════════════════\n`);
-      
+    if (!didCompleteGameSteelMan && textContent && textContent.length > 300) {
       const textLower = textContent.toLowerCase();
-      
-      // FIRST: Detect META-NARRATIVE / FLUFF that should NOT count as analysis
-      // Gary sometimes writes ABOUT himself instead of doing actual analysis
-      const isMetaNarrative = 
-        textLower.includes('gary style') ||
-        textLower.includes('grizzled veteran') ||
-        textLower.includes('mental check on gary') ||
-        textLower.includes('the storyteller') ||
-        textLower.includes('three decades') ||
-        textLower.includes('closing up shop') ||
-        textLower.includes('bring it home') ||
-        textLower.includes("let's do a quick") ||
-        textLower.includes('time to bring') ||
-        (textLower.includes('gary') && textLower.includes('voice')) ||
-        (textLower.includes('gary') && textLower.includes('character'));
-      
-      if (isMetaNarrative) {
-        console.log(`[Props] ❌ Detected meta-narrative (Gary writing ABOUT himself, not analysis) - NOT counting as bilateral`);
-        // Don't mark complete - force another attempt
-      } else {
-        // VALIDATION CHECKLIST - Must have specific elements of genuine investigation
-        const validationResults = {
-          hasOverCase: false,
-          hasUnderCase: false,
-          hasVerdict: false,
-          hasLineAwareness: false,
-          overCaseSubstantive: false,
-          underCaseSubstantive: false
-        };
-        
-        // Check for OVER case (multiple ways Gary might write it)
-        validationResults.hasOverCase = 
-          textLower.includes('case for over') ||
-          textLower.includes('📈') ||
-          textLower.includes('bull case') ||
-          (textLower.includes('over:') && !textLower.includes('game over')) ||
-          textLower.includes('why it hits') ||
-          textLower.includes('goes over because');
-        
-        // Check for UNDER case (multiple ways Gary might write it)
-        validationResults.hasUnderCase = 
-          textLower.includes('case for under') ||
-          textLower.includes('📉') ||
-          textLower.includes('bear case') ||
-          textLower.includes('under:') ||
-          textLower.includes('why it misses') ||
-          textLower.includes('goes under because') ||
-          textLower.includes('risk:') ||
-          textLower.includes('the risk is');
-        
-        // Check for VERDICT (explicit decision)
-        validationResults.hasVerdict = 
-          textLower.includes('verdict:') ||
-          textLower.includes('⚖️') ||
-          textLower.includes('lean:') ||
-          textLower.includes('the stronger case') ||
-          textLower.includes('i side with') ||
-          (textLower.includes('why') && (textLower.includes('wins') || textLower.includes('stronger')));
-        
-        // Check for LINE AWARENESS (understanding why line is set there)
-        validationResults.hasLineAwareness = 
-          textLower.includes('line is set') ||
-          textLower.includes('books are pricing') ||
-          textLower.includes('market is pricing') ||
-          textLower.includes('line awareness') ||
-          textLower.includes('why is the line') ||
-          textLower.includes('the line respects') ||
-          textLower.includes('line reflects');
-        
-        // Check SUBSTANCE of cases - must be more than 100 chars between Over and Under sections
-        // This catches cases where Gary writes "OVER: He'll hit it. UNDER: He won't." (too short)
-        const overSection = textContent.match(/(?:case for over|📈|bull case)[:\s]*([\s\S]{0,500}?)(?:case for under|📉|bear case|under:|risk:)/i);
-        const underSection = textContent.match(/(?:case for under|📉|bear case|under:|risk:)[:\s]*([\s\S]{0,500}?)(?:verdict|⚖️|lean:|$)/i);
-        
-        validationResults.overCaseSubstantive = overSection && overSection[1] && overSection[1].trim().length > 100;
-        validationResults.underCaseSubstantive = underSection && underSection[1] && underSection[1].trim().length > 80;
-        
-        // Log validation results
-        console.log(`[Props] Bilateral Validation:`);
-        console.log(`   Over Case: ${validationResults.hasOverCase ? '✓' : '✗'} (substantive: ${validationResults.overCaseSubstantive ? '✓' : '✗'})`);
-        console.log(`   Under Case: ${validationResults.hasUnderCase ? '✓' : '✗'} (substantive: ${validationResults.underCaseSubstantive ? '✓' : '✗'})`);
-        console.log(`   Verdict: ${validationResults.hasVerdict ? '✓' : '✗'}`);
-        console.log(`   Line Awareness: ${validationResults.hasLineAwareness ? '✓ (bonus)' : '- (not required but encouraged)'}`);
-        
-        // MINIMUM REQUIREMENTS: Over case + Under case + at least one substantive
-        const meetsMinimumRequirements = 
-          validationResults.hasOverCase && 
-          validationResults.hasUnderCase &&
-          (validationResults.overCaseSubstantive || validationResults.underCaseSubstantive);
-        
-        // FULL REQUIREMENTS: Over + Under + Verdict + both substantive
-        const meetsFullRequirements = 
-          validationResults.hasOverCase && 
-          validationResults.hasUnderCase &&
-          validationResults.hasVerdict &&
-          validationResults.overCaseSubstantive &&
-          validationResults.underCaseSubstantive;
-        
-        if (meetsFullRequirements) {
-          didCompletePass2 = true;
-          console.log(`[Props] ✓ BILATERAL ANALYSIS COMPLETE - Full investigation detected`);
-        } else if (meetsMinimumRequirements) {
-          didCompletePass2 = true;
-          console.log(`[Props] ✓ BILATERAL ANALYSIS ACCEPTED - Minimum requirements met (Over + Under + substance)`);
-        } else {
-          // Still missing required elements - do NOT mark complete
-          const missing = [];
-          if (!validationResults.hasOverCase) missing.push('OVER case');
-          if (!validationResults.hasUnderCase) missing.push('UNDER case');
-          if (!validationResults.overCaseSubstantive && !validationResults.underCaseSubstantive) missing.push('substantive reasoning (cases too short)');
-          console.log(`[Props] ⚠️ Bilateral analysis INCOMPLETE - Missing: ${missing.join(', ')}`);
-        }
+
+      // Detect game-level Steel Man analysis (Team vs Team, not Over vs Under)
+      const hasTeamCase = textLower.includes('case for') && !textLower.includes('case for over') && !textLower.includes('case for under');
+      const hasGameRead = textLower.includes('game read') || textLower.includes('game script') || textLower.includes('expect the game') || textLower.includes('game flow');
+      const hasTeamAnalysis = textLower.includes('path to winning') || textLower.includes('path to covering') || textLower.includes('how they win') || textLower.includes('strengths show up');
+      const hasBlowoutShootout = textLower.includes('blowout') || textLower.includes('shootout') || textLower.includes('close game');
+
+      if ((hasTeamCase || hasGameRead || hasTeamAnalysis) && hasBlowoutShootout) {
+        console.log(`\n[Props] GARY'S GAME ANALYSIS:`);
+        console.log(`════════════════════════════════════════════════════════════════`);
+        console.log(textContent.substring(0, 2000));
+        console.log(`════════════════════════════════════════════════════════════════\n`);
+
+        didCompleteGameSteelMan = true;
+        gameSteelManText = textContent;
+        console.log(`[Props] ✓ GAME STEEL MAN COMPLETE - Gary understands how the game plays out`);
       }
     }
-    
+
     if (textContent) {
       const jsonMatch = textContent.match(/\{[\s\S]*"picks"[\s\S]*\}/);
       if (jsonMatch) {
@@ -2543,58 +2973,47 @@ Then call finalize_props with your ${sportLabel === 'NBA' || sportLabel === 'NHL
 
       // Text response but no picks
       iteration++;
-      
-      // FIX: During bilateral mode, don't prompt to finalize - that defeats the purpose!
-      if (didInjectPass2 && !didCompletePass2) {
-        console.log(`\n[Props Iteration ${sportLabel}] ${iteration}/${maxIterations} (bilateral mode - more analysis needed)`);
-        // GEMINI 3 OPTIMIZED: Simple format reminder
-        result = await chat.sendMessage(`Missing required format. Use these headers:
 
-CASE FOR OVER: [your reasoning]
-CASE FOR UNDER: [your reasoning]
-VERDICT: [decision]`);
+      // During game analysis mode, prompt for game read
+      if (didInjectGameSteelMan && !didCompleteGameSteelMan) {
+        console.log(`\n[Props Iteration ${sportLabel}] ${iteration}/${maxIterations} (game analysis mode - need game read)`);
+        result = await chat.sendMessage(`Complete your Game Steel Man analysis. How does this game play out?
+
+Write your game read: Blowout, close game, or shootout? Which team's strengths show up?`);
         response = result.response;
         continue;
       }
-      
+
       console.log(`\n[Props Iteration ${sportLabel}] ${iteration}/${maxIterations} (prompting finalize)`);
-      result = await chat.sendMessage('Please call the finalize_props tool with your final prop picks now.');
+      result = await chat.sendMessage('Please call the finalize_props tool with your 2 best prop picks now.');
       response = result.response;
       continue;
     }
-    
+
     // CRITICAL: Handle empty response (no function calls AND no text)
     // This prevents infinite loops when Gemini returns nothing
     if (functionCallParts.length === 0 && textParts.length === 0) {
       consecutiveEmptyResponses++;
-      console.log(`[Props] ⚠️ Empty response from Gemini (${consecutiveEmptyResponses} consecutive)`);
-      
+      console.log(`[Props] Empty response from Gemini (${consecutiveEmptyResponses} consecutive)`);
+
       iteration++;
       if (iteration >= maxIterations) {
-        console.log(`[Props] ❌ Max iterations reached with empty responses`);
+        console.log(`[Props] Max iterations reached with empty responses`);
         break;
       }
-      
-      // ══════════════════════════════════════════════════════════════════
-      // FIX: During bilateral mode, ALWAYS prompt for bilateral analysis
-      // NOT "please finalize" - that's the opposite of what we want!
-      // ══════════════════════════════════════════════════════════════════
-      if (didInjectPass2 && !didCompletePass2) {
-        console.log(`[Props] 📝 Reminding Gary to write bilateral analysis (not finalize)`);
-        
-        // GEMINI 3 OPTIMIZED: Simple, direct message
-        const topCandidate = propCandidatesForSteelMan[0];
-        const bilateralReminder = `Empty response. Write bilateral analysis now.
 
-For ${topCandidate?.player || 'your top pick'}:
+      // During game analysis mode, prompt for game analysis
+      if (didInjectGameSteelMan && !didCompleteGameSteelMan) {
+        console.log(`[Props] Reminding Gary to complete game analysis`);
 
-CASE FOR OVER: [3+ sentences - mechanism]
-CASE FOR UNDER: [3+ sentences - risk]
-VERDICT: [decision]
+        const gameReminder = `Empty response. Complete your GAME ANALYSIS first:
 
-Write as text. No tools.`;
+How does this game play out? Which team's strengths show up?
+Is this a blowout, close game, or shootout?
 
-        result = await chat.sendMessage(bilateralReminder);
+Write your game read as text.`;
+
+        result = await chat.sendMessage(gameReminder);
         response = result.response;
         continue;
       }
@@ -2663,11 +3082,11 @@ DO NOT request more tools. CALL finalize_props NOW.`;
   }
 
   // Log specific reason for failure
-  if (didInjectPass2 && !didCompletePass2) {
-    console.log(`[Props] ❌ FAILED - Max iterations reached. Gary refused to complete bilateral analysis.`);
-    console.log(`[Props] ❌ Bilateral bypass attempts: ${pass2BypassAttempts}. No picks accepted without investigation.`);
+  if (didInjectGameSteelMan && !didCompleteGameSteelMan) {
+    console.log(`[Props] FAILED - Max iterations reached. Gary didn't complete game analysis.`);
+    console.log(`[Props] Game Steel Man bypass attempts: ${gameSteelManBypassAttempts}. Props must flow from game understanding.`);
   } else {
-    console.log(`[Props] ⚠️ Max iterations reached without finalization`);
+    console.log(`[Props] Max iterations reached without finalization`);
   }
   return { picks: [], iterations: iteration, toolCalls: toolCallHistory.length };
 }
@@ -3222,8 +3641,8 @@ function formatGameTime(timeString) {
  */
 function buildPropsIterationPrompt(gameSummary, propCandidates, narrativeContext, sportLabel, regularOnly = false) {
   const constitution = getConstitution(sportLabel);
-  // Pick count depends on mode
-  const pickCount = (regularOnly && sportLabel === 'NFL') ? 3 : 5;
+  // Pick count: 2 props per game (quality over quantity)
+  const pickCount = 2;
 
   const now = new Date();
   const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
@@ -3354,31 +3773,72 @@ Assign a tier to each pick based on edge strength:
 
 **TD Props should rarely be MAX** - the variance is too high. Most TDs should be CORE or SPECULATIVE.
 
-## YOUR TASK: THE PROPS WORKFLOW
+## YOUR TASK: THE PROPS WORKFLOW (GAME-FIRST APPROACH)
 
-Do NOT just pick the first 2 "good enough" props. To find true edges, you must investigate thoroughly AND think bilaterally.
+Props flow from your understanding of the GAME. You don't pick props in a vacuum - you pick props that benefit from your game read.
 
-**PHASE 1: INVESTIGATION**
-1. **SCOUT**: Review ALL prop candidates. Identify 6-8 players with the strongest angles (injuries, usage vacuums, matchup edges).
-2. **INVESTIGATE**: Fetch game logs and season stats for ALL 6-8 players. Call multiple tools at once.
-3. **SHORTLIST**: Compare those players. Identify your TOP ${pickCount} candidates where narrative AND numbers align.
+**PHASE 1: GAME STEEL MAN (REQUIRED - DO NOT SKIP)**
+1. **UNDERSTAND THE GAME**: Build Steel Man cases for BOTH teams:
+   - **CASE FOR HOME TEAM**: How do they win/cover? What strengths show up? What's the game script if they're winning?
+   - **CASE FOR AWAY TEAM**: How do they win/cover? What strengths show up? What's the game script if they're winning?
+   - **YOUR GAME READ**: Which team's strengths are more likely to show up tonight? Blowout, close game, or shootout?
 
-**PHASE 2: BILATERAL STEEL MAN (REQUIRED - DO NOT SKIP)**
-4. **STEEL MAN**: For each of your ${pickCount} candidates, write out BOTH cases:
-   
-   **FOR EACH CANDIDATE:**
-   **CASE FOR OVER**: Why does this prop go OVER? What mechanism pushes production above the line?
-   **CASE FOR UNDER**: Why does this prop go UNDER? What's the genuine risk that could make it fail?
-   **VERDICT**: Which case is stronger? Why does your chosen side win?
-   
-   CRITICAL: Your UNDER case must be GENUINE - not an afterthought. Ask: "What would convince me to actually bet the Under?"
-   CRITICAL: If both cases are equally strong, you don't have edge - PASS on that prop
+   This is NOT optional. Your prop picks should FLOW from your game analysis.
+   A prop pick that contradicts your game read is a prop pick without conviction.
 
-**PHASE 3: FINALIZE**
-5. **FINALIZE**: ONLY after completing bilateral analysis, call finalize_props with picks where one side clearly dominates.
+**PHASE 2: PROP INVESTIGATION (Based on Game Read)**
+2. **IDENTIFY BENEFICIARIES**: Based on YOUR game read, which players benefit?
+   - If you expect Team A to dominate → Team A players get opportunity
+   - If you expect a shootout → Passing props benefit
+   - If you expect a blowout → Starters may rest (affects totals)
 
-BLOCKING RULE: DO NOT call finalize_props until you have written bilateral cases for your top candidates.
-The system will BLOCK finalize attempts if bilateral analysis is not detected.
+3. **INVESTIGATE**: Call BDL tools for 4-6 players who align with your game read:
+   - \`fetch_player_game_logs\` - L5-10 recent games
+   - \`fetch_player_season_stats\` - Season context
+   - Do their numbers support the props available?
+
+## STAT PHILOSOPHY FOR PROP INVESTIGATION (CRITICAL)
+
+**PREDICTIVE vs DESCRIPTIVE METRICS:**
+- **DESCRIPTIVE (what happened)**: Season averages, career totals, "he's a 20 PPG scorer"
+- **PREDICTIVE (what will happen TONIGHT)**: L5 form, usage rate changes, matchup-specific efficiency
+- Use PREDICTIVE metrics to justify picks. Descriptive stats just describe - they don't predict.
+
+**L5/L10 vs SEASON AVERAGES:**
+- **L5/L10**: Shows CURRENT form, recent role changes, injury adjustments. More predictive for TONIGHT.
+- **Season**: Shows baseline identity, regression targets. Use for context, not primary evidence.
+- Ask: "Is L5 the NEW normal (role change, lineup shift) or just variance that regresses to season?"
+- For props, L5/L10 is usually MORE relevant than season - but investigate WHY the recent form exists.
+
+**INJURY/USAGE AWARENESS (CRITICAL FOR PROPS):**
+- **Injury DURATION matters**: Season-long absence = team has adapted. Recent absence (< 2 weeks) = usage vacuum.
+- **RETURNING players**: Check minutes restriction, conditioning rust, usage ramp-up.
+- **INJURED teammates**: WHO absorbed the usage? Check target share, touch rate, shot attempts.
+- **Ask**: "Who benefits from this injury situation? Is that already priced into the line?"
+
+**BLANKET FACTORS ARE NOISE (Don't use these):**
+- "He's been hot" without explaining WHY → What changed to cause the hot streak?
+- "This is a revenge game" → Does revenge actually show up in the stats?
+- "He always performs in primetime" → Sample size? Or just narrative?
+- "Back-to-back fatigue" → Check THIS player's actual B2B splits, not general narratives.
+
+For props, INVESTIGATE the factor. Don't cite narratives as evidence.
+
+**PHASE 3: PICK YOUR 2 BEST PROPS**
+4. **FINAL DECISION**: Pick exactly 2 props that:
+   - Align with your game read (not contradicting it)
+   - Have statistical support from your investigation
+   - Show a clear edge (mechanism, not just "average beats line")
+
+5. **FINALIZE**: Call finalize_props with your 2 picks. Include:
+   - How this prop flows from your game read
+   - The specific mechanism/edge
+   - What could go wrong (the risk)
+
+**OUTPUT: 2 PROPS PER GAME** - Quality over quantity. Two confident picks beat five shaky ones.
+
+BLOCKING RULE: DO NOT call finalize_props until you have completed your Game Steel Man analysis.
+The system will BLOCK finalize attempts if game analysis is not detected.
 
 ## RATIONALE vs KEY_STATS (THE BEST OF BOTH WORLDS)
 To give the user the best experience, we divide your analysis into two parts:
@@ -3392,9 +3852,10 @@ To give the user the best experience, we divide your analysis into two parts:
 2. **RATIONALE (The Story)**: This is where you are "Organic Gary." Write 5-7 sentences that tell the story of WHY those numbers happen. Talk about the matchup, the defenders, the motivation, and the flow of the game. NO dry stat-dumps here—make it read like a scouting report.
 
 ## FINALIZATION REMINDER
-- You MUST investigate at least 6 different players before calling finalize_props.
-- Return your TOP ${pickCount} picks. A quantum filter will decide which survive.
-- Don't settle for the easy picks. Find the value.
+- Complete your Game Steel Man analysis FIRST (understand the game before picking props).
+- Investigate 4-6 players who benefit from your game read.
+- Return your TOP 2 picks - quality over quantity. Two confident picks beat five mediocre ones.
+- Each pick MUST flow from your game analysis. If it contradicts your game read, don't pick it.
 
 ## ZERO TOLERANCE FOR HALLUCINATION
 
@@ -3471,12 +3932,12 @@ ${constitution}
 ---
 
 ## WORKFLOW REMINDER
-- INVESTIGATE at least 6 different players before moving to bilateral analysis
-- WRITE bilateral cases (OVER vs UNDER) for your top ${pickCount} candidates
-- ONLY THEN call finalize_props with the picks where one side clearly wins
-- Include at least ONE contrarian pick (UNDER or fade) if the bilateral analysis supports it
+- GAME STEEL MAN first: Understand HOW the game plays out (Team A vs Team B cases)
+- IDENTIFY beneficiaries: Which players benefit from your game read?
+- INVESTIGATE: Call BDL tools for 4-6 players who align with your game script
+- PICK 2: Select your 2 best props that flow from your game analysis
 
-**THE FLOW:** Scout then Investigate then Shortlist then BILATERAL STEEL MAN then Finalize
+**THE FLOW:** Game Steel Man then Identify Beneficiaries then Investigate Players then Pick 2
 `;
 }
 

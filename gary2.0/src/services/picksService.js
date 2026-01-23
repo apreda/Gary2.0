@@ -281,15 +281,17 @@ async function storeDailyPicksInDatabase(picks) {
         thesis_type: pick.thesis_type || null,
         thesis_mechanism: pick.thesis_mechanism || null,
         supporting_factors: pick.supporting_factors || [],
-        contradicting_factors: pick.contradicting_factors || null
+        contradicting_factors: pick.contradicting_factors || null,
+        // Multi-book sportsbook odds comparison (for iOS app display)
+        sportsbook_odds: pick.sportsbook_odds || null
       };
-      
+
       // Add the generated pick ID
       pickData.pick_id = generatePickId(pickData, currentDateString, index);
-      
+
       return pickData;
     }
-    
+
     // Fallback to original fields if we can't find the OpenAI output
     const pickData = {
       pick: pick.pick,
@@ -325,12 +327,14 @@ async function storeDailyPicksInDatabase(picks) {
       thesis_type: pick.thesis_type || null,
       thesis_mechanism: pick.thesis_mechanism || null,
       supporting_factors: pick.supporting_factors || [],
-      contradicting_factors: pick.contradicting_factors || null
+      contradicting_factors: pick.contradicting_factors || null,
+      // Multi-book sportsbook odds comparison (for iOS app display)
+      sportsbook_odds: pick.sportsbook_odds || null
     };
-    
+
     // Add the generated pick ID
     pickData.pick_id = generatePickId(pickData, currentDateString, index);
-    
+
     return pickData;
   }).filter(pick => {
     // NO CONFIDENCE FILTER - Store ALL picks regardless of confidence

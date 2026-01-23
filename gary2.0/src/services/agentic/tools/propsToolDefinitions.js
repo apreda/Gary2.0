@@ -432,7 +432,11 @@ export const propsToolDefinitions = {
       type: 'function',
       function: {
         name: 'fetch_player_season_stats',
-        description: 'Fetch NBA season averages (PPG, RPG, APG, FG%, 3PT%, minutes)',
+        description: `Fetch NBA season averages with BDL v2 usage data. Returns:
+- Base stats: PPG, RPG, APG, FG%, 3PT%, FT%, MPG, steals, blocks, turnovers, 3PM/game
+- Usage stats (BDL v2): usage_percentage, touches, pct_of_team_points, pct_of_team_fga, pct_of_team_rebounds, pct_of_team_assists
+
+This is your primary tool for understanding a player's role and volume.`,
         parameters: {
           type: 'object',
           properties: {
@@ -446,20 +450,33 @@ export const propsToolDefinitions = {
       type: 'function',
       function: {
         name: 'fetch_player_advanced_stats',
-        description: 'Fetch NBA advanced season averages from BDL API. Categories: general (base/advanced/usage/scoring/defense/misc), clutch (base/advanced/misc/scoring/usage), defense (2_pointers/3_pointers/greater_than_15ft/less_than_10ft/less_than_6ft/overall), shooting (5ft_range/by_zone)',
+        description: `Fetch NBA advanced season averages from BDL v2 API. CRITICAL FOR PROPS:
+
+**CATEGORY: general**
+- type: "usage" → GOLD FOR PROPS: usage_percentage, touches, pct_of_team_points, pct_of_team_fga, pct_of_team_rebounds, pct_of_team_ast (role share metrics)
+- type: "advanced" → offensive_rating, defensive_rating, net_rating, true_shooting_pct, effective_fg_pct, assist_pct, rebound_pct, PIE
+- type: "base" → pts, reb, ast, stl, blk, tov, min, fg_pct, fg3_pct, ft_pct
+
+**CATEGORY: defense** (GOLD for opposing player UNDERs)
+- type: "overall" → matchup_fg_pct, matchup_3pt_pct (opponent shooting when guarded - lower = better defender), defended_at_rim_fg_pct (rim protection), contested_fg_pct (skill making contested shots - higher = reliable scorer), contested_shots, deflections
+
+**CATEGORY: shooting**
+- type: "5ft_range" or "by_zone" → shooting by location (paint, midrange, corner 3, above break 3)
+
+Use "general/usage" for role share. Use "defense/overall" for matchup defense (when evaluating OPPONENT player props - bet UNDER if defender has low matchup_fg_pct). Use contested_fg_pct to identify players who score well under pressure.`,
         parameters: {
           type: 'object',
           properties: {
             player_name: { type: 'string', description: 'Full player name' },
-            category: { 
-              type: 'string', 
+            category: {
+              type: 'string',
               enum: ['general', 'clutch', 'defense', 'shooting'],
-              description: 'Stat category' 
+              description: 'Stat category - use "general" for usage/role, "defense" for matchup impact'
             },
-            type: { 
-              type: 'string', 
+            type: {
+              type: 'string',
               enum: ['base', 'advanced', 'usage', 'scoring', 'defense', 'misc', '2_pointers', '3_pointers', 'greater_than_15ft', 'less_than_10ft', 'less_than_6ft', 'overall', '5ft_range', 'by_zone'],
-              description: 'Stat type within category' 
+              description: 'Stat type - "usage" for role share metrics, "overall" for defensive matchup stats'
             }
           },
           required: ['player_name', 'category', 'type']
@@ -470,12 +487,18 @@ export const propsToolDefinitions = {
       type: 'function',
       function: {
         name: 'fetch_player_game_advanced',
-        description: 'Fetch per-game advanced stats for an NBA player (PIE, pace, offensive/defensive rating, usage%, net rating per game)',
+        description: `Fetch per-game advanced stats for NBA player's recent games (L5/L10). Returns:
+- usage_pct per game (role consistency check)
+- net_rating per game (impact on team)
+- offensive_rating, defensive_rating
+- PIE, assist_pct, true_shooting_pct
+
+Use this to check if recent usage is stable (reliable volume) or volatile (unpredictable). Compare L5 usage to season avg from fetch_player_advanced_stats to detect role changes.`,
         parameters: {
           type: 'object',
           properties: {
             player_name: { type: 'string', description: 'Full player name' },
-            num_games: { type: 'number', description: 'Number of recent games (default: 5)' }
+            num_games: { type: 'number', description: 'Number of recent games (default: 5, max: 10)' }
           },
           required: ['player_name']
         }
@@ -754,7 +777,15 @@ export const propsToolDefinitions = {
       type: 'function',
       function: {
         name: 'fetch_advanced_passing_stats',
-        description: 'Fetch NFL advanced passing stats from BDL API (aggressiveness, avg_time_to_throw, completion_pct_above_expected, avg_air_yards, passer_rating)',
+        description: `Fetch NFL advanced passing stats from BDL v2 API. CRITICAL FOR QB PROPS:
+
+- completion_pct_above_expected: Accuracy vs difficulty (+ = elite, - = inaccurate)
+- aggressiveness: % of deep/contested throws (high = more big plays, more risk)
+- avg_time_to_throw: Pocket awareness (fast = quick release, slow = holds ball)
+- avg_air_yards: Depth of target (high = takes shots downfield)
+- passer_rating: Overall efficiency
+
+Use to identify QBs who generate yards efficiently vs volume-dependent QBs.`,
         parameters: {
           type: 'object',
           properties: {
@@ -769,7 +800,14 @@ export const propsToolDefinitions = {
       type: 'function',
       function: {
         name: 'fetch_advanced_rushing_stats',
-        description: 'Fetch NFL advanced rushing stats from BDL API (efficiency, rush_yards_over_expected, avg_time_to_los, percent_attempts_gte_eight_defenders)',
+        description: `Fetch NFL advanced rushing stats from BDL v2 API. CRITICAL FOR RB PROPS:
+
+- efficiency: Yards per expected yard (>1.0 = creating yards, <1.0 = scheme-dependent)
+- rush_yards_over_expected: Total yards above/below expected (GOLD - shows skill vs opportunity)
+- pct_8_plus_box: % runs vs stacked boxes (high = harder rushing, defense keying on run)
+- avg_time_to_los: Speed to line of scrimmage (fast = quick-hitting back)
+
+Use efficiency + yards over expected to separate skilled backs from volume backs.`,
         parameters: {
           type: 'object',
           properties: {
@@ -784,7 +822,14 @@ export const propsToolDefinitions = {
       type: 'function',
       function: {
         name: 'fetch_advanced_receiving_stats',
-        description: 'Fetch NFL advanced receiving stats from BDL API (avg_cushion, avg_separation, avg_yac, catch_percentage, percent_share_of_intended_air_yards)',
+        description: `Fetch NFL advanced receiving stats from BDL v2 API. CRITICAL FOR WR/TE PROPS:
+
+- avg_separation: Yards of separation from defender (GOLD - shows route running skill)
+- catch_percentage: Catches / Targets (reliability)
+- avg_yac_above_expectation: YAC skill vs expected (+ = creates after catch)
+- pct_team_air_yards: % of team's passing game targets (ROLE SHARE - highest = alpha WR)
+
+Use separation + target share to identify reliable volume. High separation + high share = safe bet.`,
         parameters: {
           type: 'object',
           properties: {

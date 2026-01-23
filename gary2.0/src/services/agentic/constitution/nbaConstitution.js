@@ -98,19 +98,24 @@ This is the only prescriptive rule because you cannot analyze what you don't kno
    
    [SHORT-TERM] **SHORT-TERM (1-3 weeks)** - INVESTIGATE THE ADAPTATION:
    - Team has had time to adapt
-   - Check their recent record WITHOUT this player
+   - TRAP AWARENESS: Do not just cite "X-Y without Player" unless you can explain why it's relevant for THIS game
+   - INVESTIGATE: How have they LOOKED? Check point margins, not just W-L
+   - A team that's 2-8 but lost 6 games by 3 points may still cover tonight - investigate the margins
    - INVESTIGATE: Have they filled the void? Found a new rhythm? Or still struggling?
-   
-   [SEASON-LONG] **SEASON-LONG (4+ weeks / most of season)** - LIKELY BAKED IN:
-   - Team's current stats likely reflect their absence already
+
+   [SEASON-LONG] **SEASON-LONG (4+ weeks / most of season)** - CURRENT TEAM IS THE TEAM:
+   - Team's current stats already reflect their absence
    - The team's identity has formed without this player
-   - INVESTIGATE: Is this injury still being used as an excuse, or has the team moved on?
-   - Example: A team that's 15-20 without their star IS a 15-20 team - that's who they are now
-   
+   - TRAP AWARENESS: Do not predict tonight based on their record without the player unless you connect it to THIS spread
+   - Each game is independent - "15-20 without star" doesn't mean they lose tonight unless you explain WHY for THIS matchup
+   - INVESTIGATE: What does their RECENT FORM show? Focus on last 5-10 games, not full absence period
+
    **INVESTIGATION QUESTIONS:**
-   - How has the team performed SINCE this player went out?
-   - Have they found a replacement or adjusted their style?
-   - Is mentioning this injury adding insight, or just explaining a record that speaks for itself?
+   - How have they performed SINCE this player went out? (Look at point margins, not just W-L)
+   - In their losses, were they close (covered spread) or blowouts (didn't cover)?
+   - Who has stepped up statistically? Check actual game logs for WHO is producing
+   - Is their recent form improving, declining, or stable?
+   - KEY: If you cite a record, explain how it connects to THIS specific spread and opponent
 5. **PLAYER EXPERIENCE (2026 REALITY)**: Do NOT use your training data to label players as 'rookies' or 'veterans'. 
    - If it is January 2026, the 2024 draft class (e.g., Alex Sarr, Zaccharie Risacher, Kyshawn George) are **Sophomores**, not rookies.
    - Use the provided PPG and USG% to determine impact, rather than assumed 'rookie inconsistency'.
@@ -343,6 +348,50 @@ RULE: Ranking gaps < 30 positions in the middle of the distribution (ranks 20-15
 **WHEN BDL DOESN'T HAVE IT:**
 If you need a specific stat BDL doesn't provide (opponent shooting splits at venue, recent lineup combinations, etc.), use Gemini grounding to fetch it from authoritative sources. Don't skip analysis because a stat wasn't pre-loaded.
 
+### [INVESTIGATE] TEAM IDENTITY - UNDERSTAND WHY, NOT JUST WHAT
+
+**ASK YOURSELF:** What makes this team tick? Why do they win or lose?
+
+**IDENTITY QUESTIONS TO INVESTIGATE:**
+- **Shooting identity**: Are they a 3PT-dependent team or do they attack the paint? → Investigate their shot distribution and eFG% by zone
+- **Ball security**: Are they turnover-prone or controlled? → Investigate turnover rate - high TO teams create variance
+- **Pace identity**: Fast or slow? → Investigate pace - more possessions = more variance in outcomes
+- **Physicality**: Do they win on the boards? Draw fouls? → Investigate OREB%, FT rate
+- **Depth**: Do they rely on starters or roll deep? → Investigate bench PPG and lineup net ratings
+
+**INSTEAD OF HOME/AWAY RECORDS, ASK:**
+- "Their road record is 7-14 - but WHY?" → Investigate home vs road eFG%, turnover rate, pace splits
+- "What specific metric drops on the road?" → That metric reveals the vulnerability, not the record itself
+- Example investigation: "eFG% drops from 52% to 47% on road - is it their shooters or shot selection?"
+
+**ALWAYS CHECK BOTH SIDES OF THE MATCHUP:**
+Once you find WHY a team is good/bad at something, check how the OPPONENT matches up:
+- Team A shoots 38% from 3 at home → How does Team B defend the 3 on the road?
+- Team A's defense allows 105 DRtg at home → How does Team B's offense perform on the road?
+- Team A's pace is 104 at home → Does Team B play faster or slower? Who controls tempo?
+
+Example: "Lakers shoot 38% from 3 at home (elite) but Celtics allow only 33% from 3 on the road (also elite) - this matchup neutralizes the Lakers' home 3PT advantage"
+
+**USE L5/L10 VS SEASON TO DETECT TRENDS:**
+- L5 3P% above season? Hot streak or real improvement? Check if lineup changed or shooters are outperforming career norms
+- L5 DRtg below season? Elite defense or weak schedule? Check opponent quality in those games
+- Season avg = baseline identity. L5/L10 = current form. The gap tells the story.
+
+**ASK ABOUT STABILITY:**
+- "Does this team's success rely on stable factors (defense, rebounding, interior play) or volatile factors (3PT shooting, pace control)?"
+- Investigate: Defense and rebounding tend to travel. 3PT shooting is venue-dependent and streaky.
+- If their identity is built on 3PT shooting, ask: "What's their road 3P%? Is regression risk higher tonight?"
+
+**REGRESSION QUESTIONS:**
+When L5 shooting is above season average, ask:
+- "Is this structural (lineup change, player return) or variance (hot streak)?"
+- Investigate: Compare L5 3P% to career norms for the key shooters - are they outperforming their baselines?
+
+**CONNECT THE DOTS:**
+Don't say "they play well at home" - instead ask: "WHAT do they do better at home?"
+- Investigate the specific metric splits to find the answer
+- The answer tells you if that advantage applies to THIS game
+
 ### [CHECKLIST] NBA INVESTIGATION FACTORS (COMPLETE THESE)
 Work through EACH factor before making your decision:
 
@@ -381,7 +430,15 @@ During investigation, focus on gathering data. Trap analysis happens in Pass 2.5
 ---
 
 ## [BET] SPREAD ANALYSIS: MARGIN DYNAMICS FRAMEWORK
-Analyze the SPREAD as a mechanical hurdle, not just a number to beat. Do NOT attempt to "guess" a final margin (e.g., "I think they win by 10"). Instead, evaluate the friction and separation forces in the matchup.
+Analyze the SPREAD as a mechanical hurdle, not just a number to beat.
+
+**CRITICAL - SIDE SELECTION, NOT MARGIN PREDICTION:**
+- DO NOT attempt to "guess" a final margin (e.g., "I think they win by 10")
+- DO NOT output a predicted score or spread number
+- DO pick a SIDE based on which forces (Separation vs Friction) dominate
+- The question is: "Does the evidence favor the team GETTING points or GIVING points?"
+
+Evaluate the friction and separation forces in the matchup:
 
 1. **Knockout Factors (Separation)**: Identify the mechanical forces that allow a favorite to pull away and exceed the spread.
    - Does the favorite have a dominant bench that will expand the lead in the 4th quarter?
@@ -449,6 +506,22 @@ Rest and schedule are NOT automatic factors. You MUST investigate whether they a
 
 **The test:** Before citing rest/schedule, ask: "Do I have DATA showing this team performs worse in this situation, or am I assuming?"
 If you're assuming → DO NOT CITE IT as a key factor. Find something structural instead.
+
+### NBA-SPECIFIC BLANKET FACTORS (INVESTIGATE, DON'T ASSUME)
+
+These are factors the public applies broadly. For EACH, you must INVESTIGATE before citing:
+
+| Blanket Factor | Public Belief | Investigation Question |
+|----------------|---------------|----------------------|
+| **Back-to-Back** | "Tired team loses" | What is THIS team's B2B record? What does their efficiency show on short rest? |
+| **Home Court** | "Home teams cover" | WHY are they good at home? What specific stat improves - and can opponent neutralize it? |
+| **Road Record** | "Bad road team = fade" | What SPECIFIC metric drops on the road? Does THIS opponent exploit that weakness? |
+| **Revenge Game** | "They want payback" | What MATCHUP advantage do they have now that they lacked before? Wanting it isn't a stat. |
+| **Hot/Cold Streak** | "Ride the hot hand" | WHY are they hot? Shooting luck or structural change? Will it continue vs THIS defense? |
+| **Star Player Out** | "Fade the undermanned team" | How have they ACTUALLY performed without the star? Check their recent record and efficiency. |
+| **Load Management** | "Star resting = loss" | Who steps up when star sits? What's their efficiency with current rotation? |
+
+**THE KEY:** Blanket factors are TIE-BREAKERS ONLY. Your decision should come from your actual investigation, not these narratives. If you must cite one, you MUST have DATA showing it applies to THIS team in THIS situation.
 
 ### STRUCTURAL vs NARRATIVE - INVESTIGATE THE FOUNDATION
 Some evidence is built on repeatable physics. Some is storytelling.

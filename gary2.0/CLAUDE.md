@@ -28,6 +28,23 @@ Gary is an AI Sports Bettor who makes daily picks across multiple sports leagues
 
 6. **Win THIS Bet, Not the Average**: Gary doesn't bet thinking "this should hit 55% over time." He bets because he believes THIS SPECIFIC BET WINS. Each game is its own game. Past patterns don't predict futures. If Gary can't articulate why THIS bet wins tonight, he passes.
 
+7. **Neutral Investigation, Not Biased Search**: When Gary investigates stats, he should investigate NEUTRALLY and let the data tell him which side it supports.
+   - **WRONG**: "For the favorite, investigate pace... For the underdog, investigate defense..." (This biases Gary to find reasons for both sides)
+   - **RIGHT**: "Investigate pace for both teams - which side of the spread does it support?" (This lets the data speak)
+
+8. **Spread Thinking**: For spread bets, frame the question correctly:
+   - One team is GETTING X points (underdog starts ahead on the scoreboard)
+   - One team is GIVING X points (favorite must win by more than X)
+   - Gary's job: Investigate the stats and determine which side they actually support
+   - Don't ask Gary to find "a path to covering" for each side - ask him to investigate and conclude which side the stats favor
+
+9. **Side Selection, Not Margin Prediction**: Gary does NOT predict his own spread or margin number.
+   - ❌ WRONG: "I think the favorite wins by 8 points" (predicting a margin)
+   - ✅ RIGHT: "The stats support the favorite side of this spread" (selecting a side)
+   - The stats and data GUIDE Gary toward which SIDE of the spread to take
+   - Don't ask "by how much" - ask "is the difference significant enough to favor one side?"
+   - Gary picks a SIDE based on evidence, not a predicted final score
+
 ## Tech Stack
 
 **AI/LLM:**
@@ -55,6 +72,27 @@ To prevent "Concept Drift" where Gemini's 2024 training data clashes with 2026 r
 - "Demand specific citations" - forces grounded evidence
 - "Search Tool Over Intuition" - explicit instruction to use search, not internal knowledge
 
+## Gemini Best Practices
+
+### 1. Temperature 1.0 (Default)
+For Gemini 3, keep temperature at 1.0. Unlike earlier models where you lowered temperature for "accuracy," Gemini 3's reasoning engine is calibrated for 1.0. Lowering it can cause logic loops or make the model ignore complex constraints.
+
+### 2. Anchoring (Long Context Strategy)
+When giving Gemini large amounts of data, use Context Anchoring:
+- **The Rule**: Put data/files FIRST, specific question/instruction LAST
+- **Bridge Phrase**: Start final instruction with "Based on the information provided above..." or "Referencing the data in the context..."
+
+### 3. XML Tagging
+Use XML-style tags to create hard boundaries between prompt sections. Prevents "instruction drift" where the model confuses data with commands.
+
+### 4. No Emojis & Fluff Removal
+Gemini 3 treats prompts as executable code, not conversation.
+- Remove emojis, "please," and polite filler
+- Direct, neutral, factual language yields highest instruction adherence
+
+### 5. Negative Constraint Anchor
+Place "Don't" rules at the END of the prompt. Gemini 3 prioritizes the last few sentences as highest-priority constraints.
+
 **Data Sources:**
 - Ball Don't Lie API (stats, betting odds, AND player props for all sports)
 - Rotowire API (DFS data, injury reports)
@@ -74,8 +112,8 @@ To prevent "Concept Drift" where Gemini's 2024 training data clashes with 2026 r
 Gary uses a **multi-pass agentic system** located in `/src/services/agentic/`:
 
 1. **Pass 1 - Investigation**: Gary requests stats via function calling (Gemini Flash)
-2. **Pass 2 - Steel Man**: Builds arguments for BOTH sides without bias (Gemini Flash)
-3. **Pass 2.5 - Grading**: Grades his own analysis, stress tests, makes decision (Gemini Pro)
+2. **Pass 2 - Steel Man**: Builds arguments for BOTH sides without bias (Gemini Flash) - these are Gary's "advisors"
+3. **Pass 2.5 - Evaluation**: Evaluates Steel Man cases, investigates which factors the stats actually support, stress tests, makes decision (Gemini Pro) - Gary is the "sharp" who filters what's real vs fluff
 4. **Pass 3 - Output**: Formats final pick with rationale (Gemini Pro)
 
 ### Key Files
@@ -117,15 +155,94 @@ Gary uses a **multi-pass agentic system** located in `/src/services/agentic/`:
    - "Check if this team's recent shooting is sustainable or variance"
    - NOT: "If team has rest advantage, pick them"
 
-3. **Preserve Game-by-Game Analysis**: Every enhancement should preserve Gary's ability to analyze each game uniquely.
+   **For Spread Analysis - Keep It Neutral**:
+   - ✅ "Investigate pace for both teams - which side of the spread does it support?"
+   - ✅ "Investigate the efficiency gap - does it favor the team getting points or giving points?"
+   - ❌ "For the favorite, find reasons they cover... For the underdog, find reasons they cover..."
+   - ❌ "What's the path to covering for each side?" (forces Gary to find reasons for both)
 
-4. **Use Function Calling**: Gary should REQUEST stats via tools, not have them pre-fetched blindly.
+   The goal is to let the stats tell Gary which side to pick, not to find reasons for a predetermined conclusion.
 
-5. **Test with Real Games**: Always test changes against actual upcoming games.
+3. **The Guiding Gary Framework**: When writing prompts, think in three layers:
 
-6. **Maintain Constitutions**: Sport-specific logic goes in constitution files, not scattered throughout code.
+   **Layer 1 - AWARENESS (What to notice):**
+   - "Notice if L5 shooting is significantly above season average"
+   - "Be aware that turnover rate varies significantly home vs road for some teams"
+   - Statements about what factors exist = OK
 
-7. **Silent Data = Investigation Prompt**: If data is missing or a check fails, prompt Gary to investigate, don't hide it.
+   **Layer 2 - INVESTIGATION (What to look at):**
+   - "Investigate home vs road eFG% splits"
+   - "Ask: What's driving the L5 surge - structural change or variance?"
+   - Questions Gary asks himself + stats to check = OK
+
+   **Layer 3 - CONCLUSION (What it means for the pick):**
+   - ❌ NEVER: "High pace = underdog can hang"
+   - ❌ NEVER: "If shooting is above average, expect regression = fade them"
+   - ❌ NEVER: Any statement that links a factor directly to a pick conclusion
+   - Gary WILL follow explicit if/then rules - he takes instructions literally
+
+   **Why This Matters:**
+   If we write "Fast pace helps underdogs stay close" → Gary will pick underdogs in fast-paced games without investigating whether it's true for THIS matchup. He follows instructions explicitly.
+
+   Instead write: "Ask: Does the pace of this game favor higher variance (more possessions = more chances for upset) or does it not matter for THIS specific matchup?"
+
+4. **The 6-Step Factor Implementation Framework**: When adding ANY factor, stat, or consideration to Gary's analysis, follow these 6 steps:
+
+   **STEP 1 - ADD AWARENESS:**
+   Make Gary aware the factor exists. Don't tell him what it means.
+   - ✅ "Be aware of the rest/travel situation for both teams"
+   - ✅ "Notice if L5 shooting differs significantly from season average"
+
+   **STEP 2 - PUSH TO INVESTIGATE FOR THIS GAME AND THIS SPREAD:**
+   Gary must investigate how this factor applies to THIS specific matchup, not in general.
+   - ✅ "Investigate: How does the rest situation affect THIS game against THIS opponent?"
+   - ✅ "Ask: Given THIS spread, does the pace differential matter for covering?"
+   - ❌ "Rest advantage = easier cover" (too general)
+
+   **STEP 3 - GUIDE TOWARD PREDICTIVE METRICS (NOT DESCRIPTIVE):**
+   Help Gary understand which metrics predict outcomes vs which just describe the past.
+   - **DESCRIPTIVE (what happened):** Records, win streaks, "they're 7-14 on the road"
+   - **PREDICTIVE (what's likely to happen):** Efficiency gaps, L5 margins, pace-adjusted stats
+   - ✅ "Investigate their road eFG% and turnover rate - what's CAUSING the road struggles?"
+   - ❌ "Their 7-14 road record suggests they'll lose" (record describes, doesn't predict)
+
+   **STEP 4 - GUIDE TO UNDERSTAND WHAT DATA TELLS HIM ABOUT EACH TEAM:**
+   Gary should interpret what the data reveals about team identity.
+   - ✅ "Ask: Does L5 tell the story of who this team IS RIGHT NOW, or do season averages provide better context for THIS metric?"
+   - ✅ "Investigate: What does this efficiency gap reveal about how these teams match up?"
+   - Different stats have different recency relevance:
+     - **L5/L10 PRIMARY:** Form, shooting %, injury adjustments, lineup performance
+     - **SEASON AVERAGES CONTEXT:** Regression baselines, structural identity, defensive schemes
+
+   **STEP 5 - ASK WHICH SIDE OF THE SPREAD THIS BENEFITS:**
+   After investigation, Gary decides which side the factor supports.
+   - ✅ "Based on your investigation of pace, which side of the spread does it favor?"
+   - ✅ "Does the efficiency gap support the team getting points or giving points?"
+   - ❌ "High pace favors underdogs" (we decide for him - NEVER)
+
+   **STEP 6 - GUIDE TO THINK ABOUT WHETHER THIS SHOWS UP TONIGHT:**
+   Not all factors will materialize in every game. Gary decides what he can rely on.
+   - ✅ "Ask: Which of these factors do you believe will actually show up TONIGHT?"
+   - ✅ "Which factors can you rely on for your decision vs which are uncertain?"
+   - ✅ "Of everything you investigated, what do you have CONVICTION about for THIS game?"
+
+   **EXAMPLE - Applying the 6 Steps to "Pace":**
+   1. AWARENESS: "Be aware of the pace differential between these teams"
+   2. INVESTIGATE THIS GAME: "Investigate: How does EACH team perform in games at this pace? Check their efficiency in fast vs slow games"
+   3. PREDICTIVE METRICS: "Look at L5 pace-adjusted efficiency, not just raw scoring"
+   4. WHAT IT TELLS YOU: "Ask: Does the pace data reveal a matchup advantage, or is it neutral?"
+   5. WHICH SIDE: "Based on your investigation, which side of the spread does pace favor (if any)?"
+   6. WILL IT SHOW UP: "Do you believe pace will be a determining factor TONIGHT, or will other factors override it?"
+
+5. **Preserve Game-by-Game Analysis**: Every enhancement should preserve Gary's ability to analyze each game uniquely.
+
+6. **Use Function Calling**: Gary should REQUEST stats via tools, not have them pre-fetched blindly.
+
+7. **Test with Real Games**: Always test changes against actual upcoming games.
+
+8. **Maintain Constitutions**: Sport-specific logic goes in constitution files, not scattered throughout code.
+
+9. **Silent Data = Investigation Prompt**: If data is missing or a check fails, prompt Gary to investigate, don't hide it.
 
 ### DON'T's ❌
 
