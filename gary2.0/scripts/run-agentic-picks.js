@@ -442,6 +442,17 @@ async function main() {
           // Default: Get TODAY's games in EST timezone (games that haven't started yet)
           const todayEST = now.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); // YYYY-MM-DD format
 
+          // Debug: Log first game's commence_time to diagnose filter issues
+          if (allGames?.length > 0) {
+            const g = allGames[0];
+            const ct = g.commence_time;
+            const gt = new Date(ct);
+            const dateEST = gt.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+            console.log(`[${config.name}] DEBUG: now=${now.toISOString()}, todayEST=${todayEST}`);
+            console.log(`[${config.name}] DEBUG: Game 1 commence_time="${ct}" -> parsed=${gt.toISOString()} -> EST date=${dateEST}`);
+            console.log(`[${config.name}] DEBUG: dateMatch=${dateEST === todayEST}, notStarted=${gt >= now}`);
+          }
+
           games = allGames?.filter(g => {
             const gameTime = new Date(g.commence_time);
             const gameDateEST = gameTime.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
