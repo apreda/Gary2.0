@@ -3280,7 +3280,7 @@ Your pick comes from your investigation and reasoning. Find the best angle on th
 {
   "final_pick": "[Team] [spread/ML]",
   "confidence_score": [0.50-0.95],
-  "rationale": "3-4 paragraphs explaining WHY this team covers TONIGHT. Include the stats, matchup factors, and context that led you to this pick. This is where you explain your decision."
+  "rationale": "MUST START WITH 'Gary's Take\\n\\n' then a 1-2 sentence scene-setter (like a broadcaster describing the matchup), then 3-4 paragraphs explaining WHY this team covers TONIGHT with stats and matchup factors."
 }
 \`\`\`
 </output_format>
@@ -3321,6 +3321,15 @@ This is where you make your pick. One decision, based on complete analysis.
 
 **STEP 4: OUTPUT YOUR DECISION (WITH REAL REASONING)**
 Output your decision in the strict JSON format above.
+
+**RATIONALE FORMAT (CRITICAL - iOS app depends on this):**
+Your rationale MUST start with exactly: "Gary's Take\\n\\n"
+Then include:
+1. **Scene-setter (1-2 sentences):** Open like a broadcaster - describe the matchup, where teams stand, what's at stake
+2. **Key mechanism (1 paragraph):** The PRIMARY basketball/hockey/football reason this team covers - with STATS
+3. **Supporting evidence (1-2 paragraphs):** Additional factors with numbers that back up your pick
+4. **Closing:** Confident statement with your pick
+
 **CRITICAL:** Your rationale must include SPECIFIC DATA that explains your pick:
 - Actual stats (efficiency gaps, L5 margins, matchup data)
 - Specific matchup advantages backed by numbers
@@ -3371,10 +3380,13 @@ CRITICAL CONSTRAINTS (Gemini 3 prioritizes these):
    - Example: "L5 scoring up to 118 PPG from 112 season avg - shooting 52% L5 vs 46% season suggests hot streak"
    - Note if key players were OUT during L5 games - those stats may not reflect tonight's team
 
-10. FOR SPREAD BETS: Be aware that rest/travel can affect lines.
-    - Public often bets rested favorites, which can move lines
-    - Investigate actual rest performance: How has this team performed on back-to-backs? After long road trips?
-    - Consider all factors you think are relevant - your deep reasoning determines the weight of each
+10. REST/SCHEDULE IS A SOFT FACTOR - NOT A PRIMARY REASON:
+    - Rest and travel are CONTEXT, not conclusions. They must be backed by PERFORMANCE DATA.
+    - WRONG: "Team X is rested vs Team Y on a back-to-back, therefore Team X covers" (rest alone is not predictive)
+    - RIGHT: "Team Y has shot 8% worse from 3PT on back-to-backs this season (31% vs 39%), and tonight faces a top-5 perimeter defense"
+    - Investigate: How has THIS specific team actually performed on back-to-backs? What are their actual L5 B2B stats?
+    - If you cite rest/schedule, it MUST be backed by specific performance numbers showing how it affects THIS team
+    - Rest is priced into lines. To use it, show WHY the market underweighted it with actual data.
 
 11. UNDERSTAND THE DIFFERENCE between descriptive and predictive stats:
     - DESCRIPTIVE: Records, streaks - these describe what happened
@@ -5573,7 +5585,7 @@ BEGIN WRITING YOUR STEEL MAN CASES NOW.
 {
   "final_pick": "[Team] [spread/ML]",
   "confidence_score": [0.50-0.95],
-  "rationale": "3-4 paragraphs explaining WHY this team covers TONIGHT. Include the stats, matchup factors, and context that led you to this pick."
+  "rationale": "MUST START WITH 'Gary's Take\\n\\n' then scene-setter (1-2 sentences), then 3-4 paragraphs with stats explaining WHY this team covers TONIGHT."
 }
 \`\`\``
         });
@@ -5912,7 +5924,7 @@ ${toolCallHistory.slice(-15).map(t => `- ${t.token}: ${t.summary || 'data receiv
 {
   "final_pick": "[Team] [spread/ML]"${isNFL ? '' : ' or "PASS"'},
   "confidence_score": [0.50-0.95],
-  "rationale": "3-4 paragraphs explaining WHY this team covers TONIGHT. Include the stats, matchup factors, and context that led you to this pick."
+  "rationale": "MUST START WITH 'Gary's Take\\n\\n' then scene-setter (1-2 sentences), then 3-4 paragraphs with stats explaining WHY this team covers TONIGHT."
 }
 \`\`\`
 
