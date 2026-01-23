@@ -1,6 +1,7 @@
 /**
  * Service for fetching betting data (using Ball Don't Lie as primary source)
- * Falls back to The Odds API if BDL doesn't return FanDuel/DraftKings odds
+ * Uses all available sportsbooks, with preference for FanDuel/DraftKings
+ * Falls back to The Odds API if BDL doesn't return odds from any sportsbook
  */
 import axios from 'axios';
 import { ballDontLieService } from './ballDontLieService.js';
@@ -72,7 +73,7 @@ const getMarketsForSport = (sport) => {
 };
 
 /**
- * Fetch odds from The Odds API (fallback when BDL doesn't have FanDuel/DraftKings)
+ * Fetch odds from The Odds API (fallback when BDL doesn't have odds from any sportsbook)
  * @param {string} sport - Sport key (e.g., 'basketball_nba')
  * @param {string} markets - Markets to fetch (e.g., 'h2h,spreads')
  * @returns {Promise<Array>} Games with odds from The Odds API
@@ -91,8 +92,8 @@ async function fetchFromTheOddsApi(sport, markets = 'h2h,spreads') {
         apiKey,
         regions: 'us',
         markets,
-        oddsFormat: 'american',
-        bookmakers: 'fanduel,draftkings'
+        oddsFormat: 'american'
+        // No bookmakers filter - get all available sportsbooks
       },
       timeout: 15000
     });
@@ -249,23 +250,26 @@ const extractOddsFromBookmakers = (bookmakers, homeTeam, awayTeam) => {
 
   if (!bookmakers || !bookmakers.length) return result;
 
-  // ONLY use FanDuel and DraftKings - no fallback to other bookmakers
-  const preferredKeys = ['fanduel', 'draftkings'];
+  // Prefer FanDuel and DraftKings, but fall back to other sportsbooks if needed
+  const preferredKeys = ['fanduel', 'draftkings', 'betmgm', 'caesars', 'pointsbet', 'betonlineag', 'bovada', 'mybookieag', 'williamhill_us', 'unibet_us'];
   let bookmaker = null;
-  
+
   for (const key of preferredKeys) {
-    bookmaker = bookmakers.find(b => b.key.toLowerCase() === key);
-    if (bookmaker) break;
+    bookmaker = bookmakers.find(b => b.key?.toLowerCase() === key);
+    if (bookmaker && bookmaker.markets?.length > 0) break;
   }
-  
-  // If neither FanDuel nor DraftKings found, return empty result
-  // We do NOT fall back to other bookmakers for consistency
+
+  // Final fallback: use ANY bookmaker that has markets
+  if (!bookmaker || !bookmaker.markets?.length) {
+    bookmaker = bookmakers.find(b => b.markets && b.markets.length > 0);
+  }
+
   if (!bookmaker) {
-    console.warn('[Odds Service] No FanDuel or DraftKings odds found - skipping game');
+    console.warn('[Odds Service] No bookmaker with valid odds found for this game');
     return result;
   }
 
-  console.log(`[Odds Service] Using ${bookmaker.key} for game odds (standard spreads/ML only)`);
+  console.log(`[Odds Service] Using ${bookmaker.key || bookmaker.title} for game odds`);
 
   if (!bookmaker?.markets) return result;
 
@@ -843,15 +847,15 @@ export const oddsService = {
         };
       });
 
-      // Check which games are missing FanDuel/DraftKings odds
+      // Check which games are missing odds from ALL sportsbooks
       const gamesMissingOdds = processedGames.filter(g =>
         g.moneyline_home === null && g.moneyline_away === null &&
         g.spread_home === null && g.spread_away === null
       );
 
-      // FALLBACK: If games are missing odds, try The Odds API
+      // FALLBACK: If games are missing odds from BDL, try The Odds API
       if (gamesMissingOdds.length > 0) {
-        console.log(`[Odds Service] ${sport}: ${gamesMissingOdds.length} games missing FanDuel/DraftKings odds - trying The Odds API fallback...`);
+        console.log(`[Odds Service] ${sport}: ${gamesMissingOdds.length} games missing odds from all BDL sportsbooks - trying The Odds API fallback...`);
 
         try {
           const markets = getMarketsForSport(sport);
