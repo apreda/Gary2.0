@@ -3703,7 +3703,25 @@ function parseGroundingInjuries(content, homeTeam, awayTeam, sport = '') {
     };
 
     const parseInjuryLine = (line, team) => {
+      // Strip markdown formatting (bold **text**, headers ###, etc.) before parsing
+      const cleanLine = line
+        .replace(/\*\*/g, '')  // Remove bold markers
+        .replace(/^#+\s*/, '') // Remove markdown headers
+        .replace(/^\s*[-•*]\s*/, '- ') // Normalize bullet points
+        .trim();
+
+      // Skip lines that indicate no injuries
+      const lowerLine = cleanLine.toLowerCase();
+      if (lowerLine.includes('none reported') || lowerLine.includes('no injuries') ||
+          lowerLine === 'none' || lowerLine === 'n/a' || lowerLine.includes('fully healthy')) {
+        return false;
+      }
+
       const patterns = [
+        // Rotowire format: Position Initial. LastName Status (e.g., "C S. Adams Out", "G F. VanVleet Out")
+        /^[PGCSF]+\s+([A-Z]\.\s*[A-Z][a-z'.-]+)\s+(Out|Ques|Questionable|Prob|Probable|Doubt|Doubtful|GTD|OFS|IR|LTIR)\b/i,
+        // Rotowire format with full position: PG/SG/SF/PF/C Initial. LastName Status
+        /^(?:PG|SG|SF|PF|C|G|F)\s+([A-Z]\.\s*[A-Z][a-z'.-]+(?:\s+[A-Z][a-z'.-]+)?)\s+(Out|Ques|Questionable|Prob|Probable|Doubt|Doubtful|GTD|OFS|IR|LTIR)\b/i,
         // Triple Pipe (New): - Name | Status | Duration
         /[-•*]\s*([A-Z][a-z'.-]+(?:\s+[A-Z][a-z'.-]+)+)\s*\|\s*(Out|Ques|Questionable|Prob|Probable|Doubt|Doubtful|GTD|OFS|IR|LTIR)\s*\|\s*([^|\n]+)/i,
         // Standard: - Name (Pos) - Status
@@ -3715,7 +3733,11 @@ function parseGroundingInjuries(content, homeTeam, awayTeam, sport = '') {
         // Simple Pipe: Name | Status
         /([A-Z][a-z'.-]+(?:\s+[A-Z][a-z'.-]+)+)\s*\|\s*(Out|Ques|Questionable|Prob|Probable|Doubt|Doubtful|GTD|OFS|IR|LTIR)\b/i,
         // No bullet: Name (Pos) Status
-        /([A-Z][a-z'.-]+(?:\s+[A-Z][a-z'.-]+)+)\s*(?:\([^)]+\))?\s+(Out|Ques|Questionable|Prob|Probable|Doubt|Doubtful|GTD|OFS|IR|LTIR)\b/i
+        /([A-Z][a-z'.-]+(?:\s+[A-Z][a-z'.-]+)+)\s*(?:\([^)]+\))?\s+(Out|Ques|Questionable|Prob|Probable|Doubt|Doubtful|GTD|OFS|IR|LTIR)\b/i,
+        // Markdown style: Name - Status (reason)
+        /([A-Z][a-z'.-]+(?:\s+[A-Z][a-z'.-]+)+)\s*[-–]\s*(Out|Ques|Questionable|Prob|Probable|Doubt|Doubtful|GTD|OFS|IR|LTIR)\b/i,
+        // Simple: Initial. LastName Status (no position prefix)
+        /([A-Z]\.\s*[A-Z][a-z'.-]+)\s+(Out|Ques|Questionable|Prob|Probable|Doubt|Doubtful|GTD|OFS|IR|LTIR)\b/i
       ];
 
       for (const pattern of patterns) {
