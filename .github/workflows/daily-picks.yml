@@ -33,7 +33,7 @@ jobs:
           cache-dependency-path: gary2.0/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --legacy-peer-deps
 
       # Determine which sports to run based on day of week
       # NFL: Only on Thursday, Sunday, Monday (game days)
