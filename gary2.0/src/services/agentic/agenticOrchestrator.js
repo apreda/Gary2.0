@@ -1618,18 +1618,23 @@ If you can't point to DATA supporting a narrative, it's just a story.
 - Situational factors worth investigating (rest, travel)
 - These help you understand context, but need TIER 1 data to confirm
 
-**INJURY EDGE RULES (CRITICAL):**
-- **FRESH (0-3 days old):** The ONLY time injury can be an edge. Line may not have fully adjusted.
-- **>3 DAYS OLD:** Fully priced in. The market has adjusted. NOT an edge.
-- **SEASON-LONG:** 100% irrelevant. Don't even mention it.
+**INJURY RULES (ABSOLUTE - ZERO TOLERANCE):**
 
-**To use a FRESH injury as an edge, you MUST:**
-1. Confirm it's within 3 days of announcement
-2. Show via TIER 1 stats that the line UNDERREACTED (e.g., "Their DRtg drops 8 points without him but the line only moved 2")
-3. You CANNOT just say "X is out, taking other side" - that's priced in
+**FRESH (0-3 days old):** The ONLY time injury can be an edge.
+- Line may not have fully adjusted
+- To use as edge: PROVE the line UNDERREACTED with data
+- FORBIDDEN: "X is out, taking other side" (already priced in)
+- REQUIRED: "X ruled out yesterday. Their DRtg drops 8pts without him. Line moved 3. Underreaction."
 
-**FORBIDDEN:** "Player X is out so I'm taking Team B" (without proving line underreaction)
-**ALLOWED:** "Player X was ruled out yesterday. Their DRtg without him is 115.2 vs 108.1 with him - a 7-point drop. But the line only moved 3 points, suggesting the market underweights his defensive impact."
+**>3 DAYS OLD - FORBIDDEN. YOU CANNOT CITE THIS AS A REASON. EVER.**
+- The market has had 3+ days to adjust
+- This is NOT an edge - it is ALREADY IN THE LINE
+- If you cite an injury >3 days old as a reason for your pick, you are WRONG
+- Focus on CURRENT TEAM PERFORMANCE, not the injury
+
+**SEASON-LONG - 100% IRRELEVANT. DON'T MENTION IT.**
+- Team's stats already reflect the absence
+- Citing this is like explaining the sky is blue - it's priced in
 
 **TIER 3 - DESCRIPTIVE (FORBIDDEN as reasons for picks):**
 - Records (home/away, overall, ATS) - describe PAST, don't predict THIS game
