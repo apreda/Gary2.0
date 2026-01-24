@@ -1632,6 +1632,12 @@ If you can't point to DATA supporting a narrative, it's just a story.
 - If you cite an injury >3 days old as a reason for your pick, you are WRONG
 - Focus on CURRENT TEAM PERFORMANCE, not the injury
 
+**UNKNOWN DURATION - FORBIDDEN. DO NOT CITE AS A REASON.**
+- If the injury report shows [DATE UNKNOWN] or no duration info, you CANNOT cite it
+- Use Gemini grounding to search for when the injury was announced
+- If you can't confirm it's within 3 days, treat it as priced in
+- Example: If Austin Reaves is "OUT" but no date shown, search "Austin Reaves injury date" before citing
+
 **SEASON-LONG - 100% IRRELEVANT. DON'T MENTION IT.**
 - Team's stats already reflect the absence
 - Citing this is like explaining the sky is blue - it's priced in

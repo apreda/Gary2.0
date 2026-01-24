@@ -100,11 +100,17 @@ When a key player is listed as **QUESTIONABLE**, investigate rather than automat
      - "Player X was ruled out yesterday. Their DRtg without him is 115.2 vs 108.1 with him - a 7pt drop. But the line only moved 3 points."
    - FORBIDDEN: "X is out, so I'm taking the other side" (that's already priced in, not an edge)
 
-   **>3 DAYS OLD - FULLY PRICED IN. NOT AN EDGE:**
+   **>3 DAYS OLD - FORBIDDEN. YOU CANNOT CITE THIS AS A REASON. EVER.**
    - The market has had time to adjust
    - The spread ALREADY reflects this absence
-   - You CANNOT cite this as a reason for your pick
+   - You CANNOT cite this as a reason for your pick - EVER
    - Focus on the TEAM'S CURRENT FORM, not the injury
+
+   **UNKNOWN DURATION - FORBIDDEN. DO NOT CITE AS A REASON.**
+   - If the injury report shows [DATE UNKNOWN] or no duration info, you CANNOT cite it
+   - Use Gemini grounding to search for when the injury was announced
+   - If you can't confirm it's within 3 days, treat it as priced in
+   - Example: If Austin Reaves is "OUT" but no date shown, search "Austin Reaves injury date" before citing
 
    **SEASON-LONG (4+ weeks) - 100% IRRELEVANT. DON'T MENTION IT:**
    - Team's current stats already reflect the absence
