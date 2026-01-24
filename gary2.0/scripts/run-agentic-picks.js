@@ -1348,6 +1348,24 @@ async function main() {
             }
           }
 
+          // NHL FALLBACK: If statsData is sparse (<5 items), use verifiedTaleOfTape from scout report
+          // This ensures NHL pick cards have a full Tale of the Tape display
+          if (config.key === 'icehockey_nhl' && statsData.length < 5 && result.verifiedTaleOfTape?.rows) {
+            console.log(`   📊 NHL: Using verified Tale of Tape (${result.verifiedTaleOfTape.rows.length} rows) for pick card`);
+            // Clear sparse statsData and use the verified rows instead
+            statsData.length = 0;
+            for (const row of result.verifiedTaleOfTape.rows) {
+              // Skip injuries row (shown separately)
+              if (row.name === 'Key Injuries') continue;
+              statsData.push({
+                name: row.name,
+                token: row.token,
+                home: row.home,
+                away: row.away
+              });
+            }
+          }
+
           // Also keep simple token list for backwards compatibility
           const statsUsed = result.toolCallHistory
             ? result.toolCallHistory.map(t => t.token)
@@ -1355,6 +1373,7 @@ async function main() {
 
           // Fetch sportsbook odds for this game (ML and Spread comparison)
           let sportsbookOdds = null;
+          let bestLine = null; // Track best available line
           try {
             const gameId = game.id || game.bdl_game_id;
             if (gameId) {
@@ -1364,6 +1383,42 @@ async function main() {
                 // Format odds for the picked team
                 sportsbookOdds = formatOddsForStorage(rawOdds, result.pick, result.homeTeam, result.awayTeam);
                 console.log(`   ✓ Found odds from ${sportsbookOdds?.length || 0} sportsbooks`);
+
+                // BEST LINE SELECTION: Find the best spread for Gary's pick
+                // For underdogs (getting points): higher spread is better (+7 better than +6.5)
+                // For favorites (giving points): lower absolute spread is better (-6.5 better than -7)
+                if (sportsbookOdds && sportsbookOdds.length > 0 && result.type === 'spread') {
+                  const validOdds = sportsbookOdds.filter(o => typeof o.spread === 'number' && !isNaN(o.spread));
+                  if (validOdds.length > 0) {
+                    // Determine if picked team is underdog or favorite based on spread sign
+                    const firstSpread = validOdds[0].spread;
+                    const isUnderdog = firstSpread > 0; // positive spread = getting points
+
+                    // Find best line
+                    let best = validOdds[0];
+                    for (const odds of validOdds) {
+                      if (isUnderdog) {
+                        // For underdog: higher is better (+7 > +6.5)
+                        if (odds.spread > best.spread) best = odds;
+                      } else {
+                        // For favorite: less negative is better (-6.5 > -7)
+                        if (odds.spread > best.spread) best = odds;
+                      }
+                    }
+
+                    bestLine = {
+                      book: best.book,
+                      spread: best.spread,
+                      spreadOdds: best.spread_odds
+                    };
+
+                    // Log if we found a better line than the default
+                    const defaultSpread = result.spread;
+                    if (defaultSpread !== null && best.spread !== defaultSpread) {
+                      console.log(`   🎯 Best line: ${best.spread > 0 ? '+' : ''}${best.spread} @ ${best.book} (default was ${defaultSpread > 0 ? '+' : ''}${defaultSpread})`);
+                    }
+                  }
+                }
               }
             }
           } catch (oddsErr) {
@@ -1371,6 +1426,11 @@ async function main() {
           }
 
           // Create clean pick object without large/unnecessary fields
+          // Use best available line if found, otherwise fall back to default
+          const finalSpread = bestLine?.spread ?? result.spread;
+          const finalSpreadOdds = bestLine?.spreadOdds ?? result.spreadOdds;
+          const bestLineBook = bestLine?.book ?? null;
+
           const cleanPick = {
             pick: result.pick,
             type: result.type,
@@ -1383,8 +1443,9 @@ async function main() {
             contradicting_factors: result.contradicting_factors || [],
             homeTeam: result.homeTeam,
             awayTeam: result.awayTeam,
-            spread: result.spread,
-            spreadOdds: result.spreadOdds,
+            spread: finalSpread, // Best available line (not just the first sportsbook)
+            spreadOdds: finalSpreadOdds,
+            bestLineBook: bestLineBook, // Which sportsbook has the best line
             moneylineHome: result.moneylineHome,
             moneylineAway: result.moneylineAway,
             total: result.total,
@@ -1425,6 +1486,9 @@ async function main() {
             })(),
             statsUsed: statsUsed, // Token names for backwards compatibility
             statsData: statsData, // Full stat data with values for Tale of the Tape
+            // Pre-computed Tale of the Tape from scout report (BDL verified stats)
+            // Used when toolCallHistory is sparse (e.g., NHL, NCAAB)
+            verifiedTaleOfTape: result.verifiedTaleOfTape || null,
             injuries: result.injuries || null, // Structured injury data from BDL
             sportsbook_odds: sportsbookOdds, // Multi-book odds comparison (ML + Spread)
             isBeta: config.isBeta || false, // Beta flag for sports with limited data

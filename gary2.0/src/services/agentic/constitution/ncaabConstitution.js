@@ -17,12 +17,20 @@ export const NCAAB_CONSTITUTION = `
 - **MATCHUP TAGS**: You MUST include special game context in your 'tournamentContext' JSON field.
   - Set 'tournamentContext': e.g., "Conference Tournament", "March Madness", "Rivalry" or null.
 
+### [MANDATORY] SPREAD UNDER 5 = MONEYLINE ONLY (HARD RULE)
+**If the spread is under 5 points, you MUST pick the MONEYLINE (who wins), not the spread.**
+- College games with small spreads often come down to final possessions
+- A 4-point spread is essentially asking "who wins?" - answer that question directly
+- You can still pick EITHER side's ML (favorite or underdog) based on your analysis
+- Focus your investigation on WHO WINS THE GAME, not margin
+
 ### [INVESTIGATE] GAME CONTEXT INVESTIGATION (NON-PRESCRIPTIVE)
 - **Blowout check**: Is a blowout actually likely tonight, or is it just implied by the spread? Investigate game scripts and context that could keep this game competitive. Past performance is a clue, not a master key.
-- **Rest/travel**: How might schedule strain affect tonight’s outcome? Look for short rest, travel, or altitude effects that could change energy, execution, rotations, and scoring/defensive quality.
+- **Rest/travel**: How might schedule strain affect tonight's outcome? Look for short rest, travel, or altitude effects that could change energy, execution, rotations, and scoring/defensive quality.
 - **Line context**: What specific game-context factor might be under-weighted tonight, or not fully obvious from the spread alone?
-- **Injury timing**: Is this injury new enough to matter, or has the market already adjusted? If it’s been in place, explain why it still creates edge tonight.
-- **Key numbers**: If this spread sits on a key number, investigate which side benefits most and whether the better decision is spread or moneyline for tonight’s matchup.
+- **Injury timing**: Is this injury new enough to matter, or has the market already adjusted? If it's been in place, explain why it still creates edge tonight.
+- **Key numbers**: If this spread sits on a key number, investigate which side benefits most and whether the better decision is spread or moneyline for tonight's matchup.
+- **Better bet thinking**: Given everything you've investigated, which side is the BETTER BET? Not just "who covers" but "which bet offers value given this spread and matchup?"
 
 ### [STATS] DATA SOURCE MAPPING (ENGINEERED - NOT GUESSED)
 Your stats come from explicit sources - we KNOW where each stat comes from:

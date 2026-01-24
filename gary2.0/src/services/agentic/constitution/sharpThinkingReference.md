@@ -2,11 +2,11 @@
 
 ---
 
-## 🧠 WHAT GOOD ANALYSIS LOOKS LIKE
+## WHAT GOOD ANALYSIS LOOKS LIKE
 
 Before you build or grade any case, understand the difference between real analysis and rationalization.
 
-**✅ THE GOLD STANDARD (OKC -4.5):**
+**[GOOD] THE GOLD STANDARD (OKC -4.5):**
 > "Houston's defensive identity is fractured following the fresh losses of Tari Eason and Dorian Finney-Smith — the two primary 'stoppers' usually tasked with containing elite scoring guards. Without them, the Rockets lack the lateral quickness to prevent Shai Gilgeous-Alexander from living in the paint."
 
 **Why it works:**
@@ -14,7 +14,7 @@ Before you build or grade any case, understand the difference between real analy
 - Forward mechanism: No stoppers → SGA in paint → margin expansion
 - Answers "How does OKC win by 5+ against THIS opponent?"
 
-**❌ THE TRAP (Utah Example):**
+**[BAD] THE TRAP (Utah Example):**
 > "Utah's defensive rating is famously the worst in the league, but Dallas currently lacks the offensive firepower to exploit it."
 
 **Why it fails:**
@@ -22,7 +22,7 @@ Before you build or grade any case, understand the difference between real analy
 - No mechanism for how Utah actually wins — it just hopes Dallas fails
 - The question is "How does Utah cover?" not "Why can't Dallas cover?"
 
-**❌ THE "PATTERN ONLY" TRAP:**
+**[BAD] THE "PATTERN ONLY" TRAP:**
 > "I am banking on the Bucks' pride and the return of their defensive anchor to keep this within the number."
 
 **Why it fails:**
@@ -212,12 +212,12 @@ But: "Do I believe THIS side wins/covers tonight? Can I articulate WHY?"
 
 **THE DIFFERENCE:**
 
-**❌ PROBABILISTIC THINKING:**
+**[BAD] PROBABILISTIC THINKING:**
 > "Home underdogs in divisional games have covered 57% of the time since 2015. This is that situation, so I'm betting it."
 
 This isn't analysis. You're betting a pattern, not THIS game. You've outsourced your thinking to historical averages.
 
-**✅ CONVICTION-BASED THINKING:**
+**[GOOD] CONVICTION-BASED THINKING:**
 > "I believe the home team covers because their defense has the personnel to contain the opponent's primary scoring threat, their starting goalie returns after posting a .928 SV% over the last month, and they've shown they can win low-scoring games. Multiple factors point to them staying competitive."
 
 This is matchup analysis that leads to conviction about which SIDE wins.
@@ -265,7 +265,7 @@ Season-long stats are public information. The market has them. Unless you've fou
 
 Winning streaks and hot streaks are visible to everyone. Has the line moved to reflect this? If so, you're betting on stale information.
 
-**⚠️ NHL EXCEPTION:** This trap applies differently to NHL moneylines. NHL bets ask "who wins?" not "who covers a spread." A hot streak with the same goalie starting is a STRUCTURAL factor (goalie confidence, team rhythm) - not just public noise. In NHL, the question isn't "is this priced in?" but "is the same goalie starting?" If yes, the streak has legitimate structural support. See NHL Constitution for details.
+**[NHL EXCEPTION]:** This trap applies differently to NHL moneylines. NHL bets ask "who wins?" not "who covers a spread." A hot streak with the same goalie starting is a STRUCTURAL factor (goalie confidence, team rhythm) - not just public noise. In NHL, the question isn't "is this priced in?" but "is the same goalie starting?" If yes, the streak has legitimate structural support. See NHL Constitution for details.
 
 **The "Reverse Logic" Trap**
 > "Everyone expects X, so Y will happen."
@@ -465,7 +465,7 @@ The market prices the star's absence based on NARRATIVE (this team is dead witho
 
 **The Concept:** A THEORY that teams underperform after emotional peaks - big wins, rivalry games.
 
-**⚠️ REALITY CHECK - THIS IS UNVERIFIABLE:**
+**[REALITY CHECK] THIS IS UNVERIFIABLE:**
 You cannot know a team's psychological state. "Letdown" is a narrative applied AFTER the fact to explain unexpected losses. Before the game, you have no way to know if a team will "let down" or "stay focused."
 
 **The Evidence Problem:**
@@ -487,7 +487,7 @@ You cannot know a team's psychological state. "Letdown" is a narrative applied A
 
 **The Concept:** A THEORY that teams underperform when they have a big game coming up.
 
-**⚠️ REALITY CHECK - THIS IS UNVERIFIABLE:**
+**[REALITY CHECK] THIS IS UNVERIFIABLE:**
 "Trap game" and "lookahead" are narrative constructs, not measurable factors. You cannot know what a team is thinking about. Professional athletes and coaches are paid to focus on the game in front of them.
 
 **The Evidence Problem:**
@@ -570,7 +570,7 @@ Because the 30% betting the other way is SHARP MONEY - bigger bets from respecte
 
 ### Long-Term Injury Context (PRESCRIPTIVE)
 
-**⚠️ This is one of the few hard rules because it's factual, not judgmental.**
+**[HARD RULE] This is one of the few hard rules because it's factual, not judgmental.**
 
 A player who has been out for 3+ weeks is **NOT a fresh factor**:
 - If the team is still winning/competitive → they have adjusted

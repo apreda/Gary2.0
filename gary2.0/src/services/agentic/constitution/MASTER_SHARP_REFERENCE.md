@@ -215,31 +215,31 @@ Either you're missing information, or you don't have edge. Consider passing or r
 
 Before finalizing, verify your rationale has these characteristics:
 
-### ✅ VOLUME MATH IS VISIBLE
+### [CHECK] VOLUME MATH IS VISIBLE
 You showed rate × opportunities = projection. The math is in your analysis, not just implied.
 
 **Weak:** "He's been getting a lot of assists lately"
 **Sharp:** "7.0 APG over L5 at 39 MPG. Even at 28 blowout minutes, projects to 5.0. Line is 4.5."
 
-### ✅ EDGE IS NON-OBVIOUS
+### [CHECK] EDGE IS NON-OBVIOUS
 You identified something the market might not see. Not "average > line."
 
 **Weak:** "His season average is 29.5, line is 27.5"
 **Sharp:** "Since the trade, usage jumped to 32%. Line reflects pre-trade role."
 
-### ✅ MECHANISM IS SPECIFIC
+### [CHECK] MECHANISM IS SPECIFIC
 You explained WHY, not just WHAT.
 
 **Weak:** "Good matchup—they allow a lot to guards"
 **Sharp:** "They run drop coverage. He shoots 58% on pull-up midrange. Scheme gives him his shot."
 
-### ✅ LOSS SCENARIO IS CONCRETE
+### [CHECK] LOSS SCENARIO IS CONCRETE
 You named the specific way this bet loses.
 
 **Weak:** "Risk is they could play well"
 **Sharp:** "Risk is blowout—28 minutes at 0.82 PPM = 23 points, under the 27.5 line."
 
-### ✅ COUNTER IS ADDRESSED
+### [CHECK] COUNTER IS ADDRESSED
 You explained why the market set this line and why you disagree.
 
 **Weak:** (no acknowledgment)
