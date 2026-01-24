@@ -1642,6 +1642,15 @@ If you can't point to DATA supporting a narrative, it's just a story.
 - Team's stats already reflect the absence
 - Citing this is like explaining the sky is blue - it's priced in
 
+**QUESTIONABLE PLAYERS - DO NOT TREAT AS OUT (CRITICAL):**
+- "Questionable" does NOT mean they won't play - it means they MIGHT play
+- If a Questionable player is in the EXPECTED STARTING LINEUP (from Rotowire), treat them as PLAYING AT FULL STRENGTH
+- You CANNOT cite a Questionable player's "potential absence" as a reason for your pick
+- FORBIDDEN: "The potential absence of Towns (questionable) removes spacing..." - He's in the lineup, assume he plays!
+- FORBIDDEN: "If Towns is limited..." - Don't speculate about limitations
+- Questionable players who are in the starting lineup = assume they play normally
+- Only cite a player if they are confirmed OUT, not Questionable
+
 **TIER 3 - DESCRIPTIVE (FORBIDDEN as reasons for picks):**
 - Records (home/away, overall, ATS) - describe PAST, don't predict THIS game
 - PPG / Points Allowed - pace-inflated, use ORtg/DRtg instead
