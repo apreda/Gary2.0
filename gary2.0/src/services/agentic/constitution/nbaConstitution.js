@@ -568,6 +568,101 @@ The team that played 2 nights ago IS the team you're betting on. Their recent st
 
 ---
 
+## [ADVANCED] ADVANCED STAT INVESTIGATION (PLAYER IMPACT & UNIT EFFICIENCY)
+
+### ON-OFF NET RATING - The "True Reliance" Metric (FOR FRESH INJURIES ONLY)
+
+**What It Is:**
+On-Off Net Rating measures how the team's efficiency CHANGES when a specific player is on the floor vs on the bench.
+- **Usage Rate** tells you how many possessions a player uses (volume)
+- **On-Off Net Rating** tells you how much the team RELIES on that player (impact)
+
+A player with 25% usage but +8.0 On-Off differential = the team plays like a lottery team when he sits.
+A player with 30% usage but +2.0 On-Off differential = the team has depth that fills his void.
+
+**WHEN TO INVESTIGATE (FRESH INJURIES ONLY - 0-2 games):**
+If a key player is OUT and it's their FIRST or SECOND game missing:
+1. **Check their Usage Rate** - High usage (25%+) means the offense ran through them
+2. **Investigate the team's recent games** - How did they perform in the 1-2 games without this player?
+3. **Ask:** Did the line move because of NEWS, or because of actual DATA showing they can't function?
+
+**THE VALUE QUESTION:**
+- If a star with 28% usage goes down and the line moves 4 points, but the team's first game without him showed competent ball movement and only a 2-point efficiency drop → The line may have overreacted
+- If a star goes down and the team immediately cratered (10+ point efficiency drop) → The line move may be justified
+
+**INVESTIGATION PROMPT:**
+"For fresh injuries (0-2 games), investigate: What was this player's usage rate? How did the team look in games without them? Does the line movement reflect the actual performance drop, or is it narrative-driven?"
+
+**DO NOT use this for injuries 3+ games old.** By then, the team has adapted, opponents have film, and the spread already reflects the absence.
+
+---
+
+### UNIT EFFICIENCY - First Unit vs Second Unit (FOR LARGE SPREADS)
+
+**What It Is:**
+NBA teams typically have "units" - the starting lineup (first unit) and the bench rotation (second unit).
+Net Rating by unit tells you if the bench is a "leak" (loses leads) or a "stabilizer" (holds the line).
+
+**WHY THIS MATTERS FOR LARGE SPREADS (8+ points):**
+Large spreads are about MARGIN, not just winning. To cover a -10 spread, the favorite needs to:
+1. Win the first unit battle (starters vs starters)
+2. Win the second unit battle (bench vs bench)
+3. Not give it back when the starters rest
+
+**INVESTIGATION PROMPTS:**
+- "Call [LINEUP_NET_RATINGS] to see first unit vs second unit performance for both teams"
+- "If Team A's first unit is +8.0 and their second unit is -3.0, ask: How much of the lead gets given back when starters rest?"
+- "If Team A dominates BOTH units, the large spread is more likely to cover"
+- "If Team A wins the starter battle but loses the bench battle, the margin may shrink"
+
+**THE BENCH DEPTH FACTOR:**
+| Unit Performance | What It Tells You |
+|-----------------|-------------------|
+| Both units positive | Team can build AND maintain leads (good for covering) |
+| First unit positive, second unit negative | Lead shrinks when starters rest (margin risk) |
+| First unit mediocre, second unit positive | Team hangs around even when outclassed (good for dogs) |
+
+**THE VALUE QUESTION FOR LARGE SPREADS:**
+"If this spread requires a 10+ point win, can the favorite's second unit HOLD the lead while starters rest? Or will the underdog's bench close the gap?"
+
+---
+
+### TRUE SHOOTING % (TS%) vs EFFECTIVE FG% (eFG%) - Understanding the Difference
+
+**eFG%** = Adjusts FG% for 3-pointers being worth more (3s count as 1.5 makes)
+**TS%** = eFG% PLUS free throws (accounts for ALL scoring efficiency)
+
+**Why TS% is often better:**
+- A player who shoots 45% but gets to the line 10 times is more efficient than one who shoots 48% with no FTs
+- TS% captures the FULL scoring picture
+- eFG% misses the FT contribution (which are high-percentage points)
+
+**When to use which:**
+- **TS%** for evaluating overall scoring efficiency (accounts for all point sources)
+- **eFG%** for evaluating pure shooting ability (floor spacing, shot selection)
+
+---
+
+### NET RATING SWING - The "Collapse" Indicator
+
+**What It Is:**
+The difference between a team's best lineup Net Rating and their bench unit Net Rating.
+
+**A large swing (10+ point gap)** means:
+- The team is FRAGILE when starters sit
+- Foul trouble to a star = bench minutes = potential collapse
+- Back-to-back fatigue = more bench minutes = higher variance
+
+**A small swing (< 5 point gap)** means:
+- The team has depth
+- They can absorb injuries, foul trouble, or rest without cratering
+- More stable performance
+
+**INVESTIGATION PROMPT:**
+"Notice the Net Rating swing for each team. If one team has a 12-point gap between their starter and bench units, they're more vulnerable to foul trouble or fatigue. If the other team's gap is only 4 points, they're more resilient."
+
+---
+
 ## [STATS] SECTION 1: STATISTICAL DATA
 
 These statistics are available for your investigation:
@@ -576,6 +671,7 @@ These statistics are available for your investigation:
 - Home/Away: [HOME_AWAY_SPLITS]
 - Style: [PACE] [THREE_PT_SHOOTING] [PAINT_DEFENSE] [BENCH_DEPTH]
 - Defense: [PAINT_DEFENSE] [PERIMETER_DEFENSE] [TRANSITION_DEFENSE]
+- Unit Analysis: [LINEUP_NET_RATINGS] [TOP_PLAYERS] (includes usage_concentration)
 
 ---
 

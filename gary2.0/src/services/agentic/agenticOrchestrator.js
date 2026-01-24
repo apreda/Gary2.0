@@ -2817,6 +2817,21 @@ Fill in ACTUAL VALUES from your investigation. This grounds your case in data.
   - Rest/travel: note but investigate their actual impact (e.g., "Team X is 8-2 on B2Bs this season")
   - Consider recent form and how it applies to this matchup
 
+${isNBA && Math.abs(parseFloat(firstTeamSpread.replace(/[+-]/g, ''))) >= 8 ? `**LARGE SPREAD INVESTIGATION (8+ points) - UNIT EFFICIENCY:**
+For large spreads, margin matters. Investigate how BOTH units perform for each team:
+- Call [LINEUP_NET_RATINGS] or [BENCH_DEPTH] to see first unit vs second unit performance
+- If the favorite dominates BOTH units, margin expansion is more likely
+- If the favorite wins starters but loses the bench battle, the margin may shrink
+- Ask: "Can the favorite's second unit HOLD the lead while starters rest?"
+- Check each team's Net Rating swing (gap between starter and bench unit) - large swings = more fragile
+
+**FRESH INJURY INVESTIGATION (if applicable):**
+If a key player is OUT for 0-2 games only:
+- Check their usage rate (25%+ = significant offensive role)
+- How did the team look in games without them? (Net Rating change)
+- Did the line move because of NEWS or because of actual performance data?
+- If usage was high but team still performed well, the line may have overreacted` : ''}
+
 ${isNHL ? '' : `**Good Favorite Covering example:**
 "Houston's +9.3 average margin over their last 10 games shows blowout potential. They've beaten three playoff teams by double digits during this stretch - the kind of margin separation that covers -7.5..."
 
@@ -3158,8 +3173,13 @@ These patterns show common situations where public perception, injury news, or r
 **2. Ewing Effect (Injury Overreaction)?**
    - Condition: Top usage player is OUT and public assumes guaranteed loss
    - CRITICAL: Check DURATION first. If out 3+ weeks, this pattern does NOT apply - team has adjusted.
-   - For RECENT injuries only: Compare team's Net Rating WITH vs WITHOUT that player
-   - For RECENT injuries only: Has bench stepped up? Could "next man up" improve spacing/ball movement?
+   - For RECENT injuries only (0-2 games):
+     * **Usage Rate check:** Was this a high-usage player (25%+)? High usage = offense ran through them.
+     * **On-Off investigation:** Compare team's Net Rating in games WITH vs WITHOUT that player.
+       - If player had +8 Net Rating but team still had +4 without them, the drop isn't catastrophic.
+       - If player's absence caused a 10+ point Net Rating collapse, the injury impact is real.
+     * **First game effect:** First game without a player = opponents have NO tape on new lineup. Can actually HELP the team short-term.
+     * **Line move check:** Did the line move because of NEWS (narrative) or DATA (actual performance drop)?
    - For SEASON-LONG injuries: The team's current stats already reflect the absence. Not an edge.
 
 **3. Regression Check?**
@@ -3183,6 +3203,17 @@ These patterns show common situations where public perception, injury news, or r
    - Condition: Large favorite spread (8.5+) in divisional/conference game
    - Investigate: Division rivals play 4x/season - does familiarity shrink the talent gap here?
    - Investigate: Does favorite have significant bench advantage (>10 PPG) to cover margin?
+
+**6b. Unit Efficiency (Large Spreads 8+)?**
+   - Condition: Spread is 8+ points (margin question, not just "who wins")
+   - **First Unit vs Second Unit:** To cover a large spread, the favorite needs to win BOTH unit battles.
+     * If favorite's starters dominate (+10 Net Rating) but bench is negative (-3), leads shrink when starters rest.
+     * If favorite dominates BOTH units, margin expansion is more likely.
+   - **Net Rating Swing:** Check the gap between each team's best lineup and bench unit.
+     * Large swing (10+ gap) = team is FRAGILE when starters sit (foul trouble, fatigue = risk)
+     * Small swing (< 5 gap) = team has depth, more stable performance
+   - **Investigation tokens:** [LINEUP_NET_RATINGS], [BENCH_DEPTH], [TOP_PLAYERS] (usage_concentration)
+   - **Question:** "Can the favorite's second unit HOLD the lead, or will the underdog's bench close the gap?"
 
 **7. Line Inflation ("Begging for a Bet")?**
    - Condition: Elite team is suspiciously NARROW favorite vs bad team
