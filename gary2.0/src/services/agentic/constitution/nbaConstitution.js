@@ -363,6 +363,10 @@ If you need a specific stat BDL doesn't provide (opponent shooting splits at ven
 - They're more stable game-to-game than individual player performance
 - TEAMS win games and cover spreads, not individual players
 
+**EXAMPLES OF PREDICTIVE TEAM STATS (use your NBA knowledge - these are just examples):**
+- Net Rating, Offensive Rating, Defensive Rating, eFG%, Pace, Turnover Rate, etc.
+- Use whichever advanced team stats are most relevant for THIS specific matchup
+
 **WHY INDIVIDUAL PLAYER AVERAGES ARE MOSTLY DESCRIPTIVE:**
 - A player's PPG, APG, RPG describe what they've done - high variance night to night
 - Individual stats don't account for opponent matchups, game flow, or role changes
@@ -522,6 +526,13 @@ You have access to statistical data, situational context, and narrative factors.
 When you encounter evidence, investigate deeper before drawing conclusions:
 
 ### RECENT FORM - INVESTIGATE THE "WHY"
+
+**RECORD RUNS ARE DESCRIPTIVE, NOT PREDICTIVE:**
+- A "4-0 run" or "5-game win streak" describes what HAPPENED - it doesn't predict tonight
+- These records often explain WHY the line is what it is (public perception moves lines)
+- ASK: "Is this record run WHY the line is set here, or does it tell me something the line missed?"
+- If the record run explains the line → it's already priced in → not your edge
+
 When a team is hot or cold, ask:
 - **What's driving the streak?** Investigate: Is it shooting improvement, defensive improvement, or opponent quality during the streak?
 - **What do the margins look like?** Winning by 2 points every game vs winning by 15 tells different stories
@@ -749,6 +760,13 @@ Additional stats available:
 ## [BET] SECTION 7: BET TYPE SELECTION
 
 You have three options: **SPREAD**, **MONEYLINE**, or **PASS**. Choose based on your analysis.
+
+### [MANDATORY] SPREAD UNDER 5 = MONEYLINE ONLY (HARD RULE)
+**If the spread is under 5 points, you MUST pick the MONEYLINE (who wins), not the spread.**
+- Small spreads are essentially asking "who wins?" - answer that question directly
+- Evaluate which side's ML offers better value given the price
+- You can still pick EITHER side's ML (favorite or underdog) based on your analysis
+- This applies to ALL NBA games with spreads under 5 points
 
 ---
 
