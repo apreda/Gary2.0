@@ -879,13 +879,14 @@ Be specific and factual. If it's just a regular season game, say so clearly.`;
     }
   }
 
-  // NBA IMMEDIATE PASS LOGIC
-  // Skip games where key player availability is uncertain to avoid wasting tokens
+  // NBA KEY PLAYER TRACKING (NO LONGER AUTO-PASS)
+  // Track key player situations for Gary to INVESTIGATE - no longer auto-passing
   // DYNAMIC KEY PLAYER DETECTION: Uses top 5 usage rate players from BDL data
   // instead of static "star" labels - this is data-driven, not subjective
-  let immediatePass = false;
+  let immediatePass = false;  // Kept for backwards compatibility but no longer triggered for questionable players
   let passReason = '';
-  let keyPlayerOutFlags = []; // Track key players OUT for investigation (not a pass, but Gary should analyze)
+  let keyPlayerOutFlags = []; // Track key players for investigation - Gary decides, not us
+  let keyPlayerInvestigateFlags = []; // NEW: Track QUESTIONABLE players for Gary to investigate via grounding
 
   if (sportKey === 'NBA') {
     
@@ -1077,12 +1078,18 @@ Return ONLY the 5 player names in the Expected Lineup for ${teamName}. Format: N
             console.log(`[Scout Report] Could not fetch expected starters for key player check: ${e.message}`);
           }
 
-          // Only trigger pass if the player is NOT in the expected starting lineup
+          // Instead of auto-passing, flag for Gary to investigate via Gemini grounding
           if (!playerInExpectedLineup) {
-            immediatePass = true;
-            passReason = `Key player (top 5 usage) UNCERTAIN status for ${teamName}: ${injury.player?.first_name} ${injury.player?.last_name} (${injury.status})`;
-            console.log(`[Scout Report] IMMEDIATE PASS TRIGGERED: ${passReason}`);
-            return true;
+            const playerFullName = `${injury.player?.first_name} ${injury.player?.last_name}`;
+            keyPlayerInvestigateFlags.push({
+              player: playerFullName,
+              team: teamName,
+              status: injury.status,
+              reason: 'QUESTIONABLE - Use Gemini grounding to check latest news on likelihood of playing',
+              inExpectedLineup: false
+            });
+            console.log(`[Scout Report] KEY PLAYER QUESTIONABLE (INVESTIGATE): ${playerFullName} (${injury.status}) for ${teamName} - Gary should use Gemini grounding to research`);
+            // NO LONGER AUTO-PASSING - Gary investigates and decides
           }
         }
         
@@ -1180,10 +1187,17 @@ Return ONLY the 5 player names in the Expected Lineup for ${teamName}. Format: N
         });
 
         if (trueQuestionable.length >= 3) {
-          immediatePass = true;
-          passReason = `3+ players questionable for ${teamName}: ${trueQuestionable.map(i => `${i.player?.first_name} ${i.player?.last_name}`).join(', ')}`;
-          console.log(`[Scout Report] IMMEDIATE PASS TRIGGERED: ${passReason}`);
-          return true;
+          // Instead of auto-passing, flag for Gary to investigate
+          const playerNames = trueQuestionable.map(i => `${i.player?.first_name} ${i.player?.last_name}`).join(', ');
+          keyPlayerInvestigateFlags.push({
+            player: `${trueQuestionable.length} players`,
+            team: teamName,
+            status: 'Multiple Questionable',
+            reason: `${trueQuestionable.length}+ rotation players questionable (${playerNames}) - Use Gemini grounding to check latest news`,
+            inExpectedLineup: false
+          });
+          console.log(`[Scout Report] MULTIPLE PLAYERS QUESTIONABLE (INVESTIGATE): ${playerNames} for ${teamName} - Gary should use Gemini grounding to research`);
+          // NO LONGER AUTO-PASSING - Gary investigates and decides
         } else {
           console.log(`[Scout Report] Only ${trueQuestionable.length} truly questionable (${questionablePlayers.length - trueQuestionable.length} in expected lineup) - NOT passing`);
         }
@@ -1738,16 +1752,28 @@ CRITICAL: Be precise. Only include what's actually shown on RotoWire. If a secti
     
     console.log(`[Scout Report] NCAAB GTD STARTER Check - ${homeTeam}: ${homeGTDStarters.length} GTD starters, ${awayTeam}: ${awayGTDStarters.length} GTD starters`);
     
-    // RULE 1: 2+ GTD STARTERS on same team = Automatic Pass
-    // College rosters are smaller (13 scholarships) - 2 starters out is catastrophic uncertainty
+    // RULE 1: 2+ GTD STARTERS on same team = Flag for investigation (no longer auto-pass)
+    // College rosters are smaller (13 scholarships) - 2 starters GTD is significant uncertainty
     if (homeGTDStarters.length >= 2) {
-      immediatePass = true;
-      passReason = `NCAAB: 2+ STARTERS GTD for ${homeTeam}: ${homeGTDStarters.map(p => p.name).join(', ')} - too much lineup uncertainty`;
-      console.log(`[Scout Report] NCAAB IMMEDIATE PASS: ${passReason}`);
+      const playerNames = homeGTDStarters.map(p => p.name).join(', ');
+      keyPlayerInvestigateFlags.push({
+        player: `${homeGTDStarters.length} starters`,
+        team: homeTeam,
+        status: 'Multiple GTD Starters',
+        reason: `${homeGTDStarters.length}+ starters GTD (${playerNames}) - Use Gemini grounding to check latest news`,
+        inExpectedLineup: false
+      });
+      console.log(`[Scout Report] NCAAB MULTIPLE GTD STARTERS (INVESTIGATE): ${playerNames} for ${homeTeam} - Gary should investigate`);
     } else if (awayGTDStarters.length >= 2) {
-      immediatePass = true;
-      passReason = `NCAAB: 2+ STARTERS GTD for ${awayTeam}: ${awayGTDStarters.map(p => p.name).join(', ')} - too much lineup uncertainty`;
-      console.log(`[Scout Report] NCAAB IMMEDIATE PASS: ${passReason}`);
+      const playerNames = awayGTDStarters.map(p => p.name).join(', ');
+      keyPlayerInvestigateFlags.push({
+        player: `${awayGTDStarters.length} starters`,
+        team: awayTeam,
+        status: 'Multiple GTD Starters',
+        reason: `${awayGTDStarters.length}+ starters GTD (${playerNames}) - Use Gemini grounding to check latest news`,
+        inExpectedLineup: false
+      });
+      console.log(`[Scout Report] NCAAB MULTIPLE GTD STARTERS (INVESTIGATE): ${playerNames} for ${awayTeam} - Gary should investigate`);
     }
     
     // RULE 2: 1 GTD STARTER - check if they're a key/star player via Gemini Grounding
@@ -1780,9 +1806,15 @@ Consider: points per game, assists, team role, and overall importance to the tea
           console.log(`[Scout Report] 🔍 Key player check result: ${response.substring(0, 100)}`);
           
           if (response.toUpperCase().startsWith('YES')) {
-            immediatePass = true;
-            passReason = `NCAAB: Key player GTD for ${teamToCheck}: ${playerToCheck.name} (${playerToCheck.status}) - ${response.substring(0, 100)}`;
-            console.log(`[Scout Report] NCAAB IMMEDIATE PASS: ${passReason}`);
+            // Flag for investigation instead of auto-pass
+            keyPlayerInvestigateFlags.push({
+              player: playerToCheck.name,
+              team: teamToCheck,
+              status: playerToCheck.status,
+              reason: `Key player GTD - ${response.substring(0, 100)} - Use Gemini grounding to check latest news`,
+              inExpectedLineup: false
+            });
+            console.log(`[Scout Report] NCAAB KEY PLAYER GTD (INVESTIGATE): ${playerToCheck.name} for ${teamToCheck} - Gary should investigate`);
           } else {
             console.log(`[Scout Report] ${playerToCheck.name} is not a key player - proceeding with analysis`);
           }
@@ -1951,6 +1983,8 @@ ${formatTokenMenu(sportKey)}
     passReason,
     // Key players confirmed OUT - Gary should INVESTIGATE impact (usage redistribution, team adjustment)
     keyPlayerOutFlags: keyPlayerOutFlags.length > 0 ? keyPlayerOutFlags : null,
+    // Key players QUESTIONABLE - Gary should use Gemini grounding to investigate latest news
+    keyPlayerInvestigateFlags: keyPlayerInvestigateFlags.length > 0 ? keyPlayerInvestigateFlags : null,
     // Verified Tale of the Tape - Gary MUST use this exactly, no hallucination
     verifiedTaleOfTape,
     // Venue context for NBA Cup, neutral site games, CFP games, etc.

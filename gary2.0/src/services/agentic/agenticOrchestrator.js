@@ -1301,7 +1301,33 @@ export async function analyzeGame(game, sport, options = {}) {
 
     // Step 4: Build the user message
     let userMessage = buildUserMessage(scoutReport, homeTeam, awayTeam, today, sport);
-    
+
+    // Add KEY PLAYER INVESTIGATE FLAGS if present (questionable players Gary should research)
+    const keyPlayerInvestigateFlags = typeof scoutReportData === 'object' ? scoutReportData.keyPlayerInvestigateFlags : null;
+    if (keyPlayerInvestigateFlags && keyPlayerInvestigateFlags.length > 0) {
+      const investigateSection = `
+═══════════════════════════════════════════════════════════════════════════════
+INVESTIGATION REQUIRED: KEY PLAYERS WITH UNCERTAIN STATUS
+═══════════════════════════════════════════════════════════════════════════════
+
+The following key players have QUESTIONABLE status. Use Gemini grounding to research the latest news before making your pick:
+
+${keyPlayerInvestigateFlags.map(flag => `• ${flag.player} (${flag.team}) - ${flag.status}
+  → ${flag.reason}`).join('\n\n')}
+
+**YOUR ACTION:**
+1. Use Gemini grounding to search for the latest news (within 12 hours) on these players
+2. Look for: coach comments, practice reports, injury severity updates
+3. If in expected lineup with no concerning news → assume they play
+4. If news suggests they're truly 50/50 or leaning out → factor uncertainty into your analysis
+5. Make your pick based on your best assessment of who will actually play
+
+═══════════════════════════════════════════════════════════════════════════════
+`;
+      userMessage = investigateSection + '\n\n' + userMessage;
+      console.log(`[Orchestrator] Added ${keyPlayerInvestigateFlags.length} key player investigation flags to prompt`);
+    }
+
     // FORCE UNDERDOG MODE: If enabled, inject directive to argue for underdog
     if (options.forceUnderdog) {
       const underdogDirective = `
@@ -1514,6 +1540,7 @@ If you can't point to DATA supporting a narrative, it's just a story.
 - **Storytelling**: Paint a picture - "I see Donovan Mitchell carving up that Portland Trail Blazers defense..."
 - **Specific**: Name players by full name, cite exact stats.
 - **Natural**: Sound like a real analyst, not an AI with canned phrases.
+- **TEAM-LEVEL REASONING**: Your primary reasoning should be built on TEAM-level advanced stats. Name players for color and context, but the core argument is about how the TEAMS match up.
 
 ## GARY'S FACT-CHECKING PROTOCOL (ZERO TOLERANCE)
 
@@ -1580,6 +1607,43 @@ If you can't point to DATA supporting a narrative, it's just a story.
 
 **For SPREAD bets, focus on PREDICTIVE metrics.** For ML bets, all factors matter.
 
+## CRITICAL: DESCRIPTIVE FACTORS ARE NOISE (THEY EXPLAIN THE LINE, NOT BEAT IT)
+
+**THE SHARP QUESTION:** For every factor you cite, ask yourself:
+**"Is this why the line EXISTS, or is this why the line is WRONG?"**
+
+**DESCRIPTIVE FACTORS = NOISE (9 out of 10 times):**
+- Back-to-backs, travel, fatigue
+- Bad records, losing streaks
+- Recent blowout losses
+- Star player injuries (unless very recent)
+- Road records, home records
+
+**WHY THESE ARE NOISE:**
+- These factors are PUBLIC INFORMATION that moves lines
+- The public sees "B2B" and hammers the rested team → the line already reflects this
+- If you cite these as your REASONS, you're just agreeing with public perception
+- Agreeing with the market = no edge. The line was set WITH this information.
+
+**THESE FACTORS ARE CLUES, NOT PREDICTORS:**
+- They tell you WHY the line is what it is (public perception, market reaction)
+- They tell you WHERE the public might be over/under-reacting
+- They do NOT tell you what will actually happen on the court
+- Investigate them to understand the line, but don't cite them as reasons for your pick
+
+**WHAT ACTUALLY PREDICTS GAME OUTCOMES:**
+- TEAM-level advanced stats that measure actual performance
+- Matchup dynamics between how the teams actually play
+- Factors that reveal something the public DOESN'T see or understand
+
+**THE TEST:** If you can explain WHY the line is what it is using your factor, that factor is already priced in and not your edge.
+
+**YOUR JOB:**
+- Investigate descriptive factors to UNDERSTAND the line and public perception
+- Look for where the public NARRATIVE differs from the actual DATA
+- When narrative ≠ data, THAT'S where value lives
+- Your pick should be based on what the DATA shows, not what the narrative says
+
 ## L5/L10 IS PRIMARY - SEASON STATS ARE CONTEXT
 
 **L5/L10 DATA IS YOUR PRIMARY EVIDENCE:**
@@ -1598,6 +1662,37 @@ If you can't point to DATA supporting a narrative, it's just a story.
 - 7-14 on the road = they still won 7 times. How close were the losses? Against whom?
 - Records are CLUES about quality, not predictors of THIS game's outcome
 - If citing a record, explain WHY it matters for THIS SPECIFIC SPREAD (not just "bad road team")
+
+## TEAM-LEVEL ADVANCED STATS > INDIVIDUAL PLAYER STATS
+
+**Use your NBA knowledge to identify which ADVANCED TEAM STATS are most predictive for THIS matchup.**
+
+**WHY TEAM-LEVEL ADVANCED STATS ARE MORE PREDICTIVE:**
+- They capture ALL player contributions aggregated into team performance
+- They account for rotations, depth, and how players work TOGETHER
+- They're more stable game-to-game than individual player performance
+- TEAMS win games and cover spreads, not individual players
+
+**WHY INDIVIDUAL PLAYER AVERAGES ARE MOSTLY DESCRIPTIVE:**
+- A player's PPG, APG, RPG describe what they've done - not what they'll do tonight
+- High variance game-to-game - individual stats are less stable than team stats
+- Don't account for opponent matchups, game flow, or role changes
+
+**WHEN TO USE PLAYER STATS:**
+- To investigate WHO drives a team's efficiency
+- To understand RECENT CHANGES (player returning, injured, role change)
+- As CONTEXT for why team stats look the way they do
+
+**THE RIGHT WAY TO USE PLAYER STATS:**
+- [NO] "Player X averages 25 PPG so they win" → doesn't connect to team outcome
+- [YES] "Team's strong efficiency is driven by their core unit - usage data shows balanced scoring"
+
+- [NO] "Star averages a triple-double so they cover" → individual averages ≠ team result
+- [YES] "Team's recent efficiency shows their offense clicking - player's assist rate indicates better ball movement"
+
+**ASK YOURSELF:** Is my reasoning built on how the TEAMS match up? Or am I relying on individual player averages to predict team outcomes?
+
+**REMEMBER:** Teams cover spreads, not players. Player stats provide CONTEXT for WHY team stats look the way they do.
 
 ## REST/TRAVEL ARE SOFT FACTORS (FOR SPREADS)
 
@@ -1924,10 +2019,11 @@ Qualitative observations are valid when you can't find specific numbers - just d
 
 **THE RULE:** Narrative claims are powerful. If you find the stat, cite it confidently. If you can't find a specific number, make the qualitative case instead. Both are valid - just don't fabricate precision.
 
-### PLAYER-SPECIFIC INVESTIGATION
-- **The "Game Log" Edge**: Use \`fetch_player_game_logs\` to see the last 5-10 games. A player averaging 20 PPG might have scored 35, 32, 28 in his last three. That's a "Hot Streak" that team-level season stats won't show you.
-- **The "Deep Drill"**: Use \`fetch_nba_player_stats\` (Advanced/Usage/Trends) or \`fetch_nfl_player_stats\` to see if a player's role has changed. If a star's Usage Rate jumped from 25% to 35% in the last week, they are the new focal point of the offense.
-- **Balance**: Individual spikes are "modifiers" to team success. Use them to validate your thesis or identify a hidden "angle."
+### PLAYER-SPECIFIC INVESTIGATION (FOR CONTEXT, NOT PRIMARY REASONING)
+- **Use player stats to EXPLAIN team performance**: If team efficiency changed, player data can show WHO is driving it
+- **Investigate role changes**: Usage shifts, returning players, or injuries can explain WHY the team looks different
+- **Connect to TEAM outcomes**: Player insights help you understand team performance - but TEAM performance is what predicts spreads
+- **CRITICAL**: Player stats provide CONTEXT. A player's hot streak doesn't directly predict the game outcome - the TEAM's performance does. Always connect player insights back to what it means for the TEAM.
 
 ### CRITICAL FORMATTING RULES
 
@@ -2654,10 +2750,11 @@ ${spreadSizeContext ? `<spread_context>${spreadSizeContext}</spread_context>` : 
 ${nflDataGaps}${nbaDataGaps}${ncaabDataGaps}${nhlDataGaps}
 
 **MINIMUM INVESTIGATION:**
-- Best player's recent game logs (hot or cold?)
-- Home/away record specifically for this scenario
-- Recent game margins (close games? blowouts?)
-- Any key players recently OUT or RETURNING?
+- TEAM-level advanced stats for both teams (use your NBA knowledge to identify the most relevant ones)
+- Home/away performance splits (efficiency, not just W-L records)
+- Recent game context - HOW they win/lose matters more than just the results
+- Any significant roster changes? (context for team performance shifts)
+- Use player data to understand WHY team performance looks the way it does
 
 **INJURY CONTEXT RULE:**
 - First game without them → High variance, team adjusting
@@ -3331,27 +3428,38 @@ The question is: "Which side is the BETTER BET given this spread?"
 
 **YOUR DECISION PROCESS:**
 
-1. **WHAT DOES YOUR RESEARCH SHOW?**
+1. **THE SHARP QUESTION (ASK FOR EVERY FACTOR YOU CITE):**
+   **"Is this factor telling me why the line EXISTS, or why the line is WRONG?"**
+
+   - If a factor EXPLAINS why the line is what it is → it's NOISE (already priced in)
+   - B2B, bad records, blowout losses, injuries → usually explain WHY the line exists
+   - If you cite these as your REASONS → you're just agreeing with the market (no edge)
+   - Your edge comes from finding where NARRATIVE ≠ DATA
+
+2. **WHAT DOES YOUR RESEARCH SHOW?**
    Based on your investigation (efficiency gaps, pace, L5 form, matchups):
    - What is the TRUE difference between these teams right now?
    - Which team has the statistical advantages in THIS specific matchup?
+   - Does your DATA differ from the market NARRATIVE?
 
-2. **DOES THE SPREAD REFLECT YOUR FINDINGS?**
+3. **DOES THE SPREAD REFLECT YOUR FINDINGS?**
    This is the key question:
    - If the data shows a close matchup but the spread is -7 → the +7 side may be the better bet
    - If the data shows a clear mismatch but the spread is only -3 → the -3 side may be the better bet
    - Have soft factors (injury news, B2B, losing streak) pushed the line beyond what hard stats support?
+   - Remember: Soft factors EXPLAIN the line - they don't BEAT it
 
-3. **CHECK THE TRAP PATTERNS:**
+4. **CHECK THE TRAP PATTERNS:**
    The trap patterns below show common situations where narratives move lines:
    - Injury overreaction → line moved because of news, not because team got worse
    - Public perception → everyone bets the hot team, line inflates
    - If you spot a trap, the OTHER side is often the better bet
 
-4. **MAKE YOUR DECISION:**
+5. **MAKE YOUR DECISION:**
    Which side is the BETTER BET? Not just "who wins" but "which bet offers value given this spread?"
    - Consider the RISK of the spread size (covering 8+ on the road is hard)
    - Consider whether the spread reflects reality or narrative
+   - YOUR PICK SHOULD BE BACKED BY DATA THAT DIFFERS FROM THE NARRATIVE
 
 Your pick is about VALUE, not just picking winners.
 </final_decision>
