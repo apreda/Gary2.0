@@ -2621,10 +2621,16 @@ Before writing your Steel Man cases, investigate BOTH sides equally.
   // ═══════════════════════════════════════════════════════════════════════════
   return `
 <pass_context>
-## PASS 2 - STEEL MAN ANALYSIS (PURE ADVOCACY)
+## PASS 2 - MATCHUP ANALYSIS (NEUTRAL INVESTIGATION)
 
-You have your first wave of data. Your job is to be a GENUINE ADVOCATE for BOTH sides.
-Do NOT evaluate, judge, or indicate which side you prefer. Decision-making happens in Pass 2.5.
+You have your first wave of data. Your job is to INVESTIGATE this matchup neutrally and understand what the data tells you about BOTH teams.
+
+**THE CORE QUESTION:** Does this spread reflect what you're finding in your research?
+- Investigate both teams' stats, form, and matchup dynamics
+- Build a complete picture of the TRUE difference between these teams
+- Ask: Have narrative factors (injuries, B2B, public perception) pushed this line beyond what the hard stats support?
+
+Decision-making happens in Pass 2.5 where you'll determine which side is the BETTER BET.
 </pass_context>
 
 ${spreadSizeContext ? `<spread_context>${spreadSizeContext}</spread_context>` : ''}
@@ -2820,11 +2826,17 @@ ${isNHL ? '' : `**Good Favorite Covering example:**
 **Good Statistical Matchup example:**
 "Cleveland's 113.4 Offensive Rating (5th) vs Philadelphia's 108.9 Defensive Rating (18th) creates a +4.5 efficiency gap that typically translates to 6-8 point margins at home..."`}
 
-**CASE FOR ${firstTeam} ${firstTeamSpread}:**
-*(They need to ${firstTeamCoverDesc})*
+**ANALYSIS FOR ${firstTeam} (${firstTeamSpread}):**
+*(What does the data say about their ability to perform in this matchup?)*
 
-**CASE FOR ${secondTeam} ${secondTeamSpread}:**
-*(They need to ${secondTeamCoverDesc})*
+**ANALYSIS FOR ${secondTeam} (${secondTeamSpread}):**
+*(What does the data say about their ability to perform in this matchup?)*
+
+**THE VALUE QUESTION:** After your analysis, ask yourself:
+- Does the spread of ${Math.abs(parseFloat(firstTeamSpread.replace(/[+-]/g, '')))} reflect the TRUE difference you found between these teams?
+- Have soft factors (injury news, B2B, public perception) pushed this line beyond what the hard stats support?
+- If the data shows an even matchup but the spread says -7, the +7 side may be the better bet
+- If the data shows a clear mismatch but the spread is only -3, the -3 side may be the better bet
 </case_structure>
 
 <instructions>
@@ -2836,9 +2848,9 @@ Using the investigation checklist, quality gate, and variance check above, execu
 
 **STEP 2:** Note RECENT UPDATES for each team (last 24-48 hours)
 
-**STEP 3:** Write **CASE FOR ${firstTeam}** (3-4 paragraphs with key factors, recent form with margins, stats)
+**STEP 3:** Write **ANALYSIS FOR ${firstTeam}** (3-4 paragraphs with key factors, recent form with margins, stats)
 
-**STEP 4:** Write **CASE FOR ${secondTeam}** (3-4 paragraphs with key factors, recent form with margins, stats)
+**STEP 4:** Write **ANALYSIS FOR ${secondTeam}** (3-4 paragraphs with key factors, recent form with margins, stats)
 
 **STEP 5:** Write **KEY CONCERNS** for BOTH sides (PARAGRAPH FORM - not bullet lists):
 
@@ -2850,12 +2862,12 @@ Example: "Detroit's 3PT shooting has been volatile - they shot 38.1% over the se
 **KEY CONCERNS FOR ${secondTeam}:**
 Same format - 3-5 sentences explaining concerns with stats and spread relevance.
 
-This keeps your Steel Man cases as strong advocacy while ensuring you're aware of the obvious issues on each side.
+This keeps your analysis grounded while ensuring you're aware of concerns on each side.
 
-**CRITICAL:** Do NOT indicate which side you prefer yet. Be a genuine advocate for BOTH sides.
-Evaluation happens in Pass 2.5 AFTER your cases are written.
+**CRITICAL:** Do NOT indicate which side is the better bet yet. Investigate BOTH sides neutrally.
+In Pass 2.5 you'll determine which side is the BETTER BET based on whether the spread reflects your findings.
 
-BEGIN STEEL MAN ANALYSIS NOW.
+BEGIN MATCHUP ANALYSIS NOW.
 </instructions>
 `.trim();
 }
@@ -3122,9 +3134,16 @@ The stats say [X side] of the spread is supported. Given your tonight prediction
 <stress_test_patterns>
 ## STRESS TEST PATTERNS (CHECK BOTH SIDES)
 
-**A trap is an OVERREACTION to a visible factor.** Investigate if the visible factor (blowout, injury news, streak) has been over-weighted in your analysis or the Steel Man cases.
+**A trap is where NARRATIVE has moved the line beyond what the STATS support.**
 
-**STRESS TEST BOTH TEAMS:** Check if EITHER side falls into these traps. This informs your final decision.
+These patterns show common situations where public perception, injury news, or recent results push spreads in one direction - often creating VALUE on the other side.
+
+**HOW TO USE TRAP PATTERNS:**
+- If you identify a trap on one side, ask: "Has this factor pushed the spread beyond what the hard stats support?"
+- Example: Star player just went out → public hammers the opponent → line moves from -3 to -7 → but the team's recent stats without the star show they're still competitive → the +7 is now the better bet
+- The trap patterns help you identify WHERE narrative has overtaken reality
+
+**CHECK BOTH SIDES:** Either team could be a trap. This informs which side is the BETTER BET.
 
 ---
 
@@ -3248,29 +3267,39 @@ ${keyPlayerSection}
 You are not playing a long game of "this should hit 55% over time."
 You are trying to WIN THIS SPECIFIC BET.
 
-The question is not: "What's the probability this hits based on historical patterns?"
-The question is: "Do I believe THIS bet wins tonight? Can I articulate WHY?"
+The question is not: "Who covers this spread?"
+The question is: "Which side is the BETTER BET given this spread?"
 
-Each game is its own game. You're not betting the average - you're betting THIS matchup.
+**THE VALUE FRAMEWORK:**
+- The spread reflects what the market thinks, influenced by public money, injury news, and narratives
+- Your research shows you the TRUE matchup dynamics based on hard stats
+- If these don't align, one side offers better value than the other
 
 **YOUR DECISION PROCESS:**
 
-1. **WHICH SIDE DOES EACH FACTOR BENEFIT?**
-   For each key factor you investigated (efficiency, pace, L5 form, matchups):
-   - Which side of the spread does it support?
-   - Does the data favor the team getting points or giving points?
+1. **WHAT DOES YOUR RESEARCH SHOW?**
+   Based on your investigation (efficiency gaps, pace, L5 form, matchups):
+   - What is the TRUE difference between these teams right now?
+   - Which team has the statistical advantages in THIS specific matchup?
 
-2. **WHICH FACTORS WILL ACTUALLY SHOW UP TONIGHT?**
-   Not all factors materialize in every game.
-   - Which factors do you have CONVICTION about for THIS game?
-   - Consider which factors you believe will show up in THIS specific matchup
-   - What's your overall read on how this game plays out?
+2. **DOES THE SPREAD REFLECT YOUR FINDINGS?**
+   This is the key question:
+   - If the data shows a close matchup but the spread is -7 → the +7 side may be the better bet
+   - If the data shows a clear mismatch but the spread is only -3 → the -3 side may be the better bet
+   - Have soft factors (injury news, B2B, losing streak) pushed the line beyond what hard stats support?
 
-3. **MAKE YOUR PICK:**
-   Based on your answers above - which side COVERS the spread in THIS game?
-   You're answering: "Does the favorite win by MORE than the spread?" or "Does the underdog keep it CLOSER than the spread?"
+3. **CHECK THE TRAP PATTERNS:**
+   The trap patterns below show common situations where narratives move lines:
+   - Injury overreaction → line moved because of news, not because team got worse
+   - Public perception → everyone bets the hot team, line inflates
+   - If you spot a trap, the OTHER side is often the better bet
 
-Your pick comes from your investigation and reasoning. Find the best angle on this game.
+4. **MAKE YOUR DECISION:**
+   Which side is the BETTER BET? Not just "who wins" but "which bet offers value given this spread?"
+   - Consider the RISK of the spread size (covering 8+ on the road is hard)
+   - Consider whether the spread reflects reality or narrative
+
+Your pick is about VALUE, not just picking winners.
 </final_decision>
 
 <output_format>
@@ -3316,8 +3345,8 @@ Check BOTH teams against the trap patterns.
 Document which patterns apply to EACH side.
 
 **STEP 3: MAKE YOUR FINAL DECISION**
-Based on everything - filtered case arguments, tonight expectations, stress test results - which side COVERS?
-This is where you make your pick. One decision, based on complete analysis.
+Based on everything - your matchup analysis, whether the spread reflects your findings, and trap pattern checks - which side is the BETTER BET?
+This is where you decide. Not just "who wins" but "which side offers value given this spread?"
 
 **STEP 4: OUTPUT YOUR DECISION (WITH REAL REASONING)**
 Output your decision in the strict JSON format above.
@@ -3330,12 +3359,13 @@ Then include:
 3. **Supporting evidence (1-2 paragraphs):** Additional factors with numbers that back up your pick
 4. **Closing:** Confident statement with your pick
 
-**CRITICAL:** Your rationale must include SPECIFIC DATA that explains your pick:
-- Actual stats (efficiency gaps, L5 margins, matchup data)
-- Specific matchup advantages backed by numbers
-- Why you expect THIS team to play WELL/COVER tonight
-- NOT just "Team A is better" - WHY do they cover THIS SPREAD? What mechanism creates that outcome?
-- DO NOT predict your own margin or score. Pick a SIDE based on the evidence.
+**CRITICAL:** Your rationale must explain WHY this side is the BETTER BET:
+- What does the data show about this matchup?
+- Does the spread reflect reality, or has narrative pushed it too far one way?
+- Actual stats (efficiency gaps, L5 margins, matchup data) that support your pick
+- Why this side offers value at this spread
+- NOT just "Team A is better" - WHY is this the better BET given this specific spread?
+- DO NOT predict your own margin or score. Explain the value.
 
 <negative_constraints>
 CRITICAL CONSTRAINTS (Gemini 3 prioritizes these):
@@ -4356,7 +4386,7 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
       
       // Extract FULL "Case for [Team]" sections using improved regex
       // Match "CASE FOR [Team Name]" followed by content until the next "CASE FOR" or end markers
-      const casePattern = /(?:\*\*)?(?:Case for|CASE FOR)[:\s*]+([^\n*]+)[\s\S]*?(?=(?:\*\*)?(?:Case for|CASE FOR)|###|---|\n## |$)/gi;
+      const casePattern = /(?:\*\*)?(?:Case for|CASE FOR|Analysis for|ANALYSIS FOR)[:\s*]+([^\n*]+)[\s\S]*?(?=(?:\*\*)?(?:Case for|CASE FOR|Analysis for|ANALYSIS FOR)|###|---|\n## |$)/gi;
       const caseMatches = [...content.matchAll(casePattern)];
       
       if (caseMatches.length >= 2) {
@@ -4420,8 +4450,8 @@ Do NOT call any more stats. Provide your analysis and pick NOW.`;
         nudgeContent = `You didn't provide a response. You have enough data (${toolCallHistory.length} stats gathered).
 
 **WRITE YOUR STEEL MAN CASES NOW:**
-1. **CASE FOR ${homeTeam}:** 3-4 paragraphs with key factors, data, and statistical argument for why they cover
-2. **CASE FOR ${awayTeam}:** 3-4 paragraphs with key factors, data, and statistical argument for why they cover
+1. **ANALYSIS FOR ${homeTeam}:** 3-4 paragraphs with key factors, data, and statistical argument
+2. **ANALYSIS FOR ${awayTeam}:** 3-4 paragraphs with key factors, data, and statistical argument
 
 Do NOT request more stats. Write your analysis NOW using the data you already have.`;
       } else {
@@ -5242,7 +5272,7 @@ Do NOT request more stats. Write your analysis NOW using the data you already ha
         // - "Why [Team] covers" / "How [Team] covers"
         // - "[Team] TO COVER:" / "[Team] to cover"
         // - Arguments for both teams (using team names from context)
-        const caseForCount = (content.match(/(?:Case for|CASE FOR|case for)/gi) || []).length;
+        const caseForCount = (content.match(/(?:Case for|CASE FOR|case for|Analysis for|ANALYSIS FOR|analysis for)/gi) || []).length;
         const toCoversCount = (content.match(/(?:TO COVER|to cover|To Cover)[:\s]/gi) || []).length;
         const whyCoversCount = (content.match(/(?:Why|How)\s+(?:the\s+)?[\w\s]+\s+(?:cover|win)/gi) || []).length;
         
@@ -5353,7 +5383,7 @@ Do NOT request more stats. Write your analysis NOW using the data you already ha
             role: 'user',
             content: `
 <enforcement_context>
-## STEEL MAN ANALYSIS REQUIRED
+## MATCHUP ANALYSIS REQUIRED
 
 You have gathered ${covered.length}/${totalFactors} investigation factors (${(coverage * 100).toFixed(0)}% coverage).
 This is SUFFICIENT data to proceed.
@@ -5364,17 +5394,17 @@ This is SUFFICIENT data to proceed.
 
 Write SUBSTANTIVE PARAGRAPHS, not bullet point summaries.
 
-**CASE FOR ${homeTeam} TO COVER:**
+**ANALYSIS FOR ${homeTeam}:**
 Write 3-4 detailed paragraphs explaining:
-- KEY FACTORS (how their strength exploits opponent weakness - could be one factor or a combination)
+- KEY FACTORS (how their strengths/weaknesses apply to this matchup)
 - DATA (specific numbers backing this up)
-- WHY THIS SIDE COVERS (structural reasons supporting this pick)
+- What the stats tell you about this team in this matchup
 
-**CASE FOR ${awayTeam} TO COVER:**
-Write 3-4 detailed paragraphs with the same depth - key factors, data, and why this side covers.
+**ANALYSIS FOR ${awayTeam}:**
+Write 3-4 detailed paragraphs with the same depth - key factors, data, and what the stats show.
 
-**DO NOT make a final pick yet.** Just write cases for BOTH sides.
-After you write these cases, I will ask you to rate them.
+**DO NOT make a final pick yet.** Just analyze BOTH sides.
+After your analysis, you'll determine which side is the BETTER BET given the spread.
 </case_requirements>
 
 <instructions>
@@ -5382,14 +5412,14 @@ After you write these cases, I will ask you to rate them.
 
 Using the data you've gathered, STOP calling more stats and execute NOW:
 
-1. Write **CASE FOR ${homeTeam}** (3-4 substantive paragraphs)
-2. Write **CASE FOR ${awayTeam}** (3-4 substantive paragraphs)
+1. Write **ANALYSIS FOR ${homeTeam}** (3-4 substantive paragraphs)
+2. Write **ANALYSIS FOR ${awayTeam}** (3-4 substantive paragraphs)
 
-BEGIN WRITING YOUR STEEL MAN CASES NOW.
+BEGIN WRITING YOUR MATCHUP ANALYSIS NOW.
 </instructions>
 `
           });
-          console.log(`[Orchestrator] STEEL MAN ENFORCEMENT - Gary must write cases before proceeding (${covered.length}/${totalFactors} factors)`);
+          console.log(`[Orchestrator] MATCHUP ANALYSIS ENFORCEMENT - Gary must write analysis before proceeding (${covered.length}/${totalFactors} factors)`);
         } else if (!pass25AlreadyInjected && steelManCompleted) {
           // ═══════════════════════════════════════════════════════════════════════
           // PASS 2.5 INJECTION + PRO MODEL SWITCH (NBA/NFL/NHL only)
@@ -5605,7 +5635,7 @@ BEGIN WRITING YOUR STEEL MAN CASES NOW.
 {
   "final_pick": "[Team] [spread/ML]",
   "confidence_score": [0.50-0.95],
-  "rationale": "MUST START WITH 'Gary's Take\\n\\n' then scene-setter (1-2 sentences), then 3-4 paragraphs with stats explaining WHY this team covers TONIGHT."
+  "rationale": "MUST START WITH 'Gary's Take\\n\\n' then scene-setter (1-2 sentences), then 3-4 paragraphs explaining WHY this side is the BETTER BET given the spread."
 }
 \`\`\``
         });
@@ -5735,7 +5765,7 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
       const pass25WasInjected = messages.some(m => m.content?.includes('PASS 2.5 - CASE REVIEW') || m.content?.includes('PASS 2.5 - CONVICTION ASSESSMENT'));
       const steelManDetected = messages.some(m => {
         const content = m.content || '';
-        const caseForCount = (content.match(/(?:Case for|CASE FOR|case for)/gi) || []).length;
+        const caseForCount = (content.match(/(?:Case for|CASE FOR|case for|Analysis for|ANALYSIS FOR|analysis for)/gi) || []).length;
         const toCoversCount = (content.match(/(?:TO COVER|to cover|To Cover)[:\s]/gi) || []).length;
         return (caseForCount + toCoversCount) >= 2;
       });
@@ -5907,17 +5937,17 @@ This is a SMALL SPREAD - essentially asking "who wins?"
       const synthesisPrompt = `You've gathered ${toolCallHistory.length} stats across ${iteration} iterations for ${awayTeam} @ ${homeTeam}.
 ${spreadSizeFraming}
 
-**STEP 1: STEEL MAN BOTH SIDES (Required)**
+**STEP 1: ANALYZE BOTH SIDES (Required)**
 Write SUBSTANTIVE PARAGRAPHS (not bullet summaries) for each team:
 
-**CASE FOR ${homeTeam} (${homeIsFavorite ? `-${absSpread.toFixed(1)}` : `+${absSpread.toFixed(1)}`}):**
+**ANALYSIS FOR ${homeTeam} (${homeIsFavorite ? `-${absSpread.toFixed(1)}` : `+${absSpread.toFixed(1)}`}):**
 Write 3-4 detailed paragraphs explaining:
-- KEY FACTORS: How their strength exploits opponent weakness (could be one factor or a combination)
+- KEY FACTORS: What the data shows about this team in this matchup
 - DATA: Specific numbers (not just "they're good")
-- WHY THIS SIDE COVERS: ${homeIsFavorite ? `What creates separation (win by ${coverThreshold}+)?` : `What keeps this close or enables an outright win?`}
+- MATCHUP APPLICATION: How their strengths/weaknesses apply to THIS opponent
 
-**CASE FOR ${awayTeam} (${!homeIsFavorite ? `-${absSpread.toFixed(1)}` : `+${absSpread.toFixed(1)}`}):**
-Write 3-4 detailed paragraphs with the same depth - key factors, specific data, why this side covers.
+**ANALYSIS FOR ${awayTeam} (${!homeIsFavorite ? `-${absSpread.toFixed(1)}` : `+${absSpread.toFixed(1)}`}):**
+Write 3-4 detailed paragraphs with the same depth - key factors, specific data, matchup analysis.
 
 **STEP 2: STRESS TEST BOTH SIDES**
 Check BOTH teams against these patterns (don't pick yet, just identify red flags):
@@ -5926,12 +5956,15 @@ Check BOTH teams against these patterns (don't pick yet, just identify red flags
 - **Game Flow Consideration:** Are there structural advantages (scheme, depth) vs talent-based advantages (star player)? → How might THIS game's flow affect which matters more?
 ${isNFL ? '- **Playoff Context:** Are there playoff implications? → Investigate: Does THIS QB have late-game closing ability?' : ''}
 
-**STEP 3: FINAL DECISION**
+**STEP 3: FINAL DECISION - WHICH IS THE BETTER BET?**
 
-**THE MINDSET:** You're not playing a long game of "this should hit 55% over time." You're trying to WIN THIS SPECIFIC BET. Each game is its own game.
+**THE MINDSET:** The question is not "who covers?" - it's "which side is the BETTER BET given this spread?"
 
-Based on your cases and stress test findings, which side do you BELIEVE wins/covers THIS game?
-Your pick comes from your investigation and reasoning.
+Based on your analysis and stress test: Does this spread of ${absSpread.toFixed(1)} reflect what you found in your research?
+- If narrative factors (injury news, B2B, public perception) pushed the line beyond what hard stats support → the other side is the better bet
+- If the stats show a clear mismatch but the spread is too small → the favorite side is the better bet
+
+Your pick is about VALUE, not just picking winners.
 ${isNFL ? `
 **NFL:** Always make a pick. NFL games are limited and high-value.` : `
 **PASS:** Always valid when you don't believe in either side for THIS game.`}
@@ -5944,7 +5977,7 @@ ${toolCallHistory.slice(-15).map(t => `- ${t.token}: ${t.summary || 'data receiv
 {
   "final_pick": "[Team] [spread/ML]"${isNFL ? '' : ' or "PASS"'},
   "confidence_score": [0.50-0.95],
-  "rationale": "MUST START WITH 'Gary's Take\\n\\n' then scene-setter (1-2 sentences), then 3-4 paragraphs with stats explaining WHY this team covers TONIGHT."
+  "rationale": "MUST START WITH 'Gary's Take\\n\\n' then scene-setter (1-2 sentences), then 3-4 paragraphs explaining WHY this side is the BETTER BET given the spread."
 }
 \`\`\`
 
