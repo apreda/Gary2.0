@@ -30,6 +30,83 @@ function getGeminiClient() {
 }
 
 /**
+ * Extract injury duration from BDL description and return_date
+ * BDL provides rich descriptions like "at least another month" or "since Dec. 18"
+ */
+function extractDurationFromBdl(description, returnDate) {
+  const now = new Date();
+  let daysSinceOut = null;
+  let outSinceStr = null;
+  let duration = 'UNKNOWN';
+
+  const desc = (description || '').toLowerCase();
+
+  // Pattern 1: "since [month] [day]" - exact date
+  const sinceMatch = desc.match(/since\s+(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)[.\s]*(\d{1,2})?/i);
+  if (sinceMatch) {
+    const monthStr = sinceMatch[1].toLowerCase();
+    const day = sinceMatch[2] ? parseInt(sinceMatch[2], 10) : 1;
+    const monthMap = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+    const monthNum = monthMap[monthStr.substring(0, 3)];
+    if (monthNum !== undefined) {
+      let year = now.getFullYear();
+      if (monthNum > now.getMonth()) year -= 1;
+      const outDate = new Date(year, monthNum, day);
+      daysSinceOut = Math.floor((now - outDate) / (1000 * 60 * 60 * 24));
+      outSinceStr = outDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+  }
+
+  // Pattern 2: Use return_date to estimate how long they've been out
+  // If return is "at least another month", that suggests they've been out a while
+  if (!daysSinceOut && returnDate) {
+    const returnDateObj = new Date(returnDate);
+    const daysUntilReturn = Math.floor((returnDateObj - now) / (1000 * 60 * 60 * 24));
+
+    // Heuristic: if return is 30+ days away, assume out for at least 2-3 weeks already
+    if (daysUntilReturn >= 30) {
+      daysSinceOut = 21; // Assume out for 3 weeks already
+      outSinceStr = 'estimated 3+ weeks ago';
+    } else if (daysUntilReturn >= 14) {
+      daysSinceOut = 10; // Assume out for 10 days
+      outSinceStr = 'estimated 10+ days ago';
+    } else if (daysUntilReturn >= 7) {
+      daysSinceOut = 5;
+      outSinceStr = 'estimated 5+ days ago';
+    }
+  }
+
+  // Pattern 3: Text-based duration hints
+  if (!daysSinceOut) {
+    if (desc.includes('at least another month') || desc.includes('out for season') || desc.includes('no timetable')) {
+      daysSinceOut = 30;
+      outSinceStr = '30+ days (long-term)';
+    } else if (desc.includes('week-to-week') || desc.includes('several weeks')) {
+      daysSinceOut = 14;
+      outSinceStr = 'multi-week injury';
+    } else if (desc.includes('day-to-day')) {
+      daysSinceOut = 2;
+      outSinceStr = 'day-to-day (recent)';
+    }
+  }
+
+  // Categorize duration
+  if (daysSinceOut !== null) {
+    if (daysSinceOut >= 30) {
+      duration = 'SEASON-LONG';
+    } else if (daysSinceOut >= 7) {
+      duration = 'MID-SEASON';
+    } else if (daysSinceOut <= 3) {
+      duration = 'RECENT';
+    } else {
+      duration = 'MID-SEASON';
+    }
+  }
+
+  return { duration, daysSinceOut, outSinceStr };
+}
+
+/**
  * Fetch a snapshot of the league landscape (standings) to ground analysis
  * This prevents Gary from using historical knowledge for current season evaluation.
  */
@@ -2841,11 +2918,75 @@ async function fetchInjuries(homeTeam, awayTeam, sport) {
     const groundingAwayCount = groundingInjuries?.away?.length || 0;
     
     // Use Rotowire grounding injuries as source of truth
+    // But ENRICH with BDL duration data (BDL has return_date and description with duration context)
     if (groundingHomeCount > 0 || groundingAwayCount > 0) {
       console.log(`[Scout Report] Using Rotowire injuries (${groundingHomeCount} home, ${groundingAwayCount} away) as source of truth`);
+
+      // Fetch BDL injuries for duration enrichment (BDL has return_date and description)
+      let enrichedHome = groundingInjuries.home || [];
+      let enrichedAway = groundingInjuries.away || [];
+
+      try {
+        const bdlSport = sportToBdlKey(sport);
+        if (bdlSport === 'basketball_nba') {
+          // Get team IDs for BDL query
+          const [homeTeamData, awayTeamData] = await Promise.all([
+            ballDontLieService.getTeamByName(homeTeam),
+            ballDontLieService.getTeamByName(awayTeam)
+          ]);
+
+          if (homeTeamData?.id || awayTeamData?.id) {
+            const teamIds = [homeTeamData?.id, awayTeamData?.id].filter(Boolean);
+            const bdlInjuries = await ballDontLieService.getNbaPlayerInjuries(teamIds);
+
+            // Create lookup map from BDL injuries
+            const bdlMap = new Map();
+            for (const inj of bdlInjuries) {
+              const name = `${inj.player?.first_name} ${inj.player?.last_name}`.toLowerCase().trim();
+              bdlMap.set(name, inj);
+            }
+
+            // Enrich grounding injuries with BDL duration data
+            const enrichWithBdl = (injuries) => {
+              return injuries.map(inj => {
+                const name = `${inj.player?.first_name || ''} ${inj.player?.last_name || ''}`.toLowerCase().trim();
+                const bdlMatch = bdlMap.get(name);
+
+                if (bdlMatch && !inj.daysSinceReport) {
+                  // Extract duration from BDL description
+                  const desc = bdlMatch.description || '';
+                  const returnDate = bdlMatch.return_date;
+
+                  // Parse duration from description (e.g., "at least another month", "since Dec. 18")
+                  const durationInfo = extractDurationFromBdl(desc, returnDate);
+
+                  if (durationInfo.daysSinceOut !== null) {
+                    console.log(`[Scout Report] Enriched ${name} with BDL duration: ${durationInfo.daysSinceOut} days`);
+                    return {
+                      ...inj,
+                      duration: durationInfo.duration,
+                      daysSinceReport: durationInfo.daysSinceOut,
+                      reportDateStr: durationInfo.outSinceStr,
+                      bdlDescription: desc.substring(0, 100),
+                      bdlReturnDate: returnDate
+                    };
+                  }
+                }
+                return inj;
+              });
+            };
+
+            enrichedHome = enrichWithBdl(enrichedHome);
+            enrichedAway = enrichWithBdl(enrichedAway);
+          }
+        }
+      } catch (e) {
+        console.log(`[Scout Report] BDL duration enrichment failed: ${e.message}`);
+      }
+
       return {
-        home: groundingInjuries.home || [],
-        away: groundingInjuries.away || [],
+        home: enrichedHome,
+        away: enrichedAway,
         lineups: { home: [], away: [] },
         narrativeContext
       };

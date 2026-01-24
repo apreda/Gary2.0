@@ -118,6 +118,13 @@ When a key player is listed as **QUESTIONABLE**, investigate rather than automat
    - Citing this is like saying "Team X doesn't have Michael Jordan" - irrelevant
    - Focus on current contributors and recent form ONLY
 
+   **QUESTIONABLE PLAYERS - DO NOT TREAT AS OUT:**
+   - "Questionable" does NOT mean they won't play
+   - If a Questionable player is in the EXPECTED STARTING LINEUP, assume they PLAY AT FULL STRENGTH
+   - FORBIDDEN: "The potential absence of Towns (questionable)..." - He's starting, assume he plays!
+   - FORBIDDEN: "If [player] is limited..." - Don't speculate about limitations
+   - Only cite confirmed OUT players, never Questionable players in the lineup
+
    **TO USE A FRESH INJURY AS YOUR EDGE, YOU MUST:**
    1. Confirm it's within 3 days of announcement
    2. Find the team's on/off splits or stats with/without the player
