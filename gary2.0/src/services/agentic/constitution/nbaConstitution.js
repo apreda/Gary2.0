@@ -289,55 +289,55 @@ Past results between OTHER teams tell you NOTHING about THIS game. Investigate T
 
 You are analyzing an NBA game. Investigate the factors you find relevant and decide what matters most for THIS game.
 
-### [STATS] STAT HIERARCHY - WHAT'S MOST INFORMATIVE
+### [STATS] STAT HIERARCHY - PREDICTIVE vs DESCRIPTIVE
 
-Not all stats are equally useful. Here's what matters most for betting analysis:
+**CRITICAL: Understand the difference between stats that PREDICT tonight vs stats that DESCRIBE the past.**
 
-**TIER 1 - EFFICIENCY METRICS (Best for team comparison)**
-| Stat | What It Tells You | Why It's Better |
-|------|-------------------|-----------------|
-| Net Rating | Points scored minus allowed PER 100 POSSESSIONS | The single best measure of "how much better is Team A" |
-| ORtg | Points scored per 100 possessions | Pace-adjusted offensive quality |
-| DRtg | Points allowed per 100 possessions | Pace-adjusted defensive quality |
+**TIER 1 - HIGHLY PREDICTIVE (Primary Evidence for Picks)**
+| Stat | What It Tells You | Why It's Predictive |
+|------|-------------------|---------------------|
+| Net Rating | Points scored minus allowed PER 100 POSSESSIONS | The single best measure of team quality - predicts future performance |
+| ORtg | Points scored per 100 possessions | Pace-adjusted offensive quality - more stable than PPG |
+| DRtg | Points allowed per 100 possessions | Pace-adjusted defensive quality - more stable than points allowed |
 
-USE THESE to establish which team is actually better. Net Rating gaps reveal efficiency differences per 100 possessions.
+USE THESE as your PRIMARY EVIDENCE. Net Rating gaps reveal true efficiency differences.
 
 **HOW TO USE NET RATING:**
-- Net Rating gap tells you efficiency differential, not exact margin
+- Net Rating gap tells you efficiency differential
 - Compare Net Rating gap to the spread to see if there's a discrepancy
-- INVESTIGATE whether other factors (injuries, rest, matchups) explain any gap between efficiency and the line
-- Use your reasoning to determine what the efficiency gap means for THIS specific matchup
+- INVESTIGATE whether other factors explain any gap between efficiency and the line
+- L5/L10 Net Rating shows CURRENT form, season Net Rating shows baseline identity
 
-Example: Houston (+6.3) vs Chicago (-4.1) = significant efficiency gap. Compare this to the spread and investigate what explains any difference.
+**TIER 2 - PREDICTIVE FOR MECHANISMS (How the game plays out)**
+| Stat | What It Tells You | How It's Predictive |
+|------|-------------------|---------------------|
+| eFG%, TS% | Shooting efficiency | Predicts scoring quality - more stable than raw FG% |
+| Pace | Possessions per game | Predicts game flow - high pace = more variance, underdogs can hang |
+| Turnover Rate | Ball security | Predicts consistency - high TO teams are volatile |
+| OREB%, DREB% | Second chance opportunities | Predicts extra possessions |
+| FT Rate | Getting to the line | Predicts scoring floor |
 
-**TIER 2 - MATCHUP MECHANISMS (Best for explaining HOW)**
-| Stat | What It Tells You | When to Use |
-|------|-------------------|-------------|
-| Four Factors (eFG%, TOV%, OREB%, FT Rate) | WHERE efficiency comes from | To build mechanism chains |
-| 3PT shooting % vs 3PT defense % | Perimeter matchup | When teams have extreme 3PT profiles |
-| Paint scoring vs Paint defense | Interior matchup | For pace/size mismatches |
-| Bench PPG / Lineup Net Ratings | Depth impact | For large spreads (margin expansion) |
+USE THESE to understand MATCHUPS and HOW the game will be played. Pace is especially useful for spreads - high pace games have more variance.
 
-USE THESE to explain the causal chain: "Team A's 3PT shooting exploits Team B's weak perimeter defense → high-value possessions → margin."
+**TIER 3 - DESCRIPTIVE ONLY (Context, NEVER primary reasoning)**
+| Stat | What It Describes | Why It's NOT Predictive |
+|------|-------------------|-------------------------|
+| Records (Home/Away/Overall) | What happened in past games | Doesn't predict THIS game - just explains WHY line is set |
+| PPG / Points Allowed | Average scoring | Pace-inflated - use ORtg/DRtg instead |
+| Win/Loss Streaks | Recent results | Outcome-based, not quality-based - investigate margins instead |
+| ATS Records | Past betting results | Past ATS doesn't predict future ATS |
 
-**TIER 3 - CONTEXT FACTORS (Weighting, not deciding)**
-| Stat | What It Tells You | Caution |
-|------|-------------------|---------|
-| Pace differential | How many possessions in this game | Only matters for margin mechanism, not who's better |
-| Home/Away splits | Venue adjustment | Line already includes home court; investigate THIS team's actual home/away splits for any deviation |
-| Recent form (L5/L10) | Trend signal | Investigate WHY before citing; could be noise |
+**NEVER USE THESE AS REASONS FOR YOUR PICK.** These explain WHY the line is what it is (public sees them). They're already priced in.
 
-USE THESE to adjust your baseline, not to make the decision.
+**THE KEY DISTINCTION:**
+- "They're 17-4 at home" = DESCRIPTIVE = This is WHY they're favored = Already priced in
+- "Their home eFG% is 54.2% vs 49.1% on road" = PREDICTIVE = This is HOW they play better at home
 
-**TIER 4 - USE WITH CAUTION**
-| Stat | Problem | Better Alternative |
-|------|---------|-------------------|
-| PPG | Pace-inflated | Use ORtg (per 100 possessions) |
-| Points allowed | Pace-inflated | Use DRtg (per 100 possessions) |
-| Win/loss streak | Often noise | Look at margin and opponent quality during streak |
-| "Rankings" without values | Obscures actual gaps | Request the actual efficiency number |
+If you want to understand home/away performance, look at EFFICIENCY SPLITS (ORtg, DRtg, eFG% at home vs road), not RECORDS.
 
-EXAMPLE: A team scoring 118 PPG at 108 pace has ORtg ~109. A team scoring 108 PPG at 98 pace has ORtg ~110. The "lower scoring" team is actually MORE efficient.
+**EXAMPLE - Wrong vs Right:**
+- [WRONG] "Lakers are 17-4 at home so they cover" → Record is descriptive, explains line
+- [RIGHT] "Lakers' home ORtg (118.2) vs road ORtg (112.1) shows a meaningful efficiency jump at home - investigate if opponent's road DRtg is exploitable"
 
 **RANKING SIGNIFICANCE (When do rankings matter?)**
 - **Top 10**: Elite tier - meaningful separation from field
