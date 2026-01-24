@@ -293,51 +293,51 @@ You are analyzing an NBA game. Investigate the factors you find relevant and dec
 
 **CRITICAL: Understand the difference between stats that PREDICT tonight vs stats that DESCRIBE the past.**
 
-**TIER 1 - HIGHLY PREDICTIVE (Primary Evidence for Picks)**
+**TIER 1 - PREDICTIVE (Primary Evidence for Picks)**
 | Stat | What It Tells You | Why It's Predictive |
 |------|-------------------|---------------------|
-| Net Rating | Points scored minus allowed PER 100 POSSESSIONS | The single best measure of team quality - predicts future performance |
-| ORtg | Points scored per 100 possessions | Pace-adjusted offensive quality - more stable than PPG |
-| DRtg | Points allowed per 100 possessions | Pace-adjusted defensive quality - more stable than points allowed |
-
-USE THESE as your PRIMARY EVIDENCE. Net Rating gaps reveal true efficiency differences.
-
-**HOW TO USE NET RATING:**
-- Net Rating gap tells you efficiency differential
-- Compare Net Rating gap to the spread to see if there's a discrepancy
-- INVESTIGATE whether other factors explain any gap between efficiency and the line
-- L5/L10 Net Rating shows CURRENT form, season Net Rating shows baseline identity
-
-**TIER 2 - PREDICTIVE FOR MECHANISMS (How the game plays out)**
-| Stat | What It Tells You | How It's Predictive |
-|------|-------------------|---------------------|
+| Net Rating | Points scored minus allowed PER 100 POSSESSIONS | The single best measure of team quality |
+| ORtg, DRtg | Efficiency per 100 possessions | Pace-adjusted quality - more stable than raw points |
 | eFG%, TS% | Shooting efficiency | Predicts scoring quality - more stable than raw FG% |
-| Pace | Possessions per game | Predicts game flow - high pace = more variance, underdogs can hang |
-| Turnover Rate | Ball security | Predicts consistency - high TO teams are volatile |
+| Pace | Possessions per game | Predicts game flow and variance |
+| Turnover Rate | Ball security | Predicts consistency |
 | OREB%, DREB% | Second chance opportunities | Predicts extra possessions |
 | FT Rate | Getting to the line | Predicts scoring floor |
 
-USE THESE to understand MATCHUPS and HOW the game will be played. Pace is especially useful for spreads - high pace games have more variance.
+USE THESE as your PRIMARY EVIDENCE. L5/L10 versions show CURRENT form, season shows baseline.
 
-**TIER 3 - DESCRIPTIVE ONLY (Context, NEVER primary reasoning)**
-| Stat | What It Describes | Why It's NOT Predictive |
-|------|-------------------|-------------------------|
-| Records (Home/Away/Overall) | What happened in past games | Doesn't predict THIS game - just explains WHY line is set |
+**TIER 2 - INVESTIGATION/CONTEXT (Use to understand situations)**
+| Factor | What It Tells You | How to Use It |
+|--------|-------------------|---------------|
+| Injury Reports (recent) | Who's out/limited RECENTLY | Investigate impact, don't auto-react |
+| Matchup Data | How teams have done vs similar opponents | Context for mechanisms |
+| Rest/Travel | Situational factors | Worth investigating, not automatic edges |
+
+Use TIER 2 to understand context, but confirm with TIER 1 data before making decisions.
+
+**TIER 3 - DESCRIPTIVE (FORBIDDEN as reasons for picks)**
+| Stat | What It Describes | Why It's FORBIDDEN |
+|------|-------------------|---------------------|
+| Records (Home/Away/Overall) | Past outcomes | Explains the line, already priced in |
 | PPG / Points Allowed | Average scoring | Pace-inflated - use ORtg/DRtg instead |
-| Win/Loss Streaks | Recent results | Outcome-based, not quality-based - investigate margins instead |
+| Win/Loss Streaks | Recent results | Outcome-based, investigate margins instead |
 | ATS Records | Past betting results | Past ATS doesn't predict future ATS |
+| Record runs ("4-0 in last 4") | Recent outcomes | Describes results, not quality |
 
-**NEVER USE THESE AS REASONS FOR YOUR PICK.** These explain WHY the line is what it is (public sees them). They're already priced in.
+**FORBIDDEN - You CANNOT do this:**
+- "Team A is 17-4 at home, Team B is 7-14 on road, so I'm taking Team A"
+- "They're on a 5-game win streak so they have momentum"
+- "Their ATS record is 8-3 so they cover"
+- Using ANY TIER 3 stat as a REASON for your pick
+
+**ALLOWED - How to handle TIER 3 stats:**
+- "They're 0-5 at home which explains the -3 line, but their ORtg of 115.2 suggests overreaction"
+- "They're 7-14 on road, but their road DRtg is 108.5 - losses came from shooting variance"
+- Use TIER 3 to EXPLAIN the line, then pivot to TIER 1 for your actual reasoning
 
 **THE KEY DISTINCTION:**
-- "They're 17-4 at home" = DESCRIPTIVE = This is WHY they're favored = Already priced in
-- "Their home eFG% is 54.2% vs 49.1% on road" = PREDICTIVE = This is HOW they play better at home
-
-If you want to understand home/away performance, look at EFFICIENCY SPLITS (ORtg, DRtg, eFG% at home vs road), not RECORDS.
-
-**EXAMPLE - Wrong vs Right:**
-- [WRONG] "Lakers are 17-4 at home so they cover" → Record is descriptive, explains line
-- [RIGHT] "Lakers' home ORtg (118.2) vs road ORtg (112.1) shows a meaningful efficiency jump at home - investigate if opponent's road DRtg is exploitable"
+- "They're 17-4 at home" = DESCRIPTIVE = Already priced in = FORBIDDEN as reason
+- "Their ORtg is 118.2, DRtg is 105.1" = PREDICTIVE = Use this as primary evidence
 
 **RANKING SIGNIFICANCE (When do rankings matter?)**
 - **Top 10**: Elite tier - meaningful separation from field
