@@ -711,7 +711,14 @@ Be specific and factual. If it's just a regular season game, say so clearly.`;
 
         if (standings && standings.length > 0) {
           const significance = generateGameSignificance(
-            { home_team: homeTeam, away_team: awayTeam, venue: game.venue },
+            {
+              home_team: homeTeam,
+              away_team: awayTeam,
+              venue: game.venue,
+              // Pass conference data for NCAAB/NCAAF (already set on game object)
+              homeConference: game.homeConference,
+              awayConference: game.awayConference
+            },
             sportKey,
             standings,
             game.week || null
@@ -1901,9 +1908,8 @@ TEAM IDENTITIES
 ${formatTeamIdentity(homeTeam, homeProfile, 'Home')}
 ${formatTeamIdentity(awayTeam, awayProfile, 'Away')}
 ${conferenceTierSection}${ncaabTournamentContext}
-TALE OF THE TAPE (VERIFIED FROM BDL)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayProfile, sportKey, injuries, recentHome, recentAway)}
+${buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayProfile, sportKey, injuries, recentHome, recentAway).text}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 RECENT FORM (Last 5 Games)
@@ -10596,11 +10602,23 @@ export function buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayPro
     const awayVal = row.away;
     return `${label}${homeVal}${arrow}${awayVal}`;
   });
-  
-  return `TALE OF THE TAPE (VERIFIED FROM BDL)
+
+  const formattedText = `TALE OF THE TAPE (VERIFIED FROM BDL)
 
 ${headerLine}
 ${rowLines.join('\n')}`;
+
+  // Return both formatted text AND structured rows for iOS app
+  // The structured rows can be used for pick card display when toolCallHistory is sparse
+  return {
+    text: formattedText,
+    rows: rows.map(row => ({
+      name: row.label,
+      token: row.label.toUpperCase().replace(/[^A-Z0-9]/g, '_'),
+      home: { team: homeTeam, value: row.home },
+      away: { team: awayTeam, value: row.away }
+    }))
+  };
 }
 
 export { fetchCurrentState, fetchComprehensivePropsNarrative };

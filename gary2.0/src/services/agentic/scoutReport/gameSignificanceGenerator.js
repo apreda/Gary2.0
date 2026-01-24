@@ -289,7 +289,7 @@ function generateFromStandings(homeStanding, awayStanding) {
 
 /**
  * Main function to generate game significance
- * @param {Object} game - Game object with home_team, away_team, venue
+ * @param {Object} game - Game object with home_team, away_team, venue, homeConference, awayConference
  * @param {string} sport - Sport key (NBA, NFL, NHL, NCAAB, NCAAF)
  * @param {Array} standings - Full standings array from BDL
  * @param {number} week - NFL week number (optional)
@@ -299,6 +299,11 @@ export function generateGameSignificance(game, sport, standings = [], week = nul
   const homeTeam = game.home_team;
   const awayTeam = game.away_team;
   const venue = game.venue;
+
+  // For NCAAB/NCAAF: Use pre-calculated conference data if available
+  // This is more reliable than nickname matching
+  const homeConference = game.homeConference;
+  const awayConference = game.awayConference;
 
   // Priority 1: International game (always wins)
   const intlGame = checkInternationalGame(venue);
@@ -365,7 +370,21 @@ export function generateGameSignificance(game, sport, standings = [], week = nul
     }
   }
 
-  // Priority 6: Sport-specific default fallback (always return something)
+  // Priority 6: For NCAAB/NCAAF - use conference matchup if available
+  if ((sport === 'NCAAB' || sport === 'NCAAF') && homeConference && awayConference) {
+    if (homeConference === awayConference) {
+      // Same conference: "Big Ten" or "SEC"
+      console.log(`[GameSignificance] Conference: ${homeConference}`);
+      return homeConference;
+    } else {
+      // Cross-conference: "Big Ten vs SEC"
+      const crossConf = `${homeConference} vs ${awayConference}`;
+      console.log(`[GameSignificance] Cross-conference: ${crossConf}`);
+      return crossConf;
+    }
+  }
+
+  // Priority 7: Sport-specific default fallback (always return something)
   const defaultLabels = {
     NBA: 'Regular Season',
     NFL: 'Regular Season',

@@ -94,6 +94,10 @@ struct GaryPick: Identifiable, Codable {
     let cfpRound: String?
     let homeSeed: Int?
     let awaySeed: Int?
+    // NCAAB conference data for filtering
+    let conference: String?  // Conference of the picked team (e.g., "Big Ten", "SEC")
+    let homeConference: String?
+    let awayConference: String?
     // Thesis-based classification (new filtering system)
     let thesis_type: String?  // "clear_read", "found_angle", "educated_lean", "coin_flip"
     let thesis_mechanism: String?  // One-sentence explanation of WHY this team wins
@@ -212,6 +216,9 @@ struct ContradictingFactors: Codable {
             cfpRound: dict["cfpRound"] as? String,
             homeSeed: dict["homeSeed"] as? Int,
             awaySeed: dict["awaySeed"] as? Int,
+            conference: dict["conference"] as? String,
+            homeConference: dict["homeConference"] as? String,
+            awayConference: dict["awayConference"] as? String,
             thesis_type: dict["thesis_type"] as? String,
             thesis_mechanism: dict["thesis_mechanism"] as? String,
             supporting_factors: dict["supporting_factors"] as? [String],

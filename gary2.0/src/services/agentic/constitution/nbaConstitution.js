@@ -643,23 +643,24 @@ Large spreads are about MARGIN, not just winning. To cover a -10 spread, the fav
 
 ---
 
-### NET RATING SWING - The "Collapse" Indicator
+### NET RATING SWING - Investigate Team Fragility
 
 **What It Is:**
 The difference between a team's best lineup Net Rating and their bench unit Net Rating.
 
-**A large swing (10+ point gap)** means:
-- The team is FRAGILE when starters sit
-- Foul trouble to a star = bench minutes = potential collapse
-- Back-to-back fatigue = more bench minutes = higher variance
+**INVESTIGATE - DON'T ASSUME:**
+- Call [LINEUP_NET_RATINGS] or [BENCH_DEPTH] to get the actual swing data for each team
+- Investigate: What is THIS team's actual Net Rating swing? What are the numbers?
+- Investigate: How many minutes does THIS team typically give to their bench?
+- Investigate: Has the swing been consistent, or has it changed recently?
 
-**A small swing (< 5 point gap)** means:
-- The team has depth
-- They can absorb injuries, foul trouble, or rest without cratering
-- More stable performance
+**INVESTIGATION QUESTIONS:**
+1. "What is each team's Net Rating swing for this matchup?"
+2. "Given the swing, how might foul trouble or fatigue affect each team differently?"
+3. "Does one team's depth create a potential edge when starters rest?"
+4. "Based on the data, which team is more resilient if the game script forces extended bench minutes?"
 
-**INVESTIGATION PROMPT:**
-"Notice the Net Rating swing for each team. If one team has a 12-point gap between their starter and bench units, they're more vulnerable to foul trouble or fatigue. If the other team's gap is only 4 points, they're more resilient."
+**THE KEY:** Let the DATA tell you what the swing means for THIS specific matchup. A large swing might be offset by factors you discover in your investigation (e.g., the opponent's bench is equally weak). Investigate, don't assume.
 
 ---
 

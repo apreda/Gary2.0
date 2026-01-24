@@ -1256,6 +1256,8 @@ export async function analyzeGame(game, sport, options = {}) {
     // Handle both old (string) and new (object) formats
     const scoutReport = typeof scoutReportData === 'string' ? scoutReportData : scoutReportData.text;
     const injuries = typeof scoutReportData === 'object' ? scoutReportData.injuries : null;
+    // Extract verified Tale of the Tape (pre-computed stats for pick card display)
+    const verifiedTaleOfTape = typeof scoutReportData === 'object' ? scoutReportData.verifiedTaleOfTape : null;
     // Extract venue context (for NBA Cup, neutral site games, CFP games, etc.)
     const venueContext = typeof scoutReportData === 'object' ? {
       venue: scoutReportData.venue,
@@ -1271,7 +1273,9 @@ export async function analyzeGame(game, sport, options = {}) {
       awayRanking: scoutReportData.awayRanking,
       // NCAAB conference data for app filtering
       homeConference: scoutReportData.homeConference,
-      awayConference: scoutReportData.awayConference
+      awayConference: scoutReportData.awayConference,
+      // Verified Tale of the Tape stats for pick card
+      verifiedTaleOfTape
     } : null;
 
     // Get today's date for constitution
@@ -1406,6 +1410,8 @@ You CANNOT default to the favorite without exhausting underdog angles first.
       // NCAAB conference data for app filtering
       result.homeConference = venueContext.homeConference;
       result.awayConference = venueContext.awayConference;
+      // Verified Tale of the Tape (pre-computed BDL stats for pick card display)
+      result.verifiedTaleOfTape = venueContext.verifiedTaleOfTape;
     }
 
     // Ensure result contains the canonical matchup strings used by the UI
@@ -2172,8 +2178,16 @@ The statistical matchup heavily favors Miami's defensive identity: their 107.2 D
 5. Keep the table clean - use spaces to align columns.
 6. Gary's Take = YOUR WINNING STEEL MAN CASE (with the same stats, reasoning, form).
 7. Start your take with the KEY FACTOR you identified, not market commentary.
-8. Do NOT invent player names - only mention players from your scout report data.
-9. LENGTH: 3-4 paragraphs covering your core reasoning, form, and key stats.
+8. PLAYER NAME RULES (HARD):
+   - Only mention players from your scout report who are ACTIVE this 2025-2026 season
+   - DO NOT mention players who have been OUT for 1+ month (fully priced in, irrelevant)
+   - DO NOT mention players who haven't played at all this season
+   - Focus on CURRENT ACTIVE roster, not historical absences
+9. TONE: Sound like a sharp sports analyst, NOT a gambling market analyst.
+   - GOOD: Sports analysis with stats, matchups, form, mechanisms
+   - BAD: "The market overreacted" / "Public money inflated the line" / "Sharp value play"
+10. NO EMOJIS. Never use emojis in your output.
+11. LENGTH: 3-4 paragraphs covering your core reasoning, form, and key stats.
 
 ═══════════════════════════════════════════════════════════════════════
 `.trim();
@@ -2611,9 +2625,9 @@ Before writing your Steel Man cases, investigate BOTH sides equally.
 3. "Hot streak" must be backed by xG data, not just W-L
 4. NO narrative phrases: "mud fight," "backs against the wall," "recipe for disaster"
 
-**NHL MONEYLINE vs PUCK LINE:**
-- **Moneyline (most NHL bets):** You're picking WHO WINS. Team quality, goalie, form - these matter for predicting the winner even if the line reflects them. Focus on: which factors give one side a better chance to WIN?
-- **Puck Line (-1.5):** This IS a margin question. Here, "priced in" matters more - you need edge on the MARGIN, not just who wins.
+**NHL IS MONEYLINE ONLY:**
+You are picking WHO WINS. No puck lines, no spreads - just the winner.
+Focus on: which factors give one side a better chance to WIN? Goaltending matchup is the single most important factor.
 ` : '';
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -2798,12 +2812,18 @@ Fill in ACTUAL VALUES from your investigation. This grounds your case in data.
   - Compare to opponent's weaknesses: "Team A's 115.2 Off Rating attacks Team B's 112.8 Def Rating (21st in league)"
   - NOT just player stats - the TEAM'S efficiency profile is what covers spreads
 
-- **PARAGRAPH 2 (RECENT FORM vs SEASON - MANDATORY):**
+- **PARAGRAPH 2 (RECENT FORM + LAST GAME CONTEXT - MANDATORY):**
   Include SPECIFIC L5/L10 numbers COMPARED to season averages:
   - "L5 Off Rating: 118.4 vs 114.2 season (+4.2 improvement) - team is peaking"
   - "L5 Def Rating: 108.1 vs 111.5 season - defense has tightened"
   - WHO did they play? Note opponent quality (playoff teams vs bottom feeders)
   - WHO was playing? If key player was OUT during L5, those stats may not reflect tonight
+
+  **LAST GAME SUMMARY (REQUIRED for each team):**
+  - What happened in their MOST RECENT game? (opponent, score, home/away)
+  - Context: Was it a blowout win, close loss, overtime thriller, etc.?
+  - This helps YOU investigate whether today's line might be over/under-reacting to that result
+  - NOTE: We are NOT saying "recent loss = value" - you decide what the data means
 
 - **PARAGRAPH 3 (MATCHUP APPLICATION):**
   Apply the stats to THIS specific matchup and THIS spread:
@@ -3206,14 +3226,17 @@ These patterns show common situations where public perception, injury news, or r
 
 **6b. Unit Efficiency (Large Spreads 8+)?**
    - Condition: Spread is 8+ points (margin question, not just "who wins")
-   - **First Unit vs Second Unit:** To cover a large spread, the favorite needs to win BOTH unit battles.
-     * If favorite's starters dominate (+10 Net Rating) but bench is negative (-3), leads shrink when starters rest.
-     * If favorite dominates BOTH units, margin expansion is more likely.
-   - **Net Rating Swing:** Check the gap between each team's best lineup and bench unit.
-     * Large swing (10+ gap) = team is FRAGILE when starters sit (foul trouble, fatigue = risk)
-     * Small swing (< 5 gap) = team has depth, more stable performance
+   - **First Unit vs Second Unit:** INVESTIGATE how each team performs when starters rest.
+     * Call [LINEUP_NET_RATINGS] or [BENCH_DEPTH] to get the data
+     * Investigate: What is each team's bench Net Rating? Do they win or lose their bench minutes?
+     * Investigate: How much of the game do starters typically play? (~32-36 min)
+   - **Net Rating Swing:** INVESTIGATE the gap between starter and bench performance.
+     * Ask: "What is THIS team's Net Rating swing?"
+     * Investigate: Does a large swing (10+) indicate fragility when starters sit?
+     * Investigate: Does a small swing indicate depth that stabilizes performance?
+     * Let the DATA tell you what the swing means for THIS specific matchup.
    - **Investigation tokens:** [LINEUP_NET_RATINGS], [BENCH_DEPTH], [TOP_PLAYERS] (usage_concentration)
-   - **Question:** "Can the favorite's second unit HOLD the lead, or will the underdog's bench close the gap?"
+   - **Question:** "Based on my investigation of unit efficiency, can the favorite maintain their lead throughout the game?"
 
 **7. Line Inflation ("Begging for a Bet")?**
    - Condition: Elite team is suspiciously NARROW favorite vs bad team
@@ -3390,13 +3413,34 @@ Then include:
 3. **Supporting evidence (1-2 paragraphs):** Additional factors with numbers that back up your pick
 4. **Closing:** Confident statement with your pick
 
-**CRITICAL:** Your rationale must explain WHY this side is the BETTER BET:
+**RATIONALE TONE (Sound like a sharp sports analyst with value awareness):**
+You CAN explain why this is the better bet and reference line value - but ALWAYS back it up with real game analysis:
+
+- GOOD: "This line feels inflated after Houston's 22-point loss to Milwaukee - but that was an outlier. Houston's L5 Net Rating is still +4.2, they shot 28% from 3PT that night vs their 37% season average, and they're 8-2 in their last 10 home games. At +6.5, you're getting a team that typically loses close games by 3-4 points."
+- BAD: "The market overreacted. Sharp money is on the underdog here." (no actual analysis)
+
+- GOOD: "Phoenix at +145 ML is great value - their efficiency metrics (112.4 ORtg, 108.1 DRtg) are nearly identical to Denver's, and they've won 3 of their last 4 road games against top-10 defenses. This should be a pick'em, not a 3-point spread."
+- BAD: "This ML price is too good to pass up." (no stats backing it up)
+
+- GOOD: "The blowout loss narrative is overblown - Detroit lost by 18 but trailed by only 4 entering the 4th quarter before foul trouble derailed them. Their L5 point differential is +3.2 and they've covered 4 of 5 at home."
+- BAD: "Public is fading Detroit after the blowout, creating value." (no game context)
+
+You CAN discuss value, line movement, and why the spread is wrong - but ALWAYS explain the GAME REASONS behind it.
+The value explanation should be the conclusion, not the premise. Lead with stats, end with why it's the better bet.
+
+**PLAYER NAME RULES (HARD RULE - NO EXCEPTIONS):**
+- DO NOT mention any player who hasn't played at all this 2025-2026 season
+- DO NOT mention any player who has been OUT for 1+ month (their absence is fully priced in)
+- Only mention ACTIVE players or players with FRESH injuries (0-2 games out)
+- If you need to reference a long-term absence, reference the TEAM's adjustment, not the player's name
+  - GOOD: "The team has found its rhythm with the current rotation, going 8-3 over L10"
+  - BAD: "Without [Player X] who's been out since November, the team has adjusted..."
+
+**CRITICAL:** Your rationale must explain WHY this side wins/covers:
 - What does the data show about this matchup?
-- Does the spread reflect reality, or has narrative pushed it too far one way?
 - Actual stats (efficiency gaps, L5 margins, matchup data) that support your pick
-- Why this side offers value at this spread
-- NOT just "Team A is better" - WHY is this the better BET given this specific spread?
-- DO NOT predict your own margin or score. Explain the value.
+- NOT just "Team A is better" - explain the MECHANISM for why they win/cover
+- DO NOT predict your own margin or score
 
 <negative_constraints>
 CRITICAL CONSTRAINTS (Gemini 3 prioritizes these):
@@ -3436,8 +3480,13 @@ CRITICAL CONSTRAINTS (Gemini 3 prioritizes these):
    Your training is from 2024. Use the Scout Report and stats we provide.
    If the data contradicts your memory, USE THE DATA.
 
-5. DO NOT cite a player as relevant to tonight if they have been out for months.
-   The CURRENT ROSTER is the team you are betting on.
+5. BANNED PLAYER MENTIONS (HARD RULE - NO EXCEPTIONS):
+   - DO NOT mention ANY player who hasn't played at all this 2025-2026 season
+   - DO NOT mention ANY player who has been OUT for 1+ month (fully priced in)
+   - The CURRENT ROSTER is the team you are betting on
+   - Long-term absences are IRRELEVANT - the team has adapted, the line reflects it
+   - If a player hasn't played in a month, pretend they don't exist for tonight's analysis
+   - Only mention ACTIVE players or FRESH injuries (0-2 games out)
 
 6. TRAP AWARENESS: "X-Y record without player" thinking
    - Do not just cite "2-8 without Star X" unless you can explain why it's relevant for THIS game
@@ -3503,6 +3552,10 @@ CRITICAL CONSTRAINTS (Gemini 3 prioritizes these):
     - These are narrative crutches that bypass actual analysis
     - If you believe rest/travel matters, PROVE IT with data: "Houston shot 31% from 3PT on their last 3 B2Bs vs 38% rested"
     - The market prices in schedule factors. To use them, show specific data proving THIS team is affected.
+
+16. NO EMOJIS (ABSOLUTE):
+    - NEVER include emojis in your analysis, rationale, or output
+    - Use text only - no icons, symbols, or Unicode emoji characters
 </negative_constraints>
 
 BEGIN YOUR ANALYSIS NOW.
@@ -3781,11 +3834,16 @@ PASS is a valid decision when you don't have edge.
 ## PASS 3 - FINAL OUTPUT
 
 You've reviewed the Steel Man cases, completed the stress test, and made your decision in Pass 2.5.
+You have access to ALL evidence from your investigation - nothing is truncated.
 
 **Your Decision:**
 - **Final Pick:** ${finalPick}
 - **Confidence:** ${confidenceScore} (${confidenceLabel})
 ${flipNote}${passConsideration}
+
+**INVESTIGATION OPTION:**
+If you realize you need more data before finalizing, you can still call fetch_stats for additional investigation.
+However, if your analysis is complete, proceed directly to output.
 </pass_context>
 
 <rationale_constraints>
@@ -3799,6 +3857,8 @@ Your final rationale should be built from the Steel Man case for your chosen sid
 
 **IMPORTANT:** All the stats you called during Pass 2 investigation are available in this conversation.
 Reference those specific numbers in your rationale to make it data-driven.
+
+**NO EMOJIS:** Never include emojis in your output.
 </rationale_constraints>
 
 <closing_ability_check>
@@ -4373,7 +4433,7 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
           currentSession = createGeminiSession({
             modelName: 'gemini-3-flash-preview',
             systemPrompt: systemPrompt + '\n\n' + textualContext,
-            tools: currentPass === 'conviction_rating' || currentPass === 'final_decision' ? [] : toolDefinitions,
+            tools: currentPass === 'conviction_rating' ? [] : toolDefinitions, // Pass 3 can call more stats if needed
             thinkingLevel: 'high'
           });
           currentModelName = 'gemini-3-flash-preview';

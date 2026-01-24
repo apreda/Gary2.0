@@ -1,6 +1,6 @@
 # Gary's NCAAB Sharp Betting Principles
 
-## ⚠️ CRITICAL: THIS IS NOT A FORMULA
+## [CRITICAL] THIS IS NOT A FORMULA
 
 > **Everything in this document is REFERENCE MATERIAL, not rules to apply.**
 > 
@@ -49,12 +49,12 @@ For every spread bet, ask the RIGHT question based on spread size:
 ### Steel Man Structure for Spreads
 
 **FOR UNDERDOG +10.5:**
-❌ Wrong question: "Can Iowa win?"
-✅ Right question: "Can Iowa lose by 10 or fewer? What prevents a blowout?"
+[NO] Wrong question: "Can Iowa win?"
+[YES] Right question: "Can Iowa lose by 10 or fewer? What prevents a blowout?"
 
 **FOR FAVORITE -10.5:**
-❌ Wrong question: "Will Purdue win?"
-✅ Right question: "Will Purdue win by 11+? What's the mechanism for margin EXPANSION?"
+[NO] Wrong question: "Will Purdue win?"
+[YES] Right question: "Will Purdue win by 11+? What's the mechanism for margin EXPANSION?"
 
 ---
 
@@ -131,14 +131,14 @@ A "66-spot KenPom gap" sounds impressive. But ranking gaps have diminishing sign
 
 Always ask: "Would these teams be in different tiers in a tournament bracket?" If no, treat the gap as noise.
 
-✅ MEANINGFUL: "Duke #8 KenPom (AdjEM +28.2) vs Cal #82 (AdjEM +11.4) - 17-point efficiency gap"
-❌ MEANINGLESS: "VU's 38th-ranked defense vs Providence's 36th-ranked offense" (2 spots = identical tier)
+[VALID] MEANINGFUL: "Duke #8 KenPom (AdjEM +28.2) vs Cal #82 (AdjEM +11.4) - 17-point efficiency gap"
+[INVALID] MEANINGLESS: "VU's 38th-ranked defense vs Providence's 36th-ranked offense" (2 spots = identical tier)
 
 ---
 
 ## PART 4: HOME COURT ADVANTAGE (Reference - Already Priced In)
 
-### ⚠️ THE LINE ALREADY INCLUDES HOME COURT
+### [CRITICAL] THE LINE ALREADY INCLUDES HOME COURT
 
 **DO NOT** add or subtract points for home court. The spread already factors this in.
 
@@ -188,7 +188,7 @@ Home court doesn't CREATE blowouts by itself.
 
 ## PART 5: TEMPO AND POSSESSION ANALYSIS (Reference - Market Knows This)
 
-### ⚠️ THE LINE ALREADY FACTORS TEMPO
+### [CRITICAL] THE LINE ALREADY FACTORS TEMPO
 
 Vegas has tempo data. They know Iowa plays slow. This section helps you understand tempo dynamics - not to "apply" them, but to evaluate whether the line's tempo assumption is correct.
 
@@ -331,27 +331,27 @@ A team has a massive game next week and overlooks a "lesser" opponent this week.
 
 ### Fake Edge (Describing Why the Line Exists)
 
-❌ "Duke is a Top 10 team with superior talent"
+[NO] "Duke is a Top 10 team with superior talent"
 → That's WHY they're -13.5 favorites
 
-❌ "Kansas has elite home court at Allen Fieldhouse"
+[NO] "Kansas has elite home court at Allen Fieldhouse"
 → That's WHY the spread is set where it is - the line already reflects home court
 
-❌ "Iowa State has the #2 defense in the country"
+[NO] "Iowa State has the #2 defense in the country"
 → That's WHY they're favorites on the road
 
-❌ "Northwestern has covered 19 straight at home"
+[NO] "Northwestern has covered 19 straight at home"
 → Historical trends don't predict future outcomes
 
 ### Real Edge (Identifying Where the Line is Wrong)
 
-✅ "The line assumes standard home court, but THIS venue has poor attendance and a neutral-site feel. The 3-point home adjustment is too generous."
+[YES] "The line assumes standard home court, but THIS venue has poor attendance and a neutral-site feel. The 3-point home adjustment is too generous."
 
-✅ "Claude was ruled OUT this morning. The line moved but his 14.5 PPG + floor general role and the team's actual performance without him suggests the market may not have fully adjusted."
+[YES] "Claude was ruled OUT this morning. The line moved but his 14.5 PPG + floor general role and the team's actual performance without him suggests the market may not have fully adjusted."
 
-✅ "The line assumes Purdue's frontcourt dominates, but Iowa's defensive efficiency (#20) is virtually identical to Purdue's (#21). The blowout mechanism isn't there."
+[YES] "The line assumes Purdue's frontcourt dominates, but Iowa's defensive efficiency (#20) is virtually identical to Purdue's (#21). The blowout mechanism isn't there."
 
-✅ "Oklahoma's 10-2 record came against #315 SOS. Their first three SEC games exposed them. The line is still based on their inflated pre-conference metrics."
+[YES] "Oklahoma's 10-2 record came against #315 SOS. Their first three SEC games exposed them. The line is still based on their inflated pre-conference metrics."
 
 ### The Edge Statement Test
 
@@ -376,32 +376,32 @@ If your answer is:
 
 ### What Gary Must NEVER Cite as Edge
 
-❌ **Historical ATS Trends:**
+[NO] **Historical ATS Trends:**
 > "Northwestern has covered +9.5 in 19 consecutive home games"
 - Past ATS performance doesn't predict future covers
 - If this trend were real, the market would have priced it in
 
-❌ **Reverse Line Movement:**
+[NO] **Reverse Line Movement:**
 > "Line moved from -9.5 to -8.5 despite 75% public on Illinois"
 - We analyze matchups, not other bettors
 - RLM is often noise or stale information
 
-❌ **Public Betting Percentages:**
+[NO] **Public Betting Percentages:**
 > "80% of bets are on Duke"
 - Irrelevant to who wins or covers
 - Sharp money matters, but we can't reliably identify it
 
-❌ **Sharp Money Claims:**
+[NO] **Sharp Money Claims:**
 > "Sharps are on the underdog"
 - We don't know what sharps are doing
 - Even if we did, blindly following isn't analysis
 
-❌ **One Previous Matchup:**
+[NO] **One Previous Matchup:**
 > "They beat them by 20 last time"
 - One game is noise, not signal
 - Circumstances change, adjustments happen
 
-❌ **AP/Coaches Poll Rankings:**
+[NO] **AP/Coaches Poll Rankings:**
 > "They're ranked #8 in the country"
 - Media perception ≠ efficiency
 - Use KenPom, not polls
@@ -412,19 +412,19 @@ If your answer is:
 
 ### What Gary MUST Provide for Each Pick
 
-✅ **Specific Efficiency Gap (with values):**
+[REQUIRED] **Specific Efficiency Gap (with values):**
 > "Duke's AdjEM (+28.2) vs Cal's (+11.4) = 16.8-point efficiency gap. This is a meaningful tier difference (Top 10 vs 80s)."
 
-✅ **Mechanism for Margin (large spreads):**
+[REQUIRED] **Mechanism for Margin (large spreads):**
 > "Duke's interior dominance (#1 in 2PT%) creates second-chance points against Cal's depleted frontcourt (Petraitis, Yeanay OUT). This is the blowout mechanism."
 
-✅ **Mechanism for Margin Prevention (underdog picks):**
+[REQUIRED] **Mechanism for Margin Prevention (underdog picks):**
 > "Iowa's #20 AdjD vs Purdue's #21 AdjD shows defensive PARITY. Combined with Iowa's glacial tempo (#339), there's no mechanism for Purdue to score at will."
 
-✅ **Fresh Information (if applicable):**
+[REQUIRED] **Fresh Information (if applicable):**
 > "Desmond Claude ruled OUT today (14.5 PPG void). Line hasn't fully adjusted yet."
 
-✅ **Why the LINE is Wrong (not why the team is good):**
+[REQUIRED] **Why the LINE is Wrong (not why the team is good):**
 > "The line assumes Purdue wins by a significant margin based on home court and frontcourt advantage. But the defensive efficiency parity and tempo suppression suggest a closer game than the spread implies."
 
 ---
@@ -549,7 +549,7 @@ Before finalizing, ask:
 
 ## PART 17: WHAT THE LINE ALREADY KNOWS
 
-### ⚠️ DO NOT MENTALLY ADD OR SUBTRACT POINTS
+### [WARNING] DO NOT MENTALLY ADD OR SUBTRACT POINTS
 
 The line ALREADY incorporates these factors. Do NOT mentally add point values for anything.
 

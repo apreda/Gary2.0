@@ -277,6 +277,10 @@ async function storeDailyPicksInDatabase(picks) {
         cfpRound: pick.cfpRound || null,
         homeSeed: pick.homeSeed || null,
         awaySeed: pick.awaySeed || null,
+        // NCAAB conference data for app filtering
+        conference: pick.conference || null,
+        homeConference: pick.homeConference || null,
+        awayConference: pick.awayConference || null,
         // Thesis-based classification (new filtering system)
         thesis_type: pick.thesis_type || null,
         thesis_mechanism: pick.thesis_mechanism || null,
@@ -323,6 +327,10 @@ async function storeDailyPicksInDatabase(picks) {
       cfpRound: pick.cfpRound || null,
       homeSeed: pick.homeSeed || null,
       awaySeed: pick.awaySeed || null,
+      // NCAAB conference data for app filtering
+      conference: pick.conference || null,
+      homeConference: pick.homeConference || null,
+      awayConference: pick.awayConference || null,
       // Thesis-based classification (new filtering system)
       thesis_type: pick.thesis_type || null,
       thesis_mechanism: pick.thesis_mechanism || null,

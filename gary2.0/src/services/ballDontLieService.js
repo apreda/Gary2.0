@@ -6239,7 +6239,7 @@ const ballDontLieService = {
       const cacheKey = `nba_players_${uniqueIds.sort().join(',')}`;
 
       return await getCachedOrFetch(cacheKey, async () => {
-        const url = `${BALLDONTLIE_API_BASE_URL}/players${buildQuery({ player_ids: uniqueIds, per_page: 100 })}`;
+        const url = `${BALLDONTLIE_API_BASE_URL}/nba/v1/players${buildQuery({ player_ids: uniqueIds, per_page: 100 })}`;
         console.log(`[Ball Don't Lie] Fetching ${uniqueIds.length} NBA players`);
 
         const response = await axios.get(url, {
@@ -6253,7 +6253,7 @@ const ballDontLieService = {
         for (const player of players) {
           playerMap[player.id] = {
             id: player.id,
-            name: `${player.first_name} ${player.last_name}`,
+            name: player.full_name || `${player.first_name} ${player.last_name}`,
             position: player.position,
             team: player.team?.full_name || 'Unknown'
           };

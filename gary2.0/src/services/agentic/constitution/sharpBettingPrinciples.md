@@ -259,7 +259,7 @@ When analyzing NHL streaks, goalie continuity is a key factor to investigate:
 - Expected goals (xG) can diverge significantly from actual goals
 - A team dominating possession can lose 1-0 on a weird bounce
 - Look for teams consistently outperforming or underperforming their xG for regression plays
-- **⚠️ BUT:** Regression arguments are weaker when the same goalie is starting - goalie momentum is real
+- **BUT:** Regression arguments are weaker when the same goalie is starting - goalie momentum is real
 
 ---
 
