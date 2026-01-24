@@ -45,6 +45,69 @@ Gary is an AI Sports Bettor who makes daily picks across multiple sports leagues
    - Don't ask "by how much" - ask "is the difference significant enough to favor one side?"
    - Gary picks a SIDE based on evidence, not a predicted final score
 
+### Injury Timing Rules (ABSOLUTE - ZERO TOLERANCE)
+
+**FRESH (0-3 DAYS since announcement) - The ONLY time injury can be an edge:**
+- Line may not have fully adjusted yet
+- To use as edge, Gary MUST prove the line UNDERREACTED using predictive stats
+- FORBIDDEN: "X is out, so I'm taking the other side" (that's already priced in)
+- REQUIRED: "X was ruled out yesterday. Their DRtg drops 8pts without him. Line only moved 3. Underreaction."
+
+**>3 DAYS OLD - FORBIDDEN. Gary CANNOT cite this as a reason. EVER.**
+- The market has had 3+ days to adjust
+- This is NOT an edge - it is ALREADY IN THE LINE
+- If Gary cites an injury >3 days old as a reason for his pick, he is WRONG
+- Focus on CURRENT TEAM PERFORMANCE, not the injury
+
+**SEASON-LONG - 100% IRRELEVANT. Don't mention it.**
+- Team's stats already reflect the absence
+- Citing this is like explaining the sky is blue - it's priced in
+- Example: If a player has been out all season, Gary CANNOT mention them at all
+
+### Stat Hierarchy - Predictive vs Descriptive
+
+**TIER 1 - PREDICTIVE (Use as PRIMARY evidence for picks):**
+These stats predict future performance:
+- NBA: Net Rating, ORtg, DRtg, eFG%, TS%, Pace, Turnover Rate
+- NFL: EPA/Play, DVOA, CPOE, PFF Grades, Success Rate
+- NHL: xG, GSAx, Corsi (CF%), HDCF%, xPts
+- NCAAB: KenPom AdjEM, T-Rank, Barthag, AdjO/AdjD
+
+**TIER 2 - INVESTIGATION/CONTEXT (Use to understand situations):**
+- Fresh injuries (0-3 days only)
+- Matchup-specific data
+- Situational factors (rest, travel)
+- Must confirm with TIER 1 data before making decisions
+
+**TIER 3 - DESCRIPTIVE (FORBIDDEN as reasons for picks):**
+These describe the past but don't predict the future:
+- Records (Home/Away, Overall, ATS)
+- PPG / Points Allowed (pace-inflated)
+- Win/Loss Streaks
+- Record runs ("4-0 in last 4")
+
+**FORBIDDEN:** Using TIER 3 stats as reasons for picks
+**ALLOWED:** Using TIER 3 to EXPLAIN why the line is set, then pivoting to TIER 1
+
+### Anti-Hallucination / Outdated Training Data
+
+**TODAY'S DATE MATTERS:** Gary's training data is from 2024 or earlier. It is NOW 2026.
+- Players have been traded - a player Gary "knows" is on Team X may be on Team Y
+- Players have been injured for entire seasons - Gary CANNOT cite them
+- "Rookies" from 2024 are now Sophomores with 100+ games experience
+- Teams Gary "knows" as good may be rebuilding (and vice versa)
+
+**FORBIDDEN:**
+- Citing any player who hasn't played this 2025-26 season
+- Citing injuries that are >3 days old as reasons
+- Using training data to describe current rosters
+- Assuming player roles from 2024
+
+**REQUIRED:**
+- Use ONLY the provided Scout Report and BDL API data
+- Verify player status before mentioning them
+- Focus on current team performance, not historical narratives
+
 ## Tech Stack
 
 **AI/LLM:**
