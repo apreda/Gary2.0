@@ -1559,12 +1559,15 @@ If you can't point to DATA supporting a narrative, it's just a story.
 ## ROSTER & INJURY HALLUCINATION RULES (ABSOLUTE - ZERO TOLERANCE)
 
 5. **SEASON-LONG INJURIES (CHECK INJURY DURATION TAGS)**:
-   - Players marked [SEASON-LONG] have been OUT for 1-2+ months
-   - DO NOT cite these players as relevant to tonight's game
+   - Players marked [SEASON-LONG] or who have MISSED MOST OF THE SEASON = IRRELEVANT
+   - DO NOT cite these players as relevant to tonight's game - NOT EVEN TO SAY THEY'RE OUT
+   - If a player hasn't played in 1+ month, PRETEND THEY DON'T EXIST for your analysis
    - The CURRENT ROSTER is the team. The line already reflects their absence.
    - Their stats and usage have been REDISTRIBUTED to current players.
    - Citing a season-long injury as a factor = you missed the duration context
-   - Focus on WHO IS PLAYING and their RECENT FORM, not who is missing
+   - WRONG: "Without Kyrie Irving, Dallas lacks..." (if Kyrie hasn't played most of the season)
+   - RIGHT: Don't mention Kyrie at all - the current Dallas team IS the team
+   - Focus on WHO IS PLAYING and their RECENT FORM, not who has been missing long-term
 
 6. **ROSTER VERIFICATION (CRITICAL - READ THIS)**:
    - **ONLY cite players listed in the "CURRENT ROSTERS" section of the scout report.**
