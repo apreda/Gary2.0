@@ -1690,6 +1690,11 @@ If you can't point to DATA supporting a narrative, it's just a story.
 - [NO] "Star averages a triple-double so they cover" → individual averages ≠ team result
 - [YES] "Team's recent efficiency shows their offense clicking - player's assist rate indicates better ball movement"
 
+**YOUR INVESTIGATION APPROACH:**
+- Lead with TEAM-level advanced stats to understand the matchup
+- Use player stats to investigate WHY team stats look the way they do
+- Player stats provide CONTEXT - they help explain team performance, not predict game outcomes directly
+
 **ASK YOURSELF:** Is my reasoning built on how the TEAMS match up? Or am I relying on individual player averages to predict team outcomes?
 
 **REMEMBER:** Teams cover spreads, not players. Player stats provide CONTEXT for WHY team stats look the way they do.
