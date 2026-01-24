@@ -92,35 +92,32 @@ When a key player is listed as **QUESTIONABLE**, investigate rather than automat
    - [NO] NEVER guess historical patterns from training data
    - [YES] If you have H2H data, cite ONLY the specific games shown
    - [YES] If you DON'T have H2H data, simply skip H2H analysis - focus on efficiency, form, matchups
-4. **INJURY DURATION CONTEXT - "BAKED IN" vs "FRESH ABSENCE"**:
-   The team that won 2 nights ago IS the team taking the floor tonight. Investigate how injury duration affects relevance:
-   
-   [RECENT] **RECENT (0-7 days)** - INVESTIGATE THE ADJUSTMENT:
-   - Team may still be ADJUSTING to the absence
-   - Rotation/minutes may not be stabilized yet
-   - "Next man up" effects still developing
-   - INVESTIGATE: How has the team looked since this injury? Are they still finding their footing or have they adjusted?
-   
-   [SHORT-TERM] **SHORT-TERM (1-3 weeks)** - INVESTIGATE THE ADAPTATION:
-   - Team has had time to adapt
-   - TRAP AWARENESS: Do not just cite "X-Y without Player" unless you can explain why it's relevant for THIS game
-   - INVESTIGATE: How have they LOOKED? Check point margins, not just W-L
-   - A team that's 2-8 but lost 6 games by 3 points may still cover tonight - investigate the margins
-   - INVESTIGATE: Have they filled the void? Found a new rhythm? Or still struggling?
+4. **INJURY TIMING - CAN YOU USE IT AS AN EDGE? (CRITICAL)**
 
-   [SEASON-LONG] **SEASON-LONG (4+ weeks / most of season)** - CURRENT TEAM IS THE TEAM:
-   - Team's current stats already reflect their absence
+   **FRESH (0-3 DAYS since announcement) - The ONLY time injury can be an edge:**
+   - Line may not have fully adjusted yet
+   - To use as edge, you MUST prove the line UNDERREACTED using TIER 1 stats:
+     - "Player X was ruled out yesterday. Their DRtg without him is 115.2 vs 108.1 with him - a 7pt drop. But the line only moved 3 points."
+   - FORBIDDEN: "X is out, so I'm taking the other side" (that's already priced in, not an edge)
+
+   **>3 DAYS OLD - FULLY PRICED IN. NOT AN EDGE:**
+   - The market has had time to adjust
+   - The spread ALREADY reflects this absence
+   - You CANNOT cite this as a reason for your pick
+   - Focus on the TEAM'S CURRENT FORM, not the injury
+
+   **SEASON-LONG (4+ weeks) - 100% IRRELEVANT. DON'T MENTION IT:**
+   - Team's current stats already reflect the absence
    - The team's identity has formed without this player
-   - TRAP AWARENESS: Do not predict tonight based on their record without the player unless you connect it to THIS spread
-   - Each game is independent - "15-20 without star" doesn't mean they lose tonight unless you explain WHY for THIS matchup
-   - INVESTIGATE: What does their RECENT FORM show? Focus on last 5-10 games, not full absence period
+   - Citing this is like saying "Team X doesn't have Michael Jordan" - irrelevant
+   - Focus on current contributors and recent form ONLY
 
-   **INVESTIGATION QUESTIONS:**
-   - How have they performed SINCE this player went out? (Look at point margins, not just W-L)
-   - In their losses, were they close (covered spread) or blowouts (didn't cover)?
-   - Who has stepped up statistically? Check actual game logs for WHO is producing
-   - Is their recent form improving, declining, or stable?
-   - KEY: If you cite a record, explain how it connects to THIS specific spread and opponent
+   **TO USE A FRESH INJURY AS YOUR EDGE, YOU MUST:**
+   1. Confirm it's within 3 days of announcement
+   2. Find the team's on/off splits or stats with/without the player
+   3. Calculate the statistical impact (e.g., "Net Rating drops 8 points without him")
+   4. Compare to how much the line moved (e.g., "Line only moved 3 points")
+   5. If impact > line movement → You have an edge. If not → NOT an edge.
 5. **PLAYER EXPERIENCE (2026 REALITY)**: Do NOT use your training data to label players as 'rookies' or 'veterans'. 
    - If it is January 2026, the 2024 draft class (e.g., Alex Sarr, Zaccharie Risacher, Kyshawn George) are **Sophomores**, not rookies.
    - Use the provided PPG and USG% to determine impact, rather than assumed 'rookie inconsistency'.
@@ -309,11 +306,19 @@ USE THESE as your PRIMARY EVIDENCE. L5/L10 versions show CURRENT form, season sh
 **TIER 2 - INVESTIGATION/CONTEXT (Use to understand situations)**
 | Factor | What It Tells You | How to Use It |
 |--------|-------------------|---------------|
-| Injury Reports (recent) | Who's out/limited RECENTLY | Investigate impact, don't auto-react |
+| Injury Reports (FRESH ONLY) | Who's out/limited in last 0-3 days | Must prove line underreaction to use |
 | Matchup Data | How teams have done vs similar opponents | Context for mechanisms |
 | Rest/Travel | Situational factors | Worth investigating, not automatic edges |
 
 Use TIER 2 to understand context, but confirm with TIER 1 data before making decisions.
+
+**INJURY EDGE RULES (CRITICAL):**
+- **FRESH (0-3 days):** The ONLY time injury can be an edge. Must prove line underreaction.
+- **>3 DAYS OLD:** Fully priced in. NOT an edge. Don't cite it.
+- **SEASON-LONG:** 100% irrelevant. Don't mention it.
+
+**FORBIDDEN:** "Player X is out so I'm taking Team B"
+**REQUIRED:** "Player X was ruled out yesterday. Their DRtg drops 8pts without him but line only moved 3 - underreaction."
 
 **TIER 3 - DESCRIPTIVE (FORBIDDEN as reasons for picks)**
 | Stat | What It Describes | Why It's FORBIDDEN |
