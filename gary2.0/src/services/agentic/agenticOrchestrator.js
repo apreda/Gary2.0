@@ -610,7 +610,7 @@ const INVESTIGATION_FACTORS = {
     PLAYER_PERFORMANCE: ['PLAYER_GAME_LOGS', 'TOP_PLAYERS', 'USAGE_RATES', 'MINUTES_TREND'],
     INJURIES: ['INJURIES', 'LINEUP_NET_RATINGS'],
     SCHEDULE: ['REST_SITUATION', 'BACK_TO_BACK', 'TRAVEL_SITUATION', 'SCHEDULE_STRENGTH'],
-    HOME_AWAY: ['HOME_AWAY_SPLITS'],
+    // HOME_AWAY removed - records are descriptive (explain line), not predictive. Gary can investigate efficiency splits if needed.
     H2H: ['H2H_HISTORY', 'VS_ELITE_TEAMS'],
     ROSTER_CONTEXT: ['BENCH_DEPTH', 'CLUTCH_STATS', 'BLOWOUT_TENDENCY'],
     LUCK_CLOSE_GAMES: ['LUCK_ADJUSTED', 'CLOSE_GAME_RECORD'], // Regression and clutch
@@ -1592,23 +1592,33 @@ If you can't point to DATA supporting a narrative, it's just a story.
    - CORRECT: "[Team] ranks 28th in assists" (let stats speak)
    - Only RECENT injuries (1-2 weeks) are betting edges.
 
-## DESCRIPTIVE vs PREDICTIVE METRICS (CRITICAL FOR SPREADS)
+## STAT RELIABILITY - PREDICTIVE vs DESCRIPTIVE (CRITICAL)
 
-**Gary, understand the difference between what HAPPENED and what will HAPPEN.**
+**Gary, understand which stats PREDICT tonight vs which stats DESCRIBE the past.**
 
-**DESCRIPTIVE METRICS (what happened - use for CONTEXT only):**
-- Overall record (24-18), road record (7-14), home record (15-5)
-- Win streaks, losing streaks
-- "Team is 3-7 in their last 10" - this DESCRIBES the past, it doesn't PREDICT game #11
-- A 7-14 road record doesn't account for roster evolution - a team might have lost 10 of those in October but be completely different by January
+**TIER 1 - HIGHLY PREDICTIVE (Use as PRIMARY evidence):**
+- Net Rating, ORtg, DRtg (efficiency per 100 possessions)
+- L5/L10 versions of efficiency metrics for CURRENT form
+- These measure HOW WELL a team plays, not just outcomes
 
-**PREDICTIVE METRICS (what's LIKELY to happen - use for DECISIONS):**
-- L5/L10 efficiency metrics (Off Rating, Def Rating, Net Rating over last 5-10 games)
-- L5/L10 pace and scoring margins
-- Current roster health and how RECENT games look with current lineup
-- Head-to-head statistical matchups (pace, efficiency gaps, rebounding differentials)
+**TIER 2 - PREDICTIVE FOR MECHANISMS (Use to understand matchups):**
+- eFG%, TS% (shooting efficiency - more stable than raw FG%)
+- Pace (game flow - high pace = more variance, underdogs can hang)
+- Turnover Rate (ball security - high TO teams are volatile)
+- Rebound Rates, FT Rate (possession and scoring predictors)
+- These tell you HOW the game will be played
 
-**For SPREAD bets, focus on PREDICTIVE metrics.** For ML bets, all factors matter.
+**TIER 3 - DESCRIPTIVE ONLY (NEVER use as primary reasoning):**
+- Records (home/away, overall, ATS) - describe PAST, don't predict THIS game
+- PPG / Points Allowed - pace-inflated, use ORtg/DRtg instead
+- Win/Loss Streaks - outcome-based, investigate margins instead
+- These explain WHY the line is set - they're already priced in
+
+**THE KEY TEST:**
+- "They're 17-4 at home" = DESCRIPTIVE = This is WHY they're favored = Already in line
+- "Their home ORtg is 118.2 vs 112.1 on road" = PREDICTIVE = This is HOW they play better
+
+**For SPREAD bets, focus on TIER 1 and TIER 2 stats.** TIER 3 stats explain the line, they don't beat it.
 
 ## CRITICAL: DESCRIPTIVE FACTORS ARE NOISE (THEY EXPLAIN THE LINE, NOT BEAT IT)
 
@@ -2382,12 +2392,13 @@ ${nflGuidance ? `<sport_specific_guidance>${nflGuidance}</sport_specific_guidanc
 - Cherry-picking stats for one side = incomplete picture = bad bet
 
 **MINIMUM investigation (BOTH teams):**
-- Team efficiency (offensive rating, defensive rating, net rating)
-- Recent form (last 5 games with margins and opponent quality)
-- Home/Away splits (home record for home team, road record for away team)
-- Key player game logs (best player on EACH team)
-- Turnover differential
-- Style indicators (pace, 3PT shooting, paint scoring)
+- Team efficiency (offensive rating, defensive rating, net rating) - PREDICTIVE
+- Recent form (last 5 games with margins and opponent quality) - PREDICTIVE
+- Key player game logs (best player on EACH team) - for CONTEXT
+- Turnover differential - PREDICTIVE
+- Style indicators (pace, 3PT shooting, paint scoring) - PREDICTIVE for matchups
+
+**NOTE:** Home/away RECORDS are DESCRIPTIVE (they explain WHY the line is set, not what happens tonight). If you want to understand venue impact, investigate home/away EFFICIENCY splits (ORtg, eFG% at home vs road), not records.
 
 **ADDITIONAL STATS TO CONSIDER:**
 - BENCH_DEPTH (especially for large spreads)
@@ -2758,11 +2769,14 @@ ${spreadSizeContext ? `<spread_context>${spreadSizeContext}</spread_context>` : 
 ${nflDataGaps}${nbaDataGaps}${ncaabDataGaps}${nhlDataGaps}
 
 **MINIMUM INVESTIGATION:**
-- TEAM-level advanced stats for both teams (use your NBA knowledge to identify the most relevant ones)
-- Home/away performance splits (efficiency, not just W-L records)
+- TEAM-level advanced stats for both teams (Net Rating, ORtg, DRtg, eFG%, Pace, etc.)
 - Recent game context - HOW they win/lose matters more than just the results
 - Any significant roster changes? (context for team performance shifts)
 - Use player data to understand WHY team performance looks the way it does
+
+**DO NOT USE AS PRIMARY REASONING:**
+- Home/away RECORDS (17-4 at home) - these are DESCRIPTIVE, they explain WHY the line is set
+- If you want venue insight, investigate home/away EFFICIENCY (ORtg, eFG% home vs road)
 
 **INJURY CONTEXT RULE:**
 - First game without them → High variance, team adjusting
