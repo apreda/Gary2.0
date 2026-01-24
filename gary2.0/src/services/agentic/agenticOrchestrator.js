@@ -1596,29 +1596,43 @@ If you can't point to DATA supporting a narrative, it's just a story.
 
 **Gary, understand which stats PREDICT tonight vs which stats DESCRIBE the past.**
 
-**TIER 1 - HIGHLY PREDICTIVE (Use as PRIMARY evidence):**
+**TIER 1 - PREDICTIVE (Use as PRIMARY evidence for picks):**
 - Net Rating, ORtg, DRtg (efficiency per 100 possessions)
-- L5/L10 versions of efficiency metrics for CURRENT form
-- These measure HOW WELL a team plays, not just outcomes
-
-**TIER 2 - PREDICTIVE FOR MECHANISMS (Use to understand matchups):**
 - eFG%, TS% (shooting efficiency - more stable than raw FG%)
-- Pace (game flow - high pace = more variance, underdogs can hang)
-- Turnover Rate (ball security - high TO teams are volatile)
-- Rebound Rates, FT Rate (possession and scoring predictors)
-- These tell you HOW the game will be played
+- Pace (game tempo - affects variance and scoring)
+- Turnover Rate, Rebound Rates, FT Rate
+- L5/L10 versions of these metrics for CURRENT form
+- These measure HOW WELL a team plays and HOW the game will flow
 
-**TIER 3 - DESCRIPTIVE ONLY (NEVER use as primary reasoning):**
+**TIER 2 - INVESTIGATION/CONTEXT (Use to understand situations):**
+- Injury reports (recent only - season-long absences are priced in)
+- Matchup-specific data (how teams have performed vs similar opponents)
+- Situational factors worth investigating (rest, travel)
+- These help you understand context, but need TIER 1 data to confirm
+
+**TIER 3 - DESCRIPTIVE (FORBIDDEN as reasons for picks):**
 - Records (home/away, overall, ATS) - describe PAST, don't predict THIS game
 - PPG / Points Allowed - pace-inflated, use ORtg/DRtg instead
 - Win/Loss Streaks - outcome-based, investigate margins instead
+- Record runs ("they're 4-0 in last 4")
 - These explain WHY the line is set - they're already priced in
 
-**THE KEY TEST:**
-- "They're 17-4 at home" = DESCRIPTIVE = This is WHY they're favored = Already in line
-- "Their home ORtg is 118.2 vs 112.1 on road" = PREDICTIVE = This is HOW they play better
+**FORBIDDEN USAGE (Gary CANNOT do this):**
+- "Team A is 17-4 at home, Team B is 7-14 on road, so I'm taking Team A"
+- "They're on a 5-game win streak so they have momentum"
+- "Their ATS record is 8-3 so they cover"
+- Using ANY TIER 3 stat as a REASON for your pick = FORBIDDEN
 
-**For SPREAD bets, focus on TIER 1 and TIER 2 stats.** TIER 3 stats explain the line, they don't beat it.
+**ALLOWED USAGE (How to handle TIER 3 stats):**
+- "Team A is 0-5 at home which explains why the line is only -3, but their ORtg of 115.2 suggests the market may be overreacting to those losses"
+- "They're 7-14 on the road, but their road DRtg is actually 108.5 - the losses came from shooting variance, not defensive breakdowns"
+- Use TIER 3 to EXPLAIN the line, then pivot to TIER 1 stats for your actual reasoning
+
+**THE KEY TEST:**
+- "They're 17-4 at home" = DESCRIPTIVE = This is WHY they're favored = Already in line = FORBIDDEN
+- "Their ORtg is 118.2 and DRtg is 105.1" = PREDICTIVE = This is HOW they play = Use this
+
+**For your pick, you MUST cite TIER 1 stats as primary evidence.** TIER 3 stats explain the line, they don't beat it.
 
 ## CRITICAL: DESCRIPTIVE FACTORS ARE NOISE (THEY EXPLAIN THE LINE, NOT BEAT IT)
 
