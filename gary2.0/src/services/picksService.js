@@ -337,6 +337,29 @@ async function storeDailyPicksInDatabase(picks) {
 
     return pickData;
   }).filter(pick => {
+    // FILTER 1: Road favorites at -5 or greater are filtered out
+    // Road favorites at large spreads are historically poor bets
+    const pickStr = pick.pick || '';
+    const homeTeam = pick.homeTeam || '';
+    const awayTeam = pick.awayTeam || '';
+    const pickType = pick.type || '';
+
+    // Check if this is a spread pick for the away team (road team)
+    if (pickType === 'spread') {
+      // Extract the spread from the pick string (e.g., "Houston Rockets -5.5 -110")
+      const spreadMatch = pickStr.match(/([+-]?\d+\.?\d*)\s*[-+]?\d*$/);
+      if (spreadMatch) {
+        const spread = parseFloat(spreadMatch[1]);
+        // Check if picked team is the away team AND they're a favorite (negative spread)
+        const pickedTeamIsAway = awayTeam && pickStr.toLowerCase().includes(awayTeam.toLowerCase().split(' ').pop());
+
+        if (pickedTeamIsAway && spread <= -5) {
+          console.log(`🚫 FILTERED: Road favorite ${awayTeam} at ${spread} (road favorites -5 or greater filtered out)`);
+          return false;
+        }
+      }
+    }
+
     // NO CONFIDENCE FILTER - Store ALL picks regardless of confidence
     // Gary's picks get stored whether confidence is 0 or 0.9
     const sport = pick.sport || '';
@@ -347,7 +370,7 @@ async function storeDailyPicksInDatabase(picks) {
       const parsed = parseFloat(pick.confidence);
       confidence = Number.isFinite(parsed) ? parsed : 0;
     }
-    
+
     console.log(`✅ Including ${sport} pick with confidence ${confidence}`);
     return true;
   });

@@ -414,7 +414,7 @@ Work through EACH factor before making your decision:
 
 For each factor, investigate BOTH teams and note any asymmetries.
 
-Once ALL factors investigated → Build Steel Man cases for BOTH sides → Final decision
+Once ALL factors investigated → Analyze BOTH sides → Determine which side is the BETTER BET
 
 ### RECENT FORM CONTEXT
 Consider roster context when evaluating recent form - who was playing during that stretch vs. who plays tonight.
@@ -429,14 +429,24 @@ During investigation, focus on gathering data. Trap analysis happens in Pass 2.5
 
 ---
 
-## [BET] SPREAD ANALYSIS: MARGIN DYNAMICS FRAMEWORK
-Analyze the SPREAD as a mechanical hurdle, not just a number to beat.
+## [BET] SPREAD ANALYSIS: THE BETTER BET FRAMEWORK
+The question is not "who covers?" - it's "which side is the BETTER BET given this spread?"
+
+**THE VALUE QUESTION:**
+- Does this spread REFLECT what you found in your research?
+- The spread is set by the market, influenced by public money, injury news, B2B situations, and narratives
+- Your research shows you the TRUE matchup dynamics based on hard stats
+- If these don't align, one side offers better value
 
 **CRITICAL - SIDE SELECTION, NOT MARGIN PREDICTION:**
 - DO NOT attempt to "guess" a final margin (e.g., "I think they win by 10")
 - DO NOT output a predicted score or spread number
-- DO pick a SIDE based on which forces (Separation vs Friction) dominate
-- The question is: "Does the evidence favor the team GETTING points or GIVING points?"
+- DO decide which side is the BETTER BET based on whether the spread reflects your findings
+
+**EXAMPLES OF THE VALUE QUESTION:**
+- Data shows close matchup, but spread is -8 → The +8 side is likely the better bet (narrative pushed line too far)
+- Data shows clear mismatch, but spread is only -3 → The -3 side is likely the better bet (market undervaluing)
+- Star goes down, line moves from -5 to -9, but team's recent stats without star show they're still competitive → The +9 is the better bet (injury overreaction)
 
 Evaluate the friction and separation forces in the matchup:
 
@@ -455,7 +465,7 @@ Evaluate the friction and separation forces in the matchup:
    - **Rest/Fatigue**: How does the specific travel/rest context affect their execution (not just their energy)?
    - **Regression/Sustainability**: Based on your [Assess Sustainability] check, is one team's recent form likely to hold or falter in this specific matchup?
 
-**THE SHARP CONCLUSION**: Your pick is not based on "who is better," but on which side of the **Margin Dynamics** (Separation vs. Friction) has the advantage at THIS specific spread.
+**THE SHARP CONCLUSION**: Your pick is not based on "who is better" or even "who covers." It's based on which side is the BETTER BET - where does the spread NOT reflect what your research shows? That's where the value is.
 
 ---
 
