@@ -12,8 +12,8 @@ import { generateGameSignificance } from './gameSignificanceGenerator.js';
 // All context comes from Gemini 3 Flash with Google Search Grounding
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import axios from 'axios';
-// NOTE: Using Gemini Grounding with site:rotowire.com instead of Puppeteer scraper
-// Grounding is more reliable and provides CONTEXT (injury duration, when it happened)
+// Rotowire data via Gemini Grounding (searches rotowire.com directly)
+// BDL injuries used ONLY for duration enrichment (when player went out)
 
 // Lazy-initialize Gemini for grounded searches
 let geminiClient = null;
@@ -2903,17 +2903,17 @@ async function fetchInjuries(homeTeam, awayTeam, sport) {
     }
     
     // =============================================================================
-    // NBA/NHL/NCAAB: Use Gemini Grounding as PRIMARY source (game-day status)
-    // SINGLE GROUNDING CALL: fetchGroundingInjuries returns both structured data AND groundingRaw
+    // NBA/NHL/NCAAB: Fetch injuries & lineups from Rotowire via Gemini Grounding
+    // Gemini searches site:rotowire.com and extracts the lineup/injury data
     // =============================================================================
     console.log(`[Scout Report] Fetching injuries from Rotowire (via Gemini Grounding) for ${awayTeam} @ ${homeTeam}`);
 
-    // PRIMARY: Fetch from Rotowire via Gemini Grounding (returns structured injuries + raw narrative)
+    // Fetch from Rotowire via Gemini Grounding (returns structured injuries + raw narrative)
     const groundingInjuries = await fetchGroundingInjuries(homeTeam, awayTeam, sport);
 
     // Use groundingRaw from the single call (no duplicate fetchGroundedContext call needed)
     const narrativeContext = groundingInjuries?.groundingRaw || null;
-    
+
     const groundingHomeCount = groundingInjuries?.home?.length || 0;
     const groundingAwayCount = groundingInjuries?.away?.length || 0;
     
@@ -2978,6 +2978,62 @@ async function fetchInjuries(homeTeam, awayTeam, sport) {
 
             enrichedHome = enrichWithBdl(enrichedHome);
             enrichedAway = enrichWithBdl(enrichedAway);
+
+            // IMPORTANT: Add BDL injuries that Rotowire grounding MISSED
+            // This supplements Rotowire data when grounding fails to return all injuries
+            const rotowireHomeNames = new Set(enrichedHome.map(i =>
+              `${i.player?.first_name || ''} ${i.player?.last_name || ''}`.toLowerCase().trim()
+            ));
+            const rotowireAwayNames = new Set(enrichedAway.map(i =>
+              `${i.player?.first_name || ''} ${i.player?.last_name || ''}`.toLowerCase().trim()
+            ));
+
+            for (const bdlInj of bdlInjuries) {
+              const name = `${bdlInj.player?.first_name} ${bdlInj.player?.last_name}`.toLowerCase().trim();
+              const teamId = bdlInj.team?.id;
+              const isHome = teamId === homeTeamData?.id;
+              const isAway = teamId === awayTeamData?.id;
+
+              // Skip if already in Rotowire data
+              if (rotowireHomeNames.has(name) || rotowireAwayNames.has(name)) {
+                continue;
+              }
+
+              // Only add OUT/Doubtful injuries (not Day-to-Day or minor)
+              const status = (bdlInj.status || '').toLowerCase();
+              if (!status.includes('out') && !status.includes('doubtful')) {
+                continue;
+              }
+
+              // Extract duration from BDL
+              const desc = bdlInj.description || '';
+              const returnDate = bdlInj.return_date;
+              const durationInfo = extractDurationFromBdl(desc, returnDate);
+
+              const injuryObj = {
+                player: {
+                  first_name: bdlInj.player?.first_name,
+                  last_name: bdlInj.player?.last_name,
+                  position: bdlInj.player?.position
+                },
+                status: bdlInj.status || 'Out',
+                type: bdlInj.injury_type || 'Unknown',
+                daysSinceReport: durationInfo.daysSinceOut,
+                duration: durationInfo.duration,
+                reportDateStr: durationInfo.outSinceStr,
+                bdlDescription: desc.substring(0, 100),
+                bdlReturnDate: returnDate,
+                source: 'BDL'
+              };
+
+              if (isHome) {
+                console.log(`[Scout Report] Adding BDL injury for HOME (${homeTeam}): ${name} (${bdlInj.status})`);
+                enrichedHome.push(injuryObj);
+              } else if (isAway) {
+                console.log(`[Scout Report] Adding BDL injury for AWAY (${awayTeam}): ${name} (${bdlInj.status})`);
+                enrichedAway.push(injuryObj);
+              }
+            }
           }
         }
       } catch (e) {
@@ -3534,28 +3590,35 @@ async function fetchGroundingInjuries(homeTeam, awayTeam, sport) {
 
       // SIMPLE DIRECT QUERY: Just search the Rotowire NHL lineups page for the matchup
       // The page shows today's games by default - no need for complex date logic
-      const makeNhlInjuryQuery = (teamName, opponentName) => `Search rotowire.com/hockey/nhl-lineups.php for the ${teamName} vs ${opponentName} game.
+      const makeNhlInjuryQuery = (teamName, opponentName) => `Search site:rotowire.com/hockey/nhl-lineups.php for the ${teamName} vs ${opponentName} game.
 
-Look at the INJURIES section listed under the ${teamName} lineup card on that page.
+Look at the lineup card for ${teamName} on that page. Extract the following:
 
-Return in this EXACT format:
-INJURIES - ${teamName}:
-- [Full Name] | [Position] | [Status] | [since Month Day] or [missed X games]
+1. STARTING GOALIE:
+${teamName} Goalie: [Name] (Confirmed/Expected)
+
+2. INJURIES section - List ALL players with their EXACT status:
+${teamName} INJURIES:
+- [Position] [Full Name] [Status]
 
 Example format:
-- Marcus Johansson | LW | OUT | since Jan 5
-- Jonas Brodin | D | IR | missed 12 games
-- Matt Boldy | LW | IR | since Dec 18
+- D Jacob Bryson IR
+- RW J. Danforth IR
+- D Ryan Pulock OUT
+- LW P. Engvall IR-LT
+
+STATUS CODES:
+- OUT = Out for this game
+- IR = Injured Reserve
+- IR-LT = Injured Reserve Long-Term
+- IR-NR = Injured Reserve Non-Roster
+- DTD = Day-to-Day
 
 RULES:
-1. List ALL players shown in the INJURIES section for ${teamName} on that page
-2. Use FULL player names (Marcus Johansson, not M. Johansson)
-3. Use the EXACT status shown: OUT, IR, IR-LT, IR-NR, or DTD
-4. For DURATION, include how long the player has been out:
-   - "since [Month] [Day]" format (e.g., "since Dec 18", "since January 5")
-   - OR "missed [X] games" format (e.g., "missed 5 games")
-5. If no injuries are listed, return "INJURIES - ${teamName}: None"
-6. Do NOT add players that aren't listed on the page`;
+1. The STARTING GOALIE is critical - include whether Confirmed or Expected
+2. List ALL players in the INJURIES section with their position and status
+3. Use the EXACT status code shown (OUT, IR, IR-LT, IR-NR, DTD)
+4. If no injuries listed, say "None"`;
 
       const [awayResponse, homeResponse] = await Promise.all([
         geminiGroundingSearch(makeNhlInjuryQuery(awayTeam, homeTeam), { temperature: 0.3, maxTokens: 1500 }),
@@ -3600,39 +3663,79 @@ RULES:
       return combined;
 
     } else if (sport === 'NCAAB' || sport === 'basketball_ncaab') {
-      query = `Search site:rotowire.com/daily/ncaab/lineups.php for the college basketball game ${awayTeam} vs ${homeTeam} on ${today}
+      query = `Search site:rotowire.com/cbb/lineups.php for the college basketball game ${awayTeam} vs ${homeTeam}.
 
-CRITICAL: Get the EXACT injury statuses from RotoWire's lineup page:
+Look at the lineup card for this matchup on that page. Extract the following EXACTLY as shown:
 
 1. STARTING LINEUPS - For EACH team, list the starting 5:
-   - PG: [Name]
-   - SG: [Name]
-   - SF: [Name]
-   - PF: [Name]
-   - C: [Name]
+${awayTeam}:
+PG [Name]
+SG [Name]
+SF [Name]
+PF [Name]
+C [Name]
 
-2. INJURIES - Use EXACT statuses from RotoWire:
-   - "GTD" = Game Time Decision (CRITICAL - means uncertain if playing)
-   - "Out" = Confirmed out
-   - "OFS" = Out For Season
+${homeTeam}:
+PG [Name]
+SG [Name]
+SF [Name]
+PF [Name]
+C [Name]
 
-   Format each injury as: "[Name] ([Position]) - [EXACT STATUS: GTD/Out/OFS] - [since Month Day] or [missed X games]"
+2. INJURIES section - List players with EXACT status:
+${awayTeam} Injuries:
+- [Position] [Name] [Status]
+(Example: C I. Ufochukwu Out, F S. Wilkins OFS)
+OR "None" if no injuries
 
-   ${awayTeam} INJURIES:
-   ${homeTeam} INJURIES:
+${homeTeam} Injuries:
+- [Position] [Name] [Status]
+OR "None" if no injuries
 
-DURATION FORMAT (REQUIRED):
-- Include how long the player has been out
-- Use "since [Month] [Day]" format (e.g., "since Dec 18", "since January 5")
-- OR "missed [X] games" format (e.g., "missed 5 games")
+STATUS CODES:
+- Out = Confirmed out for this game
+- OFS = Out For Season
+- GTD = Game Time Decision
 
-PRESERVE THE EXACT GTD STATUS - Do NOT convert GTD to "Questionable" or "Out"
-A player marked GTD on RotoWire means game-time decision - report it as "GTD"
-
-Be factual. List injuries with EXACT RotoWire statuses and duration.`;
+RULES:
+1. Return BOTH teams' starting lineups
+2. Use EXACT status codes from Rotowire (Out, OFS, GTD)
+3. If no injuries, say "None"`;
     } else if (sport === 'NFL' || sport === 'americanfootball_nfl') {
-      // NFL uses official injury reports - this is a placeholder
-      query = `Search for ${awayTeam} vs ${homeTeam} NFL injury report ${today}. List all injured players with status and duration.`;
+      // NFL-specific query - search rotowire.com/football/nfl-lineups.php directly
+      query = `Search site:rotowire.com/football/nfl-lineups.php for the ${awayTeam} vs ${homeTeam} game.
+
+Look at the lineup card for this matchup on that page. Extract the following EXACTLY as shown:
+
+1. STARTING LINEUPS - Most importantly the STARTING QB:
+${awayTeam}:
+- QB [Name]
+- RB [Name]
+- WR [Name], [Name], [Name]
+- TE [Name]
+- K [Name]
+
+${homeTeam}:
+- QB [Name]
+- RB [Name]
+- WR [Name], [Name], [Name]
+- TE [Name]
+- K [Name]
+
+2. PLAYER STATUSES - Look for status codes after player names:
+- "Q" = Questionable
+- "D" = Doubtful
+- "O" = Out
+- "IR" = Injured Reserve
+
+3. INACTIVES section (if available):
+${awayTeam} Inactives: [List players or "Not Yet Available"]
+${homeTeam} Inactives: [List players or "Not Yet Available"]
+
+CRITICAL:
+1. The STARTING QB is the most important piece of information
+2. Note any player with Q/D/O/IR status code
+3. If inactives aren't available yet, say "Not Yet Available"`;
     } else if (sport === 'NCAAF' || sport === 'americanfootball_ncaaf') {
       query = `For the college football game ${awayTeam} @ ${homeTeam} on ${today} (2025-26 Bowl Season):
 
@@ -3671,35 +3774,37 @@ CRITICAL ANTI-OPINION RULES:
 4. NO BETTING ADVICE - Gary makes his own picks.`;
 
     } else if (sport === 'NBA' || sport === 'basketball_nba') {
-      // NBA-specific query - search-based (Gemini Grounding cannot navigate to URLs directly)
-      query = `Search Rotowire NBA lineups page for ${awayTeam} vs ${homeTeam} ${today}
+      // NBA-specific query - search rotowire.com/basketball/nba-lineups.php directly
+      query = `Search site:rotowire.com/basketball/nba-lineups.php for the ${awayTeam} vs ${homeTeam} game.
 
-Return the MAY NOT PLAY section with EXACT status abbreviations as shown on Rotowire:
-- "Out" = Confirmed out
-- "Prob" = Probable (expected to play)
-- "Doubt" = Doubtful (unlikely to play)
-- "Ques" = Questionable (uncertain)
-- "OFS" = Out For Season
-- "GTD" = Game Time Decision
+Look at the lineup card for this matchup on that page. Extract the following EXACTLY as shown:
 
-MAY NOT PLAY - ${awayTeam}:
-- [Player Name] | [EXACT status: Out/Prob/Doubt/Ques/OFS/GTD] | [since Month Day] or [missed X games] or [X consecutive games]
-
-MAY NOT PLAY - ${homeTeam}:
-- [Player Name] | [EXACT status: Out/Prob/Doubt/Ques/OFS/GTD] | [since Month Day] or [missed X games] or [X consecutive games]
-
-EXPECTED STARTING LINEUPS:
+1. EXPECTED STARTING LINEUPS (the Confirmed/Expected Lineup section):
 ${awayTeam}: PG [Name], SG [Name], SF [Name], PF [Name], C [Name]
 ${homeTeam}: PG [Name], SG [Name], SF [Name], PF [Name], C [Name]
 
-CRITICAL:
-1. Copy the EXACT status abbreviation shown on Rotowire (Prob, Doubt, Ques, Out, OFS, GTD)
-2. Do NOT convert statuses - "Doubt" stays "Doubt", "Prob" stays "Prob"
-3. For DURATION, use one of these formats:
-   - "since [Month] [Day]" (e.g., "since Dec 18", "since January 5")
-   - "missed [X] games" (e.g., "missed 5 games")
-   - "[X] consecutive games" (e.g., "10 consecutive games")
-4. Search for when the player was FIRST reported injured/out`;
+2. MAY NOT PLAY section - List EVERY player with their EXACT status code:
+${awayTeam} MAY NOT PLAY:
+- [Position letter] [Player Name] [Status]
+(Example: G A. Reaves Out, F A. Thiero Out, C D. Gafford Prob)
+
+${homeTeam} MAY NOT PLAY:
+- [Position letter] [Player Name] [Status]
+(Example: C M. Cisse Doubt, C A. Davis Out, G K. Irving Out)
+
+STATUS CODES FROM ROTOWIRE:
+- Out = Confirmed out
+- Prob = Probable (expected to play)
+- Doubt = Doubtful (unlikely to play)
+- Ques = Questionable (uncertain)
+- OFS = Out For Season
+- GTD = Game Time Decision
+
+RULES:
+1. Return BOTH teams' data even if one has no injuries (say "No injuries listed")
+2. Copy the EXACT status code shown on Rotowire (Out, Prob, Doubt, Ques, OFS, GTD)
+3. Include the position letter (G, F, C) before each player name
+4. This page shows today's games - no date needed in search`;
 
     } else {
       query = `Current injuries for ${sport} game ${awayTeam} vs ${homeTeam} as of ${today}. List all players OUT, DOUBTFUL, or QUESTIONABLE with their status and injury type.`;

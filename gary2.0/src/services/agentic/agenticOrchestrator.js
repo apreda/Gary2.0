@@ -5630,13 +5630,17 @@ Do NOT request more stats. Write your analysis NOW using the data you already ha
             currentModelName = currentSession.modelName;
             hasSwichedToPro = true;
 
+            // CRITICAL: Clear pending function responses from Flash session
+            // Pro starts fresh - it never made those function calls
+            pendingFunctionResponses = [];
+
             console.log(`[Orchestrator] 🧠 NFL Pro session created with tools for Steel Man analysis`);
             console.log(`[Orchestrator] Context passed: ${textualSummary.length} chars (full stats)`);
           } catch (proError) {
             console.warn(`[Orchestrator] ⚠️ Failed to switch to Pro for NFL Steel Man, continuing with Flash:`, proError.message);
           }
         }
-        
+
         messages.push({
           role: 'user',
           content: buildPass2Message(sport, homeTeam, awayTeam, spread)
@@ -5746,6 +5750,10 @@ BEGIN WRITING YOUR MATCHUP ANALYSIS NOW.
               currentModelName = currentSession.modelName;
               hasSwichedToPro = true;
 
+              // CRITICAL: Clear pending function responses from Flash session
+              // Pro starts fresh - it never made those function calls
+              pendingFunctionResponses = [];
+
               console.log(`[Orchestrator] 🧠 Pro session created with tools for verification`);
               console.log(`[Orchestrator] Context passed: ${textualSummary.length} chars (full stats + Steel Man cases)`);
             } catch (proError) {
@@ -5776,13 +5784,18 @@ BEGIN WRITING YOUR MATCHUP ANALYSIS NOW.
               });
               currentModelName = currentSession.modelName;
               hasSwichedToPro = true;
+
+              // CRITICAL: Clear pending function responses from Flash session
+              // Pro starts fresh - it never made those function calls
+              pendingFunctionResponses = [];
+
               console.log(`[Orchestrator] 🧠 NFL Pro session created with tools for Steel Man analysis`);
               console.log(`[Orchestrator] Context passed: ${textualSummary.length} chars (full stats)`);
             } catch (proError) {
               console.warn(`[Orchestrator] ⚠️ Failed to switch to Pro, continuing with Flash:`, proError.message);
             }
           }
-          
+
           messages.push({
             role: 'user',
             content: buildPass2Message(sport, homeTeam, awayTeam, spread) + 
@@ -5989,6 +6002,10 @@ BEGIN WRITING YOUR MATCHUP ANALYSIS NOW.
           });
           currentModelName = currentSession.modelName;
           hasSwichedToPro = true;
+
+          // CRITICAL: Clear pending function responses from Flash session
+          // Pro starts fresh - it never made those function calls
+          pendingFunctionResponses = [];
 
           console.log(`[Orchestrator] 🧠 Pro session created with tools for verification`);
           console.log(`[Orchestrator] Context passed: ${textualSummary.length} chars (full stats + Steel Man cases)`);

@@ -1,21 +1,21 @@
-name: Daily Game Picks
+name: Daily Props Generation
 
 # Runs at 7am EST (12:00 UTC standard time)
-# Early enough for users to see picks before games
+# Same time as game picks - runs in parallel
 on:
   schedule:
     - cron: '0 12 * * *'  # 7am EST (standard time)
   workflow_dispatch:  # Allow manual trigger
     inputs:
       sports:
-        description: 'Sports to run (comma-separated: nba,nhl,ncaab,nfl,ncaaf or all)'
+        description: 'Sports to run (comma-separated: nba,nhl,nfl or all)'
         required: false
         default: 'all'
 
 jobs:
-  generate-picks:
+  generate-props:
     runs-on: ubuntu-latest
-    timeout-minutes: 360  # GitHub max is 360 min (6 hrs) - pick generation needs full agentic analysis
+    timeout-minutes: 360  # GitHub max is 360 min (6 hrs)
 
     defaults:
       run:
@@ -36,9 +36,6 @@ jobs:
         run: npm ci --legacy-peer-deps
 
       # Determine which sports to run based on day of week
-      # NFL: Only on Thursday, Sunday, Monday (game days)
-      # NCAAF: Only on Thursday, Friday, Saturday (game days)
-      # NBA/NHL/NCAAB: Daily
       - name: Determine sports to run
         id: sports
         run: |
@@ -50,22 +47,17 @@ jobs:
             exit 0
           fi
 
-          SPORTS="nba,nhl,ncaab"
+          SPORTS="nba,nhl"
 
           # Add NFL on Thursday (4), Sunday (7), Monday (1)
           if [ "$DAY_OF_WEEK" = "4" ] || [ "$DAY_OF_WEEK" = "7" ] || [ "$DAY_OF_WEEK" = "1" ]; then
             SPORTS="$SPORTS,nfl"
           fi
 
-          # Add NCAAF on Thursday (4), Friday (5), Saturday (6)
-          if [ "$DAY_OF_WEEK" = "4" ] || [ "$DAY_OF_WEEK" = "5" ] || [ "$DAY_OF_WEEK" = "6" ]; then
-            SPORTS="$SPORTS,ncaaf"
-          fi
-
           echo "sports=$SPORTS" >> $GITHUB_OUTPUT
-          echo "Running picks for: $SPORTS"
+          echo "Running props for: $SPORTS"
 
-      - name: Generate NBA game picks
+      - name: Generate NBA props
         if: contains(steps.sports.outputs.sports, 'nba')
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -76,9 +68,9 @@ jobs:
           ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
           QRNG_API_KEY: ${{ secrets.QRNG_API_KEY }}
           TANK01_RAPIDAPI_KEY: ${{ secrets.TANK01_RAPIDAPI_KEY }}
-        run: node scripts/run-agentic-picks.js --nba
+        run: node scripts/run-agentic-nba-props.js
 
-      - name: Generate NHL game picks
+      - name: Generate NHL props
         if: contains(steps.sports.outputs.sports, 'nhl')
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -89,22 +81,9 @@ jobs:
           ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
           QRNG_API_KEY: ${{ secrets.QRNG_API_KEY }}
           TANK01_RAPIDAPI_KEY: ${{ secrets.TANK01_RAPIDAPI_KEY }}
-        run: node scripts/run-agentic-picks.js --nhl
+        run: node scripts/run-agentic-nhl-props.js
 
-      - name: Generate NCAAB game picks
-        if: contains(steps.sports.outputs.sports, 'ncaab')
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
-          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
-          QRNG_API_KEY: ${{ secrets.QRNG_API_KEY }}
-          TANK01_RAPIDAPI_KEY: ${{ secrets.TANK01_RAPIDAPI_KEY }}
-        run: node scripts/run-agentic-picks.js --ncaab
-
-      - name: Generate NFL game picks
+      - name: Generate NFL props
         if: contains(steps.sports.outputs.sports, 'nfl')
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -115,20 +94,7 @@ jobs:
           ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
           QRNG_API_KEY: ${{ secrets.QRNG_API_KEY }}
           TANK01_RAPIDAPI_KEY: ${{ secrets.TANK01_RAPIDAPI_KEY }}
-        run: node scripts/run-agentic-picks.js --nfl
-
-      - name: Generate NCAAF game picks
-        if: contains(steps.sports.outputs.sports, 'ncaaf')
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
-          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
-          QRNG_API_KEY: ${{ secrets.QRNG_API_KEY }}
-          TANK01_RAPIDAPI_KEY: ${{ secrets.TANK01_RAPIDAPI_KEY }}
-        run: node scripts/run-agentic-picks.js --ncaaf
+        run: node scripts/run-agentic-nfl-props.js
 
       - name: Log completion
-        run: echo "Game pick generation completed at $(date)"
+        run: echo "Props generation completed at $(date)"
