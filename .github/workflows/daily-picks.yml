@@ -52,8 +52,9 @@ jobs:
 
           SPORTS="nba,nhl,ncaab"
 
-          # Add NFL on Thursday (4), Sunday (7), Monday (1)
-          if [ "$DAY_OF_WEEK" = "4" ] || [ "$DAY_OF_WEEK" = "7" ] || [ "$DAY_OF_WEEK" = "1" ]; then
+          # Add NFL on Thursday (4), Saturday (6), Sunday (7), Monday (1)
+          # Saturday included for playoff weekends (Wild Card, Divisional, etc.)
+          if [ "$DAY_OF_WEEK" = "4" ] || [ "$DAY_OF_WEEK" = "6" ] || [ "$DAY_OF_WEEK" = "7" ] || [ "$DAY_OF_WEEK" = "1" ]; then
             SPORTS="$SPORTS,nfl"
           fi
 
