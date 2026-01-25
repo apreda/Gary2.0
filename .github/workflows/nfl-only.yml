@@ -1,6 +1,6 @@
-name: NFL Only - Props & Picks
+name: NFL Only - Picks & Props
 
-# Manual trigger only - runs NFL props, TD props, and game picks
+# Manual trigger only - runs NFL game picks FIRST, then props
 on:
   workflow_dispatch:
 
@@ -27,6 +27,18 @@ jobs:
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
 
+      - name: Generate NFL game picks (FIRST)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+          QRNG_API_KEY: ${{ secrets.QRNG_API_KEY }}
+          TANK01_RAPIDAPI_KEY: ${{ secrets.TANK01_RAPIDAPI_KEY }}
+        run: node scripts/run-agentic-picks.js --nfl
+
       - name: Generate NFL props
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -50,18 +62,6 @@ jobs:
           QRNG_API_KEY: ${{ secrets.QRNG_API_KEY }}
           TANK01_RAPIDAPI_KEY: ${{ secrets.TANK01_RAPIDAPI_KEY }}
         run: node scripts/run-agentic-nfl-td.js --store=1
-
-      - name: Generate NFL game picks
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
-          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
-          QRNG_API_KEY: ${{ secrets.QRNG_API_KEY }}
-          TANK01_RAPIDAPI_KEY: ${{ secrets.TANK01_RAPIDAPI_KEY }}
-        run: node scripts/run-agentic-picks.js --nfl
 
       - name: Log completion
         run: echo "NFL complete generation finished at $(date)"
