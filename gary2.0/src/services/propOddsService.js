@@ -105,9 +105,9 @@ const PROP_MARKETS = {
 // ============================================================================
 // Only accept odds in a reasonable range for night-in-night-out picks:
 // - No heavy juice (worse than -200) - the vig kills long-term edge
-// - No lottery tickets (better than +250) - hat tricks, multi-goal, etc.
+// - No extreme lottery tickets (better than +400)
 const MIN_ACCEPTABLE_ODDS = -200;  // -200 OK, -201 filtered
-const MAX_ACCEPTABLE_ODDS = 250;   // +250 OK, +251 filtered
+const MAX_ACCEPTABLE_ODDS = 400;   // +400 OK, +401 filtered
 
 /**
  * Check if odds are within acceptable range
@@ -461,14 +461,21 @@ export const propOddsService = {
 
             const result = Object.values(grouped);
 
+            // Filter to FULL GAME props only (no quarter/half props)
+            const quarterHalfPatterns = /(?:1st|2nd|3rd|4th|first|second|third|fourth)[-_\s]*(quarter|half)|(?:1q|2q|3q|4q|1h|2h|q1|q2|q3|q4|h1|h2)(?:_|$)/i;
+            const fullGameProps = result.filter(p => {
+              const propType = (p.prop_type || '').toLowerCase();
+              return !quarterHalfPatterns.test(propType);
+            });
+
             // Log prop type breakdown
             const propTypes = {};
-            result.forEach(p => { propTypes[p.prop_type] = (propTypes[p.prop_type] || 0) + 1; });
-            console.log(`[PropOdds] BDL NBA props breakdown:`, propTypes);
-            console.log(`[PropOdds] BDL returned ${result.length} unique NBA player props`);
+            fullGameProps.forEach(p => { propTypes[p.prop_type] = (propTypes[p.prop_type] || 0) + 1; });
+            console.log(`[PropOdds] BDL NBA props breakdown (full game only):`, propTypes);
+            console.log(`[PropOdds] BDL returned ${fullGameProps.length} unique NBA player props (filtered ${result.length - fullGameProps.length} quarter/half props)`);
 
             // Filter by odds value
-            const filtered = propOddsService.filterPropsByOddsValue(result);
+            const filtered = propOddsService.filterPropsByOddsValue(fullGameProps);
             return filtered;
           }
         }
