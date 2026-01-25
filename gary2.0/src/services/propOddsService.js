@@ -366,14 +366,21 @@ export const propOddsService = {
 
             const result = Object.values(grouped);
 
+            // Filter to FULL GAME props only (no quarter/half props)
+            const quarterHalfPatterns = /(?:1st|2nd|3rd|4th|first|second|third|fourth)[-_\s]*(quarter|half)|(?:1q|2q|3q|4q|1h|2h|q1|q2|q3|q4|h1|h2)(?:_|$)/i;
+            const fullGameProps = result.filter(p => {
+              const propType = (p.prop_type || '').toLowerCase();
+              return !quarterHalfPatterns.test(propType);
+            });
+
             // Log prop type breakdown
             const propTypes = {};
-            result.forEach(p => { propTypes[p.prop_type] = (propTypes[p.prop_type] || 0) + 1; });
-            console.log(`[PropOdds] BDL NFL props breakdown:`, propTypes);
-            console.log(`[PropOdds] BDL returned ${result.length} unique NFL player props`);
+            fullGameProps.forEach(p => { propTypes[p.prop_type] = (propTypes[p.prop_type] || 0) + 1; });
+            console.log(`[PropOdds] BDL NFL props breakdown (full game only):`, propTypes);
+            console.log(`[PropOdds] BDL returned ${fullGameProps.length} unique NFL player props (filtered ${result.length - fullGameProps.length} quarter/half props)`);
 
             // Filter by odds value
-            const filtered = propOddsService.filterPropsByOddsValue(result);
+            const filtered = propOddsService.filterPropsByOddsValue(fullGameProps);
             return filtered;
           }
         }
