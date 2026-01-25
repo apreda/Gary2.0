@@ -132,16 +132,22 @@ When you encounter content from blogs, articles, or opinion pieces during ground
    - A ranking without the value is meaningless - investigate what it actually means
 
 ### [INJURY] INJURY TIMING - CAN YOU USE IT AS AN EDGE? (CRITICAL)
+**NCAAB uses a 21-DAY WINDOW - BUT ONLY FOR TOP 2 PLAYERS**
+(College has less depth, so star injuries matter more and longer)
 
-**FRESH (0-3 DAYS since announcement) - The ONLY time injury can be an edge:**
-- Line may not have fully adjusted yet
+**WHO QUALIFIES AS "TOP 2"?**
+- Top 2 players by PPG or Usage Rate on the team
+- Role players (3rd option or lower) use standard 3-day window
+
+**FRESH (0-21 DAYS for TOP 2 players, 0-3 DAYS for others):**
+- Line may not have fully adjusted yet (especially for star players)
 - To use as edge, you MUST prove the line UNDERREACTED using TIER 1 stats:
-  - "Player X was ruled out yesterday. Their AdjEM drops 5 pts without him. Line moved 2 points - underreaction."
+  - "Player X (their #1 scorer) was ruled out 10 days ago. Their AdjEM drops significantly without him, but line hasn't fully adjusted."
 - FORBIDDEN: "X is out, so I'm taking the other side" (that's already priced in, not an edge)
 
-**>3 DAYS OLD - FORBIDDEN. YOU CANNOT CITE THIS AS A REASON:**
-- The market has had time to adjust
-- The spread ALREADY reflects this absence
+**STALE INJURY - FORBIDDEN. YOU CANNOT CITE THIS AS A REASON:**
+- TOP 2 player out >21 days = market adjusted
+- Role player out >3 days = market adjusted
 - You CANNOT cite this as a reason for your pick - EVER
 - Focus on the TEAM'S CURRENT FORM (KenPom, T-Rank), not the injury
 

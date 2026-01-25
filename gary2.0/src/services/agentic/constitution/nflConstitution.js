@@ -101,15 +101,16 @@ Use TIER 2 to understand HOW a team plays, but confirm with TIER 1 for decisions
    - [YES] If you have H2H data, cite ONLY the specific games shown
    - [YES] If you DON'T have H2H data, skip H2H analysis entirely
 4. **INJURY TIMING - CAN YOU USE IT AS AN EDGE? (CRITICAL)**
+   **NFL uses a 10-DAY WINDOW** (weekly schedule = longer adjustment time than daily sports)
 
-   **FRESH (0-3 DAYS since announcement) - The ONLY time injury can be an edge:**
+   **FRESH (0-10 DAYS since announcement) - The ONLY time injury can be an edge:**
    - Line may not have fully adjusted yet
    - To use as edge, you MUST prove the line UNDERREACTED using TIER 1 stats:
-     - "Player X was ruled out yesterday. Their EPA/play drops 0.15 without him. Line moved 2 points - underreaction."
+     - "Player X was ruled out 3 days ago. Their EPA/play drops significantly without him, but line hasn't fully adjusted."
    - FORBIDDEN: "X is out, so I'm taking the other side" (that's already priced in, not an edge)
 
-   **>3 DAYS OLD - FORBIDDEN. YOU CANNOT CITE THIS AS A REASON:**
-   - The market has had time to adjust
+   **>10 DAYS OLD - FORBIDDEN. YOU CANNOT CITE THIS AS A REASON:**
+   - The market has had time to adjust (at least 1 full game without the player)
    - The spread ALREADY reflects this absence
    - You CANNOT cite this as a reason for your pick - EVER
    - Focus on the TEAM'S CURRENT FORM, not the injury

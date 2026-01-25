@@ -94,7 +94,7 @@ Use TIER 2 to understand HOW a team plays, but confirm with TIER 1 for decisions
    **FRESH (0-3 DAYS since announcement) - The ONLY time injury can be an edge:**
    - Line may not have fully adjusted yet
    - To use as edge, you MUST prove the line UNDERREACTED using TIER 1 stats:
-     - "Player X was ruled out yesterday. Their xG For drops 0.8 without him. Line moved 5 cents - underreaction."
+     - "Player X was ruled out yesterday. Their xG For drops significantly without him, but line hasn't fully adjusted."
    - FORBIDDEN: "X is out, so I'm taking the other side" (that's already priced in, not an edge)
 
    **>3 DAYS OLD - FORBIDDEN. YOU CANNOT CITE THIS AS A REASON:**
