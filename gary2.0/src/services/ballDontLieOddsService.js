@@ -533,9 +533,9 @@ export const ballDontLieOddsService = {
       const homeTeamName = mapTeamName(g.home_team);
 
       // Use proper datetime fields for accurate timezone handling
-      // BDL returns: date="YYYY-MM-DD" (local schedule date), datetime="ISO8601" (actual UTC time)
-      // The "status" field for upcoming games contains the ISO datetime (e.g., "2026-01-24T00:00:00Z")
-      // Priority: datetime > status (if ISO format) > start_time_utc > date with time adjustment
+      // BDL returns for NFL: date="2026-01-25T20:00:00.000Z" (ISO with actual game time!)
+      // But datetime/start_time_utc are often undefined, and status is human-readable
+      // Priority: date (if ISO) > datetime > start_time_utc > fallback
 
       // DEBUG: Log what BDL returns for NFL games
       if (sportKey === 'americanfootball_nfl') {
@@ -544,18 +544,22 @@ export const ballDontLieOddsService = {
 
       let commenceTime = g.datetime || g.start_time_utc;
 
-      // If no datetime, check if status contains the game time (BDL uses status for scheduled time)
-      if (!commenceTime && g.status && g.status.includes('T')) {
-        commenceTime = g.status;
+      // NFL FIX: BDL returns the actual game time in g.date as an ISO string (e.g., "2026-01-25T20:00:00.000Z")
+      // Check if g.date contains 'T' indicating it's an ISO datetime, not just a date
+      if (!commenceTime && g.date && g.date.includes('T')) {
+        commenceTime = g.date;
+        console.log(`[BDL Odds] Using g.date as ISO datetime: ${commenceTime}`);
       }
 
-      // Last resort: use date but add a reasonable game time (assume afternoon NFL game time ~3pm EST = 8pm UTC)
+      // Fallback: If date is just YYYY-MM-DD format, add reasonable game time
       if (!commenceTime && g.date) {
-        // Convert date string to a reasonable game time (3pm EST = 8pm UTC same day)
-        const dateParts = g.date.split('-');
-        const gameDate = new Date(Date.UTC(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]), 20, 0, 0));
-        commenceTime = gameDate.toISOString();
-        console.log(`[BDL Odds] WARNING: No datetime for game, using date+offset: ${g.date} -> ${commenceTime}`);
+        // Check if it's a simple date string (no T)
+        if (!g.date.includes('T')) {
+          const dateParts = g.date.split('-');
+          const gameDate = new Date(Date.UTC(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]), 20, 0, 0));
+          commenceTime = gameDate.toISOString();
+          console.log(`[BDL Odds] WARNING: No datetime, using date+offset: ${g.date} -> ${commenceTime}`);
+        }
       }
 
       commenceTime = commenceTime || new Date().toISOString();
