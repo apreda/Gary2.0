@@ -3875,6 +3875,70 @@ const ballDontLieService = {
   },
 
   /**
+   * Get NFL player injuries from BDL (official practice report data)
+   * @param {Array} teamIds - Array of NFL team IDs to check for injuries
+   * @returns {Promise<Array>} - Array of player injury data with status (Questionable/Doubtful/Out)
+   */
+  async getNflPlayerInjuries(teamIds = []) {
+    try {
+      const cacheKey = `nfl_player_injuries_${teamIds.join('_') || 'all'}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        console.log(`🏈 Fetching NFL player injuries for teams: ${teamIds.length > 0 ? teamIds.join(', ') : 'ALL'}`);
+
+        // Use HTTP endpoint directly (SDK may have issues)
+        let allInjuries = [];
+        let cursor = null;
+        let page = 1;
+        const maxPages = 10;
+
+        do {
+          const params = new URLSearchParams();
+          params.append('per_page', '100');
+          if (cursor) params.append('cursor', cursor);
+          // Add team_ids if specified
+          for (const tid of teamIds) {
+            params.append('team_ids[]', tid);
+          }
+
+          const url = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/player_injuries?${params.toString()}`;
+          console.log(`🏈 Fetching NFL player injuries (page ${page})`);
+
+          const response = await axios.get(url, {
+            headers: { 'Authorization': API_KEY }
+          });
+
+          const injuries = response.data?.data || [];
+          allInjuries = allInjuries.concat(injuries);
+          cursor = response.data?.meta?.next_cursor;
+          page++;
+        } while (cursor && page <= maxPages);
+
+        console.log(`🏈 Found ${allInjuries.length} NFL player injuries (${page - 1} pages)`);
+
+        // Log injury breakdown
+        const outPlayers = allInjuries.filter(i => i.status?.toUpperCase() === 'OUT');
+        const doubtfulPlayers = allInjuries.filter(i => i.status?.toUpperCase() === 'DOUBTFUL');
+        const questionablePlayers = allInjuries.filter(i => i.status?.toUpperCase() === 'QUESTIONABLE');
+
+        if (outPlayers.length > 0) {
+          console.log(`🏈 OUT (${outPlayers.length}): ${outPlayers.slice(0, 10).map(i => `${i.player?.first_name} ${i.player?.last_name}`).join(', ')}${outPlayers.length > 10 ? '...' : ''}`);
+        }
+        if (doubtfulPlayers.length > 0) {
+          console.log(`🏈 DOUBTFUL (${doubtfulPlayers.length}): ${doubtfulPlayers.slice(0, 5).map(i => `${i.player?.first_name} ${i.player?.last_name}`).join(', ')}${doubtfulPlayers.length > 5 ? '...' : ''}`);
+        }
+        if (questionablePlayers.length > 0) {
+          console.log(`🏈 QUESTIONABLE (${questionablePlayers.length}): ${questionablePlayers.slice(0, 5).map(i => `${i.player?.first_name} ${i.player?.last_name}`).join(', ')}${questionablePlayers.length > 5 ? '...' : ''}`);
+        }
+
+        return allInjuries;
+      }, 30); // Cache for 30 minutes - NFL injury reports update less frequently than NBA
+    } catch (error) {
+      console.error('Error fetching NFL player injuries:', error);
+      return [];
+    }
+  },
+
+  /**
    * Get advanced stats - supports filtering by game_ids, player_ids, seasons
    * @param {Object|Array} options - Options object or legacy array of game IDs
    * @param {Array} options.game_ids - Array of game IDs

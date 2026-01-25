@@ -2874,15 +2874,14 @@ async function fetchInjuries(homeTeam, awayTeam, sport) {
                        bdlSport === 'americanfootball_nfl' || bdlSport === 'americanfootball_ncaaf';
     
     // =============================================================================
-    // NFL/NCAAF: Use currentState (Gemini Grounding) as PRIMARY source
-    // BDL injury data can be stale (showing injuries from weeks ago)
-    // The currentState fetch provides game-day accurate "OUT/LIMITED" info
+    // NFL/NCAAF: Use BDL as PRIMARY source for injury data
+    // BDL has official practice report data (Questionable/Doubtful/Out status)
+    // Apply 10-day freshness rule: only injuries reported within 10 days matter
     // =============================================================================
     if (isFootball && bdlSport) {
-      console.log(`[Scout Report] NFL/NCAAF: Using currentState (Gemini Grounding) for game-day injury info`);
-      console.log(`[Scout Report] Skipping BDL injury fetch (can include stale injuries from weeks ago)`);
-      
-      // Fetch current state for narratives - this is the PRIMARY injury source for NFL now
+      console.log(`[Scout Report] NFL/NCAAF: Fetching BDL injuries (official practice reports)`);
+
+      // Fetch current state for narratives and additional context
       let narrativeContext = null;
       try {
         const currentState = await fetchCurrentState(homeTeam, awayTeam, sport);
@@ -2890,13 +2889,85 @@ async function fetchInjuries(homeTeam, awayTeam, sport) {
       } catch (e) {
         console.log(`[Scout Report] Failed to fetch ${sport} current state: ${e.message}`);
       }
-      
-      // Return empty injury arrays - injury data comes from currentState (OUT/LIMITED section)
-      // This is the same pattern used for NBA to avoid stale BDL data
-      console.log(`[Scout Report] NFL/NCAAF: Injury data will come from "OUT/LIMITED" in currentState (game-day accurate)`);
+
+      // Fetch BDL injuries for both teams
+      let homeInjuries = [];
+      let awayInjuries = [];
+
+      try {
+        // Get team IDs from BDL
+        const [homeTeamData, awayTeamData] = await Promise.all([
+          ballDontLieService.getTeamByName(homeTeam, bdlSport),
+          ballDontLieService.getTeamByName(awayTeam, bdlSport)
+        ]);
+
+        const homeTeamId = homeTeamData?.id;
+        const awayTeamId = awayTeamData?.id;
+
+        if (homeTeamId || awayTeamId) {
+          const teamIds = [homeTeamId, awayTeamId].filter(Boolean);
+          console.log(`[Scout Report] NFL team IDs: ${homeTeam}=${homeTeamId}, ${awayTeam}=${awayTeamId}`);
+
+          // Fetch injuries from BDL (uses nfl/v1/player_injuries endpoint)
+          const bdlInjuries = await ballDontLieService.getNflPlayerInjuries(teamIds);
+          console.log(`[Scout Report] BDL returned ${bdlInjuries?.length || 0} NFL injuries`);
+
+          // Calculate freshness (10-day window for NFL)
+          const now = new Date();
+          const FRESH_WINDOW_DAYS = 10;
+
+          // Process injuries and assign to home/away
+          for (const inj of (bdlInjuries || [])) {
+            const playerTeamId = inj.player?.team?.id || inj.team?.id;
+            const injuryDate = inj.date ? new Date(inj.date) : null;
+            const daysSinceReport = injuryDate ? Math.floor((now - injuryDate) / (1000 * 60 * 60 * 24)) : null;
+
+            // Determine freshness category
+            let freshness = 'UNKNOWN';
+            if (daysSinceReport !== null) {
+              if (daysSinceReport <= FRESH_WINDOW_DAYS) {
+                freshness = 'FRESH';
+              } else {
+                freshness = 'STALE - PRICED IN';
+              }
+            }
+
+            const injuryObj = {
+              player: {
+                first_name: inj.player?.first_name,
+                last_name: inj.player?.last_name,
+                position: inj.player?.position || inj.player?.position_abbreviation
+              },
+              status: inj.status || 'Unknown',
+              type: inj.comment?.split('(')[1]?.split(')')[0] || 'Unknown', // Extract injury type from comment
+              daysSinceReport,
+              reportDateStr: injuryDate ? injuryDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : null,
+              freshness,
+              comment: inj.comment?.substring(0, 150) || '',
+              source: 'BDL'
+            };
+
+            // Log fresh injuries prominently
+            if (freshness === 'FRESH') {
+              console.log(`[Scout Report] 🚨 FRESH NFL INJURY: ${inj.player?.first_name} ${inj.player?.last_name} (${inj.status}) - ${daysSinceReport} days ago`);
+            }
+
+            if (playerTeamId === homeTeamId) {
+              homeInjuries.push(injuryObj);
+            } else if (playerTeamId === awayTeamId) {
+              awayInjuries.push(injuryObj);
+            }
+          }
+
+          console.log(`[Scout Report] NFL injuries parsed: ${homeInjuries.length} for ${homeTeam}, ${awayInjuries.length} for ${awayTeam}`);
+        }
+      } catch (e) {
+        console.warn(`[Scout Report] Failed to fetch BDL NFL injuries: ${e.message}`);
+      }
+
       return {
-        home: [],
-        away: [],
+        home: homeInjuries,
+        away: awayInjuries,
         lineups: { home: [], away: [] },
         narrativeContext
       };
