@@ -1072,8 +1072,8 @@ function summarizePlayerStats(statResult, statType, teamName) {
 // This prevents "blanking" where the model loses the thread due to context rot.
 // ═══════════════════════════════════════════════════════════════════════════
 
-const MAX_CONTEXT_MESSAGES = 25; // Keep last 25 messages max during analysis
-const PRUNE_AFTER_ITERATION = 5;
+const MAX_CONTEXT_MESSAGES = 20; // Keep last 20 messages max during analysis (reduced from 25 to prevent token overflow)
+const PRUNE_AFTER_ITERATION = 4; // Start pruning earlier (iteration 4 instead of 5)
 
 /**
  * Prune message history to prevent context bloat
@@ -4637,11 +4637,54 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
           if (message.content || message.tool_calls) {
             messages.push(message);
           }
+        } else if (error.message?.includes('MALFORMED_FUNCTION_CALL')) {
+          // MALFORMED_FUNCTION_CALL after retries - force transition to Steel Man instead of failing
+          console.log(`[Orchestrator] ⚠️ MALFORMED_FUNCTION_CALL after retries - forcing Steel Man transition`);
+          console.log(`[Orchestrator] 🔄 Recovering by extracting context and creating new session for Steel Man`);
+
+          // Extract what we have so far
+          const textualContext = extractTextualSummaryForModelSwitch(messages, steelManCases, toolCallHistory);
+
+          // Create fresh Pro session for Steel Man with reduced context
+          currentSession = createGeminiSession({
+            modelName: 'gemini-3-pro-preview',
+            systemPrompt: systemPrompt + '\n\n[RECOVERY MODE] Investigation phase hit errors. Proceed directly to Steel Man cases with available data.\n\n' + textualContext,
+            tools: toolDefinitions,
+            thinkingLevel: 'high'
+          });
+          currentModelName = 'gemini-3-pro-preview';
+          hasSwichedToPro = true;
+
+          // Force Steel Man transition
+          const steelManPrompt = `[PASS 2 - STEEL MAN] You have gathered sufficient data. Write your Steel Man cases now:
+
+**Case for ${homeTeam}** (the home team):
+[Build the strongest case for why ${homeTeam} covers/wins, using ONLY the data from your investigation]
+
+**Case for ${awayTeam}** (the away team):
+[Build the strongest case for why ${awayTeam} covers/wins, using ONLY the data from your investigation]
+
+Focus on TIER 1 predictive stats (efficiency, EPA) and TIER 2 context (fresh injuries, matchups). Proceed with your Steel Man analysis.`;
+
+          const recoveryResponse = await sendToSessionWithRetry(currentSession, steelManPrompt);
+          message = {
+            role: 'assistant',
+            content: recoveryResponse.content,
+            tool_calls: recoveryResponse.toolCalls
+          };
+          finishReason = recoveryResponse.finishReason;
+
+          if (message.content || message.tool_calls) {
+            messages.push(message);
+          }
+
+          // Clear pending function responses to avoid stale state
+          pendingFunctionResponses = [];
         } else {
           throw error;
         }
       }
-      
+
     } else if (provider === 'gemini') {
       // Fallback to old method if session not available (shouldn't happen)
       const currentPass = determineCurrentPass(messages);
@@ -4761,14 +4804,20 @@ Do NOT request more stats. Write your analysis NOW using the data you already ha
     // Check if Gary requested tool calls
     if (message.tool_calls && message.tool_calls.length > 0) {
       // Build set of ALREADY FETCHED stats from history (across all iterations)
-      const alreadyFetchedStats = new Set(
-        toolCallHistory.map(t => {
-          // Create key from token or player stat type
-          const token = t.token || '';
-          // Extract base token (e.g., "NHL_PLAYER_STATS:goals" -> "NHL_PLAYER_STATS:goals")
-          return token.split(':')[0] || token;
-        }).filter(Boolean)
-      );
+      // Include BOTH full tokens and base tokens to catch duplicates properly
+      const alreadyFetchedStats = new Set();
+      for (const t of toolCallHistory) {
+        const token = t.token || '';
+        if (token) {
+          // Add full token (e.g., "PLAYER_GAME_LOGS:Drake Maye")
+          alreadyFetchedStats.add(token);
+          // Also add base token (e.g., "PLAYER_GAME_LOGS") for generic checks
+          const baseToken = token.split(':')[0];
+          if (baseToken && baseToken !== token) {
+            alreadyFetchedStats.add(baseToken);
+          }
+        }
+      }
       
       // Deduplicate tool calls - both within this batch AND against history
       const seenStats = new Set();

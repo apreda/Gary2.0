@@ -3,6 +3,15 @@ name: NFL Only - Picks & Props
 # Manual trigger only - runs NFL game picks FIRST, then props
 on:
   workflow_dispatch:
+    inputs:
+      matchup:
+        description: 'Filter to specific matchup (e.g., "Patriots", "Broncos")'
+        required: false
+        default: ''
+      skip_props:
+        description: 'Skip props generation (picks only)'
+        required: false
+        default: 'false'
 
 jobs:
   nfl-complete:
@@ -37,9 +46,15 @@ jobs:
           ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
           QRNG_API_KEY: ${{ secrets.QRNG_API_KEY }}
           TANK01_RAPIDAPI_KEY: ${{ secrets.TANK01_RAPIDAPI_KEY }}
-        run: node scripts/run-agentic-picks.js --nfl
+        run: |
+          if [ -n "${{ github.event.inputs.matchup }}" ]; then
+            node scripts/run-agentic-picks.js --nfl --matchup "${{ github.event.inputs.matchup }}" --limit 1
+          else
+            node scripts/run-agentic-picks.js --nfl
+          fi
 
       - name: Generate NFL props
+        if: ${{ github.event.inputs.skip_props != 'true' }}
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
@@ -52,6 +67,7 @@ jobs:
         run: node scripts/run-agentic-nfl-props.js --store=1
 
       - name: Generate NFL TD props
+        if: ${{ github.event.inputs.skip_props != 'true' }}
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
