@@ -1,0 +1,47 @@
+name: NFL Picks Only (Single Game)
+
+on:
+  workflow_dispatch:
+    inputs:
+      matchup:
+        description: 'Team name to filter (e.g., "Patriots")'
+        required: true
+        default: 'Patriots'
+
+jobs:
+  nfl-pick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    defaults:
+      run:
+        working-directory: gary2.0
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: gary2.0/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Generate NFL pick
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+          QRNG_API_KEY: ${{ secrets.QRNG_API_KEY }}
+          TANK01_RAPIDAPI_KEY: ${{ secrets.TANK01_RAPIDAPI_KEY }}
+        run: node scripts/run-agentic-picks.js --nfl --matchup "${{ github.event.inputs.matchup }}" --limit 1
+
+      - name: Done
+        run: echo "NFL pick for ${{ github.event.inputs.matchup }} completed"
