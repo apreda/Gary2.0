@@ -365,8 +365,17 @@ async function main() {
         const currentWeekNumber = picksService.getNFLWeekNumber();
         const currentWeekStart = picksService.getNFLWeekStart();
 
-        // Detect if we're in playoffs (any game has postseason: true)
-        const hasPlayoffGames = allGames?.some(g => g.postseason === true);
+        // Detect if we're in playoffs based on DATE (Odds API doesn't have postseason flag)
+        // NFL playoffs: Wild Card (early Jan), Divisional (mid Jan), Championship (late Jan), Super Bowl (early Feb)
+        // Regular season ends around Week 18 (typically first week of January)
+        const month = now.getMonth() + 1; // 1-indexed
+        const day = now.getDate();
+        const isPlayoffPeriod = (month === 1 && day >= 10) || (month === 2 && day <= 15);
+        const hasPlayoffGames = isPlayoffPeriod;
+
+        if (isPlayoffPeriod) {
+          console.log(`[${config.name}] Date check: ${month}/${day} - NFL Playoffs period detected`);
+        }
 
         // CHECK: If --date flag is provided, filter to specific date(s) ONLY
         if (dateFilter) {
@@ -395,16 +404,15 @@ async function main() {
             return gameTime > now && gameTime <= new Date(now.getTime() + windowMs);
           }) || [];
 
-          // Determine playoff round based on date
-          const month = now.getMonth() + 1; // 1-indexed
-          const day = now.getDate();
+          // Determine playoff round based on date (already have month/day from above)
           let playoffRound = 'Playoffs';
           if (month === 1) {
-            if (day >= 1 && day <= 15) playoffRound = 'Wild Card';
-            else if (day >= 16 && day <= 22) playoffRound = 'Divisional';
-            else if (day >= 23 && day <= 31) playoffRound = 'Conference Championship';
-          } else if (month === 2 && day <= 15) {
-            playoffRound = 'Super Bowl';
+            if (day >= 10 && day <= 16) playoffRound = 'Wild Card';
+            else if (day >= 17 && day <= 23) playoffRound = 'Divisional';
+            else if (day >= 24 && day <= 31) playoffRound = 'Conference Championship';
+          } else if (month === 2) {
+            if (day <= 7) playoffRound = 'Conference Championship';
+            else if (day <= 15) playoffRound = 'Super Bowl';
           }
 
           timeLabel = `NFL ${playoffRound}`;
