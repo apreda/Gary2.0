@@ -6181,7 +6181,8 @@ const ballDontLieService = {
         if (options.prop_type) params.prop_type = options.prop_type;
         if (options.vendors) params.vendors = options.vendors;
 
-        const url = `${BALLDONTLIE_API_BASE_URL}/nba/v1/odds/player_props${buildQuery(params)}`;
+        // NBA player props use v2 endpoint (not under /nba/ prefix)
+        const url = `${BALLDONTLIE_API_BASE_URL}/v2/odds/player_props${buildQuery(params)}`;
         console.log(`[Ball Don't Lie] Fetching NBA player props: ${url}`);
 
         const response = await axios.get(url, {
