@@ -536,6 +536,12 @@ export const ballDontLieOddsService = {
       // BDL returns: date="YYYY-MM-DD" (local schedule date), datetime="ISO8601" (actual UTC time)
       // The "status" field for upcoming games contains the ISO datetime (e.g., "2026-01-24T00:00:00Z")
       // Priority: datetime > status (if ISO format) > start_time_utc > date with time adjustment
+
+      // DEBUG: Log what BDL returns for NFL games
+      if (sportKey === 'americanfootball_nfl') {
+        console.log(`[BDL Odds] NFL Game ${g.id}: date=${g.date}, datetime=${g.datetime}, status=${g.status}, start_time_utc=${g.start_time_utc}`);
+      }
+
       let commenceTime = g.datetime || g.start_time_utc;
 
       // If no datetime, check if status contains the game time (BDL uses status for scheduled time)
@@ -543,16 +549,21 @@ export const ballDontLieOddsService = {
         commenceTime = g.status;
       }
 
-      // Last resort: use date but add a reasonable game time (7pm EST = midnight UTC next day)
+      // Last resort: use date but add a reasonable game time (assume afternoon NFL game time ~3pm EST = 8pm UTC)
       if (!commenceTime && g.date) {
-        // Convert date string to a reasonable game time (assume 7pm EST = 00:00 UTC next day)
+        // Convert date string to a reasonable game time (3pm EST = 8pm UTC same day)
         const dateParts = g.date.split('-');
-        const gameDate = new Date(Date.UTC(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]) + 1, 0, 0, 0));
+        const gameDate = new Date(Date.UTC(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]), 20, 0, 0));
         commenceTime = gameDate.toISOString();
         console.log(`[BDL Odds] WARNING: No datetime for game, using date+offset: ${g.date} -> ${commenceTime}`);
       }
 
       commenceTime = commenceTime || new Date().toISOString();
+
+      // DEBUG: Log final commence_time
+      if (sportKey === 'americanfootball_nfl') {
+        console.log(`[BDL Odds] NFL Game ${g.id}: FINAL commence_time = ${commenceTime}`);
+      }
 
       const result = {
         id: g.id,
