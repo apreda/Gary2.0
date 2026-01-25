@@ -77,7 +77,7 @@ function detectPlayoffStage() {
       return {
         isPlayoffs: true,
         round: 'Wild Card / Divisional Round',
-        context: `🏆 NFL PLAYOFFS - Wild Card/Divisional Weekend
+        context: `NFL PLAYOFFS - Wild Card/Divisional Weekend
 - Higher stakes = more conservative play-calling early
 - Teams may script more opening drive plays
 - Star players get MORE usage (no load management)
@@ -88,7 +88,7 @@ function detectPlayoffStage() {
       return {
         isPlayoffs: true,
         round: 'Conference Championships',
-        context: `🏆 NFL CONFERENCE CHAMPIONSHIPS
+        context: `NFL CONFERENCE CHAMPIONSHIPS
 - 4 teams remaining, HIGHEST intensity games
 - Teams are battle-tested - game plans are tight
 - Star players will be featured heavily
@@ -100,7 +100,7 @@ function detectPlayoffStage() {
     return {
       isPlayoffs: true,
       round: 'Super Bowl',
-      context: `🏆 SUPER BOWL
+      context: `SUPER BOWL
 - Biggest game of the year
 - Both teams have 2 weeks to prepare
 - Scripted plays are more elaborate
@@ -353,7 +353,7 @@ async function fetchPlayerTDRates(players, season) {
 function formatTDRatesContext(tdRates, players) {
   if (!tdRates || Object.keys(tdRates).length === 0) return '';
   
-  let context = '\n## 📊 PLAYER TD RATES (2025 Season - BDL Verified)\n';
+  let context = '\n## PLAYER TD RATES (2025 Season - BDL Verified)\n';
   context += 'Use these TD rates to assess value vs odds:\n\n';
   
   // Group by high/medium/low TD rate
@@ -519,7 +519,7 @@ async function runTDScorerAnalysis(allTDProps, firstTDProps, playerStats, gameMa
         if (game.spreadContext === 'HOME_BIG_FAVORITE' || game.spreadContext === 'AWAY_BIG_FAVORITE') {
           const favorite = game.spreadContext === 'HOME_BIG_FAVORITE' ? game.homeTeam : game.awayTeam;
           const underdog = game.spreadContext === 'HOME_BIG_FAVORITE' ? game.awayTeam : game.homeTeam;
-          context += `- ⚠️ GAME SCRIPT: ${favorite} RB1 likely high volume late. ${underdog} may trail = more passing TDs.\n`;
+          context += `- GAME SCRIPT: ${favorite} RB1 likely high volume late. ${underdog} may trail = more passing TDs.\n`;
         }
         if (game.totalContext === 'HIGH_SCORING') {
           context += `- High total: Multiple TDs expected - WRs/TEs have increased equity.\n`;
@@ -562,7 +562,7 @@ async function runTDScorerAnalysis(allTDProps, firstTDProps, playerStats, gameMa
 You are Gary, the expert NFL analyst. You're picking Touchdown Scorers for today's games.
 ${playoffInfo.isPlayoffs ? `\n${playoffInfo.context}\n` : ''}
 
-🚨🚨🚨 ZERO TOLERANCE FOR HALLUCINATION - READ THIS FIRST 🚨🚨🚨
+*** ZERO TOLERANCE FOR HALLUCINATION - READ THIS FIRST ***
 
 YOU ARE ABSOLUTELY FORBIDDEN FROM INVENTING ANY STATISTICS OR FACTS.
 
@@ -572,13 +572,13 @@ The ONLY information you can use is:
 3. Stats explicitly provided in the player_context or live_context data
 4. Information found via Google Search grounding during this analysis
 
-❌ YOU CANNOT:
+YOU CANNOT:
 - Invent touchdown counts (e.g., "9 TDs in 15 games" unless you verified it)
 - Make up red zone statistics unless explicitly provided
 - Claim any player stat you did not see in the provided data
 - Assign players to wrong teams (CHECK the verified team assignments!)
 
-✅ YOU MUST:
+YOU MUST:
 - Use ONLY verified player-team assignments from the context
 - Cite only stats you actually see in the data
 - Say "strong TD scoring role" instead of inventing specific TD counts
