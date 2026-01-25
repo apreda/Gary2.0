@@ -865,16 +865,15 @@ async function main() {
 
   // Fetch NFL games
   const games = await oddsService.getUpcomingGames(SPORT_KEY, { nocache });
-  
-  // Get current EST date boundaries (start of today and start of tomorrow in EST)
-  const todayEST = getESTDate();
-  const todayStart = new Date(`${todayEST}T00:00:00-05:00`).getTime();
-  const tomorrowStart = new Date(`${todayEST}T00:00:00-05:00`).getTime() + (24 * 60 * 60 * 1000);
-  
-  // Filter games that start on the current EST day
+
+  // Use 48-hour rolling window for NFL (catches Sunday + Monday games)
+  const now = Date.now();
+  const windowMs = 48 * 60 * 60 * 1000; // 48 hours
+
+  // Filter games starting within next 48 hours
   let filteredGames = games.filter(g => {
     const tip = new Date(g.commence_time).getTime();
-    return !Number.isNaN(tip) && tip >= todayStart && tip < tomorrowStart;
+    return !Number.isNaN(tip) && tip > now && tip <= now + windowMs;
   });
   
   // Apply matchup filter if specified (e.g., --matchup="49ers")

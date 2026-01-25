@@ -18,10 +18,10 @@ runAgenticPropsCli({
   sportKey: 'americanfootball_nfl',
   leagueLabel: 'NFL',
   buildContext: buildNflPropsAgenticContext,
-  windowHours: 24 * 7,     // NFL is weekly - covers full week of games
+  windowHours: 48,         // 48-hour rolling window (catches Sunday + Monday games)
   propsPerGame: 7,         // Gary outputs: 3 regular + 2 regular TD + 1 value TD + 1 first TD = 7 max
   limitDefault: 16,        // Max 16 games in Wild Card Weekend
-  useESTDayFiltering: true // Use EST day filtering for game day runs
+  useESTDayFiltering: false // Use rolling window - more reliable for NFL scheduling
 })
   .then(() => process.exit(0))
   .catch((error) => {
