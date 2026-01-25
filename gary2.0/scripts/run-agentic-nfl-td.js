@@ -612,12 +612,16 @@ Pick your ${standardCount} BEST touchdown scorer bet${standardCount > 1 ? 's' : 
 
 RULE: ${isSingleGame ? 'Pick exactly 1 standard TD scorer.' : 'Pick from at least 4 different games.'} For standard picks, use line 0.5 (Over 0.5 TDs = scores at least 1 TD).
 
-### CATEGORY 2: UNDERDOG TD SCORERS (${underdogCount} pick${underdogCount > 1 ? 's' : ''})  
+### CATEGORY 2: UNDERDOG TD SCORERS (${underdogCount} pick${underdogCount > 1 ? 's' : ''})
 Pick ${underdogCount} touchdown scorer bet${underdogCount > 1 ? 's' : ''} with odds of +200 or better (higher payout). These are your VALUE plays:
 - Players who could vulture a TD or score multiple
 - Boom/bust candidates in high-scoring games
 - Players in favorable TD-scoring situations that oddsmakers are undervaluing
-- You CAN pick Over 1.5 TDs (2+ touchdowns) for players you think will have big games
+- For top 5 players (best anytime TD odds), you can pick Over 1.5 TDs (2+ touchdowns) if you think they have multi-TD upside
+
+LINE OPTIONS:
+- line: 0.5 = Player scores AT LEAST 1 TD (anytime TD)
+- line: 1.5 = Player scores 2+ TDs (only available for top 5 players by odds)
 
 RULE: ${isSingleGame ? 'Pick exactly 1 value TD scorer.' : 'Pick from at least 4 different games.'}
 
@@ -918,27 +922,68 @@ async function main() {
     try {
       const props = await propOddsService.getPlayerPropOdds(SPORT_KEY, game.home_team, game.away_team);
       
-      // Filter for anytime TD props ONLY (single TD to score)
-      // IMPORTANT: Do NOT include player_tds_over (2+ TDs) - that's a different market!
+      // Filter for anytime TD props (1+ TD, line 0.5)
+      // Also get 2+ TD props (line 1.5) for top players
       const rawTdProps = props.filter(p => {
         const propType = (p.prop_type || '').toLowerCase();
-        // Only anytime TD (single TD) - exclude tds_over which is 2+ TDs
-        return propType === 'anytime_td' || 
-               propType === 'player_anytime_td';
+        return propType === 'anytime_td' ||
+               propType === 'player_anytime_td' ||
+               propType === 'player_tds_over' ||  // 2+ TDs
+               propType === 'tds_over';
       });
 
       // Filter for First TD props
       const rawFirstProps = props.filter(p => {
         const propType = (p.prop_type || '').toLowerCase();
-        return propType === 'first_td' || 
+        return propType === 'first_td' ||
                propType === 'player_1st_td' ||
                propType === '1st_td';
       });
 
-      console.log(`   Found ${rawTdProps.length} anytime TD, ${rawFirstProps.length} first TD props`);
+      // Limit to 10 players per team for TD props
+      // Group by player and team, sort by odds, take top 10 per team
+      const groupByTeam = (tdProps, teamName) => {
+        const teamProps = tdProps.filter(p => {
+          const playerTeamNorm = (p.team || '').toLowerCase();
+          const teamNameNorm = (teamName || '').toLowerCase();
+          return playerTeamNorm.includes(teamNameNorm) || teamNameNorm.includes(playerTeamNorm);
+        });
+        // Group by player, keep best odds per player
+        const byPlayer = {};
+        for (const prop of teamProps) {
+          const key = prop.player.toLowerCase();
+          if (!byPlayer[key] || prop.over_odds < byPlayer[key].over_odds) {
+            byPlayer[key] = prop;
+          }
+        }
+        // Sort by odds (best odds first) and take top 10
+        return Object.values(byPlayer)
+          .sort((a, b) => (a.over_odds || 999) - (b.over_odds || 999))
+          .slice(0, 10);
+      };
+
+      const homeTdPlayers = groupByTeam(rawTdProps, game.home_team);
+      const awayTdPlayers = groupByTeam(rawTdProps, game.away_team);
+      const limitedTdProps = [...homeTdPlayers, ...awayTdPlayers];
+
+      // For 2+ TDs (line 1.5): Only allow top 5 players with best odds
+      // Get the top 5 players overall by 1+ TD odds (most likely scorers)
+      const top5Players = new Set(
+        [...homeTdPlayers.slice(0, 3), ...awayTdPlayers.slice(0, 2)]
+          .map(p => p.player.toLowerCase())
+      );
+
+      // Filter 2+ TD props to only top 5 players
+      const twoTdProps = rawTdProps.filter(p => {
+        const propType = (p.prop_type || '').toLowerCase();
+        const is2TdProp = propType === 'player_tds_over' || propType === 'tds_over';
+        return is2TdProp && top5Players.has(p.player.toLowerCase());
+      });
+
+      console.log(`   Found ${limitedTdProps.length} anytime TD (10/team), ${twoTdProps.length} 2+ TD (top 5), ${rawFirstProps.length} first TD props`);
 
       // NEW: Validate player-team assignments via BDL API
-      const allGameProps = [...rawTdProps, ...rawFirstProps].map(p => ({
+      const allGameProps = [...limitedTdProps, ...twoTdProps, ...rawFirstProps].map(p => ({
         player: p.player,
         team: p.team,
         odds: p.over_odds || p.odds
@@ -952,13 +997,28 @@ async function main() {
         playerTeamMap[vp.player.toLowerCase()] = vp.team;
       }
 
-      // Apply validated teams to TD props
-      rawTdProps.forEach(p => {
+      // Apply validated teams to TD props (limited to 10 per team)
+      limitedTdProps.forEach(p => {
         const validatedTeam = playerTeamMap[p.player.toLowerCase()];
         allTDProps.push({
           player: p.player,
-          team: validatedTeam || p.team, // Use validated team if available
+          team: validatedTeam || p.team,
           odds: p.over_odds || p.odds,
+          line: 0.5, // 1+ TD
+          matchup: matchup,
+          game_time: game.commence_time,
+          validated: !!validatedTeam
+        });
+      });
+
+      // Add 2+ TD props for top 5 players only
+      twoTdProps.forEach(p => {
+        const validatedTeam = playerTeamMap[p.player.toLowerCase()];
+        allTDProps.push({
+          player: p.player,
+          team: validatedTeam || p.team,
+          odds: p.over_odds || p.odds,
+          line: 1.5, // 2+ TDs
           matchup: matchup,
           game_time: game.commence_time,
           validated: !!validatedTeam
