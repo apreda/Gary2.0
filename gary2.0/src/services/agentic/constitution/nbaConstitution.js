@@ -863,32 +863,76 @@ Investigate, verify your claims with data, consider both sides, and make the pic
 
 ---
 
-## [FINAL] REMEMBER - WHAT PREDICTS OUTCOMES?
+## [FINAL] STAT AWARENESS - WHAT PREDICTS OUTCOMES?
 
-<decision_making_awareness>
-**When making your decision, be aware of what predicts outcomes vs what's already priced in:**
+<stat_type_awareness>
+**Be aware of what types of stats predict outcomes vs what's already priced into the line:**
 
-**Already priced into the line (oddsmakers know this):**
+**Already priced into the line (oddsmakers use these to SET the line):**
 - Records, standings, seeding ("2nd-seeded team vs lottery team")
 - Win/Loss streaks, "momentum" narratives
 - Raw PPG and Points Allowed (pace-inflated)
 - Public perception and media narratives
 
-**Reveals actual team quality (investigate these):**
-- Efficiency gaps: Net Rating, ORtg, DRtg differences
+**TIER 1 - Predictive (investigate these - they reveal actual team quality):**
+- Efficiency: Net Rating, ORtg, DRtg differences
 - Shooting quality: eFG%, TS% (more stable than raw FG%)
+- Style indicators: Pace, Turnover Rate, Rebound Rates
 - Current form: L5/L10 efficiency vs season baseline
-- Style matchups: How does THEIR offense attack THIS defense?
 
-**The better bet question:**
-Ask yourself: "Does the LINE accurately reflect what the EFFICIENCY DATA shows?"
-- If yes → No edge, consider passing
-- If no → The data tells a different story than the market. Investigate why.
+**TIER 2 - Context (investigate these - they reveal the situation):**
+- Fresh injuries (0-3 days) - investigate if line has fully adjusted
+- Matchup-specific data: How does THEIR offense attack THIS defense?
+- Situational factors: Rest, travel, schedule context
+</stat_type_awareness>
+
+<the_better_bet_question>
+**After investigating TIER 1 and TIER 2 factors, ask yourself:**
+"Which SIDE of this line - favorite or underdog - is the better bet?"
+
+The spread divides the game into two sides. Your investigation should reveal which side the data supports:
+- TIER 1 stats show the matchup dynamics
+- TIER 2 factors provide context for THIS game
+- Your decision: Which side offers the better bet given what you found?
 
 Your rationale should reflect what you actually found during investigation.
-If you found a meaningful efficiency gap, that's your reason.
-If you found the narratives are accurate, that's your reason too.
-</decision_making_awareness>
+Use TIER 1 and TIER 2 factors as your reasons - NEVER TIER 3.
+
+**Examples of valid reasons (TIER 1 + TIER 2):**
+- Efficiency gap (Net Rating, ORtg, DRtg differences)
+- Shooting quality mismatch (eFG%, TS% differentials)
+- Style/pace mismatch that favors one side
+- Fresh injury (0-3 days) where line hasn't fully adjusted
+- Matchup-specific advantage (how their offense attacks this defense)
+- Current form divergence (L5/L10 efficiency trending differently than season)
+
+**NEVER use these as reasons (TIER 3 - already priced in):**
+- Records, standings, seeding
+- Win/loss streaks, "momentum"
+- Raw PPG or Points Allowed
+- ATS records or betting trends
+
+Let the TIER 1 and TIER 2 data guide you to a side.
+</the_better_bet_question>
+
+<investigation_questions>
+**When building your thesis, ask yourself:**
+
+1. "Am I citing records, streaks, or PPG as reasons?"
+   → If yes, investigate TIER 1 stats instead - what do efficiency metrics show?
+
+2. "Is my rationale built on what happened (descriptive) or what's likely to happen (predictive)?"
+   → Investigate the underlying stats that drive outcomes, not just outcomes themselves
+
+3. "Which SIDE of this spread - favorite or underdog - does my investigation support?"
+   → Let the TIER 1 and TIER 2 data guide you to a side
+
+**Your rationale should reflect what you actually found:**
+- If you found a meaningful efficiency gap, that's your reason
+- If you found a fresh injury the line hasn't adjusted to, that's your reason
+- If you found a style mismatch, that's your reason
+- Let YOUR investigation guide YOUR decision
+</investigation_questions>
 
 `;
 
