@@ -360,29 +360,57 @@ async function main() {
       let games;
       let timeLabel;
 
-      // NFL: Filter to current NFL week only using week number
-      // This prevents grabbing next week's games (e.g., Week 16 games when running Week 15)
+      // NFL: Filter to current NFL week or playoffs
       if (config.key === 'americanfootball_nfl') {
         const currentWeekNumber = picksService.getNFLWeekNumber();
         const currentWeekStart = picksService.getNFLWeekStart();
+
+        // Detect if we're in playoffs (any game has postseason: true)
+        const hasPlayoffGames = allGames?.some(g => g.postseason === true);
 
         // CHECK: If --date flag is provided, filter to specific date(s) ONLY
         if (dateFilter) {
           // Parse comma-separated dates (e.g., "2025-12-25,2025-12-26")
           const targetDates = dateFilter.split(',').map(d => d.trim());
           console.log(`[${config.name}] --date filter active: targeting ${targetDates.join(', ')}`);
-          
+
           games = allGames?.filter(g => {
             const gameTime = new Date(g.commence_time);
             const gameDateEST = gameTime.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); // YYYY-MM-DD
             // Game date matches one of the target dates
             return targetDates.includes(gameDateEST);
           }) || [];
-          
+
           timeLabel = `${targetDates.join(' & ')}`;
           console.log(`[${config.name}] Date filter: found ${games.length} games on ${targetDates.join(', ')}`);
+        } else if (hasPlayoffGames) {
+          // PLAYOFFS: Use simple rolling window instead of week-based filtering
+          // Playoffs have irregular schedules (Wild Card weekend = Sat+Sun, Divisional = Sat+Sun, etc.)
+          console.log(`[${config.name}] 🏈 PLAYOFFS DETECTED - using rolling window filter`);
+
+          // Get all games within next 48 hours that haven't started
+          const windowMs = 48 * 60 * 60 * 1000; // 48 hours
+          games = allGames?.filter(g => {
+            const gameTime = new Date(g.commence_time);
+            return gameTime > now && gameTime <= new Date(now.getTime() + windowMs);
+          }) || [];
+
+          // Determine playoff round based on date
+          const month = now.getMonth() + 1; // 1-indexed
+          const day = now.getDate();
+          let playoffRound = 'Playoffs';
+          if (month === 1) {
+            if (day >= 1 && day <= 15) playoffRound = 'Wild Card';
+            else if (day >= 16 && day <= 22) playoffRound = 'Divisional';
+            else if (day >= 23 && day <= 31) playoffRound = 'Conference Championship';
+          } else if (month === 2 && day <= 15) {
+            playoffRound = 'Super Bowl';
+          }
+
+          timeLabel = `NFL ${playoffRound}`;
+          console.log(`[${config.name}] NFL ${playoffRound}: found ${games.length} games in next 48h`);
         } else {
-          // Default NFL week-based filtering (no --date flag)
+          // REGULAR SEASON: Default NFL week-based filtering
           // NFL weeks run Tuesday-Monday, so we filter games that belong to the current week
           // Get end of current week (next Tuesday 5:00 AM ET to catch late Monday games)
           const weekStartDate = new Date(currentWeekStart + 'T00:00:00');
