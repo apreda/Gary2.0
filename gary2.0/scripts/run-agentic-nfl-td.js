@@ -61,6 +61,63 @@ function parseArgs() {
 }
 
 /**
+ * Detect NFL playoff stage based on current date
+ * @returns {Object} { isPlayoffs: boolean, round: string, context: string }
+ */
+function detectPlayoffStage() {
+  const now = new Date();
+  const month = now.getMonth() + 1; // 1-indexed
+  const day = now.getDate();
+
+  // NFL Playoffs: January (Wild Card, Divisional, Conference) and early February (Super Bowl)
+  // Regular season ends around Week 18 (late December/early January)
+
+  if (month === 1) {
+    if (day >= 1 && day <= 15) {
+      return {
+        isPlayoffs: true,
+        round: 'Wild Card / Divisional Round',
+        context: `🏆 NFL PLAYOFFS - Wild Card/Divisional Weekend
+- Higher stakes = more conservative play-calling early
+- Teams may script more opening drive plays
+- Star players get MORE usage (no load management)
+- Backup RBs may see reduced work
+- Weather is a factor for outdoor games`
+      };
+    } else if (day >= 16 && day <= 28) {
+      return {
+        isPlayoffs: true,
+        round: 'Conference Championships',
+        context: `🏆 NFL CONFERENCE CHAMPIONSHIPS
+- 4 teams remaining, HIGHEST intensity games
+- Teams are battle-tested - game plans are tight
+- Star players will be featured heavily
+- Red zone efficiency matters more than ever
+- These are the best 4 teams - defense is elite`
+      };
+    }
+  } else if (month === 2 && day <= 15) {
+    return {
+      isPlayoffs: true,
+      round: 'Super Bowl',
+      context: `🏆 SUPER BOWL
+- Biggest game of the year
+- Both teams have 2 weeks to prepare
+- Scripted plays are more elaborate
+- Star players are the focus
+- Expect conservative early, aggressive late if trailing`
+    };
+  }
+
+  // Regular season
+  return {
+    isPlayoffs: false,
+    round: 'Regular Season',
+    context: ''
+  };
+}
+
+/**
  * Ensure diverse game coverage - get best options from EACH game
  */
 function getBalancedOptions(props, maxPerGame = 8, totalMax = 80) {
@@ -498,8 +555,12 @@ async function runTDScorerAnalysis(allTDProps, firstTDProps, playerStats, gameMa
   const standardCount = isSingleGame ? 1 : 5;
   const underdogCount = isSingleGame ? 1 : 5;
 
+  // Detect playoff stage for context
+  const playoffInfo = detectPlayoffStage();
+
   const systemPrompt = `
 You are Gary, the expert NFL analyst. You're picking Touchdown Scorers for today's games.
+${playoffInfo.isPlayoffs ? `\n${playoffInfo.context}\n` : ''}
 
 🚨🚨🚨 ZERO TOLERANCE FOR HALLUCINATION - READ THIS FIRST 🚨🚨🚨
 

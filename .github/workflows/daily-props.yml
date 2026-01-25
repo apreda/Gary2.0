@@ -49,8 +49,9 @@ jobs:
 
           SPORTS="nba,nhl"
 
-          # Add NFL on Thursday (4), Sunday (7), Monday (1)
-          if [ "$DAY_OF_WEEK" = "4" ] || [ "$DAY_OF_WEEK" = "7" ] || [ "$DAY_OF_WEEK" = "1" ]; then
+          # Add NFL on Thursday (4), Saturday (6), Sunday (7), Monday (1)
+          # Saturday included for playoff weekends (Wild Card, Divisional, etc.)
+          if [ "$DAY_OF_WEEK" = "4" ] || [ "$DAY_OF_WEEK" = "6" ] || [ "$DAY_OF_WEEK" = "7" ] || [ "$DAY_OF_WEEK" = "1" ]; then
             SPORTS="$SPORTS,nfl"
           fi
 
@@ -68,7 +69,7 @@ jobs:
           ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
           QRNG_API_KEY: ${{ secrets.QRNG_API_KEY }}
           TANK01_RAPIDAPI_KEY: ${{ secrets.TANK01_RAPIDAPI_KEY }}
-        run: node scripts/run-agentic-nba-props.js
+        run: node scripts/run-agentic-nba-props.js --store=1
 
       - name: Generate NHL props
         if: contains(steps.sports.outputs.sports, 'nhl')
@@ -81,7 +82,7 @@ jobs:
           ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
           QRNG_API_KEY: ${{ secrets.QRNG_API_KEY }}
           TANK01_RAPIDAPI_KEY: ${{ secrets.TANK01_RAPIDAPI_KEY }}
-        run: node scripts/run-agentic-nhl-props.js
+        run: node scripts/run-agentic-nhl-props.js --store=1
 
       - name: Generate NFL props
         if: contains(steps.sports.outputs.sports, 'nfl')
@@ -94,7 +95,20 @@ jobs:
           ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
           QRNG_API_KEY: ${{ secrets.QRNG_API_KEY }}
           TANK01_RAPIDAPI_KEY: ${{ secrets.TANK01_RAPIDAPI_KEY }}
-        run: node scripts/run-agentic-nfl-props.js
+        run: node scripts/run-agentic-nfl-props.js --store=1
+
+      - name: Generate NFL TD props
+        if: contains(steps.sports.outputs.sports, 'nfl')
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+          QRNG_API_KEY: ${{ secrets.QRNG_API_KEY }}
+          TANK01_RAPIDAPI_KEY: ${{ secrets.TANK01_RAPIDAPI_KEY }}
+        run: node scripts/run-agentic-nfl-td.js --store=1
 
       - name: Log completion
         run: echo "Props generation completed at $(date)"
