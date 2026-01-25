@@ -86,20 +86,37 @@ export async function runAgenticPropsCli({
   }
   const windowMs = windowHours ? windowHours * 60 * 60 * 1000 : null;
 
+  // DEBUG: Log all games before filtering
+  console.log(`\n🔍 DEBUG: ${games.length} games returned from oddsService:`);
+  for (const g of games) {
+    console.log(`   - ${g.away_team} @ ${g.home_team} | commence_time: ${g.commence_time} | id: ${g.id}`);
+  }
+  console.log(`🔍 DEBUG: now = ${new Date(now).toISOString()}, windowMs = ${windowMs}ms (${windowHours}h)\n`);
+
   const filtered = games
     .filter((game) => {
       const tip = new Date(game.commence_time).getTime();
-      if (Number.isNaN(tip)) return false;
-      
+      const tipIsNaN = Number.isNaN(tip);
+      const tipInPast = tip <= now;
+      const tipOutsideWindow = windowMs != null && tip > now + windowMs;
+
+      // DEBUG: Log each game's filter result
+      if (tipIsNaN || tipInPast || tipOutsideWindow) {
+        console.log(`🚫 FILTERED OUT: ${game.away_team} @ ${game.home_team}`);
+        console.log(`   commence_time: ${game.commence_time}, tip: ${tip}, isNaN: ${tipIsNaN}, inPast: ${tipInPast}, outsideWindow: ${tipOutsideWindow}`);
+      }
+
+      if (tipIsNaN) return false;
+
       if (useESTDayFiltering) {
         // Filter games starting on current EST day
         if (tip < todayStart || tip >= tomorrowStart) return false;
       } else {
         // Use rolling window (original behavior)
-        if (tip <= now) return false;
-        if (windowMs != null && tip > now + windowMs) return false;
+        if (tipInPast) return false;
+        if (tipOutsideWindow) return false;
       }
-      
+
       // Apply matchup filter if provided
       if (matchupFilter) {
         const matchupLower = matchupFilter.toLowerCase();
