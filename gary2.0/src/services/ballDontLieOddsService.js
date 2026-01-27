@@ -259,19 +259,53 @@ export const ballDontLieOddsService = {
       });
     }
     // NCAAB: use sport-specific v1 odds endpoint; odds start 2025-26 and not guaranteed per docs
+    // NCAAB FIX: BDL stores games by UTC date, but we want EST date
+    // Games at 7pm+ EST are stored under the NEXT UTC date (e.g., 7pm EST Jan 27 = midnight UTC Jan 28)
+    // So we must query BOTH today AND tomorrow's UTC dates to get all EST games for today
     if (sportKey === 'basketball_ncaab') {
       const apiKey = getApiKey();
-      const games = await ballDontLieService.getGames('basketball_ncaab', { dates: [dateStr], per_page: 100 }, 10);
+
+      // Calculate tomorrow's date in UTC
+      const todayDate = new Date(dateStr);
+      const tomorrowDate = new Date(todayDate.getTime() + 24 * 60 * 60 * 1000);
+      const tomorrowStr = tomorrowDate.toISOString().split('T')[0]; // YYYY-MM-DD
+
+      console.log(`[NCAAB] Fetching games for BOTH ${dateStr} AND ${tomorrowStr} (UTC) to capture all EST games`);
+
+      // Fetch games for both dates
+      const [gamesToday, gamesTomorrow] = await Promise.all([
+        ballDontLieService.getGames('basketball_ncaab', { dates: [dateStr], per_page: 100 }, 10),
+        ballDontLieService.getGames('basketball_ncaab', { dates: [tomorrowStr], per_page: 100 }, 10)
+      ]);
+
+      // Combine and deduplicate by game ID
+      const allGamesMap = new Map();
+      for (const g of [...(gamesToday || []), ...(gamesTomorrow || [])]) {
+        if (g?.id && !allGamesMap.has(g.id)) {
+          allGamesMap.set(g.id, g);
+        }
+      }
+      const games = Array.from(allGamesMap.values());
+      console.log(`[NCAAB] Combined: ${gamesToday?.length || 0} from ${dateStr} + ${gamesTomorrow?.length || 0} from ${tomorrowStr} = ${games.length} unique games`);
+
       const ids = (games || []).map(g => g.id).filter(Boolean);
       let oddsRows = [];
       try {
-        // Try by date first
-        const respByDate = await axios.get(BDL_NCAAB_ODDS_V1, {
-          params: { 'dates[]': [dateStr], per_page: 100 },
-          headers: { Authorization: apiKey }
-        });
-        const rowsByDate = Array.isArray(respByDate?.data?.data) ? respByDate.data.data : [];
-        oddsRows = rowsByDate;
+        // Try by date first - fetch odds for both dates
+        const [respToday, respTomorrow] = await Promise.all([
+          axios.get(BDL_NCAAB_ODDS_V1, {
+            params: { 'dates[]': [dateStr], per_page: 100 },
+            headers: { Authorization: apiKey }
+          }),
+          axios.get(BDL_NCAAB_ODDS_V1, {
+            params: { 'dates[]': [tomorrowStr], per_page: 100 },
+            headers: { Authorization: apiKey }
+          })
+        ]);
+        const rowsToday = Array.isArray(respToday?.data?.data) ? respToday.data.data : [];
+        const rowsTomorrow = Array.isArray(respTomorrow?.data?.data) ? respTomorrow.data.data : [];
+        oddsRows = [...rowsToday, ...rowsTomorrow];
+        console.log(`[NCAAB] Odds: ${rowsToday.length} from ${dateStr} + ${rowsTomorrow.length} from ${tomorrowStr}`);
       } catch (e) {
         console.warn('[BallDonLieOdds][NCAAB] date-based v1 odds fetch failed:', e?.response?.data || e?.message || e);
       }
@@ -328,18 +362,15 @@ export const ballDontLieOddsService = {
           return { key: v.vendor, title: v.vendor, markets };
         });
 
-        // NCAAB FIX: BDL often returns dates as "YYYY-MM-DD" without time
-        // When parsed, "2026-01-27" becomes midnight UTC = 7PM EST the day BEFORE
-        // This causes games to appear "in the past" and get filtered out
-        // Solution: Always check if the time is date-only and fix it
+        // NCAAB dates: BDL stores times in UTC
+        // We pass through the time as-is and let the date filter in run-agentic-picks.js
+        // convert to EST and filter correctly
         let commenceTime = g.datetime || g.commence_time || g.date || new Date().toISOString();
 
-        // FIX: Check if commenceTime is date-only (no 'T' means no time component)
-        // This can happen from g.datetime, g.commence_time, OR g.date
+        // Only fix date-only strings (no time component) - these genuinely need a time
         if (typeof commenceTime === 'string' && commenceTime.length === 10 && !commenceTime.includes('T')) {
-          // Date-only string like "2026-01-27" - append late evening time
-          // Use 23:59 UTC = 6:59 PM EST (or 7:59 PM EDT) - always future for morning runs
-          commenceTime = `${commenceTime}T23:59:00.000Z`;
+          // Use 22:00 UTC = 5 PM EST - typical game time
+          commenceTime = `${commenceTime}T22:00:00.000Z`;
           console.log(`[BDL NCAAB] Fixed date-only time for game ${g.id}: ${commenceTime}`);
         }
 

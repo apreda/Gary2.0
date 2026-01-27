@@ -475,18 +475,30 @@ async function main() {
           timeLabel = `${targetDates.join(' & ')}`;
           console.log(`[${config.name}] Date filter: found ${games.length} games on ${targetDates.join(', ')}`);
         } else {
-          // Default: Get TODAY's games in EST timezone (games that haven't started yet)
+          // Default: Get TODAY's games in EST timezone
           const todayEST = now.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); // YYYY-MM-DD format
+
+          // NCAAB FIX: BDL often returns dates without proper times (midnight UTC = 7 PM EST yesterday)
+          // For college basketball, we trust the DATE from BDL and include ALL games for today
+          // Don't filter by "hasn't started yet" because BDL commence_times are unreliable
+          const isNCAAB = config.key === 'basketball_ncaab';
 
           games = allGames?.filter(g => {
             const gameTime = new Date(g.commence_time);
             const gameDateEST = gameTime.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-            // Game is today in EST AND hasn't started yet
-            return gameDateEST === todayEST && gameTime >= now;
+
+            if (isNCAAB) {
+              // For NCAAB: Include ALL games for today's date, regardless of time
+              // BDL dates are the actual game date, just trust them
+              return gameDateEST === todayEST;
+            } else {
+              // For other sports: Game is today in EST AND hasn't started yet
+              return gameDateEST === todayEST && gameTime >= now;
+            }
           }) || [];
 
           timeLabel = `today (${todayEST})`;
-          console.log(`[${config.name}] EST date filter: today=${todayEST}, found ${games.length} upcoming games`);
+          console.log(`[${config.name}] EST date filter: today=${todayEST}, found ${games.length} ${isNCAAB ? 'games' : 'upcoming games'}`);
         }
       } else if (config.daysAhead) {
         // Weekly sports: Use days ahead
