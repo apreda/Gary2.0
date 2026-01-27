@@ -328,23 +328,19 @@ export const ballDontLieOddsService = {
           return { key: v.vendor, title: v.vendor, markets };
         });
 
-        // NCAAB FIX: BDL often returns g.date as "YYYY-MM-DD" without time
+        // NCAAB FIX: BDL often returns dates as "YYYY-MM-DD" without time
         // When parsed, "2026-01-27" becomes midnight UTC = 7PM EST the day BEFORE
         // This causes games to appear "in the past" and get filtered out
-        // Solution: If only date string provided, set time to 23:59 UTC (6:59 PM EST)
-        // This ensures games are always "upcoming" when script runs in the morning
-        let commenceTime = g.datetime || g.commence_time;
-        if (!commenceTime && g.date) {
-          // If date is just "YYYY-MM-DD", append late evening time
-          if (g.date.length === 10 && !g.date.includes('T')) {
-            // Use 23:59 UTC = 6:59 PM EST (or 7:59 PM EDT) - always future for morning runs
-            commenceTime = `${g.date}T23:59:00.000Z`;
-          } else {
-            commenceTime = g.date;
-          }
-        }
-        if (!commenceTime) {
-          commenceTime = new Date().toISOString();
+        // Solution: Always check if the time is date-only and fix it
+        let commenceTime = g.datetime || g.commence_time || g.date || new Date().toISOString();
+
+        // FIX: Check if commenceTime is date-only (no 'T' means no time component)
+        // This can happen from g.datetime, g.commence_time, OR g.date
+        if (typeof commenceTime === 'string' && commenceTime.length === 10 && !commenceTime.includes('T')) {
+          // Date-only string like "2026-01-27" - append late evening time
+          // Use 23:59 UTC = 6:59 PM EST (or 7:59 PM EDT) - always future for morning runs
+          commenceTime = `${commenceTime}T23:59:00.000Z`;
+          console.log(`[BDL NCAAB] Fixed date-only time for game ${g.id}: ${commenceTime}`);
         }
 
         return {
