@@ -1384,22 +1384,28 @@ async function main() {
             }
           }
 
-          // NHL FALLBACK: If statsData is sparse (<5 items), use verifiedTaleOfTape from scout report
-          // This ensures NHL pick cards have a full Tale of the Tape display
-          if (config.key === 'icehockey_nhl' && statsData.length < 5 && result.verifiedTaleOfTape?.rows) {
+          // NHL: ALWAYS use verifiedTaleOfTape from scout report for consistent display
+          // NHL toolCallHistory can be sparse or inconsistent - verifiedTaleOfTape has reliable BDL stats
+          if (config.key === 'icehockey_nhl' && result.verifiedTaleOfTape?.rows) {
             console.log(`   📊 NHL: Using verified Tale of Tape (${result.verifiedTaleOfTape.rows.length} rows) for pick card`);
-            // Clear sparse statsData and use the verified rows instead
+            // Clear any toolCallHistory stats and use the verified rows instead
             statsData.length = 0;
             for (const row of result.verifiedTaleOfTape.rows) {
               // Skip injuries row (shown separately)
               if (row.name === 'Key Injuries') continue;
+              // Extract value from nested structure: { team: "Name", value: "3.45" }
+              const homeValue = typeof row.home === 'object' ? row.home.value : row.home;
+              const awayValue = typeof row.away === 'object' ? row.away.value : row.away;
+              const homeTeam = typeof row.home === 'object' ? row.home.team : result.homeTeam;
+              const awayTeam = typeof row.away === 'object' ? row.away.team : result.awayTeam;
               statsData.push({
                 name: row.name,
                 token: row.token,
-                home: row.home,
-                away: row.away
+                home: { team: homeTeam, value: homeValue },
+                away: { team: awayTeam, value: awayValue }
               });
             }
+            console.log(`   ✓ NHL: Added ${statsData.length} stats from verified Tale of Tape`);
           }
 
           // Also keep simple token list for backwards compatibility

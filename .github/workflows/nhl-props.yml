@@ -1,0 +1,49 @@
+name: NHL Props
+
+on:
+  schedule:
+    # 8:40 AM EST = 1:40 PM UTC (13:40)
+    - cron: '40 13 * * *'
+  workflow_dispatch:
+
+env:
+  TZ: America/New_York
+
+# Prevent concurrent runs from cancelling each other
+concurrency:
+  group: nhl-props
+  cancel-in-progress: false
+
+jobs:
+  generate-props:
+    runs-on: ubuntu-latest
+    timeout-minutes: 200
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: gary2.0/package-lock.json
+
+      - name: Install dependencies
+        working-directory: gary2.0
+        run: npm ci --legacy-peer-deps
+
+      - name: Generate NHL Props
+        working-directory: gary2.0
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
+        run: node scripts/run-agentic-props-cli.js --nhl --store=1
+
+      - name: Summary
+        if: always()
+        run: echo "NHL Props completed at $(date)"
