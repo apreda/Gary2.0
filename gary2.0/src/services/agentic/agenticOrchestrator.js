@@ -796,7 +796,8 @@ function summarizeStatForContext(statResult, statToken, homeTeam, awayTeam) {
         return `RECENT FORM (Last 5): ${awayTeam} ${awayForm} | ${homeTeam} ${homeForm}`;
       
       case 'HOME_AWAY_SPLITS':
-        return `HOME/AWAY SPLITS: ${awayTeam} road ${a.record || a.away_record || 'N/A'} | ${homeTeam} home ${h.record || h.home_record || 'N/A'}`;
+        // Records are TIER 3 - Gary can use them to understand the line, then check if efficiency supports it
+        return `HOME/AWAY SPLITS: ${awayTeam} road ${a.away_record || a.record || 'N/A'} | ${homeTeam} home ${h.home_record || h.record || 'N/A'} [TIER 3 - Use to understand line, then check efficiency]`;
       
       case 'PACE':
         return `PACE: ${awayTeam} ${formatNum(a.pace)} | ${homeTeam} ${formatNum(h.pace)} possessions/game`;
@@ -2228,7 +2229,7 @@ INVESTIGATION SEQUENCE:
 YOUR JOB: Investigate and discover the truth. Do not assume injuries help or hurt either side.
 </injury_duration_rules>
 
-**supporting_factors**: List the stats/factors that support your pick (e.g., "defensive_rating_gap", "key_injury", "home_record")
+**supporting_factors**: List the TIER 1/TIER 2 stats/factors that support your pick (e.g., "net_rating_gap", "efficiency_mismatch", "fresh_injury_edge", "pace_advantage")
 
 **contradicting_factors_major**: List significant factors that could challenge your pick
 
@@ -2582,12 +2583,13 @@ function buildPass2Message(sport = '', homeTeam = '[HOME TEAM]', awayTeam = '[AW
   const secondTeamSpread = (secondTeam === favoriteTeam) ? `-${absSpread.toFixed(1)}` : `+${absSpread.toFixed(1)}`;
   
   // Also compute what "covering" means for each team
-  const firstTeamCoverDesc = (firstTeam === favoriteTeam) 
-    ? `win by ${coverThreshold}+` 
-    : `keep it within ${Math.floor(absSpread)} or win outright`;
-  const secondTeamCoverDesc = (secondTeam === favoriteTeam) 
-    ? `win by ${coverThreshold}+` 
-    : `keep it within ${Math.floor(absSpread)} or win outright`;
+  // NOTE: We describe what covering MEANS, but Gary picks a SIDE - he doesn't predict margin
+  const firstTeamCoverDesc = (firstTeam === favoriteTeam)
+    ? `cover as the favorite (give the points)`
+    : `cover as the underdog (take the points)`;
+  const secondTeamCoverDesc = (secondTeam === favoriteTeam)
+    ? `cover as the favorite (give the points)`
+    : `cover as the underdog (take the points)`;
   
   // Build spread-size specific framing (uses the cleaner number-anchored language)
   let spreadSizeContext = '';
@@ -2597,47 +2599,51 @@ function buildPass2Message(sport = '', homeTeam = '[HOME TEAM]', awayTeam = '[AW
       spreadSizeContext = `
 **SPREAD-SIZE FRAMING (LARGE: ${absSpread > 0 ? '+' : ''}${spread.toFixed(1)})**
 
-This is a **LARGE SPREAD**. The question is NOT "who wins?" The question is:
+This is a **LARGE SPREAD**. The question is: Does the evidence support the FAVORITE or UNDERDOG side?
 
-**FOR ${underdogTeam} +${absSpread.toFixed(1)}:**
-> "Why won't they lose by ${coverThreshold}+?"
-> Focus: What keeps this game competitive? (Defense, tempo control, matchups, etc.)
+**FOR ${underdogTeam} +${absSpread.toFixed(1)} (UNDERDOG SIDE):**
+> Question: "Does the evidence suggest the line is too high?"
+> Look for: Defense that limits damage, tempo control, matchups that keep it close, narrative factors inflating the line
 
-**FOR ${favoriteTeam} -${absSpread.toFixed(1)}:**
-> "Why will they win by ${coverThreshold}+?"
-> Focus: What creates separation? (Depth, pace control, 2nd half dominance, etc.)
+**FOR ${favoriteTeam} -${absSpread.toFixed(1)} (FAVORITE SIDE):**
+> Question: "Does the evidence suggest the line is too low?"
+> Look for: Depth advantage, pace control, ability to maintain leads, underdog weaknesses that suggest blowout
 
-Do NOT answer "who wins" - that's the wrong question for this spread size.
+Pick the SIDE the evidence supports. Do NOT predict what the margin will be.
 `;
     } else if (absSpread >= 5) {
       // Medium spread
       spreadSizeContext = `
 **SPREAD-SIZE FRAMING (MEDIUM: ${spread > 0 ? '+' : ''}${spread.toFixed(1)})**
 
-This is a **MEDIUM SPREAD**. The question is: Does ${favoriteTeam} win COMFORTABLY?
+This is a **MEDIUM SPREAD**. The question is: Does the evidence support the FAVORITE or UNDERDOG side?
 
-**FOR ${underdogTeam} +${absSpread.toFixed(1)}:**
-> "Why won't they lose by ${coverThreshold}+?"
-> Focus: What keeps this competitive? Tempo control, defensive floor, matchup parity?
+**FOR ${underdogTeam} +${absSpread.toFixed(1)} (UNDERDOG SIDE):**
+> Question: "Does the evidence suggest the line is too high?"
+> Look for: Tempo control, defensive floor, matchup parity, narrative factors inflating the spread
 
-**FOR ${favoriteTeam} -${absSpread.toFixed(1)}:**
-> "Why will they win by ${coverThreshold}+?"
-> Focus: What creates separation? Depth advantage, pace control, 3rd quarter dominance?
+**FOR ${favoriteTeam} -${absSpread.toFixed(1)} (FAVORITE SIDE):**
+> Question: "Does the evidence suggest the line is too low?"
+> Look for: Depth advantage, pace control, bench that extends leads, underdog weaknesses
+
+Pick the SIDE the evidence supports. Do NOT predict what the margin will be.
 `;
     } else {
       // Small spread (≤4.5)
       spreadSizeContext = `
 **SPREAD-SIZE FRAMING (SMALL: ${spread > 0 ? '+' : ''}${spread.toFixed(1)})**
 
-This is a **SMALL SPREAD** — essentially asking "who wins?"
+This is a **SMALL SPREAD** — close to a pick'em. The question is: Does the evidence support the FAVORITE or UNDERDOG side?
 
-**FOR ${underdogTeam} +${absSpread.toFixed(1)}:**
-> "Why do they WIN or lose by fewer than ${coverThreshold}?"
-> Focus: Clutch execution, best closer, late-game coaching, close-game patterns.
+**FOR ${underdogTeam} +${absSpread.toFixed(1)} (UNDERDOG SIDE):**
+> Question: "Does the evidence suggest the underdog is undervalued?"
+> Look for: Clutch execution, late-game coaching, close-game patterns, narrative deflating their line
 
-**FOR ${favoriteTeam} -${absSpread.toFixed(1)}:**
-> "Why do they win by ${coverThreshold}+?"
-> Focus: Why do they pull away instead of staying close? Home court, closing ability?
+**FOR ${favoriteTeam} -${absSpread.toFixed(1)} (FAVORITE SIDE):**
+> Question: "Does the evidence suggest the favorite is undervalued?"
+> Look for: Closing ability, home court, efficiency edge that creates separation
+
+Pick the SIDE the evidence supports. Do NOT predict what the margin will be.
 `;
     }
   }
@@ -5650,13 +5656,13 @@ Do NOT request more stats. Write your analysis NOW using the data you already ha
         console.log(`[Orchestrator] Missing factors: ${missing.join(', ')}`);
       }
       
-      // FACTOR-BASED PHASE TRIGGERS (80% minimum before Steel Man):
-      // - <80% coverage: Keep investigating, nudge for more
-      // - 80%+ coverage: Ready for Steel Man analysis
-      // - 100% coverage: Ready for final synthesis
-      
-      if (coverage >= 0.8 && !pass2AlreadyInjected && !steelManCompleted) {
-        // 80%+ coverage reached - NOW inject Pass 2 (Steel Man)
+      // FACTOR-BASED PHASE TRIGGERS (100% required before Steel Man):
+      // - <100% coverage: Keep investigating, nudge for more
+      // - 100% coverage: Ready for Steel Man analysis and final synthesis
+      // NOTE: Changed from 80% to 100% - Gary must investigate ALL factors including bench stats
+
+      if (coverage >= 1.0 && !pass2AlreadyInjected && !steelManCompleted) {
+        // 100% coverage reached - NOW inject Pass 2 (Steel Man)
         
         // ═══════════════════════════════════════════════════════════════════════
         // NFL SPECIAL: Switch to Pro for Steel Man cases (not just grading)
@@ -5695,28 +5701,27 @@ Do NOT request more stats. Write your analysis NOW using the data you already ha
           content: buildPass2Message(sport, homeTeam, awayTeam, spread)
         });
         console.log(`[Orchestrator] Injected Pass 2 instructions (${covered.length}/${totalFactors} = ${(coverage * 100).toFixed(0)}% coverage, spread: ${spread})`);
-      } else if (coverage < 0.8) {
-        // FIXED: Require 80% minimum coverage before Steel Man
-        // Under 80% - tell Gary what's missing and nudge for more investigation
+      } else if (coverage < 1.0) {
+        // Require 100% coverage before Steel Man - Gary must investigate ALL factors
         const missingDisplay = missing.slice(0, 6).map(f => f.replace(/_/g, ' ')).join(', ');
         const coveragePct = (coverage * 100).toFixed(0);
-        
-        if (iteration >= 4 && coverage >= 0.6) {
-          // After several iterations with decent coverage, give a stronger nudge
+
+        if (iteration >= 4 && coverage >= 0.8) {
+          // After several iterations with good coverage, give a stronger nudge for the remaining factors
           messages.push({
             role: 'user',
-            content: `**INVESTIGATION AT ${coveragePct}% (need 80% minimum)** - You're still missing critical data:\n\n**UNINVESTIGATED:** ${missingDisplay}${missing.length > 6 ? '...' : ''}\n\nCall these stats NOW. Do NOT proceed to Steel Man cases until you reach 80% coverage.`
+            content: `**INVESTIGATION AT ${coveragePct}% (need 100%)** - You're close but missing critical data:\n\n**UNINVESTIGATED:** ${missingDisplay}${missing.length > 6 ? '...' : ''}\n\nCall these stats NOW. You MUST reach 100% factor coverage before Steel Man. Missing factors may include BENCH_DEPTH, LINEUP_NET_RATINGS, or other critical matchup data.`
           });
-          console.log(`[Orchestrator] Strong nudge for 80% coverage (${covered.length}/${totalFactors} = ${coveragePct}% covered)`);
+          console.log(`[Orchestrator] Strong nudge for 100% coverage (${covered.length}/${totalFactors} = ${coveragePct}% covered)`);
         } else {
           messages.push({
             role: 'user',
-            content: `You've covered ${covered.length}/${totalFactors} investigation factors (${coveragePct}%). Continue investigating BOTH teams to reach 80% minimum. Uncovered factors: ${missingDisplay}${missing.length > 6 ? '...' : ''}. Call stats for each factor.`
+            content: `You've covered ${covered.length}/${totalFactors} investigation factors (${coveragePct}%). Continue investigating BOTH teams to reach 100%. Uncovered factors: ${missingDisplay}${missing.length > 6 ? '...' : ''}. Call stats for each factor - especially BENCH_DEPTH and unit efficiency for spread analysis.`
           });
-          console.log(`[Orchestrator] Nudged to reach 80% coverage (${covered.length}/${totalFactors} = ${coveragePct}% covered)`);
+          console.log(`[Orchestrator] Nudged to reach 100% coverage (${covered.length}/${totalFactors} = ${coveragePct}% covered)`);
         }
-      } else if (coverage >= 0.8 && iteration >= 2 && !pass3AlreadyInjected) {
-        // 80%+ factors covered - decide between Pass 2.5, Steel Man enforcement, or Mid-Investigation Synthesis
+      } else if (coverage >= 1.0 && iteration >= 2 && !pass3AlreadyInjected) {
+        // 100% factors covered - decide between Pass 2.5, Steel Man enforcement, or Mid-Investigation Synthesis
         // Priority: Steel Man enforcement > Pass 2.5 (if Steel Man done) > Mid-Investigation Synthesis
         
         if (!steelManCompleted && pass2AlreadyInjected) {
@@ -6247,43 +6252,47 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
       spreadSizeFraming = `
 **SPREAD-SIZE FRAMING (LARGE: ${spread.toFixed(1)})**
 
-This is a LARGE SPREAD. The question is NOT "who wins?" The question is:
+This is a LARGE SPREAD. The question is: Does the evidence support the FAVORITE or UNDERDOG side?
 
-**FOR ${underdogTeam} +${absSpread.toFixed(1)}:**
-> "Why won't they lose by ${coverThreshold}+?"
-> Focus: What keeps this game competitive? (Defense, tempo control, matchups, etc.)
+**FOR ${underdogTeam} +${absSpread.toFixed(1)} (UNDERDOG SIDE):**
+> Question: "Does the evidence suggest the line is too high?"
+> Look for: Defense that limits damage, tempo control, matchups that keep it close, narrative factors inflating the line
 
-**FOR ${favoriteTeam} -${absSpread.toFixed(1)}:**
-> "Why will they win by ${coverThreshold}+?"
-> Focus: What creates separation? (Depth, pace control, 2nd half dominance, etc.)
+**FOR ${favoriteTeam} -${absSpread.toFixed(1)} (FAVORITE SIDE):**
+> Question: "Does the evidence suggest the line is too low?"
+> Look for: Depth advantage, pace control, ability to maintain leads, underdog weaknesses
 
-Do NOT answer "who wins" - that's the wrong question for this spread size.`;
+Pick the SIDE the evidence supports. Do NOT predict what the margin will be.`;
     } else if (absSpread >= 5) {
       spreadSizeFraming = `
 **SPREAD-SIZE FRAMING (MEDIUM: ${spread.toFixed(1)})**
 
-This is a MEDIUM SPREAD. The question is: Does ${favoriteTeam} win COMFORTABLY?
+This is a MEDIUM SPREAD. The question is: Does the evidence support the FAVORITE or UNDERDOG side?
 
-**FOR ${underdogTeam} +${absSpread.toFixed(1)}:**
-> "Why won't they lose by ${coverThreshold}+?"
-> Focus: What keeps this competitive? Tempo control, defensive floor, matchup parity?
+**FOR ${underdogTeam} +${absSpread.toFixed(1)} (UNDERDOG SIDE):**
+> Question: "Does the evidence suggest the line is too high?"
+> Look for: Tempo control, defensive floor, matchup parity, narrative factors inflating the spread
 
-**FOR ${favoriteTeam} -${absSpread.toFixed(1)}:**
-> "Why will they win by ${coverThreshold}+?"
-> Focus: What creates separation? Depth advantage, pace control, 3rd quarter/2nd half dominance?`;
+**FOR ${favoriteTeam} -${absSpread.toFixed(1)} (FAVORITE SIDE):**
+> Question: "Does the evidence suggest the line is too low?"
+> Look for: Depth advantage, pace control, bench that extends leads, underdog weaknesses
+
+Pick the SIDE the evidence supports. Do NOT predict what the margin will be.`;
     } else {
       spreadSizeFraming = `
 **SPREAD-SIZE FRAMING (SMALL: ${spread.toFixed(1)})**
 
-This is a SMALL SPREAD - essentially asking "who wins?"
+This is a SMALL SPREAD - close to a pick'em. The question is: Does the evidence support the FAVORITE or UNDERDOG side?
 
-**FOR ${underdogTeam} +${absSpread.toFixed(1)}:**
-> "Why do they WIN or lose by fewer than ${coverThreshold}?"
-> Focus: Clutch execution, best closer, late-game coaching, close-game patterns.
+**FOR ${underdogTeam} +${absSpread.toFixed(1)} (UNDERDOG SIDE):**
+> Question: "Does the evidence suggest the underdog is undervalued?"
+> Look for: Clutch execution, late-game coaching, close-game patterns, narrative deflating their line
 
-**FOR ${favoriteTeam} -${absSpread.toFixed(1)}:**
-> "Why do they win by ${coverThreshold}+?"
-> Focus: Why do they pull away instead of staying close? Closing ability?`;
+**FOR ${favoriteTeam} -${absSpread.toFixed(1)} (FAVORITE SIDE):**
+> Question: "Does the evidence suggest the favorite is undervalued?"
+> Look for: Closing ability, home court, efficiency edge that creates separation
+
+Pick the SIDE the evidence supports. Do NOT predict what the margin will be.`;
     }
   }
   
@@ -6338,7 +6347,21 @@ ${toolCallHistory.slice(-15).map(t => `- ${t.token}: ${t.summary || 'data receiv
 }
 \`\`\`
 
-**CRITICAL REMINDER:** ${isWinsQuestion ? 'This spread is small enough that "who wins" is the right question.' : `This is a ${absSpread >= 10 ? 'LARGE' : 'MEDIUM'} spread - your rationale should explain why ${favoriteTeam} wins by ${coverThreshold}+ (or why ${underdogTeam} keeps it closer than ${Math.floor(absSpread)}).`}`;
+**CRITICAL REMINDER:** ${isWinsQuestion ? 'This spread is small enough that "who wins" is the right question.' : `This is a ${absSpread >= 10 ? 'LARGE' : 'MEDIUM'} spread - your rationale should explain why ${favoriteTeam} wins by ${coverThreshold}+ (or why ${underdogTeam} keeps it closer than ${Math.floor(absSpread)}).`}
+
+**STAT TIER HIERARCHY (CRITICAL - READ THIS):**
+- TIER 1 (PREDICTIVE): Net Rating, ORtg, DRtg, eFG%, TS%, Pace - USE THESE as PRIMARY evidence for picks
+- TIER 2 (CONTEXT): Fresh injuries (0-3 days), matchup data - need TIER 1 confirmation
+- TIER 3 (DESCRIPTIVE): Records, PPG, win/loss streaks, L5/L10 records - FORBIDDEN as reasons for picks
+
+**FORBIDDEN (END-OF-PROMPT PRIORITY):**
+- [NO] "They have a 15-3 home record" → Record is TIER 3, explains line not edge
+- [NO] "Rest advantage" without efficiency data → Must confirm with ORtg/DRtg in rested vs B2B games
+- [NO] "They average 116 PPG" → Raw PPG is pace-inflated, use ORtg instead
+- [YES] "Their +4.2 Net Rating vs opponent's -1.8 shows structural efficiency gap"
+- [YES] "Home ORtg 118.5 vs road 112.3 suggests venue matters for THIS team"
+
+Your rationale MUST cite TIER 1 stats. If you only have TIER 3 stats, the pick is NOT supported.`;
 
       messages.push({
         role: 'user',

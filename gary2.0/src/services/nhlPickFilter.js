@@ -1,40 +1,38 @@
 /**
  * NHL Pick Filter Service
  *
- * Filters Gary's NHL picks for balanced selection.
+ * Filters Gary's NHL picks based on confidence trimming.
  * This is a POST-FILTER applied AFTER Gary makes his picks, before storage.
  *
  * FILTERING RULES (Jan 2026):
  *
- * NHL IS MONEYLINE ONLY:
- * - Filter out ANY puck line picks (spreads like +1.5, -1.5)
+ * BET TYPE RULES:
+ * - MONEYLINE ONLY - Puck lines are NOT allowed (filtered out entirely)
  *
- * SELECTION PROCESS:
- * 1. Remove top 2 confidence picks (overconfidence trap)
- * 2. Remove bottom 2 confidence picks (low conviction)
- * 3. From remaining: Take 2 best underdog MLs
- * 4. From remaining: Take 2 best favorite MLs
- * 5. Total = 4 picks (2 underdogs + 2 favorites)
+ * CAPACITY (40% rule):
+ * - Take 40% of total picks
+ * - Minimum 3 picks per day
+ * - Maximum 4 picks per day
+ *
+ * CONFIDENCE TRIMMING:
+ * - Sort by confidence, take top 40%
  */
 
 /**
- * Check if a pick is a puck line (spread bet)
- * NHL should be ML only - this catches any puck lines that slip through
+ * Determine if a pick is a puck line (spread bet)
  */
 function isPuckLine(pick) {
-  // Check type field
+  // Puck lines have spreads like +1.5, -1.5
   if (pick.type === 'spread' || pick.type === 'puckline' || pick.type === 'puck_line') {
     return true;
   }
-
-  // Check pick string for spread indicators
+  // Also check the pick string for spread indicators
   const pickStr = pick.pick?.toLowerCase() || '';
   if (pickStr.includes('+1.5') || pickStr.includes('-1.5') ||
       pickStr.includes('+2.5') || pickStr.includes('-2.5') ||
       pickStr.includes('puck line') || pickStr.includes('puckline')) {
     return true;
   }
-
   return false;
 }
 
@@ -49,16 +47,6 @@ function isUnderdogML(pick) {
 }
 
 /**
- * Determine if a pick is a favorite ML
- * Favorite = negative odds (e.g., -150)
- */
-function isFavoriteML(pick) {
-  if (!pick.odds) return false;
-  const odds = typeof pick.odds === 'string' ? parseInt(pick.odds) : pick.odds;
-  return odds < 0;
-}
-
-/**
  * Get confidence value from pick (handles different field names)
  */
 function getConfidence(pick) {
@@ -69,12 +57,9 @@ function getConfidence(pick) {
  * Main filter function - applies NHL filtering rules
  *
  * RULES:
- * 1. Filter out puck lines (NHL is ML only)
- * 2. Remove top 2 confidence picks (overconfidence trap)
- * 3. Remove bottom 2 confidence picks (low conviction)
- * 4. Take 2 best underdog MLs
- * 5. Take 2 best favorite MLs
- * 6. Total = 4 picks
+ * 1. REMOVE ALL PUCK LINES (NHL is ML only)
+ * 2. Take 40% of picks by confidence
+ * 3. Min 3, Max 4 picks
  *
  * @param {Array} picks - Array of Gary's NHL picks
  * @returns {Object} - { kept: [], removed: [], summary: {} }
@@ -82,116 +67,90 @@ function getConfidence(pick) {
 export async function filterNHLPicks(picks) {
   console.log(`\n[NHL Filter] Analyzing ${picks.length} picks...`);
 
-  const kept = [];
-  const removed = [];
-  const reasons = {
-    puckLinesRemoved: 0,
-    removedTopConfidence: 0,
-    removedBottomConfidence: 0,
-    keptUnderdogs: 0,
-    keptFavorites: 0,
-    removedExcess: 0
-  };
+  const MIN_PICKS = 3;
+  const MAX_PICKS = 4;
 
-  // STEP 0: Filter out PASS picks and puck lines
-  const mlPicks = picks.filter(p => {
-    if (p.pick === 'PASS' || p.type === 'pass') {
-      return false;
-    }
-    if (isPuckLine(p)) {
-      console.log(`  [FILTER] ${p.pick} - Puck line removed (NHL is ML only)`);
-      reasons.puckLinesRemoved++;
-      return false;
-    }
-    return true;
-  });
+  // Filter out PASS picks first
+  const activePicks = picks.filter(p => p.pick !== 'PASS' && p.type !== 'pass');
 
-  if (mlPicks.length === 0) {
-    console.log('[NHL Filter] No ML picks to filter');
+  if (activePicks.length === 0) {
+    console.log('[NHL Filter] No active picks to filter');
     return { kept: [], removed: [], summary: { noActivePicks: true } };
   }
 
-  console.log(`[NHL Filter] ${mlPicks.length} ML picks after puck line filter`);
+  const kept = [];
+  const removed = [];
+  const reasons = {
+    removedPuckLine: 0,
+    removedLowConfidence: 0,
+    keptML: 0
+  };
 
-  // STEP 1: Sort by confidence (highest first)
-  const sortedByConfidence = [...mlPicks].sort((a, b) => getConfidence(b) - getConfidence(a));
+  // STEP 1: Remove ALL puck lines (NHL is ML only)
+  console.log('\n[NHL Filter] Step 1: Removing puck lines (ML only)...');
+  const mlOnlyPicks = [];
 
-  console.log('\n[NHL Filter] Picks sorted by confidence:');
-  sortedByConfidence.forEach((p, i) => {
+  for (const pick of activePicks) {
+    if (isPuckLine(pick)) {
+      removed.push({ pick, reason: 'Puck line - NHL is MONEYLINE ONLY' });
+      reasons.removedPuckLine++;
+      console.log(`  [REMOVED] ${pick.pick} - Puck line not allowed`);
+    } else {
+      mlOnlyPicks.push(pick);
+      console.log(`  [OK] ML: ${pick.pick}`);
+    }
+  }
+
+  console.log(`\n[NHL Filter] ${mlOnlyPicks.length} ML picks remain after puck line filter`);
+
+  if (mlOnlyPicks.length === 0) {
+    console.log('[NHL Filter] No ML picks remaining');
+    return { kept: [], removed, summary: reasons };
+  }
+
+  // STEP 2: Sort by confidence and take 40%
+  mlOnlyPicks.sort((a, b) => getConfidence(b) - getConfidence(a));
+
+  console.log('\n[NHL Filter] Step 2: Picks sorted by confidence:');
+  mlOnlyPicks.forEach((p, i) => {
     const conf = getConfidence(p);
-    const type = isUnderdogML(p) ? 'UNDERDOG' : 'FAVORITE';
-    console.log(`  ${i + 1}. ${p.pick} - conf: ${conf.toFixed(2)} (${type})`);
+    const isUnderdog = isUnderdogML(p) ? ' (underdog)' : ' (favorite)';
+    console.log(`  ${i + 1}. ${p.pick} - conf: ${conf.toFixed(2)}${isUnderdog}`);
   });
 
-  // STEP 2: Remove top 2 confidence (overconfidence trap) AND bottom 2 confidence (low conviction)
-  const afterConfidenceTrim = [];
-  const totalPicks = sortedByConfidence.length;
+  // Calculate target: 40% of original active picks (before puck line filter)
+  // This ensures we're taking 40% of what Gary gave us, not 40% of what's left after filtering
+  const targetCount = Math.round(activePicks.length * 0.4);
+  const adjustedTarget = Math.min(MAX_PICKS, Math.max(MIN_PICKS, targetCount));
 
-  for (let i = 0; i < totalPicks; i++) {
-    const pick = sortedByConfidence[i];
+  console.log(`\n[NHL Filter] Target: 40% of ${activePicks.length} = ${targetCount}, adjusted to min ${MIN_PICKS}/max ${MAX_PICKS} = ${adjustedTarget}`);
 
-    // Remove top 2 confidence (overconfidence trap)
-    if (i < 2) {
-      removed.push({ pick, reason: `Top ${i + 1} confidence (${getConfidence(pick).toFixed(2)}) - overconfidence trap` });
-      reasons.removedTopConfidence++;
-      console.log(`  [REMOVE] ${pick.pick} - Top ${i + 1} confidence (overconfidence trap)`);
-    }
-    // Remove bottom 2 confidence (low conviction)
-    else if (i >= totalPicks - 2) {
-      removed.push({ pick, reason: `Bottom ${totalPicks - i} confidence (${getConfidence(pick).toFixed(2)}) - low conviction` });
-      reasons.removedBottomConfidence++;
-      console.log(`  [REMOVE] ${pick.pick} - Bottom ${totalPicks - i} confidence (low conviction)`);
-    }
-    else {
-      afterConfidenceTrim.push(pick);
-    }
-  }
+  // Take top picks by confidence up to adjusted target
+  const finalCount = Math.min(adjustedTarget, mlOnlyPicks.length);
 
-  console.log(`\n[NHL Filter] ${afterConfidenceTrim.length} picks after removing top 2 and bottom 2 confidence`);
+  for (let i = 0; i < mlOnlyPicks.length; i++) {
+    const pick = mlOnlyPicks[i];
+    const conf = getConfidence(pick);
 
-  // STEP 2: Separate into underdogs and favorites
-  const underdogs = afterConfidenceTrim.filter(p => isUnderdogML(p));
-  const favorites = afterConfidenceTrim.filter(p => isFavoriteML(p));
-
-  console.log(`  Underdogs available: ${underdogs.length}`);
-  console.log(`  Favorites available: ${favorites.length}`);
-
-  // STEP 3: Take 2 best underdogs (already sorted by confidence)
-  for (let i = 0; i < underdogs.length; i++) {
-    const pick = underdogs[i];
-    if (reasons.keptUnderdogs < 2) {
+    if (i < finalCount) {
       kept.push(pick);
-      reasons.keptUnderdogs++;
-      console.log(`  [KEEP] ${pick.pick} - Underdog #${reasons.keptUnderdogs}`);
+      reasons.keptML++;
+      console.log(`  [KEEP] ${pick.pick} - Top ${i + 1} of ${finalCount}`);
     } else {
-      removed.push({ pick, reason: 'Excess underdog (already have 2)' });
-      reasons.removedExcess++;
-    }
-  }
-
-  // STEP 4: Take 2 best favorites (already sorted by confidence)
-  for (let i = 0; i < favorites.length; i++) {
-    const pick = favorites[i];
-    if (reasons.keptFavorites < 2) {
-      kept.push(pick);
-      reasons.keptFavorites++;
-      console.log(`  [KEEP] ${pick.pick} - Favorite #${reasons.keptFavorites}`);
-    } else {
-      removed.push({ pick, reason: 'Excess favorite (already have 2)' });
-      reasons.removedExcess++;
+      removed.push({ pick, reason: `Below 40% cutoff (rank ${i + 1}, conf: ${conf.toFixed(2)})` });
+      reasons.removedLowConfidence++;
+      console.log(`  [REMOVE] ${pick.pick} - Below cutoff`);
     }
   }
 
   // Summary
-  console.log(`\n[NHL Filter] Summary:`);
-  console.log(`  KEPT: ${kept.length} picks (target: 4 = 2 underdogs + 2 favorites)`);
-  console.log(`    - Underdogs: ${reasons.keptUnderdogs}`);
-  console.log(`    - Favorites: ${reasons.keptFavorites}`);
+  console.log(`\n[NHL Filter] Final Summary:`);
+  console.log(`  KEPT: ${kept.length} picks (min ${MIN_PICKS}, max ${MAX_PICKS})`);
+  console.log(`    - ML picks: ${reasons.keptML}`);
+
   console.log(`  REMOVED: ${removed.length} picks`);
-  if (reasons.puckLinesRemoved > 0) console.log(`    - Puck lines: ${reasons.puckLinesRemoved}`);
-  if (reasons.removedTopConfidence > 0) console.log(`    - Top confidence (overconfidence): ${reasons.removedTopConfidence}`);
-  if (reasons.removedBottomConfidence > 0) console.log(`    - Bottom confidence (low conviction): ${reasons.removedBottomConfidence}`);
-  if (reasons.removedExcess > 0) console.log(`    - Excess picks: ${reasons.removedExcess}`);
+  if (reasons.removedPuckLine > 0) console.log(`    - Puck lines (not allowed): ${reasons.removedPuckLine}`);
+  if (reasons.removedLowConfidence > 0) console.log(`    - Below 40% cutoff: ${reasons.removedLowConfidence}`);
 
   return {
     kept,
