@@ -327,12 +327,32 @@ export const ballDontLieOddsService = {
           if (totalsOutcomes.length) markets.push({ key: 'totals', outcomes: totalsOutcomes });
           return { key: v.vendor, title: v.vendor, markets };
         });
+
+        // NCAAB FIX: BDL often returns g.date as "YYYY-MM-DD" without time
+        // When parsed, "2026-01-27" becomes midnight UTC = 7PM EST the day BEFORE
+        // This causes games to appear "in the past" and get filtered out
+        // Solution: If only date string provided, set time to 23:59 UTC (6:59 PM EST)
+        // This ensures games are always "upcoming" when script runs in the morning
+        let commenceTime = g.datetime || g.commence_time;
+        if (!commenceTime && g.date) {
+          // If date is just "YYYY-MM-DD", append late evening time
+          if (g.date.length === 10 && !g.date.includes('T')) {
+            // Use 23:59 UTC = 6:59 PM EST (or 7:59 PM EDT) - always future for morning runs
+            commenceTime = `${g.date}T23:59:00.000Z`;
+          } else {
+            commenceTime = g.date;
+          }
+        }
+        if (!commenceTime) {
+          commenceTime = new Date().toISOString();
+        }
+
         return {
           id: g.id,
           sport_key: sportKey,
           home_team: mapTeamName(g.home_team),
           away_team: mapTeamName(g.visitor_team || g.away_team),
-          commence_time: g.datetime || g.date || g.commence_time || new Date().toISOString(),
+          commence_time: commenceTime,
           bookmakers
         };
       });
