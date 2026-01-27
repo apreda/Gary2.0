@@ -878,7 +878,7 @@ async function main() {
       constitution = constitution.replace(/{{CURRENT_DATE}}/g, today);
       const systemPrompt = buildSystemPrompt(constitution, config.key);
       
-      console.log(`[${config.name}] 🎯 Processing ${finalGames.length} games - Spread, ML, or Pass`);
+      console.log(`[${config.name}] 🎯 Processing ${finalGames.length} games`);
 
       // Process each game
       const sportPicks = [];

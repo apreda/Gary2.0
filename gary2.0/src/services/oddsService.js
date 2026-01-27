@@ -269,7 +269,7 @@ const extractOddsFromBookmakers = (bookmakers, homeTeam, awayTeam) => {
     return result;
   }
 
-  console.log(`[Odds Service] Using ${bookmaker.key || bookmaker.title} for game odds`);
+  // Bookmaker selected: ${bookmaker.key || bookmaker.title} (logged once per batch in fetchUpcomingGames)
 
   if (!bookmaker?.markets) return result;
 
