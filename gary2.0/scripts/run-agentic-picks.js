@@ -777,52 +777,8 @@ async function main() {
           console.log(`[${config.name}] 🔍 DEBUG: UCLA game position: #${idx + 1} of ${games.length}`);
         }
 
-        // NCAAB: Filter out extreme spreads (≥14 points)
-        // These are unpredictable - will the favorite keep starters in? Garbage time variance is too high.
-        // Nobody can reliably predict if a team up 20+ will keep pushing or coast.
-        const EXTREME_SPREAD_THRESHOLD = 14;
-        const beforeSpreadFilter = games.length;
-        const extremeSpreadGames = [];
-
-        games = games.filter(game => {
-          // Extract spread from bookmakers
-          const bookmakers = game.bookmakers || [];
-          let spread = null;
-
-          for (const bookmaker of bookmakers) {
-            const markets = bookmaker?.markets || [];
-            const spreadMarket = markets.find(m => m.key === 'spreads');
-            if (spreadMarket?.outcomes?.length) {
-              // Get the absolute spread value (either outcome works, they're inverse)
-              const outcome = spreadMarket.outcomes[0];
-              if (typeof outcome?.point === 'number') {
-                spread = Math.abs(outcome.point);
-                break;
-              }
-            }
-          }
-
-          // If no spread found, include the game (rare edge case)
-          if (spread === null) return true;
-
-          // Filter out extreme spreads
-          if (spread >= EXTREME_SPREAD_THRESHOLD) {
-            extremeSpreadGames.push({ game, spread });
-            return false;
-          }
-          return true;
-        });
-
-        if (extremeSpreadGames.length > 0) {
-          console.log(`[${config.name}] ⚠️ Filtered out ${extremeSpreadGames.length} extreme spread games (≥${EXTREME_SPREAD_THRESHOLD} pts):`);
-          extremeSpreadGames.slice(0, 5).forEach(({ game, spread }) => {
-            console.log(`   - ${game.away_team} @ ${game.home_team} (spread: ${spread})`);
-          });
-          if (extremeSpreadGames.length > 5) {
-            console.log(`   ... and ${extremeSpreadGames.length - 5} more`);
-          }
-        }
-        console.log(`[${config.name}] Spread filter: ${beforeSpreadFilter} → ${games.length} games`);
+        // NOTE: Extreme spread filter REMOVED per user request
+        // All Top 7 conference games are now processed regardless of spread size
       }
 
       // Apply --matchup filter to run a single specific game
