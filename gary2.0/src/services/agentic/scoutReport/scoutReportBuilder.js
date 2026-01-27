@@ -3145,52 +3145,49 @@ async function fetchInjuries(homeTeam, awayTeam, sport) {
       }
 
       // =========================================================================
-      // STALE INJURY FILTER (NBA: 3-day window)
+      // STALE INJURY MARKING (NBA: 3-day window)
       // Per CLAUDE.md: Injuries >3 days old are PRICED INTO THE LINE
-      // Gary should NEVER see stale injuries - they are NOT an edge
+      // Gary should SEE all injuries but KNOW which are stale (priced in)
+      // This way Gary knows who's OUT but understands stale = not a betting edge
       // =========================================================================
       const STALE_WINDOW_DAYS = 3;
-      const filterStaleInjuries = (injuries, teamName) => {
-        const fresh = [];
-        const filtered = [];
+      const markStaleInjuries = (injuries, teamName) => {
+        const marked = [];
         for (const inj of injuries) {
           const name = `${inj.player?.first_name || ''} ${inj.player?.last_name || ''}`.trim();
           const days = inj.daysSinceReport;
 
           // If we don't have duration info, we can't determine staleness
-          // Keep the injury but mark it as unknown freshness
           if (days === null || days === undefined) {
             inj.freshness = 'UNKNOWN';
-            fresh.push(inj);
+            inj.isPricedIn = false;
           } else if (days <= STALE_WINDOW_DAYS) {
             inj.freshness = 'FRESH';
-            console.log(`[Scout Report] 🚨 FRESH NBA INJURY: ${name} (${days} days) - Gary will see this`);
-            fresh.push(inj);
+            inj.isPricedIn = false;
+            console.log(`[Scout Report] 🚨 FRESH NBA INJURY: ${name} (${days} days) - Potential edge if line hasn't adjusted`);
           } else {
-            inj.freshness = 'STALE - PRICED IN';
-            console.log(`[Scout Report] ⏭️ STALE NBA INJURY (filtered): ${name} (${days} days) - Priced into line, hiding from Gary`);
-            filtered.push(inj);
+            inj.freshness = 'STALE';
+            inj.isPricedIn = true;
+            console.log(`[Scout Report] ⏭️ STALE NBA INJURY: ${name} (${days} days) - Priced in, Gary knows player is OUT but won't use as betting reason`);
           }
+          marked.push(inj);
         }
-        if (filtered.length > 0) {
-          console.log(`[Scout Report] Filtered ${filtered.length} stale injuries for ${teamName} (>3 days old)`);
-        }
-        return { fresh, filtered };
+        return marked;
       };
 
-      const homeFiltered = filterStaleInjuries(enrichedHome, homeTeam);
-      const awayFiltered = filterStaleInjuries(enrichedAway, awayTeam);
+      const markedHome = markStaleInjuries(enrichedHome, homeTeam);
+      const markedAway = markStaleInjuries(enrichedAway, awayTeam);
 
-      // Track which players were filtered for narrative scrubbing
-      const filteredLongTerm = [
-        ...homeFiltered.filtered.map(i => `${i.player?.first_name || ''} ${i.player?.last_name || ''}`.trim()),
-        ...awayFiltered.filtered.map(i => `${i.player?.first_name || ''} ${i.player?.last_name || ''}`.trim())
+      // Track stale injuries for context (Gary knows they're out, but not an edge)
+      const staleInjuries = [
+        ...markedHome.filter(i => i.isPricedIn).map(i => `${i.player?.first_name || ''} ${i.player?.last_name || ''}`.trim()),
+        ...markedAway.filter(i => i.isPricedIn).map(i => `${i.player?.first_name || ''} ${i.player?.last_name || ''}`.trim())
       ];
 
       return {
-        home: homeFiltered.fresh,
-        away: awayFiltered.fresh,
-        filteredLongTerm,
+        home: markedHome,
+        away: markedAway,
+        staleInjuries, // Gary knows these are OUT but priced in
         lineups: { home: [], away: [] },
         narrativeContext
       };
@@ -4926,43 +4923,48 @@ function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey) {
     const pos = i.player?.position_abbreviation || i.player?.position || i.position || '';
     const reason = i.description || i.comment || i.injury || '';
     const shortReason = reason ? ` - ${reason.split('.')[0].substring(0, 60)}` : '';
-    
+
     // Build duration tag with ACTUAL DATE and days for Gary to see clearly
     let durationTag = '';
     const days = i.daysSinceReport;
     const reportDate = i.reportDateStr; // e.g., "Jan 8"
-    
+
     // Show both the actual date AND days ago for maximum clarity
     let timeInfo = '';
     if (reportDate && days !== null && days !== undefined) {
-      timeInfo = ` - Reported ${reportDate} (${days}d ago)`;
+      timeInfo = ` - Since ${reportDate} (${days}d)`;
     } else if (days !== null && days !== undefined) {
-      timeInfo = ` (${days}d ago)`;
+      timeInfo = ` (${days}d)`;
     } else if (reportDate) {
-      timeInfo = ` - Reported ${reportDate}`;
+      timeInfo = ` - Since ${reportDate}`;
     }
-    
-    // OFS = Out For Season (Rotowire status code)
-    if (i.duration === 'SEASON-LONG' || i.status === 'Injured Reserve' || i.status === 'IR' || i.status === 'LTIR' || i.status === 'OFS') {
-      durationTag = ` [SEASON-LONG${timeInfo} - PRICED IN - NOT EDGE]`;
+
+    // Use the isPricedIn flag from stale injury marking
+    // This is the definitive indicator of whether the injury is an edge
+    if (i.isPricedIn === true || i.freshness === 'STALE') {
+      durationTag = ` [PRICED IN${timeInfo} - NOT an edge, line already adjusted]`;
+    } else if (i.freshness === 'FRESH') {
+      durationTag = ` [FRESH${timeInfo} - investigate if line over/under reacted]`;
+    } else if (i.duration === 'SEASON-LONG' || i.status === 'Injured Reserve' || i.status === 'IR' || i.status === 'LTIR' || i.status === 'OFS') {
+      durationTag = ` [PRICED IN - SEASON-LONG${timeInfo}]`;
     } else if (i.duration === 'MID-SEASON') {
-      durationTag = ` [MID-SEASON${timeInfo} - LIKELY PRICED IN]`;
+      durationTag = ` [PRICED IN - MID-SEASON${timeInfo}]`;
     } else if (i.duration === 'RECENT' || i.isEdge === true) {
-      durationTag = ` [RECENT${timeInfo} - investigate impact]`;
-    } else if (i.duration === 'UNKNOWN') {
-      durationTag = ` [DATE UNKNOWN - verify freshness before citing as edge]`;
+      durationTag = ` [FRESH${timeInfo} - investigate impact]`;
+    } else if (i.duration === 'UNKNOWN' || i.freshness === 'UNKNOWN') {
+      durationTag = ` [UNKNOWN${timeInfo} - verify before citing]`;
     }
 
     if (!durationTag && (i.status === 'IR' || i.status === 'Injured Reserve' || i.status === 'LTIR' || i.status === 'OFS' ||
         (i.description && i.description.toLowerCase().includes('injured reserve')))) {
-      durationTag = ' [IR/OFS - SEASON-LONG - PRICED IN - NOT EDGE]';
+      durationTag = ' [PRICED IN - IR/OFS]';
     }
-    
+
     // If we still don't have duration info, add a warning
     if (!durationTag && !reportDate && days === null) {
-      durationTag = ' [DATE UNKNOWN - verify before citing]';
+      durationTag = ' [UNKNOWN - verify before citing]';
     }
-    
+
     return `  • ${name}${pos ? ` (${pos})` : ''} (${i.status || 'Unknown'})${shortReason}${durationTag}`;
   };
   
@@ -5028,22 +5030,28 @@ function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey) {
 
   // Add educational context about injury significance - direct, no emojis (Gemini best practices)
   lines.push('<injury_interpretation_rules>');
-  lines.push('INJURY DURATION - INVESTIGATE, DO NOT ASSUME');
+  lines.push('INJURY RULES - WHO IS OUT vs WHAT IS AN EDGE');
   lines.push('');
-  lines.push('MID-SEASON (3-6 weeks out):');
-  lines.push('  - Team has partially adapted.');
-  lines.push('  - INVESTIGATE: What is their record DURING this period?');
-  lines.push('  - INVESTIGATE: Who absorbed the usage? How are they performing?');
+  lines.push('[PRICED IN] injuries (marked above):');
+  lines.push('  - These players are OUT and will NOT play tonight');
+  lines.push('  - The LINE ALREADY REFLECTS their absence (market has adjusted)');
+  lines.push('  - DO NOT use as a betting reason ("X is out so I take the other side")');
+  lines.push('  - ONLY investigate if you believe the line OVER or UNDER reacted');
   lines.push('');
-  lines.push('RECENT (< 2 weeks out):');
-  lines.push('  - HIGH UNCERTAINTY. Team is still adjusting.');
-  lines.push('  - DO NOT ASSUME the impact is positive or negative.');
-  lines.push('  - INVESTIGATE: How have they looked in the few games since?');
-  lines.push('  - INVESTIGATE: Who is stepping up? Who is struggling?');
-  lines.push('  - Let the data show you the actual impact.');
+  lines.push('[FRESH] injuries (0-3 days old):');
+  lines.push('  - Line may NOT have fully adjusted yet');
+  lines.push('  - INVESTIGATE: Is the line showing an overreaction or underreaction?');
+  lines.push('  - To use as edge, you must prove WHY the line is mispriced');
   lines.push('');
-  lines.push('YOUR JOB: Investigate the injuries shown above. Do not assume injuries help or hurt either side.');
-  lines.push('NOTE: Season-long injuries are NOT shown - those players are not relevant to tonight.');
+  lines.push('FORBIDDEN REASONING:');
+  lines.push('  - "X is out, so I take the other side" (already priced in)');
+  lines.push('  - "They are missing X player" as a reason (market knows this)');
+  lines.push('');
+  lines.push('CORRECT REASONING:');
+  lines.push('  - "X was ruled out 2 days ago. The line moved from -5 to -3, but their DRtg');
+  lines.push('    drops 8 points without him. Line should be -1. Taking the other side."');
+  lines.push('');
+  lines.push('YOUR JOB: Know who is playing. Use CURRENT roster performance, not absences.');
   lines.push('</injury_interpretation_rules>');
   lines.push('');
 
