@@ -30,7 +30,7 @@ const { picksService } = await import('../src/services/picksService.js');
 const { getVenueForHomeTeam } = await import('../src/services/venueMapping.js');
 const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
 const { getConstitution } = await import('../src/services/agentic/constitution/index.js');
-const { applyQuantumFilter, isQuantumEnabled } = await import('../src/services/quantumService.js');
+// Quantum service removed - not needed
 const { fetchSportsbookOdds, formatOddsForStorage } = await import('../src/services/sportsbookOddsService.js');
 const { filterNBAPicks, clearFilterCache } = await import('../src/services/nbaPickFilter.js');
 const { filterNHLPicks } = await import('../src/services/nhlPickFilter.js');
@@ -1657,12 +1657,6 @@ async function main() {
           // ═══════════════════════════════════════════════════════════════
           if (finalPicks.length > 0) {
             let picksToStore = finalPicks;
-
-            if (isQuantumEnabled()) {
-              // Attach quantum scores for tracking (no filtering)
-              console.log(`\n[${config.name}] Attaching quantum scores to ${finalPicks.length} picks`);
-              picksToStore = await applyQuantumFilter(finalPicks, config.name, { storeAll: true });
-            }
 
             filteredOutCount = qualifiedPicks.length - finalPicks.length;
             const filterNote = (config.name === 'NBA' || config.name === 'NHL' || config.name === 'NCAAB') && filteredOutCount > 0 ? ` (${filteredOutCount} filtered out)` : '';

@@ -1033,6 +1033,7 @@ const FETCHERS = {
       
       return {
         category: 'Pace & Tempo (BDL Advanced)',
+        TIER_LABEL: 'TIER 1 (PREDICTIVE) - Pace is a structural stat that predicts game flow and variance.',
         source: 'Ball Don\'t Lie API',
         home: {
           team: home.full_name || home.name,
@@ -1094,6 +1095,7 @@ const FETCHERS = {
       
       return {
         category: 'Offensive Efficiency (BDL Advanced)',
+        TIER_LABEL: 'TIER 1 (PREDICTIVE) - ORtg is a PRIMARY stat for pick reasoning. Use this as core evidence.',
         source: 'Ball Don\'t Lie API',
         home: {
           team: home.full_name || home.name,
@@ -1151,6 +1153,7 @@ const FETCHERS = {
       
       return {
         category: 'Defensive Efficiency (BDL Advanced)',
+        TIER_LABEL: 'TIER 1 (PREDICTIVE) - DRtg is a PRIMARY stat for pick reasoning. Use this as core evidence.',
         source: 'Ball Don\'t Lie API',
         home: {
           team: home.full_name || home.name,
@@ -1208,6 +1211,7 @@ const FETCHERS = {
 
       return {
         category: 'Net Rating Comparison (BDL Advanced)',
+        TIER_LABEL: 'TIER 1 (PREDICTIVE) - Net Rating is a PRIMARY stat for pick reasoning. Use this as core evidence, not records or streaks.',
         source: 'Ball Don\'t Lie API',
         home: {
           team: home.full_name || home.name,
@@ -1299,6 +1303,7 @@ const FETCHERS = {
       
       return {
         category: 'Shooting Efficiency (BDL Advanced)',
+        TIER_LABEL: 'TIER 1 (PREDICTIVE) - eFG% and TS% are PRIMARY shooting metrics. Use as core evidence.',
         source: 'Ball Don\'t Lie API',
         home: {
           team: home.full_name || home.name,
@@ -4780,6 +4785,7 @@ const FETCHERS = {
       
       return {
         category: 'Recent Form - L5 + L10 Analysis',
+        TIER_LABEL: 'TIER 3 (DESCRIPTIVE) - Records describe past, they do NOT predict future. Use to understand WHY the line is set, then pivot to TIER 1 efficiency stats for your pick reasoning.',
         home: {
           team: home.full_name || home.name,
           ...homeForm

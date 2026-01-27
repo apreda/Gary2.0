@@ -3977,6 +3977,67 @@ const ballDontLieService = {
   },
 
   /**
+   * Get NBA V2 Advanced Stats - includes 100+ metrics including usage, scoring distribution, hustle stats
+   * Use this for: usage_percentage, pct_points, pct_fga, net_rating, pie, scoring profile
+   * Critical for unit 1 vs unit 2 analysis (starters vs bench performance)
+   * @param {Object} options - Query options
+   * @param {Array} options.team_ids - Filter by team IDs
+   * @param {Array} options.player_ids - Filter by player IDs
+   * @param {Array} options.game_ids - Filter by game IDs
+   * @param {Array} options.seasons - Filter by seasons
+   * @param {number} options.max_records - Max records to fetch (default 500)
+   * @returns {Promise<Array>} - Array of V2 advanced stats with usage, scoring distribution, etc.
+   */
+  async getNbaAdvancedStatsV2(options = {}) {
+    try {
+      const { team_ids = [], player_ids = [], game_ids = [], seasons = [], max_records = 500 } = options;
+      const cacheKey = `nba_advanced_stats_v2_t${team_ids.join('_')}_p${player_ids.join('_')}_g${game_ids.join('_')}_s${seasons.join('_')}_max${max_records}`;
+
+      return await getCachedOrFetch(cacheKey, async () => {
+        const allData = [];
+        let cursor = null;
+        const per_page = 100; // BDL max is 100
+
+        // Paginate until we have enough records or no more pages
+        while (allData.length < max_records) {
+          // Build query params
+          const params = new URLSearchParams();
+          team_ids.forEach(id => params.append('team_ids[]', id));
+          player_ids.forEach(id => params.append('player_ids[]', id));
+          game_ids.forEach(id => params.append('game_ids[]', id));
+          seasons.forEach(s => params.append('seasons[]', s));
+          params.append('per_page', per_page);
+          if (cursor) params.append('cursor', cursor);
+
+          const url = `https://api.balldontlie.io/nba/v2/stats/advanced?${params.toString()}`;
+          if (!cursor) {
+            console.log(`[Ball Don't Lie] Fetching NBA V2 Advanced Stats: team_ids=${team_ids.join(',')}, seasons=${seasons.join(',')}`);
+          }
+
+          const resp = await fetch(url, { headers: { Authorization: API_KEY } });
+          if (!resp.ok) {
+            const text = await resp.text().catch(() => '');
+            throw new Error(`HTTP ${resp.status} ${text}`);
+          }
+          const json = await resp.json();
+          const data = json.data || [];
+          allData.push(...data);
+
+          // Check if there are more pages
+          cursor = json.meta?.next_cursor;
+          if (!cursor || data.length < per_page) break;
+        }
+
+        console.log(`[Ball Don't Lie] V2 Advanced Stats: fetched ${allData.length} total records`);
+        return allData;
+      }, 15); // 15 min cache
+    } catch (error) {
+      console.error('[Ball Don\'t Lie] NBA V2 Advanced Stats error:', error.message);
+      return [];
+    }
+  },
+
+  /**
    * Get live box scores for current NBA games
    * @returns {Promise<Array>} - Array of live box scores
    */
