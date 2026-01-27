@@ -986,7 +986,7 @@ Be specific and factual. If it's just a regular season game, say so clearly.`;
         // Here we just need to know who WON'T BE PLAYING tonight
         let allOutPlayers = new Set();
         try {
-          const injuryData = await ballDontLieService.getPlayerInjuries('basketball_nba', [teamId]);
+          const injuryData = await ballDontLieService.getNbaPlayerInjuries([teamId]);
           if (injuryData?.length) {
             for (const inj of injuryData) {
               const status = (inj.status || '').toLowerCase();
