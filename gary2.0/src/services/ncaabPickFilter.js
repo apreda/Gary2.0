@@ -4,20 +4,18 @@
  * Filters Gary's NCAAB picks for quality and bet type balance.
  * This is a POST-FILTER applied AFTER Gary makes his picks, before storage.
  *
- * FILTERING RULES (Jan 2026):
+ * FILTERING RULES (Jan 2026 - UPDATED):
  *
  * TARGET: 3-7 picks per day (40% of total picks)
  *
  * BET TYPE RULES:
- * - Underdog spreads: ALL allowed
- * - Favorite spreads: ONLY if favorite is the HOME team
+ * - ALL spread bets allowed (home or away, favorite or underdog)
  * - Moneyline: At least 1 ML pick per day
  *
  * SELECTION ORDER:
  * 1. Sort by confidence (highest first)
- * 2. Apply bet type rules
- * 3. Take top 40% (min 3, max 7)
- * 4. Ensure at least 1 ML pick
+ * 2. Take top 40% (min 3, max 7)
+ * 3. Ensure at least 1 ML pick
  */
 
 /**
@@ -107,43 +105,31 @@ export async function filterNCAABPicks(picks) {
     addedMLForBalance: 0
   };
 
-  // STEP 1: Apply bet type rules
-  console.log('\n[NCAAB Filter] Applying bet type rules...');
+  // STEP 1: All picks allowed (no bet type restrictions)
+  // NOTE: Previous restriction on favorite-away spreads has been REMOVED
+  // Gary's picks are trusted - we only apply confidence-based filtering
+  console.log('\n[NCAAB Filter] Classifying picks (all types allowed)...');
   const qualifiedPicks = [];
 
   for (const pick of activePicks) {
     const type = getPickType(pick);
     const conf = getConfidence(pick);
-    const isHome = isPickedTeamHome(pick);
 
-    // ML picks: always allowed
+    // ALL picks allowed - just classify for logging
+    qualifiedPicks.push(pick);
+
     if (type.isML) {
-      qualifiedPicks.push(pick);
       console.log(`  [OK] ML: ${pick.pick} (conf: ${conf.toFixed(2)})`);
-      continue;
-    }
-
-    // Underdog spreads: always allowed
-    if (type.isUnderdog) {
-      qualifiedPicks.push(pick);
-      console.log(`  [OK] Dog +${Math.abs(type.spreadValue)}: ${pick.pick} (conf: ${conf.toFixed(2)})`);
-      continue;
-    }
-
-    // Favorite spreads: only if HOME team
-    if (type.isFavorite) {
-      if (isHome) {
-        qualifiedPicks.push(pick);
-        console.log(`  [OK] Fav ${type.spreadValue} (HOME): ${pick.pick} (conf: ${conf.toFixed(2)})`);
-      } else {
-        removed.push({ pick, reason: 'Favorite spread on AWAY team - not allowed' });
-        reasons.removedFavoriteAway++;
-        console.log(`  [REMOVED] Fav ${type.spreadValue} (AWAY): ${pick.pick} - favorites must be home`);
-      }
+    } else if (type.isUnderdog) {
+      console.log(`  [OK] Underdog +${Math.abs(type.spreadValue)}: ${pick.pick} (conf: ${conf.toFixed(2)})`);
+    } else if (type.isFavorite) {
+      console.log(`  [OK] Favorite ${type.spreadValue}: ${pick.pick} (conf: ${conf.toFixed(2)})`);
+    } else {
+      console.log(`  [OK] ${pick.pick} (conf: ${conf.toFixed(2)})`);
     }
   }
 
-  console.log(`\n[NCAAB Filter] ${qualifiedPicks.length} picks passed bet type rules, ${reasons.removedFavoriteAway} removed (favorite away)`);
+  console.log(`\n[NCAAB Filter] ${qualifiedPicks.length} picks passed (all bet types allowed)`);
 
   // STEP 2: Sort by confidence
   qualifiedPicks.sort((a, b) => getConfidence(b) - getConfidence(a));

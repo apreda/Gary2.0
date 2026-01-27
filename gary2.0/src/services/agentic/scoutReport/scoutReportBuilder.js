@@ -971,7 +971,8 @@ Be specific and factual. If it's just a regular season game, say so clearly.`;
      * Dynamically fetch top 5 usage players for a team from BDL
      * Usage = FGA + FTA*0.44 + TOV (standard usage formula components)
      * This replaces the static "star players" map with real data
-     * Also tags players with injury status if available
+     * Also EXCLUDES players who are OUT (regardless of how long they've been out)
+     * Gary needs to know who's AVAILABLE to play, not who has the best season stats
      */
     const getTopUsagePlayers = async (teamId, teamName, teamInjuries = []) => {
       try {
@@ -979,11 +980,34 @@ Be specific and factual. If it's just a regular season game, say so clearly.`;
         const currentMonth = new Date().getMonth() + 1;
         const currentYear = new Date().getFullYear();
         const season = currentMonth >= 10 ? currentYear : currentYear - 1;
-        
+
+        // Fetch ALL current injuries from BDL to exclude players who are OUT
+        // This is separate from the "fresh" injuries shown to Gary for betting decisions
+        // Here we just need to know who WON'T BE PLAYING tonight
+        let allOutPlayers = new Set();
+        try {
+          const injuryData = await ballDontLieService.getPlayerInjuries('basketball_nba', [teamId]);
+          if (injuryData?.length) {
+            for (const inj of injuryData) {
+              const status = (inj.status || '').toLowerCase();
+              // OUT, OFS (out for season), IR = player won't play
+              if (status === 'out' || status === 'ofs' || status === 'ir' || status.includes('out for season')) {
+                const name = `${inj.player?.first_name || ''} ${inj.player?.last_name || ''}`.toLowerCase().trim();
+                allOutPlayers.add(name);
+              }
+            }
+          }
+          if (allOutPlayers.size > 0) {
+            console.log(`[Scout Report] Players OUT for ${teamName} (excluded from key players): ${Array.from(allOutPlayers).join(', ')}`);
+          }
+        } catch (e) {
+          console.log(`[Scout Report] Could not fetch injuries for ${teamName}: ${e.message}`);
+        }
+
         // Fetch active players for the team
-        const playersRaw = await ballDontLieService.getPlayersActive('basketball_nba', { 
-          team_ids: [teamId], 
-          per_page: 15 
+        const playersRaw = await ballDontLieService.getPlayersActive('basketball_nba', {
+          team_ids: [teamId],
+          per_page: 15
         });
         const players = Array.isArray(playersRaw) ? playersRaw : (playersRaw?.data || []);
         
@@ -1020,11 +1044,18 @@ Be specific and factual. If it's just a regular season game, say so clearly.`;
         }));
         
         // Calculate usage proxy and sort by highest usage
+        // EXCLUDE players who are OUT - Gary needs to know who's actually available
         const playersWithUsage = statsData
           .filter(s => (s.fga > 0 || s.pts > 0) && s.min && parseFloat(s.min) >= 20) // Must play 20+ min
           .map(s => {
             const playerName = playerMap[s.player_id] || `player ${s.player_id}`;
-            // Check if this player has an injury
+            // Check if this player is OUT (using allOutPlayers set from BDL injuries)
+            const isOut = allOutPlayers.has(playerName) ||
+                          Array.from(allOutPlayers).some(outName =>
+                            outName.includes(playerName.split(' ').pop()) ||
+                            playerName.includes(outName.split(' ').pop())
+                          );
+            // Check if this player has a fresh injury (for tagging, not exclusion)
             const injury = (teamInjuries || []).find(inj => {
               const injName = `${inj.player?.first_name || ''} ${inj.player?.last_name || ''}`.toLowerCase().trim();
               return injName === playerName ||
@@ -1038,11 +1069,13 @@ Be specific and factual. If it's just a regular season game, say so clearly.`;
               usageProxy: (s.fga || 0) + (s.fta || 0) * 0.44 + (s.turnover || 0),
               ppg: s.pts || 0,
               min: s.min || 0,
-              injuryStatus: injury ? injury.status : null
+              injuryStatus: injury ? injury.status : null,
+              isOut: isOut
             };
           })
+          .filter(p => !p.isOut) // EXCLUDE players who are OUT
           .sort((a, b) => b.usageProxy - a.usageProxy)
-          .slice(0, 5); // Top 5 usage players
+          .slice(0, 5); // Top 5 usage players who are AVAILABLE
 
         // Log with injury tags
         const playerStrings = playersWithUsage.map(p => {
