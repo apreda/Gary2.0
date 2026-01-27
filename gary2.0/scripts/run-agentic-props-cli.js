@@ -80,9 +80,15 @@ export async function runAgenticPropsCli({
   let todayStart, tomorrowStart;
   if (useESTDayFiltering) {
     // Use EST day boundaries for filtering (all games on current EST day)
+    // DST-safe: Calculate using proper timezone offset
     const todayEST = getESTDate();
-    todayStart = new Date(`${todayEST}T00:00:00-05:00`).getTime();
+    // Create date at midnight EST/EDT (timezone-aware)
+    const midnightToday = new Date(`${todayEST}T00:00:00`);
+    // Get the timezone offset for EST/EDT dynamically
+    const estOffset = new Date().toLocaleString('en-US', { timeZone: 'America/New_York', timeZoneName: 'short' }).includes('EDT') ? '-04:00' : '-05:00';
+    todayStart = new Date(`${todayEST}T00:00:00${estOffset}`).getTime();
     tomorrowStart = todayStart + (24 * 60 * 60 * 1000);
+    console.log(`📅 EST Day Filter: ${todayEST} (${estOffset}), todayStart=${new Date(todayStart).toISOString()}, tomorrowStart=${new Date(tomorrowStart).toISOString()}`);
   }
   const windowMs = windowHours ? windowHours * 60 * 60 * 1000 : null;
 
