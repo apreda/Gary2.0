@@ -3232,13 +3232,65 @@ async function fetchInjuries(homeTeam, awayTeam, sport) {
       }
     }
     
-    // NO BDL FALLBACK - BDL injury data is stale and lacks context
-    // If Gemini Grounding failed to provide injury data, we proceed without it
-    // The currentState grounded context is the ONLY source of truth for injuries
-    console.log(`[Scout Report] Grounding parsing did not extract structured injuries`);
-    console.log(`[Scout Report] Injury data will come from narrative context in currentState (Rotowire/grounding)`);
-    console.log(`[Scout Report] BDL injury fallback DISABLED - BDL data is stale and lacks game-day context`);
-    
+    // BDL FALLBACK - When Rotowire grounding fails (429 rate limit, etc.)
+    // BDL has current injury data with status and dates
+    console.log(`[Scout Report] Grounding failed - using BDL as fallback for injury data`);
+
+    try {
+      const bdlSport = sportToBdlKey(sport);
+      if (bdlSport === 'basketball_nba') {
+        const [homeTeamData, awayTeamData] = await Promise.all([
+          ballDontLieService.getTeamByName(homeTeam),
+          ballDontLieService.getTeamByName(awayTeam)
+        ]);
+
+        if (homeTeamData?.id || awayTeamData?.id) {
+          const teamIds = [homeTeamData?.id, awayTeamData?.id].filter(Boolean);
+          const bdlInjuries = await ballDontLieService.getNbaPlayerInjuries(teamIds);
+
+          const homeInjuries = [];
+          const awayInjuries = [];
+
+          for (const inj of bdlInjuries) {
+            const playerName = `${inj.player?.first_name} ${inj.player?.last_name}`;
+            const teamId = inj.team?.id;
+            const status = inj.status || 'Out';
+
+            const injuryObj = {
+              player: {
+                first_name: inj.player?.first_name,
+                last_name: inj.player?.last_name,
+                position: inj.player?.position
+              },
+              status: status,
+              type: inj.injury_type || 'Unknown',
+              bdlDescription: (inj.description || '').substring(0, 100),
+              source: 'BDL_fallback'
+            };
+
+            if (teamId === homeTeamData?.id) {
+              homeInjuries.push(injuryObj);
+            } else if (teamId === awayTeamData?.id) {
+              awayInjuries.push(injuryObj);
+            }
+          }
+
+          console.log(`[Scout Report] BDL fallback injuries: ${homeInjuries.length} home (${homeTeam}), ${awayInjuries.length} away (${awayTeam})`);
+
+          return {
+            home: homeInjuries,
+            away: awayInjuries,
+            lineups: { home: [], away: [] },
+            narrativeContext,
+            source: 'BDL_fallback'
+          };
+        }
+      }
+    } catch (bdlErr) {
+      console.warn(`[Scout Report] BDL fallback failed: ${bdlErr.message}`);
+    }
+
+    // If BDL also fails, return empty
     return {
       home: [],
       away: [],
