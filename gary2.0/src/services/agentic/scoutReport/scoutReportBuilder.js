@@ -3149,13 +3149,20 @@ async function fetchInjuries(homeTeam, awayTeam, sport) {
       // Per CLAUDE.md: Injuries >3 days old are PRICED INTO THE LINE
       // Gary should SEE all injuries but KNOW which are stale (priced in)
       // This way Gary knows who's OUT but understands stale = not a betting edge
+      // NOTE: Only log significant players (starters/high usage) - role players don't matter
       // =========================================================================
       const STALE_WINDOW_DAYS = 3;
+      const freshSignificantPlayers = [];
+      const staleSignificantPlayers = [];
+
       const markStaleInjuries = (injuries, teamName) => {
         const marked = [];
         for (const inj of injuries) {
           const name = `${inj.player?.first_name || ''} ${inj.player?.last_name || ''}`.trim();
           const days = inj.daysSinceReport;
+          const status = (inj.status || '').toLowerCase();
+          // Check if player is significant (Out status only - Questionable players might play)
+          const isOut = status.includes('out') || status.includes('doubtful');
 
           // If we don't have duration info, we can't determine staleness
           if (days === null || days === undefined) {
@@ -3164,11 +3171,16 @@ async function fetchInjuries(homeTeam, awayTeam, sport) {
           } else if (days <= STALE_WINDOW_DAYS) {
             inj.freshness = 'FRESH';
             inj.isPricedIn = false;
-            console.log(`[Scout Report] 🚨 FRESH NBA INJURY: ${name} (${days} days) - Potential edge if line hasn't adjusted`);
+            // Only track significant fresh injuries (OUT players, not questionable)
+            if (isOut) {
+              freshSignificantPlayers.push(`${name} (${days}d, ${teamName})`);
+            }
           } else {
             inj.freshness = 'STALE';
             inj.isPricedIn = true;
-            console.log(`[Scout Report] ⏭️ STALE NBA INJURY: ${name} (${days} days) - Priced in, Gary knows player is OUT but won't use as betting reason`);
+            if (isOut) {
+              staleSignificantPlayers.push(`${name} (${days}d)`);
+            }
           }
           marked.push(inj);
         }
@@ -3177,6 +3189,14 @@ async function fetchInjuries(homeTeam, awayTeam, sport) {
 
       const markedHome = markStaleInjuries(enrichedHome, homeTeam);
       const markedAway = markStaleInjuries(enrichedAway, awayTeam);
+
+      // Log summary of significant injuries (not individual lines for each player)
+      if (freshSignificantPlayers.length > 0) {
+        console.log(`[Scout Report] 🚨 FRESH OUT (potential edge): ${freshSignificantPlayers.join(', ')}`);
+      }
+      if (staleSignificantPlayers.length > 0) {
+        console.log(`[Scout Report] ⏭️ STALE OUT (priced in): ${staleSignificantPlayers.join(', ')}`);
+      }
 
       // Track stale injuries for context (Gary knows they're out, but not an edge)
       const staleInjuries = [
