@@ -1,21 +1,19 @@
 /**
  * NCAAB Pick Filter Service
  *
- * Filters Gary's NCAAB picks for conference diversity and bet type balance.
+ * Filters Gary's NCAAB picks for bet type balance.
  * This is a POST-FILTER applied AFTER Gary makes his picks, before storage.
  *
  * FILTERING RULES (Jan 2026):
  *
- * CONFIDENCE TRIMMING:
- * - Remove TOP confidence pick (overconfidence trap)
- * - Remove BOTTOM confidence pick (low conviction)
+ * 40% RULE:
+ * - Keep approximately 40% of picks
+ * - Minimum 3 picks (no hard max - 40% naturally produces 3-7)
  *
- * PER-CONFERENCE SELECTION (3 picks max per conference):
- * - 1 ML pick (highest confidence ML)
- * - 1 Underdog spread (highest confidence + spread)
- * - 1 Favorite spread (highest confidence - spread)
- *
- * This ensures diversity across conferences and bet types.
+ * BET TYPE RULES:
+ * - Underdog spreads: ALLOWED (team getting points)
+ * - Favorite spreads: ONLY if HOME team (laying points at home is safer)
+ * - At least 1 ML pick required
  */
 
 /**
@@ -41,40 +39,57 @@ function getPickType(pick) {
     result.isML = true;
   } else if (pick.type === 'spread') {
     result.isSpread = true;
-    // Extract spread from pick string (e.g., "Duke -7.5 -110")
-    const spreadMatch = pick.pick?.match(/([+-]?\d+\.?\d*)\s*[+-]\d+$/);
-    if (spreadMatch) {
-      result.spreadValue = parseFloat(spreadMatch[1]);
-      result.isFavorite = result.spreadValue < 0;
-      result.isUnderdog = result.spreadValue > 0;
+    // Check spread value from pick data or pick string
+    const spreadVal = pick.spread || pick.spreadValue;
+    if (spreadVal !== undefined && spreadVal !== null) {
+      result.spreadValue = parseFloat(spreadVal);
+    } else {
+      // Extract spread from pick string (e.g., "Duke -7.5 -110")
+      const spreadMatch = pick.pick?.match(/([+-]?\d+\.?\d*)\s*[+-]\d+$/);
+      if (spreadMatch) {
+        result.spreadValue = parseFloat(spreadMatch[1]);
+      }
     }
+    result.isFavorite = result.spreadValue < 0;
+    result.isUnderdog = result.spreadValue > 0;
   }
 
   return result;
 }
 
 /**
- * Get conference from pick (attached during game processing)
+ * Check if the picked team is the HOME team
  */
-function getConference(pick) {
-  // Conference is attached to pick during game processing
-  // Check multiple possible field names
-  return pick.conference || pick.homeConference || pick.awayConference || 'Unknown';
+function isPickedTeamHome(pick) {
+  const pickText = pick.pick || '';
+  const homeTeam = pick.homeTeam || '';
+
+  if (!homeTeam) return false;
+
+  // Check if home team name appears in the pick
+  // Use last word of team name for matching (e.g., "Duke" from "Duke Blue Devils")
+  const homeWords = homeTeam.split(' ');
+  const lastWord = homeWords[homeWords.length - 1];
+
+  return pickText.toLowerCase().includes(lastWord.toLowerCase());
 }
 
 /**
  * Main filter function - applies NCAAB filtering rules
  *
  * RULES:
- * 1. Remove top 1 and bottom 1 confidence picks
- * 2. Group by conference
- * 3. Per conference: keep 1 ML, 1 underdog spread, 1 favorite spread (by confidence)
+ * 1. 40% rule (target 40% of games, min 3)
+ * 2. Underdog spreads OK
+ * 3. Favorite spreads ONLY if HOME team
+ * 4. At least 1 ML pick
  *
  * @param {Array} picks - Array of Gary's NCAAB picks
  * @returns {Object} - { kept: [], removed: [], summary: {} }
  */
 export async function filterNCAABPicks(picks) {
-  console.log(`\n[NCAAB Filter] Analyzing ${picks.length} picks (Conference Diversity)...`);
+  console.log(`\n[NCAAB Filter] Analyzing ${picks.length} picks...`);
+
+  const MIN_PICKS = 3;
 
   // Filter out PASS picks first
   const activePicks = picks.filter(p => p.pick !== 'PASS' && p.type !== 'pass');
@@ -84,137 +99,112 @@ export async function filterNCAABPicks(picks) {
     return { kept: [], removed: [], summary: { noActivePicks: true } };
   }
 
+  // Calculate target based on 40% rule
+  const targetCount = Math.max(MIN_PICKS, Math.round(activePicks.length * 0.4));
+  console.log(`[NCAAB Filter] ${activePicks.length} picks, targeting ${targetCount} (40% rule, min ${MIN_PICKS})`);
+
   const kept = [];
   const removed = [];
   const reasons = {
-    removedTopConfidence: 0,
-    removedBottomConfidence: 0,
+    removedFavoriteAway: 0,
+    removedForTarget: 0,
     keptML: 0,
     keptUnderdogSpread: 0,
-    keptFavoriteSpread: 0,
-    removedExcessInConference: 0
+    keptFavoriteSpread: 0
   };
 
-  // STEP 1: Sort by confidence and remove top 1 + bottom 1
-  const sortedByConfidence = [...activePicks].sort((a, b) => getConfidence(b) - getConfidence(a));
+  // STEP 1: Filter out favorite spreads that are NOT home teams
+  const validPicks = [];
 
-  console.log('\n[NCAAB Filter] Picks sorted by confidence:');
-  sortedByConfidence.forEach((p, i) => {
-    const conf = getConfidence(p);
-    const type = getPickType(p);
-    const typeStr = type.isML ? 'ML' : (type.isUnderdog ? `+${Math.abs(type.spreadValue)}` : `${type.spreadValue}`);
-    console.log(`  ${i + 1}. ${p.pick} [${typeStr}] - conf: ${conf.toFixed(2)} - ${getConference(p)}`);
-  });
+  for (const pick of activePicks) {
+    const type = getPickType(pick);
 
-  // Only trim if we have enough picks
-  let trimmedPicks = [...sortedByConfidence];
-
-  if (sortedByConfidence.length >= 4) {
-    // Remove top 1 (overconfidence)
-    const topPick = trimmedPicks.shift();
-    removed.push({ pick: topPick, reason: `Top confidence (${getConfidence(topPick).toFixed(2)}) - overconfidence trap` });
-    reasons.removedTopConfidence++;
-    console.log(`\n[NCAAB Filter] Removed top confidence: ${topPick.pick}`);
-
-    // Remove bottom 1 (low conviction)
-    const bottomPick = trimmedPicks.pop();
-    removed.push({ pick: bottomPick, reason: `Bottom confidence (${getConfidence(bottomPick).toFixed(2)}) - low conviction` });
-    reasons.removedBottomConfidence++;
-    console.log(`[NCAAB Filter] Removed bottom confidence: ${bottomPick.pick}`);
-  } else {
-    console.log(`\n[NCAAB Filter] Only ${sortedByConfidence.length} picks - skipping confidence trim`);
-  }
-
-  // STEP 2: Group remaining picks by conference
-  const byConference = new Map();
-
-  for (const pick of trimmedPicks) {
-    const conf = getConference(pick);
-    if (!byConference.has(conf)) {
-      byConference.set(conf, []);
-    }
-    byConference.get(conf).push(pick);
-  }
-
-  console.log(`\n[NCAAB Filter] Picks by conference:`);
-  for (const [conf, confPicks] of byConference) {
-    console.log(`  ${conf}: ${confPicks.length} picks`);
-  }
-
-  // STEP 3: For each conference, select up to 3 picks (1 ML, 1 underdog spread, 1 favorite spread)
-  console.log(`\n[NCAAB Filter] Selecting best picks per conference (1 ML, 1 dog spread, 1 fav spread):`);
-
-  for (const [conf, confPicks] of byConference) {
-    // Sort conference picks by confidence (highest first)
-    confPicks.sort((a, b) => getConfidence(b) - getConfidence(a));
-
-    // Categorize picks
-    const mlPicks = confPicks.filter(p => getPickType(p).isML);
-    const underdogSpreads = confPicks.filter(p => getPickType(p).isUnderdog);
-    const favoriteSpreads = confPicks.filter(p => getPickType(p).isFavorite);
-
-    const selectedForConf = [];
-    const usedPicks = new Set();
-
-    // Select best ML (if available)
-    if (mlPicks.length > 0) {
-      const bestML = mlPicks[0];
-      selectedForConf.push(bestML);
-      usedPicks.add(bestML);
-      bestML.filterReason = `Best ML in ${conf}`;
-      reasons.keptML++;
-      console.log(`  [${conf}] ML: ${bestML.pick} (${getConfidence(bestML).toFixed(2)})`);
+    if (type.isFavorite && type.isSpread) {
+      // Favorite spread - check if HOME team
+      if (!isPickedTeamHome(pick)) {
+        removed.push({ pick, reason: 'Favorite spread on AWAY team (only home favorites allowed)' });
+        reasons.removedFavoriteAway++;
+        console.log(`  [REMOVE] ${pick.pick} - Favorite spread on away team`);
+        continue;
+      }
     }
 
-    // Select best underdog spread (if available)
-    if (underdogSpreads.length > 0) {
-      const bestDog = underdogSpreads[0];
-      if (!usedPicks.has(bestDog)) {
-        selectedForConf.push(bestDog);
-        usedPicks.add(bestDog);
-        bestDog.filterReason = `Best underdog spread in ${conf}`;
+    validPicks.push(pick);
+  }
+
+  console.log(`[NCAAB Filter] ${validPicks.length} valid picks after favorite-away filter`);
+
+  // STEP 2: Sort by confidence
+  const sortedByConfidence = [...validPicks].sort((a, b) => getConfidence(b) - getConfidence(a));
+
+  // STEP 3: Ensure at least 1 ML pick
+  const mlPicks = sortedByConfidence.filter(p => getPickType(p).isML);
+  const spreadPicks = sortedByConfidence.filter(p => !getPickType(p).isML);
+
+  // Reserve the best ML pick
+  let reservedML = null;
+  if (mlPicks.length > 0) {
+    reservedML = mlPicks[0];
+    kept.push(reservedML);
+    reasons.keptML++;
+    console.log(`  [KEEP] ${reservedML.pick} - Reserved ML pick`);
+  }
+
+  // STEP 4: Fill remaining slots from spread picks by confidence
+  const remainingSlots = targetCount - kept.length;
+  const remainingPicks = sortedByConfidence.filter(p => p !== reservedML);
+
+  for (let i = 0; i < remainingPicks.length; i++) {
+    const pick = remainingPicks[i];
+    const type = getPickType(pick);
+
+    if (kept.length < targetCount) {
+      kept.push(pick);
+      if (type.isML) {
+        reasons.keptML++;
+        console.log(`  [KEEP] ${pick.pick} - ML`);
+      } else if (type.isUnderdog) {
         reasons.keptUnderdogSpread++;
-        const type = getPickType(bestDog);
-        console.log(`  [${conf}] Dog +${Math.abs(type.spreadValue)}: ${bestDog.pick} (${getConfidence(bestDog).toFixed(2)})`);
-      }
-    }
-
-    // Select best favorite spread (if available)
-    if (favoriteSpreads.length > 0) {
-      const bestFav = favoriteSpreads[0];
-      if (!usedPicks.has(bestFav)) {
-        selectedForConf.push(bestFav);
-        usedPicks.add(bestFav);
-        bestFav.filterReason = `Best favorite spread in ${conf}`;
+        console.log(`  [KEEP] ${pick.pick} - Underdog spread`);
+      } else if (type.isFavorite) {
         reasons.keptFavoriteSpread++;
-        const type = getPickType(bestFav);
-        console.log(`  [${conf}] Fav ${type.spreadValue}: ${bestFav.pick} (${getConfidence(bestFav).toFixed(2)})`);
+        console.log(`  [KEEP] ${pick.pick} - Home favorite spread`);
       }
+    } else {
+      removed.push({ pick, reason: 'Removed for 40% target cap' });
+      reasons.removedForTarget++;
     }
+  }
 
-    // Add selected picks to kept
-    kept.push(...selectedForConf);
-
-    // Mark remaining picks in this conference as removed
-    for (const pick of confPicks) {
-      if (!usedPicks.has(pick)) {
-        removed.push({ pick, reason: `Excess pick in ${conf} (already have 3 types)` });
-        reasons.removedExcessInConference++;
+  // STEP 5: If we don't have an ML and there are ML picks available, swap one in
+  if (reasons.keptML === 0 && mlPicks.length > 0) {
+    const bestML = mlPicks[0];
+    // Find lowest confidence non-ML pick to swap out
+    const nonMLKept = kept.filter(p => !getPickType(p).isML);
+    if (nonMLKept.length > 0) {
+      nonMLKept.sort((a, b) => getConfidence(a) - getConfidence(b));
+      const toSwap = nonMLKept[0];
+      const swapIdx = kept.indexOf(toSwap);
+      if (swapIdx > -1) {
+        kept.splice(swapIdx, 1);
+        kept.push(bestML);
+        removed.push({ pick: toSwap, reason: 'Swapped for required ML pick' });
+        reasons.keptML++;
+        console.log(`  [SWAP] Removed ${toSwap.pick} for ML ${bestML.pick}`);
       }
     }
   }
 
   // Summary
   console.log(`\n[NCAAB Filter] Summary:`);
-  console.log(`  KEPT: ${kept.length} picks`);
+  console.log(`  KEPT: ${kept.length} picks (target was ${targetCount})`);
   if (reasons.keptML > 0) console.log(`    - ML picks: ${reasons.keptML}`);
   if (reasons.keptUnderdogSpread > 0) console.log(`    - Underdog spreads: ${reasons.keptUnderdogSpread}`);
-  if (reasons.keptFavoriteSpread > 0) console.log(`    - Favorite spreads: ${reasons.keptFavoriteSpread}`);
+  if (reasons.keptFavoriteSpread > 0) console.log(`    - Favorite spreads (home): ${reasons.keptFavoriteSpread}`);
 
   console.log(`  REMOVED: ${removed.length} picks`);
-  if (reasons.removedTopConfidence > 0) console.log(`    - Top confidence (overconfidence): ${reasons.removedTopConfidence}`);
-  if (reasons.removedBottomConfidence > 0) console.log(`    - Bottom confidence (low conviction): ${reasons.removedBottomConfidence}`);
-  if (reasons.removedExcessInConference > 0) console.log(`    - Excess in conference: ${reasons.removedExcessInConference}`);
+  if (reasons.removedFavoriteAway > 0) console.log(`    - Favorite spreads (away): ${reasons.removedFavoriteAway}`);
+  if (reasons.removedForTarget > 0) console.log(`    - Over 40% target: ${reasons.removedForTarget}`);
 
   return {
     kept,

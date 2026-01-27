@@ -6322,8 +6322,8 @@ Based on your analysis and stress test: Does this spread of ${absSpread.toFixed(
 - If the stats show a clear mismatch but the spread is too small → the favorite side is the better bet
 
 Your pick is about VALUE, not just picking winners.
-${isNFL ? `
-**NFL:** Always make a pick. NFL games are limited and high-value.` : `
+${(isNFL || isNBA) ? `
+**${isNFL ? 'NFL' : 'NBA'}:** Always make a pick. Every game has a better side - find it.` : `
 **PASS:** Always valid when you don't believe in either side for THIS game.`}
 
 **KEY STATS GATHERED:**
@@ -6332,7 +6332,7 @@ ${toolCallHistory.slice(-15).map(t => `- ${t.token}: ${t.summary || 'data receiv
 **OUTPUT FORMAT (JSON):**
 \`\`\`json
 {
-  "final_pick": "[Team] [spread/ML]"${isNFL ? '' : ' or "PASS"'},
+  "final_pick": "[Team] [spread/ML]"${(isNFL || isNBA) ? '' : ' or "PASS"'},
   "confidence_score": [0.50-0.95],
   "rationale": "MUST START WITH 'Gary's Take\\n\\n' then scene-setter (1-2 sentences), then 3-4 paragraphs explaining WHY this side is the BETTER BET given the spread."
 }
