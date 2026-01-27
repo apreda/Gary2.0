@@ -314,7 +314,7 @@ async function sendToSession(session, message, options = {}) {
     // Check for blocked response or malformed function call
     const blockReason = response.promptFeedback?.blockReason || candidate?.finishReason;
     if (blockReason && blockReason !== 'STOP' && parts.length === 0) {
-      // Enhanced diagnostics for MALFORMED_FUNCTION_CALL
+      // Enhanced diagnostics for specific block reasons
       if (blockReason === 'MALFORMED_FUNCTION_CALL') {
         // This happens when the model generates invalid function call JSON
         // Possible causes: complex context, ambiguous schemas, or model confusion
@@ -322,12 +322,19 @@ async function sendToSession(session, message, options = {}) {
         console.log(`[Session] ⚠️ MALFORMED_FUNCTION_CALL detected`);
         console.log(`[Session]    Context size: ${tokenCount} tokens`);
         console.log(`[Session]    This is a model-side issue (invalid function call JSON) - retrying`);
-        
+
         // Check if candidate has any partial data we can log for debugging
         if (candidate?.content) {
           const partialContent = JSON.stringify(candidate.content).slice(0, 200);
           console.log(`[Session]    Partial response: ${partialContent}...`);
         }
+      } else if (blockReason === 'UNEXPECTED_TOOL_CALL') {
+        // This happens when the model tries to make tool calls when none were expected
+        // Often occurs when sending function responses and model wants more data
+        const tokenCount = response.usageMetadata?.promptTokenCount || 'unknown';
+        console.log(`[Session] ⚠️ UNEXPECTED_TOOL_CALL detected`);
+        console.log(`[Session]    Context size: ${tokenCount} tokens`);
+        console.log(`[Session]    Model tried to call tools when not expected - retrying with fresh context`);
       } else {
         console.log(`[Session] ⚠️ Response blocked/filtered: ${blockReason}`);
       }
@@ -416,6 +423,7 @@ async function sendToSessionWithRetry(session, message, options = {}, maxRetries
         error.message?.includes('503') ||
         error.message?.includes('blocked') ||
         error.message?.includes('MALFORMED_FUNCTION_CALL') || // Explicit check for malformed function calls
+        error.message?.includes('UNEXPECTED_TOOL_CALL') || // Model tried to call tools when not expected
         error.message?.includes('UNAVAILABLE') ||
         // Network-level failures (transient, should be retried)
         errorMsg.includes('fetch failed') ||
