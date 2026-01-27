@@ -11,9 +11,10 @@
  *
  * SELECTION PROCESS:
  * 1. Remove top 2 confidence picks (overconfidence trap)
- * 2. From remaining: Take 2 best underdog MLs
- * 3. From remaining: Take 2 best favorite MLs
- * 4. Total = 4 picks (2 underdogs + 2 favorites)
+ * 2. Remove bottom 2 confidence picks (low conviction)
+ * 3. From remaining: Take 2 best underdog MLs
+ * 4. From remaining: Take 2 best favorite MLs
+ * 5. Total = 4 picks (2 underdogs + 2 favorites)
  */
 
 /**
@@ -70,9 +71,10 @@ function getConfidence(pick) {
  * RULES:
  * 1. Filter out puck lines (NHL is ML only)
  * 2. Remove top 2 confidence picks (overconfidence trap)
- * 3. Take 2 best underdog MLs
- * 4. Take 2 best favorite MLs
- * 5. Total = 4 picks
+ * 3. Remove bottom 2 confidence picks (low conviction)
+ * 4. Take 2 best underdog MLs
+ * 5. Take 2 best favorite MLs
+ * 6. Total = 4 picks
  *
  * @param {Array} picks - Array of Gary's NHL picks
  * @returns {Object} - { kept: [], removed: [], summary: {} }
@@ -85,6 +87,7 @@ export async function filterNHLPicks(picks) {
   const reasons = {
     puckLinesRemoved: 0,
     removedTopConfidence: 0,
+    removedBottomConfidence: 0,
     keptUnderdogs: 0,
     keptFavorites: 0,
     removedExcess: 0
@@ -110,7 +113,7 @@ export async function filterNHLPicks(picks) {
 
   console.log(`[NHL Filter] ${mlPicks.length} ML picks after puck line filter`);
 
-  // STEP 1: Sort by confidence (highest first) and remove top 2
+  // STEP 1: Sort by confidence (highest first)
   const sortedByConfidence = [...mlPicks].sort((a, b) => getConfidence(b) - getConfidence(a));
 
   console.log('\n[NHL Filter] Picks sorted by confidence:');
@@ -120,20 +123,31 @@ export async function filterNHLPicks(picks) {
     console.log(`  ${i + 1}. ${p.pick} - conf: ${conf.toFixed(2)} (${type})`);
   });
 
-  // Remove top 2 confidence (overconfidence trap)
+  // STEP 2: Remove top 2 confidence (overconfidence trap) AND bottom 2 confidence (low conviction)
   const afterConfidenceTrim = [];
-  for (let i = 0; i < sortedByConfidence.length; i++) {
+  const totalPicks = sortedByConfidence.length;
+
+  for (let i = 0; i < totalPicks; i++) {
     const pick = sortedByConfidence[i];
+
+    // Remove top 2 confidence (overconfidence trap)
     if (i < 2) {
       removed.push({ pick, reason: `Top ${i + 1} confidence (${getConfidence(pick).toFixed(2)}) - overconfidence trap` });
       reasons.removedTopConfidence++;
       console.log(`  [REMOVE] ${pick.pick} - Top ${i + 1} confidence (overconfidence trap)`);
-    } else {
+    }
+    // Remove bottom 2 confidence (low conviction)
+    else if (i >= totalPicks - 2) {
+      removed.push({ pick, reason: `Bottom ${totalPicks - i} confidence (${getConfidence(pick).toFixed(2)}) - low conviction` });
+      reasons.removedBottomConfidence++;
+      console.log(`  [REMOVE] ${pick.pick} - Bottom ${totalPicks - i} confidence (low conviction)`);
+    }
+    else {
       afterConfidenceTrim.push(pick);
     }
   }
 
-  console.log(`\n[NHL Filter] ${afterConfidenceTrim.length} picks after removing top 2 confidence`);
+  console.log(`\n[NHL Filter] ${afterConfidenceTrim.length} picks after removing top 2 and bottom 2 confidence`);
 
   // STEP 2: Separate into underdogs and favorites
   const underdogs = afterConfidenceTrim.filter(p => isUnderdogML(p));
@@ -176,6 +190,7 @@ export async function filterNHLPicks(picks) {
   console.log(`  REMOVED: ${removed.length} picks`);
   if (reasons.puckLinesRemoved > 0) console.log(`    - Puck lines: ${reasons.puckLinesRemoved}`);
   if (reasons.removedTopConfidence > 0) console.log(`    - Top confidence (overconfidence): ${reasons.removedTopConfidence}`);
+  if (reasons.removedBottomConfidence > 0) console.log(`    - Bottom confidence (low conviction): ${reasons.removedBottomConfidence}`);
   if (reasons.removedExcess > 0) console.log(`    - Excess picks: ${reasons.removedExcess}`);
 
   return {
