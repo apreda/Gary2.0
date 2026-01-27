@@ -3190,12 +3190,12 @@ async function fetchInjuries(homeTeam, awayTeam, sport) {
       const markedHome = markStaleInjuries(enrichedHome, homeTeam);
       const markedAway = markStaleInjuries(enrichedAway, awayTeam);
 
-      // Log summary of significant injuries (not individual lines for each player)
+      // Log injury summary (per CLAUDE.md: include date + games missed to distinguish fresh vs stale)
       if (freshSignificantPlayers.length > 0) {
-        console.log(`[Scout Report] 🚨 FRESH OUT (potential edge): ${freshSignificantPlayers.join(', ')}`);
+        console.log(`[Scout Report] Fresh OUT (0-3 days): ${freshSignificantPlayers.join(', ')}`);
       }
       if (staleSignificantPlayers.length > 0) {
-        console.log(`[Scout Report] ⏭️ STALE OUT (priced in): ${staleSignificantPlayers.join(', ')}`);
+        console.log(`[Scout Report] Stale OUT (>3 days, priced in): ${staleSignificantPlayers.join(', ')}`);
       }
 
       // Track stale injuries for context (Gary knows they're out, but not an edge)
