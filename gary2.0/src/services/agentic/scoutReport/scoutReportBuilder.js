@@ -4113,19 +4113,23 @@ function parseGroundingInjuries(content, homeTeam, awayTeam, sport = '') {
     const awayLower = awayTeam.toLowerCase();
 
     const isTeamHeader = (lineLower, teamLower) => {
-      const hasTeam = lineLower.includes(teamLower);
-      const hasInjuryHeader = lineLower.includes('may not play') || lineLower.includes('injuries');
+      // Strip markdown formatting (**, ##, etc.) before checking
+      const cleanLine = lineLower.replace(/\*\*/g, '').replace(/^#+\s*/, '').trim();
+      const hasTeam = cleanLine.includes(teamLower);
+      const hasInjuryHeader = cleanLine.includes('may not play') || cleanLine.includes('injuries');
       if (hasTeam && hasInjuryHeader) return true;
-      // Allow simple team header lines like "Memphis Grizzlies:"
-      if (hasTeam && /[:\-–]?\s*$/.test(lineLower)) return true;
+      // Allow simple team header lines like "Memphis Grizzlies:" or "**Washington Wizards:**"
+      if (hasTeam && /[:\-–]?\s*$/.test(cleanLine)) return true;
       return false;
     };
 
     const shouldStopSection = (lineLower) => {
-      return lineLower.includes('starting lineup') ||
-        lineLower.includes('starting lineups') ||
-        lineLower.includes('expected starting') ||
-        lineLower.startsWith('starting lineups');
+      // Strip markdown before checking
+      const cleanLine = lineLower.replace(/\*\*/g, '').replace(/^#+\s*/, '').trim();
+      return cleanLine.includes('starting lineup') ||
+        cleanLine.includes('starting lineups') ||
+        cleanLine.includes('expected starting') ||
+        cleanLine.startsWith('starting lineups');
     };
 
     const addParsedInjury = (team, playerName, status, rawLine) => {
