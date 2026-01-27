@@ -4588,8 +4588,41 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
         }
         
       } catch (error) {
-        // Handle quota errors with Flash fallback (for Pro)
-        if (error.isQuotaError && currentModelName === 'gemini-3-pro-preview') {
+        // Handle quota errors with model fallback
+        // Flash -> Pro fallback (Flash hit rate limit, use Pro)
+        if (error.isQuotaError && currentModelName === 'gemini-3-flash-preview') {
+          console.log(`[Orchestrator] ⚠️ Flash quota exceeded - falling back to Pro`);
+
+          // Extract textual context to pass to Pro
+          const textualContext = extractTextualSummaryForModelSwitch(messages, steelManCases, toolCallHistory);
+
+          // Create new Pro session for fallback
+          currentSession = createGeminiSession({
+            modelName: 'gemini-3-pro-preview',
+            systemPrompt: systemPrompt + '\n\n' + textualContext,
+            tools: currentPass === 'conviction_rating' ? [] : toolDefinitions,
+            thinkingLevel: 'high'
+          });
+          currentModelName = 'gemini-3-pro-preview';
+          hasSwichedToPro = true;
+
+          console.log(`[Orchestrator] 🔄 Created fallback Pro session, retrying...`);
+
+          // Retry with new session
+          const retryResponse = await sendToSessionWithRetry(currentSession, nextMessageToSend);
+          message = {
+            role: 'assistant',
+            content: retryResponse.content,
+            tool_calls: retryResponse.toolCalls
+          };
+          finishReason = retryResponse.finishReason;
+
+          if (message.content || message.tool_calls) {
+            messages.push(message);
+          }
+        }
+        // Pro -> Flash fallback (Pro hit rate limit, use Flash)
+        else if (error.isQuotaError && currentModelName === 'gemini-3-pro-preview') {
           console.log(`[Orchestrator] ⚠️ Pro quota exceeded - falling back to Flash`);
           
           // Extract textual context to pass to Flash (include full stat history)
