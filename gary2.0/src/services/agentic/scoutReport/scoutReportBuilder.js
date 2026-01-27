@@ -2037,10 +2037,10 @@ ${formatSituationalFactors(game, injuries, sportKey)}
 
 BETTING CONTEXT (For Reference Only - Do NOT base pick on these)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${formatOdds(game)}
+${formatOdds(game, sportKey)}
 
-IMPORTANT: Odds are shown for value assessment AFTER you form your 
-statistical conclusion. Your analysis must be independently justified 
+IMPORTANT: Odds are shown for value assessment AFTER you form your
+statistical conclusion. Your analysis must be independently justified
 by stats. Do NOT use "big spread" or "expensive ML" as reasoning.
 
 ══════════════════════════════════════════════════════════════════════
@@ -3111,9 +3111,53 @@ async function fetchInjuries(homeTeam, awayTeam, sport) {
         console.log(`[Scout Report] BDL duration enrichment failed: ${e.message}`);
       }
 
+      // =========================================================================
+      // STALE INJURY FILTER (NBA: 3-day window)
+      // Per CLAUDE.md: Injuries >3 days old are PRICED INTO THE LINE
+      // Gary should NEVER see stale injuries - they are NOT an edge
+      // =========================================================================
+      const STALE_WINDOW_DAYS = 3;
+      const filterStaleInjuries = (injuries, teamName) => {
+        const fresh = [];
+        const filtered = [];
+        for (const inj of injuries) {
+          const name = `${inj.player?.first_name || ''} ${inj.player?.last_name || ''}`.trim();
+          const days = inj.daysSinceReport;
+
+          // If we don't have duration info, we can't determine staleness
+          // Keep the injury but mark it as unknown freshness
+          if (days === null || days === undefined) {
+            inj.freshness = 'UNKNOWN';
+            fresh.push(inj);
+          } else if (days <= STALE_WINDOW_DAYS) {
+            inj.freshness = 'FRESH';
+            console.log(`[Scout Report] 🚨 FRESH NBA INJURY: ${name} (${days} days) - Gary will see this`);
+            fresh.push(inj);
+          } else {
+            inj.freshness = 'STALE - PRICED IN';
+            console.log(`[Scout Report] ⏭️ STALE NBA INJURY (filtered): ${name} (${days} days) - Priced into line, hiding from Gary`);
+            filtered.push(inj);
+          }
+        }
+        if (filtered.length > 0) {
+          console.log(`[Scout Report] Filtered ${filtered.length} stale injuries for ${teamName} (>3 days old)`);
+        }
+        return { fresh, filtered };
+      };
+
+      const homeFiltered = filterStaleInjuries(enrichedHome, homeTeam);
+      const awayFiltered = filterStaleInjuries(enrichedAway, awayTeam);
+
+      // Track which players were filtered for narrative scrubbing
+      const filteredLongTerm = [
+        ...homeFiltered.filtered.map(i => `${i.player?.first_name || ''} ${i.player?.last_name || ''}`.trim()),
+        ...awayFiltered.filtered.map(i => `${i.player?.first_name || ''} ${i.player?.last_name || ''}`.trim())
+      ];
+
       return {
-        home: enrichedHome,
-        away: enrichedAway,
+        home: homeFiltered.fresh,
+        away: awayFiltered.fresh,
+        filteredLongTerm,
         lineups: { home: [], away: [] },
         narrativeContext
       };
@@ -3854,14 +3898,14 @@ Look at the lineup card for this matchup on that page. Extract the following EXA
 ${awayTeam}: PG [Name], SG [Name], SF [Name], PF [Name], C [Name]
 ${homeTeam}: PG [Name], SG [Name], SF [Name], PF [Name], C [Name]
 
-2. MAY NOT PLAY section - List EVERY player with their EXACT status code:
+2. MAY NOT PLAY section - List EVERY player with their EXACT status code AND DURATION:
 ${awayTeam} MAY NOT PLAY:
-- [Position letter] [Player Name] [Status]
-(Example: G A. Reaves Out, F A. Thiero Out, C D. Gafford Prob)
+- [Position letter] [Player Name] [Status] - [Duration/Injury info]
+(Example: G K. Irving Out - since Jan 15 (knee), C J. Embiid Out - missed 20 games (knee management), F P. George OFS - out for season since Dec 1)
 
 ${homeTeam} MAY NOT PLAY:
-- [Position letter] [Player Name] [Status]
-(Example: C M. Cisse Doubt, C A. Davis Out, G K. Irving Out)
+- [Position letter] [Player Name] [Status] - [Duration/Injury info]
+(Example: C A. Davis Out - day-to-day (ankle), G A. Reaves Ques - missed 3 games (hamstring))
 
 STATUS CODES FROM ROTOWIRE:
 - Out = Confirmed out
@@ -3871,11 +3915,18 @@ STATUS CODES FROM ROTOWIRE:
 - OFS = Out For Season
 - GTD = Game Time Decision
 
+CRITICAL - DURATION INFO (REQUIRED for each injured player):
+- Include "since [Month] [Day]" when available
+- OR "missed [X] games" count
+- OR "day-to-day" / "week-to-week" / "out for season"
+- This helps determine if the injury is FRESH (recent edge) or STALE (priced in)
+
 RULES:
 1. Return BOTH teams' data even if one has no injuries (say "No injuries listed")
 2. Copy the EXACT status code shown on Rotowire (Out, Prob, Doubt, Ques, OFS, GTD)
 3. Include the position letter (G, F, C) before each player name
-4. This page shows today's games - no date needed in search`;
+4. INCLUDE DURATION - how long has each player been out?
+5. This page shows today's games - no date needed in search`;
 
     } else {
       query = `Current injuries for ${sport} game ${awayTeam} vs ${homeTeam} as of ${today}. List all players OUT, DOUBTFUL, or QUESTIONABLE with their status and injury type.`;
@@ -3995,11 +4046,12 @@ function parseGroundingInjuries(content, homeTeam, awayTeam, sport = '') {
     }
 
     // Text-based detection (fallback if no dates/games found)
+    // OFS = Rotowire's status code for "Out For Season"
     if (t.includes('season-long') || t.includes('all season') || t.includes('since week 1') ||
         t.includes('since week 2') || t.includes('since week 3') || t.includes('most of the season') ||
         t.includes('out for the year') || t.includes('out all year') ||
         t.includes('indefinitely') || t.includes('no timetable') || t.includes('no return') ||
-        t.includes('season-ending') || t.includes('out for season') ||
+        t.includes('season-ending') || t.includes('out for season') || t.includes('ofs') ||
         t.includes('won\'t return') || t.includes('will not return') ||
         t.includes('since the start') || t.includes('long-term') || t.includes('long term')) {
       return { duration: 'SEASON-LONG', isEdge: false, note: '', outSinceDate: null, daysSinceOut: null };
@@ -4823,10 +4875,11 @@ function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey) {
 
   // Categorize injuries by importance/duration
   const categorize = (teamInjuries) => {
-    const critical = teamInjuries.filter(i => (i.duration === 'RECENT' || i.isEdge === true) && i.status !== 'Out');
-    const out = teamInjuries.filter(i => i.status === 'Out' || i.status === 'IR' || i.status === 'LTIR' || i.status === 'Injured Reserve');
-    const seasonal = teamInjuries.filter(i => i.duration === 'SEASON-LONG' && i.status !== 'Out' && i.status !== 'IR');
-    const others = teamInjuries.filter(i => 
+    const critical = teamInjuries.filter(i => (i.duration === 'RECENT' || i.isEdge === true) && i.status !== 'Out' && i.status !== 'OFS');
+    // OFS = Out For Season (Rotowire status code)
+    const out = teamInjuries.filter(i => i.status === 'Out' || i.status === 'IR' || i.status === 'LTIR' || i.status === 'OFS' || i.status === 'Injured Reserve');
+    const seasonal = teamInjuries.filter(i => i.duration === 'SEASON-LONG' && i.status !== 'Out' && i.status !== 'IR' && i.status !== 'OFS');
+    const others = teamInjuries.filter(i =>
       !critical.includes(i) && !out.includes(i) && !seasonal.includes(i)
     );
     return { critical, out, seasonal, others };
@@ -4856,7 +4909,8 @@ function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey) {
       timeInfo = ` - Reported ${reportDate}`;
     }
     
-    if (i.duration === 'SEASON-LONG' || i.status === 'Injured Reserve' || i.status === 'IR' || i.status === 'LTIR') {
+    // OFS = Out For Season (Rotowire status code)
+    if (i.duration === 'SEASON-LONG' || i.status === 'Injured Reserve' || i.status === 'IR' || i.status === 'LTIR' || i.status === 'OFS') {
       durationTag = ` [SEASON-LONG${timeInfo} - PRICED IN - NOT EDGE]`;
     } else if (i.duration === 'MID-SEASON') {
       durationTag = ` [MID-SEASON${timeInfo} - LIKELY PRICED IN]`;
@@ -4865,10 +4919,10 @@ function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey) {
     } else if (i.duration === 'UNKNOWN') {
       durationTag = ` [DATE UNKNOWN - verify freshness before citing as edge]`;
     }
-    
-    if (!durationTag && (i.status === 'IR' || i.status === 'Injured Reserve' || i.status === 'LTIR' || 
+
+    if (!durationTag && (i.status === 'IR' || i.status === 'Injured Reserve' || i.status === 'LTIR' || i.status === 'OFS' ||
         (i.description && i.description.toLowerCase().includes('injured reserve')))) {
-      durationTag = ' [IR - SEASON-LONG - PRICED IN - NOT EDGE]';
+      durationTag = ' [IR/OFS - SEASON-LONG - PRICED IN - NOT EDGE]';
     }
     
     // If we still don't have duration info, add a warning
@@ -4893,8 +4947,9 @@ function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey) {
     // Show ALL out players, categorized by recency
     const recentOut = cats.out.filter(i => i.duration === 'RECENT' || i.isEdge === true);
     const midSeasonOut = cats.out.filter(i => i.duration === 'MID-SEASON');
+    // OFS = Out For Season (Rotowire status code)
     const seasonLongOut = cats.out.filter(i =>
-      i.duration === 'SEASON-LONG' || i.status === 'IR' || i.status === 'LTIR' || i.status === 'Injured Reserve'
+      i.duration === 'SEASON-LONG' || i.status === 'IR' || i.status === 'LTIR' || i.status === 'OFS' || i.status === 'Injured Reserve'
     );
     const unknownOut = cats.out.filter(i =>
       !recentOut.includes(i) && !midSeasonOut.includes(i) && !seasonLongOut.includes(i)
@@ -5127,14 +5182,22 @@ function formatSituationalFactors(game, injuries, sport) {
 
 /**
  * Format odds for display
+ * @param {Object} game - Game data with odds
+ * @param {string} sport - Sport key (e.g., 'icehockey_nhl')
  */
-function formatOdds(game) {
+function formatOdds(game, sport = '') {
   const lines = [];
-  
-  // Spread
+  const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
+
+  // Spread - SKIP FOR NHL (NHL is moneyline only, no puck lines)
   let spreadValue = null;
   let spreadOdds = -110;
-  if (game.spread_home !== undefined && game.spread_home !== null) {
+  if (isNHL) {
+    lines.push('⚠️ NHL IS MONEYLINE ONLY - No puck lines, no spreads');
+    lines.push('   Pick WHO WINS the game. Focus on goaltending matchup.');
+    spreadValue = null; // Explicitly null for NHL
+    spreadOdds = null;
+  } else if (game.spread_home !== undefined && game.spread_home !== null) {
     const homeSpread = parseFloat(game.spread_home);
     const awaySpread = -homeSpread;
     spreadValue = homeSpread;
@@ -5145,7 +5208,7 @@ function formatOdds(game) {
   } else {
     lines.push('Spread: Not available');
   }
-  
+
   // Moneyline
   let mlHome = null;
   let mlAway = null;
@@ -5156,8 +5219,8 @@ function formatOdds(game) {
   } else if (game.h2h) {
     lines.push(`Moneyline: ${game.h2h}`);
   }
-  
-  // Total
+
+  // Total - still show for NHL (for context, though we don't bet it)
   let totalValue = null;
   if (game.total !== undefined && game.total !== null) {
     totalValue = parseFloat(game.total);
@@ -5165,16 +5228,22 @@ function formatOdds(game) {
   } else if (game.totals) {
     lines.push(`Total: ${game.totals}`);
   }
-  
+
   // Add raw values for Gary to include in JSON output
   lines.push('');
-  lines.push('RAW ODDS VALUES (copy these to your JSON output):');
-  lines.push(`  spread: ${spreadValue !== null ? spreadValue : 'null'}`);
-  lines.push(`  spreadOdds: ${spreadOdds}`);
+  if (isNHL) {
+    lines.push('RAW ODDS VALUES (NHL - MONEYLINE ONLY):');
+    lines.push('  spread: null  ← NHL does not use puck lines');
+    lines.push('  spreadOdds: null');
+  } else {
+    lines.push('RAW ODDS VALUES (copy these to your JSON output):');
+    lines.push(`  spread: ${spreadValue !== null ? spreadValue : 'null'}`);
+    lines.push(`  spreadOdds: ${spreadOdds}`);
+  }
   lines.push(`  moneylineHome: ${mlHome !== null ? mlHome : 'null'}`);
   lines.push(`  moneylineAway: ${mlAway !== null ? mlAway : 'null'}`);
   lines.push(`  total: ${totalValue !== null ? totalValue : 'null'}`);
-  
+
   return lines.join('\n') || 'Odds not available';
 }
 
@@ -10711,8 +10780,15 @@ export function buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayPro
     const out = teamInjuries.filter(i => i.status === 'Out' || i.status === 'OUT');
     const questionable = teamInjuries.filter(i => i.status === 'Questionable' || i.status === 'GTD' || i.status === 'Day-To-Day');
     const parts = [];
-    if (out.length > 0) parts.push(out.slice(0, 2).map(i => `${i.player} (O)`).join(', '));
-    if (questionable.length > 0) parts.push(questionable.slice(0, 1).map(i => `${i.player} (Q)`).join(', '));
+    // FIX: i.player can be an object {first_name, last_name} or a string - handle both
+    const getPlayerName = (i) => {
+      if (typeof i.player === 'string') return i.player;
+      if (i.player?.first_name) return `${i.player.first_name} ${i.player.last_name || ''}`.trim();
+      if (i.name) return i.name;
+      return 'Unknown';
+    };
+    if (out.length > 0) parts.push(out.slice(0, 2).map(i => `${getPlayerName(i)} (O)`).join(', '));
+    if (questionable.length > 0) parts.push(questionable.slice(0, 1).map(i => `${getPlayerName(i)} (Q)`).join(', '));
     return parts.join(', ') || 'None';
   };
   
@@ -10768,10 +10844,13 @@ export function buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayPro
       rows.push({ label: 'Conf Record', ...confRecord });
     }
 
+    // NOTE: Efficiency stats (ORtg, DRtg, Net Rating) are NOT included here
+    // because BDL doesn't provide team-level ratings in standings/profile data.
+    // Gary MUST call OFFENSIVE_RATING, DEFENSIVE_RATING, NET_RATING tools during
+    // his investigation to get these TIER 1 stats. These tools fetch from
+    // BDL advanced_stats and aggregate by team.
+
     rows.push(
-      { label: 'Off Rating', ...offRtg },
-      { label: 'Def Rating', ...defRtg },
-      { label: 'Net Rating', ...netRtg },
       { label: 'Key Injuries', home: homeInjuries, away: awayInjuries, arrow: '' }
     );
     
