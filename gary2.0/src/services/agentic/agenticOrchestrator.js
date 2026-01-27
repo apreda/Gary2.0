@@ -2238,8 +2238,7 @@ YOUR JOB: Investigate and discover the truth. Do not assume injuries help or hur
 
 Be HONEST about major contradictions - they help you (and us) gauge pick quality.
 
-**NOTE:** The stats will be extracted from your rationale's TALE OF THE TAPE section automatically.
-Do NOT include a "stats" field in your JSON - it causes parsing issues.
+**NOTE:** Do NOT include a "stats" field in your JSON - it causes parsing issues. Tale of Tape is handled separately by the UI from BDL data.
 
 ### CRITICAL ODDS RULES:
 1. LOOK AT THE "RAW ODDS VALUES" SECTION in your scout report - it has the EXACT odds:
@@ -2281,18 +2280,6 @@ ${buildFactorChecklist(sport)}
 
 Your rationale MUST follow this EXACT format (iOS app depends on this):
 
-**CRITICAL: COPY THE "VERIFIED TALE OF THE TAPE" FROM YOUR SCOUT REPORT EXACTLY**
-- The scout report contains a section called "VERIFIED TALE OF THE TAPE (USE THIS EXACTLY IN YOUR RATIONALE)"
-- COPY those numbers EXACTLY - they are verified from Ball Don't Lie API
-- Do NOT make up your own numbers - this causes inaccuracies
-- Do NOT modify the stats in any way
-
-Your rationale structure:
-
-TALE OF THE TAPE
-
-[COPY THE VERIFIED TABLE FROM SCOUT REPORT HERE - DO NOT CHANGE ANY NUMBERS]
-
 Gary's Take
 **CRITICAL: Your "Gary's Take" IS your winning Steel Man case.**
 
@@ -2320,15 +2307,6 @@ After your 1-2 sentence "scene setter," transition into the KEY FACTOR you ident
 EXAMPLE OUTPUT:
 ═══════════════════════════════════════════════════════════════════════
 
-TALE OF THE TAPE (VERIFIED FROM BDL)
-
-                    Miami Heat            Phoenix Suns
-Record                 20-19      ←          22-17
-Off Rating             113.9      ←          116.0
-Def Rating             112.3      ←          113.5
-Net Rating              +1.9      →           +1.8
-Key Injuries     N. Powell (Q)        J. Green (O)
-
 Gary's Take
 Miami hosts Phoenix in a marquee matchup between two teams with playoff aspirations, with the Heat looking to defend home court against a Suns squad that's struggled on the road lately.
 
@@ -2343,21 +2321,19 @@ The statistical matchup heavily favors Miami's defensive identity: their 107.2 D
 ### CRITICAL FORMATTING RULES
 1. NO markdown (bolding, italics, etc.), NO emojis.
 2. NO all-caps headers or titles within the rationale.
-3. TALE OF THE TAPE: COPY EXACTLY from the "VERIFIED TALE OF THE TAPE" in your scout report.
-4. "Gary's Take" is the only section header allowed below the table.
-5. Keep the table clean - use spaces to align columns.
-6. Gary's Take = YOUR WINNING STEEL MAN CASE (with the same stats, reasoning, form).
-7. Start your take with the KEY FACTOR you identified, not market commentary.
-8. PLAYER NAME RULES (HARD):
+3. "Gary's Take" is your only section header.
+4. Gary's Take = YOUR WINNING STEEL MAN CASE (with the same stats, reasoning, form).
+5. Start your take with the KEY FACTOR you identified, not market commentary.
+6. PLAYER NAME RULES (HARD):
    - Only mention players from your scout report who are ACTIVE this 2025-2026 season
    - DO NOT mention players who have been OUT for 1+ month (fully priced in, irrelevant)
    - DO NOT mention players who haven't played at all this season
    - Focus on CURRENT ACTIVE roster, not historical absences
-9. TONE: Sound like a sharp sports analyst, NOT a gambling market analyst.
+7. TONE: Sound like a sharp sports analyst, NOT a gambling market analyst.
    - GOOD: Sports analysis with stats, matchups, form, mechanisms
    - BAD: "The market overreacted" / "Public money inflated the line" / "Sharp value play"
-10. NO EMOJIS. Never use emojis in your output.
-11. LENGTH: 3-4 paragraphs covering your core reasoning, form, and key stats.
+8. NO EMOJIS. Never use emojis in your output.
+9. LENGTH: 3-4 paragraphs covering your core reasoning, form, and key stats.
 
 ═══════════════════════════════════════════════════════════════════════
 `.trim();
@@ -6092,10 +6068,9 @@ BEGIN WRITING YOUR MATCHUP ANALYSIS NOW.
       messages.push({
         role: 'user',
         content: `Your response is missing a complete rationale. Please provide your FULL analysis with:
-1. A complete "TALE OF THE TAPE" comparison
-2. "Gary's Take" section with 3-4 paragraphs explaining your reasoning
-3. Clear discussion of the key stats that support your pick
-4. Acknowledgment of any risks or contradicting factors
+1. "Gary's Take" section with 3-4 paragraphs explaining your reasoning
+2. Clear discussion of the key stats that support your pick
+3. Acknowledgment of any risks or contradicting factors
 
 Output your complete pick JSON with the full rationale in the "rationale" field. Do NOT use placeholders like "See detailed analysis below" - write the actual analysis.`
       });
