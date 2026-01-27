@@ -29,10 +29,6 @@ export const NCAAB_CONSTITUTION = `
 - **Rest/travel**: How might schedule strain affect tonight's outcome? Look for short rest, travel, or altitude effects that could change energy, execution, rotations, and scoring/defensive quality.
 - **Line context**: What specific game-context factor might be under-weighted tonight, or not fully obvious from the spread alone?
 - **Injury timing**: Is this injury new enough to matter, or has the market already adjusted? If it's been in place, explain why it still creates edge tonight.
-- **GTD (Game-Time Decision) - ASSUME THEY PLAY AT FULL STRENGTH:**
-  - If a player is listed as GTD/Questionable but is in the expected starting lineup → assume they play
-  - FORBIDDEN: "The potential absence of [GTD player]..." - If they're starting, assume they play!
-  - Only cite GTD if you have CONFIRMED OUT status from today's news
 - **Key numbers**: If this spread sits on a key number, investigate which side benefits most and whether the better decision is spread or moneyline for tonight's matchup.
 - **Better bet thinking**: Given everything you've investigated, which side is the BETTER BET? Not just "who covers" but "which bet offers value given this spread and matchup?"
 
@@ -158,6 +154,13 @@ When you encounter content from blogs, articles, or opinion pieces during ground
 **SEASON-LONG (4+ weeks) - 100% IRRELEVANT. DON'T MENTION IT:**
 - Team's current KenPom/T-Rank/NET already reflects the absence
 - Citing this is like saying "Team X doesn't have a graduated player" - irrelevant
+
+**GTD (GAME-TIME DECISION) - ASSUME THEY PLAY AT FULL STRENGTH:**
+- If a player is listed as GTD/Questionable but is in the expected starting lineup → assume they play
+- College coaches are conservative with injury designations - most GTD players suit up
+- FORBIDDEN: "The potential absence of [GTD player]..." - If they're starting, assume they play!
+- FORBIDDEN: "If [player] is limited..." - Don't speculate about limitations
+- Only use confirmed OUT players in your injury analysis, never GTD players in the lineup
 
 ### [STATS] H2H SWEEP CONTEXT (NCAAB-SPECIFIC)
 
