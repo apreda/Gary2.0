@@ -3309,59 +3309,13 @@ async function fetchInjuries(homeTeam, awayTeam, sport) {
       }
     }
 
-    // FALLBACK 2: For NBA, try BDL injuries API directly
-    // NBA almost always has injuries - if grounding failed to parse, try BDL
-    // Note: bdlSport already defined at function scope (line ~2967)
-    if (bdlSport === 'basketball_nba') {
-      console.log(`[Scout Report] ⚠️ NBA grounding returned 0 injuries (unusual) - trying BDL fallback...`);
-      try {
-        const [homeTeamData, awayTeamData] = await Promise.all([
-          ballDontLieService.getTeamByName(homeTeam),
-          ballDontLieService.getTeamByName(awayTeam)
-        ]);
-
-        if (homeTeamData?.id || awayTeamData?.id) {
-          const teamIds = [homeTeamData?.id, awayTeamData?.id].filter(Boolean);
-          const bdlInjuries = await ballDontLieService.getNbaPlayerInjuries(teamIds);
-
-          if (bdlInjuries && bdlInjuries.length > 0) {
-            console.log(`[Scout Report] ✅ BDL fallback found ${bdlInjuries.length} injuries`);
-            const homeInjuries = [];
-            const awayInjuries = [];
-
-            for (const inj of bdlInjuries) {
-              const teamId = inj.team?.id;
-              const injObj = {
-                player: {
-                  first_name: inj.player?.first_name,
-                  last_name: inj.player?.last_name,
-                  position: inj.player?.position
-                },
-                status: inj.status || 'Out',
-                type: inj.injury_type || 'Unknown',
-                source: 'BDL_FALLBACK'
-              };
-
-              if (teamId === homeTeamData?.id) {
-                homeInjuries.push(injObj);
-              } else if (teamId === awayTeamData?.id) {
-                awayInjuries.push(injObj);
-              }
-            }
-
-            console.log(`[Scout Report] BDL fallback: ${homeInjuries.length} for ${homeTeam}, ${awayInjuries.length} for ${awayTeam}`);
-            return {
-              home: homeInjuries,
-              away: awayInjuries,
-              lineups: { home: [], away: [] },
-              narrativeContext
-            };
-          }
-        }
-      } catch (e) {
-        console.warn(`[Scout Report] BDL fallback failed: ${e.message}`);
-      }
-    }
+    // NO BDL FALLBACK FOR STATUS
+    // BDL injury status data is often stale (e.g., player listed as "Questionable" when they've been playing for days)
+    // Rotowire (via Gemini Grounding) is the ONLY source of truth for:
+    //   - Expected starting lineups
+    //   - Current injury status (OUT, GTD, Questionable, Doubtful, Probable)
+    // BDL is ONLY used for duration enrichment (how long a player has been out)
+    // If grounding fails, we must fail - cannot trust BDL for current game-day status
 
     // NO FALLBACK - Rotowire grounding MUST work
     // If grounding fails, throw error to fail the process
