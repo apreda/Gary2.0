@@ -263,7 +263,54 @@ When analyzing NHL streaks, goalie continuity is a key factor to investigate:
 
 ---
 
-## PART 10: WHAT CREATES REAL EDGE
+## PART 10: LINE MOVEMENT DRIVERS
+
+### The Fundamental: Spreads Are Perception Maps
+
+> "Spreads work like stock prices. They move based on public information and perception, not intrinsic value. Your job isn't to predict the game - it's to find where the market's perception diverges from reality."
+
+**What the PUBLIC focuses on (what MOVES lines):**
+| Factor | Typical Movement | Market Adjustment |
+|--------|-----------------|-------------------|
+| Star injury (0-3 days old) | 2-5 points | 2-6 hours to price in |
+| Blowout loss (30+ pt) | 1-3 pts on next game | Same day narrative shift |
+| Losing streak (5+ L) | Cumulative 2-4 pts | Builds over the streak |
+| B2B situation | 1-2 points | Priced in advance |
+| Star returning from injury | 2-4 points | 2-12 hours |
+| Revenge game narrative | 0.5-1 point | Usually already priced |
+
+### The Better Bet Investigation Framework
+
+**Step 1:** Identify what PUBLIC factors set or moved this line
+- "Why is this -14 and not -7?"
+- "What narrative is the market pricing in?"
+
+**Step 2:** Investigate if ACTUAL IMPACT matches PERCEIVED IMPACT
+- Team went 0-5 with blowouts → line moved to -14
+- But investigate: Was the 0-5 due to a missing player who's back? Bad matchups that don't apply here? Shooting variance?
+
+**Step 3:** Compare NARRATIVE vs DATA
+- Narrative: "This team is terrible, -14 is justified"
+- Data: "Their Tier 1 metrics (Net Rating, eFG%) show they're still competitive - only -4 underlying quality"
+- When narrative ≠ data → potential better bet
+
+### The Line Movement Test
+
+**Ask:** "Can I explain WHY this line is where it is using public perception?"
+
+- **If YES** → Those factors are already priced in. Look elsewhere for edge.
+- **If NO** → You may have found a gap between narrative and reality.
+
+**Example:**
+- Line: Team A -14 vs Team B
+- Public perception: "Team B lost by 30 last game, they're terrible"
+- Your investigation: Team B's L5 Net Rating is only -2, blowout was shooting variance
+- The gap: Narrative says -14, data says closer to -7
+- Better bet: +14 if the data supports it
+
+---
+
+## PART 11: WHAT CREATES REAL EDGE
 
 ### Edge Comes From:
 1. **Breaking injury news** (hours old, not days)
@@ -281,7 +328,7 @@ When analyzing NHL streaks, goalie continuity is a key factor to investigate:
 
 ---
 
-## PART 11: THE DISCIPLINE PRINCIPLES
+## PART 12: THE DISCIPLINE PRINCIPLES
 
 ### On Passing
 
@@ -297,7 +344,7 @@ When analyzing NHL streaks, goalie continuity is a key factor to investigate:
 
 ---
 
-## PART 12: CHECKLIST BEFORE EVERY PICK
+## PART 13: CHECKLIST BEFORE EVERY PICK
 
 Before finalizing analysis, ask:
 

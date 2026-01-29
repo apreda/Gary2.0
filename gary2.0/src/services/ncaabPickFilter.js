@@ -1,70 +1,61 @@
 /**
  * NCAAB Pick Filter Service
  *
- * Filters Gary's NCAAB picks for quality and bet type balance.
+ * Filters Gary's NCAAB picks to create a balanced slate.
  * This is a POST-FILTER applied AFTER Gary makes his picks, before storage.
  *
- * FILTERING RULES (Jan 2026 - UPDATED):
+ * FILTERING RULES (Jan 29, 2026):
  *
- * TARGET: 3-7 picks per day (40% of total picks)
+ * 1. SKIP the top confidence pick (don't take it)
+ * 2. Take 1 UNDERDOG SPREAD (highest confidence)
+ * 3. Take 1 ML PICK (highest confidence)
+ * 4. Take 1 FAVORITE SPREAD (highest confidence)
+ * 5. Take the NEXT HIGHEST CONFIDENCE pick (any type)
+ * 6. Take 1 UNDERDOG HOME TEAM pick (highest confidence remaining)
  *
- * BET TYPE RULES:
- * - ALL spread bets allowed (home or away, favorite or underdog)
- * - Moneyline: At least 1 ML pick per day
- *
- * SELECTION ORDER:
- * 1. Sort by confidence (highest first)
- * 2. Take top 40% (min 3, max 7)
- * 3. Ensure at least 1 ML pick
+ * Result: 5 balanced picks
  */
 
 /**
- * Get confidence value from pick
+ * Get confidence value from pick (handles different field names)
  */
 function getConfidence(pick) {
   return pick.confidence || pick.confidence_score || 0.5;
 }
 
 /**
- * Determine pick type details
+ * Determine if a pick is an underdog
+ * - Spread picks: positive spread (e.g., +7.5)
+ * - ML picks: positive odds (e.g., +150)
  */
-function getPickType(pick) {
-  const result = {
-    isML: false,
-    isSpread: false,
-    isFavorite: false,
-    isUnderdog: false,
-    spreadValue: 0
-  };
-
-  if (pick.type === 'moneyline') {
-    result.isML = true;
-  } else if (pick.type === 'spread') {
-    result.isSpread = true;
-    // Extract spread from pick string (e.g., "Duke -7.5 -110")
+function isUnderdog(pick) {
+  // Check spread first
+  if (pick.type === 'spread') {
     const spreadMatch = pick.pick?.match(/([+-]?\d+\.?\d*)\s*[+-]\d+$/);
     if (spreadMatch) {
-      result.spreadValue = parseFloat(spreadMatch[1]);
-      result.isFavorite = result.spreadValue < 0;
-      result.isUnderdog = result.spreadValue > 0;
+      const spreadValue = parseFloat(spreadMatch[1]);
+      return spreadValue > 0; // Positive spread = underdog
     }
   }
 
-  return result;
+  // Check ML odds
+  if (pick.odds) {
+    const odds = typeof pick.odds === 'string' ? parseInt(pick.odds) : pick.odds;
+    return odds > 0; // Positive odds = underdog
+  }
+
+  return false;
 }
 
 /**
  * Check if the picked team is the home team
  */
 function isPickedTeamHome(pick) {
-  // The pick format is "Team Name [spread] [odds]"
-  // The matchup is stored in pick.matchup or can be derived from pick.home_team/away_team
   const pickedTeamName = pick.pick?.split(/\s+[+-]?\d/)[0]?.trim()?.toLowerCase();
   const homeTeamName = pick.home_team?.toLowerCase() || pick.homeTeam?.toLowerCase() || '';
 
   if (!pickedTeamName || !homeTeamName) {
-    // If we can't determine, allow it (conservative)
-    return true;
+    return false; // Can't determine, be conservative
   }
 
   // Check if the picked team name matches the home team
@@ -72,13 +63,31 @@ function isPickedTeamHome(pick) {
 }
 
 /**
+ * Determine pick type category
+ */
+function getPickCategory(pick) {
+  const isUnderdogPick = isUnderdog(pick);
+
+  if (pick.type === 'moneyline') {
+    return 'ml';
+  } else if (pick.type === 'spread') {
+    return isUnderdogPick ? 'underdog_spread' : 'favorite_spread';
+  }
+
+  // Fallback based on odds
+  return 'ml';
+}
+
+/**
  * Main filter function - applies NCAAB filtering rules
  *
  * RULES:
- * 1. Filter by bet type rules (underdog OK, favorite only if home)
- * 2. Sort by confidence
- * 3. Take top 40% (min 3, max 7)
- * 4. Ensure at least 1 ML pick
+ * 1. Skip top confidence pick
+ * 2. Take 1 underdog spread
+ * 3. Take 1 ML pick
+ * 4. Take 1 favorite spread
+ * 5. Take next highest confidence pick
+ * 6. Take 1 underdog home team pick
  *
  * @param {Array} picks - Array of Gary's NCAAB picks
  * @returns {Object} - { kept: [], removed: [], summary: {} }
@@ -97,115 +106,122 @@ export async function filterNCAABPicks(picks) {
   const kept = [];
   const removed = [];
   const reasons = {
-    removedFavoriteAway: 0,
-    keptML: 0,
+    skippedTopConfidence: 0,
     keptUnderdogSpread: 0,
-    keptFavoriteHomeSpread: 0,
-    removedLowConfidence: 0,
-    addedMLForBalance: 0
+    keptML: 0,
+    keptFavoriteSpread: 0,
+    keptNextHighestConf: 0,
+    keptUnderdogHome: 0,
+    removedNotNeeded: 0
   };
 
-  // STEP 1: All picks allowed (no bet type restrictions)
-  // NOTE: Previous restriction on favorite-away spreads has been REMOVED
-  // Gary's picks are trusted - we only apply confidence-based filtering
-  console.log('\n[NCAAB Filter] Classifying picks (all types allowed)...');
-  const qualifiedPicks = [];
+  // Sort by confidence (highest first)
+  activePicks.sort((a, b) => getConfidence(b) - getConfidence(a));
 
-  for (const pick of activePicks) {
-    const type = getPickType(pick);
-    const conf = getConfidence(pick);
-
-    // ALL picks allowed - just classify for logging
-    qualifiedPicks.push(pick);
-
-    if (type.isML) {
-      console.log(`  [OK] ML: ${pick.pick} (conf: ${conf.toFixed(2)})`);
-    } else if (type.isUnderdog) {
-      console.log(`  [OK] Underdog +${Math.abs(type.spreadValue)}: ${pick.pick} (conf: ${conf.toFixed(2)})`);
-    } else if (type.isFavorite) {
-      console.log(`  [OK] Favorite ${type.spreadValue}: ${pick.pick} (conf: ${conf.toFixed(2)})`);
-    } else {
-      console.log(`  [OK] ${pick.pick} (conf: ${conf.toFixed(2)})`);
-    }
-  }
-
-  console.log(`\n[NCAAB Filter] ${qualifiedPicks.length} picks passed (all bet types allowed)`);
-
-  // STEP 2: Sort by confidence
-  qualifiedPicks.sort((a, b) => getConfidence(b) - getConfidence(a));
-
-  console.log('\n[NCAAB Filter] Picks sorted by confidence:');
-  qualifiedPicks.forEach((p, i) => {
+  console.log('\n[NCAAB Filter] All picks sorted by confidence:');
+  activePicks.forEach((p, i) => {
     const conf = getConfidence(p);
-    const type = getPickType(p);
-    const typeStr = type.isML ? 'ML' : (type.isUnderdog ? `+${Math.abs(type.spreadValue)}` : `${type.spreadValue}`);
-    console.log(`  ${i + 1}. ${p.pick} [${typeStr}] - conf: ${conf.toFixed(2)}`);
+    const category = getPickCategory(p);
+    const isHome = isPickedTeamHome(p) ? ' [HOME]' : '';
+    console.log(`  ${i + 1}. ${p.pick} - conf: ${conf.toFixed(2)} [${category}]${isHome}`);
   });
 
-  // STEP 3: Calculate target count (40% of original, min 3)
-  // No hard max - 40% naturally produces 3-7 picks with typical daily game counts
-  const targetCount = Math.max(3, Math.round(activePicks.length * 0.4));
-  console.log(`\n[NCAAB Filter] Target: ${targetCount} picks (40% of ${activePicks.length}, min 3)`);
-
-  // STEP 4: Take top picks by confidence
-  const selectedPicks = qualifiedPicks.slice(0, targetCount);
-  const excessPicks = qualifiedPicks.slice(targetCount);
-
-  // Track what we kept
-  for (const pick of selectedPicks) {
-    const type = getPickType(pick);
-    if (type.isML) reasons.keptML++;
-    else if (type.isUnderdog) reasons.keptUnderdogSpread++;
-    else if (type.isFavorite) reasons.keptFavoriteHomeSpread++;
+  // STEP 1: Skip the top confidence pick
+  const topPick = activePicks[0];
+  if (topPick) {
+    removed.push({ pick: topPick, reason: 'Top confidence pick (skipped by rule)' });
+    reasons.skippedTopConfidence++;
+    console.log(`\n[NCAAB Filter] SKIP top confidence: ${topPick.pick} (conf: ${getConfidence(topPick).toFixed(2)})`);
   }
 
-  // Add excess to removed
-  for (const pick of excessPicks) {
-    removed.push({ pick, reason: `Below 40% cutoff (confidence: ${getConfidence(pick).toFixed(2)})` });
-    reasons.removedLowConfidence++;
+  // Remaining picks after skipping top
+  const remainingPicks = activePicks.slice(1);
+
+  // Categorize remaining picks
+  const underdogSpreads = remainingPicks.filter(p => getPickCategory(p) === 'underdog_spread');
+  const mlPicks = remainingPicks.filter(p => getPickCategory(p) === 'ml');
+  const favoriteSpreads = remainingPicks.filter(p => getPickCategory(p) === 'favorite_spread');
+
+  console.log(`\n[NCAAB Filter] Categories (after skipping top):`);
+  console.log(`  Underdog spreads: ${underdogSpreads.length}`);
+  console.log(`  ML picks: ${mlPicks.length}`);
+  console.log(`  Favorite spreads: ${favoriteSpreads.length}`);
+
+  // Track which picks we've used
+  const usedPicks = new Set();
+
+  // STEP 2: Take 1 underdog spread (highest confidence)
+  if (underdogSpreads.length > 0) {
+    const pick = underdogSpreads[0];
+    kept.push(pick);
+    usedPicks.add(pick);
+    reasons.keptUnderdogSpread++;
+    console.log(`  [KEEP] Underdog spread: ${pick.pick}`);
   }
 
-  // STEP 5: Ensure at least 1 ML pick
-  const hasML = selectedPicks.some(p => getPickType(p).isML);
+  // STEP 3: Take 1 ML pick (highest confidence)
+  if (mlPicks.length > 0) {
+    const pick = mlPicks[0];
+    kept.push(pick);
+    usedPicks.add(pick);
+    reasons.keptML++;
+    console.log(`  [KEEP] ML: ${pick.pick}`);
+  }
 
-  if (!hasML && qualifiedPicks.length > 0) {
-    // Find the best ML pick from qualified picks
-    const bestML = qualifiedPicks.find(p => getPickType(p).isML);
+  // STEP 4: Take 1 favorite spread (highest confidence)
+  if (favoriteSpreads.length > 0) {
+    const pick = favoriteSpreads[0];
+    kept.push(pick);
+    usedPicks.add(pick);
+    reasons.keptFavoriteSpread++;
+    console.log(`  [KEEP] Favorite spread: ${pick.pick}`);
+  }
 
-    if (bestML && !selectedPicks.includes(bestML)) {
-      // Remove the lowest confidence pick and add the ML
-      const lowestPick = selectedPicks.pop();
-      if (lowestPick) {
-        removed.push({ pick: lowestPick, reason: 'Replaced to ensure ML pick' });
-        reasons.removedLowConfidence++;
+  // STEP 5: Take next highest confidence pick (any type)
+  const remainingByConfidence = remainingPicks.filter(p => !usedPicks.has(p));
 
-        // Adjust counts
-        const lowestType = getPickType(lowestPick);
-        if (lowestType.isUnderdog) reasons.keptUnderdogSpread--;
-        else if (lowestType.isFavorite) reasons.keptFavoriteHomeSpread--;
-      }
+  if (remainingByConfidence.length > 0) {
+    const pick = remainingByConfidence[0]; // Already sorted by confidence
+    kept.push(pick);
+    usedPicks.add(pick);
+    reasons.keptNextHighestConf++;
+    console.log(`  [KEEP] Next highest confidence: ${pick.pick}`);
+  }
 
-      selectedPicks.push(bestML);
-      reasons.keptML++;
-      reasons.addedMLForBalance++;
-      console.log(`\n[NCAAB Filter] Added ML pick for balance: ${bestML.pick}`);
+  // STEP 6: Take 1 underdog HOME team pick (highest confidence remaining)
+  const underdogHomePicks = remainingPicks.filter(p => {
+    if (usedPicks.has(p)) return false;
+    return isUnderdog(p) && isPickedTeamHome(p);
+  });
+
+  if (underdogHomePicks.length > 0) {
+    const pick = underdogHomePicks[0];
+    kept.push(pick);
+    usedPicks.add(pick);
+    reasons.keptUnderdogHome++;
+    console.log(`  [KEEP] Underdog HOME: ${pick.pick}`);
+  }
+
+  // Mark remaining picks as removed
+  for (const pick of remainingPicks) {
+    if (!usedPicks.has(pick)) {
+      removed.push({ pick, reason: 'Not needed for balanced slate' });
+      reasons.removedNotNeeded++;
     }
   }
-
-  // Final kept list
-  kept.push(...selectedPicks);
 
   // Summary
   console.log(`\n[NCAAB Filter] Final Summary:`);
   console.log(`  KEPT: ${kept.length} picks`);
-  if (reasons.keptML > 0) console.log(`    - ML picks: ${reasons.keptML}`);
-  if (reasons.keptUnderdogSpread > 0) console.log(`    - Underdog spreads: ${reasons.keptUnderdogSpread}`);
-  if (reasons.keptFavoriteHomeSpread > 0) console.log(`    - Favorite spreads (home only): ${reasons.keptFavoriteHomeSpread}`);
+  if (reasons.keptUnderdogSpread > 0) console.log(`    - Underdog spread: ${reasons.keptUnderdogSpread}`);
+  if (reasons.keptML > 0) console.log(`    - ML: ${reasons.keptML}`);
+  if (reasons.keptFavoriteSpread > 0) console.log(`    - Favorite spread: ${reasons.keptFavoriteSpread}`);
+  if (reasons.keptNextHighestConf > 0) console.log(`    - Next highest confidence: ${reasons.keptNextHighestConf}`);
+  if (reasons.keptUnderdogHome > 0) console.log(`    - Underdog HOME: ${reasons.keptUnderdogHome}`);
 
   console.log(`  REMOVED: ${removed.length} picks`);
-  if (reasons.removedFavoriteAway > 0) console.log(`    - Favorite away (not allowed): ${reasons.removedFavoriteAway}`);
-  if (reasons.removedLowConfidence > 0) console.log(`    - Below 40% cutoff: ${reasons.removedLowConfidence}`);
-  if (reasons.addedMLForBalance > 0) console.log(`    - ML added for balance: ${reasons.addedMLForBalance}`);
+  if (reasons.skippedTopConfidence > 0) console.log(`    - Top confidence (skipped): ${reasons.skippedTopConfidence}`);
+  if (reasons.removedNotNeeded > 0) console.log(`    - Not needed: ${reasons.removedNotNeeded}`);
 
   return {
     kept,

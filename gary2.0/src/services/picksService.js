@@ -352,17 +352,16 @@ async function storeDailyPicksInDatabase(picks) {
     const awayTeam = pick.awayTeam || '';
     const pickType = pick.type || '';
 
-    // Check if this is a spread pick for the away team (road team)
+    // Check if this is a big favorite spread (-8.5 or greater) - filter these out
+    // Applies to BOTH home and road favorites - only filter extreme chalk
     if (pickType === 'spread') {
       // Extract the spread from the pick string (e.g., "Houston Rockets -5.5 -110")
       const spreadMatch = pickStr.match(/([+-]?\d+\.?\d*)\s*[-+]?\d*$/);
       if (spreadMatch) {
         const spread = parseFloat(spreadMatch[1]);
-        // Check if picked team is the away team AND they're a favorite (negative spread)
-        const pickedTeamIsAway = awayTeam && pickStr.toLowerCase().includes(awayTeam.toLowerCase().split(' ').pop());
-
-        if (pickedTeamIsAway && spread <= -5) {
-          console.log(`🚫 FILTERED: Road favorite ${awayTeam} at ${spread} (road favorites -5 or greater filtered out)`);
+        // Only filter big favorites at -8.5 or more (too much chalk)
+        if (spread <= -8.5) {
+          console.log(`🚫 FILTERED: Big favorite at ${spread} (favorites -8.5 or greater filtered out)`);
           return false;
         }
       }
