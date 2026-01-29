@@ -86,22 +86,34 @@ function sportUsesPro(sport) {
 /**
  * Get the appropriate model for a given phase and sport
  * @param {string} sport - Sport identifier
- * @param {string} phase - 'investigation', 'steel_man', 'conviction_rating', 'final_decision'
+ * @param {string} phase - 'scout_report', 'investigation', 'steel_man', 'conviction_rating', 'final_decision'
  * @returns {string} - Model name to use
  */
 function getModelForPhase(sport, phase) {
-  // NCAAB always uses Flash (high volume, no Pro)
+  // NCAAB/NCAAF always uses Flash (high volume, no Pro needed)
   if (!sportUsesPro(sport)) {
     return 'gemini-3-flash-preview';
   }
-  
-  // NBA, NFL, NHL: Use Pro for grading and final decision
+
+  // NBA (Jan 29, 2026): Flash for scout report ONLY, Pro for everything else
+  // Pro has better deep think reasoning for stats interpretation and decisions
+  const isNBA = sport === 'basketball_nba' || sport === 'NBA';
+  if (isNBA) {
+    // Scout report building uses Flash (fast, grounding-focused)
+    if (phase === 'scout_report') {
+      return 'gemini-3-flash-preview';
+    }
+    // Everything else uses Pro (investigation, steel_man, conviction, final)
+    return 'gemini-3-pro-preview';
+  }
+
+  // NFL, NHL: Use Pro for grading and final decision only
   const proPhases = ['conviction_rating', 'final_decision'];
   if (proPhases.includes(phase)) {
     return 'gemini-3-pro-preview';
   }
-  
-  // Investigation and Steel Man phases use Flash
+
+  // Investigation and Steel Man phases use Flash for NFL/NHL
   return 'gemini-3-flash-preview';
 }
 
@@ -144,15 +156,21 @@ const CONFIG = {
     temperature: 1.0, // DO NOT CHANGE - Google's recommended default for Gemini 3
     topP: 0.95, // Google recommended for Gemini 3 (0.95 standard)
     
-    // Per-pass thinking level (replaces legacy thinkingBudget for Gemini 3)
-    // Options: "minimal" (Flash only), "low", "medium" (Flash only), "high" (default)
-    // "high" = maximizes reasoning depth (model may take longer for first token)
-    // All passes now use "high" for maximum quality (latency is acceptable)
+    // Per-MODEL thinking level (Jan 29, 2026)
+    // Flash: 'medium' - balanced speed/reasoning for scout reports and tool calling
+    // Pro: 'high' - deep reasoning for steel man, conviction, and final decisions
+    // This is MODEL-specific, not pass-specific - Pro always needs deep thinking
+    thinkingLevelByModel: {
+      flash: 'medium',   // Flash: balanced speed with reasonable reasoning
+      pro: 'high'        // Pro: maximum reasoning depth for decisions
+    },
+
+    // Legacy per-pass config (kept for backwards compatibility)
     thinkingLevelByPass: {
-      investigation: 'high',     // Strategic reasoning about which stats to fetch
-      steel_man: 'high',         // Deep reasoning for comprehensive case-building
-      conviction_rating: 'high', // Cross-checking + judgment requires deep reasoning
-      final_decision: 'high',    // Important decision needs thorough reasoning
+      investigation: 'medium',   // Investigation uses Flash - medium is fine
+      steel_man: 'high',         // Steel man uses Pro - needs deep reasoning
+      conviction_rating: 'high', // Conviction uses Pro - needs deep reasoning
+      final_decision: 'high',    // Final decision uses Pro - needs deep reasoning
       default: 'high'            // Default to high for complex analysis
     },
     
@@ -2666,57 +2684,65 @@ If you're missing any critical pieces, call them NOW before proceeding.
 
 ` : '';
 
-  // NBA-specific follow-up investigation
+  // NBA-specific follow-up investigation - FACTOR-BASED (builds on scout report baseline)
   const nbaDataGaps = (sport === 'basketball_nba' || sport === 'NBA') ? `
-### NBA INVESTIGATION (MINIMUM STARTING POINT - BOTH TEAMS):
-Before writing your Steel Man cases, investigate BOTH sides equally.
-This checklist is a STARTING POINT - use your Gemini 3 Deep Think to go BEYOND it.
+### NBA INVESTIGATION (BUILDING ON YOUR SCOUT REPORT BASELINE)
 
-**MINIMUM FOR BOTH TEAMS:**
-- [ ] Best player's game logs (hot or cold?)
-- [ ] Home/Road record specifically
-- [ ] Recent game margins (close or blowouts?)
-- [ ] Schedule spot (rest, travel, letdown?)
+**YOUR SCOUT REPORT ALREADY CONTAINS (DO NOT RE-FETCH):**
+- Four Factors: eFG%, TS%, Net Rating, ORtg, DRtg for both teams
+- Efficiency Comparison: Which team has the edge
+- Unit Comparison: Starters vs Bench metrics (+/-, eFG%, NetRtg)
+- Top 10 players with advanced stats (eFG%, TS%, NetRtg, +/-, USG%)
 
-**IF EITHER TEAM IS MISSING A KEY PLAYER:**
-- [ ] How long out? (First game without them? Or baked into stats?)
-- [ ] Who replaces them? (Check replacement's game logs)
-- [ ] If FIRST game without → High variance, possible mispricing
+**USE THE SCOUT REPORT AS YOUR BASELINE.** Your job now is to INVESTIGATE factors the scout report cannot tell you.
+
+**FACTOR-BASED INVESTIGATION QUESTIONS (THIS SPECIFIC GAME):**
+
+**1. L5/L10 vs SEASON - Has something changed recently?**
+- [ ] Call [EFFICIENCY_TREND] or [RECENT_FORM] to compare L5/L10 ratings vs season averages
+- [ ] If L5 eFG% is 5%+ above season → Investigate: Is this sustainable or variance?
+- [ ] If L5 Net Rating differs significantly from season → What changed? (Lineup? Opponent strength?)
+- Ask: "Does recent form suggest the scout report baseline is STALE?"
+
+**2. MATCHUP-SPECIFIC VECTORS (Scout report shows WHO, you investigate HOW):**
+- [ ] Scout report shows Team A's eFG% edge. Now ask: How does Team B defend the 3? The paint?
+- [ ] Call [THREE_PT_DEFENSE] or [PAINT_DEFENSE] to see if strength ATTACKS weakness
+- [ ] Call [PACE] for both teams - does tempo favor one side?
+- Ask: "Does Team A's strength ATTACK Team B's specific weakness, or is it neutralized?"
+
+**3. PLAYER ABSENCE IMPACT (If applicable):**
+- [ ] How long has the player been out? (0-2 games = variance, 3+ weeks = priced in)
+- [ ] Check scout report Unit Comparison: Did the bench step up with improved +/-?
+- [ ] Call [RECENT_FORM] to see team performance SINCE the absence
+- Ask: "Is the line reacting to NEWS or to actual performance degradation?"
+
+**4. SUSTAINABILITY CHECK (Regression Risk):**
+- [ ] Compare L5 3PT% to season 3PT% - gap of 5%+ = potential regression
+- [ ] Compare L5 FT Rate to season - did foul calls spike temporarily?
+- [ ] If team has been "hot" - investigate opponent quality during hot streak
+- Ask: "Is recent hot shooting repeatable, or are we betting on variance?"
+
+**5. SITUATIONAL FACTORS (Context the stats don't capture):**
+- [ ] Call [REST_SITUATION] - but investigate: How does THIS team perform on B2Bs historically?
+- [ ] Call [TRAVEL_SITUATION] - time zone factor for road team
+- [ ] Check schedule: Is this a sandwich/letdown spot? Big game next?
+- Ask: "What non-statistical factors might affect effort/focus tonight?"
+
+**WHAT TO SKIP (Already in Scout Report):**
+- Do NOT call [NET_RATING], [OFFENSIVE_RATING], [DEFENSIVE_RATING] for season averages - you have these
+- Do NOT call [EFG_PCT], [TURNOVER_RATE] for season averages - scout report has them
+- Do NOT re-investigate "which team is better overall" - the Four Factors comparison tells you that
+
+**THE INVESTIGATION PRINCIPLE:**
+Scout Report = WHO these teams are (baseline identity from Four Factors)
+Your Investigation = What's DIFFERENT about THIS game vs the baseline?
 
 **BEYOND THE CHECKLIST (USE YOUR EXPERTISE):**
 You have deep basketball knowledge. Think about:
 - Style matchups (pace, 3PT reliance, paint scoring, transition)
 - Coaching tendencies in this type of game
-- Historical patterns (revenge games, division rivals, back-to-backs)
 - Player-specific matchups (can their guard handle the opposing guard?)
 - Anything ELSE your basketball brain tells you matters for THIS game
-
-**INVESTIGATE WHAT MATTERS FOR THIS NBA GAME:**
-Don't assume any factor is automatically predictive. Verify for THIS specific matchup:
-
-- **DEFENSE vs OFFENSE - INVESTIGATE BOTH:**
-  - What is EACH team's defensive rating? Is there a meaningful gap?
-  - Has THIS defensive team actually been consistent this season, or have they had blowout losses despite "good defense"?
-  - Don't assume defense > offense as a rule - verify which side of the ball matters MORE for THIS matchup.
-
-- **Net Rating is CONTEXT, not CONCLUSION:**
-  - Net Rating tells you overall team quality, but investigate HOW they got there
-  - A +5 Net Rating from offense vs defense tells different stories - investigate which is relevant tonight
-
-- **MATCHUP-SPECIFIC QUESTIONS (INVESTIGATE):**
-  - Who guards who? What's the point-of-attack defense? Is there rim protection?
-  - Has this defensive scheme been effective against THIS style of offense?
-  - Check the data before assuming a matchup advantage exists.
-
-**Don't assume any side of the ball is "more reliable" - investigate the actual data for BOTH teams.**
-
-**INVESTIGATE BEFORE CONCLUDING:**
-If you identify a factor that could affect the outcome, investigate it:
-1. Gather data to understand the context behind the pattern
-2. Consider whether tonight's circumstances are similar or different
-3. Then decide how much weight to give it
-
-**THE PRINCIPLE:** Use your expertise to ask the right questions, then verify with data.
 
 ` : '';
 
@@ -2793,13 +2819,20 @@ Focus on: which factors give one side a better chance to WIN? Goaltending matchu
   // ═══════════════════════════════════════════════════════════════════════════
   // GEMINI 3 OPTIMIZED: XML-tagged structure with END-OF-PROMPT instruction
   // ═══════════════════════════════════════════════════════════════════════════
+
   return `
 <pass_context>
 ## PASS 2 - MATCHUP ANALYSIS (NEUTRAL INVESTIGATION)
 
 You have your first wave of data. Your job is to INVESTIGATE this matchup neutrally and understand what the data tells you about BOTH teams.
 
-**THE CORE QUESTION:** Does this spread reflect what you're finding in your research?
+${isNBA ? `**NBA BASELINE REMINDER:** Your scout report contains Four Factors (eFG%, TS%, Net Rating, ORtg, DRtg) and Unit Comparison with efficiency metrics. This is your BASELINE - the teams' season identity. Your investigation should focus on:
+1. **TRENDS**: Has something changed recently? (L5/L10 vs season baseline)
+2. **MATCHUP**: Does one team's strength attack the other's specific weakness?
+3. **CONTEXT**: Are there factors that make THIS game different from the baseline?
+Do NOT re-fetch basic efficiency stats (NET_RATING, OFFENSIVE_RATING, DEFENSIVE_RATING). You already have them. INVESTIGATE what they mean for THIS game.
+
+` : ''}**THE CORE QUESTION:** Does this spread reflect what you're finding in your research?
 - Investigate both teams' stats, form, and matchup dynamics
 - Build a complete picture of the TRUE difference between these teams
 - Ask: Have narrative factors (injuries, B2B, public perception) pushed this line beyond what the hard stats support?
@@ -2814,7 +2847,12 @@ ${spreadSizeContext ? `<spread_context>${spreadSizeContext}</spread_context>` : 
 ${nflDataGaps}${nbaDataGaps}${ncaabDataGaps}${nhlDataGaps}
 
 **MINIMUM INVESTIGATION:**
-- TEAM-level advanced stats for both teams (Net Rating, ORtg, DRtg, eFG%, Pace, etc.)
+${isNBA ? `- **NBA SPECIFIC**: You HAVE Net Rating, ORtg, DRtg, eFG% from scout report. Focus on:
+  - [ ] Call [EFFICIENCY_TREND] or [RECENT_FORM] - compare L5/L10 to season baseline
+  - [ ] Identify MATCHUP VECTORS - which strength attacks which weakness?
+  - [ ] Check SUSTAINABILITY - is recent hot/cold streak variance or real?
+  - [ ] NOTE: Do NOT re-fetch NET_RATING, OFFENSIVE_RATING for season averages - you have these
+` : `- TEAM-level advanced stats for both teams (Net Rating, ORtg, DRtg, eFG%, Pace, etc.)`}
 - Recent game context - HOW they win/lose matters more than just the results
 - Any significant roster changes? (context for team performance shifts)
 - Use player data to understand WHY team performance looks the way it does
@@ -2964,42 +3002,48 @@ ${isNBA ? `**NBA TEAM SNAPSHOT FORMAT (L5 METRICS MANDATORY):**
 Fill in ACTUAL VALUES from your investigation. This grounds your case in data.
 
 **MANDATORY REQUIREMENTS FOR EACH CASE:**
-- TEAM ADVANCED STATS are REQUIRED (Net Rating, Offensive Rating, Defensive Rating, eFG%, Pace, Turnover Rate, etc.)
+${isNBA ? `- START with Four Factors from scout report as your BASELINE (you have eFG%, Net Rating, ORtg, DRtg)
+- SHOW TRENDS: Compare L5/L10 to season (e.g., "Scout report shows +4.2 Net Rating, but L5 is +7.1 = trending UP")
+- INVESTIGATE: What does the trend mean for THIS game? (sustainable? matchup-driven? variance?)
+- MATCHUP APPLICATION: How does Team A's strength attack Team B's weakness SPECIFICALLY?` : `- TEAM ADVANCED STATS are REQUIRED (Net Rating, Offensive Rating, Defensive Rating, eFG%, Pace, Turnover Rate, etc.)
 - Player stats can supplement team stats, but team stats must be the foundation
-- Compare L5/L10 to SEASON AVERAGES to show trends (e.g., "L5 Off Rating: 114.2 vs 110.8 season = trending up")
+- Compare L5/L10 to SEASON AVERAGES to show trends (e.g., "L5 Off Rating: 114.2 vs 110.8 season = trending up")`}
 - INJURY RULES: Only mention RECENT injuries (< 2 weeks). Old injuries are priced in and reflected in team stats.
 
 **Then write 3-4 detailed paragraphs (not bullet points) for EACH case:**
 
-- **PARAGRAPH 1 (TEAM ADVANCED STATS - MANDATORY):** Lead with TEAM-level advanced metrics.
-  - Net Rating, Offensive Rating, Defensive Rating, eFG%, Pace, Turnover Rate
-  - Compare to opponent's weaknesses: "Team A's 115.2 Off Rating attacks Team B's 112.8 Def Rating (21st in league)"
-  - NOT just player stats - the TEAM'S efficiency profile is what covers spreads
+- **PARAGRAPH 1 (${isNBA ? 'BASELINE + TREND INVESTIGATION' : 'TEAM EFFICIENCY INVESTIGATION'} - MANDATORY):**
+${isNBA ? `  - Start with the Four Factors baseline from your scout report (eFG%, Net Rating, ORtg, DRtg)
+  - Investigate: How do L5/L10 trends compare to the season baseline? Is the team trending up, down, or stable?
+  - Ask: Does recent form suggest the baseline is ACCURATE or STALE for this team right now?
+  - For SPREADS: Determine which side of the spread the efficiency gap supports` : `  - Investigate team efficiency gaps (Net Rating, ORtg, DRtg, eFG%, Pace, Turnover Rate)
+  - Ask: Which team's efficiency strength exploits the opponent's weakness?
+  - For SPREADS: Determine which side of the spread the efficiency data supports
+  - Remember: Team efficiency profiles drive spread outcomes, not individual player performances`}
 
 - **PARAGRAPH 2 (RECENT FORM + LAST GAME CONTEXT - MANDATORY):**
-  Include SPECIFIC L5/L10 numbers COMPARED to season averages:
-  - "L5 Off Rating: 118.4 vs 114.2 season (+4.2 improvement) - team is peaking"
-  - "L5 Def Rating: 108.1 vs 111.5 season - defense has tightened"
-  - WHO did they play? Note opponent quality (playoff teams vs bottom feeders)
+  Investigate L5/L10 trends compared to season averages:
+  - Is the team trending UP or DOWN from their baseline?
+  - WHO did they play? Investigate opponent quality during recent stretch
   - WHO was playing? If key player was OUT during L5, those stats may not reflect tonight
+  - Determine: Does recent form change what the baseline tells you?
 
   **LAST GAME SUMMARY (REQUIRED for each team):**
   - What happened in their MOST RECENT game? (opponent, score, home/away)
-  - Context: Was it a blowout win, close loss, overtime thriller, etc.?
-  - This helps YOU investigate whether today's line might be over/under-reacting to that result
-  - NOTE: We are NOT saying "recent loss = value" - you decide what the data means
+  - Investigate: Is today's line over/under-reacting to that result?
+  - NOTE: You decide what the data means - don't assume "recent loss = value"
 
 - **PARAGRAPH 3 (MATCHUP APPLICATION):**
-  Apply the stats to THIS specific matchup and THIS spread:
-  - "The +8.2 Net Rating gap (Detroit +4.4 vs Houston -3.8) suggests margin separation"
-  - "Detroit's 46.2 paint PPG allowed vs Houston's paint-heavy offense creates friction"
-  - Which side of the spread does each factor support?
+  Apply your findings to THIS specific matchup and THIS spread:
+  - Investigate: Does the efficiency gap favor the favorite or underdog side of the spread?
+  - Ask: Does one team's strength directly exploit the other's weakness?
+  - Determine: Which side of the spread does each factor support?
 
 - **PARAGRAPH 4 (TONIGHT'S FACTORS):**
   Which factors will ACTUALLY show up tonight?
   - Investigate which factors you believe will materialize in THIS specific game
-  - Rest/travel: note but investigate their actual impact (e.g., "Team X is 8-2 on B2Bs this season")
-  - Consider recent form and how it applies to this matchup
+  - Rest/travel: investigate their actual impact for THIS team (not generic assumptions)
+  - Determine: What's your conviction for which side based on your investigation?
 
 ${isNBA && Math.abs(parseFloat(firstTeamSpread.replace(/[+-]/g, ''))) >= 8 ? `**LARGE SPREAD INVESTIGATION (8+ points) - UNIT EFFICIENCY:**
 For large spreads, margin matters. Investigate how BOTH units perform for each team:
@@ -4182,10 +4226,14 @@ async function callGemini(messages, tools, modelName = 'gemini-3-flash-preview',
     console.log(`[Gemini] Google Search Grounding enabled (no functions)`);
   }
 
-  // Select thinking level based on current pass (Gemini 3 best practice)
-  // Temperature is fixed at 1.0 per Google's recommendation
-  const thinkingLevel = CONFIG.gemini.thinkingLevelByPass[currentPass] || CONFIG.gemini.thinkingLevelByPass.default;
-  console.log(`[Gemini] Pass: ${currentPass}, Temperature: ${CONFIG.gemini.temperature}, ThinkingLevel: ${thinkingLevel}`);
+  // Select thinking level based on MODEL (Jan 29, 2026)
+  // Flash: 'medium' - balanced speed/reasoning
+  // Pro: 'high' - deep reasoning for decisions
+  const isFlash = modelName.toLowerCase().includes('flash');
+  const thinkingLevel = isFlash
+    ? CONFIG.gemini.thinkingLevelByModel.flash
+    : CONFIG.gemini.thinkingLevelByModel.pro;
+  console.log(`[Gemini] Pass: ${currentPass}, Model: ${modelName}, ThinkingLevel: ${thinkingLevel}`);
 
   // Convert OpenAI messages to Gemini format
   let systemInstruction = '';
@@ -4812,9 +4860,21 @@ Do NOT call any more stats. Provide your analysis and pick NOW.`;
 
 Do NOT request more stats. Write your analysis NOW using the data you already have.`;
       } else {
-        // Still in investigation phase - okay to request more stats
-        console.log(`[Orchestrator] ⚠️ Gemini returned empty response - prompting for more stats`);
-        nudgeContent = `I notice you didn't respond. Please use the get_stat tool to request stats for this matchup. You've gathered ${toolCallHistory.length} stats so far. Request more stats like PACE, RECENT_FORM, or TURNOVER_STATS to complete your analysis.`;
+        // Still in investigation phase
+        // If Gary already has 5+ stats, encourage moving to analysis rather than more stats
+        if (toolCallHistory.length >= 5) {
+          console.log(`[Orchestrator] ⚠️ Gemini returned empty response with ${toolCallHistory.length} stats gathered - encouraging analysis`);
+          nudgeContent = `I notice you didn't respond. You've already gathered ${toolCallHistory.length} stats. You have enough data to begin your analysis.
+
+Either:
+1. Request specific additional stats if there's a key factor you need to investigate
+2. Or proceed to write your Steel Man cases for both teams
+
+What would you like to do?`;
+        } else {
+          console.log(`[Orchestrator] ⚠️ Gemini returned empty response - prompting for more stats`);
+          nudgeContent = `I notice you didn't respond. Please use the get_stat tool to request stats for this matchup. You've gathered ${toolCallHistory.length} stats so far. Request more stats like PACE, RECENT_FORM, or TURNOVER_STATS to complete your analysis.`;
+        }
       }
       
       messages.push({ role: 'user', content: nudgeContent });
@@ -4879,6 +4939,47 @@ Do NOT request more stats. Write your analysis NOW using the data you already ha
       console.log(`[Orchestrator] Gary requested ${uniqueToolCalls.length} stat(s):`);
 
       // Note: Assistant message already added to messages array after API call (for session tracking)
+
+      // CRITICAL FIX: Handle when ALL tool calls were duplicates
+      // Without this, Gary keeps requesting the same stats and loops forever
+      if (uniqueToolCalls.length === 0 && message.tool_calls.length > 0) {
+        console.log(`[Orchestrator] ⚠️ All ${message.tool_calls.length} stat request(s) were duplicates - nudging Gary to proceed with analysis`);
+
+        // Build list of already-gathered stats for context
+        const gatheredStats = toolCallHistory.map(t => t.token).filter(Boolean);
+        const statsSummary = gatheredStats.length > 10
+          ? `${gatheredStats.slice(0, 10).join(', ')}... (${gatheredStats.length} total)`
+          : gatheredStats.join(', ');
+
+        // Determine what phase we're in
+        const pass2Injected = messages.some(m => m.content?.includes('PASS 2 - STEEL MAN') || m.content?.includes('STEEL MAN ANALYSIS'));
+        const pass25Injected = messages.some(m => m.content?.includes('PASS 2.5') || m.content?.includes('CASE REVIEW') || m.content?.includes('CASE EVALUATION'));
+
+        let nudgeMessage;
+        if (pass25Injected) {
+          nudgeMessage = `You requested stats that you already have. You've gathered ${toolCallHistory.length} stats: ${statsSummary}
+
+STOP requesting stats and MAKE YOUR FINAL DECISION NOW. Output your JSON pick with confidence_score and rationale.`;
+        } else if (pass2Injected) {
+          nudgeMessage = `You requested stats that you already have. You've gathered ${toolCallHistory.length} stats: ${statsSummary}
+
+STOP requesting stats. You have enough data. Write your Steel Man cases NOW using the data you've already gathered.`;
+        } else {
+          nudgeMessage = `You requested stats that you already have (${skippedDuplicates.join(', ')}).
+
+You've already gathered ${toolCallHistory.length} stats: ${statsSummary}
+
+If you need different stats, request NEW ones. If you have enough data, proceed to your Steel Man analysis.`;
+        }
+
+        messages.push({
+          role: 'user',
+          content: nudgeMessage
+        });
+
+        nextMessageToSend = nudgeMessage;
+        continue;
+      }
 
       // Process each unique tool call
       for (const toolCall of uniqueToolCalls) {

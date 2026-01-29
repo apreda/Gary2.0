@@ -1080,78 +1080,89 @@ const ballDontLieService = {
   },
 
   /**
-   * Get NBA roster depth for two teams - top 9 players per team with season averages
+   * Get NBA roster depth for two teams - top 10 players per team with base + advanced stats
    * Used for scout report to show Gary the full rotation (starters + key bench)
+   * Includes: base stats (PPG, RPG, APG) + advanced stats (eFG%, TS%, +/-, net_rating, usage)
    * @param {string} homeTeamName - Home team name
    * @param {string} awayTeamName - Away team name
    * @param {number} season - Season year (e.g., 2025 for 2025-26 season)
-   * @returns {Promise<Object>} - { home: [...], away: [...] } arrays of player stats
+   * @returns {Promise<Object>} - { home: [...], away: [...] } arrays of player stats with advanced metrics
    */
   async getNbaRosterDepth(homeTeamName, awayTeamName, season, ttlMinutes = 30) {
     try {
       console.log(`🏀 [Ball Don't Lie] Fetching NBA roster depth for ${awayTeamName} @ ${homeTeamName} (${season} season)`);
-      
+
       // Get team IDs first
       const [homeTeam, awayTeam] = await Promise.all([
         this.getTeamByName(homeTeamName),
         this.getTeamByName(awayTeamName)
       ]);
-      
+
       if (!homeTeam?.id || !awayTeam?.id) {
         console.warn(`[Ball Don't Lie] Could not find team IDs for ${homeTeamName} or ${awayTeamName}`);
         return { home: [], away: [] };
       }
-      
+
       console.log(`🏀 [Ball Don't Lie] Team IDs: ${homeTeam.full_name} (${homeTeam.id}) vs ${awayTeam.full_name} (${awayTeam.id})`);
-      
+
       const cacheKey = `nba_roster_depth_${homeTeam.id}_${awayTeam.id}_${season}`;
       return await getCachedOrFetch(cacheKey, async () => {
-        // Fetch active players for both teams separately (limit 12 per team to avoid fetching deep bench)
-        // 12 players per team = ~24 total, covering rotation + key reserves
+        // Fetch active players for both teams separately (limit 15 per team to cover full rotation)
         console.log(`🏀 [Ball Don't Lie] Fetching active players...`);
-        
+
         const [homePlayersResp, awayPlayersResp] = await Promise.all([
-          axios.get(`${BALLDONTLIE_API_BASE_URL}/nba/v1/players/active?team_ids[]=${homeTeam.id}&per_page=12`, { headers: { 'Authorization': API_KEY } }),
-          axios.get(`${BALLDONTLIE_API_BASE_URL}/nba/v1/players/active?team_ids[]=${awayTeam.id}&per_page=12`, { headers: { 'Authorization': API_KEY } })
+          axios.get(`${BALLDONTLIE_API_BASE_URL}/nba/v1/players/active?team_ids[]=${homeTeam.id}&per_page=15`, { headers: { 'Authorization': API_KEY } }),
+          axios.get(`${BALLDONTLIE_API_BASE_URL}/nba/v1/players/active?team_ids[]=${awayTeam.id}&per_page=15`, { headers: { 'Authorization': API_KEY } })
         ]);
-        
+
         const homePlayers = Array.isArray(homePlayersResp?.data?.data) ? homePlayersResp.data.data : [];
         const awayPlayers = Array.isArray(awayPlayersResp?.data?.data) ? awayPlayersResp.data.data : [];
-        
+
         if (homePlayers.length === 0 && awayPlayers.length === 0) {
           console.warn('[Ball Don\'t Lie] No active players found for teams');
           return { home: [], away: [] };
         }
-        
+
         const allPlayers = [...homePlayers, ...awayPlayers];
         console.log(`🏀 [Ball Don't Lie] Found ${allPlayers.length} active players (${homePlayers.length} + ${awayPlayers.length})`);
-        
+
         // Get all player IDs for season averages fetch
         const allPlayerIds = allPlayers.map(p => p.id);
-        
+
         if (allPlayerIds.length === 0) {
           return { home: [], away: [] };
         }
-        
-        // Fetch season averages for players (base stats: pts, reb, ast, min, etc.)
-        console.log(`🏀 [Ball Don't Lie] Fetching season averages for ${allPlayerIds.length} players...`);
-        const seasonAverages = await this.getNbaSeasonAverages({
-          category: 'general',
-          type: 'base',
-          season,
-          season_type: 'regular',
-          player_ids: allPlayerIds.slice(0, 100) // BDL limit
-        });
-        
+
+        // Fetch base AND advanced season averages in parallel
+        console.log(`🏀 [Ball Don't Lie] Fetching base + advanced season averages for ${allPlayerIds.length} players...`);
+        const [baseAverages, advancedAverages] = await Promise.all([
+          // Base stats: pts, reb, ast, min, fg_pct, etc.
+          this.getNbaSeasonAverages({
+            category: 'general',
+            type: 'base',
+            season,
+            season_type: 'regular',
+            player_ids: allPlayerIds.slice(0, 100)
+          }),
+          // Advanced stats: efg_pct, ts_pct, off_rating, def_rating, net_rating, usg_pct, pace, pie
+          this.getNbaSeasonAverages({
+            category: 'general',
+            type: 'advanced',
+            season,
+            season_type: 'regular',
+            player_ids: allPlayerIds.slice(0, 100)
+          })
+        ]);
+
         // Filter out players with 0 games played (haven't actually played this season)
-        const relevantAverages = seasonAverages.filter(avg => (avg.stats?.gp || 0) > 0);
-        console.log(`🏀 [Ball Don't Lie] Got season averages for ${relevantAverages.length} players with games played (filtered from ${seasonAverages.length})`);
-        
-        // Build a map of player ID -> season averages (only players who have actually played)
-        const statsMap = {};
-        for (const avg of relevantAverages) {
+        const relevantBaseAverages = baseAverages.filter(avg => (avg.stats?.gp || 0) > 0);
+        console.log(`🏀 [Ball Don't Lie] Got base averages for ${relevantBaseAverages.length} players, advanced for ${advancedAverages.length} players`);
+
+        // Build maps of player ID -> stats
+        const baseStatsMap = {};
+        for (const avg of relevantBaseAverages) {
           if (avg.player?.id) {
-            statsMap[avg.player.id] = {
+            baseStatsMap[avg.player.id] = {
               pts: avg.stats?.pts || 0,
               reb: avg.stats?.reb || 0,
               ast: avg.stats?.ast || 0,
@@ -1160,51 +1171,100 @@ const ballDontLieService = {
               blk: avg.stats?.blk || 0,
               fg_pct: avg.stats?.fg_pct || 0,
               fg3_pct: avg.stats?.fg3_pct || 0,
-              gp: avg.stats?.gp || 0
+              fgm: avg.stats?.fgm || 0,
+              fga: avg.stats?.fga || 0,
+              fg3m: avg.stats?.fg3m || 0,
+              fta: avg.stats?.fta || 0,
+              ftm: avg.stats?.ftm || 0,
+              tov: avg.stats?.turnover || avg.stats?.tov || 0,
+              oreb: avg.stats?.oreb || 0,
+              dreb: avg.stats?.dreb || 0,
+              gp: avg.stats?.gp || 0,
+              plus_minus: avg.stats?.plus_minus || 0
             };
           }
         }
-        
-        // Helper to format player with stats
+
+        // Build advanced stats map
+        const advStatsMap = {};
+        for (const avg of advancedAverages) {
+          if (avg.player?.id) {
+            advStatsMap[avg.player.id] = {
+              efg_pct: avg.stats?.efg_pct || 0,
+              ts_pct: avg.stats?.ts_pct || 0,
+              off_rating: avg.stats?.off_rating || avg.stats?.offensive_rating || 0,
+              def_rating: avg.stats?.def_rating || avg.stats?.defensive_rating || 0,
+              net_rating: avg.stats?.net_rating || 0,
+              usg_pct: avg.stats?.usg_pct || avg.stats?.usage_pct || 0,
+              pace: avg.stats?.pace || 0,
+              pie: avg.stats?.pie || 0
+            };
+          }
+        }
+
+        // Helper to format player with base + advanced stats
         const formatPlayer = (player) => {
-          const stats = statsMap[player.id] || {};
+          const base = baseStatsMap[player.id] || {};
+          const adv = advStatsMap[player.id] || {};
+
+          // Calculate eFG% if not provided: eFG% = (FGM + 0.5 * FG3M) / FGA
+          let efgPct = adv.efg_pct || 0;
+          if (!efgPct && base.fga > 0) {
+            efgPct = (base.fgm + 0.5 * base.fg3m) / base.fga;
+          }
+
           return {
             id: player.id,
             name: `${player.first_name} ${player.last_name}`,
             position: player.position || '?',
             jersey: player.jersey_number || '?',
-            pts: stats.pts || 0,
-            reb: stats.reb || 0,
-            ast: stats.ast || 0,
-            min: stats.min || 0,
-            stl: stats.stl || 0,
-            blk: stats.blk || 0,
-            fg_pct: stats.fg_pct || 0,
-            fg3_pct: stats.fg3_pct || 0,
-            gp: stats.gp || 0
+            // Base stats
+            pts: base.pts || 0,
+            reb: base.reb || 0,
+            ast: base.ast || 0,
+            min: base.min || 0,
+            stl: base.stl || 0,
+            blk: base.blk || 0,
+            fg_pct: base.fg_pct || 0,
+            fg3_pct: base.fg3_pct || 0,
+            gp: base.gp || 0,
+            plus_minus: base.plus_minus || 0,
+            tov: base.tov || 0,
+            oreb: base.oreb || 0,
+            // Advanced stats (TIER 1 PREDICTIVE)
+            efg_pct: efgPct,
+            ts_pct: adv.ts_pct || 0,
+            off_rating: adv.off_rating || 0,
+            def_rating: adv.def_rating || 0,
+            net_rating: adv.net_rating || 0,
+            usg_pct: adv.usg_pct || 0,
+            pace: adv.pace || 0,
+            pie: adv.pie || 0
           };
         };
-        
-        // Format, filter players with actual minutes (>5 min avg), and sort by minutes (top 9 per team)
+
+        // Format, filter players with actual minutes (>5 min avg), and sort by minutes (top 10 per team)
         const homeRoster = homePlayers
           .map(formatPlayer)
           .filter(p => p.min > 5 || p.gp > 0) // Must have some playing time
           .sort((a, b) => b.min - a.min)
-          .slice(0, 9);
-          
+          .slice(0, 10);
+
         const awayRoster = awayPlayers
           .map(formatPlayer)
           .filter(p => p.min > 5 || p.gp > 0) // Must have some playing time
           .sort((a, b) => b.min - a.min)
-          .slice(0, 9);
-        
+          .slice(0, 10);
+
         console.log(`🏀 [Ball Don't Lie] Roster depth ready: ${homeTeam.name} (${homeRoster.length} players), ${awayTeam.name} (${awayRoster.length} players)`);
-        
+
         return {
           home: homeRoster,
           away: awayRoster,
           homeTeamName: homeTeam.full_name,
-          awayTeamName: awayTeam.full_name
+          awayTeamName: awayTeam.full_name,
+          homeTeamId: homeTeam.id,
+          awayTeamId: awayTeam.id
         };
       }, ttlMinutes);
     } catch (e) {

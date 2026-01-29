@@ -517,7 +517,7 @@ async function fetchNBATeamAdvancedStats(teamId, season = null) {
       return null;
     }
     
-    // Get season averages (advanced, usage, scoring) for top players - BDL v2
+    // Get season averages (advanced, usage, scoring) for top 10 players - BDL v2
     const topPlayerIds = players.slice(0, 10).map(p => p.id);
     const playerIdParams = topPlayerIds.map(id => `player_ids[]=${id}`).join('&');
 
@@ -739,7 +739,7 @@ async function fetchNBATeamBaseStats(teamId, season = null) {
       return null;
     }
     
-    // Get season averages (base) for top 10 players
+    // Get season averages (base) for top 10 players (matches roster depth)
     const topPlayerIds = players.slice(0, 10).map(p => p.id);
     const playerIdParams = topPlayerIds.map(id => `player_ids[]=${id}`).join('&');
     const seasonAvgUrl = `https://api.balldontlie.io/v1/season_averages/general?season=${season}&season_type=regular&type=base&${playerIdParams}`;
@@ -3547,8 +3547,19 @@ const FETCHERS = {
   // ===== STANDINGS & RECORDS =====
   // ===== STANDINGS & RECORDS =====
   STANDINGS: async (bdlSport, home, away, season) => {
+    // NCAAF/NCAAB standings require conference_id - skip to avoid 400 errors
+    // Standings snapshot is already fetched in scoutReportBuilder with proper conference handling
+    if (bdlSport === 'americanfootball_ncaaf' || bdlSport === 'basketball_ncaab') {
+      return {
+        category: 'Full Standings & Records',
+        note: '⚠️ College standings require conference_id. Check the Scout Report standings snapshot for conference records.',
+        home: { team: home.full_name || home.name, overall: 'See Scout Report', conference_record: 'See Scout Report' },
+        away: { team: away.full_name || away.name, overall: 'See Scout Report', conference_record: 'See Scout Report' }
+      };
+    }
+
     const standings = await ballDontLieService.getStandingsGeneric(bdlSport, { season });
-    
+
     const homeSt = standings?.find(s => s.team?.id === home.id);
     const awaySt = standings?.find(s => s.team?.id === away.id);
     
@@ -5976,8 +5987,8 @@ const FETCHERS = {
       const homePlayers = Array.isArray(homePlayersRaw) ? homePlayersRaw : (homePlayersRaw?.data || []);
       const awayPlayers = Array.isArray(awayPlayersRaw) ? awayPlayersRaw : (awayPlayersRaw?.data || []);
       
-      const homePlayerIds = homePlayers.slice(0, 10).map(p => p.id);
-      const awayPlayerIds = awayPlayers.slice(0, 10).map(p => p.id);
+      const homePlayerIds = homePlayers.slice(0, 10).map(p => p.id);  // Match Top 10 roster depth
+      const awayPlayerIds = awayPlayers.slice(0, 10).map(p => p.id);  // Match Top 10 roster depth
       
       // Fetch base season averages (FGA, PTS, AST as usage proxies)
       const fetchBaseStats = async (playerIds, teamName) => {
