@@ -4024,26 +4024,38 @@ CRITICAL ANTI-OPINION RULES:
 4. NO BETTING ADVICE - Gary makes his own picks.`;
 
     } else if (sport === 'NBA' || sport === 'basketball_nba') {
-      // NBA-specific query - strict format to ensure parser can extract injuries
+      // NBA-specific query - strict format for both lineups AND injuries
       query = `Search site:rotowire.com/basketball/nba-lineups.php for today's game: ${awayTeam} at ${homeTeam}
 
-Look at the "MAY NOT PLAY" section for BOTH teams.
+Extract BOTH the "Expected Lineup" AND "MAY NOT PLAY" sections for BOTH teams.
 
 RESPOND IN THIS EXACT FORMAT:
 
 === ${awayTeam} ===
-INJURIES:
+EXPECTED LINEUP:
+PG: FirstName LastName
+SG: FirstName LastName
+SF: FirstName LastName
+PF: FirstName LastName
+C: FirstName LastName
+
+MAY NOT PLAY:
 [List each player as: FirstName LastName Status]
 Example: Malik Monk Out
 Example: De'Aaron Fox GTD
 
 === ${homeTeam} ===
-INJURIES:
+EXPECTED LINEUP:
+PG: FirstName LastName
+SG: FirstName LastName
+SF: FirstName LastName
+PF: FirstName LastName
+C: FirstName LastName
+
+MAY NOT PLAY:
 [List each player as: FirstName LastName Status]
 
-If a team has no injuries, write: No injuries reported
-
-DO NOT include lineups or starters. ONLY injuries from "MAY NOT PLAY" section.`;
+If a team has no injuries in MAY NOT PLAY, write: No injuries reported`;
 
     } else {
       query = `Current injuries for ${sport} game ${awayTeam} vs ${homeTeam} as of ${today}. List all players OUT, DOUBTFUL, or QUESTIONABLE with their status and injury type.`;
@@ -4226,13 +4238,16 @@ function parseGroundingInjuries(content, homeTeam, awayTeam, sport = '') {
       return false;
     };
 
-    const shouldStopSection = (lineLower) => {
+    const shouldStopInjurySection = (lineLower) => {
       // Strip markdown before checking
-      const cleanLine = lineLower.replace(/\*\*/g, '').replace(/^#+\s*/, '').trim();
-      return cleanLine.includes('starting lineup') ||
+      const cleanLine = lineLower.replace(/\*\*/g, '').replace(/^#+\s*/, '').replace(/^[=#]+\s*/, '').replace(/\s*[=#]+$/, '').trim();
+      // Stop injury parsing when we hit lineup sections or next team header
+      return cleanLine.includes('expected lineup') ||
+        cleanLine.includes('starting lineup') ||
         cleanLine.includes('starting lineups') ||
         cleanLine.includes('expected starting') ||
-        cleanLine.startsWith('starting lineups');
+        cleanLine.startsWith(homeLower) ||
+        cleanLine.startsWith(awayLower);
     };
 
     const addParsedInjury = (team, playerName, status, rawLine) => {
@@ -4340,26 +4355,40 @@ function parseGroundingInjuries(content, homeTeam, awayTeam, sport = '') {
     };
 
     let currentTeam = null;
+    let inMayNotPlaySection = false;
+
     for (const rawLine of lines) {
       const line = rawLine.trim();
       if (!line) continue;
       const lower = line.toLowerCase();
+      const cleanLower = lower.replace(/\*\*/g, '').replace(/^[=#]+\s*/, '').replace(/\s*[=#]+$/, '').trim();
 
-      if (shouldStopSection(lower)) {
-        currentTeam = null;
-        continue;
-      }
-
+      // Check for team header (=== Team Name ===)
       if (isTeamHeader(lower, awayLower)) {
         currentTeam = 'away';
+        inMayNotPlaySection = false; // Reset section flag for new team
         continue;
       }
       if (isTeamHeader(lower, homeLower)) {
         currentTeam = 'home';
+        inMayNotPlaySection = false; // Reset section flag for new team
         continue;
       }
 
-      if (currentTeam) {
+      // Check for MAY NOT PLAY section header
+      if (cleanLower.includes('may not play') || cleanLower === 'injuries:') {
+        inMayNotPlaySection = true;
+        continue;
+      }
+
+      // Check for EXPECTED LINEUP section header (stop parsing injuries)
+      if (cleanLower.includes('expected lineup') || cleanLower.includes('starting lineup')) {
+        inMayNotPlaySection = false;
+        continue;
+      }
+
+      // Only parse injury lines when we're in the MAY NOT PLAY section
+      if (currentTeam && inMayNotPlaySection) {
         parseInjuryLine(line, currentTeam);
       }
     }
