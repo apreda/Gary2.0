@@ -778,33 +778,37 @@ Be specific and factual. If it's just a regular season game, say so clearly.`;
   // This provides meaningful labels like "Division Rivals", "Top 5 Eastern Battle", "Historic Rivalry", etc.
   if (!game.gameSignificance || game.gameSignificance === 'Regular season game' || game.gameSignificance.length > 100) {
     try {
-      // Fetch standings for significance generation
+      // Fetch standings for significance generation (optional - fallbacks exist)
       const bdlSport = sportToBdlKey(sportKey);
+      let standings = [];
       if (bdlSport && sportKey !== 'NCAAF') {
         const currentMonth = new Date().getMonth() + 1;
         const currentYear = new Date().getFullYear();
         const currentSeason = currentMonth >= 10 ? currentYear : currentYear - 1;
-        const standings = await ballDontLieService.getStandingsGeneric(bdlSport, { season: currentSeason });
-
-        if (standings && standings.length > 0) {
-          const significance = generateGameSignificance(
-            {
-              home_team: homeTeam,
-              away_team: awayTeam,
-              venue: game.venue,
-              // Pass conference data for NCAAB/NCAAF (already set on game object)
-              homeConference: game.homeConference,
-              awayConference: game.awayConference
-            },
-            sportKey,
-            standings,
-            game.week || null
-          );
-          if (significance) {
-            game.gameSignificance = significance;
-            console.log(`[Scout Report] ✓ Game significance: ${significance}`);
-          }
+        try {
+          standings = await ballDontLieService.getStandingsGeneric(bdlSport, { season: currentSeason }) || [];
+        } catch (standingsErr) {
+          console.log(`[Scout Report] Standings fetch failed (will use fallbacks): ${standingsErr.message}`);
         }
+      }
+
+      // Generate significance even without standings - fallbacks handle conference matchups
+      const significance = generateGameSignificance(
+        {
+          home_team: homeTeam,
+          away_team: awayTeam,
+          venue: game.venue,
+          // Pass conference data for NCAAB/NCAAF (already set on game object)
+          homeConference: game.homeConference,
+          awayConference: game.awayConference
+        },
+        sportKey,
+        standings,
+        game.week || null
+      );
+      if (significance) {
+        game.gameSignificance = significance;
+        console.log(`[Scout Report] ✓ Game significance: ${significance}`);
       }
     } catch (sigErr) {
       console.log(`[Scout Report] Could not generate game significance: ${sigErr.message}`);
@@ -3087,12 +3091,10 @@ async function fetchInjuries(homeTeam, awayTeam, sport) {
     // If narrativeContext has substantial content (>100 chars), grounding succeeded
     const groundingWorked = narrativeContext && narrativeContext.length > 100;
 
-    // SPORT-SPECIFIC HANDLING:
-    // - NCAAB: 0 injuries is VALID (college teams can be fully healthy)
-    // - NBA/NHL: 0 injuries is SUSPICIOUS (pro sports almost always have some injuries)
-    //   For NBA/NHL with 0 injuries parsed, we'll try BDL fallback
-    const isCollege = sport === 'basketball_ncaab' || sport === 'NCAAB';
-    const zeroInjuriesIsValid = isCollege && groundingWorked;
+    // If grounding worked (got a response with content), 0 injuries is VALID
+    // Teams CAN be healthy - both college and pro. Treating 0 injuries as a failure
+    // causes unnecessary errors when teams are actually healthy.
+    const zeroInjuriesIsValid = groundingWorked;
 
     // Use Rotowire grounding injuries as source of truth
     // But ENRICH with BDL duration data (BDL has return_date and description with duration context)
@@ -4022,20 +4024,26 @@ CRITICAL ANTI-OPINION RULES:
 4. NO BETTING ADVICE - Gary makes his own picks.`;
 
     } else if (sport === 'NBA' || sport === 'basketball_nba') {
-      // NBA-specific query - direct and explicit to get complete response
-      query = `site:rotowire.com/basketball/nba-lineups.php ${awayTeam} vs ${homeTeam}
+      // NBA-specific query - strict format to ensure parser can extract injuries
+      query = `Search site:rotowire.com/basketball/nba-lineups.php for today's game: ${awayTeam} at ${homeTeam}
 
-Extract BOTH sections from this game's lineup card:
+Look at the "MAY NOT PLAY" section for BOTH teams.
 
-**EXPECTED LINEUP** (5 starters per team):
-${awayTeam}: PG, SG, SF, PF, C with player names
-${homeTeam}: PG, SG, SF, PF, C with player names
+RESPOND IN THIS EXACT FORMAT:
 
-**MAY NOT PLAY** (ALL injured/questionable players):
-${awayTeam}: List every player with status (Out/Ques/Doubtful/OFS) and injury
-${homeTeam}: List every player with status (Out/Ques/Doubtful/OFS) and injury
+=== ${awayTeam} ===
+INJURIES:
+[List each player as: FirstName LastName Status]
+Example: Malik Monk Out
+Example: De'Aaron Fox GTD
 
-IMPORTANT: Include ALL players from the MAY NOT PLAY section for both teams. Do not skip any.`;
+=== ${homeTeam} ===
+INJURIES:
+[List each player as: FirstName LastName Status]
+
+If a team has no injuries, write: No injuries reported
+
+DO NOT include lineups or starters. ONLY injuries from "MAY NOT PLAY" section.`;
 
     } else {
       query = `Current injuries for ${sport} game ${awayTeam} vs ${homeTeam} as of ${today}. List all players OUT, DOUBTFUL, or QUESTIONABLE with their status and injury type.`;
@@ -4051,11 +4059,19 @@ IMPORTANT: Include ALL players from the MAY NOT PLAY section for both teams. Do 
       return { home: [], away: [], groundingRaw: null };
     }
 
+    // Log first 500 chars of raw response to help debug parsing issues
+    console.log(`[Grounding Search] Response preview (first 500 chars):\n${response.data.substring(0, 500)}`);
+
     // Parse the grounding response to extract injuries
     const parsed = parseGroundingInjuries(response.data, homeTeam, awayTeam, sport);
     parsed.groundingRaw = response.data; // Keep raw for display
 
     console.log(`[Scout Report] Grounding injuries: ${parsed.home.length} for ${homeTeam}, ${parsed.away.length} for ${awayTeam}`);
+
+    // If parsing found 0 injuries for both teams, log a warning - this might be a parsing issue
+    if (parsed.home.length === 0 && parsed.away.length === 0 && sport === 'basketball_nba') {
+      console.warn(`[Scout Report] ⚠️ NBA grounding returned 0 injuries for BOTH teams - verify if this is correct or a parsing issue`);
+    }
     
     return parsed;
     
@@ -4193,11 +4209,18 @@ function parseGroundingInjuries(content, homeTeam, awayTeam, sport = '') {
     const awayLower = awayTeam.toLowerCase();
 
     const isTeamHeader = (lineLower, teamLower) => {
-      // Strip markdown formatting (**, ##, etc.) before checking
-      const cleanLine = lineLower.replace(/\*\*/g, '').replace(/^#+\s*/, '').trim();
+      // Strip markdown formatting (**, ##, etc.) and === markers before checking
+      const cleanLine = lineLower.replace(/\*\*/g, '').replace(/^[=#]+\s*/, '').replace(/\s*[=#]+$/, '').trim();
       const hasTeam = cleanLine.includes(teamLower);
-      const hasInjuryHeader = cleanLine.includes('may not play') || cleanLine.includes('injuries');
-      if (hasTeam && hasInjuryHeader) return true;
+
+      // Match team name at start of line (with === markers from strict query format)
+      if (cleanLine.startsWith(teamLower)) return true;
+
+      // Match "Team: injuries" or "Team injuries" or "Team - Out Players"
+      if (hasTeam && (cleanLine.includes('injur') || cleanLine.includes('may not play') || cleanLine.includes('out'))) {
+        return true;
+      }
+
       // Allow simple team header lines like "Memphis Grizzlies:" or "**Washington Wizards:**"
       if (hasTeam && /[:\-–]?\s*$/.test(cleanLine)) return true;
       return false;
@@ -4271,6 +4294,8 @@ function parseGroundingInjuries(content, homeTeam, awayTeam, sport = '') {
       }
 
       const patterns = [
+        // Simple strict format: FirstName LastName Status (from strict query format - prioritize this)
+        /^([A-Z][a-z'.-]+\s+[A-Z][a-z'.-]+(?:\s+[A-Z][a-z'.-]+)?)\s+(Out|GTD|Ques|Questionable|Doubtful|Prob|Probable)\s*$/i,
         // Rotowire format: Position Initial. LastName Status (e.g., "C S. Adams Out", "G F. VanVleet Out")
         /[PGCSF]+\s+([A-Z]\.\s*[A-Z][a-z'.-]+)\s+(Out|Ques|Questionable|Prob|Probable|Doubt|Doubtful|GTD|OFS|IR|LTIR)\b/i,
         // Rotowire format with full position: PG/SG/SF/PF/C Initial. LastName Status
