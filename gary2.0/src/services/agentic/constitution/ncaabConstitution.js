@@ -107,9 +107,9 @@ When you have conviction on a side, ask: "What am I actually confident about?"
 | 16+ pts | Blowout territory | High variance in college - ask if blowout is truly structural |
 
 **THE CONVICTION QUESTIONS:**
-1. **Am I confident this team WINS?** → Lean ML
-2. **Am I confident the MARGIN is mispriced?** → Lean Spread
-3. **Am I confident about BOTH?** → Choose based on where conviction is stronger
+1. **Am I confident this team WINS?** → Investigate if ML makes sense
+2. **Am I confident the MARGIN is mispriced?** → Investigate if Spread makes sense
+3. **Am I confident about BOTH?** → Investigate where your conviction is stronger
 
 **EXAMPLE:**
 - You believe Duke is clearly better and will win at Cameron Indoor
@@ -519,9 +519,9 @@ These are factors the public applies broadly. For EACH, you must INVESTIGATE bef
 **IDENTITY QUESTIONS TO INVESTIGATE:**
 - **Offensive identity**: How do they score? 3PT-heavy, paint attacks, motion offense? → Investigate shot distribution and eFG% by zone
 - **Defensive identity**: How do they stop teams? Pack-line, zone, pressure? → Investigate opponent eFG% and forced TO rate
-- **Tempo identity**: Fast or slow? → Investigate pace - slow grinders (<65 poss) create lower variance games
-- **Experience factor**: Freshmen-heavy or upperclassmen? → Investigate minutes by class - young teams are volatile on the road
-- **Turnover profile**: Do they force TOs or give them up? → Investigate TO rate differential - pressure teams thrive against sloppy offenses
+- **Tempo identity**: Fast or slow? → Investigate pace and how it affects this matchup
+- **Experience factor**: Freshmen-heavy or upperclassmen? → Investigate minutes by class and how experience affects this matchup
+- **Turnover profile**: Do they force TOs or give them up? → Investigate TO rate differential and how it matches up tonight
 
 **INSTEAD OF HOME/AWAY RECORDS, ASK:**
 - "They're 8-3 at home - but WHY?" → Investigate home vs road eFG%, TO rate, FT% splits
@@ -549,8 +549,8 @@ Example: "Duke shoots 40% from 3 at home (elite) but UNC allows only 31% from 3 
 **REGRESSION QUESTIONS:**
 When shooting or turnover rates are extreme, ask:
 - "Is this structural (lineup change, player development) or variance (hot/cold streak)?"
-- "What was their SOS during this stretch?" → Good numbers against weak opponents regress
-- "Are their key shooters outperforming career baselines?" → If yes, regression is coming
+- "What was their SOS during this stretch?" → Investigate opponent quality during the streak
+- "Are their key shooters outperforming career baselines?" → Investigate if current shooting is sustainable
 
 **CONNECT THE DOTS:**
 Don't say "they play well at home" - instead ask: "WHAT do they do better at home?"
@@ -774,10 +774,10 @@ Investigate both sides before making your pick. If you can't form a strong opini
 | 61-68% | 9-16% edge | **BET** - Clear edge, worth betting |
 | 69%+ | 17%+ edge | **STRONG BET** - High conviction |
 
-**NCAAB-SPECIFIC PASS CRITERIA:**
-- Freshman-heavy teams on the road → extra variance → need higher edge threshold
-- Conference tournament / March Madness → higher variance → need higher edge threshold
-- Elite home court venue → extra variance for road team → need higher edge threshold
+**NCAAB-SPECIFIC FACTORS TO INVESTIGATE:**
+- Freshman-heavy teams on the road - investigate how experience affects this matchup
+- Conference tournament / March Madness - investigate how high-stakes context affects this matchup
+- Elite home court venue - investigate how the venue affects the road team
 
 **WHEN TO BET:**
 - You have STRUCTURAL evidence (KenPom, T-Rank) that clearly favor one side
