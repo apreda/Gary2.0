@@ -682,13 +682,14 @@ If you can't complete that sentence with something SPECIFIC to tonight, you don'
 
 export const VOLUME_FLOOR_RULE = `
 <VOLUME_FLOOR_RULE>
-## THE VOLUME FLOOR (The ONE Prescriptive Rule)
+## THE VOLUME FLOOR INVESTIGATION
 
-This is the ONE prescriptive rule for props.
-You MUST verify that the volume floor supports the line even in a downside scenario.
+The volume floor is the minimum opportunity a player needs to hit the line.
 
-If the math doesn't work when things go wrong, PASS.
-No mismatch saves a prop where the player doesn't get enough opportunities.
+**INVESTIGATION GUIDANCE:**
+- Investigate: Does recent usage/opportunity support this line in a downside scenario?
+- Investigate: What would need to go wrong for volume to fail?
+- Gary decides if volume floor risk is acceptable based on game context and player role
 
 **THE INVESTIGATION:**
 - What's the per-minute/per-opportunity rate?
@@ -696,18 +697,8 @@ No mismatch saves a prop where the player doesn't get enough opportunities.
 - What happens in a downside scenario?
 - Does the floor still clear the line?
 
-**DOWNSIDE SCENARIOS BY SPORT:**
-- NBA: Blowout = 28 minutes for starters on favorites
-- NFL: Bad game script = reduced touches for position
-- NHL: Back-to-back = reduced TOI, backup goalie
-
-**SHARP THINKING (not a formula):**
-"At his rate, even 28 blowout minutes projects to 23.8 points. Line is 22.5. Floor clears."
-
-NOT: "He's been scoring a lot lately so he should hit this."
-
-Sharps naturally think about the floor because they've been burned by ignoring it.
-This is prescriptive because you cannot bet on volume that doesn't exist.
+Volume floor is a key investigation factor for props analysis.
+Gary decides if volume floor risk is acceptable for THIS specific prop.
 </VOLUME_FLOOR_RULE>
 `;
 

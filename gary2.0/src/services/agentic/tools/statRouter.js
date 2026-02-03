@@ -183,6 +183,9 @@ const NHL_GEMINI_TOKENS = [
   'LINE_COMBINATIONS',    // Projected lines - site:dailyfaceoff.com
   'LUCK_INDICATORS',      // Regression analysis
   'SCORING_FIRST',        // First goal stats - site:hockey-reference.com
+  'NHL_GSAX',             // Goals Saved Above Expected - site:moneypuck.com (THE GOLD STANDARD for goalie evaluation)
+  'NHL_GOALIE_RECENT_FORM', // Goalie L10 form (GSAx, SV%, HD SV%) - site:moneypuck.com, site:naturalstattrick.com
+  'NHL_HIGH_DANGER_SV_PCT', // High-Danger Save % - site:naturalstattrick.com
 ];
 
 // NFL: Stats that require Gemini (BDL doesn't have PFF/FO/NGS grades)
@@ -206,6 +209,9 @@ const NCAAB_GEMINI_TOKENS = [
   'NCAAB_QUAD_RECORD',    // Quad 1-4 records - site:ncaa.com
   'NCAAB_STRENGTH_OF_SCHEDULE', // SOS - site:kenpom.com
   'NCAAB_BARTTORVIK',     // T-Rank, tempo-free stats - barttorvik.com (2026 season)
+  'NCAAB_CONFERENCE_STRENGTH', // Conference power rankings - site:kenpom.com (average AdjEM by conference)
+  'NCAAB_OPPONENT_QUALITY', // Recent opponent quality filter (last 10 opponents' KenPom) - site:kenpom.com
+  'NCAAB_HOME_COURT_ADVANTAGE', // Home court advantage data by venue - site:kenpom.com, site:barttorvik.com
 ];
 
 // NCAAF: Stats that require Gemini (BDL doesn't have SP+/FPI)
@@ -282,10 +288,10 @@ export function getAuthoritativeSource(token) {
   }
   
   // NHL sources
-  if (['CORSI_FOR_PCT', 'PDO', 'HIGH_DANGER_CHANCES'].includes(token)) {
+  if (['CORSI_FOR_PCT', 'PDO', 'HIGH_DANGER_CHANCES', 'NHL_HIGH_DANGER_SV_PCT'].includes(token)) {
     return 'site:naturalstattrick.com OR site:hockey-reference.com';
   }
-  if (['EXPECTED_GOALS', 'LUCK_INDICATORS'].includes(token)) {
+  if (['EXPECTED_GOALS', 'LUCK_INDICATORS', 'NHL_GSAX', 'NHL_GOALIE_RECENT_FORM'].includes(token)) {
     return 'site:moneypuck.com OR site:naturalstattrick.com';
   }
   if (token === 'LINE_COMBINATIONS') {
@@ -1051,7 +1057,7 @@ const FETCHERS = {
             : `Pace mismatch: ${home.name} (${homePace.toFixed(1)}) vs ${away.name} (${awayPace.toFixed(1)})`,
         CONTEXT_WARNING: `⚠️ This is SEASON-LONG pace. Actual game pace depends on BOTH teams.`,
         MATCHUP_NOTE: `📊 Pace is determined by the SLOWER team more than the faster team. A 105-pace team facing a 95-pace team will likely play around 98-100, not 105.`,
-        INVESTIGATE: `🔍 Who controls tempo? Check recent games - has either team been playing faster/slower than their season average?`
+        INVESTIGATE: `How does pace differential affect this matchup? Check recent games for tempo trends.`
       };
     }
     
@@ -1115,7 +1121,7 @@ const FETCHERS = {
           `${home.name} ORtg ${homeStats.offensive_rating} vs ${away.name} ORtg ${awayStats.offensive_rating} = ${(parseFloat(homeStats.offensive_rating) - parseFloat(awayStats.offensive_rating)).toFixed(1)} point gap` : 
           'Comparison unavailable',
         CONTEXT_WARNING: `⚠️ This is SEASON-LONG data. A team's current offensive form may differ.`,
-        INVESTIGATE: `🔍 Is this offense trending UP or DOWN? Check RECENT_FORM margins - are they scoring more or less lately?`
+        INVESTIGATE: `What does recent offensive efficiency reveal about current form? Check RECENT_FORM margins.`
       };
     }
     
@@ -1169,7 +1175,7 @@ const FETCHERS = {
           `${home.name} DRtg ${homeStats.defensive_rating} vs ${away.name} DRtg ${awayStats.defensive_rating} (lower is better)` :
           'Comparison unavailable',
         CONTEXT_WARNING: `⚠️ This is SEASON-LONG data. A team's current defensive form may differ.`,
-        INVESTIGATE: `🔍 Is this defense trending UP or DOWN? Check RECENT_FORM - are they allowing more or fewer points lately? Key defenders injured?`
+        INVESTIGATE: `What does recent defensive efficiency reveal about current form? Check RECENT_FORM trends.`
       };
     }
     
@@ -1241,9 +1247,9 @@ const FETCHERS = {
         CONTEXT_WARNING: `This is SEASON-LONG data. A team's current form may differ significantly.`,
         INVESTIGATE: `Cross-reference with RECENT_FORM: Is this team playing BETTER or WORSE than their season average lately? A +5.0 Net Rating team that's been -2.0 in L5 is NOT playing like a +5.0 team right now.`,
         // NEW: Usage concentration guidance (awareness, not rules)
-        USAGE_AWARENESS: `Notice the usage_concentration for each team. "star-heavy" teams (top 2 control 55%+) are MORE affected by star injuries/rest. "balanced" teams maintain production when a player is out. Investigate: If a key player is out, how does this team's structure handle it?`,
+        USAGE_AWARENESS: `Notice the usage_concentration for each team. Investigate: How does usage concentration affect roster flexibility when key players are out?`,
         // NEW: Scoring profile guidance (awareness, not rules)
-        SCORING_PROFILE_AWARENESS: `Notice where each team scores (scoring_profile). High paint % = vulnerable to rim protection. High 3pt % = vulnerable to perimeter D. Investigate: Does THIS opponent's defense match up well or poorly against this scoring style?`
+        SCORING_PROFILE_AWARENESS: `Notice where each team scores (scoring_profile). Investigate: How does scoring distribution interact with defensive scheme?`
       };
     }
     
@@ -1319,7 +1325,7 @@ const FETCHERS = {
           `eFG% gap: ${(parseFloat(homeStats.efg_pct) - parseFloat(awayStats.efg_pct)).toFixed(1)}% (${home.name} ${homeStats.efg_pct}% vs ${away.name} ${awayStats.efg_pct}%)` :
           'Comparison unavailable',
         CONTEXT_WARNING: `⚠️ This is SEASON-LONG shooting efficiency. Teams have hot/cold streaks.`,
-        INVESTIGATE: `🔍 Is this team shooting BETTER or WORSE lately? Check RECENT_FORM margins - high-scoring wins suggest hot shooting, low-scoring losses suggest cold.`,
+        INVESTIGATE: `What do shooting splits reveal about sustainability? Check RECENT_FORM for shooting context.`,
         VARIANCE_NOTE: `📊 Shooting efficiency is HIGH VARIANCE game-to-game. A 54% eFG team can have games at 45% or 62%.`
       };
     }
@@ -1926,22 +1932,30 @@ const FETCHERS = {
     try {
       const homeTeamName = home.full_name || home.name;
       const awayTeamName = away.full_name || away.name;
-      
+
       console.log(`[Stat Router] Fetching KenPom ratings for ${awayTeamName} @ ${homeTeamName} via Gemini Grounding`);
-      
-      const query = `What are the current KenPom ratings for ${homeTeamName} and ${awayTeamName} college basketball teams for the ${getCurrentSeasonString()} season? Include:
-        - KenPom ranking
-        - Adjusted Efficiency Margin (AdjEM)
-        - Adjusted Offensive Efficiency (AdjO)
-        - Adjusted Defensive Efficiency (AdjD)
-        - Tempo (possessions per 40 minutes)
-        
-        Provide the exact numbers from kenpom.com. Format as structured data.`;
-      
+
+      // Improved query with explicit format requirements for reliable parsing
+      const query = `Search kenpom.com for the 2025-26 college basketball season KenPom ratings.
+
+Find the EXACT KenPom stats for these TWO teams:
+1. ${homeTeamName}
+2. ${awayTeamName}
+
+For EACH team, you MUST provide these stats in this EXACT format:
+TEAM_NAME:
+- KenPom Rank: [number 1-365]
+- AdjEM: [number with sign, like +15.2 or -3.4]
+- AdjO: [number like 112.5]
+- AdjD: [number like 98.3]
+- Tempo: [number like 68.5]
+
+IMPORTANT: Use ONLY data from kenpom.com for the 2025-26 season. Do not guess - provide real numbers from the site.`;
+
       const response = await geminiGroundingSearch(query, {
         temperature: 1.0,
         maxTokens: 1500,
-        systemMessage: 'You are a college basketball analytics expert. Provide accurate KenPom statistics from the current season. Return data in a structured format with exact numbers.'
+        systemMessage: 'You are a college basketball analytics expert. You MUST search kenpom.com and return the exact KenPom statistics. Format each team separately with the exact stats requested. Do not make up numbers - only use real data from kenpom.com.'
       });
       
       // Parse the response to extract KenPom data
@@ -2148,28 +2162,32 @@ const FETCHERS = {
     try {
       const homeTeamName = home.full_name || home.name;
       const awayTeamName = away.full_name || away.name;
-      
+
       console.log(`[Stat Router] Fetching Barttorvik T-Rank for ${awayTeamName} @ ${homeTeamName} via Gemini Grounding`);
-      
-      // Note: barttorvik.com/# defaults to 2026 season
-      const query = `Search barttorvik.com for the 2026 college basketball season stats for ${homeTeamName} and ${awayTeamName}. 
-      
-      For EACH team provide from Barttorvik's T-Rank data:
-      - T-Rank (overall ranking)
-      - AdjOE (Adjusted Offensive Efficiency)
-      - AdjDE (Adjusted Defensive Efficiency)
-      - Barthag (win probability vs average team)
-      - EFG% (Effective Field Goal %)
-      - Tempo (possessions per game)
-      - WAB (Wins Above Bubble) if available
-      - 3P Rate and 3P% if available
-      
-      Use the 2026 season data from barttorvik.com. Format as structured data with actual numbers.`;
-      
+
+      // Improved query with explicit format requirements for reliable parsing
+      const query = `Search barttorvik.com for the 2025-26 college basketball season T-Rank stats.
+
+Find the EXACT Barttorvik stats for these TWO teams:
+1. ${homeTeamName}
+2. ${awayTeamName}
+
+For EACH team, you MUST provide these stats in this EXACT format:
+TEAM_NAME:
+- T-Rank: [number 1-365]
+- AdjOE: [number like 112.5]
+- AdjDE: [number like 98.3]
+- Barthag: [decimal like 0.8542]
+- Tempo: [number like 68.5]
+- WAB: [number with sign like +4.2 or -1.5]
+- EFG%: [percentage like 52.3]
+
+IMPORTANT: Use ONLY data from barttorvik.com for the 2025-26 season (site shows as 2026). Do not guess - provide real numbers.`;
+
       const response = await geminiGroundingSearch(query, {
         temperature: 1.0,
         maxTokens: 2000,
-        systemMessage: 'You are a college basketball analytics expert. Search barttorvik.com for accurate T-Rank and tempo-free statistics for the 2026 season. Provide exact numbers from the site.'
+        systemMessage: 'You are a college basketball analytics expert. You MUST search barttorvik.com and return the exact T-Rank statistics. Format each team separately with the exact stats requested. Do not make up numbers - only use real data from barttorvik.com.'
       });
       
       const content = response?.content || response?.choices?.[0]?.message?.content || '';
@@ -2222,64 +2240,94 @@ const FETCHERS = {
     }
   },
 
-  // ===== NCAAB HOME/AWAY SPLITS FROM BDL STANDINGS =====
-  // NOTE: BDL requires valid conference_id for NCAAB standings - we skip this to avoid 400 errors
-  
+  // ===== NCAAB HOME/AWAY SPLITS VIA GEMINI GROUNDING =====
+  // BDL standings API requires conference_id which causes 400 errors
+  // Use Gemini grounding to fetch home/away records from ESPN or team pages
+
   NCAAB_HOME_AWAY_SPLITS: async (bdlSport, home, away, season) => {
     if (bdlSport !== 'basketball_ncaab') return null;
-    
+
     try {
-      console.log(`[Stat Router] NCAAB Home/Away Splits - using team season stats (standings API requires conference_id)`);
-      
-      // BDL standings for NCAAB require conference_id which we don't reliably have
-      // Return guidance to use team stats instead
-      return {
-        category: 'Home/Away Splits (NCAAB)',
-        note: '⚠️ NCAAB standings API requires conference_id. Use team season stats for home/away record.',
-        home: { team: home.full_name || home.name, suggestion: 'Check TEAM_SEASON_STATS for home/away record' },
-        away: { team: away.full_name || away.name, suggestion: 'Check TEAM_SEASON_STATS for home/away record' }
-      };
-      
-      // DISABLED: This causes 400 errors when conference_id is not provided or invalid
-      // const standings = await ballDontLieService.getStandingsGeneric(bdlSport, { season });
-      
-      const homeStanding = (standings || []).find(s => s.team?.id === home.id);
-      const awayStanding = (standings || []).find(s => s.team?.id === away.id);
-      
-      if (!homeStanding && !awayStanding) {
+      const homeTeamName = home.full_name || home.name;
+      const awayTeamName = away.full_name || away.name;
+
+      console.log(`[Stat Router] Fetching NCAAB Home/Away Splits for ${awayTeamName} @ ${homeTeamName} via Gemini Grounding`);
+
+      // Use Gemini grounding to fetch home/away records from ESPN
+      const query = `Search ESPN or sports-reference.com for the 2025-26 college basketball home and away records.
+
+Find the HOME and AWAY records for these TWO teams:
+1. ${homeTeamName}
+2. ${awayTeamName}
+
+For EACH team, you MUST provide these stats in this EXACT format:
+TEAM_NAME:
+- Overall Record: [wins-losses like 15-5]
+- Home Record: [wins-losses like 10-2]
+- Away Record: [wins-losses like 5-3]
+- Conference Record: [wins-losses like 8-3] if available
+
+IMPORTANT: Use ONLY data from the 2025-26 college basketball season. Do not guess - provide real numbers.`;
+
+      const response = await geminiGroundingSearch(query, {
+        temperature: 1.0,
+        maxTokens: 1500,
+        systemMessage: 'You are a college basketball expert. Search ESPN or sports-reference for accurate home/away records for the 2025-26 season. Format each team separately with the exact stats requested.'
+      });
+
+      const content = response?.content || response?.choices?.[0]?.message?.content || '';
+
+      // Extract home/away records from the response
+      const extractHomeAwaySplits = (text, teamName) => {
+        // Try to find team section
+        const teamLower = teamName.toLowerCase();
+        const textLower = text.toLowerCase();
+
+        // Extract overall record
+        const overallMatch = text.match(/overall[^\d]*(\d{1,2})-(\d{1,2})/i) ||
+                           text.match(/record[^\d]*(\d{1,2})-(\d{1,2})/i);
+
+        // Extract home record
+        const homeMatch = text.match(/home[^\d]*(\d{1,2})-(\d{1,2})/i);
+
+        // Extract away record
+        const awayMatch = text.match(/away|road[^\d]*(\d{1,2})-(\d{1,2})/i);
+
+        // Extract conference record
+        const confMatch = text.match(/conference[^\d]*(\d{1,2})-(\d{1,2})/i) ||
+                         text.match(/conf[^\d]*(\d{1,2})-(\d{1,2})/i);
+
         return {
-          category: 'Home/Away Splits',
-          note: 'Standings data not available for these teams',
-          home: { team: home.full_name || home.name, home_record: 'N/A', away_record: 'N/A' },
-          away: { team: away.full_name || away.name, home_record: 'N/A', away_record: 'N/A' }
+          overall_record: overallMatch ? `${overallMatch[1]}-${overallMatch[2]}` : 'N/A',
+          home_record: homeMatch ? `${homeMatch[1]}-${homeMatch[2]}` : 'N/A',
+          away_record: awayMatch ? `${awayMatch[1]}-${awayMatch[2]}` : 'N/A',
+          conference_record: confMatch ? `${confMatch[1]}-${confMatch[2]}` : 'N/A'
         };
-      }
-      
+      };
+
+      // Split response by team name to parse each separately
+      const homeSection = content.split(awayTeamName)[0] || content;
+      const awaySection = content.split(homeTeamName).pop() || content;
+
       return {
         category: 'Home/Away Splits (NCAAB)',
+        source: 'ESPN/Sports-Reference via Gemini Grounding',
         home: {
-          team: home.full_name || home.name,
-          overall_record: homeStanding ? `${homeStanding.wins}-${homeStanding.losses}` : 'N/A',
-          home_record: homeStanding?.home_record || 'N/A',
-          away_record: homeStanding?.away_record || 'N/A',
-          conference_record: homeStanding?.conference_record || 'N/A',
-          win_pct: homeStanding?.win_percentage ? (homeStanding.win_percentage * 100).toFixed(1) + '%' : 'N/A'
+          team: homeTeamName,
+          ...extractHomeAwaySplits(homeSection, homeTeamName)
         },
         away: {
-          team: away.full_name || away.name,
-          overall_record: awayStanding ? `${awayStanding.wins}-${awayStanding.losses}` : 'N/A',
-          home_record: awayStanding?.home_record || 'N/A',
-          away_record: awayStanding?.away_record || 'N/A',
-          conference_record: awayStanding?.conference_record || 'N/A',
-          win_pct: awayStanding?.win_percentage ? (awayStanding.win_percentage * 100).toFixed(1) + '%' : 'N/A'
+          team: awayTeamName,
+          ...extractHomeAwaySplits(awaySection, awayTeamName)
         },
-        context: 'Investigate home court advantage for this matchup. Compare home_record vs away_record for each team.'
+        context: 'Investigate home court advantage for this matchup. Compare home_record vs away_record for each team.',
+        raw_response: content.substring(0, 1000)
       };
     } catch (error) {
       console.warn('[Stat Router] NCAAB Home/Away Splits failed:', error.message);
       return {
         category: 'Home/Away Splits',
-        error: 'Data unavailable',
+        error: 'Data unavailable - grounding failed',
         home: { team: home.full_name || home.name, home_record: 'N/A' },
         away: { team: away.full_name || away.name, away_record: 'N/A' }
       };
@@ -4342,7 +4390,7 @@ const FETCHERS = {
         home: { team: home.full_name || home.name },
         away: { team: away.full_name || away.name },
         grounding_data: groundingResult?.content || 'Data unavailable',
-        INVESTIGATE: `🔍 Paint-heavy offenses struggle vs elite rim protectors. Check if opponent has strong paint defense.`,
+        INVESTIGATE: `How does scoring profile interact with defensive matchup? Check opponent paint defense.`,
         note: 'League average is ~46 paint points/game. Elite paint teams score 50+.'
       };
     } catch (error) {
@@ -4412,7 +4460,7 @@ const FETCHERS = {
         home: { team: home.full_name || home.name },
         away: { team: away.full_name || away.name },
         grounding_data: groundingResult?.content || 'Data unavailable',
-        INVESTIGATE: `🔍 Elite paint defense (<44 opp paint PPG) forces opponents to shoot jumpers. Poor paint defense gets attacked inside.`,
+        INVESTIGATE: `What does paint defense data suggest about opponent adjustment? Check how teams score against this defense.`,
         note: 'League average allowed paint PPG is ~46. Elite rim protectors hold opponents under 44.'
       };
     } catch (error) {
@@ -4447,7 +4495,7 @@ const FETCHERS = {
         home: { team: home.full_name || home.name },
         away: { team: away.full_name || away.name },
         grounding_data: groundingResult?.content || 'Data unavailable',
-        INVESTIGATE: `🔍 Poor transition defense (allowing 15+ fast break PPG) gets exploited by fast-paced teams. Check opponent's pace.`,
+        INVESTIGATE: `How does transition defense interact with opponent pace? Check fast break data.`,
         note: 'League average allowed fast break PPG is ~13. Bad transition defense allows 15+.'
       };
     } catch (error) {

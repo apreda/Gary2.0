@@ -37,24 +37,26 @@ Stars don't sit in NFL - but PLAY-CALLING changes dramatically based on score.
 | Metric | What It Tells You | Kill Threshold |
 |--------|-------------------|----------------|
 | Snap % | Is he on the field? | < 70% = caution |
-| Route Participation | Is he running routes when on field? | < 80% = red flag |
-| **Target Share** | Is the ball coming to him? | **< 15% L3 = ABANDON** |
+| Route Participation | Is he running routes when on field? | Low = investigate usage |
+| **Target Share** | Is the ball coming to him? | **Low = investigate why** |
 | Air Yards Share | Short dump-offs vs. deep shots? | Context for ceiling |
 
-**WR/TE Kill Condition:**
-If Target Share < 15% over the last 3 games, the volume floor doesn't exist.
-He's a decoy or a blocker, not a target.
+**WR/TE Volume Investigation:**
+- Target share indicates opportunity floor
+- Low target share (under ~15%) suggests reduced opportunity - investigate why
+- Gary decides if volume floor exists based on target trends, snap counts, and game script projection
 
 **RB Props - Volume Metrics:**
-| Metric | What It Tells You | Kill Threshold |
-|--------|-------------------|----------------|
-| Snap % | Playing time share | < 50% = committee, caution |
-| **Carry Share** | Rush attempts vs. committee | **< 50% = split backfield** |
-| Red Zone Opportunity Share | TD prop specific | For TD props ONLY |
+| Metric | What It Tells You | Investigation |
+|--------|-------------------|---------------|
+| Snap % | Playing time share | Low = committee, investigate role |
+| **Carry Share** | Rush attempts vs. committee | **Low = split backfield, investigate usage** |
+| Red Zone Opportunity Share | TD prop specific | For TD props context |
 | Receiving Involvement | Targets/routes for yardage | PPR-style relevance |
 
-**RB Kill Condition:**
-If Carry Share < 50% AND game script projects opponent comfortable win (passing to catch up), the rushing volume floor is dead.
+**RB Volume Investigation:**
+- Low carry share combined with unfavorable game script suggests volume risk
+- Gary decides if volume floor exists based on carry trends, snap counts, and game script projection
 
 ---
 
@@ -136,15 +138,16 @@ TD props are NOT like yardage props. Don't evaluate them the same way.
 **YARDAGE PROPS** = Volume + Consistency (how many touches, how efficient)
 **TD PROPS** = Opportunity + Red Zone Role (are they the guy when it matters?)
 
-**TD Kill Conditions:**
-- If Red Zone Target Share < 15% (for WR/TE), ABANDON TD props
-- If Goal Line Carry Share < 40% (for RB), ABANDON TD props
-- If player is on underdog team AND underdog by 10+ points, ABANDON rushing TD props
+**TD Volume Investigation:**
+- Low red zone target share (for WR/TE) suggests reduced TD opportunity - investigate role
+- Low goal line carry share (for RB) suggests TD opportunity risk - investigate usage
+- Player on big underdog may face game script limiting TD opportunity - investigate
+- Gary decides if TD opportunity floor exists based on red zone role and game script
 
 **TD Value Signals:**
-- High implied team total (26+) = more TD opportunities for everyone
-- Goal line back on team favored by 7+ = multiple chances
-- Big TE who leads in red zone targets but is 3rd in overall targets = undervalued TD candidate
+- High implied team total = more TD opportunities for everyone
+- Goal line back on favored team = multiple chances
+- TE leading red zone targets but lower overall targets = potential value
 
 ---
 

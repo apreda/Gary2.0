@@ -2651,28 +2651,23 @@ Pick the SIDE the evidence supports. Do NOT predict what the margin will be.
   }
   // NFL-specific follow-up investigation
   const nflDataGaps = (sport === 'americanfootball_nfl' || sport === 'NFL') ? `
-### NFL DATA GAPS TO CHECK (BOTH TEAMS):
-Before writing your Steel Man cases, investigate BOTH teams equally:
+### NFL INVESTIGATION GUIDANCE:
+Before writing your Steel Man cases, investigate BOTH teams equally.
 
-**FOR BOTH TEAMS:**
-- [ ] **QB's game logs** - Last 3-5 GAMES with context (hot/cold/injured?)
-- [ ] **RB1's game logs** - Run game controls clock and game flow
-- [ ] **Key defensive playmaker** - Is their star rusher/CB dominating or quiet?
+**INVESTIGATION GUIDANCE:**
+Gary decides which positions and matchups matter most for THIS game.
+Consider: Which players drive each team's efficiency? Which matchups create advantages?
+Request data for the factors YOU determine are relevant to this specific matchup.
 
-**SITUATIONAL (BOTH TEAMS):**
-- [ ] **Red Zone %** - Who converts TDs vs. settles for FGs?
-- [ ] **3rd Down Conversion %** - Who sustains drives?
-- [ ] **Turnover Differential** - Who wins/loses the turnover battle?
+**POSSIBLE INVESTIGATION AREAS (Gary decides which are relevant):**
+- Key player performance trends (QB, RB1, key defenders)
+- Efficiency metrics (red zone %, 3rd down %, turnover differential)
+- Situational factors (home/away, schedule, weather)
 
-**IF EITHER TEAM IS MISSING A KEY PLAYER:**
-- [ ] **How long out?** - First game without them? Or out for weeks?
-- [ ] **Who fills their role?** - Check that player's recent game logs
-- [ ] **Team's recent form without them** - If available
-
-**CONTEXT:**
-- [ ] **Home/Away record specifically** - Not just overall record
-- [ ] **Schedule factor** - Short week? Bye week? Cross-country travel?
-- [ ] **Weather** - If outdoor game in cold weather
+**IF KEY PLAYER IS OUT:**
+- **How long out?** - First game without them? Or out for weeks?
+- **Who fills their role?** - Check that player's recent game logs
+- **Team's recent form without them** - If available
 
 **INVESTIGATE BEFORE CONCLUDING:**
 If you identify a factor that could affect the outcome, investigate it:
@@ -2680,7 +2675,7 @@ If you identify a factor that could affect the outcome, investigate it:
 2. Consider whether tonight's circumstances are similar or different
 3. Then decide how much weight to give it
 
-If you're missing any critical pieces, call them NOW before proceeding.
+If you're missing critical pieces for YOUR analysis, call them NOW before proceeding.
 
 ` : '';
 
@@ -2748,49 +2743,52 @@ You have deep basketball knowledge. Think about:
 
   // NCAAB-specific follow-up investigation
   const ncaabDataGaps = (sport === 'basketball_ncaab' || sport === 'NCAAB') ? `
-### NCAAB INVESTIGATION (COLLEGE-SPECIFIC - BOTH TEAMS):
+### NCAAB INVESTIGATION GUIDANCE:
 Before writing your Steel Man cases, investigate BOTH sides equally.
 
-**MINIMUM FOR BOTH TEAMS:**
-- [ ] **Conference vs. Non-Conference Splits** - Is their record inflated by cupcakes?
-- [ ] **Home/Road Record** - Hostile environments matter more in college.
-- [ ] **KenPom/NET Ranking Quality** - Are they #30 because they beat #300 teams?
-- [ ] **Best player's game logs** - Are they a high-usage freshman prone to road slumps?
+**INVESTIGATION GUIDANCE:**
+Gary decides which factors matter most for THIS college basketball matchup.
+Consider: Which efficiency metrics reveal true team quality? Which matchups create advantages?
+Request data for the factors YOU determine are relevant to this specific game.
 
-**STRENGTH OF SCHEDULE CONTEXT (CRITICAL):**
-- [ ] **Check BOTH teams' SOS** - A 15-3 record vs SOS #200 ≠ 12-6 vs SOS #20
-- [ ] **Quad Records** - How did they perform against Q1/Q2 opponents?
-- [ ] **Conference Strength** - Big Ten #8 faced tougher competition than mid-major #8
-- Ask: "Is this team's record/efficiency real or inflated by weak opponents?"
+**POSSIBLE INVESTIGATION AREAS (Gary decides which are relevant):**
+- Conference vs non-conference performance splits
+- Home/road efficiency differentials
+- KenPom/NET ranking quality vs schedule difficulty
+- Key player performance and trends
 
-**INJURY DURATION CHECK:**
-- [ ] **How long out?** (First game without them? 2 weeks? Season-long?)
-- [ ] If **2+ weeks out** → Stats ALREADY reflect the absence. This is CONTEXT, not edge.
-- [ ] If **recent (< 2 weeks)** - Team may still be adjusting. Investigate recent form.
-- [ ] **Replacement performance** - Check the 6th man's recent game logs.
+**STRENGTH OF SCHEDULE CONTEXT:**
+Consider: Is this team's record/efficiency real or inflated by weak opponents?
+Investigate: SOS, Quad records, conference strength if you determine these matter for THIS game.
 
-**VERIFY WHAT YOU READ:**
+**INJURY DURATION CHECK (IF APPLICABLE):**
+- **How long out?** (First game without them? 2 weeks? Season-long?)
+- If **2+ weeks out** → Stats ALREADY reflect the absence. This is CONTEXT, not edge.
+- If **recent (< 2 weeks)** - Team may still be adjusting. Investigate recent form.
+- **Replacement performance** - Check backup's recent game logs.
+
+**VERIFY WHAT YOU READ (ANTI-HALLUCINATION):**
 - If you see a ranking like "top 5 defense," find the ACTUAL number (e.g., "AdjD 92.5")
-- If you see a player name in a blog, verify they're actually playing (check Rotowire/roster)
+- If you see a player name, verify they're actually playing (check Rotowire/roster)
 - Blog opinions are context, not facts. Form your OWN thesis from verified data.
 
 **VERIFY BEFORE DISMISS:**
-If you see "Team X is 2-8 on the road," you MUST investigate WHY. Was it injuries? 
+If you see "Team X is 2-8 on the road," you MUST investigate WHY. Was it injuries?
 A gauntlet of Top-25 opponents? Or just poor road shooting?
 ` : '';
 
   // NHL-specific follow-up investigation
   const nhlDataGaps = (sport === 'icehockey_nhl' || sport === 'NHL') ? `
-### NHL INVESTIGATION (HOCKEY-SPECIFIC - BOTH TEAMS):
+### NHL INVESTIGATION GUIDANCE:
 Before writing your Steel Man cases, investigate BOTH sides equally.
 
-**GOALTENDING (THE #1 FACTOR - INVESTIGATE FIRST):**
+**GOALTENDING (Critical for NHL):**
 - [ ] **Who is starting tonight?** - Confirmed starter vs backup?
 - [ ] **Starter's GAA and SV%** - Include actual numbers
 - [ ] **Starter's recent form (L5)** - Record and performance
-- [ ] **Head-to-head goalie comparison table** - REQUIRED for your case
+- [ ] **Head-to-head goalie comparison table** - Include in your case
 
-**POSSESSION METRICS (MUST INCLUDE NUMBERS):**
+**POSSESSION METRICS (Include actual numbers):**
 - [ ] **CF% (Corsi For %)** - Both teams' 5v5 possession rate
 - [ ] **xGF/60 and xGA/60** - Expected goals for/against
 - [ ] **High-Danger Chances For/Against** - Quality scoring opportunities
@@ -2805,7 +2803,7 @@ Before writing your Steel Man cases, investigate BOTH sides equally.
 - [ ] **PP% and PK%** - Both teams
 - [ ] **How many PP opportunities per game?** - Volume matters
 
-**NHL-SPECIFIC RULES:**
+**NHL EVIDENCE REQUIREMENTS:**
 1. Every case MUST include a goalie comparison table with actual stats
 2. "Possession disaster" must be backed by CF% numbers
 3. "Hot streak" must be backed by xG data, not just W-L
@@ -2813,7 +2811,7 @@ Before writing your Steel Man cases, investigate BOTH sides equally.
 
 **NHL IS MONEYLINE ONLY:**
 You are picking WHO WINS. No puck lines, no spreads - just the winner.
-Focus on: which factors give one side a better chance to WIN? Goaltending matchup is the single most important factor.
+Focus on: which factors give one side a better chance to WIN? Goaltending matchup is critical.
 ` : '';
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -3338,11 +3336,10 @@ This is the core of your evaluation. Two questions, answered neutrally:
 The spread is ${Math.abs(parseFloat(spread) || 7)} points.
 ${Math.abs(parseFloat(spread) || 7) <= 4.5 ? '(Small spread - this is essentially asking WHO WINS)' : Math.abs(parseFloat(spread) || 7) >= 10 ? '(Large spread - this is asking about MARGIN, not just winning)' : '(Medium spread - comfortable win required)'}
 
-Investigate these factors neutrally - which side of the spread does each support?
-- Investigate the efficiency gap between these teams - is the difference significant enough to matter for this spread? Which side does it favor?
-- Investigate pace - does the expected pace favor one side's style over the other? Which side does it support?
-- Investigate defensive matchups - can either team disrupt the other's rhythm in a way that favors one side of the spread?
-- Investigate recent margins - do the patterns suggest one side is more likely to cover this spread?
+**SPREAD EVALUATION:**
+Does this spread reflect what the TIER 1 data shows?
+Gary investigates the factors HE determines are relevant to this matchup and spread size.
+The question: Is the margin mispriced based on efficiency data, or does the line accurately reflect team quality?
 
 Based on your investigation: Which SIDE of the spread do the stats support?
 - The team GETTING ${Math.abs(parseFloat(spread) || 7)} points?
