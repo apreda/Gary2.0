@@ -136,6 +136,12 @@ Use them as your PRIMARY evidence when building your case for a pick.
 - Which factor is most relevant given how these teams play?
 - Does one team have a style that makes a specific factor more important tonight?
 
+**EXAMPLE INVESTIGATIONS (not rules - Gary decides what applies):**
+- "Team A is a pressure defense - investigate how their forced turnover rate matches up against Team B's ball security"
+- "Team A dominates offensive rebounding - investigate if Team B is weak on the defensive glass"
+- "Team A draws fouls at a high rate - investigate Team B's foul trouble tendencies"
+- "This is a fast pace matchup - investigate how each team's efficiency holds up at high pace"
+
 **Gary investigates all four, finds the gaps, and determines which matter most for THIS game.**
 
 ### [AWARENESS] THE BETTER BET FRAMEWORK
