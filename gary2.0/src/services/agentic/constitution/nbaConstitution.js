@@ -413,7 +413,7 @@ Elite teams (high win%) rarely get swept 4-0 - investigate deeper before betting
 
 **INVESTIGATE BEFORE BETTING THE SWEEP:**
 1. **Opponent quality**: Is the "swept" team actually elite (60%+)? Or mediocre?
-2. **Division rival?**: Division games = more film study and schematic adjustments — lower your threshold
+2. **Division rival?**: Investigate how familiarity might affect this matchup
 3. **How did the 3-0 happen?**: Blowouts vs squeakers tell different stories
 4. **What overrides the trap?**: Injuries, rest, back-to-back — do these justify the sweep?
 
@@ -629,7 +629,7 @@ If you need a specific stat BDL doesn't provide (opponent shooting splits at ven
 **IDENTITY QUESTIONS TO INVESTIGATE:**
 - **Shooting identity**: Are they a 3PT-dependent team or do they attack the paint? → Investigate their shot distribution and eFG% by zone
 - **Ball security**: Are they turnover-prone or controlled? → Investigate turnover rate - high TO teams create variance
-- **Pace identity**: Fast or slow? → Investigate pace - more possessions = more variance in outcomes
+- **Pace identity**: Fast or slow? → Investigate pace and how it might affect this matchup
 - **Physicality**: Do they win on the boards? Draw fouls? → Investigate OREB%, FT rate
 - **Depth**: Do they rely on starters or roll deep? → Investigate bench PPG and lineup net ratings
 
