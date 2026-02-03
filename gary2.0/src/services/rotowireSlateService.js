@@ -450,50 +450,114 @@ export async function fetchSlatesFromRotoWire(platform = 'fanduel', sport = 'NBA
       // Valid NBA team abbreviations (to filter out positions like PG, PF, SF, SG, C)
     const NBA_TEAMS = new Set([
       'ATL', 'BOS', 'BKN', 'CHA', 'CHI', 'CLE', 'DAL', 'DEN', 'DET', 'GS', 'GSW',
-      'HOU', 'IND', 'LAC', 'LAL', 'MEM', 'MIA', 'MIL', 'MIN', 'NO', 'NOP', 'NY', 
+      'HOU', 'IND', 'LAC', 'LAL', 'MEM', 'MIA', 'MIL', 'MIN', 'NO', 'NOP', 'NY',
       'NYK', 'OKC', 'ORL', 'PHI', 'PHX', 'POR', 'SAC', 'SA', 'SAS', 'TOR', 'UTA', 'WAS'
     ]);
-    
-    // If we found slates, try to get the teams for the main slate
-    if (slates.length > 0 && slates[0].teams.length === 0) {
-      // Extract teams from the current page view
-      const teams = await page.evaluate(() => {
+
+    // Helper function to extract teams/games from current page view
+    const extractTeamsFromPage = async () => {
+      return await page.evaluate((validTeams) => {
         const teamSet = new Set();
-        
-        // Look for team abbreviations in the games section
-        const teamElements = document.querySelectorAll('[class*="team"], [class*="abbr"], .matchup span, td');
-        teamElements.forEach(el => {
-          const text = el.textContent?.trim();
-          // Match 2-4 letter team abbreviations
-          if (text && /^[A-Z]{2,4}$/.test(text)) {
-            teamSet.add(text);
-          }
-        });
-        
-        // Also check for team names in game cards
-        const gameCards = document.querySelectorAll('[class*="game"], [class*="matchup"]');
+        const matchups = [];
+
+        // Look for matchup cards/rows with team abbreviations
+        const gameCards = document.querySelectorAll('[class*="game"], [class*="matchup"], [class*="contest"]');
         gameCards.forEach(card => {
-          const text = card.textContent;
-          // Extract teams from "TOR @ BOS" or "TOR vs BOS" format
-          const matches = text.match(/([A-Z]{2,4})\s*[@vs]+\s*([A-Z]{2,4})/gi);
-          if (matches) {
-            matches.forEach(match => {
-              const parts = match.split(/[@vs]+/i);
-              parts.forEach(p => {
-                const team = p.trim();
-                if (team.length >= 2 && team.length <= 4) {
-                  teamSet.add(team.toUpperCase());
+          const text = card.textContent || '';
+          // Extract teams from "ATL @ MIA" or "ATL vs MIA" format
+          const matchPattern = text.match(/([A-Z]{2,4})\s*[@vs\.]+\s*([A-Z]{2,4})/gi);
+          if (matchPattern) {
+            matchPattern.forEach(match => {
+              const parts = match.split(/[@vs\.]+/i).map(p => p.trim().toUpperCase());
+              if (parts.length === 2 && parts[0].length <= 4 && parts[1].length <= 4) {
+                const away = parts[0];
+                const home = parts[1];
+                if (validTeams.includes(away) && validTeams.includes(home)) {
+                  teamSet.add(away);
+                  teamSet.add(home);
+                  matchups.push(`${away}@${home}`);
                 }
-              });
+              }
             });
           }
         });
-        
-        return [...teamSet];
-      });
-      
-      // Filter to only valid NBA teams
-      slates[0].teams = teams.filter(t => NBA_TEAMS.has(t));
+
+        // Also look for standalone team abbreviations
+        const teamElements = document.querySelectorAll('[class*="team"], [class*="abbr"], .matchup span');
+        teamElements.forEach(el => {
+          const text = el.textContent?.trim()?.toUpperCase();
+          if (text && text.length >= 2 && text.length <= 4 && validTeams.includes(text)) {
+            teamSet.add(text);
+          }
+        });
+
+        return { teams: [...teamSet], matchups: [...new Set(matchups)] };
+      }, Array.from(NBA_TEAMS));
+    };
+
+    // ITERATE THROUGH ALL SLATES and extract teams for each one
+    // This ensures we get the ACTUAL games for each slate, not time-based guesses
+    console.log(`[RotoWire] 🔄 Extracting teams for ${slates.length} slates...`);
+
+    for (let i = 0; i < slates.length; i++) {
+      const slate = slates[i];
+
+      // Skip if slate already has teams (from the dropdown parsing)
+      if (slate.teams && slate.teams.length > 0) {
+        console.log(`[RotoWire]    ✓ ${slate.name}: ${slate.teams.length} teams (already populated)`);
+        continue;
+      }
+
+      try {
+        // Click "Change Slate" button to open dropdown
+        await page.evaluate(() => {
+          const buttons = Array.from(document.querySelectorAll('button'));
+          const btn = buttons.find(b => b.textContent?.includes('Change Slate') || b.textContent?.includes('Change'));
+          if (btn) btn.click();
+        });
+        await new Promise(r => setTimeout(r, 500));
+
+        // Click on the specific slate by name
+        const slateClicked = await page.evaluate((slateName, slateTime) => {
+          // Find elements that match the slate name and optionally time
+          const rows = document.querySelectorAll('tr, [class*="slate-row"], [class*="option"], li');
+          for (const row of rows) {
+            const text = row.textContent || '';
+            // Match by name, or by name + time for disambiguation (e.g., two "Turbo" slates)
+            if (text.includes(slateName) && (!slateTime || text.includes(slateTime))) {
+              row.click();
+              return true;
+            }
+          }
+          // Fallback: click any element containing the slate name
+          const allElements = document.querySelectorAll('*');
+          for (const el of allElements) {
+            if (el.textContent?.trim() === slateName || el.textContent?.includes(`${slateName} `)) {
+              el.click();
+              return true;
+            }
+          }
+          return false;
+        }, slate.name, slate.startTime);
+
+        if (slateClicked) {
+          // Wait for page to update with new slate's games
+          await new Promise(r => setTimeout(r, 1000));
+
+          // Extract teams from the updated page
+          const { teams, matchups } = await extractTeamsFromPage();
+
+          slate.teams = teams;
+          slate.matchups = matchups;
+          slate.games = matchups; // Alias
+
+          console.log(`[RotoWire]    ✓ ${slate.name} (${slate.startTime}): ${teams.length} teams, ${matchups.length} games → ${matchups.join(', ')}`);
+        } else {
+          console.log(`[RotoWire]    ✗ ${slate.name}: Could not click slate in dropdown`);
+        }
+      } catch (err) {
+        console.log(`[RotoWire]    ✗ ${slate.name}: Error extracting teams - ${err.message}`);
+      }
     }
     
     // Filter teams in all slates to only valid NBA teams

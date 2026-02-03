@@ -309,23 +309,29 @@ async function scrapeRotoWireSlates(sport, platform, dateStr) {
                                 nameLC.includes('late');
             const isExpressSlate = nameLC.includes('express') || nameLC.includes('turbo');
             
-            // Time thresholds in minutes from midnight (Eastern)
-            const LATE_NIGHT_START = 22 * 60 + 30; // 10:30 PM = 1350 minutes
-            
+            // Time window in minutes - how close must a game be to the slate lock time
+            // CRITICAL: Turbo slates are TIME-SPECIFIC (only games at that exact time slot)
+            const TURBO_WINDOW = 15; // Turbo slates = games starting within 15 min of lock
+            const LATE_WINDOW = 90;  // Late slates = games within 90 min window
+
             // For Main/All slates: include games starting at or after lock
+            // BUT exclude games that would be in late-night slates (they're separate)
             if (!isLateSlate && !isExpressSlate) {
-              return gameMinutes >= slateMinutes;
+              const LATE_NIGHT_CUTOFF = 22 * 60; // 10:00 PM = games after this are "Night"
+              return gameMinutes >= slateMinutes && gameMinutes < LATE_NIGHT_CUTOFF;
             }
-            
-            // For Express/Turbo slates: games from lock time BUT exclude late night games
-            // Express/Turbo is typically the middle time slot games only
+
+            // For Express/Turbo slates: ONLY games starting NEAR the lock time
+            // These are time-specific slates, NOT "everything after X time"
+            // Example: Turbo 7:30 PM = only 7:30 PM games, NOT all games 7:30+
             if (isExpressSlate) {
-              return gameMinutes >= slateMinutes && gameMinutes < LATE_NIGHT_START;
+              const timeDiff = gameMinutes - slateMinutes;
+              return timeDiff >= 0 && timeDiff <= TURBO_WINDOW;
             }
-            
-            // For late slates (After Hours, Night): ONLY games starting at 10:30 PM or later
+
+            // For late slates (After Hours, Night): games within 90 min window of lock
             const timeDiff = gameMinutes - slateMinutes;
-            return timeDiff >= 0 && timeDiff <= 90;
+            return timeDiff >= 0 && timeDiff <= LATE_WINDOW;
           });
           
           const teams = matchingGames.flatMap(g => [
