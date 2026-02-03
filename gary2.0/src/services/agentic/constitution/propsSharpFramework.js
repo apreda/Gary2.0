@@ -449,7 +449,7 @@ Rankings are not mechanisms. This is one of the most common traps.
 **EXAMPLES OF REAL MECHANISMS:**
 - Scheme: "Drop coverage gives up pull-up midrange. He shoots 58% from there."
 - Personnel: "Their rim protector is out. He scores 68% of his points at the rim."
-- Pace: "This is the fastest team in the league. More possessions = more opportunities."
+- Pace: "This is the fastest team in the league. Investigate how pace affects opportunities tonight."
 - Role: "He moved to PP1 three games ago. His PP TOI jumped from 1:30 to 4:00."
 
 INVESTIGATE: Is there a specific ON-COURT/ON-ICE reason this player will perform differently tonight?
@@ -560,7 +560,7 @@ Season averages can mislead when tonight's context differs.
 A player's production depends on:
 - Who's playing around them (usage splits when stars are in/out)
 - What role they're in (PP1 vs PP2, starter vs backup, target share)
-- What game script develops (blowout = fewer minutes, trailing = more pass attempts)
+- What game script develops (investigate how blowout risk or trailing affects this player's usage)
 
 **The Sharp Question:**
 "Is my baseline (season average) calculated from the SAME context as tonight?"

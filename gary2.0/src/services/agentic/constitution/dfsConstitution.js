@@ -35,7 +35,7 @@ Hard Factors are PHYSICAL, MEASURABLE, and REPEATABLE:
 
 **Matchup Data (Investigable)**
 - Defense vs Position (DvP) rankings
-- Pace of play (more possessions = more fantasy opportunities)
+- Pace of play (investigate how pace affects fantasy opportunities in this matchup)
 - Opponent's defensive efficiency at each position
 
 **Value Metrics (Investigable)**
@@ -208,9 +208,9 @@ ${DFS_CONSTITUTION}
 ## NBA-SPECIFIC DFS HEURISTICS
 
 ### PACE & ENVIRONMENT
-- High-pace matchups (100+ possessions) = more fantasy opportunities
-- High totals (230+) = shootout potential, stack both sides
-- Large spreads (-12+) = blowout risk, monitor 4th quarter minutes
+- **Pace**: Investigate how the pace of this matchup affects fantasy opportunities for each player
+- **Totals**: High totals (230+) suggest shootout potential - investigate stacking opportunities
+- **Spreads**: Large spreads (-12+) carry blowout risk - investigate 4th quarter minute implications
 
 ### NBA STACKING
 - Same-team stacks: Correlated ceiling (if one hits, others likely benefit)
@@ -236,9 +236,10 @@ ${DFS_CONSTITUTION}
 ## NFL-SPECIFIC DFS HEURISTICS
 
 ### GAME SCRIPT
-- Heavy favorites → RB volume (clock killing)
-- Heavy underdogs → WR/TE volume (passing to catch up)
-- Close games → balanced opportunity
+Investigate how the projected game script affects each position:
+- **Favorites**: How does leading affect RB usage in this offense?
+- **Underdogs**: How does trailing affect WR/TE volume in this offense?
+- **Close games**: What's the expected opportunity balance?
 
 ### NFL STACKING (CRITICAL FOR GPP)
 - QB + WR1 is the core stack
@@ -253,10 +254,11 @@ ${DFS_CONSTITUTION}
 - **TE**: Red zone targets, blocking vs receiving TE
 - **DST**: Vegas implied points, turnover potential
 
-### WEATHER MATTERS
-- Wind >15mph → Fade deep passing, boost RBs
-- Rain/Snow → Ground game boost, passing efficiency drops
-- Dome → Safe passing environment
+### WEATHER INVESTIGATION
+Investigate how weather conditions affect this specific matchup:
+- **Wind**: How does wind speed affect THIS team's passing attack and ground game?
+- **Rain/Snow**: How have THESE offenses historically performed in adverse conditions?
+- **Dome**: What does a controlled environment mean for THIS game's offensive output?
 `;
 
 export default DFS_CONSTITUTION;

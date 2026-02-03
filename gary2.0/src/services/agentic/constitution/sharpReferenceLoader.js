@@ -486,7 +486,7 @@ Investigate the substance of each case, not how it sounds.
 
 **NBA MARGIN DYNAMICS (Different from NCAAB):**
 - **Garbage time compression**: Stars sit when up 15+, bench units often give back margin
-- **Pace factor**: High-pace teams (100+ possessions) = more variance in final margin
+- **Pace factor**: Investigate how pace affects margin variance in THIS matchup
 - **Load management in blowouts**: Stars rest in 4th quarter of runaway games
 - **Comeback frequency**: NBA teams more equipped to close large gaps than college
 
