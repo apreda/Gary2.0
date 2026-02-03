@@ -2951,9 +2951,11 @@ In high-stakes games, coaching adjustments intensify. A schematic advantage that
 A team with a lower "power rating" can still win if their STYLE creates a hard counter.
 This is about HOW Team A's specific strengths hit Team B's specific weaknesses — not just who is "better."
 
-**WHEN BUILDING YOUR CASE:** If you identify a stylistic vector, explain the connection:
-- Not just "Team A is better" but "Team A's strength meets Team B's weakness HERE"
+**WHEN BUILDING YOUR CASE:** Cite the stats that show the connection:
+- Not just "Team A is better" but "Team A's [specific stat] vs Team B's [specific stat] shows a mismatch"
 - Cite the specific metrics that show the mismatch (e.g., rank vs rank, rate vs rate)
+- DO NOT invent tactical narratives (defensive coverages, driving lanes, paint attacks, etc.)
+- Stick to STATS you can verify - you're not watching film, you're analyzing data
 </stylistic_matchup_philosophy>
 
 <case_structure>
@@ -3010,6 +3012,12 @@ ${isNBA ? `- START with Four Factors from scout report as your BASELINE (you hav
 - Player stats can supplement team stats, but team stats must be the foundation
 - Compare L5/L10 to SEASON AVERAGES to show trends (e.g., "L5 Off Rating: 114.2 vs 110.8 season = trending up")`}
 - INJURY RULES: Only mention RECENT injuries (< 2 weeks). Old injuries are priced in and reflected in team stats.
+
+**ANTI-FABRICATION RULE:** Each paragraph must cite STATS you investigated. Do NOT invent:
+- Tactical play-by-play (defensive schemes, driving lanes, paint dominance)
+- Claims about HOW the game will play out that you can't verify from stats
+- "Player X will draw Player Y away from..." - you're not watching film, you're analyzing data
+If you don't have a stat for something, don't write it. Focus on what you CAN verify.
 
 **Then write 3-4 detailed paragraphs (not bullet points) for EACH case:**
 
@@ -3296,7 +3304,13 @@ ${sharpReference}
 
 **Take a beat.** You just wrote both Steel Man cases as an advocate. Now shift gears — you are the EDITOR reviewing both cases with a critical eye.
 
-**Your job now:** Filter through each case and separate what's REAL and RELEVANT from what's fluff, narrative, or trap.
+**Your job now:** Filter through each case and separate what's REAL and RELEVANT from what's fluff, narrative, or fabrication.
+
+**FABRICATION CHECK:** Did either case include tactical claims you can't verify from stats?
+- "Player X will drag Player Y away from the paint" - FABRICATED (you didn't watch film)
+- "Their defensive scheme gives up driving lanes" - FABRICATED (unless you have the stat)
+- "He'll exploit the coverage" - FABRICATED (you can't see defensive schemes in stats)
+Strip these out. Only keep claims backed by ACTUAL STATS from your investigation.
 
 **DO NOT pick a side yet.** But DO identify what actually matters for THIS game.
 
@@ -3304,8 +3318,9 @@ ${sharpReference}
 
 **A. CORE ARGUMENT - INVESTIGATE IF IT'S REAL**
 - Investigate the central reasoning for why this team COVERS (not just wins)
-- Investigate whether it's backed by ACTUAL DATA (stats, numbers, matchup specifics) - if yes, cite the data; if no, flag it as narrative fluff
-- Strip out narratives ("they're due," "revenge game," "they always play up/down") - what STAT or DATA actually drives this case?
+- Investigate whether it's backed by ACTUAL DATA (stats, numbers, matchup specifics) - if yes, cite the data; if no, flag it as fluff
+- Strip out narratives ("they're due," "revenge game," "they always play up/down") - what STAT actually drives this case?
+- Strip out FABRICATED TACTICS (defensive coverages, driving lanes, paint attacks) - these are made-up, not from data
 
 **B. RECENT FORM - INVESTIGATE THE CONTEXT**
 - Investigate their recent results - WHO did they play?
@@ -3597,6 +3612,7 @@ For each Steel Man case, work through:
 
 A. **PREDICTIVE vs DESCRIPTIVE:** Did the case use predictive metrics (efficiency, L5 margins, pace) or just descriptive records (W-L, streaks)?
    - Flag any arguments based on records without explaining the underlying metrics
+   - Flag any FABRICATED TACTICS (defensive schemes, driving lanes, coverage breakdowns) - these are made up, not from your data
 
 B. **WHAT DOES THE DATA TELL YOU?** For each key stat cited:
    - Does L5/L10 tell the story of who this team IS RIGHT NOW?
