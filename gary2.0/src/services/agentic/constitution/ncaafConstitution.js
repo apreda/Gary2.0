@@ -114,13 +114,18 @@ USE THESE for team comparison. SP+ is the gold standard for NCAAF prediction.
 | Home Field | Venue context | ALREADY PRICED IN. The spread reflects venue - don't add points. |
 | Weather (outdoor games) | Wind 15+ mph affects passing/kicking. Cold affects grip. Rain/snow increases turnovers. | Check forecast |
 
-**TIER 4 - USE WITH CAUTION**
+**TIER 4 - DESCRIPTIVE (Explains line-setting, NOT reasons for picks)**
 | Stat | Problem | Better Alternative |
 |------|---------|-------------------|
 | PPG | Massively SOS-dependent | Use SP+ or EPA |
 | Total yards | FCS opponents inflate numbers | Use per-play efficiency |
 | Record | Doesn't account for SOS | Use SP+ ranking |
 | AP Poll | Media perception, not efficiency | Use SP+ or FPI |
+
+**HOW TO USE TIER 4 CORRECTLY:**
+1. Use TIER 4 to explain WHY the spread is set at this number
+2. Then argue: Is this spread OVERREACTING to descriptive stats?
+3. Example: "The line is -14 because Team A is ranked #8 in AP Poll (descriptive). But their SP+ gap is only +5 (predictive). The spread may be inflated by media perception."
 
 **NCAAF-SPECIFIC CONSIDERATIONS:**
 

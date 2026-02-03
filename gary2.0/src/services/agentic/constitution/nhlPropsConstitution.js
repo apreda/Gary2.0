@@ -47,12 +47,13 @@ Your analysis MUST separate PP1 players from non-PP players.
 - The best shooters are on PP1
 - A PP1 player has ~2-3x the shot volume of an even-strength player
 
-**SOG Props Kill Condition:**
-If a player is NOT on PP1 AND their iCF < 5.0 over L5 games, the volume floor doesn't exist.
-Even-strength grinders don't generate enough attempts to reliably hit SOG lines.
+**SOG Props Volume Investigation:**
+- Players not on PP1 with low iCF may lack volume floor - investigate shot generation
+- Gary decides if volume floor exists based on PP status, iCF trends, and TOI
 
-**Points Props Kill Condition:**
-If a player is NOT on PP1 AND their TOI < 16 minutes, the floor is broken unless they have elite linemates.
+**Points Props Volume Investigation:**
+- Players not on PP1 with low TOI may lack opportunity floor - investigate role and linemates
+- Gary decides if volume floor exists based on PP status, TOI, and linemate quality
 
 ---
 

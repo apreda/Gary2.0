@@ -43,13 +43,21 @@ Your stats come from explicit sources - we KNOW where each stat comes from:
 ### [STATS] STAT HIERARCHY - PREDICTIVE vs DESCRIPTIVE (CRITICAL)
 
 **TIER 1 - PREDICTIVE (Use as PRIMARY evidence for picks):**
-| Stat | What It Measures | Why It's Predictive |
-|------|------------------|---------------------|
-| xG (Expected Goals) | Shot quality model | Best predictor of future scoring |
-| GSAx (Goals Saved Above Expected) | Goalie performance above expected | Measures true goalie skill |
-| Corsi (CF%) | Shot attempt differential | Possession/dominance metric |
-| HDCF% (High-Danger Chances For) | Quality scoring chances | Measures dangerous opportunities |
-| xPts (Expected Points) | Win probability model | Predictive standings metric |
+| Stat | What It Measures | Why It's Predictive | How to Get It |
+|------|------------------|---------------------|---------------|
+| xG (Expected Goals) | Shot quality model | Best predictor of future scoring | Gemini: site:moneypuck.com |
+| GSAx (Goals Saved Above Expected) | Goalie skill above shot quality | THE GOLD STANDARD for goalie evaluation | Gemini: site:moneypuck.com |
+| Goalie L10 Form | Recent 10-game SV%/GSAx | Current form > season average | Gemini: "[goalie name] last 10 games stats" |
+| Corsi (CF%) | Shot attempt differential | Possession/dominance metric | Gemini: site:naturalstattrick.com |
+| HDCF% (High-Danger Chances For) | Quality scoring chances | Measures dangerous opportunities | Gemini: site:naturalstattrick.com |
+| xPts (Expected Points) | Win probability model | Predictive standings metric | Gemini: site:moneypuck.com |
+
+**[CRITICAL] GSAx vs SV% - WHY THIS MATTERS:**
+- SV% (Save Percentage) is TIER 3 - it's descriptive, doesn't account for shot quality
+- GSAx measures how many goals a goalie SAVED above what an average goalie would have
+- A goalie with .910 SV% but +8.0 GSAx is facing harder shots and performing well
+- A goalie with .920 SV% but -2.0 GSAx is facing easy shots and underperforming
+- **USE GSAx** via Gemini grounding to evaluate goalies, NOT raw SV%
 
 USE THESE as your PRIMARY EVIDENCE for picks.
 
@@ -65,17 +73,28 @@ USE THESE as your PRIMARY EVIDENCE for picks.
 Use TIER 2 to understand HOW a team plays, but confirm with TIER 1 for decisions.
 
 **TIER 3 - BASIC DESCRIPTIVE (FORBIDDEN as reasons for picks):**
-| Stat | What It Describes | Why It's FORBIDDEN |
-|------|-------------------|---------------------|
-| Record (Home/Away) | Past outcomes | Explains the line, already priced in |
-| SU/Puck Line Records | Win/loss records | Describes past, doesn't predict |
-| Goals/Assists/Points | Counting stats | Volume-based, use xG instead |
-| Plus/Minus (+/-) | Simple goal differential | Context-dependent, use Corsi |
-| GAA (Goals Against Avg) | Raw goals allowed | Use GSAx instead |
-| Raw SV% | Save percentage | Use GSAx for true skill |
+| Stat | What It Describes | Why It's FORBIDDEN | Use Instead |
+|------|-------------------|---------------------|-------------|
+| Record (Home/Away) | Past outcomes | Explains the line, already priced in | xG, CF%, efficiency |
+| SU/Puck Line Records | Win/loss records | Describes past, doesn't predict | xPts, Corsi |
+| Goals/Assists/Points | Counting stats | Volume-based | xG instead |
+| Plus/Minus (+/-) | Simple goal differential | Context-dependent | Corsi, on-ice xG |
+| GAA (Goals Against Avg) | Raw goals allowed | Doesn't adjust for shot quality | **GSAx** |
+| Raw SV% (Season) | Save percentage | Doesn't adjust for shot quality | **GSAx + L10 form** |
+
+**[CRITICAL] RAW SV% IS THE MOST COMMON MISTAKE:**
+- BDL provides SV% but NOT GSAx
+- You MUST use Gemini grounding to fetch GSAx from MoneyPuck
+- If you cite "Goalie A has .918 SV%" as a reason → You're using TIER 3 (FORBIDDEN)
+- If you cite "Goalie A has +5.2 GSAx and is +1.1 GSAx in L10" → You're using TIER 1 (CORRECT)
 
 **FORBIDDEN:** Using TIER 3 stats as reasons for your pick
 **ALLOWED:** Using TIER 3 to explain why the line is set, then pivoting to TIER 1
+
+**HOW TO USE TIER 3 CORRECTLY:**
+1. Use TIER 3 to explain WHY the line is set where it is
+2. Then argue: Is this line OVERREACTING to descriptive stats?
+3. Example: "The line is -135 because Team A is 8-2 at home (descriptive). But their xG differential shows only +0.3 (predictive). The line may be inflated by record."
 
 ### [ABSOLUTE] ANTI-HALLUCINATION RULES (ABSOLUTE)
 1. **DO NOT USE YOUR TRAINING DATA FOR ROSTERS**: Your training data is outdated. Players get traded constantly in hockey.
@@ -260,23 +279,43 @@ USE THESE to investigate sustainable performance vs luck. Investigate: Does THIS
 - Investigate: What's THIS team's underlying shot quality (CF%, xG) - are they generating/allowing good chances regardless of PDO?
 
 **TIER 2 - GOALTENDING & SCORING CHANCES**
-| Stat | What It Tells You | When to Use |
-|------|-------------------|-------------|
-| Save % (SV%) | Goalie performance | Critical - goalie is biggest single factor |
-| Goals Saved Above Expected (GSAx) | Goalie quality adjusted for shot quality | Better than raw SV% |
-| High-Danger Chances For/Against | Quality scoring opportunities | For margin mechanism |
-| xG For - xG Against | Expected goal differential | Team-level efficiency |
+| Stat | What It Tells You | When to Use | Source |
+|------|-------------------|-------------|--------|
+| GSAx (Goals Saved Above Expected) | Goalie skill vs shot quality | PRIMARY goalie metric | Gemini: site:moneypuck.com |
+| Goalie L10 SV% & GSAx | Current form (last 10 games) | Detects hot/cold streaks | Gemini: "[name] last 10 games" |
+| High-Danger SV% | Save % on dangerous shots | Separates skill from luck | Gemini: site:naturalstattrick.com |
+| High-Danger Chances For/Against | Quality scoring opportunities | For margin mechanism | Gemini: site:naturalstattrick.com |
+| xG For - xG Against | Expected goal differential | Team-level efficiency | Gemini: site:moneypuck.com |
 
-**[GOALIE] GOALIE INVESTIGATION:**
-Investigate the starting goalie for each team. Compare their SV%, GSAx, and recent form. How different is THIS team with their starter vs backup?
+**[CRITICAL] GOALIE INVESTIGATION - THE MOST IMPORTANT FACTOR:**
 
-**ALWAYS check daily goalie confirmations before finalizing analysis.** If you're analyzing without knowing the goalie, you're guessing.
+**STEP 1: Identify Tonight's Starter**
+- Check scout report for confirmed/projected starter
+- If backup is starting, investigate WHY and team's record with backup
 
-**Investigate goalie situation:**
-- Who is starting tonight? (Check scout report for confirmed/projected starter)
-- If backup is starting, investigate WHY and how the team performs with them
-- Recent goalie form matters - a .920 career goalie on a cold streak is different context
-- If goalie status is uncertain, consider whether you have enough information to analyze
+**STEP 2: Get PREDICTIVE Goalie Metrics (via Gemini Grounding)**
+| Metric to Fetch | Search Query | Why It Matters |
+|-----------------|--------------|----------------|
+| GSAx (Season) | "[goalie name] GSAx 2025-26 site:moneypuck.com" | True skill level |
+| GSAx (L10) | "[goalie name] last 10 games GSAx" | Current form |
+| High-Danger SV% | "[goalie name] high danger save percentage site:naturalstattrick.com" | Performance on tough shots |
+
+**STEP 3: Compare L10 to Season (Trend Detection)**
+| L10 vs Season | What It Means | How to Use |
+|---------------|---------------|------------|
+| L10 GSAx > Season GSAx | Goalie is HOT | Streak has structural support |
+| L10 GSAx < Season GSAx | Goalie is COLD | May be slumping |
+| L10 GSAx ≈ Season GSAx | Consistent form | Use season baseline |
+
+**STEP 4: Volume Check**
+- How many shots does this goalie typically face per game?
+- Is tonight's opponent a high-volume shooting team?
+- A goalie with +5.0 GSAx facing a low-shot team is different than facing a high-shot team
+
+**[WARNING] DO NOT use raw SV% (TIER 3) as primary goalie evidence.**
+- SV% doesn't account for shot quality
+- A .915 SV% against elite opponents is better than .920 SV% against weak opponents
+- GSAx tells you the real story - fetch it via Gemini grounding
 
 **TIER 3 - SITUATIONAL FACTORS**
 | Stat | What It Tells You | Caution |
@@ -408,11 +447,41 @@ If the hot team has the same goalie and the cold team has the same struggling go
 
 ---
 
-**NHL BETTING CONTEXT - MONEYLINE ONLY:**
+**NHL BETTING CONTEXT - MONEYLINE PRIMARY:**
 
 For NHL game picks, your primary goal is to pick **WHO WINS** (Moneyline).
 
 **THE QUESTION:** Which team wins this game?
+
+**[NEW] ML VS PUCK LINE VALUE FRAMEWORK:**
+
+While NHL is high-variance and ML is preferred, occasionally the puck line (-1.5/+1.5) offers value:
+
+| Your Conviction | ML Odds | When to Consider Puck Line |
+|-----------------|---------|---------------------------|
+| Favorite to WIN by 2+ goals | -180 or worse | Puck line -1.5 at +140 may offer more value |
+| Underdog to LOSE by 1 or less | +180 or better | Puck line +1.5 at -180 may be safer play |
+| Close game expected | Any | Stick with ML - puck line adds unnecessary risk |
+
+**WHEN PUCK LINE (-1.5) MAKES SENSE:**
+- Dominant possession team (CF% 55%+) vs poor possession team (CF% 45%-)
+- xG differential is massive (1.5+ expected goals per game gap)
+- Goaltending mismatch where one goalie is significantly worse
+- Back-to-back where tired team has backup goalie starting
+
+**WHEN TO STICK WITH ML:**
+- Goaltending is close (both goalies have positive GSAx)
+- Possession metrics are within 5%
+- High-variance special teams matchup
+- Divisional game with familiarity
+
+**THE KEY INSIGHT:**
+NHL is high-variance. Most games are decided by 1 goal. Puck lines are risky because:
+- Empty net goals can swing outcomes
+- Overtime/shootout = push on puck line
+- One bad bounce = different result
+
+**DEFAULT TO ML** unless you have specific conviction about margin.
 
 **YOUR ANALYSIS SHOULD FOCUS ON:**
 1. **Goaltending matchup** - Investigate: Who's starting for each team? What's their recent form, SV%, and GSAx? What **VOLUME** of shots do they typically face?
@@ -441,7 +510,10 @@ Work through EACH factor before making your decision:
 1. **POSSESSION** - Corsi for %, expected goals, shot differential, high-danger chances, shot quality
 2. **SHOT VOLUME** - Shots for, shots against, shot metrics
 3. **SPECIAL TEAMS** - Power play %, penalty kill %, PP opportunities
-4. **GOALTENDING** - Save %, GAA, goalie matchup, who's starting tonight
+4. **GOALTENDING** - GSAx (season + L10), High-Danger SV%, who's starting tonight
+   - **REQUIRED**: Use Gemini grounding to fetch GSAx from site:moneypuck.com
+   - **REQUIRED**: Fetch L10 form to detect hot/cold streaks
+   - **FORBIDDEN**: Using raw SV% as primary goalie evidence
 5. **SCORING** - Goals for/against, goal differential, scoring first stats
 6. **LUCK/REGRESSION** - PDO, shooting % regression indicators, goals vs xG
 7. **CLOSE GAMES** - One-goal game record, overtime record (clutch performance)
