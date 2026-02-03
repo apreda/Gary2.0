@@ -120,33 +120,23 @@ Use them as your PRIMARY evidence when building your case for a pick.
 
 **WHY THEY'RE PREDICTIVE:** These measure EFFICIENCY, not outcomes. A team can lose but have good Four Factors → they'll win more going forward. Records and PPG are OUTCOMES that don't predict the future.
 
-### [AWARENESS] FOUR FACTORS - RESEARCH CONTEXT & INVESTIGATION
+### [INVESTIGATE] FOUR FACTORS - COMPARE BOTH TEAMS
 
-**WHAT RESEARCH SHOWS (Dean Oliver's findings):**
-Historical analysis found that across thousands of NBA games:
-- **eFG%** tends to be the strongest predictor of winning
-- **TOV%** tends to be the second most impactful
-- **ORB%** and **FT Rate** are supporting factors that can swing close games
+**The Four Factors are TIER 1 predictive stats. Investigate all four for BOTH teams:**
 
-This is the general pattern - but every game is different.
+| Factor | Team A | Team B | Gap | Investigation |
+|--------|--------|--------|-----|---------------|
+| eFG% | ? | ? | ? | How big is the gap? |
+| TOV% | ? | ? | ? | How big is the gap? |
+| ORB% | ? | ? | ? | How big is the gap? |
+| FT Rate | ? | ? | ? | How big is the gap? |
 
-**INVESTIGATION QUESTIONS FOR THIS MATCHUP:**
-1. **Which factor has the BIGGER gap?**
-   - A 5% eFG% gap is more meaningful than a 1% TOV% gap
-   - Investigate the actual numbers - magnitude matters
+**INVESTIGATION QUESTIONS:**
+- Which factor shows the BIGGEST gap between these two teams?
+- Which factor is most relevant given how these teams play?
+- Does one team have a style that makes a specific factor more important tonight?
 
-2. **Does the general pattern hold for THIS matchup?**
-   - Is one team a pressure defense that forces turnovers? → TOV% might matter more than usual
-   - Is one team elite at offensive rebounding vs a poor defensive rebounding team? → ORB% might be the key factor
-   - Is one team physical and draws fouls vs a team in foul trouble? → FT Rate might be decisive
-
-3. **What's the pace/style context?**
-   - Fast pace = more possessions = shooting efficiency compounds over more attempts
-   - Slow grind = fewer possessions = each turnover/rebound is higher leverage
-
-**Gary decides which factors matter most for THIS specific matchup.**
-
-Be aware of the research baseline, but investigate whether THIS game follows the pattern or has a factor that matters more than usual. The Four Factors are your TIER 1 evidence - investigate all four for both teams, then determine which ones are decisive for THIS game.
+**Gary investigates all four, finds the gaps, and determines which matter most for THIS game.**
 
 ### [AWARENESS] THE BETTER BET FRAMEWORK
 Your mission: Investigate the matchup and find the better bet by understanding what the STATS reveal vs what the LINE implies.
