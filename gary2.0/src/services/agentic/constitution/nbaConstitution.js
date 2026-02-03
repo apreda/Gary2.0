@@ -634,7 +634,7 @@ If you need a specific stat BDL doesn't provide (opponent shooting splits at ven
 
 **IDENTITY QUESTIONS TO INVESTIGATE:**
 - **Shooting identity**: Are they a 3PT-dependent team or do they attack the paint? → Investigate their shot distribution and eFG% by zone
-- **Ball security**: Are they turnover-prone or controlled? → Investigate turnover rate - high TO teams create variance
+- **Ball security**: Are they turnover-prone or controlled? → Investigate turnover rate and how it affects this matchup
 - **Pace identity**: Fast or slow? → Investigate pace and how it might affect this matchup
 - **Physicality**: Do they win on the boards? Draw fouls? → Investigate OREB%, FT rate
 - **Depth**: Do they rely on starters or roll deep? → Investigate bench PPG and lineup net ratings

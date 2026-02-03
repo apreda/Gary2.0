@@ -108,7 +108,7 @@ Do NOT do your own division or multiplication.
 
 **Pace Mismatches:**
 - Fast pace team (100+ poss/game) vs. slow team
-- More possessions = more volume for everyone
+- Investigate how the pace differential affects volume for THIS player
 - Check pace differential for opportunity context
 
 ---

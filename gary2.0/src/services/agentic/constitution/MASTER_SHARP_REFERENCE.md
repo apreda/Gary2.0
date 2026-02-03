@@ -45,9 +45,9 @@ For each prop, identify which edge type you're exploiting. If you can't identify
 
 ### EDGE 3: MEDIAN VS MEAN ARBITRAGE
 **What it is:** The player's distribution favors one side the line doesn't capture.
-- High-variance player (boom/bust) → Unders often undervalued
-- Low-variance player (consistent) → Line is accurate, less edge
-- Recent outlier inflating average → Under has value
+- High-variance player (boom/bust) - Investigate how their distribution affects the line
+- Low-variance player (consistent) - Line is often accurate, investigate if edge exists
+- Recent outlier inflating average - Investigate if line reflects mean or median
 
 **Grading Questions:**
 - Look at last 10 games: How many outliers?
@@ -88,10 +88,10 @@ For each prop, identify which edge type you're exploiting. If you can't identify
 
 ### EDGE 5: GAME SCRIPT CORRELATION
 **What it is:** You see how the game will flow differently than the market expects.
-- Spread suggests blowout, but you expect close game → Star minutes edge
-- Pace mismatch creates extra possessions → Volume boost
-- Team missing rim protector → Paint points/rebounds edge
-- Expected game script favors specific player role
+- Spread suggests blowout, but you expect close game - Investigate star minutes implications
+- Pace mismatch - Investigate how it affects volume for this player
+- Team missing rim protector - Investigate paint points/rebounds opportunities
+- Expected game script - Investigate which players benefit from your thesis
 
 **Grading Questions:**
 - What does the spread say about expected game flow?
@@ -331,10 +331,10 @@ Before you lock in your 2 picks, ask:
 ## APPENDIX: SPORT-SPECIFIC NOTES
 
 ### NBA PROPS
-- **Blowout Impact:** SEVERE. Stars sit entire 4th quarters. Always check spread.
-- **Minutes Restrictions:** Common for load management. Check injury report closely.
-- **Back-to-Back:** Second game of B2B = reduced minutes, especially for older players.
-- **Pace:** High-pace games = more possessions = volume boost for everyone.
+- **Blowout Impact:** Investigate: What's the spread? How might blowout risk affect THIS player's minutes?
+- **Minutes Restrictions:** Investigate: Any load management concerns? What does the injury report say?
+- **Back-to-Back:** Investigate: Is this a B2B? How has THIS player's usage changed in B2B situations?
+- **Pace:** Investigate: What's the pace of this matchup? How does it affect volume for THIS player?
 
 ### NFL PROPS
 - **Game Script:** Investigate: What's the projected game script? How does THIS player's usage change when their team is trailing vs leading?
@@ -547,13 +547,13 @@ When a player's usage suddenly jumps (teammate injury), can they maintain it?
 - The Murray "16.5 APG without Jokic" claim needs sample size check
 
 **THE PACE POSSESSIONS THEORY**
-Everything flows from possessions. More possessions = more everything.
+Possessions are the foundation of volume. Investigate how pace affects THIS player.
 
 *Application:*
-- High pace game = volume boost for everyone
+- Investigate how pace affects volume for THIS player in THIS matchup
 - Calculate possessions: Your team's pace + opponent's pace creates game pace
 - But: More possessions also means more opportunities for OPPONENT
-- Overs hit more in high-pace, but so do opponent props
+- Investigate pace impact on both teams' props, not just one side
 
 ---
 
@@ -563,42 +563,42 @@ Everything flows from possessions. More possessions = more everything.
 Some players elevate in clutch time, some disappear.
 
 *Application:*
-- Known closers (established stars) get extra usage late
-- Line might not account for clutch usage boost
-- But also: Close games = more free throws, clock stoppages = more possessions in same time
+- Investigate if THIS player gets extra clutch-time usage
+- Investigate if the line accounts for clutch usage patterns
+- Investigate how close game scenarios affect free throw and possession opportunities
 
 **NBA: THE "PLAYOFF MODE" SWITCH**
 Theory: Regular season effort ≠ playoff effort. Some players coast, some don't know how to switch.
 
 *Application:*
-- Mid-season props on known "coasters" → Consider unders
-- But: Load management makes this murkier—are they coasting or just being rested?
+- Investigate if THIS player has shown effort variance through the season
+- Investigate: Is load management affecting their output, or are they coasting?
 
 **NFL: THE SCRIPT DEPENDENCY**
 Game script dominates NFL props more than any other sport.
 
 *Application:*
-- RB props die when trailing (team abandons run)
-- WR props die when leading big (team runs out clock)
-- QB props depend entirely on game flow
-- Always model: "What happens if they're up 14?" and "What happens if they're down 14?"
+- Investigate how THIS team's RB usage changes when trailing vs leading
+- Investigate how THIS team's WR usage changes by game script
+- QB props depend on game flow - investigate THIS QB's splits
+- Model both scenarios: "What happens if they're up 14?" and "What happens if they're down 14?"
 
 **NFL: THE WEATHER WINDOWS**
-Specific conditions create specific edges.
+Specific conditions create specific edges. Investigate how weather affects THIS matchup.
 
 *Sharp Take:*
-- Wind 15+ mph: Passing yards crater, rushing yards boom
-- Rain: Passing efficiency drops but attempts might stay same
-- Cold: Ball is harder to grip, drops increase
-- Dome teams playing outdoors in December = disaster
+- Investigate how wind affects THIS team's passing attack and ground game
+- Investigate how rain affects THIS QB's efficiency
+- Investigate how cold affects THIS team's ball security
+- Investigate how dome teams have performed outdoors in adverse conditions
 
 **NHL: THE GOALIE CAROUSEL**
 Goalie changes affect everything but are announced late.
 
 *Application:*
-- Backup goalie = more goals expected for opponent
-- But ALSO: Team might play tighter defense in front of backup
-- Best play is often opponent props, not own team
+- Investigate how backup goalie affects goal expectations
+- Investigate: Does THIS team play tighter defense in front of backups?
+- Investigate opponent props vs own team props in backup goalie situations
 
 **NHL: THE "GETTING PUCKS ON NET" FALLACY**
 Coaches always say "get pucks on net" but SOG ≠ quality chances.

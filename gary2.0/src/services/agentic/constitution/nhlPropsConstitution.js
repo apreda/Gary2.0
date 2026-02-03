@@ -75,13 +75,13 @@ Your analysis MUST separate PP1 players from non-PP players.
 - Shooting % is highly variable (don't trust 3-game trends)
 - High-danger chance rate matters more
 - PP1 creates goal opportunities
-- Check opponent's goalie (backup = more goals)
+- Investigate opponent's goalie - how does their performance affect goal opportunities?
 
 **Goalie Saves Props:**
 - Opponent shot volume is the driver
 - Opponent pace of play
-- Own team's PK (more PP against = more shots)
-- Check if backup is starting (either side)
+- Investigate how own team's PK performance affects shot volume faced
+- Investigate if backup is starting and how that affects the prop
 
 ---
 
