@@ -3539,52 +3539,137 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
     year: 'numeric' 
   });
   
-  // Get teams playing today (use slate teams if provided, otherwise get all)
-  const teams = slate?.teams || await getTeamsPlayingToday(sport, dateStr);
-  console.log(`[DFS Context] Teams playing: ${teams.join(', ') || 'None found'}`);
-  
-  if (teams.length === 0) {
-    return {
-      platform,
-      sport,
-      date: dateStr,
-      players: [],
-      gamesCount: 0,
-      error: 'No games found for this date'
-    };
+  // Get teams - STRICT: Must have slate-specific teams, no fallback to all teams
+  // If no slate is provided (Main slate case), we'll derive teams from games later
+  let teams = slate?.teams || [];
+
+  // For Main slate with no explicit teams, get all teams as initial pool
+  // This will be validated later against actual filtered games
+  if (teams.length === 0 && !slate) {
+    teams = await getTeamsPlayingToday(sport, dateStr);
   }
+
+  console.log(`[DFS Context] Initial teams: ${teams.join(', ') || 'Will derive from games'}`);
+
+  // Don't fail here yet - we'll validate after game filtering
   
   // Get game info for narrative context
   const sportKey = sport === 'NBA' ? 'basketball_nba' : 'americanfootball_nfl';
   let allGames = await ballDontLieService.getGames(sportKey, { dates: [dateStr] }, 5) || [];
   
-  // Filter games based on slate if provided, otherwise use date-based filtering
+  // Filter games based on slate - STRICT MODE: No fallbacks that produce wrong data
+  // CRITICAL: Each slate (Main, Turbo, Night) has specific games - MUST be accurate or fail
   let games = [];
-  if (slate?.games) {
-    // If slate provides games (e.g. "LAL@BOS"), filter allGames to match
+
+  // Try multiple properties to get slate games (some discovery methods use different property names)
+  const slateGames = slate?.games || slate?.matchups || [];
+  const inputSlateTeams = slate?.teams || [];  // Renamed to avoid conflict with derivedTeams later
+
+  if (slateGames.length > 0) {
+    // Use slate's explicit game list
+    console.log(`[DFS Context] Filtering to slate games: ${slateGames.join(', ')}`);
     games = allGames.filter(g => {
       const match1 = `${g.visitor_team?.abbreviation}@${g.home_team?.abbreviation}`;
       const match2 = `${g.away_team?.abbreviation}@${g.home_team?.abbreviation}`;
-      return slate.games.includes(match1) || slate.games.includes(match2);
-    });
-  } else {
-    // Default date-based filtering
-    if (sport === 'NFL' && allGames.length > 0) {
-      const targetMonth = dateStr.split('-')[1];
-      const targetDay = dateStr.split('-')[2];
-      const targetDateStr = `${targetMonth}/${targetDay}`;
-      
-      games = allGames.filter(game => {
-        const status = game.status || '';
-        return status.includes(targetDateStr);
+      // Also try lowercase and various formats
+      const match1Lower = match1.toLowerCase();
+      const match2Lower = match2.toLowerCase();
+      return slateGames.some(sg => {
+        const sgLower = sg.toLowerCase();
+        return sgLower === match1Lower || sgLower === match2Lower ||
+               sg === match1 || sg === match2;
       });
-    } else {
-      games = allGames;
-    }
+    });
+  } else if (inputSlateTeams.length > 0) {
+    // Fallback: Filter by teams if games list not available
+    console.log(`[DFS Context] No games list, filtering by teams: ${inputSlateTeams.join(', ')}`);
+    const slateTeamSet = new Set(inputSlateTeams.map(t => t.toUpperCase()));
+    games = allGames.filter(g => {
+      const homeTeam = (g.home_team?.abbreviation || '').toUpperCase();
+      const visitorTeam = (g.visitor_team?.abbreviation || g.away_team?.abbreviation || '').toUpperCase();
+      return slateTeamSet.has(homeTeam) || slateTeamSet.has(visitorTeam);
+    });
+  } else if (!slate) {
+    // NO SLATE PROVIDED = Main slate / all games for the day
+    // This is the default case when user doesn't specify a specific slate
+    console.log(`[DFS Context] No slate specified - using ALL ${allGames.length} games for the day (Main slate)`);
+    games = allGames;
+  } else {
+    // SPECIFIC SLATE WAS PROVIDED but has no games/teams = FAIL
+    // This means slate discovery failed to populate this slate's data
+    // Do NOT fall back to all games - that produces contaminated lineups
+    console.error(`[DFS Context] ❌ FATAL: No slate.games or slate.teams provided for slate "${slate?.name || 'unknown'}"`);
+    console.error(`[DFS Context] Slate object:`, JSON.stringify(slate, null, 2));
+    return {
+      platform,
+      sport,
+      date: dateStr,
+      slate: slate?.name,
+      players: [],
+      gamesCount: 0,
+      error: `Slate "${slate?.name}" has no games or teams defined - cannot generate accurate lineup. Fix slate discovery.`
+    };
   }
-  
-  console.log(`[DFS Context] Filtered to ${games.length} games for this slate`);
-  
+
+  // VALIDATION: Check if game count matches slate expectation
+  if (slate?.gameCount && games.length !== slate.gameCount) {
+    const expectedGames = slate.gameCount;
+    const foundGames = games.length;
+
+    if (foundGames === 0) {
+      // No games found at all - definitely wrong slate data
+      console.error(`[DFS Context] ❌ No games found for slate "${slate.name}" (expected ${expectedGames})`);
+      console.error(`[DFS Context] Slate games tried: ${slateGames.join(', ')}`);
+      return {
+        platform,
+        sport,
+        date: dateStr,
+        slate: slate?.name,
+        players: [],
+        gamesCount: 0,
+        expectedGames,
+        error: `No games matched for slate "${slate.name}" - expected ${expectedGames}. Check slate discovery matchup data.`
+      };
+    }
+
+    if (foundGames > expectedGames) {
+      // Found MORE games than expected = likely contamination from wrong slate
+      console.error(`[DFS Context] ❌ Game count contamination! Slate "${slate.name}" expects ${expectedGames} games, found ${foundGames}`);
+      console.error(`[DFS Context] Slate games: ${slateGames.join(', ')}`);
+      console.error(`[DFS Context] Filtered games: ${games.map(g => `${g.visitor_team?.abbreviation}@${g.home_team?.abbreviation}`).join(', ')}`);
+      return {
+        platform,
+        sport,
+        date: dateStr,
+        slate: slate?.name,
+        players: [],
+        gamesCount: foundGames,
+        expectedGames,
+        error: `Too many games matched for slate "${slate.name}": found ${foundGames} but expected ${expectedGames}. This indicates slate contamination.`
+      };
+    }
+
+    // Found fewer games than expected - might be postponement/cancellation, warn but continue
+    console.warn(`[DFS Context] ⚠️ Game count mismatch: slate "${slate.name}" expects ${expectedGames} games, found ${foundGames}`);
+    console.warn(`[DFS Context] This may be due to postponements. Continuing with ${foundGames} games...`);
+  }
+
+  console.log(`[DFS Context] ✅ Filtered to ${games.length} games for slate "${slate?.name || 'unknown'}": ${games.map(g => `${g.visitor_team?.abbreviation}@${g.home_team?.abbreviation}`).join(', ')}`);
+
+  // CRITICAL: Derive teams FROM the filtered games - this is the authoritative source
+  // Do NOT use the original 'teams' variable which may have been set incorrectly
+  const derivedTeams = new Set();
+  games.forEach(g => {
+    if (g.home_team?.abbreviation) derivedTeams.add(g.home_team.abbreviation.toUpperCase());
+    if (g.visitor_team?.abbreviation) derivedTeams.add(g.visitor_team.abbreviation.toUpperCase());
+    if (g.away_team?.abbreviation) derivedTeams.add(g.away_team.abbreviation.toUpperCase());
+  });
+  const slateTeams = Array.from(derivedTeams);
+  console.log(`[DFS Context] ✅ Teams in this slate (derived from games): ${slateTeams.join(', ')}`);
+
+  // Override 'teams' with accurate slate teams for downstream use
+  teams = slateTeams;
+
   const gameList = games.map(g => ({
     home_team: g.home_team?.abbreviation || g.home_team?.name,
     visitor_team: g.visitor_team?.abbreviation || g.visitor_team?.name,
@@ -3613,13 +3698,19 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
   const bdlCount = bdlPlayers.length;
   const salaryCount = salaryData.players?.length || 0;
   
-  console.log(`[DFS Context] BDL players: ${bdlCount}`);
-  console.log(`[DFS Context] Tank01 salary data: ${salaryCount} players`);
-  
-  // Filter player stats and salaries to only include teams in this slate
+  console.log(`[DFS Context] BDL players (all): ${bdlCount}`);
+  console.log(`[DFS Context] Tank01 salary data (all): ${salaryCount} players`);
+
+  // Filter player stats and salaries to ONLY include teams in this slate
+  // This is critical - using the derived teams from filtered games
   const slateTeamSet = new Set(teams.map(t => t.toUpperCase()));
+  console.log(`[DFS Context] Filtering players to teams: ${Array.from(slateTeamSet).join(', ')}`);
+
   const filteredBdlPlayers = bdlPlayers.filter(p => slateTeamSet.has(p.team?.toUpperCase()));
   const filteredSalaryPlayers = (salaryData.players || []).filter(p => slateTeamSet.has(p.team?.toUpperCase()));
+
+  console.log(`[DFS Context] ✅ Filtered BDL players: ${filteredBdlPlayers.length} (from ${bdlCount})`);
+  console.log(`[DFS Context] ✅ Filtered salary players: ${filteredSalaryPlayers.length} (from ${salaryCount})`);
   
   // ═══════════════════════════════════════════════════════════════════════════
   // INTEGRATE CONFIRMED STARTERS & BENCHMARKS
