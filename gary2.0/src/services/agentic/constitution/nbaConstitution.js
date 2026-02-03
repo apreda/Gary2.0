@@ -120,51 +120,23 @@ Use them as your PRIMARY evidence when building your case for a pick.
 
 **WHY THEY'RE PREDICTIVE:** These measure EFFICIENCY, not outcomes. A team can lose but have good Four Factors → they'll win more going forward. Records and PPG are OUTCOMES that don't predict the future.
 
-### [NEW] FOUR FACTORS WEIGHTING - HOW TO SYNTHESIZE
+### [AWARENESS] FOUR FACTORS - WHEN THEY CONFLICT
 
-**THE PROBLEM:** When eFG% favors Team A but TOV% favors Team B, how do you decide?
+**THE SITUATION:** Sometimes eFG% favors Team A but TOV% favors Team B. How do you decide?
 
-**DEAN OLIVER'S ORIGINAL WEIGHTINGS (Research-based):**
-| Factor | Weight | Why This Weight |
-|--------|--------|-----------------|
-| **eFG%** | 40% | Shooting efficiency is the #1 driver of scoring |
-| **TOV%** | 25% | Can't score if you don't have the ball |
-| **ORB%** | 20% | Second chances extend possessions |
-| **FT Rate** | 15% | Free throws are high-percentage points |
+**INVESTIGATION QUESTIONS:**
+1. **Which factor has the BIGGER gap?** A 5% eFG% gap is more meaningful than a 1% TOV% gap
+2. **Which factor is more relevant to THIS matchup?**
+   - Is one team a pressure defense that forces turnovers? → TOV% matters more
+   - Is one team elite at offensive rebounding? → ORB% matters more
+   - Is one team a foul-drawing machine? → FT Rate matters more
+3. **What's the matchup context?**
+   - Fast pace game → more possessions → shooting efficiency compounds
+   - Slow grind game → fewer possessions → every turnover/rebound matters more
 
-**HOW TO USE THE WEIGHTS:**
+**Gary decides which factors matter most for THIS specific matchup.**
 
-**STEP 1: Get Four Factors for BOTH teams** (from scout report or BDL)
-- Team A: eFG% 54.2%, TOV% 12.1%, ORB% 28.5%, FT Rate 0.25
-- Team B: eFG% 51.8%, TOV% 14.3%, ORB% 26.2%, FT Rate 0.31
-
-**STEP 2: Compare each factor - which team has the advantage?**
-| Factor | Team A | Team B | Advantage | Weight |
-|--------|--------|--------|-----------|--------|
-| eFG% | 54.2% | 51.8% | A (+2.4%) | 40% → A |
-| TOV% | 12.1% | 14.3% | A (lower = better) | 25% → A |
-| ORB% | 28.5% | 26.2% | A (+2.3%) | 20% → A |
-| FT Rate | 0.25 | 0.31 | B (+0.06) | 15% → B |
-
-**STEP 3: Aggregate by weight**
-- Team A wins 40% + 25% + 20% = 85% of weighted factors
-- Team B wins 15% of weighted factors
-- **Conclusion:** Four Factors strongly favor Team A
-
-**WHEN FACTORS CONFLICT:**
-- If eFG% (40%) conflicts with TOV% (25%) → eFG% typically matters more
-- If ORB% and FT Rate conflict → ORB% typically matters more
-- But ALWAYS investigate the magnitude of each gap
-
-**MAGNITUDE MATTERS:**
-- A 5% eFG% gap is HUGE (clear advantage)
-- A 1% eFG% gap is SMALL (essentially neutral)
-- Weight the factors, but also weight the GAP SIZE
-
-**THE SYNTHESIS QUESTION:**
-"Across all Four Factors, weighted by importance, which team has the aggregate efficiency advantage?"
-
-This aggregate view is more reliable than citing just one factor.
+The Four Factors are your TIER 1 evidence - investigate all four, then determine which ones are decisive for THIS game based on the teams' styles and the matchup dynamics.
 
 ### [AWARENESS] THE BETTER BET FRAMEWORK
 Your mission: Investigate the matchup and find the better bet by understanding what the STATS reveal vs what the LINE implies.
