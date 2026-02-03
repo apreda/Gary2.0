@@ -343,7 +343,7 @@ USE THESE to investigate sustainable performance vs luck. Investigate: Does THIS
 **WHEN LAST CHANGE MATTERS MOST:**
 - Home underdog with strong top-6 forwards
 - Road favorite that relies heavily on one line for scoring
-- Games where pace will be controlled (fewer line changes = more matchup impact)
+- Games where pace will be controlled - investigate how line changes affect matchups
 
 **GRADING HOME UNDERDOG CASES:**
 - "They have home ice" alone = weak argument (only ~0.15-0.2 goals raw)
@@ -362,11 +362,11 @@ USE THESE to investigate sustainable performance vs luck. Investigate: Does THIS
 **ASK YOURSELF:** What makes this team tick? Why do they win or lose?
 
 **IDENTITY QUESTIONS TO INVESTIGATE:**
-- **Possession identity**: Do they control the puck or play counter-attack? → Investigate CF% - high possession teams are more consistent
+- **Possession identity**: Do they control the puck or play counter-attack? → Investigate CF%
 - **Scoring quality**: Do they generate high-danger chances or rely on perimeter shots? → Investigate xGF and slot shot frequency
-- **Special teams dependency**: Are they PP-reliant to score? → Investigate 5v5 goal differential vs PP goals - PP-dependent teams are volatile
-- **Depth**: One-line team or four-line depth? → Investigate goal distribution - depth scoring is more sustainable
-- **Goaltending stability**: Strong tandem or starter-dependent? → Investigate backup SV% and starts - this affects back-to-backs
+- **Special teams dependency**: Are they PP-reliant to score? → Investigate 5v5 goal differential vs PP goals
+- **Depth**: One-line team or four-line depth? → Investigate goal distribution across lines
+- **Goaltending stability**: Strong tandem or starter-dependent? → Investigate backup performance and workload
 
 **INSTEAD OF HOME/AWAY RECORDS, ASK:**
 - "Their road record is 12-8 - but WHY?" → Investigate home vs road CF%, xGF, SV% splits
@@ -394,7 +394,7 @@ Example: "Bruins generate 3.4 xGF at home (elite) but Panthers allow only 2.1 xG
 **REGRESSION QUESTIONS:**
 When PDO is extreme (>102 or <98), ask:
 - "Is this sustainable or due for regression?" → Investigate xG vs actual goals
-- "Is it shooting-driven or goaltending-driven?" → Shooting regresses faster than elite goaltending
+- "Is it shooting-driven or goaltending-driven?" → Investigate what's driving the extreme PDO
 - "Has there been any partial correction already in L5?"
 
 **CONNECT THE DOTS:**
@@ -436,7 +436,7 @@ In NBA/NFL, streaks are often driven by shooting variance or turnover luck - fac
 | Team cold (L4), fresh goalie tonight | Could break the slump | Investigate the new goalie's form |
 
 **INVESTIGATION QUESTIONS (Fuel Tank Audit):**
-1. **Is the same goalie starting tonight who played during the streak?** If YES → streak has structural support.
+1. **Is the same goalie starting tonight who played during the streak?** Investigate what this means for tonight.
 2. **What are the goalie's numbers DURING the streak vs. season average?** Hot goalie (SV% up 0.010+) = sustainable momentum.
 3. **For cold streaks: Is it goalie-driven or team-driven?** Check CF% during the cold stretch.
 4. **Is the opponent's streak also goalie-dependent?** Compare both sides' goalie continuity.
