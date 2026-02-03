@@ -5138,9 +5138,12 @@ function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey) {
       midSeasonOut.forEach(i => lines.push(formatPlayer(i)));
     }
 
-    // SEASON-LONG injuries are NOT shown to Gary - if he can't see them, he can't cite them
-    // The team has fully adapted to these absences - they're priced in and not an edge
-    // seasonLongOut is intentionally not rendered
+    // SEASON-LONG injuries ARE shown to Gary so he doesn't hallucinate from training data
+    // But clearly labeled as PRICED IN so he knows not to cite them as reasons
+    if (seasonLongOut.length > 0) {
+      lines.push(`  [PRICED IN - SEASON-LONG] Team has FULLY adapted - DO NOT cite as reason:`);
+      seasonLongOut.forEach(i => lines.push(formatPlayer(i)));
+    }
 
     if (unknownOut.length > 0) {
       lines.push(`  [OUT - UNKNOWN DURATION] Verify before citing:`);
@@ -5152,8 +5155,11 @@ function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey) {
       cats.others.forEach(i => lines.push(formatPlayer(i)));
     }
 
-    // cats.seasonal (season-long non-OUT injuries) are NOT shown to Gary
-    // Same reasoning: priced in, not an edge, team has adapted
+    // cats.seasonal (season-long non-OUT injuries) ARE shown so Gary doesn't hallucinate
+    if (cats.seasonal.length > 0) {
+      lines.push(`  [PRICED IN - SEASON-LONG] Extended absences - DO NOT cite as reason:`);
+      cats.seasonal.forEach(i => lines.push(formatPlayer(i)));
+    }
 
     if (!cats.critical.length && !cats.out.length && !cats.others.length && !cats.seasonal.length) {
       lines.push(`  No injuries reported`);
@@ -5180,6 +5186,20 @@ function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey) {
   lines.push('  - Line may NOT have fully adjusted yet');
   lines.push('  - INVESTIGATE: Is the line showing an overreaction or underreaction?');
   lines.push('  - To use as edge, you must prove WHY the line is mispriced');
+  lines.push('');
+  lines.push('[PRICED IN - SEASON-LONG] injuries (1+ month out):');
+  lines.push('  - These players have been OUT for most/all of the season');
+  lines.push('  - The team IS what it IS without them - their current stats reflect the absence');
+  lines.push('  - 100% IRRELEVANT to your pick - PRETEND THEY DO NOT EXIST');
+  lines.push('  - DO NOT cite, DO NOT mention, DO NOT factor into analysis');
+  lines.push('  - We show you these so you KNOW they are out (prevents hallucination from training data)');
+  lines.push('');
+  lines.push('LINE-MOVER AWARENESS (Sharp thinking):');
+  lines.push('  - When a star is out, the line moves. Your job: Did it move the RIGHT amount?');
+  lines.push('  - When a team is on B2B, the line moves. Your job: Does the data support that much movement?');
+  lines.push('  - The public OVERREACTS to "star out" and "tired team" narratives');
+  lines.push('  - GOOD: "X injury moved this line to -2, but even without X the efficiency gap shows these teams are not evenly matched"');
+  lines.push('  - GOOD: "Line moved 4 points for B2B, but this team shows no efficiency drop on back-to-backs"');
   lines.push('');
   lines.push('FORBIDDEN REASONING:');
   lines.push('  - "X is out, so I take the other side" (already priced in)');
