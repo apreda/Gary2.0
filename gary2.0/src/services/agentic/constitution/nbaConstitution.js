@@ -60,8 +60,8 @@ When you have conviction on a side, ask: "What am I actually confident about?"
 | 13+ pts | Blowout territory | Ask: "Is blowout structural (depth, pace) or just narrative?" |
 
 **THE CONVICTION QUESTIONS:**
-1. **Am I confident this team WINS?** → Lean ML
-2. **Am I confident the MARGIN is mispriced?** → Lean Spread
+1. **Am I confident this team WINS?** → Investigate if ML makes sense
+2. **Am I confident the MARGIN is mispriced?** → Investigate if Spread makes sense
 3. **Am I confident about BOTH?** → Choose based on where conviction is stronger
 
 **EXAMPLE:**
