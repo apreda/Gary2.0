@@ -302,215 +302,6 @@ console.log(`[DFS Context] Initialized with MODEL_CONFIG:`, {
   grounding: DFS_MODEL_CONFIG.grounding
 });
 
-/**
- * ═══════════════════════════════════════════════════════════════════════════
- * PROP LINES FOR DFS PROJECTIONS - The Sharpest Edge
- * ═══════════════════════════════════════════════════════════════════════════
- * 
- * Prop lines are set by oddsmakers with real money on the line. They represent
- * the market's consensus on player performance - much sharper than "expert"
- * projections or historical averages.
- * 
- * DFS Fantasy Point Calculation (DraftKings):
- * - Points: 1 pt per point scored
- * - Rebounds: 1.25 pts per rebound
- * - Assists: 1.5 pts per assist
- * - Steals: 2 pts per steal
- * - Blocks: 2 pts per block
- * - Turnovers: -0.5 pts per turnover
- * - 3PM: 0.5 bonus per three made
- * - Double-Double: 1.5 bonus
- * - Triple-Double: 3 bonus
- * 
- * By using prop lines, we can estimate floor/ceiling:
- * - Points O/U 22.5 → baseline 22.5 fantasy pts just from scoring
- * - Assists O/U 6.5 → +9.75 fantasy pts from assists
- * - Rebounds O/U 8.5 → +10.6 fantasy pts from boards
- * ═══════════════════════════════════════════════════════════════════════════
- */
-
-/**
- * Fetch player prop lines for DFS projection enhancement
- * @param {string} sport - 'NBA' or 'NFL'
- * @param {Array} gameIds - Array of game IDs to fetch props for
- * @returns {Object} Map of player names to prop-based projections
- */
-export async function fetchPropLinesForDFS(sport, gameIds) {
-  if (!gameIds || gameIds.length === 0) {
-    console.log('[DFS Props] No game IDs provided - skipping prop lines');
-    return {};
-  }
-  
-  const propProjections = {};
-  
-  try {
-    console.log(`[DFS Props] 📊 Fetching prop lines for ${gameIds.length} games to enhance DFS projections`);
-    
-    // Check if BDL service has player props method for this sport
-    // NOTE: BDL SDK currently only supports NHL props, not NBA
-    if (sport === 'NBA' && typeof ballDontLieService.getNbaPlayerProps !== 'function') {
-      console.log('[DFS Props] ⚠️ NBA player props not available via BDL SDK - using MCP tools would be required');
-      console.log('[DFS Props] ℹ️ Falling back to season stats for projections');
-      return {};
-    }
-    
-    // Fetch props for each game
-    for (const gameId of gameIds) {
-      try {
-        // Use BDL API to fetch player props (NHL supported, NBA not yet)
-        const propsMethod = sport === 'NBA' ? 'getNbaPlayerProps' : 
-                          sport === 'NHL' ? 'getNhlPlayerProps' : null;
-        
-        if (!propsMethod || typeof ballDontLieService[propsMethod] !== 'function') {
-          console.log(`[DFS Props] ⚠️ ${sport} props not available`);
-          continue;
-        }
-        
-        const props = await ballDontLieService[propsMethod](gameId);
-        
-        if (!props || props.length === 0) continue;
-        
-        // Group props by player
-        const playerProps = {};
-        for (const prop of props) {
-          const playerName = prop.player?.full_name || prop.player_name;
-          if (!playerName) continue;
-          
-          if (!playerProps[playerName]) {
-            playerProps[playerName] = {
-              name: playerName,
-              team: prop.team?.abbreviation || prop.team,
-              props: {}
-            };
-          }
-          
-          // Store the prop line (use the line value, not the odds)
-          const propType = prop.prop_type || prop.stat_type;
-          const line = prop.line || prop.over_under;
-          
-          if (propType && line) {
-            playerProps[playerName].props[propType] = line;
-          }
-        }
-        
-        // Calculate DFS projection from props
-        for (const [name, data] of Object.entries(playerProps)) {
-          const p = data.props;
-          
-          // DraftKings scoring
-          let projection = 0;
-          let components = [];
-          
-          // Points (1 pt per point)
-          if (p.points) {
-            projection += p.points * 1;
-            components.push(`${p.points} pts`);
-          }
-          
-          // Rebounds (1.25 pts per rebound)
-          if (p.rebounds) {
-            projection += p.rebounds * 1.25;
-            components.push(`${p.rebounds} reb`);
-          }
-          
-          // Assists (1.5 pts per assist)
-          if (p.assists) {
-            projection += p.assists * 1.5;
-            components.push(`${p.assists} ast`);
-          }
-          
-          // Threes (0.5 bonus per 3PM - already counted in points)
-          if (p.threes) {
-            projection += p.threes * 0.5;
-            components.push(`${p.threes} 3PM`);
-          }
-          
-          // PRA (Points + Rebounds + Assists combo)
-          if (p.points_rebounds_assists && !p.points && !p.rebounds && !p.assists) {
-            // If we have PRA but not individual lines, use it as a rough estimate
-            // PRA ≈ Points + Rebounds*1.25 + Assists*1.5 (but we only have raw total)
-            // Estimate: PRA line * 1.2 for DFS conversion
-            projection = p.points_rebounds_assists * 1.15;
-            components.push(`${p.points_rebounds_assists} PRA`);
-          }
-          
-          if (projection > 0) {
-            propProjections[name] = {
-              ...data,
-              propBasedProjection: Math.round(projection * 10) / 10,
-              propComponents: components.join(' + '),
-              confidence: components.length >= 3 ? 'HIGH' : components.length >= 2 ? 'MEDIUM' : 'LOW'
-            };
-          }
-        }
-        
-      } catch (gameError) {
-        console.warn(`[DFS Props] Failed to fetch props for game ${gameId}: ${gameError.message}`);
-      }
-    }
-    
-    const playerCount = Object.keys(propProjections).length;
-    console.log(`[DFS Props] ✅ Generated prop-based projections for ${playerCount} players`);
-    
-    return propProjections;
-    
-  } catch (error) {
-    console.error(`[DFS Props] Error fetching prop lines: ${error.message}`);
-    return {};
-  }
-}
-
-/**
- * Enhance DFS player data with prop-based projections
- * @param {Array} players - Array of DFS players with salaries
- * @param {Object} propProjections - Prop-based projections from fetchPropLinesForDFS
- * @returns {Array} Enhanced player array with prop projections
- */
-export function enhancePlayersWithProps(players, propProjections) {
-  if (!propProjections || Object.keys(propProjections).length === 0) {
-    return players;
-  }
-  
-  let enhancedCount = 0;
-  
-  const enhanced = players.map(player => {
-    const playerName = player.name || player.player;
-    
-    // Try exact match first, then fuzzy match
-    let propData = propProjections[playerName];
-    
-    if (!propData) {
-      // Try partial match (last name)
-      const lastName = playerName?.split(' ').pop()?.toLowerCase();
-      for (const [name, data] of Object.entries(propProjections)) {
-        if (name.toLowerCase().includes(lastName)) {
-          propData = data;
-          break;
-        }
-      }
-    }
-    
-    if (propData) {
-      enhancedCount++;
-      return {
-        ...player,
-        propProjection: propData.propBasedProjection,
-        propComponents: propData.propComponents,
-        propConfidence: propData.confidence,
-        // Use prop projection as floor/ceiling estimate
-        projectedFloor: Math.round(propData.propBasedProjection * 0.7 * 10) / 10,
-        projectedCeiling: Math.round(propData.propBasedProjection * 1.4 * 10) / 10,
-        valueScore: player.salary ? (propData.propBasedProjection / (player.salary / 1000)).toFixed(2) : null
-      };
-    }
-    
-    return player;
-  });
-  
-  console.log(`[DFS Props] Enhanced ${enhancedCount}/${players.length} players with prop-based projections`);
-  
-  return enhanced;
-}
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -3687,12 +3478,11 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
   // Get game IDs for prop line fetching
   const gameIds = games.map(g => g.id).filter(Boolean);
   
-  const [bdlPlayers, salaryData, narrativeContext, ownershipData, propProjections] = await Promise.all([
+  const [bdlPlayers, salaryData, narrativeContext, ownershipData] = await Promise.all([
     fetchPlayerStatsFromBDL(sport, dateStr),
     fetchDfsSalaries(sport, dateStr, platform), // Tank01 API for real salaries
     fetchDFSNarrativeContext(sport, slateDate, gameList),
-    fetchOwnershipProjections(sport, platform, slateDate, teams),
-    fetchPropLinesForDFS(sport, gameIds) // NEW: Prop lines for sharp projections
+    fetchOwnershipProjections(sport, platform, slateDate, teams)
   ]);
   
   const bdlCount = bdlPlayers.length;
@@ -3730,15 +3520,6 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
   // Also get excluded players for teammate opportunity analysis
   const { merged: mergedPlayersRaw, excludedPlayers } = mergePlayerData(filteredBdlPlayers, filteredSalaryPlayers);
   let mergedPlayers = mergedPlayersRaw;
-  
-  // ═══════════════════════════════════════════════════════════════════════════
-  // ENHANCE WITH PROP LINES - The Sharpest Projection Source
-  // ═══════════════════════════════════════════════════════════════════════════
-  // Prop lines represent real money being wagered - sharper than "expert" projections
-  if (Object.keys(propProjections).length > 0) {
-    mergedPlayers = enhancePlayersWithProps(mergedPlayers, propProjections);
-    console.log(`[DFS Context] 📊 Enhanced players with prop-based projections`);
-  }
   
   // Apply metadata to merged players
   for (const player of mergedPlayers) {
@@ -3908,8 +3689,47 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
   // SIGNAL: Star was OUT recently (< 7 days) but is NOW PLAYING
   // This means teammates who benefited from their absence now lose usage
   // ═══════════════════════════════════════════════════════════════════════════
-  const starsReturning = narrativeContext.starsReturning || [];
-  
+  let starsReturning = narrativeContext.starsReturning || [];
+
+  // VALIDATE stars_returning against actual BDL data to prevent Gemini hallucinations
+  // Gemini's grounding can return incorrect teams (e.g., training data team vs current team)
+  if (starsReturning.length > 0) {
+    const validatedStars = [];
+    const slateTeamSet = new Set(mergedPlayers.map(p => p.team?.toUpperCase()));
+
+    for (const star of starsReturning) {
+      // Find player in our BDL data
+      const bdlMatch = bdlPlayers.find(p => {
+        const nameMatch = p.name?.toLowerCase() === star.name?.toLowerCase() ||
+          p.name?.toLowerCase().includes(star.name?.toLowerCase()) ||
+          star.name?.toLowerCase().includes(p.name?.toLowerCase());
+        return nameMatch;
+      });
+
+      if (bdlMatch) {
+        // Player found in BDL - validate and correct team if needed
+        const bdlTeam = bdlMatch.team?.toUpperCase();
+        const geminiTeam = star.team?.toUpperCase();
+
+        if (bdlTeam !== geminiTeam) {
+          console.log(`[DFS Context] ⚠️ Gemini team mismatch: ${star.name} is ${bdlTeam} (not ${geminiTeam}) - correcting`);
+          star.team = bdlTeam;
+        }
+
+        // Only include if player's team is in this slate
+        if (slateTeamSet.has(bdlTeam)) {
+          validatedStars.push(star);
+        } else {
+          console.log(`[DFS Context] ⚠️ Skipping ${star.name} - team ${bdlTeam} not in this slate`);
+        }
+      } else {
+        console.log(`[DFS Context] ⚠️ Cannot validate ${star.name} (${star.team}) - not found in BDL data, skipping`);
+      }
+    }
+
+    starsReturning = validatedStars;
+  }
+
   if (starsReturning.length > 0) {
     console.log(`[DFS Context] 🔄 STARS RETURNING - USAGE REDUCTION:`);
     starsReturning.forEach(star => {

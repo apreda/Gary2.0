@@ -139,12 +139,19 @@ const PUNT_SALARY_THRESHOLD = {
 };
 
 /**
- * Maximum punts allowed per lineup
- * Too many punts = "Fragile Floor" (one dud kills the whole lineup)
+ * PUNT AWARENESS THRESHOLDS (NOT limits - Gary decides)
+ *
+ * Gary is AWARE that pros typically use 1-2 punts in GPPs.
+ * But if Gary finds undervalued low-salary players with real upside
+ * (minutes increase, injury replacement, favorable matchup), he can
+ * build lineups with more punts if his investigation supports it.
+ *
+ * The audit layer will flag punt-heavy lineups for Gary to review,
+ * but won't block them - Gary has agency to make his own decisions.
  */
-const MAX_PUNTS_PER_LINEUP = {
-  gpp: 2,   // Tournament: max 2 punts (high risk acceptable)
-  cash: 1   // Cash games: max 1 punt (need high floor)
+const PUNT_AWARENESS = {
+  gpp: { typical: 2, flagIfOver: 3 },   // Flag for review if 4+ punts
+  cash: { typical: 1, flagIfOver: 2 }   // Flag for review if 3+ punts
 };
 
 /**
@@ -2315,7 +2322,25 @@ export function optimizeLineup(players, constraints, sport, platform, context = 
   // Calculate minimum salary to reserve for remaining positions
   // This prevents overspending early and leaving no room for flex
   const MIN_SALARY_PER_POSITION = sport === 'NFL' ? 3500 : 3800;
-  
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PUNT AWARENESS (NOT enforcement - Gary has agency)
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Gary is AWARE that most winning GPP lineups have 1-2 punts.
+  // BUT Gary can use MORE punts if he's found genuine value:
+  //   - Player getting increased minutes (injury to teammate)
+  //   - Usage spike (trade, lineup change)
+  //   - Favorable matchup + pace-up spot
+  //   - Underpriced due to recent slump but talent is there
+  //
+  // Gary's job: INVESTIGATE whether cheap players have real upside.
+  // The audit layer will flag punt-heavy lineups for review, not block them.
+  // ═══════════════════════════════════════════════════════════════════════════
+  const puntThreshold = PUNT_SALARY_THRESHOLD[platform] || 4500;
+  const puntAwareness = PUNT_AWARENESS[contestType] || { typical: 2, flagIfOver: 3 };
+  let currentPuntCount = 0;
+
   // Fill each position slot
   for (let i = 0; i < sortedPositions.length; i++) {
     const posSlot = sortedPositions[i];
@@ -2324,6 +2349,13 @@ export function optimizeLineup(players, constraints, sport, platform, context = 
     
     // Calculate remaining positions to fill (after this one)
     const remainingPositions = sortedPositions.length - i - 1;
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // SALARY RESERVATION: Ensure we can fill remaining spots
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Reserve minimum salary for remaining positions so we don't get stuck.
+    // Gary has agency to choose punts OR mid-tier - we just ensure the lineup
+    // can be completed. Gary will investigate if his punt picks have real upside.
     const reservedSalary = remainingPositions * MIN_SALARY_PER_POSITION;
     const maxSalaryForThisSlot = salaryCap - totalSalary - reservedSalary;
     
@@ -2354,7 +2386,18 @@ export function optimizeLineup(players, constraints, sport, platform, context = 
       
       // Skip if no salary (invalid player)
       if (!player.salary || player.salary <= 0) continue;
-      
+
+      // ═══════════════════════════════════════════════════════════════════════
+      // PUNT AWARENESS (NO enforcement - Gary has agency)
+      // ═══════════════════════════════════════════════════════════════════════
+      // Gary can choose punt plays if he's investigated and found real upside:
+      //   - Minutes increase (teammate injury/trade)
+      //   - Usage spike (scheme change, hot streak)
+      //   - Favorable DvP matchup
+      //   - Price hasn't caught up to reality
+      // The audit layer will flag high-punt lineups for Gary to explain his thesis.
+      const isPunt = player.salary < puntThreshold;
+
       const pts = player.projected_pts || 0;
       const own = player.ownership || 15;
       const sal = player.salary || 5000;
@@ -2381,10 +2424,36 @@ export function optimizeLineup(players, constraints, sport, platform, context = 
       }
     }
     
+    // ═══════════════════════════════════════════════════════════════════════════
+    // SALARY OVERFLOW: No valid player within budget
+    // ═══════════════════════════════════════════════════════════════════════════
+    // If we can't find any player within budget, log it for investigation.
+    // This usually means earlier picks were too expensive - but Gary may have
+    // conviction in those star picks. The audit will flag salary allocation.
+    if (!bestPlayer && candidates.length > 0) {
+      console.warn(`[Optimizer] ⚠️ No player within budget for ${posSlot}`);
+      console.warn(`[Optimizer]    → Budget remaining: $${maxSalaryForThisSlot}`);
+      console.warn(`[Optimizer]    → Gary may need to investigate cheaper alternatives`);
+      // Try to find ANY valid player (even if over typical budget)
+      const anyValidPlayer = candidates.find(p =>
+        !usedPlayers.has(p.name) && p.status !== 'OUT' && p.salary > 0
+      );
+      if (anyValidPlayer) {
+        bestPlayer = anyValidPlayer;
+        console.log(`[Optimizer] → Found ${anyValidPlayer.name} ($${anyValidPlayer.salary}) - over budget but completing lineup`);
+      }
+    }
+
     if (bestPlayer) {
       usedPlayers.add(bestPlayer.name);
       totalSalary += bestPlayer.salary;
-      
+
+      // Track punt count for fragile floor prevention
+      if (bestPlayer.salary < puntThreshold) {
+        currentPuntCount++;
+        console.log(`[Optimizer] 🎯 Punt ${currentPuntCount}/${maxPunts}: ${bestPlayer.name} ($${bestPlayer.salary})`);
+      }
+
       // Generate rationale and supporting stats for this pick
       const { rationale, supportingStats } = generatePlayerRationale(bestPlayer, sport, platform);
       

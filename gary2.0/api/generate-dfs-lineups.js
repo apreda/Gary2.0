@@ -182,9 +182,10 @@ export default async function handler(req, res) {
     console.log(`[DFS] Sports: ${sports.join(', ')}`);
     console.log(`[DFS] Contest Type: GPP (TOURNAMENT MODE - Ceiling optimization, max upside to WIN)`);
     
-    // Lazy import services
+    // Lazy import services - USE NEW AGENTIC SYSTEM (NO FALLBACKS)
     const { buildDFSContext, discoverDFSSlates } = await import('../src/services/agentic/dfsAgenticContext.js');
-    const { generateDFSLineup, validateLineup, PLATFORM_CONSTRAINTS } = await import('../src/services/dfsLineupService.js');
+    const { generateAgenticDFSLineup } = await import('../src/services/agentic/dfs/dfsAgenticOrchestrator.js');
+    const { PLATFORM_CONSTRAINTS } = await import('../src/services/dfsLineupService.js');
     
     const results = [];
     const errors = [];
@@ -232,36 +233,49 @@ export default async function handler(req, res) {
               }
               
               console.log(`[DFS] Player pool: ${context.players.length}`);
-              
-              // Generate optimal lineup with pivots
-              // Archetype selection: balanced_build (default), stars_and_scrubs, cash_safe
-              const archetype = req.query.archetype || 'balanced_build';
-              
-              const lineup = await generateDFSLineup({
+
+              // ═══════════════════════════════════════════════════════════════════
+              // AGENTIC DFS LINEUP GENERATION (NO FALLBACKS)
+              // Gary Pro (Gemini) actually reasons about lineup decisions
+              // If this fails, we fail - no mathematical optimizer fallback
+              // ═══════════════════════════════════════════════════════════════════
+
+              const agenticResult = await generateAgenticDFSLineup({
                 platform,
                 sport,
-                players: context.players,
-                context: {
-                  contestType,
-                  archetype,
-                  fadePlayers: context.fadePlayers || [],
-                  targetPlayers: context.targetPlayers || [],
-                  games: context.games || [],
-                  ownershipData: context.ownershipData || {},
-                  slate: slate
-                }
+                date: dateParam,
+                slate,
+                contestType
               });
+
+              // Convert agentic result to expected format
+              const lineup = {
+                lineup: agenticResult.lineup.map(p => ({
+                  player: p.name,
+                  position: p.position,
+                  salary: p.salary,
+                  team: p.team,
+                  projected_points: p.projectedPoints || p.projected_pts,
+                  ceiling_projection: p.ceilingProjection,
+                  reasoning: p.reasoning
+                })),
+                total_salary: agenticResult.totalSalary,
+                projected_points: agenticResult.projectedPoints,
+                ceiling_projection: agenticResult.ceilingProjection,
+                floor_projection: agenticResult.floorProjection,
+                gary_notes: agenticResult.garyNotes,
+                harmony_reasoning: agenticResult.ceilingScenario,
+                stackInfo: null, // Agentic system handles correlation differently
+                conviction: agenticResult.conviction,
+                archetype: agenticResult.archetype,
+                build_thesis: agenticResult.buildThesis
+              };
+
+              // Gary's notes from agentic system
+              const garyNotes = lineup.gary_notes || `${agenticResult.archetype}: ${agenticResult.buildThesis}`;
               
-              // Validate lineup
-              const validation = validateLineup(lineup, platform, sport);
-              if (!validation.valid) {
-                console.warn(`[DFS] Lineup validation warnings: ${validation.errors.join(', ')}`);
-              }
-              
-              // Gary's notes are now built inside generateDFSLineup
-              const garyNotes = lineup.gary_notes || buildGaryNotes(context, lineup, contestType);
-              
-              // Store in database with slate-specific info
+              // Store in database with slate-specific info (including agentic fields)
+              const salaryCap = PLATFORM_CONSTRAINTS[platform]?.[sport]?.salaryCap || 50000;
               const lineupRecord = {
                 date: dateParam,
                 platform,
@@ -270,7 +284,7 @@ export default async function handler(req, res) {
                 slate_start_time: slate.startTime,
                 slate_game_count: slate.gameCount || 0,
                 contest_type: contestType,
-                salary_cap: PLATFORM_CONSTRAINTS[platform][sport].salaryCap,
+                salary_cap: salaryCap,
                 total_salary: lineup.total_salary,
                 projected_points: lineup.projected_points,
                 ceiling_projection: lineup.ceiling_projection,
@@ -279,6 +293,10 @@ export default async function handler(req, res) {
                 lineup: lineup.lineup,
                 gary_notes: lineup.gary_notes,
                 harmony_reasoning: lineup.harmony_reasoning,
+                // NEW: Agentic system fields
+                conviction: lineup.conviction,
+                archetype: lineup.archetype,
+                build_thesis: lineup.build_thesis,
                 updated_at: new Date().toISOString()
               };
               
@@ -299,7 +317,8 @@ export default async function handler(req, res) {
                 });
               } else {
                 const ceilingStr = lineup.ceiling_projection ? ` (ceiling: ${lineup.ceiling_projection})` : '';
-                console.log(`[DFS] ✅ Stored ${slate.name} lineup: $${lineup.total_salary}/${PLATFORM_CONSTRAINTS[platform][sport].salaryCap}, ${lineup.projected_points} pts${ceilingStr}`);
+                const convictionStr = lineup.conviction ? ` | Conviction: ${lineup.conviction}` : '';
+                console.log(`[DFS] ✅ Stored ${slate.name} lineup: $${lineup.total_salary}/${salaryCap}, ${lineup.projected_points} pts${ceilingStr}${convictionStr}`);
                 results.push({
                   platform,
                   sport,
@@ -311,7 +330,11 @@ export default async function handler(req, res) {
                   ceilingProjection: lineup.ceiling_projection,
                   floorProjection: lineup.floor_projection,
                   stackInfo: lineup.stackInfo,
-                  playersCount: lineup.lineup.length
+                  playersCount: lineup.lineup.length,
+                  // NEW: Agentic system fields
+                  conviction: lineup.conviction,
+                  archetype: lineup.archetype,
+                  buildThesis: lineup.build_thesis
                 });
               }
               

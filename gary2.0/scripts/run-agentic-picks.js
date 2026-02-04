@@ -478,18 +478,19 @@ async function main() {
           // Default: Get TODAY's games in EST timezone
           const todayEST = now.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); // YYYY-MM-DD format
 
-          // NCAAB FIX: BDL often returns dates without proper times (midnight UTC = 7 PM EST yesterday)
-          // For college basketball, we trust the DATE from BDL and include ALL games for today
+          // BDL FIX: BDL often returns dates without proper times (midnight UTC = 7 PM EST yesterday)
+          // For NCAAB and NHL, trust the DATE from BDL and include ALL games for today
           // Don't filter by "hasn't started yet" because BDL commence_times are unreliable
           const isNCAAB = config.key === 'basketball_ncaab';
+          const isNHL = config.key === 'icehockey_nhl';
 
           games = allGames?.filter(g => {
             const gameTime = new Date(g.commence_time);
             const gameDateEST = gameTime.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 
-            if (isNCAAB) {
-              // For NCAAB: Include ALL games for today's date, regardless of time
-              // BDL dates are the actual game date, just trust them
+            if (isNCAAB || isNHL) {
+              // For NCAAB/NHL: Include ALL games for today's EST date, regardless of time
+              // Skip "hasn't started" check since BDL times can be unreliable
               return gameDateEST === todayEST;
             } else {
               // For other sports: Game is today in EST AND hasn't started yet
@@ -702,17 +703,15 @@ async function main() {
             game.homeConference = getConfName(homeConfId);
             game.awayConference = getConfName(awayConfId);
 
-            // BOTH teams must be from an approved Top 7 conference
+            // AT LEAST ONE team must be from an approved Top 7 conference
             const homeApproved = isApprovedConference(homeConfId);
             const awayApproved = isApprovedConference(awayConfId);
-            
-            if (!homeApproved || !awayApproved) {
-              const issues = [];
-              if (!homeApproved) issues.push(`${game.home_team} (${getConfName(homeConfId)})`);
-              if (!awayApproved) issues.push(`${game.away_team} (${getConfName(awayConfId)})`);
-              skippedNonApproved.push({ 
-                game, 
-                reason: `Not in Top 7: ${issues.join(', ')}` 
+
+            if (!homeApproved && !awayApproved) {
+              // Neither team is in Top 7 - skip
+              skippedNonApproved.push({
+                game,
+                reason: `Neither in Top 7: ${game.home_team} (${getConfName(homeConfId)}), ${game.away_team} (${getConfName(awayConfId)})`
               });
               continue;
             }
@@ -1366,11 +1365,14 @@ async function main() {
               const awayValue = typeof row.away === 'object' ? row.away.value : row.away;
               const homeTeam = typeof row.home === 'object' ? row.home.team : result.homeTeam;
               const awayTeam = typeof row.away === 'object' ? row.away.team : result.awayTeam;
+              // Use token as key (lowercase) to match iOS app format for NBA/NCAAB
+              // iOS expects: { team: "Name", stat_key: "value" }, not { team: "Name", value: "value" }
+              const statKey = row.token.toLowerCase();
               statsData.push({
                 name: row.name,
                 token: row.token,
-                home: { team: homeTeam, value: homeValue },
-                away: { team: awayTeam, value: awayValue }
+                home: { team: homeTeam, [statKey]: homeValue },
+                away: { team: awayTeam, [statKey]: awayValue }
               });
             }
             console.log(`   ✓ NHL: Added ${statsData.length} stats from verified Tale of Tape`);
@@ -1441,6 +1443,16 @@ async function main() {
           const finalSpreadOdds = bestLine?.spreadOdds ?? result.spreadOdds;
           const bestLineBook = bestLine?.book ?? null;
 
+          // Format game time for UI display
+          const gameTimeEST = game.commence_time
+            ? new Date(game.commence_time).toLocaleString('en-US', {
+                timeZone: 'America/New_York',
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+              })
+            : 'TBD';
+
           const cleanPick = {
             pick: result.pick,
             type: result.type,
@@ -1453,6 +1465,9 @@ async function main() {
             contradicting_factors: result.contradicting_factors || [],
             homeTeam: result.homeTeam,
             awayTeam: result.awayTeam,
+            // UI display fields
+            game: `${result.awayTeam} @ ${result.homeTeam}`,
+            time: gameTimeEST,
             spread: finalSpread, // Best available line (not just the first sportsbook)
             spreadOdds: finalSpreadOdds,
             bestLineBook: bestLineBook, // Which sportsbook has the best line
