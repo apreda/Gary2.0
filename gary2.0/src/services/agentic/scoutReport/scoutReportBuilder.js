@@ -1341,6 +1341,7 @@ Return ONLY the 5 player names in the Expected Lineup for ${teamName}. Format: N
     // Status codes: GTD = Game Time Decision, Out = Out, OFS = Out For Season
     let rotoWireGTD = { home: [], away: [] };
     let rotoWireStarters = { home: [], away: [] }; // Track starting lineups for verification
+    let rotoWireInjuries = { home: [], away: [] }; // Track injuries from RotoWire response (NCAAB)
     try {
       const gemini = getGeminiClient();
       if (gemini) {
@@ -1504,7 +1505,78 @@ CRITICAL: Be precise. Only include what's actually shown on RotoWire. If a secti
           // Parse starters for both teams
           rotoWireStarters.away = parseStartingLineup(responseText, awayTeam, awayShort, homeTeam);
           rotoWireStarters.home = parseStartingLineup(responseText, homeTeam, homeShort, awayTeam);
-          
+
+          // STEP 1.5: Parse INJURIES from RotoWire response (NCAAB)
+          // The RotoWire response often has INJURIES section like: "INJURIES:\nG Jahseem Felton OFS\nF Patrick Suemnick Out"
+          const parseNcaabInjuriesFromResponse = (text, teamName, otherTeamName) => {
+            const injuries = [];
+            const teamLower = teamName.toLowerCase();
+            const otherTeamLower = (otherTeamName || '').toLowerCase();
+
+            // Extract team-specific INJURIES section
+            // Look for "=== Team Name ===" followed by INJURIES: section
+            const sectionPatterns = [
+              new RegExp(`===\\s*${teamLower}.*?===([\\s\\S]*?)(?:===|$)`, 'i'),
+              new RegExp(`\\*\\*${teamLower}.*?\\*\\*([\\s\\S]*?)(?:\\*\\*${otherTeamLower}|===|$)`, 'i'),
+            ];
+
+            let teamSection = '';
+            for (const pattern of sectionPatterns) {
+              const match = text.match(pattern);
+              if (match && match[1]) {
+                teamSection = match[1];
+                break;
+              }
+            }
+
+            if (!teamSection) teamSection = text;
+
+            // Look for INJURIES: section within team section
+            const injuriesMatch = teamSection.match(/INJURIES?:?\s*\n?([\s\S]*?)(?:\n===|\n\*\*|$)/i);
+            if (!injuriesMatch) return injuries;
+
+            const injuriesText = injuriesMatch[1];
+
+            // NCAAB RotoWire format: "G Jahseem Felton OFS" or "F Patrick Suemnick Out"
+            // Position: PG, SG, SF, PF, C, G, F
+            // Status: Out, OFS, GTD
+            const injuryPattern = /\b(PG|SG|SF|PF|C|G|F)\s+([A-Z][a-z'.-]+(?:\s+[A-Z][a-z'.-]+)*)\s+(Out|OFS|GTD)\b/gi;
+            const matches = [...injuriesText.matchAll(injuryPattern)];
+
+            for (const match of matches) {
+              const position = match[1];
+              const playerName = match[2];
+              const status = match[3].toUpperCase();
+
+              // Normalize status
+              let normalizedStatus = status;
+              if (status === 'OFS') normalizedStatus = 'Out (Season)';
+
+              const nameParts = playerName.trim().split(/\s+/);
+              injuries.push({
+                player: {
+                  first_name: nameParts[0],
+                  last_name: nameParts.slice(1).join(' '),
+                  position: position
+                },
+                status: normalizedStatus,
+                source: 'rotowire'
+              });
+              console.log(`[Scout Report] NCAAB RotoWire injury found: ${position} ${playerName} ${status} for ${teamName}`);
+            }
+
+            return injuries;
+          };
+
+          // Parse injuries from both team sections in the response
+          if (sportKey === 'NCAAB' || sportKey === 'basketball_ncaab') {
+            rotoWireInjuries.away = parseNcaabInjuriesFromResponse(responseText, awayTeam, homeTeam);
+            rotoWireInjuries.home = parseNcaabInjuriesFromResponse(responseText, homeTeam, awayTeam);
+            if (rotoWireInjuries.away.length > 0 || rotoWireInjuries.home.length > 0) {
+              console.log(`[Scout Report] NCAAB RotoWire injuries parsed: ${rotoWireInjuries.away.length} for ${awayTeam}, ${rotoWireInjuries.home.length} for ${homeTeam}`);
+            }
+          }
+
           // STEP 2: Parse GTD players from response
           // Parse response - handle multiple formats including our explicit format
           
@@ -3138,6 +3210,33 @@ async function fetchInjuries(homeTeam, awayTeam, sport) {
       // Fetch BDL injuries for duration enrichment (BDL has return_date and description)
       let enrichedHome = groundingInjuries.home || [];
       let enrichedAway = groundingInjuries.away || [];
+
+      // NCAAB: Merge injuries from RotoWire lineups response (if grounding missed them)
+      // The RotoWire lineups response often has more complete injury data
+      if ((sportKey === 'NCAAB' || sportKey === 'basketball_ncaab') && rotoWireInjuries) {
+        const existingHomeNames = new Set(enrichedHome.map(i =>
+          `${i.player?.first_name || ''} ${i.player?.last_name || ''}`.toLowerCase().trim()
+        ));
+        const existingAwayNames = new Set(enrichedAway.map(i =>
+          `${i.player?.first_name || ''} ${i.player?.last_name || ''}`.toLowerCase().trim()
+        ));
+
+        // Add injuries from RotoWire that grounding missed
+        for (const inj of (rotoWireInjuries.home || [])) {
+          const name = `${inj.player?.first_name || ''} ${inj.player?.last_name || ''}`.toLowerCase().trim();
+          if (!existingHomeNames.has(name)) {
+            enrichedHome.push(inj);
+            console.log(`[Scout Report] Added NCAAB injury from RotoWire lineups: ${name} (${inj.status}) for ${homeTeam}`);
+          }
+        }
+        for (const inj of (rotoWireInjuries.away || [])) {
+          const name = `${inj.player?.first_name || ''} ${inj.player?.last_name || ''}`.toLowerCase().trim();
+          if (!existingAwayNames.has(name)) {
+            enrichedAway.push(inj);
+            console.log(`[Scout Report] Added NCAAB injury from RotoWire lineups: ${name} (${inj.status}) for ${awayTeam}`);
+          }
+        }
+      }
 
       try {
         const bdlSport = sportToBdlKey(sport);
