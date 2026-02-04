@@ -2111,8 +2111,8 @@ IMPORTANT: Use ONLY data from kenpom.com for the 2025-26 season. Do not guess - 
       
       const response = await geminiGroundingSearch(query, {
         temperature: 1.0,
-        maxTokens: 1500,
-        systemMessage: 'You are a college basketball expert specializing in NCAA tournament metrics. Provide accurate Quad records.'
+        maxTokens: 2500,
+        systemMessage: 'You are a college basketball expert specializing in NCAA tournament metrics. Provide accurate Quad records with complete data for BOTH teams.'
       });
       
       const content = response?.content || response?.choices?.[0]?.message?.content || '';
@@ -2271,8 +2271,8 @@ IMPORTANT: Use ONLY data from the 2025-26 college basketball season. Do not gues
 
       const response = await geminiGroundingSearch(query, {
         temperature: 1.0,
-        maxTokens: 1500,
-        systemMessage: 'You are a college basketball expert. Search ESPN or sports-reference for accurate home/away records for the 2025-26 season. Format each team separately with the exact stats requested.'
+        maxTokens: 2500,
+        systemMessage: 'You are a college basketball expert. Search ESPN or sports-reference for accurate home/away records for the 2025-26 season. Format each team separately with the exact stats requested. Provide complete data for BOTH teams.'
       });
 
       const content = response?.content || response?.choices?.[0]?.message?.content || '';

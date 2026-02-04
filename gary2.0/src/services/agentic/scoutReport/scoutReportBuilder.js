@@ -1415,24 +1415,51 @@ CRITICAL: Be precise. Only include what's actually shown on RotoWire. If a secti
           console.log(`[Scout Report] RotoWire response: ${responseText.substring(0, 500)}`);
           
           // STEP 1: Parse starting lineups from response
-          const parseStartingLineup = (text, teamName, teamShort) => {
+          const parseStartingLineup = (text, teamName, teamShort, otherTeamName) => {
             const starters = [];
             const teamNameLower = teamName.toLowerCase();
             const teamShortLower = teamShort.toLowerCase();
-            
+            const otherTeamLower = (otherTeamName || '').toLowerCase();
+
             // Words that should NOT be captured as player names
             // INCLUDES POSITION ABBREVIATIONS (PG, SG, SF, PF, C, G, F) to prevent "styles phipps sg" type issues
             const invalidWords = /^(lineup|the|top|injury|started|while|don't|starters?|starting|expected|projected|confirmed|position|each|player|based|depth|chart|following|information|available|status|currently|note|however|although|uncertain|questionable|gtd|out|ofs|season|college|basketball|game|january|february|march|april|december|november|2026|2025|pg|sg|sf|pf|c|g|f)$/i;
-            
-            // Pattern 1: "TeamName STARTERS:" followed by list
-            const startersPatterns = [
-              new RegExp(`${teamShortLower}[^:]*starters?:?\\s*([^\\n]+(?:\\n[^\\n]*){0,5})`, 'i'),
-              new RegExp(`${teamNameLower}[^:]*starters?:?\\s*([^\\n]+(?:\\n[^\\n]*){0,5})`, 'i'),
-              new RegExp(`starters?[^:]*${teamShortLower}:?\\s*([^\\n]+(?:\\n[^\\n]*){0,5})`, 'i')
+
+            // CRITICAL FIX: First, extract ONLY this team's section from the response
+            // This prevents parsing the wrong team's starters
+            // Look for patterns like "=== Team Name ===" or "**Team Name**" or "Team Name:" sections
+            let teamSection = '';
+
+            // Try to find team-specific section boundaries
+            const sectionPatterns = [
+              // "=== Team Name ===" format
+              new RegExp(`===\\s*${teamNameLower}.*?===([\\s\\S]*?)(?:===|$)`, 'i'),
+              // "**Team Name**" followed by content until next "**Other Team**" or end
+              new RegExp(`\\*\\*${teamNameLower}.*?\\*\\*([\\s\\S]*?)(?:\\*\\*${otherTeamLower}|$)`, 'i'),
+              // "Team Name:" or "Team Name STARTERS:" until next team mention
+              new RegExp(`${teamNameLower}[^\\n]*?:([\\s\\S]*?)(?:${otherTeamLower}|$)`, 'i'),
             ];
-            
-            for (const pattern of startersPatterns) {
+
+            for (const pattern of sectionPatterns) {
               const match = text.match(pattern);
+              if (match && match[1]) {
+                teamSection = match[1];
+                break;
+              }
+            }
+
+            // Fallback: use whole text if no section found (but this risks cross-contamination)
+            if (!teamSection) {
+              teamSection = text;
+            }
+
+            // Now parse starters from the isolated team section
+            const startersPatterns = [
+              /starters?:?\s*([^\n]+(?:\n[^\n]*){0,5})/i,
+            ];
+
+            for (const pattern of startersPatterns) {
+              const match = teamSection.match(pattern);
               if (match) {
                 const section = match[1];
                 // Extract player names (look for position abbreviations followed by names)
@@ -1443,7 +1470,7 @@ CRITICAL: Be precise. Only include what's actually shown on RotoWire. If a secti
                   const name = playerMatch[1].trim();
                   // Validate: must have at least 2 words, not invalid words
                   const words = name.split(/\s+/);
-                  if (words.length >= 2 && 
+                  if (words.length >= 2 &&
                       !words.some(w => invalidWords.test(w)) &&
                       !starters.includes(name.toLowerCase())) {
                     starters.push(name.toLowerCase());
@@ -1456,7 +1483,7 @@ CRITICAL: Be precise. Only include what's actually shown on RotoWire. If a secti
                 while ((playerMatch = fullNamePattern.exec(section)) !== null) {
                   const name = playerMatch[1].trim();
                   const words = name.split(/\s+/);
-                  if (words.length >= 2 && 
+                  if (words.length >= 2 &&
                       !words.some(w => invalidWords.test(w)) &&
                       !starters.includes(name.toLowerCase())) {
                     starters.push(name.toLowerCase());
@@ -1465,7 +1492,7 @@ CRITICAL: Be precise. Only include what's actually shown on RotoWire. If a secti
                 if (starters.length >= 3) break; // Found enough starters
               }
             }
-            
+
             if (starters.length > 0) {
               console.log(`[Scout Report] Parsed ${starters.length} starters for ${teamShort}: ${starters.slice(0, 5).join(', ')}`);
             } else {
@@ -1475,8 +1502,8 @@ CRITICAL: Be precise. Only include what's actually shown on RotoWire. If a secti
           };
           
           // Parse starters for both teams
-          rotoWireStarters.away = parseStartingLineup(responseText, awayTeam, awayShort);
-          rotoWireStarters.home = parseStartingLineup(responseText, homeTeam, homeShort);
+          rotoWireStarters.away = parseStartingLineup(responseText, awayTeam, awayShort, homeTeam);
+          rotoWireStarters.home = parseStartingLineup(responseText, homeTeam, homeShort, awayTeam);
           
           // STEP 2: Parse GTD players from response
           // Parse response - handle multiple formats including our explicit format
