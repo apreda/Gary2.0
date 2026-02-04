@@ -5664,8 +5664,10 @@ If you need different stats, request NEW ones. If you have enough data, proceed 
         }
 
         // Fetch the stats
+        // Always use the orchestrator's validated sport key, not args.sport which can be malformed
+        // (Gemini sometimes passes sport as "NHL_GOALIE_STATS" instead of "NHL")
         const statResult = await fetchStats(
-          args.sport || sport,
+          sport,
           args.token,
           homeTeam,
           awayTeam,
