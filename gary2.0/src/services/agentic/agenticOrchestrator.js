@@ -4882,7 +4882,7 @@ Do NOT request more stats. Write your analysis NOW using the data you already ha
         // Still in investigation phase
         // If Gary already has 5+ stats, encourage moving to analysis rather than more stats
         if (toolCallHistory.length >= 5) {
-          console.log(`[Orchestrator] ⚠️ Gemini returned empty response with ${toolCallHistory.length} stats gathered - encouraging analysis`);
+          console.log(`[Orchestrator] Gary has ${toolCallHistory.length} stats - encouraging analysis`);
           nudgeContent = `I notice you didn't respond. You've already gathered ${toolCallHistory.length} stats. You have enough data to begin your analysis.
 
 Either:
@@ -4962,7 +4962,7 @@ What would you like to do?`;
       // CRITICAL FIX: Handle when ALL tool calls were duplicates
       // Without this, Gary keeps requesting the same stats and loops forever
       if (uniqueToolCalls.length === 0 && message.tool_calls.length > 0) {
-        console.log(`[Orchestrator] ⚠️ All ${message.tool_calls.length} stat request(s) were duplicates - nudging Gary to proceed with analysis`);
+        console.log(`[Orchestrator] All ${message.tool_calls.length} stats already gathered - nudging Gary to proceed`);
 
         // Build list of already-gathered stats for context
         const gatheredStats = toolCallHistory.map(t => t.token).filter(Boolean);
@@ -6318,10 +6318,7 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
       
       // ALWAYS attach convictionRatings - even if empty, include diagnostic info
       if (!ratingsFound) {
-        console.log(`[Orchestrator] ⚠️ No conviction ratings found in Gary's responses`);
-        console.log(`  Pass 2.5 was injected: ${pass25WasInjected}`);
-        console.log(`  Steel Man detected: ${steelManDetected}`);
-        
+        // Conviction ratings are optional - no need to warn in logs
         // Attach diagnostic-only convictionRatings so we can see what happened
         pick.convictionRatings = {
           favoriteRating: null,

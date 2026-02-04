@@ -1421,7 +1421,8 @@ CRITICAL: Be precise. Only include what's actually shown on RotoWire. If a secti
             const teamShortLower = teamShort.toLowerCase();
             
             // Words that should NOT be captured as player names
-            const invalidWords = /^(lineup|the|top|injury|started|while|don't|starters?|starting|expected|projected|confirmed|position|each|player|based|depth|chart|following|information|available|status|currently|note|however|although|uncertain|questionable|gtd|out|ofs|season|college|basketball|game|january|february|march|april|december|november|2026|2025)$/i;
+            // INCLUDES POSITION ABBREVIATIONS (PG, SG, SF, PF, C, G, F) to prevent "styles phipps sg" type issues
+            const invalidWords = /^(lineup|the|top|injury|started|while|don't|starters?|starting|expected|projected|confirmed|position|each|player|based|depth|chart|following|information|available|status|currently|note|however|although|uncertain|questionable|gtd|out|ofs|season|college|basketball|game|january|february|march|april|december|november|2026|2025|pg|sg|sf|pf|c|g|f)$/i;
             
             // Pattern 1: "TeamName STARTERS:" followed by list
             const startersPatterns = [
@@ -1449,7 +1450,9 @@ CRITICAL: Be precise. Only include what's actually shown on RotoWire. If a secti
                   }
                 }
                 // Also look for comma separated full names
-                const fullNamePattern = /([A-Z][a-z]+(?:[-'][A-Z]?[a-z]+)?\s+[A-Z][a-z]+(?:[-'][A-Z]?[a-z]+)?)/g;
+                // IMPORTANT: Match names but NOT position abbreviations (PG/SG/SF/PF/C that sometimes follow names)
+                // Stop at position abbreviations or other structural words
+                const fullNamePattern = /([A-Z][a-z]+(?:[-'][A-Z]?[a-z]+)?\s+[A-Z][a-z]+(?:[-'][A-Z]?[a-z]+)?)(?=\s+(?:PG|SG|SF|PF|C|G|F|,|\||$)|\s*[,\|\n]|$)/gi;
                 while ((playerMatch = fullNamePattern.exec(section)) !== null) {
                   const name = playerMatch[1].trim();
                   const words = name.split(/\s+/);
@@ -4959,7 +4962,143 @@ function parseGroundingInjuries(content, homeTeam, awayTeam, sport = '') {
     }
     console.log(`[Scout Report] NHL strict parser found 0 injuries, falling back to generic parser`);
   }
-  
+
+  // NCAAB-specific parser: Handles RotoWire format "F Mookie Cook Out" or "PG John Smith OFS"
+  // Format: [Position] [Name] [Status] - no separator between name and status
+  const parseNcaabInjuries = () => {
+    const result = { home: [], away: [], filteredLongTerm: [] };
+    if (!content) return result;
+
+    const homeLower = homeTeam.toLowerCase();
+    const awayLower = awayTeam.toLowerCase();
+    const foundPlayers = new Set();
+
+    // NCAAB ROTOWIRE EXACT FORMAT PATTERN
+    // Format: Position Name Status (e.g., "F Mookie Cook Out", "G John Smith GTD", "C Mike Jones OFS")
+    // Positions: PG, SG, SF, PF, C, G, F
+    // Status: Out, OFS (Out For Season), GTD (Game Time Decision)
+    // IMPORTANT: NO separators - just space between name and status
+    // IMPORTANT: NO ^ or $ anchors - grounding often returns multiple injuries on one line
+    // Example: "F Mookie Cook Out F Kristers Skrinda Out F Tallis Toure Out" - must match ALL
+    const ncaabRotoWirePattern = /\b(PG|SG|SF|PF|C|G|F)\s+([A-Z][a-z'.-]+(?:\s+[A-Z][a-z'.-]+)*)\s+(Out|OFS|GTD)\b/gi;
+
+    const fullText = content;
+    const matches = [...fullText.matchAll(ncaabRotoWirePattern)];
+
+    console.log(`[Scout Report] NCAAB parser: Found ${matches.length} potential injuries in grounding response`);
+
+    for (const match of matches) {
+      const position = match[1];
+      const playerName = match[2];
+      const status = match[3];
+
+      // Skip if already found
+      const playerKey = playerName.toLowerCase();
+      if (foundPlayers.has(playerKey)) continue;
+
+      // Find team context by looking back from match position
+      const matchIndex = match.index;
+      const contextStart = Math.max(0, matchIndex - 500);
+      const context = fullText.substring(contextStart, matchIndex).toLowerCase();
+
+      let team = null;
+      const homeIdx = context.lastIndexOf(homeLower);
+      const awayIdx = context.lastIndexOf(awayLower);
+
+      if (homeIdx > awayIdx && homeIdx !== -1) {
+        team = 'home';
+      } else if (awayIdx > homeIdx && awayIdx !== -1) {
+        team = 'away';
+      }
+
+      if (team && playerName) {
+        foundPlayers.add(playerKey);
+
+        // Normalize NCAAB status
+        let normalizedStatus = status.toUpperCase();
+        if (normalizedStatus === 'OFS') normalizedStatus = 'Out (Season)';
+        else if (normalizedStatus === 'GTD') normalizedStatus = 'GTD';
+        else normalizedStatus = 'Out';
+
+        const nameParts = playerName.trim().split(/\s+/);
+        result[team].push({
+          player: {
+            first_name: nameParts[0],
+            last_name: nameParts.slice(1).join(' '),
+            position: position
+          },
+          status: normalizedStatus,
+          source: 'rotowire'
+        });
+        console.log(`[Scout Report] NCAAB parser: Found ${position} ${playerName} ${status} -> ${team}`);
+      }
+    }
+
+    // If RotoWire pattern didn't catch injuries, try alternate formats common in NCAAB
+    // Format: "- Position Initial. LastName Status" (e.g., "- F M. Cook Out")
+    if (result.home.length === 0 && result.away.length === 0) {
+      const altPattern = /[-•*]\s*(PG|SG|SF|PF|C|G|F)\s+([A-Z]\.\s*[A-Z][a-z'.-]+(?:\s+[A-Z][a-z'.-]+)?)\s+(Out|OFS|GTD)\b/gi;
+      const altMatches = [...fullText.matchAll(altPattern)];
+
+      for (const match of altMatches) {
+        const position = match[1];
+        const playerName = match[2].replace(/\.\s*/, '. '); // Normalize "M.Cook" to "M. Cook"
+        const status = match[3];
+
+        const playerKey = playerName.toLowerCase();
+        if (foundPlayers.has(playerKey)) continue;
+
+        const matchIndex = match.index;
+        const contextStart = Math.max(0, matchIndex - 500);
+        const context = fullText.substring(contextStart, matchIndex).toLowerCase();
+
+        let team = null;
+        const homeIdx = context.lastIndexOf(homeLower);
+        const awayIdx = context.lastIndexOf(awayLower);
+
+        if (homeIdx > awayIdx && homeIdx !== -1) {
+          team = 'home';
+        } else if (awayIdx > homeIdx && awayIdx !== -1) {
+          team = 'away';
+        }
+
+        if (team && playerName) {
+          foundPlayers.add(playerKey);
+          let normalizedStatus = status.toUpperCase();
+          if (normalizedStatus === 'OFS') normalizedStatus = 'Out (Season)';
+          else if (normalizedStatus === 'GTD') normalizedStatus = 'GTD';
+          else normalizedStatus = 'Out';
+
+          const nameParts = playerName.trim().split(/\s+/);
+          result[team].push({
+            player: {
+              first_name: nameParts[0],
+              last_name: nameParts.slice(1).join(' '),
+              position: position
+            },
+            status: normalizedStatus,
+            source: 'rotowire'
+          });
+          console.log(`[Scout Report] NCAAB alt parser: Found ${position} ${playerName} ${status} -> ${team}`);
+        }
+      }
+    }
+
+    console.log(`[Scout Report] NCAAB parser found: ${result.home.length} home, ${result.away.length} away injuries`);
+    return result;
+  };
+
+  if (sport === 'NCAAB' || sport === 'basketball_ncaab') {
+    const strictNcaab = parseNcaabInjuries();
+    if (strictNcaab.home.length || strictNcaab.away.length) {
+      injuries.home = strictNcaab.home;
+      injuries.away = strictNcaab.away;
+      injuries.filteredLongTerm = strictNcaab.filteredLongTerm || [];
+      return injuries;
+    }
+    console.log(`[Scout Report] NCAAB strict parser found 0 injuries, falling back to generic parser`);
+  }
+
   // Split content into sections by team (pass other team to find boundary)
   const homeSection = extractTeamSection(content, homeTeam, awayTeam);
   const awaySection = extractTeamSection(content, awayTeam, homeTeam);
