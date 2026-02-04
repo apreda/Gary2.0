@@ -3998,6 +3998,261 @@ const ballDontLieService = {
   },
 
   /**
+   * Get NHL Player Injuries from BDL
+   * Endpoint: GET https://api.balldontlie.io/nhl/v1/player_injuries
+   * Returns: player info, status, injury_type, return_date, comment
+   *
+   * IMPORTANT FOR INJURY INTERPRETATION:
+   * - Use return_date to determine if injury is FRESH (0-3 days) or PRICED IN (>3 days)
+   * - status: IR, IR-LT, IR-NR, DTD, OUT, LTIR
+   * - comment contains detailed injury description
+   *
+   * @param {Array} teamIds - Array of NHL team IDs to filter (optional)
+   * @returns {Promise<Array>} - Array of player injury data
+   */
+  async getNhlPlayerInjuries(teamIds = []) {
+    try {
+      const cacheKey = `nhl_player_injuries_${teamIds.join('_') || 'all'}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        console.log(`🏒 Fetching NHL player injuries for teams: ${teamIds.length > 0 ? teamIds.join(', ') : 'ALL'}`);
+
+        let allInjuries = [];
+        let cursor = null;
+        let page = 1;
+        const maxPages = 10;
+
+        do {
+          const params = new URLSearchParams();
+          params.append('per_page', '100');
+          if (cursor) params.append('cursor', cursor);
+          // Add team_ids if specified
+          for (const tid of teamIds) {
+            params.append('team_ids[]', tid);
+          }
+
+          const url = `${BALLDONTLIE_API_BASE_URL}/nhl/v1/player_injuries?${params.toString()}`;
+          console.log(`🏒 Fetching NHL player injuries (page ${page})`);
+
+          const response = await axios.get(url, {
+            headers: { 'Authorization': API_KEY }
+          });
+
+          const injuries = response.data?.data || [];
+          allInjuries = allInjuries.concat(injuries);
+          cursor = response.data?.meta?.next_cursor;
+          page++;
+        } while (cursor && page <= maxPages);
+
+        console.log(`🏒 Found ${allInjuries.length} NHL player injuries (${page - 1} pages)`);
+
+        // Log injury breakdown by status
+        const irPlayers = allInjuries.filter(i => i.status?.toUpperCase() === 'IR');
+        const irLtPlayers = allInjuries.filter(i => i.status?.toUpperCase() === 'IR-LT' || i.status?.toUpperCase() === 'LTIR');
+        const dtdPlayers = allInjuries.filter(i => i.status?.toUpperCase() === 'DTD' || i.status?.toUpperCase() === 'DAY-TO-DAY');
+        const outPlayers = allInjuries.filter(i => i.status?.toUpperCase() === 'OUT');
+
+        if (irPlayers.length > 0) {
+          console.log(`🏒 IR (${irPlayers.length}): ${irPlayers.slice(0, 5).map(i => `${i.player?.first_name} ${i.player?.last_name}`).join(', ')}${irPlayers.length > 5 ? '...' : ''}`);
+        }
+        if (irLtPlayers.length > 0) {
+          console.log(`🏒 IR-LT/LTIR (${irLtPlayers.length}): ${irLtPlayers.slice(0, 5).map(i => `${i.player?.first_name} ${i.player?.last_name}`).join(', ')}${irLtPlayers.length > 5 ? '...' : ''}`);
+        }
+        if (dtdPlayers.length > 0) {
+          console.log(`🏒 DTD (${dtdPlayers.length}): ${dtdPlayers.slice(0, 5).map(i => `${i.player?.first_name} ${i.player?.last_name}`).join(', ')}${dtdPlayers.length > 5 ? '...' : ''}`);
+        }
+        if (outPlayers.length > 0) {
+          console.log(`🏒 OUT (${outPlayers.length}): ${outPlayers.slice(0, 5).map(i => `${i.player?.first_name} ${i.player?.last_name}`).join(', ')}${outPlayers.length > 5 ? '...' : ''}`);
+        }
+
+        return allInjuries;
+      }, 30); // Cache for 30 minutes
+    } catch (error) {
+      console.error('Error fetching NHL player injuries:', error);
+      return [];
+    }
+  },
+
+  /**
+   * NHL.com Official API - Team Abbreviation Mapping
+   * Maps full team names to NHL 3-letter abbreviations
+   */
+  getNhlTeamAbbreviation(teamName) {
+    const mapping = {
+      // Atlantic Division
+      'boston bruins': 'BOS',
+      'buffalo sabres': 'BUF',
+      'detroit red wings': 'DET',
+      'florida panthers': 'FLA',
+      'montreal canadiens': 'MTL',
+      'ottawa senators': 'OTT',
+      'tampa bay lightning': 'TBL',
+      'toronto maple leafs': 'TOR',
+      // Metropolitan Division
+      'carolina hurricanes': 'CAR',
+      'columbus blue jackets': 'CBJ',
+      'new jersey devils': 'NJD',
+      'new york islanders': 'NYI',
+      'new york rangers': 'NYR',
+      'philadelphia flyers': 'PHI',
+      'pittsburgh penguins': 'PIT',
+      'washington capitals': 'WSH',
+      // Central Division
+      'arizona coyotes': 'ARI',
+      'utah hockey club': 'UTA',
+      'chicago blackhawks': 'CHI',
+      'colorado avalanche': 'COL',
+      'dallas stars': 'DAL',
+      'minnesota wild': 'MIN',
+      'nashville predators': 'NSH',
+      'st. louis blues': 'STL',
+      'st louis blues': 'STL',
+      'winnipeg jets': 'WPG',
+      // Pacific Division
+      'anaheim ducks': 'ANA',
+      'calgary flames': 'CGY',
+      'edmonton oilers': 'EDM',
+      'los angeles kings': 'LAK',
+      'san jose sharks': 'SJS',
+      'seattle kraken': 'SEA',
+      'vancouver canucks': 'VAN',
+      'vegas golden knights': 'VGK',
+    };
+    const normalized = teamName.toLowerCase().trim();
+    return mapping[normalized] || null;
+  },
+
+  /**
+   * NHL.com Official API - Get Team Roster with Injury Status
+   * FREE API - No authentication required
+   * Returns complete roster including injury status and dates
+   *
+   * @param {string} teamName - Full team name (e.g., "Chicago Blackhawks")
+   * @returns {Promise<Object>} - Roster data with injuries
+   */
+  async getNhlOfficialRoster(teamName) {
+    try {
+      const abbrev = this.getNhlTeamAbbreviation(teamName);
+      if (!abbrev) {
+        console.log(`🏒 [NHL.com] Unknown team: ${teamName}`);
+        return null;
+      }
+
+      const cacheKey = `nhl_official_roster_${abbrev}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        console.log(`🏒 [NHL.com] Fetching official roster for ${teamName} (${abbrev})`);
+
+        const url = `https://api-web.nhle.com/v1/roster/${abbrev}/current`;
+        const response = await axios.get(url, { timeout: 10000 });
+
+        const data = response.data;
+        console.log(`🏒 [NHL.com] Got roster: ${data?.forwards?.length || 0} forwards, ${data?.defensemen?.length || 0} defensemen, ${data?.goalies?.length || 0} goalies`);
+
+        return data;
+      }, 30); // Cache for 30 minutes
+    } catch (error) {
+      console.error(`🏒 [NHL.com] Error fetching roster for ${teamName}:`, error.message);
+      return null;
+    }
+  },
+
+  /**
+   * NHL.com Official API - Get Player Injuries with Duration
+   * Fetches roster and extracts injured players with status dates
+   *
+   * @param {string} teamName - Full team name
+   * @returns {Promise<Array>} - Array of injured players with duration info
+   */
+  async getNhlOfficialInjuries(teamName) {
+    try {
+      const abbrev = this.getNhlTeamAbbreviation(teamName);
+      if (!abbrev) {
+        return [];
+      }
+
+      const cacheKey = `nhl_official_injuries_${abbrev}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        console.log(`🏒 [NHL.com] Fetching official injuries for ${teamName}`);
+
+        // Get roster
+        const roster = await this.getNhlOfficialRoster(teamName);
+        if (!roster) return [];
+
+        const injuries = [];
+        const allPlayers = [
+          ...(roster.forwards || []),
+          ...(roster.defensemen || []),
+          ...(roster.goalies || [])
+        ];
+
+        // NHL.com roster includes injuryStatus for injured players
+        for (const player of allPlayers) {
+          // Check if player has injury indicators
+          // NHL.com uses various fields: injuryStatus, injuries array, or roster status
+          if (player.injuryStatus || player.injuries?.length > 0) {
+            const injury = {
+              player: {
+                id: player.id,
+                first_name: player.firstName?.default || player.firstName,
+                last_name: player.lastName?.default || player.lastName,
+                position: player.positionCode
+              },
+              status: player.injuryStatus || 'IR',
+              injury_type: player.injuries?.[0]?.injuryType || 'Unknown',
+              description: player.injuries?.[0]?.description || '',
+              // NHL.com provides dates when available
+              injury_date: player.injuries?.[0]?.injuryDate || null,
+              return_date: player.injuries?.[0]?.returnDate || null
+            };
+
+            // Calculate days since injury if date available
+            if (injury.injury_date) {
+              const injDate = new Date(injury.injury_date);
+              const now = new Date();
+              injury.daysSinceOut = Math.floor((now - injDate) / (1000 * 60 * 60 * 24));
+              injury.outSinceStr = injDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            }
+
+            injuries.push(injury);
+          }
+        }
+
+        console.log(`🏒 [NHL.com] Found ${injuries.length} injuries for ${teamName}`);
+        return injuries;
+      }, 30); // Cache for 30 minutes
+    } catch (error) {
+      console.error(`🏒 [NHL.com] Error fetching injuries for ${teamName}:`, error.message);
+      return [];
+    }
+  },
+
+  /**
+   * NHL.com Official API - Get Combined Injuries for a Matchup
+   * Fetches injuries for both teams and combines them
+   *
+   * @param {string} homeTeam - Home team name
+   * @param {string} awayTeam - Away team name
+   * @returns {Promise<Object>} - { home: [], away: [] } injury arrays
+   */
+  async getNhlOfficialInjuriesForMatchup(homeTeam, awayTeam) {
+    try {
+      console.log(`🏒 [NHL.com] Fetching official injuries for ${awayTeam} @ ${homeTeam}`);
+
+      const [homeInjuries, awayInjuries] = await Promise.all([
+        this.getNhlOfficialInjuries(homeTeam),
+        this.getNhlOfficialInjuries(awayTeam)
+      ]);
+
+      return {
+        home: homeInjuries,
+        away: awayInjuries
+      };
+    } catch (error) {
+      console.error('🏒 [NHL.com] Error fetching matchup injuries:', error.message);
+      return { home: [], away: [] };
+    }
+  },
+
+  /**
    * Get advanced stats - supports filtering by game_ids, player_ids, seasons
    * @param {Object|Array} options - Options object or legacy array of game IDs
    * @param {Array} options.game_ids - Array of game IDs
@@ -4896,14 +5151,48 @@ const ballDontLieService = {
 
   /**
    * Get NHL team details by name, abbreviation, or ID
+   * Uses BDL's /nhl/v1/teams endpoint
    * @param {string|number} nameOrId - Team name, abbreviation, or ID
    * @returns {Promise<Object>} - Team details or null if not found
    */
   async getNhlTeamByName(nameOrId) {
     try {
-      // Ball Don't Lie API only supports NBA, not NHL
-      console.log(`⚠️ Ball Don't Lie API does not support NHL - cannot find team: ${nameOrId}`);
-      return null;
+      const cacheKey = `nhl_team_by_name_${nameOrId}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        // First, get all NHL teams
+        const url = `${BALLDONTLIE_API_BASE_URL}/nhl/v1/teams`;
+        const response = await axios.get(url, {
+          headers: { 'Authorization': API_KEY }
+        });
+
+        const teams = response.data?.data || [];
+
+        // Search for team by name, abbreviation, or ID
+        const searchLower = String(nameOrId).toLowerCase().trim();
+
+        const team = teams.find(t => {
+          if (!t) return false;
+          // Match by ID
+          if (String(t.id) === String(nameOrId)) return true;
+          // Match by full name (e.g., "Columbus Blue Jackets")
+          if (t.full_name?.toLowerCase() === searchLower) return true;
+          if (t.name?.toLowerCase() === searchLower) return true;
+          // Match by abbreviation (e.g., "CBJ")
+          if (t.abbreviation?.toLowerCase() === searchLower) return true;
+          // Partial match (e.g., "Blue Jackets" or "Columbus")
+          if (t.full_name?.toLowerCase().includes(searchLower)) return true;
+          if (searchLower.includes(t.name?.toLowerCase())) return true;
+          return false;
+        });
+
+        if (team) {
+          console.log(`🏒 Found NHL team: ${team.full_name} (ID: ${team.id})`);
+          return team;
+        }
+
+        console.log(`🏒 NHL team not found: ${nameOrId}`);
+        return null;
+      }, 60); // Cache for 60 minutes
     } catch (error) {
       console.error(`Error getting NHL team by name/id ${nameOrId}:`, error);
       return null;
