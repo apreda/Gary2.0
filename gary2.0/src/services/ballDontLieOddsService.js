@@ -384,6 +384,120 @@ export const ballDontLieOddsService = {
         };
       });
     }
+    // NHL: Use dual-date fetching like NCAAB to capture all EST games
+    // Games at 7pm+ EST are stored under the NEXT UTC date
+    if (sportKey === 'icehockey_nhl') {
+      const apiKey = getApiKey();
+
+      // Calculate tomorrow's date in UTC
+      const todayDate = new Date(dateStr);
+      const tomorrowDate = new Date(todayDate.getTime() + 24 * 60 * 60 * 1000);
+      const tomorrowStr = tomorrowDate.toISOString().split('T')[0];
+
+      console.log(`[NHL] Fetching games for BOTH ${dateStr} AND ${tomorrowStr} (UTC) to capture all EST games`);
+
+      // Fetch games for both dates
+      let gamesToday = [];
+      let gamesTomorrow = [];
+      try {
+        [gamesToday, gamesTomorrow] = await Promise.all([
+          ballDontLieService.getGames('icehockey_nhl', { dates: [dateStr], per_page: 100 }, 10),
+          ballDontLieService.getGames('icehockey_nhl', { dates: [tomorrowStr], per_page: 100 }, 10)
+        ]);
+      } catch (e) {
+        console.warn(`[NHL] Games fetch failed, trying individual dates:`, e?.message || e);
+        // Fallback: try individually
+        try { gamesToday = await ballDontLieService.getGames('icehockey_nhl', { dates: [dateStr], per_page: 100 }, 10) || []; } catch { gamesToday = []; }
+        try { gamesTomorrow = await ballDontLieService.getGames('icehockey_nhl', { dates: [tomorrowStr], per_page: 100 }, 10) || []; } catch { gamesTomorrow = []; }
+      }
+
+      // Combine and deduplicate by game ID
+      const allGamesMap = new Map();
+      for (const g of [...(gamesToday || []), ...(gamesTomorrow || [])]) {
+        if (g?.id && !allGamesMap.has(g.id)) {
+          allGamesMap.set(g.id, g);
+        }
+      }
+      const games = Array.from(allGamesMap.values());
+      console.log(`[NHL] Combined: ${gamesToday?.length || 0} from ${dateStr} + ${gamesTomorrow?.length || 0} from ${tomorrowStr} = ${games.length} unique games`);
+
+      const ids = (games || []).map(g => g.id).filter(Boolean);
+      let oddsRows = [];
+      try {
+        // Fetch odds for both dates
+        const [respToday, respTomorrow] = await Promise.all([
+          axios.get(BDL_NHL_ODDS_V1, {
+            params: { 'dates[]': [dateStr], per_page: 100 },
+            headers: { Authorization: apiKey }
+          }),
+          axios.get(BDL_NHL_ODDS_V1, {
+            params: { 'dates[]': [tomorrowStr], per_page: 100 },
+            headers: { Authorization: apiKey }
+          })
+        ]);
+        const rowsToday = Array.isArray(respToday?.data?.data) ? respToday.data.data : [];
+        const rowsTomorrow = Array.isArray(respTomorrow?.data?.data) ? respTomorrow.data.data : [];
+        oddsRows = [...rowsToday, ...rowsTomorrow];
+        console.log(`[NHL] Odds: ${rowsToday.length} from ${dateStr} + ${rowsTomorrow.length} from ${tomorrowStr}`);
+      } catch (e) {
+        console.warn('[BallDonLieOdds][NHL] date-based v1 odds fetch failed:', e?.response?.data || e?.message || e);
+      }
+
+      // Index odds by game
+      const byGame = oddsRows.reduce((acc, r) => {
+        const list = acc.get(r.game_id) || [];
+        list.push(r);
+        acc.set(r.game_id, list);
+        return acc;
+      }, new Map());
+      const mapTeamName = (t) => (typeof t === 'string' ? t : (t?.full_name || t?.name || t?.short_name || ''));
+      return (games || []).map(g => {
+        const vendors = byGame.get(g.id) || [];
+        const bookmakers = vendors.map(v => {
+          const totalsOutcomes = [];
+          const totalPoint = toNumber(v.total_value);
+          const totalOver = toNumber(v.total_over_odds);
+          const totalUnder = toNumber(v.total_under_odds);
+          if (totalPoint !== null && totalOver !== null) totalsOutcomes.push({ name: 'Over', point: totalPoint, price: totalOver });
+          if (totalPoint !== null && totalUnder !== null) totalsOutcomes.push({ name: 'Under', point: totalPoint, price: totalUnder });
+          const spreadsOutcomes = [];
+          const homeSpreadPoint = toNumber(v.spread_home_value);
+          const homeSpreadPrice = toNumber(v.spread_home_odds);
+          if (homeSpreadPoint !== null && homeSpreadPrice !== null) {
+            spreadsOutcomes.push({ name: mapTeamName(g.home_team), point: homeSpreadPoint, price: homeSpreadPrice });
+          }
+          const awaySpreadPoint = toNumber(v.spread_away_value);
+          const awaySpreadPrice = toNumber(v.spread_away_odds);
+          if (awaySpreadPoint !== null && awaySpreadPrice !== null) {
+            spreadsOutcomes.push({ name: mapTeamName(g.visitor_team || g.away_team), point: awaySpreadPoint, price: awaySpreadPrice });
+          }
+          const h2hOutcomes = [];
+          const homeMl = toNumber(v.moneyline_home_odds);
+          if (homeMl !== null) h2hOutcomes.push({ name: mapTeamName(g.home_team), price: homeMl });
+          const awayMl = toNumber(v.moneyline_away_odds);
+          if (awayMl !== null) h2hOutcomes.push({ name: mapTeamName(g.visitor_team || g.away_team), price: awayMl });
+          const markets = [];
+          if (h2hOutcomes.length) markets.push({ key: 'h2h', outcomes: h2hOutcomes });
+          if (spreadsOutcomes.length) markets.push({ key: 'spreads', outcomes: spreadsOutcomes });
+          if (totalsOutcomes.length) markets.push({ key: 'totals', outcomes: totalsOutcomes });
+          return { key: v.vendor, title: v.vendor, markets };
+        });
+
+        let commenceTime = g.datetime || g.commence_time || g.date || new Date().toISOString();
+        if (typeof commenceTime === 'string' && commenceTime.length === 10 && !commenceTime.includes('T')) {
+          commenceTime = `${commenceTime}T00:00:00.000Z`;
+        }
+
+        return {
+          id: g.id,
+          sport_key: sportKey,
+          home_team: mapTeamName(g.home_team),
+          away_team: mapTeamName(g.visitor_team || g.away_team),
+          commence_time: commenceTime,
+          bookmakers
+        };
+      });
+    }
     // Fetch games (v1 multi-sport wrapper) and v2 odds (date-based)
     const games = await ballDontLieService.getGames(sportKey, { dates: [dateStr], per_page: 100 }, 10);
 

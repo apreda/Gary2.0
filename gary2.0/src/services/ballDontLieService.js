@@ -1487,9 +1487,8 @@ const ballDontLieService = {
       
       const cacheKey = `ncaab_roster_depth_${homeTeam.id}_${awayTeam.id}_${season}`;
       return await getCachedOrFetch(cacheKey, async () => {
-        // Fetch active players for both teams
-        console.log(`🏀 [Ball Don't Lie] Fetching active NCAAB players...`);
-        const activePlayersUrl = `${BALLDONTLIE_API_BASE_URL}/ncaab/v1/players/active?team_ids[]=${homeTeam.id}&team_ids[]=${awayTeam.id}&per_page=100`;
+        // Fetch active players for both teams (limit to 25 total, we only need top 9 per team)
+        const activePlayersUrl = `${BALLDONTLIE_API_BASE_URL}/ncaab/v1/players/active?team_ids[]=${homeTeam.id}&team_ids[]=${awayTeam.id}&per_page=25`;
         const playersResp = await axios.get(activePlayersUrl, { headers: { 'Authorization': API_KEY } });
         const allPlayers = Array.isArray(playersResp?.data?.data) ? playersResp.data.data : [];
         
