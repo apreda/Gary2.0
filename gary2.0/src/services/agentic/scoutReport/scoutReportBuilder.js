@@ -5151,7 +5151,7 @@ function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey) {
     }
 
     if (cats.others.length > 0) {
-      lines.push(`  [QUESTIONABLE/DOUBTFUL] Game-time decision:`);
+      lines.push(`  [QUESTIONABLE/GTD] If in STARTING LINEUP above → ASSUME FULL STRENGTH, do NOT cite as limitation:`);
       cats.others.forEach(i => lines.push(formatPlayer(i)));
     }
 
@@ -5194,6 +5194,13 @@ function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey) {
   lines.push('  - DO NOT cite, DO NOT mention, DO NOT factor into analysis');
   lines.push('  - We show you these so you KNOW they are out (prevents hallucination from training data)');
   lines.push('');
+  lines.push('[QUESTIONABLE/GTD] players IN THE STARTING LINEUP:');
+  lines.push('  - If a player is QUESTIONABLE but appears in the STARTING LINEUP above → ASSUME THEY PLAY AT FULL STRENGTH');
+  lines.push('  - The coaching staff decided they are ready to play');
+  lines.push('  - DO NOT cite "playing through injury", "may be limited", "dealing with an injury"');
+  lines.push('  - DO NOT speculate about minutes restrictions or diminished performance');
+  lines.push('  - If they are in the lineup, they are PLAYING. Period. Analyze what they DO, not what they MIGHT NOT do.');
+  lines.push('');
   lines.push('LINE-MOVER AWARENESS (Sharp thinking):');
   lines.push('  - When a star is out, the line moves. Your job: Did it move the RIGHT amount?');
   lines.push('  - When a team is on B2B, the line moves. Your job: Does the data support that much movement?');
@@ -5204,6 +5211,8 @@ function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey) {
   lines.push('FORBIDDEN REASONING:');
   lines.push('  - "X is out, so I take the other side" (already priced in)');
   lines.push('  - "They are missing X player" as a reason (market knows this)');
+  lines.push('  - "X is questionable/dealing with injury so they may be limited" (if in lineup, assume full strength)');
+  lines.push('  - "Rotation fragility due to questionable status" (if playing, they are playing)');
   lines.push('');
   lines.push('CORRECT REASONING:');
   lines.push('  - "X was ruled out 2 days ago. The line moved from -5 to -3, but their DRtg');
