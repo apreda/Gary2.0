@@ -97,13 +97,13 @@ async function geminiGrounding(query) {
   }
 }
 
-async function getScoreGrounding(league, home, away, date) {
-  // FIXED: Query format now matches parameter order (home, away)
-  const query = `What was the final score of the ${league} game: ${away} @ ${home} on ${date}? Respond ONLY as HomeScore-AwayScore with HOME team score first (e.g. 115-102 means home won 115-102). If unknown, say "null".`;
+async function getScoreGrounding(league, teamA, teamB, date) {
+  // Ask for scores by team name — avoids errors when pick's home/away doesn't match reality
+  const query = `What was the final score of the ${league} game between ${teamA} and ${teamB} on ${date}? Respond ONLY as "${teamA} score"-"${teamB} score" (e.g. 115-102 means ${teamA} scored 115 and ${teamB} scored 102). If unknown, say "null".`;
   const text = await geminiGrounding(query);
   if (!text || text.toLowerCase().includes('null')) return null;
   const match = text.match(/(\d+)-(\d+)/);
-  // Parse as HomeScore-AwayScore now (h first, v second)
+  // h = teamA's score (pick's homeTeam), v = teamB's score (pick's awayTeam)
   return match ? { h: parseInt(match[1]), v: parseInt(match[2]) } : null;
 }
 
@@ -189,11 +189,24 @@ async function fetchNFLStats(gameIds) {
 function matchGame(games, h, v) {
   const hn = normalizeName(h), vn = normalizeName(v);
   const hLast = hn.split(' ').pop(), vLast = vn.split(' ').pop();
-  return games.find(g => {
+
+  // Try normal match first (pick's home = API's home)
+  let match = games.find(g => {
     const gh = normalizeName(g.home_team?.full_name || g.home_team?.name || '');
     const gv = normalizeName(g.visitor_team?.full_name || g.visitor_team?.name || g.away_team?.full_name || g.away_team?.name || '');
     return (gh.includes(hn) || gh.includes(hLast)) && (gv.includes(vn) || gv.includes(vLast));
   });
+  if (match) return { game: match, swapped: false };
+
+  // Try reverse match (pick's home/away may be swapped vs API)
+  match = games.find(g => {
+    const gh = normalizeName(g.home_team?.full_name || g.home_team?.name || '');
+    const gv = normalizeName(g.visitor_team?.full_name || g.visitor_team?.name || g.away_team?.full_name || g.away_team?.name || '');
+    return (gh.includes(vn) || gh.includes(vLast)) && (gv.includes(hn) || gv.includes(hLast));
+  });
+  if (match) return { game: match, swapped: true };
+
+  return null;
 }
 
 function gradeGame(pickText, homeTeam, awayTeam, hScore, vScore) {
@@ -320,6 +333,7 @@ async function processGenericGames(table, date, leagueFilter = null) {
       let gameDate = date;
       let hs = null, vs = null;
       let matchedGame = null;
+      let swapped = false;
 
       if (table === 'weekly_nfl_picks') {
         const dateObj = new Date(date);
@@ -328,21 +342,32 @@ async function processGenericGames(table, date, leagueFilter = null) {
           checkDate.setDate(dateObj.getDate() + i);
           const dStr = checkDate.toISOString().split('T')[0];
           const games = await fetchGames(league, dStr);
-          const matched = matchGame(games, pick.homeTeam, pick.awayTeam);
-          if (matched && matched.status === 'Final') {
-            matchedGame = matched;
+          const result = matchGame(games, pick.homeTeam, pick.awayTeam);
+          if (result && result.game.status === 'Final') {
+            matchedGame = result.game;
+            swapped = result.swapped;
             gameDate = dStr;
             break;
           }
         }
       } else {
         const games = await fetchGames(league, date);
-        matchedGame = matchGame(games, pick.homeTeam, pick.awayTeam);
+        const result = matchGame(games, pick.homeTeam, pick.awayTeam);
+        if (result) {
+          matchedGame = result.game;
+          swapped = result.swapped;
+        }
       }
 
       if (matchedGame) {
-        hs = matchedGame.home_team_score ?? matchedGame.home_score ?? null;
-        vs = matchedGame.visitor_team_score ?? matchedGame.away_score ?? matchedGame.visitor_score ?? null;
+        if (swapped) {
+          // Pick's "home" is actually BDL's visitor and vice versa — swap scores to align with pick
+          hs = matchedGame.visitor_team_score ?? matchedGame.away_score ?? matchedGame.visitor_score ?? null;
+          vs = matchedGame.home_team_score ?? matchedGame.home_score ?? null;
+        } else {
+          hs = matchedGame.home_team_score ?? matchedGame.home_score ?? null;
+          vs = matchedGame.visitor_team_score ?? matchedGame.away_score ?? matchedGame.visitor_score ?? null;
+        }
         // Normalize the game date to ET to ensure it aligns with app's "Yesterday" view
         gameDate = normalizeToETDate(matchedGame) || gameDate;
       }
