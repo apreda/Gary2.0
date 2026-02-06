@@ -1418,6 +1418,8 @@ You CANNOT default to the favorite without exhausting underdog angles first.
       gameTime: game.commence_time || null,
       // Pass spread for Pass 2.5 context (use home spread as reference, typically negative for favorite)
       spread: game.spread_home || game.spread_away || 0,
+      // Pass game object for odds fallback in pick normalization
+      game,
       // Pass shared messages if in session mode
       sharedMessages: isSessionMode ? slateSession.messages : null
     };
@@ -6217,7 +6219,7 @@ BEGIN WRITING YOUR MATCHUP ANALYSIS NOW.
     }
 
     // Try to extract JSON from the response
-    let pick = parseGaryResponse(message.content, homeTeam, awayTeam, sport, game);
+    let pick = parseGaryResponse(message.content, homeTeam, awayTeam, sport, options.game || {});
 
     // If pick is null (invalid rationale), retry once with explicit instruction
     if (!pick && iteration < CONFIG.maxIterations) {
@@ -6512,7 +6514,7 @@ Your rationale MUST cite TIER 1 stats. If you only have TIER 3 stats, the pick i
       const finalMessage = finalResponse.choices?.[0]?.message;
       
       if (finalMessage?.content) {
-        const synthesizedPick = parseGaryResponse(finalMessage.content, homeTeam, awayTeam, sport, game);
+        const synthesizedPick = parseGaryResponse(finalMessage.content, homeTeam, awayTeam, sport, options.game || {});
         if (synthesizedPick && synthesizedPick.pick) {
           console.log(`[Orchestrator] ✅ Synthesis successful (attempt ${attempt}) - got pick: ${synthesizedPick.pick}`);
           synthesizedPick.toolCallHistory = toolCallHistory;
