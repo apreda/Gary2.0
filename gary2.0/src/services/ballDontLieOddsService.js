@@ -291,35 +291,35 @@ export const ballDontLieOddsService = {
       const ids = (games || []).map(g => g.id).filter(Boolean);
       let oddsRows = [];
       try {
-        // Try by date first - fetch odds for both dates
-        const [respToday, respTomorrow] = await Promise.all([
-          axios.get(BDL_NCAAB_ODDS_V1, {
-            params: { 'dates[]': [dateStr], per_page: 100 },
-            headers: { Authorization: apiKey }
-          }),
-          axios.get(BDL_NCAAB_ODDS_V1, {
-            params: { 'dates[]': [tomorrowStr], per_page: 100 },
-            headers: { Authorization: apiKey }
-          })
+        // Use paginated getOddsV2 (auto-paginates via cursor, up to 10 pages)
+        const [rowsToday, rowsTomorrow] = await Promise.all([
+          ballDontLieService.getOddsV2({ dates: [dateStr], per_page: 100 }, 'basketball_ncaab'),
+          ballDontLieService.getOddsV2({ dates: [tomorrowStr], per_page: 100 }, 'basketball_ncaab')
         ]);
-        const rowsToday = Array.isArray(respToday?.data?.data) ? respToday.data.data : [];
-        const rowsTomorrow = Array.isArray(respTomorrow?.data?.data) ? respTomorrow.data.data : [];
-        oddsRows = [...rowsToday, ...rowsTomorrow];
-        console.log(`[NCAAB] Odds: ${rowsToday.length} from ${dateStr} + ${rowsTomorrow.length} from ${tomorrowStr}`);
+        oddsRows = [...(rowsToday || []), ...(rowsTomorrow || [])];
+        console.log(`[NCAAB] Odds: ${rowsToday?.length || 0} from ${dateStr} + ${rowsTomorrow?.length || 0} from ${tomorrowStr} (paginated)`);
       } catch (e) {
         console.warn('[BallDonLieOdds][NCAAB] date-based v1 odds fetch failed:', e?.response?.data || e?.message || e);
       }
-      // If none by date, try by game_ids
-      if ((!Array.isArray(oddsRows) || oddsRows.length === 0) && ids.length > 0) {
-        try {
-          const respByIds = await axios.get(BDL_NCAAB_ODDS_V1, {
-            params: { 'game_ids[]': ids.slice(0, 100), per_page: 100 },
-            headers: { Authorization: apiKey }
-          });
-          const rowsByIds = Array.isArray(respByIds?.data?.data) ? respByIds.data.data : [];
-          oddsRows = rowsByIds;
-        } catch (e) {
-          console.warn('[BallDonLieOdds][NCAAB] game_ids v1 odds fetch failed:', e?.response?.data || e?.message || e);
+      // Fallback: fetch by game_ids for games still missing odds
+      if (ids.length > 0) {
+        const coveredGameIds = new Set(oddsRows.map(r => r.game_id));
+        const missingIds = ids.filter(id => !coveredGameIds.has(id));
+        if (missingIds.length > 0) {
+          console.log(`[NCAAB] ${missingIds.length} games missing odds after date fetch — fetching by game_ids...`);
+          try {
+            // Fetch in batches of 100
+            for (let i = 0; i < missingIds.length; i += 100) {
+              const batch = missingIds.slice(i, i + 100);
+              const byIds = await ballDontLieService.getOddsV2({ game_ids: batch, per_page: 100 }, 'basketball_ncaab');
+              if (Array.isArray(byIds) && byIds.length) {
+                oddsRows = oddsRows.concat(byIds);
+                console.log(`[NCAAB] Recovered odds for ${byIds.length} rows via game_ids fallback (batch ${Math.floor(i / 100) + 1})`);
+              }
+            }
+          } catch (e) {
+            console.warn('[BallDonLieOdds][NCAAB] game_ids v1 odds fetch failed:', e?.response?.data || e?.message || e);
+          }
         }
       }
       // Index odds by game

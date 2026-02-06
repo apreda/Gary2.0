@@ -3811,11 +3811,14 @@ BEGIN YOUR ANALYSIS NOW.
 function parsePass25Ratings(content) {
   if (!content) return null;
 
+  // Sanitize JSON: strip '+' prefix from numbers (e.g., +155 → 155) which Gemini sometimes outputs
+  const sanitizeJson = (str) => str.replace(/:\s*\+(\d)/g, ': $1');
+
   try {
     // Method 1: Try to find JSON block in the response
     const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
     if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[1]);
+      const parsed = JSON.parse(sanitizeJson(jsonMatch[1]));
 
       // NEW GRADELESS FORMAT: Check for case_summaries structure (no numerical grades)
       if (parsed.case_summaries && parsed.final_pick) {
@@ -3900,7 +3903,7 @@ function parsePass25Ratings(content) {
     const gradelessMatch = content.match(/\{[\s\S]*?"case_summaries"[\s\S]*?"final_pick"[\s\S]*?\}/);
     if (gradelessMatch) {
       try {
-        const parsed = JSON.parse(gradelessMatch[0]);
+        const parsed = JSON.parse(sanitizeJson(gradelessMatch[0]));
         if (parsed.case_summaries && parsed.final_pick) {
           console.log(`[Pass 2.5] ✅ Gradeless format found via raw JSON`);
           return {
@@ -3928,7 +3931,7 @@ function parsePass25Ratings(content) {
     const legacyMatch = content.match(/\{[\s\S]*?"case_grades"[\s\S]*?"final_pick"[\s\S]*?\}/);
     if (legacyMatch) {
       try {
-        const parsed = JSON.parse(legacyMatch[0]);
+        const parsed = JSON.parse(sanitizeJson(legacyMatch[0]));
         if (parsed.case_grades && parsed.final_pick) {
           console.log(`[Pass 2.5] ✅ Legacy format with grades found via raw JSON`);
           const homeGrade = parsed.case_grades.home_team?.strength || 5.0;
@@ -3966,7 +3969,7 @@ function parsePass25Ratings(content) {
     // Method 4: Fallback - try oldest legacy format
     const rawJsonMatch = content.match(/\{[\s\S]*?"favorite_path_rating"[\s\S]*?\}/);
     if (rawJsonMatch) {
-      const parsed = JSON.parse(rawJsonMatch[0]);
+      const parsed = JSON.parse(sanitizeJson(rawJsonMatch[0]));
       if (parsed.favorite_path_rating && parsed.underdog_path_rating) {
         console.log(`[Pass 2.5] ✅ Oldest legacy format found via raw JSON`);
         return {
