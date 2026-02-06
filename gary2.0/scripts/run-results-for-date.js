@@ -236,66 +236,87 @@ function findMatchingGame(scores, homeTeam, awayTeam, logMatch = false) {
   const awayIds = getTeamIdentifiers(awayTeam);
   const normalizedHome = normalizeTeamName(homeTeam);
   const normalizedAway = normalizeTeamName(awayTeam);
-  
-  const matches = scores.map(game => {
-    const gameHomeIds = getTeamIdentifiers(game.home_team);
-    const gameAwayIds = getTeamIdentifiers(game.away_team);
-    const gameHomeNorm = normalizeTeamName(game.home_team);
-    const gameAwayNorm = normalizeTeamName(game.away_team);
-    
-    // Strategy 1: Exact normalized match (best)
-    const exactHomeMatch = gameHomeNorm === normalizedHome;
-    const exactAwayMatch = gameAwayNorm === normalizedAway;
-    
-    // Strategy 2: Mascot match (reliable for teams with same city)
-    const mascotHomeMatch = homeIds.lastWord && gameHomeIds.lastWord === homeIds.lastWord;
-    const mascotAwayMatch = awayIds.lastWord && gameAwayIds.lastWord === awayIds.lastWord;
-    
-    // Strategy 3: Contains match (fallback)
-    const containsHomeMatch = gameHomeNorm.includes(normalizedHome) || normalizedHome.includes(gameHomeNorm);
-    const containsAwayMatch = gameAwayNorm.includes(normalizedAway) || normalizedAway.includes(gameAwayNorm);
-    
-    // Strategy 4: Word overlap (for partial matches)
-    const homeWordOverlap = homeIds.words.some(w => w.length > 3 && gameHomeIds.words.includes(w));
-    const awayWordOverlap = awayIds.words.some(w => w.length > 3 && gameAwayIds.words.includes(w));
-    
-    // Calculate match score
-    let homeScore = 0;
-    let awayScore = 0;
-    
-    if (exactHomeMatch) homeScore += 10;
-    else if (mascotHomeMatch) homeScore += 8;
-    else if (containsHomeMatch) homeScore += 5;
-    else if (homeWordOverlap) homeScore += 3;
-    
-    if (exactAwayMatch) awayScore += 10;
-    else if (mascotAwayMatch) awayScore += 8;
-    else if (containsAwayMatch) awayScore += 5;
-    else if (awayWordOverlap) awayScore += 3;
-    
-    return {
-      game,
-      homeScore,
-      awayScore,
-      totalScore: homeScore + awayScore,
-      homeMatch: homeScore > 0,
-      awayMatch: awayScore > 0,
-      bothMatch: homeScore > 0 && awayScore > 0
-    };
-  });
-  
-  // Find best match (both teams must match, prefer higher scores)
-  const bestMatch = matches
-    .filter(m => m.bothMatch)
-    .sort((a, b) => b.totalScore - a.totalScore)[0];
-  
-  if (bestMatch && logMatch) {
-    console.log(`     🎯 Matched: "${bestMatch.game.away_team}" @ "${bestMatch.game.home_team}"`);
-    console.log(`        (Looking for: "${awayTeam}" @ "${homeTeam}")`);
-    console.log(`        Match score: ${bestMatch.totalScore} (Home: ${bestMatch.homeScore}, Away: ${bestMatch.awayScore})`);
+
+  // Try both normal and reverse matching (pick's home/away may be swapped vs API)
+  for (const trySwapped of [false, true]) {
+    const pickHome = trySwapped ? normalizedAway : normalizedHome;
+    const pickAway = trySwapped ? normalizedHome : normalizedAway;
+    const pickHomeIds = trySwapped ? awayIds : homeIds;
+    const pickAwayIds = trySwapped ? homeIds : awayIds;
+
+    const matches = scores.map(game => {
+      const gameHomeIds = getTeamIdentifiers(game.home_team);
+      const gameAwayIds = getTeamIdentifiers(game.away_team);
+      const gameHomeNorm = normalizeTeamName(game.home_team);
+      const gameAwayNorm = normalizeTeamName(game.away_team);
+
+      // Strategy 1: Exact normalized match (best)
+      const exactHomeMatch = gameHomeNorm === pickHome;
+      const exactAwayMatch = gameAwayNorm === pickAway;
+
+      // Strategy 2: Mascot match (reliable for teams with same city)
+      const mascotHomeMatch = pickHomeIds.lastWord && gameHomeIds.lastWord === pickHomeIds.lastWord;
+      const mascotAwayMatch = pickAwayIds.lastWord && gameAwayIds.lastWord === pickAwayIds.lastWord;
+
+      // Strategy 3: Contains match (fallback)
+      const containsHomeMatch = gameHomeNorm.includes(pickHome) || pickHome.includes(gameHomeNorm);
+      const containsAwayMatch = gameAwayNorm.includes(pickAway) || pickAway.includes(gameAwayNorm);
+
+      // Strategy 4: Word overlap (for partial matches)
+      const homeWordOverlap = pickHomeIds.words.some(w => w.length > 3 && gameHomeIds.words.includes(w));
+      const awayWordOverlap = pickAwayIds.words.some(w => w.length > 3 && gameAwayIds.words.includes(w));
+
+      // Calculate match score
+      let homeScore = 0;
+      let awayScore = 0;
+
+      if (exactHomeMatch) homeScore += 10;
+      else if (mascotHomeMatch) homeScore += 8;
+      else if (containsHomeMatch) homeScore += 5;
+      else if (homeWordOverlap) homeScore += 3;
+
+      if (exactAwayMatch) awayScore += 10;
+      else if (mascotAwayMatch) awayScore += 8;
+      else if (containsAwayMatch) awayScore += 5;
+      else if (awayWordOverlap) awayScore += 3;
+
+      return {
+        game,
+        homeScore,
+        awayScore,
+        totalScore: homeScore + awayScore,
+        homeMatch: homeScore > 0,
+        awayMatch: awayScore > 0,
+        bothMatch: homeScore > 0 && awayScore > 0
+      };
+    });
+
+    // Find best match (both teams must match, prefer higher scores)
+    const bestMatch = matches
+      .filter(m => m.bothMatch)
+      .sort((a, b) => b.totalScore - a.totalScore)[0];
+
+    if (bestMatch) {
+      if (logMatch) {
+        console.log(`     🎯 Matched: "${bestMatch.game.away_team}" @ "${bestMatch.game.home_team}"${trySwapped ? ' (home/away swapped in pick)' : ''}`);
+        console.log(`        (Looking for: "${awayTeam}" @ "${homeTeam}")`);
+        console.log(`        Match score: ${bestMatch.totalScore} (Home: ${bestMatch.homeScore}, Away: ${bestMatch.awayScore})`);
+      }
+
+      if (trySwapped) {
+        // Pick's home/away is reversed vs API — swap the scores so they align with the pick
+        return {
+          ...bestMatch.game,
+          homeScore: bestMatch.game.awayScore,
+          awayScore: bestMatch.game.homeScore,
+          _swapped: true
+        };
+      }
+      return bestMatch.game;
+    }
   }
-  
-  return bestMatch ? bestMatch.game : null;
+
+  return null;
 }
 
 /**
