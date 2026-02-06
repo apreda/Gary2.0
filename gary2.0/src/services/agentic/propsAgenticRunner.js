@@ -4136,7 +4136,7 @@ CRITICAL CONSTRAINTS (apply these strictly):
       prop: formatProp(pick),
       // Normalize 'yes' to 'over' for UI consistency (anytime goal = over 0.5 goals)
       bet: (pick.bet || 'over').toLowerCase() === 'yes' ? 'over' : (pick.bet || 'over').toLowerCase(),
-      odds: pick.odds || -110,
+      odds: pick.odds || null,
       confidence: pick.confidence || 0.6,
       rationale: cleanSourceTags(pick.rationale) || 'Analysis based on matchup data.',
       key_stats: cleanKeyStats(pick.key_stats),
@@ -4387,7 +4387,7 @@ CRITICAL CONSTRAINTS (apply these strictly):
       prop: formatPropLegacy(pick),
       // Normalize 'yes' to 'over' for UI consistency (anytime goal = over 0.5 goals)
       bet: (pick.bet || 'over').toLowerCase() === 'yes' ? 'over' : (pick.bet || 'over').toLowerCase(),
-      odds: pick.odds || -110,
+      odds: pick.odds || null,
       confidence: pick.confidence || 0.6,
       rationale: cleanSourceTagsLegacy(pick.rationale) || 'Analysis based on matchup data.',
       key_stats: cleanKeyStatsLegacy(pick.key_stats),

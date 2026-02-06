@@ -6217,7 +6217,7 @@ BEGIN WRITING YOUR MATCHUP ANALYSIS NOW.
     }
 
     // Try to extract JSON from the response
-    let pick = parseGaryResponse(message.content, homeTeam, awayTeam, sport);
+    let pick = parseGaryResponse(message.content, homeTeam, awayTeam, sport, game);
 
     // If pick is null (invalid rationale), retry once with explicit instruction
     if (!pick && iteration < CONFIG.maxIterations) {
@@ -6512,7 +6512,7 @@ Your rationale MUST cite TIER 1 stats. If you only have TIER 3 stats, the pick i
       const finalMessage = finalResponse.choices?.[0]?.message;
       
       if (finalMessage?.content) {
-        const synthesizedPick = parseGaryResponse(finalMessage.content, homeTeam, awayTeam, sport);
+        const synthesizedPick = parseGaryResponse(finalMessage.content, homeTeam, awayTeam, sport, game);
         if (synthesizedPick && synthesizedPick.pick) {
           console.log(`[Orchestrator] ✅ Synthesis successful (attempt ${attempt}) - got pick: ${synthesizedPick.pick}`);
           synthesizedPick.toolCallHistory = toolCallHistory;
@@ -6563,7 +6563,7 @@ Your rationale MUST cite TIER 1 stats. If you only have TIER 3 stats, the pick i
  * Pass indicators are only checked if no valid pick is found in JSON.
  * This prevents false positives like "moving on" in analysis from triggering PASS.
  */
-function parseGaryResponse(content, homeTeam, awayTeam, sport) {
+function parseGaryResponse(content, homeTeam, awayTeam, sport, gameOdds = {}) {
   if (!content) return null;
 
   // Helper to fix common JSON issues from Gemini
@@ -6623,7 +6623,7 @@ function parseGaryResponse(content, homeTeam, awayTeam, sport) {
     let jsonStr = jsonMatch[1];
     try {
       const parsed = JSON.parse(jsonStr);
-      return normalizePickFormat(parsed, homeTeam, awayTeam, sport);
+      return normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds);
     } catch (e) {
       console.warn('[Orchestrator] Failed to parse JSON from code block:', e.message);
       // Try to fix common Gemini JSON issues
@@ -6631,7 +6631,7 @@ function parseGaryResponse(content, homeTeam, awayTeam, sport) {
         const fixedJson = fixJsonString(jsonStr);
         const parsed = JSON.parse(fixedJson);
         console.log('[Orchestrator] Parsed JSON after fixing Gemini formatting issues');
-        return normalizePickFormat(parsed, homeTeam, awayTeam, sport);
+        return normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds);
       } catch (e2) {
         console.warn('[Orchestrator] Still failed after fixes:', e2.message);
       }
@@ -6644,7 +6644,7 @@ function parseGaryResponse(content, homeTeam, awayTeam, sport) {
     let jsonStr = rawJsonMatch[0];
     try {
       const parsed = JSON.parse(jsonStr);
-      return normalizePickFormat(parsed, homeTeam, awayTeam, sport);
+      return normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds);
     } catch (e) {
       console.warn('[Orchestrator] Failed to parse raw JSON:', e.message);
       // Try to fix common Gemini JSON issues
@@ -6652,7 +6652,7 @@ function parseGaryResponse(content, homeTeam, awayTeam, sport) {
         const fixedJson = fixJsonString(jsonStr);
         const parsed = JSON.parse(fixedJson);
         console.log('[Orchestrator] Parsed JSON after fixing Gemini formatting issues');
-        return normalizePickFormat(parsed, homeTeam, awayTeam, sport);
+        return normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds);
       } catch (e2) {
         console.warn('[Orchestrator] Still failed after fixes:', e2.message);
         // Log a snippet of the problematic JSON
@@ -6712,7 +6712,7 @@ function parseGaryResponse(content, homeTeam, awayTeam, sport) {
  * Normalize pick format for storage
  * Handles both legacy format (parsed.pick) and new format (parsed.final_pick)
  */
-function normalizePickFormat(parsed, homeTeam, awayTeam, sport) {
+function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds = {}) {
   // CRITICAL: Support both legacy format (pick) and new format (final_pick)
   // The new Pass 2.5 format uses "final_pick" instead of "pick"
   if (!parsed.pick && parsed.final_pick) {
@@ -6769,22 +6769,27 @@ function normalizePickFormat(parsed, homeTeam, awayTeam, sport) {
     
     if (pickLower.includes(homeTeamLower.split(' ')[0]) || pickLower.includes(homeTeamLower.split(' ').pop())) {
       pickedTeam = homeTeam;
-      mlOdds = parsed.moneylineHome;
+      mlOdds = parsed.moneylineHome ?? gameOdds.moneyline_home ?? null;
     } else if (pickLower.includes(awayTeamLower.split(' ')[0]) || pickLower.includes(awayTeamLower.split(' ').pop())) {
       pickedTeam = awayTeam;
-      mlOdds = parsed.moneylineAway;
+      mlOdds = parsed.moneylineAway ?? gameOdds.moneyline_away ?? null;
     } else {
       // Fallback: use the team name from the pick
       pickedTeam = parsed.homeTeam || parsed.awayTeam || homeTeam;
-      mlOdds = parsed.moneylineHome || parsed.moneylineAway;
+      mlOdds = parsed.moneylineHome ?? parsed.moneylineAway ?? gameOdds.moneyline_home ?? gameOdds.moneyline_away ?? null;
     }
-    
-    // Convert to ML
+
+    // Convert to ML — only include odds in pick text if we have real odds
     parsed.type = 'moneyline';
-    const mlOddsStr = mlOdds > 0 ? `+${mlOdds}` : `${mlOdds}`;
-    parsed.pick = `${pickedTeam} ML ${mlOddsStr}`;
+    if (mlOdds != null) {
+      const mlOddsStr = mlOdds > 0 ? `+${mlOdds}` : `${mlOdds}`;
+      parsed.pick = `${pickedTeam} ML ${mlOddsStr}`;
+    } else {
+      console.warn(`[Orchestrator] ⚠️ MISSING ML ODDS for ${pickedTeam} — no odds from AI or game data`);
+      parsed.pick = `${pickedTeam} ML`;
+    }
     parsed.odds = mlOdds;
-    
+
     console.log(`[Orchestrator] ${sportLabel} Converted to: ${parsed.pick}`);
   }
   
@@ -6845,10 +6850,15 @@ function normalizePickFormat(parsed, homeTeam, awayTeam, sport) {
   }
 
   // Ensure pick text includes odds if not already present
-  const odds = parsed.odds || parsed.spreadOdds || parsed.moneylineHome || parsed.moneylineAway || -110;
+  // Use real odds from AI output, then fall back to actual game data — NEVER default to -110
+  const odds = parsed.odds ?? parsed.spreadOdds ?? parsed.moneylineHome ?? parsed.moneylineAway
+    ?? gameOdds.moneyline_home ?? gameOdds.moneyline_away ?? null;
+  if (odds == null) {
+    console.warn(`[Orchestrator] ⚠️ NO ODDS AVAILABLE for pick "${pickText}" — AI and game data both missing`);
+  }
   if (!pickText.includes('-1') && !pickText.includes('+1') && !pickText.includes('-2') && !pickText.includes('+2')) {
-    // Odds not in pick text, append them
-    if (odds && typeof odds === 'number') {
+    // Odds not in pick text, append them only if we have real odds
+    if (odds != null && typeof odds === 'number') {
       const oddsStr = odds > 0 ? `+${odds}` : `${odds}`;
       if (!pickText.includes(oddsStr)) {
         pickText = `${pickText} ${oddsStr}`;
@@ -6911,22 +6921,31 @@ function normalizePickFormat(parsed, homeTeam, awayTeam, sport) {
     
     const type = parsed.type || 'spread';
     if (type === 'moneyline' || type === 'ml') {
-      // Determine correct ML odds based on which team was picked
+      // Determine correct ML odds based on which team was picked — use game data as fallback
       let mlOdds;
       if (team === homeTeamName) {
-        mlOdds = parsed.moneylineHome || parsed.moneylineAway || odds;
+        mlOdds = parsed.moneylineHome ?? gameOdds.moneyline_home ?? parsed.moneylineAway ?? gameOdds.moneyline_away ?? null;
       } else {
-        mlOdds = parsed.moneylineAway || parsed.moneylineHome || odds;
+        mlOdds = parsed.moneylineAway ?? gameOdds.moneyline_away ?? parsed.moneylineHome ?? gameOdds.moneyline_home ?? null;
       }
-      const mlOddsStr = mlOdds > 0 ? `+${mlOdds}` : `${mlOdds}`;
-      pickText = `${team} ML ${mlOddsStr}`;
+      if (mlOdds != null) {
+        const mlOddsStr = mlOdds > 0 ? `+${mlOdds}` : `${mlOdds}`;
+        pickText = `${team} ML ${mlOddsStr}`;
+      } else {
+        console.warn(`[Orchestrator] ⚠️ MISSING ML ODDS during reconstruction for ${team}`);
+        pickText = `${team} ML`;
+      }
       console.log(`[Orchestrator] Reconstructed ML pick: ${pickText}`);
     } else if (parsed.spread) {
       const spreadNum = parseFloat(parsed.spread);
       const spreadStr = spreadNum > 0 ? `+${spreadNum}` : `${spreadNum}`;
-      const spreadOdds = parsed.spreadOdds || -110;
-      const spreadOddsStr = spreadOdds > 0 ? `+${spreadOdds}` : `${spreadOdds}`;
-      pickText = `${team} ${spreadStr} ${spreadOddsStr}`;
+      const spreadOdds = parsed.spreadOdds ?? gameOdds.spread_home_odds ?? null;
+      if (spreadOdds != null) {
+        const spreadOddsStr = spreadOdds > 0 ? `+${spreadOdds}` : `${spreadOdds}`;
+        pickText = `${team} ${spreadStr} ${spreadOddsStr}`;
+      } else {
+        pickText = `${team} ${spreadStr}`;
+      }
       console.log(`[Orchestrator] Reconstructed spread pick: ${pickText}`);
     }
   }
@@ -7018,13 +7037,13 @@ function normalizePickFormat(parsed, homeTeam, awayTeam, sport) {
     league: normalizeSportToLeague(sport),
     sport: sport,
     rationale: rationale,
-    // Include odds from Gary's output
-    spread: parsed.spread,
-    spreadOdds: parsed.spreadOdds || -110,
-    moneylineHome: parsed.moneylineHome,
-    moneylineAway: parsed.moneylineAway,
-    total: parsed.total,
-    totalOdds: parsed.totalOdds || -110,
+    // Include odds from Gary's output — fall back to game data, NEVER to -110
+    spread: parsed.spread ?? gameOdds.spread_home ?? null,
+    spreadOdds: parsed.spreadOdds ?? gameOdds.spread_home_odds ?? null,
+    moneylineHome: parsed.moneylineHome ?? gameOdds.moneyline_home ?? null,
+    moneylineAway: parsed.moneylineAway ?? gameOdds.moneyline_away ?? null,
+    total: parsed.total ?? gameOdds.total ?? null,
+    totalOdds: parsed.totalOdds ?? gameOdds.total_over_odds ?? null,
     // Additional judge fields
     trapAlert: parsed.trapAlert || false,
     revenge: parsed.revenge || false,

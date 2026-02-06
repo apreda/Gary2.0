@@ -239,13 +239,13 @@ const extractOddsFromBookmakers = (bookmakers, homeTeam, awayTeam) => {
   const result = {
     spread_home: null,
     spread_away: null,
-    spread_home_odds: -110,
-    spread_away_odds: -110,
+    spread_home_odds: null,
+    spread_away_odds: null,
     moneyline_home: null,
     moneyline_away: null,
     total: null,
-    total_over_odds: -110,
-    total_under_odds: -110
+    total_over_odds: null,
+    total_under_odds: null
   };
 
   if (!bookmakers || !bookmakers.length) return result;
@@ -279,10 +279,10 @@ const extractOddsFromBookmakers = (bookmakers, homeTeam, awayTeam) => {
     for (const outcome of spreadsMarket.outcomes) {
       if (outcome.name === homeTeam) {
         result.spread_home = outcome.point;
-        result.spread_home_odds = outcome.price || -110;
+        result.spread_home_odds = outcome.price ?? null;
       } else if (outcome.name === awayTeam) {
         result.spread_away = outcome.point;
-        result.spread_away_odds = outcome.price || -110;
+        result.spread_away_odds = outcome.price ?? null;
       }
     }
   }
@@ -305,9 +305,9 @@ const extractOddsFromBookmakers = (bookmakers, homeTeam, awayTeam) => {
     for (const outcome of totalsMarket.outcomes) {
       if (outcome.name === 'Over') {
         result.total = outcome.point;
-        result.total_over_odds = outcome.price || -110;
+        result.total_over_odds = outcome.price ?? null;
       } else if (outcome.name === 'Under') {
-        result.total_under_odds = outcome.price || -110;
+        result.total_under_odds = outcome.price ?? null;
       }
     }
   }

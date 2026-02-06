@@ -170,12 +170,12 @@ function Home() {
                     color: '#bfa142'
                   }}>
                     {(() => {
-                      // Extract odds from the pick string
+                      // Extract odds from the pick string — show nothing rather than fake -110
                       if (displayPick.pick) {
                         const oddsMatch = displayPick.pick.match(/([-+]\d+)$/);
-                        return oddsMatch ? oddsMatch[1] : '-110';
+                        return oddsMatch ? oddsMatch[1] : '';
                       }
-                      return displayPick.odds || '-110';
+                      return displayPick.odds || '';
                     })()}
                   </div>
                 </div>
