@@ -120,7 +120,7 @@ export function buildMarketSnapshot(bookmakers = [], homeTeamName = 'Home', away
           totals.push({
             side: outcome.name, // 'Over' or 'Under'
             point: outcome.point,
-            price: outcome.price || -110,
+            price: outcome.price ?? null,
             bookmaker: bookmaker.title || bookmaker.key
           });
         });
