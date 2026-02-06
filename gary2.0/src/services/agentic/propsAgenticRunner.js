@@ -6,7 +6,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { openaiService, GEMINI_FLASH_MODEL } from '../openaiService.js';
 import { ballDontLieService } from '../ballDontLieService.js';
-import { applyQuantumFilter, isQuantumEnabled } from '../quantumService.js';
+// quantumService removed (2026-02) — was tracking-only, never filtered picks
 import { geminiGroundingSearch } from './scoutReport/scoutReportBuilder.js';
 // Import sharp grading reference for Steel Man case evaluation
 import { getSteelManGradingReference } from './constitution/sharpReferenceLoader.js';
@@ -67,7 +67,7 @@ const PICK_SCHEMA = {
     edge_type: { 
       type: 'string', 
       enum: ['USAGE_SHIFT', 'MATCHUP_MISMATCH', 'GAME_SCRIPT', 'RECENT_FORM', 'LINE_SOFT', 'NEXT_GEN_EDGE'],
-      description: 'Primary edge type: USAGE_SHIFT (teammate out), MATCHUP_MISMATCH (defender weakness), GAME_SCRIPT (pace/blowout), RECENT_FORM (hot streak), LINE_SOFT (book mistake), NEXT_GEN_EDGE (advanced stats)' 
+      description: 'Primary edge type: USAGE_SHIFT (fresh roster change creating new opportunity), MATCHUP_MISMATCH (specific defender/scheme weakness), GAME_SCRIPT (pace/blowout projection), RECENT_FORM (hot streak line hasnt caught), LINE_SOFT (book pricing error), NEXT_GEN_EDGE (advanced stats reveal hidden value)'
     },
     confidence_tier: { type: 'string', enum: ['MAX', 'CORE', 'SPECULATIVE'], description: 'MAX (2 units, elite edge), CORE (1 unit, solid), SPECULATIVE (0.5 units, value shot)' },
     rationale: { type: 'string', description: '5-7 sentences explaining why you like this pick.' },
@@ -3754,7 +3754,7 @@ For EVERY pick, identify the PRIMARY edge type. This helps track what kinds of e
 
 | Edge Type | Description | Example |
 |-----------|-------------|---------|
-| USAGE_SHIFT | Teammate injury/absence creates opportunity | "WR1 out, WR2 gets +30% target share" |
+| USAGE_SHIFT | Fresh roster change creating new opportunity | "WR1 ruled out yesterday — investigate how target share redistributes and whether the line has adjusted" |
 | MATCHUP_MISMATCH | Specific defender/scheme weakness | "Speed WR vs slow CB, 3.5 separation avg" |
 | GAME_SCRIPT | Pace/blowout/shootout projection | "+10 underdog will throw 45+ times" |
 | RECENT_FORM | Hot streak the line hasn't caught up to | "L3 avg 95 yards, line still at 68.5" |
@@ -4190,23 +4190,6 @@ CRITICAL CONSTRAINTS (apply these strictly):
         console.log(`[Props Constraint] Applied 2-per-game: ${validPicks.length} kept, ${droppedPicks.length} dropped, ${garySpecials.length} Gary Specials`);
       }
       
-      if (isQuantumEnabled()) {
-        // NBA/NHL PROPS: Mirror game-picks "Tracking Mode" (v2.1 update)
-        // - We attach quantum scores for research, but DON'T filter picks
-        // - This ensures the user gets 2 props per game as requested
-        console.log(`[Agentic Props][${sportLabel}] 🌌 Applying quantum tagging to ${validPicks.length} shortlisted props`);
-        const quantumTracked = await applyQuantumFilter(validPicks, `${sportLabel} PROPS`, { storeAll: true });
-        console.log(`[Agentic Props][${sportLabel}] 🌌 Quantum tagging complete for ${quantumTracked.length} picks`);
-
-        return {
-          picks: quantumTracked,
-          iterations: result.iterations,
-          toolCalls: result.toolCalls,
-          elapsedMs: Date.now() - start
-        };
-      }
-
-      console.log(`[Agentic Props][${sportLabel}] ⚠️ Quantum filter disabled (--no-quantum flag) - returning full shortlist (${validPicks.length})`);
       return {
         picks: validPicks,
         iterations: result.iterations,
@@ -4414,6 +4397,8 @@ CRITICAL CONSTRAINTS (apply these strictly):
     elapsedMs
   };
 }
+
+export { getConstitution as getPropsConstitution, applyPropsPerGameConstraint, PICK_SCHEMA as PROPS_PICK_SCHEMA };
 
 export default {
   runAgenticPropsPipeline

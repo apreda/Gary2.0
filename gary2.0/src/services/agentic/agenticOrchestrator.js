@@ -1313,6 +1313,13 @@ export async function analyzeGame(game, sport, options = {}) {
       day: 'numeric' 
     });
 
+    // Props mode detection
+    const isPropsMode = options.mode === 'props';
+    const propContext = options.propContext || null;
+    if (isPropsMode) {
+      console.log(`[Orchestrator] 🎯 PROPS MODE: Analyzing props for ${awayTeam} @ ${homeTeam}`);
+    }
+
     // Step 2 & 3: Get system prompt (from session or build new)
     let systemPrompt;
     if (isSessionMode) {
@@ -1324,6 +1331,12 @@ export async function analyzeGame(game, sport, options = {}) {
       let constitution = getConstitution(sport);
       constitution = constitution.replace(/{{CURRENT_DATE}}/g, today);
       systemPrompt = buildSystemPrompt(constitution, sport);
+    }
+
+    // In props mode, append props-specific constitution
+    if (isPropsMode && propContext?.propsConstitution) {
+      systemPrompt += '\n\n' + propContext.propsConstitution;
+      console.log(`[Orchestrator] Appended props constitution (${propContext.propsConstitution.length} chars)`);
     }
 
     // Step 4: Build the user message
@@ -1410,6 +1423,15 @@ You CANNOT default to the favorite without exhausting underdog angles first.
       }
     }
 
+    // In props mode, append a note to user message so Gary knows props evaluation comes after game analysis
+    if (isPropsMode) {
+      userMessage += `\n\n═══════════════════════════════════════════════════════════════════════════════
+PROPS MODE: After completing your game analysis (Steel Man + Conviction Assessment),
+you will be asked to evaluate player props for this matchup. Your game analysis will
+directly inform which player props have edge. Investigate the game thoroughly first.
+═══════════════════════════════════════════════════════════════════════════════`;
+    }
+
     // Step 5: Run the agent loop
     // Include game time for weather forecasting (only fetch weather within 36h of game time)
     // Include spread for Pass 2.5 spread context injection
@@ -1421,7 +1443,10 @@ You CANNOT default to the favorite without exhausting underdog angles first.
       // Pass game object for odds fallback in pick normalization
       game,
       // Pass shared messages if in session mode
-      sharedMessages: isSessionMode ? slateSession.messages : null
+      sharedMessages: isSessionMode ? slateSession.messages : null,
+      // Props mode context
+      mode: isPropsMode ? 'props' : 'game',
+      propContext: isPropsMode ? propContext : null
     };
     const result = await runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam, enrichedOptions);
     
@@ -3802,200 +3827,9 @@ BEGIN YOUR ANALYSIS NOW.
 `.trim();
 }
 
-/**
- * Parse Gary's Pass 2.5 output from his response
- * Handles new gradeless format (case_summaries) and legacy formats for backwards compatibility
- * @param {string} content - Gary's response content
- * @returns {object|null} - Parsed decision data or null if not found
- */
-function parsePass25Ratings(content) {
-  if (!content) return null;
-
-  // Sanitize JSON: strip '+' prefix from numbers (e.g., +155 → 155) which Gemini sometimes outputs
-  const sanitizeJson = (str) => str.replace(/:\s*\+(\d)/g, ': $1');
-
-  try {
-    // Method 1: Try to find JSON block in the response
-    const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(sanitizeJson(jsonMatch[1]));
-
-      // NEW GRADELESS FORMAT: Check for case_summaries structure (no numerical grades)
-      if (parsed.case_summaries && parsed.final_pick) {
-        console.log(`[Pass 2.5] ✅ Gradeless format detected (case_summaries)`);
-
-        const homeName = parsed.case_summaries.home_team?.name || 'Home';
-        const awayName = parsed.case_summaries.away_team?.name || 'Away';
-
-        return {
-          // No grades - just metadata
-          reasoning: parsed.confidence_reasoning || parsed.rationale || '',
-          varianceIndicator: parsed.variance_indicator || 'MEDIUM',
-          varianceReasoning: '',
-          underdogCanWinOutright: parsed.underdog_can_win_outright === true,
-          outrightWinReasoning: '',
-          // Case summaries (no grades)
-          caseSummaries: parsed.case_summaries,
-          stressTest: parsed.stress_test,
-          finalPick: parsed.final_pick,
-          confidenceScore: parseFloat(parsed.confidence_score) || 0.65,
-          confidenceLabel: parsed.confidence_label || 'CONFIDENT',
-          confidenceReasoning: parsed.confidence_reasoning || '',
-          rationale: parsed.rationale || '',
-          supportingEvidence: parsed.supporting_evidence || ''
-        };
-      }
-
-      // LEGACY FORMAT: Check for case_grades structure (with numerical grades)
-      if (parsed.case_grades && parsed.final_pick) {
-        console.log(`[Pass 2.5] ✅ Legacy format with grades detected`);
-
-        const homeGrade = parsed.case_grades.home_team?.strength || 5.0;
-        const awayGrade = parsed.case_grades.away_team?.strength || 5.0;
-        const homeName = parsed.case_grades.home_team?.name || 'Home';
-        const awayName = parsed.case_grades.away_team?.name || 'Away';
-
-        return {
-          favoriteRating: Math.max(homeGrade, awayGrade),
-          underdogRating: Math.min(homeGrade, awayGrade),
-          favoriteTeam: homeGrade > awayGrade ? homeName : awayName,
-          underdogTeam: homeGrade > awayGrade ? awayName : homeName,
-          reasoning: parsed.confidence_reasoning || parsed.rationale || '',
-          varianceIndicator: parsed.variance_indicator || 'MEDIUM',
-          varianceReasoning: '',
-          underdogCanWinOutright: parsed.underdog_can_win_outright === true,
-          outrightWinReasoning: '',
-          caseGrades: parsed.case_grades,
-          tentativePick: parsed.tentative_pick,
-          stressTest: parsed.stress_test,
-          sanityCheckSummary: parsed.sanity_check_summary,
-          finalPick: parsed.final_pick,
-          pickFlipped: parsed.pick_flipped === true,
-          confidenceScore: parseFloat(parsed.confidence_score) || 0.65,
-          confidenceLabel: parsed.confidence_label || 'CONFIDENT',
-          confidenceReasoning: parsed.confidence_reasoning || '',
-          rationale: parsed.rationale || ''
-        };
-      }
-
-      // OLDEST FORMAT: Check for favorite_path_rating structure
-      if (parsed.favorite_path_rating && parsed.underdog_path_rating) {
-        console.log(`[Pass 2.5] ✅ Oldest legacy format detected`);
-        return {
-          favoriteRating: parseFloat(parsed.favorite_path_rating),
-          underdogRating: parseFloat(parsed.underdog_path_rating),
-          favoriteTeam: parsed.favorite_team || 'Favorite',
-          underdogTeam: parsed.underdog_team || 'Underdog',
-          reasoning: parsed.rating_reasoning || '',
-          varianceIndicator: parsed.variance_indicator || 'MEDIUM',
-          varianceReasoning: parsed.variance_reasoning || '',
-          underdogCanWinOutright: parsed.underdog_can_win_outright === true,
-          outrightWinReasoning: parsed.outright_win_reasoning || '',
-          confidenceScore: 0.65,
-          confidenceLabel: 'CONFIDENT',
-          finalPick: null,
-          pickFlipped: false
-        };
-      }
-    }
-
-    // Method 2: Fallback - try to parse raw JSON without code blocks (new gradeless format)
-    const gradelessMatch = content.match(/\{[\s\S]*?"case_summaries"[\s\S]*?"final_pick"[\s\S]*?\}/);
-    if (gradelessMatch) {
-      try {
-        const parsed = JSON.parse(sanitizeJson(gradelessMatch[0]));
-        if (parsed.case_summaries && parsed.final_pick) {
-          console.log(`[Pass 2.5] ✅ Gradeless format found via raw JSON`);
-          return {
-            reasoning: parsed.confidence_reasoning || parsed.rationale || '',
-            varianceIndicator: parsed.variance_indicator || 'MEDIUM',
-            varianceReasoning: '',
-            underdogCanWinOutright: parsed.underdog_can_win_outright === true,
-            outrightWinReasoning: '',
-            caseSummaries: parsed.case_summaries,
-            stressTest: parsed.stress_test,
-            finalPick: parsed.final_pick,
-            confidenceScore: parseFloat(parsed.confidence_score) || 0.65,
-            confidenceLabel: parsed.confidence_label || 'CONFIDENT',
-            confidenceReasoning: parsed.confidence_reasoning || '',
-            rationale: parsed.rationale || '',
-            supportingEvidence: parsed.supporting_evidence || ''
-          };
-        }
-      } catch (e) {
-        // Continue to next method
-      }
-    }
-
-    // Method 3: Fallback - try to parse raw JSON without code blocks (legacy with grades)
-    const legacyMatch = content.match(/\{[\s\S]*?"case_grades"[\s\S]*?"final_pick"[\s\S]*?\}/);
-    if (legacyMatch) {
-      try {
-        const parsed = JSON.parse(sanitizeJson(legacyMatch[0]));
-        if (parsed.case_grades && parsed.final_pick) {
-          console.log(`[Pass 2.5] ✅ Legacy format with grades found via raw JSON`);
-          const homeGrade = parsed.case_grades.home_team?.strength || 5.0;
-          const awayGrade = parsed.case_grades.away_team?.strength || 5.0;
-          const homeName = parsed.case_grades.home_team?.name || 'Home';
-          const awayName = parsed.case_grades.away_team?.name || 'Away';
-
-          return {
-            favoriteRating: Math.max(homeGrade, awayGrade),
-            underdogRating: Math.min(homeGrade, awayGrade),
-            favoriteTeam: homeGrade > awayGrade ? homeName : awayName,
-            underdogTeam: homeGrade > awayGrade ? awayName : homeName,
-            reasoning: parsed.confidence_reasoning || parsed.rationale || '',
-            varianceIndicator: parsed.variance_indicator || 'MEDIUM',
-            varianceReasoning: '',
-            underdogCanWinOutright: parsed.underdog_can_win_outright === true,
-            outrightWinReasoning: '',
-            caseGrades: parsed.case_grades,
-            tentativePick: parsed.tentative_pick,
-            stressTest: parsed.stress_test,
-            sanityCheckSummary: parsed.sanity_check_summary,
-            finalPick: parsed.final_pick,
-            pickFlipped: parsed.pick_flipped === true,
-            confidenceScore: parseFloat(parsed.confidence_score) || 0.65,
-            confidenceLabel: parsed.confidence_label || 'CONFIDENT',
-            confidenceReasoning: parsed.confidence_reasoning || '',
-            rationale: parsed.rationale || ''
-          };
-        }
-      } catch (e) {
-        // Continue to next method
-      }
-    }
-
-    // Method 4: Fallback - try oldest legacy format
-    const rawJsonMatch = content.match(/\{[\s\S]*?"favorite_path_rating"[\s\S]*?\}/);
-    if (rawJsonMatch) {
-      const parsed = JSON.parse(sanitizeJson(rawJsonMatch[0]));
-      if (parsed.favorite_path_rating && parsed.underdog_path_rating) {
-        console.log(`[Pass 2.5] ✅ Oldest legacy format found via raw JSON`);
-        return {
-          favoriteRating: parseFloat(parsed.favorite_path_rating),
-          underdogRating: parseFloat(parsed.underdog_path_rating),
-          favoriteTeam: parsed.favorite_team || 'Favorite',
-          underdogTeam: parsed.underdog_team || 'Underdog',
-          reasoning: parsed.rating_reasoning || '',
-          varianceIndicator: parsed.variance_indicator || 'MEDIUM',
-          varianceReasoning: parsed.variance_reasoning || '',
-          underdogCanWinOutright: parsed.underdog_can_win_outright === true,
-          outrightWinReasoning: parsed.outright_win_reasoning || '',
-          confidenceScore: 0.65,
-          confidenceLabel: 'CONFIDENT',
-          finalPick: null,
-          pickFlipped: false
-        };
-      }
-    }
-
-    return null;
-  } catch (e) {
-    console.log(`[Pass 2.5] Failed to parse decision: ${e.message}`);
-    return null;
-  }
-}
+// parsePass25Ratings REMOVED — conviction ratings were unused downstream (2026-02)
+// Pass 2.5 evaluation still happens, but structured rating extraction is no longer needed.
+// The sanitizeJson helper was moved into parseGaryResponse where it's still used.
 
 /**
  * Build the PASS 3 message - Final Synthesis & Pick Decision
@@ -4051,11 +3885,11 @@ You've gathered substantial evidence. Before making your pick, do a final check:
  * @param {string} awayTeam - Away team name
  */
 function buildPass3Unified(ratings, homeTeam = '[HOME]', awayTeam = '[AWAY]') {
-  // Extract values from the new Pass 2.5 format
-  const finalPick = ratings.finalPick || ratings.tentativePick || 'Your pick';
-  const confidenceScore = ratings.confidenceScore || 0.65;
-  const confidenceLabel = ratings.confidenceLabel || 'CONFIDENT';
-  const pickFlipped = ratings.pickFlipped || false;
+  // Extract values — ratings may be null (conviction ratings removed)
+  const finalPick = ratings?.finalPick || ratings?.tentativePick || 'Your pick';
+  const confidenceScore = ratings?.confidenceScore || 0.65;
+  const confidenceLabel = ratings?.confidenceLabel || 'CONFIDENT';
+  const pickFlipped = ratings?.pickFlipped || false;
   
   const flipNote = pickFlipped ? `
 **NOTE:** You flipped from your tentative pick based on the stress test and sanity check.
@@ -4146,6 +3980,175 @@ Focus on WHO IS PLAYING and RECENT FORM, not hypotheticals about healthy rosters
 </negative_constraints>
 </instructions>
 `.trim();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PROPS MODE: Pass 3 replacement + finalize_props tool + response parser
+// ═══════════════════════════════════════════════════════════════════════════
+
+const PROPS_PICK_SCHEMA = {
+  type: 'object',
+  properties: {
+    player: { type: 'string', description: 'Full player name' },
+    team: { type: 'string', description: 'Team name' },
+    prop: { type: 'string', description: 'Market type ONLY — e.g. "player_points", "player_rebounds", "player_assists", "player_shots_on_goal". Do NOT include the line number here.' },
+    line: { type: 'number', description: 'The numerical line for this prop — e.g. 25.5, 6.5, 3.5. This is REQUIRED.' },
+    bet: { type: 'string', enum: ['over', 'under', 'yes'] },
+    odds: { type: 'number', description: 'American odds — e.g. -115, +105' },
+    confidence: { type: 'number', description: 'Your confidence level (0.50-0.95).' },
+    rationale: { type: 'string', description: 'Your full reasoning for this pick. Cite specific stats and matchup factors. Same depth as a game pick rationale.' },
+    key_stats: { type: 'array', items: { type: 'string' }, description: 'Key stats supporting your pick.' }
+  },
+  required: ['player', 'team', 'prop', 'line', 'bet', 'odds', 'confidence', 'rationale', 'key_stats']
+};
+
+const FINALIZE_PROPS_TOOL = {
+  type: 'function',
+  function: {
+    name: 'finalize_props',
+    description: `Output your final prop picks. Include your full reasoning in the rationale field — same depth and quality as a game pick rationale.`,
+    parameters: {
+      type: 'object',
+      properties: {
+        picks: {
+          type: 'array',
+          items: PROPS_PICK_SCHEMA,
+          description: 'Your best 2 prop picks from different players'
+        }
+      },
+      required: ['picks']
+    }
+  }
+};
+
+/**
+ * Build Pass 3 for props mode — replaces buildPass3Unified when mode='props'
+ * Gary has completed game analysis (Passes 1-2.5) and now evaluates prop candidates
+ */
+function buildPass3Props(homeTeam, awayTeam, propContext = {}) {
+  const { propCandidates, availableLines, playerStats, propsConstitution, gameSummary } = propContext;
+
+  // Format candidates for the prompt
+  const candidatesList = (propCandidates || []).map(c => {
+    const propsStr = (c.props || []).join(', ');
+    const form = c.recentForm || {};
+    return `- ${c.player} (${c.team}): ${propsStr} | Form: ${form.formTrend || 'N/A'}`;
+  }).join('\n');
+
+  // Format available lines
+  const linesList = (availableLines || []).map(l => {
+    return `- ${l.player}: ${l.prop_type} ${l.line} (O: ${l.over_odds || 'N/A'} / U: ${l.under_odds || 'N/A'})`;
+  }).join('\n');
+
+  // Format player stats summary
+  const statsStr = typeof playerStats === 'string' ? playerStats :
+    JSON.stringify(playerStats || {}, null, 1).substring(0, 8000);
+
+  return `
+<pass_context>
+## PASS 3 - PROPS EVALUATION PHASE
+
+You've completed your full game analysis through Passes 1-2.5. You understand:
+- The game matchup dynamics (from your Steel Man cases)
+- Which team has the edge and why (from your conviction assessment)
+- The key statistical factors driving this game
+
+Now apply that game understanding to evaluate PLAYER PROPS.
+</pass_context>
+
+<prop_candidates>
+## PROP CANDIDATES
+
+${candidatesList || 'No candidates provided'}
+</prop_candidates>
+
+<available_lines>
+## AVAILABLE PROP LINES
+
+${linesList || 'No lines provided'}
+</available_lines>
+
+<player_context>
+## PLAYER STATS & CONTEXT
+
+${statsStr}
+</player_context>
+
+${propsConstitution ? `<props_constitution>\n${propsConstitution}\n</props_constitution>` : ''}
+
+${gameSummary ? `<game_summary>\n${gameSummary}\n</game_summary>` : ''}
+
+<props_instructions>
+## YOUR TASK: EVALUATE PROPS USING YOUR GAME ANALYSIS
+
+You just analyzed ${awayTeam} @ ${homeTeam} in depth. Now find the 2 best prop picks that FLOW from your game conviction.
+
+**THOUGHT PROCESS**
+
+Start from your game analysis and work down to individual players:
+
+1. **Game Connection:** What does your game conviction tell you about how this game will be played? Which players are positioned to benefit from the game script, pace, and matchup dynamics you identified?
+
+2. **Investigate Each Candidate:** For your top 3-4 candidates, investigate:
+   - What does THIS player's recent form look like? Are they trending up or down?
+   - What is the specific defensive matchup TONIGHT? How does the opposing defense handle this type of player?
+   - How does the projected game script (pace, blowout risk, competitive game) affect this player's opportunity?
+   - Does the line reflect this player's CURRENT production, or is there a gap?
+
+3. **Think Both Sides:** For each candidate, consider both the OVER and UNDER scenario. What has to happen for the over to hit? What kills it? Which scenario is more believable given your game analysis? This is your internal process — work through it before deciding.
+
+4. **Select 2 Best Props:** Pick from DIFFERENT players. Call finalize_props with your picks. Your rationale should read like a game pick rationale — explain WHY this bet wins tonight with specific stats and matchup reasoning.
+
+**FINDING REAL EDGES**
+
+The same principles that apply to game picks apply here. The line reflects what the market already knows — established roles, long-term absences, and recent production patterns. Your edge comes from seeing what the line hasn't fully absorbed yet.
+
+For each candidate, investigate:
+- What is the specific defensive matchup TONIGHT that creates or limits opportunity?
+- How does your game script projection affect this player's production ceiling and floor?
+- Is there a recent trend in the data that the line hasn't caught up to?
+- Are you describing this player's established role (which IS the line), or are you identifying something the line doesn't fully capture?
+
+**INVESTIGATION OPTION:**
+If you need specific player stats before finalizing, you can still call fetch_stats tools.
+When ready, call finalize_props with your 2 best picks.
+No emojis in output.
+</props_instructions>
+`.trim();
+}
+
+/**
+ * Parse props response — extract finalize_props tool call or JSON from Gary's response
+ */
+function parsePropsResponse(content, toolCallArgs) {
+  // If we received direct tool call args (from finalize_props), use those
+  if (toolCallArgs && toolCallArgs.picks) {
+    return toolCallArgs.picks;
+  }
+
+  // Fallback: try to extract from text response
+  if (!content) return null;
+
+  // Try JSON block
+  const jsonMatch = content.match(/```json\s*([\s\S]*?)```/);
+  if (jsonMatch) {
+    try {
+      const parsed = JSON.parse(jsonMatch[1]);
+      if (Array.isArray(parsed)) return parsed;
+      if (parsed.picks && Array.isArray(parsed.picks)) return parsed.picks;
+    } catch (e) { /* continue to next method */ }
+  }
+
+  // Try raw JSON object with picks
+  const rawMatch = content.match(/\{[\s\S]*?"picks"[\s\S]*?\[[\s\S]*?\][\s\S]*?\}/);
+  if (rawMatch) {
+    try {
+      const parsed = JSON.parse(rawMatch[0]);
+      if (parsed.picks && Array.isArray(parsed.picks)) return parsed.picks;
+    } catch (e) { /* continue */ }
+  }
+
+  return null;
 }
 
 /**
@@ -4494,8 +4497,8 @@ async function callGeminiWithRetry(messages, tools, modelName, maxRetries = 3, c
 function determineCurrentPass(messages) {
   // Check from most recent to oldest
   // FIXED: Check for both "FINAL DECISION" (old) and "FINAL OUTPUT" (new buildPass3Unified format)
-  const hasPass3 = messages.some(m => 
-    m.content?.includes('PASS 3 - FINAL DECISION') || m.content?.includes('PASS 3 - FINAL OUTPUT')
+  const hasPass3 = messages.some(m =>
+    m.content?.includes('PASS 3 - FINAL DECISION') || m.content?.includes('PASS 3 - FINAL OUTPUT') || m.content?.includes('PASS 3 - PROPS EVALUATION PHASE')
   );
   if (hasPass3) return 'final_decision';
   
@@ -4543,6 +4546,18 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
   console.log(`[Orchestrator] Model strategy: Flash for investigation${isNFLSport && useProForGrading ? ', Pro for Steel Man + decision' : useProForGrading ? ', Pro for review/decision' : ' (all phases)'}`);
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // Props mode setup (must be before session creation so activeTools is available)
+  const isPropsMode = options.mode === 'props';
+  const propContext = options.propContext || null;
+  let propsFinalized = false; // Track if finalize_props was called
+  let propsPicks = null; // Store props picks from finalize_props tool call
+  let propsRetryCount = 0; // Track finalize_props retry attempts
+
+  // Build tools list — add finalize_props when in props mode
+  const activeTools = isPropsMode
+    ? [...toolDefinitions, FINALIZE_PROPS_TOOL]
+    : toolDefinitions;
+
   // PERSISTENT SESSION SETUP (Gemini 3 Thought Signature Compliance)
   // ═══════════════════════════════════════════════════════════════════════════
   // Create Flash session for investigation phase
@@ -4550,14 +4565,14 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
   let currentSession = null;
   let currentModelName = initialModel;
   let hasSwichedToPro = false;
-  
+
   if (provider === 'gemini') {
     // OPTIMIZATION: Use 'low' thinking for investigation (tool calling)
     // Save 'high' reasoning for Steel Man, Pass 2.5 grading, and final decision
     currentSession = createGeminiSession({
       modelName: 'gemini-3-flash-preview',
       systemPrompt: systemPrompt,
-      tools: toolDefinitions,
+      tools: activeTools,
       thinkingLevel: 'low'  // Low reasoning for stat fetching - no deep thinking needed
     });
     currentModelName = currentSession.modelName;
@@ -4580,7 +4595,7 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
 
   let iteration = 0;
   const toolCallHistory = [];
-  
+
   // Store full steel man cases for transparency/debugging
   let steelManCases = {
     homeTeamCase: null,
@@ -4597,9 +4612,17 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
   let nextMessageToSend = userMessage;
   let pendingFunctionResponses = []; // Batched function responses to send
 
-  while (iteration < CONFIG.maxIterations) {
+  // Persistent pass-injection flags (survive context pruning)
+  let _pass2Injected = false;
+  let _pass25Injected = false;
+  let _pass3Injected = false;
+  let _synthInjected = false;
+
+  const effectiveMaxIterations = CONFIG.maxIterations;
+
+  while (iteration < effectiveMaxIterations) {
     iteration++;
-    console.log(`\n[Orchestrator] Iteration ${iteration}/${CONFIG.maxIterations} (${provider}, ${currentModelName})`);
+    console.log(`\n[Orchestrator] Iteration ${iteration}/${effectiveMaxIterations} (${provider}, ${currentModelName})`);
     
     // Get the spread for Pass 2/2.5 context injection (available throughout loop)
     const spread = options.spread || 0;
@@ -4744,7 +4767,7 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
           currentSession = createGeminiSession({
             modelName: 'gemini-3-pro-preview',
             systemPrompt: systemPrompt + '\n\n[RECOVERY MODE] Investigation phase hit errors. Proceed directly to Steel Man cases with available data.\n\n' + textualContext,
-            tools: toolDefinitions,
+            tools: activeTools,
             thinkingLevel: 'high'
           });
           currentModelName = 'gemini-3-pro-preview';
@@ -4795,7 +4818,7 @@ Focus on TIER 1 predictive stats (efficiency, EPA) and TIER 2 context (fresh inj
       response = await getOpenAI().chat.completions.create({
         model: currentModelName,
         messages,
-        tools: toolDefinitions,
+        tools: activeTools,
         tool_choice: 'auto',
         max_completion_tokens: CONFIG.maxTokens,
         reasoning_effort: CONFIG.openai.reasoning.effort
@@ -5010,6 +5033,26 @@ If you need different stats, request NEW ones. If you have enough data, proceed 
         const args = JSON.parse(toolCall.function.arguments);
         const functionName = toolCall.function.name;
 
+        // Handle finalize_props tool call (props mode only)
+        if (functionName === 'finalize_props' && isPropsMode) {
+          console.log(`[Orchestrator] 🎯 finalize_props called with ${(args.picks || []).length} picks`);
+          propsFinalized = true;
+          propsPicks = args.picks || [];
+
+          // Return the props picks immediately
+          return {
+            picks: propsPicks,
+            toolCallHistory,
+            iterations: iteration,
+            homeTeam,
+            awayTeam,
+            sport,
+            rawAnalysis: message.content || '',
+            steelManCases,
+            isProps: true
+          };
+        }
+
         // Handle fetch_narrative_context tool (storylines, player news, context)
         if (functionName === 'fetch_narrative_context') {
           console.log(`  → [NARRATIVE_CONTEXT] for query: "${args.query}"`);
@@ -5037,6 +5080,32 @@ If you need different stats, request NEW ones. If you have enough data, proceed 
               };
               messages.push(toolResponse);
               console.log(`    ✓ Found narrative context via Gemini Grounding (${searchResult.data.length} chars)`);
+
+              // Track in toolCallHistory so factor coverage recognizes grounding data
+              const q = (args.query || '').toLowerCase();
+              const mapped = [];
+              if (/defen|drtg|block|steal|rebound/.test(q)) mapped.push('REBOUNDS', 'STEALS', 'BLOCKS', 'DEFENSIVE_RATING');
+              if (/recent|form|streak|last\s*\d|results?\b|record\b/.test(q)) mapped.push('RECENT_FORM');
+              if (/h2h|head.to.head|history|series|matchup|versus|\bvs\b/.test(q)) mapped.push('H2H_HISTORY');
+              if (/assist|playmaking|ball.movement/.test(q)) mapped.push('ASSISTS');
+              if (/standing|playoff|seed|division/.test(q)) mapped.push('STANDINGS');
+              if (/motiv|rival|revenge|primetime/.test(q)) mapped.push('MOTIVATION_CONTEXT', 'PRIMETIME_RECORD');
+              if (/injur|ruled.out|questionable/.test(q)) mapped.push('INJURIES');
+              if (/rest\b|back.to.back|travel|schedule/.test(q)) mapped.push('REST_SITUATION');
+              if (/goalie|save|goaltend/.test(q)) mapped.push('GOALIE_STATS');
+              if (/scoring.trend|quarter|first.half|second.half|period/.test(q)) mapped.push('QUARTER_SCORING', 'FIRST_HALF_TRENDS');
+              if (/roster|depth|bench|rotation/.test(q)) mapped.push('BENCH_DEPTH');
+              if (/corsi|possession|expected.goal/.test(q)) mapped.push('CORSI_FOR_PCT');
+              if (/power.play|penalty.kill|special.team/.test(q)) mapped.push('SPECIAL_TEAMS');
+              if (/tempo|pace/.test(q)) mapped.push('PACE');
+              if (/efficien|rating|kenpom|adjEM|net.rating/.test(q)) mapped.push('NET_RATING', 'NCAAB_KENPOM_RATINGS');
+
+              // Push all mapped tokens so coverage tracker can recognize them
+              for (const token of mapped) {
+                toolCallHistory.push({ token, timestamp: Date.now() });
+              }
+              // Always push the generic tracking entry
+              toolCallHistory.push({ token: 'NARRATIVE_CONTEXT', timestamp: Date.now() });
             } else {
               throw new Error('Grounding search failed or returned no data');
             }
@@ -5745,13 +5814,11 @@ If you need different stats, request NEW ones. If you have enough data, proceed 
       const factorStatus = getInvestigatedFactors(toolCallHistory, sport, preloadedFactors);
       const { covered, missing, coverage, totalFactors } = factorStatus;
       
-      // Track if we've already injected certain passes
-      // FIXED: Check for actual output string from buildPass2Message
-      const pass2AlreadyInjected = messages.some(m => m.content?.includes('PASS 2 - STEEL MAN') || m.content?.includes('PASS 2 - EVIDENCE GATHERING'));
-      const pass25AlreadyInjected = messages.some(m => m.content?.includes('PASS 2.5 - CASE REVIEW') || m.content?.includes('PASS 2.5 - CONVICTION ASSESSMENT'));
-      const synthAlreadyInjected = messages.some(m => m.content?.includes('MID-INVESTIGATION SYNTHESIS'));
-      // FIXED: Check for both "FINAL DECISION" (old) and "FINAL OUTPUT" (new buildPass3Unified format)
-      const pass3AlreadyInjected = messages.some(m => m.content?.includes('PASS 3 - FINAL DECISION') || m.content?.includes('PASS 3 - FINAL OUTPUT'));
+      // Use persistent flags (survive context pruning) — also check messages as fallback
+      const pass2AlreadyInjected = _pass2Injected || messages.some(m => m.content?.includes('PASS 2 - STEEL MAN') || m.content?.includes('PASS 2 - EVIDENCE GATHERING'));
+      const pass25AlreadyInjected = _pass25Injected || messages.some(m => m.content?.includes('PASS 2.5 - CASE REVIEW') || m.content?.includes('PASS 2.5 - CONVICTION ASSESSMENT'));
+      const synthAlreadyInjected = _synthInjected || messages.some(m => m.content?.includes('MID-INVESTIGATION SYNTHESIS'));
+      const pass3AlreadyInjected = _pass3Injected || messages.some(m => m.content?.includes('PASS 3 - FINAL DECISION') || m.content?.includes('PASS 3 - FINAL OUTPUT') || m.content?.includes('PASS 3 - PROPS EVALUATION PHASE'));
       
       // Check if Gary completed Steel Man analysis (look for bilateral case sections in recent assistant messages)
       const recentAssistantMessages = messages.filter(m => m.role === 'assistant' && m.content).slice(-5);
@@ -5776,37 +5843,22 @@ If you need different stats, request NEW ones. If you have enough data, proceed 
         return hasBilateralAnalysis;
       });
       
-      // Check if Gary responded to Pass 2.5 with ratings
-      let pass25Ratings = null;
-      if (pass25AlreadyInjected && !pass3AlreadyInjected) {
-        // Look for ratings in Gary's responses AFTER Pass 2.5 was injected
-        const pass25Index = messages.findIndex(m => m.content?.includes('PASS 2.5 - CASE REVIEW') || m.content?.includes('PASS 2.5 - CONVICTION ASSESSMENT'));
-        if (pass25Index > -1) {
-          const responsesAfter25 = messages.slice(pass25Index + 1).filter(m => m.role === 'assistant' && m.content);
-          for (const response of responsesAfter25) {
-            const parsed = parsePass25Ratings(response.content);
-            if (parsed) {
-              pass25Ratings = parsed;
-              console.log(`[Orchestrator] 📊 Pass 2.5 Ratings parsed: Favorite ${parsed.favoriteRating}/10, Underdog ${parsed.underdogRating}/10`);
-              break;
-            }
-          }
-        }
-      }
-      
       // Log factor coverage
       console.log(`[Orchestrator] Factor Coverage: ${covered.length}/${totalFactors} (${(coverage * 100).toFixed(0)}%)`);
       if (missing.length > 0 && missing.length <= 4) {
         console.log(`[Orchestrator] Missing factors: ${missing.join(', ')}`);
       }
       
-      // FACTOR-BASED PHASE TRIGGERS (100% required before Steel Man):
-      // - <100% coverage: Keep investigating, nudge for more
-      // - 100% coverage: Ready for Steel Man analysis and final synthesis
-      // NOTE: Changed from 80% to 100% - Gary must investigate ALL factors including bench stats
+      // FACTOR-BASED PHASE TRIGGERS:
+      // Props mode: 70% coverage is sufficient — Gary needs game context for player evaluation,
+      // not exhaustive factor investigation. Some factors (STANDINGS_CONTEXT, CONFERENCE_SPLITS,
+      // LUCK_CLOSE_GAMES, SCORING_TRENDS) may not map to props-relevant stat requests.
+      // Game mode: 100% required — Gary must investigate ALL factors including bench stats.
+      const coverageThreshold = isPropsMode ? 0.60 : 1.0;
+      const coverageThresholdPct = isPropsMode ? '60%' : '100%';
 
-      if (coverage >= 1.0 && !pass2AlreadyInjected && !steelManCompleted) {
-        // 100% coverage reached - NOW inject Pass 2 (Steel Man)
+      if (coverage >= coverageThreshold && !pass2AlreadyInjected && !steelManCompleted) {
+        // Coverage threshold reached - NOW inject Pass 2 (Steel Man)
         
         // ═══════════════════════════════════════════════════════════════════════
         // NFL SPECIAL: Switch to Pro for Steel Man cases (not just grading)
@@ -5823,7 +5875,7 @@ If you need different stats, request NEW ones. If you have enough data, proceed 
             currentSession = createGeminiSession({
               modelName: 'gemini-3-pro-preview',
               systemPrompt: systemPrompt + '\n\n' + textualSummary,
-              tools: toolDefinitions, // GIVE PRO TOOLS to verify and re-investigate
+              tools: activeTools, // GIVE PRO TOOLS to verify and re-investigate
               thinkingLevel: 'high'
             });
             currentModelName = currentSession.modelName;
@@ -5844,27 +5896,28 @@ If you need different stats, request NEW ones. If you have enough data, proceed 
           role: 'user',
           content: buildPass2Message(sport, homeTeam, awayTeam, spread)
         });
+        _pass2Injected = true;
         console.log(`[Orchestrator] Injected Pass 2 instructions (${covered.length}/${totalFactors} = ${(coverage * 100).toFixed(0)}% coverage, spread: ${spread})`);
-      } else if (coverage < 1.0) {
-        // Require 100% coverage before Steel Man - Gary must investigate ALL factors
+      } else if (coverage < coverageThreshold) {
+        // Below threshold — keep investigating
         const missingDisplay = missing.slice(0, 6).map(f => f.replace(/_/g, ' ')).join(', ');
         const coveragePct = (coverage * 100).toFixed(0);
 
-        if (iteration >= 4 && coverage >= 0.8) {
-          // After several iterations with good coverage, give a stronger nudge for the remaining factors
+        if (iteration >= 4 && coverage >= (coverageThreshold - 0.2)) {
+          // After several iterations with close-to-threshold coverage, give a stronger nudge
           messages.push({
             role: 'user',
-            content: `**INVESTIGATION AT ${coveragePct}% (need 100%)** - You're close but missing critical data:\n\n**UNINVESTIGATED:** ${missingDisplay}${missing.length > 6 ? '...' : ''}\n\nCall these stats NOW. You MUST reach 100% factor coverage before Steel Man. Missing factors may include BENCH_DEPTH, LINEUP_NET_RATINGS, or other critical matchup data.`
+            content: `**INVESTIGATION AT ${coveragePct}% (need ${coverageThresholdPct})** - You're close but missing critical data:\n\n**UNINVESTIGATED:** ${missingDisplay}${missing.length > 6 ? '...' : ''}\n\nCall these stats NOW. You MUST reach ${coverageThresholdPct} factor coverage before Steel Man. Missing factors may include BENCH_DEPTH, LINEUP_NET_RATINGS, or other critical matchup data.`
           });
-          console.log(`[Orchestrator] Strong nudge for 100% coverage (${covered.length}/${totalFactors} = ${coveragePct}% covered)`);
+          console.log(`[Orchestrator] Strong nudge for ${coverageThresholdPct} coverage (${covered.length}/${totalFactors} = ${coveragePct}% covered)`);
         } else {
           messages.push({
             role: 'user',
-            content: `You've covered ${covered.length}/${totalFactors} investigation factors (${coveragePct}%). Continue investigating BOTH teams to reach 100%. Uncovered factors: ${missingDisplay}${missing.length > 6 ? '...' : ''}. Call stats for each factor - especially BENCH_DEPTH and unit efficiency for spread analysis.`
+            content: `You've covered ${covered.length}/${totalFactors} investigation factors (${coveragePct}%). Continue investigating BOTH teams to reach ${coverageThresholdPct}. Uncovered factors: ${missingDisplay}${missing.length > 6 ? '...' : ''}. Call stats for each factor - especially BENCH_DEPTH and unit efficiency for spread analysis.`
           });
-          console.log(`[Orchestrator] Nudged to reach 100% coverage (${covered.length}/${totalFactors} = ${coveragePct}% covered)`);
+          console.log(`[Orchestrator] Nudged to reach ${coverageThresholdPct} coverage (${covered.length}/${totalFactors} = ${coveragePct}% covered)`);
         }
-      } else if (coverage >= 1.0 && iteration >= 2 && !pass3AlreadyInjected) {
+      } else if (coverage >= coverageThreshold && iteration >= 2 && !pass3AlreadyInjected) {
         // 100% factors covered - decide between Pass 2.5, Steel Man enforcement, or Mid-Investigation Synthesis
         // Priority: Steel Man enforcement > Pass 2.5 (if Steel Man done) > Mid-Investigation Synthesis
         
@@ -5942,7 +5995,7 @@ BEGIN WRITING YOUR MATCHUP ANALYSIS NOW.
               currentSession = createGeminiSession({
                 modelName: 'gemini-3-pro-preview',
                 systemPrompt: systemPrompt + '\n\n' + textualSummary,
-                tools: toolDefinitions, // GIVE PRO TOOLS to verify and re-investigate
+                tools: activeTools, // GIVE PRO TOOLS to verify and re-investigate
                 thinkingLevel: 'high'
               });
               currentModelName = currentSession.modelName;
@@ -5961,6 +6014,7 @@ BEGIN WRITING YOUR MATCHUP ANALYSIS NOW.
             }
           }
           
+          _pass25Injected = true;
           console.log(`[Orchestrator] Injected Pass 2.5 (Case Evaluation & Decision) - ${covered.length}/${totalFactors} factors, Steel Man complete, spread: ${spread}`);
         } else if (!steelManCompleted && !pass2AlreadyInjected) {
           // Neither Pass 2 nor Steel Man - inject Pass 2 with urgency
@@ -5977,7 +6031,7 @@ BEGIN WRITING YOUR MATCHUP ANALYSIS NOW.
               currentSession = createGeminiSession({
                 modelName: 'gemini-3-pro-preview',
                 systemPrompt: systemPrompt + '\n\n' + textualSummary,
-                tools: toolDefinitions, // GIVE PRO TOOLS to verify and re-investigate
+                tools: activeTools, // GIVE PRO TOOLS to verify and re-investigate
                 thinkingLevel: 'high'
               });
               currentModelName = currentSession.modelName;
@@ -5999,39 +6053,28 @@ BEGIN WRITING YOUR MATCHUP ANALYSIS NOW.
             content: buildPass2Message(sport, homeTeam, awayTeam, spread) + 
               `\n\n**CRITICAL:** You have ${(coverage * 100).toFixed(0)}% factor coverage. Write your Steel Man cases NOW before making any pick.`
           });
+          _pass2Injected = true;
           console.log(`[Orchestrator] Injected Pass 2 (urgent) - ${covered.length}/${totalFactors} factors, spread: ${spread}, Steel Man required`);
-        } else if (pass25AlreadyInjected && pass25Ratings) {
-          // Pass 2.5 complete with ratings - inject unified Pass 3 (non-prescriptive)
-          const rawGap = pass25Ratings.favoriteRating - pass25Ratings.underdogRating;
-          
-          messages.push({
-            role: 'user',
-            content: buildPass3Unified(pass25Ratings, homeTeam, awayTeam)
-          });
-          // Log depends on format - gradeless (new) vs legacy (old)
-          if (pass25Ratings.caseSummaries) {
-            console.log(`[Orchestrator] Injected Pass 3 - Pick: ${pass25Ratings.finalPick}, Confidence: ${pass25Ratings.confidenceScore} (Gradeless format)`);
-          } else {
-            console.log(`[Orchestrator] Injected Pass 3 - Ratings: Fav ${pass25Ratings.favoriteRating}/10, Dog ${pass25Ratings.underdogRating}/10 (Gap: ${rawGap.toFixed(1)})`);
-          }
-        } else if (pass25AlreadyInjected && !pass25Ratings) {
-          // Pass 2.5 was injected but no decision yet - nudge Gary to provide it
-          messages.push({
-            role: 'user',
-            content: `Please complete your Pass 2.5 analysis with the JSON format specified. Include case_summaries for both teams, your stress_test results (flags for BOTH sides), and your final_pick with confidence_score (0.50-0.95).`
-          });
-          console.log(`[Orchestrator] Nudged for Pass 2.5 JSON (awaiting case_summaries/confidence response)`);
+        } else if (pass25AlreadyInjected && !pass3AlreadyInjected) {
+          // Pass 2.5 evaluation done — inject Pass 3 for final output
+          const pass3Content = isPropsMode
+            ? buildPass3Props(homeTeam, awayTeam, propContext)
+            : buildPass3Unified(null, homeTeam, awayTeam);
+          messages.push({ role: 'user', content: pass3Content });
+          _pass3Injected = true;
+          console.log(`[Orchestrator] Injected Pass 3 (${isPropsMode ? 'Props Evaluation' : 'Final Output'})`);
         }
         // NOTE: Removed the fallback that injected Pass 3 directly without Steel Man/Pass 2.5
         // The Steel Man Enforcement above will handle cases where Gary hasn't written his cases
-      } else if (iteration >= 2 && coverage < 0.8) {
-        // Iteration 2+ with incomplete factor coverage - let Gary continue at his own pace
+      } else if (iteration >= 2 && coverage < (coverageThreshold - 0.2)) {
+        // Iteration 2+ with well-below-threshold coverage - let Gary continue at his own pace
         if (!pass2AlreadyInjected && coverage >= 0.5) {
           // Has enough for Steel Man but not complete
           messages.push({
             role: 'user',
             content: buildPass2Message(sport, homeTeam, awayTeam, spread)
           });
+          _pass2Injected = true;
           console.log(`[Orchestrator] Injected Pass 2 (delayed) - ${covered.length}/${totalFactors} factors covered, spread: ${spread}`);
         }
         // No aggressive nudging - Gary decides when he's done investigating
@@ -6083,68 +6126,24 @@ BEGIN WRITING YOUR MATCHUP ANALYSIS NOW.
     // No minimum enforcement - Gary calls what he needs organically
     // The prompts encourage comprehensive stat gathering naturally
 
-    // Check if Gary just responded to Pass 2.5 with ratings (not a final pick)
+    // Check if Gary just responded to Pass 2.5 (no conviction rating parsing needed)
     const pass25WasInjected = messages.some(m => m.content?.includes('PASS 2.5 - CASE REVIEW') || m.content?.includes('PASS 2.5 - CONVICTION ASSESSMENT'));
-    // FIXED: Check for both "FINAL DECISION" (old) and "FINAL OUTPUT" (new buildPass3Unified format)
-    const pass3WasInjected = messages.some(m => m.content?.includes('PASS 3 - FINAL DECISION') || m.content?.includes('PASS 3 - FINAL OUTPUT'));
-    
-    if (pass25WasInjected && !pass3WasInjected && iteration < CONFIG.maxIterations) {
-      // Gary responded to Pass 2.5 - check for ratings
-      const ratings = parsePass25Ratings(message.content);
-      
-      if (ratings) {
-        // Got ratings - inject appropriate Pass 3 and continue
-        const rawGap = ratings.favoriteRating - ratings.underdogRating;
-        
-        console.log(`\n📊 GARY'S CONVICTION ASSESSMENT (Pass 2.5):\n${'─'.repeat(60)}`);
-        console.log(message.content);
-        console.log(`${'─'.repeat(60)}\n`);
-        console.log(`[Orchestrator] 📊 Pass 2.5 Ratings: Favorite ${ratings.favoriteRating}/10, Underdog ${ratings.underdogRating}/10 (Gap: ${rawGap.toFixed(1)})`);
-        
-        messages.push({
-          role: 'assistant',
-          content: message.content
-        });
-        
-        // Inject unified Pass 3 (non-prescriptive - no gap-based conditional logic)
-        messages.push({
-          role: 'user',
-          content: buildPass3Unified(ratings, homeTeam, awayTeam)
-        });
-        // Log depends on format - gradeless (new) vs legacy (old)
-        if (ratings.caseSummaries) {
-          console.log(`[Orchestrator] Injected Pass 3 - Pick: ${ratings.finalPick}, Confidence: ${ratings.confidenceScore} (Gradeless format)`);
-        } else {
-          console.log(`[Orchestrator] Injected Pass 3 - Ratings: Fav ${ratings.favoriteRating}/10, Dog ${ratings.underdogRating}/10 (Gap: ${rawGap.toFixed(1)})`);
-        }
-        
-        iteration++;
-        continue; // Continue to get final pick
-      } else {
-        // No ratings found - nudge Gary to provide them
-        console.log(`[Orchestrator] ⚠️ Pass 2.5 response missing ratings - requesting JSON format`);
-        
-        messages.push({
-          role: 'assistant',
-          content: message.content
-        });
-        
-        messages.push({
-          role: 'user',
-          content: `Please provide your decision in the JSON format:
+    const pass3WasInjected = messages.some(m => m.content?.includes('PASS 3 - FINAL DECISION') || m.content?.includes('PASS 3 - FINAL OUTPUT') || m.content?.includes('PASS 3 - PROPS EVALUATION PHASE'));
 
-\`\`\`json
-{
-  "final_pick": "[Team] [spread/ML]",
-  "confidence_score": [0.50-0.95],
-  "rationale": "MUST START WITH 'Gary's Take\\n\\n' then scene-setter (1-2 sentences), then 3-4 paragraphs explaining WHY this side is the BETTER BET given the spread."
-}
-\`\`\``
-        });
-        
-        iteration++;
-        continue;
-      }
+    if (pass25WasInjected && !pass3WasInjected && iteration < effectiveMaxIterations) {
+      // Gary answered Pass 2.5 — inject Pass 3 for final output directly
+      messages.push({ role: 'assistant', content: message.content });
+
+      const pass3Content = isPropsMode
+        ? buildPass3Props(homeTeam, awayTeam, propContext)
+        : buildPass3Unified(null, homeTeam, awayTeam);
+      messages.push({ role: 'user', content: pass3Content });
+      nextMessageToSend = pass3Content;
+      _pass3Injected = true;
+      console.log(`[Orchestrator] Injected Pass 3 - ${isPropsMode ? 'Props Evaluation' : 'Final Output'} (after Pass 2.5 evaluation)`);
+
+      iteration++;
+      continue;
     }
 
     // Gary is done - but check if we need to inject Pass 2.5 first
@@ -6153,7 +6152,7 @@ BEGIN WRITING YOUR MATCHUP ANALYSIS NOW.
     // Check if Steel Man was just completed and Pass 2.5 hasn't been done yet
     const pass25Done = messages.some(m => m.content?.includes('PASS 2.5 - CASE REVIEW') || m.content?.includes('PASS 2.5 - CONVICTION ASSESSMENT'));
     // FIXED: Check for both "FINAL DECISION" (old) and "FINAL OUTPUT" (new buildPass3Unified format)
-    const pass3Done = messages.some(m => m.content?.includes('PASS 3 - FINAL DECISION') || m.content?.includes('PASS 3 - FINAL OUTPUT'));
+    const pass3Done = messages.some(m => m.content?.includes('PASS 3 - FINAL DECISION') || m.content?.includes('PASS 3 - FINAL OUTPUT') || m.content?.includes('PASS 3 - PROPS EVALUATION PHASE'));
     
     // Detect Steel Man in current response
     const currentContent = message.content || '';
@@ -6161,7 +6160,7 @@ BEGIN WRITING YOUR MATCHUP ANALYSIS NOW.
     const toCoversCount = (currentContent.match(/(?:TO COVER|to cover|To Cover)[:\s]/gi) || []).length;
     const steelManJustWritten = (caseForCount + toCoversCount) >= 2;
     
-    if (steelManJustWritten && !pass25Done && !pass3Done && iteration < CONFIG.maxIterations) {
+    if (steelManJustWritten && !pass25Done && !pass3Done && iteration < effectiveMaxIterations) {
       // Gary just wrote Steel Man cases! Inject Pass 2.5 before allowing a pick
       console.log(`[Orchestrator] ✅ Steel Man detected in response (caseFor=${caseForCount}, toCovers=${toCoversCount})`);
       console.log(`\n📋 GARY'S STEEL MAN ANALYSIS (Both Sides):\n${'─'.repeat(60)}`);
@@ -6195,7 +6194,7 @@ BEGIN WRITING YOUR MATCHUP ANALYSIS NOW.
           currentSession = createGeminiSession({
             modelName: 'gemini-3-pro-preview',
             systemPrompt: systemPrompt + '\n\n' + textualSummary,
-            tools: toolDefinitions, // GIVE PRO TOOLS to verify and re-investigate
+            tools: activeTools, // GIVE PRO TOOLS to verify and re-investigate
             thinkingLevel: 'high'
           });
           currentModelName = currentSession.modelName;
@@ -6221,18 +6220,50 @@ BEGIN WRITING YOUR MATCHUP ANALYSIS NOW.
       continue; // Go back to get Pass 2.5 response
     }
 
-    // Try to extract JSON from the response
+    // ─── Props mode: parse with parsePropsResponse ───────────────────────
+    if (isPropsMode) {
+      const propsParsed = parsePropsResponse(message.content, null);
+      if (propsParsed && propsParsed.length > 0) {
+        return {
+          picks: propsParsed,
+          toolCallHistory, iterations: iteration,
+          homeTeam, awayTeam, sport,
+          rawAnalysis: message.content,
+          steelManCases, isProps: true
+        };
+      }
+      // Props response didn't parse — retry up to 2 times, then let max-iterations fallback handle it
+      propsRetryCount++;
+      if (propsRetryCount <= 2 && iteration < effectiveMaxIterations) {
+        console.log(`[Orchestrator] ⚠️ Props response didn't parse (attempt ${propsRetryCount}/2) - requesting finalize_props tool call...`);
+        messages.push({ role: 'assistant', content: message.content });
+        const nudge = propsRetryCount === 1
+          ? 'You MUST call the finalize_props tool to submit your picks. Do NOT write JSON in text — use the finalize_props function call with your 2 best picks.'
+          : 'CRITICAL: Call the finalize_props function NOW. Your analysis is complete. Submit your 2 picks by calling finalize_props({ picks: [{ player, team, prop, line, bet, odds, confidence, rationale, key_stats }] }). This is a TOOL CALL, not text output.';
+        messages.push({ role: 'user', content: nudge });
+        iteration++;
+        continue;
+      }
+      // Don't return early — let the loop exhaust iterations so the max-iterations
+      // fallback (outside the while loop) can try with a fresh session
+      console.log(`[Orchestrator] ⚠️ Props finalize_props not called after ${propsRetryCount} retries — continuing to max-iterations fallback`);
+      messages.push({ role: 'assistant', content: message.content });
+      iteration++;
+      continue;
+    }
+
+    // ─── Game mode: parse with parseGaryResponse ──────────────────────────
     let pick = parseGaryResponse(message.content, homeTeam, awayTeam, sport, options.game || {});
 
     // If pick is null (invalid rationale), retry once with explicit instruction
-    if (!pick && iteration < CONFIG.maxIterations) {
+    if (!pick && iteration < effectiveMaxIterations) {
       console.log(`[Orchestrator] ⚠️ Invalid or missing rationale - requesting full analysis...`);
-      
+
       messages.push({
         role: 'assistant',
         content: message.content
       });
-      
+
       messages.push({
         role: 'user',
         content: `Your response is missing a complete rationale. Please provide your FULL analysis with:
@@ -6242,20 +6273,16 @@ BEGIN WRITING YOUR MATCHUP ANALYSIS NOW.
 
 Output your complete pick JSON with the full rationale in the "rationale" field. Do NOT use placeholders like "See detailed analysis below" - write the actual analysis.`
       });
-      
+
       iteration++;
       continue; // Retry
     }
 
     if (pick) {
-      // REMOVED: Devil's Advocate - Gary now makes decisions with full agency
-      // Following "Awareness vs Prescription" principle: Gary gathers ALL information,
-      // applies his reasoning, and makes his call. No second-guessing his own picks.
-      
       pick.toolCallHistory = toolCallHistory;
       pick.iterations = iteration;
       pick.rawAnalysis = message.content;
-      
+
       // Attach full steel man cases for transparency
       if (steelManCases.homeTeamCase || steelManCases.awayTeamCase) {
         pick.steelManCases = {
@@ -6265,7 +6292,7 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
         };
         console.log(`[Orchestrator] 📝 Steel Man cases attached to pick`);
       }
-      
+
       // Diagnostic: Check if Pass 2.5 was injected during this analysis
       const pass25WasInjected = messages.some(m => m.content?.includes('PASS 2.5 - CASE REVIEW') || m.content?.includes('PASS 2.5 - CONVICTION ASSESSMENT'));
       const steelManDetected = messages.some(m => {
@@ -6274,76 +6301,9 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
         const toCoversCount = (content.match(/(?:TO COVER|to cover|To Cover)[:\s]/gi) || []).length;
         return (caseForCount + toCoversCount) >= 2;
       });
-      
-      // Attach Pass 2.5 conviction ratings - ALWAYS include diagnostic info
-      const allAssistantMessages = messages.filter(m => m.role === 'assistant' && m.content);
-      let ratingsFound = false;
-      
-      for (const msg of allAssistantMessages) {
-        const ratings = parsePass25Ratings(msg.content);
-        if (ratings) {
-          ratingsFound = true;
-          const rawGap = ratings.favoriteRating - ratings.underdogRating;
-          pick.convictionRatings = {
-            favoriteRating: ratings.favoriteRating,
-            underdogRating: ratings.underdogRating,
-            favoriteTeam: ratings.favoriteTeam,
-            underdogTeam: ratings.underdogTeam,
-            rawGap: rawGap,
-            reasoning: ratings.reasoning,
-            // Variance and chaos indicators
-            varianceIndicator: ratings.varianceIndicator || 'MEDIUM',
-            varianceReasoning: ratings.varianceReasoning || '',
-            // Outright win assessment
-            underdogCanWinOutright: ratings.underdogCanWinOutright || false,
-            outrightWinReasoning: ratings.outrightWinReasoning || '',
-            // Simple gap info (no prescriptive scenario labels)
-            gap: rawGap,
-            higherRatedSide: rawGap < 0 ? 'underdog' : rawGap > 0 ? 'favorite' : 'even',
-            // Diagnostic info
-            _diagnostic: {
-              pass25Injected: pass25WasInjected,
-              steelManDetected: steelManDetected,
-              ratingsFound: true
-            }
-          };
-          
-          // Log conviction info (simplified - no prescriptive scenario labels)
-          const leanEmoji = rawGap < 0 ? '🐕' : rawGap > 0 ? '⭐' : '⚖️';
-          console.log(`[Orchestrator] 📊 Final Pick Conviction Ratings:`);
-          console.log(`  ${leanEmoji} Higher Rated: ${rawGap < 0 ? 'Underdog' : rawGap > 0 ? 'Favorite' : 'Even'}`);
-          console.log(`  📈 Ratings: Favorite ${ratings.favoriteRating}/10 vs Underdog ${ratings.underdogRating}/10 (Gap: ${rawGap.toFixed(1)})`);
-          console.log(`  🎲 Variance: ${ratings.varianceIndicator || 'MEDIUM'}`);
-          if (ratings.underdogCanWinOutright) {
-            console.log(`  🎯 Underdog Win Outright: YES - "${ratings.outrightWinReasoning?.substring(0, 50) || 'Path exists'}..."`);
-          }
-          break;
-        }
-      }
-      
-      // ALWAYS attach convictionRatings - even if empty, include diagnostic info
-      if (!ratingsFound) {
-        // Conviction ratings are optional - no need to warn in logs
-        // Attach diagnostic-only convictionRatings so we can see what happened
-        pick.convictionRatings = {
-          favoriteRating: null,
-          underdogRating: null,
-          favoriteTeam: null,
-          underdogTeam: null,
-          rawGap: null,
-          reasoning: null,
-          scenario: 'NOT_RATED',
-          _diagnostic: {
-            pass25Injected: pass25WasInjected,
-            steelManDetected: steelManDetected,
-            ratingsFound: false,
-            reason: !pass25WasInjected ? 'Pass 2.5 was never injected' :
-                    !steelManDetected ? 'Steel Man cases not detected' :
-                    'Gary responded to Pass 2.5 but ratings JSON not found'
-          }
-        };
-      }
-      
+
+      // Conviction ratings removed (2026-02) — no downstream code used them
+
       return pick;
     } else {
       // If no valid JSON after retry, return the raw analysis
@@ -6359,8 +6319,66 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
     }
   }
 
-  // Max iterations reached - Gary has done thorough analysis
-  // IMPORTANT: Still require Steel Man + Conviction Assessment even at max iterations
+  // Max iterations reached
+  // For props mode: inject Pass 3 Props and try up to 3 times to get finalize_props
+  if (isPropsMode) {
+    console.log(`[Orchestrator] ⚠️ Max iterations (${CONFIG.maxIterations}) reached in props mode - injecting final props prompt...`);
+    const pass3PropsContent = buildPass3Props(homeTeam, awayTeam, propContext);
+    messages.push({ role: 'user', content: pass3PropsContent });
+
+    const synthesisModel = useProForGrading ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview';
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const finalResponse = await callGeminiWithRetry(messages, activeTools, synthesisModel, 3, 'final_decision');
+        const finalMessage = finalResponse.choices?.[0]?.message;
+
+        // Check for finalize_props tool call
+        if (finalMessage?.tool_calls?.length) {
+          const propsCall = finalMessage.tool_calls.find(tc => tc.function?.name === 'finalize_props');
+          if (propsCall) {
+            const args = typeof propsCall.function.arguments === 'string'
+              ? JSON.parse(propsCall.function.arguments)
+              : propsCall.function.arguments;
+            return {
+              picks: args.picks || [],
+              toolCallHistory, iterations: iteration + attempt,
+              homeTeam, awayTeam, sport,
+              rawAnalysis: finalMessage.content || '',
+              steelManCases, isProps: true
+            };
+          }
+        }
+
+        // Try parsing text response
+        if (finalMessage?.content) {
+          const propsParsed = parsePropsResponse(finalMessage.content, null);
+          if (propsParsed && propsParsed.length > 0) {
+            return {
+              picks: propsParsed,
+              toolCallHistory, iterations: iteration + attempt,
+              homeTeam, awayTeam, sport,
+              rawAnalysis: finalMessage.content,
+              steelManCases, isProps: true
+            };
+          }
+          // Add response and retry with explicit instruction
+          messages.push({ role: 'assistant', content: finalMessage.content });
+          messages.push({ role: 'user', content: 'You have completed your analysis. Now call the finalize_props tool with your 2 best prop picks based on everything you investigated. Do not request more stats.' });
+          console.log(`[Orchestrator] Props synthesis attempt ${attempt} - no finalize_props call, retrying...`);
+        }
+      } catch (propsError) {
+        console.error(`[Orchestrator] Props synthesis attempt ${attempt} error:`, propsError.message);
+      }
+    }
+
+    return {
+      error: 'Could not extract props after max iterations',
+      toolCallHistory, iterations: iteration,
+      homeTeam, awayTeam, sport, isProps: true
+    };
+  }
+
+  // Game mode: Still require Steel Man + Conviction Assessment even at max iterations
   console.log(`[Orchestrator] ⚠️ Max iterations (${CONFIG.maxIterations}) reached - requesting FULL synthesis with Steel Man + Conviction...`);
   
   // Build spread-size specific framing (CRITICAL - same as buildPass2Message)
@@ -7065,14 +7083,19 @@ function normalizeSportToLeague(sport) {
   const mapping = {
     'basketball_nba': 'NBA',
     'americanfootball_nfl': 'NFL',
+    'icehockey_nhl': 'NHL',
     'basketball_ncaab': 'NCAAB',
     'americanfootball_ncaaf': 'NCAAF',
     'NBA': 'NBA',
     'NFL': 'NFL',
+    'NHL': 'NHL',
     'NCAAB': 'NCAAB',
     'NCAAF': 'NCAAF'
   };
   return mapping[sport] || sport;
 }
+
+// Named exports for testing
+export { normalizeSportToLeague, getInvestigatedFactors, INVESTIGATION_FACTORS, buildPass3Props, parsePropsResponse, FINALIZE_PROPS_TOOL };
 
 export default { analyzeGame, buildSystemPrompt };

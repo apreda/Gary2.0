@@ -1,1 +1,18 @@
+# Environment variables (real keys — never commit)
 .env
+.env.local
+.env*.local
+
+# Security
+*.pem
+*.key
+credentials.json
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Logs
+*.log

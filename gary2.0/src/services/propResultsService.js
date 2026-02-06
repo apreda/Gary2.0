@@ -4,7 +4,8 @@
  * Uses MLB Stats API for retrieving player stats and determining prop results
  */
 import { supabase } from '../supabaseClient.js';
-import { mlbStatsApiService } from './mlbStatsApiService.js';
+// mlbStatsApiService removed (2026-02) — MLB not an active sport
+const mlbStatsApiService = { automateProps: async () => [] };
 
 // Team name normalization mapping to fix shortened names
 const teamNameMapping = {

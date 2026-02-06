@@ -14,22 +14,8 @@ import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const { createClient } = require('@supabase/supabase-js');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
-const dotenv = require('dotenv');
-const path = require('path');
-const { fileURLToPath } = require('url');
-
-// Robust environment variable loading
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const rootDir = path.resolve(__dirname, '..');
-
-// Try multiple .env locations
-[
-  path.join(rootDir, '.env'),
-  path.join(rootDir, '.env.local'),
-  path.join(process.cwd(), '.env'),
-  path.join(process.cwd(), '.env.local'),
-].forEach(p => dotenv.config({ path: p }));
+// Load environment variables FIRST (centralized)
+await import('../src/loadEnv.js');
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;

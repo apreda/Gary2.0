@@ -8,15 +8,8 @@
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const { createClient } = require('@supabase/supabase-js');
-import dotenv from 'dotenv';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
 // Load environment variables FIRST
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-dotenv.config({ path: path.resolve(__dirname, '../.env') });
-dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
+import '../src/loadEnv.js';
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;

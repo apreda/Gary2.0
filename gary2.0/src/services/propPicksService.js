@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { propOddsService } from './propOddsService.js';
 import { oddsService } from './oddsService.js';
-import { mlbStatsApiService } from './mlbStatsApiService.enhanced.js';
+// mlbStatsApiService removed (2026-02) — MLB not an active sport
 import { openaiService } from './openaiService.js';
 // Using MLB Stats API exclusively for prop picks to avoid legacy data sources
 import { nbaSeason, formatSeason, getCurrentEST, formatInEST, getESTDate } from '../utils/dateUtils.js';
@@ -9,8 +9,7 @@ import { debugUtils } from '../utils/debugUtils.js';
 
 // Import Supabase named export
 import { supabase } from '../supabaseClient.js';
-import { propUtils } from './propUtils.js';
-import { generatePropBets } from './propGenerator.js';
+// propUtils + propGenerator removed (2026-02) — legacy MLB prop code
 // NOTE: RotoWire Puppeteer scraper removed - injury filtering now relies on BDL API
 // The scraper is kept only for DFS (dfsAgenticContext.js)
 // NBA player props service for fetching NBA player stats
@@ -57,7 +56,7 @@ export const propPicksService = {
   /**
    * Format MLB player stats from MLB Stats API
    */
-  formatMLBPlayerStats: propUtils.formatMLBPlayerStats,
+  formatMLBPlayerStats: () => '', // MLB removed
 
   /**
    * Create prompt for the OpenAI API to generate prop picks

@@ -13,15 +13,7 @@
  */
 
 // MUST load env vars FIRST before any other imports
-import dotenv from 'dotenv';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-// Load .env first, then .env.local (later values override)
-dotenv.config({ path: path.join(__dirname, '..', '.env') });
-dotenv.config({ path: path.join(__dirname, '..', '.env.local'), override: true });
+import '../src/loadEnv.js';
 
 // Now import modules that depend on env vars
 const { analyzeGame, buildSystemPrompt } = await import('../src/services/agentic/agenticOrchestrator.js');

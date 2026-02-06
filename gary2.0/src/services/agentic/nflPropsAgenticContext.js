@@ -17,11 +17,12 @@ import {
   formatGameTimeEST, 
   buildMarketSnapshot, 
   parseGameDate, 
-  safeApiCallArray, 
-  safeApiCallObject, 
-  findBestPlayerMatch, 
+  safeApiCallArray,
+  safeApiCallObject,
+  findBestPlayerMatch,
   checkDataAvailability,
-  fixBdlInjuryStatus
+  fixBdlInjuryStatus,
+  normalizeTeamName
 } from './sharedUtils.js';
 import { fetchComprehensivePropsNarrative, fetchPropLineMovement, getPlayerPropMovement } from './scoutReport/scoutReportBuilder.js';
 
@@ -719,7 +720,6 @@ async function resolvePlayerIdsAndTeams(propCandidates, teamIds, homeTeam, awayT
   }
   
   // Normalize team names for matching
-  const normalizeTeamName = (name) => (name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
   const homeNorm = normalizeTeamName(homeTeam);
   const awayNorm = normalizeTeamName(awayTeam);
   const validTeamIds = new Set(teamIds);

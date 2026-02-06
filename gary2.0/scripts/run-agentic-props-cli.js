@@ -3,21 +3,16 @@
  * Agentic Props CLI Runner
  * Generic CLI for running agentic prop picks pipeline
  */
-import dotenv from 'dotenv';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+// Load environment variables FIRST
+import '../src/loadEnv.js';
 import { createClient } from '@supabase/supabase-js';
-
-// Load environment variables from .env.local first, then .env BEFORE importing services
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-dotenv.config({ path: join(__dirname, '..', '.env.local') });
-dotenv.config({ path: join(__dirname, '..', '.env') });
 
 // Dynamic imports after env is loaded (so openaiService gets correct proxy URL)
 const { oddsService } = await import('../src/services/oddsService.js');
 const { propOddsService } = await import('../src/services/propOddsService.js');
 const { runAgenticPropsPipeline } = await import('../src/services/agentic/propsAgenticRunner.js');
+const { getPropsConstitution, applyPropsPerGameConstraint } = await import('../src/services/agentic/propsAgenticRunner.js');
+const { analyzeGame } = await import('../src/services/agentic/agenticOrchestrator.js');
 
 const defaultArgv = process.argv.slice(2);
 
@@ -61,12 +56,15 @@ export async function runAgenticPropsCli({
   const matchupFilter = args.matchup || null;
   // CLI override for regularOnly: --regular=1 or --no-td=1
   const cliRegularOnly = regularOnly || args.regular === '1' || args['no-td'] === '1';
+  // --legacy flag: use old pipeline (propsAgenticRunner) instead of orchestrator
+  const useLegacy = args.legacy === true || args.legacy === '1' || args.legacy === 'true';
 
   console.log(`\n🏈 Agentic ${leagueLabel} Props Runner Starting...`);
   console.log(`${'='.repeat(50)}`);
   console.log(`📅 Date: ${getESTDate()}`);
   console.log(`🎯 Sport: ${leagueLabel}`);
   console.log(`📊 Games limit: ${limit}`);
+  console.log(`🔧 Pipeline: ${useLegacy ? 'LEGACY (propsAgenticRunner)' : 'ORCHESTRATOR (multi-pass)'}`);
   console.log(`💾 Store: ${shouldStore ? 'Yes' : 'No (pass --store=1 to save)'}`);
   if (cliRegularOnly && leagueLabel === 'NFL') console.log(`🏈 Mode: Regular props only (yards/receptions - TDs handled separately)`);
   if (matchupFilter) console.log(`🔍 Matchup filter: ${matchupFilter}`);
@@ -178,29 +176,120 @@ export async function runAgenticPropsCli({
         continue;
       }
 
-      // Build context and run pipeline
-      const result = await runAgenticPropsPipeline({
-        game,
-        playerProps,
-        buildContext,
-        sportLabel: leagueLabel,
-        propsPerGame,
-        options: { nocache },
-        regularOnly: cliRegularOnly  // NFL: if true, skip TD categories (TDs handled by separate script)
-      });
+      let result;
+
+      if (useLegacy) {
+        // LEGACY: Use old propsAgenticRunner pipeline
+        result = await runAgenticPropsPipeline({
+          game,
+          playerProps,
+          buildContext,
+          sportLabel: leagueLabel,
+          propsPerGame,
+          options: { nocache },
+          regularOnly: cliRegularOnly
+        });
+      } else {
+        // NEW: Use orchestrator multi-pass pipeline (same as game picks)
+        console.log(`[Orchestrator Props] Building context for ${matchup}...`);
+        const context = await buildContext(game, playerProps, { nocache, regularOnly: cliRegularOnly });
+
+        // Prepare prop candidates and available lines for orchestrator
+        const propCandidates = (context.propCandidates || []).slice(0, 14).map(p => ({
+          player: p.player,
+          team: p.team,
+          props: p.props,
+          recentForm: p.recentForm ? {
+            targetTrend: p.recentForm.targetTrend,
+            usageTrend: p.recentForm.usageTrend,
+            formTrend: p.recentForm.formTrend
+          } : null
+        }));
+
+        // Filter available lines to only validated players
+        const validatedPlayerNames = new Set(
+          (context.propCandidates || []).map(p => p.player.toLowerCase())
+        );
+        const availableLines = playerProps
+          .filter(p => validatedPlayerNames.has(p.player.toLowerCase()))
+          .slice(0, 50)
+          .map(p => ({
+            player: p.player,
+            prop_type: p.prop_type,
+            line: p.line,
+            over_odds: p.over_odds,
+            under_odds: p.under_odds
+          }));
+
+        const propsConstitution = getPropsConstitution(leagueLabel);
+
+        result = await analyzeGame(game, sportKey, {
+          mode: 'props',
+          propContext: {
+            propCandidates,
+            availableLines,
+            playerStats: context.playerStats || '',
+            gameSummary: context.gameSummary || {},
+            propsConstitution,
+            narrativeContext: context.narrativeContext || null
+          }
+        });
+
+        // Post-process orchestrator picks: normalize line + add metadata
+        if (result.picks && result.picks.length > 0) {
+          result.picks = result.picks.map(pick => {
+            // Normalize prop and line: extract line from prop string if embedded
+            let prop = pick.prop || '';
+            let line = pick.line;
+            const propParts = prop.match(/^([a-z_]+)\s+([\d.]+)$/i);
+            if (propParts) {
+              prop = propParts[1]; // Just the market type
+              if (!line) line = parseFloat(propParts[2]);
+            }
+            // If line is still missing, look it up from available lines
+            if (!line && pick.player && prop) {
+              const match = playerProps.find(p =>
+                p.player.toLowerCase() === pick.player.toLowerCase() &&
+                p.prop_type.toLowerCase() === prop.toLowerCase()
+              );
+              if (match) line = match.line;
+            }
+            if (!line) {
+              console.log(`⚠️ Missing line for ${pick.player} ${prop} — could not resolve from available lines`);
+            }
+            return {
+              ...pick,
+              prop,
+              line: line || null,
+              sport: leagueLabel,
+              matchup,
+              commence_time: game.commence_time,
+              bet: (pick.bet || 'over').toLowerCase() === 'yes' ? 'over' : (pick.bet || 'over').toLowerCase(),
+              confidence: pick.confidence || 0.6,
+              confidence_tier: pick.confidence_tier || 'CORE'
+            };
+          });
+
+          // Apply 2-per-game constraint for NBA/NHL
+          if (leagueLabel === 'NBA' || leagueLabel === 'NHL') {
+            const { constrainedPicks } = applyPropsPerGameConstraint(result.picks, `${leagueLabel}-post`);
+            result.picks = constrainedPicks;
+          }
+        }
+      }
 
       if (result.picks && result.picks.length > 0) {
         console.log(`✅ Generated ${result.picks.length} picks for ${matchup}`);
-        
+
         // DEBUG: Print full pick details with rationale
         for (const pick of result.picks) {
           console.log(`\n📊 PICK: ${pick.player} (${pick.team})`);
-          console.log(`   Prop: ${pick.bet?.toUpperCase()} ${pick.prop} @ ${pick.odds}`);
+          console.log(`   Prop: ${pick.bet?.toUpperCase()} ${pick.prop} ${pick.line || '?'} @ ${pick.odds}`);
           console.log(`   Confidence: ${Math.round((pick.confidence || 0) * 100)}%`);
           console.log(`   Gary's Take: ${pick.rationale || pick.analysis || 'N/A'}`);
           if (pick.key_stats) console.log(`   Key Stats: ${JSON.stringify(pick.key_stats)}`);
         }
-        
+
         allPropPicks.push(...result.picks);
       } else {
         console.log(`⚠️ No confident prop picks for this game`);
@@ -317,7 +406,7 @@ export async function runAgenticPropsCli({
   
   sortedPicks.forEach((pick, i) => {
     const conf = (pick.confidence * 100).toFixed(0);
-    console.log(`${i + 1}. ${pick.player} (${pick.team}): ${pick.bet.toUpperCase()} ${pick.prop} @ ${pick.odds} (${conf}% confidence)`);
+    console.log(`${i + 1}. ${pick.player} (${pick.team}): ${pick.bet.toUpperCase()} ${pick.prop} ${pick.line || '?'} @ ${pick.odds} (${conf}% confidence)`);
   });
 
   console.log(`\n🏁 Agentic ${leagueLabel} Props Runner Complete.\n`);
