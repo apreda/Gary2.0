@@ -3,16 +3,9 @@
  * Agentic NFL Touchdown Scorer Runner
  * Special feature: Gary picks 5 standard TDs + 5 underdog TDs (+200 or better) + 1 First TD per game
  */
-import dotenv from 'dotenv';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+// Load environment variables FIRST
+import '../src/loadEnv.js';
 import { createClient } from '@supabase/supabase-js';
-
-// Load environment variables
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-dotenv.config({ path: join(__dirname, '..', '.env.local') });
-dotenv.config({ path: join(__dirname, '..', '.env') });
 
 // Dynamic imports after env is loaded
 const { oddsService } = await import('../src/services/oddsService.js');

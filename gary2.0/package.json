@@ -19,14 +19,13 @@
     "gary:nba": "node scripts/run-agentic-picks.js --nba",
     "gary:nfl": "node scripts/run-agentic-picks.js --nfl",
     "gary:ncaab": "node scripts/run-agentic-picks.js --ncaab",
-    "gary:ncaaf": "node scripts/run-agentic-picks.js --ncaaf"
+    "gary:ncaaf": "node scripts/run-agentic-picks.js --ncaaf",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@balldontlie/sdk": "^1.2.2",
     "@google/generative-ai": "^0.24.1",
-    "@react-spring/three": "^9.7.5",
-    "@react-three/drei": "^9.88.7",
-    "@react-three/fiber": "^9.1.2",
     "@shadcn/ui": "^0.0.4",
     "@supabase/supabase-js": "^2.49.4",
     "@tailwindcss/aspect-ratio": "^0.4.2",
@@ -41,7 +40,6 @@
     "express": "^5.1.0",
     "firebase-admin": "^13.6.0",
     "framer-motion": "^12.9.5",
-    "gsap": "^3.12.7",
     "lucide-react": "^0.503.0",
     "node-cron": "^3.0.3",
     "openai": "^4.96.2",
@@ -52,10 +50,7 @@
     "react-dom": "^18.2.0",
     "react-icons": "^5.5.0",
     "react-router-dom": "^7.5.0",
-    "react-spring": "^9.7.5",
-    "react-swipeable": "^7.0.2",
-    "recharts": "^2.15.3",
-    "three": "^0.175.0"
+    "react-swipeable": "^7.0.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.21.0",
@@ -71,6 +66,7 @@
     "globals": "^15.15.0",
     "postcss": "^8.5.3",
     "tailwindcss": "^3.4.17",
-    "vite": "^6.2.0"
+    "vite": "^6.2.0",
+    "vitest": "^4.0.18"
   }
 }

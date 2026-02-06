@@ -25,11 +25,12 @@ import {
   buildMarketSnapshot, 
   parseGameDate, 
   safeApiCallArray, 
-  safeApiCallObject, 
-  fuzzyMatchPlayerName, 
-  findBestPlayerMatch, 
+  safeApiCallObject,
+  fuzzyMatchPlayerName,
+  findBestPlayerMatch,
   checkDataAvailability,
-  fixBdlInjuryStatus 
+  fixBdlInjuryStatus,
+  normalizeTeamName
 } from './sharedUtils.js';
 import { fetchComprehensivePropsNarrative, fetchPropLineMovement, getPlayerPropMovement } from './scoutReport/scoutReportBuilder.js';
 
@@ -535,8 +536,6 @@ async function resolvePlayerIds(propCandidates, teamIds, season, homeTeamName, a
     return playerIdMap;
   }
   
-  // Normalize team names for matching
-  const normalizeTeamName = (name) => (name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
   const homeNorm = normalizeTeamName(homeTeamName);
   const awayNorm = normalizeTeamName(awayTeamName);
   const validTeamIds = new Set(teamIds);
@@ -1040,7 +1039,7 @@ function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnap
   
   return {
     player_stats: {
-      summary: playerStats.substring(0, 5000), // Increased for more context
+      summary: playerStats.substring(0, 8000), // Increased to prevent truncation for later players
       playerCount: (playerStats.match(/\*\*/g) || []).length / 2
     },
     prop_lines: {

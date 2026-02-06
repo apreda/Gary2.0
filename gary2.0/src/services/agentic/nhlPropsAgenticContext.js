@@ -15,11 +15,12 @@ import {
   formatGameTimeEST, 
   buildMarketSnapshot, 
   parseGameDate, 
-  safeApiCallArray, 
-  safeApiCallObject, 
-  findBestPlayerMatch, 
+  safeApiCallArray,
+  safeApiCallObject,
+  findBestPlayerMatch,
   checkDataAvailability,
-  fixBdlInjuryStatus
+  fixBdlInjuryStatus,
+  normalizeTeamName
 } from './sharedUtils.js';
 import { fetchComprehensivePropsNarrative, fetchPropLineMovement, getPlayerPropMovement } from './scoutReport/scoutReportBuilder.js';
 
@@ -99,6 +100,60 @@ function calculateNhlVolumeMetrics(playerStats, gameLogs) {
           : null
       }
     }
+  };
+}
+
+/**
+ * Calculate hit rate for an NHL player prop against recent game logs
+ * Similar to NBA's calculateHitRate — tells Gary "hit O 3.5 SOG in 7/10 games"
+ * @param {Array} games - Recent game log entries
+ * @param {string} propType - The prop type (e.g., 'player_shots_on_goal')
+ * @param {number} line - The line value (e.g., 3.5)
+ * @returns {Object|null} Hit rate data
+ */
+function calculateNhlHitRate(games, propType, line) {
+  if (!games || games.length === 0 || line == null) return null;
+
+  const propToField = {
+    'player_shots_on_goal': 'sog', 'shots_on_goal': 'sog', 'sog': 'sog',
+    'player_goals': 'goals', 'goals': 'goals',
+    'player_assists': 'assists', 'assists': 'assists',
+    'player_points': 'points', 'points': 'points',
+    'player_power_play_points': 'pp_points', 'power_play_points': 'pp_points',
+    'player_blocked_shots': 'blocked_shots', 'blocked_shots': 'blocked_shots',
+    'player_total_saves': 'saves', 'total_saves': 'saves', 'saves': 'saves',
+    'player_goals_scorer': 'goals'
+  };
+
+  const field = propToField[propType?.toLowerCase()] || propType;
+
+  let hitsOver = 0, hitsUnder = 0, pushes = 0;
+  const values = [];
+
+  for (const game of games) {
+    const value = game[field];
+    if (value === undefined || value === null) continue;
+    values.push(value);
+    if (value > line) hitsOver++;
+    else if (value < line) hitsUnder++;
+    else pushes++;
+  }
+
+  const totalGames = values.length;
+  if (totalGames === 0) return null;
+
+  const avgValue = values.reduce((a, b) => a + b, 0) / totalGames;
+
+  return {
+    totalGames,
+    hitsOver,
+    hitsUnder,
+    pushes,
+    overRate: ((hitsOver / totalGames) * 100).toFixed(0),
+    underRate: ((hitsUnder / totalGames) * 100).toFixed(0),
+    avgValue: avgValue.toFixed(1),
+    values: values.slice(0, 5),
+    recommendation: avgValue > line * 1.05 ? 'OVER' : avgValue < line * 0.95 ? 'UNDER' : 'CLOSE'
   };
 }
 
@@ -393,7 +448,6 @@ async function resolvePlayerIds(propCandidates, teamIds, season, homeTeamName, a
   }
   
   // Normalize team names for matching
-  const normalizeTeamName = (name) => (name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
   const homeNorm = normalizeTeamName(homeTeamName);
   const awayNorm = normalizeTeamName(awayTeamName);
   const validTeamIds = new Set(teamIds);
@@ -899,12 +953,17 @@ function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnap
     // Calculate NHL-specific volume metrics (PP1, TOI, iCF)
     const volumeMetrics = calculateNhlVolumeMetrics(stats, games);
     
-    // Calculate line movement for each prop
+    // Calculate line movement and hit rates for each prop
     const propsWithContext = p.props.map(prop => {
       // Look up line movement for this player + prop
       const propKey = `${p.player}_${prop.type}`.toLowerCase().replace(/\s+/g, '_');
       const movement = lineMovements[propKey] || getPlayerPropMovement(lineMovements, p.player, prop.type);
-      
+
+      // Calculate hit rate from recent game logs (like NBA does)
+      const hitRate = games.length > 0
+        ? calculateNhlHitRate(games, prop.type, prop.line)
+        : null;
+
       // Determine which kill condition applies to this prop type
       const propType = (prop.type || '').toLowerCase();
       let killCondition = null;
@@ -913,9 +972,18 @@ function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnap
       } else if (propType.includes('points') || propType.includes('goals') || propType.includes('assists')) {
         killCondition = volumeMetrics.killConditions?.points;
       }
-      
+
       return {
         ...prop,
+        // HIT RATE DATA - "hit O 3.5 SOG in 7/10 games"
+        hitRate: hitRate ? {
+          overRate: hitRate.overRate,
+          underRate: hitRate.underRate,
+          avgValue: hitRate.avgValue,
+          lastValues: hitRate.values,
+          recommendation: hitRate.recommendation,
+          gamesAnalyzed: hitRate.totalGames
+        } : null,
         // LINE MOVEMENT DATA - for Tier 2 Kill Condition analysis
         lineMovement: movement ? {
           open: movement.open,
@@ -923,7 +991,7 @@ function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnap
           direction: movement.direction,
           magnitude: movement.magnitude,
           signal: movement.signal,
-          movementNote: movement.magnitude >= 1.5 
+          movementNote: movement.magnitude >= 1.5
             ? `Line moved ${movement.direction} ${Math.abs(movement.magnitude)} (${movement.open} -> ${movement.current})`
             : null
         } : { source: 'NOT_FOUND' },

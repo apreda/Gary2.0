@@ -24,7 +24,9 @@ const PROP_MARKETS = {
     'player_blocks',
     'player_steals',
     'player_points_rebounds_assists',  // PRA combo
-    'player_points_rebounds'            // PR combo
+    'player_points_rebounds',           // PR combo
+    'player_rebounds_assists',          // RA combo
+    'player_double_double'             // Double-double yes/no
   ],
   americanfootball_nfl: [
     // Full game NFL player prop markets (expanded coverage)
@@ -88,15 +90,15 @@ const PROP_MARKETS = {
     'pitcher_record_a_win'
   ],
   icehockey_nhl: [
-    // NHL player props from The Odds API (limited to reduce API usage)
+    // NHL player props
     'player_points',
     'player_power_play_points',
     'player_assists',
     'player_blocked_shots',
     'player_shots_on_goal',
     'player_goals',
-    'player_total_saves'
-    // Goal scorer props removed to reduce token usage
+    'player_total_saves',
+    'player_goals_scorer'  // Re-added: anytime goal scorer (edge opportunities)
   ]
 };
 
