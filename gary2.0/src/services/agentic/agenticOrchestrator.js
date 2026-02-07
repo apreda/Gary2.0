@@ -41,10 +41,9 @@ function getGemini() {
 //   - Faster response times
 //   - Used for ALL sports during investigation phase
 //
-// PRO: Grading + Final Decision (Pass 2.5-3) for NBA, NFL, NHL only
+// PRO: Grading + Final Decision (Pass 2.5-3) for NBA, NFL, NHL, NCAAB
 //   - Deep reasoning with thinking_level: 'high'
 //   - Better at complex judgment and case evaluation
-//   - NCAAB stays on Flash (high volume)
 //
 // IMPORTANT: Thought signatures are model-specific!
 //   - Cannot pass Flash signatures to Pro (causes 400 error)
@@ -52,7 +51,7 @@ function getGemini() {
 // ═══════════════════════════════════════════════════════════════════════════
 const ALLOWED_GEMINI_MODELS = [
   'gemini-3-flash-preview',  // Investigation + Steel Man (all sports)
-  'gemini-3-pro-preview',    // Grading + Final Decision (NBA, NFL, NHL)
+  'gemini-3-pro-preview',    // Grading + Final Decision (NBA, NFL, NHL, NCAAB)
 ];
 
 function validateGeminiModel(model) {
@@ -77,8 +76,9 @@ function validateGeminiModel(model) {
 function sportUsesPro(sport) {
   const proSports = [
     'basketball_nba', 'NBA',
-    'americanfootball_nfl', 'NFL', 
-    'icehockey_nhl', 'NHL'
+    'americanfootball_nfl', 'NFL',
+    'icehockey_nhl', 'NHL',
+    'basketball_ncaab', 'NCAAB'
   ];
   return proSports.includes(sport);
 }
@@ -747,6 +747,17 @@ function getInvestigatedFactors(toolCallHistory, sport, preloadedFactors = []) {
   const coverage = covered.length / totalFactors;
   
   return { covered, missing, coverage, totalFactors };
+}
+
+/**
+ * Get human-readable token hints for a missing factor
+ * e.g., "DEFENSIVE_STATS (call: REBOUNDS or STEALS or BLOCKS)"
+ */
+function getTokenHints(sport, factorName) {
+  const factors = INVESTIGATION_FACTORS[sport];
+  if (!factors || !factors[factorName]) return factorName;
+  const tokens = factors[factorName];
+  return `${factorName} (call: ${tokens.join(' or ')})`;
 }
 
 /**
@@ -3526,7 +3537,7 @@ Output your decision in the strict JSON format above.
 Your rationale MUST start with exactly: "Gary's Take\\n\\n"
 Then include:
 1. **Scene-setter (1-2 sentences):** Open with the matchup context and what's at stake
-2. **Your reasoning (2-3 paragraphs):** Explain your pick naturally — the factors and stats you found that led to this decision. If the line doesn't reflect what the data shows, say so. If a specific matchup factor or stat drove your decision, lead with it. Write like you're explaining your bet to another sharp — every claim backed by a real number from your investigation. No fluff, no fabricated tactics.
+2. **Your reasoning (2-3 paragraphs):** Explain your pick naturally — the factors and stats you found that led to this decision. If the line doesn't reflect what the data shows, say so. If a specific matchup factor or stat drove your decision, lead with it. Write like you're explaining your bet to another sharp — every claim backed by a real number from your investigation. No fluff, no fabricated tactics. Situational framing ("get right spot", "statement game", "must-win") is fine ONLY if the standings, schedule, or scout report data genuinely supports it — don't use these phrases as filler.
 3. **Closing:** Why you're taking this side tonight
 
 **IMPORTANT:** Stick to stats you actually investigated. Do NOT invent tactical narratives about how the game will play out (defensive schemes, driving lanes, paint attacks) - you're analyzing stats, not watching film.
@@ -4374,7 +4385,7 @@ function determineCurrentPass(messages) {
  * - Uses PERSISTENT chat sessions for automatic thought signature handling
  * - Flash session for Investigation + Steel Man (Pass 1-2)
  * - Pro session for Grading + Final Decision (Pass 2.5-3) for NBA/NFL/NHL
- * - NCAAB stays on Flash throughout (high volume)
+ * - NCAAB uses Pro for Pass 2.5-3 (same quality as NBA)
  * 
  * @param {string} systemPrompt - The system prompt
  * @param {string} userMessage - The user message (scout report + game context)
@@ -4466,6 +4477,15 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
   let _synthInjected = false;
 
   const effectiveMaxIterations = CONFIG.maxIterations;
+
+  // Sport-specific preloaded factors — shared across tool-call and pipeline-gate scopes
+  const SPORT_PRELOADED_MAP = {
+    basketball_nba: ['INJURIES', 'H2H', 'SCHEDULE', 'STANDINGS_CONTEXT'],
+    basketball_ncaab: ['INJURIES', 'H2H', 'SCHEDULE_QUALITY'],
+    americanfootball_nfl: ['INJURIES', 'H2H', 'SCHEDULE', 'STANDINGS_CONTEXT'],
+    icehockey_nhl: ['INJURIES', 'H2H', 'SCHEDULE', 'STANDINGS_CONTEXT'],
+    americanfootball_ncaaf: ['INJURIES', 'H2H', 'SCHEDULE_QUALITY'],
+  };
 
   while (iteration < effectiveMaxIterations) {
     iteration++;
@@ -4737,7 +4757,7 @@ Focus on TIER 1 predictive stats (efficiency, EPA) and TIER 2 context (fresh inj
     // Handle empty response from Gemini (common when model is confused)
     if (provider === 'gemini' && !message.content && !message.tool_calls) {
       // Check what pass we're in to provide appropriate nudge
-      const pass2WasInjected = messages.some(m => m.content?.includes('PASS 2 - STEEL MAN') || m.content?.includes('STEEL MAN ANALYSIS'));
+      const pass2WasInjected = _pass2Injected;
       const pass25WasInjected = messages.some(m => m.content?.includes('PASS 2.5') || m.content?.includes('CASE REVIEW') || m.content?.includes('CASE EVALUATION'));
       
       let nudgeContent;
@@ -4810,7 +4830,11 @@ Request any REMAINING stats you need, or proceed to your Steel Man analysis NOW.
         try {
           const args = JSON.parse(tc.function.arguments);
           // Key based on function name + stat identifier (token for fetch_stats, stat_type for player stats)
-          const token = args.token || args.stat_type || 'unknown';
+          const token = args.token || args.stat_type;
+          if (!token) {
+            skippedDuplicates.push('unknown');
+            return false; // Reject malformed calls without a token
+          }
           const key = `${tc.function.name}:${token}`;
           
           // Check if already fetched in previous iterations
@@ -4860,7 +4884,7 @@ Request any REMAINING stats you need, or proceed to your Steel Man analysis NOW.
           : `\n\nYou've gathered ${toolCallHistory.length} stats: ${gatheredStats.join(', ')}`;
 
         // Determine what phase we're in
-        const pass2Injected = messages.some(m => m.content?.includes('PASS 2 - STEEL MAN') || m.content?.includes('STEEL MAN ANALYSIS'));
+        const pass2Injected = _pass2Injected;
         const pass25Injected = messages.some(m => m.content?.includes('PASS 2.5') || m.content?.includes('CASE REVIEW') || m.content?.includes('CASE EVALUATION'));
 
         let nudgeMessage;
@@ -4873,9 +4897,35 @@ MAKE YOUR FINAL DECISION NOW. Output your JSON pick with confidence_score and ra
 
 Write your Steel Man cases NOW using the data above.`;
         } else {
-          nudgeMessage = `ALL ${message.tool_calls.length} stats you requested were already gathered (${skippedDuplicates.join(', ')}). DO NOT re-request these.${dataRecap}
+          // Check factor coverage to give Gary specific guidance on what to call
+          const preloadedFactors = SPORT_PRELOADED_MAP[sport] || ['INJURIES'];
+          const factorStatus = getInvestigatedFactors(toolCallHistory, sport, preloadedFactors);
+          const { covered, missing, coverage, totalFactors } = factorStatus;
 
-Either request DIFFERENT stats you haven't gathered yet, or proceed to your Steel Man analysis.`;
+          // Track stall count for all-duplicates scenario
+          if (coverage <= _lastCoverageValue) {
+            _coverageStallCount++;
+          }
+          _lastCoverageValue = coverage;
+
+          console.log(`[Orchestrator] All-duplicates Factor Coverage: ${covered.length}/${totalFactors} (${(coverage * 100).toFixed(0)}%)`);
+
+          // STALL BREAK: If stuck at 70%+ for 3+ iterations with all duplicates, force Pass 2
+          if (_coverageStallCount >= 3 && coverage >= 0.70 && !_pass2Injected) {
+            console.log(`[Orchestrator] STALL BREAKER (all-dupes): Coverage stuck at ${(coverage * 100).toFixed(0)}% for ${_coverageStallCount} iterations — forcing Pass 2`);
+            messages.push({ role: 'user', content: buildPass2Message(sport, homeTeam, awayTeam, spread) });
+            _pass2Injected = true;
+            nextMessageToSend = buildPass2Message(sport, homeTeam, awayTeam, spread);
+            continue;
+          }
+
+          // Include token hints for missing factors
+          const missingDisplay = missing.slice(0, 6).map(f => getTokenHints(sport, f)).join(', ');
+          nudgeMessage = `Your stat requests failed because they were missing the required "token" parameter. Each call MUST include a "token" field specifying which stat to fetch.${dataRecap}
+
+**MISSING FACTORS (${missing.length} remaining):** ${missingDisplay}
+
+Call these specific tokens NOW using the get_stat tool with the "token" parameter. Example: {"token": "REBOUNDS"}.`;
         }
 
         messages.push({
@@ -5672,21 +5722,18 @@ Either request DIFFERENT stats you haven't gathered yet, or proceed to your Stee
       // - INJURIES: Scout report always includes injury data for NFL/NBA/NHL/NCAAB/NCAAF
       // Gary doesn't need to call INJURIES token explicitly - data is already in context
       // PRELOADED: Scout report already provides these — Gary shouldn't need to call them
-      // - INJURIES: Injury report with durations and priced-in tags
-      // - H2H: Head-to-head results included in scout report
-      // - SCHEDULE: Rest/travel/B2B already calculated in scout report
-      // - STANDINGS_CONTEXT: Standings and records included in scout report
-      const preloadedFactors = ['INJURIES', 'H2H', 'SCHEDULE', 'STANDINGS_CONTEXT'];
+      // Sport-specific preloaded factors (uses shared SPORT_PRELOADED_MAP defined at loop scope)
+      const preloadedFactors = SPORT_PRELOADED_MAP[sport] || ['INJURIES'];
       
       // FACTOR-BASED PROGRESS: Check which investigation factors Gary has covered
       const factorStatus = getInvestigatedFactors(toolCallHistory, sport, preloadedFactors);
       const { covered, missing, coverage, totalFactors } = factorStatus;
       
-      // Use persistent flags (survive context pruning) — also check messages as fallback
-      const pass2AlreadyInjected = _pass2Injected || messages.some(m => m.content?.includes('PASS 2 - STEEL MAN') || m.content?.includes('PASS 2 - EVIDENCE GATHERING'));
-      const pass25AlreadyInjected = _pass25Injected || messages.some(m => m.content?.includes('PASS 2.5 - CASE REVIEW') || m.content?.includes('PASS 2.5 - CONVICTION ASSESSMENT'));
-      const synthAlreadyInjected = _synthInjected || messages.some(m => m.content?.includes('MID-INVESTIGATION SYNTHESIS'));
-      const pass3AlreadyInjected = _pass3Injected || messages.some(m => m.content?.includes('PASS 3 - FINAL DECISION') || m.content?.includes('PASS 3 - FINAL OUTPUT') || m.content?.includes('PASS 3 - PROPS EVALUATION PHASE'));
+      // Use persistent flags ONLY (survive context pruning, no false positives from Gemini echoing pass labels)
+      const pass2AlreadyInjected = _pass2Injected;
+      const pass25AlreadyInjected = _pass25Injected;
+      const synthAlreadyInjected = _synthInjected;
+      const pass3AlreadyInjected = _pass3Injected;
       
       // Check if Gary completed Steel Man analysis (look for bilateral case sections in recent assistant messages)
       const recentAssistantMessages = messages.filter(m => m.role === 'assistant' && m.content).slice(-5);
@@ -5776,7 +5823,7 @@ Either request DIFFERENT stats you haven't gathered yet, or proceed to your Stee
         console.log(`[Orchestrator] Injected Pass 2 instructions (${covered.length}/${totalFactors} = ${(coverage * 100).toFixed(0)}% coverage, spread: ${spread})`);
       } else if (coverage < coverageThreshold) {
         // Below threshold — keep investigating (or stall break)
-        const missingDisplay = missing.slice(0, 6).map(f => f.replace(/_/g, ' ')).join(', ');
+        const missingDisplay = missing.slice(0, 6).map(f => getTokenHints(sport, f)).join(', ');
         const coveragePct = (coverage * 100).toFixed(0);
 
         // STALL BREAKER: If coverage hasn't improved in 3 iterations and we're at 70%+, force Pass 2
@@ -5854,7 +5901,7 @@ BEGIN WRITING YOUR MATCHUP ANALYSIS NOW.
           console.log(`[Orchestrator] MATCHUP ANALYSIS ENFORCEMENT - Gary must write analysis before proceeding (${covered.length}/${totalFactors} factors)`);
         } else if (!pass25AlreadyInjected && steelManCompleted) {
           // ═══════════════════════════════════════════════════════════════════════
-          // PASS 2.5 INJECTION + PRO MODEL SWITCH (NBA/NFL/NHL only)
+          // PASS 2.5 INJECTION + PRO MODEL SWITCH (NBA/NFL/NHL/NCAAB)
           // ═══════════════════════════════════════════════════════════════════════
           // Steel Man done, inject Pass 2.5 (Conviction Assessment)
           // For NBA/NFL/NHL: Switch to Pro model for deep reasoning on grading
@@ -5867,7 +5914,7 @@ BEGIN WRITING YOUR MATCHUP ANALYSIS NOW.
           messages.push({ role: 'user', content: pass25Content });
           
           // ═══════════════════════════════════════════════════════════════════════
-          // PRO MODEL SWITCH for grading phase (NBA/NFL/NHL only)
+          // PRO MODEL SWITCH for grading phase (NBA/NFL/NHL/NCAAB)
           // ═══════════════════════════════════════════════════════════════════════
           // HYBRID APPROACH: Pro gets FULL stats + tools to verify/investigate
           // ═══════════════════════════════════════════════════════════════════════
@@ -6012,11 +6059,48 @@ BEGIN WRITING YOUR MATCHUP ANALYSIS NOW.
     // No minimum enforcement - Gary calls what he needs organically
     // The prompts encourage comprehensive stat gathering naturally
 
-    // Check if Gary just responded to Pass 2.5 (no conviction rating parsing needed)
-    const pass25WasInjected = messages.some(m => m.content?.includes('PASS 2.5 - CASE REVIEW') || m.content?.includes('PASS 2.5 - CONVICTION ASSESSMENT'));
-    const pass3WasInjected = messages.some(m => m.content?.includes('PASS 3 - FINAL DECISION') || m.content?.includes('PASS 3 - FINAL OUTPUT') || m.content?.includes('PASS 3 - PROPS EVALUATION PHASE'));
+    // ═══════════════════════════════════════════════════════════════════════
+    // PIPELINE ENFORCEMENT: Gary MUST go through the full multi-pass pipeline
+    // Pass 1 (Investigation) → Pass 2 (Steel Man) → Pass 2.5 (Conviction/Pro) → Pass 3 (Final Output/Pro)
+    // If Gary tries to output a pick before completing these passes, reject it and
+    // force the correct next step. This prevents Flash from making picks without Pro review.
+    // ═══════════════════════════════════════════════════════════════════════
+    if (!isPropsMode && !_pass2Injected && iteration < effectiveMaxIterations) {
+      // Pass 2 hasn't been injected yet — Gary tried to skip investigation
+      // Check current factor coverage and inject appropriate nudge
+      const preloadedFactors = SPORT_PRELOADED_MAP[sport] || ['INJURIES'];
+      const factorStatus = getInvestigatedFactors(toolCallHistory, sport, preloadedFactors);
+      const { covered, missing, coverage, totalFactors } = factorStatus;
 
-    if (pass25WasInjected && !pass3WasInjected && iteration < effectiveMaxIterations) {
+      if (coverage >= 1.0) {
+        // Coverage complete — inject Pass 2 (Steel Man)
+        console.log(`[Orchestrator] ⚠️ PIPELINE GATE: Gary tried to pick before Pass 2 — injecting Steel Man (${covered.length}/${totalFactors} factors)`);
+        messages.push({ role: 'assistant', content: message.content });
+        messages.push({ role: 'user', content: buildPass2Message(sport, homeTeam, awayTeam, spread) });
+        _pass2Injected = true;
+        iteration++;
+        continue;
+      } else if (coverage >= 0.70) {
+        // Coverage at 70%+ — stall break and inject Pass 2
+        console.log(`[Orchestrator] ⚠️ PIPELINE GATE: Gary tried to pick at ${(coverage * 100).toFixed(0)}% coverage — stall breaking to Pass 2`);
+        messages.push({ role: 'assistant', content: message.content });
+        messages.push({ role: 'user', content: buildPass2Message(sport, homeTeam, awayTeam, spread) });
+        _pass2Injected = true;
+        iteration++;
+        continue;
+      } else {
+        // Coverage too low — nudge to continue investigating
+        const missingDisplay = missing.slice(0, 6).map(f => getTokenHints(sport, f)).join(', ');
+        console.log(`[Orchestrator] ⚠️ PIPELINE GATE: Gary tried to pick at ${(coverage * 100).toFixed(0)}% coverage — nudging to investigate`);
+        messages.push({ role: 'assistant', content: message.content });
+        messages.push({ role: 'user', content: `You need to investigate more factors before making your pick. Coverage is ${(coverage * 100).toFixed(0)}% but must reach 100%. Missing: ${missingDisplay}. Call stats for these factors now.` });
+        iteration++;
+        continue;
+      }
+    }
+
+    // Use persistent flags (no false positives from message scanning)
+    if (_pass25Injected && !_pass3Injected && iteration < effectiveMaxIterations) {
       // Gary answered Pass 2.5 — inject Pass 3 for final output directly
       messages.push({ role: 'assistant', content: message.content });
 
@@ -6040,11 +6124,12 @@ BEGIN WRITING YOUR MATCHUP ANALYSIS NOW.
     // FIXED: Check for both "FINAL DECISION" (old) and "FINAL OUTPUT" (new buildPass3Unified format)
     const pass3Done = messages.some(m => m.content?.includes('PASS 3 - FINAL DECISION') || m.content?.includes('PASS 3 - FINAL OUTPUT') || m.content?.includes('PASS 3 - PROPS EVALUATION PHASE'));
     
-    // Detect Steel Man in current response
+    // Detect Steel Man in current response (must match BOTH formats: "Case for" AND "Analysis for")
     const currentContent = message.content || '';
-    const caseForCount = (currentContent.match(/(?:Case for|CASE FOR|case for)/gi) || []).length;
+    const caseForCount = (currentContent.match(/(?:Case for|CASE FOR|case for|Analysis for|ANALYSIS FOR|analysis for)/gi) || []).length;
     const toCoversCount = (currentContent.match(/(?:TO COVER|to cover|To Cover)[:\s]/gi) || []).length;
-    const steelManJustWritten = (caseForCount + toCoversCount) >= 2;
+    const whyCoversCount = (currentContent.match(/(?:Why|How)\s+(?:the\s+)?[\w\s]+\s+(?:cover|win)/gi) || []).length;
+    const steelManJustWritten = (caseForCount + toCoversCount + whyCoversCount) >= 2;
     
     if (steelManJustWritten && !pass25Done && !pass3Done && iteration < effectiveMaxIterations) {
       // Gary just wrote Steel Man cases! Inject Pass 2.5 before allowing a pick
@@ -6134,6 +6219,54 @@ BEGIN WRITING YOUR MATCHUP ANALYSIS NOW.
       // fallback (outside the while loop) can try with a fresh session
       console.log(`[Orchestrator] ⚠️ Props finalize_props not called after ${propsRetryCount} retries — continuing to max-iterations fallback`);
       messages.push({ role: 'assistant', content: message.content });
+      iteration++;
+      continue;
+    }
+
+    // ─── PIPELINE GATE: Don't accept picks before Pass 2.5 + Pass 3 ─────
+    // If Pass 2 was injected (Steel Man phase), Gary MUST go through Pass 2.5 (Pro conviction)
+    // and Pass 3 (Pro final output) before a pick is accepted. This prevents Gary from
+    // sneaking a pick JSON into his Steel Man analysis and bypassing Pro reasoning.
+    if (_pass2Injected && !_pass25Injected && iteration < effectiveMaxIterations) {
+      console.log(`[Orchestrator] ⚠️ PIPELINE GATE: Pick attempted before Pass 2.5 — forcing Steel Man + Pass 2.5 flow`);
+      messages.push({ role: 'assistant', content: message.content });
+
+      // Inject Pass 2.5 + Pro switch (same logic as steelManJustWritten path above)
+      const pass25Content = buildPass25Message(homeTeam, awayTeam, sport, spread);
+      messages.push({ role: 'user', content: pass25Content });
+
+      if (provider === 'gemini' && useProForGrading && !hasSwichedToPro) {
+        console.log(`[Orchestrator] 🔄 PIPELINE GATE: Switching to Pro model for conviction assessment`);
+        const textualSummary = extractTextualSummaryForModelSwitch(messages, steelManCases, toolCallHistory);
+        try {
+          currentSession = createGeminiSession({
+            modelName: 'gemini-3-pro-preview',
+            systemPrompt: systemPrompt + '\n\n' + textualSummary,
+            tools: activeTools,
+            thinkingLevel: 'high'
+          });
+          currentModelName = currentSession.modelName;
+          hasSwichedToPro = true;
+          pendingFunctionResponses = [];
+          console.log(`[Orchestrator] 🧠 Pro session created (pipeline gate) — ${textualSummary.length} chars`);
+        } catch (proError) {
+          console.error(`[Orchestrator] ⚠️ Pro init failed (pipeline gate): ${proError.message}`);
+        }
+      }
+
+      nextMessageToSend = pass25Content;
+      _pass25Injected = true;
+      iteration++;
+      continue;
+    }
+
+    if (_pass25Injected && !_pass3Injected && iteration < effectiveMaxIterations) {
+      console.log(`[Orchestrator] ⚠️ PIPELINE GATE: Pick attempted before Pass 3 — injecting final output pass`);
+      messages.push({ role: 'assistant', content: message.content });
+      const pass3Content = buildPass3Unified(null, homeTeam, awayTeam);
+      messages.push({ role: 'user', content: pass3Content });
+      nextMessageToSend = pass3Content;
+      _pass3Injected = true;
       iteration++;
       continue;
     }

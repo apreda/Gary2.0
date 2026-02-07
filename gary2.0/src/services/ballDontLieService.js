@@ -3155,6 +3155,10 @@ const ballDontLieService = {
 
   async getStandingsGeneric(sportKey, params = {}, ttlMinutes = 30) {
     try {
+      // NCAAB/NCAAF standings require conference_id — use getNcaabStandings() instead
+      if (sportKey === 'basketball_ncaab' || sportKey === 'americanfootball_ncaaf') {
+        return [];
+      }
       const cacheKey = `${sportKey}_standings_${JSON.stringify(params)}`;
       return await getCachedOrFetch(cacheKey, async () => {
         const sport = this._getSportClient(sportKey);
