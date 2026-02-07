@@ -486,12 +486,12 @@ function extractTextualSummaryForModelSwitch(messages, steelManCases, toolCallHi
   // ═══════════════════════════════════════════════════════════════════════════
   // SECTION 1: Full Scout Report Data
   // ═══════════════════════════════════════════════════════════════════════════
-  const scoutReportMsg = messages.find(m => m.role === 'user' && m.content?.includes('SCOUT REPORT'));
+  const scoutReportMsg = messages.findLast(m => m.role === 'user' && m.content?.includes('SCOUT REPORT'));
   if (scoutReportMsg) {
     // Pass the FULL scout report, not just filtered lines
     // This includes injuries, standings, H2H, lineups, etc.
     summary += '## SCOUT REPORT (Full Context)\n';
-    summary += scoutReportMsg.content.substring(0, 15000) + '\n\n'; // Allow up to 15k chars
+    summary += scoutReportMsg.content + '\n\n'; // Full scout report — no truncation
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -545,6 +545,12 @@ function extractTextualSummaryForModelSwitch(messages, steelManCases, toolCallHi
     if (steelManCases.awayTeamCase) {
       summary += steelManCases.awayTeamCase + '\n\n';
     }
+  }
+
+  // Always anchor game identity — prevents wrong-game confusion after model switch
+  const matchupMatch = messages[1]?.content?.match(/([\w][\w\s.'&-]+?)\s*(?:@|vs\.?|versus)\s*([\w][\w\s.'&-]+?)(?:\n|$)/);
+  if (matchupMatch) {
+    summary += `\n## CURRENT GAME: ${matchupMatch[1].trim()} @ ${matchupMatch[2].trim()}\n`;
   }
 
   return summary;
