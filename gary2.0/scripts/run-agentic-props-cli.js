@@ -235,15 +235,15 @@ export async function runAgenticPropsCli({
           }
         });
 
-        // Post-process orchestrator picks: normalize line + add metadata
+        // Post-process orchestrator picks: normalize line + format prop for iOS display
         if (result.picks && result.picks.length > 0) {
           result.picks = result.picks.map(pick => {
-            // Normalize prop and line: extract line from prop string if embedded
+            // Extract line from prop string if embedded (e.g. "player_points 25.5")
             let prop = pick.prop || '';
             let line = pick.line;
             const propParts = prop.match(/^([a-z_]+)\s+([\d.]+)$/i);
             if (propParts) {
-              prop = propParts[1]; // Just the market type
+              prop = propParts[1];
               if (!line) line = parseFloat(propParts[2]);
             }
             // If line is still missing, look it up from available lines
@@ -257,10 +257,18 @@ export async function runAgenticPropsCli({
             if (!line) {
               console.log(`⚠️ Missing line for ${pick.player} ${prop} — could not resolve from available lines`);
             }
+
+            // Format prop for iOS propDisplay():
+            // Strip "player_" prefix → "player_points" becomes "points"
+            // Append line number → "points 25.5"
+            // iOS propDisplay("points 25.5") renders as "Points 25.5"
+            let displayProp = prop.replace(/^player_/i, '');
+            if (line) displayProp = `${displayProp} ${line}`;
+
             return {
               ...pick,
-              prop,
-              line: line || null,
+              prop: displayProp,
+              line: line != null ? String(line) : null,
               sport: leagueLabel,
               matchup,
               commence_time: game.commence_time,
@@ -284,7 +292,7 @@ export async function runAgenticPropsCli({
         // DEBUG: Print full pick details with rationale
         for (const pick of result.picks) {
           console.log(`\n📊 PICK: ${pick.player} (${pick.team})`);
-          console.log(`   Prop: ${pick.bet?.toUpperCase()} ${pick.prop} ${pick.line || '?'} @ ${pick.odds}`);
+          console.log(`   Prop: ${pick.bet?.toUpperCase()} ${pick.prop} @ ${pick.odds}`);
           console.log(`   Confidence: ${Math.round((pick.confidence || 0) * 100)}%`);
           console.log(`   Gary's Take: ${pick.rationale || pick.analysis || 'N/A'}`);
           if (pick.key_stats) console.log(`   Key Stats: ${JSON.stringify(pick.key_stats)}`);
