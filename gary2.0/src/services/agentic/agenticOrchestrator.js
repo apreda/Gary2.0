@@ -6735,6 +6735,21 @@ function parseGaryResponse(content, homeTeam, awayTeam, sport, gameOdds = {}) {
  * Normalize pick format for storage
  * Handles both legacy format (parsed.pick) and new format (parsed.final_pick)
  */
+/**
+ * Validate that a pick references one of the two teams in the game
+ * Prevents wrong-game picks from being stored (e.g., "Miami Heat" for a Nuggets @ Bulls game)
+ */
+function validatePickTeam(pickText, homeTeam, awayTeam) {
+  if (!pickText) return false;
+  const pickLower = pickText.toLowerCase();
+  const homeWords = homeTeam.toLowerCase().split(' ');
+  const awayWords = awayTeam.toLowerCase().split(' ');
+  // Check if ANY significant word (3+ chars) from home or away team appears in pick
+  const homeMatch = homeWords.some(w => w.length >= 3 && pickLower.includes(w));
+  const awayMatch = awayWords.some(w => w.length >= 3 && pickLower.includes(w));
+  return homeMatch || awayMatch;
+}
+
 function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds = {}) {
   // CRITICAL: Support both legacy format (pick) and new format (final_pick)
   // The new Pass 2.5 format uses "final_pick" instead of "pick"
@@ -6889,88 +6904,16 @@ function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds = {}) {
     }
   }
 
-  // Final validation: if pick text is too short or missing team name, reconstruct it
-  if (pickText.length < 10 || !pickText.match(/[A-Za-z]{3,}/)) {
-    console.log(`[Orchestrator] ⚠️ Pick text too short or missing team name: "${pickText}" - attempting reconstruction`);
-    
-    // CRITICAL FIX: Try to extract team from rationale before falling back to homeTeam
-    // The rationale often ends with "Take [Team] ML" or "Take [Team] +X.X"
-    let team = null;
-    const rationale = parsed.rationale || '';
-    const homeTeamName = parsed.homeTeam || homeTeam || '';
-    const awayTeamName = parsed.awayTeam || awayTeam || '';
-    
-    // Check rationale for "Take [Team]" pattern - this is the most reliable indicator
-    const takePattern = /take\s+(?:the\s+)?([A-Za-z]+(?:\s+[A-Za-z]+)*)\s+(?:ML|moneyline|\+|\-)/i;
-    const takeMatch = rationale.match(takePattern);
-    
-    if (takeMatch) {
-      const mentionedTeam = takeMatch[1].toLowerCase();
-      const homeWords = homeTeamName.toLowerCase().split(' ');
-      const awayWords = awayTeamName.toLowerCase().split(' ');
-      
-      // Check if the mentioned team matches home or away
-      if (homeWords.some(w => w.length > 3 && mentionedTeam.includes(w)) || 
-          mentionedTeam.includes(homeWords[homeWords.length - 1])) {
-        team = homeTeamName;
-        console.log(`[Orchestrator] ✅ Extracted HOME team from rationale: ${team}`);
-      } else if (awayWords.some(w => w.length > 3 && mentionedTeam.includes(w)) ||
-                 mentionedTeam.includes(awayWords[awayWords.length - 1])) {
-        team = awayTeamName;
-        console.log(`[Orchestrator] ✅ Extracted AWAY team from rationale: ${team}`);
-      }
-    }
-    
-    // If still no team, check if rationale mentions one team more favorably at the end
-    if (!team) {
-      const lastSentences = rationale.slice(-300).toLowerCase();
-      const homeMentions = homeTeamName.split(' ').filter(w => w.length > 3 && lastSentences.includes(w.toLowerCase())).length;
-      const awayMentions = awayTeamName.split(' ').filter(w => w.length > 3 && lastSentences.includes(w.toLowerCase())).length;
-      
-      if (awayMentions > homeMentions) {
-        team = awayTeamName;
-        console.log(`[Orchestrator] ✅ Inferred AWAY team from rationale mentions: ${team}`);
-      } else if (homeMentions > awayMentions) {
-        team = homeTeamName;
-        console.log(`[Orchestrator] ✅ Inferred HOME team from rationale mentions: ${team}`);
-      }
-    }
-    
-    // Final fallback - but log a warning
-    if (!team) {
-      team = homeTeamName || awayTeamName || 'Unknown Team';
-      console.log(`[Orchestrator] ⚠️ WARNING: Could not determine team from rationale, falling back to: ${team}`);
-    }
-    
-    const type = parsed.type || 'spread';
-    if (type === 'moneyline' || type === 'ml') {
-      // Determine correct ML odds based on which team was picked — use game data as fallback
-      let mlOdds;
-      if (team === homeTeamName) {
-        mlOdds = parsed.moneylineHome ?? gameOdds.moneyline_home ?? parsed.moneylineAway ?? gameOdds.moneyline_away ?? null;
-      } else {
-        mlOdds = parsed.moneylineAway ?? gameOdds.moneyline_away ?? parsed.moneylineHome ?? gameOdds.moneyline_home ?? null;
-      }
-      if (mlOdds != null) {
-        const mlOddsStr = mlOdds > 0 ? `+${mlOdds}` : `${mlOdds}`;
-        pickText = `${team} ML ${mlOddsStr}`;
-      } else {
-        console.warn(`[Orchestrator] ⚠️ MISSING ML ODDS during reconstruction for ${team}`);
-        pickText = `${team} ML`;
-      }
-      console.log(`[Orchestrator] Reconstructed ML pick: ${pickText}`);
-    } else if (parsed.spread) {
-      const spreadNum = parseFloat(parsed.spread);
-      const spreadStr = spreadNum > 0 ? `+${spreadNum}` : `${spreadNum}`;
-      const spreadOdds = parsed.spreadOdds ?? gameOdds.spread_home_odds ?? null;
-      if (spreadOdds != null) {
-        const spreadOddsStr = spreadOdds > 0 ? `+${spreadOdds}` : `${spreadOdds}`;
-        pickText = `${team} ${spreadStr} ${spreadOddsStr}`;
-      } else {
-        pickText = `${team} ${spreadStr}`;
-      }
-      console.log(`[Orchestrator] Reconstructed spread pick: ${pickText}`);
-    }
+  // Reject picks with too-short or invalid text — do NOT fabricate picks
+  if (pickText.length < 5 || !pickText.match(/[A-Za-z]{3,}/)) {
+    console.error(`[Orchestrator] REJECTED: Pick text too short/invalid: "${pickText}" — not fabricating a pick`);
+    return null;
+  }
+
+  // Validate that the pick references one of the two teams in the game
+  if (!validatePickTeam(pickText, homeTeam, awayTeam)) {
+    console.error(`[Orchestrator] REJECTED: Pick "${pickText}" does not reference ${homeTeam} or ${awayTeam} — wrong game`);
+    return null;
   }
 
   // Normalize contradicting_factors to always be { major: [], minor: [] }
