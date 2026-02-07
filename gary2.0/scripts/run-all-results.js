@@ -414,7 +414,7 @@ async function processPropBets(date) {
   for (const row of rows) {
     const picks = typeof row.props === 'string' ? JSON.parse(row.props) : (row.props || row.picks || []);
     for (const p of picks) {
-      const name = p.player || p.player_name, type = p.prop || p.prop_type;
+      const name = p.player || p.player_name, rawProp = p.prop || p.prop_type, type = rawProp?.split(' ')?.[0] || rawProp;
       const line = p.line || p.line_value, bet = p.bet, sport = p.sport?.toUpperCase();
       if (!name || !type || line === undefined) continue;
 
