@@ -178,7 +178,7 @@ For ML, don't apply the same "has market priced this in?" scrutiny. Focus on:
 - Recent form and home/road performance
 
 **3. Is there a clear winner, or is this a coin flip?**
-- If factors point both ways equally, it's a PASS
+- If factors point both ways equally, pick the side with the slight edge and note low conviction
 - If one side has clear advantages for winning, that's your pick
 
 ### FOR BOTH:
@@ -452,7 +452,7 @@ Before finalizing your evaluation, check yourself against tendencies that affect
 | **Contrarian Bias** | Underdog case feels edgy/smart | Contrarian isn't automatically edge - investigate substance |
 | **Recency Weighting** | Overweighting last game for either team | Check baseline form, not just last result |
 | **Narrative Coherence** | Case sounds "clean" but lacks data | Require stats regardless of how good the story sounds |
-| **Completion Pressure** | Forcing a pick when no edge exists | PASS is valid for BOTH sides if you don't see clear edge |
+| **Completion Pressure** | Forcing a pick when no edge exists | Note low conviction in rationale if edge is unclear |
 
 **The Key:** Evaluate the SUBSTANCE of each case, not how it makes you feel.
 
@@ -793,7 +793,7 @@ NHL moneyline asks WHO WINS, not who covers a spread. This means:
 **WHEN METRICS ARE CLOSE (Coin Flip Games):**
 If CF%, xG, and goaltending are all similar - what breaks the tie?
 - This is where situational factors may legitimately matter
-- Don't force a pick if there's no edge - PASS is valid
+- If edge is thin, note low conviction in your rationale
 - But if you DO pick, explain the tiebreaker reasoning
 
 ---

@@ -350,9 +350,9 @@ Only reference players listed in the scout report roster section.
 
 ## [BET] SECTION 5: BET TYPE SELECTION
 
-You have three options: **SPREAD**, **MONEYLINE**, or **PASS**. Choose based on your analysis.
+You have two options: **SPREAD** or **MONEYLINE**. Every game gets a pick. Choose based on your analysis.
 
-Investigate both sides before making your pick. If you can't form a strong opinion, PASS is valid.
+Investigate both sides before making your pick. If conviction is low, note it in your rationale.
 
 ---
 

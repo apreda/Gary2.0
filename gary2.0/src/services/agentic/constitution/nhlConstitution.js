@@ -677,9 +677,9 @@ Only reference players listed in the scout report roster section.
 
 ## [BET] SECTION 5: PICK THE WINNER
 
-You have two options: **MONEYLINE** (pick a winner) or **PASS**.
+Your option: **MONEYLINE** (pick a winner). Every game gets a pick.
 
-Build Steel Man cases for BOTH teams. Pick the team with the stronger case. If you genuinely can't separate them, PASS is valid.
+Build Steel Man cases for BOTH teams. Pick the team with the stronger case. If conviction is low, note it in your rationale.
 
 **Your pick format:** "[Team Name] ML [odds]" (e.g., "Detroit Red Wings ML -185")
 

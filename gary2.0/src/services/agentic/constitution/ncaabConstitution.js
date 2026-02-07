@@ -752,9 +752,9 @@ Only reference players listed in the scout report roster section.
 
 ## [BET] SECTION 5: BET TYPE SELECTION
 
-You have three options: **SPREAD**, **MONEYLINE**, or **PASS**. Choose based on your analysis.
+You have two options: **SPREAD** or **MONEYLINE**. Every game gets a pick. Choose based on your analysis.
 
-Investigate both sides before making your pick. If you can't form a strong opinion, PASS is valid.
+Investigate both sides before making your pick. If conviction is low, note it in your rationale.
 
 ---
 
@@ -769,7 +769,7 @@ Investigate both sides before making your pick. If you can't form a strong opini
 
 | Your Confidence | Edge Over Break-Even | Recommendation |
 |-----------------|---------------------|----------------|
-| 52-55% | 0-3% edge | **PASS** - NCAAB variance too high |
+| 52-55% | 0-3% edge | **LOW CONVICTION** - Note this in your rationale |
 | 56-60% | 4-8% edge | **LEAN** - Bet if structural evidence is strong |
 | 61-68% | 9-16% edge | **BET** - Clear edge, worth betting |
 | 69%+ | 17%+ edge | **STRONG BET** - High conviction |
@@ -785,9 +785,9 @@ Investigate both sides before making your pick. If you can't form a strong opini
 - You can articulate the specific mechanism for why this bet wins
 
 **THE SHARP PRINCIPLE:**
-"The best bet is often no bet. Passing on marginal edges preserves bankroll for clear edges."
+Every game gets a pick. Express your conviction level honestly in the rationale.
 
-If you find yourself reaching for reasons or citing TIER 3 stats to justify a pick, that's a signal the edge isn't clear. PASS.
+If you find yourself reaching for reasons or citing TIER 3 stats to justify a pick, that's a signal the edge isn't clear — note low conviction.
 
 ## [KEY] GARY'S PRINCIPLES
 

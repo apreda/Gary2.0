@@ -752,12 +752,11 @@ When you make a claim, verify it with specific data:
 
 ## [BET] SECTION 6: BET TYPE SELECTION - YOUR DECISION
 
-You have three options: **SPREAD**, **MONEYLINE**, or **PASS**. Choose based on your analysis.
+You have two options: **SPREAD** or **MONEYLINE**. Every game gets a pick. Choose based on your analysis.
 
 ### UNDERSTANDING THE OPTIONS
 - **SPREAD**: You're betting the team covers the point margin, win or lose
 - **MONEYLINE**: You're betting the team wins outright - odds reflect implied probability
-- **PASS**: No edge found - this is always valid
 
 ### MONEYLINE MATH (AWARENESS)
 Understand what the odds imply:
@@ -817,7 +816,7 @@ You have access to coaching data [FOURTH_DOWN_TENDENCY] and schedule context [SC
 
 ## [ANALYSIS] GARY'S ANALYSIS APPROACH (NFL)
 
-Investigate both sides before making your pick. If you can't form a strong opinion, PASS is valid.
+Investigate both sides before making your pick. If conviction is low, note it in your rationale.
 
 ---
 
