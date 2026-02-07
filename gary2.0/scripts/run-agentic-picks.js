@@ -602,7 +602,13 @@ async function main() {
           7,   // Big East
           10,  // Big Ten
           24,  // SEC
-          31   // WCC (includes Gonzaga)
+          // WCC removed — only Gonzaga/Saint Mary's are relevant, handled via APPROVED_TEAM_NAMES
+        ]);
+
+        // Elite teams from non-approved conferences that should still get picks
+        const APPROVED_TEAM_NAMES = new Set([
+          'gonzaga bulldogs',
+          "saint mary's gaels",
         ]);
 
         // Conference ID to name mapping for logging and storage
@@ -623,39 +629,11 @@ async function main() {
         const filteredGames = [];
         const skippedGames = [];
         const skippedNonApproved = [];
-        
-        // DEBUG: Check if UCLA/Penn State are in the raw games list
-        const uclaGame = games.find(g => 
-          g.home_team?.toLowerCase().includes('ucla') || 
-          g.away_team?.toLowerCase().includes('ucla') ||
-          g.home_team?.toLowerCase().includes('penn state') || 
-          g.away_team?.toLowerCase().includes('penn state')
-        );
-        if (uclaGame) {
-          console.log(`[${config.name}] 🔍 DEBUG: Found UCLA/Penn State game in raw list: ${uclaGame.away_team} @ ${uclaGame.home_team}`);
-          console.log(`[${config.name}] 🔍 DEBUG: Game time: ${uclaGame.commence_time}`);
-        } else {
-          console.log(`[${config.name}] ⚠️ DEBUG: UCLA/Penn State NOT found in ${games.length} raw games`);
-        }
 
         // Pre-fetch all teams once to optimize lookup
         const ncaabTeams = await ballDontLieService.getTeams('basketball_ncaab');
         const normalize = (name) => name?.toLowerCase().replace(/[^a-z0-9]/g, '').trim();
-        
-        // DEBUG: Check UCLA/Penn State conference IDs in BDL
-        if (uclaGame) {
-          const uclaTeam = ncaabTeams.find(t => 
-            t.name?.toLowerCase().includes('ucla') || 
-            t.full_name?.toLowerCase().includes('ucla')
-          );
-          const pennStateTeam = ncaabTeams.find(t => 
-            t.name?.toLowerCase().includes('penn state') || 
-            t.full_name?.toLowerCase().includes('penn state')
-          );
-          console.log(`[${config.name}] 🔍 DEBUG: UCLA in BDL: ${uclaTeam ? `ID=${uclaTeam.id}, conference_id=${uclaTeam.conference_id}, name=${uclaTeam.full_name}` : 'NOT FOUND'}`);
-          console.log(`[${config.name}] 🔍 DEBUG: Penn State in BDL: ${pennStateTeam ? `ID=${pennStateTeam.id}, conference_id=${pennStateTeam.conference_id}, name=${pennStateTeam.full_name}` : 'NOT FOUND'}`);
-        }
-        
+
         const teamMap = new Map();
         ncaabTeams.forEach(t => {
           if (t.full_name) teamMap.set(normalize(t.full_name), t);
@@ -695,9 +673,9 @@ async function main() {
             game.homeConference = getConfName(homeConfId);
             game.awayConference = getConfName(awayConfId);
 
-            // AT LEAST ONE team must be from an approved Top 7 conference
-            const homeApproved = isApprovedConference(homeConfId);
-            const awayApproved = isApprovedConference(awayConfId);
+            // AT LEAST ONE team must be from an approved conference OR be a named elite team
+            const homeApproved = isApprovedConference(homeConfId) || APPROVED_TEAM_NAMES.has(normalize(game.home_team));
+            const awayApproved = isApprovedConference(awayConfId) || APPROVED_TEAM_NAMES.has(normalize(game.away_team));
 
             if (!homeApproved && !awayApproved) {
               // Neither team is in Top 7 - skip
