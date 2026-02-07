@@ -165,15 +165,6 @@ const CONFIG = {
       pro: 'high'        // Pro: maximum reasoning depth for decisions
     },
 
-    // Legacy per-pass config (kept for backwards compatibility)
-    thinkingLevelByPass: {
-      investigation: 'medium',   // Investigation uses Flash - medium is fine
-      steel_man: 'high',         // Steel man uses Pro - needs deep reasoning
-      conviction_rating: 'high', // Conviction uses Pro - needs deep reasoning
-      final_decision: 'high',    // Final decision uses Pro - needs deep reasoning
-      default: 'high'            // Default to high for complex analysis
-    },
-    
     // Grounding with Google Search - enables live context searches
     grounding: {
       enabled: true,
@@ -4621,6 +4612,10 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
   // Persistent pass-injection flags (survive context pruning)
   let _pass2Injected = false;
   let _pass25Injected = false;
+
+  // Coverage stall detection — force Pass 2 if coverage stops improving
+  let _lastCoverageValue = 0;
+  let _coverageStallCount = 0;
   let _pass3Injected = false;
   let _synthInjected = false;
 
@@ -4704,6 +4699,9 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
 
           // Extract textual context to pass to Pro
           const textualContext = extractTextualSummaryForModelSwitch(messages, steelManCases, toolCallHistory);
+          if (textualContext.length < 2000) {
+            console.warn(`[Orchestrator] LOW CONTEXT WARNING: Only ${textualContext.length} chars for Flash→Pro switch`);
+          }
 
           // Create new Pro session for fallback
           currentSession = createGeminiSession({
@@ -4736,7 +4734,10 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
           
           // Extract textual context to pass to Flash (include full stat history)
           const textualContext = extractTextualSummaryForModelSwitch(messages, steelManCases, toolCallHistory);
-          
+          if (textualContext.length < 2000) {
+            console.warn(`[Orchestrator] LOW CONTEXT WARNING: Only ${textualContext.length} chars for Pro→Flash switch`);
+          }
+
           // Create new Flash session for fallback
           currentSession = createGeminiSession({
             modelName: 'gemini-3-flash-preview',
@@ -4768,6 +4769,9 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
 
           // Extract what we have so far
           const textualContext = extractTextualSummaryForModelSwitch(messages, steelManCases, toolCallHistory);
+          if (textualContext.length < 2000) {
+            console.warn(`[Orchestrator] LOW CONTEXT WARNING: Only ${textualContext.length} chars for MALFORMED recovery`);
+          }
 
           // Create fresh Pro session for Steel Man with reduced context
           currentSession = createGeminiSession({
@@ -5854,7 +5858,15 @@ If you need different stats, request NEW ones. If you have enough data, proceed 
       if (missing.length > 0 && missing.length <= 4) {
         console.log(`[Orchestrator] Missing factors: ${missing.join(', ')}`);
       }
-      
+
+      // COVERAGE STALL DETECTION: Track if coverage stops improving
+      if (coverage <= _lastCoverageValue) {
+        _coverageStallCount++;
+      } else {
+        _coverageStallCount = 0;
+      }
+      _lastCoverageValue = coverage;
+
       // FACTOR-BASED PHASE TRIGGERS:
       // Props mode: 70% coverage is sufficient — Gary needs game context for player evaluation,
       // not exhaustive factor investigation. Some factors (STANDINGS_CONTEXT, CONFERENCE_SPLITS,
@@ -5905,11 +5917,21 @@ If you need different stats, request NEW ones. If you have enough data, proceed 
         _pass2Injected = true;
         console.log(`[Orchestrator] Injected Pass 2 instructions (${covered.length}/${totalFactors} = ${(coverage * 100).toFixed(0)}% coverage, spread: ${spread})`);
       } else if (coverage < coverageThreshold) {
-        // Below threshold — keep investigating
+        // Below threshold — keep investigating (or stall break)
         const missingDisplay = missing.slice(0, 6).map(f => f.replace(/_/g, ' ')).join(', ');
         const coveragePct = (coverage * 100).toFixed(0);
 
-        if (iteration >= 4 && coverage >= (coverageThreshold - 0.2)) {
+        // STALL BREAKER: If coverage hasn't improved in 3 iterations and we're at 80%+, force Pass 2
+        // This prevents spinning on unreachable factors (endpoint errors, irrelevant stats)
+        if (_coverageStallCount >= 3 && coverage >= 0.80 && !pass2AlreadyInjected) {
+          console.log(`[Orchestrator] STALL BREAKER: Coverage stuck at ${coveragePct}% for ${_coverageStallCount} iterations — forcing Pass 2 with ${covered.length}/${totalFactors} factors`);
+          console.log(`[Orchestrator] Unreachable factors: ${missing.join(', ')}`);
+          messages.push({
+            role: 'user',
+            content: buildPass2Message(sport, homeTeam, awayTeam, spread)
+          });
+          _pass2Injected = true;
+        } else if (iteration >= 4 && coverage >= (coverageThreshold - 0.2)) {
           // After several iterations with close-to-threshold coverage, give a stronger nudge
           messages.push({
             role: 'user',
@@ -6384,203 +6406,20 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
     };
   }
 
-  // Game mode: Still require Steel Man + Conviction Assessment even at max iterations
-  console.log(`[Orchestrator] ⚠️ Max iterations (${CONFIG.maxIterations}) reached - requesting FULL synthesis with Steel Man + Conviction...`);
-  
-  // Build spread-size specific framing (CRITICAL - same as buildPass2Message)
-  // NOTE: spread needs to be extracted from options here since we're outside the loop scope
-  const spread = options.spread || 0;
-  const absSpread = Math.abs(spread);
-  const homeIsFavorite = spread < 0;
-  const favoriteTeam = homeIsFavorite ? homeTeam : awayTeam;
-  const underdogTeam = homeIsFavorite ? awayTeam : homeTeam;
-  const coverThreshold = Math.floor(absSpread) + 1;
-  
-  // Determine if this is "who wins" vs "who covers" based on sport and spread
-  const isNFL = sport === 'americanfootball_nfl' || sport === 'NFL';
-  const isNBA = sport === 'basketball_nba' || sport === 'NBA';
-  const isNCAAB = sport === 'basketball_ncaab' || sport === 'NCAAB';
-  const isNCAAF = sport === 'americanfootball_ncaaf' || sport === 'NCAAF';
-  const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
-  
-  const isWinsQuestion = isNHL || 
-    (isNBA && absSpread < 5) ||
-    (isNFL && absSpread < 3.5) ||
-    (isNCAAB && absSpread < 5) ||
-    (isNCAAF && absSpread < 3.5);
-  
-  // Build spread-size framing
-  let spreadSizeFraming = '';
-  if (!isWinsQuestion && absSpread > 0) {
-    if (absSpread >= 10) {
-      spreadSizeFraming = `
-**SPREAD-SIZE FRAMING (LARGE: ${spread.toFixed(1)})**
-
-This is a LARGE SPREAD. The question is: Does the evidence support the FAVORITE or UNDERDOG side?
-
-**FOR ${underdogTeam} +${absSpread.toFixed(1)} (UNDERDOG SIDE):**
-> Question: "Does the evidence suggest the line is too high?"
-> Look for: Defense that limits damage, tempo control, matchups that keep it close, narrative factors inflating the line
-
-**FOR ${favoriteTeam} -${absSpread.toFixed(1)} (FAVORITE SIDE):**
-> Question: "Does the evidence suggest the line is too low?"
-> Look for: Depth advantage, pace control, ability to maintain leads, underdog weaknesses
-
-Pick the SIDE the evidence supports. Do NOT predict what the margin will be.`;
-    } else if (absSpread >= 5) {
-      spreadSizeFraming = `
-**SPREAD-SIZE FRAMING (MEDIUM: ${spread.toFixed(1)})**
-
-This is a MEDIUM SPREAD. The question is: Does the evidence support the FAVORITE or UNDERDOG side?
-
-**FOR ${underdogTeam} +${absSpread.toFixed(1)} (UNDERDOG SIDE):**
-> Question: "Does the evidence suggest the line is too high?"
-> Look for: Tempo control, defensive floor, matchup parity, narrative factors inflating the spread
-
-**FOR ${favoriteTeam} -${absSpread.toFixed(1)} (FAVORITE SIDE):**
-> Question: "Does the evidence suggest the line is too low?"
-> Look for: Depth advantage, pace control, bench that extends leads, underdog weaknesses
-
-Pick the SIDE the evidence supports. Do NOT predict what the margin will be.`;
-    } else {
-      spreadSizeFraming = `
-**SPREAD-SIZE FRAMING (SMALL: ${spread.toFixed(1)})**
-
-This is a SMALL SPREAD - close to a pick'em. The question is: Does the evidence support the FAVORITE or UNDERDOG side?
-
-**FOR ${underdogTeam} +${absSpread.toFixed(1)} (UNDERDOG SIDE):**
-> Question: "Does the evidence suggest the underdog is undervalued?"
-> Look for: Clutch execution, late-game coaching, close-game patterns, narrative deflating their line
-
-**FOR ${favoriteTeam} -${absSpread.toFixed(1)} (FAVORITE SIDE):**
-> Question: "Does the evidence suggest the favorite is undervalued?"
-> Look for: Closing ability, home court, efficiency edge that creates separation
-
-Pick the SIDE the evidence supports. Do NOT predict what the margin will be.`;
-    }
-  }
-  
-  // Request synthesis WITH Steel Man and Conviction Assessment (compressed into one prompt)
-  const MAX_SYNTHESIS_ATTEMPTS = 3;
-  for (let attempt = 1; attempt <= MAX_SYNTHESIS_ATTEMPTS; attempt++) {
-    try {
-      const synthesisPrompt = `You've gathered ${toolCallHistory.length} stats across ${iteration} iterations for ${awayTeam} @ ${homeTeam}.
-${spreadSizeFraming}
-
-**STEP 1: ANALYZE BOTH SIDES (Required)**
-Write SUBSTANTIVE PARAGRAPHS (not bullet summaries) for each team:
-
-**ANALYSIS FOR ${homeTeam} (${homeIsFavorite ? `-${absSpread.toFixed(1)}` : `+${absSpread.toFixed(1)}`}):**
-Write 3-4 detailed paragraphs explaining:
-- KEY FACTORS: What the data shows about this team in this matchup
-- DATA: Specific numbers (not just "they're good")
-- MATCHUP APPLICATION: How their strengths/weaknesses apply to THIS opponent
-
-**ANALYSIS FOR ${awayTeam} (${!homeIsFavorite ? `-${absSpread.toFixed(1)}` : `+${absSpread.toFixed(1)}`}):**
-Write 3-4 detailed paragraphs with the same depth - key factors, specific data, matchup analysis.
-
-**STEP 2: STRESS TEST BOTH SIDES**
-Check BOTH teams against these patterns (don't pick yet, just identify red flags):
-- **Returning Players:** Is a key player returning from injury? → Investigate: What's the typical adjustment period? Does this add uncertainty worth noting?
-- **Travel/Rest Situation:** Is there a travel/rest disparity? → Investigate: How has EACH team performed in similar situations? Does THIS matchup make it relevant?
-- **Game Flow Consideration:** Are there structural advantages (scheme, depth) vs talent-based advantages (star player)? → How might THIS game's flow affect which matters more?
-${isNFL ? '- **Playoff Context:** Are there playoff implications? → Investigate: Does THIS QB have late-game closing ability?' : ''}
-
-**STEP 3: FINAL DECISION - WHICH IS THE BETTER BET?**
-
-**THE MINDSET:** The question is not "who covers?" - it's "which side is the BETTER BET given this spread?"
-
-Based on your analysis and stress test: Does this spread of ${absSpread.toFixed(1)} reflect what you found in your research?
-- If narrative factors (injury news, B2B, public perception) pushed the line beyond what hard stats support → the other side is the better bet
-- If the stats show a clear mismatch but the spread is too small → the favorite side is the better bet
-
-Your pick is about VALUE, not just picking winners.
-${(isNFL || isNBA) ? `
-**${isNFL ? 'NFL' : 'NBA'}:** Always make a pick. Every game has a better side - find it.` : `
-**PASS:** Always valid when you don't believe in either side for THIS game.`}
-
-**KEY STATS GATHERED:**
-${toolCallHistory.slice(-15).map(t => `- ${t.token}: ${t.summary || 'data received'}`).join('\n')}
-
-**OUTPUT FORMAT (JSON):**
-\`\`\`json
-{
-  "final_pick": "[Team] [spread/ML]"${(isNFL || isNBA) ? '' : ' or "PASS"'},
-  "confidence_score": [0.50-0.95],
-  "rationale": "MUST START WITH 'Gary's Take\\n\\n' then scene-setter (1-2 sentences), then 3-4 paragraphs explaining WHY this side is the BETTER BET given the spread."
-}
-\`\`\`
-
-**CRITICAL REMINDER:** ${isWinsQuestion ? 'This spread is small enough that "who wins" is the right question.' : `This is a ${absSpread >= 10 ? 'LARGE' : 'MEDIUM'} spread - your rationale should explain why ${favoriteTeam} wins by ${coverThreshold}+ (or why ${underdogTeam} keeps it closer than ${Math.floor(absSpread)}).`}
-
-**STAT TIER HIERARCHY (CRITICAL - READ THIS):**
-- TIER 1 (PREDICTIVE): Net Rating, ORtg, DRtg, eFG%, TS%, Pace - USE THESE as PRIMARY evidence for picks
-- TIER 2 (CONTEXT): Fresh injuries (0-3 days), matchup data - need TIER 1 confirmation
-- TIER 3 (DESCRIPTIVE): Records, PPG, win/loss streaks, L5/L10 records - FORBIDDEN as reasons for picks
-
-**FORBIDDEN (END-OF-PROMPT PRIORITY):**
-- [NO] "They have a 15-3 home record" → Record is TIER 3, explains line not edge
-- [NO] "Rest advantage" without efficiency data → Must confirm with ORtg/DRtg in rested vs B2B games
-- [NO] "They average 116 PPG" → Raw PPG is pace-inflated, use ORtg instead
-- [YES] "Their +4.2 Net Rating vs opponent's -1.8 shows structural efficiency gap"
-- [YES] "Home ORtg 118.5 vs road 112.3 suggests venue matters for THIS team"
-
-Your rationale MUST cite TIER 1 stats. If you only have TIER 3 stats, the pick is NOT supported.`;
-
-      messages.push({
-        role: 'user',
-        content: synthesisPrompt
-      });
-
-      // For synthesis, use Pro model for NBA/NFL/NHL (same as grading/decision phases)
-      // NCAAB stays on Flash
-      const synthesisModel = useProForGrading ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview';
-      console.log(`[Orchestrator] Using ${synthesisModel} for synthesis (sport: ${sport}, useProForGrading: ${useProForGrading})`);
-      
-      const finalResponse = await callGeminiWithRetry(messages, [], synthesisModel, 3, 'final_decision');
-      const finalMessage = finalResponse.choices?.[0]?.message;
-      
-      if (finalMessage?.content) {
-        const synthesizedPick = parseGaryResponse(finalMessage.content, homeTeam, awayTeam, sport, options.game || {});
-        if (synthesizedPick && synthesizedPick.pick) {
-          console.log(`[Orchestrator] ✅ Synthesis successful (attempt ${attempt}) - got pick: ${synthesizedPick.pick}`);
-          synthesizedPick.toolCallHistory = toolCallHistory;
-          synthesizedPick.iterations = iteration + attempt;
-          synthesizedPick.rawAnalysis = finalMessage.content;
-          
-          // Attach steel man cases if captured earlier
-          if (steelManCases.homeTeamCase || steelManCases.awayTeamCase) {
-            synthesizedPick.steelManCases = {
-              homeTeam: steelManCases.homeTeamCase,
-              awayTeam: steelManCases.awayTeamCase,
-              capturedAt: steelManCases.capturedAt
-            };
-          }
-          return synthesizedPick;
-        }
-        
-        // Add the response to messages for next attempt
-        messages.push({
-          role: 'assistant',
-          content: finalMessage.content
-        });
-      }
-      
-      console.log(`[Orchestrator] Synthesis attempt ${attempt} didn't produce pick - trying again...`);
-    } catch (synthError) {
-      console.error(`[Orchestrator] Synthesis attempt ${attempt} error:`, synthError.message);
-    }
-  }
-
-  // This should rarely happen - but return error with all gathered data
-  console.error(`[Orchestrator] ❌ Could not extract pick after ${MAX_SYNTHESIS_ATTEMPTS} synthesis attempts`);
+  // Game mode: Pipeline did not complete within max iterations — NO synthesis fallback
+  // Every pick must come from the real pipeline (Pass 1→2→2.5→3). If the pipeline
+  // can't complete, this game is reported as a failure. No fake/synthesized picks.
+  console.error(`[Orchestrator] MAX ITERATIONS (${CONFIG.maxIterations}) reached without completing pipeline for ${awayTeam} @ ${homeTeam}`);
+  console.error(`[Orchestrator] Pipeline state: pass2=${_pass2Injected}, pass25=${_pass25Injected}, pass3=${_pass3Injected}, steelMan=${steelManCases.capturedAt ? 'captured' : 'missing'}`);
+  console.error(`[Orchestrator] Stats gathered: ${toolCallHistory.length}, iterations: ${iteration}`);
   return {
-    error: 'Could not extract final pick after synthesis attempts',
+    error: 'Pipeline did not complete within max iterations — no pick generated',
     toolCallHistory,
     iterations: iteration,
     homeTeam,
     awayTeam,
     sport,
+    _pipelineState: { pass2: _pass2Injected, pass25: _pass25Injected, pass3: _pass3Injected },
     _statsGathered: toolCallHistory.length
   };
 }
