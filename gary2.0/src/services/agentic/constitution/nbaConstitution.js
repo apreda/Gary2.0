@@ -428,41 +428,15 @@ Elite teams (high win%) rarely get swept 4-0 - investigate deeper before betting
 
 If your thesis relies purely on "they've won 3 straight," investigate deeper. This is not a hard PASS rule — but sweeping a 70%+ team (especially a division rival) is historically very rare. Make sure your reasoning goes beyond the H2H record.
 
-### [STATS] H2H EVIDENCE WEIGHTING (FOR STEEL MAN GRADING)
+### [INVESTIGATE] H2H — INVESTIGATE THE CONDITIONS, NOT THE RECORD
 
-**H2H sample size determines how much weight to give it in your conviction rating:**
+If you have H2H data, investigate whether the conditions of those games are relevant to tonight:
 
-| H2H Games | Weight | How to Use in Steel Man |
-|-----------|--------|-------------------------|
-| **0** | None | No data — rely on efficiency, form, matchups |
-| **1** | Very Low | **Anecdotal** — note it for narrative ("revenge spot"), don't lean on it for conviction |
-| **2** | Low | Starting to see a pattern, but could be noise |
-| **3+** | Moderate | Real signal — especially if margins are consistent |
-| **3+ vs 70%+ team** | Sweep trap | Use the sweep context logic above |
+- **What were the circumstances?** Same venue? Same players available? Was one team on a back-to-back? Different point in season?
+- **Was the result structural or variance?** Did one team expose a real scheme mismatch, or did the other team just shoot 15% from 3 that night?
+- **What's DIFFERENT tonight?** Different roster health, different venue, different rest, different form — investigate what's changed
 
-**THE KEY DISTINCTION:**
-- **1 H2H game = CONTEXT, not EVIDENCE**
-- It tells you what happened ONCE under THOSE specific conditions (rosters, venue, rest, health)
-- It does NOT tell you about scheme mismatches, predictive value, or what will happen tonight
-
-**GOOD USE OF 1-GAME H2H:**
-- "Plus Philly has a revenge angle after the Nov 5 loss" (secondary color)
-- "Embiid didn't play in their last meeting — he's probable tonight" (what's different)
-
-**BAD USE OF 1-GAME H2H:**
-- "Cavs won Nov 5 so they own Philly" (over-weighting single result)
-- Citing 1-0 H2H as a PRIMARY reason for your pick (weak thesis)
-
-**H2H AS EVIDENCE:**
-- A single H2H game is anecdotal, not predictive - investigate if conditions are similar tonight
-- H2H works better as secondary context supporting a stronger thesis
-- Rate based on the overall strength of the reasoning, not by formula
-
-**THE QUESTION TO ASK:** "What's DIFFERENT tonight?"
-- Different roster health (star was out last time, playing now)
-- Different venue (home/away flip)
-- Different rest/schedule context
-- Different point in season (early season vs playoff push)
+H2H tells you what happened under THOSE specific conditions. Investigate whether those conditions apply tonight before deciding how much it matters for your thesis.
 
 ### [INVESTIGATE] TRANSITIVE PROPERTY FALLACY (A > B > C TRAP)
 

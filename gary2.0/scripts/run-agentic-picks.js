@@ -1388,7 +1388,11 @@ async function main() {
 
                   let best = validOdds[0];
                   for (const odds of validOdds) {
-                    if (odds.spread > best.spread) best = odds;
+                    if (isUnderdog) {
+                      if (odds.spread > best.spread) best = odds;   // higher = more points = better
+                    } else {
+                      if (odds.spread < best.spread) best = odds;   // lower (more negative) = fewer to cover = better
+                    }
                   }
 
                   bestLine = {
