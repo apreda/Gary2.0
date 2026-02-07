@@ -138,7 +138,7 @@ Does floor still clear?
 ### Volume Floor Verdicts:
 - **CLEARS EASILY:** Downside still beats line by 15%+ → Strong
 - **CLEARS TIGHT:** Downside meets line or barely beats it → Moderate
-- **FAILS:** Downside falls short of line → PASS (no matter how good the story)
+- **FAILS:** Downside falls short of line → LOW CONVICTION (note in rationale)
 
 ---
 
@@ -262,7 +262,7 @@ For each of your 5 shortlisted props, run through:
 ### Selection Logic:
 - **LOCK:** Volume clears easily + identifiable edge + 0-1 red flags + market tension answered
 - **LEAN:** Volume clears tight + edge exists but thinner + 1-2 red flags
-- **PASS:** Volume fails OR 3+ red flags OR can't answer market tension
+- **LOW CONVICTION:** Volume fails OR 3+ red flags OR can't answer market tension — note in rationale
 
 ---
 
@@ -319,7 +319,7 @@ Before you lock in your 2 picks, ask:
 - But volume floor is tighter
 - Moderate size, clear value but variance higher
 
-### LOW-CONVICTION / PASS:
+### LOW-CONVICTION:
 
 - Only edge is "average > line"
 - Multiple red flags triggered

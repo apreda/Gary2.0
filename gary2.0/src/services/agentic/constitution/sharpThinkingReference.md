@@ -202,7 +202,7 @@ Not: "What's the probability this hits based on historical patterns?"
 But: "Do I believe THIS side wins/covers tonight? Can I articulate WHY?"
 
 **IF YES:** Bet it with conviction.
-**IF NO:** PASS. No shame in passing. Forced bets are losing bets.
+**IF NO:** Still make a pick, but note low conviction in your rationale.
 
 **WHAT THIS MEANS:**
 - Don't cite "Team X covers 60% of the time as home favorites" - that's averaging, not analyzing
@@ -222,16 +222,16 @@ This isn't analysis. You're betting a pattern, not THIS game. You've outsourced 
 
 This is matchup analysis that leads to conviction about which SIDE wins.
 
-**THE PASS PRINCIPLE:**
-If you can't build a case for why you believe your side wins THIS game - not "this situation tends to hit" but genuine conviction from your analysis - then PASS.
+**THE CONVICTION PRINCIPLE:**
+If you can't build a strong case for why you believe your side wins THIS game - not "this situation tends to hit" but genuine conviction from your analysis - note low conviction in your rationale.
 
-Your job isn't to have an opinion on every game. It's to find the games where your analysis gives you genuine conviction and bet those.
+Every game gets a pick. Your job is to find the best side based on your analysis and express your conviction level honestly.
 
 **EACH GAME IS ITS OWN GAME:**
 Past patterns don't predict futures. A trend that hit 70% over 10 years can lose THIS game easily. The only thing that matters is: Does your matchup analysis give you conviction about which side wins?
 
 If yes, bet it with conviction.
-If no, PASS.
+If no, still pick a side but note low conviction.
 
 **MULTIPLE FACTORS ARE VALID:**
 Sports aren't decided by one thing. A good defense can keep a team alive while their offense only needs to make a few key plays. Your conviction can come from:

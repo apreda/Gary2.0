@@ -399,7 +399,7 @@ ${snapshot.join('\n')}
  * Build a scout report for a game
  * This gives Gary enough context to think, not just react to odds.
  */
-export async function buildScoutReport(game, sport) {
+export async function buildScoutReport(game, sport, options = {}) {
   const homeTeam = game.home_team;
   const awayTeam = game.away_team;
   const sportKey = normalizeSport(sport);
@@ -2267,10 +2267,11 @@ ${formatSituationalFactors(game, injuries, sportKey)}
 BETTING CONTEXT (For Reference Only - Do NOT base pick on these)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${formatOdds(game, sportKey)}
-
+${options.sportsbookOdds ? formatSportsbookComparison(options.sportsbookOdds, game.home_team, game.away_team) : ''}
 IMPORTANT: Odds are shown for value assessment AFTER you form your
 statistical conclusion. Your analysis must be independently justified
 by stats. Do NOT use "big spread" or "expensive ML" as reasoning.
+When making your pick, reference the BEST available line from the sportsbook comparison above.
 
 ══════════════════════════════════════════════════════════════════════
 AVAILABLE STAT CATEGORIES (use fetch_stats tool to request):
@@ -5871,6 +5872,32 @@ function formatOdds(game, sport = '') {
 }
 
 /**
+ * Format sportsbook odds comparison for scout report
+ * Shows lines from multiple books so Gary can reference the best available line
+ */
+function formatSportsbookComparison(oddsArray, homeTeam, awayTeam) {
+  if (!Array.isArray(oddsArray) || oddsArray.length === 0) return '';
+
+  const fmtSpread = (v) => v != null ? (v > 0 ? `+${v}` : `${v}`) : '-';
+  const fmtML = (v) => v != null ? (Number(v) > 0 ? `+${v}` : `${v}`) : '-';
+
+  const lines = [
+    '',
+    'SPORTSBOOK LINE COMPARISON (Shop for Best Line):',
+    '---------------------------------------------------'
+  ];
+  for (const book of oddsArray.slice(0, 8)) {
+    const away = `${fmtSpread(book.spread_away)} (${book.spread_away_odds || '-'}) | ML ${fmtML(book.ml_away)}`;
+    const home = `${fmtSpread(book.spread_home)} (${book.spread_home_odds || '-'}) | ML ${fmtML(book.ml_home)}`;
+    lines.push(`  ${(book.displayName || book.vendor || '?').padEnd(12)} ${awayTeam}: ${away}  |  ${homeTeam}: ${home}`);
+  }
+  lines.push('---------------------------------------------------');
+  lines.push('Use the BEST available line for your pick (most favorable spread/odds).');
+  lines.push('');
+  return lines.join('\n');
+}
+
+/**
  * Format moneyline number
  */
 function formatMoneyline(ml) {
@@ -7263,15 +7290,38 @@ CRITICAL for injuries:
       }
     }
     
+    // Parse OUT player names from RotoWire lineup data (Gemini Grounding free-text)
+    const outPlayerNames = new Set();
+    if (rotoWireLineups?.content) {
+      const rotoContent = rotoWireLineups.content;
+      // Match patterns like "Player Name - OUT" or "Player Name (OUT)" or "Player Name — OUT"
+      const outPatterns = [
+        /([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\s*[-–—]\s*OUT/gi,
+        /([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\s*\(OUT\)/gi,
+        /OUT\s*[-–—:]\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)/gi
+      ];
+      for (const pattern of outPatterns) {
+        let match;
+        while ((match = pattern.exec(rotoContent)) !== null) {
+          outPlayerNames.add(match[1].toLowerCase().trim());
+        }
+      }
+      if (outPlayerNames.size > 0) {
+        console.log(`[Scout Report] Parsed ${outPlayerNames.size} OUT players from RotoWire: ${[...outPlayerNames].join(', ')}`);
+      }
+    }
+
     // Process roster to get top players SORTED BY ACTUAL IMPORTANCE (PPG)
+    // Filters OUT players so they don't appear as "key players" in BDL fallback
     const processRoster = (players, teamName) => {
       if (!players || players.length === 0) return null;
-      
+
       // Map players with their stats
       const playersWithStats = players.map(p => {
         const stats = playerStats[p.id] || {};
+        const fullName = `${p.first_name} ${p.last_name}`;
         return {
-          name: `${p.first_name} ${p.last_name}`,
+          name: fullName,
           position: p.position || 'N/A',
           jerseyNumber: p.jersey_number,
           id: p.id,
@@ -7281,20 +7331,29 @@ CRITICAL for injuries:
           apg: parseFloat(stats.apg) || 0
         };
       });
-      
+
+      // Filter OUT players — they won't play tonight, shouldn't be listed as key players
+      const available = playersWithStats.filter(p => {
+        if (outPlayerNames.has(p.name.toLowerCase())) {
+          if (p.ppg >= 10) console.log(`[Scout Report] Excluded ${p.name} (${p.ppg.toFixed(1)} PPG) from ${teamName} key players - OUT`);
+          return false;
+        }
+        return true;
+      });
+
       // Sort by PPG (descending) to get actual key players
-      playersWithStats.sort((a, b) => b.ppg - a.ppg);
-      
+      available.sort((a, b) => b.ppg - a.ppg);
+
       // Take top 10 by PPG (the most significant players)
-      const keyPlayers = playersWithStats.slice(0, 10);
-      
+      const keyPlayers = available.slice(0, 10);
+
       // Log who we're identifying as key players
       const topScorers = keyPlayers.slice(0, 5).map(p => `${p.name} (${p.ppg.toFixed(1)} PPG)`);
       console.log(`[Scout Report] ${teamName} key players (by PPG): ${topScorers.join(', ')}`);
-      
+
       return keyPlayers;
     };
-    
+
     const homeKeyPlayers = processRoster(homePlayers, homeTeam);
     const awayKeyPlayers = processRoster(awayPlayers, awayTeam);
     

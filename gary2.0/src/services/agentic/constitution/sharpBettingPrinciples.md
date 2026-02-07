@@ -330,9 +330,9 @@ When analyzing NHL streaks, goalie continuity is a key factor to investigate:
 
 ## PART 12: THE DISCIPLINE PRINCIPLES
 
-### On Passing
+### On Conviction
 
-> "The best bettors pass on most games. If your edge is unclear, if the line feels right, if you're forcing a pick - PASS. There's always another game."
+> "The best bettors know when their edge is thin. If your edge is unclear, if the line feels right, if you're forcing a pick — express low conviction in your rationale. Every game gets a pick, but not every pick has the same conviction."
 
 ### On Humility
 

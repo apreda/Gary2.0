@@ -1096,11 +1096,14 @@ function summarizePlayerStats(statResult, statType, teamName) {
 // This prevents "blanking" where the model loses the thread due to context rot.
 // ═══════════════════════════════════════════════════════════════════════════
 
-const MAX_CONTEXT_MESSAGES = 20; // Keep last 20 messages max during analysis (reduced from 25 to prevent token overflow)
-const PRUNE_AFTER_ITERATION = 4; // Start pruning earlier (iteration 4 instead of 5)
+const MAX_CONTEXT_MESSAGES = 20; // Target max messages during analysis
+const PRUNE_AFTER_ITERATION = 4; // Start pruning at iteration 4
 
 /**
  * Prune message history to prevent context bloat
+ * SMART PRUNING: Keeps tool response messages (stat data) from the middle,
+ * only drops assistant analysis text (which is summarized in toolCallHistory anyway).
+ * This prevents Gary from re-requesting stats he already fetched.
  * @param {Array} messages - Current message array
  * @param {number} iteration - Current iteration number
  * @returns {Array} Pruned message array
@@ -1109,17 +1112,31 @@ function pruneContextIfNeeded(messages, iteration) {
   if (iteration < PRUNE_AFTER_ITERATION || messages.length <= MAX_CONTEXT_MESSAGES) {
     return messages; // No pruning needed
   }
-  
-  console.log(`[Orchestrator] 🧹 Pruning context: ${messages.length} messages → ${MAX_CONTEXT_MESSAGES} (iteration ${iteration})`);
-  
+
   // Always keep: system prompt (index 0) and user's initial query (index 1)
-  const systemPrompt = messages[0];
-  const initialQuery = messages[1];
-  
-  // Keep the most recent messages (where the good reasoning is)
-  const recentMessages = messages.slice(-(MAX_CONTEXT_MESSAGES - 2));
-  
-  return [systemPrompt, initialQuery, ...recentMessages];
+  const preserved = [messages[0], messages[1]];
+
+  // Recent messages always kept (last 16 — active analysis window)
+  const recentCount = MAX_CONTEXT_MESSAGES - 4;
+  const recent = messages.slice(-recentCount);
+
+  // Middle section: eligible for pruning
+  const middle = messages.slice(2, -recentCount);
+
+  // From middle, keep tool response messages (contain stat data Gary needs)
+  // Drop assistant analysis and user nudge messages (insights are in toolCallHistory)
+  const keptFromMiddle = middle.filter(m => {
+    // Keep tool/function response messages (contain stat data)
+    if (m.role === 'tool') return true;
+    // Keep assistant messages that have tool_calls (stat request + response pairs)
+    if (m.role === 'assistant' && m.tool_calls && m.tool_calls.length > 0) return true;
+    // Drop pure text assistant messages and user nudge messages
+    return false;
+  });
+
+  const result = [...preserved, ...keptFromMiddle, ...recent];
+  console.log(`[Orchestrator] Pruning context: ${messages.length} → ${result.length} messages (kept ${keptFromMiddle.length} tool exchanges from middle)`);
+  return result;
 }
 
 /**
@@ -1141,23 +1158,10 @@ export async function analyzeGame(game, sport, options = {}) {
   try {
     // Step 1: Build the scout report (Level 1 context)
     console.log('[Orchestrator] Building scout report...');
-    const scoutReportData = await buildScoutReport(game, sport);
+    const scoutReportData = await buildScoutReport(game, sport, { sportsbookOdds: options.sportsbookOdds });
 
-    // CHECK FOR IMMEDIATE PASS (NBA Rule)
-    if (scoutReportData && scoutReportData.immediatePass) {
-      console.log(`[Orchestrator] ⏭️ IMMEDIATE PASS: ${scoutReportData.passReason}`);
-      return {
-        pick: 'PASS',
-        type: 'pass',
-        confidence: 0,
-        odds: null,
-        rationale: `IMMEDIATE PASS: ${scoutReportData.passReason}`,
-        awayTeam,
-        homeTeam,
-        sport,
-        isPass: true
-      };
-    }
+    // NOTE: No auto-PASS logic. Gary always makes a pick for every game.
+    // If there's uncertainty (GTD players, etc.), Gary investigates and decides.
 
     // Handle both old (string) and new (object) formats
     const scoutReport = typeof scoutReportData === 'string' ? scoutReportData : scoutReportData.text;
@@ -4757,16 +4761,13 @@ Do NOT call any more stats. Provide your analysis and pick NOW.`;
 Do NOT request more stats. Write your analysis NOW using the data you already have.`;
       } else {
         // Still in investigation phase
-        // If Gary already has 5+ stats, encourage moving to analysis rather than more stats
+        // If Gary already has 5+ stats, push to move forward — don't waste iterations
         if (toolCallHistory.length >= 5) {
-          console.log(`[Orchestrator] Gary has ${toolCallHistory.length} stats - encouraging analysis`);
-          nudgeContent = `I notice you didn't respond. You've already gathered ${toolCallHistory.length} stats. You have enough data to begin your analysis.
+          console.log(`[Orchestrator] Gary has ${toolCallHistory.length} stats - pushing to proceed`);
+          const gatheredList = toolCallHistory.map(t => t.token).filter(Boolean);
+          nudgeContent = `You have ${toolCallHistory.length} stats gathered: ${gatheredList.join(', ')}.
 
-Either:
-1. Request specific additional stats if there's a key factor you need to investigate
-2. Or proceed to write your Steel Man cases for both teams
-
-What would you like to do?`;
+Request any REMAINING stats you need, or proceed to your Steel Man analysis NOW. Do not waste iterations.`;
         } else {
           console.log(`[Orchestrator] ⚠️ Gemini returned empty response - prompting for more stats`);
           nudgeContent = `I notice you didn't respond. Please use the get_stat tool to request stats for this matchup. You've gathered ${toolCallHistory.length} stats so far. Request more stats like PACE, RECENT_FORM, or TURNOVER_STATS to complete your analysis.`;
@@ -4841,11 +4842,19 @@ What would you like to do?`;
       if (uniqueToolCalls.length === 0 && message.tool_calls.length > 0) {
         console.log(`[Orchestrator] All ${message.tool_calls.length} stats already gathered - nudging Gary to proceed`);
 
-        // Build list of already-gathered stats for context
+        // Build a DATA RECAP of key findings so Gary doesn't re-request after context pruning
         const gatheredStats = toolCallHistory.map(t => t.token).filter(Boolean);
-        const statsSummary = gatheredStats.length > 10
-          ? `${gatheredStats.slice(0, 10).join(', ')}... (${gatheredStats.length} total)`
-          : gatheredStats.join(', ');
+        const dataRecapLines = [];
+        for (const entry of toolCallHistory) {
+          if (entry.summary && entry.summary.length > 10) {
+            // Include a one-line summary of each stat result
+            const shortSummary = entry.summary.length > 200 ? entry.summary.substring(0, 200) + '...' : entry.summary;
+            dataRecapLines.push(`• ${entry.token}: ${shortSummary}`);
+          }
+        }
+        const dataRecap = dataRecapLines.length > 0
+          ? `\n\n**YOUR GATHERED DATA (${toolCallHistory.length} stats):**\n${dataRecapLines.slice(0, 20).join('\n')}`
+          : `\n\nYou've gathered ${toolCallHistory.length} stats: ${gatheredStats.join(', ')}`;
 
         // Determine what phase we're in
         const pass2Injected = messages.some(m => m.content?.includes('PASS 2 - STEEL MAN') || m.content?.includes('STEEL MAN ANALYSIS'));
@@ -4853,19 +4862,17 @@ What would you like to do?`;
 
         let nudgeMessage;
         if (pass25Injected) {
-          nudgeMessage = `You requested stats that you already have. You've gathered ${toolCallHistory.length} stats: ${statsSummary}
+          nudgeMessage = `ALL ${message.tool_calls.length} stats you requested were already gathered. DO NOT request more stats.${dataRecap}
 
-STOP requesting stats and MAKE YOUR FINAL DECISION NOW. Output your JSON pick with confidence_score and rationale.`;
+MAKE YOUR FINAL DECISION NOW. Output your JSON pick with confidence_score and rationale.`;
         } else if (pass2Injected) {
-          nudgeMessage = `You requested stats that you already have. You've gathered ${toolCallHistory.length} stats: ${statsSummary}
+          nudgeMessage = `ALL ${message.tool_calls.length} stats you requested were already gathered. DO NOT request more stats.${dataRecap}
 
-STOP requesting stats. You have enough data. Write your Steel Man cases NOW using the data you've already gathered.`;
+Write your Steel Man cases NOW using the data above.`;
         } else {
-          nudgeMessage = `You requested stats that you already have (${skippedDuplicates.join(', ')}).
+          nudgeMessage = `ALL ${message.tool_calls.length} stats you requested were already gathered (${skippedDuplicates.join(', ')}). DO NOT re-request these.${dataRecap}
 
-You've already gathered ${toolCallHistory.length} stats: ${statsSummary}
-
-If you need different stats, request NEW ones. If you have enough data, proceed to your Steel Man analysis.`;
+Either request DIFFERENT stats you haven't gathered yet, or proceed to your Steel Man analysis.`;
         }
 
         messages.push({
@@ -5627,12 +5634,16 @@ If you need different stats, request NEW ones. If you have enough data, proceed 
 
         const values = extractStatValues(statResult, args.token);
 
-        // Store with values for structured display
+        // Summarize for context (used both in conversation and data recap for dedup nudges)
+        const statSummary = summarizeStatForContext(statResult, args.token, homeTeam, awayTeam);
+
+        // Store with values for structured display + summary for data recap
         toolCallHistory.push({
           token: args.token,
           timestamp: Date.now(),
           homeValue: values.home,
           awayValue: values.away,
+          summary: statSummary, // Used in dedup data recap so Gary sees what he already has
           rawResult: statResult // Keep raw result for debugging
         });
 
@@ -5640,7 +5651,7 @@ If you need different stats, request NEW ones. If you have enough data, proceed 
         messages.push({
           tool_call_id: toolCall.id,
           role: 'tool',
-          content: summarizeStatForContext(statResult, args.token, homeTeam, awayTeam)
+          content: statSummary
         });
       }
 
@@ -5657,7 +5668,12 @@ If you need different stats, request NEW ones. If you have enough data, proceed 
       // PRELOADED FACTORS: These are already covered by the Scout Report
       // - INJURIES: Scout report always includes injury data for NFL/NBA/NHL/NCAAB/NCAAF
       // Gary doesn't need to call INJURIES token explicitly - data is already in context
-      const preloadedFactors = ['INJURIES'];
+      // PRELOADED: Scout report already provides these — Gary shouldn't need to call them
+      // - INJURIES: Injury report with durations and priced-in tags
+      // - H2H: Head-to-head results included in scout report
+      // - SCHEDULE: Rest/travel/B2B already calculated in scout report
+      // - STANDINGS_CONTEXT: Standings and records included in scout report
+      const preloadedFactors = ['INJURIES', 'H2H', 'SCHEDULE', 'STANDINGS_CONTEXT'];
       
       // FACTOR-BASED PROGRESS: Check which investigation factors Gary has covered
       const factorStatus = getInvestigatedFactors(toolCallHistory, sport, preloadedFactors);
@@ -5760,9 +5776,9 @@ If you need different stats, request NEW ones. If you have enough data, proceed 
         const missingDisplay = missing.slice(0, 6).map(f => f.replace(/_/g, ' ')).join(', ');
         const coveragePct = (coverage * 100).toFixed(0);
 
-        // STALL BREAKER: If coverage hasn't improved in 3 iterations and we're at 80%+, force Pass 2
+        // STALL BREAKER: If coverage hasn't improved in 3 iterations and we're at 70%+, force Pass 2
         // This prevents spinning on unreachable factors (endpoint errors, irrelevant stats)
-        if (_coverageStallCount >= 3 && coverage >= 0.80 && !pass2AlreadyInjected) {
+        if (_coverageStallCount >= 3 && coverage >= 0.70 && !pass2AlreadyInjected) {
           console.log(`[Orchestrator] STALL BREAKER: Coverage stuck at ${coveragePct}% for ${_coverageStallCount} iterations — forcing Pass 2 with ${covered.length}/${totalFactors} factors`);
           console.log(`[Orchestrator] Unreachable factors: ${missing.join(', ')}`);
           messages.push({
@@ -6368,46 +6384,20 @@ function parseGaryResponse(content, homeTeam, awayTeam, sport, gameOdds = {}) {
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // PASS DETECTION - Only check AFTER JSON parsing fails to find a valid pick
-  // This prevents false positives from phrases like "moving on" in analysis
-  // ═══════════════════════════════════════════════════════════════════════════
+  // NO PASS ALLOWED: Gary must always make a pick. If he tries to pass,
+  // return null to trigger retry logic which will tell him to pick a side.
   const lowerContent = content.toLowerCase();
   const passIndicators = [
-    // Explicit pass statements (high confidence)
     'i\'m passing', 'im passing', 'i am passing',
     'no pick', 'passing on this', 'pass on this',
-    'sitting this one out', 'sit this one out',
-    // JSON indicators
     '"type": "pass"', '"pick": "pass"', '"pick":"pass"',
-    // Coin flip / no edge language (moderate confidence)
-    'too close to call', 'genuine coin flip', 'true coin flip',
-    'cannot separate', 'can\'t separate these teams',
-    'no clear edge', 'no discernible edge', 'can\'t find an edge',
-    // Recommendation hesitation (moderate confidence)
-    'cannot recommend', 'can\'t recommend',
-    'wouldn\'t bet this', 'would not bet this',
-    'stay away', 'staying away',
-    // Sharp bettor language (lower confidence - only check if no JSON pick)
-    'this is a pass',
-    'not enough edge', 'insufficient edge',
-    'could go either way', 'goes either way'
-    // REMOVED: 'move on', 'moving on' - these trigger false positives in analysis
+    'this is a pass', 'staying away', 'stay away'
   ];
-  
+
   const isPass = passIndicators.some(indicator => lowerContent.includes(indicator));
   if (isPass) {
-    console.log('[Orchestrator] ⏭️ Gary PASSED on this game (no valid JSON pick + pass indicator found)');
-    return {
-      pick: 'PASS',
-      type: 'pass',
-      odds: null,
-      thesis_reasoning: 'Gary passed - no compelling edge found',
-      supporting_factors: [],
-      contradicting_factors_major: [],
-      contradicting_factors_minor: [],
-      rationale: content.substring(0, 3000)
-    };
+    console.error('[Orchestrator] REJECTED: Gary tried to PASS — no passes allowed, must make a pick');
+    return null; // Triggers retry — Gary will be told to pick a side
   }
 
   // No valid JSON pick found and no clear pass indicators - return null to trigger retry
@@ -6442,26 +6432,13 @@ function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds = {}) {
     console.log(`[Orchestrator] 📋 Using final_pick as pick: "${parsed.pick}"`);
   }
   
-  // Check if this is a PASS pick
-  const isPassPick = parsed.type === 'pass' || 
+  // NO PASS: If Gary outputs a PASS pick, reject it — he must pick a side
+  const isPassPick = parsed.type === 'pass' ||
                      (parsed.pick && parsed.pick.toUpperCase() === 'PASS');
-  
+
   if (isPassPick) {
-    console.log('[Orchestrator] ⏭️ Gary PASSED on this game (from JSON)');
-    return {
-      pick: 'PASS',
-      type: 'pass',
-      odds: null,
-      thesis_reasoning: parsed.thesis_reasoning || parsed.thesis_mechanism || 'Gary passed - moving on',
-      supporting_factors: [],
-      contradicting_factors: { major: [], minor: [] },
-      homeTeam: parsed.homeTeam || homeTeam,
-      awayTeam: parsed.awayTeam || awayTeam,
-      league: normalizeSportToLeague(sport),
-      sport: sport,
-      rationale: parsed.rationale || parsed.thesis_reasoning || parsed.thesis_mechanism || 'No compelling edge found',
-      agentic: true
-    };
+    console.error('[Orchestrator] REJECTED: Gary output PASS in JSON — no passes allowed, must pick a side');
+    return null; // Triggers retry
   }
   
   // ═══════════════════════════════════════════════════════════════════════════

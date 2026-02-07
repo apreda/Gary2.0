@@ -915,10 +915,26 @@ async function main() {
         // Mark as being processed BEFORE we start (prevents race condition)
         processedGamesThisSession.add(gameKey);
 
+        // Fetch sportsbook odds BEFORE analysis so Gary sees available lines
+        let preSportsbookOdds = null;
+        try {
+          const preGameId = game.id || game.bdl_game_id;
+          if (preGameId) {
+            console.log(`   Fetching sportsbook odds comparison (pre-analysis)...`);
+            preSportsbookOdds = await fetchSportsbookOdds(config.key, preGameId, game.home_team, game.away_team);
+            if (preSportsbookOdds?.length > 0) {
+              console.log(`   Found odds from ${preSportsbookOdds.length} sportsbooks`);
+            }
+          }
+        } catch (oddsPreErr) {
+          console.log(`   Could not fetch pre-analysis sportsbook odds: ${oddsPreErr.message}`);
+        }
+
         // Run agentic analysis (each game is independent)
-        const runnerOptions = { 
+        const runnerOptions = {
           nocache: process.argv.includes('--nocache'),
-          forceUnderdog: forceUnderdog // Make Gary argue for the underdog
+          forceUnderdog: forceUnderdog,
+          sportsbookOdds: preSportsbookOdds // Pass multi-book odds for scout report
         };
         let result;
         try {
@@ -1375,58 +1391,43 @@ async function main() {
             ? result.toolCallHistory.map(t => t.token)
             : [];
 
-          // Fetch sportsbook odds for this game (ML and Spread comparison)
+          // Use pre-fetched sportsbook odds (already fetched before analysis)
           let sportsbookOdds = null;
-          let bestLine = null; // Track best available line
+          let bestLine = null;
           try {
-            const gameId = game.id || game.bdl_game_id;
-            if (gameId) {
-              console.log(`   📊 Fetching sportsbook odds comparison...`);
-              const rawOdds = await fetchSportsbookOdds(config.key, gameId, result.homeTeam, result.awayTeam);
-              if (rawOdds && rawOdds.length > 0) {
-                // Format odds for the picked team
-                sportsbookOdds = formatOddsForStorage(rawOdds, result.pick, result.homeTeam, result.awayTeam);
-                console.log(`   ✓ Found odds from ${sportsbookOdds?.length || 0} sportsbooks`);
+            const rawOdds = preSportsbookOdds; // Reuse pre-analysis odds — no duplicate API call
+            if (rawOdds && rawOdds.length > 0) {
+              // Format odds for the picked team
+              sportsbookOdds = formatOddsForStorage(rawOdds, result.pick, result.homeTeam, result.awayTeam);
+              console.log(`   Found odds from ${sportsbookOdds?.length || 0} sportsbooks`);
 
-                // BEST LINE SELECTION: Find the best spread for Gary's pick
-                // For underdogs (getting points): higher spread is better (+7 better than +6.5)
-                // For favorites (giving points): lower absolute spread is better (-6.5 better than -7)
-                if (sportsbookOdds && sportsbookOdds.length > 0 && result.type === 'spread') {
-                  const validOdds = sportsbookOdds.filter(o => typeof o.spread === 'number' && !isNaN(o.spread));
-                  if (validOdds.length > 0) {
-                    // Determine if picked team is underdog or favorite based on spread sign
-                    const firstSpread = validOdds[0].spread;
-                    const isUnderdog = firstSpread > 0; // positive spread = getting points
+              // BEST LINE SELECTION: Find the best spread for Gary's pick
+              if (sportsbookOdds && sportsbookOdds.length > 0 && result.type === 'spread') {
+                const validOdds = sportsbookOdds.filter(o => typeof o.spread === 'number' && !isNaN(o.spread));
+                if (validOdds.length > 0) {
+                  const firstSpread = validOdds[0].spread;
+                  const isUnderdog = firstSpread > 0;
 
-                    // Find best line
-                    let best = validOdds[0];
-                    for (const odds of validOdds) {
-                      if (isUnderdog) {
-                        // For underdog: higher is better (+7 > +6.5)
-                        if (odds.spread > best.spread) best = odds;
-                      } else {
-                        // For favorite: less negative is better (-6.5 > -7)
-                        if (odds.spread > best.spread) best = odds;
-                      }
-                    }
+                  let best = validOdds[0];
+                  for (const odds of validOdds) {
+                    if (odds.spread > best.spread) best = odds;
+                  }
 
-                    bestLine = {
-                      book: best.book,
-                      spread: best.spread,
-                      spreadOdds: best.spread_odds
-                    };
+                  bestLine = {
+                    book: best.book,
+                    spread: best.spread,
+                    spreadOdds: best.spread_odds
+                  };
 
-                    // Log if we found a better line than the default
-                    const defaultSpread = result.spread;
-                    if (defaultSpread !== null && best.spread !== defaultSpread) {
-                      console.log(`   🎯 Best line: ${best.spread > 0 ? '+' : ''}${best.spread} @ ${best.book} (default was ${defaultSpread > 0 ? '+' : ''}${defaultSpread})`);
-                    }
+                  const defaultSpread = result.spread;
+                  if (defaultSpread !== null && best.spread !== defaultSpread) {
+                    console.log(`   Best line: ${best.spread > 0 ? '+' : ''}${best.spread} @ ${best.book} (default was ${defaultSpread > 0 ? '+' : ''}${defaultSpread})`);
                   }
                 }
               }
             }
           } catch (oddsErr) {
-            console.log(`   ⚠️ Could not fetch sportsbook odds: ${oddsErr.message}`);
+            console.log(`   Could not process sportsbook odds: ${oddsErr.message}`);
           }
 
           // Create clean pick object without large/unnecessary fields
@@ -1434,6 +1435,21 @@ async function main() {
           const finalSpread = bestLine?.spread ?? result.spread;
           const finalSpreadOdds = bestLine?.spreadOdds ?? result.spreadOdds;
           const bestLineBook = bestLine?.book ?? null;
+
+          // Update pick text to reflect best available line (not just Gary's raw output)
+          let finalPickText = result.pick;
+          if (bestLine && result.type === 'spread' && finalSpread !== result.spread && finalPickText) {
+            // Replace the spread number in the pick text
+            // e.g., "Washington Wizards +6.0 -114" → "Washington Wizards +6.5 -110"
+            const spreadStr = finalSpread > 0 ? `+${finalSpread}` : `${finalSpread}`;
+            const oddsStr = finalSpreadOdds ? ` ${finalSpreadOdds > 0 ? '+' + finalSpreadOdds : finalSpreadOdds}` : '';
+            // Match pattern: team name followed by spread number and optional odds
+            const pickMatch = finalPickText.match(/^(.+?)\s*[+-]\d+\.?\d*\s*[+-]?\d*$/);
+            if (pickMatch) {
+              finalPickText = `${pickMatch[1].trim()} ${spreadStr}${oddsStr}`;
+              console.log(`   📝 Pick text updated: "${result.pick}" → "${finalPickText}"`);
+            }
+          }
 
           // Format game time for UI display
           const gameTimeEST = game.commence_time
@@ -1446,9 +1462,9 @@ async function main() {
             : 'TBD';
 
           const cleanPick = {
-            pick: result.pick,
+            pick: finalPickText,
             type: result.type,
-            odds: result.odds,
+            odds: finalSpreadOdds || result.odds,
             confidence: result.confidence || 0.65, // Gary's conviction in the bet (0.50-1.00)
             // Thesis-based classification (new filtering system)
             thesis_type: result.thesis_type || null,
