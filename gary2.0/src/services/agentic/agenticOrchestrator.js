@@ -1122,138 +1122,20 @@ function pruneContextIfNeeded(messages, iteration) {
   return [systemPrompt, initialQuery, ...recentMessages];
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// SLATE SESSION MANAGEMENT (TRUE MEMORY SYSTEM)
-// ═══════════════════════════════════════════════════════════════════════════
-// Gary maintains genuine memory across all games in a slate by keeping a
-// shared message history. This enables organic ranking based on conviction
-// rather than re-reading summaries.
-// ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * Create a slate session that persists across games
- * @param {string} sport - The sport being analyzed
- * @param {string} systemPrompt - The system prompt (constitution + guidelines)
- * @returns {Object} Session object with shared message history
- */
-export function createSlateSession(sport, systemPrompt) {
-  console.log(`[SlateSession] Creating new session for ${sport}`);
-  return {
-    sport,
-    systemPrompt,
-    messages: [{ role: 'system', content: systemPrompt }],
-    picks: [],           // Stores all pick results
-    gamesAnalyzed: 0,    // Counter for games that returned picks
-    gamesAttempted: 0,   // Counter for ALL games attempted (success or fail) - used for context clearing
-    toolCallHistory: [], // Accumulated tool calls across all games
-    createdAt: new Date().toISOString()
-  };
-}
-
-/**
- * Build a transition message when moving to a new game in the same session
- * Provides Gary with context about previous games analyzed
- * @param {Object} slateSession - The current slate session
- * @param {string} homeTeam - Home team for the new game
- * @param {string} awayTeam - Away team for the new game
- * @returns {string|null} Transition message or null if first game
- */
-function buildGameTransitionMessage(slateSession, homeTeam, awayTeam) {
-  if (slateSession.picks.length === 0) return null;
-  
-  // For large slates, use compressed summary of older games + full list of recent
-  const keepFullCount = 3;
-  let previousPicksSummary;
-  
-  if (slateSession.compressedOlderGames && slateSession.gamesAnalyzed > keepFullCount) {
-    // Large slate: show compressed older games + recent games in full
-    const recentPicks = slateSession.picks.slice(-keepFullCount).map((p, i) => {
-      const gameNum = slateSession.gamesAnalyzed - keepFullCount + i + 1;
-      return `  ${gameNum}. ${p.pick || 'PASS'}`;
-    }).join('\n');
-    
-    previousPicksSummary = `[Earlier games summarized for context window management]\n${slateSession.compressedOlderGames}\n\n[Recent games - full memory retained]\n${recentPicks}`;
-  } else {
-    // Small slate: show all picks
-    previousPicksSummary = slateSession.picks.map((p, i) => {
-      return `  ${i + 1}. ${p.pick || 'PASS'}`;
-    }).join('\n');
-  }
-  
-  return `
-═══════════════════════════════════════════════════════════════════════════
-GAME ${slateSession.gamesAnalyzed + 1} - ${awayTeam} @ ${homeTeam}
-═══════════════════════════════════════════════════════════════════════════
-
-You've analyzed ${slateSession.gamesAnalyzed} game(s) so far today:
-${previousPicksSummary}
-
-Now analyze: **${awayTeam} @ ${homeTeam}**
-
-You have FULL MEMORY of your previous analyses. Use the same rigorous process.
-═══════════════════════════════════════════════════════════════════════════
-`;
-}
-
-/**
- * Compress older games in session to prevent token overflow
- * Keeps last N games in full detail, summarizes older ones
- * For very large slates (>8 games), also trims the message history
- * @param {Object} slateSession - The current slate session
- * @param {number} keepFullCount - Number of recent games to keep in full (default 3)
- */
-function compressSessionHistory(slateSession, keepFullCount = 3) {
-  // ═══════════════════════════════════════════════════════════════════════════
-  // AGGRESSIVE CONTEXT CLEARING BETWEEN GAMES
-  // Problem: Carrying 125k tokens from previous games causes Gemini to "ghost"
-  // Solution: CLEAR message history BEFORE EACH game, only keep pick summaries
-  // 
-  // KEY: Use gamesAttempted (not gamesAnalyzed) so clearing happens even
-  // when previous games FAILED (gamesAnalyzed only counts successes)
-  // ═══════════════════════════════════════════════════════════════════════════
-  
-  // Build compressed summary of ALL previous picks (not full analysis)
-  const picksSummary = slateSession.picks.map((p, i) => {
-    const thesis = p.thesis_reasoning || p.thesis_mechanism || (p.rationale ? p.rationale.substring(0, 80) : 'No thesis');
-    return `${i + 1}. ${p.awayTeam || '?'} @ ${p.homeTeam || '?'} → ${p.pick || 'PASS'}`;
-  }).join('\n');
-  
-  slateSession.compressedOlderGames = picksSummary;
-  
-  // AGGRESSIVE: Clear message history BEFORE every game after the first
-  // Uses gamesAttempted (incremented before each game) so failures don't poison next game
-  if (slateSession.gamesAttempted > 0) {
-    console.log(`[SlateSession] 🧹 CLEARING message history before game ${slateSession.gamesAttempted + 1}`);
-    console.log(`[SlateSession] Messages before clear: ${slateSession.messages.length}`);
-    
-    // Keep ONLY the system prompt - fresh start for each game
-    const systemPrompt = slateSession.messages[0];
-    
-    slateSession.messages = [systemPrompt];
-    console.log(`[SlateSession] Messages after clear: ${slateSession.messages.length} (system prompt only)`);
-    console.log(`[SlateSession] Previous picks retained in summary: ${slateSession.picks.length}`);
-  }
-}
-
 /**
  * Main entry point - analyze a game and generate a pick
  * @param {Object} game - Game data with home_team, away_team, etc.
  * @param {string} sport - Sport identifier
  * @param {Object} options - Optional settings
- * @param {Object} options.slateSession - If provided, use shared session for true memory
  */
 export async function analyzeGame(game, sport, options = {}) {
   const startTime = Date.now();
   let homeTeam = game.home_team;
   let awayTeam = game.away_team;
-  
-  // Check if we're using a slate session (true memory mode)
-  const slateSession = options.slateSession;
-  const isSessionMode = !!slateSession;
 
   console.log(`\n${'═'.repeat(70)}`);
   console.log(`🐻 GARY AGENTIC ANALYSIS: ${awayTeam} @ ${homeTeam}`);
-  console.log(`Sport: ${sport}${isSessionMode ? ` | Session Mode (Game ${slateSession.gamesAnalyzed + 1})` : ''}`);
+  console.log(`Sport: ${sport}`);
   console.log(`${'═'.repeat(70)}\n`);
 
   try {
@@ -1317,18 +1199,10 @@ export async function analyzeGame(game, sport, options = {}) {
       console.log(`[Orchestrator] 🎯 PROPS MODE: Analyzing props for ${awayTeam} @ ${homeTeam}`);
     }
 
-    // Step 2 & 3: Get system prompt (from session or build new)
-    let systemPrompt;
-    if (isSessionMode) {
-      // Use session's existing system prompt
-      systemPrompt = slateSession.systemPrompt;
-      console.log('[Orchestrator] Using shared session system prompt');
-    } else {
-      // Build fresh system prompt (standalone mode)
-      let constitution = getConstitution(sport);
-      constitution = constitution.replace(/{{CURRENT_DATE}}/g, today);
-      systemPrompt = buildSystemPrompt(constitution, sport);
-    }
+    // Step 2 & 3: Build system prompt
+    let constitution = getConstitution(sport);
+    constitution = constitution.replace(/{{CURRENT_DATE}}/g, today);
+    let systemPrompt = buildSystemPrompt(constitution, sport);
 
     // In props mode, append props-specific constitution
     if (isPropsMode && propContext?.propsConstitution) {
@@ -1403,23 +1277,6 @@ You CANNOT default to the favorite without exhausting underdog angles first.
     }
     
     // If in session mode, ALWAYS clear context between games to prevent token overflow
-    if (isSessionMode) {
-      // CRITICAL: Clear message history BEFORE this game starts
-      // This uses gamesAttempted (not gamesAnalyzed) so failed games don't poison next game
-      compressSessionHistory(slateSession);
-      
-      // NOW increment gamesAttempted (after clearing, before analysis)
-      slateSession.gamesAttempted++;
-      
-      // Add transition context if we have previous picks
-      if (slateSession.picks.length > 0) {
-        const transitionMsg = buildGameTransitionMessage(slateSession, homeTeam, awayTeam);
-        if (transitionMsg) {
-          userMessage = transitionMsg + '\n\n' + userMessage;
-        }
-      }
-    }
-
     // In props mode, append a note to user message so Gary knows props evaluation comes after game analysis
     if (isPropsMode) {
       userMessage += `\n\n═══════════════════════════════════════════════════════════════════════════════
@@ -1439,19 +1296,12 @@ directly inform which player props have edge. Investigate the game thoroughly fi
       spread: game.spread_home || game.spread_away || 0,
       // Pass game object for odds fallback in pick normalization
       game,
-      // Pass shared messages if in session mode
-      sharedMessages: isSessionMode ? slateSession.messages : null,
       // Props mode context
       mode: isPropsMode ? 'props' : 'game',
       propContext: isPropsMode ? propContext : null
     };
     const result = await runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam, enrichedOptions);
     
-    // If in session mode, accumulate tool calls and update session
-    if (isSessionMode && result.toolCallHistory) {
-      slateSession.toolCallHistory.push(...result.toolCallHistory);
-    }
-
     // NCAAB: normalize display team names to full school names (avoid mascot-only like "Tigers")
     if (sport === 'basketball_ncaab') {
       try {
@@ -4525,21 +4375,17 @@ function determineCurrentPass(messages) {
  * @param {string} homeTeam - Home team name
  * @param {string} awayTeam - Away team name
  * @param {Object} options - Additional options
- * @param {Array} options.sharedMessages - If provided, append to this shared history (session mode)
  */
 async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam, options = {}) {
   // Sport-based provider routing
   const provider = getProviderForSport(sport);
   const initialModel = getModelForProvider(provider, sport);
   
-  // Check if we're using shared messages (session mode for true memory)
-  const isSessionMode = !!options.sharedMessages;
-  
   // Determine if this sport uses Pro for grading/decision phases
   const useProForGrading = sportUsesPro(sport);
-  
+
   const isNFLSport = sport === 'americanfootball_nfl' || sport === 'NFL';
-  console.log(`[Orchestrator] Using ${provider.toUpperCase()} for ${sport}${isSessionMode ? ' [SESSION MODE]' : ''}`);
+  console.log(`[Orchestrator] Using ${provider.toUpperCase()} for ${sport}`);
   console.log(`[Orchestrator] Model strategy: Flash for investigation${isNFLSport && useProForGrading ? ', Pro for Steel Man + decision' : useProForGrading ? ', Pro for review/decision' : ' (all phases)'}`);
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -4578,17 +4424,10 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
 
   // Messages array for state tracking (pass detection, steel man capture)
   // Note: For Gemini, actual API calls go through the persistent session
-  let messages;
-  if (isSessionMode) {
-    messages = options.sharedMessages;
-    messages.push({ role: 'user', content: userMessage });
-    console.log(`[Orchestrator] Session history: ${messages.length} messages`);
-  } else {
-    messages = [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userMessage }
-    ];
-  }
+  let messages = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userMessage }
+  ];
 
   let iteration = 0;
   const toolCallHistory = [];
