@@ -3475,7 +3475,7 @@ Your pick is about VALUE, not just picking winners.
 {
   "final_pick": "[Team] [spread/ML]",
   "confidence_score": [0.50-0.95],
-  "rationale": "MUST START WITH 'Gary's Take\\n\\n' then a 1-2 sentence scene-setter (like a broadcaster describing the matchup), then 3-4 paragraphs explaining WHY this team covers TONIGHT with stats and matchup factors."
+  "rationale": "MUST START WITH 'Gary's Take\\n\\n' then a 1-2 sentence scene-setter. Then 3-4 paragraphs of your REAL reasoning — the factors and stats that led you to this pick. Write it like a sharp bettor explaining their bet: what you found, why it matters, and why you're taking this side. Every claim must be backed by a stat you investigated."
 }
 \`\`\`
 </output_format>
@@ -3512,8 +3512,12 @@ Check BOTH teams against the trap patterns.
 Document which patterns apply to EACH side.
 
 **STEP 3: MAKE YOUR FINAL DECISION**
-Based on everything - your matchup analysis, whether the spread reflects your findings, and trap pattern checks - which side is the BETTER BET?
-This is where you decide. Not just "who wins" but "which side offers value given this spread?"
+
+Based on everything — your matchup analysis, the factors you investigated, and whether the spread reflects your findings — which side is the BETTER BET?
+
+Consider what likely created this line (injury news, recent form, schedule, matchup perception). Does your research agree with the number, or did you find something the line doesn't fully reflect?
+
+Which side do you actually want to bet on and WHY? Think like a bettor placing real money — your reasoning should be the genuine factors and stats that drove your decision, not a formula.
 
 **STEP 4: OUTPUT YOUR DECISION (WITH REAL REASONING)**
 Output your decision in the strict JSON format above.
@@ -3521,10 +3525,9 @@ Output your decision in the strict JSON format above.
 **RATIONALE FORMAT (CRITICAL - iOS app depends on this):**
 Your rationale MUST start with exactly: "Gary's Take\\n\\n"
 Then include:
-1. **Scene-setter (1-2 sentences):** Open with the matchup context - where teams stand, what's at stake
-2. **Key evidence (1 paragraph):** The PRIMARY stats and data that support this pick - cite what you found in your investigation
-3. **Supporting evidence (1-2 paragraphs):** Additional factors with numbers that back up your pick
-4. **Closing:** Confident statement with your pick
+1. **Scene-setter (1-2 sentences):** Open with the matchup context and what's at stake
+2. **Your reasoning (2-3 paragraphs):** Explain your pick naturally — the factors and stats you found that led to this decision. If the line doesn't reflect what the data shows, say so. If a specific matchup factor or stat drove your decision, lead with it. Write like you're explaining your bet to another sharp — every claim backed by a real number from your investigation. No fluff, no fabricated tactics.
+3. **Closing:** Why you're taking this side tonight
 
 **IMPORTANT:** Stick to stats you actually investigated. Do NOT invent tactical narratives about how the game will play out (defensive schemes, driving lanes, paint attacks) - you're analyzing stats, not watching film.
 
@@ -3749,8 +3752,7 @@ Make sure your rationale reflects why the NEW pick is stronger, not just why the
 
   const passConsideration = confidenceScore < 0.55 ? `
 **LOW CONFIDENCE (${confidenceScore}):**
-Your confidence is in PASS territory. If you proceed, make sure you have a specific reason.
-PASS is a valid decision when you don't have edge.
+Your confidence is low. Make sure your rationale clearly states why you believe this side is still the better bet despite thin edge.
 ` : '';
   
   // ═══════════════════════════════════════════════════════════════════════════
@@ -3781,6 +3783,7 @@ Your final rationale should be built from the Steel Man case for your chosen sid
 - Use the factors already vetted in that Steel Man case
 - Do NOT introduce new claims that weren't investigated
 - Explain why you believe this side wins/covers based on your analysis
+- **INJURY RULE (HARD):** DO NOT name any player who hasn't played this 2025-26 season. DO NOT name any player whose injury is >3 days old. Reference the TEAM's current performance instead (e.g., "the current rotation has gone 8-3 over L10" NOT "without Player X who's been out since November"). If you name a player not in tonight's lineup, your rationale is INVALID.
 
 **IMPORTANT:** All the stats you called during Pass 2 investigation are available in this conversation.
 Reference those specific numbers in your rationale to make it data-driven.

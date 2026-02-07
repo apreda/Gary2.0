@@ -672,8 +672,8 @@ Don't say "they play well at home" - instead ask: "WHAT do they do better at hom
 - Investigate the specific metric splits to find the answer
 - The answer tells you if that advantage applies to THIS game
 
-### [CHECKLIST] NBA INVESTIGATION FACTORS (COMPLETE THESE)
-Work through EACH factor before making your decision:
+### [CHECKLIST] NBA INVESTIGATION FACTORS
+Investigate these factors for awareness — not all will matter for every game. Your job is to identify which ones actually drive the edge for THIS specific matchup:
 
 1. **EFFICIENCY** - Net rating, offensive rating, defensive rating
 2. **PACE/TEMPO** - Pace of play, pace trends (L10), home vs away pace
@@ -694,7 +694,7 @@ Work through EACH factor before making your decision:
 
 For each factor, investigate BOTH teams and note any asymmetries.
 
-Once ALL factors investigated → Analyze BOTH sides → Determine which side is the BETTER BET
+After investigating, decide which factors actually matter for THIS game. Build your case on those — use as many or as few as the data warrants.
 
 ### RECENT FORM CONTEXT
 Consider roster context when evaluating recent form - who was playing during that stretch vs. who plays tonight.
