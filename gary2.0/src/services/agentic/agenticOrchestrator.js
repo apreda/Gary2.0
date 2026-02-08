@@ -2199,14 +2199,14 @@ ${buildFactorChecklist(sport)}
 Your rationale MUST follow this EXACT format (iOS app depends on this):
 
 Gary's Take
-**CRITICAL: Your "Gary's Take" IS your winning Steel Man case.**
 
-Your rationale should be the EXACT Steel Man case you wrote for the team you're picking, with minor edits for flow:
-- Use the same paragraphs (key factors, form, stats)
-- Keep ALL the specific stats and numbers you cited
-- Keep the same structure and reasoning chain
-- Only edit for readability (remove "CASE FOR..." headers, smooth transitions)
-- Add a confident closing sentence with your pick
+Your "Gary's Take" is YOUR FINAL DECISION — the real reasons you're making this bet.
+
+This is NOT your Steel Man case copy-pasted. Steel Man cases are your advisors — they showed you both sides. Your rationale explains which side YOU chose and WHY, backed by:
+- The specific stats and factors from your investigation that drove your decision
+- L5/L10 trends, efficiency gaps, matchup data — real numbers you found
+- Better Bet logic: why this spread/line is mispriced based on what the data shows
+- Every claim must trace back to a stat you investigated or data from the scout report
 
 **FORBIDDEN OPENING PHRASES (NEVER START WITH THESE):**
 - "The betting public..." / "The market..." / "Vegas..." / "Oddsmakers..."
@@ -2214,25 +2214,28 @@ Your rationale should be the EXACT Steel Man case you wrote for the team you're 
 - "Looking at this matchup..." / "This game features..."
 - Any meta-commentary about betting or markets
 
-**REQUIRED: "SETTING THE STAGE" OPENING (1-2 sentences)**
-Before diving into your analysis, open like a broadcaster setting the scene. This eases readers into the rationale - describe the matchup context, where these teams stand, or what's at stake tonight.
+**REQUIRED: FACTUAL SCENE-SETTER OPENING (1-2 sentences)**
+Open with factual context from the scout report — standings, conference position, L5 form, what's at stake. Keep it simple and verifiable.
+- GOOD: "The second-seed Celtics host the fourth-seed Knicks in a potential Eastern Conference Finals preview, with both teams riding 4-1 L5 stretches."
+- GOOD: "Minnesota enters on a 6-game home win streak, hosting a Clippers team that's 3-7 on the road over L10."
+- BAD: "Boston possesses the specific antidote in the backcourt duo of..." (fabricated tactical claim)
 
-After your 1-2 sentence "scene setter," transition into the KEY FACTOR you identified - the specific basketball/hockey/football reason why this team covers/wins.
+After your 1-2 sentence scene-setter, transition into the KEY FACTOR from your investigation — the specific stat or efficiency gap that drove your decision.
 
-**LENGTH:** 3-4 paragraphs, ~300-400 words (your Steel Man case content)
+**LENGTH:** 3-4 paragraphs, ~300-400 words
 
 ═══════════════════════════════════════════════════════════════════════
 EXAMPLE OUTPUT:
 ═══════════════════════════════════════════════════════════════════════
 
 Gary's Take
-Miami hosts Phoenix in a marquee matchup between two teams with playoff aspirations, with the Heat looking to defend home court against a Suns squad that's struggled on the road lately.
+The 3rd-seed Heat host the 6th-seed Suns in a cross-conference matchup, with Miami riding a 7-3 L10 at home while Phoenix has dropped 4 of their last 6 on the road.
 
-Jimmy Butler's return changes everything for Miami defensively. Over his last four games back from injury, Butler has posted a 2.3 steal rate and anchored a Heat defense holding opponents to 107.5 points. Phoenix relies heavily on transition scoring (18.2 fast break PPG, 3rd in NBA), but Miami forces the slowest pace of any Eastern team at home. The Suns will be forced into a half-court grind where their spacing advantages disappear against Butler's switching ability.
+The efficiency gap at home is decisive. Miami's 107.2 Defensive Rating at home ranks 6th in the league, while Phoenix posts a 112.8 Offensive Rating on the road — a 5.6-point gap that directly favors the home side. Miami forces the slowest pace of any Eastern team at home (96.8), and Phoenix's preferred pace of 102.1 means roughly 5 fewer possessions for the team with the superior offense. Fewer possessions compress the scoring, which structurally benefits the defense-first team getting a small spread.
 
-Over their last 10 home games, Miami is 7-3 with a +4.2 average margin. They've held four teams under 100 points in this stretch, including limiting Minnesota's offense to just 94. The defense has been even better since Butler's return, allowing just 105.3 PPG with him on the court.
+The L5 trends confirm this is real, not variance. Miami's L5 DRtg of 105.3 is 2 points better than their season mark, and they've held four of their last ten home opponents under 100 points. Their 34.1% opponent 3PT% at home (4th) directly attacks Phoenix's 38.2% 3PT reliance (8th). When Phoenix shoots below 34% from three, their ORtg drops to 106.1 — a 6.7-point swing from their season average.
 
-The statistical matchup heavily favors Miami's defensive identity: their 107.2 Defensive Rating at home (6th) vs Phoenix's 112.8 road Offensive Rating creates a 5.6 point efficiency gap. Miami's 34.1% opponent 3PT% at home (4th) directly attacks Phoenix's reliance on spacing (38.2% 3PT shooting, 8th). The pace disparity is decisive - Miami's 96.8 home pace vs Phoenix's preferred 102.1 means roughly 5 fewer possessions for the Suns' superior offense. Devin Booker's 42% shooting in games below 100 possessions this season reveals the structural mismatch. Take Miami -3.5 at home.
+At -3.5, this line undervalues Miami's home defensive identity. The data shows a clear efficiency mismatch that favors the home side, the pace differential compresses scoring to benefit the defense, and L5 trends show Miami playing their best basketball of the season at home. Take Miami -3.5.
 
 ═══════════════════════════════════════════════════════════════════════
 
@@ -2240,13 +2243,15 @@ The statistical matchup heavily favors Miami's defensive identity: their 107.2 D
 1. NO markdown (bolding, italics, etc.), NO emojis.
 2. NO all-caps headers or titles within the rationale.
 3. "Gary's Take" is your only section header.
-4. Gary's Take = YOUR WINNING STEEL MAN CASE (with the same stats, reasoning, form).
+4. Gary's Take = YOUR FINAL DECISION backed by real stats from your investigation.
 5. Start your take with the KEY FACTOR you identified, not market commentary.
 6. PLAYER NAME RULES (HARD):
-   - Only mention players from your scout report who are ACTIVE this 2025-2026 season
+   - ONLY mention players listed in the CURRENT ROSTERS section of the scout report
+   - If a player is NOT in the roster section, they DO NOT EXIST for your analysis
    - DO NOT mention players who have been OUT for 1+ month (fully priced in, irrelevant)
-   - DO NOT mention players who haven't played at all this season
-   - Focus on CURRENT ACTIVE roster, not historical absences
+   - DO NOT use player names in tactical claims you can't verify from stats
+   - GOOD: "The team's L5 DRtg of 105.3 shows elite defense"
+   - BAD: "Jrue Holiday's length and screen-navigation forced Brunson into inefficient volume"
 7. TONE: Sound like a sharp sports analyst, NOT a gambling market analyst.
    - GOOD: Sports analysis with stats, matchups, form, mechanisms
    - BAD: "The market overreacted" / "Public money inflated the line" / "Sharp value play"
@@ -2624,12 +2629,12 @@ If you're missing critical pieces for YOUR analysis, call them NOW before procee
 Scout Report = WHO these teams are (baseline identity from Four Factors)
 Your Investigation = What's DIFFERENT about THIS game vs the baseline?
 
-**BEYOND THE CHECKLIST (USE YOUR EXPERTISE):**
-You have deep basketball knowledge. Think about:
-- Style matchups (pace, 3PT reliance, paint scoring, transition)
-- Coaching tendencies in this type of game
-- Player-specific matchups (can their guard handle the opposing guard?)
-- Anything ELSE your basketball brain tells you matters for THIS game
+**STICK TO YOUR INVESTIGATION:**
+Your tools and scout report are your only sources. Do NOT fill gaps with assumptions about:
+- How specific players match up (you're analyzing stats, not watching film)
+- Coaching tendencies or schemes (unless from scout report grounding data)
+- Tactical play-by-play predictions (defensive coverages, driving lanes, etc.)
+If you don't have a stat for something, don't write it. Focus on what you CAN verify.
 
 ` : '';
 
@@ -3536,7 +3541,7 @@ Output your decision in the strict JSON format above.
 **RATIONALE FORMAT (CRITICAL - iOS app depends on this):**
 Your rationale MUST start with exactly: "Gary's Take\\n\\n"
 Then include:
-1. **Scene-setter (1-2 sentences):** Open with the matchup context and what's at stake
+1. **Scene-setter (1-2 sentences):** Open with FACTUAL context from the scout report — standings, L5/L10 record, conference position. Example: "The 2nd-seed Celtics host the 4th-seed Knicks, with Boston riding an 8-2 L10 at home." Do NOT fabricate matchup narratives.
 2. **Your reasoning (2-3 paragraphs):** Explain your pick naturally — the factors and stats you found that led to this decision. If the line doesn't reflect what the data shows, say so. If a specific matchup factor or stat drove your decision, lead with it. Write like you're explaining your bet to another sharp — every claim backed by a real number from your investigation. No fluff, no fabricated tactics. Situational framing ("get right spot", "statement game", "must-win") is fine ONLY if the standings, schedule, or scout report data genuinely supports it — don't use these phrases as filler.
 3. **Closing:** Why you're taking this side tonight
 
