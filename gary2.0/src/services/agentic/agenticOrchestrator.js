@@ -667,7 +667,7 @@ const INVESTIGATION_FACTORS = {
   basketball_ncaab: {
     KENPOM_EFFICIENCY: ['NCAAB_KENPOM_RATINGS', 'NCAAB_OFFENSIVE_RATING'], // Gold standard
     RANKINGS: ['NCAAB_NET_RANKING', 'NCAAB_AP_RANKING', 'NCAAB_COACHES_RANKING'],
-    FOUR_FACTORS: ['NCAAB_EFG_PCT', 'TURNOVER_RATE', 'OREB_RATE', 'FT_RATE'],
+    FOUR_FACTORS: ['NCAAB_EFG_PCT', 'NCAAB_TS_PCT', 'TURNOVER_RATE', 'OREB_RATE', 'FT_RATE'],
     SCORING_SHOOTING: ['SCORING', 'FG_PCT', 'THREE_PT_SHOOTING', 'THREE_PT_DEFENSE'], // Shooting offense AND defense
     DEFENSIVE_STATS: ['REBOUNDS', 'STEALS', 'BLOCKS'], // Defensive/rebounding metrics
     TEMPO: ['NCAAB_TEMPO', 'PACE'],
@@ -6358,7 +6358,8 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
     const pass3PropsContent = buildPass3Props(homeTeam, awayTeam, propContext);
     messages.push({ role: 'user', content: pass3PropsContent });
 
-    const synthesisModel = useProForGrading ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview';
+    // Always use Flash for finalize — Flash is better at tool calling than Pro
+    const synthesisModel = 'gemini-3-flash-preview';
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
         const finalResponse = await callGeminiWithRetry(messages, activeTools, synthesisModel, 3, 'final_decision');

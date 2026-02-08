@@ -108,6 +108,7 @@ const NCAAB_TOKENS = [
   'REBOUNDS', 'ASSISTS', 'STEALS', 'BLOCKS',
   // NCAAB-Specific Calculated Stats (avoid aliases)
   'NCAAB_EFG_PCT',           // Calculated eFG%
+  'NCAAB_TS_PCT',            // Calculated True Shooting % (FG + 3PT + FT efficiency)
   'NCAAB_TEMPO',             // Calculated possessions per game
   'NCAAB_OFFENSIVE_RATING',  // Calculated offensive efficiency
   // Rankings (BDL API)
