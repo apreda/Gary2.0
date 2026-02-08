@@ -1723,34 +1723,39 @@ const FETCHERS = {
   // These calculate derived stats to avoid duplicate data
   
   NCAAB_EFG_PCT: async (bdlSport, home, away, season) => {
-    const [homeStats, awayStats] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
-    ]);
-    const homeData = Array.isArray(homeStats) ? homeStats[0] : homeStats;
-    const awayData = Array.isArray(awayStats) ? awayStats[0] : awayStats;
-    
-    // Calculate eFG% = (FGM + 0.5 * FG3M) / FGA
-    const calcEfg = (data) => {
-      if (!data) return null;
-      const fgm = data.fgm || 0;
-      const fg3m = data.fg3m || 0;
-      const fga = data.fga || 0;
-      if (fga === 0) return null;
-      return ((fgm + 0.5 * fg3m) / fga * 100).toFixed(1);
-    };
-    
-    return {
-      category: 'Effective FG%',
-      home: {
-        team: home.full_name || home.name,
-        efg_pct: calcEfg(homeData) ? `${calcEfg(homeData)}%` : 'N/A'
-      },
-      away: {
-        team: away.full_name || away.name,
-        efg_pct: calcEfg(awayData) ? `${calcEfg(awayData)}%` : 'N/A'
-      }
-    };
+    try {
+      const [homeStats, awayStats] = await Promise.all([
+        ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
+        ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+      ]);
+      const homeData = Array.isArray(homeStats) ? homeStats[0] : homeStats;
+      const awayData = Array.isArray(awayStats) ? awayStats[0] : awayStats;
+
+      // Calculate eFG% = (FGM + 0.5 * FG3M) / FGA
+      const calcEfg = (data) => {
+        if (!data) return null;
+        const fgm = data.fgm || 0;
+        const fg3m = data.fg3m || 0;
+        const fga = data.fga || 0;
+        if (fga === 0) return null;
+        return ((fgm + 0.5 * fg3m) / fga * 100).toFixed(1);
+      };
+
+      return {
+        category: 'Effective FG%',
+        home: {
+          team: home.full_name || home.name,
+          efg_pct: calcEfg(homeData) ? `${calcEfg(homeData)}%` : 'N/A'
+        },
+        away: {
+          team: away.full_name || away.name,
+          efg_pct: calcEfg(awayData) ? `${calcEfg(awayData)}%` : 'N/A'
+        }
+      };
+    } catch (error) {
+      console.warn('[Stat Router] NCAAB_EFG_PCT fetch failed:', error.message);
+      return { category: 'Effective FG%', error: 'Data unavailable' };
+    }
   },
 
   NCAAB_AP_RANKING: async (bdlSport, home, away, season) => {
@@ -1859,70 +1864,80 @@ const FETCHERS = {
   },
 
   NCAAB_TEMPO: async (bdlSport, home, away, season) => {
-    const [homeStats, awayStats] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
-    ]);
-    const homeData = Array.isArray(homeStats) ? homeStats[0] : homeStats;
-    const awayData = Array.isArray(awayStats) ? awayStats[0] : awayStats;
-    
-    // Calculate possessions per game estimate: FGA + 0.44*FTA - OREB + TOV
-    const calcTempo = (data) => {
-      if (!data) return null;
-      const fga = data.fga || 0;
-      const fta = data.fta || 0;
-      const oreb = data.oreb || 0;
-      const tov = data.turnover || 0;
-      const games = data.games_played || 1;
-      const possessions = fga + 0.44 * fta - oreb + tov;
-      return (possessions / games).toFixed(1);
-    };
-    
-    return {
-      category: 'Tempo (Possessions/Game)',
-      home: {
-        team: home.full_name || home.name,
-        tempo: calcTempo(homeData) || 'N/A'
-      },
-      away: {
-        team: away.full_name || away.name,
-        tempo: calcTempo(awayData) || 'N/A'
-      }
-    };
+    try {
+      const [homeStats, awayStats] = await Promise.all([
+        ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
+        ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+      ]);
+      const homeData = Array.isArray(homeStats) ? homeStats[0] : homeStats;
+      const awayData = Array.isArray(awayStats) ? awayStats[0] : awayStats;
+
+      // Calculate possessions per game estimate: FGA + 0.44*FTA - OREB + TOV
+      const calcTempo = (data) => {
+        if (!data) return null;
+        const fga = data.fga || 0;
+        const fta = data.fta || 0;
+        const oreb = data.oreb || 0;
+        const tov = data.turnover || 0;
+        const games = data.games_played || 1;
+        const possessions = fga + 0.44 * fta - oreb + tov;
+        return (possessions / games).toFixed(1);
+      };
+
+      return {
+        category: 'Tempo (Possessions/Game)',
+        home: {
+          team: home.full_name || home.name,
+          tempo: calcTempo(homeData) || 'N/A'
+        },
+        away: {
+          team: away.full_name || away.name,
+          tempo: calcTempo(awayData) || 'N/A'
+        }
+      };
+    } catch (error) {
+      console.warn('[Stat Router] NCAAB_TEMPO fetch failed:', error.message);
+      return { category: 'Tempo (Possessions/Game)', error: 'Data unavailable' };
+    }
   },
 
   NCAAB_OFFENSIVE_RATING: async (bdlSport, home, away, season) => {
-    const [homeStats, awayStats] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
-    ]);
-    const homeData = Array.isArray(homeStats) ? homeStats[0] : homeStats;
-    const awayData = Array.isArray(awayStats) ? awayStats[0] : awayStats;
-    
-    // Calculate offensive rating: (Points / Possessions) * 100
-    const calcORtg = (data) => {
-      if (!data) return null;
-      const pts = data.pts || 0;
-      const fga = data.fga || 0;
-      const fta = data.fta || 0;
-      const oreb = data.oreb || 0;
-      const tov = data.turnover || 0;
-      const possessions = fga + 0.44 * fta - oreb + tov;
-      if (possessions === 0) return null;
-      return ((pts / possessions) * 100).toFixed(1);
-    };
-    
-    return {
-      category: 'Offensive Rating (Pts/100 Poss)',
-      home: {
-        team: home.full_name || home.name,
-        offensive_rating: calcORtg(homeData) || 'N/A'
-      },
-      away: {
-        team: away.full_name || away.name,
-        offensive_rating: calcORtg(awayData) || 'N/A'
-      }
-    };
+    try {
+      const [homeStats, awayStats] = await Promise.all([
+        ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
+        ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+      ]);
+      const homeData = Array.isArray(homeStats) ? homeStats[0] : homeStats;
+      const awayData = Array.isArray(awayStats) ? awayStats[0] : awayStats;
+
+      // Calculate offensive rating: (Points / Possessions) * 100
+      const calcORtg = (data) => {
+        if (!data) return null;
+        const pts = data.pts || 0;
+        const fga = data.fga || 0;
+        const fta = data.fta || 0;
+        const oreb = data.oreb || 0;
+        const tov = data.turnover || 0;
+        const possessions = fga + 0.44 * fta - oreb + tov;
+        if (possessions === 0) return null;
+        return ((pts / possessions) * 100).toFixed(1);
+      };
+
+      return {
+        category: 'Offensive Rating (Pts/100 Poss)',
+        home: {
+          team: home.full_name || home.name,
+          offensive_rating: calcORtg(homeData) || 'N/A'
+        },
+        away: {
+          team: away.full_name || away.name,
+          offensive_rating: calcORtg(awayData) || 'N/A'
+        }
+      };
+    } catch (error) {
+      console.warn('[Stat Router] NCAAB_OFFENSIVE_RATING fetch failed:', error.message);
+      return { category: 'Offensive Rating (Pts/100 Poss)', error: 'Data unavailable' };
+    }
   },
 
   // ===== NCAAB GROUNDING-BASED ADVANCED STATS =====
@@ -1965,6 +1980,8 @@ IMPORTANT: Use ONLY data from kenpom.com for the 2025-26 season. Do not guess - 
       const extractKenpomData = (text, teamName) => {
         const teamSection = text.toLowerCase();
         const rankMatch = teamSection.match(new RegExp(`${teamName.toLowerCase()}[^\\d]*(\\d{1,3})(?:st|nd|rd|th)?\\s*(?:rank|kenpom|overall)`, 'i')) ||
+                         teamSection.match(/kenpom[^\d]*#?\s*(\d{1,3})/i) ||
+                         teamSection.match(/rank(?:ed|ing)?[^\d]*#?\s*(\d{1,3})/i) ||
                          teamSection.match(/rank[^\d]*(\d{1,3})/i);
         const adjEmMatch = teamSection.match(/adj(?:usted)?\.?\s*(?:efficiency\s*)?(?:margin|em)[^\d-]*([+-]?\d+\.?\d*)/i);
         const adjOMatch = teamSection.match(/adj(?:usted)?\.?\s*(?:offensive|o)[^\d]*(\d+\.?\d*)/i);
@@ -3655,12 +3672,15 @@ IMPORTANT: Use ONLY data from the 2025-26 college basketball season. Do not gues
   },
   
   HOME_AWAY_SPLITS: async (bdlSport, home, away, season) => {
-    // NCAAF/NCAAB standings require conference_id - skip to avoid 400 errors
-    // For college sports, return N/A (RECENT_FORM provides game-by-game context)
-    if (bdlSport === 'americanfootball_ncaaf' || bdlSport === 'basketball_ncaab') {
+    // NCAAB: BDL standings require conference_id — delegate to Gemini Grounding fetcher
+    if (bdlSport === 'basketball_ncaab') {
+      return FETCHERS.NCAAB_HOME_AWAY_SPLITS(bdlSport, home, away, season);
+    }
+    // NCAAF: BDL standings require conference_id — no grounding fetcher available
+    if (bdlSport === 'americanfootball_ncaaf') {
       return {
         category: 'Home/Away Splits',
-        note: 'College sports home/away splits unavailable via BDL standings - use RECENT_FORM for game context',
+        note: 'NCAAF home/away splits unavailable via BDL standings - use RECENT_FORM for game context',
         home: { team: home.full_name || home.name, overall: 'N/A', home_record: 'N/A', away_record: 'N/A' },
         away: { team: away.full_name || away.name, overall: 'N/A', home_record: 'N/A', away_record: 'N/A' }
       };
