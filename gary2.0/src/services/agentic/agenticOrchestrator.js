@@ -5812,6 +5812,15 @@ Call these specific tokens NOW using the get_stat tool with the "token" paramete
             // Pro starts fresh - it never made those function calls
             pendingFunctionResponses = [];
 
+            // Also remove Flash's tool responses from messages array
+            // so they don't get re-prepared at line ~6033 for the new Pro session
+            const lastAsstIdx = messages.findLastIndex(m => m.role === 'assistant');
+            if (lastAsstIdx >= 0) {
+              while (messages.length > lastAsstIdx + 1 && messages[messages.length - 1].role === 'tool') {
+                messages.pop();
+              }
+            }
+
             console.log(`[Orchestrator] 🧠 NFL Pro session created with tools for Steel Man analysis`);
             console.log(`[Orchestrator] Context passed: ${textualSummary.length} chars (full stats)`);
           } catch (proError) {
