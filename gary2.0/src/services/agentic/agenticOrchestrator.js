@@ -3686,49 +3686,8 @@ BEGIN YOUR ANALYSIS NOW.
 // Pass 2.5 evaluation still happens, but structured rating extraction is no longer needed.
 // The sanitizeJson helper was moved into parseGaryResponse where it's still used.
 
-/**
- * Build the PASS 3 message - Final Synthesis & Pick Decision
- * Injected AFTER Gary has all the stats he needs
- */
-function buildPass3Message() {
-  return `
-══════════════════════════════════════════════════════════════════════
-## PASS 3 - FINAL SYNTHESIS & PICK DECISION
-
-You've gathered substantial evidence. Before making your pick, do a final check:
-
-**BEFORE DECIDING - INVESTIGATION CHECK:**
-- Did you call stats for BOTH teams' key players (game logs)?
-- Did you check BOTH teams' home/away records?
-- If a star is missing, did you investigate how long they've been out?
-- Did you build genuine cases for BOTH sides in the Steel Man?
-
-**IF YOU MISSED SOMETHING → CALL MORE STATS. There is no rush.**
-
-**WHEN YOU'RE CONFIDENT YOU'VE SEEN BOTH SIDES:**
-
-**STEP 1: WEIGH THE EVIDENCE**
-- Which team's case is supported by the most RECENT and RELEVANT data?
-- INJURY CHECK: Are injuries RECENT (< 2 weeks) or SEASON-LONG (1-2+ months)?
-  - SEASON-LONG = Team has adapted. Focus on CURRENT contributors and RECENT FORM.
-  - RECENT = Investigate how team has adjusted. This can be an edge.
-
-**STEP 2: CONFIRM YOUR CONVICTION**
-- Based on your investigation, which side do you believe wins or covers?
-- What factors support your pick? (Can be multiple - defense, matchups, situational, etc.)
-- Is your conviction strong enough to bet, or should you PASS?
-
-**STEP 3: SELF-INTERROGATION**
-1. **Season-Long Injury Check**: Did I cite ANY player marked [SEASON-LONG] in the injury report? If yes, REMOVE them from your rationale. Those players have been out for MONTHS - the team has adapted. Focus on CURRENT contributors.
-2. **Roster Check**: Did I only mention players in the CURRENT ROSTERS section?
-3. **Stat-Narrative Alignment**: Does my reasoning match the data I found?
-4. **Conviction Check**: Do I genuinely believe this side wins/covers based on my analysis?
-
-**STEP 4: OUTPUT YOUR FINAL PICK JSON**
-(Refer to the RATIONALE FORMAT in the system prompt)
-══════════════════════════════════════════════════════════════════════
-`.trim();
-}
+// buildPass3Message REMOVED — legacy Pass 3 that didn't reference Pass 2.5 decision (2026-02)
+// All Pass 3 logic now goes through buildPass3Unified which receives the Pass 2.5 decision.
 
 /**
  * Build the unified PASS 3 message - Simplified Final Output
@@ -3744,12 +3703,6 @@ function buildPass3Unified(ratings, homeTeam = '[HOME]', awayTeam = '[AWAY]') {
   const finalPick = ratings?.finalPick || ratings?.tentativePick || 'Your pick';
   const confidenceScore = ratings?.confidenceScore || 0.65;
   const confidenceLabel = ratings?.confidenceLabel || 'CONFIDENT';
-  const pickFlipped = ratings?.pickFlipped || false;
-  
-  const flipNote = pickFlipped ? `
-**NOTE:** You flipped from your tentative pick based on the stress test and sanity check.
-Make sure your rationale reflects why the NEW pick is stronger, not just why the old pick had issues.
-` : '';
 
   const passConsideration = confidenceScore < 0.55 ? `
 **LOW CONFIDENCE (${confidenceScore}):**
@@ -3769,7 +3722,7 @@ You have access to ALL evidence from your investigation - nothing is truncated.
 **Your Decision:**
 - **Final Pick:** ${finalPick}
 - **Confidence:** ${confidenceScore} (${confidenceLabel})
-${flipNote}${passConsideration}
+${passConsideration}
 
 **INVESTIGATION OPTION:**
 If you realize you need more data before finalizing, you can still call fetch_stats for additional investigation.
@@ -3779,9 +3732,9 @@ However, if your analysis is complete, proceed directly to output.
 <rationale_constraints>
 ## RATIONALE CONSTRAINTS
 
-Your final rationale should be built from the Steel Man case for your chosen side.
+Your final rationale is YOUR DECISION — the real reasons you're making this bet, backed by stats you investigated.
 - **REFERENCE YOUR STATS:** Use the actual numbers from your investigation (efficiency gaps, L5 margins, etc.)
-- Use the factors already vetted in that Steel Man case
+- Steel Man cases were your advisors — your rationale explains which side YOU chose and WHY
 - Do NOT introduce new claims that weren't investigated
 - Explain why you believe this side wins/covers based on your analysis
 - **INJURY RULE (HARD):** DO NOT name any player who hasn't played this 2025-26 season. DO NOT name any player whose injury is >3 days old. Reference the TEAM's current performance instead (e.g., "the current rotation has gone 8-3 over L10" NOT "without Player X who's been out since November"). If you name a player not in tonight's lineup, your rationale is INVALID.
@@ -3791,26 +3744,6 @@ Reference those specific numbers in your rationale to make it data-driven.
 
 **NO EMOJIS:** Never include emojis in your output.
 </rationale_constraints>
-
-<closing_ability_check>
-## FINAL CHECK: Who Closes Games? (Structure vs Star)
-
-Before finalizing, investigate closing dynamics for BOTH teams:
-
-**STRUCTURAL EDGE:**
-- Structure gets a team the lead in the 1st half
-- But in the 4th quarter of close games, coaches abandon systems and give it to their best player
-- Investigate: Which team has the better closer if the game is close in the 4th?
-
-**STAR POWER:**
-- Star power keeps or steals the lead in the 2nd half
-- But stars cannot overcome massive structural mismatches if the game is never close
-- Investigate: Which team has enough structure to keep it competitive until crunch time?
-
-**CLOSING QUESTION:**
-If this game comes down to the final 5 minutes within 5 points, which team has the higher probability of closing?
-Investigate the closing ability for both teams and factor this into your pick.
-</closing_ability_check>
 
 <output_requirements>
 ## OUTPUT REQUIREMENTS
