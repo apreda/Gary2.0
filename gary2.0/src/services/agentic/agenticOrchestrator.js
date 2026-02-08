@@ -2224,21 +2224,6 @@ After your 1-2 sentence scene-setter, transition into the KEY FACTOR from your i
 
 **LENGTH:** 3-4 paragraphs, ~300-400 words
 
-═══════════════════════════════════════════════════════════════════════
-EXAMPLE OUTPUT:
-═══════════════════════════════════════════════════════════════════════
-
-Gary's Take
-The 3rd-seed Heat host the 6th-seed Suns in a cross-conference matchup, with Miami riding a 7-3 L10 at home while Phoenix has dropped 4 of their last 6 on the road.
-
-The efficiency gap at home is decisive. Miami's 107.2 Defensive Rating at home ranks 6th in the league, while Phoenix posts a 112.8 Offensive Rating on the road — a 5.6-point gap that directly favors the home side. Miami forces the slowest pace of any Eastern team at home (96.8), and Phoenix's preferred pace of 102.1 means roughly 5 fewer possessions for the team with the superior offense. Fewer possessions compress the scoring, which structurally benefits the defense-first team getting a small spread.
-
-The L5 trends confirm this is real, not variance. Miami's L5 DRtg of 105.3 is 2 points better than their season mark, and they've held four of their last ten home opponents under 100 points. Their 34.1% opponent 3PT% at home (4th) directly attacks Phoenix's 38.2% 3PT reliance (8th). When Phoenix shoots below 34% from three, their ORtg drops to 106.1 — a 6.7-point swing from their season average.
-
-At -3.5, this line undervalues Miami's home defensive identity. The data shows a clear efficiency mismatch that favors the home side, the pace differential compresses scoring to benefit the defense, and L5 trends show Miami playing their best basketball of the season at home. Take Miami -3.5.
-
-═══════════════════════════════════════════════════════════════════════
-
 ### CRITICAL FORMATTING RULES
 1. NO markdown (bolding, italics, etc.), NO emojis.
 2. NO all-caps headers or titles within the rationale.
