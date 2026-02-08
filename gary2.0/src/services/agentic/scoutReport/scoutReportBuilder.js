@@ -1465,7 +1465,9 @@ CRITICAL: Be precise. Only include what's actually shown on RotoWire. List ALL i
                 // Extract player names (look for position abbreviations followed by names)
                 // Must have both first and last name (two capital words)
                 // Allow periods (A.J.), hyphens (Karl-Anthony), apostrophes (De'Aaron) in names
-                const playerPattern = /(?:PG|SG|SF|PF|C)[:\s]+([A-Z][a-z.'-]+(?:\s+[A-Z][a-z.'-]+)+)/gi;
+                // Use [ \t] instead of \s to prevent matching across newlines (which caused
+                // names like "Kennard Davis Jr.\nPF" to include the next line's position)
+                const playerPattern = /(?:PG|SG|SF|PF|C)[:\s]+([A-Z][a-z.'-]+(?:[ \t]+[A-Z][a-z.'-]+)+)/gi;
                 let playerMatch;
                 while ((playerMatch = playerPattern.exec(section)) !== null) {
                   const name = playerMatch[1].trim();
@@ -1480,7 +1482,9 @@ CRITICAL: Be precise. Only include what's actually shown on RotoWire. List ALL i
                 // Also look for comma separated full names
                 // IMPORTANT: Match names but NOT position abbreviations (PG/SG/SF/PF/C that sometimes follow names)
                 // Stop at position abbreviations or other structural words
-                const fullNamePattern = /([A-Z][a-z]+(?:[-'][A-Z]?[a-z]+)?\s+[A-Z][a-z]+(?:[-'][A-Z]?[a-z]+)?)(?=\s+(?:PG|SG|SF|PF|C|G|F|,|\||$)|\s*[,\|\n]|$)/gi;
+                // Fallback: comma-separated names. Use [ \t] to avoid newline matching.
+                // Allow suffixes like Jr., III, IV and short names like AJ
+                const fullNamePattern = /([A-Z][a-z.'-]+(?:[-'][A-Z]?[a-z.'-]+)?[ \t]+[A-Z][a-z.'-]+(?:[-'][A-Z]?[a-z.'-]+)?(?:[ \t]+(?:Jr\.?|Sr\.?|III?|IV|V))?)(?=[ \t]+(?:PG|SG|SF|PF|C|G|F|,|\||$)|[ \t]*[,\|\n]|$)/gi;
                 while ((playerMatch = fullNamePattern.exec(section)) !== null) {
                   const name = playerMatch[1].trim();
                   const words = name.split(/\s+/);
@@ -1552,7 +1556,9 @@ CRITICAL: Be precise. Only include what's actually shown on RotoWire. List ALL i
             // NCAAB RotoWire format: "G Jahseem Felton OFS" or "F Patrick Suemnick Out"
             // Position: PG, SG, SF, PF, C, G, F
             // Status: Out, OFS, GTD
-            const injuryPattern = /\b(PG|SG|SF|PF|C|G|F)\s+([A-Z][a-z'.-]+(?:\s+[A-Z][a-z'.-]+)*)\s+(Out|OFS|GTD)\b/gi;
+            // Use [ \t] instead of \s to prevent matching across newlines
+            // (which caused "Kordel Jefferson OFS\nHouston Cougars GTD" to concat into one entry)
+            const injuryPattern = /\b(PG|SG|SF|PF|C|G|F)[ \t]+([A-Z][a-z'.-]+(?:[ \t]+[A-Z][a-z'.-]+)*)[ \t]+(Out|OFS|GTD)\b/gi;
             const matches = [...injuriesText.matchAll(injuryPattern)];
 
             for (const match of matches) {
@@ -1560,9 +1566,23 @@ CRITICAL: Be precise. Only include what's actually shown on RotoWire. List ALL i
               const playerName = match[2];
               const status = match[3].toUpperCase();
 
-              // Normalize status
+              // Normalize status and add freshness tags per CLAUDE.md injury timing rules
               let normalizedStatus = status;
-              if (status === 'OFS') normalizedStatus = 'Out (Season)';
+              let duration = 'UNKNOWN';
+              let freshnessTip = '';
+
+              if (status === 'OFS') {
+                normalizedStatus = 'Out (Season)';
+                duration = 'SEASON-LONG';
+                freshnessTip = 'SEASON-LONG — 100% PRICED IN. Team stats already reflect this absence. DO NOT cite as edge.';
+              } else if (status === 'GTD') {
+                normalizedStatus = 'GTD';
+                duration = 'RECENT';
+                freshnessTip = 'GAME-TIME DECISION — True uncertainty. If confirmed OUT close to tip-off, line may not have fully adjusted. INVESTIGATE latest update.';
+              } else if (status === 'OUT') {
+                duration = 'UNKNOWN';
+                freshnessTip = 'STATUS: OUT — INVESTIGATE: How long has this player been out? If >21 days (top 2 players) or >3 days (role player), this is PRICED IN. If ruled out in last 1-3 days, potential edge — but only if you can prove the line UNDERREACTED.';
+              }
 
               const nameParts = playerName.trim().split(/\s+/);
               injuries.push({
@@ -1572,9 +1592,11 @@ CRITICAL: Be precise. Only include what's actually shown on RotoWire. List ALL i
                   position: position
                 },
                 status: normalizedStatus,
+                duration,
+                freshnessTip,
                 source: 'rotowire'
               });
-              console.log(`[Scout Report] NCAAB RotoWire injury found: ${position} ${playerName} ${status} for ${teamName}`);
+              console.log(`[Scout Report] NCAAB RotoWire injury found: ${position} ${playerName} ${status} [${duration}] for ${teamName}`);
             }
 
             return injuries;
@@ -5685,40 +5707,37 @@ function formatSituationalFactors(game, injuries, sport) {
   const factors = [];
   const sportKey = normalizeSport(sport);
   
-  // Injuries
-  const homeInjuries = injuries.home?.filter(i => ['Out', 'Doubtful', 'Questionable'].includes(i.status));
-  const awayInjuries = injuries.away?.filter(i => ['Out', 'Doubtful', 'Questionable'].includes(i.status));
+  // Injuries — include NCAAB statuses (Out (Season), GTD) alongside standard ones
+  const relevantStatuses = ['Out', 'Doubtful', 'Questionable', 'Out (Season)', 'GTD', 'IR', 'LTIR'];
+  const homeInjuries = injuries.home?.filter(i => relevantStatuses.some(s => i.status?.includes(s)));
+  const awayInjuries = injuries.away?.filter(i => relevantStatuses.some(s => i.status?.includes(s)));
   
+  // Helper to format injury with freshness tag
+  const formatInjuryWithFreshness = (i) => {
+    let tag = '';
+    const dateInfo = i.reportDateStr ? ` (${i.reportDateStr})` : '';
+    if (i.duration === 'SEASON-LONG' || i.status === 'IR' || i.status === 'LTIR' || i.status === 'Out (Season)') {
+      tag = ' [SEASON-LONG - PRICED IN]';
+    } else if (i.status === 'GTD') {
+      tag = ' [GAME-TIME DECISION - INVESTIGATE]';
+    } else if (i.duration === 'RECENT' || i.isEdge) {
+      tag = ` [RECENT${dateInfo} - INVESTIGATE IF LINE ADJUSTED]`;
+    } else if (dateInfo) {
+      tag = dateInfo;
+    }
+    // Add freshnessTip for NCAAB injuries (from RotoWire parsing)
+    const tip = i.freshnessTip ? `\n    → ${i.freshnessTip}` : '';
+    return `${i.player?.first_name} ${i.player?.last_name}: ${i.status}${tag}${tip}`;
+  };
+
   if (homeInjuries?.length > 0) {
-    const injuryList = homeInjuries.slice(0, 3).map(i => {
-      let tag = '';
-      const dateInfo = i.reportDateStr ? ` (${i.reportDateStr})` : '';
-      if (i.duration === 'SEASON-LONG' || i.status === 'IR' || i.status === 'LTIR') {
-        tag = ' [SEASON-LONG - PRICED IN]';
-      } else if (i.duration === 'RECENT' || i.isEdge) {
-        tag = ` [RECENT${dateInfo} - EDGE]`;
-      } else if (dateInfo) {
-        tag = dateInfo;
-      }
-      return `${i.player?.first_name} ${i.player?.last_name}: ${i.status}${tag}`;
-    }).join(', ');
-    factors.push(`• ${game.home_team} Injuries: ${injuryList}`);
+    const injuryList = homeInjuries.slice(0, 5).map(formatInjuryWithFreshness).join('\n  ');
+    factors.push(`• ${game.home_team} Injuries:\n  ${injuryList}`);
   }
-  
+
   if (awayInjuries?.length > 0) {
-    const injuryList = awayInjuries.slice(0, 3).map(i => {
-      let tag = '';
-      const dateInfo = i.reportDateStr ? ` (${i.reportDateStr})` : '';
-      if (i.duration === 'SEASON-LONG' || i.status === 'IR' || i.status === 'LTIR') {
-        tag = ' [SEASON-LONG - PRICED IN]';
-      } else if (i.duration === 'RECENT' || i.isEdge) {
-        tag = ` [RECENT${dateInfo} - EDGE]`;
-      } else if (dateInfo) {
-        tag = dateInfo;
-      }
-      return `${i.player?.first_name} ${i.player?.last_name}: ${i.status}${tag}`;
-    }).join(', ');
-    factors.push(`• ${game.away_team} Injuries: ${injuryList}`);
+    const injuryList = awayInjuries.slice(0, 5).map(formatInjuryWithFreshness).join('\n  ');
+    factors.push(`• ${game.away_team} Injuries:\n  ${injuryList}`);
   }
   
   // Rest situation (if available)
@@ -8074,13 +8093,24 @@ function formatNcaabRosterDepth(homeTeam, awayTeam, rosterDepth, injuries) {
   const formatPlayerRow = (player, index) => {
     const injury = getInjuryStatus(player.name);
     const status = injury ? '[OUT]' : '[ACTIVE]';
-    const injuryNote = injury ? ` - ${injury.status.toUpperCase()}` : '';
-    
+    let injuryNote = '';
+    if (injury) {
+      const statusUpper = injury.status.toUpperCase();
+      // Add freshness context for NCAAB
+      if (statusUpper.includes('SEASON') || statusUpper === 'OFS') {
+        injuryNote = ` - ${statusUpper} [PRICED IN]`;
+      } else if (statusUpper === 'GTD') {
+        injuryNote = ` - GTD [INVESTIGATE]`;
+      } else {
+        injuryNote = ` - ${statusUpper}`;
+      }
+    }
+
     // Format stats
-    const stats = player.gp > 0 
+    const stats = player.gp > 0
       ? `${player.ppg} PPG | ${player.reb} REB | ${player.ast} AST | FG: ${player.fgPct}% | 3PT: ${player.fg3Pct}%`
       : `No stats yet`;
-    
+
     return `  ${status} ${player.name} (${player.position})${injuryNote} - ${stats}`;
   };
   
