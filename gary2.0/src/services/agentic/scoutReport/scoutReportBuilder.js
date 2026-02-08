@@ -3525,14 +3525,16 @@ async function fetchInjuries(homeTeam, awayTeam, sport) {
     throw new Error(errorMsg);
     
   } catch (error) {
-    // CRITICAL: Re-throw Rotowire failures - process MUST fail if Rotowire doesn't work
-    if (error.message?.includes('CRITICAL: Rotowire grounding failed')) {
-      console.error(`[Scout Report] Error fetching injuries:`, error.message);
-      throw error; // Re-throw to fail the process
+    // NCAAB uses a different flow (lineups fetch includes injuries) — non-critical here
+    if (isNcaab) {
+      console.warn(`[Scout Report] NCAAB injury fetch error (non-critical): ${error.message}`);
+      return { home: [], away: [], narrativeContext: null };
     }
-    // For other errors, log and return empty (these are non-critical)
-    console.warn(`[Scout Report] Error fetching injuries:`, error.message);
-    return { home: [], away: [], narrativeContext: null };
+    // For NBA/NHL/NFL: ALL injury grounding errors are critical — process MUST fail
+    // If Rotowire grounding fails for ANY reason (timeout, rate limit, API error),
+    // we cannot proceed because Gary would analyze the game without knowing who's playing
+    console.error(`[Scout Report] CRITICAL: Injury grounding failed for ${sport}: ${error.message}`);
+    throw new Error(`[Scout Report] CRITICAL: Rotowire grounding failed to get injury/lineup data for ${sport}. Cannot proceed without Rotowire. Original error: ${error.message}`);
   }
 }
 
@@ -4252,38 +4254,92 @@ CRITICAL ANTI-OPINION RULES:
 4. NO BETTING ADVICE - Gary makes his own picks.`;
 
     } else if (sport === 'NBA' || sport === 'basketball_nba') {
-      // NBA-specific query - strict format for both lineups AND injuries
-      query = `Search site:rotowire.com/basketball/nba-lineups.php for today's game: ${awayTeam} at ${homeTeam}
+      // NBA-specific: Separate per-team queries for reliability (mirrors NHL pattern)
+      // A single combined query for both teams risks truncating the injury section
+      console.log(`[Scout Report] Using per-team NBA Grounding queries for ${awayTeam} @ ${homeTeam}`);
 
-Extract BOTH the "Expected Lineup" AND "MAY NOT PLAY" sections for BOTH teams.
+      const makeNbaTeamQuery = (teamName, opponentName, isAway) => `Search site:rotowire.com/basketball/nba-lineups.php for today's NBA game: ${isAway ? `${teamName} at ${opponentName}` : `${opponentName} at ${teamName}`}
 
-RESPOND IN THIS EXACT FORMAT:
+Find the ${teamName} lineup card on this page.
 
-=== ${awayTeam} ===
-EXPECTED LINEUP:
+Extract the following for ${teamName} ONLY:
+
+1. EXPECTED LINEUP:
 PG: FirstName LastName
 SG: FirstName LastName
 SF: FirstName LastName
 PF: FirstName LastName
 C: FirstName LastName
 
-MAY NOT PLAY:
-[List each player as: FirstName LastName Status]
+2. MAY NOT PLAY / INJURIES:
+List EVERY player shown as injured, out, questionable, doubtful, or game-time decision for ${teamName}.
+Format each as: FirstName LastName Status
 Example: Malik Monk Out
 Example: De'Aaron Fox GTD
 
-=== ${homeTeam} ===
-EXPECTED LINEUP:
-PG: FirstName LastName
-SG: FirstName LastName
-SF: FirstName LastName
-PF: FirstName LastName
-C: FirstName LastName
+CRITICAL: The MAY NOT PLAY section is the MOST IMPORTANT part.
+Do NOT skip it. List ALL players with any injury status.
+If ${teamName} has no injuries, write: "No injuries reported"`;
 
-MAY NOT PLAY:
-[List each player as: FirstName LastName Status]
+      // Run BOTH team queries in parallel (like NHL does for goalie + injury queries)
+      const [awayResponse, homeResponse] = await Promise.all([
+        geminiGroundingSearch(makeNbaTeamQuery(awayTeam, homeTeam, true), { temperature: 0.3, maxTokens: 2000 }),
+        geminiGroundingSearch(makeNbaTeamQuery(homeTeam, awayTeam, false), { temperature: 0.3, maxTokens: 2000 })
+      ]);
 
-If a team has no injuries in MAY NOT PLAY, write: No injuries reported`;
+      // Log raw responses for debugging
+      if (awayResponse?.data) {
+        console.log(`[Scout Report] ${awayTeam} NBA grounding raw: ${awayResponse.data.substring(0, 400)}...`);
+      }
+      if (homeResponse?.data) {
+        console.log(`[Scout Report] ${homeTeam} NBA grounding raw: ${homeResponse.data.substring(0, 400)}...`);
+      }
+
+      // Combine responses with clear team markers for the parser
+      const combined = {
+        home: [],
+        away: [],
+        groundingRaw: null
+      };
+
+      const mergeParsed = (response, side, teamName) => {
+        if (!response?.success || !response?.data) {
+          console.warn(`[Scout Report] ⚠️ NBA grounding FAILED for ${teamName} - no response`);
+          return false;
+        }
+        const parsed = parseGroundingInjuries(response.data, homeTeam, awayTeam, sport);
+        const list = side === 'home' ? (parsed.home || []) : (parsed.away || []);
+        const existing = side === 'home' ? combined.home : combined.away;
+
+        const getPlayerKey = (p) => {
+          if (!p) return '';
+          if (typeof p === 'string') return p.toLowerCase();
+          return `${p.first_name || ''} ${p.last_name || ''}`.trim().toLowerCase();
+        };
+
+        const seen = new Set(existing.map(i => getPlayerKey(i.player)));
+        for (const item of list) {
+          const key = getPlayerKey(item.player);
+          if (key && !seen.has(key)) {
+            existing.push(item);
+            seen.add(key);
+          }
+        }
+        combined.groundingRaw = `${combined.groundingRaw || ''}\n=== ${teamName} ===\n${response.data}`.trim();
+        return true;
+      };
+
+      const awayOk = mergeParsed(awayResponse, 'away', awayTeam);
+      const homeOk = mergeParsed(homeResponse, 'home', homeTeam);
+
+      // If BOTH team queries failed, grounding is broken — this will trigger the hard fail downstream
+      if (!awayOk && !homeOk) {
+        console.error(`[Scout Report] ⚠️ NBA grounding FAILED for BOTH teams — will trigger process failure`);
+        return { home: [], away: [], groundingRaw: null };
+      }
+
+      console.log(`[Scout Report] NBA per-team grounding injuries: ${combined.home.length} for ${homeTeam}, ${combined.away.length} for ${awayTeam}`);
+      return combined;
 
     } else {
       query = `Current injuries for ${sport} game ${awayTeam} vs ${homeTeam} as of ${today}. List all players OUT, DOUBTFUL, or QUESTIONABLE with their status and injury type.`;

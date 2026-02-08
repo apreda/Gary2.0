@@ -3930,7 +3930,7 @@ const ballDontLieService = {
         }
         
         return allInjuries;
-      }, 10); // Cache for 10 minutes since injury status changes frequently
+      }, 2); // Cache for 2 minutes — injury status changes rapidly on game day
     } catch (error) {
       console.error('Error fetching NBA player injuries:', error);
       return [];
