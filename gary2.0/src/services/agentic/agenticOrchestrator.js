@@ -4650,13 +4650,17 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
           hasSwichedToPro = true;
 
           // Force Steel Man transition
+          // Randomize team order to prevent bias (matches Pass 2's approach)
+          const recoveryHomeFirst = Math.random() > 0.5;
+          const recoveryFirst = recoveryHomeFirst ? homeTeam : awayTeam;
+          const recoverySecond = recoveryHomeFirst ? awayTeam : homeTeam;
           const steelManPrompt = `[PASS 2 - STEEL MAN] You have gathered sufficient data. Write your Steel Man cases now:
 
-**Case for ${homeTeam}** (the home team):
-[Build the strongest case for why ${homeTeam} covers/wins, using ONLY the data from your investigation]
+**Case for ${recoveryFirst}**:
+[Build the strongest case for why ${recoveryFirst} covers/wins, using ONLY the data from your investigation]
 
-**Case for ${awayTeam}** (the away team):
-[Build the strongest case for why ${awayTeam} covers/wins, using ONLY the data from your investigation]
+**Case for ${recoverySecond}**:
+[Build the strongest case for why ${recoverySecond} covers/wins, using ONLY the data from your investigation]
 
 Focus on TIER 1 predictive stats (efficiency, EPA) and TIER 2 context (fresh injuries, matchups). Proceed with your Steel Man analysis.`;
 
