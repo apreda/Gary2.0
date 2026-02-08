@@ -6733,27 +6733,13 @@ IMPORTANT: Use ONLY data from the 2025-26 college basketball season. Do not gues
       };
     }
     
-    // Fallback to season stats (third/fourth down as proxy - clearly labeled)
-    const [homeStatsArr, awayStatsArr] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
-    ]);
-    const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
-    const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
-    
+    // Red zone data unavailable — return error instead of substituting a different stat
     return {
-      category: 'Down Conversion Efficiency (Red Zone Proxy)',
-      home: {
-        team: homeName,
-        third_down_pct: fmtPct(homeStats?.misc_third_down_conv_pct / 100),
-        fourth_down_pct: fmtPct(homeStats?.misc_fourth_down_conv_pct / 100)
-      },
-      away: {
-        team: awayName,
-        third_down_pct: fmtPct(awayStats?.misc_third_down_conv_pct / 100),
-        fourth_down_pct: fmtPct(awayStats?.misc_fourth_down_conv_pct / 100)
-      },
-      note: 'Red zone data unavailable - showing 3rd/4th down conversion as efficiency proxy'
+      category: 'Red Zone Scoring Efficiency',
+      error: 'Red zone data unavailable from BDL for this game',
+      home: { team: homeName, red_zone_td_pct: 'N/A', red_zone_scores: 'N/A', red_zone_attempts: 'N/A' },
+      away: { team: awayName, red_zone_td_pct: 'N/A', red_zone_scores: 'N/A', red_zone_attempts: 'N/A' },
+      note: 'Red zone game data not available. Use Gemini grounding to investigate red zone efficiency if needed.'
     };
   },
   
@@ -7037,33 +7023,42 @@ IMPORTANT: Use ONLY data from the 2025-26 college basketball season. Do not gues
   },
 
   TURNOVER_LUCK: async (bdlSport, home, away, season) => {
-    const [homeStatsArr, awayStatsArr] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
-    ]);
-    const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
-    const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
-    
-    const homeTakeaways = (homeStats?.defense_interceptions || 0) + (homeStats?.defense_fumble_recoveries || 0);
-    const homeGiveaways = (homeStats?.passing_interceptions || 0) + (homeStats?.offense_fumbles_lost || 0);
-    const awayTakeaways = (awayStats?.defense_interceptions || 0) + (awayStats?.defense_fumble_recoveries || 0);
-    const awayGiveaways = (awayStats?.passing_interceptions || 0) + (awayStats?.offense_fumbles_lost || 0);
-    
-    return {
-      category: 'Turnover Analysis',
-      home: {
-        team: home.full_name || home.name,
-        takeaways: fmtNum(homeTakeaways, 0),
-        giveaways: fmtNum(homeGiveaways, 0),
-        turnover_diff: fmtNum(homeTakeaways - homeGiveaways, 0)
-      },
-      away: {
-        team: away.full_name || away.name,
-        takeaways: fmtNum(awayTakeaways, 0),
-        giveaways: fmtNum(awayGiveaways, 0),
-        turnover_diff: fmtNum(awayTakeaways - awayGiveaways, 0)
+    try {
+      const [homeStatsArr, awayStatsArr] = await Promise.all([
+        ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
+        ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+      ]);
+      const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
+      const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;
+
+      if (!homeStats || !awayStats) {
+        return { category: 'Turnover Analysis', error: 'Data unavailable — BDL returned no stats for one or both teams' };
       }
-    };
+
+      const homeTakeaways = (homeStats.defense_interceptions || 0) + (homeStats.defense_fumble_recoveries || 0);
+      const homeGiveaways = (homeStats.passing_interceptions || 0) + (homeStats.offense_fumbles_lost || 0);
+      const awayTakeaways = (awayStats.defense_interceptions || 0) + (awayStats.defense_fumble_recoveries || 0);
+      const awayGiveaways = (awayStats.passing_interceptions || 0) + (awayStats.offense_fumbles_lost || 0);
+
+      return {
+        category: 'Turnover Analysis',
+        home: {
+          team: home.full_name || home.name,
+          takeaways: fmtNum(homeTakeaways, 0),
+          giveaways: fmtNum(homeGiveaways, 0),
+          turnover_diff: fmtNum(homeTakeaways - homeGiveaways, 0)
+        },
+        away: {
+          team: away.full_name || away.name,
+          takeaways: fmtNum(awayTakeaways, 0),
+          giveaways: fmtNum(awayGiveaways, 0),
+          turnover_diff: fmtNum(awayTakeaways - awayGiveaways, 0)
+        }
+      };
+    } catch (err) {
+      console.error(`[Stat Router] TURNOVER_LUCK error: ${err.message}`);
+      return { category: 'Turnover Analysis', error: 'Data unavailable' };
+    }
   },
 
   // ===== NFL EARLY/LATE DOWN & EXPLOSIVENESS STATS =====

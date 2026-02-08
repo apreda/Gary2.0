@@ -164,7 +164,7 @@ export async function runAgenticPropsCli({
       console.log(`\n📡 Fetching player props...`);
       let playerProps = [];
       try {
-        playerProps = await propOddsService.getPlayerPropOdds(sportKey, game.home_team, game.away_team);
+        playerProps = await propOddsService.getPlayerPropOdds(sportKey, game.home_team, game.away_team, game.commence_time);
         console.log(`✅ Found ${playerProps.length} prop lines`);
       } catch (propsError) {
         console.warn(`⚠️ Could not fetch props: ${propsError.message}`);

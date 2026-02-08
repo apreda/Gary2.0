@@ -12,7 +12,7 @@ const { oddsService } = await import('../src/services/oddsService.js');
 const { propOddsService } = await import('../src/services/propOddsService.js');
 const { openaiService, GEMINI_FLASH_MODEL } = await import('../src/services/openaiService.js');
 const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
-const { fetchGroundedContext } = await import('../src/services/agentic/scoutReport/scoutReportBuilder.js');
+const { getGroundedRichContext } = await import('../src/services/agentic/scoutReport/scoutReportBuilder.js');
 
 const SPORT_KEY = 'americanfootball_nfl';
 
@@ -912,7 +912,7 @@ async function main() {
     console.log(`   Fetching props...`);
 
     try {
-      const props = await propOddsService.getPlayerPropOdds(SPORT_KEY, game.home_team, game.away_team);
+      const props = await propOddsService.getPlayerPropOdds(SPORT_KEY, game.home_team, game.away_team, game.commence_time);
       
       // Filter for anytime TD props (1+ TD, line 0.5)
       // Also get 2+ TD props (line 1.5) for top players
@@ -1034,7 +1034,7 @@ async function main() {
         month: 'long', day: 'numeric', year: 'numeric' 
       });
       console.log(`   Fetching narrative context...`);
-      const grounded = await fetchGroundedContext(game.home_team, game.away_team, 'NFL', dateStr, { useFlash: true }).catch(() => null);
+      const grounded = await getGroundedRichContext(game.home_team, game.away_team, 'NFL', dateStr).catch(() => null);
       
       // NEW: Extract structured injuries from grounded context
       const gameInjuries = grounded?.groundedRaw 
