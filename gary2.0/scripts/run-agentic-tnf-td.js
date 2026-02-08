@@ -281,7 +281,7 @@ async function main() {
   console.log(`\n📡 Fetching TD props for ${matchup}...`);
 
   try {
-    const props = await propOddsService.getPlayerPropOdds(SPORT_KEY, tnfGame.home_team, tnfGame.away_team);
+    const props = await propOddsService.getPlayerPropOdds(SPORT_KEY, tnfGame.home_team, tnfGame.away_team, tnfGame.commence_time);
     
     // Filter for anytime TD props
     const tdProps = props.filter(p => {

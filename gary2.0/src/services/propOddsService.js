@@ -191,13 +191,23 @@ export const propOddsService = {
    * @param {string} sport - Sport key (e.g., 'basketball_nba')
    * @param {string} homeTeam - Home team name
    * @param {string} awayTeam - Away team name
+   * @param {string} [commenceTime] - ISO datetime of game start (used to derive correct search date)
    * @returns {Promise<Array>} - Array of player prop odds
    * @throws {Error} When no valid current player prop data is available
    */
-  getPlayerPropOdds: async (sport, homeTeam, awayTeam) => {
+  getPlayerPropOdds: async (sport, homeTeam, awayTeam, commenceTime) => {
     try {
       console.log(`🔍 Fetching player prop odds for ${sport} game: ${homeTeam} vs ${awayTeam}...`);
-      
+
+      // Derive game date in EST — use commenceTime when available, fall back to now
+      const getGameDateEST = () => {
+        const dateSource = commenceTime ? new Date(commenceTime) : new Date();
+        const estOptions = { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' };
+        const estDate = new Intl.DateTimeFormat('en-US', estOptions).format(dateSource);
+        const [month, day, year] = estDate.split('/');
+        return `${year}-${month}-${day}`;
+      };
+
       // Normalize team names for more flexible matching
       const normalizeTeamName = (name) => name.toLowerCase().replace(/\s+/g, '');
       const normalizedHomeTeam = normalizeTeamName(homeTeam);
@@ -206,13 +216,8 @@ export const propOddsService = {
       // ============ NHL: Use Ball Don't Lie Player Props API ============
       if (sport === 'icehockey_nhl') {
         console.log(`[PropOdds] Using Ball Don't Lie for NHL player props`);
-        
-        // Get today's date in YYYY-MM-DD format (EST) - DST-safe
-        const now = new Date();
-        const estOptions = { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' };
-        const estDate = new Intl.DateTimeFormat('en-US', estOptions).format(now);
-        const [month, day, year] = estDate.split('/');
-        const dateStr = `${year}-${month}-${day}`;
+
+        const dateStr = getGameDateEST();
         console.log(`[PropOdds] NHL: Searching for games on EST date: ${dateStr}`);
         
         // Find the game ID from BDL
@@ -297,12 +302,7 @@ export const propOddsService = {
       if (sport === 'americanfootball_nfl') {
         console.log(`[PropOdds] Using Ball Don't Lie for NFL player props`);
 
-        // Get today's date in YYYY-MM-DD format (EST) - DST-safe
-        const now = new Date();
-        const estOptions = { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' };
-        const estDate = new Intl.DateTimeFormat('en-US', estOptions).format(now);
-        const [month, day, year] = estDate.split('/');
-        const dateStr = `${year}-${month}-${day}`;
+        const dateStr = getGameDateEST();
         console.log(`[PropOdds] NFL: Searching for games on EST date: ${dateStr}`);
 
         // Find the game ID from BDL
@@ -392,12 +392,7 @@ export const propOddsService = {
       if (sport === 'basketball_nba') {
         console.log(`[PropOdds] Using Ball Don't Lie for NBA player props`);
 
-        // Get today's date in YYYY-MM-DD format (EST) - DST-safe
-        const now = new Date();
-        const estOptions = { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' };
-        const estDate = new Intl.DateTimeFormat('en-US', estOptions).format(now);
-        const [month, day, year] = estDate.split('/');
-        const dateStr = `${year}-${month}-${day}`;
+        const dateStr = getGameDateEST();
         console.log(`[PropOdds] NBA: Searching for games on EST date: ${dateStr}`);
 
         // Find the game ID from BDL
