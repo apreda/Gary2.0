@@ -1940,6 +1940,45 @@ const FETCHERS = {
     }
   },
 
+  NCAAB_TS_PCT: async (bdlSport, home, away, season) => {
+    try {
+      const [homeStats, awayStats] = await Promise.all([
+        ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
+        ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+      ]);
+      const homeData = Array.isArray(homeStats) ? homeStats[0] : homeStats;
+      const awayData = Array.isArray(awayStats) ? awayStats[0] : awayStats;
+
+      // TS% = Points / (2 * (FGA + 0.44 * FTA))
+      const calcTS = (data) => {
+        if (!data) return null;
+        const pts = data.pts || 0;
+        const fga = data.fga || 0;
+        const fta = data.fta || 0;
+        const games = data.games_played || 1;
+        const tsa = fga + 0.44 * fta; // True Shooting Attempts
+        if (tsa === 0) return null;
+        return ((pts / games) / (2 * (tsa / games)) * 100).toFixed(1);
+      };
+
+      return {
+        category: 'True Shooting % (TS%)',
+        home: {
+          team: home.full_name || home.name,
+          ts_pct: calcTS(homeData) ? `${calcTS(homeData)}%` : 'N/A'
+        },
+        away: {
+          team: away.full_name || away.name,
+          ts_pct: calcTS(awayData) ? `${calcTS(awayData)}%` : 'N/A'
+        },
+        note: 'TS% captures total scoring efficiency (FG + 3PT + FT). Higher than eFG% for teams with elite FT rate.'
+      };
+    } catch (error) {
+      console.warn('[Stat Router] NCAAB_TS_PCT fetch failed:', error.message);
+      return { category: 'True Shooting % (TS%)', error: 'Data unavailable' };
+    }
+  },
+
   // ===== NCAAB GROUNDING-BASED ADVANCED STATS =====
   // These use Gemini Grounding to fetch advanced analytics not available in BDL
   
