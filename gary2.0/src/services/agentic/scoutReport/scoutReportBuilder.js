@@ -1365,27 +1365,13 @@ Return ONLY the 5 player names in the Expected Lineup for ${teamName}. Format: N
           }
         }
         
-        // ENHANCED: Get BOTH starting lineups AND full injury list from RotoWire specifically
-        // This matches EXACTLY what's shown on RotoWire's NCAAB lineups page
-        const gtdQuery = `Search RotoWire NCAAB/CBB lineups page (rotowire.com/daily/ncaab/lineups.php) for ${awayShort} vs ${homeShort} January 2026
+        // ENHANCED: Fetch EACH team separately to prevent truncation
+        // Single-query approach was cutting off the second team's data (493 chars for 2 teams)
+        const buildTeamQuery = (teamName, teamShort) => `Search RotoWire NCAAB/CBB lineups page (rotowire.com/daily/ncaab/lineups.php) for ${teamShort} February 2026
 
-I need the EXACT information shown on RotoWire's college basketball lineups page for this game.
+Return the EXACT information from RotoWire's college basketball lineups page for ${teamName}:
 
-COPY THE EXACT FORMAT FROM ROTOWIRE:
-
-=== ${awayTeam} ===
-STARTERS:
-PG: [full name]
-SG: [full name]  
-SF: [full name]
-PF: [full name]
-C: [full name]
-
-INJURIES:
-[Position] [Name] [Status]
-(list ALL injuries from RotoWire with position letter G/F/C, player name, and status GTD/Out/OFS)
-
-=== ${homeTeam} ===
+=== ${teamName} ===
 STARTERS:
 PG: [full name]
 SG: [full name]
@@ -1397,23 +1383,36 @@ INJURIES:
 [Position] [Name] [Status]
 (list ALL injuries from RotoWire with position letter G/F/C, player name, and status GTD/Out/OFS)
 
-ALSO PROVIDE SUMMARY LINES:
-${awayTeam} GTD PLAYERS: [comma-separated names of players marked "GTD" ONLY, or "None"]
-${homeTeam} GTD PLAYERS: [comma-separated names of players marked "GTD" ONLY, or "None"]
+${teamName} GTD PLAYERS: [comma-separated names of players marked "GTD" ONLY, or "None"]
 
-STATUS DEFINITIONS FROM ROTOWIRE:
-- GTD = Game Time Decision (uncertain - could play or sit)
-- Out = Confirmed NOT playing tonight
-- OFS = Out For Season (season-ending injury)
-
-CRITICAL: Be precise. Only include what's actually shown on RotoWire. If a section says "None" or is empty, say "None".`;
+STATUS KEY: GTD = Game Time Decision, Out = Confirmed NOT playing, OFS = Out For Season
+CRITICAL: Be precise. Only include what's actually shown on RotoWire. List ALL injuries.`;
 
         console.log(`[Scout Report] Fetching RotoWire lineups and GTD status for ${awayTeam} @ ${homeTeam}...`);
-        const result = await model.generateContent(gtdQuery);
-        const responseText = (result.response?.text() || '').trim();
-        
+
+        // Fetch BOTH teams in parallel — separate calls prevent truncation
+        const [awayResult, homeResult] = await Promise.all([
+          model.generateContent(buildTeamQuery(awayTeam, awayShort)),
+          model.generateContent(buildTeamQuery(homeTeam, homeShort))
+        ]);
+
+        const awayResponseText = (awayResult.response?.text() || '').trim();
+        const homeResponseText = (homeResult.response?.text() || '').trim();
+
+        console.log(`[Scout Report] RotoWire responses: ${awayTeam} (${awayResponseText.length} chars), ${homeTeam} (${homeResponseText.length} chars)`);
+
+        // Combine into unified format for existing parsers
+        // Strip markdown formatting (Gemini sometimes wraps positions in **bold**)
+        // e.g., "**PG:** Kingston Flemings" → "PG: Kingston Flemings"
+        const cleanAway = awayResponseText.replace(/\*\*/g, '');
+        const cleanHome = homeResponseText.replace(/\*\*/g, '');
+        const responseText = `=== ${awayTeam} ===\n${cleanAway}\n\n=== ${homeTeam} ===\n${cleanHome}`;
+
         if (responseText) {
           console.log(`[Scout Report] RotoWire response: ${responseText.substring(0, 500)}`);
+          // Log individual team responses for parser debugging
+          console.log(`[Scout Report] ${awayTeam} clean response (${cleanAway.length} chars): ${cleanAway.substring(0, 300)}`);
+          console.log(`[Scout Report] ${homeTeam} clean response (${cleanHome.length} chars): ${cleanHome.substring(0, 300)}`);
           
           // STEP 1: Parse starting lineups from response
           const parseStartingLineup = (text, teamName, teamShort, otherTeamName) => {
@@ -1465,7 +1464,8 @@ CRITICAL: Be precise. Only include what's actually shown on RotoWire. If a secti
                 const section = match[1];
                 // Extract player names (look for position abbreviations followed by names)
                 // Must have both first and last name (two capital words)
-                const playerPattern = /(?:PG|SG|SF|PF|C)[:\s]+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)/gi;
+                // Allow periods (A.J.), hyphens (Karl-Anthony), apostrophes (De'Aaron) in names
+                const playerPattern = /(?:PG|SG|SF|PF|C)[:\s]+([A-Z][a-z.'-]+(?:\s+[A-Z][a-z.'-]+)+)/gi;
                 let playerMatch;
                 while ((playerMatch = playerPattern.exec(section)) !== null) {
                   const name = playerMatch[1].trim();
@@ -1502,9 +1502,21 @@ CRITICAL: Be precise. Only include what's actually shown on RotoWire. If a secti
             return starters;
           };
           
-          // Parse starters for both teams
-          rotoWireStarters.away = parseStartingLineup(responseText, awayTeam, awayShort, homeTeam);
-          rotoWireStarters.home = parseStartingLineup(responseText, homeTeam, homeShort, awayTeam);
+          // Parse starters from INDIVIDUAL team responses (not combined text)
+          // Each team's Gemini response is self-contained — no section extraction needed
+          rotoWireStarters.away = parseStartingLineup(cleanAway, awayTeam, awayShort, homeTeam);
+          rotoWireStarters.home = parseStartingLineup(cleanHome, homeTeam, homeShort, awayTeam);
+
+          // STARTERS VALIDATION: If we can't identify starters, the analysis is invalid
+          // Gary cannot make a pick without knowing who's playing — fail loud so we fix it
+          if (rotoWireStarters.home.length < 4 || rotoWireStarters.away.length < 4) {
+            const homeCount = rotoWireStarters.home.length;
+            const awayCount = rotoWireStarters.away.length;
+            console.error(`[Scout Report] ❌ NCAAB STARTERS INCOMPLETE: ${homeTeam} (${homeCount}/5), ${awayTeam} (${awayCount}/5)`);
+            console.error(`[Scout Report] Raw response length: ${responseText.length} chars`);
+            console.error(`[Scout Report] Cannot analyze game without knowing starters — failing`);
+            throw new Error(`NCAAB starters incomplete: ${homeTeam} (${homeCount}/5), ${awayTeam} (${awayCount}/5). RotoWire data was truncated or unparseable. Raw response: ${responseText.substring(0, 300)}...`);
+          }
 
           // STEP 1.5: Parse INJURIES from RotoWire response (NCAAB)
           // The RotoWire response often has INJURIES section like: "INJURIES:\nG Jahseem Felton OFS\nF Patrick Suemnick Out"
@@ -1568,10 +1580,10 @@ CRITICAL: Be precise. Only include what's actually shown on RotoWire. If a secti
             return injuries;
           };
 
-          // Parse injuries from both team sections in the response
+          // Parse injuries from INDIVIDUAL team responses (not combined text)
           if (sportKey === 'NCAAB' || sportKey === 'basketball_ncaab') {
-            rotoWireInjuries.away = parseNcaabInjuriesFromResponse(responseText, awayTeam, homeTeam);
-            rotoWireInjuries.home = parseNcaabInjuriesFromResponse(responseText, homeTeam, awayTeam);
+            rotoWireInjuries.away = parseNcaabInjuriesFromResponse(cleanAway, awayTeam, homeTeam);
+            rotoWireInjuries.home = parseNcaabInjuriesFromResponse(cleanHome, homeTeam, awayTeam);
             if (rotoWireInjuries.away.length > 0 || rotoWireInjuries.home.length > 0) {
               console.log(`[Scout Report] NCAAB RotoWire injuries parsed: ${rotoWireInjuries.away.length} for ${awayTeam}, ${rotoWireInjuries.home.length} for ${homeTeam}`);
 
@@ -1853,6 +1865,10 @@ CRITICAL: Be precise. Only include what's actually shown on RotoWire. If a secti
         }
       }
     } catch (e) {
+      // Starters incomplete = data integrity failure — must propagate to kill the pipeline
+      if (e.message && e.message.includes('NCAAB starters incomplete')) {
+        throw e;
+      }
       console.warn(`[Scout Report] RotoWire GTD check failed: ${e.message}`);
     }
     
@@ -5826,7 +5842,13 @@ function formatOdds(game, sport = '') {
     const awaySpread = -homeSpread;
     spreadValue = homeSpread;
     spreadOdds = game.spread_home_odds || game.spread_odds || null;
-    lines.push(`Spread: ${game.away_team} ${awaySpread > 0 ? '+' : ''}${awaySpread.toFixed(1)} | ${game.home_team} ${homeSpread > 0 ? '+' : ''}${homeSpread.toFixed(1)} (${spreadOdds})`);
+    // Randomize which team is listed first to prevent order bias (away was always first)
+    const spreadHomeFirst = Math.random() > 0.5;
+    if (spreadHomeFirst) {
+      lines.push(`Spread: ${game.home_team} ${homeSpread > 0 ? '+' : ''}${homeSpread.toFixed(1)} | ${game.away_team} ${awaySpread > 0 ? '+' : ''}${awaySpread.toFixed(1)} (${spreadOdds})`);
+    } else {
+      lines.push(`Spread: ${game.away_team} ${awaySpread > 0 ? '+' : ''}${awaySpread.toFixed(1)} | ${game.home_team} ${homeSpread > 0 ? '+' : ''}${homeSpread.toFixed(1)} (${spreadOdds})`);
+    }
   } else if (game.spreads) {
     lines.push(`Spread: ${game.spreads}`);
   } else {
@@ -8523,28 +8545,12 @@ async function fetchNcaabKeyPlayers(homeTeam, awayTeam, sport) {
           tools: [{ googleSearch: {} }]
         });
         
-        // Search RotoWire specifically for tonight's college basketball lineup
-        // Format matches EXACTLY what RotoWire shows on their CBB lineups page
-        const lineupQuery = `Search site:rotowire.com/daily/ncaab/lineups.php for ${awayTeam} vs ${homeTeam} ${today}
+        // Fetch EACH team separately to prevent truncation (single-query approach cut off second team)
+        const buildLineupQuery = (teamName) => `Search site:rotowire.com/daily/ncaab/lineups.php for ${teamName} ${today}
 
-Return the EXACT information from RotoWire's CBB lineups page in this format:
+Return the EXACT information from RotoWire's CBB lineups page for ${teamName}:
 
-═══ ${awayTeam} (AWAY) ═══
-STARTERS:
-PG: [name]
-SG: [name]
-SF: [name]
-PF: [name]
-C: [name]
-
-INJURIES:
-[Pos] [Name] [Status]
-(Format: G/F/C + Name + GTD/Out/OFS)
-Example: G J. Edwards GTD
-Example: F Rich Barron Out
-Example: C A. Smith OFS
-
-═══ ${homeTeam} (HOME) ═══
+═══ ${teamName} ═══
 STARTERS:
 PG: [name]
 SG: [name]
@@ -8556,20 +8562,22 @@ INJURIES:
 [Pos] [Name] [Status]
 (Format: G/F/C + Name + GTD/Out/OFS)
 
-STATUS KEY:
-- GTD = Game Time Decision (uncertain)
-- Out = Confirmed NOT playing
-- OFS = Out For Season
-
+STATUS KEY: GTD = Game Time Decision, Out = Confirmed NOT playing, OFS = Out For Season
 List ALL injuries shown on RotoWire. If no injuries, write "None".`;
 
-        const result = await model.generateContent(lineupQuery);
-        const responseText = result.response?.text() || '';
-        
-        if (responseText && responseText.length > 100) {
-          console.log(`[Scout Report] Gemini Grounding returned NCAAB lineup data (${responseText.length} chars)`);
+        const [awayLineupResult, homeLineupResult] = await Promise.all([
+          model.generateContent(buildLineupQuery(awayTeam)),
+          model.generateContent(buildLineupQuery(homeTeam))
+        ]);
+
+        const awayLineupText = awayLineupResult.response?.text() || '';
+        const homeLineupText = homeLineupResult.response?.text() || '';
+        const combinedLineupText = `═══ ${awayTeam} (AWAY) ═══\n${awayLineupText}\n\n═══ ${homeTeam} (HOME) ═══\n${homeLineupText}`;
+
+        if (combinedLineupText.length > 100) {
+          console.log(`[Scout Report] Gemini Grounding returned NCAAB lineup data: ${awayTeam} (${awayLineupText.length} chars), ${homeTeam} (${homeLineupText.length} chars)`);
           rotoWireLineups = {
-            content: responseText,
+            content: combinedLineupText,
             source: 'Gemini Grounding (site:rotowire.com)',
             fetchedAt: new Date().toISOString()
           };
