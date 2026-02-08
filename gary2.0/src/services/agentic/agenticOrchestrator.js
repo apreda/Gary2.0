@@ -90,7 +90,7 @@ function sportUsesPro(sport) {
  * @returns {string} - Model name to use
  */
 function getModelForPhase(sport, phase) {
-  // NCAAB/NCAAF always uses Flash (high volume, no Pro needed)
+  // NCAAF always uses Flash (high volume). NBA/NFL/NHL/NCAAB use Pro for Pass 2.5+
   if (!sportUsesPro(sport)) {
     return 'gemini-3-flash-preview';
   }
