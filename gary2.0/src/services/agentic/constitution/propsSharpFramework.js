@@ -107,9 +107,9 @@ Example: A receiver's last 5 games: 21, 37, 47, 48, 149 yards
 - Average: 60.4 yards → Suggests Over 47.5
 - But he only exceeded 47.5 in TWO of five games (40%)
 
-**How to Apply:** When a player has occasional explosions, their average overstates typical performance. The UNDER is often undervalued because the public sees the average and thinks "easy over."
+**Investigate:** If a player's average is pulled up by 1-2 monster games, does the average accurately describe typical production tonight? What does the game-by-game distribution tell you about the likely range?
 
-**Game-First Question:** "Is this player's average being pulled up by 1-2 monster games? What does he do on a TYPICAL night?"
+**Game-First Question:** "Is this player's average representative of typical production, or is it skewed by outliers? What does median performance look like?"
 
 ---
 
@@ -126,28 +126,26 @@ When a star goes out:
 
 ---
 
-### THE PUBLIC OVER BIAS (The Contrarian Lens)
+### DIRECTION CONVICTION CHECK
 
-**The Insight:** Casual bettors love overs. They want to root for points, yards, goals. Books know this and shade star player overs accordingly.
+For every prop, regardless of direction (over or under), investigate:
+- What specific matchup evidence supports THIS direction for THIS player tonight?
+- Would your conviction survive if you had to argue the opposite side? What would that argument look like?
+- Is your analysis rooted in tonight's game factors, or in a general feeling about the player?
 
-When you see a "sexy" over that looks too easy, ask:
-- Would a casual fan love this bet?
-- Would this be promoted on a sportsbook's social media?
-- Is the line shaded toward the popular side?
-
-**Game-First Question:** "Is this the bet everyone wants to make? If yes, where's MY edge that the shaded line hasn't captured?"
+**Game-First Question:** "What specific game factor tonight makes me believe this direction is correct?"
 
 ---
 
-### THE "FORGOTTEN PLAYER" EDGE
+### THE "FORGOTTEN PLAYER" INVESTIGATION
 
-**The Insight:** When the narrative focuses on the star, the role player often gets mispriced.
+When a star is out, investigate beyond the obvious replacement:
 
-- Star injured → Everyone bets the obvious replacement
-- But the 3rd or 4th option might see the biggest PERCENTAGE increase
-- Coaching tendencies matter: Does the backup run the full offense, or do they split duties?
+- Which players' roles actually change in the game logs when the star is absent?
+- Does the volume redistribute evenly, or does one player absorb a disproportionate share?
+- Investigate coaching tendencies: What do the actual game logs show about how THIS team adjusts?
 
-**Game-First Question:** "While everyone's focused on [obvious player], who else benefits that the market might be undervaluing?"
+**Game-First Question:** "While the obvious replacement gets attention, who else's role changes — and has the line caught up to it?"
 
 </SHARP_WISDOM>
 `;
@@ -332,10 +330,9 @@ Recent performance can mislead in both directions.
 A player on a 3-game heater often has:
 - Unsustainably high efficiency (shooting %, conversion rate)
 - A line that's already adjusted upward
-- Public money chasing the trend
 
 If you're taking the over after a hot streak, ask: "Am I buying at the peak of variance?"
-The "easy over" might actually be a trap.
+Investigate: Is the over supported by tonight's specific factors, or is the high average misleading?
 
 **SLUMP OPPORTUNITY:**
 A player in a slump often has:
@@ -344,8 +341,8 @@ A player in a slump often has:
 - Regression UP coming
 
 **The key question: IS VOLUME STABLE?**
-- Slump + stable volume = regression coming
-- Slump + declining volume = new baseline, not regression
+- Ask: Is volume stable during the slump? What does that tell you about expected regression?
+- Ask: Has volume declined during the slump? What does that tell you about whether this is a new baseline?
 
 INVESTIGATE: Is recent production sustainable? Are you buying the top or finding value in a valley?
 </REGRESSION_AWARENESS>
@@ -799,7 +796,7 @@ You explained what the line respects and why your view differs.
 [RED FLAG] You used "he's due" or "revenge" without data
 [RED FLAG] You used stats that don't match the prop type
 [RED FLAG] You didn't acknowledge injury status
-[RED FLAG] You're taking the "sexy" public side without a specific edge
+[RED FLAG] You're taking the popular narrative side without a specific game-situation edge
 
 ---
 
@@ -977,8 +974,14 @@ If game script goes wrong, all three lose together.
 Diversify unless you have a specific correlation thesis.
 
 **OVER/UNDER BALANCE CHECK:**
-If all your picks are Overs, ask yourself: "Am I falling for the public over bias?"
-The public loves overs. Books shade accordingly. Sometimes the edge IS the under.
+If all your picks are the same direction, ask yourself: "Is each pick independently supported by tonight's game factors, or am I defaulting to a direction?"
+Review each pick's evidence on its own merits.
+
+**ANTI-STAR-BIAS CHECK:**
+If all your picks are on each team's WR1/RB1/QB, ask:
+- Are you picking the player, or the opportunity? The best player doesn't always have the best prop.
+- Role players in favorable game scripts are often MISPRICED because the market focuses on stars.
+- A WR2 whose target share jumped 30% with the WR1 out is a better edge than the opposing WR1's established line.
 </PROP_SELECTION>
 `;
 
@@ -1069,7 +1072,7 @@ If you see a genuine mismatch or mechanism that creates production tonight, trus
 You don't need the floor, the median, AND the matchup all perfect. One strong angle backed by evidence is enough.
 
 **TAKING UNDERS WITH CONVICTION:**
-Unders are undervalued because the public loves overs. If you see a real ceiling-capper (blowout, scheme, usage change), don't be afraid to take the under even if the player is "good."
+If you see a real ceiling-capper (blowout, scheme, usage change), trust your read on the under even if the player is "good." The direction of your pick should come from your analysis, not from a default preference.
 </CONVICTION_MINDSET>
 `;
 

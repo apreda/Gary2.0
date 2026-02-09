@@ -377,7 +377,7 @@ function getTopPropCandidates(props, maxPlayersPerTeam = 10) {
   // NOTE: No bias toward any specific prop type - Gary decides organically
   const scored = grouped.map(player => {
     const avgOdds = player.props.reduce((sum, p) => {
-      const odds = p.over_odds || p.under_odds || -110;
+      const odds = p.over_odds || p.under_odds || null;
       return sum + odds;
     }, 0) / player.props.length;
     

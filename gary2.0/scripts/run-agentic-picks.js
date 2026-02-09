@@ -211,8 +211,6 @@ const forceRerun = args.includes('--force');
 const dateFilter = getArgValue('--date');
 // --dynamic flag to enable dynamic slate review (organic pick selection based on board quality)
 const useDynamicSlateReview = args.includes('--dynamic');
-// --force-underdog flag to make Gary argue FOR the underdog (one-time use for testing value)
-const forceUnderdog = args.includes('--force-underdog');
 // --test flag to store picks in test_daily_picks table instead of production (for testing)
 const useTestTable = args.includes('--test');
 // --test-name flag to label the test run (e.g., "Sharp Betting Reference Test")
@@ -256,7 +254,6 @@ if (sportsToRun.length === 0) {
 ║    --time 12,13                (filter to 12pm and 1pm EST)      ║
 ║    --limit 5                   (limit to N games)                ║
 ║    --force                     (skip deduplication)              ║
-║    --force-underdog            (make Gary argue for underdog)    ║
 ║    --store false               (analyze only, don't save)        ║
 ║    --test                      (store to test_daily_picks table) ║
 ║    --test-name "My Test"       (label the test run)              ║
@@ -911,7 +908,6 @@ async function main() {
         // Run agentic analysis (each game is independent)
         const runnerOptions = {
           nocache: process.argv.includes('--nocache'),
-          forceUnderdog: forceUnderdog,
           sportsbookOdds: preSportsbookOdds // Pass multi-book odds for scout report
         };
         let result;

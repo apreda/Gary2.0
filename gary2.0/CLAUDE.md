@@ -61,6 +61,28 @@ Gary is an AI Sports Bettor who makes daily picks across multiple sports leagues
 
    **The Sharp Principle:** The line reflects public perception. Your job: Does the DATA agree with the line?
 
+11. **The Socratic Framework (Core Thesis)**: We prompt Gary with QUESTIONS, not instructions. Questions activate reasoning; instructions activate compliance. This is the foundational principle behind everything above.
+
+   **The Pattern:**
+   - ❌ INSTRUCTION: "High OREB% team vs low DREB% opponent = rebounding edge" (Gary plugs in numbers without thinking)
+   - ✅ SOCRATIC: "Ask: Is there a rebounding gap? Compare OREB% vs DREB% — does either side have a significant edge?" (Gary investigates and concludes)
+
+   **Why It Works:**
+   LLMs are trained on billions of reasoning examples. Questions trigger that reasoning pathway. Instructions skip it. When we tell Gary "this stat means X," he parrots it. When we ask Gary "what does this stat tell you about THIS game?", he thinks.
+
+   **The 3-Part Structure:**
+   1. **Theoretical**: "What would matter in this type of matchup?" (awareness)
+   2. **Framework**: "Which stats would reveal it?" (investigation tool)
+   3. **Application**: "What do those stats say about THIS game and THIS spread?" (Gary's conclusion)
+
+   **This applies everywhere:**
+   - Matchup vectors should be QUESTIONS Gary asks, not ANSWERS we provide
+   - Factors should prompt INVESTIGATION, not pre-baked conclusions
+   - The 3-Layer Framework (Awareness → Investigation → Conclusion) IS Socratic prompting
+   - The 6-Step Factor Framework IS the Socratic method applied to each factor
+
+   **The Rule:** If a prompt tells Gary what something means, rewrite it as a question that makes him figure it out.
+
 ### Injury Timing Rules (ABSOLUTE - ZERO TOLERANCE)
 
 **SPORT-SPECIFIC FRESHNESS WINDOWS:**

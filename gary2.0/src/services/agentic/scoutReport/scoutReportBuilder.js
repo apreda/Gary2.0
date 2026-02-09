@@ -2258,7 +2258,10 @@ INJURY DURATION RULES (CRITICAL):
 ${narrativeContext ? `
 CURRENT STATE & CONTEXT (PRIMARY INJURY SOURCE)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-This is what a knowledgeable fan would know about each team heading into this game.
+This is what a knowledgeable fan would know about each team heading into this game —
+the public narrative that fans, media, and the market see. Betting lines are set in REACTION
+to these narratives. Understanding what the public sees helps you identify where the line's
+pricing may or may not match what the data actually shows.
 
 [IMPORTANT] INJURY CITATION FILTER (APPLY BEFORE CITING ANY INJURY):
 When you see an injury mentioned below, ASK YOURSELF:
@@ -3346,61 +3349,10 @@ async function fetchInjuries(homeTeam, awayTeam, sport) {
             enrichedHome = enrichWithBdl(enrichedHome);
             enrichedAway = enrichWithBdl(enrichedAway);
 
-            // IMPORTANT: Add BDL injuries that Rotowire grounding MISSED
-            // This supplements Rotowire data when grounding fails to return all injuries
-            const rotowireHomeNames = new Set(enrichedHome.map(i =>
-              `${i.player?.first_name || ''} ${i.player?.last_name || ''}`.toLowerCase().trim()
-            ));
-            const rotowireAwayNames = new Set(enrichedAway.map(i =>
-              `${i.player?.first_name || ''} ${i.player?.last_name || ''}`.toLowerCase().trim()
-            ));
-
-            for (const bdlInj of bdlInjuries) {
-              const name = `${bdlInj.player?.first_name} ${bdlInj.player?.last_name}`.toLowerCase().trim();
-              const teamId = bdlInj.team?.id;
-              const isHome = teamId === homeTeamData?.id;
-              const isAway = teamId === awayTeamData?.id;
-
-              // Skip if already in Rotowire data
-              if (rotowireHomeNames.has(name) || rotowireAwayNames.has(name)) {
-                continue;
-              }
-
-              // Only add OUT/Doubtful injuries (not Day-to-Day or minor)
-              const status = (bdlInj.status || '').toLowerCase();
-              if (!status.includes('out') && !status.includes('doubtful')) {
-                continue;
-              }
-
-              // Extract duration from BDL
-              const desc = bdlInj.description || '';
-              const returnDate = bdlInj.return_date;
-              const durationInfo = extractDurationFromBdl(desc, returnDate);
-
-              const injuryObj = {
-                player: {
-                  first_name: bdlInj.player?.first_name,
-                  last_name: bdlInj.player?.last_name,
-                  position: bdlInj.player?.position
-                },
-                status: bdlInj.status || 'Out',
-                type: bdlInj.injury_type || 'Unknown',
-                daysSinceReport: durationInfo.daysSinceOut,
-                duration: durationInfo.duration,
-                reportDateStr: durationInfo.outSinceStr,
-                bdlDescription: desc.substring(0, 100),
-                bdlReturnDate: returnDate,
-                source: 'BDL'
-              };
-
-              if (isHome) {
-                console.log(`[Scout Report] Adding BDL injury for HOME (${homeTeam}): ${name} (${bdlInj.status})`);
-                enrichedHome.push(injuryObj);
-              } else if (isAway) {
-                console.log(`[Scout Report] Adding BDL injury for AWAY (${awayTeam}): ${name} (${bdlInj.status})`);
-                enrichedAway.push(injuryObj);
-              }
-            }
+            // NOTE: BDL is ONLY used for duration enrichment above.
+            // Rotowire is the SOLE source of truth for injury STATUS.
+            // We do NOT add BDL-only injuries — if a player isn't on Rotowire's
+            // lineup card, they shouldn't be in our injury list.
           }
         } else if (bdlSport === 'icehockey_nhl') {
           // NHL: Skip BDL injuries entirely - RotoWire Grounding already provides duration info
@@ -3629,7 +3581,7 @@ What is the CURRENT STATE of each team heading into this game?
    - 1-2 days ago = "FRESH / NEW"
 
 **${homeTeam}:**
-- Momentum (last 5-10 games - hot/cold?)
+- Recent trajectory (last 5-10 games — wins, losses, and how they've looked)
 - **LAST GAME:** What happened? (Beat writer narrative - blowout, close, buzzer beater?)
 - **INJURIES:** OUT/DOUBTFUL/QUESTIONABLE/LIMITED players with:
   * Status, injury type, ORIGINAL DATE, GAMES MISSED
@@ -3637,7 +3589,7 @@ What is the CURRENT STATE of each team heading into this game?
 - Recent storylines (breakout performances, key headlines)
 
 **${awayTeam}:**
-- Momentum (last 5-10 games - hot/cold?)
+- Recent trajectory (last 5-10 games — wins, losses, and how they've looked)
 - **LAST GAME:** What happened? (Beat writer narrative)
 - **INJURIES:** Same format as above with ORIGINAL DATE + GAMES MISSED
 - Recent storylines
@@ -4082,8 +4034,8 @@ Report whether the goalie is "Confirmed" or "Expected" based on what RotoWire sh
       const [awayGoalieResponse, homeGoalieResponse, awayInjuryResponse, homeInjuryResponse] = await Promise.all([
         geminiGroundingSearch(makeNhlGoalieQuery(awayTeam, homeTeam), { temperature: 0.3, maxTokens: 500 }),
         geminiGroundingSearch(makeNhlGoalieQuery(homeTeam, awayTeam), { temperature: 0.3, maxTokens: 500 }),
-        geminiGroundingSearch(makeNhlInjuryOnlyQuery(awayTeam), { temperature: 0.3, maxTokens: 2000 }),
-        geminiGroundingSearch(makeNhlInjuryOnlyQuery(homeTeam), { temperature: 0.3, maxTokens: 2000 })
+        geminiGroundingSearch(makeNhlInjuryOnlyQuery(awayTeam), { temperature: 0.3, maxTokens: 8192 }),
+        geminiGroundingSearch(makeNhlInjuryOnlyQuery(homeTeam), { temperature: 0.3, maxTokens: 8192 })
       ]);
 
       // Log raw injury responses for debugging
@@ -4258,41 +4210,39 @@ CRITICAL ANTI-OPINION RULES:
       // A single combined query for both teams risks truncating the injury section
       console.log(`[Scout Report] Using per-team NBA Grounding queries for ${awayTeam} @ ${homeTeam}`);
 
-      const makeNbaTeamQuery = (teamName, opponentName, isAway) => `Search site:rotowire.com/basketball/nba-lineups.php for today's NBA game: ${isAway ? `${teamName} at ${opponentName}` : `${opponentName} at ${teamName}`}
+      const makeNbaTeamQuery = (teamName, opponentName, isAway) => `Go to rotowire.com/basketball/nba-lineups.php and find the ${teamName} lineup card for today's game (${isAway ? `${teamName} at ${opponentName}` : `${opponentName} at ${teamName}`}).
 
-Find the ${teamName} lineup card on this page.
+The lineup card has two sections I need you to copy word-for-word:
 
-Extract the following for ${teamName} ONLY:
+SECTION 1: "Expected Lineup" — Copy the 5 starters exactly as shown on the card.
+SECTION 2: "MAY NOT PLAY" — Copy every player listed under "MAY NOT PLAY" exactly as shown on the card.
 
-1. EXPECTED LINEUP:
-PG: FirstName LastName
-SG: FirstName LastName
-SF: FirstName LastName
-PF: FirstName LastName
-C: FirstName LastName
+RULES:
+- ONLY copy text that is LITERALLY VISIBLE on the ${teamName} lineup card
+- Do NOT add any players from the injury report page, the news section, or any other source
+- Do NOT add status tags (Ques, Prob, Out) to players unless the tag is LITERALLY shown next to their name on the card
+- Do NOT interpret or rephrase anything — just copy the text
+- If there is no "MAY NOT PLAY" section, write: "No MAY NOT PLAY section"
 
-2. MAY NOT PLAY / INJURIES:
-List EVERY player shown as injured, out, questionable, doubtful, or game-time decision for ${teamName}.
-Format each as: FirstName LastName Status
-Example: Malik Monk Out
-Example: De'Aaron Fox GTD
+Output format:
+EXPECTED LINEUP
+[copy the 5 starters exactly]
 
-CRITICAL: The MAY NOT PLAY section is the MOST IMPORTANT part.
-Do NOT skip it. List ALL players with any injury status.
-If ${teamName} has no injuries, write: "No injuries reported"`;
+MAY NOT PLAY
+[copy every player + status exactly as shown, or "No MAY NOT PLAY section"]`;
 
       // Run BOTH team queries in parallel (like NHL does for goalie + injury queries)
       const [awayResponse, homeResponse] = await Promise.all([
-        geminiGroundingSearch(makeNbaTeamQuery(awayTeam, homeTeam, true), { temperature: 0.3, maxTokens: 2000 }),
-        geminiGroundingSearch(makeNbaTeamQuery(homeTeam, awayTeam, false), { temperature: 0.3, maxTokens: 2000 })
+        geminiGroundingSearch(makeNbaTeamQuery(awayTeam, homeTeam, true), { temperature: 0.3, maxTokens: 8192 }),
+        geminiGroundingSearch(makeNbaTeamQuery(homeTeam, awayTeam, false), { temperature: 0.3, maxTokens: 8192 })
       ]);
 
-      // Log raw responses for debugging
+      // Log full raw responses for debugging (these are short card extracts, not long summaries)
       if (awayResponse?.data) {
-        console.log(`[Scout Report] ${awayTeam} NBA grounding raw: ${awayResponse.data.substring(0, 400)}...`);
+        console.log(`[Scout Report] ${awayTeam} NBA grounding raw:\n${awayResponse.data}`);
       }
       if (homeResponse?.data) {
-        console.log(`[Scout Report] ${homeTeam} NBA grounding raw: ${homeResponse.data.substring(0, 400)}...`);
+        console.log(`[Scout Report] ${homeTeam} NBA grounding raw:\n${homeResponse.data}`);
       }
 
       // Combine responses with clear team markers for the parser
@@ -4307,7 +4257,11 @@ If ${teamName} has no injuries, write: "No injuries reported"`;
           console.warn(`[Scout Report] ⚠️ NBA grounding FAILED for ${teamName} - no response`);
           return false;
         }
-        const parsed = parseGroundingInjuries(response.data, homeTeam, awayTeam, sport);
+        // Prepend a team header so the parser knows which team this per-team response belongs to.
+        // Without this, parseNbaMayNotPlay() finds the injury section but currentTeam stays null
+        // because per-team grounding responses don't include a team name header.
+        const labeledData = `=== ${teamName} ===\n${response.data}`;
+        const parsed = parseGroundingInjuries(labeledData, homeTeam, awayTeam, sport);
         const list = side === 'home' ? (parsed.home || []) : (parsed.away || []);
         const existing = side === 'home' ? combined.home : combined.away;
 
@@ -4507,18 +4461,26 @@ function parseGroundingInjuries(content, homeTeam, awayTeam, sport = '') {
     const isTeamHeader = (lineLower, teamLower) => {
       // Strip markdown formatting (**, ##, etc.) and === markers before checking
       const cleanLine = lineLower.replace(/\*\*/g, '').replace(/^[=#]+\s*/, '').replace(/\s*[=#]+$/, '').trim();
-      const hasTeam = cleanLine.includes(teamLower);
 
       // Match team name at start of line (with === markers from strict query format)
+      // e.g., "washington wizards", "=== miami heat ===", "miami heat:"
       if (cleanLine.startsWith(teamLower)) return true;
 
+      // For non-startsWith matches, require SHORT lines to avoid matching intro sentences
+      // like "The following Miami Heat players are listed with an injury..." (85+ chars)
+      // Real team headers are short: "Miami Heat - Injuries" (~22 chars)
+      if (cleanLine.length > 60) return false;
+
+      const hasTeam = cleanLine.includes(teamLower);
+      if (!hasTeam) return false;
+
       // Match "Team: injuries" or "Team injuries" or "Team - Out Players"
-      if (hasTeam && (cleanLine.includes('injur') || cleanLine.includes('may not play') || cleanLine.includes('out'))) {
+      if (cleanLine.includes('injur') || cleanLine.includes('may not play') || cleanLine.includes('out')) {
         return true;
       }
 
       // Allow simple team header lines like "Memphis Grizzlies:" or "**Washington Wizards:**"
-      if (hasTeam && /[:\-–]?\s*$/.test(cleanLine)) return true;
+      if (/[:\-–]\s*$/.test(cleanLine)) return true;
       return false;
     };
 
@@ -4659,14 +4621,16 @@ function parseGroundingInjuries(content, homeTeam, awayTeam, sport = '') {
         continue;
       }
 
-      // Check for MAY NOT PLAY section header
-      if (cleanLower.includes('may not play') || cleanLower === 'injuries:') {
+      // Check for MAY NOT PLAY / INJURIES section header
+      // Only match short lines (actual headers like "### 1. INJURIES / MAY NOT PLAY", not sentences)
+      if (cleanLower.length < 60 && (cleanLower.includes('may not play') || cleanLower.includes('injuries') || cleanLower === 'injuries:')) {
         inMayNotPlaySection = true;
         continue;
       }
 
       // Check for EXPECTED LINEUP section header (stop parsing injuries)
-      if (cleanLower.includes('expected lineup') || cleanLower.includes('starting lineup')) {
+      // Only match short lines — long sentences mentioning "starting lineup" are descriptions, not headers
+      if (cleanLower.length < 60 && (cleanLower.includes('expected lineup') || cleanLower.includes('starting lineup'))) {
         inMayNotPlaySection = false;
         continue;
       }

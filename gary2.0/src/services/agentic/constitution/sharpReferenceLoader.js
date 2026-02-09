@@ -85,9 +85,9 @@ It helps you identify what's real vs fluff, what's relevant vs noise, so YOU can
 ## WHAT GOOD ANALYSIS LOOKS LIKE (Examples to Reference)
 
 **GOLD STANDARD:**
-> "Houston's defensive identity is fractured following the fresh losses of Tari Eason and Dorian Finney-Smith — the two primary 'stoppers' usually tasked with containing elite scoring guards. Without them, the Rockets lack the lateral quickness to prevent Shai Gilgeous-Alexander from living in the paint."
+> "Houston's DRtg has dropped from 108.1 to 115.6 over L5 following the fresh losses of Tari Eason and Dorian Finney-Smith. OKC's ORtg of 118.4 against teams with DRtg above 113 this season suggests the efficiency gap has widened significantly. The line moved 3 points, but the DRtg swing is worth closer to 7."
 
-Why it works: Fresh information → tied to specific matchup → forward mechanism (no stoppers → SGA in paint → margin expansion)
+Why it works: Fresh information → quantified with specific stats → efficiency gap measured with data, not assumed → line mispricing identified with numbers
 
 **THE TRAP:**
 > "Utah's defensive rating is famously the worst in the league, but Dallas currently lacks the offensive firepower to exploit it."

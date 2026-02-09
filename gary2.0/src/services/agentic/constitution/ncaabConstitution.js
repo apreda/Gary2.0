@@ -48,7 +48,7 @@ If the line and your findings don't align, one side offers better value.
 - Ask: Does team's efficiency WITHOUT star support this move?
 
 **NARRATIVE INFLATION:**
-- Public loves/hates a team, line inflated beyond data
+- Team perception may differ from current performance data
 - Ask: Does AdjEM gap justify this spread?
 
 **RECENCY BIAS:**
@@ -526,14 +526,14 @@ These are factors the public applies broadly. For EACH, you must INVESTIGATE bef
 
 | Blanket Factor | Public Belief | Investigation Question |
 |----------------|---------------|----------------------|
-| **Home Court** | "Add 3-4 points for home team" | The LINE already reflects this. What SPECIFIC metric improves at home - and does opponent's road data show vulnerability? |
-| **Conference Play** | "Conference games are tighter" | Familiarity helps WHO? Does the better coach have more tape? Which team adjusts better mid-game? |
-| **Ranked vs Unranked** | "Fade unranked team" | What's the ACTUAL AdjEM gap? AP/Coaches poll ≠ efficiency. A 15-point ranking gap might be 3 efficiency points. |
-| **Rivalry Game** | "Rivalry = close game" | What MATCHUP advantage does the underdog have? Emotion doesn't change efficiency unless personnel/scheme changes. |
-| **Coming Off Loss** | "Bounce back spot" | Did they lose due to poor shooting (variance) or being outplayed (structural)? Check the efficiency, not just the result. |
-| **Road Underdog** | "Road dogs cover in college" | WHY would THIS road dog cover THIS spread? What specific matchup or efficiency edge exists? |
-| **Experience Narrative** | "Seniors beat freshmen" | Check the actual minutes returned data. Are the "experienced" players actually better statistically? |
-| **Tournament Time** | "Tournament teams play harder" | What's their ACTUAL efficiency trend in February/March vs November? Data over narrative. |
+| **Home Court** | "Add 3-4 points for home team" | Investigate: What does this team's home performance data show? Has the line already captured the home court narrative, and does the data reveal an edge on either side? |
+| **Conference Play** | "Conference games are tighter" | Investigate: What does the conference matchup history data show? Has the "conference games are tighter" narrative already adjusted the line, and which side does the data support? |
+| **Ranked vs Unranked** | "Fade unranked team" | Investigate: What does the efficiency data (AdjEM, KenPom) show vs what the ranking implies? Has the ranking narrative moved the line beyond what the data supports? |
+| **Rivalry Game** | "Rivalry = close game" | Investigate: What does the data show about this rivalry matchup? Has the "rivalry = close game" narrative already tightened the line, and which side does the data support? |
+| **Coming Off Loss** | "Bounce back spot" | Investigate: What does the data show about why they lost? Has the "bounce back" narrative already moved the line, and which side does the data support? |
+| **Road Underdog** | "Road dogs cover in college" | Investigate: Does this road underdog have a specific matchup advantage, or has the "road dogs cover" narrative already tightened the line? Which side does the data support? |
+| **Experience Narrative** | "Seniors beat freshmen" | Investigate: What does the minutes/experience data actually show? Has the experience narrative already moved the line, and which side does the data support? |
+| **Tournament Time** | "Tournament teams play harder" | Investigate: What does the efficiency trend data show across the season? Has the "tournament team" narrative already moved the line? |
 
 **THE KEY:** Blanket factors are TIE-BREAKERS ONLY. Your decision should come from your actual investigation, not these narratives. If you must cite one, you MUST have DATA showing it applies to THIS team in THIS situation.
 

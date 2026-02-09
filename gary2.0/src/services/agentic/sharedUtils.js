@@ -549,10 +549,20 @@ export function fixBdlInjuryStatus(injury) {
   injury.reportDateStr = reportDateStr; // e.g., "Jan 8" - the actual date for Gary to see
   
   // 1. Fix Status Inconsistencies (BDL often lists as 'Out' when they are GTD)
+  // IMPORTANT: Only check the MOST RECENT update in the description, not historical text.
+  // Descriptions often contain history like "Feb 5: Questionable... Feb 7: Ruled Out"
+  // — checking the full string would incorrectly downgrade "Out" to "Questionable".
   if (injury.status === 'Out') {
-    if (desc.includes('questionable') || desc.includes('game-time decision') || desc.includes('gtd')) {
+    // Get the last segment of the description (most recent update)
+    const segments = desc.split(/(?:;\s*|\.\s+|\n)/);
+    const lastSegment = segments.filter(s => s.trim()).pop() || desc;
+
+    // Only downgrade if the LATEST update indicates questionable/GTD
+    if ((lastSegment.includes('questionable') || lastSegment.includes('game-time decision') || lastSegment.includes('gtd'))
+        && !lastSegment.includes('ruled out') && !lastSegment.includes('will not play') && !lastSegment.includes('out for')) {
       injury.status = 'Questionable';
-    } else if (desc.includes('day-to-day') || desc.includes('day to day')) {
+    } else if ((lastSegment.includes('day-to-day') || lastSegment.includes('day to day'))
+        && !lastSegment.includes('ruled out') && !lastSegment.includes('will not play') && !lastSegment.includes('out for')) {
       injury.status = 'Day-To-Day';
     } else if (isReturnToday) {
       injury.status = 'Questionable';

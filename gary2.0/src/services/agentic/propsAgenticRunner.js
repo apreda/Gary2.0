@@ -2076,8 +2076,15 @@ function validatePropsAgainstToolHistory(picks, toolCallHistory) {
 function buildGameSteelManForProps(homeTeam, awayTeam, gameSummary, sportLabel = 'NFL') {
   const spread = gameSummary?.spread || 0;
   const total = gameSummary?.total || 0;
-  const homeImplied = gameSummary?.gameScript?.impliedTotals?.home || Math.round((total - spread) / 2);
-  const awayImplied = gameSummary?.gameScript?.impliedTotals?.away || Math.round((total + spread) / 2);
+  const isNFL = sportLabel === 'NFL' || sportLabel === 'americanfootball_nfl';
+
+  // NFL only gets spread; other sports get spread + total + implied
+  let gameLine = `Spread: ${homeTeam} ${spread > 0 ? '+' : ''}${spread}`;
+  if (!isNFL && total) {
+    const homeImplied = gameSummary?.gameScript?.impliedTotals?.home || Math.round((total - spread) / 2);
+    const awayImplied = gameSummary?.gameScript?.impliedTotals?.away || Math.round((total + spread) / 2);
+    gameLine += ` | Total: ${total}\nImplied Points: ${awayTeam} ${awayImplied} | ${homeTeam} ${homeImplied}`;
+  }
 
   return `## GAME STEEL MAN - UNDERSTAND THE GAME BEFORE PICKING PROPS
 
@@ -2085,8 +2092,7 @@ Before you pick ANY props, you need to understand HOW this game will play out.
 Build Steel Man cases for BOTH teams. This tells you which players benefit.
 
 **${awayTeam} @ ${homeTeam}**
-Spread: ${homeTeam} ${spread > 0 ? '+' : ''}${spread} | Total: ${total}
-Implied Points: ${awayTeam} ${awayImplied} | ${homeTeam} ${homeImplied}
+${gameLine}
 
 ---
 
@@ -3719,7 +3725,7 @@ What happens when things go wrong? Sharps think about downside before committing
 
 **DERIVATIVE LAZINESS:** Books model star props carefully. Backup/role player props often get lazy formula adjustments. The vacuum isn't fully priced.
 
-**PUBLIC OVER BIAS:** Casual bettors love overs. Would this be promoted on a sportsbook's social media? If yes, ask where YOUR edge is.
+**DIRECTION CONVICTION CHECK:** For every pick, ask: What specific game factor tonight supports THIS direction? Would your analysis hold up if you argued the opposite side?
 
 **SPECIFICITY OVER GENERALITY:** Sharps have receipts.
 - Hand-wavy: "His role has grown significantly"  
@@ -3900,7 +3906,7 @@ Your rationale MUST include these 5 elements in 5-7 sentences:
    "With Wilson at QB, his L5 is 78, 92, 65, 88, 101 yards (84.8 avg)..."
 
 **3. GAME SCRIPT ALIGNMENT** - Use the gameScript data provided:
-   "As +7 underdogs with implied 19 points, Pittsburgh will throw 40+ times chasing..."
+   "As +7 underdogs, Pittsburgh's game script projects heavy passing volume..."
 
 **4. THE RISK** - Name what could go wrong (honest assessment):
    "The risk is if they fall behind 21+ early and abandon balance..."
@@ -3916,9 +3922,8 @@ Your rationale MUST include these 5 elements in 5-7 sentences:
 [BANNED] "He's due" (gambling fallacy)
 
 ## USE THE DATA YOU HAVE
-- Check \`gameScript.impliedTotals\` - tells you expected points per team
+- Check \`gameScript.spread\` and \`gameScript.edges\` - pre-identified sharp edges from game script
 - Check \`trumpCards\` array - if one exists, make it central to your thesis
-- Check \`gameScript.edges\` - pre-identified sharp edges
 - Use \`fetch_player_vs_opponent\` for revenge game validation
 
 ${narrativeContext ? `\n## LIVE CONTEXT (from Gemini Search)\n${narrativeContext.substring(0, 8000)}` : ''}
