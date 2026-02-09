@@ -6,7 +6,7 @@
  * 
  * v3.1 CHANGES:
  * - THE FOUR INVESTIGATIONS framework: Mismatch, Game Logic, Mechanism, Floor
- * - Sharp Wisdom integration (Median vs Mean, Derivative Laziness, Public Over Bias)
+ * - Sharp Wisdom integration (Median vs Mean, Derivative Laziness, Direction Conviction)
  * - Gary is a GAME ANALYST, not a betting market analyst
  * - Enhanced Noise Awareness (rankings are not mechanisms)
  * - Specificity over Generality in rationale evaluation

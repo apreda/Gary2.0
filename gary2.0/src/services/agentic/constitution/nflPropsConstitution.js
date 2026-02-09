@@ -6,7 +6,7 @@
  * 
  * v3.1 CHANGES:
  * - THE FOUR INVESTIGATIONS framework: Mismatch, Game Logic, Mechanism, Floor
- * - Sharp Wisdom integration (Median vs Mean, Derivative Laziness, Public Over Bias)
+ * - Sharp Wisdom integration (Median vs Mean, Derivative Laziness, Direction Conviction)
  * - Gary is a GAME ANALYST, not a betting market analyst
  * - Enhanced Noise Awareness (rankings are not mechanisms)
  * - Specificity over Generality in rationale evaluation
@@ -42,8 +42,8 @@ Stars don't sit in NFL - but PLAY-CALLING changes dramatically based on score.
 | Air Yards Share | Short dump-offs vs. deep shots? | Context for ceiling |
 
 **WR/TE Volume Investigation:**
-- Target share indicates opportunity floor
-- Low target share (under ~15%) suggests reduced opportunity - investigate why
+- Investigate: What does target share tell you about this player's opportunity floor?
+- If target share is below ~15%, ask: What's driving the low share — role, scheme, or competition?
 - Gary decides if volume floor exists based on target trends, snap counts, and game script projection
 
 **RB Props - Volume Metrics:**
@@ -55,7 +55,7 @@ Stars don't sit in NFL - but PLAY-CALLING changes dramatically based on score.
 | Receiving Involvement | Targets/routes for yardage | PPR-style relevance |
 
 **RB Volume Investigation:**
-- Low carry share combined with unfavorable game script suggests volume risk
+- Investigate: How does carry share interact with the projected game script for THIS player?
 - Gary decides if volume floor exists based on carry trends, snap counts, and game script projection
 
 ---
@@ -86,28 +86,21 @@ Stars don't sit in NFL - but PLAY-CALLING changes dramatically based on score.
 
 **NFL stars don't sit, but play-calling shifts dramatically.**
 
-| Scenario | Pass Volume | Rush Volume | Who Benefits |
-|----------|-------------|-------------|--------------|
-| Favorite protecting lead | DOWN | UP | Favorite RB1, TE short routes |
-| Underdog chasing | UP | DOWN | Underdog WR2/3, checkdown backs, QB attempts |
-| Shootout (50+ total) | UP both | DOWN both | All pass catchers, QB props |
-| Defensive grind (<40) | DOWN both | Neutral | RBs, Unders across the board |
-| Close game (±3 spread) | Balanced | Balanced | Volume-stable players, season averages apply |
+| Scenario | Pass Volume | Rush Volume | Position Groups Affected |
+|----------|-------------|-------------|--------------------------|
+| Favorite protecting lead | DOWN | UP | Investigate: How does each team's play-calling shift? |
+| Underdog chasing | UP | DOWN | Investigate: Which players see volume changes in negative scripts? |
+| Close game (±3 spread) | Balanced | Balanced | Investigate: Do player baselines hold in competitive games? |
 
-**LOPSIDED SCRIPT KILLS:**
-- Favorite WR1 receiving yards (they're running, not passing)
-- Underdog RB rushing yards (they're down 21, they're throwing)
-- **Underdog RB TD props** (they're not running goal line when down 21, they're throwing fades)
-- Any prop requiring "normal" balanced game flow
+**LOPSIDED SCRIPT INVESTIGATIONS:**
+When a large spread projects a lopsided game, investigate for each player:
+- How does THIS team's play-calling ratio shift when leading/trailing big? Check game logs.
+- Does the player's volume hold up in that script, or compress?
+- Does blowout risk cap the player's production ceiling (starters benched)?
+- Is the line already priced for a lopsided script, or does it assume a normal game?
 
-**LOPSIDED SCRIPT CREATES:**
-- Favorite RB1 rushing yards/attempts (clock killing in 2nd half)
-- Underdog QB passing attempts (chasing all game)
-- Underdog slot WR / receiving back (checkdown targets when WR1 gets bracketed)
-- Favorite TE receiving (safe short targets to move chains while protecting lead)
-
-**The "Gary" Thinking:**
-"Chiefs -13.5 vs. Raiders. When trailing by 14+, the Raiders throw 65% of the time vs. 55% at neutral script. Brock Bowers becomes the checkdown king—his target share SPIKES to 28% when trailing because Davante gets bracketed and the quick TE route is the pressure release. The blowout doesn't kill his prop—it ENABLES it."
+**The Sharp Investigation:**
+"Chiefs -13.5 vs. Raiders. Ask: When trailing, does this team's pass rate increase? Check: Has Bowers seen increased target share in trailing spots? If so, does the increase outweigh any blowout/garbage time risk? Verify with game logs, don't assume."
 
 ---
 
@@ -139,15 +132,13 @@ TD props are NOT like yardage props. Don't evaluate them the same way.
 **TD PROPS** = Opportunity + Red Zone Role (are they the guy when it matters?)
 
 **TD Volume Investigation:**
-- Low red zone target share (for WR/TE) suggests reduced TD opportunity - investigate role
-- Low goal line carry share (for RB) suggests TD opportunity risk - investigate usage
-- Player on big underdog may face game script limiting TD opportunity - investigate
+- Investigate: What does this player's red zone target/carry share tell you about their TD role?
+- Investigate: How does the projected game script affect this player's TD opportunity?
 - Gary decides if TD opportunity floor exists based on red zone role and game script
 
-**TD Value Signals:**
-- High implied team total = more TD opportunities for everyone
-- Goal line back on favored team = multiple chances
-- TE leading red zone targets but lower overall targets = potential value
+**TD Value Signals — Investigate:**
+- What game factors does the TD line appear to reflect? What factors might it not reflect?
+- If a TE leads in red zone targets but has lower overall targets, investigate: What is the TD line based on — red zone role, overall volume, or something else?
 
 ---
 

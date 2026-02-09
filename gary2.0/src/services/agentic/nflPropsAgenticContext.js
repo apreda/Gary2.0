@@ -46,7 +46,7 @@ function calculateNflVolumeMetrics(playerStats, gameLogs, position) {
   
   if (['WR', 'TE'].includes(position)) {
     // Calculate target share metrics for receivers
-    const totalTeamTargets = l3Games.reduce((sum, g) => sum + (g.team_targets || 30), 0); // Default 30 if not available
+    const totalTeamTargets = l3Games.reduce((sum, g) => sum + (g.team_targets || 0), 0);
     const playerTargets = l3Games.reduce((sum, g) => sum + (g.targets || 0), 0);
     const targetShareL3 = totalTeamTargets > 0 ? ((playerTargets / totalTeamTargets) * 100).toFixed(1) : null;
     
@@ -398,8 +398,8 @@ function getTopPropCandidates(props, maxPlayersPerTeam = 10, options = {}) {
   
   const filteredGrouped = grouped.map(player => {
     const goodOddsProps = player.props.filter(p => {
-      const overOdds = p.over_odds || -110;
-      const underOdds = p.under_odds || -110;
+      const overOdds = p.over_odds || null;
+      const underOdds = p.under_odds || null;
       // At least one side must have acceptable odds
       const hasGoodOdds = isOddsAcceptable(overOdds) || isOddsAcceptable(underOdds);
       if (!hasGoodOdds) {
@@ -424,19 +424,17 @@ function getTopPropCandidates(props, maxPlayersPerTeam = 10, options = {}) {
   
   // Score each player by number of props and odds quality
   const scored = filteredGrouped.map(player => {
-    const avgOdds = player.props.reduce((sum, p) => {
-      const odds = p.over_odds || p.under_odds || -110;
-      return sum + odds;
-    }, 0) / player.props.length;
+    const propsWithOdds = player.props.filter(p => p.over_odds || p.under_odds);
+    const avgOdds = propsWithOdds.length > 0
+      ? propsWithOdds.reduce((sum, p) => sum + (p.over_odds || p.under_odds), 0) / propsWithOdds.length
+      : null;
     
-    // Prioritize players with core stat props (pass_yds, rush_yds, rec_yds)
-    const hasCoreStatProp = player.props.some(p => 
-      ['pass_yds', 'rush_yds', 'reception_yds', 'receptions'].includes(p.type)
-    );
-    
+    // Prop variety bonus - reward players with multiple prop types available (matches NBA)
+    const uniquePropTypes = new Set(player.props.map(p => p.type)).size;
+
     return {
       ...player,
-      score: player.props.length * 10 + (avgOdds > -110 ? 20 : 0) + (hasCoreStatProp ? 15 : 0)
+      score: player.props.length * 10 + (avgOdds !== null && avgOdds > -110 ? 20 : 0) + (uniquePropTypes * 5)
     };
   });
   
@@ -1066,33 +1064,26 @@ function detectGameDayType(gameDate) {
 
 /**
  * BUILD GAME SCRIPT CONTEXT - Critical for Sharp NFL Prop Betting
+ *
+ * Uses spread to project game flow and player volume.
+ * Identifies game script edges based on spread size.
  * 
- * Sharps use spread/total to project game flow and player volume.
- * This function calculates implied team totals and identifies game script edges.
- * 
- * @param {Object} marketSnapshot - Market data with spread and total
+ * @param {Object} marketSnapshot - Market data with spread
  * @param {string} homeTeam - Home team name
  * @param {string} awayTeam - Away team name
  * @returns {Object} Game script analysis for prop betting
  */
 function buildGameScriptContext(marketSnapshot, homeTeam, awayTeam) {
   const spread = marketSnapshot?.spread?.home?.point;
-  const total = marketSnapshot?.total?.line;
-  
-  // Can't build game script without both spread and total
-  if (spread === null || spread === undefined || !total) {
+
+  // Can't build game script without spread
+  if (spread === null || spread === undefined) {
     return {
       available: false,
-      reason: 'Spread or total not available'
+      reason: 'Spread not available'
     };
   }
-  
-  // Calculate implied team totals
-  // Formula: Home Implied = (Total + Spread) / 2, Away Implied = (Total - Spread) / 2
-  // Note: Spread is from home perspective (negative = home favored)
-  const homeImplied = (total - spread) / 2;
-  const awayImplied = (total + spread) / 2;
-  
+
   // Determine favorite
   const favorite = spread < 0 ? 'home' : spread > 0 ? 'away' : 'pick';
   const favoriteTeam = favorite === 'home' ? homeTeam : favorite === 'away' ? awayTeam : 'Neither';
@@ -1107,56 +1098,35 @@ function buildGameScriptContext(marketSnapshot, homeTeam, awayTeam) {
   let starterMinutesRisk = false;
   
   if (spreadAbs >= 14) {
-    gameScriptProjection = 'BLOWOUT EXPECTED';
-    passVolumeImpact = `${underdogTeam} will be forced to throw early and often. ${favoriteTeam} may run clock in 2nd half.`;
-    rushVolumeImpact = `${favoriteTeam} heavy rush volume in 2nd half to kill clock. ${underdogTeam} RBs may get abandoned.`;
+    gameScriptProjection = 'LARGE SPREAD';
+    passVolumeImpact = `Spread of ${spreadAbs} points. Investigate: How does ${underdogTeam}'s pass/run ratio shift when trailing big? How does ${favoriteTeam} adjust play-calling with a comfortable lead?`;
+    rushVolumeImpact = `Investigate: Does ${favoriteTeam} lean heavily on rushing in 2nd half leads? Does ${underdogTeam} abandon the run when trailing?`;
     garbageTimeRisk = true;
     starterMinutesRisk = true;
   } else if (spreadAbs >= 10) {
-    gameScriptProjection = 'LIKELY COMFORTABLE WIN';
-    passVolumeImpact = `${underdogTeam} will likely trail and need to pass more. ${favoriteTeam} balanced but may lean run late.`;
-    rushVolumeImpact = `${favoriteTeam} should get positive game script for rushing. ${underdogTeam} may abandon run if behind.`;
+    gameScriptProjection = 'MODERATE-LARGE SPREAD';
+    passVolumeImpact = `Spread of ${spreadAbs} points. Investigate: How does trailing affect ${underdogTeam}'s passing volume? Does ${favoriteTeam} shift to a run-heavy approach with a lead?`;
+    rushVolumeImpact = `Investigate: Check game logs for how each team's rushing volume changes based on game flow.`;
     garbageTimeRisk = true;
     starterMinutesRisk = false;
   } else if (spreadAbs >= 7) {
-    gameScriptProjection = 'FAVORITE SHOULD CONTROL';
-    passVolumeImpact = `Standard volume expected. ${underdogTeam} may need to throw more if trailing in 4th.`;
-    rushVolumeImpact = `${favoriteTeam} should get decent rushing opportunities with leads.`;
+    gameScriptProjection = 'MODERATE SPREAD';
+    passVolumeImpact = `Spread of ${spreadAbs} points. Investigate: Does this spread size typically produce volume shifts, or do teams stick to their identity?`;
+    rushVolumeImpact = `Investigate: With a one-score lead, does ${favoriteTeam} increase rushing attempts?`;
     garbageTimeRisk = false;
     starterMinutesRisk = false;
   } else if (spreadAbs >= 3) {
-    gameScriptProjection = 'COMPETITIVE GAME EXPECTED';
-    passVolumeImpact = 'Both teams likely to stick to game plan. No major volume shifts expected from game script.';
-    rushVolumeImpact = 'Balanced approach likely for both teams throughout.';
+    gameScriptProjection = 'COMPETITIVE GAME';
+    passVolumeImpact = `Close spread (${spreadAbs} pts). Investigate: In competitive games, do both teams' play-calling ratios hold to their season baselines?`;
+    rushVolumeImpact = `Investigate: Does a close spread mean player baselines hold, or does competitiveness introduce variability?`;
     garbageTimeRisk = false;
     starterMinutesRisk = false;
   } else {
     gameScriptProjection = 'TOSS-UP GAME';
-    passVolumeImpact = 'Game script unpredictable. Focus on player baselines rather than game flow assumptions.';
-    rushVolumeImpact = 'Volume will depend on who takes early lead.';
+    passVolumeImpact = `Near pick-em (${spreadAbs} pts). Investigate: With no clear script direction, which players' roles are consistent regardless of game flow?`;
+    rushVolumeImpact = `Investigate: How stable is each player's production across different game scripts? Check game logs for consistency.`;
     garbageTimeRisk = false;
     starterMinutesRisk = false;
-  }
-  
-  // Total-based scoring environment
-  let scoringEnvironment = '';
-  let passingGameOutlook = '';
-  
-  if (total >= 52) {
-    scoringEnvironment = 'SHOOTOUT EXPECTED';
-    passingGameOutlook = 'High total suggests both teams will be throwing. QB and WR props get a boost. Consider OVERS.';
-  } else if (total >= 47) {
-    scoringEnvironment = 'ABOVE AVERAGE SCORING';
-    passingGameOutlook = 'Good scoring environment. Passing game should be active for both teams.';
-  } else if (total >= 42) {
-    scoringEnvironment = 'AVERAGE SCORING';
-    passingGameOutlook = 'Standard NFL game. No major environmental boost or suppression.';
-  } else if (total >= 38) {
-    scoringEnvironment = 'LOWER SCORING';
-    passingGameOutlook = 'Defensive game or poor offenses. Consider UNDERs on passing props. Rushing may be emphasized.';
-  } else {
-    scoringEnvironment = 'DEFENSIVE STRUGGLE';
-    passingGameOutlook = 'Very low total suggests bad weather, elite defenses, or poor offenses. Heavy UNDER lean on passing.';
   }
   
   return {
@@ -1168,14 +1138,6 @@ function buildGameScriptContext(marketSnapshot, homeTeam, awayTeam) {
       size: spreadAbs,
       isBlowoutRisk: spreadAbs >= 10
     },
-    total: {
-      line: total,
-      environment: scoringEnvironment
-    },
-    impliedTotals: {
-      home: { team: homeTeam, points: parseFloat(homeImplied.toFixed(1)) },
-      away: { team: awayTeam, points: parseFloat(awayImplied.toFixed(1)) }
-    },
     gameScript: {
       projection: gameScriptProjection,
       passVolumeImpact,
@@ -1183,66 +1145,44 @@ function buildGameScriptContext(marketSnapshot, homeTeam, awayTeam) {
       garbageTimeRisk,
       starterMinutesRisk
     },
-    passingGameOutlook,
     // Sharp betting edges from game script
-    edges: buildGameScriptEdges(spread, total, homeTeam, awayTeam)
+    edges: buildGameScriptEdges(spread, homeTeam, awayTeam)
   };
 }
 
 /**
  * Identify specific betting edges from game script
  */
-function buildGameScriptEdges(spread, total, homeTeam, awayTeam) {
+function buildGameScriptEdges(spread, homeTeam, awayTeam) {
   const edges = [];
   const spreadAbs = Math.abs(spread);
   const favorite = spread < 0 ? homeTeam : awayTeam;
   const underdog = spread < 0 ? awayTeam : homeTeam;
-  
-  // Big underdog = passing volume spike
+
+  // Big underdog — investigate game script impact on passing
   if (spreadAbs >= 10) {
     edges.push({
       type: 'UNDERDOG_PASS_VOLUME',
       team: underdog,
-      edge: `${underdog} is a ${spreadAbs}-point underdog. Expect elevated passing attempts. QB pass attempts OVER, WR targets OVER.`,
-      confidence: spreadAbs >= 14 ? 'HIGH' : 'MEDIUM'
+      edge: `${underdog} is a ${spreadAbs}-point underdog. Investigate: How does trailing game script affect this team's pass/run ratio? Does the QB's volume increase in negative game scripts?`
     });
   }
-  
-  // Big favorite = clock-killing rush volume
+
+  // Big favorite — investigate clock management and rushing
   if (spreadAbs >= 10) {
     edges.push({
       type: 'FAVORITE_RUSH_VOLUME',
       team: favorite,
-      edge: `${favorite} is a ${spreadAbs}-point favorite. Expect late-game rushing to kill clock. Lead RB rush attempts OVER.`,
-      confidence: spreadAbs >= 14 ? 'HIGH' : 'MEDIUM'
+      edge: `${favorite} is a ${spreadAbs}-point favorite. Investigate: In games with a comfortable lead, does this team shift to heavy rushing? How does clock management affect the RB's volume floor?`
     });
   }
-  
-  // High total = shootout, pass-happy
-  if (total >= 50) {
-    edges.push({
-      type: 'SHOOTOUT',
-      edge: `Total of ${total} suggests a shootout. Both QBs and top receivers get volume boost. Consider passing OVERS.`,
-      confidence: total >= 54 ? 'HIGH' : 'MEDIUM'
-    });
-  }
-  
-  // Low total = defensive game
-  if (total <= 40) {
-    edges.push({
-      type: 'DEFENSIVE_GAME',
-      edge: `Total of ${total} suggests a defensive struggle. Consider passing UNDERS. Rushing may be safer for volume.`,
-      confidence: total <= 37 ? 'HIGH' : 'MEDIUM'
-    });
-  }
-  
-  // Garbage time risk for favorites
+
+  // Heavy favorite — investigate blowout risk on starters
   if (spreadAbs >= 14) {
     edges.push({
       type: 'GARBAGE_TIME_RISK',
       team: favorite,
-      edge: `${favorite} starters may sit in 4th quarter if blowout materializes. Be cautious on high lines for ${favorite} skill players.`,
-      confidence: 'MEDIUM'
+      edge: `${favorite} is a heavy favorite (${spreadAbs} pts). Investigate: How does blowout risk affect starters' 4th-quarter usage? Does the player's line require full-game production, or is 3 quarters sufficient?`
     });
   }
   
@@ -1293,8 +1233,8 @@ function detectTrumpCards(injuries, playerGameLogs, propCandidates, narrativeSec
           position: position,
           team: team,
           beneficiaries: beneficiaries.map(b => b.player).slice(0, 3),
-          edge: `${outPlayer.player} (${position}) is OUT. Target vacuum creates opportunity for ${beneficiaries.map(b => b.player).slice(0, 2).join(', ')}. RECENT injury = team still adjusting.`,
-          action: 'Consider OVERS on remaining pass catchers, especially in target share props.'
+          edge: `${outPlayer.player} (${position}) is OUT. Investigate: How has the target distribution shifted without this player? Which remaining pass catchers (${beneficiaries.map(b => b.player).slice(0, 2).join(', ')}) have absorbed volume in games this player missed?`,
+          action: 'Check recent game logs for target share changes and whether the line has already adjusted for this absence.'
         });
       }
     }
@@ -1309,8 +1249,8 @@ function detectTrumpCards(injuries, playerGameLogs, propCandidates, narrativeSec
     trumpCards.push({
       type: 'BACKUP_QB',
       severity: 'HIGH',
-      edge: 'Backup QB starting. Offensive scheme will simplify. Check targets go to safety valves (TEs, RBs). Deep shots may decrease.',
-      action: 'Consider TE receptions OVER, deep WR yards UNDER, RB targets OVER.'
+      edge: 'Backup QB starting. Investigate: How does this QB change affect route complexity, target distribution, and checkdown tendencies? Compare this backup\'s passing patterns to the starter.',
+      action: 'Examine game logs from games with this backup QB. Which receivers saw more/fewer targets? Did any position group benefit?'
     });
   }
   
@@ -1353,7 +1293,7 @@ function detectTrumpCards(injuries, playerGameLogs, propCandidates, narrativeSec
             player: candidate.player,
             change: `+${changeVal}%`,
             edge: `${candidate.player} has seen a ${changeVal}%+ increase in usage over last 2 games vs earlier games. Role may have expanded.`,
-            action: 'Strong OVER lean if the spike is due to opportunity (teammate injury) rather than random variance.'
+            action: 'Investigate: Is the usage spike structural (teammate injury, role change) or variance? If structural, does the player\'s production floor at projected usage still relate to the line?'
           });
         }
       }
@@ -1872,13 +1812,10 @@ function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnap
     // Game Script Context - Critical for Sharp Prop Betting
     game_script: gameScriptContext?.available ? {
       spread: gameScriptContext.spread,
-      total: gameScriptContext.total,
-      impliedTotals: gameScriptContext.impliedTotals,
       projection: gameScriptContext.gameScript.projection,
       passVolumeImpact: gameScriptContext.gameScript.passVolumeImpact,
       rushVolumeImpact: gameScriptContext.gameScript.rushVolumeImpact,
       garbageTimeRisk: gameScriptContext.gameScript.garbageTimeRisk,
-      passingGameOutlook: gameScriptContext.passingGameOutlook,
       edges: gameScriptContext.edges
     } : { available: false },
     // Trump Cards - Single Overriding Factors
@@ -2182,7 +2119,7 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
   );
 
   // NEW: Build Game Script Context - Critical for Sharp Prop Betting
-  // Calculates implied team totals and identifies game script edges
+  // Uses spread to project game flow and identifies game script edges
   const gameScriptContext = buildGameScriptContext(
     marketSnapshot,
     homeTeam?.full_name || game.home_team,
@@ -2192,8 +2129,6 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
   if (gameScriptContext.available) {
     console.log(`[NFL Props Context] 📊 Game Script: ${gameScriptContext.gameScript.projection}`);
     console.log(`   - Spread: ${gameScriptContext.spread.favorite} -${gameScriptContext.spread.size}`);
-    console.log(`   - Total: ${gameScriptContext.total.line} (${gameScriptContext.total.environment})`);
-    console.log(`   - Implied: ${gameScriptContext.impliedTotals.home.team} ${gameScriptContext.impliedTotals.home.points} | ${gameScriptContext.impliedTotals.away.team} ${gameScriptContext.impliedTotals.away.points}`);
     if (gameScriptContext.edges.length > 0) {
       console.log(`   - Sharp Edges Identified: ${gameScriptContext.edges.length}`);
     }
@@ -2257,7 +2192,6 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
     kickoff: formatGameTimeEST(game.commence_time),
     odds: {
       spread: marketSnapshot.spread,
-      total: marketSnapshot.total,
       moneyline: marketSnapshot.moneyline
     },
     // NEW: Game Script Analysis - Critical for Sharp Props
@@ -2269,15 +2203,9 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
         underdog: gameScriptContext.spread.underdog,
         isBlowoutRisk: gameScriptContext.spread.isBlowoutRisk
       },
-      total: {
-        line: gameScriptContext.total.line,
-        environment: gameScriptContext.total.environment
-      },
-      impliedTotals: gameScriptContext.impliedTotals,
       passVolumeImpact: gameScriptContext.gameScript.passVolumeImpact,
       rushVolumeImpact: gameScriptContext.gameScript.rushVolumeImpact,
       garbageTimeRisk: gameScriptContext.gameScript.garbageTimeRisk,
-      passingGameOutlook: gameScriptContext.passingGameOutlook,
       // Sharp edges identified from game script
       edges: gameScriptContext.edges
     } : null,

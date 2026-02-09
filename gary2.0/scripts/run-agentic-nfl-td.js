@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Agentic NFL Touchdown Scorer Runner
- * Special feature: Gary picks 5 standard TDs + 5 underdog TDs (+200 or better) + 1 First TD per game
+ * Special feature: Gary picks 5 standard TDs + 5 long-shot TDs (+200 or better) + 1 First TD per game
  */
 // Load environment variables FIRST
 import '../src/loadEnv.js';
@@ -71,22 +71,18 @@ function detectPlayoffStage() {
         isPlayoffs: true,
         round: 'Wild Card / Divisional Round',
         context: `NFL PLAYOFFS - Wild Card/Divisional Weekend
-- Higher stakes = more conservative play-calling early
-- Teams may script more opening drive plays
-- Star players get MORE usage (no load management)
-- Backup RBs may see reduced work
-- Weather is a factor for outdoor games`
+- Playoff game: stakes, preparation, and intensity differ from regular season
+- Investigate: How does playoff intensity affect play-calling and player usage for THESE specific teams?
+- Investigate: Do star players see expanded roles, or do coaches tighten rotations?`
       };
     } else if (day >= 16 && day <= 28) {
       return {
         isPlayoffs: true,
         round: 'Conference Championships',
         context: `NFL CONFERENCE CHAMPIONSHIPS
-- 4 teams remaining, HIGHEST intensity games
-- Teams are battle-tested - game plans are tight
-- Star players will be featured heavily
-- Red zone efficiency matters more than ever
-- These are the best 4 teams - defense is elite`
+- 4 teams remaining — these are the best teams in the league
+- Investigate: How have these teams performed in their playoff games so far? Any patterns in play-calling or player usage?
+- Investigate: Does the quality of opponent change TD distribution by position?`
       };
     }
   } else if (month === 2 && day <= 15) {
@@ -94,11 +90,10 @@ function detectPlayoffStage() {
       isPlayoffs: true,
       round: 'Super Bowl',
       context: `SUPER BOWL
-- Biggest game of the year
-- Both teams have 2 weeks to prepare
-- Scripted plays are more elaborate
-- Star players are the focus
-- Expect conservative early, aggressive late if trailing`
+- The biggest game of the year — anything can happen, this is NOT a regular game
+- Both teams have had 2 weeks to prepare with elaborate game plans
+- Investigate: How do extended preparation windows affect TD scoring patterns?
+- Investigate: Do Super Bowls historically play out differently than regular season games in terms of TD distribution?`
     };
   }
 
@@ -497,7 +492,7 @@ async function runTDScorerAnalysis(allTDProps, firstTDProps, playerStats, gameMa
       context += `### ${game.awayTeam} @ ${game.homeTeam}\n`;
       
       // GAME SCRIPT DATA - Critical for TD distribution modeling
-      if (game.spread != null || game.total != null) {
+      if (game.spread != null) {
         context += `**GAME SCRIPT DATA (Use for TD distribution):**\n`;
         if (game.spread != null) {
           const favoriteTeam = game.spread < 0 ? game.homeTeam : game.awayTeam;
@@ -505,19 +500,11 @@ async function runTDScorerAnalysis(allTDProps, firstTDProps, playerStats, gameMa
           context += `- Spread: ${game.homeTeam} ${game.spread > 0 ? '+' : ''}${game.spread} (${favoriteTeam} favored by ${spreadAbs})\n`;
           context += `- Game Type: ${game.spreadContext.replace(/_/g, ' ')}\n`;
         }
-        if (game.total != null) {
-          context += `- Total (O/U): ${game.total} → ${game.totalContext.replace(/_/g, ' ')} expected scoring\n`;
-        }
-        // Game script impact guidance
+        // Game script context (non-prescriptive, spread-based only)
         if (game.spreadContext === 'HOME_BIG_FAVORITE' || game.spreadContext === 'AWAY_BIG_FAVORITE') {
           const favorite = game.spreadContext === 'HOME_BIG_FAVORITE' ? game.homeTeam : game.awayTeam;
           const underdog = game.spreadContext === 'HOME_BIG_FAVORITE' ? game.awayTeam : game.homeTeam;
-          context += `- GAME SCRIPT: ${favorite} RB1 likely high volume late. ${underdog} may trail = more passing TDs.\n`;
-        }
-        if (game.totalContext === 'HIGH_SCORING') {
-          context += `- High total: Multiple TDs expected - WRs/TEs have increased equity.\n`;
-        } else if (game.totalContext === 'LOW_SCORING') {
-          context += `- Low total: Grind game expected - RBs have increased TD equity.\n`;
+          context += `- GAME SCRIPT NOTE: ${favorite} is a big favorite. Investigate: How does a lopsided game script affect TD distribution across positions for THESE teams?\n`;
         }
       }
       
@@ -531,7 +518,7 @@ async function runTDScorerAnalysis(allTDProps, firstTDProps, playerStats, gameMa
       
       // List key injuries (especially QBs and stars)
       if (game.injuries && game.injuries.length > 0) {
-        context += `**KEY INJURIES (affects TD opportunities):**\n`;
+        context += `**KEY INJURIES:**\n`;
         for (const inj of game.injuries.slice(0, 8)) {
           context += `- ${inj.player} (${inj.team}): ${inj.status}${inj.description ? ` - ${inj.description}` : ''}\n`;
         }
@@ -553,7 +540,16 @@ async function runTDScorerAnalysis(allTDProps, firstTDProps, playerStats, gameMa
 
   const systemPrompt = `
 You are Gary, the expert NFL analyst. You're picking Touchdown Scorers for today's games.
+TODAY'S DATE: ${getESTDate()}
+CURRENT SEASON: 2025-26 NFL Season
 ${playoffInfo.isPlayoffs ? `\n${playoffInfo.context}\n` : ''}
+
+*** TRAINING DATA WARNING ***
+Your training data is from 2024 or earlier. It is NOW the 2025-26 season.
+- Players have been traded. A player you "know" on Team X may be on Team Y now.
+- Use ONLY the verified player-team assignments provided in CRITICAL GAME CONTEXT below.
+- Do NOT cite any stat, roster detail, or team narrative from your training data.
+- If you're unsure about something, describe qualitatively — do NOT invent numbers.
 
 *** ZERO TOLERANCE FOR HALLUCINATION - READ THIS FIRST ***
 
@@ -605,11 +601,11 @@ Pick your ${standardCount} BEST touchdown scorer bet${standardCount > 1 ? 's' : 
 
 RULE: ${isSingleGame ? 'Pick exactly 1 standard TD scorer.' : 'Pick from at least 4 different games.'} For standard picks, use line 0.5 (Over 0.5 TDs = scores at least 1 TD).
 
-### CATEGORY 2: UNDERDOG TD SCORERS (${underdogCount} pick${underdogCount > 1 ? 's' : ''})
-Pick ${underdogCount} touchdown scorer bet${underdogCount > 1 ? 's' : ''} with odds of +200 or better (higher payout). These are your VALUE plays:
+### CATEGORY 2: LONG-SHOT TD SCORERS (${underdogCount} pick${underdogCount > 1 ? 's' : ''})
+Pick ${underdogCount} touchdown scorer bet${underdogCount > 1 ? 's' : ''} with odds of +200 or better (higher payout). These are higher-payout plays:
 - Players who could vulture a TD or score multiple
 - Boom/bust candidates in high-scoring games
-- Players in favorable TD-scoring situations that oddsmakers are undervaluing
+- Players whose TD role you believe the odds haven't fully captured based on your investigation
 - For top 5 players (best anytime TD odds), you can pick Over 1.5 TDs (2+ touchdowns) if you think they have multi-TD upside
 
 LINE OPTIONS:
@@ -624,15 +620,15 @@ Pick exactly ONE player from EACH game who is most likely to score the FIRST tou
 - Teams with strong opening drive scripts
 - Goal line backs and red zone targets
 - Consider each team's first-drive tendencies
-- Weight toward RB1s (28% of first TDs) and WR1s (22% of first TDs)
+- Historical First TD rates by position are below — ask: Do TODAY's matchups shift this distribution?
 
 CRITICAL RULE: You MUST pick exactly 1 First TD scorer from EACH game on the slate. If there are 4 games, pick 4 First TD scorers (one per game).
 
 ## ANALYSIS FRAMEWORK FOR TD PROPS
 
-### 1. HISTORICAL TD RATES BY POSITION (Use this to weight First TD picks)
+### 1. HISTORICAL TD RATES BY POSITION (Baseline Context)
 First TD scorers historically by position (NFL averages):
-- RB1 (lead back): ~28% of all First TDs - HIGHEST equity
+- RB1 (lead back): ~28% of all First TDs
 - WR1 (team's top receiver): ~22% of First TDs
 - TE1 (primary tight end): ~12% of First TDs
 - WR2/Slot: ~10% of First TDs
@@ -640,71 +636,44 @@ First TD scorers historically by position (NFL averages):
 - RB2/Goal-line specialist: ~8% of First TDs
 - All other players: ~12% combined
 
-USE THIS: Weight your First TD picks toward RB1s and WR1s who are their team's primary scoring threats.
+These historical averages provide a BASELINE. Ask: Do TODAY's matchups, game scripts, and player roles shift this distribution for these specific games?
 
-### 2. GAME SCRIPT MODELING (Critical for TD distribution)
-Analyze the spread and total to predict game flow:
+### 2. GAME SCRIPT AWARENESS (How might the spread affect TD distribution?)
 
-**CLOSE GAMES (Spread ±3):**
-- More balanced TD distribution
-- Both teams stay committed to game plan
-- RBs maintain volume throughout
-- Good for both sides' TD scorers
+For each game, look at the spread and investigate:
 
-**FAVORITES BY 7+ POINTS:**
-- Favorite's RB1 likely to get late-game clock-killing carries = MORE TD EQUITY
-- Underdog may trail = MORE passing TDs to WRs/TEs
-- Underdog RB1 may see REDUCED volume if trailing
+- **Spread magnitude**: How does the projected game flow affect which positions have TD opportunities? Check each team's play-calling tendencies in similar game scripts.
+- **Trailing team dynamics**: If one team falls behind, how does THEIR specific offensive approach change? What do the game logs show?
+- **Clock management**: Which team controls the ball late in a lopsided game? How does that affect volume and scoring opportunities?
 
-**HIGH TOTALS (O/U 48+):**
-- Expect shootout = PASSING TDs more likely
-- WRs and TEs have increased TD equity
-- Multiple TD scorers per game expected
+Investigate each game's spread from CRITICAL GAME CONTEXT — what does the projected game flow tell you about TD distribution for THESE specific teams?
 
-**LOW TOTALS (O/U 40 or less):**
-- Grind-it-out game = RUSHING TDs more likely
-- RBs have increased TD equity
-- Fewer total TDs to go around - pick carefully
 
-### 3. WEATHER IMPACT (For outdoor games - check live_context)
-**COLD WEATHER (Below 35°F):**
-- Passing games suffer (-10-15% efficiency)
-- RBs gain TD equity
-- TEs gain short-yardage TD equity (reliable hands in cold)
-- WR deep threats LOSE equity
+### 3. WEATHER AWARENESS (For outdoor games — check live_context)
 
-**WIND (15+ mph):**
-- Deep passing drastically affected
-- Short/intermediate routes still viable
-- RBs and short-area TEs benefit
-- Kicking game affected = more 4th down attempts in red zone
+If the game is outdoors, investigate:
+- **Temperature**: Does cold weather data for THESE teams show any impact on passing vs rushing efficiency?
+- **Wind**: Is wind significant enough to affect deep passing? What do the stats show?
+- **Precipitation**: How does precipitation affect THIS game's offensive approach?
 
-**RAIN/SNOW:**
-- Run game favored heavily
-- RBs gain significant TD equity
-- Turnovers increase = defensive TDs possible
-- WR TD equity drops significantly
+Don't assume weather effects — verify with actual performance data. Weather is only relevant if the data supports it for THIS game.
 
 ### 4. SNAP COUNT & USAGE TRENDS (From player_context data)
-Look for INCREASING usage patterns:
-- Player's snap % trending UP = more opportunities
-- New role (injury to teammate) = usage spike expected
-- Veteran's snap count declining = vulture back opportunity
+Investigate usage patterns for each player:
+- Is snap % trending in a clear direction? What's driving it?
+- Has a teammate change (injury, trade) affected this player's role?
+- Are there any minutes/role limitations to investigate?
 
-Red flags:
-- "Pitch count" or "limited snaps" = reduced TD ceiling
-- Coming off injury = may not have full role yet
-- Backup QB = entire offense's ceiling affected
+Ask: Is the usage trend structural (sustainable) or variance (temporary)? What do the game logs show?
 
 ## ANALYSIS APPROACH
-- Consider red zone opportunity rates
-- Look at defensive TD rates allowed by position
-- Factor in game script (blowout vs close game)
-- Consider goal-line personnel tendencies
-- For First TD: opening drive efficiency, scripted plays, early usage patterns
-- APPLY THE WEATHER IMPACT analysis if game is outdoors
-- USE THE GAME SCRIPT MODEL based on spread and total
-- SPREAD PICKS ACROSS THE FULL SLATE - find value in multiple games
+For each player, investigate:
+- What is their red zone opportunity rate?
+- How does the opposing defense perform against this position in the red zone?
+- How does the game script (based on spread/total) affect this player's TD opportunity?
+- What are the goal-line personnel tendencies for this team?
+- For First TD: What do opening drive tendencies show for these teams?
+- What game factors does the line/odds appear to be based on for this player?
 
 ## RESPONSE FORMAT (STRICT JSON)
 {
@@ -715,7 +684,7 @@ Red flags:
       "line": 0.5,
       "odds": -120,
       "matchup": "vs OPP",
-      "rationale": "Red zone usage: X TDs in last Y games | Goal-line role: describe\n\n[Main thesis in 3-5 sentences explaining why this player will score, including specific stats, matchup advantages, and game script factors.]\n\nKey factors:\n• Factor 1 with specific stat\n• Factor 2 with matchup context\n• Factor 3 with usage/role info\n\nRisk: Brief note on what could go wrong.\n\nConfidence: X% | TD equity: high/medium"
+      "rationale": "Red zone usage: X TDs in last Y games | Goal-line role: describe\n\n[Main thesis in 3-5 sentences explaining why this player will score, including specific stats, matchup advantages, and game script factors.]\n\nKey factors:\n• Factor 1 with specific stat\n• Factor 2 with matchup context\n• Factor 3 with usage/role info\n\nRisk: Brief note on what could go wrong."
     }
   ],
   "underdog_td_picks": [
@@ -725,7 +694,7 @@ Red flags:
       "line": 0.5,
       "odds": 250,
       "matchup": "vs OPP",
-      "rationale": "Odds value: +XXX for a player who [role description]\n\n[Main thesis in 3-5 sentences explaining the value opportunity - why these odds are too long, what role gives them TD equity, and what game script would unlock them.]\n\nKey factors:\n• Factor 1 (e.g., goal-line vulture role)\n• Factor 2 (e.g., matchup soft spot)\n• Factor 3 (e.g., game script projection)\n\nRisk: Brief note on low-volume or situational concern.\n\nConfidence: X% | Value rating: strong/moderate"
+      "rationale": "Odds value: +XXX for a player who [role description]\n\n[Main thesis in 3-5 sentences explaining the value opportunity - why these odds are too long, what role gives them TD equity, and what game script would unlock them.]\n\nKey factors:\n• Factor 1 (e.g., goal-line vulture role)\n• Factor 2 (e.g., matchup soft spot)\n• Factor 3 (e.g., game script projection)\n\nRisk: Brief note on low-volume or situational concern."
     }
   ],
   "first_td_picks": [
@@ -734,7 +703,7 @@ Red flags:
       "team": "Team Abbreviation",
       "odds": 500,
       "matchup": "vs OPP",
-      "rationale": "Opening drive equity: [team's scripted play tendency]\n\n[Main thesis in 3-5 sentences explaining why this player could score FIRST - consider opening possession efficiency, scripted red zone plays, early usage patterns, and whether their team typically receives the opening kick.]\n\nKey factors:\n• Factor 1 (e.g., team's opening drive TD rate)\n• Factor 2 (e.g., player's early-game usage)\n• Factor 3 (e.g., opponent's slow-start defense)\n\nRisk: High variance play - first TD is inherently unpredictable.\n\nConfidence: X% | First TD equity: present/longshot"
+      "rationale": "Opening drive equity: [team's scripted play tendency]\n\n[Main thesis in 3-5 sentences explaining why this player could score FIRST - consider opening possession efficiency, scripted red zone plays, early usage patterns, and whether their team typically receives the opening kick.]\n\nKey factors:\n• Factor 1 (e.g., team's opening drive TD rate)\n• Factor 2 (e.g., player's early-game usage)\n• Factor 3 (e.g., opponent's slow-start defense)\n\nRisk: High variance play - first TD is inherently unpredictable."
     }
   ],
   "game_notes": "Brief overall thoughts on TD-scoring environment today"
@@ -742,10 +711,11 @@ Red flags:
 
 IMPORTANT:
 - Standard picks: Pick exactly ${standardCount} from any odds, line is always 0.5
-- Underdog picks: Pick exactly ${underdogCount} with odds +200 or better. Line can be 0.5 (1+ TD) or 1.5 (2+ TDs)
+- Long-shot picks: Pick exactly ${underdogCount} with odds +200 or better. Line can be 0.5 (1+ TD) or 1.5 (2+ TDs)
 - First TD picks: Pick exactly 1 player PER GAME (so if 1 game, pick 1 First TD scorer)
-- RATIONALES MUST BE DETAILED: Include stats line, 3-5 sentence thesis, bullet point factors, risk note, and confidence
+- RATIONALES MUST BE DETAILED: Include stats line, 3-5 sentence thesis, bullet point factors, and risk note
 - Be specific about WHY each player will score - use real stats and matchup analysis
+- Do NOT invent statistics. If you don't have a specific number, describe qualitatively.
 `;
 
   // Build structured game context for user content
@@ -1068,10 +1038,9 @@ async function main() {
         .filter(p => p.validated && p.team === game.away_team)
         .map(p => p.player);
 
-      // Extract spread and total for game script modeling
+      // Extract spread for game script modeling
       const spread = game.spread_home != null ? game.spread_home : null;
-      const total = game.total != null ? game.total : null;
-      
+
       gamesData.push({
         matchup: matchup,
         homeTeam: game.home_team,
@@ -1082,24 +1051,16 @@ async function main() {
         gameTime: game.commence_time,
         // Game script modeling data
         spread: spread,  // Home team spread (negative = favorite)
-        total: total,    // Over/Under total
-        spreadContext: spread != null 
-          ? Math.abs(spread) <= 3 
-            ? 'CLOSE_GAME' 
-            : spread < -6.5 
-              ? 'HOME_BIG_FAVORITE' 
-              : spread > 6.5 
-                ? 'AWAY_BIG_FAVORITE' 
-                : spread < 0 
-                  ? 'HOME_SLIGHT_FAVORITE' 
+        spreadContext: spread != null
+          ? Math.abs(spread) <= 3
+            ? 'CLOSE_GAME'
+            : spread < -6.5
+              ? 'HOME_BIG_FAVORITE'
+              : spread > 6.5
+                ? 'AWAY_BIG_FAVORITE'
+                : spread < 0
+                  ? 'HOME_SLIGHT_FAVORITE'
                   : 'AWAY_SLIGHT_FAVORITE'
-          : 'UNKNOWN',
-        totalContext: total != null
-          ? total >= 48 
-            ? 'HIGH_SCORING' 
-            : total <= 40 
-              ? 'LOW_SCORING' 
-              : 'MODERATE'
           : 'UNKNOWN'
       });
 
@@ -1169,7 +1130,7 @@ async function main() {
     console.log(`      💡 ${pick.rationale}\n`);
   });
 
-  console.log(`\n🎰 UNDERDOG TD SCORERS (5 Value Plays @ +200+):`);
+  console.log(`\n🎰 LONG-SHOT TD SCORERS (5 Higher-Payout Plays @ +200+):`);
   (result.underdog_td_picks || []).forEach((pick, i) => {
     console.log(`   ${i + 1}. ${pick.player} (${pick.team}) @ +${pick.odds}`);
     console.log(`      ${pick.matchup}`);
@@ -1247,7 +1208,7 @@ async function main() {
         line: line,
         bet: 'over',
         odds: pick.odds,
-        confidence: 0.70, // Standard confidence for display
+        confidence: null, // Gary's analysis determines confidence — no hardcoded default
         rationale: pick.rationale,
         matchup: pick.matchup,
         td_category: 'standard',
@@ -1268,7 +1229,7 @@ async function main() {
         line: line,
         bet: 'over',
         odds: pick.odds,
-        confidence: 0.50, // Lower confidence for underdogs (they're longshots!)
+        confidence: null, // Gary's analysis determines confidence — no hardcoded default
         rationale: pick.rationale,
         matchup: pick.matchup,
         td_category: 'underdog',
@@ -1287,7 +1248,7 @@ async function main() {
         line: 0.5,
         bet: 'over',
         odds: pick.odds,
-        confidence: 0.35, // Low confidence for first TD (high variance)
+        confidence: null, // Gary's analysis determines confidence — no hardcoded default
         rationale: pick.rationale,
         matchup: pick.matchup,
         td_category: 'first_td',
@@ -1329,7 +1290,7 @@ async function main() {
     if (insertError) {
       console.error(`❌ Insert error: ${insertError.message}`);
     } else {
-      console.log(`✅ Stored ${allTDPicks.length} NFL TD picks (${standardPicks.length} standard + ${underdogPicks.length} underdog + ${firstTDPicks.length} first TD)`);
+      console.log(`✅ Stored ${allTDPicks.length} NFL TD picks (${standardPicks.length} standard + ${underdogPicks.length} long-shot + ${firstTDPicks.length} first TD)`);
     }
   }
 

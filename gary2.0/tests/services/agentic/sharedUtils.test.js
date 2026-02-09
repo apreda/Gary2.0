@@ -148,10 +148,22 @@ describe('fixBdlInjuryStatus', () => {
     expect(result.isEdge).toBe(false);
   });
 
-  it('corrects Out status when description says questionable', () => {
+  it('corrects Out status when latest update says questionable', () => {
     const injury = { status: 'Out', description: 'Feb 5: Questionable with ankle soreness' };
     const result = fixBdlInjuryStatus(injury);
     expect(result.status).toBe('Questionable');
+  });
+
+  it('keeps Out status when description has historical questionable but latest is ruled out', () => {
+    const injury = { status: 'Out', description: 'Feb 5: Questionable with calf concern; Feb 7: Ruled out for Saturday' };
+    const result = fixBdlInjuryStatus(injury);
+    expect(result.status).toBe('Out');
+  });
+
+  it('keeps Out status when description mentions questionable historically then out for game', () => {
+    const injury = { status: 'Out', description: 'Feb 3: Questionable with knee soreness. Feb 5: Will not play Saturday' };
+    const result = fixBdlInjuryStatus(injury);
+    expect(result.status).toBe('Out');
   });
 
   it('marks surgery as SEASON-LONG', () => {

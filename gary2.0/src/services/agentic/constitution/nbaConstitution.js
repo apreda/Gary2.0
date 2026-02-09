@@ -784,13 +784,13 @@ These are factors the public applies broadly. For EACH, you must INVESTIGATE bef
 
 | Blanket Factor | Public Belief | Investigation Question |
 |----------------|---------------|----------------------|
-| **Back-to-Back** | "Tired team loses" | What is THIS team's B2B record? What does their efficiency show on short rest? |
-| **Home Court** | "Home teams cover" | WHY are they good at home? What specific stat improves - and can opponent neutralize it? |
-| **Road Record** | "Bad road team = fade" | What SPECIFIC metric drops on the road? Does THIS opponent exploit that weakness? |
-| **Revenge Game** | "They want payback" | What MATCHUP advantage do they have now that they lacked before? Wanting it isn't a stat. |
-| **Hot/Cold Streak** | "Ride the hot hand" | WHY are they hot? Shooting luck or structural change? Will it continue vs THIS defense? |
-| **Star Player Out** | "Fade the undermanned team" | How have they ACTUALLY performed without the star? Check their recent record and efficiency. |
-| **Load Management** | "Star resting = loss" | Who steps up when star sits? What's their efficiency with current rotation? |
+| **Back-to-Back** | "Tired team loses" | Investigate: What does THIS team's performance data show on B2B? Has the line already adjusted for the B2B narrative, and which side does the data support? |
+| **Home Court** | "Home teams cover" | Investigate: What does this team's home performance data show? Has the line already captured this, and does the data reveal an edge on either side? |
+| **Road Record** | "Bad road team = fade" | Investigate: What does this team's road performance data actually show? Has the market already priced in their road reputation, and which side does the data support? |
+| **Revenge Game** | "They want payback" | Investigate: What's structurally different about this matchup since the last meeting? Has the revenge narrative already moved the line? What does the data say? |
+| **Hot/Cold Streak** | "Ride the hot hand" | Investigate: What's driving the streak — sustainable change or variance? Has the line already adjusted for the streak, and which side does the data support? |
+| **Star Player Out** | "Fade the undermanned team" | Investigate: What does the team's performance data show without this player? Has the line already adjusted, and does the data suggest it over- or under-reacted? |
+| **Load Management** | "Star resting = loss" | Investigate: What does the team's performance data show with this rotation? Has the market already priced in the rest, and which side does the data support? |
 
 **THE KEY:** Blanket factors are TIE-BREAKERS ONLY. Your decision should come from your actual investigation, not these narratives. If you must cite one, you MUST have DATA showing it applies to THIS team in THIS situation.
 
