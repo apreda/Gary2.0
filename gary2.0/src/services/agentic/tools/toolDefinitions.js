@@ -120,6 +120,10 @@ const NCAAB_TOKENS = [
   'NCAAB_NET_RANKING',       // NCAA NET ranking
   'NCAAB_STRENGTH_OF_SCHEDULE', // SOS ranking
   'NCAAB_QUAD_RECORD',       // Quad 1-4 records
+  'NCAAB_BARTTORVIK',        // BartTorvik T-Rank, Barthag, WAB
+  'NCAAB_CONFERENCE_STRENGTH', // Conference power rankings (KenPom avg AdjEM)
+  'NCAAB_OPPONENT_QUALITY',    // Last 10 opponents with KenPom rankings
+  'NCAAB_HOME_COURT_ADVANTAGE', // Venue-specific home/away performance
   // Half Scoring Trends (BDL has home_score_h1, home_score_h2, etc.)
   'NCAAB_FIRST_HALF_TRENDS',  // 1st half scoring patterns - fast starters vs slow starters
   'NCAAB_SECOND_HALF_TRENDS', // 2nd half scoring - closers vs faders

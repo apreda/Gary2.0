@@ -489,7 +489,7 @@ export async function buildScoutReport(game, sport, options = {}) {
         const gameDate = new Date(game.commence_time);
         dateStr = gameDate.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); // YYYY-MM-DD format
       } else {
-        dateStr = new Date().toISOString().slice(0, 10);
+        dateStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
       }
       console.log(`[Scout Report] Fetching NBA game context via Gemini Grounding for ${dateStr}...`);
       
@@ -774,8 +774,27 @@ Be specific and factual. If it's just a regular season game, say so clearly.`;
     } catch (e) {
       console.warn('[Scout Report] NCAAB roster depth error:', e.message);
     }
+
+    // Compute NCAAB L5 efficiency + roster context (BDL has per-game player_stats for NCAAB)
+    if (ncaabRosterDepth?.homeTeamId && ncaabRosterDepth?.awayTeamId) {
+      const homeGameIds = (recentHome || []).map(g => g.id).filter(Boolean);
+      const awayGameIds = (recentAway || []).map(g => g.id).filter(Boolean);
+      if (homeGameIds.length > 0 || awayGameIds.length > 0) {
+        try {
+          const [homeL5, awayL5] = await Promise.all([
+            homeGameIds.length > 0 ? ballDontLieService.getTeamL5Efficiency(ncaabRosterDepth.homeTeamId, homeGameIds, 'basketball_ncaab') : null,
+            awayGameIds.length > 0 ? ballDontLieService.getTeamL5Efficiency(ncaabRosterDepth.awayTeamId, awayGameIds, 'basketball_ncaab') : null
+          ]);
+          ncaabRosterDepth.homeL5 = homeL5;
+          ncaabRosterDepth.awayL5 = awayL5;
+          console.log(`[Scout Report] NCAAB L5 efficiency computed: Home ${homeL5?.efficiency?.games || 0} games, Away ${awayL5?.efficiency?.games || 0} games`);
+        } catch (e) {
+          console.warn(`[Scout Report] NCAAB L5 efficiency computation failed (non-fatal):`, e.message);
+        }
+      }
+    }
   }
-  
+
   // For NFL, fetch roster depth (key skill players)
   let nflRosterDepth = null;
   let nflPlayoffHistory = null;
@@ -2422,7 +2441,7 @@ RECENT FORM (Last 5 Games)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${formatRecentForm(homeTeam, recentHome)}
 ${formatRecentForm(awayTeam, recentAway)}
-${sportKey === 'NCAAB' ? formatNcaabL5ScoringTrends(homeTeam, awayTeam, recentHome, recentAway) : ''}
+${sportKey === 'NCAAB' ? formatNcaabL5ScoringTrends(homeTeam, awayTeam, recentHome, recentAway, ncaabRosterDepth, homeProfile, awayProfile) : ''}
 HEAD-TO-HEAD HISTORY (THIS SEASON)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${formatH2HSection(h2hData, homeTeam, awayTeam)}
@@ -3077,63 +3096,113 @@ function formatRecentForm(teamName, recentGames) {
 }
 
 /**
- * Format NCAAB L5 scoring trends from game scores.
- * BDL doesn't have per-game box scores for NCAAB, so we compute what we can from final scores:
- * PPG, opponent PPG, average margin, and scoring consistency.
+ * Format NCAAB L5 efficiency and scoring trends.
+ * Uses BDL per-game player_stats for real efficiency metrics (eFG%, TS%, approx ORtg/DRtg/Net).
+ * Falls back to scoring trends from final scores if L5 efficiency data is unavailable.
  */
-function formatNcaabL5ScoringTrends(homeTeam, awayTeam, recentHome, recentAway) {
+function formatNcaabL5ScoringTrends(homeTeam, awayTeam, recentHome, recentAway, rosterDepth, homeProfile, awayProfile) {
+  const homeL5Data = rosterDepth?.homeL5;
+  const awayL5Data = rosterDepth?.awayL5;
+
+  // If we have real L5 efficiency data from BDL player_stats, show it
+  if (homeL5Data?.efficiency || awayL5Data?.efficiency) {
+    const lines = [
+      '',
+      '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+      'L5 EFFICIENCY vs SEASON (Last 5 Games)',
+      '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+      ''
+    ];
+
+    const formatL5Section = (teamName, l5Data, profile, roster, label) => {
+      if (!l5Data?.efficiency) return;
+      const eff = l5Data.efficiency;
+      const stats = profile?.seasonStats;
+
+      lines.push(`[${label}] ${teamName}:`);
+      lines.push(`  L5:      eFG% ${eff.efg_pct || '?'} | TS% ${eff.ts_pct || '?'} | Approx ORtg ${eff.approx_ortg || '?'} | DRtg ${eff.approx_drtg || '?'} | Net ${eff.approx_net_rtg || '?'}`);
+      if (stats?.offensive_rating && stats?.defensive_rating) {
+        const netRtg = (parseFloat(stats.offensive_rating) - parseFloat(stats.defensive_rating)).toFixed(1);
+        lines.push(`  Season:  ORtg ${parseFloat(stats.offensive_rating).toFixed(1)} | DRtg ${parseFloat(stats.defensive_rating).toFixed(1)} | Net ${netRtg}`);
+      }
+
+      // Roster context: compare L5 game participation against top players
+      if (l5Data.playersByGame && roster && roster.length > 0) {
+        const keyPlayers = roster.slice(0, 5);
+        const totalGames = Object.keys(l5Data.playersByGame).length;
+        const missingPlayers = [];
+
+        for (const player of keyPlayers) {
+          let gamesPlayed = 0;
+          for (const gameId of Object.keys(l5Data.playersByGame)) {
+            const gamePlayers = l5Data.playersByGame[gameId];
+            // Match by player ID (most reliable) or name fallback
+            const found = gamePlayers.some(p =>
+              p.playerId === player.id ||
+              p.name.toLowerCase() === player.name?.toLowerCase()
+            );
+            if (found) gamesPlayed++;
+          }
+          if (gamesPlayed < totalGames) {
+            missingPlayers.push({
+              name: player.name,
+              ppg: player.ppg || '?',
+              gamesPlayed,
+              totalGames
+            });
+          }
+        }
+
+        if (missingPlayers.length === 0) {
+          lines.push(`  L5 Roster: All 5 key players played all ${totalGames} L5 games.`);
+        } else {
+          for (const mp of missingPlayers) {
+            lines.push(`  L5 Roster: ${mp.name} (${mp.ppg} PPG) — played ${mp.gamesPlayed} of ${mp.totalGames} L5 games.`);
+          }
+        }
+      }
+      lines.push('');
+    };
+
+    formatL5Section(homeTeam, homeL5Data, homeProfile, rosterDepth?.home, 'HOME');
+    formatL5Section(awayTeam, awayL5Data, awayProfile, rosterDepth?.away, 'AWAY');
+    return lines.join('\n');
+  }
+
+  // Fallback: scoring trends from final scores if no L5 efficiency data
   function computeL5(teamName, games) {
     if (!games || games.length === 0) return null;
-
     const completed = games.filter(g => (g.home_team_score || 0) > 0 || (g.visitor_team_score || 0) > 0);
     if (completed.length === 0) return null;
-
     const l5 = completed.slice(0, 5);
     let totalPts = 0, totalOppPts = 0;
     const margins = [];
-
     for (const game of l5) {
       const homeTeamName = game.home_team?.name || game.home_team?.full_name || '';
       const isHome = homeTeamName.toLowerCase().includes(teamName.toLowerCase().split(' ').pop()) ||
                      teamName.toLowerCase().includes(homeTeamName.toLowerCase().split(' ').pop());
-
       const teamScore = isHome ? game.home_team_score : game.visitor_team_score;
       const oppScore = isHome ? game.visitor_team_score : game.home_team_score;
-
       totalPts += teamScore;
       totalOppPts += oppScore;
       margins.push(teamScore - oppScore);
     }
-
     const gp = l5.length;
-    const avgPts = (totalPts / gp).toFixed(1);
-    const avgOppPts = (totalOppPts / gp).toFixed(1);
-    const avgMargin = (margins.reduce((a, b) => a + b, 0) / gp).toFixed(1);
-
-    return { gp, avgPts, avgOppPts, avgMargin };
+    return { gp, avgPts: (totalPts / gp).toFixed(1), avgOppPts: (totalOppPts / gp).toFixed(1), avgMargin: (margins.reduce((a, b) => a + b, 0) / gp).toFixed(1) };
   }
 
   const homeL5 = computeL5(homeTeam, recentHome);
   const awayL5 = computeL5(awayTeam, recentAway);
-
   if (!homeL5 && !awayL5) return '';
 
   const lines = [
     '',
-    'L5 SCORING TRENDS (from game scores — BDL does not provide NCAAB box stats)',
+    'L5 SCORING TRENDS (from game scores)',
     '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
   ];
-
-  if (homeL5) {
-    lines.push(`  ${homeTeam}: L5 PPG ${homeL5.avgPts} | Opp PPG ${homeL5.avgOppPts} | Avg Margin ${homeL5.avgMargin > 0 ? '+' : ''}${homeL5.avgMargin} (${homeL5.gp} games)`);
-  }
-  if (awayL5) {
-    lines.push(`  ${awayTeam}: L5 PPG ${awayL5.avgPts} | Opp PPG ${awayL5.avgOppPts} | Avg Margin ${awayL5.avgMargin > 0 ? '+' : ''}${awayL5.avgMargin} (${awayL5.gp} games)`);
-  }
-
-  lines.push('  Note: For true L5 efficiency (AdjEM, AdjO, AdjD), call NCAAB_KENPOM_RATINGS via grounding.');
+  if (homeL5) lines.push(`  ${homeTeam}: L5 PPG ${homeL5.avgPts} | Opp PPG ${homeL5.avgOppPts} | Avg Margin ${homeL5.avgMargin > 0 ? '+' : ''}${homeL5.avgMargin} (${homeL5.gp} games)`);
+  if (awayL5) lines.push(`  ${awayTeam}: L5 PPG ${awayL5.avgPts} | Opp PPG ${awayL5.avgOppPts} | Avg Margin ${awayL5.avgMargin > 0 ? '+' : ''}${awayL5.avgMargin} (${awayL5.gp} games)`);
   lines.push('');
-
   return lines.join('\n');
 }
 

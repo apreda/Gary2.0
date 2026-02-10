@@ -1382,12 +1382,19 @@ async function main() {
                   const firstSpread = validOdds[0].spread;
                   const isUnderdog = firstSpread > 0;
 
-                  let best = validOdds[0];
-                  for (const odds of validOdds) {
+                  // Compute median spread to filter outliers (e.g., Kalshi +32.5 vs consensus +17.5)
+                  const sortedSpreads = validOdds.map(o => o.spread).sort((a, b) => a - b);
+                  const medianSpread = sortedSpreads[Math.floor(sortedSpreads.length / 2)];
+                  const MAX_DEVIATION = 4; // Max points away from median to be considered valid
+                  const inRangeOdds = validOdds.filter(o => Math.abs(o.spread - medianSpread) <= MAX_DEVIATION);
+                  const searchOdds = inRangeOdds.length > 0 ? inRangeOdds : validOdds;
+
+                  let best = searchOdds[0];
+                  for (const odds of searchOdds) {
                     if (isUnderdog) {
-                      if (odds.spread > best.spread) best = odds;   // higher = more points = better
+                      if (odds.spread > best.spread) best = odds;   // +18.5 > +17.5 = more cushion = better
                     } else {
-                      if (odds.spread < best.spread) best = odds;   // lower (more negative) = fewer to cover = better
+                      if (odds.spread > best.spread) best = odds;   // -16.5 > -17.5 = fewer to cover = better
                     }
                   }
 
