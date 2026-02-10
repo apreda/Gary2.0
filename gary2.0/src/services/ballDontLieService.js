@@ -3117,6 +3117,91 @@ const ballDontLieService = {
     }
   },
 
+  /**
+   * Compute L5 team efficiency from player-level box score stats.
+   * Returns efficiency metrics (eFG%, TS%, approx ORtg/DRtg/Net Rating) plus
+   * per-game player participation for roster context.
+   */
+  async getTeamL5Efficiency(teamId, gameIds, ttlMinutes = 10) {
+    try {
+      if (!teamId || !gameIds || gameIds.length === 0) return null;
+
+      const cacheKey = `nba_l5_efficiency_${teamId}_${gameIds.sort().join('_')}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        // Fetch all player stats for these game IDs in one batch call
+        const url = `${BALLDONTLIE_API_BASE_URL}/nba/v1/stats${buildQuery({
+          game_ids: gameIds,
+          per_page: 100
+        })}`;
+        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const stats = response.data?.data || [];
+
+        if (stats.length === 0) return null;
+
+        // Separate team vs opponent stats + track per-game player participation
+        const teamTotals = { fgm: 0, fga: 0, fg3m: 0, fg3a: 0, ftm: 0, fta: 0, pts: 0, oreb: 0, tov: 0, games: new Set() };
+        const oppTotals = { fgm: 0, fga: 0, fg3m: 0, fg3a: 0, ftm: 0, fta: 0, pts: 0, oreb: 0, tov: 0, games: new Set() };
+        const playersByGame = {}; // gameId → [{ name, playerId, minutes }]
+
+        for (const s of stats) {
+          const statTeamId = s.team?.id;
+          const isTeam = statTeamId === teamId;
+          const target = isTeam ? teamTotals : oppTotals;
+
+          target.fgm += s.fgm || 0;
+          target.fga += s.fga || 0;
+          target.fg3m += s.fg3m || 0;
+          target.fg3a += s.fg3a || 0;
+          target.ftm += s.ftm || 0;
+          target.fta += s.fta || 0;
+          target.pts += s.pts || 0;
+          target.oreb += s.oreb || 0;
+          target.tov += s.turnover || 0;
+          target.games.add(s.game?.id);
+
+          // Track who played per game (team players only)
+          if (isTeam) {
+            const mins = parseInt(s.min) || 0;
+            if (mins > 0) {
+              const gid = s.game?.id;
+              if (!playersByGame[gid]) playersByGame[gid] = [];
+              playersByGame[gid].push({
+                name: `${s.player?.first_name || ''} ${s.player?.last_name || ''}`.trim(),
+                playerId: s.player?.id,
+                minutes: mins
+              });
+            }
+          }
+        }
+
+        const gp = teamTotals.games.size;
+        if (gp === 0 || teamTotals.fga === 0) return null;
+
+        // Estimate possessions: FGA + 0.44*FTA - OREB + TOV
+        const possEst = teamTotals.fga + 0.44 * teamTotals.fta - teamTotals.oreb + teamTotals.tov;
+        const oppPossEst = oppTotals.fga + 0.44 * oppTotals.fta - oppTotals.oreb + oppTotals.tov;
+
+        return {
+          efficiency: {
+            games: gp,
+            efg_pct: teamTotals.fga > 0 ? ((teamTotals.fgm + 0.5 * teamTotals.fg3m) / teamTotals.fga * 100).toFixed(1) : null,
+            ts_pct: teamTotals.fga > 0 ? (teamTotals.pts / (2 * (teamTotals.fga + 0.44 * teamTotals.fta)) * 100).toFixed(1) : null,
+            approx_ortg: possEst > 0 ? (teamTotals.pts / possEst * 100).toFixed(1) : null,
+            approx_drtg: oppPossEst > 0 ? (oppTotals.pts / oppPossEst * 100).toFixed(1) : null,
+            approx_net_rtg: (possEst > 0 && oppPossEst > 0) ? ((teamTotals.pts / possEst * 100) - (oppTotals.pts / oppPossEst * 100)).toFixed(1) : null,
+            ppg: (teamTotals.pts / gp).toFixed(1),
+            opp_ppg: (oppTotals.pts / gp).toFixed(1),
+            tov_per_game: (teamTotals.tov / gp).toFixed(1)
+          },
+          playersByGame
+        };
+      }, ttlMinutes);
+    } catch (e) {
+      console.error(`[Ball Don't Lie] getTeamL5Efficiency error for team ${teamId}:`, e.message);
+      return null;
+    }
+  },
+
   async getTeamStats(sportKey, params = {}, ttlMinutes = 10) {
     try {
       const cacheKey = `${sportKey}_team_stats_${JSON.stringify(params)}`;
