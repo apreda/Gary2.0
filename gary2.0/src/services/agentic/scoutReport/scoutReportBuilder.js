@@ -9,11 +9,46 @@ import { ballDontLieService } from '../../ballDontLieService.js';
 import { formatTokenMenu } from '../tools/toolDefinitions.js';
 import { fixBdlInjuryStatus } from '../sharedUtils.js';
 import { generateGameSignificance } from './gameSignificanceGenerator.js';
+import { fetchNbaInjuriesForGame } from '../../nbaInjuryReportService.js';
 // All context comes from Gemini 3 Flash with Google Search Grounding
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import axios from 'axios';
-// Rotowire data via Gemini Grounding (searches rotowire.com directly)
+// NBA injuries: RapidAPI (primary) → Gemini Grounding fallback (RotoWire)
 // BDL injuries used ONLY for duration enrichment (when player went out)
+
+/**
+ * Robust player name matching — handles hyphenated names, API inconsistencies
+ * e.g., "Shai Alexander" (RapidAPI) vs "Shai Gilgeous-Alexander" (BDL)
+ */
+function playerNamesMatch(name1, name2) {
+  const a = (name1 || '').toLowerCase().trim();
+  const b = (name2 || '').toLowerCase().trim();
+  if (!a || !b) return false;
+  if (a === b) return true;
+
+  const aParts = a.split(/\s+/);
+  const bParts = b.split(/\s+/);
+  if (aParts.length < 2 || bParts.length < 2) return false;
+
+  const aFirst = aParts[0];
+  const bFirst = bParts[0];
+  const aLast = aParts.slice(1).join(' ');
+  const bLast = bParts.slice(1).join(' ');
+
+  // First names must match
+  if (aFirst !== bFirst) return false;
+
+  // Last names: exact match
+  if (aLast === bLast) return true;
+
+  // Last names: one contains the other (handles "alexander" in "gilgeous-alexander")
+  if (aLast.includes(bLast) || bLast.includes(aLast)) return true;
+
+  // Split hyphenated parts and check any part matches
+  const aLastParts = aLast.split('-');
+  const bLastParts = bLast.split('-');
+  return aLastParts.some(ap => bLastParts.some(bp => ap === bp && ap.length > 2));
+}
 
 // Lazy-initialize Gemini for grounded searches
 let geminiClient = null;
@@ -87,6 +122,34 @@ function extractDurationFromBdl(description, returnDate) {
     } else if (desc.includes('day-to-day')) {
       daysSinceOut = 2;
       outSinceStr = 'day-to-day (recent)';
+    }
+  }
+
+  // Pattern 4: Date at start of description (e.g., "Jan 20: Player is out..." or "Nov 16, 2025 -")
+  if (!daysSinceOut) {
+    const dateStartMatch = desc.match(/^(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)[.\s]*(\d{1,2})/i);
+    if (dateStartMatch) {
+      const monthStr = dateStartMatch[1].toLowerCase();
+      const day = parseInt(dateStartMatch[2], 10);
+      const monthMap = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+      const monthNum = monthMap[monthStr.substring(0, 3)];
+      if (monthNum !== undefined) {
+        let year = now.getFullYear();
+        if (monthNum > now.getMonth()) year -= 1;
+        const outDate = new Date(year, monthNum, day);
+        daysSinceOut = Math.floor((now - outDate) / (1000 * 60 * 60 * 24));
+        outSinceStr = outDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      }
+    }
+  }
+
+  // Pattern 5: "missed X games" — estimate days from game count (NBA ~every 2 days)
+  if (!daysSinceOut) {
+    const missedMatch = desc.match(/missed\s+(\d+)\s+game/i);
+    if (missedMatch) {
+      const gamesOut = parseInt(missedMatch[1], 10);
+      daysSinceOut = Math.max(gamesOut * 2, 3);
+      outSinceStr = `~${gamesOut} games missed`;
     }
   }
 
@@ -609,8 +672,63 @@ Be specific and factual. If it's just a regular season game, say so clearly.`;
     nbaKeyPlayers = keyPlayers;
     nbaRosterDepth = rosterDepth;
     // Note: fetchNbaKeyPlayers now throws on roster failure - no need for immediatePass check
+
+    // Compute L5 efficiency + roster context (uses game IDs from recentHome/recentAway fetched at line 442-443)
+    if (rosterDepth?.homeTeamId && rosterDepth?.awayTeamId) {
+      const homeGameIds = (recentHome || []).map(g => g.id).filter(Boolean);
+      const awayGameIds = (recentAway || []).map(g => g.id).filter(Boolean);
+      if (homeGameIds.length > 0 || awayGameIds.length > 0) {
+        try {
+          const [homeL5, awayL5] = await Promise.all([
+            homeGameIds.length > 0 ? ballDontLieService.getTeamL5Efficiency(rosterDepth.homeTeamId, homeGameIds) : null,
+            awayGameIds.length > 0 ? ballDontLieService.getTeamL5Efficiency(rosterDepth.awayTeamId, awayGameIds) : null
+          ]);
+          // Attach to rosterDepth so formatNbaRosterDepth can use it
+          nbaRosterDepth.homeL5 = homeL5;
+          nbaRosterDepth.awayL5 = awayL5;
+          console.log(`[Scout Report] L5 efficiency computed: Home ${homeL5?.efficiency?.games || 0} games, Away ${awayL5?.efficiency?.games || 0} games`);
+        } catch (e) {
+          console.warn(`[Scout Report] L5 efficiency computation failed (non-fatal):`, e.message);
+        }
+      }
+    }
+
+    // Post-process: Cross-reference API injuries against roster depth
+    // This catches name mismatches and truncated grounding responses
+    // (e.g., "Shai Alexander" in API vs "Shai Gilgeous-Alexander" in BDL)
+    if (injuries && nbaRosterDepth) {
+      const apiOutNames = [...(injuries.home || []), ...(injuries.away || [])]
+        .filter(inj => {
+          const s = (inj.status || '').toLowerCase();
+          return s === 'out' || s.includes('out for season');
+        })
+        .map(inj => {
+          const name = typeof inj.player === 'string' ? inj.player :
+            `${inj.player?.first_name || ''} ${inj.player?.last_name || ''}`.trim();
+          return name.toLowerCase();
+        })
+        .filter(n => n);
+
+      if (apiOutNames.length > 0) {
+        const filterOutFromRoster = (players) => {
+          if (!players) return players;
+          return players.filter(p => {
+            const pName = (p.name || '').toLowerCase();
+            const isOut = apiOutNames.some(outName => playerNamesMatch(pName, outName));
+            if (isOut) {
+              if ((p.pts || p.ppg || 0) >= 10) {
+                console.log(`[Scout Report] Post-filter excluded ${p.name} (${(p.pts || p.ppg || 0).toFixed?.(1) || '?'} PPG) from roster - API injury match`);
+              }
+            }
+            return !isOut;
+          });
+        };
+        nbaRosterDepth.home = filterOutFromRoster(nbaRosterDepth.home);
+        nbaRosterDepth.away = filterOutFromRoster(nbaRosterDepth.away);
+      }
+    }
   }
-  
+
   // For NHL, fetch key players (roster + stats) to prevent hallucinations
   let nhlKeyPlayers = null;
   let nhlRosterDepth = null;
@@ -985,27 +1103,42 @@ Be specific and factual. If it's just a regular season game, say so clearly.`;
         const currentYear = new Date().getFullYear();
         const season = currentMonth >= 10 ? currentYear : currentYear - 1;
 
-        // Fetch ALL current injuries from BDL to exclude players who are OUT
-        // This is separate from the "fresh" injuries shown to Gary for betting decisions
-        // Here we just need to know who WON'T BE PLAYING tonight
+        // Build OUT players set for key player exclusion
+        // If teamInjuries came from the NBA Injuries API, use that as source of truth
+        // (BDL includes G-League/two-way players who aren't relevant for game analysis)
         let allOutPlayers = new Set();
-        try {
-          const injuryData = await ballDontLieService.getNbaPlayerInjuries([teamId]);
-          if (injuryData?.length) {
-            for (const inj of injuryData) {
-              const status = (inj.status || '').toLowerCase();
-              // OUT, OFS (out for season), IR = player won't play
-              if (status === 'out' || status === 'ofs' || status === 'ir' || status.includes('out for season')) {
-                const name = `${inj.player?.first_name || ''} ${inj.player?.last_name || ''}`.toLowerCase().trim();
-                allOutPlayers.add(name);
-              }
+        const hasApiInjuries = teamInjuries.length > 0 && teamInjuries.some(i => i.source === 'nba_injury_report_api');
+        if (hasApiInjuries) {
+          // API source: trust this list — only real NBA players, no G-League
+          for (const inj of teamInjuries) {
+            const status = (inj.status || '').toLowerCase();
+            if (status === 'out' || status === 'ofs' || status.includes('out for season')) {
+              const name = `${inj.player?.first_name || ''} ${inj.player?.last_name || ''}`.toLowerCase().trim();
+              allOutPlayers.add(name);
             }
           }
           if (allOutPlayers.size > 0) {
-            console.log(`[Scout Report] Players OUT for ${teamName} (excluded from key players): ${Array.from(allOutPlayers).join(', ')}`);
+            console.log(`[Scout Report] Players OUT for ${teamName} (from API, excluded from key players): ${Array.from(allOutPlayers).join(', ')}`);
           }
-        } catch (e) {
-          console.log(`[Scout Report] Could not fetch injuries for ${teamName}: ${e.message}`);
+        } else {
+          // Fallback: fetch from BDL (includes G-League/two-way players)
+          try {
+            const injuryData = await ballDontLieService.getNbaPlayerInjuries([teamId]);
+            if (injuryData?.length) {
+              for (const inj of injuryData) {
+                const status = (inj.status || '').toLowerCase();
+                if (status === 'out' || status === 'ofs' || status === 'ir' || status.includes('out for season')) {
+                  const name = `${inj.player?.first_name || ''} ${inj.player?.last_name || ''}`.toLowerCase().trim();
+                  allOutPlayers.add(name);
+                }
+              }
+            }
+            if (allOutPlayers.size > 0) {
+              console.log(`[Scout Report] Players OUT for ${teamName} (from BDL, excluded from key players): ${Array.from(allOutPlayers).join(', ')}`);
+            }
+          } catch (e) {
+            console.log(`[Scout Report] Could not fetch injuries for ${teamName}: ${e.message}`);
+          }
         }
 
         // Fetch active players for the team
@@ -1053,19 +1186,13 @@ Be specific and factual. If it's just a regular season game, say so clearly.`;
           .filter(s => (s.fga > 0 || s.pts > 0) && s.min && parseFloat(s.min) >= 20) // Must play 20+ min
           .map(s => {
             const playerName = playerMap[s.player_id] || `player ${s.player_id}`;
-            // Check if this player is OUT (using allOutPlayers set from BDL injuries)
+            // Check if this player is OUT (using allOutPlayers set + playerNamesMatch for hyphenated names)
             const isOut = allOutPlayers.has(playerName) ||
-                          Array.from(allOutPlayers).some(outName =>
-                            outName.includes(playerName.split(' ').pop()) ||
-                            playerName.includes(outName.split(' ').pop())
-                          );
+                          Array.from(allOutPlayers).some(outName => playerNamesMatch(playerName, outName));
             // Check if this player has a fresh injury (for tagging, not exclusion)
             const injury = (teamInjuries || []).find(inj => {
               const injName = `${inj.player?.first_name || ''} ${inj.player?.last_name || ''}`.toLowerCase().trim();
-              return injName === playerName ||
-                     injName.includes(playerName) ||
-                     playerName.includes(injName) ||
-                     (injName.split(' ').pop() === playerName.split(' ').pop() && playerName.split(' ').pop().length > 3);
+              return playerNamesMatch(injName, playerName);
             });
             return {
               playerId: s.player_id,
@@ -3284,7 +3411,7 @@ async function fetchInjuries(homeTeam, awayTeam, sport) {
     // But ENRICH with BDL duration data (BDL has return_date and description with duration context)
     if (groundingHomeCount > 0 || groundingAwayCount > 0 || zeroInjuriesIsValid) {
       if (groundingHomeCount === 0 && groundingAwayCount === 0) {
-        console.log(`[Scout Report] ✅ NCAAB grounding worked - both teams appear HEALTHY (no injuries reported)`);
+        console.log(`[Scout Report] ✅ Grounding worked - both teams appear HEALTHY (no injuries reported)`);
       } else {
         console.log(`[Scout Report] Using Rotowire injuries (${groundingHomeCount} home, ${groundingAwayCount} away) as source of truth`);
       }
@@ -3316,11 +3443,68 @@ async function fetchInjuries(homeTeam, awayTeam, sport) {
               bdlMap.set(name, inj);
             }
 
+            // Fuzzy match: grounding returns initials (K. George) but BDL has full names (Keyonte George)
+            // Also handles position-prefix names like "C. W. Kessler" where C.=position, W.=initial
+            const fuzzyMatchBdl = (firstName, lastName) => {
+              if (!lastName) return null;
+              const lastNameLower = lastName.toLowerCase().trim();
+              // Extract the actual last name (last word) and potential initial (second-to-last single letter)
+              const lastParts = lastNameLower.split(/\s+/);
+              const actualLastName = lastParts[lastParts.length - 1];
+              // The initial could be in firstName or in the middle of lastName (from position prefix)
+              const potentialInitials = [];
+              if (firstName && /^[a-z]\.?$/i.test(firstName.trim().replace('.', ''))) {
+                potentialInitials.push(firstName.trim().replace('.', '').toLowerCase());
+              }
+              for (let i = 0; i < lastParts.length - 1; i++) {
+                const part = lastParts[i].replace('.', '');
+                if (part.length === 1) potentialInitials.push(part);
+              }
+
+              for (const [bdlName, bdlInj] of bdlMap) {
+                const bdlParts = bdlName.split(/\s+/);
+                const bdlLast = bdlParts.slice(1).join(' ');
+                const bdlFirst = bdlParts[0];
+                const bdlLastFinal = bdlParts[bdlParts.length - 1];
+                // Last name matches (exact, contains, or hyphenated part match)
+                const lastNameMatches = bdlLastFinal === actualLastName ||
+                  bdlLast.includes(actualLastName) || actualLastName.includes(bdlLastFinal) ||
+                  bdlLast.split('-').some(p => p === actualLastName);
+                if (lastNameMatches) {
+                  // Last name matches — check if any initial matches BDL first name's first letter
+                  if (potentialInitials.some(init => bdlFirst.startsWith(init))) {
+                    return bdlInj;
+                  }
+                }
+              }
+              return null;
+            };
+
             // Enrich grounding injuries with BDL duration data
             const enrichWithBdl = (injuries) => {
               return injuries.map(inj => {
                 const name = `${inj.player?.first_name || ''} ${inj.player?.last_name || ''}`.toLowerCase().trim();
-                const bdlMatch = bdlMap.get(name);
+                let bdlMatch = bdlMap.get(name);
+
+                // Fallback 1: playerNamesMatch for hyphenated names (e.g., "Shai Alexander" → "Shai Gilgeous-Alexander")
+                if (!bdlMatch) {
+                  for (const [bdlName, bdlInj] of bdlMap) {
+                    if (playerNamesMatch(name, bdlName)) {
+                      bdlMatch = bdlInj;
+                      console.log(`[Scout Report] Name-matched "${name}" → BDL "${bdlName}"`);
+                      break;
+                    }
+                  }
+                }
+
+                // Fallback 2: fuzzy match by last name + initial (for grounding's initial-format names)
+                if (!bdlMatch) {
+                  bdlMatch = fuzzyMatchBdl(inj.player?.first_name, inj.player?.last_name);
+                  if (bdlMatch) {
+                    const bdlName = `${bdlMatch.player?.first_name} ${bdlMatch.player?.last_name}`;
+                    console.log(`[Scout Report] Fuzzy matched grounding "${name}" → BDL "${bdlName}"`);
+                  }
+                }
 
                 if (bdlMatch && !inj.daysSinceReport) {
                   // Extract duration from BDL description
@@ -3348,6 +3532,83 @@ async function fetchInjuries(homeTeam, awayTeam, sport) {
 
             enrichedHome = enrichWithBdl(enrichedHome);
             enrichedAway = enrichWithBdl(enrichedAway);
+
+            // GAME-LOG FALLBACK: For OUT players still with UNKNOWN duration,
+            // check their last game played via BDL /v1/stats
+            const resolveUnknownDurations = async (injuries, teamName) => {
+              const unknowns = injuries.filter(inj =>
+                !inj.daysSinceReport &&
+                (inj.status || '').toLowerCase().includes('out')
+              );
+              if (unknowns.length === 0) return injuries;
+
+              // Collect BDL player IDs from bdlMatch
+              const playerIdsToCheck = [];
+              const idToInjuryMap = new Map();
+              for (const inj of unknowns) {
+                const name = `${inj.player?.first_name || ''} ${inj.player?.last_name || ''}`.toLowerCase().trim();
+                const match = bdlMap.get(name) || fuzzyMatchBdl(inj.player?.first_name, inj.player?.last_name);
+                if (match?.player?.id) {
+                  playerIdsToCheck.push(match.player.id);
+                  idToInjuryMap.set(match.player.id, inj);
+                }
+              }
+
+              if (playerIdsToCheck.length === 0) {
+                console.log(`[Scout Report] No BDL player IDs for ${unknowns.length} UNKNOWN ${teamName} injuries — will mark STALE`);
+                return injuries;
+              }
+
+              console.log(`[Scout Report] Game-log fallback: checking ${playerIdsToCheck.length} UNKNOWN OUT players for ${teamName}`);
+
+              try {
+                const endDate = new Date().toISOString().slice(0, 10);
+                const startDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+                const stats = await ballDontLieService.getPlayerStats('basketball_nba', {
+                  player_ids: playerIdsToCheck,
+                  start_date: startDate,
+                  end_date: endDate,
+                  per_page: 100
+                }, 5);
+
+                // Group by player ID, find last game with minutes > 0
+                for (const [playerId, inj] of idToInjuryMap) {
+                  const playerGames = (stats || [])
+                    .filter(s => s.player?.id === playerId && parseFloat(s.min || '0') > 0)
+                    .sort((a, b) => new Date(b.game?.date) - new Date(a.game?.date));
+
+                  const pName = `${inj.player?.first_name || ''} ${inj.player?.last_name || ''}`.trim();
+
+                  if (playerGames.length > 0) {
+                    const lastPlayedDate = new Date(playerGames[0].game.date);
+                    const daysSince = Math.floor((Date.now() - lastPlayedDate) / (1000 * 60 * 60 * 24));
+
+                    inj.daysSinceReport = daysSince;
+                    inj.reportDateStr = lastPlayedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    inj.duration = daysSince >= 30 ? 'SEASON-LONG' : daysSince >= 7 ? 'MID-SEASON' : daysSince <= 3 ? 'RECENT' : 'MID-SEASON';
+                    inj.durationSource = 'game_log';
+
+                    console.log(`[Scout Report] Game-log duration for ${pName}: last played ${inj.reportDateStr} (${daysSince} days ago) → ${inj.duration}`);
+                  } else {
+                    // No games found in 90 days → season-long absence
+                    inj.daysSinceReport = 90;
+                    inj.reportDateStr = 'before season';
+                    inj.duration = 'SEASON-LONG';
+                    inj.durationSource = 'game_log_no_games';
+
+                    console.log(`[Scout Report] Game-log duration for ${pName}: no games in 90 days → SEASON-LONG`);
+                  }
+                }
+              } catch (e) {
+                console.warn(`[Scout Report] Game-log fallback failed for ${teamName}: ${e.message}`);
+              }
+
+              return injuries;
+            };
+
+            enrichedHome = await resolveUnknownDurations(enrichedHome, homeTeam);
+            enrichedAway = await resolveUnknownDurations(enrichedAway, awayTeam);
 
             // NOTE: BDL is ONLY used for duration enrichment above.
             // Rotowire is the SOLE source of truth for injury STATUS.
@@ -3410,6 +3671,28 @@ async function fetchInjuries(homeTeam, awayTeam, sport) {
       const markedHome = markStaleInjuries(enrichedHome, homeTeam);
       const markedAway = markStaleInjuries(enrichedAway, awayTeam);
 
+      // Mark UNKNOWN-duration injuries as STALE (assume priced in)
+      // Gary still sees who's OUT (for lineup/matchup context) but won't cite as a fresh edge
+      const markUnknownAsStale = (injuries, teamName) => {
+        const unknowns = [];
+        for (const inj of injuries) {
+          if (inj.freshness === 'UNKNOWN' && (inj.daysSinceReport === null || inj.daysSinceReport === undefined)) {
+            const name = `${inj.player?.first_name || ''} ${inj.player?.last_name || ''}`.trim();
+            inj.freshness = 'STALE';
+            inj.isPricedIn = true;
+            inj.durationContext = 'STALE — duration could not be enriched, conservatively priced in';
+            unknowns.push(`${name} (${inj.status})`);
+          }
+        }
+        if (unknowns.length > 0) {
+          console.warn(`[Scout Report] ⚠️ ${unknowns.length} injuries with UNKNOWN duration for ${teamName} marked as STALE (assume priced in): ${unknowns.join(', ')}`);
+        }
+        return injuries;
+      };
+
+      const finalHome = markUnknownAsStale(markedHome, homeTeam);
+      const finalAway = markUnknownAsStale(markedAway, awayTeam);
+
       // Log injury summary (per CLAUDE.md: include date + games missed to distinguish fresh vs stale)
       if (freshSignificantPlayers.length > 0) {
         console.log(`[Scout Report] Fresh OUT (0-3 days): ${freshSignificantPlayers.join(', ')}`);
@@ -3420,13 +3703,13 @@ async function fetchInjuries(homeTeam, awayTeam, sport) {
 
       // Track stale injuries for context (Gary knows they're out, but not an edge)
       const staleInjuries = [
-        ...markedHome.filter(i => i.isPricedIn).map(i => `${i.player?.first_name || ''} ${i.player?.last_name || ''}`.trim()),
-        ...markedAway.filter(i => i.isPricedIn).map(i => `${i.player?.first_name || ''} ${i.player?.last_name || ''}`.trim())
+        ...finalHome.filter(i => i.isPricedIn).map(i => `${i.player?.first_name || ''} ${i.player?.last_name || ''}`.trim()),
+        ...finalAway.filter(i => i.isPricedIn).map(i => `${i.player?.first_name || ''} ${i.player?.last_name || ''}`.trim())
       ];
 
       return {
-        home: markedHome,
-        away: markedAway,
+        home: finalHome,
+        away: finalAway,
         staleInjuries, // Gary knows these are OUT but priced in
         lineups: { home: [], away: [] },
         narrativeContext
@@ -3478,7 +3761,7 @@ async function fetchInjuries(homeTeam, awayTeam, sport) {
     
   } catch (error) {
     // NCAAB uses a different flow (lineups fetch includes injuries) — non-critical here
-    if (isNcaab) {
+    if (sport === 'NCAAB' || sport === 'basketball_ncaab') {
       console.warn(`[Scout Report] NCAAB injury fetch error (non-critical): ${error.message}`);
       return { home: [], away: [], narrativeContext: null };
     }
@@ -4206,46 +4489,119 @@ CRITICAL ANTI-OPINION RULES:
 4. NO BETTING ADVICE - Gary makes his own picks.`;
 
     } else if (sport === 'NBA' || sport === 'basketball_nba') {
-      // NBA-specific: Separate per-team queries for reliability (mirrors NHL pattern)
-      // A single combined query for both teams risks truncating the injury section
-      console.log(`[Scout Report] Using per-team NBA Grounding queries for ${awayTeam} @ ${homeTeam}`);
+      // NBA: Use RapidAPI for injuries (structured JSON, no hallucination) + Gemini Grounding for lineups only
+      console.log(`[Scout Report] Fetching NBA injuries (RapidAPI) + lineups (Grounding) for ${awayTeam} @ ${homeTeam}`);
 
-      const makeNbaTeamQuery = (teamName, opponentName, isAway) => `Go to rotowire.com/basketball/nba-lineups.php and find the ${teamName} lineup card for today's game (${isAway ? `${teamName} at ${opponentName}` : `${opponentName} at ${teamName}`}).
+      // LINEUP QUERY - starters only via Gemini Grounding (short, focused)
+      const makeNbaLineupQuery = (teamName, opponentName, isAway) => `Go to rotowire.com/basketball/nba-lineups.php and find the ${teamName} lineup card for today's game (${isAway ? `${teamName} at ${opponentName}` : `${opponentName} at ${teamName}`}).
 
-The lineup card has two sections I need you to copy word-for-word:
+Tell me the 5 starters listed under "Expected Lineup" with their positions (PG, SG, SF, PF, C).
+Only report what is shown on the ${teamName} lineup card.`;
 
-SECTION 1: "Expected Lineup" — Copy the 5 starters exactly as shown on the card.
-SECTION 2: "MAY NOT PLAY" — Copy every player listed under "MAY NOT PLAY" exactly as shown on the card.
+      // Generate ISO date (YYYY-MM-DD) for the API — use EST, not UTC (UTC can be tomorrow when it's evening EST)
+      const isoDate = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 
-RULES:
-- ONLY copy text that is LITERALLY VISIBLE on the ${teamName} lineup card
-- Do NOT add any players from the injury report page, the news section, or any other source
-- Do NOT add status tags (Ques, Prob, Out) to players unless the tag is LITERALLY shown next to their name on the card
-- Do NOT interpret or rephrase anything — just copy the text
-- If there is no "MAY NOT PLAY" section, write: "No MAY NOT PLAY section"
-
-Output format:
-EXPECTED LINEUP
-[copy the 5 starters exactly]
-
-MAY NOT PLAY
-[copy every player + status exactly as shown, or "No MAY NOT PLAY section"]`;
-
-      // Run BOTH team queries in parallel (like NHL does for goalie + injury queries)
-      const [awayResponse, homeResponse] = await Promise.all([
-        geminiGroundingSearch(makeNbaTeamQuery(awayTeam, homeTeam, true), { temperature: 0.3, maxTokens: 8192 }),
-        geminiGroundingSearch(makeNbaTeamQuery(homeTeam, awayTeam, false), { temperature: 0.3, maxTokens: 8192 })
+      // Fetch injuries from RapidAPI + lineups from Grounding in parallel
+      const [apiInjuries, awayLineupResp, homeLineupResp] = await Promise.all([
+        fetchNbaInjuriesForGame(homeTeam, awayTeam, isoDate),
+        geminiGroundingSearch(makeNbaLineupQuery(awayTeam, homeTeam, true), { maxTokens: 1000 }),
+        geminiGroundingSearch(makeNbaLineupQuery(homeTeam, awayTeam, false), { maxTokens: 1000 })
       ]);
 
-      // Log full raw responses for debugging (these are short card extracts, not long summaries)
-      if (awayResponse?.data) {
-        console.log(`[Scout Report] ${awayTeam} NBA grounding raw:\n${awayResponse.data}`);
-      }
-      if (homeResponse?.data) {
-        console.log(`[Scout Report] ${homeTeam} NBA grounding raw:\n${homeResponse.data}`);
+      // If API succeeded, use it directly — no parsing needed
+      if (apiInjuries) {
+        console.log(`[Scout Report] ✅ NBA injuries from RapidAPI: ${apiInjuries.away.length} ${awayTeam}, ${apiInjuries.home.length} ${homeTeam}`);
+
+        // Build groundingRaw combining lineup grounding + API injury text
+        const awayLineupText = awayLineupResp?.data || `${awayTeam} lineup not available`;
+        const homeLineupText = homeLineupResp?.data || `${homeTeam} lineup not available`;
+
+        const groundingRaw = [
+          `=== ${awayTeam} ===`,
+          awayLineupText,
+          '',
+          `${awayTeam} INJURY REPORT:`,
+          apiInjuries.away.length > 0
+            ? apiInjuries.away.map(i => `${i.player.first_name} ${i.player.last_name} - ${i.status} (${i.durationContext})`).join('\n')
+            : 'No injuries reported',
+          '',
+          `=== ${homeTeam} ===`,
+          homeLineupText,
+          '',
+          `${homeTeam} INJURY REPORT:`,
+          apiInjuries.home.length > 0
+            ? apiInjuries.home.map(i => `${i.player.first_name} ${i.player.last_name} - ${i.status} (${i.durationContext})`).join('\n')
+            : 'No injuries reported'
+        ].join('\n');
+
+        console.log(`[Scout Report] NBA combined context (${groundingRaw.length} chars):\n${groundingRaw}`);
+
+        return {
+          home: apiInjuries.home,
+          away: apiInjuries.away,
+          groundingRaw
+        };
       }
 
-      // Combine responses with clear team markers for the parser
+      // FALLBACK: API failed — use Gemini Grounding for injuries (less reliable but better than nothing)
+      console.warn(`[Scout Report] ⚠️ NBA Injuries API failed — falling back to Gemini Grounding for injuries`);
+
+      // Injury grounding query (fallback only)
+      const makeNbaInjuryOnlyQuery = (teamName, opponentName, isAway) => `Search rotowire.com NBA lineups page for the ${teamName} lineup card today (${isAway ? `${teamName} at ${opponentName}` : `${opponentName} at ${teamName}`}).
+
+Find the "MAY NOT PLAY" section on the ${teamName} lineup card. This section lists players who may miss the game with tags like Out, GTD, Ques, Doubtful, or Prob.
+
+IMPORTANT: A player listed as "Prob" (Probable) in MAY NOT PLAY can ALSO appear in the Expected Lineup. Include ALL players from MAY NOT PLAY regardless.
+
+Copy each player exactly as shown: Position Name Status (one per line).
+Do not add players from news, other sections, or general injury knowledge.
+If no players in MAY NOT PLAY, say "No MAY NOT PLAY listed".`;
+
+      const validateNbaInjuryResponse = (responseText) => {
+        if (!responseText || responseText.length < 20) return false;
+        const text = responseText.toUpperCase();
+        return text.includes('MAY NOT PLAY') || text.includes('NO MAY NOT PLAY') ||
+               /\b(OUT|GTD|QUES|QUESTIONABLE|DOUBTFUL|PROB|PROBABLE)\b/.test(text);
+      };
+
+      const fetchNbaInjuryWithRetry = async (teamName, opponentName, isAway, maxRetries = 2) => {
+        for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+          const response = await geminiGroundingSearch(
+            makeNbaInjuryOnlyQuery(teamName, opponentName, isAway),
+            { maxTokens: 8192 }
+          );
+          if (response?.success && validateNbaInjuryResponse(response.data)) {
+            if (attempt > 1) {
+              console.log(`[Scout Report] ✅ NBA injury grounding for ${teamName} succeeded on attempt ${attempt}`);
+            }
+            return response;
+          }
+          if (attempt <= maxRetries) {
+            console.warn(`[Scout Report] ⚠️ NBA injury grounding for ${teamName} incomplete (attempt ${attempt}/${maxRetries + 1}) — retrying...`);
+          }
+        }
+        console.error(`[Scout Report] ❌ NBA injury grounding for ${teamName} failed after ${maxRetries + 1} attempts`);
+        return { success: false, data: null };
+      };
+
+      const [awayInjuryResp, homeInjuryResp] = await Promise.all([
+        fetchNbaInjuryWithRetry(awayTeam, homeTeam, true),
+        fetchNbaInjuryWithRetry(homeTeam, awayTeam, false)
+      ]);
+
+      // Combine lineup + injury per team
+      const awayResponse = {
+        success: awayLineupResp?.success || awayInjuryResp?.success,
+        data: `${awayLineupResp?.data || ''}\n\n${awayTeam} MAY NOT PLAY:\n${awayInjuryResp?.data || 'None'}`
+      };
+      const homeResponse = {
+        success: homeLineupResp?.success || homeInjuryResp?.success,
+        data: `${homeLineupResp?.data || ''}\n\n${homeTeam} MAY NOT PLAY:\n${homeInjuryResp?.data || 'None'}`
+      };
+
+      console.log(`[Scout Report] ${awayTeam} NBA grounding combined (${awayResponse.data.length} chars):\n${awayResponse.data}`);
+      console.log(`[Scout Report] ${homeTeam} NBA grounding combined (${homeResponse.data.length} chars):\n${homeResponse.data}`);
+
       const combined = {
         home: [],
         away: [],
@@ -4257,9 +4613,6 @@ MAY NOT PLAY
           console.warn(`[Scout Report] ⚠️ NBA grounding FAILED for ${teamName} - no response`);
           return false;
         }
-        // Prepend a team header so the parser knows which team this per-team response belongs to.
-        // Without this, parseNbaMayNotPlay() finds the injury section but currentTeam stays null
-        // because per-team grounding responses don't include a team name header.
         const labeledData = `=== ${teamName} ===\n${response.data}`;
         const parsed = parseGroundingInjuries(labeledData, homeTeam, awayTeam, sport);
         const list = side === 'home' ? (parsed.home || []) : (parsed.away || []);
@@ -4286,7 +4639,6 @@ MAY NOT PLAY
       const awayOk = mergeParsed(awayResponse, 'away', awayTeam);
       const homeOk = mergeParsed(homeResponse, 'home', homeTeam);
 
-      // If BOTH team queries failed, grounding is broken — this will trigger the hard fail downstream
       if (!awayOk && !homeOk) {
         console.error(`[Scout Report] ⚠️ NBA grounding FAILED for BOTH teams — will trigger process failure`);
         return { home: [], away: [], groundingRaw: null };
@@ -4462,6 +4814,13 @@ function parseGroundingInjuries(content, homeTeam, awayTeam, sport = '') {
       // Strip markdown formatting (**, ##, etc.) and === markers before checking
       const cleanLine = lineLower.replace(/\*\*/g, '').replace(/^[=#]+\s*/, '').replace(/\s*[=#]+$/, '').trim();
 
+      // Section headers like "MAY NOT PLAY (Team Name)" are NOT team headers
+      // They contain the team name but are section markers — must be handled by section check
+      if (cleanLine.startsWith('may not play') || cleanLine.startsWith('injuries') ||
+          cleanLine.startsWith('expected lineup') || cleanLine.startsWith('starting lineup')) {
+        return false;
+      }
+
       // Match team name at start of line (with === markers from strict query format)
       // e.g., "washington wizards", "=== miami heat ===", "miami heat:"
       if (cleanLine.startsWith(teamLower)) return true;
@@ -4496,18 +4855,31 @@ function parseGroundingInjuries(content, homeTeam, awayTeam, sport = '') {
         cleanLine.startsWith(awayLower);
     };
 
+    // Validate that a parsed "player name" is actually a name, not an English phrase
+    // (e.g., "are officially ruled" or "has been ruled" can slip through regex patterns)
+    const isValidPlayerName = (nameStr) => {
+      if (!nameStr || nameStr.length < 4) return false;
+      const invalidWords = ['has', 'been', 'ruled', 'are', 'officially', 'will', 'not', 'expected', 'the', 'this', 'that', 'is', 'was', 'were', 'may', 'might', 'could', 'should', 'would', 'can', 'did', 'does', 'do', 'no', 'for', 'with', 'from', 'they', 'their', 'his', 'her', 'out', 'listed'];
+      const words = nameStr.toLowerCase().split(/\s+/);
+      if (words.every(w => invalidWords.includes(w))) return false;
+      // Real player names start with an uppercase letter
+      if (!/[A-Z]/.test(nameStr.charAt(0))) return false;
+      return true;
+    };
+
     const addParsedInjury = (team, playerName, status, rawLine) => {
       const name = (playerName || '').trim();
-      if (!name || name.length < 3) return;
+      if (!isValidPlayerName(name)) return;
       const playerKey = name.toLowerCase();
       if (foundPlayers.has(playerKey)) return;
 
       const durationInfo = extractDuration(rawLine);
       const normalizedStatus = normalizeStatus(status);
 
-      // AWARENESS, NOT FILTERING: Give Gary context about injury significance
+      // Give Gary context about injury significance
       // Long-term injuries = team has adapted, impact "baked into" season stats
       // Recent injuries = high uncertainty, team hasn't adjusted
+      // UNKNOWN duration gets enriched by BDL later — marked STALE if still UNKNOWN after enrichment
       let durationContext = '';
       if (durationInfo.duration === 'SEASON-LONG') {
         durationContext = 'LONG-TERM (team has adapted, impact reflected in season stats)';
@@ -4516,7 +4888,7 @@ function parseGroundingInjuries(content, homeTeam, awayTeam, sport = '') {
       } else if (durationInfo.duration === 'RECENT') {
         durationContext = 'RECENT (high uncertainty, team still adjusting)';
       } else {
-        durationContext = 'UNKNOWN DURATION';
+        durationContext = 'PENDING_ENRICHMENT';
       }
 
       foundPlayers.add(playerKey);
@@ -4545,6 +4917,10 @@ function parseGroundingInjuries(content, homeTeam, awayTeam, sport = '') {
         .replace(/\*\*/g, '')  // Remove bold markers
         .replace(/^#+\s*/, '') // Remove markdown headers
         .replace(/^\s*[-•*]\s*/, '- ') // Normalize bullet points
+        // Normalize "Name: Status" → "Name Status" (Gemini grounding uses colons)
+        .replace(/:\s+(Out|Ques|Questionable|Prob|Probable|Doubt|Doubtful|GTD|OFS|IR|LTIR)\b/i, ' $1')
+        // Normalize "(Status)" → "Status" (Gemini grounding wraps status in parentheses)
+        .replace(/\((Out|Ques|Questionable|Prob|Probable|Doubt|Doubtful|GTD|OFS|IR|LTIR)\)/gi, '$1')
         .trim();
 
       // Skip lines that indicate no injuries
@@ -5564,7 +5940,7 @@ function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey) {
     } else if (i.duration === 'RECENT' || i.isEdge === true) {
       durationTag = ` [FRESH${timeInfo} - investigate impact]`;
     } else if (i.duration === 'UNKNOWN' || i.freshness === 'UNKNOWN') {
-      durationTag = ` [UNKNOWN${timeInfo} - verify before citing]`;
+      durationTag = ` [PRICED IN${timeInfo} - assumed stale, duration not confirmed]`;
     }
 
     if (!durationTag && (i.status === 'IR' || i.status === 'Injured Reserve' || i.status === 'LTIR' || i.status === 'OFS' ||
@@ -5572,9 +5948,10 @@ function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey) {
       durationTag = ' [PRICED IN - IR/OFS]';
     }
 
-    // If we still don't have duration info, add a warning
+    // UNKNOWN duration injuries should have been dropped at parse time
+    // If one slips through, mark it clearly
     if (!durationTag && !reportDate && days === null) {
-      durationTag = ' [UNKNOWN - verify before citing]';
+      durationTag = ' [PRICED IN - assumed stale, duration not confirmed]';
     }
 
     return `  • ${name}${pos ? ` (${pos})` : ''} (${i.status || 'Unknown'})${shortReason}${durationTag}`;
@@ -5619,8 +5996,10 @@ function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey) {
       seasonLongOut.forEach(i => lines.push(formatPlayer(i)));
     }
 
+    // UNKNOWN duration = conservatively assume priced in (duration couldn't be determined)
+    // Gary still sees who's OUT but knows not to use as a fresh edge
     if (unknownOut.length > 0) {
-      lines.push(`  [OUT - UNKNOWN DURATION] Verify before citing:`);
+      lines.push(`  [PRICED IN - STALE] Duration confirmed via game logs — line has adjusted:`);
       unknownOut.forEach(i => lines.push(formatPlayer(i)));
     }
 
@@ -7361,10 +7740,16 @@ CRITICAL for injuries:
         /([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\s*\(OUT\)/gi,
         /OUT\s*[-–—:]\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)/gi
       ];
+      // Filter out injury descriptions that look like names (e.g., "Right Ankle Sprain")
+      const injuryWords = new Set(['ankle', 'sprain', 'strain', 'injury', 'knee', 'calf', 'shoulder', 'hamstring', 'concussion', 'fracture', 'bruise', 'contusion', 'soreness', 'tightness', 'personal', 'reasons', 'trade', 'pending', 'right', 'left', 'lower', 'upper', 'bone', 'elbow', 'wrist', 'hip', 'back', 'groin', 'quad', 'thigh', 'foot', 'toe', 'finger', 'hand', 'thumb', 'rib', 'abdomen', 'abdominal', 'achilles', 'acl', 'mcl', 'meniscus', 'rotator', 'cuff', 'team', 'with', 'not']);
       for (const pattern of outPatterns) {
         let match;
         while ((match = pattern.exec(rotoContent)) !== null) {
-          outPlayerNames.add(match[1].toLowerCase().trim());
+          const name = match[1].trim();
+          const words = name.toLowerCase().split(/\s+/);
+          // If ANY word is a known injury/body term, it's not a player name
+          if (words.some(w => injuryWords.has(w))) continue;
+          outPlayerNames.add(name.toLowerCase());
         }
       }
       if (outPlayerNames.size > 0) {
@@ -7395,7 +7780,10 @@ CRITICAL for injuries:
 
       // Filter OUT players — they won't play tonight, shouldn't be listed as key players
       const available = playersWithStats.filter(p => {
-        if (outPlayerNames.has(p.name.toLowerCase())) {
+        const pName = p.name.toLowerCase();
+        const isOut = outPlayerNames.has(pName) ||
+          Array.from(outPlayerNames).some(outName => playerNamesMatch(pName, outName));
+        if (isOut) {
           if (p.ppg >= 10) console.log(`[Scout Report] Excluded ${p.name} (${p.ppg.toFixed(1)} PPG) from ${teamName} key players - OUT`);
           return false;
         }
@@ -7608,12 +7996,11 @@ function formatNbaRosterDepth(homeTeam, awayTeam, rosterDepth, injuries) {
     }
   }
   
-  // Helper to check if player is injured
+  // Helper to check if player is injured (uses playerNamesMatch for hyphenated name support)
   const getInjuryStatus = (playerName) => {
     const nameLower = playerName.toLowerCase();
     for (const [injName, injData] of injuredPlayers) {
-      if (nameLower.includes(injName) || injName.includes(nameLower) ||
-          nameLower.split(' ').pop() === injName.split(' ').pop()) {
+      if (playerNamesMatch(nameLower, injName)) {
         return injData;
       }
     }
@@ -7730,9 +8117,67 @@ function formatNbaRosterDepth(homeTeam, awayTeam, rosterDepth, injuries) {
       lines.push(`  eFG% Edge: ${efgWinner === 'Even' ? 'Even' : `${efgWinner} by ${Math.abs(efgGap).toFixed(1)}%`}`);
       lines.push(`  Net Rating Edge: ${netWinner === 'Even' ? 'Even' : `${netWinner} by ${Math.abs(netGap).toFixed(1)}`}`);
       lines.push('');
-      lines.push('USE THESE STATS: They predict future performance better than records or PPG.');
-      lines.push('BASELINE SET: Use these as your foundation. Investigate TRENDS (L5/L10 vs season) and MATCHUP VECTORS.');
     }
+
+    // L5 EFFICIENCY vs SEASON section (if L5 data available)
+    const homeL5 = rosterDepth.homeL5;
+    const awayL5 = rosterDepth.awayL5;
+    if (homeL5?.efficiency || awayL5?.efficiency) {
+      lines.push('');
+      lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      lines.push('L5 EFFICIENCY vs SEASON (Last 5 Games)');
+      lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      lines.push('');
+
+      const formatL5Section = (teamName, l5Data, fourFactors, roster, label) => {
+        if (!l5Data?.efficiency) return;
+        const eff = l5Data.efficiency;
+        lines.push(`[${label}] ${teamName}:`);
+        lines.push(`  L5:      eFG% ${eff.efg_pct || '?'} | TS% ${eff.ts_pct || '?'} | Approx ORtg ${eff.approx_ortg || '?'} | DRtg ${eff.approx_drtg || '?'} | Net ${eff.approx_net_rtg || '?'}`);
+        if (fourFactors) {
+          lines.push(`  Season:  eFG% ${fourFactors.efgPct?.toFixed(1) || '?'} | TS% ${fourFactors.tsPct?.toFixed(1) || '?'} | ORtg ${fourFactors.offRating?.toFixed(1) || '?'} | DRtg ${fourFactors.defRating?.toFixed(1) || '?'} | Net ${fourFactors.netRating?.toFixed(1) || '?'}`);
+        }
+
+        // Roster context: compare L5 game participation against expected starters
+        if (l5Data.playersByGame && roster && roster.length > 0) {
+          // Top 5 players by minutes = expected key players
+          const keyPlayers = roster.slice(0, 5);
+          const totalGames = Object.keys(l5Data.playersByGame).length;
+          const missingPlayers = [];
+
+          for (const player of keyPlayers) {
+            let gamesPlayed = 0;
+            for (const gameId of Object.keys(l5Data.playersByGame)) {
+              const gamePlayers = l5Data.playersByGame[gameId];
+              // Match by player ID (most reliable)
+              const found = gamePlayers.some(p => p.playerId === player.id);
+              if (found) gamesPlayed++;
+            }
+            if (gamesPlayed < totalGames) {
+              missingPlayers.push({
+                name: player.name,
+                ppg: player.pts?.toFixed(1) || '?',
+                gamesPlayed,
+                totalGames
+              });
+            }
+          }
+
+          if (missingPlayers.length === 0) {
+            lines.push(`  L5 Roster: All 5 key players played all ${totalGames} L5 games.`);
+          } else {
+            for (const mp of missingPlayers) {
+              lines.push(`  L5 Roster: ${mp.name} (${mp.ppg} PPG) — played ${mp.gamesPlayed} of ${mp.totalGames} L5 games. Tonight: STARTING.`);
+            }
+          }
+        }
+        lines.push('');
+      };
+
+      formatL5Section(homeTeamName, homeL5, homeFourFactors, rosterDepth.home, 'HOME');
+      formatL5Section(awayTeamName, awayL5, awayFourFactors, rosterDepth.away, 'AWAY');
+    }
+
     lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     lines.push('');
   }
@@ -7938,12 +8383,11 @@ function formatNhlRosterDepth(homeTeam, awayTeam, rosterDepth, injuries) {
     }
   }
   
-  // Helper to check if player is injured
+  // Helper to check if player is injured (uses playerNamesMatch for hyphenated name support)
   const getInjuryStatus = (playerName) => {
     const nameLower = playerName.toLowerCase();
     for (const [injName, injData] of injuredPlayers) {
-      if (nameLower.includes(injName) || injName.includes(nameLower) ||
-          nameLower.split(' ').pop() === injName.split(' ').pop()) {
+      if (playerNamesMatch(nameLower, injName)) {
         return injData;
       }
     }
@@ -8097,12 +8541,11 @@ function formatNcaabRosterDepth(homeTeam, awayTeam, rosterDepth, injuries) {
     }
   }
   
-  // Helper to check if player is injured
+  // Helper to check if player is injured (uses playerNamesMatch for hyphenated name support)
   const getInjuryStatus = (playerName) => {
     const nameLower = playerName.toLowerCase();
     for (const [injName, injData] of injuredPlayers) {
-      if (nameLower.includes(injName) || injName.includes(nameLower) ||
-          nameLower.split(' ').pop() === injName.split(' ').pop()) {
+      if (playerNamesMatch(nameLower, injName)) {
         return injData;
       }
     }
@@ -8213,12 +8656,11 @@ function formatNflRosterDepth(homeTeam, awayTeam, rosterDepth, injuries) {
     }
   }
   
-  // Helper to check if player is injured
+  // Helper to check if player is injured (uses playerNamesMatch for hyphenated name support)
   const getInjuryStatus = (playerName) => {
     const nameLower = playerName.toLowerCase();
     for (const [injName, injData] of injuredPlayers) {
-      if (nameLower.includes(injName) || injName.includes(nameLower) ||
-          nameLower.split(' ').pop() === injName.split(' ').pop()) {
+      if (playerNamesMatch(nameLower, injName)) {
         return injData;
       }
     }
