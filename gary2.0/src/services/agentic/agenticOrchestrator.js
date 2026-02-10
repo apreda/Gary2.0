@@ -684,20 +684,18 @@ const INVESTIGATION_FACTORS = {
   basketball_nba: {
     EFFICIENCY: ['NET_RATING', 'OFFENSIVE_RATING', 'DEFENSIVE_RATING'],
     PACE_TEMPO: ['PACE', 'PACE_LAST_10', 'PACE_HOME_AWAY'],
-    FOUR_FACTORS_OFFENSE: ['EFG_PCT', 'TURNOVER_RATE', 'OREB_RATE', 'FT_RATE'],
-    FOUR_FACTORS_DEFENSE: ['OPP_EFG_PCT', 'OPP_TOV_RATE', 'OPP_FT_RATE', 'DREB_RATE'],
-    SHOOTING_ZONES: ['THREE_PT_SHOOTING', 'PAINT_SCORING', 'MIDRANGE', 'THREE_PT_DEFENSE', 'PAINT_DEFENSE', 'TRANSITION_DEFENSE'],
-    STANDINGS_CONTEXT: ['STANDINGS', 'CONFERENCE_STANDING'], // Playoff picture
-    CONFERENCE_SPLITS: ['CONFERENCE_STATS', 'NON_CONF_STRENGTH'], // Conference vs non-conference
+    FOUR_FACTORS: ['EFG_PCT', 'TURNOVER_RATE', 'OREB_RATE', 'FT_RATE', 'DREB_RATE'],
+    SHOOTING_STYLE: ['THREE_PT_SHOOTING'], // Scoring profile (paint/mid/3pt/fastbreak %) is in scout report via BDL V2
+    STANDINGS_CONTEXT: ['STANDINGS', 'CONFERENCE_STANDING'],
+    CONFERENCE_SPLITS: ['CONFERENCE_STATS', 'NON_CONF_STRENGTH'],
     RECENT_FORM: ['RECENT_FORM', 'EFFICIENCY_TREND'],
-    PLAYER_PERFORMANCE: ['PLAYER_GAME_LOGS', 'TOP_PLAYERS', 'USAGE_RATES', 'MINUTES_TREND'],
-    INJURIES: ['INJURIES', 'LINEUP_NET_RATINGS'],
+    PLAYER_PERFORMANCE: ['PLAYER_GAME_LOGS', 'TOP_PLAYERS', 'USAGE_RATES'],
+    INJURIES: ['INJURIES'],
     SCHEDULE: ['REST_SITUATION', 'BACK_TO_BACK', 'TRAVEL_SITUATION', 'SCHEDULE_STRENGTH'],
-    // HOME_AWAY removed - records are descriptive (explain line), not predictive. Gary can investigate efficiency splits if needed.
     H2H: ['H2H_HISTORY', 'VS_ELITE_TEAMS'],
     ROSTER_CONTEXT: ['BENCH_DEPTH', 'CLUTCH_STATS', 'BLOWOUT_TENDENCY'],
-    LUCK_CLOSE_GAMES: ['LUCK_ADJUSTED', 'CLOSE_GAME_RECORD'], // Regression and clutch
-    SCORING_TRENDS: ['QUARTER_SCORING', 'FIRST_HALF_SCORING', 'SECOND_HALF_SCORING'] // Game flow
+    LUCK_CLOSE_GAMES: ['LUCK_ADJUSTED', 'CLOSE_GAME_RECORD'],
+    SCORING_TRENDS: ['QUARTER_SCORING', 'FIRST_HALF_SCORING', 'SECOND_HALF_SCORING']
   },
   
   // NHL: 17 required factors (comprehensive - matches NBA/NFL coverage)
@@ -2307,9 +2305,9 @@ If a team's recent form (L5/L10) diverges significantly from their season stats 
 The Scout Report may include "INVESTIGATION TRIGGERS" - these are AUTO-FLAGS.
 
 **YOU MUST investigate each trigger with actual stat calls:**
-- PACE TRAP - Call PACE + OPP_DEF_TRANSITION + REST_SITUATION
+- PACE TRAP - Call PACE + REST_SITUATION
 - ROOKIE ROAD - Call PLAYER_GAME_LOGS with away filter
-- STAR CONDITIONING - Call PLAYER_GAME_LOGS (L10) + MINUTES_TREND
+- STAR CONDITIONING - Call PLAYER_GAME_LOGS (L10)
 - REVENGE GAME - Call PLAYER_VS_TEAM_HISTORY if available
 - RETURNING STAR - Call TEAM_RECORD_WITHOUT_PLAYER + RECENT_FORM
 - L5 ROSTER MISMATCH → Note that L5 stats may understate/overstate the team
@@ -2514,10 +2512,10 @@ If you're missing critical pieces for YOUR analysis, call them NOW before procee
 - Ask: "Does recent form suggest the scout report baseline is STALE?"
 
 **2. MATCHUP-SPECIFIC STATISTICAL GAPS (Compare the numbers):**
-- [ ] Scout report shows Team A's eFG% edge. Now ask: What are Team B's defensive efficiency numbers in those same categories?
-- [ ] Call [THREE_PT_DEFENSE] or [PAINT_DEFENSE] to compare — is there a measurable statistical gap?
+- [ ] Compare eFG%, ORtg, DRtg for both teams — where is the efficiency gap?
+- [ ] Compare scoring profiles (paint%, 3PT%, fastbreak%) — do their styles create a mismatch?
 - [ ] Call [PACE] for both teams — is there a meaningful pace differential?
-- Ask: "Do the numbers show a statistical gap between Team A's strength and Team B's corresponding defensive numbers?"
+- Ask: "Do the numbers show a statistical gap that favors one side of the spread?"
 
 **3. PLAYER ABSENCE IMPACT (If applicable):**
 - [ ] How long has the player been out? (0-2 games = variance, 3+ weeks = priced in)
@@ -2742,12 +2740,12 @@ Teams often exhibit tendencies that create natural matchup advantages. A team ma
 - Red zone efficiency gaps (TD% vs FG% for both sides)
 
 **PLAYOFF CONTEXT (Consider if applicable):**
-In high-stakes games, coaching adjustments intensify. A schematic advantage that worked in the regular season may be specifically game-planned against. Consider whether the edge is "solvable" with film study or structural (e.g., elite pass rush vs backup tackle is harder to scheme away).` : ''}${isNBA ? `**NBA MATCHUP VECTORS TO INVESTIGATE:**
-- Investigate rebounding for BOTH teams: Compare OREB% vs DREB% — which side has the edge?
-- Investigate transition for BOTH teams: Compare transition frequency and transition efficiency — which side benefits?
-- Investigate paint scoring for BOTH teams: Compare paint points% vs rim protection — is there a meaningful gap?
-- Investigate 3PT for BOTH teams: Compare 3PA rate vs opponent 3PT defense — which side of the spread does this favor?
-- Investigate pace for BOTH teams: Compare pace and half-court efficiency — which side benefits from the likely tempo?` : ''}${isNCAAB ? `**NCAAB MATCHUP VECTORS TO INVESTIGATE:**
+In high-stakes games, coaching adjustments intensify. A schematic advantage that worked in the regular season may be specifically game-planned against. Consider whether the edge is "solvable" with film study or structural (e.g., elite pass rush vs backup tackle is harder to scheme away).` : ''}${isNBA ? `**NBA MATCHUP VECTORS TO INVESTIGATE (Use BDL data in scout report):**
+- Investigate efficiency gap: Compare ORtg, DRtg, Net Rating for BOTH teams — which side has the edge?
+- Investigate rebounding: Compare OREB% vs DREB% for BOTH teams — is there a meaningful gap?
+- Investigate scoring profile: Compare paint%, 3PT%, fastbreak% for BOTH teams — do their styles create a mismatch?
+- Investigate pace: Compare pace for BOTH teams — does the tempo differential favor one side?
+- Investigate L5 vs season efficiency: Is either team trending significantly different from their season baseline?` : ''}${isNCAAB ? `**NCAAB MATCHUP VECTORS TO INVESTIGATE:**
 - Investigate rebounding for BOTH teams: Compare OREB% vs DREB% — which side has the edge?
 - Investigate tempo for BOTH teams: Compare preferred pace vs efficiency at different tempos — which side benefits?
 - Investigate interior scoring for BOTH teams: Compare paint scoring vs rim protection — is there a meaningful gap?
@@ -2880,8 +2878,8 @@ ${isNBA ? `  - Start with the efficiency data from your scout report and investi
 
 ${isNBA && Math.abs(parseFloat(firstTeamSpread.replace(/[+-]/g, ''))) >= 8 ? `**LARGE SPREAD INVESTIGATION (8+ points) - UNIT EFFICIENCY:**
 For large spreads, investigate how BOTH units perform for each team:
-- Call [LINEUP_NET_RATINGS] or [BENCH_DEPTH] to see first unit vs second unit performance
-- Ask: What is the Net Rating gap between starters and bench for EACH team?
+- Call [BENCH_DEPTH] to compare bench scoring and depth for each team
+- Ask: What is the depth gap between these teams? Does one rely heavily on starters?
 - Ask: Does one team's bench unit create a meaningful advantage or vulnerability?
 - Ask: What does the unit efficiency data tell you about whether this spread is the right size?
 
@@ -3256,19 +3254,13 @@ These patterns show common situations where perception, injury news, or recent r
    - Investigate: Division rivals play 4x/season - does familiarity shrink the talent gap here?
    - Investigate: Does favorite have significant bench advantage (>10 PPG) to cover margin?
 
-**6b. Unit Efficiency (Large Spreads 8+)?**
+**6b. Depth Check (Large Spreads 8+)?**
    - Condition: Spread is 8+ points (margin question, not just "who wins")
-   - **First Unit vs Second Unit:** INVESTIGATE how each team performs when starters rest.
-     * Call [LINEUP_NET_RATINGS] or [BENCH_DEPTH] to get the data
-     * Investigate: What is each team's bench Net Rating? Do they win or lose their bench minutes?
-     * Investigate: How much of the game do starters typically play? (~32-36 min)
-   - **Net Rating Swing:** INVESTIGATE the gap between starter and bench performance.
-     * Ask: "What is THIS team's Net Rating swing?"
-     * Investigate: Does a large swing (10+) indicate fragility when starters sit?
-     * Investigate: Does a small swing indicate depth that stabilizes performance?
-     * Let the DATA tell you what the swing means for THIS specific matchup.
-   - **Investigation tokens:** [LINEUP_NET_RATINGS], [BENCH_DEPTH], [TOP_PLAYERS] (usage_concentration)
-   - **Question:** "Based on my investigation of unit efficiency, can the favorite maintain their lead throughout the game?"
+   - **Bench Depth:** INVESTIGATE how each team's depth compares.
+     * Call [BENCH_DEPTH] to compare bench scoring and depth for each team
+     * Check usage_concentration from scout report — is one team star-heavy?
+     * Investigate: Does one team's depth create an advantage when starters rest?
+   - **Question:** "Based on the depth data, which team is more resilient across a full game?"
 
 **7. Line Inflation ("Begging for a Bet")?**
    - Condition: Elite team is suspiciously NARROW favorite vs bad team
@@ -5687,7 +5679,7 @@ Call these specific tokens NOW using the get_stat tool with the "token" paramete
           // After several iterations with close-to-threshold coverage, give a stronger nudge
           messages.push({
             role: 'user',
-            content: `**INVESTIGATION AT ${coveragePct}% (need ${coverageThresholdPct})** - You're close but missing critical data:\n\n**UNINVESTIGATED:** ${missingDisplay}${missing.length > 6 ? '...' : ''}\n\nCall these stats NOW. You MUST reach ${coverageThresholdPct} factor coverage before Steel Man. Missing factors may include BENCH_DEPTH, LINEUP_NET_RATINGS, or other critical matchup data.`
+            content: `**INVESTIGATION AT ${coveragePct}% (need ${coverageThresholdPct})** - You're close but missing critical data:\n\n**UNINVESTIGATED:** ${missingDisplay}${missing.length > 6 ? '...' : ''}\n\nCall these stats NOW. You MUST reach ${coverageThresholdPct} factor coverage before Steel Man. Missing factors may include BENCH_DEPTH, EFFICIENCY_TREND, or other critical matchup data.`
           });
           console.log(`[Orchestrator] Strong nudge for ${coverageThresholdPct} coverage (${covered.length}/${totalFactors} = ${coveragePct}% covered)`);
         } else {

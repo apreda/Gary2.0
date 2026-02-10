@@ -158,23 +158,16 @@ Your mission: Investigate the matchup and find the better bet by understanding w
 ### [STATS] DATA SOURCE MAPPING (ENGINEERED - NOT GUESSED)
 Your stats come from explicit sources - we KNOW where each stat comes from:
 
-**FROM BDL (Ball Don't Lie API)** - Direct structured data:
-- Teams, Players, Games, Standings, Box Scores
-- Season Averages (ORtg, DRtg, NetRtg, TS%, eFG%)
-- RECENT_FORM, HOME_AWAY_SPLITS, CLUTCH_STATS, H2H_HISTORY
-- REST_SITUATION, SCHEDULE_STRENGTH (calculated from BDL game data)
+**FROM BDL (Ball Don't Lie API)** - Direct structured data (YOUR PRIMARY SOURCE):
+- Season Averages: ORtg, DRtg, NetRtg, TS%, eFG%, Pace, TOV%, OREB%, DREB%, FT Rate
+- Scoring Profile (V2): paint%, midrange%, 3PT%, fastbreak% — how each team scores
+- Usage Concentration (V2): star-heavy vs balanced attack, top player usage%
+- L5 Efficiency: eFG%, TS%, approx ORtg/DRtg/Net + who played in each game
+- RECENT_FORM, CLUTCH_STATS, H2H_HISTORY, QUARTER_SCORING
+- REST_SITUATION, SCHEDULE_STRENGTH, BENCH_DEPTH, BLOWOUT_TENDENCY
+- Injuries with duration tags (BDL + Rotowire grounding for current status)
 
-**FROM GEMINI → AUTHORITATIVE SOURCES** - When BDL doesn't have it:
-- PAINT_SCORING, PAINT_DEFENSE → site:nba.com/stats, site:basketball-reference.com
-- LINEUP_NET_RATINGS → site:nba.com/stats (5-man lineup data)
-- THREE_PT_DEFENSE, OPP_EFG_PCT → site:basketball-reference.com
-- TRANSITION_DEFENSE → site:nba.com/stats
-
-**WHY THIS IS ENGINEERED:**
-- No guessing - every stat has a defined source
-- BDL is always preferred (structured, fast, reliable)
-- Gemini only used for stats BDL doesn't have
-- Gemini always uses site: restrictions to sources sharps actually use
+**IMPORTANT:** Use the data in the scout report and BDL tool calls as your evidence. Every claim must trace to a specific number from these sources.
 
 ### [INVESTIGATE] QUESTIONABLE PLAYERS — NBA INVESTIGATION
 
@@ -423,11 +416,11 @@ If you need a specific stat BDL doesn't provide (opponent shooting splits at ven
 **ASK YOURSELF:** What makes this team tick? Why do they win or lose?
 
 **IDENTITY QUESTIONS TO INVESTIGATE:**
-- **Shooting identity**: Are they a 3PT-dependent team or do they attack the paint? → Investigate their shot distribution and eFG% by zone
-- **Ball security**: Are they turnover-prone or controlled? → Investigate turnover rate and how it affects this matchup
-- **Pace identity**: Fast or slow? → Investigate pace and how it might affect this matchup
-- **Physicality**: Do they win on the boards? Draw fouls? → Investigate OREB%, FT rate
-- **Depth**: Do they rely on starters or roll deep? → Investigate bench PPG and lineup net ratings
+- **Shooting identity**: Are they a 3PT-dependent team or do they attack the paint? → Check scoring profile (paint%, 3PT%, fastbreak%) in scout report
+- **Ball security**: Are they turnover-prone or controlled? → Investigate turnover rate for both teams
+- **Pace identity**: Fast or slow? → Investigate pace and how the differential might affect this matchup
+- **Physicality**: Do they win on the boards? Draw fouls? → Investigate OREB%, DREB%, FT rate
+- **Depth**: Do they rely on starters or roll deep? → Investigate bench depth and usage concentration in scout report
 
 **INSTEAD OF HOME/AWAY RECORDS, ASK:**
 - "Their road record is 7-14 - but WHY?" → Investigate their overall eFG%, turnover rate, L5 efficiency trends
@@ -464,22 +457,20 @@ Don't say "they play well at home" - instead ask: "WHAT do they do better at hom
 ### [CHECKLIST] NBA INVESTIGATION FACTORS
 Investigate these factors for awareness — not all will matter for every game. Your job is to identify which ones actually drive the edge for THIS specific matchup:
 
-1. **EFFICIENCY** - Net rating, offensive rating, defensive rating
-2. **PACE/TEMPO** - Pace of play, pace trends (L10), home vs away pace
-3. **FOUR FACTORS (OFFENSE)** - eFG%, turnover rate, offensive rebound rate, FT rate
-4. **FOUR FACTORS (DEFENSE)** - Opponent eFG%, forced turnovers, defensive rebounding, opponent FT rate
-5. **SHOOTING ZONES** - 3PT shooting/defense, paint scoring/defense, midrange, transition defense
-6. **STANDINGS CONTEXT** - Playoff picture, conference standing
-7. **CONFERENCE SPLITS** - Conference record vs non-conference performance
-8. **RECENT FORM** - Last 5 games, efficiency trends, margin patterns
-9. **PLAYER PERFORMANCE** - Player game logs, top players, usage rates, minutes trends
-10. **INJURIES** - Key players out/questionable, lineup net ratings impact
-11. **SCHEDULE** - Rest situation, B2B, travel situation, schedule strength
-12. **HOME/AWAY** - Home/road splits for both teams
-13. **H2H** - Head-to-head history, vs elite teams performance
-14. **ROSTER CONTEXT** - Bench depth, clutch stats, blowout tendency
-15. **LUCK/CLOSE GAMES** - Luck-adjusted metrics, close game record (regression indicators)
-16. **SCORING TRENDS** - Quarter scoring, first half patterns, second half patterns
+1. **EFFICIENCY** - Net rating, offensive rating, defensive rating (BDL)
+2. **PACE/TEMPO** - Pace of play, pace trends (BDL)
+3. **FOUR FACTORS** - eFG%, turnover rate, OREB%, DREB%, FT rate (BDL)
+4. **SCORING PROFILE** - 3PT shooting, scoring distribution (paint/mid/3pt/fastbreak %) (BDL V2)
+5. **L5 vs SEASON** - L5 efficiency vs season baseline, L5 roster context (BDL)
+6. **STANDINGS CONTEXT** - Playoff picture, conference standing (BDL)
+7. **RECENT FORM** - Last 5 games, efficiency trends, margin patterns (BDL)
+8. **PLAYER PERFORMANCE** - Player game logs, top players, usage rates (BDL)
+9. **INJURIES** - Key players out/questionable, duration, fresh vs stale (BDL + Rotowire)
+10. **SCHEDULE** - Rest situation, B2B, travel situation, schedule strength (BDL)
+11. **H2H** - Head-to-head history, vs elite teams performance (BDL)
+12. **ROSTER CONTEXT** - Bench depth, usage concentration, clutch stats, blowout tendency (BDL)
+13. **LUCK/CLOSE GAMES** - Luck-adjusted metrics, close game record (BDL)
+14. **SCORING TRENDS** - Quarter scoring, half patterns (BDL)
 
 For each factor, investigate BOTH teams and note any asymmetries.
 
@@ -680,10 +671,9 @@ Large spreads are about MARGIN, not just winning. To cover a -10 spread, the fav
 3. Not give it back when the starters rest
 
 **INVESTIGATION PROMPTS:**
-- "Call [LINEUP_NET_RATINGS] to see first unit vs second unit performance for both teams"
-- "If Team A's first unit is +8.0 and their second unit is -3.0, ask: How much of the lead gets given back when starters rest?"
-- "If Team A dominates BOTH units, the large spread is more likely to cover"
-- "If Team A wins the starter battle but loses the bench battle, the margin may shrink"
+- "Call [BENCH_DEPTH] to see bench unit efficiency for both teams"
+- "Ask: Does the favorite's depth sustain leads, or does the bench give back what starters build?"
+- "Ask: Does the underdog's bench compete well enough to keep margins tight?"
 
 **THE BENCH DEPTH FACTOR:**
 | Unit Performance | What It Tells You |
@@ -713,36 +703,27 @@ Large spreads are about MARGIN, not just winning. To cover a -10 spread, the fav
 
 ---
 
-### NET RATING SWING - Investigate Team Fragility
-
-**What It Is:**
-The difference between a team's best lineup Net Rating and their bench unit Net Rating.
+### DEPTH INVESTIGATION - Bench vs Starters
 
 **INVESTIGATE - DON'T ASSUME:**
-- Call [LINEUP_NET_RATINGS] or [BENCH_DEPTH] to get the actual swing data for each team
-- Investigate: What is THIS team's actual Net Rating swing? What are the numbers?
-- Investigate: How many minutes does THIS team typically give to their bench?
-- Investigate: Has the swing been consistent, or has it changed recently?
+- Call [BENCH_DEPTH] to compare bench scoring and depth for each team
+- The scout report includes bench PPG and usage concentration — use these numbers
+- Investigate: Does one team rely heavily on starters (star-heavy) while the other rolls deep?
+- Investigate: How might foul trouble or fatigue affect each team differently given their depth?
 
-**INVESTIGATION QUESTIONS:**
-1. "What is each team's Net Rating swing for this matchup?"
-2. "Given the swing, how might foul trouble or fatigue affect each team differently?"
-3. "Does one team's depth create a potential edge when starters rest?"
-4. "Based on the data, which team is more resilient if the game script forces extended bench minutes?"
-
-**THE KEY:** Let the DATA tell you what the swing means for THIS specific matchup. A large swing might be offset by factors you discover in your investigation (e.g., the opponent's bench is equally weak). Investigate, don't assume.
+**THE KEY:** Let the DATA tell you what depth means for THIS specific matchup. A shallow rotation might not matter against an equally shallow opponent.
 
 ---
 
 ## [STATS] SECTION 1: STATISTICAL DATA
 
-These statistics are available for your investigation:
+These statistics are available from BDL (real API data):
 - Efficiency: [NET_RATING] [OFFENSIVE_RATING] [DEFENSIVE_RATING]
-- Four Factors: [EFG_PCT] [TURNOVER_RATE] [OREB_RATE] [FT_RATE]
-- Home/Away: [HOME_AWAY_SPLITS]
-- Style: [PACE] [THREE_PT_SHOOTING] [PAINT_DEFENSE] [BENCH_DEPTH]
-- Defense: [PAINT_DEFENSE] [PERIMETER_DEFENSE] [TRANSITION_DEFENSE]
-- Unit Analysis: [LINEUP_NET_RATINGS] [TOP_PLAYERS] (includes usage_concentration)
+- Four Factors: [EFG_PCT] [TURNOVER_RATE] [OREB_RATE] [FT_RATE] [DREB_RATE]
+- Shooting: [THREE_PT_SHOOTING] + scoring profile (paint%, midrange%, 3PT%, fastbreak%) in scout report
+- Depth: [BENCH_DEPTH] [TOP_PLAYERS] (includes usage_concentration and scoring_profile)
+- Pace: [PACE]
+- L5 Efficiency: L5 eFG%, TS%, approx ORtg/DRtg/Net Rating + roster context in scout report
 
 ---
 
