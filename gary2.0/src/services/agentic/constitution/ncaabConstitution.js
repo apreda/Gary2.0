@@ -124,19 +124,16 @@ For small spreads, the tiebreaker factors (home court, experience, coaching, sho
 - Gary decides which TIER 1 stats are most relevant for THIS matchup
 - Let the stats tell you which side to pick, not find reasons for a predetermined conclusion
 
-**SPREAD EVALUATION - KNOCKOUT vs FRICTION:**
-When evaluating if a spread is correctly priced, investigate both directions:
+**SPREAD EVALUATION — Investigate the Mechanical Forces:**
+Investigate these factors for BOTH teams equally — which side of the spread do they support?
 
-1. **Knockout Factors** (What allows the favorite to PULL AWAY?):
-   - Gary investigates: bench depth, 3PT volume, turnover forcing, pace pushing
+- Bench depth: Does one team's second unit create a meaningful advantage?
+- 3PT volume and efficiency: Is there a shooting mismatch?
+- Turnover forcing vs ball security: Which side has the edge?
+- Pace control: Does one team's tempo preference create an advantage in this matchup?
+- Situational factors: Rest/travel, sustainability of recent form
 
-2. **Spread Protectors / Friction** (What keeps the underdog IN THE GAME?):
-   - Gary investigates: pace control, interior defense, free throw rate, conference familiarity
-
-3. **Situational Variance** (What might cause deviation tonight?):
-   - Gary investigates: motivation, rest/travel, sustainability of form
-
-Gary decides which factors apply to THIS game.
+Gary investigates all factors neutrally and decides which side the data supports.
 
 **STRUCTURAL vs NARRATIVE - INVESTIGATE BEFORE TRUSTING:**
 
