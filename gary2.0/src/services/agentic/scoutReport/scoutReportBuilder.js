@@ -2422,7 +2422,7 @@ RECENT FORM (Last 5 Games)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${formatRecentForm(homeTeam, recentHome)}
 ${formatRecentForm(awayTeam, recentAway)}
-
+${sportKey === 'NCAAB' ? formatNcaabL5ScoringTrends(homeTeam, awayTeam, recentHome, recentAway) : ''}
 HEAD-TO-HEAD HISTORY (THIS SEASON)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${formatH2HSection(h2hData, homeTeam, awayTeam)}
@@ -3074,6 +3074,67 @@ function formatRecentForm(teamName, recentGames) {
   
   return `• ${teamName}: ${wins}-${losses} last ${completedGames.length > 5 ? 5 : completedGames.length}
   ${results.slice(0, 3).join(' | ')}`;
+}
+
+/**
+ * Format NCAAB L5 scoring trends from game scores.
+ * BDL doesn't have per-game box scores for NCAAB, so we compute what we can from final scores:
+ * PPG, opponent PPG, average margin, and scoring consistency.
+ */
+function formatNcaabL5ScoringTrends(homeTeam, awayTeam, recentHome, recentAway) {
+  function computeL5(teamName, games) {
+    if (!games || games.length === 0) return null;
+
+    const completed = games.filter(g => (g.home_team_score || 0) > 0 || (g.visitor_team_score || 0) > 0);
+    if (completed.length === 0) return null;
+
+    const l5 = completed.slice(0, 5);
+    let totalPts = 0, totalOppPts = 0;
+    const margins = [];
+
+    for (const game of l5) {
+      const homeTeamName = game.home_team?.name || game.home_team?.full_name || '';
+      const isHome = homeTeamName.toLowerCase().includes(teamName.toLowerCase().split(' ').pop()) ||
+                     teamName.toLowerCase().includes(homeTeamName.toLowerCase().split(' ').pop());
+
+      const teamScore = isHome ? game.home_team_score : game.visitor_team_score;
+      const oppScore = isHome ? game.visitor_team_score : game.home_team_score;
+
+      totalPts += teamScore;
+      totalOppPts += oppScore;
+      margins.push(teamScore - oppScore);
+    }
+
+    const gp = l5.length;
+    const avgPts = (totalPts / gp).toFixed(1);
+    const avgOppPts = (totalOppPts / gp).toFixed(1);
+    const avgMargin = (margins.reduce((a, b) => a + b, 0) / gp).toFixed(1);
+
+    return { gp, avgPts, avgOppPts, avgMargin };
+  }
+
+  const homeL5 = computeL5(homeTeam, recentHome);
+  const awayL5 = computeL5(awayTeam, recentAway);
+
+  if (!homeL5 && !awayL5) return '';
+
+  const lines = [
+    '',
+    'L5 SCORING TRENDS (from game scores — BDL does not provide NCAAB box stats)',
+    '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
+  ];
+
+  if (homeL5) {
+    lines.push(`  ${homeTeam}: L5 PPG ${homeL5.avgPts} | Opp PPG ${homeL5.avgOppPts} | Avg Margin ${homeL5.avgMargin > 0 ? '+' : ''}${homeL5.avgMargin} (${homeL5.gp} games)`);
+  }
+  if (awayL5) {
+    lines.push(`  ${awayTeam}: L5 PPG ${awayL5.avgPts} | Opp PPG ${awayL5.avgOppPts} | Avg Margin ${awayL5.avgMargin > 0 ? '+' : ''}${awayL5.avgMargin} (${awayL5.gp} games)`);
+  }
+
+  lines.push('  Note: For true L5 efficiency (AdjEM, AdjO, AdjD), call NCAAB_KENPOM_RATINGS via grounding.');
+  lines.push('');
+
+  return lines.join('\n');
 }
 
 /**

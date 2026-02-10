@@ -723,7 +723,7 @@ const INVESTIGATION_FACTORS = {
   // NCAAB: 12 required factors (comprehensive)
   // NOTE: BDL has limited NCAAB data - advanced stats (KenPom, NET) come from Gemini grounding
   basketball_ncaab: {
-    KENPOM_EFFICIENCY: ['NCAAB_KENPOM_RATINGS', 'NCAAB_OFFENSIVE_RATING'], // Gold standard
+    KENPOM_EFFICIENCY: ['NCAAB_KENPOM_RATINGS', 'NCAAB_OFFENSIVE_RATING'], // NCAAB_KENPOM_RATINGS = grounding (AdjEM/AdjO/AdjD), NCAAB_OFFENSIVE_RATING = BDL calculated ORtg
     RANKINGS: ['NCAAB_NET_RANKING', 'NCAAB_AP_RANKING', 'NCAAB_COACHES_RANKING'],
     FOUR_FACTORS: ['NCAAB_EFG_PCT', 'NCAAB_TS_PCT', 'TURNOVER_RATE', 'OREB_RATE', 'FT_RATE'],
     SCORING_SHOOTING: ['SCORING', 'FG_PCT', 'THREE_PT_SHOOTING', 'THREE_PT_DEFENSE'], // Shooting offense AND defense
@@ -1576,10 +1576,15 @@ Every stat tells you something. WHAT it tells you determines HOW you use it.
 - FORBIDDEN: "X is out, taking other side" (already priced in)
 - REQUIRED: "X ruled out yesterday. Their DRtg drops 8pts without him. Line moved 3. Underreaction."
 
-**>3 DAYS OLD - FORBIDDEN. YOU CANNOT CITE THIS AS A REASON. EVER.**
-- The market has had 3+ days to adjust
+**NCAAB SPECIAL RULE:** College has less depth — star injuries matter more and longer.
+- **TOP 2 players (by usage/PPG):** Fresh window is 0-21 days (not 3)
+- **Role players (3rd option or lower):** Standard 0-3 day window
+- Why: 12-15 scholarship players vs NBA's 15-man rosters. Star absence creates a bigger ripple in college.
+
+**>3 DAYS OLD (or >21 days for NCAAB top 2) - FORBIDDEN. YOU CANNOT CITE THIS AS A REASON. EVER.**
+- The market has had enough time to adjust
 - This is NOT an edge - it is ALREADY IN THE LINE
-- If you cite an injury >3 days old as a reason for your pick, you are WRONG
+- If you cite a stale injury as a reason for your pick, you are WRONG
 - Focus on CURRENT TEAM PERFORMANCE, not the injury
 
 **UNKNOWN DURATION - FORBIDDEN. DO NOT CITE AS A REASON.**
@@ -2252,6 +2257,40 @@ Call stats for these game-deciding factors:
 ═══════════════════════════════════════════════════════════════════════
 ` : '';
 
+  // NCAAB-specific guidance
+  const ncaabGuidance = (sport === 'basketball_ncaab' || sport === 'NCAAB') ? `
+
+═════════════════════ NCAAB-SPECIFIC INVESTIGATION ═════════════════════
+
+**College basketball is NOT one league — it's ~32 mini-leagues (conferences) with massive quality variance.**
+
+### KENPOM / ADVANCED EFFICIENCY (MANDATORY for NCAAB)
+Your scout report has BDL stats (basic efficiency, standings, roster). But NCAAB's gold standard metrics require grounding calls:
+- **Call \`fetch_stats\` with \`NCAAB_KENPOM_RATINGS\`** for BOTH teams — AdjEM, AdjO, AdjD, Tempo
+- **Call \`fetch_stats\` with \`NCAAB_NET_RANKING\`** for BOTH teams — NCAA NET ranking
+- **Call \`fetch_stats\` with \`NCAAB_QUAD_RECORD\`** if schedule quality is relevant
+- These are your Tier 1 stats. Do NOT skip them — BDL basic stats alone are insufficient for college analysis.
+
+### NCAAB INVESTIGATION TRIGGERS
+Watch for these patterns that require deeper investigation:
+- **Conference vs Non-Conference**: A team's record/efficiency in conference play may differ significantly from non-conference. Which is more relevant for tonight?
+- **SOS Filter**: Is either team's record inflated by weak schedule? Check opponent quality in recent games.
+- **Freshman-Heavy Roster**: Young teams are more volatile — investigate road efficiency and performance under pressure vs at home.
+- **Conference Rematch**: Second meeting between conference rivals. Coaching adjustments from first game may shift dynamics.
+
+### INJURY RULES (NCAAB-SPECIFIC)
+- **TOP 2 players (by PPG/usage):** Fresh injury window is 0-21 days (college has less depth)
+- **Role players (3rd option or lower):** Standard 0-3 day window
+- If a top player has been out >21 days, their absence is already reflected in the team's current efficiency stats
+
+### WHAT BDL PROVIDES vs WHAT REQUIRES GROUNDING
+- **BDL (in scout report):** Basic stats, roster depth (top 9 players), conference standings, recent form, rankings (AP/Coaches)
+- **Grounding (you must call):** KenPom AdjEM/AdjO/AdjD, NET ranking, Quad records, T-Rank, SOS, home court splits
+- If you need a stat that's not in the scout report, call the appropriate token. Don't skip analysis because data wasn't pre-loaded.
+
+═══════════════════════════════════════════════════════════════════════
+` : '';
+
   // ═══════════════════════════════════════════════════════════════════════════
   // GEMINI 3 OPTIMIZED: XML-tagged structure with END-OF-PROMPT instruction
   // ═══════════════════════════════════════════════════════════════════════════
@@ -2263,6 +2302,7 @@ ${scoutReport}
 </scout_report>
 
 ${nflGuidance ? `<sport_specific_guidance>${nflGuidance}</sport_specific_guidance>` : ''}
+${ncaabGuidance ? `<sport_specific_guidance>${ncaabGuidance}</sport_specific_guidance>` : ''}
 
 <investigation_rules>
 ## INVESTIGATION RULES
@@ -2826,7 +2866,10 @@ ${isNBA ? `- START with efficiency data from the scout report (eFG%, Net Rating,
 - MATCHUP APPLICATION: Where does Team A's efficiency strength meet Team B's efficiency weakness? Cite the specific stats.
 - RECORDS: Copy records EXACTLY from the scout report. Do NOT use records from your training data.` : isNFL ? `- TEAM ADVANCED STATS are REQUIRED (EPA/Play, DVOA, Success Rate, Pressure Rate, etc.)
 - Player stats can supplement team stats, but team stats must be the foundation
-- INVESTIGATE: Is there a gap between recent and season data? If so, is it a real shift or variance?` : `- TEAM ADVANCED STATS are REQUIRED — use the sport-appropriate advanced metrics from your data
+- INVESTIGATE: Is there a gap between recent and season data? If so, is it a real shift or variance?` : isNCAAB ? `- START with KenPom efficiency data (AdjEM, AdjO, AdjD) from your Pass 1 grounding calls — these are your Tier 1 stats
+- If you did NOT call NCAAB_KENPOM_RATINGS in Pass 1, call it NOW before writing cases
+- INVESTIGATE: Is there a gap between recent form and season efficiency? Check opponent quality during recent stretch.
+- RECORDS: Copy records EXACTLY from the scout report. Do NOT use records from your training data.` : `- TEAM ADVANCED STATS are REQUIRED — use the sport-appropriate advanced metrics from your data
 - Player stats can supplement team stats, but team stats must be the foundation
 - INVESTIGATE: Is there a gap between recent and season data? If so, is it a real shift or variance?`}
 - INJURY RULES: Only mention RECENT injuries (< 2 weeks). Old injuries are priced in and reflected in team stats.
@@ -2845,7 +2888,10 @@ ${isNBA ? `  - Start with the efficiency data from your scout report and investi
   - For SPREADS: Determine which side of the spread the efficiency data supports` : isNFL ? `  - Investigate team efficiency gaps (EPA/Play, DVOA, Success Rate, Pressure Rate)
   - Ask: Which team's efficiency strength exploits the opponent's weakness?
   - For SPREADS: Determine which side of the spread the efficiency data supports
-  - Remember: Team efficiency profiles drive spread outcomes, not individual player performances` : `  - Investigate team efficiency gaps using the sport-appropriate advanced metrics
+  - Remember: Team efficiency profiles drive spread outcomes, not individual player performances` : isNCAAB ? `  - Start with KenPom AdjEM gap between the teams — this is the single best predictor of college basketball outcomes
+  - Ask: Does the AdjEM gap support this spread, or is the line based on perception (ranking, record) rather than efficiency?
+  - Investigate AdjO vs AdjD matchup — where does one team's offensive strength meet the other's defensive weakness?
+  - Check opponent quality (SOS, Quad records) — are these efficiency numbers battle-tested or inflated by weak schedule?` : `  - Investigate team efficiency gaps using the sport-appropriate advanced metrics
   - Ask: Which team's efficiency strength exploits the opponent's weakness?
   - For SPREADS: Determine which side of the spread the efficiency data supports
   - Remember: Team efficiency profiles drive spread outcomes, not individual player performances`}
