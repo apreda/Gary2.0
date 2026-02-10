@@ -8,11 +8,11 @@ import { ballDontLieService } from './ballDontLieService.js';
 
 // Sport-specific available vendors for GAME ODDS
 const GAME_ODDS_VENDORS = {
-  basketball_nba: ['betmgm', 'fanduel', 'draftkings', 'bet365', 'caesars', 'ballybet', 'betway', 'betparx', 'betrivers', 'rebet', 'polymarket', 'kalshi'],
-  icehockey_nhl: ['draftkings', 'fanduel', 'caesars', 'polymarket', 'kalshi'],
-  americanfootball_nfl: ['betmgm', 'fanduel', 'draftkings', 'bet365', 'caesars', 'ballybet', 'betparx', 'betrivers', 'betway', 'polymarket', 'kalshi'],
-  basketball_ncaab: ['betmgm', 'fanduel', 'draftkings', 'bet365', 'caesars', 'polymarket', 'kalshi'],
-  americanfootball_ncaaf: ['betmgm', 'fanduel', 'draftkings', 'bet365', 'caesars', 'polymarket', 'kalshi']
+  basketball_nba: ['betmgm', 'fanduel', 'draftkings', 'bet365', 'caesars', 'ballybet', 'betway', 'betparx', 'betrivers', 'rebet'],
+  icehockey_nhl: ['draftkings', 'fanduel', 'caesars'],
+  americanfootball_nfl: ['betmgm', 'fanduel', 'draftkings', 'bet365', 'caesars', 'ballybet', 'betparx', 'betrivers', 'betway'],
+  basketball_ncaab: ['betmgm', 'fanduel', 'draftkings', 'bet365', 'caesars'],
+  americanfootball_ncaaf: ['betmgm', 'fanduel', 'draftkings', 'bet365', 'caesars']
 };
 
 // Sport-specific available vendors for PLAYER PROPS
@@ -36,9 +36,7 @@ const BOOK_DISPLAY_NAMES = {
   betway: 'Betway',
   ballybet: 'Bally Bet',
   betparx: 'BetParx',
-  rebet: 'Rebet',
-  polymarket: 'Polymarket',
-  kalshi: 'Kalshi'
+  rebet: 'Rebet'
 };
 
 /**
@@ -83,13 +81,15 @@ export async function fetchSportsbookOdds(sport, gameId, homeTeam, awayTeam) {
       return [];
     }
 
-    // Group by vendor and format
+    // Group by vendor and format (filter to allowed vendors only)
+    const allowedVendors = GAME_ODDS_VENDORS[sport] || [];
     const vendorOdds = {};
     for (const row of odds) {
       if (row.game_id !== gameId) continue;
 
       const vendor = (row.vendor || '').toLowerCase();
       if (!vendor) continue;
+      if (allowedVendors.length > 0 && !allowedVendors.includes(vendor)) continue;
 
       vendorOdds[vendor] = {
         vendor: vendor,

@@ -1556,6 +1556,8 @@ const ballDontLieService = {
           away: awayRoster,
           homeTeamName: homeTeam.full_name || homeTeam.name,
           awayTeamName: awayTeam.full_name || awayTeam.name,
+          homeTeamId: homeTeam.id,
+          awayTeamId: awayTeam.id,
           homeConferenceId: homeTeam.conference_id,
           awayConferenceId: awayTeam.conference_id
         };
@@ -3121,15 +3123,23 @@ const ballDontLieService = {
    * Compute L5 team efficiency from player-level box score stats.
    * Returns efficiency metrics (eFG%, TS%, approx ORtg/DRtg/Net Rating) plus
    * per-game player participation for roster context.
+   * Supports NBA and NCAAB (both have per-game player_stats endpoints).
    */
-  async getTeamL5Efficiency(teamId, gameIds, ttlMinutes = 10) {
+  async getTeamL5Efficiency(teamId, gameIds, sportKey = 'basketball_nba', ttlMinutes = 10) {
     try {
       if (!teamId || !gameIds || gameIds.length === 0) return null;
 
-      const cacheKey = `nba_l5_efficiency_${teamId}_${gameIds.sort().join('_')}`;
+      const endpointMap = {
+        basketball_nba: 'nba/v1/stats',
+        basketball_ncaab: 'ncaab/v1/player_stats'
+      };
+      const endpoint = endpointMap[sportKey];
+      if (!endpoint) return null;
+
+      const cacheKey = `${sportKey}_l5_efficiency_${teamId}_${gameIds.sort().join('_')}`;
       return await getCachedOrFetch(cacheKey, async () => {
         // Fetch all player stats for these game IDs in one batch call
-        const url = `${BALLDONTLIE_API_BASE_URL}/nba/v1/stats${buildQuery({
+        const url = `${BALLDONTLIE_API_BASE_URL}/${endpoint}${buildQuery({
           game_ids: gameIds,
           per_page: 100
         })}`;

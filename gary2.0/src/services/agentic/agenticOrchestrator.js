@@ -729,10 +729,10 @@ const INVESTIGATION_FACTORS = {
     SCORING_SHOOTING: ['SCORING', 'FG_PCT', 'THREE_PT_SHOOTING', 'THREE_PT_DEFENSE'], // Shooting offense AND defense
     DEFENSIVE_STATS: ['REBOUNDS', 'STEALS', 'BLOCKS'], // Defensive/rebounding metrics
     TEMPO: ['NCAAB_TEMPO', 'PACE'],
-    SCHEDULE_QUALITY: ['NCAAB_STRENGTH_OF_SCHEDULE', 'NCAAB_QUAD_RECORD', 'NCAAB_CONFERENCE_RECORD'],
+    SCHEDULE_QUALITY: ['NCAAB_STRENGTH_OF_SCHEDULE', 'NCAAB_QUAD_RECORD', 'NCAAB_CONFERENCE_RECORD', 'NCAAB_CONFERENCE_STRENGTH', 'NCAAB_OPPONENT_QUALITY'],
     RECENT_FORM: ['RECENT_FORM', 'NCAAB_FIRST_HALF_TRENDS', 'NCAAB_SECOND_HALF_TRENDS'],
     INJURIES: ['INJURIES', 'TOP_PLAYERS'],
-    HOME_AWAY: ['HOME_AWAY_SPLITS'],
+    HOME_AWAY: ['HOME_AWAY_SPLITS', 'NCAAB_HOME_COURT_ADVANTAGE'],
     H2H: ['H2H_HISTORY'],
     ASSISTS_PLAYMAKING: ['ASSISTS'] // Ball movement and playmaking
   },
@@ -2271,11 +2271,17 @@ Your scout report has BDL stats (basic efficiency, standings, roster). But NCAAB
 - **Call \`fetch_stats\` with \`NCAAB_QUAD_RECORD\`** if schedule quality is relevant
 - These are your Tier 1 stats. Do NOT skip them — BDL basic stats alone are insufficient for college analysis.
 
+### HOME COURT & OPPONENT QUALITY (NCAAB-SPECIFIC TOKENS)
+College home court is a REAL structural factor — much larger than pro sports. Use these tokens:
+- **Call \`fetch_stats\` with \`NCAAB_HOME_COURT_ADVANTAGE\`** — venue-specific home/away performance data from KenPom/Barttorvik
+- **Call \`fetch_stats\` with \`NCAAB_OPPONENT_QUALITY\`** — quality of each team's last 10 opponents (KenPom rankings). Critical for determining if recent form is battle-tested or inflated.
+- **Call \`fetch_stats\` with \`NCAAB_CONFERENCE_STRENGTH\`** — conference power rankings by average AdjEM. Context for interpreting stats across conferences.
+
 ### NCAAB INVESTIGATION TRIGGERS
 Watch for these patterns that require deeper investigation:
 - **Conference vs Non-Conference**: A team's record/efficiency in conference play may differ significantly from non-conference. Which is more relevant for tonight?
-- **SOS Filter**: Is either team's record inflated by weak schedule? Check opponent quality in recent games.
-- **Freshman-Heavy Roster**: Young teams are more volatile — investigate road efficiency and performance under pressure vs at home.
+- **SOS Filter**: Is either team's record inflated by weak schedule? Call NCAAB_OPPONENT_QUALITY to check.
+- **Home Court Impact**: Some teams are nearly unbeatable at home. Call NCAAB_HOME_COURT_ADVANTAGE to see the actual home/away performance gap.
 - **Conference Rematch**: Second meeting between conference rivals. Coaching adjustments from first game may shift dynamics.
 
 ### INJURY RULES (NCAAB-SPECIFIC)
@@ -2285,7 +2291,7 @@ Watch for these patterns that require deeper investigation:
 
 ### WHAT BDL PROVIDES vs WHAT REQUIRES GROUNDING
 - **BDL (in scout report):** Basic stats, roster depth (top 9 players), conference standings, recent form, rankings (AP/Coaches)
-- **Grounding (you must call):** KenPom AdjEM/AdjO/AdjD, NET ranking, Quad records, T-Rank, SOS, home court splits
+- **Grounding (you must call):** KenPom AdjEM/AdjO/AdjD, NET ranking, Quad records, T-Rank, SOS, home court advantage, opponent quality, conference strength
 - If you need a stat that's not in the scout report, call the appropriate token. Don't skip analysis because data wasn't pre-loaded.
 
 ═══════════════════════════════════════════════════════════════════════
@@ -4808,6 +4814,8 @@ Call these specific tokens NOW using the get_stat tool with the "token" paramete
         });
 
         nextMessageToSend = nudgeMessage;
+        // Don't count duplicate-only iterations against the budget — no new work was done
+        iteration--;
         continue;
       }
 

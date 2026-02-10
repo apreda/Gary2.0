@@ -128,11 +128,11 @@ Why it's best: Identifies SPECIFIC reasons the line might be off - opponent qual
 
 The spread is the market's estimate of margin. It reflects public information. Your job for spread bets is to find a SPECIFIC reason the spread is off.
 
-- Old injuries (2+ weeks) → Already reflected in the spread
-- Team quality differences → Already reflected in the spread
-- Schedules, travel → Already reflected in the spread
+- Old injuries (2+ weeks) → Likely reflected. But investigate: Has the team's efficiency WITH the absence matched what the line implies?
+- Team quality differences → The line's starting point. But investigate: Does THIS matchup's data agree with the market's quality assessment?
+- Schedules, travel → Market sees the schedule. But investigate: Does THIS team's actual performance in similar schedule spots match what the line assumes?
 
-Edge on spreads comes from: What has the spread NOT fully absorbed?
+The spread reflects what the market THINKS about these factors. Your job: Does the DATA agree with what the market thinks?
 
 ### FOR MONEYLINE BETS:
 **"Who wins this game?"**
@@ -431,9 +431,10 @@ Use to sanity-check your evaluation for THIS specific game.
 | NFL underdogs ATS | 52% cover rate | Slight historical edge to dogs |
 | NFL key numbers | 3 (15%), 7 (10%) margins | Half-points around 3/7 matter significantly |
 | Divisional underdogs | 71% ATS | Familiarity breeds closer games |
-| NBA home court | Line already includes it | Investigate THIS team's actual home/away performance |
+| Home court (NBA) | ~2-3 pts, relatively uniform | Line includes it — investigate THIS team's actual home/away splits |
+| Home court (NCAAB) | ~4-6 pts, HIGHLY variable by team | Line includes SOME adjustment — but investigate whether THIS home team's advantage is above/below what the line assumes |
 | Wind over 20 mph | 54% under | Weather impacts totals/passing |
-| Injury priced in | After 2-3 games | Fresh injury ≠ known absence |
+| Injury priced in | After 2-3 games (NBA/NHL), 21 days top players (NCAAB) | Fresh injury ≠ known absence |
 
 **How to Use:** This is historical context, not a formula. Investigate each game individually.
 - Favorites CAN have edge (when market undervalues dominance for small spreads)
@@ -565,7 +566,39 @@ CASE FOR [FAVORITE] -X.X:
   // For NCAAB, add the spread-based case structure
   if (isNcaab) {
     const ncaabAddendum = `
-## NCAAB-SPECIFIC: SPREAD-BASED CASE STRUCTURE
+## NCAAB-SPECIFIC: MARKET DYNAMICS & CASE STRUCTURE
+
+### HOME COURT IN COLLEGE BASKETBALL
+
+Home court advantage in NCAAB is a REAL structural factor — significantly larger and more variable than in pro sports.
+
+**Why it's different from NBA:**
+- 18-22 year olds affected more by hostile crowds than seasoned pros
+- Venue familiarity (shooting backgrounds, depth perception) creates real shooting splits
+- Student sections create sustained noise pressure — especially on freshman guards
+- Some home courts are worth 6+ points of advantage; others feel like neutral sites
+- Conference rivalry games amplify the effect
+
+**The line includes SOME home court adjustment. Your investigation determines if it got the SIZE right:**
+- Ask: What is THIS home team's actual home record and home efficiency? Do they play significantly better at home?
+- Ask: How has THIS road team performed away from home? Does their efficiency hold on the road?
+- Ask: Is this a particularly hostile home court (Cameron, Allen Fieldhouse, Mackey) or a quiet arena with low attendance?
+- Ask: Is this a conference game where rivalry stakes compound the advantage?
+
+**Home court CAN be the edge** when the line undervalues the home team's real advantage. It can also be overvalued — some "home" teams play in half-empty arenas. Investigate which.
+
+---
+
+### STRENGTH OF SCHEDULE — THE NCAAB FILTER
+
+360+ Division I teams with MASSIVE quality variance. SOS context is critical for evaluating every stat:
+- Ask: Did this team build their record/stats against real competition or against SOS #250?
+- Ask: How do their Quad 1-2 results compare to their overall record?
+- Ask: Is the team's L5 performance inflated by weak opponents or tested against quality?
+
+---
+
+### SPREAD-BASED CASE STRUCTURE
 
 **FOR LARGE SPREAD UNDERDOG (+10 or more):**
 \`\`\`
@@ -575,7 +608,8 @@ CASE FOR [UNDERDOG] +X.X:
 1. [Mechanism that PREVENTS blowout]
    - Specific stat showing defensive/offensive parity
    - Tempo factor that limits possessions
-   
+   - Home court data showing THIS team plays tighter games at home
+
 2. [Efficiency reality check]
    - Actual AdjEM gap vs implied margin
    - Is the spread larger than efficiency suggests?
@@ -589,18 +623,23 @@ CASE FOR [FAVORITE] -X.X:
 1. [Mechanism that CREATES blowout]
    - Specific matchup advantage (size, speed, depth)
    - Fresh injury news that guts opponent
-   
+
 2. [Tier gap reality]
    - Actual AdjEM gap supports the margin
-   - Pattern of covering similar spreads vs similar opponents
+   - Pattern of efficiency vs similar-tier opponents
 \`\`\`
 
-**RANKING SIGNIFICANCE (When Gaps Matter):**
+**FOR ROAD FAVORITES — REQUIRED INVESTIGATION:**
+If you're picking a road favorite, investigate: Does their road efficiency actually support this? How does the home team's home record and home defensive stats affect the margin? Don't ignore the environment — investigate it.
+
+---
+
+### RANKING SIGNIFICANCE (When Gaps Matter)
 - Top 25 vs 100+ = Real gap (meaningful)
 - 35th vs 55th = Same tier (noise)
 - 60th vs 80th = Essentially identical (noise)
 
-Rule: Ranking gaps < 30-40 positions in the 30-150 range = NEUTRAL
+Ask: What are the ACTUAL AdjEM values behind each rank? A 30-position gap might be 1 point of efficiency (noise) or 10 points (real).
 ═══════════════════════════════════════════════════════════════════════════════
 `;
     return corePhilosophy + ncaabAddendum;

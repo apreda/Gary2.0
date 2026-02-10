@@ -315,15 +315,21 @@ export function getAuthoritativeSource(token) {
     return 'site:footballoutsiders.com OR site:pro-football-reference.com';
   }
   
-  // NCAAB sources
+  // NCAAB sources — each token searches ONE source for accuracy
   if (['NCAAB_KENPOM_RATINGS', 'NCAAB_STRENGTH_OF_SCHEDULE'].includes(token)) {
     return 'site:kenpom.com';
   }
   if (['NCAAB_NET_RANKING', 'NCAAB_QUAD_RECORD'].includes(token)) {
     return 'site:ncaa.com';
   }
-  if (token === 'NCAAB_BARTTORVIK') {
-    return 'site:barttorvik.com'; // Defaults to 2026 season
+  if (['NCAAB_BARTTORVIK', 'NCAAB_OPPONENT_QUALITY'].includes(token)) {
+    return 'site:barttorvik.com';
+  }
+  if (token === 'NCAAB_HOME_COURT_ADVANTAGE') {
+    return 'site:teamrankings.com';
+  }
+  if (token === 'NCAAB_CONFERENCE_STRENGTH') {
+    return 'site:kenpom.com';
   }
   
   // NCAAF sources
@@ -1990,26 +1996,27 @@ const FETCHERS = {
       console.log(`[Stat Router] Fetching KenPom ratings for ${awayTeamName} @ ${homeTeamName} via Gemini Grounding`);
 
       // Improved query with explicit format requirements for reliable parsing
-      const query = `Search kenpom.com for the 2025-26 college basketball season KenPom ratings.
+      const homeSlug = homeTeamName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      const awaySlug = awayTeamName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      const query = `Search kenpom.com ONLY for the 2025-26 college basketball season.
 
-Find the EXACT KenPom stats for these TWO teams:
+Find KenPom efficiency ratings for these TWO teams:
 1. ${homeTeamName}
 2. ${awayTeamName}
 
-For EACH team, you MUST provide these stats in this EXACT format:
+For EACH team, provide in this EXACT format:
 TEAM_NAME:
 - KenPom Rank: [number 1-365]
 - AdjEM: [number with sign, like +15.2 or -3.4]
 - AdjO: [number like 112.5]
 - AdjD: [number like 98.3]
-- Tempo: [number like 68.5]
 
-IMPORTANT: Use ONLY data from kenpom.com for the 2025-26 season. Do not guess - provide real numbers from the site.`;
+CRITICAL: Only report numbers you find on kenpom.com. If not found, write "not found". Do NOT use numbers from other sites.`;
 
       const response = await geminiGroundingSearch(query, {
         temperature: 1.0,
         maxTokens: 1500,
-        systemMessage: 'You are a college basketball analytics expert. You MUST search kenpom.com and return the exact KenPom statistics. Format each team separately with the exact stats requested. Do not make up numbers - only use real data from kenpom.com.'
+        systemMessage: 'You are a college basketball analytics expert. Search ONLY kenpom.com for efficiency ratings. Report only numbers you find on kenpom.com — never fabricate or estimate.'
       });
       
       // Parse the response to extract KenPom data
@@ -2067,12 +2074,23 @@ IMPORTANT: Use ONLY data from kenpom.com for the 2025-26 season. Do not guess - 
       
       console.log(`[Stat Router] Fetching NET rankings for ${awayTeamName} @ ${homeTeamName} via Gemini Grounding`);
       
-      const query = `What are the current NCAA NET rankings for ${homeTeamName} and ${awayTeamName} college basketball teams? Include their NET ranking number and any Quad 1/2/3/4 record information. NET rankings are from ncaa.com and used for NCAA tournament selection.`;
+      const query = `Search ncaa.com for the 2025-26 college basketball season NCAA NET rankings.
+
+What are the NET rankings for:
+1. ${homeTeamName}
+2. ${awayTeamName}
+
+For EACH team provide:
+- NET Ranking: [number]
+- Quad 1 Record: [W-L]
+- Quad 2 Record: [W-L]
+
+CRITICAL: Only report numbers from ncaa.com for the 2025-26 season. Do NOT guess or use old data.`;
       
       const response = await geminiGroundingSearch(query, {
         temperature: 1.0,
         maxTokens: 1500,
-        systemMessage: 'You are a college basketball expert. Provide accurate NET rankings and Quad records from the current season.'
+        systemMessage: 'You are a college basketball expert. Search ncaa.com for 2025-26 NET rankings. Only report numbers you find — never fabricate.'
       });
       
       const content = response?.content || response?.choices?.[0]?.message?.content || '';
@@ -2114,13 +2132,25 @@ IMPORTANT: Use ONLY data from kenpom.com for the 2025-26 season. Do not guess - 
       const awayTeamName = away.full_name || away.name;
       
       console.log(`[Stat Router] Fetching Strength of Schedule for ${awayTeamName} @ ${homeTeamName} via Gemini Grounding`);
-      
-      const query = `What is the current strength of schedule (SOS) ranking for ${homeTeamName} and ${awayTeamName} college basketball teams in the ${getCurrentSeasonString()} season? Include their SOS rank and any notable wins or losses against ranked teams.`;
-      
+
+      const homeSlug = homeTeamName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      const awaySlug = awayTeamName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      const query = `Search kenpom.com ONLY for the 2025-26 college basketball season.
+
+What is the strength of schedule (SOS) ranking for:
+1. ${homeTeamName}
+2. ${awayTeamName}
+
+For EACH team provide:
+- SOS Rank: [number]
+- Non-conference SOS: [number if available]
+
+CRITICAL: Only report numbers from kenpom.com. Do NOT estimate or fabricate.`;
+
       const response = await geminiGroundingSearch(query, {
         temperature: 1.0,
         maxTokens: 1500,
-        systemMessage: 'You are a college basketball analytics expert. Provide strength of schedule information.'
+        systemMessage: 'You are a college basketball analytics expert. Search ONLY kenpom.com for SOS data. Only report numbers you find — never fabricate.'
       });
       
       const content = response?.content || response?.choices?.[0]?.message?.content || '';
@@ -2222,23 +2252,19 @@ IMPORTANT: Use ONLY data from kenpom.com for the 2025-26 season. Do not guess - 
       console.log(`[Stat Router] Fetching Barttorvik T-Rank for ${awayTeamName} @ ${homeTeamName} via Gemini Grounding`);
 
       // Improved query with explicit format requirements for reliable parsing
-      const query = `Search barttorvik.com for the 2025-26 college basketball season T-Rank stats.
+      const query = `Search barttorvik.com ONLY for the 2025-26 college basketball season T-Rank ratings.
 
-Find the EXACT Barttorvik stats for these TWO teams:
+Find the Barttorvik stats for:
 1. ${homeTeamName}
 2. ${awayTeamName}
 
-For EACH team, you MUST provide these stats in this EXACT format:
-TEAM_NAME:
+For EACH team provide:
 - T-Rank: [number 1-365]
 - AdjOE: [number like 112.5]
 - AdjDE: [number like 98.3]
-- Barthag: [decimal like 0.8542]
-- Tempo: [number like 68.5]
-- WAB: [number with sign like +4.2 or -1.5]
 - EFG%: [percentage like 52.3]
 
-IMPORTANT: Use ONLY data from barttorvik.com for the 2025-26 season (site shows as 2026). Do not guess - provide real numbers.`;
+CRITICAL: Only report numbers from barttorvik.com. Do NOT use data from other sites or guess.`;
 
       const response = await geminiGroundingSearch(query, {
         temperature: 1.0,
@@ -2473,6 +2499,161 @@ IMPORTANT: Use ONLY data from the 2025-26 college basketball season. Do not gues
         error: 'Data unavailable',
         home: { team: home.full_name || home.name, l5_record: 'N/A' },
         away: { team: away.full_name || away.name, l5_record: 'N/A' }
+      };
+    }
+  },
+
+  // ===== NCAAB GROUNDING — CONFERENCE STRENGTH, OPPONENT QUALITY, HOME COURT =====
+
+  NCAAB_CONFERENCE_STRENGTH: async (bdlSport, home, away, season) => {
+    if (bdlSport !== 'basketball_ncaab') return null;
+
+    try {
+      const homeTeamName = home.full_name || home.name;
+      const awayTeamName = away.full_name || away.name;
+
+      console.log(`[Stat Router] Fetching NCAAB Conference Strength for ${awayTeamName} @ ${homeTeamName} via Gemini Grounding`);
+
+      const query = `Search kenpom.com for 2025-26 college basketball conference rankings by average efficiency.
+
+I need the conference power rankings for the conferences that ${homeTeamName} and ${awayTeamName} play in.
+
+For EACH conference, provide:
+- Conference Name
+- Average AdjEM (adjusted efficiency margin) for the conference
+- KenPom conference rank (1 = strongest conference)
+- Number of teams ranked in KenPom Top 50
+
+IMPORTANT: Use ONLY data from kenpom.com for the current 2025-26 season.`;
+
+      const response = await geminiGroundingSearch(query, {
+        temperature: 1.0,
+        maxTokens: 1200,
+        systemMessage: 'You are a college basketball analytics expert. Search kenpom.com and return conference strength data. Only use real data from kenpom.com for the 2025-26 season.'
+      });
+
+      const content = response?.content || response?.choices?.[0]?.message?.content || '';
+
+      return {
+        category: 'Conference Strength (NCAAB)',
+        source: 'kenpom.com via Gemini Grounding',
+        home_team: homeTeamName,
+        away_team: awayTeamName,
+        raw_response: content.substring(0, 1500),
+        context: 'Conference average AdjEM provides context for interpreting team stats. A team ranked 40th in a strong conference faces tougher nightly competition than one ranked 40th in a weak conference.'
+      };
+    } catch (error) {
+      console.warn('[Stat Router] NCAAB Conference Strength fetch failed:', error.message);
+      return {
+        category: 'Conference Strength',
+        error: 'Conference strength data unavailable',
+        home_team: home.full_name || home.name,
+        away_team: away.full_name || away.name
+      };
+    }
+  },
+
+  NCAAB_OPPONENT_QUALITY: async (bdlSport, home, away, season) => {
+    if (bdlSport !== 'basketball_ncaab') return null;
+
+    try {
+      const homeTeamName = home.full_name || home.name;
+      const awayTeamName = away.full_name || away.name;
+
+      console.log(`[Stat Router] Fetching NCAAB Opponent Quality for ${awayTeamName} @ ${homeTeamName} via Gemini Grounding`);
+
+      const homeSlug = homeTeamName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      const awaySlug = awayTeamName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      const query = `Search barttorvik.com ONLY for the 2025-26 college basketball season.
+
+For these TWO teams, find their record against quality opponents:
+1. ${homeTeamName}
+2. ${awayTeamName}
+
+For EACH team provide:
+- Record vs KenPom Top 50 opponents
+- Record vs KenPom Top 100 opponents
+- Their most recent 5 opponents and those opponents' approximate KenPom rankings
+
+CRITICAL: Only report data from barttorvik.com. Do NOT fabricate game results or rankings. If you cannot find specific data, say "not found".`;
+
+      const response = await geminiGroundingSearch(query, {
+        temperature: 1.0,
+        maxTokens: 2000,
+        systemMessage: 'You are a college basketball analytics expert. Search ONLY barttorvik.com for opponent quality data. Only report real data — never fabricate.'
+      });
+
+      const content = response?.content || response?.choices?.[0]?.message?.content || '';
+
+      return {
+        category: 'Opponent Quality Filter (NCAAB)',
+        source: 'kenpom.com / barttorvik.com via Gemini Grounding',
+        home_team: homeTeamName,
+        away_team: awayTeamName,
+        raw_response: content.substring(0, 2000),
+        context: 'Recent opponent quality determines if L5/L10 stats are battle-tested or inflated by weak schedule. A team going 8-2 in L10 against KenPom 150+ opponents is very different from 5-5 against Top-50 teams.'
+      };
+    } catch (error) {
+      console.warn('[Stat Router] NCAAB Opponent Quality fetch failed:', error.message);
+      return {
+        category: 'Opponent Quality',
+        error: 'Opponent quality data unavailable',
+        home_team: home.full_name || home.name,
+        away_team: away.full_name || away.name
+      };
+    }
+  },
+
+  NCAAB_HOME_COURT_ADVANTAGE: async (bdlSport, home, away, season) => {
+    if (bdlSport !== 'basketball_ncaab') return null;
+
+    try {
+      const homeTeamName = home.full_name || home.name;
+      const awayTeamName = away.full_name || away.name;
+      const homeSlug = homeTeamName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      const awaySlug = awayTeamName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+
+      console.log(`[Stat Router] Fetching NCAAB Home Court Advantage for ${awayTeamName} @ ${homeTeamName} via Gemini Grounding`);
+
+      const query = `Search teamrankings.com ONLY for the 2025-26 college basketball season.
+
+Go to these EXACT URLs:
+- https://www.teamrankings.com/ncaa-basketball/team/${homeSlug}/stats
+- https://www.teamrankings.com/ncaa-basketball/team/${awaySlug}/stats
+
+For ${homeTeamName}, find:
+- Opp Effective FG %: [percentage and rank]
+- Opp Points/Game: [number and rank]
+
+For ${awayTeamName}, find:
+- Opp Effective FG %: [percentage and rank]
+- Opp Points/Game: [number and rank]
+
+CRITICAL: Only report numbers you find on the teamrankings.com pages above. These stats are in the "Defense" column of the team stats page. Do NOT estimate, fabricate, or use numbers from other sites.`;
+
+      const response = await geminiGroundingSearch(query, {
+        temperature: 1.0,
+        maxTokens: 2000,
+        systemMessage: 'You are a college basketball analytics expert. Search ONLY teamrankings.com for the exact stats requested. Only report numbers from teamrankings.com — never fabricate or use other sites.'
+      });
+
+      const content = response?.content || response?.choices?.[0]?.message?.content || '';
+
+      return {
+        category: 'Home Court Advantage (NCAAB)',
+        source: 'teamrankings.com / kenpom.com / barttorvik.com via Gemini Grounding',
+        home_team: homeTeamName,
+        away_team: awayTeamName,
+        raw_response: content.substring(0, 2000),
+        context: 'Home court advantage in college basketball is significantly larger than pro sports. Investigate whether the line has accurately sized the home court factor for this specific matchup.'
+      };
+    } catch (error) {
+      console.warn('[Stat Router] NCAAB Home Court Advantage fetch failed:', error.message);
+      return {
+        category: 'Home Court Advantage',
+        error: 'Home court data unavailable',
+        home_team: home.full_name || home.name,
+        away_team: away.full_name || away.name
       };
     }
   },
