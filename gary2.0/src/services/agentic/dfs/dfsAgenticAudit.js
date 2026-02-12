@@ -47,12 +47,7 @@ You just built a lineup. Now AUDIT it with fresh eyes.
    - Are correlated players actually in correlated situations?
    - Did I accidentally spread too thin?
 
-4. OWNERSHIP LEVERAGE
-   - Am I differentiated enough to win if chalk busts?
-   - Am I too contrarian (punting edge for uniqueness)?
-   - What happens if the chalk hits?
-
-5. VALUE CHECK
+4. VALUE CHECK
    - Did I leave money on the table unnecessarily?
    - Are my punts actual edges or just cheap prices?
    - Did I overpay for any "name brand" players?
@@ -61,12 +56,6 @@ You just built a lineup. Now AUDIT it with fresh eyes.
    - What's the biggest risk to this lineup?
    - Is there a single point of failure?
    - What's my floor scenario?
-
-## CONVICTION LEVELS
-After audit, rate your conviction:
-- HIGH: "I believe this lineup wins. The thesis is sound, the players are right."
-- MEDIUM: "This lineup competes. Some uncertainty but the approach is correct."
-- LOW: "I have concerns. Either thesis or execution feels off."
 
 ## ADJUSTMENTS
 If you see issues, you can make 1-2 swaps. But be specific:
@@ -80,12 +69,9 @@ If you see issues, you can make 1-2 swaps. But be specific:
     "thesisAlignment": "How well does this execute the thesis?",
     "ceilingCheck": "Is the ceiling realistic?",
     "correlationCheck": "Are stacks properly built?",
-    "ownershipLeverage": "Am I differentiated correctly?",
     "valueCheck": "Did I allocate salary well?",
     "riskAssessment": "What could go wrong?"
   },
-  "conviction": "HIGH | MEDIUM | LOW",
-  "convictionReasoning": "Why this conviction level",
   "adjustments": [
     {
       "out": "Player Name",
@@ -135,21 +121,13 @@ export async function auditLineupWithPro(genAI, lineup, buildThesis, context, op
     }
   });
 
-  let responseText = '';
-  try {
-    const result = await model.generateContent(auditRequest);
-    responseText = result.response.text() || '';
-    if (!responseText) {
-      console.warn('[Lineup Audit] Gemini Pro returned empty text response');
-    }
-  } catch (apiError) {
-    console.warn('[Lineup Audit] API call failed:', apiError.message);
-    console.warn('[Lineup Audit] API error stack:', apiError.stack?.slice(0, 500));
-    // Use default audit on API failure
-    responseText = '';
+  const result = await model.generateContent(auditRequest);
+  const responseText = result.response.text() || '';
+  if (!responseText) {
+    throw new Error('[Lineup Audit] Gemini Pro returned empty response — audit failed');
   }
 
-  // Parse audit results (will use defaults if empty)
+  // Parse audit results — NO fallbacks
   const auditResult = parseAuditResult(responseText);
 
   // Apply any adjustments Gary made
@@ -158,16 +136,14 @@ export async function auditLineupWithPro(genAI, lineup, buildThesis, context, op
   // Merge audit data into lineup
   const auditedLineup = {
     ...finalLineup,
-    conviction: auditResult.conviction || 'MEDIUM',
     auditNotes: auditResult.auditNotes || {},
-    convictionReasoning: auditResult.convictionReasoning || '',
     adjustments: auditResult.adjustments || [],
     ceilingScenario: auditResult.finalCeilingScenario || finalLineup.ceilingScenario,
     garyNotes: auditResult.garyFinalThoughts || finalLineup.garyNotes,
     perPlayerReasoning: buildPerPlayerReasoning(finalLineup.players)
   };
 
-  console.log(`[Lineup Audit] ✓ Conviction: ${auditedLineup.conviction}`);
+  console.log(`[Lineup Audit] ✓ Audit complete`);
   if (auditResult.adjustments?.length > 0) {
     console.log(`[Lineup Audit] ✓ Made ${auditResult.adjustments.length} adjustments`);
   }
@@ -214,10 +190,9 @@ Ceiling Scenario: ${lineup.ceilingScenario || 'Not specified'}
 ${alternatesStr}
 
 ## YOUR TASK
-1. Audit each checkpoint (thesis, ceiling, correlation, ownership, value, risk)
-2. Rate your conviction (HIGH/MEDIUM/LOW)
-3. Make 0-2 swaps if you see clear improvements
-4. Provide final thoughts
+1. Audit each checkpoint (thesis, ceiling, correlation, value, risk)
+2. Make 0-2 swaps if you see clear improvements
+3. Provide final thoughts
 
 Output your audit as JSON.
 `;
@@ -293,18 +268,7 @@ function parseAuditResult(text) {
   }
 
   if (!jsonStr) {
-    // If no JSON found, create a minimal valid audit with MEDIUM conviction
-    // This allows the lineup to proceed with a warning
-    console.warn('[Lineup Audit] Could not extract JSON from response. Using default audit.');
-    console.warn('[Lineup Audit] Raw response: ' + text.slice(0, 300));
-    return {
-      auditNotes: { note: 'Auto-generated audit - model did not produce valid JSON' },
-      conviction: 'MEDIUM',
-      convictionReasoning: 'Audit could not be parsed - defaulting to MEDIUM conviction',
-      adjustments: [],
-      finalCeilingScenario: '',
-      garyFinalThoughts: text.slice(0, 500)
-    };
+    throw new Error('[Lineup Audit] Could not extract JSON from response. Raw: ' + text.slice(0, 300));
   }
 
   let parsed;
@@ -320,31 +284,12 @@ function parseAuditResult(text) {
         .replace(/'/g, '"');
       parsed = JSON.parse(fixedJson);
     } catch (e2) {
-      console.warn('[Lineup Audit] JSON parse failed, using default audit');
-      return {
-        auditNotes: { note: 'JSON parse error - using default' },
-        conviction: 'MEDIUM',
-        convictionReasoning: 'Could not parse audit JSON',
-        adjustments: [],
-        finalCeilingScenario: '',
-        garyFinalThoughts: text.slice(0, 500)
-      };
+      throw new Error('[Lineup Audit] JSON parse failed: ' + e2.message + '. Raw: ' + jsonStr.slice(0, 300));
     }
-  }
-
-  // Extract conviction - be flexible with format
-  let conviction = 'MEDIUM';
-  if (parsed.conviction) {
-    const convUpper = String(parsed.conviction).toUpperCase();
-    if (convUpper.includes('HIGH')) conviction = 'HIGH';
-    else if (convUpper.includes('LOW')) conviction = 'LOW';
-    else conviction = 'MEDIUM';
   }
 
   return {
     auditNotes: parsed.auditNotes || parsed.audit_notes || {},
-    conviction,
-    convictionReasoning: parsed.convictionReasoning || parsed.conviction_reasoning || '',
     adjustments: parsed.adjustments || [],
     finalCeilingScenario: parsed.finalCeilingScenario || parsed.ceiling_scenario || '',
     garyFinalThoughts: parsed.garyFinalThoughts || parsed.gary_notes || parsed.notes || ''

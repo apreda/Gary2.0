@@ -14,6 +14,7 @@
 
 // MUST load env vars FIRST before any other imports
 import '../src/loadEnv.js';
+import { ncaabSeason } from '../src/utils/dateUtils.js';
 
 // Now import modules that depend on env vars
 const { analyzeGame, buildSystemPrompt } = await import('../src/services/agentic/agenticOrchestrator.js');
@@ -24,9 +25,7 @@ const { ballDontLieService } = await import('../src/services/ballDontLieService.
 const { getConstitution } = await import('../src/services/agentic/constitution/index.js');
 // Quantum service removed - not needed
 const { fetchSportsbookOdds, formatOddsForStorage } = await import('../src/services/sportsbookOddsService.js');
-const { filterNBAPicks, clearFilterCache } = await import('../src/services/nbaPickFilter.js');
-const { filterNHLPicks } = await import('../src/services/nhlPickFilter.js');
-const { filterNCAABPicks } = await import('../src/services/ncaabPickFilter.js');
+// Sport post-filters removed — Gary's output is final (no heuristic overrides)
 // Simple system: Gary picks SPREAD, ML, or PASS.
 // ═══════════════════════════════════════════════════════════════════════════
 // GARY PICK GENERATION
@@ -261,8 +260,8 @@ if (sportsToRun.length === 0) {
 ║    --fresh                     (clear cache for fresh data)      ║
 ║                                                                  ║
 ║  Gary's Pick System:                                             ║
-║    - SPREAD or MONEYLINE = picks stored                          ║
-║    - PASS = skip game (no pick stored)                           ║
+║    - Gary always picks a side (SPREAD or MONEYLINE)              ║
+║    - No PASS, no totals — spread/ML only                         ║
 ║                                                                  ║
 ╚══════════════════════════════════════════════════════════════════╝
 `);
@@ -330,10 +329,6 @@ async function main() {
     const config = SPORT_CONFIG[sportShort];
     const sportStartTime = Date.now();
 
-    // Clear NBA filter cache at start of each NBA run
-    if (config.name === 'NBA') {
-      clearFilterCache();
-    }
 
     console.log(`\n${'═'.repeat(70)}`);
     console.log(`${config.emoji} STARTING ${config.name} ANALYSIS`);
@@ -342,7 +337,7 @@ async function main() {
     try {
       // Fetch games
       console.log(`[${config.name}] Fetching upcoming games...`);
-      const allGames = await oddsService.getUpcomingGames(config.key, { nocache: true });
+      const allGames = await oddsService.getUpcomingGames(config.key, { nocache: true, targetDate: dateFilter });
 
       // Filter to games within time window
       const now = new Date();
@@ -648,7 +643,7 @@ async function main() {
           return null;
         };
 
-        const season = now.getMonth() + 1 <= 4 ? now.getFullYear() - 1 : now.getFullYear();
+        const season = ncaabSeason();
         console.log(`[${config.name}] Pre-processing ${games.length} games...`);
 
         for (const game of games) {
@@ -1557,112 +1552,41 @@ async function main() {
           // ═══════════════════════════════════════════════════════════════
           // SIMPLE PASS FILTER (Gary has full agency)
           // ═══════════════════════════════════════════════════════════════
-          // Gary decides what's worth betting. We just filter out PASS picks.
-          // No confidence thresholds, no quotas, no caps.
-          // If Gary picked it (spread or ML), we store it.
+          // Gary always makes a pick (spread or ML). Filter totals and PASS.
           // ═══════════════════════════════════════════════════════════════
 
           const qualifiedPicks = sportPicks.filter(p => {
-            // Filter out PASS picks
-            if (p.pick === 'PASS' || p.type === 'pass') {
-              console.log(`  ⏭️ PASS: ${p.homeTeam} vs ${p.awayTeam} - Gary moved on`);
-              if (p.thesis_mechanism) {
-                console.log(`     Reason: ${p.thesis_mechanism}`);
-              }
-              return false;
-            }
-
             // Filter out totals (over/under) - game picks are spread/ML only
             if (p.type === 'total') {
               console.log(`  ❌ Filtered: ${p.pick} (totals not included for game picks)`);
               return false;
             }
+            // Defense-in-depth: catch PASS if orchestrator didn't
+            if (p.type === 'pass' || (p.pick && p.pick.toUpperCase() === 'PASS')) {
+              console.log(`  ❌ Filtered: PASS pick (Gary must always pick a side)`);
+              return false;
+            }
 
             // Determine if this is an underdog pick
-            const isUnderdogPick = 
+            const isUnderdogPick =
               (p.type === 'spread' && p.pick.includes('+')) ||
               (p.type === 'moneyline' && p.odds && (parseInt(p.odds) >= 100 || String(p.odds).startsWith('+')));
-            
-            // Log the pick Gary staked his name on
+
             const pickType = p.type === 'moneyline' ? '💰ML' : '📊SPREAD';
             const dogTag = isUnderdogPick ? '🐕DOG' : '🏆FAV';
             console.log(`  ✅ PICK: ${p.pick} [${pickType}] [${dogTag}]`);
-            if (p.thesis_mechanism) {
-              console.log(`     Thesis: ${p.thesis_mechanism}`);
-            }
 
             return true;
           });
 
-          // Log filtering summary
-          const passCount = sportPicks.filter(p => p.pick === 'PASS' || p.type === 'pass').length;
-          console.log(`\n[${config.name}] Gary's decisions: ${qualifiedPicks.length} PICKS, ${passCount} PASS`)
+          console.log(`\n[${config.name}] ${qualifiedPicks.length} picks ready for filtering`)
 
           // ═══════════════════════════════════════════════════════════════
-          // NBA PICK FILTER (Post-Filter)
-          // Applies rule-based filtering to NBA picks only
           // ═══════════════════════════════════════════════════════════════
-          let finalPicks = qualifiedPicks;
-
-          if (config.name === 'NBA' && qualifiedPicks.length > 0) {
-            console.log(`\n[NBA] Applying post-filter rules...`);
-            const filterResult = await filterNBAPicks(qualifiedPicks);
-            finalPicks = filterResult.kept;
-
-            // Log removed picks
-            if (filterResult.removed.length > 0) {
-              console.log(`\n[NBA] Filtered out ${filterResult.removed.length} picks:`);
-              for (const { pick, reason } of filterResult.removed) {
-                console.log(`  - ${pick.pick} | ${reason}`);
-              }
-            }
-          }
-
+          // STORE PICKS — Gary's output is final (no sport post-filters)
           // ═══════════════════════════════════════════════════════════════
-          // NHL PICK FILTER (Confidence Trimming)
-          // Removes top 2 and bottom 2 confidence picks (overconfidence + low conviction)
-          // Max 5 picks, Min 3 picks. NHL is ML-only (no puck lines)
-          // ═══════════════════════════════════════════════════════════════
-          if (config.name === 'NHL' && qualifiedPicks.length > 0) {
-            console.log(`\n[NHL] Applying confidence trimming filter...`);
-            const filterResult = await filterNHLPicks(qualifiedPicks);
-            finalPicks = filterResult.kept;
+          const finalPicks = qualifiedPicks;
 
-            // Log removed picks
-            if (filterResult.removed.length > 0) {
-              console.log(`\n[NHL] Filtered out ${filterResult.removed.length} picks:`);
-              for (const { pick, reason } of filterResult.removed) {
-                console.log(`  - ${pick.pick} | ${reason}`);
-              }
-            }
-          }
-
-          // ═══════════════════════════════════════════════════════════════
-          // NCAAB PICK FILTER (Conference Diversity)
-          // Per conference: 1 ML, 1 underdog spread, 1 favorite spread
-          // Removes top/bottom confidence first
-          // ═══════════════════════════════════════════════════════════════
-          if (config.name === 'NCAAB' && qualifiedPicks.length > 0) {
-            console.log(`\n[NCAAB] Applying conference diversity filter...`);
-            const filterResult = await filterNCAABPicks(qualifiedPicks);
-            finalPicks = filterResult.kept;
-
-            // Log removed picks
-            if (filterResult.removed.length > 0) {
-              console.log(`\n[NCAAB] Filtered out ${filterResult.removed.length} picks:`);
-              for (const { pick, reason } of filterResult.removed) {
-                console.log(`  - ${pick.pick} | ${reason}`);
-              }
-            }
-          }
-
-          // ═══════════════════════════════════════════════════════════════
-          // STORE FILTERED PICKS
-          // NBA: Rule-based filtering (home favorites, standings, etc.)
-          // NHL: Confidence trimming (remove top 2 + bottom 2, max 5)
-          // NCAAB: Conference diversity (1 ML, 1 dog, 1 fav per conf)
-          // Other sports: All Gary's picks go directly to Supabase
-          // ═══════════════════════════════════════════════════════════════
           if (finalPicks.length > 0) {
             let picksToStore = finalPicks;
 

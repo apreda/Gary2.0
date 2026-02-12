@@ -52,8 +52,7 @@ This means:
 For EACH position, consider:
 1. WHO has the highest ceiling (not floor) for THIS slate?
 2. WHO fits my build thesis?
-3. WHO gives me ownership leverage?
-4. WHO has the best path to smashing value?
+3. WHO has the best path to smashing value?
 
 DON'T just pick the highest projected player.
 DO pick the player with the best CEILING PATH given the situation.
@@ -369,7 +368,6 @@ function parseLineupDecision(text, players, salaryCap, rosterSlots) {
       team: fullPlayer?.team || p.team,
       positions: fullPlayer?.positions || [p.position],
       projected_pts: fullPlayer?.projected_pts || p.projectedPoints,
-      ownership: fullPlayer?.ownership,
       salary: fullPlayer?.salary || p.salary  // Prefer real salary
     };
   });

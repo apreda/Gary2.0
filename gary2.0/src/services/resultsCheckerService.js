@@ -53,8 +53,9 @@ export const resultsCheckerService = {
       // Extract picks from each row
       const allPicks = [];
       for (const row of data) {
-        if (row.picks && Array.isArray(JSON.parse(row.picks))) {
-          const parsedPicks = JSON.parse(row.picks).map(pick => ({
+        const parsed = typeof row.picks === 'string' ? JSON.parse(row.picks) : row.picks;
+        if (parsed && Array.isArray(parsed)) {
+          const parsedPicks = parsed.map(pick => ({
             ...pick,
             pick_id: row.id,
             game_date: targetDate
@@ -106,8 +107,9 @@ export const resultsCheckerService = {
       // Extract picks from each row
       const allPropPicks = [];
       for (const row of data) {
-        if (row.picks && Array.isArray(JSON.parse(row.picks))) {
-          const parsedPicks = JSON.parse(row.picks).map(pick => ({
+        const parsed = typeof row.picks === 'string' ? JSON.parse(row.picks) : row.picks;
+        if (parsed && Array.isArray(parsed)) {
+          const parsedPicks = parsed.map(pick => ({
             ...pick,
             prop_pick_id: row.id,
             game_date: targetDate

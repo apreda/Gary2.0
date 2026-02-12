@@ -161,15 +161,12 @@ import { isGameCompleted, formatStatValue, safeStatValue } from '../sharedUtils.
  */
 
 // NBA: Stats that require Gemini (BDL doesn't have zone/lineup data)
+// NOTE: OPP_EFG_PCT, OPP_TOV_RATE, THREE_PT_DEFENSE, PAINT_SCORING, PAINT_DEFENSE
+// removed — Grounding unreliable for these. Handlers now return BDL proxy guidance.
 const NBA_GEMINI_TOKENS = [
-  'PAINT_SCORING',        // Zone stats - site:nba.com/stats
-  'PAINT_DEFENSE',        // Opponent zone stats
   'MIDRANGE',             // Shot location data
   'LINEUP_NET_RATINGS',   // 5-man lineup performance
   'MINUTES_TREND',        // Fatigue/load management
-  'OPP_EFG_PCT',          // Opponent shooting efficiency
-  'OPP_TOV_RATE',         // Forced turnovers
-  'THREE_PT_DEFENSE',     // Opponent 3PT%
   'OPP_FT_RATE',          // Opponent FT rate
   'TRANSITION_DEFENSE',   // Fast break points allowed
 ];
@@ -280,10 +277,10 @@ export function isGeminiToken(token) {
  */
 export function getAuthoritativeSource(token) {
   // NBA sources
-  if (['PAINT_SCORING', 'PAINT_DEFENSE', 'MIDRANGE', 'LINEUP_NET_RATINGS', 'MINUTES_TREND'].includes(token)) {
+  if (['MIDRANGE', 'LINEUP_NET_RATINGS', 'MINUTES_TREND'].includes(token)) {
     return 'site:nba.com/stats OR site:basketball-reference.com';
   }
-  if (['OPP_EFG_PCT', 'OPP_TOV_RATE', 'THREE_PT_DEFENSE', 'OPP_FT_RATE', 'TRANSITION_DEFENSE'].includes(token)) {
+  if (['OPP_FT_RATE', 'TRANSITION_DEFENSE'].includes(token)) {
     return 'site:basketball-reference.com OR site:nba.com/stats';
   }
   
@@ -498,6 +495,18 @@ function normalizeSportName(sport) {
   return mapping[sport] || sport;
 }
 
+// ═══ Session-level caches: prevent duplicate BDL calls within a single game analysis ═══
+// Each game analysis calls the same team stats 6-12 times via different tokens.
+// These caches ensure each team's data is fetched ONCE and reused.
+const _nbaBaseStatsCache = new Map();
+const _nbaAdvancedStatsCache = new Map();
+
+/** Clear stat caches between games */
+export function clearStatRouterCache() {
+  _nbaBaseStatsCache.clear();
+  _nbaAdvancedStatsCache.clear();
+}
+
 /**
  * Fetch NBA team advanced stats via BDL Season Averages endpoint
  * Returns aggregated team stats from their top players
@@ -507,51 +516,48 @@ async function fetchNBATeamAdvancedStats(teamId, season = null) {
   if (!season) {
     const month = new Date().getMonth() + 1;
     const year = new Date().getFullYear();
-    // Oct(10)-Dec = currentYear, Jan-Sep = previousYear
     season = month >= 10 ? year : year - 1;
   }
-  
+  // Check session cache first (same team+season fetched by multiple tokens)
+  const cacheKey = `${teamId}_${season}`;
+  if (_nbaAdvancedStatsCache.has(cacheKey)) {
+    return _nbaAdvancedStatsCache.get(cacheKey);
+  }
+
   try {
-    // Get active players for team
+    // Get active players for usage concentration + scoring profile
     const playersUrl = `https://api.balldontlie.io/v1/players/active?team_ids[]=${teamId}&per_page=15`;
     const playersResp = await fetch(playersUrl, { headers: { Authorization: BDL_API_KEY } });
-    
+
     if (!playersResp.ok) {
       console.warn(`[Stat Router] Failed to fetch players for team ${teamId}: ${playersResp.status}`);
       return null;
     }
-    
+
     const playersJson = await playersResp.json();
     const players = playersJson.data || [];
-    
-    if (players.length === 0) {
-      console.warn(`[Stat Router] No active players found for team ${teamId}`);
-      return null;
-    }
-    
-    // Get season averages (advanced, usage, scoring) for top 10 players - BDL v2
+
+    // Fetch REAL team-level stats + player-level usage/scoring in parallel
     const topPlayerIds = players.slice(0, 10).map(p => p.id);
     const playerIdParams = topPlayerIds.map(id => `player_ids[]=${id}`).join('&');
 
-    // Fetch advanced, usage, and scoring stats in parallel (BDL v2)
-    let playerStats = [];
+    let teamStats = null;
     let usageStats = [];
     let scoringStats = [];
 
     try {
-      const [advResp, usageResp, scoringResp] = await Promise.all([
-        fetch(`https://api.balldontlie.io/v1/season_averages/general?season=${season}&season_type=regular&type=advanced&${playerIdParams}`,
-          { headers: { Authorization: BDL_API_KEY } }),
+      const [teamResp, usageResp, scoringResp] = await Promise.all([
+        // TEAM-LEVEL advanced stats (real ORtg/DRtg/NetRtg — NOT player-averaged)
+        ballDontLieService.getTeamSeasonAdvanced(teamId, season),
+        // Player-level usage (for usage concentration analysis)
         fetch(`https://api.balldontlie.io/v1/season_averages/general?season=${season}&season_type=regular&type=usage&${playerIdParams}`,
           { headers: { Authorization: BDL_API_KEY } }),
+        // Player-level scoring profile (where they score)
         fetch(`https://api.balldontlie.io/v1/season_averages/general?season=${season}&season_type=regular&type=scoring&${playerIdParams}`,
           { headers: { Authorization: BDL_API_KEY } })
       ]);
 
-      if (advResp.ok) {
-        const advJson = await advResp.json();
-        playerStats = advJson.data || [];
-      }
+      teamStats = teamResp; // Already parsed by ballDontLieService
       if (usageResp.ok) {
         const usageJson = await usageResp.json();
         usageStats = usageJson.data || [];
@@ -561,88 +567,39 @@ async function fetchNBATeamAdvancedStats(teamId, season = null) {
         scoringStats = scoringJson.data || [];
       }
     } catch (err) {
-      console.warn(`[Stat Router] BDL v2 parallel fetch failed: ${err.message}`);
+      console.warn(`[Stat Router] BDL team/player stats fetch failed: ${err.message}`);
     }
 
-    // Fallback to base stats if advanced failed
-    if (playerStats.length === 0) {
-      try {
-        const baseUrl = `https://api.balldontlie.io/v1/season_averages/general?season=${season}&season_type=regular&type=base&${playerIdParams}`;
-        const baseResp = await fetch(baseUrl, { headers: { Authorization: BDL_API_KEY } });
-
-        if (baseResp.ok) {
-          const baseJson = await baseResp.json();
-          playerStats = baseJson.data || [];
-          console.log(`[Stat Router] Using base stats fallback for team ${teamId}`);
-        }
-      } catch (baseErr) {
-        console.warn(`[Stat Router] Base stats also failed: ${baseErr.message}`);
-      }
-    }
-
-    if (playerStats.length === 0) {
-      console.warn(`[Stat Router] No season averages found for team ${teamId}`);
+    if (!teamStats) {
+      console.warn(`[Stat Router] No team season averages found for team ${teamId}`);
       return null;
     }
 
-    // Build lookup maps for usage and scoring by player_id
-    const usageMap = new Map(usageStats.map(u => [u.player_id, u]));
-    const scoringMap = new Map(scoringStats.map(s => [s.player_id, s]));
-
-    // Aggregate team stats (weighted by minutes/games played)
-    let totalMinutes = 0;
-    let weightedORtg = 0, weightedDRtg = 0, weightedNetRtg = 0;
-    let weightedEfg = 0, weightedPace = 0, weightedTsPct = 0;
-    let totalGames = 0;
-
-    // Usage concentration tracking
+    // Build player usage concentration from player-level data
     const playerUsages = [];
-
-    // Scoring profile tracking (weighted)
     let weightedPctPaint = 0, weightedPctMidrange = 0, weightedPct3pt = 0, weightedPctFastbreak = 0;
     let scoringWeightTotal = 0;
 
-    for (const ps of playerStats) {
-      const stats = ps.stats || ps;
-      const playerId = ps.player_id || ps.player?.id;
-      const mins = stats.min || 0;
-      const gp = stats.gp || stats.games_played || 1;
-      const weight = mins * gp;
-      totalMinutes += weight;
-      totalGames = Math.max(totalGames, gp);
-
-      weightedORtg += (stats.off_rating || stats.offensive_rating || 0) * weight;
-      weightedDRtg += (stats.def_rating || stats.defensive_rating || 0) * weight;
-      weightedNetRtg += (stats.net_rating || 0) * weight;
-      weightedEfg += (stats.efg_pct || 0) * weight;
-      weightedPace += (stats.pace || 0) * weight;
-      weightedTsPct += (stats.ts_pct || 0) * weight;
-
-      // Get usage data for this player
-      const usage = usageMap.get(playerId);
-      if (usage) {
-        const usgPct = usage.usg_pct || usage.usage_pct || 0;
-        playerUsages.push({
-          name: `${ps.player?.first_name || ''} ${ps.player?.last_name || ''}`.trim(),
-          usage: usgPct * 100,
-          mins: mins
-        });
-      }
-
-      // Get scoring profile for this player
-      const scoring = scoringMap.get(playerId);
-      if (scoring && weight > 0) {
-        weightedPctPaint += (scoring.pct_pts_paint || 0) * weight;
-        weightedPctMidrange += (scoring.pct_pts_mid_range_2 || 0) * weight;
-        weightedPct3pt += (scoring.pct_pts_3pt || 0) * weight;
-        weightedPctFastbreak += (scoring.pct_pts_fb || 0) * weight;
-        scoringWeightTotal += weight;
-      }
+    for (const u of usageStats) {
+      const usgPct = u.usg_pct || u.usage_pct || 0;
+      playerUsages.push({
+        name: `${u.player?.first_name || ''} ${u.player?.last_name || ''}`.trim(),
+        usage: usgPct * 100,
+        mins: u.min || 0
+      });
     }
 
-    if (totalMinutes === 0) {
-      console.warn(`[Stat Router] No minutes data for team ${teamId}`);
-      return null;
+    for (const s of scoringStats) {
+      const mins = s.min || 0;
+      const gp = s.gp || 1;
+      const weight = mins * gp;
+      if (weight > 0) {
+        weightedPctPaint += (s.pct_pts_paint || 0) * weight;
+        weightedPctMidrange += (s.pct_pts_mid_range_2 || 0) * weight;
+        weightedPct3pt += (s.pct_pts_3pt || 0) * weight;
+        weightedPctFastbreak += (s.pct_pts_fb || 0) * weight;
+        scoringWeightTotal += weight;
+      }
     }
 
     // Calculate usage concentration (star-heavy vs balanced)
@@ -650,7 +607,6 @@ async function fetchNBATeamAdvancedStats(teamId, season = null) {
     const top2Usage = playerUsages.slice(0, 2).reduce((sum, p) => sum + p.usage, 0);
     const top3Usage = playerUsages.slice(0, 3).reduce((sum, p) => sum + p.usage, 0);
 
-    // Determine team structure
     let teamStructure = 'balanced';
     let structureNote = '';
     if (top2Usage >= 55) {
@@ -663,7 +619,6 @@ async function fetchNBATeamAdvancedStats(teamId, season = null) {
       structureNote = `Balanced attack - top 3 at ${top3Usage.toFixed(0)}% combined usage`;
     }
 
-    // Calculate team scoring profile
     const scoringProfile = scoringWeightTotal > 0 ? {
       pct_paint: ((weightedPctPaint / scoringWeightTotal) * 100).toFixed(1) + '%',
       pct_midrange: ((weightedPctMidrange / scoringWeightTotal) * 100).toFixed(1) + '%',
@@ -671,23 +626,24 @@ async function fetchNBATeamAdvancedStats(teamId, season = null) {
       pct_fastbreak: ((weightedPctFastbreak / scoringWeightTotal) * 100).toFixed(1) + '%'
     } : null;
 
-    return {
-      offensive_rating: (weightedORtg / totalMinutes).toFixed(1),
-      defensive_rating: (weightedDRtg / totalMinutes).toFixed(1),
-      net_rating: (weightedNetRtg / totalMinutes).toFixed(1),
-      efg_pct: ((weightedEfg / totalMinutes) * 100).toFixed(1),
-      pace: (weightedPace / totalMinutes).toFixed(1),
-      true_shooting_pct: ((weightedTsPct / totalMinutes) * 100).toFixed(1),
-      games_played: totalGames,
-      players_sampled: playerStats.length,
-      // NEW: Usage concentration (BDL v2)
+    // Use REAL team-level stats from BDL team_season_averages endpoint
+    const result = {
+      offensive_rating: teamStats.off_rating?.toFixed?.(1) || String(teamStats.off_rating),
+      defensive_rating: teamStats.def_rating?.toFixed?.(1) || String(teamStats.def_rating),
+      net_rating: teamStats.net_rating?.toFixed?.(1) || String(teamStats.net_rating),
+      efg_pct: teamStats.efg_pct ? (teamStats.efg_pct * 100).toFixed(1) : 'N/A',
+      pace: teamStats.pace?.toFixed?.(1) || String(teamStats.pace),
+      true_shooting_pct: teamStats.ts_pct ? (teamStats.ts_pct * 100).toFixed(1) : 'N/A',
+      games_played: teamStats.gp || 0,
+      players_sampled: usageStats.length,
+      // Player-level: usage concentration
       usage_concentration: {
         structure: teamStructure,
         top_2_usage: top2Usage.toFixed(1) + '%',
         top_3_usage: top3Usage.toFixed(1) + '%',
         note: structureNote
       },
-      // NEW: Scoring profile (BDL v2)
+      // Player-level: scoring profile
       scoring_profile: scoringProfile,
       top_players: playerUsages.slice(0, 3).map(p => ({
         name: p.name,
@@ -695,6 +651,8 @@ async function fetchNBATeamAdvancedStats(teamId, season = null) {
         mins: p.mins.toFixed(1)
       }))
     };
+    _nbaAdvancedStatsCache.set(cacheKey, result);
+    return result;
   } catch (error) {
     console.warn('[Stat Router] BDL NBA advanced stats fetch failed:', error.message);
     return null;
@@ -738,6 +696,11 @@ async function fetchNBATeamBaseStats(teamId, season = null) {
     const year = new Date().getFullYear();
     // Oct(10)-Dec = currentYear, Jan-Sep = previousYear
     season = month >= 10 ? year : year - 1;
+  }
+  // Check session cache first (same team+season fetched by multiple tokens)
+  const cacheKey = `${teamId}_${season}`;
+  if (_nbaBaseStatsCache.has(cacheKey)) {
+    return _nbaBaseStatsCache.get(cacheKey);
   }
   try {
     // Get active players for team (get more players for better aggregation)
@@ -832,8 +795,8 @@ async function fetchNBATeamBaseStats(teamId, season = null) {
     const oreb_rate = (totalOreb + totalDreb) > 0 ? (totalOreb / (totalOreb + totalDreb)) : 0;
     
     console.log(`[NBA Base Stats] Team ${teamId}: FG3%=${(fg3_pct*100).toFixed(1)}%, FT%=${(ft_pct*100).toFixed(1)}%, FT_RATE=${ft_rate.toFixed(3)}`);
-    
-    return {
+
+    const result = {
       games_played: maxGames,
       players_sampled: playerStats.length,
       // Shooting
@@ -866,6 +829,8 @@ async function fetchNBATeamBaseStats(teamId, season = null) {
         fg3_pct: ps.stats?.fg3_pct ? (ps.stats.fg3_pct * 100).toFixed(1) : 'N/A'
       }))
     };
+    _nbaBaseStatsCache.set(cacheKey, result);
+    return result;
   } catch (error) {
     console.warn('[Stat Router] BDL NBA base stats fetch failed:', error.message);
     return null;
@@ -4284,45 +4249,29 @@ CRITICAL: Only report numbers you find on the teamrankings.com pages above. Thes
     }
   },
 
-  // ===== THREE POINT DEFENSE (Opponent 3PT% - REAL DATA) =====
+  // ===== THREE POINT DEFENSE (BDL proxy — uses DRtg as defensive efficiency proxy) =====
   THREE_PT_DEFENSE: async (bdlSport, home, away, season) => {
-    console.log(`[Stat Router] Fetching THREE_PT_DEFENSE for ${away.name} @ ${home.name}`);
-    
-    // This requires box score data or advanced defensive stats
-    // Use Gemini Grounding for the most accurate data
-    try {
-      const seasonStr = getCurrentSeasonString();
-      const query = `${seasonStr} NBA opponent three point percentage defense stats ${home.name} vs ${away.name}. 
-        What is each team's opponent 3PT% (three point defense)?
-        Which team allows more threes? 
-        Format: Team - Opp 3PT% - Rank`;
-      
-      const groundingResult = await geminiGroundingSearch(query, {
-        systemMessage: 'You are an NBA stats analyst. Provide opponent three-point percentage for both teams.'
-      });
-      
-      return {
-        category: 'Three Point Defense (Opponent 3PT%)',
-        source: 'Gemini Grounding (Live Search)',
-        home: {
-          team: home.full_name || home.name
-        },
-        away: {
-          team: away.full_name || away.name
-        },
-        grounding_data: groundingResult?.content || 'Data unavailable',
-        INVESTIGATE: `🔍 Teams that allow high opponent 3PT% give up open looks. Check if this is scheme (switching, drop coverage) or personnel (slow perimeter defenders).`,
-        note: 'League average opponent 3PT% is ~36%. Elite perimeter defenses hold opponents under 34%.'
-      };
-    } catch (error) {
-      console.error(`[Stat Router] Error fetching THREE_PT_DEFENSE:`, error.message);
-      return {
-        category: 'Three Point Defense',
-        error: 'Data unavailable - check defensive stats in Scout Report',
-        home: { team: home.full_name || home.name },
-        away: { team: away.full_name || away.name }
-      };
-    }
+    console.log(`[Stat Router] Fetching THREE_PT_DEFENSE (proxy via DRtg) for ${away.name} @ ${home.name}`);
+    const [homeStats, awayStats] = await Promise.all([
+      fetchNBATeamAdvancedStats(home.id, season),
+      fetchNBATeamAdvancedStats(away.id, season)
+    ]);
+    return {
+      category: 'Three Point Defense (Proxy: Defensive Rating)',
+      source: 'Ball Don\'t Lie API (Advanced)',
+      proxy_note: 'Opponent 3PT% not available via BDL. DRtg is the best available proxy — lower DRtg correlates with better perimeter defense.',
+      home: {
+        team: home.full_name || home.name,
+        defensive_rating: homeStats?.defensive_rating || 'N/A',
+        net_rating: homeStats?.net_rating || 'N/A'
+      },
+      away: {
+        team: away.full_name || away.name,
+        defensive_rating: awayStats?.defensive_rating || 'N/A',
+        net_rating: awayStats?.net_rating || 'N/A'
+      },
+      INVESTIGATE: 'Lower DRtg = better overall defense. Compare these values to assess which team defends better.'
+    };
   },
 
   // ===== OPPONENT FREE THROW RATE (REAL DATA) =====
@@ -4365,74 +4314,56 @@ CRITICAL: Only report numbers you find on the teamrankings.com pages above. Thes
     }
   },
 
-  // ===== OPPONENT EFFECTIVE FG% (REAL DATA - Defensive Shooting Efficiency) =====
+  // ===== OPPONENT EFFECTIVE FG% (BDL proxy — uses DRtg + own eFG% as context) =====
   OPP_EFG_PCT: async (bdlSport, home, away, season) => {
-    console.log(`[Stat Router] Fetching OPP_EFG_PCT for ${away.name} @ ${home.name}`);
-    
-    try {
-      const seasonStr = getCurrentSeasonString();
-      const query = `${seasonStr} NBA defensive efficiency opponent effective field goal percentage ${home.name} vs ${away.name}.
-        What is each team's OPPONENT eFG% (how efficiently opponents shoot AGAINST them)?
-        Lower = better defense. Include defensive ranking if available.
-        Format: Team - Opp eFG% - Defensive Rank`;
-      
-      const groundingResult = await geminiGroundingSearch(query, {
-        systemMessage: 'You are an NBA defensive stats analyst. Provide opponent effective field goal percentage (defensive efficiency) for both teams. Lower opponent eFG% means better defense.'
-      });
-      
-      return {
-        category: 'Opponent Shooting Efficiency (Defensive)',
-        source: 'Gemini Grounding (Live Search)',
-        home: { team: home.full_name || home.name },
-        away: { team: away.full_name || away.name },
-        grounding_data: groundingResult?.content || 'Data unavailable',
-        INVESTIGATE: `🔍 Lower Opp eFG% = better perimeter defense. Teams that allow high opponent eFG% give up easy shots.`,
-        note: 'League average Opp eFG% is ~54%. Elite defenses hold opponents under 52%.'
-      };
-    } catch (error) {
-      console.error(`[Stat Router] Error fetching OPP_EFG_PCT:`, error.message);
-      return {
-        category: 'Opponent Shooting Efficiency',
-        error: 'Data unavailable',
-        home: { team: home.full_name || home.name },
-        away: { team: away.full_name || away.name }
-      };
-    }
+    console.log(`[Stat Router] Fetching OPP_EFG_PCT (proxy via DRtg) for ${away.name} @ ${home.name}`);
+    const [homeStats, awayStats] = await Promise.all([
+      fetchNBATeamAdvancedStats(home.id, season),
+      fetchNBATeamAdvancedStats(away.id, season)
+    ]);
+    return {
+      category: 'Opponent Shooting Efficiency (Proxy: DRtg + eFG%)',
+      source: 'Ball Don\'t Lie API (Advanced)',
+      proxy_note: 'Opponent eFG% not available via BDL. DRtg is the best proxy for defensive shooting efficiency. Own eFG% provided for context.',
+      home: {
+        team: home.full_name || home.name,
+        defensive_rating: homeStats?.defensive_rating || 'N/A',
+        efg_pct: homeStats?.efg_pct || 'N/A'
+      },
+      away: {
+        team: away.full_name || away.name,
+        defensive_rating: awayStats?.defensive_rating || 'N/A',
+        efg_pct: awayStats?.efg_pct || 'N/A'
+      },
+      INVESTIGATE: 'Lower DRtg = opponents shoot worse against this team. Compare both teams\' defensive quality.'
+    };
   },
 
-  // ===== OPPONENT TURNOVER RATE (REAL DATA - Forced Turnovers) =====
+  // ===== OPPONENT TURNOVER RATE (BDL proxy — uses own TOV rate + base stats for steals) =====
   OPP_TOV_RATE: async (bdlSport, home, away, season) => {
-    console.log(`[Stat Router] Fetching OPP_TOV_RATE for ${away.name} @ ${home.name}`);
-    
-    try {
-      const seasonStr = getCurrentSeasonString();
-      const query = `${seasonStr} NBA defensive stats opponent turnover rate steals per game ${home.name} vs ${away.name}.
-        What is each team's opponent turnover rate (turnovers they FORCE)?
-        Include steals per game and deflections if available.
-        Higher = better at forcing turnovers.`;
-      
-      const groundingResult = await geminiGroundingSearch(query, {
-        systemMessage: 'You are an NBA defensive stats analyst. Provide opponent turnover rate (turnovers forced) and steals data for both teams.'
-      });
-      
-      return {
-        category: 'Forced Turnovers (Defensive)',
-        source: 'Gemini Grounding (Live Search)',
-        home: { team: home.full_name || home.name },
-        away: { team: away.full_name || away.name },
-        grounding_data: groundingResult?.content || 'Data unavailable',
-        INVESTIGATE: `🔍 Higher Opp TOV% = better at forcing turnovers. Check if this team's defense creates chaos or plays conservatively.`,
-        note: 'League average forced TOV rate is ~13%. Elite turnover-forcing defenses are at 15%+.'
-      };
-    } catch (error) {
-      console.error(`[Stat Router] Error fetching OPP_TOV_RATE:`, error.message);
-      return {
-        category: 'Forced Turnovers',
-        error: 'Data unavailable',
-        home: { team: home.full_name || home.name },
-        away: { team: away.full_name || away.name }
-      };
-    }
+    console.log(`[Stat Router] Fetching OPP_TOV_RATE (proxy via steals + TOV rate) for ${away.name} @ ${home.name}`);
+    const [homeAdvanced, awayAdvanced, homeBase, awayBase] = await Promise.all([
+      fetchNBATeamAdvancedStats(home.id, season),
+      fetchNBATeamAdvancedStats(away.id, season),
+      fetchNBATeamBaseStats(home.id, season),
+      fetchNBATeamBaseStats(away.id, season)
+    ]);
+    return {
+      category: 'Forced Turnovers (Proxy: Steals + Turnover Rate)',
+      source: 'Ball Don\'t Lie API (Advanced + Base)',
+      proxy_note: 'Opponent turnover rate not available via BDL. Team steals per game and own turnover rate are the best available proxies for defensive disruption.',
+      home: {
+        team: home.full_name || home.name,
+        turnover_rate: homeAdvanced?.tov_pct || 'N/A',
+        steals_per_game: homeBase?.stl || 'N/A'
+      },
+      away: {
+        team: away.full_name || away.name,
+        turnover_rate: awayAdvanced?.tov_pct || 'N/A',
+        steals_per_game: awayBase?.stl || 'N/A'
+      },
+      INVESTIGATE: 'High steals + low own turnover rate = disruptive defense that protects the ball. Compare both teams.'
+    };
   },
 
   // ===== PACE LAST 10 GAMES (REAL DATA - Calculated) =====
@@ -4609,39 +4540,33 @@ CRITICAL: Only report numbers you find on the teamrankings.com pages above. Thes
     }
   },
 
-  // ===== PAINT SCORING (REAL DATA) =====
+  // ===== PAINT SCORING (BDL proxy — uses FG% and 3PT% ratio from base stats) =====
   PAINT_SCORING: async (bdlSport, home, away, season) => {
-    console.log(`[Stat Router] Fetching PAINT_SCORING for ${away.name} @ ${home.name}`);
-    
-    try {
-      const seasonStr = getCurrentSeasonString();
-      const query = `${seasonStr} NBA points in the paint per game ${home.name} vs ${away.name}.
-        How many points in the paint does each team score per game?
-        Include paint attempts and paint FG% if available.
-        Which team is more paint-dominant?`;
-      
-      const groundingResult = await geminiGroundingSearch(query, {
-        systemMessage: 'You are an NBA offensive stats analyst. Provide points in the paint data for both teams.'
-      });
-      
-      return {
-        category: 'Points in the Paint',
-        source: 'Gemini Grounding (Live Search)',
-        home: { team: home.full_name || home.name },
-        away: { team: away.full_name || away.name },
-        grounding_data: groundingResult?.content || 'Data unavailable',
-        INVESTIGATE: `How does scoring profile interact with defensive matchup? Check opponent paint defense.`,
-        note: 'League average is ~46 paint points/game. Elite paint teams score 50+.'
-      };
-    } catch (error) {
-      console.error(`[Stat Router] Error fetching PAINT_SCORING:`, error.message);
-      return {
-        category: 'Points in the Paint',
-        error: 'Data unavailable',
-        home: { team: home.full_name || home.name },
-        away: { team: away.full_name || away.name }
-      };
-    }
+    console.log(`[Stat Router] Fetching PAINT_SCORING (proxy via FG%/3PT% ratio) for ${away.name} @ ${home.name}`);
+    const [homeBase, awayBase] = await Promise.all([
+      fetchNBATeamBaseStats(home.id, season),
+      fetchNBATeamBaseStats(away.id, season)
+    ]);
+    return {
+      category: 'Points in the Paint (Proxy: FG% vs 3PT% Ratio)',
+      source: 'Ball Don\'t Lie API (Base)',
+      proxy_note: 'Points in the paint not available via BDL. FG% vs 3PT% ratio is the best proxy — high FG% with moderate 3PT% indicates paint-dominant scoring.',
+      home: {
+        team: home.full_name || home.name,
+        fg_pct: homeBase?.fg_pct || 'N/A',
+        fg3_pct: homeBase?.fg3_pct || 'N/A',
+        fga: homeBase?.fga || 'N/A',
+        fg3a: homeBase?.fg3a || 'N/A'
+      },
+      away: {
+        team: away.full_name || away.name,
+        fg_pct: awayBase?.fg_pct || 'N/A',
+        fg3_pct: awayBase?.fg3_pct || 'N/A',
+        fga: awayBase?.fga || 'N/A',
+        fg3a: awayBase?.fg3a || 'N/A'
+      },
+      INVESTIGATE: 'High FG% with low 3PA/FGA ratio = paint-dominant. Compare both teams\' inside vs outside scoring profiles.'
+    };
   },
 
   // ===== MIDRANGE SHOOTING (REAL DATA) =====
@@ -4679,39 +4604,31 @@ CRITICAL: Only report numbers you find on the teamrankings.com pages above. Thes
     }
   },
 
-  // ===== PAINT DEFENSE (REAL DATA) =====
+  // ===== PAINT DEFENSE (BDL proxy — uses DRtg + blocks from base stats) =====
   PAINT_DEFENSE: async (bdlSport, home, away, season) => {
-    console.log(`[Stat Router] Fetching PAINT_DEFENSE for ${away.name} @ ${home.name}`);
-    
-    try {
-      const seasonStr = getCurrentSeasonString();
-      const query = `${seasonStr} NBA opponent points in the paint allowed defense ${home.name} vs ${away.name}.
-        How many points in the paint does each team ALLOW per game?
-        Include blocks per game, rim protection stats if available.
-        Which team has better paint defense?`;
-      
-      const groundingResult = await geminiGroundingSearch(query, {
-        systemMessage: 'You are an NBA defensive stats analyst. Provide paint defense data (opponent points in paint allowed) for both teams.'
-      });
-      
-      return {
-        category: 'Paint Defense (Rim Protection)',
-        source: 'Gemini Grounding (Live Search)',
-        home: { team: home.full_name || home.name },
-        away: { team: away.full_name || away.name },
-        grounding_data: groundingResult?.content || 'Data unavailable',
-        INVESTIGATE: `What does paint defense data suggest about opponent adjustment? Check how teams score against this defense.`,
-        note: 'League average allowed paint PPG is ~46. Elite rim protectors hold opponents under 44.'
-      };
-    } catch (error) {
-      console.error(`[Stat Router] Error fetching PAINT_DEFENSE:`, error.message);
-      return {
-        category: 'Paint Defense',
-        error: 'Data unavailable',
-        home: { team: home.full_name || home.name },
-        away: { team: away.full_name || away.name }
-      };
-    }
+    console.log(`[Stat Router] Fetching PAINT_DEFENSE (proxy via DRtg + blocks) for ${away.name} @ ${home.name}`);
+    const [homeAdvanced, awayAdvanced, homeBase, awayBase] = await Promise.all([
+      fetchNBATeamAdvancedStats(home.id, season),
+      fetchNBATeamAdvancedStats(away.id, season),
+      fetchNBATeamBaseStats(home.id, season),
+      fetchNBATeamBaseStats(away.id, season)
+    ]);
+    return {
+      category: 'Paint Defense (Proxy: DRtg + Blocks)',
+      source: 'Ball Don\'t Lie API (Advanced + Base)',
+      proxy_note: 'Paint defense data not available via BDL. DRtg combined with blocks per game is the best proxy for rim protection.',
+      home: {
+        team: home.full_name || home.name,
+        defensive_rating: homeAdvanced?.defensive_rating || 'N/A',
+        blocks_per_game: homeBase?.blk || 'N/A'
+      },
+      away: {
+        team: away.full_name || away.name,
+        defensive_rating: awayAdvanced?.defensive_rating || 'N/A',
+        blocks_per_game: awayBase?.blk || 'N/A'
+      },
+      INVESTIGATE: 'High blocks + low DRtg = strong paint defense. Compare both teams\' rim protection.'
+    };
   },
 
   // ===== TRANSITION DEFENSE (REAL DATA) =====

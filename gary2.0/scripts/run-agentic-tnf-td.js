@@ -17,10 +17,12 @@ const { perplexityService } = await import('../src/services/perplexityService.js
 const SPORT_KEY = 'americanfootball_nfl';
 
 function getESTDate() {
+  // DST-safe: Use Intl with America/New_York timezone
   const now = new Date();
-  const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-  const est = new Date(utc + (3600000 * -5));
-  return est.toISOString().split('T')[0];
+  const options = { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' };
+  const estDate = new Intl.DateTimeFormat('en-US', options).format(now);
+  const [month, day, year] = estDate.split('/');
+  return `${year}-${month}-${day}`;
 }
 
 // Check if today is Thursday in EST

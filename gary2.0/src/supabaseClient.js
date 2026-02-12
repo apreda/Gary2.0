@@ -76,37 +76,14 @@ export const storeDailyPicks = async (dateString, picksArray) => {
   // Use service role key when available to bypass RLS on server
   const adminKey = supabaseServiceKey || supabaseKey;
 
-  // 1. Delete any existing entry for this date
-  console.log(`STORAGE FIX: Removing existing daily picks for ${dateString}...`);
+  // Atomic upsert — no separate DELETE (prevents data loss if INSERT fails)
+  console.log(`STORAGE: Upserting ${sanitizedPicks.length} picks for ${dateString}...`);
   try {
-    await axios({
-      method: 'DELETE',
-      url: `${supabaseUrl}/rest/v1/daily_picks`,
-      params: {
-        date: `eq.${dateString}`
-      },
-      headers: {
-        'apikey': adminKey,
-        'Authorization': `Bearer ${adminKey}`,
-        'Content-Type': 'application/json'
-      }
-    });
-    console.log('Successfully deleted any existing records');
-  } catch (deleteError) {
-    console.warn('Delete operation warning:', deleteError.message);
-    // Continue anyway - the record might not exist yet
-  }
-
-  // 2. Add the new picks using direct REST endpoint
-  console.log(`STORAGE FIX: Storing ${sanitizedPicks.length} picks via direct API...`);
-  try {
-    // Create minimal record to avoid PostgreSQL JSON handling issues
     const payload = {
       date: dateString,
-      picks: sanitizedPicks // Pass as JSON array, not string
+      picks: sanitizedPicks
     };
 
-    // Use axios for more reliable network handling
     const response = await axios({
       method: 'POST',
       url: `${supabaseUrl}/rest/v1/daily_picks`,
@@ -115,11 +92,14 @@ export const storeDailyPicks = async (dateString, picksArray) => {
         'apikey': adminKey,
         'Authorization': `Bearer ${adminKey}`,
         'Content-Type': 'application/json',
-        'Prefer': 'return=minimal'
+        'Prefer': 'resolution=merge-duplicates,return=minimal'
+      },
+      params: {
+        on_conflict: 'date'
       }
     });
 
-    console.log('STORAGE FIX: Successfully stored picks via direct API');
+    console.log('STORAGE: Successfully upserted picks via direct API');
     return { success: true };
   } catch (insertError) {
     console.error('Direct API insert failed:', insertError.message);

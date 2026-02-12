@@ -248,15 +248,28 @@ export const ballDontLieOddsService = {
           if (totalsOutcomes.length) markets.push({ key: 'totals', outcomes: totalsOutcomes });
           return { key: v.vendor, title: v.vendor, markets };
         });
+        let commenceTime = g.datetime || g.date || g.commence_time || null;
+        if (!commenceTime) {
+          console.warn(`[BDL NCAAF] Game ${g.id} has no date/time — skipping`);
+          return null;
+        }
+        // Date-only → estimated time (20:00 UTC = 3 PM EST, typical NCAAF kickoff)
+        let estimated_time = false;
+        if (typeof commenceTime === 'string' && commenceTime.length === 10 && !commenceTime.includes('T')) {
+          commenceTime = `${commenceTime}T20:00:00.000Z`;
+          estimated_time = true;
+          console.log(`[BDL NCAAF] Estimated time for game ${g.id}: ${commenceTime}`);
+        }
         return {
           id: g.id,
           sport_key: sportKey,
           home_team: mapTeamName(g.home_team),
           away_team: mapTeamName(g.visitor_team || g.away_team),
-          commence_time: g.datetime || g.date || g.commence_time || new Date().toISOString(),
+          commence_time: commenceTime,
+          estimated_time,
           bookmakers
         };
-      });
+      }).filter(Boolean);
     }
     // NCAAB: use sport-specific v1 odds endpoint; odds start 2025-26 and not guaranteed per docs
     // NCAAB FIX: BDL stores games by UTC date, but we want EST date
@@ -362,16 +375,18 @@ export const ballDontLieOddsService = {
           return { key: v.vendor, title: v.vendor, markets };
         });
 
-        // NCAAB dates: BDL stores times in UTC
-        // We pass through the time as-is and let the date filter in run-agentic-picks.js
-        // convert to EST and filter correctly
-        let commenceTime = g.datetime || g.commence_time || g.date || new Date().toISOString();
+        let commenceTime = g.datetime || g.commence_time || g.date || null;
+        if (!commenceTime) {
+          console.warn(`[BDL NCAAB] Game ${g.id} has no date/time — skipping`);
+          return null;
+        }
 
-        // Only fix date-only strings (no time component) - these genuinely need a time
+        // Date-only → estimated time (22:00 UTC = 5 PM EST, typical NCAAB evening game)
+        let estimated_time = false;
         if (typeof commenceTime === 'string' && commenceTime.length === 10 && !commenceTime.includes('T')) {
-          // Use 22:00 UTC = 5 PM EST - typical game time
           commenceTime = `${commenceTime}T22:00:00.000Z`;
-          console.log(`[BDL NCAAB] Fixed date-only time for game ${g.id}: ${commenceTime}`);
+          estimated_time = true;
+          console.log(`[BDL NCAAB] Estimated time for game ${g.id}: ${commenceTime}`);
         }
 
         return {
@@ -380,9 +395,10 @@ export const ballDontLieOddsService = {
           home_team: mapTeamName(g.home_team),
           away_team: mapTeamName(g.visitor_team || g.away_team),
           commence_time: commenceTime,
+          estimated_time,
           bookmakers
         };
-      });
+      }).filter(Boolean);
     }
     // NHL: Use dual-date fetching like NCAAB to capture all EST games
     // Games at 7pm+ EST are stored under the NEXT UTC date
@@ -483,9 +499,16 @@ export const ballDontLieOddsService = {
           return { key: v.vendor, title: v.vendor, markets };
         });
 
-        let commenceTime = g.datetime || g.commence_time || g.date || new Date().toISOString();
+        let commenceTime = g.datetime || g.commence_time || g.date || null;
+        if (!commenceTime) {
+          console.warn(`[BDL NHL] Game ${g.id} has no date/time — skipping`);
+          return null;
+        }
+        let estimated_time = false;
         if (typeof commenceTime === 'string' && commenceTime.length === 10 && !commenceTime.includes('T')) {
           commenceTime = `${commenceTime}T00:00:00.000Z`;
+          estimated_time = true;
+          console.log(`[BDL NHL] Estimated time for game ${g.id}: ${commenceTime}`);
         }
 
         return {
@@ -494,9 +517,10 @@ export const ballDontLieOddsService = {
           home_team: mapTeamName(g.home_team),
           away_team: mapTeamName(g.visitor_team || g.away_team),
           commence_time: commenceTime,
+          estimated_time,
           bookmakers
         };
-      });
+      }).filter(Boolean);
     }
     // Fetch games (v1 multi-sport wrapper) and v2 odds (date-based)
     const games = await ballDontLieService.getGames(sportKey, { dates: [dateStr], per_page: 100 }, 10);
@@ -713,17 +737,21 @@ export const ballDontLieOddsService = {
       }
 
       // Fallback: If date is just YYYY-MM-DD format, add reasonable game time
+      let estimated_time = false;
       if (!commenceTime && g.date) {
-        // Check if it's a simple date string (no T)
         if (!g.date.includes('T')) {
           const dateParts = g.date.split('-');
           const gameDate = new Date(Date.UTC(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]), 20, 0, 0));
           commenceTime = gameDate.toISOString();
-          console.log(`[BDL Odds] WARNING: No datetime, using date+offset: ${g.date} -> ${commenceTime}`);
+          estimated_time = true;
+          console.log(`[BDL Odds] Estimated time for game ${g.id}: ${g.date} -> ${commenceTime}`);
         }
       }
 
-      commenceTime = commenceTime || new Date().toISOString();
+      if (!commenceTime) {
+        console.warn(`[BDL Odds] Game ${g.id} (${awayTeamName} @ ${homeTeamName}) has no date/time — skipping`);
+        return null;
+      }
 
       // DEBUG: Log final commence_time
       if (sportKey === 'americanfootball_nfl') {
@@ -736,6 +764,7 @@ export const ballDontLieOddsService = {
         home_team: homeTeamName,
         away_team: awayTeamName,
         commence_time: commenceTime,
+        estimated_time,
         bookmakers
       };
       if (sportKey === 'americanfootball_nfl') {
@@ -746,7 +775,7 @@ export const ballDontLieOddsService = {
         }
       }
       return result;
-    });
+    }).filter(Boolean);
   },
 
   /**

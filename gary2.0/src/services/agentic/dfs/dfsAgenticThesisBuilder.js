@@ -75,8 +75,7 @@ Based on the slate investigation, form your thesis:
 1. Which ARCHETYPE fits this slate and why?
 2. Which GAMES are you targeting and what makes them special?
 3. What USAGE SITUATIONS are you exploiting?
-4. What OWNERSHIP LEVERAGE do you have?
-5. What needs to go RIGHT for this thesis to WIN?
+4. What needs to go RIGHT for this thesis to WIN?
 
 Be specific. Have conviction. This is YOUR thesis.
 `;
@@ -138,7 +137,6 @@ function buildThesisRequest(slateAnalysis, context) {
 
   // Calculate slate characteristics
   const avgSalary = players?.reduce((sum, p) => sum + (p.salary || 0), 0) / (players?.length || 1);
-  const highOwnershipPlayers = players?.filter(p => (p.ownership || 0) > 25) || [];
 
   return `
 ## SLATE INVESTIGATION COMPLETE
@@ -161,9 +159,6 @@ ${formatStackTargets(stackTargets)}
 ### GAME ENVIRONMENTS
 ${formatGameEnvironments(gameEnvironments)}
 
-### OWNERSHIP CONCENTRATION
-High-owned players (>25%): ${highOwnershipPlayers.map(p => `${p.name} (${p.ownership}%)`).join(', ') || 'None identified'}
-
 ### RAW INVESTIGATION NOTES
 ${rawAnalysis?.slice(0, 2000) || 'No additional notes'}
 
@@ -180,9 +175,7 @@ Based on this investigation:
 
 3. What USAGE SITUATIONS are you exploiting?
 
-4. What's your OWNERSHIP LEVERAGE strategy?
-
-5. CEILING SCENARIO: How does this lineup score ${winningTargets?.toWin || 380}+ and WIN?
+4. CEILING SCENARIO: How does this lineup score ${winningTargets?.toWin || 380}+ and WIN?
 
 OUTPUT YOUR THESIS AS JSON:
 {
@@ -192,7 +185,6 @@ OUTPUT YOUR THESIS AS JSON:
   "usageSituations": [
     { "player": "Austin Reaves", "situation": "LeBron OUT creates usage vacuum" }
   ],
-  "ownershipStrategy": "Fading overpriced chalk on X, leveraging underowned Y",
   "winCondition": "How this lineup scores 380+ and wins",
   "keyAssumptions": ["LAL-SAC stays close and high-scoring", "Reaves usage boost materializes"],
   "risks": ["If LAL blows out SAC, starters rest"]
@@ -280,7 +272,6 @@ function parseThesisResponse(text) {
     thesis: parsed.thesis,
     targetGames: parsed.targetGames || [],
     usageSituations: parsed.usageSituations || [],
-    ownershipStrategy: parsed.ownershipStrategy || '',
     winCondition: parsed.winCondition || '',
     keyAssumptions: parsed.keyAssumptions || [],
     risks: parsed.risks || [],

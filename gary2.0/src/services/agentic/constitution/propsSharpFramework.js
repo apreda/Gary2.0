@@ -240,25 +240,43 @@ export const STAT_AWARENESS = `
 <STAT_AWARENESS>
 ## STAT AWARENESS: USE THE RIGHT STATS FOR THE PROP
 
-Different props have different volume drivers. Using the wrong stats leads you astray.
+### TIER 1 — PREDICTIVE (Primary evidence for picks)
+These stats predict tonight's performance. Use as PRIMARY reasons for your pick.
 
 **NBA:**
-- Points → FGA, minutes, usage rate, FTA
-- Assists → Usage, teammate FG%, touches, pace
-- Rebounds → Minutes, REB%, contested reb rate
-- 3PM → 3PA, catch-and-shoot opportunities
+- Points → Usage Rate, True Shooting %, eFG%, Minutes, FGA
+- Assists → Usage Rate, teammate FG%, touches, pace
+- Rebounds → Minutes, REB%, contested reb rate, per-minute production
+- 3PM → 3PA, catch-and-shoot opportunities, eFG% from 3
+- ALL props → L5 game logs (recent form), per-minute production rates, matchup-specific data (vs specific defenders)
 
 **NFL:**
-- Receiving yards → Target share, air yards share, route participation
-- Rushing yards → Carry share, snap %, game script
-- Receptions → Target share, ADOT, route participation
+- Receiving yards → Target share, air yards share, route participation, ADOT
+- Rushing yards → Carry share, snap %, EPA/rush
+- Receptions → Target share, route participation, catch rate
 - TDs → Red zone target/carry share (NOT overall volume)
 
 **NHL:**
 - SOG → iCF (shot attempts), PP TOI, PP1 status
-- Points → PP TOI, PP1 status, linemates
-- PP Points → PP TOI, PP1 status, team PP opportunities, opponent PK
-- Saves → Opponent shot volume, pace, team PK quality
+- Points → PP TOI, PP1 status, linemates, xG
+- Goals → xG, shooting %, HDCF
+- Saves → Opponent shot volume, xGA, team PK quality
+
+### TIER 2 — INVESTIGATION/CONTEXT
+Use to understand situations. Must confirm with TIER 1 before making decisions.
+- Fresh injuries (0-3 days) — only if game logs show measurable shift
+- Game script projections (pace, blowout risk)
+- Line movement (opening vs current)
+- Matchup-specific data (specific defenders, scheme tendencies)
+
+### TIER 3 — DESCRIPTIVE (FORBIDDEN as reasons for picks)
+These describe the past but don't predict the future.
+- Season averages without recent context
+- "Career highs" or "personal bests"
+- Narrative claims without data backing
+- Overall records or streaks
+
+**Ask: Is this stat PREDICTIVE of tonight's performance, or just DESCRIPTIVE of the past?**
 
 If you find yourself using stats that don't connect to the prop's actual driver, STOP.
 High-danger chances tell you about goals, not PP points.
@@ -270,27 +288,25 @@ You may find exceptions. Investigate why before proceeding.
 
 export const INJURY_AWARENESS = `
 <INJURY_AWARENESS>
-## INJURY AWARENESS: VOLUME FLOOR IMPACT
+## INJURY AWARENESS: TIMING IS EVERYTHING
 
-For props, injury status affects the volume floor directly.
+**BEFORE citing ANY injury as a factor, ask yourself these questions:**
 
-**PLAYER INJURY STATUS:**
-- HEALTHY: Full go. No adjustment needed.
-- PROBABLE: Likely plays. Investigate the specific injury and how it affects this prop type.
-- QUESTIONABLE: High uncertainty. Consider both void risk AND limitation if they play.
-- OUT: Skip. But check for usage vacuum created.
+1. **"How long has this player been out?"**
+   - FRESH (0-3 days): Usage patterns are STILL SHIFTING. The prop lines may not fully reflect the change yet. INVESTIGATE recent game logs to see how usage redistributed.
+   - STALE (4+ days): The lines have ALREADY adjusted. Usage has been redistributed. This is NOT an edge — it is the baseline the props are set from.
+   - SEASON-LONG: 100% IRRELEVANT. Every stat, every prop line, every projection already reflects this player's absence. DO NOT mention it.
 
-**TEAMMATE INJURIES - CHECK DURATION:**
-- RECENT (< 2 weeks): Usage patterns still shifting. INVESTIGATE recent game logs.
-- SEASON-LONG (1-2+ months): Usage has been REDISTRIBUTED. Look at RECENT FORM, not season averages.
-- DO NOT ASSUME teammate injuries help or hurt this player. INVESTIGATE the actual impact.
+2. **"Are the prop lines ALREADY set with this player out?"**
+   - If YES → citing their absence is explaining why the line exists, not finding an edge
+   - If NO (just ruled out today/yesterday) → INVESTIGATE how recent game logs shifted
 
-**INVESTIGATION REQUIRED:**
-- How does this player's role change? Check their RECENT game logs.
-- Does the data support increased opportunity, or has someone else absorbed usage?
-- Let the data show you the impact - do not prescribe outcomes.
+3. **"Does the DATA show a usage shift, or am I assuming one?"**
+   - DO NOT ASSUME that a teammate being out helps or hurts a player
+   - CHECK the actual game logs from games without the injured player
+   - If you can't find data showing a shift, there IS no shift to cite
 
-You decide how much injury matters for THIS specific prop based on your investigation.
+**THE RULE:** If you can't answer "this player was ruled out in the last 1-3 days AND the game logs show a measurable usage change," then DO NOT cite the injury as a factor in your pick.
 </INJURY_AWARENESS>
 `;
 

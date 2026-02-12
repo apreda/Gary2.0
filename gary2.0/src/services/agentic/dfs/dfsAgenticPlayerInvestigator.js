@@ -204,13 +204,35 @@ Thesis: ${buildThesis.thesis?.slice(0, 200) || 'No specific thesis'}
 ## POSITION TO INVESTIGATE: ${position}
 
 ## CANDIDATES (sorted by projected points)
-${candidates.map((p, i) => `
-${i + 1}. ${p.name} - $${p.salary}
-   Team: ${p.team} vs ${p.opponent || 'TBD'}
-   Projected: ${p.projected_pts?.toFixed(1) || '?'} pts
-   Ownership: ${p.ownership || '?'}%
-   Season: ${p.ppg?.toFixed(1) || '?'} PPG, ${p.mpg?.toFixed(1) || '?'} MPG
-`).join('\n')}
+${candidates.map((p, i) => {
+  let line = `${i + 1}. ${p.name} - $${p.salary}`;
+  line += `\n   Team: ${p.team} vs ${p.opponent || 'TBD'}`;
+  line += `\n   Season: ${p.ppg?.toFixed(1) || '?'} PPG / ${p.rpg?.toFixed(1) || '?'} RPG / ${p.apg?.toFixed(1) || '?'} APG / ${p.mpg?.toFixed(1) || '?'} MPG`;
+  // Advanced efficiency (from Tank01 roster enrichment)
+  if (p.tsPercent || p.efgPercent) {
+    line += `\n   Efficiency: TS% ${p.tsPercent?.toFixed(1) || '?'}, eFG% ${p.efgPercent?.toFixed(1) || '?'}`;
+  }
+  // Matchup DvP context (from Tank01 team defense)
+  if (p.matchupDvP) {
+    line += `\n   Matchup DvP: Opponent allows ${p.matchupDvP.oppDvpPts?.toFixed(1) || '?'} PPG to ${p.matchupDvP.position}s`;
+  }
+  // Benchmark projection
+  if (p.benchmarkProjection) {
+    line += `\n   Benchmark: ${p.benchmarkProjection.toFixed(1)} FPTS (industry)`;
+  }
+  // Injury/status context
+  if (p.injuryContext) {
+    line += `\n   Injury Note: ${p.injuryContext}`;
+  }
+  if (p.status && p.status !== 'HEALTHY') {
+    line += `\n   Status: ${p.status}`;
+  }
+  // News context
+  if (p.newsContext && p.newsContext.length > 0) {
+    line += `\n   News: ${p.newsContext[0]}`;
+  }
+  return line;
+}).join('\n\n')}
 
 ## YOUR TASK
 Investigate EACH candidate:

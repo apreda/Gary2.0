@@ -177,11 +177,13 @@ function buildAnalysisRequest(context) {
     teamRosters[team].push(player);
   }
 
-  // Format games
+  // Format games (include O/U totals from BDL — Change 7)
   const gamesStr = (games || []).map(g => {
-    const home = g.homeTeam || g.home_team?.abbreviation || 'HOME';
-    const away = g.awayTeam || g.away_team?.abbreviation || 'AWAY';
-    return `${away} @ ${home}`;
+    const home = g.homeTeam || g.home_team || 'HOME';
+    const away = g.awayTeam || g.visitor_team || g.away_team || 'AWAY';
+    const total = g.total ? ` (O/U ${g.total})` : '';
+    const spread = g.spread ? ` [${g.spread > 0 ? '+' : ''}${g.spread}]` : '';
+    return `${away} @ ${home}${total}${spread}`;
   }).join(', ');
 
   // Format known injuries

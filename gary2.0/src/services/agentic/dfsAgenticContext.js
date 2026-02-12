@@ -19,12 +19,22 @@
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { ballDontLieService } from '../ballDontLieService.js';
-import { fetchDfsSalaries } from '../tank01DfsService.js';
+import {
+  fetchDfsSalaries,
+  fetchNbaRostersForTeams,
+  extractPlayerEnrichment,
+  fetchNbaTeamDefenseStats,
+  getPlayerDvP,
+  fetchNbaProjections,
+  fetchNbaNews,
+  matchNewsToPlayers
+} from '../tank01DfsService.js';
 import { fetchSlatesFromRotoWire, populateSlateTeams } from '../rotowireSlateService.js';
 import { discoverDFSSlates as discoverSlatesWithService } from './dfsSlateDiscoveryService.js';
 // Import DFS constitution for Sharp Gambler framework
-import { getConstitution as getConstitutionWithBaseRules } from './constitution/index.js';
+// getConstitutionWithBaseRules removed — DFS constitution now in dfs/constitution/dfsAgenticConstitution.js
 import { inferPlayerRole } from './nbaStackingRules.js';
+import { fetchAllInjuries as fetchNbaInjuriesFromRapidApi } from '../nbaInjuryReportService.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // MODULE-LEVEL INJURY CACHE
@@ -270,34 +280,11 @@ export function getDFSTemperature(contestType = 'gpp') {
   return DFS_MODEL_CONFIG.temperature; // Fixed at 1.0 per Google recommendation
 }
 
-/**
- * Get the DFS constitution for a sport (WITH BASE_RULES included)
- * This ensures DFS gets the same core identity (INDEPENDENT THINKER), 
- * data source rules, and external betting influence prohibition as game picks.
- * 
- * @param {string} sport - 'NBA' or 'NFL'
- * @returns {string} Full constitution with BASE_RULES prepended
- */
-export function getDFSConstitution(sport) {
-  const constitutionKey = sport === 'NFL' ? 'NFL_DFS' : 'NBA_DFS';
-  let constitution = getConstitutionWithBaseRules(constitutionKey);
-  
-  // Replace date template if present
-  const today = new Date().toLocaleDateString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  });
-  constitution = constitution.replace(/\{\{CURRENT_DATE\}\}/g, today);
-  
-  return constitution;
-}
+// getDFSConstitution removed — now in dfs/constitution/dfsAgenticConstitution.js
 
 console.log(`[DFS Context] Initialized with MODEL_CONFIG:`, {
   model: DFS_MODEL_CONFIG.model,
-  tempGPP: DFS_MODEL_CONFIG.temperature.gpp,
-  tempCash: DFS_MODEL_CONFIG.temperature.cash,
+  temperature: DFS_MODEL_CONFIG.temperature,
   reasoning: DFS_MODEL_CONFIG.reasoningLevel,
   grounding: DFS_MODEL_CONFIG.grounding
 });
@@ -497,414 +484,13 @@ export async function discoverDFSSlates(sport, platform, slateDate) {
 // Note: fetchSlatesFromRotoWire is now imported from rotowireSlateService.js
 // which uses Puppeteer browser automation for reliable slate scraping
 
-/**
- * Fetch DFS salaries and injury data using Gemini Grounding
- * @param {string} platform - 'draftkings' or 'fanduel'
- * @param {string} sport - 'NBA' or 'NFL'
- * @param {string} slateDate - Date string (e.g., 'December 23, 2025')
- * @param {Array} teams - Array of team names playing on this slate
- * @returns {Object} Player salaries and statuses
- */
+// REMOVED: fetchDFSSalariesWithGrounding — Gemini Grounding salary fetch was unreliable.
+// Salaries now come from DraftKings draftables API (primary) + Tank01 (FanDuel fallback).
+
+/** @deprecated — Grounding salary fetch removed. Use Tank01/DK draftables instead. */
 export async function fetchDFSSalariesWithGrounding(platform, sport, slateDate, teams = []) {
-  const genAI = getGeminiClient();
-  if (!genAI) {
-    console.log('[DFS Context] Gemini not available - returning empty salaries');
-    return { players: [], groundingUsed: false };
-  }
-  
-  const platformName = platform === 'draftkings' ? 'DraftKings' : 'FanDuel';
-  const teamsStr = teams.length > 0 ? teams.join(', ') : 'all teams';
-  
-  // Apply DFS_MODEL_CONFIG for salary fetching
-  try {
-    console.log(`[DFS Context] 🔍 Fetching ${platformName} ${sport} salaries for ${slateDate}`);
-    console.log(`[DFS Context] MODEL_CONFIG: ${DFS_MODEL_CONFIG.model} | temp=${DFS_MODEL_CONFIG.temperature} | reasoning=${DFS_MODEL_CONFIG.reasoningLevel} | grounding=${DFS_MODEL_CONFIG.grounding}`);
-    
-    // For salary fetching with grounding - DO NOT use responseMimeType as it breaks grounding
-    // POLICY: Only Gemini 3 models allowed (never 1.x or 2.x)
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-3-flash-preview', // Gemini 3 Flash for grounding
-      tools: [{
-        google_search: {} // Grounding: ENABLED - Use Google Search for salaries
-      }],
-      safetySettings: SAFETY_SETTINGS,
-      generationConfig: {
-        temperature: 1.0, // Gemini 3: MUST be 1.0 per Google recommendation
-        topP: 0.95,
-        maxOutputTokens: DFS_MODEL_CONFIG.maxOutputTokens
-        // Note: responseMimeType: 'application/json' breaks grounding - don't use it here
-      }
-    });
-    
-    let prompt;
-    if (sport === 'NBA') {
-      prompt = `Search the web for ${platformName} NBA DFS salaries for ${slateDate}.
-
-Find the ACTUAL ${platformName} salary prices for NBA players on today's slate. I need at least 40-60 players.
-
-For each player found, provide in this EXACT JSON format:
-{
-  "slate_info": {
-    "platform": "${platformName}",
-    "sport": "NBA",
-    "date": "${slateDate}",
-    "games_count": <number of games>
-  },
-  "players": [
-    {"name": "Player Name", "team": "TEAM", "position": "POS", "salary": 9500, "status": "HEALTHY"},
-    ...more players
-  ],
-  "late_scratches": ["Player Name"],
-  "rest_days": ["Player Name"]
-}
-
-IMPORTANT RULES:
-- Search for "${platformName} NBA salaries ${slateDate}" or similar queries
-- salary must be a NUMBER (not string), e.g. 9500 not "$9,500"
-- Teams playing today: ${teamsStr}
-- Include ALL salary tiers from $3000 to $12000+
-- Position should be: PG, SG, SF, PF, or C
-- Status: HEALTHY, OUT, GTD, QUESTIONABLE, or DOUBTFUL
-
-Return ONLY valid JSON. Start with { and end with }. No explanation text.
-
-Example player entry:
-{"name": "LeBron James", "team": "LAL",
-      "position": "SF",
-      "salary": 10500,
-      "status": "HEALTHY",
-      "notes": ""
-    }
-  ],
-  "late_scratches": ["Player Name if any"],
-  "rest_days": ["Player Name if any"]
-}
-
-Only include players actually on today's ${platformName} slate. Be accurate with salaries.
-
-IMPORTANT: Return ONLY valid JSON. No markdown, no explanation text. Start your response with { and end with }`;
-    } else if (sport === 'NFL') {
-      // Determine if this is a small slate (2-4 teams = Saturday games)
-      const teamCount = teams.length;
-      const isSmallSlate = teamCount <= 8; // 4 teams = 2 games = small slate
-      const slateType = isSmallSlate ? 'Saturday 2-game' : 'Sunday main';
-      const expectedPlayers = isSmallSlate ? '40-60' : '100+';
-      
-      prompt = `Search ${platformName}.com for the COMPLETE NFL DFS player pool and salaries for ${slateDate}.
-
-THIS IS A ${slateType.toUpperCase()} SLATE: ${teamCount / 2} games with teams: ${teamsStr}
-
-**CRITICAL: I NEED THE COMPLETE PLAYER LIST WITH REAL ${platformName.toUpperCase()} SALARIES**
-
-Search for: "${platformName} NFL showdown ${slateDate}" or "${platformName} NFL classic ${slateDate}"
-
-I need ${expectedPlayers} players - the FULL slate including:
-- ALL QBs (${teamCount} teams = ~${teamCount} QBs)
-- ALL RBs (3-4 per team = ~${teamCount * 3} RBs)
-- ALL WRs (4-5 per team = ~${teamCount * 4} WRs)  
-- ALL TEs (2-3 per team = ~${teamCount * 2} TEs)
-- ALL Kickers (1 per team = ${teamCount} Ks)
-- ALL Defenses (${teamCount} DSTs)
-
-**ALSO CHECK INJURY STATUS:**
-Search "NFL injury report ${slateDate}" for:
-- OUT = Will NOT play
-- DOUBTFUL = Unlikely to play  
-- QUESTIONABLE = Game-time decision
-
-**IMPORTANT: ONLY include NEW injuries from THIS WEEK (< 7 days)**
-- ❌ DO NOT list season-long injuries (e.g., player out 3+ months)
-- ✅ DO list recent injuries (e.g., "Kelce OUT tonight")
-- Season stats already reflect long-term absences - NOT an angle
-- HEALTHY = Playing
-
-Return this EXACT JSON format:
-{
-  "slate_info": {
-    "platform": "${platformName}",
-    "sport": "NFL", 
-    "date": "${slateDate}",
-    "slate_type": "${slateType}",
-    "games_count": ${teamCount / 2}
-  },
-  "players": [
-    {"name": "Justin Herbert", "team": "LAC", "position": "QB", "salary": 8200, "status": "HEALTHY"},
-    {"name": "Josh Jacobs", "team": "GB", "position": "RB", "salary": 6700, "status": "HEALTHY"},
-    {"name": "Derrick Henry", "team": "BAL", "position": "RB", "salary": 7800, "status": "HEALTHY"},
-    {"name": "Nico Collins", "team": "HOU", "position": "WR", "salary": 6400, "status": "HEALTHY"},
-    {"name": "Mark Andrews", "team": "BAL", "position": "TE", "salary": 4300, "status": "HEALTHY"},
-    {"name": "Tucker Kraft", "team": "GB", "position": "TE", "salary": 3500, "status": "HEALTHY"},
-    {"name": "Tyler Conklin", "team": "LAC", "position": "TE", "salary": 3200, "status": "HEALTHY"},
-    {"name": "HOU DST", "team": "HOU", "position": "DST", "salary": 3500, "status": "HEALTHY"},
-    {"name": "Brandon McManus", "team": "GB", "position": "K", "salary": 4000, "status": "HEALTHY"}
-  ],
-  "confirmed_out": ["Lamar Jackson (BAL) - Hip"],
-  "qb_changes": ["BAL - Tyler Huntley starting"]
-}
-
-RULES:
-- salary = NUMBER not string (7800 not "$7,800")
-- Include EVERY player on the ${platformName} slate for these teams
-- Must have real ${platformName} salaries - do NOT estimate
-- Position: QB, RB, WR, TE, K, or DST
-
-Return ONLY valid JSON. Start with { end with }.`;
-    }
-    
-    const startTime = Date.now();
-    const result = await model.generateContent(prompt);
-    const duration = Date.now() - startTime;
-    
-    console.log(`[DFS Context] ✅ Gemini Grounding response in ${duration}ms`);
-    
-    const response = result.response;
-    const text = response.text();
-    
-    // Log grounding metadata if available
-    const candidate = response.candidates?.[0];
-    const groundingMetadata = candidate?.groundingMetadata;
-    if (groundingMetadata?.webSearchQueries?.length > 0) {
-      console.log(`[DFS Context] 🔍 Grounded searches: "${groundingMetadata.webSearchQueries.join('", "')}"`);
-    }
-    
-    // Parse JSON from response
-    const parsed = parseGroundingResponse(text);
-    
-    return {
-      ...parsed,
-      groundingUsed: !!groundingMetadata?.webSearchQueries?.length,
-      rawResponse: text.substring(0, 500) // For debugging
-    };
-    
-  } catch (error) {
-    console.error(`[DFS Context] Gemini Grounding failed: ${error.message}`);
-    return { players: [], groundingUsed: false, error: error.message };
-  }
-}
-
-/**
- * Parse Gemini grounding response to extract JSON
- * @param {string} text - Raw response text
- * @returns {Object} Parsed player data
- */
-function parseGroundingResponse(text) {
-  try {
-    // Step 0: Clean up markdown formatting
-    let cleanText = text.trim();
-    
-    // Remove leading/trailing markdown code block markers
-    if (cleanText.startsWith('```')) {
-      cleanText = cleanText.replace(/^```(?:json)?\s*/, '');
-    }
-    
-    // Step 1: Find balanced JSON by counting braces
-    const firstBrace = cleanText.indexOf('{');
-    if (firstBrace !== -1) {
-      let depth = 0;
-      let inString = false;
-      let escape = false;
-      let endPos = -1;
-      
-      for (let i = firstBrace; i < cleanText.length; i++) {
-        const char = cleanText[i];
-        
-        if (escape) {
-          escape = false;
-          continue;
-        }
-        
-        if (char === '\\' && inString) {
-          escape = true;
-          continue;
-        }
-        
-        if (char === '"' && !escape) {
-          inString = !inString;
-          continue;
-        }
-        
-        if (!inString) {
-          if (char === '{') depth++;
-          else if (char === '}') {
-            depth--;
-            if (depth === 0) {
-              endPos = i;
-              break;
-            }
-          }
-        }
-      }
-      
-      if (endPos > firstBrace) {
-        const jsonStr = cleanText.substring(firstBrace, endPos + 1);
-        try {
-          return JSON.parse(jsonStr);
-        } catch (e) {
-          console.warn(`[DFS Context] Balanced brace parse failed: ${e.message}`);
-        }
-      }
-    }
-    
-    // Step 2: Try direct parse
-    try {
-      return JSON.parse(cleanText);
-    } catch (e) {
-      // Continue to other methods
-    }
-    
-    // Step 3: Try regex for JSON object
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      try {
-        return JSON.parse(jsonMatch[0]);
-      } catch (e) {
-        console.warn(`[DFS Context] Regex JSON parse failed: ${e.message}`);
-      }
-    }
-    
-    // Step 4: Try to extract salary data from natural language response
-    // This handles cases where Gemini grounding returns prose with embedded salary info
-    console.log(`[DFS Context] Attempting to extract salaries from natural language response...`);
-    const extractedPlayers = extractSalariesFromText(text);
-    if (extractedPlayers.length > 0) {
-      console.log(`[DFS Context] ✅ Extracted ${extractedPlayers.length} players from natural language`);
-      return {
-        slate_info: {},
-        players: extractedPlayers,
-        late_scratches: [],
-        extracted: true // Flag that this was extracted, not parsed
-      };
-    }
-    
-    console.warn(`[DFS Context] All JSON parsing methods failed`);
-    return {
-      slate_info: {},
-      players: [],
-      late_scratches: [],
-      error: 'Failed to parse response'
-    };
-    
-  } catch (e) {
-    console.warn(`[DFS Context] JSON parsing error: ${e.message}`);
-    return {
-      slate_info: {},
-      players: [],
-      late_scratches: [],
-      error: 'Failed to parse response'
-    };
-  }
-}
-
-/**
- * Extract salary data from natural language text
- * Handles cases like: "Nikola Jokic (DEN) - $12,500" or "Jokic with a salary of $12,500"
- * @param {string} text - Natural language text containing salary info
- * @returns {Array} Extracted player objects
- */
-function extractSalariesFromText(text) {
-  const players = [];
-  
-  // Common team abbreviations
-  const teamAbbrs = {
-    // NBA
-    'Lakers': 'LAL', 'Celtics': 'BOS', 'Warriors': 'GSW', 'Nuggets': 'DEN', 'Suns': 'PHX',
-    'Heat': 'MIA', 'Bucks': 'MIL', 'Cavaliers': 'CLE', 'Nets': 'BKN', 'Knicks': 'NYK',
-    'Hawks': 'ATL', 'Bulls': 'CHI', 'Clippers': 'LAC', 'Mavericks': 'DAL', 'Grizzlies': 'MEM',
-    'Pelicans': 'NOP', 'Thunder': 'OKC', 'Kings': 'SAC', 'Timberwolves': 'MIN', 'Trail Blazers': 'POR',
-    'Rockets': 'HOU', 'Jazz': 'UTA', 'Spurs': 'SAS', 'Magic': 'ORL', 'Pacers': 'IND',
-    'Pistons': 'DET', 'Hornets': 'CHA', 'Wizards': 'WAS', '76ers': 'PHI', 'Raptors': 'TOR',
-    // NFL
-    'Chiefs': 'KC', 'Bills': 'BUF', 'Eagles': 'PHI', 'Cowboys': 'DAL', 'Ravens': 'BAL',
-    'Bengals': 'CIN', 'Dolphins': 'MIA', 'Browns': 'CLE', 'Steelers': 'PIT', 'Titans': 'TEN',
-    'Colts': 'IND', 'Jaguars': 'JAX', 'Texans': 'HOU', 'Broncos': 'DEN', 'Raiders': 'LV',
-    'Chargers': 'LAC', 'Packers': 'GB', 'Vikings': 'MIN', 'Bears': 'CHI', 'Lions': 'DET',
-    '49ers': 'SF', 'Seahawks': 'SEA', 'Rams': 'LAR', 'Cardinals': 'ARI', 'Giants': 'NYG',
-    'Commanders': 'WAS', 'Saints': 'NO', 'Buccaneers': 'TB', 'Falcons': 'ATL', 'Panthers': 'CAR'
-  };
-  
-  // Patterns to match salary mentions
-  // Pattern 1: "Player Name (TEAM) - $X,XXX" or "Player Name (TEAM) with salary of $X,XXX"
-  const pattern1 = /([A-Z][a-z]+(?:\s+[A-Z][a-z.']+)+)\s*\(([A-Z]{2,4})\)[^\$]*\$(\d{1,2},?\d{3})/gi;
-  // Pattern 2: "Player Name ... salary of $X,XXX" or "Player Name ... $X,XXX salary"
-  const pattern2 = /([A-Z][a-z]+(?:\s+[A-Z][a-z.']+)+)[^$]{1,50}(?:salary of |priced at |costing |at )\$?(\d{1,2},?\d{3})/gi;
-  // Pattern 3: "Player Name - TEAM: $X,XXX"
-  const pattern3 = /([A-Z][a-z]+(?:\s+[A-Z][a-z.']+)+)\s*[-–]\s*([A-Z]{2,4})[:\s]+\$?(\d{1,2},?\d{3})/gi;
-  
-  const seen = new Set();
-  
-  // Try pattern 1
-  let match;
-  while ((match = pattern1.exec(text)) !== null) {
-    const name = match[1].trim();
-    const team = match[2].toUpperCase();
-    const salary = parseInt(match[3].replace(',', ''));
-    
-    const key = name.toLowerCase();
-    if (!seen.has(key) && salary >= 3000 && salary <= 15000) {
-      seen.add(key);
-      players.push({
-        name,
-        team,
-        position: guessPosition(name, text),
-        salary,
-        status: 'HEALTHY'
-      });
-    }
-  }
-  
-  // Try pattern 3 if we didn't get many from pattern 1
-  if (players.length < 10) {
-    while ((match = pattern3.exec(text)) !== null) {
-      const name = match[1].trim();
-      const team = match[2].toUpperCase();
-      const salary = parseInt(match[3].replace(',', ''));
-      
-      const key = name.toLowerCase();
-      if (!seen.has(key) && salary >= 3000 && salary <= 15000) {
-        seen.add(key);
-        players.push({
-          name,
-          team,
-          position: guessPosition(name, text),
-          salary,
-          status: 'HEALTHY'
-        });
-      }
-    }
-  }
-  
-  console.log(`[DFS Context] Extracted ${players.length} players from text: ${players.slice(0, 5).map(p => `${p.name} $${p.salary}`).join(', ')}${players.length > 5 ? '...' : ''}`);
-  return players;
-}
-
-/**
- * Guess player position from context
- * @param {string} name - Player name
- * @param {string} text - Full text to search for context
- * @returns {string} Position abbreviation
- */
-function guessPosition(name, text) {
-  // Look for position mentions near the player name
-  const nameIndex = text.toLowerCase().indexOf(name.toLowerCase());
-  if (nameIndex === -1) return 'UTIL';
-  
-  const context = text.substring(Math.max(0, nameIndex - 50), Math.min(text.length, nameIndex + name.length + 50)).toLowerCase();
-  
-  // NFL positions
-  if (context.includes('quarterback') || context.includes(' qb ')) return 'QB';
-  if (context.includes('running back') || context.includes(' rb ')) return 'RB';
-  if (context.includes('wide receiver') || context.includes(' wr ')) return 'WR';
-  if (context.includes('tight end') || context.includes(' te ')) return 'TE';
-  
-  // NBA positions
-  if (context.includes('point guard') || context.includes(' pg ')) return 'PG';
-  if (context.includes('shooting guard') || context.includes(' sg ')) return 'SG';
-  if (context.includes('small forward') || context.includes(' sf ')) return 'SF';
-  if (context.includes('power forward') || context.includes(' pf ')) return 'PF';
-  if (context.includes('center') || context.includes(' c ')) return 'C';
-  
-  // Default based on salary (very rough heuristic)
-  return 'UTIL';
+  console.warn('[DFS Context] fetchDFSSalariesWithGrounding is DEPRECATED — use Tank01/DK draftables instead');
+  return { players: [], groundingUsed: false };
 }
 
 /**
@@ -1046,53 +632,94 @@ export async function fetchPlayerStatsFromBDL(sport, dateStr) {
       // ⭐ Use ACTIVE PLAYERS endpoint - this has CURRENT team assignments after trades
       const players = await fetchActivePlayersFromBDL('NBA', teamIds);
       
-      // Fetch injuries to mark players by status
-      // ⚠️ FOR DFS: Track ALL risky statuses (OUT, DOUBTFUL, QUESTIONABLE, GTD)
-      const injuries = await fetchInjuriesFromBDL('NBA', teamIds);
-      
+      // ═══════════════════════════════════════════════════════════════════════════
+      // NBA INJURIES: Use RapidAPI (same source as game picks) — NOT BDL
+      // RapidAPI is updated 3x daily from official NBA injury reports
+      // BDL injury data can be stale — RapidAPI is the source of truth for status
+      // ═══════════════════════════════════════════════════════════════════════════
+      let injuries = [];
+      try {
+        console.log(`[DFS Context] 🏥 Fetching NBA injuries from RapidAPI...`);
+        const rapidApiEntries = await fetchNbaInjuriesFromRapidApi(dateStr);
+
+        // Filter to actionable injuries (skip "Available" and G-League)
+        // and map to BDL-compatible shape for downstream code
+        const teamNameSet = new Set([...teamAbbreviations.values()].map(t => t.toUpperCase()));
+        for (const entry of rapidApiEntries) {
+          const status = (entry.status || '').toLowerCase();
+          if (status === 'available') continue;
+          const reason = (entry.reason || '').toLowerCase();
+          if (reason.includes('g league') || reason.includes('g-league')) continue;
+
+          const fullName = (entry.player || '').trim();
+          const nameParts = fullName.split(/\s+/);
+          const first_name = nameParts[0] || '';
+          const last_name = nameParts.slice(1).join(' ') || '';
+
+          injuries.push({
+            player: { first_name, last_name },
+            status: entry.status,
+            description: entry.reason || '',
+            return_date: null
+          });
+        }
+        console.log(`[DFS Context] ✅ RapidAPI: ${injuries.length} actionable injuries found`);
+      } catch (rapidApiErr) {
+        console.error(`[DFS Context] ❌ RapidAPI injury fetch failed: ${rapidApiErr.message}`);
+        console.error(`[DFS Context] No fallback — BDL injury data is unreliable for DFS status`);
+        // Continue with empty injuries — Gary will see no injury data rather than wrong injury data
+      }
+
       // ⭐ CRITICAL: Populate module-level injury cache for use in mergePlayerData
       // This allows Tank01 players to be checked by name even if their IDs don't match BDL
       setInjuryNameCache(injuries);
-      
-      // Create ID-based injury map for fast lookup
-      const playerInjuryStatusMap = new Map(); // ID -> status
-      const playerInjuryNameMap = _injuryNameCache; // Use the module cache
-      
+
+      // Create injury maps for player matching
+      const playerInjuryStatusMap = new Map(); // ID -> status (for BDL players)
+      const playerInjuryNameMap = _injuryNameCache; // Name-based lookup (for Tank01 ID mismatches)
+
+      // Match injuries to BDL players by name for ID-based lookup
       for (const inj of injuries) {
-        const pid = inj.player?.id;
+        const injName = `${inj.player?.first_name} ${inj.player?.last_name}`.toLowerCase().trim();
         const status = (inj.status || '').toUpperCase();
-        
-        if (pid && status) {
-          playerInjuryStatusMap.set(pid, status);
+        if (!injName || !status) continue;
+
+        // Find matching BDL player by name
+        const matchedPlayer = players.find(p => {
+          const pName = `${p.first_name} ${p.last_name}`.toLowerCase().trim();
+          return pName === injName || pName.includes(injName) || injName.includes(pName);
+        });
+        if (matchedPlayer?.id) {
+          playerInjuryStatusMap.set(matchedPlayer.id, status);
         }
       }
-      
+
       // Count by status type for logging
       const outCount = [...playerInjuryStatusMap.values()].filter(s => s === 'OUT').length;
       const questionableCount = [...playerInjuryStatusMap.values()].filter(s => s === 'QUESTIONABLE' || s.includes('GTD') || s.includes('DAY')).length;
       const doubtfulCount = [...playerInjuryStatusMap.values()].filter(s => s === 'DOUBTFUL').length;
-      
+
       console.log(`[DFS Context] 🏥 Injuries: ${outCount} OUT, ${doubtfulCount} DOUBTFUL, ${questionableCount} QUESTIONABLE/GTD`);
-      
+
       // Log OUT players specifically (these are CRITICAL to exclude)
       const outPlayers = injuries.filter(i => (i.status || '').toUpperCase() === 'OUT');
       if (outPlayers.length > 0) {
         console.log(`[DFS Context] 🚫 OUT PLAYERS (will exclude): ${outPlayers.map(i => `${i.player?.first_name} ${i.player?.last_name}`).join(', ')}`);
       }
-      
-      // Log questionable players specifically (for DFS these are risky!)
+
+      // Log questionable players (included in pool with flag)
       const questionablePlayers = injuries.filter(i => {
-        const status = (i.status || '').toUpperCase();
-        return status === 'QUESTIONABLE' || status.includes('GTD') || status.includes('DAY') || status.includes('DOUBT');
+        const st = (i.status || '').toUpperCase();
+        return st === 'QUESTIONABLE' || st.includes('GTD') || st.includes('DAY');
       });
       if (questionablePlayers.length > 0) {
-        console.log(`[DFS Context] ⚠️ RISKY PLAYERS (excluding from DFS): ${questionablePlayers.map(i => `${i.player?.first_name} ${i.player?.last_name} (${i.status})`).join(', ')}`);
+        console.log(`[DFS Context] ⚠️ QUESTIONABLE/GTD (included with flag): ${questionablePlayers.map(i => `${i.player?.first_name} ${i.player?.last_name} (${i.status})`).join(', ')}`);
       }
       
       // ═══════════════════════════════════════════════════════════════════════════
-      // GEMINI GROUNDING INJURY CHECK - Catch last-minute scratches BDL might miss
+      // GEMINI GROUNDING INJURY CHECK - Catch last-minute scratches RapidAPI might miss
       // ═══════════════════════════════════════════════════════════════════════════
-      // BDL injury data can be stale. Use Gemini Grounding to search for TODAY's
+      // RapidAPI updates 3x daily. Use Gemini Grounding to search for TODAY's
       // injury news and catch players who were just ruled OUT (like Moe Wagner)
       // ═══════════════════════════════════════════════════════════════════════════
       try {
@@ -1595,25 +1222,24 @@ export async function fetchPlayerStatsFromBDL(sport, dateStr) {
  * ═══════════════════════════════════════════════════════════════════════════
  * INJURY STATUS FILTERING FOR DFS
  * ═══════════════════════════════════════════════════════════════════════════
- * 
- * ⚠️ FOR DFS: We MUST be conservative! If a player is ruled out at game time,
- * users won't have time to adjust their lineup. Better to miss upside than
- * lock in a zero from a player who doesn't play.
- * 
- * EXCLUDE (too risky for DFS):
- * - OUT: Definitely not playing
+ *
+ * HARD EXCLUDE (definitely not playing):
+ * - OUT: Confirmed not playing
  * - DOUBTFUL: Very unlikely (<25% chance)
- * - QUESTIONABLE: May or may not play (too risky - could be ruled out late!)
- * - GTD/DTD: Game-time/Day-to-day decision (no time to swap if ruled out)
  * - IR/PUP/SUSPENDED: Extended absence
- * 
+ *
+ * INCLUDE WITH FLAG (risky but playable — Gary decides):
+ * - QUESTIONABLE: May or may not play — Gary uses only if ceiling justifies risk
+ * - GTD/DTD/DAY-TO-DAY: Game-time decision — same as questionable
+ * - Gary must NEVER roster a questionable player AND their backup
+ *
  * INCLUDE (safe for DFS):
  * - PROBABLE: Likely to play (>75% chance)
  * - HEALTHY: Playing
- * 
+ *
  * ═══════════════════════════════════════════════════════════════════════════
  */
-const EXCLUDED_INJURY_STATUSES = ['OUT', 'DOUBTFUL', 'QUESTIONABLE', 'GTD', 'DTD', 'DAY-TO-DAY', 'IR', 'PUP', 'SUSPENDED'];
+const HARD_EXCLUDE_STATUSES = ['OUT', 'DOUBTFUL', 'IR', 'PUP', 'SUSPENDED'];
 
 /**
  * Check if a player should be excluded based on rotation risk (DNP-CD)
@@ -1676,12 +1302,12 @@ function checkRotationRisk(p) {
 function shouldExcludePlayer(status) {
   if (!status) return false;
   const upperStatus = status.toUpperCase();
-  
+
   // Catch phrases like "Two weeks away" or "Out for season"
   const specialOutPhrases = ['WEEKS AWAY', 'FOR SEASON', 'INDEFINITE', 'SURGERY'];
   if (specialOutPhrases.some(phrase => upperStatus.includes(phrase))) return true;
-  
-  return EXCLUDED_INJURY_STATUSES.some(excluded => upperStatus.includes(excluded));
+
+  return HARD_EXCLUDE_STATUSES.some(excluded => upperStatus.includes(excluded));
 }
 
 /**
@@ -3343,129 +2969,95 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
   console.log(`[DFS Context] Initial teams: ${teams.join(', ') || 'Will derive from games'}`);
 
   // Don't fail here yet - we'll validate after game filtering
-  
-  // Get game info for narrative context
-  const sportKey = sport === 'NBA' ? 'basketball_nba' : 'americanfootball_nfl';
-  let allGames = await ballDontLieService.getGames(sportKey, { dates: [dateStr] }, 5) || [];
-  
-  // Filter games based on slate - STRICT MODE: No fallbacks that produce wrong data
-  // CRITICAL: Each slate (Main, Turbo, Night) has specific games - MUST be accurate or fail
-  let games = [];
 
-  // Try multiple properties to get slate games (some discovery methods use different property names)
+  // ═══════════════════════════════════════════════════════════════════════════
+  // BUILD GAMES FROM SLATE (DK/FD slate discovery is source of truth for games)
+  // No BDL getGames() call — slate.games has exact matchups from DK API
+  // ═══════════════════════════════════════════════════════════════════════════
   const slateGames = slate?.games || slate?.matchups || [];
-  const inputSlateTeams = slate?.teams || [];  // Renamed to avoid conflict with derivedTeams later
 
-  if (slateGames.length > 0) {
-    // Use slate's explicit game list
-    console.log(`[DFS Context] Filtering to slate games: ${slateGames.join(', ')}`);
-    games = allGames.filter(g => {
-      const match1 = `${g.visitor_team?.abbreviation}@${g.home_team?.abbreviation}`;
-      const match2 = `${g.away_team?.abbreviation}@${g.home_team?.abbreviation}`;
-      // Also try lowercase and various formats
-      const match1Lower = match1.toLowerCase();
-      const match2Lower = match2.toLowerCase();
-      return slateGames.some(sg => {
-        const sgLower = sg.toLowerCase();
-        return sgLower === match1Lower || sgLower === match2Lower ||
-               sg === match1 || sg === match2;
-      });
-    });
-  } else if (inputSlateTeams.length > 0) {
-    // Fallback: Filter by teams if games list not available
-    console.log(`[DFS Context] No games list, filtering by teams: ${inputSlateTeams.join(', ')}`);
-    const slateTeamSet = new Set(inputSlateTeams.map(t => t.toUpperCase()));
-    games = allGames.filter(g => {
-      const homeTeam = (g.home_team?.abbreviation || '').toUpperCase();
-      const visitorTeam = (g.visitor_team?.abbreviation || g.away_team?.abbreviation || '').toUpperCase();
-      return slateTeamSet.has(homeTeam) || slateTeamSet.has(visitorTeam);
-    });
-  } else if (!slate) {
-    // NO SLATE PROVIDED = Main slate / all games for the day
-    // This is the default case when user doesn't specify a specific slate
-    console.log(`[DFS Context] No slate specified - using ALL ${allGames.length} games for the day (Main slate)`);
-    games = allGames;
-  } else {
-    // SPECIFIC SLATE WAS PROVIDED but has no games/teams = FAIL
-    // This means slate discovery failed to populate this slate's data
-    // Do NOT fall back to all games - that produces contaminated lineups
-    console.error(`[DFS Context] ❌ FATAL: No slate.games or slate.teams provided for slate "${slate?.name || 'unknown'}"`);
-    console.error(`[DFS Context] Slate object:`, JSON.stringify(slate, null, 2));
-    return {
-      platform,
-      sport,
-      date: dateStr,
-      slate: slate?.name,
-      players: [],
-      gamesCount: 0,
-      error: `Slate "${slate?.name}" has no games or teams defined - cannot generate accurate lineup. Fix slate discovery.`
-    };
+  if (slateGames.length === 0 && !slate) {
+    // No slate provided at all — need to discover first
+    throw new Error('[DFS Context] No slate provided. Run slate discovery first to get game matchups.');
   }
 
-  // VALIDATION: Check if game count matches slate expectation
-  if (slate?.gameCount && games.length !== slate.gameCount) {
-    const expectedGames = slate.gameCount;
-    const foundGames = games.length;
-
-    if (foundGames === 0) {
-      // No games found at all - definitely wrong slate data
-      console.error(`[DFS Context] ❌ No games found for slate "${slate.name}" (expected ${expectedGames})`);
-      console.error(`[DFS Context] Slate games tried: ${slateGames.join(', ')}`);
-      return {
-        platform,
-        sport,
-        date: dateStr,
-        slate: slate?.name,
-        players: [],
-        gamesCount: 0,
-        expectedGames,
-        error: `No games matched for slate "${slate.name}" - expected ${expectedGames}. Check slate discovery matchup data.`
-      };
-    }
-
-    if (foundGames > expectedGames) {
-      // Found MORE games than expected = likely contamination from wrong slate
-      console.error(`[DFS Context] ❌ Game count contamination! Slate "${slate.name}" expects ${expectedGames} games, found ${foundGames}`);
-      console.error(`[DFS Context] Slate games: ${slateGames.join(', ')}`);
-      console.error(`[DFS Context] Filtered games: ${games.map(g => `${g.visitor_team?.abbreviation}@${g.home_team?.abbreviation}`).join(', ')}`);
-      return {
-        platform,
-        sport,
-        date: dateStr,
-        slate: slate?.name,
-        players: [],
-        gamesCount: foundGames,
-        expectedGames,
-        error: `Too many games matched for slate "${slate.name}": found ${foundGames} but expected ${expectedGames}. This indicates slate contamination.`
-      };
-    }
-
-    // Found fewer games than expected - might be postponement/cancellation, warn but continue
-    console.warn(`[DFS Context] ⚠️ Game count mismatch: slate "${slate.name}" expects ${expectedGames} games, found ${foundGames}`);
-    console.warn(`[DFS Context] This may be due to postponements. Continuing with ${foundGames} games...`);
+  if (slateGames.length === 0 && slate) {
+    throw new Error(`[DFS Context] Slate "${slate?.name}" has no games defined. Fix slate discovery.`);
   }
 
-  console.log(`[DFS Context] ✅ Filtered to ${games.length} games for slate "${slate?.name || 'unknown'}": ${games.map(g => `${g.visitor_team?.abbreviation}@${g.home_team?.abbreviation}`).join(', ')}`);
+  // Parse matchup strings ("ATL@CHA") into game objects
+  const games = slateGames.map(matchup => {
+    const parts = matchup.split('@');
+    if (parts.length !== 2) return null;
+    const [away, home] = parts.map(t => t.trim().toUpperCase());
+    return { homeTeam: home, awayTeam: away, matchup };
+  }).filter(Boolean);
 
-  // CRITICAL: Derive teams FROM the filtered games - this is the authoritative source
-  // Do NOT use the original 'teams' variable which may have been set incorrectly
+  console.log(`[DFS Context] ✅ ${games.length} games from slate "${slate?.name || 'Main'}": ${slateGames.join(', ')}`);
+
+  // Derive teams from games
   const derivedTeams = new Set();
   games.forEach(g => {
-    if (g.home_team?.abbreviation) derivedTeams.add(g.home_team.abbreviation.toUpperCase());
-    if (g.visitor_team?.abbreviation) derivedTeams.add(g.visitor_team.abbreviation.toUpperCase());
-    if (g.away_team?.abbreviation) derivedTeams.add(g.away_team.abbreviation.toUpperCase());
+    derivedTeams.add(g.homeTeam);
+    derivedTeams.add(g.awayTeam);
   });
   const slateTeams = Array.from(derivedTeams);
-  console.log(`[DFS Context] ✅ Teams in this slate (derived from games): ${slateTeams.join(', ')}`);
-
-  // Override 'teams' with accurate slate teams for downstream use
   teams = slateTeams;
+  console.log(`[DFS Context] ✅ Teams in this slate: ${slateTeams.join(', ')}`);
 
-  const gameList = games.map(g => ({
-    home_team: g.home_team?.abbreviation || g.home_team?.name,
-    visitor_team: g.visitor_team?.abbreviation || g.visitor_team?.name,
-    away_team: g.away_team?.abbreviation || g.away_team?.name
-  }));
+  // Try to enrich games with O/U and spread from BDL
+  const sportKey = sport === 'NBA' ? 'basketball_nba' : 'americanfootball_nfl';
+  const oddsDate = dateStr || new Date().toISOString().split('T')[0];
+
+  // BDL odds are keyed by game_id — need to fetch games first to get IDs + team names,
+  // then join with odds rows. Use getGames (date-only format) + getOddsV2.
+  let bdlGameOddsMap = new Map(); // homeTeam+awayTeam → { total, spread }
+  try {
+    const [bdlGames, oddsRows] = await Promise.all([
+      ballDontLieService.getGames(sportKey, { dates: [oddsDate] }).catch(() => []),
+      ballDontLieService.getOddsV2({ dates: [oddsDate], per_page: 100 }, sportKey).catch(() => [])
+    ]);
+
+    // Index odds by game_id (pick first vendor per game)
+    const oddsByGameId = new Map();
+    for (const row of (oddsRows || [])) {
+      if (!oddsByGameId.has(row.game_id)) {
+        oddsByGameId.set(row.game_id, row);
+      }
+    }
+
+    // Match games to odds by game_id, index by team abbreviation pair
+    for (const g of (bdlGames || [])) {
+      const home = (g.home_team?.abbreviation || '').toUpperCase();
+      const away = (g.visitor_team?.abbreviation || '').toUpperCase();
+      if (!home || !away) continue;
+      const odds = oddsByGameId.get(g.id);
+      if (odds) {
+        bdlGameOddsMap.set(`${away}@${home}`, {
+          total: odds.total_value != null ? parseFloat(odds.total_value) : null,
+          spread: odds.spread_home_value != null ? parseFloat(odds.spread_home_value) : null
+        });
+      }
+    }
+    if (bdlGameOddsMap.size > 0) {
+      console.log(`[DFS Context] ✅ BDL odds enrichment: ${bdlGameOddsMap.size} games with O/U and spread`);
+    }
+  } catch (e) {
+    console.warn(`[DFS Context] BDL odds fetch failed (${e.message}) — games will have no O/U or spread`);
+  }
+
+  // Build game list with O/U and spread enrichment
+  const gameList = games.map(g => {
+    const key = `${g.awayTeam}@${g.homeTeam}`;
+    const odds = bdlGameOddsMap.get(key);
+    return {
+      home_team: g.homeTeam,
+      visitor_team: g.awayTeam,
+      away_team: g.awayTeam,
+      total: odds?.total || null,
+      spread: odds?.spread || null
+    };
+  });
   
   // ═══════════════════════════════════════════════════════════════════════════
   // PARALLEL FETCH: Tank01 API salaries + BDL stats + Narrative context + Ownership + Props
@@ -3475,14 +3067,28 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
   // Gemini Grounding used for narrative context, ownership, lineups, and projections
   // NOTE: BDL lineups API only works AFTER game starts - useless for pregame DFS
   
-  // Get game IDs for prop line fetching
-  const gameIds = games.map(g => g.id).filter(Boolean);
+  // Game IDs not needed for DFS (props fetched separately)
   
-  const [bdlPlayers, salaryData, narrativeContext, ownershipData] = await Promise.all([
+  // Tank01 enrichment fetches (NBA only — Changes 5, 6, 8, 9)
+  const isNBA = sport.toUpperCase() === 'NBA';
+  const tank01Promises = isNBA ? [
+    fetchNbaRostersForTeams(slateTeams),     // Change 5: Player enrichment
+    fetchNbaTeamDefenseStats(),               // Change 6: DvP matchup context
+    fetchNbaProjections(dateStr),             // Change 8: Benchmark projections
+    fetchNbaNews(30)                          // Change 9: Breaking headlines
+  ] : [
+    Promise.resolve(new Map()),
+    Promise.resolve(new Map()),
+    Promise.resolve(new Map()),
+    Promise.resolve([])
+  ];
+
+  const [bdlPlayers, salaryData, narrativeContext, ownershipData, rosterData, teamDefenseStats, tank01Projections, tank01News] = await Promise.all([
     fetchPlayerStatsFromBDL(sport, dateStr),
     fetchDfsSalaries(sport, dateStr, platform), // Tank01 API for real salaries
     fetchDFSNarrativeContext(sport, slateDate, gameList),
-    fetchOwnershipProjections(sport, platform, slateDate, teams)
+    Promise.resolve({ chalk: [], contrarian: [], lowOwned: [] }), // Ownership removed — no reliable free source
+    ...tank01Promises
   ]);
   
   const bdlCount = bdlPlayers.length;
@@ -3510,9 +3116,16 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
   // Note: BDL lineups API only works AFTER game starts - useless for pregame DFS
   // Confirmed starters will be populated from Gemini Grounding or narrative context
 
-  // Fetch benchmark projections using Gemini Grounding (Industry Best Practice)
-  // This helps Gary double-check his AI math against "Vegas/Expert" consensus
-  const benchmarkProjections = await fetchBenchmarkProjections(sport, slateDate, teams);
+  // Benchmark projections: Tank01 for NBA — no fallback (Grounding hallucinates numbers)
+  let benchmarkProjections = new Map();
+  if (isNBA && tank01Projections.size > 0) {
+    for (const [name, proj] of tank01Projections) {
+      benchmarkProjections.set(normalizePlayerName(proj.longName || name), proj.projFpts);
+    }
+    console.log(`[DFS Context] Tank01 benchmark projections: ${benchmarkProjections.size} players`);
+  } else if (isNBA) {
+    console.warn(`[DFS Context] Tank01 projections unavailable — no benchmarks (no fallback to Grounding)`);
+  }
 
   console.log(`[DFS Context] Integrated: ${confirmedStarters.size} confirmed starters, ${benchmarkProjections.size} benchmarks`);
   
@@ -3531,87 +3144,92 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
       player.lockReason = 'Confirmed Starter (Ball Don\'t Lie)';
     }
 
-    // Benchmark Projection (from Gemini Grounding)
+    // Benchmark Projection (Tank01 for NBA, Grounding for others)
     if (benchmarkProjections.has(key)) {
       player.benchmarkProjection = benchmarkProjections.get(key);
     }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // TANK01 ENRICHMENT (NBA only — Changes 5, 6, 9)
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (isNBA) {
+    // Build Tank01 playerID → playerName map for news matching
+    const tank01PlayerIdMap = new Map();
+
+    // Build a roster name lookup: normalizedName → roster player
+    const rosterNameMap = new Map();
+    for (const [teamAbv, players] of rosterData) {
+      for (const rp of players) {
+        const normName = normalizePlayerName(rp.longName || '');
+        if (normName) {
+          rosterNameMap.set(normName, rp);
+          if (rp.playerID) {
+            tank01PlayerIdMap.set(String(rp.playerID), rp.longName);
+          }
+        }
+      }
+    }
+
+    // Build game lookup: team → opponent (for DvP)
+    const teamToOpponent = new Map();
+    for (const game of gameList) {
+      const home = (game.home_team || '').toUpperCase();
+      const away = (game.visitor_team || game.away_team || '').toUpperCase();
+      if (home && away) {
+        teamToOpponent.set(home, away);
+        teamToOpponent.set(away, home);
+      }
+    }
+
+    // Match news to players
+    const newsMap = matchNewsToPlayers(tank01News, tank01PlayerIdMap);
+
+    let enrichedCount = 0;
+    for (const player of mergedPlayers) {
+      const normName = normalizePlayerName(player.name);
+      const rosterPlayer = rosterNameMap.get(normName);
+
+      // Change 5: Player enrichment (TS%, eFG%, injury context, lastGamePlayed)
+      if (rosterPlayer) {
+        const enrichment = extractPlayerEnrichment(rosterPlayer);
+        if (enrichment) {
+          player.tsPercent = enrichment.tsPercent;
+          player.efgPercent = enrichment.efgPercent;
+          player.avgMinutes = enrichment.avgMinutes;
+          player.gamesPlayed = enrichment.gamesPlayed;
+          player.injuryContext = enrichment.injuryDescription;
+          player.injuryReturnDate = enrichment.injuryReturnDate;
+          player.lastGamePlayed = enrichment.lastGamePlayed;
+          enrichedCount++;
+        }
+      }
+
+      // Change 6: DvP matchup context
+      const playerTeam = (player.team || '').toUpperCase();
+      const opponent = teamToOpponent.get(playerTeam);
+      if (opponent && teamDefenseStats.size > 0) {
+        const dvp = getPlayerDvP(opponent, player.position, teamDefenseStats);
+        if (dvp) {
+          player.matchupDvP = dvp;
+        }
+      }
+
+      // Change 9: News context
+      if (newsMap.has(rosterPlayer?.longName)) {
+        player.newsContext = newsMap.get(rosterPlayer.longName);
+      }
+    }
+
+    console.log(`[DFS Context] Tank01 enriched ${enrichedCount}/${mergedPlayers.length} players (TS%, eFG%, injury, DvP, news)`);
   }
 
   // ⚠️ Filter out late scratches
   const finalMergedPlayers = mergedPlayers.filter(p => p.status !== 'OUT' && p.status !== 'INACTIVE');
   console.log(`[DFS Context] Final slate player pool: ${finalMergedPlayers.length}`);
   
-  // ═══════════════════════════════════════════════════════════════════════════
-  // APPLY OWNERSHIP DATA TO PLAYERS
-  // ═══════════════════════════════════════════════════════════════════════════
-  // Create lookup maps for ownership data
-  const chalkMap = new Map();
-  const contrarianMap = new Map();
-  const lowOwnedMap = new Map();
-  
-  (ownershipData.chalk || []).forEach(p => {
-    const key = normalizePlayerName(p.name);
-    chalkMap.set(key, { ownership: p.ownership, reason: p.reason });
-  });
-  
-  (ownershipData.contrarian || []).forEach(p => {
-    const key = normalizePlayerName(p.name);
-    contrarianMap.set(key, { ownership: p.ownership, upside: p.upside, ceiling: p.ceiling });
-  });
-  
-  (ownershipData.lowOwned || []).forEach(p => {
-    const key = normalizePlayerName(p.name);
-    lowOwnedMap.set(key, { ownership: p.ownership, reason: p.reason });
-  });
-  
-  // Apply ownership to merged players
-  for (const player of mergedPlayers) {
-    const key = normalizePlayerName(player.name);
-    
-    // Check if player is chalk (>25% ownership)
-    if (chalkMap.has(key)) {
-      const chalkInfo = chalkMap.get(key);
-      player.ownership = chalkInfo.ownership;
-      player.isChalk = true;
-      player.isContrarian = false;
-      player.ownershipNote = chalkInfo.reason;
-    }
-    // Check if player is contrarian (<10% ownership)
-    else if (contrarianMap.has(key)) {
-      const contrarianInfo = contrarianMap.get(key);
-      player.ownership = contrarianInfo.ownership;
-      player.isChalk = false;
-      player.isContrarian = true;
-      player.ownershipNote = contrarianInfo.upside;
-      player.ceilingNote = contrarianInfo.ceiling;
-    }
-    // Check if player is low-owned (10-25%)
-    else if (lowOwnedMap.has(key)) {
-      const lowOwnedInfo = lowOwnedMap.get(key);
-      player.ownership = lowOwnedInfo.ownership;
-      player.isChalk = false;
-      player.isContrarian = false;
-      player.ownershipNote = lowOwnedInfo.reason;
-    }
-    // Default: estimate ownership using SMART SALARY-BASED MODEL
-    // This is what sharps use when no grounding data is available
-    else if (!player.ownership) {
-      player.ownership = estimateOwnershipFromSalary(player, platform, sport);
-      player.isChalk = player.ownership >= 25;
-      player.isContrarian = player.ownership < 10;
-      player.ownershipNote = 'Estimated from salary tier';
-      player.ownershipEstimated = true; // Flag that this is an estimate
-    }
-  }
-  
-  // Log ownership integration results
-  const estimatedCount = mergedPlayers.filter(p => p.ownershipEstimated).length;
-  if (estimatedCount > 0) {
-    console.log(`[DFS Context] ⚠️ ${estimatedCount} players have estimated ownership (Grounding didn't find real data)`);
-  }
-  const chalkInLineup = mergedPlayers.filter(p => p.isChalk).length;
-  const contrarianInLineup = mergedPlayers.filter(p => p.isContrarian).length;
-  console.log(`[DFS Context] Ownership applied: ${chalkInLineup} chalk, ${contrarianInLineup} contrarian players in pool`);
+  // Ownership projections removed — no reliable free source exists.
+  // Gary makes lineup decisions based on stats, matchups, and game environment instead.
   
   // ═══════════════════════════════════════════════════════════════════════════
   // TEAMMATE USAGE CONTEXT - Dynamic Role Awareness
@@ -3877,13 +3495,7 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
     targetPlayers: narrativeContext.targetPlayers || [],
     fadePlayers: narrativeContext.fadePlayers || [],
     starsReturning: narrativeContext.starsReturning || [],
-    // Ownership intelligence for tournament strategy
-    ownershipData: {
-      chalk: ownershipData.chalk || [],
-      contrarian: ownershipData.contrarian || [],
-      lowOwned: ownershipData.lowOwned || [],
-      sources: ownershipData.sources || []
-    },
+    // Ownership projections removed — no reliable free source
     // Metadata
     salarySource: salaryData.source || 'Tank01 API',
     buildTimeMs: duration,
@@ -3907,7 +3519,6 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
 }
 
 export default {
-  fetchDFSSalariesWithGrounding, // Keep for backward compatibility (will fall back to this if Tank01 fails)
   fetchDFSNarrativeContext,
   fetchPlayerStatsFromBDL,
   mergePlayerData,
