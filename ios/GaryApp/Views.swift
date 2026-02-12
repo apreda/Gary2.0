@@ -2694,8 +2694,10 @@ struct PickCardMobile: View {
                 let numStr = String(pickText[numRange])
                 if let num = Double(numStr), num > 0, num < 50 {
                     // Determine correct sign: sportsbook spread is from home team perspective
-                    let pickedTeamIsHome = pick.homeTeam != nil &&
-                        pickText.lowercased().contains(pick.homeTeam!.split(separator: " ").last?.lowercased() ?? "???")
+                    let pickedTeamIsHome: Bool = {
+                        guard let home = pick.homeTeam else { return false }
+                        return pickText.lowercased().contains(home.split(separator: " ").last?.lowercased() ?? "???")
+                    }()
                     let correctSpread = pickedTeamIsHome ? firstSpread : -firstSpread
                     let correctSign = correctSpread >= 0 ? "+" : "-"
                     // Fix if sign is missing or wrong
