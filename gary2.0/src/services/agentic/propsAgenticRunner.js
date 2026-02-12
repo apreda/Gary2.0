@@ -8,8 +8,9 @@ import { openaiService, GEMINI_FLASH_MODEL } from '../openaiService.js';
 import { ballDontLieService } from '../ballDontLieService.js';
 // quantumService removed (2026-02) — was tracking-only, never filtered picks
 import { geminiGroundingSearch } from './scoutReport/scoutReportBuilder.js';
-// Import sharp grading reference for Steel Man case evaluation
-import { getSteelManGradingReference } from './constitution/sharpReferenceLoader.js';
+import { fetchNbaInjuriesForGame } from '../nbaInjuryReportService.js';
+import { nbaSeason, nhlSeason, nflSeason } from '../../utils/dateUtils.js';
+
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PROPS MODEL POLICY (ALL USE FLASH)
@@ -64,16 +65,10 @@ const PICK_SCHEMA = {
     over_thesis: { type: 'string', description: '2 sentences max: The game script where the OVER/YES hits. What has to happen?' },
     under_thesis: { type: 'string', description: '2 sentences max: The game script where the UNDER/NO hits. What kills the OVER?' },
     thesis_lean: { type: 'string', enum: ['OVER', 'UNDER', 'COIN-FLIP'], description: 'Which thesis is more believable given the matchup?' },
-    edge_type: { 
-      type: 'string', 
-      enum: ['USAGE_SHIFT', 'MATCHUP_MISMATCH', 'GAME_SCRIPT', 'RECENT_FORM', 'LINE_SOFT', 'NEXT_GEN_EDGE'],
-      description: 'Primary edge type: USAGE_SHIFT (fresh roster change creating new opportunity), MATCHUP_MISMATCH (specific defender/scheme weakness), GAME_SCRIPT (pace/blowout projection), RECENT_FORM (hot streak line hasnt caught), LINE_SOFT (book pricing error), NEXT_GEN_EDGE (advanced stats reveal hidden value)'
-    },
-    confidence_tier: { type: 'string', enum: ['MAX', 'CORE', 'SPECULATIVE'], description: 'MAX (2 units, elite edge), CORE (1 unit, solid), SPECULATIVE (0.5 units, value shot)' },
     rationale: { type: 'string', description: '5-7 sentences explaining why you like this pick.' },
     key_stats: { type: 'array', items: { type: 'string' }, description: 'Key stats supporting your pick with source attribution.' }
   },
-  required: ['player', 'team', 'prop', 'line', 'bet', 'odds', 'confidence', 'over_thesis', 'under_thesis', 'thesis_lean', 'edge_type', 'confidence_tier', 'rationale', 'key_stats']
+  required: ['player', 'team', 'prop', 'line', 'bet', 'odds', 'confidence', 'over_thesis', 'under_thesis', 'thesis_lean', 'rationale', 'key_stats']
 };
 
 // Common tools available for all sports (non-NFL)
@@ -108,58 +103,6 @@ Your rationale MUST be SPECIFIC with receipts. If your thesis is "average > line
   }
 };
 
-// NFL-specific finalize tool with 4 categories
-const NFL_FINALIZE_TOOL = {
-  type: 'function',
-  function: {
-    name: 'finalize_props',
-    description: `Output your final NFL prop picks in 4 SEPARATE CATEGORIES.
-
-BLOCKING RULE: BEFORE CALLING THIS TOOL, you MUST have completed BILATERAL STEEL MAN analysis:
-- For each pick, you should have written CASE FOR OVER and CASE FOR UNDER
-- Your chosen side should CLEARLY beat the opposing case
-
-REQUIREMENTS FOR EACH PICK:
-1. EDGE IDENTIFIED: What specific factor exists TONIGHT that the line hasn't captured?
-2. LINE LOGIC UNDERSTOOD: Why did books set this line? What are you disagreeing with?
-3. MECHANISM EXPLAINED: HOW does this player produce? (Not rankings - actual game action)
-4. RISK ACKNOWLEDGED: What's the specific scenario where this loses?
-
-CATEGORIES:
-1. regular_props (Shortlist 5): Yards, receptions, attempts - NO TDs. Odds range: -200 to +250.
-2. regular_td (Shortlist 4): Anytime TD with odds -200 to +200. Likely scorers.
-3. value_td (Pick 1): Anytime TD with odds +200 or higher. Can include 2+ TDs. NOT 1st TD.
-4. first_td (Pick 1): First TD scorer only. Lottery pick.
-
-Each rationale MUST be SPECIFIC. If your thesis is "average > line", you haven't found edge.`,
-    parameters: {
-      type: 'object',
-      properties: {
-        regular_props: {
-          type: 'array',
-          description: 'Shortlist 5 regular props (yards, receptions, attempts). NO TD props. Odds range: -200 to +250.',
-          items: PICK_SCHEMA
-        },
-        regular_td: {
-          type: 'array', 
-          description: 'Shortlist 4 Anytime TD props with odds between -200 and +200.',
-          items: PICK_SCHEMA
-        },
-        value_td: {
-          type: 'array',
-          description: 'Pick 1 Anytime TD or 2+ TDs prop with odds +200 or higher. NOT 1st TD.',
-          items: PICK_SCHEMA
-        },
-        first_td: {
-          type: 'array',
-          description: 'Pick 1 First TD scorer. This is a lottery pick.',
-          items: PICK_SCHEMA
-        }
-      },
-      required: ['regular_props', 'regular_td', 'value_td', 'first_td']
-    }
-  }
-};
 
 const SEARCH_TOOL = {
   type: 'function',
@@ -226,10 +169,10 @@ const NFL_REGULAR_PROP_TOOLS = [
     }
   },
   SEARCH_TOOL,
-  FINALIZE_TOOL  // Standard finalize tool (not categorized)
+  FINALIZE_TOOL
 ];
 
-// NFL-specific prop tools (full categorized - includes TDs)
+// NFL-specific prop tools
 const NFL_PROP_TOOLS = [
   {
     type: 'function',
@@ -277,7 +220,7 @@ const NFL_PROP_TOOLS = [
     }
   },
   SEARCH_TOOL,
-  NFL_FINALIZE_TOOL  // NFL uses categorized finalize tool
+  FINALIZE_TOOL
 ];
 
 // NBA-specific prop tools (NO WEB SEARCH - all data in context)
@@ -748,10 +691,7 @@ async function handlePropsToolCall(toolCall, sportKey, sportLabel) {
 
       // NBA-specific season stats - Enhanced with BDL v2 advanced stats
       if (isNBA) {
-        const currentMonth = new Date().getMonth() + 1;
-        const currentYear = new Date().getFullYear();
-        // NBA season starts in October: Oct(10)-Dec = currentYear, Jan-Sep = previousYear
-        const season = currentMonth >= 10 ? currentYear : currentYear - 1;
+        const season = nbaSeason();
 
         // Fetch base, usage, advanced, and scoring stats in parallel (BDL v2)
         const [baseStatsResp, usageStatsResp, advancedStatsResp, scoringStatsResp] = await Promise.all([
@@ -829,10 +769,7 @@ async function handlePropsToolCall(toolCall, sportKey, sportLabel) {
 
       // NHL-specific season stats
       if (isNHL) {
-        // NHL season starts in October: Oct(10)-Dec = currentYear, Jan-Sep = previousYear
-        const nhlMonth = new Date().getMonth() + 1;
-        const nhlYear = new Date().getFullYear();
-        const season = nhlMonth >= 10 ? nhlYear : nhlYear - 1;
+        const season = nhlSeason();
         const seasonStats = await ballDontLieService.getNhlPlayerSeasonStats(player.id, season);
         
         if (!seasonStats || seasonStats.length === 0) {
@@ -866,11 +803,8 @@ async function handlePropsToolCall(toolCall, sportKey, sportLabel) {
       }
 
       // NFL-specific season stats (default)
-      // Calculate NFL season dynamically: Aug-Dec = current year, Jan-Jul = previous year
-      const nflMonth = new Date().getMonth() + 1; // 1-indexed
-      const nflYear = new Date().getFullYear();
-      const nflSeason = nflMonth <= 7 ? nflYear - 1 : nflYear;
-      const seasonStats = await ballDontLieService.getNflSeasonStats({ player_ids: [player.id], season: nflSeason });
+      const nflSeasonYear = nflSeason();
+      const seasonStats = await ballDontLieService.getNflSeasonStats({ player_ids: [player.id], season: nflSeasonYear });
       const stats = seasonStats.find(s => s.player?.id === player.id);
 
       return {
@@ -887,19 +821,33 @@ async function handlePropsToolCall(toolCall, sportKey, sportLabel) {
   // FETCH_TEAM_INJURIES - NBA-specific
   // ============================================================================
   if (functionName === 'fetch_team_injuries') {
-    console.log(`  → [TEAM_INJURIES] ${args.team_name}`);
+    console.log(`  → [TEAM_INJURIES] ${args.team_name} (RapidAPI — same source as game picks)`);
     try {
-      // Get team info first
+      // Use RapidAPI for NBA injuries (same source of truth as game picks)
+      if (sportKey === 'basketball_nba') {
+        const isoDate = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+        const apiInjuries = await fetchNbaInjuriesForGame(args.team_name, args.team_name, isoDate);
+        if (!apiInjuries) {
+          return { error: 'NBA Injuries API unavailable' };
+        }
+        // Combine home + away (API fetches by matchup but we only need one team)
+        const allInjuries = [...(apiInjuries.home || []), ...(apiInjuries.away || [])];
+        return {
+          team: args.team_name,
+          injuries: allInjuries.map(inj => ({
+            player: `${inj.player?.first_name} ${inj.player?.last_name}`,
+            status: inj.status,
+            description: inj.durationContext || 'No details'
+          }))
+        };
+      }
+      // Non-NBA: fall back to BDL
       const teams = await ballDontLieService.getNbaTeams();
-      const team = teams.find(t => 
+      const team = teams.find(t =>
         t.full_name?.toLowerCase().includes(args.team_name.toLowerCase()) ||
         t.name?.toLowerCase().includes(args.team_name.toLowerCase())
       );
-      
-      if (!team) {
-        return { error: `Team "${args.team_name}" not found` };
-      }
-
+      if (!team) return { error: `Team "${args.team_name}" not found` };
       const injuries = await ballDontLieService.getNbaPlayerInjuries([team.id]);
       return {
         team: team.full_name,
@@ -1567,58 +1515,9 @@ async function handlePropsToolCall(toolCall, sportKey, sportLabel) {
   }
 
   // ============================================================================
-  // FINALIZE_PROPS - Handles both regular and NFL categorized format
+  // FINALIZE_PROPS - Standard format for all sports
   // ============================================================================
   if (functionName === 'finalize_props') {
-    // Check if this is NFL categorized format (has regular_props, regular_td, etc.)
-    if (args.regular_props || args.regular_td || args.value_td || args.first_td) {
-      // NFL categorized format - combine all categories with metadata
-      const allPicks = [];
-      
-      // Regular props (shortlist 5 → we take top 3)
-      if (args.regular_props && Array.isArray(args.regular_props)) {
-        args.regular_props.forEach(pick => {
-          allPicks.push({ ...pick, category: 'regular_props' });
-        });
-      }
-      
-      // Regular TD (shortlist 4 → we take top 2, odds -200 to +200)
-      if (args.regular_td && Array.isArray(args.regular_td)) {
-        args.regular_td.forEach(pick => {
-          allPicks.push({ ...pick, category: 'regular_td' });
-        });
-      }
-      
-      // Value TD (pick 1, odds +200 or higher)
-      if (args.value_td && Array.isArray(args.value_td)) {
-        args.value_td.forEach(pick => {
-          allPicks.push({ ...pick, category: 'value_td' });
-        });
-      }
-      
-      // First TD (pick 1, lottery)
-      if (args.first_td && Array.isArray(args.first_td)) {
-        args.first_td.forEach(pick => {
-          allPicks.push({ ...pick, category: 'first_td' });
-        });
-      }
-      
-      console.log(`[NFL Props] Categorized finalize: ${args.regular_props?.length || 0} regular, ${args.regular_td?.length || 0} regular TD, ${args.value_td?.length || 0} value TD, ${args.first_td?.length || 0} first TD`);
-      
-      return { 
-        finalized: true, 
-        picks: allPicks,
-        categorized: true,
-        categories: {
-          regular_props: args.regular_props || [],
-          regular_td: args.regular_td || [],
-          value_td: args.value_td || [],
-          first_td: args.first_td || []
-        }
-      };
-    }
-    
-    // Standard format (non-NFL sports) - return picks as-is
     return { finalized: true, picks: args.picks };
   }
 
@@ -1632,20 +1531,6 @@ async function handlePropsToolCall(toolCall, sportKey, sportLabel) {
  * @param {Array} toolCallHistory - Array of {tool, result} from the iteration loop
  * @returns {Object} - { validatedPicks, warnings, invalidStats }
  */
-/**
- * Pass through Gary's raw confidence without calibration
- * We want Gary to express his confidence freely (0.50-1.0 scale)
- * @param {number} rawConfidence - Gary's raw confidence
- * @returns {number} - Same confidence, just validated
- */
-function calibrateConfidence(rawConfidence) {
-  // No calibration - pass through Gary's confidence as-is
-  // Just ensure it's in a valid range
-  if (!rawConfidence || rawConfidence < 0.5) return 0.5;
-  if (rawConfidence > 1.0) return 1.0;
-  return rawConfidence;
-}
-
 /**
  * Apply 2-props-per-game constraint with player diversification
  * 
@@ -1838,89 +1723,6 @@ function checkPropCorrelation(prop1, prop2) {
   return false;
 }
 
-/**
- * Check rationale quality for sharp betting standards
- * Returns warnings for generic or low-quality rationales
- */
-function checkRationaleQuality(rationale, player) {
-  const warnings = [];
-  const rationaleLower = (rationale || '').toLowerCase();
-  
-  // BANNED GENERIC PHRASES - These signal lazy analysis or public betting mentality
-  const bannedPhrases = [
-    // Generic prediction language
-    { phrase: 'should be able to', reason: 'Generic prediction language' },
-    { phrase: 'look for him to', reason: 'Generic prediction language' },
-    { phrase: 'i expect him to', reason: 'Generic prediction language' },
-    { phrase: 'expect him to', reason: 'Generic prediction language' },
-    { phrase: 'should hit', reason: 'Generic prediction language' },
-    { phrase: 'should cash', reason: 'Generic prediction language' },
-    // Gambling fallacies
-    { phrase: "he's due", reason: 'Gambling fallacy' },
-    { phrase: 'due for a big', reason: 'Gambling fallacy' },
-    { phrase: 'due for regression', reason: 'Gambling fallacy' },
-    // Public betting phrases
-    { phrase: 'buy the dip', reason: 'Public betting phrase - not analysis' },
-    { phrase: 'riding the hot hand', reason: 'Public betting phrase - not analysis' },
-    { phrase: 'hot hand', reason: 'Public betting phrase - needs specific data' },
-    { phrase: 'bounce back', reason: 'Needs specific mechanism for bounce back' },
-    // Narrative fluff
-    { phrase: 'firing on all cylinders', reason: 'Narrative fluff - not analysis' },
-    { phrase: 'lead by example', reason: 'Narrative fluff - not analysis' },
-    { phrase: 'big stage', reason: 'Narrative fluff - needs data' },
-    { phrase: 'milestone game', reason: 'Narrative fluff - milestones dont affect performance' },
-    { phrase: 'milestone', reason: 'Narrative fluff - milestones dont affect performance' },
-    { phrase: 'revenge game', reason: 'Narrative - show the actual splits or drop it' },
-    { phrase: 'primetime', reason: 'Narrative - needs actual primetime splits' },
-    { phrase: 'loves playing', reason: 'Narrative - needs actual venue/opponent splits' },
-    // Vague analysis
-    { phrase: 'volume play', reason: 'Needs specific volume data' },
-    { phrase: 'ceiling game', reason: 'Needs specific ceiling driver' },
-    { phrase: 'good spot', reason: 'Needs specific reasoning' },
-    { phrase: 'certified', reason: 'Hyperbole - not analysis' },
-    { phrase: 'philly-killer', reason: 'One-game sample treated as pattern' },
-    { phrase: '-killer', reason: 'One-game sample treated as pattern' },
-  ];
-  
-  // VAGUE PHRASES that need specificity
-  const vaguePatterns = [
-    { pattern: /good matchup(?! against| vs| with \d)/i, reason: 'Says "good matchup" without specifics - needs defensive rank or yards allowed' },
-    { pattern: /been hot(?! with \d| averaging| l[35])/i, reason: 'Says "been hot" without specifics - needs L3/L5 numbers' },
-    { pattern: /favorable(?! \d| rank| allow)/i, reason: 'Says "favorable" without specifics - needs data backing' },
-  ];
-  
-  // Check for banned phrases
-  for (const { phrase, reason } of bannedPhrases) {
-    if (rationaleLower.includes(phrase)) {
-      warnings.push(`[${player}] Banned phrase detected: "${phrase}" - ${reason}`);
-    }
-  }
-  
-  // Check for vague patterns
-  for (const { pattern, reason } of vaguePatterns) {
-    if (pattern.test(rationaleLower)) {
-      warnings.push(`[${player}] Vague language: ${reason}`);
-    }
-  }
-  
-  // Check for required elements (5-part structure)
-  const hasLineAnalysis = rationaleLower.includes('line') || rationaleLower.includes('set at') || rationaleLower.includes('priced');
-  const hasRisk = rationaleLower.includes('risk') || rationaleLower.includes('concern') || rationaleLower.includes('worry') || rationaleLower.includes('could go wrong');
-  const hasGameScript = rationaleLower.includes('spread') || rationaleLower.includes('underdog') || rationaleLower.includes('favorite') || rationaleLower.includes('implied') || rationaleLower.includes('game script');
-  
-  if (!hasLineAnalysis) {
-    warnings.push(`[${player}] Missing "why line is wrong" analysis`);
-  }
-  if (!hasRisk) {
-    warnings.push(`[${player}] Missing risk acknowledgment`);
-  }
-  if (!hasGameScript) {
-    warnings.push(`[${player}] Missing game script context (spread/total/implied)`);
-  }
-  
-  return warnings;
-}
-
 function validatePropsAgainstToolHistory(picks, toolCallHistory) {
   const warnings = [];
   const invalidStats = [];
@@ -2003,192 +1805,23 @@ function validatePropsAgainstToolHistory(picks, toolCallHistory) {
       validatedKeyStats.push(stat);
     }
     
-    // Calibrate confidence to realistic betting levels
-    const originalConfidence = pick.confidence;
-    let calibratedConfidence = calibrateConfidence(originalConfidence);
-    
-    // Check rationale quality for sharp betting standards
-    const rationaleWarnings = checkRationaleQuality(pick.rationale, pick.player);
-    if (rationaleWarnings.length > 0) {
-      warnings.push(...rationaleWarnings);
-    }
-    
-    // ════════════════════════════════════════════════════════════════════
-    // CONFIDENCE ADJUSTMENTS BASED ON VALIDATION QUALITY
-    // ════════════════════════════════════════════════════════════════════
-    
-    // RULE 1: No tool data for this player = MAX 0.65 confidence
-    // Gary should not have high confidence without actual data to back it up
-    if (!playerHasToolData) {
-      const cappedConfidence = Math.min(calibratedConfidence, 0.65);
-      if (cappedConfidence < calibratedConfidence) {
-        warnings.push(`[${pick.player}] Confidence capped 0.65 (no tool data fetched for this player)`);
-        calibratedConfidence = cappedConfidence;
-      }
-    }
-    
-    // RULE 2: Multiple rationale warnings = reduce confidence
-    // Each warning reduces confidence by 0.03 (max reduction 0.15)
-    const playerWarningCount = rationaleWarnings.length;
-    if (playerWarningCount > 0) {
-      const warningPenalty = Math.min(playerWarningCount * 0.03, 0.15);
-      const penalizedConfidence = Math.max(calibratedConfidence - warningPenalty, 0.50);
-      if (penalizedConfidence < calibratedConfidence) {
-        calibratedConfidence = penalizedConfidence;
-      }
-    }
-    
+    // Confidence: store Gary's raw confidence as-is (same as game picks — no manipulation)
     return {
       ...pick,
-      confidence: calibratedConfidence,
-      _originalConfidence: originalConfidence, // Keep for debugging
+      confidence: pick.confidence || null,
       key_stats: validatedKeyStats,
       _validation: {
-        hasToolData: playerHasToolData, // NOW PER-PLAYER, not global
-        warningCount: rationaleWarnings.length,
-        rationaleQuality: rationaleWarnings.length === 0 ? 'SHARP' : 'NEEDS_IMPROVEMENT',
-        confidenceAdjusted: calibratedConfidence !== calibrateConfidence(originalConfidence)
+        hasToolData: playerHasToolData,
       }
     };
   });
-  
-  // Log rationale quality summary
-  const sharpCount = validatedPicks.filter(p => p._validation?.rationaleQuality === 'SHARP').length;
-  const needsWorkCount = validatedPicks.filter(p => p._validation?.rationaleQuality === 'NEEDS_IMPROVEMENT').length;
-  if (needsWorkCount > 0) {
-    console.log(`[Props Validation] 📝 Rationale quality: ${sharpCount} sharp, ${needsWorkCount} need improvement`);
-  }
-  
+
   return { validatedPicks, warnings, invalidStats };
 }
 
 /**
- * Build the GAME STEEL MAN message for props - Team A vs Team B analysis
- * Gary understands how the GAME will play out before deciding which props benefit.
- * This mirrors game picks Steel Man cases but focuses on game flow for prop selection.
- *
- * @param {string} homeTeam - Home team name
- * @param {string} awayTeam - Away team name
- * @param {object} gameSummary - Game context (spread, totals, etc.)
- * @param {string} sportLabel - Sport identifier
- * @returns {string} - The Game Steel Man prompt
- */
-function buildGameSteelManForProps(homeTeam, awayTeam, gameSummary, sportLabel = 'NFL') {
-  const spread = gameSummary?.spread || 0;
-  const total = gameSummary?.total || 0;
-  const isNFL = sportLabel === 'NFL' || sportLabel === 'americanfootball_nfl';
-
-  // NFL only gets spread; other sports get spread + total + implied
-  let gameLine = `Spread: ${homeTeam} ${spread > 0 ? '+' : ''}${spread}`;
-  if (!isNFL && total) {
-    const homeImplied = gameSummary?.gameScript?.impliedTotals?.home || Math.round((total - spread) / 2);
-    const awayImplied = gameSummary?.gameScript?.impliedTotals?.away || Math.round((total + spread) / 2);
-    gameLine += ` | Total: ${total}\nImplied Points: ${awayTeam} ${awayImplied} | ${homeTeam} ${homeImplied}`;
-  }
-
-  return `## GAME STEEL MAN - UNDERSTAND THE GAME BEFORE PICKING PROPS
-
-Before you pick ANY props, you need to understand HOW this game will play out.
-Build Steel Man cases for BOTH teams. This tells you which players benefit.
-
-**${awayTeam} @ ${homeTeam}**
-${gameLine}
-
----
-
-## WRITE YOUR GAME ANALYSIS
-
-**CASE FOR ${homeTeam} (Home Team):**
-Write 2-3 paragraphs explaining:
-- What is ${homeTeam}'s path to winning/covering? What strengths show up?
-- How does ${homeTeam} attack ${awayTeam}'s weaknesses?
-- What's the game script if ${homeTeam} is winning? (Who gets volume? Who rests?)
-
-**CASE FOR ${awayTeam} (Away Team):**
-Write 2-3 paragraphs explaining:
-- What is ${awayTeam}'s path to winning/covering? What strengths show up?
-- How does ${awayTeam} attack ${homeTeam}'s weaknesses?
-- What's the game script if ${awayTeam} is winning? (Who gets volume? Who rests?)
-
-**YOUR GAME READ:**
-After writing both cases, state YOUR belief about how this game plays out:
-- Which team's strengths are more likely to show up tonight?
-- Is this a blowout, close game, or shootout?
-- What's the expected game flow? (Early lead? Comeback? Back-and-forth?)
-
----
-
-## WHY THIS MATTERS FOR PROPS
-
-Your game read tells you which props benefit:
-- If you expect ${homeTeam} to dominate → ${homeTeam} players get more opportunity, ${awayTeam} may chase
-- If you expect ${awayTeam} to control → ${awayTeam} players get more opportunity
-- If you expect a shootout → Passing props benefit, game stays close
-- If you expect a blowout → Starters may rest, garbage time distorts stats
-- If you expect a close game → Stars play full minutes, crunch time usage matters
-
-**DO NOT SKIP THIS STEP.** Your prop picks should FLOW from your game analysis.
-A prop pick that contradicts your game read is a prop pick without conviction.
-
----
-
-Write your Game Steel Man analysis now. NO tool calls - text analysis only.`;
-}
-
-/**
- * Build the PROP INVESTIGATION message - Player stats based on game read
- * After Gary understands the game, he investigates players who benefit from his read.
- *
- * @param {string} gameRead - Gary's game analysis/read
- * @param {Array} propCandidates - Available prop candidates
- * @param {string} sportLabel - Sport identifier
- * @returns {string} - The Prop Investigation prompt
- */
-function buildPropInvestigationMessage(gameRead, propCandidates, sportLabel = 'NFL') {
-  const candidateList = propCandidates.slice(0, 10).map((p, i) =>
-    `${i + 1}. ${p.player} (${p.team}) - ${p.props?.map(pr => `${pr.type} ${pr.line}`).join(', ') || 'Available'}`
-  ).join('\n');
-
-  return `## PROP INVESTIGATION - FIND PLAYERS WHO BENEFIT FROM YOUR GAME READ
-
-You've completed your Game Steel Man analysis. Now investigate which players benefit.
-
-**YOUR GAME READ:**
-${gameRead.substring(0, 2000)}
-
----
-
-**AVAILABLE PROP CANDIDATES:**
-${candidateList}
-
----
-
-## YOUR TASK
-
-Based on your game read, identify 4-6 players who benefit most from the game script you expect.
-
-For each player you're interested in, call the BDL tools to investigate:
-- \`fetch_player_game_logs\` - Recent performance (L5-10 games)
-- \`fetch_player_season_stats\` - Season averages
-- \`fetch_player_vs_opponent\` - How they perform vs this opponent
-
-**INVESTIGATION QUESTIONS:**
-1. Which players benefit from YOUR expected game script?
-2. Do their recent numbers support the props available?
-3. Is there a mismatch the line hasn't captured?
-
-**AFTER INVESTIGATION:**
-Pick your 2 BEST props that:
-- Align with your game read
-- Have statistical support from your investigation
-- Show a clear edge (not just "average beats line")
-
-Call the BDL tools NOW to investigate your top candidates.`;
-}
-
-/**
- * Build the PASS 2 message for props - Steel Man Bilateral Analysis (LEGACY - kept for backwards compatibility)
- * This is now secondary to the Game Steel Man approach but kept for fallback.
+ * Build the PASS 2 message for props - Bilateral OVER/UNDER Analysis
+ * After investigation, Gary writes cases for both sides of each candidate prop.
  *
  * @param {Array} candidates - The shortlisted prop candidates to analyze
  * @param {string} sportLabel - Sport identifier
@@ -2233,283 +1866,6 @@ DO NOT call any tools. Write text analysis only. Start with ${candidates[0]?.pla
 }
 
 /**
- * Build the PASS 2.5 message for props - Steel Man GRADING & Conviction Assessment
- * Now includes Sharp Reference for grading the Steel Man cases.
- * This forces Gary to evaluate each prop's edge potential using sharp principles.
- * 
- * @param {Array} picks - The shortlisted picks Gary wants to finalize
- * @param {string} sportLabel - Sport identifier
- * @returns {string} - The Pass 2.5 prompt
- */
-function buildPropsPass25Message(picks, sportLabel = 'NFL') {
-  // Load the Sharp Reference for grading (sport-specific)
-  const sharpReference = getSteelManGradingReference(sportLabel);
-  
-  const pickSummary = picks.map((p, i) => 
-    `${i + 1}. ${p.player} ${p.bet?.toUpperCase() || 'OVER'} ${p.prop || p.prop_type} ${p.line} @ ${p.odds}`
-  ).join('\n');
-
-  return `
-══════════════════════════════════════════════════════════════════════
-## PASS 2.5 - STEEL MAN GRADING & CONVICTION ASSESSMENT
-
-You've built Steel Man cases for both sides of your prop candidates.
-Now you must GRADE those cases using sharp betting principles.
-
-**YOUR PICKS TO GRADE:**
-${pickSummary}
-
----
-
-${sharpReference}
-
----
-
-## STEP 1: GRADE YOUR STEEL MAN CASES
-
-For each prop you analyzed in Pass 2, apply the sharp principles above:
-
-**CASE QUALITY CHECK:**
-1. Did your OVER case explain something the line might MISS, or just describe public info?
-2. Did your UNDER case identify a specific mechanism, or just say "maybe it won't happen"?
-3. Which case has the stronger STRUCTURAL foundation?
-4. Which case relies on FRESH factors vs just baseline stats?
-
-**TRAP LOGIC CHECK:**
-- Did you use "his average beats the line" as your main argument? = WEAK (market has this)
-- Did you cite one previous game result? = WEAK (one game is noise)
-- Did you identify a specific mechanism the line hasn't captured? = STRONG
-
----
-
-## STEP 2: RATE EDGE POTENTIAL (1-10)
-
-For each prop, rate based on how strongly your winning case beats the opposing case:
-
-| Rating | Meaning |
-|--------|---------|
-| 8-10 | Clear structural edge, weak counter-case, fresh factor |
-| 6-7 | Good edge, counter-case has some merit but yours is stronger |
-| 5 | Slight lean, could go either way |
-| 1-4 | Counter-case is equally strong or stronger - NO EDGE |
-
-**THE "TOO EASY" TEST:**
-> "Could I explain this pick in 30 seconds to a casual fan?"
-> If YES, the market already knows it. Rate 4 or lower.
-
----
-
-## STEP 3: IDENTIFY WHAT KILLS EACH PICK
-
-For each prop you're keeping, name the SPECIFIC scenario where it loses:
-
-[GOOD] "Risk: If game becomes a blowout (spread is -12), he sits in Q4 with 28 minutes instead of 34"
-[WEAK] "Risk: He might not play well"
-
----
-
-## OUTPUT FORMAT (strict JSON):
-
-\`\`\`json
-{
-  "case_grades": [
-    {
-      "player": "Player Name",
-      "prop": "prop_type line",
-      "over_case_grade": "STRONG/MEDIUM/WEAK",
-      "under_case_grade": "STRONG/MEDIUM/WEAK",
-      "winning_case": "OVER/UNDER",
-      "trap_logic_detected": false,
-      "fresh_factor_identified": "Specific fresh factor or null"
-    }
-  ],
-  "conviction_ratings": [
-    {
-      "player": "Player Name",
-      "prop": "prop_type line",
-      "edge_rating": 7,
-      "edge_type": "USAGE_SHIFT",
-      "what_line_misses": "Specific factor the book may not have priced",
-      "kill_scenario": "Specific game script where this loses",
-      "keep_pick": true
-    }
-  ],
-  "overall_slate_conviction": "HIGH/MEDIUM/LOW",
-  "drops": ["Player Name - reason (e.g., trap logic, weak case, equally strong counter)"],
-  "final_count": 3
-}
-\`\`\`
-
----
-
-## GRADING RULES:
-
-1. **Grade EVERY prop** you analyzed in Pass 2
-2. **DROP picks with edge_rating below 5** - the counter-case is too strong
-3. **DROP picks where you detected trap logic** - "average beats line" is not edge
-4. **Be HONEST** - if both cases are equally strong, that's edge_rating = 4-5, not a pick
-
-**After grading, call finalize_props with ONLY the picks rated 6+ with no trap logic.**
-`.trim();
-}
-
-/**
- * Parse Gary's Props Pass 2.5 conviction ratings
- * ROBUST VERSION: Multiple fallback extraction methods for malformed Gemini output
- * @param {string} content - Gary's response content
- * @returns {object|null} - Parsed ratings or null
- */
-function parsePropsPass25Ratings(content) {
-  if (!content) return null;
-  
-  /**
-   * Helper: Clean and sanitize JSON string for parsing
-   */
-  const sanitizeJson = (str) => {
-    return str
-      .replace(/[\x00-\x1F\x7F]/g, ' ')  // Remove control chars
-      .replace(/,\s*}/g, '}')            // Fix trailing commas in objects
-      .replace(/,\s*]/g, ']')            // Fix trailing commas in arrays
-      .replace(/\n/g, ' ')               // Normalize newlines
-      .replace(/\r/g, '')                // Remove carriage returns
-      .trim();
-  };
-  
-  /**
-   * Helper: Format successful parse result
-   */
-  const formatResult = (parsed) => {
-    const ratings = parsed.conviction_ratings || [];
-    return {
-      ratings,
-      slateConviction: parsed.overall_slate_conviction || 'MEDIUM',
-      drops: parsed.drops || ratings
-        .filter(r => r.keep_pick === false || r.edge_rating < 5)
-        .map(r => `${r.player} - ${r.drop_reason || 'edge rating ' + r.edge_rating}`),
-      finalCount: parsed.final_count || ratings.filter(r => r.keep_pick !== false && r.edge_rating >= 5).length
-    };
-  };
-  
-  // ══════════════════════════════════════════════════════════════════
-  // ATTEMPT 1: Standard JSON code block (most reliable)
-  // ══════════════════════════════════════════════════════════════════
-  try {
-    const jsonBlockMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
-    if (jsonBlockMatch) {
-      const jsonStr = sanitizeJson(jsonBlockMatch[1]);
-      const parsed = JSON.parse(jsonStr);
-      if (parsed.conviction_ratings) {
-        console.log(`[Props Pass 2.5] ✓ Parsed via JSON code block`);
-        return formatResult(parsed);
-      }
-    }
-  } catch (e) {
-    console.log(`[Props Pass 2.5] JSON block parse attempt failed: ${e.message.slice(0, 60)}`);
-  }
-  
-  // ══════════════════════════════════════════════════════════════════
-  // ATTEMPT 2: Raw JSON object with conviction_ratings
-  // ══════════════════════════════════════════════════════════════════
-  try {
-    // More specific regex that captures the full object
-    const rawJsonMatch = content.match(/\{\s*"conviction_ratings"\s*:\s*\[[\s\S]*?\]\s*[,}]/);
-    if (rawJsonMatch) {
-      // Complete the object if it was truncated
-      let jsonStr = rawJsonMatch[0];
-      if (!jsonStr.endsWith('}')) {
-        jsonStr = jsonStr.slice(0, -1) + '}'; // Replace trailing comma with closing brace
-      }
-      const parsed = JSON.parse(sanitizeJson(jsonStr));
-      if (parsed.conviction_ratings) {
-        console.log(`[Props Pass 2.5] ✓ Parsed via raw JSON extraction`);
-        return formatResult(parsed);
-      }
-    }
-  } catch (e) {
-    console.log(`[Props Pass 2.5] Raw JSON parse attempt failed: ${e.message.slice(0, 60)}`);
-  }
-  
-  // ══════════════════════════════════════════════════════════════════
-  // ATTEMPT 3: Extract individual ratings via regex patterns (fallback)
-  // ══════════════════════════════════════════════════════════════════
-  try {
-    const ratings = [];
-    
-    // Pattern 1: "Player Name": X/10 (EDGE_TYPE)
-    const pattern1 = content.matchAll(/["']?([A-Za-z][A-Za-z\s.'-]{2,30})["']?\s*[:\-]\s*(\d+)\s*\/\s*10\s*\(([A-Z_]+)\)/gi);
-    for (const match of pattern1) {
-      if (!ratings.find(r => r.player === match[1].trim())) {
-        ratings.push({
-          player: match[1].trim(),
-          edge_rating: parseInt(match[2]),
-          edge_type: match[3].trim().toUpperCase(),
-          keep_pick: parseInt(match[2]) >= 5
-        });
-      }
-    }
-    
-    // Pattern 2: player: "Name", edge_rating: X
-    const pattern2 = content.matchAll(/"player"\s*:\s*"([^"]+)"[^}]*"edge_rating"\s*:\s*(\d+)/gi);
-    for (const match of pattern2) {
-      if (!ratings.find(r => r.player === match[1].trim())) {
-        ratings.push({
-          player: match[1].trim(),
-          edge_rating: parseInt(match[2]),
-          edge_type: 'UNKNOWN',
-          keep_pick: parseInt(match[2]) >= 5
-        });
-      }
-    }
-    
-    // Pattern 3: ✓/✗ PlayerName: X/10
-    const pattern3 = content.matchAll(/[✓✗]\s*([A-Za-z][A-Za-z\s.'-]{2,30}):\s*(\d+)\/10/gi);
-    for (const match of pattern3) {
-      if (!ratings.find(r => r.player === match[1].trim())) {
-        ratings.push({
-          player: match[1].trim(),
-          edge_rating: parseInt(match[2]),
-          edge_type: 'UNKNOWN',
-          keep_pick: parseInt(match[2]) >= 5
-        });
-      }
-    }
-    
-    if (ratings.length > 0) {
-      console.log(`[Props Pass 2.5] ✓ Extracted ${ratings.length} ratings via regex fallback`);
-      return {
-        ratings,
-        slateConviction: 'MEDIUM',
-        drops: ratings.filter(r => r.edge_rating < 5).map(r => `${r.player} - edge rating ${r.edge_rating}`),
-        finalCount: ratings.filter(r => r.edge_rating >= 5).length
-      };
-    }
-  } catch (e) {
-    console.log(`[Props Pass 2.5] Regex fallback failed: ${e.message.slice(0, 60)}`);
-  }
-  
-  // ══════════════════════════════════════════════════════════════════
-  // ATTEMPT 4: Extract slate conviction even if ratings failed
-  // ══════════════════════════════════════════════════════════════════
-  try {
-    const convictionMatch = content.match(/slate.*conviction[:\s]*(HIGH|MEDIUM|LOW)/i) ||
-                           content.match(/overall.*conviction[:\s]*(HIGH|MEDIUM|LOW)/i);
-    if (convictionMatch) {
-      console.log(`[Props Pass 2.5] ⚠️ Found conviction (${convictionMatch[1]}) but no parseable ratings`);
-      // Return minimal result so we don't block the flow
-      return {
-        ratings: [],
-        slateConviction: convictionMatch[1].toUpperCase(),
-        drops: [],
-        finalCount: 0
-      };
-    }
-  } catch {}
-  
-  console.log(`[Props Pass 2.5] ✗ All parsing attempts failed`);
-  return null;
-}
-
-/**
  * Run full iteration loop for props using PERSISTENT chat session
  * The chat session manages its own history, avoiding thoughtSignature issues
  */
@@ -2530,7 +1886,7 @@ async function runPropsIterationLoop({ systemPrompt, userMessage, sportKey, spor
   // GEMINI 3 FLASH SETTINGS FOR PROPS (Updated per Google best practices):
   // - temperature: 1.0 (Google's recommended default - lower causes looping/degraded math)
   // - thinkingLevel: "low" for tool dispatch (~5-8s) - pure pattern matching, minimal thinking
-  // - Reasoning phases (Pass 2, Pass 2.5) use separate high-thinking calls
+  // - All passes use the same model (no separate high-thinking calls)
   const model = gemini.getGenerativeModel({
     model: propsModel,
     safetySettings: GEMINI_SAFETY_SETTINGS,
@@ -2547,22 +1903,6 @@ async function runPropsIterationLoop({ systemPrompt, userMessage, sportKey, spor
     }
   });
   
-  // Create HIGH-THINKING model for reasoning phases (Pass 2 Steel Man, Pass 2.5 Conviction)
-  // This uses "high" thinking for deep reasoning on pick analysis
-  const reasoningModel = gemini.getGenerativeModel({
-    model: propsModel,
-    safetySettings: GEMINI_SAFETY_SETTINGS,
-    generationConfig: {
-      temperature: 1.0,
-      topP: 0.95,
-      maxOutputTokens: 8000,
-      thinkingConfig: {
-        includeThoughts: true,
-        thinkingLevel: 'high' // "high" = deep reasoning for bilateral analysis
-      }
-    }
-  });
-
   // Create PERSISTENT chat session with system instruction
   const chat = model.startChat({
     systemInstruction: { parts: [{ text: systemPrompt }] }
@@ -2570,17 +1910,55 @@ async function runPropsIterationLoop({ systemPrompt, userMessage, sportKey, spor
 
   let iteration = 0;
   const toolCallHistory = [];
-  let didDirectionBalanceCheck = false;
-  // GAME STEEL MAN tracking - Gary must understand the game BEFORE picking props
-  let didInjectGameSteelMan = false;    // Track if Game Steel Man message was SENT
-  let didCompleteGameSteelMan = false;  // Track if Gary COMPLETED game analysis (Team A vs Team B cases)
-  let gameSteelManText = '';            // Store Gary's game analysis for prop investigation
-  // PROP INVESTIGATION tracking - After game read, Gary investigates players
-  let didInjectPropInvestigation = false; // Track if Prop Investigation message was SENT
-  let didCompletePropInvestigation = false; // Track if Gary investigated players (tool calls for stats)
-  let gameSteelManBypassAttempts = 0;   // Track how many times Gary tried to bypass game analysis
-  let consecutiveEmptyResponses = 0; // Track consecutive empty responses
-  let propCandidatesForInvestigation = []; // Store candidates for player investigation
+  let consecutiveEmptyResponses = 0;
+
+  // ═══════════════════════════════════════════════════════════════════
+  // 4-PASS PIPELINE (mirrors game picks: agenticOrchestrator.js)
+  //   Pass 1: Investigation (Flash, low-thinking) — tool calls for player stats
+  //   Pass 2: Bilateral Cases (text only) — OVER/UNDER for each candidate
+  //   Pass 2.5: Evaluation (text only) — stress test cases, decide which 2
+  //   Pass 3: Finalize — call finalize_props with 2 picks
+  // ═══════════════════════════════════════════════════════════════════
+  let _pass2Injected = false;   // Bilateral case writing injected
+  let _pass25Injected = false;  // Evaluation injected
+  let _pass3Injected = false;   // Finalize injected
+
+  // Helper: count investigated players (tool data available)
+  function getInvestigatedPlayerCount() {
+    const players = new Set();
+    for (const { tool, result: r } of toolCallHistory) {
+      if (['fetch_player_game_logs', 'fetch_player_season_stats', 'fetch_player_advanced_stats', 'fetch_player_game_advanced'].includes(tool) && r?.player) {
+        players.add(r.player.toLowerCase());
+      }
+    }
+    return players.size;
+  }
+
+  // Helper: detect bilateral OVER/UNDER case completion (Pass 2 → 2.5)
+  function detectBilateralCases(text) {
+    const lower = text.toLowerCase();
+    const overCases = (lower.match(/case for over/g) || []).length;
+    const underCases = (lower.match(/case for under/g) || []).length;
+    const verdicts = (lower.match(/verdict:/g) || []).length;
+    // Need at least 2 candidates with OVER+UNDER cases, or 2 verdicts
+    return (overCases >= 2 && underCases >= 2) || verdicts >= 2;
+  }
+
+  // Helper: build candidate list from investigation history for Pass 2
+  function buildInvestigatedCandidates() {
+    const candidates = [];
+    const seen = new Set();
+    for (const { tool, result: r } of toolCallHistory) {
+      if (['fetch_player_game_logs', 'fetch_player_season_stats'].includes(tool) && r?.player) {
+        const name = r.player;
+        if (!seen.has(name.toLowerCase())) {
+          seen.add(name.toLowerCase());
+          candidates.push({ player: name, props: [] });
+        }
+      }
+    }
+    return candidates;
+  }
 
   // Send initial user message
   console.log(`\n[Props Iteration ${sportLabel}] 1/${maxIterations} (initial)`);
@@ -2591,229 +1969,173 @@ async function runPropsIterationLoop({ systemPrompt, userMessage, sportKey, spor
   while (iteration < maxIterations) {
     const candidate = response.candidates?.[0];
     const parts = candidate?.content?.parts || [];
-    
+
     // Extract function calls and text
     const functionCallParts = parts.filter(p => p.functionCall);
     const textParts = parts.filter(p => p.text).map(p => p.text);
-    
+    const textContent = textParts.join('');
+
     console.log(`[Props] Response: ${functionCallParts.length} function call(s), ${textParts.length} text part(s)`);
 
-    // Check for finalize_props in function calls FIRST
-    for (const fc of functionCallParts) {
-      if (fc.functionCall?.name === 'finalize_props') {
-        const args = fc.functionCall.args || {};
-        
-        // Handle NFL categorized format (regular_props, regular_td, value_td, first_td)
-        // vs standard format (picks array)
-        let picks = [];
-        let isCategorized = false;
-        if (args.regular_props || args.regular_td || args.value_td || args.first_td) {
-          // NFL categorized format - combine all categories
-          isCategorized = true;
-          if (Array.isArray(args.regular_props)) picks.push(...args.regular_props.map(p => ({ ...p, category: 'regular_props' })));
-          if (Array.isArray(args.regular_td)) picks.push(...args.regular_td.map(p => ({ ...p, category: 'regular_td' })));
-          if (Array.isArray(args.value_td)) picks.push(...args.value_td.map(p => ({ ...p, category: 'value_td' })));
-          if (Array.isArray(args.first_td)) picks.push(...args.first_td.map(p => ({ ...p, category: 'first_td' })));
-          console.log(`[Props] ✓ NFL Categorized: ${args.regular_props?.length || 0} regular, ${args.regular_td?.length || 0} regular TD, ${args.value_td?.length || 0} value TD, ${args.first_td?.length || 0} first TD = ${picks.length} total`);
-        } else {
-          // Standard format
-          picks = args.picks || [];
-          console.log(`[Props] ✓ Gary finalized ${picks.length} picks`);
-        }
+    // ═══════════════════════════════════════════════════════════════════
+    // FINALIZE GATE — Only accept finalize_props after Pass 3
+    // ═══════════════════════════════════════════════════════════════════
+    const finalizeCall = functionCallParts.find(fc => fc.functionCall?.name === 'finalize_props');
+    if (finalizeCall) {
+      const args = finalizeCall.functionCall.args || {};
+      let picks = args.picks || [];
+      console.log(`[Props] Gary called finalize_props with ${picks.length} picks`);
 
-        // ══════════════════════════════════════════════════════════════════
-        // GAME STEEL MAN ENFORCEMENT - HARD GATE, NO BYPASS ALLOWED
-        // Props flow from understanding the GAME. Gary MUST analyze the game first.
-        // ══════════════════════════════════════════════════════════════════
+      // GATE: Reject if pipeline not complete
+      if (!_pass3Injected && iteration < maxIterations - 1) {
+        const playersInvestigated = getInvestigatedPlayerCount();
 
-        // Extract team names from userMessage context for detection
-        // Look for patterns like "Team @ Team" or team-specific case markers
-        const combinedText = textParts.join('');
-
-        // Check if Gary wrote Game Steel Man analysis WITH the finalize_props call
-        // Look for game-level analysis (CASE FOR [TEAM], game read, etc.)
-        if (!didCompleteGameSteelMan && textParts.length > 0 && combinedText.length > 300) {
-          const textLower = combinedText.toLowerCase();
-          // Detect game-level Steel Man (Team vs Team analysis)
-          const hasTeamCase = textLower.includes('case for') && !textLower.includes('case for over') && !textLower.includes('case for under');
-          const hasGameRead = textLower.includes('game read') || textLower.includes('game script') || textLower.includes('expect the game') || textLower.includes('game flow');
-          const hasTeamAnalysis = textLower.includes('path to winning') || textLower.includes('path to covering') || textLower.includes('how they win') || textLower.includes('strengths show up');
-          const hasBlowoutShootout = textLower.includes('blowout') || textLower.includes('shootout') || textLower.includes('close game');
-
-          if ((hasTeamCase || hasGameRead || hasTeamAnalysis) && hasBlowoutShootout) {
-            console.log(`[Props] ✓ Game Steel Man detected WITH finalize_props call`);
-            console.log(`[Props] GARY'S GAME ANALYSIS:`);
-            console.log(`════════════════════════════════════════════════════════════════`);
-            console.log(combinedText.substring(0, 2000));
-            console.log(`════════════════════════════════════════════════════════════════`);
-            didCompleteGameSteelMan = true;
-            gameSteelManText = combinedText;
-          }
-        }
-
-        if (!didCompleteGameSteelMan && Array.isArray(picks) && picks.length > 0) {
-          // Track bypass attempts
-          gameSteelManBypassAttempts++;
-
-          // NO BYPASS - Gary MUST complete Game Steel Man analysis first
-          if (!didInjectGameSteelMan) {
-            // First time - inject Game Steel Man requirements
-            didInjectGameSteelMan = true;
-            console.log(`[Props] REJECTED - Gary tried to finalize without GAME ANALYSIS`);
-
-            iteration++;
-            console.log(`\n[Props Iteration ${sportLabel}] ${iteration}/${maxIterations} (GAME STEEL MAN REQUIRED) [HIGH THINKING]`);
-
-            // Extract team names from the userMessage (look for @ pattern)
-            const matchMatch = userMessage.match(/"matchup":\s*"([^"]+)\s*@\s*([^"]+)"/);
-            const awayTeam = matchMatch?.[1] || 'Away Team';
-            const homeTeam = matchMatch?.[2] || 'Home Team';
-
-            // Use HIGH-THINKING reasoningModel for Game Steel Man
-            const gameSteelManMessage = buildGameSteelManForProps(homeTeam, awayTeam, {}, sportLabel);
-            const gameSteelManResult = await reasoningModel.generateContent(gameSteelManMessage);
-            const gameSteelManResponse = gameSteelManResult.response;
-            gameSteelManText = gameSteelManResponse.text() || '';
-
-            if (gameSteelManText.length > 100) {
-              console.log(`[Props] HIGH-THINKING Game Steel Man (${gameSteelManText.length} chars)`);
-              console.log(`[Props] GAME ANALYSIS:`);
-              console.log(`════════════════════════════════════════════════════════════════`);
-              console.log(gameSteelManText.substring(0, 1500));
-              console.log(`════════════════════════════════════════════════════════════════`);
-            }
-
-            didCompleteGameSteelMan = true;
-
-            // Inject the game analysis back into chat and ask for prop investigation
-            result = await chat.sendMessage(`GAME STEEL MAN COMPLETE:\n\n${gameSteelManText}\n\nBased on this game analysis, now INVESTIGATE the players who benefit from your game read. Call BDL tools for 4-6 players, then finalize_props with your 2 best picks that FLOW from your game analysis.`);
-            response = result.response;
-            continue;
+        // Build function responses for ALL calls (must respond to every function call)
+        const functionResponses = [];
+        for (const fc of functionCallParts) {
+          if (fc.functionCall?.name === 'finalize_props') {
+            functionResponses.push({
+              functionResponse: {
+                name: 'finalize_props',
+                response: { content: JSON.stringify({ error: 'Complete analysis pipeline before finalizing.' }) }
+              }
+            });
           } else {
-            // Already injected but Gary tried again without proper investigation
-            console.log(`[Props] BLOCKED (attempt ${gameSteelManBypassAttempts}) - Need player investigation based on game read`);
-            iteration++;
-
-            const reminderMessage = `Your game analysis is complete. Now:
-
-1. INVESTIGATE players who benefit from your game read (call BDL tools for 4-6 players)
-2. Pick 2 props that FLOW from your game analysis
-
-Which players benefit from the game script you expect? Call fetch_player_game_logs or fetch_player_season_stats for those players.`;
-
-            result = await chat.sendMessage(reminderMessage);
-            response = result.response;
-            continue;
+            // Process other tool calls normally
+            const toolCall = { function: { name: fc.functionCall.name, arguments: JSON.stringify(fc.functionCall.args || {}) } };
+            const toolResult = await handlePropsToolCall(toolCall, sportKey, sportLabel);
+            toolCallHistory.push({ tool: fc.functionCall.name, result: toolResult });
+            functionResponses.push({
+              functionResponse: {
+                name: fc.functionCall.name,
+                response: { content: JSON.stringify(toolResult) }
+              }
+            });
           }
         }
+        iteration++;
+        result = await chat.sendMessage(functionResponses);
+        response = result.response;
 
-        // ══════════════════════════════════════════════════════════════════
-        // PROP COUNT ENFORCEMENT - Only accept 2 props per game (quality over quantity)
-        // ══════════════════════════════════════════════════════════════════
-        if (didCompleteGameSteelMan && Array.isArray(picks) && picks.length > 2) {
-          console.log(`[Props] Gary submitted ${picks.length} picks - trimming to top 2 by confidence`);
-          // Sort by confidence and take top 2
-          picks.sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
-          picks = picks.slice(0, 2);
-          console.log(`[Props] Kept: ${picks.map(p => `${p.player} ${p.prop}`).join(', ')}`);
-        }
+        // Inject the appropriate next pass
+        if (!_pass2Injected && playersInvestigated >= 3) {
+          _pass2Injected = true;
+          const candidates = buildInvestigatedCandidates();
+          console.log(`[Props] PIPELINE GATE: finalize before Pass 2 — injecting bilateral cases (${playersInvestigated} players investigated)`);
+          iteration++;
+          console.log(`\n[Props Iteration ${sportLabel}] ${iteration}/${maxIterations} (PASS 2 — bilateral cases)`);
+          result = await chat.sendMessage(buildPropsPass2SteelManMessage(candidates, sportLabel));
+          response = result.response;
+        } else if (!_pass2Injected) {
+          console.log(`[Props] PIPELINE GATE: finalize too early — only ${playersInvestigated} players investigated (need 3+)`);
+          iteration++;
+          console.log(`\n[Props Iteration ${sportLabel}] ${iteration}/${maxIterations} (need more investigation)`);
+          result = await chat.sendMessage(`You've only investigated ${playersInvestigated} player(s). Investigate at least 3 players with BDL tools before finalizing. Call fetch_player_game_logs or fetch_player_season_stats for more candidates.`);
+          response = result.response;
+        } else if (!_pass25Injected) {
+          _pass25Injected = true;
+          console.log(`[Props] PIPELINE GATE: finalize before Pass 2.5 — injecting evaluation`);
+          iteration++;
+          console.log(`\n[Props Iteration ${sportLabel}] ${iteration}/${maxIterations} (PASS 2.5 — evaluation)`);
+          result = await chat.sendMessage(`## PASS 2.5 — EVALUATION
 
-        // NOTE: We removed the Pass 2.5 grading phase since props now flow from game analysis
-        // The game Steel Man IS the reasoning phase - no separate grading needed
+You've written OVER/UNDER cases for your candidates. Now evaluate:
 
-        // Direction balance check: if Gary returns ALL overs/ALL unders,
-        // log a warning but ACCEPT the picks - don't block on this
-        // Sharp bettors often have slate-wide directional leans based on market conditions
-        if (!didDirectionBalanceCheck && Array.isArray(picks) && picks.length > 0) {
-          const normalizedBets = picks
-            .map(p => (p?.bet || '').toString().trim().toLowerCase())
-            .filter(b => b === 'over' || b === 'under');
+1. For each candidate, which case was stronger — OVER or UNDER? Be honest about which argument holds up.
+2. Does the DATA from your investigation support your verdict, or are you relying on narrative?
+3. Which 2 props have the CLEAREST statistical edge?
 
-          const uniqueDirections = new Set(normalizedBets);
-          const isAllOneSide = normalizedBets.length === picks.length && uniqueDirections.size === 1;
+CRITICAL QUESTIONS:
+- Do your picks ALIGN with how you expect this game to play out?
+- What specific mechanism pushes production ABOVE or BELOW the line tonight?
+- Is the line mispriced based on what your investigation revealed?
 
-          if (isAllOneSide) {
-            didDirectionBalanceCheck = true;
-            const onlySide = normalizedBets[0];
-            console.log(`[Props] ℹ️ All picks are "${onlySide}" - accepting (sharp slates often lean one way)`);
-            // Don't block - proceed with validation and return picks
-          }
+Identify your 2 BEST picks. Write your evaluation as text. Do NOT call finalize_props yet.`);
+          response = result.response;
+        } else {
+          _pass3Injected = true;
+          console.log(`[Props] PIPELINE GATE: finalize before Pass 3 — injecting final instruction`);
+          iteration++;
+          console.log(`\n[Props Iteration ${sportLabel}] ${iteration}/${maxIterations} (PASS 3 — finalize)`);
+          result = await chat.sendMessage(`## PASS 3 — FINALIZE
+
+Your investigation and evaluation are complete. Call finalize_props NOW with your 2 best picks.
+
+For each pick provide:
+- player, prop, line, odds, bet (OVER/UNDER), confidence (0.50-0.95 — use precise values like 0.72, 0.81, not round numbers), rationale
+
+Call finalize_props now.`);
+          response = result.response;
         }
-        
-        // Validate picks against tool call history
-        const { validatedPicks, warnings, invalidStats } = validatePropsAgainstToolHistory(picks, toolCallHistory);
-        
-        if (warnings.length > 0) {
-          console.log(`[Props Validation] ⚠️ ${warnings.length} warning(s):`);
-          warnings.slice(0, 5).forEach(w => console.log(`   - ${w}`));
-          if (warnings.length > 5) console.log(`   ... and ${warnings.length - 5} more`);
-        }
-        if (invalidStats.length > 0) {
-          console.log(`[Props Validation] ❌ ${invalidStats.length} unverifiable stat(s) detected`);
-        }
-        
-        // CRITICAL: Filter out picks for players NOT on valid teams (per BDL verification)
-        // This catches stale Odds API data (e.g., Deebo Samuel listed as 49er when he's on Commanders)
-        let finalPicks = validatedPicks;
-        if (validatedPlayerNames && validatedPlayerNames.size > 0) {
-          const beforeCount = finalPicks.length;
-          finalPicks = finalPicks.filter(pick => {
-            const playerKey = (pick.player || '').toLowerCase();
-            const isValid = validatedPlayerNames.has(playerKey);
-            if (!isValid) {
-              console.log(`[Props Validation] ❌ REJECTED: ${pick.player} - not verified on either team (stale roster data)`);
-            }
-            return isValid;
-          });
-          if (finalPicks.length < beforeCount) {
-            console.log(`[Props Validation] Filtered ${beforeCount - finalPicks.length} pick(s) with invalid team assignments`);
-          }
-        }
-        
-        // Apply 2-props-per-game constraint with player diversification
-        // NOTE: Constraint is applied LATER (after matchup field is added) for ALL sports
-        // This ensures we can properly group picks by game across both teams
-        // NFL categorization (regular_props, regular_td, value_td, first_td) happens post-iteration
-        
-        // Return picks directly - constraint and categorization happen in post-processing
-        return { 
-          picks: finalPicks, 
-          iterations: iteration, 
-          toolCalls: toolCallHistory.length, 
-          warnings, 
-          categorized: isCategorized,
-          droppedByConstraint: 0,
-          garySpecials: 0
-        };
+        continue;
       }
+
+      // ═══════════════════════════════════════════════════════════════════
+      // ACCEPTED — Pass 3 complete, process the picks
+      // ═══════════════════════════════════════════════════════════════════
+      console.log(`[Props] ✓ Pass 3 complete — accepting ${picks.length} picks`);
+
+      // Trim to top 2 by confidence
+      if (Array.isArray(picks) && picks.length > 2) {
+        console.log(`[Props] Gary submitted ${picks.length} picks — trimming to top 2 by confidence`);
+        picks.sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
+        picks = picks.slice(0, 2);
+        console.log(`[Props] Kept: ${picks.map(p => `${p.player} ${p.prop}`).join(', ')}`);
+      }
+
+      // Direction balance check (informational only)
+      if (Array.isArray(picks) && picks.length > 0) {
+        const normalizedBets = picks
+          .map(p => (p?.bet || '').toString().trim().toLowerCase())
+          .filter(b => b === 'over' || b === 'under');
+        const uniqueDirections = new Set(normalizedBets);
+        if (normalizedBets.length === picks.length && uniqueDirections.size === 1) {
+          console.log(`[Props] ℹ️ All picks are "${normalizedBets[0]}" — accepting (sharp slates often lean one way)`);
+        }
+      }
+
+      // Validate picks against tool call history
+      const { validatedPicks, warnings, invalidStats } = validatePropsAgainstToolHistory(picks, toolCallHistory);
+      if (warnings.length > 0) {
+        console.log(`[Props Validation] ⚠️ ${warnings.length} warning(s):`);
+        warnings.slice(0, 5).forEach(w => console.log(`   - ${w}`));
+        if (warnings.length > 5) console.log(`   ... and ${warnings.length - 5} more`);
+      }
+      if (invalidStats.length > 0) {
+        console.log(`[Props Validation] ❌ ${invalidStats.length} unverifiable stat(s) detected`);
+      }
+
+      // Filter out picks for players NOT on valid teams
+      let finalPicks = validatedPicks;
+      if (validatedPlayerNames && validatedPlayerNames.size > 0) {
+        const beforeCount = finalPicks.length;
+        finalPicks = finalPicks.filter(pick => {
+          const playerKey = (pick.player || '').toLowerCase();
+          const isValid = validatedPlayerNames.has(playerKey);
+          if (!isValid) {
+            console.log(`[Props Validation] ❌ REJECTED: ${pick.player} — not verified on either team (stale roster data)`);
+          }
+          return isValid;
+        });
+        if (finalPicks.length < beforeCount) {
+          console.log(`[Props Validation] Filtered ${beforeCount - finalPicks.length} pick(s) with invalid team assignments`);
+        }
+      }
+
+      return {
+        picks: finalPicks,
+        iterations: iteration,
+        toolCalls: toolCallHistory.length,
+        warnings,
+        droppedByConstraint: 0,
+        garySpecials: 0
+      };
     }
 
-    // Handle other tool calls
+    // ═══════════════════════════════════════════════════════════════════
+    // TOOL CALLS — Pass 1 Investigation
+    // ═══════════════════════════════════════════════════════════════════
     if (functionCallParts.length > 0) {
-      // ══════════════════════════════════════════════════════════════════
-      // NEW GAME STEEL MAN FLOW:
-      // 1. Game Steel Man first (Team A vs Team B)
-      // 2. Then prop investigation (call stats for players who benefit from game read)
-      // 3. Then finalize with 2 props that flow from game analysis
-      // ══════════════════════════════════════════════════════════════════
-
-      // Check if Gary wrote Game Steel Man analysis WITH tool calls
-      if (!didCompleteGameSteelMan && textParts.length > 0) {
-        const combinedText = textParts.join('');
-        if (combinedText.length > 300) {
-          const textLower = combinedText.toLowerCase();
-          const hasTeamCase = textLower.includes('case for') && !textLower.includes('case for over') && !textLower.includes('case for under');
-          const hasGameRead = textLower.includes('game read') || textLower.includes('game script') || textLower.includes('expect the game');
-          const hasBlowoutShootout = textLower.includes('blowout') || textLower.includes('shootout') || textLower.includes('close game');
-
-          if ((hasTeamCase || hasGameRead) && hasBlowoutShootout) {
-            console.log(`[Props] ✓ Game Steel Man detected WITH tool call`);
-            didCompleteGameSteelMan = true;
-            gameSteelManText = combinedText;
-          }
-        }
-      }
-
       console.log(`[Props] Gary requested ${functionCallParts.length} tool(s):`);
 
       // Process all tool calls and collect responses
@@ -2827,8 +2149,6 @@ Which players benefit from the game script you expect? Call fetch_player_game_lo
         };
         const toolResult = await handlePropsToolCall(toolCall, sportKey, sportLabel);
         toolCallHistory.push({ tool: fc.functionCall.name, result: toolResult });
-
-        // Build function response for Gemini
         functionResponses.push({
           functionResponse: {
             name: fc.functionCall.name,
@@ -2837,167 +2157,139 @@ Which players benefit from the game script you expect? Call fetch_player_game_lo
         });
       }
 
-      // Track prop investigation progress (players with stats fetched)
-      if (!didCompletePropInvestigation) {
-        const playersWithStats = new Set();
-        for (const { tool, result: toolResult } of toolCallHistory) {
-          if ((tool === 'fetch_player_game_logs' || tool === 'fetch_player_season_stats') && toolResult?.player) {
-            playersWithStats.add(toolResult.player);
-          }
-        }
-        if (playersWithStats.size >= 3) {
-          didCompletePropInvestigation = true;
-          console.log(`[Props] ✓ Prop investigation complete: ${playersWithStats.size} players investigated`);
-        }
-      }
-
-      // Send all function responses at once to continue the chat
+      // Send all function responses
       iteration++;
       console.log(`\n[Props Iteration ${sportLabel}] ${iteration}/${maxIterations}`);
       result = await chat.sendMessage(functionResponses);
       response = result.response;
 
-      // ══════════════════════════════════════════════════════════════════
-      // GAME STEEL MAN INJECTION - After initial tool calls, before prop finalization
-      // Forces Gary to understand the GAME before picking props
-      // ══════════════════════════════════════════════════════════════════
-      if (!didInjectGameSteelMan && toolCallHistory.length >= 2 && iteration >= 2 && iteration < maxIterations - 3) {
-        didInjectGameSteelMan = true;
-
-        // Extract team names from the userMessage
-        const matchMatch = userMessage.match(/"matchup":\s*"([^"]+)\s*@\s*([^"]+)"/);
-        const awayTeam = matchMatch?.[1] || 'Away Team';
-        const homeTeam = matchMatch?.[2] || 'Home Team';
-
-        console.log(`[Props] Injecting GAME STEEL MAN for ${awayTeam} @ ${homeTeam}...`);
-        iteration++;
-        console.log(`\n[Props Iteration ${sportLabel}] ${iteration}/${maxIterations} (GAME STEEL MAN) [HIGH THINKING]`);
-
-        // Use HIGH-THINKING reasoningModel for Game Steel Man
-        const gameSteelManMessage = buildGameSteelManForProps(homeTeam, awayTeam, {}, sportLabel);
-        const gameSteelManResult = await reasoningModel.generateContent(gameSteelManMessage);
-        const gameSteelManResponse = gameSteelManResult.response;
-        gameSteelManText = gameSteelManResponse.text() || '';
-
-        if (gameSteelManText.length > 100) {
-          console.log(`[Props] HIGH-THINKING Game Steel Man (${gameSteelManText.length} chars)`);
+      // Check if investigation threshold met → inject Pass 2
+      if (!_pass2Injected) {
+        const playersInvestigated = getInvestigatedPlayerCount();
+        if (playersInvestigated >= 3 && iteration < maxIterations - 3) {
+          _pass2Injected = true;
+          const candidates = buildInvestigatedCandidates();
+          console.log(`[Props] ✓ ${playersInvestigated} players investigated — injecting PASS 2 (bilateral cases)`);
+          iteration++;
+          console.log(`\n[Props Iteration ${sportLabel}] ${iteration}/${maxIterations} (PASS 2 — bilateral cases)`);
+          result = await chat.sendMessage(buildPropsPass2SteelManMessage(candidates, sportLabel));
+          response = result.response;
         }
-
-        didCompleteGameSteelMan = true;
-
-        // Inject the game analysis and prompt for prop investigation
-        result = await chat.sendMessage(`GAME STEEL MAN COMPLETE:\n\n${gameSteelManText}\n\nBased on this game analysis, now call BDL tools to investigate 4-6 players who BENEFIT from your game read. Then finalize_props with your 2 best picks that FLOW from your game analysis.`);
-        response = result.response;
-        continue;
       }
 
-      // Add urgency nudge on later iterations
-      if (iteration >= maxIterations - 2) {
-        console.log(`[Props] Sending finalization nudge...`);
-        const nudgeMessage = didCompleteGameSteelMan
-          ? `TIME CHECK: You have ${maxIterations - iteration} rounds left.
-
-Based on your game analysis, finalize_props with your 2 best props that flow from your game read.`
-          : `TIME CHECK: You have ${maxIterations - iteration} rounds left.
-
-Complete your Game Steel Man analysis (how will this game play out?), then pick 2 props that benefit from that game script.`;
-        result = await chat.sendMessage(nudgeMessage);
-        response = result.response;
+      // Urgency: approaching max iterations — accelerate pipeline
+      if (iteration >= maxIterations - 2 && !_pass3Injected) {
+        console.log(`[Props] ⚠️ Approaching max iterations — accelerating pipeline`);
+        if (!_pass2Injected) {
+          _pass2Injected = true;
+          const candidates = buildInvestigatedCandidates();
+          iteration++;
+          console.log(`\n[Props Iteration ${sportLabel}] ${iteration}/${maxIterations} (PASS 2 — forced by iteration limit)`);
+          result = await chat.sendMessage(buildPropsPass2SteelManMessage(candidates, sportLabel));
+          response = result.response;
+        }
       }
       continue;
     }
 
-    // Check for picks in text response (fallback)
-    const textContent = textParts.join('');
-
-    // ══════════════════════════════════════════════════════════════════
-    // GAME STEEL MAN COMPLETION DETECTION
-    // Gary must understand the GAME (Team A vs Team B) before picking props
-    // ══════════════════════════════════════════════════════════════════
-    if (!didCompleteGameSteelMan && textContent && textContent.length > 300) {
-      const textLower = textContent.toLowerCase();
-
-      // Detect game-level Steel Man analysis (Team vs Team, not Over vs Under)
-      const hasTeamCase = textLower.includes('case for') && !textLower.includes('case for over') && !textLower.includes('case for under');
-      const hasGameRead = textLower.includes('game read') || textLower.includes('game script') || textLower.includes('expect the game') || textLower.includes('game flow');
-      const hasTeamAnalysis = textLower.includes('path to winning') || textLower.includes('path to covering') || textLower.includes('how they win') || textLower.includes('strengths show up');
-      const hasBlowoutShootout = textLower.includes('blowout') || textLower.includes('shootout') || textLower.includes('close game');
-
-      if ((hasTeamCase || hasGameRead || hasTeamAnalysis) && hasBlowoutShootout) {
-        console.log(`\n[Props] GARY'S GAME ANALYSIS:`);
-        console.log(`════════════════════════════════════════════════════════════════`);
-        console.log(textContent.substring(0, 2000));
-        console.log(`════════════════════════════════════════════════════════════════\n`);
-
-        didCompleteGameSteelMan = true;
-        gameSteelManText = textContent;
-        console.log(`[Props] ✓ GAME STEEL MAN COMPLETE - Gary understands how the game plays out`);
-      }
-    }
-
+    // ═══════════════════════════════════════════════════════════════════
+    // TEXT RESPONSE — Pass transitions
+    // ═══════════════════════════════════════════════════════════════════
     if (textContent) {
-      const jsonMatch = textContent.match(/\{[\s\S]*"picks"[\s\S]*\}/);
-      if (jsonMatch) {
-        try {
-          const parsed = JSON.parse(jsonMatch[0]);
-          if (Array.isArray(parsed.picks)) {
-            console.log(`[Props] ✓ Found picks in text response`);
-            // Validate picks against tool call history
-            const { validatedPicks, warnings } = validatePropsAgainstToolHistory(parsed.picks, toolCallHistory);
-            if (warnings.length > 0) {
-              console.log(`[Props Validation] ⚠️ ${warnings.length} warning(s)`);
-            }
-            
-            // Apply 2-props-per-game constraint with player diversification
-            // NOTE: For NBA/NHL, constraint is applied LATER (after matchup field is added)
-            const isNbaOrNhl = sportLabel === 'NBA' || sportLabel === 'NHL';
-            
-            if (isNbaOrNhl) {
-              return { 
-                picks: validatedPicks, 
-                iterations: iteration, 
-                toolCalls: toolCallHistory.length, 
+      consecutiveEmptyResponses = 0;
+
+      // Pass 2 → 2.5: Check for bilateral case completion
+      if (_pass2Injected && !_pass25Injected) {
+        if (detectBilateralCases(textContent)) {
+          _pass25Injected = true;
+          console.log(`[Props] ✓ Bilateral cases detected — injecting PASS 2.5 (evaluation)`);
+          iteration++;
+          console.log(`\n[Props Iteration ${sportLabel}] ${iteration}/${maxIterations} (PASS 2.5 — evaluation)`);
+          result = await chat.sendMessage(`## PASS 2.5 — EVALUATION
+
+You've written OVER/UNDER cases for your candidates. Now evaluate:
+
+1. For each candidate, which case was stronger — OVER or UNDER? Be honest about which argument holds up.
+2. Does the DATA from your investigation support your verdict, or are you relying on narrative?
+3. Which 2 props have the CLEAREST statistical edge?
+
+CRITICAL QUESTIONS:
+- Do your picks ALIGN with how you expect this game to play out?
+- What specific mechanism pushes production ABOVE or BELOW the line tonight?
+- Is the line mispriced based on what your investigation revealed?
+
+Identify your 2 BEST picks. Write your evaluation as text. Do NOT call finalize_props yet.`);
+          response = result.response;
+          continue;
+        }
+        // Bilateral not complete — nudge to continue
+        iteration++;
+        console.log(`\n[Props Iteration ${sportLabel}] ${iteration}/${maxIterations} (waiting for bilateral cases)`);
+        result = await chat.sendMessage('Continue writing your bilateral OVER/UNDER analysis for each candidate. Write CASE FOR OVER and CASE FOR UNDER for each player, then a VERDICT.');
+        response = result.response;
+        continue;
+      }
+
+      // Pass 2.5 → 3: Evaluation complete → inject finalize
+      if (_pass25Injected && !_pass3Injected) {
+        _pass3Injected = true;
+        console.log(`[Props] ✓ Evaluation complete — injecting PASS 3 (finalize)`);
+        iteration++;
+        console.log(`\n[Props Iteration ${sportLabel}] ${iteration}/${maxIterations} (PASS 3 — finalize)`);
+        result = await chat.sendMessage(`## PASS 3 — FINALIZE
+
+Your investigation and evaluation are complete. Call finalize_props NOW with your 2 best picks.
+
+For each pick provide:
+- player, prop, line, odds, bet (OVER/UNDER), confidence (0.50-0.95 — use precise values like 0.72, 0.81, not round numbers), rationale
+
+Call finalize_props now.`);
+        response = result.response;
+        continue;
+      }
+
+      // Fallback: check for JSON picks in text (after Pass 3)
+      if (_pass3Injected) {
+        const jsonMatch = textContent.match(/\{[\s\S]*"picks"[\s\S]*\}/);
+        if (jsonMatch) {
+          try {
+            const parsed = JSON.parse(jsonMatch[0]);
+            if (Array.isArray(parsed.picks)) {
+              console.log(`[Props] ✓ Found picks in text response (fallback)`);
+              const { validatedPicks, warnings } = validatePropsAgainstToolHistory(parsed.picks, toolCallHistory);
+              if (warnings.length > 0) {
+                console.log(`[Props Validation] ⚠️ ${warnings.length} warning(s)`);
+              }
+              return {
+                picks: validatedPicks,
+                iterations: iteration,
+                toolCalls: toolCallHistory.length,
                 warnings,
                 droppedByConstraint: 0,
                 garySpecials: 0
               };
             }
-            
-            const { constrainedPicks, droppedPicks, garySpecials } = applyPropsPerGameConstraint(validatedPicks, `${sportLabel}-${iteration}`);
-            
-            return { 
-              picks: constrainedPicks, 
-              iterations: iteration, 
-              toolCalls: toolCallHistory.length, 
-              warnings,
-              droppedByConstraint: droppedPicks.length,
-              garySpecials: garySpecials.length
-            };
-          }
-        } catch {}
+          } catch {}
+        }
       }
 
-      // Text response but no picks
+      // Generic text — prompt to continue/finalize
       iteration++;
-
-      // During game analysis mode, prompt for game read
-      if (didInjectGameSteelMan && !didCompleteGameSteelMan) {
-        console.log(`\n[Props Iteration ${sportLabel}] ${iteration}/${maxIterations} (game analysis mode - need game read)`);
-        result = await chat.sendMessage(`Complete your Game Steel Man analysis. How does this game play out?
-
-Write your game read: Blowout, close game, or shootout? Which team's strengths show up?`);
+      if (_pass3Injected) {
+        console.log(`\n[Props Iteration ${sportLabel}] ${iteration}/${maxIterations} (prompting finalize tool call)`);
+        result = await chat.sendMessage('Call the finalize_props tool with your 2 best prop picks now. Use the tool — do not write JSON in text.');
         response = result.response;
-        continue;
+      } else {
+        console.log(`\n[Props Iteration ${sportLabel}] ${iteration}/${maxIterations} (text response — continuing)`);
+        result = await chat.sendMessage('Continue your analysis. Use BDL tools to investigate player stats.');
+        response = result.response;
       }
-
-      console.log(`\n[Props Iteration ${sportLabel}] ${iteration}/${maxIterations} (prompting finalize)`);
-      result = await chat.sendMessage('Please call the finalize_props tool with your 2 best prop picks now.');
-      response = result.response;
       continue;
     }
 
-    // CRITICAL: Handle empty response (no function calls AND no text)
-    // This prevents infinite loops when Gemini returns nothing
+    // ═══════════════════════════════════════════════════════════════════
+    // EMPTY RESPONSE — Handle gracefully
+    // ═══════════════════════════════════════════════════════════════════
     if (functionCallParts.length === 0 && textParts.length === 0) {
       consecutiveEmptyResponses++;
       console.log(`[Props] Empty response from Gemini (${consecutiveEmptyResponses} consecutive)`);
@@ -3008,27 +2300,14 @@ Write your game read: Blowout, close game, or shootout? Which team's strengths s
         break;
       }
 
-      // During game analysis mode, prompt for game analysis
-      if (didInjectGameSteelMan && !didCompleteGameSteelMan) {
-        console.log(`[Props] Reminding Gary to complete game analysis`);
-
-        const gameReminder = `Empty response. Complete your GAME ANALYSIS first:
-
-How does this game play out? Which team's strengths show up?
-Is this a blowout, close game, or shootout?
-
-Write your game read as text.`;
-
-        result = await chat.sendMessage(gameReminder);
-        response = result.response;
-        continue;
-      }
-      
-      // After 3 consecutive empties (outside bilateral mode), force finalization
+      // After 3 consecutive empties, force finalization
       if (consecutiveEmptyResponses >= 3) {
-        console.log(`[Props] ⚠️ Too many empty responses - forcing explicit finalization request`);
-        
-        // Build context from tool history for Gary to work with
+        console.log(`[Props] ⚠️ Too many empty responses — forcing pipeline completion`);
+        // Force through remaining passes
+        if (!_pass2Injected) _pass2Injected = true;
+        if (!_pass25Injected) _pass25Injected = true;
+        if (!_pass3Injected) _pass3Injected = true;
+
         const playerDataSummary = toolCallHistory
           .filter(t => t.tool === 'fetch_player_game_logs' || t.tool === 'fetch_player_season_stats')
           .slice(0, 5)
@@ -3039,61 +2318,54 @@ Write your game read as text.`;
             } catch { return 'player data'; }
           })
           .join(', ');
-        
-        const forcePrompt = `
-CRITICAL: You have stopped responding. This is your FINAL chance to produce picks.
+
+        const forcePrompt = `CRITICAL: You have stopped responding. This is your FINAL chance to produce picks.
 
 You have gathered data on: ${playerDataSummary || 'multiple players'}.
 
-You MUST now call finalize_props with 3-5 prop picks. Pick format:
-{
-  "picks": [
-    { "player": "NAME", "prop": "pass_yds", "line": 250.5, "odds": -110, "bet": "OVER", "confidence": 0.7, "rationale": "Why..." }
-  ]
-}
-
-DO NOT request more tools. CALL finalize_props NOW.`;
+Call finalize_props NOW with your 2 best prop picks.`;
 
         result = await chat.sendMessage(forcePrompt);
         response = result.response;
-        
+
         // If still empty after force, give up
         const forcedParts = response.candidates?.[0]?.content?.parts || [];
         if (forcedParts.length === 0) {
-          console.log(`[Props] ❌ Gemini unresponsive after force prompt - aborting`);
+          console.log(`[Props] ❌ Gemini unresponsive after force prompt — aborting`);
           break;
         }
-        consecutiveEmptyResponses = 0; // Reset if we got a response
+        consecutiveEmptyResponses = 0;
         continue;
       }
-      
-      // Add small delay before retry (helps with API stability)
+
+      // Add small delay before retry
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      result = await chat.sendMessage('You returned an empty response. Please call finalize_props NOW with your best picks based on all data gathered.');
+      result = await chat.sendMessage('You returned an empty response. Please continue your analysis or call finalize_props with your picks.');
       response = result.response;
       continue;
     }
-    
+
     // Reset empty counter on successful response
     consecutiveEmptyResponses = 0;
-    
+
     // Nudge when approaching max iterations
-    if (iteration >= maxIterations - 1 && functionCallParts.length === 0) {
+    if (iteration >= maxIterations - 1 && !_pass3Injected) {
       iteration++;
-      console.log(`\n[Props Iteration ${sportLabel}] ${iteration}/${maxIterations} (final warning)`);
-      result = await chat.sendMessage('⚠️ FINAL ROUND - Complete your bilateral analysis if not done, then call finalize_props with your best picks.');
+      console.log(`\n[Props Iteration ${sportLabel}] ${iteration}/${maxIterations} (final warning — forcing pipeline)`);
+      // Force through to Pass 3
+      if (!_pass2Injected) _pass2Injected = true;
+      if (!_pass25Injected) _pass25Injected = true;
+      _pass3Injected = true;
+      result = await chat.sendMessage(`## PASS 3 — FINALIZE (FINAL ROUND)
+
+⚠️ This is your LAST round. Call finalize_props NOW with your 2 best picks based on all data gathered.`);
       response = result.response;
     }
   }
 
-  // Log specific reason for failure
-  if (didInjectGameSteelMan && !didCompleteGameSteelMan) {
-    console.log(`[Props] FAILED - Max iterations reached. Gary didn't complete game analysis.`);
-    console.log(`[Props] Game Steel Man bypass attempts: ${gameSteelManBypassAttempts}. Props must flow from game understanding.`);
-  } else {
-    console.log(`[Props] Max iterations reached without finalization`);
-  }
+  // Post-loop: pipeline didn't complete
+  const passStatus = `Pass 2: ${_pass2Injected ? '✓' : '✗'} | Pass 2.5: ${_pass25Injected ? '✓' : '✗'} | Pass 3: ${_pass3Injected ? '✓' : '✗'}`;
+  console.log(`[Props] Max iterations reached without finalization. Pipeline: ${passStatus}`);
   return { picks: [], iterations: iteration, toolCalls: toolCallHistory.length };
 }
 
@@ -3202,12 +2474,12 @@ Example uses of context:
   * "KD returning from injury, minutes restriction" - Consider the impact on his volume
 
 ## CRITICAL: INJURY IMPACT ON PROPS
-Injuries are CRUCIAL for player props! Consider how they affect:
-- Star scorer OUT: Their teammates may see increased touches/shots
-- Star rebounder OUT: Other bigs may see increased board opportunities
-- Player QUESTIONABLE or on minutes restriction: Volume may be affected
-- Primary defender OUT: Offensive opportunities may increase
-- Always check the injury report and consider the downstream effects!
+Before citing ANY injury as a factor, ask yourself:
+- "When was this player ruled out?" If more than 3 days ago, the prop lines ALREADY reflect it — this is NOT an edge.
+- "Do the recent game logs (games WITHOUT this player) show a measurable usage shift?" If not, don't assume one exists.
+- "Am I citing this injury because it's a real edge, or because it FEELS like it should matter?"
+- SEASON-LONG injuries are ALREADY BAKED INTO EVERY PROP LINE. Do NOT cite them. Ever.
+- FRESH OUT (0-3 days): Investigate game logs for actual usage shift data before citing.
 
 ## 🚨 CRITICAL: PLAYER NAME ACCURACY - NO CONFUSION
 **ALWAYS use FULL NAMES (first + last) when referencing players, especially for:**
@@ -3685,7 +2957,7 @@ Current Season: ${seasonLabel}
 ## WHO YOU ARE
 You are an INDEPENDENT THINKER. You investigate, understand, and decide on your own.
 
-You aren't a spreadsheet. You're a scout. You see the game before it happens. You know when a player is "due" for a breakout, when a matchup is a nightmare, and when the books have set a line based on averages that don't apply to TONIGHT'S situation. You don't follow consensus—you make YOUR OWN picks.
+You aren't a spreadsheet. You're a scout. You investigate whether recent performance changes reflect structural shifts or variance. You distinguish between narratives and matchup-specific edges. You know when books have set a line based on averages that don't capture TONIGHT'S specific situation. You don't follow consensus—you make YOUR OWN picks.
 
 ## YOUR VOICE & TONE
 - **Storytelling**: Paint a picture of the game flow. "I see Donovan Mitchell carving up that Portland defense..."
@@ -3698,20 +2970,21 @@ You are a GAME ANALYST, not a betting market analyst. You investigate GAME INFO.
 Before finalizing ANY prop, run these investigations (in whatever order makes sense):
 
 **1. INVESTIGATE THE MISMATCH**
-What structural factor exists TONIGHT that the line hasn't captured?
-- Role change? Injury vacuum? Scheme vulnerability? Minutes situation?
+Ask: What structural factors about TONIGHT's game create a production opportunity this player isn't priced for?
+- Things that might matter: role changes, injury vacuums, scheme vulnerabilities, minutes situations. Investigate what's real tonight vs what's narrative.
 - If you can't identify a specific mismatch, you might just be agreeing with the market.
 
 **2. INVESTIGATE THE GAME LOGIC**
-Why did the books set this line where it is? What game factor are they respecting?
-- If you see "obvious" value, ask: "What GAME FACTOR is the line respecting that I'm challenging?"
+Ask: Why is this line set at this number? What game factors are the books pricing in?
+- Then ask: Do I see game factors the books might have underweighted? Or does my view align with their assessment?
 - Example: "Murray's line is 8.5 assists. The line respects it's a small sample against weak opponents. MY view is the role change is real."
 
 **3. INVESTIGATE THE MECHANISM**
-HOW does this player hit tonight? Not rankings - the actual on-court/ice ACTION.
-[BAD] "They're 27th against centers" = Ranking (noise - reflects schedule and variance)
-[GOOD] "They lack a vertical rim protector since the starter went down. He scores 68% of points in the paint." = Mechanism (signal)
-- If your only support is a positional ranking, dig deeper or lower conviction.
+Ask: What is the on-court/on-ice action that creates this production opportunity?
+- A ranking alone doesn't tell you if it's structural or noise. Investigate the mechanism behind it.
+- Example: "They're 27th against centers" — ask: Does this reflect a specific scheme weakness, or schedule luck? What mechanism explains it?
+- Example with mechanism: "They lack a vertical rim protector since the starter went down. He scores 68% of points in the paint."
+- If your only support is a ranking without an underlying mechanism, dig deeper.
 
 **4. INVESTIGATE THE FLOOR**
 What happens when things go wrong? Sharps think about downside before committing.
@@ -3721,9 +2994,9 @@ What happens when things go wrong? Sharps think about downside before committing
 
 ## SHARP WISDOM (How to Think)
 
-**MEDIAN VS MEAN TRAP:** High-variance players have averages that lie. If 2 monster games pull up the average, the UNDER is often undervalued.
+**MEDIAN VS MEAN TRAP:** Ask: Is this player's average pulled up by 1-2 monster games? If so, does the median production tell a different story than the mean? Investigate which better describes TONIGHT's likely output.
 
-**DERIVATIVE LAZINESS:** Books model star props carefully. Backup/role player props often get lazy formula adjustments. The vacuum isn't fully priced.
+**DERIVATIVE LAZINESS:** Ask: Is THIS player's prop line set with the same modeling care as star props? Books focus sophisticated modeling on high-profile markets — secondary players and backup roles may receive formula adjustments that don't capture game-specific situations. Investigate whether this line reflects tonight's reality.
 
 **DIRECTION CONVICTION CHECK:** For every pick, ask: What specific game factor tonight supports THIS direction? Would your analysis hold up if you argued the opposite side?
 
@@ -3754,54 +3027,34 @@ Before finalizing ANY pick, hold your reasoning up to this mirror:
 **THE SHARP TEST:** Can you state your mismatch in ONE sentence?
 If you can't, you might not have edge - you might have an opinion that agrees with the market.
 
-## EDGE TYPE CLASSIFICATION
+## CONFIDENCE
 
-For EVERY pick, identify the PRIMARY edge type. This helps track what kinds of edges actually win.
+**confidence (0.50-0.95):** Base it on how strong your reasoning is — how clear the data edge was,
+how many factors aligned. Use the FULL range with PRECISE granular values (e.g., 0.72, 0.81, 0.63, 0.58).
+Do NOT round to tier values like 0.65, 0.75, 0.85 — each prop has unique conviction.
 
-| Edge Type | Description | Example |
-|-----------|-------------|---------|
-| USAGE_SHIFT | Fresh roster change creating new opportunity | "WR1 ruled out yesterday — investigate how target share redistributes and whether the line has adjusted" |
-| MATCHUP_MISMATCH | Specific defender/scheme weakness | "Speed WR vs slow CB, 3.5 separation avg" |
-| GAME_SCRIPT | Pace/blowout/shootout projection | "+10 underdog will throw 45+ times" |
-| RECENT_FORM | Hot streak the line hasn't caught up to | "L3 avg 95 yards, line still at 68.5" |
-| LINE_SOFT | Book made a pricing mistake | "Line at 4.5 rec but he's averaged 7 since trade" |
-| NEXT_GEN_EDGE | Advanced stats show hidden value | "Elite separation (3.5 yds) but only 60 yards - due for breakout" |
+## YOUR TASK: THE PROPS WORKFLOW (4-PASS PIPELINE)
 
-## CONFIDENCE TIERS
+Props should reflect your understanding of the GAME. Ask: Do these player opportunities align with the game flow I expect?
 
-Assign a tier to each pick based on edge strength:
+**PASS 1: INVESTIGATION**
+1. **INVESTIGATE PLAYERS**: Use BDL tools to examine 4-6 players:
+   - \`fetch_player_game_logs\` - Recent performance (L5-10 games)
+   - \`fetch_player_season_stats\` - Baseline to compare against recency
+   - Ask: Which players see increased opportunity in the expected game script?
+   - Ask: What do these numbers tell you about production potential TONIGHT?
 
-| Tier | Units | When to Use |
-|------|-------|-------------|
-| MAX | 2 units | Elite edge, multiple factors align, high confidence |
-| CORE | 1 unit | Solid edge, standard play |
-| SPECULATIVE | 0.5 units | Value shot, TD lottery, higher variance |
+**PASS 2: BILATERAL CASES** (injected after investigation)
+2. **WRITE OVER/UNDER CASES**: For each candidate you investigated:
+   - CASE FOR OVER: What specific mechanism pushes production ABOVE the line tonight?
+   - CASE FOR UNDER: What genuine risk CAPS production tonight?
+   - VERDICT: Which case is stronger, and why?
 
-**TD Props should rarely be MAX** - the variance is too high. Most TDs should be CORE or SPECULATIVE.
-
-## YOUR TASK: THE PROPS WORKFLOW (GAME-FIRST APPROACH)
-
-Props flow from your understanding of the GAME. You don't pick props in a vacuum - you pick props that benefit from your game read.
-
-**PHASE 1: GAME STEEL MAN (REQUIRED - DO NOT SKIP)**
-1. **UNDERSTAND THE GAME**: Build Steel Man cases for BOTH teams:
-   - **CASE FOR HOME TEAM**: How do they win/cover? What strengths show up? What's the game script if they're winning?
-   - **CASE FOR AWAY TEAM**: How do they win/cover? What strengths show up? What's the game script if they're winning?
-   - **YOUR GAME READ**: Which team's strengths are more likely to show up tonight? Blowout, close game, or shootout?
-
-   This is NOT optional. Your prop picks should FLOW from your game analysis.
-   A prop pick that contradicts your game read is a prop pick without conviction.
-
-**PHASE 2: PROP INVESTIGATION (Based on Game Read)**
-2. **IDENTIFY BENEFICIARIES**: Based on YOUR game read, which players benefit?
-   - If you expect Team A to dominate → Team A players get opportunity
-   - If you expect a shootout → Passing props benefit
-   - If you expect a blowout → Starters may rest (affects totals)
-
-3. **INVESTIGATE**: Call BDL tools for 4-6 players who align with your game read:
-   - \`fetch_player_game_logs\` - L5-10 recent games
-   - \`fetch_player_season_stats\` - Season context
-   - Do their numbers support the props available?
+**PASS 2.5: EVALUATION** (injected after bilateral cases)
+3. **STRESS TEST**: Evaluate your cases honestly:
+   - Which candidates have the CLEAREST statistical edge?
+   - Does the data support your verdict, or are you relying on narrative?
+   - Identify your 2 BEST picks.
 
 ## STAT PHILOSOPHY FOR PROP INVESTIGATION (CRITICAL)
 
@@ -3822,29 +3075,24 @@ Props flow from your understanding of the GAME. You don't pick props in a vacuum
 - **INJURED teammates**: WHO absorbed the usage? Check target share, touch rate, shot attempts.
 - **Ask**: "Who benefits from this injury situation? Is that already priced into the line?"
 
-**BLANKET FACTORS ARE NOISE (Don't use these):**
-- "He's been hot" without explaining WHY → What changed to cause the hot streak?
-- "This is a revenge game" → Does revenge actually show up in the stats?
-- "He always performs in primetime" → Sample size? Or just narrative?
-- "Back-to-back fatigue" → Check THIS player's actual B2B splits, not general narratives.
+**COMMON NARRATIVES — INVESTIGATE WHETHER THEY APPLY:**
+- "He's been hot" — Ask: Is this efficiency variance (regresses) or structural change (sustains)? What changed?
+- "This is a revenge game" — Ask: Do the stats show performance differences vs this team? Or is this narrative noise?
+- "He always performs in primetime" — Ask: Is this real across a large sample? Or narrative selected from variance?
+- "Back-to-back fatigue" — Ask: Does THIS player actually underperform B2B? Check his actual splits.
 
 For props, INVESTIGATE the factor. Don't cite narratives as evidence.
 
 **PHASE 3: PICK YOUR 2 BEST PROPS**
-4. **FINAL DECISION**: Pick exactly 2 props that:
-   - Align with your game read (not contradicting it)
-   - Have statistical support from your investigation
-   - Show a clear edge (mechanism, not just "average beats line")
-
-5. **FINALIZE**: Call finalize_props with your 2 picks. Include:
-   - How this prop flows from your game read
+**PASS 3: FINALIZE** (injected after evaluation)
+4. **CALL finalize_props** with your 2 best picks. Include:
    - The specific mechanism/edge
+   - Statistical support from your investigation
    - What could go wrong (the risk)
 
 **OUTPUT: 2 PROPS PER GAME** - Quality over quantity. Two confident picks beat five shaky ones.
 
-BLOCKING RULE: DO NOT call finalize_props until you have completed your Game Steel Man analysis.
-The system will BLOCK finalize attempts if game analysis is not detected.
+The system enforces the 4-pass pipeline. finalize_props calls are BLOCKED until all passes are complete.
 
 ## RATIONALE vs KEY_STATS (THE BEST OF BOTH WORLDS)
 To give the user the best experience, we divide your analysis into two parts:
@@ -3858,10 +3106,10 @@ To give the user the best experience, we divide your analysis into two parts:
 2. **RATIONALE (The Story)**: This is where you are "Organic Gary." Write 5-7 sentences that tell the story of WHY those numbers happen. Talk about the matchup, the defenders, the motivation, and the flow of the game. NO dry stat-dumps here—make it read like a scouting report.
 
 ## FINALIZATION REMINDER
-- Complete your Game Steel Man analysis FIRST (understand the game before picking props).
-- Investigate 4-6 players who benefit from your game read.
-- Return your TOP 2 picks - quality over quantity. Two confident picks beat five mediocre ones.
-- Each pick MUST flow from your game analysis. If it contradicts your game read, don't pick it.
+- Investigate 4-6 players with BDL tools (Pass 1).
+- Write bilateral OVER/UNDER cases for each candidate (Pass 2).
+- Evaluate your cases and identify your 2 best picks (Pass 2.5).
+- Call finalize_props with your 2 picks (Pass 3).
 
 ## ZERO TOLERANCE FOR HALLUCINATION
 
@@ -3936,13 +3184,13 @@ ${constitution}
 
 ---
 
-## WORKFLOW REMINDER
-- GAME STEEL MAN first: Understand HOW the game plays out (Team A vs Team B cases)
-- IDENTIFY beneficiaries: Which players benefit from your game read?
-- INVESTIGATE: Call BDL tools for 4-6 players who align with your game script
-- PICK 2: Select your 2 best props that flow from your game analysis
+## WORKFLOW REMINDER (4-PASS PIPELINE)
+- PASS 1: INVESTIGATE 4-6 players with BDL tools
+- PASS 2: Write bilateral OVER/UNDER cases for each candidate
+- PASS 2.5: EVALUATE your cases — which 2 have the clearest edge?
+- PASS 3: Call finalize_props with your 2 best picks
 
-**THE FLOW:** Game Steel Man then Identify Beneficiaries then Investigate Players then Pick 2
+**THE FLOW:** Investigate → Bilateral Cases → Evaluate → Finalize
 `;
 }
 
@@ -4150,8 +3398,6 @@ CRITICAL CONSTRAINTS (apply these strictly):
       over_thesis: pick.over_thesis || null,
       under_thesis: pick.under_thesis || null,
       thesis_lean: pick.thesis_lean || null,
-      edge_type: pick.edge_type || null,
-      confidence_tier: pick.confidence_tier || 'CORE'  // Default to CORE if not specified
     }));
 
     // NBA/NHL PROPS: Mirror NBA/NHL game-picks quantum behavior
@@ -4203,83 +3449,13 @@ CRITICAL CONSTRAINTS (apply these strictly):
       };
     }
 
-    // NFL CATEGORIZED: Handle 4 separate categories
-    // CRITICAL: Map internal categories to td_category values expected by GaryProps.jsx
-    // - 'regular_props' → no td_category (regular props)
-    // - 'regular_td' → td_category: 'standard' (chalk TD picks)
-    // - 'value_td' → td_category: 'underdog' (longshot TD picks)
-    // - 'first_td' → td_category: 'first_td' (first TD scorer)
-    if (sportLabel === 'NFL' && result.categorized) {
-      const finalPicks = [];
-      
-      // Category 1: Regular Props - Shortlist 5 → Top 3 (NO td_category - these are NOT TD props)
-      const regularProps = allPicks.filter(p => p.category === 'regular_props')
-        .sort((a, b) => (b.confidence || 0) - (a.confidence || 0))
-        .slice(0, 3)
-        .map(p => {
-          // Remove internal category, keep as regular prop (no td_category)
-          const { category, ...rest } = p;
-          return rest;
-        });
-      finalPicks.push(...regularProps);
-      console.log(`[NFL Props] Regular Props: ${regularProps.length}/3 (from ${allPicks.filter(p => p.category === 'regular_props').length} shortlisted)`);
-      
-      // Category 2: Regular TD - Shortlist 4 → Top 2 (odds -200 to +200) → td_category: 'standard'
-      const regularTd = allPicks.filter(p => p.category === 'regular_td')
-        .filter(p => p.odds >= -200 && p.odds <= 200) // Enforce odds range
-        .sort((a, b) => (b.confidence || 0) - (a.confidence || 0))
-        .slice(0, 2)
-        .map(p => {
-          // Map to td_category: 'standard' for frontend display
-          const { category, ...rest } = p;
-          return { ...rest, td_category: 'standard' };
-        });
-      finalPicks.push(...regularTd);
-      console.log(`[NFL Props] Regular TD: ${regularTd.length}/2 (from ${allPicks.filter(p => p.category === 'regular_td').length} shortlisted)`);
-      
-      // Category 3: Value TD - Pick 1 (odds +200 or higher) → td_category: 'underdog'
-      const valueTd = allPicks.filter(p => p.category === 'value_td')
-        .filter(p => p.odds >= 200) // Enforce odds range
-        .sort((a, b) => (b.confidence || 0) - (a.confidence || 0))
-        .slice(0, 1)
-        .map(p => {
-          // Map to td_category: 'underdog' for frontend display
-          const { category, ...rest } = p;
-          return { ...rest, td_category: 'underdog' };
-        });
-      finalPicks.push(...valueTd);
-      console.log(`[NFL Props] Value TD: ${valueTd.length}/1 (from ${allPicks.filter(p => p.category === 'value_td').length} shortlisted)`);
-      
-      // Category 4: First TD - Pick 1 → td_category: 'first_td'
-      const firstTd = allPicks.filter(p => p.category === 'first_td')
-        .sort((a, b) => (b.confidence || 0) - (a.confidence || 0))
-        .slice(0, 1)
-        .map(p => {
-          // Map to td_category: 'first_td' for frontend display
-          const { category, ...rest } = p;
-          return { ...rest, td_category: 'first_td' };
-        });
-      finalPicks.push(...firstTd);
-      console.log(`[NFL Props] First TD: ${firstTd.length}/1 (from ${allPicks.filter(p => p.category === 'first_td').length} shortlisted)`);
-      
-      console.log(`[NFL Props] TOTAL: ${finalPicks.length} picks (3 regular + 2 regular TD + 1 value TD + 1 first TD = 7 max)`);
-      
-      return {
-        picks: finalPicks,
-        iterations: result.iterations,
-        toolCalls: result.toolCalls,
-        elapsedMs: Date.now() - start
-      };
-    }
-    
-    // Other sports (or NFL without categories): Sort by confidence and keep top N
+    // Sort by confidence and keep top N
     const sortedPicks = allPicks.sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
     
-    // NFL fallback (non-categorized): Take top 3
-    // Other sports: Take top N with confidence filter
+    // NFL: Take top 3, Other sports: Take top N
     let finalPicks;
     if (sportLabel === 'NFL') {
-      // NFL fallback: Simply take the top 3 by confidence
+      // NFL: Top 3 by confidence
       finalPicks = sortedPicks.slice(0, 3);
       console.log(`[Agentic Props][${sportLabel}] Taking TOP 3 from ${allPicks.length} shortlisted picks (fallback mode)`);
     } else {
@@ -4384,13 +3560,10 @@ CRITICAL CONSTRAINTS (apply these strictly):
       over_thesis: pick.over_thesis || null,
       under_thesis: pick.under_thesis || null,
       thesis_lean: pick.thesis_lean || null,
-      edge_type: pick.edge_type || null,
-      confidence_tier: pick.confidence_tier || 'CORE'  // Default to CORE if not specified
   }));
 
-  // Sport-specific filtering
-  const usesTwoPerGame = TWO_PER_GAME_SPORTS.includes(sportLabel);
-  const finalPicks = usesTwoPerGame ? enhancedPicks : enhancedPicks.filter(p => p.confidence >= 0.65);
+  // No confidence filter — Gary's picks are stored as-is (same as game picks)
+  const finalPicks = enhancedPicks;
 
   const elapsedMs = Date.now() - start;
   console.log(`[Agentic Props][${sportLabel}] Pipeline complete in ${elapsedMs}ms`);

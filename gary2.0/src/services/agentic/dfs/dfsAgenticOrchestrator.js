@@ -190,15 +190,11 @@ export async function generateAgenticDFSLineup(options) {
     });
 
     // NO FALLBACKS: Validate Gary Pro completed the audit
-    if (!auditedLineup || !auditedLineup.conviction) {
-      throw new Error('[Gary DFS] Phase 6 FAILED: Gary Pro did not complete lineup audit');
-    }
-
-    if (!auditedLineup.players || auditedLineup.players.length === 0) {
+    if (!auditedLineup || !auditedLineup.players || auditedLineup.players.length === 0) {
       throw new Error('[Gary DFS] Phase 6 FAILED: Audit resulted in empty lineup');
     }
 
-    console.log(`[Gary DFS] ✓ Conviction Level: ${auditedLineup.conviction}`);
+    console.log(`[Gary DFS] ✓ Audit complete`);
     if (auditedLineup.adjustments?.length > 0) {
       console.log(`[Gary DFS] ✓ Made ${auditedLineup.adjustments.length} post-audit adjustments`);
     }
@@ -226,7 +222,6 @@ export async function generateAgenticDFSLineup(options) {
       perPlayerReasoning: auditedLineup.perPlayerReasoning,
 
       // Audit results
-      conviction: auditedLineup.conviction,
       auditNotes: auditedLineup.auditNotes,
 
       // Targets
@@ -252,7 +247,7 @@ export async function generateAgenticDFSLineup(options) {
 
     console.log('\n═══════════════════════════════════════════════════════════════════════════════');
     console.log(`[Gary DFS] ✅ Lineup complete in ${elapsed}s`);
-    console.log(`[Gary DFS] Conviction: ${result.conviction} | Ceiling: ${result.ceilingProjection} pts`);
+    console.log(`[Gary DFS] Ceiling: ${result.ceilingProjection} pts`);
     console.log('═══════════════════════════════════════════════════════════════════════════════\n');
 
     return result;

@@ -109,8 +109,42 @@ export function nbaSeason() {
 }
 
 /**
+ * Get the current NHL season year.
+ * NHL season starts in October, same as NBA.
+ * @returns {number} The NHL season year (e.g., 2025 for the 2025-2026 season)
+ */
+export function nhlSeason() {
+  const now = getCurrentEST();
+  const month = now.getMonth(); // 0-indexed
+  return month >= 9 ? now.getFullYear() : now.getFullYear() - 1; // Oct+
+}
+
+/**
+ * Get the current NFL season year.
+ * NFL regular season starts in September.
+ * @returns {number} The NFL season year (e.g., 2025 for the Sep 2025 - Feb 2026 season)
+ */
+export function nflSeason() {
+  const now = getCurrentEST();
+  const month = now.getMonth(); // 0-indexed
+  return month >= 8 ? now.getFullYear() : now.getFullYear() - 1; // Sep+
+}
+
+/**
+ * Get the current NCAAB season year.
+ * NCAAB season starts in November (Nov 2025 - Apr 2026 = "2025" season).
+ * @returns {number} The NCAAB season year (e.g., 2025 for the Nov 2025 - Apr 2026 season)
+ */
+export function ncaabSeason() {
+  const now = getCurrentEST();
+  const month = now.getMonth(); // 0-indexed
+  // Nov-Dec → current year, Jan-Oct → prev year
+  return month >= 10 ? now.getFullYear() : now.getFullYear() - 1;
+}
+
+/**
  * Format a season for display (e.g., "2024-2025")
- * 
+ *
  * @param {number} seasonYear - The season year (e.g., 2024)
  * @returns {string} Formatted season (e.g., "2024-2025")
  */

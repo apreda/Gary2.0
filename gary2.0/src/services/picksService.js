@@ -345,27 +345,8 @@ async function storeDailyPicksInDatabase(picks) {
 
     return pickData;
   }).filter(pick => {
-    // FILTER 1: Road favorites at -5 or greater are filtered out
-    // Road favorites at large spreads are historically poor bets
-    const pickStr = pick.pick || '';
-    const homeTeam = pick.homeTeam || '';
-    const awayTeam = pick.awayTeam || '';
-    const pickType = pick.type || '';
-
-    // Check if this is a big favorite spread (-8.5 or greater) - filter these out
-    // Applies to BOTH home and road favorites - only filter extreme chalk
-    if (pickType === 'spread') {
-      // Extract the spread from the pick string (e.g., "Houston Rockets -5.5 -110")
-      const spreadMatch = pickStr.match(/([+-]?\d+\.?\d*)\s*[-+]?\d*$/);
-      if (spreadMatch) {
-        const spread = parseFloat(spreadMatch[1]);
-        // Only filter big favorites at -8.5 or more (too much chalk)
-        if (spread <= -8.5) {
-          console.log(`🚫 FILTERED: Big favorite at ${spread} (favorites -8.5 or greater filtered out)`);
-          return false;
-        }
-      }
-    }
+    // Sport-specific pick filters (nbaPickFilter, ncaabPickFilter, etc.) handle
+    // all filtering logic BEFORE storage. No secondary spread/favorite filters here.
 
     // NO CONFIDENCE FILTER - Store ALL picks regardless of confidence
     // Gary's picks get stored whether confidence is 0 or 0.9
@@ -462,14 +443,7 @@ async function storeDailyPicksInDatabase(picks) {
         .eq('id', existing.id);
 
       if (updateError) {
-        console.warn('JSON update failed, retrying with stringified picks:', updateError.message);
-        const { error: updateAltError } = await supabase
-          .from('daily_picks')
-          .update({ picks: mergedPicks })
-          .eq('id', existing.id);
-        if (updateAltError) {
-          throw new Error(`Failed to append picks: ${updateAltError.message}`);
-        }
+        throw new Error(`Failed to append picks: ${updateError.message}`);
       }
 
       console.log('✅ Successfully appended picks to existing daily_picks row');
@@ -652,317 +626,6 @@ async function generateDailyPicks() {
   }
 }
 
-/**
- * Generate Gary's thoughts on all games for the day
- * Returns spread, moneyline, and over/under picks for every game
- * @returns {Promise<Array>} - Array of games with Gary's picks
- */
-async function generateWhatGaryThinks() {
-  console.log('🧠 Starting What Gary Thinks generation...');
-  
-  try {
-    const allGames = [];
-    const sports = ['basketball_nba', 'icehockey_nhl'];
-    
-    for (let sportIndex = 0; sportIndex < sports.length; sportIndex++) {
-      const sport = sports[sportIndex];
-      
-      // Add delay between sports to prevent rate limiting (except for first sport)
-      if (sportIndex > 0) {
-        console.log(`⏳ Adding 5s delay between sports to prevent OpenAI rate limiting...`);
-        await new Promise(resolve => setTimeout(resolve, 5000));
-      }
-      
-      console.log(`🧠 Getting ${sport} games for What Gary Thinks...`);
-      
-      const games = await oddsService.getUpcomingGames(sport);
-      
-      // Get today's date in EST time zone format (YYYY-MM-DD)
-      const today = new Date();
-      const estOptions = { timeZone: 'America/New_York' };
-      const estDateString = today.toLocaleDateString('en-US', estOptions);
-      const [month, day, year] = estDateString.split('/');
-      const estFormattedDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-      
-      // Filter games for today only
-      const todayGames = games.filter(game => {
-        const gameDate = new Date(game.commence_time);
-        const gameDateInEST = gameDate.toLocaleDateString('en-US', estOptions);
-        const [gameMonth, gameDay, gameYear] = gameDateInEST.split('/');
-        const gameFormattedDate = `${gameYear}-${gameMonth.padStart(2, '0')}-${gameDay.padStart(2, '0')}`;
-        return gameFormattedDate === estFormattedDate;
-      });
-      
-      console.log(`🧠 Found ${todayGames.length} ${sport} games for today`);
-      
-      for (let i = 0; i < todayGames.length; i++) {
-        const game = todayGames[i];
-        try {
-          // Add delay between games to prevent rate limiting (except for first game)
-          if (i > 0) {
-            console.log(`⏳ Adding 3s delay to prevent OpenAI rate limiting...`);
-            await new Promise(resolve => setTimeout(resolve, 3000));
-          }
-          
-          // Extract odds data
-          const odds = extractOddsData(game);
-          
-          // Get game stats (reuse existing logic)
-          const gameStats = await getGameStatsForThoughts(game, sport);
-          
-          // Generate Gary's picks for this game
-          const garyPicks = await generateGaryPicksForGame(game, gameStats, sport);
-          
-          const gameData = {
-            id: game.id,
-            homeTeam: game.home_team,
-            awayTeam: game.away_team,
-            league: sport === 'baseball_mlb' ? 'MLB' : sport === 'basketball_nba' ? 'NBA' : 'NHL',
-            time: formatGameTime(game.commence_time),
-            odds: odds,
-            garyPicks: garyPicks,
-            sport: sport
-          };
-          
-          allGames.push(gameData);
-          
-        } catch (error) {
-          console.error(`🧠 Error processing game ${game.away_team} @ ${game.home_team}:`, error);
-          
-          // If it's a rate limiting error, add extra delay
-          if (error.message && (error.message.includes('429') || error.message.includes('Too Many Requests'))) {
-            console.log(`⏳ Rate limit detected, adding 10s delay before continuing...`);
-            await new Promise(resolve => setTimeout(resolve, 10000));
-          }
-        }
-      }
-    }
-    
-    console.log(`🧠 Generated What Gary Thinks for ${allGames.length} total games`);
-    return allGames;
-    
-  } catch (error) {
-    console.error('🧠 Error generating What Gary Thinks:', error);
-    throw error;
-  }
-}
-
-/**
- * Extract odds data from game object
- * @param {Object} game - Game object from odds service
- * @returns {Object} - Formatted odds data
- */
-function extractOddsData(game) {
-  if (!game.bookmakers || game.bookmakers.length === 0) {
-    return null;
-  }
-  
-  const bookmaker = game.bookmakers[0];
-  const odds = {
-    spread: { home: null, away: null },
-    moneyline: { home: null, away: null },
-    total: { line: null, over: null, under: null }
-  };
-  
-  bookmaker.markets?.forEach(market => {
-    if (market.key === 'spreads') {
-      market.outcomes?.forEach(outcome => {
-        if (outcome.name === game.home_team) {
-          odds.spread.home = { line: outcome.point, odds: outcome.price };
-        } else if (outcome.name === game.away_team) {
-          odds.spread.away = { line: outcome.point, odds: outcome.price };
-        }
-      });
-    } else if (market.key === 'h2h') {
-      market.outcomes?.forEach(outcome => {
-        if (outcome.name === game.home_team) {
-          odds.moneyline.home = outcome.price;
-        } else if (outcome.name === game.away_team) {
-          odds.moneyline.away = outcome.price;
-        }
-      });
-    } else if (market.key === 'totals') {
-      if (market.outcomes?.length >= 2) {
-        odds.total.line = market.outcomes[0].point;
-        market.outcomes.forEach(outcome => {
-          if (outcome.name === 'Over') {
-            odds.total.over = outcome.price;
-          } else if (outcome.name === 'Under') {
-            odds.total.under = outcome.price;
-          }
-        });
-      }
-    }
-  });
-  
-  return odds;
-}
-
-/**
- * Get game stats for What Gary Thinks (simplified version)
- * @param {Object} game - Game object
- * @param {string} sport - Sport type
- * @returns {Object} - Game stats
- */
-async function getGameStatsForThoughts(game, sport) {
-  // Reuse existing stats gathering logic but simplified
-  if (sport === 'basketball_nba') {
-    // Get NBA stats
-    const playoffAnalysis = await ballDontLieService.getNbaPlayoffPlayerStats(
-      game.home_team,
-      game.away_team
-    );
-    return { playoffAnalysis };
-  } else if (sport === 'icehockey_nhl') {
-    // Get NHL stats
-    const playoffAnalysis = await ballDontLieService.getComprehensiveNhlPlayoffAnalysis(
-      game.home_team,
-      game.away_team
-    );
-    return { playoffAnalysis };
-  }
-  
-  return {};
-}
-
-/**
- * Validate logical consistency between spread and moneyline picks
- * @param {Object} picks - The picks object with spread, moneyline, and total
- * @returns {Object} - Validated and corrected picks
- */
-function validatePickConsistency(picks) {
-  if (!picks || !picks.spread || !picks.moneyline) {
-    return picks;
-  }
-  
-  // Check for logical inconsistency
-  if (picks.spread !== picks.moneyline) {
-    console.warn(`🚨 Logical inconsistency detected: ${picks.moneyline} moneyline but ${picks.spread} spread. Fixing...`);
-    // Fix by making spread match moneyline (since moneyline is the primary pick)
-    picks.spread = picks.moneyline;
-    console.log(`✅ Fixed: Both spread and moneyline now pick ${picks.moneyline}`);
-  }
-  
-  return picks;
-}
-
-/**
- * Generate Gary's picks for a specific game (spread, moneyline, over/under)
- * @param {Object} game - Game object
- * @param {Object} gameStats - Game statistics
- * @param {string} sport - Sport type
- * @returns {Object} - Gary's picks
- */
-async function generateGaryPicksForGame(game, gameStats, sport) {
-  try {
-    // Create a simplified prompt for What Gary Thinks
-    const systemMessage = {
-      role: "system",
-      content: `You are Gary the Bear, analyzing this game to make picks on spread, moneyline, and over/under.
-
-CRITICAL: You must pick ALL THREE bet types for this game:
-1. SPREAD: Pick either "home" or "away" 
-2. MONEYLINE: Pick either "home" or "away"
-3. TOTAL: Pick either "over" or "under"
-
-=== LOGICAL CONSISTENCY RULES (EXTREMELY IMPORTANT) ===
-Your spread and moneyline picks MUST be logically consistent:
-
-- If you pick a team on the MONEYLINE (meaning you think they'll WIN the game), you should generally pick the SAME team on the SPREAD (unless there's a very specific reason not to)
-- If you pick the HOME team moneyline, you should pick the HOME team spread
-- If you pick the AWAY team moneyline, you should pick the AWAY team spread
-- The only exception is if you think a team will win but not cover a large spread, but this should be rare
-
-NEVER pick contradictory bets like:
-❌ Detroit moneyline + San Francisco spread
-❌ Home team moneyline + Away team spread
-
-=== RATIONALE FORMAT ===
-Write a SINGLE PARAGRAPH (2-4 sentences) in first person as Gary, directly addressing the user. Focus on the most compelling matchup dynamics and situational factors that led to your conclusions across all three bet types.
-
-NEVER EVER mention missing or limited stats in your rationale. Do not use phrases like "with no player stats available" or "relying on league averages" or any other language that suggests data limitations. Users should never know if data is missing.
-
-Respond in this exact JSON format:
-{
-  "spread": "home" or "away",
-  "moneyline": "home" or "away", 
-  "total": "over" or "under",
-  "rationale": "A 2-4 sentence paragraph explaining your picks using expert-level analysis."
-}
-
-Base your picks on the provided stats and odds. Be decisive - you must pick a side for each bet type. Remember: logical consistency between spread and moneyline is MANDATORY.`
-    };
-
-    const userMessage = {
-      role: "user",
-      content: `Analyze this ${sport} game and make your picks:
-
-GAME: ${game.away_team} @ ${game.home_team}
-TIME: ${game.commence_time}
-
-ODDS DATA:
-${JSON.stringify(extractOddsData(game), null, 2)}
-
-STATS DATA:
-${JSON.stringify(gameStats, null, 2)}
-
-Make your picks for spread, moneyline, and total.`
-    };
-
-    const response = await openaiService.generateResponse([systemMessage, userMessage], {
-      temperature: 1.0, // Gemini 3: MUST be 1.0 per Google recommendation
-      maxTokens: 300
-    });
-
-    // Parse the JSON response
-    const jsonMatch = response.match(/\{[\s\S]*?\}/);
-    if (jsonMatch) {
-      const picks = JSON.parse(jsonMatch[0]);
-      
-      // Validate logical consistency between spread and moneyline
-      return validatePickConsistency(picks);
-    }
-
-    // Fallback if parsing fails
-    return {
-      spread: 'home',
-      moneyline: 'home', 
-      total: 'over',
-      rationale: 'Analysis based on available team data and current betting lines.'
-    };
-
-  } catch (error) {
-    console.error('Error generating Gary picks for game:', error);
-    // Return default picks if error (ensuring consistency)
-    return {
-      spread: 'home',
-      moneyline: 'home',
-      total: 'over',
-      rationale: 'Analysis based on available team data and current betting lines.'
-    };
-  }
-}
-
-/**
- * Format game time for display
- * @param {string} timeString - ISO time string
- * @returns {string} - Formatted time
- */
-function formatGameTime(timeString) {
-  try {
-    const date = new Date(timeString);
-    const options = { 
-      hour: 'numeric', 
-      minute: '2-digit', 
-      hour12: true, 
-      timeZone: 'America/New_York' 
-    };
-    const timeFormatted = new Intl.DateTimeFormat('en-US', options).format(date);
-    return `${timeFormatted} EST`;
-  } catch (error) {
-    return 'TBD';
-  }
-}
 
 // ==========================================
 // WEEKLY NFL PICKS (persist all week)
@@ -1206,7 +869,6 @@ async function storeTestPicks(picks, testName = null, testNotes = null) {
 // Export both styles!
 const picksService = {
   generateDailyPicks,
-  generateWhatGaryThinks,
   storeDailyPicksInDatabase,
   storeTestPicks,
   storeWeeklyNFLPicks,
@@ -1216,7 +878,6 @@ const picksService = {
   getNFLWeekNumber,
   checkForExistingPicks,
   ensureValidSupabaseSession,
-  validatePickConsistency,
   _teamNameMatch,
   logAgenticRun
 };

@@ -67,7 +67,7 @@ export const DFS_SLATE_ANALYSIS_TOOLS = [
   },
   {
     name: 'GET_PLAYER_SALARY',
-    description: 'Get DFS salary and ownership projection for a player.',
+    description: 'Get DFS salary and projection for a player.',
     parameters: {
       type: 'object',
       properties: {
@@ -237,7 +237,7 @@ export async function executeToolCall(toolName, args, context) {
         return await getTeammateStatus(args.team, context);
 
       case 'SEARCH_LATEST_NEWS':
-        return await searchLatestNews(args.query);
+        return await searchLatestNews(args.query, context);
 
       case 'GET_PLAYER_VS_TEAM_HISTORY':
         return await getPlayerVsTeamHistory(args.playerName, args.opponent, context);
@@ -334,54 +334,36 @@ async function getUsageBoost(outPlayer, team, context) {
 }
 
 async function getGameEnvironment(homeTeam, awayTeam, context) {
-  // Look for game in context
+  // Look for game in context (populated by BDL odds in Phase 1)
   const game = context.games?.find(g => {
-    const h = g.homeTeam || g.home_team?.abbreviation;
-    const a = g.awayTeam || g.away_team?.abbreviation;
+    const h = (g.homeTeam || '').toUpperCase();
+    const a = (g.awayTeam || '').toUpperCase();
     return (h === homeTeam && a === awayTeam) || (h === awayTeam && a === homeTeam);
   });
 
   if (game) {
+    const ou = game.overUnder || game.total || null;
+    const sp = game.spread || game.homeSpread || null;
     return {
       homeTeam,
       awayTeam,
-      spread: game.spread || game.homeSpread || 0,
-      overUnder: game.overUnder || game.total || 220,
-      homeMoneyline: game.homeMoneyline || game.home_ml,
-      awayMoneyline: game.awayMoneyline || game.away_ml,
-      pace: game.pace || 'medium',
-      impliedTotal: {
-        home: game.homeImpliedTotal || (game.overUnder / 2 - game.spread / 2),
-        away: game.awayImpliedTotal || (game.overUnder / 2 + game.spread / 2)
-      }
+      spread: sp,
+      overUnder: ou,
+      homeMoneyline: game.homeMoneyline || game.home_ml || null,
+      awayMoneyline: game.awayMoneyline || game.away_ml || null,
+      impliedTotal: ou && sp ? {
+        home: (ou / 2 - sp / 2),
+        away: (ou / 2 + sp / 2)
+      } : null
     };
-  }
-
-  // Fallback to BDL odds
-  try {
-    const odds = await ballDontLieService.getOdds('basketball_nba', {});
-    const gameOdds = odds?.find(o =>
-      (o.home_team?.abbreviation === homeTeam && o.away_team?.abbreviation === awayTeam)
-    );
-
-    if (gameOdds) {
-      return {
-        homeTeam,
-        awayTeam,
-        spread: gameOdds.spread || 0,
-        overUnder: gameOdds.over_under || 220
-      };
-    }
-  } catch (e) {
-    // Fallback defaults
   }
 
   return {
     homeTeam,
     awayTeam,
-    spread: 0,
-    overUnder: 220,
-    note: 'Could not find game odds - using defaults'
+    spread: null,
+    overUnder: null,
+    note: 'Game not found in context — odds data unavailable'
   };
 }
 
@@ -397,8 +379,7 @@ function getPlayerSalary(playerName, context) {
       salary: player.salary,
       position: player.position || player.positions?.join('/'),
       team: player.team,
-      projectedPts: player.projected_pts || player.projection,
-      ownership: player.ownership || 'Unknown'
+      projectedPts: player.projected_pts || player.projection
     };
   }
 
@@ -406,30 +387,30 @@ function getPlayerSalary(playerName, context) {
 }
 
 async function getPlayerGameLogs(playerName, games, context) {
-  // Find player in context first
+  // Find player in context
   const player = context.players?.find(p =>
     p.name?.toLowerCase().includes(playerName.toLowerCase())
   );
 
-  if (player?.recentGames) {
-    return {
-      player: player.name,
-      games: player.recentGames.slice(0, games),
-      l5Avg: player.l5Stats || calculateL5Avg(player.recentGames)
-    };
+  if (!player) {
+    return { player: playerName, error: 'Player not found in slate' };
   }
 
-  // Fetch from BDL
-  try {
-    // Would need player ID - simplified for now
-    return {
-      player: playerName,
-      games: [],
-      note: 'Game logs require player ID lookup - check context'
-    };
-  } catch (e) {
-    return { player: playerName, error: e.message };
-  }
+  // Return L5 stats from context (populated by BDL in Phase 1)
+  return {
+    player: player.name,
+    team: player.team,
+    l5Stats: player.l5Stats || null,
+    seasonStats: {
+      ppg: player.ppg || player.seasonStats?.ppg,
+      rpg: player.rpg || player.seasonStats?.rpg,
+      apg: player.apg || player.seasonStats?.apg,
+      mpg: player.mpg || player.seasonStats?.mpg,
+    },
+    tsPercent: player.tsPercent || null,
+    efgPercent: player.efgPercent || null,
+    note: player.l5Stats ? null : 'L5 game logs not available for this player'
+  };
 }
 
 async function getPlayerSeasonStats(playerName, context) {
@@ -447,9 +428,11 @@ async function getPlayerSeasonStats(playerName, context) {
         apg: player.apg || player.seasonStats?.apg,
         mpg: player.mpg || player.seasonStats?.mpg,
         usage: player.usage || player.seasonStats?.usg_pct,
-        trueShootingPct: player.seasonStats?.ts_pct,
-        efgPct: player.seasonStats?.efg_pct
+        trueShootingPct: player.tsPercent || player.seasonStats?.ts_pct,
+        efgPct: player.efgPercent || player.seasonStats?.efg_pct
       },
+      l5Stats: player.l5Stats || null,
+      matchupDvP: player.matchupDvP || null,
       salary: player.salary,
       valuePerDollar: player.salary ? ((player.projected_pts || 0) / player.salary * 1000).toFixed(2) : 'N/A'
     };
@@ -459,18 +442,26 @@ async function getPlayerSeasonStats(playerName, context) {
 }
 
 async function getMatchupData(playerName, position, opponent, context) {
-  // Get DvP data for the opponent
-  const dvpData = context.dvpRankings?.[opponent]?.[position];
+  // Find player in context — DvP is stored per-player from Tank01
+  const player = context.players?.find(p =>
+    p.name?.toLowerCase().includes(playerName.toLowerCase())
+  );
+
+  if (player?.matchupDvP) {
+    return {
+      player: player.name,
+      position: position || player.position,
+      opponent,
+      dvp: player.matchupDvP
+    };
+  }
 
   return {
     player: playerName,
     position,
     opponent,
-    dvp: dvpData || {
-      rank: 'Unknown',
-      pointsAllowed: 'Check BDL',
-      note: 'DvP data not in context - investigate manually'
-    }
+    dvp: null,
+    note: 'DvP data not available for this player/opponent matchup'
   };
 }
 
@@ -493,48 +484,49 @@ async function getTeammateStatus(team, context) {
   };
 }
 
-async function searchLatestNews(query) {
-  // This would use Gemini Grounding in production
-  // For now, return a placeholder
+async function searchLatestNews(query, context) {
+  // Search for matching news in player newsContext (populated from Tank01 in Phase 1)
+  const queryLower = query.toLowerCase();
+  const matchingNews = [];
+
+  for (const player of (context?.players || [])) {
+    if (player.newsContext && player.name?.toLowerCase().includes(queryLower.split(' ')[0].toLowerCase())) {
+      matchingNews.push({
+        player: player.name,
+        team: player.team,
+        news: player.newsContext
+      });
+    }
+  }
+
+  if (matchingNews.length > 0) {
+    return { query, results: matchingNews };
+  }
+
   return {
     query,
-    note: 'News search requires Gemini Grounding - use google_search tool in prompt',
-    suggestion: 'Ask Gary Pro to use web search for latest injury/news updates'
+    results: [],
+    note: 'No matching news found in context for this query'
   };
 }
 
 async function getPlayerVsTeamHistory(playerName, opponent, context) {
-  // Would need historical game data
+  // Check if L5 stats show any games against this opponent
+  const player = context.players?.find(p =>
+    p.name?.toLowerCase().includes(playerName.toLowerCase())
+  );
+
   return {
-    player: playerName,
+    player: player?.name || playerName,
     opponent,
-    note: 'Historical matchup data requires BDL game logs lookup',
-    suggestion: 'Check player\'s L10 games for any against this opponent'
+    matchupDvP: player?.matchupDvP || null,
+    note: 'Historical game-by-game matchup data not available — use DvP and season stats instead'
   };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // HELPERS
 // ═══════════════════════════════════════════════════════════════════════════════
-
-function calculateL5Avg(recentGames) {
-  if (!recentGames || recentGames.length === 0) return null;
-
-  const last5 = recentGames.slice(0, 5);
-  const sum = last5.reduce((acc, g) => ({
-    pts: acc.pts + (g.pts || g.points || 0),
-    reb: acc.reb + (g.reb || g.rebounds || 0),
-    ast: acc.ast + (g.ast || g.assists || 0),
-    min: acc.min + (g.min || g.minutes || 0)
-  }), { pts: 0, reb: 0, ast: 0, min: 0 });
-
-  return {
-    ppg: (sum.pts / last5.length).toFixed(1),
-    rpg: (sum.reb / last5.length).toFixed(1),
-    apg: (sum.ast / last5.length).toFixed(1),
-    mpg: (sum.min / last5.length).toFixed(1)
-  };
-}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // EXPORTS

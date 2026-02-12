@@ -508,23 +508,7 @@ export const propOddsService = {
     return [];
   },
 
-  /**
-   * Filter out any invalid props - kept for backwards compatibility
-   * @private
-      const validProps = props.filter(prop => (
-        prop.player && 
-        prop.prop_type && 
-        !isNaN(prop.line) && 
-        (prop.over_odds !== null || prop.under_odds !== null)
-      ));
-      
-      console.log(`Extracted ${validProps.length} props using regex patterns`);
-      return validProps;
-    } catch (error) {
-      console.error('Error extracting structured props:', error);
-      return [];
-    }
-  },
+  // validateProps removed — orphaned code from deprecated extraction function
   
   /**
    * Standardize prop type names across different sources

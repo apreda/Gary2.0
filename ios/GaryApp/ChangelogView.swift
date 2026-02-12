@@ -53,6 +53,18 @@ struct ChangelogEntry: Identifiable {
 
 let changelogEntries: [ChangelogEntry] = [
     ChangelogEntry(
+        version: "1.9.8",
+        date: "February 11, 2026",
+        type: .improvement,
+        title: "Refreshed Page Design",
+        changes: [
+            "Redesigned page headers with Gary logo across all tabs",
+            "Compact dropdown filters on Billfold and Fantasy pages",
+            "Cleaner sport filter layout with consistent spacing",
+            "Visual polish and spacing improvements throughout"
+        ]
+    ),
+    ChangelogEntry(
         version: "1.9.7",
         date: "January 22, 2026",
         type: .feature,
@@ -85,7 +97,7 @@ let changelogEntries: [ChangelogEntry] = [
         type: .improvement,
         title: "App Performance & Data Accuracy",
         changes: [
-            "Removed fallback logic - picks now refresh daily (no stale data)",
+            "Improved data freshness - picks refresh daily with smart day-boundary handling",
             "Removed all debug print statements for cleaner production logs",
             "Improved data freshness - app shows empty state when no picks exist for current day/week",
             "Code cleanup - removed 100+ lines of unused fallback code"

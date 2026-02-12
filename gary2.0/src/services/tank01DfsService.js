@@ -463,9 +463,368 @@ export async function fetchDfsSalaries(sport, dateStr, platform = 'draftkings') 
   }
 }
 
+// ============================================================================
+// NBA TEAM ROSTER DATA (Player enrichment: TS%, eFG%, injury context, etc.)
+// ============================================================================
+
+// Cache roster data per team (30 min TTL — doesn't change mid-session)
+const _rosterCache = new Map();
+const ROSTER_CACHE_TTL = 30 * 60 * 1000;
+
+/**
+ * Fetch NBA team roster with player averages from Tank01
+ * Returns per-player: injury details, lastGamePlayed, TS%, eFG%, full stat line
+ *
+ * @param {string} teamAbv - Team abbreviation (e.g., "CHA", "ATL")
+ * @returns {Promise<Array>} Array of player objects with enriched stats
+ */
+export async function fetchNbaTeamRoster(teamAbv) {
+  const key = teamAbv.toUpperCase();
+  const now = Date.now();
+  const cached = _rosterCache.get(key);
+  if (cached && (now - cached.at) < ROSTER_CACHE_TTL) {
+    return cached.data;
+  }
+
+  try {
+    const data = await makeApiRequest('/getNBATeamRoster', {
+      teamAbv: key,
+      statsToGet: 'averages'
+    });
+
+    const roster = data?.body?.roster || [];
+    const players = roster.map(p => ({
+      longName: p.longName || `${p.espnName || ''}`,
+      team: key,
+      pos: p.pos || '',
+      injury: p.injury || null,
+      lastGamePlayed: p.lastGamePlayed || null,
+      stats: p.stats || null,
+      nbaComHeadshot: p.nbaComHeadshot || null,
+      playerID: p.playerID || null,
+      bDay: p.bDay || null,
+      exp: p.exp || null
+    }));
+
+    _rosterCache.set(key, { data: players, at: now });
+    console.log(`[Tank01 DFS] Roster for ${key}: ${players.length} players`);
+    return players;
+  } catch (err) {
+    console.warn(`[Tank01 DFS] Roster fetch failed for ${key}: ${err.message}`);
+    return [];
+  }
+}
+
+/**
+ * Fetch roster data for multiple teams in parallel
+ * @param {string[]} teamAbvs - Array of team abbreviations
+ * @returns {Promise<Map<string, Array>>} Map of team → players
+ */
+export async function fetchNbaRostersForTeams(teamAbvs) {
+  const results = new Map();
+  const fetches = teamAbvs.map(async (team) => {
+    const roster = await fetchNbaTeamRoster(team);
+    results.set(team.toUpperCase(), roster);
+  });
+  await Promise.all(fetches);
+  return results;
+}
+
+/**
+ * Extract enrichment data for a specific player from Tank01 roster
+ * Returns: TS%, eFG%, injury context, lastGamePlayed, minutes, games played
+ *
+ * @param {Object} rosterPlayer - Tank01 roster player object
+ * @returns {Object} Enrichment data to merge into DFS player
+ */
+export function extractPlayerEnrichment(rosterPlayer) {
+  if (!rosterPlayer) return null;
+
+  const stats = rosterPlayer.stats || {};
+  const injury = rosterPlayer.injury || {};
+
+  return {
+    tsPercent: stats.trueShootingPercentage ? parseFloat(stats.trueShootingPercentage) : null,
+    efgPercent: stats.effectiveShootingPercentage ? parseFloat(stats.effectiveShootingPercentage) : null,
+    avgMinutes: stats.mins ? parseFloat(stats.mins) : null,
+    gamesPlayed: stats.gamesPlayed ? parseInt(stats.gamesPlayed, 10) : null,
+    fgPercent: stats.fgp ? parseFloat(stats.fgp) : null,
+    threePtPercent: stats.tptfgp ? parseFloat(stats.tptfgp) : null,
+    ftPercent: stats.ftp ? parseFloat(stats.ftp) : null,
+    turnovers: stats.TOV ? parseFloat(stats.TOV) : null,
+    // Injury context
+    injuryDesignation: injury.designation || null,
+    injuryDescription: injury.description || null,
+    injuryReturnDate: injury.injReturnDate || null,
+    // Last game played (trade/return detection)
+    lastGamePlayed: rosterPlayer.lastGamePlayed || null
+  };
+}
+
+// ============================================================================
+// NBA TEAM DEFENSE (DvP — Defense vs Position)
+// ============================================================================
+
+let _teamStatsCache = null;
+let _teamStatsCachedAt = 0;
+const TEAM_STATS_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+
+/**
+ * Fetch all NBA team stats including defensive stats by position (DvP)
+ * One call returns all 30 teams.
+ *
+ * @returns {Promise<Map<string, Object>>} Map of teamAbv → team stats with defensiveStats
+ */
+export async function fetchNbaTeamDefenseStats() {
+  const now = Date.now();
+  if (_teamStatsCache && (now - _teamStatsCachedAt) < TEAM_STATS_CACHE_TTL) {
+    console.log(`[Tank01 DFS] Using cached team defense stats`);
+    return _teamStatsCache;
+  }
+
+  try {
+    const data = await makeApiRequest('/getNBATeams', { teamStats: 'true' });
+    const teams = data?.body || [];
+
+    const teamMap = new Map();
+    for (const team of teams) {
+      const abv = normalizeTeam(team.teamAbv || '');
+      if (!abv || abv === 'UNK') continue;
+
+      teamMap.set(abv, {
+        teamAbv: abv,
+        teamName: team.teamName || '',
+        teamCity: team.teamCity || '',
+        defensiveStats: team.defensiveStats || null,
+        offensiveStats: team.offensiveStats || null,
+        wins: team.wins || '0',
+        losses: team.loss || '0'
+      });
+    }
+
+    _teamStatsCache = teamMap;
+    _teamStatsCachedAt = now;
+    console.log(`[Tank01 DFS] Team defense stats loaded for ${teamMap.size} teams`);
+    return teamMap;
+  } catch (err) {
+    console.warn(`[Tank01 DFS] Team defense fetch failed: ${err.message}`);
+    return new Map();
+  }
+}
+
+/**
+ * Get DvP (Defense vs Position) data for a player's matchup
+ *
+ * @param {string} opponentAbv - Opponent team abbreviation
+ * @param {string} position - Player position (PG, SG, SF, PF, C)
+ * @param {Map} teamStatsMap - Pre-fetched team stats map
+ * @returns {Object|null} DvP data: { oppDvpPts, oppDvpReb, oppDvpAst, oppDvpStl, oppDvpBlk }
+ */
+export function getPlayerDvP(opponentAbv, position, teamStatsMap) {
+  if (!opponentAbv || !position || !teamStatsMap) return null;
+
+  const oppStats = teamStatsMap.get(opponentAbv.toUpperCase());
+  if (!oppStats?.defensiveStats) return null;
+
+  const dvp = oppStats.defensiveStats;
+  const pos = position.toUpperCase();
+
+  // Map DFS positions to DvP positions
+  // G → PG (guard), F → SF (forward), UTIL → ignore
+  const dvpPos = pos === 'G' ? 'PG' : pos === 'F' ? 'SF' : pos;
+  if (!['PG', 'SG', 'SF', 'PF', 'C'].includes(dvpPos)) return null;
+
+  return {
+    oppDvpPts: dvp.pts?.[dvpPos] ? parseFloat(dvp.pts[dvpPos]) : null,
+    oppDvpReb: dvp.reb?.[dvpPos] ? parseFloat(dvp.reb[dvpPos]) : null,
+    oppDvpAst: dvp.ast?.[dvpPos] ? parseFloat(dvp.ast[dvpPos]) : null,
+    oppDvpStl: dvp.stl?.[dvpPos] ? parseFloat(dvp.stl[dvpPos]) : null,
+    oppDvpBlk: dvp.blk?.[dvpPos] ? parseFloat(dvp.blk[dvpPos]) : null,
+    oppDvpTotalPts: dvp.pts?.Total ? parseFloat(dvp.pts.Total) : null,
+    oppGamesPlayed: dvp.gamesPlayed ? parseInt(dvp.gamesPlayed, 10) : null,
+    position: dvpPos
+  };
+}
+
+// ============================================================================
+// NBA PROJECTIONS (Benchmark — Gary makes his own, this is sanity check)
+// ============================================================================
+
+let _projectionsCache = null;
+let _projectionsCachedAt = 0;
+const PROJECTIONS_CACHE_TTL = 30 * 60 * 1000;
+
+/**
+ * Fetch NBA player projections from Tank01
+ * These are BENCHMARKS — Gary makes his OWN projections using Socratic reasoning.
+ *
+ * @param {string} dateStr - Date in YYYY-MM-DD format
+ * @returns {Promise<Map<string, Object>>} Map of playerName → projection data
+ */
+export async function fetchNbaProjections(dateStr) {
+  const now = Date.now();
+  if (_projectionsCache && (now - _projectionsCachedAt) < PROJECTIONS_CACHE_TTL) {
+    console.log(`[Tank01 DFS] Using cached projections`);
+    return _projectionsCache;
+  }
+
+  try {
+    const apiDate = formatDateForApi(dateStr);
+    const data = await makeApiRequest('/getNBAProjections', {
+      numOfDays: '7',
+      date: apiDate
+    });
+
+    const projections = data?.body?.playerProjections || {};
+    const projMap = new Map();
+
+    for (const [id, proj] of Object.entries(projections)) {
+      const name = (proj.longName || '').trim().toLowerCase();
+      if (!name) continue;
+
+      projMap.set(name, {
+        playerID: id,
+        longName: proj.longName,
+        team: normalizeTeam(proj.team || ''),
+        pos: proj.pos || '',
+        projPts: proj.pts ? parseFloat(proj.pts) : 0,
+        projReb: proj.reb ? parseFloat(proj.reb) : 0,
+        projAst: proj.ast ? parseFloat(proj.ast) : 0,
+        projStl: proj.stl ? parseFloat(proj.stl) : 0,
+        projBlk: proj.blk ? parseFloat(proj.blk) : 0,
+        projTov: proj.TOV ? parseFloat(proj.TOV) : 0,
+        projFpts: proj.fantasyPoints ? parseFloat(proj.fantasyPoints) : 0
+      });
+    }
+
+    _projectionsCache = projMap;
+    _projectionsCachedAt = now;
+    console.log(`[Tank01 DFS] Projections loaded for ${projMap.size} players`);
+    return projMap;
+  } catch (err) {
+    console.warn(`[Tank01 DFS] Projections fetch failed: ${err.message}`);
+    return new Map();
+  }
+}
+
+// ============================================================================
+// NBA NEWS (Breaking headlines — injury updates, trades, rest decisions)
+// ============================================================================
+
+let _newsCache = null;
+let _newsCachedAt = 0;
+const NEWS_CACHE_TTL = 15 * 60 * 1000; // 15 min (news changes frequently)
+
+/**
+ * Fetch recent NBA news/headlines from Tank01
+ *
+ * @param {number} maxItems - Max number of headlines to fetch
+ * @returns {Promise<Array>} Array of news items with title, link, playerIDs
+ */
+export async function fetchNbaNews(maxItems = 30) {
+  const now = Date.now();
+  if (_newsCache && (now - _newsCachedAt) < NEWS_CACHE_TTL) {
+    console.log(`[Tank01 DFS] Using cached news (${_newsCache.length} items)`);
+    return _newsCache;
+  }
+
+  try {
+    const data = await makeApiRequest('/getNBANews', {
+      recentNews: 'true',
+      maxItems: String(maxItems)
+    });
+
+    const news = data?.body || [];
+    _newsCache = news;
+    _newsCachedAt = now;
+    console.log(`[Tank01 DFS] News loaded: ${news.length} headlines`);
+    return news;
+  } catch (err) {
+    console.warn(`[Tank01 DFS] News fetch failed: ${err.message}`);
+    return [];
+  }
+}
+
+/**
+ * Match news headlines to players on today's slate
+ * Returns a Map of playerName → array of relevant headlines
+ *
+ * @param {Array} newsItems - Raw news from fetchNbaNews
+ * @param {Map} playerIdMap - Map of Tank01 playerID → playerName (from roster data)
+ * @returns {Map<string, string[]>} Map of playerName → headline strings
+ */
+export function matchNewsToPlayers(newsItems, playerIdMap) {
+  const newsMap = new Map();
+
+  for (const item of newsItems) {
+    const title = item.title || '';
+    const playerIDs = item.playerIDs || [];
+
+    for (const pid of playerIDs) {
+      const playerName = playerIdMap.get(String(pid));
+      if (!playerName) continue;
+
+      if (!newsMap.has(playerName)) {
+        newsMap.set(playerName, []);
+      }
+      newsMap.get(playerName).push(title);
+    }
+  }
+
+  return newsMap;
+}
+
+// ============================================================================
+// NBA GAME TIMES (Fallback for slate discovery if DK API fails)
+// ============================================================================
+
+/**
+ * Fetch NBA game times from Tank01's scores endpoint
+ * Returns gameTime and gameTime_epoch per game
+ *
+ * @param {string} dateStr - Date in YYYY-MM-DD format
+ * @returns {Promise<Array>} Array of game objects with time data
+ */
+export async function fetchNbaGameTimes(dateStr) {
+  try {
+    const apiDate = formatDateForApi(dateStr);
+    const data = await makeApiRequest('/getNBAScoresOnly', { gameDate: apiDate });
+
+    const games = data?.body || {};
+    const result = [];
+
+    for (const [gameId, game] of Object.entries(games)) {
+      result.push({
+        gameID: gameId,
+        away: normalizeTeam(game.away || ''),
+        home: normalizeTeam(game.home || ''),
+        gameTime: game.gameTime || null,
+        gameTimeEpoch: game.gameTime_epoch ? parseFloat(game.gameTime_epoch) : null,
+        gameStatus: game.gameStatus || 'Unknown'
+      });
+    }
+
+    console.log(`[Tank01 DFS] Game times for ${dateStr}: ${result.length} games`);
+    return result;
+  } catch (err) {
+    console.warn(`[Tank01 DFS] Game times fetch failed: ${err.message}`);
+    return [];
+  }
+}
+
 export default {
   fetchDfsSalaries,
   fetchNbaDfsSalaries,
-  fetchNflDfsSalaries
+  fetchNflDfsSalaries,
+  // New NBA DFS enrichment functions
+  fetchNbaTeamRoster,
+  fetchNbaRostersForTeams,
+  extractPlayerEnrichment,
+  fetchNbaTeamDefenseStats,
+  getPlayerDvP,
+  fetchNbaProjections,
+  fetchNbaNews,
+  matchNewsToPlayers,
+  fetchNbaGameTimes
 };
 

@@ -33,6 +33,7 @@ import {
   normalizeTeamName
 } from './sharedUtils.js';
 import { fetchComprehensivePropsNarrative, fetchPropLineMovement, getPlayerPropMovement } from './scoutReport/scoutReportBuilder.js';
+import { fetchNbaInjuriesForGame } from '../nbaInjuryReportService.js';
 
 const SPORT_KEY = 'basketball_nba';
 
@@ -270,17 +271,23 @@ function analyzeTeammateImpact(playerName, team, injuries, playerSeasonStats) {
   
   const allStars = keyPlayers.star_scorers.map(n => n.toLowerCase());
   
-  // Find injured stars on the same team
+  // Find injured stars on the same team (FRESH injuries only — season-long is priced in)
   const teamInjuries = injuries.filter(inj => {
     const injTeam = (inj.team || '').toLowerCase();
     const injPlayer = (inj.player || '').toLowerCase();
     const injStatus = (inj.status || '').toLowerCase();
-    
+    const injDuration = (inj.duration || '').toLowerCase();
+
     // Check if on same team and is a key player
     const isTeammate = injTeam.includes(team.toLowerCase()) || team.toLowerCase().includes(injTeam.split(' ').pop());
     const isKeyPlayer = allStars.some(star => injPlayer.includes(star) || star.includes(injPlayer));
     const isOut = ['out', 'doubtful', 'day-to-day'].some(s => injStatus.includes(s));
-    
+
+    // Skip season-long injuries — team has adapted, usage already shifted, props already reflect it
+    const isSeasonLong = injDuration.includes('season') || injDuration.includes('90d') ||
+      (inj.durationDays && inj.durationDays >= 30);
+    if (isSeasonLong) return false;
+
     return isTeammate && isKeyPlayer && isOut && injPlayer !== playerName.toLowerCase();
   });
   
@@ -423,22 +430,32 @@ function getTopPropCandidates(props, maxPlayersPerTeam = 10) {
  * Format injuries relevant to NBA props
  */
 function formatPropsInjuries(injuries = []) {
-  // NO SLICE - include ALL injuries from BDL to prevent any truncation
+  // Handles both RapidAPI format (source: 'nba_injury_report_api') and BDL format
   return (injuries || [])
     .filter(inj => inj?.player?.full_name || inj?.player?.first_name)
     .map((injury) => {
-      // Apply duration context logic
-      const fixedInj = fixBdlInjuryStatus(injury);
-      
+      // RapidAPI injuries already have correct status — skip BDL fix
+      const isRapidApi = injury.source === 'nba_injury_report_api';
+      const fixedInj = isRapidApi ? injury : fixBdlInjuryStatus(injury);
+
       return {
         player: fixedInj?.player?.full_name || `${fixedInj?.player?.first_name || ''} ${fixedInj?.player?.last_name || ''}`.trim(),
         position: fixedInj?.player?.position || 'Unknown',
         status: fixedInj?.status || 'Unknown',
-        description: fixedInj?.description || '',
-        team: fixedInj?.team?.full_name || '',
+        description: fixedInj?.description || fixedInj?.durationContext || '',
+        team: fixedInj?.team?.full_name || fixedInj?.team || '',
         duration: fixedInj?.duration || 'UNKNOWN',
         isEdge: fixedInj?.isEdge || false
       };
+    })
+    // Filter out season-long injuries — prop lines already reflect their absence
+    .filter(inj => {
+      const dur = (inj.duration || '').toLowerCase();
+      const isSeasonLong = dur.includes('season') || dur.includes('90d');
+      if (isSeasonLong) {
+        console.log(`[Props Injuries] Filtered out ${inj.player} (${inj.duration}) — season-long, already priced into prop lines`);
+      }
+      return !isSeasonLong;
     });
 }
 
@@ -1111,12 +1128,20 @@ export async function buildNbaPropsAgenticContext(game, playerProps, options = {
   // Parallel fetch: injuries, player IDs, narrative context, AND LINE MOVEMENT via Gemini Grounding
   // IMPORTANT: All context is fetched UPFRONT so Gary knows all factors BEFORE iterations
   console.log('[NBA Props Context] Fetching injuries, player IDs, narrative context, and LINE MOVEMENT...');
-  const [injuries, playerIdMap, comprehensiveNarrative, lineMovementData] = await Promise.all([
-    // Injuries from BDL - with logging if fails
-    teamIds.length > 0 
+  // RapidAPI for injury STATUS (same source as game picks)
+  const isoDate = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+
+  const [apiInjuries, bdlInjuries, playerIdMap, comprehensiveNarrative, lineMovementData] = await Promise.all([
+    // RapidAPI: injury STATUS (source of truth — same as game picks)
+    fetchNbaInjuriesForGame(game.home_team, game.away_team, isoDate).catch(e => {
+      console.error(`[NBA Props Context] RapidAPI injury fetch FAILED: ${e.message}`);
+      return null;
+    }),
+    // BDL: duration ENRICHMENT only (description text for duration parsing)
+    teamIds.length > 0
       ? safeApiCallArray(
           () => ballDontLieService.getInjuriesGeneric(SPORT_KEY, { team_ids: teamIds }, options.nocache ? 0 : 5),
-          `NBA Props: Fetch injuries for teams ${teamIds.join(', ')}`
+          `NBA Props: BDL duration enrichment`
         )
       : Promise.resolve([]),
     
@@ -1152,6 +1177,70 @@ export async function buildNbaPropsAgenticContext(game, playerProps, options = {
     console.log(`[NBA Props Context] No line movement data available (source: ${lineMovementData?.source || 'UNKNOWN'})`);
   }
   
+  // Merge RapidAPI injuries with BDL duration enrichment (same pipeline as game picks)
+  let injuries = [];
+  if (apiInjuries) {
+    // RapidAPI returned data — use as source of truth for STATUS
+    const allApiInjuries = [...(apiInjuries.home || []), ...(apiInjuries.away || [])];
+    console.log(`[NBA Props Context] RapidAPI injuries: ${apiInjuries.home?.length || 0} home, ${apiInjuries.away?.length || 0} away`);
+
+    // Build BDL lookup for duration enrichment
+    const bdlMap = new Map();
+    for (const inj of bdlInjuries) {
+      const name = `${inj.player?.first_name || ''} ${inj.player?.last_name || ''}`.toLowerCase().trim();
+      if (name) bdlMap.set(name, inj);
+    }
+
+    // Enrich each RapidAPI injury with BDL duration data
+    injuries = allApiInjuries.map(inj => {
+      const name = `${inj.player?.first_name || ''} ${inj.player?.last_name || ''}`.toLowerCase().trim();
+      let bdlMatch = bdlMap.get(name);
+      // Fallback: try last-name-only match
+      if (!bdlMatch && inj.player?.last_name) {
+        const lastName = inj.player.last_name.toLowerCase();
+        for (const [bdlName, bdlInj] of bdlMap) {
+          if (bdlName.endsWith(lastName)) { bdlMatch = bdlInj; break; }
+        }
+      }
+
+      // Apply BDL duration enrichment if matched
+      const enrichedInj = { ...inj };
+      if (bdlMatch) {
+        const desc = bdlMatch.comment || bdlMatch.description || '';
+        enrichedInj.description = desc;
+        // Parse duration from BDL description (same as game picks scoutReportBuilder)
+        const descLower = desc.toLowerCase();
+        if (descLower.includes('out for season') || descLower.includes('no timetable') || descLower.includes('at least another month')) {
+          enrichedInj.duration = 'SEASON-LONG';
+        } else if (descLower.includes('week-to-week') || descLower.includes('several weeks')) {
+          enrichedInj.duration = 'MID-SEASON';
+        } else if (descLower.includes('day-to-day')) {
+          enrichedInj.duration = 'RECENT';
+        }
+        // Also try "since [month]" pattern for date-based duration
+        const sinceMatch = descLower.match(/since\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i);
+        if (sinceMatch) {
+          const monthMap = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+          const monthNum = monthMap[sinceMatch[1].toLowerCase().substring(0, 3)];
+          if (monthNum !== undefined) {
+            const now = new Date();
+            let year = now.getFullYear();
+            if (monthNum > now.getMonth()) year -= 1;
+            const daysSince = Math.floor((now - new Date(year, monthNum, 1)) / (1000 * 60 * 60 * 24));
+            if (daysSince >= 30) enrichedInj.duration = 'SEASON-LONG';
+            else if (daysSince >= 7) enrichedInj.duration = 'MID-SEASON';
+            else enrichedInj.duration = 'RECENT';
+          }
+        }
+      }
+      return enrichedInj;
+    });
+  } else {
+    // RapidAPI failed — fall back to BDL only (degraded mode)
+    console.warn('[NBA Props Context] RapidAPI failed — using BDL injuries as fallback (degraded)');
+    injuries = bdlInjuries;
+  }
+
   // Extract narrative context - now includes structured sections
   const narrativeContext = comprehensiveNarrative?.raw || null;
   const narrativeSections = comprehensiveNarrative?.sections || {};
@@ -1239,14 +1328,14 @@ export async function buildNbaPropsAgenticContext(game, playerProps, options = {
   // Merge BDL injuries with detected injuries
   const allInjuries = [...formattedInjuries, ...detectedInjuries];
   
-  // Log exact injuries from BDL to help debug any hallucinations
+  // Log injury report (RapidAPI + BDL enrichment, same as game picks)
   if (formattedInjuries.length > 0) {
-    console.log(`[NBA Props Context] 🏥 BDL Injury Report (${formattedInjuries.length} injuries):`);
+    console.log(`[NBA Props Context] Injury Report (${formattedInjuries.length} injuries, source: ${apiInjuries ? 'RapidAPI + BDL enrichment' : 'BDL fallback'}):`);
     formattedInjuries.forEach(inj => {
-      console.log(`   - ${inj.player} (${inj.team}) - ${inj.status}`);
+      console.log(`   - ${inj.player} (${inj.team}) - ${inj.status} [${inj.duration}]`);
     });
   } else {
-    console.log(`[NBA Props Context] 🏥 BDL: No injuries reported for these teams`);
+    console.log(`[NBA Props Context] No injuries reported for these teams`);
   }
   
   // Log detected injuries (from 0 minutes in game logs)
@@ -1339,7 +1428,7 @@ export async function buildNbaPropsAgenticContext(game, playerProps, options = {
   console.log(`   - ${availableCandidates.length} player candidates (verified on team, excludes Doubtful/Day-To-Day)`);
   console.log(`   - ${playersWithStats} players with season stats (${(statsCoverage * 100).toFixed(0)}% coverage)`);
   console.log(`   - ${playersWithLogs} players with game logs (${(logsCoverage * 100).toFixed(0)}% coverage)`);
-  console.log(`   - ${allInjuries.length} injuries (${formattedInjuries.length} from BDL + ${detectedInjuries.length} detected from game logs)`);
+  console.log(`   - ${allInjuries.length} injuries (${formattedInjuries.length} from ${apiInjuries ? 'RapidAPI' : 'BDL'} + ${detectedInjuries.length} detected from game logs)`);
   console.log(`   - Narrative context: ${narrativeContext ? 'YES' : 'NO'}`);
   console.log(`   - Line movement data: ${lineMovementCount > 0 ? `${lineMovementCount} props tracked` : 'NOT AVAILABLE'}`);
 

@@ -10,7 +10,7 @@ import { requestQueue } from '../utils/requestQueue.js';
 
 // LLM provider - Gemini 3 Deep Think
 const LLM_PROVIDER = 'gemini';
-// Gemini 3 Flash (default for all picks) - POLICY: Always use Flash, never Pro
+// Gemini 3 Flash (default model). Game picks orchestrator switches to Pro for reasoning passes.
 const GEMINI_MODEL_DEFAULT = 'gemini-3-flash-preview';
 // Gemini 3 Flash - Pro-grade at lightning speeds (for props when Pro has quota issues)
 const GEMINI_MODEL_FLASH = 'gemini-3-flash-preview';

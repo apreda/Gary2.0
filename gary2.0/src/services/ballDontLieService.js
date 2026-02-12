@@ -1,5 +1,6 @@
 import { BalldontlieAPI } from '@balldontlie/sdk';
 import axios from 'axios';
+import { nhlSeason } from '../utils/dateUtils.js';
 
 // Set cache TTL (5 minutes for playoff data)
 const TTL_MINUTES = 5;
@@ -125,10 +126,7 @@ function buildQuery(params = {}) {
  * @returns {number} - Season year (e.g., 2025 for current 2025-26 season)
  */
 function getCurrentNhlSeason() {
-  const currentMonth = new Date().getMonth() + 1; // 1-indexed for consistency
-  const currentYear = new Date().getFullYear();
-  // NHL season starts in October: Oct(10)-Dec = currentYear, Jan-Sep = previousYear
-  return currentMonth >= 10 ? currentYear : currentYear - 1;
+  return nhlSeason();
 }
 
 /**
@@ -251,22 +249,22 @@ const ballDontLieService = {
             const data = await fetchAllPages(v2Url, norm);
             if (data && data.length) return data;
             console.log(`[Ball Don't Lie] NBA v2/odds returned 0 rows for`, norm);
+            // Legitimate "no odds" — OK to cache empty result
+            return [];
           } catch (v2err) {
             const status = v2err?.response?.status || '';
             const data = v2err?.response?.data ? JSON.stringify(v2err.response.data).slice(0, 400) : '';
             console.warn(`[Ball Don't Lie] NBA v2/odds failed: ${status} ${data}`);
+            throw v2err; // Don't cache failed fetches — let outer catch handle
           }
-          // Do NOT fallback to V1; per latest docs NBA odds are V2-only
-          return [];
         } else {
           // Non-NBA sports: use V1 sport-scoped endpoint
           const v1Url = `${BALLDONTLIE_API_BASE_URL}/${sportKey}/v1/odds`;
-          // Reuse fetchAllPages for consistency
           try {
              return await fetchAllPages(v1Url, norm);
           } catch (err) {
              console.warn(`[Ball Don't Lie] ${sportKey} v1/odds failed: ${err.message}`);
-             return [];
+             throw err; // Don't cache failed fetches — let outer catch handle
           }
         }
       }, ttlMinutes);
@@ -2168,6 +2166,10 @@ const ballDontLieService = {
         }
 
         console.log(`[Ball Don't Lie] Got NBA season stats for ${Object.keys(statsMap).length}/${uniqueIds.length} players (with usage data)`);
+        const missingIds = uniqueIds.filter(id => !statsMap[id]);
+        if (missingIds.length > 0) {
+          console.log(`[Ball Don't Lie] Missing season stats for player ID(s): ${missingIds.join(', ')} — likely two-way/inactive`);
+        }
         return statsMap;
       }, 30); // Cache for 30 minutes
     } catch (e) {
@@ -3081,7 +3083,7 @@ const ballDontLieService = {
       }, ttlMinutes);
     } catch (e) {
       console.error(`[Ball Don't Lie] ${sportKey} getGames error:`, e.message);
-      return [];
+      throw e; // Don't swallow — let the runner distinguish outages from "no games"
     }
   },
 
@@ -3120,6 +3122,22 @@ const ballDontLieService = {
   },
 
   /**
+   * Fetch REAL team-level advanced stats from BDL team_season_averages endpoint.
+   * Returns: { off_rating, def_rating, net_rating, pace, efg_pct, ts_pct, oreb_pct, dreb_pct, tm_tov_pct, gp, w, l, ... }
+   * This is the CORRECT source for team ORtg/DRtg/NetRtg (NOT player weight-averaging).
+   */
+  async getTeamSeasonAdvanced(teamId, season, ttlMinutes = 30) {
+    const cacheKey = `nba_team_season_advanced_${teamId}_${season}`;
+    return await getCachedOrFetch(cacheKey, async () => {
+      const url = `${BALLDONTLIE_API_BASE_URL}/nba/v1/team_season_averages/general?season=${season}&season_type=regular&type=advanced&team_ids[]=${teamId}`;
+      const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+      const data = response.data?.data;
+      if (!data || data.length === 0) return null;
+      return data[0].stats;
+    }, ttlMinutes);
+  },
+
+  /**
    * Compute L5 team efficiency from player-level box score stats.
    * Returns efficiency metrics (eFG%, TS%, approx ORtg/DRtg/Net Rating) plus
    * per-game player participation for roster context.
@@ -3138,13 +3156,19 @@ const ballDontLieService = {
 
       const cacheKey = `${sportKey}_l5_efficiency_${teamId}_${gameIds.sort().join('_')}`;
       return await getCachedOrFetch(cacheKey, async () => {
-        // Fetch all player stats for these game IDs in one batch call
-        const url = `${BALLDONTLIE_API_BASE_URL}/${endpoint}${buildQuery({
-          game_ids: gameIds,
-          per_page: 100
-        })}`;
-        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
-        const stats = response.data?.data || [];
+        // Fetch all player stats for these game IDs — must paginate (max 100/page, ~36 rows/game)
+        let stats = [];
+        let cursor = null;
+        for (let page = 0; page < 5; page++) { // Safety cap: 5 pages max
+          const params = { game_ids: gameIds, per_page: 100 };
+          if (cursor) params.cursor = cursor;
+          const url = `${BALLDONTLIE_API_BASE_URL}/${endpoint}${buildQuery(params)}`;
+          const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+          const pageData = response.data?.data || [];
+          stats = stats.concat(pageData);
+          cursor = response.data?.meta?.next_cursor;
+          if (!cursor || pageData.length === 0) break;
+        }
 
         if (stats.length === 0) return null;
 
@@ -3201,6 +3225,8 @@ const ballDontLieService = {
             approx_net_rtg: (possEst > 0 && oppPossEst > 0) ? ((teamTotals.pts / possEst * 100) - (oppTotals.pts / oppPossEst * 100)).toFixed(1) : null,
             ppg: (teamTotals.pts / gp).toFixed(1),
             opp_ppg: (oppTotals.pts / gp).toFixed(1),
+            opp_efg_pct: oppTotals.fga > 0 ? ((oppTotals.fgm + 0.5 * oppTotals.fg3m) / oppTotals.fga * 100).toFixed(1) : null,
+            opp_fg3_pct: oppTotals.fg3a > 0 ? (oppTotals.fg3m / oppTotals.fg3a * 100).toFixed(1) : null,
             tov_per_game: (teamTotals.tov / gp).toFixed(1)
           },
           playersByGame

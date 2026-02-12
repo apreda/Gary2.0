@@ -696,15 +696,16 @@ struct HomeView: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 20) {
                     // Header - Brand
-                    VStack(spacing: 2) {
+                    VStack(spacing: 4) {
                         Text("GARY A.I.")
-                            .font(.system(size: 31, weight: .heavy))
-                            .tracking(-0.5)
+                            .font(.system(size: 30, weight: .heavy))
+                            .tracking(1)
                             .foregroundStyle(GaryColors.goldGradient)
-                        
-                        Text("Intelligent Sports Analysis")
-                            .font(.system(size: 18, weight: .regular))
-                            .foregroundStyle(.secondary)
+                            .shadow(color: GaryColors.gold.opacity(0.2), radius: 12)
+
+                        Text("Sharp Sports Analysis")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(Color.white.opacity(0.4))
                     }
                     .padding(.top, 2)
                     
@@ -811,37 +812,21 @@ struct HomeView: View {
                             .foregroundStyle(GaryColors.gold)
                             .tracking(1)
                             .padding(.horizontal, 4)
-                        
+
                         VStack(spacing: 14) {
-                            HeroBenefitCard(title: "Deep Thinking AI Engine", text: "Powered by Google's Gemini with extended reasoning capabilities. Gary doesn't just pattern match—he thinks through each game step by step, weighing offensive efficiency vs defensive matchups, rest advantages, and historical trends before forming a thesis.", badge: "THE BRAIN")
-                            
-                            HeroBenefitCard(title: "Live Search Grounding", text: "Every analysis starts with a real-time web search for breaking news: injuries (by player name and status), weather forecasts, lineup changes, coaching updates, and late-breaking roster moves. Gary sees what happened in the last 24 hours, not last week.", badge: "REAL-TIME INTEL")
-                            
-                            HeroBenefitCard(title: "30+ Stats Per Sport", text: "Gary pulls from professional sports databases: offensive/defensive ratings, pace, turnover rates, rebounding margins, shooting splits, home/away records, recent form, and head-to-head history. Each pick shows the actual Tale of the Tape comparison.", badge: "THE DATA")
-                            
-                            HeroBenefitCard(title: "Sport-Specific Focus", text: "NFL: weather impact, QB matchups, red zone efficiency. NBA: pace differentials, back-to-back fatigue, rest days. NHL: goalie save %, special teams, Corsi. NCAAF: transfer portal losses, bowl motivation. Gary knows what moves the needle for each league.", badge: "TAILORED ANALYSIS")
-                            
-                            HeroBenefitCard(title: "The Human Edge", text: "Revenge games when a star faces his old team. Trap spots after emotional wins. Lookahead situations before marquee matchups. Public betting percentages creating line value. The factors that pure models miss but sharp bettors exploit.", badge: "SOFT FACTORS")
-                            
-                            HeroBenefitCard(title: "Thesis-Based Selection", text: "Every pick requires a specific thesis—not just 'Team A is better' but WHY they cover tonight. Gary grades his own reasoning and only publishes picks where he found a clear structural edge or exploitable angle. No confidence, no pick.", badge: "QUALITY FILTER")
+                            HeroBenefitCard(title: "The Steel Man Process", text: "Before every pick, Gary builds the strongest possible case for both sides of the game using real data. No bias, no predetermined winner. He argues both cases, grades the evidence, and only commits when one side clearly holds up.", badge: "BOTH SIDES")
+
+                            HeroBenefitCard(title: "Finding Where the Line Is Wrong", text: "Gary doesn't just pick who wins—the spread already reflects that. His job is finding where the number is mispriced. When the line says 8 but the efficiency data says 5, that gap is where value lives. That's how sharps think.", badge: "SHARP THINKING")
+
+                            HeroBenefitCard(title: "Predictive Stats Over Box Scores", text: "Not all stats are equal. Gary prioritizes metrics that predict future outcomes—offensive efficiency, defensive ratings, pace, shooting quality—over stats that just describe the past like records and streaks. Records explain the line. Efficiency tells you if it's right.", badge: "THE DATA")
+
+                            HeroBenefitCard(title: "Real-Time Before Every Pick", text: "Gary searches for the latest injury reports, lineup changes, and breaking news before every analysis. Advanced stats pulled directly from professional sports databases. He sees who's playing, who's out, and what changed today—not last week.", badge: "LIVE INTEL")
+
+                            HeroBenefitCard(title: "A Different Playbook for Each Sport", text: "Each sport has its own deep analytical framework with dozens of factors tailored to what actually moves the needle in that league. Gary doesn't apply the same generic model everywhere—he knows what matters in the NBA is different from what matters in the NFL, NHL, or college basketball.", badge: "SPORT-SPECIFIC")
+
+                            HeroBenefitCard(title: "Stress-Tested Against Common Traps", text: "Injury overreactions where the line moved too far. Shooting streaks built on variance, not real improvement. Lookahead spots where favorites are already thinking about their next game. Gary stress-tests every pick against known betting traps before committing.", badge: "TRAP DETECTION")
                         }
                     }
-                    .padding(16)
-                    .background(
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .fill(Color(hex: "#0A0A0C").opacity(0.6))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                    .stroke(
-                                        LinearGradient(
-                                            colors: [GaryColors.gold.opacity(0.3), GaryColors.gold.opacity(0.1)],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        ),
-                                        lineWidth: 0.5
-                                    )
-                            )
-                    )
                     .padding(.horizontal, 16)
                     .opacity(animateIn ? 1 : 0)
                     .animation(.easeOut(duration: 0.6).delay(0.4), value: animateIn)
@@ -1293,22 +1278,34 @@ struct GaryPicksView: View {
             // Content - respects safe area
             VStack(spacing: 0) {
                 // Floating Header
-                VStack(spacing: 8) {
-                    Text("Gary's Picks")
-                        .font(.system(size: 28, weight: .heavy))
-                        .tracking(-0.5)
-                        .foregroundStyle(GaryColors.goldGradient)
-                    
-                    Text("AI-Powered Sports Analysis")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.top, 8) // Extra padding after safe area
-                .padding(.bottom, 12)
-                
+                Text("GARY'S PICKS")
+                    .font(.system(size: 26, weight: .heavy))
+                    .tracking(1.5)
+                    .foregroundStyle(GaryColors.goldGradient)
+                    .shadow(color: GaryColors.gold.opacity(0.2), radius: 12)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 20)
+                    .padding(.bottom, 14)
+                    .background(alignment: .leading) {
+                        Image("GaryIconBG")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(height: 81)
+                            .shadow(color: GaryColors.gold.opacity(0.3), radius: 10)
+                            .allowsHitTesting(false)
+                    }
+                    .padding(.horizontal, 16)
+
+                // Separator
+                Rectangle()
+                    .fill(LinearGradient(colors: [.clear, GaryColors.gold.opacity(0.25), .clear], startPoint: .leading, endPoint: .trailing))
+                    .frame(height: 0.5)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 16)
+
                 // Sport Filter
                 SportFilterBar(selected: $selectedSport, availableSports: availableSports, showAll: true)
-                    .padding(.bottom, 16)
+                    .padding(.bottom, 4)
                 
                 // Content
                 if loading {
@@ -1340,7 +1337,7 @@ struct GaryPicksView: View {
                                         .fill(GaryColors.gold.opacity(0.5))
                                         .frame(height: 1)
                                     Text(group.timeSlot)
-                                        .font(.system(size: 13, weight: .semibold))
+                                        .font(.system(size: 14, weight: .bold))
                                         .foregroundColor(GaryColors.gold)
                                         .fixedSize()
                                     Rectangle()
@@ -1541,22 +1538,34 @@ struct GaryPropsView: View {
             // Content - respects safe area
             VStack(spacing: 0) {
                 // Header
-                VStack(spacing: 8) {
-                    Text("Gary Props")
-                        .font(.system(size: 28, weight: .heavy))
-                        .tracking(-0.5)
-                        .foregroundStyle(GaryColors.goldGradient)
-                    
-                    Text("AI-Powered Prop Betting")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.top, 8) // Extra padding after safe area
-                .padding(.bottom, 12)
-                
+                Text("GARY'S PROPS")
+                    .font(.system(size: 26, weight: .heavy))
+                    .tracking(1.5)
+                    .foregroundStyle(GaryColors.goldGradient)
+                    .shadow(color: GaryColors.gold.opacity(0.2), radius: 12)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 20)
+                    .padding(.bottom, 14)
+                    .background(alignment: .leading) {
+                        Image("GaryIconBG")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(height: 81)
+                            .shadow(color: GaryColors.gold.opacity(0.3), radius: 10)
+                            .allowsHitTesting(false)
+                    }
+                    .padding(.horizontal, 16)
+
+                // Separator
+                Rectangle()
+                    .fill(LinearGradient(colors: [.clear, GaryColors.gold.opacity(0.25), .clear], startPoint: .leading, endPoint: .trailing))
+                    .frame(height: 0.5)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 16)
+
                 // Sport Filter (with props-only filters like NFL TDs)
                 SportFilterBar(selected: $selectedSport, availableSports: availableSports, showPropsOnly: true)
-                    .padding(.bottom, 16)
+                    .padding(.bottom, 4)
                 
                 // Content
                 if loading {
@@ -1756,26 +1765,108 @@ struct BillfoldView: View {
             
             // Content - respects safe area
             ScrollView(showsIndicators: false) {
-                VStack(spacing: 16) {
+                VStack(spacing: 0) {
                     // Header
-                    Text("Billfold")
-                        .font(.system(size: 28, weight: .heavy))
-                        .tracking(-0.5)
+                    Text("BILLFOLD")
+                        .font(.system(size: 26, weight: .heavy))
+                        .tracking(1.5)
                         .foregroundStyle(GaryColors.goldGradient)
-                        .padding(.top, 8)
-                    
-                    // Segmented Control with Glass
-                    segmentedControl
-                    
-                    // Sport Filter
-                    sportFilterBar
-                    
-                    // Timeframe Buttons
-                    timeframeButtons
-                    
+                        .shadow(color: GaryColors.gold.opacity(0.2), radius: 12)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 20)
+                        .padding(.bottom, 14)
+                        .background(alignment: .leading) {
+                            Image("GaryIconBG")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(height: 81)
+                                .shadow(color: GaryColors.gold.opacity(0.3), radius: 10)
+                                .allowsHitTesting(false)
+                        }
+
+                    // Separator
+                    Rectangle()
+                        .fill(LinearGradient(colors: [.clear, GaryColors.gold.opacity(0.25), .clear], startPoint: .leading, endPoint: .trailing))
+                        .frame(height: 0.5)
+                        .padding(.horizontal, 4)
+                        .padding(.bottom, 12)
+
+                    // Filters Row: dropdowns + refresh
+                    HStack(spacing: 10) {
+                        billfoldDropdown(
+                            label: selectedTab == 0 ? "Picks" : "Props",
+                            icon: selectedTab == 0 ? "chart.bar.fill" : "person.fill"
+                        ) {
+                            Button { withAnimation { selectedTab = 0 } } label: {
+                                Label("Picks", systemImage: "chart.bar.fill")
+                            }
+                            Button { withAnimation { selectedTab = 1 } } label: {
+                                Label("Props", systemImage: "person.fill")
+                            }
+                        }
+
+                        billfoldDropdown(
+                            label: selectedSport == .all ? "All Sports" : selectedSport.rawValue,
+                            icon: selectedSport.icon
+                        ) {
+                            ForEach(sortedSportsForBillfold, id: \.self) { sport in
+                                let isAvailable = sport == .all || availableSports.contains(sport.rawValue)
+                                Button {
+                                    withAnimation {
+                                        selectedSport = sport
+                                        if timeframe != "7d" {
+                                            timeframe = "7d"
+                                            Task { await loadData() }
+                                        }
+                                    }
+                                } label: {
+                                    Label(
+                                        sport == .all ? "All Sports" : sport.rawValue,
+                                        systemImage: sport.icon
+                                    )
+                                }
+                                .disabled(!isAvailable)
+                            }
+                        }
+
+                        billfoldDropdown(
+                            label: timeframe.uppercased(),
+                            icon: "calendar"
+                        ) {
+                            ForEach(timeframes, id: \.self) { tf in
+                                Button {
+                                    withAnimation { timeframe = tf }
+                                    Task { await loadData() }
+                                } label: {
+                                    Text(tf.uppercased())
+                                }
+                            }
+                        }
+
+                        Spacer()
+
+                        Button {
+                            Task { await loadData() }
+                        } label: {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(GaryColors.gold)
+                                .padding(9)
+                                .background(
+                                    Circle()
+                                        .fill(Color(hex: "#1A1A1E"))
+                                        .overlay(
+                                            Circle().stroke(GaryColors.gold.opacity(0.3), lineWidth: 0.5)
+                                        )
+                                )
+                        }
+                    }
+                    .padding(.bottom, 12)
+
                     // Metrics
                     metricsCards
-                    
+                        .padding(.bottom, 12)
+
                     // Recent Picks
                     recentPicksList
                 }
@@ -1788,32 +1879,32 @@ struct BillfoldView: View {
     
     private var segmentedControl: some View {
         HStack(spacing: 0) {
-            ForEach(["Game Picks", "Prop Picks"].indices, id: \.self) { index in
+            ForEach(["Picks", "Props"].indices, id: \.self) { index in
                 Button {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                         selectedTab = index
                     }
                 } label: {
-                    Text(index == 0 ? "Game Picks" : "Prop Picks")
-                        .font(.subheadline.bold())
-                        .foregroundStyle(selectedTab == index ? .black : .white.opacity(0.7))
-                        .padding(.vertical, 12)
+                    Text(index == 0 ? "Picks" : "Props")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(selectedTab == index ? .black : .white.opacity(0.5))
+                        .padding(.vertical, 8)
                         .frame(maxWidth: .infinity)
                         .background {
                             if selectedTab == index {
-                                RoundedRectangle(cornerRadius: 12)
+                                RoundedRectangle(cornerRadius: 10)
                                     .fill(GaryColors.goldGradient)
                             }
                         }
                 }
             }
         }
-        .padding(4)
+        .padding(3)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: 13, style: .continuous)
                 .fill(Color(hex: "#141416"))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    RoundedRectangle(cornerRadius: 13, style: .continuous)
                         .stroke(GaryColors.gold.opacity(0.2), lineWidth: 0.5)
                 )
         )
@@ -1898,8 +1989,34 @@ struct BillfoldView: View {
         .frame(height: 38)
     }
     
+    private func billfoldDropdown<Content: View>(label: String, icon: String, @ViewBuilder content: @escaping () -> Content) -> some View {
+        Menu {
+            content()
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: icon)
+                    .font(.system(size: 10, weight: .semibold))
+                Text(label)
+                    .font(.system(size: 12, weight: .semibold))
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .bold))
+            }
+            .foregroundStyle(GaryColors.gold)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                Capsule()
+                    .fill(Color(hex: "#1A1A1E"))
+                    .overlay(
+                        Capsule()
+                            .stroke(GaryColors.gold.opacity(0.25), lineWidth: 0.5)
+                    )
+            )
+        }
+    }
+
     private var timeframeButtons: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             ForEach(timeframes, id: \.self) { tf in
                 Button {
                     withAnimation(.spring(response: 0.3)) {
@@ -1908,10 +2025,10 @@ struct BillfoldView: View {
                     Task { await loadData() }
                 } label: {
                     Text(tf.uppercased())
-                        .font(.caption.bold())
-                        .foregroundStyle(timeframe == tf ? .black : .white.opacity(0.6))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(timeframe == tf ? .black : .white.opacity(0.5))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
                         .background {
                             if timeframe == tf {
                                 Capsule().fill(GaryColors.goldGradient)
@@ -1930,9 +2047,9 @@ struct BillfoldView: View {
                 Task { await loadData() }
             } label: {
                 Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(GaryColors.gold)
-                    .padding(10)
+                    .padding(8)
                     .background(
                         Circle()
                             .fill(Color(hex: "#1A1A1E"))
@@ -2227,63 +2344,39 @@ struct HeroBenefitCard: View {
             Text(badge)
                 .font(.system(size: 11, weight: .bold))
                 .tracking(1.5)
-                .foregroundStyle(GaryColors.gold)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(
-                    Capsule()
-                        .fill(GaryColors.gold.opacity(0.15))
-                )
+                .foregroundStyle(GaryColors.gold.opacity(0.7))
             
-            // Title - larger and gold
+            // Title
             Text(title)
-                .font(.system(size: 22, weight: .bold))
-                .foregroundStyle(GaryColors.lightGold)
-            
+                .font(.system(size: 19, weight: .semibold))
+                .foregroundStyle(Color.white.opacity(0.55))
+
             // Full description text - always visible
             Text(text)
-                .font(.system(size: 15, weight: .regular))
-                .foregroundStyle(Color.white.opacity(0.85))
+                .font(.system(size: 14, weight: .regular))
+                .foregroundStyle(Color.white.opacity(0.9))
                 .lineSpacing(4)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(24)
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .background(
-            Group {
-                if PerformanceMode.current.useExpensiveEffects {
-                    // Full design for iOS 16+
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(hex: "#0A0A0C"))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(
                             LinearGradient(
-                                colors: [Color(hex: "#1A1814"), Color(hex: "#141416")],
+                                colors: [GaryColors.gold.opacity(0.5), GaryColors.gold.opacity(0.15)],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
-                            )
+                            ),
+                            lineWidth: 1
                         )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .stroke(
-                                    LinearGradient(
-                                        colors: [GaryColors.gold.opacity(0.5), GaryColors.gold.opacity(0.2)],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    ),
-                                    lineWidth: 1.5
-                                )
-                        )
-                        .shadow(color: GaryColors.gold.opacity(0.1), radius: 20, y: 8)
-                } else {
-                    // Lighter version for iOS 15 and below
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(Color(hex: "#171514"))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .stroke(GaryColors.gold.opacity(0.35), lineWidth: 1.5)
-                        )
-                }
-            }
+                )
         )
+        .shadow(color: GaryColors.gold.opacity(0.15), radius: 16, x: 0, y: 4)
+        .shadow(color: GaryColors.gold.opacity(0.08), radius: 32, x: 0, y: 8)
     }
 }
 
@@ -2584,9 +2677,41 @@ struct PickCardMobile: View {
     
     /// Extract pick text and odds separately, expanding team names for NBA, shortening for college
     private var pickParts: (pick: String, odds: String) {
-        let parts = Formatters.splitPickAndOdds(pick.pick)
+        var parts = Formatters.splitPickAndOdds(pick.pick)
         let league = pick.league?.uppercased() ?? ""
-        
+
+        // SPREAD SIGN FIX: Correct missing or wrong spread sign using sportsbook odds
+        if let type = pick.type, type == "spread",
+           let books = pick.sportsbook_odds, let firstSpread = books.compactMap({ $0.spread }).first {
+            var pickText = parts.0
+            // Match a bare number (unsigned) or signed number that looks like a spread (1-50 range)
+            let spreadPattern = #"([+-]?)(\d{1,2}\.?\d*)\s*$"#
+            if let regex = try? NSRegularExpression(pattern: spreadPattern),
+               let match = regex.firstMatch(in: pickText, range: NSRange(pickText.startIndex..., in: pickText)),
+               let signRange = Range(match.range(at: 1), in: pickText),
+               let numRange = Range(match.range(at: 2), in: pickText) {
+                let sign = String(pickText[signRange])
+                let numStr = String(pickText[numRange])
+                if let num = Double(numStr), num > 0, num < 50 {
+                    // Determine correct sign: sportsbook spread is from home team perspective
+                    let pickedTeamIsHome = pick.homeTeam != nil &&
+                        pickText.lowercased().contains(pick.homeTeam!.split(separator: " ").last?.lowercased() ?? "???")
+                    let correctSpread = pickedTeamIsHome ? firstSpread : -firstSpread
+                    let correctSign = correctSpread >= 0 ? "+" : "-"
+                    // Fix if sign is missing or wrong
+                    if sign.isEmpty || sign != correctSign {
+                        let correctNum = abs(correctSpread)
+                        let replacement = "\(correctSign)\(correctNum.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(correctNum)) : String(correctNum))"
+                        let fullRange = match.range(at: 0)
+                        if let swiftRange = Range(fullRange, in: pickText) {
+                            pickText = pickText.replacingCharacters(in: swiftRange, with: replacement)
+                            parts = (pickText, parts.1)
+                        }
+                    }
+                }
+            }
+        }
+
         // For NBA, replace short team name with full team name in pick text
         if league == "NBA" {
             var expandedPick = parts.0
@@ -5460,8 +5585,6 @@ struct GaryFantasyView: View {
         }
     }
     
-    @State private var showMenu = false
-    
     var body: some View {
         ZStack {
             // Background
@@ -5469,81 +5592,141 @@ struct GaryFantasyView: View {
             
             // Content
             VStack(spacing: 0) {
-                // Header with menu button
-                HStack(alignment: .center) {
-                    Spacer()
-                    
-                    VStack(spacing: 4) {
-                        Text("Gary's Daily Fantasy")
-                            .font(.system(size: 28, weight: .heavy))
-                            .tracking(-0.5)
-                            .foregroundStyle(GaryColors.goldGradient)
-                        
-                        Text("AI-Powered Lineup Optimization")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                // Header
+                Text("FANTASY")
+                    .font(.system(size: 26, weight: .heavy))
+                    .tracking(1.5)
+                    .foregroundStyle(GaryColors.goldGradient)
+                    .shadow(color: GaryColors.gold.opacity(0.2), radius: 12)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 20)
+                    .padding(.bottom, 14)
+                    .background(alignment: .leading) {
+                        Image("GaryIconBG")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(height: 81)
+                            .shadow(color: GaryColors.gold.opacity(0.3), radius: 10)
+                            .allowsHitTesting(false)
                     }
-                    
-                    Spacer()
-                    
-                    // Menu button
-                    Button {
-                        showMenu = true
-                    } label: {
-                        Image(systemName: "ellipsis")
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                            .frame(width: 44, height: 44)
-                            .background(
-                                Circle()
-                                    .fill(Color.white.opacity(0.05))
-                                    .overlay(
-                                        Circle()
-                                            .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
-                                    )
-                            )
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
-                .padding(.bottom, 12)
-                
-                // Sport Filter (NBA / NFL) - Always show both
-                DFSSportFilter(selected: $selectedSport, available: ["NBA", "NFL"])
+                    .padding(.horizontal, 16)
+
+                // Separator
+                Rectangle()
+                    .fill(LinearGradient(colors: [.clear, GaryColors.gold.opacity(0.25), .clear], startPoint: .leading, endPoint: .trailing))
+                    .frame(height: 0.5)
+                    .padding(.horizontal, 20)
                     .padding(.bottom, 12)
-                
-                // Platform Toggle + Slate Dropdown Row with accent outline
-                HStack(spacing: 12) {
-                    // Platform Toggle (DraftKings / FanDuel)
-                    DFSPlatformToggle(selected: $selectedPlatform)
-                    
-                    // Slate Dropdown
-                    if availableSlates.count > 0 {
-                        DFSSlateDropdown(
-                            selected: $selectedSlate, 
-                            available: availableSlates,
-                            currentLineup: currentLineup
-                        )
-                    }
-                }
-                .padding(12)
-                .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(Color.clear)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 16)
-                                .stroke(
-                                    selectedPlatform == .draftkings 
-                                        ? Color(hex: "#53D337").opacity(0.4)
-                                        : Color(hex: "#1493FF").opacity(0.4),
-                                    lineWidth: 1.5
+
+                // Filters Row: [Platform ▾] [Sport ▾] [Slate ▾]
+                HStack(spacing: 10) {
+                    // Platform dropdown (brand colored)
+                    Menu {
+                        Button { withAnimation { selectedPlatform = .draftkings } } label: {
+                            Label("DraftKings", systemImage: "crown.fill")
+                        }
+                        Button { withAnimation { selectedPlatform = .fanduel } } label: {
+                            Label("FanDuel", systemImage: "bolt.fill")
+                        }
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: selectedPlatform == .draftkings ? "crown.fill" : "bolt.fill")
+                                .font(.system(size: 10, weight: .semibold))
+                            Text(selectedPlatform.displayName)
+                                .font(.system(size: 12, weight: .semibold))
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 8, weight: .bold))
+                        }
+                        .foregroundStyle(selectedPlatform == .draftkings ? Color(hex: "#53D337") : Color(hex: "#1493FF"))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(
+                            Capsule()
+                                .fill(Color(hex: "#1A1A1E"))
+                                .overlay(
+                                    Capsule()
+                                        .stroke(
+                                            (selectedPlatform == .draftkings ? Color(hex: "#53D337") : Color(hex: "#1493FF")).opacity(0.35),
+                                            lineWidth: 0.5
+                                        )
                                 )
                         )
-                )
+                    }
+
+                    // Sport dropdown
+                    Menu {
+                        ForEach(["NBA", "NFL"], id: \.self) { sport in
+                            Button {
+                                withAnimation { selectedSport = sport }
+                            } label: {
+                                Label(sport, systemImage: sport == "NBA" ? "basketball.fill" : "football.fill")
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: selectedSport == "NBA" ? "basketball.fill" : "football.fill")
+                                .font(.system(size: 10, weight: .semibold))
+                            Text(selectedSport)
+                                .font(.system(size: 12, weight: .semibold))
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 8, weight: .bold))
+                        }
+                        .foregroundStyle(GaryColors.gold)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(
+                            Capsule()
+                                .fill(Color(hex: "#1A1A1E"))
+                                .overlay(
+                                    Capsule()
+                                        .stroke(GaryColors.gold.opacity(0.25), lineWidth: 0.5)
+                                )
+                        )
+                    }
+
+                    // Slate dropdown
+                    if availableSlates.count > 0 {
+                        Menu {
+                            ForEach(availableSlates, id: \.self) { slate in
+                                Button {
+                                    withAnimation { selectedSlate = slate }
+                                } label: {
+                                    HStack {
+                                        Text(slate)
+                                        if selectedSlate == slate {
+                                            Image(systemName: "checkmark")
+                                        }
+                                    }
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 5) {
+                                Image(systemName: "list.bullet")
+                                    .font(.system(size: 10, weight: .semibold))
+                                Text(selectedSlate)
+                                    .font(.system(size: 12, weight: .semibold))
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 8, weight: .bold))
+                            }
+                            .foregroundStyle(GaryColors.gold)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(
+                                Capsule()
+                                    .fill(Color(hex: "#1A1A1E"))
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(GaryColors.gold.opacity(0.25), lineWidth: 0.5)
+                                    )
+                            )
+                        }
+                    }
+
+                    Spacer()
+                }
                 .padding(.horizontal, 16)
-                .padding(.bottom, 16)
-                
+                .padding(.bottom, 8)
+
                 // Content
                 if loading {
                     Spacer()

@@ -237,4 +237,5 @@ export async function fetchNbaInjuriesForGame(homeTeam, awayTeam, dateStr) {
   }
 }
 
-export default { fetchNbaInjuriesForGame };
+export { fetchAllInjuries };
+export default { fetchNbaInjuriesForGame, fetchAllInjuries };

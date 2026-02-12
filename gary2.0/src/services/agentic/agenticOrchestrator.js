@@ -8,7 +8,7 @@
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { toolDefinitions, formatTokenMenu, getTokensForSport } from './tools/toolDefinitions.js';
-import { fetchStats } from './tools/statRouter.js';
+import { fetchStats, clearStatRouterCache } from './tools/statRouter.js';
 import { getConstitution } from './constitution/index.js';
 import { getSteelManGradingReference } from './constitution/sharpReferenceLoader.js';
 import { buildScoutReport } from './scoutReport/scoutReportBuilder.js';
@@ -680,22 +680,19 @@ const INVESTIGATION_FACTORS = {
     VARIANCE_CONSISTENCY: ['VARIANCE_CONSISTENCY'] // Point differential variance, upset potential
   },
   
-  // NBA: 16 required factors (comprehensive)
+  // NBA: 11 required factor categories (comprehensive)
   basketball_nba: {
     EFFICIENCY: ['NET_RATING', 'OFFENSIVE_RATING', 'DEFENSIVE_RATING'],
     PACE_TEMPO: ['PACE', 'PACE_LAST_10', 'PACE_HOME_AWAY'],
     FOUR_FACTORS: ['EFG_PCT', 'TURNOVER_RATE', 'OREB_RATE', 'FT_RATE', 'DREB_RATE'],
     SHOOTING_STYLE: ['THREE_PT_SHOOTING'], // Scoring profile (paint/mid/3pt/fastbreak %) is in scout report via BDL V2
     STANDINGS_CONTEXT: ['STANDINGS', 'CONFERENCE_STANDING'],
-    CONFERENCE_SPLITS: ['CONFERENCE_STATS', 'NON_CONF_STRENGTH'],
-    RECENT_FORM: ['RECENT_FORM', 'EFFICIENCY_TREND'],
-    PLAYER_PERFORMANCE: ['PLAYER_GAME_LOGS', 'TOP_PLAYERS', 'USAGE_RATES'],
+    RECENT_FORM: ['RECENT_FORM', 'EFFICIENCY_TREND', 'FIRST_HALF_SCORING', 'SECOND_HALF_SCORING'],
     INJURIES: ['INJURIES'],
     SCHEDULE: ['REST_SITUATION', 'BACK_TO_BACK', 'TRAVEL_SITUATION', 'SCHEDULE_STRENGTH'],
     H2H: ['H2H_HISTORY', 'VS_ELITE_TEAMS'],
-    ROSTER_CONTEXT: ['BENCH_DEPTH', 'CLUTCH_STATS', 'BLOWOUT_TENDENCY'],
-    LUCK_CLOSE_GAMES: ['LUCK_ADJUSTED', 'CLOSE_GAME_RECORD'],
-    SCORING_TRENDS: ['QUARTER_SCORING', 'FIRST_HALF_SCORING', 'SECOND_HALF_SCORING']
+    PLAYER_PERFORMANCE: ['PLAYER_GAME_LOGS', 'TOP_PLAYERS', 'USAGE_RATES'],
+    ROSTER_CONTEXT: ['BENCH_DEPTH', 'CLUTCH_STATS', 'BLOWOUT_TENDENCY', 'LUCK_ADJUSTED']
   },
   
   // NHL: 17 required factors (comprehensive - matches NBA/NFL coverage)
@@ -773,8 +770,10 @@ function getInvestigatedFactors(toolCallHistory, sport, preloadedFactors = []) {
     return { covered: [], missing: [], coverage: 1.0, totalFactors: 0, useFallback: true };
   }
   
-  // Get all unique tokens called (store full token strings)
-  const calledTokens = toolCallHistory.map(t => t.token).filter(Boolean);
+  // Get all unique tokens called that returned real data (not errors/proxies with no data)
+  const calledTokens = toolCallHistory
+    .filter(t => t.token && t.quality !== 'unavailable')
+    .map(t => t.token);
   
   // Convert preloadedFactors to a Set for fast lookup
   const preloaded = new Set(preloadedFactors);
@@ -1215,6 +1214,8 @@ function pruneContextIfNeeded(messages, iteration) {
  * @param {Object} options - Optional settings
  */
 export async function analyzeGame(game, sport, options = {}) {
+  // Clear stat router cache from previous game (prevents stale cross-game data)
+  clearStatRouterCache();
   const startTime = Date.now();
   let homeTeam = game.home_team;
   let awayTeam = game.away_team;
@@ -1286,33 +1287,6 @@ export async function analyzeGame(game, sport, options = {}) {
     // Step 4: Build the user message
     let userMessage = buildUserMessage(scoutReport, homeTeam, awayTeam, today, sport);
 
-    // Add KEY PLAYER INVESTIGATE FLAGS if present (questionable players Gary should research)
-    const keyPlayerInvestigateFlags = typeof scoutReportData === 'object' ? scoutReportData.keyPlayerInvestigateFlags : null;
-    if (keyPlayerInvestigateFlags && keyPlayerInvestigateFlags.length > 0) {
-      const investigateSection = `
-═══════════════════════════════════════════════════════════════════════════════
-INVESTIGATION REQUIRED: KEY PLAYERS WITH UNCERTAIN STATUS
-═══════════════════════════════════════════════════════════════════════════════
-
-The following key players have QUESTIONABLE status. Use Gemini grounding to research the latest news before making your pick:
-
-${keyPlayerInvestigateFlags.map(flag => `• ${flag.player} (${flag.team}) - ${flag.status}
-  → ${flag.reason}`).join('\n\n')}
-
-**YOUR ACTION:**
-1. Use Gemini grounding to search for the latest news (within 12 hours) on these players
-2. Look for: coach comments, practice reports, injury severity updates
-3. If in expected lineup with no concerning news → assume they play
-4. If news suggests they're truly 50/50 or leaning out → factor uncertainty into your analysis
-5. Make your pick based on your best assessment of who will actually play
-
-═══════════════════════════════════════════════════════════════════════════════
-`;
-      userMessage = investigateSection + '\n\n' + userMessage;
-      console.log(`[Orchestrator] Added ${keyPlayerInvestigateFlags.length} key player investigation flags to prompt`);
-    }
-
-    
     // If in session mode, ALWAYS clear context between games to prevent token overflow
     // In props mode, append a note to user message so Gary knows props evaluation comes after game analysis
     if (isPropsMode) {
@@ -2014,33 +1988,7 @@ When ready, output this JSON:
 
 Make the pick you believe in based on your analysis. Your reputation is built on sound reasoning, not on following patterns.
 
-**ML MATH:** For underdogs you believe win outright, ML offers a better payout than the spread for the same prediction. For favorites, the spread offers better value to bettors than heavy ML juice.
-
-### CLOSE GAME RULES: MONEYLINE ONLY (MANDATORY)
-
-For close games, the question is simply "WHO WINS?" - spread betting on tiny margins is inefficient.
-
-**NBA: Spread < 5 points → MONEYLINE ONLY**
-If the NBA spread is under 5 points, pick the WINNER (ML), not the spread.
-- A 4.5 point spread is essentially asking "who wins" - ML pays better for the same prediction.
-- Focus your analysis on WHO WINS THE GAME, not margin.
-
-**NFL: Spread < 3.5 points → MONEYLINE ONLY**
-If the NFL spread is under 3.5 points, pick the WINNER (ML), not the spread.
-- These games are coin-flip close - pick the winner.
-
-**NCAAB: Spread < 5 points → MONEYLINE ONLY**
-If the college basketball spread is under 5 points, pick the WINNER (ML), not the spread.
-- College games with small spreads often come down to final possessions - pick who wins.
-
-**NCAAF: Spread < 3.5 points → MONEYLINE ONLY**
-If the college football spread is under 3.5 points, pick the WINNER (ML), not the spread.
-- These are "pick'em" type games - focus on the winner.
-
-**LARGER SPREADS → SPREAD (ML for underdogs only)**
-For spreads above these thresholds:
-- Favorites: ALWAYS pick the spread. No favorite ML picks outside close game rules.
-- Underdogs: Spread is the default, but ML is allowed if you believe in an outright win.
+**ML MATH:** For underdogs you believe win outright, ML offers a better payout than the spread for the same prediction. For favorites, the spread offers better value to bettors than heavy ML juice. You decide the best bet type (spread or ML) for each game based on your analysis.
 
 ### SPREAD BETTING AWARENESS
 
@@ -2370,19 +2318,26 @@ Using the scout report and investigation rules above, execute these steps NOW:
 **STEP 1: READ BOTH TEAM SITUATIONS**
 Understand each team's current story, QB/star situation, key players, and motivation.
 
-**STEP 2: IDENTIFY BATTLEGROUNDS**
+**STEP 2: INJURY CROSS-CHECK**
+Read the injury report. For each team, ask yourself:
+- Which starters or key rotation players are OUT tonight?
+- For FRESH OUT players (0-3 days): "The L5 stats may include this player's contributions. How does their absence change the picture?"
+- For STALE or SEASON-LONG OUT players: The team has adapted. Their current stats ALREADY reflect the absence. Do NOT cite these injuries as factors.
+- If a key player is OUT tonight who played in the L5 games, investigate what the team looked like in games WITHOUT that player.
+
+**STEP 3: IDENTIFY BATTLEGROUNDS**
 Identify the 3-4 key BATTLEGROUNDS that will decide this game:
 - Specific unit matchups (e.g., "Team A Run Game vs. Team B Front 7")
 - Situational factors (e.g., "Home team desperation vs. road team playing for seeding")
 - Key player availability (e.g., "How does offense look without their WR1?")
 
-**STEP 3: STAY NEUTRAL**
+**STEP 4: STAY NEUTRAL**
 Do NOT form a hypothesis yet. Do NOT decide who is better. Simply identify where the conflict lies.
 
-**STEP 4: REQUEST COMPREHENSIVE EVIDENCE (BOTH TEAMS EQUALLY)**
+**STEP 5: REQUEST COMPREHENSIVE EVIDENCE (BOTH TEAMS EQUALLY)**
 Call the fetch_stats tool for ALL stat categories needed. Apply THE SYMMETRY RULE.
 
-**STEP 5: INVESTIGATE ALL FLAGGED TRIGGERS**
+**STEP 6: INVESTIGATE ALL FLAGGED TRIGGERS**
 If the Scout Report flagged any triggers, call stats to verify them.
 
 **CRITICAL:** You are a scout building the complete picture. You are not a judge yet. Do NOT output a pick.
@@ -3391,7 +3346,7 @@ ${keyPlayerSection}
 </closing_dynamics>
 
 <final_decision>
-## FINAL DECISION - MAKE YOUR PICK NOW
+## YOUR EVALUATION AND DECISION
 
 **THE MINDSET:**
 You are not playing a long game of "this should hit 55% over time."
@@ -3433,27 +3388,16 @@ The question is: "Which side is the BETTER BET given this spread?"
    - Perception-driven movement → investigate whether the line reflects data or narrative
    - If you spot a disconnect, investigate which side your data supports
 
-5. **MAKE YOUR DECISION:**
+5. **STATE YOUR DECISION:**
    Which side is the BETTER BET? Not just "who wins" but "which bet offers value given this spread?"
    - Consider the RISK of the spread size (covering 8+ on the road is hard)
    - Consider whether the spread reflects reality or narrative
    - YOUR PICK SHOULD BE BACKED BY YOUR INVESTIGATION OF THE DATA FOR THIS SPECIFIC GAME
+   - State your pick clearly in plain text (e.g., "I'm taking Team X +5.5") with your top reasons
+   - Do NOT output JSON — the final formatted output comes in the next step
 
 Your pick is about VALUE, not just picking winners.
 </final_decision>
-
-<output_format>
-## OUTPUT FORMAT (strict JSON)
-
-\`\`\`json
-{
-  "final_pick": "[Team] [spread/ML]",
-  "rationale": "MUST START WITH 'Gary's Take\\n\\n' then a 1-2 sentence scene-setter. Then 3-4 paragraphs of your REAL reasoning — the factors and stats that led you to this pick. Write it like a sharp bettor explaining their bet: what you found, why it matters, and why you're taking this side. Every claim must be backed by a stat you investigated."
-}
-\`\`\`
-
-Do NOT include confidence_score here. You will set confidence in Pass 3 AFTER your decision and reasoning are finalized.
-</output_format>
 
 <instructions>
 ## YOUR TASK (Execute in Order)
@@ -3489,45 +3433,13 @@ Fill out the CASE SUMMARY. Do NOT pick a side yet.
 Check BOTH teams against the trap patterns.
 Document which patterns apply to EACH side.
 
-**STEP 3: MAKE YOUR FINAL DECISION**
+**STEP 3: STATE YOUR DECISION**
 
 Based on everything — your matchup analysis, the factors you investigated, and whether the spread reflects your findings — which side is the BETTER BET?
 
 Consider what likely created this line (injury news, recent form, schedule, matchup perception). Does your research agree with the number, or did you find something the line doesn't fully reflect?
 
-Which side do you actually want to bet on and WHY? Think like a bettor placing real money — your reasoning should be the genuine factors and stats that drove your decision, not a formula.
-
-**STEP 4: OUTPUT YOUR DECISION (WITH REAL REASONING)**
-Output your decision in the strict JSON format above.
-
-**RATIONALE FORMAT (CRITICAL - iOS app depends on this):**
-Your rationale MUST start with exactly: "Gary's Take\\n\\n"
-Then include:
-1. **Scene-setter (1-2 sentences):** Open with the EXACT record and standings from your scout report data. Copy the numbers directly — do NOT use records from your training data. Your training data is from 2024 and WILL be wrong. The scout report has the real 2025-26 records. Do NOT fabricate matchup narratives.
-2. **Your reasoning (2-3 paragraphs):** Explain your pick naturally — the factors and stats you found that led to this decision. If the line doesn't reflect what the data shows, say so. If a specific matchup factor or stat drove your decision, lead with it. Write like you're explaining your bet to another sharp — every claim backed by a real number from your investigation. No fluff, no fabricated tactics. Situational framing ("get right spot", "statement game", "must-win") is fine ONLY if the standings, schedule, or scout report data genuinely supports it — don't use these phrases as filler.
-3. **Closing:** Why you're taking this side tonight
-
-**IMPORTANT — CITE YOUR SOURCES:**
-- Every factual claim MUST include the specific detail that makes it verifiable. No vague labels, no unsupported assertions — include the real data behind every claim you make.
-- If you didn't find the specific detail in your investigation, do NOT claim it. No source = no claim.
-
-**IMPORTANT — NO TRAINING DATA CLAIMS:**
-- Do NOT cite coaching tendencies, player reputations, or team identities from your training knowledge.
-- Do NOT make claims about what coaches "typically do" or are "known for" — you haven't watched film.
-- ONLY cite facts from: (1) the scout report, (2) stats you requested, (3) the grounding search results.
-- If a claim can't be traced to data from THIS game's investigation, delete it.
-
-**RATIONALE TONE (Sound like a sharp sports analyst with value awareness):**
-You CAN explain why this is the better bet and reference line value - but ALWAYS back it up with real game analysis:
-
-- GOOD: "This line feels inflated after Houston's 22-point loss to Milwaukee - but that was an outlier. Houston's L5 Net Rating is still +4.2, they shot 28% from 3PT that night vs their 37% season average, and they're 8-2 in their last 10 home games. At +6.5, you're getting a team that typically loses close games by 3-4 points."
-- BAD: "The market overreacted. Sharp money is on the underdog here." (no actual analysis)
-
-- GOOD: "Phoenix at +145 ML is great value - their efficiency metrics (112.4 ORtg, 108.1 DRtg) are nearly identical to Denver's, and they've won 3 of their last 4 road games against top-10 defenses. This should be a pick'em, not a 3-point spread."
-- BAD: "This ML price is too good to pass up." (no stats backing it up)
-
-- GOOD: "The blowout loss narrative is overblown - Detroit lost by 18 but trailed by only 4 entering the 4th quarter before foul trouble derailed them. Their L5 point differential is +3.2 and they've covered 4 of 5 at home."
-- BAD: "Public is fading Detroit after the blowout, creating value." (no game context)
+State your pick clearly (e.g., "I'm taking [Team] [spread]") and your top 2-3 reasons backed by stats from your investigation. Write in natural language — do NOT output JSON. The final formatted output comes in the next step.
 
 You CAN discuss value, line movement, and why the spread is wrong - but ALWAYS explain the GAME REASONS behind it.
 The value explanation should be the conclusion, not the premise. Lead with stats, end with why it's the better bet.
@@ -3680,6 +3592,30 @@ Your final rationale is YOUR DECISION — the real reasons you're making this be
 
 **IMPORTANT:** All the stats you called during Pass 2 investigation are available in this conversation.
 Reference those specific numbers in your rationale to make it data-driven.
+
+**RATIONALE FORMAT (CRITICAL - iOS app depends on this):**
+Your rationale MUST start with exactly: "Gary's Take\\n\\n"
+Then include:
+1. **Scene-setter (1-2 sentences):** Open with the EXACT record and standings from your scout report data. Copy the numbers directly — do NOT use records from your training data. Your training data is from 2024 and WILL be wrong. The scout report has the real 2025-26 records. Do NOT fabricate matchup narratives.
+2. **Your reasoning (2-3 paragraphs):** Explain your pick naturally — the factors and stats you found that led to this decision. If the line doesn't reflect what the data shows, say so. If a specific matchup factor or stat drove your decision, lead with it. Write like you're explaining your bet to another sharp — every claim backed by a real number from your investigation. No fluff, no fabricated tactics. Situational framing ("get right spot", "statement game", "must-win") is fine ONLY if the standings, schedule, or scout report data genuinely supports it — don't use these phrases as filler.
+3. **Closing:** Why you're taking this side tonight
+
+**CITE YOUR SOURCES:**
+- Every factual claim MUST include the specific detail that makes it verifiable. No vague labels, no unsupported assertions — include the real data behind every claim you make.
+- If you didn't find the specific detail in your investigation, do NOT claim it. No source = no claim.
+
+**NO TRAINING DATA CLAIMS:**
+- Do NOT cite coaching tendencies, player reputations, or team identities from your training knowledge.
+- Do NOT make claims about what coaches "typically do" or are "known for" — you haven't watched film.
+- ONLY cite facts from: (1) the scout report, (2) stats you requested, (3) the grounding search results.
+- If a claim can't be traced to data from THIS game's investigation, delete it.
+
+**RATIONALE TONE (Sound like a sharp sports analyst with value awareness):**
+You CAN explain why this is the better bet and reference line value - but ALWAYS back it up with real game analysis:
+- GOOD: "This line feels inflated after Houston's 22-point loss to Milwaukee - but that was an outlier. Houston's L5 Net Rating is still +4.2, they shot 28% from 3PT that night vs their 37% season average, and they're 8-2 in their last 10 home games. At +6.5, you're getting a team that typically loses close games by 3-4 points."
+- BAD: "The market overreacted. Sharp money is on the underdog here." (no actual analysis)
+- GOOD: "Phoenix at +145 ML is great value - their efficiency metrics (112.4 ORtg, 108.1 DRtg) are nearly identical to Denver's, and they've won 3 of their last 4 road games against top-10 defenses. This should be a pick'em, not a 3-point spread."
+- BAD: "This ML price is too good to pass up." (no stats backing it up)
 </rationale_constraints>
 
 <output_requirements>
@@ -3699,6 +3635,8 @@ Output your final pick as JSON:
 Base it on how strong your reasoning is — how clear the data edge was, how many factors aligned,
 and how much the data supported your side vs the other side.
 Do not anchor to any previous number. Assess your conviction fresh based on the analysis you just completed.
+Use PRECISE values across the full range (e.g., 0.72, 0.81, 0.63, 0.58).
+Do NOT round to generic tiers like 0.65, 0.75, 0.85 — each game has unique conviction.
 </output_requirements>
 
 <instructions>
@@ -4654,7 +4592,7 @@ Focus on TIER 1 predictive stats (efficiency, EPA) and TIER 2 context (fresh inj
 Do NOT call any more stats. Provide your analysis and pick NOW.`;
       } else if (pass2WasInjected) {
         // Pass 2 already sent - need Steel Man cases, not stats
-        console.log(`[Orchestrator] ⚠️ Gemini returned empty response after Pass 2 - requesting Steel Man cases`);
+        console.log(`[Orchestrator] ↩️ Gemini returned empty response after Pass 2 — nudging for Steel Man cases`);
         nudgeContent = `You didn't provide a response. You have enough data (${toolCallHistory.length} stats gathered).
 
 **WRITE YOUR STEEL MAN CASES NOW:**
@@ -4711,9 +4649,16 @@ Request any REMAINING stats you need, or proceed to your Steel Man analysis NOW.
           const args = JSON.parse(tc.function.arguments);
           // Key based on function name + stat identifier (token for fetch_stats, stat_type for player stats)
           const token = args.token || args.stat_type;
+          if (!token && tc.function.name === 'fetch_stats') {
+            console.warn(`[Orchestrator] Malformed tool call — missing token/stat_type. Args: ${JSON.stringify(args).slice(0, 100)}`);
+            return true; // Keep it — will send error function response so Gary can retry
+          }
           if (!token) {
-            skippedDuplicates.push('unknown');
-            return false; // Reject malformed calls without a token
+            // Non-fetch_stats tools (e.g. fetch_player_game_logs) — dedup by function:player_name
+            const altKey = `${tc.function.name}:${args.player_name || args.player || 'unknown'}`;
+            if (seenStats.has(altKey)) { skippedDuplicates.push(altKey); return false; }
+            seenStats.add(altKey);
+            return true;
           }
           const key = `${tc.function.name}:${token}`;
           
@@ -4823,6 +4768,16 @@ Call these specific tokens NOW using the get_stat tool with the "token" paramete
       for (const toolCall of uniqueToolCalls) {
         const args = JSON.parse(toolCall.function.arguments);
         const functionName = toolCall.function.name;
+
+        // Handle malformed tool calls — missing token parameter
+        if (functionName === 'fetch_stats' && !args.token && !args.stat_type) {
+          messages.push({
+            tool_call_id: toolCall.id,
+            role: 'tool',
+            content: JSON.stringify({ error: 'Malformed tool call — missing token parameter. Specify which stat to fetch (e.g., token: "NET_RATING").' })
+          });
+          continue;
+        }
 
         // Handle finalize_props tool call (props mode only)
         if (functionName === 'finalize_props' && isPropsMode) {
@@ -5517,6 +5472,7 @@ Call these specific tokens NOW using the get_stat tool with the "token" paramete
             timestamp: Date.now(),
             homeValue: 'N/A',
             awayValue: 'N/A',
+            quality: 'unavailable',
             rawResult: statResult
           });
 
@@ -5572,12 +5528,19 @@ Call these specific tokens NOW using the get_stat tool with the "token" paramete
         // Summarize for context (used both in conversation and data recap for dedup nudges)
         const statSummary = summarizeStatForContext(statResult, args.token, homeTeam, awayTeam);
 
+        // Determine result quality for coverage tracking
+        const hasRealData = statResult && !statResult.error &&
+          statResult.source !== 'Not available via API' &&
+          (values.home !== 'N/A' || values.away !== 'N/A');
+        const resultQuality = hasRealData ? 'available' : 'unavailable';
+
         // Store with values for structured display + summary for data recap
         toolCallHistory.push({
           token: args.token,
           timestamp: Date.now(),
           homeValue: values.home,
           awayValue: values.away,
+          quality: resultQuality,
           summary: statSummary, // Used in dedup data recap so Gary sees what he already has
           rawResult: statResult // Keep raw result for debugging
         });
@@ -6128,7 +6091,7 @@ BEGIN WRITING YOUR MATCHUP ANALYSIS NOW.
     // and Pass 3 (Pro final output) before a pick is accepted. This prevents Gary from
     // sneaking a pick JSON into his Steel Man analysis and bypassing Pro reasoning.
     if (_pass2Injected && !_pass25Injected && iteration < effectiveMaxIterations) {
-      console.log(`[Orchestrator] ⚠️ PIPELINE GATE: Pick attempted before Pass 2.5 — forcing Steel Man + Pass 2.5 flow`);
+      console.log(`[Orchestrator] 🔄 PIPELINE GATE: Pro attempted early pick — redirecting to Pass 2.5 evaluation`);
       messages.push({ role: 'assistant', content: message.content });
 
       // Inject Pass 2.5 + Pro switch (same logic as steelManJustWritten path above)
@@ -6479,57 +6442,6 @@ function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds = {}) {
     return null; // Triggers retry
   }
   
-  // ═══════════════════════════════════════════════════════════════════════════
-  // CLOSE GAME SPREAD/ML ENFORCEMENT: Small spreads = FORCE MONEYLINE
-  // Thresholds: NBA <5, NFL <3.5, NCAAB <5, NCAAF <3.5
-  // ═══════════════════════════════════════════════════════════════════════════
-  const isNBA = sport === 'basketball_nba' || sport === 'NBA';
-  const isNFL = sport === 'americanfootball_nfl' || sport === 'NFL';
-  const isNCAAB = sport === 'basketball_ncaab' || sport === 'NCAAB';
-  const isNCAAF = sport === 'americanfootball_ncaaf' || sport === 'NCAAF';
-  const absSpread = Math.abs(parseFloat(parsed.spread) || 0);
-  
-  // Determine threshold based on sport
-  const mlOnlyThreshold = (isNBA || isNCAAB) ? 5 : (isNFL || isNCAAF) ? 3.5 : 0;
-  const sportLabel = isNBA ? 'NBA' : isNFL ? 'NFL' : isNCAAB ? 'NCAAB' : isNCAAF ? 'NCAAF' : '';
-  
-  if (mlOnlyThreshold > 0 && absSpread > 0 && absSpread < mlOnlyThreshold && parsed.type === 'spread') {
-    console.log(`[Orchestrator] ${sportLabel} CLOSE GAME RULE: Converting spread to ML (spread was ${parsed.spread}, threshold <${mlOnlyThreshold})`);
-    
-    // Determine which team was picked based on pick text
-    const pickLower = (parsed.pick || '').toLowerCase();
-    const homeTeamLower = (homeTeam || '').toLowerCase();
-    const awayTeamLower = (awayTeam || '').toLowerCase();
-    
-    let pickedTeam = '';
-    let mlOdds = null;
-    
-    if (pickLower.includes(homeTeamLower.split(' ')[0]) || pickLower.includes(homeTeamLower.split(' ').pop())) {
-      pickedTeam = homeTeam;
-      mlOdds = parsed.moneylineHome ?? gameOdds.moneyline_home ?? null;
-    } else if (pickLower.includes(awayTeamLower.split(' ')[0]) || pickLower.includes(awayTeamLower.split(' ').pop())) {
-      pickedTeam = awayTeam;
-      mlOdds = parsed.moneylineAway ?? gameOdds.moneyline_away ?? null;
-    } else {
-      // Fallback: use the team name from the pick
-      pickedTeam = parsed.homeTeam || parsed.awayTeam || homeTeam;
-      mlOdds = parsed.moneylineHome ?? parsed.moneylineAway ?? gameOdds.moneyline_home ?? gameOdds.moneyline_away ?? null;
-    }
-
-    // Convert to ML — only include odds in pick text if we have real odds
-    parsed.type = 'moneyline';
-    if (mlOdds != null) {
-      const mlOddsStr = mlOdds > 0 ? `+${mlOdds}` : `${mlOdds}`;
-      parsed.pick = `${pickedTeam} ML ${mlOddsStr}`;
-    } else {
-      console.warn(`[Orchestrator] ⚠️ MISSING ML ODDS for ${pickedTeam} — no odds from AI or game data`);
-      parsed.pick = `${pickedTeam} ML`;
-    }
-    parsed.odds = mlOdds;
-
-    console.log(`[Orchestrator] ${sportLabel} Converted to: ${parsed.pick}`);
-  }
-  
   // NHL: ALWAYS moneyline (no puck line, no totals - Gary picks winners)
   const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
   if (isNHL) {
@@ -6602,6 +6514,40 @@ function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds = {}) {
       const oddsStr = odds > 0 ? `+${odds}` : `${odds}`;
       if (!pickText.includes(oddsStr)) {
         pickText = `${pickText} ${oddsStr}`;
+      }
+    }
+  }
+
+  // SPREAD SIGN VALIDATION: Ensure the spread in pick text has the correct sign
+  // Gary sometimes omits the sign or uses the wrong one (especially NCAAB)
+  if (parsed.type === 'spread' && gameOdds.spread_home != null) {
+    const spreadInText = pickText.match(/\s([+-]?)(\d+\.?\d*)\s/);
+    if (spreadInText) {
+      const currentSign = spreadInText[1]; // '+', '-', or '' (missing)
+      const spreadNum = parseFloat(spreadInText[2]);
+
+      // Determine if picked team is home or away
+      const pickLower = pickText.toLowerCase();
+      const homeWords = (homeTeam || '').toLowerCase().split(/\s+/);
+      const awayWords = (awayTeam || '').toLowerCase().split(/\s+/);
+      const pickedHome = homeWords.some(w => w.length > 2 && pickLower.includes(w));
+      const pickedAway = awayWords.some(w => w.length > 2 && pickLower.includes(w));
+
+      // Calculate correct spread from picked team's perspective
+      const homeSpread = parseFloat(gameOdds.spread_home);
+      if (!isNaN(homeSpread) && (pickedHome || pickedAway)) {
+        const correctSpread = pickedHome ? homeSpread : -homeSpread;
+        const correctSign = correctSpread >= 0 ? '+' : '-';
+        const correctAbs = Math.abs(correctSpread);
+
+        // Fix if: sign is missing, sign is wrong, OR number doesn't match odds
+        if (!currentSign || (currentSign === '+' && correctSpread < 0) || (currentSign === '-' && correctSpread > 0)) {
+          const oldFragment = spreadInText[0];
+          const correctStr = correctSpread >= 0 ? `+${correctAbs}` : `-${correctAbs}`;
+          const newFragment = ` ${correctStr} `;
+          pickText = pickText.replace(oldFragment, newFragment);
+          console.log(`[Orchestrator] 🔧 SPREAD SIGN FIX: "${oldFragment.trim()}" → "${correctStr}" (home_spread=${homeSpread}, picked=${pickedHome ? 'home' : 'away'})`);
+        }
       }
     }
   }
