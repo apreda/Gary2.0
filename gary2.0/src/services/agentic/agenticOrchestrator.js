@@ -36,14 +36,16 @@ function getGemini() {
 // ═══════════════════════════════════════════════════════════════════════════
 // GEMINI 3 MODEL STRATEGY (2026 - Persistent Sessions + Thought Signatures)
 // ═══════════════════════════════════════════════════════════════════════════
-// FLASH: Investigation + Steel Man building (Pass 1-2)
-//   - Better at tool calling and data gathering
-//   - Faster response times
-//   - Used for ALL sports during investigation phase
+// PRO-ONLY (Full Pipeline): NBA, NCAAB
+//   - Pro runs investigation, Steel Man, evaluation, AND final decision
+//   - Pro does the Socratic investigation himself since he makes the pick
+//   - thinking_level: 'high' throughout
 //
-// PRO: Grading + Final Decision (Pass 2.5-3) for NBA, NFL, NHL, NCAAB
-//   - Deep reasoning with thinking_level: 'high'
-//   - Better at complex judgment and case evaluation
+// FLASH→PRO HYBRID: NFL, NHL
+//   - Flash for Investigation + Steel Man building (Pass 1-2)
+//   - Pro for Grading + Final Decision (Pass 2.5-3)
+//
+// FLASH-ONLY: NCAAF (high volume)
 //
 // IMPORTANT: Thought signatures are model-specific!
 //   - Cannot pass Flash signatures to Pro (causes 400 error)
@@ -518,9 +520,7 @@ function formatStatForDigest(call) {
 
   // Shape 3: Has grounding_data (PAINT_SCORING, THREE_PT_DEFENSE, etc.)
   if (typeof r === 'object' && r.grounding_data && r.grounding_data !== 'Data unavailable') {
-    const text = r.grounding_data.substring(0, 300);
-    const ellipsis = r.grounding_data.length > 300 ? '...' : '';
-    return `- **${token}**: ${text}${ellipsis}`;
+    return `- **${token}**: ${r.grounding_data}`; // Full grounding data — no truncation
   }
 
   // Shape 4: Has trend_detail (EFFICIENCY_TREND)
@@ -543,13 +543,11 @@ function formatStatForDigest(call) {
 
   // Shape 6: String result (some grounding calls)
   if (typeof r === 'string') {
-    const text = r.substring(0, 300);
-    const ellipsis = r.length > 300 ? '...' : '';
-    return `- **${token}**: ${text}${ellipsis}`;
+    return `- **${token}**: ${r}`; // Full string — no truncation
   }
 
   // Fallback: compact JSON (single line, no pretty-print)
-  return `- **${token}**: ${JSON.stringify(r).substring(0, 300)}`;
+  return `- **${token}**: ${JSON.stringify(r)}`;
 }
 
 function extractTextualSummaryForModelSwitch(messages, steelManCases, toolCallHistory = []) {
@@ -727,7 +725,7 @@ const INVESTIGATION_FACTORS = {
     DEFENSIVE_STATS: ['REBOUNDS', 'STEALS', 'BLOCKS'], // Defensive/rebounding metrics
     TEMPO: ['NCAAB_TEMPO', 'PACE'],
     SCHEDULE_QUALITY: ['NCAAB_STRENGTH_OF_SCHEDULE', 'NCAAB_QUAD_RECORD', 'NCAAB_CONFERENCE_RECORD', 'NCAAB_CONFERENCE_STRENGTH', 'NCAAB_OPPONENT_QUALITY'],
-    RECENT_FORM: ['RECENT_FORM', 'NCAAB_FIRST_HALF_TRENDS', 'NCAAB_SECOND_HALF_TRENDS'],
+    RECENT_FORM: ['RECENT_FORM'],
     INJURIES: ['INJURIES', 'TOP_PLAYERS'],
     HOME_AWAY: ['HOME_AWAY_SPLITS', 'NCAAB_HOME_COURT_ADVANTAGE'],
     H2H: ['H2H_HISTORY'],
@@ -945,10 +943,10 @@ function summarizeStatForContext(statResult, statToken, homeTeam, awayTeam) {
         return `H2H HISTORY (${h2hGames.length} games this season): ${seriesRecord}. Meetings: ${h2hDetails}${revengeNote ? ` [REVENGE: ${revengeNote}]` : ''}${sweepContextStr}${conditionsChangedStr}`;
       
       case 'CLUTCH_STATS':
-        return `CLUTCH RECORD (games within 5pts): ${awayTeam} ${a.record || a.clutch_record || 'N/A'} | ${homeTeam} ${h.record || h.clutch_record || 'N/A'}`;
+        return `CLUTCH PERFORMANCE: ${awayTeam} ${a.clutch_record || 'N/A'} (Net ${a.clutch_net_rating || 'N/A'}, Rank ${a.clutch_net_rank || 'N/A'}, eFG ${a.clutch_efg_pct || 'N/A'}) | ${homeTeam} ${h.clutch_record || 'N/A'} (Net ${h.clutch_net_rating || 'N/A'}, Rank ${h.clutch_net_rank || 'N/A'}, eFG ${h.clutch_efg_pct || 'N/A'})`;
       
       case 'BENCH_DEPTH':
-        return `BENCH DEPTH: ${awayTeam} bench ${formatNum(a.bench_ppg || a.value)} PPG | ${homeTeam} bench ${formatNum(h.bench_ppg || h.value)} PPG`;
+        return `BENCH DEPTH: ${awayTeam} bench ${formatNum(a.bench_ppg || a.value)} PPG (${a.bench_pct || ''} of scoring, ${a.rotation_size || '?'}-man rotation${a.top_bench ? ', top bench: ' + a.top_bench : ''}) | ${homeTeam} bench ${formatNum(h.bench_ppg || h.value)} PPG (${h.bench_pct || ''} of scoring, ${h.rotation_size || '?'}-man rotation${h.top_bench ? ', top bench: ' + h.top_bench : ''})`;
       
       case 'REST_SITUATION':
         return `REST: ${awayTeam} ${a.days_rest || 'N/A'} days rest | ${homeTeam} ${h.days_rest || 'N/A'} days rest`;
@@ -1031,7 +1029,7 @@ function summarizeStatForContext(statResult, statToken, homeTeam, awayTeam) {
         });
         
         // Include IMPORTANT note if present (for context warnings)
-        const important = statResult.IMPORTANT ? ` [NOTE: ${statResult.IMPORTANT.slice(0, 100)}]` : '';
+        const important = statResult.IMPORTANT ? ` [NOTE: ${statResult.IMPORTANT}]` : '';
         return `${statToken}: ${fieldSummaries.join(', ')}${important}`;
     }
   } catch (e) {
@@ -3651,6 +3649,8 @@ Missing players' stats have been REDISTRIBUTED to current players.
 If citing "X-Y record without player", investigate the MARGINS - were losses close or blowouts?
 Focus on WHO IS PLAYING and RECENT FORM, not hypotheticals about healthy rosters.
 </negative_constraints>
+
+MANDATORY: Your JSON MUST include all three fields: "final_pick", "rationale", AND "confidence_score". Missing confidence_score will cause a system error.
 </instructions>
 `.trim();
 }
@@ -4216,7 +4216,10 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
 
   const isNFLSport = sport === 'americanfootball_nfl' || sport === 'NFL';
   console.log(`[Orchestrator] Using ${provider.toUpperCase()} for ${sport}`);
-  console.log(`[Orchestrator] Model strategy: Flash for investigation${isNFLSport && useProForGrading ? ', Pro for Steel Man + decision' : useProForGrading ? ', Pro for review/decision' : ' (all phases)'}`);
+  const isNCAABSport = sport === 'basketball_ncaab' || sport === 'NCAAB';
+  const isNBASport = sport === 'basketball_nba' || sport === 'NBA';
+  const proFromStart = isNCAABSport || isNBASport;
+  console.log(`[Orchestrator] Model strategy: ${proFromStart ? 'Pro for ENTIRE pipeline' : `Flash for investigation${isNFLSport && useProForGrading ? ', Pro for Steel Man + decision' : useProForGrading ? ', Pro for review/decision' : ' (all phases)'}`}`);
 
   // ═══════════════════════════════════════════════════════════════════════════
   // Props mode setup (must be before session creation so activeTools is available)
@@ -4240,16 +4243,34 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
   let hasSwichedToPro = false;
 
   if (provider === 'gemini') {
-    // OPTIMIZATION: Use 'low' thinking for investigation (tool calling)
-    // Save 'high' reasoning for Steel Man, Pass 2.5 grading, and final decision
-    currentSession = createGeminiSession({
-      modelName: 'gemini-3-flash-preview',
-      systemPrompt: systemPrompt,
-      tools: activeTools,
-      thinkingLevel: 'low'  // Low reasoning for stat fetching - no deep thinking needed
-    });
-    currentModelName = currentSession.modelName;
-    console.log(`[Orchestrator] 🚀 Flash session created for investigation phase (low reasoning)`);
+    // NCAAB + NBA: Pro for the ENTIRE pipeline (investigation → Steel Man → evaluation → pick)
+    // Pro does the Socratic investigation himself since he's the one making the decision
+    const isNCAAB = sport === 'basketball_ncaab' || sport === 'NCAAB';
+    const isNBA = sport === 'basketball_nba' || sport === 'NBA';
+    const useProFromStart = isNCAAB || isNBA;
+
+    if (useProFromStart) {
+      currentSession = createGeminiSession({
+        modelName: 'gemini-3-pro-preview',
+        systemPrompt: systemPrompt,
+        tools: activeTools,
+        thinkingLevel: 'high'
+      });
+      currentModelName = currentSession.modelName;
+      hasSwichedToPro = true; // Prevent redundant switch later
+      console.log(`[Orchestrator] 🧠 Pro session created for FULL pipeline (${sport} — Pro investigates + decides)`);
+    } else {
+      // Flash with medium reasoning for other sports (NFL, NHL, NCAAF)
+      // Pro (high) handles Pass 2.5 grading and final decision
+      currentSession = createGeminiSession({
+        modelName: 'gemini-3-flash-preview',
+        systemPrompt: systemPrompt,
+        tools: activeTools,
+        thinkingLevel: 'medium'
+      });
+      currentModelName = currentSession.modelName;
+      console.log(`[Orchestrator] 🚀 Flash session created for investigation phase (medium reasoning)`);
+    }
   }
 
   // Messages array for state tracking (pass detection, steel man capture)
@@ -4281,6 +4302,7 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
 
   // Persistent pass-injection flags (survive context pruning)
   let _pass2Injected = false;
+  let _pass2Delivered = false; // True only when Pass 2 is actually SENT to the Gemini session (not just pushed to messages)
   let _pass25Injected = false;
 
   // Coverage stall detection — force Pass 2 if coverage stops improving
@@ -4294,7 +4316,7 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
   // Sport-specific preloaded factors — shared across tool-call and pipeline-gate scopes
   const SPORT_PRELOADED_MAP = {
     basketball_nba: ['INJURIES', 'H2H', 'SCHEDULE', 'STANDINGS_CONTEXT'],
-    basketball_ncaab: ['INJURIES', 'H2H', 'SCHEDULE_QUALITY'],
+    basketball_ncaab: ['INJURIES', 'SCHEDULE_QUALITY'],
     americanfootball_nfl: ['INJURIES', 'H2H', 'SCHEDULE', 'STANDINGS_CONTEXT'],
     icehockey_nhl: ['INJURIES', 'H2H', 'SCHEDULE', 'STANDINGS_CONTEXT'],
     americanfootball_ncaaf: ['INJURIES', 'H2H', 'SCHEDULE_QUALITY'],
@@ -4341,9 +4363,14 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
             console.log(`[Orchestrator] 📝 Sending queued pass message after function responses`);
             // Send the pass message as follow-up
             sessionResponse = await sendToSessionWithRetry(currentSession, nextMessageToSend);
+            // Track Pass 2 delivery (not just injection)
+            if (_pass2Injected && !_pass2Delivered && nextMessageToSend.includes('PASS 2') && !nextMessageToSend.includes('PASS 2.5')) {
+              _pass2Delivered = true;
+              console.log(`[Orchestrator] ✅ Pass 2 DELIVERED to session`);
+            }
             nextMessageToSend = null; // Clear after sending
           }
-          
+
         } else {
           // Send text message (user message or pass transition)
           if (!nextMessageToSend) {
@@ -4351,6 +4378,11 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
             nextMessageToSend = `Continue with your analysis. If you have enough data, proceed to write your Steel Man cases or provide your final pick.`;
           }
           sessionResponse = await sendToSessionWithRetry(currentSession, nextMessageToSend);
+          // Track Pass 2 delivery (not just injection)
+          if (_pass2Injected && !_pass2Delivered && nextMessageToSend && nextMessageToSend.includes('PASS 2') && !nextMessageToSend.includes('PASS 2.5')) {
+            _pass2Delivered = true;
+            console.log(`[Orchestrator] ✅ Pass 2 DELIVERED to session`);
+          }
         }
         
         // Convert session response to OpenAI-compatible format for downstream code
@@ -4700,7 +4732,7 @@ Request any REMAINING stats you need, or proceed to your Steel Man analysis NOW.
         for (const entry of toolCallHistory) {
           if (entry.summary && entry.summary.length > 10) {
             // Include a one-line summary of each stat result
-            const shortSummary = entry.summary.length > 200 ? entry.summary.substring(0, 200) + '...' : entry.summary;
+            const shortSummary = entry.summary; // Full summary — no truncation
             dataRecapLines.push(`• ${entry.token}: ${shortSummary}`);
           }
         }
@@ -4801,15 +4833,41 @@ Call these specific tokens NOW using the get_stat tool with the "token" paramete
 
         // Handle fetch_narrative_context tool (storylines, player news, context)
         if (functionName === 'fetch_narrative_context') {
-          console.log(`  → [NARRATIVE_CONTEXT] for query: "${args.query}"`);
+          // Block narrative context after Pass 2 — investigation is over, Gary should be building cases
+          if (_pass2Injected) {
+            console.log(`  → [NARRATIVE_CONTEXT] BLOCKED (Pass 2 injected — investigation phase over): "${args.query}"`);
+            messages.push({
+              role: 'tool',
+              tool_call_id: toolCall.id,
+              name: functionName,
+              content: JSON.stringify({ error: 'Investigation phase is complete. You have sufficient data. Write your Steel Man analysis using the stats already gathered. Do NOT request more data.' })
+            });
+            continue;
+          }
+
+          // NCAAB: Block ALL narrative context — Current State + Tier 1 metrics (KenPom/NET/Barttorvik/SOS)
+          // are already in the scout report. Narrative context calls return garbage (146 chars of generic text)
+          // and waste iterations. Gary should use fetch_stats for BDL data instead.
+          if (sport === 'basketball_ncaab') {
+            console.log(`  → [NARRATIVE_CONTEXT] BLOCKED (NCAAB — data already in scout report): "${args.query}"`);
+            messages.push({
+              role: 'tool',
+              tool_call_id: toolCall.id,
+              name: functionName,
+              content: JSON.stringify({ error: 'NCAAB narrative context is already in your scout report (Current State section + Tier 1 Advanced Metrics). Use fetch_stats for additional BDL data. Do NOT call fetch_narrative_context for NCAAB.' })
+            });
+            continue;
+          }
+
+          // Non-NCAAB: Qualify queries to prevent contamination
+          let groundingQuery = args.query;
+
+          console.log(`  → [NARRATIVE_CONTEXT] for query: "${groundingQuery}"`);
 
           try {
             const { geminiGroundingSearch } = await import('./scoutReport/scoutReportBuilder.js');
-            
-            // Allow Gary to investigate any query, including weather
-            // Gary decides what matters based on the data returned
-            
-            const searchResult = await geminiGroundingSearch(args.query, {
+
+            const searchResult = await geminiGroundingSearch(groundingQuery, {
               temperature: 1.0,
               maxTokens: 1000
             });
@@ -5682,9 +5740,16 @@ Call these specific tokens NOW using the get_stat tool with the "token" paramete
         const missingDisplay = missing.slice(0, 6).map(f => getTokenHints(sport, f)).join(', ');
         const coveragePct = (coverage * 100).toFixed(0);
 
-        // STALL BREAKER: If coverage hasn't improved in 3 iterations and we're at 70%+, force Pass 2
-        // This prevents spinning on unreachable factors (endpoint errors, irrelevant stats)
-        if (_coverageStallCount >= 3 && coverage >= 0.70 && !pass2AlreadyInjected) {
+        if (pass2AlreadyInjected) {
+          // Pass 2 already injected (e.g., via stall breaker) — tell Gary to write cases, NOT investigate more
+          console.log(`[Orchestrator] Pass 2 already injected — enforcing Steel Man (${coveragePct}% coverage)`);
+          messages.push({
+            role: 'user',
+            content: `You have gathered ${covered.length}/${totalFactors} investigation factors (${coveragePct}% coverage). This is SUFFICIENT data to proceed. Do NOT request more stats or narrative context. Write your Steel Man analysis NOW — build the strongest case for EACH side of the spread using the data you already have.`
+          });
+        } else if (_coverageStallCount >= 3 && coverage >= 0.70) {
+          // STALL BREAKER: If coverage hasn't improved in 3 iterations and we're at 70%+, force Pass 2
+          // This prevents spinning on unreachable factors (endpoint errors, irrelevant stats)
           console.log(`[Orchestrator] STALL BREAKER: Coverage stuck at ${coveragePct}% for ${_coverageStallCount} iterations — forcing Pass 2 with ${covered.length}/${totalFactors} factors`);
           console.log(`[Orchestrator] Unreachable factors: ${missing.join(', ')}`);
           messages.push({
@@ -5696,13 +5761,13 @@ Call these specific tokens NOW using the get_stat tool with the "token" paramete
           // After several iterations with close-to-threshold coverage, give a stronger nudge
           messages.push({
             role: 'user',
-            content: `**INVESTIGATION AT ${coveragePct}% (need ${coverageThresholdPct})** - You're close but missing critical data:\n\n**UNINVESTIGATED:** ${missingDisplay}${missing.length > 6 ? '...' : ''}\n\nCall these stats NOW. You MUST reach ${coverageThresholdPct} factor coverage before Steel Man. Missing factors may include BENCH_DEPTH, EFFICIENCY_TREND, or other critical matchup data.`
+            content: `**INVESTIGATION AT ${coveragePct}% (need ${coverageThresholdPct})** - You're close but missing critical data:\n\n**UNINVESTIGATED:** ${missingDisplay}${missing.length > 6 ? '...' : ''}\n\nCall these stats NOW using fetch_stats. You MUST reach ${coverageThresholdPct} factor coverage before Steel Man.`
           });
           console.log(`[Orchestrator] Strong nudge for ${coverageThresholdPct} coverage (${covered.length}/${totalFactors} = ${coveragePct}% covered)`);
         } else {
           messages.push({
             role: 'user',
-            content: `You've covered ${covered.length}/${totalFactors} investigation factors (${coveragePct}%). Continue investigating BOTH teams to reach ${coverageThresholdPct}. Uncovered factors: ${missingDisplay}${missing.length > 6 ? '...' : ''}. Call stats for each factor - especially BENCH_DEPTH and unit efficiency for spread analysis.`
+            content: `You've covered ${covered.length}/${totalFactors} investigation factors (${coveragePct}%). Continue investigating BOTH teams to reach ${coverageThresholdPct}. Uncovered factors: ${missingDisplay}${missing.length > 6 ? '...' : ''}. Call fetch_stats for each missing factor.`
           });
           console.log(`[Orchestrator] Nudged to reach ${coverageThresholdPct} coverage (${covered.length}/${totalFactors} = ${coveragePct}% covered)`);
         }
@@ -5710,8 +5775,8 @@ Call these specific tokens NOW using the get_stat tool with the "token" paramete
         // 100% factors covered - decide between Pass 2.5, Steel Man enforcement, or Mid-Investigation Synthesis
         // Priority: Steel Man enforcement > Pass 2.5 (if Steel Man done) > Mid-Investigation Synthesis
         
-        if (!steelManCompleted && pass2AlreadyInjected) {
-          // STEEL MAN ENFORCEMENT: Pass 2 was injected but Gary hasn't written cases yet
+        if (!steelManCompleted && pass2AlreadyInjected && _pass2Delivered) {
+          // STEEL MAN ENFORCEMENT: Pass 2 was delivered to session but Gary hasn't written cases yet
           // Force Gary to stop calling stats and write his Steel Man analysis NOW
           // GEMINI 3 OPTIMIZED: XML-tagged structure with END-OF-PROMPT instruction
           messages.push({
@@ -5755,6 +5820,10 @@ BEGIN WRITING YOUR MATCHUP ANALYSIS NOW.
 `
           });
           console.log(`[Orchestrator] MATCHUP ANALYSIS ENFORCEMENT - Gary must write analysis before proceeding (${covered.length}/${totalFactors} factors)`);
+        } else if (!steelManCompleted && pass2AlreadyInjected && !_pass2Delivered) {
+          // Pass 2 was queued (pushed to messages, _pass2Injected=true) but NOT yet sent to the session
+          // Don't push enforcement — let the queued Pass 2 be delivered first
+          console.log(`[Orchestrator] Pass 2 queued but not yet delivered to session — waiting for delivery before enforcement`);
         } else if (!pass25AlreadyInjected && steelManCompleted) {
           // ═══════════════════════════════════════════════════════════════════════
           // PASS 2.5 INJECTION + PRO MODEL SWITCH (NBA/NFL/NHL/NCAAB)
@@ -5940,7 +6009,6 @@ BEGIN WRITING YOUR MATCHUP ANALYSIS NOW.
         messages.push({ role: 'assistant', content: message.content });
         messages.push({ role: 'user', content: buildPass2Message(sport, homeTeam, awayTeam, spread) });
         _pass2Injected = true;
-        iteration++;
         continue;
       } else if (coverage >= 0.70) {
         // Coverage at 70%+ — stall break and inject Pass 2
@@ -5948,7 +6016,6 @@ BEGIN WRITING YOUR MATCHUP ANALYSIS NOW.
         messages.push({ role: 'assistant', content: message.content });
         messages.push({ role: 'user', content: buildPass2Message(sport, homeTeam, awayTeam, spread) });
         _pass2Injected = true;
-        iteration++;
         continue;
       } else {
         // Coverage too low — nudge to continue investigating
@@ -5956,7 +6023,6 @@ BEGIN WRITING YOUR MATCHUP ANALYSIS NOW.
         console.log(`[Orchestrator] ⚠️ PIPELINE GATE: Gary tried to pick at ${(coverage * 100).toFixed(0)}% coverage — nudging to investigate`);
         messages.push({ role: 'assistant', content: message.content });
         messages.push({ role: 'user', content: `You need to investigate more factors before making your pick. Coverage is ${(coverage * 100).toFixed(0)}% but must reach 100%. Missing: ${missingDisplay}. Call stats for these factors now.` });
-        iteration++;
         continue;
       }
     }
@@ -5974,7 +6040,6 @@ BEGIN WRITING YOUR MATCHUP ANALYSIS NOW.
       _pass3Injected = true;
       console.log(`[Orchestrator] Injected Pass 3 - ${isPropsMode ? 'Props Evaluation' : 'Final Output'} (after Pass 2.5 evaluation)`);
 
-      iteration++;
       continue;
     }
 
@@ -6049,8 +6114,7 @@ BEGIN WRITING YOUR MATCHUP ANALYSIS NOW.
       
       // CRITICAL: Set nextMessageToSend so the session knows what to send next
       nextMessageToSend = pass25Content;
-      
-      iteration++;
+
       continue; // Go back to get Pass 2.5 response
     }
 
@@ -6075,14 +6139,12 @@ BEGIN WRITING YOUR MATCHUP ANALYSIS NOW.
           ? 'You MUST call the finalize_props tool to submit your picks. Do NOT write JSON in text — use the finalize_props function call with your 2 best picks.'
           : 'CRITICAL: Call the finalize_props function NOW. Your analysis is complete. Submit your 2 picks by calling finalize_props({ picks: [{ player, team, prop, line, bet, odds, confidence, rationale, key_stats }] }). This is a TOOL CALL, not text output.';
         messages.push({ role: 'user', content: nudge });
-        iteration++;
         continue;
       }
       // Don't return early — let the loop exhaust iterations so the max-iterations
       // fallback (outside the while loop) can try with a fresh session
       console.log(`[Orchestrator] ⚠️ Props finalize_props not called after ${propsRetryCount} retries — continuing to max-iterations fallback`);
       messages.push({ role: 'assistant', content: message.content });
-      iteration++;
       continue;
     }
 
@@ -6120,7 +6182,6 @@ BEGIN WRITING YOUR MATCHUP ANALYSIS NOW.
 
       nextMessageToSend = pass25Content;
       _pass25Injected = true;
-      iteration++;
       continue;
     }
 
@@ -6131,7 +6192,6 @@ BEGIN WRITING YOUR MATCHUP ANALYSIS NOW.
       messages.push({ role: 'user', content: pass3Content });
       nextMessageToSend = pass3Content;
       _pass3Injected = true;
-      iteration++;
       continue;
     }
 
@@ -6157,7 +6217,6 @@ BEGIN WRITING YOUR MATCHUP ANALYSIS NOW.
 Output your complete pick JSON with the full rationale in the "rationale" field. Do NOT use placeholders like "See detailed analysis below" - write the actual analysis.`
       });
 
-      iteration++;
       continue; // Retry
     }
 

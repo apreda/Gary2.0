@@ -111,6 +111,7 @@ const NCAAB_TOKENS = [
   'NCAAB_TS_PCT',            // Calculated True Shooting % (FG + 3PT + FT efficiency)
   'NCAAB_TEMPO',             // Calculated possessions per game
   'NCAAB_OFFENSIVE_RATING',  // Calculated offensive efficiency
+  'NCAAB_DEFENSIVE_RATING',  // Calculated defensive efficiency (opp pts/100 poss)
   // Rankings (BDL API)
   'NCAAB_AP_RANKING',        // AP Poll rank
   'NCAAB_COACHES_RANKING',   // Coaches Poll rank
@@ -124,9 +125,6 @@ const NCAAB_TOKENS = [
   'NCAAB_CONFERENCE_STRENGTH', // Conference power rankings (KenPom avg AdjEM)
   'NCAAB_OPPONENT_QUALITY',    // Last 10 opponents with KenPom rankings
   'NCAAB_HOME_COURT_ADVANTAGE', // Venue-specific home/away performance
-  // Half Scoring Trends (BDL has home_score_h1, home_score_h2, etc.)
-  'NCAAB_FIRST_HALF_TRENDS',  // 1st half scoring patterns - fast starters vs slow starters
-  'NCAAB_SECOND_HALF_TRENDS', // 2nd half scoring - closers vs faders
   // Context (BDL)
   'HOME_AWAY_SPLITS', 'RECENT_FORM', 'H2H_HISTORY',
   // Players (BDL)
