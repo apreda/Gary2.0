@@ -3715,7 +3715,7 @@ function buildPass3Props(homeTeam, awayTeam, propContext = {}) {
 
   // Format player stats summary
   const statsStr = typeof playerStats === 'string' ? playerStats :
-    JSON.stringify(playerStats || {}, null, 1).substring(0, 8000);
+    JSON.stringify(playerStats || {}, null, 1); // Full player stats — no truncation
 
   return `
 <pass_context>
