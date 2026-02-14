@@ -3604,35 +3604,24 @@ RULES:
  */
 async function fetchNcaabAdvancedMetrics(homeTeamName, awayTeamName) {
   // ═══════════════════════════════════════════════════════════════════════════
-  // DYNAMIC RETRIEVAL APPROACH: Ask Pro naturally, get JSON back
-  // No brittle regex parsing — Pro integrates search results directly
+  // DYNAMIC RETRIEVAL: Pro searches naturally, returns text Gary reads directly
+  // No JSON, no regex — Pro's natural text goes straight into the scout report
   // ═══════════════════════════════════════════════════════════════════════════
-  const buildQuery = (teamName) => `Search kenpom.com, barttorvik.com, and ncaa.com for the current 2025-26 college basketball advanced metrics for "${teamName}".
+  const buildQuery = (teamName) => `Search kenpom.com and barttorvik.com for the current 2025-26 college basketball advanced metrics for "${teamName}".
 
-Return your findings as a single JSON object. Use Google Search — do NOT rely on training data.
+Report the following metrics you find. Use Google Search — do NOT rely on training data.
 
-Required JSON format:
-{
-  "team": "${teamName}",
-  "kenpom_rank": <number or null>,
-  "kenpom_adj_em": <signed number like +15.2 or -3.1 or null>,
-  "kenpom_adj_o": <number or null>,
-  "kenpom_adj_d": <number or null>,
-  "kenpom_tempo": <number or null>,
-  "barttorvik_t_rank": <number or null>,
-  "barttorvik_adj_oe": <number or null>,
-  "barttorvik_adj_de": <number or null>,
-  "barttorvik_barthag": <decimal like 0.8432 or null>,
-  "net_rank": <number or null>,
-  "sos_rank": <number or null>
-}
+KenPom: Rank, AdjEM (with +/- sign), AdjO, AdjD, Tempo
+Barttorvik: T-Rank, AdjOE, AdjDE, Barthag
+NET Ranking
+Strength of Schedule rank
 
-IMPORTANT: Return ONLY the JSON object, no markdown, no commentary. Use null for any metric you cannot find.`;
+Be concise. Report numbers only, no analysis.`;
 
   const groundingOpts = {
     temperature: 1.0,
     maxTokens: 1500,
-    _useProFallback: true, // Pro for natural search integration
+    _useProFallback: true,
   };
 
   console.log(`[Scout Report] Fetching NCAAB Tier 1 advanced metrics via Pro (Dynamic Retrieval) for ${awayTeamName} @ ${homeTeamName}...`);
@@ -3644,89 +3633,15 @@ IMPORTANT: Return ONLY the JSON object, no markdown, no commentary. Use null for
   ]);
 
   const duration = Date.now() - startTime;
+  const homeText = (homeResponse?.data || homeResponse?.raw || '').trim();
+  const awayText = (awayResponse?.data || awayResponse?.raw || '').trim();
   console.log(`[Scout Report] NCAAB Tier 1 metrics fetched in ${duration}ms`);
-
-  const extractMetrics = (response, teamName) => {
-    const content = (response?.data || response?.raw || '').trim();
-
-    // Try JSON parse directly (Pro returns clean JSON with Dynamic Retrieval)
-    let parsed = null;
-    try {
-      // Strip markdown code fences if present
-      const jsonStr = content.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
-      parsed = JSON.parse(jsonStr);
-    } catch (e) {
-      // Fallback: extract first balanced JSON object using brace counting
-      const startIdx = content.indexOf('{');
-      if (startIdx >= 0) {
-        let depth = 0;
-        let endIdx = -1;
-        for (let i = startIdx; i < content.length; i++) {
-          if (content[i] === '{') depth++;
-          else if (content[i] === '}') { depth--; if (depth === 0) { endIdx = i; break; } }
-        }
-        if (endIdx > startIdx) {
-          try { parsed = JSON.parse(content.substring(startIdx, endIdx + 1)); } catch (e2) { /* fall through */ }
-        }
-      }
-    }
-
-    if (!parsed) {
-      console.warn(`[Scout Report] ${teamName}: Could not parse JSON from Pro response (${content.length} chars). Raw: ${content.substring(0, 500)}`);
-      // Return all N/A
-      return {
-        kenpom: { rank: 'N/A', adj_em: 'N/A', adj_o: 'N/A', adj_d: 'N/A', tempo: 'N/A' },
-        barttorvik: { t_rank: 'N/A', adj_oe: 'N/A', adj_de: 'N/A', barthag: 'N/A' },
-        net: { rank: 'N/A' },
-        sos: { rank: 'N/A' }
-      };
-    }
-
-    // Map JSON fields to our internal structure
-    const val = (v) => (v !== null && v !== undefined) ? String(v) : 'N/A';
-    const data = {
-      kenpom: {
-        rank: val(parsed.kenpom_rank),
-        adj_em: val(parsed.kenpom_adj_em),
-        adj_o: val(parsed.kenpom_adj_o),
-        adj_d: val(parsed.kenpom_adj_d),
-        tempo: val(parsed.kenpom_tempo)
-      },
-      barttorvik: {
-        t_rank: val(parsed.barttorvik_t_rank),
-        adj_oe: val(parsed.barttorvik_adj_oe),
-        adj_de: val(parsed.barttorvik_adj_de),
-        barthag: val(parsed.barttorvik_barthag)
-      },
-      net: { rank: val(parsed.net_rank) },
-      sos: { rank: val(parsed.sos_rank) }
-    };
-
-    // Log extraction quality
-    const allValues = [
-      data.kenpom.rank, data.kenpom.adj_em, data.kenpom.adj_o, data.kenpom.adj_d,
-      data.barttorvik.t_rank, data.barttorvik.barthag,
-      data.net.rank, data.sos.rank
-    ];
-    const extracted = allValues.filter(v => v !== 'N/A').length;
-    console.log(`[Scout Report] ${teamName} metrics: ${extracted}/${allValues.length} extracted (JSON parse)`);
-
-    return data;
-  };
+  console.log(`[Scout Report] ${homeTeamName}: ${homeText.length} chars`);
+  console.log(`[Scout Report] ${awayTeamName}: ${awayText.length} chars`);
 
   return {
-    home: {
-      team: homeTeamName,
-      ...extractMetrics(homeResponse, homeTeamName)
-    },
-    away: {
-      team: awayTeamName,
-      ...extractMetrics(awayResponse, awayTeamName)
-    },
-    raw: {
-      home: (homeResponse?.data || ''),
-      away: (awayResponse?.data || '')
-    }
+    home: { team: homeTeamName, text: homeText },
+    away: { team: awayTeamName, text: awayText }
   };
 }
 
@@ -3739,50 +3654,25 @@ function formatNcaabAdvancedMetrics(data) {
 
   const lines = [];
   lines.push('');
-  lines.push('NCAAB TIER 1 ADVANCED METRICS');
+  lines.push('NCAAB TIER 1 ADVANCED METRICS (via Dynamic Retrieval)');
   lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   lines.push('');
 
   const formatTeam = (teamData, label) => {
     if (!teamData) return;
-    const kp = teamData.kenpom || {};
-    const bt = teamData.barttorvik || {};
-    const net = teamData.net || {};
-    const sos = teamData.sos || {};
-
-    // Check data quality — count how many key metrics we got
-    const keyVals = [kp.rank, kp.adj_em, kp.adj_o, kp.adj_d, bt.t_rank, bt.barthag, net.rank, sos.rank];
-    const available = keyVals.filter(v => v && v !== 'N/A').length;
-
-    if (available === 0) {
+    const text = (teamData.text || '').trim();
+    if (!text) {
       lines.push(`[${label}] ${(teamData.team || '').toUpperCase()}: Grounding data unavailable — use fetch_stats tool to request [NCAAB_KENPOM_RATINGS] and [NCAAB_BARTTORVIK].`);
       lines.push('');
       return;
     }
-
     lines.push(`[${label}] ${(teamData.team || '').toUpperCase()}:`);
-    lines.push(`  KenPom:     #${kp.rank} | AdjEM: ${kp.adj_em} | AdjO: ${kp.adj_o} | AdjD: ${kp.adj_d} | Tempo: ${kp.tempo}`);
-    lines.push(`  Barttorvik: T-Rank #${bt.t_rank} | AdjOE: ${bt.adj_oe} | AdjDE: ${bt.adj_de} | Barthag: ${bt.barthag}`);
-    lines.push(`  NET: #${net.rank} | SOS: #${sos.rank}`);
-    if (available < 5) {
-      lines.push(`  ⚠ Partial data (${available}/8 metrics) — use fetch_stats tool for missing values.`);
-    }
+    lines.push(text);
     lines.push('');
   };
 
   formatTeam(data.home, 'HOME');
   formatTeam(data.away, 'AWAY');
-
-  // AdjEM comparison if both available
-  const homeEM = parseFloat(data.home?.kenpom?.adj_em);
-  const awayEM = parseFloat(data.away?.kenpom?.adj_em);
-  if (!isNaN(homeEM) && !isNaN(awayEM)) {
-    const gap = Math.abs(homeEM - awayEM).toFixed(1);
-    const higher = homeEM > awayEM ? data.home.team : data.away.team;
-    lines.push(`EFFICIENCY COMPARISON:`);
-    lines.push(`  KenPom AdjEM Gap: ${gap} (${higher} higher)`);
-    lines.push('');
-  }
 
   lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   lines.push('');
