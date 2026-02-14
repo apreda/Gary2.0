@@ -430,6 +430,7 @@ function getTopPropCandidates(props, maxPlayersPerTeam = 10) {
  * Format injuries relevant to NBA props
  */
 function formatPropsInjuries(injuries = []) {
+  const STALE_WINDOW_DAYS = 3; // Same as game picks (per CLAUDE.md)
   // Handles both RapidAPI format (source: 'nba_injury_report_api') and BDL format
   return (injuries || [])
     .filter(inj => inj?.player?.full_name || inj?.player?.first_name)
@@ -437,6 +438,38 @@ function formatPropsInjuries(injuries = []) {
       // RapidAPI injuries already have correct status — skip BDL fix
       const isRapidApi = injury.source === 'nba_injury_report_api';
       const fixedInj = isRapidApi ? injury : fixBdlInjuryStatus(injury);
+      const dur = (fixedInj?.duration || 'UNKNOWN').toUpperCase();
+      const days = fixedInj?.daysSinceReport;
+
+      // Freshness evaluation — mirrors game picks scoutReportBuilder logic
+      // Props lines adjust just like game lines; stale injuries are NOT edges
+      let freshness = 'STALE';
+      let isPricedIn = true;
+      if (dur === 'SEASON-LONG' || dur.includes('SEASON')) {
+        freshness = 'STALE';
+        isPricedIn = true;
+      } else if (dur === 'MID-SEASON') {
+        // 7+ days — always priced in
+        freshness = 'STALE';
+        isPricedIn = true;
+      } else if (dur === 'RECENT') {
+        // RECENT could be 0-7 days — check exact days if available
+        if (days !== null && days !== undefined && days <= STALE_WINDOW_DAYS) {
+          freshness = 'FRESH';
+          isPricedIn = false;
+        } else if (days !== null && days !== undefined) {
+          freshness = 'STALE';
+          isPricedIn = true;
+        } else {
+          // day-to-day without exact days — treat as potentially fresh
+          freshness = 'FRESH';
+          isPricedIn = false;
+        }
+      } else {
+        // UNKNOWN duration — conservatively assume priced in
+        freshness = 'STALE';
+        isPricedIn = true;
+      }
 
       return {
         player: fixedInj?.player?.full_name || `${fixedInj?.player?.first_name || ''} ${fixedInj?.player?.last_name || ''}`.trim(),
@@ -444,8 +477,10 @@ function formatPropsInjuries(injuries = []) {
         status: fixedInj?.status || 'Unknown',
         description: fixedInj?.description || fixedInj?.durationContext || '',
         team: fixedInj?.team?.full_name || fixedInj?.team || '',
-        duration: fixedInj?.duration || 'UNKNOWN',
-        isEdge: fixedInj?.isEdge || false
+        duration: dur,
+        daysSinceReport: days,
+        freshness,
+        isPricedIn
       };
     })
     // Filter out season-long injuries — prop lines already reflect their absence
@@ -826,36 +861,47 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerSeasonSt
   
   // Away team section
   statsText += `### ${awayTeam} Players\n`;
-  
+
   if (awayPlayers.length > 0) {
     statsText += '\n**Player Season Stats & Recent Form:**\n';
     for (const candidate of awayPlayers) {
       const stats = getPlayerStats(candidate.player);
       const logs = getPlayerLogs(candidate.player);
       const propsStr = candidate.props.map(p => `${p.type} ${p.line}`).join(', ');
-      
+
       const injuryRecord = injuries.find(i => i.player.toLowerCase() === candidate.player.toLowerCase());
       const isInjured = !!injuryRecord;
-      const durationTag = injuryRecord?.duration ? ` [${injuryRecord.duration}]` : '';
-      const injuryFlag = isInjured ? ` ⚠️ INJURED${durationTag}` : '';
-      
+      // Use [PRICED IN] / [FRESH] labels matching game picks — not just [duration]
+      let injuryFlag = '';
+      if (isInjured) {
+        const daysInfo = injuryRecord.daysSinceReport != null ? ` (${injuryRecord.daysSinceReport}d)` : '';
+        if (injuryRecord.isPricedIn) {
+          injuryFlag = ` ⚠️ INJURED [PRICED IN${daysInfo} - NOT an edge, line already adjusted]`;
+        } else if (injuryRecord.freshness === 'FRESH') {
+          injuryFlag = ` ⚠️ INJURED [FRESH${daysInfo} - investigate if line has reacted]`;
+        } else {
+          injuryFlag = ` ⚠️ INJURED [PRICED IN${daysInfo} - assumed stale]`;
+        }
+      }
+
       if (stats) {
         statsText += `- **${candidate.player}** (${stats.position || 'N/A'})${injuryFlag}:\n`;
+        statsText += `  Props: ${propsStr}\n`;
         statsText += `  Season: PPG ${stats.ppg || 'N/A'}, RPG ${stats.rpg || 'N/A'}, APG ${stats.apg || 'N/A'}, 3PG ${stats.tpg || 'N/A'}, PRA ${stats.pra || 'N/A'}, MPG ${stats.mpg || 'N/A'}\n`;
-        
+
         // ENHANCED: Show usage & efficiency metrics for prop context
         if (stats.usagePct || stats.trueShooting) {
           statsText += `  Usage: USG% ${stats.usagePct || 'N/A'}, TS% ${stats.trueShooting || 'N/A'}, EFG% ${stats.effectiveFgPct || 'N/A'}\n`;
         }
-        
+
         // Add recent form if available - show ALL stat types equally for organic analysis
         if (logs) {
           const formIcon = logs.formTrend === 'hot' ? '🔥' : logs.formTrend === 'cold' ? '❄️' : '';
           statsText += `  L${logs.gamesAnalyzed} Avg: PTS ${logs.averages?.pts || 'N/A'}, REB ${logs.averages?.reb || 'N/A'}, AST ${logs.averages?.ast || 'N/A'}, 3PM ${logs.averages?.fg3m || 'N/A'} ${formIcon}\n`;
-          
+
           // Show recent games for ALL prop types - no bias toward any stat
           statsText += `  Recent: PTS [${formatRecentGames(logs, 'pts')}] | REB [${formatRecentGames(logs, 'reb')}] | AST [${formatRecentGames(logs, 'ast')}]\n`;
-          
+
           // Consistency scores for ALL stat types - Gary decides which matters
           if (logs.consistency) {
             const ptsC = logs.consistency.pts ? (parseFloat(logs.consistency.pts) * 100).toFixed(0) : 'N/A';
@@ -863,15 +909,13 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerSeasonSt
             const astC = logs.consistency.ast ? (parseFloat(logs.consistency.ast) * 100).toFixed(0) : 'N/A';
             statsText += `  Consistency: PTS ${ptsC}% | REB ${rebC}% | AST ${astC}%\n`;
           }
-          
+
           // Home/Away splits - show multiple stats
           if (logs.splits?.home && logs.splits?.away) {
             statsText += `  Home: ${logs.splits.home.pts} PTS, ${logs.splits.home.reb || 'N/A'} REB, ${logs.splits.home.ast || 'N/A'} AST (${logs.splits.home.games}g)\n`;
             statsText += `  Away: ${logs.splits.away.pts} PTS, ${logs.splits.away.reb || 'N/A'} REB, ${logs.splits.away.ast || 'N/A'} AST (${logs.splits.away.games}g)\n`;
           }
         }
-        
-        statsText += `  Props: ${propsStr}\n`;
       } else {
         statsText += `- ${candidate.player}${injuryFlag}: (stats unavailable) | Props: ${propsStr}\n`;
       }
@@ -882,21 +926,32 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerSeasonSt
   
   // Home team section
   statsText += `### ${homeTeam} Players\n`;
-  
+
   if (homePlayers.length > 0) {
     statsText += '\n**Player Season Stats & Recent Form:**\n';
     for (const candidate of homePlayers) {
       const stats = getPlayerStats(candidate.player);
       const logs = getPlayerLogs(candidate.player);
       const propsStr = candidate.props.map(p => `${p.type} ${p.line}`).join(', ');
-      
+
       const injuryRecord = injuries.find(i => i.player.toLowerCase() === candidate.player.toLowerCase());
       const isInjured = !!injuryRecord;
-      const durationTag = injuryRecord?.duration ? ` [${injuryRecord.duration}]` : '';
-      const injuryFlag = isInjured ? ` ⚠️ INJURED${durationTag}` : '';
-      
+      // Use [PRICED IN] / [FRESH] labels matching game picks — not just [duration]
+      let injuryFlag = '';
+      if (isInjured) {
+        const daysInfo = injuryRecord.daysSinceReport != null ? ` (${injuryRecord.daysSinceReport}d)` : '';
+        if (injuryRecord.isPricedIn) {
+          injuryFlag = ` ⚠️ INJURED [PRICED IN${daysInfo} - NOT an edge, line already adjusted]`;
+        } else if (injuryRecord.freshness === 'FRESH') {
+          injuryFlag = ` ⚠️ INJURED [FRESH${daysInfo} - investigate if line has reacted]`;
+        } else {
+          injuryFlag = ` ⚠️ INJURED [PRICED IN${daysInfo} - assumed stale]`;
+        }
+      }
+
       if (stats) {
         statsText += `- **${candidate.player}** (${stats.position || 'N/A'})${injuryFlag}:\n`;
+        statsText += `  Props: ${propsStr}\n`;
         statsText += `  Season: PPG ${stats.ppg || 'N/A'}, RPG ${stats.rpg || 'N/A'}, APG ${stats.apg || 'N/A'}, 3PG ${stats.tpg || 'N/A'}, PRA ${stats.pra || 'N/A'}, MPG ${stats.mpg || 'N/A'}\n`;
         
         // ENHANCED: Show usage & efficiency metrics for prop context
@@ -926,20 +981,26 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerSeasonSt
             statsText += `  Away: ${logs.splits.away.pts} PTS, ${logs.splits.away.reb || 'N/A'} REB, ${logs.splits.away.ast || 'N/A'} AST (${logs.splits.away.games}g)\n`;
           }
         }
-        
-        statsText += `  Props: ${propsStr}\n`;
       } else {
         statsText += `- ${candidate.player}${injuryFlag}: (stats unavailable) | Props: ${propsStr}\n`;
       }
     }
   }
-  
-  // Add injury summary if any - NO SLICE to include ALL injuries
+
+  // Add injury summary with freshness labels matching game picks
   if (injuries.length > 0) {
-    statsText += '\n### Injury Report (from BDL - SOURCE OF TRUTH)\n';
+    statsText += '\n### Injury Report\n';
     injuries.forEach(inj => {
-      const durationTag = inj.duration ? ` [${inj.duration}]` : '';
-      statsText += `- ${inj.player} (${inj.status}${durationTag}): ${inj.description?.slice(0, 100) || 'No details'}\n`;
+      const daysInfo = inj.daysSinceReport != null ? ` (${inj.daysSinceReport}d)` : '';
+      let label;
+      if (inj.isPricedIn) {
+        label = `[PRICED IN${daysInfo} - NOT an edge]`;
+      } else if (inj.freshness === 'FRESH') {
+        label = `[FRESH${daysInfo} - investigate]`;
+      } else {
+        label = `[PRICED IN${daysInfo}]`;
+      }
+      statsText += `- ${inj.player} (${inj.status}) ${label}: ${inj.description?.slice(0, 100) || 'No details'}\n`;
     });
   }
   
@@ -1218,7 +1279,7 @@ export async function buildNbaPropsAgenticContext(game, playerProps, options = {
           enrichedInj.duration = 'RECENT';
         }
         // Also try "since [month]" pattern for date-based duration
-        const sinceMatch = descLower.match(/since\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i);
+        const sinceMatch = descLower.match(/since\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s*(\d{1,2})?/i);
         if (sinceMatch) {
           const monthMap = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
           const monthNum = monthMap[sinceMatch[1].toLowerCase().substring(0, 3)];
@@ -1226,7 +1287,9 @@ export async function buildNbaPropsAgenticContext(game, playerProps, options = {
             const now = new Date();
             let year = now.getFullYear();
             if (monthNum > now.getMonth()) year -= 1;
-            const daysSince = Math.floor((now - new Date(year, monthNum, 1)) / (1000 * 60 * 60 * 24));
+            const day = sinceMatch[2] ? parseInt(sinceMatch[2]) : 1;
+            const daysSince = Math.floor((now - new Date(year, monthNum, day)) / (1000 * 60 * 60 * 24));
+            enrichedInj.daysSinceReport = daysSince;
             if (daysSince >= 30) enrichedInj.duration = 'SEASON-LONG';
             else if (daysSince >= 7) enrichedInj.duration = 'MID-SEASON';
             else enrichedInj.duration = 'RECENT';

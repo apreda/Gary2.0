@@ -150,6 +150,7 @@
 import { ballDontLieService } from '../../ballDontLieService.js';
 import { geminiGroundingSearch, getGroundedWeather } from '../scoutReport/scoutReportBuilder.js';
 import { isGameCompleted, formatStatValue, safeStatValue } from '../sharedUtils.js';
+import { getNcaabH2H } from '../../highlightlyService.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════════
@@ -1911,6 +1912,65 @@ const FETCHERS = {
     }
   },
 
+  NCAAB_DEFENSIVE_RATING: async (bdlSport, home, away, season) => {
+    try {
+      // Fetch team season stats (for possessions estimate) + completed games (for opponent points)
+      const [homeStats, awayStats, homeGames, awayGames] = await Promise.all([
+        ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
+        ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false }),
+        ballDontLieService.getGames(bdlSport, { team_ids: [home.id], seasons: [season], per_page: 100 }),
+        ballDontLieService.getGames(bdlSport, { team_ids: [away.id], seasons: [season], per_page: 100 })
+      ]);
+      const homeData = Array.isArray(homeStats) ? homeStats[0] : homeStats;
+      const awayData = Array.isArray(awayStats) ? awayStats[0] : awayStats;
+
+      // Calculate DRtg: (Opponent Points / Team Possessions) * 100
+      const calcDRtg = (data, games, teamId) => {
+        if (!data || !games || games.length === 0) return null;
+        // Sum opponent scores from completed games
+        let totalOppPts = 0;
+        let completedGames = 0;
+        for (const game of games) {
+          const isCompleted = game.status === 'Final' || game.status === 'post' || game.status === 'final' ||
+            ((game.home_team_score ?? game.home_score ?? 0) > 0) || ((game.visitor_team_score ?? game.away_score ?? 0) > 0);
+          if (!isCompleted) continue;
+          const isHome = (game.home_team?.id || game.home_team_id) === teamId;
+          const oppScore = isHome
+            ? (game.visitor_team_score ?? game.away_score ?? 0)
+            : (game.home_team_score ?? game.home_score ?? 0);
+          if (oppScore > 0) {
+            totalOppPts += oppScore;
+            completedGames++;
+          }
+        }
+        if (completedGames === 0) return null;
+        // Estimate possessions from team's own stats
+        const fga = data.fga || 0;
+        const fta = data.fta || 0;
+        const oreb = data.oreb || 0;
+        const tov = data.turnover || 0;
+        const possessions = fga + 0.44 * fta - oreb + tov;
+        if (possessions === 0) return null;
+        return ((totalOppPts / possessions) * 100).toFixed(1);
+      };
+
+      return {
+        category: 'Defensive Rating (Opp Pts/100 Poss)',
+        home: {
+          team: home.full_name || home.name,
+          defensive_rating: calcDRtg(homeData, homeGames, home.id) || 'N/A'
+        },
+        away: {
+          team: away.full_name || away.name,
+          defensive_rating: calcDRtg(awayData, awayGames, away.id) || 'N/A'
+        }
+      };
+    } catch (error) {
+      console.warn('[Stat Router] NCAAB_DEFENSIVE_RATING fetch failed:', error.message);
+      return { category: 'Defensive Rating (Opp Pts/100 Poss)', error: 'Data unavailable' };
+    }
+  },
+
   NCAAB_TS_PCT: async (bdlSport, home, away, season) => {
     try {
       const [homeStats, awayStats] = await Promise.all([
@@ -1958,68 +2018,81 @@ const FETCHERS = {
       const homeTeamName = home.full_name || home.name;
       const awayTeamName = away.full_name || away.name;
 
-      console.log(`[Stat Router] Fetching KenPom ratings for ${awayTeamName} @ ${homeTeamName} via Gemini Grounding`);
+      console.log(`[Stat Router] Fetching KenPom ratings for ${awayTeamName} @ ${homeTeamName} via Gemini Grounding (split queries)`);
 
-      // Improved query with explicit format requirements for reliable parsing
-      const homeSlug = homeTeamName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-      const awaySlug = awayTeamName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-      const query = `Search kenpom.com ONLY for the 2025-26 college basketball season.
+      // Split into TWO parallel queries — one per team — to avoid truncation losing the second team
+      const buildKenpomQuery = (teamName) => `Search kenpom.com for the 2025-26 college basketball season.
 
-Find KenPom efficiency ratings for these TWO teams:
-1. ${homeTeamName}
-2. ${awayTeamName}
+Find the KenPom efficiency ratings for ${teamName}.
 
-For EACH team, provide in this EXACT format:
-TEAM_NAME:
-- KenPom Rank: [number 1-365]
-- AdjEM: [number with sign, like +15.2 or -3.4]
-- AdjO: [number like 112.5]
-- AdjD: [number like 98.3]
+Respond with ONLY these numbers in this exact format:
+Rank: [number]
+AdjEM: [number with sign]
+AdjO: [number]
+AdjD: [number]
+Tempo: [number]
 
-CRITICAL: Only report numbers you find on kenpom.com. If not found, write "not found". Do NOT use numbers from other sites.`;
+Only report numbers from kenpom.com. If not found, write "not found".`;
 
-      const response = await geminiGroundingSearch(query, {
+      const groundingOpts = {
         temperature: 1.0,
-        maxTokens: 1500,
-        systemMessage: 'You are a college basketball analytics expert. Search ONLY kenpom.com for efficiency ratings. Report only numbers you find on kenpom.com — never fabricate or estimate.'
-      });
-      
-      // Parse the response to extract KenPom data
-      const content = response?.content || response?.choices?.[0]?.message?.content || '';
-      
-      // Try to extract numbers from the response
-      const extractKenpomData = (text, teamName) => {
-        const teamSection = text.toLowerCase();
-        const rankMatch = teamSection.match(new RegExp(`${teamName.toLowerCase()}[^\\d]*(\\d{1,3})(?:st|nd|rd|th)?\\s*(?:rank|kenpom|overall)`, 'i')) ||
-                         teamSection.match(/kenpom[^\d]*#?\s*(\d{1,3})/i) ||
-                         teamSection.match(/rank(?:ed|ing)?[^\d]*#?\s*(\d{1,3})/i) ||
-                         teamSection.match(/rank[^\d]*(\d{1,3})/i);
-        const adjEmMatch = teamSection.match(/adj(?:usted)?\.?\s*(?:efficiency\s*)?(?:margin|em)[^\d-]*([+-]?\d+\.?\d*)/i);
-        const adjOMatch = teamSection.match(/adj(?:usted)?\.?\s*(?:offensive|o)[^\d]*(\d+\.?\d*)/i);
-        const adjDMatch = teamSection.match(/adj(?:usted)?\.?\s*(?:defensive|d)[^\d]*(\d+\.?\d*)/i);
-        const tempoMatch = teamSection.match(/tempo[^\d]*(\d+\.?\d*)/i);
-        
-        return {
+        maxTokens: 2500,
+        systemMessage: 'Search kenpom.com. Report only the numbers requested — no commentary, no paragraphs. Format exactly as requested.'
+      };
+
+      const [homeResponse, awayResponse] = await Promise.all([
+        geminiGroundingSearch(buildKenpomQuery(homeTeamName), groundingOpts),
+        geminiGroundingSearch(buildKenpomQuery(awayTeamName), groundingOpts)
+      ]);
+
+      // Extract KenPom data from a single-team response
+      const extractKenpomData = (response, teamName) => {
+        const content = (response?.content || response?.choices?.[0]?.message?.content || '').toLowerCase();
+
+        // Try multiple regex patterns in priority order
+        const rankMatch = content.match(/rank[^\d]*#?\s*(\d{1,3})/i) ||
+                         content.match(/(\d{1,3})(?:st|nd|rd|th)\s/i) ||
+                         content.match(/#(\d{1,3})\b/i);
+        const adjEmMatch = content.match(/adj(?:usted)?\.?\s*(?:efficiency\s*)?(?:margin|em)[^\d-]*([+-]?\d+\.?\d*)/i) ||
+                          content.match(/adjem[:\s]*([+-]?\d+\.?\d*)/i);
+        const adjOMatch = content.match(/adj(?:usted)?\.?\s*(?:offensive|o)[:\s]*(\d+\.?\d*)/i) ||
+                         content.match(/adjo[:\s]*(\d+\.?\d*)/i);
+        const adjDMatch = content.match(/adj(?:usted)?\.?\s*(?:defensive|d)[:\s]*(\d+\.?\d*)/i) ||
+                         content.match(/adjd[:\s]*(\d+\.?\d*)/i);
+        const tempoMatch = content.match(/tempo[:\s]*(\d+\.?\d*)/i);
+
+        const data = {
           kenpom_rank: rankMatch ? rankMatch[1] : 'N/A',
           adj_em: adjEmMatch ? adjEmMatch[1] : 'N/A',
           adj_offense: adjOMatch ? adjOMatch[1] : 'N/A',
           adj_defense: adjDMatch ? adjDMatch[1] : 'N/A',
           tempo: tempoMatch ? tempoMatch[1] : 'N/A'
         };
+
+        // Validation: flag if partial extraction
+        const extracted = Object.values(data).filter(v => v !== 'N/A').length;
+        if (extracted > 0 && extracted < 3) {
+          data._partial = true;
+        }
+
+        return data;
       };
-      
+
+      const homeData = extractKenpomData(homeResponse, homeTeamName);
+      const awayData = extractKenpomData(awayResponse, awayTeamName);
+
       return {
         category: 'KenPom Ratings',
         source: 'kenpom.com via Gemini Grounding',
         home: {
           team: homeTeamName,
-          ...extractKenpomData(content, homeTeamName)
+          ...homeData
         },
         away: {
           team: awayTeamName,
-          ...extractKenpomData(content, awayTeamName)
+          ...awayData
         },
-        raw_response: content.substring(0, 1200)
+        raw_response: `HOME: ${(homeResponse?.content || '')}\n---\nAWAY: ${(awayResponse?.content || '')}`
       };
     } catch (error) {
       console.warn('[Stat Router] KenPom fetch failed:', error.message);
@@ -2036,49 +2109,55 @@ CRITICAL: Only report numbers you find on kenpom.com. If not found, write "not f
     try {
       const homeTeamName = home.full_name || home.name;
       const awayTeamName = away.full_name || away.name;
-      
-      console.log(`[Stat Router] Fetching NET rankings for ${awayTeamName} @ ${homeTeamName} via Gemini Grounding`);
-      
-      const query = `Search ncaa.com for the 2025-26 college basketball season NCAA NET rankings.
 
-What are the NET rankings for:
-1. ${homeTeamName}
-2. ${awayTeamName}
+      console.log(`[Stat Router] Fetching NET rankings for ${awayTeamName} @ ${homeTeamName} via Gemini Grounding (split queries)`);
 
-For EACH team provide:
-- NET Ranking: [number]
-- Quad 1 Record: [W-L]
-- Quad 2 Record: [W-L]
+      const buildNetQuery = (teamName) => `Search ncaa.com for the 2025-26 college basketball season NCAA NET rankings.
 
-CRITICAL: Only report numbers from ncaa.com for the 2025-26 season. Do NOT guess or use old data.`;
-      
-      const response = await geminiGroundingSearch(query, {
+What is the NET ranking for ${teamName}?
+
+Respond with ONLY:
+NET Ranking: [number]
+Quad 1 Record: [W-L]
+Quad 2 Record: [W-L]
+
+Only report numbers from ncaa.com. If not found, write "not found".`;
+
+      const groundingOpts = {
         temperature: 1.0,
-        maxTokens: 1500,
-        systemMessage: 'You are a college basketball expert. Search ncaa.com for 2025-26 NET rankings. Only report numbers you find — never fabricate.'
-      });
-      
-      const content = response?.content || response?.choices?.[0]?.message?.content || '';
-      
-      // Extract NET rankings
-      const extractNetRank = (text, teamName) => {
-        const regex = new RegExp(`${teamName}[^\\d]*(\\d{1,3})`, 'i');
-        const match = text.match(regex) || text.match(/net[^\d]*(\d{1,3})/i);
-        return match ? match[1] : 'N/A';
+        maxTokens: 2500,
+        systemMessage: 'Search ncaa.com for 2025-26 NET rankings. Report only the numbers requested — no commentary.'
       };
-      
+
+      const [homeResponse, awayResponse] = await Promise.all([
+        geminiGroundingSearch(buildNetQuery(homeTeamName), groundingOpts),
+        geminiGroundingSearch(buildNetQuery(awayTeamName), groundingOpts)
+      ]);
+
+      const extractNetData = (response) => {
+        const content = (response?.content || response?.choices?.[0]?.message?.content || '').toLowerCase();
+        const netMatch = content.match(/net[^\d]*#?\s*(\d{1,3})/i) || content.match(/rank[^\d]*#?\s*(\d{1,3})/i);
+        const q1Match = content.match(/quad\s*1[^\d]*(\d+-\d+)/i);
+        const q2Match = content.match(/quad\s*2[^\d]*(\d+-\d+)/i);
+        return {
+          net_rank: netMatch ? netMatch[1] : 'N/A',
+          quad_1: q1Match ? q1Match[1] : 'N/A',
+          quad_2: q2Match ? q2Match[1] : 'N/A'
+        };
+      };
+
       return {
         category: 'NET Ranking',
         source: 'NCAA via Gemini Grounding',
         home: {
           team: homeTeamName,
-          net_rank: extractNetRank(content, homeTeamName)
+          ...extractNetData(homeResponse)
         },
         away: {
           team: awayTeamName,
-          net_rank: extractNetRank(content, awayTeamName)
+          ...extractNetData(awayResponse)
         },
-        raw_response: content.substring(0, 1200)
+        raw_response: `HOME: ${(homeResponse?.content || '')}\n---\nAWAY: ${(awayResponse?.content || '')}`
       };
     } catch (error) {
       console.warn('[Stat Router] NET Ranking fetch failed:', error.message);
@@ -2095,50 +2174,52 @@ CRITICAL: Only report numbers from ncaa.com for the 2025-26 season. Do NOT guess
     try {
       const homeTeamName = home.full_name || home.name;
       const awayTeamName = away.full_name || away.name;
-      
-      console.log(`[Stat Router] Fetching Strength of Schedule for ${awayTeamName} @ ${homeTeamName} via Gemini Grounding`);
 
-      const homeSlug = homeTeamName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-      const awaySlug = awayTeamName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-      const query = `Search kenpom.com ONLY for the 2025-26 college basketball season.
+      console.log(`[Stat Router] Fetching Strength of Schedule for ${awayTeamName} @ ${homeTeamName} via Gemini Grounding (split queries)`);
 
-What is the strength of schedule (SOS) ranking for:
-1. ${homeTeamName}
-2. ${awayTeamName}
+      const buildSOSQuery = (teamName) => `Search kenpom.com for the 2025-26 college basketball season.
 
-For EACH team provide:
-- SOS Rank: [number]
-- Non-conference SOS: [number if available]
+What is the strength of schedule (SOS) ranking for ${teamName}?
 
-CRITICAL: Only report numbers from kenpom.com. Do NOT estimate or fabricate.`;
+Respond with ONLY:
+SOS Rank: [number]
+Non-conference SOS: [number if available]
 
-      const response = await geminiGroundingSearch(query, {
+Only report numbers from kenpom.com. If not found, write "not found".`;
+
+      const groundingOpts = {
         temperature: 1.0,
-        maxTokens: 1500,
-        systemMessage: 'You are a college basketball analytics expert. Search ONLY kenpom.com for SOS data. Only report numbers you find — never fabricate.'
-      });
-      
-      const content = response?.content || response?.choices?.[0]?.message?.content || '';
-      
-      // Extract SOS info
-      const extractSOS = (text, teamName) => {
-        const regex = new RegExp(`${teamName}[^\\d]*(\\d{1,3})(?:st|nd|rd|th)?\\s*(?:sos|strength)`, 'i');
-        const match = text.match(regex) || text.match(/(?:sos|strength)[^\d]*(\d{1,3})/i);
-        return match ? match[1] : 'N/A';
+        maxTokens: 2500,
+        systemMessage: 'Search kenpom.com for SOS data. Report only the numbers requested — no commentary.'
       };
-      
+
+      const [homeResponse, awayResponse] = await Promise.all([
+        geminiGroundingSearch(buildSOSQuery(homeTeamName), groundingOpts),
+        geminiGroundingSearch(buildSOSQuery(awayTeamName), groundingOpts)
+      ]);
+
+      const extractSOS = (response) => {
+        const content = (response?.content || response?.choices?.[0]?.message?.content || '').toLowerCase();
+        const sosMatch = content.match(/(?:sos|strength)[^\d]*#?\s*(\d{1,3})/i) || content.match(/rank[^\d]*#?\s*(\d{1,3})/i);
+        const ncSosMatch = content.match(/non.?conf[^\d]*#?\s*(\d{1,3})/i);
+        return {
+          sos_rank: sosMatch ? sosMatch[1] : 'N/A',
+          nc_sos_rank: ncSosMatch ? ncSosMatch[1] : 'N/A'
+        };
+      };
+
       return {
         category: 'Strength of Schedule',
-        source: 'Multiple sources via Gemini Grounding',
+        source: 'kenpom.com via Gemini Grounding',
         home: {
           team: homeTeamName,
-          sos_rank: extractSOS(content, homeTeamName)
+          ...extractSOS(homeResponse)
         },
         away: {
           team: awayTeamName,
-          sos_rank: extractSOS(content, awayTeamName)
+          ...extractSOS(awayResponse)
         },
-        raw_response: content.substring(0, 1200)
+        raw_response: `HOME: ${(homeResponse?.content || '')}\n---\nAWAY: ${(awayResponse?.content || '')}`
       };
     } catch (error) {
       console.warn('[Stat Router] SOS fetch failed:', error.message);
@@ -2194,7 +2275,7 @@ CRITICAL: Only report numbers from kenpom.com. Do NOT estimate or fabricate.`;
           team: awayTeamName,
           ...extractQuads(content, awayTeamName)
         },
-        raw_response: content.substring(0, 1200)
+        raw_response: content
       };
     } catch (error) {
       console.warn('[Stat Router] Quad Record fetch failed:', error.message);
@@ -2214,67 +2295,64 @@ CRITICAL: Only report numbers from kenpom.com. Do NOT estimate or fabricate.`;
       const homeTeamName = home.full_name || home.name;
       const awayTeamName = away.full_name || away.name;
 
-      console.log(`[Stat Router] Fetching Barttorvik T-Rank for ${awayTeamName} @ ${homeTeamName} via Gemini Grounding`);
+      console.log(`[Stat Router] Fetching Barttorvik T-Rank for ${awayTeamName} @ ${homeTeamName} via Gemini Grounding (split queries)`);
 
-      // Improved query with explicit format requirements for reliable parsing
-      const query = `Search barttorvik.com ONLY for the 2025-26 college basketball season T-Rank ratings.
+      const buildBartQuery = (teamName) => `Search barttorvik.com for the 2025-26 college basketball season.
 
-Find the Barttorvik stats for:
-1. ${homeTeamName}
-2. ${awayTeamName}
+Find the T-Rank ratings for ${teamName}.
 
-For EACH team provide:
-- T-Rank: [number 1-365]
-- AdjOE: [number like 112.5]
-- AdjDE: [number like 98.3]
-- EFG%: [percentage like 52.3]
+Respond with ONLY:
+T-Rank: [number]
+AdjOE: [number]
+AdjDE: [number]
+Barthag: [number]
+WAB: [number]
 
-CRITICAL: Only report numbers from barttorvik.com. Do NOT use data from other sites or guess.`;
+Only report numbers from barttorvik.com. If not found, write "not found".`;
 
-      const response = await geminiGroundingSearch(query, {
+      const groundingOpts = {
         temperature: 1.0,
-        maxTokens: 2000,
-        systemMessage: 'You are a college basketball analytics expert. You MUST search barttorvik.com and return the exact T-Rank statistics. Format each team separately with the exact stats requested. Do not make up numbers - only use real data from barttorvik.com.'
-      });
-      
-      const content = response?.content || response?.choices?.[0]?.message?.content || '';
-      
-      // Extract Barttorvik data
-      const extractBarttorvik = (text, teamName) => {
-        const rankMatch = text.match(new RegExp(`${teamName}[^\\d]*(\\d{1,3})(?:st|nd|rd|th)?`, 'i')) ||
-                         text.match(/t-rank[^\d]*(\d{1,3})/i) ||
-                         text.match(/rank[^\d]*(\d{1,3})/i);
-        const adjOeMatch = text.match(/adj(?:usted)?\.?\s*o(?:ffensive)?(?:\s*e(?:fficiency)?)?[^\d]*(\d+\.?\d*)/i);
-        const adjDeMatch = text.match(/adj(?:usted)?\.?\s*d(?:efensive)?(?:\s*e(?:fficiency)?)?[^\d]*(\d+\.?\d*)/i);
-        const barthagMatch = text.match(/barthag[^\d]*\.?(\d+\.?\d*)/i);
-        const tempoMatch = text.match(/tempo[^\d]*(\d+\.?\d*)/i);
-        const efgMatch = text.match(/efg[^\d]*(\d+\.?\d*)/i);
-        const wabMatch = text.match(/wab[^\d]*([+-]?\d+\.?\d*)/i);
-        
+        maxTokens: 2500,
+        systemMessage: 'Search barttorvik.com for T-Rank statistics. Report only the numbers requested — no commentary.'
+      };
+
+      const [homeResponse, awayResponse] = await Promise.all([
+        geminiGroundingSearch(buildBartQuery(homeTeamName), groundingOpts),
+        geminiGroundingSearch(buildBartQuery(awayTeamName), groundingOpts)
+      ]);
+
+      const extractBarttorvik = (response) => {
+        const content = (response?.content || response?.choices?.[0]?.message?.content || '').toLowerCase();
+        const rankMatch = content.match(/t-rank[:\s]*#?\s*(\d{1,3})/i) || content.match(/rank[:\s]*#?\s*(\d{1,3})/i);
+        const adjOeMatch = content.match(/adj(?:usted)?\.?\s*o(?:ffensive)?(?:\s*e(?:fficiency)?)?[:\s]*(\d+\.?\d*)/i) ||
+                          content.match(/adjoe[:\s]*(\d+\.?\d*)/i);
+        const adjDeMatch = content.match(/adj(?:usted)?\.?\s*d(?:efensive)?(?:\s*e(?:fficiency)?)?[:\s]*(\d+\.?\d*)/i) ||
+                          content.match(/adjde[:\s]*(\d+\.?\d*)/i);
+        const barthagMatch = content.match(/barthag[:\s]*\.?(\d+\.?\d*)/i);
+        const wabMatch = content.match(/wab[:\s]*([+-]?\d+\.?\d*)/i);
+
         return {
           t_rank: rankMatch ? rankMatch[1] : 'N/A',
           adj_oe: adjOeMatch ? adjOeMatch[1] : 'N/A',
           adj_de: adjDeMatch ? adjDeMatch[1] : 'N/A',
           barthag: barthagMatch ? barthagMatch[1] : 'N/A',
-          tempo: tempoMatch ? tempoMatch[1] : 'N/A',
-          efg_pct: efgMatch ? efgMatch[1] : 'N/A',
           wab: wabMatch ? wabMatch[1] : 'N/A'
         };
       };
-      
+
       return {
         category: 'Barttorvik T-Rank (2026 Season)',
         source: 'barttorvik.com via Gemini Grounding',
         season: '2026',
         home: {
           team: homeTeamName,
-          ...extractBarttorvik(content, homeTeamName)
+          ...extractBarttorvik(homeResponse)
         },
         away: {
           team: awayTeamName,
-          ...extractBarttorvik(content, awayTeamName)
+          ...extractBarttorvik(awayResponse)
         },
-        raw_response: content.substring(0, 1500)
+        raw_response: `HOME: ${(homeResponse?.content || '')}\n---\nAWAY: ${(awayResponse?.content || '')}`
       };
     } catch (error) {
       console.warn('[Stat Router] Barttorvik fetch failed:', error.message);
@@ -2368,7 +2446,7 @@ IMPORTANT: Use ONLY data from the 2025-26 college basketball season. Do not gues
           ...extractHomeAwaySplits(awaySection, awayTeamName)
         },
         context: 'Investigate home court advantage for this matchup. Compare home_record vs away_record for each team.',
-        raw_response: content.substring(0, 1000)
+        raw_response: content
       };
     } catch (error) {
       console.warn('[Stat Router] NCAAB Home/Away Splits failed:', error.message);
@@ -2504,7 +2582,7 @@ IMPORTANT: Use ONLY data from kenpom.com for the current 2025-26 season.`;
         source: 'kenpom.com via Gemini Grounding',
         home_team: homeTeamName,
         away_team: awayTeamName,
-        raw_response: content.substring(0, 1500),
+        raw_response: content,
         context: 'Conference average AdjEM provides context for interpreting team stats. A team ranked 40th in a strong conference faces tougher nightly competition than one ranked 40th in a weak conference.'
       };
     } catch (error) {
@@ -2555,7 +2633,7 @@ CRITICAL: Only report data from barttorvik.com. Do NOT fabricate game results or
         source: 'kenpom.com / barttorvik.com via Gemini Grounding',
         home_team: homeTeamName,
         away_team: awayTeamName,
-        raw_response: content.substring(0, 2000),
+        raw_response: content,
         context: 'Recent opponent quality determines if L5/L10 stats are battle-tested or inflated by weak schedule. A team going 8-2 in L10 against KenPom 150+ opponents is very different from 5-5 against Top-50 teams.'
       };
     } catch (error) {
@@ -2575,42 +2653,83 @@ CRITICAL: Only report data from barttorvik.com. Do NOT fabricate game results or
     try {
       const homeTeamName = home.full_name || home.name;
       const awayTeamName = away.full_name || away.name;
-      const homeSlug = homeTeamName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-      const awaySlug = awayTeamName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 
-      console.log(`[Stat Router] Fetching NCAAB Home Court Advantage for ${awayTeamName} @ ${homeTeamName} via Gemini Grounding`);
+      console.log(`[Stat Router] Fetching NCAAB Home Court Advantage for ${awayTeamName} @ ${homeTeamName} via BDL games`);
 
-      const query = `Search teamrankings.com ONLY for the 2025-26 college basketball season.
+      // BDL-based: Calculate actual home/away scoring differentials from completed games
+      const [homeGames, awayGames] = await Promise.all([
+        ballDontLieService.getGames(bdlSport, { team_ids: [home.id], seasons: [season], per_page: 100 }),
+        ballDontLieService.getGames(bdlSport, { team_ids: [away.id], seasons: [season], per_page: 100 })
+      ]);
 
-Go to these EXACT URLs:
-- https://www.teamrankings.com/ncaa-basketball/team/${homeSlug}/stats
-- https://www.teamrankings.com/ncaa-basketball/team/${awaySlug}/stats
+      const calcHomeSplits = (games, teamId, teamName) => {
+        let homeWins = 0, homeLosses = 0, homePtsFor = 0, homePtsAgainst = 0, homeGamesCount = 0;
+        let awayWins = 0, awayLosses = 0, awayPtsFor = 0, awayPtsAgainst = 0, awayGamesCount = 0;
 
-For ${homeTeamName}, find:
-- Opp Effective FG %: [percentage and rank]
-- Opp Points/Game: [number and rank]
+        for (const game of games) {
+          const isCompleted = game.status === 'Final' || game.status === 'post' || game.status === 'final' ||
+            ((game.home_team_score ?? game.home_score ?? 0) > 0);
+          if (!isCompleted) continue;
 
-For ${awayTeamName}, find:
-- Opp Effective FG %: [percentage and rank]
-- Opp Points/Game: [number and rank]
+          const isHome = (game.home_team?.id || game.home_team_id) === teamId;
+          const teamScore = isHome
+            ? (game.home_team_score ?? game.home_score ?? 0)
+            : (game.visitor_team_score ?? game.away_score ?? 0);
+          const oppScore = isHome
+            ? (game.visitor_team_score ?? game.away_score ?? 0)
+            : (game.home_team_score ?? game.home_score ?? 0);
 
-CRITICAL: Only report numbers you find on the teamrankings.com pages above. These stats are in the "Defense" column of the team stats page. Do NOT estimate, fabricate, or use numbers from other sites.`;
+          if (teamScore === 0 && oppScore === 0) continue;
 
-      const response = await geminiGroundingSearch(query, {
-        temperature: 1.0,
-        maxTokens: 2000,
-        systemMessage: 'You are a college basketball analytics expert. Search ONLY teamrankings.com for the exact stats requested. Only report numbers from teamrankings.com — never fabricate or use other sites.'
-      });
+          if (isHome) {
+            homeGamesCount++;
+            homePtsFor += teamScore;
+            homePtsAgainst += oppScore;
+            if (teamScore > oppScore) homeWins++; else homeLosses++;
+          } else {
+            awayGamesCount++;
+            awayPtsFor += teamScore;
+            awayPtsAgainst += oppScore;
+            if (teamScore > oppScore) awayWins++; else awayLosses++;
+          }
+        }
 
-      const content = response?.content || response?.choices?.[0]?.message?.content || '';
+        const homePPG = homeGamesCount > 0 ? (homePtsFor / homeGamesCount).toFixed(1) : 'N/A';
+        const homeOppPPG = homeGamesCount > 0 ? (homePtsAgainst / homeGamesCount).toFixed(1) : 'N/A';
+        const awayPPG = awayGamesCount > 0 ? (awayPtsFor / awayGamesCount).toFixed(1) : 'N/A';
+        const awayOppPPG = awayGamesCount > 0 ? (awayPtsAgainst / awayGamesCount).toFixed(1) : 'N/A';
+        const homeMargin = homeGamesCount > 0 ? ((homePtsFor - homePtsAgainst) / homeGamesCount).toFixed(1) : 'N/A';
+        const awayMargin = awayGamesCount > 0 ? ((awayPtsFor - awayPtsAgainst) / awayGamesCount).toFixed(1) : 'N/A';
+
+        return {
+          home_record: `${homeWins}-${homeLosses}`,
+          away_record: `${awayWins}-${awayLosses}`,
+          home_ppg: homePPG,
+          home_opp_ppg: homeOppPPG,
+          home_margin: homeMargin,
+          away_ppg: awayPPG,
+          away_opp_ppg: awayOppPPG,
+          away_margin: awayMargin,
+          home_court_edge: (homeGamesCount > 0 && awayGamesCount > 0)
+            ? ((homePtsFor - homePtsAgainst) / homeGamesCount - (awayPtsFor - awayPtsAgainst) / awayGamesCount).toFixed(1)
+            : 'N/A'
+        };
+      };
+
+      const homeSplits = calcHomeSplits(homeGames, home.id, homeTeamName);
+      const awaySplits = calcHomeSplits(awayGames, away.id, awayTeamName);
 
       return {
         category: 'Home Court Advantage (NCAAB)',
-        source: 'teamrankings.com / kenpom.com / barttorvik.com via Gemini Grounding',
-        home_team: homeTeamName,
-        away_team: awayTeamName,
-        raw_response: content.substring(0, 2000),
-        context: 'Home court advantage in college basketball is significantly larger than pro sports. Investigate whether the line has accurately sized the home court factor for this specific matchup.'
+        source: 'BDL game results (calculated)',
+        home: {
+          team: homeTeamName,
+          ...homeSplits
+        },
+        away: {
+          team: awayTeamName,
+          ...awaySplits
+        }
       };
     } catch (error) {
       console.warn('[Stat Router] NCAAB Home Court Advantage fetch failed:', error.message);
@@ -2917,7 +3036,7 @@ CRITICAL: Only report numbers you find on the teamrankings.com pages above. Thes
           team: awayTeamName,
           ...extractSOS(content, awayTeamName)
         },
-        raw_response: content.substring(0, 1200)
+        raw_response: content
       };
     } catch (error) {
       console.warn('[Stat Router] NCAAF SOS fetch failed:', error.message);
@@ -2988,7 +3107,7 @@ CRITICAL: Only report numbers you find on the teamrankings.com pages above. Thes
           team: awayTeamName,
           ...extractRatings(content, awayTeamName)
         },
-        raw_response: content.substring(0, 1200)
+        raw_response: content
       };
     } catch (error) {
       console.warn('[Stat Router] Opponent-Adjusted Ratings fetch failed:', error.message);
@@ -3056,7 +3175,7 @@ CRITICAL: Only report numbers you find on the teamrankings.com pages above. Thes
           team: awayTeamName,
           ...extractConfData(content, awayTeamName)
         },
-        raw_response: content.substring(0, 1200)
+        raw_response: content
       };
     } catch (error) {
       console.warn('[Stat Router] Conference Strength fetch failed:', error.message);
@@ -3125,7 +3244,7 @@ CRITICAL: Only report numbers you find on the teamrankings.com pages above. Thes
           team: awayTeamName,
           ...extractP4Data(content, awayTeamName)
         },
-        raw_response: content.substring(0, 1200)
+        raw_response: content
       };
     } catch (error) {
       console.warn('[Stat Router] vs Power Opponents fetch failed:', error.message);
@@ -3177,7 +3296,7 @@ CRITICAL: Only report numbers you find on the teamrankings.com pages above. Thes
         distance_miles: distanceMatch ? distanceMatch[1].replace(',', '') : 'N/A',
         time_zones_crossed: timeZonesMatch ? timeZonesMatch[1] : 'N/A',
         away_road_record: roadRecordMatch ? roadRecordMatch[1] : 'N/A',
-        raw_response: content.substring(0, 1200)
+        raw_response: content
       };
     } catch (error) {
       console.warn('[Stat Router] Travel Fatigue fetch failed:', error.message);
@@ -3244,7 +3363,7 @@ CRITICAL: Only report numbers you find on the teamrankings.com pages above. Thes
           team: awayTeamName,
           ...extractSPPlus(content, awayTeamName)
         },
-        raw_response: content.substring(0, 1200)
+        raw_response: content
       };
     } catch (error) {
       console.warn('[Stat Router] SP+ fetch failed:', error.message);
@@ -3310,7 +3429,7 @@ CRITICAL: Only report numbers you find on the teamrankings.com pages above. Thes
           team: awayTeamName,
           ...extractFPI(content, awayTeamName)
         },
-        raw_response: content.substring(0, 1200)
+        raw_response: content
       };
     } catch (error) {
       console.warn('[Stat Router] FPI fetch failed:', error.message);
@@ -3376,7 +3495,7 @@ CRITICAL: Only report numbers you find on the teamrankings.com pages above. Thes
           team: awayTeamName,
           ...extractEPA(content, awayTeamName)
         },
-        raw_response: content.substring(0, 1200)
+        raw_response: content
       };
     } catch (error) {
       console.warn('[Stat Router] EPA fetch failed:', error.message);
@@ -3445,7 +3564,7 @@ CRITICAL: Only report numbers you find on the teamrankings.com pages above. Thes
           team: awayTeamName,
           ...extractHavoc(content, awayTeamName)
         },
-        raw_response: content.substring(0, 1200)
+        raw_response: content
       };
     } catch (error) {
       console.warn('[Stat Router] Havoc Rate fetch failed:', error.message);
@@ -3510,7 +3629,7 @@ CRITICAL: Only report numbers you find on the teamrankings.com pages above. Thes
           team: awayTeamName,
           ...extractExplosive(content, awayTeamName)
         },
-        raw_response: content.substring(0, 1200)
+        raw_response: content
       };
     } catch (error) {
       console.warn('[Stat Router] Explosiveness fetch failed:', error.message);
@@ -3576,7 +3695,7 @@ CRITICAL: Only report numbers you find on the teamrankings.com pages above. Thes
           team: awayTeamName,
           ...extractRush(content, awayTeamName)
         },
-        raw_response: content.substring(0, 1200)
+        raw_response: content
       };
     } catch (error) {
       console.warn('[Stat Router] Rushing Efficiency fetch failed:', error.message);
@@ -3643,7 +3762,7 @@ CRITICAL: Only report numbers you find on the teamrankings.com pages above. Thes
           team: awayTeamName,
           ...extractPass(content, awayTeamName)
         },
-        raw_response: content.substring(0, 1200)
+        raw_response: content
       };
     } catch (error) {
       console.warn('[Stat Router] Passing Efficiency fetch failed:', error.message);
@@ -3706,7 +3825,7 @@ CRITICAL: Only report numbers you find on the teamrankings.com pages above. Thes
           team: awayTeamName,
           ...extractRedZone(content, awayTeamName)
         },
-        raw_response: content.substring(0, 1200)
+        raw_response: content
       };
     } catch (error) {
       console.warn('[Stat Router] Red Zone fetch failed:', error.message);
@@ -4397,17 +4516,17 @@ CRITICAL: Only report numbers you find on the teamrankings.com pages above. Thes
       // Calculate pace proxy from total points scored (higher scoring = faster pace)
       const calcRecentPace = (games, teamId) => {
         const completed = (games || [])
-          .filter(g => (g.home_team_score || 0) > 0)
+          .filter(g => ((g.home_team_score ?? g.home_score ?? 0) > 0))
           .sort((a, b) => new Date(b.date) - new Date(a.date))
           .slice(0, 10);
-        
+
         if (completed.length < 5) return null;
-        
+
         let totalPts = 0, totalOppPts = 0;
         for (const g of completed) {
           const isHome = g.home_team?.id === teamId;
-          totalPts += isHome ? g.home_team_score : g.visitor_team_score;
-          totalOppPts += isHome ? g.visitor_team_score : g.home_team_score;
+          totalPts += isHome ? (g.home_team_score ?? g.home_score ?? 0) : (g.visitor_team_score ?? g.away_score ?? 0);
+          totalOppPts += isHome ? (g.visitor_team_score ?? g.away_score ?? 0) : (g.home_team_score ?? g.home_score ?? 0);
         }
         
         const avgTotal = (totalPts + totalOppPts) / completed.length;
@@ -4481,7 +4600,7 @@ CRITICAL: Only report numbers you find on the teamrankings.com pages above. Thes
       
       // Calculate pace splits (home vs road)
       const calcPaceSplits = (games, teamId) => {
-        const completed = (games || []).filter(g => (g.home_team_score || 0) > 0);
+        const completed = (games || []).filter(g => ((g.home_team_score ?? g.home_score ?? 0) > 0));
         
         const homeGamesOnly = completed.filter(g => g.home_team?.id === teamId);
         const roadGamesOnly = completed.filter(g => g.visitor_team?.id === teamId);
@@ -4490,7 +4609,7 @@ CRITICAL: Only report numbers you find on the teamrankings.com pages above. Thes
           if (gList.length === 0) return null;
           let total = 0;
           for (const g of gList) {
-            total += (g.home_team_score || 0) + (g.visitor_team_score || 0);
+            total += (g.home_team_score ?? g.home_score ?? 0) + (g.visitor_team_score ?? g.away_score ?? 0);
           }
           return (total / gList.length).toFixed(1);
         };
@@ -4864,14 +4983,14 @@ CRITICAL: Only report numbers you find on the teamrankings.com pages above. Thes
         
         for (const g of completed) {
           const isHome = g.home_team?.id === teamId;
-          const teamScore = isHome ? g.home_team_score : g.visitor_team_score;
-          const oppScore = isHome ? g.visitor_team_score : g.home_team_score;
+          const teamScore = isHome ? (g.home_team_score ?? g.home_score ?? 0) : (g.visitor_team_score ?? g.away_score ?? 0);
+          const oppScore = isHome ? (g.visitor_team_score ?? g.away_score ?? 0) : (g.home_team_score ?? g.home_score ?? 0);
           const margin = teamScore - oppScore;
           const absMargin = Math.abs(margin);
-          
+
           margins.push(margin);
           totalMargin += margin;
-          
+
           if (margin > 0) {
             // Win
             if (absMargin >= 15) blowoutWins++;
@@ -5173,8 +5292,8 @@ CRITICAL: Only report numbers you find on the teamrankings.com pages above. Thes
           const oppQ1 = isHome ? game.visitor_team_q1 : game.home_team_q1;
           const oppQ2 = isHome ? game.visitor_team_q2 : game.home_team_q2;
           
-          const teamFinal = isHome ? game.home_team_score : game.visitor_team_score;
-          const oppFinal = isHome ? game.visitor_team_score : game.home_team_score;
+          const teamFinal = isHome ? (game.home_team_score ?? game.home_score ?? 0) : (game.visitor_team_score ?? game.away_score ?? 0);
+          const oppFinal = isHome ? (game.visitor_team_score ?? game.away_score ?? 0) : (game.home_team_score ?? game.home_score ?? 0);
           
           if (teamQ1 !== null && teamQ2 !== null && oppQ1 !== null && oppQ2 !== null) {
             const team1H = (teamQ1 || 0) + (teamQ2 || 0);
@@ -5538,12 +5657,70 @@ CRITICAL: Only report numbers you find on the teamrankings.com pages above. Thes
         currentSeason = month <= 7 ? year - 1 : year;
       }
       
+      // ===== NCAAB: Try Highlightly API first (better team name matching, verified scores) =====
+      if (bdlSport === 'basketball_ncaab') {
+        try {
+          const h2hData = await getNcaabH2H(homeName, awayName);
+          if (h2hData?.games?.length > 0) {
+            const games = h2hData.games.slice(0, 5); // Last 5
+            let homeWinsHL = 0;
+            let awayWinsHL = 0;
+            const h2hResults = games.map(g => {
+              // Highlightly uses state.score.homeTeam/awayTeam as arrays of half scores
+              const gameHomeArr = g.state?.score?.homeTeam || [];
+              const gameAwayArr = g.state?.score?.awayTeam || [];
+              const gameHomeTotal = gameHomeArr.reduce((s, v) => s + (v || 0), 0);
+              const gameAwayTotal = gameAwayArr.reduce((s, v) => s + (v || 0), 0);
+              const gameHomeId = g.homeTeam?.id || g.homeTeamId;
+              const isOurHomeTeamHome = gameHomeId === h2hData.homeTeamId;
+              const ourHomeScore = isOurHomeTeamHome ? gameHomeTotal : gameAwayTotal;
+              const ourAwayScore = isOurHomeTeamHome ? gameAwayTotal : gameHomeTotal;
+              if (ourHomeScore > ourAwayScore) homeWinsHL++;
+              else if (ourAwayScore > ourHomeScore) awayWinsHL++;
+              const winner = (ourHomeScore > ourAwayScore) ? homeName : awayName;
+              const margin = Math.abs(ourHomeScore - ourAwayScore);
+              const date = g.date
+                ? new Date(g.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                : 'Unknown date';
+              const homeH1 = isOurHomeTeamHome ? (gameHomeArr[0] ?? '') : (gameAwayArr[0] ?? '');
+              const awayH1 = isOurHomeTeamHome ? (gameAwayArr[0] ?? '') : (gameHomeArr[0] ?? '');
+              const halfInfo = homeH1 !== '' && awayH1 !== '' ? ` (1H: ${homeH1}-${awayH1})` : '';
+              return {
+                date,
+                result: `${winner} won by ${margin}`,
+                score: `${homeName} ${ourHomeScore} - ${ourAwayScore} ${awayName}${halfInfo}`,
+                margin,
+                home_won: ourHomeScore > ourAwayScore
+              };
+            });
+
+            const revengeGame = h2hResults[0] && !h2hResults[0].home_won;
+            console.log(`[Stat Router] H2H_HISTORY (Highlightly): ${games.length} game(s) for ${awayName} @ ${homeName}`);
+            return {
+              category: `Head-to-Head History (${currentSeason} Season ONLY)`,
+              source: 'Highlightly',
+              games_found: games.length,
+              h2h_available: true,
+              this_season_record: `${homeName} ${homeWinsHL}-${awayWinsHL} ${awayName}`,
+              meetings_this_season: h2hResults,
+              revenge_game: revengeGame,
+              revenge_note: revengeGame ? `${awayName} lost the last meeting - potential revenge spot` : null,
+              sweep_context: null,
+              ANTI_HALLUCINATION: `🚫 DATA BOUNDARY: You have ONLY ${games.length} verified H2H game(s) from the ${currentSeason} season. You may cite these specific games. DO NOT claim historical streaks, prior season records, or "all-time" H2H records that are not shown here.`
+            };
+          }
+          console.log(`[Stat Router] Highlightly H2H returned no games for ${awayName} @ ${homeName}, falling back to BDL`);
+        } catch (hlErr) {
+          console.log(`[Stat Router] Highlightly H2H failed for NCAAB (${hlErr.message}), falling back to BDL`);
+        }
+      }
+
       const homeGames = await ballDontLieService.getGames(bdlSport, {
         team_ids: [home.id],
         seasons: [currentSeason],
         per_page: 50
       });
-      
+
       // Filter to only COMPLETED games against the away team
       const h2hGames = (homeGames || []).filter(game => {
         const gameHomeId = game.home_team?.id || game.home_team_id;
@@ -5554,7 +5731,7 @@ CRITICAL: Only report numbers you find on the teamrankings.com pages above. Thes
         // NFL: status='Final'
         // NCAAB: status='Final' or 'post'
         // NHL: status='Final' or game_state='OFF'
-        const hasScores = (game.home_team_score > 0 || game.visitor_team_score > 0);
+        const hasScores = ((game.home_team_score ?? game.home_score ?? 0) > 0) || ((game.visitor_team_score ?? game.away_score ?? 0) > 0);
         const statusFinal = game.status === 'Final' || game.status === 'post' || game.status === 'final';
         const isCompleted = hasScores || statusFinal;
         // Also ensure game date is in the past
@@ -5609,8 +5786,8 @@ CRITICAL: Only report numbers you find on the teamrankings.com pages above. Thes
       // Format H2H results with full date including year AND personnel notes
       const h2hResults = h2hGames.slice(0, 5).map(game => {
         const isHomeTeamHome = (game.home_team?.id || game.home_team_id) === home.id;
-        const homeScore = isHomeTeamHome ? game.home_team_score : game.visitor_team_score;
-        const awayScore = isHomeTeamHome ? game.visitor_team_score : game.home_team_score;
+        const homeScore = isHomeTeamHome ? (game.home_team_score ?? game.home_score ?? 0) : (game.visitor_team_score ?? game.away_score ?? 0);
+        const awayScore = isHomeTeamHome ? (game.visitor_team_score ?? game.away_score ?? 0) : (game.home_team_score ?? game.home_score ?? 0);
         const winner = homeScore > awayScore ? homeName : awayName;
         const margin = Math.abs(homeScore - awayScore);
         const gameDate = new Date(game.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -5954,119 +6131,51 @@ CRITICAL: Only report numbers you find on the teamrankings.com pages above. Thes
 
   // ===== CLUTCH STATS (Close Game Record) =====
   CLUTCH_STATS: async (bdlSport, home, away, season) => {
-    console.log(`[Stat Router] Fetching CLUTCH_STATS (close game record) for ${away.name} @ ${home.name}`);
-    
+    console.log(`[Stat Router] Fetching CLUTCH_STATS for ${away.name} @ ${home.name}`);
+
     try {
-      // NFL API does NOT support start_date/end_date - use seasons[] instead
-      // Other sports (NBA, etc.) can use date range filtering
-      const isNFL = bdlSport === 'americanfootball_nfl';
-      const isNCAA = bdlSport === 'americanfootball_ncaaf' || bdlSport === 'basketball_ncaab';
-      
-      let params;
-      if (isNFL || isNCAA) {
-        // NFL/NCAAF: Use seasons[] parameter (per BDL API docs)
-        // Calculate dynamic season if not provided
-        let effectiveSeason = season;
-        if (!effectiveSeason) {
-          const month = new Date().getMonth() + 1;
-          const year = new Date().getFullYear();
-          effectiveSeason = month <= 7 ? year - 1 : year;
-        }
-        params = {
-          seasons: [effectiveSeason],
-          per_page: 50
-        };
-      } else {
-        // NBA/NHL/etc: Use date range filtering
-        const today = new Date();
-        const ninetyDaysAgo = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000);
-        params = {
-          start_date: ninetyDaysAgo.toISOString().split('T')[0],
-          end_date: today.toISOString().split('T')[0],
-          per_page: 50
+      // NBA: Use real BDL team_season_averages/clutch endpoint (Tier 1 predictive data)
+      if (bdlSport === 'basketball_nba') {
+        const API_KEY = process.env.BALLDONTLIE_API_KEY;
+        const baseUrl = 'https://api.balldontlie.io/nba/v1/team_season_averages/clutch';
+
+        const [homeAdv, awayAdv, homeBase, awayBase] = await Promise.all([
+          axios.get(`${baseUrl}?season=${season}&season_type=regular&type=advanced&team_ids[]=${home.id}`, { headers: { Authorization: API_KEY } }),
+          axios.get(`${baseUrl}?season=${season}&season_type=regular&type=advanced&team_ids[]=${away.id}`, { headers: { Authorization: API_KEY } }),
+          axios.get(`${baseUrl}?season=${season}&season_type=regular&type=base&team_ids[]=${home.id}`, { headers: { Authorization: API_KEY } }),
+          axios.get(`${baseUrl}?season=${season}&season_type=regular&type=base&team_ids[]=${away.id}`, { headers: { Authorization: API_KEY } })
+        ]);
+
+        const hAdv = homeAdv.data?.data?.[0]?.stats || {};
+        const aAdv = awayAdv.data?.data?.[0]?.stats || {};
+        const hBase = homeBase.data?.data?.[0]?.stats || {};
+        const aBase = awayBase.data?.data?.[0]?.stats || {};
+
+        const formatClutch = (adv, base, teamName) => ({
+          team: teamName,
+          clutch_record: `${adv.w || 0}-${adv.l || 0}`,
+          clutch_win_pct: adv.w_pct ? `${(adv.w_pct * 100).toFixed(1)}%` : 'N/A',
+          clutch_games: adv.gp || 0,
+          clutch_net_rating: adv.net_rating ?? 'N/A',
+          clutch_net_rank: adv.net_rating_rank ?? 'N/A',
+          clutch_off_rating: adv.off_rating ?? 'N/A',
+          clutch_def_rating: adv.def_rating ?? 'N/A',
+          clutch_efg_pct: adv.efg_pct ? `${(adv.efg_pct * 100).toFixed(1)}%` : 'N/A',
+          clutch_ts_pct: adv.ts_pct ? `${(adv.ts_pct * 100).toFixed(1)}%` : 'N/A',
+          clutch_tov_pct: adv.tm_tov_pct ? `${(adv.tm_tov_pct * 100).toFixed(1)}%` : 'N/A',
+          clutch_ppg: base.pts ?? 'N/A',
+          clutch_plus_minus: base.plus_minus ?? 'N/A'
+        });
+
+        return {
+          category: 'Clutch Performance (BDL Team Clutch Averages)',
+          home: formatClutch(hAdv, hBase, home.full_name || home.name),
+          away: formatClutch(aAdv, aBase, away.full_name || away.name)
         };
       }
-      
-      const [homeGames, awayGames] = await Promise.all([
-        ballDontLieService.getGames(bdlSport, { team_ids: [home.id], ...params }),
-        ballDontLieService.getGames(bdlSport, { team_ids: [away.id], ...params })
-      ]);
-      
-      // Calculate close game record (games decided by 5 points or less) WITH TREND
-      const calcClutchRecord = (games, teamName, teamId) => {
-        const closeGameMargin = 5;
-        const closeGames = [];
-        
-        // Sort games by date (most recent first)
-        const sortedGames = [...(games || [])].sort((a, b) => new Date(b.date) - new Date(a.date));
-        
-        for (const game of sortedGames) {
-          const homeScore = game.home_team_score || game.home_score || 0;
-          const awayScore = game.visitor_team_score || game.away_score || game.away_team_score || 0;
-          const margin = Math.abs(homeScore - awayScore);
-          
-          // Skip unplayed games
-          if (homeScore === 0 && awayScore === 0) continue;
-          
-          if (margin <= closeGameMargin) {
-            const isHomeTeam = game.home_team?.id === teamId || 
-                               game.home_team?.name?.includes(teamName.split(' ').pop()) || 
-                               game.home_team?.full_name?.includes(teamName);
-            const won = isHomeTeam ? homeScore > awayScore : awayScore > homeScore;
-            closeGames.push({
-              date: game.date,
-              result: won ? 'W' : 'L',
-              margin: margin
-            });
-          }
-        }
-        
-        const total = closeGames.length;
-        const closeWins = closeGames.filter(g => g.result === 'W').length;
-        const closeLosses = total - closeWins;
-        const pct = total > 0 ? ((closeWins / total) * 100).toFixed(0) : 'N/A';
-        
-        // Calculate recent trend (last 3 close games vs overall)
-        const last3Close = closeGames.slice(0, 3);
-        const last3Wins = last3Close.filter(g => g.result === 'W').length;
-        const last3Losses = last3Close.length - last3Wins;
-        const last3Record = last3Close.length > 0 ? `${last3Wins}-${last3Losses}` : 'N/A';
-        const last3Streak = last3Close.map(g => g.result).join('');
-        
-        // Determine trend
-        let clutchTrend = 'STABLE';
-        if (last3Close.length >= 2) {
-          if (last3Wins >= 2) clutchTrend = 'CLUTCH UP 🔥';
-          else if (last3Losses >= 2) clutchTrend = 'CLUTCH DOWN ❄️';
-        }
-        
-        return {
-          close_record: `${closeWins}-${closeLosses}`,
-          close_win_pct: total > 0 ? `${pct}%` : 'N/A',
-          close_games: total,
-          last_3_close: last3Record,
-          last_3_close_streak: last3Streak,
-          clutch_trend: clutchTrend
-        };
-      };
-      
-      const homeClutch = calcClutchRecord(homeGames, home.name, home.id);
-      const awayClutch = calcClutchRecord(awayGames, away.name, away.id);
-      
-      return {
-        category: 'Clutch Stats (Games Decided by ≤5 Points)',
-        home: {
-          team: home.full_name || home.name,
-          ...homeClutch
-        },
-        away: {
-          team: away.full_name || away.name,
-          ...awayClutch
-        },
-        interpretation: `Close game records indicate which team performs better in tight situations`,
-        TREND_CONTEXT: `🔄 Check last_3_close and clutch_trend - a team that's 3-7 overall but won their last 2 close games is IMPROVING in clutch situations.`,
-        INVESTIGATE: `🔍 Don't just see "3-7 in close games" - ask: Are they getting BETTER or WORSE at closing? The trend matters more than the total.`
-      };
+
+      // Non-NBA: Sport not supported for clutch stats
+      return { category: 'Clutch Stats', note: 'Only available for NBA', error: 'Sport not supported' };
     } catch (error) {
       console.error(`[Stat Router] Error fetching clutch stats:`, error.message);
       return {
@@ -6105,14 +6214,14 @@ CRITICAL: Only report numbers you find on the teamrankings.com pages above. Thes
       
       // Calculate PPG from recent games
       const calcPpg = (games, teamId) => {
-        const completedGames = (games || []).filter(g => g.home_team_score > 0 || g.visitor_team_score > 0);
+        const completedGames = (games || []).filter(g => (g.home_team_score ?? g.home_score ?? 0) > 0 || (g.visitor_team_score ?? g.away_score ?? 0) > 0);
         if (completedGames.length === 0) return { ppg: 0, oppPpg: 0 };
-        
+
         let totalPf = 0, totalPa = 0;
         for (const g of completedGames) {
           const isHome = g.home_team?.id === teamId;
-          totalPf += isHome ? (g.home_team_score || 0) : (g.visitor_team_score || 0);
-          totalPa += isHome ? (g.visitor_team_score || 0) : (g.home_team_score || 0);
+          totalPf += isHome ? (g.home_team_score ?? g.home_score ?? 0) : (g.visitor_team_score ?? g.away_score ?? 0);
+          totalPa += isHome ? (g.visitor_team_score ?? g.away_score ?? 0) : (g.home_team_score ?? g.home_score ?? 0);
         }
         return { ppg: totalPf / completedGames.length, oppPpg: totalPa / completedGames.length };
       };
@@ -6512,11 +6621,71 @@ CRITICAL: Only report numbers you find on the teamrankings.com pages above. Thes
 
   // ===== BENCH DEPTH (NBA - Critical for Large Spreads) =====
   BENCH_DEPTH: async (bdlSport, home, away, season) => {
-    // Only for NBA
-    if (bdlSport !== 'basketball_nba') {
-      return { category: 'Bench Depth', note: 'Only available for NBA', error: 'Sport not supported' };
+    // NCAAB: Use player season stats to compute depth (starters vs bench contribution)
+    if (bdlSport === 'basketball_ncaab') {
+      console.log(`[Stat Router] Fetching NCAAB BENCH_DEPTH for ${away.name} @ ${home.name}`);
+      try {
+        const [homeStats, awayStats] = await Promise.all([
+          ballDontLieService.getNcaabPlayerSeasonStats({ teamId: home.id, season }),
+          ballDontLieService.getNcaabPlayerSeasonStats({ teamId: away.id, season })
+        ]);
+
+        const calcNcaabDepth = (playerStats, teamName) => {
+          if (!playerStats || playerStats.length === 0) return { error: 'No player stats' };
+          // Calculate per-game averages, sort by PPG
+          const players = playerStats
+            .filter(s => (s.games_played || 0) > 0)
+            .map(s => {
+              const gp = s.games_played || 1;
+              return {
+                name: `${s.player?.first_name || ''} ${s.player?.last_name || ''}`.trim(),
+                ppg: (s.pts || 0) / gp,
+                rpg: (s.reb || 0) / gp,
+                apg: (s.ast || 0) / gp,
+                gp
+              };
+            })
+            .sort((a, b) => b.ppg - a.ppg);
+
+          const starters = players.slice(0, 5);
+          const bench = players.slice(5);
+          const starterPPG = starters.reduce((sum, p) => sum + p.ppg, 0);
+          const benchPPG = bench.reduce((sum, p) => sum + p.ppg, 0);
+          const benchContributors = bench.filter(p => p.ppg >= 3).length;
+
+          return {
+            starter_ppg: starterPPG.toFixed(1),
+            bench_ppg: benchPPG.toFixed(1),
+            bench_pct: starterPPG > 0 ? `${((benchPPG / (starterPPG + benchPPG)) * 100).toFixed(0)}%` : 'N/A',
+            rotation_size: players.filter(p => p.ppg >= 3).length,
+            bench_contributors: benchContributors,
+            top_bench: bench.slice(0, 3).map(p => `${p.name} ${p.ppg.toFixed(1)}ppg`).join(', ') || 'None'
+          };
+        };
+
+        const homeDepth = calcNcaabDepth(homeStats, home.name);
+        const awayDepth = calcNcaabDepth(awayStats, away.name);
+        const homeBench = parseFloat(homeDepth.bench_ppg) || 0;
+        const awayBench = parseFloat(awayDepth.bench_ppg) || 0;
+        const depthEdge = homeBench > awayBench + 3 ? 'HOME' : awayBench > homeBench + 3 ? 'AWAY' : 'EVEN';
+
+        return {
+          category: 'NCAAB Bench Depth (Season Stats)',
+          home: { team: home.full_name || home.name, ...homeDepth },
+          away: { team: away.full_name || away.name, ...awayDepth },
+          depth_edge: depthEdge
+        };
+      } catch (error) {
+        console.warn('[Stat Router] NCAAB BENCH_DEPTH error:', error.message);
+        return { category: 'Bench Depth', error: 'Data unavailable for NCAAB' };
+      }
     }
-    
+
+    // Non-NBA/NCAAB: not supported
+    if (bdlSport !== 'basketball_nba') {
+      return { category: 'Bench Depth', note: 'Only available for NBA/NCAAB', error: 'Sport not supported' };
+    }
+
     console.log(`[Stat Router] Fetching BENCH_DEPTH for ${away.name} @ ${home.name}`);
     
     try {

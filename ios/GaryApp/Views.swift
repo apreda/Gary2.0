@@ -655,6 +655,9 @@ struct HomeView: View {
     @State private var freePick: GaryPick?
     @State private var loading = true
     @State private var animateIn = false
+    @State private var activeWin = 0
+    @State private var winTimer: Timer?
+    @State private var recentWins: [(String, String, String)] = [] // (label, league, date)
     @State private var yesterdayRecord: (wins: Int, losses: Int, pushes: Int) = (0, 0, 0)
     @State private var sportBreakdown: [SupabaseAPI.SportRecord] = []
     @State private var performanceLoaded = false  // Track if performance data has been fetched
@@ -694,20 +697,114 @@ struct HomeView: View {
             
             // Content - respects safe area
             ScrollView(showsIndicators: false) {
-                VStack(spacing: 20) {
-                    // Header - Brand
-                    VStack(spacing: 4) {
-                        Text("GARY A.I.")
-                            .font(.system(size: 30, weight: .heavy))
-                            .tracking(1)
-                            .foregroundStyle(GaryColors.goldGradient)
-                            .shadow(color: GaryColors.gold.opacity(0.2), radius: 12)
+                VStack(spacing: 14) {
+                    // ── Hero Section ──
+                    VStack(spacing: 14) {
+                        // Brand lockup — BET WITH GARY
+                        ZStack {
+                            // Subtle ambient glow behind lockup
+                            Ellipse()
+                                .fill(
+                                    RadialGradient(
+                                        colors: [GaryColors.gold.opacity(0.06), .clear],
+                                        center: .center,
+                                        startRadius: 10,
+                                        endRadius: 120
+                                    )
+                                )
+                                .frame(width: 280, height: 60)
+                                .blur(radius: 20)
 
-                        Text("Sharp Sports Analysis")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(Color.white.opacity(0.4))
+                            VStack(spacing: 3) {
+                                Text("BET WITH")
+                                    .font(.system(size: 14, weight: .heavy))
+                                    .tracking(10)
+                                    .foregroundStyle(Color.white.opacity(0.55))
+
+                                // GARY — sharp border stroke + fill
+                                ZStack {
+                                    // Stroke layer — dark outline behind
+                                    Text("GARY")
+                                        .font(.system(size: 42, weight: .black))
+                                        .tracking(6)
+                                        .foregroundStyle(Color(hex: "#8B6914"))
+                                        .shadow(color: Color.black, radius: 0, x: 1.5, y: 0)
+                                        .shadow(color: Color.black, radius: 0, x: -1.5, y: 0)
+                                        .shadow(color: Color.black, radius: 0, x: 0, y: 1.5)
+                                        .shadow(color: Color.black, radius: 0, x: 0, y: -1.5)
+
+                                    // Fill layer — matte gold on top
+                                    Text("GARY")
+                                        .font(.system(size: 42, weight: .black))
+                                        .tracking(6)
+                                        .foregroundStyle(Color(hex: "#C9A227"))
+                                }
+                                .shadow(color: Color.black.opacity(0.5), radius: 0, x: 1, y: 1)
+                                .shadow(color: Color.black.opacity(0.2), radius: 3, x: 1, y: 2)
+                            }
+                        }
+                        .opacity(animateIn ? 1 : 0)
+                        .offset(y: animateIn ? 0 : 10)
+                        .animation(.easeOut(duration: 0.6), value: animateIn)
+
+                        // Cycling recent wins
+                        if !recentWins.isEmpty {
+                            ZStack {
+                                ForEach(Array(recentWins.enumerated()), id: \.offset) { index, win in
+                                    HStack(spacing: 10) {
+                                        // Green checkmark
+                                        ZStack {
+                                            Circle()
+                                                .fill(Color.green.opacity(0.15))
+                                                .frame(width: 28, height: 28)
+                                            Image(systemName: "checkmark")
+                                                .font(.system(size: 12, weight: .bold))
+                                                .foregroundStyle(.green)
+                                        }
+
+                                        // Pick text
+                                        Text(win.0)
+                                            .font(.system(size: 13, weight: .semibold))
+                                            .foregroundStyle(Color.white.opacity(0.9))
+                                            .lineLimit(1)
+
+                                        // League badge
+                                        Text(win.1)
+                                            .font(.system(size: 10, weight: .heavy))
+                                            .tracking(0.5)
+                                            .foregroundStyle(GaryColors.gold)
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 2)
+                                            .background(
+                                                Capsule()
+                                                    .fill(GaryColors.gold.opacity(0.12))
+                                            )
+                                    }
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 7)
+                                    .background(
+                                        Capsule()
+                                            .fill(Color.white.opacity(0.04))
+                                            .overlay(
+                                                Capsule()
+                                                    .stroke(Color.green.opacity(0.15), lineWidth: 0.5)
+                                            )
+                                    )
+                                    .opacity(activeWin == index ? 1 : 0)
+                                    .scaleEffect(activeWin == index ? 1 : 0.9)
+                                    .animation(.spring(response: 0.5, dampingFraction: 0.7), value: activeWin)
+                                }
+                            }
+                            .frame(height: 42)
+                            .opacity(animateIn ? 1 : 0)
+                            .animation(.easeOut(duration: 0.6).delay(0.2), value: animateIn)
+                        }
                     }
                     .padding(.top, 2)
+                    .onDisappear {
+                        winTimer?.invalidate()
+                        winTimer = nil
+                    }
                     
                     // Hero Image - Dynamic based on Gary's most recent performance
                     // Only show once performance data is loaded to prevent flash
@@ -715,15 +812,15 @@ struct HomeView: View {
                         Image(heroImage)
                             .resizable()
                             .scaledToFit()
-                            .frame(width: 262, height: 262)
-                            .shadow(color: heroImageGlow.opacity(0.5), radius: 30)
+                            .frame(width: 242, height: 242)
+                            .shadow(color: heroImageGlow.opacity(0.5), radius: 26)
                             .opacity(animateIn ? 1 : 0)
-                            .offset(y: animateIn ? 0 : 20)
+                            .offset(y: animateIn ? 0 : 16)
                             .transition(.opacity.combined(with: .scale(scale: 0.95)))
                     } else {
                         // Placeholder while loading - maintains layout
                         Color.clear
-                            .frame(width: 262, height: 262)
+                            .frame(width: 242, height: 242)
                     }
                     
                     // Yesterday's Performance Banner (Game Picks only)
@@ -845,6 +942,8 @@ struct HomeView: View {
             async let recordFetch = SupabaseAPI.fetchYesterdayGameRecord()
             async let breakdownFetch = SupabaseAPI.fetchYesterdayBySport()
             async let picksFetch = SupabaseAPI.fetchAllPicks(date: date)
+            async let gameResultsFetch = SupabaseAPI.fetchAllGameResults(since: nil)
+            async let propResultsFetch = SupabaseAPI.fetchPropResults(since: nil)
             
             // Wait for performance record first (needed for hero image)
             if let record = try? await recordFetch {
@@ -864,6 +963,50 @@ struct HomeView: View {
             // Get the other results (already fetched in parallel, just awaiting)
             if let breakdown = try? await breakdownFetch {
                 sportBreakdown = breakdown
+            }
+
+            // Build recent wins ticker from game + prop results
+            let shortDate: (String?) -> String = { dateStr in
+                guard let dateStr = dateStr else { return "" }
+                // Parse "YYYY-MM-DD" and format as "Feb 3"
+                let months = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                              "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+                let parts = dateStr.split(separator: "-")
+                if parts.count == 3,
+                   let m = Int(parts[1]), m >= 1, m <= 12,
+                   let d = Int(parts[2]) {
+                    return "\(months[m]) \(d)"
+                }
+                return ""
+            }
+            var wins: [(String, String, String)] = []
+            if let gameResults = try? await gameResultsFetch {
+                let gameWins = gameResults.filter { $0.result == "won" }.prefix(10)
+                for w in gameWins {
+                    let label = w.pick_text ?? w.matchup ?? "Win"
+                    let league = w.effectiveLeague ?? "PICK"
+                    let date = shortDate(w.game_date)
+                    wins.append((label, league, date))
+                }
+            }
+            if let propResults = try? await propResultsFetch {
+                let propWins = propResults.filter { $0.result == "won" }.prefix(10)
+                for w in propWins {
+                    let label = Formatters.propResultTitle(w)
+                    let league = w.effectiveLeague ?? "PROP"
+                    let date = shortDate(w.game_date)
+                    wins.append((label, league, date))
+                }
+            }
+            // Shuffle to mix game and prop wins, take up to 12
+            recentWins = Array(wins.shuffled().prefix(12))
+            // Start timer now that we have data
+            if !recentWins.isEmpty {
+                winTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { _ in
+                    withAnimation {
+                        activeWin = (activeWin + 1) % recentWins.count
+                    }
+                }
             }
             
             // Get picks data (already fetched in parallel)

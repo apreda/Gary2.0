@@ -750,8 +750,25 @@ async function main() {
           console.log(`[${config.name}] 🔍 DEBUG: UCLA game position: #${idx + 1} of ${games.length}`);
         }
 
-        // NOTE: Extreme spread filter REMOVED per user request
-        // All Top 7 conference games are now processed regardless of spread size
+        // SPREAD SIZE FILTER: Remove blowout games (spread >= 15 either direction)
+        // These games have low betting value — Gary shouldn't waste time on them
+        const beforeSpreadFilter = games.length;
+        const skippedSpreads = [];
+        games = games.filter(game => {
+          // Try spread_home first (BDL odds format), then spread (generic)
+          const spreadVal = parseFloat(game.spread_home ?? game.spread_away ?? game.spread);
+          if (isNaN(spreadVal)) return true; // keep games with no spread data
+          if (Math.abs(spreadVal) >= 15) {
+            skippedSpreads.push(`${game.away_team} @ ${game.home_team} (spread: ${spreadVal > 0 ? '+' : ''}${spreadVal})`);
+            return false;
+          }
+          return true;
+        });
+        if (skippedSpreads.length > 0) {
+          console.log(`[${config.name}] 🚫 Filtered ${skippedSpreads.length} blowout games (spread >= 15):`);
+          skippedSpreads.forEach(s => console.log(`   - ${s}`));
+        }
+        console.log(`[${config.name}] Spread filter: ${beforeSpreadFilter} → ${games.length} games`);
       }
 
       // Apply --matchup filter to run a single specific game
@@ -997,8 +1014,19 @@ async function main() {
               !t.match(/^(NBA|NFL|NHL|NCAAB|NCAAF)_PLAYER_STATS/)
             ).length;
             
-            // Check key investigation areas
-            const investigatedAreas = {
+            // Check key investigation areas (sport-aware)
+            const isNCAABSport = config.key === 'basketball_ncaab';
+            const investigatedAreas = isNCAABSport ? {
+              // NCAAB: No clutch stats; bench depth from player season stats or scout report
+              homeAwaySplits: tokens.some(t => t && (t.includes('HOME_AWAY') || t.includes('SPLITS') || t.includes('HOME_COURT'))),
+              recentForm: tokens.some(t => t && (t.includes('RECENT_FORM') || t.includes('LAST_'))),
+              h2hHistory: tokens.some(t => t && t.includes('H2H')),
+              tempo: tokens.some(t => t && (t.includes('PACE') || t.includes('TEMPO'))),
+              efficiency: tokens.some(t => t && (t.includes('KENPOM') || t.includes('BARTTORVIK') || t.includes('RATING') || t.includes('EFG'))),
+              advancedMetrics: tokens.some(t => t && (t.includes('NET_RANKING') || t.includes('QUAD') || t.includes('OPPONENT_QUALITY'))),
+              benchDepth: tokens.some(t => t && t.includes('BENCH')),
+              playerLogs: playerStatsCount > 0
+            } : {
               homeAwaySplits: tokens.some(t => t && (t.includes('HOME_AWAY') || t.includes('SPLITS'))),
               recentForm: tokens.some(t => t && (t.includes('RECENT_FORM') || t.includes('LAST_'))),
               h2hHistory: tokens.some(t => t && t.includes('H2H')),

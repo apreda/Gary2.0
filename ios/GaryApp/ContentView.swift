@@ -9,42 +9,38 @@ struct ContentView: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             // Content Views - Use conditional animation for older iOS
-            Group {
-                switch selectedTab {
-                case 0:
-                    HomeView()
-                case 1:
-                    GaryPicksView()
-                case 2:
-                    GaryPropsView()
-                case 3:
-                    BillfoldView()
-                case 4:
-                    GaryFantasyView()
-                default:
-                    HomeView()
+            ZStack(alignment: .topTrailing) {
+                Group {
+                    switch selectedTab {
+                    case 0:
+                        HomeView()
+                    case 1:
+                        GaryPicksView()
+                    case 2:
+                        GaryPropsView()
+                    case 3:
+                        BillfoldView()
+                    case 4:
+                        GaryFantasyView()
+                    default:
+                        HomeView()
+                    }
                 }
-            }
-            .transaction { transaction in
-                // Disable animations on older iOS for smoother tab switching
-                if !PerformanceMode.current.useExpensiveEffects {
-                    transaction.animation = nil
+                .transaction { transaction in
+                    // Disable animations on older iOS for smoother tab switching
+                    if !PerformanceMode.current.useExpensiveEffects {
+                        transaction.animation = nil
+                    }
                 }
+
+                // Settings button — floating top right on every page
+                SettingsMenuButton(showingSettings: $showingSettings)
+                    .padding(.top, 12)
+                    .padding(.trailing, 16)
             }
-            
+
             // Compact Floating Tab Bar
             CompactTabBar(selectedTab: $selectedTab)
-            
-            // Three-dot Settings Menu (top-right)
-            VStack {
-                HStack {
-                    Spacer()
-                    SettingsMenuButton(showingSettings: $showingSettings)
-                        .padding(.top, 8)
-                        .padding(.trailing, 16)
-                }
-                Spacer()
-            }
         }
         .sheet(isPresented: $showingSettings) {
             SettingsSheetView()
@@ -106,7 +102,7 @@ struct SettingsSheetView: View {
 
 struct CompactTabBar: View {
     @Binding var selectedTab: Int
-    
+
     private let tabs: [(icon: String, label: String)] = [
         ("house.fill", "Home"),
         ("list.bullet.rectangle.fill", "Picks"),
@@ -114,12 +110,11 @@ struct CompactTabBar: View {
         ("wallet.pass.fill", "Billfold"),
         ("trophy.fill", "Fantasy")
     ]
-    
+
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 2) {
             ForEach(tabs.indices, id: \.self) { index in
                 Button {
-                    // Use simpler animation on older iOS
                     if PerformanceMode.current.useExpensiveEffects {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                             selectedTab = index

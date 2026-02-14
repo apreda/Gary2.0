@@ -40,5 +40,18 @@
 	</array>
 	<key>FirebaseAppDelegateProxyEnabled</key>
 	<false/>
+	<key>UIAppFonts</key>
+	<array>
+		<string>Fonts/BebasNeue-Regular.ttf</string>
+		<string>Fonts/Anton-Regular.ttf</string>
+		<string>Fonts/Oswald-Bold.ttf</string>
+		<string>Fonts/Teko-Bold.ttf</string>
+		<string>Fonts/SairaCondensed-Bold.ttf</string>
+		<string>Fonts/ChakraPetch-Bold.ttf</string>
+		<string>Fonts/RussoOne-Regular.ttf</string>
+		<string>Fonts/BarlowCondensed-Bold.ttf</string>
+		<string>Fonts/Rajdhani-Bold.ttf</string>
+		<string>Fonts/RacingSansOne.ttf</string>
+	</array>
 </dict>
 </plist>

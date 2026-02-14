@@ -1548,7 +1548,16 @@ const ballDontLieService = {
           .slice(0, 9);
         
         console.log(`🏀 [Ball Don't Lie] NCAAB roster depth ready: ${homeTeam.full_name || homeTeam.name} (${homeRoster.length} players), ${awayTeam.full_name || awayTeam.name} (${awayRoster.length} players)`);
-        
+
+        // Build GP map for ALL players (not just top 9) — used by narrative scrubber
+        // to distinguish "never played this season" (gp=0) from "played but now injured"
+        const gpMap = {};
+        for (const player of allPlayers) {
+          const name = `${player.first_name} ${player.last_name}`.trim();
+          const stats = statsMap[player.id] || {};
+          gpMap[name] = stats.games_played || 0;
+        }
+
         return {
           home: homeRoster,
           away: awayRoster,
@@ -1557,7 +1566,8 @@ const ballDontLieService = {
           homeTeamId: homeTeam.id,
           awayTeamId: awayTeam.id,
           homeConferenceId: homeTeam.conference_id,
-          awayConferenceId: awayTeam.conference_id
+          awayConferenceId: awayTeam.conference_id,
+          gpMap
         };
       }, ttlMinutes);
     } catch (e) {
@@ -2831,10 +2841,11 @@ const ballDontLieService = {
 
   /**
    * NCAAB player game logs - returns season stats for a player
-   * Note: BDL NCAAB API doesn't have game-by-game stats endpoint like NBA
-   * So we use player_season_stats and return averages instead
+   * Note: BDL NCAAB API DOES have /ncaab/v1/player_stats with game_ids[] filtering
+   * for per-game box scores, but this function currently uses season averages.
+   * TODO: Refactor to use player_stats endpoint for actual game-by-game logs
    * @param {number} playerId - BDL player ID
-   * @param {number} numGames - Ignored for NCAAB (API limitation)
+   * @param {number} numGames - Number of recent games to fetch
    * @returns {Promise<Object|null>} - Player season averages (not individual games)
    */
   async getNcaabPlayerGameLogs(playerId, numGames = 10) {
