@@ -2576,7 +2576,7 @@ COMPREHENSIVE GAME CONTEXT (CRITICAL - READ ALL SECTIONS BEFORE ANALYSIS)
 
 This context was fetched UPFRONT so you know ALL relevant factors BEFORE choosing which stats to investigate.
 
-${narrativeContext.substring(0, 12000)}
+${narrativeContext}
 
 BETTING SIGNALS NOTE: If you see any line movement or public % data above, treat it as a MINOR observation only - it should NEVER be the primary reason for any pick.
 </narrative_context>
@@ -2594,7 +2594,7 @@ BETTING SIGNALS NOTE: If you see any line movement or public % data above, treat
     tipoff: gameSummary.tipoff,
     odds: gameSummary.odds,
     propCandidates: enhancedCandidates,
-    playerStatsPreview: playerStats.substring(0, 10000), // Generous limit to ensure all player data is included
+    playerStatsPreview: playerStats, // Full player stats — no truncation
     injuryReport: injurySection,
     // CRITICAL: Full narrative context so Gary knows all factors UPFRONT
     comprehensiveContext: narrativeSection || null
@@ -3174,7 +3174,7 @@ Your rationale MUST include these 5 elements in 5-7 sentences:
 - Check \`trumpCards\` array - if one exists, make it central to your thesis
 - Use \`fetch_player_vs_opponent\` for revenge game validation
 
-${narrativeContext ? `\n## LIVE CONTEXT (from Gemini Search)\n${narrativeContext.substring(0, 8000)}` : ''}
+${narrativeContext ? `\n## LIVE CONTEXT (from Gemini Search)\n${narrativeContext}` : ''}
 
 ---
 

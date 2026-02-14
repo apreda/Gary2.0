@@ -543,7 +543,7 @@ function extractInjuriesFromGrounding(groundedContext, homeTeam, awayTeam) {
           team: currentTeam || 'Unknown',
           position: position.toUpperCase(),
           status: status.includes('INJURED RESERVE') ? 'IR' : status,
-          description: description.trim().substring(0, 100),
+          description: description.trim(),
           gamesMissed: gamesMissed
         });
         break;
@@ -1791,7 +1791,7 @@ function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnap
   
   return {
     player_stats: {
-      summary: playerStats.substring(0, 6000), // Increased for comprehensive context
+      summary: playerStats, // Full player stats — no truncation
       playerCount: (playerStats.match(/\*\*/g) || []).length / 2
     },
     prop_lines: {

@@ -1117,7 +1117,7 @@ function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnap
   
   return {
     player_stats: {
-      summary: playerStats.substring(0, 8000), // Increased to prevent truncation for later players
+      summary: playerStats, // Full player stats — no truncation
       playerCount: (playerStats.match(/\*\*/g) || []).length / 2
     },
     prop_lines: {

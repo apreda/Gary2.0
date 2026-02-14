@@ -945,7 +945,7 @@ Focus on the ${seasonString} season only - do NOT use stats from previous years.
         
         return {
           red_zone_td_pct: tdPct,
-          context: responseText.substring(0, 300)
+          context: responseText
         };
       };
       
@@ -967,7 +967,7 @@ Focus on the ${seasonString} season only - do NOT use stats from previous years.
           red_zone_td_pct: awayStats.red_zone_td_pct,
           note: 'From live search - verify in Scout Report context'
         },
-        raw_context: responseText.substring(0, 500),
+        raw_context: responseText,
         note: 'NCAAF red zone stats via Gemini Grounding (BDL does not provide this data)'
       };
     }
