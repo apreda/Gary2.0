@@ -17,7 +17,7 @@ struct AccessView: View {
                 
                 // Logo - no glow, matches home page
                 VStack(spacing: 0) {
-                    Image("GaryCoin") // Transparent glass bear image, no added background
+                    Image("GaryCigar") // Standard Gary image (no seasonal hat)
                         .resizable()
                         .scaledToFit()
                         .frame(width: 260, height: 260)
@@ -69,12 +69,12 @@ struct AccessView: View {
                         ],
                         spacing: 10
                     ) {
-                        TechChip(icon: "brain.head.profile", text: "Gemini 3")
+                        TechChip(icon: "brain.head.profile", text: "Gemini Pro")
                         TechChip(icon: "arrow.triangle.2.circlepath", text: "Agentic AI")
-                        TechChip(icon: "chart.line.uptrend.xyaxis", text: "Odds API")
-                        TechChip(icon: "magnifyingglass", text: "Perplexity")
+                        TechChip(icon: "chart.line.uptrend.xyaxis", text: "Multi-Book Odds")
+                        TechChip(icon: "globe", text: "Live Search")
                         TechChip(icon: "doc.text.magnifyingglass", text: "Scout Reports")
-                        TechChip(icon: "chart.bar.xaxis", text: "Stat APIs")
+                        TechChip(icon: "chart.bar.xaxis", text: "Live Stats")
                     }
                     .padding(.horizontal, 24)
                 }
