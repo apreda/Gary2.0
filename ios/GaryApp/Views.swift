@@ -2824,6 +2824,8 @@ struct PickCardMobile: View {
         let league = pick.league?.uppercased() ?? ""
 
         // SPREAD SIGN FIX: Correct missing or wrong spread sign using sportsbook odds
+        // NOTE: sportsbook_odds.spread is stored from the PICKED team's perspective
+        // (backend formatOddsForStorage selects spread_home or spread_away based on pick)
         if let type = pick.type, type == "spread",
            let books = pick.sportsbook_odds, let firstSpread = books.compactMap({ $0.spread }).first {
             var pickText = parts.0
@@ -2836,12 +2838,8 @@ struct PickCardMobile: View {
                 let sign = String(pickText[signRange])
                 let numStr = String(pickText[numRange])
                 if let num = Double(numStr), num > 0, num < 50 {
-                    // Determine correct sign: sportsbook spread is from home team perspective
-                    let pickedTeamIsHome: Bool = {
-                        guard let home = pick.homeTeam else { return false }
-                        return pickText.lowercased().contains(home.split(separator: " ").last?.lowercased() ?? "???")
-                    }()
-                    let correctSpread = pickedTeamIsHome ? firstSpread : -firstSpread
+                    // firstSpread is already from picked team's perspective — use directly
+                    let correctSpread = firstSpread
                     let correctSign = correctSpread >= 0 ? "+" : "-"
                     // Fix if sign is missing or wrong
                     if sign.isEmpty || sign != correctSign {
@@ -2880,22 +2878,43 @@ struct PickCardMobile: View {
             return (expandedPick, parts.1)
         }
         
-        // For NCAAF/NCAAB, use shortened school name (without mascot) if pick is too long
+        // For NCAAF/NCAAB, show FULL team name (auto-scaling font handles length)
+        // splitPickAndOdds may have stripped city names or truncated — rebuild from original
         if league == "NCAAF" || league == "NCAAB" {
-            var shortenedPick = parts.0
-            
-            // Replace full team name with just the school name for college sports
-            // e.g., "Jacksonville State Gamecocks ML" -> "Jacksonville State ML"
-            if let homeTeam = pick.homeTeam, shortenedPick.contains(homeTeam) {
-                let schoolName = Formatters.shortTeamName(homeTeam, league: pick.league)
-                shortenedPick = shortenedPick.replacingOccurrences(of: homeTeam, with: schoolName)
+            let raw = pick.pick ?? ""
+            // Extract American odds (3+ digits) from end of raw pick text
+            let oddsPattern = #"^(.+?)\s+([-+]\d{3,}\.?\d*)$"#
+            var fullPick = raw
+            var odds = parts.1 // keep odds from splitPickAndOdds as fallback
+            if let regex = try? NSRegularExpression(pattern: oddsPattern),
+               let match = regex.firstMatch(in: raw, range: NSRange(raw.startIndex..., in: raw)),
+               let pickRange = Range(match.range(at: 1), in: raw),
+               let oddsRange = Range(match.range(at: 2), in: raw) {
+                fullPick = String(raw[pickRange]).trimmingCharacters(in: .whitespaces)
+                odds = String(raw[oddsRange])
             }
-            if let awayTeam = pick.awayTeam, shortenedPick.contains(awayTeam) {
-                let schoolName = Formatters.shortTeamName(awayTeam, league: pick.league)
-                shortenedPick = shortenedPick.replacingOccurrences(of: awayTeam, with: schoolName)
+
+            // Apply spread sign fix from sportsbook odds (picked team perspective)
+            if let type = pick.type, type == "spread",
+               let books = pick.sportsbook_odds, let firstSpread = books.compactMap({ $0.spread }).first {
+                let spreadPattern2 = #"([+-]?)(\d{1,2}\.?\d*)\s*$"#
+                if let regex = try? NSRegularExpression(pattern: spreadPattern2),
+                   let match = regex.firstMatch(in: fullPick, range: NSRange(fullPick.startIndex..., in: fullPick)),
+                   let signRange = Range(match.range(at: 1), in: fullPick) {
+                    let sign = String(fullPick[signRange])
+                    let correctSign = firstSpread >= 0 ? "+" : "-"
+                    if sign.isEmpty || sign != correctSign {
+                        let correctNum = abs(firstSpread)
+                        let replacement = "\(correctSign)\(correctNum.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(correctNum)) : String(correctNum))"
+                        let fullRange = match.range(at: 0)
+                        if let swiftRange = Range(fullRange, in: fullPick) {
+                            fullPick = fullPick.replacingCharacters(in: swiftRange, with: replacement)
+                        }
+                    }
+                }
             }
-            
-            return (shortenedPick, parts.1)
+
+            return (fullPick, odds)
         }
         
         return parts
