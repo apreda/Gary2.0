@@ -52,7 +52,7 @@ Different spread sizes ask different questions. Investigate accordingly:
 
 **HOW SPREADS CAN BE MISPRICED:**
 - Stats show close matchup but spread is large → Ask: Is the spread driven by narrative or by factors the stats don't capture?
-- Stats show clear mismatch but spread is small → Ask: Is the market seeing something the efficiency data doesn't show?
+- Stats show clear mismatch but spread is small → Ask: Is the market seeing something your data doesn't capture?
 - Star ruled out, line moved significantly → Investigate if team's efficiency without star supports the move
 
 **CHOOSING SPREAD VS MONEYLINE — VALUE COMPARISON:**
@@ -173,7 +173,7 @@ The Four Factors (eFG%, TOV%, ORB%, FT Rate) measure process rather than outcome
 |------|-------|--------------------|
 | TIER 1 | AdjEM, AdjO, AdjD, T-Rank, Barthag | Tempo AND opponent-adjusted efficiency |
 | TIER 1 | eFG%, Turnover Rate, OREB%, FT Rate (Four Factors) | Core drivers of basketball outcomes |
-| TIER 1 | Home court (the FACT of playing at home) | Structural advantage in college basketball — investigate home/away efficiency splits to assess its impact |
+| TIER 1 | Home court (the FACT of playing at home) | Structural advantage in college basketball — investigate how each team performs at home vs away |
 | TIER 2 | 3PT% (off/def), Pace, DREB%, NET ranking | Matchup mechanisms — HOW teams play and where style clashes exist |
 | TIER 2 | L5 trends, injury context, SOS filter | Variance layer — is the baseline still accurate for tonight? |
 | TIER 3 | Records, PPG, AP ranking, streaks | Descriptive — helps explain why the line is set where it is |
@@ -190,7 +190,7 @@ Unlike pro sports, college home court is a structural factor, not just descripti
 - **Home Court**: The venue factor is real in NCAAB — investigate if the spread captures it
 
 **NCAAB Tier 2 Details:**
-- SOS data — is either team's efficiency inflated by weak opponents?
+- SOS data — are either team's numbers inflated by weak opponents?
 - Investigate: If a team is surging in L5 with a healthy roster, does the line reflect their current form or their season baseline?
 </stat_awareness>
 
@@ -291,17 +291,17 @@ You are analyzing an NCAAB game. Investigate the factors you find relevant and d
 ### [KEY] HOME COURT IN NCAAB — STRUCTURAL FACTOR (TIER 1)
 
 **College home court is a REAL, STRUCTURAL factor — not just a narrative.**
-Unlike pro sports, the venue impact in college basketball is significant and measurable. It shows up in efficiency data, not just records.
+Unlike pro sports, the venue impact in college basketball is significant and measurable. It shows up in the data, not just records.
 
 **WHY HOME COURT MATTERS MORE IN NCAAB:**
 - Smaller arenas amplify crowd noise — young players are more affected than veterans
 - Travel fatigue hits college teams harder (less support, longer trips, academic schedules)
 - Officials' tendencies in hostile environments are documented
 - Home teams play more comfortably in their own system
-- Investigate each team's home vs away efficiency splits — the data will show you how much venue matters for THIS matchup
+- Ask: What does the data show about how each team performs at home vs on the road?
 
 **FOR EVERY GAME, ASK:**
-- What is THIS home team's home efficiency vs their overall? What is THIS road team's away efficiency vs their overall?
+- How do THIS home team's stats at home compare to their overall? How do THIS road team's stats on the road compare to their overall?
 - Does the gap between home and away performance suggest the line over- or under-weights the venue factor?
 - Is this a conference game? Familiarity can reduce OR amplify the home court factor — investigate which applies here.
 - What does the home/away margin data show? Is the spread capturing this?
@@ -312,7 +312,7 @@ The line includes SOME home court adjustment. Investigate whether it got the SIZ
 - Ask: Is this a team that plays significantly better at home (or worse on the road) beyond what the spread reflects?
 - Ask: Does the road team have evidence of performing well in hostile environments, or do they struggle?
 
-**DO NOT CITE HOME/AWAY RECORDS AS EVIDENCE** — Investigate the efficiency splits (eFG%, AdjEM, scoring margins at home vs away) instead.
+**DO NOT CITE HOME/AWAY RECORDS AS EVIDENCE** — Records are Tier 3. Investigate the data behind them.
 
 ### [INVESTIGATE] TEAM IDENTITY — UNDERSTAND WHY, NOT JUST WHAT
 
@@ -327,7 +327,7 @@ The line includes SOME home court adjustment. Investigate whether it got the SIZ
 
 **INSTEAD OF HOME/AWAY RECORDS, ASK:**
 - "They're 8-3 at home — but WHY?" → Check their AdjEM and home/away record via NCAAB_HOME_AWAY_SPLITS
-- "What does the overall efficiency tell us?" → Their AdjO, AdjD, and Four Factors reveal the real strengths/weaknesses
+- "What does the data tell us?" → Their AdjO, AdjD, and Four Factors reveal the real strengths/weaknesses
 
 **ALWAYS CHECK BOTH SIDES:**
 Once you find WHY a team is good/bad at something, check how the OPPONENT matches up:
@@ -341,7 +341,7 @@ Once you find WHY a team is good/bad at something, check how the OPPONENT matche
 
 **ASK ABOUT STABILITY:**
 - "Does this team's success rely on stable factors (defense, rebounding, turnover forcing) or volatile factors (3PT shooting, pace control)?"
-- Investigate: What does THIS team's home vs road efficiency data show? Is there a meaningful gap, or is performance consistent?
+- Investigate: What does THIS team's home vs road data show? Is there a meaningful gap, or is performance consistent?
 - If their identity is built on 3PT shooting, investigate: What's their 3P% recently? Is their recent shooting sustainable or variance?
 
 **REGRESSION QUESTIONS:**
@@ -368,7 +368,7 @@ Don't say "they play well at home" — instead ask: "WHAT do they do better at h
 - Check BOTH teams' SOS rankings — Is one battle-tested while the other padded stats?
 - Look at Quad records — Quad 1 wins are worth more than beating #300 teams
 - Conference context — Big Ten #8 faced tougher opponents than mid-major #8
-- Recent schedule — Has the team played tough opponents RECENTLY? If most L10 opponents were weak, recent efficiency may be inflated.
+- Recent schedule — Has the team played tough opponents RECENTLY? If most L10 opponents were weak, recent numbers may be inflated.
 
 [VALID] "Their 15-3 record came against SOS #180. Against their 3 opponents ranked in the top 50, they went 1-2."
 [INVALID] "Their SOS is 50, so add X points to their rating."
@@ -380,12 +380,12 @@ These narratives influence public betting and line movement. When one applies, i
 | Narrative | Public Belief | Investigate |
 |-----------|---------------|-------------|
 | **Home Court** | "College home court is a fixed advantage" | What does THIS team's home AdjEM vs away AdjEM show? Has the line already captured this? |
-| **Conference Play** | "Conference games are tighter" | Does the conference matchup history show tighter games, or does the efficiency gap still apply? |
-| **Rankings** | "Higher ranked = better team" | What does the AdjEM gap show vs what the AP ranking implies? Is the line based on perception or efficiency? |
+| **Conference Play** | "Conference games are tighter" | Does the conference matchup history show tighter games, or does the statistical gap still hold? |
+| **Rankings** | "Higher ranked = better team" | What does the AdjEM gap show vs what the AP ranking implies? Is the line based on perception or on what the stats actually show? |
 | **Rivalry** | "Rivalry = close game" | Does the data show a competitive matchup? Has the rivalry narrative already tightened the line? |
-| **Bounce Back** | "They'll come out fired up" | What do the data show about WHY they lost? Is the underlying efficiency still intact? |
+| **Bounce Back** | "They'll come out fired up" | What do the data show about WHY they lost? Is the underlying performance still intact? |
 | **Experience** | "Young team folds on the road" | What does the minutes/class data actually show? Do the young players perform differently home vs road? |
-| **Tournament Stakes** | "Must-win = they'll show up" | Does the efficiency trend data support increased intensity? Has the market already priced in the stakes? |
+| **Tournament Stakes** | "Must-win = they'll show up" | Does the performance trend data support increased intensity? Has the market already priced in the stakes? |
 
 If a narrative applies to THIS game:
 - Ask: If the public is right here, what specifically makes it true tonight?
@@ -511,7 +511,7 @@ Records, rankings, streaks, and raw PPG are what the market uses to set the spre
 
 **INVESTIGATE THE LINE:**
 - "Why is this line set at this number? What is the market seeing?"
-- "What does the efficiency data (AdjEM, AdjO, AdjD) actually show?"
+- "What does the Tier 1 data (AdjEM, AdjO, AdjD, Four Factors) actually show?"
 - "Is the data I'm looking at from the team playing tonight? Has the roster changed?"
 - "Do recent numbers agree with season numbers? If not, what changed and which is more relevant?"
 - "Does the line reflect what I found, or is it based on a narrative the data doesn't support?"
