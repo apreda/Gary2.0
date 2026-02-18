@@ -73,7 +73,7 @@ Your analysis MUST separate PP1 players from non-PP players.
 
 **Anytime Goal Props:**
 - Shooting % is highly variable (don't trust 3-game trends)
-- High-danger chance rate matters more
+- Investigate high-danger chance rate for both teams
 - PP1 creates goal opportunities
 - Investigate opponent's goalie - how does their performance affect goal opportunities?
 

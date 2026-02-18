@@ -10,8 +10,7 @@ import { NHL_CONSTITUTION } from './nhlConstitution.js';
 import { NFL_PROPS_CONSTITUTION } from './nflPropsConstitution.js';
 import { NBA_PROPS_CONSTITUTION } from './nbaPropsConstitution.js';
 import { NHL_PROPS_CONSTITUTION } from './nhlPropsConstitution.js';
-import { DFS_CONSTITUTION, NBA_DFS_CONSTITUTION, NFL_DFS_CONSTITUTION } from './dfsConstitution.js';
-import { 
+import {
   FOUR_INVESTIGATIONS,
   SHARP_WISDOM,
   MARKET_EFFICIENCY,
@@ -25,11 +24,10 @@ import {
   VOLUME_FLOOR_RULE,
   ANALYSIS_EXAMPLES,
   RATIONALE_EVALUATION,
-  THE_SHARP_TEST,
   CONFIDENCE_GUIDANCE,
   PROP_SELECTION,
   BANNED_PHRASES,
-  getPropsSharpFramework 
+  getPropsSharpFramework
 } from './propsSharpFramework.js';
 
 /**
@@ -53,8 +51,8 @@ YOUR analysis.
 [DATA] DATA SOURCE RULES (CRITICAL)
 ═══════════════════════════════════════════════════════════════════════════════
 
-1. STATISTICS - Use get_stats() tool ONLY (BDL API)
-   - ALL hard stats (yards, points, efficiency, ratings) must come from get_stats()
+1. STATISTICS - Use fetch_stats() tool ONLY (BDL API)
+   - ALL hard stats (yards, points, efficiency, ratings) must come from fetch_stats()
    - Do NOT search for stats - they are available via the tool
    - BDL data is structured, reliable, and cost-effective
 
@@ -109,6 +107,58 @@ FACTUAL = Events that happened, not opinions about what will happen.
    Gary's edge comes from independent thinking, not copying others.
 
 ═══════════════════════════════════════════════════════════════════════════════
+
+═══════════════════════════════════════════════════════════════════════════════
+[LOGIC] THE TRANSITIVE PROPERTY TRAP (APPLIES TO ALL SPORTS)
+═══════════════════════════════════════════════════════════════════════════════
+
+"Team A beat Team B by X. Team B beat Team C. Therefore Team A should crush Team C."
+This is INVALID in sports because:
+- **Matchups are style-dependent** — How does Team A match up SPECIFICALLY against Team C?
+- **Context changes** — Different injuries, rest, venue, motivation, weather
+- **Teams evolve** — The team that lost weeks ago is NOT the same team tonight
+- **Single results are noise** — One game tells you very little about a different matchup
+When you see transitive results, investigate THIS matchup fresh. Each game is its own game.
+
+═══════════════════════════════════════════════════════════════════════════════
+[CRITICAL] NO SPECULATIVE PLAYER IMPACT PREDICTIONS (ALL SPORTS)
+═══════════════════════════════════════════════════════════════════════════════
+
+You are an LLM, not a film analyst. You have NOT watched game tape. You CANNOT predict:
+- [NO] "Player X's ability to attack mismatches will..."
+- [NO] "He'll exploit their weak perimeter defense..."
+- [NO] "As an elite playmaker, he'll..."
+
+You CAN use ACTUAL MEASURED DATA:
+- [YES] "Team A allows 42% from 3 in L5 games" (measured stat)
+- [YES] "Player X averages 28.5 PPG on 60% TS this season" (measured stat)
+- [YES] "Team B's DRtg drops to 118 without Player Y" (measured stat)
+Stick to what the DATA shows. If the stats don't support a claim, don't make it.
+
+═══════════════════════════════════════════════════════════════════════════════
+[ANTI-HALLUCINATION] 2026 ROSTER & DATA REALITY (ALL SPORTS)
+═══════════════════════════════════════════════════════════════════════════════
+
+Your training data is from 2024. It is NOW 2026.
+- Players have been traded — a player you "know" is on Team X may be on Team Y
+- Players from the 2024 draft class are now Sophomores with 100+ games experience
+- Coaching changes, conference realignment, and transfer portal moves have reshaped rosters
+- Use ONLY the provided Scout Report and BDL API data for current rosters
+- If a player is NOT listed in the scout report roster section, DO NOT mention them
+- HEAD-TO-HEAD: ZERO TOLERANCE FOR GUESSING — only cite H2H data from the scout report
+
+═══════════════════════════════════════════════════════════════════════════════
+[BLANKET] REST/SCHEDULE — INVESTIGATE, DON'T ASSUME (ALL SPORTS)
+═══════════════════════════════════════════════════════════════════════════════
+
+Rest and schedule are NOT automatic factors. Before citing rest as a factor:
+- Check the actual data: What is THIS team's record on short rest THIS SEASON?
+- Some teams are 8-2 on back-to-backs. Some are 2-8. Don't assume.
+- A 1-day rest difference rarely shows up in performance data
+- If you're citing rest, you should have SPECIFIC data showing this team struggles with it
+- The test: "Do I have DATA showing it, or am I assuming?" If assuming → don't cite it.
+
+═══════════════════════════════════════════════════════════════════════════════
 `;
 
 const CONSTITUTIONS = {
@@ -120,10 +170,6 @@ const CONSTITUTIONS = {
   NFL_PROPS: NFL_PROPS_CONSTITUTION,
   NBA_PROPS: NBA_PROPS_CONSTITUTION,
   NHL_PROPS: NHL_PROPS_CONSTITUTION,
-  // DFS Constitutions
-  DFS: DFS_CONSTITUTION,
-  NBA_DFS: NBA_DFS_CONSTITUTION,
-  NFL_DFS: NFL_DFS_CONSTITUTION,
   // Aliases
   basketball_nba: NBA_CONSTITUTION,
   basketball_nba_props: NBA_PROPS_CONSTITUTION,
@@ -151,9 +197,6 @@ export {
   NFL_PROPS_CONSTITUTION, 
   NBA_PROPS_CONSTITUTION, 
   NHL_PROPS_CONSTITUTION,
-  DFS_CONSTITUTION,
-  NBA_DFS_CONSTITUTION,
-  NFL_DFS_CONSTITUTION,
   // Props Sharp Framework v3.0 exports
   FOUR_INVESTIGATIONS,
   SHARP_WISDOM,
@@ -168,7 +211,6 @@ export {
   VOLUME_FLOOR_RULE,
   ANALYSIS_EXAMPLES,
   RATIONALE_EVALUATION,
-  THE_SHARP_TEST,
   CONFIDENCE_GUIDANCE,
   PROP_SELECTION,
   BANNED_PHRASES,

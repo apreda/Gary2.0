@@ -51,11 +51,11 @@ Don't apply yesterday's strategy to today's slate.
 - Different game environments create different stacks
 - Different ownership creates different leverage
 
-**CEILING OVER FLOOR**
-You're not playing to avoid losing. You're playing to WIN.
-- A safe lineup that scores 290 loses to 100,000 people
-- A ceiling lineup that scores 370 wins the tournament
-- Variance is your friend in GPPs
+**CEILING VS FLOOR INVESTIGATION**
+In a GPP, what matters more -- floor or ceiling? Investigate how lineup ceiling correlates with tournament placement.
+- Ask: Does a safe lineup that scores 290 have any path to winning against 100,000 entries?
+- Ask: What ceiling threshold is typically required to win a tournament of this size?
+- Investigate: How does variance affect GPP outcomes differently than cash games?
 
 **CORRELATION IS REAL**
 Players on the same team score together. Players in the same game score together.
@@ -337,8 +337,8 @@ If the team is STILL struggling, cite the evidence:
 - "Memphis has tried Aldama, Huff, and small-ball lineups but none have solved the rebounding issue - they're -6.2 in rebound margin over the last 10 games"
 - The injury context explains WHY, but the recent performance is the EVIDENCE
 
-**USE LAST_GAME_BOX_SCORE TOKEN:**
-Call \`fetch_stats(token: 'LAST_GAME_BOX_SCORE')\` to see who actually played in each team's last game, their minutes, and their performance. This gives you the NAMES and DATA to write about the current team, not just injury lists.
+**USE PLAYER_GAME_LOGS TOKEN:**
+Call \`fetch_stats(token: 'PLAYER_GAME_LOGS')\` to see who actually played in recent games, their minutes, and their performance. This gives you the NAMES and DATA to write about the current team, not just injury lists.
 
 ## [FINAL] ABSOLUTE FORBIDDEN RULES (NEGATIVE CONSTRAINT ANCHOR)
 
@@ -474,7 +474,7 @@ The question: Will this TEAM match up well? Players provide context, teams deter
 ### KEY FACTORS FOR NHL DFS
 
 **LINE COMBINATIONS**
-- PP1 exposure is crucial for ceiling
+- Investigate PP1 exposure — how does power play time affect this player's production?
 - Check line combos day-of (they change frequently)
 - Top-6 forwards with PP1 time = premium plays
 

@@ -281,9 +281,6 @@ async function storeDailyPicksInDatabase(picks) {
         conference: pick.conference || null,
         homeConference: pick.homeConference || null,
         awayConference: pick.awayConference || null,
-        // Thesis-based classification (new filtering system)
-        thesis_type: pick.thesis_type || null,
-        thesis_mechanism: pick.thesis_mechanism || null,
         supporting_factors: pick.supporting_factors || [],
         contradicting_factors: pick.contradicting_factors || null,
         // Multi-book sportsbook odds comparison (for iOS app display)
@@ -331,9 +328,6 @@ async function storeDailyPicksInDatabase(picks) {
       conference: pick.conference || null,
       homeConference: pick.homeConference || null,
       awayConference: pick.awayConference || null,
-      // Thesis-based classification (new filtering system)
-      thesis_type: pick.thesis_type || null,
-      thesis_mechanism: pick.thesis_mechanism || null,
       supporting_factors: pick.supporting_factors || [],
       contradicting_factors: pick.contradicting_factors || null,
       // Multi-book sportsbook odds comparison (for iOS app display)

@@ -2475,11 +2475,11 @@ Example uses of context:
 
 ## CRITICAL: INJURY IMPACT ON PROPS
 Before citing ANY injury as a factor, ask yourself:
-- "When was this player ruled out?" If more than 3 days ago, the prop lines ALREADY reflect it — this is NOT an edge.
+- "How long has this player been out?" Check the duration tag in the injury report.
 - "Do the recent game logs (games WITHOUT this player) show a measurable usage shift?" If not, don't assume one exists.
-- "Am I citing this injury because it's a real edge, or because it FEELS like it should matter?"
-- SEASON-LONG injuries are ALREADY BAKED INTO EVERY PROP LINE. Do NOT cite them. Ever.
-- FRESH OUT (0-3 days): Investigate game logs for actual usage shift data before citing.
+- "Am I citing this injury because the DATA shows an impact, or because it FEELS like it should matter?"
+- For long absences: The current prop lines reflect the current roster. Investigate the actual usage data.
+- For recent absences: Investigate game logs for actual usage shift data before citing.
 
 ## 🚨 CRITICAL: PLAYER NAME ACCURACY - NO CONFUSION
 **ALWAYS use FULL NAMES (first + last) when referencing players, especially for:**

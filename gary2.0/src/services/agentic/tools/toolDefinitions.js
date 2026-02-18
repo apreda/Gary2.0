@@ -100,35 +100,21 @@ const NFL_TOKENS = [
   'VARIANCE_CONSISTENCY'  // Point differential variance, QB consistency, upset potential
 ];
 
-// NCAAB Stat Tokens - unique fetchers with calculated values + Gemini Grounding advanced stats
+// NCAAB Stat Tokens - BDL-only (ZERO Gemini Grounding during Pass 1)
+// ALL advanced metrics (KenPom, Barttorvik, NET, SOS, Quad, etc.) are in the scout report
+// Pass 1 investigation uses only BDL-calculated stats to complement scout report data
 const NCAAB_TOKENS = [
-  // BDL Core Stats (unique calculations)
+  // BDL Core Stats (team-level, from /team_season_stats)
   'SCORING', 'FG_PCT', 'THREE_PT_SHOOTING',
   'TURNOVER_RATE', 'OREB_RATE', 'FT_RATE',
   'REBOUNDS', 'ASSISTS', 'STEALS', 'BLOCKS',
-  // NCAAB-Specific Calculated Stats (avoid aliases)
-  'NCAAB_EFG_PCT',           // Calculated eFG%
-  'NCAAB_TS_PCT',            // Calculated True Shooting % (FG + 3PT + FT efficiency)
-  'NCAAB_TEMPO',             // Calculated possessions per game
-  'NCAAB_OFFENSIVE_RATING',  // Calculated offensive efficiency
-  'NCAAB_DEFENSIVE_RATING',  // Calculated defensive efficiency (opp pts/100 poss)
-  // Rankings (BDL API)
-  'NCAAB_AP_RANKING',        // AP Poll rank
-  'NCAAB_COACHES_RANKING',   // Coaches Poll rank
-  'NCAAB_CONFERENCE_RECORD', // Conference record from standings
-  // Gemini Grounding Advanced Stats (KenPom, NET, etc.)
-  'NCAAB_KENPOM_RATINGS',    // KenPom AdjEM, AdjO, AdjD, Tempo
-  'NCAAB_NET_RANKING',       // NCAA NET ranking
-  'NCAAB_STRENGTH_OF_SCHEDULE', // SOS ranking
-  'NCAAB_QUAD_RECORD',       // Quad 1-4 records
-  'NCAAB_BARTTORVIK',        // BartTorvik T-Rank, Barthag, WAB
-  'NCAAB_CONFERENCE_STRENGTH', // Conference power rankings (KenPom avg AdjEM)
-  'NCAAB_OPPONENT_QUALITY',    // Last 10 opponents with KenPom rankings
-  'NCAAB_HOME_COURT_ADVANTAGE', // Venue-specific home/away performance
-  // Context (BDL)
-  'HOME_AWAY_SPLITS', 'RECENT_FORM', 'H2H_HISTORY',
-  // Players (BDL)
-  'TOP_PLAYERS', 'INJURIES'
+  // NCAAB-Specific Calculated Stats (from BDL raw box score data)
+  'NCAAB_EFG_PCT',           // (FGM + 0.5*FG3M) / FGA
+  'NCAAB_TS_PCT',            // PTS / (2*(FGA+0.44*FTA))
+  'NCAAB_TEMPO',             // (FGA+0.44*FTA-OREB+TOV) / GP
+  'NCAAB_OFFENSIVE_RATING',  // (PTS/Poss)*100
+  'NCAAB_DEFENSIVE_RATING',  // (OppPTS/Poss)*100 — uses games endpoint for opp points
+  'NET_RATING'               // Combined ORtg - DRtg (uses NCAAB calculated ratings)
 ];
 
 // NCAAF Stat Tokens - BDL-based tokens that work
@@ -152,10 +138,6 @@ const NCAAF_TOKENS = [
   'NCAAF_RUSH_EFFICIENCY',    // Opponent-adjusted rushing metrics
   'NCAAF_PASS_EFFICIENCY',    // Opponent-adjusted passing metrics
   'NCAAF_REDZONE',            // Red zone scoring and defense conversion %
-  'NCAAF_STRENGTH_OF_SCHEDULE', // Season-long schedule difficulty
-  'NCAAF_CONFERENCE_STRENGTH', // Relative strength of the team's conference
-  'NCAAF_VS_POWER_OPPONENTS', // Performance specifically against Power 4 teams
-  
   // ===== GAME DATA (BDL games endpoint - WORKS) =====
   'RECENT_FORM',              // BDL: recent game results and scores
   'SCORING',                  // BDL: points per game from game data
@@ -210,17 +192,8 @@ const NHL_TOKENS = [
   'CLOSE_GAME_RECORD',    // One-goal game record
   'ONE_GOAL_GAMES',       // 1-goal game win/loss record (from BDL games)
   'OVERTIME_RECORD',      // Real OT/SO record calculated
-  // NEW: Period Scoring Trends (from BDL play-by-play)
-  'PERIOD_SCORING',       // Period-by-period goal patterns
-  'FIRST_PERIOD_TRENDS',  // 1st period scoring tendencies
-  'THIRD_PERIOD_TRENDS',  // 3rd period scoring (close game finishes)
-  // NEW: Roster Depth (from BDL box_scores - time_on_ice distribution)
-  'DEPTH_SCORING',        // Bottom-6/bottom-pair contribution
-  'TOP_SIX_PRODUCTION',   // Top-6 forward production
-  'FOURTH_LINE_IMPACT',   // 4th line energy/physicality
-  // NEW: Variance/Consistency (from BDL standings + games)
+  // Variance/Consistency (from BDL standings + games)
   'REGULATION_WIN_PCT',   // Regulation wins vs total wins
-  'OT_LOSS_RATE',         // OT loss rate (luck indicator)
   'MARGIN_VARIANCE'       // Goal differential variance
 ];
 

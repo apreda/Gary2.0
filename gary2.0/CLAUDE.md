@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Core Philosophy
 
 ### Gary's Mission
-Gary is an AI Sports Bettor who makes daily picks across multiple sports leagues. His goal is to **WIN EACH BET HE MAKES** through deep analysis. Gary doesn't think statistically ("this should hit 7 out of 10 times"). He thinks with conviction: "I believe THIS specific bet wins, and here's why." If he can't make that case, he passes.
+Gary is an AI Sports Bettor who makes daily picks across multiple sports leagues. His goal is to **WIN EACH BET HE MAKES** through deep analysis. Gary doesn't think statistically ("this should hit 7 out of 10 times"). He thinks with conviction: "I believe THIS specific bet wins, and here's why."
 
 ### Guiding Principles
 
@@ -26,7 +26,7 @@ Gary is an AI Sports Bettor who makes daily picks across multiple sports leagues
 
 5. **Tools Over Instructions**: Gary has access to stats APIs and search - we nudge him to USE these tools to investigate, not pre-program answers.
 
-6. **Win THIS Bet, Not the Average**: Gary doesn't bet thinking "this should hit 55% over time." He bets because he believes THIS SPECIFIC BET WINS. Each game is its own game. Past patterns don't predict futures. If Gary can't articulate why THIS bet wins tonight, he passes.
+6. **Win THIS Bet, Not the Average**: Gary doesn't bet thinking "this should hit 55% over time." He bets because he believes THIS SPECIFIC BET WINS. Each game is its own game. Past patterns don't predict futures. Every game gets a pick — Gary always takes a side.
 
 7. **Neutral Investigation, Not Biased Search**: When Gary investigates stats, he should investigate NEUTRALLY and let the data tell him which side it supports.
    - **WRONG**: "For the favorite, investigate pace... For the underdog, investigate defense..." (This biases Gary to find reasons for both sides)
@@ -35,7 +35,7 @@ Gary is an AI Sports Bettor who makes daily picks across multiple sports leagues
 8. **Spread Thinking**: For spread bets, frame the question correctly:
    - One team is GETTING X points (underdog starts ahead on the scoreboard)
    - One team is GIVING X points (favorite must win by more than X)
-   - Gary's job: Investigate the stats and determine which side they actually support
+   - Investigate the stats and determine which side they actually support
    - Don't ask Gary to find "a path to covering" for each side - ask him to investigate and conclude which side the stats favor
 
 9. **Side Selection, Not Margin Prediction**: Gary does NOT predict his own spread or margin number.
@@ -59,7 +59,7 @@ Gary is an AI Sports Bettor who makes daily picks across multiple sports leagues
    **IMPORTANT:** This is NOT about predicting a margin. Gary does NOT say "I think they win by 6."
    Gary says: "My investigation shows [X], but the spread implies [Y]. The [side] is the better bet."
 
-   **The Sharp Principle:** The line reflects public perception. Your job: Does the DATA agree with the line?
+   **The Sharp Principle:** The line reflects public perception. Investigate: Does the data support what the line implies?
 
 11. **The Socratic Framework (Core Thesis)**: We prompt Gary with QUESTIONS, not instructions. Questions activate reasoning; instructions activate compliance. This is the foundational principle behind everything above.
 
@@ -93,11 +93,11 @@ Gary is an AI Sports Bettor who makes daily picks across multiple sports leagues
 | NHL | 0-3 days | Any player |
 | NCAAB | 0-21 days | TOP 2 PLAYERS ONLY (smaller rosters, bigger impact) |
 
-**FRESH INJURY (within window above) - The ONLY time injury can be an edge:**
+**FRESH INJURY (within window above) - The ONLY time an injury might not be fully reflected in the line:**
 - Line may not have fully adjusted yet
-- To use as edge, Gary MUST prove the line UNDERREACTED using predictive stats
+- Gary MUST investigate whether the line has UNDERREACTED using predictive stats
 - FORBIDDEN: "X is out, so I'm taking the other side" (that's already priced in)
-- REQUIRED: "X was ruled out yesterday. Their DRtg drops significantly without him, but line hasn't fully adjusted - investigate as potential edge."
+- REQUIRED: "X was ruled out yesterday. Check how the team has performed in recent games without him — investigate whether the line reflects the team's actual level without this player."
 
 **STALE INJURY (beyond window) - FORBIDDEN. Gary CANNOT cite this as a reason. EVER.**
 - The market has had enough time to adjust
@@ -209,7 +209,7 @@ Place "Don't" rules at the END of the prompt. Gemini 3 prioritizes the last few 
 
 **Data Sources:**
 - Ball Don't Lie API (stats, betting odds, AND player props for all sports)
-- Rotowire API (DFS data, injury reports)
+- Rotowire (via Gemini Grounding - injury reports for NHL/NCAAB)
 
 **Backend:**
 - Supabase (PostgreSQL database)
@@ -225,10 +225,10 @@ Place "Don't" rules at the END of the prompt. Gemini 3 prioritizes the last few 
 ### Agentic System
 Gary uses a **multi-pass agentic system** located in `/src/services/agentic/`:
 
-1. **Pass 1 - Investigation**: Gary requests stats via function calling (Gemini Flash)
-2. **Pass 2 - Steel Man**: Builds arguments for BOTH sides without bias (Gemini Flash) - these are Gary's "advisors"
-3. **Pass 2.5 - Evaluation**: Evaluates Steel Man cases, investigates which factors the stats actually support, stress tests, makes decision (Gemini Pro) - Gary is the "sharp" who filters what's real vs fluff
-4. **Pass 3 - Output**: Formats final pick with rationale (Gemini Pro)
+1. **Pass 1 - Investigation**: Gary requests stats via function calling (Gemini Flash for tool calls)
+2. **Pass 2 - Steel Man**: Builds bilateral OVER/UNDER or spread cases without bias (Gemini Flash) - these are Gary's "advisors"
+3. **Pass 2.5 - Evaluation**: Stress-tests the bilateral cases from Pass 2, investigates which factors the stats actually support (Gemini Flash/Pro for reasoning) - Gary is the "sharp" who filters what's real vs fluff. Does NOT make the final decision.
+4. **Pass 3 - Finalize**: Formats final pick with rationale via finalize tool call (Gemini Flash for tool calling)
 
 ### Key Files
 
@@ -250,12 +250,12 @@ Gary uses a **multi-pass agentic system** located in `/src/services/agentic/`:
 - `src/services/agentic/constitution/nhlConstitution.js`
 - `src/services/agentic/constitution/ncaabConstitution.js`
 - `src/services/agentic/constitution/ncaafConstitution.js`
-- `src/services/agentic/constitution/MASTER_SHARP_REFERENCE.md` - Sharp betting principles
+- `src/services/agentic/constitution/sharpReferenceLoader.js` - Sharp betting principles loader
 
 **Data Services:**
 - `src/services/picksService.js` - Pick storage/retrieval (Supabase)
-- `src/services/oddsService.js` - Betting odds from The Odds API
-- `src/services/ballDontLieService.js` - NBA/NHL stats
+- `src/services/oddsService.js` - Betting odds (via Ball Don't Lie)
+- `src/services/ballDontLieService.js` - Stats for all sports (NBA, NHL, NCAAB, NCAAF, NFL)
 
 ## Development Guidelines
 
@@ -370,7 +370,7 @@ Gary uses a **multi-pass agentic system** located in `/src/services/agentic/`:
 
 5. **Don't Skip Context**: If adding a new factor (weather, altitude, etc.), make Gary INVESTIGATE it, don't just feed him the data.
 
-6. **Don't Create Hard Gates**: Except for the Questionable Player rule (true uncertainty), avoid auto-PASS logic.
+6. **Don't Create Hard Gates**: Gary always makes a pick (spread or ML). Don't add auto-PASS logic or skip conditions.
 
 ## Trap Pattern Awareness
 
@@ -390,7 +390,7 @@ Gary should be AWARE of these trap patterns to investigate when conditions apply
 
 ### 4. Overlook/Lookahead Trigger
 - **Trigger**: Dominant favorite plays high-stakes rival NEXT game
-- **Investigation**: Might they coast tonight? Does underdog have defensive depth?
+- **Investigation**: Is there evidence of focus or preparation difference? What does the underdog's defensive profile show?
 
 ### 5. Desperation Flip
 - **Trigger**: Team on long losing streak (market "bottoming out")
@@ -398,11 +398,11 @@ Gary should be AWARE of these trap patterns to investigate when conditions apply
 
 ### 6. Divisional Grinders
 - **Trigger**: Large favorite spread (8.5+) in divisional game
-- **Investigation**: High familiarity shrinks talent gap. Does favorite have bench depth advantage?
+- **Investigation**: Does familiarity between these teams change the expected margin? What does the data show about the actual gap?
 
 ### 7. Line Inflation ("Begging for a Bet")
 - **Trigger**: Elite team is suspiciously narrow favorite vs bad team
-- **Investigation**: What hidden disadvantage are oddsmakers pricing in?
+- **Investigation**: What could explain this line being narrower than expected? Investigate the matchup data for what the market might be seeing.
 
 ### 8. Narrative Vacuum (Returning Star)
 - **Trigger**: Star returns after missing 3+ games

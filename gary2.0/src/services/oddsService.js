@@ -1,9 +1,7 @@
 /**
  * Service for fetching betting data (using Ball Don't Lie as primary source)
  * Uses all available sportsbooks, with preference for FanDuel/DraftKings
- * Falls back to The Odds API if BDL doesn't return odds from any sportsbook
  */
-import axios from 'axios';
 import { ballDontLieService } from './ballDontLieService.js';
 import { ballDontLieOddsService } from './ballDontLieOddsService.js';
 
@@ -169,171 +167,6 @@ const extractOddsFromBookmakers = (bookmakers, homeTeam, awayTeam) => {
 // NOTE: fetchUpcomingOddsFallback and fetchOddsFromOddsApiByDate removed
 // All odds now come from Ball Don't Lie via ballDontLieOddsService
 
-// Bet analysis helper functions
-const analyzeBettingMarkets = (game) => {
-  if (!game || !game.bookmakers || !Array.isArray(game.bookmakers)) {
-    return null;
-  }
-
-  const markets = {
-    spreads: analyzeSpreadMarket(game.bookmakers),
-    totals: analyzeTotalsMarket(game.bookmakers),
-    moneyline: analyzeMoneylineMarket(game.bookmakers)
-  };
-
-  return findBestOpportunity(markets);
-};
-
-const analyzeSpreadMarket = (bookmakers) => {
-  const opportunities = [];
-
-  bookmakers.forEach(bookmaker => {
-    const spreadMarket = bookmaker.markets.find(m => m.key === 'spreads');
-    if (!spreadMarket) return;
-
-    spreadMarket.outcomes.forEach(outcome => {
-      opportunities.push({
-        type: 'spread',
-        team: outcome.name,
-        point: outcome.point,
-        price: outcome.price,
-        bookmaker: bookmaker.key
-      });
-    });
-  });
-
-  return findBestInMarket(opportunities, 'spread');
-};
-
-const analyzeTotalsMarket = (bookmakers) => {
-  const opportunities = [];
-
-  bookmakers.forEach(bookmaker => {
-    const totalsMarket = bookmaker.markets.find(m => m.key === 'totals');
-    if (!totalsMarket) return;
-
-    totalsMarket.outcomes.forEach(outcome => {
-      opportunities.push({
-        type: 'total',
-        position: outcome.name,
-        point: outcome.point,
-        price: outcome.price,
-        bookmaker: bookmaker.key
-      });
-    });
-  });
-
-  return findBestInMarket(opportunities, 'total');
-};
-
-const analyzeMoneylineMarket = (bookmakers) => {
-  const opportunities = [];
-
-  bookmakers.forEach(bookmaker => {
-    const h2hMarket = bookmaker.markets.find(m => m.key === 'h2h');
-    if (!h2hMarket) return;
-
-    h2hMarket.outcomes.forEach(outcome => {
-      opportunities.push({
-        type: 'moneyline',
-        team: outcome.name,
-        price: outcome.price,
-        bookmaker: bookmaker.key
-      });
-    });
-  });
-
-  return findBestInMarket(opportunities, 'moneyline');
-};
-
-const findBestInMarket = (opportunities, marketType) => {
-  if (!opportunities.length) return null;
-
-  opportunities.forEach(opp => {
-    opp.ev = calculateExpectedValue(opp);
-    opp.roi = calculateROI(opp);
-  });
-
-  return opportunities.sort((a, b) => b.ev - a.ev)[0];
-};
-
-const findBestOpportunity = (markets) => {
-  const bestOpportunities = [];
-
-  for (const market in markets) {
-    if (markets[market]) bestOpportunities.push(markets[market]);
-  }
-
-  if (!bestOpportunities.length) return null;
-
-  return bestOpportunities.sort((a, b) => b.ev - a.ev)[0];
-};
-
-const calculateExpectedValue = (opportunity) => {
-  const winProb = 0.5;
-  return (opportunity.price * winProb) - (1 - winProb);
-};
-
-const calculateROI = (opportunity) => {
-  let decimalOdds = opportunity.price;
-  if (decimalOdds < 0) {
-    decimalOdds = (100 / Math.abs(decimalOdds)) + 1;
-  } else {
-    decimalOdds = (decimalOdds / 100) + 1;
-  }
-  return ((decimalOdds - 1) * 100).toFixed(2) + '%';
-};
-
-const processMarketData = (bookmakers, marketKey, game) => {
-  const playerProps = [];
-
-  for (const bookmaker of bookmakers) {
-    const market = bookmaker.markets.find(m => m.key === marketKey);
-    if (!market || !market.outcomes) continue;
-
-    for (const outcome of market.outcomes) {
-      if (!outcome.description) continue;
-
-      try {
-        const player = outcome.description;
-        const team = determinePlayerTeam(player, game);
-        const point = outcome.point || null;
-
-        if (outcome.name.toLowerCase() === 'over') {
-          playerProps.push({
-            player,
-            team,
-            prop_type: marketKey,
-            line: point,
-            over_odds: outcome.price,
-            under_odds: null,
-            bookmaker: bookmaker.key
-          });
-        } else if (outcome.name.toLowerCase() === 'under') {
-          playerProps.push({
-            player,
-            team,
-            prop_type: marketKey,
-            line: point,
-            over_odds: null,
-            under_odds: outcome.price,
-            bookmaker: bookmaker.key
-          });
-        }
-      } catch (err) {
-        console.warn(`Error processing prop data: ${err.message}`);
-      }
-    }
-  }
-
-  function determinePlayerTeam(playerName, game) {
-    if (!game) return 'unknown';
-    return game.home_team || game.homeTeam || 'unknown';
-  }
-
-  return playerProps;
-};
-
 const dedupeRequest = async (key, fn) => {
   if (inFlightRequests.has(key)) {
     console.log(`[OddsService] Deduplicating request: ${key}`);
@@ -462,116 +295,11 @@ const computeWindow = (sport) => {
   return { windowStart, windowEnd, todayEstStr };
 };
 
-const analyzeLineMovement = (historicalData) => {
-  const bookmakerData = historicalData.bookmakerData;
-
-  if (Object.keys(bookmakerData).length < 2) {
-    return {
-      market: historicalData.title,
-      bookmakers: Object.keys(bookmakerData),
-      discrepancy: 0,
-      bestOption: null,
-      analysis: 'Not enough bookmakers for comparison'
-    };
-  }
-
-  const oddsToProb = (americanOdds) => {
-    if (americanOdds > 0) {
-      return 100 / (americanOdds + 100);
-    } else {
-      return Math.abs(americanOdds) / (Math.abs(americanOdds) + 100);
-    }
-  };
-
-  const outcomes = {};
-
-  for (const bookmaker in bookmakerData) {
-    const bookmakerOdds = bookmakerData[bookmaker];
-
-    bookmakerOdds.forEach(outcome => {
-      const key = `${outcome.name}_${outcome.point || ''}`;
-
-      if (!outcomes[key]) {
-        outcomes[key] = {
-          name: outcome.name,
-          point: outcome.point,
-          min: { price: Infinity, bookmaker: '' },
-          max: { price: -Infinity, bookmaker: '' }
-        };
-      }
-
-      if (outcome.price < outcomes[key].min.price) {
-        outcomes[key].min = { price: outcome.price, bookmaker };
-      }
-
-      if (outcome.price > outcomes[key].max.price) {
-        outcomes[key].max = { price: outcome.price, bookmaker };
-      }
-    });
-  }
-
-  let maxDiscrepancy = 0;
-  let bestOption = null;
-
-  for (const key in outcomes) {
-    const outcome = outcomes[key];
-    const minProb = oddsToProb(outcome.min.price);
-    const maxProb = oddsToProb(outcome.max.price);
-    const discrepancy = Math.abs(minProb - maxProb);
-
-    if (discrepancy > maxDiscrepancy) {
-      maxDiscrepancy = discrepancy;
-      bestOption = {
-        name: outcome.name,
-        point: outcome.point,
-        price: outcome.max.price,
-        bookmaker: outcome.max.bookmaker
-      };
-    }
-  }
-
-  return {
-    market: historicalData.title,
-    bookmakers: Object.keys(bookmakerData),
-    discrepancy: maxDiscrepancy,
-    bestOption,
-    analysis: maxDiscrepancy > 0.1 ? 'Significant line movement detected' : 'No significant line movement'
-  };
-};
-
 export const oddsService = {
-  // DEPRECATED: These methods used The Odds API which has been removed
-  // All odds now come from Ball Don't Lie - use getUpcomingGames instead
-  getSports: async () => {
-    console.warn('[oddsService.getSports] DEPRECATED - The Odds API removed. Use BDL for sports data.');
-    return [
-      { key: 'basketball_nba', title: 'NBA', active: true },
-      { key: 'americanfootball_nfl', title: 'NFL', active: true },
-      { key: 'icehockey_nhl', title: 'NHL', active: true },
-      { key: 'basketball_ncaab', title: 'NCAAB', active: true },
-      { key: 'americanfootball_ncaaf', title: 'NCAAF', active: true }
-    ];
-  },
-
+  // DEPRECATED: Redirects to getUpcomingGames (still used by nbaPicksHandler.js)
   getOdds: async (sport) => {
     console.warn(`[oddsService.getOdds] DEPRECATED - use getUpcomingGames('${sport}') instead`);
     return oddsService.getUpcomingGames(sport);
-  },
-
-  getBatchOdds: async (sports) => {
-    console.warn('[oddsService.getBatchOdds] DEPRECATED - use getUpcomingGames for each sport');
-    if (!Array.isArray(sports) || sports.length === 0) return {};
-    const results = {};
-    for (const sport of sports) {
-      results[sport] = await oddsService.getUpcomingGames(sport);
-    }
-    return results;
-  },
-
-  getGameOdds: async (gameId, { useCache = true, sport = null } = {}) => {
-    // DEPRECATED: The Odds API has been removed - use getUpcomingGames and filter by game ID
-    console.warn('[oddsService.getGameOdds] DEPRECATED - The Odds API removed. Use getUpcomingGames instead.');
-    return null;
   },
 
   getCompletedGamesByDate,
@@ -581,9 +309,8 @@ export const oddsService = {
     return dedupeRequest(cacheKey, async () => {
       console.log(`[Odds Service] Fetching upcoming games for ${sport}...`);
 
-      // ALL SPORTS NOW USE BDL AS PRIMARY SOURCE (no more Odds API exemption)
+      // ALL SPORTS USE BDL AS PRIMARY SOURCE
       // BDL has comprehensive odds coverage for NBA, NFL, NHL, NCAAB, NCAAF
-      // Fallback to The Odds API only if BDL fails
 
       let dates = [];
       const isNfl = sport === 'americanfootball_nfl';
@@ -659,7 +386,7 @@ export const oddsService = {
       }
 
       if (!Array.isArray(combined) || combined.length === 0) {
-        console.log(`[Odds Service] ${sport}: No odds available from Ball Don't Lie or Odds API for dates ${dates.join(', ')}`);
+        console.log(`[Odds Service] ${sport}: No odds available from Ball Don't Lie for dates ${dates.join(', ')}`);
         return [];
       }
 
@@ -677,8 +404,6 @@ export const oddsService = {
 
       // First pass: extract odds from BDL bookmakers
       let processedGames = unique.map(game => {
-        const bestOpportunity = analyzeBettingMarkets(game);
-
         // Extract odds from bookmakers if not already present
         let extractedOdds = {};
         if (game.moneyline_home === undefined && game.bookmakers?.length > 0) {
@@ -697,7 +422,6 @@ export const oddsService = {
           total: game.total ?? extractedOdds.total,
           total_over_odds: game.total_over_odds ?? extractedOdds.total_over_odds,
           total_under_odds: game.total_under_odds ?? extractedOdds.total_under_odds,
-          bestBet: bestOpportunity
         };
       });
 
@@ -715,29 +439,6 @@ export const oddsService = {
       return processedGames;
     });
   },
-
-  getAllSports: async () => {
-    // DEPRECATED: The Odds API removed - return static list of supported sports
-    console.warn('[oddsService.getAllSports] DEPRECATED - The Odds API removed');
-    return [
-      { key: 'basketball_nba', title: 'NBA', active: true },
-      { key: 'americanfootball_nfl', title: 'NFL', active: true },
-      { key: 'icehockey_nhl', title: 'NHL', active: true },
-      { key: 'basketball_ncaab', title: 'NCAAB', active: true },
-      { key: 'americanfootball_ncaaf', title: 'NCAAF', active: true }
-    ];
-  },
-
-  getLineMovement: async (sport, eventId) => {
-    // DEPRECATED: The Odds API removed - line movement tracking not available
-    console.warn('[oddsService.getLineMovement] DEPRECATED - The Odds API removed');
-    return {
-      success: false,
-      message: 'Line movement tracking not available (The Odds API deprecated)'
-    };
-  },
-
-  analyzeLineMovement,
 
   getPlayerPropOdds: async (sport, homeTeam, awayTeam) => {
     // DEPRECATED: The Odds API removed - use BDL player props via ballDontLieOddsService

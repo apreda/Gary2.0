@@ -325,11 +325,11 @@ function getNhlGameTotalContext(marketSnapshot, homeTeam = '', awayTeam = '') {
       away: { team: awayTeam || 'Away', goals: parseFloat(awayImplied.toFixed(2)) }
     },
     // Sharp betting context
-    sharpContext: total >= 6.5 
-      ? 'High total favors offensive players. Volume (SOG) correlates with opportunity.'
+    sharpContext: total >= 6.5
+      ? 'Game total is high (6.5+). Investigate: How does increased shot volume affect THIS player\'s opportunities?'
       : total <= 5.5
-        ? 'Low total suggests tight checking. Defensive forwards and shutdown matchups matter more.'
-        : 'Average total - look for player-specific edges rather than environmental plays.'
+        ? 'Game total is low (5.5 or less). Investigate: How does a lower-scoring environment affect THIS player\'s usage and production?'
+        : 'Game total is average. Investigate player-specific matchup factors rather than game environment.'
   };
 }
 
