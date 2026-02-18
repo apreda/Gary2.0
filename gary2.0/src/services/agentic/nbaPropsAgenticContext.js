@@ -323,7 +323,7 @@ function getPaceAndTotalContext(marketSnapshot, homeTeamStats, awayTeamStats) {
       scoringEnvironment = 'above average scoring expected';
     } else if (total <= 210) {
       totalCategory = 'low';
-      scoringEnvironment = 'defensive game - consider unders';
+      scoringEnvironment = 'low total — investigate how pace and defense affect player usage';
     } else if (total <= 218) {
       totalCategory = 'below_average';
       scoringEnvironment = 'slower pace expected';
@@ -821,10 +821,62 @@ async function detectBackToBack(teamIds, gameDate) {
 }
 
 /**
- * Build comprehensive player stats text with actual BDL data
- * ENHANCED: Now includes recent form, consistency, and home/away splits
+ * Fetch and compute opponent defensive profile for a team.
+ * Uses ballDontLieService.getTeamOpponentStats() for opponent shooting/TOV/FT data
+ * and ballDontLieService.getTeamSeasonAdvanced() for pace and DRtg.
+ * Returns a concise defensive summary object.
+ * @param {number} teamId - BDL team ID
+ * @param {number} season - NBA season year
+ * @returns {Object|null} Opponent defense profile
  */
-function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerSeasonStats, playerIdMap, injuries, playerGameLogs = {}) {
+async function fetchOpponentDefenseProfile(teamId, season) {
+  if (!teamId) return null;
+
+  try {
+    const [oppStats, advancedStats] = await Promise.all([
+      ballDontLieService.getTeamOpponentStats(teamId, season),
+      ballDontLieService.getTeamSeasonAdvanced(teamId, season)
+    ]);
+
+    if (!oppStats && !advancedStats) return null;
+
+    // Compute derived metrics from raw opponent stats (same math as statRouter.js)
+    const opp_fgm = oppStats?.opp_fgm || 0;
+    const opp_fga = oppStats?.opp_fga || 0;
+    const opp_fg3m = oppStats?.opp_fg3m || 0;
+    const opp_fta = oppStats?.opp_fta || 0;
+    const opp_tov = oppStats?.opp_tov || 0;
+
+    return {
+      // Opponent eFG%: (FGM + 0.5 * 3PM) / FGA
+      opp_efg_pct: opp_fga > 0 ? ((opp_fgm + 0.5 * opp_fg3m) / opp_fga * 100).toFixed(1) : null,
+      // Opponent 3PT%
+      opp_fg3_pct: oppStats?.opp_fg3_pct != null ? (oppStats.opp_fg3_pct * 100).toFixed(1) : null,
+      // Opponent PPG allowed
+      opp_pts: oppStats?.opp_pts != null ? oppStats.opp_pts.toFixed(1) : null,
+      // Opponent TOV rate: TOV / (FGA + 0.44*FTA + TOV)
+      opp_tov_rate: (opp_fga + 0.44 * opp_fta + opp_tov) > 0
+        ? (opp_tov / (opp_fga + 0.44 * opp_fta + opp_tov) * 100).toFixed(1)
+        : null,
+      // Opponent FT rate: FTA / FGA
+      opp_ft_rate: opp_fga > 0 ? (opp_fta / opp_fga * 100).toFixed(1) : null,
+      // Opponent OREB (second chance opportunities allowed)
+      opp_oreb: oppStats?.opp_oreb != null ? oppStats.opp_oreb.toFixed(1) : null,
+      // From advanced: pace, DRtg
+      pace: advancedStats?.pace != null ? advancedStats.pace.toFixed(1) : null,
+      def_rating: advancedStats?.def_rating != null ? advancedStats.def_rating.toFixed(1) : null
+    };
+  } catch (e) {
+    console.warn(`[NBA Props Context] Failed to fetch opponent defense for team ${teamId}:`, e.message);
+    return null;
+  }
+}
+
+/**
+ * Build comprehensive player stats text with actual BDL data
+ * ENHANCED: Now includes recent form, consistency, home/away splits, and opponent defense
+ */
+function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerSeasonStats, playerIdMap, injuries, playerGameLogs = {}, opponentDefense = {}) {
   let statsText = '';
   
   // Helper to get stats for a player
@@ -859,8 +911,22 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerSeasonSt
   // Check for injured players
   const injuredNames = new Set(injuries.map(i => i.player?.toLowerCase()));
   
-  // Away team section
+  // Away team section — opponent is the HOME team's defense
   statsText += `### ${awayTeam} Players\n`;
+
+  // Show opponent (home team) defensive profile for away players
+  const awayOppDef = opponentDefense.home; // away players face HOME defense
+  if (awayOppDef) {
+    const defParts = [];
+    if (awayOppDef.opp_pts) defParts.push(`${awayOppDef.opp_pts} PPG allowed`);
+    if (awayOppDef.opp_efg_pct) defParts.push(`${awayOppDef.opp_efg_pct}% opp eFG`);
+    if (awayOppDef.opp_fg3_pct) defParts.push(`${awayOppDef.opp_fg3_pct}% opp 3PT`);
+    if (awayOppDef.pace) defParts.push(`Pace ${awayOppDef.pace}`);
+    if (awayOppDef.def_rating) defParts.push(`DRtg ${awayOppDef.def_rating}`);
+    if (defParts.length > 0) {
+      statsText += `Opponent Defense (${homeTeam}): ${defParts.join(' | ')}\n`;
+    }
+  }
 
   if (awayPlayers.length > 0) {
     statsText += '\n**Player Season Stats & Recent Form:**\n';
@@ -871,16 +937,17 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerSeasonSt
 
       const injuryRecord = injuries.find(i => i.player.toLowerCase() === candidate.player.toLowerCase());
       const isInjured = !!injuryRecord;
-      // Use [PRICED IN] / [FRESH] labels matching game picks — not just [duration]
+      // Factual injury labels with duration
       let injuryFlag = '';
       if (isInjured) {
         const daysInfo = injuryRecord.daysSinceReport != null ? ` (${injuryRecord.daysSinceReport}d)` : '';
-        if (injuryRecord.isPricedIn) {
-          injuryFlag = ` ⚠️ INJURED [PRICED IN${daysInfo} - NOT an edge, line already adjusted]`;
-        } else if (injuryRecord.freshness === 'FRESH') {
-          injuryFlag = ` ⚠️ INJURED [FRESH${daysInfo} - investigate if line has reacted]`;
+        const duration = injuryRecord.duration || '';
+        if (duration === 'SEASON-LONG') {
+          injuryFlag = ` ⚠️ INJURED [Out For Season${daysInfo}]`;
+        } else if (duration === 'RECENT') {
+          injuryFlag = ` ⚠️ INJURED [RECENT${daysInfo}]`;
         } else {
-          injuryFlag = ` ⚠️ INJURED [PRICED IN${daysInfo} - assumed stale]`;
+          injuryFlag = ` ⚠️ INJURED [OUT${daysInfo}]`;
         }
       }
 
@@ -892,6 +959,16 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerSeasonSt
         // ENHANCED: Show usage & efficiency metrics for prop context
         if (stats.usagePct || stats.trueShooting) {
           statsText += `  Usage: USG% ${stats.usagePct || 'N/A'}, TS% ${stats.trueShooting || 'N/A'}, EFG% ${stats.effectiveFgPct || 'N/A'}\n`;
+        }
+
+        // Team-share percentages — tells Gary what % of team production this player represents
+        if (stats.pctPts || stats.pctFga) {
+          const shareParts = [];
+          if (stats.pctPts) shareParts.push(`${stats.pctPts}% PTS`);
+          if (stats.pctReb) shareParts.push(`${stats.pctReb}% REB`);
+          if (stats.pctAst) shareParts.push(`${stats.pctAst}% AST`);
+          if (stats.pctFga) shareParts.push(`${stats.pctFga}% FGA`);
+          statsText += `  Team Share: ${shareParts.join(' | ')}\n`;
         }
 
         // Add recent form if available - show ALL stat types equally for organic analysis
@@ -921,11 +998,25 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerSeasonSt
       }
     }
   }
-  
+
   statsText += '\n';
-  
-  // Home team section
+
+  // Home team section — opponent is the AWAY team's defense
   statsText += `### ${homeTeam} Players\n`;
+
+  // Show opponent (away team) defensive profile for home players
+  const homeOppDef = opponentDefense.away; // home players face AWAY defense
+  if (homeOppDef) {
+    const defParts = [];
+    if (homeOppDef.opp_pts) defParts.push(`${homeOppDef.opp_pts} PPG allowed`);
+    if (homeOppDef.opp_efg_pct) defParts.push(`${homeOppDef.opp_efg_pct}% opp eFG`);
+    if (homeOppDef.opp_fg3_pct) defParts.push(`${homeOppDef.opp_fg3_pct}% opp 3PT`);
+    if (homeOppDef.pace) defParts.push(`Pace ${homeOppDef.pace}`);
+    if (homeOppDef.def_rating) defParts.push(`DRtg ${homeOppDef.def_rating}`);
+    if (defParts.length > 0) {
+      statsText += `Opponent Defense (${awayTeam}): ${defParts.join(' | ')}\n`;
+    }
+  }
 
   if (homePlayers.length > 0) {
     statsText += '\n**Player Season Stats & Recent Form:**\n';
@@ -936,16 +1027,17 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerSeasonSt
 
       const injuryRecord = injuries.find(i => i.player.toLowerCase() === candidate.player.toLowerCase());
       const isInjured = !!injuryRecord;
-      // Use [PRICED IN] / [FRESH] labels matching game picks — not just [duration]
+      // Factual injury labels with duration
       let injuryFlag = '';
       if (isInjured) {
         const daysInfo = injuryRecord.daysSinceReport != null ? ` (${injuryRecord.daysSinceReport}d)` : '';
-        if (injuryRecord.isPricedIn) {
-          injuryFlag = ` ⚠️ INJURED [PRICED IN${daysInfo} - NOT an edge, line already adjusted]`;
-        } else if (injuryRecord.freshness === 'FRESH') {
-          injuryFlag = ` ⚠️ INJURED [FRESH${daysInfo} - investigate if line has reacted]`;
+        const duration = injuryRecord.duration || '';
+        if (duration === 'SEASON-LONG') {
+          injuryFlag = ` ⚠️ INJURED [Out For Season${daysInfo}]`;
+        } else if (duration === 'RECENT') {
+          injuryFlag = ` ⚠️ INJURED [RECENT${daysInfo}]`;
         } else {
-          injuryFlag = ` ⚠️ INJURED [PRICED IN${daysInfo} - assumed stale]`;
+          injuryFlag = ` ⚠️ INJURED [OUT${daysInfo}]`;
         }
       }
 
@@ -953,20 +1045,30 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerSeasonSt
         statsText += `- **${candidate.player}** (${stats.position || 'N/A'})${injuryFlag}:\n`;
         statsText += `  Props: ${propsStr}\n`;
         statsText += `  Season: PPG ${stats.ppg || 'N/A'}, RPG ${stats.rpg || 'N/A'}, APG ${stats.apg || 'N/A'}, 3PG ${stats.tpg || 'N/A'}, PRA ${stats.pra || 'N/A'}, MPG ${stats.mpg || 'N/A'}\n`;
-        
+
         // ENHANCED: Show usage & efficiency metrics for prop context
         if (stats.usagePct || stats.trueShooting) {
           statsText += `  Usage: USG% ${stats.usagePct || 'N/A'}, TS% ${stats.trueShooting || 'N/A'}, EFG% ${stats.effectiveFgPct || 'N/A'}\n`;
         }
-        
+
+        // Team-share percentages — tells Gary what % of team production this player represents
+        if (stats.pctPts || stats.pctFga) {
+          const shareParts = [];
+          if (stats.pctPts) shareParts.push(`${stats.pctPts}% PTS`);
+          if (stats.pctReb) shareParts.push(`${stats.pctReb}% REB`);
+          if (stats.pctAst) shareParts.push(`${stats.pctAst}% AST`);
+          if (stats.pctFga) shareParts.push(`${stats.pctFga}% FGA`);
+          statsText += `  Team Share: ${shareParts.join(' | ')}\n`;
+        }
+
         // Add recent form if available - show ALL stat types equally for organic analysis
         if (logs) {
           const formIcon = logs.formTrend === 'hot' ? '🔥' : logs.formTrend === 'cold' ? '❄️' : '';
           statsText += `  L${logs.gamesAnalyzed} Avg: PTS ${logs.averages?.pts || 'N/A'}, REB ${logs.averages?.reb || 'N/A'}, AST ${logs.averages?.ast || 'N/A'}, 3PM ${logs.averages?.fg3m || 'N/A'} ${formIcon}\n`;
-          
+
           // Show recent games for ALL prop types - no bias toward any stat
           statsText += `  Recent: PTS [${formatRecentGames(logs, 'pts')}] | REB [${formatRecentGames(logs, 'reb')}] | AST [${formatRecentGames(logs, 'ast')}]\n`;
-          
+
           // Consistency scores for ALL stat types - Gary decides which matters
           if (logs.consistency) {
             const ptsC = logs.consistency.pts ? (parseFloat(logs.consistency.pts) * 100).toFixed(0) : 'N/A';
@@ -974,7 +1076,7 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerSeasonSt
             const astC = logs.consistency.ast ? (parseFloat(logs.consistency.ast) * 100).toFixed(0) : 'N/A';
             statsText += `  Consistency: PTS ${ptsC}% | REB ${rebC}% | AST ${astC}%\n`;
           }
-          
+
           // Home/Away splits - show multiple stats
           if (logs.splits?.home && logs.splits?.away) {
             statsText += `  Home: ${logs.splits.home.pts} PTS, ${logs.splits.home.reb || 'N/A'} REB, ${logs.splits.home.ast || 'N/A'} AST (${logs.splits.home.games}g)\n`;
@@ -987,18 +1089,19 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerSeasonSt
     }
   }
 
-  // Add injury summary with freshness labels matching game picks
+  // Add injury summary with factual duration labels
   if (injuries.length > 0) {
     statsText += '\n### Injury Report\n';
     injuries.forEach(inj => {
       const daysInfo = inj.daysSinceReport != null ? ` (${inj.daysSinceReport}d)` : '';
+      const duration = inj.duration || '';
       let label;
-      if (inj.isPricedIn) {
-        label = `[PRICED IN${daysInfo} - NOT an edge]`;
-      } else if (inj.freshness === 'FRESH') {
-        label = `[FRESH${daysInfo} - investigate]`;
+      if (duration === 'SEASON-LONG') {
+        label = `[Out For Season${daysInfo}]`;
+      } else if (duration === 'RECENT') {
+        label = `[RECENT${daysInfo}]`;
       } else {
-        label = `[PRICED IN${daysInfo}]`;
+        label = `[OUT${daysInfo}]`;
       }
       statsText += `- ${inj.player} (${inj.status}) ${label}: ${inj.description?.slice(0, 100) || 'No details'}\n`;
     });
@@ -1359,12 +1462,24 @@ export async function buildNbaPropsAgenticContext(game, playerProps, options = {
     console.log(`[NBA Props Context] Filtered out ${excluded} Doubtful/Day-To-Day player(s) to avoid void bets`);
   }
 
-  // NOW fetch player season stats AND game logs in parallel (requires player IDs)
-  console.log('[NBA Props Context] Fetching BDL player season stats and game logs...');
-  const [playerSeasonStats, playerGameLogs] = await Promise.all([
+  // NOW fetch player season stats, game logs, AND opponent defense profiles in parallel
+  console.log('[NBA Props Context] Fetching BDL player season stats, game logs, and opponent defense...');
+  const [playerSeasonStats, playerGameLogs, homeDefenseProfile, awayDefenseProfile] = await Promise.all([
     fetchPlayerSeasonStats(playerIdMap, season),
-    fetchPlayerGameLogs(playerIdMap)
+    fetchPlayerGameLogs(playerIdMap),
+    // Opponent defense: fetch BOTH teams so we can show "what defense does each player face?"
+    homeTeam?.id ? fetchOpponentDefenseProfile(homeTeam.id, season) : Promise.resolve(null),
+    awayTeam?.id ? fetchOpponentDefenseProfile(awayTeam.id, season) : Promise.resolve(null)
   ]);
+
+  // Build opponent defense lookup: { home: homeTeamDefProfile, away: awayTeamDefProfile }
+  const opponentDefense = { home: homeDefenseProfile, away: awayDefenseProfile };
+  if (homeDefenseProfile) {
+    console.log(`[NBA Props Context] Home defense (${game.home_team}): DRtg ${homeDefenseProfile.def_rating || 'N/A'}, Pace ${homeDefenseProfile.pace || 'N/A'}, ${homeDefenseProfile.opp_pts || 'N/A'} PPG allowed`);
+  }
+  if (awayDefenseProfile) {
+    console.log(`[NBA Props Context] Away defense (${game.away_team}): DRtg ${awayDefenseProfile.def_rating || 'N/A'}, Pace ${awayDefenseProfile.pace || 'N/A'}, ${awayDefenseProfile.opp_pts || 'N/A'} PPG allowed`);
+  }
   
   // Log stats coverage (use available candidates - excludes Doubtful/Day-To-Day)
   const playersWithStats = Object.keys(playerSeasonStats).length;
@@ -1414,7 +1529,7 @@ export async function buildNbaPropsAgenticContext(game, playerProps, options = {
     awayTeam?.full_name || game.away_team
   );
 
-  // Build player stats text with REAL player data and recent form
+  // Build player stats text with REAL player data, recent form, and opponent defense
   // Use availableCandidates which excludes Doubtful/Day-To-Day players
   const playerStats = buildPlayerStatsText(
     game.home_team,
@@ -1423,7 +1538,8 @@ export async function buildNbaPropsAgenticContext(game, playerProps, options = {
     playerSeasonStats,
     playerIdMap,
     allInjuries,  // Use ALL injuries (BDL + detected from 0-minute games)
-    playerGameLogs // Pass game logs for recent form
+    playerGameLogs, // Pass game logs for recent form
+    opponentDefense // Pass opponent defense profiles for matchup context
   );
 
   // Build token data with enhanced player info, game logs, and LINE MOVEMENT
@@ -1492,6 +1608,7 @@ export async function buildNbaPropsAgenticContext(game, playerProps, options = {
   console.log(`   - ${playersWithStats} players with season stats (${(statsCoverage * 100).toFixed(0)}% coverage)`);
   console.log(`   - ${playersWithLogs} players with game logs (${(logsCoverage * 100).toFixed(0)}% coverage)`);
   console.log(`   - ${allInjuries.length} injuries (${formattedInjuries.length} from ${apiInjuries ? 'RapidAPI' : 'BDL'} + ${detectedInjuries.length} detected from game logs)`);
+  console.log(`   - Opponent defense: home=${homeDefenseProfile ? 'YES' : 'NO'}, away=${awayDefenseProfile ? 'YES' : 'NO'}`);
   console.log(`   - Narrative context: ${narrativeContext ? 'YES' : 'NO'}`);
   console.log(`   - Line movement data: ${lineMovementCount > 0 ? `${lineMovementCount} props tracked` : 'NOT AVAILABLE'}`);
 
@@ -1503,6 +1620,7 @@ export async function buildNbaPropsAgenticContext(game, playerProps, options = {
     playerStats,
     playerSeasonStats,
     playerGameLogs, // Include game logs in return
+    opponentDefense, // Opponent defense profiles for both teams
     narrativeContext, // CRITICAL: Full raw narrative from Gemini
     // LINE MOVEMENT DATA - for Tier 2 Kill Condition analysis
     lineMovementData: {

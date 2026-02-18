@@ -178,6 +178,7 @@ function buildAnalysisRequest(context) {
   }
 
   // Format games (include O/U totals from BDL — Change 7)
+  // Also include opponent defense profiles when available (BDL opponent stats)
   const gamesStr = (games || []).map(g => {
     const home = g.homeTeam || g.home_team || 'HOME';
     const away = g.awayTeam || g.visitor_team || g.away_team || 'AWAY';
@@ -185,6 +186,25 @@ function buildAnalysisRequest(context) {
     const spread = g.spread ? ` [${g.spread > 0 ? '+' : ''}${g.spread}]` : '';
     return `${away} @ ${home}${total}${spread}`;
   }).join(', ');
+
+  // Format opponent defense profiles per game (BDL real data)
+  const defenseLines = (games || []).map(g => {
+    const home = g.homeTeam || g.home_team || 'HOME';
+    const away = g.awayTeam || g.visitor_team || g.away_team || 'AWAY';
+    const lines = [];
+
+    // Away team's defense (what they allow — relevant for home team's offense)
+    const awayDef = g.away_defense;
+    if (awayDef && awayDef.opp_pts != null) {
+      lines.push(`${away} Defense: Allow ${awayDef.opp_pts.toFixed(1)} PPG | ${awayDef.opp_efg_pct ?? '?'}% eFG | ${awayDef.opp_fg3_pct ?? '?'}% 3PT | ${awayDef.opp_ft_rate ?? '?'} FT Rate | Pace: ${awayDef.pace ?? '?'}`);
+    }
+    // Home team's defense (what they allow — relevant for away team's offense)
+    const homeDef = g.home_defense;
+    if (homeDef && homeDef.opp_pts != null) {
+      lines.push(`${home} Defense: Allow ${homeDef.opp_pts.toFixed(1)} PPG | ${homeDef.opp_efg_pct ?? '?'}% eFG | ${homeDef.opp_fg3_pct ?? '?'}% 3PT | ${homeDef.opp_ft_rate ?? '?'} FT Rate | Pace: ${homeDef.pace ?? '?'}`);
+    }
+    return lines.join('\n');
+  }).filter(Boolean).join('\n');
 
   // Format known injuries
   const injuriesStr = formatKnownInjuries(injuries);
@@ -195,6 +215,7 @@ Platform: ${platform}
 Sport: ${sport}
 Games: ${gamesStr}
 Total Players: ${players.length}
+${defenseLines ? `\n## OPPONENT DEFENSE PROFILES (BDL)\n${defenseLines}` : ''}
 
 ## KNOWN INJURIES (from context)
 ${injuriesStr || 'None loaded yet - USE GET_TEAM_INJURIES to check each team'}

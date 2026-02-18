@@ -1158,6 +1158,58 @@ enum Sport: String, CaseIterable {
     }
 }
 
+// MARK: - Conference Filter Bar (NCAAB)
+
+struct ConferenceFilterBar: View {
+    @Binding var selected: String
+    let conferences: [String]
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                // "All" chip
+                conferenceChip("All", isSelected: selected == "All")
+
+                // Conference chips
+                ForEach(conferences, id: \.self) { conf in
+                    conferenceChip(conf, isSelected: selected == conf)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 2)
+        }
+    }
+
+    private func conferenceChip(_ label: String, isSelected: Bool) -> some View {
+        Button {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                selected = label
+            }
+        } label: {
+            Text(label)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(isSelected ? .black : .white.opacity(0.7))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background {
+                    if isSelected {
+                        Capsule()
+                            .fill(GaryColors.gold)
+                    } else {
+                        Capsule()
+                            .fill(.white.opacity(0.06))
+                            .overlay(
+                                Capsule()
+                                    .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                            )
+                    }
+                }
+        }
+    }
+}
+
+// MARK: - Sport Filter Bar
+
 struct SportFilterBar: View {
     @Binding var selected: Sport
     let availableSports: Set<String>
@@ -1249,6 +1301,7 @@ struct GaryPicksView: View {
     @State private var allPicks: [GaryPick] = []
     @State private var loading = true
     @State private var selectedSport: Sport = .all
+    @State private var selectedConference: String = "All"
 
     private var filteredPicks: [GaryPick] {
         // Sort picks by game time (commence_time) - earliest games first
@@ -1321,7 +1374,18 @@ struct GaryPicksView: View {
         guard selectedSport != .all else {
             return interleaveBySport(upcomingPicks)
         }
-        return sortByTime(upcomingPicks.filter { ($0.league ?? "").uppercased() == selectedSport.rawValue })
+        var sportFiltered = sortByTime(upcomingPicks.filter { ($0.league ?? "").uppercased() == selectedSport.rawValue })
+
+        // Apply conference filter for NCAAB
+        if selectedSport == .ncaab && selectedConference != "All" {
+            sportFiltered = sportFiltered.filter { pick in
+                let homeConf = pick.homeConference ?? ""
+                let awayConf = pick.awayConference ?? ""
+                return homeConf == selectedConference || awayConf == selectedConference
+            }
+        }
+
+        return sportFiltered
     }
     
     /// Interleave picks by sport in round-robin order
@@ -1373,7 +1437,18 @@ struct GaryPicksView: View {
     private var availableSports: Set<String> {
         Set(allPicks.compactMap { $0.league?.uppercased() })
     }
-    
+
+    /// Available conferences from today's NCAAB picks
+    private var availableConferences: [String] {
+        let ncaabPicks = allPicks.filter { ($0.league ?? "").uppercased() == "NCAAB" }
+        var confSet = Set<String>()
+        for pick in ncaabPicks {
+            if let hc = pick.homeConference, !hc.isEmpty { confSet.insert(hc) }
+            if let ac = pick.awayConference, !ac.isEmpty { confSet.insert(ac) }
+        }
+        return confSet.sorted()
+    }
+
     /// Get time slot string for NFL picks (e.g., "Sunday 1:00 PM ET")
     private func getTimeSlot(for pick: GaryPick) -> String? {
         guard let isoTime = pick.commence_time, !isoTime.isEmpty else { return nil }
@@ -1449,7 +1524,20 @@ struct GaryPicksView: View {
                 // Sport Filter
                 SportFilterBar(selected: $selectedSport, availableSports: availableSports, showAll: true)
                     .padding(.bottom, 4)
-                
+                    .onChange(of: selectedSport) { _, _ in
+                        selectedConference = "All" // Reset conference when sport changes
+                    }
+
+                // Conference Filter (NCAAB only)
+                if selectedSport == .ncaab {
+                    ConferenceFilterBar(
+                        selected: $selectedConference,
+                        conferences: availableConferences
+                    )
+                    .padding(.bottom, 4)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
+
                 // Content
                 if loading {
                     Spacer()
@@ -3842,6 +3930,16 @@ struct TaleOfTapeSection: View {
     /// Map tokens to display names
     private func displayName(for token: String) -> String {
         let map: [String: String] = [
+            // NCAAB Barttorvik Tale of Tape
+            "ADJOE": "AdjOE",
+            "ADJDE": "AdjDE",
+            "ADJEM": "AdjEM",
+            "TEMPO": "Tempo",
+            "T_RANK": "T-Rank",
+            "BARTHAG": "Barthag",
+            "L5_FORM": "L5 Form",
+            "RECORD": "Record",
+            "CONF_RECORD": "Conf Record",
             // NBA/NCAAB stats
             "OFFENSIVE_RATING": "Off Rating",
             "DEFENSIVE_RATING": "Def Rating",
@@ -3979,7 +4077,15 @@ struct TaleOfTapeSection: View {
             "NCAAB_NET_RANKING": "NET Rank",
             "NCAAB_STRENGTH_OF_SCHEDULE": "SOS",
             "NCAAB_KENPOM_RATINGS": "KenPom Rank",
-            // NHL specific
+            // NHL verified Tale of Tape tokens
+            "GOALS_FOR_GM": "Goals/G",
+            "GOALS_AGST_GM": "GA/G",
+            "SHOTS_FOR_GM": "Shots/G",
+            "POWER_PLAY__": "PP%",
+            "PENALTY_KILL__": "PK%",
+            "FACEOFF_WIN__": "FO%",
+            "SAVE__": "Save%",
+            // NHL specific (from toolCallHistory)
             "GOALS_FOR": "Goals/G",
             "GOALS_AGAINST": "GA/G",
             "GOAL_DIFFERENTIAL": "Goal Diff",

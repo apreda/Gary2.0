@@ -78,7 +78,7 @@ Stars don't sit in NFL - but PLAY-CALLING changes dramatically based on score.
 - Red zone target/carry share is the driver
 - NOT overall volume or yardage efficiency
 - TD props are high-variance binary events
-- Goal-line role matters more than total touches
+- Investigate goal-line role vs total touches — which drives this player's scoring?
 
 ---
 

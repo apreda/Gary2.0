@@ -23,10 +23,9 @@ const { picksService } = await import('../src/services/picksService.js');
 const { getVenueForHomeTeam } = await import('../src/services/venueMapping.js');
 const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
 const { getConstitution } = await import('../src/services/agentic/constitution/index.js');
-// Quantum service removed - not needed
 const { fetchSportsbookOdds, formatOddsForStorage } = await import('../src/services/sportsbookOddsService.js');
-// Sport post-filters removed — Gary's output is final (no heuristic overrides)
-// Simple system: Gary picks SPREAD, ML, or PASS.
+const { supabase } = await import('../src/supabaseClient.js');
+// Simple system: Gary picks SPREAD or ML.
 // ═══════════════════════════════════════════════════════════════════════════
 // GARY PICK GENERATION
 // ═══════════════════════════════════════════════════════════════════════════
@@ -56,115 +55,15 @@ const FBS_CONFERENCE_IDS = [
   11,  // Sun Belt
 ];
 
-// NCAAB: Only analyze top 7 conferences + elite teams
-// Power 6 + Atlantic 10 have best data, NBA talent, and most reliable betting markets
-const NCAAB_ELITE_CONFERENCE_IDS = [
-  1,   // ACC
-  5,   // Atlantic 10 (A-10)
-  6,   // Big 12
-  7,   // Big East
-  10,  // Big Ten
-  24,  // SEC
-  33,  // Pac-12
-];
-
-// Elite teams outside top 7 conferences to KEEP (by team name substring)
-const NCAAB_ELITE_TEAM_NAMES = [
-  'memphis', 'uconn', 'connecticut',
-  'san diego state', 'nevada', 'new mexico', 'boise state', // Mountain West elites
-  'drake', 'indiana state', // MVC elites
-];
-
 // ═══════════════════════════════════════════════════════════════════════════
 // PICK LOGGING & TRANSPARENCY
 // ═══════════════════════════════════════════════════════════════════════════
 // 
-// Gary evaluates the full slate and decides PASS vs PICK.
+// Gary evaluates the full slate and makes a pick.
 // We do not filter by confidence or apply hard rules here.
 // This section only provides transparency tags (e.g., rest, injuries, traps).
 // ═══════════════════════════════════════════════════════════════════════════
 
-// Long-term injury keywords for context only (market may already price these in).
-// Gary should still investigate if the absence changes tonight's matchup.
-const LONG_TERM_INJURY_KEYWORDS = [
-  'out for season', 'season-ending', 'out indefinitely', 'out all year',
-  'ruled out for 2025', 'not expected to return', 'out for the year'
-];
-
-/**
- * Detect if a pick has a "trap" situation (for logging/awareness only; NOT a filter)
- * Returns { isTrap: boolean, trapReason: string | null }
- */
-function detectTrapSituation(pick, sportName) {
-  const factors = pick.supporting_factors || [];
-  const contradictions = pick.contradicting_factors?.major || [];
-  const allFactors = [...factors, ...contradictions].map(f => f.toLowerCase());
-  
-  // Detect back-to-back
-  const isBackToBack = allFactors.some(f => 
-    f.includes('back_to_back') || f.includes('b2b') || f.includes('back-to-back')
-  );
-  
-  // Detect road favorite
-  const isRoadFavorite = allFactors.some(f => 
-    f.includes('road_favorite') || f.includes('away_favorite')
-  );
-  
-  // Extract spread from pick
-  const spreadMatch = pick.pick?.match(/([+-]?\d+\.?\d*)\s*[+-]\d+$/);
-  const spreadValue = spreadMatch ? parseFloat(spreadMatch[1]) : 0;
-  const isBigSpread = spreadValue < -5; // Laying more than 5 points
-  
-  // TRAP: Back-to-back + road favorite + big spread
-  if (isBackToBack && isRoadFavorite && isBigSpread) {
-    return { 
-      isTrap: true, 
-      trapReason: `B2B road favorite laying ${Math.abs(spreadValue)} points` 
-    };
-  }
-  
-  return { isTrap: false, trapReason: null };
-}
-
-/**
- * Identify likely long-term injuries for context.
- * Not a hard rule — use for investigation, not auto-ignore.
- */
-function isLongTermInjury(injuryDescription) {
-  if (!injuryDescription) return false;
-  const lower = injuryDescription.toLowerCase();
-  return LONG_TERM_INJURY_KEYWORDS.some(kw => lower.includes(kw));
-}
-
-/**
- * Extract binary flags from pick for transparency
- */
-function extractBinaryFlags(pick) {
-  const factors = pick.supporting_factors || [];
-  const contradictions = pick.contradicting_factors?.major || [];
-  const allFactors = [...factors, ...contradictions].map(f => f.toLowerCase());
-  
-  return {
-    rest_advantage: allFactors.some(f => 
-      f.includes('rest_advantage') || f.includes('well_rested') || f.includes('rest_edge')
-    ),
-    back_to_back_disadvantage: allFactors.some(f => 
-      f.includes('back_to_back') || f.includes('b2b') || f.includes('fatigue')
-    ),
-    injury_edge: allFactors.some(f => 
-      f.includes('injury') && (f.includes('edge') || f.includes('advantage') || f.includes('out'))
-    ),
-    home_court: allFactors.some(f => 
-      f.includes('home_court') || f.includes('home_advantage')
-    ),
-    efficiency_edge: allFactors.some(f => 
-      f.includes('efficiency') || f.includes('net_rating') || f.includes('offensive_rating') || f.includes('corsi') || f.includes('xgf')
-    ),
-    goalie_edge: allFactors.some(f =>
-      f.includes('goalie') || f.includes('gsax') || f.includes('save_pct')
-    )
-  };
-}
 
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -271,7 +170,7 @@ if (sportsToRun.length === 0) {
 // Check environment variables
 function checkEnv() {
   const checks = [
-    { name: 'GEMINI_API_KEY', alts: [] },  // Gemini 3 Deep Think (replaced OpenAI)
+    { name: 'GEMINI_API_KEY', alts: [] },
     { name: 'SUPABASE_URL', alts: ['VITE_SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_URL'] },
     { name: 'SUPABASE_SERVICE_ROLE_KEY', alts: ['SUPABASE_SERVICE_KEY', 'VITE_SUPABASE_SERVICE_ROLE_KEY'] }
   ];
@@ -307,7 +206,7 @@ async function main() {
 ║                                                                  ║
 ║              🐻 GARY AGENTIC PICKS GENERATOR 🐻                  ║
 ║                                                                  ║
-║        Stats-First Analysis | OpenAI Function Calling            ║
+║        Stats-First Analysis | Gemini Function Calling            ║
 ║                                                                  ║
 ╚══════════════════════════════════════════════════════════════════╝
 `);
@@ -604,9 +503,16 @@ async function main() {
         ]);
 
         // Conference ID to name mapping for logging and storage
+        // Complete mapping of all BDL conference IDs to human-readable names
         const CONF_ID_NAMES = {
-          1: 'ACC', 4: 'AAC', 6: 'Big 12', 7: 'Big East',
-          10: 'Big Ten', 24: 'SEC', 31: 'WCC', 33: 'Pac-12'
+          1: 'ACC', 2: 'America East', 3: 'Atlantic 10', 4: 'AAC', 5: 'Atlantic Sun',
+          6: 'Big 12', 7: 'Big East', 8: 'Big Sky', 9: 'Big South',
+          10: 'Big Ten', 11: 'Big West', 12: 'CAA', 13: 'Conference USA',
+          14: 'Horizon', 15: 'Ivy League', 16: 'MAAC', 17: 'MAC',
+          18: 'MEAC', 19: 'Missouri Valley', 20: 'Mountain West', 21: 'NEC',
+          22: 'Ohio Valley', 23: 'Patriot', 24: 'SEC', 25: 'Southern',
+          26: 'Southland', 27: 'SWAC', 28: 'Summit', 29: 'Sun Belt',
+          30: 'WAC', 31: 'WCC', 32: 'West Coast', 33: 'Pac-12'
         };
 
         const isApprovedConference = (confId) => {
@@ -739,17 +645,6 @@ async function main() {
         }
         console.log(`[${config.name}] Top 7 conference + data quality filter: ${beforeCount} → ${games.length} games`);
         
-        // DEBUG: Check if UCLA made it through
-        const uclaInFiltered = games.find(g => 
-          g.home_team?.toLowerCase().includes('ucla') || 
-          g.away_team?.toLowerCase().includes('ucla')
-        );
-        console.log(`[${config.name}] 🔍 DEBUG: UCLA in filtered games: ${uclaInFiltered ? 'YES ✅' : 'NO ❌'}`);
-        if (uclaInFiltered) {
-          const idx = games.indexOf(uclaInFiltered);
-          console.log(`[${config.name}] 🔍 DEBUG: UCLA game position: #${idx + 1} of ${games.length}`);
-        }
-
         // SPREAD SIZE FILTER: Remove blowout games (spread >= 15 either direction)
         // These games have low betting value — Gary shouldn't waste time on them
         const beforeSpreadFilter = games.length;
@@ -864,17 +759,6 @@ async function main() {
       for (let i = 0; i < finalGames.length; i++) {
         const game = finalGames[i];
 
-        // Skip specific teams if configured (for testing)
-        const SKIP_TEAMS = []; // Empty - let deduplication handle existing picks
-        const shouldSkip = SKIP_TEAMS.some(team =>
-          game.home_team?.toLowerCase().includes(team.toLowerCase()) ||
-          game.away_team?.toLowerCase().includes(team.toLowerCase())
-        );
-        if (shouldSkip) {
-          console.log(`\n⏭️  Skipping: ${game.away_team} @ ${game.home_team} (in skip list)`);
-          continue;
-        }
-
         console.log(`\n[${i + 1}/${finalGames.length}] ${game.away_team} @ ${game.home_team}`);
 
         // Create game key for deduplication
@@ -935,8 +819,10 @@ async function main() {
 
         if (result && !result.error && result.pick) {
           // Check minimum stats requirement (for NCAAB especially)
-          // Use UNIQUE stats count (not duplicates across iterations)
-          const allTokens = result.toolCallHistory?.map(t => t.token) || [];
+          // Use UNIQUE stats count — exclude rejected tokens (quality: 'unavailable')
+          const allTokens = (result.toolCallHistory || [])
+            .filter(t => t.token && t.quality !== 'unavailable')
+            .map(t => t.token);
           const uniqueTokens = [...new Set(allTokens)];
           const statsCount = uniqueTokens.length;
           const minStatsRequired = config.minStats || 0;
@@ -954,7 +840,7 @@ async function main() {
             let totalCheckedStats = 0;
             const badStats = [];
 
-            for (const stat of result.toolCallHistory) {
+            for (const stat of result.toolCallHistory.filter(t => t.quality !== 'unavailable')) {
               // Check for zero/empty values in home and away data
               const checkForZeros = (obj, teamLabel) => {
                 if (!obj || typeof obj !== 'object') return false;
@@ -998,8 +884,8 @@ async function main() {
             console.log(`   Stats Requested (${statsCount} unique): ${uniqueTokens.join(', ')}`);
             
             // 📊 INVESTIGATION AUDIT - Show what Gary actually investigated
-            // Filter out undefined/empty tokens
-            const tokens = result.toolCallHistory.map(t => t.token).filter(t => t);
+            // Filter out undefined/empty tokens AND rejected tokens (quality: 'unavailable')
+            const tokens = result.toolCallHistory.filter(t => t.token && t.quality !== 'unavailable').map(t => t.token);
             // Count player stats: tokens containing PLAYER_, _PLAYER, GAME_LOGS, or specific player stat patterns
             const playerStatsCount = tokens.filter(t => 
               t && (t.includes('PLAYER_') || 
@@ -1017,14 +903,13 @@ async function main() {
             // Check key investigation areas (sport-aware)
             const isNCAABSport = config.key === 'basketball_ncaab';
             const investigatedAreas = isNCAABSport ? {
-              // NCAAB: No clutch stats; bench depth from player season stats or scout report
-              homeAwaySplits: tokens.some(t => t && (t.includes('HOME_AWAY') || t.includes('SPLITS') || t.includes('HOME_COURT'))),
-              recentForm: tokens.some(t => t && (t.includes('RECENT_FORM') || t.includes('LAST_'))),
-              h2hHistory: tokens.some(t => t && t.includes('H2H')),
-              tempo: tokens.some(t => t && (t.includes('PACE') || t.includes('TEMPO'))),
-              efficiency: tokens.some(t => t && (t.includes('KENPOM') || t.includes('BARTTORVIK') || t.includes('RATING') || t.includes('EFG'))),
-              advancedMetrics: tokens.some(t => t && (t.includes('NET_RANKING') || t.includes('QUAD') || t.includes('OPPONENT_QUALITY'))),
-              benchDepth: tokens.some(t => t && t.includes('BENCH')),
+              // NCAAB: BDL tokens only — scout report covers KenPom, rankings, H2H, injuries, home court
+              fourFactors: tokens.some(t => t && (t.includes('EFG') || t.includes('TURNOVER_RATE') || t.includes('OREB_RATE') || t.includes('FT_RATE'))),
+              tempo: tokens.some(t => t && t.includes('TEMPO')),
+              efficiency: tokens.some(t => t && (t.includes('RATING') || t.includes('TS_PCT'))),
+              scoring: tokens.some(t => t && (t.includes('SCORING') || t.includes('FG_PCT') || t.includes('THREE_PT'))),
+              defense: tokens.some(t => t && (t.includes('REBOUNDS') || t.includes('STEALS') || t.includes('BLOCKS'))),
+              assists: tokens.some(t => t && t.includes('ASSISTS')),
               playerLogs: playerStatsCount > 0
             } : {
               homeAwaySplits: tokens.some(t => t && (t.includes('HOME_AWAY') || t.includes('SPLITS'))),
@@ -1356,10 +1241,40 @@ async function main() {
             }
           }
 
-          // NHL: ALWAYS use verifiedTaleOfTape from scout report for consistent display
-          // NHL toolCallHistory can be sparse or inconsistent - verifiedTaleOfTape has reliable BDL stats
-          if (config.key === 'icehockey_nhl' && result.verifiedTaleOfTape?.rows) {
-            console.log(`   📊 NHL: Using verified Tale of Tape (${result.verifiedTaleOfTape.rows.length} rows) for pick card`);
+          // NHL + NCAAB: ALWAYS use verifiedTaleOfTape from scout report for consistent display
+          // NHL toolCallHistory can be sparse or inconsistent
+          // NCAAB: BDL-calculated ORtg/DRtg values were garbage (2702 instead of ~100)
+          //        Now uses Barttorvik AdjOE/AdjDE for real adjusted efficiency
+          if ((config.key === 'icehockey_nhl' || config.key === 'basketball_ncaab') && result.verifiedTaleOfTape?.rows) {
+            const sportLabel = config.key === 'icehockey_nhl' ? 'NHL' : 'NCAAB';
+            console.log(`   📊 ${sportLabel}: Using verified Tale of Tape (${result.verifiedTaleOfTape.rows.length} rows) for pick card`);
+
+            // Map verifiedTaleOfTape tokens to iOS StatValues property names
+            // iOS StatValues.from(dict:) reads specific keys like "offensive_rating", "tempo", etc.
+            // getValue(for: token) then uses the token to look up the value from those properties
+            const tokenToIosKey = {
+              // NCAAB Barttorvik stats
+              'ADJOE': 'offensive_rating',
+              'ADJDE': 'defensive_rating',
+              'ADJEM': 'net_rating',
+              'TEMPO': 'tempo',
+              'T_RANK': 'kenpom_rank',
+              'BARTHAG': 'efg_pct',  // Reuse efg_pct slot for Barthag display
+              // Common stats
+              'L5_FORM': 'last_5',
+              'RECORD': 'overall',
+              'CONF_RECORD': 'conference_record',
+              'EFG_PCT': 'efg_pct',
+              // NHL stats
+              'GOALS_FOR_GM': 'goals_for_per_game',
+              'GOALS_AGST_GM': 'goals_against_per_game',
+              'SHOTS_FOR_GM': 'shots_for',
+              'POWER_PLAY__': 'power_play_pct',
+              'PENALTY_KILL__': 'penalty_kill_pct',
+              'FACEOFF__': 'faceoff_pct',
+              'SAVE__': 'save_pct',
+            };
+
             // Clear any toolCallHistory stats and use the verified rows instead
             statsData.length = 0;
             for (const row of result.verifiedTaleOfTape.rows) {
@@ -1370,17 +1285,16 @@ async function main() {
               const awayValue = typeof row.away === 'object' ? row.away.value : row.away;
               const homeTeam = typeof row.home === 'object' ? row.home.team : result.homeTeam;
               const awayTeam = typeof row.away === 'object' ? row.away.team : result.awayTeam;
-              // Use token as key (lowercase) to match iOS app format for NBA/NCAAB
-              // iOS expects: { team: "Name", stat_key: "value" }, not { team: "Name", value: "value" }
-              const statKey = row.token.toLowerCase();
+              // Map token to iOS-compatible property name
+              const iosKey = tokenToIosKey[row.token] || row.token.toLowerCase();
               statsData.push({
                 name: row.name,
                 token: row.token,
-                home: { team: homeTeam, [statKey]: homeValue },
-                away: { team: awayTeam, [statKey]: awayValue }
+                home: { team: homeTeam, [iosKey]: homeValue },
+                away: { team: awayTeam, [iosKey]: awayValue }
               });
             }
-            console.log(`   ✓ NHL: Added ${statsData.length} stats from verified Tale of Tape`);
+            console.log(`   ✓ ${sportLabel}: Added ${statsData.length} stats from verified Tale of Tape`);
           }
 
           // Also keep simple token list for backwards compatibility
@@ -1474,9 +1388,6 @@ async function main() {
             type: result.type,
             odds: finalSpreadOdds || result.odds,
             confidence: result.confidence || 0.65, // Gary's conviction in the bet (0.50-1.00)
-            // Thesis-based classification (new filtering system)
-            thesis_type: result.thesis_type || null,
-            thesis_mechanism: result.thesis_mechanism || null,
             supporting_factors: result.supporting_factors || [],
             contradicting_factors: result.contradicting_factors || [],
             homeTeam: result.homeTeam,
@@ -1541,6 +1452,53 @@ async function main() {
           // Add to picks
           sportPicks.push(cleanPick);
           picksGenerated += 1;
+
+          // Store full analysis log for debugging/review (non-blocking)
+          try {
+            const gameDate = game.commence_time
+              ? new Date(game.commence_time).toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+              : new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+
+            const logData = {
+              pick_id: cleanPick.pick_id,
+              sport: config.key,
+              game_date: gameDate,
+              matchup: `${game.away_team} @ ${game.home_team}`,
+              pick_text: cleanPick.pick,
+              pick_type: cleanPick.type,
+              odds: cleanPick.odds,
+              confidence: cleanPick.confidence,
+              rationale: result.rationale || null,
+              supporting_factors: result.supporting_factors || [],
+              contradicting_factors: result.contradicting_factors || {},
+              raw_analysis: result.rawAnalysis || null,
+              steel_man_cases: result.steelManCases ? JSON.stringify(result.steelManCases) : null,
+              tool_call_history: result.toolCallHistory ? JSON.stringify(result.toolCallHistory) : null,
+              iterations: result.iterations || null,
+              created_at: new Date().toISOString(),
+            };
+
+            const logTable = useTestTable ? 'test_pick_logs' : 'pick_logs';
+            const { error: logError } = await supabase.from(logTable).insert(logData);
+            if (logError) {
+              console.warn(`   ⚠️ Failed to store pick log: ${logError.message}`);
+            } else {
+              console.log(`   📝 Full analysis log stored to ${logTable}`);
+            }
+          } catch (logErr) {
+            console.warn(`   ⚠️ Failed to store pick log: ${logErr.message}`);
+          }
+
+          // NCAAB: Store each pick immediately so it appears in the app as soon as it's ready
+          if (config.name === 'NCAAB' && shouldStore && cleanPick.type !== 'pass' && cleanPick.pick !== 'PASS') {
+            try {
+              console.log(`\n📤 [NCAAB] Storing pick immediately: ${cleanPick.pick}`);
+              await storePicks([cleanPick]);
+              console.log(`✅ [NCAAB] Pick stored to Supabase`);
+            } catch (storeErr) {
+              console.log(`⚠️  [NCAAB] Immediate store failed (will retry at end): ${storeErr.message}`);
+            }
+          }
         } else if (result.error) {
           console.log(`\n⚠️  Error: ${result.error}`);
         } else {
@@ -1571,17 +1529,11 @@ async function main() {
           console.log(`╠══════════════════════════════════════════════════════════════════╣`);
           for (let i = 0; i < sportPicks.length; i++) {
             const p = sportPicks[i];
-            const typeTag = p.type === 'pass' ? 'PASS' : (p.type === 'moneyline' ? 'ML' : 'SPREAD');
-            const pickStr = (p.pick || 'PASS').slice(0, 30).padEnd(30);
+            const typeTag = p.type === 'moneyline' ? 'ML' : 'SPREAD';
+            const pickStr = (p.pick || '').slice(0, 30).padEnd(30);
             console.log(`║  ${pickStr} | ${typeTag.padEnd(6)}`);
           }
           console.log(`╚══════════════════════════════════════════════════════════════════╝\n`);
-
-          // ═══════════════════════════════════════════════════════════════
-          // SIMPLE PASS FILTER (Gary has full agency)
-          // ═══════════════════════════════════════════════════════════════
-          // Gary always makes a pick (spread or ML). Filter totals and PASS.
-          // ═══════════════════════════════════════════════════════════════
 
           const qualifiedPicks = sportPicks.filter(p => {
             // Filter out totals (over/under) - game picks are spread/ML only
@@ -1634,9 +1586,7 @@ async function main() {
 
       const sportTime = ((Date.now() - sportStartTime) / 1000).toFixed(1);
 
-      // Count picks vs passes
-      const pickCount = sportPicks.filter(p => p.pick !== 'PASS' && p.type !== 'pass').length;
-      const passCount = sportPicks.filter(p => p.pick === 'PASS' || p.type === 'pass').length;
+      const pickCount = sportPicks.length;
 
       // Track failed games for this sport (slateSession removed)
       const failedCount = 0;
@@ -1644,7 +1594,6 @@ async function main() {
       summary[config.name] = {
         games: finalGames.length,
         picks: pickCount,
-        passed: passCount,
         stored: storedPicksCount,
         filtered: filteredOutCount,
         failed: failedCount,

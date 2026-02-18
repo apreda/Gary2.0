@@ -212,6 +212,17 @@ ${candidates.map((p, i) => {
   if (p.tsPercent || p.efgPercent) {
     line += `\n   Efficiency: TS% ${p.tsPercent?.toFixed(1) || '?'}, eFG% ${p.efgPercent?.toFixed(1) || '?'}`;
   }
+  // Team role / usage share (from BDL usage stats)
+  if (p.usageStats) {
+    const u = p.usageStats;
+    const parts = [];
+    if (u.pct_pts != null) parts.push(`${(u.pct_pts * 100).toFixed(1)}% PTS`);
+    if (u.pct_fga != null) parts.push(`${(u.pct_fga * 100).toFixed(1)}% FGA`);
+    if (u.usg_pct != null) parts.push(`USG: ${(u.usg_pct * 100).toFixed(1)}%`);
+    if (parts.length > 0) {
+      line += `\n   Team Role: ${parts.join(' | ')}`;
+    }
+  }
   // Matchup DvP context (from Tank01 team defense)
   if (p.matchupDvP) {
     line += `\n   Matchup DvP: Opponent allows ${p.matchupDvP.oppDvpPts?.toFixed(1) || '?'} PPG to ${p.matchupDvP.position}s`;

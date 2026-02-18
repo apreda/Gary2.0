@@ -47,7 +47,7 @@ PASS 1: Investigation (Gemini 3 Flash)
 PASS 2: Steel Man (Gemini 3 Flash)
    ↓ Gary builds arguments for BOTH sides without bias
 
-PASS 2.5: Conviction Rating (Gemini 3 Pro)
+PASS 2.5: Evaluation (Gemini 3 Pro)
    ↓ Gary stress-tests arguments, evaluates which side data supports
 
 PASS 3: Final Decision (Gemini 3 Pro)
@@ -55,7 +55,7 @@ PASS 3: Final Decision (Gemini 3 Pro)
 ```
 
 **Model Selection:**
-- NBA/NFL/NHL: Flash for investigation, Pro for conviction/decision
+- NBA/NFL/NHL: Flash for investigation, Pro for evaluation/decision
 - NCAAB/NCAAF: Flash throughout (high volume)
 
 ---

@@ -10,6 +10,17 @@
       "headers": {
         "Authorization": "970a977f-60b9-4cfc-9c84-9ea3d08fe26c"
       }
+    },
+    "RapidAPI Hub - Tank01 Fantasy Stats": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://mcp.rapidapi.com",
+        "--header",
+        "x-api-host: tank01-fantasy-stats.p.rapidapi.com",
+        "--header",
+        "x-api-key: f5ff86aeb9mshc1d086741e78fefp1649f3jsn64fc04060c96"
+      ]
     }
   }
 }

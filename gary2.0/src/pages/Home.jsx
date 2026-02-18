@@ -668,37 +668,15 @@ function Home() {
             return;
           }
           
-          // Score picks based on thesis quality
+          // Score picks by confidence (highest confidence = featured pick)
           const scorePick = (pick) => {
             if (!pick) return -1;
-            const thesisType = pick.thesis_type;
-            const majorCount = pick.contradicting_factors?.major?.length || 0;
             const confidence = typeof pick.confidence === 'number' ? pick.confidence : parseFloat(pick.confidence) || 0;
-            
-            // Priority scoring:
-            // clear_read with 0 majors = 1000
-            // clear_read with 1 major = 900
-            // clear_read with 2 majors = 800
-            // found_angle with 0 majors = 700
-            // found_angle with 1 major = 600
-            // found_angle with 2 majors = 500
-            // Then add confidence as tiebreaker (0-100)
-            
-            let baseScore = 0;
-            if (thesisType === 'clear_read') {
-              baseScore = 1000 - (majorCount * 100);
-            } else if (thesisType === 'found_angle') {
-              baseScore = 700 - (majorCount * 100);
-            } else {
-              // Fallback to confidence for old picks without thesis_type
-              baseScore = confidence * 10;
-            }
-            
-            return baseScore + confidence;
+            return confidence;
           };
-          
+
           const topPicks = allPicks
-            .filter(pick => pick && (pick.confidence || pick.thesis_type))
+            .filter(pick => pick && pick.confidence)
             .sort((a, b) => scorePick(b) - scorePick(a))
             .slice(0, 1);
           

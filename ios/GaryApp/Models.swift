@@ -556,6 +556,16 @@ struct StatValues: Codable {
         case "STEALS": return stealsPerGame ?? "N/A"
         case "BLOCKS": return blocksPerGame ?? "N/A"
         case "FG_PCT": return fgPct ?? efgPct ?? "N/A"
+        // NCAAB Barttorvik Tale of Tape tokens
+        case "ADJOE": return offensiveRating ?? "N/A"
+        case "ADJDE": return defensiveRating ?? "N/A"
+        case "ADJEM": return netRating ?? "N/A"
+        case "TEMPO": return tempo ?? "N/A"
+        case "T_RANK": return kenpomRank ?? "N/A"
+        case "BARTHAG": return efgPct ?? "N/A"
+        case "L5_FORM": return last5 ?? "N/A"
+        case "RECORD": return overall ?? "N/A"
+        case "CONF_RECORD": return conferenceRecord ?? "N/A"
         // NCAAB enriched tokens
         case "NCAAB_EFG_PCT": return efgPct ?? "N/A"
         case "NCAAB_TEMPO": return tempo ?? "N/A"
@@ -574,7 +584,15 @@ struct StatValues: Codable {
         case "NCAAF_DEFENSE": return oppTotalYards ?? oppYardsPerGame ?? "N/A"
         case "NCAAF_TURNOVER_MARGIN": return interceptionsThrown ?? interceptions ?? turnoverDiff ?? "N/A"
         case "NCAAF_RED_ZONE_OFFENSE": return thirdDownPct ?? "N/A"
-        // NHL-specific stats
+        // NHL verified Tale of Tape tokens (from label.toUpperCase)
+        case "GOALS_FOR_GM": return goalsForPerGame ?? "N/A"
+        case "GOALS_AGST_GM": return goalsAgainstPerGame ?? "N/A"
+        case "SHOTS_FOR_GM": return shotsFor ?? "N/A"
+        case "POWER_PLAY__": return powerPlayPct ?? "N/A"
+        case "PENALTY_KILL__": return penaltyKillPct ?? "N/A"
+        case "FACEOFF_WIN__": return faceoffPct ?? "N/A"
+        case "SAVE__": return savePct ?? "N/A"
+        // NHL-specific stats (from toolCallHistory)
         case "GOALS_FOR": return goalsForPerGame ?? "N/A"
         case "GOALS_AGAINST": return goalsAgainstPerGame ?? "N/A"
         case "GOAL_DIFFERENTIAL": return shotDifferential ?? "N/A"

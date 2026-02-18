@@ -138,7 +138,13 @@ OUTPUT FORMAT — respond ONLY with valid JSON, no markdown, no explanation:
     generationConfig: {
       temperature: 1.0,
       maxOutputTokens: 8192
-    }
+    },
+    safetySettings: [
+      { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+    ]
   });
 
   const result = await model.generateContent(query);
