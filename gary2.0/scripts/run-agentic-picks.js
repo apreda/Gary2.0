@@ -1253,8 +1253,12 @@ async function main() {
               // Skip injuries row (shown separately)
               if (row.name === 'Key Injuries') continue;
               // Extract value from nested structure: { team: "Name", value: "3.45" }
-              const homeValue = typeof row.home === 'object' ? row.home.value : row.home;
-              const awayValue = typeof row.away === 'object' ? row.away.value : row.away;
+              // CRITICAL: iOS StatValues.from(dict:) casts with `as? String` — numbers silently fail
+              // Always convert to String so iOS can parse them
+              const rawHome = typeof row.home === 'object' ? row.home.value : row.home;
+              const rawAway = typeof row.away === 'object' ? row.away.value : row.away;
+              const homeValue = rawHome != null ? String(rawHome) : 'N/A';
+              const awayValue = rawAway != null ? String(rawAway) : 'N/A';
               const homeTeam = typeof row.home === 'object' ? row.home.team : result.homeTeam;
               const awayTeam = typeof row.away === 'object' ? row.away.team : result.awayTeam;
               // Map token to iOS-compatible property name
@@ -1424,42 +1428,6 @@ async function main() {
           // Add to picks
           sportPicks.push(cleanPick);
           picksGenerated += 1;
-
-          // Store full analysis log for debugging/review (non-blocking)
-          try {
-            const gameDate = game.commence_time
-              ? new Date(game.commence_time).toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
-              : new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-
-            const logData = {
-              pick_id: cleanPick.pick_id,
-              sport: config.key,
-              game_date: gameDate,
-              matchup: `${game.away_team} @ ${game.home_team}`,
-              pick_text: cleanPick.pick,
-              pick_type: cleanPick.type,
-              odds: cleanPick.odds,
-              confidence: cleanPick.confidence,
-              rationale: result.rationale || null,
-              supporting_factors: result.supporting_factors || [],
-              contradicting_factors: result.contradicting_factors || {},
-              raw_analysis: result.rawAnalysis || null,
-              steel_man_cases: result.steelManCases ? JSON.stringify(result.steelManCases) : null,
-              tool_call_history: result.toolCallHistory ? JSON.stringify(result.toolCallHistory) : null,
-              iterations: result.iterations || null,
-              created_at: new Date().toISOString(),
-            };
-
-            const logTable = useTestTable ? 'test_pick_logs' : 'pick_logs';
-            const { error: logError } = await supabase.from(logTable).insert(logData);
-            if (logError) {
-              console.warn(`   ⚠️ Failed to store pick log: ${logError.message}`);
-            } else {
-              console.log(`   📝 Full analysis log stored to ${logTable}`);
-            }
-          } catch (logErr) {
-            console.warn(`   ⚠️ Failed to store pick log: ${logErr.message}`);
-          }
 
           // NCAAB: Store each pick immediately so it appears in the app as soon as it's ready
           if (config.name === 'NCAAB' && shouldStore && cleanPick.type !== 'pass' && cleanPick.pick !== 'PASS') {
