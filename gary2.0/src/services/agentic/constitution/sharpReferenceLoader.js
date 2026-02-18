@@ -278,7 +278,7 @@ Markets overreact BOTH directions — a blowout loss can make a line too generou
 ## NCAAB-SPECIFIC: CASE STRUCTURE
 
 ### HOME COURT — A STRUCTURAL FACTOR IN NCAAB
-Home court in college basketball is NOT just a narrative — it's a measurable structural advantage worth 3-8 points depending on venue and teams. The line includes SOME home court adjustment, but:
+Home court in college basketball is NOT just a narrative — it's a measurable structural advantage. The line includes SOME home court adjustment, but:
 - Investigate whether the spread got the SIZE of the home court factor right
 - Ask: Does this team's home efficiency data show an advantage the spread underweights?
 - Ask: Does the road team's away efficiency data show they struggle more than the spread implies?

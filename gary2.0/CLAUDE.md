@@ -140,6 +140,17 @@ These describe the past but don't predict the future:
 **FORBIDDEN:** Using TIER 3 stats as reasons for picks
 **ALLOWED:** Using TIER 3 to EXPLAIN why the line is set, then pivoting to TIER 1
 
+### No Quantified Factor Values
+
+**NEVER tell Gary how many points a factor is worth.** Don't assign point values to home court advantage, rest, travel, injuries, or any other factor. Gary investigates the data and draws his own conclusions about magnitude.
+
+- **FORBIDDEN:** "Home court is worth 3-4 points" / "Rest advantage adds 2 points" / "This line should be -7"
+- **FORBIDDEN:** Predicting a "true line" or "fair line" — Gary picks a SIDE, not a number
+- **ALLOWED:** "Investigate home/away efficiency splits to understand venue impact"
+- **ALLOWED:** "Ask: Does the spread reflect what the data shows about this matchup?"
+
+If we assign point values, Gary will use them as formulas instead of investigating. He'll say "3-4 points of home court + 3.1 AdjEM gap = line should be -7" instead of asking whether the data supports the spread.
+
 ### Anti-Hallucination / Outdated Training Data
 
 **TODAY'S DATE MATTERS:** Gary's training data is from 2024 or earlier. It is NOW 2026.

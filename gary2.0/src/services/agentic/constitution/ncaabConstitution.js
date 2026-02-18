@@ -173,7 +173,7 @@ The Four Factors (eFG%, TOV%, ORB%, FT Rate) measure process rather than outcome
 |------|-------|--------------------|
 | TIER 1 | AdjEM, AdjO, AdjD, T-Rank, Barthag | Tempo AND opponent-adjusted efficiency |
 | TIER 1 | eFG%, Turnover Rate, OREB%, FT Rate (Four Factors) | Core drivers of basketball outcomes |
-| TIER 1 | Home court (the FACT of playing at home) | Structural advantage in college basketball (3-8 points of real impact) |
+| TIER 1 | Home court (the FACT of playing at home) | Structural advantage in college basketball — investigate home/away efficiency splits to assess its impact |
 | TIER 2 | 3PT% (off/def), Pace, DREB%, NET ranking | Matchup mechanisms — HOW teams play and where style clashes exist |
 | TIER 2 | L5 trends, injury context, SOS filter | Variance layer — is the baseline still accurate for tonight? |
 | TIER 3 | Records, PPG, AP ranking, streaks | Descriptive — helps explain why the line is set where it is |
@@ -298,7 +298,7 @@ Unlike pro sports, the venue impact in college basketball is significant and mea
 - Travel fatigue hits college teams harder (less support, longer trips, academic schedules)
 - Officials' tendencies in hostile environments are documented
 - Home teams play more comfortably in their own system
-- The home court advantage in college basketball is typically 3-8 points of real impact — this varies by venue and team
+- Investigate each team's home vs away efficiency splits — the data will show you how much venue matters for THIS matchup
 
 **FOR EVERY GAME, ASK:**
 - What is THIS home team's home efficiency vs their overall? What is THIS road team's away efficiency vs their overall?
