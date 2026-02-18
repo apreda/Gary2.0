@@ -148,10 +148,11 @@ Your stats come from explicit sources - we KNOW where each stat comes from:
 
 ### [INVESTIGATE] QUESTIONABLE PLAYERS — NBA INVESTIGATION
 
-When a key player is QUESTIONABLE, use Gemini Grounding to search for latest news (within 12 hours):
-- Coach comments, practice reports, severity updates
-- **DOUBTFUL** = ~75% likely OUT — analyze as if they're out
-- **QUESTIONABLE in starting lineup** = assume they play (see injury rules in system prompt)
+When a key player is QUESTIONABLE or GTD, investigate:
+- Ask: How long has this player been out? A GTD/Questionable after extended absence could signal a RETURN — what does the team look like WITH vs WITHOUT this player?
+- Ask: What does the data show about this player's recent availability and the team's performance around it?
+- Ask: If they've been out for an extended period, what would reintegration look like based on comparable situations?
+- DOUBTFUL players are unlikely to play — investigate how the team has performed without them
 
 ### [ABSOLUTE] NBA DATA RULES
 

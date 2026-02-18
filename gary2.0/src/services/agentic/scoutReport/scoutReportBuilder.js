@@ -5484,14 +5484,16 @@ function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey, rosterDepth 
     }
 
     // Factual duration labels — no prescriptive conclusions about edges or pricing
-    if (i.duration === 'SEASON-LONG' || i.status === 'Injured Reserve' || i.status === 'IR' || i.status === 'LTIR' || i.status === 'OFS') {
+    // GTD checked FIRST — a GTD player might return regardless of how long they were out
+    if (i.status?.toUpperCase() === 'GTD') {
+      const durationContext = days ? ` - was out ${days}d` : '';
+      durationTag = ` [GTD${durationContext}]`;
+    } else if (i.duration === 'SEASON-LONG' || i.status === 'Injured Reserve' || i.status === 'IR' || i.status === 'LTIR' || i.status === 'OFS') {
       durationTag = ` [Out For Season${timeInfo}]`;
     } else if (i.duration === 'MID-SEASON') {
       durationTag = ` [OUT${timeInfo}]`;
     } else if (i.duration === 'RECENT') {
       durationTag = ` [RECENT${timeInfo}]`;
-    } else if (i.status?.toUpperCase() === 'GTD') {
-      durationTag = ' [GTD]';
     } else if (days !== null && days !== undefined) {
       // Has timing info but no duration category
       durationTag = ` [OUT${timeInfo}]`;
@@ -5651,10 +5653,12 @@ function formatSituationalFactors(game, injuries, sport) {
     const dateStr = i.reportDateStr;
     const timeInfo = dateStr && days ? ` - since ${dateStr} (${days}d)` : dateStr ? ` - since ${dateStr}` : days ? ` (${days}d)` : '';
 
-    if (i.duration === 'SEASON-LONG' || i.status === 'IR' || i.status === 'LTIR' || i.status === 'Out (Season)') {
+    if (i.status === 'GTD') {
+      // GTD overrides duration — player might return regardless of how long they were out
+      const durationContext = days ? ` - was out ${days}d` : '';
+      tag = ` [GTD${durationContext}]`;
+    } else if (i.duration === 'SEASON-LONG' || i.status === 'IR' || i.status === 'LTIR' || i.status === 'Out (Season)') {
       tag = ` [Out For Season${timeInfo}]`;
-    } else if (i.status === 'GTD') {
-      tag = ' [GTD]';
     } else if (i.duration === 'RECENT') {
       tag = ` [RECENT${timeInfo}]`;
     } else if (i.duration === 'MID-SEASON') {

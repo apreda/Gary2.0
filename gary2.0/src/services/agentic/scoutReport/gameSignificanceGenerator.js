@@ -193,17 +193,17 @@ function areDivisionalRivals(homeTeam, awayTeam, sport) {
   const awayDivision = findDivision(awayTeam, sport);
 
   if (homeDivision && awayDivision && homeDivision === awayDivision) {
-    // For college sports, return conference-specific label
+    // For college sports, just return conference name (not every conf game is a rivalry)
     if (sport === 'NCAAB' || sport === 'NCAAF') {
       const confLabels = {
-        big_ten: 'Big Ten Rivals',
-        sec: 'SEC Rivals',
-        acc: 'ACC Rivals',
-        big_12: 'Big 12 Rivals',
-        big_east: 'Big East Rivals',
-        pac_12: 'Pac-12 Rivals'
+        big_ten: 'Big Ten',
+        sec: 'SEC',
+        acc: 'ACC',
+        big_12: 'Big 12',
+        big_east: 'Big East',
+        pac_12: 'Pac-12'
       };
-      return confLabels[homeDivision] || 'Conference Rivals';
+      return confLabels[homeDivision] || 'Conference';
     }
     return 'Division Rivals';
   }

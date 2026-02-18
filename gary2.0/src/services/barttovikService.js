@@ -8,7 +8,7 @@
  *
  * Replaces Gemini Grounding calls for:
  *   - NCAAB_BARTTORVIK (T-Rank, AdjOE, AdjDE, Barthag, WAB)
- *   - NCAAB_KENPOM_RATINGS (KenPom-equivalent AdjO/AdjD/AdjEM)
+ *   - NCAAB_BARTTORVIK_RATINGS (AdjO/AdjD/AdjEM via Barttorvik API)
  *   - NCAAB_OFFENSIVE_RATING / NCAAB_DEFENSIVE_RATING (broken BDL calc)
  *   - NCAAB_TEMPO (broken BDL calc)
  *   - fetchNcaabAdvancedMetrics() in scout report (2 Grounding calls)
