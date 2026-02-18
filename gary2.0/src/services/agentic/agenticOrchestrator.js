@@ -1790,7 +1790,7 @@ ${ncaabGuidance ? `<sport_specific_guidance>${ncaabGuidance}</sport_specific_gui
 
 **NOTE:** Home/away RECORDS are DESCRIPTIVE (they explain WHY the line is set, not what happens tonight). If you want to understand venue impact, investigate home/away EFFICIENCY splits (ORtg, eFG% at home vs road), not records.
 ${(sport === 'basketball_ncaab' || sport === 'NCAAB') ? `
-**NCAAB HOME COURT:** In college basketball, the FACT of playing at home is a STRUCTURAL factor (Tier 1), not just descriptive. Investigate whether the spread accurately captures the venue impact — home court in NCAAB can be worth 3-8 real points depending on the venue and teams. Investigate home/away EFFICIENCY splits to quantify it.` : ''}
+**NCAAB HOME COURT:** In college basketball, the FACT of playing at home is a STRUCTURAL factor (Tier 1), not just descriptive. Investigate whether the spread accurately captures the venue impact. Investigate home/away EFFICIENCY splits to understand the real difference.` : ''}
 
 **ADDITIONAL STATS TO CONSIDER:**
 - BENCH_DEPTH
@@ -2870,7 +2870,7 @@ Then include:
 You CAN explain why this is the better bet and reference line value - but ALWAYS back it up with real game analysis:
 - GOOD: "This line feels inflated after Houston's 22-point loss to Milwaukee - but that was an outlier. Houston's L5 Net Rating is still +4.2, they shot 28% from 3PT that night vs their 37% season average, and they're 8-2 in their last 10 home games. At +6.5, you're getting a team that typically loses close games by 3-4 points."
 - BAD: "The market overreacted. Sharp money is on this side." (no actual analysis)
-- GOOD: "Phoenix at +145 ML is great value - their efficiency metrics (112.4 ORtg, 108.1 DRtg) are nearly identical to Denver's, and they've won 3 of their last 4 road games against top-10 defenses. This should be a pick'em, not a 3-point spread."
+- GOOD: "Phoenix at +145 ML is great value - their efficiency metrics (112.4 ORtg, 108.1 DRtg) are nearly identical to Denver's, and they've won 3 of their last 4 road games against top-10 defenses. The data says these teams are closer than the line implies."
 - BAD: "This ML price is too good to pass up." (no stats backing it up)
 </rationale_constraints>
 
