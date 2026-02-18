@@ -471,7 +471,6 @@ async function main() {
       if (config.key === 'basketball_ncaab') {
         console.log(`[${config.name}] Filtering to Top 7 conferences only (Power 6 + WCC)...`);
         const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
-        const MIN_GAMES_FOR_ANALYSIS = 5;
 
         // TOP 7 conference IDs from BDL (BOTH teams must be from one of these)
         // Verified via BDL API:
@@ -584,37 +583,10 @@ async function main() {
               continue;
             }
 
-            // Check season stats for both teams
-            const [homeStats, awayStats] = await Promise.all([
-              ballDontLieService.getTeamSeasonStats('basketball_ncaab', { teamId: homeTeam.id, season }),
-              ballDontLieService.getTeamSeasonStats('basketball_ncaab', { teamId: awayTeam.id, season })
-            ]);
-
-            // Extract stats
-            const h = homeStats?.[0] || {};
-            const a = awayStats?.[0] || {};
-
-            const homeGames = h.games_played || 0;
-            const awayGames = a.games_played || 0;
-            const homePts = h.pts || 0;
-            const awayPts = a.pts || 0;
-            const homeFgPct = h.fg_pct || 0;
-            const awayFgPct = a.fg_pct || 0;
-
-            const homeHasData = homeGames >= MIN_GAMES_FOR_ANALYSIS && homePts > 40 && homeFgPct > 30;
-            const awayHasData = awayGames >= MIN_GAMES_FOR_ANALYSIS && awayPts > 40 && awayFgPct > 30;
-
-            if (homeHasData && awayHasData) {
-              // Conference already attached above - just push to filtered games
-              filteredGames.push(game);
-            } else {
-              const homeReason = !homeHasData ? `${homeGames}g/${homePts.toFixed(1)}ppg/${homeFgPct.toFixed(1)}%fg` : 'OK';
-              const awayReason = !awayHasData ? `${awayGames}g/${awayPts.toFixed(1)}ppg/${awayFgPct.toFixed(1)}%fg` : 'OK';
-              skippedGames.push({
-                game,
-                reason: `${game.home_team}: ${homeReason} | ${game.away_team}: ${awayReason}`
-              });
-            }
+            // Both teams are in approved conferences and exist in BDL — they have data
+            // (Data quality API calls removed — by mid-season every team has 20+ games,
+            //  the check never filters anything and wasted ~42 API calls per run)
+            filteredGames.push(game);
           } catch (err) {
             console.warn(`[${config.name}] Could not verify data for ${game.away_team} @ ${game.home_team}: ${err.message}`);
             filteredGames.push(game);

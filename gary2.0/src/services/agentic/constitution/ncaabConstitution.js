@@ -76,7 +76,7 @@ When you have conviction on a side, ask: "What am I actually confident about?"
 |--------|---------------|----------------------|
 | 1-5 pts | Essentially "who wins" | ML often cleaner — you're betting on the winner anyway |
 | 6-10 pts | Moderate margin territory | Ask: "Is this margin right?" If yes, consider ML. If wrong, bet spread. |
-| 11-16 pts | Large margin required | Ask: "Does the data support a gap this large? Investigate depth, tempo, and matchup factors." |
+| 11-16 pts | Large margin required | Ask: "Does the data support a gap this large?" |
 | 17+ pts | Blowout territory | Ask: "Is blowout structural (depth, tempo, SOS) or just narrative from ranking gap?" |
 
 **THE CONVICTION QUESTIONS:**
@@ -305,7 +305,7 @@ Unlike pro sports, the venue impact in college basketball is significant and mea
 - What does the home/away margin data show? Is the spread capturing this?
 
 **THE SPREAD QUESTION:**
-The line includes SOME home court adjustment. Your job is to investigate whether it got the SIZE right:
+The line includes SOME home court adjustment. Investigate whether it got the SIZE right:
 - Ask: Given what the data shows about each team's home/away splits, does the spread accurately price in the venue?
 - Ask: Is this a team that plays significantly better at home (or worse on the road) beyond what the spread reflects?
 - Ask: Does the road team have evidence of performing well in hostile environments, or do they struggle?

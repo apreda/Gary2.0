@@ -1240,7 +1240,7 @@ backed by evidence you found — not assumptions, narratives, or training data.
 You don't follow consensus. You don't copy betting advice. You do your homework
 and make YOUR OWN picks based on YOUR analysis.
 
-### YOUR JOB: ANALYZE THE DATA
+### ANALYZE THE DATA
 You are a DATA ANALYST. You read numbers and draw statistical conclusions from them.
 You do NOT have scheme knowledge, film knowledge, or tactical expertise about how any sport is played.
 If a conclusion requires knowledge beyond the stats, scout report, and grounding results you were given, you cannot draw it.
@@ -3149,9 +3149,13 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
   let propsRetryCount = 0; // Track finalize_props retry attempts
 
   // Build tools list — add finalize_props when in props mode
-  const activeTools = isPropsMode
-    ? [...toolDefinitions, FINALIZE_PROPS_TOOL]
+  // NCAAB: Remove fetch_narrative_context (all narrative data is in scout report — Grounding wastes iterations)
+  const baseTools = isNCAABSport
+    ? toolDefinitions.filter(t => t.function?.name !== 'fetch_narrative_context')
     : toolDefinitions;
+  const activeTools = isPropsMode
+    ? [...baseTools, FINALIZE_PROPS_TOOL]
+    : baseTools;
 
   // PERSISTENT SESSION SETUP (Gemini 3 Thought Signature Compliance)
   // ═══════════════════════════════════════════════════════════════════════════
@@ -3338,7 +3342,7 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
           currentSession = createGeminiSession({
             modelName: 'gemini-3-pro-preview',
             systemPrompt: systemPrompt + '\n\n' + textualContext,
-            tools: currentPass === 'evaluation' ? [] : toolDefinitions,
+            tools: currentPass === 'evaluation' ? [] : activeTools,
             thinkingLevel: 'high'
           });
           currentModelName = 'gemini-3-pro-preview';
@@ -3373,7 +3377,7 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
           currentSession = createGeminiSession({
             modelName: 'gemini-3-flash-preview',
             systemPrompt: systemPrompt + '\n\n' + textualContext,
-            tools: currentPass === 'evaluation' ? [] : toolDefinitions, // Pass 3 can call more stats if needed
+            tools: currentPass === 'evaluation' ? [] : activeTools, // Pass 3 can call more stats if needed
             thinkingLevel: 'high'
           });
           currentModelName = 'gemini-3-flash-preview';
