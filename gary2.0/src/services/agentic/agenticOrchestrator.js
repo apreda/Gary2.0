@@ -554,12 +554,12 @@ const INVESTIGATION_FACTORS = {
   },
   
   // NCAAB: 14 factor categories (matches NBA structure)
-  // Scout report pre-loads BASELINE: KenPom/Barttorvik/NET/SOS, AP/Coaches rankings,
+  // Scout report pre-loads BASELINE: Barttorvik/NET/SOS, AP/Coaches rankings,
   //   home court, L5 scoring trends, H2H, injuries, roster depth
   // Gary investigates BEYOND the baseline: deeper efficiency, Four Factors, matchup-specific data
   // Tokens in preloaded categories allow Gary to go DEEPER when needed (not re-fetch baseline)
   basketball_ncaab: {
-    KENPOM_EFFICIENCY: ['NCAAB_OFFENSIVE_RATING', 'NCAAB_DEFENSIVE_RATING', 'NET_RATING'],
+    BARTTORVIK_EFFICIENCY: ['NCAAB_OFFENSIVE_RATING', 'NCAAB_DEFENSIVE_RATING', 'NET_RATING'],
     FOUR_FACTORS: ['NCAAB_EFG_PCT', 'NCAAB_TS_PCT', 'TURNOVER_RATE', 'OREB_RATE', 'FT_RATE'],
     SCORING_SHOOTING: ['SCORING', 'FG_PCT', 'THREE_PT_SHOOTING'],
     DEFENSIVE_STATS: ['REBOUNDS', 'STEALS', 'BLOCKS'],
@@ -1720,7 +1720,7 @@ Call stats for these game-deciding factors:
 **College basketball is NOT one league — it's ~32 mini-leagues (conferences) with massive quality variance.**
 
 ### YOUR SCOUT REPORT IS YOUR BASELINE (DO NOT RE-FETCH):
-- **Tier 1 Advanced Metrics:** KenPom (AdjEM, AdjO, AdjD, Tempo), Barttorvik (T-Rank, Barthag), NET ranking, SOS
+- **Tier 1 Advanced Metrics:** Barttorvik (T-Rank, AdjEM, AdjO, AdjD, Tempo, Barthag), NET ranking, SOS
 - **Rankings:** AP Poll, Coaches Poll
 - **Home Court:** Home/away records, margins, home/away splits
 - **Recent Form:** L5 game-by-game scores, margins, efficiency trends
@@ -2004,7 +2004,7 @@ Your scout report is the BASELINE — who these teams are. Your investigation sh
 ### NCAAB INVESTIGATION (BUILDING ON YOUR SCOUT REPORT)
 
 **ALREADY IN YOUR SCOUT REPORT (DO NOT RE-FETCH):**
-- KenPom/Barttorvik: AdjEM, AdjO, AdjD, Tempo, T-Rank, Barthag for both teams
+- Barttorvik: AdjEM, AdjO, AdjD, Tempo, T-Rank, Barthag for both teams
 - NET ranking, SOS ranking, AP/Coaches Poll rankings
 - Home court data: home/away records, margins, splits
 - Recent form: L5 game-by-game scores, margins, efficiency trends
@@ -2061,7 +2061,7 @@ ${isNBA ? `**NBA BASELINE REMINDER:** Your scout report contains Four Factors (e
 3. **CONTEXT**: Are there factors that make THIS game different from the baseline?
 Do NOT re-fetch basic efficiency stats (NET_RATING, OFFENSIVE_RATING, DEFENSIVE_RATING). You already have them. INVESTIGATE what they mean for THIS game.
 
-` : ''}${isNCAAB ? `**NCAAB BASELINE REMINDER:** Your scout report contains KenPom/Barttorvik efficiency metrics (AdjEM, AdjO, AdjD, Tempo, T-Rank, Barthag), rankings (AP, NET, SOS), home court data, L5 trends, H2H, injuries, and roster depth. This is your BASELINE — the teams' identity. Your investigation should focus on:
+` : ''}${isNCAAB ? `**NCAAB BASELINE REMINDER:** Your scout report contains Barttorvik efficiency metrics (AdjEM, AdjO, AdjD, Tempo, T-Rank, Barthag), rankings (AP, NET, SOS), home court data, L5 trends, H2H, injuries, and roster depth. This is your BASELINE — the teams' identity. Your investigation should focus on:
 1. **FOUR FACTORS**: Investigate eFG%, TOV%, ORB%, FT Rate for BOTH teams — where are the gaps?
 2. **MATCHUP**: Does one team's AdjO strength attack the other's AdjD weakness? What does the style matchup reveal?
 3. **HOME COURT**: Is the venue factor fully captured in this spread? Investigate home/away efficiency splits.
@@ -2086,7 +2086,7 @@ ${nflDataGaps}${nbaDataGaps}${ncaabDataGaps}${nhlDataGaps}
 Investigate the factors YOU determine are most relevant to THIS matchup. Your constitution lists available investigation factors and stat tiers.
 ${isNBA ? `
 **NBA NOTE:** You already have season efficiency from the scout report. Focus on what's DIFFERENT about THIS game.` : ''}${isNCAAB ? `
-**NCAAB NOTE:** Your scout report has baseline efficiency data (KenPom, Barttorvik, L5 trends, home court, injuries). This is the BASELINE — who these teams are. Your investigation should focus on what's DIFFERENT about THIS game vs the baseline. Investigate the Four Factors, matchup-specific data, and whether the spread reflects your findings.` : ''}
+**NCAAB NOTE:** Your scout report has baseline efficiency data (Barttorvik, L5 trends, home court, injuries). This is the BASELINE — who these teams are. Your investigation should focus on what's DIFFERENT about THIS game vs the baseline. Investigate the Four Factors, matchup-specific data, and whether the spread reflects your findings.` : ''}
 
 **REMINDER:** Home/away RECORDS are descriptive — they explain the line, not why it's wrong.${isNCAAB ? ` However, in NCAAB the FACT of playing at home IS a structural factor — investigate whether the spread accurately captures the venue impact.` : ''} Investigate efficiency data for venue impact.
 
@@ -2159,7 +2159,7 @@ Fill in ACTUAL VALUES from the scout report and your investigation. The record M
 \`\`\`
 [TEAM NAME] SNAPSHOT:
 - Record: [W-L] (from scout report) | Conference: [conf record]
-- KenPom: #[rank] | AdjO: [value] | AdjD: [value] | AdjEM: [+/-value]
+- Barttorvik: T-Rank #[rank] | AdjO: [value] | AdjD: [value] | AdjEM: [+/-value]
 - Recent form: [include whatever timeframe you determined is most relevant and why]
 - Key Absences: [current injuries from scout report]
 - Rest: [X days rest]
@@ -2184,7 +2184,7 @@ ${isNBA ? `- START with efficiency data from the scout report (eFG%, Net Rating,
 - MATCHUP APPLICATION: Where does Team A's efficiency strength meet Team B's efficiency weakness? Cite the specific stats.
 - RECORDS: Copy records EXACTLY from the scout report. Do NOT use records from your training data.` : isNFL ? `- TEAM ADVANCED STATS are REQUIRED (EPA/Play, DVOA, Success Rate, Pressure Rate, etc.)
 - Player stats can supplement team stats, but team stats must be the foundation
-- INVESTIGATE: Is there a gap between recent and season data? If so, is it a real shift or variance?` : isNCAAB ? `- Use efficiency data from your scout report and investigation (KenPom AdjEM, AdjO, AdjD, eFG%, ORtg, DRtg) as your Tier 1 foundation
+- INVESTIGATE: Is there a gap between recent and season data? If so, is it a real shift or variance?` : isNCAAB ? `- Use efficiency data from your scout report and investigation (AdjEM, AdjO, AdjD, eFG%, ORtg, DRtg) as your Tier 1 foundation
 - Use the BDL Four Factors (eFG%, TS%, TOV%, ORB%, FT Rate) from your Pass 1 investigation to build each case
 - INVESTIGATE: Is there a gap between recent form and season efficiency? Check opponent quality during recent stretch.
 - RECORDS: Copy records EXACTLY from the scout report. Do NOT use records from your training data.` : `- TEAM ADVANCED STATS are REQUIRED — use the sport-appropriate advanced metrics from your data
@@ -2206,7 +2206,7 @@ ${isNBA ? `  - Start with the efficiency data from your scout report and investi
   - For SPREADS: Determine which side of the spread the efficiency data supports` : isNFL ? `  - Investigate team efficiency gaps (EPA/Play, DVOA, Success Rate, Pressure Rate)
   - Ask: Which team's efficiency strength exploits the opponent's weakness?
   - For SPREADS: Determine which side of the spread the efficiency data supports
-  - Ask: What does the efficiency data tell you about which side of the spread it supports?` : isNCAAB ? `  - Start with the efficiency data from your scout report and investigation (KenPom AdjEM, AdjO, AdjD, eFG%, ORtg, DRtg)
+  - Ask: What does the efficiency data tell you about which side of the spread it supports?` : isNCAAB ? `  - Start with the efficiency data from your scout report and investigation (AdjEM, AdjO, AdjD, eFG%, ORtg, DRtg)
   - Ask: Do the numbers tell a consistent story, or is there a gap between recent and season data that needs investigation?
   - Ask: Does the efficiency gap support this spread, or is the line reflecting something else (ranking, record, narrative)?
   - Investigate AdjO vs AdjD matchup — where does one team's offensive strength meet the other's defensive weakness?` : `  - Investigate team efficiency gaps using the sport-appropriate advanced metrics
@@ -3755,7 +3755,7 @@ Call these specific tokens NOW using the get_stat tool with the "token" paramete
             continue;
           }
 
-          // NCAAB: Block ALL narrative context — Current State + Tier 1 metrics (KenPom/NET/Barttorvik/SOS)
+          // NCAAB: Block ALL narrative context — Current State + Tier 1 metrics (Barttorvik/NET/SOS)
           // are already in the scout report. Narrative context calls return garbage (146 chars of generic text)
           // and waste iterations. Gary should use fetch_stats for BDL data instead.
           if (sport === 'basketball_ncaab') {
@@ -5501,9 +5501,20 @@ function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds = {}) {
   }
 
   // Ensure pick text includes odds if not already present
-  // Use real odds from AI output, then fall back to actual game data — NEVER default to -110
-  const odds = parsed.odds ?? parsed.spreadOdds ?? parsed.moneylineHome ?? parsed.moneylineAway
-    ?? gameOdds.moneyline_home ?? gameOdds.moneyline_away ?? null;
+  // Use CORRECT odds for pick type — spread picks get spread odds, ML picks get ML odds
+  // NEVER default to -110 or use ML odds for a spread pick
+  let odds;
+  if (parsed.type === 'spread') {
+    // For spread picks: use spreadOdds, then game spread_odds — NEVER ML odds
+    odds = parsed.odds ?? parsed.spreadOdds ?? gameOdds.spread_odds ?? null;
+  } else {
+    // For ML picks: determine which team was picked and use their ML odds
+    const pickLower = (parsed.pick || '').toLowerCase();
+    const homeWords = (homeTeam || '').toLowerCase().split(/\s+/);
+    const pickedHome = homeWords.some(w => w.length > 2 && pickLower.includes(w));
+    odds = parsed.odds ?? (pickedHome ? parsed.moneylineHome : parsed.moneylineAway)
+      ?? (pickedHome ? gameOdds.moneyline_home : gameOdds.moneyline_away) ?? null;
+  }
   if (odds == null) {
     console.warn(`[Orchestrator] ⚠️ NO ODDS AVAILABLE for pick "${pickText}" — AI and game data both missing`);
   }

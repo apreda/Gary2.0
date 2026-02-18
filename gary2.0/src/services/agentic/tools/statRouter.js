@@ -121,7 +121,7 @@
  * │   - Basic stats (FG%, 3PT%, rebounds, assists)                            │
  * │                                                                             │
  * │ Barttorvik API:                                                           │
- * │   - NCAAB_KENPOM_RATINGS (AdjEM, AdjO, AdjD, Tempo)                       │
+ * │   - NCAAB_BARTTORVIK_RATINGS (AdjEM, AdjO, AdjD, Tempo)                       │
  * │   - NCAAB_CONFERENCE_STRENGTH (conference context via T-Rank)              │
  * │                                                                             │
  * │ Gemini (site:barttorvik.com):                                             │
@@ -212,7 +212,7 @@ const NFL_GEMINI_TOKENS = [
 // NCAAB: Stats that require Gemini (BDL doesn't have KenPom/NET)
 const NCAAB_GEMINI_TOKENS = [
   // These tokens NOW use Barttorvik API (no Grounding needed):
-  // NCAAB_KENPOM_RATINGS, NCAAB_BARTTORVIK, NCAAB_STRENGTH_OF_SCHEDULE, NCAAB_OPPONENT_QUALITY
+  // NCAAB_BARTTORVIK_RATINGS, NCAAB_BARTTORVIK, NCAAB_STRENGTH_OF_SCHEDULE, NCAAB_OPPONENT_QUALITY
   // NCAAB_OFFENSIVE_RATING, NCAAB_DEFENSIVE_RATING, NCAAB_TEMPO, NET_RATING (NCAAB branch)
   'NCAAB_NET_RANKING',    // NCAA NET - site:ncaa.com (still Grounding)
   'NCAAB_QUAD_RECORD',    // Quad 1-4 records - site:ncaa.com (still Grounding)
@@ -321,7 +321,7 @@ export function getAuthoritativeSource(token) {
   }
   
   // NCAAB sources — tokens still using Gemini Grounding
-  // (NCAAB_KENPOM_RATINGS, NCAAB_BARTTORVIK, NCAAB_STRENGTH_OF_SCHEDULE, NCAAB_OPPONENT_QUALITY
+  // (NCAAB_BARTTORVIK_RATINGS, NCAAB_BARTTORVIK, NCAAB_STRENGTH_OF_SCHEDULE, NCAAB_OPPONENT_QUALITY
   //  now use Barttorvik API directly — no Grounding needed)
   if (['NCAAB_NET_RANKING', 'NCAAB_QUAD_RECORD'].includes(token)) {
     return 'site:ncaa.com';
@@ -2023,12 +2023,12 @@ const FETCHERS = {
   // ===== NCAAB GROUNDING-BASED ADVANCED STATS =====
   // These use Gemini Grounding to fetch advanced analytics not available in BDL
   
-  NCAAB_KENPOM_RATINGS: async (bdlSport, home, away, season) => {
+  NCAAB_BARTTORVIK_RATINGS: async (bdlSport, home, away, season) => {
     try {
       const homeTeamName = home.full_name || home.name;
       const awayTeamName = away.full_name || away.name;
 
-      console.log(`[Stat Router] Fetching KenPom-equivalent ratings for ${awayTeamName} @ ${homeTeamName} via Barttorvik API`);
+      console.log(`[Stat Router] Fetching Barttorvik ratings for ${awayTeamName} @ ${homeTeamName} via Barttorvik API`);
 
       // Barttorvik metrics are KenPom-equivalent (AdjOE ≈ AdjO, AdjDE ≈ AdjD, AdjEM ≈ AdjEM)
       const [homeBartt, awayBartt] = await Promise.all([
@@ -2038,7 +2038,7 @@ const FETCHERS = {
 
       const formatTeam = (bartt, teamName) => ({
         team: teamName,
-        kenpom_rank: bartt ? `#${bartt.rank} (T-Rank)` : 'N/A',
+        t_rank: bartt ? `#${bartt.rank}` : 'N/A',
         adj_em: bartt ? ((bartt.adjEM > 0 ? '+' : '') + bartt.adjEM) : 'N/A',
         adj_offense: bartt?.adjOE ?? 'N/A',
         adj_defense: bartt?.adjDE ?? 'N/A',
@@ -2046,18 +2046,18 @@ const FETCHERS = {
       });
 
       return {
-        category: 'KenPom-Equivalent Ratings (Barttorvik T-Rank)',
+        category: 'Barttorvik Ratings (T-Rank)',
         source: 'barttorvik.com API (direct)',
         home: formatTeam(homeBartt, homeTeamName),
         away: formatTeam(awayBartt, awayTeamName)
       };
     } catch (error) {
-      console.warn('[Stat Router] KenPom-equivalent fetch failed:', error.message);
+      console.warn('[Stat Router] Barttorvik ratings fetch failed:', error.message);
       return {
-        category: 'KenPom-Equivalent Ratings',
+        category: 'Barttorvik Ratings',
         error: 'Data unavailable',
-        home: { team: home.full_name || home.name, kenpom_rank: 'N/A' },
-        away: { team: away.full_name || away.name, kenpom_rank: 'N/A' }
+        home: { team: home.full_name || home.name, t_rank: 'N/A' },
+        away: { team: away.full_name || away.name, t_rank: 'N/A' }
       };
     }
   },
