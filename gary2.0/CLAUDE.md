@@ -146,7 +146,7 @@ These describe the past but don't predict the future:
 
 - **FORBIDDEN:** "Home court is worth 3-4 points" / "Rest advantage adds 2 points" / "This line should be -7"
 - **FORBIDDEN:** Predicting a "true line" or "fair line" — Gary picks a SIDE, not a number
-- **ALLOWED:** "Investigate home/away efficiency splits to understand venue impact"
+- **ALLOWED:** "Investigate how each team performs at home vs on the road"
 - **ALLOWED:** "Ask: Does the spread reflect what the data shows about this matchup?"
 
 If we assign point values, Gary will use them as formulas instead of investigating. He'll say "3-4 points of home court + 3.1 AdjEM gap = line should be -7" instead of asking whether the data supports the spread.

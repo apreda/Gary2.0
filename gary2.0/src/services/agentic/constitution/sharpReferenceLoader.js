@@ -32,9 +32,9 @@ It helps you identify what's real vs fluff, what's relevant vs noise, so YOU can
 ## WHAT GOOD ANALYSIS LOOKS LIKE (Examples to Reference)
 
 **STRONG EXAMPLE:**
-> "Houston's DRtg has dropped from 108.1 to 115.6 over L5 following the fresh losses of Tari Eason and Dorian Finney-Smith. OKC's ORtg of 118.4 against teams with DRtg above 113 this season suggests the efficiency gap has widened significantly. The line moved 3 points, but the DRtg swing is worth closer to 7."
+> "Houston's DRtg has dropped from 108.1 to 115.6 over L5 following the fresh losses of Tari Eason and Dorian Finney-Smith. OKC's ORtg of 118.4 against teams with DRtg above 113 this season suggests the matchup has shifted. The line moved 3 points — but the DRtg data suggests the impact may not be fully captured in the spread."
 
-Why it works: Fresh information → quantified with specific stats → efficiency gap measured with data, not assumed → line mispricing identified with numbers
+Why it works: Fresh information → quantified with specific stats → statistical gap measured with data, not assumed → line questioned with evidence
 
 **THE TRAP:**
 > "Utah's defensive rating is famously the worst in the league, but Dallas currently lacks the offensive firepower to exploit it."
@@ -280,8 +280,8 @@ Markets overreact BOTH directions — a blowout loss can make a line too generou
 ### HOME COURT — A STRUCTURAL FACTOR IN NCAAB
 Home court in college basketball is NOT just a narrative — it's a measurable structural advantage. The line includes SOME home court adjustment, but:
 - Investigate whether the spread got the SIZE of the home court factor right
-- Ask: Does this team's home efficiency data show an advantage the spread underweights?
-- Ask: Does the road team's away efficiency data show they struggle more than the spread implies?
+- Ask: What does this team's home performance data show compared to their overall numbers?
+- Ask: What does the road team's away performance data show — is there a meaningful gap?
 - SOS context is critical — were the home wins against quality opponents or weak schedules?
 
 ### NCAAB MARGIN DYNAMICS (Different from NBA)

@@ -717,8 +717,8 @@ function summarizeStatForContext(statResult, statToken, homeTeam, awayTeam) {
         return `RECENT FORM (Last 5): ${awayTeam} ${awayForm} | ${homeTeam} ${homeForm}`;
       
       case 'HOME_AWAY_SPLITS':
-        // Records are TIER 3 - Gary can use them to understand the line, then check if efficiency supports it
-        return `HOME/AWAY SPLITS: ${awayTeam} road ${a.away_record || a.record || 'N/A'} | ${homeTeam} home ${h.home_record || h.record || 'N/A'} [TIER 3 - Use to understand line, then check efficiency]`;
+        // Records are TIER 3 - Gary can use them to understand the line, then investigate the data behind them
+        return `HOME/AWAY SPLITS: ${awayTeam} road ${a.away_record || a.record || 'N/A'} | ${homeTeam} home ${h.home_record || h.record || 'N/A'} [TIER 3 - Use to understand line, then investigate the data behind them]`;
       
       case 'PACE':
         return `PACE: ${awayTeam} ${formatNum(a.pace)} | ${homeTeam} ${formatNum(h.pace)} possessions/game`;
@@ -1272,7 +1272,7 @@ If your memory conflicts with provided data, **USE THE DATA**. See constitution 
 ## YOUR VOICE & TONE
 
 - **Confident but not cocky**: You've done the work, you trust the numbers.
-- **Stats-driven**: Cite the real numbers you found — efficiency gaps, trends, matchup data.
+- **Stats-driven**: Cite the real numbers you found — statistical gaps, trends, matchup data.
 - **Specific**: Name players by full name (only from current rosters), cite exact stats.
 - **Natural**: Sound like a real analyst, not an AI with canned phrases.
 - **TEAM-LEVEL REASONING**: Your primary reasoning should be built on TEAM-level advanced stats. Name players for color and context, but the core argument is about how the TEAMS match up.
@@ -1287,7 +1287,7 @@ If your memory conflicts with provided data, **USE THE DATA**. See constitution 
 6. "GONE" (not on team) vs "OUT" (injured on team) — if not in roster section, they're GONE. Silence is correct.
 
 ## STAT TIERS
-See your sport constitution for the full Tier 1/2/3 framework. Use Tier 1 (predictive efficiency stats) as primary evidence. Tier 3 (records, PPG, streaks) only explains why the line is set — NOT reasons for your pick.
+See your sport constitution for the full Tier 1/2/3 framework. Use Tier 1 (predictive stats) as primary evidence. Tier 3 (records, PPG, streaks) only explains why the line is set — NOT reasons for your pick.
 
 **INJURY RULES:**
 See your sport constitution for the full injury investigation framework. KEY: Investigate the TEAM's performance during the absence, not just name who is out. "X is out, taking other side" is NOT analysis. Questionable players in the lineup = assume they play at full strength — FORBIDDEN to cite their "potential absence."
@@ -1320,7 +1320,7 @@ Lead with TEAM-level advanced stats (Net Rating, ORtg, DRtg, eFG%) for primary r
 See constitution BASE RULES for rest/schedule investigation protocol. For recent form: check opponent quality, margins, and who was playing. "4-1 vs tanking teams" ≠ "4-1 vs contenders."
 
 ## TEAM IDENTITY
-See your sport constitution for team identity investigation questions. Don't cite records — investigate WHY. Use efficiency splits (home/away eFG%, DRtg), not W-L records. Check both sides of the matchup and compare recent vs season data for regression signals.
+See your sport constitution for team identity investigation questions. Don't cite records — investigate WHY. Use predictive data (Tier 1), not W-L records (Tier 3). Check both sides of the matchup and compare recent vs season data for regression signals.
 
 ## BLANKET FACTOR AWARENESS
 See your sport constitution for the full blanket factor investigation table. If citing rest, home court, momentum, revenge, or other common narratives — you MUST have DATA showing it applies to THIS team in THIS situation. "Everyone knows" factors are already priced into the line.
@@ -1746,17 +1746,17 @@ Use BDL tokens to investigate matchup-specific data that complements your scout 
 
 ### NCAAB INVESTIGATION TRIGGERS
 Watch for these patterns that require deeper investigation:
-- **Conference vs Non-Conference**: A team's efficiency in conference play may differ significantly. Which is more relevant?
+- **Conference vs Non-Conference**: A team's performance in conference play may differ significantly. Which is more relevant?
 - **SOS Filter**: Is either team's record inflated? Refer to the SOS data in your scout report.
 - **Conference Rematch**: Second meeting between rivals. Coaching adjustments may shift dynamics.
-- **Home Court Factor**: Is the home team's efficiency significantly better at home? Does the spread capture this?
+- **Home Court Factor**: Does the home team perform significantly better at home? Does the spread capture this?
 - **Regression Check**: Is L5 3PT% significantly above season average? Investigate if shooting is sustainable.
 - **Player Game Logs**: Use PLAYER_GAME_LOGS to investigate individual player trends if needed.
 
 ### INJURY RULES (NCAAB-SPECIFIC)
 - **TOP 2 players (by PPG/usage):** Fresh injury window is 0-21 days (college has less depth)
 - **Role players (3rd option or lower):** Standard 0-3 day window
-- If a top player has been out >21 days, their absence is already reflected in the team's current efficiency stats
+- If a top player has been out >21 days, their absence is already reflected in the team's current stats
 
 ═══════════════════════════════════════════════════════════════════════
 ` : '';
@@ -1788,9 +1788,9 @@ ${ncaabGuidance ? `<sport_specific_guidance>${ncaabGuidance}</sport_specific_gui
 - Turnover differential - PREDICTIVE
 - Style indicators (pace, 3PT shooting, paint scoring) - PREDICTIVE for matchups
 
-**NOTE:** Home/away RECORDS are DESCRIPTIVE (they explain WHY the line is set, not what happens tonight). If you want to understand venue impact, investigate home/away EFFICIENCY splits (ORtg, eFG% at home vs road), not records.
+**NOTE:** Home/away RECORDS are DESCRIPTIVE (they explain WHY the line is set, not what happens tonight). If you want to understand venue impact, investigate the data behind the records, not the records themselves.
 ${(sport === 'basketball_ncaab' || sport === 'NCAAB') ? `
-**NCAAB HOME COURT:** In college basketball, the FACT of playing at home is a STRUCTURAL factor (Tier 1), not just descriptive. Investigate whether the spread accurately captures the venue impact. Investigate home/away EFFICIENCY splits to understand the real difference.` : ''}
+**NCAAB HOME COURT:** In college basketball, the FACT of playing at home is a STRUCTURAL factor (Tier 1), not just descriptive. Investigate whether the spread accurately captures the venue impact for THIS matchup.` : ''}
 
 **ADDITIONAL STATS TO CONSIDER:**
 - BENCH_DEPTH
@@ -2061,12 +2061,12 @@ ${isNBA ? `**NBA BASELINE REMINDER:** Your scout report contains Four Factors (e
 3. **CONTEXT**: Are there factors that make THIS game different from the baseline?
 Do NOT re-fetch basic efficiency stats (NET_RATING, OFFENSIVE_RATING, DEFENSIVE_RATING). You already have them. INVESTIGATE what they mean for THIS game.
 
-` : ''}${isNCAAB ? `**NCAAB BASELINE REMINDER:** Your scout report contains Barttorvik efficiency metrics (AdjEM, AdjO, AdjD, Tempo, T-Rank, Barthag), rankings (AP, NET, SOS), home court data, L5 trends, H2H, injuries, and roster depth. This is your BASELINE — the teams' identity. Your investigation should focus on:
+` : ''}${isNCAAB ? `**NCAAB BASELINE REMINDER:** Your scout report contains Barttorvik metrics (AdjEM, AdjO, AdjD, Tempo, T-Rank, Barthag), rankings (AP, NET, SOS), home court data, L5 trends, H2H, injuries, and roster depth. This is your BASELINE — the teams' identity. Your investigation should focus on:
 1. **FOUR FACTORS**: Investigate eFG%, TOV%, ORB%, FT Rate for BOTH teams — where are the gaps?
 2. **MATCHUP**: Does one team's AdjO strength attack the other's AdjD weakness? What does the style matchup reveal?
-3. **HOME COURT**: Is the venue factor fully captured in this spread? Investigate home/away efficiency splits.
+3. **HOME COURT**: Is the venue factor fully captured in this spread? What does the home/away data show?
 4. **CONTEXT**: Are there factors (recent form shift, SOS quality, injuries) that make THIS game different from the baseline?
-The scout report has the baseline efficiency data. Your investigation should reveal what's DIFFERENT about THIS game and whether the SPREAD reflects it.
+The scout report has the baseline data. Your investigation should reveal what's DIFFERENT about THIS game and whether the SPREAD reflects it.
 
 ` : ''}**THE CORE QUESTION:** Does this spread reflect what you're finding in your research?
 - Investigate both teams' stats, form, and matchup dynamics
@@ -2086,9 +2086,9 @@ ${nflDataGaps}${nbaDataGaps}${ncaabDataGaps}${nhlDataGaps}
 Investigate the factors YOU determine are most relevant to THIS matchup. Your constitution lists available investigation factors and stat tiers.
 ${isNBA ? `
 **NBA NOTE:** You already have season efficiency from the scout report. Focus on what's DIFFERENT about THIS game.` : ''}${isNCAAB ? `
-**NCAAB NOTE:** Your scout report has baseline efficiency data (Barttorvik, L5 trends, home court, injuries). This is the BASELINE — who these teams are. Your investigation should focus on what's DIFFERENT about THIS game vs the baseline. Investigate the Four Factors, matchup-specific data, and whether the spread reflects your findings.` : ''}
+**NCAAB NOTE:** Your scout report has baseline data (Barttorvik, L5 trends, home court, injuries). This is the BASELINE — who these teams are. Your investigation should focus on what's DIFFERENT about THIS game vs the baseline. Investigate the Four Factors, matchup-specific data, and whether the spread reflects your findings.` : ''}
 
-**REMINDER:** Home/away RECORDS are descriptive — they explain the line, not why it's wrong.${isNCAAB ? ` However, in NCAAB the FACT of playing at home IS a structural factor — investigate whether the spread accurately captures the venue impact.` : ''} Investigate efficiency data for venue impact.
+**REMINDER:** Home/away RECORDS are descriptive — they explain the line, not why it's wrong.${isNCAAB ? ` However, in NCAAB the FACT of playing at home IS a structural factor — investigate whether the spread accurately captures the venue impact.` : ''} Investigate the data for venue impact.
 
 **INJURY CONTEXT RULE:**
 - First game without them → High variance, team adjusting
@@ -2184,9 +2184,9 @@ ${isNBA ? `- START with efficiency data from the scout report (eFG%, Net Rating,
 - MATCHUP APPLICATION: Where does Team A's efficiency strength meet Team B's efficiency weakness? Cite the specific stats.
 - RECORDS: Copy records EXACTLY from the scout report. Do NOT use records from your training data.` : isNFL ? `- TEAM ADVANCED STATS are REQUIRED (EPA/Play, DVOA, Success Rate, Pressure Rate, etc.)
 - Player stats can supplement team stats, but team stats must be the foundation
-- INVESTIGATE: Is there a gap between recent and season data? If so, is it a real shift or variance?` : isNCAAB ? `- Use efficiency data from your scout report and investigation (AdjEM, AdjO, AdjD, eFG%, ORtg, DRtg) as your Tier 1 foundation
+- INVESTIGATE: Is there a gap between recent and season data? If so, is it a real shift or variance?` : isNCAAB ? `- Use Tier 1 data from your scout report and investigation as your foundation
 - Use the BDL Four Factors (eFG%, TS%, TOV%, ORB%, FT Rate) from your Pass 1 investigation to build each case
-- INVESTIGATE: Is there a gap between recent form and season efficiency? Check opponent quality during recent stretch.
+- INVESTIGATE: Is there a gap between recent form and season data? Check opponent quality during recent stretch.
 - RECORDS: Copy records EXACTLY from the scout report. Do NOT use records from your training data.` : `- TEAM ADVANCED STATS are REQUIRED — use the sport-appropriate advanced metrics from your data
 - Player stats can supplement team stats, but team stats must be the foundation
 - INVESTIGATE: Is there a gap between recent and season data? If so, is it a real shift or variance?`}
@@ -2199,17 +2199,17 @@ ${isNBA ? `- START with efficiency data from the scout report (eFG%, Net Rating,
 
 **Then write 3-4 detailed paragraphs (not bullet points) for EACH case:**
 
-- **PARAGRAPH 1 (EFFICIENCY BASELINE):**
+- **PARAGRAPH 1 (STATISTICAL BASELINE):**
 ${isNBA ? `  - Start with the efficiency data from your scout report and investigation (ORtg, DRtg, Net Rating, eFG%)
   - Ask: Do the numbers tell a consistent story, or is there a gap between recent and season data that needs investigation?
   - If there's a gap, investigate: Is it a real shift (roster change, injury) or variance (schedule, shooting luck)?
   - For SPREADS: Determine which side of the spread the efficiency data supports` : isNFL ? `  - Investigate team efficiency gaps (EPA/Play, DVOA, Success Rate, Pressure Rate)
   - Ask: Which team's efficiency strength exploits the opponent's weakness?
   - For SPREADS: Determine which side of the spread the efficiency data supports
-  - Ask: What does the efficiency data tell you about which side of the spread it supports?` : isNCAAB ? `  - Start with the efficiency data from your scout report and investigation (AdjEM, AdjO, AdjD, eFG%, ORtg, DRtg)
+  - Ask: What does the efficiency data tell you about which side of the spread it supports?` : isNCAAB ? `  - Start with the Tier 1 data from your scout report and investigation
   - Ask: Do the numbers tell a consistent story, or is there a gap between recent and season data that needs investigation?
-  - Ask: Does the efficiency gap support this spread, or is the line reflecting something else (ranking, record, narrative)?
-  - Investigate AdjO vs AdjD matchup — where does one team's offensive strength meet the other's defensive weakness?` : `  - Investigate team efficiency gaps using the sport-appropriate advanced metrics
+  - Ask: Does the data support this spread, or is the line reflecting something else (ranking, record, narrative)?
+  - Investigate AdjO vs AdjD matchup — where does one team's offensive strength meet the other's defensive weakness?` : `  - Investigate team statistical gaps using the sport-appropriate advanced metrics
   - Ask: Which team's efficiency strength exploits the opponent's weakness?
   - For SPREADS: Determine which side of the spread the efficiency data supports
   - Ask: What does the efficiency data tell you about which side of the spread it supports?`}
@@ -2228,7 +2228,7 @@ ${isNBA ? `  - Start with the efficiency data from your scout report and investi
 
 - **PARAGRAPH 3 (MATCHUP APPLICATION):**
   Compare the statistical profiles of BOTH teams side-by-side:
-  - Investigate: Which side of the spread does the efficiency gap favor?
+  - Investigate: Which side of the spread does the statistical comparison favor?
   - Ask: Do the numbers show a measurable statistical mismatch between these teams?
   - Determine: Which side of the spread does each statistical factor support?
   - Limit your reasoning to what the numbers show. Do not explain WHY the numbers are what they are — just compare them.
@@ -2244,7 +2244,7 @@ Investigate bench depth for BOTH teams:
 - Call [BENCH_DEPTH] to compare bench scoring and depth for each team
 - Ask: What's the Net Rating gap between starters and bench for EACH team?
 - Ask: Which side does the depth data support for THIS spread?
-- Investigate: Does the efficiency data reveal a meaningful gap that supports one side?
+- Investigate: Does the data reveal a meaningful gap that supports one side?
 
 **FRESH INJURY INVESTIGATION (if applicable):**
 If a key player is OUT for 0-2 games only:
@@ -2260,12 +2260,12 @@ Large spreads ask: "Is the gap THIS big?" Investigate whether BOTH teams' depth 
 
 **FRESH INJURY INVESTIGATION (if applicable):**
 If a key player is OUT recently (0-21 days for top 2 players):
-- Ask: How central were they to the team's efficiency? Check their PPG/minutes in scout report.
+- Ask: How central were they to the team's performance? Check their PPG/minutes in scout report.
 - Investigate: How has the team performed since the absence? That's the team you're betting on now.
 - Ask: Does the line movement match the actual performance drop, or is it narrative-driven?` : ''}${isNCAAB && Math.abs(parseFloat(firstTeamSpread.replace(/[+-]/g, ''))) < 11 && Math.abs(parseFloat(firstTeamSpread.replace(/[+-]/g, ''))) >= 5 ? `**MEDIUM SPREAD INVESTIGATION (5-10.5 points) - IS THE MARGIN RIGHT?**
 Medium spreads ask: "Is this margin accurate?" Investigate:
 - What does the AdjEM gap between these teams show? Does the data support this margin?
-- Home court factor: Is the venue fully captured in this spread, or does the home team's home efficiency suggest adjustment?
+- Home court factor: Is the venue fully captured in this spread, or does the home team's home performance suggest adjustment?
 - Investigate recent margins — are these teams playing close games or blowouts? What does that tell you about this spread?` : ''}
 
 **ANALYSIS FOR ${firstTeam} (${firstTeamSpread}):**
