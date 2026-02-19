@@ -51,6 +51,7 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
+          TANK01_RAPIDAPI_KEY: ${{ secrets.TANK01_RAPIDAPI_KEY }}
         run: |
           ARGS="--ncaab"
           if [ "${{ github.event.inputs.limit }}" != "0" ] && [ -n "${{ github.event.inputs.limit }}" ]; then

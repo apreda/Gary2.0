@@ -177,9 +177,9 @@ If your answer identifies clear factors favoring one side to WIN, that's your pi
 
 1. **Am I answering the right QUESTION for this bet type?** (Margin vs. win probability)
 2. **Have I investigated whether each factor is actually relevant to THIS matchup?**
-3. **Am I citing prohibited reasoning?** (ATS trends, line movement, one game sample)
-4. **Can I explain WHY the line might be wrong, not just why the team is good?**
-5. **Does my reasoning hold up under scrutiny?**
+3. **What specific evidence supports each claim, and does it trace to my investigation data?** (Not ATS trends, line movement, or one game samples)
+4. **What is my explanation for WHY the line might be wrong — not just why the team is good?**
+5. **What would someone arguing the other side say about my reasoning?**
 
 ---
 
@@ -278,16 +278,18 @@ Markets overreact BOTH directions — a blowout loss can make a line too generou
 ## NCAAB-SPECIFIC: CASE STRUCTURE
 
 ### HOME COURT — A STRUCTURAL FACTOR IN NCAAB
-Home court in college basketball is NOT just a narrative — it's a measurable structural advantage. The line includes SOME home court adjustment, but:
-- Investigate whether the spread got the SIZE of the home court factor right
+Home court in college basketball is NOT just a narrative — it's a measurable structural advantage. Investigate its actual size for THIS matchup:
+- What does this team's home data show vs their overall numbers?
+- What does the road team's away data reveal?
+- What does the venue data reveal about this matchup?
 - Ask: What does this team's home performance data show compared to their overall numbers?
-- Ask: What does the road team's away performance data show — is there a meaningful gap?
+- Ask: What does the road team's away performance data reveal about how they perform on the road?
 - SOS context is critical — were the home wins against quality opponents or weak schedules?
 
 ### NCAAB MARGIN DYNAMICS (Different from NBA)
 
 **COLLEGE-SPECIFIC MARGIN FACTORS:**
-- **No garbage time relief**: College games have fewer strategic lineup changes — if a team is up 20 with 5 minutes left, the same players often stay in
+- **Late-game dynamics**: Starters stay in longer in college (no garbage time like NBA), but trailing teams foul aggressively and hit 3s to close gaps. Investigate: Do this team's margins hold late or compress?
 - **3PT variance**: College games have higher shooting variance — a team can go on a 12-0 run fueled by 3-point shooting
 - **Tempo control**: The team that controls pace controls margin — investigate tempo for BOTH teams
 - **Foul trouble in short rotations**: With only 7-8 players, foul trouble can collapse a team's margin — investigate which team has depth to absorb fouls
@@ -299,7 +301,7 @@ CASE FOR [TEAM] [SPREAD]:
 "This spread asks: Does the data support a gap this large?"
 
 1. [Data assessment]
-   - What does the AdjEM gap show vs the implied margin?
+   - What do the matchup-specific factors show about this margin?
    - Does the data support this margin, or is it wider/closer than the spread implies?
 
 2. [Depth and structure]
@@ -314,7 +316,7 @@ CASE FOR [TEAM] [SPREAD]:
 **NCAAB SPREAD-SIZE CONTEXT:**
 - **Small (≤4.5)**: "Who wins?" — Investigate what the data shows about close-game factors and home court
 - **Medium (5-10.5)**: "Is this margin right?" — Investigate what the data shows about the gap between these teams and whether venue is fully captured
-- **Large (11+)**: "Does the data support a gap this size?" — Investigate depth, sustainability, SOS context, and whether the ranking/AdjEM gap actually supports this spread
+- **Large (11+)**: "Does the data support a gap this size?" — Investigate depth, sustainability, SOS context, and whether the matchup-specific factors support this margin
 
 ---
 
@@ -323,7 +325,7 @@ CASE FOR [TEAM] [SPREAD]:
 - 35th vs 55th = Same tier (noise)
 - 60th vs 80th = Essentially identical (noise)
 
-Ask: What are the ACTUAL AdjEM values behind each rank? A 30-position gap might be 1 point of efficiency (noise) or 10 points (real).
+Ask: What are the ACTUAL AdjEM values behind each rank? A 30-position gap might be 1 point of AdjEM (noise) or 10 points (real).
 
 ---
 
@@ -332,7 +334,7 @@ Ask: What are the ACTUAL AdjEM values behind each rank? A 30-position gap might 
 NCAAB-specific regression triggers: Shooting explosion (85+ in a low-tempo game), defensive collapse (80+ allowed by a good defense), SOS inflation (big numbers against weak opponents).
 
 Always check:
-- AdjEM vs record disconnect — what does the gap between efficiency and record tell you about this team?
+- AdjEM vs record disconnect — what does the gap between AdjEM and record tell you about this team?
 - L5 shooting vs season baseline — is the recent performance sustainable or variance?
 - SOS of recent opponents — were the inflated stats against quality teams or weak schedules?
 - Markets can overreact BOTH directions — a blowout loss to a ranked team can make a line too generous, just as a blowout win over a weak team can make it too stingy
@@ -375,11 +377,7 @@ CASE FOR [TEAM] ML/PL:
 
 ## NHL GRADING PRINCIPLES
 
-**MONEYLINE (most NHL bets):** "Who wins?" — underdogs win 35-40% outright. One bounce decides it.
-
-**PUCK LINE (-1.5):** "Can they win by 2+?" Most NHL games are 1-goal until empty net time.
-- Puck line covers come from EMPTY NET GOALS, not just dominance
-- Requires: elite PP (top 10) + closer mentality + opponent that chases (pulls goalie early)
+**MONEYLINE (all NHL bets):** "Who wins?" — underdogs win 35-40% outright. One bounce decides it. NHL is moneyline only.
 
 **STREAK INVESTIGATION:** Is the same goalie starting who played during the streak? How does goalie continuity affect the streak's structural validity?
 - Same goalie starting as during the streak? Investigate: Does goalie continuity affect how much weight you give the streak?

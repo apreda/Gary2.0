@@ -5,9 +5,7 @@
  * Defaults to yesterday if no date provided
  */
 
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
-const { createClient } = require('@supabase/supabase-js');
+import { createClient } from '@supabase/supabase-js';
 // Load environment variables FIRST
 import '../src/loadEnv.js';
 

@@ -161,31 +161,77 @@ Rest and schedule are NOT automatic factors. Before citing rest as a factor:
 ═══════════════════════════════════════════════════════════════════════════════
 `;
 
-const CONSTITUTIONS = {
+/**
+ * Game-pick constitutions — may be sectioned objects { domainKnowledge, investigationPrompts, guardrails }
+ * or flat strings (legacy, not yet restructured).
+ */
+const GAME_CONSTITUTIONS = {
   NBA: NBA_CONSTITUTION,
   NFL: NFL_CONSTITUTION,
   NCAAB: NCAAB_CONSTITUTION,
   NCAAF: NCAAF_CONSTITUTION,
   NHL: NHL_CONSTITUTION,
-  NFL_PROPS: NFL_PROPS_CONSTITUTION,
-  NBA_PROPS: NBA_PROPS_CONSTITUTION,
-  NHL_PROPS: NHL_PROPS_CONSTITUTION,
   // Aliases
   basketball_nba: NBA_CONSTITUTION,
-  basketball_nba_props: NBA_PROPS_CONSTITUTION,
   americanfootball_nfl: NFL_CONSTITUTION,
-  americanfootball_nfl_props: NFL_PROPS_CONSTITUTION,
   basketball_ncaab: NCAAB_CONSTITUTION,
   americanfootball_ncaaf: NCAAF_CONSTITUTION,
   icehockey_nhl: NHL_CONSTITUTION,
-  icehockey_nhl_props: NHL_PROPS_CONSTITUTION
 };
 
+/**
+ * Props constitutions — always flat strings, NOT restructured.
+ */
+const PROPS_CONSTITUTIONS = {
+  NFL_PROPS: NFL_PROPS_CONSTITUTION,
+  NBA_PROPS: NBA_PROPS_CONSTITUTION,
+  NHL_PROPS: NHL_PROPS_CONSTITUTION,
+  basketball_nba_props: NBA_PROPS_CONSTITUTION,
+  americanfootball_nfl_props: NFL_PROPS_CONSTITUTION,
+  icehockey_nhl_props: NHL_PROPS_CONSTITUTION,
+};
+
+/**
+ * Get constitution for a sport.
+ *
+ * For game-pick sports with sectioned constitutions (objects):
+ *   Returns { baseRules, domainKnowledge, investigationPrompts, guardrails, full }
+ *   - .full = all sections combined (for system prompt at session creation)
+ *   - Individual sections allow phase-aligned delivery (e.g., Flash gets domainKnowledge + guardrails only)
+ *
+ * For props sports or legacy flat-string constitutions:
+ *   Returns a flat string (BASE_RULES + constitution)
+ */
 export function getConstitution(sport) {
   const normalized = sport?.toUpperCase?.() || sport;
-  const sportConstitution = CONSTITUTIONS[normalized] || CONSTITUTIONS[sport] || '';
-  // Prepend BASE_RULES to all constitutions for data source rules and anti-influence protection
-  return BASE_RULES + sportConstitution;
+
+  // Props — always flat string (backward compat)
+  const propsConst = PROPS_CONSTITUTIONS[normalized] || PROPS_CONSTITUTIONS[sport];
+  if (propsConst) {
+    return BASE_RULES + propsConst;
+  }
+
+  // Game picks — may be sectioned object or legacy flat string
+  const sportConst = GAME_CONSTITUTIONS[normalized] || GAME_CONSTITUTIONS[sport];
+
+  if (sportConst && typeof sportConst === 'object' && sportConst.domainKnowledge) {
+    // Sectioned constitution — return object with convenience .full property
+    return {
+      baseRules: BASE_RULES,
+      domainKnowledge: sportConst.domainKnowledge,
+      investigationPrompts: sportConst.investigationPrompts || '',
+      guardrails: sportConst.guardrails || '',
+      // Full combined string: guardrails first (hard rules), then domain knowledge, then investigation prompts
+      full: BASE_RULES + sportConst.guardrails + '\n\n' + sportConst.domainKnowledge + '\n\n' + sportConst.investigationPrompts,
+    };
+  }
+
+  // Legacy flat string constitution (not yet restructured) or unknown sport
+  if (sportConst && typeof sportConst === 'string') {
+    return BASE_RULES + sportConst;
+  }
+
+  return BASE_RULES;
 }
 
 export { 

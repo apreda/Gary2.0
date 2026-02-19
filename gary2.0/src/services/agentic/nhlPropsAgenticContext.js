@@ -821,7 +821,7 @@ function buildPlayerStatsText(homeTeam, awayTeam, advancedStats, propCandidates,
         
         // Add recent form if available - show ALL stat types equally for organic analysis
         if (logs) {
-          const formIcon = logs.formTrend === 'hot' ? '🔥' : logs.formTrend === 'cold' ? '❄️' : '';
+          const formIcon = logs.formTrend === 'hot' ? '[HOT]' : logs.formTrend === 'cold' ? '[COLD]' : '';
           statsText += `  L${logs.gamesAnalyzed} Avg: SOG ${logs.averages?.sog || 'N/A'}, PTS ${logs.averages?.points || 'N/A'}, G ${logs.averages?.goals || 'N/A'}, A ${logs.averages?.assists || 'N/A'} ${formIcon}\n`;
           
           // Show recent games for ALL prop types - no bias toward any stat
@@ -890,7 +890,7 @@ function buildPlayerStatsText(homeTeam, awayTeam, advancedStats, propCandidates,
         
         // Add recent form if available - show ALL stat types equally for organic analysis
         if (logs) {
-          const formIcon = logs.formTrend === 'hot' ? '🔥' : logs.formTrend === 'cold' ? '❄️' : '';
+          const formIcon = logs.formTrend === 'hot' ? '[HOT]' : logs.formTrend === 'cold' ? '[COLD]' : '';
           statsText += `  L${logs.gamesAnalyzed} Avg: SOG ${logs.averages?.sog || 'N/A'}, PTS ${logs.averages?.points || 'N/A'}, G ${logs.averages?.goals || 'N/A'}, A ${logs.averages?.assists || 'N/A'} ${formIcon}\n`;
           
           // Show recent games for ALL prop types - no bias toward any stat

@@ -1475,7 +1475,10 @@ CRITICAL: Be precise. Only include what's actually shown on RotoWire. List ALL i
 
                         inj.daysSinceReport = daysSince;
                         inj.reportDateStr = lastPlayedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                        inj.duration = daysSince >= 30 ? 'SEASON-LONG' : daysSince >= 7 ? 'MID-SEASON' : daysSince <= 3 ? 'RECENT' : 'MID-SEASON';
+                        // GTD players keep their duration — they might return tonight regardless of absence length
+                        if ((inj.status || '').toUpperCase() !== 'GTD') {
+                          inj.duration = daysSince >= 30 ? 'SEASON-LONG' : daysSince >= 7 ? 'MID-SEASON' : daysSince <= 3 ? 'RECENT' : 'MID-SEASON';
+                        }
                         inj.durationSource = 'game_log';
 
                         console.log(`[Scout Report] NCAAB game-log: ${pName} last played ${inj.reportDateStr} (${daysSince}d ago) → ${inj.duration}`);
@@ -3780,7 +3783,7 @@ function formatNcaabAdvancedMetrics(data) {
 
   const lines = [];
   lines.push('');
-  lines.push('NCAAB TIER 1 ADVANCED METRICS (Barttorvik T-Rank)');
+  lines.push('NCAAB REFERENCE METRICS (Barttorvik)');
   lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   lines.push('');
 
@@ -3802,23 +3805,6 @@ function formatNcaabAdvancedMetrics(data) {
 
   formatTeam(data.home, 'HOME');
   formatTeam(data.away, 'AWAY');
-
-  // Side-by-side comparison for quick reference
-  const h = data.home?.data;
-  const a = data.away?.data;
-  if (h && a) {
-    lines.push('COMPARISON:');
-    const pad = (v, w) => String(v).padStart(w);
-    lines.push(`  ${''.padEnd(20)} ${pad(data.home.team, 15)}  ${pad(data.away.team, 15)}`);
-    lines.push(`  ${'T-Rank'.padEnd(20)} ${pad('#' + h.rank, 15)}  ${pad('#' + a.rank, 15)}`);
-    lines.push(`  ${'AdjOE'.padEnd(20)} ${pad(h.adjOE, 15)}  ${pad(a.adjOE, 15)}`);
-    lines.push(`  ${'AdjDE'.padEnd(20)} ${pad(h.adjDE, 15)}  ${pad(a.adjDE, 15)}`);
-    lines.push(`  ${'AdjEM'.padEnd(20)} ${pad((h.adjEM > 0 ? '+' : '') + h.adjEM, 15)}  ${pad((a.adjEM > 0 ? '+' : '') + a.adjEM, 15)}`);
-    lines.push(`  ${'Tempo'.padEnd(20)} ${pad(h.tempo, 15)}  ${pad(a.tempo, 15)}`);
-    lines.push(`  ${'Barthag'.padEnd(20)} ${pad(h.barthag, 15)}  ${pad(a.barthag, 15)}`);
-    lines.push(`  ${'WAB'.padEnd(20)} ${pad((h.wab > 0 ? '+' : '') + h.wab, 15)}  ${pad((a.wab > 0 ? '+' : '') + a.wab, 15)}`);
-    lines.push('');
-  }
 
   lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   lines.push('');
@@ -4321,8 +4307,7 @@ CRITICAL ANTI-OPINION RULES:
       }
 
       // API failed — process MUST fail (no Grounding fallback)
-      console.error(`[Scout Report] NBA Injuries API failed — no fallback, process will fail`);
-      return { home: [], away: [], groundingRaw: null };
+      throw new Error(`[Scout Report] CRITICAL: NBA Injuries API failed — cannot proceed without injury data. Gary would analyze the game without knowing who's playing.`);
 
     } else {
       query = `Current injuries for ${sport} game ${awayTeam} vs ${homeTeam} as of ${today}. List all players OUT, DOUBTFUL, or QUESTIONABLE with their status and injury type.`;
@@ -5423,7 +5408,7 @@ function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey, rosterDepth 
     const critical = teamInjuries.filter(i => (i.duration === 'RECENT' || i.isEdge === true) && i.status !== 'Out' && i.status !== 'OFS');
     // OFS = Out For Season (Rotowire status code)
     const out = teamInjuries.filter(i => i.status === 'Out' || i.status === 'IR' || i.status === 'LTIR' || i.status === 'OFS' || i.status === 'Injured Reserve');
-    const seasonal = teamInjuries.filter(i => i.duration === 'SEASON-LONG' && i.status !== 'Out' && i.status !== 'IR' && i.status !== 'OFS');
+    const seasonal = teamInjuries.filter(i => i.duration === 'SEASON-LONG' && i.status !== 'Out' && i.status !== 'IR' && i.status !== 'OFS' && (i.status || '').toUpperCase() !== 'GTD');
     const others = teamInjuries.filter(i =>
       !critical.includes(i) && !out.includes(i) && !seasonal.includes(i)
     );
@@ -5748,13 +5733,12 @@ function formatSituationalFactors(game, injuries, sport) {
   if (sportKey === 'basketball_ncaab') {
     factors.push('');
     factors.push('NCAAB INVESTIGATION PROMPTS:');
-    factors.push('• Ask: Is there alignment or divergence between AdjO and AdjD? Does one team have a lopsided profile?');
-    factors.push('• Ask: What is the tempo differential? Who controls pace, and does that favor one side of the spread?');
+    factors.push('• Ask: What does the tempo differential reveal about this matchup? Who controls pace?');
     factors.push('• Ask: What do the home/away splits reveal about each team in this venue context?');
     factors.push('• Ask: Has L5 form diverged from season averages? If so, is it a structural change or shooting variance?');
-    factors.push('• Ask: What is each team\'s 3PT shooting profile, and what does that mean for outcome variance?');
     factors.push('• Ask: Is there a rebounding gap? Compare ORB/g vs DRB/g from the Four Factors for both teams.');
     factors.push('• Ask: What does the rotation depth look like for each team? How might that factor into this game?');
+    factors.push('• Ask: What factors explain WHY the spread is set at this number? What is the market pricing in beyond raw team quality?');
   }
   
   // NFL: Rest & EPA factors
@@ -7623,16 +7607,11 @@ function formatNbaRosterDepth(homeTeam, awayTeam, rosterDepth, injuries) {
     lines.push(...formatTeamStats(awayFourFactors, awayTeamName, 'AWAY'));
     lines.push('');
 
-    // Comparison summary
+    // Comparison summary — raw numbers only, no "winner" labels
     if (homeFourFactors && awayFourFactors) {
-      const efgGap = homeFourFactors.efgPct - awayFourFactors.efgPct;
-      const netGap = homeFourFactors.netRating - awayFourFactors.netRating;
-      const efgWinner = efgGap > 1 ? homeTeamName : (efgGap < -1 ? awayTeamName : 'Even');
-      const netWinner = netGap > 1 ? homeTeamName : (netGap < -1 ? awayTeamName : 'Even');
-
       lines.push('EFFICIENCY COMPARISON:');
-      lines.push(`  eFG% Gap: ${efgWinner === 'Even' ? 'Even' : `${efgWinner} by ${Math.abs(efgGap).toFixed(1)}%`}`);
-      lines.push(`  Net Rating Gap: ${netWinner === 'Even' ? 'Even' : `${netWinner} by ${Math.abs(netGap).toFixed(1)}`}`);
+      lines.push(`  eFG%: ${homeTeamName} ${homeFourFactors.efgPct.toFixed(1)}% | ${awayTeamName} ${awayFourFactors.efgPct.toFixed(1)}%`);
+      lines.push(`  Net Rating: ${homeTeamName} ${homeFourFactors.netRating >= 0 ? '+' : ''}${homeFourFactors.netRating.toFixed(1)} | ${awayTeamName} ${awayFourFactors.netRating >= 0 ? '+' : ''}${awayFourFactors.netRating.toFixed(1)}`);
       lines.push('');
     }
 
@@ -8123,7 +8102,9 @@ function formatNcaabRosterDepth(homeTeam, awayTeam, rosterDepth, injuries) {
   // Helper to format a player row
   const formatPlayerRow = (player, index) => {
     const injury = getInjuryStatus(player.name);
-    const status = injury ? '[OUT]' : '[ACTIVE]';
+    const status = injury
+      ? ((injury.status || '').toUpperCase() === 'GTD' ? '[GTD]' : '[OUT]')
+      : '[ACTIVE]';
     let injuryNote = '';
     if (injury) {
       const statusUpper = injury.status.toUpperCase();
@@ -11334,19 +11315,10 @@ export function buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayPro
   const homeL5 = calcL5Record(homeTeam, recentHome);
   const awayL5 = calcL5Record(awayTeam, recentAway);
   
-  // Helper to format stat with arrow showing advantage
+  // Helper to format stat — neutral presentation, no directional arrows
+  // Gary compares the numbers himself — we don't pre-digest who's "better"
   const formatStat = (homeStat, awayStat, higherIsBetter = true) => {
-    const homeVal = parseFloat(homeStat) || 0;
-    const awayVal = parseFloat(awayStat) || 0;
-    
-    let arrow;
-    if (higherIsBetter) {
-      arrow = homeVal > awayVal ? '←' : (awayVal > homeVal ? '→' : '←→');
-    } else {
-      arrow = homeVal < awayVal ? '←' : (awayVal < homeVal ? '→' : '←→');
-    }
-    
-    return { arrow, home: homeStat || 'N/A', away: awayStat || 'N/A' };
+    return { arrow: '|', home: homeStat || 'N/A', away: awayStat || 'N/A' };
   };
   
   // Get key injuries for each team (truncate if too long)
@@ -11417,21 +11389,8 @@ export function buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayPro
     if (isNcaab) {
       const confRecord = formatStat(homeProfile?.conferenceRecord, awayProfile?.conferenceRecord, true);
       rows.push({ label: 'Conf Record', ...confRecord });
-
-      // NCAAB: Add Barttorvik TIER 1 advanced metrics to Tale of the Tape
-      // These are REAL adjusted efficiency values (not broken BDL calcs)
-      const homeBartt = ncaabAdvancedMetrics?.home?.data;
-      const awayBartt = ncaabAdvancedMetrics?.away?.data;
-      if (homeBartt && awayBartt) {
-        rows.push({ label: 'AdjOE', ...formatStat(homeBartt.adjOE, awayBartt.adjOE, true) });
-        rows.push({ label: 'AdjDE', ...formatStat(homeBartt.adjDE, awayBartt.adjDE, false) }); // Lower = better
-        rows.push({ label: 'AdjEM', ...formatStat(
-          (homeBartt.adjEM > 0 ? '+' : '') + homeBartt.adjEM,
-          (awayBartt.adjEM > 0 ? '+' : '') + awayBartt.adjEM, true) });
-        rows.push({ label: 'Tempo', ...formatStat(homeBartt.tempo, awayBartt.tempo, true) });
-        rows.push({ label: 'T-Rank', ...formatStat('#' + homeBartt.rank, '#' + awayBartt.rank, false) }); // Lower = better
-        rows.push({ label: 'Barthag', ...formatStat(homeBartt.barthag, awayBartt.barthag, true) });
-      }
+      // Barttorvik metrics available in dedicated reference block below — not in Tale of the Tape
+      // (matches NBA approach: Tale of the Tape is lean, efficiency data is reference/investigation)
     }
 
     rows.push(

@@ -13,20 +13,21 @@ const EDT_OFFSET = -4 * 60 * 60 * 1000; // EDT is UTC-4
 function isEDT(date) {
   // Check if date is in EDT (second Sunday in March to first Sunday in November)
   const year = date.getFullYear();
-  
-  // Find second Sunday in March
-  let dstStart = new Date(Date.UTC(year, 2, 8)); // March 8
+
+  // Find second Sunday in March (ranges from March 8-14)
+  // Start at March 1, find first Sunday, then add 7 days
+  let dstStart = new Date(Date.UTC(year, 2, 1)); // March 1
   while (dstStart.getUTCDay() !== 0) {
     dstStart.setUTCDate(dstStart.getUTCDate() + 1);
   }
   dstStart.setUTCDate(dstStart.getUTCDate() + 7); // Second Sunday
-  
+
   // Find first Sunday in November
   let dstEnd = new Date(Date.UTC(year, 10, 1)); // November 1
   while (dstEnd.getUTCDay() !== 0) {
     dstEnd.setUTCDate(dstEnd.getUTCDate() + 1);
   }
-  
+
   return date >= dstStart && date < dstEnd;
 }
 
@@ -49,8 +50,7 @@ export function toEST(date) {
  */
 export function formatInEST(date, options = {}) {
   const d = new Date(date);
-  const estDate = toEST(d);
-  
+
   const defaultOptions = {
     timeZone: 'America/New_York',
     month: 'short',
@@ -60,8 +60,10 @@ export function formatInEST(date, options = {}) {
     minute: '2-digit',
     hour12: true
   };
-  
-  return estDate.toLocaleString('en-US', { ...defaultOptions, ...options });
+
+  // toLocaleString handles EST/EDT conversion via timeZone option —
+  // no need to also call toEST() (that would double-apply the offset)
+  return d.toLocaleString('en-US', { ...defaultOptions, ...options });
 }
 
 /**
