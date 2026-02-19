@@ -19,9 +19,8 @@
 
 import { normalizeTeamAbbreviation } from './agentic/agenticUtils.js';
 
-// Cache: one call per run is enough (slates don't change mid-session)
-let _cachedResponse = null;
-let _cachedAt = 0;
+// Cache: keyed by sport (one call per sport per run)
+const _cache = new Map(); // sport -> { response, cachedAt }
 const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 // DK sport name mapping
@@ -62,10 +61,12 @@ const DK_NBA_TEAM_ID_TO_ABV = {
  * @returns {Promise<Object>} Raw DK lobby response
  */
 async function fetchDKContests(sport) {
+  const sportKey = sport.toUpperCase();
   const now = Date.now();
-  if (_cachedResponse && (now - _cachedAt) < CACHE_TTL_MS) {
-    console.log(`[DK Slates] Using cached response (${Math.round((now - _cachedAt) / 1000)}s old)`);
-    return _cachedResponse;
+  const cached = _cache.get(sportKey);
+  if (cached && (now - cached.cachedAt) < CACHE_TTL_MS) {
+    console.log(`[DK Slates] Using cached ${sportKey} response (${Math.round((now - cached.cachedAt) / 1000)}s old)`);
+    return cached.response;
   }
 
   const dkSport = DK_SPORT_MAP[sport.toUpperCase()];
@@ -88,9 +89,8 @@ async function fetchDKContests(sport) {
 
   const data = await response.json();
 
-  // Cache it
-  _cachedResponse = data;
-  _cachedAt = now;
+  // Cache it keyed by sport
+  _cache.set(sportKey, { response: data, cachedAt: now });
 
   const gameSetCount = data.GameSets?.length || 0;
   const draftGroupCount = data.DraftGroups?.length || 0;

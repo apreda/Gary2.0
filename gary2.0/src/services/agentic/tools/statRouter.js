@@ -531,7 +531,7 @@ async function fetchNBATeamScoringStats(teamId, season = null) {
     return result;
   } catch (error) {
     console.warn('[Stat Router] BDL NBA team scoring stats fetch failed:', error.message);
-    _nbaTeamScoringStatsCache.set(cacheKey, null);
+    // Do NOT cache errors — transient API failures should be retryable on next request
     return null;
   }
 }
@@ -876,7 +876,7 @@ async function fetchNBATeamOpponentStats(teamId, season = null) {
     return result;
   } catch (error) {
     console.warn('[Stat Router] BDL NBA opponent stats fetch failed:', error.message);
-    _nbaOpponentStatsCache.set(cacheKey, null);
+    // Do NOT cache errors — transient API failures should be retryable on next request
     return null;
   }
 }
@@ -917,7 +917,7 @@ async function fetchNBATeamDefenseStats(teamId, season = null) {
     return result;
   } catch (error) {
     console.warn('[Stat Router] BDL NBA defense stats fetch failed:', error.message);
-    _nbaDefenseStatsCache.set(cacheKey, null);
+    // Do NOT cache errors — transient API failures should be retryable on next request
     return null;
   }
 }
@@ -1246,7 +1246,7 @@ const FETCHERS = {
           defensive_rating: awayBartt?.adjDE ?? 'N/A'
         },
         gap: fmtNum(homeNet - awayNet),
-        INVESTIGATE: 'How does each team\'s efficiency gap compare to the spread?'
+        INVESTIGATE: 'What does the AdjEM/Net Rating gap reveal about this matchup compared to the spread?'
       };
     }
 

@@ -123,7 +123,13 @@ async function checkForExistingPicks(dateString) {
   
   // Check if we have valid picks data
   if (data && data.length > 0 && data[0].picks) {
-    const picks = Array.isArray(data[0].picks) ? data[0].picks : JSON.parse(data[0].picks || '[]');
+    let picks;
+    try {
+      picks = Array.isArray(data[0].picks) ? data[0].picks : JSON.parse(data[0].picks || '[]');
+    } catch {
+      console.error('Error parsing picks JSON for', dateString);
+      return false;
+    }
     console.log(`📊 Found existing picks for ${dateString}: ${picks.length} picks`);
     return picks.length > 0;
   }

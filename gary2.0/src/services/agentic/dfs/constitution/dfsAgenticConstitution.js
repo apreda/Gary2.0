@@ -368,9 +368,9 @@ You can USE these to understand WHY the line is set, but NOT as reasons FOR your
    - [NO] "They're 8-3 ATS so they cover"
    - Past ATS performance doesn't predict future ATS performance.
 
-5. **STALE INJURIES (>3 days old)** - Already priced into the line
+5. **INJURIES THE MARKET HAS ABSORBED** - Investigate how long the market has known
    - [NO] "Star X is out so I'm taking Team B"
-   - The market has adjusted. Focus on CURRENT team performance since the injury.
+   - Ask: Has the market had time to adjust? Focus on CURRENT team performance since the absence.
 
 6. **REST/SCHEDULE WITHOUT TIER 1 CONFIRMATION**
    - [NO] "They have a rest advantage so they'll be fresher"

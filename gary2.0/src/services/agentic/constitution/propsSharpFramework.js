@@ -252,7 +252,7 @@ These stats predict tonight's performance.
 
 ### TIER 2 — INVESTIGATION/CONTEXT
 Must confirm with TIER 1 before making decisions.
-- Fresh injuries (0-3 days) — only if game logs show measurable shift
+- Recent injuries — only if game logs show measurable shift and the line may not fully reflect the change
 - Game script projections (pace, blowout risk)
 - Line movement (opening vs current)
 - Matchup-specific data (specific defenders, scheme tendencies)

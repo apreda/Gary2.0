@@ -310,8 +310,12 @@ export async function safeApiCall(apiCall, defaultValue, context = 'API call') {
     const result = await apiCall();
     return result;
   } catch (error) {
-    console.warn(`[BDL API FAILURE] ${context}: ${error.message}`);
-    console.warn(`[BDL API FAILURE] Gary will proceed WITHOUT this data - analysis may be incomplete`);
+    console.error(`[BDL API FAILURE] ${context}: ${error.message}`);
+    console.error(`[BDL API FAILURE] Gary will proceed WITHOUT this data — analysis may be incomplete`);
+    // Track failed calls so orchestrator can detect degraded data quality
+    safeApiCall._failureCount = (safeApiCall._failureCount || 0) + 1;
+    safeApiCall._failures = safeApiCall._failures || [];
+    safeApiCall._failures.push(context);
     return defaultValue;
   }
 }
@@ -634,7 +638,7 @@ export function checkDataAvailability(dataObject, requiredFields = []) {
       hasData: false,
       availableFields: [],
       missingFields: requiredFields,
-      message: '⚠️ NO DATA AVAILABLE - Analysis may be incomplete'
+      message: 'NO DATA AVAILABLE - Analysis may be incomplete'
     };
   }
   
@@ -655,7 +659,7 @@ export function checkDataAvailability(dataObject, requiredFields = []) {
     availableFields: available,
     missingFields: missing,
     message: missing.length > 0 
-      ? `⚠️ MISSING DATA: ${missing.join(', ')}` 
+      ? `MISSING DATA: ${missing.join(', ')}`
       : '✓ All required data available'
   };
 }

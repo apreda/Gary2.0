@@ -87,7 +87,8 @@ async function getAllNcaabTeams() {
     );
     console.log(`[Highlightly] Loaded ${allNcaabTeams.length} teams for local matching`);
   } else {
-    allNcaabTeams = [];
+    console.warn('[Highlightly] Failed to load teams (API returned empty or null) — will retry next call');
+    return []; // Return empty but DON'T cache — leave allNcaabTeams as null so next call retries
   }
   return allNcaabTeams;
 }

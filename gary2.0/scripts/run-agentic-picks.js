@@ -25,6 +25,17 @@ const { ballDontLieService } = await import('../src/services/ballDontLieService.
 const { getConstitution } = await import('../src/services/agentic/constitution/index.js');
 const { fetchSportsbookOdds, formatOddsForStorage } = await import('../src/services/sportsbookOddsService.js');
 const { supabase } = await import('../src/supabaseClient.js');
+// Graceful shutdown handler — log and exit cleanly on SIGTERM/SIGINT
+// Picks stored before the signal are already safe in Supabase (incremental storage)
+process.on('SIGTERM', () => {
+  console.log('\n⚠️ Received SIGTERM — shutting down gracefully...');
+  process.exit(0);
+});
+process.on('SIGINT', () => {
+  console.log('\n⚠️ Received SIGINT — shutting down gracefully...');
+  process.exit(0);
+});
+
 // Simple system: Gary picks SPREAD or ML.
 // ═══════════════════════════════════════════════════════════════════════════
 // GARY PICK GENERATION
@@ -714,13 +725,22 @@ async function main() {
       
       // Build system prompt for this sport
       let constitution = getConstitution(config.key);
-      const today = new Date().toLocaleDateString('en-US', { 
-        weekday: 'long', 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
+      const today = new Date().toLocaleDateString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
       });
-      constitution = constitution.replace(/{{CURRENT_DATE}}/g, today);
+      // Replace date template — handle both sectioned object and flat string
+      if (typeof constitution === 'object' && constitution.full) {
+        for (const key of ['baseRules', 'domainKnowledge', 'investigationPrompts', 'guardrails', 'full']) {
+          if (constitution[key]) {
+            constitution[key] = constitution[key].replace(/{{CURRENT_DATE}}/g, today);
+          }
+        }
+      } else {
+        constitution = constitution.replace(/{{CURRENT_DATE}}/g, today);
+      }
       const systemPrompt = buildSystemPrompt(constitution, config.key);
       
       console.log(`[${config.name}] 🎯 Processing ${finalGames.length} games`);
