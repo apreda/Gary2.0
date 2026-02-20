@@ -58,6 +58,9 @@ export async function runAgenticPropsCli({
   const cliRegularOnly = regularOnly || args.regular === '1' || args['no-td'] === '1';
   // --legacy flag: use old pipeline (propsAgenticRunner) instead of orchestrator
   const useLegacy = args.legacy === true || args.legacy === '1' || args.legacy === 'true';
+  // --test flag: store to test_prop_picks table instead of production (for testing)
+  const useTestTable = args.test === true || args.test === '1' || args.test === 'true';
+  const testTableName = useTestTable ? 'test_prop_picks' : 'prop_picks';
 
   console.log(`\n🏈 Agentic ${leagueLabel} Props Runner Starting...`);
   console.log(`${'='.repeat(50)}`);
@@ -65,7 +68,7 @@ export async function runAgenticPropsCli({
   console.log(`🎯 Sport: ${leagueLabel}`);
   console.log(`📊 Games limit: ${limit}`);
   console.log(`🔧 Pipeline: ${useLegacy ? 'LEGACY (propsAgenticRunner)' : 'ORCHESTRATOR (multi-pass)'}`);
-  console.log(`💾 Store: ${shouldStore ? 'Yes' : 'No (pass --store=1 to save)'}`);
+  console.log(`💾 Store: ${shouldStore ? 'Yes' : 'No (pass --store=1 to save)'}${useTestTable ? ' (TEST MODE → test_prop_picks)' : ''}`);
   if (cliRegularOnly && leagueLabel === 'NFL') console.log(`🏈 Mode: Regular props only (yards/receptions - TDs handled separately)`);
   if (matchupFilter) console.log(`🔍 Matchup filter: ${matchupFilter}`);
   console.log(`${'='.repeat(50)}\n`);
@@ -272,9 +275,9 @@ export async function runAgenticPropsCli({
               sport: leagueLabel,
               matchup,
               commence_time: game.commence_time,
-              bet: (pick.bet || 'over').toLowerCase() === 'yes' ? 'over' : (pick.bet || 'over').toLowerCase(),
-              confidence: pick.confidence || 0.6,
-              confidence_tier: pick.confidence_tier || 'CORE'
+              bet: pick.bet ? (pick.bet.toLowerCase() === 'yes' ? 'over' : pick.bet.toLowerCase()) : pick.bet,
+              confidence: pick.confidence || null,
+              confidence_tier: pick.confidence_tier || null
             };
           });
 
@@ -353,7 +356,7 @@ export async function runAgenticPropsCli({
 
       const dateParam = getESTDate();
       const { data: existingData } = await supabase
-        .from('prop_picks')
+        .from(testTableName)
         .select('picks')
         .eq('date', dateParam)
         .single();
@@ -390,7 +393,7 @@ export async function runAgenticPropsCli({
       
       // Use upsert instead of delete-then-insert (atomic, race-safe)
       const { error: upsertError } = await supabase
-        .from('prop_picks')
+        .from(testTableName)
         .upsert({
           date: dateParam,
           picks: mergedPicks,
@@ -413,8 +416,9 @@ export async function runAgenticPropsCli({
   console.log(`${'='.repeat(50)}`);
   
   sortedPicks.forEach((pick, i) => {
-    const conf = (pick.confidence * 100).toFixed(0);
-    console.log(`${i + 1}. ${pick.player} (${pick.team}): ${pick.bet.toUpperCase()} ${pick.prop} ${pick.line || '?'} @ ${pick.odds} (${conf}% confidence)`);
+    const conf = pick.confidence ? (pick.confidence * 100).toFixed(0) : '?';
+    const bet = pick.bet ? pick.bet.toUpperCase() : '?';
+    console.log(`${i + 1}. ${pick.player || 'Unknown'} (${pick.team || '?'}): ${bet} ${pick.prop || '?'} ${pick.line || '?'} @ ${pick.odds || '?'} (${conf}% confidence)`);
   });
 
   console.log(`\n🏁 Agentic ${leagueLabel} Props Runner Complete.\n`);

@@ -176,16 +176,23 @@ OUTPUT FORMAT — respond ONLY with valid JSON, no markdown, no explanation:
 
   console.log(`[Slate Discovery] Found ${parsed.slates.length} FanDuel slates via Grounding`);
 
-  // Convert to standard slate format
-  return parsed.slates.map(s => {
+  // Convert to standard slate format with team validation
+  const validSlates = parsed.slates.map(s => {
     // Extract team abbreviations from game strings like "MIL @ ORL"
     const teams = [];
     const matchups = [];
     for (const game of (s.games || [])) {
       const parts = game.split(/\s*@\s*/);
       if (parts.length === 2) {
-        teams.push(parts[0].trim(), parts[1].trim());
-        matchups.push(game);
+        const away = parts[0].trim().toUpperCase();
+        const home = parts[1].trim().toUpperCase();
+        // Validate both team abbreviations
+        if (isValidTeamAbbr(away, sport) && isValidTeamAbbr(home, sport)) {
+          teams.push(away, home);
+          matchups.push(`${away} @ ${home}`);
+        } else {
+          console.warn(`[Slate Discovery] Skipping invalid matchup from Grounding: "${game}" (${away} or ${home} not a valid ${sport} team)`);
+        }
       }
     }
 
@@ -193,13 +200,44 @@ OUTPUT FORMAT — respond ONLY with valid JSON, no markdown, no explanation:
       name: s.name,
       id: generateSlateId(s.name),
       startTime: s.startTime,
-      gameCount: s.gameCount || s.games?.length || 0,
+      gameCount: matchups.length,
       games: matchups,
       matchups,
       teams: [...new Set(teams)],
       source: 'FanDuel (Gemini Grounding)'
     };
-  });
+  }).filter(s => s.matchups.length >= 2); // Must have at least 2 valid games
+
+  if (validSlates.length === 0) {
+    throw new Error(`[Slate Discovery] FanDuel Grounding returned ${parsed.slates.length} slates but none had valid team abbreviations after validation.`);
+  }
+
+  return validSlates;
+}
+
+// ============================================================================
+// TEAM ABBREVIATION VALIDATION
+// ============================================================================
+
+const VALID_NBA_TEAMS = new Set([
+  'ATL', 'BOS', 'BKN', 'CHA', 'CHI', 'CLE', 'DAL', 'DEN', 'DET', 'GSW',
+  'HOU', 'IND', 'LAC', 'LAL', 'MEM', 'MIA', 'MIL', 'MIN', 'NOP', 'NYK',
+  'OKC', 'ORL', 'PHI', 'PHX', 'POR', 'SAC', 'SAS', 'TOR', 'UTA', 'WAS'
+]);
+
+const VALID_NFL_TEAMS = new Set([
+  'ARI', 'ATL', 'BAL', 'BUF', 'CAR', 'CHI', 'CIN', 'CLE', 'DAL', 'DEN',
+  'DET', 'GB', 'HOU', 'IND', 'JAX', 'KC', 'LV', 'LAC', 'LAR', 'MIA',
+  'MIN', 'NE', 'NO', 'NYG', 'NYJ', 'PHI', 'PIT', 'SF', 'SEA', 'TB',
+  'TEN', 'WAS'
+]);
+
+function isValidTeamAbbr(abbr, sport) {
+  if (!abbr) return false;
+  const upper = abbr.toUpperCase().trim();
+  if (sport === 'NBA') return VALID_NBA_TEAMS.has(upper);
+  if (sport === 'NFL') return VALID_NFL_TEAMS.has(upper);
+  return upper.length >= 2 && upper.length <= 4;
 }
 
 // ============================================================================

@@ -1555,6 +1555,14 @@ const ballDontLieService = {
         const formatPlayer = (player) => {
           const stats = statsMap[player.id] || {};
           const gp = stats.games_played || 1;
+          const fgm = stats.fgm || 0;
+          const fga = stats.fga || 0;
+          const fg3m = stats.fg3m || 0;
+          const fta = stats.fta || 0;
+          const efgPct = fga > 0 ? ((fgm + 0.5 * fg3m) / fga * 100).toFixed(1) : null;
+          const tsa = 2 * (fga + 0.44 * fta);
+          const tsPct = tsa > 0 ? ((stats.pts || 0) / tsa * 100).toFixed(1) : null;
+          const fgaPg = gp > 0 ? (fga / gp).toFixed(1) : '0.0';
           return {
             id: player.id,
             name: `${player.first_name} ${player.last_name}`,
@@ -1565,9 +1573,12 @@ const ballDontLieService = {
             ppg: gp > 0 ? ((stats.pts || 0) / gp).toFixed(1) : '0.0',
             reb: gp > 0 ? ((stats.reb || 0) / gp).toFixed(1) : '0.0',
             ast: gp > 0 ? ((stats.ast || 0) / gp).toFixed(1) : '0.0',
-            min: gp > 0 ? ((stats.min || 0) / gp).toFixed(1) : '0.0',
+            min: stats.min ? parseFloat(stats.min).toFixed(1) : '0.0',
             fgPct: stats.fg_pct ? stats.fg_pct.toFixed(1) : 'N/A',
-            fg3Pct: stats.fg3_pct ? stats.fg3_pct.toFixed(1) : 'N/A'
+            fg3Pct: stats.fg3_pct ? stats.fg3_pct.toFixed(1) : 'N/A',
+            efgPct,
+            tsPct,
+            fgaPg
           };
         };
         
@@ -1593,6 +1604,36 @@ const ballDontLieService = {
           gpMap[name] = stats.games_played || 0;
         }
 
+        // Compute team-level Four Factors from team_season_stats (per-game averages)
+        // player_season_stats does NOT have oreb/dreb — only team_season_stats does
+        // team_season_stats returns per-game averages, so ratios (eFG%, TOV Rate, etc.) work directly
+        const [homeTeamSeasonStats, awayTeamSeasonStats] = await Promise.all([
+          this.getTeamSeasonStats('basketball_ncaab', { teamId: homeTeam.id, season }),
+          this.getTeamSeasonStats('basketball_ncaab', { teamId: awayTeam.id, season })
+        ]);
+
+        const computeTeamFourFactors = (teamStatsArr) => {
+          const ts = Array.isArray(teamStatsArr) ? teamStatsArr[0] : teamStatsArr;
+          if (!ts) return { efgPct: null, tovRate: null, ftRate: null, orebRate: null };
+          const fgm = ts.fgm || 0;
+          const fga = ts.fga || 0;
+          const fg3m = ts.fg3m || 0;
+          const fta = ts.fta || 0;
+          const oreb = ts.oreb || 0;
+          const dreb = ts.dreb || 0;
+          const tov = ts.turnover || 0;
+          const totalReb = oreb + dreb;
+          return {
+            efgPct: fga > 0 ? ((fgm + 0.5 * fg3m) / fga * 100).toFixed(1) : null,
+            tovRate: fga > 0 ? (tov / (fga + 0.44 * fta + tov) * 100).toFixed(1) : null,
+            ftRate: fga > 0 ? (fta / fga * 100).toFixed(1) : null,
+            orebRate: totalReb > 0 ? (oreb / totalReb * 100).toFixed(1) : null,
+          };
+        };
+
+        const homeTeamFourFactors = computeTeamFourFactors(homeTeamSeasonStats);
+        const awayTeamFourFactors = computeTeamFourFactors(awayTeamSeasonStats);
+
         return {
           home: homeRoster,
           away: awayRoster,
@@ -1602,7 +1643,9 @@ const ballDontLieService = {
           awayTeamId: awayTeam.id,
           homeConferenceId: homeTeam.conference_id,
           awayConferenceId: awayTeam.conference_id,
-          gpMap
+          gpMap,
+          homeTeamFourFactors,
+          awayTeamFourFactors
         };
       }, ttlMinutes);
     } catch (e) {
@@ -2651,7 +2694,7 @@ const ballDontLieService = {
           stl: gp > 0 ? (s.stl || 0) / gp : 0,
           blk: gp > 0 ? (s.blk || 0) / gp : 0,
           fg3m: gp > 0 ? (s.fg3m || 0) / gp : 0,
-          min: gp > 0 ? (s.min || 0) / gp : 0,
+          min: s.min ? parseFloat(s.min) : 0,
           pra: gp > 0 ? ((s.pts || 0) + (s.reb || 0) + (s.ast || 0)) / gp : 0
         };
 

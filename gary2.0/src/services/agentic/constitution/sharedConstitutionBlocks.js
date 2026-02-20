@@ -99,10 +99,39 @@ College rosters change constantly — opt-outs, transfers, suspensions, freshmen
   },
 };
 
+// ── Shared Injury Core ──
+// Used by BOTH game picks and props. One source of truth for injury investigation principles.
+function getSharedInjuryCore() {
+  return `### INJURY INVESTIGATION: DURATION & DATA FIRST
+
+**BEFORE citing ANY injury or absence, investigate the timeline:**
+
+1. **"How long has the market known about this absence?"**
+   - Check the duration tag. How many days/games have they missed?
+   - For recent absences (1-3 days): Patterns may still be shifting. Investigate recent game logs.
+   - For established absences (1+ weeks): The current lines and stats reflect the current roster. Ask: What does the data show about ACTUAL performance without them?
+   - For season-long absences: This IS the team/player you're evaluating. The absence is backstory, not a current factor.
+
+2. **"Does the DATA show a change, or am I assuming one?"**
+   - Don't assume a player being out helps or hurts anyone. CHECK the actual game logs.
+   - Name who IS filling the role and cite THEIR data.
+   - If you can't find data showing a shift, there IS no shift to cite.
+
+3. **"Has the line/spread already adjusted?"**
+   - Ask: When was the absence announced? What do the actual numbers (season averages, game logs) show compared to the current line/spread?
+   - Ask: Does the line/spread reflect the full impact of the absence, or is there a gap? What does that tell you about this bet tonight?
+
+**STALE VS FRESH:**
+Be aware that long-standing absences are already reflected in the lines, stats, and team identity. A player out for 3 weeks is old news — the team you see in the data IS the team without that player. A player ruled out yesterday is fresh information the line may not fully reflect. Investigate: What does the data show?`;
+}
+
+// ── Game Picks: Team-Level Injury Investigation ──
 export function getInjuryNarrativeFramework(sport) {
   const config = INJURY_CONFIGS[sport] || INJURY_CONFIGS.NBA;
 
-  return `### [KEY] CURRENT TEAM STATE > INJURY NARRATIVE (CRITICAL MINDSET)
+  return `${getSharedInjuryCore()}
+
+### [KEY] CURRENT TEAM STATE > INJURY NARRATIVE (GAME PICKS)
 
 **THE CORE PRINCIPLE:** The current team's recent performance IS the evidence. Injuries are CONTEXT for why, not predictions of what.
 ${config.rosterContext}
@@ -123,6 +152,24 @@ If the team is still struggling, cite the evidence of the decline — not just t
 
 **USE PLAYER_GAME_LOGS TOKEN:**
 Call \`fetch_stats(token: 'PLAYER_GAME_LOGS')\` to see who actually played, their minutes/TOI, and performance in recent games.`;
+}
+
+// ── Props: Player-Level Injury Investigation ──
+// Used by propsSharpFramework.js — same core principles, focused on individual usage/line impact.
+export function getPropsInjuryFramework() {
+  return `${getSharedInjuryCore()}
+
+### PLAYER-LEVEL INJURY INVESTIGATION (PROPS)
+
+**USAGE INVESTIGATION:**
+When a teammate is out, investigate:
+- What do the game logs show from games WITHOUT this player? Has anything measurably changed?
+- What does the data show about how production is distributed with the current roster?
+- Is there a shift in the data, or is the team performing similarly without the absent player?
+
+**LINE ADJUSTMENT INVESTIGATION:**
+- Investigate: When was the absence announced? What do the player's season averages and recent game logs show compared to the current prop line?
+- Ask: Does the line reflect what the data shows about the usage shift, or is there a gap? What does that tell you about this prop tonight?`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -289,4 +336,57 @@ export function getNarrativeClosingQuestions() {
 - Ask: If the public is right here, what specifically makes it true tonight?
 - Ask: If the data points away from the public belief, what explains the gap?
 - Ask: How has this narrative shaped the line, and does the number feel right given everything you've investigated?`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// BLOCK 7: Props Recent Form Investigation (props guardrails)
+// Player-level version of getRecentFormInvestigation — shared principles,
+// framed for individual production investigation.
+// ═══════════════════════════════════════════════════════════════════════
+
+export function getPropsRecentFormInvestigation() {
+  return `### RECENT FORM — INVESTIGATE WHAT'S DRIVING THE TREND
+
+**RECENT RUNS ARE DESCRIPTIVE, NOT PREDICTIVE:**
+- "He's hit the over 4 straight games" describes what HAPPENED — it doesn't predict tonight
+- Recent runs often explain WHY the line is where it is (books adjust for hot/cold streaks)
+- Ask: "Is this run WHY the line is set here, or does it reveal something the line hasn't captured?"
+
+**When a player is on a multi-game heater or slump, investigate:**
+- What's driving the streak? Is it volume changes (more minutes, more usage) or efficiency variance (unsustainable shooting)?
+- Is the roster the same? A streak WITH a teammate out is different from a streak with the full roster.
+- What's the opponent quality during the streak? Did the recent games feature matchups that inflate or deflate production?
+- What do the game logs show about the specific mechanism (FGA, minutes, usage rate, matchup)?
+
+**Ask:** "Is this streak evidence of a real structural change, or variance that will correct?"
+
+**SINGLE RESULTS — INVESTIGATE, DON'T ANCHOR:**
+One great (or terrible) game against a team doesn't define the matchup tonight.
+- What were the circumstances? Same roster? Same role? Same matchup personnel?
+- Was there something unique? Blowout, overtime, foul trouble, injury mid-game?
+- Does the mechanism from that game apply tonight, or was it noise?
+
+**Ask:** "Does this single result reveal something structural about tonight, or was it noise?"`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// BLOCK 8: Props Structural vs Narrative (props guardrails)
+// Player-level version of getStructuralVsNarrative — shared principles,
+// framed for prop-level reasoning.
+// ═══════════════════════════════════════════════════════════════════════
+
+export function getPropsStructuralVsNarrative() {
+  return `### STRUCTURAL vs NARRATIVE — VERIFY BEFORE CITING
+
+Treat all narratives ("revenge game," "he always kills them," "primetime player," "due for a bounce-back") as **hypotheses**. Verify with data before citing:
+1. **Prove it**: What do the game logs and stats actually show? Does the data back the narrative?
+2. **Contextualize**: Is it sustainable (role change, usage shift, matchup mechanism) or noise (2-game shooting heater, one outlier game)?
+3. **Emotional labels are opinions**: "He's due" or "he loves this matchup" require data to cite.
+
+**Structural (repeatable):** Usage rate shifts, role changes, minutes changes, matchup mechanisms, lineup data.
+**Narrative (investigate first):** Revenge, "he always performs at MSG," streaks, "he's due."
+
+**AWARENESS:** A player's season averages reflect what the prop line ALSO reflects. Citing a gap between average and line confirms the market's view — it doesn't reveal edge. Edge comes from matchup-specific factors: role changes, personnel mismatches, scheme vulnerabilities, recent structural shifts. Investigate where YOUR findings and the line disagree.
+
+**Ask:** "Is my thesis built on something the line already reflects, or have I found something the line hasn't captured?"`;
 }

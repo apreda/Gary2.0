@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Agentic NBA Player Props Runner
- * Uses a 3-stage pipeline (Hypothesis → Investigator → Judge) for prop analysis
+ * 4-pass agentic pipeline: Investigation → Bilateral Cases → Evaluation → Finalize
  * 
  * Usage:
  *   node scripts/run-agentic-nba-props.js

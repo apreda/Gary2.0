@@ -8,7 +8,7 @@
  * These tools give him the data he needs.
  */
 
-import { ballDontLieService } from '../../../ballDontLieService.js';
+// BDL import removed — injury status comes from RapidAPI via context, not BDL
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // SLATE ANALYSIS TOOLS (Used by Flash in Phase 2)
@@ -189,15 +189,6 @@ export const DFS_PLAYER_INVESTIGATION_TOOLS = [
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ALL TOOLS COMBINED
-// ═══════════════════════════════════════════════════════════════════════════════
-
-export const ALL_DFS_TOOLS = [
-  ...DFS_SLATE_ANALYSIS_TOOLS,
-  ...DFS_PLAYER_INVESTIGATION_TOOLS
-];
-
-// ═══════════════════════════════════════════════════════════════════════════════
 // TOOL EXECUTION
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -256,7 +247,8 @@ export async function executeToolCall(toolName, args, context) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 async function getTeamInjuries(team, context) {
-  // Check context first
+  // Injuries are populated from RapidAPI during context building (Phase 1).
+  // Do NOT fall back to BDL — BDL injuries are for duration enrichment only, not status.
   const contextInjuries = context.injuries?.[team];
   if (contextInjuries && contextInjuries.length > 0) {
     return {
@@ -270,25 +262,12 @@ async function getTeamInjuries(team, context) {
     };
   }
 
-  // Fetch from BDL
-  try {
-    const injuries = await ballDontLieService.getInjuries('basketball_nba');
-    const teamInjuries = (injuries || []).filter(i => {
-      const playerTeam = i.player?.team?.abbreviation || i.team;
-      return playerTeam?.toUpperCase() === team.toUpperCase();
-    });
-
-    return {
-      team,
-      injuries: teamInjuries.map(i => ({
-        player: i.player?.first_name ? `${i.player.first_name} ${i.player.last_name}` : i.player,
-        status: i.status,
-        reason: i.reason || i.injury
-      }))
-    };
-  } catch (e) {
-    return { team, injuries: [], error: e.message };
-  }
+  // No injuries in context for this team — either no injuries or context wasn't populated
+  return {
+    team,
+    injuries: [],
+    note: 'No injury data in context for this team. Injury data comes from RapidAPI during context build.'
+  };
 }
 
 async function getUsageBoost(outPlayer, team, context) {
@@ -305,24 +284,30 @@ async function getUsageBoost(outPlayer, team, context) {
   const outPlayerMinutes = outPlayerData?.mpg || outPlayerData?.seasonStats?.mpg || 32;
 
   // Identify likely beneficiaries (same position, similar role)
-  const beneficiaries = players
+  const rawBeneficiaries = players
     .filter(p => p.name !== outPlayerData?.name)
     .filter(p => {
-      // Same position or adjacent
       const positions = p.positions || [p.position];
       const outPositions = outPlayerData?.positions || [outPlayerData?.position];
       return positions.some(pos => outPositions?.includes(pos)) ||
              (p.mpg && p.mpg >= 15); // Or significant minute players
     })
-    .slice(0, 5)
-    .map(p => ({
+    .slice(0, 5);
+
+  // Distribute usage proportionally — higher-usage teammates get more of the redistribution
+  const totalCurrentUsage = rawBeneficiaries.reduce((sum, p) => sum + (p.usage || p.seasonStats?.usg_pct || 20), 0);
+  const beneficiaries = rawBeneficiaries.map(p => {
+    const currentUsage = p.usage || p.seasonStats?.usg_pct || 20;
+    const share = totalCurrentUsage > 0 ? currentUsage / totalCurrentUsage : 1 / rawBeneficiaries.length;
+    return {
       name: p.name,
-      currentUsage: p.usage || p.seasonStats?.usg_pct || 20,
+      currentUsage,
       currentMinutes: p.mpg || p.seasonStats?.mpg || 20,
-      projectedBoost: Math.round((outPlayerUsage / 3) * 10) / 10, // Rough estimate
+      projectedBoost: Math.round(outPlayerUsage * share * 10) / 10,
       salary: p.salary,
-      priceAdjusted: false // Would need to check if salary moved
-    }));
+      priceAdjusted: false
+    };
+  });
 
   return {
     outPlayer,
@@ -336,8 +321,8 @@ async function getUsageBoost(outPlayer, team, context) {
 async function getGameEnvironment(homeTeam, awayTeam, context) {
   // Look for game in context (populated by BDL odds in Phase 1)
   const game = context.games?.find(g => {
-    const h = (g.homeTeam || '').toUpperCase();
-    const a = (g.awayTeam || '').toUpperCase();
+    const h = (g.homeTeam || g.home_team || '').toUpperCase();
+    const a = (g.awayTeam || g.visitor_team || g.away_team || '').toUpperCase();
     return (h === homeTeam && a === awayTeam) || (h === awayTeam && a === homeTeam);
   });
 
@@ -351,10 +336,14 @@ async function getGameEnvironment(homeTeam, awayTeam, context) {
       overUnder: ou,
       homeMoneyline: game.homeMoneyline || game.home_ml || null,
       awayMoneyline: game.awayMoneyline || game.away_ml || null,
-      impliedTotal: ou && sp ? {
-        home: (ou / 2 - sp / 2),
-        away: (ou / 2 + sp / 2)
-      } : null
+      impliedTotal: {
+        home: game.implied_home_total ?? (ou && sp ? (ou / 2 - sp / 2) : null),
+        away: game.implied_away_total ?? (ou && sp ? (ou / 2 + sp / 2) : null)
+      },
+      blowoutRisk: game.blowout_risk ?? false,
+      gamePace: game.game_pace ?? null,
+      homeB2B: game.home_b2b ?? false,
+      awayB2B: game.away_b2b ?? false
     };
   }
 
@@ -486,11 +475,16 @@ async function getTeammateStatus(team, context) {
 
 async function searchLatestNews(query, context) {
   // Search for matching news in player newsContext (populated from Tank01 in Phase 1)
-  const queryLower = query.toLowerCase();
+  const queryWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 2);
   const matchingNews = [];
 
   for (const player of (context?.players || [])) {
-    if (player.newsContext && player.name?.toLowerCase().includes(queryLower.split(' ')[0].toLowerCase())) {
+    if (!player.newsContext) continue;
+    const nameLower = player.name?.toLowerCase() || '';
+    // Match if any query word appears in the player name, or player name appears in query
+    const nameMatch = queryWords.some(w => nameLower.includes(w)) ||
+                      nameLower.split(/\s+/).some(w => query.toLowerCase().includes(w));
+    if (nameMatch) {
       matchingNews.push({
         player: player.name,
         team: player.team,
@@ -511,16 +505,38 @@ async function searchLatestNews(query, context) {
 }
 
 async function getPlayerVsTeamHistory(playerName, opponent, context) {
-  // Check if L5 stats show any games against this opponent
   const player = context.players?.find(p =>
     p.name?.toLowerCase().includes(playerName.toLowerCase())
   );
 
+  if (!player) {
+    return { player: playerName, opponent, error: 'Player not found in slate' };
+  }
+
+  // Check L5 game logs for games against this opponent
+  const vsGames = [];
+  if (player.l5Stats?.games) {
+    for (const game of player.l5Stats.games) {
+      const opp = (game.opponent || game.opp || '').toUpperCase();
+      if (opp === opponent.toUpperCase()) {
+        vsGames.push(game);
+      }
+    }
+  }
+
   return {
-    player: player?.name || playerName,
+    player: player.name,
     opponent,
-    matchupDvP: player?.matchupDvP || null,
-    note: 'Historical game-by-game matchup data not available — use DvP and season stats instead'
+    recentGamesVsOpponent: vsGames.length > 0 ? vsGames : null,
+    matchupDvP: player.matchupDvP || null,
+    seasonStats: {
+      ppg: player.ppg || player.seasonStats?.ppg,
+      rpg: player.rpg || player.seasonStats?.rpg,
+      apg: player.apg || player.seasonStats?.apg,
+    },
+    note: vsGames.length > 0
+      ? `Found ${vsGames.length} recent game(s) vs ${opponent}`
+      : `No recent games vs ${opponent} in L5 — use DvP and season stats instead`
   };
 }
 
@@ -535,6 +551,5 @@ async function getPlayerVsTeamHistory(playerName, opponent, context) {
 export default {
   DFS_SLATE_ANALYSIS_TOOLS,
   DFS_PLAYER_INVESTIGATION_TOOLS,
-  ALL_DFS_TOOLS,
   executeToolCall
 };

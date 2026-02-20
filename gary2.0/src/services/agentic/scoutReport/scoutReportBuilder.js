@@ -59,12 +59,15 @@ function playerNamesMatch(name1, name2) {
   const aLast = aParts.slice(1).join(' ');
   const bLast = bParts.slice(1).join(' ');
 
-  // First names must match (or one is an initial/abbreviation of the other)
+  // First names must match (or one is an initial/abbreviation/prefix of the other)
+  // Handles: "N." → "Nicolas", "Nic" → "Nicolas", "Nicolas" → "Nicolas"
   const aClean = aFirst.replace('.', '');
   const bClean = bFirst.replace('.', '');
   const firstNameMatch = (aFirst === bFirst) ||
     (aClean.length === 1 && bFirst.startsWith(aClean)) ||
-    (bClean.length === 1 && aFirst.startsWith(bClean));
+    (bClean.length === 1 && aFirst.startsWith(bClean)) ||
+    (aClean.length >= 2 && bFirst.startsWith(aClean)) ||
+    (bClean.length >= 2 && aFirst.startsWith(bClean));
   if (!firstNameMatch) return false;
 
   // Last names: exact match
@@ -93,95 +96,6 @@ function getGeminiClient() {
   return geminiClient;
 }
 
-/**
- * Extract injury duration from BDL description and return_date
- * BDL provides rich descriptions like "at least another month" or "since Dec. 18"
- */
-function extractDurationFromBdl(description, returnDate) {
-  const now = new Date();
-  let daysSinceOut = null;
-  let outSinceStr = null;
-  let duration = 'UNKNOWN';
-
-  const desc = (description || '').toLowerCase();
-
-  // Pattern 1: "since [month] [day]" - exact date
-  const sinceMatch = desc.match(/since\s+(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)[.\s]*(\d{1,2})?/i);
-  if (sinceMatch) {
-    const monthStr = sinceMatch[1].toLowerCase();
-    const day = sinceMatch[2] ? parseInt(sinceMatch[2], 10) : 1;
-    const monthMap = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
-    const monthNum = monthMap[monthStr.substring(0, 3)];
-    if (monthNum !== undefined) {
-      let year = now.getFullYear();
-      if (monthNum > now.getMonth()) year -= 1;
-      const outDate = new Date(year, monthNum, day);
-      daysSinceOut = Math.floor((now - outDate) / (1000 * 60 * 60 * 24));
-      outSinceStr = outDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    }
-  }
-
-  // Pattern 2: REMOVED — return_date heuristic was unreliable.
-  // A player close to returning could have been out for months (e.g., Toppin stress fracture).
-  // Game-log fallback (resolveUnknownDurations) is more accurate for these cases.
-
-  // Pattern 3: Text-based duration hints
-  if (!daysSinceOut) {
-    if (desc.includes('at least another month') || desc.includes('out for season') || desc.includes('no timetable')) {
-      daysSinceOut = 30;
-      outSinceStr = '30+ days (long-term)';
-    } else if (desc.includes('week-to-week') || desc.includes('several weeks')) {
-      daysSinceOut = 14;
-      outSinceStr = 'multi-week injury';
-    } else if (desc.includes('day-to-day')) {
-      daysSinceOut = 2;
-      outSinceStr = 'day-to-day (recent)';
-    }
-  }
-
-  // Pattern 4: Date at start of description (e.g., "Jan 20: Player is out..." or "Nov 16, 2025 -")
-  if (!daysSinceOut) {
-    const dateStartMatch = desc.match(/^(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)[.\s]*(\d{1,2})/i);
-    if (dateStartMatch) {
-      const monthStr = dateStartMatch[1].toLowerCase();
-      const day = parseInt(dateStartMatch[2], 10);
-      const monthMap = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
-      const monthNum = monthMap[monthStr.substring(0, 3)];
-      if (monthNum !== undefined) {
-        let year = now.getFullYear();
-        if (monthNum > now.getMonth()) year -= 1;
-        const outDate = new Date(year, monthNum, day);
-        daysSinceOut = Math.floor((now - outDate) / (1000 * 60 * 60 * 24));
-        outSinceStr = outDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      }
-    }
-  }
-
-  // Pattern 5: "missed X games" — estimate days from game count (NBA ~every 2 days)
-  if (!daysSinceOut) {
-    const missedMatch = desc.match(/missed\s+(\d+)\s+game/i);
-    if (missedMatch) {
-      const gamesOut = parseInt(missedMatch[1], 10);
-      daysSinceOut = Math.max(gamesOut * 2, 3);
-      outSinceStr = `~${gamesOut} games missed`;
-    }
-  }
-
-  // Categorize duration
-  if (daysSinceOut !== null) {
-    if (daysSinceOut >= 30) {
-      duration = 'SEASON-LONG';
-    } else if (daysSinceOut >= 7) {
-      duration = 'MID-SEASON';
-    } else if (daysSinceOut <= 3) {
-      duration = 'RECENT';
-    } else {
-      duration = 'MID-SEASON';
-    }
-  }
-
-  return { duration, daysSinceOut, outSinceStr };
-}
 
 /**
  * Fetch a snapshot of the league landscape (standings) to ground analysis
@@ -215,14 +129,21 @@ async function fetchStandingsSnapshot(sport, homeTeam = null, awayTeam = null, n
         const awayTeamLower = awayTeam.toLowerCase();
         
         // Find teams in standings by matching team name or full_name
+        // Uses word-boundary regex to prevent "Nets" matching "Hornets"
         const findTeam = (teamName) => {
           const nameLower = teamName.toLowerCase();
+          const lastWord = nameLower.split(' ').pop();
+          const lastWordRegex = new RegExp(`\\b${lastWord}\\b`, 'i');
           return standings.find(s => {
             const bdlName = (s.team?.name || '').toLowerCase();
             const bdlFullName = (s.team?.full_name || '').toLowerCase();
-            return nameLower.includes(bdlName) || bdlFullName.includes(nameLower) || 
-                   bdlName.includes(nameLower.split(' ').pop()) || // Match by last word (e.g., "Celtics")
-                   nameLower.split(' ').pop() === bdlName.split(' ').pop();
+            // Priority 1: Exact full name match
+            if (bdlFullName === nameLower) return true;
+            // Priority 2: Full name contains search or vice versa
+            if (nameLower.includes(bdlName) || bdlFullName.includes(nameLower)) return true;
+            // Priority 3: Word-boundary match on last word (prevents "nets" in "hornets")
+            if (lastWordRegex.test(bdlName) || lastWordRegex.test(bdlFullName)) return true;
+            return false;
           });
         };
         
@@ -479,11 +400,176 @@ export async function buildScoutReport(game, sport, options = {}) {
     fetchTeamProfile(homeTeam, sportKey),
     fetchTeamProfile(awayTeam, sportKey),
     fetchInjuries(homeTeam, awayTeam, sportKey),
-    fetchRecentGames(homeTeam, sportKey, 8),
-    fetchRecentGames(awayTeam, sportKey, 8),
+    fetchRecentGames(homeTeam, sportKey, sportKey === 'NCAAB' ? 50 : 8),
+    fetchRecentGames(awayTeam, sportKey, sportKey === 'NCAAB' ? 50 : 8),
     fetchStandingsSnapshot(sportKey, homeTeam, awayTeam)
   ]);
   
+  // =========================================================================
+  // NBA INJURY DURATION RESOLUTION (box-score method — single source of truth)
+  // Uses the team's recent game box scores to determine when each injured player
+  // last played. Counts GAMES missed (not calendar days) — naturally handles
+  // All-Star breaks, bye weeks, and any schedule gap.
+  // Also handles: suspension detection, FRESH/STALE marking, HARD FAIL on UNKNOWN.
+  // =========================================================================
+  if (sportKey === 'NBA' && (injuries?.home?.length > 0 || injuries?.away?.length > 0)) {
+    const STALE_WINDOW_GAMES = 2; // 0-2 games missed = FRESH/RECENT, >2 = STALE
+
+    const resolveDurationByBoxScore = async (injuryList, teamRecentGames, teamName) => {
+      // Step 1: Handle suspensions — known bounded durations, skip box-score check
+      for (const inj of injuryList) {
+        const context = (inj.durationContext || '').toLowerCase();
+        if (context.includes('suspension') || context.includes('suspended')) {
+          const pName = `${inj.player?.first_name || ''} ${inj.player?.last_name || ''}`.trim();
+          inj.duration = 'RECENT';
+          inj.daysSinceReport = 7;
+          inj.reportDateStr = 'suspension';
+          inj.durationSource = 'suspension_detected';
+          inj.freshness = 'FRESH';
+          inj.isPricedIn = false;
+          inj.isEdge = true;
+          console.log(`[Scout Report] Suspension detected for ${pName} — marked RECENT`);
+        }
+      }
+
+      // Step 2: Identify all actionable injuries that need duration resolution
+      const actionableInjuries = injuryList.filter(inj => {
+        if (inj.durationSource === 'suspension_detected') return false;
+        const status = (inj.status || '').toLowerCase();
+        return status.includes('out') || status.includes('doubtful') || status.includes('questionable') || status.includes('day-to-day');
+      });
+      if (actionableInjuries.length === 0) return;
+
+      const gameIds = (teamRecentGames || []).map(g => g.id).filter(Boolean).slice(0, 10);
+      if (gameIds.length === 0) {
+        throw new Error(`[Scout Report] CRITICAL: No recent game IDs available for ${teamName} — cannot resolve injury durations`);
+      }
+
+      // Build game date map from recentGames
+      const gameDateMap = new Map();
+      const gameOrder = []; // ordered most-recent-first
+      for (const g of teamRecentGames) {
+        if (g.id) {
+          gameDateMap.set(g.id, g.date || g.datetime);
+          gameOrder.push(g.id);
+        }
+      }
+
+      // Fetch player stats per-game in parallel (avoids pagination issues —
+      // 10 games × ~30 players = ~300 entries, exceeds single-page 100 limit)
+      const perGameResults = await Promise.all(
+        gameIds.map(gId => ballDontLieService.getPlayerStats('basketball_nba', {
+          game_ids: [gId],
+          per_page: 100
+        }))
+      );
+      const allStats = perGameResults.flat();
+      if (!allStats || allStats.length === 0) {
+        throw new Error(`[Scout Report] CRITICAL: No box-score data returned for ${teamName} recent games — cannot resolve injury durations`);
+      }
+
+      // Step 3: Resolve each injury via box scores
+      for (const inj of actionableInjuries) {
+        const injName = `${inj.player?.first_name || ''} ${inj.player?.last_name || ''}`.toLowerCase().trim();
+        if (!injName) continue;
+        const pName = `${inj.player?.first_name || ''} ${inj.player?.last_name || ''}`.trim();
+
+        // Find this player's entries in the box scores
+        const playerEntries = allStats.filter(s => {
+          const statName = `${s.player?.first_name || ''} ${s.player?.last_name || ''}`.toLowerCase().trim();
+          return playerNamesMatch(injName, statName) && parseFloat(s.min || '0') > 0;
+        });
+
+        if (playerEntries.length > 0) {
+          // Sort by game date descending to find most recent appearance
+          playerEntries.sort((a, b) => {
+            const dateA = new Date(a.game?.date || gameDateMap.get(a.game?.id) || 0);
+            const dateB = new Date(b.game?.date || gameDateMap.get(b.game?.id) || 0);
+            return dateB - dateA;
+          });
+
+          const lastGameDate = new Date(playerEntries[0].game?.date || gameDateMap.get(playerEntries[0].game?.id));
+          const daysSince = Math.floor((Date.now() - lastGameDate) / (1000 * 60 * 60 * 24));
+
+          // Count games the TEAM played after this player's last game
+          const gamesMissed = gameOrder.filter(gId => {
+            const gDate = gameDateMap.get(gId);
+            return gDate && new Date(gDate) > lastGameDate;
+          }).length;
+
+          // Set duration + freshness based on games missed
+          if (gamesMissed <= STALE_WINDOW_GAMES) {
+            inj.duration = 'RECENT';
+            inj.freshness = 'FRESH';
+            inj.isPricedIn = false;
+            inj.isEdge = true;
+          } else if (gamesMissed <= 7) {
+            inj.duration = 'MID-SEASON';
+            inj.freshness = 'STALE';
+            inj.isPricedIn = true;
+          } else {
+            inj.duration = 'SEASON-LONG';
+            inj.freshness = 'STALE';
+            inj.isPricedIn = true;
+          }
+
+          inj.daysSinceReport = daysSince;
+          inj.gamesMissed = gamesMissed;
+          inj.reportDateStr = lastGameDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          inj.durationSource = 'box_score';
+
+          console.log(`[Scout Report] ${pName} (${teamName}) last played ${inj.reportDateStr} — ${gamesMissed} game(s) missed → ${inj.duration} [${inj.freshness}]`);
+        } else {
+          // Not found in any of the last N games → long-term absence
+          // gamesMissed is a MINIMUM (player has been out longer than our window)
+          inj.gamesMissed = gameIds.length;
+          inj.gamesMissedIsMinimum = true;
+          inj.duration = 'SEASON-LONG';
+          inj.freshness = 'STALE';
+          inj.isPricedIn = true;
+          inj.durationSource = 'box_score';
+          console.log(`[Scout Report] ${pName} (${teamName}) not in last ${gameIds.length} games → SEASON-LONG [STALE]`);
+        }
+      }
+    };
+
+    await Promise.all([
+      resolveDurationByBoxScore(injuries.home || [], recentHome, homeTeam),
+      resolveDurationByBoxScore(injuries.away || [], recentAway, awayTeam)
+    ]);
+
+    // HARD FAIL: If any Out/Doubtful injury still has UNKNOWN duration, something broke
+    const allInjuries = [...(injuries.home || []), ...(injuries.away || [])];
+    const unresolved = allInjuries.filter(inj => {
+      const status = (inj.status || '').toLowerCase();
+      const isActionable = status.includes('out') || status.includes('doubtful');
+      return isActionable && inj.duration === 'UNKNOWN';
+    });
+    if (unresolved.length > 0) {
+      const details = unresolved.map(inj => {
+        const name = `${inj.player?.first_name || ''} ${inj.player?.last_name || ''}`.trim();
+        return `${name} (${inj.status}, reason: ${inj.durationContext || 'none'}, source: ${inj.source || 'unknown'})`;
+      }).join('; ');
+      throw new Error(`[Scout Report] CRITICAL: ${unresolved.length} NBA injuries with UNKNOWN duration after box-score resolution. This should never happen. Details: ${details}`);
+    }
+
+    // Build stale injuries list (for downstream context)
+    injuries.staleInjuries = [
+      ...(injuries.home || []).filter(i => i.isPricedIn).map(i => `${i.player?.first_name || ''} ${i.player?.last_name || ''}`.trim()),
+      ...(injuries.away || []).filter(i => i.isPricedIn).map(i => `${i.player?.first_name || ''} ${i.player?.last_name || ''}`.trim())
+    ];
+
+    // Log summary
+    const freshPlayers = allInjuries.filter(i => i.freshness === 'FRESH' && (i.status || '').toLowerCase().includes('out'));
+    const stalePlayers = allInjuries.filter(i => i.freshness === 'STALE' && (i.status || '').toLowerCase().includes('out'));
+    if (freshPlayers.length > 0) {
+      console.log(`[Scout Report] Fresh OUT (0-2 games missed): ${freshPlayers.map(i => `${i.player?.first_name} ${i.player?.last_name} (${i.gamesMissed ?? 0}g)`).join(', ')}`);
+    }
+    if (stalePlayers.length > 0) {
+      console.log(`[Scout Report] Stale OUT (>2 games, priced in): ${stalePlayers.map(i => `${i.player?.first_name} ${i.player?.last_name} (${i.gamesMissedIsMinimum ? i.gamesMissed + '+' : i.gamesMissed}g)`).join(', ')}`);
+    }
+  }
+
   // For NBA, fetch game context using Gemini Grounding (venue, tournament context, game significance)
   // This works dynamically for regular season, NBA Cup, playoffs, etc.
   let gameContextData = null;
@@ -879,7 +965,7 @@ VENUE: [arena name, city]
     }
 
     // Phase 3: L5 efficiency (depends on roster depth team IDs + recent game IDs)
-    // We fetch 8 recent games as buffer (some may lack box scores), but only use 5 for L5 calc
+    // Full season fetched for home/away splits, but only first 5 game IDs used for L5 efficiency
     if (ncaabRosterDepth?.homeTeamId && ncaabRosterDepth?.awayTeamId) {
       const homeGameIds = (recentHome || []).map(g => g.id).filter(Boolean).slice(0, 5);
       const awayGameIds = (recentAway || []).map(g => g.id).filter(Boolean).slice(0, 5);
@@ -2352,20 +2438,22 @@ async function fetchRecentGames(teamName, sport, count = 5) {
     const team = findTeam(teams, teamName);
     if (!team) return [];
     
-    // Build params based on sport - NFL/NCAAF/NHL use seasons[], other sports use date range
+    // Build params based on sport - NFL/NCAAF/NHL/NCAAB use seasons[], NBA uses date range
     // Per BDL API docs: NFL/NHL games endpoint does NOT support start_date/end_date (documented for NBA)
-    const usesSeasonParam = bdlSport === 'americanfootball_nfl' || 
+    // NCAAB switched to seasons param to fetch full season (needed for Season/L10/L5 home/away splits)
+    const usesSeasonParam = bdlSport === 'americanfootball_nfl' ||
                            bdlSport === 'americanfootball_ncaaf' ||
-                           bdlSport === 'icehockey_nhl';
+                           bdlSport === 'icehockey_nhl' ||
+                           bdlSport === 'basketball_ncaab';
     
     let params;
     if (usesSeasonParam) {
-      // NFL/NCAAF/NHL: Use seasons parameter
+      // NFL/NCAAF/NHL/NCAAB: Use seasons parameter
       const season = seasonForSport(sport);
       params = {
         team_ids: [team.id],
         seasons: [season],
-        per_page: 20
+        per_page: 50  // NCAAB teams play ~30 games; 50 covers full season with margin
       };
     } else {
       // NBA/etc: Use date range filtering
@@ -2904,7 +2992,10 @@ IMPORTANT: Since there are NO H2H games, DO NOT mention H2H history in your anal
   lines.push('');
   lines.push(`[DATA BOUNDARY]: You may ONLY cite the ${h2hData.gamesFound} game(s) shown above.`);
   lines.push(`   DO NOT claim historical streaks or records beyond this data.`);
-  
+  lines.push('');
+  lines.push(`[DEEPER H2H]: Call fetch_stats with token H2H_HISTORY to get box score details`);
+  lines.push(`   (who scored, key performers, DNP players) for these matchups.`);
+
   return lines.join('\n');
 }
 
@@ -3081,197 +3172,9 @@ async function fetchInjuries(homeTeam, awayTeam, sport) {
       try {
         const bdlSport = sportToBdlKey(sport);
         if (bdlSport === 'basketball_nba') {
-          // Get team IDs for BDL query
-          const [homeTeamData, awayTeamData] = await Promise.all([
-            ballDontLieService.getTeamByName(homeTeam),
-            ballDontLieService.getTeamByName(awayTeam)
-          ]);
-
-          if (homeTeamData?.id || awayTeamData?.id) {
-            const teamIds = [homeTeamData?.id, awayTeamData?.id].filter(Boolean);
-            const bdlInjuries = await ballDontLieService.getNbaPlayerInjuries(teamIds);
-
-            // Create lookup map from BDL injuries
-            const bdlMap = new Map();
-            for (const inj of bdlInjuries) {
-              const name = `${inj.player?.first_name} ${inj.player?.last_name}`.toLowerCase().trim();
-              bdlMap.set(name, inj);
-            }
-
-            // Fuzzy match: grounding returns initials (K. George) but BDL has full names (Keyonte George)
-            // Also handles position-prefix names like "C. W. Kessler" where C.=position, W.=initial
-            const fuzzyMatchBdl = (firstName, lastName) => {
-              if (!lastName) return null;
-              const lastNameLower = lastName.toLowerCase().trim();
-              // Extract the actual last name (last word) and potential initial (second-to-last single letter)
-              const lastParts = lastNameLower.split(/\s+/);
-              const actualLastName = lastParts[lastParts.length - 1];
-              // The initial could be in firstName or in the middle of lastName (from position prefix)
-              const potentialInitials = [];
-              if (firstName && /^[a-z]\.?$/i.test(firstName.trim().replace('.', ''))) {
-                potentialInitials.push(firstName.trim().replace('.', '').toLowerCase());
-              }
-              for (let i = 0; i < lastParts.length - 1; i++) {
-                const part = lastParts[i].replace('.', '');
-                if (part.length === 1) potentialInitials.push(part);
-              }
-
-              for (const [bdlName, bdlInj] of bdlMap) {
-                const bdlParts = bdlName.split(/\s+/);
-                const bdlLast = bdlParts.slice(1).join(' ');
-                const bdlFirst = bdlParts[0];
-                const bdlLastFinal = bdlParts[bdlParts.length - 1];
-                // Last name matches (exact, contains, or hyphenated part match)
-                const lastNameMatches = bdlLastFinal === actualLastName ||
-                  bdlLast.includes(actualLastName) || actualLastName.includes(bdlLastFinal) ||
-                  bdlLast.split('-').some(p => p === actualLastName);
-                if (lastNameMatches) {
-                  // Last name matches — check if any initial matches BDL first name's first letter
-                  if (potentialInitials.some(init => bdlFirst.startsWith(init))) {
-                    return bdlInj;
-                  }
-                }
-              }
-              return null;
-            };
-
-            // Enrich grounding injuries with BDL duration data
-            const enrichWithBdl = (injuries) => {
-              return injuries.map(inj => {
-                const name = `${inj.player?.first_name || ''} ${inj.player?.last_name || ''}`.toLowerCase().trim();
-                let bdlMatch = bdlMap.get(name);
-
-                // Fallback 1: playerNamesMatch for hyphenated names (e.g., "Shai Alexander" → "Shai Gilgeous-Alexander")
-                if (!bdlMatch) {
-                  for (const [bdlName, bdlInj] of bdlMap) {
-                    if (playerNamesMatch(name, bdlName)) {
-                      bdlMatch = bdlInj;
-                      console.log(`[Scout Report] Name-matched "${name}" → BDL "${bdlName}"`);
-                      break;
-                    }
-                  }
-                }
-
-                // Fallback 2: fuzzy match by last name + initial (for grounding's initial-format names)
-                if (!bdlMatch) {
-                  bdlMatch = fuzzyMatchBdl(inj.player?.first_name, inj.player?.last_name);
-                  if (bdlMatch) {
-                    const bdlName = `${bdlMatch.player?.first_name} ${bdlMatch.player?.last_name}`;
-                    console.log(`[Scout Report] Fuzzy matched grounding "${name}" → BDL "${bdlName}"`);
-                  }
-                }
-
-                if (bdlMatch && !inj.daysSinceReport) {
-                  // Extract duration from BDL description
-                  const desc = bdlMatch.description || '';
-                  const returnDate = bdlMatch.return_date;
-
-                  // Parse duration from description (e.g., "at least another month", "since Dec. 18")
-                  const durationInfo = extractDurationFromBdl(desc, returnDate);
-
-                  if (durationInfo.daysSinceOut !== null) {
-                    console.log(`[Scout Report] Enriched ${name} with BDL duration: ${durationInfo.daysSinceOut} days`);
-                    return {
-                      ...inj,
-                      duration: durationInfo.duration,
-                      daysSinceReport: durationInfo.daysSinceOut,
-                      reportDateStr: durationInfo.outSinceStr,
-                      bdlDescription: desc.substring(0, 100),
-                      bdlReturnDate: returnDate
-                    };
-                  }
-                }
-                return inj;
-              });
-            };
-
-            enrichedHome = enrichWithBdl(enrichedHome);
-            enrichedAway = enrichWithBdl(enrichedAway);
-
-            // GAME-LOG FALLBACK: For OUT players still with UNKNOWN duration,
-            // check their last game played via BDL /v1/stats
-            const resolveUnknownDurations = async (injuries, teamName) => {
-              const unknowns = injuries.filter(inj => {
-                if (inj.daysSinceReport) return false;
-                const statusLower = (inj.status || '').toLowerCase();
-                return statusLower.includes('out') || statusLower.includes('questionable') ||
-                       statusLower.includes('doubtful') || statusLower.includes('day-to-day');
-              });
-              if (unknowns.length === 0) return injuries;
-
-              // Collect BDL player IDs from bdlMatch
-              const playerIdsToCheck = [];
-              const idToInjuryMap = new Map();
-              for (const inj of unknowns) {
-                const name = `${inj.player?.first_name || ''} ${inj.player?.last_name || ''}`.toLowerCase().trim();
-                const match = bdlMap.get(name) || fuzzyMatchBdl(inj.player?.first_name, inj.player?.last_name);
-                if (match?.player?.id) {
-                  playerIdsToCheck.push(match.player.id);
-                  idToInjuryMap.set(match.player.id, inj);
-                }
-              }
-
-              if (playerIdsToCheck.length === 0) {
-                console.log(`[Scout Report] No BDL player IDs for ${unknowns.length} UNKNOWN ${teamName} injuries — will mark STALE`);
-                return injuries;
-              }
-
-              console.log(`[Scout Report] Game-log fallback: checking ${playerIdsToCheck.length} UNKNOWN OUT/QUESTIONABLE players for ${teamName}`);
-
-              try {
-                const endDate = new Date().toISOString().slice(0, 10);
-                const startDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-
-                const stats = await ballDontLieService.getPlayerStats('basketball_nba', {
-                  player_ids: playerIdsToCheck,
-                  start_date: startDate,
-                  end_date: endDate,
-                  per_page: 100
-                }, 5);
-
-                // Group by player ID, find last game with minutes > 0
-                for (const [playerId, inj] of idToInjuryMap) {
-                  const playerGames = (stats || [])
-                    .filter(s => s.player?.id === playerId && parseFloat(s.min || '0') > 0)
-                    .sort((a, b) => new Date(b.game?.date) - new Date(a.game?.date));
-
-                  const pName = `${inj.player?.first_name || ''} ${inj.player?.last_name || ''}`.trim();
-
-                  if (playerGames.length > 0) {
-                    const lastPlayedDate = new Date(playerGames[0].game.date);
-                    const daysSince = Math.floor((Date.now() - lastPlayedDate) / (1000 * 60 * 60 * 24));
-
-                    inj.daysSinceReport = daysSince;
-                    inj.reportDateStr = lastPlayedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                    inj.duration = daysSince >= 30 ? 'SEASON-LONG' : daysSince >= 7 ? 'MID-SEASON' : daysSince <= 3 ? 'RECENT' : 'MID-SEASON';
-                    inj.durationSource = 'game_log';
-
-                    console.log(`[Scout Report] Game-log duration for ${pName}: last played ${inj.reportDateStr} (${daysSince} days ago) → ${inj.duration}`);
-                  } else {
-                    // No games found in 90 days → season-long absence
-                    inj.daysSinceReport = 90;
-                    inj.reportDateStr = 'before season';
-                    inj.duration = 'SEASON-LONG';
-                    inj.durationSource = 'game_log_no_games';
-
-                    console.log(`[Scout Report] Game-log duration for ${pName}: no games in 90 days → SEASON-LONG`);
-                  }
-                }
-              } catch (e) {
-                console.warn(`[Scout Report] Game-log fallback failed for ${teamName}: ${e.message}`);
-              }
-
-              return injuries;
-            };
-
-            enrichedHome = await resolveUnknownDurations(enrichedHome, homeTeam);
-            enrichedAway = await resolveUnknownDurations(enrichedAway, awayTeam);
-
-            // NOTE: BDL is ONLY used for duration enrichment above.
-            // Rotowire is the SOLE source of truth for injury STATUS.
-            // We do NOT add BDL-only injuries — if a player isn't on Rotowire's
-            // lineup card, they shouldn't be in our injury list.
-          }
+          // NBA: Duration resolved via box-score in buildScoutReport()
+          // RapidAPI provides status + reason; box-score determines how long each player has been out
+          console.log(`[Scout Report] NBA: Duration will be resolved via box-score in buildScoutReport()`);
         } else if (bdlSport === 'icehockey_nhl') {
           // NHL: Skip BDL injuries entirely - RotoWire Grounding already provides duration info
           // The BDL NHL injuries API doesn't include team info, making it useless for filtering
@@ -3282,7 +3185,17 @@ async function fetchInjuries(homeTeam, awayTeam, sport) {
         console.log(`[Scout Report] BDL duration enrichment failed: ${e.message}`);
       }
 
-      // =========================================================================
+      // NBA: Skip stale marking — box-score resolution in buildScoutReport() handles duration + freshness
+      if (bdlSport === 'basketball_nba') {
+        return {
+          home: enrichedHome,
+          away: enrichedAway,
+          staleInjuries: [], // Computed in buildScoutReport after box-score resolution
+          lineups: { home: [], away: [] },
+          narrativeContext
+        };
+      }
+
       // STALE INJURY MARKING (NBA: 3-day window, NHL: 3-day window)
       // Enriches injury objects with freshness data (FRESH/STALE)
       // Constitution teaches Gary how to think about injury timing
@@ -3796,10 +3709,9 @@ function formatNcaabAdvancedMetrics(data) {
       return;
     }
     lines.push(`[${label}] ${(teamData.team || '').toUpperCase()} (${d.conferenceName || d.conference})`);
-    lines.push(`  T-Rank: #${d.rank} | Record: ${d.record} | Conf: ${d.confRecord}`);
-    lines.push(`  AdjOE: ${d.adjOE} (#${d.adjOE_rank}) | AdjDE: ${d.adjDE} (#${d.adjDE_rank})`);
-    lines.push(`  AdjEM: ${d.adjEM > 0 ? '+' : ''}${d.adjEM} | Barthag: ${d.barthag}`);
-    lines.push(`  Tempo: ${d.tempo} | WAB: ${d.wab > 0 ? '+' : ''}${d.wab}`);
+    lines.push(`  Record: ${d.record} | Conf: ${d.confRecord}`);
+    lines.push(`  AdjOE: ${d.adjOE} | AdjDE: ${d.adjDE} | AdjEM: ${d.adjEM > 0 ? '+' : ''}${d.adjEM}`);
+    lines.push(`  Tempo: ${d.tempo} | Barthag: ${d.barthag} | WAB: ${d.wab > 0 ? '+' : ''}${d.wab}`);
     lines.push('');
   };
 
@@ -3857,11 +3769,13 @@ async function fetchNcaabApRankings(homeTeamId, awayTeamId, season, homeTeamName
 }
 
 /**
- * Calculate NCAAB Home Court data from recent games.
- * No extra API call — uses recentHome/recentAway already fetched.
+ * Calculate NCAAB Home/Away splits from recent games.
+ * Now computes Season + L10 + L5 breakdowns for trend analysis.
+ * No extra API call — uses recentHome/recentAway already fetched (full season via seasons param).
  */
 function calcNcaabHomeCourt(recentHome, recentAway, homeTeamName, awayTeamName, homeTeamId, awayTeamId) {
-  const calcSplits = (games, teamId, teamName) => {
+  // Compute home/away splits for a given slice of games
+  const calcSplitsForSlice = (games, teamId, teamName) => {
     if (!games || games.length === 0) return null;
 
     let homeWins = 0, homeLosses = 0, awayWins = 0, awayLosses = 0;
@@ -3890,25 +3804,31 @@ function calcNcaabHomeCourt(recentHome, recentAway, homeTeamName, awayTeamName, 
 
     const homeMargin = homeGames > 0 ? ((homePts - homeOppPts) / homeGames).toFixed(1) : 'N/A';
     const awayMargin = awayGamesCount > 0 ? ((awayPts - awayOppPts) / awayGamesCount).toFixed(1) : 'N/A';
-    const homePpg = homeGames > 0 ? (homePts / homeGames).toFixed(1) : 'N/A';
-    const awayPpg = awayGamesCount > 0 ? (awayPts / awayGamesCount).toFixed(1) : 'N/A';
 
     return {
       home_record: `${homeWins}-${homeLosses}`,
       away_record: `${awayWins}-${awayLosses}`,
       home_margin: homeMargin,
       away_margin: awayMargin,
-      home_ppg: homePpg,
-      away_ppg: awayPpg,
       home_games: homeGames,
-      away_games: awayGamesCount,
-      advantage: homeGames > 0 && awayGamesCount > 0 ? (parseFloat(homeMargin) - parseFloat(awayMargin)).toFixed(1) : 'N/A'
+      away_games: awayGamesCount
+    };
+  };
+
+  // Compute splits for a team across Season / L10 / L5
+  const calcAllSplits = (games, teamId, teamName) => {
+    if (!games || games.length === 0) return null;
+    // games are sorted most-recent-first
+    return {
+      season: calcSplitsForSlice(games, teamId, teamName),
+      l10: calcSplitsForSlice(games.slice(0, 10), teamId, teamName),
+      l5: calcSplitsForSlice(games.slice(0, 5), teamId, teamName)
     };
   };
 
   return {
-    home: calcSplits(recentHome, homeTeamId, homeTeamName),
-    away: calcSplits(recentAway, awayTeamId, awayTeamName)
+    home: calcAllSplits(recentHome, homeTeamId, homeTeamName),
+    away: calcAllSplits(recentAway, awayTeamId, awayTeamName)
   };
 }
 
@@ -3944,25 +3864,31 @@ function formatNcaabRankingsAndHomeCourt(rankings, homeCourt, homeTeam, awayTeam
     lines.push('');
   }
 
-  // Home Court Context
+  // Home/Away Splits — Season + L10 + L5 comparison
   if (homeCourt && (homeCourt.home || homeCourt.away)) {
     hasContent = true;
-    lines.push('HOME COURT CONTEXT (FROM BDL GAME RESULTS)');
+    lines.push('HOME/AWAY SPLITS (FROM BDL GAME RESULTS)');
     lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
-    const formatSplits = (splits, teamName, label) => {
-      if (!splits) return;
+    const formatTeamSplits = (teamSplits, teamName, label) => {
+      if (!teamSplits) return;
       lines.push(`  [${label}] ${teamName}:`);
-      lines.push(`    Home: ${splits.home_record} (${splits.home_games}g) | PPG: ${splits.home_ppg} | Margin: ${splits.home_margin}`);
-      lines.push(`    Away: ${splits.away_record} (${splits.away_games}g) | PPG: ${splits.away_ppg} | Margin: ${splits.away_margin}`);
-      if (splits.advantage !== 'N/A') {
-        lines.push(`    Home/Away margin difference: ${splits.advantage} pts`);
-      }
+
+      const formatRow = (period, splits) => {
+        if (!splits) return;
+        const homeStr = `Home: ${splits.home_record} (${splits.home_games}g) Margin: ${splits.home_margin}`;
+        const awayStr = `Away: ${splits.away_record} (${splits.away_games}g) Margin: ${splits.away_margin}`;
+        lines.push(`    ${period.padEnd(8)} ${homeStr} | ${awayStr}`);
+      };
+
+      formatRow('Season', teamSplits.season);
+      formatRow('L10', teamSplits.l10);
+      formatRow('L5', teamSplits.l5);
+      lines.push('');
     };
 
-    formatSplits(homeCourt.home, homeTeam, 'HOME');
-    formatSplits(homeCourt.away, awayTeam, 'AWAY');
-    lines.push('');
+    formatTeamSplits(homeCourt.home, homeTeam, 'HOME');
+    formatTeamSplits(homeCourt.away, awayTeam, 'AWAY');
     lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     lines.push('');
   }
@@ -8118,9 +8044,9 @@ function formatNcaabRosterDepth(homeTeam, awayTeam, rosterDepth, injuries) {
       }
     }
 
-    // Format stats
+    // Format stats with advanced metrics
     const stats = player.gp > 0
-      ? `${player.ppg} PPG | ${player.reb} REB | ${player.ast} AST | FG: ${player.fgPct}% | 3PT: ${player.fg3Pct}%`
+      ? `${player.ppg} PPG | ${player.reb} REB | ${player.ast} AST | eFG: ${player.efgPct || 'N/A'}% | TS: ${player.tsPct || 'N/A'}% | ${player.fgaPg || '0.0'} FGA/g | 3PT: ${player.fg3Pct}%`
       : `No stats yet`;
 
     return `  ${status} ${player.name} (${player.position})${injuryNote} - ${stats}`;
@@ -8164,6 +8090,59 @@ function formatNcaabRosterDepth(homeTeam, awayTeam, rosterDepth, injuries) {
     lines.push('');
   }
   
+  // NCAAB Four Factors (computed from player season data)
+  if (rosterDepth.homeTeamFourFactors || rosterDepth.awayTeamFourFactors) {
+    const hff = rosterDepth.homeTeamFourFactors || {};
+    const aff = rosterDepth.awayTeamFourFactors || {};
+    const homeTeamLabel = (rosterDepth.homeTeamName || homeTeam).toUpperCase();
+    const awayTeamLabel = (rosterDepth.awayTeamName || awayTeam).toUpperCase();
+    lines.push('NCAAB FOUR FACTORS (computed from season player data)');
+    lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    lines.push(`[HOME] ${homeTeamLabel}:`);
+    lines.push(`  eFG%: ${hff.efgPct || 'N/A'}% | TOV Rate: ${hff.tovRate || 'N/A'}% | FT Rate: ${hff.ftRate || 'N/A'}% | ORB Rate: ${hff.orebRate || 'N/A'}%`);
+    lines.push('');
+    lines.push(`[AWAY] ${awayTeamLabel}:`);
+    lines.push(`  eFG%: ${aff.efgPct || 'N/A'}% | TOV Rate: ${aff.tovRate || 'N/A'}% | FT Rate: ${aff.ftRate || 'N/A'}% | ORB Rate: ${aff.orebRate || 'N/A'}%`);
+    lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    lines.push('');
+  }
+
+  // Unit Comparison (Starters vs Bench)
+  const buildUnitComparison = (players, teamName) => {
+    if (!players || players.length < 5) return null;
+    const sorted = [...players].sort((a, b) => parseFloat(b.min || 0) - parseFloat(a.min || 0));
+    const starters = sorted.slice(0, 5);
+    const bench = sorted.slice(5);
+
+    const unitStats = (unit) => {
+      const ppg = unit.reduce((s, p) => s + parseFloat(p.ppg || 0), 0);
+      const efgValues = unit.filter(p => p.efgPct).map(p => parseFloat(p.efgPct));
+      const avgEfg = efgValues.length > 0 ? (efgValues.reduce((s, v) => s + v, 0) / efgValues.length).toFixed(1) : 'N/A';
+      const avgMin = (unit.reduce((s, p) => s + parseFloat(p.min || 0), 0) / unit.length).toFixed(1);
+      return { ppg: ppg.toFixed(1), efg: avgEfg, min: avgMin, count: unit.length };
+    };
+
+    return { starters: unitStats(starters), bench: unitStats(bench), name: teamName };
+  };
+
+  const homeUnit = buildUnitComparison(rosterDepth.home, rosterDepth.homeTeamName || homeTeam);
+  const awayUnit = buildUnitComparison(rosterDepth.away, rosterDepth.awayTeamName || awayTeam);
+
+  if (homeUnit || awayUnit) {
+    lines.push('UNIT COMPARISON (Starters vs Bench by minutes):');
+    lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    if (homeUnit) {
+      lines.push(`  ${homeUnit.name.toUpperCase()} Starters (${homeUnit.starters.count}): ${homeUnit.starters.ppg} PPG | eFG% ${homeUnit.starters.efg}% | ${homeUnit.starters.min} MIN avg`);
+      lines.push(`  ${homeUnit.name.toUpperCase()} Bench (${homeUnit.bench.count}):    ${homeUnit.bench.ppg} PPG | eFG% ${homeUnit.bench.efg}% | ${homeUnit.bench.min} MIN avg`);
+    }
+    if (awayUnit) {
+      lines.push(`  ${awayUnit.name.toUpperCase()} Starters (${awayUnit.starters.count}): ${awayUnit.starters.ppg} PPG | eFG% ${awayUnit.starters.efg}% | ${awayUnit.starters.min} MIN avg`);
+      lines.push(`  ${awayUnit.name.toUpperCase()} Bench (${awayUnit.bench.count}):    ${awayUnit.bench.ppg} PPG | eFG% ${awayUnit.bench.efg}% | ${awayUnit.bench.min} MIN avg`);
+    }
+    lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    lines.push('');
+  }
+
   // Add context note
   lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   lines.push('NCAAB ROSTER DEPTH CONTEXT:');
@@ -11385,12 +11364,36 @@ export function buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayPro
       { label: 'Record', ...record }
     ];
 
-    // Add conference record for NCAAB (important for college basketball)
+    // Add conference record and Barttorvik efficiency metrics for NCAAB
     if (isNcaab) {
       const confRecord = formatStat(homeProfile?.conferenceRecord, awayProfile?.conferenceRecord, true);
       rows.push({ label: 'Conf Record', ...confRecord });
-      // Barttorvik metrics available in dedicated reference block below — not in Tale of the Tape
-      // (matches NBA approach: Tale of the Tape is lean, efficiency data is reference/investigation)
+
+      // Wire up Barttorvik AdjOE/AdjDE/Tempo — the components behind the composite rankings
+      if (ncaabAdvancedMetrics) {
+        const hd = ncaabAdvancedMetrics.home?.data;
+        const ad = ncaabAdvancedMetrics.away?.data;
+        const adjOE = formatStat(
+          hd?.adjOE != null ? String(hd.adjOE) : null,
+          ad?.adjOE != null ? String(ad.adjOE) : null,
+          true
+        );
+        const adjDE = formatStat(
+          hd?.adjDE != null ? String(hd.adjDE) : null,
+          ad?.adjDE != null ? String(ad.adjDE) : null,
+          false // Lower is better for defense
+        );
+        const tempo = formatStat(
+          hd?.tempo != null ? String(hd.tempo) : null,
+          ad?.tempo != null ? String(ad.tempo) : null,
+          true
+        );
+        rows.push(
+          { label: 'AdjOE', ...adjOE },
+          { label: 'AdjDE', ...adjDE },
+          { label: 'Tempo', ...tempo }
+        );
+      }
     }
 
     rows.push(

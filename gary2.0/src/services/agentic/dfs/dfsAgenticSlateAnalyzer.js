@@ -12,7 +12,6 @@
  * This gives Gary Pro the INVESTIGATED DATA he needs to form his thesis.
  */
 
-import { ballDontLieService } from '../../ballDontLieService.js';
 import { DFS_SLATE_ANALYSIS_TOOLS, executeToolCall } from './tools/dfsToolDefinitions.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -20,23 +19,26 @@ import { DFS_SLATE_ANALYSIS_TOOLS, executeToolCall } from './tools/dfsToolDefini
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const SLATE_ANALYSIS_PROMPT = `
+<role>
 You are Gary's DFS Research Assistant (Gemini Flash).
 Your job is to INVESTIGATE the slate and surface opportunities for Gary Pro to evaluate.
+</role>
 
-## YOUR ROLE
+<responsibilities>
 - Use function calls to gather REAL DATA about players and games
 - Identify USAGE VACUUMS (when star players are OUT, who absorbs their production?)
 - Identify PRICE LAGS (players whose salary hasn't caught up to their new role)
 - Identify STACK TARGETS (games with highest scoring potential)
-- DO NOT make lineup decisions - just gather and organize the data
+</responsibilities>
 
-## INVESTIGATION PRIORITIES
+<investigation_priorities>
 1. Check injury status for ALL teams - look for fresh OUT designations
 2. For each OUT player, identify who benefits (usage vacuum)
 3. Check game environments - O/U, spreads, pace matchups
 4. Flag any players whose price seems wrong given their situation
+</investigation_priorities>
 
-## OUTPUT FORMAT
+<output_format>
 After investigation, summarize your findings in JSON:
 {
   "usageVacuums": [
@@ -78,6 +80,12 @@ After investigation, summarize your findings in JSON:
     }
   ]
 }
+</output_format>
+
+<constraints>
+- DO NOT make lineup decisions - just gather and organize the data
+- DO NOT rank players or suggest who to roster
+</constraints>
 `;
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -154,7 +162,18 @@ export async function analyzeSlateWithFlash(genAI, context, options = {}) {
   }
 
   // Parse the final response
-  const finalText = response.response.text();
+  let finalText = response.response.text();
+
+  // If Flash ended its loop without producing text (spent all iterations on tool
+  // calls, or last response was purely function calls), nudge it to output JSON.
+  if (!finalText || !finalText.trim()) {
+    console.log('[Slate Analyzer] Flash ended without text — nudging for JSON summary...');
+    response = await chat.sendMessage(
+      'Your investigation is complete. Now produce your JSON summary with usageVacuums, priceLags, stackTargets, and gameEnvironments based on everything you found.'
+    );
+    finalText = response.response.text();
+  }
+
   const analysis = parseSlateAnalysis(finalText);
 
   console.log(`[Slate Analyzer] ✓ Investigation complete after ${iterations} iterations`);
@@ -177,15 +196,23 @@ function buildAnalysisRequest(context) {
     teamRosters[team].push(player);
   }
 
-  // Format games (include O/U totals from BDL — Change 7)
-  // Also include opponent defense profiles when available (BDL opponent stats)
+  // Format games (include O/U, spread, implied totals, B2B, blowout risk, pace)
   const gamesStr = (games || []).map(g => {
     const home = g.homeTeam || g.home_team || 'HOME';
     const away = g.awayTeam || g.visitor_team || g.away_team || 'AWAY';
     const total = g.total ? ` (O/U ${g.total})` : '';
     const spread = g.spread ? ` [${g.spread > 0 ? '+' : ''}${g.spread}]` : '';
-    return `${away} @ ${home}${total}${spread}`;
-  }).join(', ');
+    const implied = (g.implied_home_total != null && g.implied_away_total != null)
+      ? ` Implied: ${home} ${g.implied_home_total} / ${away} ${g.implied_away_total}`
+      : '';
+    const pace = g.game_pace ? ` Pace: ${g.game_pace}` : '';
+    const flags = [];
+    if (g.blowout_risk) flags.push('BLOWOUT RISK');
+    if (g.home_b2b) flags.push(`${home} B2B`);
+    if (g.away_b2b) flags.push(`${away} B2B`);
+    const flagStr = flags.length > 0 ? ` ⚠️ ${flags.join(', ')}` : '';
+    return `${away} @ ${home}${total}${spread}${implied}${pace}${flagStr}`;
+  }).join('\n');
 
   // Format opponent defense profiles per game (BDL real data)
   const defenseLines = (games || []).map(g => {

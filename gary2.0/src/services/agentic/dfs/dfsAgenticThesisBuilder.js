@@ -15,29 +15,26 @@
  * FOLLOWS CLAUDE.md: Gary REASONS about the slate, not follows formulas.
  */
 
-import { WINNING_SCORE_TARGETS } from '../FIBLE.js';
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // THESIS BUILDER SYSTEM PROMPT
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const THESIS_BUILDER_PROMPT = `
+<role>
 You are Gary - an elite DFS player with deep sharp knowledge.
 You've just completed your slate investigation. Now form your BUILD THESIS.
+</role>
 
-## WHAT IS A BUILD THESIS?
-
+<what_is_a_thesis>
 A BUILD THESIS is your STRATEGY for attacking this specific slate.
-It's NOT "pick the highest projected players" - that's what everyone does.
-
-Your thesis answers:
+It answers:
 1. What's the ANGLE I'm exploiting that others will miss?
 2. Which GAMES have the best environment for fantasy scoring?
 3. What USAGE SITUATIONS create underpriced opportunity?
 4. How does this lineup WIN the tournament, not just cash?
+</what_is_a_thesis>
 
-## BUILD ARCHETYPES TO CONSIDER
-
+<build_archetypes>
 STARS AND PUNTS
 - 2-3 premium anchors ($8K+) with established ceilings
 - Fill the rest with value plays who have real paths to production
@@ -67,10 +64,10 @@ USAGE VACUUM
 - Fresh injuries create underpriced situations
 - Works when: Key player ruled OUT recently, price hasn't adjusted
 - Risk: News gets out, ownership spikes before lock
+</build_archetypes>
 
-## YOUR TASK
-
-Based on the slate investigation, form your thesis:
+<task>
+Based on the slate investigation provided above, form your thesis:
 
 1. Which ARCHETYPE fits this slate and why?
 2. Which GAMES are you targeting and what makes them special?
@@ -78,6 +75,7 @@ Based on the slate investigation, form your thesis:
 4. What needs to go RIGHT for this thesis to WIN?
 
 Be specific. Have conviction. This is YOUR thesis.
+</task>
 `;
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -134,9 +132,6 @@ export async function formBuildThesis(genAI, slateAnalysis, context, options = {
 function buildThesisRequest(slateAnalysis, context) {
   const { usageVacuums, priceLags, stackTargets, gameEnvironments, rawAnalysis } = slateAnalysis;
   const { winningTargets, platform, contestType, players } = context;
-
-  // Calculate slate characteristics
-  const avgSalary = players?.reduce((sum, p) => sum + (p.salary || 0), 0) / (players?.length || 1);
 
   return `
 ## SLATE INVESTIGATION COMPLETE
@@ -235,10 +230,19 @@ function formatGameEnvironments(gameEnvironments) {
     return 'Game environment data not available';
   }
 
-  return gameEnvironments.map(ge =>
-    `- ${ge.awayTeam}@${ge.homeTeam}: Spread ${ge.spread || 0}, O/U ${ge.overUnder || 220}
-     Pace Up: ${ge.paceUp ? 'Yes' : 'No'} | Blowout Risk: ${ge.blowoutRisk ? 'Yes' : 'No'}`
-  ).join('\n');
+  return gameEnvironments.map(ge => {
+    const implied = ge.impliedTotal
+      ? `Implied: ${ge.homeTeam} ${ge.impliedTotal.home?.toFixed?.(1) || '?'} / ${ge.awayTeam} ${ge.impliedTotal.away?.toFixed?.(1) || '?'}`
+      : '';
+    const pace = ge.gamePace ? `Pace: ${ge.gamePace}` : (ge.paceUp ? 'Pace Up' : '');
+    const flags = [];
+    if (ge.blowoutRisk) flags.push('BLOWOUT RISK');
+    if (ge.homeB2B) flags.push(`${ge.homeTeam} B2B`);
+    if (ge.awayB2B) flags.push(`${ge.awayTeam} B2B`);
+    const flagStr = flags.length > 0 ? ` ⚠️ ${flags.join(', ')}` : '';
+    return `- ${ge.awayTeam}@${ge.homeTeam}: Spread ${ge.spread || 0}, O/U ${ge.overUnder || '?'}
+     ${implied} | ${pace}${flagStr}`;
+  }).join('\n');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

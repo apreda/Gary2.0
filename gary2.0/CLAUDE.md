@@ -95,6 +95,36 @@ After investigating, Gary notes what the data reveals about the matchup — WITH
 - ✅ "What does the depth comparison tell you about the structure of this game?"
 - ❌ "Which side does pace favor?" (creates a per-factor vote — Gary should not commit to a side until synthesis)
 
+**LEADING QUESTIONS — A SPECIFIC FAILURE MODE:**
+A leading question is one where the expected answer points in a direction. These are NOT Socratic — they nudge Gary toward a conclusion before synthesis.
+- ❌ "Is laying X points realistic in this spot?" (implied answer: "no" → takes underdog)
+- ❌ "Does the price reflect the full picture, or only the talent gap?" (implied answer: "only the talent gap" → takes underdog)
+- ❌ "Is this spread justified by the matchup?" (implied answer: "probably not" → takes underdog)
+- ✅ "What is the spread asking each team to do in this spot?" (open — Gary investigates)
+- ✅ "What does the situational context reveal about this game?" (open — no implied direction)
+- ✅ "What does the data show about [factor]?" (open — lets Gary find the answer)
+
+The test: if you can predict which side Gary will lean toward from reading the question alone, it's leading. Rewrite it as an open investigation prompt.
+
+**DON'T TELL GARY WHERE TO LOOK:**
+Gary has the data. He can reason. Don't list specific stat names or data sources in investigation prompts — that narrows his thinking to only those metrics and anchors him to whatever those numbers show.
+- ❌ "Investigate: What do the Barttorvik components (AdjOE, AdjDE, Tempo) show?" (anchors Gary to one source)
+- ❌ "Investigate: What do eFG%, TOV rate, and L5 efficiency trends show?" (prescribes which stats to check)
+- ✅ "Investigate: What does the data show about the gap between these teams?" (Gary decides what's relevant)
+- ✅ "Investigate: What does the data reveal about this matchup?" (open — Gary reasons about what matters)
+
+Ask the QUESTION, not the question plus the answer key. Gary's value is in his reasoning — if we tell him exactly which stats to look at, we're just building a formula with extra steps.
+
+**DON'T TELL GARY WHAT THE EDGE IS:**
+Gary investigates and identifies edge himself. We don't tell him "this is edge" or "that gap is edge" — we ask him to investigate what the data reveals. If we label something as edge, Gary will parrot it instead of reasoning about whether it's actually exploitable tonight.
+- ❌ "If the line hasn't adjusted, that's genuine edge" (tells Gary what edge is — he'll repeat it without verifying)
+- ❌ "A gap between data and line = edge" (formula that skips investigation)
+- ❌ "Hot streaks with inflated efficiency can make UNDER the sharper play" (tells Gary what a finding means for the pick)
+- ✅ "Investigate: What does the gap between the data and the line tell you about this prop?" (Gary reasons about whether it's meaningful)
+- ✅ "Ask: Does the data suggest the line reflects tonight's reality? What did your investigation reveal?" (open — Gary decides)
+
+The test: if your prompt tells Gary something IS edge or IS the play, you've skipped investigation. Rewrite it as a question that makes Gary evaluate whether the finding creates edge for THIS prop tonight.
+
 Gary accumulates findings as matchup characteristics:
 - "High-pace matchup where both teams' efficiency drops, but Team A's drop is steeper"
 - "Significant depth gap — Team B's bench outperforms by 8 Net Rating"
@@ -309,6 +339,10 @@ TANK01_RAPIDAPI_KEY=     # DFS data
 QRNG_API_KEY=            # Optional - quantum random numbers
 # ODDS_API_KEY=          # DEPRECATED - no longer needed (BDL provides all odds)
 ```
+
+## Test Output Preferences
+
+When showing test results (rationale, Steel Man cases, scout reports, etc.), ALWAYS show the FULL verbatim output — every single word. NEVER summarize, paraphrase, or condense Gary's output. The user needs to see exactly what Gary wrote to evaluate quality.
 
 ## Database Tables
 

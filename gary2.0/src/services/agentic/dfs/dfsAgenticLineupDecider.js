@@ -17,7 +17,6 @@
  * FOLLOWS CLAUDE.md: "Don't Override Gary's Judgment"
  */
 
-import { WINNING_SCORE_TARGETS } from '../FIBLE.js';
 import { getDFSConstitution } from './constitution/dfsAgenticConstitution.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -25,19 +24,20 @@ import { getDFSConstitution } from './constitution/dfsAgenticConstitution.js';
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const LINEUP_DECISION_PROMPT = `
+<role>
 You are Gary - an elite DFS player making your lineup decisions.
-
-## YOUR SITUATION
 You've investigated the slate. You have your thesis. Now BUILD THE LINEUP.
+</role>
 
-## SALARY CAP RULES
+<salary_cap_rules>
 - DraftKings NBA: $50,000 cap, 8 players (PG, SG, SF, PF, C, G, F, UTIL)
 - FanDuel NBA: $60,000 cap, 9 players (PG, PG, SG, SG, SF, SF, PF, PF, C)
 - You MUST fill every roster slot
 - You MUST stay under the salary cap
 - Remaining salary ($1 over cap = invalid lineup)
+</salary_cap_rules>
 
-## WHAT YOU'RE BUILDING FOR
+<objective>
 You're not building to "cash" - you're building to WIN.
 To win a GPP, you need a CEILING LINEUP that can score 350-400+ fantasy points.
 
@@ -46,18 +46,18 @@ This means:
 2. You need CORRELATION (players from the same game who can boom together)
 3. You need LEVERAGE (some differentiation from chalk)
 4. You need a CEILING SCENARIO (what needs to go right to score 380+)
+</objective>
 
-## DECISION FRAMEWORK
-
+<decision_framework>
 For EACH position, consider:
 1. WHO has the highest ceiling (not floor) for THIS slate?
 2. WHO fits my build thesis?
 3. WHO has the best path to smashing value?
 
-DON'T just pick the highest projected player.
-DO pick the player with the best CEILING PATH given the situation.
+Pick the player with the best CEILING PATH given the situation.
+</decision_framework>
 
-## PUNT AWARENESS (NOT RULES)
+<punt_awareness>
 "Punts" ($4K-$5.5K) can be GREAT when:
 - A usage vacuum exists (star is OUT, they absorb production)
 - Price hasn't adjusted to their new situation
@@ -69,9 +69,10 @@ DO pick the player with the best CEILING PATH given the situation.
 - Their minutes are uncertain
 
 Gary, you decide. If you see 3 punts that all have real edges, PLAY THEM.
-If you see 0 punts worth playing, DON'T FORCE IT.
+If you see 0 punts worth playing, that's fine too.
+</punt_awareness>
 
-## OUTPUT FORMAT
+<output_format>
 Provide your lineup as JSON:
 {
   "players": [
@@ -92,6 +93,13 @@ Provide your lineup as JSON:
   "ceilingScenario": "How this lineup hits 380+ and wins",
   "garyNotes": "Your overall thoughts on this build"
 }
+</output_format>
+
+<constraints>
+- DO NOT just pick the highest projected player at each position
+- DO NOT force punts if no real edge exists
+- DO NOT exceed the salary cap
+</constraints>
 `;
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -133,7 +141,7 @@ export async function decideLineupWithPro(genAI, buildThesis, playerInvestigatio
     systemInstruction: LINEUP_DECISION_PROMPT + '\n\n' + getDFSConstitution(context.sport, contestType),
     generationConfig: {
       temperature: 1.0, // Gemini: Keep at 1.0
-      maxOutputTokens: 8192
+      maxOutputTokens: 16384
     },
     // Extended thinking for lineup decisions
     thinkingConfig: {
@@ -332,7 +340,24 @@ function parseLineupDecision(text, players, salaryCap, rosterSlots) {
   try {
     parsed = JSON.parse(jsonMatch[0]);
   } catch (e) {
-    throw new Error('[Lineup Decider] Gary Pro produced invalid JSON: ' + e.message + '. Raw: ' + jsonMatch[0].slice(0, 500));
+    // Attempt truncated JSON recovery — Gemini Pro may exceed output tokens
+    console.warn(`[Lineup Decider] JSON parse failed: ${e.message} — attempting truncation recovery`);
+    let truncated = jsonMatch[0];
+    // Find the last complete player object (ends with })
+    const lastBrace = truncated.lastIndexOf('}');
+    if (lastBrace > 0) {
+      // Close the players array and root object
+      truncated = truncated.slice(0, lastBrace + 1) + ']}';
+      truncated = truncated.replace(/,\s*\]/, ']'); // Remove trailing comma before ]
+      try {
+        parsed = JSON.parse(truncated);
+        console.warn(`[Lineup Decider] ✓ Recovered truncated JSON — got ${parsed.players?.length || 0} players`);
+      } catch (e2) {
+        throw new Error('[Lineup Decider] Gary Pro produced invalid JSON: ' + e.message + '. Raw: ' + jsonMatch[0].slice(0, 500));
+      }
+    } else {
+      throw new Error('[Lineup Decider] Gary Pro produced invalid JSON: ' + e.message + '. Raw: ' + jsonMatch[0].slice(0, 500));
+    }
   }
 
   if (!parsed.players || parsed.players.length === 0) {
@@ -355,20 +380,32 @@ function parseLineupDecision(text, players, salaryCap, rosterSlots) {
     }
 
     if (!fullPlayer) {
-      console.warn(`[Lineup Decider] ⚠️ Player "${p.name}" not found in slate - using Gemini's data (may have wrong team)`);
-    } else if (fullPlayer.team !== p.team) {
-      console.log(`[Lineup Decider] ✓ Fixed team for ${p.name}: ${p.team} → ${fullPlayer.team}`);
+      console.warn(`[Lineup Decider] ⚠️ Player "${p.name}" not found in slate - using Gemini's data (may have wrong team/position)`);
+    } else {
+      if (fullPlayer.team !== p.team) {
+        console.log(`[Lineup Decider] ✓ Fixed team for ${p.name}: ${p.team} → ${fullPlayer.team}`);
+      }
+      // Validate Gemini's slot assignment against real DK/FD position eligibility
+      const realPositions = fullPlayer.positions || [fullPlayer.position];
+      const assignedSlot = (p.position || '').toUpperCase();
+      const isEligible = isSlotEligible(assignedSlot, realPositions);
+      if (!isEligible) {
+        console.warn(`[Lineup Decider] ⚠️ ${p.name} assigned to ${assignedSlot} but eligible for ${realPositions.join('/')} — fixing to ${realPositions[0]}`);
+      }
     }
 
     // ALWAYS prefer fullPlayer data over Gemini's output to prevent hallucinations
+    const realPositions = fullPlayer?.positions || [fullPlayer?.position || p.position];
+    const assignedSlot = (p.position || '').toUpperCase();
     return {
       ...p,
       id: fullPlayer?.id || p.id,
-      // Use REAL team from BDL data, not Gemini's hallucinated team
       team: fullPlayer?.team || p.team,
-      positions: fullPlayer?.positions || [p.position],
+      // Override position with real data — use Gemini's slot ONLY if player is actually eligible
+      position: isSlotEligible(assignedSlot, realPositions) ? assignedSlot : realPositions[0],
+      positions: realPositions,
       projected_pts: fullPlayer?.projected_pts || p.projectedPoints,
-      salary: fullPlayer?.salary || p.salary  // Prefer real salary
+      salary: fullPlayer?.salary || p.salary
     };
   });
 
@@ -399,6 +436,25 @@ function parseLineupDecision(text, players, salaryCap, rosterSlots) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// POSITION ELIGIBILITY CHECK
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Check if a player is eligible for a given DK/FD roster slot.
+ * DK slots: PG, SG, SF, PF, C, G (PG/SG), F (SF/PF), UTIL (any)
+ * FD slots: PG, SG, SF, PF, C (no flex slots)
+ */
+function isSlotEligible(slot, playerPositions) {
+  if (!slot || !playerPositions || playerPositions.length === 0) return true;
+  const s = slot.toUpperCase();
+  const poss = playerPositions.map(p => p.toUpperCase());
+  if (s === 'UTIL') return true;
+  if (s === 'G') return poss.some(p => p === 'PG' || p === 'SG');
+  if (s === 'F') return poss.some(p => p === 'SF' || p === 'PF');
+  return poss.includes(s);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // VALIDATE LINEUP
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -422,10 +478,12 @@ function validateLineup(lineup, salaryCap, rosterSlots) {
     issues.push('Duplicate players in lineup');
   }
 
-  // Check position eligibility (basic)
-  const filledPositions = new Set();
+  // Check position eligibility
   for (const player of lineup.players || []) {
-    filledPositions.add(player.position);
+    const positions = player.positions || [player.position];
+    if (!isSlotEligible(player.position, positions)) {
+      issues.push(`${player.name} assigned to ${player.position} but eligible for ${positions.join('/')}`);
+    }
   }
 
   return {

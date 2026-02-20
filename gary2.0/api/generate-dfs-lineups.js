@@ -245,7 +245,8 @@ export default async function handler(req, res) {
                 sport,
                 date: dateParam,
                 slate,
-                contestType
+                contestType,
+                context
               });
 
               // Convert agentic result to expected format

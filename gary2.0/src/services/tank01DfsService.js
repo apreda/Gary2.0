@@ -237,7 +237,7 @@ function parseNbaResponse(data, platform) {
       status,
       // Additional data
       playerId: p.playerID || p.playerId,
-      allPositions: p.allValidPositions || [position],
+      positions: p.allValidPositions || [position],
       teamId: p.teamID,
       projection: 0 // Will be calculated by dfsLineupService using BDL stats
     });
@@ -310,7 +310,7 @@ function parseNflResponse(data, platform) {
       status,
       // Additional data
       playerId: p.playerID || p.playerId,
-      allPositions: p.allValidPositions || [position],
+      positions: p.allValidPositions || [position],
       teamId: p.teamID,
       projection: 0 // Will be calculated by dfsLineupService
     });
@@ -516,17 +516,24 @@ export async function fetchNbaTeamRoster(teamAbv) {
 }
 
 /**
- * Fetch roster data for multiple teams in parallel
+ * Fetch roster data for multiple teams in staggered batches
+ * Batches 4 teams at a time with 300ms delay between batches to avoid Tank01 rate limits
  * @param {string[]} teamAbvs - Array of team abbreviations
  * @returns {Promise<Map<string, Array>>} Map of team → players
  */
 export async function fetchNbaRostersForTeams(teamAbvs) {
   const results = new Map();
-  const fetches = teamAbvs.map(async (team) => {
-    const roster = await fetchNbaTeamRoster(team);
-    results.set(team.toUpperCase(), roster);
-  });
-  await Promise.all(fetches);
+  const BATCH_SIZE = 4;
+  const BATCH_DELAY_MS = 300;
+
+  for (let i = 0; i < teamAbvs.length; i += BATCH_SIZE) {
+    if (i > 0) await new Promise(r => setTimeout(r, BATCH_DELAY_MS));
+    const batch = teamAbvs.slice(i, i + BATCH_SIZE);
+    await Promise.all(batch.map(async (team) => {
+      const roster = await fetchNbaTeamRoster(team);
+      results.set(team.toUpperCase(), roster);
+    }));
+  }
   return results;
 }
 

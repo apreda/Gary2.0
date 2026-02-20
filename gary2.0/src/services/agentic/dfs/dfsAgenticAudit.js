@@ -15,23 +15,17 @@
  * FOLLOWS CLAUDE.md: Gary investigates, Gary decides, Gary audits.
  */
 
-import { WINNING_SCORE_TARGETS } from '../FIBLE.js';
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // AUDIT SYSTEM PROMPT
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const LINEUP_AUDIT_PROMPT = `
+<role>
 You are Gary - reviewing your own DFS lineup before it's locked.
-
-CRITICAL: Your response MUST be ONLY valid JSON. No markdown, no explanation text.
-Start your response with { and end with }. Nothing else.
-
-## YOUR ROLE
 You just built a lineup. Now AUDIT it with fresh eyes.
+</role>
 
-## AUDIT CHECKLIST
-
+<audit_checklist>
 1. THESIS ALIGNMENT
    - Does this lineup actually execute my build thesis?
    - Are my target games properly represented?
@@ -52,18 +46,20 @@ You just built a lineup. Now AUDIT it with fresh eyes.
    - Are my punts actual edges or just cheap prices?
    - Did I overpay for any "name brand" players?
 
-6. RISK ASSESSMENT
+5. RISK ASSESSMENT
    - What's the biggest risk to this lineup?
    - Is there a single point of failure?
    - What's my floor scenario?
+</audit_checklist>
 
-## ADJUSTMENTS
-If you see issues, you can make 1-2 swaps. But be specific:
+<adjustments>
+If you see issues, you can make 1-2 swaps. Be specific:
 - WHO you're swapping out and WHY
 - WHO you're swapping in and WHY
 - How this improves the lineup
+</adjustments>
 
-## OUTPUT FORMAT
+<output_format>
 {
   "auditNotes": {
     "thesisAlignment": "How well does this execute the thesis?",
@@ -82,9 +78,13 @@ If you see issues, you can make 1-2 swaps. But be specific:
   "finalCeilingScenario": "Updated ceiling scenario after audit",
   "garyFinalThoughts": "Your final thoughts on this lineup"
 }
+</output_format>
 
-REMEMBER: Output ONLY the JSON object above. No other text, no markdown, no code blocks.
-Your entire response must be valid JSON starting with { and ending with }.
+<constraints>
+- DO NOT output any text before or after the JSON object
+- DO NOT use markdown code blocks
+- Your entire response must be valid JSON starting with { and ending with }
+</constraints>
 `;
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -117,7 +117,7 @@ export async function auditLineupWithPro(genAI, lineup, buildThesis, context, op
     systemInstruction: LINEUP_AUDIT_PROMPT,
     generationConfig: {
       temperature: 1.0, // Gemini: Keep at 1.0
-      maxOutputTokens: 4096
+      maxOutputTokens: 8192
     }
   });
 
@@ -306,6 +306,8 @@ function applyAdjustments(lineup, adjustments, players) {
   }
 
   const updatedPlayers = [...(lineup.players || [])];
+  const platform = lineup.platform || 'draftkings';
+  const salaryCap = platform.toLowerCase() === 'fanduel' ? 60000 : 50000;
 
   for (const adj of adjustments) {
     const { out: outName, in: inName, reason } = adj;
@@ -330,33 +332,64 @@ function applyAdjustments(lineup, adjustments, players) {
       continue;
     }
 
-    // Make the swap
     const outPlayer = updatedPlayers[outIndex];
+    const slot = outPlayer.position;
+
+    // Validate position eligibility for the slot
+    const inPositions = inPlayer.positions || [inPlayer.position];
+    if (!isSlotEligible(slot, inPositions)) {
+      console.warn(`[Lineup Audit] ${inPlayer.name} not eligible for ${slot} (has ${inPositions.join('/')}) — skipping swap`);
+      continue;
+    }
+
+    // Validate salary cap — check if swap would put us over
+    const salaryDiff = (inPlayer.salary || 0) - (outPlayer.salary || 0);
+    const currentTotal = updatedPlayers.reduce((sum, p) => sum + (p.salary || 0), 0);
+    if (currentTotal + salaryDiff > salaryCap) {
+      console.warn(`[Lineup Audit] Swap ${outName} → ${inName} would exceed salary cap ($${currentTotal + salaryDiff} > $${salaryCap}) — skipping`);
+      continue;
+    }
+
+    // Make the swap
     updatedPlayers[outIndex] = {
-      position: outPlayer.position,
+      position: slot,
+      positions: inPositions,
       name: inPlayer.name,
       team: inPlayer.team,
       salary: inPlayer.salary,
       projectedPoints: inPlayer.projected_pts,
-      ceilingProjection: (inPlayer.projected_pts || 0) * 1.3,
+      ceilingProjection: inPlayer.ceilingProjection || outPlayer.ceilingProjection,
       reasoning: reason || `Swapped in during audit (was ${outName})`
     };
 
     console.log(`[Lineup Audit] Swapped ${outName} → ${inName}`);
   }
 
-  // Recalculate totals
+  // Recalculate totals from actual player data
   const totalSalary = updatedPlayers.reduce((sum, p) => sum + (p.salary || 0), 0);
   const projectedPoints = updatedPlayers.reduce((sum, p) => sum + (p.projectedPoints || 0), 0);
+  // Use sum of per-player ceilings instead of flat multiplier
+  const ceilingProjection = updatedPlayers.reduce((sum, p) => sum + (p.ceilingProjection || p.projectedPoints || 0), 0);
 
   return {
     ...lineup,
     players: updatedPlayers,
     totalSalary,
     projectedPoints,
-    ceilingProjection: projectedPoints * 1.25,
-    floorProjection: projectedPoints * 0.75
+    ceilingProjection,
+    floorProjection: lineup.floorProjection
   };
+}
+
+// Position eligibility check (same logic as lineup decider)
+function isSlotEligible(slot, playerPositions) {
+  if (!slot || !playerPositions || playerPositions.length === 0) return true;
+  const s = slot.toUpperCase();
+  const poss = playerPositions.map(p => p.toUpperCase());
+  if (s === 'UTIL') return true;
+  if (s === 'G') return poss.some(p => p === 'PG' || p === 'SG');
+  if (s === 'F') return poss.some(p => p === 'SF' || p === 'PF');
+  return poss.includes(s);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
