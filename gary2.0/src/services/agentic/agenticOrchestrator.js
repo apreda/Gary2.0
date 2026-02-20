@@ -3727,8 +3727,7 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
   let _proAssessment = null;            // Pro's honest assessment text
   let _proAssessmentRequested = false;  // True after we ask Pro for his assessment
 
-  // Props 4-pass pipeline needs more iterations than game picks (15 often isn't enough)
-  const effectiveMaxIterations = isPropsMode ? 22 : CONFIG.maxIterations;
+  const effectiveMaxIterations = CONFIG.maxIterations;
 
   // ═══════════════════════════════════════════════════════════════════════
   // FLASH ADVISOR HELPER — reusable spawn logic (captures closure variables)
@@ -3769,7 +3768,7 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
   // Sport-specific preloaded factors — shared across tool-call and pipeline-gate scopes
   const SPORT_PRELOADED_MAP = {
     basketball_nba: ['INJURIES', 'H2H', 'SCHEDULE', 'STANDINGS_CONTEXT'],
-    basketball_ncaab: ['STANDINGS_CONTEXT', 'RANKINGS', 'INJURIES', 'H2H', 'HOME_AWAY', 'SCHEDULE'], // Scout report pre-fetches injuries (RotoWire), H2H, home/away splits, rest situation
+    basketball_ncaab: ['STANDINGS_CONTEXT', 'RANKINGS', 'INJURIES', 'H2H', 'HOME_AWAY', 'SCHEDULE', 'RECENT_FORM', 'PLAYER_PERFORMANCE', 'DEFENSIVE_STATS', 'TEMPO', 'ASSISTS_PLAYMAKING'], // Scout report provides: injuries (RotoWire), H2H, home/away splits, rest, L5 efficiency/trends, roster depth (PPG/RPG/APG/eFG%/TS%), Barttorvik tempo, defensive stats
     americanfootball_nfl: ['INJURIES', 'H2H', 'SCHEDULE', 'STANDINGS_CONTEXT'],
     icehockey_nhl: ['INJURIES', 'H2H', 'SCHEDULE', 'STANDINGS_CONTEXT'],
     americanfootball_ncaaf: ['INJURIES', 'H2H', 'SCHEDULE_QUALITY'],
@@ -5645,6 +5644,7 @@ BEGIN WRITING YOUR MATCHUP ANALYSIS NOW.
       
       // CRITICAL: Set nextMessageToSend so the session knows what to send next
       nextMessageToSend = pass25Content;
+      _pass25Injected = true;
       _pass25JustInjected = true;
 
       continue; // Go back to get Pass 2.5 response
