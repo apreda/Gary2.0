@@ -89,7 +89,7 @@ Example:
  * @returns {Object} - Investigation results by position
  */
 export async function investigatePlayersForPositions(genAI, buildThesis, context, options = {}) {
-  const { modelName = 'gemini-3-flash-preview' } = options;
+  const { modelName = 'gemini-3-pro-preview' } = options;
   const { players, platform } = context;
 
   console.log('[Player Investigator] Starting player investigations...');
@@ -263,15 +263,18 @@ async function investigatePositionCandidates(genAI, position, candidates, buildT
   // Build investigation request
   const investigationRequest = buildInvestigationRequest(position, topCandidates, buildThesis, context);
 
-  // Create Flash model with function calling
+  // Create Pro model with function calling
   // Note: Can't use responseMimeType with function calling, so we enforce JSON in prompt
   const model = genAI.getGenerativeModel({
     model: modelName,
     systemInstruction: PLAYER_INVESTIGATION_PROMPT,
     tools: [{ functionDeclarations: DFS_PLAYER_INVESTIGATION_TOOLS }],
     generationConfig: {
-      temperature: 1.0,
+      temperature: 1.0, // Gemini: Keep at 1.0
       maxOutputTokens: 8192
+    },
+    thinkingConfig: {
+      thinkingBudget: 16384
     }
   });
 
@@ -419,6 +422,9 @@ ${candidates.map((p, i) => {
   return line;
 }).join('\n\n')}
 
+## KNOWN TEAM INJURIES
+${formatTeamInjuriesForInvestigation(candidates, context)}
+
 ## YOUR TASK
 For EACH candidate, you MUST investigate:
 1. Call GET_PLAYER_GAME_LOGS to assess recent form (L5 trends, hot/cold streaks)
@@ -437,6 +443,13 @@ situation (usage vacuum, extreme salary discount vs recent production, hot strea
 The thesis informs your focus but does NOT constrain your findings. If you find a better play
 outside the thesis targets, report it with conviction.
 
+INJURY DURATION AWARENESS:
+- Check the KNOWN TEAM INJURIES section above for duration tags on each OUT player (measured in team games missed).
+- Ask: How many team games has this player missed? If LONG-TERM (11+ games), the salary ALREADY reflects
+  this roster. Do NOT cite a long-term absence as a reason to roster someone — that is old news the market
+  has already absorbed. Instead, evaluate the player's ACTUAL RECENT PRODUCTION at their current salary.
+- For RECENT absences (0-2 games missed): the salary may not have adjusted yet. Investigate the game logs.
+
 After investigating, OUTPUT YOUR FINDINGS AS A JSON ARRAY.
 IMPORTANT: Your final response MUST be ONLY a valid JSON array starting with [ and ending with ].
 No markdown, no explanation text, no code blocks - ONLY the raw JSON array.
@@ -449,43 +462,88 @@ Begin your investigation now by calling the tools, then output the JSON array.
 // PARSE INVESTIGATION RESULTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function parseInvestigationResults(text, candidates) {
-  // Try to find a complete JSON array first
-  let jsonMatch = text.match(/\[[\s\S]*\]/);
+/**
+ * Extract a JSON array from text using bracket-depth tracking.
+ * Unlike regex /\[[\s\S]*\]/, this finds the MATCHING ] for the first [,
+ * so trailing text with brackets doesn't corrupt the extraction.
+ */
+function extractJsonArray(text) {
+  const start = text.indexOf('[');
+  if (start === -1) return null;
 
-  // If no complete array, try to recover from truncated response
-  if (!jsonMatch) {
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+
+    if (escape) {
+      escape = false;
+      continue;
+    }
+
+    if (ch === '\\' && inString) {
+      escape = true;
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = !inString;
+      continue;
+    }
+
+    if (inString) continue;
+
+    if (ch === '[') depth++;
+    if (ch === ']') {
+      depth--;
+      if (depth === 0) {
+        return text.slice(start, i + 1);
+      }
+    }
+  }
+
+  // Array was never closed — truncated response
+  return null;
+}
+
+function parseInvestigationResults(text, candidates) {
+  // Extract JSON array using bracket-depth tracking (not greedy regex)
+  // This handles Flash adding explanation text after the JSON array
+  let jsonStr = extractJsonArray(text);
+
+  // If bracket tracking failed, try truncation recovery
+  if (!jsonStr) {
     const arrayStart = text.indexOf('[');
     if (arrayStart !== -1) {
-      // Find the last complete JSON object (ending with })
       let truncated = text.slice(arrayStart);
       const lastBrace = truncated.lastIndexOf('}');
       if (lastBrace > 0) {
         truncated = truncated.slice(0, lastBrace + 1) + ']';
-        // Remove any trailing comma before the ]
         truncated = truncated.replace(/,\s*\]$/, ']');
-        jsonMatch = [truncated];
+        jsonStr = truncated;
         console.warn('[Player Investigator] Recovered truncated JSON array');
       }
     }
   }
 
-  if (!jsonMatch) {
+  if (!jsonStr) {
     throw new Error('[Player Investigator] Gary Flash did not produce JSON array of investigations. Raw response: ' + text.slice(0, 500));
   }
 
   let parsed;
   try {
-    parsed = JSON.parse(jsonMatch[0]);
+    parsed = JSON.parse(jsonStr);
   } catch (e) {
-    // Try fixing common issues: trailing commas, unescaped quotes
+    // Try fixing common issues: trailing commas, control chars
     try {
-      const fixed = jsonMatch[0]
+      const fixed = jsonStr
         .replace(/,\s*([}\]])/g, '$1')
-        .replace(/[\x00-\x1F]/g, ' '); // Remove control characters
+        .replace(/[\x00-\x1F]/g, ' ');
       parsed = JSON.parse(fixed);
     } catch (e2) {
-      throw new Error('[Player Investigator] Gary Flash produced invalid JSON: ' + e2.message + '. Raw: ' + jsonMatch[0].slice(0, 500));
+      throw new Error('[Player Investigator] Gary Flash produced invalid JSON: ' + e2.message + '. Raw: ' + jsonStr.slice(0, 500));
     }
   }
 
@@ -513,6 +571,42 @@ function parseInvestigationResults(text, candidates) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // POSITION HELPERS
 // ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Format team injuries with duration tags for the investigation prompt.
+ * Shows Gary which teams have OUT players and how long they've been out,
+ * so he can investigate whether salaries have already adjusted.
+ */
+function formatTeamInjuriesForInvestigation(candidates, context) {
+  if (!context.injuries || Object.keys(context.injuries).length === 0) {
+    return 'No injury data available — use GET_TEAM_INJURIES to check.';
+  }
+
+  // Only show injuries for teams that have candidates in this position group
+  const relevantTeams = new Set(candidates.map(c => (c.team || '').toUpperCase()));
+  const lines = [];
+
+  for (const [team, injuries] of Object.entries(context.injuries)) {
+    if (!relevantTeams.has(team)) continue;
+    const outPlayers = injuries.filter(i => {
+      const st = (i.status || '').toUpperCase();
+      return st.includes('OUT') || st === 'OFS' || st.includes('DOUBTFUL');
+    });
+    if (outPlayers.length === 0) continue;
+
+    const formatted = outPlayers.map(i => {
+      const name = i.player?.first_name ? `${i.player.first_name} ${i.player.last_name}` : i.player;
+      const reason = i.injury || i.reason || '';
+      if (i.duration) {
+        return `${name} (${i.status}) [${i.duration} — ${i.gamesMissed} team games missed] ${reason}`;
+      }
+      return `${name} (${i.status}) ${reason}`;
+    });
+    lines.push(`${team}: ${formatted.join(', ')}`);
+  }
+
+  return lines.length > 0 ? lines.join('\n') : 'No OUT players on candidate teams.';
+}
 
 function getPositionSlots(platform) {
   // DraftKings NBA classic roster

@@ -59,8 +59,8 @@ Pick the player with the best CEILING PATH given the situation.
 
 <punt_awareness>
 "Punts" ($4K-$5.5K) can be GREAT when:
-- A usage vacuum exists (star is OUT, they absorb production)
-- Price hasn't adjusted to their new situation
+- A RECENT usage vacuum exists (star OUT in last 1-3 days, salary hasn't adjusted)
+- Their recent game logs show production above their salary tier
 - They have real minutes and role (not a deep bench guy)
 
 "Punts" are RISKY when:
@@ -377,6 +377,9 @@ Remember:
 - Your thesis is your STARTING FRAMEWORK, not a constraint. If the player investigation
   revealed better opportunities outside your thesis targets, adjust. The best lineup wins,
   not the most thesis-consistent lineup.
+- INJURY REASONING: Do NOT cite LONG-TERM absences (11+ team games missed) as reasons for rostering
+  someone. Those absences are old news — the salary already reflects the current roster. Your reasoning
+  should be based on the player's ACTUAL RECENT PRODUCTION, matchup, and game environment tonight.
 
 Output your lineup as JSON.
 `;

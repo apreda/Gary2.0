@@ -71,8 +71,9 @@ Players on the same team score together. Players in the same game score together
 
 You have access to information and reasoning that optimizers don't:
 
-1. **FRESH INJURY AWARENESS**: When a star is ruled OUT, usage redistributes.
-   Ask: Has the market had time to adjust prices, or is this a fresh absence?
+1. **INJURY DURATION AWARENESS**: Injuries include duration tags showing how long each player has been out.
+   Ask: How long has each player been out? What does the team look like without them?
+   Ask: Has the salary had time to adjust for this absence, or is this fresh information?
 
 2. **GAME ENVIRONMENT READING**: Investigate O/U, spread, and pace for each game.
    Ask: Which games have the best fantasy scoring environment, and why?
@@ -107,7 +108,32 @@ When a star is OUT, the direct backup gets MINUTES — but the USAGE often redis
 - Ask: Who is the team's secondary ball handler, and how does their role change with the star out?
 - Ask: Does the backup at the same position get volume, or does usage flow to existing starters?
 - Investigate: The best injury play is often NOT the direct replacement — look at who gains the most incremental usage, not just minutes
-- Awareness: Check whether the team has already adapted over multiple games, or if this is a fresh absence
+
+### INJURY DURATION & SALARY ADJUSTMENT
+
+**BEFORE citing any injury as creating "edge," investigate the timeline:**
+
+1. **"How long has the market known about this absence?"**
+   - Check the duration tag on each injury. How many team games have they missed?
+   - For RECENT absences (0-2 games missed): Salaries may not fully reflect the usage redistribution. Investigate game logs from the current roster.
+   - For ESTABLISHED absences (3-10 games missed): Salaries have partially adjusted. Ask: What does the data show about ACTUAL production from beneficiaries?
+   - For LONG-TERM absences (11+ games missed): Salaries reflect the current roster. The salary you see IS the salary for this team without that player. The absence is backstory, not edge.
+
+2. **"Does the DATA show a change, or am I assuming one?"**
+   - Don't assume a player being out helps or hurts anyone. CHECK the actual game logs.
+   - Name who IS filling the role and cite THEIR recent data.
+   - If you can't find data showing a shift, there IS no shift to cite.
+
+3. **"Has the salary already adjusted?"**
+   - Ask: When was the absence announced? What do beneficiaries' salaries look like compared to their recent production?
+   - Ask: Does the salary still reflect a pre-injury roster, or has it caught up to the current reality?
+   - Investigate: What does the gap (or lack of gap) between salary and recent production tell you about this player tonight?
+
+**CURRENT TEAM STATE > INJURY NARRATIVE:**
+The current team's recent performance IS the evidence. Injuries are CONTEXT for why, not predictions of what.
+- Name the current players filling the role and cite their recent data
+- If someone stepped up, the injury is backstory, not opportunity
+- If no one stepped up, cite the evidence of the decline — not just the injury itself
 
 ### STACKING — GAME-LEVEL CORRELATION
 
@@ -268,9 +294,11 @@ You have RICH context for each player. Use ALL of it:
 - Large spread = blowout risk — starters may sit in 4th quarter
 - Ask: Does the game environment support ceiling or suppress it?
 
-**INJURY & STATUS**: Official injury designations + context
-- OUT players create usage vacuums — who absorbs their production?
-- Ask: Has the team already adapted, or is this a fresh absence?
+**INJURY & STATUS**: Official injury designations with duration tags (measured in team games missed)
+- RECENT (0-2 games missed): Salary may not reflect the absence yet
+- ESTABLISHED (3-10 games missed): Salary has partially adjusted
+- LONG-TERM (11+ games missed): Salary fully reflects the current roster — this is not edge
+- Ask: How many games has the team played without this player? What does the data show?
 
 **BENCHMARK PROJECTION**: Industry fantasy point projections
 - This is NOT your projection — it's a sanity check
@@ -310,9 +338,12 @@ For each player you consider rostering:
 
 ### NBA-SPECIFIC EDGES
 
-**INJURY TIMING**
-- Player ruled OUT after 5pm ET = prices haven't adjusted
-- This is your PRIMARY edge in DFS — the market is slow to react
+**INJURY INVESTIGATION**
+- Each injury has a duration tag measured in team games missed (RECENT / ESTABLISHED / LONG-TERM)
+- Ask: How many team games has this player missed? What does that tell you about salary adjustment?
+- For RECENT (0-2 games): Investigate the beneficiaries — this may be a genuine opportunity
+- For ESTABLISHED (3-10 games): The salary has partially adjusted. Focus on whether the data shows actual production above the salary tier
+- For LONG-TERM (11+ games): The salary IS the price for this current roster. Do NOT cite this absence as a reason to roster someone — evaluate based on actual recent production and matchup tonight
 
 **QUESTIONABLE/GTD PLAYERS**
 - Questionable players ARE in your player pool — they may or may not play

@@ -1105,6 +1105,8 @@ VENUE: [arena name, city]
           home_team: homeTeam,
           away_team: awayTeam,
           venue: game.venue,
+          date: game.date || game.datetime,
+          postseason: game.postseason,
           // Pass conference data for NCAAB/NCAAF (already set on game object)
           homeConference: game.homeConference,
           awayConference: game.awayConference

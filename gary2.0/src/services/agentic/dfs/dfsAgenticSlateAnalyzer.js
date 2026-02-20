@@ -114,8 +114,11 @@ export async function analyzeSlateWithFlash(genAI, context, options = {}) {
     systemInstruction: SLATE_ANALYSIS_PROMPT,
     tools: [{ functionDeclarations: DFS_SLATE_ANALYSIS_TOOLS }],
     generationConfig: {
-      temperature: 1.0, // Gemini 3: Keep at 1.0
+      temperature: 1.0, // Gemini: Keep at 1.0
       maxOutputTokens: 8192
+    },
+    thinkingConfig: {
+      thinkingBudget: 8192
     }
   });
 
@@ -261,7 +264,9 @@ ${Object.keys(teamRosters).join(', ')}
 
 ## YOUR TASK
 1. Call GET_TEAM_INJURIES for each team to find OUT/GTD players
-2. For each OUT player, call GET_USAGE_BOOST to find who benefits
+   - IMPORTANT: Check the DURATION tag on each injury. LONG-TERM absences (11+ team games missed) are already priced into salaries — they are NOT usage opportunities.
+   - Only RECENT absences (0-2 team games missed) create genuine edge — salaries may not have adjusted yet.
+2. For RECENT absences only, call GET_USAGE_BOOST to find who benefits
 3. Call GET_GAME_ENVIRONMENT for each game to assess pace/scoring
 4. Identify any PRICE LAG situations where salary < fair value
 
@@ -322,7 +327,11 @@ function formatKnownInjuries(injuries) {
     const gtd = teamInjuries.filter(i => i.status === 'GTD' || i.status === 'Questionable' || i.status === 'Day-To-Day');
 
     if (out.length > 0) {
-      lines.push(`${team} OUT: ${out.map(i => i.player?.first_name ? `${i.player.first_name} ${i.player.last_name}` : i.player).join(', ')}`);
+      lines.push(`${team} OUT: ${out.map(i => {
+        const name = i.player?.first_name ? `${i.player.first_name} ${i.player.last_name}` : i.player;
+        const durationTag = i.duration ? ` [${i.duration} — ${i.gamesMissed} games missed]` : '';
+        return `${name}${durationTag}`;
+      }).join(', ')}`);
     }
     if (gtd.length > 0) {
       lines.push(`${team} GTD: ${gtd.map(i => i.player?.first_name ? `${i.player.first_name} ${i.player.last_name}` : i.player).join(', ')}`);

@@ -289,12 +289,21 @@ async function getTeamInjuries(team, context) {
   if (contextInjuries && contextInjuries.length > 0) {
     return {
       team,
-      injuries: contextInjuries.map(i => ({
-        player: i.player?.first_name ? `${i.player.first_name} ${i.player.last_name}` : i.player,
-        status: i.status,
-        reason: i.reason || i.injury,
-        impact: i.impact || 'Unknown'
-      }))
+      injuries: contextInjuries.map(i => {
+        const entry = {
+          player: i.player?.first_name ? `${i.player.first_name} ${i.player.last_name}` : i.player,
+          status: i.status,
+          reason: i.reason || i.injury,
+          impact: i.impact || 'Unknown'
+        };
+        // Surface duration data when available
+        if (i.duration) {
+          entry.duration = i.duration;
+          entry.gamesMissed = i.gamesMissed;
+          entry.lastGameDate = i.lastGameDate;
+        }
+        return entry;
+      })
     };
   }
 
@@ -363,13 +372,37 @@ async function getUsageBoost(outPlayer, team, context) {
     };
   });
 
-  return {
+  // Look up injury duration from context injury map
+  const teamInjuries = context.injuries?.[team] || [];
+  const injuryEntry = teamInjuries.find(i =>
+    (i.player || '').toLowerCase().includes(outPlayer.toLowerCase()) ||
+    outPlayer.toLowerCase().includes((i.player || '').toLowerCase())
+  );
+  const injuryDuration = injuryEntry?.duration || null;
+  const gamesMissed = injuryEntry?.gamesMissed || null;
+
+  const result = {
     outPlayer,
     team,
     outPlayerUsage,
     outPlayerMinutes,
     beneficiaries
   };
+
+  // Surface duration context so Gary understands whether this is actionable
+  if (injuryDuration) {
+    result.absenceDuration = injuryDuration;
+    result.gamesMissed = gamesMissed;
+    if (injuryDuration === 'LONG-TERM') {
+      result.durationNote = `${outPlayer} has missed ${gamesMissed}+ team games. Current salaries and team stats already reflect this absence. This usage redistribution is the current baseline, not a new opportunity.`;
+    } else if (injuryDuration === 'ESTABLISHED') {
+      result.durationNote = `${outPlayer} has missed ${gamesMissed} team games. Salaries have partially adjusted. Investigate whether beneficiaries' recent production matches their current salary.`;
+    } else if (injuryDuration === 'RECENT') {
+      result.durationNote = `${outPlayer} has missed only ${gamesMissed} team games. Salaries may not fully reflect this absence yet.`;
+    }
+  }
+
+  return result;
 }
 
 async function getGameEnvironment(homeTeam, awayTeam, context) {

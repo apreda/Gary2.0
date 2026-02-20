@@ -133,8 +133,8 @@ export async function auditLineupWithPro(genAI, lineup, buildThesis, context, op
   // Parse audit results — NO fallbacks
   const auditResult = parseAuditResult(responseText);
 
-  // Apply any adjustments Gary made
-  const finalLineup = applyAdjustments(lineup, auditResult.adjustments, players);
+  // Apply any adjustments Gary made (pass platform for correct salary cap)
+  const finalLineup = applyAdjustments(lineup, auditResult.adjustments, players, platform);
 
   // Merge audit data into lineup
   const auditedLineup = {
@@ -147,8 +147,9 @@ export async function auditLineupWithPro(genAI, lineup, buildThesis, context, op
   };
 
   console.log(`[Lineup Audit] ✓ Audit complete`);
+  const successfulSwaps = finalLineup._successfulSwaps || 0;
   if (auditResult.adjustments?.length > 0) {
-    console.log(`[Lineup Audit] ✓ Made ${auditResult.adjustments.length} adjustments`);
+    console.log(`[Lineup Audit] ✓ Made ${successfulSwaps}/${auditResult.adjustments.length} adjustments`);
   }
 
   return auditedLineup;
@@ -316,14 +317,15 @@ function parseAuditResult(text) {
 // APPLY ADJUSTMENTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function applyAdjustments(lineup, adjustments, players) {
+function applyAdjustments(lineup, adjustments, players, contextPlatform) {
   if (!adjustments || adjustments.length === 0) {
-    return lineup;
+    return { ...lineup, _successfulSwaps: 0 };
   }
 
   const updatedPlayers = [...(lineup.players || [])];
-  const platform = lineup.platform || 'draftkings';
+  const platform = contextPlatform || lineup.platform || 'draftkings';
   const salaryCap = platform.toLowerCase() === 'fanduel' ? 60000 : 50000;
+  let successfulSwaps = 0;
 
   for (const adj of adjustments) {
     const { out: outName, in: inName, reason } = adj;
@@ -334,17 +336,17 @@ function applyAdjustments(lineup, adjustments, players) {
     );
 
     if (outIndex === -1) {
-      console.warn(`[Lineup Audit] Could not find player to swap out: ${outName}`);
+      console.warn(`[Lineup Audit] Could not find player to swap out: ${outName} — not in lineup`);
       continue;
     }
 
-    // Find player to add
+    // Find player to add from the actual player pool
     const inPlayer = players.find(p =>
       p.name?.toLowerCase() === inName?.toLowerCase()
     );
 
     if (!inPlayer) {
-      console.warn(`[Lineup Audit] Could not find player to swap in: ${inName}`);
+      console.warn(`[Lineup Audit] Could not find player to swap in: ${inName} — not in player pool`);
       continue;
     }
 
@@ -378,6 +380,7 @@ function applyAdjustments(lineup, adjustments, players) {
       reasoning: reason || `Swapped in during audit (was ${outName})`
     };
 
+    successfulSwaps++;
     console.log(`[Lineup Audit] Swapped ${outName} → ${inName}`);
   }
 
@@ -393,7 +396,8 @@ function applyAdjustments(lineup, adjustments, players) {
     totalSalary,
     projectedPoints,
     ceilingProjection,
-    floorProjection: lineup.floorProjection
+    floorProjection: lineup.floorProjection,
+    _successfulSwaps: successfulSwaps
   };
 }
 
