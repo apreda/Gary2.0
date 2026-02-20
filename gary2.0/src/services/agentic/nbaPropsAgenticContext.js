@@ -13,8 +13,8 @@
  * 
  * NEW FACTORS FOR PROP ANALYSIS:
  * 1. Hit Rate / Consistency Score - "Player has hit this line in X of last Y games"
- * 2. Key Teammate Out Impact - Usage boost when stars are injured
- * 3. Pace/Total Environment - High O/U = more opportunities
+ * 2. Key Teammate Absence Detection - Factual absence context for investigation
+ * 3. Pace/Total Environment - Game total context for investigation
  * 4. Home/Away Splits - Player-specific home/road performance
  */
 import { ballDontLieService } from '../ballDontLieService.js';
@@ -93,19 +93,19 @@ function calculateScenarioProjections(playerStats, props, gameSpread) {
     const blowoutProj = parseFloat((blowoutMinutes * rateData.rate).toFixed(1));
     const competitiveProj = parseFloat((competitiveMinutes * rateData.rate).toFixed(1));
     
-    // Kill condition: If blowout projection < line AND team is favorite (will sit if up big)
-    const killTriggered = isBlowoutRisk && isOnFavorite && blowoutProj < line;
-    
+    // Blowout scenario: projection below line when team is favorite in a blowout-risk game
+    const projectionBelowLine = isBlowoutRisk && isOnFavorite && blowoutProj < line;
+
     projections[propType] = {
       baseline: { minutes: mpg, projection: baselineProj },
       blowout: { minutes: blowoutMinutes, projection: blowoutProj },
       competitive: { minutes: competitiveMinutes, projection: competitiveProj },
       line: line,
       perMinuteRate: parseFloat(rateData.rate.toFixed(3)),
-      killCondition: {
-        triggered: killTriggered,
-        reason: killTriggered 
-          ? `Blowout projection (${blowoutProj}) < line (${line}) - spread is ${gameSpread}`
+      blowoutScenario: {
+        projectionBelowLine,
+        detail: projectionBelowLine
+          ? `At ${blowoutMinutes} min: projection ${blowoutProj} vs line ${line} (spread ${gameSpread})`
           : null
       },
       // Quick reference for Gary
@@ -246,7 +246,7 @@ function calculateHitRate(games, propType, line) {
     underRate: ((hitsUnder / totalGames) * 100).toFixed(0),
     avgValue: avgValue.toFixed(1),
     values: values.slice(0, 5), // Last 5 values for display
-    recommendation: avgValue > line * 1.05 ? 'OVER' : avgValue < line * 0.95 ? 'UNDER' : 'CLOSE'
+    // recommendation field removed — Gary investigates and decides direction himself
   };
 }
 
@@ -259,9 +259,9 @@ function calculateHitRate(games, propType, line) {
  * @returns {Object|null} Teammate impact analysis
  */
 function analyzeTeammateImpact(playerName, team, injuries, playerSeasonStats) {
-  // Key players by team whose absence would boost others' usage
+  // Key players by team — high usage players whose absence Gary should investigate
   const keyPlayers = {
-    // High usage players - their absence creates opportunity
+    // High usage players — investigate role redistribution when absent
     'star_scorers': ['LeBron James', 'Stephen Curry', 'Kevin Durant', 'Giannis Antetokounmpo', 
       'Luka Doncic', 'Jayson Tatum', 'Shai Gilgeous-Alexander', 'Anthony Edwards',
       'Donovan Mitchell', 'Damian Lillard', 'Devin Booker', 'Trae Young', 'Ja Morant',
@@ -295,8 +295,8 @@ function analyzeTeammateImpact(playerName, team, injuries, playerSeasonStats) {
   
   return {
     injuredStars: teamInjuries.map(i => `${i.player} (${i.status})`),
-    usageBoostExpected: true,
-    reason: `With ${teamInjuries.map(i => i.player).join(', ')} out, expect increased usage/touches`
+    teammateAbsenceDetected: true,
+    context: `${teamInjuries.map(i => i.player).join(', ')} currently out — investigate how this affects role distribution in recent games without them`
   };
 }
 
@@ -317,16 +317,16 @@ function getPaceAndTotalContext(marketSnapshot, homeTeamStats, awayTeamStats) {
   if (total) {
     if (total >= 235) {
       totalCategory = 'very_high';
-      scoringEnvironment = 'shootout expected - good for scoring props';
+      scoringEnvironment = `total ${total} — well above league average`;
     } else if (total >= 225) {
       totalCategory = 'high';
-      scoringEnvironment = 'above average scoring expected';
+      scoringEnvironment = `total ${total} — above league average`;
     } else if (total <= 210) {
       totalCategory = 'low';
-      scoringEnvironment = 'low total — investigate how pace and defense affect player usage';
+      scoringEnvironment = `total ${total} — well below league average`;
     } else if (total <= 218) {
       totalCategory = 'below_average';
-      scoringEnvironment = 'slower pace expected';
+      scoringEnvironment = `total ${total} — below league average`;
     }
   }
   
@@ -336,8 +336,8 @@ function getPaceAndTotalContext(marketSnapshot, homeTeamStats, awayTeamStats) {
     scoringEnvironment,
     spread: marketSnapshot?.spread?.line || null,
     blowoutRisk: Math.abs(parseFloat(marketSnapshot?.spread?.line) || 0) >= 10,
-    blowoutNote: Math.abs(parseFloat(marketSnapshot?.spread?.line) || 0) >= 10 
-      ? 'Large spread - possible garbage time or early benching of starters'
+    blowoutNote: Math.abs(parseFloat(marketSnapshot?.spread?.line) || 0) >= 10
+      ? `spread ${marketSnapshot?.spread?.line} — investigate how this affects minute distribution for each player`
       : null
   };
 }
@@ -973,7 +973,7 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerSeasonSt
 
         // Add recent form if available - show ALL stat types equally for organic analysis
         if (logs) {
-          const formIcon = logs.formTrend === 'hot' ? '[HOT]' : logs.formTrend === 'cold' ? '[COLD]' : '';
+          const formIcon = logs.formTrend === 'hot' ? '[L5 > Season]' : logs.formTrend === 'cold' ? '[L5 < Season]' : '';
           statsText += `  L${logs.gamesAnalyzed} Avg: PTS ${logs.averages?.pts || 'N/A'}, REB ${logs.averages?.reb || 'N/A'}, AST ${logs.averages?.ast || 'N/A'}, 3PM ${logs.averages?.fg3m || 'N/A'} ${formIcon}\n`;
 
           // Show recent games for ALL prop types - no bias toward any stat
@@ -1063,7 +1063,7 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerSeasonSt
 
         // Add recent form if available - show ALL stat types equally for organic analysis
         if (logs) {
-          const formIcon = logs.formTrend === 'hot' ? '[HOT]' : logs.formTrend === 'cold' ? '[COLD]' : '';
+          const formIcon = logs.formTrend === 'hot' ? '[L5 > Season]' : logs.formTrend === 'cold' ? '[L5 < Season]' : '';
           statsText += `  L${logs.gamesAnalyzed} Avg: PTS ${logs.averages?.pts || 'N/A'}, REB ${logs.averages?.reb || 'N/A'}, AST ${logs.averages?.ast || 'N/A'}, 3PM ${logs.averages?.fg3m || 'N/A'} ${formIcon}\n`;
 
           // Show recent games for ALL prop types - no bias toward any stat
@@ -1142,10 +1142,9 @@ function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnap
           underRate: hitRate.underRate,
           avgValue: hitRate.avgValue,
           lastValues: hitRate.values,
-          recommendation: hitRate.recommendation,
           gamesAnalyzed: hitRate.totalGames
         } : null,
-        // LINE MOVEMENT DATA - for Tier 2 Kill Condition analysis
+        // LINE MOVEMENT DATA - for line movement investigation
         lineMovement: movement ? {
           open: movement.open,
           current: movement.current,
@@ -1160,7 +1159,7 @@ function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnap
       };
     });
     
-    // Calculate SCENARIO PROJECTIONS for this player (for Tier 1 Kill Conditions)
+    // Calculate SCENARIO PROJECTIONS for this player (blowout/competitive/baseline)
     const scenarioData = stats ? calculateScenarioProjections(stats, p.props, gameSpread) : null;
     
     // Analyze teammate injury impact
@@ -1184,7 +1183,7 @@ function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnap
         mpg: stats.mpg,
         position: stats.position
       } : null,
-      // SCENARIO PROJECTIONS - for Tier 1 Kill Condition math (pre-calculated, no LLM arithmetic)
+      // SCENARIO PROJECTIONS - pre-calculated for Gary's investigation (no LLM arithmetic)
       scenarioProjections: scenarioData?.projections || null,
       scenarioMeta: scenarioData?.meta || null,
       // Recent form data with home/away splits
@@ -1210,14 +1209,14 @@ function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnap
   });
   
   // Count any kill conditions triggered
-  const killConditionsTriggered = enhancedCandidates.filter(c => 
-    c.scenarioProjections && Object.values(c.scenarioProjections).some(p => p.killCondition?.triggered)
+  const blowoutProjectionsBelowLine = enhancedCandidates.filter(c =>
+    c.scenarioProjections && Object.values(c.scenarioProjections).some(p => p.blowoutScenario?.projectionBelowLine)
   ).length;
-  
-  if (killConditionsTriggered > 0) {
-    console.log(`[NBA Props Context] ⚠️ ${killConditionsTriggered} players have Tier 1 Kill Conditions triggered (blowout risk)`);
+
+  if (blowoutProjectionsBelowLine > 0) {
+    console.log(`[NBA Props Context] ⚠️ ${blowoutProjectionsBelowLine} players have blowout projections below their prop lines`);
   }
-  
+
   return {
     player_stats: {
       summary: playerStats, // Full player stats — no truncation
@@ -1226,7 +1225,7 @@ function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnap
     prop_lines: {
       candidates: enhancedCandidates,
       totalProps: propCandidates.reduce((sum, p) => sum + p.props.length, 0),
-      killConditionsTriggered: killConditionsTriggered
+      blowoutProjectionsBelowLine
     },
     // Game environment context
     game_environment: {
@@ -1622,7 +1621,7 @@ export async function buildNbaPropsAgenticContext(game, playerProps, options = {
     playerGameLogs, // Include game logs in return
     opponentDefense, // Opponent defense profiles for both teams
     narrativeContext, // CRITICAL: Full raw narrative from Gemini
-    // LINE MOVEMENT DATA - for Tier 2 Kill Condition analysis
+    // LINE MOVEMENT DATA - for investigation context
     lineMovementData: {
       movements: lineMovements,
       count: lineMovementCount,
@@ -1657,7 +1656,7 @@ export async function buildNbaPropsAgenticContext(game, playerProps, options = {
         narrativeAvailable: !!narrativeContext,
         lineMovementAvailable: lineMovementCount > 0,
         dataGaps: dataGaps.length > 0 ? dataGaps : null,
-        dataQuality: dataGaps.length === 0 ? 'HIGH' : dataGaps.length <= 1 ? 'MEDIUM' : 'LOW'
+        dataGapCount: dataGaps.length
       }
     }
   };

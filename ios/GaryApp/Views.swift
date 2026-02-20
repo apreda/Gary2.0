@@ -1524,7 +1524,7 @@ struct GaryPicksView: View {
                 // Sport Filter
                 SportFilterBar(selected: $selectedSport, availableSports: availableSports, showAll: true)
                     .padding(.bottom, 4)
-                    .onChange(of: selectedSport) { _, _ in
+                    .onChange(of: selectedSport) { _ in
                         selectedConference = "All" // Reset conference when sport changes
                     }
 

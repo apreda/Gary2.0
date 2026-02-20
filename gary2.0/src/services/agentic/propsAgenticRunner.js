@@ -4,36 +4,22 @@
  * Gary can call tools mid-analysis to fetch stats organically
  */
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { openaiService, GEMINI_FLASH_MODEL } from '../openaiService.js';
+import { GEMINI_FLASH_MODEL } from '../openaiService.js';
 import { ballDontLieService } from '../ballDontLieService.js';
-// quantumService removed (2026-02) — was tracking-only, never filtered picks
 import { geminiGroundingSearch } from './scoutReport/scoutReportBuilder.js';
 import { fetchNbaInjuriesForGame } from '../nbaInjuryReportService.js';
 import { nbaSeason, nhlSeason, nflSeason } from '../../utils/dateUtils.js';
-
+import { getConstitution as getConstitutionWithBaseRules } from './constitution/index.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
-// PROPS MODEL POLICY (ALL USE FLASH)
-// ═══════════════════════════════════════════════════════════════════════════
-// ALL Props: Use Gemini 3 Flash (avoid quota issues)
+// PROPS MODEL POLICY — All sports use Gemini 3 Flash (quota management)
 // ═══════════════════════════════════════════════════════════════════════════
 const PROPS_MODEL_FLASH = GEMINI_FLASH_MODEL;
 
-// Get the right model for props based on sport (always Flash now)
 function getPropsModelForSport(sportLabel) {
   console.log(`[Props] Using Gemini 3 Flash for ${sportLabel} props (quota management)`);
   return PROPS_MODEL_FLASH;
 }
-
-// Default for backward compatibility
-const PROPS_MODEL = PROPS_MODEL_FLASH;
-import { safeJsonParse } from './agenticUtils.js';
-// Import getConstitution from index to get BASE_RULES + sport constitution
-import { getConstitution as getConstitutionWithBaseRules } from './constitution/index.js';
-// Keep direct imports for backwards compatibility (3-stage flow)
-import { NFL_PROPS_CONSTITUTION } from './constitution/nflPropsConstitution.js';
-import { NBA_PROPS_CONSTITUTION } from './constitution/nbaPropsConstitution.js';
-import { NHL_PROPS_CONSTITUTION } from './constitution/nhlPropsConstitution.js';
 
 // Lazy-initialize Gemini client for props
 let geminiProps = null;
@@ -60,15 +46,11 @@ const PICK_SCHEMA = {
     line: { type: 'number', description: 'The line value (use 0.5 for TD props)' },
     bet: { type: 'string', enum: ['over', 'under', 'yes'] },
     odds: { type: 'number' },
-    confidence: { type: 'number', description: 'Your confidence level (0.50-1.0).' },
-    // Thesis Gate fields - forces dual-scenario thinking before picking a side
-    over_thesis: { type: 'string', description: '2 sentences max: The game script where the OVER/YES hits. What has to happen?' },
-    under_thesis: { type: 'string', description: '2 sentences max: The game script where the UNDER/NO hits. What kills the OVER?' },
-    thesis_lean: { type: 'string', enum: ['OVER', 'UNDER', 'COIN-FLIP'], description: 'Which thesis is more believable given the matchup?' },
-    rationale: { type: 'string', description: '5-7 sentences explaining why you like this pick.' },
-    key_stats: { type: 'array', items: { type: 'string' }, description: 'Key stats supporting your pick with source attribution.' }
+    confidence: { type: 'number', description: 'Your confidence level (0.50-0.95).' },
+    rationale: { type: 'string', description: 'Your full reasoning for this pick. Cite specific stats and matchup factors. Same depth as a game pick rationale.' },
+    key_stats: { type: 'array', items: { type: 'string' }, description: 'Key stats supporting your pick.' }
   },
-  required: ['player', 'team', 'prop', 'line', 'bet', 'odds', 'confidence', 'over_thesis', 'under_thesis', 'thesis_lean', 'rationale', 'key_stats']
+  required: ['player', 'team', 'prop', 'line', 'bet', 'odds', 'confidence', 'rationale', 'key_stats']
 };
 
 // Common tools available for all sports (non-NFL)
@@ -76,20 +58,7 @@ const FINALIZE_TOOL = {
   type: 'function',
   function: {
     name: 'finalize_props',
-    description: `Output your final prop picks. 
-
-BLOCKING RULE: BEFORE CALLING THIS TOOL, you MUST have completed BILATERAL STEEL MAN analysis:
-- For each pick, you should have written CASE FOR OVER and CASE FOR UNDER
-- Your chosen side should CLEARLY beat the opposing case
-- If you haven't written bilateral cases yet, STOP and do that first
-
-REQUIREMENTS FOR EACH PICK:
-1. EDGE IDENTIFIED: What specific factor exists TONIGHT that the line hasn't captured?
-2. LINE LOGIC UNDERSTOOD: Why did books set this line? What are you disagreeing with?
-3. MECHANISM EXPLAINED: HOW does this player hit? (Not rankings - actual game action)
-4. RISK ACKNOWLEDGED: What's the specific scenario where this loses?
-
-Your rationale MUST be SPECIFIC with receipts. If your thesis is "average > line", you haven't found edge - you've described why the line exists.`,
+    description: `Output your final prop picks. Include your full reasoning in the rationale field — same depth and quality as a game pick rationale.`,
     parameters: {
       type: 'object',
       properties: {
@@ -336,21 +305,11 @@ function getPropsToolsForSport(sportLabel, regularOnly = false) {
   return SPORT_PROP_TOOLS[sportLabel] || COMMON_PROP_TOOLS;
 }
 
-// Legacy alias for backwards compatibility
-const PROPS_TOOL_DEFINITIONS = NFL_PROP_TOOLS;
-
 // Map of sport labels to constitution keys (for getConstitutionWithBaseRules)
 const SPORT_CONSTITUTION_KEYS = {
   'NFL': 'NFL_PROPS',
   'NBA': 'NBA_PROPS',
   'NHL': 'NHL_PROPS',
-};
-
-// Legacy map for backwards compatibility (3-stage flow uses these directly)
-const SPORT_CONSTITUTIONS_LEGACY = {
-  'NFL': NFL_PROPS_CONSTITUTION,
-  'NBA': NBA_PROPS_CONSTITUTION,
-  'NHL': NHL_PROPS_CONSTITUTION,
 };
 
 /**
@@ -401,138 +360,17 @@ const GEMINI_SAFETY_SETTINGS = [
 ];
 
 /**
- * Call Gemini with tools for props iteration
- * Uses startChat() pattern like game picks for proper context management
- */
-async function callGeminiForProps(messages, tools, modelName) {
-  const gemini = getGeminiForProps();
-  
-  // Convert tools to Gemini function declarations
-  const functionDeclarations = convertToolsForGemini(tools);
-  
-  const geminiModel = gemini.getGenerativeModel({
-    model: modelName || PROPS_MODEL,
-    safetySettings: GEMINI_SAFETY_SETTINGS,
-    tools: [{ functionDeclarations }],
-    generationConfig: {
-      temperature: 1.0, // Gemini 3 optimized default - DO NOT lower (causes looping on math tasks)
-      topP: 0.95, // Include plausible longshots in reasoning - helps Gary find non-obvious edges
-      maxOutputTokens: 8000
-    }
-  });
-
-  // Convert messages to Gemini format
-  let systemInstruction = '';
-  const contents = [];
-  
-  for (const msg of messages) {
-    if (msg.role === 'system') {
-      systemInstruction += (systemInstruction ? '\n\n' : '') + msg.content;
-    } else if (msg.role === 'user') {
-      contents.push({
-        role: 'user',
-        parts: [{ text: msg.content }]
-      });
-    } else if (msg.role === 'assistant') {
-      // Handle assistant messages that might have tool_calls
-      if (msg.tool_calls && msg.tool_calls.length > 0) {
-        const parts = [];
-        if (msg.content) {
-          parts.push({ text: msg.content });
-        }
-        for (const tc of msg.tool_calls) {
-          parts.push({
-            functionCall: {
-              name: tc.function.name,
-              args: JSON.parse(tc.function.arguments)
-            }
-          });
-        }
-        contents.push({ role: 'model', parts });
-      } else if (msg.content) {
-        contents.push({
-          role: 'model',
-          parts: [{ text: msg.content }]
-        });
-      }
-    } else if (msg.role === 'tool') {
-      // Handle tool responses - use 'function' role for Gemini
-      contents.push({
-        role: 'function',
-        parts: [{
-          functionResponse: {
-            name: msg.name || msg.tool_call_id || 'tool_response',
-            response: { content: msg.content }
-          }
-        }]
-      });
-    }
-  }
-
-  // Create chat session with system instruction (like game picks)
-  const chat = geminiModel.startChat({
-    history: contents.slice(0, -1), // All but the last message
-    systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined
-  });
-
-  // Send the last message
-  const lastMessage = contents[contents.length - 1];
-  let lastContent = '';
-  
-  if (lastMessage?.role === 'function') {
-    // For function responses, we need to send them differently
-    // Extract function response parts
-    lastContent = lastMessage.parts;
-  } else {
-    lastContent = lastMessage?.parts?.map(p => p.text || '').join('') || '';
-  }
-
-  const startTime = Date.now();
-  const result = await chat.sendMessage(lastContent);
-  const response = await result.response;
-  const duration = Date.now() - startTime;
-  console.log(`[Props Gemini] Response in ${duration}ms`);
-
-  // Convert Gemini response to OpenAI-compatible format
-  const candidate = response.candidates?.[0];
-  const parts = candidate?.content?.parts || [];
-
-  // Parse response parts
-  const functionCallParts = parts.filter(p => p.functionCall);
-  const textParts = parts.filter(p => p.text).map(p => p.text);
-
-  let toolCalls = undefined;
-  if (functionCallParts.length > 0) {
-    toolCalls = functionCallParts.map((fc, i) => ({
-      id: `call_${Date.now()}_${i}`,
-      type: 'function',
-      function: { name: fc.functionCall.name, arguments: JSON.stringify(fc.functionCall.args || {}) }
-    }));
-  }
-
-  return {
-    choices: [{
-      index: 0,
-      message: {
-        role: 'assistant',
-        content: functionCallParts.length > 0 ? null : textParts.join(''),
-        tool_calls: toolCalls
-      },
-      finish_reason: functionCallParts.length > 0 ? 'tool_calls' : 'stop'
-    }],
-    usage: {
-      prompt_tokens: response.usageMetadata?.promptTokenCount || 0,
-      completion_tokens: response.usageMetadata?.candidatesTokenCount || 0
-    }
-  };
-}
-
-/**
  * Handle tool calls during props iteration - SPORT-AWARE
  * Uses BDL MCP for accurate player stats per sport
  */
 async function handlePropsToolCall(toolCall, sportKey, sportLabel) {
-  const args = JSON.parse(toolCall.function.arguments);
+  let args;
+  try {
+    args = JSON.parse(toolCall.function.arguments);
+  } catch (e) {
+    console.warn(`[Props] Failed to parse tool call arguments: ${e.message}`);
+    return { error: `Malformed tool call arguments. Please retry with valid JSON.` };
+  }
   const functionName = toolCall.function.name;
 
   // Determine which sport we're handling
@@ -1534,13 +1372,6 @@ async function handlePropsToolCall(toolCall, sportKey, sportLabel) {
 }
 
 /**
- * Validate props output against tool call history
- * Checks that key_stats cite valid sources and contain verifiable data
- * @param {Array} picks - The prop picks with key_stats
- * @param {Array} toolCallHistory - Array of {tool, result} from the iteration loop
- * @returns {Object} - { validatedPicks, warnings, invalidStats }
- */
-/**
  * Apply 2-props-per-game constraint with player diversification
  * 
  * RULES:
@@ -1851,15 +1682,19 @@ function buildPropsPass2SteelManMessage(candidates, sportLabel = 'NFL') {
 YOUR CANDIDATES:
 ${candidateList}
 
-REQUIRED OUTPUT FORMAT - Write this for each candidate:
+REQUIRED OUTPUT FORMAT - Write this for each candidate (give BOTH cases equal depth):
 
 **[PLAYER NAME] - [PROP] [LINE]**
 
-CASE FOR OVER:
-[Write 3-4 detailed sentences. Explain the specific mechanism that pushes production ABOVE the line tonight. Not "his average is higher" - that's why the line exists. What's DIFFERENT tonight?]
+${Math.random() > 0.5 ? `CASE FOR OVER:
+[Write 3-4 detailed sentences. What specific mechanism pushes production ABOVE the line tonight? Not "his average is higher" - that's what created the line. What's DIFFERENT tonight?]
 
 CASE FOR UNDER:
-[Write 3-4 detailed sentences. Explain the genuine risk. Not "he might play badly" - be specific. What caps his ceiling? Blowout? Matchup? Usage change?]
+[Write 3-4 detailed sentences. What specific mechanism LIMITS production BELOW the line tonight? Not "he might play badly" - what structural factor caps production? Scheme? Game script? Usage change?]` : `CASE FOR UNDER:
+[Write 3-4 detailed sentences. What specific mechanism LIMITS production BELOW the line tonight? Not "he might play badly" - what structural factor caps production? Scheme? Game script? Usage change?]
+
+CASE FOR OVER:
+[Write 3-4 detailed sentences. What specific mechanism pushes production ABOVE the line tonight? Not "his average is higher" - that's what created the line. What's DIFFERENT tonight?]`}
 
 VERDICT: [OVER/UNDER/PASS] because [one sentence explaining which case is stronger]
 
@@ -1888,7 +1723,7 @@ async function runPropsIterationLoop({ systemPrompt, userMessage, sportKey, spor
   const toolMode = regularOnly && sportLabel === 'NFL' ? '(regular props only - no TDs)' : '';
   console.log(`[Props] Using ${sportLabel} tools ${toolMode}: ${sportTools.map(t => t.function.name).join(', ')}`);
   
-  // Get the right model for this sport (Pro for NFL, Flash for others)
+  // Get the props model for this sport
   const propsModel = getPropsModelForSport(sportLabel);
   
   // Create model with tools
@@ -1907,7 +1742,7 @@ async function runPropsIterationLoop({ systemPrompt, userMessage, sportKey, spor
       // Gemini 3 thinkingConfig - use thinkingLevel (replaces legacy thinkingBudget)
       thinkingConfig: {
         includeThoughts: true,
-        thinkingLevel: 'low' // "low" = fast tool dispatch, pattern matching (~5-8s)
+        thinkingLevel: 'high' // "high" = deep reasoning for investigation + evaluation
       }
     }
   });
@@ -2027,7 +1862,7 @@ async function runPropsIterationLoop({ systemPrompt, userMessage, sportKey, spor
         response = result.response;
 
         // Inject the appropriate next pass
-        if (!_pass2Injected && playersInvestigated >= 3) {
+        if (!_pass2Injected && playersInvestigated >= 5) {
           _pass2Injected = true;
           const candidates = buildInvestigatedCandidates();
           console.log(`[Props] PIPELINE GATE: finalize before Pass 2 — injecting bilateral cases (${playersInvestigated} players investigated)`);
@@ -2175,7 +2010,7 @@ Call finalize_props now.`);
       // Check if investigation threshold met → inject Pass 2
       if (!_pass2Injected) {
         const playersInvestigated = getInvestigatedPlayerCount();
-        if (playersInvestigated >= 3 && iteration < maxIterations - 3) {
+        if (playersInvestigated >= 5 && iteration < maxIterations - 3) {
           _pass2Injected = true;
           const candidates = buildInvestigatedCandidates();
           console.log(`[Props] ✓ ${playersInvestigated} players investigated — injecting PASS 2 (bilateral cases)`);
@@ -2379,416 +2214,6 @@ Call finalize_props NOW with your 2 best prop picks.`;
 }
 
 /**
- * Stage 1: Props Hypothesis (LEGACY - kept for non-NFL sports)
- * Form initial hypotheses about which props have value
- */
-async function runPropsHypothesisStage({ gameSummary, propCandidates, playerStats, sportLabel = 'NFL', tokenData = {}, narrativeContext = null }) {
-  const constitution = getConstitution(sportLabel);
-  
-  // Sport-specific context for using season stats (non-prescriptive)
-  const statsGuidance = sportLabel === 'NHL' ? `
-## NHL PROPS - USE YOUR JUDGMENT
-You have REAL player season stats available (SOG/G, goals, assists, points).
-Compare these to the prop lines and use your judgment about what constitutes value.
-Consider recent form, matchup context, and any other factors you deem relevant.
-` : sportLabel === 'NBA' ? `
-## NBA PROPS - USE YOUR JUDGMENT  
-You have REAL player season stats available (PPG, RPG, APG, 3PG).
-Compare these to the prop lines and use your judgment about what constitutes value.
-Consider recent form, matchup context, and any other factors you deem relevant.
-` : '';
-
-  const systemPrompt = `
-<reference_data>
-${constitution}
-${statsGuidance}
-</reference_data>
-
-<identity>
-You are Gary the Bear, scouting player props for this game.
-Use ONLY the verified stats from the reference data, game-by-game numbers explicitly listed, and numbers found via Google Search grounding.
-</identity>
-
-<task>
-Look at the player stats provided and identify 3-5 players who stand out to you.
-
-FIRST: Read the COMPREHENSIVE GAME CONTEXT section carefully. It contains:
-- Breaking News (last-minute scratches, trade rumors, roster moves)
-- Motivation Factors (revenge games, milestones, contract years)
-- Schedule Context (B2B fatigue, trap games, rest advantage)
-- Player-Specific (load management, matchup history, role changes)
-- Team Trends (streaks, home/away context)
-
-These factors tell you WHICH stats matter most for this game.
-
-Then analyze each player's situation:
-- What's this player averaging this season?
-- How have they been playing lately - hot, cold, or steady?
-- Does the CONTEXT favor them? (revenge game? opponent injuries? fresh legs?)
-- Is the line set too low or too high based on what you see?
-</task>
-
-<response_format>
-You MUST respond with ONLY valid JSON. No text before or after. Start with \`\`\`json and end with \`\`\`.
-
-\`\`\`json
-{
-  "top_opportunities": [
-    {
-      "player": "Player Name",
-      "prop_type": "${sportLabel === 'NBA' ? 'points' : sportLabel === 'NHL' ? 'shots_on_goal' : 'pass_yds'}",
-      "line": 24.5,
-      "lean": "over",
-      "take": "Your quick take on this player - why you like them in this spot"
-    }
-  ],
-  "game_context": "Brief note on how you see this game playing out",
-  "concerns": ["Any concerns worth noting"]
-}
-\`\`\`
-
-Output ONLY the JSON block above. No introduction, no preamble, no analysis outside the JSON.
-
-Guidelines:
-- Look at ALL stat types (${sportLabel === 'NBA' ? 'points, rebounds, assists, threes, blocks, steals, PRA' : sportLabel === 'NHL' ? 'shots, goals, assists, points' : 'pass yards, rush yards, receiving yards'})
-- If a player's season average is way above their line, that's interesting
-- Factor in recent form
-
-Context categories to check:
-  * BREAKING NEWS: Last-minute scratches, trade rumors, roster moves
-  * MOTIVATION: Revenge games (vs former team), milestones, contract year players
-  * SCHEDULE: B2B fatigue, trap games, altitude, rest advantage
-  * PLAYER-SPECIFIC: Role changes, load management risk, matchup history
-  * TEAM TRENDS: Win/lose streaks, home/away splits
-
-INJURY IMPACT ON PROPS:
-Before citing ANY injury as a factor, ask yourself:
-- "How long has this player been out?" Check the duration tag in the injury report.
-- "Do the recent game logs (games WITHOUT this player) show a measurable usage shift?" If not, don't assume one exists.
-- "Am I citing this injury because the DATA shows an impact, or because it FEELS like it should matter?"
-- For long absences: The current prop lines reflect the current roster. Investigate the actual usage data.
-- For recent absences: Investigate game logs for actual usage shift data before citing.
-</response_format>
-
-<negative_constraints>
-PLAYER NAME ACCURACY:
-- ALWAYS use FULL NAMES (first + last) when referencing players.
-- ONLY trust the "injuryReport" field for injury status - it uses FULL NAMES from BDL.
-- Do NOT assume a player is injured unless they appear in the injuryReport.
-- If narrative context mentions just a last name as OUT, VERIFY which player from the injury report.
-
-PLAYER-TEAM VERIFICATION:
-- The prop data may show OUTDATED team assignments. Check the ROSTER MOVES section in the context for 2025 trades/signings.
-- If a player changed teams in 2025, use their CURRENT team.
-
-STATS ACCURACY - ZERO TOLERANCE:
-- ONLY cite stats you see in the provided data (game logs, season stats, playerStatsPreview).
-- Calculate averages YOURSELF from the provided game-by-game numbers.
-- If stats say "unavailable", focus on matchup/context instead.
-- Do NOT invent specific averages or claim stats you didn't see.
-- "Recent strong performances" is better than a made-up specific number.
-- If you don't have a specific number, say "stats unavailable" - do NOT make up numbers.
-- Every claim in your rationale MUST be traceable to provided data.
-- If narrative context conflicts with injuryReport, trust injuryReport.
-- WHEN IN DOUBT, LEAVE IT OUT.
-</negative_constraints>
-`;
-
-  // Enhanced prop candidates with season stats for NHL and NBA
-  // Allow up to 14 players (7 per team) for more comprehensive analysis
-  const enhancedCandidates = propCandidates.slice(0, 14).map(p => {
-    const base = {
-      player: p.player,
-      team: p.team,
-      props: p.props
-    };
-    
-    // Include season stats if available (from tokenData for NHL or NBA)
-    if ((sportLabel === 'NHL' || sportLabel === 'NBA') && tokenData?.prop_lines?.candidates) {
-      const match = tokenData.prop_lines.candidates.find(c => c.player === p.player);
-      if (match?.seasonStats) {
-        base.seasonStats = match.seasonStats;
-      }
-      // Also include recent form data if available
-      if (match?.recentForm) {
-        base.recentForm = match.recentForm;
-      }
-    }
-    
-    return base;
-  });
-
-  // Extract injury data from tokenData for explicit inclusion
-  const injuryReport = tokenData?.injury_report?.notable || [];
-
-  // Include COMPREHENSIVE narrative context if available
-  // This includes ALL factors fetched upfront: breaking news, motivation, schedule, player context, etc.
-  // GEMINI 3 BEST PRACTICE: No emojis in input data (causes tokenization fragmentation)
-  const narrativeSection = narrativeContext ? `
-<narrative_context>
-COMPREHENSIVE GAME CONTEXT (CRITICAL - READ ALL SECTIONS BEFORE ANALYSIS)
-
-This context was fetched UPFRONT so you know ALL relevant factors BEFORE choosing which stats to investigate.
-
-${narrativeContext}
-
-BETTING SIGNALS NOTE: If you see any line movement or public % data above, treat it as a MINOR observation only - it should NEVER be the primary reason for any pick.
-</narrative_context>
-` : '';
-
-  // Format injury report for explicit inclusion - BDL is SOURCE OF TRUTH
-  const injurySection = injuryReport.length > 0 
-    ? `OFFICIAL BDL INJURY REPORT (ONLY TRUST THIS FOR INJURY STATUS):\n` + injuryReport.map(inj => 
-        `- ${inj.player} (${inj.team || 'Unknown'}) - ${inj.status}: ${inj.description || 'No details'}`
-      ).join('\n')
-    : 'OFFICIAL BDL INJURY REPORT: No significant injuries reported for these teams';
-
-  const userContent = JSON.stringify({
-    matchup: gameSummary.matchup,
-    tipoff: gameSummary.tipoff,
-    odds: gameSummary.odds,
-    propCandidates: enhancedCandidates,
-    playerStatsPreview: playerStats, // Full player stats — no truncation
-    injuryReport: injurySection,
-    // CRITICAL: Full narrative context so Gary knows all factors UPFRONT
-    comprehensiveContext: narrativeSection || null
-  });
-
-  const messages = [
-    { role: 'system', content: systemPrompt },
-    { role: 'user', content: userContent }
-  ];
-
-  const raw = await openaiService.generateResponse(messages, {
-    model: PROPS_MODEL, // Gemini 3 Flash for props (faster, avoids Pro quota issues)
-    temperature: 1.0, // Gemini 3 optimized: "strongly recommend keeping temperature at 1.0"
-    topP: 0.95,
-    maxTokens: 8000
-  });
-
-  const parsed = safeJsonParse(raw, null);
-  if (!parsed) {
-    throw new Error('Props hypothesis stage failed to return valid JSON');
-  }
-
-  return {
-    top_opportunities: Array.isArray(parsed.top_opportunities) ? parsed.top_opportunities.slice(0, 5) : [],
-    game_context: parsed.game_context || parsed.game_script_expectation || '',
-    concerns: Array.isArray(parsed.concerns) ? parsed.concerns.slice(0, 3) : []
-  };
-}
-
-/**
- * Stage 2: Props Investigator
- * Dig deeper into the scouted props with detailed stats
- */
-async function runPropsInvestigatorStage({ gameSummary, hypothesis, tokenData, propCandidates }) {
-  const systemPrompt = `
-You are Gary the Bear, digging deeper into the props you scouted.
-
-## YOUR TASK
-For each player you identified in Stage 1, look at the detailed stats and ask yourself:
-- Does the season average support this pick?
-- How has this player been playing lately? Hot streak or slump?
-- Is this player consistent or all over the place game to game?
-- Does playing at home/away matter for them?
-
-If the numbers back up your initial take, keep the prop. If not, drop it and explain why.
-
-## RESPONSE FORMAT (STRICT JSON - REQUIRED)
-You MUST respond with ONLY valid JSON. No text before or after. Start with \`\`\`json and end with \`\`\`.
-
-\`\`\`json
-{
-  "validated_props": [
-    {
-      "player": "Player Name",
-      "prop_type": "points",
-      "line": 24.5,
-      "lean": "over",
-      "confidence": 0.65,
-      "reasoning": "Brief explanation of what you found in the stats - 1-2 sentences about why this still looks good"
-    }
-  ],
-  "dropped_props": [
-    {"player": "Name", "reason": "Why you're backing off this one"}
-  ]
-}
-\`\`\`
-
-CRITICAL: Output ONLY the JSON block above. No introduction, no analysis paragraphs, no commentary outside the JSON.
-`;
-
-  const userContent = JSON.stringify({
-    matchup: gameSummary.matchup,
-    scouted_props: hypothesis.top_opportunities,
-    game_context: hypothesis.game_context,
-    data: {
-      player_stats: tokenData.player_stats,
-      prop_lines: tokenData.prop_lines,
-      injuries: tokenData.injury_report
-    },
-    propDetails: propCandidates.slice(0, 8)
-  });
-
-  const messages = [
-    { role: 'system', content: systemPrompt },
-    { role: 'user', content: userContent }
-  ];
-
-  const raw = await openaiService.generateResponse(messages, {
-    model: PROPS_MODEL, // Gemini 3 Flash for props
-    temperature: 1.0, // Gemini 3 optimized: "strongly recommend keeping temperature at 1.0"
-    topP: 0.95,
-    maxTokens: 8000
-  });
-
-  const parsed = safeJsonParse(raw, null);
-  if (!parsed) {
-    throw new Error('Props investigator stage failed to return valid JSON');
-  }
-
-  return {
-    validated_props: Array.isArray(parsed.validated_props) ? parsed.validated_props : [],
-    dropped_props: Array.isArray(parsed.dropped_props) ? parsed.dropped_props : [],
-    gaps: Array.isArray(parsed.gaps) ? parsed.gaps : []
-  };
-}
-
-// Sports that use the 2-per-game rule (quality over quantity)
-const TWO_PER_GAME_SPORTS = ['NBA', 'NHL'];
-
-/**
- * Stage 3: Props Judge
- * Render final prop picks with organic, Gary-style rationale
- */
-async function runPropsJudgeStage({ gameSummary, investigation, playerProps, sportLabel = 'NFL' }) {
-  // Sport-specific pick counts: NBA/NHL = exactly 2, NFL = 3-5
-  const usesTwoPerGame = TWO_PER_GAME_SPORTS.includes(sportLabel);
-  const pickCountText = usesTwoPerGame ? 'exactly 2' : '3-5';
-  const maxPicks = usesTwoPerGame ? 2 : 5;
-
-  const systemPrompt = `
-<identity>
-You are Gary the Bear, finalizing your player prop picks.
-Write rationales like you're explaining your pick to a friend - conversational, insightful, and rooted in what you see happening on the court/ice.
-</identity>
-
-<task>
-1. Review the validated props from the Analyst
-2. Select the TOP ${pickCountText} props${usesTwoPerGame ? ' - these are your most confident selections' : ''}
-3. Write an ORGANIC rationale for each pick (5-7 sentences) - tell the STORY of the game flow, defenders, and motivation.
-4. Provide 3-4 KEY STATS bullets. This is where you put the dry math: "L5 avg: 26.5 vs line 24.5", season averages, and shooting percentages.
-</task>
-
-<rationale_style>
-Write like Gary explains regular game picks - conversational and story-driven. 5-7 sentences that paint the full picture.
-
-Use natural, conversational tone in the RATIONALE. Hard numbers and line comparisons go in the KEY_STATS bullets. Use player names and specific context. Paint the whole picture - context, matchup, recent form, and conclusion.
-
-EXAMPLE RATIONALE (NBA rebounds prop):
-"Jarrett Allen is about to feast on the glass tonight. With Evan Mobley sidelined, the Cavaliers are down their second-best rebounder, and that workload has to go somewhere. Allen has been an absolute monster all season, pulling down nearly 11 boards per game, and he's going to be the only true big man Cleveland trusts in crunch time. The Hornets are one of the worst rebounding teams in the league, ranking dead last in offensive boards and bottom-five in overall rebounding rate. When you combine Allen's motor, his positional advantage, and the extra minutes he'll see without Mobley, this feels like one of the safest props on the board tonight. Give me the over."
-
-EXAMPLE KEY_STATS (for the above):
-["Season avg: 10.8 RPG (career high)", "L5 avg: 12.4 vs line 9.5", "Mobley out = extra 4-5 boards available per game", "Charlotte ranks 28th in defensive rebounding rate"]
-</rationale_style>
-
-<response_format>
-{
-  "picks": [
-    {
-      "player": "Player Name",
-      "team": "Team Name",
-      "prop": "pts 25.5",
-      "line": 25.5,
-      "bet": "over",
-      "odds": -110,
-      "confidence": 0.65-0.85,
-      "rationale": "Your organic, conversational analysis - 5-7 sentences explaining why you like this pick. Paint the full picture: context, recent form, matchup advantage, and your confident conclusion.",
-      "key_stats": ["Stat 1 that supports your pick", "Stat 2 that supports your pick", "Stat 3 that supports your pick"]
-    }
-  ]
-}
-
-Guidelines:
-- ${usesTwoPerGame ? `EXACTLY ${maxPicks} picks - your most confident ones` : `Up to ${maxPicks} picks`}
-- Rationale should be 5-7 sentences, reading like sports commentary
-- key_stats should be 3-4 bullet points with the most compelling stats
-- Reference the player's recent performance naturally
-- Explain the matchup in plain terms
-- End with a confident take on why this hits${usesTwoPerGame ? `
-- These should be picks you'd confidently tell a friend about` : ''}
-</response_format>
-
-<negative_constraints>
-PLAYER-TEAM VERIFICATION:
-- Before finalizing ANY pick, verify the player's CURRENT TEAM from the roster moves in the context.
-- If a player was traded or signed as a free agent in 2025, use their NEW team.
-- The odds data may show outdated team assignments.
-
-STATS ACCURACY - ZERO TOLERANCE:
-- The ONLY stats you can cite are: stats marked "VERIFIED" in the investigation data, specific game numbers from game logs, and line hit counts you calculated from actual provided games.
-- Before writing ANY number, ask: "Did I see this EXACT number in the data provided?" If NO, do NOT use it.
-- Calculate averages YOURSELF from the provided game-by-game numbers.
-- If stats are marked "unavailable", focus on matchup/context, not numbers.
-- Say "recent strong performances" instead of inventing specific averages.
-- key_stats: Only include stats you can VERIFY from the provided context.
-
-RATIONALE RULES:
-- Do NOT use "THE EDGE" / "WHY IT HITS" / "THE RISK" headers.
-- Do NOT use "Line X | Season Avg: Y | Edge: +Z" format in the rationale text.
-- Do NOT use betting jargon (line movement, EV, edge, sharp money, fade, steam).
-- Do NOT use data scientist language (convergence of factors, metrics indicate).
-- ALWAYS use FULL NAMES (first + last) when referencing players.
-- VERIFY all stats before writing - use ONLY numbers from the KEY PLAYER STATS section.
-</negative_constraints>
-`;
-
-  // Build a lookup map for odds
-  const oddsMap = {};
-  for (const prop of playerProps) {
-    const key = `${prop.player}_${prop.prop_type}_${prop.line}`;
-    oddsMap[key] = {
-      over_odds: prop.over_odds,
-      under_odds: prop.under_odds
-    };
-  }
-
-  const userContent = JSON.stringify({
-    matchup: gameSummary.matchup,
-    tipoff: gameSummary.tipoff,
-    validated_props: investigation.validated_props,
-    available_odds: playerProps.slice(0, 50).map(p => ({
-      player: p.player,
-      prop_type: p.prop_type,
-      line: p.line,
-      over_odds: p.over_odds,
-      under_odds: p.under_odds
-    }))
-  });
-
-  const messages = [
-    { role: 'system', content: systemPrompt },
-    { role: 'user', content: userContent }
-  ];
-
-  const raw = await openaiService.generateResponse(messages, {
-    model: PROPS_MODEL, // Gemini 3 Flash for props
-    temperature: 1.0, // Gemini 3 optimized: "strongly recommend keeping temperature at 1.0"
-    topP: 0.95,
-    maxTokens: 8000
-  });
-
-  const parsed = safeJsonParse(raw, null);
-  if (!parsed || !Array.isArray(parsed.picks)) {
-    throw new Error('Props judge stage failed to return valid JSON');
-  }
-
-  return parsed.picks;
-}
-
-
-/**
  * Format game time for display
  */
 function formatGameTime(timeString) {
@@ -2847,13 +2272,14 @@ Current Season: ${seasonLabel}
 (CRITICAL: Ensure you are looking for stats from the ${seasonLabel} season. If it is January 2026, you are in the middle of the ${seasonLabel} season.)
 
 ## WHO YOU ARE
-You are an INDEPENDENT THINKER. You investigate, understand, and decide on your own.
+You are a DATA ANALYST and an INDEPENDENT THINKER. You read numbers and draw statistical conclusions. You investigate, understand, and decide on your own.
 
-You aren't a spreadsheet. You're a scout. You investigate whether recent performance changes reflect structural shifts or variance. You distinguish between narratives and matchup-specific edges. You know when books have set a line based on averages that don't capture TONIGHT'S specific situation. You don't follow consensus—you make YOUR OWN picks.
+You do NOT have scheme knowledge, film knowledge, or tactical expertise. You CANNOT predict how plays will unfold or how matchups will play out tactically. You CAN analyze statistical patterns, usage data, game logs, and matchup numbers. If a conclusion requires knowledge beyond the stats (defensive scheme tendencies, coaching adjustments, play-calling), you cannot draw it — stick to what the data shows.
+
+You investigate whether recent performance changes reflect structural shifts or variance. You distinguish between narratives and matchup-specific edges. You know when books have set a line based on averages that don't capture TONIGHT'S specific situation. You don't follow consensus—you make YOUR OWN picks.
 
 ## YOUR VOICE & TONE
-- **Storytelling**: Paint a picture of the game flow. "I see Donovan Mitchell carving up that Portland defense..."
-- **Confident but not cocky**: You've done the work, you trust your eyes.
+- **Confident but not cocky**: You've done the work, you trust the data.
 - **Natural**: Sound like a real analyst having a conversation, not an AI with canned phrases.
 
 ## THE FOUR INVESTIGATIONS (Your Core Framework)
@@ -2862,27 +2288,27 @@ You are a GAME ANALYST, not a betting market analyst. You investigate GAME INFO.
 Before finalizing ANY prop, run these investigations (in whatever order makes sense):
 
 **1. INVESTIGATE THE MISMATCH**
-Ask: What structural factors about TONIGHT's game create a production opportunity this player isn't priced for?
-- Things that might matter: role changes, injury vacuums, scheme vulnerabilities, minutes situations. Investigate what's real tonight vs what's narrative.
-- If you can't identify a specific mismatch, you might just be agreeing with the market.
+Ask: What structural factor exists tonight that changes this player's expected production — in EITHER direction?
+- Things that might matter: role changes (up OR down), injury cascades, scheme matchups (exploitable OR limiting), minutes situations. Investigate what's real tonight vs what's narrative.
+- If you can't identify a specific mismatch in either direction, you might just be agreeing with the market.
 
 **2. INVESTIGATE THE GAME LOGIC**
 Ask: Why is this line set at this number? What game factors are the books pricing in?
-- Then ask: Do I see game factors the books might have underweighted? Or does my view align with their assessment?
+- Then ask: Do I see game factors the books might have underweighted? This applies to BOTH directions — maybe the UNDER is underpriced because of a defensive matchup the line doesn't capture, or the OVER is underpriced because of a role change.
 - Example: "Murray's line is 8.5 assists. The line respects it's a small sample against weak opponents. MY view is the role change is real."
 
 **3. INVESTIGATE THE MECHANISM**
-Ask: What is the on-court/on-ice action that creates this production opportunity?
+Ask: What is the on-court/on-ice action that drives production ABOVE or BELOW the line tonight?
 - A ranking alone doesn't tell you if it's structural or noise. Investigate the mechanism behind it.
-- Example: "They're 27th against centers" — ask: Does this reflect a specific scheme weakness, or schedule luck? What mechanism explains it?
-- Example with mechanism: "They lack a vertical rim protector since the starter went down. He scores 68% of points in the paint."
+- OVER mechanism: "They lack a vertical rim protector since the starter went down. He scores 68% of points in the paint."
+- UNDER mechanism: "Their perimeter defense switches everything. His assist rate drops 38% against switching schemes."
 - If your only support is a ranking without an underlying mechanism, dig deeper.
 
-**4. INVESTIGATE THE FLOOR**
-What happens when things go wrong? Sharps think about downside before committing.
-- "Even if he only plays 28 minutes, at his rate he still projects to..."
-- "Even if the game becomes a blowout, his first-half production should..."
-- If the floor doesn't support the line, no mismatch saves you.
+**4. INVESTIGATE THE FLOOR AND CEILING**
+Sharps think about downside AND upside limits before committing.
+- FOR OVERS: "Even if he only plays 28 minutes, at his rate he still projects to..." — if the floor doesn't clear the line, no mismatch saves your OVER.
+- FOR UNDERS: "Even in his BEST scenario tonight, his production projects to..." — if the ceiling still clears the line, your UNDER thesis is weak.
+- This applies to BOTH directions. OVER needs a floor that clears. UNDER needs a ceiling that doesn't.
 
 ## SHARP WISDOM (How to Think)
 
@@ -2937,10 +2363,10 @@ Props should reflect your understanding of the GAME. Ask: Do these player opport
    - Ask: What do these numbers tell you about production potential TONIGHT?
 
 **PASS 2: BILATERAL CASES** (injected after investigation)
-2. **WRITE OVER/UNDER CASES**: For each candidate you investigated:
+2. **WRITE OVER/UNDER CASES**: For each candidate you investigated, build BOTH cases with equal analytical depth:
    - CASE FOR OVER: What specific mechanism pushes production ABOVE the line tonight?
-   - CASE FOR UNDER: What genuine risk CAPS production tonight?
-   - VERDICT: Which case is stronger, and why?
+   - CASE FOR UNDER: What specific mechanism LIMITS production BELOW the line tonight?
+   - VERDICT: Which case is stronger based on the data, and why?
 
 **PASS 2.5: EVALUATION** (injected after bilateral cases)
 3. **STRESS TEST**: Evaluate your cases honestly:
@@ -2961,11 +2387,11 @@ Props should reflect your understanding of the GAME. Ask: Do these player opport
 - Ask: "Is L5 the NEW normal (role change, lineup shift) or just variance that regresses to season?"
 - For props, L5/L10 is usually MORE relevant than season - but investigate WHY the recent form exists.
 
-**INJURY/USAGE AWARENESS (CRITICAL FOR PROPS):**
-- **Injury DURATION matters**: Season-long absence = team has adapted. Recent absence (< 2 weeks) = usage vacuum.
-- **RETURNING players**: Check minutes restriction, conditioning rust, usage ramp-up.
-- **INJURED teammates**: WHO absorbed the usage? Check target share, touch rate, shot attempts.
-- **Ask**: "Who benefits from this injury situation? Is that already priced into the line?"
+**INJURY/USAGE AWARENESS:**
+Your constitution includes the full injury investigation framework. Key reminders:
+- Investigate injury DURATION and whether the line has already adjusted before citing any absence.
+- For returning players: Be aware of potential minutes restrictions or conditioning ramp-up. What does the data show?
+- For injured teammates: Investigate the actual usage redistribution in the game logs — don't assume.
 
 **COMMON NARRATIVES — INVESTIGATE WHETHER THEY APPLY:**
 - "He's been hot" — Ask: Is this efficiency variance (regresses) or structural change (sustains)? What changed?
@@ -3062,9 +2488,8 @@ Your rationale MUST include these 5 elements in 5-7 sentences:
 [BANNED] "He's due" (gambling fallacy)
 
 ## USE THE DATA YOU HAVE
-- Check \`gameScript.spread\` and \`gameScript.edges\` - pre-identified sharp edges from game script
-- Check \`trumpCards\` array - if one exists, make it central to your thesis
-- Use \`fetch_player_vs_opponent\` for revenge game validation
+- Review the game context (matchup, spread, game script) and investigate what it reveals about player opportunity
+- Use \`fetch_player_vs_opponent\` for matchup validation
 
 ${narrativeContext ? `\n## LIVE CONTEXT (from Gemini Search)\n${narrativeContext}` : ''}
 
@@ -3089,8 +2514,6 @@ ${constitution}
 /**
  * Main pipeline runner for props
  */
-// Sports that use the full iteration loop with BDL MCP tools
-const ITERATION_SPORTS = ['NFL', 'NBA', 'NHL', 'NCAAB', 'NCAAF'];
 
 // Map sport labels to their sport keys
 const SPORT_KEYS = {
@@ -3118,60 +2541,58 @@ export async function runAgenticPropsPipeline({
   const context = await buildContext(game, playerProps, contextOptions);
   const matchup = `${game.away_team} @ ${game.home_team}`;
 
-  // Use iteration loop for NFL, NBA, NHL (full agentic with BDL MCP tools)
-  if (ITERATION_SPORTS.includes(sportLabel)) {
-    const modeLabel = regularOnly && sportLabel === 'NFL' ? ' (regular props only - TDs handled separately)' : '';
-    console.log(`[Agentic Props][${sportLabel}] Using full iteration loop with BDL MCP tools${modeLabel}`);
+  const modeLabel = regularOnly && sportLabel === 'NFL' ? ' (regular props only - TDs handled separately)' : '';
+  console.log(`[Agentic Props][${sportLabel}] Using full iteration loop with BDL MCP tools${modeLabel}`);
 
-    const systemPrompt = buildPropsIterationPrompt(
-      context.gameSummary,
-      context.propCandidates,
-      context.narrativeContext,
-      sportLabel,
-      regularOnly  // Pass through to inform Gary about prop restrictions
-    );
+  const systemPrompt = buildPropsIterationPrompt(
+    context.gameSummary,
+    context.propCandidates,
+    context.narrativeContext,
+    sportLabel,
+    regularOnly  // Pass through to inform Gary about prop restrictions
+  );
 
-    // GEMINI 3 BEST PRACTICE: "Final Line Rule" - Put DATA first, INSTRUCTIONS last
-    // XML-style tags create unambiguous boundaries between data and instructions
-    const gameData = {
-      matchup: context.gameSummary.matchup,
-      tipoff: context.gameSummary.tipoff,
-      gameScript: context.gameSummary.gameScript || null,
-      trumpCards: context.gameSummary.trumpCards || [],
-      weather: context.gameSummary.weather || null
-    };
-    
-    const propCandidatesData = context.propCandidates.slice(0, 14).map(p => ({
+  // GEMINI 3 BEST PRACTICE: "Final Line Rule" - Put DATA first, INSTRUCTIONS last
+  // XML-style tags create unambiguous boundaries between data and instructions
+  const gameData = {
+    matchup: context.gameSummary.matchup,
+    tipoff: context.gameSummary.tipoff,
+    gameScript: context.gameSummary.gameScript || null,
+    trumpCards: context.gameSummary.trumpCards || [],
+    weather: context.gameSummary.weather || null
+  };
+  
+  const propCandidatesData = context.propCandidates.slice(0, 14).map(p => ({
+    player: p.player,
+    team: p.team,
+    props: p.props,
+    recentForm: p.recentForm ? {
+      targetTrend: p.recentForm.targetTrend,
+      usageTrend: p.recentForm.usageTrend,
+      formTrend: p.recentForm.formTrend
+    } : null
+  }));
+  
+  // CRITICAL FIX: Only show Gary lines for VALIDATED players (on correct teams per BDL)
+  // This prevents Gary from picking players who are no longer on the teams playing
+  // (e.g., Deebo Samuel props for 49ers when he's now on Washington)
+  const validatedPlayerNames = new Set(
+    context.propCandidates.map(p => p.player.toLowerCase())
+  );
+  
+  const availableLinesData = playerProps
+    .filter(p => validatedPlayerNames.has(p.player.toLowerCase()))
+    .slice(0, 50)
+    .map(p => ({
       player: p.player,
-      team: p.team,
-      props: p.props,
-      recentForm: p.recentForm ? {
-        targetTrend: p.recentForm.targetTrend,
-        usageTrend: p.recentForm.usageTrend,
-        formTrend: p.recentForm.formTrend
-      } : null
+      prop_type: p.prop_type,
+      line: p.line,
+      over_odds: p.over_odds,
+      under_odds: p.under_odds
     }));
-    
-    // CRITICAL FIX: Only show Gary lines for VALIDATED players (on correct teams per BDL)
-    // This prevents Gary from picking players who are no longer on the teams playing
-    // (e.g., Deebo Samuel props for 49ers when he's now on Washington)
-    const validatedPlayerNames = new Set(
-      context.propCandidates.map(p => p.player.toLowerCase())
-    );
-    
-    const availableLinesData = playerProps
-      .filter(p => validatedPlayerNames.has(p.player.toLowerCase()))
-      .slice(0, 50)
-      .map(p => ({
-        player: p.player,
-        prop_type: p.prop_type,
-        line: p.line,
-        over_odds: p.over_odds,
-        under_odds: p.under_odds
-      }));
-    
-    // Structured user message with XML-style tags and instructions at END (Final Line Rule)
-    const userMessage = `<game_context>
+  
+  // Structured user message with XML-style tags and instructions at END (Final Line Rule)
+  const userMessage = `<game_context>
 ${JSON.stringify(gameData, null, 2)}
 </game_context>
 
@@ -3198,273 +2619,177 @@ CRITICAL CONSTRAINTS (apply these strictly):
 - Temperature and weather data affects NFL props significantly
 </instructions>`;
 
-    const sportKey = SPORT_KEYS[sportLabel] || 'americanfootball_nfl';
-    const result = await runPropsIterationLoop({ 
-      systemPrompt, 
-      userMessage, 
-      sportKey, 
-      sportLabel, 
-      // Give room for bilateral analysis + direction-bias recheck pass + finalization
-      // Increased from 8 to 10 to allow hard bilateral enforcement without timeout
-      maxIterations: 10,
-      regularOnly,  // Pass through for NFL regular-only mode
-      validatedPlayerNames  // Pass validated player names to filter invalid picks
-    });
+  const sportKey = SPORT_KEYS[sportLabel] || 'americanfootball_nfl';
+  const result = await runPropsIterationLoop({ 
+    systemPrompt, 
+    userMessage, 
+    sportKey, 
+    sportLabel, 
+    // Give room for bilateral analysis + direction-bias recheck pass + finalization
+    // Increased from 8 to 10 to allow hard bilateral enforcement without timeout
+    maxIterations: 15,
+    regularOnly,  // Pass through for NFL regular-only mode
+    validatedPlayerNames  // Pass validated player names to filter invalid picks
+  });
 
-    console.log(`[Agentic Props][${sportLabel}] Completed: ${result.iterations} iterations, ${result.toolCalls} tool calls`);
+  console.log(`[Agentic Props][${sportLabel}] Completed: ${result.iterations} iterations, ${result.toolCalls} tool calls`);
 
-    // Helper: Clean source attributions from text for user display
-    // Removes "(from fetch_player_season_stats)", "(from game_logs)", "(from search_context)", etc.
-    const cleanSourceTags = (text) => {
-      if (!text || typeof text !== 'string') return text;
-      // Remove patterns like "(from fetch_player_season_stats)", "(from season_stats)", "(from search_context)", "(from prop_candidates)"
-      return text.replace(/\s*\(from\s+[^)]+\)\s*/gi, ' ').replace(/\s+/g, ' ').trim();
-    };
+  // Helper: Clean source attributions from text for user display
+  // Removes "(from fetch_player_season_stats)", "(from game_logs)", "(from search_context)", etc.
+  const cleanSourceTags = (text) => {
+    if (!text || typeof text !== 'string') return text;
+    // Remove patterns like "(from fetch_player_season_stats)", "(from season_stats)", "(from search_context)", "(from prop_candidates)"
+    return text.replace(/\s*\(from\s+[^)]+\)\s*/gi, ' ').replace(/\s+/g, ' ').trim();
+  };
 
-    const cleanKeyStats = (stats) => {
-      if (!Array.isArray(stats)) return [];
-      return stats.map(stat => cleanSourceTags(stat)).filter(s => s && s.length > 0);
-    };
+  const cleanKeyStats = (stats) => {
+    if (!Array.isArray(stats)) return [];
+    return stats.map(stat => cleanSourceTags(stat)).filter(s => s && s.length > 0);
+  };
 
-    // Helper: Ensure prop includes the line value and correct prop type
-    // Build a lookup from available props to find correct prop_type
-    const propsLookup = {};
-    for (const p of playerProps) {
-      // Create multiple keys to match different formats Gary might return
-      const key1 = `${p.player?.toLowerCase()}_${p.line}`;
-      const key2 = `${p.player?.toLowerCase()}_${p.prop_type?.toLowerCase()}_${p.line}`;
-      propsLookup[key1] = p.prop_type;
-      propsLookup[key2] = p.prop_type;
+  // Helper: Ensure prop includes the line value and correct prop type
+  // Build a lookup from available props to find correct prop_type
+  const propsLookup = {};
+  for (const p of playerProps) {
+    // Create multiple keys to match different formats Gary might return
+    const key1 = `${p.player?.toLowerCase()}_${p.line}`;
+    const key2 = `${p.player?.toLowerCase()}_${p.prop_type?.toLowerCase()}_${p.line}`;
+    propsLookup[key1] = p.prop_type;
+    propsLookup[key2] = p.prop_type;
+  }
+  
+  const formatProp = (pick) => {
+    // If prop already has a valid type with number, use it
+    if (pick.prop && /\d/.test(pick.prop) && !pick.prop.toLowerCase().includes('unknown')) {
+      return pick.prop;
     }
     
-    const formatProp = (pick) => {
-      // If prop already has a valid type with number, use it
-      if (pick.prop && /\d/.test(pick.prop) && !pick.prop.toLowerCase().includes('unknown')) {
-        return pick.prop;
-      }
-      
-      // Try to find the prop type from our lookup
-      const playerKey = pick.player?.toLowerCase();
-      const line = pick.line || '';
-      let propType = pick.prop_type || pick.prop || 'unknown';
-      
-      // Look up by player + line
-      const lookupKey1 = `${playerKey}_${line}`;
-      if (propsLookup[lookupKey1]) {
-        propType = propsLookup[lookupKey1];
-      }
-      
-      // If prop_type contains 'unknown', try harder to find it
-      if (propType.toLowerCase().includes('unknown') && playerKey && line) {
-        // Search through all props for this player with this line
-        const match = playerProps.find(p => 
-          p.player?.toLowerCase() === playerKey && 
-          Math.abs(p.line - parseFloat(line)) < 0.1
-        );
-        if (match?.prop_type) {
-          propType = match.prop_type;
-        }
-      }
-      
-      return `${propType} ${line}`.trim();
-    };
-
-    // Enhance picks with metadata and sort by confidence
-    const allPicks = (result.picks || []).map(pick => ({
-      ...pick,
-      sport: sportLabel,
-      time: formatGameTime(game.commence_time),
-      matchup,
-      commence_time: game.commence_time,
-      player: pick.player || 'Unknown',
-      team: pick.team || sportLabel,
-      prop: formatProp(pick),
-      // Normalize 'yes' to 'over' for UI consistency (anytime goal = over 0.5 goals)
-      bet: (pick.bet || 'over').toLowerCase() === 'yes' ? 'over' : (pick.bet || 'over').toLowerCase(),
-      odds: pick.odds || null,
-      confidence: pick.confidence || 0.6,
-      rationale: cleanSourceTags(pick.rationale) || 'Analysis based on matchup data.',
-      key_stats: cleanKeyStats(pick.key_stats),
-      analysis: cleanSourceTags(pick.rationale) || 'Analysis based on matchup data.',
-      // Thesis Gate fields - preserve from Gary's output
-      over_thesis: pick.over_thesis || null,
-      under_thesis: pick.under_thesis || null,
-      thesis_lean: pick.thesis_lean || null,
-    }));
-
-    // NBA/NHL PROPS: Mirror NBA/NHL game-picks quantum behavior
-    // - Gary produces a shortlist (target: 5)
-    // - Quantum scores are tracked for research only (NOT used as a filter)
-    // - This can yield 0..5 surviving props per game
-    if (sportLabel === 'NBA' || sportLabel === 'NHL') {
-      
-      // NHL-SPECIFIC: Filter out invalid prop types that Gary might have picked
-      // Period-specific props (1p, 2p, 3p) and random goal props are NOT analyzable
-      let validPicks = allPicks;
-      if (sportLabel === 'NHL') {
-        const INVALID_NHL_PROP_PATTERNS = [
-          '_1p', '_2p', '_3p',           // Period-specific: anytime_goal_2p, points_3p
-          '1p_', '2p_', '3p_',           // Alternative format
-          'first_goal', 'second_goal', 'third_goal', 'last_goal', 'overtime_goal',
-          'first_scorer', 'second_scorer', 'third_scorer', 'last_scorer'
-        ];
-        
-        const originalCount = allPicks.length;
-        validPicks = allPicks.filter(pick => {
-          const propType = (pick.prop || pick.prop_type || '').toLowerCase();
-          const isInvalid = INVALID_NHL_PROP_PATTERNS.some(pattern => propType.includes(pattern));
-          if (isInvalid) {
-            console.log(`[NHL Props] ⚠️ Filtering out invalid prop: ${pick.player} ${propType} (period-specific or random)`);
-          }
-          return !isInvalid;
-        });
-        
-        if (validPicks.length < originalCount) {
-          console.log(`[NHL Props] Filtered ${originalCount - validPicks.length} invalid prop type(s) from Gary's picks`);
-        }
-      }
-      
-      // Apply 2-per-game constraint NOW (after matchup is available on picks)
-      // This ensures we get exactly 2 props per game across both teams
-      const { constrainedPicks, droppedPicks, garySpecials } = applyPropsPerGameConstraint(validPicks, `${sportLabel}-post`);
-      validPicks = constrainedPicks;
-      
-      if (droppedPicks.length > 0 || garySpecials.length > 0) {
-        console.log(`[Props Constraint] Applied 2-per-game: ${validPicks.length} kept, ${droppedPicks.length} dropped, ${garySpecials.length} Gary Specials`);
-      }
-      
-      return {
-        picks: validPicks,
-        iterations: result.iterations,
-        toolCalls: result.toolCalls,
-        elapsedMs: Date.now() - start
-      };
-    }
-
-    // Sort by confidence and keep top N
-    const sortedPicks = allPicks.sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
+    // Try to find the prop type from our lookup
+    const playerKey = pick.player?.toLowerCase();
+    const line = pick.line || '';
+    let propType = pick.prop_type || pick.prop || 'unknown';
     
-    // NFL: Take top 3, Other sports: Take top N
-    let finalPicks;
-    if (sportLabel === 'NFL') {
-      // NFL: Top 3 by confidence
-      finalPicks = sortedPicks.slice(0, 3);
-      console.log(`[Agentic Props][${sportLabel}] Taking TOP 3 from ${allPicks.length} shortlisted picks (fallback mode)`);
-    } else {
-      // Other sports: Apply confidence filter
-      const topPicks = sortedPicks.slice(0, propsPerGame);
-      const minConfidence = 0.60;
-      finalPicks = topPicks.filter(p => p.confidence >= minConfidence);
-      console.log(`[Agentic Props][${sportLabel}] Sorted by confidence: Top ${propsPerGame} of ${allPicks.length}, filtered to ${finalPicks.length} picks (>=${minConfidence})`);
+    // Look up by player + line
+    const lookupKey1 = `${playerKey}_${line}`;
+    if (propsLookup[lookupKey1]) {
+      propType = propsLookup[lookupKey1];
     }
+    
+    // If prop_type contains 'unknown', try harder to find it
+    if (propType.toLowerCase().includes('unknown') && playerKey && line) {
+      // Search through all props for this player with this line
+      const match = playerProps.find(p => 
+        p.player?.toLowerCase() === playerKey && 
+        Math.abs(p.line - parseFloat(line)) < 0.1
+      );
+      if (match?.prop_type) {
+        propType = match.prop_type;
+      }
+    }
+    
+    return `${propType} ${line}`.trim();
+  };
 
+  // Enhance picks with metadata and sort by confidence
+  const allPicks = (result.picks || []).map(pick => ({
+    ...pick,
+    sport: sportLabel,
+    time: formatGameTime(game.commence_time),
+    matchup,
+    commence_time: game.commence_time,
+    player: pick.player || 'Unknown',
+    team: pick.team || sportLabel,
+    prop: formatProp(pick),
+    // Normalize 'yes' to 'over' for UI consistency (anytime goal = over 0.5 goals)
+    // NOTE: No default — if Gary omits bet direction, we log a warning (don't silently default to 'over')
+    bet: pick.bet ? (pick.bet.toLowerCase() === 'yes' ? 'over' : pick.bet.toLowerCase()) : null,
+    odds: pick.odds || null,
+    confidence: pick.confidence || null,
+    rationale: cleanSourceTags(pick.rationale) || 'Analysis based on matchup data.',
+    key_stats: cleanKeyStats(pick.key_stats),
+    analysis: cleanSourceTags(pick.rationale) || 'Analysis based on matchup data.',
+  }));
+
+  // Filter out picks with missing bet direction (Gary must explicitly choose OVER or UNDER)
+  const validBetPicks = allPicks.filter(p => {
+    if (!p.bet) {
+      console.warn(`[Props] ⚠️ Dropping pick for ${p.player} — missing bet direction (no default to OVER)`);
+      return false;
+    }
+    return true;
+  });
+
+  // NBA/NHL PROPS: Mirror NBA/NHL game-picks quantum behavior
+  // - Gary produces a shortlist (target: 5)
+  // - Quantum scores are tracked for research only (NOT used as a filter)
+  // - This can yield 0..5 surviving props per game
+  if (sportLabel === 'NBA' || sportLabel === 'NHL') {
+    
+    // NHL-SPECIFIC: Filter out invalid prop types that Gary might have picked
+    // Period-specific props (1p, 2p, 3p) and random goal props are NOT analyzable
+    let validPicks = validBetPicks;
+    if (sportLabel === 'NHL') {
+      const INVALID_NHL_PROP_PATTERNS = [
+        '_1p', '_2p', '_3p',           // Period-specific: anytime_goal_2p, points_3p
+        '1p_', '2p_', '3p_',           // Alternative format
+        'first_goal', 'second_goal', 'third_goal', 'last_goal', 'overtime_goal',
+        'first_scorer', 'second_scorer', 'third_scorer', 'last_scorer'
+      ];
+
+      const originalCount = validBetPicks.length;
+      validPicks = validBetPicks.filter(pick => {
+        const propType = (pick.prop || pick.prop_type || '').toLowerCase();
+        const isInvalid = INVALID_NHL_PROP_PATTERNS.some(pattern => propType.includes(pattern));
+        if (isInvalid) {
+          console.log(`[NHL Props] ⚠️ Filtering out invalid prop: ${pick.player} ${propType} (period-specific or random)`);
+        }
+        return !isInvalid;
+      });
+      
+      if (validPicks.length < originalCount) {
+        console.log(`[NHL Props] Filtered ${originalCount - validPicks.length} invalid prop type(s) from Gary's picks`);
+      }
+    }
+    
+    // Apply 2-per-game constraint NOW (after matchup is available on picks)
+    // This ensures we get exactly 2 props per game across both teams
+    const { constrainedPicks, droppedPicks, garySpecials } = applyPropsPerGameConstraint(validPicks, `${sportLabel}-post`);
+    validPicks = constrainedPicks;
+    
+    if (droppedPicks.length > 0 || garySpecials.length > 0) {
+      console.log(`[Props Constraint] Applied 2-per-game: ${validPicks.length} kept, ${droppedPicks.length} dropped, ${garySpecials.length} Gary Specials`);
+    }
+    
     return {
-      picks: finalPicks,
+      picks: validPicks,
       iterations: result.iterations,
       toolCalls: result.toolCalls,
       elapsedMs: Date.now() - start
     };
   }
 
-  // LEGACY: 3-stage pipeline for other sports
-  console.log(`[Agentic Props][${sportLabel}] Using 3-stage pipeline (legacy)`);
+  // Sort by confidence and keep top N
+  const sortedPicks = validBetPicks.sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
 
-  console.log(`[Agentic Props][${sportLabel}] Stage 1: Hypothesis for ${context.gameSummary.matchup}`);
-  if (context.narrativeContext) {
-    console.log(`[Agentic Props][${sportLabel}] ✓ Including narrative context`);
+  // NFL: Take top 3, Other sports: Take top N
+  let finalPicks;
+  if (sportLabel === 'NFL') {
+    // NFL: Top 3 by confidence
+    finalPicks = sortedPicks.slice(0, 3);
+    console.log(`[Agentic Props][${sportLabel}] Taking TOP 3 from ${validBetPicks.length} shortlisted picks (fallback mode)`);
+  } else {
+    // Other sports: Apply confidence filter
+    const topPicks = sortedPicks.slice(0, propsPerGame);
+    const minConfidence = 0.60;
+    finalPicks = topPicks.filter(p => p.confidence >= minConfidence);
+    console.log(`[Agentic Props][${sportLabel}] Sorted by confidence: Top ${propsPerGame} of ${allPicks.length}, filtered to ${finalPicks.length} picks (>=${minConfidence})`);
   }
-  const stage1 = await runPropsHypothesisStage({
-    gameSummary: context.gameSummary,
-    propCandidates: context.propCandidates,
-    playerStats: context.playerStats,
-    sportLabel,
-    tokenData: context.tokenData,
-    narrativeContext: context.narrativeContext
-  });
-  console.log(`[Agentic Props][${sportLabel}] Found ${stage1.top_opportunities.length} opportunities`);
-
-  if (stage1.top_opportunities.length === 0) {
-    console.log(`[Agentic Props][${sportLabel}] No prop opportunities identified`);
-    return { picks: [], elapsedMs: Date.now() - start };
-  }
-
-  console.log(`[Agentic Props][${sportLabel}] Stage 2: Investigating props...`);
-  const stage2 = await runPropsInvestigatorStage({
-    gameSummary: context.gameSummary,
-    hypothesis: stage1,
-    tokenData: context.tokenData,
-    propCandidates: context.propCandidates
-  });
-  console.log(`[Agentic Props][${sportLabel}] Validated ${stage2.validated_props.length} props, dropped ${stage2.dropped_props.length}`);
-
-  if (stage2.validated_props.length === 0) {
-    console.log(`[Agentic Props][${sportLabel}] No props passed validation`);
-    return { picks: [], elapsedMs: Date.now() - start };
-  }
-
-  console.log(`[Agentic Props][${sportLabel}] Stage 3: Rendering final picks...`);
-  const rawPicks = await runPropsJudgeStage({
-    gameSummary: context.gameSummary,
-    investigation: stage2,
-    playerProps: context.playerProps,
-    sportLabel
-  });
-  
-  // Helper: Clean source attributions from text for user display
-  const cleanSourceTagsLegacy = (text) => {
-    if (!text || typeof text !== 'string') return text;
-    return text.replace(/\s*\(from\s+[^)]+\)\s*/gi, ' ').replace(/\s+/g, ' ').trim();
-  };
-
-  const cleanKeyStatsLegacy = (stats) => {
-    if (!Array.isArray(stats)) return [];
-    return stats.map(stat => cleanSourceTagsLegacy(stat)).filter(s => s && s.length > 0);
-  };
-
-  // Helper: Ensure prop includes the line value
-  const formatPropLegacy = (pick) => {
-    if (pick.prop && /\d/.test(pick.prop)) {
-      return pick.prop;
-    }
-    const propType = pick.prop || pick.prop_type || 'unknown';
-    const line = pick.line || '';
-    return `${propType} ${line}`.trim();
-  };
-  
-  // Enhance picks with metadata
-  const enhancedPicks = rawPicks.slice(0, propsPerGame).map(pick => ({
-      ...pick,
-      sport: sportLabel,
-      time: formatGameTime(game.commence_time),
-    matchup,
-    commence_time: game.commence_time,
-      player: pick.player || 'Unknown',
-      team: pick.team || sportLabel,
-      prop: formatPropLegacy(pick),
-      // Normalize 'yes' to 'over' for UI consistency (anytime goal = over 0.5 goals)
-      bet: (pick.bet || 'over').toLowerCase() === 'yes' ? 'over' : (pick.bet || 'over').toLowerCase(),
-      odds: pick.odds || null,
-      confidence: pick.confidence || 0.6,
-      rationale: cleanSourceTagsLegacy(pick.rationale) || 'Analysis based on matchup data.',
-      key_stats: cleanKeyStatsLegacy(pick.key_stats),
-      analysis: cleanSourceTagsLegacy(pick.rationale) || 'Analysis based on matchup data.',
-      // Thesis Gate fields - preserve from Gary's output
-      over_thesis: pick.over_thesis || null,
-      under_thesis: pick.under_thesis || null,
-      thesis_lean: pick.thesis_lean || null,
-  }));
-
-  // No confidence filter — Gary's picks are stored as-is (same as game picks)
-  const finalPicks = enhancedPicks;
-
-  const elapsedMs = Date.now() - start;
-  console.log(`[Agentic Props][${sportLabel}] Pipeline complete in ${elapsedMs}ms`);
 
   return {
     picks: finalPicks,
-    stage1,
-    stage2,
-    elapsedMs
+    iterations: result.iterations,
+    toolCalls: result.toolCalls,
+    elapsedMs: Date.now() - start
   };
 }
 

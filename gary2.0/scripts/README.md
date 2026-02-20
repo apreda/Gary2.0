@@ -21,7 +21,7 @@ node scripts/pickManager.js
 - `GEMINI_API_KEY`: Gemini 3 Deep Think API key
 
 ### `run-agentic-nba-props.js`
-Runs the 3-stage agentic pipeline for NBA player props.
+Runs the 4-pass agentic pipeline for NBA player props.
 ```bash
 node scripts/run-agentic-nba-props.js --store=1
 ```

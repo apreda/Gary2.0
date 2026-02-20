@@ -363,8 +363,9 @@ export function generateGameSignificance(game, sport, standings = [], week = nul
       return 'Top 25 Test';
     }
   } else {
-    // Pro sports: check if one team is top 5
-    if (homeRank <= 5 || awayRank <= 5) {
+    // Pro sports: "Contender Matchup" only when BOTH teams are in top 10
+    // One top-5 team vs a bottom team is just Regular Season
+    if ((homeRank <= 5 || awayRank <= 5) && homeRank <= 10 && awayRank <= 10) {
       console.log(`[GameSignificance] Contender Matchup`);
       return 'Contender Matchup';
     }

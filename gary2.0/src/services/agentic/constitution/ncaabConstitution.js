@@ -97,12 +97,11 @@ The Four Factors (eFG%, TOV%, ORB%, FT Rate) measure process rather than outcome
 - Ask: Does this stat trace a chain from how the team plays to tonight's outcome?
 - Ask: Or does it just describe what happened in the past without explaining why?
 
-**STAT AWARENESS:**
-- **FOUR FACTORS**: eFG%, TOV%, ORB%, FT Rate — investigate which shows the biggest gap in THIS matchup
-- **BARTTORVIK**: AdjEM, AdjO, AdjD — opponent-adjusted, tempo-adjusted team quality (season-long baseline)
-- **MATCHUP-SPECIFIC**: 3PT% (off/def), Pace, style clashes — how teams interact in THIS game
-- Season AND L5 advanced stats are in the scout report — compare them to detect shifts
-- SOS data — are either team's numbers inflated by weak opponents?
+**DATA AVAILABLE TO YOU:**
+- Four Factors, Barttorvik ratings, shooting splits, and pace data are in your scout report
+- Season AND L5 advanced stats let you compare baseline identity vs current form
+- SOS data helps you assess whether a team's numbers are inflated by weak opponents
+- Use whatever data is relevant to THIS matchup — you decide what matters
 
 **AdjEM AND THE SPREAD — AWARENESS:**
 AdjEM measures season-long team quality. The spread ALSO reflects team quality — plus home court, conference context, injuries, and matchup dynamics. When you cite the AdjEM gap, ask yourself:
@@ -110,12 +109,22 @@ AdjEM measures season-long team quality. The spread ALSO reflects team quality �
 - What does AdjEM NOT capture? Matchup-specific dynamics, recent roster changes, venue effects, pace mismatches, stylistic clashes — these are where the spread could be wrong.
 - Investigate: Where does your game-specific research DISAGREE with the baseline metrics? That's where edge lives.
 
-**WHEN THE SPREAD IS SMALL BUT THE QUALITY GAP IS LARGE:**
-If you see a large baseline quality gap but a small spread, the market is telling you something. Ask:
-- What factors is the market seeing that compress this margin? (Home court, conference familiarity, injuries, matchup dynamics?)
-- In conference play at a home venue, games often play closer than season-long metrics suggest. Investigate: Does the home team's data support a tighter game than the baseline gap implies?
-- A small spread despite a large quality gap is NOT mispricing by default — it may be the market correctly accounting for factors that compress margins in THIS specific context.
-- Investigate BOTH possibilities: Is the spread too small (the better team will separate)? Or is the spread right (conference home games are close regardless of season-long metrics)?
+### [INVESTIGATE] THE SPOT AND THE PRICE
+
+**AWARENESS:** Be aware of the full situational context of this game — the SPOT. Situational factors create real game-to-game variance alongside what the stats show.
+
+**INVESTIGATE THE SPOT FOR THIS GAME:**
+- What's the venue situation? Road conference game? Hostile environment? Neutral site?
+- What's the schedule context? Midweek game? Back-to-back? Travel situation?
+- What's the emotional context? Team breaking a losing streak? Coming off an embarrassing loss? Rivalry energy?
+- What's the conference context? Late-season positioning? How familiar are these teams with each other?
+- What are the stakes for each team? Tournament bubble? Already locked in? Playing for seeding?
+
+**INVESTIGATE THE PRICE:**
+What is the spread asking each team to do in THIS spot? What does the situational context reveal about whether the spread reflects the full picture or only part of it?
+
+**MATCHUP PICTURE:**
+What does the combination of situational context AND statistical data reveal about this game? Where do they agree? Where do they conflict?
 
 **RANKING SIGNIFICANCE — INVESTIGATE THE NUMBER, NOT THE RANK:**
 Rankings can be misleading. A team ranked 40th might be nearly identical to a team ranked 70th in actual AdjEM.
@@ -230,39 +239,43 @@ College home court effects tend to be larger than pro sports. Investigate what t
 **ASK YOURSELF:** What makes this team tick? Why do they win or lose?
 
 **IDENTITY QUESTIONS TO INVESTIGATE:**
-- **Offensive identity**: How do they score? 3PT-heavy, paint attacks, motion offense? → Investigate eFG%, 3PT%, and FT Rate
-- **Defensive identity**: How do they stop teams? Pack-line, zone, pressure? → Investigate AdjD and opponent turnover rate
-- **Tempo identity**: Fast or slow? → Investigate Barttorvik Tempo and BDL pace — how does the pace differential affect this matchup?
-- **Experience factor**: How many minutes go to the top 5 vs the rest? → Check roster depth from scout report
-- **Turnover profile**: What does the turnover data reveal for BOTH teams? → Investigate turnover rate
+- How does each team score? How do they defend? What's their tempo?
+- How deep are they? What happens if their top players have an off night?
+- What does the data reveal about their strengths and weaknesses?
 
-**ALWAYS CHECK BOTH SIDES:**
-Once you find WHY a team is good/bad at something, check how the OPPONENT matches up:
-- Team A shoots 38% from 3 (season avg) → What's Team B's 3PT defense?
-- Team A forces turnovers → What does Team B's turnover rate reveal about ball security in this matchup?
+**COMPARE OFFENSE VS DEFENSE:**
+Once you understand each team's identity, compare them against each other:
+- How does each team's offense match up against the opponent's defense?
+- How does each team's defense match up against the opponent's offense?
+- This is the core of matchup analysis — strengths vs weaknesses, not stats in a vacuum.
 
-**USE L5/L10 VS SEASON TO DETECT TRENDS:**
-- Season avg = baseline identity. L5/L10 = current form. The gap tells the story.
-- Ask: Is L5 showing a real shift (health, lineup change) or just variance (hot shooting, weak schedule)?
-- Check the SOS data in your scout report to assess opponent quality during recent stretches.
-
-**ASK ABOUT STABILITY:**
-- "Does this team's success rely on stable factors (defense, rebounding, turnover forcing) or volatile factors (3PT shooting, pace control)?"
-- If their identity is built on 3PT shooting, investigate: What's their 3P% recently? Is it sustainable or variance?
-
-**REGRESSION QUESTIONS:**
-When L5 eFG%/TS% is above season average, ask:
-- "Is this structural (lineup change, player development) or variance (hot streak against weak defenses)?"
-- Compare L5 to season baselines — what does the gap reveal?
-- What was the quality of competition during the recent stretch?
+**CURRENT FORM VS BASELINE:**
+- Are they playing better or worse than their season average right now?
+- If there's a gap between recent form and season data, investigate: is it a real shift or variance?
+- What was the quality of opponents during the recent stretch?
 
 **CONNECT THE DOTS:**
 Don't say "they play well at home" — instead ask: "WHAT do they do better at home?"
-- Investigate the specific metric splits to find the answer
 - The answer tells you if that advantage applies to THIS game and THIS spread
 
 **COACHING:**
 - Is this a conference rematch? How did the first meeting go — what adjustments might apply?
+
+### [INVESTIGATE] WHAT'S IN THE SPREAD?
+
+**AWARENESS:** The spread prices in more than raw team quality. Records, rankings, home court, conference context, and the SPOT all move lines — but they don't all predict margins. In NCAAB, situational factors create real game-to-game variance that season stats don't capture.
+
+**INVESTIGATE FOR THIS GAME:**
+When you cite a record, ranking, or situation — ask: "Is this describing what happened, or explaining what will happen tonight?"
+- "Their road record is 2-8" → Investigate: What does the data show about WHY they struggle on the road? What is the SPOT tonight — is this a similar or different situation?
+- "They're ranked 38th, opponent is 82nd" → Investigate: What does the data show about the actual gap between these teams? What does the SPOT tonight reveal about whether that gap translates here?
+- "They're on a 5-game win streak" → Investigate: What does the data show about the quality of that streak? What does the SPOT tonight reveal about whether that streak is relevant here?
+
+**CAUSAL VS DESCRIPTIVE:**
+- Records, rankings, and streaks DESCRIBE — they tell you what happened. They explain why the line is set where it is. A team is 9-8, the market sees that, the spread reflects it. But "9-8" can't tell you which side of tonight's spread is the better bet.
+- Stats that measure HOW a team plays EXPLAIN — they reveal what's causing the results and how each team's strengths match up against the opponent's weaknesses. This is what helps you find edge against the spread.
+- The SPOT — venue, schedule, conference dynamics, emotional context — creates variance that shapes how tonight plays out.
+- Investigate all three layers: descriptive context (explains the line), causal metrics (explains the matchup), AND situational factors (the spot).
 
 ### [STATS] STRENGTH OF SCHEDULE — CONTEXT FOR ALL STATS
 
@@ -391,12 +404,13 @@ When you encounter a narrative (Home Court, Conference Play, Rankings, Rivalry, 
 - Has the narrative already moved the line, and does the adjusted price feel right?
 
 **NCAAB-specific narratives to investigate when relevant:**
-- **Home Court**: What does THIS team's home vs away performance data show? Has the line already captured this? In conference play at home, how do margins compare to season-long baselines?
-- **Conference Play**: Does the conference matchup data show tighter games, or does the statistical gap still hold? Conference opponents have scouting familiarity, game film, and preparation time that non-conference opponents don't. Investigate: Do conference game margins run closer than season-long metrics suggest?
-- **Rankings**: What do the actual stat values show behind each team's ranking? Is the line based on perception or data?
-- **Rivalry**: What does the data show about this matchup? Has the rivalry narrative already tightened the line?
-- **Bounce Back**: What do the data show about WHY they lost? Is the underlying performance still intact?
-- **Tournament Stakes**: Does the performance data support increased intensity? Has the market already priced this in?
+- **Home Court**: Be aware of the venue. Investigate: What do each team's home vs away records and PPG margins show? What does the SPOT — a home team with crowd energy, familiarity with the floor — reveal about how this game could play out?
+- **Conference Play**: Be aware of conference context. Investigate: What do the conference records, H2H history, and standings show? What does playing a conference opponent — with the familiarity and intensity that brings — mean for THIS game?
+- **Rankings**: Be aware of the ranking gap. Investigate: What does the data show about the actual gap behind the rankings? What does the SPOT reveal about whether the ranking gap translates tonight?
+- **Schedule Spot**: Be aware of the schedule context. Investigate: What's the travel situation? Midweek game? What does the SPOT reveal about each team's readiness for THIS game?
+- **Rivalry / Emotional Context**: Be aware of rivalry energy, losing streaks, or recent embarrassments. Investigate: What does the H2H data show? What does the emotional context reveal about intensity and motivation for THIS game?
+- **Bounce Back**: Be aware of a recent bad loss. Investigate: What does the data show about whether the team is declining or had a bad night? What does the SPOT tonight reveal about bounce-back potential?
+- **Tournament Stakes**: Be aware of tournament positioning. Investigate: What do conference standings and rankings show about what's at stake for each team? What does the urgency reveal about effort and focus?
 
 ${getNarrativeClosingQuestions()}
 

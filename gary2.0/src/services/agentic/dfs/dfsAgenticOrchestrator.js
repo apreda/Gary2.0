@@ -30,6 +30,19 @@ import { WINNING_SCORE_TARGETS } from '../FIBLE.js';
 import { buildDFSContext } from '../dfsAgenticContext.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`[Gary DFS] ${label} timed out after ${ms / 1000}s`)), ms)
+    )
+  ]);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // GEMINI MODEL CONFIGURATION
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -100,15 +113,30 @@ export async function generateAgenticDFSLineup(options) {
     console.log(`[Gary DFS] ✓ Target to WIN: ${winningTargets.toWin} pts | Cash line: ${winningTargets.toCash} pts`);
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // PHASE 2: SLATE ANALYSIS (Gemini Flash)
+    // PHASE 2: SLATE ANALYSIS (Gemini Flash → retry once on failure)
     // ═══════════════════════════════════════════════════════════════════════════
     console.log('\n[Gary DFS] Phase 2: Gary Flash analyzing the slate...');
 
-    const slateAnalysis = await analyzeSlateWithFlash(genAI, context, {
-      modelName: GEMINI_FLASH_MODEL
-    });
+    let slateAnalysis;
+    try {
+      slateAnalysis = await withTimeout(
+        analyzeSlateWithFlash(genAI, context, { modelName: GEMINI_FLASH_MODEL }),
+        180000, // 3 min wall-clock timeout
+        'Phase 2 slate analysis'
+      );
+    } catch (flashError) {
+      if (flashError.status === 429 || flashError.status === 503 || flashError.message?.includes('timeout')) {
+        console.warn(`[Gary DFS] Phase 2: Flash failed (${flashError.message}) — retrying once`);
+        slateAnalysis = await withTimeout(
+          analyzeSlateWithFlash(genAI, context, { modelName: GEMINI_FLASH_MODEL }),
+          180000,
+          'Phase 2 slate analysis retry'
+        );
+      } else {
+        throw flashError;
+      }
+    }
 
-    // NO FALLBACKS: Validate slate analysis succeeded
     if (!slateAnalysis) {
       throw new Error('[Gary DFS] Phase 2 FAILED: Slate analysis returned null');
     }
@@ -118,18 +146,30 @@ export async function generateAgenticDFSLineup(options) {
     console.log(`[Gary DFS] ✓ Identified ${slateAnalysis.priceLags?.length || 0} price lag opportunities`);
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // PHASE 3: BUILD THESIS (Gemini Pro)
+    // PHASE 3: BUILD THESIS (Gemini Pro → Flash fallback)
     // ═══════════════════════════════════════════════════════════════════════════
     console.log('\n[Gary DFS] Phase 3: Gary Pro forming build thesis...');
 
-    const buildThesis = await formBuildThesis(genAI, slateAnalysis, context, {
-      modelName: GEMINI_PRO_MODEL,
-      constitution: getDFSConstitution(sport, contestType)
-    });
+    let buildThesis;
+    try {
+      buildThesis = await formBuildThesis(genAI, slateAnalysis, context, {
+        modelName: GEMINI_PRO_MODEL,
+        constitution: getDFSConstitution(sport, contestType)
+      });
+    } catch (proError) {
+      if (proError.status === 429 || proError.status === 503) {
+        console.warn(`[Gary DFS] Phase 3: Pro unavailable (${proError.status}) — falling back to Flash`);
+        buildThesis = await formBuildThesis(genAI, slateAnalysis, context, {
+          modelName: GEMINI_FLASH_MODEL,
+          constitution: getDFSConstitution(sport, contestType)
+        });
+      } else {
+        throw proError;
+      }
+    }
 
-    // NO FALLBACKS: Validate Gary Pro formed a real thesis
     if (!buildThesis || !buildThesis.archetype || !buildThesis.thesis) {
-      throw new Error('[Gary DFS] Phase 3 FAILED: Gary Pro did not produce valid build thesis');
+      throw new Error('[Gary DFS] Phase 3 FAILED: Did not produce valid build thesis');
     }
 
     console.log(`[Gary DFS] ✓ Build Archetype: ${buildThesis.archetype}`);
@@ -137,15 +177,30 @@ export async function generateAgenticDFSLineup(options) {
     console.log(`[Gary DFS] ✓ Thesis: "${buildThesis.thesis?.slice(0, 100)}..."`);
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // PHASE 4: PLAYER INVESTIGATION (Gemini Flash per position)
+    // PHASE 4: PLAYER INVESTIGATION (Gemini Flash per position → retry on failure)
     // ═══════════════════════════════════════════════════════════════════════════
     console.log('\n[Gary DFS] Phase 4: Gary Flash investigating player candidates...');
 
-    const playerInvestigations = await investigatePlayersForPositions(genAI, buildThesis, context, {
-      modelName: GEMINI_FLASH_MODEL
-    });
+    let playerInvestigations;
+    try {
+      playerInvestigations = await withTimeout(
+        investigatePlayersForPositions(genAI, buildThesis, context, { modelName: GEMINI_FLASH_MODEL }),
+        300000, // 5 min wall-clock timeout (multiple positions)
+        'Phase 4 player investigation'
+      );
+    } catch (flashError) {
+      if (flashError.status === 429 || flashError.status === 503 || flashError.message?.includes('timeout')) {
+        console.warn(`[Gary DFS] Phase 4: Flash failed (${flashError.message}) — retrying once`);
+        playerInvestigations = await withTimeout(
+          investigatePlayersForPositions(genAI, buildThesis, context, { modelName: GEMINI_FLASH_MODEL }),
+          300000,
+          'Phase 4 player investigation retry'
+        );
+      } else {
+        throw flashError;
+      }
+    }
 
-    // NO FALLBACKS: Validate player investigations completed
     if (!playerInvestigations || Object.keys(playerInvestigations).length === 0) {
       throw new Error('[Gary DFS] Phase 4 FAILED: Gary Flash did not investigate any players');
     }
@@ -157,18 +212,30 @@ export async function generateAgenticDFSLineup(options) {
     console.log(`[Gary DFS] ✓ Investigated ${investigatedCount} players across all positions`);
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // PHASE 5: LINEUP DECISION (Gemini Pro with thinkingLevel: HIGH)
+    // PHASE 5: LINEUP DECISION (Gemini Pro → Flash fallback, thinkingLevel: HIGH)
     // ═══════════════════════════════════════════════════════════════════════════
     console.log('\n[Gary DFS] Phase 5: Gary Pro making lineup decisions...');
 
-    const lineup = await decideLineupWithPro(genAI, buildThesis, playerInvestigations, context, {
-      modelName: GEMINI_PRO_MODEL,
-      thinkingLevel: 'high'
-    });
+    let lineup;
+    try {
+      lineup = await decideLineupWithPro(genAI, buildThesis, playerInvestigations, context, {
+        modelName: GEMINI_PRO_MODEL,
+        thinkingLevel: 'high'
+      });
+    } catch (proError) {
+      if (proError.status === 429 || proError.status === 503 || proError.message?.includes('429') || proError.message?.includes('503') || proError.message?.includes('quota')) {
+        console.warn(`[Gary DFS] Phase 5: Pro unavailable — falling back to Flash`);
+        lineup = await decideLineupWithPro(genAI, buildThesis, playerInvestigations, context, {
+          modelName: GEMINI_FLASH_MODEL,
+          thinkingLevel: 'high'
+        });
+      } else {
+        throw proError;
+      }
+    }
 
-    // NO FALLBACKS: Validate Gary Pro built a complete lineup
     if (!lineup || !lineup.players || lineup.players.length === 0) {
-      throw new Error('[Gary DFS] Phase 5 FAILED: Gary Pro did not produce any lineup');
+      throw new Error('[Gary DFS] Phase 5 FAILED: Did not produce any lineup');
     }
 
     const expectedPlayers = platform?.toLowerCase() === 'fanduel' ? 9 : 8;
@@ -181,22 +248,46 @@ export async function generateAgenticDFSLineup(options) {
     console.log(`[Gary DFS] ✓ Projected Ceiling: ${lineup.ceilingProjection} pts`);
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // PHASE 6: SELF-AUDIT (Gemini Pro)
+    // PHASE 6: SELF-AUDIT (Gemini Pro) — enrichment, not critical path
+    // The lineup is already decided at Phase 5. Audit adds notes and may swap
+    // players, but a failure here should NOT throw away a valid lineup.
     // ═══════════════════════════════════════════════════════════════════════════
     console.log('\n[Gary DFS] Phase 6: Gary Pro auditing his lineup...');
 
-    const auditedLineup = await auditLineupWithPro(genAI, lineup, buildThesis, context, {
-      modelName: GEMINI_PRO_MODEL
-    });
-
-    // NO FALLBACKS: Validate Gary Pro completed the audit
-    if (!auditedLineup || !auditedLineup.players || auditedLineup.players.length === 0) {
-      throw new Error('[Gary DFS] Phase 6 FAILED: Audit resulted in empty lineup');
-    }
-
-    console.log(`[Gary DFS] ✓ Audit complete`);
-    if (auditedLineup.adjustments?.length > 0) {
-      console.log(`[Gary DFS] ✓ Made ${auditedLineup.adjustments.length} post-audit adjustments`);
+    let auditedLineup;
+    try {
+      auditedLineup = await auditLineupWithPro(genAI, lineup, buildThesis, context, {
+        modelName: GEMINI_PRO_MODEL
+      });
+      if (!auditedLineup || !auditedLineup.players || auditedLineup.players.length === 0) {
+        console.warn('[Gary DFS] Phase 6: Audit returned empty lineup — using pre-audit lineup');
+        auditedLineup = lineup;
+      } else {
+        console.log(`[Gary DFS] ✓ Audit complete`);
+        if (auditedLineup.adjustments?.length > 0) {
+          console.log(`[Gary DFS] ✓ Made ${auditedLineup.adjustments.length} post-audit adjustments`);
+        }
+      }
+    } catch (auditError) {
+      // If Pro is unavailable (429/503), try Flash before giving up
+      if (auditError.status === 429 || auditError.status === 503 || auditError.message?.includes('429') || auditError.message?.includes('503') || auditError.message?.includes('quota')) {
+        console.warn(`[Gary DFS] Phase 6: Pro unavailable — trying Flash audit`);
+        try {
+          auditedLineup = await auditLineupWithPro(genAI, lineup, buildThesis, context, {
+            modelName: GEMINI_FLASH_MODEL
+          });
+          if (!auditedLineup || !auditedLineup.players || auditedLineup.players.length === 0) {
+            auditedLineup = lineup;
+          }
+        } catch (flashError) {
+          console.warn(`[Gary DFS] Phase 6 Flash audit also failed — using pre-audit lineup`);
+          auditedLineup = lineup;
+        }
+      } else {
+        console.warn(`[Gary DFS] Phase 6 audit failed: ${auditError.message}`);
+        console.warn('[Gary DFS] Using pre-audit lineup from Phase 5');
+        auditedLineup = lineup;
+      }
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -263,7 +354,9 @@ export async function generateAgenticDFSLineup(options) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function getWinningTargets(platform, sport, contestType, slate) {
-  const platformKey = platform.toUpperCase() === 'FANDUEL' ? 'FANDUEL_NBA' : 'DRAFTKINGS_NBA';
+  const sportUpper = (sport || 'NBA').toUpperCase();
+  const platformPrefix = platform.toUpperCase() === 'FANDUEL' ? 'FANDUEL' : 'DRAFTKINGS';
+  const platformKey = `${platformPrefix}_${sportUpper}`;
   const targets = WINNING_SCORE_TARGETS[platformKey];
 
   if (!targets) {

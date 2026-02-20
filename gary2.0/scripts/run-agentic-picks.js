@@ -906,7 +906,7 @@ async function main() {
             } : {
               homeAwaySplits: tokens.some(t => t && (t.includes('HOME_AWAY') || t.includes('SPLITS'))),
               recentForm: tokens.some(t => t && (t.includes('RECENT_FORM') || t.includes('LAST_'))),
-              h2hHistory: tokens.some(t => t && t.includes('H2H')),
+              h2hHistory: true, // H2H is preloaded in scout report for all sports
               pace: tokens.some(t => t && t.includes('PACE')),
               efficiency: tokens.some(t => t && (t.includes('RATING') || t.includes('EFG'))),
               clutchStats: tokens.some(t => t && t.includes('CLUTCH')),
@@ -1233,11 +1233,10 @@ async function main() {
             }
           }
 
-          // NHL + NCAAB: ALWAYS use verifiedTaleOfTape from scout report for consistent display
-          // NHL toolCallHistory can be sparse or inconsistent
-          // NCAAB: BDL-calculated ORtg/DRtg values were garbage (2702 instead of ~100)
-          //        Now uses Barttorvik AdjOE/AdjDE for real adjusted efficiency
-          if ((config.key === 'icehockey_nhl' || config.key === 'basketball_ncaab') && result.verifiedTaleOfTape?.rows) {
+          // NHL: ALWAYS use verifiedTaleOfTape — toolCallHistory can be sparse or inconsistent
+          // NCAAB: No longer overridden — toolCallHistory now flows through like NBA
+          //        (old override was a band-aid for garbage BDL ORtg/DRtg; now uses Barttorvik via stat router)
+          if (config.key === 'icehockey_nhl' && result.verifiedTaleOfTape?.rows) {
             const sportLabel = config.key === 'icehockey_nhl' ? 'NHL' : 'NCAAB';
             console.log(`   📊 ${sportLabel}: Using verified Tale of Tape (${result.verifiedTaleOfTape.rows.length} rows) for pick card`);
 

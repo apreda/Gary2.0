@@ -363,26 +363,26 @@ async function sendToSession(session, message, options = {}) {
  * @param {number} maxRetries - Max retry attempts (default 3)
  * @returns {Object} - Response from sendToSession
  */
-async function sendToSessionWithRetry(session, message, options = {}, maxRetries = 3) {
+async function sendToSessionWithRetry(session, message, options = {}, maxRetries = 5) {
   let lastError;
-  
+
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       return await sendToSession(session, message, options);
     } catch (error) {
       lastError = error;
-      
+
       // Don't retry quota errors - they need manual intervention or fallback
       if (error.isQuotaError) {
         throw error;
       }
-      
+
       // Retry on server errors (500, 503), blocked responses, malformed function calls, AND network failures
       // MALFORMED_FUNCTION_CALL: Model generated invalid function call JSON - transient, retry usually succeeds
       // Network failures include: fetch failed, ECONNRESET, ETIMEDOUT, ENOTFOUND, socket hang up
       const errorMsg = error.message?.toLowerCase() || '';
-      const isRetryable = 
-        error.status >= 500 || 
+      const isRetryable =
+        error.status >= 500 ||
         error.message?.includes('500') ||
         error.message?.includes('503') ||
         error.message?.includes('blocked') ||
@@ -401,19 +401,20 @@ async function sendToSessionWithRetry(session, message, options = {}, maxRetries
         error.code === 'ETIMEDOUT' ||
         error.code === 'ENOTFOUND' ||
         error.code === 'UND_ERR_CONNECT_TIMEOUT';
-      
+
       if (!isRetryable || attempt === maxRetries) {
         throw error;
       }
-      
-      // Exponential backoff: 3s, 6s, 12s (increased for network issues)
-      const delay = Math.pow(2, attempt) * 1500;
+
+      // Exponential backoff: 3s, 6s, 15s, 30s, 60s (aggressive backoff for 503 demand spikes)
+      const backoffDelays = [3000, 6000, 15000, 30000, 60000];
+      const delay = backoffDelays[attempt - 1] || 60000;
       console.log(`[Session] ⚠️ Retryable error (attempt ${attempt}/${maxRetries}): ${error.message?.slice(0, 80)}...`);
       console.log(`[Session] 🔄 Waiting ${delay/1000}s before retry...`);
       await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
-  
+
   throw lastError;
 }
 
@@ -552,13 +553,53 @@ async function buildFlashSteelManCases(systemPrompt, messages, toolCallHistory, 
 
     console.log(`[Flash Advisor] Response received in ${elapsed}s (${flashResponse.content.length} chars)`);
 
-    // 5. Extract cases using existing capture regex
+    // 5. Extract cases using regex — try multiple strategies
     const content = flashResponse.content;
-    const casePattern = /(?:\*\*)?(?:Case for|CASE FOR|Analysis for|ANALYSIS FOR)[:\s*]+([^\n*]+)[\s\S]*?(?=(?:\*\*)?(?:Case for|CASE FOR|Analysis for|ANALYSIS FOR)|$)/gi;
-    const caseMatches = [...content.matchAll(casePattern)];
 
-    if (caseMatches.length >= 2) {
-      const fullCases = caseMatches.slice(0, 2).map(m => m[0].trim());
+    // Strategy 1: Split on major case headers (more robust than lazy regex)
+    const headerPattern = /(?:^|\n)(?:\*\*)?(?:#{1,3}\s*)?(?:Case for|CASE FOR|Analysis for|ANALYSIS FOR)[:\s*—-]+/gi;
+    const headerMatches = [...content.matchAll(headerPattern)];
+
+    let fullCases = [];
+    if (headerMatches.length >= 2) {
+      // Split content at each header, take the two longest sections
+      const sections = [];
+      for (let i = 0; i < headerMatches.length; i++) {
+        const start = headerMatches[i].index;
+        const end = i + 1 < headerMatches.length ? headerMatches[i + 1].index : content.length;
+        sections.push(content.substring(start, end).trim());
+      }
+      // Sort by length descending and take the two longest (handles extra headers within cases)
+      sections.sort((a, b) => b.length - a.length);
+      fullCases = sections.slice(0, 2);
+
+      // If second case is suspiciously short (<200 chars), the regex split wrong
+      if (fullCases[1].length < 200 && sections.length > 2) {
+        console.warn(`[Flash Advisor] ⚠️ Second case too short (${fullCases[1].length} chars) — likely split on internal header. Merging fragments...`);
+        // Try merging remaining sections into the short case
+        const shortIdx = sections.indexOf(fullCases[1]);
+        const remaining = sections.filter((_, i) => i !== 0 && i !== shortIdx);
+        fullCases[1] = fullCases[1] + '\n\n' + remaining.join('\n\n');
+      }
+    }
+
+    // Strategy 2: Fallback — simple split on "---" or double newline between cases
+    if (fullCases.length < 2 || fullCases.some(c => c.length < 200)) {
+      console.log(`[Flash Advisor] Trying fallback split strategy...`);
+      // Split on markdown horizontal rules or major section breaks
+      const halves = content.split(/\n---+\n/);
+      if (halves.length >= 2) {
+        // Find the two halves that contain case-like content
+        const caseHalves = halves.filter(h => h.length > 200);
+        if (caseHalves.length >= 2) {
+          fullCases = caseHalves.slice(0, 2).map(h => h.trim());
+          console.log(`[Flash Advisor] Fallback split: ${fullCases[0].length} + ${fullCases[1].length} chars`);
+        }
+      }
+    }
+
+    // Final validation: both cases must be substantial
+    if (fullCases.length >= 2 && fullCases[0].length >= 200 && fullCases[1].length >= 200) {
       const case1Lower = fullCases[0].toLowerCase();
       const homeTeamLower = homeTeam.toLowerCase();
       const case1IsHome = case1Lower.includes(homeTeamLower.split(' ').pop()) ||
@@ -574,9 +615,10 @@ async function buildFlashSteelManCases(systemPrompt, messages, toolCallHistory, 
       return result;
     }
 
-    // Flash failed to produce bilateral cases
-    console.warn(`[Flash Advisor] ⚠️ Could not extract bilateral cases from Flash response (found ${caseMatches.length} case patterns)`);
-    console.warn(`[Flash Advisor] Response preview: ${content.substring(0, 300)}...`);
+    // All strategies failed — log raw content for debugging
+    console.warn(`[Flash Advisor] ⚠️ Could not extract bilateral cases (found ${fullCases.length} sections, sizes: ${fullCases.map(c => c.length).join(', ')})`);
+    console.warn(`[Flash Advisor] Headers found at positions: ${headerMatches.map(m => m.index).join(', ')}`);
+    console.warn(`[Flash Advisor] Response preview: ${content.substring(0, 500)}...`);
     return null;
 
   } catch (error) {
@@ -794,50 +836,84 @@ function buildFactorChecklist(sport) {
  */
 function summarizeStatForContext(statResult, statToken, homeTeam, awayTeam) {
   if (!statResult) return `${statToken}: No data available`;
-  
+
   try {
     const { home, away, homeValue, awayValue } = statResult;
     const h = home || homeValue || {};
     const a = away || awayValue || {};
-    
-    // Handle different stat types with natural language
+
+    // Randomize team presentation order to prevent primacy bias
+    const homeFirst = Math.random() < 0.5;
+    const orderTeams = (label, homeStr, awayStr, suffix) => {
+      const line = homeFirst
+        ? `${label}: ${homeTeam} ${homeStr} | ${awayTeam} ${awayStr}`
+        : `${label}: ${awayTeam} ${awayStr} | ${homeTeam} ${homeStr}`;
+      return suffix ? `${line} ${suffix}` : line;
+    };
+
     switch (statToken) {
       case 'NET_RATING':
-        return `NET RATING: ${awayTeam} ${formatNum(a.net_rating || a.netRating)} | ${homeTeam} ${formatNum(h.net_rating || h.netRating)} (higher is better)`;
-      
+        return orderTeams('NET RATING',
+          formatNum(h.net_rating || h.netRating),
+          formatNum(a.net_rating || a.netRating),
+          '(higher is better)');
+
       case 'OFFENSIVE_RATING':
-        return `OFFENSIVE RATING: ${awayTeam} ${formatNum(a.off_rating || a.offRating)} | ${homeTeam} ${formatNum(h.off_rating || h.offRating)} (points per 100 possessions)`;
-      
+        return orderTeams('OFFENSIVE RATING',
+          formatNum(h.off_rating || h.offRating),
+          formatNum(a.off_rating || a.offRating),
+          '(points per 100 possessions)');
+
       case 'DEFENSIVE_RATING':
-        return `DEFENSIVE RATING: ${awayTeam} ${formatNum(a.def_rating || a.defRating)} | ${homeTeam} ${formatNum(h.def_rating || h.defRating)} (lower is better)`;
-      
-      case 'RECENT_FORM':
+        return orderTeams('DEFENSIVE RATING',
+          formatNum(h.def_rating || h.defRating),
+          formatNum(a.def_rating || a.defRating),
+          '(lower is better)');
+
+      case 'RECENT_FORM': {
         const awayForm = a.summary || a.last_5 || 'N/A';
         const homeForm = h.summary || h.last_5 || 'N/A';
-        return `RECENT FORM (Last 5): ${awayTeam} ${awayForm} | ${homeTeam} ${homeForm}`;
-      
+        return orderTeams('RECENT FORM (Last 5)', homeForm, awayForm);
+      }
+
       case 'HOME_AWAY_SPLITS':
-        // Records are TIER 3 - Gary can use them to understand the line, then investigate the data behind them
-        return `HOME/AWAY SPLITS: ${awayTeam} road ${a.away_record || a.record || 'N/A'} | ${homeTeam} home ${h.home_record || h.record || 'N/A'} [TIER 3 - Use to understand line, then investigate the data behind them]`;
-      
+        // Records are descriptive — Gary should investigate the causal data behind them
+        return orderTeams('HOME/AWAY SPLITS',
+          `home ${h.home_record || h.record || 'N/A'}`,
+          `road ${a.away_record || a.record || 'N/A'}`);
+
       case 'PACE':
-        return `PACE: ${awayTeam} ${formatNum(a.pace)} | ${homeTeam} ${formatNum(h.pace)} possessions/game`;
-      
+        return orderTeams('PACE',
+          formatNum(h.pace),
+          formatNum(a.pace),
+          'possessions/game');
+
       case 'EFG_PCT':
-        return `EFFECTIVE FG%: ${awayTeam} ${formatPct(a.efg_pct || a.eFG)} | ${homeTeam} ${formatPct(h.efg_pct || h.eFG)}`;
-      
+        return orderTeams('EFFECTIVE FG%',
+          formatPct(h.efg_pct || h.eFG),
+          formatPct(a.efg_pct || a.eFG));
+
       case 'TURNOVER_RATE':
-        return `TURNOVER RATE: ${awayTeam} ${formatPct(a.tov_rate || a.tovRate)} | ${homeTeam} ${formatPct(h.tov_rate || h.tovRate)} (lower is better)`;
-      
+        return orderTeams('TURNOVER RATE',
+          formatPct(h.tov_rate || h.tovRate),
+          formatPct(a.tov_rate || a.tovRate),
+          '(lower is better)');
+
       case 'OREB_RATE':
-        return `OFFENSIVE REBOUND RATE: ${awayTeam} ${formatPct(a.oreb_rate || a.orebRate)} | ${homeTeam} ${formatPct(h.oreb_rate || h.orebRate)}`;
-      
+        return orderTeams('OFFENSIVE REBOUND RATE',
+          formatPct(h.oreb_rate || h.orebRate),
+          formatPct(a.oreb_rate || a.orebRate));
+
       case 'THREE_PT_SHOOTING':
-        return `3PT SHOOTING: ${awayTeam} ${formatPct(a.fg3_pct || a.threePct)} on ${formatNum(a.fg3a || a.threeAttempts)} attempts | ${homeTeam} ${formatPct(h.fg3_pct || h.threePct)} on ${formatNum(h.fg3a || h.threeAttempts)} attempts`;
-      
+        return orderTeams('3PT SHOOTING',
+          `${formatPct(h.fg3_pct || h.threePct)} on ${formatNum(h.fg3a || h.threeAttempts)} attempts`,
+          `${formatPct(a.fg3_pct || a.threePct)} on ${formatNum(a.fg3a || a.threeAttempts)} attempts`);
+
       case 'PAINT_SCORING':
       case 'PAINT_DEFENSE':
-        return `${statToken}: ${awayTeam} ${formatNum(a.paint_ppg || a.value)} PPG in paint | ${homeTeam} ${formatNum(h.paint_ppg || h.value)} PPG in paint`;
+        return orderTeams(statToken,
+          `${formatNum(h.paint_ppg || h.value)} PPG in paint`,
+          `${formatNum(a.paint_ppg || a.value)} PPG in paint`);
       
       case 'H2H_HISTORY':
         // Preserve FULL context: dates, scores, margins, revenge status, sweep context, PERSONNEL
@@ -875,13 +951,19 @@ function summarizeStatForContext(statResult, statToken, homeTeam, awayTeam) {
         return `H2H HISTORY (${h2hGames.length} games this season): ${seriesRecord}. Meetings: ${h2hDetails}${revengeNote ? ` [REVENGE: ${revengeNote}]` : ''}${sweepContextStr}${conditionsChangedStr}`;
       
       case 'CLUTCH_STATS':
-        return `CLUTCH PERFORMANCE: ${awayTeam} ${a.clutch_record || 'N/A'} (Net ${a.clutch_net_rating || 'N/A'}, Rank ${a.clutch_net_rank || 'N/A'}, eFG ${a.clutch_efg_pct || 'N/A'}) | ${homeTeam} ${h.clutch_record || 'N/A'} (Net ${h.clutch_net_rating || 'N/A'}, Rank ${h.clutch_net_rank || 'N/A'}, eFG ${h.clutch_efg_pct || 'N/A'})`;
-      
+        return orderTeams('CLUTCH PERFORMANCE',
+          `${h.clutch_record || 'N/A'} (Net ${h.clutch_net_rating || 'N/A'}, Rank ${h.clutch_net_rank || 'N/A'}, eFG ${h.clutch_efg_pct || 'N/A'})`,
+          `${a.clutch_record || 'N/A'} (Net ${a.clutch_net_rating || 'N/A'}, Rank ${a.clutch_net_rank || 'N/A'}, eFG ${a.clutch_efg_pct || 'N/A'})`);
+
       case 'BENCH_DEPTH':
-        return `BENCH DEPTH: ${awayTeam} bench ${formatNum(a.bench_ppg || a.value)} PPG (${a.bench_pct || ''} of scoring, ${a.rotation_size || '?'}-man rotation${a.top_bench ? ', top bench: ' + a.top_bench : ''}) | ${homeTeam} bench ${formatNum(h.bench_ppg || h.value)} PPG (${h.bench_pct || ''} of scoring, ${h.rotation_size || '?'}-man rotation${h.top_bench ? ', top bench: ' + h.top_bench : ''})`;
-      
+        return orderTeams('BENCH DEPTH',
+          `bench ${formatNum(h.bench_ppg || h.value)} PPG (${h.bench_pct || ''} of scoring, ${h.rotation_size || '?'}-man rotation${h.top_bench ? ', top bench: ' + h.top_bench : ''})`,
+          `bench ${formatNum(a.bench_ppg || a.value)} PPG (${a.bench_pct || ''} of scoring, ${a.rotation_size || '?'}-man rotation${a.top_bench ? ', top bench: ' + a.top_bench : ''})`);
+
       case 'REST_SITUATION':
-        return `REST: ${awayTeam} ${a.days_rest || 'N/A'} days rest | ${homeTeam} ${h.days_rest || 'N/A'} days rest`;
+        return orderTeams('REST',
+          `${h.days_rest || 'N/A'} days rest`,
+          `${a.days_rest || 'N/A'} days rest`);
       
       case 'PLAYER_GAME_LOGS':
         // Preserve FULL game-by-game breakdown for Gary to interpret
@@ -943,7 +1025,7 @@ function summarizeStatForContext(statResult, statToken, homeTeam, awayTeam) {
           // Try to extract from home/away structure
           const homeKeys = Object.keys(h).slice(0, 8);
           if (homeKeys.length > 0) {
-            const summary = homeKeys.map(k => `${k}: ${awayTeam} ${formatNum(a[k])} | ${homeTeam} ${formatNum(h[k])}`).join('; ');
+            const summary = homeKeys.map(k => orderTeams(k, formatNum(h[k]), formatNum(a[k]))).join('; ');
             return `${statToken}: ${summary}`;
           }
           return `${statToken}: Data received but empty`;
@@ -1236,8 +1318,8 @@ export async function analyzeGame(game, sport, options = {}) {
     if (isPropsMode) {
       userMessage += `\n\n═══════════════════════════════════════════════════════════════════════════════
 PROPS MODE: After completing your game analysis (Steel Man + Case Review),
-you will be asked to evaluate player props for this matchup. Your game analysis will
-directly inform which player props have edge. Investigate the game thoroughly first.
+you will be asked to evaluate player props for this matchup. Your game analysis provides
+context for player-level evaluation. Investigate the game thoroughly first.
 ═══════════════════════════════════════════════════════════════════════════════`;
     }
 
@@ -2118,7 +2200,7 @@ This is a close matchup.
 
 Investigate BOTH teams equally. Pick the SIDE the evidence supports. Do NOT predict the margin.
 ${(sport === 'basketball_ncaab' || sport === 'NCAAB') ? `
-If there is a large baseline quality gap between these teams but the spread is small, investigate WHY: Home court, conference familiarity, recent form shifts, injuries, and matchup dynamics can all compress margins. The market may be correctly pricing factors the baseline metrics don't capture.` : ''}
+In NCAAB, investigate the SPOT alongside the stats. A team can be statistically superior and still be in a bad spot to cover. Investigate what the spread is asking each team to do in THIS situation — the PRICE reflects both the talent gap and the situational context. Where do the stats and the spot agree? Where do they conflict?` : ''}
 `;
     }
   }
@@ -2266,8 +2348,6 @@ If the gap is marginal, either skip it or acknowledge it's a minor factor. Focus
 ## ANALYSIS RULES
 
 **ANTI-FABRICATION:** DO NOT invent tactical narratives (defensive coverages, driving lanes, paint attacks, etc.). Stick to STATS you can verify — you're analyzing data, not watching film.
-
-**CITE SPECIFICS:** When building your case, cite the specific stats that show the mismatch (e.g., rank vs rank, rate vs rate). "Team A is better" is not analysis — show WHERE the data separates them.
 </analysis_rules>
 
 <case_structure>
@@ -2329,7 +2409,7 @@ ${isNBA ? `- Focus on MATCHUP-SPECIFIC findings: Where does Team A's statistical
 - Season-long baselines (Net Rating, ORtg, DRtg) reflect team quality the spread already captures. Build your case on what makes THIS game different.
 - RECORDS: Copy records EXACTLY from the scout report. Do NOT use records from your training data.` : isNFL ? `- TEAM ADVANCED STATS are REQUIRED (EPA/Play, DVOA, Success Rate, Pressure Rate, etc.)
 - Player stats can supplement team stats, but team stats must be the foundation
-- INVESTIGATE: What does the gap between recent and season data reveal? What evidence points to a real shift vs variance?` : isNCAAB ? `- Focus on MATCHUP-SPECIFIC findings: style clashes, Four Factors gaps (eFG%, TS%, TOV%, ORB%, FT Rate), shooting vs defensive matchups
+- INVESTIGATE: What does the gap between recent and season data reveal? What evidence points to a real shift vs variance?` : isNCAAB ? `- Focus on MATCHUP-SPECIFIC findings: compare each team's offense against the opponent's defense, and vice versa. What does the matchup reveal?
 - INVESTIGATE: What does the gap between recent form and season data reveal? What does the opponent quality during the recent stretch tell you?
 - Season-long baselines (AdjEM, AdjO, AdjD) reflect team quality the spread already captures. Build your case on what makes THIS game different.
 - RECORDS: Copy records EXACTLY from the scout report. Do NOT use records from your training data.` : `- TEAM ADVANCED STATS are REQUIRED — use the sport-appropriate advanced metrics from your data
@@ -2343,6 +2423,15 @@ ${isNBA ? `- Focus on MATCHUP-SPECIFIC findings: Where does Team A's statistical
 - If you don't have a stat for something, don't write it. Focus on what you CAN verify.
 
 **ANTI-NARRATIVE RULE:** BOTH cases must cite at least 2 data-backed stats from your investigation. If you can only find narrative reasons for one side (emotion, crowd, "fight", "resilience"), that tells you something important about which side the data actually supports. Narrative without numbers is not a case — it's a story.
+
+**CASE QUALITY — ARGUE FOR THE SPREAD, NOT THE TEAM:**
+Each case should argue for its SIDE OF THE SPREAD, not just argue for its team. As you write each case, ask yourself:
+- Am I using data to reason about tonight's specific game, or just describing how good/bad this team has been?
+- Is each argument about the MATCHUP between these two teams, or about one team in isolation?
+- Does each argument apply to THIS game specifically, or would it be equally true for any game this team plays this week?
+- Am I building my case around what the specific spread demands, or arguing for the team and tacking the spread on at the end?
+
+If the spread number changed significantly, your case should change too. A case that reads the same at -16.5 and -6.5 is a team-quality argument, not a spread argument.
 
 **Then write 3-4 detailed paragraphs (not bullet points) for EACH case:**
 
@@ -2447,6 +2536,140 @@ BEGIN MATCHUP ANALYSIS NOW.
 }
 
 /**
+ * Build the PASS 2 message for PROPS mode — bilateral OVER/UNDER analysis
+ *
+ * Unlike game picks (which analyze team spread covering), props Pass 2 asks Gary
+ * to transition from game-level investigation to player-level bilateral analysis.
+ * Gary builds OVER and UNDER cases for his top prop candidates, connecting
+ * game-level findings (pace, defense, game script) to individual player production.
+ *
+ * @param {string} sport - Sport identifier
+ * @param {string} homeTeam - Home team name
+ * @param {string} awayTeam - Away team name
+ * @param {object} propContext - Props context (candidates, lines, etc.)
+ */
+function buildPass2PropsMessage(sport = '', homeTeam = '[HOME]', awayTeam = '[AWAY]', propContext = {}) {
+  const { availableLines } = propContext || {};
+
+  // Randomize OVER/UNDER presentation order to prevent primacy bias (same as game picks randomize home/away)
+  const overFirst = Math.random() > 0.5;
+  const firstDirection = overFirst ? 'OVER' : 'UNDER';
+  const secondDirection = overFirst ? 'UNDER' : 'OVER';
+
+  // Format available lines for reference
+  const linesList = (availableLines || []).map(l => {
+    return `- ${l.player} (${l.team || ''}): ${l.prop_type} ${l.line} (O: ${l.over_odds || 'N/A'} / U: ${l.under_odds || 'N/A'})`;
+  }).join('\n');
+
+  const isNBA = sport === 'basketball_nba' || sport === 'NBA';
+  const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
+  const isNFL = sport === 'americanfootball_nfl' || sport === 'NFL';
+
+  // Sport-specific game context synthesis guidance
+  const sportContextGuidance = isNBA ? `
+What did your game investigation reveal about the factors that affect player production tonight? Synthesize what you found — the matchup dynamics, the game environment, any personnel changes — and how those findings apply to individual players.` : isNHL ? `
+- **Expected Goals & Possession:** What does the xGF%/Corsi% matchup suggest about shot volume?
+- **Goalie Matchup:** How do the goalies' recent SV% and GAA affect scoring opportunity?
+- **Power Play/Penalty Kill:** Which team takes more penalties? Which PP unit is more dangerous?
+- **Line Matchups:** Are there deployment advantages for specific players tonight?
+- **Game Script:** Competitive game (balanced minutes) or blowout risk (pulled goalies, deployment shifts)?` : isNFL ? `
+- **Pace & Play Volume:** What does the pace matchup suggest about total plays and opportunity?
+- **Defensive Scheme:** How does the opposing defense affect passing vs rushing volume?
+- **Game Script:** Projected game flow — does one team need to pass more to keep up? Does a lead mean heavy rushing?
+- **Injury Impact:** Are there absences that shift targets, carries, or routes to specific players?
+- **Weather/Conditions:** Any factors that affect passing vs rushing distribution?` : `
+- **Pace & Opportunity:** What does the matchup suggest about total possessions and player opportunity?
+- **Defensive Matchups:** Which defensive weaknesses create opportunity for specific player types?
+- **Game Script:** Competitive game or blowout risk? How does this affect minute distribution?
+- **Injury Cascades:** Are there absences that shift production to specific players?`;
+
+  return `
+<pass_context>
+## PASS 2 - BILATERAL PROP ANALYSIS
+
+You've completed your game-level investigation for ${awayTeam} @ ${homeTeam}. Now transition from GAME analysis to PLAYER analysis.
+
+Your investigation revealed the game dynamics. Now apply those findings to evaluate specific player props.
+</pass_context>
+
+<game_synthesis>
+## STEP 1: GAME CONTEXT SYNTHESIS
+
+Before evaluating individual props, synthesize your game investigation into factors that affect player production:
+${sportContextGuidance}
+
+Summarize these game factors BRIEFLY — they are the lens through which you evaluate each prop candidate.
+</game_synthesis>
+
+${linesList ? `<available_lines>
+## AVAILABLE PROP LINES
+
+${linesList}
+</available_lines>
+
+` : ''}<bilateral_analysis>
+## STEP 2: BILATERAL OVER/UNDER ANALYSIS
+
+Select your top 3-4 prop candidates — the players where your game investigation reveals something the line might not fully capture.
+
+**FOR EACH CANDIDATE, BUILD BOTH CASES** (in whichever order you write them, give BOTH cases equal depth and effort):
+
+### ${firstDirection} CASE for [Player] — [Prop Type] [Line]
+Build the strongest case for WHY this player goes ${firstDirection} tonight. Connect your game-level findings to this specific player's production:
+- What game factors from your investigation support this direction?
+- What does the player's recent form show? How does it compare to what the line reflects?
+- What does the matchup data reveal about production in this direction?
+- Cite the STATS from your investigation that support this case.
+
+### ${secondDirection} CASE for [Player] — [Prop Type] [Line]
+Build the strongest case for WHY this player goes ${secondDirection} tonight. This is NOT filler — give it equal analytical depth:
+- What game factors from your investigation support this direction?
+- What does the matchup data reveal about production in this direction?
+- What conditions must be true for this case to hold? Are those conditions specific to tonight?
+- Cite the STATS that support this case.
+
+**REQUIREMENTS FOR EACH CASE:**
+- Every claim must trace back to a SPECIFIC STAT from your investigation or scout report
+- Connect game-level factors (you already investigated these) to individual player production
+- Do NOT fabricate matchup details you don't have data for — stick to what you investigated
+- The line already reflects this player's established role and recent production. Build your case on what makes TONIGHT different.
+
+**VARIANCE CHECK:** After building both cases, assess which direction has stronger data-backed support for each candidate. Note where you have genuine conviction and where you don't.
+</bilateral_analysis>
+
+<analysis_rules>
+## ANALYSIS RULES
+
+**ANTI-FABRICATION:** Cite STATS from your investigation. Do not invent defensive schemes, matchup details, or coaching adjustments you don't have data for. You're comparing numbers, not watching film.
+
+**GAME CONNECTION:** Each case should address what makes TONIGHT different from the player's baseline. Investigate what the line already reflects before building your case.
+
+**INVESTIGATION OPTION:** If you need more player data to build stronger cases, you can still call fetch_stats tools before writing your cases.
+</analysis_rules>
+
+<instructions>
+## YOUR TASK
+
+Execute these steps NOW:
+
+**STEP 1:** Synthesize your game investigation into player-relevant factors (1-2 paragraphs)
+
+**STEP 2:** Select your top 3-4 prop candidates and explain WHY each one is a candidate based on your game analysis
+
+**STEP 3:** For EACH candidate, write:
+- **${firstDirection} CASE** (2-3 paragraphs with stats, game factors, matchup evidence)
+- **${secondDirection} CASE** (2-3 paragraphs with stats, game factors, matchup evidence)
+
+**STEP 4:** If you need more player-specific data to build stronger cases, call fetch_stats now
+
+**CRITICAL:** Do NOT pick OVER or UNDER yet. Build BOTH cases neutrally.
+In Pass 2.5 you'll stress-test both sides and determine which direction is the BETTER BET for each candidate.
+
+BEGIN BILATERAL PROP ANALYSIS NOW.
+</instructions>`.trim();
+}
+
+/**
  * Get spread context message based on sport and spread size
  * Historical data shows favorites cover less often as spreads increase
  * This gives Gary the context to make informed decisions
@@ -2485,7 +2708,7 @@ function getSpreadContext(sport, absSpread) {
  * @param {string} sport - Sport identifier for spread context thresholds
  * @param {number} spread - The spread value (e.g., -13.5)
  */
-function buildPass25Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', sport = '', spread = 0) {
+function buildPass25Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', sport = '', spread = 0, proAssessment = null) {
   // Randomize team presentation order to prevent primacy bias (same as Pass 2)
   const p25HomeFirst = Math.random() > 0.5;
   const p25First = p25HomeFirst ? homeTeam : awayTeam;
@@ -2560,12 +2783,22 @@ For large spreads, the question shifts from "who wins?" to "who wins by X?" Inve
   // ═══════════════════════════════════════════════════════════════════════════
   // GEMINI 3 OPTIMIZED: XML-tagged structure with END-OF-PROMPT instruction
   // ═══════════════════════════════════════════════════════════════════════════
+  // Build intro text based on whether Pro's own assessment is available
+  const introText = proAssessment
+    ? `You have THREE inputs to evaluate:
+1. **Your own initial read** — your honest take on what this game is about, written before seeing any advisor cases
+2. **Advisor's case for the home team** — built independently from your investigation data
+3. **Advisor's case for the away team** — built independently from your investigation data
+
+REVIEW all three critically, VERIFY claims against the data, and make YOUR final decision. Your initial read is NOT your final answer — it's one of three inputs. Evaluate all three with equal rigor.`
+    : `Steel Man cases have been built by an independent advisor. These are your "advisors" — they saw the same data you did but built their cases independently.
+REVIEW them critically, VERIFY claims against the data, and make YOUR decision.`;
+
   return `
 <game_context>
 ## PASS 2.5 - CASE REVIEW, STRESS TEST & FINAL DECISION
 
-Steel Man cases have been built by an independent advisor. These are your "advisors" — they saw the same data you did but built their cases independently.
-REVIEW them critically, VERIFY claims against the data, and make YOUR decision.
+${introText}
 
 ${spreadContext}
 </game_context>
@@ -2657,7 +2890,32 @@ Strip these out. Only keep claims where the conclusion follows directly from com
 - If YES: Investigate how the team has performed WITHOUT them - that IS the team now
 - **CONCLUDE:** What does the team's performance during the absence reveal — and which "team" are the cases actually describing?
 
-**F. TWO-STEP SPREAD ANALYSIS (NEUTRAL FOR BOTH TEAMS)**
+**F. EVALUATING ALL INPUTS**
+
+${proAssessment ? `You have THREE pieces to evaluate: your own initial assessment AND two advisor cases built independently. Apply the same 6 questions to ALL THREE — your own assessment gets the same scrutiny as the advisor's cases.` : `These cases were built by an independent advisor. Your job is to evaluate the quality of reasoning in each case to help determine which side is the better bet tonight.`}
+
+For EACH ${proAssessment ? 'piece (your assessment AND each advisor case)' : 'case'} as a whole, ask yourself:
+
+1. **Is this argument using data to reason about tonight's specific game, or is it using data to describe how good/bad a team has been?** ${proAssessment ? 'All three pieces' : 'Both cases'} will cite stats. The question is what they DO with them — are they connecting the data to a specific condition, matchup, or situation in tonight's game, or just summarizing team quality?
+
+2. **If this stat were different, would my evaluation of tonight's game actually change, or would the matchup dynamics be the same?** If a key number in the ${proAssessment ? 'piece' : 'case'} changed and the argument would still hold, the ${proAssessment ? 'piece' : 'case'} is about team quality, not about tonight's game.
+
+3. **Is this argument about the MATCHUP between these two teams, or about one team in isolation?** A ${proAssessment ? 'piece' : 'case'} that says "Team A is elite" is different from one that says "Team A's specific strength runs directly into Team B's specific weakness."
+
+4. **Does this argument apply to THIS game specifically, or would it be equally true for any game this team plays this week?** Reasoning that's specific to tonight's conditions, opponent, and situation is different from reasoning that describes general team quality.
+
+5. **Does this ${proAssessment ? 'piece' : 'case'} argue for its side of the spread, or does it argue for its team and treat the spread as an afterthought?** If the spread number changed significantly, would the argument still be the same? A ${proAssessment ? 'piece' : 'case'} built around what the specific spread demands is different from one that argues "this team is good" and tacks the spread on at the end.
+
+6. **For each claim, trace the logic: What evidence is cited, and does the conclusion actually follow from it?** Every ${proAssessment ? 'piece' : 'case'} connects data points to conclusions. Examine each connection individually — is the reasoning sound, or is there a logical leap between what the data shows and what the ${proAssessment ? 'piece' : 'case'} claims it means? Stop at each claim and push back: Does this hold up under scrutiny? Is the data cited representative of who this team actually is, or could it reflect short-term variance unlikely to repeat?
+
+**FOR EACH ${proAssessment ? 'PIECE' : 'CASE'}, CONCLUDE:**
+- Which ${proAssessment ? 'piece' : 'case'} gives you more reasoning about THIS specific game to help determine which side of the spread is the better bet?
+${proAssessment ? `- Does your initial read still hold up after seeing the advisor's cases? Did the advisor's cases address the dynamics you identified, or did they focus on different things?
+- Which of the three pieces has the STRONGEST game-specific reasoning?` : ''}
+
+**STAY OBJECTIVE** — sometimes the favorite's case will have the stronger reasoning. Sometimes the underdog's will. Evaluate the quality of reasoning, not the side.
+
+**G. TWO-STEP SPREAD ANALYSIS (NEUTRAL FOR BOTH TEAMS)**
 
 This is the core of your evaluation. Two questions, answered neutrally:
 
@@ -2691,11 +2949,12 @@ For EACH team, investigate:
 **COMBINE BOTH STEPS:**
 Looking at the statistical picture AND tonight's conditions together — what does the full picture tell you about this spread?
 
-**CASE SUMMARY:**
-| Team | Data-Backed Argument | Tonight's Conditions | Biggest Hole in Case |
-|------|---------------------|---------------------|---------------------|
-| ${p25First} | [What STAT/DATA drives their case?] | [What changes tonight?] | [What's the flaw?] |
-| ${p25Second} | [What STAT/DATA drives their case?] | [What changes tonight?] | [What's the flaw?] |
+**${proAssessment ? 'INPUT' : 'CASE'} SUMMARY:**
+| ${proAssessment ? 'Input' : 'Team'} | Data-Backed Argument | Tonight's Conditions | Biggest Hole | Game-Specific Reasoning |
+|------|---------------------|---------------------|---------------------|------------------------|
+${proAssessment ? `| Your Initial Read | [What dynamics did YOU identify as most important?] | [What conditions shaped your read?] | [What's the biggest gap in your own reasoning?] | [Is your read about THIS game's specific dynamics, or general team quality?] |
+` : ''}| ${p25First} Advisor Case | [What STAT/DATA drives their case?] | [What changes tonight?] | [What's the flaw?] | [Is the case reasoning about THIS game, or describing general team quality?] |
+| ${p25Second} Advisor Case | [What STAT/DATA drives their case?] | [What changes tonight?] | [What's the flaw?] | [Is the case reasoning about THIS game, or describing general team quality?] |
 
 **STAY OBJECTIVE:** Do NOT pick a side yet. You will stress test BOTH sides before deciding.
 </case_review>
@@ -2811,7 +3070,29 @@ These patterns show common situations where perception, injury news, or recent r
    - If injury announced < 1 week: Team still adjusting. High variance situation - investigate closely.
    - **For SPREAD bets:** Fresh news (< 48 hours) may not be fully reflected in the spread. Old news is.
    - **For ML bets:** Focus on team adaptation, not when market learned about it.
+${isNCAAB ? `
+### NCAAB-SPECIFIC FACTORS TO INVESTIGATE:
 
+**THE SPOT:**
+   - AWARENESS: Be aware of the full situational context of this game — venue, schedule, travel, emotional context.
+   - INVESTIGATE: What's the venue situation? What's the schedule context — midweek? travel? What's the emotional context — momentum, breaking a streak, rivalry energy? What are the stakes for each team?
+   - WHAT DOES THIS TELL YOU: What does the spot reveal about how this game is likely to be played?
+
+**HOME COURT:**
+   - AWARENESS: College home court effects are real and significant. Be aware of the venue and what each team's home/away data shows.
+   - INVESTIGATE: What do the home/away records and PPG margins show for each team? What does the home court advantage data reveal about the impact of venue in THIS matchup?
+   - WHAT DOES THIS TELL YOU: What does the venue factor add to the matchup picture?
+
+**CONFERENCE CONTEXT:**
+   - AWARENESS: Conference games carry familiarity, intensity, and stakes that non-conference games don't. Be aware of whether this is a conference game, a rematch, or a late-season meeting.
+   - INVESTIGATE: What do the conference records and standings show? What does the H2H history reveal — scores, margins, context from prior meetings?
+   - WHAT DOES THIS TELL YOU: What does the conference context add to the matchup picture?
+
+**THE PRICE:**
+   - AWARENESS: The spread is the price — it's what the market is asking each team to do in THIS spot. A team can be statistically superior and still be mispriced for the situation.
+   - INVESTIGATE: Given the spot, the venue, and the conference context — what is the spread asking each team to do? What does the situational context reveal about whether the spread reflects the full picture or only part of it?
+   - WHAT DOES THIS TELL YOU: Where do the stats and the situational factors agree about the price? Where do they conflict?
+` : ''}
 ---
 
 ### PICK-LEVEL CONCERNS:
@@ -2938,6 +3219,155 @@ CRITICAL CONSTRAINTS (all system prompt rules apply — these are reminders of t
 BEGIN YOUR ANALYSIS NOW.
 </instructions>
 `.trim();
+}
+
+/**
+ * Build the PASS 2.5 message for PROPS mode — evaluate bilateral OVER/UNDER cases
+ *
+ * After Gary builds bilateral cases for each prop candidate in Pass 2,
+ * this pass asks him to stress-test those cases and identify which
+ * candidates have the strongest edges before the final selection in Pass 3.
+ *
+ * @param {string} homeTeam - Home team name
+ * @param {string} awayTeam - Away team name
+ * @param {string} sport - Sport identifier
+ */
+function buildPass25PropsMessage(homeTeam = '[HOME]', awayTeam = '[AWAY]', sport = '') {
+  return `
+<pass_context>
+## PASS 2.5 - PROP CASE REVIEW & STRESS TEST
+
+You've built bilateral OVER/UNDER cases for your top prop candidates in ${awayTeam} @ ${homeTeam}. Now REVIEW them critically — verify claims, stress-test assumptions, and identify which candidates have genuine edges.
+</pass_context>
+
+<verification_protocol>
+## VERIFY BEFORE YOU EVALUATE
+
+You have access to ALL the stat data gathered during investigation.
+You also have TOOLS to investigate anything further if needed.
+
+**FOR EACH CASE CLAIM:**
+1. Check if the stat cited is in your investigation data
+2. Verify the numbers are accurate
+3. If a claim seems uncertain or lacks data backing, CALL A STAT to verify
+4. Do not accept claims at face value — verify them
+
+**USE YOUR TOOLS IF:**
+- A case cites a stat you can't verify in the data
+- You want to check a player's game logs against a specific opponent
+- You need to verify a defensive matchup claim
+- Any claim feels like narrative without data backing
+</verification_protocol>
+
+<case_review>
+## CASE REVIEW — FOR EACH CANDIDATE
+
+**Take a beat.** You're reviewing bilateral OVER/UNDER cases. Evaluate them critically against YOUR investigation data. Separate what's REAL and RELEVANT from what's narrative or fabrication.
+
+**FABRICATION CHECK:** Did either case include claims that require knowledge beyond the data?
+- Ask: Can I trace this claim to a specific number from my investigation, game logs, or grounding results?
+- Ask: Does this claim require me to understand HOW the sport is played tactically (defensive schemes, play design, coaching adjustments) to connect two data points?
+- If a claim connects data points using tactical reasoning you weren't given in the data, it is fabricated — even if the individual data points are real.
+Strip these out. Only keep claims where the conclusion follows directly from comparing the numbers.
+
+**FOR EACH PROP CANDIDATE, EVALUATE:**
+
+**A. OVER CASE STRENGTH:**
+- Is the OVER case built on STATS or narrative? Strip out any claims without data.
+- What does the game context tell you about production relative to baseline for this direction?
+- Is the recent form trend driven by factors that are likely to repeat tonight, or by factors that may not? What does the data show?
+- CONCLUDE: What is the strongest data-backed argument for OVER?
+
+**B. UNDER CASE STRENGTH:**
+- Is the UNDER case built on STATS or narrative? Strip out any claims without data.
+- What does the specific defensive matchup tonight reveal about this player's production ceiling and floor?
+- What game-script scenarios could materialize, and what do they mean for this player's production?
+- CONCLUDE: What is the strongest data-backed argument for UNDER?
+
+**C. DATA QUALITY:**
+- Investigate whether the stats cited reveal something about THIS specific prop tonight, or just confirm what the line likely already reflects
+- Investigate the relationship between season stats and recent form — what does the data show about whether recent form represents a real shift?
+- CONCLUDE: Which findings reveal something the line might NOT have captured?
+
+**D. FRESHNESS — HAS THE MARKET ADJUSTED?**
+- Investigate how long key news (injuries, lineup changes, role shifts) has been known
+- If announced 1+ weeks ago → Investigate: What do the data and line movement suggest about whether this has been fully absorbed?
+- If news is recent → Investigate: What does the data show about the impact, and does the current line appear to reflect it?
+- CONCLUDE: Is this a factor that affects tonight's prop, or information the line already reflects?
+
+**E. EDGE ASSESSMENT:**
+- Which direction (OVER or UNDER) has the stronger DATA-BACKED case?
+- Is the evidence about THIS GAME specifically, or just the player's general tendencies?
+- What would need to be true for the OPPOSITE direction to be the better bet?
+- How strong is the evidence for your preferred direction? What's your honest conviction level?
+
+**F. LINE CHECK:**
+- The line reflects this player's established role, recent production, and known factors
+- What specifically from your investigation does the line NOT reflect?
+- If your edge is just "he's been scoring a lot lately" — that's already IN the line. What's DIFFERENT tonight?
+</case_review>
+
+<stress_test>
+## STRESS TEST PATTERNS (Check ALL candidates)
+
+**1. Role Pricing:** Is this player's opportunity (minutes, usage, targets) already priced into the line? If yes, what CHANGES tonight?
+
+**2. Game Script Risk:** What happens to this player's production if the game goes differently than projected? Does your case depend on a specific game script (competitive, blowout, pace)? What if that script doesn't materialize?
+
+**3. Opponent Adjustment:** Has the opposing team shown they adjust defensively to this player type? Check if they've limited similar players recently.
+
+**4. Sample Size:** Is the "trend" you're riding based on a sample size that your investigation shows is meaningful? What does the broader data context suggest?
+
+**5. Correlation Check:** Are your top candidates correlated? If the game goes differently than projected, how does that affect each prop independently?
+
+**6. Line Movement Context:** Has this line moved since open? If so, investigate what information may have caused the movement. What does the direction and size of the move tell you about market perception of this prop?
+
+**7. Injury Impact Verification:** If your case involves a teammate absence, investigate: When was the absence announced? What do the player's stats during the absence show compared to the current line? What does that tell you?
+</stress_test>
+
+<reflection>
+## BEFORE YOU DECIDE — THINK.
+
+You've investigated the data. You've built and reviewed bilateral cases. You've stress-tested the arguments. Now, before you rank your candidates, genuinely sit with everything you've found.
+
+Don't rush to a conclusion. Ask yourself: What surprised you in your investigation? What confirmed what you expected? Where did the data and the narrative disagree?
+
+Think about each candidate — the game logs, the matchup data, the injury situations and their timing, the recent form trends, the game script projections. What do you trust most from all of it? What matters most for EACH prop tonight — and why?
+
+Of everything you found, what do you have genuine conviction about? What are you less certain of? Where is the uncertainty, and does that uncertainty favor OVER or UNDER?
+
+**NOW INTERROGATE THE LINE.**
+
+The prop line is set where it is for reasons. Ask yourself: What created THIS number? What combination of season averages, recent form, matchup, and known factors went into it?
+
+Given everything you've investigated:
+- Does this line feel right for tonight?
+- If not, which direction is it off — and what specifically from your research tells you that?
+- What would need to be true for the OPPOSITE direction to be the better bet?
+</reflection>
+
+<instructions>
+## YOUR TASK (Execute in Order)
+
+**STEP 1: REVIEW EACH CANDIDATE**
+Work through sections A-F for each prop candidate. Use tools to verify any uncertain claims. Strip out any fabricated tactical claims.
+
+**STEP 2: REFLECT**
+Before ranking, genuinely think about what you found. What surprised you? What do you trust? Where is the uncertainty?
+
+**STEP 3: RANK YOUR CANDIDATES**
+Based on your review, rank your candidates by edge strength:
+- Which candidates have CLEAR, data-backed edges?
+- Which candidates seemed promising but the edge dissolved under scrutiny?
+- Which direction (OVER/UNDER) won for each candidate?
+
+**STEP 4: PRELIMINARY SELECTION**
+Identify your top 2-3 candidates and the direction you lean for each. State your reasoning in natural language — the final selection happens in Pass 3.
+
+**CRITICAL:** Your evaluation should be HONEST. If a candidate's edge dissolved under scrutiny, say so. It's better to identify weak edges now than to force a bad pick later.
+
+BEGIN YOUR CASE REVIEW NOW.
+</instructions>`.trim();
 }
 
 /**
@@ -3108,7 +3538,7 @@ function buildPass3Props(homeTeam, awayTeam, propContext = {}) {
   const candidatesList = (propCandidates || []).map(c => {
     const propsStr = (c.props || []).join(', ');
     const form = c.recentForm || {};
-    return `- ${c.player} (${c.team}): ${propsStr} | Form: ${form.formTrend || 'N/A'}`;
+    return `- ${c.player} (${c.team}): ${propsStr}`;
   }).join('\n');
 
   // Format available lines
@@ -3126,8 +3556,8 @@ function buildPass3Props(homeTeam, awayTeam, propContext = {}) {
 
 You've completed your full game analysis through Passes 1-2.5. You understand:
 - The game matchup dynamics (from your Steel Man cases)
-- Which team has the edge and why (from your case review)
-- The key statistical factors driving this game
+- What the data revealed about the matchup (from your case review)
+- The key statistical factors you investigated for this game
 
 Now apply that game understanding to evaluate PLAYER PROPS.
 </pass_context>
@@ -3150,28 +3580,22 @@ ${linesList || 'No lines provided'}
 ${statsStr}
 </player_context>
 
-${propsConstitution ? `<props_constitution>\n${propsConstitution}\n</props_constitution>` : ''}
-
 ${gameSummary ? `<game_summary>\n${gameSummary}\n</game_summary>` : ''}
 
 <props_instructions>
 ## YOUR TASK: EVALUATE PROPS USING YOUR GAME ANALYSIS
 
-You just analyzed ${awayTeam} @ ${homeTeam} in depth. Now find the 2 best prop picks that FLOW from your game conviction.
+You just analyzed ${awayTeam} @ ${homeTeam} in depth. Now evaluate PLAYER PROPS using the game dynamics you identified. Your game analysis provides context — but each prop is its own investigation.
 
 **THOUGHT PROCESS**
 
 Start from your game analysis and work down to individual players:
 
-1. **Game Connection:** What does your game conviction tell you about how this game will be played? Which players are positioned to benefit from the game script, pace, and matchup dynamics you identified?
+1. **Game Connection:** What does your game analysis reveal about how this game will be played? How do the dynamics you identified affect each player's production environment?
 
-2. **Investigate Each Candidate:** For your top 3-4 candidates, investigate:
-   - What does THIS player's recent form reveal about their current level of play?
-   - What is the specific defensive matchup TONIGHT? How does the opposing defense handle this type of player?
-   - How does the projected game script (pace, blowout risk, competitive game) affect this player's opportunity?
-   - What game factors does the line appear to reflect for this player? What factors might it not reflect?
+2. **Investigate Each Candidate:** For your top 3-4 candidates, investigate what the data reveals about this player's production tonight. What does the matchup, the game environment, and the player's recent data tell you? What does the line appear to reflect, and what might it not?
 
-3. **Think Both Sides:** For each candidate, consider both the OVER and UNDER scenario. What has to happen for the over to hit? What kills it? Which scenario is more believable given your game analysis? This is your internal process — work through it before deciding.
+3. **Think Both Sides:** For each candidate, investigate both the OVER and UNDER scenario. What has to happen for the OVER to hit? What about the UNDER? Which scenario has stronger data-backed support given your game analysis? Work through both directions before deciding.
 
 **CRITICAL: OVER/UNDER DIVERSITY CHECK**
 Before finalizing, ask yourself:
@@ -3185,9 +3609,7 @@ Before finalizing, ask yourself:
 The same principles that apply to game picks apply here. The line reflects what the market already knows — established roles, long-term absences, and recent production patterns. Your edge comes from seeing what the line hasn't fully absorbed yet.
 
 For each candidate, investigate:
-- What is the specific defensive matchup TONIGHT that creates or limits opportunity?
-- How does your game script projection affect this player's production ceiling and floor?
-- Is there a recent trend in the data that the line hasn't caught up to?
+- What does the data reveal about this player's production environment tonight?
 - Are you describing this player's established role (which IS the line), or are you identifying something the line doesn't fully capture?
 
 **INVESTIGATION OPTION:**
@@ -3209,19 +3631,18 @@ function parsePropsResponse(content, toolCallArgs) {
   // Fallback: try to extract from text response
   if (!content) return null;
 
-  // Try JSON block
-  const jsonMatch = content.match(/```json\s*([\s\S]*?)```/);
-  if (jsonMatch) {
+  // Try ALL JSON code blocks (not just the first) — Flash may output game pick JSON before props JSON
+  const jsonBlocks = [...content.matchAll(/```json\s*([\s\S]*?)```/g)];
+  for (const match of jsonBlocks) {
     try {
-      const parsed = JSON.parse(jsonMatch[1]);
-      if (Array.isArray(parsed)) return parsed;
-      if (parsed.picks && Array.isArray(parsed.picks)) return parsed.picks;
-    } catch (e) { /* continue to next method */ }
+      const parsed = JSON.parse(match[1]);
+      if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].player) return parsed;
+      if (parsed.picks && Array.isArray(parsed.picks) && parsed.picks.length > 0) return parsed.picks;
+    } catch (e) { /* continue to next block */ }
   }
 
-  // Try raw JSON object with picks
-  // Use greedy [\s\S]* before the final } to match the LAST closing brace
-  const rawMatch = content.match(/\{[\s\S]*?"picks"[\s\S]*?\[[\s\S]*\][\s\S]*\}/);
+  // Try raw JSON object with picks — find the specific block containing "picks": [
+  const rawMatch = content.match(/\{[^{}]*"picks"\s*:\s*\[[\s\S]*?\]\s*\}/);
   if (rawMatch) {
     try {
       const parsed = JSON.parse(rawMatch[0]);
@@ -3311,15 +3732,23 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
   let hasSwitchedToPro = false;
 
   if (provider === 'gemini') {
+    // NBA props: Flash + high reasoning (quota-friendly, props don't need Pro depth)
+    // All other modes (game picks, non-NBA props): Pro + high reasoning
+    const useFlashForProps = isPropsMode && isNBASport;
+    const sessionModel = useFlashForProps ? 'gemini-3-flash-preview' : 'gemini-3-pro-preview';
     currentSession = createGeminiSession({
-      modelName: 'gemini-3-pro-preview',
+      modelName: sessionModel,
       systemPrompt: systemPrompt,
       tools: activeTools,
       thinkingLevel: 'high'
     });
     currentModelName = currentSession.modelName;
-    hasSwitchedToPro = true; // Pro from start — no mid-pipeline switch needed
-    console.log(`[Orchestrator] 🧠 Pro session created for investigation + evaluation (${sport} — Flash advisor handles Steel Man cases)`);
+    hasSwitchedToPro = !useFlashForProps; // Pro from start for game picks; Flash from start for NBA props
+    if (useFlashForProps) {
+      console.log(`[Orchestrator] ⚡ Flash + HIGH session created for NBA props (${sport})`);
+    } else {
+      console.log(`[Orchestrator] 🧠 Pro session created for investigation + evaluation (${sport} — Flash advisor handles Steel Man cases)`);
+    }
   }
 
   // Messages array for state tracking (pass detection, steel man capture)
@@ -3366,6 +3795,10 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
   let _flashCasesReady = false;      // True when Flash has returned cases (or failed)
   let _flashCases = null;            // { homeTeamCase, awayTeamCase, flashContent }
   let _flashStartedAt = null;        // Timestamp for logging
+
+  // Pro's Own Assessment — honest read BEFORE seeing advisor cases
+  let _proAssessment = null;            // Pro's honest assessment text
+  let _proAssessmentRequested = false;  // True after we ask Pro for his assessment
 
   const effectiveMaxIterations = CONFIG.maxIterations;
 
@@ -3447,9 +3880,10 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
           
           // Step 2: Check if Gary responded without tool calls AND we have a pass message queued
           // If so, send the pass message immediately as a follow-up
-          const hasQueuedPassMessage = nextMessageToSend && nextMessageToSend !== userMessage && 
-            (nextMessageToSend.includes('PASS 2') || nextMessageToSend.includes('STEEL MAN') || 
-             nextMessageToSend.includes('PASS 2.5') || nextMessageToSend.includes('CASE REVIEW') || nextMessageToSend.includes('CASE EVALUATION'));
+          const hasQueuedPassMessage = nextMessageToSend && nextMessageToSend !== userMessage &&
+            (nextMessageToSend.includes('PASS 2') || nextMessageToSend.includes('STEEL MAN') ||
+             nextMessageToSend.includes('PASS 2.5') || nextMessageToSend.includes('CASE REVIEW') ||
+             nextMessageToSend.includes('CASE EVALUATION') || nextMessageToSend.includes('YOUR honest read'));
           
           if (!sessionResponse.toolCalls && hasQueuedPassMessage) {
             console.log(`[Orchestrator] 📝 Sending queued pass message after function responses`);
@@ -3502,6 +3936,20 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
           if (message.content.length > 2000) console.log(`... (${message.content.length} total chars)`);
           console.log(`${'─'.repeat(60)}\n`);
           _pass25JustInjected = false;
+        }
+
+        // Capture Pro's honest assessment (first substantial text-only response after request)
+        // Must be: assessment requested, not yet captured, not props mode, text-only response, substantial
+        if (_proAssessmentRequested && !_proAssessment && !isPropsMode &&
+            message.content && (!message.tool_calls || message.tool_calls.length === 0) &&
+            message.content.length > 200 && !_pass25Injected) {
+          _proAssessment = message.content;
+          console.log(`\n┌─────────────────────────────────────────────────────────────────┐`);
+          console.log(`│  📝 PRO'S INITIAL READ CAPTURED                                │`);
+          console.log(`├─────────────────────────────────────────────────────────────────┤`);
+          console.log(`│  ${_proAssessment.substring(0, 150).replace(/\n/g, ' ')}...`);
+          console.log(`│  (${_proAssessment.length} chars)`);
+          console.log(`└─────────────────────────────────────────────────────────────────┘\n`);
         }
 
       } catch (error) {
@@ -3675,15 +4123,23 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
 
 Do NOT call any more stats. Provide your analysis and pick NOW.`;
       } else if (pass2WasInjected) {
-        // Pass 2 already sent - need Steel Man cases, not stats
-        console.log(`[Orchestrator] ↩️ Gemini returned empty response after Pass 2 — nudging for Steel Man cases`);
-        nudgeContent = `You didn't provide a response. You have enough data (${toolCallHistory.length} stats gathered).
+        // Pass 2 already sent — investigation is over
+        if (isPropsMode) {
+          console.log(`[Orchestrator] ↩️ Gemini returned empty response after Pass 2 — nudging for bilateral prop cases`);
+          nudgeContent = `You didn't provide a response. You have enough data (${toolCallHistory.length} stats gathered).
 
-**WRITE YOUR STEEL MAN CASES NOW:**
-1. **ANALYSIS FOR ${homeTeam}:** 3-4 paragraphs with key factors, data, and statistical argument
-2. **ANALYSIS FOR ${awayTeam}:** 3-4 paragraphs with key factors, data, and statistical argument
+**WRITE YOUR BILATERAL PROP CASES NOW:**
+For your top 3-4 prop candidates, build the OVER case and the UNDER case using the data you already have.
 
-Do NOT request more stats. Write your analysis NOW using the data you already have.`;
+Do NOT request more stats. Write your analysis NOW.`;
+        } else {
+          console.log(`[Orchestrator] ↩️ Gemini returned empty response after Pass 2 — nudging for honest assessment (Flash building cases)`);
+          nudgeContent = `You didn't provide a response. You have enough data (${toolCallHistory.length} stats gathered). An independent advisor is building bilateral Steel Man cases from your investigation data.
+
+Write YOUR honest read on this game — what are the key dynamics, what matters most for how this game plays out tonight? Cite the key findings from your investigation.
+
+Do NOT pick a side. Do NOT request more stats. Do NOT write Steel Man cases — they are being built independently.`;
+        }
       } else {
         // Still in investigation phase
         // If Gary already has 5+ stats, push to move forward — don't waste iterations
@@ -3808,9 +4264,15 @@ Request any REMAINING stats you need, or proceed to your Steel Man analysis NOW.
 
 MAKE YOUR FINAL DECISION NOW. Output your JSON pick with confidence_score and rationale.`;
         } else if (pass2Injected) {
-          nudgeMessage = `ALL ${message.tool_calls.length} stats you requested were already gathered. DO NOT request more stats.${dataRecap}
+          if (isPropsMode) {
+            nudgeMessage = `ALL ${message.tool_calls.length} stats you requested were already gathered. DO NOT request more stats.${dataRecap}
 
-Write your Steel Man cases NOW using the data above.`;
+Write your bilateral prop cases NOW using the data above.`;
+          } else {
+            nudgeMessage = `ALL ${message.tool_calls.length} stats you requested were already gathered. DO NOT request more stats.${dataRecap}
+
+An independent advisor is building bilateral Steel Man cases from your investigation data. Write YOUR honest read on this game — what are the key dynamics and what matters most for tonight? Do NOT pick a side. Do NOT write Steel Man cases yourself.`;
+          }
         } else {
           // Check factor coverage to give Gary specific guidance on what to call
           const preloadedFactors = SPORT_PRELOADED_MAP[sport] || ['INJURIES'];
@@ -3830,7 +4292,8 @@ Write your Steel Man cases NOW using the data above.`;
             console.log(`[Orchestrator] STALL BREAKER (all-dupes): Coverage stuck at ${(coverage * 100).toFixed(0)}% for ${_coverageStallCount} iterations`);
             spawnFlashAdvisor('stall break (all-dupes)', `(${(coverage * 100).toFixed(0)}%)`);
             _pass2Injected = true;
-            messages.push({ role: 'user', content: `Your investigation has stalled at ${(coverage * 100).toFixed(0)}% coverage. An independent advisor is building bilateral cases from your data. Summarize the key findings from your investigation so far while the cases are being prepared.` });
+            _proAssessmentRequested = true;
+            messages.push({ role: 'user', content: `Your investigation has stalled at ${(coverage * 100).toFixed(0)}% coverage. An independent advisor is building bilateral cases from your data. Write YOUR honest read on this game — what are the key dynamics and matchup factors that matter most for tonight? Cite the key findings from your investigation. Do NOT pick a side.` });
             nextMessageToSend = messages[messages.length - 1].content;
             continue;
           }
@@ -3877,9 +4340,41 @@ Call these specific tokens NOW using the get_stat tool with the "token" paramete
 
         // Handle finalize_props tool call (props mode only)
         if (functionName === 'finalize_props' && isPropsMode) {
-          console.log(`[Orchestrator] 🎯 finalize_props called with ${(args.picks || []).length} picks`);
+          // PIPELINE GATE: Block finalize_props until Pass 3 has been injected
+          // Props must go through full pipeline: Pass 1 → Pass 2 → Pass 2.5 → Pass 3 → finalize
+          if (!_pass3Injected) {
+            const stage = !_pass2Injected ? 'Steel Man cases (Pass 2)' : !_pass25Injected ? 'case evaluation (Pass 2.5)' : 'final props evaluation (Pass 3)';
+            console.log(`[Orchestrator] ⚠️ finalize_props BLOCKED — ${stage} not yet completed`);
+            pendingFunctionResponses.push({
+              name: functionName,
+              content: JSON.stringify({ error: `Cannot finalize props yet. You must complete ${stage} first. Continue with your analysis — write your bilateral Steel Man cases for both sides of this matchup, then evaluate them, before selecting your final props.` })
+            });
+            continue;
+          }
+
+          const rawPicks = args.picks || [];
+          console.log(`[Orchestrator] 🎯 finalize_props called with ${rawPicks.length} picks`);
+
+          // Validate picks have required fields
+          const validPicks = rawPicks.filter(p => {
+            if (!p.player || !p.bet || !p.rationale) {
+              console.warn(`[Orchestrator] ⚠️ Dropping pick — missing required fields: player=${p.player}, bet=${p.bet}, rationale=${!!p.rationale}`);
+              return false;
+            }
+            return true;
+          });
+
+          if (validPicks.length === 0) {
+            console.warn(`[Orchestrator] ⚠️ finalize_props had 0 valid picks — requesting retry`);
+            pendingFunctionResponses.push({
+              name: functionName,
+              content: JSON.stringify({ error: 'Your picks are missing required fields (player, bet, rationale). Please call finalize_props again with complete pick data.' })
+            });
+            continue;
+          }
+
           propsFinalized = true;
-          propsPicks = args.picks || [];
+          propsPicks = validPicks;
 
           // Return the props picks immediately
           return {
@@ -3904,7 +4399,9 @@ Call these specific tokens NOW using the get_stat tool with the "token" paramete
               role: 'tool',
               tool_call_id: toolCall.id,
               name: functionName,
-              content: JSON.stringify({ error: 'Investigation phase is complete. You have sufficient data. Write your Steel Man analysis using the stats already gathered. Do NOT request more data.' })
+              content: JSON.stringify({ error: isPropsMode
+                ? 'Investigation phase is complete. You have sufficient data. Write your bilateral prop analysis using the stats already gathered. Do NOT request more data.'
+                : 'Investigation phase is complete. You have sufficient data. An independent advisor is building bilateral cases. Write your honest read on this game — what matters most for tonight. Do NOT pick a side. Do NOT request more data or write Steel Man cases.' })
             });
             continue;
           }
@@ -4733,21 +5230,20 @@ Call these specific tokens NOW using the get_stat tool with the "token" paramete
       const recentAssistantMessages = messages.filter(m => m.role === 'assistant' && m.content).slice(-5);
       const steelManCompleted = (_flashCases && _flashCasesReady) || recentAssistantMessages.some(m => {
         const content = m.content || '';
-        // Multiple patterns that indicate bilateral Steel Man analysis:
-        // - "Case for [Team]" (2+ times)
-        // - "Why [Team] covers" / "How [Team] covers"
-        // - "[Team] TO COVER:" / "[Team] to cover"
-        // - Arguments for both teams (using team names from context)
+        // Multiple patterns that indicate bilateral analysis:
+        // Game picks: "Case for [Team]", "Why [Team] covers", "[Team] TO COVER:"
+        // Props: "OVER case for [Player]", "UNDER case for [Player]"
         const caseForCount = (content.match(/(?:Case for|CASE FOR|case for|Analysis for|ANALYSIS FOR|analysis for)/gi) || []).length;
         const toCoversCount = (content.match(/(?:TO COVER|to cover|To Cover)[:\s]/gi) || []).length;
         const whyCoversCount = (content.match(/(?:Why|How)\s+(?:the\s+)?[\w\s]+\s+(?:cover|win)/gi) || []).length;
-        
-        // Need at least 2 of any pattern to indicate both teams were analyzed
-        const totalBilateralPatterns = caseForCount + toCoversCount + whyCoversCount;
+        const overUnderCaseCount = (content.match(/(?:OVER|UNDER)\s+(?:case|CASE|Case)/gi) || []).length;
+
+        // Need at least 2 of any pattern to indicate bilateral analysis
+        const totalBilateralPatterns = caseForCount + toCoversCount + whyCoversCount + overUnderCaseCount;
         const hasBilateralAnalysis = totalBilateralPatterns >= 2;
-        
+
         if (hasBilateralAnalysis) {
-          console.log(`[Orchestrator] ✅ Steel Man detected: caseFor=${caseForCount}, toCovers=${toCoversCount}, whyCovers=${whyCoversCount}`);
+          console.log(`[Orchestrator] ✅ Bilateral analysis detected: caseFor=${caseForCount}, toCovers=${toCoversCount}, whyCovers=${whyCoversCount}, overUnder=${overUnderCaseCount}`);
         }
         return hasBilateralAnalysis;
       });
@@ -4767,12 +5263,10 @@ Call these specific tokens NOW using the get_stat tool with the "token" paramete
       _lastCoverageValue = coverage;
 
       // FACTOR-BASED PHASE TRIGGERS:
-      // Props mode: 70% coverage is sufficient — Gary needs game context for player evaluation,
-      // not exhaustive factor investigation. Some factors (STANDINGS_CONTEXT, CONFERENCE_SPLITS,
-      // LUCK_CLOSE_GAMES, SCORING_TRENDS) may not map to props-relevant stat requests.
-      // Game mode: 100% required — Gary must investigate ALL factors including bench stats.
-      const coverageThreshold = isPropsMode ? 0.60 : 1.0;
-      const coverageThresholdPct = isPropsMode ? '60%' : '100%';
+      // Both props and game picks require full factor investigation before proceeding.
+      // Props benefits from the same comprehensive game context that game picks uses.
+      const coverageThreshold = 1.0;
+      const coverageThresholdPct = '100%';
 
       if (coverage >= coverageThreshold && !pass2AlreadyInjected && !steelManCompleted) {
         // ═══════════════════════════════════════════════════════════════════════
@@ -4786,43 +5280,67 @@ Call these specific tokens NOW using the get_stat tool with the "token" paramete
           // Game picks: Flash builds independent cases
           spawnFlashAdvisor('coverage threshold', `(${covered.length}/${totalFactors} = ${(coverage * 100).toFixed(0)}%)`);
           _pass2Injected = true;
+          _proAssessmentRequested = true;
 
-          // Give Pro a brief nudge to keep working while Flash builds cases
+          // Ask Pro for his honest assessment BEFORE seeing advisor cases
           messages.push({
             role: 'user',
-            content: `You have reached ${(coverage * 100).toFixed(0)}% factor coverage (${covered.length}/${totalFactors}). Your investigation data is being analyzed by an independent advisor who will build bilateral cases for both sides. While that's processing, verify your investigation is complete — are there any factors you want to investigate further for this matchup? If you're satisfied with your data, summarize the key statistical findings from your investigation.`
+            content: `You have reached ${(coverage * 100).toFixed(0)}% factor coverage (${covered.length}/${totalFactors}). Your investigation data is being analyzed by an independent advisor who will build bilateral cases for both sides.
+
+**BEFORE you see those cases, write YOUR honest read on this game.** Based on everything you've investigated:
+
+- What do you think this game is ABOUT? What are the key dynamics and matchup factors that will drive the outcome?
+- What are the 2-3 strongest findings from your investigation — the things that matter most for how this game plays out tonight?
+- Is there anything in the data that surprised you or changed your initial assumptions about this matchup?
+- What's the biggest uncertainty — the thing you're least sure about?
+
+Be specific — cite the key data points. This is YOUR read on the game before seeing any external analysis. Do NOT pick a side, do NOT write bilateral cases — just describe what you think this game looks like based on what you found.`
           });
         } else {
-          // Props mode: Pro writes its own cases (no Flash advisor for props)
+          // Props mode: bilateral OVER/UNDER analysis (no Flash advisor for props)
           messages.push({
             role: 'user',
-            content: buildPass2Message(sport, homeTeam, awayTeam, spread)
+            content: buildPass2PropsMessage(sport, homeTeam, awayTeam, propContext || {})
           });
           _pass2Injected = true;
-          console.log(`[Orchestrator] Injected Pass 2 instructions for props (${covered.length}/${totalFactors} = ${(coverage * 100).toFixed(0)}% coverage)`);
+          console.log(`[Orchestrator] Injected Props Pass 2 — bilateral OVER/UNDER analysis (${covered.length}/${totalFactors} = ${(coverage * 100).toFixed(0)}% coverage)`);
         }
       } else if (coverage < coverageThreshold) {
         // Below threshold — keep investigating (or stall break)
         const missingDisplay = missing.slice(0, 6).map(f => getTokenHints(sport, f)).join(', ');
         const coveragePct = (coverage * 100).toFixed(0);
 
-        if (pass2AlreadyInjected) {
+        if (_pass25Injected || steelManCompleted) {
+          // Bilateral analysis already written + Pass 2.5 injected — pipeline flags handle the rest
+          // Don't send enforcement messages, Gary is now evaluating cases
+          console.log(`[Orchestrator] Pipeline past bilateral analysis (pass25=${_pass25Injected}, steelMan=${steelManCompleted}) — skipping coverage enforcement`);
+        } else if (pass2AlreadyInjected) {
           // Pass 2 already injected (e.g., via stall breaker) — tell Gary to write cases, NOT investigate more
-          console.log(`[Orchestrator] Pass 2 already injected — enforcing Steel Man (${coveragePct}% coverage)`);
-          messages.push({
-            role: 'user',
-            content: `You have gathered ${covered.length}/${totalFactors} investigation factors (${coveragePct}% coverage). This is SUFFICIENT data to proceed. Do NOT request more stats or narrative context. Write your Steel Man analysis NOW — build the strongest case for EACH side of the spread using the data you already have.`
-          });
+          console.log(`[Orchestrator] Pass 2 already injected — enforcing bilateral analysis (${coveragePct}% coverage)`);
+          const enforceMsg = isPropsMode
+            ? `You have gathered ${covered.length}/${totalFactors} investigation factors (${coveragePct}% coverage). This is SUFFICIENT data to proceed. Do NOT request more stats or narrative context. Write your bilateral prop analysis NOW — for your top 3-4 prop candidates, build the OVER case and the UNDER case using the data you already have.`
+            : `You have gathered ${covered.length}/${totalFactors} investigation factors (${coveragePct}% coverage). This is SUFFICIENT data to proceed. Do NOT request more stats or narrative context. An independent advisor is building bilateral Steel Man cases from your data. Write YOUR honest read on this game — what are the key dynamics and what matters most for tonight? Do NOT pick a side.`;
+          messages.push({ role: 'user', content: enforceMsg });
         } else if (_coverageStallCount >= 3 && coverage >= 0.70) {
-          // STALL BREAKER: If coverage hasn't improved in 3 iterations and we're at 70%+, spawn Flash
-          console.log(`[Orchestrator] STALL BREAKER: Coverage stuck at ${coveragePct}% for ${_coverageStallCount} iterations — spawning Flash with ${covered.length}/${totalFactors} factors`);
+          // STALL BREAKER: If coverage hasn't improved in 3 iterations and we're at 70%+
+          console.log(`[Orchestrator] STALL BREAKER: Coverage stuck at ${coveragePct}% for ${_coverageStallCount} iterations — ${isPropsMode ? 'injecting props Pass 2' : 'spawning Flash'} with ${covered.length}/${totalFactors} factors`);
           console.log(`[Orchestrator] Unreachable factors: ${missing.join(', ')}`);
-          spawnFlashAdvisor('stall break', `(${coveragePct}%)`);
+          if (isPropsMode) {
+            // Props: inject bilateral analysis directly (no Flash advisor for props)
+            messages.push({
+              role: 'user',
+              content: buildPass2PropsMessage(sport, homeTeam, awayTeam, propContext || {})
+            });
+          } else {
+            // Game picks: spawn Flash advisor
+            spawnFlashAdvisor('stall break', `(${coveragePct}%)`);
+            _proAssessmentRequested = true;
+            messages.push({
+              role: 'user',
+              content: `Your investigation has stalled at ${coveragePct}% coverage. An independent advisor is building bilateral cases from your data. Write YOUR honest read on this game — what are the key dynamics and matchup factors that matter most for tonight? Cite the key findings from your investigation. Do NOT pick a side.`
+            });
+          }
           _pass2Injected = true;
-          messages.push({
-            role: 'user',
-            content: `Your investigation has stalled at ${coveragePct}% coverage. An independent advisor is building bilateral cases from your data. Summarize the key findings from your investigation so far.`
-          });
         } else if (iteration >= 4 && coverage >= (coverageThreshold - 0.2)) {
           // After several iterations with close-to-threshold coverage, give a stronger nudge
           messages.push({
@@ -4842,17 +5360,55 @@ Call these specific tokens NOW using the get_stat tool with the "token" paramete
         // Priority: Steel Man enforcement > Pass 2.5 (if Steel Man done) > Mid-Investigation Synthesis
         
         if (!steelManCompleted && pass2AlreadyInjected && _pass2Delivered && !_flashCasesPromise) {
-          // STEEL MAN ENFORCEMENT: Pass 2 was delivered to Pro's session and Flash isn't building cases
-          // This only fires when Flash failed and Pro fell back to writing its own cases
-          // Force Gary to stop calling stats and write his Steel Man analysis NOW
-          // GEMINI 3 OPTIMIZED: XML-tagged structure with END-OF-PROMPT instruction
-          // Use shared coin flip to ensure DIFFERENT teams in each slot (not two independent Math.random calls)
-          const enforcementHomeFirst = Math.random() > 0.5;
-          const enforcementFirst = enforcementHomeFirst ? homeTeam : awayTeam;
-          const enforcementSecond = enforcementHomeFirst ? awayTeam : homeTeam;
-          messages.push({
-            role: 'user',
-            content: `
+          // BILATERAL ANALYSIS ENFORCEMENT: Pass 2 was delivered but bilateral cases not written yet
+          // Force Gary to stop calling stats and write bilateral analysis NOW
+          if (isPropsMode) {
+            messages.push({
+              role: 'user',
+              content: `
+<enforcement_context>
+## BILATERAL PROP ANALYSIS REQUIRED
+
+You have gathered ${covered.length}/${totalFactors} investigation factors (${(coverage * 100).toFixed(0)}% coverage).
+This is SUFFICIENT data to proceed. STOP calling more stats.
+</enforcement_context>
+
+<case_requirements>
+## REQUIRED OUTPUT
+
+For your top 3-4 prop candidates, write BOTH cases:
+
+### OVER CASE for [Player] — [Prop Type] [Line]
+2-3 paragraphs: What game factors support OVER? What does recent form show? Cite specific stats.
+
+### UNDER CASE for [Player] — [Prop Type] [Line]
+2-3 paragraphs: What limits production tonight? What risks exist? Cite specific stats.
+
+**DO NOT call finalize_props yet.** Write bilateral cases for each candidate first.
+</case_requirements>
+
+<instructions>
+## YOUR TASK
+
+Using the data you've gathered, STOP calling more stats and execute NOW:
+
+1. Synthesize game factors that affect player production (1 paragraph)
+2. For each of your top 3-4 candidates, write **OVER CASE** and **UNDER CASE**
+
+BEGIN WRITING YOUR BILATERAL PROP ANALYSIS NOW.
+</instructions>
+`
+            });
+            console.log(`[Orchestrator] BILATERAL PROP ANALYSIS ENFORCEMENT - Gary must write OVER/UNDER cases before proceeding (${covered.length}/${totalFactors} factors)`);
+          } else {
+            // Game picks: team-level Steel Man enforcement
+            // GEMINI 3 OPTIMIZED: XML-tagged structure with END-OF-PROMPT instruction
+            const enforcementHomeFirst = Math.random() > 0.5;
+            const enforcementFirst = enforcementHomeFirst ? homeTeam : awayTeam;
+            const enforcementSecond = enforcementHomeFirst ? awayTeam : homeTeam;
+            messages.push({
+              role: 'user',
+              content: `
 <enforcement_context>
 ## MATCHUP ANALYSIS REQUIRED
 
@@ -4889,8 +5445,9 @@ Using the data you've gathered, STOP calling more stats and execute NOW:
 BEGIN WRITING YOUR MATCHUP ANALYSIS NOW.
 </instructions>
 `
-          });
-          console.log(`[Orchestrator] MATCHUP ANALYSIS ENFORCEMENT - Gary must write analysis before proceeding (${covered.length}/${totalFactors} factors)`);
+            });
+            console.log(`[Orchestrator] MATCHUP ANALYSIS ENFORCEMENT - Gary must write analysis before proceeding (${covered.length}/${totalFactors} factors)`);
+          }
         } else if (!steelManCompleted && pass2AlreadyInjected && !_pass2Delivered) {
           // Pass 2 was queued (pushed to messages, _pass2Injected=true) but NOT yet sent to the session
           // Don't push enforcement — let the queued Pass 2 be delivered first
@@ -4901,10 +5458,12 @@ BEGIN WRITING YOUR MATCHUP ANALYSIS NOW.
           // ═══════════════════════════════════════════════════════════════════════
           // Steel Man done, inject Pass 2.5 (Case Review)
           // For NBA/NFL/NHL: Switch to Pro model for deep reasoning on grading
-          const missingNote = missing.length > 0 
+          const missingNote = missing.length > 0
             ? `\n\n(Note: ${missing.length} factors were not investigated: ${missing.slice(0, 4).map(f => f.replace(/_/g, ' ')).join(', ')}${missing.length > 4 ? '...' : ''} - proceed with your case review based on the evidence you gathered.)`
             : '';
-          const pass25Content = buildPass25Message(homeTeam, awayTeam, sport, spread) + missingNote;
+          const pass25Content = (isPropsMode
+            ? buildPass25PropsMessage(homeTeam, awayTeam, sport)
+            : buildPass25Message(homeTeam, awayTeam, sport, spread, _proAssessment)) + missingNote;
           
           // spread already defined at loop scope
           messages.push({ role: 'user', content: pass25Content });
@@ -4951,9 +5510,10 @@ BEGIN WRITING YOUR MATCHUP ANALYSIS NOW.
           // Neither Pass 2 nor Steel Man — spawn Flash advisor (urgent path)
           spawnFlashAdvisor('urgent (100% coverage, no Pass 2)', `(${covered.length}/${totalFactors})`);
           _pass2Injected = true;
+          _proAssessmentRequested = true;
           messages.push({
             role: 'user',
-            content: `You have ${(coverage * 100).toFixed(0)}% factor coverage. An independent advisor is building bilateral cases from your data. Summarize the key findings from your investigation.`
+            content: `You have ${(coverage * 100).toFixed(0)}% factor coverage. An independent advisor is building bilateral cases from your data. Write YOUR honest read on this game — what are the key dynamics and matchup factors that matter most for tonight? Cite the key findings from your investigation. Do NOT pick a side.`
           });
           console.log(`[Orchestrator] Flash advisor spawned (urgent) - ${covered.length}/${totalFactors} factors, spread: ${spread}`);
         } else if (pass25AlreadyInjected && !pass3AlreadyInjected) {
@@ -4973,9 +5533,10 @@ BEGIN WRITING YOUR MATCHUP ANALYSIS NOW.
           // Has enough for Steel Man but not complete — spawn Flash advisor
           spawnFlashAdvisor('delayed (50%+ coverage)', `(${covered.length}/${totalFactors})`);
           _pass2Injected = true;
+          _proAssessmentRequested = true;
           messages.push({
             role: 'user',
-            content: `You have ${(coverage * 100).toFixed(0)}% factor coverage. An independent advisor is building bilateral cases from your data. Continue investigating remaining factors.`
+            content: `You have ${(coverage * 100).toFixed(0)}% factor coverage. An independent advisor is building bilateral cases from your data. Continue investigating remaining factors — once you're done, write your honest assessment of the game before seeing the advisor's cases.`
           });
           console.log(`[Orchestrator] Flash advisor spawned (delayed) - ${covered.length}/${totalFactors} factors covered, spread: ${spread}`);
         }
@@ -5004,8 +5565,18 @@ BEGIN WRITING YOUR MATCHUP ANALYSIS NOW.
           console.log(`│  Source: Independent Flash advisor (no investigation lean)`);
           console.log(`└─────────────────────────────────────────────────────────────────┘\n`);
 
-          // Build Pass 2.5 with Flash's cases as advisor input
-          const advisorPreamble = `## INDEPENDENT ADVISOR ANALYSIS
+          // Build Pass 2.5 with Pro's own assessment + Flash's cases as inputs
+          const proAssessmentSection = _proAssessment ? `## YOUR INITIAL READ
+
+You wrote this honest read on the game BEFORE seeing any advisor cases — what you think this game is about, what matters most, and what you believe drives the outcome tonight:
+
+${_proAssessment}
+
+---
+
+` : '';
+
+          const advisorPreamble = `${proAssessmentSection}## INDEPENDENT ADVISOR ANALYSIS
 
 The following bilateral cases were built by an independent analyst who reviewed all your investigation data but did NOT participate in your investigation. These are your "advisors" — they saw the same data you did but approached it fresh, without your investigation context or leanings.
 
@@ -5018,7 +5589,7 @@ ${_flashCases.awayTeamCase}
 ---
 
 `;
-          const pass25Content = advisorPreamble + buildPass25Message(homeTeam, awayTeam, sport, spread);
+          const pass25Content = advisorPreamble + buildPass25Message(homeTeam, awayTeam, sport, spread, _proAssessment);
           messages.push({ role: 'user', content: pass25Content });
           nextMessageToSend = pass25Content;
 
@@ -5026,7 +5597,7 @@ ${_flashCases.awayTeamCase}
           _pass25JustInjected = true;
           _pass2Delivered = true; // Cases have been delivered (via Flash)
 
-          console.log(`[Orchestrator] Injected Pass 2.5 with Flash advisor cases — Pro evaluates independently`);
+          console.log(`[Orchestrator] Injected Pass 2.5 with ${_proAssessment ? 'Pro assessment + ' : ''}Flash advisor cases — Pro evaluates ${_proAssessment ? '3 pieces' : 'independently'}`);
         } else {
           // Flash failed — fall back to Pro writing its own cases
           console.log(`[Orchestrator] Flash advisor failed — falling back to Pro writing Steel Man cases`);
@@ -5098,7 +5669,7 @@ ${_flashCases.awayTeamCase}
     // If Gary tries to output a pick before completing these passes, reject it and
     // force the correct next step. This prevents the model from making picks without completing the full pipeline.
     // ═══════════════════════════════════════════════════════════════════════
-    if (!isPropsMode && !_pass2Injected && iteration < effectiveMaxIterations) {
+    if (!_pass2Injected && iteration < effectiveMaxIterations) {
       // Pass 2 hasn't been injected yet — Gary tried to skip investigation
       // Check current factor coverage and inject appropriate nudge
       const preloadedFactors = SPORT_PRELOADED_MAP[sport] || ['INJURIES'];
@@ -5107,20 +5678,36 @@ ${_flashCases.awayTeamCase}
 
       if (coverage >= 1.0) {
         // Coverage complete — inject Pass 2 (Steel Man)
-        console.log(`[Orchestrator] ⚠️ PIPELINE GATE: Gary tried to pick before Pass 2 — spawning Flash advisor (${covered.length}/${totalFactors} factors)`);
         messages.push({ role: 'assistant', content: message.content });
-        spawnFlashAdvisor('pipeline gate (100% coverage)', `(${covered.length}/${totalFactors})`);
-        _pass2Injected = true;
-        messages.push({ role: 'user', content: `An independent advisor is building bilateral cases from your investigation data. Hold your pick — you will evaluate the cases before making a decision.` });
+        if (isPropsMode) {
+          // Props: writes its own bilateral cases (no Flash advisor)
+          console.log(`[Orchestrator] ⚠️ PIPELINE GATE: Gary tried to pick before Pass 2 — injecting bilateral prop analysis (${covered.length}/${totalFactors} factors)`);
+          messages.push({ role: 'user', content: buildPass2PropsMessage(sport, homeTeam, awayTeam, propContext || {}) });
+          _pass2Injected = true;
+        } else {
+          // Game picks: Flash builds independent cases
+          console.log(`[Orchestrator] ⚠️ PIPELINE GATE: Gary tried to pick before Pass 2 — spawning Flash advisor (${covered.length}/${totalFactors} factors)`);
+          spawnFlashAdvisor('pipeline gate (100% coverage)', `(${covered.length}/${totalFactors})`);
+          _pass2Injected = true;
+          _proAssessmentRequested = true;
+          messages.push({ role: 'user', content: `An independent advisor is building bilateral cases from your investigation data. Hold your pick — before you see those cases, write YOUR honest read on this game. What are the key dynamics and what matters most for tonight? Do NOT pick a side.` });
+        }
         nextMessageToSend = messages[messages.length - 1].content;
         continue;
       } else if (coverage >= 0.70) {
-        // Coverage at 70%+ — spawn Flash advisor
-        console.log(`[Orchestrator] ⚠️ PIPELINE GATE: Gary tried to pick at ${(coverage * 100).toFixed(0)}% coverage — spawning Flash advisor`);
+        // Coverage at 70%+ — inject Pass 2
         messages.push({ role: 'assistant', content: message.content });
-        spawnFlashAdvisor('pipeline gate (70%+ coverage)', `(${(coverage * 100).toFixed(0)}%)`);
-        _pass2Injected = true;
-        messages.push({ role: 'user', content: `An independent advisor is building bilateral cases from your data. Hold your pick — you will evaluate the cases before making a decision.` });
+        if (isPropsMode) {
+          console.log(`[Orchestrator] ⚠️ PIPELINE GATE: Gary tried to pick at ${(coverage * 100).toFixed(0)}% coverage — injecting bilateral prop analysis`);
+          messages.push({ role: 'user', content: buildPass2PropsMessage(sport, homeTeam, awayTeam, propContext || {}) });
+          _pass2Injected = true;
+        } else {
+          console.log(`[Orchestrator] ⚠️ PIPELINE GATE: Gary tried to pick at ${(coverage * 100).toFixed(0)}% coverage — spawning Flash advisor`);
+          spawnFlashAdvisor('pipeline gate (70%+ coverage)', `(${(coverage * 100).toFixed(0)}%)`);
+          _pass2Injected = true;
+          _proAssessmentRequested = true;
+          messages.push({ role: 'user', content: `An independent advisor is building bilateral cases from your data. Hold your pick — before you see those cases, write YOUR honest read on this game. What are the key dynamics and what matters most for tonight? Do NOT pick a side.` });
+        }
         nextMessageToSend = messages[messages.length - 1].content;
         continue;
       } else {
@@ -5156,28 +5743,33 @@ ${_flashCases.awayTeamCase}
     const pass25Done = messages.some(m => m.content?.includes('PASS 2.5 - CASE REVIEW'));
     const pass3Done = messages.some(m => m.content?.includes('PASS 3 - FINAL OUTPUT') || m.content?.includes('PASS 3 - PROPS EVALUATION PHASE'));
     
-    // Detect Steel Man in current response (must match BOTH formats: "Case for" AND "Analysis for")
+    // Detect Steel Man / bilateral analysis in current response
+    // Game picks: "Case for [Team]", "to cover", "Why/How covers/wins"
+    // Props: "OVER case for [Player]", "UNDER case for [Player]", "OVER CASE", "UNDER CASE"
     const currentContent = message.content || '';
     const caseForCount = (currentContent.match(/(?:Case for|CASE FOR|case for|Analysis for|ANALYSIS FOR|analysis for)/gi) || []).length;
     const toCoversCount = (currentContent.match(/(?:TO COVER|to cover|To Cover)[:\s]/gi) || []).length;
     const whyCoversCount = (currentContent.match(/(?:Why|How)\s+(?:the\s+)?[\w\s]+\s+(?:cover|win)/gi) || []).length;
-    const steelManJustWritten = (caseForCount + toCoversCount + whyCoversCount) >= 2;
-    
+    const overUnderCaseCount = (currentContent.match(/(?:OVER|UNDER)\s+(?:case|CASE|Case)/gi) || []).length;
+    const steelManJustWritten = (caseForCount + toCoversCount + whyCoversCount + overUnderCaseCount) >= 2;
+
     if (steelManJustWritten && !pass25Done && !pass3Done && iteration < effectiveMaxIterations) {
-      // Gary just wrote Steel Man cases! Inject Pass 2.5 before allowing a pick
-      console.log(`[Orchestrator] ✅ Steel Man detected in response (caseFor=${caseForCount}, toCovers=${toCoversCount})`);
-      console.log(`\n📋 GARY'S STEEL MAN ANALYSIS (Both Sides):\n${'─'.repeat(60)}`);
+      // Gary just wrote bilateral analysis! Inject Pass 2.5 before allowing a pick
+      console.log(`[Orchestrator] ✅ Bilateral analysis detected (caseFor=${caseForCount}, toCovers=${toCoversCount}, overUnder=${overUnderCaseCount})`);
+      console.log(`\n📋 GARY'S ${isPropsMode ? 'BILATERAL PROP ANALYSIS' : 'STEEL MAN ANALYSIS'} (Both Sides):\n${'─'.repeat(60)}`);
       console.log(currentContent);
       console.log(`${'─'.repeat(60)}\n`);
-      console.log(`[Orchestrator] Injecting Pass 2.5 (Case Evaluation & Decision) - Steel Man just completed`);
-      
+      console.log(`[Orchestrator] Injecting Pass 2.5 (${isPropsMode ? 'Prop Case Review' : 'Case Evaluation & Decision'}) - bilateral analysis just completed`);
+
       messages.push({
         role: 'assistant',
         content: message.content
       });
-      
+
       // spread already defined at loop scope
-      const pass25Content = buildPass25Message(homeTeam, awayTeam, sport, spread);
+      const pass25Content = isPropsMode
+        ? buildPass25PropsMessage(homeTeam, awayTeam, sport)
+        : buildPass25Message(homeTeam, awayTeam, sport, spread, _proAssessment);
       messages.push({
         role: 'user',
         content: pass25Content
@@ -5247,11 +5839,9 @@ ${_flashCases.awayTeamCase}
         messages.push({ role: 'user', content: nudge });
         continue;
       }
-      // Don't return early — let the loop exhaust iterations so the max-iterations
-      // fallback (outside the while loop) can try with a fresh session
-      console.log(`[Orchestrator] ⚠️ Props finalize_props not called after ${propsRetryCount} retries — continuing to max-iterations fallback`);
-      messages.push({ role: 'assistant', content: message.content });
-      continue;
+      // After 2 nudges, skip straight to max-iterations fallback (don't waste iterations)
+      console.log(`[Orchestrator] ⚠️ Props finalize_props not called after ${propsRetryCount} retries — jumping to max-iterations fallback`);
+      break;
     }
 
     // ─── PIPELINE GATE: Don't accept picks before Pass 2.5 + Pass 3 ─────
@@ -5276,45 +5866,120 @@ ${_flashCases.awayTeamCase}
         continue;
       }
 
-      // Check if Steel Man cases were actually written (Pro wrote them, or Flash delivered them)
+      // Check if bilateral cases were actually written (Pro wrote them, or Flash delivered them)
       const gateRecentMsgs = messages.filter(m => m.role === 'assistant' && m.content).slice(-5);
       const gateSteelManDone = (_flashCases && _flashCasesReady) || gateRecentMsgs.some(m => {
         const c = m.content || '';
         const cf = (c.match(/(?:Case for|CASE FOR|case for|Analysis for|ANALYSIS FOR|analysis for)/gi) || []).length;
         const tc = (c.match(/(?:TO COVER|to cover|To Cover)[:\s]/gi) || []).length;
         const wc = (c.match(/(?:Why|How)\s+(?:the\s+)?[\w\s]+\s+(?:cover|win)/gi) || []).length;
-        return (cf + tc + wc) >= 2;
+        const ou = (c.match(/(?:OVER|UNDER)\s+(?:case|CASE|Case)/gi) || []).length;
+        return (cf + tc + wc + ou) >= 2;
       });
 
       if (!gateSteelManDone) {
-        // Steel Man cases NOT written and Flash not available — re-enforce Pass 2 (Pro writes its own)
-        console.log(`[Orchestrator] 🔄 PIPELINE GATE: Pick attempted but Steel Man cases not written — re-enforcing Pass 2`);
-        const enfHomeFirst = Math.random() > 0.5;
-        const enfFirst = enfHomeFirst ? homeTeam : awayTeam;
-        const enfSecond = enfHomeFirst ? awayTeam : homeTeam;
-        messages.push({
-          role: 'user',
-          content: `**STOP.** You attempted to make a pick without writing your bilateral Steel Man analysis. You MUST build the strongest case for EACH side of the spread BEFORE making a decision.
+        // Bilateral cases NOT written — re-enforce Pass 2
+        if (isPropsMode) {
+          console.log(`[Orchestrator] 🔄 PIPELINE GATE: Pick attempted but bilateral prop analysis not written — re-enforcing Props Pass 2`);
+          messages.push({
+            role: 'user',
+            content: `**STOP.** You attempted to finalize props without writing your bilateral OVER/UNDER analysis. You MUST build both the OVER case and UNDER case for your top 3-4 prop candidates BEFORE making a selection.
 
-Write your Steel Man cases NOW:
+For each candidate, write:
 
-**CASE FOR ${enfFirst}:**
-[Build the strongest data-backed case for this side — cite matchup-specific stats from your investigation]
+### OVER CASE for [Player] — [Prop Type] [Line]
+[Build the strongest data-backed case for OVER — cite stats from your investigation]
 
-**CASE FOR ${enfSecond}:**
-[Build the strongest data-backed case for this side — cite matchup-specific stats from your investigation]
+### UNDER CASE for [Player] — [Prop Type] [Line]
+[Build the strongest data-backed case for UNDER — cite stats from your investigation]
 
-Do NOT output a pick. Write BOTH cases first.`
-        });
+Do NOT call finalize_props yet. Write BOTH cases for each candidate first.`
+          });
+        } else if (isPropsMode) {
+          console.log(`[Orchestrator] 🔄 PIPELINE GATE: Pick attempted but bilateral prop cases not written — re-enforcing Pass 2`);
+          messages.push({
+            role: 'user',
+            content: `**STOP.** You attempted to make a pick without writing your bilateral analysis. You MUST build the OVER case and UNDER case for each prop candidate BEFORE making a decision.
+
+Write your bilateral prop cases NOW for your top 3-4 candidates. Do NOT call finalize_props yet. Write BOTH cases for each candidate first.`
+          });
+        } else {
+          // Game picks: Flash builds cases, not Pro. Await Flash.
+          console.log(`[Orchestrator] 🔄 PIPELINE GATE: Pick attempted but Flash Steel Man cases not ready — awaiting Flash advisor`);
+          if (_flashCasesPromise && !_flashCasesReady) {
+            // Flash is still building — tell Pro to wait
+            messages.push({
+              role: 'user',
+              content: `**STOP.** You attempted to make a pick before the bilateral Steel Man analysis is ready. An independent advisor is currently building the cases for both sides. Summarize your key investigation findings while the cases are being prepared. Do NOT make a pick yet.`
+            });
+          } else if (!_flashCasesPromise) {
+            // Flash was never spawned — spawn it now
+            console.log(`[Orchestrator] ⚠️ Flash advisor was never spawned — spawning now for pipeline gate`);
+            spawnFlashAdvisor('pipeline gate', '(pre-pick)');
+            messages.push({
+              role: 'user',
+              content: `**STOP.** You attempted to make a pick before the bilateral Steel Man analysis is ready. An independent advisor is now building the cases for both sides. Summarize your key investigation findings while the cases are being prepared. Do NOT make a pick yet.`
+            });
+          } else {
+            // Flash already completed — cases should be available, something else is wrong
+            // Let the normal Flash injection path handle it on next iteration
+            messages.push({
+              role: 'user',
+              content: `**STOP.** You attempted to make a pick before evaluating the bilateral Steel Man cases. The cases are ready — they will be provided to you for evaluation. Do NOT make a pick yet.`
+            });
+          }
+        }
         nextMessageToSend = messages[messages.length - 1].content;
         continue;
       }
 
-      // Steel Man cases were written — proceed to Pass 2.5
-      console.log(`[Orchestrator] 🔄 PIPELINE GATE: Pro attempted early pick — redirecting to Pass 2.5 evaluation`);
+      // Bilateral cases were written — proceed to Pass 2.5
+      console.log(`[Orchestrator] 🔄 PIPELINE GATE: Attempted early pick — redirecting to Pass 2.5 evaluation`);
 
       // Inject Pass 2.5 + Pro switch (same logic as steelManJustWritten path above)
-      const pass25Content = buildPass25Message(homeTeam, awayTeam, sport, spread);
+      // Props: use props-specific Pass 2.5 (evaluates OVER/UNDER cases, not team spread)
+      // Game picks: use Flash advisor cases if available
+      let pass25Content;
+      if (isPropsMode) {
+        pass25Content = buildPass25PropsMessage(homeTeam, awayTeam, sport);
+        console.log(`[Orchestrator] Injecting Props Pass 2.5 (prop case review & stress test)`);
+      } else if (_flashCases && _flashCases.homeTeamCase && _flashCases.awayTeamCase) {
+        // Flash cases available — include them as advisor preamble
+        steelManCases.homeTeamCase = _flashCases.homeTeamCase;
+        steelManCases.awayTeamCase = _flashCases.awayTeamCase;
+        steelManCases.capturedAt = new Date().toISOString();
+        steelManCases.source = 'flash_advisor';
+
+        const proAssessmentSection = _proAssessment ? `## YOUR INITIAL READ
+
+You wrote this honest read on the game BEFORE seeing any advisor cases — what you think this game is about, what matters most, and what you believe drives the outcome tonight:
+
+${_proAssessment}
+
+---
+
+` : '';
+
+        const advisorPreamble = `${proAssessmentSection}## INDEPENDENT ADVISOR ANALYSIS
+
+The following bilateral cases were built by an independent analyst who reviewed all your investigation data but did NOT participate in your investigation. These are your "advisors" — they saw the same data you did but approached it fresh, without your investigation context or leanings.
+
+**CASE FOR ${homeTeam}:**
+${_flashCases.homeTeamCase}
+
+**CASE FOR ${awayTeam}:**
+${_flashCases.awayTeamCase}
+
+---
+
+`;
+        pass25Content = advisorPreamble + buildPass25Message(homeTeam, awayTeam, sport, spread, _proAssessment);
+        console.log(`[Orchestrator] ✅ Flash advisor cases included in pipeline gate Pass 2.5 (${_flashCases.homeTeamCase?.length || 0} + ${_flashCases.awayTeamCase?.length || 0} chars)`);
+      } else {
+        // No Flash cases — use plain Pass 2.5 (Pro will self-synthesize)
+        pass25Content = buildPass25Message(homeTeam, awayTeam, sport, spread, _proAssessment);
+        console.log(`[Orchestrator] ⚠️ No Flash advisor cases available — Pro will self-synthesize Steel Man cases`);
+      }
       messages.push({ role: 'user', content: pass25Content });
 
       if (provider === 'gemini' && useProForGrading && !hasSwitchedToPro) {
@@ -5344,9 +6009,11 @@ Do NOT output a pick. Write BOTH cases first.`
     }
 
     if (_pass25Injected && !_pass3Injected && iteration < effectiveMaxIterations) {
-      console.log(`[Orchestrator] ⚠️ PIPELINE GATE: Pick attempted before Pass 3 — injecting final output pass`);
+      console.log(`[Orchestrator] ⚠️ PIPELINE GATE: Pick attempted before Pass 3 — injecting ${isPropsMode ? 'props evaluation' : 'final output'} pass`);
       messages.push({ role: 'assistant', content: message.content });
-      const pass3Content = buildPass3Unified(homeTeam, awayTeam, options);
+      const pass3Content = isPropsMode
+        ? buildPass3Props(homeTeam, awayTeam, propContext)
+        : buildPass3Unified(homeTeam, awayTeam, options);
       messages.push({ role: 'user', content: pass3Content });
       nextMessageToSend = pass3Content;
       _pass3Injected = true;
@@ -5403,9 +6070,18 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
         pick.steelManCases = {
           homeTeam: steelManCases.homeTeamCase,
           awayTeam: steelManCases.awayTeamCase,
+          source: steelManCases.source || 'unknown',
           capturedAt: steelManCases.capturedAt
         };
-        console.log(`[Orchestrator] 📝 Steel Man cases attached to pick`);
+        console.log(`[Orchestrator] 📝 Steel Man cases attached to pick (source: ${steelManCases.source || 'unknown'})`);
+        console.log(`\n📋 STEEL MAN — CASE FOR ${homeTeam} (${steelManCases.homeTeamCase?.length || 0} chars):`);
+        console.log(`────────────────────────────────────────────────────────────`);
+        console.log(steelManCases.homeTeamCase || '(none)');
+        console.log(`────────────────────────────────────────────────────────────`);
+        console.log(`\n📋 STEEL MAN — CASE FOR ${awayTeam} (${steelManCases.awayTeamCase?.length || 0} chars):`);
+        console.log(`────────────────────────────────────────────────────────────`);
+        console.log(steelManCases.awayTeamCase || '(none)');
+        console.log(`────────────────────────────────────────────────────────────`);
       }
 
       // Diagnostic: Check if Pass 2.5 was injected during this analysis

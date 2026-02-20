@@ -20,33 +20,34 @@ import { DFS_PLAYER_INVESTIGATION_TOOLS, executeToolCall } from './tools/dfsTool
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const PLAYER_INVESTIGATION_PROMPT = `
+<role>
 You are Gary's DFS Research Assistant (Gemini Flash).
 Your job is to investigate player candidates for a specific position.
+</role>
 
-## YOUR ROLE
+<responsibilities>
 - For each candidate, use function calls to gather situation data
 - Assess recent form (L5 games)
 - Assess matchup quality (DvP)
 - Check for usage opportunities (teammate injuries)
 - Summarize each player's upside path and concerns
+</responsibilities>
 
-## DO NOT make decisions - just investigate and report.
-Gary Pro will decide which players to select based on your investigation.
-
-## INVESTIGATION CHECKLIST FOR EACH PLAYER
+<investigation_checklist>
+For each player:
 1. Recent form - are they hot, cold, or stable?
 2. Matchup - is the opponent good or bad for their position?
 3. Usage situation - any teammates out that boost their role?
 4. Price fairness - does salary match their current situation?
 5. Ceiling path - how do they score 50+ fantasy points?
 6. Concerns - what could go wrong?
+</investigation_checklist>
 
-## CRITICAL: OUTPUT MUST BE VALID JSON ARRAY
-
+<output_format>
 After investigating, output ONLY a JSON array (no markdown, no explanation text).
 Your ENTIRE response must be a valid JSON array starting with [ and ending with ]
 
-Example output format:
+Example:
 [
   {
     "player": "Player Name",
@@ -64,10 +65,14 @@ Example output format:
     "verdict": "STRONG CANDIDATE"
   }
 ]
+</output_format>
 
-DO NOT include any text before or after the JSON array.
-DO NOT use markdown code blocks.
-ONLY output the raw JSON array.
+<constraints>
+- DO NOT make lineup decisions - just investigate and report. Gary Pro will decide.
+- DO NOT include any text before or after the JSON array.
+- DO NOT use markdown code blocks.
+- ONLY output the raw JSON array.
+</constraints>
 `;
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -85,7 +90,7 @@ ONLY output the raw JSON array.
  */
 export async function investigatePlayersForPositions(genAI, buildThesis, context, options = {}) {
   const { modelName = 'gemini-3-flash-preview' } = options;
-  const { players, positions, platform } = context;
+  const { players, platform } = context;
 
   console.log('[Player Investigator] Starting player investigations...');
 
@@ -94,30 +99,46 @@ export async function investigatePlayersForPositions(genAI, buildThesis, context
   // Get position requirements for the platform
   const positionSlots = getPositionSlots(platform);
 
-  for (const position of positionSlots) {
-    console.log(`[Player Investigator] Investigating ${position} candidates...`);
+  // Deduplicate positions — FanDuel has duplicate slots (PG, PG, SG, SG, etc.)
+  // but we only need to investigate each position once
+  const uniquePositions = [...new Set(positionSlots)];
 
-    // Get candidates for this position
+  // Build investigation tasks, skipping positions with no candidates
+  const tasks = [];
+  for (const position of uniquePositions) {
     const candidates = getPositionCandidates(players, position);
-
     if (candidates.length === 0) {
       console.warn(`[Player Investigator] No candidates found for ${position}`);
       investigations[position] = [];
       continue;
     }
+    tasks.push({ position, candidates });
+  }
 
-    // Investigate candidates using Flash
-    const positionInvestigation = await investigatePositionCandidates(
-      genAI,
-      position,
-      candidates,
-      buildThesis,
-      context,
-      { modelName }
+  // Run investigations in parallel batches of 3 to balance speed vs rate limits
+  const BATCH_SIZE = 3;
+  for (let i = 0; i < tasks.length; i += BATCH_SIZE) {
+    const batch = tasks.slice(i, i + BATCH_SIZE);
+    console.log(`[Player Investigator] Investigating batch ${Math.floor(i / BATCH_SIZE) + 1}: ${batch.map(t => t.position).join(', ')}`);
+
+    const results = await Promise.all(
+      batch.map(async ({ position, candidates }) => {
+        const positionInvestigation = await investigatePositionCandidates(
+          genAI,
+          position,
+          candidates,
+          buildThesis,
+          context,
+          { modelName }
+        );
+        console.log(`[Player Investigator] ✓ ${position}: ${positionInvestigation.length} candidates investigated`);
+        return { position, positionInvestigation };
+      })
     );
 
-    investigations[position] = positionInvestigation;
-    console.log(`[Player Investigator] ✓ ${position}: ${positionInvestigation.length} candidates investigated`);
+    for (const { position, positionInvestigation } of results) {
+      investigations[position] = positionInvestigation;
+    }
   }
 
   return investigations;
@@ -186,7 +207,18 @@ async function investigatePositionCandidates(genAI, position, candidates, buildT
   }
 
   // Parse investigation results
-  const finalText = response.response.text();
+  let finalText = response.response.text();
+
+  // If Flash ended its loop without producing text (spent all iterations on tool
+  // calls), nudge it to output the JSON array.
+  if (!finalText || !finalText.trim()) {
+    console.log(`[Player Investigator] Flash ended without text for ${position} — nudging for JSON...`);
+    response = await chat.sendMessage(
+      'Your investigation is complete. Now output your findings as a JSON array. ONLY output the raw JSON array starting with [ and ending with ]. No markdown, no explanation.'
+    );
+    finalText = response.response.text();
+  }
+
   return parseInvestigationResults(finalText, topCandidates);
 }
 
@@ -242,6 +274,14 @@ ${candidates.map((p, i) => {
   if (p.newsContext && p.newsContext.length > 0) {
     line += `\n   News: ${p.newsContext[0]}`;
   }
+  // B2B flag
+  if (p.isB2B) {
+    line += `\n   ⚠️ BACK-TO-BACK (played yesterday)`;
+  }
+  // Foul trouble signal (L5 fouls per game)
+  if (p.l5Stats?.fpg >= 4.0) {
+    line += `\n   ⚠️ Foul Trouble Risk: ${p.l5Stats.fpg} FPG in L5`;
+  }
   return line;
 }).join('\n\n')}
 
@@ -269,8 +309,26 @@ Begin your investigation now by calling the tools, then output the JSON array.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function parseInvestigationResults(text, candidates) {
-  // NO FALLBACKS: Gary Flash MUST produce valid player investigations or we fail
-  const jsonMatch = text.match(/\[[\s\S]*\]/);
+  // Try to find a complete JSON array first
+  let jsonMatch = text.match(/\[[\s\S]*\]/);
+
+  // If no complete array, try to recover from truncated response
+  if (!jsonMatch) {
+    const arrayStart = text.indexOf('[');
+    if (arrayStart !== -1) {
+      // Find the last complete JSON object (ending with })
+      let truncated = text.slice(arrayStart);
+      const lastBrace = truncated.lastIndexOf('}');
+      if (lastBrace > 0) {
+        truncated = truncated.slice(0, lastBrace + 1) + ']';
+        // Remove any trailing comma before the ]
+        truncated = truncated.replace(/,\s*\]$/, ']');
+        jsonMatch = [truncated];
+        console.warn('[Player Investigator] Recovered truncated JSON array');
+      }
+    }
+  }
+
   if (!jsonMatch) {
     throw new Error('[Player Investigator] Gary Flash did not produce JSON array of investigations. Raw response: ' + text.slice(0, 500));
   }
@@ -279,7 +337,15 @@ function parseInvestigationResults(text, candidates) {
   try {
     parsed = JSON.parse(jsonMatch[0]);
   } catch (e) {
-    throw new Error('[Player Investigator] Gary Flash produced invalid JSON: ' + e.message + '. Raw: ' + jsonMatch[0].slice(0, 500));
+    // Try fixing common issues: trailing commas, unescaped quotes
+    try {
+      const fixed = jsonMatch[0]
+        .replace(/,\s*([}\]])/g, '$1')
+        .replace(/[\x00-\x1F]/g, ' '); // Remove control characters
+      parsed = JSON.parse(fixed);
+    } catch (e2) {
+      throw new Error('[Player Investigator] Gary Flash produced invalid JSON: ' + e2.message + '. Raw: ' + jsonMatch[0].slice(0, 500));
+    }
   }
 
   if (!Array.isArray(parsed) || parsed.length === 0) {
