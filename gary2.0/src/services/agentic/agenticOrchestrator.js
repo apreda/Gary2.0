@@ -33,31 +33,30 @@ function getGemini() {
 // ═══════════════════════════════════════════════════════════════════════════
 // ONLY Gemini 3 models are allowed. NEVER use Gemini 1.x or 2.x.
 //
-// 2026 Update: Flash OUTPERFORMS Pro for agentic tasks (78% vs 76.2% benchmark)
 // ═══════════════════════════════════════════════════════════════════════════
 // GEMINI 3 MODEL STRATEGY (2026 - Dual-Model Architecture)
 // ═══════════════════════════════════════════════════════════════════════════
-// DUAL-MODEL (All sports): Pro investigates + decides, Flash builds cases
-//   - Pro: Full pipeline (Pass 1 investigation → Pass 2.5 evaluation → Pass 3 finalize)
-//   - Flash: Independent Steel Man case builder (spawned at coverage threshold)
-//   - Flash receives Pro's data (text only, no tools) → builds bilateral cases
-//   - Pro evaluates Flash's cases as "advisors" (never writes its own cases)
+// DUAL-MODEL (All sports): 3.1 Pro investigates + decides, 3 Pro builds cases
+//   - Gemini 3.1 Pro: Full pipeline (Pass 1 investigation → Pass 2.5 evaluation → Pass 3 finalize)
+//   - Gemini 3 Pro: Independent Steel Man case builder (spawned at coverage threshold)
+//   - Advisor receives 3.1 Pro's data (text only, no tools) → builds bilateral cases
+//   - 3.1 Pro evaluates advisor's cases (never writes its own cases)
 //   - Eliminates confirmation bias: the investigator is not the case writer
 //
-// IMPORTANT: Flash and Pro run as separate sessions (no signature conflicts)
-//   - Flash session is ephemeral (one API call, then discarded)
-//   - Pro session persists throughout (no context loss)
-//   - If Flash fails, Pro falls back to writing its own cases
+// IMPORTANT: Advisor and main Pro run as separate sessions (no signature conflicts)
+//   - Advisor session is ephemeral (one API call, then discarded)
+//   - Main Pro session persists throughout (no context loss)
+//   - If advisor fails, the pick fails (no silent fallback to biased cases)
 // ═══════════════════════════════════════════════════════════════════════════
-// Primary Pro model: Gemini 3.1 Pro Preview (doubled reasoning over 3 Pro, same cost)
-// Fallback: Gemini 3 Pro (if 3.1 Pro hits quota or errors)
+// Primary: Gemini 3.1 Pro Preview (investigation, evaluation, final decision)
+// Advisor: Gemini 3 Pro Preview (independent bilateral Steel Man case builder)
 const GEMINI_PRO_MODEL = 'gemini-3.1-pro-preview';
-const GEMINI_PRO_FALLBACK = 'gemini-3-pro-preview';
+const GEMINI_PRO_FALLBACK = 'gemini-3-pro-preview';  // Also used as independent advisor model
 
 const ALLOWED_GEMINI_MODELS = [
-  'gemini-3-flash-preview',  // Independent Steel Man case builder (Flash Advisor)
+  'gemini-3-flash-preview',  // Flash: used for scout report tool calling
   GEMINI_PRO_MODEL,          // Primary: Investigation + Evaluation + Final Decision
-  GEMINI_PRO_FALLBACK,       // Fallback: If 3.1 Pro hits quota
+  GEMINI_PRO_FALLBACK,       // Advisor: Independent Steel Man case builder + Pro fallback
 ];
 
 function validateGeminiModel(model) {
@@ -459,27 +458,28 @@ function extractTextualSummaryForModelSwitch(messages, steelManCases, toolCallHi
 // ═══════════════════════════════════════════════════════════════════════════
 // FLASH ADVISOR — Independent Steel Man Case Builder
 // ═══════════════════════════════════════════════════════════════════════════
-// Flash receives Pro's investigation data (text only, no tools) and builds
-// bilateral Steel Man cases from scratch. This eliminates confirmation bias:
-// Pro investigates → Flash builds cases → Pro evaluates Flash's cases.
-// Flash has no investigation lean — it's a fresh analyst reviewing the data.
+// INDEPENDENT ADVISOR: Gemini 3 Pro builds bilateral Steel Man cases
+// Advisor receives 3.1 Pro's investigation data (text only, no tools) and builds
+// cases from scratch. This eliminates confirmation bias:
+// 3.1 Pro investigates → 3 Pro builds cases → 3.1 Pro evaluates advisor's cases.
+// Advisor has no investigation lean — it's a fresh analyst reviewing the data.
 // ═══════════════════════════════════════════════════════════════════════════
 
-const FLASH_ADVISOR_TIMEOUT_MS = 90000; // 90 second timeout for Flash case building
+const ADVISOR_TIMEOUT_MS = 90000; // 90 second timeout for advisor case building
 
 /**
- * Spawn an independent Flash session to build Steel Man cases
- * Flash receives Pro's investigation data but builds cases from scratch.
- * This eliminates confirmation bias — Flash has no investigation lean.
+ * Spawn an independent Gemini 3 Pro session to build Steel Man cases.
+ * Advisor receives 3.1 Pro's investigation data but builds cases from scratch.
+ * This eliminates confirmation bias — advisor has no investigation lean.
  *
  * @param {string} systemPrompt - The sport constitution + base system prompt
  * @param {Array} messages - Full message history (for scout report extraction)
- * @param {Array} toolCallHistory - Pro's investigation results
+ * @param {Array} toolCallHistory - Main Pro's investigation results
  * @param {string} sport - Sport identifier
  * @param {string} homeTeam - Home team name
  * @param {string} awayTeam - Away team name
  * @param {number} spread - Spread value
- * @returns {Object} - { homeTeamCase, awayTeamCase, flashContent } or null on failure
+ * @returns {Object} - { homeTeamCase, awayTeamCase, advisorContent } or null on failure
  */
 async function buildFlashSteelManCases(systemPrompt, messages, toolCallHistory, sport, homeTeam, awayTeam, spread) {
   const startTime = Date.now();
@@ -496,39 +496,70 @@ async function buildFlashSteelManCases(systemPrompt, messages, toolCallHistory, 
       flashDomainContent = `\n\n## SPORT-SPECIFIC REFERENCE\n${flashConstitution.domainKnowledge}\n\n## STRUCTURAL RULES\n${flashConstitution.guardrails}`;
     }
 
-    const flashSystemPrompt = `You are an independent sports analyst reviewing investigation data for a ${sportLabel} game. Your ONLY task is to build bilateral Steel Man cases — one case for each team. You do NOT have access to any tools or function calls. You receive data as text and write cases from it. Be thorough, specific, and use the data provided. Write in a neutral, analytical tone.${flashDomainContent}`;
+    const advisorSystemPrompt = `You are an independent sports analyst reviewing investigation data for a ${sportLabel} game. Your ONLY task is to build bilateral Steel Man cases — one case for each team. You do NOT have access to any tools or function calls. You receive data as text and write cases from it. Be thorough, specific, and use the data provided. Write in a neutral, analytical tone.${flashDomainContent}`;
 
-    const flashSession = createGeminiSession({
-      modelName: 'gemini-3-flash-preview',
-      systemPrompt: flashSystemPrompt,
-      tools: [],  // No tools — Flash writes cases from the data it receives
-      thinkingLevel: 'medium'
+    const advisorSession = createGeminiSession({
+      modelName: GEMINI_PRO_FALLBACK,  // Gemini 3 Pro — independent advisor (NOT 3.1 Pro which is main Gary)
+      systemPrompt: advisorSystemPrompt,
+      tools: [],  // No tools — advisor writes cases from the data it receives
+      thinkingLevel: 'high'  // Gemini 3 Pro supports 'low' or 'high' only (no 'medium')
     });
 
-    console.log(`[Flash Advisor] Session created (text only, no tools)`);
+    console.log(`[Advisor] Session created (Gemini 3 Pro, text only, no tools)`);
 
     // 2. Build context: scout report + investigation stats
     const investigationContext = extractTextualSummaryForModelSwitch(messages, {}, toolCallHistory);
 
-    // 3. Build the Pass 2 message (same bilateral case prompt Pro would get)
-    const pass2Message = buildPass2Message(sport, homeTeam, awayTeam, spread);
+    // 3. Build Flash-specific bilateral case prompt (NOT Pro's investigation prompt)
+    // Pro's buildPass2Message has tool-calling/investigation language that confuses Flash.
+    // Flash just needs: "here's the data, write two cases with these exact headers."
+    const absSpread = Math.abs(spread || 0);
+    const homeSpread = spread ? `${spread >= 0 ? '+' : ''}${spread.toFixed(1)}` : '';
+    const awaySpread = spread ? `${-spread >= 0 ? '+' : ''}${(-spread).toFixed(1)}` : '';
+    const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
 
-    // 4. Send combined context + Pass 2 to Flash (single API call)
-    const contextMessage = `${investigationContext}\n\n${pass2Message}`;
-    console.log(`[Flash Advisor] Sending ${contextMessage.length} chars to Flash (scout report + ${toolCallHistory.length} stats + Pass 2 prompt)`);
+    const flashPass2Message = `## YOUR TASK: BUILD TWO BILATERAL STEEL MAN CASES
 
-    const flashResponse = await sendToSessionWithRetry(flashSession, contextMessage);
+Based on ALL the data above, write two compelling, data-backed cases — one for each team.
+
+${isNHL ? `This is an NHL game (moneyline only — pick WHO WINS).
+
+### CASE FOR ${homeTeam}
+[Build the strongest possible case for ${homeTeam} to WIN using the data above. Cite specific stats, trends, and matchup factors.]
+
+### CASE FOR ${awayTeam}
+[Build the strongest possible case for ${awayTeam} to WIN using the data above. Cite specific stats, trends, and matchup factors.]`
+    : `The spread is ${homeTeam} ${homeSpread} / ${awayTeam} ${awaySpread}.
+
+### CASE FOR ${homeTeam} (${homeSpread})
+[Build the strongest possible case for ${homeTeam} to cover ${homeSpread} using the data above. Cite specific stats, trends, and matchup factors.]
+
+### CASE FOR ${awayTeam} (${awaySpread})
+[Build the strongest possible case for ${awayTeam} to cover ${awaySpread} using the data above. Cite specific stats, trends, and matchup factors.]`}
+
+RULES:
+- Use ONLY the data provided above. Do not invent stats or players.
+- Each case must be 400+ words with specific numbers from the data.
+- You MUST use the exact headers above: "### CASE FOR [Team]" or "### ANALYSIS FOR [Team]"
+- Do NOT write a general analysis. Do NOT pick a side. Build TWO separate cases.
+- Each case should be genuinely compelling — find the strongest arguments for THAT side.`;
+
+    // 4. Send combined context + advisor case prompt (single API call)
+    const contextMessage = `${investigationContext}\n\n${flashPass2Message}`;
+    console.log(`[Advisor] Sending ${contextMessage.length} chars to Gemini 3 Pro (scout report + ${toolCallHistory.length} stats + case prompt)`);
+
+    const advisorResponse = await sendToSessionWithRetry(advisorSession, contextMessage);
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
 
-    if (!flashResponse.content) {
-      console.warn(`[Flash Advisor] Empty response from Flash after ${elapsed}s`);
+    if (!advisorResponse.content) {
+      console.warn(`[Advisor] Empty response after ${elapsed}s`);
       return null;
     }
 
-    console.log(`[Flash Advisor] Response received in ${elapsed}s (${flashResponse.content.length} chars)`);
+    console.log(`[Advisor] Response received in ${elapsed}s (${advisorResponse.content.length} chars)`);
 
     // 5. Extract cases using regex — try multiple strategies
-    const content = flashResponse.content;
+    const content = advisorResponse.content;
 
     // Strategy 1: Split on major case headers (more robust than lazy regex)
     const headerPattern = /(?:^|\n)(?:\*\*)?(?:#{1,3}\s*)?(?:Case for|CASE FOR|Analysis for|ANALYSIS FOR)[:\s*—-]+/gi;
@@ -549,7 +580,7 @@ async function buildFlashSteelManCases(systemPrompt, messages, toolCallHistory, 
 
       // If second case is suspiciously short (<200 chars), the regex split wrong
       if (fullCases[1].length < 200 && sections.length > 2) {
-        console.warn(`[Flash Advisor] ⚠️ Second case too short (${fullCases[1].length} chars) — likely split on internal header. Merging fragments...`);
+        console.warn(`[Advisor] ⚠️ Second case too short (${fullCases[1].length} chars) — likely split on internal header. Merging fragments...`);
         // Try merging remaining sections into the short case
         const shortIdx = sections.indexOf(fullCases[1]);
         const remaining = sections.filter((_, i) => i !== 0 && i !== shortIdx);
@@ -559,7 +590,7 @@ async function buildFlashSteelManCases(systemPrompt, messages, toolCallHistory, 
 
     // Strategy 2: Fallback — simple split on "---" or double newline between cases
     if (fullCases.length < 2 || fullCases.some(c => c.length < 200)) {
-      console.log(`[Flash Advisor] Trying fallback split strategy...`);
+      console.log(`[Advisor] Trying fallback split strategy...`);
       // Split on markdown horizontal rules or major section breaks
       const halves = content.split(/\n---+\n/);
       if (halves.length >= 2) {
@@ -567,7 +598,7 @@ async function buildFlashSteelManCases(systemPrompt, messages, toolCallHistory, 
         const caseHalves = halves.filter(h => h.length > 200);
         if (caseHalves.length >= 2) {
           fullCases = caseHalves.slice(0, 2).map(h => h.trim());
-          console.log(`[Flash Advisor] Fallback split: ${fullCases[0].length} + ${fullCases[1].length} chars`);
+          console.log(`[Advisor] Fallback split: ${fullCases[0].length} + ${fullCases[1].length} chars`);
         }
       }
     }
@@ -585,19 +616,19 @@ async function buildFlashSteelManCases(systemPrompt, messages, toolCallHistory, 
         flashContent: content
       };
 
-      console.log(`[Flash Advisor] ✅ Bilateral cases extracted (home: ${result.homeTeamCase.length} chars, away: ${result.awayTeamCase.length} chars)`);
+      console.log(`[Advisor] ✅ Bilateral cases extracted (home: ${result.homeTeamCase.length} chars, away: ${result.awayTeamCase.length} chars)`);
       return result;
     }
 
     // All strategies failed — log raw content for debugging
-    console.warn(`[Flash Advisor] ⚠️ Could not extract bilateral cases (found ${fullCases.length} sections, sizes: ${fullCases.map(c => c.length).join(', ')})`);
-    console.warn(`[Flash Advisor] Headers found at positions: ${headerMatches.map(m => m.index).join(', ')}`);
-    console.warn(`[Flash Advisor] Response preview: ${content.substring(0, 500)}...`);
+    console.warn(`[Advisor] ⚠️ Could not extract bilateral cases (found ${fullCases.length} sections, sizes: ${fullCases.map(c => c.length).join(', ')})`);
+    console.warn(`[Advisor] Headers found at positions: ${headerMatches.map(m => m.index).join(', ')}`);
+    console.warn(`[Advisor] Response preview: ${content.substring(0, 500)}...`);
     return null;
 
   } catch (error) {
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.error(`[Flash Advisor] ❌ Error after ${elapsed}s: ${error.message}`);
+    console.error(`[Advisor] ❌ Error after ${elapsed}s: ${error.message}`);
     return null;
   }
 }
@@ -3696,7 +3727,8 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
   let _proAssessment = null;            // Pro's honest assessment text
   let _proAssessmentRequested = false;  // True after we ask Pro for his assessment
 
-  const effectiveMaxIterations = CONFIG.maxIterations;
+  // Props 4-pass pipeline needs more iterations than game picks (15 often isn't enough)
+  const effectiveMaxIterations = isPropsMode ? 22 : CONFIG.maxIterations;
 
   // ═══════════════════════════════════════════════════════════════════════
   // FLASH ADVISOR HELPER — reusable spawn logic (captures closure variables)
@@ -3710,26 +3742,26 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
       return; // Props mode doesn't use Flash advisor
     }
 
-    console.log(`[Orchestrator] 🎯 Spawning Flash advisor: ${reason} ${coverageInfo}`);
+    console.log(`[Orchestrator] 🎯 Spawning advisor (Gemini 3 Pro): ${reason} ${coverageInfo}`);
     _flashStartedAt = Date.now();
 
     _flashCasesPromise = Promise.race([
       buildFlashSteelManCases(systemPrompt, messages, toolCallHistory, sport, homeTeam, awayTeam, options.spread ?? null),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Flash advisor timeout')), FLASH_ADVISOR_TIMEOUT_MS))
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Advisor timeout')), ADVISOR_TIMEOUT_MS))
     ]).then(cases => {
       _flashCases = cases;
       _flashCasesReady = true;
       const elapsed = ((Date.now() - _flashStartedAt) / 1000).toFixed(1);
       if (cases) {
-        console.log(`[Flash Advisor] ✅ Cases received in ${elapsed}s (home: ${cases.homeTeamCase?.length || 0} chars, away: ${cases.awayTeamCase?.length || 0} chars)`);
+        console.log(`[Advisor] ✅ Cases received in ${elapsed}s (home: ${cases.homeTeamCase?.length || 0} chars, away: ${cases.awayTeamCase?.length || 0} chars)`);
       } else {
-        console.log(`[Flash Advisor] ⚠️ Failed after ${elapsed}s — Pro will write its own cases`);
+        console.log(`[Advisor] ⚠️ Failed after ${elapsed}s — Pro will write its own cases`);
       }
       return cases;
     }).catch(err => {
       _flashCasesReady = true;
       _flashCases = null;
-      console.error(`[Flash Advisor] ❌ Error: ${err.message} — Pro falls back to own cases`);
+      console.error(`[Advisor] ❌ Error: ${err.message} — Pro falls back to own cases`);
       return null;
     });
   }
@@ -5425,7 +5457,7 @@ BEGIN WRITING YOUR MATCHUP ANALYSIS NOW.
           steelManCases.homeTeamCase = _flashCases.homeTeamCase;
           steelManCases.awayTeamCase = _flashCases.awayTeamCase;
           steelManCases.capturedAt = new Date().toISOString();
-          steelManCases.source = 'flash_advisor'; // Track that cases came from Flash
+          steelManCases.source = 'advisor'; // Track that cases came from Flash
 
           console.log(`\n┌─────────────────────────────────────────────────────────────────┐`);
           console.log(`│  📊 FLASH ADVISOR CASES RECEIVED                                │`);
@@ -5738,7 +5770,7 @@ Do NOT call finalize_props yet. Write BOTH cases for each candidate first.`
         steelManCases.homeTeamCase = _flashCases.homeTeamCase;
         steelManCases.awayTeamCase = _flashCases.awayTeamCase;
         steelManCases.capturedAt = new Date().toISOString();
-        steelManCases.source = 'flash_advisor';
+        steelManCases.source = 'advisor';
 
         const advisorPreamble = buildAdvisorPreamble(homeTeam, awayTeam, _flashCases, _proAssessment);
         pass25Content = advisorPreamble + buildPass25Message(homeTeam, awayTeam, sport, spread, _proAssessment);
@@ -5862,7 +5894,7 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
         _pipelineState: { pass2: _pass2Injected, pass25: _pass25Injected, pass3: _pass3Injected }
       };
     }
-    console.log(`[Orchestrator] ⚠️ Max iterations (${CONFIG.maxIterations}) reached in props mode - injecting final props prompt...`);
+    console.log(`[Orchestrator] ⚠️ Max iterations (${effectiveMaxIterations}) reached in props mode - injecting final props prompt...`);
     const pass3PropsContent = buildPass3Props(homeTeam, awayTeam, propContext);
     messages.push({ role: 'user', content: pass3PropsContent });
 
@@ -5930,7 +5962,7 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
   // Game mode: Pipeline did not complete within max iterations — NO synthesis fallback
   // Every pick must come from the real pipeline (Pass 1→2→2.5→3). If the pipeline
   // can't complete, this game is reported as a failure. No fake/synthesized picks.
-  console.error(`[Orchestrator] MAX ITERATIONS (${CONFIG.maxIterations}) reached without completing pipeline for ${awayTeam} @ ${homeTeam}`);
+  console.error(`[Orchestrator] MAX ITERATIONS (${effectiveMaxIterations}) reached without completing pipeline for ${awayTeam} @ ${homeTeam}`);
   console.error(`[Orchestrator] Pipeline state: pass2=${_pass2Injected}, pass25=${_pass25Injected}, pass3=${_pass3Injected}, steelMan=${steelManCases.capturedAt ? 'captured' : 'missing'}`);
   console.error(`[Orchestrator] Stats gathered: ${toolCallHistory.length}, iterations: ${iteration}`);
   return {
