@@ -87,6 +87,24 @@ export const DFS_SLATE_ANALYSIS_TOOLS = [
 
 export const DFS_PLAYER_INVESTIGATION_TOOLS = [
   {
+    name: 'GET_USAGE_BOOST',
+    description: 'When a player is OUT, find who absorbs their usage. Returns beneficiaries with projected boost.',
+    parameters: {
+      type: 'object',
+      properties: {
+        outPlayer: {
+          type: 'string',
+          description: 'Name of the player who is OUT'
+        },
+        team: {
+          type: 'string',
+          description: 'Team abbreviation'
+        }
+      },
+      required: ['outPlayer', 'team']
+    }
+  },
+  {
     name: 'GET_PLAYER_GAME_LOGS',
     description: 'Get a player\'s last N games with full stats. Use to assess recent form.',
     parameters: {
@@ -243,6 +261,24 @@ export async function executeToolCall(toolName, args, context) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// STANDARDIZED NAME MATCHING
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function findPlayerByName(playerName, context) {
+  if (!playerName || !context.players) return null;
+  const query = playerName.toLowerCase().trim();
+  // Exact match first
+  let match = context.players.find(p => p.name?.toLowerCase() === query);
+  if (match) return match;
+  // Full name contains query (e.g., "LeBron" matches "LeBron James")
+  match = context.players.find(p => p.name?.toLowerCase().includes(query));
+  if (match) return match;
+  // Query contains full name (e.g., "LeBron James Jr" matches "LeBron James")
+  match = context.players.find(p => query.includes(p.name?.toLowerCase()));
+  return match || null;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // TOOL IMPLEMENTATIONS
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -280,8 +316,26 @@ async function getUsageBoost(outPlayer, team, context) {
     outPlayer.toLowerCase().includes(p.name?.toLowerCase())
   );
 
-  const outPlayerUsage = outPlayerData?.usage || outPlayerData?.seasonStats?.usg_pct || 25;
-  const outPlayerMinutes = outPlayerData?.mpg || outPlayerData?.seasonStats?.mpg || 32;
+  if (!outPlayerData) {
+    return {
+      outPlayer,
+      team,
+      error: `Player "${outPlayer}" not found on ${team} roster. Cannot calculate usage redistribution without real data.`,
+      beneficiaries: []
+    };
+  }
+
+  const outPlayerUsage = outPlayerData.usageStats?.usg_pct || outPlayerData.seasonStats?.usg_pct || null;
+  const outPlayerMinutes = outPlayerData.seasonStats?.mpg || null;
+
+  if (!outPlayerUsage || !outPlayerMinutes) {
+    return {
+      outPlayer,
+      team,
+      error: `Usage/minutes data unavailable for ${outPlayer}. Cannot calculate redistribution.`,
+      beneficiaries: []
+    };
+  }
 
   // Identify likely beneficiaries (same position, similar role)
   const rawBeneficiaries = players
@@ -357,10 +411,7 @@ async function getGameEnvironment(homeTeam, awayTeam, context) {
 }
 
 function getPlayerSalary(playerName, context) {
-  const player = context.players?.find(p =>
-    p.name?.toLowerCase() === playerName.toLowerCase() ||
-    p.name?.toLowerCase().includes(playerName.toLowerCase())
-  );
+  const player = findPlayerByName(playerName, context);
 
   if (player) {
     return {
@@ -368,7 +419,9 @@ function getPlayerSalary(playerName, context) {
       salary: player.salary,
       position: player.position || player.positions?.join('/'),
       team: player.team,
-      projectedPts: player.projected_pts || player.projection
+      projectedPts: player.projected_pts || player.projection,
+      dkFpts: player.seasonStats?.dkFpts,
+      benchmarkProjection: player.benchmarkProjection
     };
   }
 
@@ -376,54 +429,78 @@ function getPlayerSalary(playerName, context) {
 }
 
 async function getPlayerGameLogs(playerName, games, context) {
-  // Find player in context
-  const player = context.players?.find(p =>
-    p.name?.toLowerCase().includes(playerName.toLowerCase())
-  );
+  const player = findPlayerByName(playerName, context);
 
   if (!player) {
     return { player: playerName, error: 'Player not found in slate' };
   }
 
-  // Return L5 stats from context (populated by BDL in Phase 1)
+  // Return actual game-by-game rows (not just averages)
+  const gameRows = player.l5Stats?.gameRows || null;
+  const requestedRows = gameRows ? gameRows.slice(0, games) : null;
+
   return {
     player: player.name,
     team: player.team,
-    l5Stats: player.l5Stats || null,
+    recentGames: requestedRows,
+    l5Averages: player.l5Stats ? {
+      ppg: player.l5Stats.ppg,
+      rpg: player.l5Stats.rpg,
+      apg: player.l5Stats.apg,
+      spg: player.l5Stats.spg,
+      bpg: player.l5Stats.bpg,
+      mpg: player.l5Stats.mpg,
+      dkFptsAvg: player.l5Stats.dkFptsAvg,
+      fdFptsAvg: player.l5Stats.fdFptsAvg,
+      bestDkFpts: player.l5Stats.bestDkFpts,
+      worstDkFpts: player.l5Stats.worstDkFpts,
+      games: player.l5Stats.games
+    } : null,
     seasonStats: {
-      ppg: player.ppg || player.seasonStats?.ppg,
-      rpg: player.rpg || player.seasonStats?.rpg,
-      apg: player.apg || player.seasonStats?.apg,
-      mpg: player.mpg || player.seasonStats?.mpg,
+      ppg: player.seasonStats?.ppg,
+      rpg: player.seasonStats?.rpg,
+      apg: player.seasonStats?.apg,
+      mpg: player.seasonStats?.mpg,
+      dkFpts: player.seasonStats?.dkFpts,
+      fdFpts: player.seasonStats?.fdFpts,
     },
     tsPercent: player.tsPercent || null,
     efgPercent: player.efgPercent || null,
-    note: player.l5Stats ? null : 'L5 game logs not available for this player'
+    note: gameRows ? null : 'Game logs not available for this player (may be outside top 80 by PPG)'
   };
 }
 
 async function getPlayerSeasonStats(playerName, context) {
-  const player = context.players?.find(p =>
-    p.name?.toLowerCase().includes(playerName.toLowerCase())
-  );
+  const player = findPlayerByName(playerName, context);
 
   if (player) {
+    const dkFpts = player.seasonStats?.dkFpts || 0;
     return {
       player: player.name,
       team: player.team,
       seasonStats: {
-        ppg: player.ppg || player.seasonStats?.ppg,
-        rpg: player.rpg || player.seasonStats?.rpg,
-        apg: player.apg || player.seasonStats?.apg,
-        mpg: player.mpg || player.seasonStats?.mpg,
-        usage: player.usage || player.seasonStats?.usg_pct,
-        trueShootingPct: player.tsPercent || player.seasonStats?.ts_pct,
-        efgPct: player.efgPercent || player.seasonStats?.efg_pct
+        ppg: player.seasonStats?.ppg,
+        rpg: player.seasonStats?.rpg,
+        apg: player.seasonStats?.apg,
+        mpg: player.seasonStats?.mpg,
+        usage: player.usageStats?.usg_pct,
+        trueShootingPct: player.tsPercent,
+        efgPct: player.efgPercent,
+        dkFpts,
+        fdFpts: player.seasonStats?.fdFpts
       },
-      l5Stats: player.l5Stats || null,
+      l5Stats: player.l5Stats ? {
+        ppg: player.l5Stats.ppg,
+        rpg: player.l5Stats.rpg,
+        apg: player.l5Stats.apg,
+        mpg: player.l5Stats.mpg,
+        dkFptsAvg: player.l5Stats.dkFptsAvg,
+        fdFptsAvg: player.l5Stats.fdFptsAvg,
+        games: player.l5Stats.games
+      } : null,
       matchupDvP: player.matchupDvP || null,
       salary: player.salary,
-      valuePerDollar: player.salary ? ((player.projected_pts || 0) / player.salary * 1000).toFixed(2) : 'N/A'
+      valuePerDollar: player.salary && dkFpts ? (dkFpts / player.salary * 1000).toFixed(2) : 'N/A'
     };
   }
 
@@ -431,10 +508,7 @@ async function getPlayerSeasonStats(playerName, context) {
 }
 
 async function getMatchupData(playerName, position, opponent, context) {
-  // Find player in context — DvP is stored per-player from Tank01
-  const player = context.players?.find(p =>
-    p.name?.toLowerCase().includes(playerName.toLowerCase())
-  );
+  const player = findPlayerByName(playerName, context);
 
   if (player?.matchupDvP) {
     return {
@@ -460,7 +534,10 @@ async function getTeammateStatus(team, context) {
 
   return {
     team,
-    healthyPlayers: teammates.filter(p => p.status !== 'OUT').map(p => ({
+    healthyPlayers: teammates.filter(p => {
+      const st = (p.status || '').toUpperCase();
+      return st !== 'OUT' && st !== 'DOUBTFUL' && st !== 'INACTIVE' && st !== 'SUSPENDED' && !st.includes('OUT FOR');
+    }).map(p => ({
       name: p.name,
       position: p.position,
       salary: p.salary,
@@ -505,24 +582,16 @@ async function searchLatestNews(query, context) {
 }
 
 async function getPlayerVsTeamHistory(playerName, opponent, context) {
-  const player = context.players?.find(p =>
-    p.name?.toLowerCase().includes(playerName.toLowerCase())
-  );
+  const player = findPlayerByName(playerName, context);
 
   if (!player) {
     return { player: playerName, opponent, error: 'Player not found in slate' };
   }
 
-  // Check L5 game logs for games against this opponent
-  const vsGames = [];
-  if (player.l5Stats?.games) {
-    for (const game of player.l5Stats.games) {
-      const opp = (game.opponent || game.opp || '').toUpperCase();
-      if (opp === opponent.toUpperCase()) {
-        vsGames.push(game);
-      }
-    }
-  }
+  // Search actual game rows for games against this opponent
+  const gameRows = player.l5Stats?.gameRows || [];
+  const oppUpper = opponent.toUpperCase();
+  const vsGames = gameRows.filter(g => (g.opponent || '').toUpperCase() === oppUpper);
 
   return {
     player: player.name,
@@ -530,9 +599,10 @@ async function getPlayerVsTeamHistory(playerName, opponent, context) {
     recentGamesVsOpponent: vsGames.length > 0 ? vsGames : null,
     matchupDvP: player.matchupDvP || null,
     seasonStats: {
-      ppg: player.ppg || player.seasonStats?.ppg,
-      rpg: player.rpg || player.seasonStats?.rpg,
-      apg: player.apg || player.seasonStats?.apg,
+      ppg: player.seasonStats?.ppg,
+      rpg: player.seasonStats?.rpg,
+      apg: player.seasonStats?.apg,
+      dkFpts: player.seasonStats?.dkFpts,
     },
     note: vsGames.length > 0
       ? `Found ${vsGames.length} recent game(s) vs ${opponent}`

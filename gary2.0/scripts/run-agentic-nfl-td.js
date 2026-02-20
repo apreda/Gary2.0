@@ -12,7 +12,7 @@ const { oddsService } = await import('../src/services/oddsService.js');
 const { propOddsService } = await import('../src/services/propOddsService.js');
 const { openaiService, GEMINI_FLASH_MODEL } = await import('../src/services/openaiService.js');
 const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
-const { getGroundedRichContext } = await import('../src/services/agentic/scoutReport/scoutReportBuilder.js');
+
 
 const SPORT_KEY = 'americanfootball_nfl';
 
@@ -1003,13 +1003,11 @@ async function main() {
       const dateStr = new Date(game.commence_time).toLocaleDateString('en-US', { 
         month: 'long', day: 'numeric', year: 'numeric' 
       });
-      console.log(`   Fetching narrative context...`);
-      const grounded = await getGroundedRichContext(game.home_team, game.away_team, 'NFL', dateStr).catch(() => null);
-      
+      // getGroundedRichContext was removed (always returned null)
+      const grounded = null;
+
       // NEW: Extract structured injuries from grounded context
-      const gameInjuries = grounded?.groundedRaw 
-        ? extractStructuredInjuries(grounded.groundedRaw, game.home_team, game.away_team)
-        : [];
+      const gameInjuries = [];
       
       if (gameInjuries.length > 0) {
         console.log(`   📋 Extracted ${gameInjuries.length} injuries: ${gameInjuries.map(i => `${i.player} (${i.status})`).join(', ')}`);

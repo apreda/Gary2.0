@@ -49,9 +49,15 @@ function getGemini() {
 //   - Pro session persists throughout (no context loss)
 //   - If Flash fails, Pro falls back to writing its own cases
 // ═══════════════════════════════════════════════════════════════════════════
+// Primary Pro model: Gemini 3.1 Pro Preview (doubled reasoning over 3 Pro, same cost)
+// Fallback: Gemini 3 Pro (if 3.1 Pro hits quota or errors)
+const GEMINI_PRO_MODEL = 'gemini-3.1-pro-preview';
+const GEMINI_PRO_FALLBACK = 'gemini-3-pro-preview';
+
 const ALLOWED_GEMINI_MODELS = [
   'gemini-3-flash-preview',  // Independent Steel Man case builder (Flash Advisor)
-  'gemini-3-pro-preview',    // Investigation + Evaluation + Final Decision (all sports)
+  GEMINI_PRO_MODEL,          // Primary: Investigation + Evaluation + Final Decision
+  GEMINI_PRO_FALLBACK,       // Fallback: If 3.1 Pro hits quota
 ];
 
 function validateGeminiModel(model) {
@@ -67,38 +73,6 @@ function validateGeminiModel(model) {
 // ═══════════════════════════════════════════════════════════════════════════
 // MODEL SELECTION HELPERS
 // ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * Determine if a sport should use Pro for grading/final decision phases
- * @param {string} sport - Sport identifier
- * @returns {boolean} - True if sport uses Pro for Pass 2.5+
- */
-function sportUsesPro(sport) {
-  // DISABLED: Model switching creates new Gemini sessions, losing full conversation history.
-  // Flash handles the entire pipeline (investigation → Steel Man → evaluation → finalize).
-  // This preserves context continuity — no more "chat disappearing" mid-analysis.
-  // Quota-driven fallbacks (Flash→Pro on 429) are still active as a safety net.
-  return false;
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// PROVIDER AND MODEL ROUTING
-// ═══════════════════════════════════════════════════════════════════════════
-
-// Always returns 'gemini' - single provider system
-function getProviderForSport(sport) {
-  return 'gemini';
-}
-
-/**
- * Get the default model for a provider (used for initial session)
- * Phase-specific model switching happens in runAgentLoop
- */
-function getModelForProvider(provider, sport = null) {
-  // Default to Flash for initial session (investigation phase)
-  // Pro is used later for grading/decision phases (NBA/NFL/NHL only)
-  return validateGeminiModel('gemini-3-flash-preview');
-}
 
 // Base configuration - provider/model set dynamically per sport
 const CONFIG = {
@@ -1059,6 +1033,51 @@ function formatNum(val) {
   return String(val);
 }
 
+/**
+ * Detect bilateral analysis patterns in assistant content.
+ * Used to determine if Steel Man / bilateral cases have been written.
+ * Game picks: "Case for [Team]", "Why [Team] covers", "[Team] TO COVER:"
+ * Props: "OVER case for [Player]", "UNDER case for [Player]"
+ */
+function detectBilateralAnalysis(content) {
+  const caseForCount = (content.match(/(?:Case for|CASE FOR|case for|Analysis for|ANALYSIS FOR|analysis for)/gi) || []).length;
+  const toCoversCount = (content.match(/(?:TO COVER|to cover|To Cover)[:\s]/gi) || []).length;
+  const whyCoversCount = (content.match(/(?:Why|How)\s+(?:the\s+)?[\w\s]+\s+(?:cover|win)/gi) || []).length;
+  const overUnderCaseCount = (content.match(/(?:OVER|UNDER)\s+(?:case|CASE|Case)/gi) || []).length;
+  const total = caseForCount + toCoversCount + whyCoversCount + overUnderCaseCount;
+  return { caseForCount, toCoversCount, whyCoversCount, overUnderCaseCount, total, hasBilateral: total >= 2 };
+}
+
+/**
+ * Build the Flash advisor preamble for Pass 2.5 injection.
+ * Includes Pro's initial assessment (if available) + Flash's bilateral cases.
+ */
+function buildAdvisorPreamble(homeTeam, awayTeam, flashCases, proAssessment) {
+  const proSection = proAssessment ? `## YOUR INITIAL READ
+
+You wrote this honest read on the game BEFORE seeing any advisor cases — what you think this game is about, what matters most, and what you believe drives the outcome tonight:
+
+${proAssessment}
+
+---
+
+` : '';
+
+  return `${proSection}## INDEPENDENT ADVISOR ANALYSIS
+
+The following bilateral cases were built by an independent analyst who reviewed all your investigation data but did NOT participate in your investigation. These are your "advisors" — they saw the same data you did but approached it fresh, without your investigation context or leanings.
+
+**CASE FOR ${homeTeam}:**
+${flashCases.homeTeamCase}
+
+**CASE FOR ${awayTeam}:**
+${flashCases.awayTeamCase}
+
+---
+
+`;
+}
+
 function formatPct(val) {
   if (val === undefined || val === null) return 'N/A';
   if (typeof val === 'number') {
@@ -1491,7 +1510,7 @@ If your memory conflicts with provided data, **USE THE DATA**. See constitution 
 6. "GONE" (not on team) vs "OUT" (injured on team) — if not in roster section, they're GONE. Silence is correct.
 
 ## USING STATS
-See your sport constitution for stat categories. Season-long efficiency metrics reflect baseline team quality — the spread already captures this. Your edge comes from matchup-specific findings: style clashes, Four Factors gaps, recent form shifts, and factors the spread might not fully reflect. Records, PPG, and streaks describe the past — useful for understanding the line, not for building your case.
+See your sport constitution for stat categories. Season-long efficiency metrics provide baseline context. Investigate: What does your matchup-specific research reveal beyond the baseline? Records, PPG, and streaks describe the past — useful for understanding the line, not for building your case.
 
 **INJURY RULES:**
 See your sport constitution for the full injury investigation framework. KEY: Investigate the TEAM's performance during the absence, not just name who is out. "X is out, taking other side" is NOT analysis. Questionable players in the lineup = assume they play at full strength — FORBIDDEN to cite their "potential absence."
@@ -1527,7 +1546,9 @@ See constitution BASE RULES for rest/schedule investigation protocol. For recent
 See your sport constitution for team identity investigation questions. Don't cite records — investigate WHY. Focus on matchup-specific data and recent form, not just season-long baselines the spread already reflects. Check both sides of the matchup and compare recent vs season data for regression signals.
 
 ## BLANKET FACTOR AWARENESS
-See your sport constitution for the full blanket factor investigation table. If citing rest, home court, momentum, revenge, or other common narratives — you MUST have DATA showing it applies to THIS team in THIS situation. "Everyone knows" factors are already priced into the line.
+See your sport constitution for the full blanket factor investigation table. If citing rest, home court, momentum, revenge, or other common narratives — you MUST have DATA showing it applies to THIS team in THIS situation. Common factors like these are already visible to the market and reflected in the line — they are not new information unless your data shows something the line doesn't capture.
+
+**INJURY MARKET AWARENESS:** If a player has been out for multiple games, the team's recent stats AND the current line already reflect their absence. The team you see in the data IS the team without that player. A continued known absence is not a factor — it's the baseline. A RETURN or a FRESH absence (ruled out in the last 1-2 days) is new information worth investigating.
 
 ## INVESTIGATE, THEN DECIDE
 
@@ -1549,9 +1570,9 @@ See your sport constitution for the full blanket factor investigation table. If 
 - The "safe" choice
 
 **THE MINDSET:**
-If your investigation shows a real edge - even if it's one strong angle backed by data - have the conviction to take it.
+If your investigation reveals a strong angle backed by data - even just one - have the conviction to take it.
 Don't wait for a perfect setup that never comes.
-A pick based on real conviction from your investigation beats hesitating because "not everything aligns perfectly."
+A pick based on genuine conviction from your investigation beats hesitating because "not everything aligns perfectly."
 
 **ML CONSIDERATION:**
 If you like a team to win outright and the moneyline offers better value than the spread, consider the moneyline.
@@ -1793,11 +1814,6 @@ If you make a claim in your analysis, verify it with data. Don't assert - invest
 
 Your pick comes from your investigation and reasoning - not from a formula. If multiple factors point to one side, that's your conviction. Find the best angle on this game.
 
-**THE PUZZLE ANALOGY:**
-- The pieces of information (stats, injuries, matchups, form) are data points
-- Put the puzzle together and see what picture emerges
-- Trust the picture your analysis reveals
-
 ${buildFactorChecklist(sport)}
 
 </output_format>
@@ -1815,7 +1831,7 @@ Your "Gary's Take" is YOUR FINAL DECISION — the real reasons you're making thi
 This is NOT your Steel Man case copy-pasted. Steel Man cases are your advisors — they showed you both sides. Your rationale explains which side YOU chose and WHY, backed by:
 - The specific stats and factors from your investigation that drove your decision
 - L5/L10 trends, statistical gaps, matchup data — real numbers you found
-- Better Bet logic: why this spread/line is mispriced based on what the data shows
+- Your reasoning: what does the data show about how the spread reflects this matchup
 - Every claim must trace back to a stat you investigated or data from the scout report
 
 **FORBIDDEN OPENING PHRASES (NEVER START WITH THESE):**
@@ -1878,57 +1894,18 @@ function buildPass1Message(scoutReport, homeTeam, awayTeam, today, sport = '') {
 
 ═════════════════════ NFL-SPECIFIC INVESTIGATION ═════════════════════
 
-**NFL games are scarce (17 per team). Every detail matters. Do NOT skip these:**
+**NFL games are scarce (17 per team). Every detail matters. Investigate thoroughly.**
 
-### PLAYER GAME LOGS (NFL - always investigate)
-You MUST call \`fetch_player_game_logs\` for these players. NFL is a player-driven league:
+NFL is a player-driven league with small sample sizes. Your investigation should go deep on key personnel — how have the players who matter most for THIS game actually performed recently? Season stats can hide recent slumps, returns from injury, or hot streaks.
 
-**Call for EVERY NFL game:**
-- **BOTH starting QBs** - Their last 3-5 games with context. Trending up/down? Injury effects? This is critical for NFL analysis.
-- **BOTH RB1s** - Investigate rushing volume trends and yards per carry. What does the run game data reveal about this matchup?
-- **At least ONE key defensive player per team** - Elite pass rushers, linebackers. What does their recent production reveal about this defense?
+**KEY INVESTIGATION AREAS:**
+- **Personnel**: What do the key players' recent game logs reveal? What does the data show about who's trending up or down?
+- **Matchup dynamics**: What does each team bring to this matchup? How do their strengths and weaknesses interact?
+- **Situational efficiency**: What does the data show about each team in key situations?
+- **Context**: What environmental, scheduling, or situational factors could shape THIS game?
+- **Depth**: If key players are out, what does the data show about performance without them?
 
-**CONDITIONAL (check if relevant):**
-- **WRs if there's an injury** - If WR1 is out, check WR2/WR3's recent production to see if "next man up" is real
-- **TEs in pass-heavy offenses** - Elite TEs are game plan centerpieces.
-
-**WHY THIS MATTERS:** You cannot analyze an NFL game without knowing how the key players have ACTUALLY performed recently. Season stats hide recent slumps, returns from injury, or hot streaks. Call the logs.
-
-### VENUE & HISTORY CONTEXT
-Use \`fetch_narrative_context\` to search for:
-- **Head-to-head history at this stadium** - rivalry history at the venue
-- **Coaching matchup history** - head-to-head record between coaches
-- **QB's record in this specific situation** - career record at this venue or in similar spots
-- **Primetime/playoff implications record** - performance in high-stakes situations
-
-### SITUATIONAL EFFICIENCY (Check for BOTH teams)
-Call stats for these game-deciding factors:
-- **Red Zone Efficiency** - Teams that stall at the 20 vs. teams that convert (TD% vs FG%)
-- **3rd Down Conversion %** - Compare both teams' rates. What does the gap reveal about drive sustainability?
-- **4th Down Conversion %** - Aggressive coaches vs. conservative; do they go for it and convert?
-- **Turnover Differential** - Who wins the turnover battle and by how much?
-
-### SPECIAL TEAMS (Often Overlooked!)
-- **Kicker accuracy** - Investigate FG% overall and from various distances. How does kicker reliability affect THIS game?
-- **Punt return threats** - Is there a dynamic returner who can flip field position?
-- **Punter quality** - Pinning teams inside the 10 vs. booming touchbacks matters
-
-### ENVIRONMENTAL & SCHEDULING FACTORS
-- **Weather** - Cold weather games in northern cities are different. Cold affects passing games.
-- **Primetime factor** - SNF, MNF, Thursday Night games have different energy. Some players thrive, others shrink.
-- **Short week / Bye week** - Thursday games are brutal; bye week returns can be rusty OR refreshed
-- **Travel/Time Zone** - West coast team playing 1 PM EST = potential slow start. Cross-country travel matters.
-
-### DEPTH & ADJUSTMENTS
-- If a key player is OUT, call for the backup's stats or search for context on "how [Team] performed without [Player]"
-- If a team got embarrassed last week, search for "how [Coach] typically responds after blowout losses"
-
-### CLUTCH PERFORMANCE (Use \`fetch_narrative_context\`)
-- **4th Quarter performance** - Which team closes games? Which team chokes? Search for "[Team] 4th quarter record 2024"
-- **Close game record** - How do they perform in games decided by 7 or fewer points?
-- **Must-win game history** - Some teams rise to the occasion, others fold under pressure
-
-**Remember:** NFL has 17 games of data. A 5-game sample is 30% of the season. Dig into the WHY, not just the WHAT.
+**Remember:** A 5-game NFL sample is 30% of the season. Investigate the WHY behind the numbers, not just the WHAT.
 
 ═══════════════════════════════════════════════════════════════════════
 ` : '';
@@ -1952,18 +1929,7 @@ Call stats for these game-deciding factors:
 This is the BASELINE — who these teams are. Your investigation should focus on what's DIFFERENT about THIS game vs the baseline. Investigate whether the SPREAD reflects what you find.
 
 ### WHAT YOU NEED TO INVESTIGATE (Go deeper than baseline):
-Use BDL tokens to investigate matchup-specific data that complements your scout report:
-- **Shooting:** NCAAB_EFG_PCT, FG_PCT, THREE_PT_SHOOTING, SCORING — shooting matchup data
-- **Ball Security:** TURNOVER_RATE — forcing turnovers vs protecting the ball
-- **Rebounding:** OREB_RATE, REBOUNDS — board battles, second chance points
-- **Free Throws:** FT_RATE — foul drawing, foul trouble, FT%
-- **Defensive Stats:** STEALS, BLOCKS — defensive matchup investigation
-- **Tempo:** NCAAB_TEMPO — pace differential and its effect on this matchup
-- **Efficiency Ratings:** NCAAB_OFFENSIVE_RATING, NCAAB_DEFENSIVE_RATING (BDL-calculated)
-- **Playmaking:** ASSISTS
-- **Player Trends:** PLAYER_GAME_LOGS — who drives each team? What's changed recently?
-- **Home/Away Splits:** HOME_AWAY_SPLITS — deeper splits for venue impact
-- **Recent Form:** RECENT_FORM — deeper game-by-game context
+Your scout report provides the baseline. Investigate what the data shows about how these teams match up — go deeper on the factors YOU determine are most relevant for THIS game.
 
 ### NCAAB INVESTIGATION TRIGGERS
 Watch for these patterns that require deeper investigation:
@@ -1971,8 +1937,7 @@ Watch for these patterns that require deeper investigation:
 - **SOS Filter**: Is either team's record inflated? Refer to the SOS data in your scout report.
 - **Conference Rematch**: Second meeting between rivals. Coaching adjustments may shift dynamics.
 - **Home Court Factor**: What does the home/away data reveal about venue impact, and how does it compare to the spread?
-- **Regression Check**: What does the gap between L5 3PT% and season average tell you about whether recent shooting is sustainable?
-- **Player Game Logs**: Use PLAYER_GAME_LOGS to investigate individual player trends if needed.
+- **Regression Check**: When recent shooting diverges from the season baseline, what does the evidence show about sustainability?
 
 ### INJURY INVESTIGATION (NCAAB-SPECIFIC)
 - For each injury, ask: How long has the market known about this? What do the team's stats look like during the absence?
@@ -2003,31 +1968,14 @@ ${ncaabGuidance ? `<sport_specific_guidance>${ncaabGuidance}</sport_specific_gui
 - If you call a stat for Team A, you MUST call the equivalent for Team B
 - Cherry-picking stats for one side = incomplete picture = bad bet
 
-**MINIMUM investigation (BOTH teams):**
-- Team efficiency (offensive rating, defensive rating, net rating)
-- Recent form (last 5 games with margins and opponent quality)
-- Key player game logs (best player on EACH team)
-- Turnover differential
-- Style indicators (pace, 3PT shooting, paint scoring) — matchup-specific
-
-**NOTE:** Home/away RECORDS are DESCRIPTIVE (they explain WHY the line is set, not what happens tonight). If you want to understand venue impact, investigate the data behind the records, not the records themselves.
+**NOTE:** If you cite a home/away record, investigate what the data behind it shows.
 ${(sport === 'basketball_ncaab' || sport === 'NCAAB') ? `
 **NCAAB HOME COURT:** In college basketball, venue impact can be significant. Investigate: What does THIS team's home vs away performance data show? Has the spread already captured the venue effect, or is there a gap?` : ''}
-
-**ADDITIONAL STATS TO CONSIDER:**
-- BENCH_DEPTH
-- H2H_HISTORY (how do these teams match up?)
-- Usage stats for stars (who's carrying the load?)
 
 **INVESTIGATION MINDSET:**
 - There is NO LIMIT on how many stats you can call
 - A thorough investigation typically requires 18-30+ stat calls
 - Only finalize when YOU are confident you've seen both sides fairly
-
-**PERSONNEL PIVOT RULE:**
-If a team's recent form (L5/L10) diverges significantly from their season stats (7+ point swing):
-- You MUST call PLAYER_GAME_LOGS for their TOP 3 usage players
-- This identifies: fatigue, injury returns, hot/cold streaks, rotation changes
 
 **DO NOT claim "Team X is on a hot streak" without verifying WHO is driving it.**
 **DO NOT cite a recent loss as evidence without knowing WHO PLAYED in that game.**
@@ -2036,18 +1984,12 @@ If a team's recent form (L5/L10) diverges significantly from their season stats 
 <trigger_investigation>
 ## INVESTIGATE ALL FLAGGED TRIGGERS
 
-The Scout Report may include "INVESTIGATION TRIGGERS" - these are AUTO-FLAGS.
+The Scout Report may include "INVESTIGATION TRIGGERS" - these are AUTO-FLAGS for situations that warrant deeper investigation.
 
-**YOU MUST investigate each trigger with actual stat calls:**
-- PACE TRAP - Call PACE + REST_SITUATION
-- ROOKIE ROAD - Call PLAYER_GAME_LOGS with away filter
-- STAR CONDITIONING - Call PLAYER_GAME_LOGS (L10)
-- REVENGE GAME - Call PLAYER_VS_TEAM_HISTORY if available
-- RETURNING STAR - Call TEAM_RECORD_WITHOUT_PLAYER + RECENT_FORM
-- L5 ROSTER MISMATCH → Note that L5 stats may understate/overstate the team
+**For each flagged trigger, investigate with actual stat calls to verify whether it matters for THIS game.**
 
 **DO NOT DISMISS TRIGGERS WITHOUT INVESTIGATION.**
-If flagged, you MUST call stats to verify whether it matters or not.
+If flagged, you MUST investigate to verify whether it matters or not.
 </trigger_investigation>
 
 <instructions>
@@ -2215,10 +2157,10 @@ Investigate BOTH teams equally. Your constitution has the available stat tokens 
 ### NBA INVESTIGATION (BUILDING ON YOUR SCOUT REPORT)
 
 **ALREADY IN YOUR SCOUT REPORT (DO NOT RE-FETCH):**
-- Four Factors: eFG%, TS%, Net Rating, ORtg, DRtg for both teams
-- Unit Comparison: Starters vs Bench metrics (+/-, eFG%, NetRtg)
-- Top 10 players with advanced stats (eFG%, TS%, NetRtg, +/-, USG%)
-- Do NOT re-call NET_RATING, OFFENSIVE_RATING, DEFENSIVE_RATING, EFG_PCT, TURNOVER_RATE for season averages
+- Team efficiency metrics, shooting splits, and net ratings for both teams
+- Unit comparison: starters vs bench performance metrics
+- Top 10 players with advanced stats
+- Do NOT re-call season-average efficiency or shooting stats already in the scout report
 
 Your scout report is the BASELINE — who these teams are. Your investigation should focus on what's DIFFERENT about THIS game vs the baseline. Request data for the factors YOU determine are relevant.
 ` : '';
@@ -2228,8 +2170,8 @@ Your scout report is the BASELINE — who these teams are. Your investigation sh
 ### NCAAB INVESTIGATION (BUILDING ON YOUR SCOUT REPORT)
 
 **ALREADY IN YOUR SCOUT REPORT (DO NOT RE-FETCH):**
-- Barttorvik: AdjEM, AdjO, AdjD, Tempo, T-Rank, Barthag for both teams
-- NET ranking, SOS ranking, AP/Coaches Poll rankings
+- Team efficiency and tempo metrics for both teams
+- Rankings and strength of schedule data
 - Home court data: home/away records, margins, splits
 - Recent form: L5 game-by-game scores, margins, L5 statistical trends
 - H2H: Previous matchups this season
@@ -2238,18 +2180,8 @@ Your scout report is the BASELINE — who these teams are. Your investigation sh
 
 Your scout report is the BASELINE — who these teams are. Your investigation should focus on what's DIFFERENT about THIS game vs the baseline. Request data for the factors YOU determine are relevant.
 
-**INVESTIGATE DEEPER (BDL tokens):**
-- **Shooting:** NCAAB_EFG_PCT, FG_PCT, THREE_PT_SHOOTING, SCORING — shooting matchup data
-- **Ball Security:** TURNOVER_RATE — forcing turnovers vs protecting the ball
-- **Rebounding:** OREB_RATE, REBOUNDS — board battles, second chance points
-- **Free Throws:** FT_RATE — foul drawing, foul trouble, FT%
-- **Defense:** STEALS, BLOCKS — defensive matchup investigation
-- **Tempo:** NCAAB_TEMPO — pace differential and its effect on this matchup
-- **Efficiency Ratings:** NCAAB_OFFENSIVE_RATING, NCAAB_DEFENSIVE_RATING (BDL-calculated)
-- **Player Investigation:** PLAYER_GAME_LOGS — who drives each team? What's changed recently?
-- **Home/Away:** HOME_AWAY_SPLITS — deeper splits for venue impact
-- **Recent Form:** RECENT_FORM — deeper game-by-game context beyond L5 summary
-- **Rest/Schedule:** REST_SITUATION, SCHEDULE_STRENGTH — schedule context
+**INVESTIGATE DEEPER:**
+Use your tools to investigate the matchup-specific data that goes beyond the baseline. What does each team bring to this matchup? What do you expect to prevail tonight — and how does that compare to what the spread implies?
 
 **INVESTIGATION MINDSET:**
 - There is NO LIMIT on how many stats you can call
@@ -2279,24 +2211,21 @@ Investigate BOTH teams equally. Your constitution has the investigation factors.
 
 You have your first wave of data. INVESTIGATE this matchup neutrally — what does the data tell you about BOTH teams?
 
-${isNBA ? `**NBA BASELINE REMINDER:** Your scout report contains Four Factors (eFG%, TS%, Net Rating, ORtg, DRtg) and Unit Comparison with efficiency metrics. This is your BASELINE - the teams' season identity. Your investigation should focus on:
+${isNBA ? `**NBA BASELINE REMINDER:** Your scout report already contains baseline team metrics and efficiency data. Do NOT re-fetch data that's already in the scout report. Your investigation should focus on:
 1. **TRENDS**: What has changed recently? Compare L5/L10 to season baseline — what does the gap reveal?
-2. **MATCHUP**: Where does one team's strength meet the other's specific weakness? What does the data show?
+2. **MATCHUP**: What does each team bring to this matchup? How do their strengths and weaknesses interact?
 3. **CONTEXT**: What factors make THIS game different from the baseline?
-Do NOT re-fetch basic stats (NET_RATING, OFFENSIVE_RATING, DEFENSIVE_RATING). You already have them. INVESTIGATE what they mean for THIS game.
 
-` : ''}${isNCAAB ? `**NCAAB BASELINE REMINDER:** Your scout report contains Barttorvik metrics, rankings, home court data, L5 trends, H2H, injuries, and roster depth. This is your BASELINE — the teams' season identity. The spread likely already reflects this baseline. Your investigation should find what the spread might NOT reflect:
-1. **MATCHUP DYNAMICS**: How do these teams' styles interact? Where does one team's approach clash with the other's? What specific matchup factors does the baseline NOT capture?
-2. **FOUR FACTORS**: Investigate eFG%, TOV%, ORB%, FT Rate for BOTH teams — where are the gaps that matter for THIS specific matchup?
-3. **HOME COURT & CONTEXT**: What does the home/away data show for EACH team? Are there factors (recent form shift, injuries, SOS quality) that make THIS game different from the baseline?
-4. **WHERE IS THE EDGE?**: The baseline metrics show team quality. Investigate: Is there a disconnect between the baseline and what's happening RIGHT NOW with these teams?
+` : ''}${isNCAAB ? `**NCAAB BASELINE REMINDER:** Your scout report already contains baseline metrics and context. Do NOT re-fetch what's already provided. Your investigation should find what the spread might NOT reflect:
+1. **MATCHUP DYNAMICS**: How do these teams' styles interact? What specific matchup factors does the baseline NOT capture?
+2. **CURRENT vs BASELINE**: Investigate: Is there a disconnect between the baseline and what's happening RIGHT NOW with these teams?
 
 ` : ''}**THE CORE QUESTION:** Where does your investigation DISAGREE with this spread?
 - Investigate both teams' stats, form, and matchup dynamics
 - The spread already reflects baseline team quality. Your job is to find what it DOESN'T reflect.
 - Ask: What matchup-specific factors, recent changes, or stylistic clashes make this game different from what the baseline suggests?
 
-Decision-making happens in Pass 2.5 where you'll determine which side is the BETTER BET.
+Decision-making happens in Pass 2.5 where you'll evaluate both sides and make your pick.
 </pass_context>
 
 ${spreadSizeContext ? `<spread_context>${spreadSizeContext}</spread_context>` : ''}
@@ -2309,7 +2238,7 @@ ${nflDataGaps}${nbaDataGaps}${ncaabDataGaps}${nhlDataGaps}
 Investigate the factors YOU determine are most relevant to THIS matchup. Your constitution lists available investigation factors and stat tiers.
 ${isNBA ? `
 **NBA NOTE:** You already have season-level baseline data from the scout report (the spread reflects this). Focus on what's DIFFERENT about THIS game — matchup dynamics, recent form shifts, and factors the spread might not capture.` : ''}${isNCAAB ? `
-**NCAAB NOTE:** Your scout report has baseline data (Barttorvik, L5 trends, home court, injuries). The spread likely already reflects this baseline. Your investigation should focus on what's DIFFERENT about THIS game — matchup-specific dynamics, style clashes, recent roster changes, and factors the spread might not fully capture.
+**NCAAB NOTE:** Your scout report has baseline data (efficiency metrics, L5 trends, home court, injuries). The spread likely reflects this baseline. Your investigation should focus on what's DIFFERENT about THIS game — matchup-specific dynamics, style clashes, recent roster changes, and factors the spread might not fully capture.
 
 **NCAAB INVESTIGATION TRIGGERS:**
 - **Conference Home Games**: Conference opponents have scouting familiarity and game film. When a conference game is played at home, investigate whether margins compress beyond what season-long metrics suggest.
@@ -2318,9 +2247,7 @@ ${isNBA ? `
 **REMINDER:** Home/away RECORDS are descriptive — they explain the line, not why it's wrong.${isNCAAB ? ` However, in NCAAB the FACT of playing at home IS a structural factor — investigate whether the spread accurately captures the venue impact.` : ''} Investigate the data for venue impact.
 
 **INJURY CONTEXT RULE:**
-- First game without them → High variance, team adjusting
-- Out 3+ weeks AND team competitive → Team has adapted. Their recent form reflects playing without this player.
-- Investigate: How has team performed SINCE the absence? That's the team you're betting on now.
+How long has the market known about this absence? What does the team's performance data during that period tell you about the team you're betting on tonight?
 
 **BUILDING CASES AROUND INJURIES:**
 An opponent's injury is NOT a positive factor by itself.
@@ -2404,15 +2331,15 @@ Fill in ACTUAL VALUES from the scout report and your investigation. The record M
 Fill in ACTUAL VALUES from your investigation. This grounds your case in data.
 
 **REQUIREMENTS FOR EACH CASE:**
-${isNBA ? `- Focus on MATCHUP-SPECIFIC findings: Where does Team A's statistical strength meet Team B's specific weakness? Cite the stats.
+${isNBA ? `- Focus on MATCHUP-SPECIFIC findings: What does each team bring to this matchup, and how do their strengths and weaknesses interact? Cite the stats.
 - INVESTIGATE: What does the gap between recent and season data reveal? Is it a real shift or variance?
-- Season-long baselines (Net Rating, ORtg, DRtg) reflect team quality the spread already captures. Build your case on what makes THIS game different.
-- RECORDS: Copy records EXACTLY from the scout report. Do NOT use records from your training data.` : isNFL ? `- TEAM ADVANCED STATS are REQUIRED (EPA/Play, DVOA, Success Rate, Pressure Rate, etc.)
+- Season-long baselines reflect team quality the spread already captures. Build your case on what makes THIS game different.
+- RECORDS: Copy records EXACTLY from the scout report. Do NOT use records from your training data.` : isNFL ? `- Team-level advanced stats should be the foundation — investigate the team metrics from your data that reveal how each team plays
 - Player stats can supplement team stats, but team stats must be the foundation
 - INVESTIGATE: What does the gap between recent and season data reveal? What evidence points to a real shift vs variance?` : isNCAAB ? `- Focus on MATCHUP-SPECIFIC findings: compare each team's offense against the opponent's defense, and vice versa. What does the matchup reveal?
 - INVESTIGATE: What does the gap between recent form and season data reveal? What does the opponent quality during the recent stretch tell you?
-- Season-long baselines (AdjEM, AdjO, AdjD) reflect team quality the spread already captures. Build your case on what makes THIS game different.
-- RECORDS: Copy records EXACTLY from the scout report. Do NOT use records from your training data.` : `- TEAM ADVANCED STATS are REQUIRED — use the sport-appropriate advanced metrics from your data
+- Season-long baselines reflect team quality the spread already captures. Build your case on what makes THIS game different.
+- RECORDS: Copy records EXACTLY from the scout report. Do NOT use records from your training data.` : `- Team-level advanced stats should be the foundation — investigate the team metrics from your data that reveal how each team plays
 - Player stats can supplement team stats, but team stats must be the foundation
 - INVESTIGATE: What does the gap between recent and season data reveal? What evidence points to a real shift vs variance?`}
 - INJURY CONTEXT: Focus on the team's performance during any absences. Connect injuries to team data, not just listing who is out.
@@ -2439,13 +2366,13 @@ If the spread number changed significantly, your case should change too. A case 
 ${isNBA ? `  - Start with the matchup-specific findings from your investigation
   - Ask: Do the numbers tell a consistent story, or what does the gap between recent and season data reveal?
   - If there's a gap, investigate: What evidence tells you whether this is a real shift (roster change, injury) or variance (schedule, shooting luck)?
-  - For SPREADS: What have you found that the spread might not fully reflect?` : isNFL ? `  - Investigate team statistical gaps (EPA/Play, DVOA, Success Rate, Pressure Rate)
-  - Ask: Where does one team's statistical strength exploit the opponent's weakness?
-  - For SPREADS: What have you found that the spread might not fully reflect?` : isNCAAB ? `  - Start with the matchup-specific findings from your investigation (Four Factors, shooting vs defense, style clashes)
+  - For SPREADS: What have you found that the spread might not fully reflect?` : isNFL ? `  - Investigate team statistical gaps — what does each team bring to this matchup?
+  - Ask: How do their strengths and weaknesses interact? What do you expect to prevail tonight?
+  - For SPREADS: What have you found that the spread might not fully reflect?` : isNCAAB ? `  - Start with the matchup-specific findings from your investigation
   - Ask: Do the numbers tell a consistent story, or what does the gap between recent and season data reveal?
   - For SPREADS: What have you found about THIS specific matchup that the spread might not fully reflect?
-  - Investigate the matchup in BOTH directions — where does each team's offense attack the other's defensive weakness?` : `  - Investigate team statistical gaps using the sport-appropriate advanced metrics
-  - Ask: Where does one team's statistical strength exploit the opponent's weakness?
+  - Investigate the matchup in BOTH directions — how does each team's offense match up against the opponent's defense, and vice versa?` : `  - Investigate team statistical gaps — what does each team bring to this matchup?
+  - Ask: How do their strengths and weaknesses interact? What do you expect to prevail tonight?
   - For SPREADS: What have you found that the spread might not fully reflect?`}
 
 - **PARAGRAPH 2 (FORM + CONTEXT):**
@@ -2475,10 +2402,8 @@ ${isNBA ? `  - Start with the matchup-specific findings from your investigation
 
 ${isNBA && Math.abs(parseFloat(firstTeamSpread.replace(/[+-]/g, ''))) >= 8 ? `**LARGE SPREAD INVESTIGATION (8+ points) - DEPTH ANALYSIS:**
 Investigate bench depth for BOTH teams:
-- Call [BENCH_DEPTH] to compare bench scoring and depth for each team
-- Ask: What's the Net Rating gap between starters and bench for EACH team?
-- Ask: What does the depth comparison reveal about THIS matchup?
-- Investigate: What does the depth data reveal about this matchup?
+- What does the depth comparison reveal about THIS matchup?
+- Does the depth data support or undermine the expected margin?
 
 **FRESH INJURY INVESTIGATION (if applicable):**
 If a key player is OUT for 0-2 games only:
@@ -2510,7 +2435,7 @@ Medium spreads ask: "Is this margin accurate?" Investigate:
 
 **THE VALUE QUESTION:** After your analysis, ask yourself:
 - What did your investigation reveal that the spread of ${Math.abs(parseFloat(firstTeamSpread.replace(/[+-]/g, '')))} might NOT reflect?
-- Where do your matchup-specific findings DISAGREE with the baseline metrics? That disagreement is where edge lives.
+- Where do your matchup-specific findings DISAGREE with the baseline metrics? What does that disagreement tell you about this game?
 - The spread already captures team quality. What have you found about THIS specific game — style clashes, matchup dynamics, recent changes — that could make the actual margin different?
 </case_structure>
 
@@ -2527,8 +2452,8 @@ Using the investigation checklist, quality gate, and variance check above, execu
 
 **STEP 4:** Write **ANALYSIS FOR ${secondTeam}** (3-4 paragraphs with key factors, recent form with margins, stats)
 
-**CRITICAL:** Do NOT indicate which side is the better bet yet. Investigate BOTH sides neutrally.
-In Pass 2.5 you'll stress-test both cases and determine which side is the BETTER BET.
+**CRITICAL:** Do NOT indicate which side you favor yet. Investigate BOTH sides neutrally.
+In Pass 2.5 you'll stress-test both cases and make your decision.
 
 BEGIN MATCHUP ANALYSIS NOW.
 </instructions>
@@ -2566,22 +2491,8 @@ function buildPass2PropsMessage(sport = '', homeTeam = '[HOME]', awayTeam = '[AW
   const isNFL = sport === 'americanfootball_nfl' || sport === 'NFL';
 
   // Sport-specific game context synthesis guidance
-  const sportContextGuidance = isNBA ? `
-What did your game investigation reveal about the factors that affect player production tonight? Synthesize what you found — the matchup dynamics, the game environment, any personnel changes — and how those findings apply to individual players.` : isNHL ? `
-- **Expected Goals & Possession:** What does the xGF%/Corsi% matchup suggest about shot volume?
-- **Goalie Matchup:** How do the goalies' recent SV% and GAA affect scoring opportunity?
-- **Power Play/Penalty Kill:** Which team takes more penalties? Which PP unit is more dangerous?
-- **Line Matchups:** Are there deployment advantages for specific players tonight?
-- **Game Script:** Competitive game (balanced minutes) or blowout risk (pulled goalies, deployment shifts)?` : isNFL ? `
-- **Pace & Play Volume:** What does the pace matchup suggest about total plays and opportunity?
-- **Defensive Scheme:** How does the opposing defense affect passing vs rushing volume?
-- **Game Script:** Projected game flow — does one team need to pass more to keep up? Does a lead mean heavy rushing?
-- **Injury Impact:** Are there absences that shift targets, carries, or routes to specific players?
-- **Weather/Conditions:** Any factors that affect passing vs rushing distribution?` : `
-- **Pace & Opportunity:** What does the matchup suggest about total possessions and player opportunity?
-- **Defensive Matchups:** Which defensive weaknesses create opportunity for specific player types?
-- **Game Script:** Competitive game or blowout risk? How does this affect minute distribution?
-- **Injury Cascades:** Are there absences that shift production to specific players?`;
+  const sportContextGuidance = `
+What did your game investigation reveal about the factors that affect player production tonight? Synthesize what you found — the matchup dynamics, the game environment, any personnel changes — and how those findings apply to individual players.`;
 
   return `
 <pass_context>
@@ -2617,16 +2528,16 @@ Select your top 3-4 prop candidates — the players where your game investigatio
 ### ${firstDirection} CASE for [Player] — [Prop Type] [Line]
 Build the strongest case for WHY this player goes ${firstDirection} tonight. Connect your game-level findings to this specific player's production:
 - What game factors from your investigation support this direction?
-- What does the player's recent form show? How does it compare to what the line reflects?
-- What does the matchup data reveal about production in this direction?
+- What does the player's recent form and matchup data reveal about production in this direction?
+- What conditions must be true for this case to hold? Are those conditions specific to tonight?
 - Cite the STATS from your investigation that support this case.
 
 ### ${secondDirection} CASE for [Player] — [Prop Type] [Line]
 Build the strongest case for WHY this player goes ${secondDirection} tonight. This is NOT filler — give it equal analytical depth:
 - What game factors from your investigation support this direction?
-- What does the matchup data reveal about production in this direction?
+- What does the player's recent form and matchup data reveal about production in this direction?
 - What conditions must be true for this case to hold? Are those conditions specific to tonight?
-- Cite the STATS that support this case.
+- Cite the STATS from your investigation that support this case.
 
 **REQUIREMENTS FOR EACH CASE:**
 - Every claim must trace back to a SPECIFIC STAT from your investigation or scout report
@@ -2742,7 +2653,7 @@ function buildPass25Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', sport = ''
   
   // Build the key player dynamics section with Star Power Audit (only for small spreads / who wins questions)
   const keyPlayerSection = isWhoWinsQuestion ? `
-**B. STAR POWER AUDIT (The "Closer Effect" - Critical for Close Games)**
+**B. STAR POWER AUDIT (Close Game Dynamics)**
 
 Since this is a "WHO WINS?" question (spread < ${isNBA || isNCAAB ? '5' : '3.5'} points), investigate the CLOSING dynamic:
 
@@ -2750,30 +2661,18 @@ ${isNFL ? `**NFL CLOSE GAME INVESTIGATION:**
 In close games, late-game execution often determines the outcome.
 
 Ask: "If this game is close in the 4th quarter, what does the data show about EACH team's ability to close?" Investigate the factors YOU determine are most relevant — QB performance, matchup advantages, late-game execution data — and let the data guide you.` : isNCAAB ? `**CLOSE GAME DYNAMICS (NCAAB):**
-In close college basketball games, late-game execution often determines the outcome.
-
-**INVESTIGATE WITH STATS:**
-- Who are the go-to scorers on each team in crunch time? What's their FT% (free throws decide close games)?
-- Does one team have a measurable advantage in close-game situations this season?
-- Investigate: Does either team rely on 3PT shooting? High-variance scoring is a factor in close games.
-- Ask: "If this game is close in the last 5 minutes, what does the data show about EACH team's ability to close?"
+If this game is close late, what does the data show about each team's ability to execute in tight situations? Investigate the factors you determine are most relevant.
 
 **HOME COURT IN CLOSE GAMES:**
-- In NCAAB, close games at home are different — crowd pressure, free throw shooting in hostile environments, and officials matter more
-- Ask: Does the home team's close-game data show a venue-specific advantage? Does the road team struggle in close road games?` : `**THE CLOSER EFFECT:**
-In close games, late-game execution can determine the outcome.
-
-**INVESTIGATE WITH STATS:**
-- Who has the highest 4th quarter usage rate on each team? What's their clutch shooting %?
-- Does one team have a measurable advantage in close-game situations this season?
-- What do each team's clutch stats (Net Rating in games within 5 pts) show?`}
+- Ask: What does each team's close-game data show at home vs on the road?` : `**CLOSE GAME DYNAMICS:**
+If this game is likely to be close late, what does the data show about each team's ability to close? Investigate the factors you determine are most relevant.`}
 
 **THE PIVOT RULE:**
 If your case relies on a STRUCTURAL mismatch (style, defense, pace):
 - Ask: "What happens in the last 5 minutes when both teams abandon their system?"
-- Does the other team have a star who can OVERRIDE the structural advantage?
+- What does the data show about the other team's ability to overcome the structural advantage?
 
-**NOT "this player is great"** (already priced in)
+**NOT "this player is great"** (general talent is already reflected in the line)
 **BUT "when this game is close late, who does each team rely on and what does their data show?"**
 ` : `
 **B. KEY PLAYER DYNAMICS:**
@@ -2831,7 +2730,7 @@ You are the FINAL DECISION MAKER. Steel Man cases are inputs, not conclusions.
 - Be aware of the rest, B2B, and travel situation for both teams
 - Investigate the hard factors of THIS matchup — how is this spread over or under valued based on what you find?
 - What role, if any, is the rest situation playing in how this line is set?
-- At this spread size, what do the stats, line movement, and matchup data tell you about the better bet?
+- At this spread size, what do the stats, line movement, and matchup data tell you about which side the evidence supports?
 
 **2. RETURNING PLAYERS:**
 - If a star player is returning tonight after missing games, investigate: What does the team's recent data look like without them? How might reintegration affect tonight?
@@ -2892,7 +2791,7 @@ Strip these out. Only keep claims where the conclusion follows directly from com
 
 **F. EVALUATING ALL INPUTS**
 
-${proAssessment ? `You have THREE pieces to evaluate: your own initial assessment AND two advisor cases built independently. Apply the same 6 questions to ALL THREE — your own assessment gets the same scrutiny as the advisor's cases.` : `These cases were built by an independent advisor. Your job is to evaluate the quality of reasoning in each case to help determine which side is the better bet tonight.`}
+${proAssessment ? `You have THREE pieces to evaluate: your own initial assessment AND two advisor cases built independently. Apply the same 6 questions to ALL THREE — your own assessment gets the same scrutiny as the advisor's cases.` : `These cases were built by an independent advisor. Your job is to evaluate the quality of reasoning in each case to help determine which side the evidence supports tonight.`}
 
 For EACH ${proAssessment ? 'piece (your assessment AND each advisor case)' : 'case'} as a whole, ask yourself:
 
@@ -2900,7 +2799,7 @@ For EACH ${proAssessment ? 'piece (your assessment AND each advisor case)' : 'ca
 
 2. **If this stat were different, would my evaluation of tonight's game actually change, or would the matchup dynamics be the same?** If a key number in the ${proAssessment ? 'piece' : 'case'} changed and the argument would still hold, the ${proAssessment ? 'piece' : 'case'} is about team quality, not about tonight's game.
 
-3. **Is this argument about the MATCHUP between these two teams, or about one team in isolation?** A ${proAssessment ? 'piece' : 'case'} that says "Team A is elite" is different from one that says "Team A's specific strength runs directly into Team B's specific weakness."
+3. **Is this argument about the MATCHUP between these two teams, or about one team in isolation?** A ${proAssessment ? 'piece' : 'case'} that says "Team A is elite" is different from one that reasons about how both teams' strengths and weaknesses interact in THIS specific game.
 
 4. **Does this argument apply to THIS game specifically, or would it be equally true for any game this team plays this week?** Reasoning that's specific to tonight's conditions, opponent, and situation is different from reasoning that describes general team quality.
 
@@ -2909,7 +2808,7 @@ For EACH ${proAssessment ? 'piece (your assessment AND each advisor case)' : 'ca
 6. **For each claim, trace the logic: What evidence is cited, and does the conclusion actually follow from it?** Every ${proAssessment ? 'piece' : 'case'} connects data points to conclusions. Examine each connection individually — is the reasoning sound, or is there a logical leap between what the data shows and what the ${proAssessment ? 'piece' : 'case'} claims it means? Stop at each claim and push back: Does this hold up under scrutiny? Is the data cited representative of who this team actually is, or could it reflect short-term variance unlikely to repeat?
 
 **FOR EACH ${proAssessment ? 'PIECE' : 'CASE'}, CONCLUDE:**
-- Which ${proAssessment ? 'piece' : 'case'} gives you more reasoning about THIS specific game to help determine which side of the spread is the better bet?
+- Which ${proAssessment ? 'piece' : 'case'} gives you more game-specific reasoning to help determine which side of the spread the evidence supports?
 ${proAssessment ? `- Does your initial read still hold up after seeing the advisor's cases? Did the advisor's cases address the dynamics you identified, or did they focus on different things?
 - Which of the three pieces has the STRONGEST game-specific reasoning?` : ''}
 
@@ -2968,7 +2867,7 @@ These patterns show common situations where perception, injury news, or recent r
 
 **HOW TO USE TRAP PATTERNS:**
 - If you identify a trap on one side, ask: "Has this factor pushed the spread beyond what the hard stats support?"
-- Example: Star player just went out → line moves from -3 to -7 → Investigate: Do the team's recent stats without the star support a 7-point spread, or has the line moved beyond what the data shows?
+- Example: Star player just went out → line moves from -3 to -7 → Investigate: What does the team's data show about their level? How does that compare to the current spread?
 - The trap patterns help you identify WHERE narrative has overtaken reality
 
 **CHECK BOTH SIDES:** Either team could be a trap. This informs which side is the BETTER BET.
@@ -3015,10 +2914,9 @@ These patterns show common situations where perception, injury news, or recent r
 
 **6b. Depth Check (Large Spreads 8+)?**
    - Condition: Spread is 8+ points (margin question, not just "who wins")
-   - **Bench Depth:** INVESTIGATE how each team's depth compares.
-     * Call [BENCH_DEPTH] to compare bench scoring and depth for each team
-     * Check usage_concentration from scout report — is one team star-heavy?
-     * Investigate: Does one team's depth create an advantage when starters rest?
+   - **Bench Depth:** Investigate how each team's depth compares.
+     * What does the depth data reveal about this matchup?
+     * Does one team's depth create an advantage across a full game?
    - **Question:** "Based on the depth data, which team is more resilient across a full game?"
 
 **7. Line Inflation ("Begging for a Bet")?**
@@ -3040,7 +2938,7 @@ These patterns show common situations where perception, injury news, or recent r
    - Be aware of the rest and travel situation for each team
    - Investigate the hard factors of THIS matchup — how is this spread over or under valued based on what you find?
    - What role, if any, is the rest/travel situation playing in how this line is set?
-   - At this spread size, what do the stats, line movement, and matchup data tell you about the better bet?
+   - At this spread size, what do the stats, line movement, and matchup data tell you about which side the evidence supports?
 
 **10. Market Movement?**
    - Investigate: Where has the line moved since open, and in which direction?
@@ -3089,16 +2987,16 @@ ${isNCAAB ? `
    - WHAT DOES THIS TELL YOU: What does the conference context add to the matchup picture?
 
 **THE PRICE:**
-   - AWARENESS: The spread is the price — it's what the market is asking each team to do in THIS spot. A team can be statistically superior and still be mispriced for the situation.
-   - INVESTIGATE: Given the spot, the venue, and the conference context — what is the spread asking each team to do? What does the situational context reveal about whether the spread reflects the full picture or only part of it?
+   - AWARENESS: The spread is the price — it's what the market is asking each team to do in THIS spot. Investigate whether the spread fully reflects the situational context.
+   - INVESTIGATE: Given the spot, the venue, and the conference context — what is the spread asking each team to do? What does the situational context reveal about the spread?
    - WHAT DOES THIS TELL YOU: Where do the stats and the situational factors agree about the price? Where do they conflict?
 ` : ''}
 ---
 
-### PICK-LEVEL CONCERNS:
+### LINE-LEVEL CONCERNS:
 
-- **Line movement:** Investigate - has the line moved away from your side? Why?
-- **Sharp money signals:** Investigate - any indication sharps are opposite your pick?
+- **Line movement:** Investigate - has the line moved since open? In which direction, and why?
+- **Sharp money signals:** Investigate - any indication sharps are on one side? What does that reveal?
 
 ---
 
@@ -3138,11 +3036,11 @@ Given everything you've investigated:
 - Does this number feel right?
 - If not, which direction is it off — and what specifically from your research tells you that?
 - Have narratives around this game pushed the line beyond what the data supports — or has the market gotten it right?
-- What would need to be true for the OTHER side to be the better bet?
+- What would need to be true for the OTHER side to have the stronger case?
 
 **STATE YOUR DECISION:**
 
-Which side is the BETTER BET given this spread? Not just "who wins" — which bet offers value given the number?
+Which side does the evidence support given this spread? Not just "who wins" — which side offers value given the number?
 - YOUR PICK SHOULD BE BACKED BY YOUR INVESTIGATION OF THE DATA FOR THIS SPECIFIC GAME
 - State your pick clearly in plain text (e.g., "I'm taking Team X +5.5") with your top reasons
 - Do NOT output JSON — the final formatted output comes in the next step
@@ -3182,14 +3080,14 @@ Document which patterns apply to EACH side.
 
 **STEP 3: STATE YOUR DECISION**
 
-Based on everything — your matchup analysis, the factors you investigated, and whether the spread reflects your findings — which side is the BETTER BET?
+Based on everything — your matchup analysis, the factors you investigated, and whether the spread reflects your findings — which side does the evidence support?
 
 Consider what likely created this line (injury news, recent form, schedule, matchup perception). Does your research agree with the number, or did you find something the line doesn't fully reflect?
 
 State your pick clearly (e.g., "I'm taking [Team] [spread]") and your top 2-3 reasons backed by stats from your investigation. Write in natural language — do NOT output JSON. The final formatted output comes in the next step.
 
 You CAN discuss value, line movement, and why the spread is wrong - but ALWAYS explain the GAME REASONS behind it.
-The value explanation should be the conclusion, not the premise. Lead with stats, end with why it's the better bet.
+The value explanation should be the conclusion, not the premise. Lead with stats, end with why the evidence supports this side.
 
 **PLAYER NAME RULES (HARD RULE - NO EXCEPTIONS):**
 - DO NOT mention any player who hasn't played at all this 2025-2026 season
@@ -3237,7 +3135,7 @@ function buildPass25PropsMessage(homeTeam = '[HOME]', awayTeam = '[AWAY]', sport
 <pass_context>
 ## PASS 2.5 - PROP CASE REVIEW & STRESS TEST
 
-You've built bilateral OVER/UNDER cases for your top prop candidates in ${awayTeam} @ ${homeTeam}. Now REVIEW them critically — verify claims, stress-test assumptions, and identify which candidates have genuine edges.
+You've built bilateral OVER/UNDER cases for your top prop candidates in ${awayTeam} @ ${homeTeam}. Now REVIEW them critically — verify claims, stress-test assumptions, and pick the 2 props you would bet on tonight.
 </pass_context>
 
 <verification_protocol>
@@ -3275,13 +3173,15 @@ Strip these out. Only keep claims where the conclusion follows directly from com
 **A. OVER CASE STRENGTH:**
 - Is the OVER case built on STATS or narrative? Strip out any claims without data.
 - What does the game context tell you about production relative to baseline for this direction?
-- Is the recent form trend driven by factors that are likely to repeat tonight, or by factors that may not? What does the data show?
+- What does the specific matchup tonight reveal about this player's production floor and ceiling?
+- What game-script scenarios could materialize, and what do they mean for the OVER thesis?
 - CONCLUDE: What is the strongest data-backed argument for OVER?
 
 **B. UNDER CASE STRENGTH:**
 - Is the UNDER case built on STATS or narrative? Strip out any claims without data.
-- What does the specific defensive matchup tonight reveal about this player's production ceiling and floor?
-- What game-script scenarios could materialize, and what do they mean for this player's production?
+- What does the game context tell you about production relative to baseline for this direction?
+- What does the specific matchup tonight reveal about this player's production floor and ceiling?
+- What game-script scenarios could materialize, and what do they mean for the UNDER thesis?
 - CONCLUDE: What is the strongest data-backed argument for UNDER?
 
 **C. DATA QUALITY:**
@@ -3298,8 +3198,8 @@ Strip these out. Only keep claims where the conclusion follows directly from com
 **E. EDGE ASSESSMENT:**
 - Which direction (OVER or UNDER) has the stronger DATA-BACKED case?
 - Is the evidence about THIS GAME specifically, or just the player's general tendencies?
-- What would need to be true for the OPPOSITE direction to be the better bet?
-- How strong is the evidence for your preferred direction? What's your honest conviction level?
+- What would need to be true for the OPPOSITE direction to have the stronger case?
+- How strong is the evidence for the direction with the stronger case? What's your honest conviction level?
 
 **F. LINE CHECK:**
 - The line reflects this player's established role, recent production, and known factors
@@ -3310,7 +3210,7 @@ Strip these out. Only keep claims where the conclusion follows directly from com
 <stress_test>
 ## STRESS TEST PATTERNS (Check ALL candidates)
 
-**1. Role Pricing:** Is this player's opportunity (minutes, usage, targets) already priced into the line? If yes, what CHANGES tonight?
+**1. Role Pricing:** Investigate whether the line reflects this player's established opportunity (minutes, usage, targets). What CHANGES tonight?
 
 **2. Game Script Risk:** What happens to this player's production if the game goes differently than projected? Does your case depend on a specific game script (competitive, blowout, pace)? What if that script doesn't materialize?
 
@@ -3343,7 +3243,7 @@ The prop line is set where it is for reasons. Ask yourself: What created THIS nu
 Given everything you've investigated:
 - Does this line feel right for tonight?
 - If not, which direction is it off — and what specifically from your research tells you that?
-- What would need to be true for the OPPOSITE direction to be the better bet?
+- What would need to be true for the OPPOSITE direction to have the stronger case?
 </reflection>
 
 <instructions>
@@ -3418,7 +3318,7 @@ Your final rationale is YOUR DECISION — the real reasons you're making this be
 - Steel Man cases were your advisors — your rationale explains which side YOU chose and WHY
 - Do NOT introduce new claims that weren't investigated
 - Explain why you believe this side wins/covers based on your analysis
-- **SPREAD PICKS:** Your rationale should engage with the specific spread number — reference the data that led you to conclude this side of the spread is the better bet
+- **SPREAD PICKS:** Your rationale should engage with the specific spread number — reference the data that led you to conclude the evidence supports this side of the spread
 - **INJURY RULE (HARD):** DO NOT name any player who hasn't played this 2025-26 season. For injuries the market has already absorbed (player out for multiple games, line already reflects their absence), reference the TEAM's current performance instead (e.g., "the current rotation has gone 8-3 over L10" NOT "without Player X who's been out since November"). Only cite an injury by name if it's genuinely new information the line may not fully reflect. If you name a player not in tonight's lineup, your rationale is INVALID.
 
 **IMPORTANT:** All the stats you called during Pass 2 investigation are available in this conversation.
@@ -3442,7 +3342,7 @@ Then include:
 - If a claim can't be traced to data from THIS game's investigation, delete it.
 
 **RATIONALE TONE (Sound like a sharp sports analyst with value awareness):**
-You CAN explain why this is the better bet and reference line value - but ALWAYS back it up with real game analysis:
+You CAN explain why the evidence supports this side and reference line value - but ALWAYS back it up with real game analysis:
 - GOOD: "This line feels inflated after Houston's 22-point loss to Milwaukee - but that was an outlier. Houston's L5 Net Rating is still +4.2, they shot 28% from 3PT that night vs their 37% season average, and they're 8-2 in their last 10 home games. At +6.5, you're getting a team that typically loses close games by 3-4 points."
 - BAD: "The market overreacted. Sharp money is on this side." (no actual analysis)
 - GOOD: "Phoenix at +145 ML is great value - their efficiency metrics (112.4 ORtg, 108.1 DRtg) are nearly identical to Denver's, and they've won 3 of their last 4 road games against top-10 defenses. The data says these teams are closer than the line implies."
@@ -3497,7 +3397,7 @@ const PROPS_PICK_SCHEMA = {
   properties: {
     player: { type: 'string', description: 'Full player name' },
     team: { type: 'string', description: 'Team name' },
-    prop: { type: 'string', description: 'Market type ONLY — e.g. "player_points", "player_rebounds", "player_assists", "player_shots_on_goal". Do NOT include the line number here.' },
+    prop: { type: 'string', description: 'Market type ONLY — e.g. "player_points", "player_steals", "player_threes", "player_rebounds", "player_assists", "player_blocks", "player_points_rebounds_assists". Match the exact prop_type from the available lines.' },
     line: { type: 'number', description: 'The numerical line for this prop — e.g. 25.5, 6.5, 3.5. This is REQUIRED.' },
     bet: { type: 'string', enum: ['over', 'under', 'yes'] },
     odds: { type: 'number', description: 'American odds — e.g. -115, +105' },
@@ -3692,18 +3592,16 @@ function determineCurrentPass(messages) {
  * @param {Object} options - Additional options
  */
 async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam, options = {}) {
-  // Sport-based provider routing
-  const provider = getProviderForSport(sport);
-  const initialModel = getModelForProvider(provider, sport);
+  const provider = 'gemini';
+  const initialModel = validateGeminiModel('gemini-3-flash-preview');
   
   const isNFLSport = sport === 'americanfootball_nfl' || sport === 'NFL';
   console.log(`[Orchestrator] Using ${provider.toUpperCase()} for ${sport}`);
   const isNCAABSport = sport === 'basketball_ncaab' || sport === 'NCAAB';
   const isNBASport = sport === 'basketball_nba' || sport === 'NBA';
-  // Pro runs the entire pipeline — no mid-pipeline model switches.
-  // sportUsesPro() returns false, so all deliberate switch conditions below are dead code.
-  const useProForGrading = sportUsesPro(sport); // false — keeps 5 switch-point conditions from erroring
-  console.log(`[Orchestrator] Model strategy: Pro for entire pipeline (Flash only on 429 quota fallback)`);
+  const isPropsCheck = options.mode === 'props';
+  const useFlashForPropsCheck = isPropsCheck && isNBASport;
+  console.log(`[Orchestrator] Model strategy: ${useFlashForPropsCheck ? 'Flash + HIGH for NBA props' : 'Flash for entire pipeline (Pro only on 429 quota fallback)'}`);
 
   // ═══════════════════════════════════════════════════════════════════════════
   // Props mode setup (must be before session creation so activeTools is available)
@@ -3735,7 +3633,7 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
     // NBA props: Flash + high reasoning (quota-friendly, props don't need Pro depth)
     // All other modes (game picks, non-NBA props): Pro + high reasoning
     const useFlashForProps = isPropsMode && isNBASport;
-    const sessionModel = useFlashForProps ? 'gemini-3-flash-preview' : 'gemini-3-pro-preview';
+    const sessionModel = useFlashForProps ? 'gemini-3-flash-preview' : GEMINI_PRO_MODEL;
     currentSession = createGeminiSession({
       modelName: sessionModel,
       systemPrompt: systemPrompt,
@@ -3776,8 +3674,6 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
   // Subsequent: send function responses OR pass transition messages
   let nextMessageToSend = userMessage;
   let pendingFunctionResponses = []; // Batched function responses to send
-  let justSwitchedSession = false; // True when we just switched Flash→Pro (prevents re-filling stale responses)
-
   // Persistent pass-injection flags (survive context pruning)
   let _pass2Injected = false;
   let _pass2Delivered = false; // True only when Pass 2 is actually SENT to the Gemini session (not just pushed to messages)
@@ -3849,7 +3745,6 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
 
   while (iteration < effectiveMaxIterations) {
     iteration++;
-    justSwitchedSession = false; // Reset at start of each iteration
     console.log(`\n[Orchestrator] Iteration ${iteration}/${effectiveMaxIterations} (${provider}, ${currentModelName})`);
 
     // Get the spread for Pass 2/2.5 context injection (available throughout loop)
@@ -3929,11 +3824,10 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
           messages.push(message);
         }
 
-        // Log Pass 2.5 response content for debugging (first 2000 chars)
+        // Log Pass 2.5 response content for debugging (FULL — no truncation)
         if (_pass25JustInjected && message.content && !message.tool_calls?.length) {
-          console.log(`\n📋 GARY'S PASS 2.5 EVALUATION (first 2000 chars):\n${'─'.repeat(60)}`);
-          console.log(message.content.substring(0, 2000));
-          if (message.content.length > 2000) console.log(`... (${message.content.length} total chars)`);
+          console.log(`\n📋 GARY'S PASS 2.5 EVALUATION (${message.content.length} chars):\n${'─'.repeat(60)}`);
+          console.log(message.content);
           console.log(`${'─'.repeat(60)}\n`);
           _pass25JustInjected = false;
         }
@@ -3964,14 +3858,14 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
             console.warn(`[Orchestrator] LOW CONTEXT WARNING: Only ${textualContext.length} chars for Flash→Pro switch`);
           }
 
-          // Create new Pro session for fallback
+          // Create new Pro session for fallback (use 3.1 Pro primary)
           currentSession = createGeminiSession({
-            modelName: 'gemini-3-pro-preview',
+            modelName: GEMINI_PRO_MODEL,
             systemPrompt: systemPrompt + '\n\n' + textualContext,
             tools: currentPass === 'evaluation' ? [] : activeTools,
             thinkingLevel: 'high'
           });
-          currentModelName = 'gemini-3-pro-preview';
+          currentModelName = GEMINI_PRO_MODEL;
           hasSwitchedToPro = true;
 
           console.log(`[Orchestrator] 🔄 Created fallback Pro session, retrying...`);
@@ -3989,28 +3883,26 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
             messages.push(message);
           }
         }
-        // Pro -> Flash fallback (Pro hit rate limit, use Flash)
-        else if (error.isQuotaError && currentModelName === 'gemini-3-pro-preview') {
-          console.log(`[Orchestrator] ⚠️ Pro quota exceeded - falling back to Flash`);
-          
-          // Extract textual context to pass to Flash (include full stat history)
+        // 3.1 Pro -> 3 Pro fallback (3.1 Pro hit rate limit, try original Pro)
+        else if (error.isQuotaError && currentModelName === GEMINI_PRO_MODEL) {
+          console.log(`[Orchestrator] ⚠️ 3.1 Pro quota exceeded - falling back to 3 Pro`);
+
           const textualContext = extractTextualSummaryForModelSwitch(messages, steelManCases, toolCallHistory);
           if (textualContext.length < 2000) {
-            console.warn(`[Orchestrator] LOW CONTEXT WARNING: Only ${textualContext.length} chars for Pro→Flash switch`);
+            console.warn(`[Orchestrator] LOW CONTEXT WARNING: Only ${textualContext.length} chars for 3.1 Pro→3 Pro switch`);
           }
 
-          // Create new Flash session for fallback
           currentSession = createGeminiSession({
-            modelName: 'gemini-3-flash-preview',
+            modelName: GEMINI_PRO_FALLBACK,
             systemPrompt: systemPrompt + '\n\n' + textualContext,
-            tools: currentPass === 'evaluation' ? [] : activeTools, // Pass 3 can call more stats if needed
+            tools: currentPass === 'evaluation' ? [] : activeTools,
             thinkingLevel: 'high'
           });
-          currentModelName = 'gemini-3-flash-preview';
-          hasSwitchedToPro = false; // Went back to Flash
-          
-          console.log(`[Orchestrator] 🔄 Created fallback Flash session, retrying...`);
-          
+          currentModelName = GEMINI_PRO_FALLBACK;
+          // hasSwitchedToPro stays true — still on a Pro model
+
+          console.log(`[Orchestrator] 🔄 Created fallback 3 Pro session, retrying...`);
+
           // Retry with new session
           const retryResponse = await sendToSessionWithRetry(currentSession, nextMessageToSend);
           message = {
@@ -4019,7 +3911,35 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
             tool_calls: retryResponse.toolCalls
           };
           finishReason = retryResponse.finishReason;
-          
+
+          if (message.content || message.tool_calls) {
+            messages.push(message);
+          }
+        }
+        // 3 Pro -> Flash fallback (both Pro models hit quota, last resort)
+        else if (error.isQuotaError && currentModelName === GEMINI_PRO_FALLBACK) {
+          console.log(`[Orchestrator] ⚠️ Both Pro models quota exceeded - falling back to Flash (last resort)`);
+
+          const textualContext = extractTextualSummaryForModelSwitch(messages, steelManCases, toolCallHistory);
+          currentSession = createGeminiSession({
+            modelName: 'gemini-3-flash-preview',
+            systemPrompt: systemPrompt + '\n\n' + textualContext,
+            tools: currentPass === 'evaluation' ? [] : activeTools,
+            thinkingLevel: 'high'
+          });
+          currentModelName = 'gemini-3-flash-preview';
+          hasSwitchedToPro = false;
+
+          console.log(`[Orchestrator] 🔄 Created fallback Flash session, retrying...`);
+
+          const retryResponse = await sendToSessionWithRetry(currentSession, nextMessageToSend);
+          message = {
+            role: 'assistant',
+            content: retryResponse.content,
+            tool_calls: retryResponse.toolCalls
+          };
+          finishReason = retryResponse.finishReason;
+
           if (message.content || message.tool_calls) {
             messages.push(message);
           }
@@ -5229,23 +5149,11 @@ Call these specific tokens NOW using the get_stat tool with the "token" paramete
       // - Otherwise, check Pro's recent messages for bilateral case patterns
       const recentAssistantMessages = messages.filter(m => m.role === 'assistant' && m.content).slice(-5);
       const steelManCompleted = (_flashCases && _flashCasesReady) || recentAssistantMessages.some(m => {
-        const content = m.content || '';
-        // Multiple patterns that indicate bilateral analysis:
-        // Game picks: "Case for [Team]", "Why [Team] covers", "[Team] TO COVER:"
-        // Props: "OVER case for [Player]", "UNDER case for [Player]"
-        const caseForCount = (content.match(/(?:Case for|CASE FOR|case for|Analysis for|ANALYSIS FOR|analysis for)/gi) || []).length;
-        const toCoversCount = (content.match(/(?:TO COVER|to cover|To Cover)[:\s]/gi) || []).length;
-        const whyCoversCount = (content.match(/(?:Why|How)\s+(?:the\s+)?[\w\s]+\s+(?:cover|win)/gi) || []).length;
-        const overUnderCaseCount = (content.match(/(?:OVER|UNDER)\s+(?:case|CASE|Case)/gi) || []).length;
-
-        // Need at least 2 of any pattern to indicate bilateral analysis
-        const totalBilateralPatterns = caseForCount + toCoversCount + whyCoversCount + overUnderCaseCount;
-        const hasBilateralAnalysis = totalBilateralPatterns >= 2;
-
-        if (hasBilateralAnalysis) {
-          console.log(`[Orchestrator] ✅ Bilateral analysis detected: caseFor=${caseForCount}, toCovers=${toCoversCount}, whyCovers=${whyCoversCount}, overUnder=${overUnderCaseCount}`);
+        const result = detectBilateralAnalysis(m.content || '');
+        if (result.hasBilateral) {
+          console.log(`[Orchestrator] ✅ Bilateral analysis detected: caseFor=${result.caseForCount}, toCovers=${result.toCoversCount}, whyCovers=${result.whyCoversCount}, overUnder=${result.overUnderCaseCount}`);
         }
-        return hasBilateralAnalysis;
+        return result.hasBilateral;
       });
       
       // Log factor coverage
@@ -5467,41 +5375,6 @@ BEGIN WRITING YOUR MATCHUP ANALYSIS NOW.
           
           // spread already defined at loop scope
           messages.push({ role: 'user', content: pass25Content });
-          
-          // ═══════════════════════════════════════════════════════════════════════
-          // PRO MODEL SWITCH for grading phase (NBA/NFL/NHL/NCAAB)
-          // ═══════════════════════════════════════════════════════════════════════
-          // HYBRID APPROACH: Pro gets FULL stats + tools to verify/investigate
-          // ═══════════════════════════════════════════════════════════════════════
-          if (provider === 'gemini' && useProForGrading && !hasSwitchedToPro) {
-            console.log(`[Orchestrator] 🔄 Switching to Pro model for review & decision`);
-
-            // Pass FULL investigation context to Pro (not truncated!)
-            const textualSummary = extractTextualSummaryForModelSwitch(messages, steelManCases, toolCallHistory);
-
-            try {
-              currentSession = createGeminiSession({
-                modelName: 'gemini-3-pro-preview',
-                systemPrompt: systemPrompt + '\n\n' + textualSummary,
-                tools: activeTools, // GIVE PRO TOOLS to verify and re-investigate
-                thinkingLevel: 'high'
-              });
-              currentModelName = currentSession.modelName;
-              hasSwitchedToPro = true;
-
-              // CRITICAL: Clear pending function responses from Flash session
-              // Pro starts fresh - it never made those function calls
-              pendingFunctionResponses = [];
-              justSwitchedSession = true; // Prevent re-filling from stale messages
-
-              console.log(`[Orchestrator] 🧠 Pro session created with tools for verification`);
-              console.log(`[Orchestrator] Context passed: ${textualSummary.length} chars (full stats + Steel Man cases)`);
-            } catch (proError) {
-              // If Pro fails to initialize, continue with Flash
-              console.error(`[Orchestrator] ⚠️ Pro initialization failed: ${proError.message}`);
-              console.log(`[Orchestrator] Continuing with Flash for decision`);
-            }
-          }
 
           _pass25Injected = true;
           _pass25JustInjected = true;
@@ -5566,29 +5439,7 @@ BEGIN WRITING YOUR MATCHUP ANALYSIS NOW.
           console.log(`└─────────────────────────────────────────────────────────────────┘\n`);
 
           // Build Pass 2.5 with Pro's own assessment + Flash's cases as inputs
-          const proAssessmentSection = _proAssessment ? `## YOUR INITIAL READ
-
-You wrote this honest read on the game BEFORE seeing any advisor cases — what you think this game is about, what matters most, and what you believe drives the outcome tonight:
-
-${_proAssessment}
-
----
-
-` : '';
-
-          const advisorPreamble = `${proAssessmentSection}## INDEPENDENT ADVISOR ANALYSIS
-
-The following bilateral cases were built by an independent analyst who reviewed all your investigation data but did NOT participate in your investigation. These are your "advisors" — they saw the same data you did but approached it fresh, without your investigation context or leanings.
-
-**CASE FOR ${homeTeam}:**
-${_flashCases.homeTeamCase}
-
-**CASE FOR ${awayTeam}:**
-${_flashCases.awayTeamCase}
-
----
-
-`;
+          const advisorPreamble = buildAdvisorPreamble(homeTeam, awayTeam, _flashCases, _proAssessment);
           const pass25Content = advisorPreamble + buildPass25Message(homeTeam, awayTeam, sport, spread, _proAssessment);
           messages.push({ role: 'user', content: pass25Content });
           nextMessageToSend = pass25Content;
@@ -5620,17 +5471,6 @@ ${_flashCases.awayTeamCase}
       // Extract tool responses added to messages array during this iteration
       // Convert to format needed for sendToSession
       if (provider === 'gemini' && currentSession) {
-        if (justSwitchedSession) {
-          // Just switched Flash→Pro: skip function response prep (those belong to Flash's session)
-          // But still check for pass transition messages that need to go to Pro
-          const lastToolIdx = messages.findLastIndex(m => m.role === 'tool');
-          const lastUserIdx = messages.findLastIndex(m => m.role === 'user');
-          if (lastUserIdx > lastToolIdx && lastToolIdx >= 0) {
-            nextMessageToSend = messages[lastUserIdx].content;
-            console.log(`[Orchestrator] Pass transition queued for new Pro session`);
-          }
-        } else {
-          // Normal flow: prepare function responses from this iteration
           const lastAssistantIdx = messages.findLastIndex(m => m.role === 'assistant');
           const toolResponses = messages.slice(lastAssistantIdx + 1).filter(m => m.role === 'tool');
 
@@ -5653,7 +5493,6 @@ ${_flashCases.awayTeamCase}
             nextMessageToSend = passMessage;
             console.log(`[Orchestrator] Pass transition queued (will send after function responses processed)`);
           }
-        }
       }
       
       // Continue the loop for Gary to process the stats
@@ -5745,17 +5584,14 @@ ${_flashCases.awayTeamCase}
     
     // Detect Steel Man / bilateral analysis in current response
     // Game picks: "Case for [Team]", "to cover", "Why/How covers/wins"
-    // Props: "OVER case for [Player]", "UNDER case for [Player]", "OVER CASE", "UNDER CASE"
+    // Detect bilateral analysis in current response
     const currentContent = message.content || '';
-    const caseForCount = (currentContent.match(/(?:Case for|CASE FOR|case for|Analysis for|ANALYSIS FOR|analysis for)/gi) || []).length;
-    const toCoversCount = (currentContent.match(/(?:TO COVER|to cover|To Cover)[:\s]/gi) || []).length;
-    const whyCoversCount = (currentContent.match(/(?:Why|How)\s+(?:the\s+)?[\w\s]+\s+(?:cover|win)/gi) || []).length;
-    const overUnderCaseCount = (currentContent.match(/(?:OVER|UNDER)\s+(?:case|CASE|Case)/gi) || []).length;
-    const steelManJustWritten = (caseForCount + toCoversCount + whyCoversCount + overUnderCaseCount) >= 2;
+    const bilateralResult = detectBilateralAnalysis(currentContent);
+    const steelManJustWritten = bilateralResult.hasBilateral;
 
     if (steelManJustWritten && !pass25Done && !pass3Done && iteration < effectiveMaxIterations) {
       // Gary just wrote bilateral analysis! Inject Pass 2.5 before allowing a pick
-      console.log(`[Orchestrator] ✅ Bilateral analysis detected (caseFor=${caseForCount}, toCovers=${toCoversCount}, overUnder=${overUnderCaseCount})`);
+      console.log(`[Orchestrator] ✅ Bilateral analysis detected (caseFor=${bilateralResult.caseForCount}, toCovers=${bilateralResult.toCoversCount}, overUnder=${bilateralResult.overUnderCaseCount})`);
       console.log(`\n📋 GARY'S ${isPropsMode ? 'BILATERAL PROP ANALYSIS' : 'STEEL MAN ANALYSIS'} (Both Sides):\n${'─'.repeat(60)}`);
       console.log(currentContent);
       console.log(`${'─'.repeat(60)}\n`);
@@ -5774,40 +5610,6 @@ ${_flashCases.awayTeamCase}
         role: 'user',
         content: pass25Content
       });
-      
-      // ═══════════════════════════════════════════════════════════════════════
-      // PRO MODEL SWITCH - HYBRID APPROACH
-      // Pro gets FULL stats + tools to verify Steel Man claims and investigate
-      // ═══════════════════════════════════════════════════════════════════════
-      if (provider === 'gemini' && useProForGrading && !hasSwitchedToPro) {
-        console.log(`[Orchestrator] 🔄 Switching to Pro model for review & decision`);
-
-        // Pass FULL investigation context to Pro (all stats, not truncated!)
-        const textualSummary = extractTextualSummaryForModelSwitch(messages, steelManCases, toolCallHistory);
-
-        try {
-          currentSession = createGeminiSession({
-            modelName: 'gemini-3-pro-preview',
-            systemPrompt: systemPrompt + '\n\n' + textualSummary,
-            tools: activeTools, // GIVE PRO TOOLS to verify and re-investigate
-            thinkingLevel: 'high'
-          });
-          currentModelName = currentSession.modelName;
-          hasSwitchedToPro = true;
-
-          // CRITICAL: Clear pending function responses from Flash session
-          // Pro starts fresh - it never made those function calls
-          pendingFunctionResponses = [];
-          justSwitchedSession = true; // Prevent re-filling from stale messages
-
-          console.log(`[Orchestrator] 🧠 Pro session created with tools for verification`);
-          console.log(`[Orchestrator] Context passed: ${textualSummary.length} chars (full stats + Steel Man cases)`);
-        } catch (proError) {
-          // If Pro fails to initialize, continue with Flash
-          console.error(`[Orchestrator] ⚠️ Pro initialization failed: ${proError.message}`);
-          console.log(`[Orchestrator] Continuing with Flash for decision`);
-        }
-      }
       
       // CRITICAL: Set nextMessageToSend so the session knows what to send next
       nextMessageToSend = pass25Content;
@@ -5837,6 +5639,7 @@ ${_flashCases.awayTeamCase}
           ? 'You MUST call the finalize_props tool to submit your picks. Do NOT write JSON in text — use the finalize_props function call with your 2 best picks.'
           : 'CRITICAL: Call the finalize_props function NOW. Your analysis is complete. Submit your 2 picks by calling finalize_props({ picks: [{ player, team, prop, line, bet, odds, confidence, rationale, key_stats }] }). This is a TOOL CALL, not text output.';
         messages.push({ role: 'user', content: nudge });
+        nextMessageToSend = nudge;
         continue;
       }
       // After 2 nudges, skip straight to max-iterations fallback (don't waste iterations)
@@ -5869,12 +5672,7 @@ ${_flashCases.awayTeamCase}
       // Check if bilateral cases were actually written (Pro wrote them, or Flash delivered them)
       const gateRecentMsgs = messages.filter(m => m.role === 'assistant' && m.content).slice(-5);
       const gateSteelManDone = (_flashCases && _flashCasesReady) || gateRecentMsgs.some(m => {
-        const c = m.content || '';
-        const cf = (c.match(/(?:Case for|CASE FOR|case for|Analysis for|ANALYSIS FOR|analysis for)/gi) || []).length;
-        const tc = (c.match(/(?:TO COVER|to cover|To Cover)[:\s]/gi) || []).length;
-        const wc = (c.match(/(?:Why|How)\s+(?:the\s+)?[\w\s]+\s+(?:cover|win)/gi) || []).length;
-        const ou = (c.match(/(?:OVER|UNDER)\s+(?:case|CASE|Case)/gi) || []).length;
-        return (cf + tc + wc + ou) >= 2;
+        return detectBilateralAnalysis(m.content || '').hasBilateral;
       });
 
       if (!gateSteelManDone) {
@@ -5894,14 +5692,6 @@ For each candidate, write:
 [Build the strongest data-backed case for UNDER — cite stats from your investigation]
 
 Do NOT call finalize_props yet. Write BOTH cases for each candidate first.`
-          });
-        } else if (isPropsMode) {
-          console.log(`[Orchestrator] 🔄 PIPELINE GATE: Pick attempted but bilateral prop cases not written — re-enforcing Pass 2`);
-          messages.push({
-            role: 'user',
-            content: `**STOP.** You attempted to make a pick without writing your bilateral analysis. You MUST build the OVER case and UNDER case for each prop candidate BEFORE making a decision.
-
-Write your bilateral prop cases NOW for your top 3-4 candidates. Do NOT call finalize_props yet. Write BOTH cases for each candidate first.`
           });
         } else {
           // Game picks: Flash builds cases, not Pro. Await Flash.
@@ -5950,29 +5740,7 @@ Write your bilateral prop cases NOW for your top 3-4 candidates. Do NOT call fin
         steelManCases.capturedAt = new Date().toISOString();
         steelManCases.source = 'flash_advisor';
 
-        const proAssessmentSection = _proAssessment ? `## YOUR INITIAL READ
-
-You wrote this honest read on the game BEFORE seeing any advisor cases — what you think this game is about, what matters most, and what you believe drives the outcome tonight:
-
-${_proAssessment}
-
----
-
-` : '';
-
-        const advisorPreamble = `${proAssessmentSection}## INDEPENDENT ADVISOR ANALYSIS
-
-The following bilateral cases were built by an independent analyst who reviewed all your investigation data but did NOT participate in your investigation. These are your "advisors" — they saw the same data you did but approached it fresh, without your investigation context or leanings.
-
-**CASE FOR ${homeTeam}:**
-${_flashCases.homeTeamCase}
-
-**CASE FOR ${awayTeam}:**
-${_flashCases.awayTeamCase}
-
----
-
-`;
+        const advisorPreamble = buildAdvisorPreamble(homeTeam, awayTeam, _flashCases, _proAssessment);
         pass25Content = advisorPreamble + buildPass25Message(homeTeam, awayTeam, sport, spread, _proAssessment);
         console.log(`[Orchestrator] ✅ Flash advisor cases included in pipeline gate Pass 2.5 (${_flashCases.homeTeamCase?.length || 0} + ${_flashCases.awayTeamCase?.length || 0} chars)`);
       } else {
@@ -5981,26 +5749,6 @@ ${_flashCases.awayTeamCase}
         console.log(`[Orchestrator] ⚠️ No Flash advisor cases available — Pro will self-synthesize Steel Man cases`);
       }
       messages.push({ role: 'user', content: pass25Content });
-
-      if (provider === 'gemini' && useProForGrading && !hasSwitchedToPro) {
-        console.log(`[Orchestrator] 🔄 PIPELINE GATE: Switching to Pro model for evaluation`);
-        const textualSummary = extractTextualSummaryForModelSwitch(messages, steelManCases, toolCallHistory);
-        try {
-          currentSession = createGeminiSession({
-            modelName: 'gemini-3-pro-preview',
-            systemPrompt: systemPrompt + '\n\n' + textualSummary,
-            tools: activeTools,
-            thinkingLevel: 'high'
-          });
-          currentModelName = currentSession.modelName;
-          hasSwitchedToPro = true;
-          pendingFunctionResponses = [];
-          justSwitchedSession = true; // Prevent re-filling from stale messages
-          console.log(`[Orchestrator] 🧠 Pro session created (pipeline gate) — ${textualSummary.length} chars`);
-        } catch (proError) {
-          console.error(`[Orchestrator] ⚠️ Pro init failed (pipeline gate): ${proError.message}`);
-        }
-      }
 
       nextMessageToSend = pass25Content;
       _pass25Injected = true;
@@ -6084,17 +5832,6 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
         console.log(`────────────────────────────────────────────────────────────`);
       }
 
-      // Diagnostic: Check if Pass 2.5 was injected during this analysis
-      const pass25WasInjected = messages.some(m => m.content?.includes('PASS 2.5 - CASE REVIEW'));
-      const steelManDetected = messages.some(m => {
-        const content = m.content || '';
-        const caseForCount = (content.match(/(?:Case for|CASE FOR|case for|Analysis for|ANALYSIS FOR|analysis for)/gi) || []).length;
-        const toCoversCount = (content.match(/(?:TO COVER|to cover|To Cover)[:\s]/gi) || []).length;
-        return (caseForCount + toCoversCount) >= 2;
-      });
-
-      // Pass 2.5 is evaluation-only (2026-02) — no structured ratings extracted
-
       return pick;
     } else {
       // If no valid JSON after retry, return the raw analysis
@@ -6111,8 +5848,20 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
   }
 
   // Max iterations reached
-  // For props mode: inject Pass 3 Props and try up to 3 times to get finalize_props
+  // For props mode: only attempt finalize if pipeline has completed through Pass 2.5
+  // If pipeline didn't reach Pass 2.5, the analysis is incomplete — fail honestly
   if (isPropsMode) {
+    if (!_pass25Injected) {
+      const stage = !_pass2Injected ? 'Pass 2 (bilateral cases)' : 'Pass 2.5 (case evaluation)';
+      console.error(`[Orchestrator] ❌ Max iterations reached but pipeline incomplete — ${stage} never completed for ${awayTeam} @ ${homeTeam}`);
+      console.error(`[Orchestrator] Pipeline state: pass2=${_pass2Injected}, pass25=${_pass25Injected}, pass3=${_pass3Injected}`);
+      return {
+        error: `Props pipeline incomplete — ${stage} never completed within max iterations`,
+        toolCallHistory, iterations: iteration,
+        homeTeam, awayTeam, sport, isProps: true,
+        _pipelineState: { pass2: _pass2Injected, pass25: _pass25Injected, pass3: _pass3Injected }
+      };
+    }
     console.log(`[Orchestrator] ⚠️ Max iterations (${CONFIG.maxIterations}) reached in props mode - injecting final props prompt...`);
     const pass3PropsContent = buildPass3Props(homeTeam, awayTeam, propContext);
     messages.push({ role: 'user', content: pass3PropsContent });

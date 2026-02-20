@@ -75,8 +75,9 @@ function calculateNhlVolumeMetrics(playerStats, gameLogs) {
   // Kill condition checks:
   // 1. For SOG props: Not PP1 AND iCF < 5.0 = ABANDON
   // 2. For Points props: Not PP1 AND TOI < 16 min = ABANDON
-  const sogKillTriggered = !isPP1 && icfL5 !== null && parseFloat(icfL5) < 5.0;
-  const pointsKillTriggered = !isPP1 && toiMinutes !== null && toiMinutes < 16;
+  // Only trigger kill conditions when PP data IS available (avoid false positives when PP TOI is null)
+  const sogKillTriggered = ppToiMinutes !== null && !isPP1 && icfL5 !== null && parseFloat(icfL5) < 5.0;
+  const pointsKillTriggered = ppToiMinutes !== null && !isPP1 && toiMinutes !== null && toiMinutes < 16;
   
   return {
     hasData: true,
@@ -153,7 +154,7 @@ function calculateNhlHitRate(games, propType, line) {
     underRate: ((hitsUnder / totalGames) * 100).toFixed(0),
     avgValue: avgValue.toFixed(1),
     values: values.slice(0, 5),
-    recommendation: avgValue > line * 1.05 ? 'OVER' : avgValue < line * 0.95 ? 'UNDER' : 'CLOSE'
+    line: line
   };
 }
 
@@ -267,25 +268,21 @@ function getNhlGameTotalContext(marketSnapshot, homeTeam = '', awayTeam = '') {
   
   if (total >= 7.0) {
     totalCategory = 'SHOOTOUT';
-    scoringEnvironment = 'high scoring expected - offensive players get boost';
-    propImplications = 'Points/assists props favorable for top-6 forwards. Goalie saves could go OVER due to shot volume. Consider OVERS on elite scorers.';
+    scoringEnvironment = 'high scoring expected';
   } else if (total >= 6.5) {
     totalCategory = 'ABOVE_AVERAGE';
     scoringEnvironment = 'above average scoring expected';
-    propImplications = 'Good environment for offensive props. SOG overs for volume shooters. Top-6 forwards and PP1 players favored.';
   } else if (total >= 6.0) {
     totalCategory = 'AVERAGE';
     scoringEnvironment = 'standard NHL scoring environment';
-    propImplications = 'No strong environmental lean. Focus on matchup-specific edges and role changes.';
   } else if (total >= 5.5) {
     totalCategory = 'BELOW_AVERAGE';
     scoringEnvironment = 'slower/tighter game expected';
-    propImplications = 'Be cautious with offensive props. SOG props may be safer than points. Consider UNDERs on fringe players.';
   } else {
     totalCategory = 'LOW';
-    scoringEnvironment = 'defensive game expected - goaltending battle likely';
-    propImplications = 'Points/assists UNDERS in play. Elite goalie saves may go UNDER (fewer total shots). Focus on volume metrics like SOG for safe floor plays.';
+    scoringEnvironment = 'defensive game expected';
   }
+  propImplications = `The game total is ${total}. Investigate: How does this scoring environment affect the specific players you're evaluating?`;
   
   // Calculate implied team goals (like NFL/NBA)
   // Formula: Home Implied = (Total - Spread) / 2, Away Implied = (Total + Spread) / 2
@@ -981,7 +978,7 @@ function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnap
           underRate: hitRate.underRate,
           avgValue: hitRate.avgValue,
           lastValues: hitRate.values,
-          recommendation: hitRate.recommendation,
+          line: hitRate.line,
           gamesAnalyzed: hitRate.totalGames
         } : null,
         // LINE MOVEMENT DATA - for Tier 2 Kill Condition analysis

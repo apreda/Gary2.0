@@ -166,10 +166,19 @@ export async function analyzeSlateWithFlash(genAI, context, options = {}) {
 
   // If Flash ended its loop without producing text (spent all iterations on tool
   // calls, or last response was purely function calls), nudge it to output JSON.
+  // Try twice — first nudge can also return empty.
   if (!finalText || !finalText.trim()) {
     console.log('[Slate Analyzer] Flash ended without text — nudging for JSON summary...');
     response = await chat.sendMessage(
       'Your investigation is complete. Now produce your JSON summary with usageVacuums, priceLags, stackTargets, and gameEnvironments based on everything you found.'
+    );
+    finalText = response.response.text();
+  }
+
+  if (!finalText || !finalText.trim()) {
+    console.log('[Slate Analyzer] First nudge returned empty — sending final nudge...');
+    response = await chat.sendMessage(
+      'Output a JSON object with your findings. Start your response with { immediately.'
     );
     finalText = response.response.text();
   }

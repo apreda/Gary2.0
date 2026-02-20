@@ -118,6 +118,9 @@ export async function auditLineupWithPro(genAI, lineup, buildThesis, context, op
     generationConfig: {
       temperature: 1.0, // Gemini: Keep at 1.0
       maxOutputTokens: 8192
+    },
+    thinkingConfig: {
+      thinkingBudget: 8192
     }
   });
 
@@ -226,19 +229,32 @@ function formatAlternatesByPosition(lineup, players) {
       name: player.name,
       salary: player.salary,
       team: player.team,
-      projected: player.projected_pts || 0
+      projected: player.projected_pts || player.benchmarkProjection || player.ppg || 0,
+      dkFpts: player.seasonStats?.dkFpts || player.l5Stats?.dkFptsAvg || null,
+      l5Ppg: player.l5Stats?.ppg || 0,
+      seasonPpg: player.ppg || player.seasonStats?.ppg || 0
     });
   }
 
-  // Format top 3 alternates per position
+  // Select top 5 alternates per position using multiple signals (not just projection)
   const lines = [];
   for (const [pos, alts] of Object.entries(alternates)) {
-    const topAlts = alts
-      .sort((a, b) => b.projected - a.projected)
-      .slice(0, 3);
+    // Score each alternate by: projection + value ratio + recent form boost
+    const scored = alts.map(a => {
+      const proj = a.projected || 0;
+      const valueRatio = a.salary > 0 ? (proj / (a.salary / 1000)) : 0;
+      const formBoost = a.l5Ppg > a.seasonPpg * 1.15 ? 5 : 0;
+      return { ...a, _score: proj + valueRatio * 2 + formBoost };
+    });
+    const topAlts = scored
+      .sort((a, b) => b._score - a._score)
+      .slice(0, 5);
 
     if (topAlts.length > 0) {
-      lines.push(`${pos}: ${topAlts.map(a => `${a.name} ($${a.salary})`).join(', ')}`);
+      lines.push(`${pos}: ${topAlts.map(a => {
+        const fpts = a.dkFpts ? ` | ${a.dkFpts.toFixed(1)} DK FPTS` : '';
+        return `${a.name} ($${a.salary}${fpts})`;
+      }).join(', ')}`);
     }
   }
 

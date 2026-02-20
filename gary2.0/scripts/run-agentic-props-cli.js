@@ -215,7 +215,7 @@ export async function runAgenticPropsCli({
         );
         const availableLines = playerProps
           .filter(p => validatedPlayerNames.has(p.player.toLowerCase()))
-          .slice(0, 50)
+          .slice(0, 80)
           .map(p => ({
             player: p.player,
             prop_type: p.prop_type,
@@ -340,9 +340,26 @@ export async function runAgenticPropsCli({
     return (b.ev || 0) - (a.ev || 0);
   });
 
+  // Validate picks before storage
+  const validPicks = sortedPicks.filter(pick => {
+    const hasPlayer = !!pick.player;
+    const hasProp = !!(pick.prop || pick.prop_type);
+    const hasBet = !!(pick.bet || pick.direction);
+    const hasLine = pick.line !== undefined && pick.line !== null;
+    if (!hasPlayer || !hasProp || !hasBet || !hasLine) {
+      console.warn(`[Props CLI] ⚠️ Filtering invalid pick — missing fields:`, { player: pick.player, prop: pick.prop, bet: pick.bet, line: pick.line });
+      return false;
+    }
+    return true;
+  });
+
+  if (validPicks.length < sortedPicks.length) {
+    console.log(`[Props CLI] Filtered out ${sortedPicks.length - validPicks.length} invalid pick(s). ${validPicks.length} valid picks remain.`);
+  }
+
   // STORAGE (Do this BEFORE the big summary print)
   if (shouldStore) {
-    console.log(`\n💾 Storing ${sortedPicks.length} picks in Supabase...`);
+    console.log(`\n💾 Storing ${validPicks.length} picks in Supabase...`);
     
     const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
@@ -362,9 +379,9 @@ export async function runAgenticPropsCli({
         .single();
 
       let existingPicks = [];
-      const newMatchups = new Set(sortedPicks.map(p => p.matchup?.toLowerCase()).filter(Boolean));
+      const newMatchups = new Set(validPicks.map(p => p.matchup?.toLowerCase()).filter(Boolean));
       // Check if new picks include TD picks (for NFL categorized format)
-      const newHasTdPicks = sortedPicks.some(p => p.td_category);
+      const newHasTdPicks = validPicks.some(p => p.td_category);
       
       if (existingData?.picks) {
         existingPicks = existingData.picks.filter(p => {
@@ -389,7 +406,7 @@ export async function runAgenticPropsCli({
         });
       }
 
-      const mergedPicks = [...existingPicks, ...sortedPicks];
+      const mergedPicks = [...existingPicks, ...validPicks];
       
       // Use upsert instead of delete-then-insert (atomic, race-safe)
       const { error: upsertError } = await supabase
@@ -415,7 +432,7 @@ export async function runAgenticPropsCli({
   console.log(`🏆 FINAL ${leagueLabel} PICKS SUMMARY`);
   console.log(`${'='.repeat(50)}`);
   
-  sortedPicks.forEach((pick, i) => {
+  validPicks.forEach((pick, i) => {
     const conf = pick.confidence ? (pick.confidence * 100).toFixed(0) : '?';
     const bet = pick.bet ? pick.bet.toUpperCase() : '?';
     console.log(`${i + 1}. ${pick.player || 'Unknown'} (${pick.team || '?'}): ${bet} ${pick.prop || '?'} ${pick.line || '?'} @ ${pick.odds || '?'} (${conf}% confidence)`);

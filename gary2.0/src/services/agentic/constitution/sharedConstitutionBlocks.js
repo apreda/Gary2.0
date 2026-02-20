@@ -150,8 +150,8 @@ If a player has successfully filled a role, the injury becomes LESS relevant —
 **WHEN NO ONE HAS STEPPED UP:**
 If the team is still struggling, cite the evidence of the decline — not just the injury itself. Recent performance IS the data.
 
-**USE PLAYER_GAME_LOGS TOKEN:**
-Call \`fetch_stats(token: 'PLAYER_GAME_LOGS')\` to see who actually played, their minutes/TOI, and performance in recent games.`;
+**INVESTIGATE RECENT PERFORMANCE:**
+Look at who actually played, their minutes/TOI, and performance in recent games to verify how the team has adjusted.`;
 }
 
 // ── Props: Player-Level Injury Investigation ──
@@ -275,24 +275,24 @@ ${config.recentFormContext}`;
 
 const STRUCTURAL_NARRATIVE_CONFIGS = {
   NBA: {
-    proveIt: 'Check Net Rating, eFG%, ORtg/DRtg for the L5-L10 via [RECENT_FORM]. Does the data back the story?',
-    structural: 'Net Rating differentials, style mismatches, lineup data.',
+    proveIt: 'What does the data show? Investigate the recent performance data — does it back the story?',
+    structural: 'Efficiency differentials, style mismatches, lineup data.',
   },
   NCAAB: {
-    proveIt: 'Check AdjEM, eFG%, AdjO/AdjD for the L5-L10. Does the data back the story?',
-    structural: 'AdjEM/ORtg/DRtg differentials, style mismatches, depth data.',
+    proveIt: 'What does the data show? Investigate the recent performance data — does it back the story?',
+    structural: 'Efficiency differentials, style mismatches, depth data.',
   },
   NFL: {
-    proveIt: 'Check EPA, DVOA, success rate trends via recent game data. Does the data back the story?',
-    structural: 'EPA differentials, scheme mismatches, trench data.',
+    proveIt: 'What does the data show? Investigate the recent performance data — does it back the story?',
+    structural: 'Efficiency differentials, scheme mismatches, trench data.',
   },
   NCAAF: {
-    proveIt: 'Check SP+/FPI, EPA splits via recent game data. Does the data back the story?',
-    structural: 'SP+/FPI differentials, talent gap data, trench matchups.',
+    proveIt: 'What does the data show? Investigate the recent performance data — does it back the story?',
+    structural: 'Efficiency differentials, talent gap data, trench matchups.',
   },
   NHL: {
-    proveIt: 'Check xG, CF%, GSAx, PDO trends via recent game data. Does the data back the story?',
-    structural: 'xG differentials, possession dominance (CF%), goaltending data.',
+    proveIt: 'What does the data show? Investigate the recent performance data — does it back the story?',
+    structural: 'Possession differentials, goaltending data, style mismatches.',
   },
 };
 
@@ -356,7 +356,7 @@ export function getPropsRecentFormInvestigation() {
 - What's driving the streak? Is it volume changes (more minutes, more usage) or efficiency variance (unsustainable shooting)?
 - Is the roster the same? A streak WITH a teammate out is different from a streak with the full roster.
 - What's the opponent quality during the streak? Did the recent games feature matchups that inflate or deflate production?
-- What do the game logs show about the specific mechanism (FGA, minutes, usage rate, matchup)?
+- What do the game logs show about the specific mechanism driving the streak?
 
 **Ask:** "Is this streak evidence of a real structural change, or variance that will correct?"
 
@@ -389,4 +389,72 @@ Treat all narratives ("revenge game," "he always kills them," "primetime player,
 **AWARENESS:** A player's season averages reflect what the prop line ALSO reflects. Citing a gap between average and line confirms the market's view — it doesn't reveal edge. Edge comes from matchup-specific factors: role changes, personnel mismatches, scheme vulnerabilities, recent structural shifts. Investigate where YOUR findings and the line disagree.
 
 **Ask:** "Is my thesis built on something the line already reflects, or have I found something the line hasn't captured?"`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// BLOCK 7: Factor Investigation Framework (investigationPrompts)
+// No sport variation — identical for all 5 sports.
+// ═══════════════════════════════════════════════════════════════════════
+
+export function getFactorInvestigationFramework() {
+  return `### [FRAMEWORK] HOW TO INVESTIGATE EACH FACTOR
+
+For each factor you investigate, follow this process:
+
+1. **AWARENESS** — Notice what the data shows for this factor
+2. **INVESTIGATE THIS GAME** — How does this factor apply to THIS specific matchup against THIS opponent?
+3. **CAUSAL METRICS** — Does this stat reveal a causal mechanism connecting to tonight's outcome, or does it just describe past results?
+4. **WHAT IT TELLS YOU** — What does the data reveal about each team for this factor?
+5. **MATCHUP PICTURE** — What does this factor add to the overall matchup picture? (Don't pick a side yet — accumulate findings as game characteristics)
+
+**After investigating all relevant factors, synthesize:**
+"Considering how these factors interact — not as a scorecard but as a game profile — which side of the spread does the evidence support?"`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// BLOCK 8: H2H Zero Tolerance (guardrails)
+// Core rule identical; sport-specific context about matchup frequency.
+// ═══════════════════════════════════════════════════════════════════════
+
+const H2H_SPORT_CONTEXT = {
+  NBA: `   - If you get "0 games found" or "No previous matchups" → DO NOT mention H2H at all`,
+  NFL: `   - If divisional teams: they play twice, so there may be 1 previous meeting this season
+   - If non-divisional: they may NOT have played this season at all
+   - [NO] NEVER claim: "Cowboys are 6-2 vs Eagles in recent years" without data`,
+  NHL: `   - NHL divisional teams play multiple times per season - there may be recent meetings
+   - [NO] NEVER claim: "Bruins are 5-1 vs Leafs this year" without data`,
+  NCAAB: `   - Most non-conference teams only play once per season IF they meet in tournaments
+   - Conference teams play twice (home and away)`,
+  NCAAF: `   - Most NCAAF teams play rarely or never
+   - [NO] NEVER claim: "Ohio State is 8-2 vs Michigan in last 10" without data
+   - [NO] NEVER guess rivalry patterns from training data`,
+};
+
+export function getH2HZeroTolerance(sport) {
+  const normalized = sport?.toUpperCase?.()
+    .replace('BASKETBALL_', '')
+    .replace('AMERICANFOOTBALL_', '')
+    .replace('ICEHOCKEY_', '') || sport;
+
+  const sportContext = H2H_SPORT_CONTEXT[normalized] || '';
+
+  return `**HEAD-TO-HEAD (H2H) - ZERO TOLERANCE FOR GUESSING**:
+   - H2H data is included in your scout report. Review it there. If you need ADDITIONAL historical matchups beyond what's shown, you can call fetch_stats(token: 'H2H_HISTORY', ...)
+${sportContext}
+   - [NO] NEVER guess historical H2H patterns from training data
+   - [YES] If you have H2H data, cite ONLY the specific games shown
+   - [YES] If you DON'T have H2H data, skip H2H analysis entirely`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// BLOCK 9: Narrative Investigation Questions (guardrails)
+// The 3 core questions are identical across NBA, NFL, NCAAB, NCAAF.
+// NHL uses a different format (inline narrative descriptions).
+// ═══════════════════════════════════════════════════════════════════════
+
+export function getNarrativeInvestigationQuestions() {
+  return `**For each narrative, ask:**
+- What does the data actually show for THIS team in THIS situation?
+- Does the narrative explain WHY the line is set here? If so, what does the data show beyond the narrative?
+- Has the narrative already moved the line, and does the adjusted price feel right?`;
 }

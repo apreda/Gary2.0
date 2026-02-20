@@ -271,11 +271,25 @@ export async function discoverSlatesFromDK(sport) {
     return [];
   }
 
-  // Build DraftGroup lookup: GameSetKey → DraftGroups (filtered to Classic only)
+  // Get today's date in ET for filtering out future/stale slates
+  const todayET = new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York' });
+
+  // Build DraftGroup lookup: GameSetKey → DraftGroups (filtered to Classic only + today only)
   const classicDraftGroups = {};
   for (const dg of (data.DraftGroups || [])) {
     // Only include Classic game type
     if (!CLASSIC_GAME_TYPE_IDS.includes(dg.GameTypeId)) continue;
+
+    // Filter to today's slates only — DK API returns future slates (e.g., next Tuesday)
+    const dgDate = parseDKDate(dg.StartDate || dg.StartDateEst);
+    if (dgDate) {
+      const dgDateET = dgDate.toLocaleDateString('en-US', { timeZone: 'America/New_York' });
+      if (dgDateET !== todayET) {
+        console.log(`[DK Slates] Skipping DraftGroup ${dg.DraftGroupId} (${dgDateET} — not today ${todayET})`);
+        continue;
+      }
+    }
+
     const key = dg.GameSetKey;
     if (!classicDraftGroups[key]) classicDraftGroups[key] = [];
     classicDraftGroups[key].push(dg);

@@ -34,23 +34,22 @@ const NHL_DIVISIONS = {
   pacific: ['ducks', 'flames', 'oilers', 'kings', 'sharks', 'kraken', 'canucks', 'golden knights']
 };
 
-// NCAAB Conference mappings (using team nicknames)
-const NCAAB_CONFERENCES = {
+// Shared college conference mappings (NCAAB and NCAAF use the same schools)
+const COLLEGE_CONFERENCES = {
   big_ten: ['wolverines', 'buckeyes', 'spartans', 'hoosiers', 'boilermakers', 'hawkeyes', 'badgers', 'gophers', 'wildcats', 'illini', 'cornhuskers', 'terrapins', 'nittany lions', 'scarlet knights', 'bruins', 'trojans', 'ducks', 'huskies'],
   sec: ['crimson tide', 'tigers', 'bulldogs', 'gators', 'volunteers', 'wildcats', 'rebels', 'razorbacks', 'gamecocks', 'commodores', 'aggies', 'longhorns', 'sooners', 'mizzou'],
   acc: ['blue devils', 'tar heels', 'wolfpack', 'demon deacons', 'cavaliers', 'hokies', 'seminoles', 'hurricanes', 'cardinals', 'panthers', 'yellow jackets', 'orange', 'fighting irish', 'eagles'],
   big_12: ['jayhawks', 'wildcats', 'bears', 'red raiders', 'horned frogs', 'cyclones', 'mountaineers', 'cowboys', 'bearcats', 'cougars', 'knights', 'sun devils', 'utes', 'buffaloes', 'arizona'],
-  big_east: ['bluejays', 'bulldogs', 'hoyas', 'wildcats', 'golden eagles', 'friars', 'johnnies', 'pirates', 'huskies', 'musketeers', 'hall'],
   pac_12: ['beavers', 'cougars']
 };
 
-// NCAAF Conference mappings (same schools, football nicknames)
-const NCAAF_CONFERENCES = {
-  big_ten: ['wolverines', 'buckeyes', 'spartans', 'hoosiers', 'boilermakers', 'hawkeyes', 'badgers', 'gophers', 'wildcats', 'illini', 'cornhuskers', 'terrapins', 'nittany lions', 'scarlet knights', 'bruins', 'trojans', 'ducks', 'huskies'],
-  sec: ['crimson tide', 'tigers', 'bulldogs', 'gators', 'volunteers', 'wildcats', 'rebels', 'razorbacks', 'gamecocks', 'commodores', 'aggies', 'longhorns', 'sooners', 'mizzou'],
-  acc: ['blue devils', 'tar heels', 'wolfpack', 'demon deacons', 'cavaliers', 'hokies', 'seminoles', 'hurricanes', 'cardinals', 'panthers', 'yellow jackets', 'orange', 'fighting irish', 'eagles'],
-  big_12: ['jayhawks', 'wildcats', 'bears', 'red raiders', 'horned frogs', 'cyclones', 'mountaineers', 'cowboys', 'bearcats', 'cougars', 'knights', 'sun devils', 'utes', 'buffaloes', 'arizona'],
-  pac_12: ['beavers', 'cougars']
+// NCAAF uses the shared conferences as-is
+const NCAAF_CONFERENCES = { ...COLLEGE_CONFERENCES };
+
+// NCAAB extends shared conferences with Big East (basketball-only conference)
+const NCAAB_CONFERENCES = {
+  ...COLLEGE_CONFERENCES,
+  big_east: ['bluejays', 'bulldogs', 'hoyas', 'wildcats', 'golden eagles', 'friars', 'johnnies', 'pirates', 'huskies', 'musketeers', 'hall']
 };
 
 // Famous rivalries

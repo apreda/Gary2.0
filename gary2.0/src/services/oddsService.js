@@ -12,35 +12,7 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 // All odds now come from Ball Don't Lie — The Odds API has been fully removed
 
-// Player prop markets by sport
-const PROP_MARKETS = {
-  basketball_nba: [
-    'player_points',
-    'player_rebounds',
-    'player_assists',
-    'player_threes',
-    'player_blocks',
-    'player_steals'
-  ],
-  baseball_mlb: [
-    'batter_home_runs',
-    'batter_hits',
-    'batter_runs_scored',
-    'batter_rbis',
-    'batter_stolen_bases',
-    'batter_total_bases',
-    'pitcher_strikeouts',
-    'pitcher_outs',
-    'pitcher_earned_runs'
-  ],
-  icehockey_nhl: [
-    'player_points',
-    'player_goals',
-    'player_assists',
-    'player_shots_on_goal',
-    'player_power_play_points'
-  ]
-};
+// NOTE: PROP_MARKETS removed — BDL returns all prop types automatically via propOddsService
 
 /**
  * Fetches completed games from Ball Don't Lie API for a specific date and sport
@@ -440,44 +412,5 @@ export const oddsService = {
     });
   },
 
-  getPlayerPropOdds: async (sport, homeTeam, awayTeam) => {
-    // DEPRECATED: The Odds API removed - use BDL player props via ballDontLieOddsService
-    console.warn('[oddsService.getPlayerPropOdds] DEPRECATED - use ballDontLieOddsService for player props');
-    try {
-      const upcomingGames = await oddsService.getUpcomingGames(sport);
-
-      const game = upcomingGames.find(game => {
-        const gameHomeTeam = game.home_team.toLowerCase();
-        const gameAwayTeam = game.away_team.toLowerCase();
-        const searchHomeTeam = homeTeam.toLowerCase();
-        const searchAwayTeam = awayTeam.toLowerCase();
-
-        return (
-          (gameHomeTeam.includes(searchHomeTeam) || searchHomeTeam.includes(gameHomeTeam)) &&
-          (gameAwayTeam.includes(searchAwayTeam) || searchAwayTeam.includes(gameAwayTeam))
-        );
-      });
-
-      if (!game) {
-        console.warn(`No game found matching ${homeTeam} vs ${awayTeam} for ${sport}`);
-        return [];
-      }
-
-      console.log(`Found matching game with ID: ${game.id}`);
-
-      // Use BDL for player props based on sport
-      if (sport === 'basketball_nba') {
-        return await ballDontLieOddsService.getNbaPlayerProps(game.id);
-      } else if (sport === 'americanfootball_nfl') {
-        return await ballDontLieOddsService.getNflPlayerProps(game.id);
-      } else if (sport === 'icehockey_nhl') {
-        return await ballDontLieOddsService.getNhlPlayerProps(game.id);
-      }
-
-      return [];
-    } catch (error) {
-      console.error('Error fetching player prop odds:', error);
-      return [];
-    }
-  }
+  // NOTE: getPlayerPropOdds removed — use propOddsService.getPlayerPropOdds() instead
 };

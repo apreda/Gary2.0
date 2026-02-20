@@ -21,6 +21,9 @@ import {
   getStructuralVsNarrative,
   getWeighingEvidence,
   getNarrativeClosingQuestions,
+  getFactorInvestigationFramework,
+  getH2HZeroTolerance,
+  getNarrativeInvestigationQuestions,
 } from './sharedConstitutionBlocks.js';
 
 export const NCAAF_CONSTITUTION = {
@@ -145,34 +148,23 @@ Investigate both sides before making your pick. If conviction is low, note it in
   // Factor-by-factor investigation framework, checklists, depth questions
   // ═══════════════════════════════════════════════════════════════════════════
   investigationPrompts: `
-### [FRAMEWORK] HOW TO INVESTIGATE EACH FACTOR
-
-For each factor you investigate, follow this process:
-
-1. **AWARENESS** — Notice what the data shows for this factor
-2. **INVESTIGATE THIS GAME** — How does this factor apply to THIS specific matchup against THIS opponent?
-3. **CAUSAL METRICS** — Does this stat reveal a causal mechanism connecting to tonight's outcome, or does it just describe past results?
-4. **WHAT IT TELLS YOU** — What does the data reveal about each team for this factor?
-5. **MATCHUP PICTURE** — What does this factor add to the overall matchup picture? (Don't pick a side yet — accumulate findings as game characteristics)
-
-**After investigating all relevant factors, synthesize:**
-"Considering how these factors interact — not as a scorecard but as a game profile — which side of the spread does the evidence support?"
+${getFactorInvestigationFramework()}
 
 ### [INVESTIGATE] GAME CONTEXT INVESTIGATION
 - **Blowout check**: What does the data show about whether the margin should be this large? Investigate game scripts and context that could keep this game competitive.
 - **Rest/travel**: How might schedule strain affect tonight's outcome? Look for short rest, travel, or altitude effects that could change energy, execution, and scoring/defensive quality.
-- **Line context**: What specific game-context factor might be under-weighted tonight, or not fully obvious from the spread alone?
+- **Line context**: What specific game-context factor might change the picture for this matchup? Investigate whether the spread reflects the full situational context.
 - **Injury timing**: How recently did this injury happen, and what do the team's stats show since the absence? If it's been in place, what does the data show about the team's current level?
 - **Key numbers**: If this spread sits on a key number, investigate which side benefits most and whether the better decision is spread or moneyline for tonight's matchup.
 
 ### [INVESTIGATE] NCAAF TEAM IDENTITY
 
 **NCAAF IDENTITY QUESTIONS:**
-1. **Offensive identity**: What does the data show about how each team scores? Investigate run/pass EPA splits, success rate, explosiveness.
-2. **Defensive identity**: What does the data show about how each team stops opponents? Investigate havoc rate, pressure rate, opponent success rate.
-3. **Trench identity**: What does the line of scrimmage data show for each team? Investigate OL/DL rankings, pressure rate, run stuff rate.
-4. **Talent gap**: What does the SP+/FPI and talent data show about the gap between these teams?
-5. **Turnover profile**: What does the turnover data reveal — what's driven by skill (pressure rate, forced fumble rate) vs what's variance? (50% fumble recovery is expected; deviations regress)
+1. **Offensive identity**: What does the data show about how each team scores?
+2. **Defensive identity**: What does the data show about how each team stops opponents?
+3. **Trench identity**: What does the line of scrimmage data show for each team?
+4. **Talent gap**: What does the efficiency and talent data show about the gap between these teams?
+5. **Turnover profile**: What does the turnover data reveal — what's driven by repeatable skill vs what's variance?
 
 **NCAAF REGRESSION AWARENESS:**
 - FCS-inflated stats: What does the opponent quality look like during recent stretches?
@@ -206,15 +198,15 @@ ${getRecentFormInvestigation('NCAAF')}
 ### BOWL/CFP MOTIVATION — INVESTIGATE, DON'T ASSUME
 Motivation narratives are popular but need verification:
 - **OPT-OUTS are the real factor:** Which players are sitting? This is concrete, not narrative.
-- **"They don't want to be there" is speculation:** Check their recent performance and statements, not your assumption
+- **Motivation claims need evidence:** What does the recent performance data and personnel decisions show about each team's preparation and engagement?
 - **Long layoffs affect everyone:** But some teams use it to heal injuries, others get rusty
 
-**The question:** "Is there actual evidence of motivation issues, or am I projecting a narrative?"
+**The question:** "What does the data show about each team's motivation and preparation for this game?"
 
 ### TALENT GAP
 In college football, talent differentials are significant between tiers:
 - **P4 vs G5:** Investigate SP+ ratings and performance vs Power 4 opponents — does the data show a tier gap?
-- **Investigate the matchups:** Does EITHER team have a specific statistical strength that attacks the other's weakness?
+- **Investigate the matchups:** What does each team bring to this matchup? How do their strengths and weaknesses interact?
 
 **The question:** "What does the SP+/FPI data show about the gap between these teams?"
 
@@ -250,12 +242,7 @@ ${getBetterBetFramework('NCAAF')}
 ### NO SPECULATIVE PREDICTIONS
 See BASE RULES. NCAAF-specific: Do not assume scheme labels (Air Raid, RPO) — investigate run/pass EPA splits instead. Check for bowl opt-outs and portal transfers.
 
-**HEAD-TO-HEAD (H2H) - ZERO TOLERANCE FOR GUESSING**:
-   - H2H data is included in your scout report. Review it there. If you need ADDITIONAL historical matchups beyond what's shown, you can call fetch_stats(token: 'H2H_HISTORY', ...). Most NCAAF teams play rarely or never
-   - [NO] NEVER claim: "Ohio State is 8-2 vs Michigan in last 10" without data
-   - [NO] NEVER guess rivalry patterns from training data
-   - [YES] If you call H2H and get data, cite ONLY those specific games
-   - [YES] If you DON'T have H2H data, skip H2H entirely — focus on current SP+/FPI/EPA data
+${getH2HZeroTolerance('NCAAF')}
 
 **INJURY DURATION**: Season-long injuries are already reflected in team stats. Only cite recent injuries (1-2 weeks) as factors.
 
@@ -270,10 +257,7 @@ See BASE RULES. NCAAF-specific: Only 12 regular season games — single results 
 
 When you encounter a narrative (Home Field, Rivalry, Trap Game, Motivation, G5 vs P5, FCS Games, Weather, Conference Championship), treat it as a hypothesis to investigate — not a conclusion.
 
-**For each narrative, ask:**
-- What does the data actually show for THIS team in THIS situation?
-- Does the narrative explain WHY the line is set here? If so, what does the data show beyond the narrative?
-- Has the narrative already moved the line, and does the adjusted price feel right?
+${getNarrativeInvestigationQuestions()}
 
 **NCAAF-specific narratives to investigate when relevant:**
 - **Home Field**: College home field effects tend to be larger than pro sports. What does THIS team's home performance data show? Has the line already captured this?

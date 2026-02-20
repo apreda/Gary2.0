@@ -4560,9 +4560,18 @@ const ballDontLieService = {
           splits,
           hitRates,
           lastGame: gameStats[0] || null,
-          formTrend: gameStats.length >= 5 
-            ? (avgs.pts > (gameStats.slice(-5).reduce((s, g) => s + g.pts, 0) / 5) ? 'hot' : 'cold')
-            : 'neutral'
+          formTrend: (() => {
+            if (gameStats.length < 5) return 'neutral';
+            // Compare L2 composite (pts+reb+ast) vs L5 composite to detect form trend
+            const l2 = gameStats.slice(0, 2);
+            const l5 = gameStats.slice(0, 5);
+            const composite = g => (g.pts || 0) + (g.reb || 0) + (g.ast || 0);
+            const l2Avg = l2.reduce((s, g) => s + composite(g), 0) / l2.length;
+            const l5Avg = l5.reduce((s, g) => s + composite(g), 0) / l5.length;
+            if (l2Avg > l5Avg * 1.15) return 'hot';
+            if (l2Avg < l5Avg * 0.85) return 'cold';
+            return 'stable';
+          })()
         };
       }, 15); // Cache for 15 minutes
     } catch (e) {
@@ -5008,22 +5017,37 @@ const ballDontLieService = {
 
       const cacheKey = `nba_player_props_${gameId}_${JSON.stringify(options)}`;
       return await getCachedOrFetch(cacheKey, async () => {
-        const params = { game_id: gameId };
+        const params = { game_id: gameId, per_page: 100 };
         if (options.player_id) params.player_id = options.player_id;
         if (options.prop_type) params.prop_type = options.prop_type;
         if (options.vendors) params.vendors = options.vendors;
 
-        // NBA player props use v2 endpoint (not under /nba/ prefix)
-        const url = `${BALLDONTLIE_API_BASE_URL}/v2/odds/player_props${buildQuery(params)}`;
-        console.log(`[Ball Don't Lie] Fetching NBA player props: ${url}`);
+        // NBA player props use v2 endpoint — paginate to get all props
+        const baseUrl = `${BALLDONTLIE_API_BASE_URL}/v2/odds/player_props`;
+        let allProps = [];
+        let nextCursor = undefined;
+        let pageCount = 0;
+        const maxPages = 10;
 
-        const response = await axios.get(url, {
-          headers: { 'Authorization': API_KEY }
-        });
+        do {
+          const currentParams = { ...params };
+          if (nextCursor) currentParams.cursor = nextCursor;
 
-        const props = response.data?.data || [];
-        console.log(`[Ball Don't Lie] Retrieved ${props.length} NBA player props for game ${gameId}`);
-        return props;
+          const url = `${baseUrl}${buildQuery(currentParams)}`;
+          console.log(`[Ball Don't Lie] Fetching NBA player props: ${url} (Page ${pageCount + 1})`);
+
+          const response = await axios.get(url, {
+            headers: { 'Authorization': API_KEY }
+          });
+
+          const props = response.data?.data || [];
+          allProps = allProps.concat(props);
+          nextCursor = response.data?.meta?.next_cursor;
+          pageCount++;
+        } while (nextCursor && pageCount < maxPages);
+
+        console.log(`[Ball Don't Lie] Retrieved ${allProps.length} NBA player props for game ${gameId} (${pageCount} page${pageCount > 1 ? 's' : ''})`);
+        return allProps;
       }, 2); // Cache for 2 minutes since props are live
     } catch (error) {
       const status = error?.response?.status;

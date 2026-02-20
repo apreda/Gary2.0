@@ -38,6 +38,24 @@ import { fetchNbaInjuriesForGame } from '../nbaInjuryReportService.js';
 const SPORT_KEY = 'basketball_nba';
 
 /**
+ * Format an injury flag string from an injury record.
+ * @param {Object|null} injuryRecord - The injury record, or null if not injured
+ * @returns {string} Formatted injury flag string, or empty string
+ */
+function formatInjuryFlag(injuryRecord) {
+  if (!injuryRecord) return '';
+  const daysInfo = injuryRecord.daysSinceReport != null ? ` (${injuryRecord.daysSinceReport}d)` : '';
+  const duration = injuryRecord.duration || '';
+  if (duration === 'SEASON-LONG') {
+    return ` ⚠️ INJURED [Out For Season${daysInfo}]`;
+  } else if (duration === 'RECENT') {
+    return ` ⚠️ INJURED [RECENT${daysInfo}]`;
+  } else {
+    return ` ⚠️ INJURED [OUT${daysInfo}]`;
+  }
+}
+
+/**
  * Calculate scenario projections for kill condition analysis
  * Pre-calculates baseline, blowout, and competitive scenarios so Gary doesn't do LLM math
  * @param {Object} playerStats - Player season stats from BDL
@@ -59,6 +77,9 @@ function calculateScenarioProjections(playerStats, props, gameSpread) {
   const rpm = (parseFloat(playerStats.rpg) || 0) / mpg; // Rebounds per minute
   const apm = (parseFloat(playerStats.apg) || 0) / mpg; // Assists per minute
   const tpm = (parseFloat(playerStats.tpg) || 0) / mpg; // Threes per minute
+  const spm = (parseFloat(playerStats.spg) || 0) / mpg; // Steals per minute
+  const bpm = (parseFloat(playerStats.bpg) || 0) / mpg; // Blocks per minute
+  const topm = (parseFloat(playerStats.topg) || 0) / mpg; // Turnovers per minute
   
   // Is this team at blowout risk? (spread >= 10)
   const isBlowoutRisk = Math.abs(parseFloat(gameSpread) || 0) >= 10;
@@ -79,20 +100,70 @@ function calculateScenarioProjections(playerStats, props, gameSpread) {
     'pra': { rate: ppm + rpm + apm, avg: playerStats.pra },
     'points_rebounds_assists': { rate: ppm + rpm + apm, avg: playerStats.pra },
     'pr': { rate: ppm + rpm, avg: (parseFloat(playerStats.ppg) || 0) + (parseFloat(playerStats.rpg) || 0) },
-    'points_rebounds': { rate: ppm + rpm, avg: (parseFloat(playerStats.ppg) || 0) + (parseFloat(playerStats.rpg) || 0) }
+    'points_rebounds': { rate: ppm + rpm, avg: (parseFloat(playerStats.ppg) || 0) + (parseFloat(playerStats.rpg) || 0) },
+    'steals': { rate: spm, avg: playerStats.spg },
+    'stl': { rate: spm, avg: playerStats.spg },
+    'player_steals': { rate: spm, avg: playerStats.spg },
+    'blocks': { rate: bpm, avg: playerStats.bpg },
+    'blk': { rate: bpm, avg: playerStats.bpg },
+    'player_blocks': { rate: bpm, avg: playerStats.bpg },
+    'pa': { rate: ppm + apm, avg: (parseFloat(playerStats.ppg) || 0) + (parseFloat(playerStats.apg) || 0) },
+    'points_assists': { rate: ppm + apm, avg: (parseFloat(playerStats.ppg) || 0) + (parseFloat(playerStats.apg) || 0) },
+    'player_points_assists': { rate: ppm + apm, avg: (parseFloat(playerStats.ppg) || 0) + (parseFloat(playerStats.apg) || 0) },
+    'ra': { rate: rpm + apm, avg: (parseFloat(playerStats.rpg) || 0) + (parseFloat(playerStats.apg) || 0) },
+    'rebounds_assists': { rate: rpm + apm, avg: (parseFloat(playerStats.rpg) || 0) + (parseFloat(playerStats.apg) || 0) },
+    'player_rebounds_assists': { rate: rpm + apm, avg: (parseFloat(playerStats.rpg) || 0) + (parseFloat(playerStats.apg) || 0) },
+    'turnovers': { rate: topm, avg: playerStats.topg },
+    'tov': { rate: topm, avg: playerStats.topg },
+    'player_turnovers': { rate: topm, avg: playerStats.topg }
   };
   
+  // Milestone prop types (yes/no bets) — use baseline stat projections instead of per-minute rates
+  const milestonePropTypes = new Set([
+    'double_double', 'player_double_double',
+    'triple_double', 'player_triple_double'
+  ]);
+
   for (const prop of (props || [])) {
     const propType = (prop.type || prop.prop_type || '').toLowerCase();
     const line = parseFloat(prop.line) || 0;
+
+    // Handle milestone props (double_double, triple_double)
+    if (milestonePropTypes.has(propType)) {
+      const ppg = parseFloat(playerStats.ppg) || 0;
+      const rpg = parseFloat(playerStats.rpg) || 0;
+      const apg = parseFloat(playerStats.apg) || 0;
+      const spg = parseFloat(playerStats.spg) || 0;
+      const bpg = parseFloat(playerStats.bpg) || 0;
+      const categories = [ppg, rpg, apg, spg, bpg];
+      const categoriesAbove10 = categories.filter(v => v >= 10).length;
+      const isDD = propType.includes('double_double');
+      const threshold = isDD ? 2 : 3;
+
+      projections[propType] = {
+        baseline: { minutes: mpg, categoriesAbove10, threshold },
+        blowout: { minutes: blowoutMinutes, note: 'Reduced minutes lower all category projections' },
+        competitive: { minutes: competitiveMinutes, note: 'Full minutes maximize milestone chances' },
+        line: line,
+        categoryAverages: { pts: ppg, reb: rpg, ast: apg, stl: spg, blk: bpg },
+        blowoutScenario: {
+          projectionBelowLine: isBlowoutRisk && isOnFavorite,
+          detail: isBlowoutRisk && isOnFavorite
+            ? `Blowout risk reduces minutes — ${isDD ? 'double-double' : 'triple-double'} requires sustained involvement`
+            : null
+        }
+      };
+      continue;
+    }
+
     const rateData = propTypes[propType];
-    
+
     if (!rateData) continue;
-    
+
     const baselineProj = parseFloat((mpg * rateData.rate).toFixed(1));
     const blowoutProj = parseFloat((blowoutMinutes * rateData.rate).toFixed(1));
     const competitiveProj = parseFloat((competitiveMinutes * rateData.rate).toFixed(1));
-    
+
     // Blowout scenario: projection below line when team is favorite in a blowout-risk game
     const projectionBelowLine = isBlowoutRisk && isOnFavorite && blowoutProj < line;
 
@@ -191,10 +262,16 @@ function calculateHitRate(games, propType, line) {
     'turnovers': 'turnover',
     'player_turnovers': 'turnover',
     'tov': 'turnover',
-    
+
     // Minutes (useful for context)
     'minutes': 'min',
-    'min': 'min'
+    'min': 'min',
+
+    // Milestone props
+    'double_double': 'double_double',
+    'player_double_double': 'double_double',
+    'triple_double': 'triple_double',
+    'player_triple_double': 'triple_double'
   };
   
   const field = propToField[propType?.toLowerCase()] || propType;
@@ -219,6 +296,15 @@ function calculateHitRate(games, propType, line) {
     } else if (field === 'ra') {
       // Rebounds + Assists
       value = (game.reb || 0) + (game.ast || 0);
+    } else if (field === 'double_double') {
+      // Count how many of pts/reb/ast are >= 10
+      const cats = [(game.pts || 0) >= 10, (game.reb || 0) >= 10, (game.ast || 0) >= 10,
+                     (game.stl || 0) >= 10, (game.blk || 0) >= 10];
+      value = cats.filter(Boolean).length >= 2 ? 1 : 0;
+    } else if (field === 'triple_double') {
+      const cats = [(game.pts || 0) >= 10, (game.reb || 0) >= 10, (game.ast || 0) >= 10,
+                     (game.stl || 0) >= 10, (game.blk || 0) >= 10];
+      value = cats.filter(Boolean).length >= 3 ? 1 : 0;
     } else {
       // Direct field lookup
       value = game[field];
@@ -259,17 +345,16 @@ function calculateHitRate(games, propType, line) {
  * @returns {Object|null} Teammate impact analysis
  */
 function analyzeTeammateImpact(playerName, team, injuries, playerSeasonStats) {
-  // Key players by team — high usage players whose absence Gary should investigate
-  const keyPlayers = {
-    // High usage players — investigate role redistribution when absent
-    'star_scorers': ['LeBron James', 'Stephen Curry', 'Kevin Durant', 'Giannis Antetokounmpo', 
-      'Luka Doncic', 'Jayson Tatum', 'Shai Gilgeous-Alexander', 'Anthony Edwards',
-      'Donovan Mitchell', 'Damian Lillard', 'Devin Booker', 'Trae Young', 'Ja Morant',
-      'De\'Aaron Fox', 'Tyrese Haliburton', 'Paolo Banchero', 'Cade Cunningham',
-      'Tyler Herro', 'Bam Adebayo', 'Jimmy Butler', 'Jalen Brunson', 'Karl-Anthony Towns']
-  };
-  
-  const allStars = keyPlayers.star_scorers.map(n => n.toLowerCase());
+  // Dynamically identify high-impact players from season stats (>= 18 PPG or >= 28 MPG)
+  // No hardcoded list — stays current as rosters change
+  const allStars = [];
+  if (playerSeasonStats && typeof playerSeasonStats === 'object') {
+    for (const [id, stats] of Object.entries(playerSeasonStats)) {
+      if (stats?.playerName && ((parseFloat(stats.ppg) || 0) >= 18 || (parseFloat(stats.mpg) || 0) >= 28)) {
+        allStars.push(stats.playerName.toLowerCase());
+      }
+    }
+  }
   
   // Find injured stars on the same team (FRESH injuries only — season-long is priced in)
   const teamInjuries = injuries.filter(inj => {
@@ -380,20 +465,23 @@ function groupPropsByPlayer(props) {
 function getTopPropCandidates(props, maxPlayersPerTeam = 10) {
   const grouped = groupPropsByPlayer(props);
   
-  // Score each player by number of props and odds quality
-  // NOTE: No bias toward any specific prop type - Gary decides organically
+  // Score each player — capped volume so role players with edge props can surface
   const scored = grouped.map(player => {
-    const avgOdds = player.props.reduce((sum, p) => {
-      const odds = p.over_odds || p.under_odds || null;
-      return sum + odds;
-    }, 0) / player.props.length;
-    
-    // Prop variety bonus - reward players with multiple prop types available
+    const validOdds = player.props.filter(p => p.over_odds || p.under_odds);
+    const avgOdds = validOdds.length > 0
+      ? validOdds.reduce((sum, p) => sum + (p.over_odds || p.under_odds || 0), 0) / validOdds.length
+      : -150;
+
+    // Cap volume contribution at 4 props (prevents stars from dominating on volume alone)
+    const volumeScore = Math.min(player.props.length, 4) * 10;
+    const oddsBonus = avgOdds > -110 ? 15 : 0;
+    // Prop variety bonus — capped at 3 unique types
     const uniquePropTypes = new Set(player.props.map(p => p.type)).size;
-    
+    const varietyBonus = Math.min(uniquePropTypes, 3) * 5;
+
     return {
       ...player,
-      score: player.props.length * 10 + (avgOdds > -110 ? 20 : 0) + (uniquePropTypes * 5)
+      score: volumeScore + oddsBonus + varietyBonus
     };
   });
   
@@ -881,13 +969,15 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerSeasonSt
   
   // Helper to get stats for a player
   const getPlayerStats = (playerName) => {
-    const playerId = playerIdMap[playerName.toLowerCase()];
+    const playerInfo = playerIdMap[playerName.toLowerCase()];
+    const playerId = playerInfo?.id || playerInfo;
     return playerId ? playerSeasonStats[playerId] : null;
   };
-  
+
   // Helper to get game logs for a player
   const getPlayerLogs = (playerName) => {
-    const playerId = playerIdMap[playerName.toLowerCase()];
+    const playerInfo = playerIdMap[playerName.toLowerCase()];
+    const playerId = playerInfo?.id || playerInfo;
     return playerId ? playerGameLogs[playerId] : null;
   };
   
@@ -937,24 +1027,12 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerSeasonSt
 
       const injuryRecord = injuries.find(i => i.player.toLowerCase() === candidate.player.toLowerCase());
       const isInjured = !!injuryRecord;
-      // Factual injury labels with duration
-      let injuryFlag = '';
-      if (isInjured) {
-        const daysInfo = injuryRecord.daysSinceReport != null ? ` (${injuryRecord.daysSinceReport}d)` : '';
-        const duration = injuryRecord.duration || '';
-        if (duration === 'SEASON-LONG') {
-          injuryFlag = ` ⚠️ INJURED [Out For Season${daysInfo}]`;
-        } else if (duration === 'RECENT') {
-          injuryFlag = ` ⚠️ INJURED [RECENT${daysInfo}]`;
-        } else {
-          injuryFlag = ` ⚠️ INJURED [OUT${daysInfo}]`;
-        }
-      }
+      const injuryFlag = formatInjuryFlag(isInjured ? injuryRecord : null);
 
       if (stats) {
         statsText += `- **${candidate.player}** (${stats.position || 'N/A'})${injuryFlag}:\n`;
         statsText += `  Props: ${propsStr}\n`;
-        statsText += `  Season: PPG ${stats.ppg || 'N/A'}, RPG ${stats.rpg || 'N/A'}, APG ${stats.apg || 'N/A'}, 3PG ${stats.tpg || 'N/A'}, PRA ${stats.pra || 'N/A'}, MPG ${stats.mpg || 'N/A'}\n`;
+        statsText += `  Season: PPG ${stats.ppg || 'N/A'}, RPG ${stats.rpg || 'N/A'}, APG ${stats.apg || 'N/A'}, 3PG ${stats.tpg || 'N/A'}, SPG ${stats.spg || 'N/A'}, BPG ${stats.bpg || 'N/A'}, PRA ${stats.pra || 'N/A'}, MPG ${stats.mpg || 'N/A'}\n`;
 
         // ENHANCED: Show usage & efficiency metrics for prop context
         if (stats.usagePct || stats.trueShooting) {
@@ -974,23 +1052,24 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerSeasonSt
         // Add recent form if available - show ALL stat types equally for organic analysis
         if (logs) {
           const formIcon = logs.formTrend === 'hot' ? '[L5 > Season]' : logs.formTrend === 'cold' ? '[L5 < Season]' : '';
-          statsText += `  L${logs.gamesAnalyzed} Avg: PTS ${logs.averages?.pts || 'N/A'}, REB ${logs.averages?.reb || 'N/A'}, AST ${logs.averages?.ast || 'N/A'}, 3PM ${logs.averages?.fg3m || 'N/A'} ${formIcon}\n`;
+          statsText += `  L${logs.gamesAnalyzed} Avg: PTS ${logs.averages?.pts || 'N/A'}, REB ${logs.averages?.reb || 'N/A'}, AST ${logs.averages?.ast || 'N/A'}, 3PM ${logs.averages?.fg3m || 'N/A'}, STL ${logs.averages?.stl || 'N/A'}, BLK ${logs.averages?.blk || 'N/A'} ${formIcon}\n`;
 
           // Show recent games for ALL prop types - no bias toward any stat
-          statsText += `  Recent: PTS [${formatRecentGames(logs, 'pts')}] | REB [${formatRecentGames(logs, 'reb')}] | AST [${formatRecentGames(logs, 'ast')}]\n`;
+          statsText += `  Recent: PTS [${formatRecentGames(logs, 'pts')}] | REB [${formatRecentGames(logs, 'reb')}] | AST [${formatRecentGames(logs, 'ast')}] | 3PM [${formatRecentGames(logs, 'fg3m')}] | STL [${formatRecentGames(logs, 'stl')}] | BLK [${formatRecentGames(logs, 'blk')}]\n`;
 
           // Consistency scores for ALL stat types - Gary decides which matters
           if (logs.consistency) {
             const ptsC = logs.consistency.pts ? (parseFloat(logs.consistency.pts) * 100).toFixed(0) : 'N/A';
             const rebC = logs.consistency.reb ? (parseFloat(logs.consistency.reb) * 100).toFixed(0) : 'N/A';
             const astC = logs.consistency.ast ? (parseFloat(logs.consistency.ast) * 100).toFixed(0) : 'N/A';
-            statsText += `  Consistency: PTS ${ptsC}% | REB ${rebC}% | AST ${astC}%\n`;
+            const fg3C = logs.consistency.fg3m ? (parseFloat(logs.consistency.fg3m) * 100).toFixed(0) : 'N/A';
+            statsText += `  Consistency: PTS ${ptsC}% | REB ${rebC}% | AST ${astC}% | 3PM ${fg3C}%\n`;
           }
 
           // Home/Away splits - show multiple stats
           if (logs.splits?.home && logs.splits?.away) {
-            statsText += `  Home: ${logs.splits.home.pts} PTS, ${logs.splits.home.reb || 'N/A'} REB, ${logs.splits.home.ast || 'N/A'} AST (${logs.splits.home.games}g)\n`;
-            statsText += `  Away: ${logs.splits.away.pts} PTS, ${logs.splits.away.reb || 'N/A'} REB, ${logs.splits.away.ast || 'N/A'} AST (${logs.splits.away.games}g)\n`;
+            statsText += `  Home: ${logs.splits.home.pts} PTS, ${logs.splits.home.reb || 'N/A'} REB, ${logs.splits.home.ast || 'N/A'} AST, ${logs.splits.home.fg3m || 'N/A'} 3PM, ${logs.splits.home.stl || 'N/A'} STL, ${logs.splits.home.blk || 'N/A'} BLK (${logs.splits.home.games}g)\n`;
+            statsText += `  Away: ${logs.splits.away.pts} PTS, ${logs.splits.away.reb || 'N/A'} REB, ${logs.splits.away.ast || 'N/A'} AST, ${logs.splits.away.fg3m || 'N/A'} 3PM, ${logs.splits.away.stl || 'N/A'} STL, ${logs.splits.away.blk || 'N/A'} BLK (${logs.splits.away.games}g)\n`;
           }
         }
       } else {
@@ -1027,24 +1106,12 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerSeasonSt
 
       const injuryRecord = injuries.find(i => i.player.toLowerCase() === candidate.player.toLowerCase());
       const isInjured = !!injuryRecord;
-      // Factual injury labels with duration
-      let injuryFlag = '';
-      if (isInjured) {
-        const daysInfo = injuryRecord.daysSinceReport != null ? ` (${injuryRecord.daysSinceReport}d)` : '';
-        const duration = injuryRecord.duration || '';
-        if (duration === 'SEASON-LONG') {
-          injuryFlag = ` ⚠️ INJURED [Out For Season${daysInfo}]`;
-        } else if (duration === 'RECENT') {
-          injuryFlag = ` ⚠️ INJURED [RECENT${daysInfo}]`;
-        } else {
-          injuryFlag = ` ⚠️ INJURED [OUT${daysInfo}]`;
-        }
-      }
+      const injuryFlag = formatInjuryFlag(isInjured ? injuryRecord : null);
 
       if (stats) {
         statsText += `- **${candidate.player}** (${stats.position || 'N/A'})${injuryFlag}:\n`;
         statsText += `  Props: ${propsStr}\n`;
-        statsText += `  Season: PPG ${stats.ppg || 'N/A'}, RPG ${stats.rpg || 'N/A'}, APG ${stats.apg || 'N/A'}, 3PG ${stats.tpg || 'N/A'}, PRA ${stats.pra || 'N/A'}, MPG ${stats.mpg || 'N/A'}\n`;
+        statsText += `  Season: PPG ${stats.ppg || 'N/A'}, RPG ${stats.rpg || 'N/A'}, APG ${stats.apg || 'N/A'}, 3PG ${stats.tpg || 'N/A'}, SPG ${stats.spg || 'N/A'}, BPG ${stats.bpg || 'N/A'}, PRA ${stats.pra || 'N/A'}, MPG ${stats.mpg || 'N/A'}\n`;
 
         // ENHANCED: Show usage & efficiency metrics for prop context
         if (stats.usagePct || stats.trueShooting) {
@@ -1064,23 +1131,24 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerSeasonSt
         // Add recent form if available - show ALL stat types equally for organic analysis
         if (logs) {
           const formIcon = logs.formTrend === 'hot' ? '[L5 > Season]' : logs.formTrend === 'cold' ? '[L5 < Season]' : '';
-          statsText += `  L${logs.gamesAnalyzed} Avg: PTS ${logs.averages?.pts || 'N/A'}, REB ${logs.averages?.reb || 'N/A'}, AST ${logs.averages?.ast || 'N/A'}, 3PM ${logs.averages?.fg3m || 'N/A'} ${formIcon}\n`;
+          statsText += `  L${logs.gamesAnalyzed} Avg: PTS ${logs.averages?.pts || 'N/A'}, REB ${logs.averages?.reb || 'N/A'}, AST ${logs.averages?.ast || 'N/A'}, 3PM ${logs.averages?.fg3m || 'N/A'}, STL ${logs.averages?.stl || 'N/A'}, BLK ${logs.averages?.blk || 'N/A'} ${formIcon}\n`;
 
           // Show recent games for ALL prop types - no bias toward any stat
-          statsText += `  Recent: PTS [${formatRecentGames(logs, 'pts')}] | REB [${formatRecentGames(logs, 'reb')}] | AST [${formatRecentGames(logs, 'ast')}]\n`;
+          statsText += `  Recent: PTS [${formatRecentGames(logs, 'pts')}] | REB [${formatRecentGames(logs, 'reb')}] | AST [${formatRecentGames(logs, 'ast')}] | 3PM [${formatRecentGames(logs, 'fg3m')}] | STL [${formatRecentGames(logs, 'stl')}] | BLK [${formatRecentGames(logs, 'blk')}]\n`;
 
           // Consistency scores for ALL stat types - Gary decides which matters
           if (logs.consistency) {
             const ptsC = logs.consistency.pts ? (parseFloat(logs.consistency.pts) * 100).toFixed(0) : 'N/A';
             const rebC = logs.consistency.reb ? (parseFloat(logs.consistency.reb) * 100).toFixed(0) : 'N/A';
             const astC = logs.consistency.ast ? (parseFloat(logs.consistency.ast) * 100).toFixed(0) : 'N/A';
-            statsText += `  Consistency: PTS ${ptsC}% | REB ${rebC}% | AST ${astC}%\n`;
+            const fg3C = logs.consistency.fg3m ? (parseFloat(logs.consistency.fg3m) * 100).toFixed(0) : 'N/A';
+            statsText += `  Consistency: PTS ${ptsC}% | REB ${rebC}% | AST ${astC}% | 3PM ${fg3C}%\n`;
           }
 
           // Home/Away splits - show multiple stats
           if (logs.splits?.home && logs.splits?.away) {
-            statsText += `  Home: ${logs.splits.home.pts} PTS, ${logs.splits.home.reb || 'N/A'} REB, ${logs.splits.home.ast || 'N/A'} AST (${logs.splits.home.games}g)\n`;
-            statsText += `  Away: ${logs.splits.away.pts} PTS, ${logs.splits.away.reb || 'N/A'} REB, ${logs.splits.away.ast || 'N/A'} AST (${logs.splits.away.games}g)\n`;
+            statsText += `  Home: ${logs.splits.home.pts} PTS, ${logs.splits.home.reb || 'N/A'} REB, ${logs.splits.home.ast || 'N/A'} AST, ${logs.splits.home.fg3m || 'N/A'} 3PM, ${logs.splits.home.stl || 'N/A'} STL, ${logs.splits.home.blk || 'N/A'} BLK (${logs.splits.home.games}g)\n`;
+            statsText += `  Away: ${logs.splits.away.pts} PTS, ${logs.splits.away.reb || 'N/A'} REB, ${logs.splits.away.ast || 'N/A'} AST, ${logs.splits.away.fg3m || 'N/A'} 3PM, ${logs.splits.away.stl || 'N/A'} STL, ${logs.splits.away.blk || 'N/A'} BLK (${logs.splits.away.games}g)\n`;
           }
         }
       } else {
@@ -1122,7 +1190,8 @@ function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnap
   // Enhance prop candidates with their season stats, recent form, hit rates, 
   // SCENARIO PROJECTIONS, and LINE MOVEMENT
   const enhancedCandidates = propCandidates.map(p => {
-    const playerId = playerIdMap[p.player.toLowerCase()];
+    const playerInfo = playerIdMap[p.player.toLowerCase()];
+    const playerId = playerInfo?.id || playerInfo;
     const stats = playerId ? playerSeasonStats[playerId] : null;
     const logs = playerId ? playerGameLogs[playerId] : null;
     const games = logs?.games || [];
@@ -1199,6 +1268,9 @@ function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnap
           reb: g.reb,
           ast: g.ast,
           fg3m: g.fg3m,
+          stl: g.stl,
+          blk: g.blk,
+          min: g.min,
           opponent: g.opponent,
           isHome: g.isHome
         }))
@@ -1439,7 +1511,7 @@ export async function buildNbaPropsAgenticContext(game, playerProps, options = {
   // CRITICAL: Filter out players who are Doubtful or Day-To-Day to avoid void bets
   // If a player doesn't play, the bet is voided and we can't replace the pick in time
   const formattedInjuries = formatPropsInjuries(injuries);
-  const riskyStatuses = ['doubtful', 'day-to-day', 'day to day', 'questionable'];
+  const riskyStatuses = ['doubtful', 'day-to-day', 'day to day'];
   const injuredPlayerNames = formattedInjuries
     .filter(inj => riskyStatuses.some(status => (inj.status || '').toLowerCase().includes(status)))
     .map(inj => inj.player.toLowerCase())

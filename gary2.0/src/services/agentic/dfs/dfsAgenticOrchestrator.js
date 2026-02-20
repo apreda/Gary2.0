@@ -113,6 +113,15 @@ export async function generateAgenticDFSLineup(options) {
     console.log(`[Gary DFS] ✓ Target to WIN: ${winningTargets.toWin} pts | Cash line: ${winningTargets.toCash} pts`);
 
     // ═══════════════════════════════════════════════════════════════════════════
+    // OWNERSHIP PROXY (GPP only)
+    // No direct ownership data — use salary + situation as proxy for field
+    // concentration. Gives Gary awareness of likely chalk vs leverage plays.
+    // ═══════════════════════════════════════════════════════════════════════════
+    if (contestType !== 'cash') {
+      computeOwnershipProxy(context);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
     // PHASE 2: SLATE ANALYSIS (Gemini Flash → retry once on failure)
     // ═══════════════════════════════════════════════════════════════════════════
     console.log('\n[Gary DFS] Phase 2: Gary Flash analyzing the slate...');
@@ -152,27 +161,35 @@ export async function generateAgenticDFSLineup(options) {
 
     let buildThesis;
     try {
-      buildThesis = await formBuildThesis(genAI, slateAnalysis, context, {
-        modelName: GEMINI_PRO_MODEL,
-        constitution: getDFSConstitution(sport, contestType)
-      });
-    } catch (proError) {
-      if (proError.status === 429 || proError.status === 503) {
-        console.warn(`[Gary DFS] Phase 3: Pro unavailable (${proError.status}) — falling back to Flash`);
-        buildThesis = await formBuildThesis(genAI, slateAnalysis, context, {
-          modelName: GEMINI_FLASH_MODEL,
+      buildThesis = await withTimeout(
+        formBuildThesis(genAI, slateAnalysis, context, {
+          modelName: GEMINI_PRO_MODEL,
           constitution: getDFSConstitution(sport, contestType)
-        });
+        }),
+        180000, // 3 min wall-clock timeout
+        'Phase 3 build thesis'
+      );
+    } catch (proError) {
+      if (proError.status === 429 || proError.status === 503 || proError.message?.includes('timeout')) {
+        console.warn(`[Gary DFS] Phase 3: Pro failed (${proError.message}) — falling back to Flash`);
+        buildThesis = await withTimeout(
+          formBuildThesis(genAI, slateAnalysis, context, {
+            modelName: GEMINI_FLASH_MODEL,
+            constitution: getDFSConstitution(sport, contestType)
+          }),
+          180000,
+          'Phase 3 build thesis (Flash fallback)'
+        );
       } else {
         throw proError;
       }
     }
 
-    if (!buildThesis || !buildThesis.archetype || !buildThesis.thesis) {
+    if (!buildThesis || !buildThesis.edges || buildThesis.edges.length === 0 || !buildThesis.thesis) {
       throw new Error('[Gary DFS] Phase 3 FAILED: Did not produce valid build thesis');
     }
 
-    console.log(`[Gary DFS] ✓ Build Archetype: ${buildThesis.archetype}`);
+    console.log(`[Gary DFS] ✓ Edges: ${buildThesis.edges.map(e => e.type).join(', ')}`);
     console.log(`[Gary DFS] ✓ Target Games: ${buildThesis.targetGames?.join(', ') || 'Balanced'}`);
     console.log(`[Gary DFS] ✓ Thesis: "${buildThesis.thesis?.slice(0, 100)}..."`);
 
@@ -218,17 +235,25 @@ export async function generateAgenticDFSLineup(options) {
 
     let lineup;
     try {
-      lineup = await decideLineupWithPro(genAI, buildThesis, playerInvestigations, context, {
-        modelName: GEMINI_PRO_MODEL,
-        thinkingLevel: 'high'
-      });
-    } catch (proError) {
-      if (proError.status === 429 || proError.status === 503 || proError.message?.includes('429') || proError.message?.includes('503') || proError.message?.includes('quota')) {
-        console.warn(`[Gary DFS] Phase 5: Pro unavailable — falling back to Flash`);
-        lineup = await decideLineupWithPro(genAI, buildThesis, playerInvestigations, context, {
-          modelName: GEMINI_FLASH_MODEL,
+      lineup = await withTimeout(
+        decideLineupWithPro(genAI, buildThesis, playerInvestigations, context, {
+          modelName: GEMINI_PRO_MODEL,
           thinkingLevel: 'high'
-        });
+        }),
+        300000, // 5 min wall-clock timeout (deep reasoning)
+        'Phase 5 lineup decision'
+      );
+    } catch (proError) {
+      if (proError.status === 429 || proError.status === 503 || proError.message?.includes('429') || proError.message?.includes('503') || proError.message?.includes('quota') || proError.message?.includes('timeout')) {
+        console.warn(`[Gary DFS] Phase 5: Pro failed (${proError.message}) — falling back to Flash`);
+        lineup = await withTimeout(
+          decideLineupWithPro(genAI, buildThesis, playerInvestigations, context, {
+            modelName: GEMINI_FLASH_MODEL,
+            thinkingLevel: 'high'
+          }),
+          300000,
+          'Phase 5 lineup decision (Flash fallback)'
+        );
       } else {
         throw proError;
       }
@@ -256,9 +281,13 @@ export async function generateAgenticDFSLineup(options) {
 
     let auditedLineup;
     try {
-      auditedLineup = await auditLineupWithPro(genAI, lineup, buildThesis, context, {
-        modelName: GEMINI_PRO_MODEL
-      });
+      auditedLineup = await withTimeout(
+        auditLineupWithPro(genAI, lineup, buildThesis, context, {
+          modelName: GEMINI_PRO_MODEL
+        }),
+        180000, // 3 min wall-clock timeout
+        'Phase 6 lineup audit'
+      );
       if (!auditedLineup || !auditedLineup.players || auditedLineup.players.length === 0) {
         console.warn('[Gary DFS] Phase 6: Audit returned empty lineup — using pre-audit lineup');
         auditedLineup = lineup;
@@ -273,9 +302,13 @@ export async function generateAgenticDFSLineup(options) {
       if (auditError.status === 429 || auditError.status === 503 || auditError.message?.includes('429') || auditError.message?.includes('503') || auditError.message?.includes('quota')) {
         console.warn(`[Gary DFS] Phase 6: Pro unavailable — trying Flash audit`);
         try {
-          auditedLineup = await auditLineupWithPro(genAI, lineup, buildThesis, context, {
-            modelName: GEMINI_FLASH_MODEL
-          });
+          auditedLineup = await withTimeout(
+            auditLineupWithPro(genAI, lineup, buildThesis, context, {
+              modelName: GEMINI_FLASH_MODEL
+            }),
+            180000,
+            'Phase 6 lineup audit (Flash fallback)'
+          );
           if (!auditedLineup || !auditedLineup.players || auditedLineup.players.length === 0) {
             auditedLineup = lineup;
           }
@@ -305,7 +338,7 @@ export async function generateAgenticDFSLineup(options) {
 
       // Gary's reasoning (the key differentiator)
       buildThesis: buildThesis.thesis,
-      archetype: buildThesis.archetype,
+      edges: buildThesis.edges,
       garyNotes: auditedLineup.garyNotes,
       ceilingScenario: auditedLineup.ceilingScenario,
 
@@ -395,6 +428,84 @@ function getWinningTargets(platform, sport, contestType, slate) {
     slateMultiplier,
     gameCount
   };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// OWNERSHIP PROXY
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Tag each player with an ownership proxy based on salary rank, form, and game environment.
+ * High salary + obvious good situation = likely high owned by the field.
+ * Low salary + hidden edge = likely low owned (leverage opportunity).
+ */
+function computeOwnershipProxy(context) {
+  const { players, games } = context;
+  if (!players || players.length === 0) return;
+
+  // Find highest-total game(s) for "popular game" tagging
+  const gameTotals = (games || []).map(g => ({
+    teams: [(g.homeTeam || g.home_team || ''), (g.awayTeam || g.visitor_team || g.away_team || '')],
+    total: g.total || g.overUnder || 0
+  })).sort((a, b) => b.total - a.total);
+
+  const popularGameTeams = new Set();
+  if (gameTotals.length > 0 && gameTotals[0].total > 0) {
+    for (const g of gameTotals.slice(0, 2)) {
+      for (const t of g.teams) {
+        if (t) popularGameTeams.add(t.toUpperCase());
+      }
+    }
+  }
+
+  // Group players by position to find salary rank within position
+  const byPosition = {};
+  for (const p of players) {
+    const pos = p.position || p.positions?.[0] || 'UTIL';
+    if (!byPosition[pos]) byPosition[pos] = [];
+    byPosition[pos].push(p);
+  }
+  for (const pos of Object.keys(byPosition)) {
+    byPosition[pos].sort((a, b) => (b.salary || 0) - (a.salary || 0));
+  }
+
+  for (const p of players) {
+    const pos = p.position || p.positions?.[0] || 'UTIL';
+    const posPlayers = byPosition[pos] || [];
+    const salaryRank = posPlayers.findIndex(pp => pp.name === p.name) + 1;
+    const isTopSalary = salaryRank <= 3;
+    const l5Ppg = p.l5Stats?.ppg || 0;
+    const seasonPpg = p.ppg || p.seasonStats?.ppg || 0;
+    const isHotForm = seasonPpg > 0 && l5Ppg > seasonPpg * 1.15;
+    const isInPopularGame = popularGameTeams.has((p.team || '').toUpperCase());
+    const hasUsageBoost = p.injuryContext && (p.salary || 0) < 6000;
+
+    const signals = [];
+    if (isTopSalary && isHotForm) {
+      p.ownershipProxy = 'HIGH_OWNERSHIP_LIKELY';
+      signals.push('top salary at position', 'hot recent form');
+    } else if (isTopSalary && isInPopularGame) {
+      p.ownershipProxy = 'HIGH_OWNERSHIP_LIKELY';
+      signals.push('top salary at position', 'popular game');
+    } else if (hasUsageBoost) {
+      p.ownershipProxy = 'LOW_OWNERSHIP_LIKELY';
+      signals.push('usage boost', 'low salary');
+    } else if (isHotForm && (p.salary || 0) < 5500) {
+      p.ownershipProxy = 'LOW_OWNERSHIP_LIKELY';
+      signals.push('hot form', 'low salary');
+    } else if (isInPopularGame) {
+      p.ownershipProxy = 'MODERATE_OWNERSHIP';
+      signals.push('popular game');
+    }
+
+    if (p.ownershipProxy) {
+      p.ownershipSignals = signals;
+    }
+  }
+
+  const highOwned = players.filter(p => p.ownershipProxy === 'HIGH_OWNERSHIP_LIKELY').length;
+  const lowOwned = players.filter(p => p.ownershipProxy === 'LOW_OWNERSHIP_LIKELY').length;
+  console.log(`[Gary DFS] Ownership proxy: ${highOwned} likely high-owned, ${lowOwned} likely low-owned (leverage)`);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

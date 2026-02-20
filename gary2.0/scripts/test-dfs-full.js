@@ -23,7 +23,9 @@ function printLineup(result, platform, slateName) {
   console.log(`\n${'═'.repeat(80)}`);
   console.log(`LINEUP: ${platform.toUpperCase()} — ${slateName}`);
   console.log(`${'═'.repeat(80)}`);
-  console.log(`Archetype: ${result.archetype}`);
+  if (result.edges?.length > 0) {
+    console.log(`Edges: ${result.edges.map(e => `${e.type}: ${e.description || e.player || ''}`).join(' | ')}`);
+  }
   console.log(`Thesis: ${result.buildThesis}`);
   console.log(`Total Salary: $${result.totalSalary?.toLocaleString()}`);
   console.log(`Projected Ceiling: ${result.ceilingProjection} pts`);
@@ -83,7 +85,10 @@ async function runFullTest() {
   // ──────────────────────────────────────────────────
   console.log('PHASE 1: Discovering slates...\n');
 
-  const platforms = ['draftkings', 'fanduel'];
+  const args = process.argv.slice(2);
+  const fdOnly = args.includes('--fanduel') || args.includes('--fd');
+  const dkOnly = args.includes('--draftkings') || args.includes('--dk');
+  const platforms = fdOnly ? ['fanduel'] : dkOnly ? ['draftkings'] : ['draftkings', 'fanduel'];
   const allSlates = {};
 
   for (const platform of platforms) {
@@ -152,7 +157,7 @@ async function runFullTest() {
 
   for (const r of allResults) {
     if (r.result) {
-      console.log(`  ${r.platform.toUpperCase()} ${r.slate}: ${r.result.lineup?.length || 0} players, $${r.result.totalSalary?.toLocaleString()}, Ceiling: ${r.result.ceilingProjection} pts, Archetype: ${r.result.archetype}`);
+      console.log(`  ${r.platform.toUpperCase()} ${r.slate}: ${r.result.lineup?.length || 0} players, $${r.result.totalSalary?.toLocaleString()}, Ceiling: ${r.result.ceilingProjection} pts, Edges: ${r.result.edges?.length || 0}`);
     } else {
       console.log(`  ${r.platform.toUpperCase()} ${r.slate}: FAILED — ${r.error}`);
     }

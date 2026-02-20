@@ -610,7 +610,7 @@ async function handlePropsToolCall(toolCall, sportKey, sportLabel) {
             pct_pts_3pt: scoringStats.pct_pts_3pt ? (scoringStats.pct_pts_3pt * 100).toFixed(1) + '%' : 'N/A',
             pct_pts_fastbreak: scoringStats.pct_pts_fb ? (scoringStats.pct_pts_fb * 100).toFixed(1) + '%' : 'N/A'
           } : null,
-          note: 'TS% = true efficiency (includes FTs). Unassisted % = creates own shot (high = reliable volume). Paint % = scoring location.'
+          source: 'BDL v2 Advanced Stats'
         };
       }
 
@@ -688,14 +688,15 @@ async function handlePropsToolCall(toolCall, sportKey, sportLabel) {
           }))
         };
       }
-      // Non-NBA: fall back to BDL
-      const teams = await ballDontLieService.getNbaTeams();
-      const team = teams.find(t =>
+      // Non-NBA: use generic BDL endpoints for the correct sport
+      const teams = await ballDontLieService.getTeamsGeneric(sportKey);
+      const teamsList = Array.isArray(teams) ? teams : teams?.data || [];
+      const team = teamsList.find(t =>
         t.full_name?.toLowerCase().includes(args.team_name.toLowerCase()) ||
         t.name?.toLowerCase().includes(args.team_name.toLowerCase())
       );
-      if (!team) return { error: `Team "${args.team_name}" not found` };
-      const injuries = await ballDontLieService.getNbaPlayerInjuries([team.id]);
+      if (!team) return { error: `Team "${args.team_name}" not found for ${sportKey}` };
+      const injuries = await ballDontLieService.getInjuriesGeneric(sportKey, { team_ids: [team.id] });
       return {
         team: team.full_name,
         injuries: injuries.map(inj => ({
@@ -770,7 +771,7 @@ async function handlePropsToolCall(toolCall, sportKey, sportLabel) {
           attempts: stats.attempts,
           pass_yards: stats.pass_yards
         },
-        note: 'Completion % above expected = accuracy vs difficulty. Aggressiveness = deep throws. Avg time to throw indicates pocket awareness.'
+        source: 'BDL v2 Advanced Passing'
       };
     } catch (e) {
       console.error(`    ❌ Error:`, e.message);
@@ -835,7 +836,7 @@ async function handlePropsToolCall(toolCall, sportKey, sportLabel) {
           rush_attempts: stats.rush_attempts,
           rush_yards: stats.rush_yards
         },
-        note: 'Yards over expected = performance vs opportunity. High 8+ box % = stacked boxes = harder rushing. Efficiency = yards per expected yard.'
+        source: 'BDL v2 Advanced Rushing'
       };
     } catch (e) {
       console.error(`    ❌ Error:`, e.message);
@@ -902,7 +903,7 @@ async function handlePropsToolCall(toolCall, sportKey, sportLabel) {
           receptions: stats.receptions,
           receiving_yards: stats.receiving_yards
         },
-        note: 'Separation = getting open. YAC above expected = skill after catch. Target share = role in passing game. High separation + high target share = reliable volume.'
+        source: 'BDL v2 Advanced Receiving'
       };
     } catch (e) {
       console.error(`    ❌ Error:`, e.message);
@@ -1874,7 +1875,7 @@ async function runPropsIterationLoop({ systemPrompt, userMessage, sportKey, spor
           console.log(`[Props] PIPELINE GATE: finalize too early — only ${playersInvestigated} players investigated (need 3+)`);
           iteration++;
           console.log(`\n[Props Iteration ${sportLabel}] ${iteration}/${maxIterations} (need more investigation)`);
-          result = await chat.sendMessage(`You've only investigated ${playersInvestigated} player(s). Investigate at least 3 players with BDL tools before finalizing. Call fetch_player_game_logs or fetch_player_season_stats for more candidates.`);
+          result = await chat.sendMessage(`You've only investigated ${playersInvestigated} player(s). Investigate at least 3 players before finalizing. Use your tools to investigate more candidates.`);
           response = result.response;
         } else if (!_pass25Injected) {
           _pass25Injected = true;
@@ -2269,7 +2270,7 @@ ${nflRegularOnlyInstructions}
 ## CURRENT DATE & SEASON
 Current Date: ${dateStr}
 Current Season: ${seasonLabel}
-(CRITICAL: Ensure you are looking for stats from the ${seasonLabel} season. If it is January 2026, you are in the middle of the ${seasonLabel} season.)
+(CRITICAL: Ensure you are looking for stats from the ${seasonLabel} season. You are in the middle of the ${seasonLabel} season.)
 
 ## WHO YOU ARE
 You are a DATA ANALYST and an INDEPENDENT THINKER. You read numbers and draw statistical conclusions. You investigate, understand, and decide on your own.
@@ -2582,7 +2583,6 @@ export async function runAgenticPropsPipeline({
   
   const availableLinesData = playerProps
     .filter(p => validatedPlayerNames.has(p.player.toLowerCase()))
-    .slice(0, 50)
     .map(p => ({
       player: p.player,
       prop_type: p.prop_type,
