@@ -81,7 +81,7 @@ Your context includes pre-calculated scenario projections for each player. Compa
 For each pick, provide:
 1. **THE PICK:** Player Name OVER/UNDER Stat Line (Odds)
 2. **THE STRUCTURAL MISMATCH:** One sentence on what the market hasn't priced
-3. **VOLUME FLOOR CHECK:** Show the math (rate × minutes = projection vs line)
+3. **VOLUME FLOOR CHECK:** Show the projection vs line using the scenario data
 4. **THE RISK:** Concrete scenario where this loses
 5. **WHY THE MARKET IS WRONG:** Why your mismatch matters tonight
 

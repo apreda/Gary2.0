@@ -26,52 +26,32 @@ You've just completed your slate investigation. Now form your BUILD THESIS.
 </role>
 
 <what_is_a_thesis>
-A BUILD THESIS is your STRATEGY for attacking this specific slate.
-It answers:
-1. What's the ANGLE I'm exploiting that others will miss?
-2. Which GAMES have the best environment for fantasy scoring?
-3. What USAGE SITUATIONS create underpriced opportunity?
-4. How does this lineup WIN the tournament, not just cash?
+A BUILD THESIS identifies the TOP EDGES on this specific slate.
+Real sharps don't pick a "strategy template" first and then search for players that fit.
+They find edges first, and the lineup shape emerges from assembling those edges.
+
+Your thesis answers:
+1. What are the TOP 3-5 EDGES on this slate?
+2. Which GAMES have the best scoring environment?
+3. Where is the MARKET WRONG about a player's value?
+4. How do these edges combine into a lineup that can WIN?
 </what_is_a_thesis>
 
-<build_archetypes>
-STARS AND PUNTS
-- 2-3 premium anchors ($8K+) with established ceilings
-- Fill the rest with value plays who have real paths to production
-- Works when: Clear usage vacuums exist, high-ceiling stars available
-- Risk: If a punt busts (no minutes), whole lineup fails
-
-BALANCED
-- Spread salary across proven mid-tier ($5.5K-$7.5K)
-- No true punts, no true stars
-- Works when: Slate is unpredictable, no clear edges
-- Risk: Ceiling is capped, unlikely to win large GPPs
-
-GAME STACK
-- Heavy concentration in one high-total game (5-6 players)
-- Bet on the shootout happening
-- Works when: Game has 235+ O/U, both teams play fast, spread is tight
-- Risk: If the game is a dud, entire lineup fails
-
-CONTRARIAN
-- Target low-owned situations with real upside
-- Fade the chalk that's overpriced
-- Works when: Ownership is concentrated on obvious plays
-- Risk: Being different for the sake of it (no real edge)
-
-USAGE VACUUM
-- Build around players absorbing unexpected opportunity
-- Fresh injuries create underpriced situations
-- Works when: Key player ruled OUT recently, price hasn't adjusted
-- Risk: News gets out, ownership spikes before lock
-</build_archetypes>
+<edge_types>
+USAGE_VACUUM — A key player is OUT, usage redistributes. Price hasn't adjusted.
+PRICE_LAG — Player's role/production has changed but salary reflects the old situation.
+GAME_ENVIRONMENT — High O/U + tight spread + fast pace = scoring environment for all players.
+MATCHUP_MISMATCH — Opponent defense is weak at a specific position where a player operates.
+FORM_DIVERGENCE — Player's L5 production diverges significantly from season average.
+CORRELATION_OPPORTUNITY — A specific game's environment supports stacking multiple players.
+</edge_types>
 
 <task>
 Based on the slate investigation provided above, form your thesis:
 
-1. Which ARCHETYPE fits this slate and why?
+1. What are your TOP 3-5 EDGES on this slate? Be specific about WHY each is an edge.
 2. Which GAMES are you targeting and what makes them special?
-3. What USAGE SITUATIONS are you exploiting?
+3. How do these edges combine into a winning lineup strategy?
 4. What needs to go RIGHT for this thesis to WIN?
 
 Be specific. Have conviction. This is YOUR thesis.
@@ -119,7 +99,7 @@ export async function formBuildThesis(genAI, slateAnalysis, context, options = {
   // Parse Gary's thesis
   const thesis = parseThesisResponse(responseText);
 
-  console.log(`[Thesis Builder] ✓ Archetype: ${thesis.archetype}`);
+  console.log(`[Thesis Builder] ✓ Edges: ${thesis.edges?.map(e => e.type).join(', ')}`);
   console.log(`[Thesis Builder] ✓ Target Games: ${thesis.targetGames?.join(', ')}`);
 
   return thesis;
@@ -155,7 +135,7 @@ ${formatStackTargets(stackTargets)}
 ${formatGameEnvironments(gameEnvironments)}
 
 ### RAW INVESTIGATION NOTES
-${rawAnalysis?.slice(0, 2000) || 'No additional notes'}
+${rawAnalysis?.slice(0, 5000) || 'No additional notes'}
 
 ---
 
@@ -163,24 +143,27 @@ ${rawAnalysis?.slice(0, 2000) || 'No additional notes'}
 
 Based on this investigation:
 
-1. What BUILD ARCHETYPE will you use?
-   (Stars+Punts, Balanced, Game Stack, Contrarian, Usage Vacuum)
+1. What are the TOP 3-5 EDGES on this slate? (usage vacuums, price lags, game environments, matchup mismatches, form divergence, correlation plays)
 
 2. Which GAMES are you targeting and why?
 
-3. What USAGE SITUATIONS are you exploiting?
+3. How do these edges combine into a winning strategy?
 
 4. CEILING SCENARIO: How does this lineup score ${winningTargets?.toWin || 380}+ and WIN?
 
 OUTPUT YOUR THESIS AS JSON:
 {
-  "archetype": "stars_and_punts | balanced | game_stack | contrarian | usage_vacuum",
-  "thesis": "Your 2-3 sentence thesis explaining your strategy",
+  "edges": [
+    { "type": "USAGE_VACUUM", "player": "Austin Reaves", "description": "LeBron OUT, Reaves absorbs usage at underpriced salary", "confidence": "HIGH" },
+    { "type": "GAME_ENVIRONMENT", "game": "LAL@SAC", "description": "235 O/U, tight spread, both teams top-10 pace", "confidence": "HIGH" },
+    { "type": "PRICE_LAG", "player": "De'Aaron Fox", "description": "L5 avg 55 DK FPTS but salary reflects 42 FPTS", "confidence": "MEDIUM" }
+  ],
+  "thesis": "Your 2-3 sentence thesis explaining how these edges combine into a winning lineup",
   "targetGames": ["LAL@SAC", "BOS@MIA"],
   "usageSituations": [
     { "player": "Austin Reaves", "situation": "LeBron OUT creates usage vacuum" }
   ],
-  "winCondition": "How this lineup scores 380+ and wins",
+  "winCondition": "How this lineup scores ${winningTargets?.toWin || 380}+ and wins",
   "keyAssumptions": ["LAL-SAC stays close and high-scoring", "Reaves usage boost materializes"],
   "risks": ["If LAL blows out SAC, starters rest"]
 }
@@ -263,8 +246,8 @@ function parseThesisResponse(text) {
     throw new Error('[Thesis Builder] Gary Pro produced invalid JSON: ' + e.message + '. Raw: ' + jsonMatch[0].slice(0, 500));
   }
 
-  if (!parsed.archetype) {
-    throw new Error('[Thesis Builder] Gary Pro thesis missing archetype. Response: ' + JSON.stringify(parsed).slice(0, 500));
+  if (!parsed.edges || !Array.isArray(parsed.edges) || parsed.edges.length === 0) {
+    throw new Error('[Thesis Builder] Gary Pro thesis missing edges array. Response: ' + JSON.stringify(parsed).slice(0, 500));
   }
 
   if (!parsed.thesis || parsed.thesis.length < 20) {
@@ -272,7 +255,7 @@ function parseThesisResponse(text) {
   }
 
   return {
-    archetype: parsed.archetype,
+    edges: parsed.edges,
     thesis: parsed.thesis,
     targetGames: parsed.targetGames || [],
     usageSituations: parsed.usageSituations || [],

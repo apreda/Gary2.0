@@ -344,6 +344,23 @@ QRNG_API_KEY=            # Optional - quantum random numbers
 
 When showing test results (rationale, Steel Man cases, scout reports, etc.), ALWAYS show the FULL verbatim output — every single word. NEVER summarize, paraphrase, or condense Gary's output. The user needs to see exactly what Gary wrote to evaluate quality.
 
+## Test Log Auditing
+
+After EVERY test pick run, perform a THOROUGH line-by-line audit of the full log file. Do NOT use grep patterns to spot-check — read the entire log. Check for:
+
+1. **Data accuracy**: Are team records, standings, and stats correct? Cross-reference with the scout report data.
+2. **Duplicate logging**: Are the same fetches or messages logged more than once?
+3. **Premature references**: Does Gary reference "your pick" or a side before Pass 3?
+4. **Injury pipeline**: Are injuries fetched from the correct source? Is duration enrichment working?
+5. **Pass flow**: Do passes execute in order (Pass 1 → Pass 2 → Pass 2.5 → Pass 3)? Is any pass skipped or repeated?
+6. **Steel Man cases**: Are both bilateral cases present? Are they substantive and data-backed?
+7. **Pass 2.5 evaluation**: Is the full evaluation logged (not truncated)? Does it evaluate all 3 inputs through all 6 questions?
+8. **CLAUDE.md violations**: Does Gary's output contain Layer 3 violations (telling Gary what data means), prescriptive stats, or edge labeling?
+9. **Model usage**: Is the correct model being used at each stage (Flash for tools, Pro/3.1 Pro for reasoning)?
+10. **Errors and retries**: Are there JSON parse failures, empty rationales, or truncated outputs? Were they recovered?
+
+Report ALL findings — do not dismiss issues as "minor." Every logged anomaly could indicate a pipeline bug.
+
 ## Database Tables
 
 - `daily_picks` - Game picks (spread/ML)

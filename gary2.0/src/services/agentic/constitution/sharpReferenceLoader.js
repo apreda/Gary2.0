@@ -4,13 +4,6 @@
  * getSteelManGradingReference(sport) is the only function used at runtime.
  */
 
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
 /**
  * Get a condensed version of the key principles for steel man evaluation.
  * This is what gets injected into Pass 2 for cross-referencing.

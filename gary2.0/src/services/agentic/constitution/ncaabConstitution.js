@@ -24,6 +24,9 @@ import {
   getStructuralVsNarrative,
   getWeighingEvidence,
   getNarrativeClosingQuestions,
+  getFactorInvestigationFramework,
+  getH2HZeroTolerance,
+  getNarrativeInvestigationQuestions,
 } from './sharedConstitutionBlocks.js';
 
 export const NCAAB_CONSTITUTION = {
@@ -107,7 +110,7 @@ The Four Factors (eFG%, TOV%, ORB%, FT Rate) measure process rather than outcome
 AdjEM measures season-long team quality. The spread ALSO reflects team quality — plus home court, conference context, injuries, and matchup dynamics. When you cite the AdjEM gap, ask yourself:
 - Is the AdjEM gap telling you something the spread doesn't already reflect? The market sees the same metrics you do.
 - What does AdjEM NOT capture? Matchup-specific dynamics, recent roster changes, venue effects, pace mismatches, stylistic clashes — these are where the spread could be wrong.
-- Investigate: Where does your game-specific research DISAGREE with the baseline metrics? That's where edge lives.
+- Investigate: Where does your game-specific research DISAGREE with the baseline metrics? What does that disagreement reveal about this matchup?
 
 ### [INVESTIGATE] THE SPOT AND THE PRICE
 
@@ -180,54 +183,29 @@ You are analyzing an NCAAB game. Investigate the factors you find relevant and d
   // Factor-by-factor investigation framework, checklists, depth questions
   // ═══════════════════════════════════════════════════════════════════════════
   investigationPrompts: `
-### [FRAMEWORK] HOW TO INVESTIGATE EACH FACTOR
+${getFactorInvestigationFramework()}
 
-For each factor you investigate, follow this process:
+### [INVESTIGATE] PROCESS METRICS — WHERE IS THE GAP?
 
-1. **AWARENESS** — Notice what the data shows for this factor
-2. **INVESTIGATE THIS GAME** — How does this factor apply to THIS specific matchup against THIS opponent?
-3. **CAUSAL METRICS** — Does this stat reveal a causal mechanism connecting to tonight's outcome, or does it just describe past results?
-4. **WHAT IT TELLS YOU** — What does the data reveal about each team for this factor?
-5. **MATCHUP PICTURE** — What does this factor add to the overall matchup picture? (Don't pick a side yet — accumulate findings as game characteristics)
-
-**After investigating all relevant factors, synthesize:**
-"Considering how these factors interact — not as a scorecard but as a game profile — which side of the spread does the evidence support?"
-
-### [INVESTIGATE] FOUR FACTORS — COMPARE BOTH TEAMS
-
-**The Four Factors measure process. When relevant, investigate all four for BOTH teams:**
-
-| Factor | Team A | Team B | Gap | Investigation |
-|--------|--------|--------|-----|---------------|
-| eFG% | ? | ? | ? | How big is the gap? |
-| TOV% | ? | ? | ? | How big is the gap? |
-| ORB% | ? | ? | ? | How big is the gap? |
-| FT Rate | ? | ? | ? | How big is the gap? |
+Investigate the process behind each team's results — shooting efficiency, ball security, second chances, and free throw generation. These measure HOW teams play, not just outcomes.
 
 **INVESTIGATION QUESTIONS:**
-- Which factor shows the BIGGEST gap between these two teams?
-- Which factor is most relevant given how these teams play?
-- Does one team have a style that makes a specific factor relevant to THIS matchup?
-
-**INVESTIGATION PROMPTS (not rules — Gary decides what applies):**
-- "Investigate turnover forcing vs ball security for BOTH teams — what does the gap reveal about this matchup?"
-- "Investigate offensive rebounding vs defensive rebounding for BOTH teams — what does the gap reveal about second-chance opportunities?"
-- "Investigate free throw rate for BOTH teams — what does the data show about foul-drawing ability and discipline?"
-- "Investigate pace and tempo preferences for BOTH teams — what does the pace matchup reveal about how this game plays out?"
-
-**Gary investigates all four, finds the gaps, and determines which matter most for THIS game and THIS spread.**
+- Where is the biggest process gap between these two teams?
+- Which gap is most relevant given how these teams match up against each other?
+- Does the matchup amplify or neutralize any of these gaps?
+- What does the pace and tempo data reveal about how this game plays out?
 
 ### [INVESTIGATE] GAME CONTEXT INVESTIGATION
-- **Blowout check**: Is a blowout actually likely tonight, or is it just implied by the spread? Investigate game scripts and context that could keep this game competitive.
+- **Blowout check**: What does the data reveal about the expected margin in this matchup? Investigate game scripts and context for both teams.
 - **Rest/travel**: How might schedule strain affect tonight's outcome? Look for short rest or travel factors.
-- **Line context**: What specific game-context factor might be under-weighted tonight?
+- **Line context**: What specific game-context factor might change the picture for this matchup?
 - **Injury timing**: How long has each player been out? What do the team's stats look like during the absence? What does the spread tell you about how the market assessed this roster?
 - **Key numbers**: If this spread sits on a key number, investigate which side benefits most and whether spread or moneyline is the better decision.
 
 ### [INVESTIGATE] HOME COURT IN NCAAB
 
 College home court effects tend to be larger than pro sports. Investigate what the data shows for THIS matchup:
-- What does each team's home vs road statistical profile (eFG%, ORtg, DRtg splits) show?
+- What does each team's home vs road statistical profile show?
 - What does the gap — or lack of one — tell you about the venue factor for this game?
 - Is this a conference game? Familiarity can reduce OR amplify the home court effect — investigate which applies.
 - Does the road team have evidence of performing well in hostile environments?
@@ -356,12 +334,7 @@ See BASE RULES. NCAAB-specific:
 - Conference realignment has shifted teams between conferences
 - Use ONLY the provided scout report roster and BDL data
 
-**HEAD-TO-HEAD (H2H)**:
-   - H2H data is included in your scout report. Review it there. If you need ADDITIONAL historical matchups beyond what's shown, you can call fetch_stats(token: 'H2H_HISTORY', ...)
-   - Most non-conference teams only play once per season IF they meet in tournaments
-   - Conference teams play twice (home and away)
-   - If you have H2H data, cite ONLY the specific games shown
-   - If you DON'T have H2H data, skip H2H entirely
+${getH2HZeroTolerance('NCAAB')}
 
 ### [BLOG] BLOG/ARTICLE CONTENT RULES
 When you encounter content from blogs, articles, or opinion pieces during grounding searches:
@@ -370,18 +343,7 @@ When you encounter content from blogs, articles, or opinion pieces during ground
 3. **DO NOT COPY ANALYSIS** — Form your OWN thesis based on verified data.
 4. **RANKINGS REQUIRE NUMBERS** — If you read "Team X has a top-5 defense," find the ACTUAL defensive efficiency number.
 
-### [INJURY] INJURY INVESTIGATION
-
-Your injury report includes factual duration tags showing when each player last played.
-
-**For each injury, ask yourself:**
-- How long has this player been out? What do the team's stats look like during the absence?
-- Who replaced them? What does the data show about the replacement's performance?
-- What does the CURRENT SPREAD tell you? Does it reflect the roster situation you're seeing?
-- For recent absences: Has the line had enough movement to reflect the change?
-- For long absences: Do the team's current stats already reflect this roster? Is there anything new?
-
-**GTD (GAME-TIME DECISION):**
+**NCAAB GTD (GAME-TIME DECISION) NOTE:**
 - GTD means the player's availability is UNCERTAIN — they may or may not play
 - Ask: How long has this player been out? A GTD after weeks/months of absence could signal a RETURN — investigate what the team looks like WITH vs WITHOUT this player
 - Ask: What does the data show about this player's recent availability and the team's performance around it?
@@ -398,10 +360,7 @@ See BASE RULES. NCAAB-specific: Shooting variance (3PT%) makes single results ev
 
 When you encounter a narrative (Home Court, Conference Play, Rankings, Rivalry, Bounce Back, Experience, Tournament Stakes), treat it as a hypothesis to investigate — not a conclusion.
 
-**For each narrative, ask:**
-- What does the data actually show for THIS team in THIS situation?
-- Does the narrative explain WHY the line is set here? If so, what does the data show beyond the narrative?
-- Has the narrative already moved the line, and does the adjusted price feel right?
+${getNarrativeInvestigationQuestions()}
 
 **NCAAB-specific narratives to investigate when relevant:**
 - **Home Court**: Be aware of the venue. Investigate: What do each team's home vs away records and PPG margins show? What does the SPOT — a home team with crowd energy, familiarity with the floor — reveal about how this game could play out?

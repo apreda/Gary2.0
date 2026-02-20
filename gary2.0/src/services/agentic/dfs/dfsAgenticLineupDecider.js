@@ -39,7 +39,7 @@ You've investigated the slate. You have your thesis. Now BUILD THE LINEUP.
 
 <objective>
 You're not building to "cash" - you're building to WIN.
-To win a GPP, you need a CEILING LINEUP that can score 350-400+ fantasy points.
+To win a GPP, you need a CEILING LINEUP that targets the winning score for this slate size.
 
 This means:
 1. You need players who can EXPLODE (not just "solid")
@@ -71,6 +71,19 @@ Pick the player with the best CEILING PATH given the situation.
 Gary, you decide. If you see 3 punts that all have real edges, PLAY THEM.
 If you see 0 punts worth playing, that's fine too.
 </punt_awareness>
+
+<ownership_awareness>
+Some candidates are tagged with ownership proxy signals:
+- HIGH_OWNERSHIP_LIKELY — the field will be heavily on this player (top salary + obvious situation)
+- LOW_OWNERSHIP_LIKELY — under-the-radar play with real upside
+- MODERATE_OWNERSHIP — popular game but not the obvious play
+
+If 3+ of your players are HIGH_OWNERSHIP_LIKELY, your ceiling is capped by field duplication.
+Investigate comparable alternatives with lower expected ownership.
+
+This is awareness, not a rule. If 3 high-owned players are genuinely the best plays, use them.
+But ask: "Am I building the FIELD'S lineup, or MY lineup?"
+</ownership_awareness>
 
 <output_format>
 Provide your lineup as JSON:
@@ -190,14 +203,121 @@ export async function decideLineupWithPro(genAI, buildThesis, playerInvestigatio
     throw new Error('[Lineup Decider] Gemini Pro failed after ' + MAX_RETRIES + ' attempts: ' + errMsg);
   }
 
-  // Parse Gary's lineup decision
-  const lineup = parseLineupDecision(responseText, players, salaryCap, rosterSlots);
+  // Parse Gary's lineup decision — with self-correction loop for structural issues
+  let lineup;
+  let correctionAttempts = 0;
+  const MAX_CORRECTIONS = 2;
 
-  // Validate lineup
+  while (correctionAttempts <= MAX_CORRECTIONS) {
+    try {
+      lineup = parseLineupDecision(responseText, players, salaryCap, rosterSlots);
+
+      // Check for structural issues that need correction
+      const issues = getStructuralIssues(lineup, players, salaryCap, rosterSlots);
+      if (issues.length === 0) break; // Clean lineup, we're done
+
+      if (correctionAttempts >= MAX_CORRECTIONS) {
+        console.warn(`[Lineup Decider] Structural issues remain after ${MAX_CORRECTIONS} corrections:`, issues);
+        lineup.validationIssues = issues;
+        break;
+      }
+
+      // Send back for correction
+      correctionAttempts++;
+      console.log(`[Lineup Decider] Correction attempt ${correctionAttempts}/${MAX_CORRECTIONS}: ${issues.join('; ')}`);
+
+      const correctionPrompt = `Your lineup has these issues that MUST be fixed:
+${issues.map((iss, i) => `${i + 1}. ${iss}`).join('\n')}
+
+RULES:
+- You MUST select exactly ${rosterSlots.length} players for slots: ${rosterSlots.join(', ')}
+- All players MUST be from the slate player pool — do NOT invent players or use players from other games
+- You MUST use players from at least 2 different teams
+- Stay under $${salaryCap.toLocaleString()} salary cap
+
+Fix the lineup and output the corrected JSON.`;
+
+      const correctionResult = await model.generateContent(correctionPrompt);
+      responseText = correctionResult.response.text() || '';
+
+      if (!responseText) {
+        console.warn('[Lineup Decider] Correction returned empty — using previous lineup');
+        break;
+      }
+    } catch (parseError) {
+      if (correctionAttempts >= MAX_CORRECTIONS) {
+        throw parseError; // Give up after max corrections
+      }
+      correctionAttempts++;
+      console.log(`[Lineup Decider] Parse error, correction attempt ${correctionAttempts}: ${parseError.message}`);
+
+      const fixPrompt = `Your lineup response had an error: ${parseError.message}
+
+Build a complete ${rosterSlots.length}-player lineup for slots: ${rosterSlots.join(', ')}
+Stay under $${salaryCap.toLocaleString()}. Output ONLY the JSON object.`;
+
+      const fixResult = await model.generateContent(fixPrompt);
+      responseText = fixResult.response.text() || '';
+
+      if (!responseText) {
+        throw parseError; // Can't recover
+      }
+    }
+  }
+
+  // ── Salary Optimization Pass ──
+  // If Gary left $1000+ on the table, ask him to reconsider his cheapest player
+  const remainingSalary = salaryCap - (lineup.totalSalary || 0);
+  if (remainingSalary >= 1000 && lineup.players?.length > 0) {
+    console.log(`[Lineup Decider] Salary optimization: $${remainingSalary} remaining — reviewing cheapest player`);
+
+    // Find the cheapest player in the lineup
+    const cheapest = [...lineup.players].sort((a, b) => (a.salary || 0) - (b.salary || 0))[0];
+    const budgetForSlot = (cheapest.salary || 0) + remainingSalary;
+
+    const salaryOptPrompt = `You have $${remainingSalary.toLocaleString()} unused salary in your lineup.
+
+Your cheapest player: ${cheapest.name} ($${cheapest.salary?.toLocaleString()}) at ${cheapest.position}
+
+You could spend up to $${budgetForSlot.toLocaleString()} on that slot.
+
+Review whether upgrading from ${cheapest.name} improves your ceiling. Consider:
+- Is there a player at that salary range with a better ceiling path?
+- Does ${cheapest.name} have a real edge, or was he a salary filler?
+- Would the upgrade improve correlation with your stacks?
+
+If you find a better option, output the FULL updated lineup JSON (all ${rosterSlots.length} players).
+If ${cheapest.name} is the right play, respond with: "KEEP LINEUP"`;
+
+    try {
+      const optResult = await model.generateContent(salaryOptPrompt);
+      const optText = optResult.response.text() || '';
+
+      if (optText && !optText.toUpperCase().includes('KEEP LINEUP')) {
+        // Try to parse an upgraded lineup
+        const optLineup = parseLineupDecision(optText, players, salaryCap, rosterSlots);
+        const optIssues = getStructuralIssues(optLineup, players, salaryCap, rosterSlots);
+
+        if (optIssues.length === 0 && optLineup.totalSalary > lineup.totalSalary) {
+          console.log(`[Lineup Decider] Salary optimization accepted: $${lineup.totalSalary} → $${optLineup.totalSalary}`);
+          lineup = optLineup;
+        } else if (optIssues.length > 0) {
+          console.log(`[Lineup Decider] Salary optimization rejected — structural issues: ${optIssues.join('; ')}`);
+        } else {
+          console.log(`[Lineup Decider] Salary optimization rejected — didn't use more salary`);
+        }
+      } else {
+        console.log(`[Lineup Decider] Salary optimization: Gary kept original lineup`);
+      }
+    } catch (optError) {
+      console.warn(`[Lineup Decider] Salary optimization failed (keeping original): ${optError.message}`);
+    }
+  }
+
+  // Final validation (non-fatal — just log warnings)
   const validation = validateLineup(lineup, salaryCap, rosterSlots);
   if (!validation.valid) {
     console.warn('[Lineup Decider] Lineup validation issues:', validation.issues);
-    // Try to fix common issues
     lineup.validationIssues = validation.issues;
   }
 
@@ -221,7 +341,7 @@ function buildDecisionRequest(buildThesis, playerInvestigations, context, salary
 
   return `
 ## YOUR BUILD THESIS
-Archetype: ${buildThesis.archetype}
+Edges: ${buildThesis.edges?.map(e => `${e.type}: ${e.description} (${e.confidence || 'MEDIUM'})`).join('\n- ') || 'None identified'}
 Thesis: ${buildThesis.thesis}
 Target Games: ${buildThesis.targetGames?.join(', ') || 'Balanced'}
 Win Condition: ${buildThesis.winCondition || 'Outscore the field with ceiling plays'}
@@ -254,6 +374,9 @@ Remember:
 - Correlation matters (stack players from target games)
 - Ceiling over floor (this is GPP)
 - Stay under $${salaryCap.toLocaleString()} total
+- Your thesis is your STARTING FRAMEWORK, not a constraint. If the player investigation
+  revealed better opportunities outside your thesis targets, adjust. The best lineup wins,
+  not the most thesis-consistent lineup.
 
 Output your lineup as JSON.
 `;
@@ -274,14 +397,17 @@ function formatInvestigationsByPosition(investigations) {
       continue;
     }
 
-    for (const p of players.slice(0, 5)) { // Top 5 per position
+    for (const p of players) { // All investigated candidates — don't drop data
       const verdict = p.verdict || 'NEEDS REVIEW';
       const recentForm = p.investigation?.recentForm || 'Unknown';
       const matchup = p.investigation?.matchup || 'Unknown';
       const ceilingPath = p.investigation?.ceilingPath || 'Standard production';
+      const salary = p.salary ? `$${p.salary}` : '$?';
+      const dkFpts = p.rawData?.seasonStats?.dkFpts || p.rawData?.l5Stats?.dkFptsAvg;
+      const fptsStr = dkFpts ? ` | DK FPTS: ${dkFpts.toFixed(1)}` : '';
 
       lines.push(`
-${p.player} - $${p.salary} (${p.team} vs ${p.opponent || 'TBD'})
+${p.player} - ${salary} (${p.team} vs ${p.opponent || 'TBD'})${fptsStr}
   Verdict: ${verdict}
   Form: ${recentForm}
   Matchup: ${matchup}
@@ -409,12 +535,7 @@ function parseLineupDecision(text, players, salaryCap, rosterSlots) {
     };
   });
 
-  // Validate we have enough players
-  if (enrichedPlayers.length !== rosterSlots.length) {
-    throw new Error(`[Lineup Decider] Gary Pro selected ${enrichedPlayers.length} players but need ${rosterSlots.length}. Fix the lineup.`);
-  }
-
-  // Calculate totals
+  // Calculate totals (player count validation moved to getStructuralIssues for self-correction)
   const totalSalary = enrichedPlayers.reduce((sum, p) => sum + (p.salary || 0), 0);
   const projectedPoints = enrichedPlayers.reduce((sum, p) => sum + (p.projectedPoints || p.projected_pts || 0), 0);
 
@@ -425,7 +546,7 @@ function parseLineupDecision(text, players, salaryCap, rosterSlots) {
 
   return {
     players: enrichedPlayers,
-    totalSalary: parsed.totalSalary || totalSalary,
+    totalSalary,  // Always use computed salary (Gary's self-report may be wrong)
     projectedPoints: parsed.projectedPoints || projectedPoints,
     ceilingProjection: parsed.ceilingProjection || projectedPoints * 1.25,
     floorProjection: parsed.floorProjection || projectedPoints * 0.75,
@@ -452,6 +573,51 @@ function isSlotEligible(slot, playerPositions) {
   if (s === 'G') return poss.some(p => p === 'PG' || p === 'SG');
   if (s === 'F') return poss.some(p => p === 'SF' || p === 'PF');
   return poss.includes(s);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// STRUCTURAL ISSUE DETECTION (triggers self-correction loop)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function getStructuralIssues(lineup, players, salaryCap, rosterSlots) {
+  const issues = [];
+
+  // Wrong player count
+  if (lineup.players?.length !== rosterSlots.length) {
+    issues.push(`Need exactly ${rosterSlots.length} players but got ${lineup.players?.length || 0}`);
+  }
+
+  // Over salary cap
+  if (lineup.totalSalary > salaryCap) {
+    issues.push(`Over salary cap: $${lineup.totalSalary} > $${salaryCap}`);
+  }
+
+  // All players from same team (invalid for GPP — no correlation benefit)
+  const teams = new Set((lineup.players || []).map(p => p.team));
+  if (teams.size === 1 && (lineup.players?.length || 0) > 2) {
+    issues.push(`All ${lineup.players.length} players are from ${[...teams][0]} — must use players from at least 2 teams`);
+  }
+
+  // Players not found on the slate (hallucinated)
+  const notOnSlate = (lineup.players || []).filter(p => {
+    return !players.find(sp =>
+      sp.name?.toLowerCase() === p.name?.toLowerCase() ||
+      sp.name?.toLowerCase().includes(p.name?.toLowerCase()) ||
+      p.name?.toLowerCase().includes(sp.name?.toLowerCase())
+    );
+  });
+  if (notOnSlate.length > 0) {
+    issues.push(`Players not on slate: ${notOnSlate.map(p => p.name).join(', ')} — only use players from the player pool`);
+  }
+
+  // Duplicate players
+  const names = (lineup.players || []).map(p => p.name?.toLowerCase());
+  const dupes = names.filter((n, i) => names.indexOf(n) !== i);
+  if (dupes.length > 0) {
+    issues.push(`Duplicate players: ${[...new Set(dupes)].join(', ')}`);
+  }
+
+  return issues;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

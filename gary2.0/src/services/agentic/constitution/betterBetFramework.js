@@ -47,13 +47,9 @@ const SPREAD_CONFIGS = {
 - **The bet:** Iowa State +8.5 (you're betting the margin is wrong, not that Iowa State wins)`,
     sportSections: `
 **INVESTIGATE FOR BOTH TEAMS EQUALLY:**
-- Bench depth: Review the roster data in your scout report — does one team's depth create a meaningful advantage?
-- 3PT volume and shooting splits: What does the shooting data reveal about a possible mismatch?
-- Turnover forcing vs ball security: What does the gap reveal about this matchup?
-- Pace control: Does one team's tempo preference create an advantage?
-- Situational factors: Rest/travel, sustainability of recent form
+What does each team bring to this matchup? How do their strengths and weaknesses interact? Given how both teams play, what do you expect to prevail tonight — and how does that compare to what the spread implies?
 
-Let the stats tell you which side to pick, not find reasons for a predetermined conclusion.
+Let the data tell you which side to pick, not find reasons for a predetermined conclusion.
 `,
   },
 

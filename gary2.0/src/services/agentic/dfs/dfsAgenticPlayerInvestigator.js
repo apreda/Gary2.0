@@ -145,16 +145,120 @@ export async function investigatePlayersForPositions(genAI, buildThesis, context
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// SMART CANDIDATE SELECTION
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Select candidates for investigation using multiple signals.
+ * The whole point of DFS is finding MISPRICED players — if projections
+ * ranked them correctly, Gary adds no value. This ensures Gary sees
+ * both the obvious ceiling plays AND the hidden value plays.
+ *
+ * Selection buckets (de-duplicated, max ~12 candidates):
+ *  1. Top 5-6 by projection ceiling (established upside)
+ *  2. Top 2-3 by value ratio (projection per $1000 salary)
+ *  3. Usage vacuum beneficiaries from the build thesis
+ *  4. Hot recent form + low salary (hidden gems)
+ *  5. Players from thesis target games not yet included
+ */
+function selectSmartCandidates(candidates, buildThesis, position) {
+  const MAX_CANDIDATES = 12;
+  const selected = new Map(); // name -> player (dedup by name)
+
+  const addCandidate = (player, reason) => {
+    const key = player.name?.toLowerCase();
+    if (key && !selected.has(key)) {
+      selected.set(key, { ...player, _selectionReason: reason });
+    }
+  };
+
+  // Bucket 1: Top 5-6 by DK FPTS projection ceiling (the metric that matters for DFS)
+  const byProjection = [...candidates].sort((a, b) => {
+    const aProj = a.benchmarkProjection || a.seasonStats?.dkFpts || a.l5Stats?.dkFptsAvg || a.seasonStats?.ppg || 0;
+    const bProj = b.benchmarkProjection || b.seasonStats?.dkFpts || b.l5Stats?.dkFptsAvg || b.seasonStats?.ppg || 0;
+    return bProj - aProj;
+  });
+  for (const p of byProjection.slice(0, 6)) {
+    addCandidate(p, 'projection_ceiling');
+  }
+
+  // Bucket 2: Top 3 by value ratio (DK FPTS per $1000 salary)
+  const withValue = candidates
+    .filter(p => p.salary > 0)
+    .map(p => {
+      const proj = p.benchmarkProjection || p.seasonStats?.dkFpts || p.l5Stats?.dkFptsAvg || p.seasonStats?.ppg || 0;
+      return { ...p, _valueRatio: proj / (p.salary / 1000) };
+    })
+    .sort((a, b) => b._valueRatio - a._valueRatio);
+  for (const p of withValue.slice(0, 3)) {
+    addCandidate(p, 'value_ratio');
+  }
+
+  // Bucket 3: Usage vacuum beneficiaries from thesis
+  if (buildThesis.usageSituations?.length > 0) {
+    for (const us of buildThesis.usageSituations) {
+      const beneficiary = candidates.find(c =>
+        c.name?.toLowerCase().includes(us.player?.toLowerCase()) ||
+        us.player?.toLowerCase().includes(c.name?.toLowerCase())
+      );
+      if (beneficiary) {
+        addCandidate(beneficiary, 'usage_vacuum');
+      }
+    }
+  }
+
+  // Bucket 4: Hot recent form + low salary (hidden gems) — use DK FPTS for form detection
+  const salaries = candidates.map(p => p.salary || 0).filter(s => s > 0);
+  const medianSalary = salaries.length > 0
+    ? salaries.sort((a, b) => a - b)[Math.floor(salaries.length / 2)]
+    : 5000;
+
+  for (const p of candidates) {
+    if (selected.size >= MAX_CANDIDATES) break;
+    const l5Fpts = p.l5Stats?.dkFptsAvg || 0;
+    const seasonFpts = p.seasonStats?.dkFpts || 0;
+    const isHot = seasonFpts > 0 && l5Fpts > seasonFpts * 1.15;
+    const isLowSalary = (p.salary || 0) <= medianSalary;
+    if (isHot && isLowSalary) {
+      addCandidate(p, 'hot_form_low_salary');
+    }
+  }
+
+  // Bucket 5: Players from thesis target games not yet included
+  if (buildThesis.targetGames?.length > 0) {
+    for (const p of candidates) {
+      if (selected.size >= MAX_CANDIDATES) break;
+      const inTargetGame = buildThesis.targetGames.some(g =>
+        g.includes(p.team) || (p.opponent && g.includes(p.opponent))
+      );
+      if (inTargetGame) {
+        addCandidate(p, 'thesis_target_game');
+      }
+    }
+  }
+
+  const result = Array.from(selected.values()).slice(0, MAX_CANDIDATES);
+
+  // Log selection breakdown
+  const reasons = {};
+  for (const p of result) {
+    const r = p._selectionReason || 'unknown';
+    reasons[r] = (reasons[r] || 0) + 1;
+  }
+  console.log(`[Player Investigator] ${position}: Selected ${result.length} candidates — ${JSON.stringify(reasons)}`);
+
+  return result;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // INVESTIGATE POSITION CANDIDATES
 // ═══════════════════════════════════════════════════════════════════════════════
 
 async function investigatePositionCandidates(genAI, position, candidates, buildThesis, context, options) {
   const { modelName } = options;
 
-  // Limit candidates to top 10 by projected points (to manage API calls)
-  const topCandidates = candidates
-    .sort((a, b) => (b.projected_pts || 0) - (a.projected_pts || 0))
-    .slice(0, 10);
+  // Smart candidate selection: projection ceiling + value plays + thesis targets + hot form
+  const topCandidates = selectSmartCandidates(candidates, buildThesis, position);
 
   // Build investigation request
   const investigationRequest = buildInvestigationRequest(position, topCandidates, buildThesis, context);
@@ -175,7 +279,7 @@ async function investigatePositionCandidates(genAI, position, candidates, buildT
   let chat = model.startChat({ history: [] });
   let response = await chat.sendMessage(investigationRequest);
   let iterations = 0;
-  const maxIterations = 8;
+  const maxIterations = 15;
 
   while (iterations < maxIterations) {
     iterations++;
@@ -210,11 +314,20 @@ async function investigatePositionCandidates(genAI, position, candidates, buildT
   let finalText = response.response.text();
 
   // If Flash ended its loop without producing text (spent all iterations on tool
-  // calls), nudge it to output the JSON array.
+  // calls), nudge it to output the JSON array. Try twice — first nudge can also
+  // return empty if Flash is confused about the conversation state.
   if (!finalText || !finalText.trim()) {
     console.log(`[Player Investigator] Flash ended without text for ${position} — nudging for JSON...`);
     response = await chat.sendMessage(
       'Your investigation is complete. Now output your findings as a JSON array. ONLY output the raw JSON array starting with [ and ending with ]. No markdown, no explanation.'
+    );
+    finalText = response.response.text();
+  }
+
+  if (!finalText || !finalText.trim()) {
+    console.log(`[Player Investigator] First nudge returned empty for ${position} — sending final nudge...`);
+    response = await chat.sendMessage(
+      'Output a JSON array summarizing the players you investigated. Start your response with [ immediately.'
     );
     finalText = response.response.text();
   }
@@ -229,7 +342,7 @@ async function investigatePositionCandidates(genAI, position, candidates, buildT
 function buildInvestigationRequest(position, candidates, buildThesis, context) {
   return `
 ## BUILD THESIS
-Archetype: ${buildThesis.archetype}
+Edges: ${buildThesis.edges?.map(e => `${e.type}: ${e.description}`).join(' | ') || 'None identified'}
 Target Games: ${buildThesis.targetGames?.join(', ') || 'Balanced'}
 Thesis: ${buildThesis.thesis?.slice(0, 200) || 'No specific thesis'}
 
@@ -237,9 +350,26 @@ Thesis: ${buildThesis.thesis?.slice(0, 200) || 'No specific thesis'}
 
 ## CANDIDATES (sorted by projected points)
 ${candidates.map((p, i) => {
-  let line = `${i + 1}. ${p.name} - $${p.salary}`;
+  let line = `${i + 1}. ${p.name} - $${p.salary} [${(p.positions || [p.position]).join('/')}]`;
   line += `\n   Team: ${p.team} vs ${p.opponent || 'TBD'}`;
   line += `\n   Season: ${p.ppg?.toFixed(1) || '?'} PPG / ${p.rpg?.toFixed(1) || '?'} RPG / ${p.apg?.toFixed(1) || '?'} APG / ${p.mpg?.toFixed(1) || '?'} MPG`;
+  // DFS Fantasy Points (the metric that actually matters)
+  const dkFpts = p.seasonStats?.dkFpts || p.l5Stats?.dkFptsAvg || null;
+  const fdFpts = p.seasonStats?.fdFpts || p.l5Stats?.fdFptsAvg || null;
+  if (dkFpts || fdFpts) {
+    line += `\n   DFS FPTS: ${dkFpts ? `DK ${dkFpts.toFixed(1)}` : ''}${dkFpts && fdFpts ? ' / ' : ''}${fdFpts ? `FD ${fdFpts.toFixed(1)}` : ''}`;
+    if (p.salary > 0 && dkFpts) {
+      line += ` | Value: ${(dkFpts / (p.salary / 1000)).toFixed(2)} FPTS/$1K`;
+    }
+  }
+  // L5 FPTS trend (hot/cold)
+  if (p.l5Stats?.dkFptsAvg && dkFpts) {
+    const l5Dk = p.l5Stats.dkFptsAvg;
+    const diff = ((l5Dk - dkFpts) / dkFpts * 100).toFixed(0);
+    if (Math.abs(diff) >= 10) {
+      line += `\n   L5 Trend: ${l5Dk.toFixed(1)} DK FPTS (${diff > 0 ? '+' : ''}${diff}% vs season)`;
+    }
+  }
   // Advanced efficiency (from Tank01 roster enrichment)
   if (p.tsPercent || p.efgPercent) {
     line += `\n   Efficiency: TS% ${p.tsPercent?.toFixed(1) || '?'}, eFG% ${p.efgPercent?.toFixed(1) || '?'}`;
@@ -282,19 +412,30 @@ ${candidates.map((p, i) => {
   if (p.l5Stats?.fpg >= 4.0) {
     line += `\n   ⚠️ Foul Trouble Risk: ${p.l5Stats.fpg} FPG in L5`;
   }
+  // Ownership proxy (from context enrichment)
+  if (p.ownershipProxy) {
+    line += `\n   Ownership: ${p.ownershipProxy} (${p.ownershipSignals?.join(', ') || ''})`;
+  }
   return line;
 }).join('\n\n')}
 
 ## YOUR TASK
-Investigate EACH candidate:
-1. Call GET_PLAYER_GAME_LOGS to check recent form
-2. Call GET_MATCHUP_DATA if matchup info would help
-3. Call GET_TEAMMATE_STATUS to check for usage opportunities
+For EACH candidate, you MUST investigate:
+1. Call GET_PLAYER_GAME_LOGS to assess recent form (L5 trends, hot/cold streaks)
+2. Call GET_MATCHUP_DATA to evaluate the opponent matchup
+3. Call GET_TEAMMATE_STATUS once per team (if not already checked) to identify usage opportunities
+
+Do NOT skip players. Each candidate deserves at least a game log check and matchup assessment.
 
 Focus especially on:
 - Players in the TARGET GAMES (${buildThesis.targetGames?.join(', ') || 'all'})
-- Players who fit the ${buildThesis.archetype} archetype
-- Any PRICE LAG opportunities (salary < fair value)
+- Players who match one of the identified EDGES
+- Any PRICE LAG opportunities (salary < fair value based on recent production)
+
+IMPORTANT: Even if a candidate is NOT in a target game, flag them if they have an exceptional
+situation (usage vacuum, extreme salary discount vs recent production, hot streak + weak opponent).
+The thesis informs your focus but does NOT constrain your findings. If you find a better play
+outside the thesis targets, report it with conviction.
 
 After investigating, OUTPUT YOUR FINDINGS AS A JSON ARRAY.
 IMPORTANT: Your final response MUST be ONLY a valid JSON array starting with [ and ending with ].

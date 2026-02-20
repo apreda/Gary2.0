@@ -184,14 +184,16 @@ OUTPUT FORMAT — respond ONLY with valid JSON, no markdown, no explanation:
     for (const game of (s.games || [])) {
       const parts = game.split(/\s*@\s*/);
       if (parts.length === 2) {
-        const away = parts[0].trim().toUpperCase();
-        const home = parts[1].trim().toUpperCase();
-        // Validate both team abbreviations
-        if (isValidTeamAbbr(away, sport) && isValidTeamAbbr(home, sport)) {
+        const rawAway = parts[0].trim().toUpperCase();
+        const rawHome = parts[1].trim().toUpperCase();
+        // Normalize and validate both team abbreviations
+        const away = normalizeTeamAbbr(rawAway, sport);
+        const home = normalizeTeamAbbr(rawHome, sport);
+        if (away && home) {
           teams.push(away, home);
           matchups.push(`${away} @ ${home}`);
         } else {
-          console.warn(`[Slate Discovery] Skipping invalid matchup from Grounding: "${game}" (${away} or ${home} not a valid ${sport} team)`);
+          console.warn(`[Slate Discovery] Skipping invalid matchup from Grounding: "${game}" (${rawAway} or ${rawHome} not a valid ${sport} team)`);
         }
       }
     }
@@ -216,8 +218,26 @@ OUTPUT FORMAT — respond ONLY with valid JSON, no markdown, no explanation:
 }
 
 // ============================================================================
-// TEAM ABBREVIATION VALIDATION
+// TEAM ABBREVIATION VALIDATION + NORMALIZATION
 // ============================================================================
+
+// Common alternate abbreviations Gemini Grounding may return
+const TEAM_ABBR_ALIASES = {
+  // NBA
+  'NO': 'NOP',    // New Orleans Pelicans
+  'SA': 'SAS',    // San Antonio Spurs
+  'NY': 'NYK',    // New York Knicks
+  'GS': 'GSW',    // Golden State Warriors
+  'PHO': 'PHX',   // Phoenix Suns
+  'NOLA': 'NOP',  // New Orleans
+  'BRK': 'BKN',   // Brooklyn Nets
+  'UTAH': 'UTA',  // Utah Jazz
+  'CHAR': 'CHA',  // Charlotte Hornets
+  // NFL
+  'JAG': 'JAX',   // Jacksonville Jaguars
+  'LVR': 'LV',    // Las Vegas Raiders
+  'LAR': 'LAR',   // LA Rams (already valid)
+};
 
 const VALID_NBA_TEAMS = new Set([
   'ATL', 'BOS', 'BKN', 'CHA', 'CHI', 'CLE', 'DAL', 'DEN', 'DET', 'GSW',
@@ -232,12 +252,44 @@ const VALID_NFL_TEAMS = new Set([
   'TEN', 'WAS'
 ]);
 
+const VALID_NHL_TEAMS = new Set([
+  'ANA', 'ARI', 'BOS', 'BUF', 'CGY', 'CAR', 'CHI', 'COL', 'CBJ', 'DAL',
+  'DET', 'EDM', 'FLA', 'LAK', 'MIN', 'MTL', 'NSH', 'NJD', 'NYI', 'NYR',
+  'OTT', 'PHI', 'PIT', 'SJS', 'SEA', 'STL', 'TBL', 'TOR', 'UTA', 'VAN',
+  'VGK', 'WAS', 'WPG'
+]);
+
+const VALID_MLB_TEAMS = new Set([
+  'ARI', 'ATL', 'BAL', 'BOS', 'CHC', 'CHW', 'CIN', 'CLE', 'COL', 'DET',
+  'HOU', 'KC', 'LAA', 'LAD', 'MIA', 'MIL', 'MIN', 'NYM', 'NYY', 'OAK',
+  'PHI', 'PIT', 'SD', 'SF', 'SEA', 'STL', 'TB', 'TEX', 'TOR', 'WAS'
+]);
+
+/**
+ * Normalize a team abbreviation (fix common Grounding aliases) then validate.
+ * Returns the normalized abbreviation if valid, or null if invalid.
+ */
+function normalizeTeamAbbr(abbr, sport) {
+  if (!abbr) return null;
+  let upper = abbr.toUpperCase().trim();
+  // Check if already valid for this sport BEFORE applying aliases
+  if (sport === 'NBA' && VALID_NBA_TEAMS.has(upper)) return upper;
+  if (sport === 'NFL' && VALID_NFL_TEAMS.has(upper)) return upper;
+  if (sport === 'NHL' && VALID_NHL_TEAMS.has(upper)) return upper;
+  if (sport === 'MLB' && VALID_MLB_TEAMS.has(upper)) return upper;
+  // Apply alias mapping for non-standard abbreviations
+  if (TEAM_ABBR_ALIASES[upper]) {
+    upper = TEAM_ABBR_ALIASES[upper];
+  }
+  if (sport === 'NBA' && VALID_NBA_TEAMS.has(upper)) return upper;
+  if (sport === 'NFL' && VALID_NFL_TEAMS.has(upper)) return upper;
+  if (sport === 'NHL' && VALID_NHL_TEAMS.has(upper)) return upper;
+  if (sport === 'MLB' && VALID_MLB_TEAMS.has(upper)) return upper;
+  return null;
+}
+
 function isValidTeamAbbr(abbr, sport) {
-  if (!abbr) return false;
-  const upper = abbr.toUpperCase().trim();
-  if (sport === 'NBA') return VALID_NBA_TEAMS.has(upper);
-  if (sport === 'NFL') return VALID_NFL_TEAMS.has(upper);
-  return upper.length >= 2 && upper.length <= 4;
+  return normalizeTeamAbbr(abbr, sport) !== null;
 }
 
 // ============================================================================

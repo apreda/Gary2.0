@@ -297,16 +297,9 @@ function calculateHitRate(games, propType, line) {
   const overRate = (hitsOver / totalGames) * 100;
   const underRate = (hitsUnder / totalGames) * 100;
   
-  // Calculate edge vs line
-  const edge = ((avgValue - line) / line) * 100;
-  
-  // Recommendation based on hit rate AND edge
-  let recommendation = 'CLOSE';
-  if (overRate >= 70 && edge > 5) recommendation = 'STRONG_OVER';
-  else if (overRate >= 60 && edge > 0) recommendation = 'OVER';
-  else if (underRate >= 70 && edge < -5) recommendation = 'STRONG_UNDER';
-  else if (underRate >= 60 && edge < 0) recommendation = 'UNDER';
-  
+  // Calculate deviation from line
+  const deviation = ((avgValue - line) / line) * 100;
+
   return {
     totalGames,
     hitsOver,
@@ -315,9 +308,8 @@ function calculateHitRate(games, propType, line) {
     overRate: overRate.toFixed(0),
     underRate: underRate.toFixed(0),
     avgValue: avgValue.toFixed(1),
-    edge: edge.toFixed(1),
+    deviation: deviation.toFixed(1),
     values: values.slice(0, 5), // Last 5 values for display
-    recommendation,
     display: `${hitsOver}/${totalGames} over (${overRate.toFixed(0)}%), avg ${avgValue.toFixed(1)} vs line ${line}`
   };
 }
@@ -1063,10 +1055,10 @@ function detectGameDayType(gameDate) {
 }
 
 /**
- * BUILD GAME SCRIPT CONTEXT - Critical for Sharp NFL Prop Betting
+ * BUILD GAME SCRIPT CONTEXT - NFL Prop Betting Context
  *
  * Uses spread to project game flow and player volume.
- * Identifies game script edges based on spread size.
+ * Identifies game script factors based on spread size.
  * 
  * @param {Object} marketSnapshot - Market data with spread
  * @param {string} homeTeam - Home team name
@@ -1145,13 +1137,13 @@ function buildGameScriptContext(marketSnapshot, homeTeam, awayTeam) {
       garbageTimeRisk,
       starterMinutesRisk
     },
-    // Sharp betting edges from game script
+    // Game script factors to investigate
     edges: buildGameScriptEdges(spread, homeTeam, awayTeam)
   };
 }
 
 /**
- * Identify specific betting edges from game script
+ * Identify game script factors that affect player props
  */
 function buildGameScriptEdges(spread, homeTeam, awayTeam) {
   const edges = [];
@@ -1164,7 +1156,7 @@ function buildGameScriptEdges(spread, homeTeam, awayTeam) {
     edges.push({
       type: 'UNDERDOG_PASS_VOLUME',
       team: underdog,
-      edge: `${underdog} is a ${spreadAbs}-point underdog. Investigate: How does trailing game script affect this team's pass/run ratio? Does the QB's volume increase in negative game scripts?`
+      context: `${underdog} is a ${spreadAbs}-point underdog. Investigate: How does trailing game script affect this team's pass/run ratio? Does the QB's volume increase in negative game scripts?`
     });
   }
 
@@ -1173,7 +1165,7 @@ function buildGameScriptEdges(spread, homeTeam, awayTeam) {
     edges.push({
       type: 'FAVORITE_RUSH_VOLUME',
       team: favorite,
-      edge: `${favorite} is a ${spreadAbs}-point favorite. Investigate: In games with a comfortable lead, does this team shift to heavy rushing? How does clock management affect the RB's volume floor?`
+      context: `${favorite} is a ${spreadAbs}-point favorite. Investigate: In games with a comfortable lead, does this team shift to heavy rushing? How does clock management affect the RB's volume floor?`
     });
   }
 
@@ -1182,7 +1174,7 @@ function buildGameScriptEdges(spread, homeTeam, awayTeam) {
     edges.push({
       type: 'GARBAGE_TIME_RISK',
       team: favorite,
-      edge: `${favorite} is a heavy favorite (${spreadAbs} pts). Investigate: How does blowout risk affect starters' 4th-quarter usage? Does the player's line require full-game production, or is 3 quarters sufficient?`
+      context: `${favorite} is a heavy favorite (${spreadAbs} pts). Investigate: How does blowout risk affect starters' 4th-quarter usage? Does the player's line require full-game production, or is 3 quarters sufficient?`
     });
   }
   
@@ -1212,9 +1204,9 @@ function detectTrumpCards(injuries, playerGameLogs, propCandidates, narrativeSec
   );
   
   for (const outPlayer of outPlayers) {
-    // Check if this is a RECENT injury (trump card) vs season-long (already priced in)
-    const isRecent = (i.duration || '').toUpperCase() !== 'SEASON-LONG' && 
-                     !(i.description || '').toLowerCase().includes('season');
+    // Check if this is a RECENT injury vs season-long absence
+    const isRecent = (outPlayer.duration || '').toUpperCase() !== 'SEASON-LONG' &&
+                     !(outPlayer.description || '').toLowerCase().includes('season');
     
     if (isRecent) {
       // Find teammates at same position who might benefit
@@ -1233,8 +1225,8 @@ function detectTrumpCards(injuries, playerGameLogs, propCandidates, narrativeSec
           position: position,
           team: team,
           beneficiaries: beneficiaries.map(b => b.player).slice(0, 3),
-          edge: `${outPlayer.player} (${position}) is OUT. Investigate: How has the target distribution shifted without this player? Which remaining pass catchers (${beneficiaries.map(b => b.player).slice(0, 2).join(', ')}) have absorbed volume in games this player missed?`,
-          action: 'Check recent game logs for target share changes and whether the line has already adjusted for this absence.'
+          context: `${outPlayer.player} (${position}) is OUT. Investigate: How has the target distribution shifted without this player? Which remaining pass catchers (${beneficiaries.map(b => b.player).slice(0, 2).join(', ')}) have absorbed volume in games this player missed?`,
+          action: 'Check recent game logs for target share changes when this player was absent.'
         });
       }
     }
@@ -1249,8 +1241,8 @@ function detectTrumpCards(injuries, playerGameLogs, propCandidates, narrativeSec
     trumpCards.push({
       type: 'BACKUP_QB',
       severity: 'HIGH',
-      edge: 'Backup QB starting. Investigate: How does this QB change affect route complexity, target distribution, and checkdown tendencies? Compare this backup\'s passing patterns to the starter.',
-      action: 'Examine game logs from games with this backup QB. Which receivers saw more/fewer targets? Did any position group benefit?'
+      context: 'Backup QB starting. Investigate: How does this QB change affect route complexity, target distribution, and checkdown tendencies? Compare this backup\'s passing patterns to the starter.',
+      action: 'Examine game logs from games with this backup QB. How did target distribution change?'
     });
   }
   
@@ -1271,8 +1263,8 @@ function detectTrumpCards(injuries, playerGameLogs, propCandidates, narrativeSec
     trumpCards.push({
       type: 'REVENGE_GAME',
       severity: 'MEDIUM',
-      edge: 'Revenge game narrative detected. Historical data shows mixed results - validate with actual past performance vs this team.',
-      action: 'Soft factor - only actionable if Hard Factors (usage, matchup) also support.'
+      context: 'Revenge game narrative detected. Investigate: What does the player\'s actual past performance vs this team show?',
+      action: 'Check game logs vs this opponent if available.'
     });
   }
   
@@ -1292,8 +1284,8 @@ function detectTrumpCards(injuries, playerGameLogs, propCandidates, narrativeSec
             severity: 'MEDIUM',
             player: candidate.player,
             change: `+${changeVal}%`,
-            edge: `${candidate.player} has seen a ${changeVal}%+ increase in usage over last 2 games vs earlier games. Role may have expanded.`,
-            action: 'Investigate: Is the usage spike structural (teammate injury, role change) or variance? If structural, does the player\'s production floor at projected usage still relate to the line?'
+            context: `${candidate.player} has seen a ${changeVal}%+ increase in usage over last 2 games vs earlier games.`,
+            action: 'Investigate: Is the usage spike structural (teammate injury, role change) or variance?'
           });
         }
       }
@@ -1809,7 +1801,7 @@ function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnap
       shortWeek: shortWeekInfo,
       weather: weather
     },
-    // Game Script Context - Critical for Sharp Prop Betting
+    // Game Script Context - Prop Betting Context
     game_script: gameScriptContext?.available ? {
       spread: gameScriptContext.spread,
       projection: gameScriptContext.gameScript.projection,
@@ -2118,7 +2110,7 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
     awayTeam?.full_name || game.away_team
   );
 
-  // NEW: Build Game Script Context - Critical for Sharp Prop Betting
+  // NEW: Build Game Script Context - Prop Betting Context
   // Uses spread to project game flow and identifies game script edges
   const gameScriptContext = buildGameScriptContext(
     marketSnapshot,
@@ -2130,7 +2122,7 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
     console.log(`[NFL Props Context] 📊 Game Script: ${gameScriptContext.gameScript.projection}`);
     console.log(`   - Spread: ${gameScriptContext.spread.favorite} -${gameScriptContext.spread.size}`);
     if (gameScriptContext.edges.length > 0) {
-      console.log(`   - Sharp Edges Identified: ${gameScriptContext.edges.length}`);
+      console.log(`   - Game Script Factors: ${gameScriptContext.edges.length}`);
     }
   }
 
@@ -2146,7 +2138,7 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
   if (trumpCards.length > 0) {
     console.log(`[NFL Props Context] 🃏 TRUMP CARDS DETECTED: ${trumpCards.length}`);
     trumpCards.forEach(tc => {
-      console.log(`   - ${tc.type}: ${tc.edge.substring(0, 80)}...`);
+      console.log(`   - ${tc.type}: ${tc.context.substring(0, 80)}...`);
     });
   }
 
@@ -2194,7 +2186,7 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
       spread: marketSnapshot.spread,
       moneyline: marketSnapshot.moneyline
     },
-    // NEW: Game Script Analysis - Critical for Sharp Props
+    // NEW: Game Script Analysis - Game Script Analysis
     gameScript: gameScriptContext?.available ? {
       projection: gameScriptContext.gameScript.projection,
       spread: {
@@ -2206,7 +2198,7 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
       passVolumeImpact: gameScriptContext.gameScript.passVolumeImpact,
       rushVolumeImpact: gameScriptContext.gameScript.rushVolumeImpact,
       garbageTimeRisk: gameScriptContext.gameScript.garbageTimeRisk,
-      // Sharp edges identified from game script
+      // Game script factors to investigate
       edges: gameScriptContext.edges
     } : null,
     // NEW: Trump Cards - Single Overriding Factors

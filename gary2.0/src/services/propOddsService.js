@@ -14,93 +14,7 @@ import { ballDontLieOddsService } from './ballDontLieOddsService.js';
 // Only fetch from major US sportsbooks to reduce API token usage
 const ALLOWED_BOOKMAKERS = ['draftkings', 'fanduel'];
 
-// Define player prop markets by sport (limited to reduce API usage)
-const PROP_MARKETS = {
-  basketball_nba: [
-    'player_points',
-    'player_rebounds',
-    'player_assists',
-    'player_threes',
-    'player_blocks',
-    'player_steals',
-    'player_points_rebounds_assists',  // PRA combo
-    'player_points_rebounds',           // PR combo
-    'player_rebounds_assists',          // RA combo
-    'player_double_double'             // Double-double yes/no
-  ],
-  americanfootball_nfl: [
-    // Full game NFL player prop markets (expanded coverage)
-    // Passing
-    'player_pass_yds',
-    'player_pass_tds',
-    'player_pass_completions',
-    'player_pass_attempts',
-    'player_pass_interceptions',
-    'player_pass_longest_completion',
-    // Rushing
-    'player_rush_yds',
-    'player_rush_attempts',
-    'player_rush_tds',
-    'player_rush_longest',
-    // Receiving
-    'player_reception_yds',
-    'player_receptions',
-    'player_reception_tds',
-    'player_reception_longest',
-    // Combined Stats
-    'player_pass_rush_yds',
-    'player_rush_reception_yds',
-    'player_rush_reception_tds',
-    'player_pass_rush_reception_yds',
-    'player_pass_rush_reception_tds',
-    // Touchdown Scorers
-    'player_anytime_td',
-    'player_1st_td',
-    'player_last_td',
-    'player_tds_over',
-    // Defense
-    'player_tackles_assists',
-    'player_sacks',
-    'player_solo_tackles',
-    // Kicker
-    'player_field_goals',
-    'player_kicking_points',
-    'player_pats'
-  ],
-  baseball_mlb: [
-    // Standard MLB player props - using only non-alternate lines
-    'batter_home_runs',
-    'batter_hits',
-    'batter_total_bases',
-    'batter_rbis',
-    'batter_runs_scored',
-    'batter_hits_runs_rbis',
-    'batter_singles',
-    'batter_doubles',
-    'batter_triples',
-    'batter_walks',
-    'batter_strikeouts',
-    'batter_stolen_bases',
-    'pitcher_strikeouts',
-    'pitcher_hits_allowed',
-    'pitcher_walks',
-    'pitcher_earned_runs',
-    'pitcher_outs',
-    'batter_first_home_run',
-    'pitcher_record_a_win'
-  ],
-  icehockey_nhl: [
-    // NHL player props
-    'player_points',
-    'player_power_play_points',
-    'player_assists',
-    'player_blocked_shots',
-    'player_shots_on_goal',
-    'player_goals',
-    'player_total_saves',
-    'player_goals_scorer'  // Re-added: anytime goal scorer (edge opportunities)
-  ]
-};
+// NOTE: PROP_MARKETS removed — BDL returns all prop types automatically, no market filter needed
 
 // ============================================================================
 // ODDS FILTER CONSTANTS
@@ -124,9 +38,9 @@ const isOddsAcceptable = (odds) => {
 export const propOddsService = {
   /**
    * Filter out player props with odds outside acceptable range
-   * Range: -200 to +250 (inclusive)
+   * Range: -200 to +400 (inclusive)
    * - Filters out heavy juice (-201 and worse)
-   * - Filters out lottery tickets (+251 and higher)
+   * - Filters out lottery tickets (+401 and higher)
    * @private
    * @param {Array} props - Array of player prop data
    * @returns {Array} - Filtered props with odds in acceptable range, split into separate over/under entries
@@ -141,7 +55,7 @@ export const propOddsService = {
     
     // Process each prop to split into separate over/under entries and filter by odds
     for (const prop of props) {
-      // Only include the OVER side if odds are in acceptable range (-200 to +250)
+      // Only include the OVER side if odds are in acceptable range (-200 to +400)
       if (prop.over_odds !== null && isOddsAcceptable(prop.over_odds)) {
         splitProps.push({
           player: prop.player,
@@ -161,7 +75,7 @@ export const propOddsService = {
         console.log(`Filtering out OVER side for ${prop.player} ${prop.prop_type} ${prop.line}: ${reason}`);
       }
       
-      // Only include the UNDER side if odds are in acceptable range (-200 to +250)
+      // Only include the UNDER side if odds are in acceptable range (-200 to +400)
       if (prop.under_odds !== null && isOddsAcceptable(prop.under_odds)) {
         splitProps.push({
           player: prop.player,
@@ -369,7 +283,7 @@ export const propOddsService = {
             const result = Object.values(grouped);
 
             // Filter to FULL GAME props only (no quarter/half props)
-            const quarterHalfPatterns = /(?:1st|2nd|3rd|4th|first|second|third|fourth)[-_\s]*(quarter|half)|(?:1q|2q|3q|4q|1h|2h|q1|q2|q3|q4|h1|h2)(?:_|$)/i;
+            const quarterHalfPatterns = /(?:1st|2nd|3rd|4th|first|second|third|fourth)[-_\s]*(quarter|half)|(?:1q|2q|3q|4q|1h|2h|q1|q2|q3|q4|h1|h2)(?:_|$)|first\d+min/i;
             const fullGameProps = result.filter(p => {
               const propType = (p.prop_type || '').toLowerCase();
               return !quarterHalfPatterns.test(propType);
@@ -459,7 +373,7 @@ export const propOddsService = {
             const result = Object.values(grouped);
 
             // Filter to FULL GAME props only (no quarter/half props)
-            const quarterHalfPatterns = /(?:1st|2nd|3rd|4th|first|second|third|fourth)[-_\s]*(quarter|half)|(?:1q|2q|3q|4q|1h|2h|q1|q2|q3|q4|h1|h2)(?:_|$)/i;
+            const quarterHalfPatterns = /(?:1st|2nd|3rd|4th|first|second|third|fourth)[-_\s]*(quarter|half)|(?:1q|2q|3q|4q|1h|2h|q1|q2|q3|q4|h1|h2)(?:_|$)|first\d+min/i;
             const fullGameProps = result.filter(p => {
               const propType = (p.prop_type || '').toLowerCase();
               return !quarterHalfPatterns.test(propType);

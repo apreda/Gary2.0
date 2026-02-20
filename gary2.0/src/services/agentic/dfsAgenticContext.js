@@ -35,6 +35,35 @@ import { fetchAllInjuries as fetchNbaInjuriesFromRapidApi } from '../nbaInjuryRe
 // ═══════════════════════════════════════════════════════════════════════════
 let _injuryNameCache = new Map(); // normalized name -> { status, description }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// DFS FANTASY POINT CALCULATORS
+// ═══════════════════════════════════════════════════════════════════════════
+
+function calculateDkNbaFpts(stats) {
+  const pts = stats.pts || 0;
+  const reb = stats.reb || 0;
+  const ast = stats.ast || 0;
+  const stl = stats.stl || 0;
+  const blk = stats.blk || 0;
+  const tov = stats.tov || 0;
+  const fg3m = stats.fg3m || 0;
+  let fpts = pts + reb * 1.25 + ast * 1.5 + stl * 2 + blk * 2 - tov * 0.5 + fg3m * 0.5;
+  const doubles = [pts >= 10, reb >= 10, ast >= 10, stl >= 10, blk >= 10].filter(Boolean).length;
+  if (doubles >= 2) fpts += 1.5;
+  if (doubles >= 3) fpts += 3;
+  return Math.round(fpts * 10) / 10;
+}
+
+function calculateFdNbaFpts(stats) {
+  const pts = stats.pts || 0;
+  const reb = stats.reb || 0;
+  const ast = stats.ast || 0;
+  const stl = stats.stl || 0;
+  const blk = stats.blk || 0;
+  const tov = stats.tov || 0;
+  return Math.round((pts + reb * 1.2 + ast * 1.5 + stl * 3 + blk * 3 - tov) * 10) / 10;
+}
+
 function setInjuryNameCache(injuries) {
   _injuryNameCache = new Map();
   for (const inj of injuries) {
@@ -113,11 +142,11 @@ async function fetchActivePlayersFromBDL(sport, teamIds = []) {
       
       console.log(`[DFS Context]   - Page ${pageCount}: Got ${players.length} players (Total: ${allPlayers.length})`);
       
-      // Fallback: If we got 100 players but no cursor, BDL might not be providing one
-      // but there's likely another page. Try to stop after 1000 players as safety.
+      // If we got a full page but no cursor, BDL may have stopped providing pagination.
+      // Log and break — we have what we have.
       if (!nextCursor && players.length === 100 && pageCount < 10) {
-        // Some endpoints use offset instead of cursor, but we'll stick to cursor for now
-        // since BDL v1 usually uses next_cursor.
+        console.warn(`[DFS Context] Got full page (100 players) but no next_cursor — BDL may have more pages. Total so far: ${allPlayers.length}`);
+        break;
       }
       
     } while (nextCursor && pageCount < maxPages);
@@ -348,6 +377,12 @@ export async function fetchPlayerStatsFromBDL(sport, dateStr, slateTeams = []) {
           playerGames.get(pid).push(stat);
         });
         
+        // Build player ID → team ID map for opponent detection
+        const playerTeamIdMap = new Map();
+        for (const p of players) {
+          if (p.id && p.team?.id) playerTeamIdMap.set(p.id, p.team.id);
+        }
+
         // Calculate L5 averages for each player
         for (const [pid, games] of playerGames) {
           // Sort by game date descending and take last 5
@@ -357,18 +392,47 @@ export async function fetchPlayerStatsFromBDL(sport, dateStr, slateTeams = []) {
             .slice(0, 5);
           
           if (sortedGames.length >= 3) { // Need at least 3 games for meaningful trend
+            // Build individual game rows with context (opponent, date, DFS FPTS)
+            const gameRows = sortedGames.map(g => {
+              // Compare against player's TEAM id (not player id) to determine opponent
+              const playerTeamId = playerTeamIdMap.get(pid);
+              const opp = g.game?.home_team_id === playerTeamId
+                ? g.game?.visitor_team?.abbreviation
+                : g.game?.home_team?.abbreviation;
+              return {
+                date: g.game?.date || null,
+                opponent: opp || null,
+                pts: g.pts || 0,
+                reb: g.reb || 0,
+                ast: g.ast || 0,
+                stl: g.stl || 0,
+                blk: g.blk || 0,
+                tov: g.tov || 0,
+                fg3m: g.fg3m || 0,
+                min: parseFloat(g.min) || 0,
+                pf: g.pf || 0,
+                dkFpts: calculateDkNbaFpts(g),
+                fdFpts: calculateFdNbaFpts(g)
+              };
+            });
+
+            const n = sortedGames.length;
             const l5 = {
-              games: sortedGames.length,
-              ppg: sortedGames.reduce((sum, g) => sum + (g.pts || 0), 0) / sortedGames.length,
-              rpg: sortedGames.reduce((sum, g) => sum + (g.reb || 0), 0) / sortedGames.length,
-              apg: sortedGames.reduce((sum, g) => sum + (g.ast || 0), 0) / sortedGames.length,
-              spg: sortedGames.reduce((sum, g) => sum + (g.stl || 0), 0) / sortedGames.length,
-              bpg: sortedGames.reduce((sum, g) => sum + (g.blk || 0), 0) / sortedGames.length,
-              fpg: sortedGames.reduce((sum, g) => sum + (g.pf || 0), 0) / sortedGames.length, // Foul trouble signal
-              mpg: sortedGames.reduce((sum, g) => sum + (parseFloat(g.min) || 0), 0) / sortedGames.length,
-              // Track best and worst game for ceiling/floor
+              games: n,
+              gameRows,
+              ppg: sortedGames.reduce((sum, g) => sum + (g.pts || 0), 0) / n,
+              rpg: sortedGames.reduce((sum, g) => sum + (g.reb || 0), 0) / n,
+              apg: sortedGames.reduce((sum, g) => sum + (g.ast || 0), 0) / n,
+              spg: sortedGames.reduce((sum, g) => sum + (g.stl || 0), 0) / n,
+              bpg: sortedGames.reduce((sum, g) => sum + (g.blk || 0), 0) / n,
+              fpg: sortedGames.reduce((sum, g) => sum + (g.pf || 0), 0) / n,
+              mpg: sortedGames.reduce((sum, g) => sum + (parseFloat(g.min) || 0), 0) / n,
               bestPts: Math.max(...sortedGames.map(g => g.pts || 0)),
-              worstPts: Math.min(...sortedGames.map(g => g.pts || 0))
+              worstPts: Math.min(...sortedGames.map(g => g.pts || 0)),
+              dkFptsAvg: Math.round(gameRows.reduce((sum, g) => sum + g.dkFpts, 0) / n * 10) / 10,
+              fdFptsAvg: Math.round(gameRows.reduce((sum, g) => sum + g.fdFpts, 0) / n * 10) / 10,
+              bestDkFpts: Math.max(...gameRows.map(g => g.dkFpts)),
+              worstDkFpts: Math.min(...gameRows.map(g => g.dkFpts))
             };
             l5StatsMap.set(pid, l5);
           }
@@ -399,7 +463,7 @@ export async function fetchPlayerStatsFromBDL(sport, dateStr, slateTeams = []) {
         
         // Fallback: check by name if ID didn't match (covers Tank01/BDL ID mismatches)
         if (!bdlInjuryStatus) {
-          const normalizedName = normalizePlayerName(p.name);
+          const normalizedName = normalizePlayerName(`${p.first_name} ${p.last_name}`);
           const nameInjury = playerInjuryNameMap.get(normalizedName);
           if (nameInjury) {
             bdlInjuryStatus = nameInjury.status;
@@ -446,18 +510,26 @@ export async function fetchPlayerStatsFromBDL(sport, dateStr, slateTeams = []) {
             tpg: stats.fg3m || 0,
             topg: stats.tov || 1.5,
             mpg: stats.min ? parseFloat(stats.min) : 0,
-            fpts: stats.nba_fantasy_pts || 0
+            fpts: stats.nba_fantasy_pts || 0,
+            dkFpts: calculateDkNbaFpts(stats),
+            fdFpts: calculateFdNbaFpts(stats)
           },
-          // ⭐ NEW: L5 Recent Form (real data!)
           l5Stats: l5 ? {
             ppg: Math.round(l5.ppg * 10) / 10,
             rpg: Math.round(l5.rpg * 10) / 10,
             apg: Math.round(l5.apg * 10) / 10,
-            fpg: Math.round(l5.fpg * 10) / 10, // Fouls per game — foul trouble signal
+            spg: Math.round(l5.spg * 10) / 10,
+            bpg: Math.round(l5.bpg * 10) / 10,
+            fpg: Math.round(l5.fpg * 10) / 10,
             mpg: Math.round(l5.mpg * 10) / 10,
             bestPts: l5.bestPts,
             worstPts: l5.worstPts,
-            games: l5.games
+            dkFptsAvg: l5.dkFptsAvg,
+            fdFptsAvg: l5.fdFptsAvg,
+            bestDkFpts: l5.bestDkFpts,
+            worstDkFpts: l5.worstDkFpts,
+            games: l5.games,
+            gameRows: l5.gameRows
           } : null,
           recentForm: recentForm // 'hot', 'cold', or 'neutral'
         };
@@ -1564,9 +1636,6 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
   // Wave 2: rosters (batched 4 teams at a time with 300ms delay)
   // Wave 3: defense + projections + news (3 calls parallel)
   // Non-Tank01 calls (BDL) run in parallel alongside all Tank01 waves.
-  // Gemini Grounding removed — RapidAPI + Tank01 news provide all needed data.
-  const narrativeContext = { narratives: [], targetPlayers: [], fadePlayers: [], starsReturning: [], lateScratches: [], weatherAlerts: [], qbChanges: [] };
-
   const [bdlPlayers, tank01Results] = await Promise.all([
     fetchPlayerStatsFromBDL(sport, dateStr, slateTeams),
     // Tank01 calls in staggered waves to avoid rate limits
@@ -1587,7 +1656,7 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
     })()
   ]);
   const { salaryData, rosterData, teamDefenseStats, tank01Projections, tank01News } = tank01Results;
-  const ownershipData = { chalk: [], contrarian: [], lowOwned: [] };
+  // Ownership projections removed — no reliable free source exists.
   
   const bdlCount = bdlPlayers.length;
   const salaryCount = salaryData.players?.length || 0;
@@ -1607,13 +1676,8 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
   console.log(`[DFS Context] ✅ Filtered salary players: ${filteredSalaryPlayers.length} (from ${salaryCount})`);
   
   // ═══════════════════════════════════════════════════════════════════════════
-  // INTEGRATE CONFIRMED STARTERS & BENCHMARKS
+  // INTEGRATE BENCHMARKS
   // ═══════════════════════════════════════════════════════════════════════════
-  const confirmedStarters = new Set();
-  
-  // Note: BDL lineups API only works AFTER game starts - useless for pregame DFS
-  // Confirmed starters will be populated from Gemini Grounding or narrative context
-
   // Benchmark projections: Tank01 for NBA — no fallback (Grounding hallucinates numbers)
   let benchmarkProjections = new Map();
   if (isNBA && tank01Projections.size > 0) {
@@ -1625,7 +1689,7 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
     console.warn(`[DFS Context] Tank01 projections unavailable — no benchmarks (no fallback to Grounding)`);
   }
 
-  console.log(`[DFS Context] Integrated: ${confirmedStarters.size} confirmed starters, ${benchmarkProjections.size} benchmarks`);
+  console.log(`[DFS Context] Integrated: ${benchmarkProjections.size} benchmark projections`);
   
   // Merge data sources (Tank01 salaries + BDL stats)
   // Also get excluded players for teammate opportunity analysis
@@ -1636,13 +1700,7 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
   for (const player of mergedPlayers) {
     const key = normalizePlayerName(player.name);
     
-    // Confirmed Starter Lock (from BDL)
-    if (confirmedStarters.has(key)) {
-      player.isConfirmedStarter = true;
-      player.lockReason = 'Confirmed Starter (Ball Don\'t Lie)';
-    }
-
-    // Benchmark Projection (Tank01 for NBA, Grounding for others)
+    // Benchmark Projection (Tank01 for NBA)
     if (benchmarkProjections.has(key)) {
       player.benchmarkProjection = benchmarkProjections.get(key);
     }
@@ -1791,9 +1849,6 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
   const finalMergedPlayers = mergedPlayers.filter(p => p.status !== 'OUT' && p.status !== 'INACTIVE');
   console.log(`[DFS Context] Final slate player pool: ${finalMergedPlayers.length}`);
   
-  // Ownership projections removed — no reliable free source exists.
-  // Gary makes lineup decisions based on stats, matchups, and game environment instead.
-  
   // ═══════════════════════════════════════════════════════════════════════════
   // TEAMMATE USAGE CONTEXT - Dynamic Role Awareness
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1859,173 +1914,40 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
   }
   
   // ═══════════════════════════════════════════════════════════════════════════
-  // STARS RETURNING DETECTION - THE OPPOSITE OF INJURY BOOST
+  // BUILD TEAM-LEVEL INJURY MAP (for GET_TEAM_INJURIES tool)
   // ═══════════════════════════════════════════════════════════════════════════
-  // When high-usage stars RETURN from injury, their teammates LOSE opportunity.
-  // This is critical because:
-  // - Maxey's usage drops when Embiid/PG return
-  // - Role players who "broke out" during star absence go back to bench
-  // - Salaries haven't adjusted yet = overpriced players
-  // 
-  // SIGNAL: Star was OUT recently (< 7 days) but is NOW PLAYING
-  // This means teammates who benefited from their absence now lose usage
-  // ═══════════════════════════════════════════════════════════════════════════
-  let starsReturning = narrativeContext.starsReturning || [];
-
-  // VALIDATE stars_returning against actual BDL data to prevent Gemini hallucinations
-  // Gemini's grounding can return incorrect teams (e.g., training data team vs current team)
-  if (starsReturning.length > 0) {
-    const validatedStars = [];
-    const slateTeamSet = new Set(mergedPlayers.map(p => p.team?.toUpperCase()));
-
-    for (const star of starsReturning) {
-      // Find player in our BDL data
-      const bdlMatch = bdlPlayers.find(p => {
-        const nameMatch = p.name?.toLowerCase() === star.name?.toLowerCase() ||
-          p.name?.toLowerCase().includes(star.name?.toLowerCase()) ||
-          star.name?.toLowerCase().includes(p.name?.toLowerCase());
-        return nameMatch;
+  const injuryMap = {};
+  // Include active players with non-healthy status (QUESTIONABLE, GTD, DOUBTFUL)
+  for (const p of mergedPlayers) {
+    if (p.status && p.status !== 'ACTIVE' && p.status !== 'HEALTHY') {
+      const team = (p.team || '').toUpperCase();
+      if (!team) continue;
+      if (!injuryMap[team]) injuryMap[team] = [];
+      injuryMap[team].push({
+        player: p.name,
+        status: p.status,
+        injury: p.injuryContext || '',
       });
-
-      if (bdlMatch) {
-        // Player found in BDL - validate and correct team if needed
-        const bdlTeam = bdlMatch.team?.toUpperCase();
-        const geminiTeam = star.team?.toUpperCase();
-
-        if (bdlTeam !== geminiTeam) {
-          console.log(`[DFS Context] ⚠️ Gemini team mismatch: ${star.name} is ${bdlTeam} (not ${geminiTeam}) - correcting`);
-          star.team = bdlTeam;
-        }
-
-        // Only include if player's team is in this slate
-        if (slateTeamSet.has(bdlTeam)) {
-          validatedStars.push(star);
-        } else {
-          console.log(`[DFS Context] ⚠️ Skipping ${star.name} - team ${bdlTeam} not in this slate`);
-        }
-      } else {
-        console.log(`[DFS Context] ⚠️ Cannot validate ${star.name} (${star.team}) - not found in BDL data, skipping`);
-      }
     }
-
-    starsReturning = validatedStars;
   }
-
-  if (starsReturning.length > 0) {
-    console.log(`[DFS Context] 🔄 STARS RETURNING - USAGE REDUCTION:`);
-    starsReturning.forEach(star => {
-      // ═══════════════════════════════════════════════════════════════════════════
-      // MINUTES RESTRICTION AWARENESS - Critical for accurate impact assessment
-      // ═══════════════════════════════════════════════════════════════════════════
-      // If returning star is on a minutes restriction, the impact on teammates is REDUCED
-      // - Full return (30+ min): Full impact (15% reduction)
-      // - Partial (20-28 min restriction): Moderate impact (8% reduction)
-      // - Limited (<20 min restriction): Minimal impact (3% reduction)
-      // - Unknown: Assume moderate (8% reduction) with flag to monitor
-      // ═══════════════════════════════════════════════════════════════════════════
-      
-      const hasMinutesRestriction = star.minutes_restriction && star.minutes_restriction !== 'no restriction';
-      const impactSeverity = star.impact_severity || (hasMinutesRestriction ? 'partial' : 'full');
-      const gamesMissed = star.games_missed || 0;
-      
-      // Determine usage multiplier based on restriction
-      let usageMultiplier, usageChangeAmount, restrictionNote;
-      
-      if (impactSeverity === 'minimal' || (hasMinutesRestriction && star.minutes_restriction?.includes('15'))) {
-        // Minimal impact - star is severely limited
-        usageMultiplier = 0.97; // Only 3% reduction
-        usageChangeAmount = -3;
-        restrictionNote = `⏱️ MINUTES LIMIT: ${star.minutes_restriction} - minimal impact on teammates`;
-      } else if (impactSeverity === 'partial' || hasMinutesRestriction || gamesMissed >= 15) {
-        // Partial impact - star is on some restriction or returning from extended absence
-        usageMultiplier = 0.92; // 8% reduction (was 15%)
-        usageChangeAmount = -5;
-        restrictionNote = hasMinutesRestriction 
-          ? `⏱️ MINUTES LIMIT: ${star.minutes_restriction} - partial impact on teammates`
-          : gamesMissed >= 15
-            ? `⏱️ EXTENDED ABSENCE (${gamesMissed} games) - expect ramping minutes, partial impact`
-            : `⏱️ RETURNING - partial impact expected`;
-      } else {
-        // Full impact - star is back without restriction
-        usageMultiplier = 0.85; // Full 15% reduction
-        usageChangeAmount = -10;
-        restrictionNote = `✅ FULL RETURN - teammates lose significant usage`;
-      }
-      
-      const restrictionStatus = hasMinutesRestriction ? ` [${star.minutes_restriction}]` : '';
-      console.log(`   ${star.team}: ${star.name} returning${restrictionStatus} → ${(star.impact_players || []).join(', ')} lose usage`);
-      console.log(`      ${restrictionNote}`);
-      
-      // Find and mark affected teammates
-      const impactedNames = (star.impact_players || []).map(n => n.toLowerCase());
-      
-      mergedPlayers.forEach(player => {
-        const playerNameLower = player.name?.toLowerCase() || '';
-        const isImpacted = impactedNames.some(impName => 
-          playerNameLower.includes(impName) || impName.includes(playerNameLower)
-        );
-        
-        if (isImpacted || (player.team === star.team && !playerNameLower.includes(star.name.toLowerCase()))) {
-          // Mark as having reduced opportunity due to star returning
-          player.starReturning = {
-            star: star.name,
-            impact: star.impact_reason || `${star.name} returning - usage redistribution away from role players`,
-            usageMultiplier,
-            minutesRestriction: star.minutes_restriction,
-            impactSeverity,
-            gamesMissed,
-            restrictionNote
-          };
-          player.usageChange = (player.usageChange || 0) + usageChangeAmount;
-          
-          // Only downgrade expanded role players if it's a FULL return
-          if (impactSeverity === 'full' && (player.isBreakoutCandidate || player.rotation_status === 'expanded_role')) {
-            player.rotation_status = 'role_ending';
-            player.isBreakoutCandidate = false;
-            console.log(`      ⚠️ ${player.name}: Downgraded - ${star.name} FULL return ends expanded role`);
-          } else if (impactSeverity === 'partial' && (player.isBreakoutCandidate || player.rotation_status === 'expanded_role')) {
-            // Partial return - don't fully downgrade, just note the situation
-            player.starReturningPartial = true;
-            console.log(`      ℹ️ ${player.name}: Still has value - ${star.name} on minutes restriction`);
-          }
-        }
-      });
+  // Include excluded (OUT) players — these are filtered from the player pool
+  for (const p of excludedPlayers) {
+    const team = (p.team || '').toUpperCase();
+    if (!team) continue;
+    if (!injuryMap[team]) injuryMap[team] = [];
+    injuryMap[team].push({
+      player: p.name,
+      status: p.status || 'OUT',
+      injury: p.injuryContext || '',
     });
   }
-  
-  // Also check fade_players for "role_ended" or "bench_return" status
-  const roleFades = (narrativeContext.fadePlayers || []).filter(f => 
-    f.rotation_status === 'bench_return' || 
-    f.rotation_status === 'diminished_role' ||
-    f.role_sustainability === 'ended' ||
-    f.narrative_type === 'role_ended'
-  );
-  
-  if (roleFades.length > 0) {
-    console.log(`[DFS Context] ⚠️ ROLE ENDED FADES DETECTED:`);
-    roleFades.forEach(fade => {
-      console.log(`   ${fade.name} (${fade.team}): ${fade.reason}`);
-      
-      // Find and mark this player
-      const fadeNameLower = fade.name?.toLowerCase() || '';
-      mergedPlayers.forEach(player => {
-        const playerNameLower = player.name?.toLowerCase() || '';
-        if (playerNameLower.includes(fadeNameLower) || fadeNameLower.includes(playerNameLower)) {
-          player.roleEnded = {
-            reason: fade.reason,
-            newStatus: fade.rotation_status
-          };
-          player.usageChange = (player.usageChange || 0) - 15; // Strong negative signal
-          player.isFade = true;
-          console.log(`   ⚠️ ${player.name}: Marked as FADE - role ended`);
-        }
-      });
-    });
+  if (Object.keys(injuryMap).length > 0) {
+    console.log(`[DFS Context] 🏥 Injury map built: ${Object.keys(injuryMap).length} teams with injuries`);
   }
-  
+
   const duration = Date.now() - start;
   console.log(`[DFS Context] Context built in ${duration}ms`);
-  
+
   // Count how many players have estimated vs real salaries
   const estimatedSalaryCount = mergedPlayers.filter(p => p.estimatedSalary).length;
   const realSalaryCount = mergedPlayers.length - estimatedSalaryCount;
@@ -2049,15 +1971,8 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
     players: mergedPlayers,
     gamesCount: games.length,
     games: gameList,
-    // Late-breaking info (from narrative context since Tank01 doesn't provide these)
-    lateScratches: narrativeContext.lateScratches || [],
-    weatherAlerts: narrativeContext.weatherAlerts || [],
-    qbChanges: narrativeContext.qbChanges || [],
-    // Narrative context (what separates Gary from a math bot)
-    narratives: narrativeContext.narratives || [],
-    targetPlayers: narrativeContext.targetPlayers || [],
-    fadePlayers: narrativeContext.fadePlayers || [],
-    starsReturning: narrativeContext.starsReturning || [],
+    // Team-level injuries (for GET_TEAM_INJURIES tool)
+    injuries: injuryMap,
     // B2B teams (played yesterday — fatigue awareness)
     b2bTeams: Array.from(b2bTeams),
     // Metadata

@@ -72,16 +72,16 @@ Players on the same team score together. Players in the same game score together
 You have access to information and reasoning that optimizers don't:
 
 1. **FRESH INJURY AWARENESS**: When a star is ruled OUT, usage redistributes.
-   The market is slow. Prices take 1-2 days to adjust. This is your edge.
+   Ask: Has the market had time to adjust prices, or is this a fresh absence?
 
-2. **GAME ENVIRONMENT READING**: High O/U + tight spread + fast pace = scoring environment.
-   You can identify which games will be shootouts vs. grinders.
+2. **GAME ENVIRONMENT READING**: Investigate O/U, spread, and pace for each game.
+   Ask: Which games have the best fantasy scoring environment, and why?
 
-3. **OWNERSHIP LEVERAGE**: When 30% of the field is on the same player,
-   fading them gives you massive leverage IF you're right.
+3. **OWNERSHIP LEVERAGE**: Investigate how the field is likely constructed.
+   Ask: Where can you differentiate while maintaining quality?
 
-4. **NARRATIVE RESISTANCE**: "This team always covers" is noise.
-   You look at predictive stats, not narratives.
+4. **NARRATIVE RESISTANCE**: Investigate predictive stats, not narratives.
+   Ask: Is this data telling you something causal, or just describing past results?
 
 ### IMPLIED TEAM TOTALS — YOUR GAME ENVIRONMENT MAP
 
@@ -141,9 +141,9 @@ You're building for FIRST PLACE, not min-cash.
 - "Safe" 30-point floors don't win tournaments
 
 ### OWNERSHIP MATTERS
-- If 30% of the field has Player X, and he busts, you gain on 30% of the field
-- If 30% of the field has Player X, and he booms, you're even with 30% of the field
-- Low-owned UPSIDE is how you WIN
+- Investigate: What happens to your tournament equity when a heavily-owned player booms vs busts?
+- Ask: Where does differentiation create the most leverage against the field?
+- Awareness: Low-owned upside is valuable, but only when the player has a genuine edge
 
 ### CORRELATION WINS
 - Single-game stacks (3-4 players from same game) create ceiling correlation
@@ -181,6 +181,16 @@ Ownership leverage is not just "be contrarian." It's about risk-reward relative 
 - Ask: Has their price fully caught up to their current situation, or is there still edge?
 - Awareness: In smaller field contests, differentiation matters less — eating chalk is fine
 - Awareness: In large GPPs (100K+ entries), you NEED leverage to win — chalk alone won't get there
+
+### OWNERSHIP PROXY — READING THE FIELD
+
+You'll see ownership proxy tags on some candidates (HIGH_OWNERSHIP_LIKELY, LOW_OWNERSHIP_LIKELY, MODERATE_OWNERSHIP).
+These are estimates based on salary rank, recent form, and game popularity — not real ownership data.
+
+- Ask: How many of my core plays are likely to be heavily owned? What does that mean for my ceiling vs. the field?
+- Ask: Are there comparable alternatives with lower expected ownership that preserve my ceiling?
+- Investigate: Is this player high-owned because the situation is genuinely elite, or because the market over-indexes on name/salary?
+- Awareness: Differentiation creates leverage only if the alternative is ALSO a quality play. Low ownership alone is not edge.
 `;
 
 // ═══════════════════════════════════════════════════════════════════════════════

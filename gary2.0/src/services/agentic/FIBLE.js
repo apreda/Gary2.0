@@ -121,6 +121,65 @@ export const WINNING_SCORE_TARGETS = {
     },
   },
 
+  DRAFTKINGS_NFL: {
+    LARGE_GPP: {
+      firstPlace: { min: 200, typical: 220, ceiling: 260 },
+      top1Percent: { min: 185, typical: 200 },
+      top10Percent: { min: 160, typical: 175 },
+      cashLine: { min: 140, typical: 155 },
+    },
+    SMALL_GPP: {
+      firstPlace: { min: 190, typical: 205 },
+      top1Percent: { min: 175, typical: 190 },
+      cashLine: { min: 135, typical: 145 },
+    },
+    SHOWDOWN: {
+      firstPlace: { min: 120, typical: 140 },
+      top1Percent: { min: 105, typical: 115 },
+      cashLine: { min: 85, typical: 95 },
+    },
+    CASH: {
+      cashLine: { min: 130, typical: 145 },
+      safeTarget: 155,
+      floorFocus: true,
+    }
+  },
+
+  FANDUEL_NFL: {
+    LARGE_GPP: {
+      firstPlace: { min: 195, typical: 215 },
+      top1Percent: { min: 180, typical: 195 },
+      cashLine: { min: 135, typical: 150 }
+    },
+  },
+
+  DRAFTKINGS_NHL: {
+    LARGE_GPP: {
+      firstPlace: { min: 38, typical: 45, ceiling: 55 },
+      top1Percent: { min: 33, typical: 38 },
+      top10Percent: { min: 28, typical: 32 },
+      cashLine: { min: 22, typical: 26 },
+    },
+    SMALL_GPP: {
+      firstPlace: { min: 35, typical: 40 },
+      top1Percent: { min: 30, typical: 35 },
+      cashLine: { min: 20, typical: 24 },
+    },
+    CASH: {
+      cashLine: { min: 20, typical: 24 },
+      safeTarget: 28,
+      floorFocus: true,
+    }
+  },
+
+  FANDUEL_NHL: {
+    LARGE_GPP: {
+      firstPlace: { min: 55, typical: 65 },
+      top1Percent: { min: 48, typical: 55 },
+      cashLine: { min: 35, typical: 42 }
+    },
+  },
+
   SLATE_ADJUSTMENTS: {
     LARGE_SLATE: { games: '10+', multiplier: 1.0 },
     MEDIUM_SLATE: { games: '6-9', multiplier: 0.97 },
@@ -184,14 +243,6 @@ export const SIMULATION_STRATEGY = {
     'Ownership-adjusted win probability (low owned + boom = GPP gold)',
   ],
 
-  garyImplementation: `
-    Gary should run simulations, not just optimize projections.
-    For each lineup candidate:
-    1. Simulate the slate 1000+ times
-    2. Count how many simulations this lineup WINS
-    3. Weight by ownership leverage
-    4. Select lineups with highest WIN probability, not highest projection
-  `
 };
 
 // ============================================================================
@@ -272,14 +323,6 @@ export const BOOM_BUST_MODELING = {
     `
   },
 
-  garyImplementation: `
-    Gary should calculate boom/bust percentiles for each player:
-    1. Use historical game log variance by player
-    2. Adjust for today's matchup factors
-    3. Generate 10th/25th/50th/75th/90th percentile projections
-    4. For GPPs: Prioritize 75th percentile over median
-    5. For Cash: Prioritize 25th percentile (floor)
-  `
 };
 
 // ============================================================================
@@ -370,14 +413,6 @@ export const ADVANCED_OWNERSHIP_LEVERAGE = {
     'Cash game (ownership irrelevant)',
   ],
 
-  garyImplementation: `
-    Gary should calculate Leverage Score for every player:
-    1. Estimate win probability using simulation
-    2. Get ownership projections from consensus
-    3. Calculate leverage = win_prob_implied_ownership - projected_ownership
-    4. Target players with leverage > +3%
-    5. Fade players with leverage < -5%
-  `
 };
 
 // ============================================================================
@@ -461,14 +496,6 @@ export const LATE_SWAP_STRATEGY = {
     }
   },
 
-  garyImplementation: `
-    Gary should implement late swap protocol:
-    1. Track all questionable/probable players pre-lock
-    2. Build contingency lineups for each injury scenario
-    3. Monitor news feeds in real-time
-    4. Execute swaps within 2 minutes of news breaking
-    5. Log all late swap decisions for post-slate analysis
-  `
 };
 
 // ============================================================================
@@ -557,15 +584,6 @@ export const MINUTES_INHERITANCE = {
     `
   },
 
-  garyImplementation: `
-    Gary should model minutes and usage inheritance:
-    1. Track each player's on/off splits for teammates
-    2. When injury announced, calculate:
-       - Minutes redistribution
-       - Usage redistribution (different!)
-    3. Factor in blowout risk using spread
-    4. Identify the TRUE value play (often not the direct backup)
-  `
 };
 
 // ============================================================================
@@ -653,14 +671,6 @@ export const VEGAS_INTEGRATION = {
     }
   },
 
-  garyImplementation: `
-    Gary should integrate Vegas data:
-    1. Calculate implied team totals for every game
-    2. Rank games by total and identify pace-up spots
-    3. Weight player projections by game environment
-    4. Monitor line movement for late-breaking info
-    5. Adjust ownership expectations based on Vegas
-  `
 };
 
 // ============================================================================
@@ -736,14 +746,6 @@ export const CORRELATION_STRATEGY = {
     'Back-to-back: Minutes management likely',
   ],
 
-  garyImplementation: `
-    Gary should build correlated lineups:
-    1. Identify top game environments (total > 230, spread < 5)
-    2. Build primary stack from highest-implied team
-    3. Add bringback from opposing team
-    4. Ensure 4-5 players from single game for GPP lineups
-    5. Verify stack isn't in anti-stack scenario
-  `
 };
 
 // ============================================================================
@@ -825,14 +827,6 @@ export const PORTFOLIO_STRATEGY = {
     }
   },
 
-  garyImplementation: `
-    Gary should build portfolios, not just lineups:
-    1. For single entry: Build one optimal-leverage lineup
-    2. For multi-entry: Build N diverse lineups covering scenarios
-    3. Track exposure across portfolio
-    4. Ensure min 3-4 unique players between any two lineups
-    5. Verify portfolio covers multiple "ways to win"
-  `
 };
 
 // ============================================================================
@@ -1028,49 +1022,32 @@ export const GPP_CHECKLIST_SOTA = {
 };
 
 // ============================================================================
-// PART 12: SCORE TARGETS BY SLATE TYPE (UPDATED)
+// PART 12: SCORE TARGETS BY SLATE TYPE (derived from WINNING_SCORE_TARGETS)
 // ============================================================================
 
+// Build flat score targets from canonical WINNING_SCORE_TARGETS to avoid duplication.
+// Legacy audit service imports this shape.
+function buildScoreTargets(sportKey) {
+  const targets = WINNING_SCORE_TARGETS[sportKey];
+  if (!targets?.LARGE_GPP) return null;
+  const gpp = targets.LARGE_GPP;
+  return {
+    MAIN_SLATE: {
+      toWin: gpp.firstPlace?.typical || 0,
+      toTop1Percent: gpp.top1Percent?.typical || 0,
+      toTop10Percent: gpp.top10Percent?.typical || 0,
+      toCash: gpp.cashLine?.typical || 0,
+    },
+  };
+}
+
 export const SCORE_TARGETS_SOTA = {
-  DRAFTKINGS_NBA: {
-    MAIN_SLATE: {
-      toWin: 375,
-      toTop1Percent: 345,
-      toTop10Percent: 310,
-      toCash: 275,
-      garyMinimumTarget: 320,
-      p75Target: 340, // NEW: 75th percentile lineup projection target
-      note: 'If p75 projection < 340, lineup lacks ceiling'
-    },
-    MEDIUM_SLATE: {
-      toWin: 355,
-      toTop1Percent: 330,
-      toTop10Percent: 295,
-      toCash: 265,
-      garyMinimumTarget: 305,
-      p75Target: 325
-    },
-    SMALL_SLATE: {
-      toWin: 340,
-      toTop1Percent: 315,
-      toTop10Percent: 285,
-      toCash: 255,
-      garyMinimumTarget: 290,
-      p75Target: 310,
-      note: 'Small slates require heavier stacking'
-    }
-  },
-  
-  FANDUEL_NBA: {
-    MAIN_SLATE: {
-      toWin: 395,
-      toTop1Percent: 360,
-      toTop10Percent: 325,
-      toCash: 290,
-      garyMinimumTarget: 335,
-      p75Target: 355
-    }
-  }
+  DRAFTKINGS_NBA: buildScoreTargets('DRAFTKINGS_NBA'),
+  FANDUEL_NBA: buildScoreTargets('FANDUEL_NBA'),
+  DRAFTKINGS_NFL: buildScoreTargets('DRAFTKINGS_NFL'),
+  FANDUEL_NFL: buildScoreTargets('FANDUEL_NFL'),
+  DRAFTKINGS_NHL: buildScoreTargets('DRAFTKINGS_NHL'),
+  FANDUEL_NHL: buildScoreTargets('FANDUEL_NHL'),
 };
 
 // ============================================================================

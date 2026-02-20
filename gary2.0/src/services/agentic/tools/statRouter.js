@@ -1000,6 +1000,17 @@ function fmtPct(val) {
 // FETCHERS - Each function fetches a specific stat category
 // =============================================================================
 
+async function fetchBothTeamSeasonStats(bdlSport, home, away, season) {
+  const [homeStats, awayStats] = await Promise.all([
+    ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
+    ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+  ]);
+  return {
+    homeData: Array.isArray(homeStats) ? homeStats[0] : homeStats,
+    awayData: Array.isArray(awayStats) ? awayStats[0] : awayStats
+  };
+}
+
 const FETCHERS = {
   // ===== PACE & TEMPO =====
   PACE: async (bdlSport, home, away, season) => {
@@ -1028,7 +1039,7 @@ const FETCHERS = {
         },
         projected_pace: avgPace > 0 ? avgPace.toFixed(1) : 'N/A',
         analysis: `${home.name} pace: ${homePace.toFixed(1)}, ${away.name} pace: ${awayPace.toFixed(1)}, projected: ${avgPace > 0 ? avgPace.toFixed(1) : 'N/A'}`,
-        INVESTIGATE: `How does pace differential affect this matchup? Check recent games for tempo trends.`
+        INVESTIGATE: `How does pace affect this matchup?`
       };
     }
     
@@ -1088,10 +1099,7 @@ const FETCHERS = {
           games_played: awayStats?.games_played || 0,
           top_players: awayStats?.top_players || []
         },
-        comparison: homeStats && awayStats ? 
-          `${home.name} ORtg ${homeStats.offensive_rating} vs ${away.name} ORtg ${awayStats.offensive_rating} = ${(parseFloat(homeStats.offensive_rating) - parseFloat(awayStats.offensive_rating)).toFixed(1)} point gap` : 
-          'Comparison unavailable',
-        INVESTIGATE: `What does recent offensive efficiency reveal about current form? Check RECENT_FORM margins.`
+        INVESTIGATE: `What does the offensive efficiency data reveal about this matchup?`
       };
     }
     
@@ -1141,10 +1149,7 @@ const FETCHERS = {
           defensive_rating: awayStats?.defensive_rating || 'N/A',
           games_played: awayStats?.games_played || 0
         },
-        comparison: homeStats && awayStats ?
-          `${home.name} DRtg ${homeStats.defensive_rating} vs ${away.name} DRtg ${awayStats.defensive_rating} (lower is better)` :
-          'Comparison unavailable',
-        INVESTIGATE: `What does recent defensive efficiency reveal about current form? Check RECENT_FORM trends.`
+        INVESTIGATE: `What does the defensive efficiency data reveal about this matchup?`
       };
     }
     
@@ -1209,14 +1214,7 @@ const FETCHERS = {
           top_players: awayStats?.top_players || []
         },
         gap: gap,
-        interpretation: homeNet > awayNet
-          ? `${home.name} has +${gap} net rating advantage (${homeNet.toFixed(1)} vs ${awayNet.toFixed(1)})`
-          : `${away.name} has +${Math.abs(parseFloat(gap)).toFixed(1)} net rating advantage (${awayNet.toFixed(1)} vs ${homeNet.toFixed(1)})`,
-        INVESTIGATE: `How does each team's recent form compare to their season net rating?`,
-        // NEW: Usage concentration guidance (awareness, not rules)
-        USAGE_AWARENESS: `Notice the usage_concentration for each team. Investigate: How does usage concentration affect roster flexibility when key players are out?`,
-        // NEW: Scoring profile guidance (awareness, not rules)
-        SCORING_PROFILE_AWARENESS: `Notice where each team scores (scoring_profile). Investigate: How does scoring distribution interact with defensive scheme?`
+        INVESTIGATE: `What does the net rating data reveal about this matchup?`
       };
     }
     
@@ -1276,10 +1274,7 @@ const FETCHERS = {
         offensive_rating: fmtNum(awayData?.offensive_rating),
         defensive_rating: fmtNum(awayData?.defensive_rating)
       },
-      gap: fmtNum(homeNet - awayNet),
-      interpretation: homeNet > awayNet
-        ? `${home.name} has ${fmtNum(homeNet - awayNet)} point net rating advantage`
-        : `${away.name} has ${fmtNum(awayNet - homeNet)} point net rating advantage`
+      gap: fmtNum(homeNet - awayNet)
     };
   },
   
@@ -1620,12 +1615,7 @@ const FETCHERS = {
   // These provide actual data that BDL has for college sports
   
   SCORING: async (bdlSport, home, away, season) => {
-    const [homeStats, awayStats] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
-    ]);
-    const homeData = Array.isArray(homeStats) ? homeStats[0] : homeStats;
-    const awayData = Array.isArray(awayStats) ? awayStats[0] : awayStats;
+    const { homeData, awayData } = await fetchBothTeamSeasonStats(bdlSport, home, away, season);
     
     return {
       category: 'Scoring',
@@ -1645,12 +1635,7 @@ const FETCHERS = {
   },
 
   ASSISTS: async (bdlSport, home, away, season) => {
-    const [homeStats, awayStats] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
-    ]);
-    const homeData = Array.isArray(homeStats) ? homeStats[0] : homeStats;
-    const awayData = Array.isArray(awayStats) ? awayStats[0] : awayStats;
+    const { homeData, awayData } = await fetchBothTeamSeasonStats(bdlSport, home, away, season);
     
     return {
       category: 'Assists',
@@ -1666,12 +1651,7 @@ const FETCHERS = {
   },
 
   REBOUNDS: async (bdlSport, home, away, season) => {
-    const [homeStats, awayStats] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
-    ]);
-    const homeData = Array.isArray(homeStats) ? homeStats[0] : homeStats;
-    const awayData = Array.isArray(awayStats) ? awayStats[0] : awayStats;
+    const { homeData, awayData } = await fetchBothTeamSeasonStats(bdlSport, home, away, season);
     
     return {
       category: 'Rebounding',
@@ -1691,12 +1671,7 @@ const FETCHERS = {
   },
 
   STEALS: async (bdlSport, home, away, season) => {
-    const [homeStats, awayStats] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
-    ]);
-    const homeData = Array.isArray(homeStats) ? homeStats[0] : homeStats;
-    const awayData = Array.isArray(awayStats) ? awayStats[0] : awayStats;
+    const { homeData, awayData } = await fetchBothTeamSeasonStats(bdlSport, home, away, season);
     
     return {
       category: 'Steals',
@@ -1712,12 +1687,7 @@ const FETCHERS = {
   },
 
   BLOCKS: async (bdlSport, home, away, season) => {
-    const [homeStats, awayStats] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
-    ]);
-    const homeData = Array.isArray(homeStats) ? homeStats[0] : homeStats;
-    const awayData = Array.isArray(awayStats) ? awayStats[0] : awayStats;
+    const { homeData, awayData } = await fetchBothTeamSeasonStats(bdlSport, home, away, season);
     
     return {
       category: 'Blocks',
@@ -1733,12 +1703,7 @@ const FETCHERS = {
   },
 
   FG_PCT: async (bdlSport, home, away, season) => {
-    const [homeStats, awayStats] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
-    ]);
-    const homeData = Array.isArray(homeStats) ? homeStats[0] : homeStats;
-    const awayData = Array.isArray(awayStats) ? awayStats[0] : awayStats;
+    const { homeData, awayData } = await fetchBothTeamSeasonStats(bdlSport, home, away, season);
     
     return {
       category: 'Field Goal Percentage',

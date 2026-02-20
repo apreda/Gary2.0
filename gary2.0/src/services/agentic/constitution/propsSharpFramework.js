@@ -83,28 +83,27 @@ Rankings describe last month. Mechanisms describe tonight.
 
 **The Sharp Question:** "Can I describe the ON-COURT/ON-ICE action that affects this player's production — and does it push OVER or UNDER?"
 
-If your only support is a positional ranking, dig deeper or lower your conviction.
+If your only support is a positional ranking, ask: is there a mechanism behind it that connects to tonight?
 
 ---
 
 ### 4. INVESTIGATE THE FLOOR AND CEILING
 **Sharps think about downside AND upside limits before committing.**
 
-**FOR OVERS — Investigate the floor:**
-- "Even if he only plays 28 minutes, at his rate he still projects to..."
-- "Even if the game becomes a blowout, his first-half production should..."
-- "Even if they go zone, his catch-and-shoot numbers suggest..."
-→ If the floor doesn't clear the line, no mismatch saves your OVER.
+**FOR EACH DIRECTION — Investigate both floor AND ceiling:**
 
-**FOR UNDERS — Investigate the ceiling:**
-- "Even in his BEST scenario tonight, his production projects to..."
-- "Even if the game stays competitive and he plays full minutes, his rate projects to..."
-- "Even if the matchup weakness exists, his volume/opportunity caps production at..."
-→ If the ceiling still clears the line, your UNDER thesis is weak.
+**Floor investigation (worst-case for your direction):**
+- "Even if he only plays 28 minutes, at his rate he projects to..."
+- "Even if the game script goes against this direction, what does the data show?"
+- "In the realistic downside scenario, does the prop still work?"
 
-**The Sharp Question:** "In the worst-case scenario for MY direction, does the prop still work?"
+**Ceiling investigation (best-case for the opposite direction):**
+- "In the best scenario for the OTHER side, does the data overcome my thesis?"
+- "What would need to happen on the court for the opposite direction to win?"
 
-This applies to BOTH directions. OVER needs a floor that clears. UNDER needs a ceiling that doesn't.
+→ Apply BOTH investigations to BOTH directions equally. OVER needs a floor that clears AND a ceiling argument that doesn't overwhelm it. UNDER needs a ceiling that doesn't clear AND a floor argument that doesn't overwhelm it.
+
+**The Sharp Question:** "In the worst-case scenario for MY direction, does the prop still work? And in the best-case scenario for the OTHER direction, does it beat my thesis?"
 
 </FOUR_INVESTIGATIONS>
 `;
@@ -285,10 +284,6 @@ ${getPropsInjuryFramework()}
 </INJURY_AWARENESS>
 `;
 
-// DATA_REALITY_AWARENESS — REMOVED (redundant with BASE_RULES in constitution/index.js)
-// BASE_RULES already covers: 2026 roster reality, anti-hallucination, data source rules.
-// Both game picks and props get BASE_RULES automatically.
-
 export const REGRESSION_AWARENESS = `
 <REGRESSION_AWARENESS>
 ## REGRESSION AWARENESS: PEAKS AND VALLEYS
@@ -335,17 +330,20 @@ Rankings are not mechanisms.
 | RANKING (Investigate deeper) | MECHANISM (Connects to tonight) |
 |------------------|--------------------|
 | "They allow the 5th most points to PGs" | "They run drop coverage and he's an elite mid-range shooter" |
-| "They're 27th against centers" | "Their rim protector is out. He scores 68% at the rim." |
+| "They're 27th against centers" | "Their rim protector is out — he attacks the paint on 68% of his possessions" |
+| "They give up the most assists to PGs" | "They switch everything, which creates open cutters he finds consistently" |
+| "They allow the 3rd most steals" | "Their ball handlers average 4.2 TOV/game and he jumps passing lanes in their scheme" |
 
 **Rankings describe last month. Mechanisms describe tonight.**
 
-Examples of real mechanisms:
-- Scheme: "Drop coverage gives up pull-up midrange. He shoots 58% from there."
-- Personnel: "Their rim protector is out. He scores 68% of his points at the rim."
-- Pace: "Fastest team in the league — investigate how pace affects opportunities tonight."
+Examples of real mechanisms across prop types:
+- Scheme: "They switch everything — creates open shooters on the perimeter and cutting lanes for assists."
+- Personnel: "Their rim protector is out — affects both scoring at the rim and weakside blocks."
+- Pace: "Fastest team in the league — investigate how pace affects opportunities for ALL stat categories tonight."
 - Role: "Moved to PP1 three games ago. PP TOI jumped from 1:30 to 4:00."
+- Defensive style: "They pressure the ball aggressively — investigate how that affects turnovers, steals, and transition opportunities."
 
-If your only support is a positional ranking, your thesis is weak.
+Ask: What is the on-court mechanism, and which stat categories does it affect?
 </MECHANISM_AWARENESS>
 `;
 
@@ -463,11 +461,11 @@ export const ANALYSIS_EXAMPLES = `
 <ANALYSIS_EXAMPLES>
 ## GOOD VS BAD ANALYSIS
 
-**BAD (OVER):**
+**BAD (OVER — Points):**
 "Mitchell averages 29.5 PPG. The line is 27.5. He scored 46 against Philly earlier. Taking the over."
 → Describes what the books already know. "Average > line" is not edge.
 
-**GOOD (OVER):**
+**GOOD (OVER — Points):**
 "The line is 27.5 on Mitchell. The books know he averages 29.5, so what GAME FACTOR is the line respecting?
 
 Likely answer: Blowout probability. Cleveland is -8 and a blowout would cut his minutes to 28-30.
@@ -480,22 +478,54 @@ What beats me: Cleveland jumps out 20-8. Mitchell at 28 minutes projects to 23.8
 
 Confidence: Moderate. Mismatch is real but depends on competitive game script."
 
-**BAD (UNDER):**
-"Fox averages 26.1 PPG. The line is 25.5. He struggled last game with only 18. Taking the under."
+**BAD (UNDER — Assists):**
+"Murray averages 9.2 APG. The line is 8.5. He only had 4 last game. Taking the under."
 → One bad game is noise. And the line already reflects his average — you haven't found anything different about tonight.
 
-**GOOD (UNDER):**
-"The line is 25.5 on Fox. His season average is 26.1 — so the line is essentially pricing his baseline. What does my investigation reveal about TONIGHT?
+**GOOD (UNDER — Assists):**
+"The line is 8.5 on Murray. His season average is 9.2 — so the line is already discounting. What does my investigation reveal about TONIGHT?
 
-Matchup: Orlando ranks 3rd in defensive efficiency and holds opposing PGs to 21.8 PPG over L10. Fox's efficiency drops against top-5 defenses: 39.2% FG in those games vs 47.1% season.
+Matchup: Miami switches 1-4 and plays aggressive help defense. Their switching limits drive-and-kick assists — Murray's primary assist mechanism. Over L10 vs switch-heavy defenses, his assists drop to 6.8.
 
-Game script: Sacramento is +3 — competitive game, so minutes aren't the concern. But Orlando's pace (ranked 28th) limits possessions. Fewer possessions = fewer shot attempts, and Fox needs volume.
+Game script: Denver is -4 — competitive, so minutes aren't the concern. But Miami's half-court defense limits transition assists, which account for 22% of Murray's assists.
 
-Volume floor: At his per-minute rate, 35 min at Orlando's pace projects 23.4. Even in the BEST scenario (competitive, 36+ min), pace caps his ceiling around 26.
+Volume floor: At his per-minute assist rate vs switch-heavy defenses, 35 min projects 7.4. Even in the BEST scenario (competitive, 36+ min), the defensive scheme caps his ceiling around 8.5.
 
-What beats me: Orlando can't contain him in transition. If Sacramento pushes pace despite Orlando's preference, Fox gets easy buckets. His L3 includes 31 vs a top-10 defense.
+What beats me: Denver runs Murray in more pick-and-roll sets than usual, forcing switches and creating lob assists to Jokic. His L3 includes 12 assists against a switching defense.
 
-Confidence: Moderate. Pace and defensive matchup both limit him, but he's capable of forcing his game."
+Confidence: Moderate. Defensive scheme limits his primary assist mechanism, but he adapts."
+
+**BAD (OVER — Steals):**
+"He averages 1.8 SPG and the line is 1.5. Easy over."
+→ Describes what the books already know. What about TONIGHT's matchup?
+
+**GOOD (OVER — Steals):**
+"The line is 1.5 on Jrue Holiday. His season average is 1.8 — so the line discounts slightly. What does my investigation reveal about TONIGHT?
+
+Matchup: Charlotte's primary ball handlers average 3.8 TOV/game combined. Holiday's steal rate spikes in games against high-turnover backcourts — 2.4 SPG over L5 in those matchups.
+
+Mechanism: Holiday plays the passing lanes in Boston's switching scheme. Charlotte's motion offense creates the exact cross-court passes he jumps.
+
+What beats me: Charlotte protects the ball better than their season average, or Boston plays drop coverage limiting Holiday's passing lane opportunities.
+
+Confidence: Moderate. Specific matchup advantage against turnover-prone guards."
+
+**BAD (UNDER — Rebounds):**
+"He averages 11.2 RPG and the line is 10.5. He only grabbed 7 last game. Taking the under."
+→ One bad game is noise. What about TONIGHT's matchup?
+
+**GOOD (UNDER — Rebounds):**
+"The line is 10.5 on Sabonis. His season average is 11.2 — so the line already discounts. What does my investigation reveal about TONIGHT?
+
+Matchup: Milwaukee's front court crashes the glass aggressively — their DREB% is top 5 in the league. Over L10, opposing centers average 2.3 fewer rebounds against Milwaukee than their season average.
+
+Mechanism: Brook Lopez's positioning eliminates second-chance opportunities. Sabonis gets 35% of his rebounds from offensive boards — exactly the category Milwaukee suppresses most.
+
+Volume floor: At his per-minute rebound rate against top-5 DREB% teams, 34 min projects 9.1. Even in a competitive game with full minutes, the matchup caps his ceiling.
+
+What beats me: Milwaukee plays small lineups and Sabonis dominates the glass without Lopez contesting. Or Sacramento pushes tempo and creates more missed shots (more rebound opportunities).
+
+Confidence: Moderate. Specific defensive rebounding matchup limits his primary rebound source."
 
 **THE DIFFERENCE:** Bad compares average to line. Good asks what the line respects, finds a game-situation edge, thinks through scenarios, names the loss case.
 </ANALYSIS_EXAMPLES>
@@ -515,10 +545,10 @@ Before stating confidence, hold your reasoning up to this mirror.
 
 | Quality | Weak Example | Sharp Example |
 |---------|-------------|---------------|
-| **Specificity** | "His role has grown significantly" | "Usage jumped from 22% to 31% since the trade — 4 more FGA/game" |
+| **Specificity** | "His role has grown significantly" | "Since the trade, his role changed — game logs show the shift across multiple stat categories" |
 | **Volume floor** | "He's been getting a lot of assists" | "7.0 APG over L5 at 39 MPG. Even at 28 blowout min → 5.0. Line is 4.5." |
-| **Game-specific edge** | "Season avg is 29.5, line is 27.5" | "Since the trade, usage jumped to 32%. Line reflects pre-trade role." |
-| **Mechanism** | "Good matchup" | "Drop coverage + 58% pull-up midrange = scheme advantage" |
+| **Game-specific edge** | "Season avg is 29.5, line is 27.5" | "Role change happened 3 games ago — line reflects pre-change production" |
+| **Mechanism** | "Good matchup" | "Their defensive scheme creates a specific advantage for this player's production profile tonight" |
 | **Concrete loss scenario** | "Risk is they could play well" | "Risk: CLE up 20 by half. At 28 min → 23.8, under the line." |
 | **Game logic addressed** | (no acknowledgment) | "Line prices blowout risk. Edge is Philly keeps games close as home dogs." |
 
@@ -591,10 +621,10 @@ These phrases signal lazy analysis. NEVER write them:
 |--------|---------------------|
 | "He should be able to..." / "Should hit" / "Should cash" | State the specific mechanism or rate |
 | "Look for him to..." / "I expect him to..." | Give the data-backed projection |
-| "He's been hot lately" | "L3 avg of 28 vs season of 22, but TS% is inflated" |
-| "Good matchup" | "Drop coverage + elite mid-range game = scheme advantage" |
+| "He's been hot lately" | "L3 avg of 28 vs season of 22 — what's driving the surge, and is it sustainable?" |
+| "Good matchup" | "Their switching scheme creates the open looks / passing lanes / rebounding gaps that this player exploits" |
 | "He's due for a big game" | Gambling fallacy — cite a structural reason |
-| "Volume play" | "Usage jumped from 24% to 31% with teammate out" |
+| "Volume play" | "Role changed since the trade — investigate what the game logs show about the shift" |
 | "They're Xth against [position]" | Explain WHY — the mechanism, not the ranking |
 </BANNED_PHRASES>
 `;
