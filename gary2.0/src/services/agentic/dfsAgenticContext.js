@@ -930,14 +930,14 @@ export function mergePlayerData(bdlPlayers, groundedPlayers) {
       // This ensures we catch QUESTIONABLE/GTD players that Tank01 might miss
       const playerStatus = p.status || salaryData.status || 'HEALTHY';
       if (shouldExcludePlayer(playerStatus)) {
-        excludedPlayers.push({ name: p.name, team: p.team, status: playerStatus, reason: 'Injury status (BDL)' });
+        excludedPlayers.push({ name: p.name, team: p.team, status: playerStatus, reason: 'Injury status (BDL)', bdlId: p.id });
         continue; // Skip this player - too risky for DFS!
       }
-      
+
       // ⭐ CHECK ROTATION RISK - Catch players like Hunter Tyson who don't play
       const rotationRisk = checkRotationRisk(p);
       if (rotationRisk.exclude) {
-        excludedPlayers.push({ name: p.name, team: p.team, status: playerStatus, reason: rotationRisk.reason });
+        excludedPlayers.push({ name: p.name, team: p.team, status: playerStatus, reason: rotationRisk.reason, bdlId: p.id });
         continue;
       }
       
@@ -1943,6 +1943,179 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
   }
   if (Object.keys(injuryMap).length > 0) {
     console.log(`[DFS Context] 🏥 Injury map built: ${Object.keys(injuryMap).length} teams with injuries`);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // RESOLVE INJURY DURATION (how long has each OUT player been out?)
+  // Uses BDL game logs to find each OUT player's last game.
+  // This gives Gary FACTUAL duration data so he can investigate whether
+  // salaries have adjusted for the absence.
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (sport?.toUpperCase() === 'NBA') {
+    const outPlayersWithIds = excludedPlayers.filter(p => {
+      const st = (p.status || '').toUpperCase();
+      return p.bdlId && (st.includes('OUT') || st === 'OFS' || st.includes('DOUBTFUL'));
+    });
+
+    if (outPlayersWithIds.length > 0) {
+      console.log(`[DFS Context] Resolving injury duration for ${outPlayersWithIds.length} OUT players...`);
+      try {
+        // ═══════════════════════════════════════════════════════════════════
+        // STEP 1: Fetch player stats to find each OUT player's last game
+        // ═══════════════════════════════════════════════════════════════════
+        const lookbackDate = new Date(dateStr + 'T12:00:00');
+        lookbackDate.setDate(lookbackDate.getDate() - 45);
+        const lookbackStr = lookbackDate.toISOString().split('T')[0];
+        const outPlayerIds = outPlayersWithIds.map(p => p.bdlId);
+
+        const DURATION_BATCH_SIZE = 15;
+        const allOutStats = [];
+        for (let i = 0; i < outPlayerIds.length; i += DURATION_BATCH_SIZE) {
+          const batchIds = outPlayerIds.slice(i, i + DURATION_BATCH_SIZE);
+          const batchStats = await ballDontLieService.getPlayerStats('basketball_nba', {
+            player_ids: batchIds,
+            start_date: lookbackStr,
+            end_date: dateStr,
+            per_page: 100
+          });
+          if (Array.isArray(batchStats)) {
+            allOutStats.push(...batchStats);
+          }
+        }
+
+        // Find each player's last game date (where they had minutes > 0)
+        const playerLastGame = new Map();
+        for (const stat of allOutStats) {
+          const pid = stat.player?.id;
+          const gameDate = stat.game?.date;
+          const minutes = parseInt(stat.min) || 0;
+          if (!pid || !gameDate || minutes === 0) continue;
+          const existing = playerLastGame.get(pid);
+          if (!existing || new Date(gameDate) > new Date(existing)) {
+            playerLastGame.set(pid, gameDate);
+          }
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // STEP 2: Fetch team game schedules to count GAMES MISSED (not days)
+        // This matches the game picks box-score method — games missed is more
+        // meaningful than calendar days because it measures how much the team
+        // has actually played and adapted without the player.
+        // ═══════════════════════════════════════════════════════════════════
+        const teamsWithOutPlayers = new Set(outPlayersWithIds.map(p => (p.team || '').toUpperCase()));
+        const teamGamesMap = new Map(); // team abbr → sorted array of game dates
+
+        for (const teamAbbr of teamsWithOutPlayers) {
+          const teamBdlId = bdlTeamIdMap.get(teamAbbr);
+          if (!teamBdlId) continue;
+          const teamGames = await ballDontLieService.getGames('basketball_nba', {
+            team_ids: [teamBdlId],
+            start_date: lookbackStr,
+            end_date: dateStr,
+            per_page: 50
+          });
+          if (Array.isArray(teamGames)) {
+            const gameDates = teamGames
+              .map(g => g.date || g.datetime)
+              .filter(Boolean)
+              .map(d => new Date(d))
+              .sort((a, b) => a - b);
+            teamGamesMap.set(teamAbbr, gameDates);
+          }
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // STEP 3: Tag each OUT player with games missed + duration label
+        // ═══════════════════════════════════════════════════════════════════
+        const STALE_THRESHOLD_GAMES = 3; // 0-2 games = RECENT, 3-10 = ESTABLISHED, 11+ = LONG-TERM
+
+        for (const ep of outPlayersWithIds) {
+          const lastGame = playerLastGame.get(ep.bdlId);
+          const team = (ep.team || '').toUpperCase();
+          const teamInjuries = injuryMap[team];
+          if (!teamInjuries) continue;
+
+          const injEntry = teamInjuries.find(i =>
+            (i.player || '').toLowerCase() === (ep.name || '').toLowerCase()
+          );
+          if (!injEntry) continue;
+
+          const teamGames = teamGamesMap.get(team) || [];
+
+          if (lastGame) {
+            const lastDate = new Date(lastGame);
+            // Count team games AFTER this player's last appearance
+            const gamesMissed = teamGames.filter(gd => gd > lastDate).length;
+            injEntry.gamesMissed = gamesMissed;
+            injEntry.lastGameDate = lastGame.split('T')[0];
+            if (gamesMissed <= 2) {
+              injEntry.duration = 'RECENT';
+            } else if (gamesMissed <= 10) {
+              injEntry.duration = 'ESTABLISHED';
+            } else {
+              injEntry.duration = 'LONG-TERM';
+            }
+          } else {
+            // No games in 45 days — long-term absence
+            injEntry.gamesMissed = teamGames.length;
+            injEntry.duration = 'LONG-TERM';
+            injEntry.lastGameDate = null;
+          }
+        }
+
+        const resolved = outPlayersWithIds.filter(p => {
+          const team = (p.team || '').toUpperCase();
+          return injuryMap[team]?.find(i => i.player?.toLowerCase() === p.name?.toLowerCase() && i.duration);
+        });
+        console.log(`[DFS Context] ✓ Resolved duration for ${resolved.length}/${outPlayersWithIds.length} OUT players`);
+        for (const ep of outPlayersWithIds) {
+          const team = (ep.team || '').toUpperCase();
+          const inj = injuryMap[team]?.find(i => i.player?.toLowerCase() === ep.name?.toLowerCase());
+          if (inj?.duration) {
+            console.log(`[DFS Context]   ${ep.name} (${ep.team}): ${inj.duration} — ${inj.gamesMissed} team games missed (last played ${inj.lastGameDate || 'none in 45d'})`);
+          }
+        }
+        // ═══════════════════════════════════════════════════════════════════
+        // POST-PROCESS: Remove stale usage opportunity flags
+        // LONG-TERM absences are already priced into salaries.
+        // Only RECENT absences create genuine usage opportunities.
+        // ═══════════════════════════════════════════════════════════════════
+        let staleOpportunities = 0;
+        for (const ep of outPlayersWithIds) {
+          const team = (ep.team || '').toUpperCase();
+          const inj = injuryMap[team]?.find(i => i.player?.toLowerCase() === ep.name?.toLowerCase());
+          if (!inj || inj.duration === 'RECENT') continue;
+
+          // This absence is ESTABLISHED or LONG-TERM — salaries already reflect it
+          mergedPlayers.forEach(player => {
+            if (player.team !== ep.team) return;
+            if (!player.teammateOpportunity) return;
+            const mentions = player.teammateOpportunity.outStars || [];
+            if (!mentions.some(s => s.toLowerCase() === ep.name.toLowerCase())) return;
+
+            // Remove this specific OUT player from the opportunity list
+            player.teammateOpportunity.outStars = mentions.filter(s => s.toLowerCase() !== ep.name.toLowerCase());
+
+            // If no RECENT absences remain, remove the opportunity flag entirely
+            if (player.teammateOpportunity.outStars.length === 0) {
+              delete player.teammateOpportunity;
+              delete player.isBreakoutCandidate;
+              player.usageChange = 0;
+              staleOpportunities++;
+            } else {
+              player.teammateOpportunity.reason = `${player.teammateOpportunity.outStars[0]} OUT (RECENT) - investigate usage redistribution`;
+            }
+          });
+        }
+        if (staleOpportunities > 0) {
+          console.log(`[DFS Context] ✓ Cleared ${staleOpportunities} stale usage opportunity flags (LONG-TERM absences already priced in)`);
+        }
+
+      } catch (durationErr) {
+        console.warn(`[DFS Context] ⚠️ Injury duration resolution failed: ${durationErr.message}`);
+        console.warn(`[DFS Context] ⚠️ Continuing without duration data — Gary will investigate manually`);
+      }
+    }
   }
 
   const duration = Date.now() - start;

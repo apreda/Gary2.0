@@ -104,6 +104,13 @@ export async function generateAgenticDFSLineup(options) {
       throw new Error('No players found for this slate');
     }
 
+    // Guard: Fail if salary data is missing — lineup would be meaningless
+    const realSalaryCount = context.players.filter(p => p.salary > 0 && !p.estimatedSalary).length;
+    const salaryCoverage = realSalaryCount / context.players.length;
+    if (salaryCoverage < 0.5) {
+      throw new Error(`[Gary DFS] Salary data missing: only ${realSalaryCount}/${context.players.length} players have real salaries (${(salaryCoverage * 100).toFixed(0)}%). Tank01 may not cover this slate. Skipping to avoid invalid lineup.`);
+    }
+
     console.log(`[Gary DFS] ✓ Found ${context.players.length} players across ${context.games?.length || 0} games`);
 
     // Add winning score targets for Gary's awareness
@@ -194,32 +201,32 @@ export async function generateAgenticDFSLineup(options) {
     console.log(`[Gary DFS] ✓ Thesis: "${buildThesis.thesis?.slice(0, 100)}..."`);
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // PHASE 4: PLAYER INVESTIGATION (Gemini Flash per position → retry on failure)
+    // PHASE 4: PLAYER INVESTIGATION (Gemini Pro per position → retry on failure)
     // ═══════════════════════════════════════════════════════════════════════════
-    console.log('\n[Gary DFS] Phase 4: Gary Flash investigating player candidates...');
+    console.log('\n[Gary DFS] Phase 4: Gary Pro investigating player candidates...');
 
     let playerInvestigations;
     try {
       playerInvestigations = await withTimeout(
-        investigatePlayersForPositions(genAI, buildThesis, context, { modelName: GEMINI_FLASH_MODEL }),
+        investigatePlayersForPositions(genAI, buildThesis, context, { modelName: GEMINI_PRO_MODEL }),
         300000, // 5 min wall-clock timeout (multiple positions)
         'Phase 4 player investigation'
       );
-    } catch (flashError) {
-      if (flashError.status === 429 || flashError.status === 503 || flashError.message?.includes('timeout')) {
-        console.warn(`[Gary DFS] Phase 4: Flash failed (${flashError.message}) — retrying once`);
+    } catch (proError) {
+      if (proError.status === 429 || proError.status === 503 || proError.message?.includes('timeout')) {
+        console.warn(`[Gary DFS] Phase 4: Pro failed (${proError.message}) — retrying once`);
         playerInvestigations = await withTimeout(
-          investigatePlayersForPositions(genAI, buildThesis, context, { modelName: GEMINI_FLASH_MODEL }),
+          investigatePlayersForPositions(genAI, buildThesis, context, { modelName: GEMINI_PRO_MODEL }),
           300000,
           'Phase 4 player investigation retry'
         );
       } else {
-        throw flashError;
+        throw proError;
       }
     }
 
     if (!playerInvestigations || Object.keys(playerInvestigations).length === 0) {
-      throw new Error('[Gary DFS] Phase 4 FAILED: Gary Flash did not investigate any players');
+      throw new Error('[Gary DFS] Phase 4 FAILED: Gary Pro did not investigate any players');
     }
 
     const investigatedCount = Object.values(playerInvestigations).flat().length;

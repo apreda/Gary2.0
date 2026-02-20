@@ -287,8 +287,43 @@ function generateFromStandings(homeStanding, awayStanding) {
 }
 
 /**
+ * Check for NCAAB tournament context (conference tournaments + March Madness)
+ * Conference tournaments: roughly March 3-15
+ * NCAA Tournament: roughly March 17 - April 7
+ */
+function checkNCAABTournament(game) {
+  if (!game.date) return null;
+
+  // Check BDL postseason flag first (most reliable if available)
+  if (game.postseason === true) {
+    const gameDate = new Date(game.date);
+    const month = gameDate.getMonth() + 1;
+    const day = gameDate.getDate();
+    // After Selection Sunday (~March 15-16), it's NCAA Tournament
+    if (month === 3 && day >= 17) return 'NCAA Tournament';
+    if (month === 4) return 'NCAA Tournament';
+    // Early-mid March = conference tournament
+    if (month === 3) return 'Conference Tournament';
+    return 'Postseason';
+  }
+
+  // Date-based fallback: detect tournament window
+  const gameDate = new Date(game.date);
+  const month = gameDate.getMonth() + 1;
+  const day = gameDate.getDate();
+
+  if (month === 3) {
+    if (day >= 17) return 'NCAA Tournament';
+    if (day >= 3) return 'Conference Tournament';
+  }
+  if (month === 4 && day <= 7) return 'NCAA Tournament';
+
+  return null;
+}
+
+/**
  * Main function to generate game significance
- * @param {Object} game - Game object with home_team, away_team, venue, homeConference, awayConference
+ * @param {Object} game - Game object with home_team, away_team, venue, homeConference, awayConference, date, postseason
  * @param {string} sport - Sport key (NBA, NFL, NHL, NCAAB, NCAAF)
  * @param {Array} standings - Full standings array from BDL
  * @param {number} week - NFL week number (optional)
@@ -303,6 +338,15 @@ export function generateGameSignificance(game, sport, standings = [], week = nul
   // This is more reliable than nickname matching
   const homeConference = game.homeConference;
   const awayConference = game.awayConference;
+
+  // Priority 0: NCAAB tournament detection (highest priority for college)
+  if (sport === 'NCAAB') {
+    const tournament = checkNCAABTournament(game);
+    if (tournament) {
+      console.log(`[GameSignificance] Tournament: ${tournament}`);
+      return tournament;
+    }
+  }
 
   // Priority 1: International game (always wins)
   const intlGame = checkInternationalGame(venue);
