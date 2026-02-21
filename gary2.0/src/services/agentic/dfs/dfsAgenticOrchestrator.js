@@ -2,16 +2,16 @@
  * DFS Agentic Orchestrator
  *
  * This is the MAIN entry point for Gary's DFS lineup generation.
- * Unlike the old mathematical optimizer, this system has Gary (Gemini Pro)
- * actually REASON about lineup decisions.
+ * Unlike the old mathematical optimizer, this system has Gary
+ * actually REASON about lineup decisions using Gemini.
  *
  * FLOW:
  * 1. Context Building (existing dfsAgenticContext.js)
- * 2. Slate Analysis (Gemini Flash investigates the slate)
- * 3. Build Thesis Formation (Gemini Pro forms strategy)
- * 4. Player Investigation (Gemini Flash per position)
- * 5. Lineup Decision (Gemini Pro with thinkingLevel: HIGH)
- * 6. Self-Audit (Gemini Pro reviews his choices)
+ * 2. Slate Analysis (Gemini investigates the slate via tool calling)
+ * 3. Build Thesis Formation (Gemini forms strategy)
+ * 4. Player Investigation (Gemini per position via tool calling)
+ * 5. Lineup Decision (Gemini with thinkingLevel: HIGH)
+ * 6. Self-Audit (Gemini reviews his choices)
  *
  * FOLLOWS CLAUDE.md:
  * - Gary INVESTIGATES before deciding (not formulas)
@@ -129,9 +129,9 @@ export async function generateAgenticDFSLineup(options) {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // PHASE 2: SLATE ANALYSIS (Gemini Flash → retry once on failure)
+    // PHASE 2: SLATE ANALYSIS (Gemini → retry once on failure)
     // ═══════════════════════════════════════════════════════════════════════════
-    console.log('\n[Gary DFS] Phase 2: Gary Flash analyzing the slate...');
+    console.log('\n[Gary DFS] Phase 2: Gary analyzing the slate...');
 
     let slateAnalysis;
     try {
@@ -162,9 +162,9 @@ export async function generateAgenticDFSLineup(options) {
     console.log(`[Gary DFS] ✓ Identified ${slateAnalysis.gameEnvironments?.length || 0} game environments`);
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // PHASE 3: BUILD THESIS (Gemini Pro → Flash fallback)
+    // PHASE 3: BUILD THESIS (Gemini → retry on failure)
     // ═══════════════════════════════════════════════════════════════════════════
-    console.log('\n[Gary DFS] Phase 3: Gary Pro forming build thesis...');
+    console.log('\n[Gary DFS] Phase 3: Gary forming build thesis...');
 
     let buildThesis;
     try {
@@ -201,9 +201,9 @@ export async function generateAgenticDFSLineup(options) {
     console.log(`[Gary DFS] ✓ Thesis: "${buildThesis.thesis?.slice(0, 100)}..."`);
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // PHASE 4: PLAYER INVESTIGATION (Gemini Pro per position → retry on failure)
+    // PHASE 4: PLAYER INVESTIGATION (Gemini per position → retry on failure)
     // ═══════════════════════════════════════════════════════════════════════════
-    console.log('\n[Gary DFS] Phase 4: Gary Pro investigating player candidates...');
+    console.log('\n[Gary DFS] Phase 4: Gary investigating player candidates...');
 
     let playerInvestigations;
     try {
@@ -226,7 +226,7 @@ export async function generateAgenticDFSLineup(options) {
     }
 
     if (!playerInvestigations || Object.keys(playerInvestigations).length === 0) {
-      throw new Error('[Gary DFS] Phase 4 FAILED: Gary Pro did not investigate any players');
+      throw new Error('[Gary DFS] Phase 4 FAILED: Gary did not investigate any players');
     }
 
     const investigatedCount = Object.values(playerInvestigations).flat().length;
@@ -236,9 +236,9 @@ export async function generateAgenticDFSLineup(options) {
     console.log(`[Gary DFS] ✓ Investigated ${investigatedCount} players across all positions`);
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // PHASE 5: LINEUP DECISION (Gemini Pro → Flash fallback, thinkingLevel: HIGH)
+    // PHASE 5: LINEUP DECISION (Gemini, thinkingLevel: HIGH)
     // ═══════════════════════════════════════════════════════════════════════════
-    console.log('\n[Gary DFS] Phase 5: Gary Pro making lineup decisions...');
+    console.log('\n[Gary DFS] Phase 5: Gary making lineup decisions...');
 
     let lineup;
     try {
@@ -280,11 +280,11 @@ export async function generateAgenticDFSLineup(options) {
     console.log(`[Gary DFS] ✓ Projected Ceiling: ${lineup.ceilingProjection} pts`);
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // PHASE 6: SELF-AUDIT (Gemini Pro) — enrichment, not critical path
+    // PHASE 6: SELF-AUDIT (Gemini) — enrichment, not critical path
     // The lineup is already decided at Phase 5. Audit adds notes and may swap
     // players, but a failure here should NOT throw away a valid lineup.
     // ═══════════════════════════════════════════════════════════════════════════
-    console.log('\n[Gary DFS] Phase 6: Gary Pro auditing his lineup...');
+    console.log('\n[Gary DFS] Phase 6: Gary auditing his lineup...');
 
     let auditedLineup;
     try {

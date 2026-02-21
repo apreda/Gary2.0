@@ -2,14 +2,14 @@
  * DFS Slate Analyzer
  *
  * Phase 2 of the Agentic DFS system.
- * Gemini Flash investigates the slate using function calls to BDL/RotoWire
+ * Gemini investigates the slate using function calls to BDL/RotoWire
  * to identify:
  * - Usage vacuums (injury-created opportunity)
  * - Price lag candidates (underpriced based on situation)
  * - Stack targets (best games to correlate)
  * - Game environments (pace, O/U, spreads)
  *
- * This gives Gary Pro the INVESTIGATED DATA he needs to form his thesis.
+ * This gives Gary the INVESTIGATED DATA he needs to form his thesis.
  */
 
 import { DFS_SLATE_ANALYSIS_TOOLS, executeToolCall } from './tools/dfsToolDefinitions.js';
@@ -20,15 +20,15 @@ import { DFS_SLATE_ANALYSIS_TOOLS, executeToolCall } from './tools/dfsToolDefini
 
 const SLATE_ANALYSIS_PROMPT = `
 <role>
-You are Gary's DFS Research Assistant (Gemini Flash).
-Your job is to INVESTIGATE the slate and surface FACTUAL findings for Gary Pro to evaluate.
+You are Gary's DFS Research Assistant.
+Your job is to INVESTIGATE the slate and surface FACTUAL findings for Gary to evaluate.
 </role>
 
 <responsibilities>
 - Use function calls to gather REAL DATA about players and games
 - Investigate injury status for ALL teams — document who is OUT and how long they have been out
 - Investigate game environments — O/U, spreads, pace matchups
-- Surface the FACTS — Gary Pro decides what they mean
+- Surface the FACTS — Gary decides what they mean
 </responsibilities>
 
 <investigation_priorities>
@@ -75,7 +75,7 @@ After investigation, summarize your findings in JSON:
 - DO NOT make lineup decisions — just gather and organize the data
 - DO NOT rank players or suggest who to roster
 - DO NOT label players as "beneficiaries" or compute "boosts" — just report the facts
-- DO NOT compute "fair value" or "edge" amounts — report what you found and let Gary Pro evaluate
+- DO NOT compute "fair value" or "edge" amounts — report what you found and let Gary evaluate
 </constraints>
 `;
 
@@ -84,7 +84,7 @@ After investigation, summarize your findings in JSON:
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Analyze the slate using Gemini Flash with function calling
+ * Analyze the slate using Gemini with function calling
  *
  * @param {GoogleGenerativeAI} genAI - Gemini client
  * @param {Object} context - DFS context with players, games, injuries
@@ -267,17 +267,17 @@ Begin your investigation now. Call the tools you need.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function parseSlateAnalysis(text) {
-  // NO FALLBACKS: Gary Flash MUST produce valid slate analysis or we fail
+  // NO FALLBACKS: Gary MUST produce valid slate analysis or we fail
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
-    throw new Error('[Slate Analyzer] Gary Flash did not produce JSON analysis. Raw response: ' + text.slice(0, 500));
+    throw new Error('[Slate Analyzer] Gary did not produce JSON analysis. Raw response: ' + text.slice(0, 500));
   }
 
   let parsed;
   try {
     parsed = JSON.parse(jsonMatch[0]);
   } catch (e) {
-    throw new Error('[Slate Analyzer] Gary Flash produced invalid JSON: ' + e.message + '. Raw: ' + jsonMatch[0].slice(0, 500));
+    throw new Error('[Slate Analyzer] Gary produced invalid JSON: ' + e.message + '. Raw: ' + jsonMatch[0].slice(0, 500));
   }
 
   // Require at least some analysis - can't be completely empty
@@ -286,7 +286,7 @@ function parseSlateAnalysis(text) {
                       (parsed.gameEnvironments?.length > 0);
 
   if (!hasAnalysis) {
-    console.warn('[Slate Analyzer] Gary Flash found no data - verify slate has games');
+    console.warn('[Slate Analyzer] Gary found no data - verify slate has games');
   }
 
   return {

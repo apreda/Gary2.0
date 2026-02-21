@@ -39,21 +39,20 @@ You've investigated the slate. You have your thesis. Now BUILD THE LINEUP.
 
 <objective>
 You're not building to "cash" - you're building to WIN.
-To win a GPP, you need a CEILING LINEUP that targets the winning score for this slate size.
+Your lineup targets the winning score for this slate size.
 
-This means:
-1. You need players who can EXPLODE (not just "solid")
-2. You need CORRELATION (players from the same game who can boom together)
-3. You need LEVERAGE (some differentiation from chalk)
-4. You need a CEILING SCENARIO (what needs to go right to score 380+)
+Investigate for each decision:
+- Ask: Does your lineup have a realistic path to the winning score? What ceiling scenario gets you there?
+- Ask: How are your players' outcomes connected? What does correlation do to your lineup's range of outcomes?
+- Ask: How does your lineup's construction compare to what the field is likely building?
+- Ask: What specific game conditions need to go right for this lineup to win?
 </objective>
 
 <decision_framework>
-For EACH position, consider:
-1. WHO has the highest ceiling (not floor) for THIS slate?
-2. WHO fits my build thesis?
-3. WHO has the best path to smashing value?
-
+For EACH position, investigate:
+1. What does each candidate's range of outcomes look like for THIS slate?
+2. How does each candidate connect to your thesis and the rest of your lineup?
+3. What does the relationship between salary, situation, and upside tell you about each candidate?
 </decision_framework>
 
 <punt_awareness>
@@ -268,10 +267,10 @@ Your cheapest player: ${cheapest.name} ($${cheapest.salary?.toLocaleString()}) a
 
 You could spend up to $${budgetForSlot.toLocaleString()} on that slot.
 
-Review whether upgrading from ${cheapest.name} improves your ceiling. Consider:
-- Is there a player at that salary range with a better ceiling path?
-- Does ${cheapest.name} have a real edge, or was he a salary filler?
-- Would the upgrade improve correlation with your stacks?
+Review whether upgrading from ${cheapest.name} improves your lineup. Investigate:
+- What does the data show about available players in that salary range for this slot?
+- What is your thesis for ${cheapest.name} — does the data support their inclusion?
+- How would an upgrade at this slot affect your lineup's overall construction?
 
 If you find a better option, output the FULL updated lineup JSON (all ${rosterSlots.length} players).
 If ${cheapest.name} is the right play, respond with: "KEEP LINEUP"`;
@@ -356,10 +355,8 @@ Build your lineup. For each position:
 2. Consider who fits your thesis
 3. Make your decision with conviction
 
-Remember:
-- You're building to WIN (${winningTargets.toWin}+ pts)
-- Correlation matters (stack players from target games)
-- Ceiling over floor (this is GPP)
+Consider:
+- Your target is ${winningTargets.toWin}+ pts to WIN this GPP
 - Stay under $${salaryCap.toLocaleString()} total
 - Your thesis is your STARTING FRAMEWORK, not a constraint. If the player investigation
   revealed better opportunities outside your thesis targets, adjust. The best lineup wins,

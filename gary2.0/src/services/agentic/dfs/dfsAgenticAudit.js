@@ -170,7 +170,6 @@ function buildAuditRequest(lineup, buildThesis, context) {
 
   return `
 ## YOUR BUILD THESIS
-Archetype: ${buildThesis.archetype}
 Thesis: ${buildThesis.thesis}
 Target Games: ${buildThesis.targetGames?.join(', ') || 'Balanced'}
 Win Condition: ${buildThesis.winCondition || 'Outscore the field'}

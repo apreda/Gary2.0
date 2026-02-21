@@ -1,7 +1,7 @@
 /**
  * DFS Tool Definitions for Gemini Function Calling
  *
- * These tools allow Gary (via Gemini Flash/Pro) to investigate
+ * These tools allow Gary (via Gemini) to investigate
  * players and games using real data from BDL, RotoWire, etc.
  *
  * FOLLOWS CLAUDE.md: Gary INVESTIGATES before deciding.
@@ -11,7 +11,7 @@
 // BDL import removed — injury status comes from RapidAPI via context, not BDL
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// SLATE ANALYSIS TOOLS (Used by Flash in Phase 2)
+// SLATE ANALYSIS TOOLS (Used by Gemini in Phase 2)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export const DFS_SLATE_ANALYSIS_TOOLS = [
@@ -31,7 +31,7 @@ export const DFS_SLATE_ANALYSIS_TOOLS = [
   },
   {
     name: 'GET_TEAM_USAGE_STATS',
-    description: 'Get usage stats (USG%, minutes, team share) for all active players on a team. Use this to investigate how a team is structured.',
+    description: 'Get usage stats (USG%, minutes, team share) for all active players on a team.',
     parameters: {
       type: 'object',
       properties: {
@@ -78,13 +78,13 @@ export const DFS_SLATE_ANALYSIS_TOOLS = [
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// PLAYER INVESTIGATION TOOLS (Used by Flash in Phase 4)
+// PLAYER INVESTIGATION TOOLS (Used by Gemini in Phase 4)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export const DFS_PLAYER_INVESTIGATION_TOOLS = [
   {
     name: 'GET_TEAM_USAGE_STATS',
-    description: 'Get usage stats (USG%, minutes, team share) for all active players on a team. Use this to investigate how a team is structured.',
+    description: 'Get usage stats (USG%, minutes, team share) for all active players on a team.',
     parameters: {
       type: 'object',
       properties: {
@@ -98,7 +98,7 @@ export const DFS_PLAYER_INVESTIGATION_TOOLS = [
   },
   {
     name: 'GET_PLAYER_GAME_LOGS',
-    description: 'Get a player\'s last N games with full stats. Use to assess recent form.',
+    description: 'Get a player\'s last N games with full stats.',
     parameters: {
       type: 'object',
       properties: {
@@ -151,22 +151,8 @@ export const DFS_PLAYER_INVESTIGATION_TOOLS = [
     }
   },
   {
-    name: 'GET_TEAMMATE_STATUS',
-    description: 'Check injury and availability status of a player\'s teammates.',
-    parameters: {
-      type: 'object',
-      properties: {
-        team: {
-          type: 'string',
-          description: 'Team abbreviation'
-        }
-      },
-      required: ['team']
-    }
-  },
-  {
     name: 'SEARCH_LATEST_NEWS',
-    description: 'Search for latest news about a player (injury updates, role changes, trade rumors).',
+    description: 'Search for latest news about a player.',
     parameters: {
       type: 'object',
       properties: {

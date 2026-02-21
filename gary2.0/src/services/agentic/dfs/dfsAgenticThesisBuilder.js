@@ -31,10 +31,10 @@ Real sharps don't pick a "strategy template" first and then search for players t
 They investigate the data first, and the lineup shape emerges from assembling those findings.
 
 Your thesis answers:
-1. What are the TOP 3-5 EDGES on this slate?
-2. Which GAMES have the best scoring environment?
-3. Where is the MARKET WRONG about a player's value?
-4. How do these edges combine into a lineup that can WIN?
+1. What are the TOP 3-5 FINDINGS from your investigation? What stands out from the data?
+2. Which GAMES have the most notable scoring environments?
+3. Where does a player's situation diverge from what their salary suggests?
+4. How do these findings combine into a lineup strategy?
 </what_is_a_thesis>
 
 <investigation_areas>
@@ -47,15 +47,20 @@ When forming your thesis, investigate these areas based on the slate data:
 Your thesis should emerge from what the DATA shows, not from predefined categories.
 </investigation_areas>
 
+<constraints>
+- DO NOT force findings where the data doesn't support them — if the slate is thin on opportunities, say so
+- DO NOT fabricate data or stats not provided in the investigation
+- DO NOT classify findings into predefined edge categories — describe what the data shows
+- DO NOT presuppose that edges exist — investigate and report what you find
+</constraints>
+
 <task>
 Based on the slate investigation provided above, form your thesis:
 
-1. What are your TOP 3-5 EDGES on this slate? Be specific about WHY each is an edge.
-2. Which GAMES are you targeting and what makes them special?
-3. How do these edges combine into a winning lineup strategy?
-4. What needs to go RIGHT for this thesis to WIN?
-
-Be specific. Have conviction. This is YOUR thesis.
+1. What are your TOP 3-5 FINDINGS from this investigation? What stands out from the data?
+2. Which GAMES are you targeting and what does the data show about them?
+3. How do these findings combine into a lineup strategy?
+4. What conditions are required for this strategy to WIN?
 </task>
 `;
 
@@ -146,16 +151,14 @@ Based on this investigation:
 
 2. Which GAMES are you targeting and why?
 
-3. How do these edges combine into a winning strategy?
+3. How do these findings combine into a lineup strategy?
 
 4. What conditions are required for this lineup to reach the winning threshold of ${winningTargets?.toWin || 380}+?
 
 OUTPUT YOUR THESIS AS JSON:
 {
   "edges": [
-    { "type": "GAME_ENVIRONMENT", "game": "LAL@SAC", "description": "235 O/U, tight spread, both teams top-10 pace", "reasoning": "Why you believe this" },
-    { "type": "SALARY_VS_PRODUCTION", "player": "De'Aaron Fox", "description": "L5 avg 55 DK FPTS but salary reflects 42 FPTS", "reasoning": "Why you believe this" },
-    { "type": "CORRELATION", "game": "BOS@MIA", "description": "High total, competitive spread — stack opportunity", "reasoning": "Why you believe this" }
+    { "type": "FINDING_TYPE", "game": "TEAM@TEAM", "description": "What the data shows", "reasoning": "Why this stands out from your investigation" }
   ],
   "thesis": "Your 2-3 sentence thesis explaining how these edges combine into a winning lineup",
   "targetGames": ["LAL@SAC", "BOS@MIA"],
