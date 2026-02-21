@@ -7915,13 +7915,13 @@ function formatNcaabRosterDepth(homeTeam, awayTeam, rosterDepth, injuries) {
     const aff = rosterDepth.awayTeamFourFactors || {};
     const homeTeamLabel = (rosterDepth.homeTeamName || homeTeam).toUpperCase();
     const awayTeamLabel = (rosterDepth.awayTeamName || awayTeam).toUpperCase();
-    lines.push('NCAAB FOUR FACTORS (computed from season player data)');
+    lines.push('NCAAB FOUR FACTORS (Dean Oliver — verified against Basketball Reference)');
     lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     lines.push(`[HOME] ${homeTeamLabel}:`);
-    lines.push(`  eFG%: ${hff.efgPct || 'N/A'}% | TOV Rate: ${hff.tovRate || 'N/A'}% | FT Rate: ${hff.ftRate || 'N/A'}% | ORB Rate: ${hff.orebRate || 'N/A'}%`);
+    lines.push(`  eFG%: ${hff.efgPct || 'N/A'}% | TOV Rate: ${hff.tovRate || 'N/A'}% | FTA Rate: ${hff.ftaRate || 'N/A'}% | ORB%: ${hff.orebPct || 'N/A'}%`);
     lines.push('');
     lines.push(`[AWAY] ${awayTeamLabel}:`);
-    lines.push(`  eFG%: ${aff.efgPct || 'N/A'}% | TOV Rate: ${aff.tovRate || 'N/A'}% | FT Rate: ${aff.ftRate || 'N/A'}% | ORB Rate: ${aff.orebRate || 'N/A'}%`);
+    lines.push(`  eFG%: ${aff.efgPct || 'N/A'}% | TOV Rate: ${aff.tovRate || 'N/A'}% | FTA Rate: ${aff.ftaRate || 'N/A'}% | ORB%: ${aff.orebPct || 'N/A'}%`);
     lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     lines.push('');
   }

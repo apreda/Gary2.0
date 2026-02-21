@@ -1494,6 +1494,122 @@ const ballDontLieService = {
   },
 
   /**
+   * Get all NCAAB conferences with IDs and names
+   * Endpoint: /ncaab/v1/conferences
+   * @returns {Promise<Array>} - Array of { id, name, short_name }
+   */
+  async getNcaabConferences(ttlMinutes = 1440) {
+    try {
+      const cacheKey = 'ncaab_conferences';
+      return await getCachedOrFetch(cacheKey, async () => {
+        const url = `${BALLDONTLIE_API_BASE_URL}/ncaab/v1/conferences`;
+        console.log('🏀 [Ball Don\'t Lie] Fetching NCAAB conferences');
+        const resp = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        return resp.data?.data || [];
+      }, ttlMinutes);
+    } catch (e) {
+      console.error('[Ball Don\'t Lie] getNcaabConferences error:', e.message);
+      return [];
+    }
+  },
+
+  /**
+   * Get March Madness bracket data
+   * Endpoint: /ncaab/v1/bracket
+   * @param {number} season - Season year (e.g., 2024 for 2024-25 tournament)
+   * @returns {Promise<Array>} - Array of bracket games with seeds, teams, scores, rounds
+   */
+  async getNcaabBracket(season, ttlMinutes = 60) {
+    try {
+      if (!season) return [];
+      const cacheKey = `ncaab_bracket_${season}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const url = `${BALLDONTLIE_API_BASE_URL}/ncaab/v1/bracket?season=${season}`;
+        console.log(`🏀 [Ball Don\'t Lie] Fetching NCAAB bracket for season ${season}`);
+        const resp = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        return resp.data?.data || [];
+      }, ttlMinutes);
+    } catch (e) {
+      console.error('[Ball Don\'t Lie] getNcaabBracket error:', e.message);
+      return [];
+    }
+  },
+
+  /**
+   * Get NCAAB team game-level box scores (per-game team stats)
+   * Endpoint: /ncaab/v1/team_stats with date range
+   * Returns: FGM, FGA, FG3M, FG3A, FTM, FTA, OREB, DREB, REB, AST, STL, BLK, TOV, FOULS per game
+   * @param {number} teamId - BDL team ID
+   * @param {number} numGames - Number of recent games to fetch (default 5)
+   * @returns {Promise<Object>} - { games: [...], averages: {...}, teamId }
+   */
+  async getNcaabTeamGameLogs(teamId, numGames = 5, ttlMinutes = 15) {
+    try {
+      if (!teamId) return { games: [], averages: null, teamId };
+      const cacheKey = `ncaab_team_game_logs_${teamId}_${numGames}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        // Use 45-day lookback to capture ~10-15 games at 2-3 games/week pace
+        const endDate = new Date();
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - 45);
+        const startStr = startDate.toISOString().split('T')[0];
+        const endStr = endDate.toISOString().split('T')[0];
+
+        const url = `${BALLDONTLIE_API_BASE_URL}/ncaab/v1/team_stats?team_ids[]=${teamId}&start_date=${startStr}&end_date=${endStr}&per_page=50`;
+        console.log(`🏀 [Ball Don\'t Lie] Fetching NCAAB team game logs for team ${teamId} (${startStr} to ${endStr})`);
+        const resp = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const allGames = resp.data?.data || [];
+
+        // Sort by date descending and take the most recent N games
+        const sorted = allGames.sort((a, b) => new Date(b.game?.date || 0) - new Date(a.game?.date || 0));
+        const games = sorted.slice(0, numGames);
+
+        if (games.length === 0) return { games: [], averages: null, teamId };
+
+        // Compute averages
+        const sumField = (field) => games.reduce((s, g) => s + (g[field] || 0), 0);
+        const n = games.length;
+        const averages = {
+          fgm: (sumField('fgm') / n).toFixed(1),
+          fga: (sumField('fga') / n).toFixed(1),
+          fg_pct: (sumField('fg_pct') / n).toFixed(1),
+          fg3m: (sumField('fg3m') / n).toFixed(1),
+          fg3a: (sumField('fg3a') / n).toFixed(1),
+          fg3_pct: (sumField('fg3_pct') / n).toFixed(1),
+          ftm: (sumField('ftm') / n).toFixed(1),
+          fta: (sumField('fta') / n).toFixed(1),
+          ft_pct: (sumField('ft_pct') / n).toFixed(1),
+          oreb: (sumField('oreb') / n).toFixed(1),
+          dreb: (sumField('dreb') / n).toFixed(1),
+          reb: (sumField('reb') / n).toFixed(1),
+          ast: (sumField('ast') / n).toFixed(1),
+          stl: (sumField('stl') / n).toFixed(1),
+          blk: (sumField('blk') / n).toFixed(1),
+          tov: (sumField('turnovers') / n).toFixed(1),
+          fouls: (sumField('fouls') / n).toFixed(1),
+        };
+
+        // Compute Four Factors from L5 averages
+        const fgm = parseFloat(averages.fgm);
+        const fga = parseFloat(averages.fga);
+        const fg3m = parseFloat(averages.fg3m);
+        const fta = parseFloat(averages.fta);
+        const oreb = parseFloat(averages.oreb);
+        const tov = parseFloat(averages.tov);
+        averages.efgPct = fga > 0 ? ((fgm + 0.5 * fg3m) / fga * 100).toFixed(1) : null;
+        averages.tovRate = fga > 0 ? (tov / (fga + 0.44 * fta + tov) * 100).toFixed(1) : null;
+        averages.ftaRate = fga > 0 ? (fta / fga * 100).toFixed(1) : null;
+
+        console.log(`🏀 [Ball Don't Lie] Got ${games.length} NCAAB team game logs for team ${teamId}`);
+        return { games, averages, teamId };
+      }, ttlMinutes);
+    } catch (e) {
+      console.error('[Ball Don\'t Lie] getNcaabTeamGameLogs error:', e.message);
+      return { games: [], averages: null, teamId };
+    }
+  },
+
+  /**
    * Get NCAAB roster depth for two teams - top 9 players with season stats
    * Used for scout report to show Gary the full rotation
    * @param {string} homeTeamName - Home team name
@@ -1612,27 +1728,34 @@ const ballDontLieService = {
           this.getTeamSeasonStats('basketball_ncaab', { teamId: awayTeam.id, season })
         ]);
 
-        const computeTeamFourFactors = (teamStatsArr) => {
+        // Compute Four Factors using Dean Oliver formulas (Basketball Reference)
+        // eFG% = (FGM + 0.5 * FG3M) / FGA
+        // TOV% = TOV / (FGA + 0.44 * FTA + TOV)
+        // FTA Rate = FTA / FGA (KenPom convention — measures getting to the line)
+        // ORB% = Team_ORB / (Team_ORB + Opponent_DRB) — requires cross-referencing both teams
+        const computeTeamFourFactors = (teamStatsArr, opponentStatsArr) => {
           const ts = Array.isArray(teamStatsArr) ? teamStatsArr[0] : teamStatsArr;
-          if (!ts) return { efgPct: null, tovRate: null, ftRate: null, orebRate: null };
+          const opp = Array.isArray(opponentStatsArr) ? opponentStatsArr[0] : opponentStatsArr;
+          if (!ts) return { efgPct: null, tovRate: null, ftaRate: null, orebPct: null };
           const fgm = ts.fgm || 0;
           const fga = ts.fga || 0;
           const fg3m = ts.fg3m || 0;
           const fta = ts.fta || 0;
           const oreb = ts.oreb || 0;
-          const dreb = ts.dreb || 0;
           const tov = ts.turnover || 0;
-          const totalReb = oreb + dreb;
+          // ORB% uses opponent's DRB (correct formula), falls back to own DRB if opponent data unavailable
+          const oppDreb = opp ? (opp.dreb || 0) : (ts.dreb || 0);
+          const orebDenom = oreb + oppDreb;
           return {
             efgPct: fga > 0 ? ((fgm + 0.5 * fg3m) / fga * 100).toFixed(1) : null,
             tovRate: fga > 0 ? (tov / (fga + 0.44 * fta + tov) * 100).toFixed(1) : null,
-            ftRate: fga > 0 ? (fta / fga * 100).toFixed(1) : null,
-            orebRate: totalReb > 0 ? (oreb / totalReb * 100).toFixed(1) : null,
+            ftaRate: fga > 0 ? (fta / fga * 100).toFixed(1) : null,
+            orebPct: orebDenom > 0 ? (oreb / orebDenom * 100).toFixed(1) : null,
           };
         };
 
-        const homeTeamFourFactors = computeTeamFourFactors(homeTeamSeasonStats);
-        const awayTeamFourFactors = computeTeamFourFactors(awayTeamSeasonStats);
+        const homeTeamFourFactors = computeTeamFourFactors(homeTeamSeasonStats, awayTeamSeasonStats);
+        const awayTeamFourFactors = computeTeamFourFactors(awayTeamSeasonStats, homeTeamSeasonStats);
 
         return {
           home: homeRoster,
