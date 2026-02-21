@@ -47,7 +47,7 @@ const SPORT_CONFIG = {
   nba: { key: 'basketball_nba', name: 'NBA', emoji: '🏀', useToday: true }, // Today's games (EST)
   nfl: { key: 'americanfootball_nfl', name: 'NFL', emoji: '🏈', daysAhead: 7 }, // NFL is weekly
   nhl: { key: 'icehockey_nhl', name: 'NHL', emoji: '🏒', isBeta: true, useToday: true }, // Today's games (EST)
-  ncaab: { key: 'basketball_ncaab', name: 'NCAAB', emoji: '🏀', minStats: 8, useToday: true }, // Today's games (EST)
+  ncaab: { key: 'basketball_ncaab', name: 'NCAAB', emoji: '🏀', minStats: 6, useToday: true }, // Today's games (EST) — scout report provides 14 categories, stat fetches are supplementary
   ncaaf: { key: 'americanfootball_ncaaf', name: 'NCAAF', emoji: '🏈', fbsOnly: true, useToday: true } // Today's games (EST)
 };
 

@@ -114,7 +114,11 @@ const NCAAB_TOKENS = [
   'NCAAB_TEMPO',             // (FGA+0.44*FTA-OREB+TOV) / GP
   'NCAAB_OFFENSIVE_RATING',  // (PTS/Poss)*100
   'NCAAB_DEFENSIVE_RATING',  // (OppPTS/Poss)*100 — uses games endpoint for opp points
-  'NET_RATING'               // Combined ORtg - DRtg (uses NCAAB calculated ratings)
+  'NET_RATING',              // Combined ORtg - DRtg (uses NCAAB calculated ratings)
+  // Context stats (have dedicated NCAAB fetchers in statRouter)
+  'HOME_AWAY_SPLITS',        // NCAAB_HOME_AWAY_SPLITS fetcher (BDL game results)
+  'RECENT_FORM',             // Enhanced recent form with opponent quality
+  'H2H_HISTORY'              // Head-to-head history (BDL games)
 ];
 
 // NCAAF Stat Tokens - BDL-based tokens that work
