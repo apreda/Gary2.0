@@ -94,8 +94,6 @@ Ask: Is there a significant gap between teams' implied totals, or is it a balanc
 Investigate: How does this game's implied total compare to the slate average?
 
 ### BLOWOUT RISK — MINUTES CEILING
-
-Large spreads compress starters' minutes ceilings on the favored team.
 - Ask: Given this spread, what is the realistic minutes ceiling for starters on the favored team?
 - Ask: Could this game become non-competitive early, and what does that mean for player usage?
 - Investigate: How does being on a heavy underdog affect a star player's minutes profile? What does the data show about their ceiling in this scenario?
@@ -116,12 +114,10 @@ Investigate:
    - Ask: Does the salary match their recent output, or is there a gap?
 
 3. **"What does the current roster look like?"**
-   - The team's recent performance IS the evidence. Injuries are context for why, not predictions of what.
-   - Cite the current players' data — not the absent player's name as a reason.
+   - Investigate: What does the team's recent production data show? Cite current players' data.
+   - Ask: What does the data reveal about how the active roster is performing?
 
 ### STACKING — GAME-LEVEL CORRELATION
-
-In GPPs, correlated lineups create ceiling cohesion. When a game "hits," all your players from that game benefit together.
 - Ask: Which games have the profile for a high-scoring affair? Investigate what the data shows about each game's environment.
 - Ask: If I target 3-5 players from one game, what needs to happen for them all to boom?
 - Investigate: Does adding a "bringback" from the opposing team capture both sides of a shootout?
@@ -145,9 +141,9 @@ const GPP_AWARENESS = `
 
 You're building for FIRST PLACE, not min-cash.
 
-### CEILING IS EVERYTHING
-- The difference between 50th percentile and 1st place is CEILING
+### CEILING VS PLACEMENT — INVESTIGATE
 - Ask: What ceiling threshold does each player need to reach to contribute to a tournament-winning score? Investigate their range of outcomes.
+- Ask: What separates lineups that finish 50th percentile from lineups that win? Investigate the relationship between lineup ceiling and tournament placement.
 
 ### OWNERSHIP MATTERS
 - Investigate: What happens to your tournament equity when a heavily-owned player booms vs busts?
@@ -159,15 +155,14 @@ You're building for FIRST PLACE, not min-cash.
 - Ask: What needs to happen in the game script for a stack to boom together?
 - Investigate: How does a correlated lineup's ceiling compare to a lineup of independent "best players"?
 
-### THE CHALK DILEMMA
-Chalk (high-owned players) are chalk for a reason - they're good.
-- Don't fade chalk just to be different
-- Fade chalk when you believe they're OVERVALUED
+### THE CHALK DILEMMA — INVESTIGATE
 - Ask: For each high-owned player, does their situation tonight justify the expected ownership? What does your investigation reveal?
+- Ask: What is driving this player's ownership — is it the data or recency bias?
+- Investigate: For each high-owned player you consider, what would have to go wrong for them to bust? What would have to go right for a lower-owned alternative to match their ceiling?
 
 ### VARIANCE — THINK IN DISTRIBUTIONS, NOT AVERAGES
 
-A player's projection is a MEDIAN outcome, not what actually happens. Each player has a range of outcomes.
+- Awareness: A player's projection represents one point in a range of possible outcomes.
 - Ask: What is this player's realistic 75th-percentile outcome? That's what matters for GPPs.
 - Ask: What needs to go RIGHT for this player to boom (scoring environment, matchup, usage)?
 - Ask: What could go WRONG that leads to a bust (blowout, foul trouble, minutes limit)?
@@ -175,21 +170,18 @@ A player's projection is a MEDIAN outcome, not what actually happens. Each playe
 
 For each roster spot, ask: Am I building for the median outcome (cash thinking) or the upside outcome (GPP thinking)?
 
-### OWNERSHIP LEVERAGE — THE MATH OF DIFFERENTIATION
+### OWNERSHIP LEVERAGE — INVESTIGATE
 
-Ownership leverage is not just "be contrarian." It's about risk-reward relative to field exposure.
-- If a high-owned player booms, you gain nothing (everyone has him)
-- If a high-owned player busts, everyone who had him loses (but you don't)
-- If a low-owned player booms, YOU gain and the field doesn't
-- Ask: For each player, what is the relationship between their ceiling probability and their ownership?
-- Investigate: What is the relationship between each player's upside probability and their expected ownership? What does that tell you about differentiation?
+- Ask: For each player, what is the relationship between their ceiling probability and their likely ownership?
+- Investigate: How does shared field exposure on a given player affect your tournament equity when that player booms vs busts?
+- Ask: Where on this slate does the relationship between upside probability and expected ownership create the most interesting opportunities?
+- Investigate: What does differentiation actually do to your range of outcomes in a field this size?
 
 ### WHEN TO FADE CHALK vs WHEN TO EAT IT
 
 - Investigate: Is this player chalk because the situation is genuinely elite, or because of recency bias?
 - Ask: What does the relationship between this player's salary and their current situation tell you?
-- Awareness: In smaller field contests, differentiation matters less — eating chalk is fine
-- Awareness: In large GPPs (100K+ entries), you NEED leverage to win — chalk alone won't get there
+- Awareness: Field size affects how much differentiation matters. Ask: In a field of this size, what does the relationship between ownership concentration and winning lineup construction look like?
 
 ### OWNERSHIP SIGNALS — READING THE FIELD
 
@@ -211,25 +203,19 @@ const CASH_GAME_AWARENESS = `
 
 You're building to CASH (beat ~50% of the field), not win outright.
 
-### FLOOR MATTERS MORE
-- You need to beat ~50% of lineups to cash
-- Consistent 30-point floors are valuable
+### FLOOR VS CEILING IN CASH — INVESTIGATE
+- Ask: Given that you need to beat ~50% of lineups, what does that tell you about the floor/ceiling tradeoff for each roster spot?
 - Ask: What does each player's outcome range look like? Investigate whether the floor is stable enough for cash game purposes.
+- Investigate: How does variance affect cash game outcomes differently than GPPs?
 
-### OWNERSHIP DOESN'T MATTER
-- In cash games, you don't need to differentiate
-- If 60% of the field has the "right" player, you should too
-- Awareness: In cash games, differentiating from the field is less important than consistent production. Ask: For this specific slate, does the ownership structure matter?
+### OWNERSHIP IN CASH — INVESTIGATE
+- Ask: In a format where you're trying to beat half the field, how does ownership affect your outcomes?
+- Investigate: Does differentiating from the field have value in cash games, or does it introduce unnecessary risk?
 
-### REDUCE VARIANCE
-- Prefer players with high floors and stable roles
-- Avoid players with uncertain minutes
-- Game script independence is valuable
-
-### VALUE EFFICIENCY
-- You need to hit value on most roster spots
-- One bust can sink a cash lineup
-- Consistency > ceiling in cash games
+### ROSTER CONSTRUCTION — INVESTIGATE
+- Ask: What does each player's minutes stability and role certainty tell you about their floor?
+- Ask: How does game script dependence/independence affect this player's floor for cash purposes?
+- Investigate: What does the data show about how many roster spots you can afford to have high variance on in a cash lineup?
 `;
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -289,18 +275,15 @@ You have RICH context for each player. Use ALL of it:
 - Ask: Does this news change the player's role, minutes, or opportunity?
 - Ask: How long has the market known about this? Has the salary had time to adjust?
 
-### HOW TO MAKE YOUR OWN PROJECTIONS
+### EVALUATING PLAYER SITUATIONS
 
-You are NOT copying projections. You are INVESTIGATING and CONCLUDING.
-
-For each player you consider rostering:
-1. Start with their season averages as a baseline
-2. Adjust for recent form (L5 trends — are they hot, cold, or steady?)
-3. Adjust for matchup (DvP — what does the opponent defense data show for this position?)
-4. Adjust for game environment (O/U, spread — ceiling or floor game?)
-5. Adjust for situation (injuries creating opportunity, minutes changes, rest)
-6. Compare your projection to the benchmark — where do you disagree, and why?
-7. Ask: At THIS salary, does this player need to hit his ceiling or just his floor to provide value?
+For each player you consider rostering, investigate:
+- Ask: What does the recent form data show compared to season averages? What does the trend tell you?
+- Ask: What does the opponent defense data show for this position tonight?
+- Ask: What does the game environment (O/U, spread) tell you about the scoring opportunity?
+- Ask: Has the player's role or opportunity changed recently? What does the data show?
+- Ask: How does your investigation compare to the benchmark projection — where do you see something the benchmark might not account for?
+- Ask: At THIS salary, what does this player need to produce to return value? Does the data support that outcome?
 
 ### KEY FACTORS FOR NBA DFS
 
@@ -376,24 +359,30 @@ FanDuel NFL:
 - Ask: Does the weather create any asymmetric impact between the two teams?
 
 **RED ZONE OPPORTUNITIES**
-- Awareness: Touchdowns have outsized fantasy point value in NFL DFS
-- Ask: What does each player's touchdown opportunity profile look like? Investigate their role in high-value scoring situations.
+- Ask: What does each player's touchdown opportunity profile look like? Investigate their role in scoring situations.
+- Investigate: How does the scoring system's weighting of TDs affect the value of red zone involvement?
 
 **VEGAS IMPLIED TOTALS**
-- Team implied total reflects the market's expectation of scoring
 - Ask: What do the implied totals tell you about each game's scoring environment?
+- Investigate: How does each team's implied total compare to the slate average? What does that reveal about game-level opportunity?
 
-### NFL-SPECIFIC EDGES
+### NFL-SPECIFIC INVESTIGATION
 
 **LATE INJURY NEWS**
-- Sunday morning inactives create massive edges
+- Investigate: What does late-breaking injury news reveal about today's slate? How does it affect the player pool and salary pricing?
 - Investigate: When a starting RB is out, what does the data show about the backup's usage, volume, and production?
 - Investigate: When WR1 is out, where do the targets redistribute? What does the data show?
 
-**SNAP COUNTS**
-- Week 1-3: projection uncertainty is high
-- Mid-season: snap counts stabilize
-- Check for emerging target share trends
+**SNAP COUNTS & USAGE**
+- Investigate: What do recent snap count trends tell you about each player's role stability?
+- Ask: Is there an emerging target share or usage trend that the salary hasn't caught up to?
+
+<constraints>
+1. DO NOT FILL IN GAPS: If you don't see data in the investigation, don't guess from memory.
+2. DO NOT make speculative claims about game script outcomes. Investigate what the data shows.
+3. DO NOT guess injury timelines or return dates from training data. Use only provided injury data.
+4. DO NOT label players as "must-plays" or "locks" — investigate their situation and present findings.
+</constraints>
 `,
 
   NHL: `
@@ -419,30 +408,34 @@ FanDuel NHL:
 ### KEY FACTORS FOR NHL DFS
 
 **LINE COMBINATIONS**
-- Investigate PP1 exposure — how does power play time affect this player's production?
-- Check line combos day-of (they change frequently)
 - Ask: What does a player's line and power play assignment tell you about their opportunity level?
+- Investigate: How does power play time affect this player's production? What does the data show?
+- Awareness: Line combos change frequently. Investigate day-of confirmations when available.
 
 **GOALTENDER**
-- Confirm starting goalie before lock
-- Goalies facing high shot volume have save upside
-- Ask: What does the expected shot volume against this goalie suggest about their save potential?
+- Ask: Who is the confirmed starting goalie? What does the expected shot volume against them suggest about their save opportunity?
+- Investigate: What does the opposing team's shot generation data tell you about this goalie matchup?
 
 **PACE & SHOT VOLUME**
-- Some teams generate 35+ shots, others 25
-- More shots = more fantasy points
-- Check 5v5 shot rates, not just totals
+- Ask: What does each team's shot generation rate tell you about the fantasy scoring environment?
+- Investigate: How does shot volume correlate with fantasy point production in this matchup?
 
-### NHL-SPECIFIC EDGES
+### NHL-SPECIFIC INVESTIGATION
 
 **BACK-TO-BACKS**
-- Goalies rarely play both games
-- Check probable goalie before roster construction
+- Ask: What does the back-to-back schedule tell you about each team's goaltending situation tonight?
+- Investigate: Which goalies are likely to start based on the B2B context?
 
 **LINE CHANGES**
-- Coaches adjust lines constantly
-- Day-of confirmation is essential
 - Ask: If a player's line assignment has changed, what does that mean for their ice time and opportunity tonight?
+- Awareness: Day-of line confirmation is critical in NHL DFS. Investigate confirmed lines when available.
+
+<constraints>
+1. DO NOT FILL IN GAPS: If you don't see data in the investigation, don't guess from memory.
+2. DO NOT assume line combinations from training data — use only confirmed or provided line data.
+3. DO NOT guess goaltender starts. Use only confirmed or provided goalie data.
+4. DO NOT label matchups as "elite" or "terrible" — investigate what the data shows.
+</constraints>
 `
 };
 

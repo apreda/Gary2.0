@@ -9,15 +9,7 @@
  */
 
 import { SHARP_DFS_PRINCIPLES, LOSING_PATTERNS } from './sharpDFSPrinciples.js';
-import { BALES_PHILOSOPHY, STACKING_STRATEGIES, calculateLeverage } from './advancedDFSStrategies.js';
 import { analyzeLineupStacking } from './nbaStackingRules.js';
-import { 
-  SCORE_TARGETS_SOTA, 
-  TEN_COMMANDMENTS_SOTA, 
-  GPP_CHECKLIST_SOTA,
-  GARY_INVESTIGATION_QUESTIONS,
-  GARY_DFS_PHILOSOPHY 
-} from './FIBLE.js';
 
 /**
  * Grades a lineup and provides an audit report.
@@ -74,7 +66,7 @@ export async function auditLineup(lineup, context, options = {}) {
     if (avgOwnership > 25) {
       sharpScore -= 20;
       patterns.push(LOSING_PATTERNS.CHALK_LOCK);
-      weaknesses.push(`Chalk Lock: Avg ownership of ${avgOwnership.toFixed(1)}% is too high for GPPs.`);
+      weaknesses.push(`Avg ownership: ${avgOwnership.toFixed(1)}%. Investigate whether this ownership concentration is justified for each player.`);
     } else if (avgOwnership < 15) {
       strengths.push(`Excellent GPP leverage (Avg own: ${avgOwnership.toFixed(1)}%).`);
     } else {
@@ -107,7 +99,6 @@ export async function auditLineup(lineup, context, options = {}) {
     });
     
     const stacks = Object.entries(teamCounts).filter(([_, count]) => count >= 2);
-    let harmonyInsights = [];
 
     const qb = players.find(p => p.position === 'QB');
     if (qb) {
@@ -127,11 +118,10 @@ export async function auditLineup(lineup, context, options = {}) {
   const badMatchups = players.filter(p => p.dvpRank && p.dvpRank > 25);
   if (badMatchups.length >= 2) {
     sharpScore -= 10;
-    weaknesses.push(`${badMatchups.length} players facing elite defenses (Bottom 5 matchups).`);
+    weaknesses.push(`${badMatchups.length} players facing bottom-5 DvP matchups. Investigate what the matchup data shows for each.`);
   }
 
-  // 6. Blowout Risk Analysis (FIBLE: "THOU SHALT RESPECT BLOWOUT RISK")
-  // Stars on heavy favorites (-10+) have CAPPED ceiling - they sit Q4
+  // 6. Blowout Risk Analysis
   const blowoutRiskPlayers = players.filter(p => {
     const spread = p.teamSpread || p.spread || 0;
     const salary = p.salary || 0;
@@ -143,23 +133,22 @@ export async function auditLineup(lineup, context, options = {}) {
     sharpScore -= (blowoutRiskPlayers.length * 8);
     blowoutRiskPlayers.forEach(p => {
       const spread = Math.abs(p.teamSpread || p.spread || 10);
-      weaknesses.push(`⚠️ BLOWOUT RISK: ${p.player} ($${p.salary}) on -${spread} favorite may sit Q4`);
+      weaknesses.push(`BLOWOUT RISK: ${p.player} ($${p.salary}) on -${spread} favorite. Investigate minutes outlook.`);
     });
     if (blowoutRiskPlayers.length >= 2) {
-      patterns.push({ id: 'BLOWOUT_RISK', name: 'Blowout Risk', description: 'Multiple stars on heavy favorites = capped ceiling' });
+      patterns.push({ id: 'BLOWOUT_RISK', name: 'Blowout Risk', description: 'Multiple expensive players on heavy favorites. Investigate minutes profiles.' });
     }
   }
   
-  // Bonus: Stars on underdogs are BLOWOUT IMMUNE (play full 48)
+  // Underdog stars — minutes profile observation
   const underdogStars = players.filter(p => {
     const spread = p.teamSpread || p.spread || 0;
     const salary = p.salary || 0;
     return salary >= 8000 && spread >= 5; // Underdog by 5+
   });
-  
+
   if (underdogStars.length > 0 && isGPP) {
-    strengths.push(`Blowout Immune: ${underdogStars.map(p => p.player).join(', ')} will play full minutes on underdog.`);
-    harmonyInsights.push(`Full 48 minutes guaranteed for underdog stars.`);
+    strengths.push(`Underdog stars: ${underdogStars.map(p => p.player).join(', ')} on underdogs (+5 or more). Investigate minutes profiles.`);
   }
 
   // 7. Salary Efficiency
@@ -169,7 +158,7 @@ export async function auditLineup(lineup, context, options = {}) {
   
   if (remaining > 2000) {
     sharpScore -= 10;
-    weaknesses.push(`Leaving $${remaining.toLocaleString()} on the table. You could upgrade a position.`);
+    weaknesses.push(`$${remaining.toLocaleString()} unused salary. Investigate whether an upgrade at any position improves the lineup.`);
   } else if (remaining < 500) {
     strengths.push(`Maximum salary efficiency ($${remaining} left).`);
   }
@@ -244,13 +233,13 @@ function reflectOnFIBLEPrinciples(players, context, platform) {
       type: 'strength',
       text: `Correlation observed: ${maxFromOneTeam} players from same team - check if game environment supports this`
     });
-    harmonyInsights.push(`Team stack present - verify this game has shootout potential.`);
+    harmonyInsights.push(`Team stack present: ${maxFromOneTeam} players from one team. Investigate game environment.`);
   }
   
   if (teamsUsed >= 6) {
     observations.push({
       type: 'concern',
-      text: `Lineup spread across ${teamsUsed} teams - Gary should consider if more concentration would help ceiling`
+      text: `Lineup spread across ${teamsUsed} teams. Investigate whether concentration could affect ceiling.`
     });
     investigationNeeded.push({
       id: 'CORRELATION',
@@ -281,7 +270,7 @@ function reflectOnFIBLEPrinciples(players, context, platform) {
     investigationNeeded.push({
       id: 'LEVERAGE',
       name: 'Ownership Check',
-      question: 'Is the ownership on these players justified? Or is it recency bias Gary should fade?'
+      question: 'What is driving the ownership on these players? Investigate whether it reflects the data or other factors.'
     });
   }
   
@@ -302,7 +291,7 @@ function reflectOnFIBLEPrinciples(players, context, platform) {
     investigationNeeded.push({
       id: 'DATA_GAPS',
       name: 'Data Verification',
-      question: 'These players need BDL/Gemini verification. Are they actually playing? What role do they have?'
+      question: 'These players lack statistical context. Investigate whether they are in the active rotation and what their role is.'
     });
   }
   
@@ -313,8 +302,8 @@ function reflectOnFIBLEPrinciples(players, context, platform) {
   const totalCeiling = players.reduce((sum, p) => sum + (p.ceilingScore || p.projected_pts || 0), 0);
   
   observations.push({
-    type: totalCeiling > 300 ? 'strength' : 'concern',
-    text: `Ceiling projection: ${totalCeiling.toFixed(0)} pts - Gary should assess if this is competitive for tonight's slate`
+    type: 'observation',
+    text: `Ceiling projection: ${totalCeiling.toFixed(0)} pts. Investigate whether this is competitive for tonight's slate.`
   });
   
   // Check for blowout risk situations
@@ -454,7 +443,7 @@ export function generateImprovementPlan(auditResult, lineup, playerPool, context
         howToVerify: "Review each player's L5 stats via BDL, confirm matchup advantage via Gemini grounding.",
         fibleReference: "GARY_DFS_PHILOSOPHY.validation"
       }],
-      message: '✅ Lineup is Sharp. Verify picks are backed by data, not just formulas.'
+      message: 'Lineup scored well. Verify each pick is backed by investigation data.'
     };
   }
   
@@ -506,7 +495,7 @@ export function generateImprovementPlan(auditResult, lineup, playerPool, context
         // Add investigation question
         investigations.push({
           question: `Is ${highestChalk.player}'s ${highestChalk.ownership}% ownership justified, or is it recency bias?`,
-          howToVerify: "Use Gemini to check if ownership spike is due to last game's performance. Check BDL for true situation.",
+          howToVerify: "Investigate what is driving this player's expected ownership. Check recent production data.",
           fibleReference: "ADVANCED_OWNERSHIP_LEVERAGE.chalkFadeIndicators"
         });
         
@@ -539,8 +528,8 @@ export function generateImprovementPlan(auditResult, lineup, playerPool, context
         if (player) {
           // Add investigation question
           investigations.push({
-            question: `Is blowout ACTUALLY likely for ${playerName}'s game, or is the spread misleading?`,
-            howToVerify: "Check BDL for recent head-to-head results. Use Gemini to check if underdog has upset potential or rivalry factor.",
+            question: `What does the data show about blowout probability for ${playerName}'s game?`,
+            howToVerify: "Investigate recent head-to-head results and the matchup dynamics.",
             fibleReference: "MINUTES_INHERITANCE.blowoutRiskModeling"
           });
           
@@ -568,8 +557,8 @@ export function generateImprovementPlan(auditResult, lineup, playerPool, context
     if (weakness.includes('No game correlation') || weakness.includes('NO CORRELATION')) {
       // Add investigation question
       investigations.push({
-        question: "Which games tonight have the best shootout potential for stacking?",
-        howToVerify: "Check Vegas totals via Gemini. Verify both teams are healthy and play fast. Look for 230+ total, <5 spread.",
+        question: "Which games tonight have game environments that support stacking?",
+        howToVerify: "Investigate O/U totals, spreads, and pace data for each game.",
         fibleReference: "CORRELATION_STRATEGY.gameStackStrategy.idealGameProfile"
       });
       
@@ -619,7 +608,7 @@ export function generateImprovementPlan(auditResult, lineup, playerPool, context
     pointsNeeded,
     improvements,
     investigations, // Questions Gary should verify with BDL/Gemini
-    fibleReminder: "REMEMBER: Use BDL stats and Gemini grounding to VERIFY these suggestions are valid for TONIGHT'S slate.",
+    fibleReminder: "Investigate each suggestion against tonight's data before acting.",
     message: improvements.length > 0 
       ? `📈 ${improvements.length} possible improvements - INVESTIGATE to verify`
       : '⚠️ No clear formula-based improvements - use FIBLE questions to investigate manually'

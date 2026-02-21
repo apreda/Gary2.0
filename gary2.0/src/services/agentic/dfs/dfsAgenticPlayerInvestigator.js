@@ -2,13 +2,13 @@
  * DFS Player Investigator
  *
  * Phase 4 of the Agentic DFS system.
- * Gemini Flash investigates player candidates for each position
- * that Gary Pro needs to fill.
+ * Gemini investigates player candidates for each position
+ * that Gary needs to fill.
  *
- * For each position, Flash:
+ * For each position, Gemini:
  * - Gets candidate players sorted by salary
  * - Investigates each candidate's situation (form, matchup, teammates)
- * - Summarizes findings for Gary Pro to evaluate
+ * - Summarizes findings for Gary to evaluate
  *
  * FOLLOWS CLAUDE.md: Gary INVESTIGATES before deciding.
  */
@@ -21,14 +21,14 @@ import { DFS_PLAYER_INVESTIGATION_TOOLS, executeToolCall } from './tools/dfsTool
 
 const PLAYER_INVESTIGATION_PROMPT = `
 <role>
-You are Gary's DFS Research Assistant (Gemini Flash).
+You are Gary's DFS Research Assistant.
 Your job is to investigate player candidates for a specific position.
 </role>
 
 <responsibilities>
 - For each candidate, use function calls to gather situation data
-- Assess recent form (L5 games)
-- Assess matchup quality (DvP)
+- Investigate recent form (L5 games)
+- Investigate matchup data (DvP)
 - Check for usage opportunities (teammate injuries)
 - Summarize your factual findings for each candidate
 </responsibilities>
@@ -67,7 +67,7 @@ Example:
 </output_format>
 
 <constraints>
-- DO NOT make lineup decisions - just investigate and report. Gary Pro will decide.
+- DO NOT make lineup decisions - just investigate and report. Gary will decide.
 - DO NOT include any text before or after the JSON array.
 - DO NOT use markdown code blocks.
 - ONLY output the raw JSON array.
@@ -409,11 +409,11 @@ ${candidates.map((p, i) => {
   }
   // B2B flag
   if (p.isB2B) {
-    line += `\n   ⚠️ BACK-TO-BACK (played yesterday)`;
+    line += `\n   Back-to-back: played yesterday`;
   }
-  // Foul trouble signal (L5 fouls per game)
+  // L5 fouls per game
   if (p.l5Stats?.fpg >= 4.0) {
-    line += `\n   ⚠️ Foul Trouble Risk: ${p.l5Stats.fpg} FPG in L5`;
+    line += `\n   L5 Fouls/Game: ${p.l5Stats.fpg}`;
   }
   // Ownership signals (raw data for Gary to reason about)
   if (p.ownershipSignals) {
@@ -435,7 +435,7 @@ ${formatTeamInjuriesForInvestigation(candidates, context)}
 
 ## YOUR TASK
 For EACH candidate, you MUST investigate:
-1. Call GET_PLAYER_GAME_LOGS to assess recent form (L5 trends, hot/cold streaks)
+1. Call GET_PLAYER_GAME_LOGS to investigate recent production (L5 trends)
 2. Call GET_MATCHUP_DATA to evaluate the opponent matchup
 3. Call GET_TEAM_USAGE_STATS once per team to see the current roster structure
 
@@ -533,7 +533,7 @@ function parseInvestigationResults(text, candidates) {
   }
 
   if (!jsonStr) {
-    throw new Error('[Player Investigator] Gary Flash did not produce JSON array of investigations. Raw response: ' + text.slice(0, 500));
+    throw new Error('[Player Investigator] Gary did not produce JSON array of investigations. Raw response: ' + text.slice(0, 500));
   }
 
   let parsed;
@@ -547,12 +547,12 @@ function parseInvestigationResults(text, candidates) {
         .replace(/[\x00-\x1F]/g, ' ');
       parsed = JSON.parse(fixed);
     } catch (e2) {
-      throw new Error('[Player Investigator] Gary Flash produced invalid JSON: ' + e2.message + '. Raw: ' + jsonStr.slice(0, 500));
+      throw new Error('[Player Investigator] Gary produced invalid JSON: ' + e2.message + '. Raw: ' + jsonStr.slice(0, 500));
     }
   }
 
   if (!Array.isArray(parsed) || parsed.length === 0) {
-    throw new Error('[Player Investigator] Gary Flash returned empty investigation array. Must analyze candidates.');
+    throw new Error('[Player Investigator] Gary returned empty investigation array. Must analyze candidates.');
   }
 
   return parsed.map(p => {

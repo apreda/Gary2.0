@@ -651,14 +651,79 @@ export async function fetchPlayerStatsFromBDL(sport, dateStr, slateTeams = []) {
         if (pid) statsMap.set(pid, entry);
       });
       
+      // ═══════════════════════════════════════════════════════════════════════════
+      // NFL INJURIES: Use BDL player_injuries endpoint
+      // BDL NFL injuries come from official practice participation reports
+      // ═══════════════════════════════════════════════════════════════════════════
+      let nflInjuries = [];
+      try {
+        console.log(`[DFS Context] Fetching NFL injuries from BDL...`);
+        nflInjuries = await ballDontLieService.getNflPlayerInjuries(Array.from(teamIds));
+        console.log(`[DFS Context] BDL NFL injuries: ${nflInjuries.length} entries`);
+      } catch (injErr) {
+        console.error(`[DFS Context] NFL injury fetch failed: ${injErr.message}`);
+      }
+
+      // Build injury lookup by player ID and by name
+      const nflInjuryById = new Map();
+      const nflInjuryByName = new Map();
+      for (const inj of nflInjuries) {
+        const status = (inj.status || '').toUpperCase();
+        if (!status) continue;
+        if (inj.player?.id) nflInjuryById.set(inj.player.id, { status, comment: inj.comment || '' });
+        const fullName = `${inj.player?.first_name || ''} ${inj.player?.last_name || ''}`.trim().toLowerCase();
+        if (fullName) nflInjuryByName.set(fullName, { status, comment: inj.comment || '' });
+      }
+
+      // Populate module-level injury cache for NFL (same pattern as NBA)
+      const nflInjuriesForCache = nflInjuries.map(inj => ({
+        player: { first_name: inj.player?.first_name || '', last_name: inj.player?.last_name || '' },
+        status: inj.status || '',
+        description: inj.comment || ''
+      }));
+      setInjuryNameCache(nflInjuriesForCache);
+
+      // ═══════════════════════════════════════════════════════════════════════════
+      // NFL L5 GAME LOGS: Recent form via BDL getNflPlayerGameLogsBatch
+      // Provides game-by-game stats, form trends, target trends, usage trends
+      // ═══════════════════════════════════════════════════════════════════════════
+      let nflGameLogs = {};
+      try {
+        // Only fetch game logs for players with season stats (active contributors)
+        const activePlayerIds = players
+          .filter(p => p.id && statsMap.has(p.id))
+          .map(p => p.id);
+
+        if (activePlayerIds.length > 0) {
+          console.log(`[DFS Context] Fetching NFL L5 game logs for ${activePlayerIds.length} active players`);
+          nflGameLogs = await ballDontLieService.getNflPlayerGameLogsBatch(activePlayerIds, season, 5);
+          console.log(`[DFS Context] NFL game logs: ${Object.keys(nflGameLogs).length}/${activePlayerIds.length} players`);
+        }
+      } catch (logErr) {
+        console.warn(`[DFS Context] NFL game logs fetch failed: ${logErr.message}`);
+      }
+
       const playerList = players.map(p => {
         const stats = statsMap.get(p.id) || {};
         const position = (p.position_abbreviation || p.position || '').toUpperCase();
-        
+
+        // Check injury status (ID first, then name fallback)
+        let injuryStatus = null;
+        const injById = nflInjuryById.get(p.id);
+        if (injById) {
+          injuryStatus = injById.status;
+        } else {
+          const pName = `${p.first_name} ${p.last_name}`.trim().toLowerCase();
+          const injByName = nflInjuryByName.get(pName);
+          if (injByName) injuryStatus = injByName.status;
+        }
+
+        // Get L5 game log data if available
+        const gameLogs = nflGameLogs[p.id] || null;
+
         // Map BDL NFL stats to our DFS format
-        // Fields from BDL docs: passing_yards_per_game, passing_touchdowns, passing_interceptions,
-        // rushing_yards_per_game, rushing_touchdowns, receptions, receiving_yards_per_game, etc.
         return {
+          id: p.id,
           name: `${p.first_name} ${p.last_name}`,
           team: p.team?.abbreviation || p.team?.name || 'UNK',
           position: position === 'QUARTERBACK' ? 'QB' :
@@ -666,6 +731,8 @@ export async function fetchPlayerStatsFromBDL(sport, dateStr, slateTeams = []) {
                    position === 'WIDE RECEIVER' ? 'WR' :
                    position === 'TIGHT END' ? 'TE' :
                    position || 'FLEX',
+          status: injuryStatus || 'ACTIVE',
+          injured: !!injuryStatus,
           seasonStats: {
             // QB stats
             passing_yards_per_game: stats.passing_yards_per_game || 0,
@@ -685,7 +752,19 @@ export async function fetchPlayerStatsFromBDL(sport, dateStr, slateTeams = []) {
             receiving_fumbles_lost: stats.receiving_fumbles_lost || 0,
             // Games played
             games_played: stats.games_played || 0
-          }
+          },
+          // L5 game logs with form/target/usage trends
+          l5Stats: gameLogs ? {
+            gamesAnalyzed: gameLogs.gamesAnalyzed,
+            averages: gameLogs.averages,
+            consistency: gameLogs.consistency,
+            formTrend: gameLogs.formTrend,
+            targetTrend: gameLogs.targetTrend,
+            usageTrend: gameLogs.usageTrend,
+            splits: gameLogs.splits,
+            lastGame: gameLogs.lastGame,
+            games: gameLogs.games
+          } : null
         };
       });
       
@@ -1663,6 +1742,25 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
       console.log(`[DFS Context] Team stats: base ${teamBaseStatsMap.size > 0 ? '\u2713' : '\u2717'}, defense ${teamDefenseBreakdownMap.size > 0 ? '\u2713' : '\u2717'}, scoring ${teamScoringProfileMap.size > 0 ? '\u2713' : '\u2717'}, standings ${standingsData ? '\u2713' : '\u2717'}`);
     } catch (e) {
       console.warn(`[DFS Context] BDL team stats fetch failed (${e.message}) — continuing without supplementary team data`);
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // NFL STANDINGS (weekly sport — no B2B, no pace, but standings matter)
+  // ═══════════════════════════════════════════════════════════════════════════
+  const isNFL = sport.toUpperCase() === 'NFL';
+  if (isNFL && !standingsData) {
+    try {
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth() + 1;
+      const nflSeason = currentMonth >= 9 ? currentYear : currentYear - 1;
+      standingsData = await ballDontLieService.getNflStandings(nflSeason);
+      if (standingsData) {
+        console.log(`[DFS Context] NFL standings: ${standingsData.length} teams`);
+      }
+    } catch (e) {
+      console.warn(`[DFS Context] NFL standings fetch failed (${e.message})`);
     }
   }
 
