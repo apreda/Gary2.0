@@ -21,51 +21,40 @@ import { DFS_SLATE_ANALYSIS_TOOLS, executeToolCall } from './tools/dfsToolDefini
 const SLATE_ANALYSIS_PROMPT = `
 <role>
 You are Gary's DFS Research Assistant (Gemini Flash).
-Your job is to INVESTIGATE the slate and surface opportunities for Gary Pro to evaluate.
+Your job is to INVESTIGATE the slate and surface FACTUAL findings for Gary Pro to evaluate.
 </role>
 
 <responsibilities>
 - Use function calls to gather REAL DATA about players and games
-- Identify USAGE VACUUMS (when star players are OUT, who absorbs their production?)
-- Identify PRICE LAGS (players whose salary hasn't caught up to their new role)
-- Identify STACK TARGETS (games with highest scoring potential)
+- Investigate injury status for ALL teams — document who is OUT and how long they have been out
+- Investigate game environments — O/U, spreads, pace matchups
+- Surface the FACTS — Gary Pro decides what they mean
 </responsibilities>
 
 <investigation_priorities>
-1. Check injury status for ALL teams - look for fresh OUT designations
-2. For each OUT player, identify who benefits (usage vacuum)
-3. Check game environments - O/U, spreads, pace matchups
-4. Flag any players whose price seems wrong given their situation
+1. Check injury status for ALL teams — note duration tags (RECENT, ESTABLISHED, LONG-TERM)
+2. For teams with injuries, call GET_TEAM_USAGE_STATS to see how the active roster is structured
+3. Check game environments — O/U, spreads, pace matchups
+4. Document what you find — do NOT interpret what it means for lineups
 </investigation_priorities>
 
 <output_format>
 After investigation, summarize your findings in JSON:
 {
-  "usageVacuums": [
+  "injuryReport": [
     {
-      "outPlayer": "LeBron James",
-      "outPlayerUsage": 32.5,
-      "beneficiaries": ["Austin Reaves", "D'Angelo Russell"],
       "team": "LAL",
-      "injuryFreshness": "announced 2 hours ago",
-      "priceAdjusted": false
+      "outPlayers": [
+        { "player": "LeBron James", "duration": "RECENT", "gamesMissed": 1 }
+      ],
+      "gtdPlayers": ["Anthony Davis"]
     }
   ],
-  "priceLags": [
-    {
-      "player": "Austin Reaves",
-      "salary": 5400,
-      "situation": "Primary ball handler with LeBron OUT",
-      "fairValue": 7200,
-      "edge": 1800
-    }
-  ],
-  "stackTargets": [
+  "gameProfiles": [
     {
       "game": "LAL vs SAC",
       "overUnder": 235,
-      "pace": "high",
-      "reason": "Both teams top 10 pace, no defensive stoppers"
+      "pace": "high"
     }
   ],
   "gameEnvironments": [
@@ -75,16 +64,18 @@ After investigation, summarize your findings in JSON:
       "awayTeam": "LAL",
       "spread": -3.5,
       "overUnder": 235,
-      "paceUp": true,
-      "blowoutRisk": false
+      "homePace": 100.2,
+      "awayPace": 99.8
     }
   ]
 }
 </output_format>
 
 <constraints>
-- DO NOT make lineup decisions - just gather and organize the data
+- DO NOT make lineup decisions — just gather and organize the data
 - DO NOT rank players or suggest who to roster
+- DO NOT label players as "beneficiaries" or compute "boosts" — just report the facts
+- DO NOT compute "fair value" or "edge" amounts — report what you found and let Gary Pro evaluate
 </constraints>
 `;
 
@@ -173,7 +164,7 @@ export async function analyzeSlateWithFlash(genAI, context, options = {}) {
   if (!finalText || !finalText.trim()) {
     console.log('[Slate Analyzer] Flash ended without text — nudging for JSON summary...');
     response = await chat.sendMessage(
-      'Your investigation is complete. Now produce your JSON summary with usageVacuums, priceLags, stackTargets, and gameEnvironments based on everything you found.'
+      'Your investigation is complete. Now produce your JSON summary with injuryReport, gameProfiles, and gameEnvironments based on everything you found.'
     );
     finalText = response.response.text();
   }
@@ -188,7 +179,7 @@ export async function analyzeSlateWithFlash(genAI, context, options = {}) {
 
   const analysis = parseSlateAnalysis(finalText);
 
-  console.log(`[Slate Analyzer] ✓ Investigation complete after ${iterations} iterations`);
+  console.log(`[Slate Analyzer] Investigation complete after ${iterations} iterations`);
 
   return analysis;
 }
@@ -208,7 +199,7 @@ function buildAnalysisRequest(context) {
     teamRosters[team].push(player);
   }
 
-  // Format games (include O/U, spread, implied totals, B2B, blowout risk, pace)
+  // Format games (include O/U, spread, implied totals, B2B, pace)
   const gamesStr = (games || []).map(g => {
     const home = g.homeTeam || g.home_team || 'HOME';
     const away = g.awayTeam || g.visitor_team || g.away_team || 'AWAY';
@@ -219,10 +210,9 @@ function buildAnalysisRequest(context) {
       : '';
     const pace = g.game_pace ? ` Pace: ${g.game_pace}` : '';
     const flags = [];
-    if (g.blowout_risk) flags.push('BLOWOUT RISK');
     if (g.home_b2b) flags.push(`${home} B2B`);
     if (g.away_b2b) flags.push(`${away} B2B`);
-    const flagStr = flags.length > 0 ? ` ⚠️ ${flags.join(', ')}` : '';
+    const flagStr = flags.length > 0 ? ` | ${flags.join(', ')}` : '';
     return `${away} @ ${home}${total}${spread}${implied}${pace}${flagStr}`;
   }).join('\n');
 
@@ -263,12 +253,10 @@ ${injuriesStr || 'None loaded yet - USE GET_TEAM_INJURIES to check each team'}
 ${Object.keys(teamRosters).join(', ')}
 
 ## YOUR TASK
-1. Call GET_TEAM_INJURIES for each team to find OUT/GTD players
-   - IMPORTANT: Check the DURATION tag on each injury. LONG-TERM absences (11+ team games missed) are already priced into salaries — they are NOT usage opportunities.
-   - Only RECENT absences (0-2 team games missed) create genuine edge — salaries may not have adjusted yet.
-2. For RECENT absences only, call GET_USAGE_BOOST to find who benefits
+1. Call GET_TEAM_INJURIES for each team to find OUT/GTD players — note the duration tag on each injury
+2. For teams with injuries, call GET_TEAM_USAGE_STATS to see how the active roster is structured
 3. Call GET_GAME_ENVIRONMENT for each game to assess pace/scoring
-4. Identify any PRICE LAG situations where salary < fair value
+4. Document what you found — do NOT interpret it or label players as "beneficiaries"
 
 Begin your investigation now. Call the tools you need.
 `;
@@ -293,20 +281,17 @@ function parseSlateAnalysis(text) {
   }
 
   // Require at least some analysis - can't be completely empty
-  const hasAnalysis = (parsed.usageVacuums?.length > 0) ||
-                      (parsed.priceLags?.length > 0) ||
-                      (parsed.stackTargets?.length > 0) ||
+  const hasAnalysis = (parsed.injuryReport?.length > 0) ||
+                      (parsed.gameProfiles?.length > 0) ||
                       (parsed.gameEnvironments?.length > 0);
 
   if (!hasAnalysis) {
-    console.warn('[Slate Analyzer] Gary Flash found no opportunities - verify slate has games');
-    // This is a warning, not an error - some slates genuinely have no clear opportunities
+    console.warn('[Slate Analyzer] Gary Flash found no data - verify slate has games');
   }
 
   return {
-    usageVacuums: parsed.usageVacuums || [],
-    priceLags: parsed.priceLags || [],
-    stackTargets: parsed.stackTargets || [],
+    injuryReport: parsed.injuryReport || [],
+    gameProfiles: parsed.gameProfiles || [],
     gameEnvironments: parsed.gameEnvironments || [],
     rawAnalysis: text
   };

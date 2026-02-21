@@ -26,9 +26,9 @@ You've just completed your slate investigation. Now form your BUILD THESIS.
 </role>
 
 <what_is_a_thesis>
-A BUILD THESIS identifies the TOP EDGES on this specific slate.
+A BUILD THESIS is your strategic read on this specific slate based on your investigation.
 Real sharps don't pick a "strategy template" first and then search for players that fit.
-They find edges first, and the lineup shape emerges from assembling those edges.
+They investigate the data first, and the lineup shape emerges from assembling those findings.
 
 Your thesis answers:
 1. What are the TOP 3-5 EDGES on this slate?
@@ -37,14 +37,15 @@ Your thesis answers:
 4. How do these edges combine into a lineup that can WIN?
 </what_is_a_thesis>
 
-<edge_types>
-USAGE_VACUUM — A key player is OUT, usage redistributes. Price hasn't adjusted.
-PRICE_LAG — Player's role/production has changed but salary reflects the old situation.
-GAME_ENVIRONMENT — High O/U + tight spread + fast pace = scoring environment for all players.
-MATCHUP_MISMATCH — Opponent defense is weak at a specific position where a player operates.
-FORM_DIVERGENCE — Player's L5 production diverges significantly from season average.
-CORRELATION_OPPORTUNITY — A specific game's environment supports stacking multiple players.
-</edge_types>
+<investigation_areas>
+When forming your thesis, investigate these areas based on the slate data:
+- How do injuries change the landscape for specific teams and players?
+- Where does player production diverge from what their salary suggests?
+- Which game environments stand out and why?
+- Are there matchup dynamics worth investigating further?
+- What correlation opportunities does the slate present?
+Your thesis should emerge from what the DATA shows, not from predefined categories.
+</investigation_areas>
 
 <task>
 Based on the slate investigation provided above, form your thesis:
@@ -99,8 +100,8 @@ export async function formBuildThesis(genAI, slateAnalysis, context, options = {
   // Parse Gary's thesis
   const thesis = parseThesisResponse(responseText);
 
-  console.log(`[Thesis Builder] ✓ Edges: ${thesis.edges?.map(e => e.type).join(', ')}`);
-  console.log(`[Thesis Builder] ✓ Target Games: ${thesis.targetGames?.join(', ')}`);
+  console.log(`[Thesis Builder] Edges: ${thesis.edges?.map(e => e.type).join(', ')}`);
+  console.log(`[Thesis Builder] Target Games: ${thesis.targetGames?.join(', ')}`);
 
   return thesis;
 }
@@ -110,7 +111,8 @@ export async function formBuildThesis(genAI, slateAnalysis, context, options = {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function buildThesisRequest(slateAnalysis, context) {
-  const { usageVacuums, priceLags, stackTargets, gameEnvironments, rawAnalysis } = slateAnalysis;
+  const { injuryReport, gameProfiles, gameEnvironments, rawAnalysis } = slateAnalysis;
+  const profiles = gameProfiles || [];
   const { winningTargets, platform, contestType, players } = context;
 
   return `
@@ -122,14 +124,11 @@ function buildThesisRequest(slateAnalysis, context) {
 - Cash Line: ${winningTargets?.toCash || 285} pts
 - Slate Size: ${winningTargets?.gameCount || 8} games
 
-### USAGE VACUUMS IDENTIFIED
-${formatUsageVacuums(usageVacuums)}
+### INJURY REPORT
+${formatInjuryReport(injuryReport)}
 
-### PRICE LAG OPPORTUNITIES
-${formatPriceLags(priceLags)}
-
-### STACK TARGETS (Best Games for Correlation)
-${formatStackTargets(stackTargets)}
+### GAME PROFILES
+${formatGameProfiles(profiles)}
 
 ### GAME ENVIRONMENTS
 ${formatGameEnvironments(gameEnvironments)}
@@ -143,28 +142,26 @@ ${rawAnalysis?.slice(0, 5000) || 'No additional notes'}
 
 Based on this investigation:
 
-1. What are the TOP 3-5 EDGES on this slate? (usage vacuums, price lags, game environments, matchup mismatches, form divergence, correlation plays)
+1. What are the TOP 3-5 findings from your investigation? What stands out from the data?
 
 2. Which GAMES are you targeting and why?
 
 3. How do these edges combine into a winning strategy?
 
-4. CEILING SCENARIO: How does this lineup score ${winningTargets?.toWin || 380}+ and WIN?
+4. What conditions are required for this lineup to reach the winning threshold of ${winningTargets?.toWin || 380}+?
 
 OUTPUT YOUR THESIS AS JSON:
 {
   "edges": [
-    { "type": "USAGE_VACUUM", "player": "Austin Reaves", "description": "LeBron OUT, Reaves absorbs usage at underpriced salary", "confidence": "HIGH" },
-    { "type": "GAME_ENVIRONMENT", "game": "LAL@SAC", "description": "235 O/U, tight spread, both teams top-10 pace", "confidence": "HIGH" },
-    { "type": "PRICE_LAG", "player": "De'Aaron Fox", "description": "L5 avg 55 DK FPTS but salary reflects 42 FPTS", "confidence": "MEDIUM" }
+    { "type": "GAME_ENVIRONMENT", "game": "LAL@SAC", "description": "235 O/U, tight spread, both teams top-10 pace", "reasoning": "Why you believe this" },
+    { "type": "SALARY_VS_PRODUCTION", "player": "De'Aaron Fox", "description": "L5 avg 55 DK FPTS but salary reflects 42 FPTS", "reasoning": "Why you believe this" },
+    { "type": "CORRELATION", "game": "BOS@MIA", "description": "High total, competitive spread — stack opportunity", "reasoning": "Why you believe this" }
   ],
   "thesis": "Your 2-3 sentence thesis explaining how these edges combine into a winning lineup",
   "targetGames": ["LAL@SAC", "BOS@MIA"],
-  "usageSituations": [
-    { "player": "Austin Reaves", "situation": "LeBron OUT creates usage vacuum" }
-  ],
-  "winCondition": "How this lineup scores ${winningTargets?.toWin || 380}+ and wins",
-  "keyAssumptions": ["LAL-SAC stays close and high-scoring", "Reaves usage boost materializes"],
+  "injuryReport": ${JSON.stringify(injuryReport || [])},
+  "winCondition": "What conditions must hold for this lineup to reach the winning threshold",
+  "keyAssumptions": ["LAL-SAC stays close and high-scoring", "Fox continues L5 form"],
   "risks": ["If LAL blows out SAC, starters rest"]
 }
 `;
@@ -174,37 +171,29 @@ OUTPUT YOUR THESIS AS JSON:
 // FORMAT HELPERS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function formatUsageVacuums(usageVacuums) {
-  if (!usageVacuums || usageVacuums.length === 0) {
-    return 'None identified - no major injuries creating opportunity';
+function formatInjuryReport(injuryReport) {
+  if (!injuryReport || injuryReport.length === 0) {
+    return 'No injuries reported on this slate';
   }
 
-  return usageVacuums.map(uv =>
-    `- ${uv.outPlayer} OUT (${uv.team}) - ${uv.outPlayerUsage || '?'}% usage to redistribute
-     Beneficiaries: ${uv.beneficiaries?.map(b => b.name || b).join(', ') || 'Unknown'}
-     Fresh: ${uv.injuryFreshness || 'Unknown'} | Price Adjusted: ${uv.priceAdjusted ? 'Yes' : 'No'}`
-  ).join('\n');
+  return injuryReport.map(report => {
+    const outNames = (report.outPlayers || []).map(p =>
+      `${p.player} (${p.duration || '?'}, ${p.gamesMissed ?? '?'} games missed)`
+    ).join(', ');
+    const gtdNames = (report.gtdPlayers || []).join(', ');
+    let line = `- ${report.team}: OUT: ${outNames || 'none'}`;
+    if (gtdNames) line += ` | GTD: ${gtdNames}`;
+    return line;
+  }).join('\n');
 }
 
-function formatPriceLags(priceLags) {
-  if (!priceLags || priceLags.length === 0) {
-    return 'None identified - prices seem fair across the slate';
+function formatGameProfiles(gameProfiles) {
+  if (!gameProfiles || gameProfiles.length === 0) {
+    return 'No game profile data available';
   }
 
-  return priceLags.map(pl =>
-    `- ${pl.player} ($${pl.salary}) - ${pl.situation}
-     Fair Value: $${pl.fairValue || '?'} | Edge: $${pl.edge || '?'}`
-  ).join('\n');
-}
-
-function formatStackTargets(stackTargets) {
-  if (!stackTargets || stackTargets.length === 0) {
-    return 'No obvious stack targets - consider balanced exposure';
-  }
-
-  return stackTargets.map(st =>
-    `- ${st.game}: O/U ${st.overUnder || '?'}, Pace: ${st.pace || 'medium'}
-     Why: ${st.reason || 'High total'}`
+  return gameProfiles.map(gp =>
+    `- ${gp.game}: O/U ${gp.overUnder || '?'}, Pace: ${gp.pace || 'medium'}`
   ).join('\n');
 }
 
@@ -217,14 +206,17 @@ function formatGameEnvironments(gameEnvironments) {
     const implied = ge.impliedTotal
       ? `Implied: ${ge.homeTeam} ${ge.impliedTotal.home?.toFixed?.(1) || '?'} / ${ge.awayTeam} ${ge.impliedTotal.away?.toFixed?.(1) || '?'}`
       : '';
-    const pace = ge.gamePace ? `Pace: ${ge.gamePace}` : (ge.paceUp ? 'Pace Up' : '');
+    const paceStr = [];
+    if (ge.homePace != null) paceStr.push(`${ge.homeTeam} Pace: ${ge.homePace}`);
+    if (ge.awayPace != null) paceStr.push(`${ge.awayTeam} Pace: ${ge.awayPace}`);
+    if (ge.gamePace) paceStr.push(`Game Pace: ${ge.gamePace}`);
+    const paceDisplay = paceStr.length > 0 ? paceStr.join(' | ') : '';
     const flags = [];
-    if (ge.blowoutRisk) flags.push('BLOWOUT RISK');
     if (ge.homeB2B) flags.push(`${ge.homeTeam} B2B`);
     if (ge.awayB2B) flags.push(`${ge.awayTeam} B2B`);
-    const flagStr = flags.length > 0 ? ` ⚠️ ${flags.join(', ')}` : '';
+    const flagStr = flags.length > 0 ? ` | ${flags.join(', ')}` : '';
     return `- ${ge.awayTeam}@${ge.homeTeam}: Spread ${ge.spread || 0}, O/U ${ge.overUnder || '?'}
-     ${implied} | ${pace}${flagStr}`;
+     ${implied} | ${paceDisplay}${flagStr}`;
   }).join('\n');
 }
 
@@ -258,7 +250,7 @@ function parseThesisResponse(text) {
     edges: parsed.edges,
     thesis: parsed.thesis,
     targetGames: parsed.targetGames || [],
-    usageSituations: parsed.usageSituations || [],
+    injuryReport: parsed.injuryReport || [],
     winCondition: parsed.winCondition || '',
     keyAssumptions: parsed.keyAssumptions || [],
     risks: parsed.risks || [],

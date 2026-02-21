@@ -30,21 +30,17 @@ export const DFS_SLATE_ANALYSIS_TOOLS = [
     }
   },
   {
-    name: 'GET_USAGE_BOOST',
-    description: 'When a player is OUT, find who absorbs their usage. Returns beneficiaries with projected boost.',
+    name: 'GET_TEAM_USAGE_STATS',
+    description: 'Get usage stats (USG%, minutes, team share) for all active players on a team. Use this to investigate how a team is structured.',
     parameters: {
       type: 'object',
       properties: {
-        outPlayer: {
-          type: 'string',
-          description: 'Name of the player who is OUT'
-        },
         team: {
           type: 'string',
-          description: 'Team abbreviation'
+          description: 'Team abbreviation (e.g., LAL, MIL, BOS)'
         }
       },
-      required: ['outPlayer', 'team']
+      required: ['team']
     }
   },
   {
@@ -87,21 +83,17 @@ export const DFS_SLATE_ANALYSIS_TOOLS = [
 
 export const DFS_PLAYER_INVESTIGATION_TOOLS = [
   {
-    name: 'GET_USAGE_BOOST',
-    description: 'When a player is OUT, find who absorbs their usage. Returns beneficiaries with projected boost.',
+    name: 'GET_TEAM_USAGE_STATS',
+    description: 'Get usage stats (USG%, minutes, team share) for all active players on a team. Use this to investigate how a team is structured.',
     parameters: {
       type: 'object',
       properties: {
-        outPlayer: {
-          type: 'string',
-          description: 'Name of the player who is OUT'
-        },
         team: {
           type: 'string',
-          description: 'Team abbreviation'
+          description: 'Team abbreviation (e.g., LAL, MIL, BOS)'
         }
       },
-      required: ['outPlayer', 'team']
+      required: ['team']
     }
   },
   {
@@ -160,7 +152,7 @@ export const DFS_PLAYER_INVESTIGATION_TOOLS = [
   },
   {
     name: 'GET_TEAMMATE_STATUS',
-    description: 'Check injury/status of a player\'s teammates to identify usage opportunities.',
+    description: 'Check injury and availability status of a player\'s teammates.',
     parameters: {
       type: 'object',
       properties: {
@@ -224,8 +216,8 @@ export async function executeToolCall(toolName, args, context) {
       case 'GET_TEAM_INJURIES':
         return await getTeamInjuries(args.team, context);
 
-      case 'GET_USAGE_BOOST':
-        return await getUsageBoost(args.outPlayer, args.team, context);
+      case 'GET_TEAM_USAGE_STATS':
+        return await getTeamUsageStats(args.team, context);
 
       case 'GET_GAME_ENVIRONMENT':
         return await getGameEnvironment(args.homeTeam, args.awayTeam, context);
@@ -294,7 +286,6 @@ async function getTeamInjuries(team, context) {
           player: i.player?.first_name ? `${i.player.first_name} ${i.player.last_name}` : i.player,
           status: i.status,
           reason: i.reason || i.injury,
-          impact: i.impact || 'Unknown'
         };
         // Surface duration data when available
         if (i.duration) {
@@ -315,94 +306,53 @@ async function getTeamInjuries(team, context) {
   };
 }
 
-async function getUsageBoost(outPlayer, team, context) {
-  // Find the out player's stats to estimate usage redistribution
+async function getTeamUsageStats(team, context) {
+  // Return factual usage data for all active players on this team.
+  // Gary investigates the data and draws his own conclusions.
   const players = context.players?.filter(p => p.team === team) || [];
 
-  // Find the out player in context
-  const outPlayerData = players.find(p =>
-    p.name?.toLowerCase().includes(outPlayer.toLowerCase()) ||
-    outPlayer.toLowerCase().includes(p.name?.toLowerCase())
-  );
-
-  if (!outPlayerData) {
+  if (players.length === 0) {
     return {
-      outPlayer,
       team,
-      error: `Player "${outPlayer}" not found on ${team} roster. Cannot calculate usage redistribution without real data.`,
-      beneficiaries: []
+      error: `No active players found for ${team} in this slate.`,
+      players: []
     };
   }
 
-  const outPlayerUsage = outPlayerData.usageStats?.usg_pct || outPlayerData.seasonStats?.usg_pct || null;
-  const outPlayerMinutes = outPlayerData.seasonStats?.mpg || null;
-
-  if (!outPlayerUsage || !outPlayerMinutes) {
-    return {
-      outPlayer,
-      team,
-      error: `Usage/minutes data unavailable for ${outPlayer}. Cannot calculate redistribution.`,
-      beneficiaries: []
-    };
-  }
-
-  // Identify likely beneficiaries (same position, similar role)
-  const rawBeneficiaries = players
-    .filter(p => p.name !== outPlayerData?.name)
-    .filter(p => {
-      const positions = p.positions || [p.position];
-      const outPositions = outPlayerData?.positions || [outPlayerData?.position];
-      return positions.some(pos => outPositions?.includes(pos)) ||
-             (p.mpg && p.mpg >= 15); // Or significant minute players
-    })
-    .slice(0, 5);
-
-  // Distribute usage proportionally — higher-usage teammates get more of the redistribution
-  const totalCurrentUsage = rawBeneficiaries.reduce((sum, p) => sum + (p.usage || p.seasonStats?.usg_pct || 20), 0);
-  const beneficiaries = rawBeneficiaries.map(p => {
-    const currentUsage = p.usage || p.seasonStats?.usg_pct || 20;
-    const share = totalCurrentUsage > 0 ? currentUsage / totalCurrentUsage : 1 / rawBeneficiaries.length;
-    return {
+  // Build factual player profiles — no computed boosts or beneficiary labels
+  const playerProfiles = players
+    .filter(p => (p.seasonStats?.mpg || p.mpg || 0) >= 10) // Only players with real minutes
+    .sort((a, b) => (b.usageStats?.usg_pct || b.seasonStats?.usg_pct || 0) - (a.usageStats?.usg_pct || a.seasonStats?.usg_pct || 0))
+    .map(p => ({
       name: p.name,
-      currentUsage,
-      currentMinutes: p.mpg || p.seasonStats?.mpg || 20,
-      projectedBoost: Math.round(outPlayerUsage * share * 10) / 10,
+      position: p.position,
       salary: p.salary,
-      priceAdjusted: false
-    };
-  });
+      minutesPerGame: p.seasonStats?.mpg || p.mpg || null,
+      usagePct: p.usageStats?.usg_pct || p.seasonStats?.usg_pct || null,
+      teamSharePts: p.usageStats?.pct_pts || null,
+      teamShareFga: p.usageStats?.pct_fga || null,
+      teamShareAst: p.usageStats?.pct_ast || null,
+      seasonPpg: p.seasonStats?.ppg || null,
+      l5Ppg: p.l5Stats?.ppg || null,
+      l5DkFpts: p.l5Stats?.dkFptsAvg || null
+    }));
 
-  // Look up injury duration from context injury map
+  // Surface team injuries factually — who is out and for how long
   const teamInjuries = context.injuries?.[team] || [];
-  const injuryEntry = teamInjuries.find(i =>
-    (i.player || '').toLowerCase().includes(outPlayer.toLowerCase()) ||
-    outPlayer.toLowerCase().includes((i.player || '').toLowerCase())
-  );
-  const injuryDuration = injuryEntry?.duration || null;
-  const gamesMissed = injuryEntry?.gamesMissed || null;
+  const outPlayers = teamInjuries
+    .filter(i => (i.status || '').toUpperCase().includes('OUT') || (i.status || '').toUpperCase() === 'DOUBTFUL')
+    .map(i => ({
+      player: i.player,
+      status: i.status,
+      duration: i.duration || null,
+      gamesMissed: i.gamesMissed || null
+    }));
 
-  const result = {
-    outPlayer,
+  return {
     team,
-    outPlayerUsage,
-    outPlayerMinutes,
-    beneficiaries
+    activePlayers: playerProfiles,
+    outPlayers
   };
-
-  // Surface duration context so Gary understands whether this is actionable
-  if (injuryDuration) {
-    result.absenceDuration = injuryDuration;
-    result.gamesMissed = gamesMissed;
-    if (injuryDuration === 'LONG-TERM') {
-      result.durationNote = `${outPlayer} has missed ${gamesMissed}+ team games. Current salaries and team stats already reflect this absence. This usage redistribution is the current baseline, not a new opportunity.`;
-    } else if (injuryDuration === 'ESTABLISHED') {
-      result.durationNote = `${outPlayer} has missed ${gamesMissed} team games. Salaries have partially adjusted. Investigate whether beneficiaries' recent production matches their current salary.`;
-    } else if (injuryDuration === 'RECENT') {
-      result.durationNote = `${outPlayer} has missed only ${gamesMissed} team games. Salaries may not fully reflect this absence yet.`;
-    }
-  }
-
-  return result;
 }
 
 async function getGameEnvironment(homeTeam, awayTeam, context) {
@@ -427,7 +377,8 @@ async function getGameEnvironment(homeTeam, awayTeam, context) {
         home: game.implied_home_total ?? (ou && sp ? (ou / 2 - sp / 2) : null),
         away: game.implied_away_total ?? (ou && sp ? (ou / 2 + sp / 2) : null)
       },
-      blowoutRisk: game.blowout_risk ?? false,
+      homePace: game.home_pace ?? null,
+      awayPace: game.away_pace ?? null,
       gamePace: game.game_pace ?? null,
       homeB2B: game.home_b2b ?? false,
       awayB2B: game.away_b2b ?? false
@@ -507,7 +458,7 @@ async function getPlayerSeasonStats(playerName, context) {
   const player = findPlayerByName(playerName, context);
 
   if (player) {
-    const dkFpts = player.seasonStats?.dkFpts || 0;
+    const dkFpts = player.seasonStats?.dkFpts ?? null;
     return {
       player: player.name,
       team: player.team,
@@ -532,8 +483,7 @@ async function getPlayerSeasonStats(playerName, context) {
         games: player.l5Stats.games
       } : null,
       matchupDvP: player.matchupDvP || null,
-      salary: player.salary,
-      valuePerDollar: player.salary && dkFpts ? (dkFpts / player.salary * 1000).toFixed(2) : 'N/A'
+      salary: player.salary
     };
   }
 
@@ -639,7 +589,7 @@ async function getPlayerVsTeamHistory(playerName, opponent, context) {
     },
     note: vsGames.length > 0
       ? `Found ${vsGames.length} recent game(s) vs ${opponent}`
-      : `No recent games vs ${opponent} in L5 — use DvP and season stats instead`
+      : `No recent games vs ${opponent} found in last 5 games`
   };
 }
 

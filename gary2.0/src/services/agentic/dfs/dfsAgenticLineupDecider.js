@@ -54,35 +54,22 @@ For EACH position, consider:
 2. WHO fits my build thesis?
 3. WHO has the best path to smashing value?
 
-Pick the player with the best CEILING PATH given the situation.
 </decision_framework>
 
 <punt_awareness>
-"Punts" ($4K-$5.5K) can be GREAT when:
-- A RECENT usage vacuum exists (star OUT in last 1-3 days, salary hasn't adjusted)
-- Their recent game logs show production above their salary tier
-- They have real minutes and role (not a deep bench guy)
-
-"Punts" are RISKY when:
-- You're just chasing cheap price with no upside thesis
-- They rely on foul trouble or garbage time
-- Their minutes are uncertain
-
-Gary, you decide. If you see 3 punts that all have real edges, PLAY THEM.
-If you see 0 punts worth playing, that's fine too.
+"Punts" ($4K-$5.5K) are a DFS reality — salary constraints mean you'll likely need 1-2.
+Ask: For each low-salary player you consider, what does their recent production, role, and game environment tell you about their upside?
+Ask: Is there a genuine ceiling path for this player, or is this just a cheap price with no thesis?
 </punt_awareness>
 
 <ownership_awareness>
-Some candidates are tagged with ownership proxy signals:
-- HIGH_OWNERSHIP_LIKELY — the field will be heavily on this player (top salary + obvious situation)
-- LOW_OWNERSHIP_LIKELY — under-the-radar play with real upside
-- MODERATE_OWNERSHIP — popular game but not the obvious play
+Some candidates include raw ownership signals: salary rank at position, L5/season form ratio, and game popularity rank.
+These are raw data for YOUR assessment of likely field exposure.
 
-If 3+ of your players are HIGH_OWNERSHIP_LIKELY, your ceiling is capped by field duplication.
-Investigate comparable alternatives with lower expected ownership.
+Ask: What do the salary rank and form signals suggest about which players the field is gravitating toward?
+Ask: How many of your core plays overlap with what the field is likely building? What does that mean for your differentiation?
 
-This is awareness, not a rule. If 3 high-owned players are genuinely the best plays, use them.
-But ask: "Am I building the FIELD'S lineup, or MY lineup?"
+This is awareness, not a rule. Ask: "Am I building the FIELD'S lineup, or MY lineup?"
 </ownership_awareness>
 
 <output_format>
@@ -377,9 +364,8 @@ Remember:
 - Your thesis is your STARTING FRAMEWORK, not a constraint. If the player investigation
   revealed better opportunities outside your thesis targets, adjust. The best lineup wins,
   not the most thesis-consistent lineup.
-- INJURY REASONING: Do NOT cite LONG-TERM absences (11+ team games missed) as reasons for rostering
-  someone. Those absences are old news — the salary already reflects the current roster. Your reasoning
-  should be based on the player's ACTUAL RECENT PRODUCTION, matchup, and game environment tonight.
+- Your per-player reasoning should be based on the player's ACTUAL RECENT PRODUCTION, matchup, and
+  game environment tonight. Cite the data from your investigation.
 
 Output your lineup as JSON.
 `;
@@ -401,21 +387,22 @@ function formatInvestigationsByPosition(investigations) {
     }
 
     for (const p of players) { // All investigated candidates — don't drop data
-      const verdict = p.verdict || 'NEEDS REVIEW';
-      const recentForm = p.investigation?.recentForm || 'Unknown';
-      const matchup = p.investigation?.matchup || 'Unknown';
-      const ceilingPath = p.investigation?.ceilingPath || 'Standard production';
+      const recentForm = p.investigation?.recentForm || null;
+      const matchup = p.investigation?.matchup || null;
+      const keyFindings = p.investigation?.keyFindings || null;
+      const rangeOfOutcomes = p.investigation?.rangeOfOutcomes || null;
+      const riskFactors = p.investigation?.riskFactors || null;
       const salary = p.salary ? `$${p.salary}` : '$?';
       const dkFpts = p.rawData?.seasonStats?.dkFpts || p.rawData?.l5Stats?.dkFptsAvg;
       const fptsStr = dkFpts ? ` | DK FPTS: ${dkFpts.toFixed(1)}` : '';
 
       lines.push(`
 ${p.player} - ${salary} (${p.team} vs ${p.opponent || 'TBD'})${fptsStr}
-  Verdict: ${verdict}
-  Form: ${recentForm}
-  Matchup: ${matchup}
-  Ceiling: ${ceilingPath}
-  Concerns: ${p.investigation?.concerns || 'None noted'}`);
+  ${recentForm ? `Form: ${recentForm}` : 'Form: Not assessed'}
+  ${matchup ? `Matchup: ${matchup}` : 'Matchup: Not assessed'}
+  ${keyFindings ? `Key Findings: ${keyFindings}` : ''}
+  ${rangeOfOutcomes ? `Range of Outcomes: ${rangeOfOutcomes}` : ''}
+  ${riskFactors ? `Risk Factors: ${riskFactors}` : 'Risk Factors: Not assessed'}`);
     }
   }
 
@@ -443,11 +430,12 @@ function formatThesisTargets(buildThesis, players) {
     }
   }
 
-  // Players in usage situations
-  if (buildThesis.usageSituations?.length > 0) {
-    lines.push('\n### Usage Vacuum Beneficiaries');
-    for (const us of buildThesis.usageSituations) {
-      lines.push(`- ${us.player}: ${us.situation}`);
+  // Injury context from thesis
+  if (buildThesis.injuryReport?.length > 0) {
+    lines.push('\n### Injury Context');
+    for (const report of buildThesis.injuryReport) {
+      const outNames = (report.outPlayers || []).map(p => `${p.player} (${p.duration || 'unknown'}, ${p.gamesMissed ?? '?'} games missed)`).join(', ');
+      if (outNames) lines.push(`- ${report.team}: ${outNames}`);
     }
   }
 
