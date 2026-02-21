@@ -30,17 +30,17 @@ Your job is to investigate player candidates for a specific position.
 - Assess recent form (L5 games)
 - Assess matchup quality (DvP)
 - Check for usage opportunities (teammate injuries)
-- Summarize each player's upside path and concerns
+- Summarize your factual findings for each candidate
 </responsibilities>
 
 <investigation_checklist>
 For each player:
-1. Recent form - are they hot, cold, or stable?
-2. Matchup - is the opponent good or bad for their position?
-3. Usage situation - any teammates out that boost their role?
-4. Price fairness - does salary match their current situation?
-5. Ceiling path - how do they score 50+ fantasy points?
-6. Concerns - what could go wrong?
+1. Recent form — what does the L5 data show about production trends?
+2. Matchup — what does the opponent defense data show for their position?
+3. Team context — what does the injury report and current roster structure tell you?
+4. Salary vs production — does the salary match their recent output?
+5. Range of outcomes — what does the data suggest about this player's upside and downside?
+6. Risk factors — what does the data suggest could limit this player's production tonight?
 </investigation_checklist>
 
 <output_format>
@@ -55,14 +55,13 @@ Example:
     "team": "LAL",
     "opponent": "SAC",
     "investigation": {
-      "recentForm": "Hot - L5 avg 28 FPTS, trending up",
-      "matchup": "Good - SAC ranks 25th in DvP vs PG",
-      "usageSituation": "Normal role, no boost expected",
-      "priceFairness": "Slight value - should be $7K based on form",
-      "ceilingPath": "If game stays close, can hit 45+ with assist upside",
-      "concerns": "Might rest if blowout"
-    },
-    "verdict": "STRONG CANDIDATE"
+      "recentForm": "L5 avg 28 FPTS (season 24). Trend: 22, 25, 28, 32, 33",
+      "matchup": "SAC ranks 25th in DvP vs PG",
+      "teamContext": "LeBron OUT (RECENT, 1 game missed) — investigate usage data",
+      "keyFindings": "L5 avg 28 FPTS at $6.5K salary. Season avg 24 FPTS.",
+      "rangeOfOutcomes": "L5 range: 22-48 FPTS. Data shows...",
+      "riskFactors": "Data to assess: blowout potential, minutes outlook"
+    }
   }
 ]
 </output_format>
@@ -157,7 +156,7 @@ export async function investigatePlayersForPositions(genAI, buildThesis, context
  * Selection buckets (de-duplicated, max ~12 candidates):
  *  1. Top 5-6 by projection ceiling (established upside)
  *  2. Top 2-3 by value ratio (projection per $1000 salary)
- *  3. Usage vacuum beneficiaries from the build thesis
+ *  3. Players from teams with injuries (Gary investigates impact)
  *  4. Hot recent form + low salary (hidden gems)
  *  5. Players from thesis target games not yet included
  */
@@ -194,15 +193,15 @@ function selectSmartCandidates(candidates, buildThesis, position) {
     addCandidate(p, 'value_ratio');
   }
 
-  // Bucket 3: Usage vacuum beneficiaries from thesis
-  if (buildThesis.usageSituations?.length > 0) {
-    for (const us of buildThesis.usageSituations) {
-      const beneficiary = candidates.find(c =>
-        c.name?.toLowerCase().includes(us.player?.toLowerCase()) ||
-        us.player?.toLowerCase().includes(c.name?.toLowerCase())
-      );
-      if (beneficiary) {
-        addCandidate(beneficiary, 'usage_vacuum');
+  // Bucket 3: Players from teams with recent injuries (Gary investigates the impact)
+  if (buildThesis.injuryReport?.length > 0) {
+    for (const report of buildThesis.injuryReport) {
+      if (!report.team) continue;
+      const hasInjury = report.outPlayers?.length > 0;
+      if (!hasInjury) continue;
+      const teamCandidates = candidates.filter(c => c.team === report.team);
+      for (const tc of teamCandidates.slice(0, 2)) {
+        addCandidate(tc, 'team_with_injury');
       }
     }
   }
@@ -345,7 +344,8 @@ async function investigatePositionCandidates(genAI, position, candidates, buildT
 function buildInvestigationRequest(position, candidates, buildThesis, context) {
   return `
 ## BUILD THESIS
-Edges: ${buildThesis.edges?.map(e => `${e.type}: ${e.description}`).join(' | ') || 'None identified'}
+Thesis observations (starting points for investigation, not confirmed findings):
+${buildThesis.edges?.map(e => `${e.type}: ${e.description}`).join(' | ') || 'None identified'}
 Target Games: ${buildThesis.targetGames?.join(', ') || 'Balanced'}
 Thesis: ${buildThesis.thesis?.slice(0, 200) || 'No specific thesis'}
 
@@ -415,9 +415,17 @@ ${candidates.map((p, i) => {
   if (p.l5Stats?.fpg >= 4.0) {
     line += `\n   ⚠️ Foul Trouble Risk: ${p.l5Stats.fpg} FPG in L5`;
   }
-  // Ownership proxy (from context enrichment)
-  if (p.ownershipProxy) {
-    line += `\n   Ownership: ${p.ownershipProxy} (${p.ownershipSignals?.join(', ') || ''})`;
+  // Ownership signals (raw data for Gary to reason about)
+  if (p.ownershipSignals) {
+    const sig = p.ownershipSignals;
+    let ownershipLine = `\n   Ownership Signals: Salary rank: ${sig.salaryRankAtPosition}`;
+    if (sig.recentFormVsSeason != null) {
+      ownershipLine += ` | L5/Season form: ${sig.recentFormVsSeason}x`;
+    }
+    if (sig.gamePopularity) {
+      ownershipLine += ` | Game: ${sig.gamePopularity}`;
+    }
+    line += ownershipLine;
   }
   return line;
 }).join('\n\n')}
@@ -429,26 +437,22 @@ ${formatTeamInjuriesForInvestigation(candidates, context)}
 For EACH candidate, you MUST investigate:
 1. Call GET_PLAYER_GAME_LOGS to assess recent form (L5 trends, hot/cold streaks)
 2. Call GET_MATCHUP_DATA to evaluate the opponent matchup
-3. Call GET_TEAMMATE_STATUS once per team (if not already checked) to identify usage opportunities
+3. Call GET_TEAM_USAGE_STATS once per team to see the current roster structure
 
 Do NOT skip players. Each candidate deserves at least a game log check and matchup assessment.
 
 Focus especially on:
 - Players in the TARGET GAMES (${buildThesis.targetGames?.join(', ') || 'all'})
-- Players who match one of the identified EDGES
-- Any PRICE LAG opportunities (salary < fair value based on recent production)
+- Players whose situations align with the thesis observations
+- Players whose recent production shows notable trends
 
 IMPORTANT: Even if a candidate is NOT in a target game, flag them if they have an exceptional
-situation (usage vacuum, extreme salary discount vs recent production, hot streak + weak opponent).
-The thesis informs your focus but does NOT constrain your findings. If you find a better play
-outside the thesis targets, report it with conviction.
+situation (extreme salary discount vs recent production, hot streak + weak opponent).
+The thesis informs your focus but does NOT constrain your findings.
 
-INJURY DURATION AWARENESS:
-- Check the KNOWN TEAM INJURIES section above for duration tags on each OUT player (measured in team games missed).
-- Ask: How many team games has this player missed? If LONG-TERM (11+ games), the salary ALREADY reflects
-  this roster. Do NOT cite a long-term absence as a reason to roster someone — that is old news the market
-  has already absorbed. Instead, evaluate the player's ACTUAL RECENT PRODUCTION at their current salary.
-- For RECENT absences (0-2 games missed): the salary may not have adjusted yet. Investigate the game logs.
+INJURY CONTEXT: The KNOWN TEAM INJURIES section shows who is OUT and for how many team games.
+Investigate the data and ask yourself: what does this team's roster look like right now?
+What does each player's recent production tell you about their current role and salary?
 
 After investigating, OUTPUT YOUR FINDINGS AS A JSON ARRAY.
 IMPORTANT: Your final response MUST be ONLY a valid JSON array starting with [ and ending with ].
@@ -562,7 +566,6 @@ function parseInvestigationResults(text, candidates) {
       team: p.team,
       opponent: p.opponent,
       investigation: p.investigation || {},
-      verdict: p.verdict || 'NEEDS REVIEW',
       rawData: candidates.find(c => c.name?.toLowerCase() === p.player?.toLowerCase())
     };
   });

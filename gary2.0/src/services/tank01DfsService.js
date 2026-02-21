@@ -92,6 +92,14 @@ async function makeApiRequest(endpoint, params = {}) {
   return data;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// SALARY CACHE — one API call per day per platform
+// Tank01 returns the SAME salary data for all slates on a given day+platform.
+// Cache the raw API response so multiple slates reuse it without extra calls.
+// ═══════════════════════════════════════════════════════════════════════════
+const _salaryCache = new Map(); // key: "NBA_fanduel_2026-02-21" → { data, parsedByPlatform, at }
+const SALARY_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+
 /**
  * Fetch NBA DFS salaries from Tank01
  * @param {string} dateStr - Date in YYYY-MM-DD format
@@ -99,19 +107,57 @@ async function makeApiRequest(endpoint, params = {}) {
  * @returns {Promise<Array>} Array of players with salaries
  */
 export async function fetchNbaDfsSalaries(dateStr, platform = 'draftkings') {
+  const cacheKey = `NBA_${dateStr}`;
+  const now = Date.now();
+  const cached = _salaryCache.get(cacheKey);
+
+  // If we already fetched this day's data, parse for the requested platform
+  if (cached && (now - cached.at) < SALARY_CACHE_TTL) {
+    // Check if we already parsed for this platform
+    if (cached.parsedByPlatform[platform]) {
+      const players = cached.parsedByPlatform[platform];
+      console.log(`[Tank01 DFS] Using cached NBA salary data for ${platform} (${players.length} players)`);
+      return {
+        players,
+        source: 'Tank01 API (cached)',
+        platform,
+        date: dateStr,
+        fetchTimeMs: 0
+      };
+    }
+    // Cached raw data but need to parse for this platform
+    const players = parseNbaResponse(cached.data, platform);
+    cached.parsedByPlatform[platform] = players;
+    console.log(`[Tank01 DFS] Parsed cached NBA data for ${platform}: ${players.length} players`);
+    return {
+      players,
+      source: 'Tank01 API (cached)',
+      platform,
+      date: dateStr,
+      fetchTimeMs: 0
+    };
+  }
+
   const startTime = Date.now();
-  
+
   try {
     const apiDate = formatDateForApi(dateStr);
     const data = await makeApiRequest('/getNBADFS', { date: apiDate });
-    
+
     const duration = Date.now() - startTime;
     console.log(`[Tank01 DFS] ✅ NBA DFS response in ${duration}ms`);
-    
-    // Parse and map the response to our expected format
+
+    // Parse for requested platform
     const players = parseNbaResponse(data, platform);
     console.log(`[Tank01 DFS] 📊 Found ${players.length} NBA players for ${platform}`);
-    
+
+    // Cache the raw response + parsed result for reuse across slates
+    _salaryCache.set(cacheKey, {
+      data,
+      parsedByPlatform: { [platform]: players },
+      at: now
+    });
+
     return {
       players,
       source: 'Tank01 API',
@@ -119,7 +165,7 @@ export async function fetchNbaDfsSalaries(dateStr, platform = 'draftkings') {
       date: dateStr,
       fetchTimeMs: duration
     };
-    
+
   } catch (error) {
     console.error(`[Tank01 DFS] ❌ NBA fetch failed: ${error.message}`);
     return {

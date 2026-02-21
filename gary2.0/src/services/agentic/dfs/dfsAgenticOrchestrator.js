@@ -157,9 +157,9 @@ export async function generateAgenticDFSLineup(options) {
       throw new Error('[Gary DFS] Phase 2 FAILED: Slate analysis returned null');
     }
 
-    console.log(`[Gary DFS] ✓ Identified ${slateAnalysis.usageVacuums?.length || 0} usage vacuums`);
-    console.log(`[Gary DFS] ✓ Identified ${slateAnalysis.stackTargets?.length || 0} stack targets`);
-    console.log(`[Gary DFS] ✓ Identified ${slateAnalysis.priceLags?.length || 0} price lag opportunities`);
+    console.log(`[Gary DFS] ✓ Injury report: ${slateAnalysis.injuryReport?.length || 0} teams with injuries`);
+    console.log(`[Gary DFS] ✓ Identified ${slateAnalysis.gameProfiles?.length || 0} game profiles`);
+    console.log(`[Gary DFS] ✓ Identified ${slateAnalysis.gameEnvironments?.length || 0} game environments`);
 
     // ═══════════════════════════════════════════════════════════════════════════
     // PHASE 3: BUILD THESIS (Gemini Pro → Flash fallback)
@@ -442,28 +442,40 @@ function getWinningTargets(platform, sport, contestType, slate) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Tag each player with an ownership proxy based on salary rank, form, and game environment.
- * High salary + obvious good situation = likely high owned by the field.
- * Low salary + hidden edge = likely low owned (leverage opportunity).
+ * Tag each player with RAW OWNERSHIP SIGNALS instead of pre-concluded labels.
+ * Gary reasons about these signals himself to assess field concentration.
+ *
+ * Signals provided:
+ * - salaryRankAtPosition: e.g., "1st of 12 PGs" (high salary = high ownership)
+ * - recentFormVsSeason: e.g., 1.25 (L5 is 25% above season avg = hot = high ownership)
+ * - gamePopularity: e.g., "highest O/U on slate" (popular games draw more ownership)
  */
 function computeOwnershipProxy(context) {
   const { players, games } = context;
   if (!players || players.length === 0) return;
 
-  // Find highest-total game(s) for "popular game" tagging
+  // Rank games by O/U total to identify popular games
   const gameTotals = (games || []).map(g => ({
-    teams: [(g.homeTeam || g.home_team || ''), (g.awayTeam || g.visitor_team || g.away_team || '')],
-    total: g.total || g.overUnder || 0
-  })).sort((a, b) => b.total - a.total);
+    teams: new Set([
+      (g.homeTeam || g.home_team || '').toUpperCase(),
+      (g.awayTeam || g.visitor_team || g.away_team || '').toUpperCase()
+    ]),
+    total: g.total || g.overUnder || 0,
+    matchup: `${g.awayTeam || g.visitor_team || g.away_team || ''}@${g.homeTeam || g.home_team || ''}`
+  })).filter(g => g.total > 0).sort((a, b) => b.total - a.total);
 
-  const popularGameTeams = new Set();
-  if (gameTotals.length > 0 && gameTotals[0].total > 0) {
-    for (const g of gameTotals.slice(0, 2)) {
-      for (const t of g.teams) {
-        if (t) popularGameTeams.add(t.toUpperCase());
-      }
+  // Build team -> O/U rank map
+  const teamOURank = new Map();
+  gameTotals.forEach((g, idx) => {
+    const rank = idx + 1;
+    const label = rank === 1 ? 'highest O/U on slate'
+      : rank === 2 ? '2nd highest O/U on slate'
+      : rank <= Math.ceil(gameTotals.length / 2) ? 'top half O/U'
+      : 'bottom half O/U';
+    for (const t of g.teams) {
+      if (t) teamOURank.set(t, label);
     }
-  }
+  });
 
   // Group players by position to find salary rank within position
   const byPosition = {};
@@ -476,43 +488,27 @@ function computeOwnershipProxy(context) {
     byPosition[pos].sort((a, b) => (b.salary || 0) - (a.salary || 0));
   }
 
+  let enrichedCount = 0;
   for (const p of players) {
     const pos = p.position || p.positions?.[0] || 'UTIL';
     const posPlayers = byPosition[pos] || [];
     const salaryRank = posPlayers.findIndex(pp => pp.name === p.name) + 1;
-    const isTopSalary = salaryRank <= 3;
+
     const l5Ppg = p.l5Stats?.ppg || 0;
     const seasonPpg = p.ppg || p.seasonStats?.ppg || 0;
-    const isHotForm = seasonPpg > 0 && l5Ppg > seasonPpg * 1.15;
-    const isInPopularGame = popularGameTeams.has((p.team || '').toUpperCase());
-    const hasUsageBoost = p.injuryContext && (p.salary || 0) < 6000;
+    const formRatio = seasonPpg > 0 ? parseFloat((l5Ppg / seasonPpg).toFixed(2)) : null;
 
-    const signals = [];
-    if (isTopSalary && isHotForm) {
-      p.ownershipProxy = 'HIGH_OWNERSHIP_LIKELY';
-      signals.push('top salary at position', 'hot recent form');
-    } else if (isTopSalary && isInPopularGame) {
-      p.ownershipProxy = 'HIGH_OWNERSHIP_LIKELY';
-      signals.push('top salary at position', 'popular game');
-    } else if (hasUsageBoost) {
-      p.ownershipProxy = 'LOW_OWNERSHIP_LIKELY';
-      signals.push('usage boost', 'low salary');
-    } else if (isHotForm && (p.salary || 0) < 5500) {
-      p.ownershipProxy = 'LOW_OWNERSHIP_LIKELY';
-      signals.push('hot form', 'low salary');
-    } else if (isInPopularGame) {
-      p.ownershipProxy = 'MODERATE_OWNERSHIP';
-      signals.push('popular game');
-    }
+    const gameOURank = teamOURank.get((p.team || '').toUpperCase()) || null;
 
-    if (p.ownershipProxy) {
-      p.ownershipSignals = signals;
-    }
+    p.ownershipSignals = {
+      salaryRankAtPosition: `${salaryRank}${salaryRank === 1 ? 'st' : salaryRank === 2 ? 'nd' : salaryRank === 3 ? 'rd' : 'th'} of ${posPlayers.length} ${pos}s`,
+      recentFormVsSeason: formRatio,
+      gamePopularity: gameOURank
+    };
+    enrichedCount++;
   }
 
-  const highOwned = players.filter(p => p.ownershipProxy === 'HIGH_OWNERSHIP_LIKELY').length;
-  const lowOwned = players.filter(p => p.ownershipProxy === 'LOW_OWNERSHIP_LIKELY').length;
-  console.log(`[Gary DFS] Ownership proxy: ${highOwned} likely high-owned, ${lowOwned} likely low-owned (leverage)`);
+  console.log(`[Gary DFS] Ownership signals: enriched ${enrichedCount} players with raw salary rank, form ratio, and game popularity`);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

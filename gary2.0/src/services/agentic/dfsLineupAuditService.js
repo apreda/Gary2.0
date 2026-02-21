@@ -130,13 +130,6 @@ export async function auditLineup(lineup, context, options = {}) {
     weaknesses.push(`${badMatchups.length} players facing elite defenses (Bottom 5 matchups).`);
   }
 
-  // 5. Antifragility Check (Bales)
-  const injuryReplacementPlays = players.filter(p => p.usageBoost || p.teammateOpportunity);
-  if (injuryReplacementPlays.length >= 2) {
-    strengths.push(`Antifragile Build: Leveraging ${injuryReplacementPlays.length} players with role spikes due to injury.`);
-    harmonyInsights.push(`Exploiting Chaos: Built around role changes that the market hasn't fully priced in.`);
-  }
-
   // 6. Blowout Risk Analysis (FIBLE: "THOU SHALT RESPECT BLOWOUT RISK")
   // Stars on heavy favorites (-10+) have CAPPED ceiling - they sit Q4
   const blowoutRiskPlayers = players.filter(p => {
@@ -293,20 +286,6 @@ function reflectOnFIBLEPrinciples(players, context, platform) {
   }
   
   // ─────────────────────────────────────────────────────────────────────────
-  // OBSERVE: Is Gary taking advantage of tonight's situations?
-  // (FIBLE reminds Gary to leverage injury news and game environment)
-  // ─────────────────────────────────────────────────────────────────────────
-  const injuryBeneficiaries = players.filter(p => p.usageBoost || p.teammateOpportunity || p.injuryBeneficiary);
-  
-  if (injuryBeneficiaries.length > 0) {
-    observations.push({
-      type: 'strength',
-      text: `Situational awareness: ${injuryBeneficiaries.length} player(s) benefit from injuries - ${injuryBeneficiaries.map(p => p.player).join(', ')}`
-    });
-    harmonyInsights.push(`Lineup exploits tonight's chaos - verify the injury situations are confirmed.`);
-  }
-  
-  // ─────────────────────────────────────────────────────────────────────────
   // OBSERVE: Does Gary have a clear reason for each pick?
   // (FIBLE reminds Gary that "he's good" is not a reason)
   // ─────────────────────────────────────────────────────────────────────────
@@ -400,7 +379,7 @@ export function generateLateSwapAlerts(lineup, playerPool, context = {}) {
       alerts.push({
         type: 'QUESTIONABLE_PLAYER',
         trigger: `If ${player.player} is ruled OUT`,
-        action: `TARGET: ${backups[0].name} (+${Math.round((backups[0].seasonStats?.mpg || 5) * 0.3)} min, usage boost)`,
+        action: `INVESTIGATE: ${backups[0].name} — check recent production and salary`,
         salary: backups[0].salary,
         priority: 'HIGH'
       });

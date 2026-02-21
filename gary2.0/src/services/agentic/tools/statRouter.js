@@ -1464,13 +1464,15 @@ const FETCHERS = {
     const awayData = Array.isArray(awayStats) ? awayStats[0] : awayStats;
     
     // NCAAB BDL fields: oreb, dreb (per game) — NO oreb_pct field exists
-    // Calculate ORB% = OREB / (OREB + DREB) * 100 (team's own offensive rebound share)
-    const calcOrebRate = (d) => {
+    // ORB% = OREB / (OREB + Opponent_DREB) (Dean Oliver formula, Basketball Reference)
+    const calcOrebRate = (d, opponentData) => {
       if (!d) return null;
       // NBA may have oreb_pct directly; NCAAB only has raw oreb/dreb
       if (bdlSport !== 'basketball_ncaab' && (d.oreb_pct || d.offensive_reb_pct)) return d.oreb_pct || d.offensive_reb_pct;
       const oreb = bdlSport === 'basketball_ncaab' ? d.oreb : (d.oreb_per_game || d.oreb);
-      const dreb = bdlSport === 'basketball_ncaab' ? d.dreb : (d.dreb_per_game || d.dreb);
+      // Use opponent's DREB for correct ORB% formula; fall back to own DREB if unavailable
+      const oppDreb = opponentData ? (bdlSport === 'basketball_ncaab' ? opponentData.dreb : (opponentData.dreb_per_game || opponentData.dreb)) : null;
+      const dreb = oppDreb != null ? oppDreb : (bdlSport === 'basketball_ncaab' ? d.dreb : (d.dreb_per_game || d.dreb));
       if (oreb != null && dreb != null && (oreb + dreb) > 0) return (oreb / (oreb + dreb)) * 100;
       return null;
     };
@@ -1478,12 +1480,12 @@ const FETCHERS = {
       category: 'Offensive Rebounding',
       home: {
         team: home.full_name || home.name,
-        oreb_rate: fmtPct(calcOrebRate(homeData)),
+        oreb_rate: fmtPct(calcOrebRate(homeData, awayData)),
         oreb_per_game: fmtNum(bdlSport === 'basketball_ncaab' ? homeData?.oreb : (homeData?.oreb_per_game || homeData?.oreb))
       },
       away: {
         team: away.full_name || away.name,
-        oreb_rate: fmtPct(calcOrebRate(awayData)),
+        oreb_rate: fmtPct(calcOrebRate(awayData, homeData)),
         oreb_per_game: fmtNum(bdlSport === 'basketball_ncaab' ? awayData?.oreb : (awayData?.oreb_per_game || awayData?.oreb))
       }
     };

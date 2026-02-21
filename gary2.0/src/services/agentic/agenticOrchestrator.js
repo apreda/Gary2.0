@@ -2483,10 +2483,14 @@ Using the investigation checklist, quality gate, and variance check above, execu
 
 **STEP 4:** Write **ANALYSIS FOR ${secondTeam}** (3-4 paragraphs with key factors, recent form with margins, stats)
 
-**CRITICAL:** Do NOT indicate which side you favor yet. Investigate BOTH sides neutrally.
-In Pass 2.5 you'll stress-test both cases and make your decision.
-
 BEGIN MATCHUP ANALYSIS NOW.
+
+<negative_constraints>
+Do NOT indicate which side you favor yet. Investigate BOTH sides neutrally.
+Do NOT fabricate stats, quotes, or data not provided in the scout report or tool results.
+Do NOT assign point values to any factor (home court, rest, injuries, etc.).
+Do NOT predict a final score or "true line" — pick a SIDE, not a number.
+</negative_constraints>
 </instructions>
 `.trim();
 }
@@ -2604,10 +2608,14 @@ Execute these steps NOW:
 
 **STEP 4:** If you need more player-specific data to build stronger cases, call fetch_stats now
 
-**CRITICAL:** Do NOT pick OVER or UNDER yet. Build BOTH cases neutrally.
-In Pass 2.5 you'll stress-test both sides and determine which direction is the BETTER BET for each candidate.
-
 BEGIN BILATERAL PROP ANALYSIS NOW.
+
+<negative_constraints>
+Do NOT pick OVER or UNDER yet. Build BOTH cases neutrally.
+Do NOT fabricate stats, player data, or projections not provided in the scout report or tool results.
+Do NOT use general statements like "he usually performs well" without specific data backing.
+Do NOT reference props lines or projections unless they were provided in the data.
+</negative_constraints>
 </instructions>`.trim();
 }
 
@@ -3546,6 +3554,13 @@ For each candidate, investigate:
 **INVESTIGATION OPTION:**
 If you need specific player stats before finalizing, you can still call fetch_stats tools.
 When ready, call finalize_props with your 2 best picks.
+
+<negative_constraints>
+Do NOT select two props from the same player.
+Do NOT fabricate stats or lines not provided in the data.
+Do NOT pick a prop just because the player is "good" — identify a specific edge the line has not absorbed.
+Do NOT include confidence percentages or probability estimates in your rationale.
+</negative_constraints>
 </props_instructions>
 `.trim();
 }
@@ -4319,7 +4334,7 @@ Call these specific tokens NOW using the get_stat tool with the "token" paramete
             console.warn(`[Orchestrator] ⚠️ finalize_props had 0 valid picks — requesting retry`);
             pendingFunctionResponses.push({
               name: functionName,
-              content: JSON.stringify({ error: 'Your picks are missing required fields (player, bet, rationale). Please call finalize_props again with complete pick data.' })
+              content: JSON.stringify({ error: 'Your picks are missing required fields (player, bet, rationale). Call finalize_props again with complete pick data.' })
             });
             continue;
           }

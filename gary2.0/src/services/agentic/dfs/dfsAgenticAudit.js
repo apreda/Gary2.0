@@ -34,7 +34,7 @@ You just built a lineup. Now AUDIT it with fresh eyes.
 2. CEILING CHECK
    - Is the ceiling projection realistic?
    - What specifically needs to happen for 380+ points?
-   - Is there enough boom potential, or is this a "safe" build?
+   - What is the realistic outcome distribution for this lineup? What does the data show about its ceiling and floor?
 
 3. CORRELATION CHECK
    - Do I have proper game stacks?
@@ -43,8 +43,8 @@ You just built a lineup. Now AUDIT it with fresh eyes.
 
 4. VALUE CHECK
    - Did I leave money on the table unnecessarily?
-   - Are my punts actual edges or just cheap prices?
-   - Did I overpay for any "name brand" players?
+   - What is the upside thesis for each of my low-salary plays? Does the data support it?
+   - For each high-salary player, does tonight's situation justify the salary investment?
 
 5. RISK ASSESSMENT
    - What's the biggest risk to this lineup?
@@ -425,9 +425,7 @@ function buildPerPlayerReasoning(players) {
       position: player.position,
       salary: player.salary,
       reasoning: player.reasoning || 'Selected by Gary',
-      ceilingPath: player.ceilingProjection ?
-        `Ceiling of ${player.ceilingProjection} pts with strong game script` :
-        'Standard production expected'
+      ceilingProjection: player.ceilingProjection || null
     };
   }
 

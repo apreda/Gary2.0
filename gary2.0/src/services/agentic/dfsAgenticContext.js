@@ -325,7 +325,7 @@ export async function fetchPlayerStatsFromBDL(sport, dateStr, slateTeams = []) {
       // ═══════════════════════════════════════════════════════════════════════════
       // FETCH L5 GAME LOGS FOR TREND ANALYSIS
       // ═══════════════════════════════════════════════════════════════════════════
-      // Get last 5 games for each player to calculate hot/cold streaks
+      // Get last 5 games for each player for trend analysis
       // This provides REAL data instead of relying on Gemini search
       const l5StatsMap = new Map();
       try {
@@ -480,16 +480,6 @@ export async function fetchPlayerStatsFromBDL(sport, dateStr, slateTeams = []) {
         if (position === 'F-C' || position === 'C-F') position = 'PF'; // Power forward/center
         if (position === 'G-F' || position === 'F-G') position = 'SG'; // Combo guard/forward
         
-        // Calculate trend (hot/cold) from L5 vs season
-        const seasonPpg = stats.pts || 0;
-        const l5Ppg = l5?.ppg || seasonPpg;
-        let recentForm = 'neutral';
-        if (seasonPpg > 0) {
-          const pctDiff = ((l5Ppg - seasonPpg) / seasonPpg) * 100;
-          if (pctDiff >= 15) recentForm = 'hot';      // 15%+ above season avg
-          else if (pctDiff <= -15) recentForm = 'cold'; // 15%+ below season avg
-        }
-        
         return {
           id: p.id,
           name: `${p.first_name} ${p.last_name}`,
@@ -508,9 +498,15 @@ export async function fetchPlayerStatsFromBDL(sport, dateStr, slateTeams = []) {
             spg: stats.stl || 0,
             bpg: stats.blk || 0,
             tpg: stats.fg3m || 0,
-            topg: stats.tov || 1.5,
+            topg: stats.tov || null,
             mpg: stats.min ? parseFloat(stats.min) : 0,
-            fpts: stats.nba_fantasy_pts || 0,
+            fpts: null, // nba_fantasy_pts not available in type:base -- pipeline uses dkFpts/fdFpts
+            fgPct: stats.fg_pct || null,
+            fg3Pct: stats.fg3_pct || null,
+            ftPct: stats.ft_pct || null,
+            fga: stats.fga || null,
+            oreb: stats.oreb || null,
+            dreb: stats.dreb || null,
             dkFpts: calculateDkNbaFpts(stats),
             fdFpts: calculateFdNbaFpts(stats)
           },
@@ -531,7 +527,7 @@ export async function fetchPlayerStatsFromBDL(sport, dateStr, slateTeams = []) {
             games: l5.games,
             gameRows: l5.gameRows
           } : null,
-          recentForm: recentForm // 'hot', 'cold', or 'neutral'
+          // Gary has raw L5 vs season data — he assesses form himself
         };
       });
       // ⚠️ DON'T filter injured players here! Let mergePlayerData handle it.
@@ -888,7 +884,6 @@ export function mergePlayerData(bdlPlayers, groundedPlayers) {
       notes: p.notes,
       ownership: p.ownership,
       dvpRank: p.dvpRank,
-      recentForm: p.recentForm,
       originalName: p.name
     };
     salaryMap.set(key, salaryEntry);
@@ -958,7 +953,6 @@ export function mergePlayerData(bdlPlayers, groundedPlayers) {
         role: inferPlayerRole(playerWithSalary),
         seasonStats: p.seasonStats,
         l5Stats: p.l5Stats,  // ⭐ PRESERVE L5 data from BDL
-        recentForm: p.recentForm || salaryData.recentForm,  // Use BDL's hot/cold calc
         id: p.id,
         // Grounding provides: salary and DFS context
         salary: salaryData.salary,
@@ -1062,7 +1056,6 @@ export function mergePlayerData(bdlPlayers, groundedPlayers) {
           // ⭐ Use REAL BDL stats
           seasonStats: foundStats || bdlMatch.seasonStats || { mpg: 0, ppg: 0 },
           l5Stats: bdlMatch.l5Stats, // Include L5 if available
-          recentForm: bdlMatch.recentForm,
           fromSalaryDataOnly: false, // Has REAL stats
           teamValidated: true
         });
@@ -1592,6 +1585,87 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
     }
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // TEAM BASE STATS, DEFENSE BREAKDOWN, SCORING PROFILE (NBA only)
+  // Mirrors the game picks pipeline — gives Gary team-level context for DFS
+  // ═══════════════════════════════════════════════════════════════════════════
+  let teamBaseStatsMap = new Map();   // teamAbbr → { pts, reb, ast, fg_pct, fg3_pct, ft_pct, oreb, dreb, tov, blk, stl }
+  let teamDefenseBreakdownMap = new Map(); // teamAbbr → { opp_pts_paint, opp_pts_fb, opp_pts_off_tov, opp_pts_2nd_chance }
+  let teamScoringProfileMap = new Map();   // teamAbbr → { pct_pts_paint, pct_pts_3pt, pct_pts_ft, pct_fga_2pt, pct_fga_3pt, pct_ast_fgm }
+  let standingsData = null;           // Array of team standings
+
+  if (isNBA && bdlTeamIdMap.size > 0) {
+    try {
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth() + 1;
+      const season = currentMonth >= 10 ? currentYear : currentYear - 1;
+
+      const slateTeamEntries = Array.from(bdlTeamIdMap.entries()).filter(([abbr]) =>
+        games.some(g => g.homeTeam === abbr || g.awayTeam === abbr)
+      );
+
+      // Fetch all three team stat types + standings in parallel using Promise.allSettled
+      const [baseResults, defenseResults, scoringResults, standingsResult] = await Promise.allSettled([
+        // Team Base Stats for all slate teams
+        Promise.all(slateTeamEntries.map(async ([abbr, teamId]) => {
+          const stats = await ballDontLieService.getTeamBaseStats(teamId, season).catch(() => null);
+          return { abbr, stats };
+        })),
+        // Team Defense Breakdown for all slate teams
+        Promise.all(slateTeamEntries.map(async ([abbr, teamId]) => {
+          const stats = await ballDontLieService.getTeamDefenseStats(teamId, season).catch(() => null);
+          return { abbr, stats };
+        })),
+        // Team Scoring Profile for all slate teams
+        Promise.all(slateTeamEntries.map(async ([abbr, teamId]) => {
+          const stats = await ballDontLieService.getTeamScoringStats(teamId, season).catch(() => null);
+          return { abbr, stats };
+        })),
+        // Standings (once, not per team)
+        ballDontLieService.getNbaStandings(season)
+      ]);
+
+      // Process base stats
+      if (baseResults.status === 'fulfilled') {
+        for (const { abbr, stats } of baseResults.value) {
+          if (stats) teamBaseStatsMap.set(abbr, stats);
+        }
+      } else {
+        console.warn('[DFS Context] Team base stats fetch failed:', baseResults.reason?.message);
+      }
+
+      // Process defense breakdown
+      if (defenseResults.status === 'fulfilled') {
+        for (const { abbr, stats } of defenseResults.value) {
+          if (stats) teamDefenseBreakdownMap.set(abbr, stats);
+        }
+      } else {
+        console.warn('[DFS Context] Team defense breakdown fetch failed:', defenseResults.reason?.message);
+      }
+
+      // Process scoring profile
+      if (scoringResults.status === 'fulfilled') {
+        for (const { abbr, stats } of scoringResults.value) {
+          if (stats) teamScoringProfileMap.set(abbr, stats);
+        }
+      } else {
+        console.warn('[DFS Context] Team scoring profile fetch failed:', scoringResults.reason?.message);
+      }
+
+      // Process standings
+      if (standingsResult.status === 'fulfilled' && standingsResult.value) {
+        standingsData = standingsResult.value;
+      } else {
+        console.warn('[DFS Context] Standings fetch failed:', standingsResult.reason?.message);
+      }
+
+      console.log(`[DFS Context] Team stats: base ${teamBaseStatsMap.size > 0 ? '\u2713' : '\u2717'}, defense ${teamDefenseBreakdownMap.size > 0 ? '\u2713' : '\u2717'}, scoring ${teamScoringProfileMap.size > 0 ? '\u2713' : '\u2717'}, standings ${standingsData ? '\u2713' : '\u2717'}`);
+    } catch (e) {
+      console.warn(`[DFS Context] BDL team stats fetch failed (${e.message}) — continuing without supplementary team data`);
+    }
+  }
+
   // Build game list with O/U, spread, implied totals, blowout risk, and defense enrichment
   const gameList = games.map(g => {
     const key = `${g.awayTeam}@${g.homeTeam}`;
@@ -1602,9 +1676,6 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
     // Implied team totals: Home = (Total + Spread) / 2, Away = (Total - Spread) / 2
     const impliedHomeTotal = (total != null && spread != null) ? parseFloat(((total + spread) / 2).toFixed(1)) : null;
     const impliedAwayTotal = (total != null && spread != null) ? parseFloat(((total - spread) / 2).toFixed(1)) : null;
-
-    // Blowout risk: |spread| >= 10 means starters may sit late
-    const blowoutRisk = spread != null ? Math.abs(spread) >= 10 : false;
 
     // Game-level pace: average of both teams' pace (possessions per game)
     const homePace = teamDefenseProfiles.get(g.homeTeam)?.pace;
@@ -1619,12 +1690,20 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
       spread,
       implied_home_total: impliedHomeTotal,
       implied_away_total: impliedAwayTotal,
-      blowout_risk: blowoutRisk,
       game_pace: gamePace,
       home_b2b: b2bTeams.has(g.homeTeam),
       away_b2b: b2bTeams.has(g.awayTeam),
       home_defense: teamDefenseProfiles.get(g.homeTeam) || null,
-      away_defense: teamDefenseProfiles.get(g.awayTeam) || null
+      away_defense: teamDefenseProfiles.get(g.awayTeam) || null,
+      // Team base stats (pts, reb, ast, shooting splits, tov, etc.)
+      home_base_stats: teamBaseStatsMap.get(g.homeTeam) || null,
+      away_base_stats: teamBaseStatsMap.get(g.awayTeam) || null,
+      // Team defense breakdown (paint pts allowed, fast break pts, etc.)
+      home_defense_breakdown: teamDefenseBreakdownMap.get(g.homeTeam) || null,
+      away_defense_breakdown: teamDefenseBreakdownMap.get(g.awayTeam) || null,
+      // Team scoring profile (% pts from paint/3pt/FT, shot distribution)
+      home_scoring_profile: teamScoringProfileMap.get(g.homeTeam) || null,
+      away_scoring_profile: teamScoringProfileMap.get(g.awayTeam) || null
     };
   });
   
@@ -1850,70 +1929,6 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
   console.log(`[DFS Context] Final slate player pool: ${finalMergedPlayers.length}`);
   
   // ═══════════════════════════════════════════════════════════════════════════
-  // TEAMMATE USAGE CONTEXT - Dynamic Role Awareness
-  // ═══════════════════════════════════════════════════════════════════════════
-  // When high-usage players are OUT, their teammates inherit opportunity.
-  // Gary investigates who benefits rather than applying fixed rules.
-  // 
-  // This is AWARENESS not prescription - Gary knows to look for these situations:
-  // - Star PG out → backup PG and wing players see usage spike
-  // - Star scorer out → secondary options become primary
-  // - Big man out → small ball opportunities, guard rebounds
-  // ═══════════════════════════════════════════════════════════════════════════
-  const outPlayers = excludedPlayers.filter(p => 
-    p.status === 'OUT' || p.status === 'OUT FOR SEASON' || p.status === 'DOUBTFUL'
-  );
-  
-  // Group out players by team to find teammate opportunities
-  const outByTeam = {};
-  outPlayers.forEach(p => {
-    if (!outByTeam[p.team]) outByTeam[p.team] = [];
-    // Look up their projection/salary to estimate impact
-    const salaryPlayer = filteredSalaryPlayers.find(sp => 
-      normalizePlayerName(sp.name) === normalizePlayerName(p.name)
-    );
-    outByTeam[p.team].push({
-      name: p.name,
-      status: p.status,
-      salary: salaryPlayer?.salary || 0,
-      isHighUsage: (salaryPlayer?.salary || 0) >= 8000 // High-salary = high-usage assumption
-    });
-  });
-  
-  // For each team with high-usage players out, flag teammates for investigation
-  const teamsWithOpportunity = Object.entries(outByTeam)
-    .filter(([team, players]) => players.some(p => p.isHighUsage))
-    .map(([team, players]) => ({
-      team,
-      outStars: players.filter(p => p.isHighUsage).map(p => p.name),
-      totalOut: players.length
-    }));
-  
-  if (teamsWithOpportunity.length > 0) {
-    console.log(`[DFS Context] 🎯 USAGE OPPORTUNITY DETECTED:`);
-    teamsWithOpportunity.forEach(({ team, outStars, totalOut }) => {
-      console.log(`   ${team}: ${outStars.join(', ')} OUT - teammates may see usage spike`);
-      
-      // Flag active teammates with expanded role awareness
-      mergedPlayers.forEach(player => {
-        if (player.team === team && !player.status?.includes('OUT')) {
-          // Mark as potential expanded role - not automatic boost, just awareness
-          player.teammateOpportunity = {
-            outStars,
-            totalTeammatesOut: totalOut,
-            reason: `${outStars[0]} OUT - investigate usage redistribution`
-          };
-          // If player is already a target from narrative, reinforce it
-          if (player.narrative_type === 'injury_boost' || player.rotation_status === 'expanded_role') {
-            player.usageChange = (player.usageChange || 0) + 5; // Signal increased opportunity
-            player.isBreakoutCandidate = true;
-          }
-        }
-      });
-    });
-  }
-  
-  // ═══════════════════════════════════════════════════════════════════════════
   // BUILD TEAM-LEVEL INJURY MAP (for GET_TEAM_INJURIES tool)
   // ═══════════════════════════════════════════════════════════════════════════
   const injuryMap = {};
@@ -2075,45 +2090,35 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
             console.log(`[DFS Context]   ${ep.name} (${ep.team}): ${inj.duration} — ${inj.gamesMissed} team games missed (last played ${inj.lastGameDate || 'none in 45d'})`);
           }
         }
-        // ═══════════════════════════════════════════════════════════════════
-        // POST-PROCESS: Remove stale usage opportunity flags
-        // LONG-TERM absences are already priced into salaries.
-        // Only RECENT absences create genuine usage opportunities.
-        // ═══════════════════════════════════════════════════════════════════
-        let staleOpportunities = 0;
-        for (const ep of outPlayersWithIds) {
-          const team = (ep.team || '').toUpperCase();
-          const inj = injuryMap[team]?.find(i => i.player?.toLowerCase() === ep.name?.toLowerCase());
-          if (!inj || inj.duration === 'RECENT') continue;
 
-          // This absence is ESTABLISHED or LONG-TERM — salaries already reflect it
-          mergedPlayers.forEach(player => {
-            if (player.team !== ep.team) return;
-            if (!player.teammateOpportunity) return;
-            const mentions = player.teammateOpportunity.outStars || [];
-            if (!mentions.some(s => s.toLowerCase() === ep.name.toLowerCase())) return;
-
-            // Remove this specific OUT player from the opportunity list
-            player.teammateOpportunity.outStars = mentions.filter(s => s.toLowerCase() !== ep.name.toLowerCase());
-
-            // If no RECENT absences remain, remove the opportunity flag entirely
-            if (player.teammateOpportunity.outStars.length === 0) {
-              delete player.teammateOpportunity;
-              delete player.isBreakoutCandidate;
-              player.usageChange = 0;
-              staleOpportunities++;
-            } else {
-              player.teammateOpportunity.reason = `${player.teammateOpportunity.outStars[0]} OUT (RECENT) - investigate usage redistribution`;
-            }
-          });
+        // HARD FAIL: If any OUT/Doubtful player has unresolved duration, throw with diagnostic
+        // Per CLAUDE.md: 'UNKNOWN is never acceptable' -- process should fail so root cause can be fixed
+        const unresolved = outPlayersWithIds.filter(p => {
+          const team = (p.team || '').toUpperCase();
+          const inj = injuryMap[team]?.find(i => i.player?.toLowerCase() === p.name?.toLowerCase());
+          return !inj?.duration;
+        });
+        if (unresolved.length > 0) {
+          const diagnostics = unresolved.map(p =>
+            `  - ${p.name} (${p.team}) [BDL ID: ${p.bdlId}] -- status: ${p.status}, attempted: BDL game-log query (45d lookback)`
+          ).join('\n');
+          throw new Error(
+            `[DFS Context] HARD FAIL: ${unresolved.length} OUT/Doubtful player(s) have unresolved injury duration.\n` +
+            `Diagnostic report:\n${diagnostics}\n` +
+            `Root cause: BDL game-log query returned no minutes data for these players.\n` +
+            `Fix: Verify player IDs are correct in BDL, or check if player was recently traded/signed.`
+          );
         }
-        if (staleOpportunities > 0) {
-          console.log(`[DFS Context] ✓ Cleared ${staleOpportunities} stale usage opportunity flags (LONG-TERM absences already priced in)`);
-        }
-
       } catch (durationErr) {
-        console.warn(`[DFS Context] ⚠️ Injury duration resolution failed: ${durationErr.message}`);
-        console.warn(`[DFS Context] ⚠️ Continuing without duration data — Gary will investigate manually`);
+        // Re-throw diagnostic errors (our HARD FAIL)
+        if (durationErr.message?.includes('HARD FAIL')) {
+          throw durationErr;
+        }
+        // Infrastructure failures (API down, network error) also hard fail
+        throw new Error(
+          `[DFS Context] HARD FAIL: Injury duration resolution failed -- ${durationErr.message}\n` +
+          `Cannot proceed without injury duration data. Fix the underlying issue.`
+        );
       }
     }
   }
@@ -2148,6 +2153,8 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
     injuries: injuryMap,
     // B2B teams (played yesterday — fatigue awareness)
     b2bTeams: Array.from(b2bTeams),
+    // NBA standings (conference rank, record, streaks)
+    standings: standingsData || null,
     // Metadata
     salarySource: salaryData.source || 'Tank01 API',
     buildTimeMs: duration,

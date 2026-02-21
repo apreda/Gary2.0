@@ -541,20 +541,14 @@ struct PerformanceBanner: View {
                 VStack(alignment: .leading, spacing: 4) {
                     // Record + Yesterday
                     HStack(spacing: 7) {
-                        Text("\(wins)-\(losses)")
+                        Text(pushes > 0 ? "\(wins)-\(losses)-\(pushes)" : "\(wins)-\(losses)")
                             .font(.system(size: 26, weight: .heavy, design: .rounded))
                             .foregroundStyle(.white)
-                        
+
                         Text("YESTERDAY")
                             .font(.system(size: 11, weight: .bold))
                             .foregroundStyle(.secondary)
                             .tracking(0.5)
-                        
-                        if pushes > 0 {
-                            Text("• \(pushes)P")
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(.tertiary)
-                        }
                     }
                     
                     // Mood Label - explains the hero image
@@ -641,8 +635,15 @@ struct SportMiniCard: View {
                     .foregroundStyle(.tertiary)
                 Text("\(sport.losses)")
                     .font(.system(size: 17, weight: .bold, design: .rounded))
-                    // Always subtle gray for losses - keeps focus on the green wins
                     .foregroundStyle(Color.white.opacity(0.35))
+                if sport.pushes > 0 {
+                    Text("-")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.tertiary)
+                    Text("\(sport.pushes)")
+                        .font(.system(size: 17, weight: .bold, design: .rounded))
+                        .foregroundStyle(Color(hex: "#EAB308")) // Yellow for pushes
+                }
             }
         }
         .padding(.vertical, 6)
@@ -2339,8 +2340,8 @@ struct BillfoldView: View {
     
     private var metricsCards: some View {
         let record = calculateRecord()
-        let total = max(1, record.wins + record.losses + record.pushes)
-        let winRate = Double(record.wins) / Double(total) * 100
+        let decisive = max(1, record.wins + record.losses)
+        let winRate = Double(record.wins) / Double(decisive) * 100
         
         let sportLabel = selectedSport == .all ? "" : " (\(selectedSport.rawValue))"
         
@@ -2352,8 +2353,8 @@ struct BillfoldView: View {
     
     private var recentPicksList: some View {
         let record = calculateRecord()
-        let total = max(1, record.wins + record.losses + record.pushes)
-        let winRate = Double(record.wins) / Double(total) * 100
+        let decisive = max(1, record.wins + record.losses)
+        let winRate = Double(record.wins) / Double(decisive) * 100
         let streak = streakMeter(wins: record.wins, losses: record.losses, winRate: winRate)
         
         return VStack(alignment: .leading, spacing: 12) {
