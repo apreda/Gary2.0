@@ -5333,6 +5333,11 @@ function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey, rosterDepth 
       durationTag = ' [Out For Season]';
     }
 
+    // Probable = expected to play (~75%+ chance). NOT out — do not label as OUT.
+    if (!durationTag && (i.status === 'Prob' || i.status === 'Probable')) {
+      durationTag = ' [Probable — Expected to Play]';
+    }
+
     // Fallback: no duration info resolved
     if (!durationTag && !reportDate && days === null) {
       durationTag = ' [OUT - duration unknown]';
@@ -5400,9 +5405,16 @@ function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey, rosterDepth 
       unknownOut.forEach(i => lines.push(formatPlayer(i)));
     }
 
-    if (cats.others.length > 0) {
+    const probable = cats.others.filter(i => i.status === 'Prob' || i.status === 'Probable');
+    const questionableGtd = cats.others.filter(i => i.status !== 'Prob' && i.status !== 'Probable');
+
+    if (questionableGtd.length > 0) {
       lines.push(`  QUESTIONABLE / GTD:`);
-      cats.others.forEach(i => lines.push(formatPlayer(i)));
+      questionableGtd.forEach(i => lines.push(formatPlayer(i)));
+    }
+    if (probable.length > 0) {
+      lines.push(`  PROBABLE (expected to play):`);
+      probable.forEach(i => lines.push(formatPlayer(i)));
     }
 
     if (cats.seasonal.length > 0) {
@@ -5481,7 +5493,7 @@ function formatSituationalFactors(game, injuries, sport) {
   const sportKey = normalizeSport(sport);
   
   // Injuries — include NCAAB statuses (Out (Season), GTD) alongside standard ones
-  const relevantStatuses = ['Out', 'Doubtful', 'Questionable', 'Out (Season)', 'GTD', 'IR', 'LTIR'];
+  const relevantStatuses = ['Out', 'Doubtful', 'Questionable', 'Out (Season)', 'GTD', 'IR', 'LTIR', 'Prob', 'Probable'];
   const homeInjuries = injuries.home?.filter(i => relevantStatuses.some(s => i.status?.includes(s)));
   const awayInjuries = injuries.away?.filter(i => relevantStatuses.some(s => i.status?.includes(s)));
   

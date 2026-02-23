@@ -270,7 +270,7 @@ Stay under $${salaryCap.toLocaleString()}. Output ONLY the JSON object.`;
   }
 
   // Final validation (non-fatal — just log warnings)
-  const validation = validateLineup(lineup, salaryCap, rosterSlots);
+  const validation = validateLineup(lineup, salaryCap, rosterSlots, context.sport);
   if (!validation.valid) {
     console.warn('[Lineup Decider] Lineup validation issues:', validation.issues);
     lineup.validationIssues = validation.issues;
@@ -724,7 +724,7 @@ function getStructuralIssues(lineup, players, salaryCap, rosterSlots, sport) {
 // VALIDATE LINEUP
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function validateLineup(lineup, salaryCap, rosterSlots) {
+function validateLineup(lineup, salaryCap, rosterSlots, sport) {
   const issues = [];
 
   // Check player count
