@@ -53,6 +53,19 @@ struct ChangelogEntry: Identifiable {
 
 let changelogEntries: [ChangelogEntry] = [
     ChangelogEntry(
+        version: "1.9.9",
+        date: "February 23, 2026",
+        type: .improvement,
+        title: "Stability & Polish",
+        changes: [
+            "Fixed crash that could occur when loading picks under poor network conditions",
+            "Added retry button when picks or props fail to load — tap to try again",
+            "Improved background performance — timers now pause when the app is in the background",
+            "Better text readability across the app with improved contrast",
+            "Consistent Gary branding on the Settings page"
+        ]
+    ),
+    ChangelogEntry(
         version: "1.9.8",
         date: "February 11, 2026",
         type: .improvement,
