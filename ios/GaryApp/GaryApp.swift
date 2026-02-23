@@ -44,7 +44,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     
     func application(_ application: UIApplication,
                      didFailToRegisterForRemoteNotificationsWithError error: Error) {
-        // Silent fail - push notifications won't work but app continues
+        print("[Push] Failed to register for remote notifications: \(error.localizedDescription)")
     }
     
     // MARK: - MessagingDelegate
@@ -79,7 +79,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
             _ = try await URLSession.shared.data(for: request)
         } catch {
-            // Silent fail - token registration failed but app continues
+            print("[Push] Failed to register FCM token with backend: \(error.localizedDescription)")
         }
     }
     

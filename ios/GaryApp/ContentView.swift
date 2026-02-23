@@ -129,7 +129,7 @@ struct CompactTabBar: View {
                         Text(tabs[index].label)
                             .font(.system(size: 9, weight: .medium))
                     }
-                    .foregroundStyle(selectedTab == index ? GaryColors.gold : .white.opacity(0.5))
+                    .foregroundStyle(selectedTab == index ? GaryColors.gold : .white.opacity(0.6))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
                     .background {

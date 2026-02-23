@@ -38,7 +38,9 @@ func withTimeout<T>(seconds: TimeInterval, operation: @escaping () async throws 
             try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
             throw URLError(.timedOut)
         }
-        let result = try await group.next()!
+        guard let result = try await group.next() else {
+            throw URLError(.timedOut)
+        }
         group.cancelAll()
         return result
     }
@@ -653,6 +655,7 @@ struct SportMiniCard: View {
 // MARK: - Home View
 
 struct HomeView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @State private var freePick: GaryPick?
     @State private var loading = true
     @State private var animateIn = false
@@ -720,7 +723,7 @@ struct HomeView: View {
                                 Text("BET WITH")
                                     .font(.system(size: 14, weight: .heavy))
                                     .tracking(10)
-                                    .foregroundStyle(Color.white.opacity(0.55))
+                                    .foregroundStyle(Color.white.opacity(0.7))
 
                                 // GARY — sharp border stroke + fill
                                 ZStack {
@@ -970,13 +973,13 @@ struct HomeView: View {
             let shortDate: (String?) -> String = { dateStr in
                 guard let dateStr = dateStr else { return "" }
                 // Parse "YYYY-MM-DD" and format as "Feb 3"
-                let months = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                let months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                               "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
                 let parts = dateStr.split(separator: "-")
                 if parts.count == 3,
                    let m = Int(parts[1]), m >= 1, m <= 12,
                    let d = Int(parts[2]) {
-                    return "\(months[m]) \(d)"
+                    return "\(months[m - 1]) \(d)"
                 }
                 return ""
             }
@@ -1088,6 +1091,18 @@ struct HomeView: View {
                 freePick = nil
             }
             loading = false
+        }
+        .onChange(of: scenePhase) { newPhase in
+            if newPhase == .background || newPhase == .inactive {
+                winTimer?.invalidate()
+                winTimer = nil
+            } else if newPhase == .active && !recentWins.isEmpty && winTimer == nil {
+                winTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { _ in
+                    withAnimation {
+                        activeWin = (activeWin + 1) % recentWins.count
+                    }
+                }
+            }
         }
     }
 }
@@ -1301,6 +1316,7 @@ struct SportFilterBar: View {
 struct GaryPicksView: View {
     @State private var allPicks: [GaryPick] = []
     @State private var loading = true
+    @State private var fetchFailed = false
     @State private var selectedSport: Sport = .all
     @State private var selectedConference: String = "All"
 
@@ -1546,6 +1562,25 @@ struct GaryPicksView: View {
                         .tint(GaryColors.gold)
                         .scaleEffect(1.2)
                     Spacer()
+                } else if fetchFailed {
+                    Spacer()
+                    VStack(spacing: 16) {
+                        Image(systemName: "wifi.slash")
+                            .font(.system(size: 50))
+                            .foregroundStyle(.tertiary)
+                        Text("Couldn't load picks")
+                            .foregroundStyle(.secondary)
+                        Button {
+                            Task { await loadPicks(forceRefresh: true) }
+                        } label: {
+                            Text("Tap to retry")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(GaryColors.gold)
+                        }
+                    }
+                    .padding()
+                    .liquidGlass(cornerRadius: 24)
+                    Spacer()
                 } else if filteredPicks.isEmpty {
                     Spacer()
                     VStack(spacing: 16) {
@@ -1606,23 +1641,26 @@ struct GaryPicksView: View {
     private func loadPicks(forceRefresh: Bool = false) async {
         await MainActor.run {
             loading = true
+            fetchFailed = false
         }
 
         let date = SupabaseAPI.todayEST()
 
         // Use a timeout to prevent infinite loading
         var picks: [GaryPick] = []
+        var didFail = false
         do {
             let arr = try await withTimeout(seconds: 15) {
                 try await SupabaseAPI.fetchAllPicks(date: date, forceRefresh: forceRefresh)
             }
             picks = arr.filter { !($0.pick ?? "").isEmpty && !($0.rationale ?? "").isEmpty }
         } catch {
-            // Silent fail - empty state will show
+            didFail = true
         }
 
         await MainActor.run {
             allPicks = picks
+            fetchFailed = didFail && picks.isEmpty
             loading = false
         }
     }
@@ -1633,6 +1671,7 @@ struct GaryPicksView: View {
 struct GaryPropsView: View {
     @State private var allProps: [PropPick] = []
     @State private var loading = true
+    @State private var fetchFailed = false
     @State private var selectedSport: Sport = .all
     
     private var filteredProps: [PropPick] {
@@ -1806,6 +1845,25 @@ struct GaryPropsView: View {
                         .tint(GaryColors.gold)
                         .scaleEffect(1.2)
                     Spacer()
+                } else if fetchFailed {
+                    Spacer()
+                    VStack(spacing: 16) {
+                        Image(systemName: "wifi.slash")
+                            .font(.system(size: 50))
+                            .foregroundStyle(.tertiary)
+                        Text("Couldn't load props")
+                            .foregroundStyle(.secondary)
+                        Button {
+                            Task { await loadProps(forceRefresh: true) }
+                        } label: {
+                            Text("Tap to retry")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(GaryColors.gold)
+                        }
+                    }
+                    .padding()
+                    .liquidGlass(cornerRadius: 24)
+                    Spacer()
                 } else if filteredProps.isEmpty {
                     Spacer()
                     VStack(spacing: 16) {
@@ -1907,23 +1965,25 @@ struct GaryPropsView: View {
     private func loadProps(forceRefresh: Bool = false) async {
         await MainActor.run {
             loading = true
+            fetchFailed = false
         }
 
         let date = SupabaseAPI.todayEST()
 
         // Use a timeout to prevent infinite loading
-        let props: [PropPick]
+        var props: [PropPick] = []
+        var didFail = false
         do {
             props = try await withTimeout(seconds: 15) {
                 try await SupabaseAPI.fetchPropPicks(date: date, forceRefresh: forceRefresh)
             }
         } catch {
-            // Silent fail - empty state will show
-            props = []
+            didFail = true
         }
 
         await MainActor.run {
             allProps = props
+            fetchFailed = didFail && props.isEmpty
             loading = false
         }
     }
@@ -2258,7 +2318,7 @@ struct BillfoldView: View {
                 } label: {
                     Text(tf.uppercased())
                         .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(timeframe == tf ? .black : .white.opacity(0.5))
+                        .foregroundStyle(timeframe == tf ? .black : .white.opacity(0.6))
                         .padding(.horizontal, 10)
                         .padding(.vertical, 7)
                         .background {
@@ -3798,7 +3858,7 @@ struct AnalysisSheet: View {
                             .foregroundStyle(greenAccent)
                         Text("Powered by Gary A.I.")
                             .font(.caption)
-                            .foregroundStyle(.white.opacity(0.5))
+                            .foregroundStyle(.white.opacity(0.6))
                     }
                     Spacer()
                     Button {
@@ -5125,7 +5185,7 @@ struct PropAnalysisSheet: View {
                             .foregroundStyle(greenAccent)
                         Text("Powered by Gary A.I.")
                             .font(.caption)
-                            .foregroundStyle(.white.opacity(0.5))
+                            .foregroundStyle(.white.opacity(0.6))
                     }
                     Spacer()
                     Button {
