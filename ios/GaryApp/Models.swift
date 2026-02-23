@@ -244,8 +244,8 @@ struct StatData: Codable {
         return StatData(
             name: dict["name"] as? String,
             token: dict["token"] as? String,
-            home: homeDict != nil ? StatValues.from(dict: homeDict!) : nil,
-            away: awayDict != nil ? StatValues.from(dict: awayDict!) : nil
+            home: homeDict.flatMap { StatValues.from(dict: $0) },
+            away: awayDict.flatMap { StatValues.from(dict: $0) }
         )
     }
 }
