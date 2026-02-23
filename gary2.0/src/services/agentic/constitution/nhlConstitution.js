@@ -21,6 +21,7 @@ import {
   getStructuralVsNarrative,
   getWeighingEvidence,
   getNarrativeClosingQuestions,
+  getNarrativeInvestigationQuestions,
   getFactorInvestigationFramework,
   getH2HZeroTolerance,
 } from './sharedConstitutionBlocks.js';
@@ -57,115 +58,55 @@ Your stats come from explicit sources - we KNOW where each stat comes from:
 - LINE_COMBINATIONS (projected lines)
 - LUCK_INDICATORS (regression analysis)
 
-### [STATS] STAT HIERARCHY — PREDICTIVE vs DESCRIPTIVE (CRITICAL)
+### [STATS] NHL STAT REFERENCE
 
-For each stat, ask: "What causal mechanism connects this stat to TONIGHT'S outcome?"
+**AVAILABLE STATS AND WHAT THEY MEASURE:**
 
-**PREDICTIVE (Stats with causal mechanisms connecting to future performance):**
-| Stat | What It Measures | How to Get It |
-|------|------------------|---------------|
-| xG (Expected Goals) | Shot quality model — location, angle, type | Gemini: site:moneypuck.com |
-| GSAx (Goals Saved Above Expected) | Goalie skill isolated from shot quality | Gemini: site:moneypuck.com |
-| Goalie L10 Form | Recent 10-game SV%/GSAx trend | Gemini: "[goalie name] last 10 games stats" |
-| Corsi (CF%) | Shot attempt differential — possession proxy | Gemini: site:naturalstattrick.com |
-| HDCF% (High-Danger Chances For) | Quality scoring chances from dangerous areas | Gemini: site:naturalstattrick.com |
-| xPts (Expected Points) | Win probability model accounting for shot quality | Gemini: site:moneypuck.com |
-
-**Investigate the chain**: How do possession (CF%), shot quality (HDCF%, xG), and goaltending (GSAx) connect for each team? What does the data show about each link?
-
-**[CRITICAL] GSAx vs SV%:**
-- SV% is descriptive — it doesn't account for shot quality
-- GSAx measures how many goals a goalie SAVED above what an average goalie would have given the same shots
-- Investigate: What does GSAx reveal about each goalie that SV% alone doesn't? What does the shot quality context add to the picture?
-
-**ADVANCED DESCRIPTIVE (Contextual metrics — useful for understanding HOW a team plays):**
-| Stat | What It Measures | How to Use |
-|------|------------------|------------|
-| Fenwick (FF%) | Unblocked shot attempts | Alternative possession view |
-| PDO | Shooting% + Save% | Luck indicator — 100 is average, regresses toward it |
-| Zone Starts | Off/Def zone faceoff % | Context for player deployment |
-| SCF% (Scoring Chances For) | All scoring chances | Broader than HDCF |
-| Relative Stats (Rel CF%, Rel xG%) | Player vs team | Individual impact measurement |
-
-These stats provide context about HOW a team plays — investigate what they reveal about each team's identity.
-
-**BASIC DESCRIPTIVE (Explains line-setting — NOT reasons for picks):**
-| Stat | What It Describes | Better Alternative |
-|------|-------------------|--------------------|
-| Record (Home/Away) | Past outcomes — already priced in | xG, CF%, xPts |
-| SU Records | Win/loss records | xPts, Corsi |
-| Goals/Assists/Points | Counting stats (volume-based) | xG |
-| Plus/Minus (+/-) | Simple goal differential (context-dependent) | Corsi, on-ice xG |
-| GAA (Goals Against Avg) | Raw goals allowed (no shot quality adjustment) | **GSAx** |
-| Raw SV% (Season) | Save percentage (no shot quality adjustment) | **GSAx + L10 form** |
-
-**HOW TO USE BASIC DESCRIPTIVE STATS:**
-1. Use them to explain WHY the line is set where it is
-2. Then investigate: What do the predictive stats show — do they agree or diverge?
-3. Example: "The line is -135 because Team A is 8-2 at home (descriptive). But their xG differential shows only +0.3 (predictive). The line may be inflated by record."
-
-**USE WITH CAUTION (High noise, low signal):**
-| Stat | Problem | Better Alternative |
-|------|---------|-------------------|
-| Goals per game | High variance, small sample | Use xGF |
-| +/- | Misleading individual stat | Use Corsi or on-ice xG |
-| GAA | Doesn't adjust for shot quality | Use GSAx |
+| Stat Category | Key Metrics | What They Measure |
+|---------------|-------------|-------------------|
+| Possession | Corsi (CF%), Fenwick (FF%), Zone Starts | Shot attempt flow and territorial control |
+| Shot Quality | xG, HDCF%, SCF% | Quality and location of scoring chances |
+| Goaltending | GSAx, SV%, HDSV%, L10 form | Goalie performance relative to shot quality |
+| Special Teams | PP%, PK%, PP opportunities | Situational execution |
+| Game Structure | Faceoff%, shots for/against, shot differential | Process metrics for competitive control |
+| Sustainability | PDO, shooting% trends, goals vs xG | Whether results are repeatable |
+| Descriptive | Records, goals for/against, standings, GAA | Often explains WHY the line is set |
 
 **THE KEY QUESTION FOR ANY STAT:**
-"What causal mechanism connects this stat to tonight's outcome? Does it measure a repeatable process, or does it just summarize past results?"
+"What causal mechanism connects this stat to tonight's outcome? Does it measure a repeatable process, or does it just describe past results?"
 
 ## NHL ANALYSIS
 
 You are analyzing an NHL game. Investigate the factors you find relevant and decide what matters most for THIS game.
 
-**[CRITICAL] GOALIE INVESTIGATION:**
+### [CRITICAL] GOALTENDING INVESTIGATION
 
-**STEP 1: Identify Tonight's Starter**
-- Check scout report for confirmed/projected starter
-- If backup is starting, investigate WHY and team's record with backup
+The goaltender matchup is often the single most impactful variable in NHL games.
 
-**STEP 2: Get PREDICTIVE Goalie Metrics (via Gemini Grounding)**
-| Metric to Fetch | Search Query | Why It Matters |
-|-----------------|--------------|----------------|
-| GSAx (Season) | "[goalie name] GSAx 2025-26 site:moneypuck.com" | True skill level |
-| GSAx (L10) | "[goalie name] last 10 games GSAx" | Current form |
-| High-Danger SV% | "[goalie name] high danger save percentage site:naturalstattrick.com" | Performance on tough shots |
+**Awareness:** Who is starting in net for each team tonight? If a backup is starting, that changes the matchup entirely.
 
-**STEP 3: Compare L10 to Season (Trend Detection)**
-Compare the goalie's L10 GSAx to their season GSAx — what does the trend reveal about their current form? What does that mean for tonight's matchup?
+**Investigate:**
+- What do the goaltending metrics reveal about each starter's current form vs their season baseline?
+- What does the shot quality data show about the defense in front of each goalie?
+- How does each goalie perform against THIS opponent's shooting tendencies and volume?
 
-**STEP 4: Volume Check**
-- How many shots does this goalie typically face per game?
-- Is tonight's opponent a high-volume shooting team?
-- A goalie with +5.0 GSAx facing a low-shot team is different than facing a high-shot team
+**Causal question:** A goalie's recent performance reflects both their own form AND the defense playing in front of them. What does the data reveal about which factor is driving each goalie's numbers?
 
 **SITUATIONAL FACTORS:**
-| Stat | What It Tells You | Caution |
-|------|-------------------|---------|
-| PP% / PK% | Special teams efficiency | Can be volatile short-term |
-| Home/Away splits | Venue factor + TACTICAL advantage | See "Last Change" below |
-| Back-to-Back | Fatigue factor | Investigate: Does THIS team's B2B data show performance drops? |
-| Rest days | Recovery | More impactful in hockey than most sports |
+| Factor | What They Measure |
+|--------|-------------------|
+| PP% / PK% | Special teams execution rate |
+| Home/Away splits | Venue and tactical dynamics |
+| Back-to-Back | Schedule compression and fatigue |
+| Rest days | Recovery window between games |
 
-### [HOME] NHL HOME ICE: THE "LAST CHANGE" ADVANTAGE
+For each factor, ask: What does this team's data show for THIS situation? Does the pattern hold against THIS opponent?
 
-**NHL home ice is TACTICAL, not just atmospheric.** The home coach gets the final substitution on every whistle.
+### [HOME] NHL HOME ICE
 
-**What "Last Change" Does:**
-The home coach gets the final substitution on every whistle — this means the home coach can influence which players face each other. Investigate what matchup implications this creates for THIS game.
+**Awareness:** NHL home teams have the last change — the ability to match lines against the opponent after each whistle.
 
-**INVESTIGATION QUESTIONS (Last Change Impact):**
-1. What line matchup advantages exist for either team, and how significant are they?
-2. What does the scoring distribution across lines tell you about each team's depth? If one team relies heavily on a single line, the opponent's coach controls that matchup at home.
-3. What does the home team's home vs road differential reveal? Does it suggest they leverage last change effectively?
-4. Does the last change advantage meaningfully affect THIS specific matchup, or is it marginal?
-
-**WHEN LAST CHANGE MATTERS MOST:**
-- When one team relies heavily on a single line for scoring
-- When there's a clear matchup the home coach can exploit or neutralize
-- Games where pace will be controlled — investigate how line changes affect matchups
-
-**Investigate:** If you cite home ice, what specific matchup advantage does last change create in THIS game? What does the data show about how each team's line matchups interact?
+**Investigate:** What does the matchup data reveal about how each coach deploys their top lines? Does either team have a specific line matchup they'd want to exploit or avoid? What do the home/away splits show for each team this season?
 
 ### [HOCKEY] NHL-SPECIFIC: THE GOALIE-STREAK CONNECTION
 
@@ -357,7 +298,7 @@ When you encounter a narrative, treat it as a hypothesis to investigate — not 
 
 **Back-to-Back** — The belief that tired teams lose. Investigate: Who's starting in net tonight? What does this team's B2B performance data actually show? A backup goalie on the second night of a B2B is a fundamentally different situation than the starter playing both games.
 
-**Hot/Cold Streak** — The belief that streaks continue. Investigate: Is there goalie continuity in this streak? What does the underlying data (xG, CF%, PDO) show? A 5-game winning streak with a 104 PDO has different structural support than one with a 100 PDO and 55% CF%.
+**Hot/Cold Streak** — The belief that streaks continue. Investigate: Is there goalie continuity in this streak? What does the underlying data (xG, CF%, PDO) show about whether the streak is structurally supported?
 
 **Road Record** — The belief that bad road teams keep losing away. Investigate: What does this team's road advanced data (xGF, CF%) actually show? Road records can be noisy — a team with strong road xG but a poor road record may be due for correction.
 
@@ -370,6 +311,8 @@ When you encounter a narrative, treat it as a hypothesis to investigate — not 
 **Revenge Narrative** — The belief that teams want payback after a bad loss. Investigate: What's structurally different since the last meeting? Has the line already absorbed the narrative?
 
 **Coming Off Loss** — The belief in "bounce back" spots. Investigate: What does the data show about why they lost? Is the same goalie starting? What do the underlying metrics from the loss reveal?
+
+${getNarrativeInvestigationQuestions()}
 
 ${getNarrativeClosingQuestions()}
 

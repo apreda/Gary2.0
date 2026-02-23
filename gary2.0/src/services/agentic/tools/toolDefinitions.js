@@ -184,6 +184,9 @@ const NHL_TOKENS = [
   'HIGH_DANGER_CHANCES',  // Real scoring chance quality
   // Goaltending
   'GOALIE_STATS', 'SAVE_PCT', 'GOALS_AGAINST_AVG', 'GOALIE_MATCHUP',
+  'NHL_GSAX',                 // GSAx via Gemini Grounding (MoneyPuck/NST)
+  'NHL_GOALIE_RECENT_FORM',   // Goalie L5/L10 computed from BDL box scores
+  'NHL_HIGH_DANGER_SV_PCT',   // HDSV% via Gemini Grounding (Natural Stat Trick)
   // Situational
   'REST_SITUATION', 'BACK_TO_BACK', 'HOME_ICE', 'ROAD_PERFORMANCE',
   // Faceoffs & Possession

@@ -407,6 +407,12 @@ export async function fetchStats(sport, token, homeTeam, awayTeam, options = {})
     };
   }
   
+  // Sport-aware token overrides
+  if (token === 'CLOSE_GAME_RECORD' && bdlSport === 'icehockey_nhl') {
+    token = 'ONE_GOAL_GAMES';
+    console.log(`[Stat Router] Redirecting CLOSE_GAME_RECORD → ONE_GOAL_GAMES for NHL`);
+  }
+
   try {
     // Check for sport-specific fetcher first
     let fetcher = null;
@@ -8575,6 +8581,205 @@ Quad 4: [W-L]`;
     } catch (error) {
       console.error(`[Stat Router] Error fetching HIGH_DANGER_CHANCES:`, error.message);
       return { category: 'High Danger Chances', error: 'Data unavailable' };
+    }
+  },
+
+  // NHL GSAx (Goals Saved Above Expected) - Gemini Grounding
+  // SOURCE: MoneyPuck, Natural Stat Trick
+  NHL_GSAX: async (bdlSport, home, away, season) => {
+    const homeName = home?.full_name || home?.name || 'Unknown Home';
+    const awayName = away?.full_name || away?.name || 'Unknown Away';
+    console.log(`[Stat Router] Fetching NHL_GSAX for ${awayName} @ ${homeName}`);
+
+    if (bdlSport !== 'icehockey_nhl') {
+      return { category: 'GSAx', note: 'Only available for NHL' };
+    }
+
+    try {
+      const seasonStr = getCurrentSeasonString();
+      const query = `"MoneyPuck" OR "Natural Stat Trick" ${seasonStr} NHL season goalie stats GSAx.
+        Search for: ${homeName} and ${awayName} starting goalies Goals Saved Above Expected GSAx.
+        What is each team's starting goalie's GSAx for the current season and last 10 games?
+        Include: Goalie name, season GSAx, L10 GSAx if available, games played.
+        Return ONLY factual data, no internal reasoning.`;
+
+      const groundingResult = await geminiGroundingSearch(query, {
+        systemMessage: 'You are an NHL analytics expert. Use data from MoneyPuck or Natural Stat Trick. Provide exact GSAx (Goals Saved Above Expected) data for both teams\' starting goalies. Return ONLY the data, no chain-of-thought reasoning.',
+        maxTokens: 1500
+      });
+
+      return {
+        category: 'Goals Saved Above Expected (GSAx)',
+        source: 'MoneyPuck / Natural Stat Trick via Gemini',
+        home: { team: homeName },
+        away: { team: awayName },
+        grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
+        INVESTIGATE: 'What does each goalie\'s GSAx reveal about their performance relative to expected goals?'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching NHL_GSAX:`, error.message);
+      return { category: 'GSAx', error: 'Data unavailable' };
+    }
+  },
+
+  // NHL Goalie Recent Form - Computed from BDL box scores
+  // SOURCE: Ball Don't Lie API (box scores)
+  NHL_GOALIE_RECENT_FORM: async (bdlSport, home, away, season) => {
+    if (bdlSport !== 'icehockey_nhl') return null;
+
+    try {
+      // Get goalies for both teams
+      const goalieData = await ballDontLieService.getNhlTeamGoalies([home.id, away.id], season);
+
+      // Get last 21 days of box scores for both teams
+      const today = new Date();
+      const dates = [];
+      for (let i = 0; i < 21; i++) {
+        const d = new Date(today);
+        d.setDate(d.getDate() - i);
+        dates.push(d.toISOString().split('T')[0]);
+      }
+
+      const boxScores = await ballDontLieService.getNhlRecentBoxScores(dates, {
+        team_ids: [home.id, away.id]
+      });
+
+      if (!boxScores || boxScores.length === 0) {
+        return { category: 'Goalie Recent Form', error: 'No recent box score data available' };
+      }
+
+      // Aggregate goalie stats from box scores
+      const goalieStats = {};
+      boxScores.forEach(bs => {
+        const playerId = bs.player?.id;
+        const position = bs.position || bs.player?.position_code;
+        if (!playerId || position !== 'G') return;
+
+        // Only count games where goalie actually played (time_on_ice > 0)
+        const toi = bs.time_on_ice || '00:00';
+        if (toi === '00:00' || toi === '0:00') return;
+
+        if (!goalieStats[playerId]) {
+          goalieStats[playerId] = {
+            name: bs.player?.full_name || `${bs.player?.first_name} ${bs.player?.last_name}`,
+            teamId: bs.team?.id,
+            games: [],
+          };
+        }
+
+        goalieStats[playerId].games.push({
+          date: bs.game?.date,
+          saves: bs.saves || 0,
+          shots_against: bs.shots_against || 0,
+          goals_against: bs.goals_against || 0,
+          time_on_ice: toi,
+          win: bs.win || false,
+          loss: bs.loss || false,
+          ot_loss: bs.ot_loss || false
+        });
+      });
+
+      // Build summary for each goalie
+      const formatGoalie = (stats) => {
+        const games = stats.games.sort((a, b) => new Date(b.date) - new Date(a.date));
+        const totalSaves = games.reduce((sum, g) => sum + g.saves, 0);
+        const totalSA = games.reduce((sum, g) => sum + g.shots_against, 0);
+        const totalGA = games.reduce((sum, g) => sum + g.goals_against, 0);
+        const wins = games.filter(g => g.win).length;
+        const losses = games.filter(g => g.loss).length;
+        const otLosses = games.filter(g => g.ot_loss).length;
+
+        return {
+          name: stats.name,
+          recent_games: games.length,
+          record: `${wins}-${losses}-${otLosses}`,
+          save_pct: totalSA > 0 ? (totalSaves / totalSA).toFixed(3) : 'N/A',
+          gaa: totalSA > 0 ? (totalGA / games.length).toFixed(2) : 'N/A',
+          total_saves: totalSaves,
+          total_shots_against: totalSA,
+          last_5: games.slice(0, 5).map(g => ({
+            date: g.date,
+            saves: g.saves,
+            shots_against: g.shots_against,
+            goals_against: g.goals_against,
+            result: g.win ? 'W' : g.ot_loss ? 'OTL' : 'L'
+          }))
+        };
+      };
+
+      // Get likely starters (most games started from getNhlTeamGoalies)
+      const homeGoalies = goalieData?.[home.id] || [];
+      const awayGoalies = goalieData?.[away.id] || [];
+      const homeStarterName = homeGoalies[0]?.name;
+      const awayStarterName = awayGoalies[0]?.name;
+
+      // Find goalies from box scores matching each team
+      const homeTeamGoalies = Object.values(goalieStats)
+        .filter(g => g.teamId === home.id)
+        .map(formatGoalie)
+        .sort((a, b) => b.recent_games - a.recent_games);
+
+      const awayTeamGoalies = Object.values(goalieStats)
+        .filter(g => g.teamId === away.id)
+        .map(formatGoalie)
+        .sort((a, b) => b.recent_games - a.recent_games);
+
+      return {
+        category: 'Goalie Recent Form (Last 21 Days)',
+        source: 'Ball Don\'t Lie API (Box Scores)',
+        home: {
+          team: home.full_name || home.name,
+          likely_starter: homeStarterName || 'Unknown',
+          goalies: homeTeamGoalies
+        },
+        away: {
+          team: away.full_name || away.name,
+          likely_starter: awayStarterName || 'Unknown',
+          goalies: awayTeamGoalies
+        },
+        INVESTIGATE: 'What does each goalie\'s recent form reveal compared to their season baseline?'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching NHL_GOALIE_RECENT_FORM:`, error.message);
+      return { category: 'Goalie Recent Form', error: 'Data unavailable' };
+    }
+  },
+
+  // NHL High Danger Save Percentage - Gemini Grounding
+  // SOURCE: Natural Stat Trick
+  NHL_HIGH_DANGER_SV_PCT: async (bdlSport, home, away, season) => {
+    const homeName = home?.full_name || home?.name || 'Unknown Home';
+    const awayName = away?.full_name || away?.name || 'Unknown Away';
+    console.log(`[Stat Router] Fetching NHL_HIGH_DANGER_SV_PCT for ${awayName} @ ${homeName}`);
+
+    if (bdlSport !== 'icehockey_nhl') {
+      return { category: 'High Danger SV%', note: 'Only available for NHL' };
+    }
+
+    try {
+      const seasonStr = getCurrentSeasonString();
+      const query = `"Natural Stat Trick" ${seasonStr} NHL season goalie high danger save percentage.
+        Search for: ${homeName} and ${awayName} starting goalies high danger save percentage HDSV%.
+        What is each team's starting goalie's high-danger save percentage for the current season?
+        Include: Goalie name, HDSV%, high danger shots against, high danger goals against.
+        Return ONLY factual data, no internal reasoning.`;
+
+      const groundingResult = await geminiGroundingSearch(query, {
+        systemMessage: 'You are an NHL analytics expert. Use data from Natural Stat Trick. Provide exact high-danger save percentage data for both teams\' starting goalies. Return ONLY the data, no chain-of-thought reasoning.',
+        maxTokens: 1500
+      });
+
+      return {
+        category: 'High Danger Save Percentage',
+        source: 'Natural Stat Trick via Gemini',
+        home: { team: homeName },
+        away: { team: awayName },
+        grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
+        INVESTIGATE: 'What does each goalie\'s high-danger save percentage reveal about their performance on tough shots?'
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching NHL_HIGH_DANGER_SV_PCT:`, error.message);
+      return { category: 'High Danger SV%', error: 'Data unavailable' };
     }
   },
 

@@ -2152,6 +2152,25 @@ Watch for these patterns that require deeper investigation:
 ═══════════════════════════════════════════════════════════════════════
 ` : '';
 
+  // NHL-specific guidance
+  const nhlGuidance = (sport === 'icehockey_nhl' || sport === 'NHL') ? `
+
+═══════════════════ NHL-SPECIFIC INVESTIGATION ═══════════════════
+
+Hockey outcomes are heavily goaltender-dependent and possession-driven.
+
+**KEY INVESTIGATION AREAS:**
+- **Goaltending matchup**: Who is starting? What does recent form reveal vs season baseline?
+- **Possession and shot quality**: What do the 5v5 metrics reveal about territorial control and chance quality?
+- **Special teams**: What does PP% and PK% show? How do they interact in this matchup?
+- **Schedule and fatigue**: Rest situation, B2B, compressed schedule? Who's in net on the second night?
+- **Game structure**: Faceoff%, shot volume, close-game data — what does the process look like?
+
+**NHL is moneyline only** — you are picking WHO WINS.
+
+═══════════════════════════════════════════════════════════════════
+` : '';
+
   // ═══════════════════════════════════════════════════════════════════════════
   // GEMINI 3 OPTIMIZED: XML-tagged structure with END-OF-PROMPT instruction
   // ═══════════════════════════════════════════════════════════════════════════
@@ -2164,6 +2183,7 @@ ${scoutReport}
 
 ${nflGuidance ? `<sport_specific_guidance>${nflGuidance}</sport_specific_guidance>` : ''}
 ${ncaabGuidance ? `<sport_specific_guidance>${ncaabGuidance}</sport_specific_guidance>` : ''}
+${nhlGuidance ? `<sport_specific_guidance>${nhlGuidance}</sport_specific_guidance>` : ''}
 
 <investigation_rules>
 ## INVESTIGATION RULES
@@ -2397,12 +2417,22 @@ Use your tools to investigate the matchup-specific data that goes beyond the bas
 
   // NHL-specific follow-up investigation
   const nhlDataGaps = (sport === 'icehockey_nhl' || sport === 'NHL') ? `
-### NHL INVESTIGATION:
-Investigate BOTH teams equally. Your constitution has the investigation factors. Request data for the factors YOU determine are relevant.
+### NHL INVESTIGATION (BUILDING ON YOUR SCOUT REPORT)
 
-**NHL STRUCTURAL REQUIREMENT:** Every case MUST include a goalie comparison table with actual stats (GAA, SV%, L5 form). Back up claims with specific numbers.
+**ALREADY IN YOUR SCOUT REPORT (DO NOT RE-FETCH):**
+- Goalie comparison table (SV%, GAA, record, shutouts)
+- Team tale of the tape (L5 form, goals for/against, shots, PP%, PK%, faceoff%)
+- Injury report with status and duration labels
+- Standings and division context
+- H2H history for the season
+- Key player stats and roster depth
 
-**NHL IS MONEYLINE ONLY:** You are picking WHO WINS.
+Your scout report is the BASELINE. Investigate what's DIFFERENT about THIS game vs the baseline.
+
+**INVESTIGATE DEEPER:**
+Use your tools to go beyond the baseline. What does each team bring to this matchup?
+
+**NHL IS MONEYLINE ONLY:** You are picking WHO WINS. Every case MUST include a goalie comparison with actual stats.
 ` : '';
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -2874,7 +2904,17 @@ Ask: "If this game is close in the 4th quarter, what does the data show about EA
 If this game is close late, what does the data show about each team's ability to execute in tight situations? Investigate the factors you determine are most relevant.
 
 **HOME COURT IN CLOSE GAMES:**
-- Ask: What does each team's close-game data show at home vs on the road?` : `**CLOSE GAME DYNAMICS:**
+- Ask: What does each team's close-game data show at home vs on the road?` : isNHL ? `**CLOSE GAME DYNAMICS (NHL):**
+If this game is close in the 3rd period, what does the data show about each team's ability to protect leads or come from behind?
+
+**OVERTIME DYNAMICS:**
+- What does each team's OT/SO record reveal?
+- In 3-on-3 OT, what does the data show about each team's personnel?
+- How does OT probability affect moneyline value?
+
+**GOALTENDING IN TIGHT GAMES:**
+- What does each goalie's performance show in one-goal games?
+- What does the data reveal about each goalie's ability to hold late?` : `**CLOSE GAME DYNAMICS:**
 If this game is likely to be close late, what does the data show about each team's ability to close? Investigate the factors you determine are most relevant.`}
 
 **THE PIVOT RULE:**
@@ -3200,6 +3240,23 @@ ${isNCAAB ? `
    - AWARENESS: The spread is the price — it's what the market is asking each team to do in THIS spot. Investigate whether the spread fully reflects the situational context.
    - INVESTIGATE: Given the spot, the venue, and the conference context — what is the spread asking each team to do? What does the situational context reveal about the spread?
    - WHAT DOES THIS TELL YOU: Where do the stats and the situational factors agree about the price? Where do they conflict?
+` : ''}${isNHL ? `
+### NHL-SPECIFIC STRESS TEST PATTERNS:
+
+**GOALTENDER VARIANCE:**
+   - AWARENESS: Your case may depend on a goalie continuing an extreme streak (hot or cold).
+   - INVESTIGATE: What does the goalie's L10 data show compared to their season baseline? What does the shot quality data show — is the goalie performing differently, or is the defense in front of them driving the numbers?
+   - WHAT DOES THIS TELL YOU: Is your case built on sustainable goaltending, or an extreme that's likely to regress?
+
+**BACK-TO-BACK GOALIE ROTATION:**
+   - AWARENESS: On the second night of a B2B, a different goalie may start. That changes the matchup entirely.
+   - INVESTIGATE: Is this a B2B? If so, who starts tonight? What does the backup's data show? How does the team perform with the backup vs the starter?
+   - WHAT DOES THIS TELL YOU: Does the goalie rotation fundamentally change your case, or is the team strong enough to absorb it?
+
+**REGULATION VS OVERTIME PRICING:**
+   - AWARENESS: NHL moneyline includes OT/SO. A team that wins many games in OT/SO may be priced differently than one that dominates in regulation.
+   - INVESTIGATE: What does each team's regulation win percentage show? What does the OT/SO record reveal? Is one team's record inflated by extra-time results that may not be repeatable?
+   - WHAT DOES THIS TELL YOU: Is the moneyline reflecting regulation dominance or OT/SO variance?
 ` : ''}
 ---
 
@@ -5636,8 +5693,16 @@ BEGIN WRITING YOUR MATCHUP ANALYSIS NOW.
           }
         } else if (!steelManCompleted && pass2AlreadyInjected && !_pass2Delivered) {
           // Pass 2 was queued (pushed to messages, _pass2Injected=true) but NOT yet sent to the session
-          // Don't push enforcement — let the queued Pass 2 be delivered first
-          console.log(`[Orchestrator] Pass 2 queued but not yet delivered to session — waiting for delivery before enforcement`);
+          // The advisor is still building bilateral cases — actively await it instead of letting
+          // Gary burn iterations requesting more stats while we wait
+          if (_flashCasesPromise && !_flashCasesReady) {
+            console.log(`[Orchestrator] 🔄 Advisor still building cases — awaiting before next iteration (${iteration}/${effectiveMaxIterations})`);
+            await _flashCasesPromise;
+            // .then()/.catch() handler already set _flashCasesReady and _flashCases
+            console.log(`[Orchestrator] ✅ Advisor returned — will inject Pass 2.5 next iteration`);
+          } else {
+            console.log(`[Orchestrator] Pass 2 queued but not yet delivered to session — waiting for delivery before enforcement`);
+          }
         } else if (!pass25AlreadyInjected && steelManCompleted) {
           // ═══════════════════════════════════════════════════════════════════════
           // PASS 2.5 INJECTION + PRO MODEL SWITCH (NBA/NFL/NHL/NCAAB)

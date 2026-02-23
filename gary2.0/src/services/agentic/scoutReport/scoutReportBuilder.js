@@ -557,6 +557,139 @@ export async function buildScoutReport(game, sport, options = {}) {
     }
   }
 
+  // =========================================================================
+  // NHL INJURY DURATION RESOLUTION (box-score method — mirrors NBA approach)
+  // Uses time_on_ice > "00:00" instead of minutes > 0 to detect last appearance.
+  // =========================================================================
+  if (sportKey === 'NHL' && (injuries?.home?.length > 0 || injuries?.away?.length > 0)) {
+    const STALE_WINDOW_GAMES = 2;
+
+    const resolveNhlDurationByBoxScore = async (injuryList, teamRecentGames, teamName, teamId) => {
+      const actionableInjuries = injuryList.filter(inj => {
+        const status = (inj.status || '').toLowerCase();
+        return status.includes('out') || status.includes('doubtful') || status.includes('questionable') || status.includes('day-to-day');
+      });
+      if (actionableInjuries.length === 0) return;
+
+      // Get dates from team's recent games (up to 10)
+      const gameDates = (teamRecentGames || [])
+        .filter(g => g.date)
+        .sort((a, b) => new Date(b.date) - new Date(a.date))
+        .slice(0, 10);
+
+      if (gameDates.length === 0) {
+        throw new Error(`[Scout Report] CRITICAL: No recent game dates for ${teamName} — cannot resolve NHL injury durations`);
+      }
+
+      // Fetch box scores for those dates (team-filtered)
+      const dateStrs = [...new Set(gameDates.map(g => g.date?.split('T')[0]).filter(Boolean))];
+
+      const boxScores = await ballDontLieService.getNhlRecentBoxScores(dateStrs, {
+        team_ids: teamId ? [teamId] : []
+      });
+
+      if (!boxScores || boxScores.length === 0) {
+        throw new Error(`[Scout Report] CRITICAL: No NHL box-score data for ${teamName} — cannot resolve injury durations`);
+      }
+
+      // Resolve each injury
+      const STALE_DAYS_THRESHOLD = 5;
+      for (const inj of actionableInjuries) {
+        const injName = `${inj.player?.first_name || ''} ${inj.player?.last_name || ''}`.toLowerCase().trim();
+        if (!injName) continue;
+        const pName = `${inj.player?.first_name || ''} ${inj.player?.last_name || ''}`.trim();
+
+        // Find this player's entries where time_on_ice > 0
+        const playerEntries = boxScores.filter(s => {
+          const statName = `${s.player?.first_name || ''} ${s.player?.last_name || ''}`.toLowerCase().trim();
+          const toi = s.time_on_ice || '00:00';
+          return playerNamesMatch(injName, statName) && toi !== '00:00' && toi !== '0:00';
+        });
+
+        if (playerEntries.length > 0) {
+          // Sort by game date descending
+          playerEntries.sort((a, b) => {
+            const dateA = new Date(a.game?.date || 0);
+            const dateB = new Date(b.game?.date || 0);
+            return dateB - dateA;
+          });
+
+          const lastGameDate = new Date(playerEntries[0].game?.date);
+          const daysSince = Math.floor((Date.now() - lastGameDate) / (1000 * 60 * 60 * 24));
+
+          // Count team games after player's last appearance
+          const gamesMissed = gameDates.filter(g => new Date(g.date) > lastGameDate).length;
+
+          if (gamesMissed <= STALE_WINDOW_GAMES && daysSince < STALE_DAYS_THRESHOLD) {
+            inj.duration = 'RECENT';
+            inj.freshness = 'FRESH';
+            inj.isPricedIn = false;
+            inj.isEdge = true;
+          } else if (gamesMissed <= 7) {
+            inj.duration = 'MID-SEASON';
+            inj.freshness = 'STALE';
+            inj.isPricedIn = true;
+          } else {
+            inj.duration = 'SEASON-LONG';
+            inj.freshness = 'STALE';
+            inj.isPricedIn = true;
+          }
+
+          inj.daysSinceReport = daysSince;
+          inj.gamesMissed = gamesMissed;
+          inj.reportDateStr = lastGameDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          inj.durationSource = 'box_score';
+          console.log(`[Scout Report] ${pName} (${teamName}) last played ${inj.reportDateStr} — ${gamesMissed} game(s) missed → ${inj.duration} [${inj.freshness}]`);
+        } else {
+          // Not found in recent box scores — long-term absence
+          inj.gamesMissed = gameDates.length;
+          inj.gamesMissedIsMinimum = true;
+          inj.duration = 'SEASON-LONG';
+          inj.freshness = 'STALE';
+          inj.isPricedIn = true;
+          inj.durationSource = 'box_score';
+          console.log(`[Scout Report] ${pName} (${teamName}) not in last ${gameDates.length} games → SEASON-LONG [STALE]`);
+        }
+      }
+    };
+
+    await Promise.all([
+      resolveNhlDurationByBoxScore(injuries.home || [], recentHome, homeTeam, injuries._homeTeamId),
+      resolveNhlDurationByBoxScore(injuries.away || [], recentAway, awayTeam, injuries._awayTeamId)
+    ]);
+
+    // HARD FAIL: If any Out injury still has UNKNOWN duration, something broke
+    const allNhlInjuries = [...(injuries.home || []), ...(injuries.away || [])];
+    const unresolvedNhl = allNhlInjuries.filter(inj => {
+      const status = (inj.status || '').toLowerCase();
+      const isActionable = status.includes('out') || status.includes('doubtful');
+      return isActionable && inj.duration === 'UNKNOWN';
+    });
+    if (unresolvedNhl.length > 0) {
+      const details = unresolvedNhl.map(inj => {
+        const name = `${inj.player?.first_name || ''} ${inj.player?.last_name || ''}`.trim();
+        return `${name} (${inj.status}, raw: ${inj.statusRaw}, reason: ${inj.durationContext || 'none'})`;
+      }).join('; ');
+      throw new Error(`[Scout Report] CRITICAL: ${unresolvedNhl.length} NHL injuries with UNKNOWN duration after box-score resolution. Details: ${details}`);
+    }
+
+    // Build stale injuries list
+    injuries.staleInjuries = [
+      ...(injuries.home || []).filter(i => i.isPricedIn).map(i => `${i.player?.first_name || ''} ${i.player?.last_name || ''}`.trim()),
+      ...(injuries.away || []).filter(i => i.isPricedIn).map(i => `${i.player?.first_name || ''} ${i.player?.last_name || ''}`.trim())
+    ];
+
+    // Log summary
+    const freshNhl = allNhlInjuries.filter(i => i.freshness === 'FRESH' && (i.status || '').toLowerCase().includes('out'));
+    const staleNhl = allNhlInjuries.filter(i => i.freshness === 'STALE' && (i.status || '').toLowerCase().includes('out'));
+    if (freshNhl.length > 0) {
+      console.log(`[Scout Report] NHL Fresh OUT: ${freshNhl.map(i => `${i.player?.first_name} ${i.player?.last_name} (${i.gamesMissed ?? 0}g)`).join(', ')}`);
+    }
+    if (staleNhl.length > 0) {
+      console.log(`[Scout Report] NHL Stale OUT: ${staleNhl.map(i => `${i.player?.first_name} ${i.player?.last_name} (${i.gamesMissedIsMinimum ? i.gamesMissed + '+' : i.gamesMissed}g)`).join(', ')}`);
+    }
+  }
+
   // For NBA, fetch game context using Gemini Grounding (venue, tournament context, game significance)
   // This works dynamically for regular season, NBA Cup, playoffs, etc.
   let gameContextData = null;
@@ -3017,8 +3150,8 @@ async function fetchInjuries(homeTeam, awayTeam, sport) {
     }
     
     // =============================================================================
-    // NBA/NHL/NCAAB: Fetch injuries & lineups from Rotowire via Gemini Grounding
-    // Gemini searches site:rotowire.com and extracts the lineup/injury data
+    // NBA/NCAAB: Fetch injuries & lineups from Rotowire via Gemini Grounding
+    // NHL: Injuries from BDL API, goalie/lineup context from Grounding
     // =============================================================================
 
     // OPTIMIZATION: For NCAAB, skip the separate injury grounding call
@@ -3051,13 +3184,14 @@ async function fetchInjuries(homeTeam, awayTeam, sport) {
     // causes unnecessary errors when teams are actually healthy.
     const zeroInjuriesIsValid = groundingWorked;
 
-    // Use Rotowire grounding injuries as source of truth
-    // But ENRICH with BDL duration data (BDL has return_date and description with duration context)
+    // Use injury data as source of truth (NHL: BDL, others: Rotowire Grounding)
+    // Duration enrichment handled by box-score resolution for NBA/NHL
     if (groundingHomeCount > 0 || groundingAwayCount > 0 || zeroInjuriesIsValid) {
+      const isNhlSport = sport === 'NHL' || sport === 'icehockey_nhl';
       if (groundingHomeCount === 0 && groundingAwayCount === 0) {
-        console.log(`[Scout Report] ✅ Grounding worked - both teams appear HEALTHY (no injuries reported)`);
+        console.log(`[Scout Report] ✅ ${isNhlSport ? 'BDL' : 'Grounding'} worked - both teams appear HEALTHY (no injuries reported)`);
       } else {
-        console.log(`[Scout Report] Using Rotowire injuries (${groundingHomeCount} home, ${groundingAwayCount} away) as source of truth`);
+        console.log(`[Scout Report] Using ${isNhlSport ? 'BDL' : 'Rotowire'} injuries (${groundingHomeCount} home, ${groundingAwayCount} away) as source of truth`);
       }
 
       // Fetch BDL injuries for duration enrichment (BDL has return_date and description)
@@ -3074,23 +3208,25 @@ async function fetchInjuries(homeTeam, awayTeam, sport) {
           // RapidAPI provides status + reason; box-score determines how long each player has been out
           console.log(`[Scout Report] NBA: Duration will be resolved via box-score in buildScoutReport()`);
         } else if (bdlSport === 'icehockey_nhl') {
-          // NHL: Skip BDL injuries entirely - RotoWire Grounding already provides duration info
-          // The BDL NHL injuries API doesn't include team info, making it useless for filtering
-          // RotoWire format includes "since Jan 27, missed 2 games" which we parse for duration
-          console.log(`[Scout Report] NHL: Skipping BDL/NHL.com injury calls - RotoWire Grounding already has duration info`);
+          // NHL: Injuries now come from BDL (in fetchGroundingInjuries)
+          // Duration will be resolved via box-score in buildScoutReport() (same as NBA)
+          console.log(`[Scout Report] NHL: Duration will be resolved via box-score in buildScoutReport()`);
         }
       } catch (e) {
         console.log(`[Scout Report] BDL duration enrichment failed: ${e.message}`);
       }
 
-      // NBA: Skip stale marking — box-score resolution in buildScoutReport() handles duration + freshness
-      if (bdlSport === 'basketball_nba') {
+      // NBA & NHL: Skip stale marking — box-score resolution in buildScoutReport() handles duration + freshness
+      if (bdlSport === 'basketball_nba' || bdlSport === 'icehockey_nhl') {
         return {
           home: enrichedHome,
           away: enrichedAway,
           staleInjuries: [], // Computed in buildScoutReport after box-score resolution
           lineups: { home: [], away: [] },
-          narrativeContext
+          narrativeContext,
+          // Pass team IDs for NHL box-score duration resolution
+          _homeTeamId: groundingInjuries?._homeTeamId,
+          _awayTeamId: groundingInjuries?._awayTeamId
         };
       }
 
@@ -3938,69 +4074,82 @@ ${teamName} Goalie: [Name] (Confirmed/Expected)
 
 Report whether the goalie is "Confirmed" or "Expected" based on what RotoWire shows.`;
 
-      // Run BOTH goalie and injury queries in parallel for each team
-      const [awayGoalieResponse, homeGoalieResponse, awayInjuryResponse, homeInjuryResponse] = await Promise.all([
+      // Run goalie queries via Grounding (lineup data) AND BDL injuries in parallel
+      // BDL provides structured injury data with team info; Grounding provides goalie/lineup context
+      const bdlSportKey = sportToBdlKey(sport);
+      const bdlTeams = await ballDontLieService.getTeams(bdlSportKey);
+      const homeTeamObj = bdlTeams?.find(t =>
+        (t.full_name || '').toLowerCase().includes(homeTeam.toLowerCase()) ||
+        (t.name || '').toLowerCase().includes(homeTeam.toLowerCase()) ||
+        homeTeam.toLowerCase().includes((t.name || '').toLowerCase())
+      );
+      const awayTeamObj = bdlTeams?.find(t =>
+        (t.full_name || '').toLowerCase().includes(awayTeam.toLowerCase()) ||
+        (t.name || '').toLowerCase().includes(awayTeam.toLowerCase()) ||
+        awayTeam.toLowerCase().includes((t.name || '').toLowerCase())
+      );
+
+      const teamIds = [homeTeamObj?.id, awayTeamObj?.id].filter(Boolean);
+
+      const [awayGoalieResponse, homeGoalieResponse, bdlInjuries] = await Promise.all([
         geminiGroundingSearch(makeNhlGoalieQuery(awayTeam, homeTeam), { maxTokens: 500 }),
         geminiGroundingSearch(makeNhlGoalieQuery(homeTeam, awayTeam), { maxTokens: 500 }),
-        geminiGroundingSearch(makeNhlInjuryOnlyQuery(awayTeam), { maxTokens: 8192 }),
-        geminiGroundingSearch(makeNhlInjuryOnlyQuery(homeTeam), { maxTokens: 8192 })
+        ballDontLieService.getNhlPlayerInjuries(teamIds)
       ]);
 
-      // Log raw injury responses for debugging
-      if (awayInjuryResponse?.data) {
-        console.log(`[Scout Report] ${awayTeam} injury grounding raw: ${awayInjuryResponse.data.substring(0, 300)}...`);
-      }
-      if (homeInjuryResponse?.data) {
-        console.log(`[Scout Report] ${homeTeam} injury grounding raw: ${homeInjuryResponse.data.substring(0, 300)}...`);
-      }
+      // Build goalie context for narrative (still from Grounding)
+      const goalieRaw = `${awayGoalieResponse?.data || ''}\n\n${homeGoalieResponse?.data || ''}`.trim();
 
-      // Combine goalie + injury responses for parsing
-      // CRITICAL: Include team name before injuries so parser can determine team context
-      const awayResponse = {
-        success: awayGoalieResponse?.success || awayInjuryResponse?.success,
-        data: `${awayGoalieResponse?.data || ''}\n\n${awayTeam} INJURIES:\n${awayInjuryResponse?.data || 'None'}`
-      };
-      const homeResponse = {
-        success: homeGoalieResponse?.success || homeInjuryResponse?.success,
-        data: `${homeGoalieResponse?.data || ''}\n\n${homeTeam} INJURIES:\n${homeInjuryResponse?.data || 'None'}`
+      // Normalize BDL injury status to standard format
+      const normalizeNhlStatus = (bdlStatus) => {
+        const s = (bdlStatus || '').toUpperCase();
+        if (s === 'IR-LT' || s === 'LTIR' || s === 'IR-NR') return 'Out';
+        if (s === 'IR') return 'Out';
+        if (s === 'DTD' || s === 'DAY-TO-DAY') return 'Questionable';
+        if (s === 'OUT') return 'Out';
+        return bdlStatus || 'Unknown';
       };
 
-      const combined = {
-        home: [],
-        away: [],
-        groundingRaw: null
-      };
+      // Convert BDL injuries to standard injury format and filter by team
+      const homeInjuries = [];
+      const awayInjuries = [];
 
-      const mergeParsed = (response, side) => {
-        if (!response?.success || !response?.data) return;
-        const parsed = parseGroundingInjuries(response.data, homeTeam, awayTeam, sport);
-        const list = side === 'home' ? (parsed.home || []) : (parsed.away || []);
-        const existing = side === 'home' ? combined.home : combined.away;
-        
-        // Helper to get player name as string (handles both string and object formats)
-        const getPlayerKey = (p) => {
-          if (!p) return '';
-          if (typeof p === 'string') return p.toLowerCase();
-          return `${p.first_name || ''} ${p.last_name || ''}`.trim().toLowerCase();
+      for (const inj of (bdlInjuries || [])) {
+        const playerTeamId = inj.player?.teams?.[0]?.id || inj.player?.team?.id;
+        if (!playerTeamId) continue;
+
+        const injObj = {
+          player: {
+            first_name: inj.player?.first_name || '',
+            last_name: inj.player?.last_name || '',
+            position: inj.player?.position_code || inj.player?.position || '',
+            id: inj.player?.id
+          },
+          status: normalizeNhlStatus(inj.status),
+          statusRaw: inj.status, // Keep original BDL status (IR, IR-LT, DTD, OUT)
+          durationContext: inj.injury_type || inj.comment || '',
+          returnDate: inj.return_date || null,
+          source: 'BDL',
+          duration: 'UNKNOWN', // Will be resolved by box-score
+          freshness: 'UNKNOWN'
         };
-        
-        const seen = new Set(existing.map(i => getPlayerKey(i.player)));
-        for (const item of list) {
-          const key = getPlayerKey(item.player);
-          if (key && !seen.has(key)) {
-            existing.push(item);
-            seen.add(key);
-          }
+
+        if (playerTeamId === homeTeamObj?.id) {
+          homeInjuries.push(injObj);
+        } else if (playerTeamId === awayTeamObj?.id) {
+          awayInjuries.push(injObj);
         }
-        combined.groundingRaw = `${combined.groundingRaw || ''}\n${response.data}`.trim();
+      }
+
+      console.log(`[Scout Report] BDL NHL injuries: ${homeInjuries.length} for ${homeTeam}, ${awayInjuries.length} for ${awayTeam}`);
+
+      return {
+        home: homeInjuries,
+        away: awayInjuries,
+        groundingRaw: goalieRaw, // Goalie lineup context from Grounding
+        _homeTeamId: homeTeamObj?.id,
+        _awayTeamId: awayTeamObj?.id
       };
-
-      // Parse the 2 comprehensive responses (one per team)
-      mergeParsed(awayResponse, 'away');
-      mergeParsed(homeResponse, 'home');
-
-      console.log(`[Scout Report] Grounding injuries: ${combined.home.length} for ${homeTeam}, ${combined.away.length} for ${awayTeam}`);
-      return combined;
 
     } else if (sport === 'NCAAB' || sport === 'basketball_ncaab') {
       query = `Search site:rotowire.com/cbb/lineups.php for the college basketball game ${awayTeam} vs ${homeTeam}.
