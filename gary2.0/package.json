@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "@balldontlie/sdk": "^1.2.2",
+    "@google/genai": "^1.42.0",
     "@google/generative-ai": "^0.24.1",
     "@supabase/supabase-js": "^2.49.4",
     "@tailwindcss/aspect-ratio": "^0.4.2",

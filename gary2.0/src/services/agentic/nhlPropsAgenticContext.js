@@ -10,7 +10,7 @@
  * - Recent performance trends
  */
 import { ballDontLieService } from '../ballDontLieService.js';
-// All context comes from Gemini 3 Flash with Google Search Grounding
+// Grounding searches use Gemini 3 Flash; main pick pipeline uses 3.1 Pro + 3 Pro advisor
 import { 
   formatGameTimeEST, 
   buildMarketSnapshot, 

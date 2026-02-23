@@ -8,10 +8,9 @@
  * FLOW:
  * 1. Context Building (existing dfsAgenticContext.js)
  * 2. Slate Analysis (Gemini investigates the slate via tool calling)
- * 3. Build Thesis Formation (Gemini forms strategy)
- * 4. Player Investigation (Gemini per position via tool calling)
- * 5. Lineup Decision (Gemini with thinkingLevel: HIGH)
- * 6. Self-Audit (Gemini reviews his choices)
+ * 3. Player Investigation (Gemini per position via tool calling)
+ * 4. Lineup Decision (Gemini with thinkingLevel: HIGH)
+ * 5. Self-Audit (Gemini reviews his choices)
  *
  * FOLLOWS CLAUDE.md:
  * - Gary INVESTIGATES before deciding (not formulas)
@@ -20,12 +19,12 @@
  */
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { analyzeSlateWithFlash } from './dfsAgenticSlateAnalyzer.js';
-import { formBuildThesis } from './dfsAgenticThesisBuilder.js';
+import { analyzeSlateWithFlash, fetchOwnershipFromFTA } from './dfsAgenticSlateAnalyzer.js';
 import { investigatePlayersForPositions } from './dfsAgenticPlayerInvestigator.js';
 import { decideLineupWithPro } from './dfsAgenticLineupDecider.js';
 import { auditLineupWithPro } from './dfsAgenticAudit.js';
 import { getDFSConstitution } from './constitution/dfsAgenticConstitution.js';
+import { getRosterSlots, getFormRatioFields } from './dfsSportConfig.js';
 import { WINNING_SCORE_TARGETS } from '../FIBLE.js';
 import { buildDFSContext } from '../dfsAgenticContext.js';
 
@@ -117,7 +116,11 @@ export async function generateAgenticDFSLineup(options) {
     const winningTargets = getWinningTargets(platform, sport, contestType, slate);
     context.winningTargets = winningTargets;
 
-    console.log(`[Gary DFS] ✓ Target to WIN: ${winningTargets.toWin} pts | Cash line: ${winningTargets.toCash} pts`);
+    // Surface slate size and game count for downstream phases
+    context.slateSize = winningTargets.gameCount;
+    context.slateLabel = winningTargets.gameCount >= 10 ? 'large' : winningTargets.gameCount >= 6 ? 'medium' : winningTargets.gameCount >= 3 ? 'small' : 'showdown';
+
+    console.log(`[Gary DFS] ✓ Target to WIN: ${winningTargets.toWin} pts | Cash line: ${winningTargets.toCash} pts | Slate: ${context.slateLabel} (${winningTargets.gameCount} games)`);
 
     // ═══════════════════════════════════════════════════════════════════════════
     // OWNERSHIP PROXY (GPP only)
@@ -141,7 +144,10 @@ export async function generateAgenticDFSLineup(options) {
         'Phase 2 slate analysis'
       );
     } catch (flashError) {
-      if (flashError.status === 429 || flashError.status === 503 || flashError.message?.includes('timeout')) {
+      const isRetryable = flashError.status === 429 || flashError.status === 503 || flashError.status === 500 ||
+        flashError.message?.includes('timeout') || flashError.message?.includes('ECONNRESET') ||
+        flashError.message?.includes('fetch failed') || flashError.code === 'ECONNREFUSED';
+      if (isRetryable) {
         console.warn(`[Gary DFS] Phase 2: Flash failed (${flashError.message}) — retrying once`);
         slateAnalysis = await withTimeout(
           analyzeSlateWithFlash(genAI, context, { modelName: GEMINI_FLASH_MODEL }),
@@ -162,117 +168,127 @@ export async function generateAgenticDFSLineup(options) {
     console.log(`[Gary DFS] ✓ Identified ${slateAnalysis.gameEnvironments?.length || 0} game environments`);
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // PHASE 3: BUILD THESIS (Gemini → retry on failure)
+    // OWNERSHIP GROUNDING (GPP only, non-critical)
+    // Fetch real projected ownership data via Gemini Grounding (Google Search).
+    // Separate from the function-calling session — grounding and FC can't mix.
     // ═══════════════════════════════════════════════════════════════════════════
-    console.log('\n[Gary DFS] Phase 3: Gary forming build thesis...');
-
-    let buildThesis;
-    try {
-      buildThesis = await withTimeout(
-        formBuildThesis(genAI, slateAnalysis, context, {
-          modelName: GEMINI_PRO_MODEL,
-          constitution: getDFSConstitution(sport, contestType)
-        }),
-        180000, // 3 min wall-clock timeout
-        'Phase 3 build thesis'
-      );
-    } catch (proError) {
-      if (proError.status === 429 || proError.status === 503 || proError.message?.includes('timeout')) {
-        console.warn(`[Gary DFS] Phase 3: Pro failed (${proError.message}) — falling back to Flash`);
-        buildThesis = await withTimeout(
-          formBuildThesis(genAI, slateAnalysis, context, {
-            modelName: GEMINI_FLASH_MODEL,
-            constitution: getDFSConstitution(sport, contestType)
-          }),
-          180000,
-          'Phase 3 build thesis (Flash fallback)'
+    if (contestType !== 'cash') {
+      try {
+        console.log('[Gary DFS] Fetching ownership projections via Grounding...');
+        const ownershipData = await withTimeout(
+          fetchOwnershipFromFTA(genAI, context),
+          15000, // 15s — direct HTML fetch + parse
+          'Ownership fetch'
         );
-      } else {
-        throw proError;
+        if (ownershipData.length > 0) {
+          slateAnalysis.ownershipProjections = ownershipData;
+          console.log(`[Gary DFS] ✓ Ownership data: ${ownershipData.length} players with projected ownership`);
+
+          // Attach ownership to player objects so downstream phases can see it
+          // FTA names may differ from BDL names (compound names, hyphens, suffixes)
+          // Use normalized comparison: strip non-alpha, lowercase
+          const normalize = s => (s || '').toLowerCase().replace(/[^a-z]/g, '');
+          let ftaMatchCount = 0;
+          for (const entry of ownershipData) {
+            const entryNorm = normalize(entry.player);
+            const player = context.players.find(p => {
+              const pNorm = normalize(p.name);
+              return pNorm === entryNorm || pNorm.includes(entryNorm) || entryNorm.includes(pNorm);
+            });
+            if (player) {
+              player.projectedOwnership = entry.projectedOwnership;
+              ftaMatchCount++;
+            }
+          }
+          // When FTA covers enough players, clear proxy signals to avoid redundant/conflicting data
+          if (ftaMatchCount >= context.players.length * 0.3) {
+            for (const p of context.players) {
+              if (p.projectedOwnership != null) delete p.ownershipSignals;
+            }
+            console.log(`[Gary DFS] FTA matched ${ftaMatchCount} players — cleared proxy signals for players with real ownership`);
+          }
+        } else {
+          console.log('[Gary DFS] Ownership grounding returned no data — continuing without');
+          slateAnalysis.ownershipProjections = [];
+          slateAnalysis.ownershipMissing = true;
+        }
+      } catch (err) {
+        console.warn(`[Gary DFS] Ownership grounding failed (${err.message}) — continuing without`);
+        slateAnalysis.ownershipProjections = [];
+        slateAnalysis.ownershipMissing = true;
       }
     }
 
-    if (!buildThesis || !buildThesis.edges || buildThesis.edges.length === 0 || !buildThesis.thesis) {
-      throw new Error('[Gary DFS] Phase 3 FAILED: Did not produce valid build thesis');
-    }
-
-    console.log(`[Gary DFS] ✓ Edges: ${buildThesis.edges.map(e => e.type).join(', ')}`);
-    console.log(`[Gary DFS] ✓ Target Games: ${buildThesis.targetGames?.join(', ') || 'Balanced'}`);
-    console.log(`[Gary DFS] ✓ Thesis: "${buildThesis.thesis?.slice(0, 100)}..."`);
-
     // ═══════════════════════════════════════════════════════════════════════════
-    // PHASE 4: PLAYER INVESTIGATION (Gemini per position → retry on failure)
+    // PHASE 3: PLAYER INVESTIGATION (Gemini per position → retry on failure)
+    // Gary investigates freely — no thesis anchoring. The lineup emerges
+    // from what the data shows, not from a pre-committed strategy.
     // ═══════════════════════════════════════════════════════════════════════════
-    console.log('\n[Gary DFS] Phase 4: Gary investigating player candidates...');
+    console.log('\n[Gary DFS] Phase 3: Gary investigating player candidates...');
 
     let playerInvestigations;
     try {
+      // Phase 3 is factual data gathering (tool calling) — Flash is faster and cheaper than Pro.
+      // Pro's deep reasoning is reserved for Phase 4 (decision) and Phase 5 (audit).
       playerInvestigations = await withTimeout(
-        investigatePlayersForPositions(genAI, buildThesis, context, { modelName: GEMINI_PRO_MODEL }),
+        investigatePlayersForPositions(genAI, slateAnalysis, context, { modelName: GEMINI_FLASH_MODEL }),
         300000, // 5 min wall-clock timeout (multiple positions)
-        'Phase 4 player investigation'
+        'Phase 3 player investigation'
       );
-    } catch (proError) {
-      if (proError.status === 429 || proError.status === 503 || proError.message?.includes('timeout')) {
-        console.warn(`[Gary DFS] Phase 4: Pro failed (${proError.message}) — retrying once`);
+    } catch (flashError) {
+      const isRetryable = flashError.status === 429 || flashError.status === 503 || flashError.status === 500 ||
+        flashError.message?.includes('timeout') || flashError.message?.includes('ECONNRESET') ||
+        flashError.message?.includes('fetch failed') || flashError.code === 'ECONNREFUSED';
+      if (isRetryable) {
+        console.warn(`[Gary DFS] Phase 3: Flash failed (${flashError.message}) — retrying once`);
         playerInvestigations = await withTimeout(
-          investigatePlayersForPositions(genAI, buildThesis, context, { modelName: GEMINI_PRO_MODEL }),
+          investigatePlayersForPositions(genAI, slateAnalysis, context, { modelName: GEMINI_FLASH_MODEL }),
           300000,
-          'Phase 4 player investigation retry'
+          'Phase 3 player investigation retry'
         );
       } else {
-        throw proError;
+        throw flashError;
       }
     }
 
     if (!playerInvestigations || Object.keys(playerInvestigations).length === 0) {
-      throw new Error('[Gary DFS] Phase 4 FAILED: Gary did not investigate any players');
+      throw new Error('[Gary DFS] Phase 3 FAILED: Gary did not investigate any players');
     }
 
     const investigatedCount = Object.values(playerInvestigations).flat().length;
     if (investigatedCount === 0) {
-      throw new Error('[Gary DFS] Phase 4 FAILED: Zero players investigated across all positions');
+      throw new Error('[Gary DFS] Phase 3 FAILED: Zero players investigated across all positions');
     }
     console.log(`[Gary DFS] ✓ Investigated ${investigatedCount} players across all positions`);
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // PHASE 5: LINEUP DECISION (Gemini, thinkingLevel: HIGH)
+    // PHASE 4: LINEUP DECISION (Gemini, thinkingLevel: HIGH)
     // ═══════════════════════════════════════════════════════════════════════════
-    console.log('\n[Gary DFS] Phase 5: Gary making lineup decisions...');
+    console.log('\n[Gary DFS] Phase 4: Gary making lineup decisions...');
 
     let lineup;
     try {
       lineup = await withTimeout(
-        decideLineupWithPro(genAI, buildThesis, playerInvestigations, context, {
+        decideLineupWithPro(genAI, slateAnalysis, playerInvestigations, context, {
           modelName: GEMINI_PRO_MODEL,
           thinkingLevel: 'high'
         }),
         300000, // 5 min wall-clock timeout (deep reasoning)
-        'Phase 5 lineup decision'
+        'Phase 4 lineup decision'
       );
     } catch (proError) {
-      if (proError.status === 429 || proError.status === 503 || proError.message?.includes('429') || proError.message?.includes('503') || proError.message?.includes('quota') || proError.message?.includes('timeout')) {
-        console.warn(`[Gary DFS] Phase 5: Pro failed (${proError.message}) — falling back to Flash`);
-        lineup = await withTimeout(
-          decideLineupWithPro(genAI, buildThesis, playerInvestigations, context, {
-            modelName: GEMINI_FLASH_MODEL,
-            thinkingLevel: 'high'
-          }),
-          300000,
-          'Phase 5 lineup decision (Flash fallback)'
-        );
-      } else {
-        throw proError;
-      }
+      // No fallback to Flash — Phase 4 is the actual lineup decision.
+      // If Pro can't handle it, the lineup should fail with a diagnostic.
+      throw new Error(`[Gary DFS] Phase 4 FAILED: Gemini Pro unavailable (${proError.message}). Lineup generation cannot proceed without Pro for the decision phase.`);
     }
 
     if (!lineup || !lineup.players || lineup.players.length === 0) {
-      throw new Error('[Gary DFS] Phase 5 FAILED: Did not produce any lineup');
+      throw new Error('[Gary DFS] Phase 4 FAILED: Did not produce any lineup');
     }
 
-    const expectedPlayers = platform?.toLowerCase() === 'fanduel' ? 9 : 8;
+    const expectedPlayers = getRosterSlots(platform, sport).length;
     if (lineup.players.length !== expectedPlayers) {
-      throw new Error(`[Gary DFS] Phase 5 FAILED: Lineup has ${lineup.players.length} players, need ${expectedPlayers}`);
+      throw new Error(`[Gary DFS] Phase 4 FAILED: Lineup has ${lineup.players.length} players, need ${expectedPlayers}`);
     }
 
     console.log(`[Gary DFS] ✓ Selected ${lineup.players.length} players`);
@@ -280,23 +296,26 @@ export async function generateAgenticDFSLineup(options) {
     console.log(`[Gary DFS] ✓ Projected Ceiling: ${lineup.ceilingProjection} pts`);
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // PHASE 6: SELF-AUDIT (Gemini) — enrichment, not critical path
-    // The lineup is already decided at Phase 5. Audit adds notes and may swap
+    // PHASE 5: SELF-AUDIT (Gemini) — enrichment, not critical path
+    // The lineup is already decided at Phase 4. Audit adds notes and may swap
     // players, but a failure here should NOT throw away a valid lineup.
     // ═══════════════════════════════════════════════════════════════════════════
-    console.log('\n[Gary DFS] Phase 6: Gary auditing his lineup...');
+    console.log('\n[Gary DFS] Phase 5: Gary auditing his lineup...');
+
+    // Pass investigation data to audit so Gary can evaluate swaps with full context
+    context.playerInvestigations = playerInvestigations;
 
     let auditedLineup;
     try {
       auditedLineup = await withTimeout(
-        auditLineupWithPro(genAI, lineup, buildThesis, context, {
+        auditLineupWithPro(genAI, lineup, slateAnalysis, context, {
           modelName: GEMINI_PRO_MODEL
         }),
         180000, // 3 min wall-clock timeout
-        'Phase 6 lineup audit'
+        'Phase 5 lineup audit'
       );
       if (!auditedLineup || !auditedLineup.players || auditedLineup.players.length === 0) {
-        console.warn('[Gary DFS] Phase 6: Audit returned empty lineup — using pre-audit lineup');
+        console.warn('[Gary DFS] Phase 5: Audit returned empty lineup — using pre-audit lineup');
         auditedLineup = lineup;
       } else {
         console.log(`[Gary DFS] ✓ Audit complete`);
@@ -307,25 +326,25 @@ export async function generateAgenticDFSLineup(options) {
     } catch (auditError) {
       // If Pro is unavailable (429/503), try Flash before giving up
       if (auditError.status === 429 || auditError.status === 503 || auditError.message?.includes('429') || auditError.message?.includes('503') || auditError.message?.includes('quota')) {
-        console.warn(`[Gary DFS] Phase 6: Pro unavailable — trying Flash audit`);
+        console.warn(`[Gary DFS] Phase 5: Pro unavailable — trying Flash audit`);
         try {
           auditedLineup = await withTimeout(
-            auditLineupWithPro(genAI, lineup, buildThesis, context, {
+            auditLineupWithPro(genAI, lineup, slateAnalysis, context, {
               modelName: GEMINI_FLASH_MODEL
             }),
             180000,
-            'Phase 6 lineup audit (Flash fallback)'
+            'Phase 5 lineup audit (Flash fallback)'
           );
           if (!auditedLineup || !auditedLineup.players || auditedLineup.players.length === 0) {
             auditedLineup = lineup;
           }
         } catch (flashError) {
-          console.warn(`[Gary DFS] Phase 6 Flash audit also failed — using pre-audit lineup`);
+          console.warn(`[Gary DFS] Phase 5 Flash audit also failed — using pre-audit lineup`);
           auditedLineup = lineup;
         }
       } else {
-        console.warn(`[Gary DFS] Phase 6 audit failed: ${auditError.message}`);
-        console.warn('[Gary DFS] Using pre-audit lineup from Phase 5');
+        console.warn(`[Gary DFS] Phase 5 audit failed: ${auditError.message}`);
+        console.warn('[Gary DFS] Using pre-audit lineup from Phase 4');
         auditedLineup = lineup;
       }
     }
@@ -344,8 +363,6 @@ export async function generateAgenticDFSLineup(options) {
       floorProjection: auditedLineup.floorProjection,
 
       // Gary's reasoning (the key differentiator)
-      buildThesis: buildThesis.thesis,
-      edges: buildThesis.edges,
       garyNotes: auditedLineup.garyNotes,
       ceilingScenario: auditedLineup.ceilingScenario,
 
@@ -354,6 +371,7 @@ export async function generateAgenticDFSLineup(options) {
 
       // Audit results
       auditNotes: auditedLineup.auditNotes,
+      winConditionAnalysis: auditedLineup.winConditionAnalysis,
 
       // Targets
       winningTargets,
@@ -395,7 +413,7 @@ export async function generateAgenticDFSLineup(options) {
 
 function getWinningTargets(platform, sport, contestType, slate) {
   const sportUpper = (sport || 'NBA').toUpperCase();
-  const platformPrefix = platform.toUpperCase() === 'FANDUEL' ? 'FANDUEL' : 'DRAFTKINGS';
+  const platformPrefix = (platform || 'draftkings').toUpperCase() === 'FANDUEL' ? 'FANDUEL' : 'DRAFTKINGS';
   const platformKey = `${platformPrefix}_${sportUpper}`;
   const targets = WINNING_SCORE_TARGETS[platformKey];
 
@@ -409,30 +427,47 @@ function getWinningTargets(platform, sport, contestType, slate) {
     };
   }
 
-  // Determine slate size multiplier
   const gameCount = slate?.gameCount || slate?.games?.length || 8;
-  let slateMultiplier = 1.0;
 
-  if (gameCount >= 10) {
-    slateMultiplier = WINNING_SCORE_TARGETS.SLATE_ADJUSTMENTS.LARGE_SLATE.multiplier;
-  } else if (gameCount >= 6) {
-    slateMultiplier = WINNING_SCORE_TARGETS.SLATE_ADJUSTMENTS.MEDIUM_SLATE.multiplier;
-  } else if (gameCount >= 3) {
-    slateMultiplier = WINNING_SCORE_TARGETS.SLATE_ADJUSTMENTS.SMALL_SLATE.multiplier;
-  } else {
-    slateMultiplier = WINNING_SCORE_TARGETS.SLATE_ADJUSTMENTS.SHOWDOWN.multiplier;
+  // Cash games: use dedicated cash targets
+  if (contestType === 'cash') {
+    const cashTargets = targets.CASH || {};
+    const cashSafe = cashTargets.safeTarget || cashTargets.cashLine?.typical || 285;
+    const cashLine = cashTargets.cashLine?.typical || 275;
+    return {
+      toWin: cashSafe,
+      top1Percent: cashSafe, // Cash doesn't have percentile tiers
+      toCash: cashLine,
+      slateMultiplier: 1.0,
+      gameCount,
+      isCash: true
+    };
   }
 
-  // Get contest-specific targets
-  const contestTargets = contestType === 'cash'
-    ? targets.CASH
-    : targets.LARGE_GPP;
+  // Select contest targets based on slate size — use calibrated targets instead of blanket multiplier
+  let contestTargets;
+  let contestSlateMultiplier = 1.0;
+
+  if (gameCount <= 2 && targets.SHOWDOWN) {
+    contestTargets = targets.SHOWDOWN;
+    // SHOWDOWN targets are already calibrated for 1-2 game slates
+  } else if (gameCount <= 5 && targets.SMALL_GPP) {
+    contestTargets = targets.SMALL_GPP;
+    // SMALL_GPP targets are already calibrated for 3-5 game slates
+  } else if (gameCount >= 10) {
+    contestTargets = targets.LARGE_GPP;
+    // LARGE_GPP targets are for full slates — no adjustment
+  } else {
+    // Medium slates (6-9 games): use LARGE_GPP with slight adjustment
+    contestTargets = targets.LARGE_GPP;
+    contestSlateMultiplier = WINNING_SCORE_TARGETS.SLATE_ADJUSTMENTS.MEDIUM_SLATE.multiplier;
+  }
 
   return {
-    toWin: Math.round((contestTargets.firstPlace?.typical || 385) * slateMultiplier),
-    top1Percent: Math.round((contestTargets.top1Percent?.typical || 355) * slateMultiplier),
-    toCash: Math.round((contestTargets.cashLine?.typical || 285) * slateMultiplier),
-    slateMultiplier,
+    toWin: Math.round((contestTargets.firstPlace?.typical || 385) * contestSlateMultiplier),
+    top1Percent: Math.round((contestTargets.top1Percent?.typical || 355) * contestSlateMultiplier),
+    toCash: Math.round((contestTargets.cashLine?.typical || 285) * contestSlateMultiplier),
+    slateMultiplier: contestSlateMultiplier,
     gameCount
   };
 }
@@ -451,7 +486,7 @@ function getWinningTargets(platform, sport, contestType, slate) {
  * - gamePopularity: e.g., "highest O/U on slate" (popular games draw more ownership)
  */
 function computeOwnershipProxy(context) {
-  const { players, games } = context;
+  const { players, games, sport } = context;
   if (!players || players.length === 0) return;
 
   // Rank games by O/U total to identify popular games
@@ -494,14 +529,15 @@ function computeOwnershipProxy(context) {
     const posPlayers = byPosition[pos] || [];
     const salaryRank = posPlayers.findIndex(pp => pp.name === p.name) + 1;
 
-    const l5Ppg = p.l5Stats?.ppg || 0;
-    const seasonPpg = p.ppg || p.seasonStats?.ppg || 0;
-    const formRatio = seasonPpg > 0 ? parseFloat((l5Ppg / seasonPpg).toFixed(2)) : null;
+    const { l5Field, seasonField } = getFormRatioFields(sport);
+    const l5Val = p.l5Stats?.[l5Field] || 0;
+    const seasonVal = p[seasonField] || p.seasonStats?.[seasonField] || 0;
+    const formRatio = seasonVal > 0 ? parseFloat((l5Val / seasonVal).toFixed(2)) : null;
 
     const gameOURank = teamOURank.get((p.team || '').toUpperCase()) || null;
 
     p.ownershipSignals = {
-      salaryRankAtPosition: `${salaryRank}${salaryRank === 1 ? 'st' : salaryRank === 2 ? 'nd' : salaryRank === 3 ? 'rd' : 'th'} of ${posPlayers.length} ${pos}s`,
+      salaryRankAtPosition: `${salaryRank}${(salaryRank % 100 >= 11 && salaryRank % 100 <= 13) ? 'th' : salaryRank % 10 === 1 ? 'st' : salaryRank % 10 === 2 ? 'nd' : salaryRank % 10 === 3 ? 'rd' : 'th'} of ${posPlayers.length} ${pos}s`,
       recentFormVsSeason: formRatio,
       gamePopularity: gameOURank
     };

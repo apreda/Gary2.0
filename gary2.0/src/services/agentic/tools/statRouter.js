@@ -161,7 +161,8 @@
 import { ballDontLieService } from '../../ballDontLieService.js';
 import { geminiGroundingSearch, getGroundedWeather } from '../scoutReport/scoutReportBuilder.js';
 import { isGameCompleted, formatStatValue, safeStatValue } from '../sharedUtils.js';
-import { getNcaabH2H } from '../../highlightlyService.js';
+// Highlightly stripped to venue-only — H2H now uses BDL directly
+import { getNcaabVenue } from '../../highlightlyService.js';
 import { nbaSeason, nhlSeason, nflSeason, ncaabSeason } from '../../../utils/dateUtils.js';
 import { getTeamRatings as getBarttovikRatings } from '../../barttovikService.js';
 
@@ -1987,6 +1988,110 @@ const FETCHERS = {
     }
   },
 
+  // ===== NCAAB FOUR FACTORS (Bundled — all 4 Dean Oliver metrics in one call) =====
+  NCAAB_FOUR_FACTORS: async (bdlSport, home, away, season) => {
+    if (bdlSport !== 'basketball_ncaab') return null;
+    try {
+      const { homeData, awayData } = await fetchBothTeamSeasonStats(bdlSport, home, away, season);
+
+      const calcFourFactors = (data, oppData) => {
+        if (!data) return { efg_pct: 'N/A', tov_rate: 'N/A', fta_rate: 'N/A', oreb_pct: 'N/A' };
+        const fgm = data.fgm || 0;
+        const fga = data.fga || 0;
+        const fg3m = data.fg3m || 0;
+        const fta = data.fta || 0;
+        const tov = data.turnover || 0;
+        const oreb = data.oreb || 0;
+        // Use opponent DREB for correct ORB% formula; fall back to own DREB
+        const oppDreb = oppData?.dreb || data.dreb || 0;
+
+        return {
+          efg_pct: fga > 0 ? `${((fgm + 0.5 * fg3m) / fga * 100).toFixed(1)}%` : 'N/A',
+          tov_rate: (fga + 0.44 * fta + tov) > 0 ? `${(tov / (fga + 0.44 * fta + tov) * 100).toFixed(1)}%` : 'N/A',
+          fta_rate: fga > 0 ? (fta / fga).toFixed(3) : 'N/A',
+          oreb_pct: (oreb + oppDreb) > 0 ? `${(oreb / (oreb + oppDreb) * 100).toFixed(1)}%` : 'N/A'
+        };
+      };
+
+      return {
+        category: 'Four Factors (NCAAB)',
+        source: 'Ball Don\'t Lie API (Team Season Stats)',
+        home: {
+          team: home.full_name || home.name,
+          ...calcFourFactors(homeData, awayData)
+        },
+        away: {
+          team: away.full_name || away.name,
+          ...calcFourFactors(awayData, homeData)
+        }
+      };
+    } catch (error) {
+      console.warn('[Stat Router] NCAAB_FOUR_FACTORS fetch failed:', error.message);
+      return { category: 'Four Factors (NCAAB)', error: 'Data unavailable' };
+    }
+  },
+
+  // ===== NCAAB L5 EFFICIENCY (Last 5 Games — eFG%, TS%, ORtg, DRtg) =====
+  NCAAB_L5_EFFICIENCY: async (bdlSport, home, away, season) => {
+    if (bdlSport !== 'basketball_ncaab') return null;
+    try {
+      console.log(`[Stat Router] Fetching NCAAB L5 Efficiency for ${away.name} @ ${home.name}`);
+
+      // Fetch recent games to get last 5 game IDs for each team
+      const [homeGamesRaw, awayGamesRaw] = await Promise.all([
+        ballDontLieService.getGames(bdlSport, { team_ids: [home.id], seasons: [season], per_page: 50 }),
+        ballDontLieService.getGames(bdlSport, { team_ids: [away.id], seasons: [season], per_page: 50 })
+      ]);
+
+      const filterCompleted = (games) => (Array.isArray(games) ? games : games?.data || [])
+        .filter(g => (g.home_team_score ?? g.home_score ?? 0) > 0 || (g.visitor_team_score ?? g.away_score ?? 0) > 0)
+        .sort((a, b) => new Date(b.date || b.datetime) - new Date(a.date || a.datetime));
+
+      const homeGames = filterCompleted(homeGamesRaw);
+      const awayGames = filterCompleted(awayGamesRaw);
+
+      const homeGameIds = homeGames.slice(0, 5).map(g => g.id);
+      const awayGameIds = awayGames.slice(0, 5).map(g => g.id);
+
+      // Fetch L5 efficiency from BDL player stats
+      const [homeL5, awayL5] = await Promise.all([
+        homeGameIds.length > 0 ? ballDontLieService.getTeamL5Efficiency(home.id, homeGameIds, bdlSport) : null,
+        awayGameIds.length > 0 ? ballDontLieService.getTeamL5Efficiency(away.id, awayGameIds, bdlSport) : null
+      ]);
+
+      const formatL5 = (l5Data) => {
+        if (!l5Data?.efficiency) return { efg_pct: 'N/A', ts_pct: 'N/A', approx_ortg: 'N/A', approx_drtg: 'N/A', approx_net_rtg: 'N/A' };
+        const e = l5Data.efficiency;
+        return {
+          games: e.games || 0,
+          efg_pct: e.efg_pct ? `${e.efg_pct}%` : 'N/A',
+          ts_pct: e.ts_pct ? `${e.ts_pct}%` : 'N/A',
+          approx_ortg: e.approx_ortg || 'N/A',
+          approx_drtg: e.approx_drtg || 'N/A',
+          approx_net_rtg: e.approx_net_rtg || 'N/A',
+          opp_efg_pct: e.opp_efg_pct ? `${e.opp_efg_pct}%` : undefined,
+          opp_ppg: e.opp_ppg || undefined
+        };
+      };
+
+      return {
+        category: 'L5 Efficiency (NCAAB)',
+        source: 'Ball Don\'t Lie API (Player Stats — Last 5 Games)',
+        home: {
+          team: home.full_name || home.name,
+          ...formatL5(homeL5)
+        },
+        away: {
+          team: away.full_name || away.name,
+          ...formatL5(awayL5)
+        }
+      };
+    } catch (error) {
+      console.warn('[Stat Router] NCAAB_L5_EFFICIENCY fetch failed:', error.message);
+      return { category: 'L5 Efficiency (NCAAB)', error: 'Data unavailable' };
+    }
+  },
+
   // ===== NCAAB GROUNDING-BASED ADVANCED STATS =====
   // These use Gemini Grounding to fetch advanced analytics not available in BDL
   
@@ -2272,9 +2377,8 @@ Quad 4: [W-L]`;
     }
   },
 
-  // ===== NCAAB HOME/AWAY SPLITS VIA GEMINI GROUNDING =====
-  // BDL standings API requires conference_id which causes 400 errors
-  // Use Gemini grounding to fetch home/away records from ESPN or team pages
+  // ===== NCAAB HOME/AWAY SPLITS VIA BDL GAME RESULTS =====
+  // Computes Season/L10/L5 home vs away records + point margins from BDL games
 
   NCAAB_HOME_AWAY_SPLITS: async (bdlSport, home, away, season) => {
     if (bdlSport !== 'basketball_ncaab') return null;
@@ -2283,85 +2387,86 @@ Quad 4: [W-L]`;
       const homeTeamName = home.full_name || home.name;
       const awayTeamName = away.full_name || away.name;
 
-      console.log(`[Stat Router] Fetching NCAAB Home/Away Splits for ${awayTeamName} @ ${homeTeamName} via Gemini Grounding`);
+      console.log(`[Stat Router] Fetching NCAAB Home/Away Splits for ${awayTeamName} @ ${homeTeamName} via BDL Games`);
 
-      // Use Gemini grounding to fetch home/away records from ESPN
-      const query = `Search ESPN or sports-reference.com for the 2025-26 college basketball home and away records.
+      // Fetch full season games for both teams
+      const [homeGamesRaw, awayGamesRaw] = await Promise.all([
+        ballDontLieService.getGames(bdlSport, { team_ids: [home.id], seasons: [season], per_page: 50 }),
+        ballDontLieService.getGames(bdlSport, { team_ids: [away.id], seasons: [season], per_page: 50 })
+      ]);
 
-Find the HOME and AWAY records for these TWO teams:
-1. ${homeTeamName}
-2. ${awayTeamName}
+      const filterCompleted = (games) => (Array.isArray(games) ? games : games?.data || [])
+        .filter(g => (g.home_team_score ?? g.home_score ?? 0) > 0 || (g.visitor_team_score ?? g.away_score ?? 0) > 0)
+        .sort((a, b) => new Date(b.date || b.datetime) - new Date(a.date || a.datetime));
 
-For EACH team, you MUST provide these stats in this EXACT format:
-TEAM_NAME:
-- Overall Record: [wins-losses like 15-5]
-- Home Record: [wins-losses like 10-2]
-- Away Record: [wins-losses like 5-3]
-- Conference Record: [wins-losses like 8-3] if available
+      const homeGames = filterCompleted(homeGamesRaw);
+      const awayGames = filterCompleted(awayGamesRaw);
 
-IMPORTANT: Use ONLY data from the 2025-26 college basketball season. Do not guess - provide real numbers.`;
+      // Compute home/away splits for a slice of games
+      const calcSplitsForSlice = (games, teamId, teamName) => {
+        if (!games || games.length === 0) return null;
+        let homeWins = 0, homeLosses = 0, awayWins = 0, awayLosses = 0;
+        let homePts = 0, homeOppPts = 0, homeGamesCount = 0;
+        let awayPts = 0, awayOppPts = 0, awayGamesCount = 0;
 
-      const response = await geminiGroundingSearch(query, {
-        temperature: 1.0,
-        maxTokens: 2500,
-        systemMessage: 'You are a college basketball expert. Search ESPN or sports-reference for accurate home/away records for the 2025-26 season. Format each team separately with the exact stats requested. Provide complete data for BOTH teams.'
-      });
+        for (const g of games) {
+          const isHome = g.home_team?.id === teamId || (g.home_team?.name || '').toLowerCase().includes(teamName.toLowerCase().split(' ').pop());
+          const teamScore = isHome ? (g.home_team_score ?? g.home_score ?? 0) : (g.visitor_team_score ?? g.away_score ?? 0);
+          const oppScore = isHome ? (g.visitor_team_score ?? g.away_score ?? 0) : (g.home_team_score ?? g.home_score ?? 0);
+          if (teamScore === 0 && oppScore === 0) continue;
 
-      const content = response?.content || response?.choices?.[0]?.message?.content || '';
-
-      // Extract home/away records from the response
-      const extractHomeAwaySplits = (text, teamName) => {
-        // Try to find team section
-        const teamLower = teamName.toLowerCase();
-        const textLower = text.toLowerCase();
-
-        // Extract overall record
-        const overallMatch = text.match(/overall[^\d]*(\d{1,2})-(\d{1,2})/i) ||
-                           text.match(/record[^\d]*(\d{1,2})-(\d{1,2})/i);
-
-        // Extract home record
-        const homeMatch = text.match(/home[^\d]*(\d{1,2})-(\d{1,2})/i);
-
-        // Extract away record
-        const awayMatch = text.match(/away|road[^\d]*(\d{1,2})-(\d{1,2})/i);
-
-        // Extract conference record
-        const confMatch = text.match(/conference[^\d]*(\d{1,2})-(\d{1,2})/i) ||
-                         text.match(/conf[^\d]*(\d{1,2})-(\d{1,2})/i);
+          if (isHome) {
+            homeGamesCount++;
+            homePts += teamScore;
+            homeOppPts += oppScore;
+            if (teamScore > oppScore) homeWins++; else homeLosses++;
+          } else {
+            awayGamesCount++;
+            awayPts += teamScore;
+            awayOppPts += oppScore;
+            if (teamScore > oppScore) awayWins++; else awayLosses++;
+          }
+        }
 
         return {
-          overall_record: overallMatch ? `${overallMatch[1]}-${overallMatch[2]}` : 'N/A',
-          home_record: homeMatch ? `${homeMatch[1]}-${homeMatch[2]}` : 'N/A',
-          away_record: awayMatch ? `${awayMatch[1]}-${awayMatch[2]}` : 'N/A',
-          conference_record: confMatch ? `${confMatch[1]}-${confMatch[2]}` : 'N/A'
+          home_record: `${homeWins}-${homeLosses}`,
+          away_record: `${awayWins}-${awayLosses}`,
+          home_margin: homeGamesCount > 0 ? ((homePts - homeOppPts) / homeGamesCount).toFixed(1) : 'N/A',
+          away_margin: awayGamesCount > 0 ? ((awayPts - awayOppPts) / awayGamesCount).toFixed(1) : 'N/A',
+          home_games: homeGamesCount,
+          away_games: awayGamesCount
         };
       };
 
-      // Split response by team name to parse each separately
-      const homeSection = content.split(awayTeamName)[0] || content;
-      const awaySection = content.split(homeTeamName).pop() || content;
+      // Compute Season / L10 / L5 splits for a team
+      const calcAllSplits = (games, teamId, teamName) => {
+        if (!games || games.length === 0) return null;
+        return {
+          season: calcSplitsForSlice(games, teamId, teamName),
+          l10: calcSplitsForSlice(games.slice(0, 10), teamId, teamName),
+          l5: calcSplitsForSlice(games.slice(0, 5), teamId, teamName)
+        };
+      };
 
       return {
         category: 'Home/Away Splits (NCAAB)',
-        source: 'ESPN/Sports-Reference via Gemini Grounding',
+        source: 'Ball Don\'t Lie API (Game Results)',
         home: {
           team: homeTeamName,
-          ...extractHomeAwaySplits(homeSection, homeTeamName)
+          ...calcAllSplits(homeGames, home.id, homeTeamName)
         },
         away: {
           team: awayTeamName,
-          ...extractHomeAwaySplits(awaySection, awayTeamName)
-        },
-        context: 'Investigate home court advantage for this matchup. Compare home_record vs away_record for each team.',
-        raw_response: content
+          ...calcAllSplits(awayGames, away.id, awayTeamName)
+        }
       };
     } catch (error) {
       console.warn('[Stat Router] NCAAB Home/Away Splits failed:', error.message);
       return {
-        category: 'Home/Away Splits',
-        error: 'Data unavailable - grounding failed',
-        home: { team: home.full_name || home.name, home_record: 'N/A' },
-        away: { team: away.full_name || away.name, away_record: 'N/A' }
+        category: 'Home/Away Splits (NCAAB)',
+        error: 'Data unavailable',
+        home: { team: home.full_name || home.name },
+        away: { team: away.full_name || away.name }
       };
     }
   },
@@ -2656,6 +2761,48 @@ IMPORTANT: Use ONLY data from the 2025-26 college basketball season. Do not gues
       return {
         category: 'Home Court Advantage',
         error: 'Home court data unavailable',
+        home_team: home.full_name || home.name,
+        away_team: away.full_name || away.name
+      };
+    }
+  },
+
+  // ===== NCAAB VENUE (Highlightly API — only source for NCAAB arena names) =====
+
+  NCAAB_VENUE: async (bdlSport, home, away, season) => {
+    if (bdlSport !== 'basketball_ncaab') return null;
+
+    try {
+      const homeTeamName = home.full_name || home.name;
+      const awayTeamName = away.full_name || away.name;
+
+      console.log(`[Stat Router] Fetching NCAAB Venue for ${awayTeamName} @ ${homeTeamName} via Highlightly`);
+
+      const venue = await getNcaabVenue(homeTeamName, awayTeamName);
+
+      if (!venue) {
+        return {
+          category: 'Venue (NCAAB)',
+          source: 'Highlightly API',
+          venue: null,
+          note: 'Venue data unavailable — could not match teams or find game in Highlightly',
+          home_team: homeTeamName,
+          away_team: awayTeamName
+        };
+      }
+
+      return {
+        category: 'Venue (NCAAB)',
+        source: 'Highlightly API',
+        venue,
+        home_team: homeTeamName,
+        away_team: awayTeamName
+      };
+    } catch (error) {
+      console.warn('[Stat Router] NCAAB Venue fetch failed:', error.message);
+      return {
+        category: 'Venue (NCAAB)',
+        error: 'Venue data unavailable',
         home_team: home.full_name || home.name,
         away_team: away.full_name || away.name
       };
@@ -4758,64 +4905,6 @@ IMPORTANT: Use ONLY data from the 2025-26 college basketball season. Do not gues
         currentSeason = month <= 7 ? year - 1 : year;
       }
       
-      // ===== NCAAB: Try Highlightly API first (better team name matching, verified scores) =====
-      if (bdlSport === 'basketball_ncaab') {
-        try {
-          const h2hData = await getNcaabH2H(homeName, awayName);
-          if (h2hData?.games?.length > 0) {
-            const games = h2hData.games.slice(0, 5); // Last 5
-            let homeWinsHL = 0;
-            let awayWinsHL = 0;
-            const h2hResults = games.map(g => {
-              // Highlightly uses state.score.homeTeam/awayTeam as arrays of half scores
-              const gameHomeArr = g.state?.score?.homeTeam || [];
-              const gameAwayArr = g.state?.score?.awayTeam || [];
-              const gameHomeTotal = gameHomeArr.reduce((s, v) => s + (v || 0), 0);
-              const gameAwayTotal = gameAwayArr.reduce((s, v) => s + (v || 0), 0);
-              const gameHomeId = g.homeTeam?.id || g.homeTeamId;
-              const isOurHomeTeamHome = gameHomeId === h2hData.homeTeamId;
-              const ourHomeScore = isOurHomeTeamHome ? gameHomeTotal : gameAwayTotal;
-              const ourAwayScore = isOurHomeTeamHome ? gameAwayTotal : gameHomeTotal;
-              if (ourHomeScore > ourAwayScore) homeWinsHL++;
-              else if (ourAwayScore > ourHomeScore) awayWinsHL++;
-              const winner = (ourHomeScore > ourAwayScore) ? homeName : awayName;
-              const margin = Math.abs(ourHomeScore - ourAwayScore);
-              const date = g.date
-                ? new Date(g.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-                : 'Unknown date';
-              const homeH1 = isOurHomeTeamHome ? (gameHomeArr[0] ?? '') : (gameAwayArr[0] ?? '');
-              const awayH1 = isOurHomeTeamHome ? (gameAwayArr[0] ?? '') : (gameHomeArr[0] ?? '');
-              const halfInfo = homeH1 !== '' && awayH1 !== '' ? ` (1H: ${homeH1}-${awayH1})` : '';
-              return {
-                date,
-                result: `${winner} won by ${margin}`,
-                score: `${homeName} ${ourHomeScore} - ${ourAwayScore} ${awayName}${halfInfo}`,
-                margin,
-                home_won: ourHomeScore > ourAwayScore
-              };
-            });
-
-            const revengeGame = h2hResults[0] && !h2hResults[0].home_won;
-            console.log(`[Stat Router] H2H_HISTORY (Highlightly): ${games.length} game(s) for ${awayName} @ ${homeName}`);
-            return {
-              category: `Head-to-Head History (${currentSeason} Season ONLY)`,
-              source: 'Highlightly',
-              games_found: games.length,
-              h2h_available: true,
-              this_season_record: `${homeName} ${homeWinsHL}-${awayWinsHL} ${awayName}`,
-              meetings_this_season: h2hResults,
-              revenge_game: revengeGame,
-              revenge_note: revengeGame ? `${awayName} lost the last meeting - potential revenge spot` : null,
-              sweep_context: null,
-              ANTI_HALLUCINATION: `DATA BOUNDARY: You have ONLY ${games.length} verified H2H game(s) from the ${currentSeason} season. You may cite these specific games. DO NOT claim historical streaks, prior season records, or "all-time" H2H records that are not shown here.`
-            };
-          }
-          console.log(`[Stat Router] Highlightly H2H returned no games for ${awayName} @ ${homeName}, falling back to BDL`);
-        } catch (hlErr) {
-          console.log(`[Stat Router] Highlightly H2H failed for NCAAB (${hlErr.message}), falling back to BDL`);
-        }
-      }
-
       const homeGames = await ballDontLieService.getGames(bdlSport, {
         team_ids: [home.id],
         seasons: [currentSeason],

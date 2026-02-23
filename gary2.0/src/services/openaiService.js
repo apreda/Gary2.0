@@ -8,11 +8,11 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { apiCache } from '../utils/apiCache.js';
 import { requestQueue } from '../utils/requestQueue.js';
 
-// LLM provider - Gemini 3 Deep Think
+// LLM provider - Gemini 3
 const LLM_PROVIDER = 'gemini';
-// Gemini 3 Flash (default model). Game picks orchestrator switches to Pro for reasoning passes.
+// Gemini 3 Flash (grounding/search, props, fallback). Main picks use 3.1 Pro via orchestrator.
 const GEMINI_MODEL_DEFAULT = 'gemini-3-flash-preview';
-// Gemini 3 Flash - Pro-grade at lightning speeds (for props when Pro has quota issues)
+// Gemini 3 Flash - used for grounding, props, and as quota fallback
 const GEMINI_MODEL_FLASH = 'gemini-3-flash-preview';
 
 // Direct Gemini SDK for local/server runs
@@ -75,7 +75,7 @@ const openaiServiceInstance = {
    * Default model - varies by provider
    */
   DEFAULT_MODEL: LLM_PROVIDER === 'gemini'
-    ? 'gemini-3-flash-preview' // POLICY: Always use Gemini 3 Flash, never Pro
+    ? 'gemini-3-flash-preview' // Flash for grounding/props; picks use 3.1 Pro via orchestrator
     : ((typeof process !== 'undefined' && process.env && process.env.OPENAI_MODEL) || 'gpt-5.1'),
   
   /**

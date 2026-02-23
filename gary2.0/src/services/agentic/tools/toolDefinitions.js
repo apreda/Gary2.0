@@ -100,9 +100,9 @@ const NFL_TOKENS = [
   'VARIANCE_CONSISTENCY'  // Point differential variance, QB consistency, upset potential
 ];
 
-// NCAAB Stat Tokens - BDL-only (ZERO Gemini Grounding during Pass 1)
-// ALL advanced metrics (KenPom, Barttorvik, NET, SOS, Quad, etc.) are in the scout report
-// Pass 1 investigation uses only BDL-calculated stats to complement scout report data
+// NCAAB Stat Tokens — advanced stats are investigation tokens, not pre-loaded in scout report
+// Scout report provides context (injuries, roster, standings, rankings, recent form, H2H, venue)
+// Gary calls these tokens during Pass 1 to investigate the statistical baseline
 const NCAAB_TOKENS = [
   // BDL Core Stats (team-level, from /team_season_stats)
   'SCORING', 'FG_PCT', 'THREE_PT_SHOOTING',
@@ -115,8 +115,12 @@ const NCAAB_TOKENS = [
   'NCAAB_OFFENSIVE_RATING',  // (PTS/Poss)*100
   'NCAAB_DEFENSIVE_RATING',  // (OppPTS/Poss)*100 — uses games endpoint for opp points
   'NET_RATING',              // Combined ORtg - DRtg (uses NCAAB calculated ratings)
+  // Bundled investigation tokens
+  'NCAAB_FOUR_FACTORS',      // All 4 Dean Oliver factors in one call (eFG%, TOV%, FTA Rate, ORB%)
+  'NCAAB_L5_EFFICIENCY',     // L5 eFG%, TS%, ORtg, DRtg from player game logs
   // Context stats (have dedicated NCAAB fetchers in statRouter)
-  'HOME_AWAY_SPLITS',        // NCAAB_HOME_AWAY_SPLITS fetcher (BDL game results)
+  'HOME_AWAY_SPLITS',        // NCAAB_HOME_AWAY_SPLITS fetcher (BDL game results — Season/L10/L5 + margins)
+  'NCAAB_VENUE',             // Arena/venue name from Highlightly API (only NCAAB venue source)
   'RECENT_FORM',             // Enhanced recent form with opponent quality
   'H2H_HISTORY'              // Head-to-head history (BDL games)
 ];

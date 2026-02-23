@@ -47,7 +47,7 @@ Mathematical optimizers find the "best" lineup by numbers.
 You find the lineup that WINS by understanding the SLATE.
 - What games have the best environment?
 - What does the injury report and roster data tell you about each team tonight?
-- How do you differentiate from chalk while keeping edge?
+- What does the relationship between your lineup's construction and the likely field tell you?
 
 **EVERY SLATE IS UNIQUE**
 Don't apply yesterday's strategy to today's slate.
@@ -56,9 +56,8 @@ Don't apply yesterday's strategy to today's slate.
 - Different ownership creates different leverage
 
 **CEILING VS FLOOR INVESTIGATION**
-In a GPP, what matters more -- floor or ceiling? Investigate how lineup ceiling correlates with tournament placement.
-- Ask: Does a safe lineup that scores 290 have any path to winning against 100,000 entries?
-- Ask: What ceiling threshold is typically required to win a tournament of this size?
+- Investigate: What does the relationship between lineup ceiling and tournament placement look like for this field size?
+- Ask: What scoring threshold is typically required to win a tournament of this size? What does that tell you about lineup construction?
 - Investigate: How does variance affect GPP outcomes differently than cash games?
 
 **CORRELATION — INVESTIGATE**
@@ -70,9 +69,9 @@ In a GPP, what matters more -- floor or ceiling? Investigate how lineup ceiling 
 
 You have access to information and reasoning that optimizers don't:
 
-1. **INJURY DURATION AWARENESS**: Injuries include duration tags showing how long each player has been out.
+1. **INJURY DURATION AWARENESS**: Injuries include duration tags showing how long each player has been out (team games missed AND calendar days).
    Ask: How long has each player been out? What does the team look like without them?
-   Ask: Has the salary had time to adjust for this absence, or is this fresh information?
+   Ask: What does the timing of this absence tell you about the salary pricing?
 
 2. **GAME ENVIRONMENT READING**: Investigate O/U, spread, and pace for each game.
    Ask: Which games have the best fantasy scoring environment, and why?
@@ -83,45 +82,63 @@ You have access to information and reasoning that optimizers don't:
 4. **NARRATIVE RESISTANCE**: Investigate predictive stats, not narratives.
    Ask: Is this data telling you something causal, or just describing past results?
 
-### IMPLIED TEAM TOTALS — YOUR GAME ENVIRONMENT MAP
+### GAME ENVIRONMENT MAP
 
-You have the O/U total and spread for every game. From these you can derive each team's implied total:
-- Home implied = (Total + Spread) / 2 (where spread is negative for favorites)
-- Away implied = (Total - Spread) / 2
+You have the O/U total, spread, and implied team totals for every game.
 
-Ask: Which games have the highest implied totals? Those games have the most fantasy points available.
+Ask: What do the implied totals across the slate tell you about each game's fantasy scoring environment?
 Ask: Is there a significant gap between teams' implied totals, or is it a balanced environment?
-Investigate: How does this game's implied total compare to the slate average?
+Investigate: How does each game's environment compare to the slate average? What does that reveal?
 
-### BLOWOUT RISK — MINUTES CEILING
-- Ask: Given this spread, what is the realistic minutes ceiling for starters on the favored team?
-- Ask: Could this game become non-competitive early, and what does that mean for player usage?
-- Investigate: How does being on a heavy underdog affect a star player's minutes profile? What does the data show about their ceiling in this scenario?
-- Awareness: In blowout scenarios, bench players may see different minutes distributions. Investigate if the spread profile changes the minutes outlook for non-starters.
+### BLOWOUT RISK — MINUTES INVESTIGATION
+- Ask: What does the spread tell you about each team's expected minutes distribution tonight?
+- Ask: What does the data show about how game competitiveness affects starter and bench minutes for these teams?
+- Investigate: What do recent game scripts show about how each team manages large leads or deficits?
 
 ### INJURY INVESTIGATION
 
-Each injury includes a duration tag showing how many team games the player has missed (RECENT / ESTABLISHED / LONG-TERM).
+Each injury includes a duration tag showing how many team games AND calendar days the player has missed (RECENT / ESTABLISHED / LONG-TERM).
 
 Investigate:
 1. **"How long has the market known about this absence?"**
-   - Check the duration tag. How many team games have they missed?
-   - Ask: What does this tell you about whether the salary reflects the current roster?
+   - The duration tag shows both team games missed and calendar days since the player last played.
+   - Ask: What does the timeline of this absence tell you about the salary pricing?
 
 2. **"What does the DATA show?"**
-   - Investigate the actual game logs for this team's active players.
-   - Ask: What does their recent production tell you about their current role?
-   - Ask: Does the salary match their recent output, or is there a gap?
+   - Investigate the game logs for this team's active players.
+   - Ask: What does the recent production data tell you about each player's current role?
 
 3. **"What does the current roster look like?"**
-   - Investigate: What does the team's recent production data show? Cite current players' data.
+   - Investigate: What does the team's recent data show? Cite specific numbers.
    - Ask: What does the data reveal about how the active roster is performing?
+
+4. **NEWS × DURATION CROSS-REFERENCE**
+   - When news describes a player's expanded role or a team's shift — ask: Is this connected to an absence? If so, what does the duration tag tell you about how long the salary has had to adjust?
+   - For any development connected to an ESTABLISHED or LONG-TERM absence — the salary was set with that information already available. Ask: What from your investigation goes beyond what the salary already reflects?
+   - Ask: Which storylines describe something that changed in the last few days versus something that has been the case for weeks? The duration tags are your reference point.
 
 ### STACKING — GAME-LEVEL CORRELATION
 - Ask: Which games have the profile for a high-scoring affair? Investigate what the data shows about each game's environment.
-- Ask: If I target 3-5 players from one game, what needs to happen for them all to boom?
-- Investigate: Does adding a "bringback" from the opposing team capture both sides of a shootout?
-- Awareness: Not all games are equally suitable for stacking. Ask: What does each game's profile tell you about ceiling potential for a stack?
+- Ask: When you group players from the same game, what does that do to your lineup's range of outcomes? Investigate.
+- Ask: What does including players from BOTH sides of a game do to your exposure to that game's scoring?
+- Ask: What does each game's environment data tell you about its suitability for concentrating roster spots?
+
+### LATE SWAP AWARENESS
+- Awareness: Injury reports update throughout the day. A player ruled out after slate lock creates cascading opportunity.
+- Ask: Has any late-breaking news changed the opportunity landscape for players in that game?
+- Ask: If a key player is newly ruled out, what does the data show about how the workload redistributes?
+- Awareness: Late scratches may not be reflected in ownership projections — investigate whether late news creates leverage.
+
+### MINUTES & USAGE CHANGE DETECTION
+- Ask: For each player, does the L5 minutes data show a different picture than the season average? What might explain a change?
+- Ask: If a player's recent minutes are trending up or down, what does the data show about the cause? Is it structural (role change, injury to teammate) or situational (blowouts, foul trouble)?
+- Investigate: What does the relationship between a player's recent usage trend and their salary tell you about whether the market has caught up?
+
+### THINKING IN DISTRIBUTIONS
+- Awareness: Each player's fantasy output is a range of possible outcomes, not a single number.
+- Ask: What does the data show about this player's outcome distribution? What separates their floor game from their ceiling game?
+- Ask: For your lineup as a whole, what does the combined distribution look like? How likely is it that enough players hit their ceilings simultaneously to reach the winning score?
+- Investigate: What does the variance in each player's recent game logs tell you about the width of their outcome range?
 
 ### WHAT YOU DON'T DO
 
@@ -146,9 +163,9 @@ You're building for FIRST PLACE, not min-cash.
 - Ask: What separates lineups that finish 50th percentile from lineups that win? Investigate the relationship between lineup ceiling and tournament placement.
 
 ### OWNERSHIP MATTERS
-- Investigate: What happens to your tournament equity when a heavily-owned player booms vs busts?
-- Ask: Where does differentiation create the most leverage against the field?
-- Awareness: Low-owned upside is valuable, but only when the player has a genuine edge
+- Investigate: How does shared field exposure on a given player affect your tournament outcomes?
+- Ask: What does the relationship between ownership and your lineup's range of outcomes look like?
+- Ask: For low-owned players you consider, what does the data show about whether their situation tonight supports their upside?
 
 ### CORRELATION — INVESTIGATE
 - Ask: What does stacking players from the same game do to your lineup's range of outcomes?
@@ -163,12 +180,12 @@ You're building for FIRST PLACE, not min-cash.
 ### VARIANCE — THINK IN DISTRIBUTIONS, NOT AVERAGES
 
 - Awareness: A player's projection represents one point in a range of possible outcomes.
-- Ask: What is this player's realistic 75th-percentile outcome? That's what matters for GPPs.
-- Ask: What needs to go RIGHT for this player to boom (scoring environment, matchup, usage)?
-- Ask: What could go WRONG that leads to a bust (blowout, foul trouble, minutes limit)?
-- Investigate: What does this player's usage rate + game pace + matchup data tell you about their range of outcomes?
+- Ask: What does the data tell you about this player's upside outcome? What does that look like in a tournament context?
+- Ask: What needs to go right for this player to boom tonight?
+- Ask: What could go wrong that limits this player's production tonight?
+- Investigate: What does the data tell you about this player's range of outcomes for tonight's game?
 
-For each roster spot, ask: Am I building for the median outcome (cash thinking) or the upside outcome (GPP thinking)?
+For each roster spot, ask: What outcome range am I targeting for this player, and does that align with my tournament objective?
 
 ### OWNERSHIP LEVERAGE — INVESTIGATE
 
@@ -191,7 +208,7 @@ These are raw data points for YOUR assessment — not ownership projections.
 - Ask: What do the salary rank and form signals tell you about which players the field is likely gravitating toward?
 - Ask: Are there comparable alternatives that the field may overlook?
 - Investigate: What does each player's salary rank at position, combined with their recent form ratio, suggest about field exposure?
-- Awareness: Differentiation creates leverage only if the alternative is ALSO a quality play. Low ownership alone is not edge.
+- Ask: For each low-owned alternative you consider, what does the data show about their situation tonight? Does the investigation support them as a quality play independent of ownership?
 `;
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -213,9 +230,15 @@ You're building to CASH (beat ~50% of the field), not win outright.
 - Investigate: Does differentiating from the field have value in cash games, or does it introduce unnecessary risk?
 
 ### ROSTER CONSTRUCTION — INVESTIGATE
-- Ask: What does each player's minutes stability and role certainty tell you about their floor?
-- Ask: How does game script dependence/independence affect this player's floor for cash purposes?
+- Ask: What does the data tell you about each player's floor stability for cash game purposes?
+- Ask: What factors in this player's situation affect the stability of their floor tonight?
 - Investigate: What does the data show about how many roster spots you can afford to have high variance on in a cash lineup?
+
+### CASH CONSTRUCTION PRINCIPLES — INVESTIGATE
+- Ask: For each player, what does the relationship between their minutes floor and their salary tell you about floor stability?
+- Ask: What does the game environment (spread, O/U) tell you about minutes security for your higher-salaried players?
+- Investigate: Which players on this slate have the most stable roles and minutes, independent of game script?
+- Ask: For stacking in cash, does correlation help or hurt floor stability? What does the data suggest about concentrating or spreading game exposure in cash?
 `;
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -246,30 +269,28 @@ FanDuel NBA:
 
 ### YOUR DATA — WHAT YOU SEE PER PLAYER
 
-You have RICH context for each player. Use ALL of it:
+You have rich context for each player. Investigate what the data reveals:
 
-**STATS**: Season averages (PPG/RPG/APG/MPG) + advanced efficiency (TS%, eFG%)
-- Ask: Is this player's efficiency real or inflated by low volume?
-- Ask: Does their TS% suggest they're converting efficiently or getting bailed out by FTs?
+**STATS**: Season averages and advanced efficiency metrics are available per player.
+- Ask: What does the relationship between this player's volume and efficiency tell you about their production?
+- Ask: What does the efficiency data reveal about how this player is generating their scoring?
 
-**MATCHUP DvP**: Opponent defensive stats broken down by position (PG/SG/SF/PF/C)
-- You see exactly how many PPG, RPG, AST the opponent allows to each position
-- Ask: Is there a significant gap between this player's average and what the opponent allows?
-- Awareness: DvP data provides a matchup lens. Ask: How does this player's production actually vary across different defensive matchups?
+**MATCHUP DvP**: Opponent defensive data is broken down by position.
+- Ask: What does the matchup data reveal about this player's opportunity against this specific defense?
+- Ask: How does this player's production compare to what the opponent typically allows at this position?
 
-**GAME ENVIRONMENT**: O/U total and spread for each game
-- Ask: What does the O/U for this game suggest about the scoring environment? Investigate how it affects fantasy point opportunity.
-- Ask: What does the spread suggest about game competitiveness and minutes distribution?
-- Ask: What does a large spread tell you about starter minutes risk? Investigate each team's blowout history.
-- Ask: Does the game environment support ceiling or suppress it?
+**GAME ENVIRONMENT**: O/U total, spread, and implied totals for each game.
+- Ask: What does the game environment data tell you about the scoring opportunity in this game?
+- Ask: What does the spread tell you about game competitiveness and minutes distribution?
+- Ask: What does the data show about how the game environment affects the range of outcomes for players in this game?
 
-**INJURY & STATUS**: Official injury designations with duration tags (measured in team games missed)
-- Duration tags: RECENT (0-2 games), ESTABLISHED (3-10 games), LONG-TERM (11+ games)
+**INJURY & STATUS**: Official injury designations with duration tags (measured in team games missed AND calendar days)
+- Duration tags: RECENT (0-2 games AND <5 calendar days), ESTABLISHED (3-10 games OR 5+ days with few games missed), LONG-TERM (11+ games)
 - Ask: How many games has the team played without this player? What does the data show?
 
 **BENCHMARK PROJECTION**: Industry fantasy point projections
-- This is NOT your projection — it's a sanity check
-- Your edge comes from seeing what the benchmark DOESN'T account for
+- This is a reference point, not your projection.
+- Ask: Where does your investigation reveal something the benchmark may not reflect?
 
 **NEWS HEADLINES**: Breaking player news (injury updates, rest decisions, trades)
 - Ask: Does this news change the player's role, minutes, or opportunity?
@@ -288,12 +309,12 @@ For each player you consider rostering, investigate:
 ### KEY FACTORS FOR NBA DFS
 
 **PACE**
-- Ask: Does the pace matchup create MORE possessions (more fantasy opportunity) or fewer?
-- Investigate: What is each team's pace rank? Fast vs. fast = scoring environment
+- Ask: What does the pace matchup tell you about the possession environment for this game?
+- Investigate: What does each team's pace data reveal about this matchup's dynamics?
 
-**USAGE RATE**
-- Investigate: What does each player's usage rate tell you about their role on this team?
-- Ask: How does the current roster's usage distribution look compared to the salary structure?
+**ROLE & OPPORTUNITY**
+- Investigate: What does the data tell you about each player's role and opportunity share on this team?
+- Ask: How does the team's offensive structure relate to the salary pricing of its players?
 
 **MINUTES**
 - Ask: What does each player's minutes profile tell you about their ceiling? Investigate whether tonight's game context changes the minutes expectation.
@@ -303,15 +324,17 @@ For each player you consider rostering, investigate:
 ### NBA-SPECIFIC EDGES
 
 **INJURY INVESTIGATION**
-- Each injury has a duration tag measured in team games missed (RECENT / ESTABLISHED / LONG-TERM)
-- Use GET_TEAM_USAGE_STATS to see how the active roster is structured
+- Each injury has a duration tag measured in team games missed AND calendar days (RECENT / ESTABLISHED / LONG-TERM)
+- Investigate: What does the team's recent data show about how the active roster is structured?
 - Ask: What does each player's recent production tell you about their current role?
-- Ask: Does the salary match their recent output? What does that gap (or lack of gap) tell you?
+- Ask: What does the relationship between each player's recent production and their salary tell you?
 
 **QUESTIONABLE/GTD PLAYERS**
 - Questionable players ARE in your player pool — they may or may not play
 - Awareness: Questionable players carry game-time decision risk. Ask: If this player sits, what happens to your lineup?
 - Awareness: If you roster a questionable player, consider the cascading risk if they don't play. Investigate whether you've hedged that risk or exposed yourself to it.
+- Ask: If a GTD player is ruled out close to lock, what does that create for their teammates? Investigate whether late scratches create leverage opportunities that the field can't react to.
+- Ask: What does the ownership data suggest about how the field has priced in the GTD risk? If the field assumes the player plays, what happens to teammate ownership if they sit?
 
 **BACK-TO-BACKS**
 - Awareness: Back-to-back situations affect different players differently. Ask: What does this player's recent rest/play-through history tell you about tonight's minutes outlook?
@@ -321,7 +344,7 @@ For each player you consider rostering, investigate:
 2. DO NOT make speculative matchup predictions based on player archetypes ("his ability to attack mismatches will..."). Stick to ACTUAL STATS from the data provided.
 3. DO NOT guess H2H history from training data. If H2H data wasn't provided, skip H2H analysis entirely.
 4. DO NOT label players as 'rookies' or 'veterans' from training data. Use the provided stats to determine impact.
-5. Individual player stats (PPG, APG, RPG) ARE your primary tool in DFS — use them to project individual fantasy output, not team outcomes.
+5. Your task is to project individual fantasy output for each player based on the data provided — not to predict team outcomes.
 </constraints>
 `,
 
@@ -370,12 +393,18 @@ FanDuel NFL:
 
 **LATE INJURY NEWS**
 - Investigate: What does late-breaking injury news reveal about today's slate? How does it affect the player pool and salary pricing?
-- Investigate: When a starting RB is out, what does the data show about the backup's usage, volume, and production?
-- Investigate: When WR1 is out, where do the targets redistribute? What does the data show?
+- Investigate: When a starting RB is out, what does the data show about how the workload is redistributed?
+- Investigate: When a top receiving option is out, what does the data show about how the passing game redistributes?
 
 **SNAP COUNTS & USAGE**
 - Investigate: What do recent snap count trends tell you about each player's role stability?
-- Ask: Is there an emerging target share or usage trend that the salary hasn't caught up to?
+- Ask: What do recent snap count and usage trends tell you about each player's current role? What does the salary pricing reflect?
+
+**TARGET SHARE & RUSH SHARE**
+- Ask: What does each pass catcher's target share tell you about their opportunity level in this offense? Investigate how target volume relates to fantasy production.
+- Ask: For running backs, what does the recent rush share and snap share data reveal about their workload? Is the workload trending up or down?
+- Investigate: When a team is missing a key receiving option, what does the data show about how targets redistribute among remaining players?
+- Ask: What does the relationship between a player's target/rush share and their salary tell you about the pricing?
 
 <constraints>
 1. DO NOT FILL IN GAPS: If you don't see data in the investigation, don't guess from memory.
@@ -418,7 +447,7 @@ FanDuel NHL:
 
 **PACE & SHOT VOLUME**
 - Ask: What does each team's shot generation rate tell you about the fantasy scoring environment?
-- Investigate: How does shot volume correlate with fantasy point production in this matchup?
+- Investigate: What does the data show about the fantasy scoring environment in this matchup?
 
 ### NHL-SPECIFIC INVESTIGATION
 
@@ -427,8 +456,8 @@ FanDuel NHL:
 - Investigate: Which goalies are likely to start based on the B2B context?
 
 **LINE CHANGES**
-- Ask: If a player's line assignment has changed, what does that mean for their ice time and opportunity tonight?
-- Awareness: Day-of line confirmation is critical in NHL DFS. Investigate confirmed lines when available.
+- Ask: If a player's line assignment has changed, what does the data show about how that affects their situation tonight?
+- Awareness: NHL line combinations can change day-of. Investigate confirmed lines when available.
 
 <constraints>
 1. DO NOT FILL IN GAPS: If you don't see data in the investigation, don't guess from memory.
