@@ -58,7 +58,7 @@ struct SettingsView: View {
     
     private var appInfoCard: some View {
         HStack(spacing: 16) {
-            Image("GaryCoin") // Transparent coin image, no added background
+            Image("GaryIconBG")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 100, height: 100)
@@ -69,7 +69,7 @@ struct SettingsView: View {
                     .font(.title2.bold())
                     .foregroundStyle(GaryColors.gold)
                 
-                Text("Version 1.9.8")
+                Text("Version 1.9.9")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
