@@ -376,7 +376,7 @@ export async function generateGaryAnalysis(gameData, options = {}) {
     // Simple placeholder for news data
     const newsData = options.newsData || 'Using stats-only analysis.';
     
-    // Generate analysis using Gemini 3 Flash
+    // Generate analysis using Gemini
     console.log('Calling Gemini for analysis with temperature: 1.0 (Gemini 3 required)');
     const rawOpenAIResponse = await openaiService.generateGaryAnalysis(
       formattedData, 

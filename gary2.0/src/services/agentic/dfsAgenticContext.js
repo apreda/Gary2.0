@@ -346,9 +346,16 @@ export async function fetchPlayerStatsFromBDL(sport, dateStr, slateTeams = []) {
           const ppg = entry?.stats?.pts || entry?.pts || 0;
           if (pid) playerPpgMap.set(pid, ppg);
         }
-        const trendBatchIds = [...playerIds]
+        // Top 100 by PPG PLUS any player with salary >= $3500 (punt plays may rank low by PPG
+        // but are critical DFS differentiators if they've recently gained opportunity)
+        const salaryPlayerIds = new Set();
+        for (const p of players) {
+          if (p.id && (p.salary || 0) >= 3500) salaryPlayerIds.add(p.id);
+        }
+        const top100ByPpg = [...playerIds]
           .sort((a, b) => (playerPpgMap.get(b) || 0) - (playerPpgMap.get(a) || 0))
-          .slice(0, 80); // Top 80 players by PPG — covers all rosterable candidates
+          .slice(0, 100);
+        const trendBatchIds = [...new Set([...top100ByPpg, ...salaryPlayerIds])];
         const L5_BATCH_SIZE = 15; // 15 players * ~6 games = ~90 records per batch
         console.log(`[DFS Context] Fetching L5 trends for top ${trendBatchIds.length}/${playerIds.length} players by PPG (from ${l5StartDate} to ${dateStr})`);
         
@@ -884,7 +891,7 @@ function checkRotationRisk(p) {
   }
   
   // Case 1: Deep bench player who hasn't played in last 5 games
-  if (l5Games === 0 && seasonMpg < 12 && p.l5Stats !== undefined) {
+  if (l5Games === 0 && seasonMpg < 12 && p.l5Stats != null) {
     return { exclude: true, reason: 'DNP-CD Risk (Out of rotation - 0 games in L5)' };
   }
   
@@ -1173,220 +1180,24 @@ export function mergePlayerData(bdlPlayers, groundedPlayers) {
   console.log(`[DFS Context] Merged ${merged.length} players (${directMatches} exact + ${fuzzyMatches} fuzzy matches from ${groundedPlayers.length} grounded, ${bdlPlayers.length} BDL)`);
   
   // ═══════════════════════════════════════════════════════════════════════════
-  // SALARY DATA CHECK - We need REAL salaries for accurate DFS optimization
+  // SALARY DATA CHECK — HARD FAIL if insufficient real salaries
   // ═══════════════════════════════════════════════════════════════════════════
   // DFS salaries change daily and are set by DraftKings/FanDuel.
-  // Estimated salaries can be wildly inaccurate and defeat the purpose of lineup optimization.
-  // 
-  // If we have too few real salaries, we WARN the user prominently but still
-  // add players (some lineup is better than no lineup, but user should know).
+  // Estimated salaries are unreliable and defeat the purpose of lineup
+  // optimization. If Tank01 salary data is missing or incomplete, the lineup
+  // should FAIL with a diagnostic so the root cause can be fixed.
   // ═══════════════════════════════════════════════════════════════════════════
-  
+
   if (merged.length < 30 && bdlPlayers.length > merged.length) {
-    console.error(`[DFS Context] ════════════════════════════════════════════════════════`);
-    console.error(`[DFS Context] ❌ SALARY DATA ISSUE: Only ${merged.length}/${bdlPlayers.length} players have REAL salaries`);
-    console.error(`[DFS Context] ❌ Tank01 salary data missing or incomplete for this slate`);
-    console.error(`[DFS Context] ❌ Adding remaining players with ESTIMATED salaries`);
-    console.error(`[DFS Context] ❌ WARNING: Estimated salaries are unreliable — lineup may be invalid`);
-    console.error(`[DFS Context] ════════════════════════════════════════════════════════`);
-    
-    // Determine if this is a small slate (limited games = tighter salary distribution)
-    const isSmallSlate = bdlPlayers.length < 80;
-    console.log(`[DFS Context] Slate type: ${isSmallSlate ? 'SMALL (2-4 games)' : 'MAIN (5+ games)'}`);
-    
-    for (const p of bdlPlayers) {
-      const key = normalizePlayerName(p.name);
-      const alreadyMerged = merged.some(m => normalizePlayerName(m.name) === key);
-      
-      // Check if player has valid stats (NBA: ppg, NFL: passing/rushing/receiving)
-      const hasNBAStats = p.seasonStats?.ppg > 0;
-      // NFL stats use snake_case from BDL: passing_yards_per_game, rushing_touchdowns, etc.
-      const hasNFLStats = (p.seasonStats?.passing_yards_per_game > 0 || 
-                          p.seasonStats?.rushing_yards_per_game > 0 || 
-                          p.seasonStats?.receiving_yards_per_game > 0 || 
-                          p.seasonStats?.passing_touchdowns > 0 ||
-                          p.seasonStats?.rushing_touchdowns > 0 ||
-                          p.seasonStats?.receiving_touchdowns > 0 ||
-                          p.seasonStats?.receptions > 0);
-      
-      // Handle DST and Kicker entries separately (no traditional stats)
-      const isDST = p.position === 'DST' || p.isDST;
-      const isKicker = p.position === 'K' || p.isKicker;
-      
-      // ⭐ Check if this player was already excluded due to injury status from grounding
-      const normalizedName = normalizePlayerName(p.name);
-      if (excludedPlayerNames.has(normalizedName)) {
-        continue; // Skip players already marked OUT/DOUBTFUL from grounding
-      }
-      
-      // Also check injury status on the BDL player object itself
-      const playerStatus = p.status || 'HEALTHY';
-      if (shouldExcludePlayer(playerStatus)) {
-        continue; // Skip OUT/DOUBTFUL players
-      }
-      
-      // Include ALL players - even those without stats get minimum salary
-      // This ensures we have full position coverage on small slates
-      const hasAnyStats = hasNBAStats || hasNFLStats;
-      const isSpecialPosition = isDST || isKicker;
-      const isRelevantPosition = ['QB', 'RB', 'WR', 'TE', 'K', 'DST', 'PG', 'SG', 'SF', 'PF', 'C', 'G', 'F'].includes((p.position || '').toUpperCase());
-      
-      if (!alreadyMerged && (hasAnyStats || isSpecialPosition || isRelevantPosition)) {
-        let fpts, estimatedSalary;
-        const position = (p.position || '').toUpperCase();
-        
-        if (isDST) {
-          // DST average fantasy points per game (typical range: 5-12)
-          fpts = 8;
-          estimatedSalary = isSmallSlate ? 4000 : 3500;
-        } else if (isKicker) {
-          // Kicker average fantasy points per game (typical range: 6-10)
-          fpts = 8;
-          estimatedSalary = isSmallSlate ? 4500 : 4000;
-        } else if (hasNBAStats) {
-          // NBA fantasy points estimation
-          fpts = p.seasonStats.fpts || (p.seasonStats.ppg + p.seasonStats.rpg * 1.2 + p.seasonStats.apg * 1.5);
-        } else {
-          // ═══════════════════════════════════════════════════════════════════
-          // NFL Fantasy Points Estimation - CORRECT PER-GAME FORMULA
-          // ═══════════════════════════════════════════════════════════════════
-          // BDL provides:
-          // - *_yards_per_game = already per-game (e.g., 233 pass ypg)
-          // - *_touchdowns = SEASON TOTAL (e.g., 25 TDs)
-          // - receptions = SEASON TOTAL (e.g., 65 receptions)
-          //
-          // DraftKings scoring (Full PPR):
-          // - Passing: 0.04 pts/yd, 4 pts/TD, -1 pts/INT
-          // - Rushing: 0.1 pts/yd, 6 pts/TD
-          // - Receiving: 0.1 pts/yd, 6 pts/TD, 1 pt/reception
-          // ═══════════════════════════════════════════════════════════════════
-          
-          const stats = p.seasonStats || {};
-          const gamesPlayed = stats.games_played || 16;
-          
-          // Yards per game (already per-game from BDL)
-          const passYpg = stats.passing_yards_per_game || 0;
-          const rushYpg = stats.rushing_yards_per_game || 0;
-          const recYpg = stats.receiving_yards_per_game || 0;
-          
-          // Convert season totals to per-game
-          const passTdPg = (stats.passing_touchdowns || 0) / gamesPlayed;
-          const intsPg = (stats.passing_interceptions || 0) / gamesPlayed;
-          const rushTdPg = (stats.rushing_touchdowns || 0) / gamesPlayed;
-          const recTdPg = (stats.receiving_touchdowns || 0) / gamesPlayed;
-          const recPg = (stats.receptions || 0) / gamesPlayed;
-          
-          // Calculate per-game fantasy points (DraftKings Full PPR)
-          fpts = (passYpg * 0.04) + (passTdPg * 4) - (intsPg * 1) + 
-                 (rushYpg * 0.1) + (rushTdPg * 6) + 
-                 (recYpg * 0.1) + (recTdPg * 6) + recPg;
-        }
-        
-        // ═══════════════════════════════════════════════════════════════════
-        // SALARY ESTIMATION - Position-aware for NFL, small slate adjustment
-        // ═══════════════════════════════════════════════════════════════════
-        // Small slates have TIGHTER salary distribution to prevent stacking all stars
-        // Elite players cost MORE on small slates to force tough decisions
-        // ═══════════════════════════════════════════════════════════════════
-        
-        if (!isDST && !isKicker) {
-          if (hasNFLStats || (!hasNBAStats && isRelevantPosition && ['QB', 'RB', 'WR', 'TE'].includes(position))) {
-            // NFL position-specific salary estimation
-            // For players without stats, use position-based minimum salary
-            if (!hasNFLStats) {
-              // Minimum salary for NFL players without stats
-              const minSalaries = { QB: 4500, RB: 4000, WR: 3500, TE: 3000 };
-              fpts = 0;
-              estimatedSalary = minSalaries[position] || 3000;
-            } else if (position === 'QB') {
-              // Elite QB (Herbert): 20+ fpts/game = $7,500-$8,500
-              // Mid-tier QB: 15-20 fpts = $6,000-$7,500
-              // Backup QB: <15 fpts = $4,500-$6,000
-              if (fpts >= 20) {
-                estimatedSalary = isSmallSlate ? 7800 + (fpts - 20) * 70 : 7000 + (fpts - 20) * 100;
-              } else if (fpts >= 15) {
-                estimatedSalary = isSmallSlate ? 6500 + (fpts - 15) * 260 : 5500 + (fpts - 15) * 300;
-              } else {
-                estimatedSalary = isSmallSlate ? 5000 + fpts * 100 : 4500 + fpts * 70;
-              }
-            } else if (position === 'RB') {
-              // Elite RB (Henry/Jacobs): 18+ fpts = $7,200-$8,400
-              // Starter RB: 12-18 fpts = $5,500-$7,200
-              // Backup RB: <12 fpts = $4,000-$5,500
-              if (fpts >= 18) {
-                estimatedSalary = isSmallSlate ? 7500 + (fpts - 18) * 90 : 7000 + (fpts - 18) * 100;
-              } else if (fpts >= 12) {
-                estimatedSalary = isSmallSlate ? 5800 + (fpts - 12) * 285 : 5200 + (fpts - 12) * 300;
-              } else {
-                estimatedSalary = isSmallSlate ? 4200 + fpts * 130 : 4000 + fpts * 100;
-              }
-            } else if (position === 'WR') {
-              // Elite WR (Nico Collins): 16+ fpts = $6,800-$8,000
-              // WR2: 10-16 fpts = $5,000-$6,800
-              // WR3: <10 fpts = $3,500-$5,000
-              if (fpts >= 16) {
-                estimatedSalary = isSmallSlate ? 7000 + (fpts - 16) * 100 : 6500 + (fpts - 16) * 100;
-              } else if (fpts >= 10) {
-                estimatedSalary = isSmallSlate ? 5200 + (fpts - 10) * 300 : 4800 + (fpts - 10) * 285;
-              } else {
-                estimatedSalary = isSmallSlate ? 3800 + fpts * 140 : 3500 + fpts * 130;
-              }
-            } else if (position === 'TE') {
-              // Elite TE (Andrews): 12+ fpts = $6,000-$7,000
-              // Mid TE: 8-12 fpts = $4,500-$6,000
-              // Backup TE: <8 fpts = $3,000-$4,500
-              if (fpts >= 12) {
-                estimatedSalary = isSmallSlate ? 6200 + (fpts - 12) * 100 : 5800 + (fpts - 12) * 100;
-              } else if (fpts >= 8) {
-                estimatedSalary = isSmallSlate ? 4800 + (fpts - 8) * 350 : 4300 + (fpts - 8) * 375;
-              } else {
-                estimatedSalary = isSmallSlate ? 3200 + fpts * 200 : 3000 + fpts * 165;
-              }
-            } else {
-              // Default NFL position
-              estimatedSalary = 4500 + fpts * 150;
-            }
-          } else {
-            // NBA salary estimation (existing logic)
-            if (fpts >= 50) {
-              estimatedSalary = 10000 + (fpts - 50) * 100;
-            } else if (fpts >= 35) {
-              estimatedSalary = 7000 + (fpts - 35) * 200;
-            } else if (fpts >= 20) {
-              estimatedSalary = 4500 + (fpts - 20) * 167;
-            } else {
-              estimatedSalary = 3500 + fpts * 50;
-            }
-          }
-          
-          // Round to nearest $100
-          estimatedSalary = Math.round(estimatedSalary / 100) * 100;
-        }
-        
-        // Determine note for player type
-        let playerNote = 'Estimated salary';
-        if (isDST) playerNote = 'Defense/Special Teams';
-        else if (isKicker) playerNote = 'Place Kicker';
-        
-        merged.push({
-          name: p.name,
-          team: p.team,
-          position: p.position,
-          seasonStats: p.seasonStats || {},
-          id: p.id,
-          salary: Math.min(12500, Math.max(3000, estimatedSalary)), // Cap between $3000-$12500
-          status: p.status || 'HEALTHY',
-          notes: playerNote,
-          estimatedSalary: true, // Flag so we know this is estimated
-          isDST: isDST,
-          isKicker: isKicker
-        });
-      }
-    }
-    
-    const estimatedCount = merged.filter(p => p.estimatedSalary).length;
-    const realCount = merged.length - estimatedCount;
-    console.log(`[DFS Context] After salary estimation: ${merged.length} players (${realCount} real salaries, ${estimatedCount} ESTIMATED)`);
+    const diagnostic = [
+      `[DFS Context] SALARY DATA FAILURE`,
+      `  Players with REAL salaries: ${merged.length}`,
+      `  Players from BDL (no salary): ${bdlPlayers.length}`,
+      `  Minimum required: 30 players with real salaries`,
+      `  Root cause: Tank01 salary data missing or incomplete for this slate`,
+      `  Action: Check Tank01 API key, verify slate exists on Tank01, check date format`,
+    ].join('\n');
+    throw new Error(diagnostic);
   }
   
   // Return both merged players AND excluded players for teammate opportunity analysis
@@ -1771,9 +1582,10 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
     const total = odds?.total || null;
     const spread = odds?.spread || null; // Home spread (negative = home favored)
 
-    // Implied team totals: Home = (Total + Spread) / 2, Away = (Total - Spread) / 2
-    const impliedHomeTotal = (total != null && spread != null) ? parseFloat(((total + spread) / 2).toFixed(1)) : null;
-    const impliedAwayTotal = (total != null && spread != null) ? parseFloat(((total - spread) / 2).toFixed(1)) : null;
+    // Implied team totals: Home = (Total - Spread) / 2, Away = (Total + Spread) / 2
+    // Spread is home spread (negative = home favored). Subtracting negative increases home total.
+    const impliedHomeTotal = (total != null && spread != null) ? parseFloat(((total - spread) / 2).toFixed(1)) : null;
+    const impliedAwayTotal = (total != null && spread != null) ? parseFloat(((total + spread) / 2).toFixed(1)) : null;
 
     // Game-level pace: average of both teams' pace (possessions per game)
     const homePace = teamDefenseProfiles.get(g.homeTeam)?.pace;
@@ -1943,13 +1755,16 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
         }
       }
 
-      // Change 6: DvP matchup context
+      // Change 6: DvP matchup context + opponent field
       const playerTeam = (player.team || '').toUpperCase();
       const opponent = teamToOpponent.get(playerTeam);
-      if (opponent && teamDefenseStats.size > 0) {
-        const dvp = getPlayerDvP(opponent, player.position, teamDefenseStats);
-        if (dvp) {
-          player.matchupDvP = dvp;
+      if (opponent) {
+        player.opponent = opponent;
+        if (teamDefenseStats.size > 0) {
+          const dvp = getPlayerDvP(opponent, player.position, teamDefenseStats);
+          if (dvp) {
+            player.matchupDvP = dvp;
+          }
         }
       }
 
@@ -2067,7 +1882,7 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
   if (sport?.toUpperCase() === 'NBA') {
     const outPlayersWithIds = excludedPlayers.filter(p => {
       const st = (p.status || '').toUpperCase();
-      return p.bdlId && (st.includes('OUT') || st === 'OFS' || st.includes('DOUBTFUL'));
+      return p.bdlId && (st.includes('OUT') || st === 'OFS' || st.includes('DOUBTFUL') || st.includes('SUSPENDED'));
     });
 
     if (outPlayersWithIds.length > 0) {
@@ -2159,9 +1974,15 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
             const lastDate = new Date(lastGame);
             // Count team games AFTER this player's last appearance
             const gamesMissed = teamGames.filter(gd => gd > lastDate).length;
+            const daysSince = Math.floor((Date.now() - lastDate) / (1000 * 60 * 60 * 24));
             injEntry.gamesMissed = gamesMissed;
+            injEntry.daysSince = daysSince;
             injEntry.lastGameDate = lastGame.split('T')[0];
-            if (gamesMissed <= 2) {
+            // Both games missed AND calendar days matter for freshness.
+            // During schedule breaks (All-Star, bye weeks), a player can miss
+            // few games over many calendar days — the market still adjusts.
+            const STALE_DAYS_THRESHOLD = 5; // 5+ calendar days = market has adjusted
+            if (gamesMissed <= 2 && daysSince < STALE_DAYS_THRESHOLD) {
               injEntry.duration = 'RECENT';
             } else if (gamesMissed <= 10) {
               injEntry.duration = 'ESTABLISHED';
@@ -2185,7 +2006,8 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
           const team = (ep.team || '').toUpperCase();
           const inj = injuryMap[team]?.find(i => i.player?.toLowerCase() === ep.name?.toLowerCase());
           if (inj?.duration) {
-            console.log(`[DFS Context]   ${ep.name} (${ep.team}): ${inj.duration} — ${inj.gamesMissed} team games missed (last played ${inj.lastGameDate || 'none in 45d'})`);
+            const suspTag = (ep.status || '').toUpperCase().includes('SUSPENDED') ? ' (suspension)' : '';
+            console.log(`[DFS Context]   ${ep.name} (${ep.team})${suspTag}: ${inj.duration} — ${inj.gamesMissed} team games missed, ${inj.daysSince ?? '?'}d ago (last played ${inj.lastGameDate || 'none in 45d'})`);
           }
         }
 
@@ -2224,27 +2046,27 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
   const duration = Date.now() - start;
   console.log(`[DFS Context] Context built in ${duration}ms`);
 
-  // Count how many players have estimated vs real salaries
-  const estimatedSalaryCount = mergedPlayers.filter(p => p.estimatedSalary).length;
-  const realSalaryCount = mergedPlayers.length - estimatedSalaryCount;
-  const salaryDataQuality = realSalaryCount >= mergedPlayers.length * 0.7 ? 'good' 
-    : realSalaryCount >= mergedPlayers.length * 0.4 ? 'partial' 
+  // Count how many players have estimated vs real salaries (use finalMergedPlayers — the filtered pool)
+  const estimatedSalaryCount = finalMergedPlayers.filter(p => p.estimatedSalary).length;
+  const realSalaryCount = finalMergedPlayers.length - estimatedSalaryCount;
+  const salaryDataQuality = realSalaryCount >= finalMergedPlayers.length * 0.7 ? 'good'
+    : realSalaryCount >= finalMergedPlayers.length * 0.4 ? 'partial'
     : 'poor';
-  
+
   // Log salary data quality
   if (salaryDataQuality === 'poor') {
-    console.error(`[DFS Context] ⚠️ SALARY WARNING: Only ${realSalaryCount}/${mergedPlayers.length} players have real salaries`);
-    console.error(`[DFS Context] ⚠️ Lineup may be inaccurate - ${estimatedSalaryCount} players have estimated salaries`);
+    console.error(`[DFS Context] SALARY WARNING: Only ${realSalaryCount}/${finalMergedPlayers.length} players have real salaries`);
+    console.error(`[DFS Context] Lineup may be inaccurate - ${estimatedSalaryCount} players have estimated salaries`);
   } else if (salaryDataQuality === 'partial') {
-    console.warn(`[DFS Context] ⚠️ Partial salary data: ${realSalaryCount}/${mergedPlayers.length} real, ${estimatedSalaryCount} estimated`);
+    console.warn(`[DFS Context] Partial salary data: ${realSalaryCount}/${finalMergedPlayers.length} real, ${estimatedSalaryCount} estimated`);
   }
-  
+
   return {
     platform,
     sport,
     date: dateStr,
     slateDate,
-    players: mergedPlayers,
+    players: finalMergedPlayers,
     gamesCount: games.length,
     games: gameList,
     // Team-level injuries (for GET_TEAM_INJURIES tool)

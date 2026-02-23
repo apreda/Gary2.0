@@ -27,9 +27,9 @@ function seasonForSport(sport) {
 }
 import { generateGameSignificance } from './gameSignificanceGenerator.js';
 import { fetchNbaInjuriesForGame } from '../../nbaInjuryReportService.js';
-import { getNcaabH2H, formatHighlightlyH2H } from '../../highlightlyService.js';
+import { getNcaabVenue } from '../../highlightlyService.js';
 import { getTeamRatings as getBarttovikRatings } from '../../barttovikService.js';
-// All context comes from Gemini 3 Flash with Google Search Grounding
+// Grounding searches use Gemini 3 Flash. Main pick pipeline uses 3.1 Pro + 3 Pro advisor.
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import axios from 'axios';
 // NBA injuries: RapidAPI ONLY (no Grounding fallback — process fails if API fails)
@@ -405,25 +405,16 @@ export async function buildScoutReport(game, sport, options = {}) {
     const STALE_WINDOW_GAMES = 2; // 0-2 games missed = FRESH/RECENT, >2 = STALE
 
     const resolveDurationByBoxScore = async (injuryList, teamRecentGames, teamName) => {
-      // Step 1: Handle suspensions — known bounded durations, skip box-score check
+      // Step 1: Tag suspensions (but let them go through box-score resolution for real dates)
       for (const inj of injuryList) {
         const context = (inj.durationContext || '').toLowerCase();
         if (context.includes('suspension') || context.includes('suspended')) {
-          const pName = `${inj.player?.first_name || ''} ${inj.player?.last_name || ''}`.trim();
-          inj.duration = 'RECENT';
-          inj.daysSinceReport = 7;
-          inj.reportDateStr = 'suspension';
-          inj.durationSource = 'suspension_detected';
-          inj.freshness = 'FRESH';
-          inj.isPricedIn = false;
-          inj.isEdge = true;
-          console.log(`[Scout Report] Suspension detected for ${pName} — marked RECENT`);
+          inj.isSuspension = true;
         }
       }
 
       // Step 2: Identify all actionable injuries that need duration resolution
       const actionableInjuries = injuryList.filter(inj => {
-        if (inj.durationSource === 'suspension_detected') return false;
         const status = (inj.status || '').toLowerCase();
         return status.includes('out') || status.includes('doubtful') || status.includes('questionable') || status.includes('day-to-day');
       });
@@ -486,8 +477,13 @@ export async function buildScoutReport(game, sport, options = {}) {
             return gDate && new Date(gDate) > lastGameDate;
           }).length;
 
-          // Set duration + freshness based on games missed
-          if (gamesMissed <= STALE_WINDOW_GAMES) {
+          // Set duration + freshness based on games missed AND calendar days
+          // Both matter: games missed shows team impact, but calendar days shows
+          // how long the market has had to adjust. During schedule breaks (All-Star,
+          // bye weeks), a player can miss few games over many days — the market
+          // still adjusts over calendar time regardless.
+          const STALE_DAYS_THRESHOLD = 5; // 5+ calendar days = market has adjusted
+          if (gamesMissed <= STALE_WINDOW_GAMES && daysSince < STALE_DAYS_THRESHOLD) {
             inj.duration = 'RECENT';
             inj.freshness = 'FRESH';
             inj.isPricedIn = false;
@@ -507,7 +503,8 @@ export async function buildScoutReport(game, sport, options = {}) {
           inj.reportDateStr = lastGameDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
           inj.durationSource = 'box_score';
 
-          console.log(`[Scout Report] ${pName} (${teamName}) last played ${inj.reportDateStr} — ${gamesMissed} game(s) missed → ${inj.duration} [${inj.freshness}]`);
+          const suspTag = inj.isSuspension ? ' (suspension)' : '';
+          console.log(`[Scout Report] ${pName} (${teamName})${suspTag} last played ${inj.reportDateStr} — ${gamesMissed} game(s) missed → ${inj.duration} [${inj.freshness}]`);
         } else {
           // Not found in any of the last N games → long-term absence
           // gamesMissed is a MINIMUM (player has been out longer than our window)
@@ -517,7 +514,8 @@ export async function buildScoutReport(game, sport, options = {}) {
           inj.freshness = 'STALE';
           inj.isPricedIn = true;
           inj.durationSource = 'box_score';
-          console.log(`[Scout Report] ${pName} (${teamName}) not in last ${gameIds.length} games → SEASON-LONG [STALE]`);
+          const suspTag2 = inj.isSuspension ? ' (suspension)' : '';
+          console.log(`[Scout Report] ${pName} (${teamName})${suspTag2} not in last ${gameIds.length} games → SEASON-LONG [STALE]`);
         }
       }
     };
@@ -624,8 +622,9 @@ VENUE: [arena name, city]
           }
 
           if (venue && venue.toLowerCase() !== 'n/a') {
-            game.venue = venue;
-            console.log(`[Scout Report] ✓ Venue: ${venue}`);
+            // Strip city/state — UI only needs arena name (e.g., "Madison Square Garden" not "Madison Square Garden, New York")
+            game.venue = venue.split(',')[0].trim();
+            console.log(`[Scout Report] ✓ Venue: ${game.venue}`);
           }
         } else {
           // Structured block not found — default to regular season (safe)
@@ -882,21 +881,18 @@ VENUE: [arena name, city]
   }
   
   // For NCAAB, fetch roster depth (top 9 contributors), conference standings,
-  // CURRENT STATE narrative, and TIER 1 advanced metrics (KenPom/NET/Barttorvik/SOS)
+  // CURRENT STATE narrative, roster depth, standings, rankings
+  // Advanced stats (Barttorvik, Four Factors, Home/Away Splits, L5 Efficiency)
+  // are now investigation tokens — Gary calls them during Pass 1
   let ncaabRosterDepth = null;
   let ncaabConferenceIds = null;
   let ncaabStandingsSnapshot = '';
-  let ncaabAdvancedMetrics = null;
-  // ncaabTeamFourFactors REMOVED — BDL doesn't have proper NCAAB Four Factors data
   let ncaabRankings = null;
-  let ncaabHomeCourt = null;
-  let highlightlyH2H = null;
   if (sportKey === 'NCAAB') {
     const ncaabSeasonYear = ncaabSeason();
 
-    // Phase 1: Fetch in parallel — BDL roster depth + Gemini grounding + Highlightly H2H
-    // Current State, Advanced Metrics, and Highlightly don't need BDL team IDs
-    const [rosterResult, currentStateResult, advMetricsResult, highlightlyH2HResult] = await Promise.all([
+    // Phase 1: Fetch in parallel — BDL roster depth + Gemini grounding + venue
+    const [rosterResult, currentStateResult, venueResult] = await Promise.all([
       ballDontLieService.getNcaabRosterDepth(homeTeam, awayTeam, ncaabSeasonYear).catch(e => {
         console.warn('[Scout Report] NCAAB roster depth error:', e.message);
         return null;
@@ -905,19 +901,18 @@ VENUE: [arena name, city]
         console.warn('[Scout Report] NCAAB current state error:', e.message);
         return null;
       }),
-      fetchNcaabAdvancedMetrics(homeTeam, awayTeam).catch(e => {
-        console.warn('[Scout Report] NCAAB advanced metrics error:', e.message);
-        return null;
-      }),
-      getNcaabH2H(homeTeam, awayTeam).catch(e => {
-        console.warn('[Scout Report] Highlightly H2H error:', e.message);
+      getNcaabVenue(homeTeam, awayTeam).catch(e => {
+        console.warn('[Scout Report] NCAAB venue lookup error:', e.message);
         return null;
       })
     ]);
 
     ncaabRosterDepth = rosterResult;
-    ncaabAdvancedMetrics = advMetricsResult;
-    highlightlyH2H = highlightlyH2HResult;
+
+    // Set venue from Highlightly (arena name, city, state)
+    if (venueResult) {
+      game.venue = venueResult;
+    }
 
     // Set narrative context on injuries so it flows into CURRENT STATE section of report
     if (currentStateResult?.groundedRaw) {
@@ -932,9 +927,6 @@ VENUE: [arena name, city]
       };
 
       // Fetch standings and AP rankings in parallel
-      // NOTE: NCAAB Four Factors REMOVED — BDL returns per-game averages for NCAAB (not totals),
-      // producing nonsense values (PPG 3.5, Tempo 3.0). NCAAB doesn't have proper Four Factors in BDL.
-      // KenPom/Barttorvik Tier 1 metrics from Grounding cover this gap.
       const [standingsResult, rankingsResult] = await Promise.all([
         fetchStandingsSnapshot(sportKey, homeTeam, awayTeam, ncaabConferenceIds).catch(e => {
           console.warn('[Scout Report] NCAAB standings error:', e.message);
@@ -948,29 +940,6 @@ VENUE: [arena name, city]
 
       ncaabStandingsSnapshot = standingsResult;
       ncaabRankings = rankingsResult;
-
-      // Home court calculated from existing recentHome/recentAway — no extra API call
-      ncaabHomeCourt = calcNcaabHomeCourt(recentHome, recentAway, homeTeam, awayTeam, ncaabRosterDepth.homeTeamId, ncaabRosterDepth.awayTeamId);
-    }
-
-    // Phase 3: L5 efficiency (depends on roster depth team IDs + recent game IDs)
-    // Full season fetched for home/away splits, but only first 5 game IDs used for L5 efficiency
-    if (ncaabRosterDepth?.homeTeamId && ncaabRosterDepth?.awayTeamId) {
-      const homeGameIds = (recentHome || []).map(g => g.id).filter(Boolean).slice(0, 5);
-      const awayGameIds = (recentAway || []).map(g => g.id).filter(Boolean).slice(0, 5);
-      if (homeGameIds.length > 0 || awayGameIds.length > 0) {
-        try {
-          const [homeL5, awayL5] = await Promise.all([
-            homeGameIds.length > 0 ? ballDontLieService.getTeamL5Efficiency(ncaabRosterDepth.homeTeamId, homeGameIds, 'basketball_ncaab') : null,
-            awayGameIds.length > 0 ? ballDontLieService.getTeamL5Efficiency(ncaabRosterDepth.awayTeamId, awayGameIds, 'basketball_ncaab') : null
-          ]);
-          ncaabRosterDepth.homeL5 = homeL5;
-          ncaabRosterDepth.awayL5 = awayL5;
-          console.log(`[Scout Report] NCAAB L5 efficiency computed: Home ${homeL5?.efficiency?.games || 0} games, Away ${awayL5?.efficiency?.games || 0} games`);
-        } catch (e) {
-          console.warn(`[Scout Report] NCAAB L5 efficiency computation failed (non-fatal):`, e.message);
-        }
-      }
     }
   }
 
@@ -1486,6 +1455,15 @@ CRITICAL: Be precise. Only include what's actually shown on RotoWire. List ALL i
             const unknownDurationInjuries = allNcaabInjuries.filter(inj => {
               if (inj.daysSinceReport) return false; // already enriched
               const statusLower = (inj.status || '').toLowerCase();
+              // Skip OFS (Out For Season) — duration is already known as season-long, no BDL lookup needed
+              if (statusLower === 'ofs' || statusLower.includes('out for season') || statusLower.includes('out (season)')) {
+                const pName = `${inj.player?.first_name || ''} ${inj.player?.last_name || ''}`.trim();
+                inj.daysSinceReport = 90;
+                inj.duration = 'SEASON-LONG';
+                inj.durationSource = 'status_ofs';
+                console.log(`[Scout Report] NCAAB: ${pName} is OFS — skipping game-log lookup, marking SEASON-LONG`);
+                return false;
+              }
               return statusLower.includes('out') || statusLower === 'gtd' ||
                      statusLower.includes('questionable') || statusLower.includes('doubtful');
             });
@@ -1976,7 +1954,7 @@ The team's recent stats reflect play WITHOUT these players.
   }
 
   // Build verified Tale of Tape ONCE and reuse in report text + return object
-  const verifiedTaleOfTape = buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayProfile, sportKey, injuries, recentHome, recentAway, ncaabAdvancedMetrics);
+  const verifiedTaleOfTape = buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayProfile, sportKey, injuries, recentHome, recentAway);
 
   const report = `
 ${seasonLongInjuriesSection}══════════════════════════════════════════════════════════════════════
@@ -1989,19 +1967,6 @@ ${gameContextSection}${bowlGameContext}${cfpJourneyContext}${ncaabStandingsSnaps
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${injuryReportText}
 ${formatStartingLineups(homeTeam, awayTeam, injuries.lineups)}
-
-INJURY DURATION CONTEXT:
-Each injury above includes a duration tag showing how long the player has been out.
-
-For each absence, ask yourself:
-  - How long has this player been out? What does the team look like without them?
-  - How has the team performed during the absence?
-  - What does the current spread tell you about how the market has assessed this roster?
-  - For returning players: What changes? What does the data say about the team with vs without them?
-
-The CURRENT ROSTER is the team you are betting on.
-Investigate what the data tells you about THIS team, THIS matchup, and THIS spread.
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${returningPlayersSection}${narrativeContext ? `
 CURRENT STATE & CONTEXT
 ━━━━━━━━━━━━━━━━━━━━━━━
@@ -2019,7 +1984,7 @@ REST & SCHEDULE SITUATION
 ${formatRestSituation(homeTeam, awayTeam, calculateRestSituation(recentHome, game.commence_time, homeTeam), calculateRestSituation(recentAway, game.commence_time, awayTeam))}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-${nbaRosterDepth ? formatNbaRosterDepth(homeTeam, awayTeam, nbaRosterDepth, injuries) : ''}${ncaabAdvancedMetrics ? formatNcaabAdvancedMetrics(ncaabAdvancedMetrics) : ''}${ncaabRankings || ncaabHomeCourt ? formatNcaabRankingsAndHomeCourt(ncaabRankings, ncaabHomeCourt, homeTeam, awayTeam) : ''}${ncaabKeyPlayers ? formatNcaabKeyPlayers(homeTeam, awayTeam, ncaabKeyPlayers) : ''}${ncaabRosterDepth ? formatNcaabRosterDepth(homeTeam, awayTeam, ncaabRosterDepth, injuries) : ''}${nhlKeyPlayers ? formatNhlKeyPlayers(homeTeam, awayTeam, nhlKeyPlayers) : ''}${nhlRosterDepth ? formatNhlRosterDepth(homeTeam, awayTeam, nhlRosterDepth, injuries) : ''}${keyPlayers ? formatKeyPlayers(homeTeam, awayTeam, keyPlayers) : ''}${startingQBs ? formatStartingQBs(homeTeam, awayTeam, startingQBs) : ''}${nflRosterDepth ? formatNflRosterDepth(homeTeam, awayTeam, nflRosterDepth, injuries) : ''}${nflPlayoffHistory ? formatNflPlayoffHistory(homeTeam, awayTeam, nflPlayoffHistory, nflHomeTeamId, nflAwayTeamId) : ''}${ncaafKeyPlayers ? formatNcaafKeyPlayers(homeTeam, awayTeam, ncaafKeyPlayers) : ''}
+${nbaRosterDepth ? formatNbaRosterDepth(homeTeam, awayTeam, nbaRosterDepth, injuries) : ''}${ncaabRankings ? formatNcaabRankingsAndHomeCourt(ncaabRankings, null, homeTeam, awayTeam) : ''}${ncaabKeyPlayers ? formatNcaabKeyPlayers(homeTeam, awayTeam, ncaabKeyPlayers) : ''}${ncaabRosterDepth ? formatNcaabRosterDepth(homeTeam, awayTeam, ncaabRosterDepth, injuries) : ''}${nhlKeyPlayers ? formatNhlKeyPlayers(homeTeam, awayTeam, nhlKeyPlayers) : ''}${nhlRosterDepth ? formatNhlRosterDepth(homeTeam, awayTeam, nhlRosterDepth, injuries) : ''}${keyPlayers ? formatKeyPlayers(homeTeam, awayTeam, keyPlayers) : ''}${startingQBs ? formatStartingQBs(homeTeam, awayTeam, startingQBs) : ''}${nflRosterDepth ? formatNflRosterDepth(homeTeam, awayTeam, nflRosterDepth, injuries) : ''}${nflPlayoffHistory ? formatNflPlayoffHistory(homeTeam, awayTeam, nflPlayoffHistory, nflHomeTeamId, nflAwayTeamId) : ''}${ncaafKeyPlayers ? formatNcaafKeyPlayers(homeTeam, awayTeam, ncaafKeyPlayers) : ''}
 
 TEAM IDENTITIES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -2034,11 +1999,10 @@ RECENT FORM (Last 5 Games)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${formatRecentForm(homeTeam, recentHome)}
 ${formatRecentForm(awayTeam, recentAway)}
-${sportKey === 'NCAAB' ? formatNcaabL5ScoringTrends(homeTeam, awayTeam, recentHome, recentAway, ncaabRosterDepth, homeProfile, awayProfile) : ''}
-${highlightlyH2H?.games?.length ? formatHighlightlyH2H(highlightlyH2H, homeTeam, awayTeam) : `HEAD-TO-HEAD HISTORY (${seasonLabel} SEASON)
+HEAD-TO-HEAD HISTORY (${seasonLabel} SEASON)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${formatH2HSection(h2hData, homeTeam, awayTeam)}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 KEY SITUATIONAL FACTORS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -3277,8 +3241,9 @@ async function fetchInjuries(homeTeam, awayTeam, sport) {
 }
 
 /**
- * Execute a single grounding search via Gemini Flash.
- * Flash + Google Search grounding is used as the "search engine" — it finds facts.
+ * Execute a single grounding search via Gemini 3 Flash.
+ * Flash + Google Search grounding is the "search engine" — it finds facts.
+ * (Flash is used for grounding only; main pick pipeline uses 3.1 Pro.)
  * Returns raw factual text, not a narrative.
  */
 async function groundingSearch(genAI, query, todayFull) {
@@ -3384,31 +3349,48 @@ async function fetchCurrentState(homeTeam, awayTeam, sport, gameDate) {
     const isNFL = sport === 'NFL' || sport === 'americanfootball_nfl';
     const isNCAAF = sport === 'NCAAF' || sport === 'americanfootball_ncaaf';
     const isFootball = isNFL || isNCAAF;
+    const isNBA = sport === 'NBA' || sport === 'basketball_nba';
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // PHASE 1: Flash + Grounding searches in parallel
+    // PHASE 1: Gemini 3 Flash + Grounding searches in parallel
     // Flash is the "search engine" — finds raw facts from Google Search
     // ═══════════════════════════════════════════════════════════════════════════
-    console.log(`[Scout Report] Fetching CURRENT STATE for ${awayTeam} @ ${homeTeam} (2-phase: Flash search → Pro narrative)...`);
+    console.log(`[Scout Report] Fetching CURRENT STATE for ${awayTeam} @ ${homeTeam} (2-phase: Flash search → narrative)...`);
     const startTime = Date.now();
 
+    // Search last 7 days (not the whole month) — biases toward recent game recaps
+    // and fresh developments rather than month-old storylines framed as current news
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const recentWindow = `${sevenDaysAgo.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })} to ${now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`;
+
     const searchQueries = [
-      `${homeTeam} ${sportName} news ${new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' })}. Recent games, results, scores, storylines, trades, roster moves, headlines, beat writer articles, coach quotes.`,
-      `${awayTeam} ${sportName} news ${new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' })}. Recent games, results, scores, storylines, trades, roster moves, headlines, beat writer articles, coach quotes.`,
+      `${homeTeam} ${sportName} news ${recentWindow}. Recent games, results, scores, storylines, trades, roster moves, headlines, beat writer articles, coach quotes.`,
+      `${awayTeam} ${sportName} news ${recentWindow}. Recent games, results, scores, storylines, trades, roster moves, headlines, beat writer articles, coach quotes.`,
       `${awayTeam} vs ${homeTeam} ${sportName} game ${today}. Game preview, matchup analysis, storylines, broadcast info, breaking news.`
     ];
+    const queryLabels = ['HOME', 'AWAY', 'MATCHUP'];
 
     // Add weather search for football
     if (isFootball) {
-      // Get city from home team for weather
       searchQueries.push(`${homeTeam} stadium weather forecast ${today}. Temperature, wind, precipitation for tonight's game.`);
+      queryLabels.push('WEATHER');
+    }
+
+    // Add game-day availability search for NBA (catches load management, rest, DNP-Rest)
+    if (isNBA) {
+      searchQueries.push(`${homeTeam} ${awayTeam} NBA game tonight ${today}. Player availability, rest decisions, load management, who is sitting out, who is playing, game-day status, lineup decisions.`);
+      queryLabels.push('AVAILABILITY');
     }
 
     const searchResults = await Promise.all(
       searchQueries.map((q, i) => {
-        const label = i === 0 ? 'HOME' : i === 1 ? 'AWAY' : i === 2 ? 'MATCHUP' : 'WEATHER';
+        const label = queryLabels[i] || `QUERY_${i}`;
         return groundingSearch(genAI, q, todayFull)
           .then(text => {
+            if (!text) {
+              console.warn(`[Scout Report] Search ${label}: returned null/empty`);
+              return { label, text: '' };
+            }
             console.log(`[Scout Report] Search ${label}: ${text.length} chars`);
             return { label, text };
           })
@@ -3427,6 +3409,7 @@ async function fetchCurrentState(homeTeam, awayTeam, sport, gameDate) {
     const awayContext = searchResults.find(r => r.label === 'AWAY')?.text || '';
     const matchupContext = searchResults.find(r => r.label === 'MATCHUP')?.text || '';
     const weatherContext = searchResults.find(r => r.label === 'WEATHER')?.text || '';
+    const availabilityContext = searchResults.find(r => r.label === 'AVAILABILITY')?.text || '';
 
     // Check we got SOMETHING from searches
     const totalSearchChars = homeContext.length + awayContext.length + matchupContext.length;
@@ -3435,8 +3418,8 @@ async function fetchCurrentState(homeTeam, awayTeam, sport, gameDate) {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // PHASE 2: Flash writes the narrative (no grounding — free to write richly)
-    // Flash receives raw search results as context and crafts the narrative
+    // PHASE 2: Write the narrative (no grounding — free to write richly)
+    // Model receives raw search results as context and crafts the narrative
     // ═══════════════════════════════════════════════════════════════════════════
     const narrativeModel = genAI.getGenerativeModel({
       model: 'gemini-3-flash-preview',
@@ -3454,7 +3437,6 @@ async function fetchCurrentState(homeTeam, awayTeam, sport, gameDate) {
 
     // Injury data comes from dedicated sources (RapidAPI for NBA, RotoWire for NHL/NCAAB, BDL for NFL/NCAAF)
     // Suppress injury mentions in narrative to avoid stale/conflicting info
-    const isNBA = sport === 'NBA' || sport === 'basketball_nba';
     const isNHL = sport === 'NHL' || sport === 'icehockey_nhl';
 
     // Football-specific sections for the narrative prompt
@@ -3479,6 +3461,7 @@ ${awayContext || '[No results found]'}
 --- MATCHUP: ${awayTeam} @ ${homeTeam} (${today}) ---
 ${matchupContext || '[No results found]'}
 ${weatherContext ? `\n--- WEATHER ---\n${weatherContext}` : ''}
+${availabilityContext ? `\n--- GAME-DAY AVAILABILITY ---\n${availabilityContext}` : ''}
 </search_results>
 
 Based on the search results above, write the current state report. For EACH team, cover:
@@ -3504,7 +3487,7 @@ ${footballNarrativeInstructions}
 - Any breaking news affecting tonight's game
 
 RULES:
-- Do NOT mention injuries, player availability, or injury statuses (e.g., "OUT", "questionable", "OFS"). Injury data comes from a dedicated real-time source and is handled separately. The ONLY exception: you MAY mention a player RETURNING tonight (coming back from absence) as a storyline — that is NEWS, not an injury report.
+- Do NOT mention injuries or injury statuses (e.g., "OUT", "questionable", "OFS"). Injury data comes from a dedicated real-time source and is handled separately. EXCEPTIONS: (1) You MAY mention a player RETURNING tonight from absence as a storyline. (2) You MAY mention load management, rest decisions, or DNP-Rest — these game-day decisions do NOT appear on injury reports and are important context.
 - Do NOT include ATS records, betting trends, cover percentages, or any against-the-spread statistics.
 - Do NOT include HISTORICAL records or series history (e.g., "Team is 28-49 all-time at...", "first win since 2019", "lost 13 of last 19 trips"). These are descriptive, not predictive.
 - Do NOT include conditional records (e.g., "15-0 when scoring 80+", "2-6 in Quad 1 games"). Focus on HOW they are playing, not won-loss tallies.
@@ -3902,7 +3885,8 @@ Cleaned Report:`;
 
 /**
  * Fetch injuries using Gemini Grounding
- * Uses Gemini 3 Flash with Google Search for real-time injury data
+ * Uses Gemini 3 Flash + Google Search for real-time injury data
+ * (Flash for grounding only — main pipeline uses 3.1 Pro)
  */
 async function fetchGroundingInjuries(homeTeam, awayTeam, sport) {
   try {
@@ -5453,6 +5437,16 @@ function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey, rosterDepth 
   lines.push('');
   lines.push('Investigate: What does the current roster\'s performance data tell you about this spread?');
   lines.push('</injury_context>');
+  lines.push('');
+  lines.push('<narrative_cross_reference>');
+  lines.push('## NARRATIVE × INJURY CROSS-REFERENCE');
+  lines.push('');
+  lines.push('The current state report above describes storylines and developments around both teams. The injury report includes duration labels that tell you how long each absence has been in effect.');
+  lines.push('');
+  lines.push('- When a storyline describes a player\'s expanded role, a team\'s offensive shift, or a lineup change — ask: Is this connected to an absence in the injury report? If so, what does the duration label tell you about how long the market has had to adjust?');
+  lines.push('- For any development in the current state report that connects to an injury labeled mid-season or longer — the line was set with that information already available. Ask: What from your investigation goes beyond what the line already reflects?');
+  lines.push('- Ask: Which storylines describe something that changed in the last few days versus something that has been the case for weeks? The duration labels in the injury report are your reference point.');
+  lines.push('</narrative_cross_reference>');
   lines.push('');
 
   return lines.join('\n');
@@ -7909,22 +7903,7 @@ function formatNcaabRosterDepth(homeTeam, awayTeam, rosterDepth, injuries) {
     lines.push('');
   }
   
-  // NCAAB Four Factors (computed from player season data)
-  if (rosterDepth.homeTeamFourFactors || rosterDepth.awayTeamFourFactors) {
-    const hff = rosterDepth.homeTeamFourFactors || {};
-    const aff = rosterDepth.awayTeamFourFactors || {};
-    const homeTeamLabel = (rosterDepth.homeTeamName || homeTeam).toUpperCase();
-    const awayTeamLabel = (rosterDepth.awayTeamName || awayTeam).toUpperCase();
-    lines.push('NCAAB FOUR FACTORS (Dean Oliver — verified against Basketball Reference)');
-    lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    lines.push(`[HOME] ${homeTeamLabel}:`);
-    lines.push(`  eFG%: ${hff.efgPct || 'N/A'}% | TOV Rate: ${hff.tovRate || 'N/A'}% | FTA Rate: ${hff.ftaRate || 'N/A'}% | ORB%: ${hff.orebPct || 'N/A'}%`);
-    lines.push('');
-    lines.push(`[AWAY] ${awayTeamLabel}:`);
-    lines.push(`  eFG%: ${aff.efgPct || 'N/A'}% | TOV Rate: ${aff.tovRate || 'N/A'}% | FTA Rate: ${aff.ftaRate || 'N/A'}% | ORB%: ${aff.orebPct || 'N/A'}%`);
-    lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    lines.push('');
-  }
+  // NCAAB Four Factors moved to NCAAB_FOUR_FACTORS investigation token — Gary calls during Pass 1
 
   // Unit Comparison (Starters vs Bench)
   const buildUnitComparison = (players, teamName) => {
@@ -8366,7 +8345,7 @@ async function fetchNcaabKeyPlayers(homeTeam, awayTeam, sport) {
       const gemini = getGeminiClient();
       if (gemini) {
         const model = gemini.getGenerativeModel({
-          model: 'gemini-3-flash-preview', // POLICY: Always Gemini 3 Flash
+          model: 'gemini-3-flash-preview', // Flash for grounding searches only
           tools: [{ google_search: {} }],
           safetySettings: [
             { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
@@ -9783,7 +9762,8 @@ function formatStartingQBs(homeTeam, awayTeam, qbs) {
 
 /**
  * Generic Gemini Grounding Search
- * Uses Gemini 3 Flash with Google Search Grounding for real-time information
+ * Uses Gemini 3 Flash + Google Search Grounding for real-time information
+ * (Flash for grounding/search; main pick pipeline uses 3.1 Pro + 3 Pro advisor)
  * @param {string} query - The search query
  * @param {Object} options - Options for the search
  * @param {number} options.temperature - Temperature for generation (default 1.0 per Gemini 3 docs)
@@ -9792,15 +9772,15 @@ function formatStartingQBs(homeTeam, awayTeam, qbs) {
  */
 // ═══════════════════════════════════════════════════════════════════════════
 // GEMINI MODEL POLICY (HARDCODED - DO NOT CHANGE)
-// ONLY Gemini 3 (Flash or Pro) allowed for grounding. NEVER use Gemini 1.x or 2.x.
-// Flash is PRIMARY for all grounding (cheaper, same quality). Pro kept as 429 fallback only.
+// ONLY Gemini 3+ allowed for grounding. NEVER use Gemini 1.x or 2.x.
+// Flash is PRIMARY for grounding (cheaper, same quality). Pro kept as 429 fallback only.
 // ═══════════════════════════════════════════════════════════════════════════
 const ALLOWED_GROUNDING_MODELS = ['gemini-3-flash-preview', 'gemini-3-pro-preview']; // Flash primary, Pro 429 fallback
 
 function validateGroundingModel(model) {
   if (!ALLOWED_GROUNDING_MODELS.includes(model)) {
     console.error(`[GROUNDING MODEL POLICY VIOLATION] Attempted to use "${model}" - ONLY Gemini 3 allowed!`);
-    return 'gemini-3-flash-preview'; // Always fall back to Gemini 3 Flash
+    return 'gemini-3-flash-preview'; // Default to Flash for grounding
   }
   return model;
 }
@@ -9819,7 +9799,7 @@ export async function geminiGroundingSearch(query, options = {}) {
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      // POLICY: Gemini 3 Flash for grounding, Pro as fallback on rate limits
+      // Flash for grounding, Pro as 429 fallback
       // Both Flash and Pro support Google Search grounding
       const requestedModel = options._useProFallback
         ? (process.env.GEMINI_PRO_MODEL || 'gemini-3-pro-preview')
@@ -10190,7 +10170,7 @@ async function fetchComprehensivePropsNarrative(homeTeam, awayTeam, sport, gameD
   try {
     const today = gameDate || new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
     
-    // POLICY: Always use Gemini 3 Flash, never Pro
+    // Flash for grounding searches (Pro as 429 fallback only)
     const modelName = 'gemini-3-flash-preview';
     
     const model = genAI.getGenerativeModel({
@@ -11066,7 +11046,7 @@ export function getPlayerPropMovement(movements, playerName, propType) {
  * @param {Array} recentAway - Recent games for away team (for L5 form)
  * @returns {string} Formatted Tale of the Tape table
  */
-export function buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayProfile, sport, injuries = {}, recentHome = [], recentAway = [], ncaabAdvancedMetrics = null) {
+export function buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayProfile, sport, injuries = {}, recentHome = [], recentAway = []) {
   const homeStats = homeProfile?.seasonStats || {};
   const awayStats = awayProfile?.seasonStats || {};
 
@@ -11172,31 +11152,7 @@ export function buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayPro
       const confRecord = formatStat(homeProfile?.conferenceRecord, awayProfile?.conferenceRecord, true);
       rows.push({ label: 'Conf Record', ...confRecord });
 
-      // Wire up Barttorvik AdjOE/AdjDE/Tempo — the components behind the composite rankings
-      if (ncaabAdvancedMetrics) {
-        const hd = ncaabAdvancedMetrics.home?.data;
-        const ad = ncaabAdvancedMetrics.away?.data;
-        const adjOE = formatStat(
-          hd?.adjOE != null ? String(hd.adjOE) : null,
-          ad?.adjOE != null ? String(ad.adjOE) : null,
-          true
-        );
-        const adjDE = formatStat(
-          hd?.adjDE != null ? String(hd.adjDE) : null,
-          ad?.adjDE != null ? String(ad.adjDE) : null,
-          false // Lower is better for defense
-        );
-        const tempo = formatStat(
-          hd?.tempo != null ? String(hd.tempo) : null,
-          ad?.tempo != null ? String(ad.tempo) : null,
-          true
-        );
-        rows.push(
-          { label: 'AdjOE', ...adjOE },
-          { label: 'AdjDE', ...adjDE },
-          { label: 'Tempo', ...tempo }
-        );
-      }
+      // Barttorvik AdjOE/AdjDE/Tempo moved to NCAAB_BARTTORVIK investigation token
     }
 
     rows.push(

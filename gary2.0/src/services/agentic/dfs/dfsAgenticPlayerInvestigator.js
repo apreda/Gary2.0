@@ -1,7 +1,7 @@
 /**
  * DFS Player Investigator
  *
- * Phase 4 of the Agentic DFS system.
+ * Phase 3 of the Agentic DFS system.
  * Gemini investigates player candidates for each position
  * that Gary needs to fill.
  *
@@ -14,6 +14,7 @@
  */
 
 import { DFS_PLAYER_INVESTIGATION_TOOLS, executeToolCall } from './tools/dfsToolDefinitions.js';
+import { getFlexPositions, getPositionCandidates, getRosterSlots, getStatDisplayLines } from './dfsSportConfig.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PLAYER INVESTIGATION SYSTEM PROMPT
@@ -27,20 +28,20 @@ Your job is to investigate player candidates for a specific position.
 
 <responsibilities>
 - For each candidate, use function calls to gather situation data
-- Investigate recent form (L5 games)
-- Investigate matchup data (DvP)
-- Check for usage opportunities (teammate injuries)
+- Investigate each candidate's recent production trends
+- Investigate how each candidate's matchup tonight may affect their range of outcomes
+- Investigate each candidate's current team context and role
 - Summarize your factual findings for each candidate
 </responsibilities>
 
 <investigation_checklist>
 For each player:
-1. Recent form — what does the L5 data show about production trends?
-2. Matchup — what does the opponent defense data show for their position?
-3. Team context — what does the injury report and current roster structure tell you?
-4. Salary vs production — does the salary match their recent output?
-5. Range of outcomes — what does the data suggest about this player's upside and downside?
-6. Risk factors — what does the data suggest could limit this player's production tonight?
+1. Recent form — what do the recent games tell you about this player's current production?
+2. Matchup — what does tonight's opponent context reveal about this player's situation?
+3. Team context — what does the current team situation tell you about this player's role?
+4. Salary context — what does the data tell you about this player at this price?
+5. Range of outcomes — what does the data suggest about this player's range of outcomes tonight?
+6. Risk factors — what does the data suggest could affect this player's production tonight?
 </investigation_checklist>
 
 <output_format>
@@ -82,12 +83,12 @@ Example:
  * Investigate player candidates for all positions
  *
  * @param {GoogleGenerativeAI} genAI - Gemini client
- * @param {Object} buildThesis - Gary's build thesis from Phase 3
+ * @param {Object} slateAnalysis - Slate analysis from Phase 2 (injuries, game environments)
  * @param {Object} context - DFS context with players, games, etc.
  * @param {Object} options - Model options
  * @returns {Object} - Investigation results by position
  */
-export async function investigatePlayersForPositions(genAI, buildThesis, context, options = {}) {
+export async function investigatePlayersForPositions(genAI, slateAnalysis, context, options = {}) {
   const { modelName = 'gemini-3-pro-preview' } = options;
   const { players, platform } = context;
 
@@ -95,17 +96,20 @@ export async function investigatePlayersForPositions(genAI, buildThesis, context
 
   const investigations = {};
 
-  // Get position requirements for the platform
-  const positionSlots = getPositionSlots(platform);
+  // Get position requirements for the platform + sport
+  const positionSlots = getRosterSlots(platform, context.sport);
 
   // Deduplicate positions — FanDuel has duplicate slots (PG, PG, SG, SG, etc.)
-  // but we only need to investigate each position once
-  const uniquePositions = [...new Set(positionSlots)];
+  // but we only need to investigate each position once.
+  // Also skip flex/composite slots whose candidates are strict subsets of
+  // the base positions (NBA: G/F/UTIL, NFL: FLEX, NHL: UTIL).
+  const flexPositions = getFlexPositions(context.sport);
+  const uniquePositions = [...new Set(positionSlots)].filter(p => !flexPositions.has(p));
 
   // Build investigation tasks, skipping positions with no candidates
   const tasks = [];
   for (const position of uniquePositions) {
-    const candidates = getPositionCandidates(players, position);
+    const candidates = getPositionCandidates(players, position, context.sport);
     if (candidates.length === 0) {
       console.warn(`[Player Investigator] No candidates found for ${position}`);
       investigations[position] = [];
@@ -126,7 +130,7 @@ export async function investigatePlayersForPositions(genAI, buildThesis, context
           genAI,
           position,
           candidates,
-          buildThesis,
+          slateAnalysis,
           context,
           { modelName }
         );
@@ -158,16 +162,15 @@ export async function investigatePlayersForPositions(genAI, buildThesis, context
  *  2. Top 2-3 by value ratio (projection per $1000 salary)
  *  3. Players from teams with injuries (Gary investigates impact)
  *  4. Hot recent form + low salary (hidden gems)
- *  5. Players from thesis target games not yet included
  */
-function selectSmartCandidates(candidates, buildThesis, position) {
+function selectSmartCandidates(candidates, slateAnalysis, position) {
   const MAX_CANDIDATES = 12;
   const selected = new Map(); // name -> player (dedup by name)
 
-  const addCandidate = (player, reason) => {
+  const addCandidate = (player) => {
     const key = player.name?.toLowerCase();
     if (key && !selected.has(key)) {
-      selected.set(key, { ...player, _selectionReason: reason });
+      selected.set(key, player);
     }
   };
 
@@ -178,7 +181,7 @@ function selectSmartCandidates(candidates, buildThesis, position) {
     return bProj - aProj;
   });
   for (const p of byProjection.slice(0, 6)) {
-    addCandidate(p, 'projection_ceiling');
+    addCandidate(p);
   }
 
   // Bucket 2: Top 3 by value ratio (DK FPTS per $1000 salary)
@@ -190,26 +193,28 @@ function selectSmartCandidates(candidates, buildThesis, position) {
     })
     .sort((a, b) => b._valueRatio - a._valueRatio);
   for (const p of withValue.slice(0, 3)) {
-    addCandidate(p, 'value_ratio');
+    addCandidate(p);
   }
 
   // Bucket 3: Players from teams with recent injuries (Gary investigates the impact)
-  if (buildThesis.injuryReport?.length > 0) {
-    for (const report of buildThesis.injuryReport) {
+  if (slateAnalysis.injuryReport?.length > 0) {
+    for (const report of slateAnalysis.injuryReport) {
       if (!report.team) continue;
       const hasInjury = report.outPlayers?.length > 0;
       if (!hasInjury) continue;
       const teamCandidates = candidates.filter(c => c.team === report.team);
       for (const tc of teamCandidates.slice(0, 2)) {
-        addCandidate(tc, 'team_with_injury');
+        addCandidate(tc);
       }
     }
   }
 
   // Bucket 4: Hot recent form + low salary (hidden gems) — use DK FPTS for form detection
-  const salaries = candidates.map(p => p.salary || 0).filter(s => s > 0);
+  const salaries = candidates.map(p => p.salary || 0).filter(s => s > 0).sort((a, b) => a - b);
   const medianSalary = salaries.length > 0
-    ? salaries.sort((a, b) => a - b)[Math.floor(salaries.length / 2)]
+    ? (salaries.length % 2 === 1
+        ? salaries[Math.floor(salaries.length / 2)]
+        : (salaries[salaries.length / 2 - 1] + salaries[salaries.length / 2]) / 2)
     : 5000;
 
   for (const p of candidates) {
@@ -219,32 +224,13 @@ function selectSmartCandidates(candidates, buildThesis, position) {
     const isHot = seasonFpts > 0 && l5Fpts > seasonFpts * 1.15;
     const isLowSalary = (p.salary || 0) <= medianSalary;
     if (isHot && isLowSalary) {
-      addCandidate(p, 'hot_form_low_salary');
-    }
-  }
-
-  // Bucket 5: Players from thesis target games not yet included
-  if (buildThesis.targetGames?.length > 0) {
-    for (const p of candidates) {
-      if (selected.size >= MAX_CANDIDATES) break;
-      const inTargetGame = buildThesis.targetGames.some(g =>
-        g.includes(p.team) || (p.opponent && g.includes(p.opponent))
-      );
-      if (inTargetGame) {
-        addCandidate(p, 'thesis_target_game');
-      }
+      addCandidate(p);
     }
   }
 
   const result = Array.from(selected.values()).slice(0, MAX_CANDIDATES);
 
-  // Log selection breakdown
-  const reasons = {};
-  for (const p of result) {
-    const r = p._selectionReason || 'unknown';
-    reasons[r] = (reasons[r] || 0) + 1;
-  }
-  console.log(`[Player Investigator] ${position}: Selected ${result.length} candidates — ${JSON.stringify(reasons)}`);
+  console.log(`[Player Investigator] ${position}: Selected ${result.length} candidates`);
 
   return result;
 }
@@ -253,14 +239,14 @@ function selectSmartCandidates(candidates, buildThesis, position) {
 // INVESTIGATE POSITION CANDIDATES
 // ═══════════════════════════════════════════════════════════════════════════════
 
-async function investigatePositionCandidates(genAI, position, candidates, buildThesis, context, options) {
+async function investigatePositionCandidates(genAI, position, candidates, slateAnalysis, context, options) {
   const { modelName } = options;
 
-  // Smart candidate selection: projection ceiling + value plays + thesis targets + hot form
-  const topCandidates = selectSmartCandidates(candidates, buildThesis, position);
+  // Smart candidate selection: projection ceiling + value plays + injury teams + hot form
+  const topCandidates = selectSmartCandidates(candidates, slateAnalysis, position);
 
   // Build investigation request
-  const investigationRequest = buildInvestigationRequest(position, topCandidates, buildThesis, context);
+  const investigationRequest = buildInvestigationRequest(position, topCandidates, slateAnalysis, context);
 
   // Create Pro model with function calling
   // Note: Can't use responseMimeType with function calling, so we enforce JSON in prompt
@@ -296,11 +282,20 @@ async function investigatePositionCandidates(genAI, position, candidates, buildT
       break; // Done investigating
     }
 
-    // Execute function calls
+    // Execute function calls with per-call timeout (15s)
     const functionResponses = [];
     for (const part of functionCalls) {
       const { name, args } = part.functionCall;
-      const result = await executeToolCall(name, args, context);
+      let result;
+      try {
+        result = await Promise.race([
+          executeToolCall(name, args, context),
+          new Promise((_, reject) => setTimeout(() => reject(new Error(`Tool ${name} timed out after 15s`)), 15000))
+        ]);
+      } catch (toolErr) {
+        console.warn(`[Player Investigator] Tool call failed: ${toolErr.message}`);
+        result = { error: toolErr.message };
+      }
       functionResponses.push({
         functionResponse: {
           name,
@@ -315,9 +310,9 @@ async function investigatePositionCandidates(genAI, position, candidates, buildT
   // Parse investigation results
   let finalText = response.response.text();
 
-  // If Flash ended its loop without producing text (spent all iterations on tool
+  // If Pro ended its loop without producing text (spent all iterations on tool
   // calls), nudge it to output the JSON array. Try twice — first nudge can also
-  // return empty if Flash is confused about the conversation state.
+  // return empty if Pro is confused about the conversation state.
   if (!finalText || !finalText.trim()) {
     console.log(`[Player Investigator] Flash ended without text for ${position} — nudging for JSON...`);
     response = await chat.sendMessage(
@@ -341,13 +336,29 @@ async function investigatePositionCandidates(genAI, position, candidates, buildT
 // BUILD INVESTIGATION REQUEST
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function buildInvestigationRequest(position, candidates, buildThesis, context) {
+function buildInvestigationRequest(position, candidates, slateAnalysis, context) {
+  // Format injury report from slate analysis
+  const injuryLines = (slateAnalysis.injuryReport || []).map(report => {
+    const outNames = (report.outPlayers || []).map(p => `${p.player} (${p.duration || '?'}, ${p.gamesMissed ?? '?'} games missed)`).join(', ');
+    const gtdNames = (report.gtdPlayers || []).join(', ');
+    const parts = [];
+    if (outNames) parts.push(`OUT: ${outNames}`);
+    if (gtdNames) parts.push(`GTD: ${gtdNames}`);
+    return parts.length > 0 ? `${report.team}: ${parts.join(' | ')}` : null;
+  }).filter(Boolean).join('\n');
+
+  // Format game environments from slate analysis
+  const gameLines = (slateAnalysis.gameEnvironments || []).map(g => {
+    return `${g.awayTeam} @ ${g.homeTeam}: O/U ${g.overUnder || '?'} | Spread ${g.spread || '?'} | Pace: H ${g.homePace || '?'} / A ${g.awayPace || '?'}`;
+  }).join('\n');
+
   return `
-## BUILD THESIS
-Thesis observations (starting points for investigation, not confirmed findings):
-${buildThesis.edges?.map(e => `${e.type}: ${e.description}`).join(' | ') || 'None identified'}
-Target Games: ${buildThesis.targetGames?.join(', ') || 'Balanced'}
-Thesis: ${buildThesis.thesis?.slice(0, 200) || 'No specific thesis'}
+## SLATE CONTEXT
+Injury Report:
+${injuryLines || 'No injury data from slate analysis'}
+
+Game Environments:
+${gameLines || 'No game environment data from slate analysis'}
 
 ## POSITION TO INVESTIGATE: ${position}
 
@@ -355,22 +366,22 @@ Thesis: ${buildThesis.thesis?.slice(0, 200) || 'No specific thesis'}
 ${candidates.map((p, i) => {
   let line = `${i + 1}. ${p.name} - $${p.salary} [${(p.positions || [p.position]).join('/')}]`;
   line += `\n   Team: ${p.team} vs ${p.opponent || 'TBD'}`;
-  line += `\n   Season: ${p.ppg?.toFixed(1) || '?'} PPG / ${p.rpg?.toFixed(1) || '?'} RPG / ${p.apg?.toFixed(1) || '?'} APG / ${p.mpg?.toFixed(1) || '?'} MPG`;
-  // DFS Fantasy Points (the metric that actually matters)
-  const dkFpts = p.seasonStats?.dkFpts || p.l5Stats?.dkFptsAvg || null;
-  const fdFpts = p.seasonStats?.fdFpts || p.l5Stats?.fdFptsAvg || null;
-  if (dkFpts || fdFpts) {
-    line += `\n   DFS FPTS: ${dkFpts ? `DK ${dkFpts.toFixed(1)}` : ''}${dkFpts && fdFpts ? ' / ' : ''}${fdFpts ? `FD ${fdFpts.toFixed(1)}` : ''}`;
-    if (p.salary > 0 && dkFpts) {
-      line += ` | Value: ${(dkFpts / (p.salary / 1000)).toFixed(2)} FPTS/$1K`;
-    }
+  line += `\n   ${getStatDisplayLines(p, context.sport)}`;
+  // DFS Fantasy Points — show only platform-appropriate scoring
+  const isFD = context.platform?.toLowerCase() === 'fanduel';
+  const platformFpts = isFD
+    ? (p.seasonStats?.fdFpts || p.l5Stats?.fdFptsAvg || null)
+    : (p.seasonStats?.dkFpts || p.l5Stats?.dkFptsAvg || null);
+  const platformLabel = isFD ? 'FD' : 'DK';
+  if (platformFpts) {
+    line += `\n   ${platformLabel} FPTS: ${platformFpts.toFixed(1)}`;
   }
-  // L5 FPTS trend (hot/cold)
-  if (p.l5Stats?.dkFptsAvg && dkFpts) {
-    const l5Dk = p.l5Stats.dkFptsAvg;
-    const diff = ((l5Dk - dkFpts) / dkFpts * 100).toFixed(0);
+  // L5 FPTS trend (hot/cold) — platform-appropriate
+  const l5Fpts = isFD ? p.l5Stats?.fdFptsAvg : p.l5Stats?.dkFptsAvg;
+  if (l5Fpts && platformFpts) {
+    const diff = ((l5Fpts - platformFpts) / platformFpts * 100).toFixed(0);
     if (Math.abs(diff) >= 10) {
-      line += `\n   L5 Trend: ${l5Dk.toFixed(1)} DK FPTS (${diff > 0 ? '+' : ''}${diff}% vs season)`;
+      line += `\n   L5 Trend: ${l5Fpts.toFixed(1)} ${platformLabel} FPTS (${diff > 0 ? '+' : ''}${diff}% vs season)`;
     }
   }
   // Advanced efficiency (from Tank01 roster enrichment)
@@ -388,9 +399,20 @@ ${candidates.map((p, i) => {
       line += `\n   Team Role: ${parts.join(' | ')}`;
     }
   }
-  // Matchup DvP context (from Tank01 team defense)
+  // Matchup DvP context with relative comparison (from Tank01 team defense)
   if (p.matchupDvP) {
-    line += `\n   Matchup DvP: Opponent allows ${p.matchupDvP.oppDvpPts?.toFixed(1) || '?'} PPG to ${p.matchupDvP.position}s`;
+    const dvpPts = p.matchupDvP.oppDvpPts;
+    // Compute slate-average DvP for this position from all candidates with DvP data
+    const allDvpPts = candidates
+      .map(c => c.matchupDvP?.oppDvpPts)
+      .filter(v => v != null);
+    const avgDvp = allDvpPts.length >= 2 ? allDvpPts.reduce((s, v) => s + v, 0) / allDvpPts.length : null;
+    let dvpStr = `Matchup DvP: Opponent allows ${dvpPts?.toFixed(1) || '?'} PPG to ${p.matchupDvP.position}s`;
+    if (dvpPts != null && avgDvp != null) {
+      const diff = dvpPts - avgDvp;
+      dvpStr += ` (slate avg: ${avgDvp.toFixed(1)}, ${diff > 0 ? '+' : ''}${diff.toFixed(1)})`;
+    }
+    line += `\n   ${dvpStr}`;
   }
   // Benchmark projection
   if (p.benchmarkProjection) {
@@ -411,19 +433,25 @@ ${candidates.map((p, i) => {
   if (p.isB2B) {
     line += `\n   Back-to-back: played yesterday`;
   }
-  // L5 fouls per game
-  if (p.l5Stats?.fpg >= 4.0) {
+  // L5 fouls per game (NBA only — no foul-out risk in NFL/NHL)
+  if ((context.sport || 'NBA').toUpperCase() === 'NBA' && p.l5Stats?.fpg >= 4.0) {
     line += `\n   L5 Fouls/Game: ${p.l5Stats.fpg}`;
   }
   // Ownership signals (raw data for Gary to reason about)
-  if (p.ownershipSignals) {
-    const sig = p.ownershipSignals;
-    let ownershipLine = `\n   Ownership Signals: Salary rank: ${sig.salaryRankAtPosition}`;
-    if (sig.recentFormVsSeason != null) {
-      ownershipLine += ` | L5/Season form: ${sig.recentFormVsSeason}x`;
+  if (p.ownershipSignals || p.projectedOwnership) {
+    let ownershipLine = '\n   Ownership Signals:';
+    if (p.projectedOwnership) {
+      ownershipLine += ` Projected Ownership: ${p.projectedOwnership}%`;
     }
-    if (sig.gamePopularity) {
-      ownershipLine += ` | Game: ${sig.gamePopularity}`;
+    if (p.ownershipSignals) {
+      const sig = p.ownershipSignals;
+      ownershipLine += ` | Salary rank: ${sig.salaryRankAtPosition}`;
+      if (sig.recentFormVsSeason != null) {
+        ownershipLine += ` | L5/Season form: ${sig.recentFormVsSeason}x`;
+      }
+      if (sig.gamePopularity) {
+        ownershipLine += ` | Game: ${sig.gamePopularity}`;
+      }
     }
     line += ownershipLine;
   }
@@ -434,25 +462,16 @@ ${candidates.map((p, i) => {
 ${formatTeamInjuriesForInvestigation(candidates, context)}
 
 ## YOUR TASK
-For EACH candidate, you MUST investigate:
-1. Call GET_PLAYER_GAME_LOGS to investigate recent production (L5 trends)
-2. Call GET_MATCHUP_DATA to evaluate the opponent matchup
-3. Call GET_TEAM_USAGE_STATS once per team to see the current roster structure
+Investigate EACH candidate using the tools available to you.
+For each player, gather the data you need to understand their current situation, recent production, and tonight's context.
 
-Do NOT skip players. Each candidate deserves at least a game log check and matchup assessment.
+Do NOT skip players. Each candidate deserves a thorough investigation.
 
-Focus especially on:
-- Players in the TARGET GAMES (${buildThesis.targetGames?.join(', ') || 'all'})
-- Players whose situations align with the thesis observations
-- Players whose recent production shows notable trends
-
-IMPORTANT: Even if a candidate is NOT in a target game, flag them if they have an exceptional
-situation (extreme salary discount vs recent production, hot streak + weak opponent).
-The thesis informs your focus but does NOT constrain your findings.
+Investigate each candidate on their own merits. Let the data tell you what's notable about each player's situation tonight.
 
 INJURY CONTEXT: The KNOWN TEAM INJURIES section shows who is OUT and for how many team games.
-Investigate the data and ask yourself: what does this team's roster look like right now?
-What does each player's recent production tell you about their current role and salary?
+Investigate the data and ask yourself: what does this team's current situation look like?
+What does each player's recent data tell you about their situation tonight?
 
 After investigating, OUTPUT YOUR FINDINGS AS A JSON ARRAY.
 IMPORTANT: Your final response MUST be ONLY a valid JSON array starting with [ and ending with ].
@@ -527,7 +546,9 @@ function parseInvestigationResults(text, candidates) {
         truncated = truncated.slice(0, lastBrace + 1) + ']';
         truncated = truncated.replace(/,\s*\]$/, ']');
         jsonStr = truncated;
-        console.warn('[Player Investigator] Recovered truncated JSON array');
+        // Log how many players were recovered vs expected
+        const recoveredCount = (jsonStr.match(/"player"\s*:/g) || []).length;
+        console.warn(`[Player Investigator] Recovered truncated JSON array — ~${recoveredCount} players recovered (${candidates.length} expected). Last player may have been dropped.`);
       }
     }
   }
@@ -611,47 +632,7 @@ function formatTeamInjuriesForInvestigation(candidates, context) {
   return lines.length > 0 ? lines.join('\n') : 'No OUT players on candidate teams.';
 }
 
-function getPositionSlots(platform) {
-  // DraftKings NBA classic roster
-  if (platform?.toLowerCase() === 'draftkings') {
-    return ['PG', 'SG', 'SF', 'PF', 'C', 'G', 'F', 'UTIL'];
-  }
-  // FanDuel NBA
-  if (platform?.toLowerCase() === 'fanduel') {
-    return ['PG', 'PG', 'SG', 'SG', 'SF', 'SF', 'PF', 'PF', 'C'];
-  }
-  // Default to DK-style
-  return ['PG', 'SG', 'SF', 'PF', 'C', 'G', 'F', 'UTIL'];
-}
-
-function getPositionCandidates(players, position) {
-  if (!players || players.length === 0) return [];
-
-  return players.filter(player => {
-    const playerPositions = player.positions || [player.position];
-
-    switch (position) {
-      case 'PG':
-        return playerPositions.includes('PG');
-      case 'SG':
-        return playerPositions.includes('SG');
-      case 'SF':
-        return playerPositions.includes('SF');
-      case 'PF':
-        return playerPositions.includes('PF');
-      case 'C':
-        return playerPositions.includes('C');
-      case 'G':
-        return playerPositions.includes('PG') || playerPositions.includes('SG');
-      case 'F':
-        return playerPositions.includes('SF') || playerPositions.includes('PF');
-      case 'UTIL':
-        return true; // Any player can fill UTIL
-      default:
-        return playerPositions.includes(position);
-    }
-  });
-}
+// Position helpers (getPositionSlots, getPositionCandidates) imported from dfsSportConfig.js
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // EXPORTS

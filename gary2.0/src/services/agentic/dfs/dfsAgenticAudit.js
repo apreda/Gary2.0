@@ -1,19 +1,22 @@
 /**
  * DFS Lineup Audit
  *
- * Phase 6 of the Agentic DFS system.
+ * Phase 5 of the Agentic DFS system.
  * Gary Pro reviews his own lineup before submission.
  *
  * This is Gary's SELF-CHECK:
- * - Does this lineup actually achieve the build thesis?
  * - Is the ceiling realistic or am I being optimistic?
  * - Am I missing an obvious edge?
  * - What's my conviction level?
+ * - Does this lineup have a realistic win condition?
  *
  * Gary can make adjustments here if he sees issues.
  *
  * FOLLOWS CLAUDE.md: Gary investigates, Gary decides, Gary audits.
  */
+
+import { isSlotEligible } from './dfsPositionUtils.js';
+import { getSalaryCap } from './dfsSportConfig.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // AUDIT SYSTEM PROMPT
@@ -26,30 +29,39 @@ You just built a lineup. Now AUDIT it with fresh eyes.
 </role>
 
 <audit_checklist>
-1. THESIS ALIGNMENT
-   - Does this lineup actually execute my build thesis?
-   - Are my target games properly represented?
-   - Did I follow through on usage situations I identified?
+1. CEILING CHECK
+   - What does the data show about this lineup's realistic ceiling?
+   - What specifically needs to happen for this lineup to reach the winning target?
+   - What does the data show about the outcome distribution for this lineup?
 
-2. CEILING CHECK
-   - Is the ceiling projection realistic?
-   - What specifically needs to happen for 380+ points?
-   - What is the realistic outcome distribution for this lineup? What does the data show about its ceiling and floor?
+2. CORRELATION CHECK
+   - How are your players connected? What story do your game correlations tell?
+   - Are the correlated situations you're relying on supported by tonight's game environments?
+   - What does the distribution of your players across games reveal about your lineup's structure?
 
-3. CORRELATION CHECK
-   - Do I have proper game stacks?
-   - Are correlated players actually in correlated situations?
-   - Did I accidentally spread too thin?
+3. VALUE CHECK
+   - How did you allocate your salary? What does the data show about the alternatives available?
+   - For each low-salary player, what specific data supports their upside thesis tonight?
+   - For each high-salary player, what does tonight's specific situation reveal about the salary allocation?
 
-4. VALUE CHECK
-   - Did I leave money on the table unnecessarily?
-   - What is the upside thesis for each of my low-salary plays? Does the data support it?
-   - For each high-salary player, does tonight's situation justify the salary investment?
+4. RISK ASSESSMENT
+   - What are the key risks to this lineup?
+   - How is risk distributed across this lineup? What happens if any one player busts?
+   - What does the floor scenario look like?
 
-5. RISK ASSESSMENT
-   - What's the biggest risk to this lineup?
-   - Is there a single point of failure?
-   - What's my floor scenario?
+5. WIN CONDITION — EVALUATE YOUR LINEUP
+   Ask yourself these questions and answer honestly:
+
+   - For EACH player in this lineup: What is the specific scenario where they boom tonight?
+     What specific data from your investigation supports that scenario?
+
+   - Which of those boom scenarios must co-occur for this lineup to reach the winning score?
+     How likely is it that they happen simultaneously? What does history show?
+
+   - What is the most likely way this lineup disappoints?
+     If that happens, what does the rest of your lineup's floor look like?
+
+   - What story does this lineup tell as a whole? How do the individual selections connect to a win condition?
 </audit_checklist>
 
 <adjustments>
@@ -62,11 +74,16 @@ If you see issues, you can make 1-2 swaps. Be specific:
 <output_format>
 {
   "auditNotes": {
-    "thesisAlignment": "How well does this execute the thesis?",
     "ceilingCheck": "Is the ceiling realistic?",
     "correlationCheck": "Are stacks properly built?",
     "valueCheck": "Did I allocate salary well?",
     "riskAssessment": "What could go wrong?"
+  },
+  "winConditionAnalysis": {
+    "boomScenarios": "For each player, what specific scenario makes them boom tonight",
+    "requiredCoOccurrences": "Which scenarios must hit simultaneously for this lineup to win",
+    "mostLikelyFailure": "How does this lineup most likely disappoint",
+    "coherenceCheck": "Does this lineup tell a coherent story"
   },
   "adjustments": [
     {
@@ -95,20 +112,20 @@ If you see issues, you can make 1-2 swaps. Be specific:
  * Gary Pro audits his own lineup
  *
  * @param {GoogleGenerativeAI} genAI - Gemini client
- * @param {Object} lineup - Gary's lineup from Phase 5
- * @param {Object} buildThesis - Gary's build thesis from Phase 3
+ * @param {Object} lineup - Gary's lineup from Phase 4
+ * @param {Object} slateAnalysis - Slate analysis from Phase 2 (injuries, game environments)
  * @param {Object} context - DFS context
  * @param {Object} options - Model options
  * @returns {Object} - Audited lineup (possibly with adjustments)
  */
-export async function auditLineupWithPro(genAI, lineup, buildThesis, context, options = {}) {
+export async function auditLineupWithPro(genAI, lineup, slateAnalysis, context, options = {}) {
   const { modelName = 'gemini-3-pro-preview' } = options;
-  const { players, winningTargets, platform } = context;
+  const { players, winningTargets, platform, sport } = context;
 
   console.log('[Lineup Audit] Gary Pro auditing lineup...');
 
   // Build audit request
-  const auditRequest = buildAuditRequest(lineup, buildThesis, context);
+  const auditRequest = buildAuditRequest(lineup, slateAnalysis, context);
 
   // Create Pro model for audit
   // Note: Not using responseMimeType: 'application/json' as it can cause empty responses
@@ -124,8 +141,15 @@ export async function auditLineupWithPro(genAI, lineup, buildThesis, context, op
     }
   });
 
-  const result = await model.generateContent(auditRequest);
-  const responseText = result.response.text() || '';
+  let responseText;
+  try {
+    const result = await model.generateContent(auditRequest);
+    responseText = result.response.text() || '';
+  } catch (firstErr) {
+    console.warn(`[Lineup Audit] First attempt failed (${firstErr.message}) — retrying once`);
+    const retryResult = await model.generateContent(auditRequest);
+    responseText = retryResult.response.text() || '';
+  }
   if (!responseText) {
     throw new Error('[Lineup Audit] Gemini Pro returned empty response — audit failed');
   }
@@ -134,12 +158,13 @@ export async function auditLineupWithPro(genAI, lineup, buildThesis, context, op
   const auditResult = parseAuditResult(responseText);
 
   // Apply any adjustments Gary made (pass platform for correct salary cap)
-  const finalLineup = applyAdjustments(lineup, auditResult.adjustments, players, platform);
+  const finalLineup = applyAdjustments(lineup, auditResult.adjustments, players, platform, sport);
 
   // Merge audit data into lineup
   const auditedLineup = {
     ...finalLineup,
     auditNotes: auditResult.auditNotes || {},
+    winConditionAnalysis: auditResult.winConditionAnalysis || {},
     adjustments: auditResult.adjustments || [],
     ceilingScenario: auditResult.finalCeilingScenario || finalLineup.ceilingScenario,
     garyNotes: auditResult.garyFinalThoughts || finalLineup.garyNotes,
@@ -159,8 +184,8 @@ export async function auditLineupWithPro(genAI, lineup, buildThesis, context, op
 // BUILD AUDIT REQUEST
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function buildAuditRequest(lineup, buildThesis, context) {
-  const { winningTargets, players } = context;
+function buildAuditRequest(lineup, slateAnalysis, context) {
+  const { winningTargets, players, platform, playerInvestigations, sport } = context;
 
   // Format current lineup
   const lineupStr = formatLineupForAudit(lineup);
@@ -168,11 +193,30 @@ function buildAuditRequest(lineup, buildThesis, context) {
   // Get available alternates by position
   const alternatesStr = formatAlternatesByPosition(lineup, players);
 
+  // Format top game environments by O/U from slate analysis
+  const topGames = (slateAnalysis.gameEnvironments || [])
+    .sort((a, b) => (b.overUnder || 0) - (a.overUnder || 0))
+    .map(g => `${g.awayTeam} @ ${g.homeTeam}: O/U ${g.overUnder || '?'} | Spread ${g.spread || '?'}`)
+    .join('\n');
+
+  // Format injury context from slate analysis
+  const injuryLines = (slateAnalysis.injuryReport || []).map(report => {
+    const outNames = (report.outPlayers || []).map(p => `${p.player} (${p.duration || '?'})`).join(', ');
+    return outNames ? `${report.team}: ${outNames}` : null;
+  }).filter(Boolean).join('\n');
+
+  // Format investigation summaries for key alternates (D1: gives audit phase data-backed swap context)
+  const investigationSummary = formatInvestigationSummaryForAudit(playerInvestigations, lineup);
+
+  const salaryCap = getSalaryCap(platform, sport);
+
   return `
-## YOUR BUILD THESIS
-Thesis: ${buildThesis.thesis}
-Target Games: ${buildThesis.targetGames?.join(', ') || 'Balanced'}
-Win Condition: ${buildThesis.winCondition || 'Outscore the field'}
+## SLATE CONTEXT
+Injury Report:
+${injuryLines || 'No injury data'}
+
+Key Game Environments:
+${topGames || 'No game environment data'}
 
 ## WINNING TARGETS
 - To WIN: ${winningTargets.toWin} pts
@@ -183,27 +227,57 @@ Win Condition: ${buildThesis.winCondition || 'Outscore the field'}
 ${lineupStr}
 
 Total Salary: $${lineup.totalSalary?.toLocaleString()}
+Remaining Salary: $${(salaryCap - (lineup.totalSalary || 0)).toLocaleString()}
 Projected: ${lineup.projectedPoints} pts
 Ceiling: ${lineup.ceilingProjection} pts
 Floor: ${lineup.floorProjection} pts
-
+${formatOwnershipSummary(lineup)}
 Ceiling Scenario: ${lineup.ceilingScenario || 'Not specified'}
+
+## INVESTIGATION FINDINGS (from Phase 3)
+${investigationSummary}
 
 ## AVAILABLE ALTERNATES (if you want to swap)
 ${alternatesStr}
 
 ## YOUR TASK
-1. Audit each checkpoint (thesis, ceiling, correlation, value, risk)
-2. Make 0-2 swaps if you see clear improvements
-3. Provide final thoughts
+1. Audit each checkpoint (ceiling, correlation, value, risk)
+2. Use the investigation findings above to evaluate whether any alternates are stronger fits
+3. Make 0-2 swaps if you see clear improvements backed by investigation data
+4. Provide final thoughts
 
 Output your audit as JSON.
 `;
 }
 
+function formatInvestigationSummaryForAudit(investigations, lineup) {
+  if (!investigations || Object.keys(investigations).length === 0) {
+    return 'No investigation data available';
+  }
+
+  const lineupNames = new Set((lineup.players || []).map(p => p.name?.toLowerCase()));
+  const lines = [];
+
+  for (const [position, players] of Object.entries(investigations)) {
+    const summaries = (players || [])
+      .filter(p => !lineupNames.has(p.player?.toLowerCase())) // Only non-lineup players (alternates)
+      .slice(0, 3) // Top 3 alternates per position
+      .map(p => {
+        const findings = p.investigation?.keyFindings || p.investigation?.recentForm || 'No findings';
+        return `  ${p.player} ($${p.salary || '?'}, ${p.team}): ${typeof findings === 'string' ? findings.slice(0, 120) : 'Investigated'}`;
+      });
+
+    if (summaries.length > 0) {
+      lines.push(`${position}:\n${summaries.join('\n')}`);
+    }
+  }
+
+  return lines.length > 0 ? lines.join('\n\n') : 'No alternate investigation data available';
+}
+
 function formatLineupForAudit(lineup) {
   if (!lineup.players || lineup.players.length === 0) {
-    return 'No players in lineup - something went wrong in Phase 5';
+    return 'No players in lineup - something went wrong in Phase 4';
   }
 
   return lineup.players.map((p, i) => {
@@ -214,46 +288,73 @@ function formatLineupForAudit(lineup) {
   }).join('\n\n');
 }
 
+function formatOwnershipSummary(lineup) {
+  const ownerships = (lineup.players || [])
+    .map(p => p.projectedOwnership)
+    .filter(o => o != null && o > 0);
+  if (ownerships.length === 0) return '';
+  const total = ownerships.reduce((sum, o) => sum + o, 0);
+  const avg = (total / ownerships.length).toFixed(1);
+  const high = ownerships.filter(o => o >= 20).length;
+  const low = ownerships.filter(o => o < 5).length;
+  return `Aggregate Ownership: ${total.toFixed(1)}% total | ${avg}% avg | ${high} players 20%+ | ${low} players under 5%\n`;
+}
+
 function formatAlternatesByPosition(lineup, players) {
   const lineupNames = new Set(lineup.players?.map(p => p.name?.toLowerCase()) || []);
+  const lineupTeams = new Set(lineup.players?.map(p => p.team) || []);
   const alternates = {};
 
-  // Group remaining players by position
+  // Group remaining players by ALL eligible positions (not just first)
   for (const player of players) {
     if (lineupNames.has(player.name?.toLowerCase())) continue;
 
-    const pos = player.positions?.[0] || player.position || 'UTIL';
-    if (!alternates[pos]) alternates[pos] = [];
-
-    alternates[pos].push({
+    const positions = player.positions || [player.position || 'UTIL'];
+    const altData = {
       name: player.name,
       salary: player.salary,
       team: player.team,
       projected: player.projected_pts || player.benchmarkProjection || player.ppg || 0,
       dkFpts: player.seasonStats?.dkFpts || player.l5Stats?.dkFptsAvg || null,
       l5Ppg: player.l5Stats?.ppg || 0,
-      seasonPpg: player.ppg || player.seasonStats?.ppg || 0
-    });
+      seasonPpg: player.ppg || player.seasonStats?.ppg || 0,
+      // Game context: mark players from teams already in lineup (bring-back candidates)
+      inLineupGame: lineupTeams.has(player.team)
+    };
+
+    for (const pos of positions) {
+      if (!alternates[pos]) alternates[pos] = [];
+      alternates[pos].push(altData);
+    }
   }
 
-  // Select top 5 alternates per position using multiple signals (not just projection)
+  // Select top 7 alternates per position — show game context
   const lines = [];
   for (const [pos, alts] of Object.entries(alternates)) {
-    // Score each alternate by: projection + value ratio + recent form boost
-    const scored = alts.map(a => {
+    // De-duplicate by name (player listed under multiple positions)
+    const seen = new Set();
+    const uniqueAlts = alts.filter(a => {
+      if (seen.has(a.name)) return false;
+      seen.add(a.name);
+      return true;
+    });
+
+    const scored = uniqueAlts.map(a => {
       const proj = a.projected || 0;
       const valueRatio = a.salary > 0 ? (proj / (a.salary / 1000)) : 0;
       const formBoost = a.l5Ppg > a.seasonPpg * 1.15 ? 5 : 0;
-      return { ...a, _score: proj + valueRatio * 2 + formBoost };
+      const gameBoost = a.inLineupGame ? 3 : 0; // Surface bring-back candidates
+      return { ...a, _score: proj + valueRatio * 2 + formBoost + gameBoost };
     });
     const topAlts = scored
       .sort((a, b) => b._score - a._score)
-      .slice(0, 5);
+      .slice(0, 7);
 
     if (topAlts.length > 0) {
       lines.push(`${pos}: ${topAlts.map(a => {
         const fpts = a.dkFpts ? ` | ${a.dkFpts.toFixed(1)} DK FPTS` : '';
-        return `${a.name} ($${a.salary}${fpts})`;
+        const gameTag = a.inLineupGame ? ' [same game]' : '';
+        return `${a.name} ($${a.salary}, ${a.team}${fpts}${gameTag})`;
       }).join(', ')}`);
     }
   }
@@ -265,23 +366,35 @@ function formatAlternatesByPosition(lineup, players) {
 // PARSE AUDIT RESULT
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function parseAuditResult(text) {
-  // Try to extract JSON from response - handle various formats
-  let jsonStr = null;
+/**
+ * Extract first top-level JSON object using bracket-depth tracking.
+ */
+function extractJsonObject(text) {
+  const start = text.indexOf('{');
+  if (start === -1) return null;
 
-  // Try 1: Direct JSON object
-  let jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (jsonMatch) {
-    jsonStr = jsonMatch[0];
-  }
+  let depth = 0;
+  let inString = false;
+  let escape = false;
 
-  // Try 2: JSON in code block
-  if (!jsonStr) {
-    const codeBlockMatch = text.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
-    if (codeBlockMatch) {
-      jsonStr = codeBlockMatch[1];
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (escape) { escape = false; continue; }
+    if (ch === '\\' && inString) { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === '{') depth++;
+    if (ch === '}') {
+      depth--;
+      if (depth === 0) return text.slice(start, i + 1);
     }
   }
+  return null;
+}
+
+function parseAuditResult(text) {
+  // Extract JSON using bracket-depth tracking (safe for mixed text + JSON)
+  let jsonStr = extractJsonObject(text);
 
   if (!jsonStr) {
     throw new Error('[Lineup Audit] Could not extract JSON from response. Raw: ' + text.slice(0, 300));
@@ -291,21 +404,26 @@ function parseAuditResult(text) {
   try {
     parsed = JSON.parse(jsonStr);
   } catch (e) {
-    // Try to fix common JSON issues
+    // Try to fix common JSON issues — trailing commas only (NOT apostrophe replacement)
     try {
-      // Remove trailing commas, fix quotes
       const fixedJson = jsonStr
         .replace(/,\s*}/g, '}')
-        .replace(/,\s*]/g, ']')
-        .replace(/'/g, '"');
+        .replace(/,\s*]/g, ']');
       parsed = JSON.parse(fixedJson);
     } catch (e2) {
       throw new Error('[Lineup Audit] JSON parse failed: ' + e2.message + '. Raw: ' + jsonStr.slice(0, 300));
     }
   }
 
+  // Log win condition self-assessment if Gary flagged concerns
+  const winCondition = parsed.winConditionAnalysis || parsed.win_condition_analysis || {};
+  if (winCondition.mostLikelyFailure) {
+    console.log(`[Lineup Audit] Win condition — most likely failure: ${winCondition.mostLikelyFailure.slice(0, 150)}`);
+  }
+
   return {
     auditNotes: parsed.auditNotes || parsed.audit_notes || {},
+    winConditionAnalysis: winCondition,
     adjustments: parsed.adjustments || [],
     finalCeilingScenario: parsed.finalCeilingScenario || parsed.ceiling_scenario || '',
     garyFinalThoughts: parsed.garyFinalThoughts || parsed.gary_notes || parsed.notes || ''
@@ -316,14 +434,14 @@ function parseAuditResult(text) {
 // APPLY ADJUSTMENTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function applyAdjustments(lineup, adjustments, players, contextPlatform) {
+function applyAdjustments(lineup, adjustments, players, contextPlatform, sport) {
   if (!adjustments || adjustments.length === 0) {
     return { ...lineup, _successfulSwaps: 0 };
   }
 
   const updatedPlayers = [...(lineup.players || [])];
   const platform = contextPlatform || lineup.platform || 'draftkings';
-  const salaryCap = platform.toLowerCase() === 'fanduel' ? 60000 : 50000;
+  const salaryCap = getSalaryCap(platform, sport);
   let successfulSwaps = 0;
 
   for (const adj of adjustments) {
@@ -349,12 +467,18 @@ function applyAdjustments(lineup, adjustments, players, contextPlatform) {
       continue;
     }
 
+    // Duplicate check — don't swap in a player already in the lineup
+    if (updatedPlayers.some(p => p.name?.toLowerCase() === inPlayer.name?.toLowerCase())) {
+      console.warn(`[Lineup Audit] ${inPlayer.name} already in lineup — skipping swap`);
+      continue;
+    }
+
     const outPlayer = updatedPlayers[outIndex];
     const slot = outPlayer.position;
 
     // Validate position eligibility for the slot
     const inPositions = inPlayer.positions || [inPlayer.position];
-    if (!isSlotEligible(slot, inPositions)) {
+    if (!isSlotEligible(slot, inPositions, sport)) {
       console.warn(`[Lineup Audit] ${inPlayer.name} not eligible for ${slot} (has ${inPositions.join('/')}) — skipping swap`);
       continue;
     }
@@ -367,14 +491,15 @@ function applyAdjustments(lineup, adjustments, players, contextPlatform) {
       continue;
     }
 
-    // Make the swap
+    // Make the swap — propagate id so downstream phases can look up the player
     updatedPlayers[outIndex] = {
+      id: inPlayer.id,
       position: slot,
       positions: inPositions,
       name: inPlayer.name,
       team: inPlayer.team,
       salary: inPlayer.salary,
-      projectedPoints: inPlayer.projected_pts,
+      projectedPoints: inPlayer.benchmarkProjection || inPlayer.seasonStats?.dkFpts || inPlayer.l5Stats?.dkFptsAvg || 0,
       ceilingProjection: inPlayer.ceilingProjection || outPlayer.ceilingProjection,
       reasoning: reason || `Swapped in during audit (was ${outName})`
     };
@@ -400,16 +525,7 @@ function applyAdjustments(lineup, adjustments, players, contextPlatform) {
   };
 }
 
-// Position eligibility check (same logic as lineup decider)
-function isSlotEligible(slot, playerPositions) {
-  if (!slot || !playerPositions || playerPositions.length === 0) return true;
-  const s = slot.toUpperCase();
-  const poss = playerPositions.map(p => p.toUpperCase());
-  if (s === 'UTIL') return true;
-  if (s === 'G') return poss.some(p => p === 'PG' || p === 'SG');
-  if (s === 'F') return poss.some(p => p === 'SF' || p === 'PF');
-  return poss.includes(s);
-}
+// isSlotEligible imported from dfsPositionUtils.js
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // BUILD PER-PLAYER REASONING

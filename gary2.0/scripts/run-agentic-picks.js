@@ -47,7 +47,7 @@ const SPORT_CONFIG = {
   nba: { key: 'basketball_nba', name: 'NBA', emoji: '🏀', useToday: true }, // Today's games (EST)
   nfl: { key: 'americanfootball_nfl', name: 'NFL', emoji: '🏈', daysAhead: 7 }, // NFL is weekly
   nhl: { key: 'icehockey_nhl', name: 'NHL', emoji: '🏒', isBeta: true, useToday: true }, // Today's games (EST)
-  ncaab: { key: 'basketball_ncaab', name: 'NCAAB', emoji: '🏀', minStats: 6, useToday: true }, // Today's games (EST) — scout report provides 14 categories, stat fetches are supplementary
+  ncaab: { key: 'basketball_ncaab', name: 'NCAAB', emoji: '🏀', minStats: 3, useToday: true }, // Today's games (EST) — scout report pre-loads 14 categories (Barttorvik, Four Factors, splits, L5, roster, injuries, rankings), stat fetches are supplementary deep-dives
   ncaaf: { key: 'americanfootball_ncaaf', name: 'NCAAF', emoji: '🏈', fbsOnly: true, useToday: true } // Today's games (EST)
 };
 
@@ -126,6 +126,8 @@ const useTestTable = args.includes('--test');
 const testName = getArgValue('--test-name');
 // --limit flag to limit number of games to analyze (useful for testing)
 const gameLimit = parseInt(getArgValue('--limit'), 10) || null;
+// --offset flag to skip N games before applying limit (for parallel terminals)
+const gameOffset = parseInt(getArgValue('--offset'), 10) || 0;
 // --time flag to filter games by start time in EST (e.g., "12" for 12pm, "12,1" for 12pm and 1pm)
 const timeFilter = getArgValue('--time');
 
@@ -698,10 +700,12 @@ async function main() {
 
       // Apply max games limit if specified (for NCAAB which can have 70+ games)
       // --limit flag overrides config.maxGames for testing
+      // --offset flag skips N games before applying limit (for parallel terminals)
       const MAX_GAMES = gameLimit || config.maxGames || 100;
-      const limitedGames = games.slice(0, MAX_GAMES);
+      const limitedGames = games.slice(gameOffset, gameOffset + MAX_GAMES);
 
-      const limitNote = gameLimit ? ` (--limit ${gameLimit})` : (games.length > MAX_GAMES ? ` (limited to ${MAX_GAMES})` : '');
+      const offsetNote = gameOffset ? ` --offset ${gameOffset}` : '';
+      const limitNote = gameLimit ? ` (--limit ${gameLimit}${offsetNote})` : (games.length > MAX_GAMES ? ` (limited to ${MAX_GAMES})` : '');
       console.log(`[${config.name}] Found ${allGames?.length || 0} total games, ${games.length} ${timeLabel}${limitNote}`);
 
       // Replace games with limited version

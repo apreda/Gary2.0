@@ -20,6 +20,7 @@ import https from 'https';
 // Cache: full dataset fetched once, reused for every game
 // ═══════════════════════════════════════════════════════════════
 let _cache = null;           // { data: Map<normalizedName, teamObj>, ts: number, year: number }
+let _fetchPromise = null;    // Mutex: prevents duplicate parallel fetches
 const CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours
 
 // ═══════════════════════════════════════════════════════════════
@@ -162,7 +163,18 @@ async function fetchAllTeams(year) {
   if (_cache && _cache.year === year && (now - _cache.ts) < CACHE_TTL) {
     return _cache.data;
   }
+  // Mutex: if a fetch for this year is already in flight, await it
+  if (_fetchPromise) return _fetchPromise;
 
+  _fetchPromise = _fetchAllTeamsInner(year);
+  try {
+    return await _fetchPromise;
+  } finally {
+    _fetchPromise = null;
+  }
+}
+
+async function _fetchAllTeamsInner(year) {
   const url = `https://barttorvik.com/${year}_team_results.json`;
   console.log(`[Barttorvik] Fetching all teams from ${url}...`);
 
@@ -225,7 +237,7 @@ async function fetchAllTeams(year) {
 
   console.log(`[Barttorvik] Cached ${teamMap.size} team entries (${teams.length} teams) for ${year}`);
 
-  _cache = { data: teamMap, ts: now, year };
+  _cache = { data: teamMap, ts: Date.now(), year };
   return teamMap;
 }
 

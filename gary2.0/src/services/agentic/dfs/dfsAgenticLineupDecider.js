@@ -1,14 +1,14 @@
 /**
  * DFS Lineup Decider
  *
- * Phase 5 of the Agentic DFS system.
+ * Phase 4 of the Agentic DFS system.
  * Gary Pro (Gemini Pro with HIGH thinking) makes the actual lineup decisions.
  *
  * This is WHERE GARY DECIDES. Not formulas. Not rules. Gary.
  *
  * Gary has:
- * - His build thesis (strategy for the slate)
- * - Player investigations (form, matchup, usage data)
+ * - Slate analysis (injuries, game environments from Phase 2)
+ * - Player investigations (form, matchup, usage data from Phase 3)
  * - Winning score targets (from FIBLE)
  * - Full salary awareness
  *
@@ -18,20 +18,26 @@
  */
 
 import { getDFSConstitution } from './constitution/dfsAgenticConstitution.js';
+import { isSlotEligible } from './dfsPositionUtils.js';
+import { getSalaryCap, getRosterSlots } from './dfsSportConfig.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LINEUP DECISION SYSTEM PROMPT
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const LINEUP_DECISION_PROMPT = `
+function getLineupDecisionPrompt(platform, sport) {
+  const salaryCap = getSalaryCap(platform, sport);
+  const rosterSlots = getRosterSlots(platform, sport);
+  const platformName = (platform || 'draftkings').toLowerCase() === 'fanduel' ? 'FanDuel' : 'DraftKings';
+  const sportName = (sport || 'NBA').toUpperCase();
+  return `
 <role>
 You are Gary - an elite DFS player making your lineup decisions.
-You've investigated the slate. You have your thesis. Now BUILD THE LINEUP.
+You've investigated the slate. Now BUILD THE LINEUP.
 </role>
 
 <salary_cap_rules>
-- DraftKings NBA: $50,000 cap, 8 players (PG, SG, SF, PF, C, G, F, UTIL)
-- FanDuel NBA: $60,000 cap, 9 players (PG, PG, SG, SG, SF, SF, PF, PF, C)
+- ${platformName} ${sportName}: $${salaryCap.toLocaleString()} cap, ${rosterSlots.length} players (${rosterSlots.join(', ')})
 - You MUST fill every roster slot
 - You MUST stay under the salary cap
 - Remaining salary ($1 over cap = invalid lineup)
@@ -51,24 +57,26 @@ Investigate for each decision:
 <decision_framework>
 For EACH position, investigate:
 1. What does each candidate's range of outcomes look like for THIS slate?
-2. How does each candidate connect to your thesis and the rest of your lineup?
+2. How does each candidate connect to the rest of your lineup?
 3. What does the relationship between salary, situation, and upside tell you about each candidate?
 </decision_framework>
 
 <punt_awareness>
 "Punts" ($4K-$5.5K) are a DFS reality — salary constraints mean you'll likely need 1-2.
 Ask: For each low-salary player you consider, what does their recent production, role, and game environment tell you about their upside?
-Ask: Is there a genuine ceiling path for this player, or is this just a cheap price with no thesis?
+Ask: What does the data show about this low-salary player's upside path tonight?
 </punt_awareness>
 
 <ownership_awareness>
-Some candidates include raw ownership signals: salary rank at position, L5/season form ratio, and game popularity rank.
+If ownership projections are available, investigate:
+- Ask: What does the projected ownership tell you about how the field is constructing lineups?
+- Ask: What does the relationship between each player's situation tonight and their projected ownership tell you?
+- Ask: What does the ownership distribution across your lineup tell you about how it compares to the likely field?
+
+Some candidates also include proxy signals: salary rank at position, L5/season form ratio, and game popularity rank.
 These are raw data for YOUR assessment of likely field exposure.
 
-Ask: What do the salary rank and form signals suggest about which players the field is gravitating toward?
-Ask: How many of your core plays overlap with what the field is likely building? What does that mean for your differentiation?
-
-This is awareness, not a rule. Ask: "Am I building the FIELD'S lineup, or MY lineup?"
+This is awareness for your investigation, not a rule.
 </ownership_awareness>
 
 <output_format>
@@ -96,10 +104,14 @@ Provide your lineup as JSON:
 
 <constraints>
 - DO NOT just pick the highest projected player at each position
-- DO NOT force punts if no real edge exists
+- DO NOT use low-salary players without investigating their upside thesis
 - DO NOT exceed the salary cap
 </constraints>
 `;
+}
+
+// Shared constant for the rest of the prompt (objective through constraints)
+// The dynamic part (salary_cap_rules) is injected by getLineupDecisionPrompt
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN DECISION FUNCTION
@@ -109,25 +121,25 @@ Provide your lineup as JSON:
  * Gary Pro makes the lineup decision
  *
  * @param {GoogleGenerativeAI} genAI - Gemini client
- * @param {Object} buildThesis - Gary's build thesis from Phase 3
- * @param {Object} playerInvestigations - Investigation results from Phase 4
+ * @param {Object} slateAnalysis - Slate analysis from Phase 2 (injuries, game environments)
+ * @param {Object} playerInvestigations - Investigation results from Phase 3
  * @param {Object} context - DFS context with players, games, salary cap
  * @param {Object} options - Model options
  * @returns {Object} - Gary's lineup decision
  */
-export async function decideLineupWithPro(genAI, buildThesis, playerInvestigations, context, options = {}) {
+export async function decideLineupWithPro(genAI, slateAnalysis, playerInvestigations, context, options = {}) {
   const { modelName = 'gemini-3-pro-preview', thinkingLevel = 'high' } = options;
   const { players, platform, contestType, winningTargets } = context;
 
   console.log('[Lineup Decider] Gary Pro deciding lineup with high thinking...');
 
-  // Get salary cap for platform
-  const salaryCap = getSalaryCap(platform);
-  const rosterSlots = getRosterSlots(platform);
+  // Get salary cap and roster slots for platform + sport
+  const salaryCap = getSalaryCap(platform, context.sport);
+  const rosterSlots = getRosterSlots(platform, context.sport);
 
   // Build decision request
   const decisionRequest = buildDecisionRequest(
-    buildThesis,
+    slateAnalysis,
     playerInvestigations,
     context,
     salaryCap,
@@ -137,7 +149,7 @@ export async function decideLineupWithPro(genAI, buildThesis, playerInvestigatio
   // Create Pro model with extended thinking for deep reasoning
   const model = genAI.getGenerativeModel({
     model: modelName,
-    systemInstruction: LINEUP_DECISION_PROMPT + '\n\n' + getDFSConstitution(context.sport, contestType),
+    systemInstruction: getLineupDecisionPrompt(platform, context.sport) + '\n\n' + getDFSConstitution(context.sport, contestType),
     generationConfig: {
       temperature: 1.0, // Gemini: Keep at 1.0
       maxOutputTokens: 16384
@@ -148,6 +160,9 @@ export async function decideLineupWithPro(genAI, buildThesis, playerInvestigatio
     }
   });
 
+  // Use chat session so corrections retain full context (player pool, investigation data)
+  const chat = model.startChat({ history: [] });
+
   // Retry logic for intermittent empty responses from Gemini Pro
   const MAX_RETRIES = 3;
   let responseText = '';
@@ -155,15 +170,13 @@ export async function decideLineupWithPro(genAI, buildThesis, playerInvestigatio
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const result = await model.generateContent(decisionRequest);
+      const result = await chat.sendMessage(decisionRequest);
       responseText = result.response.text() || '';
 
       if (responseText) {
-        // Got a response, break out of retry loop
         break;
       }
 
-      // Empty response - log details and retry
       console.warn(`[Lineup Decider] Attempt ${attempt}/${MAX_RETRIES}: Gemini Pro returned empty response`);
       const candidate = result.response.candidates?.[0];
       if (candidate?.finishReason) {
@@ -190,25 +203,30 @@ export async function decideLineupWithPro(genAI, buildThesis, playerInvestigatio
   }
 
   // Parse Gary's lineup decision — with self-correction loop for structural issues
+  // Corrections use the SAME chat session so Gemini retains the full player pool context
   let lineup;
   let correctionAttempts = 0;
   const MAX_CORRECTIONS = 2;
 
   while (correctionAttempts <= MAX_CORRECTIONS) {
     try {
-      lineup = parseLineupDecision(responseText, players, salaryCap, rosterSlots);
+      lineup = parseLineupDecision(responseText, players, salaryCap, rosterSlots, context.sport);
 
       // Check for structural issues that need correction
-      const issues = getStructuralIssues(lineup, players, salaryCap, rosterSlots);
+      const issues = getStructuralIssues(lineup, players, salaryCap, rosterSlots, context.sport);
       if (issues.length === 0) break; // Clean lineup, we're done
 
       if (correctionAttempts >= MAX_CORRECTIONS) {
+        const hallucinated = issues.filter(i => i.startsWith('Players not on slate'));
+        if (hallucinated.length > 0) {
+          throw new Error(`[Lineup Decider] FAILED: Gemini Pro keeps hallucinating players not on the slate after ${MAX_CORRECTIONS} corrections. ${hallucinated.join('; ')}`);
+        }
         console.warn(`[Lineup Decider] Structural issues remain after ${MAX_CORRECTIONS} corrections:`, issues);
         lineup.validationIssues = issues;
         break;
       }
 
-      // Send back for correction
+      // Send correction via the SAME chat session (retains player pool context)
       correctionAttempts++;
       console.log(`[Lineup Decider] Correction attempt ${correctionAttempts}/${MAX_CORRECTIONS}: ${issues.join('; ')}`);
 
@@ -217,13 +235,13 @@ ${issues.map((iss, i) => `${i + 1}. ${iss}`).join('\n')}
 
 RULES:
 - You MUST select exactly ${rosterSlots.length} players for slots: ${rosterSlots.join(', ')}
-- All players MUST be from the slate player pool — do NOT invent players or use players from other games
+- All players MUST be from the slate player pool provided above — do NOT invent players
 - You MUST use players from at least 2 different teams
 - Stay under $${salaryCap.toLocaleString()} salary cap
 
 Fix the lineup and output the corrected JSON.`;
 
-      const correctionResult = await model.generateContent(correctionPrompt);
+      const correctionResult = await chat.sendMessage(correctionPrompt);
       responseText = correctionResult.response.text() || '';
 
       if (!responseText) {
@@ -232,71 +250,22 @@ Fix the lineup and output the corrected JSON.`;
       }
     } catch (parseError) {
       if (correctionAttempts >= MAX_CORRECTIONS) {
-        throw parseError; // Give up after max corrections
+        throw parseError;
       }
       correctionAttempts++;
       console.log(`[Lineup Decider] Parse error, correction attempt ${correctionAttempts}: ${parseError.message}`);
 
       const fixPrompt = `Your lineup response had an error: ${parseError.message}
 
-Build a complete ${rosterSlots.length}-player lineup for slots: ${rosterSlots.join(', ')}
+Build a complete ${rosterSlots.length}-player lineup using ONLY players from the slate provided above.
 Stay under $${salaryCap.toLocaleString()}. Output ONLY the JSON object.`;
 
-      const fixResult = await model.generateContent(fixPrompt);
+      const fixResult = await chat.sendMessage(fixPrompt);
       responseText = fixResult.response.text() || '';
 
       if (!responseText) {
-        throw parseError; // Can't recover
+        throw parseError;
       }
-    }
-  }
-
-  // ── Salary Optimization Pass ──
-  // If Gary left $1000+ on the table, ask him to reconsider his cheapest player
-  const remainingSalary = salaryCap - (lineup.totalSalary || 0);
-  if (remainingSalary >= 1000 && lineup.players?.length > 0) {
-    console.log(`[Lineup Decider] Salary optimization: $${remainingSalary} remaining — reviewing cheapest player`);
-
-    // Find the cheapest player in the lineup
-    const cheapest = [...lineup.players].sort((a, b) => (a.salary || 0) - (b.salary || 0))[0];
-    const budgetForSlot = (cheapest.salary || 0) + remainingSalary;
-
-    const salaryOptPrompt = `You have $${remainingSalary.toLocaleString()} unused salary in your lineup.
-
-Your cheapest player: ${cheapest.name} ($${cheapest.salary?.toLocaleString()}) at ${cheapest.position}
-
-You could spend up to $${budgetForSlot.toLocaleString()} on that slot.
-
-Review whether upgrading from ${cheapest.name} improves your lineup. Investigate:
-- What does the data show about available players in that salary range for this slot?
-- What is your thesis for ${cheapest.name} — does the data support their inclusion?
-- How would an upgrade at this slot affect your lineup's overall construction?
-
-If you find a better option, output the FULL updated lineup JSON (all ${rosterSlots.length} players).
-If ${cheapest.name} is the right play, respond with: "KEEP LINEUP"`;
-
-    try {
-      const optResult = await model.generateContent(salaryOptPrompt);
-      const optText = optResult.response.text() || '';
-
-      if (optText && !optText.toUpperCase().includes('KEEP LINEUP')) {
-        // Try to parse an upgraded lineup
-        const optLineup = parseLineupDecision(optText, players, salaryCap, rosterSlots);
-        const optIssues = getStructuralIssues(optLineup, players, salaryCap, rosterSlots);
-
-        if (optIssues.length === 0 && optLineup.totalSalary > lineup.totalSalary) {
-          console.log(`[Lineup Decider] Salary optimization accepted: $${lineup.totalSalary} → $${optLineup.totalSalary}`);
-          lineup = optLineup;
-        } else if (optIssues.length > 0) {
-          console.log(`[Lineup Decider] Salary optimization rejected — structural issues: ${optIssues.join('; ')}`);
-        } else {
-          console.log(`[Lineup Decider] Salary optimization rejected — didn't use more salary`);
-        }
-      } else {
-        console.log(`[Lineup Decider] Salary optimization: Gary kept original lineup`);
-      }
-    } catch (optError) {
-      console.warn(`[Lineup Decider] Salary optimization failed (keeping original): ${optError.message}`);
     }
   }
 
@@ -316,53 +285,99 @@ If ${cheapest.name} is the right play, respond with: "KEEP LINEUP"`;
 // BUILD DECISION REQUEST
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function buildDecisionRequest(buildThesis, playerInvestigations, context, salaryCap, rosterSlots) {
+function buildDecisionRequest(slateAnalysis, playerInvestigations, context, salaryCap, rosterSlots) {
   const { winningTargets, players } = context;
 
   // Format player investigations by position
-  const investigationsStr = formatInvestigationsByPosition(playerInvestigations);
+  const investigationsStr = formatInvestigationsByPosition(playerInvestigations, context.platform);
 
-  // Get high-value targets based on thesis
-  const thesisTargets = formatThesisTargets(buildThesis, players);
+  // Format game-level view (reorganize investigations by game matchup for stacking awareness)
+  const gameLevelView = formatInvestigationsByGame(playerInvestigations, slateAnalysis);
+
+  // Format injury context from slate analysis
+  const injuryLines = (slateAnalysis.injuryReport || []).map(report => {
+    const outNames = (report.outPlayers || []).map(p => `${p.player} (${p.duration || '?'}, ${p.gamesMissed ?? '?'} games missed)`).join(', ');
+    return outNames ? `${report.team}: ${outNames}` : null;
+  }).filter(Boolean).join('\n');
+
+  // Format game environments from slate analysis + team defense data from context
+  const gameDefenseMap = new Map();
+  for (const game of (context.games || [])) {
+    const key = `${game.visitor_team}@${game.home_team}`;
+    gameDefenseMap.set(key, game);
+  }
+
+  const gameLines = (slateAnalysis.gameEnvironments || []).map(g => {
+    let line = `${g.awayTeam} @ ${g.homeTeam}: O/U ${g.overUnder || '?'} | Spread ${g.spread || '?'}`;
+    // Surface team defense data if available from context
+    const gameData = gameDefenseMap.get(`${g.awayTeam}@${g.homeTeam}`);
+    if (gameData) {
+      const hd = gameData.home_defense;
+      const ad = gameData.away_defense;
+      if (hd) line += `\n  ${g.homeTeam} DEF: ${hd.opp_pts?.toFixed(1) || '?'} PPG allowed, ${hd.opp_efg_pct ? hd.opp_efg_pct.toFixed(1) + '% eFG allowed' : ''}, Pace ${hd.pace?.toFixed(1) || '?'}`;
+      if (ad) line += `\n  ${g.awayTeam} DEF: ${ad.opp_pts?.toFixed(1) || '?'} PPG allowed, ${ad.opp_efg_pct ? ad.opp_efg_pct.toFixed(1) + '% eFG allowed' : ''}, Pace ${ad.pace?.toFixed(1) || '?'}`;
+    }
+    return line;
+  }).join('\n');
+
+  // Position scarcity: count investigated candidates per position
+  const positionDepth = Object.entries(playerInvestigations)
+    .map(([pos, candidates]) => `${pos}: ${candidates?.length || 0} candidates`)
+    .join(' | ');
+
+  // Ownership awareness
+  const ownershipNote = slateAnalysis.ownershipMissing
+    ? '\nNote: Projected ownership data is UNAVAILABLE for this slate. Investigate: What does the salary and situation landscape tell you about where the field is likely concentrating?\n'
+    : '';
+
+  // Slate size awareness
+  const slateNote = context.slateSize
+    ? `\nSlate Size: ${context.slateSize} games (${context.slateLabel}). Ask: What does the slate size tell you about how concentrated your construction should be?\n`
+    : '';
+
+  // Cash game framing
+  const isCash = winningTargets.isCash;
+  const objectiveStr = isCash
+    ? `You're building to CASH (beat ~50% of the field). Target: ${winningTargets.toCash}+ pts with stable floor.`
+    : `You're building to WIN, not just cash. Target: ${winningTargets.toWin}+ pts`;
 
   return `
-## YOUR BUILD THESIS
-Edges: ${buildThesis.edges?.map(e => `${e.type}: ${e.description} (${e.confidence || 'MEDIUM'})`).join('\n- ') || 'None identified'}
-Thesis: ${buildThesis.thesis}
-Target Games: ${buildThesis.targetGames?.join(', ') || 'Balanced'}
-Win Condition: ${buildThesis.winCondition || 'Outscore the field with ceiling plays'}
+## SLATE FINDINGS
+Injury Report:
+${injuryLines || 'No injury data'}
 
-## WINNING TARGETS (This is what you're playing for)
-- To WIN this GPP: ${winningTargets.toWin} pts
+Game Environments:
+${gameLines || 'No game environment data'}
+${slateNote}${ownershipNote}
+## WINNING TARGETS
+- To WIN: ${winningTargets.toWin} pts
 - Top 1%: ${winningTargets.top1Percent} pts
 - Cash Line: ${winningTargets.toCash} pts
 
-You're building to WIN, not just cash. Target: ${winningTargets.toWin}+ pts
+${objectiveStr}
 
 ## SALARY CAP
 Cap: $${salaryCap.toLocaleString()}
 Roster: ${rosterSlots.join(', ')}
 
-## PLAYER INVESTIGATIONS (Your research)
+## POSITION DEPTH
+${positionDepth}
+
+## GAME-LEVEL VIEW (Stacking & Bring-back Opportunities)
+${gameLevelView}
+
+## PLAYER INVESTIGATIONS BY POSITION
 ${investigationsStr}
 
-## PLAYERS THAT FIT YOUR THESIS
-${thesisTargets}
-
 ## YOUR TASK
-Build your lineup. For each position:
-1. Review the investigated candidates
-2. Consider who fits your thesis
-3. Make your decision with conviction
+Build your lineup. Consider:
+1. Which game(s) do you want to concentrate roster spots in? What does the game-level view tell you about stacking opportunities?
+2. For each stack, investigate both sides of the game — what does a bring-back from the opposing team do to your exposure?
+3. For each position, review the investigated candidates and make your decision with conviction
+4. Ask: How much salary are you leaving on the table? If more than $500, investigate whether upgrading any position improves your ceiling.
 
-Consider:
-- Your target is ${winningTargets.toWin}+ pts to WIN this GPP
-- Stay under $${salaryCap.toLocaleString()} total
-- Your thesis is your STARTING FRAMEWORK, not a constraint. If the player investigation
-  revealed better opportunities outside your thesis targets, adjust. The best lineup wins,
-  not the most thesis-consistent lineup.
-- Your per-player reasoning should be based on the player's ACTUAL RECENT PRODUCTION, matchup, and
-  game environment tonight. Cite the data from your investigation.
+- Your per-player reasoning should cite specific data from your investigation.
+- Stay under $${salaryCap.toLocaleString()} total.
 
 Output your lineup as JSON.
 `;
@@ -372,7 +387,55 @@ Output your lineup as JSON.
 // FORMAT HELPERS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function formatInvestigationsByPosition(investigations) {
+function formatInvestigationsByGame(investigations, slateAnalysis) {
+  // Reorganize investigated players by game matchup for stacking awareness
+  const playersByTeam = {};
+  for (const [position, players] of Object.entries(investigations)) {
+    for (const p of (players || [])) {
+      const team = p.team || 'UNK';
+      if (!playersByTeam[team]) playersByTeam[team] = [];
+      playersByTeam[team].push({ ...p, investigatedPosition: position });
+    }
+  }
+
+  // Match teams to game environments
+  const games = slateAnalysis.gameEnvironments || [];
+  const lines = [];
+
+  for (const g of games) {
+    const home = g.homeTeam || '';
+    const away = g.awayTeam || '';
+    const homePlayers = playersByTeam[home] || [];
+    const awayPlayers = playersByTeam[away] || [];
+    if (homePlayers.length === 0 && awayPlayers.length === 0) continue;
+
+    lines.push(`\n### ${away} @ ${home} — O/U ${g.overUnder || '?'} | Spread ${g.spread || '?'}`);
+    if (awayPlayers.length > 0) {
+      lines.push(`  ${away}: ${awayPlayers.map(p => `${p.player} [${p.investigatedPosition}] $${p.salary || '?'}`).join(', ')}`);
+    }
+    if (homePlayers.length > 0) {
+      lines.push(`  ${home}: ${homePlayers.map(p => `${p.player} [${p.investigatedPosition}] $${p.salary || '?'}`).join(', ')}`);
+    }
+    const totalInGame = homePlayers.length + awayPlayers.length;
+    if (totalInGame >= 3) {
+      lines.push(`  → ${totalInGame} investigated players in this game — potential stacking opportunity`);
+    }
+  }
+
+  // Players from teams not matched to a game environment
+  const matchedTeams = new Set(games.flatMap(g => [g.homeTeam, g.awayTeam].filter(Boolean)));
+  const unmatchedTeams = Object.keys(playersByTeam).filter(t => !matchedTeams.has(t));
+  for (const team of unmatchedTeams) {
+    const tp = playersByTeam[team];
+    if (tp.length > 0) {
+      lines.push(`\n### ${team} (game env not matched): ${tp.map(p => `${p.player} [${p.investigatedPosition}]`).join(', ')}`);
+    }
+  }
+
+  return lines.length > 0 ? lines.join('\n') : 'No game-level data available';
+}
+
+function formatInvestigationsByPosition(investigations, platform) {
   const lines = [];
 
   for (const [position, players] of Object.entries(investigations)) {
@@ -390,8 +453,11 @@ function formatInvestigationsByPosition(investigations) {
       const rangeOfOutcomes = p.investigation?.rangeOfOutcomes || null;
       const riskFactors = p.investigation?.riskFactors || null;
       const salary = p.salary ? `$${p.salary}` : '$?';
-      const dkFpts = p.rawData?.seasonStats?.dkFpts || p.rawData?.l5Stats?.dkFptsAvg;
-      const fptsStr = dkFpts ? ` | DK FPTS: ${dkFpts.toFixed(1)}` : '';
+      const isFD = platform?.toLowerCase() === 'fanduel';
+      const fpts = isFD
+        ? (p.rawData?.seasonStats?.fdFpts || p.rawData?.l5Stats?.fdFptsAvg)
+        : (p.rawData?.seasonStats?.dkFpts || p.rawData?.l5Stats?.dkFptsAvg);
+      const fptsStr = fpts ? ` | ${isFD ? 'FD' : 'DK'} FPTS: ${fpts.toFixed(1)}` : '';
 
       lines.push(`
 ${p.player} - ${salary} (${p.team} vs ${p.opponent || 'TBD'})${fptsStr}
@@ -406,71 +472,83 @@ ${p.player} - ${salary} (${p.team} vs ${p.opponent || 'TBD'})${fptsStr}
   return lines.join('\n');
 }
 
-function formatThesisTargets(buildThesis, players) {
-  const lines = [];
+// ═══════════════════════════════════════════════════════════════════════════════
+// JSON EXTRACTION (bracket-depth tracking — safe for mixed text + JSON)
+// ═══════════════════════════════════════════════════════════════════════════════
 
-  // Players from target games
-  if (buildThesis.targetGames?.length > 0) {
-    const targetGamePlayers = players.filter(p => {
-      const matchup = `${p.team}@${p.opponent}`;
-      const matchupAlt = `${p.opponent}@${p.team}`;
-      return buildThesis.targetGames.some(g =>
-        g.includes(p.team) || matchup.includes(g) || matchupAlt.includes(g)
-      );
-    });
+function extractJsonObject(text) {
+  const start = text.indexOf('{');
+  if (start === -1) return null;
 
-    if (targetGamePlayers.length > 0) {
-      lines.push('### Players in Target Games');
-      for (const p of targetGamePlayers.slice(0, 15)) {
-        lines.push(`- ${p.name} ($${p.salary}) - ${p.team} - ${p.positions?.join('/') || p.position}`);
-      }
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (escape) { escape = false; continue; }
+    if (ch === '\\' && inString) { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === '{') depth++;
+    if (ch === '}') {
+      depth--;
+      if (depth === 0) return text.slice(start, i + 1);
     }
   }
-
-  // Injury context from thesis
-  if (buildThesis.injuryReport?.length > 0) {
-    lines.push('\n### Injury Context');
-    for (const report of buildThesis.injuryReport) {
-      const outNames = (report.outPlayers || []).map(p => `${p.player} (${p.duration || 'unknown'}, ${p.gamesMissed ?? '?'} games missed)`).join(', ');
-      if (outNames) lines.push(`- ${report.team}: ${outNames}`);
-    }
-  }
-
-  return lines.join('\n') || 'No specific thesis targets - evaluate all candidates';
+  return null; // Truncated — opening { never closed
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PARSE LINEUP DECISION
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function parseLineupDecision(text, players, salaryCap, rosterSlots) {
+function parseLineupDecision(text, players, salaryCap, rosterSlots, sport) {
   // NO FALLBACKS: Gary MUST produce a valid lineup or we fail
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) {
+  const jsonStr = extractJsonObject(text);
+  if (!jsonStr) {
     throw new Error('[Lineup Decider] Gary Pro did not produce JSON lineup. Raw response: ' + text.slice(0, 500));
   }
 
   let parsed;
   try {
-    parsed = JSON.parse(jsonMatch[0]);
+    parsed = JSON.parse(jsonStr);
   } catch (e) {
-    // Attempt truncated JSON recovery — Gemini Pro may exceed output tokens
+    // Attempt truncated JSON recovery — find the last complete player object
     console.warn(`[Lineup Decider] JSON parse failed: ${e.message} — attempting truncation recovery`);
-    let truncated = jsonMatch[0];
-    // Find the last complete player object (ends with })
-    const lastBrace = truncated.lastIndexOf('}');
-    if (lastBrace > 0) {
-      // Close the players array and root object
-      truncated = truncated.slice(0, lastBrace + 1) + ']}';
-      truncated = truncated.replace(/,\s*\]/, ']'); // Remove trailing comma before ]
-      try {
-        parsed = JSON.parse(truncated);
-        console.warn(`[Lineup Decider] ✓ Recovered truncated JSON — got ${parsed.players?.length || 0} players`);
-      } catch (e2) {
-        throw new Error('[Lineup Decider] Gary Pro produced invalid JSON: ' + e.message + '. Raw: ' + jsonMatch[0].slice(0, 500));
+    const playersIdx = jsonStr.indexOf('"players"');
+    const arrayStart = playersIdx >= 0 ? jsonStr.indexOf('[', playersIdx) : -1;
+    if (arrayStart > 0) {
+      // Find the last complete player object within the players array
+      let lastComplete = -1;
+      let depth = 0;
+      let inStr = false;
+      let esc = false;
+      for (let i = arrayStart; i < jsonStr.length; i++) {
+        const ch = jsonStr[i];
+        if (esc) { esc = false; continue; }
+        if (ch === '\\' && inStr) { esc = true; continue; }
+        if (ch === '"') { inStr = !inStr; continue; }
+        if (inStr) continue;
+        if (ch === '{') depth++;
+        if (ch === '}') {
+          depth--;
+          if (depth === 0) lastComplete = i; // Track last complete object at depth 0 inside array
+        }
+      }
+      if (lastComplete > arrayStart) {
+        const truncated = jsonStr.slice(0, arrayStart) + jsonStr.slice(arrayStart, lastComplete + 1) + ']}';
+        try {
+          parsed = JSON.parse(truncated);
+          console.warn(`[Lineup Decider] ✓ Recovered truncated JSON — got ${parsed.players?.length || 0} players`);
+        } catch (e2) {
+          throw new Error('[Lineup Decider] Gary Pro produced invalid JSON: ' + e.message + '. Raw: ' + jsonStr.slice(0, 500));
+        }
+      } else {
+        throw new Error('[Lineup Decider] Gary Pro produced invalid JSON: ' + e.message + '. Raw: ' + jsonStr.slice(0, 500));
       }
     } else {
-      throw new Error('[Lineup Decider] Gary Pro produced invalid JSON: ' + e.message + '. Raw: ' + jsonMatch[0].slice(0, 500));
+      throw new Error('[Lineup Decider] Gary Pro produced invalid JSON: ' + e.message + '. Raw: ' + jsonStr.slice(0, 500));
     }
   }
 
@@ -478,50 +556,78 @@ function parseLineupDecision(text, players, salaryCap, rosterSlots) {
     throw new Error('[Lineup Decider] Gary Pro did not select any players. Response: ' + JSON.stringify(parsed).slice(0, 500));
   }
 
-  // Enrich with full player data
-  const enrichedPlayers = parsed.players.map(p => {
+  // Enrich with full player data — REJECT any player not found in the slate pool
+  const enrichedPlayers = [];
+  const rejectedPlayers = [];
+
+  for (const p of parsed.players) {
+    // Guard: skip entries without a name
+    if (!p.name) {
+      rejectedPlayers.push('(unnamed player)');
+      continue;
+    }
+
+    const pNameLower = p.name.toLowerCase();
+
     // Find player by exact name match first
     let fullPlayer = players.find(fp =>
-      fp.name?.toLowerCase() === p.name?.toLowerCase()
+      fp.name?.toLowerCase() === pNameLower
     );
 
-    // Fallback to fuzzy match if not found
+    // Fallback to fuzzy match — require unambiguous (exactly 1 match)
     if (!fullPlayer) {
-      fullPlayer = players.find(fp =>
-        fp.name?.toLowerCase().includes(p.name?.toLowerCase()) ||
-        p.name?.toLowerCase().includes(fp.name?.toLowerCase())
-      );
-    }
-
-    if (!fullPlayer) {
-      console.warn(`[Lineup Decider] ⚠️ Player "${p.name}" not found in slate - using Gemini's data (may have wrong team/position)`);
-    } else {
-      if (fullPlayer.team !== p.team) {
-        console.log(`[Lineup Decider] ✓ Fixed team for ${p.name}: ${p.team} → ${fullPlayer.team}`);
-      }
-      // Validate Gemini's slot assignment against real DK/FD position eligibility
-      const realPositions = fullPlayer.positions || [fullPlayer.position];
-      const assignedSlot = (p.position || '').toUpperCase();
-      const isEligible = isSlotEligible(assignedSlot, realPositions);
-      if (!isEligible) {
-        console.warn(`[Lineup Decider] ⚠️ ${p.name} assigned to ${assignedSlot} but eligible for ${realPositions.join('/')} — fixing to ${realPositions[0]}`);
+      const fuzzyMatches = players.filter(fp => {
+        const fpLower = fp.name?.toLowerCase() || '';
+        return fpLower.includes(pNameLower) || pNameLower.includes(fpLower);
+      });
+      if (fuzzyMatches.length === 1) {
+        fullPlayer = fuzzyMatches[0];
+      } else if (fuzzyMatches.length > 1 && p.team) {
+        // Disambiguate by team if multiple fuzzy matches
+        const teamMatch = fuzzyMatches.find(fp => fp.team === p.team);
+        if (teamMatch) fullPlayer = teamMatch;
       }
     }
 
-    // ALWAYS prefer fullPlayer data over Gemini's output to prevent hallucinations
-    const realPositions = fullPlayer?.positions || [fullPlayer?.position || p.position];
+    if (!fullPlayer) {
+      // Player NOT on slate — REJECT completely. Do not use Gemini's hallucinated data.
+      console.warn(`[Lineup Decider] REJECTED "${p.name}" — not found in slate player pool`);
+      rejectedPlayers.push(p.name);
+      continue;
+    }
+
+    if (fullPlayer.team !== p.team) {
+      console.log(`[Lineup Decider] ✓ Fixed team for ${p.name}: ${p.team} → ${fullPlayer.team}`);
+    }
+    // Validate Gemini's slot assignment against real DK/FD position eligibility
+    const realPositions = fullPlayer.positions || [fullPlayer.position];
     const assignedSlot = (p.position || '').toUpperCase();
-    return {
+    const isEligible = isSlotEligible(assignedSlot, realPositions, sport);
+    if (!isEligible) {
+      console.warn(`[Lineup Decider] ⚠️ ${p.name} assigned to ${assignedSlot} but eligible for ${realPositions.join('/')} — fixing to ${realPositions[0]}`);
+    }
+
+    // Use ONLY real slate data — never Gemini's hallucinated values
+    // Projection fallback: benchmarkProjection (Tank01) > seasonStats FPTS (BDL) > Gemini's number
+    const realProjection = fullPlayer.benchmarkProjection
+      || fullPlayer.seasonStats?.dkFpts
+      || fullPlayer.l5Stats?.dkFptsAvg
+      || p.projectedPoints;
+    enrichedPlayers.push({
       ...p,
-      id: fullPlayer?.id || p.id,
-      team: fullPlayer?.team || p.team,
-      // Override position with real data — use Gemini's slot ONLY if player is actually eligible
-      position: isSlotEligible(assignedSlot, realPositions) ? assignedSlot : realPositions[0],
+      id: fullPlayer.id,
+      team: fullPlayer.team,
+      position: isEligible ? assignedSlot : realPositions[0],
       positions: realPositions,
-      projected_pts: fullPlayer?.projected_pts || p.projectedPoints,
-      salary: fullPlayer?.salary || p.salary
-    };
-  });
+      projectedPoints: realProjection,
+      benchmarkProjection: fullPlayer.benchmarkProjection || null,
+      salary: fullPlayer.salary
+    });
+  }
+
+  if (rejectedPlayers.length > 0) {
+    console.warn(`[Lineup Decider] Rejected ${rejectedPlayers.length} hallucinated players: ${rejectedPlayers.join(', ')}`);
+  }
 
   // Calculate totals (player count validation moved to getStructuralIssues for self-correction)
   const totalSalary = enrichedPlayers.reduce((sum, p) => sum + (p.salary || 0), 0);
@@ -548,26 +654,13 @@ function parseLineupDecision(text, players, salaryCap, rosterSlots) {
 // POSITION ELIGIBILITY CHECK
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/**
- * Check if a player is eligible for a given DK/FD roster slot.
- * DK slots: PG, SG, SF, PF, C, G (PG/SG), F (SF/PF), UTIL (any)
- * FD slots: PG, SG, SF, PF, C (no flex slots)
- */
-function isSlotEligible(slot, playerPositions) {
-  if (!slot || !playerPositions || playerPositions.length === 0) return true;
-  const s = slot.toUpperCase();
-  const poss = playerPositions.map(p => p.toUpperCase());
-  if (s === 'UTIL') return true;
-  if (s === 'G') return poss.some(p => p === 'PG' || p === 'SG');
-  if (s === 'F') return poss.some(p => p === 'SF' || p === 'PF');
-  return poss.includes(s);
-}
+// isSlotEligible imported from dfsPositionUtils.js
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // STRUCTURAL ISSUE DETECTION (triggers self-correction loop)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function getStructuralIssues(lineup, players, salaryCap, rosterSlots) {
+function getStructuralIssues(lineup, players, salaryCap, rosterSlots, sport) {
   const issues = [];
 
   // Wrong player count
@@ -605,6 +698,25 @@ function getStructuralIssues(lineup, players, salaryCap, rosterSlots) {
     issues.push(`Duplicate players: ${[...new Set(dupes)].join(', ')}`);
   }
 
+  // Slot distribution validation — check that each roster slot is filled exactly once
+  if (lineup.players?.length === rosterSlots.length) {
+    const requiredSlotCounts = {};
+    for (const slot of rosterSlots) {
+      requiredSlotCounts[slot] = (requiredSlotCounts[slot] || 0) + 1;
+    }
+    const assignedSlotCounts = {};
+    for (const p of lineup.players) {
+      const slot = (p.position || '').toUpperCase();
+      assignedSlotCounts[slot] = (assignedSlotCounts[slot] || 0) + 1;
+    }
+    for (const [slot, required] of Object.entries(requiredSlotCounts)) {
+      const assigned = assignedSlotCounts[slot] || 0;
+      if (assigned !== required) {
+        issues.push(`Slot ${slot}: need ${required} but got ${assigned}`);
+      }
+    }
+  }
+
   return issues;
 }
 
@@ -635,8 +747,25 @@ function validateLineup(lineup, salaryCap, rosterSlots) {
   // Check position eligibility
   for (const player of lineup.players || []) {
     const positions = player.positions || [player.position];
-    if (!isSlotEligible(player.position, positions)) {
+    if (!isSlotEligible(player.position, positions, sport)) {
       issues.push(`${player.name} assigned to ${player.position} but eligible for ${positions.join('/')}`);
+    }
+  }
+
+  // Check slot distribution matches roster template
+  const requiredSlotCounts = {};
+  for (const slot of rosterSlots) {
+    requiredSlotCounts[slot] = (requiredSlotCounts[slot] || 0) + 1;
+  }
+  const assignedSlotCounts = {};
+  for (const p of lineup.players || []) {
+    const slot = (p.position || '').toUpperCase();
+    assignedSlotCounts[slot] = (assignedSlotCounts[slot] || 0) + 1;
+  }
+  for (const [slot, required] of Object.entries(requiredSlotCounts)) {
+    const assigned = assignedSlotCounts[slot] || 0;
+    if (assigned !== required) {
+      issues.push(`Slot distribution: ${slot} needs ${required} but has ${assigned}`);
     }
   }
 
@@ -646,23 +775,7 @@ function validateLineup(lineup, salaryCap, rosterSlots) {
   };
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// PLATFORM HELPERS
-// ═══════════════════════════════════════════════════════════════════════════════
-
-function getSalaryCap(platform) {
-  if (platform?.toLowerCase() === 'fanduel') {
-    return 60000; // FanDuel NBA
-  }
-  return 50000; // DraftKings NBA
-}
-
-function getRosterSlots(platform) {
-  if (platform?.toLowerCase() === 'fanduel') {
-    return ['PG', 'PG', 'SG', 'SG', 'SF', 'SF', 'PF', 'PF', 'C'];
-  }
-  return ['PG', 'SG', 'SF', 'PF', 'C', 'G', 'F', 'UTIL'];
-}
+// Platform helpers (getSalaryCap, getRosterSlots) imported from dfsSportConfig.js
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // EXPORTS

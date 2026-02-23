@@ -12,7 +12,8 @@ import { nbaSeason, nhlSeason, nflSeason } from '../../utils/dateUtils.js';
 import { getConstitution as getConstitutionWithBaseRules } from './constitution/index.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
-// PROPS MODEL POLICY — All sports use Gemini 3 Flash (quota management)
+// PROPS MODEL POLICY — All sports use Gemini 3 Flash + HIGH reasoning
+// (Main game picks use 3.1 Pro; props use Flash for quota management)
 // ═══════════════════════════════════════════════════════════════════════════
 const PROPS_MODEL_FLASH = GEMINI_FLASH_MODEL;
 
@@ -1759,7 +1760,7 @@ async function runPropsIterationLoop({ systemPrompt, userMessage, sportKey, spor
 
   // ═══════════════════════════════════════════════════════════════════
   // 4-PASS PIPELINE (mirrors game picks: agenticOrchestrator.js)
-  //   Pass 1: Investigation (Flash, low-thinking) — tool calls for player stats
+  //   Pass 1: Investigation (Flash + high reasoning) — tool calls for player stats
   //   Pass 2: Bilateral Cases (text only) — OVER/UNDER for each candidate
   //   Pass 2.5: Evaluation (text only) — stress test cases, decide which 2
   //   Pass 3: Finalize — call finalize_props with 2 picks

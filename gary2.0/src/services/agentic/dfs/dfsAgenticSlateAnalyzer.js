@@ -3,13 +3,12 @@
  *
  * Phase 2 of the Agentic DFS system.
  * Gemini investigates the slate using function calls to BDL/RotoWire
- * to identify:
- * - Usage vacuums (injury-created opportunity)
- * - Price lag candidates (underpriced based on situation)
- * - Stack targets (best games to correlate)
+ * to investigate:
+ * - Injury status and team context
  * - Game environments (pace, O/U, spreads)
+ * - Roster structure for teams with absences
  *
- * This gives Gary the INVESTIGATED DATA he needs to form his thesis.
+ * This gives Gary the INVESTIGATED DATA he needs for lineup construction.
  */
 
 import { DFS_SLATE_ANALYSIS_TOOLS, executeToolCall } from './tools/dfsToolDefinitions.js';
@@ -33,8 +32,8 @@ Your job is to INVESTIGATE the slate and surface FACTUAL findings for Gary to ev
 
 <investigation_priorities>
 1. Check injury status for ALL teams — note duration tags (RECENT, ESTABLISHED, LONG-TERM)
-2. For teams with injuries, call GET_TEAM_USAGE_STATS to see how the active roster is structured
-3. Check game environments — O/U, spreads, pace matchups
+2. For teams with notable absences, investigate the current roster structure
+3. Investigate each game's environment data
 4. Document what you find — do NOT interpret what it means for lineups
 </investigation_priorities>
 
@@ -164,15 +163,27 @@ export async function analyzeSlateWithFlash(genAI, context, options = {}) {
   if (!finalText || !finalText.trim()) {
     console.log('[Slate Analyzer] Flash ended without text — nudging for JSON summary...');
     response = await chat.sendMessage(
-      'Your investigation is complete. Now produce your JSON summary with injuryReport, gameProfiles, and gameEnvironments based on everything you found.'
+      'Your investigation is complete. Do NOT make any more function calls. Now produce your JSON summary with injuryReport, gameProfiles, and gameEnvironments based on everything you found.'
     );
+    // If nudge triggered more function calls instead of text, execute them ONLY if
+    // we haven't already exhausted the iteration budget (prevents infinite loops)
+    const nudgeCalls = response.response.candidates?.[0]?.content?.parts?.filter(p => p.functionCall) || [];
+    if (nudgeCalls.length > 0 && iterations < maxIterations) {
+      iterations++;
+      const nudgeResponses = [];
+      for (const part of nudgeCalls) {
+        const result = await executeToolCall(part.functionCall.name, part.functionCall.args, context);
+        nudgeResponses.push({ functionResponse: { name: part.functionCall.name, response: result } });
+      }
+      response = await chat.sendMessage(nudgeResponses);
+    }
     finalText = response.response.text();
   }
 
   if (!finalText || !finalText.trim()) {
     console.log('[Slate Analyzer] First nudge returned empty — sending final nudge...');
     response = await chat.sendMessage(
-      'Output a JSON object with your findings. Start your response with { immediately.'
+      'Do NOT call any functions. Output a JSON object with your findings. Start your response with { immediately.'
     );
     finalText = response.response.text();
   }
@@ -253,10 +264,12 @@ ${injuriesStr || 'None loaded yet - USE GET_TEAM_INJURIES to check each team'}
 ${Object.keys(teamRosters).join(', ')}
 
 ## YOUR TASK
-1. Call GET_TEAM_INJURIES for each team to find OUT/GTD players — note the duration tag on each injury
-2. For teams with injuries, call GET_TEAM_USAGE_STATS to see how the active roster is structured
-3. Call GET_GAME_ENVIRONMENT for each game to assess pace/scoring
-4. Document what you found — do NOT interpret it or label players as "beneficiaries"
+Investigate this slate thoroughly using the tools available to you:
+- What does the injury situation look like across all teams? Note duration tags for each absence.
+- For teams missing key players, what does the current roster structure look like?
+- What does each game's environment data reveal?
+
+Document what you found — do NOT interpret it or label players as "beneficiaries."
 
 Begin your investigation now. Call the tools you need.
 `;
@@ -266,18 +279,45 @@ Begin your investigation now. Call the tools you need.
 // PARSE ANALYSIS RESPONSE
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/**
+ * Extract first top-level JSON object using bracket-depth tracking.
+ * Unlike greedy regex /\{[\s\S]*\}/, this finds the MATCHING } for the first {.
+ */
+function extractJsonObject(text) {
+  const start = text.indexOf('{');
+  if (start === -1) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (escape) { escape = false; continue; }
+    if (ch === '\\' && inString) { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === '{') depth++;
+    if (ch === '}') {
+      depth--;
+      if (depth === 0) return text.slice(start, i + 1);
+    }
+  }
+  return null;
+}
+
 function parseSlateAnalysis(text) {
   // NO FALLBACKS: Gary MUST produce valid slate analysis or we fail
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) {
+  const jsonStr = extractJsonObject(text);
+  if (!jsonStr) {
     throw new Error('[Slate Analyzer] Gary did not produce JSON analysis. Raw response: ' + text.slice(0, 500));
   }
 
   let parsed;
   try {
-    parsed = JSON.parse(jsonMatch[0]);
+    parsed = JSON.parse(jsonStr);
   } catch (e) {
-    throw new Error('[Slate Analyzer] Gary produced invalid JSON: ' + e.message + '. Raw: ' + jsonMatch[0].slice(0, 500));
+    throw new Error('[Slate Analyzer] Gary produced invalid JSON: ' + e.message + '. Raw: ' + jsonStr.slice(0, 500));
   }
 
   // Require at least some analysis - can't be completely empty
@@ -327,9 +367,111 @@ function formatKnownInjuries(injuries) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// OWNERSHIP VIA GEMINI GROUNDING
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Fetch projected ownership percentages using Gemini URL Context + Google Search.
+ *
+ * Uses the NEW @google/genai SDK (not @google/generative-ai) because
+ * urlContext and googleSearch tools are only supported in the new SDK.
+ *
+ * Strategy: Point Gemini at FantasyTeamAdvice (server-rendered, free ownership
+ * data for both DK and FD via direct HTML fetch + parse.
+ *
+ * The FTA page is server-rendered — ownership data is in static HTML tables.
+ * Direct parsing is 100% accurate (no AI hallucination risk) and fast (~1s).
+ *
+ * Returns empty array on failure (non-critical path).
+ *
+ * @param {object} _genAI - Unused (kept for interface compatibility)
+ * @param {Object} context - DFS context { platform, ... }
+ * @returns {Array} - Array of { player, team, projectedOwnership }
+ */
+export async function fetchOwnershipFromFTA(_genAI, context) {
+  const platform = (context.platform || 'DraftKings');
+  const isDK = platform.toLowerCase().includes('draftkings') || platform.toLowerCase() === 'dk';
+
+  const sportLower = (context.sport || 'nba').toLowerCase();
+  const FTA_URL = `https://fantasyteamadvice.com/dfs/${sportLower}/ownership`;
+
+  let resp;
+  try {
+    resp = await fetch(FTA_URL, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml',
+      },
+    });
+  } catch (fetchErr) {
+    console.warn(`[Ownership] FTA fetch failed: ${fetchErr.message}`);
+    return [];
+  }
+
+  if (!resp.ok) {
+    console.warn(`[Ownership] FTA returned ${resp.status}`);
+    return [];
+  }
+
+  const html = await resp.text();
+
+  // Page has two tables: DraftKings first, FanDuel second
+  const sportUpper = (context.sport || 'NBA').toUpperCase();
+  const fdSplitIdx = html.indexOf(`FanDuel ${sportUpper} Ownership`) !== -1
+    ? html.indexOf(`FanDuel ${sportUpper} Ownership`)
+    : html.indexOf('FanDuel');
+  if (fdSplitIdx === -1) {
+    if (isDK) {
+      // DK users: FD section missing is fine — use the whole page (DK table comes first)
+      console.warn('[Ownership] FanDuel section not found — using full page for DraftKings');
+    } else {
+      console.warn('[Ownership] Could not find FanDuel section — page structure may have changed');
+      return [];
+    }
+  }
+
+  const tableHtml = fdSplitIdx === -1 ? html : (isDK ? html.slice(0, fdSplitIdx) : html.slice(fdSplitIdx));
+
+  // Parse rows: <tr data-player-name="...">
+  //   <td class="sticky-column">Display Name</td>
+  //   <td>Team</td>
+  //   <td>Ownership%</td>
+  const rowRegex = /<tr[^>]*data-player-name="[^"]*"[^>]*>\s*<td[^>]*>([^<]*)<\/td>\s*<td[^>]*>\s*(\w+)\s*<\/td>\s*<td[^>]*>\s*([\d.]+)\s*<\/td>/g;
+
+  const results = [];
+  let match;
+  while ((match = rowRegex.exec(tableHtml)) !== null) {
+    const rawName = match[1].trim();
+    const team = match[2].trim();
+    const ownership = parseFloat(match[3]);
+
+    // FTA display names have irregular casing ("Cj Mccollum", "Nickeil Alexanderwalker")
+    // Normalize: title-case each word, fix common patterns
+    const player = rawName
+      .replace(/\b\w+/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .replace(/\bMc(\w)/g, (_, c) => 'Mc' + c.toUpperCase())   // McCollum, McConnell, etc.
+      .replace(/\b(Cj|Pj|Tj|Aj|Rj|Jj|Og|Kj|Dj|Jt)\b/gi, (m) => m.toUpperCase()) // Known initial pairs only
+      .replace(/\bJr\b/g, 'Jr.');
+
+    if (!isNaN(ownership)) {
+      results.push({ player, team, projectedOwnership: ownership });
+    }
+  }
+
+  // Sanity check: if we parsed very few results, the page structure may have changed
+  if (results.length > 0 && results.length < 10) {
+    console.warn(`[Ownership] Only ${results.length} players parsed from FTA — possible page structure change`);
+  }
+
+  console.log(`[Ownership] Fetched ${results.length} players from FTA (${isDK ? 'DraftKings' : 'FanDuel'})`);
+  return results;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // EXPORTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export default {
-  analyzeSlateWithFlash
+  analyzeSlateWithFlash,
+  fetchOwnershipFromFTA
 };

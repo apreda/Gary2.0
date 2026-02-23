@@ -31,7 +31,7 @@ export const DFS_SLATE_ANALYSIS_TOOLS = [
   },
   {
     name: 'GET_TEAM_USAGE_STATS',
-    description: 'Get usage stats (USG%, minutes, team share) for all active players on a team.',
+    description: 'Get role and workload data for all active players on a team.',
     parameters: {
       type: 'object',
       properties: {
@@ -84,7 +84,7 @@ export const DFS_SLATE_ANALYSIS_TOOLS = [
 export const DFS_PLAYER_INVESTIGATION_TOOLS = [
   {
     name: 'GET_TEAM_USAGE_STATS',
-    description: 'Get usage stats (USG%, minutes, team share) for all active players on a team.',
+    description: 'Get role and workload data for all active players on a team.',
     parameters: {
       type: 'object',
       properties: {
@@ -116,7 +116,7 @@ export const DFS_PLAYER_INVESTIGATION_TOOLS = [
   },
   {
     name: 'GET_PLAYER_SEASON_STATS',
-    description: 'Get player season averages including advanced stats (usage, TS%, etc.).',
+    description: 'Get player season averages and advanced metrics.',
     parameters: {
       type: 'object',
       properties: {
@@ -130,7 +130,7 @@ export const DFS_PLAYER_INVESTIGATION_TOOLS = [
   },
   {
     name: 'GET_MATCHUP_DATA',
-    description: 'Get defense vs position (DvP) data for a player\'s matchup tonight.',
+    description: 'Get matchup and opponent defense data for a player\'s game tonight.',
     parameters: {
       type: 'object',
       properties: {
@@ -165,8 +165,8 @@ export const DFS_PLAYER_INVESTIGATION_TOOLS = [
     }
   },
   {
-    name: 'GET_PLAYER_VS_TEAM_HISTORY',
-    description: 'Get a player\'s historical performance against a specific opponent.',
+    name: 'GET_PLAYER_RECENT_VS_OPPONENT',
+    description: 'Get a player\'s recent game logs against a specific opponent (from L5 data).',
     parameters: {
       type: 'object',
       properties: {
@@ -220,13 +220,10 @@ export async function executeToolCall(toolName, args, context) {
       case 'GET_MATCHUP_DATA':
         return await getMatchupData(args.playerName, args.position, args.opponent, context);
 
-      case 'GET_TEAMMATE_STATUS':
-        return await getTeammateStatus(args.team, context);
-
       case 'SEARCH_LATEST_NEWS':
         return await searchLatestNews(args.query, context);
 
-      case 'GET_PLAYER_VS_TEAM_HISTORY':
+      case 'GET_PLAYER_RECENT_VS_OPPONENT':
         return await getPlayerVsTeamHistory(args.playerName, args.opponent, context);
 
       default:
@@ -245,15 +242,27 @@ export async function executeToolCall(toolName, args, context) {
 function findPlayerByName(playerName, context) {
   if (!playerName || !context.players) return null;
   const query = playerName.toLowerCase().trim();
-  // Exact match first
+  // Exact match first — most reliable
   let match = context.players.find(p => p.name?.toLowerCase() === query);
   if (match) return match;
-  // Full name contains query (e.g., "LeBron" matches "LeBron James")
-  match = context.players.find(p => p.name?.toLowerCase().includes(query));
-  if (match) return match;
-  // Query contains full name (e.g., "LeBron James Jr" matches "LeBron James")
-  match = context.players.find(p => query.includes(p.name?.toLowerCase()));
-  return match || null;
+  // Partial match: query contains full name or full name contains query
+  // BUT require the match to be unambiguous (only one result)
+  const partialMatches = context.players.filter(p => {
+    const pName = p.name?.toLowerCase() || '';
+    return pName.includes(query) || query.includes(pName);
+  });
+  if (partialMatches.length === 1) return partialMatches[0];
+  // Last name match — split query into words and match last name
+  const queryWords = query.split(/\s+/);
+  const queryLast = queryWords[queryWords.length - 1];
+  if (queryLast && queryLast.length > 2) {
+    const lastNameMatches = context.players.filter(p => {
+      const parts = (p.name?.toLowerCase() || '').split(/\s+/);
+      return parts[parts.length - 1] === queryLast;
+    });
+    if (lastNameMatches.length === 1) return lastNameMatches[0];
+  }
+  return null;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -277,6 +286,7 @@ async function getTeamInjuries(team, context) {
         if (i.duration) {
           entry.duration = i.duration;
           entry.gamesMissed = i.gamesMissed;
+          entry.daysSince = i.daysSince;
           entry.lastGameDate = i.lastGameDate;
         }
         return entry;
@@ -359,9 +369,11 @@ async function getGameEnvironment(homeTeam, awayTeam, context) {
       overUnder: ou,
       homeMoneyline: game.homeMoneyline || game.home_ml || null,
       awayMoneyline: game.awayMoneyline || game.away_ml || null,
+      // Implied totals: spread is from home team's perspective (negative = home favorite)
+      // Home implied = (O/U - spread) / 2, Away implied = (O/U + spread) / 2
       impliedTotal: {
-        home: game.implied_home_total ?? (ou && sp ? (ou / 2 - sp / 2) : null),
-        away: game.implied_away_total ?? (ou && sp ? (ou / 2 + sp / 2) : null)
+        home: game.implied_home_total ?? (ou && sp != null ? (ou - sp) / 2 : null),
+        away: game.implied_away_total ?? (ou && sp != null ? (ou + sp) / 2 : null)
       },
       homePace: game.home_pace ?? null,
       awayPace: game.away_pace ?? null,
@@ -391,7 +403,8 @@ function getPlayerSalary(playerName, context) {
       team: player.team,
       projectedPts: player.projected_pts || player.projection,
       dkFpts: player.seasonStats?.dkFpts,
-      benchmarkProjection: player.benchmarkProjection
+      benchmarkProjection: player.benchmarkProjection,
+      projectedOwnership: player.projectedOwnership || null
     };
   }
 
@@ -497,39 +510,21 @@ async function getMatchupData(playerName, position, opponent, context) {
   };
 }
 
-async function getTeammateStatus(team, context) {
-  const teammates = context.players?.filter(p => p.team === team) || [];
-  const injuries = context.injuries?.[team] || [];
-
-  return {
-    team,
-    healthyPlayers: teammates.filter(p => {
-      const st = (p.status || '').toUpperCase();
-      return st !== 'OUT' && st !== 'DOUBTFUL' && st !== 'INACTIVE' && st !== 'SUSPENDED' && !st.includes('OUT FOR');
-    }).map(p => ({
-      name: p.name,
-      position: p.position,
-      salary: p.salary,
-      projectedMinutes: p.mpg || p.seasonStats?.mpg
-    })),
-    injuries: injuries.map(i => ({
-      player: i.player?.first_name ? `${i.player.first_name} ${i.player.last_name}` : i.player,
-      status: i.status
-    }))
-  };
-}
-
 async function searchLatestNews(query, context) {
   // Search for matching news in player newsContext (populated from Tank01 in Phase 1)
-  const queryWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+  const queryLower = query.toLowerCase();
   const matchingNews = [];
 
   for (const player of (context?.players || [])) {
     if (!player.newsContext) continue;
     const nameLower = player.name?.toLowerCase() || '';
-    // Match if any query word appears in the player name, or player name appears in query
-    const nameMatch = queryWords.some(w => nameLower.includes(w)) ||
-                      nameLower.split(/\s+/).some(w => query.toLowerCase().includes(w));
+    // Match on full first or last name (not partial word fragments)
+    const nameParts = nameLower.split(/\s+/).filter(w => w.length > 2);
+    const queryParts = queryLower.split(/\s+/).filter(w => w.length > 2);
+    // Full name in query OR query contains a full name part (first/last name)
+    const nameMatch = queryLower.includes(nameLower) ||
+                      nameLower.includes(queryLower) ||
+                      nameParts.some(part => queryParts.includes(part));
     if (nameMatch) {
       matchingNews.push({
         player: player.name,
