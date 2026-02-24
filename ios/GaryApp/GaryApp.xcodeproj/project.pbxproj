@@ -3,41 +3,61 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 63;
+	objectVersion = 77;
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0984340298B6C347AF6F4588 /* BebasNeue-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = C20455738476664B4F69306C /* BebasNeue-Regular.ttf */; };
 		0D3593A1A2CB73655586485A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 14B79AC926AD34DD865A8E0D /* Assets.xcassets */; };
+		0D809CA674D78F140C6117B8 /* ChangelogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B24536929674F3304E9497C4 /* ChangelogView.swift */; };
 		11082D2682BC0FFD484F133E /* AccessView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04419532DA2B9AE61A7A7B47 /* AccessView.swift */; };
-		A1B2C3D4E5F6789012345678 /* ChangelogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F67890123456789A /* ChangelogView.swift */; };
+		251ECC987D0245D3D5E87E0B /* Oswald-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = F3971BE744C5F972B9A2C2C3 /* Oswald-Bold.ttf */; };
+		267600A11B006CB6E5273D50 /* Rajdhani-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 3B00BB7C471BD1CE60801A0F /* Rajdhani-Bold.ttf */; };
 		40771064325B4E728A735AEA /* GaryApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49489C7FC0ABE55881B19E13 /* GaryApp.swift */; };
+		40DAC1759F4F7860F18A04DD /* RussoOne-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 014B3F10455983B35A7AC820 /* RussoOne-Regular.ttf */; };
 		44FB25CBEB7324D5CDF9CAB7 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = 19246C9DB6761505C046FD73 /* FirebaseMessaging */; };
 		5A432D05492831EB727B31A7 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECE32BA2E5208CC9E994A26A /* Models.swift */; };
 		8B47B0D0D084C52747EA7346 /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0616A3C8A2F0268B8A05C4D /* Secrets.swift */; };
+		8C34DF13E8B667CE889F3001 /* RacingSansOne.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E7DD2F4D55F5FFFEE8EE459E /* RacingSansOne.ttf */; };
+		96156A39CD944FAC812763CE /* Teko-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 71B2F4F02C72B63F4E81FD2D /* Teko-Bold.ttf */; };
+		962A345642B263A7E4B5145D /* ChakraPetch-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 4DB2A6343A5BCF41DD4C3664 /* ChakraPetch-Bold.ttf */; };
+		A9719630F2ABAA18AF50CEDE /* BarlowCondensed-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 3315353E71FE134F08CE96E9 /* BarlowCondensed-Bold.ttf */; };
 		B1A0DC14B221DFD88D97D546 /* AppStoreMetadata.md in Resources */ = {isa = PBXBuildFile; fileRef = 4D7626B616BEDAF94E8687F9 /* AppStoreMetadata.md */; };
 		B313EC36BDDDB18E9F687643 /* Views.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44D1E52AFB4EED7E97F55C36 /* Views.swift */; };
 		CA682CB250F6A7F4462A70B2 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C76D962853397848F9631A85 /* ContentView.swift */; };
 		D810CCA6C81972A7A21BD77F /* SupabaseAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58C162EF98D65308171329E2 /* SupabaseAPI.swift */; };
+		DEE0FC026BC0A9A6683D4934 /* Anton-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 6E42D646736ECC444CEB1436 /* Anton-Regular.ttf */; };
+		E47A0DFC2EF791B02919F0D0 /* SairaCondensed-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 7CB6FAACF413A4E92F52C8E8 /* SairaCondensed-Bold.ttf */; };
 		F2A5809FF32535CE29C4E79A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26AE11992E449EB95857D6E3 /* SettingsView.swift */; };
 		FAE577A219F049637480970D /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 423887686C6839DEC44C0DEA /* GoogleService-Info.plist */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		014B3F10455983B35A7AC820 /* RussoOne-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "RussoOne-Regular.ttf"; sourceTree = "<group>"; };
 		04419532DA2B9AE61A7A7B47 /* AccessView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessView.swift; sourceTree = "<group>"; };
 		089A2D29640F62FFCD6A4769 /* GaryApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = GaryApp.entitlements; sourceTree = "<group>"; };
-		B2C3D4E5F67890123456789A /* ChangelogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangelogView.swift; sourceTree = "<group>"; };
 		14B79AC926AD34DD865A8E0D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		26AE11992E449EB95857D6E3 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		3315353E71FE134F08CE96E9 /* BarlowCondensed-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "BarlowCondensed-Bold.ttf"; sourceTree = "<group>"; };
+		3B00BB7C471BD1CE60801A0F /* Rajdhani-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Rajdhani-Bold.ttf"; sourceTree = "<group>"; };
 		423887686C6839DEC44C0DEA /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		44D1E52AFB4EED7E97F55C36 /* Views.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views.swift; sourceTree = "<group>"; };
 		49489C7FC0ABE55881B19E13 /* GaryApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GaryApp.swift; sourceTree = "<group>"; };
 		4D7626B616BEDAF94E8687F9 /* AppStoreMetadata.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = AppStoreMetadata.md; sourceTree = "<group>"; };
+		4DB2A6343A5BCF41DD4C3664 /* ChakraPetch-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "ChakraPetch-Bold.ttf"; sourceTree = "<group>"; };
 		58C162EF98D65308171329E2 /* SupabaseAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseAPI.swift; sourceTree = "<group>"; };
+		6E42D646736ECC444CEB1436 /* Anton-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Anton-Regular.ttf"; sourceTree = "<group>"; };
+		71B2F4F02C72B63F4E81FD2D /* Teko-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Teko-Bold.ttf"; sourceTree = "<group>"; };
+		7CB6FAACF413A4E92F52C8E8 /* SairaCondensed-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SairaCondensed-Bold.ttf"; sourceTree = "<group>"; };
 		A6B153703E9F452BFFC5A392 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		B24536929674F3304E9497C4 /* ChangelogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangelogView.swift; sourceTree = "<group>"; };
+		C20455738476664B4F69306C /* BebasNeue-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "BebasNeue-Regular.ttf"; sourceTree = "<group>"; };
 		C76D962853397848F9631A85 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
-		E22C3B2D38BB04B17570FDF1 /* GaryApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GaryApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		E22C3B2D38BB04B17570FDF1 /* GaryApp.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = GaryApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		E7DD2F4D55F5FFFEE8EE459E /* RacingSansOne.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = RacingSansOne.ttf; sourceTree = "<group>"; };
 		ECE32BA2E5208CC9E994A26A /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		F0616A3C8A2F0268B8A05C4D /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
+		F3971BE744C5F972B9A2C2C3 /* Oswald-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Oswald-Bold.ttf"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -66,7 +86,7 @@
 				04419532DA2B9AE61A7A7B47 /* AccessView.swift */,
 				4D7626B616BEDAF94E8687F9 /* AppStoreMetadata.md */,
 				14B79AC926AD34DD865A8E0D /* Assets.xcassets */,
-				B2C3D4E5F67890123456789A /* ChangelogView.swift */,
+				B24536929674F3304E9497C4 /* ChangelogView.swift */,
 				C76D962853397848F9631A85 /* ContentView.swift */,
 				089A2D29640F62FFCD6A4769 /* GaryApp.entitlements */,
 				49489C7FC0ABE55881B19E13 /* GaryApp.swift */,
@@ -77,6 +97,7 @@
 				26AE11992E449EB95857D6E3 /* SettingsView.swift */,
 				58C162EF98D65308171329E2 /* SupabaseAPI.swift */,
 				44D1E52AFB4EED7E97F55C36 /* Views.swift */,
+				9BF04537F523600B06ACFE41 /* Fonts */,
 			);
 			name = GaryApp;
 			path = .;
@@ -85,9 +106,27 @@
 		91E7769BD9DC37D8974535EF = {
 			isa = PBXGroup;
 			children = (
+				9BF04537F523600B06ACFE41 /* Fonts */,
 				6CFD3216AB39252D9E52D645 /* GaryApp */,
 				02F13D03245A29657A46163C /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		9BF04537F523600B06ACFE41 /* Fonts */ = {
+			isa = PBXGroup;
+			children = (
+				6E42D646736ECC444CEB1436 /* Anton-Regular.ttf */,
+				3315353E71FE134F08CE96E9 /* BarlowCondensed-Bold.ttf */,
+				C20455738476664B4F69306C /* BebasNeue-Regular.ttf */,
+				4DB2A6343A5BCF41DD4C3664 /* ChakraPetch-Bold.ttf */,
+				F3971BE744C5F972B9A2C2C3 /* Oswald-Bold.ttf */,
+				E7DD2F4D55F5FFFEE8EE459E /* RacingSansOne.ttf */,
+				3B00BB7C471BD1CE60801A0F /* Rajdhani-Bold.ttf */,
+				014B3F10455983B35A7AC820 /* RussoOne-Regular.ttf */,
+				7CB6FAACF413A4E92F52C8E8 /* SairaCondensed-Bold.ttf */,
+				71B2F4F02C72B63F4E81FD2D /* Teko-Bold.ttf */,
+			);
+			path = Fonts;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -120,7 +159,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
-				LastUpgradeCheck = 2620;
+				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					75398D566F3FB74B46B3657E = {
 						DevelopmentTeam = SFBTX6KPLM;
@@ -141,6 +180,7 @@
 			packageReferences = (
 				333152C5F459BE3101ADA03F /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 			);
+			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -154,9 +194,19 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DEE0FC026BC0A9A6683D4934 /* Anton-Regular.ttf in Resources */,
 				B1A0DC14B221DFD88D97D546 /* AppStoreMetadata.md in Resources */,
 				0D3593A1A2CB73655586485A /* Assets.xcassets in Resources */,
+				A9719630F2ABAA18AF50CEDE /* BarlowCondensed-Bold.ttf in Resources */,
+				0984340298B6C347AF6F4588 /* BebasNeue-Regular.ttf in Resources */,
+				962A345642B263A7E4B5145D /* ChakraPetch-Bold.ttf in Resources */,
 				FAE577A219F049637480970D /* GoogleService-Info.plist in Resources */,
+				251ECC987D0245D3D5E87E0B /* Oswald-Bold.ttf in Resources */,
+				8C34DF13E8B667CE889F3001 /* RacingSansOne.ttf in Resources */,
+				267600A11B006CB6E5273D50 /* Rajdhani-Bold.ttf in Resources */,
+				40DAC1759F4F7860F18A04DD /* RussoOne-Regular.ttf in Resources */,
+				E47A0DFC2EF791B02919F0D0 /* SairaCondensed-Bold.ttf in Resources */,
+				96156A39CD944FAC812763CE /* Teko-Bold.ttf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -168,7 +218,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				11082D2682BC0FFD484F133E /* AccessView.swift in Sources */,
-				A1B2C3D4E5F6789012345678 /* ChangelogView.swift in Sources */,
+				0D809CA674D78F140C6117B8 /* ChangelogView.swift in Sources */,
 				CA682CB250F6A7F4462A70B2 /* ContentView.swift in Sources */,
 				40771064325B4E728A735AEA /* GaryApp.swift in Sources */,
 				5A432D05492831EB727B31A7 /* Models.swift in Sources */,
@@ -222,7 +272,6 @@
 				DEVELOPMENT_TEAM = SFBTX6KPLM;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -246,7 +295,6 @@
 				PRODUCT_BUNDLE_IDENTIFIER = ai.betwithgary.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
@@ -260,7 +308,6 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = GaryApp.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -312,7 +359,6 @@
 				DEVELOPMENT_TEAM = SFBTX6KPLM;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
@@ -329,7 +375,6 @@
 				PRODUCT_BUNDLE_IDENTIFIER = ai.betwithgary.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.0;
@@ -343,7 +388,6 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = GaryApp.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -384,7 +428,7 @@
 			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
 			requirement = {
 				kind = exactVersion;
-				version = 11.0.0;
+				version = 12.9.0;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */

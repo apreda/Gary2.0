@@ -216,6 +216,10 @@ async function run() {
             projected_pts: p.projectedPoints || p.projected_pts || 0,
             rationale: p.reasoning || p.rationale || null,
             ceiling_projection: p.ceilingProjection,
+            ownership: p.ownership ?? null,
+            valueScore: p.valueScore ?? null,
+            recentForm: p.recentForm ?? null,
+            opponent: p.opponent ?? null,
             pivots: (p.pivots || []).map(pv => ({
               tier: pv.tier,
               tierLabel: pv.tierLabel,
