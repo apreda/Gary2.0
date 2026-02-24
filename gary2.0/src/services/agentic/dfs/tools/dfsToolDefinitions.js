@@ -9,6 +9,7 @@
  */
 
 // BDL import removed — injury status comes from RapidAPI via context, not BDL
+import { geminiGroundingSearch } from '../../scoutReport/scoutReportBuilder.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // SLATE ANALYSIS TOOLS (Used by Gemini in Phase 2)
@@ -17,7 +18,7 @@
 export const DFS_SLATE_ANALYSIS_TOOLS = [
   {
     name: 'GET_TEAM_INJURIES',
-    description: 'Get current injury report for a team. Returns OUT, GTD, and Questionable players with their roles.',
+    description: 'Get current injury report for a team. Returns OUT, Doubtful, GTD, Questionable, and Probable players with status and duration.',
     parameters: {
       type: 'object',
       properties: {
@@ -152,7 +153,7 @@ export const DFS_PLAYER_INVESTIGATION_TOOLS = [
   },
   {
     name: 'SEARCH_LATEST_NEWS',
-    description: 'Search for latest news about a player.',
+    description: 'Search for latest news about a player from pre-loaded team news. For LIVE breaking news, use SEARCH_LIVE_NEWS instead.',
     parameters: {
       type: 'object',
       properties: {
@@ -180,6 +181,20 @@ export const DFS_PLAYER_INVESTIGATION_TOOLS = [
         }
       },
       required: ['playerName', 'opponent']
+    }
+  },
+  {
+    name: 'SEARCH_LIVE_NEWS',
+    description: 'Search the internet for LIVE breaking news about a player or team using Google Search grounding. Use for injury updates, trade rumors, or lineup changes not in pre-loaded news.',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: 'Search query (e.g., "LeBron James injury update today")'
+        }
+      },
+      required: ['query']
     }
   }
 ];
@@ -225,6 +240,9 @@ export async function executeToolCall(toolName, args, context) {
 
       case 'GET_PLAYER_RECENT_VS_OPPONENT':
         return await getPlayerVsTeamHistory(args.playerName, args.opponent, context);
+
+      case 'SEARCH_LIVE_NEWS':
+        return await searchLiveNews(args.query);
 
       default:
         return { error: `Unknown tool: ${toolName}` };
@@ -482,7 +500,12 @@ async function getPlayerSeasonStats(playerName, context) {
         games: player.l5Stats.games
       } : null,
       matchupDvP: player.matchupDvP || null,
-      salary: player.salary
+      salary: player.salary,
+      advancedStats: player.advancedStats || null,
+      scoringProfile: player.scoringProfile || null,
+      rollManStats: player.rollManStats || null,
+      driveStats: player.driveStats || null,
+      playerProps: player.playerProps || null
     };
   }
 
@@ -543,6 +566,19 @@ async function searchLatestNews(query, context) {
     results: [],
     note: 'No matching news found in context for this query'
   };
+}
+
+async function searchLiveNews(query) {
+  try {
+    const result = await geminiGroundingSearch(query, { maxTokens: 1500 });
+    if (result.success && result.data) {
+      return { query, results: result.data };
+    }
+    return { query, results: null, note: result.error || 'No results from grounding search' };
+  } catch (e) {
+    console.warn(`[DFS Tools] SEARCH_LIVE_NEWS failed: ${e.message}`);
+    return { query, error: e.message };
+  }
 }
 
 async function getPlayerVsTeamHistory(playerName, opponent, context) {

@@ -70,8 +70,7 @@ Don't apply yesterday's strategy to today's slate.
 You have access to information and reasoning that optimizers don't:
 
 1. **INJURY DURATION AWARENESS**: Injuries include duration tags showing how long each player has been out (team games missed AND calendar days).
-   Ask: How long has each player been out? What does the team look like without them?
-   Ask: What does the timing of this absence tell you about the salary pricing?
+   Ask: What does the duration tag tell you about how long each absence has been known? What does that tell you about the current salaries?
 
 2. **GAME ENVIRONMENT READING**: Investigate O/U, spread, and pace for each game.
    Ask: Which games have the best fantasy scoring environment, and why?
@@ -95,27 +94,33 @@ Investigate: How does each game's environment compare to the slate average? What
 - Ask: What does the data show about how game competitiveness affects starter and bench minutes for these teams?
 - Investigate: What do recent game scripts show about how each team manages large leads or deficits?
 
-### INJURY INVESTIGATION
+### INJURY INVESTIGATION: DURATION & DATA FIRST
 
 Each injury includes a duration tag showing how many team games AND calendar days the player has missed (RECENT / ESTABLISHED / LONG-TERM).
 
-Investigate:
+**BEFORE citing ANY injury or absence, investigate the timeline:**
+
 1. **"How long has the market known about this absence?"**
-   - The duration tag shows both team games missed and calendar days since the player last played.
-   - Ask: What does the timeline of this absence tell you about the salary pricing?
+   - Check the duration tag. How many days/games have they missed?
+   - For recent absences (1-3 days): Patterns may still be shifting. Investigate recent game logs.
+   - For established absences (1+ weeks): The current salaries and stats reflect the current roster. Ask: What does the data show about ACTUAL production without them?
+   - For season-long absences: This IS the team you're evaluating. The absence is backstory, not a current factor.
 
-2. **"What does the DATA show?"**
-   - Investigate the game logs for this team's active players.
-   - Ask: What does the recent production data tell you about each player's current role?
+2. **"Does the DATA show a change, or am I assuming one?"**
+   - Don't assume a player being out helps or hurts anyone. CHECK the actual game logs.
+   - Name who IS filling the role and cite THEIR data.
+   - If you can't find data showing a shift, there IS no shift to cite.
 
-3. **"What does the current roster look like?"**
-   - Investigate: What does the team's recent data show? Cite specific numbers.
-   - Ask: What does the data reveal about how the active roster is performing?
+3. **"Have salaries already adjusted?"**
+   - Ask: When was the absence announced? What do the actual numbers (recent production, usage rates) show compared to current salaries?
+   - Ask: Do the salaries reflect the full impact of the absence, or is there a gap? What does that tell you about value tonight?
 
 4. **NEWS × DURATION CROSS-REFERENCE**
    - When news describes a player's expanded role or a team's shift — ask: Is this connected to an absence? If so, what does the duration tag tell you about how long the salary has had to adjust?
-   - For any development connected to an ESTABLISHED or LONG-TERM absence — the salary was set with that information already available. Ask: What from your investigation goes beyond what the salary already reflects?
    - Ask: Which storylines describe something that changed in the last few days versus something that has been the case for weeks? The duration tags are your reference point.
+
+**STALE VS FRESH:**
+Be aware that long-standing absences are already reflected in salaries, stats, and team identity. A player out for 3 weeks is old news — the team you see in the data IS the team without that player. A player ruled out yesterday is fresh information salaries may not fully reflect. Investigate: What does the data show?
 
 ### STACKING — GAME-LEVEL CORRELATION
 - Ask: Which games have the profile for a high-scoring affair? Investigate what the data shows about each game's environment.

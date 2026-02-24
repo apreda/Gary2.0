@@ -4109,10 +4109,10 @@ const ballDontLieService = {
    * @returns {Promise<Array>} - Array of team standings
    */
   async getNbaStandings(season = new Date().getFullYear()) {
-    const currentMonth = new Date().getMonth() + 1;
-    // NBA season starts in October: Oct(10)-Dec = currentYear, Jan-Sep = previousYear
-    const actualSeason = currentMonth >= 10 ? season : season - 1;
-    
+    // Caller is responsible for passing the correct season year
+    // (e.g., 2025 for the 2024-25 NBA season)
+    const actualSeason = season;
+
     try {
       const cacheKey = `nba_standings_${actualSeason}`;
       return await getCachedOrFetch(cacheKey, async () => {
