@@ -922,7 +922,13 @@ struct DFSLineup: Identifiable, Decodable {
     let projected_points: Double
     let lineup: [DFSPlayer]
     let gary_notes: String?
-    
+    let ceiling_projection: Double?
+    let floor_projection: Double?
+    let archetype: String?
+    let build_thesis: String?
+    let harmony_reasoning: String?
+    let slate_game_count: Int?
+
     var displayId: String { id ?? "\(platform)-\(sport)-\(date)-\(slate_name ?? "Main")" }
     
     /// Formatted salary display (e.g., "$49,700 / $50,000")
@@ -962,6 +968,10 @@ struct DFSLineup: Identifiable, Decodable {
             players = lineupArray.compactMap { DFSPlayer.from(dict: $0) }
         }
         
+        // Parse ceiling/floor — may be Int or Double from JSON
+        let ceiling: Double? = (dict["ceiling_projection"] as? Double) ?? (dict["ceiling_projection"] as? Int).map(Double.init)
+        let floor: Double? = (dict["floor_projection"] as? Double) ?? (dict["floor_projection"] as? Int).map(Double.init)
+
         return DFSLineup(
             id: dict["id"] as? String,
             date: date,
@@ -973,7 +983,13 @@ struct DFSLineup: Identifiable, Decodable {
             total_salary: totalSalary,
             projected_points: projectedPoints,
             lineup: players,
-            gary_notes: dict["gary_notes"] as? String
+            gary_notes: dict["gary_notes"] as? String,
+            ceiling_projection: ceiling,
+            floor_projection: floor,
+            archetype: dict["archetype"] as? String,
+            build_thesis: dict["build_thesis"] as? String,
+            harmony_reasoning: dict["harmony_reasoning"] as? String,
+            slate_game_count: dict["slate_game_count"] as? Int
         )
     }
 }
@@ -1100,10 +1116,11 @@ struct DFSPlayer: Identifiable, Decodable {
         guard let position = dict["position"] as? String,
               let player = dict["player"] as? String,
               let team = dict["team"] as? String,
-              let salary = dict["salary"] as? Int,
-              let projectedPts = dict["projected_pts"] as? Double else {
+              let salary = dict["salary"] as? Int else {
             return nil
         }
+        // Accept both "projected_pts" (iOS convention) and "projected_points" (backend convention)
+        let projectedPts = (dict["projected_pts"] as? Double) ?? (dict["projected_points"] as? Double) ?? 0.0
         
         // Parse pivots array
         var pivots: [DFSPivot] = []
@@ -1123,7 +1140,7 @@ struct DFSPlayer: Identifiable, Decodable {
             team: team,
             salary: salary,
             projected_pts: projectedPts,
-            rationale: dict["rationale"] as? String,
+            rationale: (dict["rationale"] as? String) ?? (dict["reasoning"] as? String),
             supportingStats: supportingStats.isEmpty ? nil : supportingStats,
             pivots: pivots,
             // New DFS metrics

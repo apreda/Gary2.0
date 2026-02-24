@@ -213,9 +213,9 @@ async function run() {
             position: p.position,
             salary: p.salary,
             team: p.team,
-            projected_points: p.projectedPoints || p.projected_pts,
-            ceiling_projection: p.ceilingProjection,
-            reasoning: p.reasoning
+            projected_pts: p.projectedPoints || p.projected_pts || 0,
+            rationale: p.reasoning || p.rationale || null,
+            ceiling_projection: p.ceilingProjection
           })),
           gary_notes: result.garyNotes,
           harmony_reasoning: result.ceilingScenario,
