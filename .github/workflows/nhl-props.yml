@@ -2,8 +2,8 @@ name: NHL Props
 
 on:
   schedule:
-    # 8:40 AM EST = 1:40 PM UTC (13:40)
-    - cron: '40 13 * * *'
+    # 12:10 PM EST = 5:10 PM UTC (17:10)
+    - cron: '10 17 * * *'
   workflow_dispatch:
 
 env:
