@@ -26,6 +26,17 @@ enum PerformanceMode {
     }
 }
 
+// MARK: - Relative Time Formatter
+
+private func relativeTimeString(from date: Date) -> String {
+    let seconds = Int(Date().timeIntervalSince(date))
+    if seconds < 60 { return "Updated just now" }
+    let minutes = seconds / 60
+    if minutes < 60 { return "Updated \(minutes)m ago" }
+    let hours = minutes / 60
+    return "Updated \(hours)h ago"
+}
+
 // MARK: - Async Helpers
 
 /// Execute an async operation with a timeout
@@ -1314,11 +1325,13 @@ struct SportFilterBar: View {
 // MARK: - Gary's Picks View
 
 struct GaryPicksView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var allPicks: [GaryPick] = []
     @State private var loading = true
     @State private var fetchFailed = false
     @State private var selectedSport: Sport = .all
     @State private var selectedConference: String = "All"
+    @State private var lastUpdated: Date?
 
     private var filteredPicks: [GaryPick] {
         // Sort picks by game time (commence_time) - earliest games first
@@ -1545,6 +1558,16 @@ struct GaryPicksView: View {
                         selectedConference = "All" // Reset conference when sport changes
                     }
 
+                // Cache staleness indicator
+                if let updated = lastUpdated, !loading {
+                    Text(relativeTimeString(from: updated))
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.secondary.opacity(0.6))
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 2)
+                }
+
                 // Conference Filter (NCAAB only)
                 if selectedSport == .ncaab {
                     ConferenceFilterBar(
@@ -1662,6 +1685,7 @@ struct GaryPicksView: View {
             allPicks = picks
             fetchFailed = didFail && picks.isEmpty
             loading = false
+            if !didFail { lastUpdated = Date() }
         }
     }
 }
@@ -1669,10 +1693,12 @@ struct GaryPicksView: View {
 // MARK: - Gary's Props View
 
 struct GaryPropsView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var allProps: [PropPick] = []
     @State private var loading = true
     @State private var fetchFailed = false
     @State private var selectedSport: Sport = .all
+    @State private var lastUpdated: Date?
     
     private var filteredProps: [PropPick] {
         // Sort props by game time (commence_time) - earliest games first
@@ -1837,7 +1863,17 @@ struct GaryPropsView: View {
                 // Sport Filter (with props-only filters like NFL TDs)
                 SportFilterBar(selected: $selectedSport, availableSports: availableSports, showPropsOnly: true)
                     .padding(.bottom, 4)
-                
+
+                // Cache staleness indicator
+                if let updated = lastUpdated, !loading {
+                    Text(relativeTimeString(from: updated))
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.secondary.opacity(0.6))
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 2)
+                }
+
                 // Content
                 if loading {
                     Spacer()
@@ -1985,6 +2021,7 @@ struct GaryPropsView: View {
             allProps = props
             fetchFailed = didFail && props.isEmpty
             loading = false
+            if !didFail { lastUpdated = Date() }
         }
     }
 }
@@ -3428,6 +3465,8 @@ struct PickCardMobile: View {
                 isPressed = pressing
             }
         }, perform: {})
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(pick.league ?? "") pick: \(pick.homeTeam ?? "") vs \(pick.awayTeam ?? ""). \(pick.pick ?? "")")
     }
 }
 
@@ -3682,6 +3721,8 @@ struct PropCardMobile: View {
                 isPressed = pressing
             }
         }, perform: {})
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(prop.effectiveLeague ?? "") prop: \(prop.player ?? prop.team ?? ""). \(prop.bet ?? "")")
     }
 }
 
@@ -5885,12 +5926,14 @@ struct FeaturePreviewRow: View {
 
 // MARK: - Gary's Fantasy View (Full DFS Lineups)
 struct GaryFantasyView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var lineups: [DFSLineup] = []
     @State private var loading = true
     @State private var selectedPlatform: DFSPlatform = .draftkings
     @State private var selectedSport: String = "NBA"
     @State private var selectedSlate: String = "Main"
     @State private var expandedPositions: Set<String> = []
+    @State private var lastUpdated: Date?
     
     // Available sports based on loaded lineups
     private var availableSports: [String] {
@@ -6073,7 +6116,17 @@ struct GaryFantasyView: View {
                     Spacer()
                 }
                 .padding(.horizontal, 16)
-                .padding(.bottom, 8)
+                .padding(.bottom, 4)
+
+                // Cache staleness indicator
+                if let updated = lastUpdated, !loading {
+                    Text(relativeTimeString(from: updated))
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.secondary.opacity(0.6))
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 2)
+                }
 
                 // Content
                 if loading {
@@ -6200,6 +6253,7 @@ struct GaryFantasyView: View {
                 }
                 
                 loading = false
+                lastUpdated = Date()
             }
         } catch {
             await MainActor.run {

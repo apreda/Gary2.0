@@ -19,10 +19,7 @@ import {
   fetchNbaNews,
   matchNewsToPlayers
 } from '../tank01DfsService.js';
-// RotoWire Puppeteer scraper removed — DK uses structured API, FD uses Gemini Grounding
 import { discoverDFSSlates as discoverSlatesWithService } from './dfsSlateDiscoveryService.js';
-// Import DFS constitution for Sharp Gambler framework
-// getConstitutionWithBaseRules removed — DFS constitution now in dfs/constitution/dfsAgenticConstitution.js
 import { inferPlayerRole } from './nbaStackingRules.js';
 import { fetchAllInjuries as fetchNbaInjuriesFromRapidApi } from '../nbaInjuryReportService.js';
 
@@ -1254,7 +1251,6 @@ function normalizePlayerName(name) {
     .trim();
 }
 
-/* extractOwnershipFromText, fetchComprehensiveDFSContext, fetchOwnershipProjections removed — dead Grounding code */
 
 /**
  * Get teams playing on a specific date

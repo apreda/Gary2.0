@@ -105,7 +105,7 @@ export async function generateAgenticDFSLineup(options) {
     }
 
     // Guard: Fail if salary data is missing — lineup would be meaningless
-    const realSalaryCount = context.players.filter(p => p.salary > 0 && !p.estimatedSalary).length;
+    const realSalaryCount = context.players.filter(p => p.salary > 0).length;
     const salaryCoverage = realSalaryCount / context.players.length;
     if (salaryCoverage < 0.5) {
       throw new Error(`[Gary DFS] Salary data missing: only ${realSalaryCount}/${context.players.length} players have real salaries (${(salaryCoverage * 100).toFixed(0)}%). Tank01 may not cover this slate. Skipping to avoid invalid lineup.`);
@@ -437,7 +437,7 @@ function addPivotsToAgenticLineup(lineupPlayers, contextPlayers, sport, platform
       name: p.name,
       team: p.team,
       salary: p.salary,
-      allPositions: p.allPositions || [],
+      allPositions: p.positions || p.allPositions || [],
       projected_pts: p.benchmarkProjection || p.seasonStats?.dkFpts || p.projectedPoints || 0,
       status: p.injuryStatus
     }));
