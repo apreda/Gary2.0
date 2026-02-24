@@ -6090,11 +6090,9 @@ struct GaryFantasyView: View {
                                 .padding(.horizontal, 16)
                             }
                             
-                            // Gary's Notes
-                            if let notes = lineup.gary_notes, !notes.isEmpty {
-                                GaryNotesCard(notes: notes)
-                                    .padding(.horizontal, 16)
-                            }
+                            // Gary's Analysis
+                            GaryNotesCard(lineup: lineup)
+                                .padding(.horizontal, 16)
                         }
                         .padding(.vertical, 8)
                         .padding(.bottom, 100) // Space for tab bar
@@ -6382,49 +6380,128 @@ struct LineupSummaryCard: View {
         VStack(spacing: 12) {
             // Header
             HStack {
-                Text("GARY'S OPTIMAL LINEUP")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(GaryColors.gold)
-                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("GARY'S OPTIMAL LINEUP")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(GaryColors.gold)
+                    if let archetype = lineup.archetype {
+                        Text(archetype.replacingOccurrences(of: "_", with: " ").uppercased())
+                            .font(.system(size: 9, weight: .bold))
+                            .tracking(0.5)
+                            .foregroundStyle(.white.opacity(0.5))
+                    }
+                }
+
                 Spacer()
-                
-                Text(lineup.sport)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(
-                        Capsule()
-                            .fill(Color.white.opacity(0.1))
-                    )
+
+                HStack(spacing: 6) {
+                    if let games = lineup.slate_game_count, games > 0 {
+                        Text("\(games)G")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(
+                                Capsule()
+                                    .fill(Color.white.opacity(0.08))
+                            )
+                    }
+                    Text(lineup.sport)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(
+                            Capsule()
+                                .fill(Color.white.opacity(0.1))
+                        )
+                }
             }
-            
-            // Stats Row
-            HStack {
+
+            // Stats Row — Salary | Projected | Ceiling
+            HStack(spacing: 0) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Salary")
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(.secondary)
                     Text(lineup.salaryDisplay)
-                        .font(.system(size: 15, weight: .bold))
+                        .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(.white)
                 }
-                
+
                 Spacer()
-                
+
                 Rectangle()
-                    .fill(GaryColors.gold.opacity(0.3))
-                    .frame(width: 1, height: 30)
-                
+                    .fill(GaryColors.gold.opacity(0.2))
+                    .frame(width: 0.5, height: 28)
+
                 Spacer()
-                
-                VStack(alignment: .trailing, spacing: 2) {
+
+                VStack(spacing: 2) {
                     Text("Projected")
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(.secondary)
-                    Text(String(format: "%.1f pts", lineup.projected_points))
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(GaryColors.gold)
+                    Text(String(format: "%.0f pts", lineup.projected_points))
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+
+                if let ceiling = lineup.ceiling_projection {
+                    Spacer()
+
+                    Rectangle()
+                        .fill(GaryColors.gold.opacity(0.2))
+                        .frame(width: 0.5, height: 28)
+
+                    Spacer()
+
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text("Ceiling")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.secondary)
+                        Text(String(format: "%.0f pts", ceiling))
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(GaryColors.gold)
+                    }
+                }
+            }
+
+            // Floor indicator bar
+            if let floor = lineup.floor_projection, let ceiling = lineup.ceiling_projection {
+                VStack(spacing: 4) {
+                    GeometryReader { geo in
+                        let range = ceiling - floor
+                        let projPct = range > 0 ? min(1, max(0, (lineup.projected_points - floor) / range)) : 0.5
+
+                        ZStack(alignment: .leading) {
+                            // Track
+                            Capsule()
+                                .fill(Color.white.opacity(0.08))
+                                .frame(height: 4)
+
+                            // Fill to projected
+                            Capsule()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [GaryColors.gold.opacity(0.6), GaryColors.gold],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .frame(width: geo.size.width * projPct, height: 4)
+                        }
+                    }
+                    .frame(height: 4)
+
+                    HStack {
+                        Text(String(format: "Floor %.0f", floor))
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text(String(format: "Ceiling %.0f", ceiling))
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundStyle(GaryColors.gold.opacity(0.7))
+                    }
                 }
             }
         }
@@ -6828,244 +6905,216 @@ struct PivotRow: View {
 // MARK: - Gary Notes Card
 
 struct GaryNotesCard: View {
-    let notes: String
-    
-    // Parse notes into sections
-    private var sections: [NoteSection] {
-        parseNotesIntoSections(notes)
+    let lineup: DFSLineup
+
+    private var hasNotes: Bool {
+        lineup.gary_notes != nil && !(lineup.gary_notes?.isEmpty ?? true)
     }
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Header
-            HStack {
-                Image(systemName: "lightbulb.fill")
-                    .font(.system(size: 14))
-                    .foregroundStyle(GaryColors.gold)
-                Text("GARY'S NOTES")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(GaryColors.gold)
-            }
-            
-            // Rendered sections
-            ForEach(sections.indices, id: \.self) { index in
-                NoteSectionView(section: sections[index])
-            }
+    private var hasThesis: Bool {
+        lineup.build_thesis != nil && !(lineup.build_thesis?.isEmpty ?? true)
+    }
+    private var hasCeiling: Bool {
+        lineup.harmony_reasoning != nil && !(lineup.harmony_reasoning?.isEmpty ?? true)
+    }
+    private var hasContent: Bool {
+        hasNotes || hasThesis || hasCeiling
+    }
+
+    // Archetype display name and icon
+    private var archetypeInfo: (label: String, icon: String, color: Color)? {
+        guard let arch = lineup.archetype?.lowercased() else { return nil }
+        switch arch {
+        case "balanced": return ("Balanced Build", "scale.3d", Color(hex: "#3B82F6"))
+        case "mini_max", "minimax": return ("Mini-Max", "bolt.fill", Color(hex: "#F59E0B"))
+        case "alpha_anchor", "alphaanchor": return ("Alpha Anchor", "star.fill", Color(hex: "#EF4444"))
+        case "stars_and_scrubs", "starsandscrubs": return ("Stars & Scrubs", "sparkles", Color(hex: "#A855F7"))
+        case "correlation_stack", "correlationstack": return ("Correlation Stack", "link", Color(hex: "#22C55E"))
+        default: return (arch.replacingOccurrences(of: "_", with: " ").capitalized, "cube.fill", GaryColors.gold)
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color(hex: "#0D0D0F"))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(GaryColors.gold.opacity(0.15), lineWidth: 0.5)
-                )
-        )
     }
-    
-    // Parse the notes string into structured sections
-    private func parseNotesIntoSections(_ text: String) -> [NoteSection] {
-        var sections: [NoteSection] = []
-        var currentSection: NoteSection? = nil
-        var currentContent: [String] = []
-        
-        let lines = text.components(separatedBy: "\n")
-        
-        for line in lines {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            
-            // Skip separator lines (═══, ───, etc.)
-            if trimmed.allSatisfy({ $0 == "═" || $0 == "─" || $0 == "▓" }) && !trimmed.isEmpty {
-                continue
-            }
-            
-            // Skip empty lines at section boundaries
-            if trimmed.isEmpty {
-                if !currentContent.isEmpty {
-                    currentContent.append("")
-                }
-                continue
-            }
-            
-            // Check if this is a section header
-            if let sectionType = detectSectionHeader(trimmed) {
-                // Save previous section
-                if let section = currentSection {
-                    var s = section
-                    s.content = currentContent.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !s.content.isEmpty {
-                        sections.append(s)
+
+    var body: some View {
+        if hasContent {
+            VStack(alignment: .leading, spacing: 0) {
+                // ── Header ──
+                HStack(spacing: 8) {
+                    Image(systemName: "brain.head.profile.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(GaryColors.gold)
+                    Text("GARY'S TAKE")
+                        .font(.system(size: 12, weight: .bold))
+                        .tracking(1)
+                        .foregroundStyle(GaryColors.gold)
+
+                    Spacer()
+
+                    // Archetype pill
+                    if let info = archetypeInfo {
+                        HStack(spacing: 4) {
+                            Image(systemName: info.icon)
+                                .font(.system(size: 9))
+                            Text(info.label)
+                                .font(.system(size: 9, weight: .bold))
+                        }
+                        .foregroundStyle(info.color)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(
+                            Capsule()
+                                .fill(info.color.opacity(0.12))
+                                .overlay(
+                                    Capsule()
+                                        .stroke(info.color.opacity(0.25), lineWidth: 0.5)
+                                )
+                        )
                     }
                 }
-                
-                // Start new section
-                currentSection = NoteSection(
-                    type: sectionType,
-                    title: cleanSectionTitle(trimmed),
-                    content: "",
-                    icon: sectionIcon(for: sectionType)
-                )
-                currentContent = []
-            } else if currentSection != nil {
-                // Add line to current section content
-                currentContent.append(trimmed)
-            } else {
-                // Content before any section header - create intro section
-                if sections.isEmpty && currentSection == nil {
-                    currentSection = NoteSection(type: .intro, title: "", content: "", icon: nil)
+                .padding(.horizontal, 16)
+                .padding(.top, 16)
+                .padding(.bottom, 12)
+
+                // ── Gary's Notes (main analysis) ──
+                if let notes = lineup.gary_notes, !notes.isEmpty {
+                    VStack(alignment: .leading, spacing: 10) {
+                        // Split into sentences for bullet-style display
+                        let sentences = splitIntoSentences(notes)
+                        ForEach(sentences.indices, id: \.self) { idx in
+                            HStack(alignment: .top, spacing: 10) {
+                                Circle()
+                                    .fill(GaryColors.gold)
+                                    .frame(width: 5, height: 5)
+                                    .padding(.top, 6)
+
+                                Text(sentences[idx])
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundStyle(.white.opacity(0.92))
+                                    .lineSpacing(4)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, hasThesis || hasCeiling ? 0 : 16)
                 }
-                currentContent.append(trimmed)
+
+                // ── Divider ──
+                if hasNotes && (hasThesis || hasCeiling) {
+                    Rectangle()
+                        .fill(GaryColors.gold.opacity(0.12))
+                        .frame(height: 0.5)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                }
+
+                // ── Build Thesis ──
+                if let thesis = lineup.build_thesis, !thesis.isEmpty {
+                    AnalysisSectionRow(
+                        icon: "target",
+                        label: "BUILD THESIS",
+                        color: Color(hex: "#3B82F6"),
+                        text: thesis
+                    )
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, hasCeiling ? 10 : 16)
+                }
+
+                // ── Ceiling Scenario ──
+                if let ceiling = lineup.harmony_reasoning, !ceiling.isEmpty {
+                    AnalysisSectionRow(
+                        icon: "arrow.up.right",
+                        label: "CEILING SCENARIO",
+                        color: Color(hex: "#22C55E"),
+                        text: ceiling
+                    )
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 16)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color(hex: "#0D0D0F"))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [GaryColors.gold.opacity(0.25), GaryColors.gold.opacity(0.05)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 0.5
+                            )
+                    )
+            )
+        }
+    }
+
+    // Split notes into logical bullet points (by sentence boundaries)
+    private func splitIntoSentences(_ text: String) -> [String] {
+        // Split on ". " but keep the period, also handle newlines
+        var results: [String] = []
+        let lines = text.components(separatedBy: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+
+        for line in lines {
+            // If the line is already short enough, keep as-is
+            if line.count < 80 {
+                results.append(line.trimmingCharacters(in: .whitespaces))
+                continue
+            }
+            // Split longer lines by sentences
+            let sentences = line.components(separatedBy: ". ")
+            for (i, s) in sentences.enumerated() {
+                let trimmed = s.trimmingCharacters(in: .whitespaces)
+                guard !trimmed.isEmpty else { continue }
+                // Re-add period if it was removed by split (except last segment which may already have one)
+                if i < sentences.count - 1 && !trimmed.hasSuffix(".") {
+                    results.append(trimmed + ".")
+                } else {
+                    results.append(trimmed)
+                }
             }
         }
-        
-        // Save final section
-        if let section = currentSection {
-            var s = section
-            s.content = currentContent.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-            if !s.content.isEmpty || !s.title.isEmpty {
-                sections.append(s)
-            }
-        }
-        
-        return sections
-    }
-    
-    private func detectSectionHeader(_ line: String) -> NoteSectionType? {
-        let upper = line.uppercased()
-        
-        if upper.contains("LINEUP THESIS") { return .thesis }
-        if upper.contains("USAGE OPPORTUNITY") { return .usageOpportunity }
-        if upper.contains("VALUE PLAYS") { return .valuePlays }
-        if upper.contains("HOT STREAK") { return .hotStreak }
-        if upper.contains("CORRELATION STRUCTURE") { return .correlation }
-        if upper.contains("OWNERSHIP PROFILE") { return .ownership }
-        if upper.contains("MONITOR BEFORE LOCK") { return .monitor }
-        if upper.contains("BUILD ANALYSIS") { return .buildAnalysis }
-        if upper.contains("STARS RETURNING") { return .starsReturning }
-        if upper.contains("QUESTIONS FOR GARY") { return .questions }
-        if upper.contains("SHARP AUDIT") { return .sharpAudit }
-        if upper.contains("HARMONY") || upper.contains("STRATEGY") { return .harmony }
-        
-        return nil
-    }
-    
-    private func cleanSectionTitle(_ line: String) -> String {
-        var cleaned = line
-        // Remove emoji prefixes for cleaner display (we add our own icons)
-        let emojis = ["🚀", "💎", "🔥", "📊", "📈", "⏰", "🔍", "⚠️", "❓", "💡", "🤝"]
-        for emoji in emojis {
-            cleaned = cleaned.replacingOccurrences(of: emoji, with: "").trimmingCharacters(in: .whitespaces)
-        }
-        return cleaned
-    }
-    
-    private func sectionIcon(for type: NoteSectionType) -> String {
-        switch type {
-        case .intro: return "doc.text"
-        case .thesis: return "target"
-        case .usageOpportunity: return "arrow.up.right.circle.fill"
-        case .valuePlays: return "diamond.fill"
-        case .hotStreak: return "flame.fill"
-        case .correlation: return "chart.bar.fill"
-        case .ownership: return "chart.pie.fill"
-        case .monitor: return "clock.fill"
-        case .buildAnalysis: return "magnifyingglass"
-        case .starsReturning: return "exclamationmark.triangle.fill"
-        case .questions: return "questionmark.circle.fill"
-        case .sharpAudit: return "checkmark.shield.fill"
-        case .harmony: return "hand.thumbsup.fill"
-        }
+        return results
     }
 }
 
-// MARK: - Note Section Types
+// MARK: - Analysis Section Row (used inside GaryNotesCard)
 
-enum NoteSectionType {
-    case intro
-    case thesis
-    case usageOpportunity
-    case valuePlays
-    case hotStreak
-    case correlation
-    case ownership
-    case monitor
-    case buildAnalysis
-    case starsReturning
-    case questions
-    case sharpAudit
-    case harmony
-}
+struct AnalysisSectionRow: View {
+    let icon: String
+    let label: String
+    let color: Color
+    let text: String
 
-struct NoteSection {
-    var type: NoteSectionType
-    var title: String
-    var content: String
-    var icon: String?
-}
-
-// MARK: - Note Section View
-
-struct NoteSectionView: View {
-    let section: NoteSection
-    
-    private var sectionColor: Color {
-        switch section.type {
-        case .thesis: return GaryColors.gold
-        case .usageOpportunity: return Color.green
-        case .valuePlays: return Color.cyan
-        case .hotStreak: return Color.orange
-        case .correlation: return Color.purple
-        case .ownership: return Color.pink
-        case .monitor: return Color.yellow
-        case .buildAnalysis: return Color.blue
-        case .starsReturning: return Color.red
-        case .questions: return Color.orange
-        case .sharpAudit: return Color.green
-        case .harmony: return Color.teal
-        case .intro: return .secondary
-        }
-    }
-    
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Section header (if has title)
-            if !section.title.isEmpty {
-                HStack(spacing: 6) {
-                    if let icon = section.icon {
-                        Image(systemName: icon)
-                            .font(.system(size: 12))
-                            .foregroundStyle(sectionColor)
-                    }
-                    Text(section.title)
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(sectionColor)
-                }
-                .padding(.top, 4)
-                
-                // Subtle divider
-                Rectangle()
-                    .fill(sectionColor.opacity(0.2))
-                    .frame(height: 1)
+            // Section header
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(color)
+                Text(label)
+                    .font(.system(size: 10, weight: .bold))
+                    .tracking(0.5)
+                    .foregroundStyle(color)
             }
-            
-            // Section content
-            if !section.content.isEmpty {
-                Text(parseContentWithFormatting(section.content))
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
-                    .lineSpacing(5)
-            }
+
+            // Content
+            Text(text)
+                .font(.system(size: 12, weight: .regular))
+                .foregroundStyle(.white.opacity(0.75))
+                .lineSpacing(4)
+                .fixedSize(horizontal: false, vertical: true)
         }
-    }
-    
-    // Parse content to handle special formatting
-    private func parseContentWithFormatting(_ text: String) -> AttributedString {
-        let result = AttributedString(text)
-
-        // Make player names and key terms slightly brighter
-        // This is a simplified version - full implementation would parse more
-
-        return result
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(color.opacity(0.06))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(color.opacity(0.12), lineWidth: 0.5)
+                )
+        )
     }
 }
