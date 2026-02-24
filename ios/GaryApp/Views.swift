@@ -6071,25 +6071,27 @@ struct GaryFantasyView: View {
                             // Lineup Summary Card
                             LineupSummaryCard(lineup: lineup)
                                 .padding(.horizontal, 16)
-                            
-                            // Position Rows
-                            ForEach(lineup.lineup) { player in
-                                LineupPositionRow(
-                                    player: player,
-                                    isExpanded: expandedPositions.contains(player.id),
-                                    onToggle: {
-                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                            if expandedPositions.contains(player.id) {
-                                                expandedPositions.remove(player.id)
-                                            } else {
-                                                expandedPositions.insert(player.id)
+
+                            // Position Rows — tight stack, no gaps
+                            VStack(spacing: 2) {
+                                ForEach(lineup.lineup) { player in
+                                    LineupPositionRow(
+                                        player: player,
+                                        isExpanded: expandedPositions.contains(player.id),
+                                        onToggle: {
+                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                                if expandedPositions.contains(player.id) {
+                                                    expandedPositions.remove(player.id)
+                                                } else {
+                                                    expandedPositions.insert(player.id)
+                                                }
                                             }
                                         }
-                                    }
-                                )
-                                .padding(.horizontal, 16)
+                                    )
+                                }
                             }
-                            
+                            .padding(.horizontal, 16)
+
                             // Gary's Analysis
                             GaryNotesCard(lineup: lineup)
                                 .padding(.horizontal, 16)
