@@ -1,17 +1,21 @@
-name: NCAAB Game Picks
+name: DFS Lineups
 
 on:
   schedule:
-    # 11:50 AM EST = 4:50 PM UTC (16:50)
-    - cron: '50 16 * * *'
+    # 12:20 PM EST = 5:20 PM UTC (17:20)
+    - cron: '20 17 * * *'
   workflow_dispatch:
     inputs:
+      platform:
+        description: 'Platform (dk, fd, or both)'
+        required: false
+        default: 'both'
       limit:
-        description: 'Max games to analyze (0 = all)'
+        description: 'Max slates per platform (0 = all)'
         required: false
         default: '0'
       force:
-        description: 'Force re-run existing picks'
+        description: 'Force regenerate existing lineups'
         required: false
         default: 'false'
 
@@ -20,11 +24,11 @@ env:
 
 # Prevent concurrent runs from cancelling each other
 concurrency:
-  group: ncaab-game-picks
+  group: dfs-lineups
   cancel-in-progress: false
 
 jobs:
-  generate-picks:
+  generate-lineups:
     runs-on: ubuntu-latest
     timeout-minutes: 200
 
@@ -43,7 +47,7 @@ jobs:
         working-directory: gary2.0
         run: npm ci --legacy-peer-deps
 
-      - name: Generate NCAAB Game Picks
+      - name: Generate DFS Lineups
         working-directory: gary2.0
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -53,16 +57,22 @@ jobs:
           BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
           TANK01_RAPIDAPI_KEY: ${{ secrets.TANK01_RAPIDAPI_KEY }}
         run: |
-          ARGS="--ncaab"
+          ARGS=""
+          PLATFORM="${{ github.event.inputs.platform }}"
+          if [ "$PLATFORM" == "dk" ]; then
+            ARGS="$ARGS --dk"
+          elif [ "$PLATFORM" == "fd" ]; then
+            ARGS="$ARGS --fd"
+          fi
           if [ "${{ github.event.inputs.limit }}" != "0" ] && [ -n "${{ github.event.inputs.limit }}" ]; then
             ARGS="$ARGS --limit ${{ github.event.inputs.limit }}"
           fi
           if [ "${{ github.event.inputs.force }}" == "true" ]; then
             ARGS="$ARGS --force"
           fi
-          echo "Running: node scripts/run-agentic-picks.js $ARGS"
-          node scripts/run-agentic-picks.js $ARGS
+          echo "Running: node scripts/run-dfs-lineups.js $ARGS"
+          node scripts/run-dfs-lineups.js $ARGS
 
       - name: Summary
         if: always()
-        run: echo "NCAAB Game Picks completed at $(date)"
+        run: echo "DFS Lineups completed at $(date)"
