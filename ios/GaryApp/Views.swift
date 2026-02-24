@@ -6127,6 +6127,10 @@ struct GaryFantasyView: View {
             if let first = availableSports.first, !availableSports.contains(selectedSport) {
                 selectedSport = first
             }
+            // Auto-select first available slate when platform changes (e.g. FD "After Hours" → DK "Main")
+            if let first = availableSlates.first, !availableSlates.contains(selectedSlate) {
+                selectedSlate = first
+            }
         }
         .onChange(of: selectedSport) { _ in
             // Auto-select first available slate when sport changes
