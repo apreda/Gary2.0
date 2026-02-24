@@ -789,6 +789,48 @@ async function fetchPlayerSeasonStats(playerIdMap, season) {
  * Fetch game logs for all prop candidates (last 10 games)
  * Includes consistency metrics, home/away splits, and recent form
  */
+/**
+ * Fetch advanced + scoring + drives stats for all prop candidates
+ * Returns { advancedMap, scoringMap, drivesMap } keyed by player_id
+ */
+async function fetchAdvancedPlayerStats(playerIdMap, season) {
+  const playerIds = Object.values(playerIdMap).map(p => p?.id || p).filter(id => id);
+  if (playerIds.length === 0) return { advancedMap: {}, scoringMap: {}, drivesMap: {} };
+
+  try {
+    const fetchCategory = async (category, type) => {
+      const batchSize = 100;
+      let all = [];
+      for (let i = 0; i < playerIds.length; i += batchSize) {
+        const batch = await ballDontLieService.getNbaSeasonAverages({
+          category, type, season, player_ids: playerIds.slice(i, i + batchSize)
+        });
+        if (Array.isArray(batch)) all.push(...batch);
+      }
+      const map = {};
+      for (const entry of all) {
+        const pid = entry?.player?.id || entry?.player_id;
+        if (pid && entry.stats) map[pid] = entry.stats;
+      }
+      return map;
+    };
+
+    const [advancedMap, scoringMap, drivesMap] = await Promise.all([
+      fetchCategory('general', 'advanced'),
+      fetchCategory('general', 'scoring'),
+      fetchCategory('tracking', 'drives')
+    ]);
+
+    console.log(`[NBA Props Context] ✅ Advanced stats: ${Object.keys(advancedMap).length} players`);
+    console.log(`[NBA Props Context] ✅ Scoring profile: ${Object.keys(scoringMap).length} players`);
+    console.log(`[NBA Props Context] ✅ Drives tracking: ${Object.keys(drivesMap).length} players`);
+    return { advancedMap, scoringMap, drivesMap };
+  } catch (e) {
+    console.warn(`[NBA Props Context] Advanced stats fetch failed: ${e.message}`);
+    return { advancedMap: {}, scoringMap: {}, drivesMap: {} };
+  }
+}
+
 async function fetchPlayerGameLogs(playerIdMap) {
   // Extract just the IDs from the playerIdMap (now stores { id, team })
   const playerIds = Object.values(playerIdMap).map(p => p?.id || p).filter(id => id);
@@ -964,7 +1006,7 @@ async function fetchOpponentDefenseProfile(teamId, season) {
  * Build comprehensive player stats text with actual BDL data
  * ENHANCED: Now includes recent form, consistency, home/away splits, and opponent defense
  */
-function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerSeasonStats, playerIdMap, injuries, playerGameLogs = {}, opponentDefense = {}) {
+function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerSeasonStats, playerIdMap, injuries, playerGameLogs = {}, opponentDefense = {}, advancedPlayerStats = {}) {
   let statsText = '';
   
   // Helper to get stats for a player
@@ -988,6 +1030,18 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerSeasonSt
     return `L5: [${last5.join(', ')}]`;
   };
   
+  // Helper to get advanced stats for a player
+  const getAdvancedStats = (playerName) => {
+    const playerInfo = playerIdMap[playerName.toLowerCase()];
+    const playerId = playerInfo?.id || playerInfo;
+    if (!playerId) return {};
+    return {
+      advanced: advancedPlayerStats.advancedMap?.[playerId] || null,
+      scoring: advancedPlayerStats.scoringMap?.[playerId] || null,
+      drives: advancedPlayerStats.drivesMap?.[playerId] || null
+    };
+  };
+
   // Separate candidates by team
   const awayPlayers = propCandidates.filter(p => 
     p.team?.toLowerCase().includes(awayTeam.toLowerCase().split(' ').pop()) ||
@@ -1047,6 +1101,33 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerSeasonSt
           if (stats.pctAst) shareParts.push(`${stats.pctAst}% AST`);
           if (stats.pctFga) shareParts.push(`${stats.pctFga}% FGA`);
           statsText += `  Team Share: ${shareParts.join(' | ')}\n`;
+        }
+
+        // Advanced efficiency, scoring profile, and drives — deeper context for prop analysis
+        const adv = getAdvancedStats(candidate.player);
+        if (adv.advanced) {
+          const advParts = [];
+          if (adv.advanced.off_rating != null) advParts.push(`ORtg ${adv.advanced.off_rating.toFixed(1)}`);
+          if (adv.advanced.def_rating != null) advParts.push(`DRtg ${adv.advanced.def_rating.toFixed(1)}`);
+          if (adv.advanced.net_rating != null) advParts.push(`Net ${adv.advanced.net_rating.toFixed(1)}`);
+          if (adv.advanced.pace != null) advParts.push(`Pace ${adv.advanced.pace.toFixed(1)}`);
+          if (adv.advanced.pie != null) advParts.push(`PIE ${(adv.advanced.pie * 100).toFixed(1)}%`);
+          if (advParts.length > 0) statsText += `  Advanced: ${advParts.join(' | ')}\n`;
+        }
+        if (adv.scoring) {
+          const scorParts = [];
+          if (adv.scoring.pct_pts_paint != null) scorParts.push(`Paint ${(adv.scoring.pct_pts_paint * 100).toFixed(0)}%`);
+          if (adv.scoring.pct_pts_3pt != null) scorParts.push(`3PT ${(adv.scoring.pct_pts_3pt * 100).toFixed(0)}%`);
+          if (adv.scoring.pct_pts_ft != null) scorParts.push(`FT ${(adv.scoring.pct_pts_ft * 100).toFixed(0)}%`);
+          if (adv.scoring.pct_pts_fb != null) scorParts.push(`FB ${(adv.scoring.pct_pts_fb * 100).toFixed(0)}%`);
+          if (scorParts.length > 0) statsText += `  Scoring: ${scorParts.join(' | ')}\n`;
+        }
+        if (adv.drives) {
+          const drvParts = [];
+          if (adv.drives.drives != null) drvParts.push(`${adv.drives.drives.toFixed(1)} drives/g`);
+          if (adv.drives.drive_pts != null) drvParts.push(`${adv.drives.drive_pts.toFixed(1)} pts`);
+          if (adv.drives.drive_ast != null) drvParts.push(`${adv.drives.drive_ast.toFixed(1)} ast`);
+          if (drvParts.length > 0) statsText += `  Drives: ${drvParts.join(' | ')}\n`;
         }
 
         // Add recent form if available - show ALL stat types equally for organic analysis
@@ -1126,6 +1207,33 @@ function buildPlayerStatsText(homeTeam, awayTeam, propCandidates, playerSeasonSt
           if (stats.pctAst) shareParts.push(`${stats.pctAst}% AST`);
           if (stats.pctFga) shareParts.push(`${stats.pctFga}% FGA`);
           statsText += `  Team Share: ${shareParts.join(' | ')}\n`;
+        }
+
+        // Advanced efficiency, scoring profile, and drives — deeper context for prop analysis
+        const adv = getAdvancedStats(candidate.player);
+        if (adv.advanced) {
+          const advParts = [];
+          if (adv.advanced.off_rating != null) advParts.push(`ORtg ${adv.advanced.off_rating.toFixed(1)}`);
+          if (adv.advanced.def_rating != null) advParts.push(`DRtg ${adv.advanced.def_rating.toFixed(1)}`);
+          if (adv.advanced.net_rating != null) advParts.push(`Net ${adv.advanced.net_rating.toFixed(1)}`);
+          if (adv.advanced.pace != null) advParts.push(`Pace ${adv.advanced.pace.toFixed(1)}`);
+          if (adv.advanced.pie != null) advParts.push(`PIE ${(adv.advanced.pie * 100).toFixed(1)}%`);
+          if (advParts.length > 0) statsText += `  Advanced: ${advParts.join(' | ')}\n`;
+        }
+        if (adv.scoring) {
+          const scorParts = [];
+          if (adv.scoring.pct_pts_paint != null) scorParts.push(`Paint ${(adv.scoring.pct_pts_paint * 100).toFixed(0)}%`);
+          if (adv.scoring.pct_pts_3pt != null) scorParts.push(`3PT ${(adv.scoring.pct_pts_3pt * 100).toFixed(0)}%`);
+          if (adv.scoring.pct_pts_ft != null) scorParts.push(`FT ${(adv.scoring.pct_pts_ft * 100).toFixed(0)}%`);
+          if (adv.scoring.pct_pts_fb != null) scorParts.push(`FB ${(adv.scoring.pct_pts_fb * 100).toFixed(0)}%`);
+          if (scorParts.length > 0) statsText += `  Scoring: ${scorParts.join(' | ')}\n`;
+        }
+        if (adv.drives) {
+          const drvParts = [];
+          if (adv.drives.drives != null) drvParts.push(`${adv.drives.drives.toFixed(1)} drives/g`);
+          if (adv.drives.drive_pts != null) drvParts.push(`${adv.drives.drive_pts.toFixed(1)} pts`);
+          if (adv.drives.drive_ast != null) drvParts.push(`${adv.drives.drive_ast.toFixed(1)} ast`);
+          if (drvParts.length > 0) statsText += `  Drives: ${drvParts.join(' | ')}\n`;
         }
 
         // Add recent form if available - show ALL stat types equally for organic analysis
@@ -1533,11 +1641,12 @@ export async function buildNbaPropsAgenticContext(game, playerProps, options = {
     console.log(`[NBA Props Context] Filtered out ${excluded} Doubtful/Day-To-Day player(s) to avoid void bets`);
   }
 
-  // NOW fetch player season stats, game logs, AND opponent defense profiles in parallel
-  console.log('[NBA Props Context] Fetching BDL player season stats, game logs, and opponent defense...');
-  const [playerSeasonStats, playerGameLogs, homeDefenseProfile, awayDefenseProfile] = await Promise.all([
+  // NOW fetch player season stats, game logs, advanced stats, AND opponent defense profiles in parallel
+  console.log('[NBA Props Context] Fetching BDL player season stats, game logs, advanced stats, and opponent defense...');
+  const [playerSeasonStats, playerGameLogs, advancedPlayerStats, homeDefenseProfile, awayDefenseProfile] = await Promise.all([
     fetchPlayerSeasonStats(playerIdMap, season),
     fetchPlayerGameLogs(playerIdMap),
+    fetchAdvancedPlayerStats(playerIdMap, season),
     // Opponent defense: fetch BOTH teams so we can show "what defense does each player face?"
     homeTeam?.id ? fetchOpponentDefenseProfile(homeTeam.id, season) : Promise.resolve(null),
     awayTeam?.id ? fetchOpponentDefenseProfile(awayTeam.id, season) : Promise.resolve(null)
@@ -1610,7 +1719,8 @@ export async function buildNbaPropsAgenticContext(game, playerProps, options = {
     playerIdMap,
     allInjuries,  // Use ALL injuries (BDL + detected from 0-minute games)
     playerGameLogs, // Pass game logs for recent form
-    opponentDefense // Pass opponent defense profiles for matchup context
+    opponentDefense, // Pass opponent defense profiles for matchup context
+    advancedPlayerStats // Advanced, scoring, drives stats
   );
 
   // Build token data with enhanced player info, game logs, and LINE MOVEMENT

@@ -288,7 +288,16 @@ export async function fetchPlayerStatsFromBDL(sport, dateStr, slateTeams = []) {
       if (questionablePlayers.length > 0) {
         console.log(`[DFS Context] ⚠️ QUESTIONABLE/GTD (included with flag): ${questionablePlayers.map(i => `${i.player?.first_name} ${i.player?.last_name} (${i.status})`).join(', ')}`);
       }
-      
+
+      // Log probable players (playing but worth noting — Gary should be aware)
+      const probablePlayers = injuries.filter(i => {
+        const st = (i.status || '').toUpperCase();
+        return st === 'PROBABLE' || st === 'PROB';
+      });
+      if (probablePlayers.length > 0) {
+        console.log(`[DFS Context] ✅ PROBABLE (expected to play): ${probablePlayers.map(i => `${i.player?.first_name} ${i.player?.last_name} (${i.description || i.status})`).join(', ')}`);
+      }
+
       // ═══════════════════════════════════════════════════════════════════════════
       // GEMINI GROUNDING INJURY CHECK - Catch last-minute scratches RapidAPI might miss
       // ═══════════════════════════════════════════════════════════════════════════
@@ -1058,6 +1067,7 @@ export function mergePlayerData(bdlPlayers, groundedPlayers) {
   // These players get salary-based projection estimates from dfsLineupService
   // This ensures we have enough players for all positions, especially PF/SF which share F players
   let addedFromSalaryData = 0;
+  let skippedNoMatch = 0;
   for (const p of groundedPlayers) {
     const key = normalizePlayerName(p.name);
     const exists = merged.some(m => normalizePlayerName(m.name) === key);
@@ -1094,30 +1104,31 @@ export function mergePlayerData(bdlPlayers, groundedPlayers) {
       let foundStats = null;
       
       // Look for this player name in BDL data - try multiple matching strategies
-      const pNameLower = p.name?.toLowerCase() || '';
-      const pNameParts = pNameLower.split(' ');
+      // Use normalizePlayerName for all strategies (strips Jr./Sr./II/III/IV, accents, etc.)
+      const pNormalized = normalizePlayerName(p.name);
+      const pNameParts = pNormalized.split(' ');
       const pFirstName = pNameParts[0] || '';
       const pLastName = pNameParts[pNameParts.length - 1] || '';
-      
+
       // Strategy 1: Exact normalized name match
-      let bdlMatch = bdlPlayers.find(b => normalizePlayerName(b.name) === normalizePlayerName(p.name));
-      
-      // Strategy 2: First 2 chars of first name + full last name
+      let bdlMatch = bdlPlayers.find(b => normalizePlayerName(b.name) === pNormalized);
+
+      // Strategy 2: First 2 chars of first name + full last name (normalized)
       if (!bdlMatch && pFirstName.length >= 2 && pLastName.length >= 3) {
         bdlMatch = bdlPlayers.find(b => {
-          const bName = (b.name || '').toLowerCase();
-          const bParts = bName.split(' ');
+          const bNorm = normalizePlayerName(b.name);
+          const bParts = bNorm.split(' ');
           const bFirstName = bParts[0] || '';
           const bLastName = bParts[bParts.length - 1] || '';
           return bFirstName.startsWith(pFirstName.slice(0, 2)) && bLastName === pLastName;
         });
       }
-      
-      // Strategy 3: Last name + same team
+
+      // Strategy 3: Last name + same team (normalized)
       if (!bdlMatch && pLastName.length >= 3) {
         bdlMatch = bdlPlayers.find(b => {
-          const bName = (b.name || '').toLowerCase();
-          const bLastName = bName.split(' ').pop() || '';
+          const bNorm = normalizePlayerName(b.name);
+          const bLastName = bNorm.split(' ').pop() || '';
           return bLastName === pLastName && (b.team || '').toUpperCase() === (p.team || '').toUpperCase();
         });
       }
@@ -1160,21 +1171,33 @@ export function mergePlayerData(bdlPlayers, groundedPlayers) {
         // Log what we would have added so developers can debug
         console.error(`[DFS Context]    → SKIPPING this player until BDL matching is fixed`);
         // Count as skipped, not added
+        skippedNoMatch++;
         // merged.push() intentionally omitted - don't add players without stats
       }
     }
   }
-  
+
   // Log stats coverage - ALL players should have real BDL stats now
   console.log(`[DFS Context] 📊 Stats coverage: ${merged.length} players with REAL BDL stats`);
+  if (skippedNoMatch > 0) {
+    console.warn(`[DFS Context] ⚠️ ${skippedNoMatch} players skipped (no BDL match) — check name matching`);
+  }
   if (addedFromSalaryData > 0) {
     console.log(`[DFS Context] ✅ Added ${addedFromSalaryData} Tank01 players with BDL stats matched`);
   }
   
-  // Log excluded players
+  // Log excluded players — split by reason for clarity
   if (excludedPlayers.length > 0) {
-    console.log(`[DFS Context] ❌ EXCLUDED ${excludedPlayers.length} players (OUT/DOUBTFUL/QUESTIONABLE/GTD):`);
-    excludedPlayers.forEach(p => console.log(`   - ${p.name}: ${p.status}`));
+    const injuryExcluded = excludedPlayers.filter(p => (p.reason || '').includes('Injury status'));
+    const rotationExcluded = excludedPlayers.filter(p => !(p.reason || '').includes('Injury status'));
+    if (injuryExcluded.length > 0) {
+      console.log(`[DFS Context] ❌ EXCLUDED ${injuryExcluded.length} players (Injury: OUT/DOUBTFUL/QUESTIONABLE/GTD):`);
+      injuryExcluded.forEach(p => console.log(`   - ${p.name}: ${p.status}`));
+    }
+    if (rotationExcluded.length > 0) {
+      console.log(`[DFS Context] ❌ EXCLUDED ${rotationExcluded.length} players (Rotation risk: low minutes/DNP):`);
+      rotationExcluded.forEach(p => console.log(`   - ${p.name}: ${p.reason || p.status}`));
+    }
   }
   
   console.log(`[DFS Context] Merged ${merged.length} players (${directMatches} exact + ${fuzzyMatches} fuzzy matches from ${groundedPlayers.length} grounded, ${bdlPlayers.length} BDL)`);
@@ -1350,6 +1373,7 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
   // then join with odds rows. Use getGames (date-only format) + getOddsV2.
   let bdlGameOddsMap = new Map(); // homeTeam+awayTeam → { total, spread }
   let bdlTeamIdMap = new Map(); // teamAbbr (uppercase) → BDL team ID (for opponent stats fetch)
+  let bdlGameIdMap = new Map(); // teamAbbr (uppercase) → BDL game ID (for player props fetch)
   try {
     const [bdlGames, oddsRows] = await Promise.all([
       ballDontLieService.getGames(sportKey, { dates: [oddsDate] }).catch(() => []),
@@ -1371,9 +1395,13 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
       const away = (g.visitor_team?.abbreviation || '').toUpperCase();
       if (!home || !away) continue;
 
-      // Capture team IDs from BDL games
+      // Capture team IDs and game IDs from BDL games
       if (g.home_team?.id) bdlTeamIdMap.set(home, g.home_team.id);
       if (g.visitor_team?.id) bdlTeamIdMap.set(away, g.visitor_team.id);
+      if (g.id) {
+        bdlGameIdMap.set(home, g.id);
+        bdlGameIdMap.set(away, g.id);
+      }
 
       const odds = oddsByGameId.get(g.id);
       if (odds) {
@@ -1834,6 +1862,151 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
       }
     } catch (e) {
       console.warn(`[DFS Context] BDL usage stats fetch failed (${e.message}) — players will have no usage data`);
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ADVANCED + SCORING + PLAYTYPE + TRACKING STATS (NBA only)
+  // Fetches 4 high-signal BDL stat categories in parallel:
+  // 1. Advanced (off_rating, def_rating, net_rating, pace, pie)
+  // 2. Scoring profile (% pts from paint, 3pt, FT, fastbreak)
+  // 3. Roll-man playtype (PnR roll man production — high DFS signal)
+  // 4. Drives tracking (drive frequency and efficiency)
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (isNBA) {
+    try {
+      const playerIds = mergedPlayers.map(p => p.id).filter(Boolean);
+      if (playerIds.length > 0) {
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth() + 1;
+        const statSeason = currentMonth >= 10 ? currentYear : currentYear - 1;
+
+        // Helper: fetch one category/type for all players in batches of 100
+        const fetchStatCategory = async (category, type) => {
+          let allStats = [];
+          const batchSize = 100;
+          for (let i = 0; i < playerIds.length; i += batchSize) {
+            const batchIds = playerIds.slice(i, i + batchSize);
+            const batch = await ballDontLieService.getNbaSeasonAverages({
+              category,
+              type,
+              season: statSeason,
+              player_ids: batchIds
+            });
+            if (Array.isArray(batch)) allStats.push(...batch);
+          }
+          // Index by player_id
+          const map = new Map();
+          for (const entry of allStats) {
+            const pid = entry?.player?.id || entry?.player_id;
+            if (pid && entry.stats) map.set(pid, entry.stats);
+          }
+          return map;
+        };
+
+        // Fetch all 4 categories in parallel
+        const [advancedMap, scoringMap, rollManMap, drivesMap] = await Promise.all([
+          fetchStatCategory('general', 'advanced'),
+          fetchStatCategory('general', 'scoring'),
+          fetchStatCategory('playtype', 'prrollman'),
+          fetchStatCategory('tracking', 'drives')
+        ]);
+
+        // Attach to players
+        let advCount = 0, scorCount = 0, rollCount = 0, driveCount = 0;
+        for (const player of mergedPlayers) {
+          if (!player.id) continue;
+
+          if (advancedMap.has(player.id)) {
+            const a = advancedMap.get(player.id);
+            player.advancedStats = {
+              off_rating: a.off_rating ?? null,
+              def_rating: a.def_rating ?? null,
+              net_rating: a.net_rating ?? null,
+              pace: a.pace ?? null,
+              pie: a.pie ?? null
+            };
+            advCount++;
+          }
+
+          if (scoringMap.has(player.id)) {
+            const s = scoringMap.get(player.id);
+            player.scoringProfile = {
+              pct_pts_paint: s.pct_pts_paint ?? null,
+              pct_pts_3pt: s.pct_pts_3pt ?? null,
+              pct_pts_ft: s.pct_pts_ft ?? null,
+              pct_pts_fb: s.pct_pts_fb ?? null,
+              pct_fga_2pt: s.pct_fga_2pt ?? null,
+              pct_fga_3pt: s.pct_fga_3pt ?? null
+            };
+            scorCount++;
+          }
+
+          if (rollManMap.has(player.id)) {
+            player.rollManStats = rollManMap.get(player.id);
+            rollCount++;
+          }
+
+          if (drivesMap.has(player.id)) {
+            player.driveStats = drivesMap.get(player.id);
+            driveCount++;
+          }
+        }
+
+        console.log(`[DFS Context] ✅ BDL advanced stats: ${advCount}/${mergedPlayers.length} players enriched`);
+        console.log(`[DFS Context] ✅ BDL scoring profile: ${scorCount}/${mergedPlayers.length} players enriched`);
+        console.log(`[DFS Context] ✅ BDL roll-man playtype: ${rollCount}/${mergedPlayers.length} players enriched`);
+        console.log(`[DFS Context] ✅ BDL drives tracking: ${driveCount}/${mergedPlayers.length} players enriched`);
+      }
+    } catch (e) {
+      console.warn(`[DFS Context] BDL advanced/scoring/playtype/tracking fetch failed (${e.message}) — players will have limited stat profiles`);
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PLAYER PROPS (NBA only — Vegas prop lines for PTS, REB, AST, etc.)
+  // Uses BDL game IDs captured during odds fetch to get per-game prop lines.
+  // Gives Gary awareness of what Vegas expects from each player.
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (isNBA && bdlGameIdMap.size > 0) {
+    try {
+      const uniqueGameIds = [...new Set(bdlGameIdMap.values())];
+      const allProps = [];
+      for (const gid of uniqueGameIds) {
+        const props = await ballDontLieService.getNbaPlayerProps(gid);
+        if (Array.isArray(props)) allProps.push(...props);
+      }
+
+      // Index by player_id → array of prop objects (deduplicated by prop_type, keep first vendor)
+      const propsMap = new Map();
+      for (const prop of allProps) {
+        const pid = prop.player_id;
+        if (!pid) continue;
+        if (!propsMap.has(pid)) propsMap.set(pid, new Map());
+        const playerProps = propsMap.get(pid);
+        // Keep first vendor per prop_type (avoid duplicates across vendors)
+        if (!playerProps.has(prop.prop_type)) {
+          playerProps.set(prop.prop_type, {
+            type: prop.prop_type,
+            line: parseFloat(prop.line_value) || 0,
+            overOdds: prop.market?.over_odds ?? null,
+            underOdds: prop.market?.under_odds ?? null
+          });
+        }
+      }
+
+      // Attach to players by BDL player ID
+      let propsCount = 0;
+      for (const player of mergedPlayers) {
+        if (player.id && propsMap.has(player.id)) {
+          player.playerProps = [...propsMap.get(player.id).values()];
+          propsCount++;
+        }
+      }
+      console.log(`[DFS Context] ✅ BDL player props: ${propsCount}/${mergedPlayers.length} players with prop lines (${allProps.length} total props from ${uniqueGameIds.length} games)`);
+    } catch (e) {
+      console.warn(`[DFS Context] BDL player props fetch failed (${e.message}) — players will have no prop lines`);
     }
   }
 

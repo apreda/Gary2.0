@@ -28,6 +28,24 @@ You are Gary - reviewing your own DFS lineup before it's locked.
 You just built a lineup. Now AUDIT it with fresh eyes.
 </role>
 
+<training_data_warning>
+Your training data is from 2024 and is 18+ months out of date. Players may have been traded, retired, or changed teams since then.
+USE ONLY the lineup data and alternates provided below. If your memory conflicts with the data, USE THE DATA.
+Do NOT "correct" a player's team assignment — the team shown in the lineup IS their current team.
+Do NOT cite coaching tendencies, player reputations, or team identities from training knowledge — ONLY cite facts from the data provided.
+</training_data_warning>
+
+<fact_checking>
+1. ONLY recommend swaps using players from the AVAILABLE ALTERNATES list below. If a player is not listed, they do not exist.
+2. Do NOT invent stats, projections, or team assignments from memory.
+3. Every claim in your audit must trace to data provided below. No source = no claim.
+</fact_checking>
+
+<market_awareness>
+If a player has been out for multiple games, the salaries already reflect their absence. A continued known absence is baseline, not edge.
+If a player was traded in the off-season, the salary already reflects their current team and role. Do NOT treat roster changes as new information.
+</market_awareness>
+
 <audit_checklist>
 1. CEILING CHECK
    - What does the data show about this lineup's realistic ceiling?
@@ -161,20 +179,29 @@ export async function auditLineupWithPro(genAI, lineup, slateAnalysis, context, 
   const finalLineup = applyAdjustments(lineup, auditResult.adjustments, players, platform, sport);
 
   // Merge audit data into lineup
+  // Only use audit's garyNotes if ALL proposed swaps were applied.
+  // When swaps are partially applied, the audit's notes describe a lineup that doesn't exist.
+  const proposedSwaps = auditResult.adjustments?.length || 0;
+  const successfulSwaps = finalLineup._successfulSwaps || 0;
+  const allSwapsApplied = proposedSwaps === 0 || successfulSwaps === proposedSwaps;
+
+  if (!allSwapsApplied) {
+    console.log(`[Lineup Audit] ⚠️ Only ${successfulSwaps}/${proposedSwaps} swaps applied — keeping Phase 4 garyNotes (audit notes describe a different lineup)`);
+  }
+
   const auditedLineup = {
     ...finalLineup,
     auditNotes: auditResult.auditNotes || {},
     winConditionAnalysis: auditResult.winConditionAnalysis || {},
     adjustments: auditResult.adjustments || [],
-    ceilingScenario: auditResult.finalCeilingScenario || finalLineup.ceilingScenario,
-    garyNotes: auditResult.garyFinalThoughts || finalLineup.garyNotes,
+    ceilingScenario: allSwapsApplied ? (auditResult.finalCeilingScenario || finalLineup.ceilingScenario) : finalLineup.ceilingScenario,
+    garyNotes: allSwapsApplied ? (auditResult.garyFinalThoughts || finalLineup.garyNotes) : finalLineup.garyNotes,
     perPlayerReasoning: buildPerPlayerReasoning(finalLineup.players)
   };
 
   console.log(`[Lineup Audit] ✓ Audit complete`);
-  const successfulSwaps = finalLineup._successfulSwaps || 0;
-  if (auditResult.adjustments?.length > 0) {
-    console.log(`[Lineup Audit] ✓ Made ${successfulSwaps}/${auditResult.adjustments.length} adjustments`);
+  if (proposedSwaps > 0) {
+    console.log(`[Lineup Audit] ✓ Made ${successfulSwaps}/${proposedSwaps} adjustments`);
   }
 
   return auditedLineup;
@@ -228,6 +255,7 @@ ${lineupStr}
 
 Total Salary: $${lineup.totalSalary?.toLocaleString()}
 Remaining Salary: $${(salaryCap - (lineup.totalSalary || 0)).toLocaleString()}
+Salary Efficiency: $${lineup.projectedPoints ? (lineup.totalSalary / lineup.projectedPoints).toFixed(0) : '?'} per projected point
 Projected: ${lineup.projectedPoints} pts
 Ceiling: ${lineup.ceilingProjection} pts
 Floor: ${lineup.floorProjection} pts
@@ -282,7 +310,8 @@ function formatLineupForAudit(lineup) {
 
   return lineup.players.map((p, i) => {
     const reasoning = p.reasoning || 'No reasoning provided';
-    return `${i + 1}. ${p.position}: ${p.name} ($${p.salary}) - ${p.team}
+    const ptsPerDollar = p.projectedPoints > 0 ? `$${(p.salary / p.projectedPoints).toFixed(0)}/pt` : '?/pt';
+    return `${i + 1}. ${p.position}: ${p.name} ($${p.salary}) - ${p.team} [${ptsPerDollar}]
    Projected: ${p.projectedPoints || '?'} pts | Ceiling: ${p.ceilingProjection || '?'} pts
    Reasoning: ${reasoning.slice(0, 100)}...`;
   }).join('\n\n');

@@ -26,6 +26,13 @@ You are Gary's DFS Research Assistant.
 Your job is to investigate player candidates for a specific position.
 </role>
 
+<training_data_warning>
+Your training data is from 2024 and is 18+ months out of date. Players may have been traded, retired, or changed teams.
+USE ONLY the data provided and returned by function calls. If your memory conflicts with the data, USE THE DATA.
+Do NOT treat a player's current team as "new" or noteworthy — the salary was set knowing what team they play for.
+Do NOT cite coaching tendencies, player reputations, or team identities from training knowledge — ONLY cite facts from the provided data and your function call results.
+</training_data_warning>
+
 <responsibilities>
 - For each candidate, use function calls to gather situation data
 - Investigate each candidate's recent production trends
@@ -42,7 +49,17 @@ For each player:
 4. Salary context — what does the data tell you about this player at this price?
 5. Range of outcomes — what does the data suggest about this player's range of outcomes tonight?
 6. Risk factors — what does the data suggest could affect this player's production tonight?
+7. Advanced metrics — what do the efficiency and scoring profile stats reveal about this player's role?
+8. Vegas props context — if prop lines are available, what do they tell you about expected production?
 </investigation_checklist>
+
+<available_data>
+Each candidate card shows pre-loaded data. You also have tools to investigate deeper:
+- GET_PLAYER_SEASON_STATS returns advanced metrics (off/def rating, scoring profile, drive stats, roll man production)
+- GET_PLAYER_GAME_LOGS returns recent game-by-game data
+- SEARCH_LATEST_NEWS searches pre-loaded team news
+- SEARCH_LIVE_NEWS searches the internet for breaking news (use for injury updates or lineup changes)
+</available_data>
 
 <output_format>
 After investigating, output ONLY a JSON array (no markdown, no explanation text).
@@ -282,15 +299,16 @@ async function investigatePositionCandidates(genAI, position, candidates, slateA
       break; // Done investigating
     }
 
-    // Execute function calls with per-call timeout (15s)
+    // Execute function calls with per-call timeout (15s standard, 30s for grounding search)
     const functionResponses = [];
     for (const part of functionCalls) {
       const { name, args } = part.functionCall;
+      const timeoutMs = name === 'SEARCH_LIVE_NEWS' ? 30000 : 15000;
       let result;
       try {
         result = await Promise.race([
           executeToolCall(name, args, context),
-          new Promise((_, reject) => setTimeout(() => reject(new Error(`Tool ${name} timed out after 15s`)), 15000))
+          new Promise((_, reject) => setTimeout(() => reject(new Error(`Tool ${name} timed out after ${timeoutMs / 1000}s`)), timeoutMs))
         ]);
       } catch (toolErr) {
         console.warn(`[Player Investigator] Tool call failed: ${toolErr.message}`);
@@ -417,6 +435,11 @@ ${candidates.map((p, i) => {
   // Benchmark projection
   if (p.benchmarkProjection) {
     line += `\n   Benchmark: ${p.benchmarkProjection.toFixed(1)} FPTS (industry)`;
+  }
+  // Vegas prop lines (from BDL player props)
+  if (p.playerProps && p.playerProps.length > 0) {
+    const propStr = p.playerProps.map(pr => `${pr.type}: ${pr.line}`).join(', ');
+    line += `\n   Vegas Props: ${propStr}`;
   }
   // Injury/status context
   if (p.injuryContext) {

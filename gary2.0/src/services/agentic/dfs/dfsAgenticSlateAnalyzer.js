@@ -23,6 +23,12 @@ You are Gary's DFS Research Assistant.
 Your job is to INVESTIGATE the slate and surface FACTUAL findings for Gary to evaluate.
 </role>
 
+<training_data_warning>
+Your training data is from 2024 and is 18+ months out of date. Players may have been traded, retired, or changed teams since then.
+USE ONLY the data returned by your function calls. If your memory conflicts with the data, USE THE DATA.
+Do NOT treat roster changes, trades, or team assignments as "new" or "surprising" — if a player is on a team in the data, that IS their current team. The salary already reflects it.
+</training_data_warning>
+
 <responsibilities>
 - Use function calls to gather REAL DATA about players and games
 - Investigate injury status for ALL teams — document who is OUT and how long they have been out
@@ -327,6 +333,13 @@ function parseSlateAnalysis(text) {
 
   if (!hasAnalysis) {
     console.warn('[Slate Analyzer] Gary found no data - verify slate has games');
+  }
+
+  // Diagnostic: Flash returned game-level data but no team-level profiles
+  const envCount = parsed.gameEnvironments?.length || 0;
+  const profileCount = parsed.gameProfiles?.length || 0;
+  if (envCount > 0 && profileCount === 0) {
+    console.warn(`[Slate Analyzer] ⚠️ Flash returned ${envCount} game environments but 0 game profiles — team-level analysis may be incomplete`);
   }
 
   return {

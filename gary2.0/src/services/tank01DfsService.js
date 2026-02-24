@@ -524,8 +524,22 @@ const ROSTER_CACHE_TTL = 30 * 60 * 1000;
  * @param {string} teamAbv - Team abbreviation (e.g., "CHA", "ATL")
  * @returns {Promise<Array>} Array of player objects with enriched stats
  */
+// Reverse mapping: standard abbreviations → Tank01's expected format
+const TANK01_ABV_MAP = {
+  'SAS': 'SA',
+  'GSW': 'GS',
+  'NOP': 'NO',
+  'PHX': 'PHO'
+};
+
+function toTank01Abv(standardAbv) {
+  const upper = (standardAbv || '').toUpperCase();
+  return TANK01_ABV_MAP[upper] || upper;
+}
+
 export async function fetchNbaTeamRoster(teamAbv) {
   const key = teamAbv.toUpperCase();
+  const tank01Key = toTank01Abv(key);
   const now = Date.now();
   const cached = _rosterCache.get(key);
   if (cached && (now - cached.at) < ROSTER_CACHE_TTL) {
@@ -534,7 +548,7 @@ export async function fetchNbaTeamRoster(teamAbv) {
 
   try {
     const data = await makeApiRequest('/getNBATeamRoster', {
-      teamAbv: key,
+      teamAbv: tank01Key,
       statsToGet: 'averages'
     });
 
@@ -724,7 +738,7 @@ export async function fetchNbaProjections(dateStr) {
   try {
     const apiDate = formatDateForApi(dateStr);
     const data = await makeApiRequest('/getNBAProjections', {
-      numOfDays: '7',
+      numOfDays: '1',
       date: apiDate
     });
 
@@ -748,6 +762,13 @@ export async function fetchNbaProjections(dateStr) {
         projTov: proj.TOV ? parseFloat(proj.TOV) : 0,
         projFpts: proj.fantasyPoints ? parseFloat(proj.fantasyPoints) : 0
       });
+
+      // Sanity cap: no single-game projection should exceed 100 FPTS
+      const entry = projMap.get(name);
+      if (entry.projFpts > 100) {
+        console.warn(`[Tank01 DFS] ⚠️ Projection sanity cap: ${proj.longName} had ${entry.projFpts} FPTS — zeroing out (likely cumulative data)`);
+        entry.projFpts = 0;
+      }
     }
 
     _projectionsCache = projMap;
