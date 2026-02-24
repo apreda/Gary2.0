@@ -215,7 +215,16 @@ async function run() {
             team: p.team,
             projected_pts: p.projectedPoints || p.projected_pts || 0,
             rationale: p.reasoning || p.rationale || null,
-            ceiling_projection: p.ceilingProjection
+            ceiling_projection: p.ceilingProjection,
+            pivots: (p.pivots || []).map(pv => ({
+              tier: pv.tier,
+              tierLabel: pv.tierLabel,
+              player: pv.player,
+              team: pv.team,
+              salary: pv.salary,
+              projected_pts: pv.projected_pts || 0,
+              salaryDiff: pv.salaryDiff || 0
+            }))
           })),
           gary_notes: result.garyNotes,
           harmony_reasoning: result.ceilingScenario,
