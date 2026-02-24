@@ -111,7 +111,7 @@ If you see issues, you can make 1-2 swaps. Be specific:
     }
   ],
   "finalCeilingScenario": "Updated ceiling scenario after audit",
-  "garyFinalThoughts": "Your final thoughts on this lineup"
+  "garyFinalThoughts": "Write 2-3 sentences as Gary speaking directly to the user about why this lineup is built to win tonight. Be confident, conversational, and specific — mention key players by name and their role in the build. Example tone: 'I'm loading up on the DET-CLE game stack tonight. Cade is underpriced against a Cleveland defense missing Allen, and pairing him with Garland on the other side gives us double exposure to what should be a high-scoring affair.'"
 }
 </output_format>
 

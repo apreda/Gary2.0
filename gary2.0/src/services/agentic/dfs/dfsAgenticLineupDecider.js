@@ -118,7 +118,7 @@ Provide your lineup as JSON:
   "ceilingProjection": 365,
   "floorProjection": 240,
   "ceilingScenario": "How this lineup hits 380+ and wins",
-  "garyNotes": "Your overall thoughts on this build"
+  "garyNotes": "Write 2-3 sentences as Gary speaking directly to the user about why this lineup is built to win tonight. Be confident, conversational, and specific — mention key players by name and their role in the build. Example tone: 'I'm loading up on the DET-CLE game stack tonight. Cade is underpriced against a Cleveland defense missing Allen, and pairing him with Garland on the other side gives us double exposure to what should be a high-scoring affair.'"
 }
 </output_format>
 

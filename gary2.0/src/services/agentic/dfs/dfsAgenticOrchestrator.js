@@ -470,19 +470,43 @@ function addPivotsToAgenticLineup(lineupPlayers, contextPlayers, sport, platform
       platform
     );
 
-    // Cap at 2: Direct Swap + Budget (skip Mid unless no Direct exists)
-    const direct = allPivots.find(p => p.tier === 'direct');
-    const mid = allPivots.find(p => p.tier === 'mid');
-    const budget = allPivots.find(p => p.tier === 'budget');
-    const bestAvail = allPivots.find(p => p.tier === 'best_available');
-
+    // Take first 2 unique-named pivots (no duplicate players)
+    // allPivots is already sorted by tier priority (direct → mid → budget → best_available)
     const pivots = [];
-    if (direct) pivots.push(direct);
-    else if (mid) pivots.push(mid); // Mid as fallback for Direct
-    if (budget) pivots.push(budget);
-    else if (bestAvail && pivots.length < 2) pivots.push(bestAvail);
+    const seen = new Set();
+    for (const pv of allPivots) {
+      const pvName = (pv.player || '').toLowerCase();
+      if (seen.has(pvName)) continue;
+      seen.add(pvName);
+      pivots.push(pv);
+      if (pivots.length >= 2) break;
+    }
 
-    return { ...slot, pivots };
+    // ── Enrich with metrics from context ──
+    const ctxName = (slot.name || slot.player || '').toLowerCase();
+    const ctxPlayer = contextPlayers.find(cp => (cp.name || '').toLowerCase() === ctxName);
+
+    // Ownership from FTA grounding search (stored as projectedOwnership in context)
+    const ownership = ctxPlayer?.projectedOwnership ?? null;
+
+    // Value score = projected FPTS / (salary / 1000) — 5x baseline, 6x+ elite
+    const projPts = slot.projectedPoints || slot.projected_pts || 0;
+    const salK = (slot.salary || 0) / 1000;
+    const valueScore = (projPts > 0 && salK > 0) ? Math.round((projPts / salK) * 10) / 10 : null;
+
+    // Recent form: compare L5 DK FPTS avg to season DK FPTS
+    let recentForm = null;
+    const l5Fpts = ctxPlayer?.l5Stats?.dkFptsAvg || 0;
+    const seasonFpts = ctxPlayer?.seasonStats?.dkFpts || 0;
+    if (l5Fpts > 0 && seasonFpts > 0) {
+      const ratio = l5Fpts / seasonFpts;
+      recentForm = ratio >= 1.10 ? 'hot' : ratio <= 0.90 ? 'cold' : 'neutral';
+    }
+
+    // Opponent from context (game matchup)
+    const opponent = ctxPlayer?.opponent || ctxPlayer?.game?.opponent || null;
+
+    return { ...slot, pivots, ownership, valueScore, recentForm, opponent };
   });
 }
 

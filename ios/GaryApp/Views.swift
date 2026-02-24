@@ -5900,11 +5900,28 @@ struct GaryFantasyView: View {
     
     // Available slates for selected platform/sport
     private var availableSlates: [String] {
-        let slates = Set(lineups.filter { 
-            $0.platform == selectedPlatform.rawValue && 
-            $0.sport == selectedSport 
-        }.compactMap { $0.slate_name ?? "Main" })
-        return Array(slates).sorted()
+        let filtered = lineups.filter {
+            $0.platform == selectedPlatform.rawValue &&
+            $0.sport == selectedSport
+        }
+        // Build slate → earliest start time mapping for sorting
+        var slateTimeMap: [String: String] = [:]
+        for lineup in filtered {
+            let name = lineup.slate_name ?? "Main"
+            if let time = lineup.slate_start_time, slateTimeMap[name] == nil {
+                slateTimeMap[name] = time
+            }
+        }
+        let slateNames = Array(Set(filtered.compactMap { $0.slate_name ?? "Main" }))
+        // Sort by start time (earlier first), fallback to alphabetical
+        return slateNames.sorted { a, b in
+            let timeA = slateTimeMap[a] ?? ""
+            let timeB = slateTimeMap[b] ?? ""
+            if !timeA.isEmpty && !timeB.isEmpty { return timeA < timeB }
+            if !timeA.isEmpty { return true }
+            if !timeB.isEmpty { return false }
+            return a < b
+        }
     }
     
     // Current lineup for selected platform/sport/slate
@@ -6071,6 +6088,24 @@ struct GaryFantasyView: View {
                             // Lineup Summary Card
                             LineupSummaryCard(lineup: lineup)
                                 .padding(.horizontal, 16)
+
+                            // Column Headers
+                            HStack(spacing: 12) {
+                                Text("POS")
+                                    .frame(width: 36)
+                                Text("PLAYER")
+                                Spacer()
+                                Text("SAL")
+                                    .frame(width: 56, alignment: .trailing)
+                                Text("PROJ")
+                                    .frame(width: 40, alignment: .trailing)
+                                Color.clear.frame(width: 20) // chevron space
+                            }
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.secondary.opacity(0.6))
+                            .tracking(0.5)
+                            .padding(.horizontal, 30)
+                            .padding(.bottom, 2)
 
                             // Position Rows — tight stack, no gaps
                             VStack(spacing: 2) {
@@ -6546,71 +6581,125 @@ struct LineupPositionRow: View {
         VStack(spacing: 0) {
             // Main Row
             Button(action: onToggle) {
-                HStack(spacing: 12) {
-                    // Position Badge
-                    Text(player.position)
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 36, height: 24)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(positionColor(player.position))
-                        )
-                    
-                    // Player Info
-                    VStack(alignment: .leading, spacing: 3) {
-                        // Player name - clean, no emojis
+                VStack(spacing: 6) {
+                    // ── Line 1: Position | Name | Salary | Proj | Chevron ──
+                    HStack(spacing: 12) {
+                        // Position Badge
+                        Text(player.position)
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 36, height: 24)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(positionColor(player.position))
+                            )
+
+                        // Player Name — full name, no truncation
                         Text(player.player)
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(.white)
                             .lineLimit(1)
-                        
-                        // Team + single key badge
-                        HStack(spacing: 6) {
-                            Text(player.team)
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(.secondary)
-                            
-                            // Ownership badge (always show if available)
-                            if let ownership = player.ownership {
-                                Text(String(format: "%.0f%% Own", ownership))
-                                    .font(.system(size: 9, weight: .bold))
-                                    .foregroundStyle(ownershipColor(ownership))
-                                    .padding(.horizontal, 5)
-                                    .padding(.vertical, 2)
-                                    .background(
-                                        Capsule()
-                                            .fill(ownershipColor(ownership).opacity(0.15))
-                                    )
-                            }
+                            .minimumScaleFactor(0.75)
+
+                        Spacer()
+
+                        // Ownership % — only when available (no placeholder)
+                        if let ownership = player.ownership {
+                            Text(String(format: "%.0f%%", ownership))
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(ownershipColor(ownership))
+                        }
+
+                        // Salary
+                        Text(player.salaryFormatted)
+                            .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(.white)
+                            .frame(width: 56, alignment: .trailing)
+
+                        // Projected Points
+                        Text(String(format: "%.1f", player.projected_pts))
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(GaryColors.gold)
+                            .frame(width: 40, alignment: .trailing)
+
+                        // Expand Chevron
+                        if hasExpandableContent {
+                            Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(GaryColors.gold.opacity(0.7))
+                                .frame(width: 20)
+                        } else {
+                            Color.clear.frame(width: 20)
                         }
                     }
-                    
-                    Spacer()
-                    
-                    // Salary
-                    Text(player.salaryFormatted)
-                        .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(.white)
-                    
-                    // Projected Points
-                    Text(String(format: "%.1f", player.projected_pts))
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(GaryColors.gold)
-                        .frame(width: 40, alignment: .trailing)
-                    
-                    // Expand Chevron
-                    if hasExpandableContent {
-                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(GaryColors.gold.opacity(0.7))
-                            .frame(width: 20)
-                    } else {
-                        Color.clear.frame(width: 20)
+
+                    // ── Line 2: Team vs Opp | Ownership | Value | Form ──
+                    HStack(spacing: 6) {
+                        // Spacer for position badge alignment
+                        Color.clear.frame(width: 36, height: 1)
+
+                        // Team vs Opponent
+                        if let opp = player.opponent, !opp.isEmpty {
+                            Text("\(player.team) vs \(opp)")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(GaryColors.gold.opacity(0.7))
+                        } else {
+                            Text(player.team)
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(GaryColors.gold.opacity(0.7))
+                        }
+
+
+                        // Value Score Chip
+                        if let vs = player.valueScore {
+                            let isElite = vs >= 6.0
+                            Text(String(format: "%.1fx", vs))
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(isElite ? Color(hex: "#3B82F6") : .secondary)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 2)
+                                .background(
+                                    Capsule()
+                                        .fill((isElite ? Color(hex: "#3B82F6") : Color.gray).opacity(0.15))
+                                )
+                        }
+
+                        // Form Indicator Chip
+                        if player.isHot {
+                            HStack(spacing: 2) {
+                                Image(systemName: "flame.fill")
+                                    .font(.system(size: 8))
+                                Text("HOT")
+                                    .font(.system(size: 9, weight: .bold))
+                            }
+                            .foregroundStyle(Color(hex: "#22C55E"))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(
+                                Capsule()
+                                    .fill(Color(hex: "#22C55E").opacity(0.15))
+                            )
+                        } else if player.isCold {
+                            HStack(spacing: 2) {
+                                Image(systemName: "snowflake")
+                                    .font(.system(size: 8))
+                                Text("COLD")
+                                    .font(.system(size: 9, weight: .bold))
+                            }
+                            .foregroundStyle(Color(hex: "#EF4444"))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(
+                                Capsule()
+                                    .fill(Color(hex: "#EF4444").opacity(0.15))
+                            )
+                        }
+
+                        Spacer()
                     }
                 }
                 .padding(.horizontal, 14)
-                .padding(.vertical, 12)
+                .padding(.vertical, 10)
             }
             .buttonStyle(.plain)
             
@@ -6942,109 +7031,115 @@ struct GaryNotesCard: View {
     var body: some View {
         if hasContent {
             VStack(alignment: .leading, spacing: 0) {
-                // ── Header ──
-                HStack(spacing: 8) {
-                    Image(systemName: "brain.head.profile.fill")
-                        .font(.system(size: 14))
-                        .foregroundStyle(GaryColors.gold)
-                    Text("GARY'S TAKE")
-                        .font(.system(size: 12, weight: .bold))
-                        .tracking(1)
-                        .foregroundStyle(GaryColors.gold)
+                // ── Header bar with gold accent line ──
+                VStack(spacing: 0) {
+                    // Gold accent line at top
+                    LinearGradient(
+                        colors: [GaryColors.gold.opacity(0.6), GaryColors.gold.opacity(0.1)],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                    .frame(height: 2)
+                    .clipShape(RoundedRectangle(cornerRadius: 1))
+                    .padding(.horizontal, 16)
+                    .padding(.top, 1)
 
-                    Spacer()
-
-                    // Archetype pill
-                    if let info = archetypeInfo {
-                        HStack(spacing: 4) {
-                            Image(systemName: info.icon)
-                                .font(.system(size: 9))
-                            Text(info.label)
-                                .font(.system(size: 9, weight: .bold))
-                        }
-                        .foregroundStyle(info.color)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(
-                            Capsule()
-                                .fill(info.color.opacity(0.12))
-                                .overlay(
-                                    Capsule()
-                                        .stroke(info.color.opacity(0.25), lineWidth: 0.5)
+                    HStack(spacing: 8) {
+                        Image(systemName: "brain.head.profile.fill")
+                            .font(.system(size: 15))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [GaryColors.gold, GaryColors.gold.opacity(0.7)],
+                                    startPoint: .top,
+                                    endPoint: .bottom
                                 )
-                        )
+                            )
+                        Text("GARY'S TAKE")
+                            .font(.system(size: 13, weight: .heavy))
+                            .tracking(1.5)
+                            .foregroundStyle(GaryColors.gold)
+
+                        Spacer()
+
+                        // Archetype pill
+                        if let info = archetypeInfo {
+                            HStack(spacing: 4) {
+                                Image(systemName: info.icon)
+                                    .font(.system(size: 9))
+                                Text(info.label.uppercased())
+                                    .font(.system(size: 8, weight: .heavy))
+                                    .tracking(0.5)
+                            }
+                            .foregroundStyle(info.color)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(
+                                Capsule()
+                                    .fill(info.color.opacity(0.1))
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(info.color.opacity(0.3), lineWidth: 0.5)
+                                    )
+                            )
+                        }
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 14)
+                    .padding(.bottom, 14)
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 16)
-                .padding(.bottom, 12)
 
                 // ── Gary's Notes (main analysis) ──
                 if let notes = lineup.gary_notes, !notes.isEmpty {
-                    VStack(alignment: .leading, spacing: 10) {
-                        // Split into sentences for bullet-style display
-                        let sentences = splitIntoSentences(notes)
-                        ForEach(sentences.indices, id: \.self) { idx in
-                            HStack(alignment: .top, spacing: 10) {
-                                Circle()
-                                    .fill(GaryColors.gold)
-                                    .frame(width: 5, height: 5)
-                                    .padding(.top, 6)
+                    Text(notes)
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundStyle(.white.opacity(0.9))
+                        .lineSpacing(5)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, hasThesis || hasCeiling ? 4 : 16)
+                }
 
-                                Text(sentences[idx])
-                                    .font(.system(size: 13, weight: .medium))
-                                    .foregroundStyle(.white.opacity(0.92))
-                                    .lineSpacing(4)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
+                // ── Build Thesis + Ceiling side by side or stacked ──
+                if hasThesis || hasCeiling {
+                    VStack(spacing: 8) {
+                        if let thesis = lineup.build_thesis, !thesis.isEmpty {
+                            AnalysisSectionRow(
+                                icon: "scope",
+                                label: "BUILD THESIS",
+                                color: Color(hex: "#3B82F6"),
+                                text: thesis
+                            )
+                        }
+
+                        if let ceiling = lineup.harmony_reasoning, !ceiling.isEmpty {
+                            AnalysisSectionRow(
+                                icon: "arrow.up.right.circle.fill",
+                                label: "CEILING SCENARIO",
+                                color: Color(hex: "#22C55E"),
+                                text: ceiling
+                            )
                         }
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, hasThesis || hasCeiling ? 0 : 16)
-                }
-
-                // ── Divider ──
-                if hasNotes && (hasThesis || hasCeiling) {
-                    Rectangle()
-                        .fill(GaryColors.gold.opacity(0.12))
-                        .frame(height: 0.5)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                }
-
-                // ── Build Thesis ──
-                if let thesis = lineup.build_thesis, !thesis.isEmpty {
-                    AnalysisSectionRow(
-                        icon: "target",
-                        label: "BUILD THESIS",
-                        color: Color(hex: "#3B82F6"),
-                        text: thesis
-                    )
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, hasCeiling ? 10 : 16)
-                }
-
-                // ── Ceiling Scenario ──
-                if let ceiling = lineup.harmony_reasoning, !ceiling.isEmpty {
-                    AnalysisSectionRow(
-                        icon: "arrow.up.right",
-                        label: "CEILING SCENARIO",
-                        color: Color(hex: "#22C55E"),
-                        text: ceiling
-                    )
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 16)
+                    .padding(.horizontal, 14)
+                    .padding(.top, 8)
+                    .padding(.bottom, 14)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color(hex: "#0D0D0F"))
+                    .fill(
+                        LinearGradient(
+                            colors: [Color(hex: "#111114"), Color(hex: "#0A0A0C")],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
                     .overlay(
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
                             .stroke(
                                 LinearGradient(
-                                    colors: [GaryColors.gold.opacity(0.25), GaryColors.gold.opacity(0.05)],
+                                    colors: [GaryColors.gold.opacity(0.3), Color.white.opacity(0.05)],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 ),
@@ -7093,33 +7188,47 @@ struct AnalysisSectionRow: View {
     let text: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Section header
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(color)
-                Text(label)
-                    .font(.system(size: 10, weight: .bold))
-                    .tracking(0.5)
-                    .foregroundStyle(color)
-            }
+        HStack(alignment: .top, spacing: 10) {
+            // Colored accent bar
+            RoundedRectangle(cornerRadius: 1.5)
+                .fill(
+                    LinearGradient(
+                        colors: [color, color.opacity(0.3)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .frame(width: 3)
 
-            // Content
-            Text(text)
-                .font(.system(size: 12, weight: .regular))
-                .foregroundStyle(.white.opacity(0.75))
-                .lineSpacing(4)
-                .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 6) {
+                // Section header
+                HStack(spacing: 5) {
+                    Image(systemName: icon)
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(color)
+                    Text(label)
+                        .font(.system(size: 9, weight: .heavy))
+                        .tracking(1)
+                        .foregroundStyle(color)
+                }
+
+                // Content
+                Text(text)
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundStyle(.white.opacity(0.8))
+                    .lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
-        .padding(12)
+        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(color.opacity(0.06))
+                .fill(color.opacity(0.04))
                 .overlay(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(color.opacity(0.12), lineWidth: 0.5)
+                        .stroke(color.opacity(0.1), lineWidth: 0.5)
                 )
         )
     }

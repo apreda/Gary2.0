@@ -1045,7 +1045,10 @@ struct DFSPlayer: Identifiable, Decodable {
     
     /// Weather impact: "none", "positive", "negative"
     let weatherImpact: String?
-    
+
+    /// Opponent team abbreviation (e.g. "CLE")
+    let opponent: String?
+
     var id: String { "\(position)-\(player)-\(team)" }
     
     /// Formatted salary (e.g., "$7,800")
@@ -1155,7 +1158,8 @@ struct DFSPlayer: Identifiable, Decodable {
             snapPct: dict["snapPct"] as? Int,
             targetShare: dict["targetShare"] as? Double,
             redZoneTargets: dict["redZoneTargets"] as? Int,
-            weatherImpact: dict["weatherImpact"] as? String
+            weatherImpact: dict["weatherImpact"] as? String,
+            opponent: dict["opponent"] as? String
         )
     }
 }
