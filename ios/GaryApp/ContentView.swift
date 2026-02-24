@@ -71,6 +71,8 @@ struct SettingsMenuButton: View {
                 )
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("Settings")
+        .accessibilityHint("Opens settings menu")
     }
 }
 
@@ -102,6 +104,7 @@ struct SettingsSheetView: View {
 
 struct CompactTabBar: View {
     @Binding var selectedTab: Int
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let tabs: [(icon: String, label: String)] = [
         ("house.fill", "Home"),
@@ -115,7 +118,7 @@ struct CompactTabBar: View {
         HStack(spacing: 2) {
             ForEach(tabs.indices, id: \.self) { index in
                 Button {
-                    if PerformanceMode.current.useExpensiveEffects {
+                    if PerformanceMode.current.useExpensiveEffects && !reduceMotion {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                             selectedTab = index
                         }
@@ -140,6 +143,8 @@ struct CompactTabBar: View {
                     }
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("\(tabs[index].label) tab")
+                .accessibilityHint(selectedTab == index ? "Currently selected" : "Double tap to switch to \(tabs[index].label)")
             }
         }
         .padding(.horizontal, 6)

@@ -1,11 +1,13 @@
+import { normalizeTeamAbbreviation } from './agentic/agenticUtils.js';
+
 /**
  * Tank01 Fantasy Stats DFS Service
  * Fetches accurate DFS salaries from Tank01 RapidAPI for NBA and NFL
- * 
+ *
  * Endpoints:
  * - /getNBADFS?date=YYYYMMDD - NBA DFS salaries (FanDuel + DraftKings) ✅ Working
  * - /getNFLDFS?date=YYYYMMDD - NFL DFS salaries (FanDuel + DraftKings) ⚠️ May return 404 if no games
- * 
+ *
  * Response Structure (both sports):
  * {
  *   statusCode: 200,
@@ -277,7 +279,7 @@ function parseNbaResponse(data, platform) {
     
     players.push({
       name: p.longName || p.playerName || p.name,
-      team: normalizeTeam(p.team || p.teamAbv),
+      team: normalizeTeamAbbreviation(p.team || p.teamAbv),
       position,
       salary,
       status,
@@ -350,7 +352,7 @@ function parseNflResponse(data, platform) {
     
     players.push({
       name: p.longName || p.playerName || p.name,
-      team: normalizeTeam(p.team || p.teamAbv),
+      team: normalizeTeamAbbreviation(p.team || p.teamAbv),
       position,
       salary,
       status,
@@ -428,40 +430,6 @@ function normalizeNflPosition(position) {
   return 'FLEX';
 }
 
-/**
- * Normalize team abbreviation
- * @param {string} team - Team name or abbreviation
- * @returns {string} Normalized team abbreviation
- */
-function normalizeTeam(team) {
-  if (!team) return 'UNK';
-  
-  const teamUpper = team.toUpperCase().trim();
-  
-  // Common variations
-  const teamMap = {
-    'GS': 'GSW', 'GOLDEN STATE': 'GSW',
-    'NY': 'NYK', 'NEW YORK KNICKS': 'NYK',
-    'BRK': 'BKN', 'BROOKLYN': 'BKN',
-    'SA': 'SAS', 'SAN ANTONIO': 'SAS',
-    'NO': 'NOP', 'NEW ORLEANS': 'NOP',
-    'PHO': 'PHX', 'PHOENIX': 'PHX',
-    'LA': 'LAL', 'LOS ANGELES LAKERS': 'LAL',
-    'LAC': 'LAC', 'LOS ANGELES CLIPPERS': 'LAC',
-    'UTAH': 'UTA',
-    // NFL teams
-    'JAC': 'JAX', 'JACKSONVILLE': 'JAX',
-    'KC': 'KC', 'KANSAS CITY': 'KC',
-    'TB': 'TB', 'TAMPA BAY': 'TB',
-    'NE': 'NE', 'NEW ENGLAND': 'NE',
-    'SF': 'SF', 'SAN FRANCISCO': 'SF',
-    'LV': 'LV', 'LAS VEGAS': 'LV', 'OAK': 'LV',
-    'LAR': 'LAR', 'LA RAMS': 'LAR',
-    'WSH': 'WAS', 'WASHINGTON': 'WAS'
-  };
-  
-  return teamMap[teamUpper] || teamUpper;
-}
 
 /**
  * Parse injury status to standard format
@@ -655,7 +623,7 @@ export async function fetchNbaTeamDefenseStats() {
 
     const teamMap = new Map();
     for (const team of teams) {
-      const abv = normalizeTeam(team.teamAbv || '');
+      const abv = normalizeTeamAbbreviation(team.teamAbv || '');
       if (!abv || abv === 'UNK') continue;
 
       teamMap.set(abv, {
@@ -752,7 +720,7 @@ export async function fetchNbaProjections(dateStr) {
       projMap.set(name, {
         playerID: id,
         longName: proj.longName,
-        team: normalizeTeam(proj.team || ''),
+        team: normalizeTeamAbbreviation(proj.team || ''),
         pos: proj.pos || '',
         projPts: proj.pts ? parseFloat(proj.pts) : 0,
         projReb: proj.reb ? parseFloat(proj.reb) : 0,
@@ -870,8 +838,8 @@ export async function fetchNbaGameTimes(dateStr) {
     for (const [gameId, game] of Object.entries(games)) {
       result.push({
         gameID: gameId,
-        away: normalizeTeam(game.away || ''),
-        home: normalizeTeam(game.home || ''),
+        away: normalizeTeamAbbreviation(game.away || ''),
+        home: normalizeTeamAbbreviation(game.home || ''),
         gameTime: game.gameTime || null,
         gameTimeEpoch: game.gameTime_epoch ? parseFloat(game.gameTime_epoch) : null,
         gameStatus: game.gameStatus || 'Unknown'
