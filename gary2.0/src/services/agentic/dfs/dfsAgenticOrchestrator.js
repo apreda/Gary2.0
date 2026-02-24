@@ -27,6 +27,7 @@ import { getDFSConstitution } from './constitution/dfsAgenticConstitution.js';
 import { getRosterSlots, getFormRatioFields } from './dfsSportConfig.js';
 import { WINNING_SCORE_TARGETS } from '../FIBLE.js';
 import { buildDFSContext } from '../dfsAgenticContext.js';
+import { findPivotAlternatives } from '../../dfsLineupService.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // HELPERS
@@ -350,13 +351,20 @@ export async function generateAgenticDFSLineup(options) {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
+    // PIVOT ALTERNATIVES — 2 per player (Direct Swap + Budget)
+    // ═══════════════════════════════════════════════════════════════════════════
+    const lineupWithPivots = addPivotsToAgenticLineup(
+      auditedLineup.players, context.players, sport, platform
+    );
+
+    // ═══════════════════════════════════════════════════════════════════════════
     // FORMAT FINAL OUTPUT
     // ═══════════════════════════════════════════════════════════════════════════
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
 
     const result = {
       // Core lineup data
-      lineup: auditedLineup.players,
+      lineup: lineupWithPivots,
       totalSalary: auditedLineup.totalSalary,
       projectedPoints: auditedLineup.projectedPoints,
       ceilingProjection: auditedLineup.ceilingProjection,
@@ -405,6 +413,77 @@ export async function generateAgenticDFSLineup(options) {
     console.error('[Gary DFS] ❌ Error generating lineup:', error.message);
     throw error;
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PIVOT ALTERNATIVES — Attach swap options to each lineup slot
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Attach pivot alternatives to each player in the agentic lineup.
+ * Reuses findPivotAlternatives from dfsLineupService but adapts field names
+ * between the agentic pipeline (name/projectedPoints) and legacy service (player/projected_pts).
+ *
+ * Returns max 2 pivots per player: Direct Swap first, then Budget.
+ * Mid Value is only included as fallback if no Direct Swap exists.
+ */
+function addPivotsToAgenticLineup(lineupPlayers, contextPlayers, sport, platform) {
+  const lineupNames = new Set(lineupPlayers.map(p => (p.name || p.player || '').toLowerCase()));
+
+  // Build eligible pool in the format findPivotAlternatives expects
+  const pool = contextPlayers
+    .filter(p => !lineupNames.has((p.name || '').toLowerCase()) && p.salary > 0)
+    .map(p => ({
+      name: p.name,
+      team: p.team,
+      salary: p.salary,
+      allPositions: p.allPositions || [],
+      projected_pts: p.benchmarkProjection || p.seasonStats?.dkFpts || p.projectedPoints || 0,
+      status: p.injuryStatus
+    }));
+
+  return lineupPlayers.map(slot => {
+    const slotPos = (slot.position || '').toUpperCase();
+
+    // Filter pool to position-eligible players
+    const eligible = pool.filter(p => {
+      const positions = (p.allPositions || []).map(pos => pos.toUpperCase());
+      // Direct position match OR flex eligibility
+      if (positions.includes(slotPos)) return true;
+      if (sport === 'NBA' && platform === 'draftkings') {
+        if (slotPos === 'G' && (positions.includes('PG') || positions.includes('SG'))) return true;
+        if (slotPos === 'F' && (positions.includes('SF') || positions.includes('PF'))) return true;
+        if (slotPos === 'UTIL') return true;
+      }
+      if (sport === 'NBA' && platform === 'fanduel') {
+        // FanDuel NBA has strict positions: PG/SG/SF/PF/C
+        return positions.includes(slotPos);
+      }
+      return false;
+    });
+
+    // Get all pivots from legacy function
+    const allPivots = findPivotAlternatives(
+      { player: slot.name || slot.player, salary: slot.salary },
+      eligible,
+      sport,
+      platform
+    );
+
+    // Cap at 2: Direct Swap + Budget (skip Mid unless no Direct exists)
+    const direct = allPivots.find(p => p.tier === 'direct');
+    const mid = allPivots.find(p => p.tier === 'mid');
+    const budget = allPivots.find(p => p.tier === 'budget');
+    const bestAvail = allPivots.find(p => p.tier === 'best_available');
+
+    const pivots = [];
+    if (direct) pivots.push(direct);
+    else if (mid) pivots.push(mid); // Mid as fallback for Direct
+    if (budget) pivots.push(budget);
+    else if (bestAvail && pivots.length < 2) pivots.push(bestAvail);
+
+    return { ...slot, pivots };
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
