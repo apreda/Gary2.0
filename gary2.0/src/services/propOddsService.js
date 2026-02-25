@@ -403,26 +403,7 @@ export const propOddsService = {
     }
   },
 
-  /**
-   * Get player props from sportsbooks - DEPRECATED
-   * Use The Odds API for player props instead
-   * @deprecated Use The Odds API directly
-   */
-  getPlayerPropsFromSportsbooks: async (sport, game) => {
-    console.log(`⚠️ getPlayerPropsFromSportsbooks is deprecated - use The Odds API for ${sport} props`);
-    return [];
-  },
-  
-  /**
-   * Extract structured prop data - DEPRECATED
-   * @deprecated No longer used
-   */
-  extractStructuredPropsFromText: (text, sport, homeTeam, awayTeam) => {
-    console.log('⚠️ extractStructuredPropsFromText is deprecated');
-    return [];
-  },
-
-  // validateProps removed — orphaned code from deprecated extraction function
+  // getPlayerPropsFromSportsbooks, extractStructuredPropsFromText removed — deprecated dead code
   
   /**
    * Standardize prop type names across different sources
@@ -588,19 +569,7 @@ export const propOddsService = {
     return type;
   },
   
-  /**
-   * Determine which team a player is on based on context
-   * @private
-   * @param {string} playerName - Player name
-   * @param {string} homeTeam - Home team name
-   * @param {string} awayTeam - Away team name
-   * @returns {string} - Team name or 'Unknown'
-   */
-  determineTeam: (playerName, homeTeam, awayTeam) => {
-    // This is a placeholder. In a real implementation, we would use an API
-    // or player database to determine which team they're on
-    return 'Unknown';
-  },
+  // determineTeam removed — placeholder dead code
 
   /**
    * Validate player props against known team rosters
