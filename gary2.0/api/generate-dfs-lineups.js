@@ -42,19 +42,14 @@ function getSupabaseAdmin() {
   });
 }
 
-// Check authorization
+// Check authorization (header-based only — never pass secrets in query params)
 function isAuthorized(req) {
   try {
     const headerToken = req.headers['x-admin-token'] || req.headers['X-Admin-Token'];
     const secret = process.env.DFS_GEN_SECRET || process.env.ADMIN_TASK_TOKEN;
-    
-    // Header auth
+
     if (secret && headerToken && String(headerToken) === String(secret)) return true;
-    
-    // Query param auth (for browser/cron triggers)
-    const queryToken = req.query?.token;
-    if (secret && queryToken && String(queryToken) === String(secret)) return true;
-    
+
     return false;
   } catch {
     return false;
@@ -132,7 +127,7 @@ export default async function handler(req, res) {
   }
 
   // Health check
-  if (req.method === 'GET' && !req.query.token) {
+  if (req.method === 'GET' && !req.headers['x-admin-token'] && !req.headers['X-Admin-Token']) {
     return res.status(200).json({ 
       ok: true, 
       endpoint: 'api/generate-dfs-lineups',
