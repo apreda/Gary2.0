@@ -1,24 +1,15 @@
 # Pick Generation Scripts
 
-This directory contains scripts for managing the generation, storage, and distribution of betting picks.
+This directory contains scripts for generating, storing, and grading betting picks using the agentic pipeline.
 
 ## Scripts
 
-### `pickManager.js`
-
-The main entry point for generating and storing picks.
-
-**Usage:**
+### `run-agentic-picks.js`
+Runs the agentic pipeline for game picks (NBA, NHL, NFL, NCAAB).
 ```bash
-node scripts/pickManager.js
+node scripts/run-agentic-picks.js --nba
+node scripts/run-agentic-picks.js --nfl --matchup "Patriots" --limit 1
 ```
-
-**Environment Variables:**
-- `LOG_LEVEL`: Logging level (default: 'info')
-- `NODE_ENV`: Environment (e.g., 'development', 'production')
-- `SUPABASE_URL`: Supabase project URL
-- `SUPABASE_KEY`: Supabase API key
-- `GEMINI_API_KEY`: Gemini 3 Deep Think API key
 
 ### `run-agentic-nba-props.js`
 Runs the 4-pass agentic pipeline for NBA player props.
@@ -38,33 +29,39 @@ Runs the agentic pipeline for NFL player props.
 node scripts/run-agentic-nfl-props.js --store=1
 ```
 
+### `run-agentic-nfl-td.js` / `run-agentic-tnf-td.js` / `run-agentic-mnf-td.js`
+NFL touchdown prop variants (full slate, Thursday Night, Monday Night).
+```bash
+node scripts/run-agentic-nfl-td.js --store=1
+```
+
+### `run-agentic-props-cli.js`
+Interactive CLI for running props pipelines with custom options.
+
+### `run-all-results.js` / `run-results-for-date.js`
+Grade picks against final scores and update results in Supabase.
+```bash
+node scripts/run-all-results.js
+node scripts/run-results-for-date.js --date 2025-02-20
+```
+
+### `run-dfs-lineups.js`
+Generates DFS lineup recommendations.
+```bash
+node scripts/run-dfs-lineups.js
+```
+
+## Environment Variables
+
+All scripts require these env vars (set in `.env` or CI):
+- `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
+- `GEMINI_API_KEY` — primary LLM for analysis
+- `BALLDONTLIE_API_KEY` — odds, stats, and player data
+- `TANK01_RAPIDAPI_KEY` — DFS salaries and projections
+
 ## Pick Generation Flow
 
-1. **Data Collection**
-   - Fetch upcoming games
-   - Collect team/player statistics
-   - Get current odds
-
-2. **AI Analysis**
-   - Generate analysis using OpenAI
-   - Format picks with confidence scores
-
-3. **Storage**
-   - Save picks to Supabase
-   - Update related records
-
-4. **Notification**
-   - Create notifications for subscribers
-   - Trigger webhooks
-
-## Error Handling
-
-- Retries failed operations
-- Comprehensive logging
-- Graceful degradation
-
-## Monitoring
-
-- Logs all operations
-- Tracks performance metrics
-- Alerts for critical failures
+1. **Data Collection** — Fetch games, stats, and odds from BallDontLie
+2. **AI Analysis** — Agentic pipeline with Gemini for multi-pass analysis
+3. **Storage** — Save picks to Supabase
+4. **Results** — Nightly grading via `run-all-results.js`
