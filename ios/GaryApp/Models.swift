@@ -475,7 +475,7 @@ struct StatValues: Codable {
         case "FTA_PER_GAME": return ftaPerGame ?? "N/A"
         case "CLUTCH_STATS", "CLOSE_RECORD": return closeRecord ?? "N/A"
         case "CLOSE_WIN_PCT": return closeWinPct ?? "N/A"
-        case "CLOSE_GAMES": return closeGames != nil ? String(closeGames!) : "N/A"
+        case "CLOSE_GAMES": return closeGames.map(String.init) ?? "N/A"
         case "RECENT_FORM": return last5 ?? "N/A"
         // Additional NBA stats
         case "TRUE_SHOOTING_PCT": return trueShootingPct ?? "N/A"
