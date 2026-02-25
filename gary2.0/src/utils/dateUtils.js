@@ -31,62 +31,17 @@ function isEDT(date) {
   return date >= dstStart && date < dstEnd;
 }
 
-/**
- * Converts a date to EST/EDT timezone
- * @param {Date|string} date - The date to convert
- * @returns {Date} The date in EST/EDT
- */
-export function toEST(date) {
-  const d = new Date(date);
-  const offset = isEDT(d) ? EDT_OFFSET : EST_OFFSET;
-  return new Date(d.getTime() + offset);
-}
+// toEST/formatInEST/getCurrentEST/getTodayEST removed — dead code, replaced by getESTDate/getESTHour
 
 /**
- * Formats a date in EST/EDT timezone
- * @param {Date|string} date - The date to format
- * @param {Object} options - Options for toLocaleString
- * @returns {string} Formatted date string
- */
-export function formatInEST(date, options = {}) {
-  const d = new Date(date);
-
-  const defaultOptions = {
-    timeZone: 'America/New_York',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true
-  };
-
-  // toLocaleString handles EST/EDT conversion via timeZone option —
-  // no need to also call toEST() (that would double-apply the offset)
-  return d.toLocaleString('en-US', { ...defaultOptions, ...options });
-}
-
-/**
- * Gets the current date in EST/EDT timezone
+ * Gets the current date in EST/EDT timezone (used internally by season helpers)
  * @returns {Date} Current date in EST/EDT
+ * @private
  */
-export function getCurrentEST() {
-  return toEST(new Date());
-}
-
-/**
- * Gets today's date string in YYYY-MM-DD format in EST/EDT
- * @returns {string} Date string in YYYY-MM-DD format
- */
-export function getTodayEST() {
-  return formatInEST(new Date(), { 
-    year: 'numeric', 
-    month: '2-digit', 
-    day: '2-digit',
-    hour: undefined,
-    minute: undefined,
-    hour12: false
-  }).replace(/(\d+)\/(\d+)\/(\d+)/, '$3-$1-$2');
+function getCurrentEST() {
+  const now = new Date();
+  const offset = isEDT(now) ? EDT_OFFSET : EST_OFFSET;
+  return new Date(now.getTime() + offset);
 }
 
 /**
@@ -154,84 +109,7 @@ export function formatSeason(seasonYear) {
   return `${seasonYear}-${seasonYear + 1}`;
 }
 
-/**
- * Formats a date to a short string (e.g., "May 15")
- * @param {Date|string} date - The date to format
- * @returns {string} Formatted date string (e.g., "May 15")
- */
-export function formatShortDate(date) {
-  return formatInEST(date, { 
-    month: 'short', 
-    day: 'numeric',
-    year: undefined,
-    hour: undefined,
-    minute: undefined
-  });
-}
-
-/**
- * Date utility functions for handling Eastern Time conversions
- * and date formatting across the application
- */
-
-/**
- * Get the current date in Eastern Time zone
- * @returns {object} Object containing formatted date string and hour
- */
-export const getEasternDate = () => {
-  const now = new Date();
-  
-  // Convert to Eastern Time zone properly
-  const easternTimeOptions = { timeZone: "America/New_York" };
-  const easternDateString = now.toLocaleDateString('en-US', easternTimeOptions);
-  const easternTimeString = now.toLocaleTimeString('en-US', easternTimeOptions);
-  
-  // Parse the date and time components
-  const [month, day, year] = easternDateString.split('/');
-  const [time, period] = easternTimeString.match(/([\d:]+)\s(AM|PM)/).slice(1);
-  const [hours, minutes] = time.split(':');
-  
-  // Calculate the 24-hour format hour
-  let easternHour = parseInt(hours);
-  if (period === 'PM' && hours !== '12') {
-    easternHour += 12;
-  } else if (period === 'AM' && hours === '12') {
-    easternHour = 0;
-  }
-  
-  // Format the date string properly (YYYY-MM-DD)
-  const dateString = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-  
-  // Format full time for logging
-  const fullEasternTimeString = `${month}/${day}/${year} ${hours}:${minutes} ${period}`;
-  
-  return {
-    dateString,
-    easternHour,
-    fullTimeString: fullEasternTimeString,
-    month: parseInt(month),
-    day: parseInt(day),
-    year: parseInt(year)
-  };
-};
-
-/**
- * Get yesterday's date from a given date object
- * @param {number} year - Year
- * @param {number} month - Month (1-12)
- * @param {number} day - Day
- * @returns {string} Yesterday's date in YYYY-MM-DD format
- */
-export const getYesterdayDateFromParams = (year, month, day) => {
-  const yesterdayDate = new Date(year, month - 1, day);
-  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-  
-  const yesterdayYear = yesterdayDate.getFullYear();
-  const yesterdayMonth = (yesterdayDate.getMonth() + 1).toString().padStart(2, '0');
-  const yesterdayDay = yesterdayDate.getDate().toString().padStart(2, '0');
-  
-  return `${yesterdayYear}-${yesterdayMonth}-${yesterdayDay}`;
-};
+// formatShortDate, getEasternDate, getYesterdayDateFromParams removed — dead code
 
 /**
  * Format a game time string to a readable format
@@ -255,20 +133,7 @@ export const formatGameTime = (timeString) => {
   }
 };
 
-/**
- * Determine which date to use for loading picks based on current Eastern time
- * @returns {string} The date to query for picks in YYYY-MM-DD format
- */
-export const getPicksQueryDate = () => {
-  const eastern = getEasternDate();
-  
-  // Before 10am EST, use yesterday's date
-  if (eastern.easternHour < 10) {
-    return getYesterdayDateFromParams(eastern.year, eastern.month, eastern.day);
-  }
-  
-  return eastern.dateString;
-};
+// getPicksQueryDate removed — dead code (was built on removed getEasternDate/getYesterdayDateFromParams)
 
 /**
  * Date utilities for consistent EST timezone handling across the application
@@ -382,15 +247,4 @@ export function getYesterdayDate() {
   return `${year}-${month}-${day}`;
 }
 
-/**
- * Format a date to local YYYY-MM-DD string (avoids UTC timezone issues)
- * @param {Date} date - The date to format
- * @returns {string} Date in YYYY-MM-DD format
- */
-export function formatLocalDate(date) {
-  const d = date || new Date();
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
+// formatLocalDate removed — dead code, replaced by getESTDate/toESTDate
