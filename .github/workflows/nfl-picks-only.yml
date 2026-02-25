@@ -38,8 +38,6 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
-          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
-          QRNG_API_KEY: ${{ secrets.QRNG_API_KEY }}
           TANK01_RAPIDAPI_KEY: ${{ secrets.TANK01_RAPIDAPI_KEY }}
         run: node scripts/run-agentic-picks.js --nfl --matchup "${{ github.event.inputs.matchup }}" --limit 1
 
