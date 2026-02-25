@@ -30,13 +30,6 @@ const logger = pino(
 	prettyStream
 );
 
-// Create a child logger with default context
-const createLogger = (context = {}) => {
-	return logger.child(context);
-};
-
-export { createLogger };
-
-// Default export for backward compatibility
-const defaultLogger = createLogger({ module: 'app' });
+// Default export — the only logger instance used across the codebase
+const defaultLogger = logger.child({ module: 'app' });
 export default defaultLogger;

@@ -2588,16 +2588,19 @@ struct BillfoldView: View {
     }
     
     private func calculateRecord() -> (wins: Int, losses: Int, pushes: Int) {
-        // Use filtered results based on selected sport
+        // Use filtered results based on selected sport — single-pass reduce
         let results = selectedTab == 0
             ? filteredGameResults.map { $0.result ?? "" }
             : filteredPropResults.map { $0.result ?? "" }
-        
-        return (
-            wins: results.filter { $0 == "won" }.count,
-            losses: results.filter { $0 == "lost" }.count,
-            pushes: results.filter { $0 == "push" }.count
-        )
+
+        return results.reduce(into: (wins: 0, losses: 0, pushes: 0)) { acc, result in
+            switch result {
+            case "won": acc.wins += 1
+            case "lost": acc.losses += 1
+            case "push": acc.pushes += 1
+            default: break
+            }
+        }
     }
 }
 
@@ -2608,7 +2611,7 @@ struct BetCardView: View {
         ZStack {
             LiquidGlassBackground()
             
-            WebContainer(url: URL(string: "https://www.betwithgary.ai/betcard")!)
+            WebContainer(url: URL(string: "https://www.betwithgary.ai/betcard") ?? URL(string: "https://betwithgary.ai/")!)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .ignoresSafeArea(edges: .bottom)

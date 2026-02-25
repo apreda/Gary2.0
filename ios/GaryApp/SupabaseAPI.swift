@@ -110,26 +110,29 @@ enum SupabaseAPI {
     /// Falls back up to 7 days to find actual performance data
     /// This ensures Gary always shows a mood based on real results, not a default
     static func fetchMostRecentGameRecord() async throws -> (wins: Int, losses: Int, pushes: Int) {
-        let calendar = Calendar.current
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
         formatter.timeZone = TimeZone(identifier: "America/New_York")
-        
-        // Try yesterday first, then go back up to 7 days
+
+        // Fetch ONE batch of results from the last 7 days instead of looping
+        guard let weekAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date()) else {
+            return (0, 0, 0)
+        }
+        let sinceDate = formatter.string(from: weekAgo)
+        let allResults = try await fetchAllGameResults(since: sinceDate)
+
+        // Walk backwards from yesterday to find the most recent day with results
         for daysBack in 1...7 {
-            guard let checkDate = calendar.date(byAdding: .day, value: -daysBack, to: Date()) else {
+            guard let checkDate = Calendar.current.date(byAdding: .day, value: -daysBack, to: Date()) else {
                 continue
             }
             let dateStr = formatter.string(from: checkDate)
-            
-            let results = try await fetchAllGameResults(since: dateStr)
-            let dayResults = results.filter { $0.game_date == dateStr }
-            
+
             var wins = 0
             var losses = 0
             var pushes = 0
-            
-            for result in dayResults {
+
+            for result in allResults where result.game_date == dateStr {
                 switch result.result?.lowercased() {
                 case "won", "win", "w":
                     wins += 1
@@ -141,14 +144,14 @@ enum SupabaseAPI {
                     break
                 }
             }
-            
+
             // If we found results for this day, return them
             if wins + losses > 0 {
                 print("[SupabaseAPI] Found results from \(dateStr): \(wins)W-\(losses)L")
                 return (wins, losses, pushes)
             }
         }
-        
+
         // No results found in last 7 days - return zeros (GaryCoin will show)
         print("[SupabaseAPI] No results found in last 7 days")
         return (0, 0, 0)
@@ -271,11 +274,14 @@ enum SupabaseAPI {
         ])
         
         let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return [] }
-        
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            print("[SupabaseAPI] fetchDailyPicks failed: HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1)")
+            return []
+        }
+
         let rows = try JSONDecoder().decode([DailyPicksRow].self, from: data)
         guard let row = rows.first else { return [] }
-        
+
         return parsePicksRow(row.picks)
     }
     
@@ -298,8 +304,11 @@ enum SupabaseAPI {
         ])
         
         let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return [] }
-        
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            print("[SupabaseAPI] fetchWeeklyNFLPicks failed: HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1)")
+            return []
+        }
+
         let rows = try JSONDecoder().decode([WeeklyNFLPicksRow].self, from: data)
         
         if let row = rows.first {
@@ -359,10 +368,16 @@ enum SupabaseAPI {
 
         let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
 
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return [] }
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            print("[SupabaseAPI] fetchPropPicks failed: HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1)")
+            return []
+        }
 
         // Parse as array of dictionaries
-        guard let jsonArray = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return [] }
+        guard let jsonArray = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            print("[SupabaseAPI] fetchPropPicks: failed to parse JSON")
+            return []
+        }
 
         var allPicks: [PropPick] = []
 
@@ -412,13 +427,17 @@ enum SupabaseAPI {
         
         let url = buildURL(table: "game_results", query: query)
         let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
-        
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return [] }
-        
+
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            print("[SupabaseAPI] fetchGameResults failed: HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1)")
+            return []
+        }
+
         let decoder = JSONDecoder()
         do {
             return try decoder.decode([GameResult].self, from: data)
         } catch {
+            print("[SupabaseAPI] fetchGameResults decode error: \(error.localizedDescription)")
             return []
         }
     }
@@ -437,53 +456,84 @@ enum SupabaseAPI {
         
         let url = buildURL(table: "nfl_results", query: query)
         let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
-        
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return [] }
-        
+
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            print("[SupabaseAPI] fetchNFLResults failed: HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1)")
+            return []
+        }
+
         let decoder = JSONDecoder()
         do {
             let nflResults = try decoder.decode([NFLResult].self, from: data)
             // Convert to GameResult for unified display
             return nflResults.map { $0.toGameResult() }
         } catch {
+            print("[SupabaseAPI] fetchNFLResults decode error: \(error.localizedDescription)")
             return []
         }
     }
     
     /// Fetch all game results (game_results + nfl_results combined)
-    static func fetchAllGameResults(since dateFilter: String?) async throws -> [GameResult] {
+    /// - Parameter forceRefresh: Set to true for pull-to-refresh to bypass cache
+    static func fetchAllGameResults(since dateFilter: String?, forceRefresh: Bool = false) async throws -> [GameResult] {
+        let cacheKey = "gameResults_\(dateFilter ?? "all")"
+
+        // Check cache first (unless forcing refresh)
+        if !forceRefresh, let cached: [GameResult] = await APICache.shared.get(cacheKey) {
+            return cached
+        }
+
         async let gameTask = fetchGameResults(since: dateFilter)
         async let nflTask = fetchNFLResults(since: dateFilter)
-        
+
         let gameResults = (try? await gameTask) ?? []
         let nflResults = (try? await nflTask) ?? []
-        
+
         // Combine and sort by date descending
         let combined = gameResults + nflResults
-        return combined.sorted { ($0.game_date ?? "") > ($1.game_date ?? "") }
+        let result = combined.sorted { ($0.game_date ?? "") > ($1.game_date ?? "") }
+
+        // Store in cache
+        await APICache.shared.set(cacheKey, value: result)
+
+        return result
     }
     
     /// Fetch prop results with optional date filter
-    static func fetchPropResults(since dateFilter: String?) async throws -> [PropResult] {
+    /// - Parameter forceRefresh: Set to true for pull-to-refresh to bypass cache
+    static func fetchPropResults(since dateFilter: String?, forceRefresh: Bool = false) async throws -> [PropResult] {
+        let cacheKey = "propResults_\(dateFilter ?? "all")"
+
+        // Check cache first (unless forcing refresh)
+        if !forceRefresh, let cached: [PropResult] = await APICache.shared.get(cacheKey) {
+            return cached
+        }
+
         var query = [
             URLQueryItem(name: "select", value: "*"),
             URLQueryItem(name: "order", value: "game_date.desc"),
             URLQueryItem(name: "limit", value: "500")
         ]
-        
+
         if let since = dateFilter, !since.isEmpty {
             query.insert(URLQueryItem(name: "game_date", value: "gte.\(since)"), at: 1)
         }
-        
+
         let url = buildURL(table: "prop_results", query: query)
         let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
-        
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return [] }
-        
+
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            print("[SupabaseAPI] fetchPropResults failed: HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1)")
+            return []
+        }
+
         let decoder = JSONDecoder()
         do {
-            return try decoder.decode([PropResult].self, from: data)
+            let result = try decoder.decode([PropResult].self, from: data)
+            await APICache.shared.set(cacheKey, value: result)
+            return result
         } catch {
+            print("[SupabaseAPI] fetchPropResults decode error: \(error.localizedDescription)")
             return []
         }
     }
@@ -509,10 +559,16 @@ enum SupabaseAPI {
 
         let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
 
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return [] }
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            print("[SupabaseAPI] fetchDFSLineups failed: HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1)")
+            return []
+        }
 
         // Parse as array of dictionaries
-        guard let jsonArray = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return [] }
+        guard let jsonArray = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            print("[SupabaseAPI] fetchDFSLineups: failed to parse JSON")
+            return []
+        }
 
         let result = jsonArray.compactMap { DFSLineup.from(dict: $0) }
 
@@ -532,15 +588,18 @@ enum SupabaseAPI {
         ])
         
         let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
-        
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return [] }
-        
+
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            print("[SupabaseAPI] fetchDFSLineups(platform) failed: HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1)")
+            return []
+        }
+
         // Parse as array of dictionaries
         guard let jsonArray = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return [] }
-        
+
         return jsonArray.compactMap { DFSLineup.from(dict: $0) }
     }
-    
+
     /// Fetch a specific DFS lineup by platform and sport
     static func fetchDFSLineup(date: String, platform: DFSPlatform, sport: String) async throws -> DFSLineup? {
         let url = buildURL(table: "dfs_lineups", query: [
@@ -551,9 +610,12 @@ enum SupabaseAPI {
         ])
         
         let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
-        
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return nil }
-        
+
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            print("[SupabaseAPI] fetchDFSLineup(single) failed: HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1)")
+            return nil
+        }
+
         // Parse as array of dictionaries
         guard let jsonArray = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]],
               let first = jsonArray.first else { return nil }
