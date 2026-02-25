@@ -1,5 +1,4 @@
 import { supabase } from '../supabaseClient.js';
-import { createClient } from '@supabase/supabase-js';
 import { ballDontLieService } from './ballDontLieService.js';
 import { pickResultsAnalyzer } from './pickResultsAnalyzer.js';
 import { oddsService } from './oddsService.js';
@@ -9,15 +8,6 @@ const VALID_RESULTS = new Set(['won', 'lost', 'push']);
 const SCORE_REGEX = /^\d+-\d+$/;
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 2000;
-
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_SERVICE_KEY = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
-
-const adminSupabase = SUPABASE_SERVICE_KEY
-  ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
-      auth: { autoRefreshToken: false, persistSession: false }
-    })
-  : supabase;
 
 // Initialize services as needed
 
