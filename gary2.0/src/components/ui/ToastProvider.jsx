@@ -1,16 +1,7 @@
-import { createContext, useContext, useState, useCallback } from 'react';
+import { createContext, useState, useCallback } from 'react';
 import { Toast } from './Toast';
-import { GaryToast } from './GaryToast';
 
 const ToastContext = createContext();
-
-export function useToast() {
-  const context = useContext(ToastContext);
-  if (!context) {
-    throw new Error('useToast must be used within a ToastProvider');
-  }
-  return context;
-}
 
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);
@@ -30,23 +21,14 @@ export function ToastProvider({ children }) {
       {children}
       <div className="fixed bottom-4 right-4 space-y-2 z-50">
         {toasts.map(toast => (
-          toast.isGary ? (
-            <GaryToast
-              key={toast.id}
-              message={toast.message}
-              type={toast.type}
-              duration={toast.duration}
-              onClose={() => removeToast(toast.id)}
-            />
-          ) : (
-            <Toast
-              key={toast.id}
-              message={toast.message}
-              type={toast.type}
-              duration={toast.duration}
-              onClose={() => removeToast(toast.id)}
-            />
-          )
+          <Toast
+            key={toast.id}
+            message={toast.message}
+            type={toast.type}
+            duration={toast.duration}
+            isGary={toast.isGary}
+            onClose={() => removeToast(toast.id)}
+          />
         ))}
       </div>
     </ToastContext.Provider>

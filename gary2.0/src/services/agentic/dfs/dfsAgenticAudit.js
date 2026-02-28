@@ -17,6 +17,7 @@
 
 import { isSlotEligible } from './dfsPositionUtils.js';
 import { getSalaryCap } from './dfsSportConfig.js';
+import { GEMINI_PRO_FALLBACK } from '../modelConfig.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // AUDIT SYSTEM PROMPT
@@ -137,7 +138,7 @@ If you see issues, you can make 1-2 swaps. Be specific:
  * @returns {Object} - Audited lineup (possibly with adjustments)
  */
 export async function auditLineupWithPro(genAI, lineup, slateAnalysis, context, options = {}) {
-  const { modelName = 'gemini-3-pro-preview' } = options;
+  const { modelName = GEMINI_PRO_FALLBACK } = options;
   const { players, winningTargets, platform, sport } = context;
 
   console.log('[Lineup Audit] Gary Pro auditing lineup...');

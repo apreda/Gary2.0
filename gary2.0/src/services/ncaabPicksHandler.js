@@ -1,8 +1,10 @@
 import { oddsService } from './oddsService.js';
 import { ballDontLieService } from './ballDontLieService.js';
 import { makeGaryPick } from './garyEngine.js';
-import { computeRecommendedSportsbook } from './recommendedSportsbook.js';
+import { computeRecommendedSportsbook } from './recommendedSportsbookUtil.js';
 import { processGameOnce, gameAlreadyHasPick } from './picksService.js';
+import { mergeBookmakerOdds } from './agentic/sharedUtils.js';
+import { ncaabSeason } from '../utils/dateUtils.js';
 
 const SPORT_KEY = 'basketball_ncaab';
 
@@ -36,7 +38,7 @@ export async function generateNCAABPicks(options = {}) {
     windowed = [windowed[idx]];
   }
 
-  const season = new Date().getFullYear();
+  const season = ncaabSeason();
   const picks = [];
 
   for (const game of windowed) {
@@ -188,33 +190,7 @@ export async function generateNCAABPicks(options = {}) {
       };
 
       // Merge odds across all available bookmakers to avoid false negatives
-      let oddsData = null;
-      if (Array.isArray(game.bookmakers) && game.bookmakers.length > 0) {
-        const marketKeyToOutcomes = new Map();
-        for (const b of game.bookmakers) {
-          const markets = Array.isArray(b?.markets) ? b.markets : [];
-          for (const m of markets) {
-            if (!m || !m.key || !Array.isArray(m.outcomes)) continue;
-            if (!marketKeyToOutcomes.has(m.key)) marketKeyToOutcomes.set(m.key, new Map());
-            const outMap = marketKeyToOutcomes.get(m.key);
-            for (const o of m.outcomes) {
-              if (!o || typeof o?.name !== 'string' || typeof o?.price !== 'number') continue;
-              const key = `${o.name}|${typeof o.point === 'number' ? o.point : ''}`;
-              if (!outMap.has(key)) {
-                outMap.set(key, { name: o.name, price: o.price, ...(typeof o.point === 'number' ? { point: o.point } : {}) });
-              }
-            }
-          }
-        }
-        const mergedMarkets = [];
-        for (const [key, outMap] of marketKeyToOutcomes.entries()) {
-          const outcomes = Array.from(outMap.values());
-          if (outcomes.length) mergedMarkets.push({ key, outcomes });
-        }
-        if (mergedMarkets.length) {
-          oddsData = { bookmaker: 'merged', markets: mergedMarkets };
-        }
-      }
+      const oddsData = mergeBookmakerOdds(game.bookmakers);
 
       const gameObj = {
         id: gameId,
@@ -237,7 +213,7 @@ export async function generateNCAABPicks(options = {}) {
         const hasTop3 = !!(Array.isArray(statsReport?.topPlayers?.home) && statsReport.topPlayers.home.length || Array.isArray(statsReport?.topPlayers?.away) && statsReport.topPlayers.away.length);
         const hasNews = !!(realTimeNewsText && realTimeNewsText.length);
         console.log(`NCAAB: Injected season metrics/top players into prompt (fourFactors=${hasFourFactors}, top3=${hasTop3}, news=${hasNews})`);
-      } catch {}
+      } catch (e) { console.warn('NCAAB stats visibility check failed:', e?.message); }
 
       const pick = await makeGaryPick(gameObj);
       if (!pick?.success) return null;

@@ -14,7 +14,6 @@
  * from Flash to 3 Pro but the identifiers were kept for continuity.
  */
 
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { toolDefinitions, getTokensForSport } from './tools/toolDefinitions.js';
 import { fetchStats, clearStatRouterCache } from './tools/statRouter.js';
 import { getConstitution } from './constitution/index.js';
@@ -22,19 +21,13 @@ import { getSteelManGradingReference } from './constitution/sharpReferenceLoader
 import { buildScoutReport } from './scoutReport/scoutReportBuilder.js';
 import { ballDontLieService } from '../ballDontLieService.js';
 import { nhlSeason, nflSeason, ncaabSeason } from '../../utils/dateUtils.js';
+import {
+  GEMINI_FLASH_MODEL, GEMINI_PRO_MODEL, GEMINI_PRO_FALLBACK,
+  validateGeminiModel, getGeminiClient
+} from './modelConfig.js';
 
-// Lazy-initialize Gemini client
-let gemini = null;
-function getGemini() {
-  if (!gemini) {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      throw new Error('GEMINI_API_KEY environment variable is required');
-    }
-    gemini = new GoogleGenerativeAI(apiKey, "v1beta");
-  }
-  return gemini;
-}
+// v1beta client for this orchestrator (grounding, etc.)
+const getGemini = () => getGeminiClient({ beta: true });
 
 // ═══════════════════════════════════════════════════════════════════════════
 // GEMINI MODEL POLICY (2026 AGENTIC OPTIMIZATION)
@@ -56,26 +49,7 @@ function getGemini() {
 //   - Main Pro session persists throughout (no context loss)
 //   - If advisor fails, the pick fails (no silent fallback to biased cases)
 // ═══════════════════════════════════════════════════════════════════════════
-// Primary: Gemini 3.1 Pro Preview (investigation, evaluation, final decision)
-// Advisor: Gemini 3 Pro Preview (independent bilateral Steel Man case builder)
-const GEMINI_PRO_MODEL = 'gemini-3.1-pro-preview';
-const GEMINI_PRO_FALLBACK = 'gemini-3-pro-preview';  // Also used as independent advisor model
-
-const ALLOWED_GEMINI_MODELS = [
-  'gemini-3-flash-preview',  // Flash: used for scout report tool calling
-  GEMINI_PRO_MODEL,          // Primary: Investigation + Evaluation + Final Decision
-  GEMINI_PRO_FALLBACK,       // Advisor: Independent Steel Man case builder + Pro fallback
-];
-
-function validateGeminiModel(model) {
-  if (!ALLOWED_GEMINI_MODELS.includes(model)) {
-    console.error(`[MODEL POLICY VIOLATION] Attempted to use "${model}" - not in allowed list!`);
-    console.error(`[MODEL POLICY] Allowed models: ${ALLOWED_GEMINI_MODELS.join(', ')}`);
-    // Fall back to Flash rather than crash
-    return 'gemini-3-flash-preview';
-  }
-  return model;
-}
+// Model constants & validateGeminiModel imported from modelConfig.js
 
 // ═══════════════════════════════════════════════════════════════════════════
 // MODEL SELECTION HELPERS
@@ -149,7 +123,7 @@ console.log(`[Orchestrator] Gemini 3.1 Pro (main) + 3 Pro (advisor) + Flash (gro
  */
 function createGeminiSession(options = {}) {
   const {
-    modelName = 'gemini-3-flash-preview',
+    modelName = GEMINI_FLASH_MODEL,
     systemPrompt = '',
     tools = [],
     thinkingLevel = 'high'
@@ -158,7 +132,7 @@ function createGeminiSession(options = {}) {
   const genAI = getGemini();
   const validatedModel = validateGeminiModel(modelName);
   
-  // Convert OpenAI-format tools to Gemini function declarations
+  // Convert tool definitions to Gemini function declarations
   const functionDeclarations = tools
     .filter(tool => tool.type === 'function')
     .map(tool => ({
@@ -289,7 +263,7 @@ async function sendToSession(session, message, options = {}) {
     const functionCallParts = parts.filter(p => p.functionCall);
     const textParts = parts.filter(p => p.text).map(p => p.text);
     
-    // Build tool_calls array (OpenAI-compatible format for downstream compatibility)
+    // Build tool_calls array (standard format for downstream compatibility)
     let toolCalls = null;
     if (functionCallParts.length > 0) {
       toolCalls = functionCallParts.map((fc, index) => ({
@@ -403,7 +377,7 @@ async function sendToSessionWithRetry(session, message, options = {}, maxRetries
  * Extract FULL context from a session for model switching
  * Pro needs ALL the data Flash gathered to verify Steel Man claims
  *
- * @param {Array} messages - OpenAI-format message history
+ * @param {Array} messages - Chat message history
  * @param {Object} steelManCases - Captured steel man cases
  * @param {Array} toolCallHistory - Full history of tool calls and results
  * @returns {string} - Complete context for Pro model
@@ -3895,7 +3869,7 @@ function determineCurrentPass(messages) {
  */
 async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam, options = {}) {
   const provider = 'gemini';
-  const initialModel = validateGeminiModel('gemini-3-flash-preview');
+  const initialModel = validateGeminiModel(GEMINI_FLASH_MODEL);
   
   const isNFLSport = sport === 'americanfootball_nfl' || sport === 'NFL';
   console.log(`[Orchestrator] Using ${provider.toUpperCase()} for ${sport}`);
@@ -4103,7 +4077,7 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
           }
         }
         
-        // Convert session response to OpenAI-compatible format for downstream code
+        // Convert session response to standard format for downstream code
         message = {
           role: 'assistant',
           content: sessionResponse.content,
@@ -4146,7 +4120,7 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
       } catch (error) {
         // Handle quota errors with model fallback
         // Flash -> Pro fallback (Flash hit rate limit, use Pro)
-        if (error.isQuotaError && currentModelName === 'gemini-3-flash-preview') {
+        if (error.isQuotaError && currentModelName === GEMINI_FLASH_MODEL) {
           console.log(`[Orchestrator] ⚠️ Flash quota exceeded - falling back to Pro`);
 
           // Extract textual context to pass to Pro
@@ -4219,12 +4193,12 @@ async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam
 
           const textualContext = extractTextualSummaryForModelSwitch(messages, steelManCases, toolCallHistory);
           currentSession = createGeminiSession({
-            modelName: 'gemini-3-flash-preview',
+            modelName: GEMINI_FLASH_MODEL,
             systemPrompt: systemPrompt + '\n\n' + textualContext,
             tools: currentPass === 'evaluation' ? [] : activeTools,
             thinkingLevel: 'high'
           });
-          currentModelName = 'gemini-3-flash-preview';
+          currentModelName = GEMINI_FLASH_MODEL;
           hasSwitchedToPro = false;
 
           console.log(`[Orchestrator] 🔄 Created fallback Flash session, retrying...`);
@@ -6765,7 +6739,6 @@ function normalizeSportToLeague(sport) {
   return mapping[sport] || sport;
 }
 
-// Named exports for testing
-export { normalizeSportToLeague, getInvestigatedFactors, INVESTIGATION_FACTORS, buildPass3Props, parsePropsResponse, FINALIZE_PROPS_TOOL };
+// All internals consumed within this module only — no named exports needed.
 
 export default { analyzeGame, buildSystemPrompt };

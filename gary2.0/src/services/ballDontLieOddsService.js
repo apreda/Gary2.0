@@ -3,33 +3,14 @@
  * Fetches game-level betting odds and joins to NBA games by date.
  */
 import axios from 'axios';
-import { ballDontLieService } from './ballDontLieService.js';
+import { ballDontLieService, getApiKey, BALLDONTLIE_API_BASE_URL } from './ballDontLieService.js';
 
-const BDL_V2_BASE = 'https://api.balldontlie.io/v2';
-const BDL_NBA_ODDS_V1 = 'https://api.balldontlie.io/nba/v1/odds';
-const BDL_NFL_ODDS_V1 = 'https://api.balldontlie.io/nfl/v1/odds';
-const BDL_NHL_ODDS_V1 = 'https://api.balldontlie.io/nhl/v1/odds';
-const BDL_NCAAF_ODDS_V1 = 'https://api.balldontlie.io/ncaaf/v1/odds';
-const BDL_NCAAB_ODDS_V1 = 'https://api.balldontlie.io/ncaab/v1/odds';
+const BDL_NFL_ODDS_V1 = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/odds`;
+const BDL_NHL_ODDS_V1 = `${BALLDONTLIE_API_BASE_URL}/nhl/v1/odds`;
+const BDL_NCAAF_ODDS_V1 = `${BALLDONTLIE_API_BASE_URL}/ncaaf/v1/odds`;
 
-// Player Props endpoints (LIVE data, updated in real-time)
-const BDL_NBA_PROPS_V1 = 'https://api.balldontlie.io/nba/v1/odds/player_props';
-const BDL_NFL_PROPS_V1 = 'https://api.balldontlie.io/nfl/v1/odds/player_props';
-const BDL_NHL_PROPS_V1 = 'https://api.balldontlie.io/nhl/v1/odds/player_props';
-
-function getApiKey() {
-  try {
-    const serverKey =
-      (typeof process !== 'undefined' && process?.env?.BALLDONTLIE_API_KEY) ||
-      (typeof process !== 'undefined' && process?.env?.VITE_BALLDONTLIE_API_KEY) ||
-      (typeof process !== 'undefined' && process?.env?.NEXT_PUBLIC_BALLDONTLIE_API_KEY);
-    const clientKey =
-      (typeof import.meta !== 'undefined' && import.meta?.env?.VITE_BALLDONTLIE_API_KEY) || undefined;
-    return serverKey || clientKey || '';
-  } catch {
-    return '';
-  }
-}
+// getApiKey imported from ballDontLieService.js
+// Player props endpoints removed — callers use ballDontLieService methods instead
 
 const toNumber = (value) => {
   if (value === null || value === undefined) return null;
@@ -37,28 +18,6 @@ const toNumber = (value) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 };
-
-/**
- * Legacy helper (kept for reference). Prefer ballDontLieService.getOddsV2 which
- * routes NBA to /v2/odds and other sports to /{sport}/v1/odds with fallbacks.
- */
-async function fetchOddsByDates(dates = []) {
-  try {
-    const apiKey = getApiKey();
-    if (!apiKey) throw new Error('Missing Ball Don\'t Lie API key for odds');
-    const params = {};
-    if (Array.isArray(dates) && dates.length > 0) params.dates = dates; // axios adds [] for arrays
-    const resp = await axios.get(`${BDL_V2_BASE}/odds`, {
-      params,
-      headers: { Authorization: apiKey },
-      paramsSerializer: { indexes: null }
-    });
-    return Array.isArray(resp?.data?.data) ? resp.data.data : [];
-  } catch (e) {
-    // Let callers decide their own fallback; return empty on failure
-    return [];
-  }
-}
 
 async function fetchNflOddsBySeasonWeek(season, week) {
   const apiKey = getApiKey();
@@ -76,90 +35,7 @@ async function fetchNflOddsBySeasonWeek(season, week) {
   }
 }
 
-/**
- * Get NBA games with odds for a specific date (YYYY-MM-DD)
- * Returns a list of games in a structure similar to oddsService.getUpcomingGames
- */
-async function getNbaGamesWithOdds(dateStr) {
-  // Fetch games for date via v1 client
-  const games = await ballDontLieService.getGames('basketball_nba', { dates: [dateStr], per_page: 100 }, 10);
-  // Fetch odds via unified helper (routes NBA -> /v2/odds, otherwise sport v1)
-  let odds = await ballDontLieService.getOddsV2({ dates: [dateStr], per_page: 100 }, 'basketball_nba');
-
-  // Index odds by game_id and vendor
-  const gameIdToVendors = new Map();
-  odds.forEach(row => {
-    const list = gameIdToVendors.get(row.game_id) || [];
-    list.push(row);
-    gameIdToVendors.set(row.game_id, list);
-  });
-
-  // Map games to consistent structure
-  const mapped = (games || []).map(g => {
-    const vendors = gameIdToVendors.get(g.id) || [];
-    const bookmakers = vendors.map(v => {
-      // Build a bookmaker-like structure with minimal markets
-      const totalsOutcomes = [];
-      const totalPoint = toNumber(v.total_value);
-      const totalOver = toNumber(v.total_over_odds);
-      const totalUnder = toNumber(v.total_under_odds);
-      if (totalPoint !== null && totalOver !== null) {
-        totalsOutcomes.push({ name: 'Over', point: totalPoint, price: totalOver });
-      }
-      if (totalPoint !== null && totalUnder !== null) {
-        totalsOutcomes.push({ name: 'Under', point: totalPoint, price: totalUnder });
-      }
-      const spreadsOutcomes = [];
-      const homeSpreadPoint = toNumber(v.spread_home_value);
-      const homeSpreadPrice = toNumber(v.spread_home_odds);
-      if (homeSpreadPoint !== null && homeSpreadPrice !== null) {
-        spreadsOutcomes.push({ name: g.home_team?.full_name || g.home_team?.name, point: homeSpreadPoint, price: homeSpreadPrice });
-      }
-      const awaySpreadPoint = toNumber(v.spread_away_value);
-      const awaySpreadPrice = toNumber(v.spread_away_odds);
-      if (awaySpreadPoint !== null && awaySpreadPrice !== null) {
-        spreadsOutcomes.push({ name: g.visitor_team?.full_name || g.visitor_team?.name, point: awaySpreadPoint, price: awaySpreadPrice });
-      }
-      const h2hOutcomes = [];
-      const homeMl = toNumber(v.moneyline_home_odds);
-      if (homeMl !== null) {
-        h2hOutcomes.push({ name: g.home_team?.full_name || g.home_team?.name, price: homeMl });
-      }
-      const awayMl = toNumber(v.moneyline_away_odds);
-      if (awayMl !== null) {
-        h2hOutcomes.push({ name: g.visitor_team?.full_name || g.visitor_team?.name, price: awayMl });
-      }
-
-      const markets = [];
-      if (h2hOutcomes.length) markets.push({ key: 'h2h', outcomes: h2hOutcomes });
-      if (spreadsOutcomes.length) markets.push({ key: 'spreads', outcomes: spreadsOutcomes });
-      if (totalsOutcomes.length) markets.push({ key: 'totals', outcomes: totalsOutcomes });
-
-      return {
-        key: v.vendor,
-        title: v.vendor,
-        markets
-      };
-    });
-
-    return {
-      id: g.id,
-      sport_key: 'basketball_nba',
-      home_team: g.home_team?.full_name || g.home_team?.name || '',
-      away_team: g.visitor_team?.full_name || g.visitor_team?.name || '',
-      // Use datetime (actual game time in UTC) over date string to avoid timezone bugs
-      // g.date is just "YYYY-MM-DD" which when parsed becomes midnight UTC, causing EST filter issues
-      commence_time: g.datetime || g.date,
-      bookmakers
-    };
-  });
-
-  return mapped;
-}
-
 export const ballDontLieOddsService = {
-  fetchOddsByDates,
-  getNbaGamesWithOdds,
   /**
    * Generic: get games with odds for any supported sport key using BDL V1 games + V2 odds
    * @param {string} sportKey - e.g., 'basketball_nba', 'americanfootball_nfl', 'icehockey_nhl', 'baseball_mlb'
@@ -776,123 +652,7 @@ export const ballDontLieOddsService = {
       }
       return result;
     }).filter(Boolean);
-  },
-
-  /**
-   * Fetch NFL player props from BDL
-   * @param {number} gameId - BDL game ID
-   * @param {Object} options - Optional filters (player_id, prop_type, vendors[])
-   * @returns {Promise<Array>} Player props in normalized format
-   */
-  async getNflPlayerProps(gameId, options = {}) {
-    const apiKey = getApiKey();
-    if (!apiKey) throw new Error('Missing Ball Don\'t Lie API key');
-    if (!gameId) throw new Error('game_id is required for player props');
-
-    try {
-      const params = { game_id: gameId };
-      if (options.player_id) params.player_id = options.player_id;
-      if (options.prop_type) params.prop_type = options.prop_type;
-      if (options.vendors) params['vendors[]'] = options.vendors;
-
-      const resp = await axios.get(BDL_NFL_PROPS_V1, {
-        params,
-        headers: { Authorization: apiKey }
-      });
-
-      const props = Array.isArray(resp?.data?.data) ? resp.data.data : [];
-      return normalizePlayerProps(props, 'nfl');
-    } catch (e) {
-      console.warn('[BDL] NFL player props fetch failed:', e?.response?.data || e?.message);
-      return [];
-    }
-  },
-
-  /**
-   * Fetch NHL player props from BDL
-   * @param {number} gameId - BDL game ID
-   * @param {Object} options - Optional filters (player_id, prop_type, vendors[])
-   * @returns {Promise<Array>} Player props in normalized format
-   */
-  async getNhlPlayerProps(gameId, options = {}) {
-    const apiKey = getApiKey();
-    if (!apiKey) throw new Error('Missing Ball Don\'t Lie API key');
-    if (!gameId) throw new Error('game_id is required for player props');
-
-    try {
-      const params = { game_id: gameId };
-      if (options.player_id) params.player_id = options.player_id;
-      if (options.prop_type) params.prop_type = options.prop_type;
-      if (options.vendors) params['vendors[]'] = options.vendors;
-
-      const resp = await axios.get(BDL_NHL_PROPS_V1, {
-        params,
-        headers: { Authorization: apiKey }
-      });
-
-      const props = Array.isArray(resp?.data?.data) ? resp.data.data : [];
-      return normalizePlayerProps(props, 'nhl');
-    } catch (e) {
-      console.warn('[BDL] NHL player props fetch failed:', e?.response?.data || e?.message);
-      return [];
-    }
-  },
-
-  /**
-   * Fetch NBA player props from BDL (if available)
-   * @param {number} gameId - BDL game ID
-   * @param {Object} options - Optional filters (player_id, prop_type, vendors[])
-   * @returns {Promise<Array>} Player props in normalized format
-   */
-  async getNbaPlayerProps(gameId, options = {}) {
-    const apiKey = getApiKey();
-    if (!apiKey) throw new Error('Missing Ball Don\'t Lie API key');
-    if (!gameId) throw new Error('game_id is required for player props');
-
-    try {
-      const params = { game_id: gameId };
-      if (options.player_id) params.player_id = options.player_id;
-      if (options.prop_type) params.prop_type = options.prop_type;
-      if (options.vendors) params['vendors[]'] = options.vendors;
-
-      const resp = await axios.get(BDL_NBA_PROPS_V1, {
-        params,
-        headers: { Authorization: apiKey }
-      });
-
-      const props = Array.isArray(resp?.data?.data) ? resp.data.data : [];
-      return normalizePlayerProps(props, 'nba');
-    } catch (e) {
-      console.warn('[BDL] NBA player props fetch failed:', e?.response?.data || e?.message);
-      return [];
-    }
   }
+  // getNflPlayerProps, getNhlPlayerProps, getNbaPlayerProps, normalizePlayerProps removed — dead code (callers use ballDontLieService instead)
 };
-
-/**
- * Normalize BDL player props to a consistent format
- * BDL format: { player_id, vendor, prop_type, line_value, market: { type, over_odds, under_odds } OR { type, odds } }
- * Output format: { player_id, player, team, prop_type, line, over_odds, under_odds, bookmaker }
- */
-function normalizePlayerProps(props, sport) {
-  return props.map(p => {
-    const market = p.market || {};
-    const isOverUnder = market.type === 'over_under';
-
-    return {
-      id: p.id,
-      game_id: p.game_id,
-      player_id: p.player_id,
-      player: p.player_name || `Player ${p.player_id}`, // BDL may not include player name - we'll need to join
-      prop_type: p.prop_type,
-      line: toNumber(p.line_value),
-      over_odds: isOverUnder ? toNumber(market.over_odds) : null,
-      under_odds: isOverUnder ? toNumber(market.under_odds) : null,
-      milestone_odds: !isOverUnder ? toNumber(market.odds) : null,
-      market_type: market.type,
-      bookmaker: p.vendor,
-      updated_at: p.updated_at
-    };
-  });
-}
 

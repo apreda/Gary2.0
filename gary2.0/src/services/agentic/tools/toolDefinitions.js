@@ -1,6 +1,6 @@
 /**
- * OpenAI Function Calling Tool Definitions
- * 
+ * LLM Function Calling Tool Definitions (Gemini)
+ *
  * This defines the "menu" of stats Gary can request.
  * Each token maps to a specific data fetch in statRouter.js
  */
@@ -227,8 +227,8 @@ const ALL_TOKENS = [...new Set([
 ])];
 
 /**
- * OpenAI Tool Definition for fetch_stats function
- * This is the schema that tells OpenAI what Gary can request
+ * Tool Definition for fetch_stats function
+ * This is the schema that tells the LLM what Gary can request
  */
 export const toolDefinitions = [
   {
@@ -505,5 +505,5 @@ export function formatTokenMenu(sport) {
   return output.trim();
 }
 
-export { NBA_TOKENS, NFL_TOKENS, NCAAB_TOKENS, NCAAF_TOKENS, NHL_TOKENS, ALL_TOKENS };
+// Token constants are consumed internally via getTokensForSport() only.
 

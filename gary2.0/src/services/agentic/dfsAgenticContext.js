@@ -22,6 +22,7 @@ import {
 import { discoverDFSSlates as discoverSlatesWithService } from './dfsSlateDiscoveryService.js';
 import { inferPlayerRole } from './nbaStackingRules.js';
 import { fetchAllInjuries as fetchNbaInjuriesFromRapidApi } from '../nbaInjuryReportService.js';
+import { normalizePlayerName } from './sharedUtils.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // MODULE-LEVEL INJURY CACHE
@@ -94,7 +95,7 @@ function getInjuryByName(playerName) {
  * @param {string} slateDate - Date string (e.g., '2025-01-05')
  * @returns {Array} List of discovered slates with teams
  */
-export async function discoverDFSSlates(sport, platform, slateDate) {
+async function discoverDFSSlates(sport, platform, slateDate) {
   return await discoverSlatesWithService(sport, platform, slateDate);
 }
 
@@ -165,7 +166,7 @@ async function fetchActivePlayersFromBDL(sport, teamIds = []) {
  * @param {string[]} slateTeams - Optional slate team abbreviations to filter by (avoids fetching non-slate teams)
  * @returns {Array} Player stats with accurate team info
  */
-export async function fetchPlayerStatsFromBDL(sport, dateStr, slateTeams = []) {
+async function fetchPlayerStatsFromBDL(sport, dateStr, slateTeams = []) {
   try {
     if (sport === 'NBA') {
       // Get today's games
@@ -947,7 +948,7 @@ function shouldExcludePlayer(status) {
  * @param {Array} groundedPlayers - Players with salaries from Grounding
  * @returns {Array} Merged player pool (excluding OUT/DOUBTFUL)
  */
-export function mergePlayerData(bdlPlayers, groundedPlayers) {
+function mergePlayerData(bdlPlayers, groundedPlayers) {
   // Create lookup maps for grounded players - multiple keys for better matching
   const salaryMap = new Map();
   const lastNameMap = new Map(); // Secondary lookup by last name + team
@@ -1224,33 +1225,6 @@ export function mergePlayerData(bdlPlayers, groundedPlayers) {
   return { merged, excludedPlayers };
 }
 
-/**
- * Normalize player name for matching
- * Handles: accents, apostrophes, Jr/Sr/III, hyphens, etc.
- */
-function normalizePlayerName(name) {
-  if (!name) return '';
-  
-  return name
-    .toLowerCase()
-    // Remove accents/diacritics (Dončić → Doncic, etc.)
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    // Remove suffixes (Jr., Sr., III, II)
-    .replace(/\s+(jr\.?|sr\.?|iii|ii|iv)$/i, '')
-    // Replace hyphens with spaces (Karl-Anthony → Karl Anthony)
-    .replace(/-/g, ' ')
-    // Remove apostrophes (O'Neale → ONeale)
-    .replace(/'/g, '')
-    // Remove periods (P.J. → PJ)
-    .replace(/\./g, '')
-    // Remove all non-alphanumeric except spaces
-    .replace(/[^a-z0-9\s]/g, '')
-    // Collapse multiple spaces
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
 
 /**
  * Get teams playing on a specific date
@@ -1258,7 +1232,7 @@ function normalizePlayerName(name) {
  * @param {string} dateStr - Date YYYY-MM-DD
  * @returns {Array} Team names
  */
-export async function getTeamsPlayingToday(sport, dateStr) {
+async function getTeamsPlayingToday(sport, dateStr) {
   try {
     const sportKey = sport === 'NBA' ? 'basketball_nba' : 'americanfootball_nfl';
     let games = await ballDontLieService.getGames(sportKey, { dates: [dateStr] }, 5);
@@ -2267,11 +2241,6 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
 }
 
 export default {
-  fetchPlayerStatsFromBDL,
-  mergePlayerData,
-  getTeamsPlayingToday,
-  buildDFSContext,
-  // Re-export Tank01 service for direct access if needed
-  fetchDfsSalaries
+  buildDFSContext
 };
 

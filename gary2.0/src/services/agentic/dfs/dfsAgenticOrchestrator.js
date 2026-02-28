@@ -18,16 +18,18 @@
  * - Gary DECIDES with conviction (not rules)
  */
 
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { analyzeSlateWithFlash, fetchOwnershipFromFTA } from './dfsAgenticSlateAnalyzer.js';
 import { investigatePlayersForPositions } from './dfsAgenticPlayerInvestigator.js';
 import { decideLineupWithPro } from './dfsAgenticLineupDecider.js';
 import { auditLineupWithPro } from './dfsAgenticAudit.js';
-import { getDFSConstitution } from './constitution/dfsAgenticConstitution.js';
 import { getRosterSlots, getFormRatioFields } from './dfsSportConfig.js';
 import { WINNING_SCORE_TARGETS } from '../FIBLE.js';
 import { buildDFSContext } from '../dfsAgenticContext.js';
 import { findPivotAlternatives } from '../../dfsLineupService.js';
+import {
+  GEMINI_FLASH_MODEL, GEMINI_PRO_FALLBACK as GEMINI_PRO_MODEL,
+  getGeminiClient
+} from '../modelConfig.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // HELPERS
@@ -42,20 +44,7 @@ function withTimeout(promise, ms, label) {
   ]);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// GEMINI MODEL CONFIGURATION
-// ═══════════════════════════════════════════════════════════════════════════════
-
-const GEMINI_FLASH_MODEL = process.env.GEMINI_FLASH_MODEL || 'gemini-3-flash-preview';
-const GEMINI_PRO_MODEL = process.env.GEMINI_PRO_MODEL || 'gemini-3-pro-preview';
-
-function getGeminiClient() {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error('GEMINI_API_KEY not set');
-  }
-  return new GoogleGenerativeAI(apiKey);
-}
+// Model constants & getGeminiClient imported from modelConfig.js
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN ORCHESTRATOR

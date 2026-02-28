@@ -5,53 +5,18 @@
  */
 // Load environment variables FIRST
 import '../src/loadEnv.js';
-import { createClient } from '@supabase/supabase-js';
+import {
+  getESTDate, formatGameTimeEST, parseArgs,
+  filterFirstTDProps, createScriptSupabase, mergeAndStorePicks
+} from './helpers/nflTdHelpers.js';
 
 // Dynamic imports after env is loaded
 const { oddsService } = await import('../src/services/oddsService.js');
 const { propOddsService } = await import('../src/services/propOddsService.js');
-const { openaiService, GEMINI_FLASH_MODEL } = await import('../src/services/openaiService.js');
+const { llmService: openaiService, GEMINI_FLASH_MODEL } = await import('../src/services/llmService.js');
 const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
 
-
 const SPORT_KEY = 'americanfootball_nfl';
-
-function getESTDate() {
-  // DST-safe: Use Intl with America/New_York timezone
-  const now = new Date();
-  const options = { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' };
-  const estDate = new Intl.DateTimeFormat('en-US', options).format(now);
-  const [month, day, year] = estDate.split('/');
-  return `${year}-${month}-${day}`;
-}
-
-// Format game time to readable EST string
-function formatGameTimeEST(isoString) {
-  if (!isoString) return 'TBD';
-  try {
-    const date = new Date(isoString);
-    return date.toLocaleString('en-US', {
-      timeZone: 'America/New_York',
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
-    });
-  } catch {
-    return 'TBD';
-  }
-}
-
-function parseArgs() {
-  return process.argv.slice(2).reduce((acc, arg) => {
-    const [key, value] = arg.split('=');
-    if (!key) return acc;
-    acc[key.replace(/^--/, '')] = value ?? true;
-    return acc;
-  }, {});
-}
 
 /**
  * Detect NFL playoff stage based on current date
@@ -895,12 +860,7 @@ async function main() {
       });
 
       // Filter for First TD props
-      const rawFirstProps = props.filter(p => {
-        const propType = (p.prop_type || '').toLowerCase();
-        return propType === 'first_td' ||
-               propType === 'player_1st_td' ||
-               propType === '1st_td';
-      });
+      const rawFirstProps = filterFirstTDProps(props);
 
       // Limit to 10 players per team for TD props
       // Group by player and team, sort by odds, take top 10 per team
@@ -1150,17 +1110,8 @@ async function main() {
   if (shouldStore) {
     console.log(`\n💾 Storing TD picks in Supabase...`);
     
-    const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
-    
-    if (!supabaseUrl || !supabaseKey) {
-      console.error('❌ Missing Supabase credentials');
-      return;
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseKey, {
-      auth: { autoRefreshToken: false, persistSession: false }
-    });
+    const supabase = createScriptSupabase();
+    if (!supabase) return;
 
     const dateParam = getESTDate();
 
@@ -1257,37 +1208,11 @@ async function main() {
 
     const allTDPicks = [...standardPicks, ...underdogPicks, ...firstTDPicks];
 
-    // Fetch existing picks and merge
-    const { data: existingData } = await supabase
-      .from('prop_picks')
-      .select('picks')
-      .eq('date', dateParam)
-      .single();
-
-    let existingPicks = [];
-    if (existingData?.picks) {
-      // Keep non-NFL picks and non-TD NFL picks
-      existingPicks = existingData.picks.filter(p => 
-        p.sport !== 'NFL' || (p.sport === 'NFL' && p.td_category === undefined)
-      );
-    }
-
-    const mergedPicks = [...existingPicks, ...allTDPicks];
-
-    // Delete and re-insert
-    await supabase.from('prop_picks').delete().eq('date', dateParam);
-    
-    const { error: insertError } = await supabase
-      .from('prop_picks')
-      .insert({
-        date: dateParam,
-        picks: mergedPicks,
-        created_at: new Date().toISOString()
-      });
-
-    if (insertError) {
-      console.error(`❌ Insert error: ${insertError.message}`);
-    } else {
+    // Merge with existing picks (keep non-NFL and non-TD NFL picks)
+    const stored = await mergeAndStorePicks(supabase, dateParam, allTDPicks, p =>
+      p.sport !== 'NFL' || (p.sport === 'NFL' && p.td_category === undefined)
+    );
+    if (stored) {
       console.log(`✅ Stored ${allTDPicks.length} NFL TD picks (${standardPicks.length} standard + ${underdogPicks.length} long-shot + ${firstTDPicks.length} first TD)`);
     }
   }

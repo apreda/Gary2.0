@@ -1,8 +1,10 @@
 import { oddsService } from './oddsService.js';
 import { ballDontLieService } from './ballDontLieService.js';
-import { computeRecommendedSportsbook } from './recommendedSportsbook.js';
+import { computeRecommendedSportsbook } from './recommendedSportsbookUtil.js';
 import { makeGaryPick } from './garyEngine.js';
-import { processGameOnce, gameAlreadyHasPick } from './picksService.js'; // Import shared helper
+import { processGameOnce, gameAlreadyHasPick } from './picksService.js';
+import { resolveTeamByName, mergeBookmakerOdds } from './agentic/sharedUtils.js';
+import { getESTDate, toESTDate, nbaSeason } from '../utils/dateUtils.js';
 
 export async function generateNBAPicks(options = {}) {
   console.log('Processing NBA games');
@@ -13,23 +15,17 @@ export async function generateNBAPicks(options = {}) {
   const games = await oddsService.getUpcomingGames('basketball_nba', { nocache: options.nocache === true });
   console.log(`Found ${games.length} NBA games from odds service`);
   
-  // Get today's date in EST time zone format (YYYY-MM-DD)
-  const today = new Date();
-  const estOptions = { timeZone: 'America/New_York' };
-  const estDateString = today.toLocaleDateString('en-US', estOptions);
-  const [month, day, year] = estDateString.split('/');
-  const estFormattedDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  const estFormattedDate = getESTDate();
   
   console.log(`NBA filtering: Today in EST is ${estFormattedDate}`);
   
   // Filter to REST OF TODAY in EST (exclude past games; include all remaining today)
   const nowUtcMs = Date.now();
-  const todayEstStr = today.toLocaleDateString('en-US', estOptions);
   let todayGames = games.filter(game => {
-    const gameDateEstStr = new Date(game.commence_time).toLocaleDateString('en-US', estOptions);
+    const gameDateEst = toESTDate(game.commence_time);
     const gameTimeMs = new Date(game.commence_time).getTime();
-    const includeGame = (gameDateEstStr === todayEstStr) && gameTimeMs >= nowUtcMs;
-    console.log(`NBA Game: ${game.away_team} @ ${game.home_team}, Time (EST): ${new Date(game.commence_time).toLocaleString('en-US', estOptions)}, Include (rest of today): ${includeGame}`);
+    const includeGame = (gameDateEst === estFormattedDate) && gameTimeMs >= nowUtcMs;
+    console.log(`NBA Game: ${game.away_team} @ ${game.home_team}, EST date: ${gameDateEst}, Include (rest of today): ${includeGame}`);
     return includeGame;
   });
 
@@ -48,45 +44,6 @@ export async function generateNBAPicks(options = {}) {
     }
     todayGames = [todayGames[idx]];
   }
-
-  const normalizeTeamName = (name = '') => {
-    let str = name.toLowerCase();
-    const replacements = [
-      { from: /\blos angeles\b/g, to: 'la' },
-      { from: /\bnew york\b/g, to: 'ny' },
-      { from: /\bsan antonio\b/g, to: 'sa' },
-      { from: /\bnew orleans\b/g, to: 'no' },
-      { from: /\boklahoma city\b/g, to: 'okc' },
-      { from: /\bgolden state\b/g, to: 'gs' }
-    ];
-    replacements.forEach(({ from, to }) => {
-      str = str.replace(from, to);
-    });
-    return str.replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
-  };
-
-  const mascotToken = (name = '') => {
-    const parts = name.trim().split(/\s+/);
-    return parts.length ? parts[parts.length - 1].toLowerCase() : '';
-  };
-
-  const resolveTeamByName = (teamName = '', teams = []) => {
-    if (!teamName || !Array.isArray(teams)) return null;
-    const targetCanonical = normalizeTeamName(teamName);
-    const targetMascot = mascotToken(teamName);
-
-    return (
-      teams.find((team) => {
-        const fullCanonical = normalizeTeamName(team.full_name || '');
-        if (!fullCanonical) return false;
-        if (fullCanonical === targetCanonical) return true;
-        if (fullCanonical.includes(targetCanonical) || targetCanonical.includes(fullCanonical)) return true;
-        const teamMascot = mascotToken(team.full_name);
-        if (teamMascot && targetMascot && teamMascot === targetMascot) return true;
-        return false;
-      }) || null
-    );
-  };
 
   const LEADER_STAT_TYPES = ['pts', 'ast', 'reb', 'stl', 'blk', 'min'];
 
@@ -189,10 +146,7 @@ export async function generateNBAPicks(options = {}) {
   };
 
   const runTimestamp = new Date();
-  const season =
-    (runTimestamp.getMonth() + 1) <= 6
-      ? runTimestamp.getFullYear() - 1
-      : runTimestamp.getFullYear();
+  const season = nbaSeason();
   const windowStart = new Date(runTimestamp);
   windowStart.setDate(windowStart.getDate() - 21);
   const defaultStartStr = windowStart.toISOString().slice(0, 10);
@@ -245,7 +199,7 @@ export async function generateNBAPicks(options = {}) {
             division: awayTeam.division
           };
         }
-      } catch {}
+      } catch (e) { console.warn('NBA team info fetch failed:', e?.message); }
 
       // Regular season context (no playoffs)
       const startStr = defaultStartStr;
@@ -393,32 +347,7 @@ export async function generateNBAPicks(options = {}) {
       }
 
       // Merge odds across all bookmakers; for NBA use The Odds API-only path (BDL odds fallback disabled)
-      let oddsData = null;
-      const mergeBookmakers = (bookmakersArr = []) => {
-        const marketKeyToOutcomes = new Map();
-        for (const b of bookmakersArr) {
-          const markets = Array.isArray(b?.markets) ? b.markets : [];
-          for (const m of markets) {
-            if (!m || !m.key || !Array.isArray(m.outcomes)) continue;
-            if (!marketKeyToOutcomes.has(m.key)) marketKeyToOutcomes.set(m.key, new Map());
-            const outMap = marketKeyToOutcomes.get(m.key);
-            for (const o of m.outcomes) {
-              if (!o || typeof o?.name !== 'string' || typeof o?.price !== 'number') continue;
-              const key = `${o.name}|${typeof o.point === 'number' ? o.point : ''}`;
-              if (!outMap.has(key)) {
-                outMap.set(key, { name: o.name, price: o.price, ...(typeof o.point === 'number' ? { point: o.point } : {}) });
-              }
-            }
-          }
-        }
-        const mergedMarkets = [];
-        for (const [mkey, outMap] of marketKeyToOutcomes.entries()) {
-          const outcomes = Array.from(outMap.values());
-          if (outcomes.length) mergedMarkets.push({ key: mkey, outcomes });
-        }
-        return mergedMarkets.length ? { bookmaker: 'merged', markets: mergedMarkets } : null;
-      };
-      oddsData = mergeBookmakers(Array.isArray(game.bookmakers) ? game.bookmakers : []);
+      let oddsData = mergeBookmakerOdds(Array.isArray(game.bookmakers) ? game.bookmakers : []);
       const hasMlOrSpread = (data) =>
         Array.isArray(data?.markets) && data.markets.some(
           (m) => (m.key === 'h2h' || m.key === 'spreads') && Array.isArray(m.outcomes) && m.outcomes.some(o => typeof o?.price === 'number')
@@ -427,7 +356,7 @@ export async function generateNBAPicks(options = {}) {
       if (!hasMlOrSpread(oddsData)) {
         console.log(`[NBA] No ML/spread odds present from upstream list. Using The Odds API directly for ${game.away_team} @ ${game.home_team}.`);
         try {
-          const upcoming = await oddsService.getOdds('basketball_nba');
+          const upcoming = await oddsService.getUpcomingGames('basketball_nba');
           const normalize = (s) => String(s || '').toLowerCase().replace(/\\./g, '').replace(/[^a-z0-9]/g, '');
           const mascot = (s) => {
             const parts = String(s || '').trim().split(' ');
@@ -445,7 +374,7 @@ export async function generateNBAPicks(options = {}) {
             return (h1 === h2 && a1 === a2) || (h1 === a2 && a1 === h2) || ((mH1 === mH2 && mA1 === mA2) || (mH1 === mA2 && mA1 === mH2));
           }) : null;
           if (match && Array.isArray(match.bookmakers) && match.bookmakers.length > 0) {
-            const merged = mergeBookmakers(match.bookmakers);
+            const merged = mergeBookmakerOdds(match.bookmakers);
             if (hasMlOrSpread(merged)) {
               console.log('[NBA] Successfully attached Odds API markets to game.');
               oddsData = merged;
@@ -459,8 +388,6 @@ export async function generateNBAPicks(options = {}) {
           console.warn('[NBA] Odds API direct fetch failed:', e?.message || e);
         }
       }
-
-      // Removed "model" logic per user guidance
 
       // Rich context now provided by Gemini Grounding in the agentic pipeline
       const richKeyFindings = [];

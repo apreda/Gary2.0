@@ -8,7 +8,7 @@
  * If Grounding fails for FD, we fail. No cross-platform proxying.
  */
 
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { getGeminiClient, GEMINI_FLASH_MODEL } from './modelConfig.js';
 import { discoverSlatesFromDK } from '../draftKingsSlateService.js';
 
 // Slate types we explicitly exclude
@@ -77,12 +77,7 @@ async function discoverDraftKingsSlates(sport) {
 // ============================================================================
 
 async function discoverFanDuelSlates(sport, date) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error('[Slate Discovery] GEMINI_API_KEY not set — cannot discover FanDuel slates via Grounding');
-  }
-
-  const genAI = new GoogleGenerativeAI(apiKey);
+  const genAI = getGeminiClient();
   const dateObj = typeof date === 'string' ? new Date(date + 'T12:00:00') : date;
   const todayStr = dateObj.toLocaleDateString('en-US', {
     weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
@@ -133,7 +128,7 @@ OUTPUT FORMAT — respond ONLY with valid JSON, no markdown, no explanation:
   console.log(`[Slate Discovery] Querying Gemini Grounding for FanDuel ${sport} slates...`);
 
   const model = genAI.getGenerativeModel({
-    model: process.env.GEMINI_FLASH_MODEL || 'gemini-3-flash-preview',
+    model: GEMINI_FLASH_MODEL,
     tools: [{ google_search: {} }],
     generationConfig: {
       temperature: 1.0,

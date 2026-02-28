@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { picksService } from '../services/picksService';
 
 /**
@@ -21,7 +21,6 @@ const RefreshTool = () => {
       localStorage.removeItem('lastPicksGenerationTime');
       
       // Generate new picks with real data
-      console.log('Generating new picks with real API data...');
       const newPicks = await picksService.generateDailyPicks();
       
       // Save to localStorage and mark as generated
@@ -31,7 +30,6 @@ const RefreshTool = () => {
       
       setStatus(`✅ Success! Generated ${newPicks.length} picks with real data.`);
       setResult(newPicks);
-      console.log('Picks updated:', newPicks);
     } catch (error) {
       setStatus('❌ Error refreshing picks. Check console for details.');
       console.error('Error refreshing picks:', error);
