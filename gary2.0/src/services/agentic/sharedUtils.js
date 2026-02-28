@@ -1,10 +1,3 @@
-export const EST_TIME_OPTIONS = {
-  timeZone: 'America/New_York',
-  hour: 'numeric',
-  minute: '2-digit',
-  hour12: true
-};
-
 export function normalizeTeamName(name = '') {
   return name
     .toLowerCase()
@@ -45,299 +38,36 @@ export function resolveTeamByName(teamName = '', teams = []) {
   );
 }
 
-export function formatGameTimeEST(isoString) {
-  if (!isoString) return null;
-  const date = new Date(isoString);
-  if (Number.isNaN(date.getTime())) return isoString;
-  return `${new Intl.DateTimeFormat('en-US', EST_TIME_OPTIONS).format(date)} EST`;
-}
-
 /**
- * Get YYYY-MM-DD date string for a date in America/New_York timezone
- * This prevents UTC rollover issues where a 7pm EST game on Dec 30 
- * shows up as Dec 31 in UTC.
+ * Merge odds across all bookmakers into a single unified object.
+ * Deduplicates outcomes by name+point, keeping the first price seen.
+ * @param {Array} bookmakers - Array of bookmaker objects from The Odds API
+ * @returns {{ bookmaker: string, markets: Array }|null} Merged odds or null
  */
-export function getEstDate(date = new Date()) {
-  const d = date instanceof Date ? date : new Date(date);
-  return d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-}
-
-export function parseGameDate(value) {
-  if (!value) return null;
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
-
-export function buildMarketSnapshot(bookmakers = [], homeTeamName = 'Home', awayTeamName = 'Away') {
-  const homeKey = normalizeTeamName(homeTeamName);
-  const awayKey = normalizeTeamName(awayTeamName);
-  const determineSide = (name = '') => {
-    const norm = normalizeTeamName(name);
-    if (norm && (norm === homeKey || norm.includes(homeKey) || homeKey.includes(norm))) {
-      return 'home';
-    }
-    if (norm && (norm === awayKey || norm.includes(awayKey) || awayKey.includes(norm))) {
-      return 'away';
-    }
-    return null;
-  };
-
-  const spreads = [];
-  const moneylines = [];
-  const totals = [];  // NEW: Track game totals (O/U)
-  
-  (bookmakers || []).forEach((bookmaker) => {
-    const markets = Array.isArray(bookmaker?.markets) ? bookmaker.markets : [];
-    markets.forEach((market) => {
-      if (!market || !market.key || !Array.isArray(market.outcomes)) return;
-      if (market.key === 'spreads') {
-        market.outcomes.forEach((outcome) => {
-          if (!outcome || typeof outcome.price !== 'number' || typeof outcome.point !== 'number') return;
-          const side = determineSide(outcome.name);
-          spreads.push({
-            team: side || outcome.name,
-            point: outcome.point,
-            price: outcome.price,
-            bookmaker: bookmaker.title || bookmaker.key
-          });
-        });
+export function mergeBookmakerOdds(bookmakers = []) {
+  if (!Array.isArray(bookmakers) || bookmakers.length === 0) return null;
+  const marketKeyToOutcomes = new Map();
+  for (const b of bookmakers) {
+    const markets = Array.isArray(b?.markets) ? b.markets : [];
+    for (const m of markets) {
+      if (!m || !m.key || !Array.isArray(m.outcomes)) continue;
+      if (!marketKeyToOutcomes.has(m.key)) marketKeyToOutcomes.set(m.key, new Map());
+      const outMap = marketKeyToOutcomes.get(m.key);
+      for (const o of m.outcomes) {
+        if (!o || typeof o?.name !== 'string' || typeof o?.price !== 'number') continue;
+        const key = `${o.name}|${typeof o.point === 'number' ? o.point : ''}`;
+        if (!outMap.has(key)) {
+          outMap.set(key, { name: o.name, price: o.price, ...(typeof o.point === 'number' ? { point: o.point } : {}) });
+        }
       }
-      if (market.key === 'h2h') {
-        market.outcomes.forEach((outcome) => {
-          if (!outcome || typeof outcome.price !== 'number') return;
-          const side = determineSide(outcome.name);
-          moneylines.push({
-            team: side || outcome.name,
-            price: outcome.price,
-            bookmaker: bookmaker.title || bookmaker.key
-          });
-        });
-      }
-      // NEW: Extract game totals (Over/Under)
-      if (market.key === 'totals') {
-        market.outcomes.forEach((outcome) => {
-          if (!outcome || typeof outcome.point !== 'number') return;
-          totals.push({
-            side: outcome.name, // 'Over' or 'Under'
-            point: outcome.point,
-            price: outcome.price ?? null,
-            bookmaker: bookmaker.title || bookmaker.key
-          });
-        });
-      }
-    });
-  });
-
-  const pickBest = (list, predicate) => {
-    const filtered = list.filter(predicate);
-    if (!filtered.length) return null;
-    return filtered.reduce((best, item) => {
-      if (!best) return item;
-      if (item.price > best.price) return item;
-      return best;
-    }, null);
-  };
-
-  const homeSpread = pickBest(spreads, (row) => row.team === 'home');
-  const awaySpread = pickBest(spreads, (row) => row.team === 'away');
-  const homeMl = pickBest(moneylines, (row) => row.team === 'home');
-  const awayMl = pickBest(moneylines, (row) => row.team === 'away');
-  
-  // NEW: Get the total line (prefer Over outcome for the line value)
-  const overTotal = totals.find(t => t.side === 'Over');
-  const underTotal = totals.find(t => t.side === 'Under');
-  const totalLine = overTotal?.point || underTotal?.point || null;
-
-  return {
-    spread: {
-      home: homeSpread ? { ...homeSpread, teamName: homeTeamName } : null,
-      away: awaySpread ? { ...awaySpread, teamName: awayTeamName } : null
-    },
-    moneyline: {
-      home: homeMl ? { ...homeMl, teamName: homeTeamName } : null,
-      away: awayMl ? { ...awayMl, teamName: awayTeamName } : null
-    },
-    // NEW: Game total (O/U) for game script analysis
-    total: totalLine ? {
-      line: totalLine,
-      over: overTotal ? { price: overTotal.price, bookmaker: overTotal.bookmaker } : null,
-      under: underTotal ? { price: underTotal.price, bookmaker: underTotal.bookmaker } : null
-    } : null
-  };
-}
-
-export function calcRestInfo(games, teamId, targetDate) {
-  if (!Array.isArray(games) || games.length === 0) {
-    return { days_since_last_game: null, games_in_last_7: 0, back_to_back: false };
-  }
-  const sorted = [...games].sort((a, b) => new Date(b.date) - new Date(a.date));
-  const lastPlayed = sorted.find((g) => {
-    const date = parseGameDate(g?.date);
-    return date && date < targetDate;
-  }) || sorted[0];
-  const lastDate = parseGameDate(lastPlayed?.date);
-  const msInDay = 24 * 60 * 60 * 1000;
-  const days = lastDate ? Math.round((targetDate - lastDate) / msInDay) : null;
-  const gamesInLast7 = sorted.filter((game) => {
-    const date = parseGameDate(game?.date);
-    if (!date) return false;
-    return (targetDate - date) <= 7 * msInDay;
-  }).length;
-  const isB2B = typeof days === 'number' ? days <= 1 : false;
-  const opponent = (lastPlayed?.home_team?.id === teamId ? lastPlayed?.visitor_team : lastPlayed?.home_team)?.full_name || null;
-  return {
-    days_since_last_game: days,
-    games_in_last_7: gamesInLast7,
-    back_to_back: isB2B,
-    last_game_date: lastDate ? lastDate.toISOString().slice(0, 10) : null,
-    last_opponent: opponent
-  };
-}
-
-export function calcRecentForm(games, teamId, limit = 5) {
-  if (!Array.isArray(games) || games.length === 0) return { record: '0-0', avg_margin: 0 };
-  const sorted = [...games].sort((a, b) => new Date(b.date) - new Date(a.date));
-  const slice = sorted.slice(0, limit);
-  let wins = 0;
-  let losses = 0;
-  let totalMargin = 0;
-  slice.forEach((game) => {
-    const homeId = game?.home_team?.id;
-    const awayId = game?.visitor_team?.id;
-    const homeScore = game?.home_team_score || 0;
-    const awayScore = game?.visitor_team_score || 0;
-    const isHome = homeId === teamId;
-    const teamScore = isHome ? homeScore : awayScore;
-    const oppScore = isHome ? awayScore : homeScore;
-    if (teamScore > oppScore) wins += 1;
-    else losses += 1;
-    totalMargin += teamScore - oppScore;
-  });
-  return {
-    record: `${wins}-${losses}`,
-    avg_margin: slice.length ? totalMargin / slice.length : 0,
-    sample_size: slice.length
-  };
-}
-
-/**
- * Apply "buy the hook" to spread picks
- * If spread ends in .5, move it by 0.5 and adjust odds by -10
- * Example: -7.5 @ -110 becomes -7 @ -120
- * 
- * @param {number} spread - The spread number (e.g., -7.5 or +3.5)
- * @param {number} odds - The current odds (e.g., -110)
- * @returns {object} - { spread, odds, hooked: boolean }
- */
-export function applyBuyTheHook(spread, odds) {
-  // Only apply to .5 spreads
-  if (typeof spread !== 'number' || typeof odds !== 'number') {
-    return { spread, odds, hooked: false };
-  }
-  
-  const isHalfPoint = Math.abs(spread) % 1 === 0.5;
-  
-  if (!isHalfPoint) {
-    return { spread, odds, hooked: false };
-  }
-  
-  // Move spread by 0.5 toward 0 (buying the hook)
-  // -7.5 becomes -7 (better for favorite backer)
-  // +3.5 becomes +3 (worse for underdog backer, but we're buying off the hook)
-  const boughtSpread = spread > 0 
-    ? spread - 0.5  // +3.5 -> +3
-    : spread + 0.5; // -7.5 -> -7
-  
-  // Standard hook cost is approximately 10 cents (-110 becomes -120)
-  const boughtOdds = odds - 10;
-  
-  return {
-    spread: boughtSpread,
-    odds: boughtOdds,
-    hooked: true,
-    originalSpread: spread,
-    originalOdds: odds
-  };
-}
-
-/**
- * Format a spread pick string with buy-the-hook applied
- * Example: "Cowboys -7.5 -110" becomes "Cowboys -7 -120 (bought hook)"
- * 
- * @param {string} teamName - Team name
- * @param {number} spread - Original spread
- * @param {number} odds - Original odds
- * @param {boolean} applyHook - Whether to apply buy-the-hook
- * @returns {string} - Formatted pick string
- */
-export function formatSpreadPick(teamName, spread, odds, applyHook = true) {
-  if (applyHook) {
-    const hooked = applyBuyTheHook(spread, odds);
-    if (hooked.hooked) {
-      return {
-        pick: `${teamName} ${hooked.spread > 0 ? '+' : ''}${hooked.spread} ${hooked.odds}`,
-        spread: hooked.spread,
-        odds: hooked.odds,
-        hooked: true,
-        note: `(bought hook from ${spread > 0 ? '+' : ''}${spread} @ ${odds})`
-      };
     }
   }
-  
-  return {
-    pick: `${teamName} ${spread > 0 ? '+' : ''}${spread} ${odds}`,
-    spread,
-    odds,
-    hooked: false
-  };
-}
-
-// ============================================================================
-// API ERROR HANDLING UTILITIES - Prevent Silent Data Loss
-// ============================================================================
-
-/**
- * Safe API call wrapper that logs failures instead of silently swallowing them
- * This ensures Gary knows when data is unavailable vs actually zero/empty
- * 
- * @param {Function} apiCall - The async API call to execute
- * @param {any} defaultValue - Default value if call fails ([] for arrays, null for objects)
- * @param {string} context - Description of what this call is fetching (for logging)
- * @returns {Promise<any>} - Result or default value with logged failure
- */
-export async function safeApiCall(apiCall, defaultValue, context = 'API call') {
-  try {
-    const result = await apiCall();
-    return result;
-  } catch (error) {
-    console.error(`[BDL API FAILURE] ${context}: ${error.message}`);
-    console.error(`[BDL API FAILURE] Gary will proceed WITHOUT this data — analysis may be incomplete`);
-    // Track failed calls so orchestrator can detect degraded data quality
-    safeApiCall._failureCount = (safeApiCall._failureCount || 0) + 1;
-    safeApiCall._failures = safeApiCall._failures || [];
-    safeApiCall._failures.push(context);
-    return defaultValue;
+  const mergedMarkets = [];
+  for (const [mkey, outMap] of marketKeyToOutcomes.entries()) {
+    const outcomes = Array.from(outMap.values());
+    if (outcomes.length) mergedMarkets.push({ key: mkey, outcomes });
   }
-}
-
-/**
- * Safe API call for arrays - returns empty array on failure with logging
- * @param {Function} apiCall - The async API call
- * @param {string} context - Context description
- * @returns {Promise<Array>}
- */
-export async function safeApiCallArray(apiCall, context) {
-  return safeApiCall(apiCall, [], context);
-}
-
-/**
- * Safe API call for objects - returns null on failure with logging
- * @param {Function} apiCall - The async API call
- * @param {string} context - Context description
- * @returns {Promise<Object|null>}
- */
-export async function safeApiCallObject(apiCall, context) {
-  return safeApiCall(apiCall, null, context);
+  return mergedMarkets.length ? { bookmaker: 'merged', markets: mergedMarkets } : null;
 }
 
 /**
@@ -355,7 +85,7 @@ export function isGameCompleted(status) {
 /**
  * Format stat value, returning 'N/A' for missing stats instead of 0
  * This prevents Gary from thinking a player has 0 stats when data is just unavailable
- * 
+ *
  * @param {any} value - The stat value
  * @param {number} decimals - Decimal places (default 1)
  * @param {string} missingLabel - Label for missing data (default 'N/A')
@@ -374,8 +104,8 @@ export function formatStatValue(value, decimals = 1, missingLabel = 'N/A') {
 /**
  * Format stat safely - returns null if genuinely missing, actual value otherwise
  * Use this when you need to distinguish between "0" and "unavailable"
- * 
- * @param {any} value - The stat value  
+ *
+ * @param {any} value - The stat value
  * @returns {number|null}
  */
 export function safeStatValue(value) {
@@ -384,10 +114,6 @@ export function safeStatValue(value) {
   }
   return value;
 }
-
-// ============================================================================
-// FUZZY PLAYER MATCHING - Handle Name Variations
-// ============================================================================
 
 /**
  * Normalize a player name for fuzzy matching
@@ -410,65 +136,6 @@ export function normalizePlayerName(name) {
     .trim();
 }
 
-/**
- * Fuzzy match player names with tolerance for variations
- * @param {string} name1 - First name to compare
- * @param {string} name2 - Second name to compare
- * @returns {boolean} - True if names likely match
- */
-export function fuzzyMatchPlayerName(name1, name2) {
-  const n1 = normalizePlayerName(name1);
-  const n2 = normalizePlayerName(name2);
-  
-  // Exact match after normalization
-  if (n1 === n2) return true;
-  
-  // One contains the other (handles "LeBron" vs "LeBron James")
-  if (n1.includes(n2) || n2.includes(n1)) return true;
-  
-  // Check last name match (for "J. Smith" vs "John Smith")
-  const parts1 = n1.split(' ');
-  const parts2 = n2.split(' ');
-  if (parts1.length > 0 && parts2.length > 0) {
-    const lastName1 = parts1[parts1.length - 1];
-    const lastName2 = parts2[parts2.length - 1];
-    
-    // Last names must match
-    if (lastName1 === lastName2) {
-      // If one has abbreviated first name, consider it a match
-      const firstName1 = parts1[0] || '';
-      const firstName2 = parts2[0] || '';
-      if (firstName1.length <= 2 || firstName2.length <= 2) {
-        // Abbreviated first name - check if starts match
-        if (firstName1[0] === firstName2[0]) return true;
-      }
-    }
-  }
-  
-  return false;
-}
-
-/**
- * Find best matching player from a list using fuzzy matching
- * @param {string} targetName - Name to search for
- * @param {Array} players - Array of player objects with 'first_name' and 'last_name'
- * @returns {Object|null} - Matched player or null
- */
-export function findBestPlayerMatch(targetName, players) {
-  if (!targetName || !Array.isArray(players)) return null;
-  
-  const targetNorm = normalizePlayerName(targetName);
-  
-  for (const player of players) {
-    const fullName = `${player.first_name || ''} ${player.last_name || ''}`.trim();
-    if (fuzzyMatchPlayerName(targetName, fullName)) {
-      return player;
-    }
-  }
-  
-  return null;
-}
-
 // ============================================================================
 // INJURY DURATION UTILITIES - Identify Betting Edges vs Baked-in Absences
 // ============================================================================
@@ -478,10 +145,10 @@ export function findBestPlayerMatch(targetName, players) {
  * @param {string} description - BDL injury description
  * @returns {{ date: Date, dateStr: string } | null} - Parsed date and original string, or null
  */
-export function parseInjuryDate(description) {
+function parseInjuryDate(description) {
   if (!description || typeof description !== 'string') return null;
   const today = new Date();
-  
+
   // Pattern 1: "Dec 25:" at start of description (most common BDL format)
   const dateMatch = description.match(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}):/i);
   if (dateMatch) {
@@ -494,8 +161,8 @@ export function parseInjuryDate(description) {
     if (injuryDate > today) {
       injuryDate.setFullYear(year - 1);
     }
-    return { 
-      date: injuryDate, 
+    return {
+      date: injuryDate,
       dateStr: `${dateMatch[1]} ${dateMatch[2]}` // e.g., "Dec 25"
     };
   }
@@ -507,7 +174,7 @@ export function parseInjuryDate(description) {
  * @param {string} description - BDL injury description
  * @returns {number|null} - Days or null
  */
-export function getDaysSinceInjury(description) {
+function getDaysSinceInjury(description) {
   const parsed = parseInjuryDate(description);
   if (!parsed) return null;
   const today = new Date();
@@ -520,7 +187,7 @@ export function getDaysSinceInjury(description) {
  * @param {string} description - BDL injury description
  * @returns {string|null} - Date string like "Jan 8" or null
  */
-export function getInjuryReportDateStr(description) {
+function getInjuryReportDateStr(description) {
   const parsed = parseInjuryDate(description);
   return parsed ? parsed.dateStr : null;
 }
@@ -528,30 +195,30 @@ export function getInjuryReportDateStr(description) {
 /**
  * Fix BDL status inconsistencies and add duration context for betting analysis
  * This is the SOURCE OF TRUTH for Gary's understanding of injuries.
- * 
+ *
  * @param {Object} injury - Raw BDL injury object
  * @returns {Object} - Enhanced injury object with 'duration', 'isEdge', 'reportDateStr', and 'daysSinceReport'
  */
 export function fixBdlInjuryStatus(injury) {
   if (!injury) return injury;
-  
+
   const today = new Date();
   const todayStr = today.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   const desc = (injury.description || '').toLowerCase();
   const rawDesc = injury.description || '';
   const returnDate = (injury.return_date || '').toString();
-  
+
   // Return date matching today's month/day format
   const todayMonth = todayStr.split(' ')[0];
   const todayDay = todayStr.split(' ')[1];
   const isReturnToday = returnDate.includes(todayMonth) && returnDate.includes(todayDay);
-  
+
   // Calculate days since injury was first reported AND extract the actual date string
   const daysSinceReport = getDaysSinceInjury(rawDesc);
   const reportDateStr = getInjuryReportDateStr(rawDesc);
   injury.daysSinceReport = daysSinceReport;
   injury.reportDateStr = reportDateStr; // e.g., "Jan 8" - the actual date for Gary to see
-  
+
   // 1. Fix Status Inconsistencies (BDL often lists as 'Out' when they are GTD)
   // IMPORTANT: Only check the MOST RECENT update in the description, not historical text.
   // Descriptions often contain history like "Feb 5: Questionable... Feb 7: Ruled Out"
@@ -572,20 +239,20 @@ export function fixBdlInjuryStatus(injury) {
       injury.status = 'Questionable';
     }
   }
-  
+
   // 2. Determine Duration Context
-  
+
   // CATEGORY A: SEASON-LONG (Highest priority - NO EDGE)
   if (desc.includes('indefinitely') || desc.includes('no timetable') || desc.includes('no return') ||
       desc.includes('season-ending') || desc.includes('out for the season') || desc.includes('out for season') ||
-      desc.includes('won\'t return') || desc.includes('will not return') || 
+      desc.includes('won\'t return') || desc.includes('will not return') ||
       desc.includes('rest of the season') || desc.includes('remainder of the season') ||
-      desc.includes('acl') || desc.includes('achilles') || 
+      desc.includes('acl') || desc.includes('achilles') ||
       injury.status === 'Injured Reserve' || injury.status === 'IR' || injury.status === 'LTIR' ||
       desc.includes('surgery') || desc.includes('underwent') || desc.includes('procedure')) {
     injury.duration = 'SEASON-LONG';
     injury.isEdge = false;
-  } 
+  }
   // CATEGORY B: Based on time elapsed
   else if (daysSinceReport !== null) {
     if (daysSinceReport >= 42) { // 6+ weeks = SEASON-LONG (team stats have full baseline)
@@ -603,7 +270,7 @@ export function fixBdlInjuryStatus(injury) {
     }
   }
   // CATEGORY C: Keywords for recent/short-term
-  else if (desc.includes('day-to-day') || desc.includes('questionable') || desc.includes('this week') || 
+  else if (desc.includes('day-to-day') || desc.includes('questionable') || desc.includes('this week') ||
            desc.includes('game-time') || isReturnToday) {
     injury.duration = 'RECENT';
     injury.isEdge = true;
@@ -618,49 +285,6 @@ export function fixBdlInjuryStatus(injury) {
     injury.duration = injury.status === 'Out' ? 'MID-SEASON' : 'RECENT';
     injury.isEdge = injury.duration === 'RECENT';
   }
-  
+
   return injury;
 }
-
-// ============================================================================
-// DATA AVAILABILITY FLAGS - Help Gary Understand Missing Data
-// ============================================================================
-
-/**
- * Create a data availability object that explicitly shows what's missing
- * @param {Object} dataObject - Object with various data fields
- * @param {Array<string>} requiredFields - List of field names that are important
- * @returns {Object} - Data availability summary
- */
-export function checkDataAvailability(dataObject, requiredFields = []) {
-  if (!dataObject) {
-    return {
-      hasData: false,
-      availableFields: [],
-      missingFields: requiredFields,
-      message: 'NO DATA AVAILABLE - Analysis may be incomplete'
-    };
-  }
-  
-  const available = [];
-  const missing = [];
-  
-  for (const field of requiredFields) {
-    const value = dataObject[field];
-    if (value !== null && value !== undefined && value !== '' && value !== 'N/A') {
-      available.push(field);
-    } else {
-      missing.push(field);
-    }
-  }
-  
-  return {
-    hasData: available.length > 0,
-    availableFields: available,
-    missingFields: missing,
-    message: missing.length > 0 
-      ? `MISSING DATA: ${missing.join(', ')}`
-      : '✓ All required data available'
-  };
-}
-

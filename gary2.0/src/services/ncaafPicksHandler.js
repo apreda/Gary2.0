@@ -1,8 +1,10 @@
 import { oddsService } from './oddsService.js';
 import { ballDontLieService } from './ballDontLieService.js';
 import { makeGaryPick } from './garyEngine.js';
-import { computeRecommendedSportsbook } from './recommendedSportsbook.js';
+import { computeRecommendedSportsbook } from './recommendedSportsbookUtil.js';
 import { processGameOnce, gameAlreadyHasPick } from './picksService.js';
+import { mergeBookmakerOdds } from './agentic/sharedUtils.js';
+import { ncaafSeason } from '../utils/dateUtils.js';
 
 const SPORT_KEY = 'americanfootball_ncaaf';
 
@@ -166,7 +168,7 @@ export async function generateNCAAFPicks(options = {}) {
     windowed = [windowed[idx]];
   }
 
-  const season = new Date().getFullYear();
+  const season = ncaafSeason();
   const picks = [];
 
   for (const game of windowed) {
@@ -294,7 +296,7 @@ export async function generateNCAAFPicks(options = {}) {
         ]);
         homeStandings = hs;
         awayStandings = as;
-      } catch {}
+      } catch (e) { console.warn('NCAAF standings fetch failed:', e?.message); }
       const pickBasic = (row) => {
         if (!row) return {};
         const s = Array.isArray(row) ? row[0] : row;
@@ -348,10 +350,7 @@ export async function generateNCAAFPicks(options = {}) {
         richKeyFindings
       };
 
-      let oddsData = null;
-      if (game.bookmakers?.length) {
-        oddsData = { bookmaker: game.bookmakers[0]?.title, markets: game.bookmakers[0]?.markets || [] };
-      }
+      let oddsData = mergeBookmakerOdds(Array.isArray(game.bookmakers) ? game.bookmakers : []);
 
       const gameObj = {
         id: gameId,

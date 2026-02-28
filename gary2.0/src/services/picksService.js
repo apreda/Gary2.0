@@ -2,8 +2,6 @@
  * Gary Picks Service - Fully Integrated
  * Handles NBA, NFL, NHL, NCAAF, NCAAB pick generation and storage
  */
-import { makeGaryPick } from './garyEngine.js';
-import { oddsService } from './oddsService.js';
 import { supabase, storeDailyPicks } from '../supabaseClient.js';
 import { ballDontLieService } from './ballDontLieService.js';
 import { geminiService } from './geminiService.js';
@@ -25,8 +23,6 @@ const GENERATION_COOLDOWN = 30 * 1000; // 30 seconds
 
 // Lightweight in-flight locks only (no daily dedupe so repeated runs are allowed)
 const processingLocks = new Map();
-const apiCache = new Map();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 /**
  * Process a game only once with enhanced locking mechanism
@@ -66,33 +62,6 @@ const processGameOnce = async (gameId, processingFunction, opts = {}) => {
   }
 };
 
-/**
- * Cached API call to prevent duplicate requests
- * @param {string} key - Cache key
- * @param {Function} apiFunction - Function to call API
- * @returns {Promise} - Cached or fresh API result
- */
-const cachedApiCall = async (key, apiFunction) => {
-  const cached = apiCache.get(key);
-  if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
-    console.log(`🔄 Using cached data for ${key}`);
-    return cached.data;
-  }
-
-  console.log(`🔄 Making fresh API call for ${key}`);
-  const data = await apiFunction();
-  apiCache.set(key, { data, timestamp: Date.now() });
-  return data;
-};
-
-// Helper: Checks if team names match (handles small variations)
-function _teamNameMatch(team1, team2) {
-  if (!team1 || !team2) return false;
-  const clean1 = team1.toLowerCase().replace(/[^a-z0-9]/g, '');
-  const clean2 = team2.toLowerCase().replace(/[^a-z0-9]/g, '');
-  return clean1 === clean2 || clean1.includes(clean2) || clean2.includes(clean1);
-}
-
 // Helper: Ensures valid Supabase session
 async function ensureValidSupabaseSession() {
   try {
@@ -105,36 +74,6 @@ async function ensureValidSupabaseSession() {
   } catch {
     return false;
   }
-}
-
-// Helper: Check if picks for today exist with enhanced validation
-async function checkForExistingPicks(dateString) {
-  await ensureValidSupabaseSession();
-  const { data, error } = await supabase
-    .from('daily_picks')
-    .select('id, picks')
-    .eq('date', dateString)
-    .limit(1);
-  
-  if (error) {
-    console.error('Error checking for existing picks:', error);
-    return false;
-  }
-  
-  // Check if we have valid picks data
-  if (data && data.length > 0 && data[0].picks) {
-    let picks;
-    try {
-      picks = Array.isArray(data[0].picks) ? data[0].picks : JSON.parse(data[0].picks || '[]');
-    } catch {
-      console.error('Error parsing picks JSON for', dateString);
-      return false;
-    }
-    console.log(`📊 Found existing picks for ${dateString}: ${picks.length} picks`);
-    return picks.length > 0;
-  }
-  
-  return false;
 }
 
 /**
@@ -359,11 +298,7 @@ async function storeDailyPicksInDatabase(picks) {
 
     return pickData;
   }).filter(pick => {
-    // Sport-specific pick filters (nbaPickFilter, ncaabPickFilter, etc.) handle
-    // all filtering logic BEFORE storage. No secondary spread/favorite filters here.
-
-    // NO CONFIDENCE FILTER - Store ALL picks regardless of confidence
-    // Gary's picks get stored whether confidence is 0 or 0.9
+    // All picks are stored regardless of confidence; sport-specific filters run before storage.
     const sport = pick.sport || '';
     let confidence = 0;
     if (typeof pick.confidence === 'number') {
@@ -425,7 +360,7 @@ async function storeDailyPicksInDatabase(picks) {
         return `game|${p.league || ''}|${p.homeTeam || ''}|${p.awayTeam || ''}`;
       };
       
-      const seen = new Set(); // Removed existingPicks.map(gameKey) to allow overwriting with fresh data
+      const seen = new Set();
       const toAppend = validPicks.filter(p => {
         const key = gameKey(p);
         if (seen.has(key)) {
@@ -514,37 +449,6 @@ async function storeDailyPicksInDatabase(picks) {
   } finally {
     isStoringPicks = false;
     console.log('🔓 Storage lock released');
-  }
-}
-
-async function logAgenticRun(run) {
-  if (!run || !run.gameId) return;
-  try {
-    await ensureValidSupabaseSession();
-    const payload = {
-      sport: run.sport || 'basketball_nba',
-      game_id: run.gameId,
-      home_team: run.homeTeam,
-      away_team: run.awayTeam,
-      game_time: run.gameTime ? new Date(run.gameTime).toISOString() : null,
-      odds_snapshot: run.oddsSnapshot || null,
-      stage1_summary: run.stage1Summary || null,
-      stage2_summary: run.stage2Summary || null,
-      final_pick: run.finalPick || null,
-      convergence_score:
-        typeof run.convergence === 'number'
-          ? run.convergence
-          : (typeof run.finalPick?.confidence === 'number' ? run.finalPick.confidence : null),
-      red_team_note: run.redTeamNote || null,
-      elapsed_ms: run.elapsedMs || null,
-      runner_version: run.runnerVersion || null
-    };
-    const { error } = await supabase.from('gary_agentic_runs').insert(payload);
-    if (error) {
-      console.error('[Agentic] Failed to log run:', error.message);
-    }
-  } catch (err) {
-    console.error('[Agentic] Unexpected error logging run:', err.message);
   }
 }
 
@@ -886,16 +790,12 @@ const picksService = {
   storeDailyPicksInDatabase,
   storeTestPicks,
   storeWeeklyNFLPicks,
-  getWeeklyNFLPicks,
   nflGameAlreadyHasPick,
   getNFLWeekStart,
   getNFLWeekNumber,
-  checkForExistingPicks,
   ensureValidSupabaseSession,
-  _teamNameMatch,
-  logAgenticRun
 };
 
-export { processGameOnce, cachedApiCall, _teamNameMatch, gameAlreadyHasPick, nflGameAlreadyHasPick };
-export { picksService, generateDailyPicks, logAgenticRun, storeWeeklyNFLPicks, getWeeklyNFLPicks, storeTestPicks };
+export { processGameOnce, gameAlreadyHasPick, nflGameAlreadyHasPick };
+export { picksService, generateDailyPicks, storeWeeklyNFLPicks, storeTestPicks };
 export default picksService;

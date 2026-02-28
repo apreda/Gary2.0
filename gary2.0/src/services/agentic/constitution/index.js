@@ -10,26 +10,6 @@ import { NHL_CONSTITUTION } from './nhlConstitution.js';
 import { NFL_PROPS_CONSTITUTION } from './nflPropsConstitution.js';
 import { NBA_PROPS_CONSTITUTION } from './nbaPropsConstitution.js';
 import { NHL_PROPS_CONSTITUTION } from './nhlPropsConstitution.js';
-import {
-  FOUR_INVESTIGATIONS,
-  SHARP_WISDOM,
-  MARKET_EFFICIENCY,
-  STRUCTURAL_MISMATCH_AWARENESS,
-  STAT_AWARENESS,
-  INJURY_AWARENESS,
-  REGRESSION_AWARENESS,
-  MECHANISM_AWARENESS,
-  GAME_SCRIPT_AWARENESS,
-  NOISE_AWARENESS,
-  VOLUME_FLOOR_RULE,
-  ANALYSIS_EXAMPLES,
-  RATIONALE_EVALUATION,
-  CONFIDENCE_GUIDANCE,
-  PROP_SELECTION,
-  BANNED_PHRASES,
-  getPropsSharpFramework
-} from './propsSharpFramework.js';
-
 /**
  * BASE RULES - Applied to ALL sports
  * These rules govern data sources and external influence
@@ -234,32 +214,6 @@ export function getConstitution(sport) {
   return BASE_RULES;
 }
 
-export { 
-  NBA_CONSTITUTION, 
-  NFL_CONSTITUTION, 
-  NCAAB_CONSTITUTION, 
-  NCAAF_CONSTITUTION, 
-  NHL_CONSTITUTION, 
-  NFL_PROPS_CONSTITUTION, 
-  NBA_PROPS_CONSTITUTION, 
-  NHL_PROPS_CONSTITUTION,
-  // Props Sharp Framework v3.0 exports
-  FOUR_INVESTIGATIONS,
-  SHARP_WISDOM,
-  MARKET_EFFICIENCY,
-  STRUCTURAL_MISMATCH_AWARENESS,
-  STAT_AWARENESS,
-  INJURY_AWARENESS,
-  REGRESSION_AWARENESS,
-  MECHANISM_AWARENESS,
-  GAME_SCRIPT_AWARENESS,
-  NOISE_AWARENESS,
-  VOLUME_FLOOR_RULE,
-  ANALYSIS_EXAMPLES,
-  RATIONALE_EVALUATION,
-  CONFIDENCE_GUIDANCE,
-  PROP_SELECTION,
-  BANNED_PHRASES,
-  getPropsSharpFramework
-};
+// All constitution constants are consumed via getConstitution() only.
+// No named re-exports needed.
 

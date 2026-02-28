@@ -2,8 +2,6 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { Analytics } from '@vercel/analytics/react'
 import App from './App.jsx'
-// Import design system CSS first to establish variables
-import './styles/design-system.css'
 import './styles/base.css'
 // Import dark background CSS to prevent white flashes on load
 import './styles/consolidated/root-fix.css'

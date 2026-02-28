@@ -11,6 +11,8 @@
  * BDL is still used for duration enrichment.
  */
 
+import { normalizeTeamName } from './agentic/sharedUtils.js';
+
 const NBA_INJURIES_BASE_URL = 'https://nba-injuries-reports.p.rapidapi.com';
 const NBA_INJURIES_HOST = 'nba-injuries-reports.p.rapidapi.com';
 
@@ -88,13 +90,6 @@ async function fetchAllInjuries(dateStr) {
 
   console.log(`[NBA Injuries API] Fetched ${data.length} entries for ${dateStr}`);
   return data;
-}
-
-/**
- * Normalize team name for matching (handles variations)
- */
-function normalizeTeamName(name) {
-  return (name || '').toLowerCase().trim();
 }
 
 /**

@@ -110,32 +110,12 @@ export async function makeGaryPick(gameData, options = {}) {
 }
 
 /**
- * Fetch real-time game information and news
- * @param {string} homeTeam - Home team name
- * @param {string} awayTeam - Away team name
- * @param {string} sportKey - Sport identification key
- * @returns {Promise<object>} - Real-time game context information
- */
-export async function fetchRealTimeGameInfo(homeTeam, awayTeam, sportKey) {
-  // Simple implementation that returns a placeholder
-  console.log(`Fetching real-time info for ${homeTeam} vs ${awayTeam} (${sportKey})`);
-  
-  return {
-    summary: `Latest information for ${homeTeam} vs ${awayTeam}`,
-    insights: ['Using statistical analysis only'],
-    source: 'Gary Stats Engine',
-    sport: sportKey || 'unknown',
-    timestamp: new Date().toISOString()
-  };
-}
-
-/**
  * Generate Gary's analysis for a specific game
  * @param {object} gameData - The data for the game to analyze
  * @param {object} options - Optional parameters
  * @returns {Promise<object>} - Gary's analysis
  */
-export async function generateGaryAnalysis(gameData, options = {}) {
+async function generateGaryAnalysis(gameData, options = {}) {
   console.log('GARY ENGINE: Analyzing game...', gameData?.homeTeam, 'vs', gameData?.awayTeam);
   
   // Validate input data first
@@ -354,8 +334,8 @@ export async function generateGaryAnalysis(gameData, options = {}) {
       } else {
         console.log('Stats visibility: all expected sections present for this sport');
       }
-    } catch {}
-    
+    } catch (e) { console.warn('Stats visibility check failed:', e?.message); }
+
     if (isBaseball) {
       console.log(`Pitcher Data Available: ${!!gameData?.pitchers}`);
       console.log(`Hitter Stats Available: ${!!gameData?.hitterStats}`);
@@ -555,7 +535,7 @@ export function calculateStake(pick) {
  * @param {object} analysisObject - The object from generateGaryAnalysis
  * @returns {object} - The raw Gemini output directly
  */
-export function parseGaryAnalysis(analysisObject) {
+function parseGaryAnalysis(analysisObject) {
   try {
     // Just log what we're receiving for debugging
     console.log('parseGaryAnalysis input:', !!analysisObject);
@@ -579,7 +559,7 @@ export function parseGaryAnalysis(analysisObject) {
           console.warn('parseGaryAnalysis: Invalid or missing odds in AI output; rejecting pick.');
           return null;
         }
-      } catch {}
+      } catch (e) { console.warn('parseGaryAnalysis odds validation failed:', e?.message); }
       return out;
     }
     

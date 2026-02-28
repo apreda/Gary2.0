@@ -18,6 +18,7 @@
  */
 
 import { normalizeTeamAbbreviation } from './agentic/agenticUtils.js';
+import { getESTDate, toESTDate } from '../utils/dateUtils.js';
 
 // Cache: keyed by sport (one call per sport per run)
 const _cache = new Map(); // sport -> { response, cachedAt }
@@ -272,7 +273,7 @@ export async function discoverSlatesFromDK(sport) {
   }
 
   // Get today's date in ET for filtering out future/stale slates
-  const todayET = new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York' });
+  const todayET = getESTDate();
 
   // Build DraftGroup lookup: GameSetKey → DraftGroups (filtered to Classic only + today only)
   const classicDraftGroups = {};
@@ -283,7 +284,7 @@ export async function discoverSlatesFromDK(sport) {
     // Filter to today's slates only — DK API returns future slates (e.g., next Tuesday)
     const dgDate = parseDKDate(dg.StartDate || dg.StartDateEst);
     if (dgDate) {
-      const dgDateET = dgDate.toLocaleDateString('en-US', { timeZone: 'America/New_York' });
+      const dgDateET = toESTDate(dgDate);
       if (dgDateET !== todayET) {
         console.log(`[DK Slates] Skipping DraftGroup ${dg.DraftGroupId} (${dgDateET} — not today ${todayET})`);
         continue;
@@ -366,33 +367,6 @@ export async function discoverSlatesFromDK(sport) {
   return slates;
 }
 
-/**
- * Fetch per-slate player salaries from DraftKings draftables endpoint
- * @param {number} draftGroupId - DraftGroup ID from slate discovery
- * @returns {Promise<Array>} Array of player objects with salaries
- */
-export async function fetchDKDraftables(draftGroupId) {
-  const url = `https://api.draftkings.com/draftgroups/v1/draftgroups/${draftGroupId}/draftables`;
-  console.log(`[DK Slates] Fetching draftables for DraftGroup ${draftGroupId}`);
-
-  const response = await fetch(url, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
-    }
-  });
-
-  if (!response.ok) {
-    throw new Error(`DK Draftables API error: ${response.status}`);
-  }
-
-  const data = await response.json();
-  const draftables = data.draftables || [];
-
-  console.log(`[DK Slates] Got ${draftables.length} draftable players for DraftGroup ${draftGroupId}`);
-  return draftables;
-}
-
 export default {
   discoverSlatesFromDK,
-  fetchDKDraftables
 };

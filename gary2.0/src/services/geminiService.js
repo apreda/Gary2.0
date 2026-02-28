@@ -1,32 +1,25 @@
 /**
  * LLM service for generating sports analysis and picks
- * Now using Gemini 3 Deep Think exclusively (GPT-5.1 removed Dec 2025)
+ * Uses Gemini exclusively (via modelConfig.js for model selection)
  * Provides betting insights through the legendary Gary the Grizzly Bear character
  */
 import axios from 'axios';
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import { apiCache } from '../utils/apiCache.js';
-import { requestQueue } from '../utils/requestQueue.js';
+import {
+  GEMINI_FLASH_MODEL as GEMINI_MODEL_FLASH,
+  getGeminiClient as _getGeminiClient
+} from './agentic/modelConfig.js';
 
 // LLM provider - Gemini 3
 const LLM_PROVIDER = 'gemini';
-// Gemini 3 Flash (grounding/search, props, fallback). Main picks use 3.1 Pro via orchestrator.
-const GEMINI_MODEL_DEFAULT = 'gemini-3-flash-preview';
-// Gemini 3 Flash - used for grounding, props, and as quota fallback
-const GEMINI_MODEL_FLASH = 'gemini-3-flash-preview';
+const GEMINI_MODEL_DEFAULT = GEMINI_MODEL_FLASH;
 
-// Direct Gemini SDK for local/server runs
-let geminiClient = null;
-const GEMINI_SERVER_KEY = (() => { try { return process.env.GEMINI_API_KEY; } catch { return undefined; } })();
-
+// Wrapped client getter — returns null instead of throwing when key is missing (browser mode)
 function getGeminiClient() {
-  if (!geminiClient && GEMINI_SERVER_KEY) {
-    geminiClient = new GoogleGenerativeAI(GEMINI_SERVER_KEY);
-  }
-  return geminiClient;
+  try { return _getGeminiClient(); } catch { return null; }
 }
 
 // Determine if we should use direct SDK (server/local) or proxy (browser)
+const GEMINI_SERVER_KEY = (() => { try { return process.env.GEMINI_API_KEY; } catch { return undefined; } })();
 const USE_DIRECT_SDK = typeof process !== 'undefined' && GEMINI_SERVER_KEY;
 
 // Determine proxy URL (works in browser, serverless, and local dev)
@@ -41,13 +34,12 @@ const resolveProxyUrl = () => {
       if (!base.startsWith('http')) base = `https://${base}`;
       return `${base}${proxyPath}`;
     }
-  } catch {}
+  } catch (e) { /* URL resolution is non-critical, fall through to default */ }
   return '/api/gemini-proxy';
 };
 
 const PROXY_URL = resolveProxyUrl();
 const GEMINI_PROXY_URL = PROXY_URL;
-const GEMINI_DIRECT_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 
 console.log(`[LLM Service] Provider: ${LLM_PROVIDER}, Mode: ${USE_DIRECT_SDK ? 'Direct SDK' : 'Proxy'}, ${USE_DIRECT_SDK ? 'API Key: ✓' : 'Proxy: ' + PROXY_URL}`);
 
@@ -57,20 +49,8 @@ const geminiServiceInstance = {
    */
   initialized: true, // Always true since we use proxy
   
-  /**
-   * Current LLM provider
-   */
-  provider: LLM_PROVIDER,
-  
-  /**
-   * Initialize the service (no longer needs API key on client side)
-   */
-  init: function() {
-    console.log(`✅ LLM service initialized with ${LLM_PROVIDER} provider via secure proxy`);
-    this.initialized = true;
-    return this;
-  },
-  
+  // provider property and init() method removed — dead code (never called)
+
   /**
    * Default model - varies by provider
    */
@@ -220,7 +200,7 @@ const geminiServiceInstance = {
       } catch (proxyErr) {
         const status = proxyErr?.response?.status;
         if (status === 400) {
-          try { console.error(`[GEMINI PROXY 400]`, JSON.stringify(proxyErr.response.data)); } catch {}
+          try { console.error(`[GEMINI PROXY 400]`, JSON.stringify(proxyErr.response.data)); } catch (e) { /* JSON stringify can fail on circular refs */ }
         }
         throw proxyErr;
       }

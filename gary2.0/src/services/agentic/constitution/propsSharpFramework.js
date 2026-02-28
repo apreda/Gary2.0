@@ -27,7 +27,7 @@ import {
 // THE FOUR INVESTIGATIONS (Core Framework)
 // ============================================================================
 
-export const FOUR_INVESTIGATIONS = `
+const FOUR_INVESTIGATIONS = `
 <FOUR_INVESTIGATIONS>
 ## THE FOUR INVESTIGATIONS
 
@@ -111,7 +111,7 @@ If your only support is a positional ranking, ask: is there a mechanism behind i
 // SHARP WISDOM (Game-First Insights)
 // ============================================================================
 
-export const SHARP_WISDOM = `
+const SHARP_WISDOM = `
 <SHARP_WISDOM>
 ## SHARP WISDOM: WHAT THE BEST GAME ANALYSTS KNOW
 
@@ -168,7 +168,7 @@ When a star is out, investigate beyond the obvious replacement:
 // (Consolidated: absorbs EDGE_AWARENESS, THE_SHARP_TEST, MARKET_TENSION_TEST, ONE_SENTENCE_EDGE_TEST)
 // ============================================================================
 
-export const MARKET_EFFICIENCY = `
+const MARKET_EFFICIENCY = `
 <MARKET_EFFICIENCY>
 ## THE CORE PHILOSOPHY: ASSUME THE LINE REFLECTS BASIC GAME INFO
 
@@ -235,7 +235,7 @@ If you can't complete that sentence with a specific game factor, you don't have 
 // STRUCTURAL MISMATCH AWARENESS
 // ============================================================================
 
-export const STRUCTURAL_MISMATCH_AWARENESS = `
+const STRUCTURAL_MISMATCH_AWARENESS = `
 <STRUCTURAL_MISMATCH_AWARENESS>
 ## WHERE EDGE ACTUALLY LIVES
 
@@ -257,7 +257,7 @@ If you can't identify one, you're betting on vibes, not edge.
 // SUPPORTING AWARENESS SECTIONS
 // ============================================================================
 
-export const STAT_AWARENESS = `
+const STAT_AWARENESS = `
 <STAT_AWARENESS>
 ## STAT AWARENESS: INVESTIGATE THE MECHANISM
 
@@ -277,13 +277,13 @@ For every stat you cite, ask: **Does this stat have a causal mechanism that conn
 
 // INJURY_AWARENESS — now imported from sharedConstitutionBlocks.js (shared with game picks)
 // Wrapped in XML tags for consistency with other framework sections.
-export const INJURY_AWARENESS = `
+const INJURY_AWARENESS = `
 <INJURY_AWARENESS>
 ${getPropsInjuryFramework()}
 </INJURY_AWARENESS>
 `;
 
-export const REGRESSION_AWARENESS = `
+const REGRESSION_AWARENESS = `
 <REGRESSION_AWARENESS>
 ## REGRESSION AWARENESS: PEAKS AND VALLEYS
 
@@ -300,7 +300,7 @@ INVESTIGATE: What does the recent trend look like, and what's causing it? Let th
 </REGRESSION_AWARENESS>
 `;
 
-export const L5_L10_VS_SEASON = `
+const L5_L10_VS_SEASON = `
 <L5_L10_VS_SEASON>
 ## L5/L10 vs SEASON AVERAGES: WHICH TELLS THE TRUTH?
 
@@ -320,7 +320,7 @@ INVESTIGATE: What does L5 show vs season? WHY is there a difference?
 </L5_L10_VS_SEASON>
 `;
 
-export const MECHANISM_AWARENESS = `
+const MECHANISM_AWARENESS = `
 <MECHANISM_AWARENESS>
 ## MECHANISM AWARENESS: WHY, NOT WHAT
 
@@ -346,7 +346,7 @@ Ask: What is the on-court mechanism, and which stat categories does it affect?
 </MECHANISM_AWARENESS>
 `;
 
-export const GAME_SCRIPT_AWARENESS = `
+const GAME_SCRIPT_AWARENESS = `
 <GAME_SCRIPT_AWARENESS>
 ## GAME SCRIPT AWARENESS: RESHAPE, DON'T ABANDON
 
@@ -367,7 +367,7 @@ INVESTIGATE: What's the spread? How does expected game script affect THIS specif
 `;
 
 // NOISE_AWARENESS: trimmed to traps not already covered by BANNED_PHRASES
-export const NOISE_AWARENESS = `
+const NOISE_AWARENESS = `
 <NOISE_AWARENESS>
 ## NOISE AWARENESS: REASONING TRAPS
 
@@ -390,7 +390,7 @@ If your rationale relies on any of these without specific game evidence, your co
 // LINE AWARENESS
 // ============================================================================
 
-export const LINE_AWARENESS = `
+const LINE_AWARENESS = `
 <LINE_AWARENESS>
 ## LINE AWARENESS: UNDERSTAND BEFORE YOU DISAGREE
 
@@ -418,7 +418,7 @@ Investigate what the line reflects and what it doesn't. What does your investiga
 // CONTEXT AWARENESS
 // ============================================================================
 
-export const CONTEXT_AWARENESS = `
+const CONTEXT_AWARENESS = `
 <CONTEXT_AWARENESS>
 ## CONTEXT AWARENESS: IS YOUR BASELINE EVEN RIGHT?
 
@@ -436,7 +436,7 @@ The right baseline might be a split, not the season average.
 // THE ONE PRESCRIPTIVE RULE: VOLUME FLOOR
 // ============================================================================
 
-export const VOLUME_FLOOR_RULE = `
+const VOLUME_FLOOR_RULE = `
 <VOLUME_FLOOR_RULE>
 ## THE VOLUME FLOOR INVESTIGATION
 
@@ -456,7 +456,7 @@ Gary decides if volume floor risk is acceptable for THIS specific prop.
 // GOOD VS BAD ANALYSIS EXAMPLES
 // ============================================================================
 
-export const ANALYSIS_EXAMPLES = `
+const ANALYSIS_EXAMPLES = `
 <ANALYSIS_EXAMPLES>
 ## GOOD VS BAD ANALYSIS
 
@@ -534,7 +534,7 @@ Confidence: Moderate. Specific defensive rebounding matchup limits his primary r
 // RATIONALE SELF-EVALUATION (condensed — confidence overlap removed)
 // ============================================================================
 
-export const RATIONALE_EVALUATION = `
+const RATIONALE_EVALUATION = `
 <RATIONALE_EVALUATION>
 ## RATIONALE SELF-EVALUATION: THE MIRROR
 
@@ -560,7 +560,7 @@ Your thesis is "average > line" · Mechanism is a ranking without WHY · Evidenc
 // CONFIDENCE GUIDANCE
 // ============================================================================
 
-export const CONFIDENCE_GUIDANCE = `
+const CONFIDENCE_GUIDANCE = `
 <CONFIDENCE_GUIDANCE>
 ## CONFIDENCE: EARNED THROUGH INVESTIGATION, NOT VIBES
 
@@ -580,7 +580,7 @@ Trust your judgment. But be honest with the mirror.
 // PROP SELECTION RULES
 // ============================================================================
 
-export const PROP_SELECTION = `
+const PROP_SELECTION = `
 <PROP_SELECTION>
 ## PROP SELECTION RULES
 
@@ -610,7 +610,7 @@ If all picks are on each team's star, ask: Are you picking the player or the opp
 // BANNED PHRASES
 // ============================================================================
 
-export const BANNED_PHRASES = `
+const BANNED_PHRASES = `
 <BANNED_PHRASES>
 ## BANNED GENERIC PHRASES (DO NOT USE)
 
@@ -632,7 +632,7 @@ These phrases signal lazy analysis. NEVER write them:
 // BLANKET FACTOR AWARENESS
 // ============================================================================
 
-export const BLANKET_FACTOR_AWARENESS = `
+const BLANKET_FACTOR_AWARENESS = `
 <BLANKET_FACTOR_AWARENESS>
 ## NARRATIVE & LINE CONTEXT (PROPS)
 
@@ -655,7 +655,7 @@ ${getNarrativeClosingQuestions()}
 // CONVICTION MINDSET
 // ============================================================================
 
-export const CONVICTION_MINDSET = `
+const CONVICTION_MINDSET = `
 <CONVICTION_MINDSET>
 ## CONVICTION — YOU DON'T NEED PERFECT ALIGNMENT
 
@@ -762,26 +762,5 @@ ${CONVICTION_MINDSET}
 }
 
 export default {
-  FOUR_INVESTIGATIONS,
-  SHARP_WISDOM,
-  MARKET_EFFICIENCY,
-  STRUCTURAL_MISMATCH_AWARENESS,
-  STAT_AWARENESS,
-  INJURY_AWARENESS,
-  REGRESSION_AWARENESS,
-  L5_L10_VS_SEASON,
-  MECHANISM_AWARENESS,
-  GAME_SCRIPT_AWARENESS,
-  NOISE_AWARENESS,
-  LINE_AWARENESS,
-  CONTEXT_AWARENESS,
-  VOLUME_FLOOR_RULE,
-  ANALYSIS_EXAMPLES,
-  RATIONALE_EVALUATION,
-  CONFIDENCE_GUIDANCE,
-  PROP_SELECTION,
-  BANNED_PHRASES,
-  BLANKET_FACTOR_AWARENESS,
-  CONVICTION_MINDSET,
   getPropsSharpFramework
 };

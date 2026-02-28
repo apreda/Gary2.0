@@ -15,37 +15,25 @@ function clearCache() {
   console.log(`[Ball Don't Lie] 🗑️ Cache cleared (${size} entries removed)`);
 }
 
-/**
- * Clear cache entries matching a pattern (e.g., 'injuries' to clear all injury caches)
- */
-function clearCacheByPattern(pattern) {
-  let cleared = 0;
-  for (const key of cacheMap.keys()) {
-    if (key.includes(pattern)) {
-      cacheMap.delete(key);
-      cleared++;
-    }
-  }
-  console.log(`[Ball Don't Lie] 🗑️ Cleared ${cleared} cache entries matching "${pattern}"`);
-  return cleared;
-}
-
 // Base URL for Ball Don't Lie HTTP fallbacks
-const BALLDONTLIE_API_BASE_URL = 'https://api.balldontlie.io';
+export const BALLDONTLIE_API_BASE_URL = 'https://api.balldontlie.io';
 
 // Get API key from environment (support both browser and serverless)
-let API_KEY = '';
-try {
-  const serverKey =
-    (typeof process !== 'undefined' && process?.env?.BALLDONTLIE_API_KEY) ||
-    (typeof process !== 'undefined' && process?.env?.VITE_BALLDONTLIE_API_KEY) ||
-    (typeof process !== 'undefined' && process?.env?.NEXT_PUBLIC_BALLDONTLIE_API_KEY);
-  const clientKey =
-    (typeof import.meta !== 'undefined' && import.meta?.env?.VITE_BALLDONTLIE_API_KEY) || undefined;
-  API_KEY = serverKey || clientKey || '';
-} catch {
-  API_KEY = '';
+export function getApiKey() {
+  try {
+    const serverKey =
+      (typeof process !== 'undefined' && process?.env?.BALLDONTLIE_API_KEY) ||
+      (typeof process !== 'undefined' && process?.env?.VITE_BALLDONTLIE_API_KEY) ||
+      (typeof process !== 'undefined' && process?.env?.NEXT_PUBLIC_BALLDONTLIE_API_KEY);
+    const clientKey =
+      (typeof import.meta !== 'undefined' && import.meta?.env?.VITE_BALLDONTLIE_API_KEY) || undefined;
+    return serverKey || clientKey || '';
+  } catch {
+    return '';
+  }
 }
+
+const API_KEY = getApiKey();
 
 /**
  * Initialize the Ball Don't Lie API client
@@ -152,12 +140,7 @@ const ballDontLieService = {
     clearCache();
   },
 
-  /**
-   * Clear cache entries matching a pattern (e.g., 'injuries' to clear all injury caches)
-   */
-  clearCacheByPattern(pattern) {
-    return clearCacheByPattern(pattern);
-  },
+  // clearCacheByPattern removed — dead code (never called)
 
   /**
    * Get sport-specific client from the SDK
@@ -390,7 +373,7 @@ const ballDontLieService = {
           // If still empty and pid set, grab season-all then filter
           if ((!data || data.length === 0) && pid) {
             let seasonAll;
-            try { seasonAll = await sdkFetch({ season, ...(postseason ? { postseason } : {}) }); } catch {}
+            try { seasonAll = await sdkFetch({ season, ...(postseason ? { postseason } : {}) }); } catch (e) { console.warn('BDL season-all SDK fetch failed:', e?.message); }
             if (!seasonAll || seasonAll.length === 0) {
               seasonAll = await fetchSeasonAll(true);
               if (!seasonAll || seasonAll.length === 0) seasonAll = await fetchSeasonAll(false);
@@ -524,7 +507,7 @@ const ballDontLieService = {
           }
           if ((!data || data.length === 0) && pid) {
             let seasonAll;
-            try { seasonAll = await sdkFetch({ season, ...(postseason ? { postseason } : {}) }); } catch {}
+            try { seasonAll = await sdkFetch({ season, ...(postseason ? { postseason } : {}) }); } catch (e) { console.warn('BDL season-all SDK fetch failed:', e?.message); }
             if (!seasonAll || seasonAll.length === 0) {
               seasonAll = await fetchSeasonAll(true);
               if ((!seasonAll || seasonAll.length === 0)) {
@@ -659,7 +642,7 @@ const ballDontLieService = {
           }
           if ((!data || data.length === 0) && pid) {
             let seasonAll;
-            try { seasonAll = await sdkFetch({ season, ...(postseason ? { postseason } : {}) }); } catch {}
+            try { seasonAll = await sdkFetch({ season, ...(postseason ? { postseason } : {}) }); } catch (e) { console.warn('BDL season-all SDK fetch failed:', e?.message); }
             if (!seasonAll || seasonAll.length === 0) {
               seasonAll = await fetchSeasonAll(true);
               if ((!seasonAll || seasonAll.length === 0)) {
@@ -1490,122 +1473,6 @@ const ballDontLieService = {
     } catch (e) {
       console.error('[Ball Don\'t Lie] getNcaabStandings error:', e.message);
       return [];
-    }
-  },
-
-  /**
-   * Get all NCAAB conferences with IDs and names
-   * Endpoint: /ncaab/v1/conferences
-   * @returns {Promise<Array>} - Array of { id, name, short_name }
-   */
-  async getNcaabConferences(ttlMinutes = 1440) {
-    try {
-      const cacheKey = 'ncaab_conferences';
-      return await getCachedOrFetch(cacheKey, async () => {
-        const url = `${BALLDONTLIE_API_BASE_URL}/ncaab/v1/conferences`;
-        console.log('🏀 [Ball Don\'t Lie] Fetching NCAAB conferences');
-        const resp = await axios.get(url, { headers: { 'Authorization': API_KEY } });
-        return resp.data?.data || [];
-      }, ttlMinutes);
-    } catch (e) {
-      console.error('[Ball Don\'t Lie] getNcaabConferences error:', e.message);
-      return [];
-    }
-  },
-
-  /**
-   * Get March Madness bracket data
-   * Endpoint: /ncaab/v1/bracket
-   * @param {number} season - Season year (e.g., 2024 for 2024-25 tournament)
-   * @returns {Promise<Array>} - Array of bracket games with seeds, teams, scores, rounds
-   */
-  async getNcaabBracket(season, ttlMinutes = 60) {
-    try {
-      if (!season) return [];
-      const cacheKey = `ncaab_bracket_${season}`;
-      return await getCachedOrFetch(cacheKey, async () => {
-        const url = `${BALLDONTLIE_API_BASE_URL}/ncaab/v1/bracket?season=${season}`;
-        console.log(`🏀 [Ball Don\'t Lie] Fetching NCAAB bracket for season ${season}`);
-        const resp = await axios.get(url, { headers: { 'Authorization': API_KEY } });
-        return resp.data?.data || [];
-      }, ttlMinutes);
-    } catch (e) {
-      console.error('[Ball Don\'t Lie] getNcaabBracket error:', e.message);
-      return [];
-    }
-  },
-
-  /**
-   * Get NCAAB team game-level box scores (per-game team stats)
-   * Endpoint: /ncaab/v1/team_stats with date range
-   * Returns: FGM, FGA, FG3M, FG3A, FTM, FTA, OREB, DREB, REB, AST, STL, BLK, TOV, FOULS per game
-   * @param {number} teamId - BDL team ID
-   * @param {number} numGames - Number of recent games to fetch (default 5)
-   * @returns {Promise<Object>} - { games: [...], averages: {...}, teamId }
-   */
-  async getNcaabTeamGameLogs(teamId, numGames = 5, ttlMinutes = 15) {
-    try {
-      if (!teamId) return { games: [], averages: null, teamId };
-      const cacheKey = `ncaab_team_game_logs_${teamId}_${numGames}`;
-      return await getCachedOrFetch(cacheKey, async () => {
-        // Use 45-day lookback to capture ~10-15 games at 2-3 games/week pace
-        const endDate = new Date();
-        const startDate = new Date();
-        startDate.setDate(startDate.getDate() - 45);
-        const startStr = startDate.toISOString().split('T')[0];
-        const endStr = endDate.toISOString().split('T')[0];
-
-        const url = `${BALLDONTLIE_API_BASE_URL}/ncaab/v1/team_stats?team_ids[]=${teamId}&start_date=${startStr}&end_date=${endStr}&per_page=50`;
-        console.log(`🏀 [Ball Don\'t Lie] Fetching NCAAB team game logs for team ${teamId} (${startStr} to ${endStr})`);
-        const resp = await axios.get(url, { headers: { 'Authorization': API_KEY } });
-        const allGames = resp.data?.data || [];
-
-        // Sort by date descending and take the most recent N games
-        const sorted = allGames.sort((a, b) => new Date(b.game?.date || 0) - new Date(a.game?.date || 0));
-        const games = sorted.slice(0, numGames);
-
-        if (games.length === 0) return { games: [], averages: null, teamId };
-
-        // Compute averages
-        const sumField = (field) => games.reduce((s, g) => s + (g[field] || 0), 0);
-        const n = games.length;
-        const averages = {
-          fgm: (sumField('fgm') / n).toFixed(1),
-          fga: (sumField('fga') / n).toFixed(1),
-          fg_pct: (sumField('fg_pct') / n).toFixed(1),
-          fg3m: (sumField('fg3m') / n).toFixed(1),
-          fg3a: (sumField('fg3a') / n).toFixed(1),
-          fg3_pct: (sumField('fg3_pct') / n).toFixed(1),
-          ftm: (sumField('ftm') / n).toFixed(1),
-          fta: (sumField('fta') / n).toFixed(1),
-          ft_pct: (sumField('ft_pct') / n).toFixed(1),
-          oreb: (sumField('oreb') / n).toFixed(1),
-          dreb: (sumField('dreb') / n).toFixed(1),
-          reb: (sumField('reb') / n).toFixed(1),
-          ast: (sumField('ast') / n).toFixed(1),
-          stl: (sumField('stl') / n).toFixed(1),
-          blk: (sumField('blk') / n).toFixed(1),
-          tov: (sumField('turnovers') / n).toFixed(1),
-          fouls: (sumField('fouls') / n).toFixed(1),
-        };
-
-        // Compute Four Factors from L5 averages
-        const fgm = parseFloat(averages.fgm);
-        const fga = parseFloat(averages.fga);
-        const fg3m = parseFloat(averages.fg3m);
-        const fta = parseFloat(averages.fta);
-        const oreb = parseFloat(averages.oreb);
-        const tov = parseFloat(averages.tov);
-        averages.efgPct = fga > 0 ? ((fgm + 0.5 * fg3m) / fga * 100).toFixed(1) : null;
-        averages.tovRate = fga > 0 ? (tov / (fga + 0.44 * fta + tov) * 100).toFixed(1) : null;
-        averages.ftaRate = fga > 0 ? (fta / fga * 100).toFixed(1) : null;
-
-        console.log(`🏀 [Ball Don't Lie] Got ${games.length} NCAAB team game logs for team ${teamId}`);
-        return { games, averages, teamId };
-      }, ttlMinutes);
-    } catch (e) {
-      console.error('[Ball Don\'t Lie] getNcaabTeamGameLogs error:', e.message);
-      return { games: [], averages: null, teamId };
     }
   },
 
@@ -3481,54 +3348,6 @@ const ballDontLieService = {
   },
 
   /**
-   * Team season stats - generic batch version for multiple team IDs
-   * More flexible API that matches the MCP function signature
-   * NFL: /nfl/v1/team_season_stats?team_ids[]=X&team_ids[]=Y&season=XXXX
-   */
-  async getTeamSeasonStatsGeneric(sportKey, { team_ids = [], season, postseason = false } = {}, ttlMinutes = 30) {
-    try {
-      if (!team_ids || team_ids.length === 0 || !season) {
-        return [];
-      }
-      
-      const cacheKey = `${sportKey}_team_season_stats_batch_${team_ids.join('_')}_${season}_${postseason}`;
-      return await getCachedOrFetch(cacheKey, async () => {
-        // Build query with team_ids array
-        const params = new URLSearchParams();
-        team_ids.forEach(id => params.append('team_ids[]', id));
-        params.append('season', season);
-        if (postseason) params.append('postseason', 'true');
-        
-        let endpoint = null;
-        if (sportKey === 'americanfootball_nfl') {
-          endpoint = 'nfl/v1/team_season_stats';
-        } else if (sportKey === 'americanfootball_ncaaf') {
-          endpoint = 'ncaaf/v1/team_season_stats';
-        } else if (sportKey === 'basketball_ncaab') {
-          endpoint = 'ncaab/v1/team_season_stats';
-        } else {
-          console.warn(`[Ball Don't Lie] getTeamSeasonStatsGeneric not supported for ${sportKey}`);
-          return [];
-        }
-        
-        const url = `https://api.balldontlie.io/${endpoint}?${params.toString()}`;
-        console.log(`[Ball Don't Lie] Fetching team season stats: ${url}`);
-        
-        const resp = await fetch(url, { headers: { Authorization: API_KEY } });
-        if (!resp.ok) {
-          const text = await resp.text().catch(() => '');
-          throw new Error(`HTTP ${resp.status} ${text}`);
-        }
-        const json = await resp.json().catch(() => ({}));
-        return Array.isArray(json?.data) ? json.data : [];
-      }, ttlMinutes);
-    } catch (e) {
-      console.error(`[Ball Don't Lie] ${sportKey} getTeamSeasonStatsGeneric error:`, e.message);
-      return [];
-    }
-  },
-
-  /**
    * Leaders endpoints (NBA/NHL/NCAAB) via HTTP fallback
    */
   async getLeadersGeneric(sportKey, { season, type, postseason = false } = {}, ttlMinutes = 30) {
@@ -3724,40 +3543,6 @@ const ballDontLieService = {
   },
 
   /**
-   * Get NHL League Ranks for key stats
-   */
-  async getNhlLeagueRanks(season) {
-    try {
-      const cacheKey = `nhl_league_ranks_${season}`;
-      return await getCachedOrFetch(cacheKey, async () => {
-        // Fetch leaders for PP%, PK%, Goals For, Goals Against
-        const statTypes = [
-          { type: 'power_play_percentage', key: 'pp_rank' },
-          { type: 'penalty_kill_percentage', key: 'pk_rank' },
-          { type: 'goals_for_per_game', key: 'gf_rank' },
-          { type: 'goals_against_per_game', key: 'ga_rank' }
-        ];
-
-        const allRanks = {}; // { teamId: { pp_rank: 1, ... } }
-
-        await Promise.all(statTypes.map(async ({ type, key }) => {
-          const leaders = await this.getLeadersGeneric('icehockey_nhl_team', { season, type, per_page: 32 });
-          leaders.forEach((l, index) => {
-            if (!l.team?.id) return;
-            if (!allRanks[l.team.id]) allRanks[l.team.id] = {};
-            allRanks[l.team.id][key] = index + 1;
-          });
-        }));
-
-        return allRanks;
-      }, 120); // Cache for 2 hours
-    } catch (e) {
-      console.error(`[Ball Don't Lie] getNhlLeagueRanks error:`, e.message);
-      return {};
-    }
-  },
-
-  /**
    * Initialize the service
    */
   initialize() {
@@ -3850,79 +3635,6 @@ const ballDontLieService = {
       }, 60); // Cache for 60 minutes since teams don't change often
     } catch (error) {
       console.error('Error fetching NBA teams:', error);
-      return [];
-    }
-  },
-
-  /**
-   * Get NBA player injuries for current playoff teams
-   * @param {Array} teamIds - Array of team IDs to check for injuries
-   * @returns {Promise<Array>} - Array of player injury data
-   */
-  async getNbaPlayerInjuries(teamIds = []) {
-    try {
-      const cacheKey = `nba_player_injuries_${teamIds.join('_') || 'all'}`;
-      return await getCachedOrFetch(cacheKey, async () => {
-        console.log(`🏀 Fetching NBA player injuries for teams: ${teamIds.length > 0 ? teamIds.join(', ') : 'ALL'}`);
-        
-        // ⭐ SDK has bug with team_ids parameter - use HTTP fallback
-        // Error: "Cannot read properties of null (reading 'toString')"
-        let allInjuries = [];
-        let cursor = null;
-        let page = 1;
-        const maxPages = 10;
-        
-        do {
-          const params = new URLSearchParams();
-          params.append('per_page', '100');
-          if (cursor) params.append('cursor', cursor);
-          // Add team_ids if specified
-          for (const tid of teamIds) {
-            params.append('team_ids[]', tid);
-          }
-          
-          const url = `https://api.balldontlie.io/v1/player_injuries?${params.toString()}`;
-          const resp = await fetch(url, { headers: { Authorization: API_KEY } });
-          
-          if (!resp.ok) {
-            console.error(`🏀 Injuries API error: HTTP ${resp.status}`);
-            break;
-          }
-          
-          const json = await resp.json().catch(() => ({}));
-          const injuries = Array.isArray(json.data) ? json.data : [];
-          allInjuries.push(...injuries);
-          
-          cursor = json.meta?.next_cursor;
-          page++;
-          
-          if (page > maxPages) {
-            console.warn(`🏀 Hit max pages (${maxPages}) for injuries - stopping pagination`);
-            break;
-          }
-        } while (cursor);
-        
-        console.log(`🏀 Found ${allInjuries.length} player injuries (${page - 1} pages)`);
-        
-        // ⭐ Log OUT and DOUBTFUL players for debugging
-        const outPlayers = allInjuries.filter(i => i.status?.toUpperCase() === 'OUT');
-        const doubtfulPlayers = allInjuries.filter(i => i.status?.toUpperCase() === 'DOUBTFUL');
-        const questionablePlayers = allInjuries.filter(i => i.status?.toUpperCase() === 'QUESTIONABLE');
-        
-        if (outPlayers.length > 0) {
-          console.log(`🏀 OUT (${outPlayers.length}): ${outPlayers.slice(0, 10).map(i => `${i.player?.first_name} ${i.player?.last_name}`).join(', ')}${outPlayers.length > 10 ? '...' : ''}`);
-        }
-        if (doubtfulPlayers.length > 0) {
-          console.log(`🏀 DOUBTFUL (${doubtfulPlayers.length}): ${doubtfulPlayers.map(i => `${i.player?.first_name} ${i.player?.last_name}`).join(', ')}`);
-        }
-        if (questionablePlayers.length > 0) {
-          console.log(`🏀 QUESTIONABLE (${questionablePlayers.length}): ${questionablePlayers.slice(0, 5).map(i => `${i.player?.first_name} ${i.player?.last_name}`).join(', ')}${questionablePlayers.length > 5 ? '...' : ''}`);
-        }
-        
-        return allInjuries;
-      }, 2); // Cache for 2 minutes — injury status changes rapidly on game day
-    } catch (error) {
-      console.error('Error fetching NBA player injuries:', error);
       return [];
     }
   },
@@ -4322,48 +4034,6 @@ const ballDontLieService = {
     }
   },
 
-  /**
-   * Batch fetch NHL player season stats for multiple players
-   * @param {Array<number>} playerIds - Array of player IDs
-   * @param {number} season - Season year
-   * @returns {Promise<Object>} - Map of playerId to season stats
-   */
-  async getNhlPlayersSeasonStatsBatch(playerIds, season) {
-    try {
-      if (!playerIds || playerIds.length === 0) return {};
-
-      const uniqueIds = [...new Set(playerIds)].slice(0, 25); // Limit to 25 players
-      console.log(`[Ball Don't Lie] Batch fetching NHL season stats for ${uniqueIds.length} players`);
-
-      // Fetch in parallel with rate limiting
-      const results = {};
-      const batchSize = 5; // Fetch 5 at a time to avoid rate limits
-      
-      for (let i = 0; i < uniqueIds.length; i += batchSize) {
-        const batch = uniqueIds.slice(i, i + batchSize);
-        const batchResults = await Promise.all(
-          batch.map(id => this.getNhlPlayerSeasonStats(id, season).catch(() => null))
-        );
-        
-        batch.forEach((id, idx) => {
-          if (batchResults[idx]) {
-            results[id] = batchResults[idx];
-          }
-        });
-
-        // Small delay between batches to avoid rate limits
-        if (i + batchSize < uniqueIds.length) {
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
-      }
-
-      console.log(`[Ball Don't Lie] Retrieved season stats for ${Object.keys(results).length}/${uniqueIds.length} NHL players`);
-      return results;
-    } catch (error) {
-      console.error(`[Ball Don't Lie] NHL batch season stats error:`, error.message);
-      return {};
-    }
-  },
 
   /**
    * Get NHL team goalies with their season stats
@@ -4789,72 +4459,6 @@ const ballDontLieService = {
     }
   },
 
-  /**
-   * Batch fetch NBA game logs for multiple players
-   * @param {Array<number>} playerIds - Array of player IDs
-   * @param {number} numGames - Number of recent games per player
-   * @returns {Promise<Object>} - Map of playerId to game logs
-   */
-  async getNbaPlayerGameLogsBatch(playerIds, numGames = 10) {
-    try {
-      if (!playerIds || playerIds.length === 0) return {};
-
-      const uniqueIds = [...new Set(playerIds)].slice(0, 20); // Limit to 20 players
-      console.log(`[Ball Don't Lie] Batch fetching NBA game logs for ${uniqueIds.length} players`);
-
-      const results = {};
-      const failures = [];
-      const batchSize = 5;
-
-      // Helper to fetch with retry on rate limit
-      const fetchWithRetry = async (id, maxRetries = 2) => {
-        for (let attempt = 1; attempt <= maxRetries; attempt++) {
-          try {
-            return await this.getNbaPlayerGameLogs(id, numGames);
-          } catch (e) {
-            const isRateLimit = e?.response?.status === 429;
-            if (isRateLimit && attempt < maxRetries) {
-              console.warn(`[Ball Don't Lie] Rate limited on player ${id}, retrying in 2s...`);
-              await new Promise(r => setTimeout(r, 2000));
-              continue;
-            }
-            throw e;
-          }
-        }
-        return null;
-      };
-
-      for (let i = 0; i < uniqueIds.length; i += batchSize) {
-        const batch = uniqueIds.slice(i, i + batchSize);
-        const batchResults = await Promise.all(
-          batch.map(id => fetchWithRetry(id).catch(e => {
-            failures.push({ id, error: e.message });
-            return null;
-          }))
-        );
-
-        batch.forEach((id, idx) => {
-          if (batchResults[idx]) {
-            results[id] = batchResults[idx];
-          }
-        });
-
-        if (i + batchSize < uniqueIds.length) {
-          await new Promise(resolve => setTimeout(resolve, 150)); // Slightly longer delay
-        }
-      }
-
-      const successCount = Object.keys(results).length;
-      console.log(`[Ball Don't Lie] Retrieved game logs for ${successCount}/${uniqueIds.length} NBA players`);
-      if (failures.length > 0) {
-        console.warn(`[Ball Don't Lie] Failed to get logs for ${failures.length} players`);
-      }
-      return results;
-    } catch (e) {
-      console.error('[Ball Don\'t Lie] getNbaPlayerGameLogsBatch error:', e.message);
-      return {};
-    }
-  },
 
   /**
    * Get NHL player game logs with enhanced stats for prop analysis
@@ -5024,73 +4628,6 @@ const ballDontLieService = {
     } catch (e) {
       console.error('[Ball Don\'t Lie] getNhlPlayerGameLogs error:', e.message);
       return null;
-    }
-  },
-
-  /**
-   * Batch fetch NHL game logs for multiple players
-   * @param {Array<number>} playerIds - Array of player IDs  
-   * @param {number} numGames - Number of recent games per player
-   * @returns {Promise<Object>} - Map of playerId to game logs
-   */
-  async getNhlPlayerGameLogsBatch(playerIds, numGames = 10) {
-    try {
-      if (!playerIds || playerIds.length === 0) return {};
-
-      const uniqueIds = [...new Set(playerIds)].slice(0, 20);
-      console.log(`[Ball Don't Lie] Batch fetching NHL game logs for ${uniqueIds.length} players`);
-
-      const results = {};
-      const failures = [];
-      const batchSize = 5;
-
-      // Helper to fetch with retry on rate limit
-      const fetchWithRetry = async (id, maxRetries = 2) => {
-        for (let attempt = 1; attempt <= maxRetries; attempt++) {
-          try {
-            return await this.getNhlPlayerGameLogs(id, numGames);
-          } catch (e) {
-            const isRateLimit = e?.response?.status === 429;
-            if (isRateLimit && attempt < maxRetries) {
-              console.warn(`[Ball Don't Lie] Rate limited on player ${id}, retrying in 2s...`);
-              await new Promise(r => setTimeout(r, 2000));
-              continue;
-            }
-            throw e;
-          }
-        }
-        return null;
-      };
-
-      for (let i = 0; i < uniqueIds.length; i += batchSize) {
-        const batch = uniqueIds.slice(i, i + batchSize);
-        const batchResults = await Promise.all(
-          batch.map(id => fetchWithRetry(id).catch(e => {
-            failures.push({ id, error: e.message });
-            return null;
-          }))
-        );
-
-        batch.forEach((id, idx) => {
-          if (batchResults[idx]) {
-            results[id] = batchResults[idx];
-          }
-        });
-
-        if (i + batchSize < uniqueIds.length) {
-          await new Promise(resolve => setTimeout(resolve, 150)); // Slightly longer delay
-        }
-      }
-
-      const successCount = Object.keys(results).length;
-      console.log(`[Ball Don't Lie] Retrieved game logs for ${successCount}/${uniqueIds.length} NHL players`);
-      if (failures.length > 0) {
-        console.warn(`[Ball Don't Lie] Failed to get logs for ${failures.length} players`);
-      }
-      return results;
-    } catch (e) {
-      console.error('[Ball Don\'t Lie] getNhlPlayerGameLogsBatch error:', e.message);
-      return {};
     }
   },
 

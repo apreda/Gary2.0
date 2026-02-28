@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import '../styles/dimensional.css';
 import '../assets/css/logo-responsive.css';
 import { supabase } from "../supabaseClient";
+import { getESTDate, getESTHour, nflSeason as getNflSeason } from '../utils/dateUtils';
 import { 
   Flame, 
   AlertTriangle, 
@@ -67,7 +68,6 @@ const formatMatchupDisplay = (pick) => {
 function Home() {
   const [featuredPicks, setFeaturedPicks] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [winRate, setWinRate] = useState('67%');
   const [isCardFlipped, setIsCardFlipped] = useState(false);
   
   // Simple win rate badge with no dependencies
@@ -553,85 +553,17 @@ function Home() {
   };
 
   // Load featured picks from the database
-  // Fetch win rate and yesterday's performance
-  useEffect(() => {
-    const fetchWinRateData = async () => {
-      try {
-        // Fetch all picks to calculate win rate
-        const { data: picksData, error: picksError } = await supabase
-          .from("game_results")
-          .select("*")
-          .order('date', { ascending: false });
-          
-        if (picksError) {
-          console.error("Error fetching game results:", picksError);
-          return;
-        }
-        
-        if (picksData && picksData.length > 0) {
-          // Calculate overall win rate
-          const totalGames = picksData.length;
-          const wins = picksData.filter(game => game.result === 'win').length;
-          const calculatedWinRate = Math.round((wins / totalGames) * 100);
-          setWinRate(`${calculatedWinRate}%`);
-          
-          // Get yesterday's record
-          const today = new Date();
-          const yesterday = new Date(today);
-          yesterday.setDate(yesterday.getDate() - 1);
-          const yesterdayString = yesterday.toISOString().split('T')[0]; // Format: YYYY-MM-DD
-          
-          const yesterdayGames = picksData.filter(game => game.date?.includes(yesterdayString));
-          if (yesterdayGames.length > 0) {
-            const yesterdayWins = yesterdayGames.filter(game => game.result === 'win').length;
-            const yesterdayLosses = yesterdayGames.length - yesterdayWins;
-            setYesterdayRecord(`${yesterdayWins}-${yesterdayLosses}`);
-          }
-        }
-      } catch (err) {
-        console.error("Error fetching win rate data:", err);
-      }
-    };
-    
-    fetchWinRateData();
-  }, []);
-  
   useEffect(() => {
     const fetchFeaturedPicks = async () => {
       try {
-        // Use Eastern Time consistently for all date operations
-        const now = new Date();
-        
-        // Convert to Eastern Time zone properly
-        const easternTimeOptions = { timeZone: "America/New_York" };
-        const easternDateString = now.toLocaleDateString('en-US', easternTimeOptions);
-        const easternTimeString = now.toLocaleTimeString('en-US', easternTimeOptions);
-        
-        // Create a new date object with Eastern Time components
-        const [month, day, year] = easternDateString.split('/');
-        const [time, period] = easternTimeString.match(/([\d:]+)\s(AM|PM)/).slice(1);
-        const [hours, minutes] = time.split(':');
-        
-        // Format the date string properly (YYYY-MM-DD)
-        const dateString = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-        const easternHour = parseInt(hours) + (period === 'PM' && hours !== '12' ? 12 : 0);
-        
-        // Format full time for logging
-        const fullEasternTimeString = `${month}/${day}/${year} ${hours}:${minutes} ${period}`;
-        
-        console.log(`Home: Current Eastern Time: ${fullEasternTimeString} (Hour: ${easternHour})`);
-        
-        let queryDate = dateString;
-        console.log(`Home: Current Eastern Time: ${fullEasternTimeString} (Hour: ${easternHour}`);
-        
-        // Always show today's picks (EST), no fallback to yesterday
-        
+        // Use dateUtils for consistent EST timezone handling
+        const queryDate = getESTDate();
+        const easternHour = getESTHour();
+
         // Query Supabase for picks using the determined date
         // Check both daily_picks AND weekly_nfl_picks (NFL picks are in weekly table)
-        console.log(`Home: Querying picks for date: ${queryDate}`);
-        
-        // Calculate NFL Season: Jan-July is previous year's season
-        const nflSeason = parseInt(month) <= 7 ? parseInt(year) - 1 : parseInt(year);
+
+        const nflSeason = getNflSeason();
         
         const [dailyResult, nflResult] = await Promise.all([
           supabase.from("daily_picks").select("picks, date").eq("date", queryDate).maybeSingle(),
@@ -795,19 +727,6 @@ function Home() {
                       minWidth: '120px',
                     }}>
                     Odds API
-                  </div>
-                  
-                  {/* GPT-5.1 badge */}
-                  <div className="text-black text-sm font-bold px-5 py-1.5 rounded-full flex items-center justify-center" 
-                    style={{
-                      background: 'linear-gradient(135deg, #f5f5f5 0%, #d4af37 50%, #8a8a8a 100%)',
-                      color: '#111',
-                      textShadow: '0 1px 1px rgba(255,255,255,0.3)',
-                      boxShadow: '0 1px 3px rgba(0,0,0,0.3), inset 0 1px 1px rgba(255,255,255,0.4)',
-                      border: '1px solid rgba(184, 149, 63, 0.5)',
-                      minWidth: '120px',
-                    }}>
-                    GPT-5.1
                   </div>
                   
                   {/* Gemini badge */}
