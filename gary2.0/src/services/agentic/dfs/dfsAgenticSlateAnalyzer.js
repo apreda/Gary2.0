@@ -12,6 +12,7 @@
  */
 
 import { DFS_SLATE_ANALYSIS_TOOLS, executeToolCall } from './tools/dfsToolDefinitions.js';
+import { GEMINI_FLASH_MODEL } from '../modelConfig.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // SLATE ANALYSIS SYSTEM PROMPT
@@ -97,7 +98,7 @@ After investigation, summarize your findings in JSON:
  * @returns {Object} - Slate analysis with opportunities identified
  */
 export async function analyzeSlateWithFlash(genAI, context, options = {}) {
-  const { modelName = 'gemini-3-flash-preview' } = options;
+  const { modelName = GEMINI_FLASH_MODEL } = options;
 
   console.log('[Slate Analyzer] Starting slate investigation...');
 

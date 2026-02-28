@@ -7,7 +7,7 @@
 import '../src/loadEnv.js';
 import { createClient } from '@supabase/supabase-js';
 
-// Dynamic imports after env is loaded (so openaiService gets correct proxy URL)
+// Dynamic imports after env is loaded (so llmService gets correct proxy URL)
 const { oddsService } = await import('../src/services/oddsService.js');
 const { propOddsService } = await import('../src/services/propOddsService.js');
 const { runAgenticPropsPipeline } = await import('../src/services/agentic/propsAgenticRunner.js');

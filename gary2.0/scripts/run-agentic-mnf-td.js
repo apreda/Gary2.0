@@ -5,75 +5,20 @@
  */
 // Load environment variables FIRST
 import '../src/loadEnv.js';
-import { createClient } from '@supabase/supabase-js';
+import {
+  getESTDate, formatGameTimeEST, isDayOfWeekEST, isGameToday,
+  parseArgs, filterAnytimeTDProps, filterFirstTDProps,
+  createScriptSupabase, mergeAndStorePicks
+} from './helpers/nflTdHelpers.js';
 
 // Dynamic imports after env is loaded
 const { oddsService } = await import('../src/services/oddsService.js');
 const { propOddsService } = await import('../src/services/propOddsService.js');
-const { openaiService } = await import('../src/services/openaiService.js');
+const { llmService: openaiService } = await import('../src/services/llmService.js');
 const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
 
 const SPORT_KEY = 'americanfootball_nfl';
-
-function getESTDate() {
-  // DST-safe: Use Intl with America/New_York timezone
-  const now = new Date();
-  const options = { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' };
-  const estDate = new Intl.DateTimeFormat('en-US', options).format(now);
-  const [month, day, year] = estDate.split('/');
-  return `${year}-${month}-${day}`;
-}
-
-// Check if today is Monday in EST
-function isMondayEST() {
-  const now = new Date();
-  const estDate = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
-  return estDate.getDay() === 1; // 0 = Sunday, 1 = Monday
-}
-
-// Format game time to readable EST string
-function formatGameTimeEST(isoString) {
-  if (!isoString) return 'TBD';
-  try {
-    const date = new Date(isoString);
-    return date.toLocaleString('en-US', {
-      timeZone: 'America/New_York',
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
-    });
-  } catch {
-    return 'TBD';
-  }
-}
-
-// Check if a game is today (Monday) in EST
-function isGameToday(commenceTime) {
-  if (!commenceTime) return false;
-  const gameDate = new Date(commenceTime);
-  const todayEST = getESTDate();
-  
-  // Convert game time to EST date
-  const gameEST = new Date(gameDate.toLocaleString("en-US", { timeZone: "America/New_York" }));
-  const gameYear = gameEST.getFullYear();
-  const gameMonth = String(gameEST.getMonth() + 1).padStart(2, '0');
-  const gameDay = String(gameEST.getDate()).padStart(2, '0');
-  const gameDateStr = `${gameYear}-${gameMonth}-${gameDay}`;
-  
-  return gameDateStr === todayEST;
-}
-
-function parseArgs() {
-  return process.argv.slice(2).reduce((acc, arg) => {
-    const [key, value] = arg.split('=');
-    if (!key) return acc;
-    acc[key.replace(/^--/, '')] = value ?? true;
-    return acc;
-  }, {});
-}
+const isMondayEST = () => isDayOfWeekEST(1);
 
 /**
  * Run Gary's MNF TD Scorer Analysis
@@ -261,22 +206,10 @@ async function main() {
     const props = await propOddsService.getPlayerPropOdds(SPORT_KEY, mnfGame.home_team, mnfGame.away_team, mnfGame.commence_time);
     
     // Filter for anytime TD props
-    const tdProps = props.filter(p => {
-      const propType = (p.prop_type || '').toLowerCase();
-      return propType === 'anytime_td' || 
-             propType === 'player_anytime_td' ||
-             propType === 'player_tds_over' ||
-             propType === 'tds_over' ||
-             (propType.includes('td') && !propType.includes('pass_td') && !propType.includes('1st_td') && !propType.includes('first_td'));
-    });
+    const tdProps = filterAnytimeTDProps(props);
 
     // Filter for First TD props
-    const firstProps = props.filter(p => {
-      const propType = (p.prop_type || '').toLowerCase();
-      return propType === 'first_td' || 
-             propType === 'player_1st_td' ||
-             propType === '1st_td';
-    });
+    const firstProps = filterFirstTDProps(props);
 
     tdProps.forEach(p => {
       allTDProps.push({
@@ -364,17 +297,8 @@ async function main() {
   if (shouldStore) {
     console.log(`\n💾 Storing MNF TD picks in Supabase...`);
     
-    const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
-    
-    if (!supabaseUrl || !supabaseKey) {
-      console.error('❌ Missing Supabase credentials');
-      return;
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseKey, {
-      auth: { autoRefreshToken: false, persistSession: false }
-    });
+    const supabase = createScriptSupabase();
+    if (!supabase) return;
 
     const dateParam = getESTDate();
 
@@ -445,35 +369,9 @@ async function main() {
       });
     }
 
-    // Fetch existing picks and merge
-    const { data: existingData } = await supabase
-      .from('prop_picks')
-      .select('picks')
-      .eq('date', dateParam)
-      .single();
-
-    let existingPicks = [];
-    if (existingData?.picks) {
-      // Remove any existing MNF picks (to avoid duplicates on re-run)
-      existingPicks = existingData.picks.filter(p => !p.mnf_pick);
-    }
-
-    const mergedPicks = [...existingPicks, ...mnfPicks];
-
-    // Delete and re-insert
-    await supabase.from('prop_picks').delete().eq('date', dateParam);
-    
-    const { error: insertError } = await supabase
-      .from('prop_picks')
-      .insert({
-        date: dateParam,
-        picks: mergedPicks,
-        created_at: new Date().toISOString()
-      });
-
-    if (insertError) {
-      console.error(`❌ Insert error: ${insertError.message}`);
-    } else {
+    // Merge with existing picks (remove old MNF picks first)
+    const stored = await mergeAndStorePicks(supabase, dateParam, mnfPicks, p => !p.mnf_pick);
+    if (stored) {
       console.log(`✅ Stored ${mnfPicks.length} MNF TD picks (1 standard + 1 longshot + 1 first TD)`);
     }
   }

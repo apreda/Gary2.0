@@ -5,55 +5,8 @@
 import { ballDontLieService } from './ballDontLieService.js';
 import { ballDontLieOddsService } from './ballDontLieOddsService.js';
 
-// Track in-flight requests to prevent duplicates and cache API responses
+// Track in-flight requests to prevent duplicates
 const inFlightRequests = new Map();
-const oddsCache = new Map();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-
-// All odds now come from Ball Don't Lie — The Odds API has been fully removed
-
-// NOTE: PROP_MARKETS removed — BDL returns all prop types automatically via propOddsService
-
-/**
- * Fetches completed games from Ball Don't Lie API for a specific date and sport
- */
-const getCompletedGamesByDate = async (sport, date) => {
-  const sportKeyMap = {
-    'nba': 'basketball_nba',
-    'nhl': 'icehockey_nhl',
-    'mlb': 'baseball_mlb',
-    'nfl': 'americanfootball_nfl'
-  };
-
-  const sportKey = sportKeyMap[sport.toLowerCase()] || sport;
-
-  try {
-    console.log(`Fetching scores from Ball Don't Lie for ${sport} on ${date}`);
-    const games = await ballDontLieService.getGames(sportKey, { dates: [date], per_page: 100 }, 10);
-
-    if (Array.isArray(games)) {
-      return games
-        .filter(game => game.status === 'Final' || game.home_team_score > 0 || game.visitor_team_score > 0)
-        .map(game => ({
-          id: game.id,
-          sport_key: sportKey,
-          home_team: game.home_team?.full_name || game.home_team?.name || game.home_team,
-          away_team: game.visitor_team?.full_name || game.visitor_team?.name || game.visitor_team,
-          scores: {
-            home: game.home_team_score || 0,
-            away: game.visitor_team_score || 0
-          },
-          completed: true,
-          commence_time: game.date || game.start_time_utc
-        }));
-    }
-
-    return [];
-  } catch (error) {
-    console.error(`Error fetching ${sport} scores from Ball Don't Lie:`, error);
-    return [];
-  }
-};
 
 // Helper to extract odds from bookmakers array
 const extractOddsFromBookmakers = (bookmakers, homeTeam, awayTeam) => {
@@ -155,75 +108,6 @@ const dedupeRequest = async (key, fn) => {
   }
 };
 
-// Helpers to normalize BDL odds into the structure our pipeline expects
-const properCase = (s) => (s ? String(s).charAt(0).toUpperCase() + String(s).slice(1) : '');
-const toBookmakersFromV2 = (rows, homeTeam, awayTeam) => {
-  if (!Array.isArray(rows) || rows.length === 0) return [];
-  const byVendor = rows.reduce((acc, r) => {
-    if (!r || !r.vendor) return acc;
-    if (!acc[r.vendor]) acc[r.vendor] = [];
-    acc[r.vendor].push(r);
-    return acc;
-  }, {});
-  const mkOutcome = (name, price, point) => {
-    const out = { name, price };
-    if (typeof point !== 'undefined' && point !== null) out.point = typeof point === 'number' ? point : parseFloat(point);
-    return out;
-  };
-  const result = [];
-  for (const vendor of Object.keys(byVendor)) {
-    const vendorRows = byVendor[vendor];
-    // Use the latest row per vendor per game_id (already filtered per game)
-    const latest = vendorRows.sort((a, b) => String(a.updated_at || '').localeCompare(String(b.updated_at || ''))).slice(-1)[0] || vendorRows[0];
-    const markets = [];
-    // Moneyline
-    if (typeof latest.moneyline_home_odds === 'number' || typeof latest.moneyline_away_odds === 'number') {
-      markets.push({
-        key: 'h2h',
-        outcomes: [
-          mkOutcome(homeTeam, latest.moneyline_home_odds),
-          mkOutcome(awayTeam, latest.moneyline_away_odds)
-        ]
-      });
-    }
-    // Spreads
-    if (latest.spread_home_value || latest.spread_away_value) {
-      const homePoint = latest.spread_home_value != null ? parseFloat(latest.spread_home_value) : null;
-      const awayPoint = latest.spread_away_value != null ? parseFloat(latest.spread_away_value) : null;
-      markets.push({
-        key: 'spreads',
-        outcomes: [
-          mkOutcome(homeTeam, latest.spread_home_odds, homePoint),
-          mkOutcome(awayTeam, latest.spread_away_odds, awayPoint)
-        ]
-      });
-    }
-    // Totals (reference only)
-    if (latest.total_value != null && (typeof latest.total_over_odds === 'number' || typeof latest.total_under_odds === 'number')) {
-      const totPoint = parseFloat(latest.total_value);
-      markets.push({
-        key: 'totals',
-        outcomes: [
-          { name: 'Over', price: latest.total_over_odds, point: totPoint },
-          { name: 'Under', price: latest.total_under_odds, point: totPoint }
-        ]
-      });
-    }
-    result.push({
-      key: vendor,
-      title: properCase(vendor),
-      markets
-    });
-  }
-  return result;
-};
-
-const normalizeTeamString = (teamObjOrStr) => {
-  if (!teamObjOrStr) return '';
-  if (typeof teamObjOrStr === 'string') return teamObjOrStr;
-  return teamObjOrStr.full_name || teamObjOrStr.display_name || teamObjOrStr.name || '';
-};
-
 const computeWindow = (sport) => {
   const now = new Date();
 
@@ -268,13 +152,7 @@ const computeWindow = (sport) => {
 };
 
 export const oddsService = {
-  // DEPRECATED: Redirects to getUpcomingGames (still used by nbaPicksHandler.js)
-  getOdds: async (sport) => {
-    console.warn(`[oddsService.getOdds] DEPRECATED - use getUpcomingGames('${sport}') instead`);
-    return oddsService.getUpcomingGames(sport);
-  },
-
-  getCompletedGamesByDate,
+  // getCompletedGamesByDate removed — function was deleted in Round 10
 
   getUpcomingGames: async (sport = 'upcoming', options = {}) => {
     const cacheKey = `upcoming-games:${sport}:${JSON.stringify(options)}`;

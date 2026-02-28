@@ -1,0 +1,2 @@
+fatal: path 'gary2.0/public/garymoney.png' exists, but not 'public/garymoney.png'
+hint: Did you mean '9567cfb:gary2.0/public/garymoney.png' aka '9567cfb:./public/garymoney.png'?

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { userPickResultsService } from '../services/userPickResultsService';
 
 const AdminResultsProcessor = () => {
@@ -20,7 +20,6 @@ const AdminResultsProcessor = () => {
         result = await userPickResultsService.manualProcessResults(selectedDate);
       }
       setLastResult(result);
-      console.log('Processing result:', result);
     } catch (error) {
       console.error('Error processing results:', error);
       setLastResult({

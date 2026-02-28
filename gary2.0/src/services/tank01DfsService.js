@@ -108,7 +108,7 @@ const SALARY_CACHE_TTL = 60 * 60 * 1000; // 1 hour
  * @param {string} platform - 'draftkings' or 'fanduel'
  * @returns {Promise<Array>} Array of players with salaries
  */
-export async function fetchNbaDfsSalaries(dateStr, platform = 'draftkings') {
+async function fetchNbaDfsSalaries(dateStr, platform = 'draftkings') {
   const cacheKey = `NBA_${dateStr}`;
   const now = Date.now();
   const cached = _salaryCache.get(cacheKey);
@@ -186,7 +186,7 @@ export async function fetchNbaDfsSalaries(dateStr, platform = 'draftkings') {
  * @param {string} platform - 'draftkings' or 'fanduel'
  * @returns {Promise<Array>} Array of players with salaries
  */
-export async function fetchNflDfsSalaries(dateStr, platform = 'draftkings') {
+async function fetchNflDfsSalaries(dateStr, platform = 'draftkings') {
   const startTime = Date.now();
   
   try {
@@ -505,7 +505,7 @@ function toTank01Abv(standardAbv) {
   return TANK01_ABV_MAP[upper] || upper;
 }
 
-export async function fetchNbaTeamRoster(teamAbv) {
+async function fetchNbaTeamRoster(teamAbv) {
   const key = teamAbv.toUpperCase();
   const tank01Key = toTank01Abv(key);
   const now = Date.now();
@@ -817,49 +817,8 @@ export function matchNewsToPlayers(newsItems, playerIdMap) {
 }
 
 // ============================================================================
-// NBA GAME TIMES (Fallback for slate discovery if DK API fails)
-// ============================================================================
-
-/**
- * Fetch NBA game times from Tank01's scores endpoint
- * Returns gameTime and gameTime_epoch per game
- *
- * @param {string} dateStr - Date in YYYY-MM-DD format
- * @returns {Promise<Array>} Array of game objects with time data
- */
-export async function fetchNbaGameTimes(dateStr) {
-  try {
-    const apiDate = formatDateForApi(dateStr);
-    const data = await makeApiRequest('/getNBAScoresOnly', { gameDate: apiDate });
-
-    const games = data?.body || {};
-    const result = [];
-
-    for (const [gameId, game] of Object.entries(games)) {
-      result.push({
-        gameID: gameId,
-        away: normalizeTeamAbbreviation(game.away || ''),
-        home: normalizeTeamAbbreviation(game.home || ''),
-        gameTime: game.gameTime || null,
-        gameTimeEpoch: game.gameTime_epoch ? parseFloat(game.gameTime_epoch) : null,
-        gameStatus: game.gameStatus || 'Unknown'
-      });
-    }
-
-    console.log(`[Tank01 DFS] Game times for ${dateStr}: ${result.length} games`);
-    return result;
-  } catch (err) {
-    console.warn(`[Tank01 DFS] Game times fetch failed: ${err.message}`);
-    return [];
-  }
-}
-
 export default {
   fetchDfsSalaries,
-  fetchNbaDfsSalaries,
-  fetchNflDfsSalaries,
-  // New NBA DFS enrichment functions
-  fetchNbaTeamRoster,
   fetchNbaRostersForTeams,
   extractPlayerEnrichment,
   fetchNbaTeamDefenseStats,
@@ -867,6 +826,5 @@ export default {
   fetchNbaProjections,
   fetchNbaNews,
   matchNewsToPlayers,
-  fetchNbaGameTimes
 };
 

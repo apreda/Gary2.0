@@ -1,32 +1,25 @@
 /**
  * LLM service for generating sports analysis and picks
- * Now using Gemini 3 Deep Think exclusively (GPT-5.1 removed Dec 2025)
+ * Uses Gemini exclusively (via modelConfig.js for model selection)
  * Provides betting insights through the legendary Gary the Grizzly Bear character
  */
 import axios from 'axios';
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import { apiCache } from '../utils/apiCache.js';
-import { requestQueue } from '../utils/requestQueue.js';
+import {
+  GEMINI_FLASH_MODEL as GEMINI_MODEL_FLASH,
+  getGeminiClient as _getGeminiClient
+} from './agentic/modelConfig.js';
 
 // LLM provider - Gemini 3
 const LLM_PROVIDER = 'gemini';
-// Gemini 3 Flash (grounding/search, props, fallback). Main picks use 3.1 Pro via orchestrator.
-const GEMINI_MODEL_DEFAULT = 'gemini-3-flash-preview';
-// Gemini 3 Flash - used for grounding, props, and as quota fallback
-const GEMINI_MODEL_FLASH = 'gemini-3-flash-preview';
+const GEMINI_MODEL_DEFAULT = GEMINI_MODEL_FLASH;
 
-// Direct Gemini SDK for local/server runs
-let geminiClient = null;
-const GEMINI_SERVER_KEY = (() => { try { return process.env.GEMINI_API_KEY; } catch { return undefined; } })();
-
+// Wrapped client getter — returns null instead of throwing when key is missing (browser mode)
 function getGeminiClient() {
-  if (!geminiClient && GEMINI_SERVER_KEY) {
-    geminiClient = new GoogleGenerativeAI(GEMINI_SERVER_KEY);
-  }
-  return geminiClient;
+  try { return _getGeminiClient(); } catch { return null; }
 }
 
 // Determine if we should use direct SDK (server/local) or proxy (browser)
+const GEMINI_SERVER_KEY = (() => { try { return process.env.GEMINI_API_KEY; } catch { return undefined; } })();
 const USE_DIRECT_SDK = typeof process !== 'undefined' && GEMINI_SERVER_KEY;
 
 // Determine proxy URL (works in browser, serverless, and local dev)
@@ -41,45 +34,32 @@ const resolveProxyUrl = () => {
       if (!base.startsWith('http')) base = `https://${base}`;
       return `${base}${proxyPath}`;
     }
-  } catch {}
+  } catch (e) { /* URL resolution is non-critical, fall through to default */ }
   return '/api/gemini-proxy';
 };
 
 const PROXY_URL = resolveProxyUrl();
 const GEMINI_PROXY_URL = PROXY_URL;
-const GEMINI_DIRECT_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 
 console.log(`[LLM Service] Provider: ${LLM_PROVIDER}, Mode: ${USE_DIRECT_SDK ? 'Direct SDK' : 'Proxy'}, ${USE_DIRECT_SDK ? 'API Key: ✓' : 'Proxy: ' + PROXY_URL}`);
 
-const openaiServiceInstance = {
+const llmServiceInstance = {
   /**
    * Flag to indicate if initialization was successful
    */
   initialized: true, // Always true since we use proxy
   
-  /**
-   * Current LLM provider
-   */
-  provider: LLM_PROVIDER,
-  
-  /**
-   * Initialize the service (no longer needs API key on client side)
-   */
-  init: function() {
-    console.log(`✅ LLM service initialized with ${LLM_PROVIDER} provider via secure proxy`);
-    this.initialized = true;
-    return this;
-  },
-  
+  // provider property and init() method removed — dead code (never called)
+
   /**
    * Default model - varies by provider
    */
   DEFAULT_MODEL: LLM_PROVIDER === 'gemini'
-    ? 'gemini-3-flash-preview' // Flash for grounding/props; picks use 3.1 Pro via orchestrator
-    : ((typeof process !== 'undefined' && process.env && process.env.OPENAI_MODEL) || 'gpt-5.1'),
+    ? GEMINI_MODEL_FLASH // Flash for grounding/props; picks use Pro via orchestrator
+    : GEMINI_MODEL_FLASH,
   
   /**
-   * Generate a response from LLM (OpenAI or Gemini) using secure proxy
+   * Generate a response from LLM (Gemini) using secure proxy
    * @param {Array} messages - The messages to send to the LLM
    * @param {Object} options - Configuration options for the API
    * @returns {Promise<string>} - The generated response
@@ -116,7 +96,7 @@ const openaiServiceInstance = {
           }
         });
         
-        // Convert OpenAI-style messages to Gemini format
+        // Convert chat messages to Gemini format
         let systemInstruction = '';
         const geminiContents = [];
         
@@ -222,7 +202,7 @@ const openaiServiceInstance = {
       } catch (proxyErr) {
         const status = proxyErr?.response?.status;
         if (status === 400) {
-          try { console.error(`[GEMINI PROXY 400]`, JSON.stringify(proxyErr.response.data)); } catch {}
+          try { console.error(`[GEMINI PROXY 400]`, JSON.stringify(proxyErr.response.data)); } catch (e) { /* JSON stringify can fail on circular refs */ }
         }
         throw proxyErr;
       }
@@ -272,16 +252,16 @@ const openaiServiceInstance = {
             }
           }
           if (!fallback || String(fallback).trim().length === 0) {
-            throw new Error('OpenAI returned empty content after retry');
+            throw new Error('LLM returned empty content after retry');
           }
           content = fallback;
         } catch (e) {
-          throw new Error('OpenAI returned empty content (no assistant text in response)');
+          throw new Error('LLM returned empty content (no assistant text in response)');
         }
       }
 
       // Prefer strict top-level JSON parse first; if it fails, attempt to strip common wrappers, else return raw text
-      console.log('\n🔍 OpenAI response received. Checking for top-level JSON...');
+      console.log('\n🔍 LLM response received. Checking for top-level JSON...');
       try {
         const trimmed = String(content).trim();
         let candidate = trimmed;
@@ -300,8 +280,8 @@ const openaiServiceInstance = {
 
       return content;
     } catch (error) {
-      console.error('Error generating OpenAI response:', error);
-      throw new Error(`OpenAI API Error: ${error.message}`);
+      console.error('Error generating LLM response:', error);
+      throw new Error(`LLM API Error: ${error.message}`);
     }
   },
   
@@ -456,11 +436,11 @@ PICK DECISION:
       /**
        * Combine all input data and format it for the user prompt
        */
-      // Prepare all game stats in a flexible way - we'll pass whatever we have to OpenAI
+      // Prepare all game stats in a flexible way - we'll pass whatever we have to the LLM
       // This follows user's direction to be flexible with stats formatting
       let statsSection = '';  
         
-      // Add any stats we have - don't be picky about structure, OpenAI can parse them
+      // Add any stats we have - don't be picky about structure, the LLM can parse them
         
       // 1. First add the standard stats context if available
       if (gameData?.statsContext) {
@@ -1203,113 +1183,9 @@ Provide your betting analysis in the exact JSON format specified. Remember to ON
       throw error; // Rethrow so caller can handle it
     }
   },
-  /**
-   * Generate prop picks recommendations from OpenAI
-   * @param {string} prompt - The detailed prompt with game data and available props
-   * @param {Object} options - Additional options for the generation
-   * @returns {Promise<string>} - The generated prop picks response
-   */
-  generatePropPicks: async function(prompt, options = {}) {
-    try {
-      console.log('Generating prop picks from OpenAI...');
-      
-      const systemMessage = {
-        role: 'system',
-        content: `You are Gary, a professional sports bettor and statistical analyst specializing in player prop bets. 
-
-IMPORTANT: The prop lines and odds provided in the user message are REAL-TIME data from live sportsbooks. This is current, accurate data for today's games. You MUST analyze it and provide picks - do not refuse or claim you lack current data.
-
-Your task is to analyze player statistics and betting lines to identify the most profitable player prop bets.
-
-Your analysis should be data-driven, focusing on:
-1. Player recent form and consistency
-2. Matchup advantages and disadvantages
-3. Historical performance in similar situations
-4. Value in the current betting line
-5. Trends and patterns in prop performance
-
-For each recommended prop bet, you must provide:
-- Player name and team
-- Prop type (points, rebounds, assists, etc.)
-- Recommendation (over or under)
-- Confidence level (0.1-1.0 scale)
-- Rationale with bullet points, where each bullet point is a complete sentence
-- EV+ calculation (expected value per $100 bet)
-
-To calculate EV+:
-1. Estimate the true probability (p) that your selection wins based on the player stats and matchup
-2. Convert market odds to implied probability: i = 1/d where d is decimal odds
-   (e.g., for American odds -110, convert to decimal: 1.91)
-3. Calculate EV per $1: EV = p × (d - 1) - (1 - p)
-4. Calculate EV+ (per $100): EV+ = EV × 100
-
-NEVER EVER mention missing or limited stats in your rationale. Do not use phrases like "with no player stats available" or "relying on league averages" or any other language that suggests data limitations. Users should never know if data is missing.
-
-CRITICAL RATIONALE FORMATTING:
-- Write the rationale using bullet points
-- Each bullet point MUST be a complete sentence - do not cut off mid-thought
-- Use 3-4 bullet points total
-- Each bullet point should contain a complete thought/analysis point
-- Format example:
-  "• Jung leads the Rangers with 7 HR and has a .288 average with an .812 OPS, showing strong power and overall consistency.
-   • He faces Bryse Wilson, who has a 6.00 ERA, 1.79 WHIP, and allows a .331 BAA, making him a highly favorable matchup for right-handed power hitters.
-   • Jung's underlying metrics and recent form suggest a true HR probability near 16%.
-   • At +510, the payout far exceeds the risk, creating a strong value edge of approximately 12.5% expected value."
-
-Response format (valid JSON):
-\`\`\`json
-[
-  {
-    "player": "Player Name",
-    "team": "Full Team Name",
-    "prop": "Prop Type and Line (e.g., hits 0.5)",
-    "line": 0.5,
-    "bet": "over",
-    "odds": -110,
-      "confidence": 0.78,
-    "ev": 12.5,
-    "rationale": "• First complete sentence with key stat or insight. • Second complete sentence with matchup analysis. • Third complete sentence with value or trend. • Optional fourth sentence with conclusion."
-  },
-  {...}
-]
-\`\`\`
-
-You may provide up to 5 picks with their confidence scores (between 0.1 and 1.0).
-
-IMPORTANT: Format the "prop" field as "[prop type] [line value]" (e.g., "hits 0.5", "strikeouts 5.5") so it's easy to display in the UI.
-
-IMPORTANT: Always use the full team name (e.g., 'Cleveland Guardians') rather than abbreviations in the team field.`
-      };
-      
-      const userMessage = {
-        role: 'user',
-        content: prompt
-      };
-      
-      // Use our standard generateResponse method to make the API call
-      return await this.generateResponse([systemMessage, userMessage], {
-        temperature: 1.0, // Gemini 3: MUST be 1.0 per Google recommendation
-        maxTokens: options.maxTokens || 1500,
-        model: options.model || this.DEFAULT_MODEL
-      });
-    } catch (error) {
-      console.error('Error generating prop picks:', error);
-      
-      // Provide more detailed error information for debugging
-      if (error.response) {
-        console.error('API Error Response:', error.response.data);
-        console.error('Status:', error.response.status);
-      }
-      
-      throw error; // Rethrow so caller can handle it
-    }
-  }
 };
 
 // Initialize and then export the service
-openaiServiceInstance.init();
+llmServiceInstance.init();
 
-// Export Flash model ID for props to use when Pro has quota issues
-export const GEMINI_FLASH_MODEL = GEMINI_MODEL_FLASH;
-export { openaiServiceInstance as openaiService };
-export default openaiServiceInstance;
+export { llmServiceInstance as llmService };

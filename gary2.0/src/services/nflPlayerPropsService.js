@@ -3,6 +3,7 @@
  * Provides player statistics for NFL prop bet analysis using Ball Don't Lie API
  */
 import axios from 'axios';
+import { normalizeTeamName as sharedNormalizeTeamName, mascotToken, resolveTeamByName } from './agentic/sharedUtils.js';
 
 // BDL NFL API base URL
 const BDL_NFL_BASE = 'https://api.balldontlie.io/nfl/v1';
@@ -59,59 +60,18 @@ function getCurrentNFLSeason() {
   return month <= 7 ? year - 1 : year;
 }
 
-/**
- * Normalize team name for flexible matching
- */
-function normalizeTeamName(name) {
-  if (!name) return '';
-  return name.toLowerCase()
-    .replace(/\./g, '')
-    .replace(/'/g, '')
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
+// Use canonical normalizeTeamName from sharedUtils (has city alias mappings)
+const normalizeTeamName = sharedNormalizeTeamName;
 
-/**
- * Get mascot token from team name (last word)
- */
-function getMascot(name) {
-  const parts = String(name || '').trim().split(/\s+/);
-  return parts[parts.length - 1].toLowerCase().replace(/[^a-z]/g, '');
-}
+// Alias getMascot → mascotToken from sharedUtils
+const getMascot = mascotToken;
 
 /**
  * Resolve team by name from teams list
+ * Delegates to sharedUtils.resolveTeamByName (handles exact, contains, mascot matching with city aliases)
  */
 function resolveTeam(teamName, teams) {
-  if (!teamName || !Array.isArray(teams)) return null;
-  
-  const normalizedTarget = normalizeTeamName(teamName);
-  const targetMascot = getMascot(teamName);
-  
-  // Try exact full_name match first
-  let match = teams.find(t => {
-    const fullNorm = normalizeTeamName(t.full_name || '');
-    return fullNorm === normalizedTarget;
-  });
-  
-  if (match) return match;
-  
-  // Try contains match
-  match = teams.find(t => {
-    const fullNorm = normalizeTeamName(t.full_name || '');
-    return fullNorm.includes(normalizedTarget) || normalizedTarget.includes(fullNorm);
-  });
-  
-  if (match) return match;
-  
-  // Try mascot match
-  match = teams.find(t => {
-    const teamMascot = getMascot(t.full_name || t.name || '');
-    return teamMascot && targetMascot && teamMascot === targetMascot;
-  });
-  
-  return match || null;
+  return resolveTeamByName(teamName, teams);
 }
 
 /**
@@ -474,13 +434,5 @@ function getCurrentNFLWeek() {
   return Math.min(Math.max(1, weeksSinceStart), 22);
 }
 
-export default {
-  formatNFLPlayerStats,
-  getNFLTeams,
-  getActivePlayers,
-  getSeasonStats,
-  getPlayerInjuries,
-  getCurrentNFLSeason,
-  getCurrentNFLWeek
-};
+// default export removed — all callers use named import { formatNFLPlayerStats }
 

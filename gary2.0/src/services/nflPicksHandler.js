@@ -1,8 +1,10 @@
 import { oddsService } from './oddsService.js';
 import { ballDontLieService } from './ballDontLieService.js';
-import { computeRecommendedSportsbook } from './recommendedSportsbook.js';
+import { computeRecommendedSportsbook } from './recommendedSportsbookUtil.js';
 import { makeGaryPick } from './garyEngine.js';
 import { processGameOnce, gameAlreadyHasPick } from './picksService.js';
+import { mergeBookmakerOdds } from './agentic/sharedUtils.js';
+import { nflSeason } from '../utils/dateUtils.js';
 
 const SPORT_KEY = 'americanfootball_nfl';
 
@@ -147,7 +149,7 @@ export async function generateNFLPicks(options = {}) {
     todayGames = [todayGames[idx]];
   }
 
-  const season = new Date().getFullYear();
+  const season = nflSeason();
   const picks = [];
 
   for (const game of todayGames) {
@@ -342,8 +344,8 @@ export async function generateNFLPicks(options = {}) {
         const scored = await Promise.all(qbs.map(async (qb) => {
           let adv = [];
           let seasonAgg = [];
-          try { adv = await ballDontLieService.getNflAdvancedPassingStats({ season, playerId: qb.id, week: 0 }); } catch {}
-          try { seasonAgg = await ballDontLieService.getNflPlayerSeasonStats({ playerId: qb.id, season, postseason: false }); } catch {}
+          try { adv = await ballDontLieService.getNflAdvancedPassingStats({ season, playerId: qb.id, week: 0 }); } catch (e) { console.warn(`NFL QB adv passing stats failed for ${qb.id}:`, e?.message); }
+          try { seasonAgg = await ballDontLieService.getNflPlayerSeasonStats({ playerId: qb.id, season, postseason: false }); } catch (e) { console.warn(`NFL QB season stats failed for ${qb.id}:`, e?.message); }
           const advAttempts = Array.isArray(adv) && adv[0]?.attempts ? Number(adv[0].attempts) : 0;
           const seasonAttempts = Array.isArray(seasonAgg) && seasonAgg[0]?.passing_attempts ? Number(seasonAgg[0].passing_attempts) : 0;
           return { qb, score: advAttempts || seasonAttempts || 0 };
@@ -366,7 +368,7 @@ export async function generateNFLPicks(options = {}) {
           try {
             const adv = await ballDontLieService.getNflAdvancedReceivingStats({ season, playerId: wr.id, week: 0 });
             if (Array.isArray(adv) && adv.length) return { player: wr, adv };
-          } catch {}
+          } catch (e) { console.warn(`NFL WR adv receiving stats failed for ${wr.id}:`, e?.message); }
         }
         let best = null;
         for (const wr of wrs) {
@@ -376,7 +378,7 @@ export async function generateNFLPicks(options = {}) {
             const yards = Array.isArray(ss) && ss[0]?.receiving_yards ? Number(ss[0].receiving_yards) : 0;
             const score = rec * 1000 + yards;
             if (!best || score > best.score) best = { wr, score };
-          } catch {}
+          } catch (e) { console.warn(`NFL WR season stats failed for ${wr.id}:`, e?.message); }
         }
         if (best?.wr) {
           const adv = await ballDontLieService.getNflAdvancedReceivingStats({ season, playerId: best.wr.id, week: 0 }).catch(() => []);
@@ -449,7 +451,7 @@ export async function generateNFLPicks(options = {}) {
         awayRbAdvanced = awayRbAdvRes;
         homeWrAdvanced = homeWrAdvRes;
         awayWrAdvanced = awayWrAdvRes;
-      } catch {}
+      } catch (e) { console.warn('NFL advanced player stats batch failed:', e?.message); }
 
       const statsReport = {
         season,
@@ -481,34 +483,7 @@ export async function generateNFLPicks(options = {}) {
       };
 
       // Odds payload: merge markets across all bookmakers to avoid missing ML/spread
-      let oddsData = null;
-      if (Array.isArray(game.bookmakers) && game.bookmakers.length > 0) {
-        const marketKeyToOutcomes = new Map();
-        for (const b of game.bookmakers) {
-          const markets = Array.isArray(b?.markets) ? b.markets : [];
-          for (const m of markets) {
-            if (!m || !m.key || !Array.isArray(m.outcomes)) continue;
-            if (!marketKeyToOutcomes.has(m.key)) marketKeyToOutcomes.set(m.key, new Map());
-            const outMap = marketKeyToOutcomes.get(m.key);
-            for (const o of m.outcomes) {
-              if (!o || typeof o?.name !== 'string' || typeof o?.price !== 'number') continue;
-              const key = `${o.name}|${typeof o.point === 'number' ? o.point : ''}`;
-              // Keep the best (most favorable) price seen; simple override
-              if (!outMap.has(key)) {
-                outMap.set(key, { name: o.name, price: o.price, ...(typeof o.point === 'number' ? { point: o.point } : {}) });
-              }
-            }
-          }
-        }
-        const mergedMarkets = [];
-        for (const [key, outMap] of marketKeyToOutcomes.entries()) {
-          const outcomes = Array.from(outMap.values());
-          if (outcomes.length) mergedMarkets.push({ key, outcomes });
-        }
-        if (mergedMarkets.length) {
-          oddsData = { bookmaker: 'merged', markets: mergedMarkets };
-        }
-      }
+      const oddsData = mergeBookmakerOdds(game.bookmakers);
 
       // Note: no baseline model edge. Decisions are angle- and price-driven only.
 
@@ -552,7 +527,7 @@ export async function generateNFLPicks(options = {}) {
           ]);
           qbVenueH2H.away = { qbId: awayQb.id, venueSample: awayVenueStats, h2hSample: h2hStatsA };
         }
-      } catch {}
+      } catch (e) { console.warn('NFL QB venue/H2H stats failed:', e?.message); }
 
       // Provide combined teamStats and minimal gameContext
       const teamStats = {
@@ -580,7 +555,7 @@ export async function generateNFLPicks(options = {}) {
         teamStats,
         gameContext,
         statsReport,
-        // Pass real-time news summary so OpenAI "REAL-TIME NEWS AND TRENDS" section is populated
+        // Pass real-time news summary so LLM "REAL-TIME NEWS AND TRENDS" section is populated
         realTimeNews: realTimeNewsText || undefined,
         odds: oddsData,
         gameTime: game.commence_time,

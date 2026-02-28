@@ -18,6 +18,7 @@
  */
 
 import { getDFSConstitution } from './constitution/dfsAgenticConstitution.js';
+import { GEMINI_PRO_FALLBACK } from '../modelConfig.js';
 import { isSlotEligible } from './dfsPositionUtils.js';
 import { getSalaryCap, getRosterSlots } from './dfsSportConfig.js';
 
@@ -148,7 +149,7 @@ Provide your lineup as JSON:
  * @returns {Object} - Gary's lineup decision
  */
 export async function decideLineupWithPro(genAI, slateAnalysis, playerInvestigations, context, options = {}) {
-  const { modelName = 'gemini-3-pro-preview', thinkingLevel = 'high' } = options;
+  const { modelName = GEMINI_PRO_FALLBACK, thinkingLevel = 'high' } = options;
   const { players, platform, contestType, winningTargets } = context;
 
   console.log('[Lineup Decider] Gary Pro deciding lineup with high thinking...');
