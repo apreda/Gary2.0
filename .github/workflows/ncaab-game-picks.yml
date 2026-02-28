@@ -1,9 +1,9 @@
 name: NCAAB Game Picks
 
 on:
-  schedule:
-    # 11:50 AM EST = 4:50 PM UTC (16:50)
-    - cron: '50 16 * * *'
+  # schedule:
+  #   # 11:50 AM EST = 4:50 PM UTC (16:50)
+  #   - cron: '50 16 * * *'
   workflow_dispatch:
     inputs:
       limit:

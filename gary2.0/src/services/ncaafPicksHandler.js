@@ -373,7 +373,7 @@ export async function generateNCAAFPicks(options = {}) {
       // Recommended sportsbook
       let recommendedSportsbook = null;
       try {
-        const extract = pick.rawAnalysis?.rawOpenAIOutput || pick.pick || {};
+        const extract = pick.rawAnalysis?.rawGeminiOutput || pick.pick || {};
         recommendedSportsbook = computeRecommendedSportsbook({
           pickType: (extract.type || '').toLowerCase(),
           pickStr: extract.pick || '',

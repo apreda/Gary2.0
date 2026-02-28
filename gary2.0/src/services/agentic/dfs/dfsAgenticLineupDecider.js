@@ -302,6 +302,58 @@ Stay under $${salaryCap.toLocaleString()}. Output ONLY the JSON object.`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// INJURY FORMATTING (from raw context data, not Flash's transcription)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Format injuries for Gary's decision prompt using raw context.injuries data.
+ * This bypasses Flash's Phase 2 transcription which may omit duration tags.
+ */
+function formatInjuriesForDecision(injuries) {
+  if (!injuries || Object.keys(injuries).length === 0) return '';
+
+  const lines = [];
+  for (const [team, teamInjuries] of Object.entries(injuries)) {
+    if (!teamInjuries || teamInjuries.length === 0) continue;
+
+    const outPlayers = teamInjuries.filter(i => {
+      const st = (i.status || '').toUpperCase();
+      return st.includes('OUT') || st === 'OFS' || st.includes('DOUBTFUL') || st.includes('SUSPENDED') || st === 'INACTIVE';
+    });
+    const gtdPlayers = teamInjuries.filter(i => {
+      const st = (i.status || '').toUpperCase();
+      return st.includes('QUESTIONABLE') || st === 'GTD' || st.includes('DAY-TO-DAY');
+    });
+
+    const parts = [];
+    if (outPlayers.length > 0) {
+      const outStr = outPlayers.map(i => {
+        const name = i.player?.first_name ? `${i.player.first_name} ${i.player.last_name}` : i.player;
+        const reason = i.injury || '';
+        if (i.duration) {
+          return `${name} (${i.status}) [${i.duration} — ${i.gamesMissed} team games missed] ${reason}`.trim();
+        }
+        return `${name} (${i.status}) ${reason}`.trim();
+      }).join(', ');
+      parts.push(`OUT: ${outStr}`);
+    }
+    if (gtdPlayers.length > 0) {
+      const gtdStr = gtdPlayers.map(i => {
+        const name = i.player?.first_name ? `${i.player.first_name} ${i.player.last_name}` : i.player;
+        return `${name} (${i.status})`;
+      }).join(', ');
+      parts.push(`GTD: ${gtdStr}`);
+    }
+
+    if (parts.length > 0) {
+      lines.push(`${team}: ${parts.join(' | ')}`);
+    }
+  }
+
+  return lines.join('\n');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // BUILD DECISION REQUEST
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -314,11 +366,9 @@ function buildDecisionRequest(slateAnalysis, playerInvestigations, context, sala
   // Format game-level view (reorganize investigations by game matchup for stacking awareness)
   const gameLevelView = formatInvestigationsByGame(playerInvestigations, slateAnalysis);
 
-  // Format injury context from slate analysis
-  const injuryLines = (slateAnalysis.injuryReport || []).map(report => {
-    const outNames = (report.outPlayers || []).map(p => `${p.player} (${p.duration || '?'}, ${p.gamesMissed ?? '?'} games missed)`).join(', ');
-    return outNames ? `${report.team}: ${outNames}` : null;
-  }).filter(Boolean).join('\n');
+  // Format injury context from RAW context data (authoritative, not Flash's transcription)
+  // Flash's Phase 2 injuryReport may omit or garble duration tags — use context.injuries directly
+  const injuryLines = formatInjuriesForDecision(context.injuries);
 
   // Format game environments from slate analysis + team defense data from context
   const gameDefenseMap = new Map();

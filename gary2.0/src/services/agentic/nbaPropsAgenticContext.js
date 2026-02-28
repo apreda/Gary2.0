@@ -970,7 +970,7 @@ async function fetchOpponentDefenseProfile(teamId, season) {
 
     if (!oppStats && !advancedStats) return null;
 
-    // Compute derived metrics from raw opponent stats (same math as statRouter.js)
+    // Compute derived metrics from raw opponent stats (same math as statRouters/)
     const opp_fgm = oppStats?.opp_fgm || 0;
     const opp_fga = oppStats?.opp_fga || 0;
     const opp_fg3m = oppStats?.opp_fg3m || 0;

@@ -3,7 +3,7 @@ import {
   normalizeSportToLeague,
   getInvestigatedFactors,
   INVESTIGATION_FACTORS
-} from '../../../src/services/agentic/agenticOrchestrator.js';
+} from '../../../src/services/agentic/orchestrator/index.js';
 
 // ─── normalizeSportToLeague ───────────────────────────────────────────
 describe('normalizeSportToLeague', () => {

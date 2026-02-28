@@ -1,9 +1,9 @@
 name: NBA Game Picks
 
 on:
-  schedule:
-    # 11:30 AM EST = 4:30 PM UTC (16:30)
-    - cron: '30 16 * * *'
+  # schedule:
+  #   # 11:30 AM EST = 4:30 PM UTC (16:30)
+  #   - cron: '30 16 * * *'
   workflow_dispatch:
     inputs:
       limit:

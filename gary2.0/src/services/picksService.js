@@ -6,7 +6,7 @@ import { makeGaryPick } from './garyEngine.js';
 import { oddsService } from './oddsService.js';
 import { supabase, storeDailyPicks } from '../supabaseClient.js';
 import { ballDontLieService } from './ballDontLieService.js';
-import { openaiService } from './openaiService.js';
+import { geminiService } from './geminiService.js';
 import { getESTDate } from '../utils/dateUtils.js';
 import { generateNBAPicks } from './nbaPicksHandler.js';
 import { generateNFLPicks } from './nflPicksHandler.js';
@@ -224,16 +224,16 @@ async function storeDailyPicksInDatabase(picks) {
     return 0;
   };
 
-  // Simplify pick structure to only include essential fields from OpenAI output
+  // Simplify pick structure to only include essential fields from Gemini output
   const validPicks = picks.map((pick, index) => {
-    // Extract the OpenAI output fields which contain the essential pick data
-    let openAIOutput = null;
+    // Extract the Gemini output fields which contain the essential pick data
+    let geminiOutput = null;
     
     // First try to get the data from the standardized paths
-    if (pick.rawAnalysis?.rawOpenAIOutput) {
-      openAIOutput = pick.rawAnalysis.rawOpenAIOutput;
-    } else if (pick.analysis?.rawOpenAIOutput) {
-      openAIOutput = pick.analysis.rawOpenAIOutput;
+    if (pick.rawAnalysis?.rawGeminiOutput) {
+      geminiOutput = pick.rawAnalysis.rawGeminiOutput;
+    } else if (pick.analysis?.rawGeminiOutput) {
+      geminiOutput = pick.analysis.rawGeminiOutput;
     }
     
     // Generate a consistent pick ID for this pick
@@ -251,22 +251,22 @@ async function storeDailyPicksInDatabase(picks) {
       return `pick-${date}-${pickString}`;
     };
     
-    // If we found the OpenAI output, return just those fields
-    if (openAIOutput) {
+    // If we found the Gemini output, return just those fields
+    if (geminiOutput) {
       const pickData = {
-        pick: openAIOutput.pick || pick.pick,
-        time: openAIOutput.time || pick.time,
-        type: openAIOutput.type || pick.type,
-        odds: openAIOutput.odds || pick.odds,
-        league: openAIOutput.league || pick.league,
-        revenge: openAIOutput.revenge || false,
-        awayTeam: openAIOutput.awayTeam || pick.awayTeam,
-        homeTeam: openAIOutput.homeTeam || pick.homeTeam,
-        momentum: openAIOutput.momentum || 0,
-        rationale: openAIOutput.rationale || pick.rationale,
-        trapAlert: openAIOutput.trapAlert || false,
-        confidence: openAIOutput.confidence || pick.confidence,
-        superstition: openAIOutput.superstition || false,
+        pick: geminiOutput.pick || pick.pick,
+        time: geminiOutput.time || pick.time,
+        type: geminiOutput.type || pick.type,
+        odds: geminiOutput.odds || pick.odds,
+        league: geminiOutput.league || pick.league,
+        revenge: geminiOutput.revenge || false,
+        awayTeam: geminiOutput.awayTeam || pick.awayTeam,
+        homeTeam: geminiOutput.homeTeam || pick.homeTeam,
+        momentum: geminiOutput.momentum || 0,
+        rationale: geminiOutput.rationale || pick.rationale,
+        trapAlert: geminiOutput.trapAlert || false,
+        confidence: geminiOutput.confidence || pick.confidence,
+        superstition: geminiOutput.superstition || false,
         // Include sport for filtering
         sport: pick.sport,
         // Include agentic system fields (CRITICAL - was missing!)
@@ -289,6 +289,13 @@ async function storeDailyPicksInDatabase(picks) {
         awayConference: pick.awayConference || null,
         supporting_factors: pick.supporting_factors || [],
         contradicting_factors: pick.contradicting_factors || null,
+        // Odds data (spread, moneyline, total)
+        spread: pick.spread ?? null,
+        spreadOdds: pick.spreadOdds ?? null,
+        bestLineBook: pick.bestLineBook || null,
+        moneylineHome: pick.moneylineHome ?? null,
+        moneylineAway: pick.moneylineAway ?? null,
+        total: pick.total ?? null,
         // Multi-book sportsbook odds comparison (for iOS app display)
         sportsbook_odds: pick.sportsbook_odds || null
       };
@@ -299,7 +306,7 @@ async function storeDailyPicksInDatabase(picks) {
       return pickData;
     }
 
-    // Fallback to original fields if we can't find the OpenAI output
+    // Fallback to original fields if we can't find the Gemini output
     const pickData = {
       pick: pick.pick,
       time: pick.time,
@@ -336,6 +343,13 @@ async function storeDailyPicksInDatabase(picks) {
       awayConference: pick.awayConference || null,
       supporting_factors: pick.supporting_factors || [],
       contradicting_factors: pick.contradicting_factors || null,
+      // Odds data (spread, moneyline, total)
+      spread: pick.spread ?? null,
+      spreadOdds: pick.spreadOdds ?? null,
+      bestLineBook: pick.bestLineBook || null,
+      moneylineHome: pick.moneylineHome ?? null,
+      moneylineAway: pick.moneylineAway ?? null,
+      total: pick.total ?? null,
       // Multi-book sportsbook odds comparison (for iOS app display)
       sportsbook_odds: pick.sportsbook_odds || null
     };

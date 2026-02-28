@@ -162,7 +162,7 @@ Rest and schedule are NOT automatic factors. Before citing rest as a factor:
 `;
 
 /**
- * Game-pick constitutions — may be sectioned objects { domainKnowledge, investigationPrompts, guardrails }
+ * Game-pick constitutions — sectioned objects { domainKnowledge, guardrails }
  * or flat strings (legacy, not yet restructured).
  */
 const GAME_CONSTITUTIONS = {
@@ -195,7 +195,7 @@ const PROPS_CONSTITUTIONS = {
  * Get constitution for a sport.
  *
  * For game-pick sports with sectioned constitutions (objects):
- *   Returns { baseRules, domainKnowledge, investigationPrompts, guardrails, full }
+ *   Returns { baseRules, domainKnowledge, guardrails, full }
  *   - .full = all sections combined (for system prompt at session creation)
  *   - Individual sections allow phase-aligned delivery (e.g., Flash gets domainKnowledge + guardrails only)
  *
@@ -219,10 +219,10 @@ export function getConstitution(sport) {
     return {
       baseRules: BASE_RULES,
       domainKnowledge: sportConst.domainKnowledge,
-      investigationPrompts: sportConst.investigationPrompts || '',
       guardrails: sportConst.guardrails || '',
-      // Full combined string: guardrails first (hard rules), then domain knowledge, then investigation prompts
-      full: BASE_RULES + sportConst.guardrails + '\n\n' + sportConst.domainKnowledge + '\n\n' + sportConst.investigationPrompts,
+      // Full combined string: guardrails + domain knowledge ONLY
+      // Gary is the decision maker. Flash handles investigation via flashInvestigationPrompts.js.
+      full: BASE_RULES + sportConst.guardrails + '\n\n' + sportConst.domainKnowledge,
     };
   }
 

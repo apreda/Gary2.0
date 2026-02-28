@@ -1,21 +1,14 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, Link } from 'react-router-dom';
-import { useState, useEffect, lazy, Suspense } from "react";
+import { useEffect, Suspense } from "react";
 import { Navbar } from "./components/Navbar";
 import Home from "./pages/Home";
 import { TermsOfService } from "./pages/TermsOfService";
 import { PrivacyPolicy } from "./pages/PrivacyPolicy";
 import { Changelog } from "./pages/Changelog";
 
-// Admin components - dynamically loaded (keep for internal use)
-const RefreshTool = lazy(() => import('./components/RefreshTool'));
-const ResultsAdmin = lazy(() => import('./pages/ResultsAdmin'));
-
-import { ToastProvider } from "./components/ui/ToastProvider";
 import FontLoader from "./components/FontLoader";
 import "./assets/css/animations.css";
-import "./styles/base.css";
-import "./styles/consolidated/root-fix.css";
 
 function AppContent() {
   const location = useLocation();
@@ -41,10 +34,6 @@ function AppContent() {
               <Route path="/terms" element={<TermsOfService />} />
               <Route path="/privacy" element={<PrivacyPolicy />} />
               <Route path="/changelog" element={<Changelog />} />
-              
-              {/* Admin routes (internal use only) */}
-              <Route path="/admin/refresh-picks" element={<RefreshTool />} />
-              <Route path="/admin/results" element={<ResultsAdmin />} />
               
               {/* Redirect all other routes to home (marketing landing page) */}
               <Route path="/meet-gary" element={<Navigate to="/" replace />} />
@@ -94,10 +83,8 @@ function AppContent() {
 export default function App() {
   return (
     <Router>
-      <ToastProvider>
-        <FontLoader />
-        <AppContent />
-      </ToastProvider>
+      <FontLoader />
+      <AppContent />
     </Router>
   );
 }

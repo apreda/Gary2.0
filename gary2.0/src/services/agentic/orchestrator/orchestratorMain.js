@@ -1,0 +1,281 @@
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import { toolDefinitions, getTokensForSport } from '../tools/toolDefinitions.js';
+import { fetchStats, clearStatRouterCache } from '../tools/statRouters/index.js';
+import { getConstitution } from '../constitution/index.js';
+import { getFlashInvestigationPrompt } from '../flashInvestigationPrompts.js';
+import { buildScoutReport } from '../scoutReport/scoutReportBuilder.js';
+import { ballDontLieService } from '../../ballDontLieService.js';
+import { nbaSeason, nhlSeason, nflSeason, ncaabSeason } from '../../../utils/dateUtils.js';
+import { CONFIG, GEMINI_PRO_MODEL } from './orchestratorConfig.js';
+import { createGeminiSession, sendToSession } from './sessionManager.js';
+import { buildFlashResearchBriefing } from './flashAdvisor.js';
+import { buildPass1Message } from './passBuilders.js';
+import { runAgentLoop } from './agentLoop.js';
+import { normalizeSportToLeague } from './orchestratorHelpers.js';
+
+/**
+ * Main entry point - analyze a game and generate a pick
+ * @param {Object} game - Game data with home_team, away_team, etc.
+ * @param {string} sport - Sport identifier
+ * @param {Object} options - Optional settings
+ */
+export async function analyzeGame(game, sport, options = {}) {
+  // Clear stat router cache from previous game (prevents stale cross-game data)
+  clearStatRouterCache();
+  const startTime = Date.now();
+  let homeTeam = game.home_team;
+  let awayTeam = game.away_team;
+
+  console.log(`\n${'═'.repeat(70)}`);
+  console.log(`🐻 GARY AGENTIC ANALYSIS: ${awayTeam} @ ${homeTeam}`);
+  console.log(`Sport: ${sport}`);
+  console.log(`${'═'.repeat(70)}\n`);
+
+  try {
+    // Step 1: Build the scout report (Level 1 context)
+    console.log('[Orchestrator] Building scout report...');
+    const scoutReportData = await buildScoutReport(game, sport, { sportsbookOdds: options.sportsbookOdds });
+
+    // NOTE: No auto-PASS logic. Gary always makes a pick for every game.
+    // If there's uncertainty (GTD players, etc.), Gary investigates and decides.
+
+    // Handle both old (string) and new (object) formats
+    // Gary gets data-only report; Flash gets investigation-ready report with Tale of Tape + token menu
+    const garyText = typeof scoutReportData === 'string' ? scoutReportData : (scoutReportData.garyText || scoutReportData.text);
+    const flashText = typeof scoutReportData === 'string' ? scoutReportData : (scoutReportData.flashText || scoutReportData.text);
+    const injuries = typeof scoutReportData === 'object' ? scoutReportData.injuries : null;
+    // Extract verified Tale of the Tape (pre-computed stats for pick card display)
+    const verifiedTaleOfTape = typeof scoutReportData === 'object' ? scoutReportData.verifiedTaleOfTape : null;
+    // Extract venue context (for NBA Cup, neutral site games, CFP games, etc.)
+    const venueContext = typeof scoutReportData === 'object' ? {
+      venue: scoutReportData.venue,
+      isNeutralSite: scoutReportData.isNeutralSite,
+      tournamentContext: scoutReportData.tournamentContext,
+      gameSignificance: scoutReportData.gameSignificance,
+      // CFP-specific fields for NCAAF
+      cfpRound: scoutReportData.cfpRound,
+      homeSeed: scoutReportData.homeSeed,
+      awaySeed: scoutReportData.awaySeed,
+      // NCAAB AP Top 25 rankings
+      homeRanking: scoutReportData.homeRanking,
+      awayRanking: scoutReportData.awayRanking,
+      // NCAAB conference data for app filtering
+      homeConference: scoutReportData.homeConference,
+      awayConference: scoutReportData.awayConference,
+      // Verified Tale of the Tape stats for pick card
+      verifiedTaleOfTape
+    } : null;
+
+    // Get today's date for constitution
+    const today = new Date().toLocaleDateString('en-US', { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+
+    // Props mode detection
+    const isPropsMode = options.mode === 'props';
+    const propContext = options.propContext || null;
+    if (isPropsMode) {
+      console.log(`[Orchestrator] 🎯 PROPS MODE: Analyzing props for ${awayTeam} @ ${homeTeam}`);
+    }
+
+    // Step 2 & 3: Build system prompt
+    let constitution = getConstitution(sport);
+    // Replace date template — handle both sectioned object and flat string
+    if (typeof constitution === 'object' && constitution.full) {
+      for (const key of ['baseRules', 'domainKnowledge', 'guardrails', 'full']) {
+        if (constitution[key]) {
+          constitution[key] = constitution[key].replace(/{{CURRENT_DATE}}/g, today);
+        }
+      }
+    } else {
+      constitution = constitution.replace(/{{CURRENT_DATE}}/g, today);
+    }
+    let systemPrompt = buildSystemPrompt(constitution, sport);
+
+    // In props mode, append props-specific constitution
+    if (isPropsMode && propContext?.propsConstitution) {
+      systemPrompt += '\n\n' + propContext.propsConstitution;
+      console.log(`[Orchestrator] Appended props constitution (${propContext.propsConstitution.length} chars)`);
+    }
+
+    // Step 4: Build the user message
+    let userMessage = buildPass1Message(garyText, homeTeam, awayTeam, today, sport);
+
+    // Log scout report summary (full dump available with VERBOSE_GARY=1)
+    if (process.env.VERBOSE_GARY) {
+      console.log(`[Orchestrator] ═══ GARY SCOUT REPORT START (${garyText.length} chars) ═══`);
+      console.log(garyText);
+      console.log(`[Orchestrator] ═══ GARY SCOUT REPORT END ═══`);
+    } else {
+      console.log(`[Orchestrator] Scout reports ready (Gary: ${garyText.length} chars, Flash: ${flashText.length} chars)`);
+    }
+
+    // If in session mode, ALWAYS clear context between games to prevent token overflow
+    // In props mode, append a note to user message so Gary knows props evaluation comes after game analysis
+    if (isPropsMode) {
+      userMessage += `\n\n═══════════════════════════════════════════════════════════════════════════════
+PROPS MODE: After completing your game analysis (Steel Man + Case Review),
+you will be asked to evaluate player props for this matchup. Your game analysis provides
+context for player-level evaluation. Investigate the game thoroughly first.
+═══════════════════════════════════════════════════════════════════════════════`;
+    }
+
+    // Extract verified records for Pass 3 anti-hallucination
+    // Direct from scout report data first, fallback to Tale of Tape for sports that still use it
+    let homeRecord = (typeof scoutReportData === 'object' ? scoutReportData.homeRecord : null) || null;
+    let awayRecord = (typeof scoutReportData === 'object' ? scoutReportData.awayRecord : null) || null;
+    if (!homeRecord && verifiedTaleOfTape?.rows) {
+      const recordRow = verifiedTaleOfTape.rows.find(r => r.name === 'Record');
+      if (recordRow) {
+        homeRecord = recordRow.home?.value || null;
+        awayRecord = recordRow.away?.value || null;
+      }
+    }
+
+    // Step 5: Run the agent loop
+    // Include game time for weather forecasting (only fetch weather within 36h of game time)
+    // Include spread for Pass 2.5 spread context injection
+    const enrichedOptions = {
+      ...options,
+      gameTime: game.commence_time || null,
+      // Pass spread for Pass 2.5 context (use home spread as reference, typically negative for favorite)
+      spread: game.spread_home ?? game.spread_away ?? 0,
+      // Pass game object for odds fallback in pick normalization
+      game,
+      // Props mode context
+      mode: isPropsMode ? 'props' : 'game',
+      propContext: isPropsMode ? propContext : null,
+      // Pass verified records for Pass 3 anti-hallucination
+      homeRecord,
+      awayRecord,
+      // Pass Flash's investigation-ready scout report (includes Tale of Tape + token menu)
+      scoutReport: flashText
+    };
+    const result = await runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam, enrichedOptions);
+    
+    // NCAAB: normalize display team names to full school names (avoid mascot-only like "Tigers")
+    if (sport === 'basketball_ncaab') {
+      try {
+        const [homeResolved, awayResolved] = await Promise.all([
+          ballDontLieService.getTeamByNameGeneric('basketball_ncaab', game.home_team).catch(() => null),
+          ballDontLieService.getTeamByNameGeneric('basketball_ncaab', game.away_team).catch(() => null)
+        ]);
+        if (homeResolved?.full_name) homeTeam = homeResolved.full_name;
+        if (awayResolved?.full_name) awayTeam = awayResolved.full_name;
+      } catch {
+        // ignore - fall back to original strings
+      }
+    }
+
+    // Add injuries to result for storage
+    if (injuries) {
+      result.injuries = injuries;
+    }
+
+    // Add venue context (for NBA Cup, neutral site games, CFP games, etc.)
+    if (venueContext) {
+      result.venue = venueContext.venue;
+      result.isNeutralSite = venueContext.isNeutralSite;
+      result.tournamentContext = venueContext.tournamentContext || 'Regular Season';
+      result.gameSignificance = venueContext.gameSignificance;
+      // CFP-specific fields for NCAAF
+      result.cfpRound = venueContext.cfpRound;
+      result.homeSeed = venueContext.homeSeed;
+      result.awaySeed = venueContext.awaySeed;
+      // NCAAB AP Top 25 rankings
+      result.homeRanking = venueContext.homeRanking;
+      result.awayRanking = venueContext.awayRanking;
+      // NCAAB conference data for app filtering
+      result.homeConference = venueContext.homeConference;
+      result.awayConference = venueContext.awayConference;
+      // Verified Tale of the Tape (pre-computed BDL stats for pick card display)
+      result.verifiedTaleOfTape = venueContext.verifiedTaleOfTape;
+    }
+
+    // Ensure result contains the canonical matchup strings used by the UI
+    result.homeTeam = homeTeam;
+    result.awayTeam = awayTeam;
+
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(`\n[Orchestrator] Analysis complete in ${elapsed}s`);
+
+    return result;
+
+  } catch (error) {
+    console.error(`[Orchestrator] Error analyzing game:`, error);
+    return {
+      error: error.message,
+      homeTeam,
+      awayTeam,
+      sport
+    };
+  }
+}
+
+/**
+ * Build the system prompt with constitution and guidelines
+ * This is Gary's "Constitution" - his identity and principles
+ * @param {string|Object} constitution - The sport-specific constitution (sectioned object or flat string)
+ * @param {string} sport - The sport being analyzed
+ * @returns {string} The complete system prompt
+ */
+
+export function buildSystemPrompt(constitution, sport) {
+  // Support both sectioned object (.full) and legacy flat string
+  const constitutionText = (typeof constitution === 'object' && constitution.full)
+    ? constitution.full
+    : constitution;
+
+  return `
+<constitution>
+${constitutionText}
+</constitution>
+
+<identity>
+## WHO YOU ARE
+
+You are Gary — a sports bettor with over 30 years of experience. You are a gambler, not a computer. Gambling is not a math problem or an equation — it's a combination of awareness, insight, luck, and willingness to make decisions based on the evidence in front of you.
+
+There is no right or wrong reason for making a bet. Winning and losing will be your feedback. Be willing to take chances, make predictions, go against the grain.
+
+You don't copy betting advice. You do your own homework.
+
+### TRAINING DATA IS OUTDATED
+**TODAY'S DATE: {{CURRENT_DATE}}** — Your training data is from 2024 (18+ months out of date).
+USE ONLY: Scout Report (rosters, injuries, standings), BDL API stats, and Google Search Grounding.
+If your memory conflicts with provided data, **USE THE DATA**. See constitution BASE RULES for full anti-hallucination protocol.
+
+</identity>
+
+<analysis_framework>
+## FACT-CHECKING PROTOCOL (ZERO TOLERANCE)
+
+1. If a stat is NOT in your provided data, do NOT invent it. No fabricated scores, records, or tactical claims.
+2. Check Record and Net Rating before characterizing any team — your 2024 training labels are WRONG.
+3. Check the injury report before citing any player as active. If OUT, FORBIDDEN from describing as active.
+4. ONLY cite players in the "CURRENT ROSTERS" section of the scout report. Not in roster = DO NOT MENTION.
+5. "GONE" (not on team) vs "OUT" (injured on team) — if not in roster section, they're GONE. Silence is correct.
+6. Questionable players in the lineup = assume they play at full strength — FORBIDDEN to cite their "potential absence."
+
+</analysis_framework>
+
+<core_principles>
+Look at everything you have and make the call. No one tells you what matters — you decide. If you cite a stat, it has to be real. Beyond that, make the pick based on whatever you want to. It's completely your decision. Take a swing on a superstition if you want. It's really up to you.
+</core_principles>
+
+<formatting_rules>
+### CRITICAL FORMATTING RULES
+
+**RULE 1: NEVER mention tokens, feeds, or data requests**
+Your rationale is an OFFICIAL PUBLISHED STATEMENT. NEVER say "The PACE_HOME_AWAY data shows..." or "offensive_rating: N/A".
+
+**RULE 2: If data is missing or N/A, DON'T USE IT**
+Simply focus on the stats you DO have. Never apologize or explain missing data.
+
+</formatting_rules>
+`.trim();
+}
+

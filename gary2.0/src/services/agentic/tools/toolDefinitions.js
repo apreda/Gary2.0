@@ -2,7 +2,7 @@
  * OpenAI Function Calling Tool Definitions
  * 
  * This defines the "menu" of stats Gary can request.
- * Each token maps to a specific data fetch in statRouter.js
+ * Each token maps to a specific data fetch in statRouters/index.js
  */
 
 // NBA Stat Tokens
@@ -174,7 +174,6 @@ const NHL_TOKENS = [
   'POWER_PLAY_PCT', 'PENALTY_KILL_PCT', 'SPECIAL_TEAMS', 'PP_OPPORTUNITIES',
   // Scoring
   'GOALS_FOR', 'GOALS_AGAINST', 'GOAL_DIFFERENTIAL',
-  'SCORING_FIRST',        // Real fetcher - first goal stats
   // Shot Metrics
   'SHOTS_FOR', 'SHOTS_AGAINST', 'SHOT_DIFFERENTIAL', 'SHOT_QUALITY',
   // Advanced Analytics (via Gemini Grounding)

@@ -17,13 +17,72 @@ import '../src/loadEnv.js';
 import { ncaabSeason } from '../src/utils/dateUtils.js';
 
 // Now import modules that depend on env vars
-const { analyzeGame, buildSystemPrompt } = await import('../src/services/agentic/agenticOrchestrator.js');
+const { analyzeGame, buildSystemPrompt } = await import('../src/services/agentic/orchestrator/index.js');
 const { oddsService } = await import('../src/services/oddsService.js');
 const { picksService } = await import('../src/services/picksService.js');
 const { getVenueForHomeTeam } = await import('../src/services/venueMapping.js');
 const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
 const { getConstitution } = await import('../src/services/agentic/constitution/index.js');
-const { fetchSportsbookOdds, formatOddsForStorage } = await import('../src/services/sportsbookOddsService.js');
+/**
+ * Fetch multi-book sportsbook odds from BDL for a single game.
+ * Returns array in the shape formatSportsbookComparison() expects:
+ *   { spread_away, spread_away_odds, ml_away, spread_home, spread_home_odds, ml_home, displayName }
+ */
+async function fetchSportsbookOdds(sportKey, gameId, homeTeam, awayTeam) {
+  if (!gameId) return null;
+  try {
+    const rows = await ballDontLieService.getOddsV2({ game_ids: [gameId] }, sportKey);
+    if (!Array.isArray(rows) || rows.length === 0) return null;
+    return rows.map(r => ({
+      spread_home: r.spread_home_value ?? null,
+      spread_home_odds: r.spread_home_odds ?? null,
+      spread_away: r.spread_away_value ?? null,
+      spread_away_odds: r.spread_away_odds ?? null,
+      ml_home: r.moneyline_home_odds ?? null,
+      ml_away: r.moneyline_away_odds ?? null,
+      total: r.total_value ?? null,
+      total_over_odds: r.total_over_odds ?? null,
+      total_under_odds: r.total_under_odds ?? null,
+      displayName: r.vendor || 'Unknown',
+      vendor: r.vendor || 'Unknown'
+    }));
+  } catch (err) {
+    console.warn(`[Sportsbook Odds] BDL fetch failed for game ${gameId}: ${err.message}`);
+    return null;
+  }
+}
+
+/**
+ * Map multi-book odds to pick-side-specific format for storage & best-line selection.
+ * Returns array of { book, spread, spread_odds, ml } from the perspective of the picked team.
+ */
+function formatOddsForStorage(oddsArray, pick, homeTeam, awayTeam) {
+  if (!Array.isArray(oddsArray) || oddsArray.length === 0) return null;
+  // Determine which side the pick is on (home or away)
+  const pickLower = (pick || '').toLowerCase();
+  const homeLower = (homeTeam || '').toLowerCase();
+  const awayLower = (awayTeam || '').toLowerCase();
+  const isHomePick = homeLower && pickLower.includes(homeLower.split(' ').pop());
+  return oddsArray.map(row => {
+    // BDL returns spread as string ("8.5") — convert to number for consistent storage
+    const rawSpread = isHomePick ? row.spread_home : row.spread_away;
+    const spreadNum = rawSpread != null ? parseFloat(rawSpread) : NaN;
+    return {
+    book: row.displayName || row.vendor || 'Unknown',
+    spread: Number.isFinite(spreadNum) ? spreadNum : null,
+    spread_odds: isHomePick ? row.spread_home_odds : row.spread_away_odds,
+    ml: isHomePick ? row.ml_home : row.ml_away,
+    // Keep full data for Supabase storage
+    spread_home: row.spread_home,
+    spread_away: row.spread_away,
+    ml_home: row.ml_home,
+    ml_away: row.ml_away,
+    total: row.total,
+    total_over_odds: row.total_over_odds,
+    total_under_odds: row.total_under_odds
+  };
+  });
+}
 const { supabase } = await import('../src/supabaseClient.js');
 // Graceful shutdown handler — log and exit cleanly on SIGTERM/SIGINT
 // Picks stored before the signal are already safe in Supabase (incremental storage)
@@ -509,9 +568,10 @@ async function main() {
         ]);
 
         // Elite teams from non-approved conferences that should still get picks
+        // NOTE: Entries must be normalized (lowercase, no spaces/special chars) to match normalize()
         const APPROVED_TEAM_NAMES = new Set([
-          'gonzaga bulldogs',
-          "saint mary's gaels",
+          'gonzagabulldogs',
+          'saintmarysgaels',
         ]);
 
         // Conference ID to name mapping for logging and storage
@@ -1110,6 +1170,10 @@ async function main() {
             // All sports now use flattened stats for better Tale of the Tape depth
             for (const t of result.toolCallHistory) {
               if (!t.token) continue;
+              // Skip tracking-only entries (no actual stat data) — these are coverage markers, not display stats
+              if (t.homeValue === undefined && t.awayValue === undefined) continue;
+              // Skip unavailable stats
+              if (t.quality === 'unavailable') continue;
 
               const homeVal = t.homeValue;
               const awayVal = t.awayValue;
@@ -1237,17 +1301,37 @@ async function main() {
             }
           }
 
-          // NHL: ALWAYS use verifiedTaleOfTape — toolCallHistory can be sparse or inconsistent
-          // NCAAB: No longer overridden — toolCallHistory now flows through like NBA
-          //        (old override was a band-aid for garbage BDL ORtg/DRtg; now uses Barttorvik via stat router)
-          if (config.key === 'icehockey_nhl' && result.verifiedTaleOfTape?.rows) {
-            const sportLabel = config.key === 'icehockey_nhl' ? 'NHL' : 'NCAAB';
+          // ALWAYS use verifiedTaleOfTape when available — toolCallHistory is inconsistent
+          if ((config.key === 'icehockey_nhl' || config.key === 'basketball_nba' || config.key === 'basketball_ncaab') && result.verifiedTaleOfTape?.rows) {
+            const sportLabels = { 'icehockey_nhl': 'NHL', 'basketball_nba': 'NBA', 'basketball_ncaab': 'NCAAB' };
+            const sportLabel = sportLabels[config.key] || config.key;
             console.log(`   📊 ${sportLabel}: Using verified Tale of Tape (${result.verifiedTaleOfTape.rows.length} rows) for pick card`);
 
             // Map verifiedTaleOfTape tokens to iOS StatValues property names
             // iOS StatValues.from(dict:) reads specific keys like "offensive_rating", "tempo", etc.
             // getValue(for: token) then uses the token to look up the value from those properties
             const tokenToIosKey = {
+              // Common stats
+              'L5_FORM': 'last_5',
+              'L10_FORM': 'last_10',
+              'RECORD': 'overall',
+              'CONF_RECORD': 'conference_record',
+              'EFG_PCT': 'efg_pct',
+              // NBA stats (from BDL advanced + base)
+              'OFF_RATING': 'offensive_rating',
+              'DEF_RATING': 'defensive_rating',
+              'NET_RATING': 'net_rating',
+              'PACE': 'pace',
+              'TS_PCT': 'true_shooting_pct',
+              'PPG': 'points_per_game',
+              'RPG': 'rebounds_per_game',
+              'APG': 'assists_per_game',
+              'FG_PCT': 'fg_pct',
+              '3PT_PCT': 'three_pct',
+              'FT_PCT': 'ft_pct',
+              'TOV_GM': 'turnovers_per_game',
+              'OREB_GM': 'oreb_per_game',
+              'DREB_GM': 'dreb_per_game',
               // NCAAB Barttorvik stats
               'ADJOE': 'offensive_rating',
               'ADJDE': 'defensive_rating',
@@ -1255,19 +1339,23 @@ async function main() {
               'TEMPO': 'tempo',
               'T_RANK': 'kenpom_rank',
               'BARTHAG': 'efg_pct',  // Reuse efg_pct slot for Barthag display
-              // Common stats
-              'L5_FORM': 'last_5',
-              'RECORD': 'overall',
-              'CONF_RECORD': 'conference_record',
-              'EFG_PCT': 'efg_pct',
+              'WAB': 'wab',
               // NHL stats
               'GOALS_FOR_GM': 'goals_for_per_game',
               'GOALS_AGST_GM': 'goals_against_per_game',
               'SHOTS_FOR_GM': 'shots_for',
-              'POWER_PLAY__': 'power_play_pct',
-              'PENALTY_KILL__': 'penalty_kill_pct',
-              'FACEOFF__': 'faceoff_pct',
-              'SAVE__': 'save_pct',
+              'PP_PCT': 'power_play_pct',
+              'PK_PCT': 'penalty_kill_pct',
+              'FO_PCT': 'faceoff_pct',
+              'CORSI_PCT': 'corsi_pct',
+              'XG_PCT': 'xg_pct',
+              'PDO': 'pdo',
+              'SH_PCT_5V5': 'sh_pct_5v5',
+              'SV_PCT_5V5': 'sv_pct_5v5',
+              // NCAAB Barttorvik rankings
+              'ADJOE_RANK': 'adjoe_rank',
+              'ADJDE_RANK': 'adjde_rank',
+              'PROJ_RECORD': 'proj_record',
             };
 
             // Clear any toolCallHistory stats and use the verified rows instead
@@ -1385,7 +1473,7 @@ async function main() {
           const cleanPick = {
             pick: finalPickText,
             type: result.type,
-            odds: finalSpreadOdds || result.odds,
+            odds: result.type === 'spread' ? (finalSpreadOdds || result.odds) : result.odds,
             confidence: result.confidence || 0.65, // Gary's conviction in the bet (0.50-1.00)
             supporting_factors: result.supporting_factors || [],
             contradicting_factors: result.contradicting_factors || [],
@@ -1511,9 +1599,10 @@ async function main() {
             }
 
             // Determine if this is an underdog pick
+            // Spread: underdog gets + points. ML: positive odds = underdog, negative = favorite
             const isUnderdogPick =
               (p.type === 'spread' && p.pick.includes('+')) ||
-              (p.type === 'moneyline' && p.odds && (parseInt(p.odds) >= 100 || String(p.odds).startsWith('+')));
+              (p.type === 'moneyline' && p.odds != null && Number(p.odds) > 0);
 
             const pickType = p.type === 'moneyline' ? '💰ML' : '📊SPREAD';
             const dogTag = isUnderdogPick ? '🐕DOG' : '🏆FAV';

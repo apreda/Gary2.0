@@ -2,7 +2,7 @@
  * Gary Engine - The core analysis and betting recommendation system
  * @module garyEngine
  */
-import { openaiService } from './openaiService.js';
+import { geminiService } from './geminiService.js';
 
 /**
  * Generate a pick for a specific game using Gary's analysis system
@@ -145,7 +145,7 @@ export async function generateGaryAnalysis(gameData, options = {}) {
     return {
       success: false,
       message: 'Error: Insufficient game data for analysis',
-      rawOpenAIOutput: null,
+      rawGeminiOutput: null,
       game: gameData?.matchup || 'Unknown Game',
       sport: gameData?.league || gameData?.sport || 'unknown',
       timestamp: new Date().toISOString()
@@ -197,12 +197,12 @@ export async function generateGaryAnalysis(gameData, options = {}) {
         sharpAction: gameData?.sharpMoneyIndicators
       },
       
-      // Add game time data - important for OpenAI to include in response
+      // Add game time data - important for Gemini to include in response
       gameTime: gameData?.gameTime || gameData?.time || 'TBD',
       time: gameData?.gameTime || gameData?.time || 'TBD'
     };
     
-    // HARD REQUIREMENT: We must have real odds (moneyline or spread) before calling OpenAI.
+    // HARD REQUIREMENT: We must have real odds (moneyline or spread) before calling Gemini.
     // If not present, fail fast so the caller can skip this game. No "N/A" fallbacks.
     const hasOddsMarkets = Array.isArray(formattedData?.odds?.markets) && formattedData.odds.markets.length > 0;
     const hasMlOrSpread =
@@ -220,7 +220,7 @@ export async function generateGaryAnalysis(gameData, options = {}) {
         success: false,
         code: 'MISSING_ODDS',
         message: 'Missing required moneyline/spread odds',
-        rawOpenAIOutput: null,
+        rawGeminiOutput: null,
         game: formattedData.game,
         sport: formattedData.sport,
         timestamp: new Date().toISOString()
@@ -253,9 +253,9 @@ export async function generateGaryAnalysis(gameData, options = {}) {
       formattedData.statsReport = gameData?.statsReport || null;
     }
     
-    // Format odds data for better OpenAI understanding
+    // Format odds data for better Gemini understanding
     if (formattedData.odds && formattedData.odds.markets) {
-      console.log('Formatting odds data for OpenAI...');
+      console.log('Formatting odds data for Gemini...');
       let oddsText = `\nCURRENT BETTING ODDS (use these exact values in your response):\n`;
       
       // Store odds for later use in the response
@@ -378,7 +378,7 @@ export async function generateGaryAnalysis(gameData, options = {}) {
     
     // Generate analysis using Gemini
     console.log('Calling Gemini for analysis with temperature: 1.0 (Gemini 3 required)');
-    const rawOpenAIResponse = await openaiService.generateGaryAnalysis(
+    const rawGeminiResponse = await geminiService.generateGaryAnalysis(
       formattedData, 
       newsData,
       {
@@ -388,12 +388,12 @@ export async function generateGaryAnalysis(gameData, options = {}) {
     );
     
     // Validate the raw response
-    if (!rawOpenAIResponse) {
-      console.error('CRITICAL ERROR: Empty response received from OpenAI');
+    if (!rawGeminiResponse) {
+      console.error('CRITICAL ERROR: Empty response received from Gemini');
       return {
         success: false,
-        message: 'Error: No response from OpenAI',
-        rawOpenAIOutput: null,
+        message: 'Error: No response from Gemini',
+        rawGeminiOutput: null,
         game: formattedData.game,
         sport: formattedData.sport,
         timestamp: new Date().toISOString()
@@ -401,9 +401,9 @@ export async function generateGaryAnalysis(gameData, options = {}) {
     }
     
     // Log the entire raw response for complete debugging
-    console.log('FULL RAW OPENAI RESPONSE:');
-    console.log(rawOpenAIResponse);
-    console.log('Response length:', rawOpenAIResponse.length, 'characters');
+    console.log('FULL RAW GEMINI RESPONSE:');
+    console.log(rawGeminiResponse);
+    console.log('Response length:', rawGeminiResponse.length, 'characters');
     
     // Unified JSON extraction function - more maintainable and reusable
     const extractJSON = (rawResponse) => {
@@ -476,7 +476,7 @@ export async function generateGaryAnalysis(gameData, options = {}) {
     };
     
     // Use the extraction function
-    const extraction = extractJSON(rawOpenAIResponse);
+    const extraction = extractJSON(rawGeminiResponse);
     const extractedJSON = extraction.success ? extraction.json : null;
     const extractionMethod = extraction.method;
     
@@ -486,7 +486,7 @@ export async function generateGaryAnalysis(gameData, options = {}) {
       message: extractedJSON 
         ? `Analysis completed successfully (using ${extractionMethod})` 
         : 'Failed to generate valid analysis',
-      rawOpenAIOutput: extractedJSON,
+      rawGeminiOutput: extractedJSON,
       extractionMethod: extractionMethod,
       game: formattedData.game,
       sport: formattedData.sport,
@@ -509,11 +509,11 @@ export async function generateGaryAnalysis(gameData, options = {}) {
       }
     }
     
-    console.log('PARSED JSON OUTPUT:', result.rawOpenAIOutput ? 'SUCCESS' : 'FAILED');
-    if (result.rawOpenAIOutput) {
-      console.log('Extracted fields:', Object.keys(result.rawOpenAIOutput).join(', '));
-      console.log('Confidence:', result.rawOpenAIOutput.confidence);
-      console.log('Pick:', result.rawOpenAIOutput.pick);
+    console.log('PARSED JSON OUTPUT:', result.rawGeminiOutput ? 'SUCCESS' : 'FAILED');
+    if (result.rawGeminiOutput) {
+      console.log('Extracted fields:', Object.keys(result.rawGeminiOutput).join(', '));
+      console.log('Confidence:', result.rawGeminiOutput.confidence);
+      console.log('Pick:', result.rawGeminiOutput.pick);
     }
     
     return result;
@@ -522,7 +522,7 @@ export async function generateGaryAnalysis(gameData, options = {}) {
     return {
       success: false,
       message: `Error: ${error.message}`,
-      rawOpenAIOutput: null,
+      rawGeminiOutput: null,
       game: gameData?.matchup || `${gameData?.homeTeam || ''} vs ${gameData?.awayTeam || ''}`,
       sport: gameData?.league || gameData?.sport || '',
       timestamp: new Date().toISOString()
@@ -551,9 +551,9 @@ export function calculateStake(pick) {
 }
 
 /**
- * Function that simply returns the raw OpenAI output without transformations
+ * Function that simply returns the raw Gemini output without transformations
  * @param {object} analysisObject - The object from generateGaryAnalysis
- * @returns {object} - The raw OpenAI output directly
+ * @returns {object} - The raw Gemini output directly
  */
 export function parseGaryAnalysis(analysisObject) {
   try {
@@ -566,10 +566,10 @@ export function parseGaryAnalysis(analysisObject) {
       return null;
     }
     
-    // If we have the raw OpenAI output, return it directly
-    if (analysisObject.rawOpenAIOutput) {
-      console.log('Returning raw OpenAI output directly without transformation');
-      const out = analysisObject.rawOpenAIOutput;
+    // If we have the raw Gemini output, return it directly
+    if (analysisObject.rawGeminiOutput) {
+      console.log('Returning raw Gemini output directly without transformation');
+      const out = analysisObject.rawGeminiOutput;
       // Enforce "real odds only": reject if odds are missing or marked as N/A
       try {
         const oddsStr = String(out?.odds ?? '').trim();
@@ -585,7 +585,7 @@ export function parseGaryAnalysis(analysisObject) {
     
     // If the analysisObject is itself the raw output
     if (typeof analysisObject === 'object' && analysisObject.pick) {
-      console.log('Returning analysisObject directly as raw OpenAI data');
+      console.log('Returning analysisObject directly as raw Gemini data');
       const oddsStr = String(analysisObject?.odds ?? '').trim();
       const isNA = oddsStr.toUpperCase() === 'N/A';
       const isNumericOdds = /^[-+]?\d+$/.test(oddsStr);

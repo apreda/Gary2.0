@@ -494,10 +494,10 @@ export async function generateNBAPicks(options = {}) {
       const result = await makeGaryPick(gameObj);
       
       if (result.success) {
-        console.log(`Successfully generated NBA pick: ${result.rawAnalysis?.rawOpenAIOutput?.pick || 'Unknown pick'}`);
+        console.log(`Successfully generated NBA pick: ${result.rawAnalysis?.rawGeminiOutput?.pick || 'Unknown pick'}`);
         // Compute recommended sportsbook from in-memory bookmakers
         try {
-          const extract = result.rawAnalysis?.rawOpenAIOutput || result.pick || {};
+          const extract = result.rawAnalysis?.rawGeminiOutput || result.pick || {};
           const rec = computeRecommendedSportsbook({
             pickType: (extract.type || '').toLowerCase(),
             pickStr: extract.pick || '',

@@ -248,7 +248,7 @@ export const ballDontLieOddsService = {
           if (totalsOutcomes.length) markets.push({ key: 'totals', outcomes: totalsOutcomes });
           return { key: v.vendor, title: v.vendor, markets };
         });
-        let commenceTime = g.datetime || g.date || g.commence_time || null;
+        let commenceTime = g.start_time_utc || g.datetime || g.game_date || g.date || g.commence_time || null;
         if (!commenceTime) {
           console.warn(`[BDL NCAAF] Game ${g.id} has no date/time — skipping`);
           return null;
@@ -375,7 +375,7 @@ export const ballDontLieOddsService = {
           return { key: v.vendor, title: v.vendor, markets };
         });
 
-        let commenceTime = g.datetime || g.commence_time || g.date || null;
+        let commenceTime = g.start_time_utc || g.datetime || g.game_date || g.date || g.commence_time || null;
         if (!commenceTime) {
           console.warn(`[BDL NCAAB] Game ${g.id} has no date/time — skipping`);
           return null;
@@ -499,7 +499,7 @@ export const ballDontLieOddsService = {
           return { key: v.vendor, title: v.vendor, markets };
         });
 
-        let commenceTime = g.datetime || g.commence_time || g.date || null;
+        let commenceTime = g.start_time_utc || g.datetime || g.commence_time || g.game_date || g.date || null;
         if (!commenceTime) {
           console.warn(`[BDL NHL] Game ${g.id} has no date/time — skipping`);
           return null;

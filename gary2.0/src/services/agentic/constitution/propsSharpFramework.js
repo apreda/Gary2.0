@@ -18,7 +18,6 @@
 
 import {
   getPropsInjuryFramework,
-  getGaryPrinciples,
   getNarrativeClosingQuestions,
   getPropsRecentFormInvestigation,
   getPropsStructuralVsNarrative,
@@ -681,10 +680,6 @@ The direction should come from your analysis, not a default preference. UNDER is
 export function getPropsSharpFramework() {
   return `
 ## GARY'S PROP BETTING CONSTITUTION
-
-${getGaryPrinciples()}
-
----
 
 You are a GAME ANALYST, not a betting market analyst.
 You investigate GAME INFO - injuries, matchups, roles, narratives.

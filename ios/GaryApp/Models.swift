@@ -62,8 +62,8 @@ struct SportsbookOdds: Codable, Identifiable {
         return SportsbookOdds(
             book: dict["book"] as? String,
             spread: (dict["spread"] as? NSNumber)?.doubleValue,
-            spread_odds: dict["spread_odds"] as? String,
-            ml: dict["ml"] as? String
+            spread_odds: (dict["spread_odds"] as? NSNumber)?.stringValue,
+            ml: (dict["ml"] as? NSNumber)?.stringValue
         )
     }
 }
@@ -294,6 +294,7 @@ struct StatValues: Codable {
     let interceptions: String?
     let rushingTds: String?
     let last5: String?
+    let last10: String?
     // Additional NFL flattened stats
     let takeaways: String?
     let giveaways: String?
@@ -328,6 +329,8 @@ struct StatValues: Codable {
     let netRank: String?
     let sosRank: String?
     let kenpomRank: String?
+    // NCAAB Barttorvik
+    let wab: String?
     // NHL-specific stats
     let goalsForPerGame: String?
     let goalsAgainstPerGame: String?
@@ -339,6 +342,16 @@ struct StatValues: Codable {
     let savePct: String?
     let goalsAgainstAvg: String?
     let faceoffPct: String?
+    // NHL advanced stats (MoneyPuck + NHL API)
+    let corsiPct: String?
+    let xgPct: String?
+    let pdoStat: String?
+    let shPct5v5: String?
+    let svPct5v5: String?
+    // NCAAB Barttorvik rankings
+    let adjoeRank: String?
+    let adjdeRank: String?
+    let projRecord: String?
     // NCAAF BDL-specific stats (new format from stat router)
     let totalYpg: String?
     let passingYpg: String?
@@ -396,6 +409,7 @@ struct StatValues: Codable {
             interceptions: dict["interceptions"] as? String ?? (dict["interceptions"] as? NSNumber)?.stringValue,
             rushingTds: dict["rushing_tds"] as? String ?? (dict["rushing_tds"] as? NSNumber)?.stringValue,
             last5: dict["last_5"] as? String,
+            last10: dict["last_10"] as? String,
             // Additional NFL flattened stats
             takeaways: dict["takeaways"] as? String ?? (dict["takeaways"] as? NSNumber)?.stringValue,
             giveaways: dict["giveaways"] as? String ?? (dict["giveaways"] as? NSNumber)?.stringValue,
@@ -430,6 +444,8 @@ struct StatValues: Codable {
             netRank: dict["net_rank"] as? String ?? (dict["net_rank"] as? NSNumber)?.stringValue,
             sosRank: dict["sos_rank"] as? String ?? (dict["sos_rank"] as? NSNumber)?.stringValue,
             kenpomRank: dict["kenpom_rank"] as? String ?? (dict["kenpom_rank"] as? NSNumber)?.stringValue,
+            // NCAAB Barttorvik
+            wab: dict["wab"] as? String ?? (dict["wab"] as? NSNumber)?.stringValue,
             // NHL-specific stats
             goalsForPerGame: dict["goals_for_per_game"] as? String ?? (dict["goals_for_per_game"] as? NSNumber)?.stringValue,
             goalsAgainstPerGame: dict["goals_against_per_game"] as? String ?? (dict["goals_against_per_game"] as? NSNumber)?.stringValue,
@@ -441,6 +457,16 @@ struct StatValues: Codable {
             savePct: dict["save_pct"] as? String ?? (dict["save_pct"] as? NSNumber)?.stringValue,
             goalsAgainstAvg: dict["goals_against_avg"] as? String ?? (dict["goals_against_avg"] as? NSNumber)?.stringValue ?? (dict["gaa"] as? NSNumber)?.stringValue,
             faceoffPct: dict["faceoff_pct"] as? String ?? (dict["faceoff_pct"] as? NSNumber)?.stringValue,
+            // NHL advanced stats (MoneyPuck + NHL API)
+            corsiPct: dict["corsi_pct"] as? String ?? (dict["corsi_pct"] as? NSNumber)?.stringValue,
+            xgPct: dict["xg_pct"] as? String ?? (dict["xg_pct"] as? NSNumber)?.stringValue,
+            pdoStat: dict["pdo"] as? String ?? (dict["pdo"] as? NSNumber)?.stringValue,
+            shPct5v5: dict["sh_pct_5v5"] as? String ?? (dict["sh_pct_5v5"] as? NSNumber)?.stringValue,
+            svPct5v5: dict["sv_pct_5v5"] as? String ?? (dict["sv_pct_5v5"] as? NSNumber)?.stringValue,
+            // NCAAB Barttorvik rankings
+            adjoeRank: dict["adjoe_rank"] as? String,
+            adjdeRank: dict["adjde_rank"] as? String,
+            projRecord: dict["proj_record"] as? String,
             // NCAAF BDL-specific stats (from stat router)
             totalYpg: dict["total_ypg"] as? String ?? (dict["total_ypg"] as? NSNumber)?.stringValue,
             passingYpg: dict["passing_ypg"] as? String ?? (dict["passing_ypg"] as? NSNumber)?.stringValue,
@@ -556,6 +582,17 @@ struct StatValues: Codable {
         case "STEALS": return stealsPerGame ?? "N/A"
         case "BLOCKS": return blocksPerGame ?? "N/A"
         case "FG_PCT": return fgPct ?? efgPct ?? "N/A"
+        // NBA verified Tale of Tape tokens
+        case "OFF_RATING": return offensiveRating ?? "N/A"
+        case "DEF_RATING": return defensiveRating ?? "N/A"
+        case "L10_FORM": return last10 ?? "N/A"
+        case "TS_PCT": return trueShootingPct ?? "N/A"
+        case "RPG": return reboundsPerGame ?? "N/A"
+        case "APG": return assistsPerGame ?? "N/A"
+        case "3PT_PCT": return threePct ?? "N/A"
+        case "TOV_GM": return turnoversPerGame ?? "N/A"
+        case "OREB_GM": return orebPerGame ?? "N/A"
+        case "DREB_GM": return drebPerGame ?? "N/A"
         // NCAAB Barttorvik Tale of Tape tokens
         case "ADJOE": return offensiveRating ?? "N/A"
         case "ADJDE": return defensiveRating ?? "N/A"
@@ -563,6 +600,7 @@ struct StatValues: Codable {
         case "TEMPO": return tempo ?? "N/A"
         case "T_RANK": return kenpomRank ?? "N/A"
         case "BARTHAG": return efgPct ?? "N/A"
+        case "WAB": return wab ?? "N/A"
         case "L5_FORM": return last5 ?? "N/A"
         case "RECORD": return overall ?? "N/A"
         case "CONF_RECORD": return conferenceRecord ?? "N/A"
@@ -584,14 +622,21 @@ struct StatValues: Codable {
         case "NCAAF_DEFENSE": return oppTotalYards ?? oppYardsPerGame ?? "N/A"
         case "NCAAF_TURNOVER_MARGIN": return interceptionsThrown ?? interceptions ?? turnoverDiff ?? "N/A"
         case "NCAAF_RED_ZONE_OFFENSE": return thirdDownPct ?? "N/A"
+        // NCAAB Barttorvik ranking tokens
+        case "ADJOE_RANK": return adjoeRank ?? "N/A"
+        case "ADJDE_RANK": return adjdeRank ?? "N/A"
+        case "PROJ_RECORD": return projRecord ?? "N/A"
         // NHL verified Tale of Tape tokens (from label.toUpperCase)
         case "GOALS_FOR_GM": return goalsForPerGame ?? "N/A"
         case "GOALS_AGST_GM": return goalsAgainstPerGame ?? "N/A"
         case "SHOTS_FOR_GM": return shotsFor ?? "N/A"
-        case "POWER_PLAY__": return powerPlayPct ?? "N/A"
-        case "PENALTY_KILL__": return penaltyKillPct ?? "N/A"
-        case "FACEOFF_WIN__": return faceoffPct ?? "N/A"
-        case "SAVE__": return savePct ?? "N/A"
+        case "PP_PCT", "POWER_PLAY__": return powerPlayPct ?? "N/A"
+        case "PK_PCT", "PENALTY_KILL__": return penaltyKillPct ?? "N/A"
+        case "FO_PCT", "FACEOFF_WIN__": return faceoffPct ?? "N/A"
+        case "CORSI_PCT": return corsiPct ?? "N/A"
+        case "XG_PCT": return xgPct ?? "N/A"
+        case "SH_PCT_5V5": return shPct5v5 ?? "N/A"
+        case "SV_PCT_5V5": return svPct5v5 ?? "N/A"
         // NHL-specific stats (from toolCallHistory)
         case "GOALS_FOR": return goalsForPerGame ?? "N/A"
         case "GOALS_AGAINST": return goalsAgainstPerGame ?? "N/A"
@@ -601,7 +646,8 @@ struct StatValues: Codable {
         case "SHOTS_FOR": return shotsFor ?? "N/A"
         case "SHOTS_AGAINST": return shotsAgainst ?? "N/A"
         case "SHOT_DIFFERENTIAL", "SHOT_QUALITY": return shotDifferential ?? shotsFor ?? "N/A"
-        case "EXPECTED_GOALS", "CORSI_FOR_PCT", "PDO": return shotsFor ?? shotDifferential ?? "N/A"
+        case "PDO": return pdoStat ?? "N/A"
+        case "EXPECTED_GOALS", "CORSI_FOR_PCT": return corsiPct ?? shotsFor ?? shotDifferential ?? "N/A"
         case "SAVE_PCT", "GOALIE_STATS", "GOALIE_MATCHUP": return savePct ?? goalsAgainstAvg ?? "N/A"
         case "GOALS_AGAINST_AVG": return goalsAgainstAvg ?? "N/A"
         case "FACEOFF_PCT", "POSSESSION_METRICS": return faceoffPct ?? "N/A"

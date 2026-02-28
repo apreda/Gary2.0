@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from "react-router-dom";
-import '../assets/css/animations.css';
 import '../styles/dimensional.css';
 import '../assets/css/logo-responsive.css';
 import { supabase } from "../supabaseClient";

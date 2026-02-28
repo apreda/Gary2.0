@@ -4,7 +4,7 @@
  * Gary can call tools mid-analysis to fetch stats organically
  */
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { GEMINI_FLASH_MODEL } from '../openaiService.js';
+import { GEMINI_FLASH_MODEL } from '../geminiService.js';
 import { ballDontLieService } from '../ballDontLieService.js';
 import { geminiGroundingSearch } from './scoutReport/scoutReportBuilder.js';
 import { fetchNbaInjuriesForGame } from '../nbaInjuryReportService.js';
@@ -331,7 +331,7 @@ function getConstitution(sportLabel) {
   });
   // Handle both sectioned object and flat string (props are always flat, but future-proofing)
   if (typeof constitution === 'object' && constitution.full) {
-    for (const key of ['baseRules', 'domainKnowledge', 'investigationPrompts', 'guardrails', 'full']) {
+    for (const key of ['baseRules', 'domainKnowledge', 'guardrails', 'full']) {
       if (constitution[key]) {
         constitution[key] = constitution[key].replace(/\{\{CURRENT_DATE\}\}/g, today);
       }
@@ -402,11 +402,11 @@ async function handlePropsToolCall(toolCall, sportKey, sportLabel) {
 
       // NBA-specific game logs
       if (isNBA) {
-        const logs = await ballDontLieService.getNbaPlayerGameLogs(player.id, 5);
+        const logs = await ballDontLieService.getNbaPlayerGameLogs(player.id, 15);
         if (!logs?.games?.length) {
           return { player: args.player_name, team: player.team?.full_name, games: [], message: 'No game logs found' };
         }
-        const games = logs.games.slice(0, 5).map(g => ({
+        const games = logs.games.slice(0, 15).map(g => ({
           date: g.date,
           opponent: g.opponent,
           pts: g.pts,
@@ -431,11 +431,11 @@ async function handlePropsToolCall(toolCall, sportKey, sportLabel) {
 
       // NCAAB-specific game logs
       if (isNCAAB) {
-        const logs = await ballDontLieService.getNcaabPlayerGameLogs(player.id, 5);
+        const logs = await ballDontLieService.getNcaabPlayerGameLogs(player.id, 15);
         if (!logs?.games?.length) {
           return { player: args.player_name, team: player.team?.full_name, games: [], message: 'No game logs found' };
         }
-        const games = logs.games.slice(0, 5).map(g => ({
+        const games = logs.games.slice(0, 15).map(g => ({
           date: g.date,
           opponent: g.opponent,
           pts: g.pts,
@@ -457,11 +457,11 @@ async function handlePropsToolCall(toolCall, sportKey, sportLabel) {
 
       // NHL-specific game logs
       if (isNHL) {
-        const logs = await ballDontLieService.getNhlPlayerGameLogs(player.id, 5);
+        const logs = await ballDontLieService.getNhlPlayerGameLogs(player.id, 15);
         if (!logs?.games?.length) {
           return { player: args.player_name, team: player.team?.full_name, games: [], message: 'No game logs found' };
         }
-        const games = logs.games.slice(0, 5).map(g => ({
+        const games = logs.games.slice(0, 15).map(g => ({
           date: g.date,
           opponent: g.opponent,
           goals: g.goals,
@@ -486,14 +486,14 @@ async function handlePropsToolCall(toolCall, sportKey, sportLabel) {
       const nflLogMonth = new Date().getMonth() + 1;
       const nflLogYear = new Date().getFullYear();
       const nflLogSeason = nflLogMonth >= 9 ? nflLogYear : nflLogYear - 1;
-      const logs = await ballDontLieService.getNflPlayerGameLogsBatch([player.id], nflLogSeason, 5);
+      const logs = await ballDontLieService.getNflPlayerGameLogsBatch([player.id], nflLogSeason, 15);
       const playerLogs = logs[player.id];
 
       if (!playerLogs?.games?.length) {
         return { player: args.player_name, team: player.team?.full_name, games: [], message: 'No game logs found' };
       }
 
-      const games = playerLogs.games.slice(0, 5).map(g => ({
+      const games = playerLogs.games.slice(0, 15).map(g => ({
         week: g.week || 'Unknown',
         opponent: g.opponent || 'Unknown',
         pass_yds: g.pass_yds || 0,
@@ -1675,7 +1675,7 @@ function buildPropsPass2SteelManMessage(candidates, sportLabel = 'NFL') {
   // verbose or overly complex prompt engineering techniques."
   // "By default, Gemini 3 is less verbose - you must explicitly request detailed output"
 
-  const candidateList = candidates.slice(0, 5).map((p, i) =>
+  const candidateList = candidates.slice(0, 8).map((p, i) =>
     `${i + 1}. ${p.player} - ${p.props?.map(pr => `${pr.type} ${pr.line}`).join(', ') || 'TBD'}`
   ).join('\n');
 
@@ -1759,7 +1759,7 @@ async function runPropsIterationLoop({ systemPrompt, userMessage, sportKey, spor
   let consecutiveEmptyResponses = 0;
 
   // ═══════════════════════════════════════════════════════════════════
-  // 4-PASS PIPELINE (mirrors game picks: agenticOrchestrator.js)
+  // 4-PASS PIPELINE (mirrors game picks: orchestrator/agentLoop.js)
   //   Pass 1: Investigation (Flash + high reasoning) — tool calls for player stats
   //   Pass 2: Bilateral Cases (text only) — OVER/UNDER for each candidate
   //   Pass 2.5: Evaluation (text only) — stress test cases, decide which 2

@@ -1,9 +1,9 @@
 name: NBA Props
 
 on:
-  schedule:
-    # 12:00 PM EST = 5:00 PM UTC (17:00)
-    - cron: '0 17 * * *'
+  # schedule:
+  #   # 12:00 PM EST = 5:00 PM UTC (17:00)
+  #   - cron: '0 17 * * *'
   workflow_dispatch:
 
 env:

@@ -4042,20 +4042,34 @@ struct TaleOfTapeSection: View {
             "TEMPO": "Tempo",
             "T_RANK": "T-Rank",
             "BARTHAG": "Barthag",
+            "WAB": "WAB",
             "L5_FORM": "L5 Form",
+            "L10_FORM": "L10 Form",
             "RECORD": "Record",
             "CONF_RECORD": "Conf Record",
-            // NBA/NCAAB stats
+            // NBA verified Tale of Tape
+            "OFF_RATING": "Off Rating",
+            "DEF_RATING": "Def Rating",
+            "TS_PCT": "TS%",
+            "EFG_PCT": "eFG%",
+            "RPG": "Reb/Game",
+            "APG": "Ast/Game",
+            "PPG": "Pts/Game",
+            "3PT_PCT": "3PT%",
+            "FG_PCT": "FG%",
+            "FT_PCT": "FT%",
+            "TOV_GM": "TOV/Game",
+            "OREB_GM": "Off Reb/G",
+            "DREB_GM": "Def Reb/G",
+            // NBA/NCAAB stats (legacy toolCallHistory tokens)
             "OFFENSIVE_RATING": "Off Rating",
             "DEFENSIVE_RATING": "Def Rating",
             "NET_RATING": "Net Rating",
             "EFFICIENCY_LAST_10": "Net Rating",
             "ADJ_EFFICIENCY_MARGIN": "Net Rating",
             "SP_PLUS_RATINGS": "Net Rating",
-            "PACE": "Pace",
             "PACE_HOME_AWAY": "Record",
             "HOME_AWAY_SPLITS": "Record",
-            "EFG_PCT": "eFG%",
             "OPP_EFG_PCT": "Opp eFG%",
             "THREE_PT_SHOOTING": "3PT%",
             "THREE_PCT": "3PT%",
@@ -4067,7 +4081,6 @@ struct TaleOfTapeSection: View {
             "OREB_RATE": "Off Reb/G",
             "OREB_PER_GAME": "Off Reb/G",
             "FT_RATE": "FT Rate",
-            "FT_PCT": "FT%",
             "FTA_PER_GAME": "FTA/Game",
             "CLUTCH_STATS": "Close Games",
             "CLOSE_RECORD": "Close Record",
@@ -4120,7 +4133,6 @@ struct TaleOfTapeSection: View {
             "FIELD_POSITION": "Yards/G",
             // NEW: Individual NFL stat tokens (flattened)
             "POINTS_PER_GAME": "Points/Game",
-            "PPG": "Points/Game",
             "YARDS_PER_GAME": "Yards/Game",
             "YPG": "Yards/Game",
             "TOTAL_YARDS_PER_GAME": "Total YPG",
@@ -4163,7 +4175,6 @@ struct TaleOfTapeSection: View {
             "REBOUNDS": "Reb/G",
             "STEALS": "Steals/G",
             "BLOCKS": "Blocks/G",
-            "FG_PCT": "FG%",
             // NCAAF BDL stats
             "NCAAF_TOTAL_OFFENSE": "Total YPG",
             "NCAAF_PASSING_OFFENSE": "Pass YPG",
@@ -4182,14 +4193,24 @@ struct TaleOfTapeSection: View {
             "NCAAB_NET_RANKING": "NET Rank",
             "NCAAB_STRENGTH_OF_SCHEDULE": "SOS",
             "NCAAB_KENPOM_RATINGS": "KenPom Rank",
+            // NCAAB Barttorvik ranking tokens
+            "ADJOE_RANK": "AdjOE Rank",
+            "ADJDE_RANK": "AdjDE Rank",
+            "PROJ_RECORD": "Proj Record",
             // NHL verified Tale of Tape tokens
             "GOALS_FOR_GM": "Goals/G",
             "GOALS_AGST_GM": "GA/G",
             "SHOTS_FOR_GM": "Shots/G",
+            "PP_PCT": "PP%",
+            "PK_PCT": "PK%",
+            "FO_PCT": "FO%",
             "POWER_PLAY__": "PP%",
             "PENALTY_KILL__": "PK%",
             "FACEOFF_WIN__": "FO%",
-            "SAVE__": "Save%",
+            "CORSI_PCT": "Corsi%",
+            "XG_PCT": "xG%",
+            "SH_PCT_5V5": "SH% 5v5",
+            "SV_PCT_5V5": "SV% 5v5",
             // NHL specific (from toolCallHistory)
             "GOALS_FOR": "Goals/G",
             "GOALS_AGAINST": "GA/G",
@@ -4438,18 +4459,23 @@ struct TaleOfTapeSection: View {
     private func compareValues(_ home: String, _ away: String, token: String) -> Bool {
         // For defensive stats, lower is better
         let lowerIsBetter = [
-            "DEFENSIVE_RATING", "TURNOVER_RATE", "PAINT_DEFENSE",
+            "DEFENSIVE_RATING", "DEF_RATING", "ADJDE", "TURNOVER_RATE", "PAINT_DEFENSE",
             "DEFENSIVE_EPA", "SUCCESS_RATE_DEFENSE", "EXPLOSIVE_ALLOWED",
             "RED_ZONE_DEFENSE", "DL_RANKINGS", "DEFENSIVE_PLAYMAKERS",
-            "OPP_EFG_PCT", "HAVOC_ALLOWED",
+            "OPP_EFG_PCT", "HAVOC_ALLOWED", "TOV_GM", "TURNOVERS_PER_GAME",
             // Defensive individual stats (lower is better)
             "OPP_POINTS_PER_GAME", "OPP_PPG", "OPP_YARDS_PER_GAME", "OPP_YPG",
-            "GIVEAWAYS", "INTERCEPTIONS", "INTS"
+            "GIVEAWAYS", "INTERCEPTIONS", "INTS",
+            // NHL lower-is-better
+            "GOALS_AGST_GM", "GOALS_AGAINST", "GOALS_AGAINST_AVG",
+            // Rank tokens (lower rank = better)
+            "ADJOE_RANK", "ADJDE_RANK", "T_RANK"
         ].contains(token)
 
         // For records like "5-18", "16-7", compare wins (first number)
         // Applies to RECORD, HOME, AWAY, HOME_AWAY_SPLITS, SPECIAL_TEAMS, etc.
-        let recordTokens = ["RECORD", "HOME", "AWAY", "HOME_RECORD", "AWAY_RECORD",
+        let recordTokens = ["RECORD", "CONF_RECORD", "L5_FORM", "L10_FORM", "PROJ_RECORD",
+                           "HOME", "AWAY", "HOME_RECORD", "AWAY_RECORD",
                            "PACE_HOME_AWAY", "HOME_AWAY_SPLITS", "SPECIAL_TEAMS",
                            "SPECIAL_TEAMS_RATING", "ATS_RECORD", "OU_RECORD"]
         
@@ -4473,7 +4499,7 @@ struct TaleOfTapeSection: View {
         }
 
         // For turnover margin and point diff, handle positive/negative
-        if token == "TURNOVER_MARGIN" || token == "TURNOVER_DIFF" || token == "POINT_DIFF" || token == "NET_RATING" {
+        if token == "TURNOVER_MARGIN" || token == "TURNOVER_DIFF" || token == "POINT_DIFF" || token == "NET_RATING" || token == "ADJEM" || token == "WAB" {
             let homeVal = Double(home) ?? 0
             let awayVal = Double(away) ?? 0
             return homeVal > awayVal
@@ -4482,7 +4508,7 @@ struct TaleOfTapeSection: View {
         // Extract numeric values for standard comparisons
         // Remove % and handle negative numbers properly
         let cleanNum: (String) -> Double = { val in
-            let cleaned = val.replacingOccurrences(of: "%", with: "")
+            let cleaned = val.replacingOccurrences(of: "%", with: "").replacingOccurrences(of: "#", with: "")
             return Double(cleaned) ?? 0
         }
         
@@ -6140,28 +6166,10 @@ struct GaryFantasyView: View {
                     Spacer()
                 } else if let lineup = currentLineup {
                     ScrollView(showsIndicators: false) {
-                        VStack(spacing: 16) {
+                        VStack(spacing: 8) {
                             // Lineup Summary Card
                             LineupSummaryCard(lineup: lineup)
                                 .padding(.horizontal, 16)
-
-                            // Column Headers
-                            HStack(spacing: 12) {
-                                Text("POS")
-                                    .frame(width: 36)
-                                Text("PLAYER")
-                                Spacer()
-                                Text("SAL")
-                                    .frame(width: 56, alignment: .trailing)
-                                Text("PROJ")
-                                    .frame(width: 40, alignment: .trailing)
-                                Color.clear.frame(width: 20) // chevron space
-                            }
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(.secondary.opacity(0.6))
-                            .tracking(0.5)
-                            .padding(.horizontal, 30)
-                            .padding(.bottom, 2)
 
                             // Position Rows — tight stack, no gaps
                             VStack(spacing: 2) {

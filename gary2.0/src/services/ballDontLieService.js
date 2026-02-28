@@ -2281,6 +2281,7 @@ const ballDontLieService = {
             playerName: `${avg.player.first_name} ${avg.player.last_name}`,
             position: avg.player.position,
             season: avg.season,
+            gp: stats.gp || 0, // Games played this season
             // Core stats for props
             ppg: stats.pts?.toFixed(1) || null,
             rpg: stats.reb?.toFixed(1) || null,

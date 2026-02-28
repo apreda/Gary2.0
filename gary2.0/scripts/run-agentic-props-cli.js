@@ -7,12 +7,12 @@
 import '../src/loadEnv.js';
 import { createClient } from '@supabase/supabase-js';
 
-// Dynamic imports after env is loaded (so openaiService gets correct proxy URL)
+// Dynamic imports after env is loaded (so geminiService gets correct proxy URL)
 const { oddsService } = await import('../src/services/oddsService.js');
 const { propOddsService } = await import('../src/services/propOddsService.js');
 const { runAgenticPropsPipeline } = await import('../src/services/agentic/propsAgenticRunner.js');
 const { getPropsConstitution, applyPropsPerGameConstraint } = await import('../src/services/agentic/propsAgenticRunner.js');
-const { analyzeGame } = await import('../src/services/agentic/agenticOrchestrator.js');
+const { analyzeGame } = await import('../src/services/agentic/orchestrator/index.js');
 
 const defaultArgv = process.argv.slice(2);
 
