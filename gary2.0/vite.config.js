@@ -18,11 +18,8 @@ export default defineConfig({
           'admin-services': [
             './src/services/ballDontLieService.js',
             './src/services/oddsService.js',
-            './src/services/openaiService.js',
+            './src/services/llmService.js',
             './src/services/picksService.js',
-            './src/services/resultsCheckerService.js',
-            './src/services/garyPerformanceService.js',
-            './src/services/propResultsService.js',
           ],
         },
       },

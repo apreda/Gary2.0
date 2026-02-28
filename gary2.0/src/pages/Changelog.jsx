@@ -1,4 +1,3 @@
-import React from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Sparkles, Bug, Zap, Wrench, Gift, Rocket } from 'lucide-react';
 
@@ -9,7 +8,7 @@ const changelogEntries = [
     type: "feature",
     title: "Gemini 3 Deep Think + Google Search Grounding",
     changes: [
-      "Migrated all sports to Gemini 3 Deep Think (replaced GPT-5.1)",
+      "Migrated all sports to Gemini 3 Deep Think (replaced previous LLM)",
       "Added Google Search Grounding for live context (injuries, weather, roster verification)",
       "Enhanced NFL injury reporting with duration context (RECENT vs SEASON-LONG)",
       "Improved QB change detection - now flags when historical records don't apply",
@@ -88,7 +87,7 @@ const changelogEntries = [
       "Initial release of Gary A.I. - Your AI-powered sports betting companion",
       "Support for 6 sports: NFL, NBA, NCAAF, NCAAB, NHL, MLB",
       "Daily AI-generated picks with detailed analysis",
-      "GPT-5.1 powered reasoning engine",
+      "Gemini-powered reasoning engine",
       "Perplexity integration for real-time data",
       "Odds API integration for live betting lines",
       "Free to use - no paywall, no sign-up required"

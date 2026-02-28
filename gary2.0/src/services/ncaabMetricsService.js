@@ -317,27 +317,6 @@ async function getTeamRatings(teamName, year) {
 }
 
 /**
- * Get conference display name for a team.
- */
-async function getConferenceName(teamName, year) {
-  const team = await getTeamRatings(teamName, year);
-  return team?.conferenceName || null;
-}
-
-/**
- * Get all teams (full cached dataset).
- */
-async function getAllTeams(year) {
-  if (!year) year = getCurrentYear();
-  try {
-    return await fetchAllTeams(year);
-  } catch (err) {
-    console.warn(`[Barttorvik] getAllTeams failed:`, err.message);
-    return null;
-  }
-}
-
-/**
  * Determine the current Barttorvik season year.
  * Barttorvik uses the END year of the season (e.g., 2025-26 season = 2026).
  */
@@ -353,8 +332,4 @@ function getCurrentYear() {
 
 export {
   getTeamRatings,
-  getConferenceName,
-  getAllTeams,
-  getCurrentYear,
-  CONF_DISPLAY_NAMES,
 };

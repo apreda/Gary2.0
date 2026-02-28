@@ -2,7 +2,7 @@
  * Gary Engine - The core analysis and betting recommendation system
  * @module garyEngine
  */
-import { openaiService } from './openaiService.js';
+import { llmService } from './llmService.js';
 
 /**
  * Generate a pick for a specific game using Gary's analysis system
@@ -110,32 +110,12 @@ export async function makeGaryPick(gameData, options = {}) {
 }
 
 /**
- * Fetch real-time game information and news
- * @param {string} homeTeam - Home team name
- * @param {string} awayTeam - Away team name
- * @param {string} sportKey - Sport identification key
- * @returns {Promise<object>} - Real-time game context information
- */
-export async function fetchRealTimeGameInfo(homeTeam, awayTeam, sportKey) {
-  // Simple implementation that returns a placeholder
-  console.log(`Fetching real-time info for ${homeTeam} vs ${awayTeam} (${sportKey})`);
-  
-  return {
-    summary: `Latest information for ${homeTeam} vs ${awayTeam}`,
-    insights: ['Using statistical analysis only'],
-    source: 'Gary Stats Engine',
-    sport: sportKey || 'unknown',
-    timestamp: new Date().toISOString()
-  };
-}
-
-/**
  * Generate Gary's analysis for a specific game
  * @param {object} gameData - The data for the game to analyze
  * @param {object} options - Optional parameters
  * @returns {Promise<object>} - Gary's analysis
  */
-export async function generateGaryAnalysis(gameData, options = {}) {
+async function generateGaryAnalysis(gameData, options = {}) {
   console.log('GARY ENGINE: Analyzing game...', gameData?.homeTeam, 'vs', gameData?.awayTeam);
   
   // Validate input data first
@@ -197,12 +177,12 @@ export async function generateGaryAnalysis(gameData, options = {}) {
         sharpAction: gameData?.sharpMoneyIndicators
       },
       
-      // Add game time data - important for OpenAI to include in response
+      // Add game time data - important for LLM to include in response
       gameTime: gameData?.gameTime || gameData?.time || 'TBD',
       time: gameData?.gameTime || gameData?.time || 'TBD'
     };
     
-    // HARD REQUIREMENT: We must have real odds (moneyline or spread) before calling OpenAI.
+    // HARD REQUIREMENT: We must have real odds (moneyline or spread) before calling the LLM.
     // If not present, fail fast so the caller can skip this game. No "N/A" fallbacks.
     const hasOddsMarkets = Array.isArray(formattedData?.odds?.markets) && formattedData.odds.markets.length > 0;
     const hasMlOrSpread =
@@ -253,9 +233,9 @@ export async function generateGaryAnalysis(gameData, options = {}) {
       formattedData.statsReport = gameData?.statsReport || null;
     }
     
-    // Format odds data for better OpenAI understanding
+    // Format odds data for better LLM understanding
     if (formattedData.odds && formattedData.odds.markets) {
-      console.log('Formatting odds data for OpenAI...');
+      console.log('Formatting odds data for LLM...');
       let oddsText = `\nCURRENT BETTING ODDS (use these exact values in your response):\n`;
       
       // Store odds for later use in the response
@@ -354,8 +334,8 @@ export async function generateGaryAnalysis(gameData, options = {}) {
       } else {
         console.log('Stats visibility: all expected sections present for this sport');
       }
-    } catch {}
-    
+    } catch (e) { console.warn('Stats visibility check failed:', e?.message); }
+
     if (isBaseball) {
       console.log(`Pitcher Data Available: ${!!gameData?.pitchers}`);
       console.log(`Hitter Stats Available: ${!!gameData?.hitterStats}`);
@@ -378,7 +358,7 @@ export async function generateGaryAnalysis(gameData, options = {}) {
     
     // Generate analysis using Gemini
     console.log('Calling Gemini for analysis with temperature: 1.0 (Gemini 3 required)');
-    const rawOpenAIResponse = await openaiService.generateGaryAnalysis(
+    const rawOpenAIResponse = await llmService.generateGaryAnalysis(
       formattedData, 
       newsData,
       {
@@ -389,10 +369,10 @@ export async function generateGaryAnalysis(gameData, options = {}) {
     
     // Validate the raw response
     if (!rawOpenAIResponse) {
-      console.error('CRITICAL ERROR: Empty response received from OpenAI');
+      console.error('CRITICAL ERROR: Empty response received from LLM');
       return {
         success: false,
-        message: 'Error: No response from OpenAI',
+        message: 'Error: No response from LLM',
         rawOpenAIOutput: null,
         game: formattedData.game,
         sport: formattedData.sport,
@@ -401,7 +381,7 @@ export async function generateGaryAnalysis(gameData, options = {}) {
     }
     
     // Log the entire raw response for complete debugging
-    console.log('FULL RAW OPENAI RESPONSE:');
+    console.log('FULL RAW LLM RESPONSE:');
     console.log(rawOpenAIResponse);
     console.log('Response length:', rawOpenAIResponse.length, 'characters');
     
@@ -531,31 +511,11 @@ export async function generateGaryAnalysis(gameData, options = {}) {
 }
 
 /**
- * Calculate stake amount based on bet type
- * @param {object} pick - The pick object
- * @returns {number} - Recommended stake amount
- */
-export function calculateStake(pick) {
-  if (!pick) return 0;
-  
-  try {
-    // Default confidence if not provided
-    const confidence = 0.8;
-    
-    // Calculate stake based on confidence
-    return Math.round(100 * confidence);
-  } catch (error) {
-    console.error('Error calculating stake:', error);
-    return 100; // Default
-  }
-}
-
-/**
- * Function that simply returns the raw OpenAI output without transformations
+ * Function that simply returns the raw LLM output without transformations
  * @param {object} analysisObject - The object from generateGaryAnalysis
- * @returns {object} - The raw OpenAI output directly
+ * @returns {object} - The raw LLM output directly (stored as rawOpenAIOutput for DB schema compat)
  */
-export function parseGaryAnalysis(analysisObject) {
+function parseGaryAnalysis(analysisObject) {
   try {
     // Just log what we're receiving for debugging
     console.log('parseGaryAnalysis input:', !!analysisObject);
@@ -566,9 +526,9 @@ export function parseGaryAnalysis(analysisObject) {
       return null;
     }
     
-    // If we have the raw OpenAI output, return it directly
+    // If we have the raw LLM output, return it directly (field named rawOpenAIOutput for DB compat)
     if (analysisObject.rawOpenAIOutput) {
-      console.log('Returning raw OpenAI output directly without transformation');
+      console.log('Returning raw LLM output directly without transformation');
       const out = analysisObject.rawOpenAIOutput;
       // Enforce "real odds only": reject if odds are missing or marked as N/A
       try {
@@ -579,7 +539,7 @@ export function parseGaryAnalysis(analysisObject) {
           console.warn('parseGaryAnalysis: Invalid or missing odds in AI output; rejecting pick.');
           return null;
         }
-      } catch {}
+      } catch (e) { console.warn('parseGaryAnalysis odds validation failed:', e?.message); }
       return out;
     }
     

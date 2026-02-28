@@ -15,6 +15,7 @@
 
 import { DFS_PLAYER_INVESTIGATION_TOOLS, executeToolCall } from './tools/dfsToolDefinitions.js';
 import { getFlexPositions, getPositionCandidates, getRosterSlots, getStatDisplayLines } from './dfsSportConfig.js';
+import { GEMINI_PRO_FALLBACK } from '../modelConfig.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PLAYER INVESTIGATION SYSTEM PROMPT
@@ -106,7 +107,7 @@ Example:
  * @returns {Object} - Investigation results by position
  */
 export async function investigatePlayersForPositions(genAI, slateAnalysis, context, options = {}) {
-  const { modelName = 'gemini-3-pro-preview' } = options;
+  const { modelName = GEMINI_PRO_FALLBACK } = options;
   const { players, platform } = context;
 
   console.log('[Player Investigator] Starting player investigations...');

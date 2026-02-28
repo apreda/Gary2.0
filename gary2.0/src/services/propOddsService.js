@@ -4,15 +4,13 @@
  * This is separate from the main oddsService to avoid affecting the regular picks system
  * NOTE: The Odds API has been deprecated - all props now come from Ball Don't Lie
  */
-import axios from 'axios';
-import { oddsService } from './oddsService.js';
 import { ballDontLieService } from './ballDontLieService.js';
-import { ballDontLieOddsService } from './ballDontLieOddsService.js';
+import { normalizeTeamName as _normalizeTeamName } from './agentic/sharedUtils.js';
+
+// Wrap shared normalizer with space-stripping for this file's comparison pattern
+const normalizeTeamName = (name) => _normalizeTeamName(name).replace(/\s+/g, '');
 
 // NOTE: The Odds API deprecated - BDL is now the primary source for all player props
-
-// Only fetch from major US sportsbooks to reduce API token usage
-const ALLOWED_BOOKMAKERS = ['draftkings', 'fanduel'];
 
 // NOTE: PROP_MARKETS removed — BDL returns all prop types automatically, no market filter needed
 
@@ -122,8 +120,7 @@ export const propOddsService = {
         return `${year}-${month}-${day}`;
       };
 
-      // Normalize team names for more flexible matching
-      const normalizeTeamName = (name) => name.toLowerCase().replace(/\s+/g, '');
+      // Normalize team names for flexible matching (uses shared city alias mappings)
       const normalizedHomeTeam = normalizeTeamName(homeTeam);
       const normalizedAwayTeam = normalizeTeamName(awayTeam);
       
@@ -403,206 +400,5 @@ export const propOddsService = {
     }
   },
 
-  // getPlayerPropsFromSportsbooks, extractStructuredPropsFromText removed — deprecated dead code
-  
-  /**
-   * Standardize prop type names across different sources
-   * @private
-   * @param {string} propType - Raw prop type name
-   * @param {string} sport - Sport key
-   * @returns {string} - Standardized prop type
-   */
-  standardizePropType: (propType, sport) => {
-    const type = propType.toLowerCase();
-    
-    // MLB standardization based on official Odds API documentation
-    if (sport === 'mlb' || sport === 'baseball_mlb') {
-      // Official market mapping using exact API keys
-      const marketMap = {
-        'batter_home_runs': 'home_runs',
-        'batter_first_home_run': 'first_home_run',
-        'batter_hits': 'hits',
-        'batter_total_bases': 'total_bases',
-        'batter_rbis': 'rbis',
-        'batter_runs_scored': 'runs',
-        'batter_hits_runs_rbis': 'hits_runs_rbis',
-        'batter_singles': 'singles',
-        'batter_doubles': 'doubles',
-        'batter_triples': 'triples',
-        'batter_walks': 'walks',
-        'batter_strikeouts': 'strikeouts',  // Problematic market #1
-        'batter_stolen_bases': 'stolen_bases',
-        'pitcher_strikeouts': 'strikeouts',
-        'pitcher_record_a_win': 'win',      // Problematic market #2
-        'pitcher_hits_allowed': 'hits_allowed',
-        'pitcher_walks': 'walks',
-        'pitcher_earned_runs': 'earned_runs',
-        'pitcher_outs': 'outs'              // Problematic market #3
-      };
-      
-      // Return the standardized market name if it exists in our map
-      if (marketMap[type]) {
-        return marketMap[type];
-      }
-      
-      // Fallback to pattern matching for compatibility with other data sources
-      if (type.includes('hit') && !type.includes('hits_allowed')) return 'hits';
-      if (type.includes('home') && type.includes('run') && !type.includes('first')) return 'home_runs';
-      if (type.includes('total') && type.includes('base')) return 'total_bases';
-      if (type.includes('strike') || type.includes('k')) return 'strikeouts';
-      if (type.includes('rbi')) return 'rbis';
-      if (type.includes('run') && !type.includes('home') && !type.includes('earned')) return 'runs';
-      if (type.includes('walk')) return 'walks';
-    } 
-    // NBA standardization
-    else if (sport === 'nba' || sport === 'basketball_nba') {
-      if (type.includes('point')) return 'points';
-      if (type.includes('rebound')) return 'rebounds';
-      if (type.includes('assist')) return 'assists';
-      if (type.includes('three') || type.includes('3pt') || type.includes('3-point')) return 'threes';
-      if (type.includes('block')) return 'blocks';
-      if (type.includes('steal')) return 'steals';
-    }
-    // NFL standardization
-    else if (sport === 'nfl' || sport === 'americanfootball_nfl') {
-      // Map exact Odds API market keys
-      const nflMap = {
-        // Passing
-        'player_pass_yds': 'pass_yds',
-        'player_pass_tds': 'pass_tds',
-        'player_pass_completions': 'pass_completions',
-        'player_pass_attempts': 'pass_attempts',
-        'player_pass_interceptions': 'interceptions',
-        'player_pass_longest_completion': 'longest_pass',
-        // Rushing
-        'player_rush_yds': 'rush_yds',
-        'player_rush_attempts': 'rush_attempts',
-        'player_rush_tds': 'rush_tds',
-        'player_rush_longest': 'longest_rush',
-        // Receiving
-        'player_reception_yds': 'rec_yds',
-        'player_receptions': 'receptions',
-        'player_reception_tds': 'rec_tds',
-        'player_reception_longest': 'longest_reception',
-        // Combined Stats
-        'player_pass_rush_yds': 'pass_rush_yds',
-        'player_rush_reception_yds': 'rush_rec_yds',
-        'player_rush_reception_tds': 'rush_rec_tds',
-        'player_pass_rush_reception_yds': 'pass_rush_rec_yds',
-        'player_pass_rush_reception_tds': 'pass_rush_rec_tds',
-        // Touchdown Scorers
-        'player_anytime_td': 'anytime_td',
-        'player_1st_td': 'first_td',
-        'player_last_td': 'last_td',
-        'player_tds_over': 'tds_over',
-        // Defense
-        'player_tackles_assists': 'tackles_assists',
-        'player_sacks': 'sacks',
-        'player_solo_tackles': 'solo_tackles',
-        // Kicker
-        'player_field_goals': 'field_goals',
-        'player_kicking_points': 'kicking_points',
-        'player_pats': 'pats'
-      };
-      if (nflMap[type]) return nflMap[type];
-      // Pattern-based fallback
-      if (type.includes('pass') && type.includes('yd')) return 'pass_yds';
-      if (type.includes('pass') && (type.includes('td') || type.includes('touchdown'))) return 'pass_tds';
-      if (type.includes('interception')) return 'interceptions';
-      if (type.includes('rush') && type.includes('yd')) return 'rush_yds';
-      if (type.includes('rush') && (type.includes('attempt') || type.includes('att'))) return 'rush_attempts';
-      if (type.includes('rush') && type.includes('td')) return 'rush_tds';
-      if ((type.includes('receiving') || type.includes('rec')) && type.includes('yd')) return 'rec_yds';
-      if (type.includes('reception') && !type.includes('yd')) return 'receptions';
-      if (type.includes('anytime') && type.includes('td')) return 'anytime_td';
-      if (type.includes('1st') && type.includes('td')) return 'first_td';
-      if (type.includes('last') && type.includes('td')) return 'last_td';
-      if (type.includes('tds_over')) return 'tds_over';
-      if (type.includes('tackle') && type.includes('solo')) return 'solo_tackles';
-      if (type.includes('tackle')) return 'tackles_assists';
-      if (type.includes('sack')) return 'sacks';
-      if (type.includes('field_goal') || type.includes('fg')) return 'field_goals';
-      if (type.includes('kicking') && type.includes('point')) return 'kicking_points';
-      if (type.includes('pat') || type.includes('extra_point')) return 'pats';
-    }
-    // NHL standardization
-    else if (sport === 'nhl' || sport === 'icehockey_nhl') {
-      // Map exact Odds API market keys
-      const nhlMap = {
-        'player_points': 'points',
-        'player_power_play_points': 'power_play_points',
-        'player_assists': 'assists',
-        'player_blocked_shots': 'blocked_shots',
-        'player_shots_on_goal': 'shots_on_goal',
-        'player_goals': 'goals',
-        'player_total_saves': 'saves',
-        'player_goal_scorer_anytime': 'anytime_goal',
-        'player_goal_scorer_first': 'first_goal',
-        'player_goal_scorer_last': 'last_goal',
-        // BDL format fallbacks
-        'goals': 'goals',
-        'assists': 'assists',
-        'points': 'points',
-        'shots_on_goal': 'shots_on_goal',
-        'saves': 'saves',
-        'power_play_points': 'power_play_points',
-        'anytime_goal': 'anytime_goal'
-      };
-      if (nhlMap[type]) return nhlMap[type];
-      // Pattern-based fallback
-      if (type.includes('goal') && type.includes('anytime')) return 'anytime_goal';
-      if (type.includes('goal') && type.includes('first')) return 'first_goal';
-      if (type.includes('goal') && !type.includes('scorer')) return 'goals';
-      if (type.includes('assist')) return 'assists';
-      if (type.includes('shot')) return 'shots_on_goal';
-      if (type.includes('point') && type.includes('power')) return 'power_play_points';
-      if (type.includes('point')) return 'points';
-      if (type.includes('save')) return 'saves';
-      if (type.includes('block')) return 'blocked_shots';
-    }
-    
-    // Return the market name without prefixes if no standardization matches
-    if (type.startsWith('batter_') || type.startsWith('pitcher_')) {
-      return type.replace('batter_', '').replace('pitcher_', '');
-    }
-    
-    return type;
-  },
-  
-  // determineTeam removed — placeholder dead code
-
-  /**
-   * Validate player props against known team rosters
-   * @param {Array} propData - Array of player prop data
-   * @param {Array} homeTeamPlayers - Array of players on home team
-   * @param {Array} awayTeamPlayers - Array of players on away team
-   * @returns {Array} - Valid player props
-   */
-  validatePlayerProps: (propData, homeTeamPlayers, awayTeamPlayers) => {
-    // If we don't have prop data, return empty array
-    if (!propData || propData.length === 0) {
-      return [];
-    }
-    
-    // If we don't have player data, return the props as is
-    if (!homeTeamPlayers || !awayTeamPlayers) {
-      return propData;
-    }
-    
-    // Create a name lookup map for both teams' players
-    const allPlayers = [...homeTeamPlayers, ...awayTeamPlayers];
-    const playerNames = new Set(allPlayers.map(player => {
-      return `${player.first_name} ${player.last_name}`.toLowerCase();
-    }));
-    
-    // Filter props to only include players that are in the rosters
-    const validProps = propData.filter(prop => {
-      const playerName = prop.player.toLowerCase();
-      return playerNames.has(playerName);
-    });
-    
-    console.log(`Validated ${validProps.length} out of ${propData.length} player props against team rosters`);
-    
-    return validProps;
-  }
+  // getPlayerPropsFromSportsbooks, extractStructuredPropsFromText, standardizePropType, validatePlayerProps removed — deprecated dead code
 };

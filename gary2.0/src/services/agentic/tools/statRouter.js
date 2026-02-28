@@ -160,11 +160,11 @@
 
 import { ballDontLieService } from '../../ballDontLieService.js';
 import { geminiGroundingSearch, getGroundedWeather } from '../scoutReport/scoutReportBuilder.js';
-import { isGameCompleted, formatStatValue, safeStatValue } from '../sharedUtils.js';
-// Highlightly stripped to venue-only — H2H now uses BDL directly
-import { getNcaabVenue } from '../../highlightlyService.js';
+import { isGameCompleted } from '../sharedUtils.js';
+// NCAAB venue service — H2H now uses BDL directly
+import { getNcaabVenue } from '../../ncaabVenueService.js';
 import { nbaSeason, nhlSeason, nflSeason, ncaabSeason } from '../../../utils/dateUtils.js';
-import { getTeamRatings as getBarttovikRatings } from '../../barttovikService.js';
+import { getTeamRatings as getBarttovikRatings } from '../../ncaabMetricsService.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════════
@@ -176,8 +176,6 @@ import { getTeamRatings as getBarttovikRatings } from '../../barttovikService.js
  */
 
 // NBA: Stats that require Gemini (BDL doesn't have zone/lineup data)
-// NOTE: OPP_EFG_PCT, OPP_TOV_RATE, THREE_PT_DEFENSE, PAINT_SCORING, PAINT_DEFENSE, OPP_FT_RATE
-// removed — now use real BDL opponent/defense stats (type=opponent, type=defense).
 const NBA_GEMINI_TOKENS = [
   'MIDRANGE',             // Shot location data
   'LINEUP_NET_RATINGS',   // 5-man lineup performance
@@ -270,76 +268,6 @@ const SPORT_SPECIFIC_ROUTING = {
     'americanfootball_ncaaf': 'GEMINI'
   }
 };
-
-/**
- * Check if a token requires Gemini Grounding (not in BDL)
- * @param {string} token - The stat token
- * @returns {boolean} - True if this token uses Gemini
- */
-export function isGeminiToken(token) {
-  return ALL_GEMINI_TOKENS.has(token);
-}
-
-/**
- * Get the authoritative source for a Gemini token
- * @param {string} token - The stat token
- * @returns {string} - The site: restriction to use
- */
-export function getAuthoritativeSource(token) {
-  // NBA sources
-  if (['MIDRANGE', 'LINEUP_NET_RATINGS'].includes(token)) {
-    return 'site:nba.com/stats OR site:basketball-reference.com';
-  }
-  // MINUTES_TREND removed — now uses real BDL player season averages (MPG)
-  // TRANSITION_DEFENSE now uses BDL defense stats directly — no grounding needed
-  
-  // NHL sources
-  if (['CORSI_FOR_PCT', 'PDO', 'HIGH_DANGER_CHANCES', 'NHL_HIGH_DANGER_SV_PCT'].includes(token)) {
-    return 'site:naturalstattrick.com OR site:hockey-reference.com';
-  }
-  if (['EXPECTED_GOALS', 'LUCK_INDICATORS', 'NHL_GSAX', 'NHL_GOALIE_RECENT_FORM'].includes(token)) {
-    return 'site:moneypuck.com OR site:naturalstattrick.com';
-  }
-  if (token === 'LINE_COMBINATIONS') {
-    return 'site:dailyfaceoff.com OR site:leftwinglock.com';
-  }
-  if (token === 'SCORING_FIRST') {
-    return 'site:hockey-reference.com OR site:nhl.com';
-  }
-  
-  // NFL sources
-  if (['OL_RANKINGS', 'DL_RANKINGS'].includes(token)) {
-    return 'site:pff.com OR site:footballoutsiders.com';
-  }
-  if (['TIME_TO_THROW'].includes(token)) {
-    return 'site:nfl.com/stats OR site:nextgenstats.nfl.com';
-  }
-  if (['GOAL_LINE', 'TWO_MINUTE_DRILL', 'KICKING', 'PRIMETIME_RECORD'].includes(token)) {
-    return 'site:pro-football-reference.com OR site:espn.com';
-  }
-  if (token === 'FIELD_POSITION') {
-    return 'site:footballoutsiders.com OR site:pro-football-reference.com';
-  }
-  
-  // NCAAB sources — tokens still using Gemini Grounding
-  // (NCAAB_BARTTORVIK_RATINGS, NCAAB_BARTTORVIK, NCAAB_STRENGTH_OF_SCHEDULE, NCAAB_OPPONENT_QUALITY
-  //  now use Barttorvik API directly — no Grounding needed)
-  if (['NCAAB_NET_RANKING', 'NCAAB_QUAD_RECORD'].includes(token)) {
-    return 'site:ncaa.com';
-  }
-  // NCAAB_CONFERENCE_STRENGTH — now uses Barttorvik API directly (no Grounding)
-  
-  // NCAAF sources
-  if (['NCAAF_SP_PLUS_RATINGS', 'NCAAF_FPI_RATINGS'].includes(token)) {
-    return 'site:espn.com';
-  }
-  if (['NCAAF_OPPONENT_ADJUSTED', 'NCAAF_CONFERENCE_STRENGTH'].includes(token)) {
-    return 'site:footballoutsiders.com OR site:espn.com';
-  }
-  
-  // Default - should not happen if token is in ALL_GEMINI_TOKENS
-  return '';
-}
 
 /**
  * Generate dynamic season string for Gemini Grounding queries
@@ -10087,11 +10015,4 @@ function interpretTurnoverMargin(homeStats, awayStats) {
   return parts.length > 0 ? parts.join('; ') : 'Both teams near expected turnover rates';
 }
 
-/**
- * Introspection helpers (used for debugging / smoke testing token menus)
- */
-export function listAvailableStatTokens() {
-  return Object.keys(FETCHERS);
-}
-
-export default { fetchStats, listAvailableStatTokens };
+export default { fetchStats };

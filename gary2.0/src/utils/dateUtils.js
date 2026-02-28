@@ -31,8 +31,6 @@ function isEDT(date) {
   return date >= dstStart && date < dstEnd;
 }
 
-// toEST/formatInEST/getCurrentEST/getTodayEST removed — dead code, replaced by getESTDate/getESTHour
-
 /**
  * Gets the current date in EST/EDT timezone (used internally by season helpers)
  * @returns {Date} Current date in EST/EDT
@@ -100,6 +98,18 @@ export function ncaabSeason() {
 }
 
 /**
+ * Get the current NCAAF season year.
+ * NCAAF season starts in August (Aug 2025 - Jan 2026 = "2025" season).
+ * @returns {number} The NCAAF season year (e.g., 2025 for the Aug 2025 - Jan 2026 season)
+ */
+export function ncaafSeason() {
+  const now = getCurrentEST();
+  const month = now.getMonth(); // 0-indexed
+  // Aug-Dec → current year, Jan-Jul → prev year
+  return month >= 7 ? now.getFullYear() : now.getFullYear() - 1;
+}
+
+/**
  * Format a season for display (e.g., "2024-2025")
  *
  * @param {number} seasonYear - The season year (e.g., 2024)
@@ -109,31 +119,7 @@ export function formatSeason(seasonYear) {
   return `${seasonYear}-${seasonYear + 1}`;
 }
 
-// formatShortDate, getEasternDate, getYesterdayDateFromParams removed — dead code
-
-/**
- * Format a game time string to a readable format
- * @param {string} timeString - ISO timestamp or time string
- * @returns {string} Formatted time string (e.g., "7:10 PM EST")
- */
-export const formatGameTime = (timeString) => {
-  if (!timeString) return '';
-  
-  try {
-    const gameDate = new Date(timeString);
-    // Format as 1:36 PM EST
-    return gameDate.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      timeZone: 'America/New_York',
-      hour12: true
-    }) + ' EST';
-  } catch (e) {
-    return timeString; // Return original if parsing fails
-  }
-};
-
-// getPicksQueryDate removed — dead code (was built on removed getEasternDate/getYesterdayDateFromParams)
+// formatGameTime removed — dead export (3 other files define their own local versions)
 
 /**
  * Date utilities for consistent EST timezone handling across the application
@@ -152,16 +138,6 @@ export const getESTDate = () => {
 };
 
 /**
- * Get current timestamp in EST timezone as ISO string
- * @returns {string} ISO timestamp string adjusted for EST
- */
-export const getESTTimestamp = () => {
-  const now = new Date();
-  const estTimestamp = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
-  return estTimestamp.toISOString();
-};
-
-/**
  * Convert any date to EST date string (YYYY-MM-DD)
  * @param {Date|string} date - Date to convert
  * @returns {string} Date string in YYYY-MM-DD format
@@ -175,43 +151,6 @@ export const toESTDate = (date) => {
 };
 
 /**
- * Get EST date for a specific number of days offset from today
- * @param {number} daysOffset - Number of days to offset (positive for future, negative for past)
- * @returns {string} Date string in YYYY-MM-DD format
- */
-export const getESTDateOffset = (daysOffset = 0) => {
-  const now = new Date();
-  now.setDate(now.getDate() + daysOffset);
-  return toESTDate(now);
-};
-
-/**
- * Check if a date string is today in EST
- * @param {string} dateString - Date string in YYYY-MM-DD format
- * @returns {boolean} True if the date is today in EST
- */
-export const isESTToday = (dateString) => {
-  return dateString === getESTDate();
-};
-
-/**
- * Format a date for display in EST timezone
- * @param {Date|string} date - Date to format
- * @param {object} options - Intl.DateTimeFormat options
- * @returns {string} Formatted date string
- */
-export const formatESTDate = (date, options = {}) => {
-  const dateObj = new Date(date);
-  const defaultOptions = { 
-    timeZone: 'America/New_York',
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  };
-  return new Intl.DateTimeFormat('en-US', { ...defaultOptions, ...options }).format(dateObj);
-};
-
-/**
  * Get the current hour in EST (0-23)
  * @returns {number} Current hour in EST
  */
@@ -221,30 +160,4 @@ export const getESTHour = () => {
   return estTime.getHours();
 };
 
-/**
- * Check if it's currently a specific time range in EST
- * @param {number} startHour - Start hour (0-23)
- * @param {number} endHour - End hour (0-23)
- * @returns {boolean} True if current EST time is within the range
- */
-export const isESTTimeInRange = (startHour, endHour) => {
-  const currentHour = getESTHour();
-  if (startHour <= endHour) {
-    return currentHour >= startHour && currentHour < endHour;
-  } else {
-    // Handle overnight ranges (e.g., 22 to 6)
-    return currentHour >= startHour || currentHour < endHour;
-  }
-};
 
-export function getYesterdayDate() {
-  // Use local date instead of UTC to avoid timezone issues
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  const year = yesterday.getFullYear();
-  const month = String(yesterday.getMonth() + 1).padStart(2, '0');
-  const day = String(yesterday.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-// formatLocalDate removed — dead code, replaced by getESTDate/toESTDate

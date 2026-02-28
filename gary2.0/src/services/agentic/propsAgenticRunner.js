@@ -3,8 +3,7 @@
  * Full agentic iteration loop for player prop analysis (like game picks)
  * Gary can call tools mid-analysis to fetch stats organically
  */
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import { GEMINI_FLASH_MODEL } from '../openaiService.js';
+import { GEMINI_FLASH_MODEL, getGeminiClient } from './modelConfig.js';
 import { ballDontLieService } from '../ballDontLieService.js';
 import { geminiGroundingSearch } from './scoutReport/scoutReportBuilder.js';
 import { fetchNbaInjuriesForGame } from '../nbaInjuryReportService.js';
@@ -22,16 +21,8 @@ function getPropsModelForSport(sportLabel) {
   return PROPS_MODEL_FLASH;
 }
 
-// Lazy-initialize Gemini client for props
-let geminiProps = null;
-function getGeminiForProps() {
-  if (!geminiProps) {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) throw new Error('GEMINI_API_KEY required');
-    geminiProps = new GoogleGenerativeAI(apiKey, "v1beta");
-  }
-  return geminiProps;
-}
+// Props uses v1beta client (grounding support)
+const getGeminiForProps = () => getGeminiClient({ beta: true });
 
 // ============================================================================
 // SPORT-SPECIFIC PROP TOOL DEFINITIONS (Like the stat menu for game picks)
@@ -311,6 +302,8 @@ const SPORT_CONSTITUTION_KEYS = {
   'NFL': 'NFL_PROPS',
   'NBA': 'NBA_PROPS',
   'NHL': 'NHL_PROPS',
+  'NCAAB': 'NBA_PROPS',   // College basketball → closest analog is NBA props rules
+  'NCAAF': 'NFL_PROPS',   // College football → closest analog is NFL props rules
 };
 
 /**
@@ -343,7 +336,7 @@ function getConstitution(sportLabel) {
   return constitution;
 }
 
-// Convert OpenAI tool format to Gemini format
+// Convert tool definitions to Gemini format
 function convertToolsForGemini(tools) {
   return tools.map(tool => ({
     name: tool.function.name,
@@ -2115,7 +2108,7 @@ Call finalize_props now.`);
                 garySpecials: 0
               };
             }
-          } catch {}
+          } catch (e) { console.warn('Props finalize extraction failed:', e?.message); }
         }
       }
 
@@ -2794,7 +2787,7 @@ CRITICAL CONSTRAINTS (apply these strictly):
   };
 }
 
-export { getConstitution as getPropsConstitution, applyPropsPerGameConstraint, PICK_SCHEMA as PROPS_PICK_SCHEMA };
+export { getConstitution as getPropsConstitution, applyPropsPerGameConstraint };
 
 export default {
   runAgenticPropsPipeline

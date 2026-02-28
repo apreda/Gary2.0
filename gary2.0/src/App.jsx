@@ -1,6 +1,6 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, Link } from 'react-router-dom';
-import { useState, useEffect, lazy, Suspense } from "react";
+import { BrowserRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom';
+import { lazy, Suspense } from "react";
 import { Navbar } from "./components/Navbar";
 import Home from "./pages/Home";
 import { TermsOfService } from "./pages/TermsOfService";
@@ -14,16 +14,47 @@ const ResultsAdmin = lazy(() => import('./pages/ResultsAdmin'));
 import { ToastProvider } from "./components/ui/ToastProvider";
 import FontLoader from "./components/FontLoader";
 import "./assets/css/animations.css";
-import "./styles/base.css";
 import "./styles/consolidated/root-fix.css";
 
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, info) {
+    console.error('ErrorBoundary caught:', error, info);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-center justify-center min-h-screen text-white p-8 text-center">
+          <h1 className="text-2xl font-bold mb-4">Something went wrong</h1>
+          <p className="text-gray-400 mb-6">
+            {this.state.error?.message || 'An unexpected error occurred.'}
+          </p>
+          <button
+            onClick={() => {
+              this.setState({ hasError: false, error: null });
+              window.location.href = '/';
+            }}
+            className="px-6 py-2 bg-[#d4af37] text-black rounded-lg font-semibold hover:bg-[#e5c349] transition-colors"
+          >
+            Back to Home
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function AppContent() {
-  const location = useLocation();
-
-  useEffect(() => {
-    console.log('Current route path:', location.pathname);
-  }, [location]);
-
   return (
     <div className="flex flex-col min-h-screen w-full overflow-x-hidden animate-fadeIn" style={{ animationDuration: '0.5s' }}>
       {/* Add the Navbar */}
@@ -47,13 +78,6 @@ function AppContent() {
               <Route path="/admin/results" element={<ResultsAdmin />} />
               
               {/* Redirect all other routes to home (marketing landing page) */}
-              <Route path="/meet-gary" element={<Navigate to="/" replace />} />
-              <Route path="/real-gary-picks" element={<Navigate to="/" replace />} />
-              <Route path="/gary-props" element={<Navigate to="/" replace />} />
-              <Route path="/billfold" element={<Navigate to="/" replace />} />
-              <Route path="/leaderboard" element={<Navigate to="/" replace />} />
-              <Route path="/learn-more" element={<Navigate to="/" replace />} />
-              <Route path="/team-picks" element={<Navigate to="/" replace />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Suspense>
@@ -96,7 +120,9 @@ export default function App() {
     <Router>
       <ToastProvider>
         <FontLoader />
-        <AppContent />
+        <ErrorBoundary>
+          <AppContent />
+        </ErrorBoundary>
       </ToastProvider>
     </Router>
   );
