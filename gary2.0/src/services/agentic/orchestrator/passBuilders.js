@@ -39,6 +39,9 @@ As you investigate, think about the spread as a number to stress-test — not ju
 - Is the line reflecting these teams' current form, or is it anchored to season-long reputation or a specific recent result?
 - What transient factors — rest, travel, injuries, schedule density — might be shifting the line away from where the underlying data says it should be?
 - If you strip away the narratives and just look at the matchup data — efficiency, form, personnel — does the number feel right, too high, or too low?
+${(sport && (sport.includes('nba') || sport.includes('NBA') || sport.includes('ncaab') || sport.includes('NCAAB')))
+  ? '- Now consider everything together — the matchup data AND the situation surrounding this game. Does the number feel too high, too low, or just right?'
+  : ''}
 </spread_investigation>
 
 <instructions>
