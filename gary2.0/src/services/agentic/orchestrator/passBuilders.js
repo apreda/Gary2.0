@@ -33,7 +33,7 @@ The Scout Report may include investigation triggers — situations flagged for y
 <spread_investigation>
 ## INTERROGATE THE LINE
 
-As you investigate, think about the spread as a number to stress-test — not just a team to pick:
+Keep these questions in mind throughout your investigation — as you review your research assistant's findings AND as you pull your own stats for deeper investigation:
 
 - How does this line appear to be set? What are the 2-3 biggest factors the number seems to be pricing in?
 - Is the line reflecting these teams' current form, or is it anchored to season-long reputation or a specific recent result?
