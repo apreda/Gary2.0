@@ -715,6 +715,9 @@ export async function buildNbaScoutReport(game, options = {}) {
           } else if (gamesMissed <= 7) {
             inj.duration = 'MID-SEASON';
             inj.freshness = 'STALE';
+          } else if (gamesMissed <= 20) {
+            inj.duration = 'LONG-TERM';
+            inj.freshness = 'STALE';
           } else {
             inj.duration = 'SEASON-LONG';
             inj.freshness = 'STALE';

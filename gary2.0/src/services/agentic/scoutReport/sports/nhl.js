@@ -950,6 +950,10 @@ export async function buildNhlScoutReport(game, options = {}) {
             inj.duration = 'MID-SEASON';
             inj.freshness = 'STALE';
             inj.isPricedIn = true;
+          } else if (gamesMissed <= 20) {
+            inj.duration = 'LONG-TERM';
+            inj.freshness = 'STALE';
+            inj.isPricedIn = true;
           } else {
             inj.duration = 'SEASON-LONG';
             inj.freshness = 'STALE';

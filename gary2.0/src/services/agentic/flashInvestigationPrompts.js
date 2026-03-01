@@ -63,21 +63,17 @@ Work through each numbered factor below. Check off each one as you complete it. 
 **Tokens:** INJURIES, TOP_PLAYERS, USAGE_RATES, MINUTES_TREND, LINEUP_NET_RATINGS, BENCH_DEPTH
 
 **For each injured player listed in the scout report:**
-The injury label shows games missed and days out — use this to determine what to investigate.
+The scout report labels each injury with a market-aware duration tag. Use these to guide your investigation depth:
 
-- **0-2 games missed (RECENT):** This is a fresh absence. Investigate:
-  - What was this player's usage rate and team share? How much production is missing?
-  - Pull team stats from the games without this player — how did the team perform?
-  - Has the backup absorbed the role, or is there a clear drop-off?
-  - Has the spread moved since this injury was reported?
+**FRESH and SHORT-TERM injuries require full investigation:**
+- Investigate: Who is getting the minutes in that player's role since the injury?
+- Investigate: What is the replacement player's production profile — both in the games since the injury AND their season-long stats?
+- Investigate: How has the team performed in the games without the injured player vs their season average?
+- Investigate: What does the team's roster depth look like behind this player — how many rotation players does the team use, what experience level are the backups, and is there a clear next man up or does the workload get spread across multiple players?
+- For each FRESH or SHORT-TERM injury: How long has the market known about this absence? Has the line had time to fully adjust?
 
-- **3-9 games missed:** The market has had time to react but the team is still adjusting. Investigate:
-  - Pull the team's record and efficiency during the absence — are they better/worse/same?
-  - Compare the team's L5 data to when the player was healthy — what changed?
-  - Has the backup established themselves? Check their recent stats.
-  - Is the spread movement proportional to the actual performance change, or has the market over/under-adjusted?
-
-- **10+ games missed or Out For Season:** The team you see in the data IS the team without this player. Do NOT investigate this as an active factor. The current stats, the current lineup, the current spread — all reflect this absence. Move on.
+**LONG-TERM and SEASON-LONG injuries — market has fully adjusted:**
+- The team's current stats already reflect life without this player. Do not treat as new information.
 
 - **If L5/L10 diverges 7+ from season**, pull game logs for top usage players — who's driving it?
 
@@ -163,8 +159,17 @@ Large spreads are about MARGIN, not just winning. Investigate:
 - Which team's depth is the bigger factor — can the deeper team pile on, or can the shorter rotation hold on?
 
 ### INJURY MARKET TIMING
-- For each injury: How long has the market known about this? What do the team's stats look like during the absence?
-- If the team has played multiple games without this player, investigate: Has the line had time to reflect the change?
+The scout report labels each injury with a market-aware duration tag. Use these to guide your investigation depth:
+
+**FRESH and SHORT-TERM injuries require full investigation:**
+- Investigate: Who is getting the minutes in that player's role since the injury?
+- Investigate: What is the replacement player's production profile — both in the games since the injury AND their season-long stats?
+- Investigate: How has the team performed in the games without the injured player vs their season average?
+- Investigate: What does the team's roster depth look like behind this player — how many rotation players does the team use, what experience level are the backups, and is there a clear next man up or does the workload get spread across multiple players?
+- For each FRESH or SHORT-TERM injury: How long has the market known about this absence? Has the line had time to fully adjust?
+
+**LONG-TERM and SEASON-LONG injuries — market has fully adjusted:**
+- The team's current stats already reflect life without this player. Do not treat as new information.
 
 ### YOUR SCOUT REPORT IS YOUR BASELINE (DO NOT RE-FETCH)
 - **Advanced Metrics (season baseline):** Net Rating, Offensive/Defensive Rating, Four Factors, Pace — the spread likely already reflects these
@@ -387,6 +392,16 @@ Work through each numbered factor below. Check off each one as you complete it. 
 - Goalie injuries change everything
 - Key forward/defenseman absences — how has the team adapted?
 
+**FRESH and SHORT-TERM injuries require full investigation:**
+- Investigate: Who is getting the minutes in that player's role since the injury?
+- Investigate: What is the replacement player's production profile — both in the games since the injury AND their season-long stats?
+- Investigate: How has the team performed in the games without the injured player vs their season average?
+- Investigate: What does the team's roster depth look like behind this player — how many rotation players does the team use, what experience level are the backups, and is there a clear next man up or does the workload get spread across multiple players?
+- For each FRESH or SHORT-TERM injury: How long has the market known about this absence? Has the line had time to fully adjust?
+
+**LONG-TERM and SEASON-LONG injuries — market has fully adjusted:**
+- The team's current stats already reflect life without this player. Do not treat as new information.
+
 ### 10. SCHEDULE & REST
 **Tokens:** REST_SITUATION, BACK_TO_BACK
 - B2B may mean a different goalie — that changes the matchup entirely
@@ -607,10 +622,22 @@ When a conference rival has been swept this season (0-2), investigate:
 - Investigate the conditions of each prior meeting — were the margins close or dominant? What's different tonight?
 
 ### INJURY INVESTIGATION (NCAAB-SPECIFIC)
-- For each injury: How long has the market known about this? What do the team's stats look like during the absence?
-- College rosters are shorter — single absences change team identity more than in pro sports
-- College markets are thinner — lines may take longer to fully adjust to roster changes
-- If the team has played multiple games without this player, investigate: Has the line had time to reflect the change?`;
+The scout report labels each injury with a market-aware duration tag. Use these to guide your investigation depth:
+
+**FRESH (0-10 days) and SHORT-TERM (10-20 days) injuries require full investigation:**
+- For each FRESH or SHORT-TERM injury, investigate:
+  1. Who is getting the minutes in that player's role since the injury?
+  2. What are that replacement player's stats — both in the games since the injury AND their season-long production profile?
+  3. How has the team performed in the games without the injured player vs their season average?
+  4. What does the team's roster depth look like behind this player — how many rotation players does the team use, what experience level are the backups, and is there a clear next man up or does the workload get spread across multiple players?
+- For each FRESH or SHORT-TERM injury: How long has the market known about this absence? Has the line had time to fully adjust?
+
+**LONG-TERM (20+ days) injuries — market has fully adjusted:**
+- The team's current stats already reflect life without this player. Do not treat as new information.
+- Only investigate if there is a return date approaching that could change the picture.
+
+**SEASON-LONG injuries — non-factor:**
+- Player has not played this season. The team you are evaluating has never included this player. Skip entirely.`;
 
 // ═══════════════════════════════════════════════════════════════════════
 // NCAAF INVESTIGATION FACTORS

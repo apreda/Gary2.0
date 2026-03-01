@@ -1254,7 +1254,7 @@ CRITICAL: Be precise. Only include what's actually shown on RotoWire. List ALL i
               freshnessTip = 'SEASON-LONG absence.';
             } else if (status === 'GTD') {
               normalizedStatus = 'GTD';
-              duration = 'RECENT';
+              duration = 'FRESH';
               freshnessTip = 'GAME-TIME DECISION.';
             } else if (status === 'OUT') {
               duration = 'UNKNOWN';
@@ -1397,7 +1397,11 @@ CRITICAL: Be precise. Only include what's actually shown on RotoWire. List ALL i
                       inj.reportDateStr = lastPlayedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
                       // GTD players keep their duration — they might return tonight regardless of absence length
                       if ((inj.status || '').toUpperCase() !== 'GTD') {
-                        inj.duration = daysSince >= 30 ? 'SEASON-LONG' : daysSince >= 7 ? 'MID-SEASON' : daysSince <= 3 ? 'RECENT' : 'MID-SEASON';
+                        // NCAAB-specific duration tiers with market context
+                        if (daysSince >= 90) inj.duration = 'SEASON-LONG';
+                        else if (daysSince >= 20) inj.duration = 'LONG-TERM';
+                        else if (daysSince >= 10) inj.duration = 'SHORT-TERM';
+                        else inj.duration = 'FRESH';
                       }
                       inj.durationSource = 'game_log';
 

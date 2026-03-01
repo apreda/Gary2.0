@@ -3102,7 +3102,7 @@ export function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey, roste
 
   // Categorize injuries by importance/duration
   const categorize = (teamInjuries) => {
-    const critical = teamInjuries.filter(i => (i.duration === 'RECENT' || i.isEdge === true) && i.status !== 'Out' && i.status !== 'OFS');
+    const critical = teamInjuries.filter(i => (i.duration === 'RECENT' || i.duration === 'FRESH' || i.duration === 'SHORT-TERM' || i.isEdge === true) && i.status !== 'Out' && i.status !== 'OFS');
     // OFS = Out For Season (Rotowire status code)
     const out = teamInjuries.filter(i => i.status === 'Out' || i.status === 'IR' || i.status === 'LTIR' || i.status === 'OFS' || i.status === 'Injured Reserve');
     const seasonal = teamInjuries.filter(i => i.duration === 'SEASON-LONG' && i.status !== 'Out' && i.status !== 'IR' && i.status !== 'OFS' && (i.status || '').toUpperCase() !== 'GTD');
@@ -3177,25 +3177,21 @@ export function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey, roste
 
     // Factual duration labels — just the facts, no conclusions about line movement
     // GTD checked FIRST — a GTD player might return regardless of how long they were out
+    const isNcaab = sportKey && (sportKey.includes('ncaab') || sportKey.includes('NCAAB'));
+    const isNhl = sportKey && (sportKey.includes('nhl') || sportKey.includes('NHL'));
+
     if (i.status?.toUpperCase() === 'GTD') {
       const durationContext = days ? ` - was out ${days}d` : '';
       durationTag = ` [GTD${durationContext}]`;
     } else if (i.duration === 'SEASON-LONG' || i.status === 'Injured Reserve' || i.status === 'IR' || i.status === 'LTIR' || i.status === 'OFS') {
-      durationTag = ` [Out For Season]`;
-    } else if (gm !== null && gm !== undefined && gm >= 0) {
-      if (gm <= 2) {
-        durationTag = ` [RECENT${timeInfo}]`;
-      } else if (gm >= 10) {
-        durationTag = ` [OUT${timeInfo}]`;
-      } else {
-        durationTag = ` [OUT${timeInfo}]`;
-      }
-    } else if (i.duration === 'MID-SEASON') {
-      durationTag = ` [OUT${timeInfo}]`;
-    } else if (i.duration === 'RECENT') {
-      durationTag = ` [RECENT${timeInfo}]`;
+      durationTag = ` [SEASON-LONG — market fully adjusted, non-factor]`;
+    } else if (i.duration === 'LONG-TERM') {
+      durationTag = ` [LONG-TERM${timeInfo} — market has fully adjusted, injury is no longer relevant to the spread]`;
+    } else if (i.duration === 'FRESH' || i.duration === 'RECENT') {
+      durationTag = ` [FRESH${timeInfo} — injury is recent, market has had limited time to adjust]`;
+    } else if (i.duration === 'SHORT-TERM' || i.duration === 'MID-SEASON') {
+      durationTag = ` [SHORT-TERM${timeInfo} — team has played several games without this player, market adjusting with small sample]`;
     } else if (days !== null && days !== undefined) {
-      // Has timing info but no duration category
       durationTag = ` [OUT${timeInfo}]`;
     }
 

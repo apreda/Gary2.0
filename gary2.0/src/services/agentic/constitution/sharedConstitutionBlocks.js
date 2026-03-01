@@ -23,25 +23,23 @@
 function getSharedInjuryCore() {
   return `### INJURY INVESTIGATION: DURATION & DATA FIRST
 
-**BEFORE citing ANY injury or absence, investigate the timeline:**
+The scout report labels each injury with a market-aware duration tag. Use these to guide your investigation depth:
 
-1. **"How long has the market known about this absence?"**
-   - Check the duration tag. How many days/games have they missed?
-   - For recent absences (1-3 days): Patterns may still be shifting. Investigate recent game logs.
-   - For established absences (1+ weeks): The current lines and stats reflect the current roster. Ask: What does the data show about ACTUAL performance without them?
-   - For season-long absences: This IS the team/player you're evaluating. The absence is backstory, not a current factor.
+**FRESH injuries — market has had limited time to adjust:**
+- Investigate: Who is getting the minutes in that player's role since the injury?
+- Investigate: What is the replacement player's production profile — both in the games since the injury AND their season-long stats?
+- Investigate: How has the team performed in the games without the injured player vs their season average?
+- Investigate: What does the team's roster depth look like behind this player — how many rotation players does the team use, what experience level are the backups, and is there a clear next man up or does the workload get spread across multiple players?
+- How long has the market known about this absence? Has the line had time to fully adjust?
 
-2. **"Does the DATA show a change, or am I assuming one?"**
-   - Don't assume a player being out helps or hurts anyone. CHECK the actual game logs.
-   - Name who IS filling the role and cite THEIR data.
-   - If you can't find data showing a shift, there IS no shift to cite.
+**SHORT-TERM injuries — market adjusting with small sample:**
+- Same investigation as FRESH, but the team has had several games to adjust. Check if patterns are emerging.
+- Has the backup established themselves? What does their production profile look like in those games?
 
-3. **"Has the line/spread already adjusted?"**
-   - Ask: When was the absence announced? What do the actual numbers (season averages, game logs) show compared to the current line/spread?
-   - Ask: Does the line/spread reflect the full impact of the absence, or is there a gap? What does that tell you about this bet tonight?
+**LONG-TERM and SEASON-LONG injuries — market has fully adjusted:**
+- The team's current stats already reflect life without this player. Do not treat as new information.
 
-**STALE VS FRESH:**
-Be aware that long-standing absences are already reflected in the lines, stats, and team identity. A player out for 3 weeks is old news — the team you see in the data IS the team without that player. A player ruled out yesterday is fresh information the line may not fully reflect. Investigate: What does the data show?`;
+**KEY PRINCIPLE:** Don't assume a player being out helps or hurts anyone. CHECK the actual data. Name who IS filling the role and cite THEIR stats. If you can't find data showing a shift, there IS no shift to cite.`;
 }
 
 // ── Props: Player-Level Injury Investigation ──
