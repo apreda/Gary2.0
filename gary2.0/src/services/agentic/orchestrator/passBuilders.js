@@ -33,10 +33,8 @@ The Scout Report may include investigation triggers — situations flagged for y
 <spread_investigation>
 ## INTERROGATE THE LINE
 
-Keep these questions in mind throughout your investigation — as you review your research assistant's findings AND as you pull your own stats for deeper investigation:
+Keep these questions in mind throughout your investigation — as you review your research assistant's findings AND as you pull your own stats for deeper investigation. Think about what is driving the line — recent performance, season-long reputation, team standing, public perception — and whether it accurately reflects what is happening with these teams right now:
 
-- How does this line appear to be set? What are the 2-3 biggest factors the number seems to be pricing in?
-- Is the line reflecting these teams' current form, or is it anchored to season-long reputation or a specific recent result?
 - What transient factors — rest, travel, injuries, schedule density — might be shifting the line away from where the underlying data says it should be?
 - If you strip away the narratives and just look at the matchup data — efficiency, form, personnel — does the number feel right, too high, or too low?
 ${(sport && (sport.includes('nba') || sport.includes('NBA') || sport.includes('ncaab') || sport.includes('NCAAB')))
