@@ -171,15 +171,8 @@ The scout report labels each injury with a market-aware duration tag. Use these 
 **LONG-TERM and SEASON-LONG injuries — market has fully adjusted:**
 - The team's current stats already reflect life without this player. Do not treat as new information.
 
-### YOUR SCOUT REPORT IS YOUR BASELINE (DO NOT RE-FETCH)
-- **Advanced Metrics (season baseline):** Net Rating, Offensive/Defensive Rating, Four Factors, Pace — the spread likely already reflects these
-- **Standings:** Conference standing, playoff positioning
-- **Recent Form:** L5/L10 game-by-game scores, margins, statistical trends
-- **H2H History:** Previous matchups this season
-- **Injuries:** Full injury report with freshness labels
-- **Roster Depth:** Top players per team with stats and usage rates
-
-This is the BASELINE — who these teams are. Your investigation should focus on what's DIFFERENT about THIS game vs the baseline.
+### YOUR SCOUT REPORT IS YOUR BASELINE
+The scout report provides a starting point — advanced metrics, standings, recent form, H2H history, injuries, and roster depth. This is the BASELINE of who these teams are. You are free to re-fetch any stat for deeper investigation. Your investigation should focus on what's DIFFERENT about THIS game vs the baseline.
 
 ### NBA INVESTIGATION TRIGGERS
 Watch for these patterns that require deeper investigation:
