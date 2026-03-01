@@ -1,19 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from "react-router-dom";
-import '../styles/dimensional.css';
-import '../assets/css/logo-responsive.css';
 import { supabase } from "../supabaseClient";
 import { getESTDate, getESTHour, nflSeason as getNflSeason } from '../utils/dateUtils';
-import { 
-  Flame, 
-  AlertTriangle, 
-  TrendingDown, 
-  Eye,
+import {
   Syringe,
   Cloud,
   Plane,
   Building2,
-  Newspaper,
   Activity,
   LineChart,
   Users
@@ -148,7 +140,7 @@ function Home() {
                     letterSpacing: '0.02em',
                     opacity: 0.95
                   }}>
-                    {displayPick.league || 'MLB'}
+                    {displayPick.league || 'NBA'}
                   </div>
                 </div>
                 
@@ -244,59 +236,16 @@ function Home() {
                 </div>
               </div>
               
-              {/* Bet or Fade Buttons - Fixed at bottom */}
-              <div style={{ marginTop: 'auto' }}>
-                <div style={{ 
-                  fontSize: '0.75rem', 
-                  opacity: 0.6, 
+              {/* Tap to flip hint */}
+              <div style={{ marginTop: 'auto', textAlign: 'center' }}>
+                <span style={{
+                  fontSize: '0.7rem',
+                  opacity: 0.4,
                   textTransform: 'uppercase',
-                  letterSpacing: '0.05em', 
-                  marginBottom: '0.5rem'
+                  letterSpacing: '0.1em',
                 }}>
-                  Take Your Pick
-                </div>
-                <div style={{
-                  display: 'flex',
-                  gap: '0.75rem',
-                  width: '100%',
-                }}>
-                  <button 
-                    style={{
-                      background: 'rgba(191, 161, 66, 0.15)',
-                      color: '#bfa142',
-                      fontWeight: '600',
-                      padding: '0.6rem 1rem',
-                      borderRadius: '8px',
-                      border: '1px solid rgba(191, 161, 66, 0.3)',
-                      cursor: 'pointer',
-                      flex: 1,
-                      fontSize: '0.8rem',
-                      letterSpacing: '0.05em',
-                      textTransform: 'uppercase',
-                      transition: 'all 0.2s ease'
-                    }}
-                  >
-                    Bet
-                  </button>
-                  <button 
-                    style={{
-                      background: 'rgba(255, 255, 255, 0.05)',
-                      color: 'rgba(255, 255, 255, 0.8)',
-                      fontWeight: '600',
-                      padding: '0.6rem 1rem',
-                      borderRadius: '8px',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
-                      cursor: 'pointer',
-                      flex: 1,
-                      fontSize: '0.8rem',
-                      letterSpacing: '0.05em',
-                      textTransform: 'uppercase',
-                      transition: 'all 0.2s ease'
-                    }}
-                  >
-                    Fade
-                  </button>
-                </div>
+                  Tap card to view full analysis
+                </span>
               </div>
             </div>
             
@@ -692,7 +641,7 @@ function Home() {
                        transformOrigin: 'center',
                      }}>
                   <span className="mr-2 font-bold uppercase text-black">📱 NOW ON iOS</span>
-                  <span className="text-black">Free Download • 7 Sports • No Paywall</span>
+                  <span className="text-black">Free Download • 5 Sports • No Paywall</span>
                 </div>
               </div>
 
@@ -742,8 +691,8 @@ function Home() {
                     Gemini
                   </div>
                   
-                  {/* StatCast API badge */}
-                  <div className="text-black text-sm font-bold px-5 py-1.5 rounded-full flex items-center justify-center" 
+                  {/* Ball Don't Lie badge */}
+                  <div className="text-black text-sm font-bold px-5 py-1.5 rounded-full flex items-center justify-center"
                     style={{
                       background: 'linear-gradient(135deg, #f5f5f5 0%, #d4af37 50%, #8a8a8a 100%)',
                       color: '#111',
@@ -752,7 +701,7 @@ function Home() {
                       border: '1px solid rgba(184, 149, 63, 0.5)',
                       minWidth: '120px',
                     }}>
-                    StatCast API
+                    Ball Don't Lie
                   </div>
                   
 
@@ -785,7 +734,7 @@ function Home() {
             {/* Featured Pick Card Preview - Single Card Only */}
             <div className="mt-12 mb-24 w-full flex flex-col items-center justify-center">
               <h2 className="text-white text-3xl font-bold mb-4">Today's Free Pick</h2>
-              <p className="text-white/60 mb-8 text-center max-w-md">Get daily picks across 7 sports in the app. No sign-up, no paywall.</p>
+              <p className="text-white/60 mb-8 text-center max-w-md">Get daily picks across NBA, NFL, NHL, NCAAB, and NCAAF in the app. Free.</p>
               
               <div className="flex justify-center">
                 {loading ? (
@@ -817,7 +766,7 @@ function Home() {
               {/* App download CTA below pick card */}
               {featuredPicks.length > 0 && (
                 <div className="mt-8 text-center">
-                  <p className="text-white/50 text-sm mb-3">Want all picks + player props?</p>
+                  <p className="text-white/50 text-sm mb-3">Want every pick + player props + full rationale?</p>
                   <a 
                     href="https://apps.apple.com/us/app/gary-ai/id6751238914"
                     target="_blank"
@@ -850,44 +799,44 @@ function Home() {
                 {/* Section heading */}
                 <div className="text-center mb-14 px-6 relative z-20">
                   <h2 className="text-white text-5xl font-bold leading-tight mb-6">
-                    The <span className="text-[#B8953F]">Bears Brain</span>
+                    How <span className="text-[#B8953F]">Gary</span> Works
                   </h2>
                   <p className="text-white/70 text-lg max-w-2xl mx-auto">
-                    Gary runs a 3-stage agentic pipeline on every single pick. No gut feelings. No trends without causality. Just structured reasoning.
+                    Three AI models work together on every pick. A research assistant investigates, an advisor stress-tests both sides, and Gary makes the final call. No gut feelings — just structured reasoning.
                   </p>
                 </div>
 
                 {/* Cards grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 px-6 mb-6 relative z-20">
                   
-                  {/* Card 1: 3-Stage Pipeline */}
+                  {/* Card 1: 3-Model Architecture */}
                   <div className="relative bg-[#1a1a1a] rounded-3xl p-10 text-white shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden">
                     <h3 className="text-[#B8953F] font-bold text-2xl mb-3">
-                      3-Stage Agentic Pipeline
+                      3-Model Architecture
                     </h3>
                     <p className="text-white/70 mb-6">
-                      Every pick goes through three autonomous stages: form a hypothesis, investigate with real data, then validate before locking in. Only picks that survive all three stages make it to your screen.
+                      Three AI models collaborate on every pick. The research assistant investigates first, then an independent advisor builds the case for both sides. Gary evaluates everything and makes the final call.
                     </p>
                     <div className="mt-4 space-y-3">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-[#B8953F] flex items-center justify-center text-black font-bold text-sm">1</div>
                         <div className="bg-[#2a2a2a] rounded-full py-2 px-4 border border-[#B8953F]/30 flex-1">
-                          <span className="text-[#B8953F] text-sm font-medium">Hypothesis</span>
-                          <span className="text-white/50 text-xs ml-2">— Form a sharp thesis on the game</span>
+                          <span className="text-[#B8953F] text-sm font-medium">Research Assistant</span>
+                          <span className="text-white/50 text-xs ml-2">— Investigates every factor with live data</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-[#B8953F] flex items-center justify-center text-black font-bold text-sm">2</div>
                         <div className="bg-[#2a2a2a] rounded-full py-2 px-4 border border-[#B8953F]/30 flex-1">
-                          <span className="text-[#B8953F] text-sm font-medium">Investigation</span>
-                          <span className="text-white/50 text-xs ml-2">— Pull 30+ metrics, test the theory</span>
+                          <span className="text-[#B8953F] text-sm font-medium">Steel Man Advisor</span>
+                          <span className="text-white/50 text-xs ml-2">— Builds the best case for both sides</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-[#B8953F] flex items-center justify-center text-black font-bold text-sm">3</div>
                         <div className="bg-[#2a2a2a] rounded-full py-2 px-4 border border-[#B8953F]/30 flex-1">
-                          <span className="text-[#B8953F] text-sm font-medium">The Judge</span>
-                          <span className="text-white/50 text-xs ml-2">— Lock only when numbers converge</span>
+                          <span className="text-[#B8953F] text-sm font-medium">Gary</span>
+                          <span className="text-white/50 text-xs ml-2">— Evaluates the evidence and locks the pick</span>
                         </div>
                       </div>
                     </div>
@@ -903,28 +852,24 @@ function Home() {
                     </p>
                     <div className="mt-4 grid grid-cols-2 gap-2">
                       <div className="bg-[#2a2a2a] rounded-lg py-2 px-3 border border-[#B8953F]/30">
-                        <span className="text-[#B8953F] text-xs font-medium">NFL</span>
-                        <span className="text-white/50 text-xs block">EPA, Success Rate, Weather</span>
-                      </div>
-                      <div className="bg-[#2a2a2a] rounded-lg py-2 px-3 border border-[#B8953F]/30">
                         <span className="text-[#B8953F] text-xs font-medium">NBA</span>
                         <span className="text-white/50 text-xs block">Pace, Efficiency, Rest</span>
                       </div>
                       <div className="bg-[#2a2a2a] rounded-lg py-2 px-3 border border-[#B8953F]/30">
-                        <span className="text-[#B8953F] text-xs font-medium">NCAAF</span>
-                        <span className="text-white/50 text-xs block">SP+, Havoc, Talent Composite</span>
-                      </div>
-                      <div className="bg-[#2a2a2a] rounded-lg py-2 px-3 border border-[#B8953F]/30">
-                        <span className="text-[#B8953F] text-xs font-medium">NCAAB</span>
-                        <span className="text-white/50 text-xs block">KenPom, NET, Quad Records</span>
+                        <span className="text-[#B8953F] text-xs font-medium">NFL</span>
+                        <span className="text-white/50 text-xs block">EPA, Success Rate, Weather</span>
                       </div>
                       <div className="bg-[#2a2a2a] rounded-lg py-2 px-3 border border-[#B8953F]/30">
                         <span className="text-[#B8953F] text-xs font-medium">NHL</span>
                         <span className="text-white/50 text-xs block">Corsi, xGoals, Goalie Stats</span>
                       </div>
                       <div className="bg-[#2a2a2a] rounded-lg py-2 px-3 border border-[#B8953F]/30">
-                        <span className="text-[#B8953F] text-xs font-medium">MLB</span>
-                        <span className="text-white/50 text-xs block">Statcast, Bullpen, Park Factors</span>
+                        <span className="text-[#B8953F] text-xs font-medium">NCAAB</span>
+                        <span className="text-white/50 text-xs block">T-Rank, Four Factors, Home Court</span>
+                      </div>
+                      <div className="bg-[#2a2a2a] rounded-lg py-2 px-3 border border-[#B8953F]/30 col-span-2">
+                        <span className="text-[#B8953F] text-xs font-medium">NCAAF</span>
+                        <span className="text-white/50 text-xs block">SP+, Havoc, Talent Composite</span>
                       </div>
                     </div>
                   </div>
@@ -938,7 +883,7 @@ function Home() {
                       Scout Report Builder
                     </h3>
                     <p className="text-white/70 mb-6">
-                      Before the pipeline even starts, Gary builds a comprehensive scout report with real-time intel that sharp bettors pay for.
+                      Before the AI pipeline starts, a comprehensive scout report is built with real-time data — injuries, odds, recent form, H2H history, and more.
                     </p>
                     <div className="mt-4 flex flex-wrap gap-2">
                       <div className="bg-[#2a2a2a] rounded-full py-1.5 px-3 border border-[#B8953F]/30 flex items-center gap-1.5">
@@ -958,16 +903,16 @@ function Home() {
                         <span className="text-[#B8953F] text-xs">Venue Factors</span>
                       </div>
                       <div className="bg-[#2a2a2a] rounded-full py-1.5 px-3 border border-[#B8953F]/30 flex items-center gap-1.5">
-                        <Newspaper size={12} className="text-[#B8953F]" />
-                        <span className="text-[#B8953F] text-xs">Breaking News</span>
+                        <Activity size={12} className="text-[#B8953F]" />
+                        <span className="text-[#B8953F] text-xs">Standings</span>
                       </div>
                       <div className="bg-[#2a2a2a] rounded-full py-1.5 px-3 border border-[#B8953F]/30 flex items-center gap-1.5">
                         <Activity size={12} className="text-[#B8953F]" />
-                        <span className="text-[#B8953F] text-xs">Bullpen Usage</span>
+                        <span className="text-[#B8953F] text-xs">Recent Form</span>
                       </div>
                       <div className="bg-[#2a2a2a] rounded-full py-1.5 px-3 border border-[#B8953F]/30 flex items-center gap-1.5">
                         <LineChart size={12} className="text-[#B8953F]" />
-                        <span className="text-[#B8953F] text-xs">Live Odds</span>
+                        <span className="text-[#B8953F] text-xs">Current Odds</span>
                       </div>
                       <div className="bg-[#2a2a2a] rounded-full py-1.5 px-3 border border-[#B8953F]/30 flex items-center gap-1.5">
                         <Users size={12} className="text-[#B8953F]" />
@@ -976,76 +921,81 @@ function Home() {
                     </div>
                   </div>
                   
-                  {/* Card 4: Fan Brain */}
+                  {/* Card 4: Live Investigation Tools */}
                   <div className="relative bg-[#1a1a1a] rounded-3xl p-10 text-white shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden">
                     <h3 className="text-[#B8953F] font-bold text-2xl mb-3">
-                      Fan Brain
+                      Live Investigation
                     </h3>
                     <p className="text-white/70 mb-6">
-                      The qualitative factors that pure stat models miss. Gary reads the room like an old-school sharp who's seen every angle.
+                      Gary doesn't just read a report — he actively investigates. With 20+ tools at his disposal, he pulls stats, checks injuries, and verifies every angle in real time.
                     </p>
                     <div className="mt-4 space-y-2">
                       <div className="flex items-center gap-2">
                         <div className="w-8 h-8 rounded-full bg-[#B8953F]/20 flex items-center justify-center">
-                          <Flame size={16} className="text-[#B8953F]" />
+                          <Activity size={16} className="text-[#B8953F]" />
                         </div>
                         <div className="bg-[#2a2a2a] rounded-full py-1.5 px-3 border border-[#B8953F]/30 flex-1">
-                          <span className="text-[#B8953F] text-sm">Revenge Games</span>
-                          <span className="text-white/40 text-xs ml-2">— Emotional edge from last loss</span>
+                          <span className="text-[#B8953F] text-sm">Player Stats</span>
+                          <span className="text-white/40 text-xs ml-2">— Game logs, splits, usage rates</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
                         <div className="w-8 h-8 rounded-full bg-[#B8953F]/20 flex items-center justify-center">
-                          <AlertTriangle size={16} className="text-[#B8953F]" />
+                          <Syringe size={16} className="text-[#B8953F]" />
                         </div>
                         <div className="bg-[#2a2a2a] rounded-full py-1.5 px-3 border border-[#B8953F]/30 flex-1">
-                          <span className="text-[#B8953F] text-sm">Trap Alerts</span>
-                          <span className="text-white/40 text-xs ml-2">— Suspicious line movement</span>
+                          <span className="text-[#B8953F] text-sm">Injury Impact</span>
+                          <span className="text-white/40 text-xs ml-2">— Duration, replacements, depth</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
                         <div className="w-8 h-8 rounded-full bg-[#B8953F]/20 flex items-center justify-center">
-                          <TrendingDown size={16} className="text-[#B8953F]" />
+                          <LineChart size={16} className="text-[#B8953F]" />
                         </div>
                         <div className="bg-[#2a2a2a] rounded-full py-1.5 px-3 border border-[#B8953F]/30 flex-1">
-                          <span className="text-[#B8953F] text-sm">Letdown Spots</span>
-                          <span className="text-white/40 text-xs ml-2">— Flat after emotional win</span>
+                          <span className="text-[#B8953F] text-sm">Team Advanced Stats</span>
+                          <span className="text-white/40 text-xs ml-2">— Pace, efficiency, net rating</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
                         <div className="w-8 h-8 rounded-full bg-[#B8953F]/20 flex items-center justify-center">
-                          <Eye size={16} className="text-[#B8953F]" />
+                          <Users size={16} className="text-[#B8953F]" />
                         </div>
                         <div className="bg-[#2a2a2a] rounded-full py-1.5 px-3 border border-[#B8953F]/30 flex-1">
-                          <span className="text-[#B8953F] text-sm">Lookahead Spots</span>
-                          <span className="text-white/40 text-xs ml-2">— Big game next week trap</span>
+                          <span className="text-[#B8953F] text-sm">H2H History</span>
+                          <span className="text-white/40 text-xs ml-2">— Head-to-head matchup data</span>
                         </div>
                       </div>
                     </div>
                   </div>
                 </div>
                 
-                {/* Fifth card - Convergence */}
+                {/* Fifth card - Player Props */}
                 <div className="px-6 mt-8 relative z-20">
                   <div className="relative bg-[#1a1a1a] rounded-3xl p-10 text-white shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden">
                     <h3 className="text-[#B8953F] font-bold text-2xl mb-3">
-                      Convergence Scoring
+                      Player Props + Game Picks
                     </h3>
                     <p className="text-white/70 mb-6">
-                      Gary's secret weapon. Measures alignment between statistical models, market odds, and qualitative analysis. When all signals converge, you get Gary's highest-conviction plays.
+                      Gary covers both sides — game picks (spread and moneyline) and player props (points, rebounds, assists, and more). Every pick gets the same multi-model treatment with a full written rationale explaining exactly why.
                     </p>
                     <div className="flex items-center justify-center gap-8 mt-6">
                       <div className="text-center">
-                        <div className="text-4xl font-bold text-white/30">0.50</div>
-                        <div className="text-xs text-white/40 mt-1">Mixed Signals</div>
+                        <div className="text-3xl font-bold text-white/80">Spreads</div>
+                        <div className="text-xs text-white/40 mt-1">Against the spread</div>
                       </div>
-                      <div className="flex-1 h-3 bg-gradient-to-r from-white/20 via-[#B8953F]/50 to-[#B8953F] rounded-full max-w-xs"></div>
+                      <div className="w-px h-12 bg-[#B8953F]/30"></div>
                       <div className="text-center">
-                        <div className="text-4xl font-bold text-[#B8953F]">1.00</div>
-                        <div className="text-xs text-[#B8953F] mt-1">Full Convergence</div>
+                        <div className="text-3xl font-bold text-white/80">ML</div>
+                        <div className="text-xs text-white/40 mt-1">Moneyline</div>
+                      </div>
+                      <div className="w-px h-12 bg-[#B8953F]/30"></div>
+                      <div className="text-center">
+                        <div className="text-3xl font-bold text-[#B8953F]">Props</div>
+                        <div className="text-xs text-[#B8953F] mt-1">Player props</div>
                       </div>
                     </div>
-                    <p className="text-center text-white/50 text-sm mt-4">Higher convergence = higher confidence = stronger picks</p>
+                    <p className="text-center text-white/50 text-sm mt-4">Every pick includes a full rationale — no black-box predictions</p>
                   </div>
                 </div>
               </section>
