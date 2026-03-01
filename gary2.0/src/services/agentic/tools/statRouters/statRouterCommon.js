@@ -162,9 +162,9 @@ import { ballDontLieService } from '../../../ballDontLieService.js';
 import { geminiGroundingSearch, getGroundedWeather } from '../../scoutReport/scoutReportBuilder.js';
 import { isGameCompleted, formatStatValue, safeStatValue } from '../../sharedUtils.js';
 // Highlightly stripped to venue-only — H2H now uses BDL directly
-import { getNcaabVenue } from '../../../highlightlyService.js';
+import { getNcaabVenue } from '../../../ncaabVenueService.js';
 import { nbaSeason, nhlSeason, nflSeason, ncaabSeason } from '../../../../utils/dateUtils.js';
-import { getTeamRatings as getBarttovikRatings } from '../../../barttovikService.js';
+import { getTeamRatings as getBarttovikRatings } from '../../../ncaabMetricsService.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════════
@@ -1415,5 +1415,5 @@ export { getCurrentSeasonString, sportToBdlKey, normalizeSportName, findTeam, fm
 // Re-export imported dependencies for fetcher sub-modules
 export { geminiGroundingSearch, getGroundedWeather } from '../../scoutReport/scoutReportBuilder.js';
 export { isGameCompleted } from '../../sharedUtils.js';
-export { getNcaabVenue } from '../../../highlightlyService.js';
-export { getTeamRatings as getBarttovikRatings } from '../../../barttovikService.js';
+export { getNcaabVenue } from '../../../ncaabVenueService.js';
+export { getTeamRatings as getBarttovikRatings } from '../../../ncaabMetricsService.js';

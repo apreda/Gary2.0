@@ -7,8 +7,8 @@
 import { ballDontLieService } from '../../../ballDontLieService.js';
 import { generateGameSignificance } from '../gameSignificanceGenerator.js';
 import { formatTokenMenu } from '../../tools/toolDefinitions.js';
-import { getTeamRatings as getBarttovikRatings } from '../../../barttovikService.js';
-import { getNcaabVenue } from '../../../highlightlyService.js';
+import { getTeamRatings as getBarttovikRatings } from '../../../ncaabMetricsService.js';
+import { getNcaabVenue } from '../../../ncaabVenueService.js';
 import { ncaabSeason } from '../../../../utils/dateUtils.js';
 import {
   seasonForSport,

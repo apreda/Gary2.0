@@ -1,4 +1,5 @@
 import { CONFIG, GEMINI_PRO_MODEL, GEMINI_PRO_FALLBACK, validateGeminiModel, RESEARCH_BRIEFING_TIMEOUT_MS } from './orchestratorConfig.js';
+import { rotateToBackupKey, isUsingBackupKey } from '../modelConfig.js';
 import { createGeminiSession, sendToSession, sendToSessionWithRetry } from './sessionManager.js';
 import { buildFlashSteelManCases, buildFlashSteelManPropsCases, extractTextualSummaryForModelSwitch, ADVISOR_TIMEOUT_MS, buildFlashResearchBriefing } from './flashAdvisor.js';
 import { buildPass1Message, buildPass25Message, buildPass25PropsMessage, buildPass3Unified, buildPass3Props, FINALIZE_PROPS_TOOL, PROPS_PICK_SCHEMA } from './passBuilders.js';
@@ -371,24 +372,35 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
             messages.push(message);
           }
         }
-        // 3.1 Pro -> 3 Pro fallback (3.1 Pro hit rate limit, try original Pro)
+        // 3.1 Pro -> rotate key -> 3.1 Pro (key 2), or 3 Pro if no backup
         else if (error.isQuotaError && currentModelName === GEMINI_PRO_MODEL) {
-          console.log(`[Orchestrator] ⚠️ 3.1 Pro quota exceeded - falling back to 3 Pro`);
-
           const textualContext = extractTextualSummaryForModelSwitch(messages, steelManCases, toolCallHistory);
           if (textualContext.length < 2000) {
-            console.warn(`[Orchestrator] LOW CONTEXT WARNING: Only ${textualContext.length} chars for 3.1 Pro→3 Pro switch`);
+            console.warn(`[Orchestrator] LOW CONTEXT WARNING: Only ${textualContext.length} chars for model switch`);
           }
 
-          currentSession = createGeminiSession({
-            modelName: GEMINI_PRO_FALLBACK,
-            systemPrompt: systemPrompt + '\n\n' + textualContext,
-            tools: currentPass === 'evaluation' ? [] : activeTools,
-            thinkingLevel: 'high'
-          });
-          currentModelName = GEMINI_PRO_FALLBACK;
+          // Try rotating to backup API key first — keeps 3.1 Pro
+          if (!isUsingBackupKey() && rotateToBackupKey()) {
+            console.log(`[Orchestrator] ⚠️ 3.1 Pro quota exceeded — rotated to backup API key, retrying with 3.1 Pro`);
+            currentSession = createGeminiSession({
+              modelName: GEMINI_PRO_MODEL,
+              systemPrompt: systemPrompt + '\n\n' + textualContext,
+              tools: currentPass === 'evaluation' ? [] : activeTools,
+              thinkingLevel: 'high'
+            });
+            // currentModelName stays GEMINI_PRO_MODEL
+          } else {
+            console.log(`[Orchestrator] ⚠️ 3.1 Pro quota exceeded - falling back to 3 Pro`);
+            currentSession = createGeminiSession({
+              modelName: GEMINI_PRO_FALLBACK,
+              systemPrompt: systemPrompt + '\n\n' + textualContext,
+              tools: currentPass === 'evaluation' ? [] : activeTools,
+              thinkingLevel: 'high'
+            });
+            currentModelName = GEMINI_PRO_FALLBACK;
+          }
 
-          console.log(`[Orchestrator] 🔄 Created fallback 3 Pro session, retrying...`);
+          console.log(`[Orchestrator] 🔄 Created fallback session, retrying...`);
 
           // Retry with new session
           const retryResponse = await sendToSessionWithRetry(currentSession, nextMessageToSend);
@@ -403,20 +415,26 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
             messages.push(message);
           }
         }
-        // 3 Pro -> Flash fallback (both Pro models hit quota, last resort)
+        // 3 Pro -> rotate key -> 3.1 Pro (key 2), or HARD FAIL if no backup
         else if (error.isQuotaError && currentModelName === GEMINI_PRO_FALLBACK) {
-          console.log(`[Orchestrator] ⚠️ Both Pro models quota exceeded - falling back to Flash (last resort)`);
-
           const textualContext = extractTextualSummaryForModelSwitch(messages, steelManCases, toolCallHistory);
-          currentSession = createGeminiSession({
-            modelName: 'gemini-3-flash-preview',
-            systemPrompt: systemPrompt + '\n\n' + textualContext,
-            tools: currentPass === 'evaluation' ? [] : activeTools,
-            thinkingLevel: 'high'
-          });
-          currentModelName = 'gemini-3-flash-preview';
 
-          console.log(`[Orchestrator] 🔄 Created fallback Flash session, retrying...`);
+          // Try rotating to backup API key — gets us back to 3.1 Pro
+          if (!isUsingBackupKey() && rotateToBackupKey()) {
+            console.log(`[Orchestrator] ⚠️ Both Pro models quota exceeded — rotated to backup API key, retrying with 3.1 Pro`);
+            currentSession = createGeminiSession({
+              modelName: GEMINI_PRO_MODEL,
+              systemPrompt: systemPrompt + '\n\n' + textualContext,
+              tools: currentPass === 'evaluation' ? [] : activeTools,
+              thinkingLevel: 'high'
+            });
+            currentModelName = GEMINI_PRO_MODEL;
+          } else {
+            // HARD FAIL — never fall to Flash. A Pro-quality pick or no pick at all.
+            throw new Error(`[Orchestrator] All Pro model quotas exhausted on both API keys. Cannot produce pick — skipping game. (Primary + backup keys both hit daily quota limits for 3.1 Pro and 3 Pro)`);
+          }
+
+          console.log(`[Orchestrator] 🔄 Created fallback session, retrying...`);
 
           const retryResponse = await sendToSessionWithRetry(currentSession, nextMessageToSend);
           message = {

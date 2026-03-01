@@ -1,4 +1,5 @@
-import { getGemini, CONFIG, GEMINI_SAFETY_SETTINGS, validateGeminiModel } from './orchestratorConfig.js';
+import { CONFIG, GEMINI_SAFETY_SETTINGS, validateGeminiModel } from './orchestratorConfig.js';
+import { getGeminiClient } from '../modelConfig.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PERSISTENT SESSION MANAGEMENT (Gemini 3 Thought Signatures)
@@ -31,7 +32,7 @@ export function createGeminiSession(options = {}) {
     thinkingLevel = 'high'
   } = options;
   
-  const genAI = getGemini();
+  const genAI = getGeminiClient({ beta: true });
   const validatedModel = validateGeminiModel(modelName);
   
   // Convert tool definitions to Gemini function declarations

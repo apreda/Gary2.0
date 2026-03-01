@@ -1284,8 +1284,7 @@ IMPORTANT: Always use the full team name (e.g., 'Cleveland Guardians') rather th
   }
 };
 
-// Initialize and then export the service
-geminiServiceInstance.init();
+// Export the service (init() removed — initialization is inline)
 
 // Export Flash model ID for props to use when Pro has quota issues
 export const GEMINI_FLASH_MODEL = GEMINI_MODEL_FLASH;

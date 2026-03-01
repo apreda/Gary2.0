@@ -1,4 +1,4 @@
-import { getGemini, CONFIG, GEMINI_SAFETY_SETTINGS, GEMINI_PRO_MODEL } from './orchestratorConfig.js';
+import { CONFIG, GEMINI_SAFETY_SETTINGS, GEMINI_PRO_MODEL } from './orchestratorConfig.js';
 import { createGeminiSession, sendToSession, sendToSessionWithRetry } from './sessionManager.js';
 import { getConstitution } from '../constitution/index.js';
 import { getFlashInvestigationPrompt } from '../flashInvestigationPrompts.js';

@@ -152,20 +152,6 @@ export const DFS_PLAYER_INVESTIGATION_TOOLS = [
     }
   },
   {
-    name: 'SEARCH_LATEST_NEWS',
-    description: 'Search for latest news about a player from pre-loaded team news. For LIVE breaking news, use SEARCH_LIVE_NEWS instead.',
-    parameters: {
-      type: 'object',
-      properties: {
-        query: {
-          type: 'string',
-          description: 'Search query (e.g., "LeBron James injury status today")'
-        }
-      },
-      required: ['query']
-    }
-  },
-  {
     name: 'GET_PLAYER_RECENT_VS_OPPONENT',
     description: 'Get a player\'s recent game logs against a specific opponent (from L5 data).',
     parameters: {
@@ -185,7 +171,7 @@ export const DFS_PLAYER_INVESTIGATION_TOOLS = [
   },
   {
     name: 'SEARCH_LIVE_NEWS',
-    description: 'Search the internet for LIVE breaking news about a player or team using Google Search grounding. Use for injury updates, trade rumors, or lineup changes not in pre-loaded news.',
+    description: 'Search the internet for the latest news about a player or team using Google Search.',
     parameters: {
       type: 'object',
       properties: {
@@ -234,9 +220,6 @@ export async function executeToolCall(toolName, args, context) {
 
       case 'GET_MATCHUP_DATA':
         return await getMatchupData(args.playerName, args.position, args.opponent, context);
-
-      case 'SEARCH_LATEST_NEWS':
-        return await searchLatestNews(args.query, context);
 
       case 'GET_PLAYER_RECENT_VS_OPPONENT':
         return await getPlayerVsTeamHistory(args.playerName, args.opponent, context);
@@ -530,41 +513,6 @@ async function getMatchupData(playerName, position, opponent, context) {
     opponent,
     dvp: null,
     note: 'DvP data not available for this player/opponent matchup'
-  };
-}
-
-async function searchLatestNews(query, context) {
-  // Search for matching news in player newsContext (populated from Tank01 in Phase 1)
-  const queryLower = query.toLowerCase();
-  const matchingNews = [];
-
-  for (const player of (context?.players || [])) {
-    if (!player.newsContext) continue;
-    const nameLower = player.name?.toLowerCase() || '';
-    // Match on full first or last name (not partial word fragments)
-    const nameParts = nameLower.split(/\s+/).filter(w => w.length > 2);
-    const queryParts = queryLower.split(/\s+/).filter(w => w.length > 2);
-    // Full name in query OR query contains a full name part (first/last name)
-    const nameMatch = queryLower.includes(nameLower) ||
-                      nameLower.includes(queryLower) ||
-                      nameParts.some(part => queryParts.includes(part));
-    if (nameMatch) {
-      matchingNews.push({
-        player: player.name,
-        team: player.team,
-        news: player.newsContext
-      });
-    }
-  }
-
-  if (matchingNews.length > 0) {
-    return { query, results: matchingNews };
-  }
-
-  return {
-    query,
-    results: [],
-    note: 'No matching news found in context for this query'
   };
 }
 

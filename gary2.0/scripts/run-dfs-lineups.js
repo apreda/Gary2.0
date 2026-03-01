@@ -186,8 +186,7 @@ async function run() {
           platform,
           sport,
           date: dateStr,
-          slate,
-          contestType: 'gpp'
+          slate
         });
 
         printLineup(result, platform, slate.name);

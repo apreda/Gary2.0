@@ -16,8 +16,6 @@ import {
   fetchNbaTeamDefenseStats,
   getPlayerDvP,
   fetchNbaProjections,
-  fetchNbaNews,
-  matchNewsToPlayers
 } from '../tank01DfsService.js';
 import { discoverDFSSlates as discoverSlatesWithService } from './dfsSlateDiscoveryService.js';
 import { inferPlayerRole } from './nbaStackingRules.js';
@@ -1621,7 +1619,7 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
   // Tank01 calls are staggered in three waves to avoid rate limits (429 errors).
   // Wave 1: salaries only (1 call)
   // Wave 2: rosters (batched 4 teams at a time with 300ms delay)
-  // Wave 3: defense + projections + news (3 calls parallel)
+  // Wave 3: defense + projections (2 calls parallel)
   // Non-Tank01 calls (BDL) run in parallel alongside all Tank01 waves.
   const [bdlPlayers, tank01Results] = await Promise.all([
     fetchPlayerStatsFromBDL(sport, dateStr, slateTeams),
@@ -1631,18 +1629,17 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
       const salaryData = await fetchDfsSalaries(sport, dateStr, platform);
       // Wave 2: Rosters (batched 4 teams at a time with 300ms delay between batches)
       const rosterData = isNBA ? await fetchNbaRostersForTeams(slateTeams) : new Map();
-      // Wave 3: Defense + Projections + News (3 calls parallel, after rosters done)
-      const [teamDefenseStats, tank01Projections, tank01News] = isNBA
+      // Wave 3: Defense + Projections (2 calls parallel, after rosters done)
+      const [teamDefenseStats, tank01Projections] = isNBA
         ? await Promise.all([
             fetchNbaTeamDefenseStats(),
             fetchNbaProjections(dateStr),
-            fetchNbaNews(30)
           ])
-        : [new Map(), new Map(), []];
-      return { salaryData, rosterData, teamDefenseStats, tank01Projections, tank01News };
+        : [new Map(), new Map()];
+      return { salaryData, rosterData, teamDefenseStats, tank01Projections };
     })()
   ]);
-  const { salaryData, rosterData, teamDefenseStats, tank01Projections, tank01News } = tank01Results;
+  const { salaryData, rosterData, teamDefenseStats, tank01Projections } = tank01Results;
   // Ownership projections removed — no reliable free source exists.
   
   const bdlCount = bdlPlayers.length;
@@ -1702,9 +1699,6 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
   // TANK01 ENRICHMENT (NBA only — Changes 5, 6, 9)
   // ═══════════════════════════════════════════════════════════════════════════
   if (isNBA) {
-    // Build Tank01 playerID → playerName map for news matching
-    const tank01PlayerIdMap = new Map();
-
     // Build a roster name lookup: normalizedName → roster player
     const rosterNameMap = new Map();
     for (const [teamAbv, players] of rosterData) {
@@ -1712,9 +1706,6 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
         const normName = normalizePlayerName(rp.longName || '');
         if (normName) {
           rosterNameMap.set(normName, rp);
-          if (rp.playerID) {
-            tank01PlayerIdMap.set(String(rp.playerID), rp.longName);
-          }
         }
       }
     }
@@ -1730,15 +1721,12 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
       }
     }
 
-    // Match news to players
-    const newsMap = matchNewsToPlayers(tank01News, tank01PlayerIdMap);
-
     let enrichedCount = 0;
     for (const player of mergedPlayers) {
       const normName = normalizePlayerName(player.name);
       const rosterPlayer = rosterNameMap.get(normName);
 
-      // Change 5: Player enrichment (TS%, eFG%, injury context, lastGamePlayed)
+      // Player enrichment (TS%, eFG%, minutes, games played)
       if (rosterPlayer) {
         const enrichment = extractPlayerEnrichment(rosterPlayer);
         if (enrichment) {
@@ -1746,9 +1734,6 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
           player.efgPercent = enrichment.efgPercent;
           player.avgMinutes = enrichment.avgMinutes;
           player.gamesPlayed = enrichment.gamesPlayed;
-          player.injuryContext = enrichment.injuryDescription;
-          player.injuryReturnDate = enrichment.injuryReturnDate;
-          player.lastGamePlayed = enrichment.lastGamePlayed;
           enrichedCount++;
         }
       }
@@ -1766,13 +1751,9 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
         }
       }
 
-      // Change 9: News context
-      if (newsMap.has(rosterPlayer?.longName)) {
-        player.newsContext = newsMap.get(rosterPlayer.longName);
-      }
     }
 
-    console.log(`[DFS Context] Tank01 enriched ${enrichedCount}/${mergedPlayers.length} players (TS%, eFG%, injury, DvP, news)`);
+    console.log(`[DFS Context] Tank01 enriched ${enrichedCount}/${mergedPlayers.length} players (TS%, eFG%, DvP)`);
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1997,7 +1978,7 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
       injuryMap[team].push({
         player: p.name,
         status: p.status,
-        injury: p.injuryContext || '',
+        injury: getInjuryByName(p.name)?.description || '',
       });
     }
   }
@@ -2009,7 +1990,7 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
     injuryMap[team].push({
       player: p.name,
       status: p.status || 'OUT',
-      injury: p.injuryContext || '',
+      injury: getInjuryByName(p.name)?.description || '',
     });
   }
   if (Object.keys(injuryMap).length > 0) {

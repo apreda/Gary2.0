@@ -6,14 +6,13 @@ struct SettingsView: View {
     @State private var animateIn = false
     
     var body: some View {
-        NavigationStack {
-            ZStack {
-                // Background - matches homepage
-                LiquidGlassBackground()
-                
-                // Content - respects safe area
-                ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 24) {
+        ZStack {
+            // Background - matches homepage
+            LiquidGlassBackground()
+
+            // Content - respects safe area
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 24) {
                         // Header
                         Text("Settings")
                             .font(.system(size: 28, weight: .heavy))
@@ -46,7 +45,6 @@ struct SettingsView: View {
                 }
             }
             .navigationBarHidden(true)
-        }
         .onAppear {
             withAnimation(.easeOut(duration: 0.6)) {
                 animateIn = true
@@ -69,7 +67,7 @@ struct SettingsView: View {
                     .font(.title2.bold())
                     .foregroundStyle(GaryColors.gold)
                 
-                Text("Version 1.9.9")
+                Text("Version \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.9.91")")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

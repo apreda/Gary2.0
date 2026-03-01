@@ -53,6 +53,19 @@ struct ChangelogEntry: Identifiable {
 
 let changelogEntries: [ChangelogEntry] = [
     ChangelogEntry(
+        version: "1.9.91",
+        date: "February 28, 2026",
+        type: .improvement,
+        title: "Performance & Reliability",
+        changes: [
+            "Improved scrolling performance across all pick lists",
+            "Fixed tab navigation when entering from onboarding screen",
+            "Faster date and currency formatting throughout the app",
+            "Settings page now shows version dynamically",
+            "Under-the-hood stability improvements"
+        ]
+    ),
+    ChangelogEntry(
         version: "1.9.9",
         date: "February 23, 2026",
         type: .improvement,

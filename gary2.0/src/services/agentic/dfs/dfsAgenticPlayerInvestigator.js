@@ -15,7 +15,7 @@
 
 import { DFS_PLAYER_INVESTIGATION_TOOLS, executeToolCall } from './tools/dfsToolDefinitions.js';
 import { getFlexPositions, getPositionCandidates, getRosterSlots, getStatDisplayLines } from './dfsSportConfig.js';
-import { GEMINI_PRO_FALLBACK } from '../modelConfig.js';
+import { GEMINI_PRO_MODEL } from '../modelConfig.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PLAYER INVESTIGATION SYSTEM PROMPT
@@ -43,23 +43,22 @@ Do NOT cite coaching tendencies, player reputations, or team identities from tra
 </responsibilities>
 
 <investigation_checklist>
-For each player:
-1. Recent form — what do the recent games tell you about this player's current production?
-2. Matchup — what does tonight's opponent context reveal about this player's situation?
-3. Team context — what does the current team situation tell you about this player's role?
-4. Salary context — what does the data tell you about this player at this price?
-5. Range of outcomes — what does the data suggest about this player's range of outcomes tonight?
-6. Risk factors — what does the data suggest could affect this player's production tonight?
-7. Advanced metrics — what do the efficiency and scoring profile stats reveal about this player's role?
-8. Vegas props context — if prop lines are available, what do they tell you about expected production?
+For each player, evaluate:
+1. Recent form — current production trends from recent games
+2. Matchup — tonight's opponent context and positional matchup
+3. Team context — current team situation and this player's role within it
+4. Salary context — production expectations at this price point
+5. Range of outcomes — floor and ceiling for tonight based on the data
+6. Risk factors — anything that could limit production tonight
+7. Advanced metrics — efficiency, scoring profile, and role indicators
+8. Vegas props context — prop lines as indicators of expected production (if available)
 </investigation_checklist>
 
 <available_data>
 Each candidate card shows pre-loaded data. You also have tools to investigate deeper:
 - GET_PLAYER_SEASON_STATS returns advanced metrics (off/def rating, scoring profile, drive stats, roll man production)
 - GET_PLAYER_GAME_LOGS returns recent game-by-game data
-- SEARCH_LATEST_NEWS searches pre-loaded team news
-- SEARCH_LIVE_NEWS searches the internet for breaking news (use for injury updates or lineup changes)
+- SEARCH_LIVE_NEWS searches the internet for the latest news (injury updates, lineup changes, trade rumors)
 </available_data>
 
 <output_format>
@@ -107,7 +106,7 @@ Example:
  * @returns {Object} - Investigation results by position
  */
 export async function investigatePlayersForPositions(genAI, slateAnalysis, context, options = {}) {
-  const { modelName = GEMINI_PRO_FALLBACK } = options;
+  const { modelName = GEMINI_PRO_MODEL } = options;
   const { players, platform } = context;
 
   console.log('[Player Investigator] Starting player investigations...');
@@ -443,15 +442,8 @@ ${candidates.map((p, i) => {
     line += `\n   Vegas Props: ${propStr}`;
   }
   // Injury/status context
-  if (p.injuryContext) {
-    line += `\n   Injury Note: ${p.injuryContext}`;
-  }
   if (p.status && p.status !== 'HEALTHY') {
     line += `\n   Status: ${p.status}`;
-  }
-  // News context
-  if (p.newsContext && p.newsContext.length > 0) {
-    line += `\n   News: ${p.newsContext[0]}`;
   }
   // B2B flag
   if (p.isB2B) {
@@ -491,11 +483,9 @@ For each player, gather the data you need to understand their current situation,
 
 Do NOT skip players. Each candidate deserves a thorough investigation.
 
-Investigate each candidate on their own merits. Let the data tell you what's notable about each player's situation tonight.
+Evaluate each candidate on their own merits. Let the data reveal what's notable about each player's situation tonight.
 
-INJURY CONTEXT: The KNOWN TEAM INJURIES section shows who is OUT and for how many team games.
-Investigate the data and ask yourself: what does this team's current situation look like?
-What does each player's recent data tell you about their situation tonight?
+INJURY CONTEXT: The KNOWN TEAM INJURIES section shows who is OUT and for how many team games. Use duration tags to assess whether the team's current situation is priced into salaries.
 
 After investigating, OUTPUT YOUR FINDINGS AS A JSON ARRAY.
 IMPORTANT: Your final response MUST be ONLY a valid JSON array starting with [ and ending with ].

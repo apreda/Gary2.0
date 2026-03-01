@@ -18,7 +18,7 @@
  */
 
 import { getDFSConstitution } from './constitution/dfsAgenticConstitution.js';
-import { GEMINI_PRO_FALLBACK } from '../modelConfig.js';
+import { GEMINI_PRO_MODEL, GEMINI_FLASH_MODEL, rotateToBackupKey, isUsingBackupKey, getGeminiClient } from '../modelConfig.js';
 import { isSlotEligible } from './dfsPositionUtils.js';
 import { getSalaryCap, getRosterSlots } from './dfsSportConfig.js';
 
@@ -65,34 +65,33 @@ ONLY fresh developments (ruled out in the last 1-2 days, surprise return) are ne
 </salary_cap_rules>
 
 <objective>
-You're not building to "cash" - you're building to WIN.
+You're building to WIN FIRST PLACE in a large-field GPP tournament.
 Your lineup targets the winning score for this slate size.
 
-Investigate for each decision:
-- Ask: Does your lineup have a realistic path to the winning score? What ceiling scenario gets you there?
-- Ask: How are your players' outcomes connected? What does correlation do to your lineup's range of outcomes?
-- Ask: How does your lineup's construction compare to what the field is likely building?
-- Ask: What specific game conditions need to go right for this lineup to win?
+For each decision, consider:
+- Whether your lineup has a realistic path to the winning score and what ceiling scenario gets you there
+- How your players' outcomes are connected and how correlation affects your lineup's range of outcomes
+- How your lineup's construction compares to what the field is likely building
+- What specific game conditions need to go right for this lineup to win
 </objective>
 
 <decision_framework>
-For EACH position, investigate:
-1. What does each candidate's range of outcomes look like for THIS slate?
-2. How does each candidate connect to the rest of your lineup?
-3. What does the relationship between salary, situation, and upside tell you about each candidate?
+For EACH position, evaluate:
+1. Each candidate's range of outcomes for THIS slate
+2. How each candidate connects to the rest of your lineup
+3. The relationship between salary, situation, and upside for each candidate
 </decision_framework>
 
 <punt_awareness>
 "Punts" ($4K-$5.5K) are a DFS reality — salary constraints mean you'll likely need 1-2.
-Ask: For each low-salary player you consider, what does their recent production, role, and game environment tell you about their upside?
-Ask: What does the data show about this low-salary player's upside path tonight?
+Low-salary players need genuine upside supported by recent production, role, and game environment — not just a cheap price tag.
 </punt_awareness>
 
 <ownership_awareness>
-If ownership projections are available, investigate:
-- Ask: What does the projected ownership tell you about how the field is constructing lineups?
-- Ask: What does the relationship between each player's situation tonight and their projected ownership tell you?
-- Ask: What does the ownership distribution across your lineup tell you about how it compares to the likely field?
+If ownership projections are available:
+- Projected ownership reveals how the field is constructing lineups
+- The relationship between each player's situation tonight and their projected ownership reveals leverage opportunities
+- Your lineup's ownership distribution relative to the likely field defines your differentiation level
 
 Some candidates also include proxy signals: salary rank at position, L5/season form ratio, and game popularity rank.
 These are raw data for YOUR assessment of likely field exposure.
@@ -149,8 +148,8 @@ Provide your lineup as JSON:
  * @returns {Object} - Gary's lineup decision
  */
 export async function decideLineupWithPro(genAI, slateAnalysis, playerInvestigations, context, options = {}) {
-  const { modelName = GEMINI_PRO_FALLBACK, thinkingLevel = 'high' } = options;
-  const { players, platform, contestType, winningTargets } = context;
+  const { modelName = GEMINI_PRO_MODEL, thinkingLevel = 'high' } = options;
+  const { players, platform, winningTargets } = context;
 
   console.log('[Lineup Decider] Gary Pro deciding lineup with high thinking...');
 
@@ -170,7 +169,7 @@ export async function decideLineupWithPro(genAI, slateAnalysis, playerInvestigat
   // Create Pro model with extended thinking for deep reasoning
   const model = genAI.getGenerativeModel({
     model: modelName,
-    systemInstruction: getLineupDecisionPrompt(platform, context.sport) + '\n\n' + getDFSConstitution(context.sport, contestType),
+    systemInstruction: getLineupDecisionPrompt(platform, context.sport) + '\n\n' + getDFSConstitution(context.sport),
     generationConfig: {
       temperature: 1.0, // Gemini: Keep at 1.0
       maxOutputTokens: 16384
@@ -182,7 +181,7 @@ export async function decideLineupWithPro(genAI, slateAnalysis, playerInvestigat
   });
 
   // Use chat session so corrections retain full context (player pool, investigation data)
-  const chat = model.startChat({ history: [] });
+  let chat = model.startChat({ history: [] });
 
   // Retry logic for intermittent empty responses from Gemini Pro
   const MAX_RETRIES = 3;
@@ -218,9 +217,43 @@ export async function decideLineupWithPro(genAI, slateAnalysis, playerInvestigat
     }
   }
 
+  // If Pro failed (quota or other), try backup key then Flash
   if (!responseText) {
-    const errMsg = lastError ? lastError.message : 'Empty response after all retries';
-    throw new Error('[Lineup Decider] Gemini Pro failed after ' + MAX_RETRIES + ' attempts: ' + errMsg);
+    const isQuotaError = lastError?.message?.includes('429') || lastError?.message?.includes('quota');
+    if (isQuotaError) {
+      // Try rotating to backup API key first — keeps Pro model
+      if (!isUsingBackupKey() && rotateToBackupKey()) {
+        console.warn(`[Lineup Decider] Pro quota exhausted — rotated to backup API key, retrying with Pro`);
+        const backupGenAI = getGeminiClient();
+        const backupModel = backupGenAI.getGenerativeModel({
+          model: modelName,
+          systemInstruction: getLineupDecisionPrompt(platform, context.sport) + '\n\n' + getDFSConstitution(context.sport),
+          generationConfig: { temperature: 1.0, maxOutputTokens: 16384 },
+          thinkingConfig: { thinkingBudget: thinkingLevel === 'high' ? 16384 : 8192 }
+        });
+        const backupChat = backupModel.startChat({ history: [] });
+        try {
+          const backupResult = await backupChat.sendMessage(decisionRequest);
+          responseText = backupResult.response.text() || '';
+          if (responseText) {
+            console.log(`[Lineup Decider] ✅ Backup key Pro succeeded`);
+            chat = backupChat;
+          }
+        } catch (backupError) {
+          console.error(`[Lineup Decider] Backup key Pro also failed:`, backupError.message);
+        }
+      }
+
+      // HARD FAIL — never fall to Flash. Pro-quality lineup or no lineup at all.
+      if (!responseText) {
+        throw new Error(`[Lineup Decider] Pro quota exhausted on both API keys. Cannot produce lineup with Flash — skipping.`);
+      }
+    }
+
+    if (!responseText) {
+      const errMsg = lastError ? lastError.message : 'Empty response after all retries';
+      throw new Error('[Lineup Decider] All models failed after ' + MAX_RETRIES + ' attempts: ' + errMsg);
+    }
   }
 
   // Parse Gary's lineup decision — with self-correction loop for structural issues
@@ -398,19 +431,15 @@ function buildDecisionRequest(slateAnalysis, playerInvestigations, context, sala
 
   // Ownership awareness
   const ownershipNote = slateAnalysis.ownershipMissing
-    ? '\nNote: Projected ownership data is UNAVAILABLE for this slate. Investigate: What does the salary and situation landscape tell you about where the field is likely concentrating?\n'
+    ? '\nNote: Projected ownership data is UNAVAILABLE for this slate. Use salary and situation data to assess where the field is likely concentrating.\n'
     : '';
 
   // Slate size awareness
   const slateNote = context.slateSize
-    ? `\nSlate Size: ${context.slateSize} games (${context.slateLabel}). Ask: What does the slate size tell you about how concentrated your construction should be?\n`
+    ? `\nSlate Size: ${context.slateSize} games (${context.slateLabel}). Smaller slates allow more concentrated construction; larger slates require broader exposure.\n`
     : '';
 
-  // Cash game framing
-  const isCash = winningTargets.isCash;
-  const objectiveStr = isCash
-    ? `You're building to CASH (beat ~50% of the field). Target: ${winningTargets.toCash}+ pts with stable floor.`
-    : `You're building to WIN, not just cash. Target: ${winningTargets.toWin}+ pts`;
+  const objectiveStr = `You're building to WIN FIRST PLACE. Target: ${winningTargets.toWin}+ pts`;
 
   return `
 ## SLATE FINDINGS
@@ -423,7 +452,6 @@ ${slateNote}${ownershipNote}
 ## WINNING TARGETS
 - To WIN: ${winningTargets.toWin} pts
 - Top 1%: ${winningTargets.top1Percent} pts
-- Cash Line: ${winningTargets.toCash} pts
 
 ${objectiveStr}
 
@@ -442,10 +470,10 @@ ${investigationsStr}
 
 ## YOUR TASK
 Build your lineup. Consider:
-1. Which game(s) do you want to concentrate roster spots in? What does the game-level view tell you about stacking opportunities?
-2. For each stack, investigate both sides of the game — what does a bring-back from the opposing team do to your exposure?
+1. Which game(s) to concentrate roster spots in — use the game-level view to identify stacking opportunities
+2. For each stack, consider both sides of the game — a bring-back from the opposing team adds exposure to the game's total scoring
 3. For each position, review the investigated candidates and make your decision with conviction
-4. Ask: How much salary are you leaving on the table? If more than $500, investigate whether upgrading any position improves your ceiling.
+4. Check salary utilization — if more than $500 remains, consider whether upgrading any position improves your ceiling
 
 - Your per-player reasoning should cite specific data from your investigation.
 - Stay under $${salaryCap.toLocaleString()} total.

@@ -288,3 +288,176 @@ export function fixBdlInjuryStatus(injury) {
 
   return injury;
 }
+
+// ═══════════════════════════════════════════════════════════════
+// Props context utilities (restored after cleanup removal)
+// ═══════════════════════════════════════════════════════════════
+
+export const EST_TIME_OPTIONS = {
+  timeZone: 'America/New_York',
+  hour: 'numeric',
+  minute: '2-digit',
+  hour12: true
+};
+
+export function formatGameTimeEST(isoString) {
+  if (!isoString) return null;
+  const date = new Date(isoString);
+  if (Number.isNaN(date.getTime())) return isoString;
+  return `${new Intl.DateTimeFormat('en-US', EST_TIME_OPTIONS).format(date)} EST`;
+}
+
+export function getEstDate(date = new Date()) {
+  const d = date instanceof Date ? date : new Date(date);
+  return d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+}
+
+export function parseGameDate(value) {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+export function buildMarketSnapshot(bookmakers = [], homeTeamName = 'Home', awayTeamName = 'Away') {
+  const homeKey = normalizeTeamName(homeTeamName);
+  const awayKey = normalizeTeamName(awayTeamName);
+  const determineSide = (name = '') => {
+    const norm = normalizeTeamName(name);
+    if (norm && (norm === homeKey || norm.includes(homeKey) || homeKey.includes(norm))) return 'home';
+    if (norm && (norm === awayKey || norm.includes(awayKey) || awayKey.includes(norm))) return 'away';
+    return null;
+  };
+
+  const spreads = [];
+  const moneylines = [];
+  const totals = [];
+
+  (bookmakers || []).forEach((bookmaker) => {
+    const markets = Array.isArray(bookmaker?.markets) ? bookmaker.markets : [];
+    markets.forEach((market) => {
+      if (!market || !market.key || !Array.isArray(market.outcomes)) return;
+      if (market.key === 'spreads') {
+        market.outcomes.forEach((outcome) => {
+          if (!outcome || typeof outcome.price !== 'number' || typeof outcome.point !== 'number') return;
+          const side = determineSide(outcome.name);
+          spreads.push({ team: side || outcome.name, point: outcome.point, price: outcome.price, bookmaker: bookmaker.title || bookmaker.key });
+        });
+      }
+      if (market.key === 'h2h') {
+        market.outcomes.forEach((outcome) => {
+          if (!outcome || typeof outcome.price !== 'number') return;
+          const side = determineSide(outcome.name);
+          moneylines.push({ team: side || outcome.name, price: outcome.price, bookmaker: bookmaker.title || bookmaker.key });
+        });
+      }
+      if (market.key === 'totals') {
+        market.outcomes.forEach((outcome) => {
+          if (!outcome || typeof outcome.point !== 'number') return;
+          totals.push({ side: outcome.name, point: outcome.point, price: outcome.price ?? null, bookmaker: bookmaker.title || bookmaker.key });
+        });
+      }
+    });
+  });
+
+  const pickBest = (list, predicate) => {
+    const filtered = list.filter(predicate);
+    if (!filtered.length) return null;
+    return filtered.reduce((best, item) => (!best || item.price > best.price) ? item : best, null);
+  };
+
+  const homeSpread = pickBest(spreads, (row) => row.team === 'home');
+  const awaySpread = pickBest(spreads, (row) => row.team === 'away');
+  const homeMl = pickBest(moneylines, (row) => row.team === 'home');
+  const awayMl = pickBest(moneylines, (row) => row.team === 'away');
+  const overTotal = totals.find(t => t.side === 'Over');
+  const underTotal = totals.find(t => t.side === 'Under');
+  const totalLine = overTotal?.point || underTotal?.point || null;
+
+  return {
+    spread: {
+      home: homeSpread ? { ...homeSpread, teamName: homeTeamName } : null,
+      away: awaySpread ? { ...awaySpread, teamName: awayTeamName } : null
+    },
+    moneyline: {
+      home: homeMl ? { ...homeMl, teamName: homeTeamName } : null,
+      away: awayMl ? { ...awayMl, teamName: awayTeamName } : null
+    },
+    total: totalLine ? {
+      line: totalLine,
+      over: overTotal ? { price: overTotal.price, bookmaker: overTotal.bookmaker } : null,
+      under: underTotal ? { price: underTotal.price, bookmaker: underTotal.bookmaker } : null
+    } : null
+  };
+}
+
+export async function safeApiCall(apiCall, defaultValue, context = 'API call') {
+  try {
+    return await apiCall();
+  } catch (error) {
+    console.error(`[BDL API FAILURE] ${context}: ${error.message}`);
+    safeApiCall._failureCount = (safeApiCall._failureCount || 0) + 1;
+    safeApiCall._failures = safeApiCall._failures || [];
+    safeApiCall._failures.push(context);
+    return defaultValue;
+  }
+}
+
+export async function safeApiCallArray(apiCall, context) {
+  return safeApiCall(apiCall, [], context);
+}
+
+export async function safeApiCallObject(apiCall, context) {
+  return safeApiCall(apiCall, null, context);
+}
+
+export function fuzzyMatchPlayerName(name1, name2) {
+  const n1 = normalizePlayerName(name1);
+  const n2 = normalizePlayerName(name2);
+  if (n1 === n2) return true;
+  if (n1.includes(n2) || n2.includes(n1)) return true;
+  const parts1 = n1.split(' ');
+  const parts2 = n2.split(' ');
+  if (parts1.length > 0 && parts2.length > 0) {
+    const lastName1 = parts1[parts1.length - 1];
+    const lastName2 = parts2[parts2.length - 1];
+    if (lastName1 === lastName2) {
+      const firstName1 = parts1[0] || '';
+      const firstName2 = parts2[0] || '';
+      if (firstName1.length <= 2 || firstName2.length <= 2) {
+        if (firstName1[0] === firstName2[0]) return true;
+      }
+    }
+  }
+  return false;
+}
+
+export function findBestPlayerMatch(targetName, players) {
+  if (!targetName || !Array.isArray(players)) return null;
+  for (const player of players) {
+    const fullName = `${player.first_name || ''} ${player.last_name || ''}`.trim();
+    if (fuzzyMatchPlayerName(targetName, fullName)) return player;
+  }
+  return null;
+}
+
+export function checkDataAvailability(dataObject, requiredFields = []) {
+  if (!dataObject) {
+    return { hasData: false, availableFields: [], missingFields: requiredFields, message: 'NO DATA AVAILABLE' };
+  }
+  const available = [];
+  const missing = [];
+  for (const field of requiredFields) {
+    const value = dataObject[field];
+    if (value !== null && value !== undefined && value !== '' && value !== 'N/A') {
+      available.push(field);
+    } else {
+      missing.push(field);
+    }
+  }
+  return {
+    hasData: available.length > 0,
+    availableFields: available,
+    missingFields: missing,
+    message: missing.length > 0 ? `MISSING DATA: ${missing.join(', ')}` : '✓ All required data available'
+  };
+}

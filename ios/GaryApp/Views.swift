@@ -1,6 +1,25 @@
 import SwiftUI
 import WebKit
 
+// MARK: - Shared Formatters (expensive to create — reuse)
+
+private let isoFormatterFrac: ISO8601DateFormatter = {
+    let f = ISO8601DateFormatter()
+    f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return f
+}()
+
+private let isoFormatterNoFrac: ISO8601DateFormatter = {
+    let f = ISO8601DateFormatter()
+    f.formatOptions = [.withInternetDateTime]
+    return f
+}()
+
+/// Parse an ISO8601 date string, trying fractional seconds first then without
+func parseISO8601(_ string: String) -> Date? {
+    isoFormatterFrac.date(from: string) ?? isoFormatterNoFrac.date(from: string)
+}
+
 // MARK: - Performance Helpers
 
 /// Detects if device needs performance optimizations based on hardware capability
@@ -1032,13 +1051,8 @@ struct HomeView: View {
             // This matches the GaryPicksView logic for consistency
             let todayOnlyPicks: [GaryPick]? = allPicks?.filter { pick in
                 guard let commenceTime = pick.commence_time else { return true }
-                
-                let formatter = ISO8601DateFormatter()
-                formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-                let formatterNoFrac = ISO8601DateFormatter()
-                formatterNoFrac.formatOptions = [.withInternetDateTime]
-                
-                guard let gameDate = formatter.date(from: commenceTime) ?? formatterNoFrac.date(from: commenceTime) else {
+
+                guard let gameDate = parseISO8601(commenceTime) else {
                     return true
                 }
                 
@@ -1347,12 +1361,6 @@ struct GaryPicksView: View {
         // This matches the web app behavior where users can see all picks for the day
         let filterToTodaysPicks: ([GaryPick]) -> [GaryPick] = { picks in
             let now = Date()
-            let formatter = ISO8601DateFormatter()
-            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            
-            // Also try without fractional seconds
-            let formatterNoFrac = ISO8601DateFormatter()
-            formatterNoFrac.formatOptions = [.withInternetDateTime]
             
             // Set up EST calendar
             var estCalendar = Calendar.current
@@ -1373,10 +1381,7 @@ struct GaryPicksView: View {
                     return true
                 }
                 
-                // Try parsing with both formatters
-                let gameDate = formatter.date(from: commenceTime) ?? formatterNoFrac.date(from: commenceTime)
-                
-                guard let gameDate = gameDate else {
+                guard let gameDate = parseISO8601(commenceTime) else {
                     // Couldn't parse date, show the pick
                     return true
                 }
@@ -1482,17 +1487,8 @@ struct GaryPicksView: View {
     /// Get time slot string for NFL picks (e.g., "Sunday 1:00 PM ET")
     private func getTimeSlot(for pick: GaryPick) -> String? {
         guard let isoTime = pick.commence_time, !isoTime.isEmpty else { return nil }
-        
-        let isoFormatter = ISO8601DateFormatter()
-        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        
-        var date = isoFormatter.date(from: isoTime)
-        if date == nil {
-            isoFormatter.formatOptions = [.withInternetDateTime]
-            date = isoFormatter.date(from: isoTime)
-        }
-        
-        guard let gameDate = date else { return nil }
+
+        guard let gameDate = parseISO8601(isoTime) else { return nil }
         
         let formatter = DateFormatter()
         formatter.timeZone = TimeZone(identifier: "America/New_York")
@@ -1765,16 +1761,7 @@ struct GaryPropsView: View {
     private func getTimeSlot(for prop: PropPick) -> String? {
         // Try commence_time first (ISO format)
         if let isoTime = prop.commence_time, !isoTime.isEmpty {
-            let isoFormatter = ISO8601DateFormatter()
-            isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            
-            var date = isoFormatter.date(from: isoTime)
-            if date == nil {
-                isoFormatter.formatOptions = [.withInternetDateTime]
-                date = isoFormatter.date(from: isoTime)
-            }
-            
-            if let gameDate = date {
+            if let gameDate = parseISO8601(isoTime) {
                 let formatter = DateFormatter()
                 formatter.timeZone = TimeZone(identifier: "America/New_York")
                 formatter.dateFormat = "EEEE h:mm a"
@@ -2582,9 +2569,7 @@ struct BillfoldView: View {
     }
     
     private func formatISO(_ date: Date) -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter.string(from: date)
+        isoFormatterNoFrac.string(from: date)
     }
     
     private func calculateRecord() -> (wins: Int, losses: Int, pushes: Int) {
@@ -5533,15 +5518,7 @@ enum Formatters {
         guard let isoTime = isoTime, !isoTime.isEmpty else { return "" }
         
         // Try to parse ISO format: "2025-12-07T18:00:00Z"
-        let isoFormatter = ISO8601DateFormatter()
-        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        
-        // Try with fractional seconds first, then without
-        var date = isoFormatter.date(from: isoTime)
-        if date == nil {
-            isoFormatter.formatOptions = [.withInternetDateTime]
-            date = isoFormatter.date(from: isoTime)
-        }
+        let date = parseISO8601(isoTime)
         
         guard let gameDate = date else {
             // Fallback: return cleaned version
@@ -7068,13 +7045,13 @@ struct GaryNotesCard: View {
     let lineup: DFSLineup
 
     private var hasNotes: Bool {
-        lineup.gary_notes != nil && !(lineup.gary_notes?.isEmpty ?? true)
+        !(lineup.gary_notes?.isEmpty ?? true)
     }
     private var hasThesis: Bool {
-        lineup.build_thesis != nil && !(lineup.build_thesis?.isEmpty ?? true)
+        !(lineup.build_thesis?.isEmpty ?? true)
     }
     private var hasCeiling: Bool {
-        lineup.harmony_reasoning != nil && !(lineup.harmony_reasoning?.isEmpty ?? true)
+        !(lineup.harmony_reasoning?.isEmpty ?? true)
     }
     private var hasContent: Bool {
         hasNotes || hasThesis || hasCeiling
@@ -7215,33 +7192,6 @@ struct GaryNotesCard: View {
         }
     }
 
-    // Split notes into logical bullet points (by sentence boundaries)
-    private func splitIntoSentences(_ text: String) -> [String] {
-        // Split on ". " but keep the period, also handle newlines
-        var results: [String] = []
-        let lines = text.components(separatedBy: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-
-        for line in lines {
-            // If the line is already short enough, keep as-is
-            if line.count < 80 {
-                results.append(line.trimmingCharacters(in: .whitespaces))
-                continue
-            }
-            // Split longer lines by sentences
-            let sentences = line.components(separatedBy: ". ")
-            for (i, s) in sentences.enumerated() {
-                let trimmed = s.trimmingCharacters(in: .whitespaces)
-                guard !trimmed.isEmpty else { continue }
-                // Re-add period if it was removed by split (except last segment which may already have one)
-                if i < sentences.count - 1 && !trimmed.hasSuffix(".") {
-                    results.append(trimmed + ".")
-                } else {
-                    results.append(trimmed)
-                }
-            }
-        }
-        return results
-    }
 }
 
 // MARK: - Analysis Section Row (used inside GaryNotesCard)

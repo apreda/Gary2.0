@@ -1,5 +1,14 @@
 import Foundation
 
+// MARK: - Shared Formatters (expensive to create — reuse)
+
+private let currencyFormatter: NumberFormatter = {
+    let f = NumberFormatter()
+    f.numberStyle = .currency
+    f.maximumFractionDigits = 0
+    return f
+}()
+
 // MARK: - Generic Picks Value Decoder
 // Handles both JSON array and stringified JSON from Supabase
 
@@ -139,7 +148,7 @@ struct ContradictingFactors: Codable {
     }
 }
     
-    var id: String { pick_id ?? UUID().uuidString }
+    var id: String { pick_id ?? "\(homeTeam ?? "?")-\(awayTeam ?? "?")-\(league ?? "?")-\(type ?? "?")" }
     
     /// Check if this is an NBA Cup game
     var isNBACup: Bool {
@@ -979,11 +988,8 @@ struct DFSLineup: Identifiable, Decodable {
     
     /// Formatted salary display (e.g., "$49,700 / $50,000")
     var salaryDisplay: String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.maximumFractionDigits = 0
-        let used = formatter.string(from: NSNumber(value: total_salary)) ?? "$\(total_salary)"
-        let cap = formatter.string(from: NSNumber(value: salary_cap)) ?? "$\(salary_cap)"
+        let used = currencyFormatter.string(from: NSNumber(value: total_salary)) ?? "$\(total_salary)"
+        let cap = currencyFormatter.string(from: NSNumber(value: salary_cap)) ?? "$\(salary_cap)"
         return "\(used) / \(cap)"
     }
     
@@ -1099,15 +1105,12 @@ struct DFSPlayer: Identifiable, Decodable {
     
     /// Formatted salary (e.g., "$7,800")
     var salaryFormatted: String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: salary)) ?? "$\(salary)"
+        currencyFormatter.string(from: NSNumber(value: salary)) ?? "$\(salary)"
     }
-    
+
     /// Has rationale to display
     var hasRationale: Bool {
-        rationale != nil && !(rationale?.isEmpty ?? true)
+        !(rationale?.isEmpty ?? true)
     }
     
     /// Is this player a value play? (5x+ value score)
@@ -1253,19 +1256,13 @@ struct DFSPivot: Identifiable, Decodable {
     
     /// Formatted salary (e.g., "$7,800")
     var salaryFormatted: String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: salary)) ?? "$\(salary)"
+        currencyFormatter.string(from: NSNumber(value: salary)) ?? "$\(salary)"
     }
-    
+
     /// Formatted salary difference (e.g., "$100" or "$1,200") - no sign, arrow shows direction
     var salaryDiffFormatted: String {
         guard let diff = salaryDiff else { return "" }
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: abs(diff))) ?? "$\(abs(diff))"
+        return currencyFormatter.string(from: NSNumber(value: abs(diff))) ?? "$\(abs(diff))"
     }
     
     /// Display label for the tier

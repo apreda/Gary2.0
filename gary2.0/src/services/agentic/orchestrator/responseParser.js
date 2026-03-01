@@ -301,6 +301,9 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
     pickText = pickText.replace(/[+-]X\.X/g, 'ML');
   }
 
+  // Strip parenthesized odds from pick text — Gary sometimes wraps odds in parens like "(−115)"
+  pickText = pickText.replace(/\s*\([+-]\d{3,4}\)\s*$/, '').trim();
+
   // FIX: If pick says "Team spread -110" without actual number, insert the spread value
   if (pickText.toLowerCase().includes(' spread ') && parsed.spread) {
     const spreadNum = parseFloat(parsed.spread);
@@ -335,14 +338,12 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
   if (odds == null) {
     console.warn(`[Orchestrator] ⚠️ NO ODDS AVAILABLE for pick "${pickText}" — AI and game data both missing`);
   }
-  if (!pickText.includes('-1') && !pickText.includes('+1') && !pickText.includes('-2') && !pickText.includes('+2')) {
-    // Odds not in pick text, append them only if we have real odds
-    if (odds != null && typeof odds === 'number') {
-      const oddsStr = odds > 0 ? `+${odds}` : `${odds}`;
-      if (!pickText.includes(oddsStr)) {
-        pickText = `${pickText} ${oddsStr}`;
-      }
-    }
+  // Append odds to pick text if not already present
+  // American odds are 3+ digits (e.g., -115, +111) — don't confuse with spreads (e.g., +10.5, -7.5)
+  const alreadyHasOdds = /[+-]\d{3,}/.test(pickText);
+  if (!alreadyHasOdds && odds != null && typeof odds === 'number') {
+    const oddsStr = odds > 0 ? `+${odds}` : `${odds}`;
+    pickText = `${pickText} ${oddsStr}`;
   }
 
   // SPREAD SIGN VALIDATION: Ensure the spread in pick text has the correct sign

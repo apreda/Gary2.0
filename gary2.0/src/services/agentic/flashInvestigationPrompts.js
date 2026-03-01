@@ -104,6 +104,7 @@ When a player is listed as GTD or Questionable after missing time:
 **Tokens:** CLUTCH_STATS, BLOWOUT_TENDENCY, LUCK_ADJUSTED, HOME_AWAY_SPLITS
 - Close game record vs expected record — is either team due for regression?
 - Home/away efficiency splits — what SPECIFIC metric changes?
+- Investigate whether the spread is being moved by home court or by the travel, rest, and schedule context surrounding this game.
 
 ## DEEP INVESTIGATION — NBA-SPECIFIC
 
@@ -142,7 +143,46 @@ When L5/L10 diverges from season baseline:
 - What evidence distinguishes a real shift from variance?
 - Are the key contributors outperforming their baselines, and is that likely to continue?
 - Season avg = baseline identity. L5/L10 = current form. The gap tells the story.
-- Which of this team's strengths are stable vs volatile — and what does that mean for tonight?`;
+- Which of this team's strengths are stable vs volatile — and what does that mean for tonight?
+
+### WHAT'S IN THE SPREAD?
+The spread prices in more than raw team quality. Records, rankings, home court, schedule context, and the SPOT all move lines.
+
+**CAUSAL VS DESCRIPTIVE:**
+- Records, rankings, and streaks DESCRIBE — they tell you what happened. They explain why the line is set where it is. But "40-20" can't tell you which side of tonight's spread is the better bet.
+- Stats that measure HOW a team plays EXPLAIN — they reveal what's causing the results and how each team's strengths match up against the opponent's weaknesses.
+- The SPOT — venue, schedule, rest situations, emotional context — creates variance that shapes how tonight plays out.
+- Investigate all three layers: descriptive context (explains the line), causal metrics (explains the matchup), AND situational factors (the spot).
+
+When you cite a record, ranking, or situation — ask: "Is this describing what happened, or explaining what will happen tonight?"
+
+**FOR LARGE SPREADS (8+ points):**
+Large spreads are about MARGIN, not just winning. Investigate:
+- Does the depth comparison for BOTH teams support or undermine this margin?
+- In the NBA, rotation depth and bench quality determine whether a team can sustain a lead. How does rotation depth affect whether a team can extend or close a gap?
+- Which team's depth is the bigger factor — can the deeper team pile on, or can the shorter rotation hold on?
+
+### INJURY MARKET TIMING
+- For each injury: How long has the market known about this? What do the team's stats look like during the absence?
+- If the team has played multiple games without this player, investigate: Has the line had time to reflect the change?
+
+### YOUR SCOUT REPORT IS YOUR BASELINE (DO NOT RE-FETCH)
+- **Advanced Metrics (season baseline):** Net Rating, Offensive/Defensive Rating, Four Factors, Pace — the spread likely already reflects these
+- **Standings:** Conference standing, playoff positioning
+- **Recent Form:** L5/L10 game-by-game scores, margins, statistical trends
+- **H2H History:** Previous matchups this season
+- **Injuries:** Full injury report with freshness labels
+- **Roster Depth:** Top players per team with stats and usage rates
+
+This is the BASELINE — who these teams are. Your investigation should focus on what's DIFFERENT about THIS game vs the baseline.
+
+### NBA INVESTIGATION TRIGGERS
+Watch for these patterns that require deeper investigation:
+- **Schedule Spot**: Back-to-backs, road trips, rest advantages — what does the data show about each team's performance in similar schedule spots this season?
+- **Revenge / Rematch**: NBA teams play 3-4 times per season. What changed since the last meeting — roster health, form, lineup adjustments?
+- **Home Court Factor**: Investigate what the home/away data reveals about venue impact for each team, and what that means relative to the spread.
+- **Regression Check**: When L5/L10 shooting or efficiency diverges from the season baseline, what does the evidence show about sustainability?
+- **Market Efficiency**: NBA lines are heavily bet — investigate whether transient factors (rest, travel, injury timing) are creating a gap between the data and the number.`;
 
 // ═══════════════════════════════════════════════════════════════════════
 // NFL INVESTIGATION FACTORS
@@ -485,7 +525,7 @@ Work through each numbered factor below. Check off each one as you complete it. 
 - Home court effects are real and significant in college
 - Home/away efficiency splits — what SPECIFIC metric changes?
 - How does this team play at home vs how do they play on the road?
-- Is the home court advantage fully captured in the spread?
+- Investigate how much of the spread is driven by home court — is the number reflecting the venue, crowd, and travel dynamics accurately, or is it over or undervaluing either side because of where this game is being played?
 
 ### 11. HEAD-TO-HEAD
 **Tokens:** H2H_HISTORY
@@ -527,7 +567,7 @@ Watch for these patterns that require deeper investigation:
 - **Conference vs Non-Conference**: A team's performance in conference play may differ significantly. Which is more relevant?
 - **SOS Filter**: Is either team's record inflated? Refer to the SOS data in your scout report.
 - **Conference Rematch**: Second meeting between rivals. Coaching adjustments may shift dynamics.
-- **Home Court Factor**: What does the home/away data reveal about venue impact, and how does it compare to the spread?
+- **Home Court Factor**: Investigate what the home/away data shows about venue impact for each team, and what that means relative to the spread.
 - **Regression Check**: When recent shooting diverges from the season baseline, what does the evidence show about sustainability?
 
 ### HOME COURT & VENUE

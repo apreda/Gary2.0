@@ -11,16 +11,26 @@ import { ballDontLieService } from '../../../ballDontLieService.js';
 import { nbaSeason, formatSeason } from '../../../../utils/dateUtils.js';
 import { seasonForSport, findTeamInStandings, sportToBdlKey } from './utilities.js';
 
-// Lazy-initialize Gemini for grounded searches
+// Lazy-initialize Gemini for grounded searches (supports key rotation)
+import { isUsingBackupKey } from '../../modelConfig.js';
+
 let geminiClient = null;
+let _groundingKeyIsBackup = false;
 export function getGeminiClient() {
+  // Recreate client if key was rotated
+  if (geminiClient && isUsingBackupKey() !== _groundingKeyIsBackup) {
+    geminiClient = null;
+  }
   if (!geminiClient) {
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = isUsingBackupKey()
+      ? (process.env.GEMINI_API_KEY_BACKUP || process.env.GEMINI_API_KEY)
+      : process.env.GEMINI_API_KEY;
     if (!apiKey) {
       console.warn('[Scout Report] GEMINI_API_KEY not set - Grounding disabled');
       return null;
     }
     geminiClient = new GoogleGenerativeAI(apiKey);
+    _groundingKeyIsBackup = isUsingBackupKey();
   }
   return geminiClient;
 }
@@ -510,8 +520,20 @@ CRITICAL REMINDER: Today is ${todayStr}. Use ONLY fresh search results. Your 202
         });
       }
 
-      // Reverse fallback: Pro 429 → try Flash (both support google_search grounding)
+      // Reverse fallback: Pro 429 → try rotating API key, then Flash
       if (is429 && options._useProFallback) {
+        if (!isUsingBackupKey()) {
+          const { rotateToBackupKey } = await import('../../modelConfig.js');
+          if (rotateToBackupKey()) {
+            console.log(`[Grounding Search] ⚠️ Pro quota exceeded — rotated to backup API key, retrying`);
+            geminiClient = null; // Force client recreation with new key
+            return geminiGroundingSearch(query, {
+              ...options,
+              _useProFallback: false,
+              _usedProFallback: false
+            });
+          }
+        }
         console.log(`[Grounding Search] ⚠️ Pro also quota exceeded (429) - falling back to Flash`);
         return geminiGroundingSearch(query, {
           ...options,

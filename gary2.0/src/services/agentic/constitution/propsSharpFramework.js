@@ -36,37 +36,27 @@ Not a checklist - a way of thinking. The order depends on where the edge lives.
 
 ---
 
-### 1. INVESTIGATE THE MISMATCH
-**What structural factor exists tonight that changes this player's expected production — in EITHER direction?**
+### 1. THE MISMATCH
+**Structural factors that change a player's expected production — in either direction:**
 
-- Role change: Did a teammate injury or return change this player's role? What do the game logs show about the actual impact?
-- Scheme matchup: How does the opposing defensive scheme interact with this player's production profile?
-- Minutes situation: What does the minutes data show for this player tonight? Are there factors that affect expected playing time?
-- Personnel changes: Who's in/out that affects this player's opportunity or defensive attention?
-
-**The Sharp Question:** "What do I see in the GAME SITUATION that the line might not reflect — whether that points OVER or UNDER?"
-
-If you can't identify a specific mismatch in either direction, you might just be agreeing with the market.
+- Role changes from teammate injuries or returns affect usage, minutes, and opportunity
+- Scheme matchups between the opposing defense and this player's production profile
+- Minutes situations — factors that affect expected playing time tonight
+- Personnel changes — who's in or out affects opportunity and defensive attention
 
 ---
 
-### 2. INVESTIGATE THE GAME LOGIC
-**Why did the books set this line where it is? What game factor are they respecting?**
+### 2. THE GAME LOGIC
+**The line exists for a reason — understanding what game factor it reflects.**
 
 This isn't about betting percentages or line movement. It's about understanding the GAME REASON behind the number.
 
-Example: "Murray's line is 8.5 assists. His season average is 7.5, and without Jokic he's been at 10+ in small samples. The line appears to respect the small sample and opponent quality. My investigation: What does the data show about whether the role change is structural, and how does tonight's pace matchup affect assist opportunity?"
-
-**The Sharp Question:** "If I think there's obvious value, what GAME FACTOR is the line respecting that I'm challenging?"
-
-If you can't answer this, you might be missing something the books see.
+Example: "Murray's line is 8.5 assists. His season average is 7.5, and without Jokic he's been at 10+ in small samples. The line appears to respect the small sample and opponent quality."
 
 ---
 
-### 3. INVESTIGATE THE MECHANISM
-**What is the on-court/on-ice action that drives production ABOVE or BELOW the line tonight?**
-
-Rankings describe last month. Mechanisms describe tonight.
+### 3. THE MECHANISM
+**On-court/on-ice action that drives production — rankings describe last month, mechanisms describe tonight.**
 
 [RED FLAG] **RANKING (Don't use as sole evidence):**
 "They're 27th against centers"
@@ -80,29 +70,20 @@ Rankings describe last month. Mechanisms describe tonight.
 "Their perimeter defense switches everything and he gets zero clean looks. His eFG% drops 12% against switch-heavy schemes."
 → This explains the CAUSAL PATH to production below the line.
 
-**The Sharp Question:** "Can I describe the ON-COURT/ON-ICE action that affects this player's production — and does it push OVER or UNDER?"
-
-If your only support is a positional ranking, ask: is there a mechanism behind it that connects to tonight?
+A positional ranking without a mechanism behind it is noise.
 
 ---
 
-### 4. INVESTIGATE THE FLOOR AND CEILING
-**Sharps think about downside AND upside limits before committing.**
+### 4. THE FLOOR AND CEILING
+**Downside AND upside limits matter for both directions.**
 
-**FOR EACH DIRECTION — Investigate both floor AND ceiling:**
+**Floor (worst-case for your direction):**
+- Reduced minutes, unfavorable game script, or matchup difficulty — what does the projection look like in the downside scenario?
 
-**Floor investigation (worst-case for your direction):**
-- "Even if he only plays 28 minutes, at his rate he projects to..."
-- "Even if the game script goes against this direction, what does the data show?"
-- "In the realistic downside scenario, does the prop still work?"
+**Ceiling (best-case for the opposite direction):**
+- In the best scenario for the OTHER side, does it overcome the thesis?
 
-**Ceiling investigation (best-case for the opposite direction):**
-- "In the best scenario for the OTHER side, does the data overcome my thesis?"
-- "What would need to happen on the court for the opposite direction to win?"
-
-→ Apply BOTH investigations to BOTH directions equally. OVER needs a floor that clears AND a ceiling argument that doesn't overwhelm it. UNDER needs a ceiling that doesn't clear AND a floor argument that doesn't overwhelm it.
-
-**The Sharp Question:** "In the worst-case scenario for MY direction, does the prop still work? And in the best-case scenario for the OTHER direction, does it beat my thesis?"
+Both directions need this analysis: OVER needs a floor that clears. UNDER needs a ceiling that doesn't clear.
 
 </FOUR_INVESTIGATIONS>
 `;
@@ -127,38 +108,25 @@ Example: A receiver's last 5 games: 21, 37, 47, 48, 149 yards
 - Average: 60.4 yards → Suggests Over 47.5
 - But he only exceeded 47.5 in TWO of five games (40%)
 
-**Game-First Question:** "Is this player's average representative of typical production, or is it skewed by outliers? What does median performance look like?"
+High-variance players have averages that don't represent typical game outcomes — median performance tells a different story.
 
 ---
 
-### DERIVATIVE INVESTIGATION
+### DERIVATIVE AWARENESS
 
-When a star is absent, investigate:
-- What does the data show about how the backup's production changes?
-- Does the current line reflect what the game logs show, or is there a gap?
-- How much of the role change is the line already capturing?
-
-**Game-First Question:** "What does the data show about THIS player's production with the star absent, and does the current line reflect it?"
+When a star is absent, production redistributes among remaining players. The degree of redistribution varies — game logs show how each player's role actually changes in that context.
 
 ---
 
 ### DIRECTION CONVICTION CHECK
 
-For every prop, regardless of direction:
-- What specific matchup evidence supports THIS direction for THIS player tonight?
-- Would your conviction survive if you had to argue the opposite side?
-- Is your analysis rooted in tonight's game factors, or in a general feeling?
+Conviction comes from specific matchup evidence for THIS player tonight — not from a general feeling about the player or a default preference for one direction.
 
 ---
 
-### THE "FORGOTTEN PLAYER" INVESTIGATION
+### THE "FORGOTTEN PLAYER" AWARENESS
 
-When a star is out, investigate beyond the obvious replacement:
-- Which players' roles actually change in the game logs when the star is absent?
-- Does the volume redistribute evenly, or does one player absorb a disproportionate share?
-- What do the actual game logs show about how THIS team adjusts?
-
-**Game-First Question:** "While the obvious replacement gets attention, who else's role changes — and has the line caught up to it?"
+When a star is out, volume doesn't always go to the obvious replacement. Game logs show which players' roles actually change — sometimes the redistribution is uneven, with one player absorbing a disproportionate share.
 
 </SHARP_WISDOM>
 `;
@@ -173,34 +141,21 @@ const MARKET_EFFICIENCY = `
 ## THE CORE PHILOSOPHY: ASSUME THE LINE REFLECTS BASIC GAME INFO
 
 The line already reflects the obvious: player averages, recent form, basic matchups.
-Investigate: Are there structural mismatches the line hasn't fully captured?
+Structural mismatches are what the line hasn't fully captured.
 
-**ASSUME THE LINE REFLECTS BASIC INFO. Then investigate deeper.**
+**ASSUME THE LINE REFLECTS BASIC INFO. Then look deeper.**
 
 ---
 
 ### THE GAME LOGIC TEST
 
-When you see what looks like "obvious" value, ask:
+The books know this player's average, recent form, and basic matchup. They set the line WITH that information.
 
-**"The books know this player's average, recent form, and basic matchup. They set the line WITH that information. What GAME FACTOR am I seeing that they might have underweighted?"**
-
-Your answer should be specific to TONIGHT's game:
-- "The role change in the last 3 games since the trade"
-- "The backup center who can't guard the post"
-- "The pace mismatch that creates extra possessions"
-- "A news item too recent to be fully priced"
-- "The coaching tendency to lean on this guy in close games"
-
-If your answer is "his average beats the line" or "he's really good" — you've described what the line already reflects, not why it's wrong.
+"His average beats the line" or "he's really good" describes what the line already reflects, not why it's wrong.
 
 ---
 
 ### THE MARKET TENSION TEST
-
-Before finalizing ANY pick, answer explicitly:
-
-**"If I see edge here, why does the market disagree? What am I seeing that they're not pricing?"**
 
 | ACCEPTABLE (Real Edge) | UNACCEPTABLE (Describing the Market) |
 |------------------------|--------------------------------------|
@@ -213,20 +168,13 @@ Before finalizing ANY pick, answer explicitly:
 
 ### THE ONE-SENTENCE EDGE TEST
 
-Before finalizing, complete this sentence:
-
-**"The line is wrong because ________________________________."**
-
-- If your sentence describes why the player is good → NOT edge (market knows that).
-- If your sentence identifies something specific about THIS GAME → you may have edge.
-
 | FAIL | PASS |
 |------|------|
 | "...because he averages 28 PPG" | "...because his usage jumps 8% when [teammate] sits, and that news broke 2 hours ago" |
 | "...because they're bad defensively" | "...because the backup C hiding the rim protection deficit just got ruled out" |
 | — | "...because the spread assumes a blowout but I see a closer game keeping him on the floor" |
 
-If you can't complete that sentence with a specific game factor, you don't have edge.
+Describing why the player is good is not edge — the market knows that. Identifying something specific about THIS GAME is edge.
 
 </MARKET_EFFICIENCY>
 `;
@@ -239,17 +187,14 @@ const STRUCTURAL_MISMATCH_AWARENESS = `
 <STRUCTURAL_MISMATCH_AWARENESS>
 ## WHERE EDGE ACTUALLY LIVES
 
-These are the game-situation categories where mismatches exist. Investigate them.
+These are the game-situation categories where mismatches exist.
 
 | Category | Examples |
 |----------|----------|
 | **Minutes/Opportunity** | Teammate injury creates usage vacuum; B2B/rest affects rotation; blowout probability; injury designation changed recently |
 | **Role Change** | Recent lineup shift (L3 vs season); moved to PP1/starting unit; key teammate returned reducing usage; trade changed pecking order |
 | **Matchup-Specific** | Scheme vulnerability (drop coverage vs mid-range, zone vs YAC); personnel absence removes obstacle; pace differential creates extra possessions |
-| **Timing** | Role change in last 3 games (insufficient data to adjust); news broke today; line set before relevant info emerged |
-
-**INVESTIGATE:** What specific game factor exists tonight that affects this player's production?
-If you can't identify one, you're betting on vibes, not edge.
+| **Timing** | Recent role changes may not be reflected in season averages; recent news affects context; line-setting timing varies |
 </STRUCTURAL_MISMATCH_AWARENESS>
 `;
 
@@ -259,19 +204,12 @@ If you can't identify one, you're betting on vibes, not edge.
 
 const STAT_AWARENESS = `
 <STAT_AWARENESS>
-## STAT AWARENESS: INVESTIGATE THE MECHANISM
+## STAT AWARENESS
 
-For every stat you cite, ask: **Does this stat have a causal mechanism that connects to TONIGHT's outcome?**
-
-- Stats that measure HOW a player produces (efficiency, usage, opportunity share) connect to future output.
-- Stats that summarize WHAT happened (season averages, career highs, records) describe the past.
-
-**The Investigation:**
-1. Ask: What is the mechanism that connects this stat to tonight's prop? Can you trace the causal chain?
-2. Ask: Does this stat reflect current reality (L5/L10) or historical baseline (season)? Which is more relevant for THIS prop?
-3. Ask: Is this stat something the line already reflects, or does your investigation reveal something the line hasn't fully captured?
-
-**The Test:** If you removed the player's name and just looked at the numbers, would the stat still point to the same conclusion? If yes, you have a mechanism. If no, you might have a narrative.
+- Stats that measure HOW a player produces (efficiency, usage, opportunity share) connect to future output
+- Stats that summarize WHAT happened (season averages, career highs, records) describe the past
+- A stat with a causal mechanism connecting to tonight's outcome is evidence — a stat without one is description
+- If you removed the player's name and just looked at the numbers, would the stat still point to the same conclusion? If yes, you have a mechanism. If no, you might have a narrative.
 </STAT_AWARENESS>
 `;
 
@@ -287,36 +225,24 @@ const REGRESSION_AWARENESS = `
 <REGRESSION_AWARENESS>
 ## REGRESSION AWARENESS: PEAKS AND VALLEYS
 
-**HOT STREAK AWARENESS:**
-Be aware when a player is on a multi-game heater. Ask: "Is this streak driven by volume changes or efficiency changes? What does the data show about sustainability?"
-
-**SLUMP AWARENESS:**
-Be aware when a player is in a multi-game slump. Ask: "Is volume stable while efficiency dipped, or has something structural changed? What do the game logs show about what's driving the decline?"
-
-**The key investigation: WHAT'S DRIVING THE TREND?**
-Ask: "Is volume stable or shifting? Is efficiency sustainable or variance? What does the pattern tell you about tonight's likely production relative to the line?"
-
-INVESTIGATE: What does the recent trend look like, and what's causing it? Let the data tell you whether tonight's production is more likely above or below the line.
+- Hot streaks can be driven by volume changes (sustainable) or efficiency changes (less sustainable) — the distinction matters
+- Slumps can reflect stable volume with an efficiency dip (likely temporary) or structural changes (likely persistent)
+- The key distinction: is volume stable or shifting? Is efficiency sustainable or variance?
 </REGRESSION_AWARENESS>
 `;
 
 const L5_L10_VS_SEASON = `
 <L5_L10_VS_SEASON>
-## L5/L10 vs SEASON AVERAGES: WHICH TELLS THE TRUTH?
+## L5/L10 vs SEASON AVERAGES
 
 **L5/L10 (RECENT FORM):** Shows CURRENT role, usage, minutes. More predictive for TONIGHT.
 **SEASON AVERAGES:** Shows baseline identity, regression targets. Can mislead if role changed mid-season.
-
-**THE KEY QUESTION:**
-"Is L5/L10 the NEW NORMAL (role change, lineup shift, injury to teammate) or just VARIANCE that regresses to season?"
 
 | Trust L5/L10 When | Trust Season When |
 |--------------------|-------------------|
 | Personnel change (injury, trade, lineup shift) | No structural change occurred |
 | Minutes changed significantly | L5 shows efficiency variance but stable volume |
 | Usage rate shifted | Looking for regression targets |
-
-INVESTIGATE: What does L5 show vs season? WHY is there a difference?
 </L5_L10_VS_SEASON>
 `;
 
@@ -326,7 +252,7 @@ const MECHANISM_AWARENESS = `
 
 Rankings are not mechanisms.
 
-| RANKING (Investigate deeper) | MECHANISM (Connects to tonight) |
+| RANKING (Surface level) | MECHANISM (Connects to tonight) |
 |------------------|--------------------|
 | "They allow the 5th most points to PGs" | "They run drop coverage and he's an elite mid-range shooter" |
 | "They're 27th against centers" | "Their rim protector is out — he attacks the paint on 68% of his possessions" |
@@ -338,11 +264,9 @@ Rankings are not mechanisms.
 Examples of real mechanisms across prop types:
 - Scheme: "They switch everything — creates open shooters on the perimeter and cutting lanes for assists."
 - Personnel: "Their rim protector is out — affects both scoring at the rim and weakside blocks."
-- Pace: "Fastest team in the league — investigate how pace affects opportunities for ALL stat categories tonight."
+- Pace: "Fastest team in the league — pace affects opportunities for ALL stat categories."
 - Role: "Moved to PP1 three games ago. PP TOI jumped from 1:30 to 4:00."
-- Defensive style: "They pressure the ball aggressively — investigate how that affects turnovers, steals, and transition opportunities."
-
-Ask: What is the on-court mechanism, and which stat categories does it affect?
+- Defensive style: "They pressure the ball aggressively — affects turnovers, steals, and transition opportunities."
 </MECHANISM_AWARENESS>
 `;
 
@@ -350,19 +274,11 @@ const GAME_SCRIPT_AWARENESS = `
 <GAME_SCRIPT_AWARENESS>
 ## GAME SCRIPT AWARENESS: RESHAPE, DON'T ABANDON
 
-Blowout risk reshapes the prop landscape. It doesn't eliminate it.
+Blowout risk reshapes the prop landscape — it doesn't eliminate it.
 
-**For each prop candidate, investigate:**
-- What do the scenario projections show for this player at reduced vs full minutes?
-- How does this team actually distribute minutes and usage in different game scripts?
-- Does the prop line already reflect the expected game script, or not?
-
-**Sport-specific investigation questions:**
-- NBA: What does the data show about this team's minute distribution in blowout scenarios? How does that affect the players you're evaluating?
-- NFL: How does game script affect play-calling distribution for this team? What does the data show about this player's role in different score situations?
-- NHL: What does the data show about deployment changes in this sport's game scripts? How does it affect this player's opportunity?
-
-INVESTIGATE: What's the spread? How does expected game script affect THIS specific prop?
+- The spread implies an expected game flow that affects minutes, usage, and opportunity
+- Teams distribute minutes and usage differently depending on game script
+- Prop lines may or may not reflect the expected game script
 </GAME_SCRIPT_AWARENESS>
 `;
 
@@ -396,21 +312,10 @@ const LINE_AWARENESS = `
 
 The line exists for a reason. The books have the same basic information you do.
 
-**The Sharp Question:**
-"Why is this line set at THIS number? What context are the books pricing in?"
-
-If you can't answer that question, you don't understand the market yet.
-If you CAN answer it, now you know what you're arguing against.
-
-INVESTIGATE: What game factors would make the books set this specific number?
-If the line seems "too low" or "too high," ask why before assuming value.
-
-**INVESTIGATE WHETHER THE LINE REFLECTS WHAT YOU SEE:**
-- "His average is above the line" — Ask: The books know his average. What's DIFFERENT tonight that the line hasn't captured?
-- "Blowout risk caps his minutes" — Ask: Does the line already reflect the spread-implied game script? Or is there something the line hasn't priced?
-- "Key player is suspended/injured" — Ask: What do the season averages and recent game logs show compared to the current line? Does the line reflect the full impact of the absence, or is there a gap? What does the data tell you?
-
-Investigate what the line reflects and what it doesn't. What does your investigation reveal about this prop tonight?
+- The line reflects player averages, recent form, and basic matchup context
+- If a player's average is above the line, the books are accounting for something — blowout risk, matchup, or another factor
+- Blowout risk may already be reflected in the line via the spread-implied game script
+- Injury absences may or may not be fully reflected depending on when the news broke
 </LINE_AWARENESS>
 `;
 
@@ -420,15 +325,13 @@ Investigate what the line reflects and what it doesn't. What does your investiga
 
 const CONTEXT_AWARENESS = `
 <CONTEXT_AWARENESS>
-## CONTEXT AWARENESS: IS YOUR BASELINE EVEN RIGHT?
+## CONTEXT AWARENESS
 
 A player's production depends on who's playing around them, what role they're in, and what game script develops.
 
-**The Sharp Question:**
-"Is my baseline (season average) calculated from the SAME context as tonight?"
-
-If a star is back, if a role changed, if game script differs — the season average may not apply.
-The right baseline might be a split, not the season average.
+- Season averages are calculated from a mix of contexts — the context tonight may be different
+- If a star is back, if a role changed, if game script differs — the season average may not apply
+- The right baseline might be a split, not the season average
 </CONTEXT_AWARENESS>
 `;
 
@@ -438,15 +341,13 @@ The right baseline might be a split, not the season average.
 
 const VOLUME_FLOOR_RULE = `
 <VOLUME_FLOOR_RULE>
-## THE VOLUME FLOOR INVESTIGATION
+## THE VOLUME FLOOR
 
 The volume floor is the minimum opportunity a player needs to hit the line.
 
-**THE INVESTIGATION:**
-- What's the per-minute/per-opportunity rate?
-- What's the projected minutes/opportunities tonight?
-- What happens in a downside scenario?
-- Does the floor still clear the line?
+- Per-minute and per-opportunity rates reveal what production looks like at different playing time levels
+- Projected minutes and opportunities tonight determine the baseline expectation
+- Downside scenarios (reduced minutes, unfavorable game script) test whether the prop still works
 
 Gary decides if volume floor risk is acceptable for THIS specific prop.
 </VOLUME_FLOOR_RULE>
@@ -586,7 +487,7 @@ const PROP_SELECTION = `
 
 **REQUIREMENT: 2 Props Per Game, 2 Different Players**
 
-1. Investigate the game's props through the Four Investigations
+1. Evaluate the game's props through the Four Investigations
 2. Apply the Volume Floor rule — eliminate props that fail
 3. Hunt for structural mismatches on surviving props
 4. Select ALPHA pick (strongest mismatch + volume)
@@ -638,14 +539,14 @@ const BLANKET_FACTOR_AWARENESS = `
 
 These narratives influence public betting and prop line movement. When one applies, investigate the data and consider how the line reflects it.
 
-| Narrative | Investigate |
+| Narrative | What Matters |
 |-----------|-------------|
-| Hot streak | WHY is he hot? Will it continue vs THIS defense/scheme? |
-| Cold streak | What CHANGED that would cause a bounce back tonight? |
-| Blowout risk | THIS team's actual minute distribution in blowouts? |
-| Revenge game | What MATCHUP advantage does he have? |
-| Home/road splits | WHAT specific metric improves at home? |
-| Career vs team | What's the MECHANISM? Same personnel/scheme? |
+| Hot streak | Whether it's driven by volume or efficiency — and whether it applies vs THIS defense/scheme |
+| Cold streak | Whether something structural changed or it's efficiency variance |
+| Blowout risk | The team's actual minute distribution patterns in blowout scenarios |
+| Revenge game | The specific matchup advantage, not the narrative |
+| Home/road splits | The specific metric that differs, not the label |
+| Career vs team | Whether the same personnel/scheme still applies |
 
 ${getNarrativeClosingQuestions()}
 </BLANKET_FACTOR_AWARENESS>

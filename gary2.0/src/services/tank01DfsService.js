@@ -750,73 +750,6 @@ export async function fetchNbaProjections(dateStr) {
 }
 
 // ============================================================================
-// NBA NEWS (Breaking headlines — injury updates, trades, rest decisions)
-// ============================================================================
-
-let _newsCache = null;
-let _newsCachedAt = 0;
-const NEWS_CACHE_TTL = 15 * 60 * 1000; // 15 min (news changes frequently)
-
-/**
- * Fetch recent NBA news/headlines from Tank01
- *
- * @param {number} maxItems - Max number of headlines to fetch
- * @returns {Promise<Array>} Array of news items with title, link, playerIDs
- */
-export async function fetchNbaNews(maxItems = 30) {
-  const now = Date.now();
-  if (_newsCache && (now - _newsCachedAt) < NEWS_CACHE_TTL) {
-    console.log(`[Tank01 DFS] Using cached news (${_newsCache.length} items)`);
-    return _newsCache;
-  }
-
-  try {
-    const data = await makeApiRequest('/getNBANews', {
-      recentNews: 'true',
-      maxItems: String(maxItems)
-    });
-
-    const news = data?.body || [];
-    _newsCache = news;
-    _newsCachedAt = now;
-    console.log(`[Tank01 DFS] News loaded: ${news.length} headlines`);
-    return news;
-  } catch (err) {
-    console.warn(`[Tank01 DFS] News fetch failed: ${err.message}`);
-    return [];
-  }
-}
-
-/**
- * Match news headlines to players on today's slate
- * Returns a Map of playerName → array of relevant headlines
- *
- * @param {Array} newsItems - Raw news from fetchNbaNews
- * @param {Map} playerIdMap - Map of Tank01 playerID → playerName (from roster data)
- * @returns {Map<string, string[]>} Map of playerName → headline strings
- */
-export function matchNewsToPlayers(newsItems, playerIdMap) {
-  const newsMap = new Map();
-
-  for (const item of newsItems) {
-    const title = item.title || '';
-    const playerIDs = item.playerIDs || [];
-
-    for (const pid of playerIDs) {
-      const playerName = playerIdMap.get(String(pid));
-      if (!playerName) continue;
-
-      if (!newsMap.has(playerName)) {
-        newsMap.set(playerName, []);
-      }
-      newsMap.get(playerName).push(title);
-    }
-  }
-
-  return newsMap;
-}
-
-// ============================================================================
 export default {
   fetchDfsSalaries,
   fetchNbaRostersForTeams,
@@ -824,7 +757,5 @@ export default {
   fetchNbaTeamDefenseStats,
   getPlayerDvP,
   fetchNbaProjections,
-  fetchNbaNews,
-  matchNewsToPlayers,
 };
 

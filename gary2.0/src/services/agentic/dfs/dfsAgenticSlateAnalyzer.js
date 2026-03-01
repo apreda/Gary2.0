@@ -272,9 +272,9 @@ ${Object.keys(teamRosters).join(', ')}
 
 ## YOUR TASK
 Investigate this slate thoroughly using the tools available to you:
-- What does the injury situation look like across all teams? Note duration tags for each absence.
-- For teams missing key players, what does the current roster structure look like?
-- What does each game's environment data reveal?
+- Injury situation across all teams, noting duration tags for each absence
+- Current roster structure for teams missing key players
+- Each game's environment data (O/U, spread, implied totals)
 
 Document what you found — do NOT interpret it or label players as "beneficiaries."
 

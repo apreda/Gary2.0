@@ -3,6 +3,10 @@
  *
  * All model name strings and the shared GoogleGenerativeAI client live here
  * so every service references the same values.
+ *
+ * KEY ROTATION: When the primary API key hits quota (429), call rotateToBackupKey()
+ * to switch all clients to the backup key. This is automatic — all services that
+ * use getGeminiClient() will get the new key on their next call.
  */
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
@@ -37,12 +41,57 @@ export function validateGeminiModel(model) {
   return model;
 }
 
-// ── Shared Gemini client factory ────────────────────────────────────────────
+// ── Shared Gemini client factory with key rotation ──────────────────────────
 
 /** Lazy-init singleton for standard API (v1) */
 let _client = null;
 /** Lazy-init singleton for v1beta API (grounding, etc.) */
 let _clientBeta = null;
+/** Track which key is active */
+let _usingBackupKey = false;
+
+/**
+ * Get the active API key (primary or backup after rotation).
+ */
+function getActiveApiKey() {
+  if (_usingBackupKey) {
+    const backup = (() => { try { return process.env.GEMINI_API_KEY_BACKUP; } catch { return undefined; } })();
+    if (backup) return backup;
+    // Backup not set, fall through to primary
+    console.warn('[Model Config] GEMINI_API_KEY_BACKUP not set — staying on primary key');
+    _usingBackupKey = false;
+  }
+  const primary = (() => { try { return process.env.GEMINI_API_KEY; } catch { return undefined; } })();
+  if (!primary) throw new Error('GEMINI_API_KEY environment variable is required');
+  return primary;
+}
+
+/**
+ * Rotate to the backup API key. Clears all cached clients so the next
+ * getGeminiClient() call creates new ones with the backup key.
+ * Returns true if rotation succeeded, false if no backup key available.
+ */
+export function rotateToBackupKey() {
+  if (_usingBackupKey) {
+    console.warn('[Model Config] Already on backup key — no further rotation available');
+    return false;
+  }
+  const backup = (() => { try { return process.env.GEMINI_API_KEY_BACKUP; } catch { return undefined; } })();
+  if (!backup) {
+    console.warn('[Model Config] No GEMINI_API_KEY_BACKUP set — cannot rotate');
+    return false;
+  }
+  console.log('[Model Config] 🔄 Rotating to backup API key');
+  _usingBackupKey = true;
+  _client = null;
+  _clientBeta = null;
+  return true;
+}
+
+/** Check if we're currently on the backup key */
+export function isUsingBackupKey() {
+  return _usingBackupKey;
+}
 
 /**
  * Get (or create) a GoogleGenerativeAI client singleton.
@@ -50,13 +99,7 @@ let _clientBeta = null;
  * @returns {GoogleGenerativeAI}
  */
 export function getGeminiClient({ beta = false } = {}) {
-  const apiKey = (() => {
-    try { return process.env.GEMINI_API_KEY; } catch { return undefined; }
-  })();
-
-  if (!apiKey) {
-    throw new Error('GEMINI_API_KEY environment variable is required');
-  }
+  const apiKey = getActiveApiKey();
 
   if (beta) {
     if (!_clientBeta) {

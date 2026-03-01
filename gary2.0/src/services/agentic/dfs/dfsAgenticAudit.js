@@ -17,7 +17,7 @@
 
 import { isSlotEligible } from './dfsPositionUtils.js';
 import { getSalaryCap } from './dfsSportConfig.js';
-import { GEMINI_PRO_FALLBACK } from '../modelConfig.js';
+import { GEMINI_PRO_MODEL } from '../modelConfig.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // AUDIT SYSTEM PROMPT
@@ -49,38 +49,30 @@ If a player was traded in the off-season, the salary already reflects their curr
 
 <audit_checklist>
 1. CEILING CHECK
-   - What does the data show about this lineup's realistic ceiling?
-   - What specifically needs to happen for this lineup to reach the winning target?
-   - What does the data show about the outcome distribution for this lineup?
+   - Evaluate this lineup's realistic ceiling based on the data
+   - Identify what specifically needs to happen for this lineup to reach the winning target
+   - Consider the outcome distribution — how wide is the range?
 
 2. CORRELATION CHECK
-   - How are your players connected? What story do your game correlations tell?
-   - Are the correlated situations you're relying on supported by tonight's game environments?
-   - What does the distribution of your players across games reveal about your lineup's structure?
+   - Evaluate how your players are connected and whether your game correlations tell a coherent story
+   - Verify the correlated situations are supported by tonight's game environments
+   - Consider whether the distribution of players across games serves your lineup's structure
 
 3. VALUE CHECK
-   - How did you allocate your salary? What does the data show about the alternatives available?
-   - For each low-salary player, what specific data supports their upside thesis tonight?
-   - For each high-salary player, what does tonight's specific situation reveal about the salary allocation?
+   - Evaluate your salary allocation against the available alternatives
+   - For each low-salary player, identify the specific data supporting their upside thesis tonight
+   - For each high-salary player, verify tonight's situation justifies the salary allocation
 
 4. RISK ASSESSMENT
-   - What are the key risks to this lineup?
-   - How is risk distributed across this lineup? What happens if any one player busts?
-   - What does the floor scenario look like?
+   - Identify the key risks to this lineup
+   - Evaluate how risk is distributed — what happens if any one player busts?
+   - Consider the floor scenario
 
-5. WIN CONDITION — EVALUATE YOUR LINEUP
-   Ask yourself these questions and answer honestly:
-
-   - For EACH player in this lineup: What is the specific scenario where they boom tonight?
-     What specific data from your investigation supports that scenario?
-
-   - Which of those boom scenarios must co-occur for this lineup to reach the winning score?
-     How likely is it that they happen simultaneously? What does history show?
-
-   - What is the most likely way this lineup disappoints?
-     If that happens, what does the rest of your lineup's floor look like?
-
-   - What story does this lineup tell as a whole? How do the individual selections connect to a win condition?
+5. WIN CONDITION
+   - For EACH player: identify the specific boom scenario and the data supporting it
+   - Identify which boom scenarios must co-occur for the winning score — consider the likelihood of simultaneous hits
+   - Identify the most likely way this lineup disappoints and what the floor looks like if it happens
+   - Evaluate whether this lineup tells a coherent story as a whole
 </audit_checklist>
 
 <adjustments>
@@ -138,7 +130,7 @@ If you see issues, you can make 1-2 swaps. Be specific:
  * @returns {Object} - Audited lineup (possibly with adjustments)
  */
 export async function auditLineupWithPro(genAI, lineup, slateAnalysis, context, options = {}) {
-  const { modelName = GEMINI_PRO_FALLBACK } = options;
+  const { modelName = GEMINI_PRO_MODEL } = options;
   const { players, winningTargets, platform, sport } = context;
 
   console.log('[Lineup Audit] Gary Pro auditing lineup...');
@@ -249,7 +241,6 @@ ${topGames || 'No game environment data'}
 ## WINNING TARGETS
 - To WIN: ${winningTargets.toWin} pts
 - Top 1%: ${winningTargets.top1Percent} pts
-- Cash Line: ${winningTargets.toCash} pts
 
 ## YOUR LINEUP (to audit)
 ${lineupStr}

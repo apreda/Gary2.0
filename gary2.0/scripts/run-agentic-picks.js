@@ -20,7 +20,8 @@ import { ncaabSeason } from '../src/utils/dateUtils.js';
 const { analyzeGame, buildSystemPrompt } = await import('../src/services/agentic/orchestrator/index.js');
 const { oddsService } = await import('../src/services/oddsService.js');
 const { picksService } = await import('../src/services/picksService.js');
-const { getVenueForHomeTeam } = await import('../src/services/venueMapping.js');
+// venueMapping.js removed in cleanup — venue comes from scout report (result.venue)
+const getVenueForHomeTeam = () => null;
 const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
 const { getConstitution } = await import('../src/services/agentic/constitution/index.js');
 /**
@@ -1475,8 +1476,6 @@ async function main() {
             type: result.type,
             odds: result.type === 'spread' ? (finalSpreadOdds || result.odds) : result.odds,
             confidence: result.confidence || 0.65, // Gary's conviction in the bet (0.50-1.00)
-            supporting_factors: result.supporting_factors || [],
-            contradicting_factors: result.contradicting_factors || [],
             homeTeam: result.homeTeam,
             awayTeam: result.awayTeam,
             // UI display fields

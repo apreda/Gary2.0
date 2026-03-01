@@ -27,7 +27,7 @@ import { WINNING_SCORE_TARGETS } from '../FIBLE.js';
 import { buildDFSContext } from '../dfsAgenticContext.js';
 import { findPivotAlternatives } from '../../dfsLineupService.js';
 import {
-  GEMINI_FLASH_MODEL, GEMINI_PRO_FALLBACK as GEMINI_PRO_MODEL,
+  GEMINI_FLASH_MODEL, GEMINI_PRO_MODEL,
   getGeminiClient
 } from '../modelConfig.js';
 
@@ -58,12 +58,11 @@ function withTimeout(promise, ms, label) {
  * @param {string} options.sport - 'NBA', 'NFL', etc.
  * @param {string} options.date - Date string (YYYY-MM-DD)
  * @param {Object} options.slate - Slate info (name, games, lock time)
- * @param {string} options.contestType - 'gpp' or 'cash'
  * @returns {Object} - Gary's lineup with reasoning
  */
 export async function generateAgenticDFSLineup(options) {
   // Support both 'date' and 'slateDate' parameter names
-  const { platform, sport, date, slateDate, slate, contestType = 'gpp', context: passedContext } = options;
+  const { platform, sport, date, slateDate, slate, context: passedContext } = options;
   const effectiveDate = date || slateDate;
   const startTime = Date.now();
 
@@ -103,23 +102,21 @@ export async function generateAgenticDFSLineup(options) {
     console.log(`[Gary DFS] ✓ Found ${context.players.length} players across ${context.games?.length || 0} games`);
 
     // Add winning score targets for Gary's awareness
-    const winningTargets = getWinningTargets(platform, sport, contestType, slate);
+    const winningTargets = getWinningTargets(platform, sport, slate);
     context.winningTargets = winningTargets;
 
     // Surface slate size and game count for downstream phases
     context.slateSize = winningTargets.gameCount;
     context.slateLabel = winningTargets.gameCount >= 10 ? 'large' : winningTargets.gameCount >= 6 ? 'medium' : winningTargets.gameCount >= 3 ? 'small' : 'showdown';
 
-    console.log(`[Gary DFS] ✓ Target to WIN: ${winningTargets.toWin} pts | Cash line: ${winningTargets.toCash} pts | Slate: ${context.slateLabel} (${winningTargets.gameCount} games)`);
+    console.log(`[Gary DFS] ✓ Target to WIN: ${winningTargets.toWin} pts | Top 1%: ${winningTargets.top1Percent} pts | Slate: ${context.slateLabel} (${winningTargets.gameCount} games)`);
 
     // ═══════════════════════════════════════════════════════════════════════════
     // OWNERSHIP PROXY (GPP only)
     // No direct ownership data — use salary + situation as proxy for field
     // concentration. Gives Gary awareness of likely chalk vs leverage plays.
     // ═══════════════════════════════════════════════════════════════════════════
-    if (contestType !== 'cash') {
-      computeOwnershipProxy(context);
-    }
+    computeOwnershipProxy(context);
 
     // ═══════════════════════════════════════════════════════════════════════════
     // PHASE 2: SLATE ANALYSIS (Gemini → retry once on failure)
@@ -158,55 +155,53 @@ export async function generateAgenticDFSLineup(options) {
     console.log(`[Gary DFS] ✓ Identified ${slateAnalysis.gameEnvironments?.length || 0} game environments`);
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // OWNERSHIP GROUNDING (GPP only, non-critical)
+    // OWNERSHIP GROUNDING (non-critical)
     // Fetch real projected ownership data via Gemini Grounding (Google Search).
     // Separate from the function-calling session — grounding and FC can't mix.
     // ═══════════════════════════════════════════════════════════════════════════
-    if (contestType !== 'cash') {
-      try {
-        console.log('[Gary DFS] Fetching ownership projections via Grounding...');
-        const ownershipData = await withTimeout(
-          fetchOwnershipFromFTA(genAI, context),
-          15000, // 15s — direct HTML fetch + parse
-          'Ownership fetch'
-        );
-        if (ownershipData.length > 0) {
-          slateAnalysis.ownershipProjections = ownershipData;
-          console.log(`[Gary DFS] ✓ Ownership data: ${ownershipData.length} players with projected ownership`);
+    try {
+      console.log('[Gary DFS] Fetching ownership projections via Grounding...');
+      const ownershipData = await withTimeout(
+        fetchOwnershipFromFTA(genAI, context),
+        15000, // 15s — direct HTML fetch + parse
+        'Ownership fetch'
+      );
+      if (ownershipData.length > 0) {
+        slateAnalysis.ownershipProjections = ownershipData;
+        console.log(`[Gary DFS] ✓ Ownership data: ${ownershipData.length} players with projected ownership`);
 
-          // Attach ownership to player objects so downstream phases can see it
-          // FTA names may differ from BDL names (compound names, hyphens, suffixes)
-          // Use normalized comparison: strip non-alpha, lowercase
-          const normalize = s => (s || '').toLowerCase().replace(/[^a-z]/g, '');
-          let ftaMatchCount = 0;
-          for (const entry of ownershipData) {
-            const entryNorm = normalize(entry.player);
-            const player = context.players.find(p => {
-              const pNorm = normalize(p.name);
-              return pNorm === entryNorm || pNorm.includes(entryNorm) || entryNorm.includes(pNorm);
-            });
-            if (player) {
-              player.projectedOwnership = entry.projectedOwnership;
-              ftaMatchCount++;
-            }
+        // Attach ownership to player objects so downstream phases can see it
+        // FTA names may differ from BDL names (compound names, hyphens, suffixes)
+        // Use normalized comparison: strip non-alpha, lowercase
+        const normalize = s => (s || '').toLowerCase().replace(/[^a-z]/g, '');
+        let ftaMatchCount = 0;
+        for (const entry of ownershipData) {
+          const entryNorm = normalize(entry.player);
+          const player = context.players.find(p => {
+            const pNorm = normalize(p.name);
+            return pNorm === entryNorm || pNorm.includes(entryNorm) || entryNorm.includes(pNorm);
+          });
+          if (player) {
+            player.projectedOwnership = entry.projectedOwnership;
+            ftaMatchCount++;
           }
-          // When FTA covers enough players, clear proxy signals to avoid redundant/conflicting data
-          if (ftaMatchCount >= context.players.length * 0.3) {
-            for (const p of context.players) {
-              if (p.projectedOwnership != null) delete p.ownershipSignals;
-            }
-            console.log(`[Gary DFS] FTA matched ${ftaMatchCount} players — cleared proxy signals for players with real ownership`);
-          }
-        } else {
-          console.log('[Gary DFS] Ownership grounding returned no data — continuing without');
-          slateAnalysis.ownershipProjections = [];
-          slateAnalysis.ownershipMissing = true;
         }
-      } catch (err) {
-        console.warn(`[Gary DFS] Ownership grounding failed (${err.message}) — continuing without`);
+        // When FTA covers enough players, clear proxy signals to avoid redundant/conflicting data
+        if (ftaMatchCount >= context.players.length * 0.3) {
+          for (const p of context.players) {
+            if (p.projectedOwnership != null) delete p.ownershipSignals;
+          }
+          console.log(`[Gary DFS] FTA matched ${ftaMatchCount} players — cleared proxy signals for players with real ownership`);
+        }
+      } else {
+        console.log('[Gary DFS] Ownership grounding returned no data — continuing without');
         slateAnalysis.ownershipProjections = [];
         slateAnalysis.ownershipMissing = true;
       }
+    } catch (err) {
+      console.warn(`[Gary DFS] Ownership grounding failed (${err.message}) — continuing without`);
+      slateAnalysis.ownershipProjections = [];
+      slateAnalysis.ownershipMissing = true;
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -263,7 +258,7 @@ export async function generateAgenticDFSLineup(options) {
           modelName: GEMINI_PRO_MODEL,
           thinkingLevel: 'high'
         }),
-        300000, // 5 min wall-clock timeout (deep reasoning)
+        480000, // 8 min wall-clock timeout (deep reasoning on large slates)
         'Phase 4 lineup decision'
       );
     } catch (proError) {
@@ -314,24 +309,10 @@ export async function generateAgenticDFSLineup(options) {
         }
       }
     } catch (auditError) {
-      // If Pro is unavailable (429/503), try Flash before giving up
+      // If Pro is unavailable (429/503), skip audit — pre-audit lineup is fine
       if (auditError.status === 429 || auditError.status === 503 || auditError.message?.includes('429') || auditError.message?.includes('503') || auditError.message?.includes('quota')) {
-        console.warn(`[Gary DFS] Phase 5: Pro unavailable — trying Flash audit`);
-        try {
-          auditedLineup = await withTimeout(
-            auditLineupWithPro(genAI, lineup, slateAnalysis, context, {
-              modelName: GEMINI_FLASH_MODEL
-            }),
-            180000,
-            'Phase 5 lineup audit (Flash fallback)'
-          );
-          if (!auditedLineup || !auditedLineup.players || auditedLineup.players.length === 0) {
-            auditedLineup = lineup;
-          }
-        } catch (flashError) {
-          console.warn(`[Gary DFS] Phase 5 Flash audit also failed — using pre-audit lineup`);
-          auditedLineup = lineup;
-        }
+        console.warn(`[Gary DFS] Phase 5: Pro quota exhausted — skipping audit, using pre-audit lineup`);
+        auditedLineup = lineup;
       } else {
         console.warn(`[Gary DFS] Phase 5 audit failed: ${auditError.message}`);
         console.warn('[Gary DFS] Using pre-audit lineup from Phase 4');
@@ -377,7 +358,6 @@ export async function generateAgenticDFSLineup(options) {
       platform,
       sport,
       slate: slate?.name || 'Main',
-      contestType,
       generatedAt: new Date().toISOString(),
       generationTime: `${elapsed}s`
     };
@@ -503,7 +483,7 @@ function addPivotsToAgenticLineup(lineupPlayers, contextPlayers, sport, platform
 // HELPER: Get winning score targets from FIBLE
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function getWinningTargets(platform, sport, contestType, slate) {
+function getWinningTargets(platform, sport, slate) {
   const sportUpper = (sport || 'NBA').toUpperCase();
   const platformPrefix = (platform || 'draftkings').toUpperCase() === 'FANDUEL' ? 'FANDUEL' : 'DRAFTKINGS';
   const platformKey = `${platformPrefix}_${sportUpper}`;
@@ -514,27 +494,11 @@ function getWinningTargets(platform, sport, contestType, slate) {
     return {
       toWin: 380,
       top1Percent: 355,
-      toCash: 285,
       slateMultiplier: 1.0
     };
   }
 
   const gameCount = slate?.gameCount || slate?.games?.length || 8;
-
-  // Cash games: use dedicated cash targets
-  if (contestType === 'cash') {
-    const cashTargets = targets.CASH || {};
-    const cashSafe = cashTargets.safeTarget || cashTargets.cashLine?.typical || 285;
-    const cashLine = cashTargets.cashLine?.typical || 275;
-    return {
-      toWin: cashSafe,
-      top1Percent: cashSafe, // Cash doesn't have percentile tiers
-      toCash: cashLine,
-      slateMultiplier: 1.0,
-      gameCount,
-      isCash: true
-    };
-  }
 
   // Select contest targets based on slate size — use calibrated targets instead of blanket multiplier
   let contestTargets;
@@ -558,7 +522,6 @@ function getWinningTargets(platform, sport, contestType, slate) {
   return {
     toWin: Math.round((contestTargets.firstPlace?.typical || 385) * contestSlateMultiplier),
     top1Percent: Math.round((contestTargets.top1Percent?.typical || 355) * contestSlateMultiplier),
-    toCash: Math.round((contestTargets.cashLine?.typical || 285) * contestSlateMultiplier),
     slateMultiplier: contestSlateMultiplier,
     gameCount
   };
