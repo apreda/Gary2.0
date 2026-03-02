@@ -145,28 +145,60 @@ export async function auditLineupWithPro(genAI, lineup, slateAnalysis, context, 
     systemInstruction: LINEUP_AUDIT_PROMPT,
     generationConfig: {
       temperature: 1.0, // Gemini: Keep at 1.0
-      maxOutputTokens: 8192
+      maxOutputTokens: 65536
     },
     thinkingConfig: {
-      thinkingBudget: 8192
+      thinkingBudget: -1 // HIGH — let Pro think as deeply as needed
     }
   });
 
+  // Use chat session so we can send correction messages on parse failure
+  const chat = model.startChat({ history: [] });
+
   let responseText;
   try {
-    const result = await model.generateContent(auditRequest);
+    const result = await chat.sendMessage(auditRequest);
     responseText = result.response.text() || '';
   } catch (firstErr) {
     console.warn(`[Lineup Audit] First attempt failed (${firstErr.message}) — retrying once`);
-    const retryResult = await model.generateContent(auditRequest);
+    const retryResult = await chat.sendMessage(auditRequest);
     responseText = retryResult.response.text() || '';
   }
   if (!responseText) {
     throw new Error('[Lineup Audit] Gemini Pro returned empty response — audit failed');
   }
 
-  // Parse audit results — NO fallbacks
-  const auditResult = parseAuditResult(responseText);
+  // Parse audit results with correction loop (same pattern as Phase 4)
+  const MAX_CORRECTIONS = 2;
+  let correctionAttempts = 0;
+  let auditResult;
+
+  while (correctionAttempts <= MAX_CORRECTIONS) {
+    try {
+      auditResult = parseAuditResult(responseText);
+      break; // Parsed successfully
+    } catch (parseError) {
+      if (correctionAttempts >= MAX_CORRECTIONS) {
+        throw new Error(`[Lineup Audit] FAILED after ${MAX_CORRECTIONS} correction attempts: ${parseError.message}`);
+      }
+      correctionAttempts++;
+      console.log(`[Lineup Audit] Parse error, correction attempt ${correctionAttempts}: ${parseError.message}`);
+
+      const fixPrompt = `Your audit response had a JSON parsing error: ${parseError.message}
+
+Output your audit as a single valid JSON object. Start with { and end with }.
+Do NOT include any text before or after the JSON.
+Do NOT use markdown code blocks.
+Include all fields: auditNotes, winConditionAnalysis, adjustments, finalCeilingScenario, garyFinalThoughts.`;
+
+      const fixResult = await chat.sendMessage(fixPrompt);
+      responseText = fixResult.response.text() || '';
+
+      if (!responseText) {
+        throw new Error('[Lineup Audit] Correction returned empty response — audit failed');
+      }
+    }
+  }
 
   // Apply any adjustments Gary made (pass platform for correct salary cap)
   const finalLineup = applyAdjustments(lineup, auditResult.adjustments, players, platform, sport);
@@ -546,8 +578,6 @@ function applyAdjustments(lineup, adjustments, players, contextPlatform, sport) 
   };
 }
 
-// isSlotEligible imported from dfsPositionUtils.js
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // BUILD PER-PLAYER REASONING
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -568,10 +598,3 @@ function buildPerPlayerReasoning(players) {
   return reasoning;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// EXPORTS
-// ═══════════════════════════════════════════════════════════════════════════════
-
-export default {
-  auditLineupWithPro
-};

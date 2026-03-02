@@ -1,7 +1,6 @@
 /**
  * NBA Scout Report Builder
- * Extracted from scoutReportBuilder.js — handles all NBA-specific logic
- * for building the pre-game scout report.
+ * Handles all NBA-specific logic for building the pre-game scout report.
  */
 
 import { ballDontLieService } from '../../../ballDontLieService.js';
@@ -29,7 +28,6 @@ import {
   formatInjuryReport,
   formatStartingLineups,
   formatOdds,
-  formatSportsbookComparison,
   formatRestSituation,
   calculateRestSituation,
   formatRecentFormWithBoxScores,
@@ -42,130 +40,11 @@ import {
 // =========================================================================
 // NBA KEY PLAYERS HELPER
 // Uses active roster + season stats to show who's ACTUALLY on the team
-// CRITICAL: Prevents hallucinations about traded players (e.g., Luka Doncic)
-// ENHANCED: Now sorts by PPG to show the MOST SIGNIFICANT players
-// =========================================================================
-async function fetchNbaKeyPlayers(homeTeam, awayTeam, sport) {
-  try {
-    const bdlSport = sportToBdlKey(sport);
-    if (bdlSport !== 'basketball_nba') {
-      return null;
-    }
-
-    // ===================================================================
-    // NBA: BDL roster data — top players by PPG (no Grounding lineups needed)
-    // Gary doesn't need starters — minutes/PPG ranking is what matters
-    // ===================================================================
-    const teams = await ballDontLieService.getTeams(bdlSport);
-    const homeTeamData = findTeam(teams, homeTeam);
-    const awayTeamData = findTeam(teams, awayTeam);
-
-    if (!homeTeamData && !awayTeamData) {
-      console.warn('[Scout Report] Could not find team IDs for NBA roster lookup');
-      return null;
-    }
-
-    console.log(`[Scout Report] Fetching NBA stats from BDL for ${homeTeam} (ID: ${homeTeamData?.id}) and ${awayTeam} (ID: ${awayTeamData?.id})`);
-
-    // Fetch active players for each team
-    const [homePlayersRaw, awayPlayersRaw] = await Promise.all([
-      homeTeamData ? ballDontLieService.getPlayersActive(bdlSport, { team_ids: [homeTeamData.id], per_page: 20 }) : null,
-      awayTeamData ? ballDontLieService.getPlayersActive(bdlSport, { team_ids: [awayTeamData.id], per_page: 20 }) : null
-    ]);
-
-    // CRITICAL FIX: getPlayersActive returns {data: [], meta: {}} NOT a plain array
-    // Extract the actual player arrays from the response object
-    const homePlayers = Array.isArray(homePlayersRaw) ? homePlayersRaw :
-                        (homePlayersRaw?.data && Array.isArray(homePlayersRaw.data)) ? homePlayersRaw.data : [];
-    const awayPlayers = Array.isArray(awayPlayersRaw) ? awayPlayersRaw :
-                        (awayPlayersRaw?.data && Array.isArray(awayPlayersRaw.data)) ? awayPlayersRaw.data : [];
-
-    console.log(`[Scout Report] NBA roster: ${homeTeam} (${homePlayers.length} players), ${awayTeam} (${awayPlayers.length} players)`);
-
-    // HARD FAIL: If we can't get roster data, we CANNOT make picks (prevents hallucination)
-    // CRITICAL: Throw error to CRASH the process - do NOT silently pass
-    if (homePlayers.length === 0 || awayPlayers.length === 0) {
-      const errorMsg = `CRITICAL ROSTER FAILURE: Missing NBA roster data! Home ${homeTeam}: ${homePlayers.length} players, Away ${awayTeam}: ${awayPlayers.length} players. Gary would hallucinate player names without real roster data. FIX THE BDL API ISSUE.`;
-      console.error(`[Scout Report] ${errorMsg}`);
-      throw new Error(errorMsg);
-    }
-
-    // Get current season for stats lookup
-    // BDL API convention: season=2025 means the 2025-26 NBA season
-    // Oct-Dec: we're in the first half of currentYear season
-    const season = nbaSeason();
-
-    // Collect all player IDs to fetch stats
-    const allPlayerIds = [
-      ...homePlayers.map(p => p.id),
-      ...awayPlayers.map(p => p.id)
-    ].filter(id => id);
-
-    // Fetch season stats for all players to determine significance
-    let playerStats = {};
-    if (allPlayerIds.length > 0) {
-      try {
-        playerStats = await ballDontLieService.getNbaPlayerSeasonStatsForProps(allPlayerIds, season);
-        console.log(`[Scout Report] Fetched stats for ${Object.keys(playerStats).length} NBA players`);
-      } catch (e) {
-        console.warn('[Scout Report] Could not fetch player stats, using roster order:', e.message);
-      }
-    }
-
-    // Process roster to get top players SORTED BY ACTUAL IMPORTANCE (PPG)
-    // OUT players are handled separately in the injury report — no filtering needed here
-    const processRoster = (players, teamName) => {
-      if (!players || players.length === 0) return null;
-
-      const playersWithStats = players.map(p => {
-        const stats = playerStats[p.id] || {};
-        const fullName = `${p.first_name} ${p.last_name}`;
-        return {
-          name: fullName,
-          position: p.position || 'N/A',
-          jerseyNumber: p.jersey_number,
-          id: p.id,
-          ppg: parseFloat(stats.ppg) || 0,
-          mpg: parseFloat(stats.mpg) || 0,
-          rpg: parseFloat(stats.rpg) || 0,
-          apg: parseFloat(stats.apg) || 0,
-          gp: parseInt(stats.gp) || 0 // Games played this season — helps identify on-and-off players
-        };
-      });
-
-      // Sort by PPG (descending) to get actual key players
-      playersWithStats.sort((a, b) => b.ppg - a.ppg);
-
-      // Take top 10 by PPG (the most significant players)
-      const keyPlayers = playersWithStats.slice(0, 10);
-
-      const topScorers = keyPlayers.slice(0, 5).map(p => `${p.name} (${p.ppg.toFixed(1)} PPG)`);
-      console.log(`[Scout Report] ${teamName} key players (by PPG): ${topScorers.join(', ')}`);
-
-      return keyPlayers;
-    };
-
-    const homeKeyPlayers = processRoster(homePlayers, homeTeam);
-    const awayKeyPlayers = processRoster(awayPlayers, awayTeam);
-
-    return {
-      home: homeKeyPlayers,
-      away: awayKeyPlayers,
-      homeTeamName: homeTeam,
-      awayTeamName: awayTeam
-    };
-  } catch (error) {
-    console.error('[Scout Report] Error fetching NBA key players:', error.message);
-    return null;
-  }
-}
-
-
 // =========================================================================
 // FORMAT NBA ROSTER DEPTH
 // Shows top 10 players per team (starters + key bench) with base + advanced stats
 // Cross-references with injury data to mark availability
-// Includes: Four Factors, Tier 1 predictive stats, Unit comparison
+// Includes: Four Factors, advanced stats, Unit comparison
 // =========================================================================
 function formatNbaRosterDepth(homeTeam, awayTeam, rosterDepth, injuries) {
   if (!rosterDepth || (!rosterDepth.home?.length && !rosterDepth.away?.length)) {
@@ -433,7 +312,6 @@ function formatNbaRosterDepth(homeTeam, awayTeam, rosterDepth, injuries) {
   // Roster section header
   lines.push('');
   lines.push('AVAILABLE ROSTER — TOP 10 PLAYERS BY MINUTES (W/ ADVANCED + TEAM SHARE STATS)');
-  lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   lines.push('');
 
@@ -710,10 +588,10 @@ export async function buildNbaScoutReport(game, options = {}) {
           // still adjusts over calendar time regardless.
           const STALE_DAYS_THRESHOLD = 5; // 5+ calendar days = market has adjusted
           if (gamesMissed <= STALE_WINDOW_GAMES && daysSince < STALE_DAYS_THRESHOLD) {
-            inj.duration = 'RECENT';
+            inj.duration = 'FRESH';
             inj.freshness = 'FRESH';
           } else if (gamesMissed <= 7) {
-            inj.duration = 'MID-SEASON';
+            inj.duration = 'SHORT-TERM';
             inj.freshness = 'STALE';
           } else if (gamesMissed <= 20) {
             inj.duration = 'LONG-TERM';
@@ -867,23 +745,19 @@ VENUE: [arena name, city]
   // ===================================================================
   // Step D: Fetch NBA key players + roster depth + L5 + team advanced
   // ===================================================================
-  let nbaKeyPlayers = null;
   let nbaRosterDepth = null;
 
   const nbaSeasonYear = nbaSeason();
 
-  // Fetch in parallel: key players + BDL roster depth + current state (news/headlines)
-  const [keyPlayersResult, rosterDepth, nbaCurrentState] = await Promise.all([
-    fetchNbaKeyPlayers(homeTeam, awayTeam, sportKey),
+  // Fetch in parallel: BDL roster depth + current state (news/headlines)
+  const [rosterDepth, nbaCurrentState] = await Promise.all([
     ballDontLieService.getNbaRosterDepth(homeTeam, awayTeam, nbaSeasonYear),
     fetchCurrentState(homeTeam, awayTeam, 'basketball_nba').catch(e => {
       console.warn('[Scout Report] NBA current state error (non-fatal):', e.message);
       return null;
     })
   ]);
-  nbaKeyPlayers = keyPlayersResult;
   nbaRosterDepth = rosterDepth;
-  // Note: fetchNbaKeyPlayers now throws on roster failure
 
   // Set narrative context from Grounding current state (includes news/headlines/storylines)
   // This supplements the RapidAPI injury data with game context and today's news
@@ -1015,45 +889,6 @@ VENUE: [arena name, city]
   }
 
   // ===================================================================
-  // Step D2: Filter STALE injured players from key players list
-  // Players OUT for >2 games have stats that are already priced in.
-  // Their season stats may be from a previous team (trades) — misleading.
-  // Keep FRESH injuries (0-2 games) so Gary knows what the team just lost.
-  // ===================================================================
-  if (nbaKeyPlayers && injuries) {
-    const allInjured = [...(injuries.home || []), ...(injuries.away || [])];
-    const staleOutNames = allInjured
-      .filter(inj => {
-        const s = (inj.status || '').toLowerCase();
-        const isOut = s === 'out' || s.includes('out for season') || s === 'ir' || s === 'ltir' || s === 'ofs';
-        const gamesMissed = inj.gamesMissed ?? 0;
-        return isOut && gamesMissed > 2; // >2 games = stale, team has adjusted
-      })
-      .map(inj => {
-        const name = typeof inj.player === 'string' ? inj.player :
-          `${inj.player?.first_name || ''} ${inj.player?.last_name || ''}`.trim();
-        return name.toLowerCase();
-      })
-      .filter(n => n);
-
-    if (staleOutNames.length > 0) {
-      const filterStaleFromKeyPlayers = (players) => {
-        if (!players || !Array.isArray(players)) return players;
-        return players.filter(p => {
-          const pName = (p.name || '').toLowerCase();
-          const isStale = staleOutNames.some(outName => playerNamesMatch(pName, outName));
-          if (isStale) {
-            console.log(`[Scout Report] Removed stale injured player from key players: ${p.name} (${p.ppg?.toFixed?.(1) || '?'} PPG, OUT >2 games)`);
-          }
-          return !isStale;
-        });
-      };
-      nbaKeyPlayers.home = filterStaleFromKeyPlayers(nbaKeyPlayers.home);
-      nbaKeyPlayers.away = filterStaleFromKeyPlayers(nbaKeyPlayers.away);
-    }
-  }
-
-  // ===================================================================
   // Step E: Fetch H2H data + box scores for Recent Form
   // ===================================================================
   let h2hData = null;
@@ -1179,9 +1014,7 @@ VENUE: [arena name, city]
       } else {
         // Handle object structures
         const collectionKeys = [
-          'skaters', 'goalies', 'forwards', 'defensemen',
-          'players', 'roster', 'active_players', 'depth_chart',
-          'skater_stats', 'goalie_stats'
+          'players', 'roster', 'active_players', 'depth_chart'
         ];
 
         collectionKeys.forEach(key => {
@@ -1211,13 +1044,7 @@ VENUE: [arena name, city]
       addNamesFromSource(roster.away);
     }
 
-    // 2. Add names from key players if available
-    if (nbaKeyPlayers) {
-      addNamesFromSource(nbaKeyPlayers.home);
-      addNamesFromSource(nbaKeyPlayers.away);
-    }
-
-    // 3. Add names from structured injury list (which already has hard filters applied)
+    // 2. Add names from structured injury list (which already has hard filters applied)
     [...(injuries.home || []), ...(injuries.away || [])].forEach(i => {
       const name = i.name || `${i.player?.first_name || ''} ${i.player?.last_name || ''}`.trim();
       if (name && name.length > 3) allowedNames.add(name);
@@ -1342,7 +1169,6 @@ ${formatH2HSection(h2hData, homeTeam, awayTeam)}
 BETTING CONTEXT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${formatOdds(game, sportKey)}
-${options.sportsbookOdds ? formatSportsbookComparison(options.sportsbookOdds, game.home_team, game.away_team) : ''}
 `.trim();
 
   // ===================================================================

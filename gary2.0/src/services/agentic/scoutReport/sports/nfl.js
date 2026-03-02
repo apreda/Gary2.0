@@ -1,7 +1,6 @@
 /**
  * NFL Scout Report Builder
- * Extracted from scoutReportBuilder.js — handles all NFL-specific logic
- * for building the pre-game scout report.
+ * Handles all NFL-specific logic for building the pre-game scout report.
  */
 
 import axios from 'axios';
@@ -25,14 +24,11 @@ import {
   scrubNarrative,
   formatInjuryReport,
   formatStartingLineups,
-  formatSituationalFactors,
   formatOdds,
-  formatSportsbookComparison,
   formatRestSituation,
   calculateRestSituation,
   formatRecentForm,
-  formatH2HSection,
-  formatTeamIdentity
+  formatH2HSection
 } from '../shared/dataFetchers.js';
 import { buildVerifiedTaleOfTape } from '../shared/taleOfTape.js';
 
@@ -646,7 +642,7 @@ function formatKeyPlayers(homeTeam, awayTeam, keyPlayers) {
   let topReceiversSection = '';
   if (homeReceivers.length > 0 || awayReceivers.length > 0) {
     topReceiversSection = `
-TOP RECEIVING TARGETS (by receiving yards - CRITICAL FOR QB CHANGES)
+TOP RECEIVING TARGETS (by receiving yards)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 [HOME] ${homeTeam}:
 ${homeReceivers.length > 0 ? homeReceivers.map(formatReceiverLine).join('\n') : '  (No receiving data available)'}
@@ -729,9 +725,6 @@ function formatNflRosterDepth(homeTeam, awayTeam, rosterDepth, injuries) {
     '',
     'NFL ROSTER DEPTH — KEY SKILL PLAYERS (FROM BDL)',
     '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-    'This shows the depth chart for key offensive positions (QB, RB, WR, TE).',
-    '   Injury status shown for listed players. OUT players marked.',
-    '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
     ''
   ];
 
@@ -766,11 +759,6 @@ function formatNflRosterDepth(homeTeam, awayTeam, rosterDepth, injuries) {
     lines.push('');
   }
 
-  // Add context note
-  lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  lines.push('NFL ROSTER DEPTH CONTEXT:');
-  lines.push('');
-  lines.push('  Starting QB and key skill position availability shown above.');
   lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   lines.push('');
 
@@ -1029,11 +1017,6 @@ function formatNflPlayoffHistory(homeTeam, awayTeam, playoffHistory, homeTeamId,
     lines.push('');
   }
 
-  // Add context note
-  lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  lines.push('PLAYOFF HISTORY CONTEXT:');
-  lines.push('');
-  lines.push('  Game results above show margin, scoring method, and opponent quality.');
   lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   lines.push('');
 
@@ -1085,10 +1068,8 @@ function formatStartingQBs(homeTeam, awayTeam, qbs) {
     // Add experience warning for rookie/inexperienced QBs
     if (qb.experienceNote) {
       lines.push(`   ${qb.experienceNote}`);
-      lines.push(`   NOTE: Limited NFL starting experience.`);
       homeQbChangeSituation = { name: qb.name, gamesPlayed: qb.gamesPlayed || 0, isBackup: qb.isBackup };
     } else if (qb.isBackup) {
-      lines.push(`   NOTE: Backup QB starting.`);
       homeQbChangeSituation = { name: qb.name, gamesPlayed: qb.gamesPlayed || 0, isBackup: true };
     } else if ((qb.gamesPlayed || 0) <= 5) {
       // Even if not flagged as backup, very few games = new starter this season
@@ -1123,10 +1104,8 @@ function formatStartingQBs(homeTeam, awayTeam, qbs) {
     // Add experience warning for rookie/inexperienced QBs
     if (qb.experienceNote) {
       lines.push(`   ${qb.experienceNote}`);
-      lines.push(`   NOTE: Limited NFL starting experience.`);
       awayQbChangeSituation = { name: qb.name, gamesPlayed: qb.gamesPlayed || 0, isBackup: qb.isBackup };
     } else if (qb.isBackup) {
-      lines.push(`   NOTE: Backup QB starting.`);
       awayQbChangeSituation = { name: qb.name, gamesPlayed: qb.gamesPlayed || 0, isBackup: true };
     } else if ((qb.gamesPlayed || 0) <= 5) {
       // Even if not flagged as backup, very few games = new starter this season
@@ -1138,32 +1117,22 @@ function formatStartingQBs(homeTeam, awayTeam, qbs) {
 
   lines.push('');
 
-  // Add QB CHANGE IMPACT section if either team has a new/backup QB
+  // Add QB SITUATION section if either team has a new/backup QB
   if (homeQbChangeSituation || awayQbChangeSituation) {
     lines.push('');
-    lines.push('QB CHANGE IMPACT ON HISTORICAL RECORDS');
+    lines.push('QB SITUATION');
     lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
     if (homeQbChangeSituation) {
       const qb = homeQbChangeSituation;
       lines.push(`${homeTeam}:`);
       lines.push(`   Current QB: ${qb.name} (${qb.gamesPlayed} career starts)`);
-      if (qb.gamesPlayed <= 2) {
-        lines.push(`   NOTE: These records were built with a different quarterback. Current QB has limited starts.`);
-      } else if (qb.gamesPlayed <= 5) {
-        lines.push(`   NOTE: Limited sample size with this QB.`);
-      }
     }
 
     if (awayQbChangeSituation) {
       const qb = awayQbChangeSituation;
       lines.push(`${awayTeam}:`);
       lines.push(`   Current QB: ${qb.name} (${qb.gamesPlayed} career starts)`);
-      if (qb.gamesPlayed <= 2) {
-        lines.push(`   NOTE: These records were built with a different quarterback. Current QB has limited starts.`);
-      } else if (qb.gamesPlayed <= 5) {
-        lines.push(`   NOTE: Limited sample size with this QB.`);
-      }
     }
 
     lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -1498,7 +1467,6 @@ SEASON-LONG ABSENCES:
 The following players have been OUT for extended periods (1-2+ months):
 ${filteredPlayers.join(', ')}
 
-The team's recent stats reflect play WITHOUT these players.
 </season_long_injuries>
 
 ` : '';
@@ -1526,7 +1494,7 @@ Sport: ${sportKey} | ${game.commence_time ? formatGameTime(game.commence_time) :
 ${game.venue ? `Venue: ${venueLabel}` : ''}${tournamentLabel ? `\n${tournamentLabel}` : ''}
 ══════════════════════════════════════════════════════════════════════
 ${gameContextSection}${standingsSnapshot || ''}
-*** INJURY REPORT (READ THIS FIRST - CRITICAL) ***
+INJURY REPORT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${injuryReportText}
 ${formatStartingLineups(homeTeam, awayTeam, injuries.lineups)}
@@ -1545,12 +1513,6 @@ ${formatRestSituation(homeTeam, awayTeam, calculateRestSituation(recentHome, gam
 
 ${keyPlayers ? formatKeyPlayers(homeTeam, awayTeam, keyPlayers) : ''}${startingQBs ? formatStartingQBs(homeTeam, awayTeam, startingQBs) : ''}${nflRosterDepth ? formatNflRosterDepth(homeTeam, awayTeam, nflRosterDepth, injuries) : ''}${nflPlayoffHistory ? formatNflPlayoffHistory(homeTeam, awayTeam, nflPlayoffHistory, nflHomeTeamId, nflAwayTeamId) : ''}
 
-TEAM IDENTITIES
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${formatTeamIdentity(homeTeam, homeProfile, 'Home')}
-${formatTeamIdentity(awayTeam, awayProfile, 'Away')}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
 RECENT FORM (Last 5 Games)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${formatRecentForm(homeTeam, recentHome)}
@@ -1560,14 +1522,9 @@ HEAD-TO-HEAD HISTORY (${seasonLabel} SEASON)
 ${formatH2HSection(h2hData, homeTeam, awayTeam)}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-KEY SITUATIONAL FACTORS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${formatSituationalFactors(game, injuries, sportKey)}
-
 BETTING CONTEXT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${formatOdds(game, sportKey)}
-${options.sportsbookOdds ? formatSportsbookComparison(options.sportsbookOdds, game.home_team, game.away_team) : ''}BETTING ODDS COMPARISON:
 `.trim();
 
   // ===================================================================

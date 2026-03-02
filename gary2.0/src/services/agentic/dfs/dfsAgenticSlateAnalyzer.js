@@ -2,24 +2,26 @@
  * DFS Slate Analyzer
  *
  * Phase 2 of the Agentic DFS system.
- * Gemini investigates the slate using function calls to BDL/RotoWire
- * to investigate:
- * - Injury status and team context
- * - Game environments (pace, O/U, spreads)
- * - Roster structure for teams with absences
+ * Flash investigates the full slate using per-sport investigation factors,
+ * coverage checking, and produces both structured JSON and a narrative briefing
+ * for downstream phases (Phase 3 player investigation, Phase 4 lineup decision).
  *
- * This gives Gary the INVESTIGATED DATA he needs for lineup construction.
+ * Modeled after the game picks Flash research assistant (flashAdvisor.js).
  */
 
 import { DFS_SLATE_ANALYSIS_TOOLS, executeToolCall } from './tools/dfsToolDefinitions.js';
 import { GEMINI_FLASH_MODEL } from '../modelConfig.js';
+import { getDFSInvestigationPrompt } from './dfsInvestigationPrompts.js';
+import { getDFSInvestigatedFactors, buildDFSCoverageGapList } from './dfsInvestigationFactors.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// SLATE ANALYSIS SYSTEM PROMPT
+// SLATE ANALYSIS SYSTEM PROMPT (Dynamic — per-sport)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const SLATE_ANALYSIS_PROMPT = `
-<role>
+function buildSlateAnalysisPrompt(sport) {
+  const investigationMethodology = getDFSInvestigationPrompt(sport);
+
+  return `<role>
 You are Gary's DFS Research Assistant.
 Your job is to INVESTIGATE the slate and surface FACTUAL findings for Gary to evaluate.
 </role>
@@ -30,19 +32,15 @@ USE ONLY the data returned by your function calls. If your memory conflicts with
 Do NOT treat roster changes, trades, or team assignments as "new" or "surprising" — if a player is on a team in the data, that IS their current team. The salary already reflects it.
 </training_data_warning>
 
-<responsibilities>
-- Use function calls to gather REAL DATA about players and games
-- Investigate injury status for ALL teams — document who is OUT and how long they have been out
-- Investigate game environments — O/U, spreads, pace matchups
-- Surface the FACTS — Gary decides what they mean
-</responsibilities>
+${investigationMethodology}
 
-<investigation_priorities>
-1. Check injury status for ALL teams — note duration tags (RECENT, ESTABLISHED, LONG-TERM)
-2. For teams with notable absences, investigate the current roster structure
-3. Investigate each game's environment data
-4. Document what you find — do NOT interpret what it means for lineups
-</investigation_priorities>
+<investigation_process>
+1. Work through EVERY factor in the investigation checklist above
+2. For each factor: call the relevant tools, then report findings with specific numbers
+3. Connect findings across factors — an injury that overlaps with a usage shift is one finding, not two
+4. After completing ALL factors, produce your structured JSON summary
+5. Cover every factor category — do NOT skip any
+</investigation_process>
 
 <output_format>
 After investigation, summarize your findings in JSON:
@@ -82,8 +80,8 @@ After investigation, summarize your findings in JSON:
 - DO NOT rank players or suggest who to roster
 - DO NOT label players as "beneficiaries" or compute "boosts" — just report the facts
 - DO NOT compute "fair value" or "edge" amounts — report what you found and let Gary evaluate
-</constraints>
-`;
+</constraints>`;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN ANALYSIS FUNCTION
@@ -95,27 +93,31 @@ After investigation, summarize your findings in JSON:
  * @param {GoogleGenerativeAI} genAI - Gemini client
  * @param {Object} context - DFS context with players, games, injuries
  * @param {Object} options - Model options
- * @returns {Object} - Slate analysis with opportunities identified
+ * @returns {Object} - Slate analysis with structured JSON + narrative briefing
  */
 export async function analyzeSlateWithFlash(genAI, context, options = {}) {
   const { modelName = GEMINI_FLASH_MODEL } = options;
+  const sport = (context.sport || 'NBA').toUpperCase();
 
   console.log('[Slate Analyzer] Starting slate investigation...');
 
   // Build the analysis request with context
   const analysisRequest = buildAnalysisRequest(context);
 
+  // Build per-sport system prompt
+  const systemPrompt = buildSlateAnalysisPrompt(sport);
+
   // Create model with function calling tools
   const model = genAI.getGenerativeModel({
     model: modelName,
-    systemInstruction: SLATE_ANALYSIS_PROMPT,
+    systemInstruction: systemPrompt,
     tools: [{ functionDeclarations: DFS_SLATE_ANALYSIS_TOOLS }],
     generationConfig: {
-      temperature: 1.0, // Gemini: Keep at 1.0
-      maxOutputTokens: 8192
+      temperature: 1.0,
+      maxOutputTokens: 65536
     },
     thinkingConfig: {
-      thinkingBudget: 8192
+      thinkingBudget: -1 // HIGH thinking — let Flash think deeply
     }
   });
 
@@ -123,7 +125,9 @@ export async function analyzeSlateWithFlash(genAI, context, options = {}) {
   let chat = model.startChat({ history: [] });
   let response = await chat.sendMessage(analysisRequest);
   let iterations = 0;
-  const maxIterations = 12;
+  const maxIterations = 25;
+  const calledTools = []; // Track tool calls for coverage validation
+  let coverageRetryDone = false;
 
   // Function calling loop - Flash investigates via tools
   while (iterations < maxIterations) {
@@ -136,19 +140,49 @@ export async function analyzeSlateWithFlash(genAI, context, options = {}) {
     const functionCalls = content?.parts?.filter(p => p.functionCall) || [];
 
     if (functionCalls.length === 0) {
-      // No more function calls - Flash is done investigating
+      // No more function calls — Flash produced text
+      // Check coverage before accepting
+      let finalText = '';
+      try { finalText = response.response.text(); } catch (_) { /* no text yet */ }
+
+      if (finalText && finalText.trim() && !coverageRetryDone) {
+        const coverageResult = getDFSInvestigatedFactors(calledTools, sport);
+
+        if (coverageResult.totalFactors > 0 && coverageResult.coverage < 0.9) {
+          coverageRetryDone = true;
+          const gapList = buildDFSCoverageGapList(coverageResult.missing, sport);
+          console.log(`[Slate Analyzer] Coverage at ${(coverageResult.coverage * 100).toFixed(0)}% (${coverageResult.covered.length}/${coverageResult.totalFactors} factors) — need 90%, sending retry pass`);
+
+          response = await chat.sendMessage(
+            `## COVERAGE GAPS — ADDITIONAL RESEARCH NEEDED
+
+You missed the following factor categories. Please investigate these NOW using the tools:
+
+${gapList}
+
+After investigating the gaps, rewrite your COMPLETE JSON summary including ALL findings (both your original findings and these new ones).`
+          );
+          continue; // Go back to the loop — Flash will make more tool calls
+        }
+
+        // Coverage is sufficient — break out
+        console.log(`[Slate Analyzer] Coverage: ${(coverageResult.coverage * 100).toFixed(0)}% (${coverageResult.covered.length}/${coverageResult.totalFactors} factors)`);
+      }
+
       break;
     }
 
     console.log(`[Slate Analyzer] Iteration ${iterations}: ${functionCalls.length} function calls`);
 
-    // Execute each function call
+    // Execute each function call and track for coverage
     const functionResponses = [];
     for (const part of functionCalls) {
       const { name, args } = part.functionCall;
       console.log(`[Slate Analyzer]   → ${name}(${JSON.stringify(args).slice(0, 50)}...)`);
 
       const result = await executeToolCall(name, args, context);
+      calledTools.push({ tool: name, args, iteration: iterations });
+
       functionResponses.push({
         functionResponse: {
           name,
@@ -162,29 +196,28 @@ export async function analyzeSlateWithFlash(genAI, context, options = {}) {
   }
 
   // Parse the final response
-  let finalText = response.response.text();
+  let finalText = '';
+  try { finalText = response.response.text(); } catch (_) { /* empty */ }
 
-  // If Flash ended its loop without producing text (spent all iterations on tool
-  // calls, or last response was purely function calls), nudge it to output JSON.
-  // Try twice — first nudge can also return empty.
+  // If Flash ended its loop without producing text, nudge it to output JSON.
   if (!finalText || !finalText.trim()) {
     console.log('[Slate Analyzer] Flash ended without text — nudging for JSON summary...');
     response = await chat.sendMessage(
       'Your investigation is complete. Do NOT make any more function calls. Now produce your JSON summary with injuryReport, gameProfiles, and gameEnvironments based on everything you found.'
     );
-    // If nudge triggered more function calls instead of text, execute them ONLY if
-    // we haven't already exhausted the iteration budget (prevents infinite loops)
+    // If nudge triggered more function calls, execute them
     const nudgeCalls = response.response.candidates?.[0]?.content?.parts?.filter(p => p.functionCall) || [];
     if (nudgeCalls.length > 0 && iterations < maxIterations) {
       iterations++;
       const nudgeResponses = [];
       for (const part of nudgeCalls) {
         const result = await executeToolCall(part.functionCall.name, part.functionCall.args, context);
+        calledTools.push({ tool: part.functionCall.name, args: part.functionCall.args, iteration: iterations });
         nudgeResponses.push({ functionResponse: { name: part.functionCall.name, response: result } });
       }
       response = await chat.sendMessage(nudgeResponses);
     }
-    finalText = response.response.text();
+    try { finalText = response.response.text(); } catch (_) { /* empty */ }
   }
 
   if (!finalText || !finalText.trim()) {
@@ -192,14 +225,46 @@ export async function analyzeSlateWithFlash(genAI, context, options = {}) {
     response = await chat.sendMessage(
       'Do NOT call any functions. Output a JSON object with your findings. Start your response with { immediately.'
     );
-    finalText = response.response.text();
+    try { finalText = response.response.text(); } catch (_) { /* empty */ }
   }
 
   const analysis = parseSlateAnalysis(finalText);
 
-  console.log(`[Slate Analyzer] Investigation complete after ${iterations} iterations`);
+  // ═══════════════════════════════════════════════════════════════════════════
+  // NARRATIVE BRIEFING — Ask Flash to produce per-factor narrative findings
+  // Flash has the full tool call history in its session, so it can reference
+  // everything it found during investigation.
+  // ═══════════════════════════════════════════════════════════════════════════
+  let narrativeBriefing = '';
+  try {
+    const narrativeResponse = await chat.sendMessage(
+      `Now write a NARRATIVE BRIEFING of your investigation findings. Do NOT call any more functions.
 
-  return analysis;
+For each factor you investigated, write a concise bullet point with:
+- The factor name
+- Key finding with specific numbers for BOTH teams / all relevant games
+- Any important context (fresh vs absorbed injuries, pace mismatches, value gaps, stacking environments)
+
+Format as structured bullet points:
+- **[Factor Name]**: Key finding with specific numbers. Context note if relevant.
+
+This briefing will be passed to Gary for lineup construction. Surface the FACTS — do not make lineup recommendations.`
+    );
+    narrativeBriefing = narrativeResponse.response.text() || '';
+  } catch (narrativeErr) {
+    console.warn(`[Slate Analyzer] Narrative briefing failed: ${narrativeErr.message} — continuing without`);
+  }
+
+  console.log(`[Slate Analyzer] Investigation complete after ${iterations} iterations (${calledTools.length} tool calls)`);
+  if (narrativeBriefing) {
+    console.log(`[Slate Analyzer] Narrative briefing: ${narrativeBriefing.length} chars`);
+  }
+
+  return {
+    ...analysis,
+    narrativeBriefing,
+    calledTools
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -271,14 +336,10 @@ ${injuriesStr || 'None loaded yet - USE GET_TEAM_INJURIES to check each team'}
 ${Object.keys(teamRosters).join(', ')}
 
 ## YOUR TASK
-Investigate this slate thoroughly using the tools available to you:
-- Injury situation across all teams, noting duration tags for each absence
-- Current roster structure for teams missing key players
-- Each game's environment data (O/U, spread, implied totals)
+Work through EVERY factor in your investigation checklist. Call the tools you need for each factor.
+After completing all factors, produce your JSON summary.
 
-Document what you found — do NOT interpret it or label players as "beneficiaries."
-
-Begin your investigation now. Call the tools you need.
+Begin your investigation now.
 `;
 }
 
@@ -314,17 +375,16 @@ function extractJsonObject(text) {
 }
 
 function parseSlateAnalysis(text) {
-  // NO FALLBACKS: Gary MUST produce valid slate analysis or we fail
   const jsonStr = extractJsonObject(text);
   if (!jsonStr) {
-    throw new Error('[Slate Analyzer] Gary did not produce JSON analysis. Raw response: ' + text.slice(0, 500));
+    throw new Error('[Slate Analyzer] Flash did not produce JSON analysis. Raw response: ' + text.slice(0, 500));
   }
 
   let parsed;
   try {
     parsed = JSON.parse(jsonStr);
   } catch (e) {
-    throw new Error('[Slate Analyzer] Gary produced invalid JSON: ' + e.message + '. Raw: ' + jsonStr.slice(0, 500));
+    throw new Error('[Slate Analyzer] Flash produced invalid JSON: ' + e.message + '. Raw: ' + jsonStr.slice(0, 500));
   }
 
   // Require at least some analysis - can't be completely empty
@@ -333,14 +393,14 @@ function parseSlateAnalysis(text) {
                       (parsed.gameEnvironments?.length > 0);
 
   if (!hasAnalysis) {
-    console.warn('[Slate Analyzer] Gary found no data - verify slate has games');
+    console.warn('[Slate Analyzer] Flash found no data - verify slate has games');
   }
 
   // Diagnostic: Flash returned game-level data but no team-level profiles
   const envCount = parsed.gameEnvironments?.length || 0;
   const profileCount = parsed.gameProfiles?.length || 0;
   if (envCount > 0 && profileCount === 0) {
-    console.warn(`[Slate Analyzer] ⚠️ Flash returned ${envCount} game environments but 0 game profiles — team-level analysis may be incomplete`);
+    console.warn(`[Slate Analyzer] Flash returned ${envCount} game environments but 0 game profiles — team-level analysis may be incomplete`);
   }
 
   return {
@@ -396,7 +456,7 @@ function formatKnownInjuries(injuries) {
  * The FTA page is server-rendered — ownership data is in static HTML tables.
  * Direct parsing is 100% accurate (no AI hallucination risk) and fast (~1s).
  *
- * Returns empty array on failure (non-critical path).
+ * Returns empty array on failure (ownership is supplemental — does not affect player selection).
  *
  * @param {object} _genAI - Unused (kept for interface compatibility)
  * @param {Object} context - DFS context { platform, ... }
@@ -480,12 +540,3 @@ export async function fetchOwnershipFromFTA(_genAI, context) {
   console.log(`[Ownership] Fetched ${results.length} players from FTA (${isDK ? 'DraftKings' : 'FanDuel'})`);
   return results;
 }
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// EXPORTS
-// ═══════════════════════════════════════════════════════════════════════════════
-
-export default {
-  analyzeSlateWithFlash,
-  fetchOwnershipFromFTA
-};

@@ -1,7 +1,6 @@
 /**
  * NHL Scout Report Builder
- * Extracted from scoutReportBuilder.js — handles all NHL-specific logic
- * for building the pre-game scout report.
+ * Handles all NHL-specific logic for building the pre-game scout report.
  */
 
 import { ballDontLieService } from '../../../ballDontLieService.js';
@@ -27,7 +26,6 @@ import {
   formatInjuryReport,
   formatStartingLineups,
   formatOdds,
-  formatSportsbookComparison,
   formatRestSituation,
   calculateRestSituation,
   formatNhlRecentFormWithBoxScores,
@@ -643,17 +641,6 @@ GOALIE CONFIRMATION STATUS:
       return `${role}: ${g.name} | ${record} | ${svPct} SV% | ${gaa} GAA | ${g.gamesPlayed || 0}GP`;
     };
 
-    // Determine advantage based on SV% (higher is better)
-    const homeSV = parseFloat(homeStarter?.savePct) || 0;
-    const awaySV = parseFloat(awayStarter?.savePct) || 0;
-    let advantageNote = '';
-    if (homeSV > 0 && awaySV > 0) {
-      const diff = Math.abs(homeSV - awaySV);
-      if (diff >= 2) {
-        advantageNote = `\nGOALIE SV% GAP: ${homeStarter?.name} (HOME) .${(homeSV+'').replace('.','')} vs ${awayStarter?.name} (AWAY) .${(awaySV+'').replace('.','')} (${diff.toFixed(1)}% difference)`;
-      }
-    }
-
     return `
 | Position | ${awayTeam} | ${homeTeam} |
 |----------|-------------|-------------|
@@ -663,7 +650,7 @@ GOALIE CONFIRMATION STATUS:
 | GAA      | ${awayStarter?.gaa || 'N/A'} | ${homeStarter?.gaa || 'N/A'} |
 | Games    | ${awayStarter?.gamesPlayed || 0}GP | ${homeStarter?.gamesPlayed || 0}GP |
 | Shutouts | ${awayStarter?.shutouts || 0} | ${homeStarter?.shutouts || 0} |
-| BACKUP   | ${awayBackup?.name || 'N/A'} | ${homeBackup?.name || 'N/A'} |${advantageNote}
+| BACKUP   | ${awayBackup?.name || 'N/A'} | ${homeBackup?.name || 'N/A'} |
 
 NOTE: Confirmed starting goalie shown above. Backup goalie listed for reference.
 `;
@@ -699,9 +686,9 @@ GOALIE COMPARISON TABLE (REQUIRED FOR NHL ANALYSIS)
 ${goaliComparisonTable}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-*** ACTIVE ROSTER (READ THIS FIRST - PREVENTS HALLUCINATIONS) ***
+ACTIVE ROSTER
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-These are the CURRENT players on each team's roster from Ball Don't Lie data.
+Players on each team's roster from Ball Don't Lie data.
 ${homeSection}
 
 ${awaySection}
@@ -840,13 +827,6 @@ function formatNhlRosterDepth(homeTeam, awayTeam, rosterDepth, injuries) {
     lines.push('');
   }
 
-  // Add context note
-  lines.push('\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501');
-  lines.push('NHL ROSTER DEPTH CONTEXT:');
-  lines.push('');
-  lines.push('  Starting goalie SV% and GAA shown above.');
-  lines.push('  Skater production (goals, assists, points, TOI) shown per player.');
-  lines.push('\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501');
   lines.push('');
 
   return lines.join('\n');
@@ -942,12 +922,12 @@ export async function buildNhlScoutReport(game, options = {}) {
           const gamesMissed = gameDates.filter(g => new Date(g.date) > lastGameDate).length;
 
           if (gamesMissed <= STALE_WINDOW_GAMES && daysSince < STALE_DAYS_THRESHOLD) {
-            inj.duration = 'RECENT';
+            inj.duration = 'FRESH';
             inj.freshness = 'FRESH';
             inj.isPricedIn = false;
             inj.isEdge = true;
           } else if (gamesMissed <= 7) {
-            inj.duration = 'MID-SEASON';
+            inj.duration = 'SHORT-TERM';
             inj.freshness = 'STALE';
             inj.isPricedIn = true;
           } else if (gamesMissed <= 20) {
@@ -1456,8 +1436,6 @@ ${formatH2HSection(h2hData, homeTeam, awayTeam)}
 BETTING CONTEXT
 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
 ${formatOdds(game, sportKey)}
-${options.sportsbookOdds ? formatSportsbookComparison(options.sportsbookOdds, game.home_team, game.away_team) : ''}
-BETTING ODDS COMPARISON:
 `.trim();
 
   // Return both the report text, structured injuries data, and venue/game context

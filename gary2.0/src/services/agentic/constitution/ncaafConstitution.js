@@ -15,10 +15,7 @@
  * - Narrative awareness → system prompt NARRATIVE AWARENESS
  * - Anti-hallucination / current season → BASE_RULES
  * - Matchup tags (tournamentContext) → system prompt output format + scout report auto-populates
- * - Ranking tiers → L3 violation (assigns significance to rank ranges)
- * - Ranking gap examples → anchors Gary on specific stats (subtle L3)
  * - Opt-outs / portal / motivation / conference strength → Flash investigation prompts + scout report
- * - Injury duration → system prompt NARRATIVE AWARENESS
  */
 
 import {
@@ -30,12 +27,7 @@ export const NCAAF_CONSTITUTION = {
   // ═══════════════════════════════════════════════════════════════════════════
   // SECTION A: DOMAIN KNOWLEDGE — NCAAF-specific reference material
   // ═══════════════════════════════════════════════════════════════════════════
-  domainKnowledge: `
-## NCAAF ANALYSIS
-
-### GROUNDING SEARCH SITES
-For SP+ ratings, havoc rates, or talent composites not available via BDL, use Gemini grounding with site:footballoutsiders.com, site:espn.com (FPI), or site:247sports.com (talent).
-`,
+  domainKnowledge: ``,
 
   // ═══════════════════════════════════════════════════════════════════════════
   // SECTION B: REMOVED — Investigation prompts in flashInvestigationPrompts.js

@@ -20,8 +20,6 @@ import { ncaabSeason } from '../src/utils/dateUtils.js';
 const { analyzeGame, buildSystemPrompt } = await import('../src/services/agentic/orchestrator/index.js');
 const { oddsService } = await import('../src/services/oddsService.js');
 const { picksService } = await import('../src/services/picksService.js');
-// venueMapping.js removed in cleanup — venue comes from scout report (result.venue)
-const getVenueForHomeTeam = () => null;
 const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
 const { getConstitution } = await import('../src/services/agentic/constitution/index.js');
 /**
@@ -1493,8 +1491,7 @@ async function main() {
             pick_id: `agentic-${config.key}-${game.id || Date.now()}`,
             commence_time: game.commence_time,
             // Venue/tournament context (for NBA Cup, playoffs, NFL primetime, etc.)
-            // Use venue mapping based on HOME team (not the team in the pick)
-            venue: result.venue || getVenueForHomeTeam(result.homeTeam, config.name) || null,
+            venue: result.venue || null,
             isNeutralSite: result.isNeutralSite || false,
             tournamentContext: result.tournamentContext || null,
             gameSignificance: result.gameSignificance || null,
@@ -1639,16 +1636,11 @@ async function main() {
 
       const pickCount = sportPicks.length;
 
-      // Track failed games for this sport (slateSession removed)
-      const failedCount = 0;
-
       summary[config.name] = {
         games: finalGames.length,
         picks: pickCount,
         stored: storedPicksCount,
         filtered: filteredOutCount,
-        failed: failedCount,
-        failedGames: [],
         time: sportTime
       };
 

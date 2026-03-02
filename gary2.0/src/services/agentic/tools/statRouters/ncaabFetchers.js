@@ -1,4 +1,4 @@
-import { getCurrentSeasonString, sportToBdlKey, normalizeSportName, findTeam, fmtNum, fmtPct, fetchBothTeamSeasonStats, fetchNBATeamScoringStats, fetchNBATeamAdvancedStats, fetchNBALeaders, fetchNBATeamBaseStats, fetchNBATeamOpponentStats, fetchNBATeamDefenseStats, fetchTopPlayersForTeam, formatRecentGames, buildPaceAnalysis, interpretTurnoverMargin, BDL_API_KEY, _nbaBaseStatsCache, _nbaAdvancedStatsCache, _nbaOpponentStatsCache, _nbaDefenseStatsCache, _nbaTeamScoringStatsCache, geminiGroundingSearch, getNcaabVenue, getBarttovikRatings } from './statRouterCommon.js';
+import { getCurrentSeasonString, sportToBdlKey, normalizeSportName, findTeam, fmtNum, fmtPct, fetchBothTeamSeasonStats, fetchNBATeamScoringStats, fetchNBATeamAdvancedStats, fetchNBALeaders, fetchNBATeamBaseStats, fetchNBATeamOpponentStats, fetchNBATeamDefenseStats, fetchTopPlayersForTeam, formatRecentGames, buildPaceAnalysis, BDL_API_KEY, _nbaBaseStatsCache, _nbaAdvancedStatsCache, _nbaOpponentStatsCache, _nbaDefenseStatsCache, _nbaTeamScoringStatsCache, geminiGroundingSearch, getNcaabVenue, getBarttovikRatings } from './statRouterCommon.js';
 import { ballDontLieService } from '../../../ballDontLieService.js';
 
 export const ncaabFetchers = {
@@ -258,7 +258,7 @@ export const ncaabFetchers = {
           team: away.full_name || away.name,
           ts_pct: calcTS(awayData) ? `${calcTS(awayData)}%` : 'N/A'
         },
-        note: 'TS% captures total scoring efficiency (FG + 3PT + FT). Higher than eFG% for teams with elite FT rate.'
+        note: 'True shooting percentage for both teams.'
       };
     } catch (error) {
       console.warn('[Stat Router] NCAAB_TS_PCT fetch failed:', error.message);
@@ -487,7 +487,7 @@ Only report numbers from ncaa.com. If not found, write "not found".`;
 
       console.log(`[Stat Router] Fetching Strength of Schedule for ${awayTeamName} @ ${homeTeamName} via Barttorvik API`);
 
-      // WAB (Wins Above Bubble) is an SOS-adjusted metric — teams with high WAB beat tough opponents
+      // WAB (Wins Above Bubble) and opponent quality metrics
       const [homeBartt, awayBartt] = await Promise.all([
         getBarttovikRatings(homeTeamName),
         getBarttovikRatings(awayTeamName)
@@ -512,7 +512,7 @@ Only report numbers from ncaa.com. If not found, write "not found".`;
           barthag: awayBartt?.barthag ?? 'N/A',
           conference: awayBartt?.conferenceName ?? 'N/A'
         },
-        note: 'WAB (Wins Above Bubble) reflects schedule-adjusted quality. Higher WAB = more quality wins against the schedule.'
+        note: 'Barttorvik advanced metrics for both teams.'
       };
     } catch (error) {
       console.warn('[Stat Router] SOS fetch failed:', error.message);
@@ -819,7 +819,7 @@ Quad 4: [W-L]`;
           team: teamName,
           l5_record: `${wins}-${losses}`,
           avg_margin: avgMargin > 0 ? `+${avgMargin}` : avgMargin,
-          trend: wins >= 4 ? 'HOT' : wins <= 1 ? 'COLD' : 'MIXED',
+          l5_win_pct: `${((wins / (wins + losses)) * 100).toFixed(0)}%`,
           games: details
         };
       };
@@ -828,7 +828,7 @@ Quad 4: [W-L]`;
         category: 'Recent Form L5 (NCAAB)',
         home: analyzeGames(homeL5, home.id, home.full_name || home.name),
         away: analyzeGames(awayL5, away.id, away.full_name || away.name),
-        context: 'L5 record with margin and opponent context. Consider: Who did they play? Close games or blowouts?'
+        note: 'L5 record with margin and opponent data.'
       };
     } catch (error) {
       console.warn('[Stat Router] NCAAB Recent Form failed:', error.message);
@@ -880,9 +880,9 @@ Quad 4: [W-L]`;
       summary += formatTeamConf(awayTeamName, awayRatings) + '\n';
 
       if (sameConference) {
-        summary += `\nBoth teams play in the ${homeConf}. This is a conference matchup — familiarity and rivalry dynamics may apply.`;
+        summary += `\nBoth teams play in the ${homeConf}.`;
       } else if (homeConf !== 'Unknown' && awayConf !== 'Unknown') {
-        summary += `\n${homeTeamName} plays in the ${homeConf}; ${awayTeamName} plays in the ${awayConf}. Compare T-Rank and AdjEM to gauge relative conference strength.`;
+        summary += `\n${homeTeamName} plays in the ${homeConf}; ${awayTeamName} plays in the ${awayConf}.`;
       }
 
       return {
@@ -895,7 +895,7 @@ Quad 4: [W-L]`;
         home_ratings: homeRatings || null,
         away_ratings: awayRatings || null,
         raw_response: summary,
-        context: 'T-Rank and AdjEM provide context for interpreting team stats. A team ranked 40th in a strong conference faces tougher nightly competition than one ranked 40th in a weak conference.'
+        note: 'Conference strength and T-Rank data for both teams.'
       };
     } catch (error) {
       console.warn('[Stat Router] NCAAB Conference Strength fetch failed:', error.message);
@@ -943,7 +943,7 @@ Quad 4: [W-L]`;
           adjEM: awayBartt?.adjEM ?? 'N/A',
           conference: awayBartt?.conferenceName ?? 'N/A'
         },
-        context: 'WAB (Wins Above Bubble) is schedule-adjusted — high WAB means quality wins against tough opponents. Compare T-Rank gap to the spread to assess market pricing.'
+        note: 'WAB, T-Rank, and AdjEM data for both teams.'
       };
     } catch (error) {
       console.warn('[Stat Router] NCAAB Opponent Quality fetch failed:', error.message);

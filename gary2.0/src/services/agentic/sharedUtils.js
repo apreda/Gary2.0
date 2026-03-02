@@ -258,32 +258,32 @@ export function fixBdlInjuryStatus(injury) {
     if (daysSinceReport >= 42) { // 6+ weeks = SEASON-LONG (team stats have full baseline)
       injury.duration = 'SEASON-LONG';
       injury.isEdge = false;
-    } else if (daysSinceReport >= 21) { // 3-6 weeks = MID-SEASON (team has mostly adjusted)
-      injury.duration = 'MID-SEASON';
+    } else if (daysSinceReport >= 21) { // 3-6 weeks = SHORT-TERM (team has mostly adjusted)
+      injury.duration = 'SHORT-TERM';
       injury.isEdge = false;
-    } else if (daysSinceReport <= 14) { // 0-2 weeks = RECENT (This is the REAL EDGE)
-      injury.duration = 'RECENT';
+    } else if (daysSinceReport <= 14) { // 0-2 weeks = FRESH (This is the REAL EDGE)
+      injury.duration = 'FRESH';
       injury.isEdge = true;
-    } else { // 2-3 weeks = MID-SEASON
-      injury.duration = 'MID-SEASON';
+    } else { // 2-3 weeks = SHORT-TERM
+      injury.duration = 'SHORT-TERM';
       injury.isEdge = false;
     }
   }
   // CATEGORY C: Keywords for recent/short-term
   else if (desc.includes('day-to-day') || desc.includes('questionable') || desc.includes('this week') ||
            desc.includes('game-time') || isReturnToday) {
-    injury.duration = 'RECENT';
+    injury.duration = 'FRESH';
     injury.isEdge = true;
   }
   // CATEGORY D: Extended but not season-long
   else if (desc.includes('several weeks') || desc.includes('multiple weeks') || desc.includes('extended')) {
-    injury.duration = 'MID-SEASON';
+    injury.duration = 'SHORT-TERM';
     injury.isEdge = false;
   }
   // DEFAULT
   else {
-    injury.duration = injury.status === 'Out' ? 'MID-SEASON' : 'RECENT';
-    injury.isEdge = injury.duration === 'RECENT';
+    injury.duration = injury.status === 'Out' ? 'SHORT-TERM' : 'FRESH';
+    injury.isEdge = injury.duration === 'FRESH';
   }
 
   return injury;

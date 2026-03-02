@@ -1,4 +1,4 @@
-import { clearCache as _clearCache, clearCacheByPattern as _clearCacheByPattern, initApi, API_KEY } from './bdlCore.js';
+import { clearCache as _clearCache, initApi, API_KEY } from './bdlCore.js';
 import { oddsMethods } from './bdlOdds.js';
 import { gamesMethods } from './bdlGames.js';
 import { playersMethods } from './bdlPlayers.js';
@@ -12,13 +12,6 @@ const ballDontLieService = {
    */
   clearCache() {
     _clearCache();
-  },
-
-  /**
-   * Clear cache entries matching a pattern (e.g., 'injuries' to clear all injury caches)
-   */
-  clearCacheByPattern(pattern) {
-    return _clearCacheByPattern(pattern);
   },
 
   /**

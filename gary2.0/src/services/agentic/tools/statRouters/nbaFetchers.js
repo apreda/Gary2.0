@@ -1,4 +1,4 @@
-import { getCurrentSeasonString, sportToBdlKey, normalizeSportName, findTeam, fmtNum, fmtPct, fetchBothTeamSeasonStats, fetchNBATeamScoringStats, fetchNBATeamAdvancedStats, fetchNBALeaders, fetchNBATeamBaseStats, fetchNBATeamOpponentStats, fetchNBATeamDefenseStats, fetchTopPlayersForTeam, formatRecentGames, buildPaceAnalysis, interpretTurnoverMargin, BDL_API_KEY, _nbaBaseStatsCache, _nbaAdvancedStatsCache, _nbaOpponentStatsCache, _nbaDefenseStatsCache, _nbaTeamScoringStatsCache, geminiGroundingSearch, isGameCompleted, getBarttovikRatings } from './statRouterCommon.js';
+import { getCurrentSeasonString, sportToBdlKey, normalizeSportName, findTeam, fmtNum, fmtPct, fetchBothTeamSeasonStats, fetchNBATeamScoringStats, fetchNBATeamAdvancedStats, fetchNBALeaders, fetchNBATeamBaseStats, fetchNBATeamOpponentStats, fetchNBATeamDefenseStats, fetchTopPlayersForTeam, formatRecentGames, buildPaceAnalysis, BDL_API_KEY, _nbaBaseStatsCache, _nbaAdvancedStatsCache, _nbaOpponentStatsCache, _nbaDefenseStatsCache, _nbaTeamScoringStatsCache, geminiGroundingSearch, isGameCompleted, getBarttovikRatings } from './statRouterCommon.js';
 import { ballDontLieService } from '../../../ballDontLieService.js';
 import { ncaabFetchers } from './ncaabFetchers.js';
 
@@ -30,7 +30,7 @@ export const nbaFetchers = {
         },
         projected_pace: avgPace > 0 ? avgPace.toFixed(1) : 'N/A',
         analysis: `${home.name} pace: ${homePace.toFixed(1)}, ${away.name} pace: ${awayPace.toFixed(1)}, projected: ${avgPace > 0 ? avgPace.toFixed(1) : 'N/A'}`,
-        comparison: `Pace differentials can favor either side — depth advantages amplify in fast games, star power concentrates in slow ones. What competing scenarios does this data support for each team against tonight's spread?`
+        comparison: `${home.name} pace: ${homePace.toFixed(1)}, ${away.name} pace: ${awayPace.toFixed(1)}, projected game pace: ${avgPace > 0 ? avgPace.toFixed(1) : 'N/A'}`
       };
     }
     
@@ -91,7 +91,7 @@ export const nbaFetchers = {
           games_played: awayStats?.games_played || 0,
           top_players: awayStats?.top_players || []
         },
-        comparison: `Offensive rating gaps can reflect roster talent, scheme fit, or schedule difficulty. What competing narratives could this data support for each side?`
+        comparison: 'Season offensive rating and efficiency data for both teams.'
       };
     }
     
@@ -141,7 +141,7 @@ export const nbaFetchers = {
           defensive_rating: awayStats?.defensive_rating || 'N/A',
           games_played: awayStats?.games_played || 0
         },
-        comparison: `Defensive efficiency differences can stem from scheme, personnel, or opponent quality. What arguments does this data create for each team's case?`
+        comparison: 'Season defensive rating data for both teams.'
       };
     }
     
@@ -206,7 +206,7 @@ export const nbaFetchers = {
           top_players: awayStats?.top_players || []
         },
         gap: gap,
-        comparison: `Net rating captures overall margin tendencies, but recent trajectory and opponent strength shape its predictive value. What does this gap mean for each side's case tonight?`
+        comparison: 'Season net rating (ORtg - DRtg) for both teams.'
       };
     }
     
@@ -236,7 +236,7 @@ export const nbaFetchers = {
           defensive_rating: awayBartt?.adjDE ?? 'N/A'
         },
         gap: fmtNum(homeNet - awayNet),
-        comparison: 'Net rating captures overall margin tendencies, but recent trajectory and opponent strength shape its predictive value. What does this gap mean for each side\'s case tonight?'
+        comparison: 'Adjusted net rating (AdjOE - AdjDE) for both teams.'
       };
     }
 
@@ -310,7 +310,7 @@ export const nbaFetchers = {
           opp_efg_pct_allowed: awayOpp?.opp_efg_pct ? `${awayOpp.opp_efg_pct}%` : 'N/A'
         },
         comparison: homeStats && awayStats ?
-          `eFG% gap: ${(parseFloat(homeStats.efg_pct) - parseFloat(awayStats.efg_pct)).toFixed(1)}% (${home.name} ${homeStats.efg_pct}% vs ${away.name} ${awayStats.efg_pct}%). Shooting efficiency reflects both skill and shot selection — hot shooting can regress, cold shooting can normalize. What competing narratives does the shooting data create for each side?` :
+          `eFG% gap: ${(parseFloat(homeStats.efg_pct) - parseFloat(awayStats.efg_pct)).toFixed(1)}% (${home.name} ${homeStats.efg_pct}% vs ${away.name} ${awayStats.efg_pct}%).` :
           'Comparison unavailable',
       };
     }
@@ -378,7 +378,7 @@ export const nbaFetchers = {
           opp_tov_rate: awayOpp?.opp_tov_rate ? `${awayOpp.opp_tov_rate}%` : 'N/A',
           opp_tov_per_game: awayOpp?.opp_tov_per_game || 'N/A'
         },
-        comparison: 'Turnover margins can swing outcomes but are among the most volatile game-to-game stats. What scenarios does this differential support for each side?',
+        comparison: 'Turnover rate, turnovers per game, and forced turnover data for both teams.',
       };
     }
     
@@ -442,7 +442,7 @@ export const nbaFetchers = {
           oreb_per_game: awayBase?.oreb_per_game || 'N/A',
           opp_oreb_per_game: awayOpp?.opp_oreb || 'N/A'
         },
-        comparison: 'Rebounding advantages create second chances on offense and limit them on defense, but the impact varies by pace and shooting profile. What case does this make for each team?'
+        comparison: 'Rebounding data for both teams — offensive and defensive boards with opponent context.'
       };
     }
     
@@ -512,7 +512,7 @@ export const nbaFetchers = {
           opp_ft_rate: awayOpp?.opp_ft_rate ? `${awayOpp.opp_ft_rate}%` : 'N/A',
           opp_fta_per_game: awayOpp?.opp_fta_per_game || 'N/A'
         },
-        comparison: 'Free throw rate differentials reflect aggression and officiating tendencies — both of which can shift in specific matchups. What competing possibilities does this suggest?'
+        comparison: 'Free throw rate, attempts per game, and opponent FT data for both teams.'
       };
     }
     
@@ -574,7 +574,7 @@ export const nbaFetchers = {
           three_made_per_game: awayStats?.fg3m_per_game || 'N/A',
           three_attempted_per_game: awayStats?.fg3a_per_game || 'N/A'
         },
-        comparison: `Shooting efficiency reflects both skill and shot selection — hot shooting can regress, cold shooting can normalize. What competing narratives does the shooting data create for each side?`,
+        comparison: 'Season shooting splits (FG%, 3P%, FT%) for both teams.',
       };
     }
     
@@ -892,7 +892,7 @@ export const nbaFetchers = {
         home_record: awaySt?.home_record || 'N/A',
         away_record: awaySt?.road_record || 'N/A'
       },
-      comparison: `Home/away splits reflect both venue advantage and schedule quality — the gap may over- or understate true form. What does each team's split profile suggest for tonight?`
+      comparison: 'Season home/away records and splits for both teams.'
     };
   },
 
@@ -944,9 +944,8 @@ export const nbaFetchers = {
         same_conference: homeSt?.team?.conference === awaySt?.team?.conference,
         same_division: homeSt?.team?.division === awaySt?.team?.division,
         comparison: homeSt?.team?.conference === awaySt?.team?.conference
-          ? `Conference game. Conference context shapes motivation and playoff positioning, but may or may not be reflected in tonight's spread.`
-          : `Non-conference game. Conference context shapes motivation and playoff positioning, but may or may not be reflected in tonight's spread.`,
-        note: 'Conference record reflects performance against similar-level competition.'
+          ? 'Conference game — standings and conference records for both teams.'
+          : 'Non-conference game — standings and conference records for both teams.'
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching CONFERENCE_STATS:`, error.message);
@@ -1062,7 +1061,7 @@ export const nbaFetchers = {
           non_conf_games: awayNonConf.games_played,
           recent_non_conf: awayNonConf.recent
         },
-        comparison: `Conference context shapes motivation and playoff positioning, but may or may not be reflected in tonight's spread.`,
+        comparison: 'Conference standings and playoff positioning data for both teams.',
         note: 'Non-conference records provided for comparison.'
       };
     } catch (error) {
@@ -1117,7 +1116,7 @@ export const nbaFetchers = {
           opp_oreb_per_game: awayOpp?.opp_oreb || 'N/A',
           games_played: awayAdvanced?.games_played || 'N/A'
         },
-        comparison: 'Defensive rebounding efficiency limits second-chance points but correlates with pace and opponent shooting quality. What competing cases does this create?'
+        comparison: 'Defensive rebounding rate, DREB per game, and opponent OREB data for both teams.'
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching DREB_RATE:`, error.message);
@@ -1185,29 +1184,10 @@ export const nbaFetchers = {
         const l10Avg = avg(l10Margins);
         const seasonAvg = avg(seasonMargins);
         
-        // Determine trend
-        let trend = 'STABLE';
-        let trendDetail = '';
-        if (l5Avg > seasonAvg + 3) {
-          trend = 'SURGING';
-          trendDetail = `L5 margin (${l5Avg > 0 ? '+' : ''}${l5Avg.toFixed(1)}) is ${(l5Avg - seasonAvg).toFixed(1)} pts above season avg`;
-        } else if (l5Avg < seasonAvg - 3) {
-          trend = 'SLUMPING';
-          trendDetail = `L5 margin (${l5Avg > 0 ? '+' : ''}${l5Avg.toFixed(1)}) is ${(seasonAvg - l5Avg).toFixed(1)} pts below season avg`;
-        } else if (l5Avg > l10Avg + 2) {
-          trend = 'IMPROVING';
-          trendDetail = `L5 (${l5Avg > 0 ? '+' : ''}${l5Avg.toFixed(1)}) better than L10 (${l10Avg > 0 ? '+' : ''}${l10Avg.toFixed(1)})`;
-        } else if (l5Avg < l10Avg - 2) {
-          trend = 'DECLINING';
-          trendDetail = `L5 (${l5Avg > 0 ? '+' : ''}${l5Avg.toFixed(1)}) worse than L10 (${l10Avg > 0 ? '+' : ''}${l10Avg.toFixed(1)})`;
-        }
-        
         return {
           l5_margin: `${l5Avg > 0 ? '+' : ''}${l5Avg.toFixed(1)}`,
           l10_margin: `${l10Avg > 0 ? '+' : ''}${l10Avg.toFixed(1)}`,
           season_margin: `${seasonAvg > 0 ? '+' : ''}${seasonAvg.toFixed(1)}`,
-          trend,
-          trend_detail: trendDetail,
           games_analyzed: completed.length
         };
       };
@@ -1227,8 +1207,8 @@ export const nbaFetchers = {
           team: away.full_name || away.name,
           ...awayTrend
         },
-        comparison: `Point differential trends can indicate sustainable performance or schedule-driven variance. What arguments exist for each side based on margin patterns?`,
-        note: 'These are raw point differentials, not per-100-possession efficiency. Use alongside ORtg/DRtg for pace-adjusted context.'
+        comparison: 'Recent point differential trends for both teams.',
+        note: 'Raw point differentials for both teams.'
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching EFFICIENCY_TREND:`, error.message);
@@ -1266,7 +1246,7 @@ export const nbaFetchers = {
         opp_fg3m_per_game: awayOpp?.opp_fg3m_per_game || 'N/A',
         games_played: awayOpp?.games_played || 'N/A'
       },
-      comparison: 'Perimeter defense profiles interact with opponent shooting tendencies — a weakness only matters if the opponent can exploit it. What competing cases emerge?'
+      comparison: 'Opponent 3-point shooting data allowed by each team.'
     };
   },
 
@@ -1298,7 +1278,7 @@ export const nbaFetchers = {
           opp_ftm_per_game: awayOpp?.opp_ftm_per_game || 'N/A',
           games_played: awayOpp?.games_played || 'N/A'
         },
-        comparison: 'Foul tendencies affect free throw opportunities and lineup availability, but are highly referee-dependent. What scenarios does this create for each side?'
+        comparison: 'Opponent free throw rate and attempts allowed by each team.'
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching OPP_FT_RATE:`, error.message);
@@ -1336,7 +1316,7 @@ export const nbaFetchers = {
         opp_fg3_pct: awayOpp?.opp_fg3_pct ? `${awayOpp.opp_fg3_pct}%` : 'N/A',
         games_played: awayOpp?.games_played || 'N/A'
       },
-      comparison: 'Opponent shooting percentages reflect defensive scheme and personnel, but can be skewed by schedule. What competing possibilities does this suggest for tonight?'
+      comparison: 'Opponent FG% and 3P% allowed by each team.'
     };
   },
 
@@ -1363,7 +1343,7 @@ export const nbaFetchers = {
         opp_tov_per_game: awayOpp?.opp_tov_per_game || 'N/A',
         games_played: awayOpp?.games_played || 'N/A'
       },
-      comparison: 'Forced turnover rates are volatile and opponent-dependent — a team that forces turnovers against poor ball-handlers may not replicate against strong ones. What does this suggest for each side?'
+      comparison: 'Forced turnover rate and turnovers per game allowed by each team.'
     };
   },
 
@@ -1438,7 +1418,7 @@ export const nbaFetchers = {
           season_pace: awayAdvanced?.pace || 'N/A',
           ...awayPace
         },
-        comparison: 'Pace differentials can favor either side — depth advantages amplify in fast games, star power concentrates in slow ones. What competing scenarios does this data support for each team against tonight\'s spread?'
+        comparison: 'Recent pace trends (L5/L10) vs season pace for both teams.'
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching PACE_LAST_10:`, error.message);
@@ -1537,7 +1517,7 @@ export const nbaFetchers = {
           away_games: awaySplits.away_games,
           note: 'Playing on ROAD tonight'
         },
-        comparison: 'Home/away splits reflect both venue advantage and schedule quality — the gap may over- or understate true form. What does each team\'s split profile suggest for tonight?'
+        comparison: 'Home and away performance splits for both teams.'
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching PACE_HOME_AWAY:`, error.message);
@@ -1580,7 +1560,7 @@ export const nbaFetchers = {
         team: away.full_name || away.name,
         ...formatScoringZones(awayAdvanced)
       },
-      comparison: 'Scoring source distribution reveals style tendencies — paint-heavy teams face different defensive matchups than perimeter-heavy ones. What does each team\'s profile mean against this specific opponent\'s defense?'
+      comparison: 'Scoring zone distribution for both teams — paint, perimeter, and free throw breakdown.'
     };
   },
 
@@ -1615,7 +1595,7 @@ export const nbaFetchers = {
           team: away.full_name || away.name,
           ...formatMidrange(awayAdvanced)
         },
-        comparison: `Midrange reliance is an efficiency debate — low-frequency but potentially high-value against certain defensive schemes. What case does each team's shot profile create?`,
+        comparison: 'Midrange shooting frequency and efficiency for both teams.',
         note: 'Percentages show share of total scoring from each zone.'
       };
     } catch (error) {
@@ -1660,7 +1640,7 @@ export const nbaFetchers = {
         blk_per_game: awayBase?.blk_per_game || 'N/A',
         games_played: awayDefense?.games_played || awayAdvanced?.games_played || 'N/A'
       },
-      comparison: 'Paint defense effectiveness depends on matchup — interior defenders face different challenges against driving guards vs post players. What competing cases does this create?'
+      comparison: 'Paint defense and interior scoring data for both teams.'
     };
   },
 
@@ -1694,7 +1674,7 @@ export const nbaFetchers = {
           pace: awayAdvanced?.pace || 'N/A',
           games_played: awayDefense?.games_played || 'N/A'
         },
-        comparison: 'Transition defense matters most against fast-paced, athletic opponents — the impact depends on tonight\'s specific matchup style.'
+        comparison: 'Transition defense and fast break data for both teams.'
       };
     }
 
@@ -1737,7 +1717,7 @@ export const nbaFetchers = {
         home: { team: home.full_name || home.name },
         away: { team: away.full_name || away.name },
         grounding_data: groundingResult?.content || 'Data unavailable',
-        comparison: `Bench depth matters more in high-pace games, back-to-backs, and blowouts — its relevance tonight depends on expected game script.`,
+        comparison: 'Bench scoring and depth data for both teams.',
         note: 'Starter vs bench unit stats provided for comparison.'
       };
     } catch (error) {
@@ -1791,19 +1771,9 @@ export const nbaFetchers = {
     
     const tzDiff = tzOrder[homeTz] - tzOrder[awayTz];
     
-    let travelImpact = 'NEUTRAL';
-    let travelNote = '';
-
-    if (tzDiff >= 2) {
-      travelImpact = 'AWAY TEAM DISADVANTAGE';
-      travelNote = `${away.name} traveling EAST across ${Math.abs(tzDiff)} time zones.`;
-    } else if (tzDiff <= -2) {
-      travelImpact = 'MILD AWAY DISADVANTAGE';
-      travelNote = `${away.name} traveling WEST across ${Math.abs(tzDiff)} time zones.`;
-    } else if (Math.abs(tzDiff) === 1) {
-      travelImpact = 'MINIMAL IMPACT';
-      travelNote = `1 time zone difference.`;
-    }
+    const travelNote = tzDiff !== 0
+      ? `${away.name} traveling ${tzDiff > 0 ? 'EAST' : 'WEST'} across ${Math.abs(tzDiff)} time zone${Math.abs(tzDiff) > 1 ? 's' : ''}.`
+      : 'Same time zone.';
     
     return {
       category: 'Travel & Time Zone Situation',
@@ -1820,10 +1790,8 @@ export const nbaFetchers = {
       },
       time_zone_diff: Math.abs(tzDiff),
       travel_direction: tzDiff > 0 ? 'EASTWARD' : tzDiff < 0 ? 'WESTWARD' : 'SAME ZONE',
-      travel_impact: travelImpact,
       travel_note: travelNote,
-      comparison: tzDiff >= 2 ? `Travel fatigue effects are real but inconsistent — some teams adjust, others don't.` : null,
-      note: 'Eastward travel is harder than westward. 2+ time zone jumps are significant.'
+      note: 'Travel and time zone data for this game.'
     };
   },
 
@@ -1887,7 +1855,7 @@ export const nbaFetchers = {
           team: away.full_name || away.name,
           top_5_by_minutes: awayPlayers.length > 0 ? awayPlayers : 'Data unavailable'
         },
-        comparison: 'Minutes distribution reflects coaching trust and fatigue risk. Concentrated minutes can mean star dependence or veteran management.',
+        comparison: 'Minutes distribution and rotation patterns for both teams.',
         note: 'Season MPG for top 5 players per team.'
       };
     } catch (error) {
@@ -1972,9 +1940,7 @@ export const nbaFetchers = {
           close_wins: closeWins,
           close_losses: closeLosses,
           close_game_rate: `${closeGameRate}%`,
-          profile: blowoutWins >= 5 ? 'BLOWOUT TEAM' :
-                   closeWins + closeLosses >= completed.length * 0.4 ? 'CLOSE GAME TEAM' :
-                   'MIXED PROFILE'
+          total_games: completed.length
         };
       };
       
@@ -1992,8 +1958,7 @@ export const nbaFetchers = {
           team: away.full_name || away.name,
           ...awayPatterns
         },
-        comparison: `Point differential trends can indicate sustainable performance or schedule-driven variance. What arguments exist for each side based on margin patterns?`,
-        note: 'Blowout: 15+ margin. Close: 5 or less margin.'
+        comparison: 'Recent point differential trends for both teams.'
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching BLOWOUT_TENDENCY:`, error.message);
@@ -2182,21 +2147,12 @@ export const nbaFetchers = {
         const firstHalfDiff = parseFloat(avg1H) - ((parseFloat(avgQ1Allowed) + parseFloat(avgQ2Allowed)));
         const secondHalfDiff = parseFloat(avg2H) - ((parseFloat(avgQ3Allowed) + parseFloat(avgQ4Allowed)));
         
-        let profile = [];
-        if (q1Diff >= 3) profile.push('FAST STARTER (+' + q1Diff.toFixed(1) + ' Q1)');
-        if (q1Diff <= -3) profile.push('SLOW STARTER (' + q1Diff.toFixed(1) + ' Q1)');
-        if (q4Diff >= 3) profile.push('STRONG CLOSER (+' + q4Diff.toFixed(1) + ' Q4)');
-        if (q4Diff <= -3) profile.push('FADES LATE (' + q4Diff.toFixed(1) + ' Q4)');
-        if (secondHalfDiff - firstHalfDiff >= 5) profile.push('SECOND HALF TEAM');
-        if (firstHalfDiff - secondHalfDiff >= 5) profile.push('FIRST HALF TEAM');
-        
         return {
           team: teamName,
           games_analyzed: gamesWithQuarters,
           scoring: { Q1: avgQ1, Q2: avgQ2, Q3: avgQ3, Q4: avgQ4, '1H': avg1H, '2H': avg2H },
           allowed: { Q1: avgQ1Allowed, Q2: avgQ2Allowed, Q3: avgQ3Allowed, Q4: avgQ4Allowed },
-          differential: { Q1: q1Diff.toFixed(1), Q4: q4Diff.toFixed(1), '1H': firstHalfDiff.toFixed(1), '2H': secondHalfDiff.toFixed(1) },
-          profile: profile.length > 0 ? profile.join(', ') : 'BALANCED'
+          differential: { Q1: q1Diff.toFixed(1), Q4: q4Diff.toFixed(1), '1H': firstHalfDiff.toFixed(1), '2H': secondHalfDiff.toFixed(1) }
         };
       };
       
@@ -2204,7 +2160,7 @@ export const nbaFetchers = {
         category: 'Quarter-by-Quarter Scoring Trends',
         home: calcQuarterStats(completedHomeGames, home.id, homeName),
         away: calcQuarterStats(completedAwayGames, away.id, awayName),
-        insight: 'Use this to identify fast starters vs slow starters, and closers vs faders. Key for 1H/2H betting angles.'
+        note: 'Quarter-by-quarter scoring and defensive data for both teams.'
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching QUARTER_SCORING:`, error.message);
@@ -2294,7 +2250,7 @@ export const nbaFetchers = {
         category: 'First Half Scoring Trends',
         home: calcFirstHalfStats(completedHomeGames, home.id, homeName),
         away: calcFirstHalfStats(completedAwayGames, away.id, awayName),
-        insight: 'Shows which team starts faster and their close-out rate when leading at halftime.'
+        note: 'First half scoring and halftime lead data for both teams.'
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching FIRST_HALF_TRENDS:`, error.message);
@@ -2364,12 +2320,6 @@ export const nbaFetchers = {
         const avgQ4Allowed = (totalQ4Allowed / gamesWithData).toFixed(1);
         const q4Diff = (totalQ4Scored - totalQ4Allowed) / gamesWithData;
         
-        let closerProfile = 'NEUTRAL';
-        if (q4Diff >= 3) closerProfile = 'STRONG CLOSER';
-        else if (q4Diff >= 1.5) closerProfile = 'SOLID CLOSER';
-        else if (q4Diff <= -3) closerProfile = 'FADES LATE';
-        else if (q4Diff <= -1.5) closerProfile = 'STRUGGLES TO CLOSE';
-        
         return {
           team: teamName,
           games_analyzed: gamesWithData,
@@ -2379,8 +2329,7 @@ export const nbaFetchers = {
           avg_Q4_allowed: avgQ4Allowed,
           Q4_differential: q4Diff >= 0 ? `+${q4Diff.toFixed(1)}` : q4Diff.toFixed(1),
           won_2nd_half: `${won2ndHalf}/${gamesWithData}`,
-          won_Q4: `${wonQ4}/${gamesWithData}`,
-          closer_profile: closerProfile
+          won_Q4: `${wonQ4}/${gamesWithData}`
         };
       };
       
@@ -2388,7 +2337,7 @@ export const nbaFetchers = {
         category: 'Second Half & 4th Quarter Trends',
         home: calcSecondHalfStats(completedHomeGames, home.id, homeName),
         away: calcSecondHalfStats(completedAwayGames, away.id, awayName),
-        insight: 'Shows which team closes games better. Critical for live betting and late-game situations.'
+        note: 'Second half and Q4 scoring data for both teams.'
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching SECOND_HALF_TRENDS:`, error.message);
@@ -2397,8 +2346,7 @@ export const nbaFetchers = {
   },
 
 
-  // ===== VARIANCE & CONSISTENCY ANALYSIS (NEW) =====
-  // Key for underdog betting: High variance = more upset potential
+  // ===== VARIANCE & CONSISTENCY ANALYSIS =====
   VARIANCE_CONSISTENCY: async (bdlSport, home, away, season) => {
     const homeName = home.full_name || home.name || 'Home';
     const awayName = away.full_name || away.name || 'Away';
@@ -2467,34 +2415,20 @@ export const nbaFetchers = {
         const scoringVariance = pointsScored.reduce((acc, p) => acc + Math.pow(p - avgPoints, 2), 0) / pointsScored.length;
         const scoringStdDev = Math.sqrt(scoringVariance);
         
-        // Determine consistency profile
-        let marginProfile = 'CONSISTENT';
-        if (stdDev > 14) marginProfile = 'HIGH VARIANCE (Boom/Bust)';
-        else if (stdDev > 10) marginProfile = 'MODERATE VARIANCE';
-        else if (stdDev < 7) marginProfile = 'VERY CONSISTENT';
-        
-        let scoringProfile = 'CONSISTENT SCORING';
-        if (scoringStdDev > 8) scoringProfile = 'INCONSISTENT SCORING';
-        
         // Calculate upset potential indicators
         const closeGamePct = ((closeGames / margins.length) * 100).toFixed(0);
         const blowoutPct = ((blowouts / margins.length) * 100).toFixed(0);
-        
-        // Key insight for betting
-        // Just report the variance numbers, no interpretive labels
-        
+
         return {
           team: teamName,
           games_analyzed: margins.length,
           margin_analysis: {
             avg_margin: avgMargin.toFixed(1),
-            std_dev: stdDev.toFixed(1),
-            profile: marginProfile
+            std_dev: stdDev.toFixed(1)
           },
           scoring_analysis: {
             avg_points: avgPoints.toFixed(1),
-            std_dev: scoringStdDev.toFixed(1),
-            profile: scoringProfile
+            std_dev: scoringStdDev.toFixed(1)
           },
           game_types: {
             close_games: `${closeGames}/${margins.length} (${closeGamePct}%)`,
@@ -2506,27 +2440,11 @@ export const nbaFetchers = {
       const homeVariance = calcVarianceStats(completedHomeGames, home.id, homeName);
       const awayVariance = calcVarianceStats(completedAwayGames, away.id, awayName);
       
-      // Generate comparative insight
-      let compareInsight = '';
-      if (homeVariance.margin_analysis && awayVariance.margin_analysis) {
-        const homeStdDev = parseFloat(homeVariance.margin_analysis.std_dev);
-        const awayStdDev = parseFloat(awayVariance.margin_analysis.std_dev);
-        
-        if (homeStdDev > awayStdDev + 3) {
-          compareInsight = `${homeName} is more volatile (stdDev ${homeStdDev.toFixed(1)}) than ${awayName} (stdDev ${awayStdDev.toFixed(1)})`;
-        } else if (awayStdDev > homeStdDev + 3) {
-          compareInsight = `${awayName} is more volatile (stdDev ${awayStdDev.toFixed(1)}) than ${homeName} (stdDev ${homeStdDev.toFixed(1)})`;
-        } else {
-          compareInsight = 'Both teams have similar consistency profiles';
-        }
-      }
-      
       return {
         category: 'Variance & Consistency Analysis',
-        note: 'Std dev measures scoring margin consistency.',
+        note: 'Margin and scoring standard deviation for both teams.',
         home: homeVariance,
-        away: awayVariance,
-        comparative_insight: compareInsight
+        away: awayVariance
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching VARIANCE_CONSISTENCY:`, error.message);
@@ -2746,52 +2664,18 @@ export const nbaFetchers = {
                 const margins = h2hResults.map(r => r.margin || 0);
                 const avgMargin = margins.reduce((sum, m) => sum + m, 0) / margins.length;
                 
-                // Determine margin context
-                let marginNote = '';
-                if (avgMargin >= 15) {
-                  marginNote = `Blowout dominance (avg +${avgMargin.toFixed(0)}) — but elite teams adjust schemes after exposure.`;
-                } else if (avgMargin >= 8) {
-                  marginNote = `Solid margins (avg +${avgMargin.toFixed(0)}) — real edge, but not overwhelming.`;
-                } else {
-                  marginNote = `Close wins (avg +${avgMargin.toFixed(0)}) — barely dominance, regression more likely.`;
-                }
-                
-                // Sliding scale alert levels:
-                // - 70%+ win rate: STRONG trap alert
-                // - 60-70% (or 60%+ for division rivals): CAUTION flag
-                // - Below 60%: Proceed (H2H trend likely real)
-                let alertLevel = null;
-                let sweepNote = null;
-                
-                // Division rivals trigger caution at lower threshold (60% vs 70%)
-                const strongThreshold = 70;
-                const cautionThreshold = isDivisionRival ? 60 : 70;
-                
-                if (sweptWinPct >= strongThreshold) {
-                  alertLevel = 'STRONG';
-                  sweepNote = `SWEEP CONTEXT: ${sweptTeamName} is ${sweptWins}-${sweptLosses} (${sweptWinPct.toFixed(1)}%)${isDivisionRival ? ' and a division rival' : ''}. Sweeping an elite team 4-0 is historically very rare. The combination of roster quality, coaching adjustments, and statistical variance makes clean sweeps against top-tier opponents a statistical anomaly. Ask yourself: "Am I betting that an elite team will get swept 4-0?" Investigate whether non-H2H factors (injuries, rest, scheme advantages) justify betting the sweep.`;
-                } else if (sweptWinPct >= cautionThreshold) {
-                  alertLevel = 'CAUTION';
-                  sweepNote = `SWEEP CONTEXT: ${sweptTeamName} is ${sweptWins}-${sweptLosses} (${sweptWinPct.toFixed(1)}%)${isDivisionRival ? ' — a division rival with more film study opportunities' : ''}. 4-0 sweeps against playoff-caliber teams are uncommon due to coaching adjustments and statistical variance.`;
-                }
-                
-                if (alertLevel) {
-                  sweepContext = {
-                    triggered: true,
-                    alert_level: alertLevel,
-                    games_in_sweep: gamesPlayed,
-                    dominant_team: dominantTeamName,
-                    swept_team: sweptTeamName,
-                    swept_team_record: `${sweptWins}-${sweptLosses}`,
-                    swept_team_win_pct: `${sweptWinPct.toFixed(1)}%`,
-                    is_division_rival: isDivisionRival,
-                    division: isDivisionRival ? sweptDivision : null,
-                    avg_margin: avgMargin.toFixed(1),
-                    margin_context: marginNote,
-                    sweep_note: sweepNote
-                  };
-                  console.log(`[Stat Router] SWEEP CONTEXT ALERT (${alertLevel}): ${dominantTeamName} is ${gamesPlayed}-0 vs ${sweptTeamName} (${sweptWinPct.toFixed(1)}% win rate${isDivisionRival ? ', division rival' : ''})`);
-                }
+                sweepContext = {
+                  triggered: true,
+                  games_in_sweep: gamesPlayed,
+                  dominant_team: dominantTeamName,
+                  swept_team: sweptTeamName,
+                  swept_team_record: `${sweptWins}-${sweptLosses}`,
+                  swept_team_win_pct: `${sweptWinPct.toFixed(1)}%`,
+                  is_division_rival: isDivisionRival,
+                  division: isDivisionRival ? sweptDivision : null,
+                  avg_margin: avgMargin.toFixed(1)
+                };
+                console.log(`[Stat Router] SWEEP CONTEXT: ${dominantTeamName} is ${gamesPlayed}-0 vs ${sweptTeamName} (${sweptWinPct.toFixed(1)}% win rate${isDivisionRival ? ', division rival' : ''})`);
               }
             }
           } catch (sweepErr) {
@@ -2842,7 +2726,6 @@ export const nbaFetchers = {
               if (isDivisionRival && losingWinPct >= 70 && lastMargin >= 14) {
                 sweepContext = {
                   triggered: true,
-                  alert_level: 'REVENGE',
                   sport: 'NFL',
                   games_played: h2hGames.length,
                   losing_team: losingTeamName,
@@ -2852,7 +2735,7 @@ export const nbaFetchers = {
                   is_division_rival: true,
                   division: losingDivision,
                   last_margin: lastMargin,
-                  sweep_note: `NFL DIVISION REMATCH: ${losingTeamName} is ${losingWins}-${losingLosses} (${losingWinPct.toFixed(1)}%) and lost by ${lastMargin} points to division rival ${winningTeamName} earlier this season. Performance since that loss and any schematic changes are relevant. The spread may already reflect division familiarity.`
+                  sweep_note: `NFL DIVISION REMATCH: ${losingTeamName} is ${losingWins}-${losingLosses} (${losingWinPct.toFixed(1)}%) and lost by ${lastMargin} points to division rival ${winningTeamName} earlier this season.`
                 };
                 console.log(`[Stat Router] NFL REVENGE CONTEXT: ${losingTeamName} (${losingWinPct.toFixed(1)}%) lost by ${lastMargin} to division rival ${winningTeamName}`);
               }
@@ -2908,14 +2791,8 @@ export const nbaFetchers = {
                 
                 // NCAAB Sweep Context: Conference rival is 0-2 AND is 70%+ OR ranked
                 if (isConferenceRival && (sweptWinPct >= 70 || isRanked)) {
-                  const rankNote = isRanked ? ` (Ranked #${sweptRanking})` : '';
-                  const marginNote = avgMargin >= 10 
-                    ? `Dominant margins (avg +${avgMargin.toFixed(0)}) — but elite programs adjust for conference rivals.`
-                    : `Close games (avg +${avgMargin.toFixed(0)}) — series has been competitive despite the sweep.`;
-                  
                   sweepContext = {
                     triggered: true,
-                    alert_level: sweptWinPct >= 70 ? 'STRONG' : 'CAUTION',
                     sport: 'NCAAB',
                     games_in_sweep: gamesPlayed,
                     dominant_team: dominantTeamName,
@@ -2925,9 +2802,7 @@ export const nbaFetchers = {
                     swept_team_ranking: sweptRanking,
                     is_conference_rival: true,
                     conference: sweptConference,
-                    avg_margin: avgMargin.toFixed(1),
-                    margin_context: marginNote,
-                    sweep_note: `NCAAB SWEEP CONTEXT: ${sweptTeamName}${rankNote} is ${sweptWins}-${sweptLosses} (${sweptWinPct.toFixed(1)}%) and 0-${gamesPlayed} vs conference rival ${dominantTeamName}. ${marginNote}`
+                    avg_margin: avgMargin.toFixed(1)
                   };
                   console.log(`[Stat Router] NCAAB SWEEP CONTEXT: ${sweptTeamName} (${sweptWinPct.toFixed(1)}%${isRanked ? ', #' + sweptRanking : ''}) is 0-${gamesPlayed} vs conference rival ${dominantTeamName}`);
                 }
@@ -2984,7 +2859,7 @@ export const nbaFetchers = {
               triggered: true,
               dnp_players: [],
               sample_size: 1,
-              note: `SAMPLE SIZE WARNING: Only 1 H2H game this season. One game is ANECDOTAL, not predictive. Use for narrative ("revenge spot", "what's different tonight") but don't lean on it for conviction. Ask: "What's DIFFERENT tonight?" (health, venue, rest, roster changes)`
+              note: `Only 1 H2H game this season.`
             };
           }
         } catch (condErr) {
@@ -2999,7 +2874,7 @@ export const nbaFetchers = {
         this_season_record: `${homeName} ${homeWins}-${awayWins} ${awayName}`,
         meetings_this_season: h2hResults,
         revenge_game: revengeGame,
-        revenge_note: revengeGame ? `${awayName} lost the last meeting - potential revenge spot` : null,
+        revenge_note: revengeGame ? `${awayName} lost the last meeting.` : null,
         sweep_context: sweepContext,
         conditions_changed_context: conditionsChangedContext,
         ANTI_HALLUCINATION: `DATA BOUNDARY: You have ONLY ${h2hGames.length} verified H2H game(s) from the ${currentSeason} season. You may cite these specific games. DO NOT claim historical streaks, prior season records, or "all-time" H2H records that are not shown here.`
@@ -3021,7 +2896,7 @@ export const nbaFetchers = {
     console.log(`[Stat Router] Fetching CLUTCH_STATS for ${away.name} @ ${home.name}`);
 
     try {
-      // NBA: Use real BDL team_season_averages/clutch endpoint (Tier 1 predictive data)
+      // NBA: Use real BDL team_season_averages/clutch endpoint
       if (bdlSport === 'basketball_nba') {
         const API_KEY = process.env.BALLDONTLIE_API_KEY;
         const baseUrl = 'https://api.balldontlie.io/nba/v1/team_season_averages/clutch';
@@ -3142,10 +3017,6 @@ export const nbaFetchers = {
         
         // Luck factor: positive = lucky (winning more than expected), negative = unlucky
         const luckFactor = ((actualWinPct - expectedWinPct) * 100).toFixed(1);
-        const luckLabel = parseFloat(luckFactor) > 5 ? 'Winning more than expected — investigate' :
-                          parseFloat(luckFactor) < -5 ? 'Winning less than expected — investigate' :
-                          'Near expected win rate';
-        
         return {
           actual_record: `${wins}-${losses}`,
           actual_win_pct: `${(actualWinPct * 100).toFixed(1)}%`,
@@ -3153,8 +3024,7 @@ export const nbaFetchers = {
           expected_win_pct: `${(expectedWinPct * 100).toFixed(1)}%`,
           ppg: ppg.toFixed(1),
           opp_ppg: oppPpg.toFixed(1),
-          luck_factor: `${parseFloat(luckFactor) > 0 ? '+' : ''}${luckFactor}%`,
-          interpretation: luckLabel
+          luck_factor: `${parseFloat(luckFactor) > 0 ? '+' : ''}${luckFactor}%`
         };
       };
       
@@ -3168,7 +3038,7 @@ export const nbaFetchers = {
           team: away.full_name || away.name,
           ...calcPythagorean(awayStanding, awayScoring)
         },
-        note: 'Teams with expected wins significantly different from actual wins - investigate sustainability.'
+        note: 'Pythagorean expected wins vs actual wins for both teams.'
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching luck-adjusted stats:`, error.message);
@@ -3216,8 +3086,8 @@ export const nbaFetchers = {
           team: away.full_name || away.name,
           ...formatTeamUsage(awayAdvanced)
         },
-        comparison: 'Bench depth matters more in high-pace games, back-to-backs, and blowouts — its relevance tonight depends on expected game script.',
-        note: 'Usage % = share of possessions used while on court. Star-heavy teams are more vulnerable to injury/foul trouble.'
+        comparison: 'Bench scoring and depth data for both teams.',
+        note: 'Usage % = share of possessions used while on court.'
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching usage rates:`, error.message);
@@ -3318,7 +3188,7 @@ export const nbaFetchers = {
           team: away.full_name || away.name,
           ...calcVsElite(awayGames, away.id)
         },
-        note: 'Shows how each team performs against the best competition.'
+        note: 'Record vs .500+ teams for both teams.'
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching vs elite teams:`, error.message);
@@ -3414,13 +3284,10 @@ export const nbaFetchers = {
         if (opponentsWithData === 0) return null;
         
         const avgOppWinPct = totalOppWinPct / opponentsWithData;
-        const sosRating = avgOppWinPct >= 0.520 ? 'HARD' :
-                          avgOppWinPct >= 0.480 ? 'AVERAGE' : 'EASY';
-        
+
         return {
           avg_opp_win_pct: `${(avgOppWinPct * 100).toFixed(1)}%`,
           games_analyzed: opponentsWithData,
-          sos_rating: sosRating,
           opponent_breakdown: opponentBreakdown,
           vs_elite: opponentBreakdown.elite,
           vs_weak: opponentBreakdown.weak
@@ -3431,41 +3298,19 @@ export const nbaFetchers = {
       const awaySOS = calcSOS(awayGames, away.id);
       
       // Determine if records are inflated/deflated
-      const getRecordContext = (sos, teamStanding) => {
-        if (!sos || !teamStanding) return null;
-        const teamWins = teamStanding.wins || 0;
-        const teamLosses = teamStanding.losses || 0;
-        const teamPct = teamWins / (teamWins + teamLosses) || 0;
-        const avgOppPct = parseFloat(sos.avg_opp_win_pct) / 100;
-        
-        if (teamPct > 0.550 && avgOppPct < 0.470) {
-          return 'RECORD MAY BE INFLATED - easy schedule';
-        } else if (teamPct < 0.450 && avgOppPct > 0.530) {
-          return 'RECORD MAY BE DEFLATED - tough schedule';
-        } else if (teamPct > 0.550 && avgOppPct > 0.520) {
-          return 'LEGIT RECORD - proven vs tough opponents';
-        }
-        return null;
-      };
-      
-      const homeStanding = standings.find(s => s.team?.id === home.id);
-      const awayStanding = standings.find(s => s.team?.id === away.id);
-      
       return {
         category: 'Schedule Strength (Real SOS)',
         source: 'Ball Don\'t Lie API (calculated from opponent records)',
         home: {
           team: home.full_name || home.name,
-          ...homeSOS,
-          record_context: getRecordContext(homeSOS, homeStanding)
+          ...homeSOS
         },
         away: {
           team: away.full_name || away.name,
-          ...awaySOS,
-          record_context: getRecordContext(awaySOS, awayStanding)
+          ...awaySOS
         },
-        comparison: `Conference context shapes motivation and playoff positioning, but may or may not be reflected in tonight's spread.`,
-        note: 'League average SOS is 50%.'
+        comparison: 'Conference standings and playoff positioning data for both teams.',
+        note: 'Strength of schedule data for both teams.'
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching SCHEDULE_STRENGTH:`, error.message);
@@ -3479,7 +3324,7 @@ export const nbaFetchers = {
   },
 
 
-  // ===== BENCH DEPTH (NBA - Critical for Large Spreads) =====
+  // ===== BENCH DEPTH (NBA) =====
   BENCH_DEPTH: async (bdlSport, home, away, season) => {
     // NCAAB: Use player season stats to compute depth (starters vs bench contribution)
     if (bdlSport === 'basketball_ncaab') {
@@ -3525,15 +3370,11 @@ export const nbaFetchers = {
 
         const homeDepth = calcNcaabDepth(homeStats, home.name);
         const awayDepth = calcNcaabDepth(awayStats, away.name);
-        const homeBench = parseFloat(homeDepth.bench_ppg) || 0;
-        const awayBench = parseFloat(awayDepth.bench_ppg) || 0;
-        const depthEdge = homeBench > awayBench + 3 ? 'HOME' : awayBench > homeBench + 3 ? 'AWAY' : 'EVEN';
-
         return {
           category: 'NCAAB Bench Depth (Season Stats)',
           home: { team: home.full_name || home.name, ...homeDepth },
           away: { team: away.full_name || away.name, ...awayDepth },
-          depth_edge: depthEdge
+          note: 'Bench scoring data for both teams.'
         };
       } catch (error) {
         console.warn('[Stat Router] NCAAB BENCH_DEPTH error:', error.message);
@@ -3673,12 +3514,6 @@ export const nbaFetchers = {
       const homeDepth = calcBenchDepth(homePlayerStats, home.id, recentHomeGames.length);
       const awayDepth = calcBenchDepth(awayPlayerStats, away.id, recentAwayGames.length);
       
-      // Determine which team has depth advantage
-      const homeBenchPPG = parseFloat(homeDepth.bench_ppg) || 0;
-      const awayBenchPPG = parseFloat(awayDepth.bench_ppg) || 0;
-      const depthEdge = homeBenchPPG > awayBenchPPG + 3 ? 'HOME' : 
-                        awayBenchPPG > homeBenchPPG + 3 ? 'AWAY' : 'EVEN';
-      
       return {
         category: 'Bench Depth Analysis (Last 10 Games)',
         home: {
@@ -3689,12 +3524,7 @@ export const nbaFetchers = {
           team: away.full_name || away.name,
           ...awayDepth
         },
-        depth_edge: depthEdge,
-        insight: `FOR LARGE SPREADS (7+): The bench must sustain leads. ${
-          depthEdge === 'HOME' ? home.name + ' has deeper bench scoring (+' + (homeBenchPPG - awayBenchPPG).toFixed(1) + ' PPG)' :
-          depthEdge === 'AWAY' ? away.name + ' has deeper bench scoring (+' + (awayBenchPPG - homeBenchPPG).toFixed(1) + ' PPG)' :
-          'Bench scoring is roughly even - starters will determine margin'
-        }`
+        note: 'Bench scoring and depth data for both teams.'
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching bench depth:`, error.message);
@@ -3731,7 +3561,7 @@ export const nbaFetchers = {
         takeaways: fmtNum(awayStats?.misc_total_takeaways, 0),
         giveaways: fmtNum(awayStats?.misc_total_giveaways, 0)
       },
-      interpretation: interpretTurnoverMargin(homeStats, awayStats)
+      comparison: 'Turnover differential, takeaways, and giveaways for both teams.'
     };
   },
 
@@ -3901,17 +3731,14 @@ export const nbaFetchers = {
         if (totalB2B === 0) return { record: 'No B2Bs yet', win_pct: null, games: 0 };
         
         const winPct = b2bWins / totalB2B;
-        const rating = winPct >= 0.500 ? 'HANDLES B2B WELL' :
-                       winPct >= 0.350 ? 'AVERAGE on B2B' : 'STRUGGLES on B2B';
-        
+
         // Get last 3 B2B results
         const recentB2B = b2bGames.slice(-3).reverse().map(g => g.result).join('-');
-        
+
         return {
           record: `${b2bWins}-${b2bLosses}`,
           win_pct: `${(winPct * 100).toFixed(0)}%`,
           games: totalB2B,
-          rating,
           recent_b2b: recentB2B || 'N/A',
           avg_margin: b2bGames.length > 0 
             ? (b2bGames.reduce((s, g) => s + g.margin, 0) / b2bGames.length).toFixed(1)
@@ -3945,9 +3772,8 @@ export const nbaFetchers = {
         },
         rest_advantage: restAdvantage,
         comparison: homeRest.isBackToBack || awayRest.isBackToBack
-          ? `Recent performance can signal genuine improvement or regression-ready variance. What arguments exist for each team based on trajectory?`
-          : null,
-        note: 'Back-to-backs and heavy schedules can impact performance. League average B2B win rate is ~40%.'
+          ? 'Back-to-back situation detected — rest and schedule data for both teams.'
+          : null
       };
       
     } catch (error) {

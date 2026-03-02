@@ -1,6 +1,6 @@
 /**
  * NCAAF Scout Report Builder
- * Extracted from scoutReportBuilder.js — all NCAAF-specific logic
+ * Handles all NCAAF-specific logic for building the pre-game scout report.
  *
  * NCAAF does NOT have:
  * - Injury duration resolution
@@ -23,14 +23,11 @@ import {
   scrubNarrative,
   formatInjuryReport,
   formatStartingLineups,
-  formatSituationalFactors,
   formatOdds,
-  formatSportsbookComparison,
   formatRestSituation,
   calculateRestSituation,
   formatRecentForm,
-  formatH2HSection,
-  formatTeamIdentity
+  formatH2HSection
 } from '../shared/dataFetchers.js';
 import { buildVerifiedTaleOfTape } from '../shared/taleOfTape.js';
 // Import QB helpers from NFL builder (shared between NFL and NCAAF)
@@ -277,22 +274,21 @@ function detectCfpRound(text) {
 
 /**
  * BOWL GAME TIER SYSTEM
- * Determines the tier of a bowl game and its motivation implications
+ * Determines the tier of a bowl game.
  *
- * TIER 1 (Both teams highly motivated):
+ * TIER 1 (Major bowl games):
  * - CFP Playoff games (all rounds)
  * - NY6 Bowls (Rose, Sugar, Orange, Cotton, Peach, Fiesta)
  *
- * TIER 2 (Generally motivated, some opt-outs possible):
+ * TIER 2 (Mid-tier bowl games):
  * - Major conference bowls (Citrus, Music City, Gator, etc.)
  * - Premium mid-tier bowls with good payouts
  *
- * TIER 3 (Motivation asymmetry common):
+ * TIER 3 (Lower-tier bowl games):
  * - Lower-tier bowls (First Responder, Gasparilla, etc.)
  * - Transfer portal window creates opt-out risk
- * - One team often "wants it more"
  *
- * TIER 4 (High variance, significant opt-out risk):
+ * TIER 4 (Minor bowl games):
  * - Minor bowls with low payouts
  * - Both teams may have significant roster attrition
  */
@@ -441,7 +437,7 @@ async function fetchBowlGameContext(homeTeam, awayTeam, game, groundingText = nu
     // Return bowl tier context section
     if (bowlTierInfo) {
       return `
-BOWL GAME TIER & MOTIVATION CONTEXT
+BOWL GAME TIER
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${bowlTierInfo.section}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -571,7 +567,7 @@ For the ${teamName} college football team, provide their COMPLETE 2025-26 CFP pl
    - Key storyline (who starred, what happened, was it close?)
    - Date played
 
-3. Summarize their playoff momentum: Are they peaking? Did they struggle? Any concerning trends?
+3. Summarize their playoff results: scores, opponents, and outcomes.
 
 Format as a concise bullet list. If ${teamName} is NOT in the 2025-26 CFP, say "Not in 2025-26 CFP".
 ONLY report ACTUAL games that have been PLAYED - do not predict future games.`;
@@ -931,7 +927,6 @@ CONFERENCE TIER CONTEXT (NCAAF)
 TIER GAP: ${tierGap} level${tierGap !== 1 ? 's' : ''}
    ${gapAnalysis}
 
-Conference tiers reflect recruiting power and quality of opponents.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 `;
@@ -1178,8 +1173,6 @@ ${game.gameSignificance}
 SEASON-LONG ABSENCES:
 The following players have been OUT for extended periods (1-2+ months):
 ${filteredPlayers.join(', ')}
-
-The team's recent stats reflect play WITHOUT these players.
 </season_long_injuries>
 
 ` : '';
@@ -1204,7 +1197,7 @@ Sport: ${sportKey} | ${game.commence_time ? formatGameTime(game.commence_time) :
 ${game.venue ? `Venue: ${venueLabel}` : ''}${tournamentLabel ? `\n${tournamentLabel}` : ''}
 ══════════════════════════════════════════════════════════════════════
 ${gameContextSection}${bowlGameContext}${cfpJourneyContext}${standingsSnapshot || ''}
-*** INJURY REPORT (READ THIS FIRST - CRITICAL) ***
+INJURY REPORT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${injuryReportText}
 ${formatStartingLineups(homeTeam, awayTeam, injuries.lineups)}
@@ -1223,12 +1216,7 @@ ${formatRestSituation(homeTeam, awayTeam, calculateRestSituation(recentHome, gam
 
 ${ncaafKeyPlayers ? formatNcaafKeyPlayers(homeTeam, awayTeam, ncaafKeyPlayers) : ''}${startingQBs ? formatStartingQBs(homeTeam, awayTeam, startingQBs) : ''}
 
-TEAM IDENTITIES
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${formatTeamIdentity(homeTeam, homeProfile, 'Home')}
-${formatTeamIdentity(awayTeam, awayProfile, 'Away')}
 ${conferenceTierSection}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 RECENT FORM (Last 5 Games)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1239,14 +1227,9 @@ HEAD-TO-HEAD HISTORY (${seasonLabel} SEASON)
 ${formatH2HSection(h2hData, homeTeam, awayTeam)}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-KEY SITUATIONAL FACTORS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${formatSituationalFactors(game, injuries, sportKey)}
-
 BETTING CONTEXT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${formatOdds(game, sportKey)}
-${options.sportsbookOdds ? formatSportsbookComparison(options.sportsbookOdds, game.home_team, game.away_team) : ''}BETTING ODDS COMPARISON:
 `.trim();
 
   // Return both the report text, structured injuries data, and venue/game context

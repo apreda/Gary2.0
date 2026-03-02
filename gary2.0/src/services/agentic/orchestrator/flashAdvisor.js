@@ -468,7 +468,7 @@ After completing your research, write your final briefing as structured per-fact
     console.log(`[Research Briefing] Sending ${briefingPrompt.length} chars to Gemini Flash (with tools, max ${MAX_RESEARCH_ITERATIONS} iterations)`);
 
     // ═══════════════════════════════════════════════════════════════════════
-    // RESEARCH AGENT LOOP: Flash investigates with tools, then writes briefing + initial read
+    // RESEARCH AGENT LOOP: Flash investigates with tools, then writes briefing + Steel Man cases
     // ═══════════════════════════════════════════════════════════════════════
     let currentMessage = briefingPrompt;
     let isFunctionResponse = false;

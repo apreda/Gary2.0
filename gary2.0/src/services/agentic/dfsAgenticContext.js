@@ -85,22 +85,6 @@ function getInjuryByName(playerName) {
 
 
 /**
- * Discover DFS slates for a given sport and platform
- * Uses the DFS Slate Discovery Service which prioritizes Gemini Grounding
- * 
- * @param {string} sport - 'NBA' or 'NFL'
- * @param {string} platform - 'draftkings' or 'fanduel'
- * @param {string} slateDate - Date string (e.g., '2025-01-05')
- * @returns {Array} List of discovered slates with teams
- */
-async function discoverDFSSlates(sport, platform, slateDate) {
-  return await discoverSlatesWithService(sport, platform, slateDate);
-}
-
-// Slate discovery uses DK structured API and FD Gemini Grounding (see dfsSlateDiscoveryService.js)
-
-
-/**
  * Fetch ACTIVE players from BDL with current team assignments
  * This is the source of truth for rosters - more accurate than Gemini search
  * @param {string} sport - 'NBA' or 'NFL'
@@ -293,11 +277,6 @@ async function fetchPlayerStatsFromBDL(sport, dateStr, slateTeams = []) {
       if (probablePlayers.length > 0) {
         console.log(`[DFS Context] ✅ PROBABLE (expected to play): ${probablePlayers.map(i => `${i.player?.first_name} ${i.player?.last_name} (${i.description || i.status})`).join(', ')}`);
       }
-
-      // ═══════════════════════════════════════════════════════════════════════════
-      // GEMINI GROUNDING INJURY CHECK - Catch last-minute scratches RapidAPI might miss
-      // ═══════════════════════════════════════════════════════════════════════════
-      // RapidAPI is our injury source of truth — no Grounding needed
 
       // Get current NBA season (consistent with rest of codebase: 1-indexed months)
       // NBA season starts in October: Oct(10)-Dec = currentYear, Jan-Sep = previousYear
@@ -770,7 +749,7 @@ async function fetchPlayerStatsFromBDL(sport, dateStr, slateTeams = []) {
             gamesAnalyzed: gameLogs.gamesAnalyzed,
             averages: gameLogs.averages,
             consistency: gameLogs.consistency,
-            formTrend: gameLogs.formTrend,
+
             targetTrend: gameLogs.targetTrend,
             usageTrend: gameLogs.usageTrend,
             splits: gameLogs.splits,
@@ -2079,8 +2058,6 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
         // ═══════════════════════════════════════════════════════════════════
         // STEP 3: Tag each OUT player with games missed + duration label
         // ═══════════════════════════════════════════════════════════════════
-        const STALE_THRESHOLD_GAMES = 3; // 0-2 games = RECENT, 3-10 = ESTABLISHED, 11+ = LONG-TERM
-
         for (const ep of outPlayersWithIds) {
           const lastGame = playerLastGame.get(ep.bdlId);
           const team = (ep.team || '').toUpperCase();
@@ -2107,7 +2084,7 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
             // few games over many calendar days — the market still adjusts.
             const STALE_DAYS_THRESHOLD = 5; // 5+ calendar days = market has adjusted
             if (gamesMissed <= 2 && daysSince < STALE_DAYS_THRESHOLD) {
-              injEntry.duration = 'RECENT';
+              injEntry.duration = 'FRESH';
             } else if (gamesMissed <= 10) {
               injEntry.duration = 'ESTABLISHED';
             } else {
@@ -2221,7 +2198,4 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
   };
 }
 
-export default {
-  buildDFSContext
-};
 

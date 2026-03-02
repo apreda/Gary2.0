@@ -64,8 +64,7 @@ export function summarizeStatForContext(statResult, statToken, homeTeam, awayTea
       case 'NET_RATING':
         return orderTeams('NET RATING',
           formatNum(h.net_rating || h.netRating),
-          formatNum(a.net_rating || a.netRating),
-          '(higher is better)');
+          formatNum(a.net_rating || a.netRating));
 
       case 'OFFENSIVE_RATING':
         return orderTeams('OFFENSIVE RATING',
@@ -76,8 +75,7 @@ export function summarizeStatForContext(statResult, statToken, homeTeam, awayTea
       case 'DEFENSIVE_RATING':
         return orderTeams('DEFENSIVE RATING',
           formatNum(h.def_rating || h.defRating),
-          formatNum(a.def_rating || a.defRating),
-          '(lower is better)');
+          formatNum(a.def_rating || a.defRating));
 
       case 'RECENT_FORM': {
         const awayForm = a.summary || a.last_5 || 'N/A';
@@ -105,8 +103,7 @@ export function summarizeStatForContext(statResult, statToken, homeTeam, awayTea
       case 'TURNOVER_RATE':
         return orderTeams('TURNOVER RATE',
           formatPct(h.tov_rate || h.tovRate),
-          formatPct(a.tov_rate || a.tovRate),
-          '(lower is better)');
+          formatPct(a.tov_rate || a.tovRate));
 
       case 'OREB_RATE':
         return orderTeams('OFFENSIVE REBOUND RATE',
@@ -195,35 +192,7 @@ export function summarizeStatForContext(statResult, statToken, homeTeam, awayTea
         const avgReb = logs.reduce((sum, g) => sum + (g.reb || g.rebounds || g.total_rebounds || 0), 0) / logs.length;
         const avgAst = logs.reduce((sum, g) => sum + (g.ast || g.assists || 0), 0) / logs.length;
         
-        // Enhanced trend indicator (comparing last 2-3 vs prior games)
-        let trend = '';
-        let trendDetail = '';
-        if (logs.length >= 4) {
-          const recent2Avg = ((logs[0]?.pts || 0) + (logs[1]?.pts || 0)) / 2;
-          const prior2Avg = ((logs[2]?.pts || 0) + (logs[3]?.pts || 0)) / 2;
-          const diff = recent2Avg - prior2Avg;
-          
-          if (recent2Avg > prior2Avg * 1.15) {
-            trend = 'TRENDING UP';
-            trendDetail = `(last 2: ${recent2Avg.toFixed(1)} PPG vs prior: ${prior2Avg.toFixed(1)} PPG, +${diff.toFixed(1)})`;
-          } else if (recent2Avg < prior2Avg * 0.85) {
-            trend = 'TRENDING DOWN';
-            trendDetail = `(last 2: ${recent2Avg.toFixed(1)} PPG vs prior: ${prior2Avg.toFixed(1)} PPG, ${diff.toFixed(1)})`;
-          } else {
-            trend = 'STABLE';
-          }
-        }
-        
-        // Check for recent spike or crash (single game outlier)
-        let outlierNote = '';
-        if (logs.length >= 3) {
-          const lastGame = logs[0]?.pts || 0;
-          const avg3 = logs.slice(1, 4).reduce((s, g) => s + (g?.pts || 0), 0) / 3;
-          if (lastGame > avg3 * 1.4) outlierNote = ` [OUTLIER HIGH: Last game ${lastGame} vs ${avg3.toFixed(0)} avg]`;
-          else if (lastGame < avg3 * 0.6) outlierNote = ` [OUTLIER LOW: Last game ${lastGame} vs ${avg3.toFixed(0)} avg]`;
-        }
-        
-        return `${player} GAME LOGS (Last ${logs.length}): Avg ${avgPts.toFixed(1)}/${avgReb.toFixed(1)}/${avgAst.toFixed(1)} (PTS/REB/AST) ${trend} ${trendDetail}${outlierNote}. Game-by-game: ${gameByGame}`;
+        return `${player} GAME LOGS (Last ${logs.length}): Avg ${avgPts.toFixed(1)}/${avgReb.toFixed(1)}/${avgAst.toFixed(1)} (PTS/REB/AST). Game-by-game: ${gameByGame}`;
       
       default:
         // For unknown/complex stats, preserve MORE fields (up to 8) for Gary to interpret
@@ -387,16 +356,7 @@ export function summarizePlayerGameLogs(playerName, logs) {
     const avgReb = (totalReb / gamesCount).toFixed(1);
     const avgAst = (totalAst / gamesCount).toFixed(1);
     
-    // Trend indicator (factual)
-    let trend = '';
-    if (gamesArray.length >= 4) {
-      const recent2 = (gamesArray[0]?.pts || 0) + (gamesArray[1]?.pts || 0);
-      const prior2 = (gamesArray[2]?.pts || 0) + (gamesArray[3]?.pts || 0);
-      if (recent2 > prior2 * 1.15) trend = '[TRENDING UP]';
-      else if (recent2 < prior2 * 0.85) trend = '[TRENDING DOWN]';
-    }
-    
-    return `${playerName} GAME LOGS (Last ${gamesCount}): Avg ${avgPts}/${avgReb}/${avgAst} (PTS/REB/AST) ${trend}. Games: ${gameByGame.join(', ')}`;
+    return `${playerName} GAME LOGS (Last ${gamesCount}): Avg ${avgPts}/${avgReb}/${avgAst} (PTS/REB/AST). Games: ${gameByGame.join(', ')}`;
   } catch (e) {
     return `${playerName} GAME LOGS: Data unavailable (parsing error)`;
   }
@@ -505,16 +465,6 @@ export function summarizePlayerStats(statResult, statType, teamName) {
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONTEXT PRUNING (Attention Decay Prevention)
-// ═══════════════════════════════════════════════════════════════════════════
-// After iteration 5, prune old stat responses to keep context under 40k tokens.
-// This prevents "blanking" where the model loses the thread due to context rot.
-// ═══════════════════════════════════════════════════════════════════════════
-
-// ═══════════════════════════════════════════════════════════════════════════
-// CONTEXT PRUNING (Attention Decay Prevention)
-// ═══════════════════════════════════════════════════════════════════════════
-// After iteration 5, prune old stat responses to keep context under 40k tokens.
-// This prevents "blanking" where the model loses the thread due to context rot.
 // ═══════════════════════════════════════════════════════════════════════════
 
 export const MAX_CONTEXT_MESSAGES = 20; // Target max messages during analysis

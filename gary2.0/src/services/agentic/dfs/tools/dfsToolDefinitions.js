@@ -8,7 +8,6 @@
  * These tools give him the data he needs.
  */
 
-// BDL import removed — injury status comes from RapidAPI via context, not BDL
 import { geminiGroundingSearch } from '../../scoutReport/scoutReportBuilder.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -74,6 +73,20 @@ export const DFS_SLATE_ANALYSIS_TOOLS = [
         }
       },
       required: ['playerName']
+    }
+  },
+  {
+    name: 'SEARCH_LIVE_NEWS',
+    description: 'Search the internet for the latest news about a player or team using Google Search.',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: 'Search query (e.g., "LeBron James injury update today")'
+        }
+      },
+      required: ['query']
     }
   }
 ];
@@ -558,16 +571,3 @@ async function getPlayerVsTeamHistory(playerName, opponent, context) {
   };
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// HELPERS
-// ═══════════════════════════════════════════════════════════════════════════════
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// EXPORTS
-// ═══════════════════════════════════════════════════════════════════════════════
-
-export default {
-  DFS_SLATE_ANALYSIS_TOOLS,
-  DFS_PLAYER_INVESTIGATION_TOOLS,
-  executeToolCall
-};

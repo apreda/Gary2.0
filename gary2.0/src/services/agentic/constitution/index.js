@@ -10,23 +10,12 @@ import { NHL_CONSTITUTION } from './nhlConstitution.js';
 import { NFL_PROPS_CONSTITUTION } from './nflPropsConstitution.js';
 import { NBA_PROPS_CONSTITUTION } from './nbaPropsConstitution.js';
 import { NHL_PROPS_CONSTITUTION } from './nhlPropsConstitution.js';
+import { getInjuryDurationLabels } from './sharedConstitutionBlocks.js';
 /**
  * BASE RULES - Applied to ALL sports
  * These rules govern data sources and external influence
  */
 const BASE_RULES = `
-═══════════════════════════════════════════════════════════════════════════════
-[GARY] GARY'S CORE IDENTITY
-═══════════════════════════════════════════════════════════════════════════════
-
-You are an INDEPENDENT THINKER.
-
-You investigate the factors. You understand the context. You make YOUR OWN decision.
-
-You don't follow consensus. You don't copy betting advice. You don't chase what 
-everyone else sees. You do your homework, form your view, and decide based on 
-YOUR analysis.
-
 ═══════════════════════════════════════════════════════════════════════════════
 [DATA] DATA SOURCE RULES (CRITICAL)
 ═══════════════════════════════════════════════════════════════════════════════
@@ -94,7 +83,7 @@ FACTUAL = Events that happened, not opinions about what will happen.
 
 "Team A beat Team B by X. Team B beat Team C. Therefore Team A should crush Team C."
 This is INVALID in sports because:
-- **Matchups are style-dependent** — How does Team A match up SPECIFICALLY against Team C?
+- **Matchups are style-dependent** — matchup results are opponent-specific and don't transfer between opponents
 - **Context changes** — Different injuries, rest, venue, motivation, weather
 - **Teams evolve** — The team that lost weeks ago is NOT the same team tonight
 - **Single results are noise** — One game tells you very little about a different matchup
@@ -132,11 +121,19 @@ Your training data is from 2024. It is NOW 2026.
 ═══════════════════════════════════════════════════════════════════════════════
 
 Rest and schedule are NOT automatic factors. Before citing rest as a factor:
-- Check the actual data: What is THIS team's record on short rest THIS SEASON?
+- Check the actual data rather than assuming rest impact
 - Some teams are 8-2 on back-to-backs. Some are 2-8. Don't assume.
 - A 1-day rest difference rarely shows up in performance data
 - If you're citing rest, you should have SPECIFIC data showing this team struggles with it
 - The test: "Do I have DATA showing it, or am I assuming?" If assuming → don't cite it.
+
+═══════════════════════════════════════════════════════════════════════════════
+
+═══════════════════════════════════════════════════════════════════════════════
+[INJURY] INJURY DURATION LABELS (ALL SPORTS)
+═══════════════════════════════════════════════════════════════════════════════
+
+${getInjuryDurationLabels()}
 
 ═══════════════════════════════════════════════════════════════════════════════
 `;
@@ -160,7 +157,8 @@ const GAME_CONSTITUTIONS = {
 };
 
 /**
- * Props constitutions — always flat strings, NOT restructured.
+ * Props constitutions — sectioned objects { pass1, pass2, pass25, pass3 }
+ * for phase-aligned delivery (context injected at each pass, not front-loaded).
  */
 const PROPS_CONSTITUTIONS = {
   NFL_PROPS: NFL_PROPS_CONSTITUTION,
@@ -179,15 +177,29 @@ const PROPS_CONSTITUTIONS = {
  *   - .full = all sections combined (for system prompt at session creation)
  *   - Individual sections allow phase-aligned delivery (e.g., Flash gets domainKnowledge + guardrails only)
  *
- * For props sports or legacy flat-string constitutions:
+ * For props sports (sectioned objects):
+ *   Returns { baseRules, pass1, pass2, pass25, pass3 }
+ *   - Each pass section is injected at the right moment during the 4-pass pipeline
+ *
+ * For legacy flat-string constitutions:
  *   Returns a flat string (BASE_RULES + constitution)
  */
 export function getConstitution(sport) {
   const normalized = sport?.toUpperCase?.() || sport;
 
-  // Props — always flat string (backward compat)
+  // Props — sectioned objects { pass1, pass2, pass25, pass3 }
   const propsConst = PROPS_CONSTITUTIONS[normalized] || PROPS_CONSTITUTIONS[sport];
   if (propsConst) {
+    if (typeof propsConst === 'object' && propsConst.pass1) {
+      return {
+        baseRules: BASE_RULES,
+        pass1: propsConst.pass1,
+        pass2: propsConst.pass2,
+        pass25: propsConst.pass25,
+        pass3: propsConst.pass3,
+      };
+    }
+    // Legacy flat string fallback
     return BASE_RULES + propsConst;
   }
 
@@ -204,11 +216,6 @@ export function getConstitution(sport) {
       // Gary is the decision maker. Flash handles investigation via flashInvestigationPrompts.js.
       full: BASE_RULES + sportConst.guardrails + '\n\n' + sportConst.domainKnowledge,
     };
-  }
-
-  // Legacy flat string constitution (not yet restructured) or unknown sport
-  if (sportConst && typeof sportConst === 'string') {
-    return BASE_RULES + sportConst;
   }
 
   return BASE_RULES;

@@ -254,12 +254,6 @@ const VALID_NHL_TEAMS = new Set([
   'VGK', 'WAS', 'WPG'
 ]);
 
-const VALID_MLB_TEAMS = new Set([
-  'ARI', 'ATL', 'BAL', 'BOS', 'CHC', 'CHW', 'CIN', 'CLE', 'COL', 'DET',
-  'HOU', 'KC', 'LAA', 'LAD', 'MIA', 'MIL', 'MIN', 'NYM', 'NYY', 'OAK',
-  'PHI', 'PIT', 'SD', 'SF', 'SEA', 'STL', 'TB', 'TEX', 'TOR', 'WAS'
-]);
-
 /**
  * Normalize a team abbreviation (fix common Grounding aliases) then validate.
  * Returns the normalized abbreviation if valid, or null if invalid.
@@ -271,7 +265,6 @@ function normalizeTeamAbbr(abbr, sport) {
   if (sport === 'NBA' && VALID_NBA_TEAMS.has(upper)) return upper;
   if (sport === 'NFL' && VALID_NFL_TEAMS.has(upper)) return upper;
   if (sport === 'NHL' && VALID_NHL_TEAMS.has(upper)) return upper;
-  if (sport === 'MLB' && VALID_MLB_TEAMS.has(upper)) return upper;
   // Apply alias mapping for non-standard abbreviations
   if (TEAM_ABBR_ALIASES[upper]) {
     upper = TEAM_ABBR_ALIASES[upper];
@@ -279,12 +272,7 @@ function normalizeTeamAbbr(abbr, sport) {
   if (sport === 'NBA' && VALID_NBA_TEAMS.has(upper)) return upper;
   if (sport === 'NFL' && VALID_NFL_TEAMS.has(upper)) return upper;
   if (sport === 'NHL' && VALID_NHL_TEAMS.has(upper)) return upper;
-  if (sport === 'MLB' && VALID_MLB_TEAMS.has(upper)) return upper;
   return null;
-}
-
-function isValidTeamAbbr(abbr, sport) {
-  return normalizeTeamAbbr(abbr, sport) !== null;
 }
 
 // ============================================================================
@@ -310,6 +298,3 @@ function generateSlateId(name) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
-export default {
-  discoverDFSSlates
-};

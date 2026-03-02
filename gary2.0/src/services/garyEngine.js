@@ -511,26 +511,7 @@ async function generateGaryAnalysis(gameData, options = {}) {
 }
 
 /**
- * Calculate stake amount based on bet type
- * @param {object} pick - The pick object
- * @returns {number} - Recommended stake amount
- */
-export function calculateStake(pick) {
-  if (!pick) return 0;
-  
-  try {
-    // Default confidence if not provided
-    const confidence = 0.8;
-    
-    // Calculate stake based on confidence
-    return Math.round(100 * confidence);
-  } catch (error) {
-    console.error('Error calculating stake:', error);
-    return 100; // Default
-  }
-}
-
-/**
+ /**
  * Function that simply returns the raw Gemini output without transformations
  * @param {object} analysisObject - The object from generateGaryAnalysis
  * @returns {object} - The raw Gemini output directly

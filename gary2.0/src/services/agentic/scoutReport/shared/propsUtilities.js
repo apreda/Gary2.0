@@ -63,8 +63,8 @@ Search for context that affects player effort/focus:
 - BACK-TO-BACK: Is either team on the 2nd night of a back-to-back?
 - 3-IN-4 / 4-IN-5: Is either team in a compressed schedule?
 - TRAVEL FATIGUE: Did either team just travel cross-country (e.g., East to West coast)?
-- TRAP GAME SPOT: Is a good team playing a lottery team right BEFORE a big rivalry game?
-- ALTITUDE FACTOR: Is this game in Denver (elevation affects visiting teams)?
+- SCHEDULING CONTEXT: What game does each team play next?
+- ALTITUDE FACTOR: Is this game in Denver?
 - REST ADVANTAGE: How many days rest does each team have?
 - ROAD TRIP: Is either team on an extended road trip (4+ games)?
 
@@ -83,55 +83,55 @@ For the TOP PLAYERS on each team:
 - DIVISION RIVALRY: Are these division rivals? Conference rivals?
 - REVENGE SPOT: Did these teams play recently with a controversial ending?
 
-== SECTION 6: GAME ENVIRONMENT (AFFECTS PROP CEILINGS) ==
-- GAME TOTAL (O/U): What is the over/under? (High O/U like 235+ = more scoring opportunities)
-- SPREAD & BLOWOUT RISK: What is the spread? (Large spread -9+ = starters may rest in 4th quarter)
-- PACE OF PLAY: Which team plays faster/slower? (Fast pace = more possessions = higher stat ceilings)
-- CLOSE GAME EXPECTED: Is the spread within 5 points? (Starters play 36+ minutes)
+== SECTION 6: GAME ENVIRONMENT ==
+- GAME TOTAL (O/U): What is the over/under?
+- SPREAD: What is the spread?
+- PACE OF PLAY: What is each team's pace (possessions per 48)?
+- PROJECTED CLOSENESS: Is the spread within 5 points?
 
 == SECTION 7: HISTORICAL PATTERNS (PLAYER-SPECIFIC) ==
 - PLAYER VS OPPONENT: Any notable player vs this specific team history? (e.g., "Trae Young averages 28 PPG vs Miami career")
-- PRIMETIME PERFORMANCE: Is this a nationally televised game (ESPN/TNT)? Some players elevate on big stages.
-- CONSISTENCY/FLOOR-CEILING: Which players have high variance (boom-or-bust) vs consistent outputs?
+- PRIMETIME PERFORMANCE: Is this a nationally televised game (ESPN/TNT)?
+- VARIANCE DATA: Which players have high game-to-game variance vs consistent outputs?
 
 == SECTION 8: NBA ADVANCED STATS (PREDICTIVE METRICS) ==
 Search nba.com/stats and basketball-reference.com for tracking data that PREDICTS future performance:
 
 **For Scorers on ${homeTeam} and ${awayTeam}:**
-- USAGE RATE: % of team plays used when on court (high usage 28%+ = volume scorer, more FGA)
-- TRUE SHOOTING % (TS%): Efficiency accounting for 3s and FTs (elite is 60%+)
+- USAGE RATE: % of team plays used when on court
+- TRUE SHOOTING % (TS%): Efficiency accounting for 3s and FTs
 - POINTS PER POSSESSION: How efficient is the player in isolation/P&R?
-- SHOT DISTRIBUTION: What % of shots are at rim vs mid-range vs 3? (affects consistency)
-- FREE THROW RATE: Does this player get to the line? (boosts points floor)
+- SHOT DISTRIBUTION: What % of shots are at rim vs mid-range vs 3?
+- FREE THROW RATE: Free throw attempts per field goal attempt
 
 **For Playmakers on ${homeTeam} and ${awayTeam}:**
-- ASSIST %: % of teammate FGs assisted while on court (high = true playmaker)
+- ASSIST %: % of teammate FGs assisted while on court
 - POTENTIAL ASSISTS: Passes that should be assists if teammates hit shots
-- TIME OF POSSESSION: Ball-dominant guards hold ball longer = more assist opportunities
-- PICK & ROLL FREQUENCY: How often do they run P&R? (affects assist upside)
+- TIME OF POSSESSION: Average seconds per touch for primary ball handlers
+- PICK & ROLL FREQUENCY: How often do they run P&R?
 
 **For Rebounders on ${homeTeam} and ${awayTeam}:**
 - REBOUND %: % of available rebounds grabbed (offensive vs defensive split)
 - CONTESTED REBOUND %: How many of their boards are contested?
-- BOX OUT RATE: Do they create opportunities or just clean up?
+- BOX OUT RATE: How often do they box out on rebounds?
 
 **For 3-Point Shooters:**
-- 3PA PER GAME: Volume of attempts (more attempts = more variance)
-- CATCH & SHOOT %: Are they better spot-up or off-dribble?
-- CORNER 3 %: Corner is highest % shot - do they get corner looks?
+- 3PA PER GAME: Volume of 3-point attempts per game
+- CATCH & SHOOT % vs OFF-DRIBBLE %: Shooting splits by shot type
+- CORNER 3 %: What is their corner 3-point percentage and volume?
 - WIDE OPEN 3% (defender 6+ feet): How do they shoot when open?
 
 **PACE & ENVIRONMENT FACTORS:**
-- TEAM PACE: Possessions per 48 minutes (fast pace 102+ = stat inflation)
+- TEAM PACE: Possessions per 48 minutes
 - OPPONENT PACE: Will this game be fast or slow?
 - DEFENSIVE RATING vs POSITION: How does opponent defend this position?
-- MINUTES PROJECTION: Based on rotation, blowout risk, back-to-back status
+- MINUTES PROJECTION: Recent average minutes for key players
 
 **MATCHUP-SPECIFIC (Critical for Props):**
 - How does ${homeTeam} defense rank in POINTS ALLOWED to guards/forwards/centers?
 - How does ${awayTeam} defense rank vs 3-point shooters?
 - Any player whose USAGE is spiking due to teammate injuries?
-- Any player whose efficiency (TS%) is unsustainably high/low? (regression candidate)
+- Any player whose current TS% diverges significantly from career average?
 
 == SECTION 9: BETTING MARKET SIGNALS ==
 NOTE: These are SUPPLEMENTARY data points only - NOT decisive factors for picks.
@@ -183,7 +183,7 @@ CRITICAL RULES:
 For top scorers/players:
 - LOAD MANAGEMENT: Any stars likely to rest?
 - LINE CHANGES: Any recent line combination changes?
-- HOT/COLD STREAKS: Any player on a notable scoring streak or slump?
+- RECENT PRODUCTION: Points, assists, shots on goal over last 5 games for top players?
 - RECENT QUOTES: Coach comments about specific players?
 
 == SECTION 6: TEAM TRENDS ==
@@ -192,50 +192,49 @@ For top scorers/players:
 - RECENT H2H: Did these teams play recently?
 
 == SECTION 7: GAME ENVIRONMENT ==
-- GAME TOTAL (O/U): What is the over/under? (High O/U 6.5+ = more scoring expected)
-- SPREAD & GAME SCRIPT: What is the spread? Trailing team may pull goalie late.
-- CONSISTENCY: Which players have high floor vs boom-or-bust tendencies?
+- GAME TOTAL (O/U): What is the over/under?
+- SPREAD: What is the spread?
+- VARIANCE DATA: Which players have high game-to-game variance vs consistent outputs?
 
 == SECTION 8: NHL ADVANCED STATS (PREDICTIVE METRICS) ==
 Search moneypuck.com, naturalstattrick.com, and nhl.com/stats for tracking data that PREDICTS future performance:
 
 **For Skaters on ${homeTeam} and ${awayTeam}:**
-- INDIVIDUAL EXPECTED GOALS (ixG): Shot quality - are they getting HIGH DANGER chances?
+- INDIVIDUAL EXPECTED GOALS (ixG): Expected goals based on shot location and quality
 - GOALS ABOVE EXPECTED (GAE): Positive = finishing above expected, Negative = finishing below expected.
 - HIGH DANGER CHANCES (HDC): Scoring chances from slot/crease area.
-- SHOOTING %: Is it unsustainably high (15%+) or low (<5%)? NHL average is ~10%
-- INDIVIDUAL CORSI FOR (iCF): Total shot attempts - volume indicator
+- SHOOTING %: Current shooting percentage vs career average
+- INDIVIDUAL CORSI FOR (iCF): Total shot attempts per game
 
 **For Goal Scorers:**
-- ixG vs ACTUAL GOALS: If ixG >> goals, they're UNLUCKY and due for regression UP
-- ixG vs ACTUAL GOALS: If goals >> ixG, they're LUCKY and may regress DOWN
-- HDC/60: High danger chances per 60 minutes - who's getting quality looks?
-- SHOOTING % TREND: Compare career avg to current season (regression candidate?)
+- ixG vs ACTUAL GOALS: What is the gap between expected and actual goals?
+- HDC/60: High danger chances per 60 minutes
+- SHOOTING % TREND: Current season shooting % vs career average
 
 **For Assist/Points Props:**
-- PRIMARY ASSISTS: More valuable than secondary assists (repeatable skill)
-- 5v5 vs PP PRODUCTION: What % comes from power play? (PP1 = high upside)
+- PRIMARY ASSISTS: Primary assist count vs secondary assist count
+- 5v5 vs PP PRODUCTION: What % of production comes from power play? Which PP unit?
 - ON-ICE xGF: When this player is on ice, how much xG does the team generate?
-- LINEMATE QUALITY: Who are they playing with? Elite center = more assists
+- LINEMATE QUALITY: Who are they playing with? List linemates and their production
 
 **For SOG (Shots on Goal) Props:**
-- iCF (Individual Corsi For): Total shot ATTEMPTS (more predictive than SOG)
-- SHOTS THROUGH %: What % of attempts reach the net? (consistency indicator)
+- iCF (Individual Corsi For): Total shot attempts (includes blocked and missed)
+- SHOTS THROUGH %: What % of shot attempts reach the net?
 - SHOT RATE/60: Shots per 60 minutes of ice time
-- O-ZONE STARTS %: More offensive zone starts = more shot opportunities
+- O-ZONE STARTS %: Percentage of shifts starting in offensive zone
 
 **Team-Level Predictive Metrics:**
 - ${homeTeam} xGF/60 (expected goals for per 60): Offensive generation quality
 - ${awayTeam} xGF/60: Offensive generation quality
 - ${homeTeam} xGA/60 (expected goals against per 60): Defensive quality
 - ${awayTeam} xGA/60: Defensive quality
-- PDO: Team shooting % + save %. If > 102, regression DOWN likely. If < 98, regression UP likely.
+- PDO: Team shooting % + save % (100 is baseline)
 
 **MATCHUP-SPECIFIC (Critical for Props):**
-- ${homeTeam} goalie xSV% (expected save %): Is goalie over/under-performing?
-- ${awayTeam} goalie xSV%: Is goalie over/under-performing?
-- Any player whose GOALS >> ixG? (lucky, may regress down)
-- Any player whose ixG >> GOALS? (unlucky, due for regression up - TARGET THESE)
+- ${homeTeam} goalie xSV% (expected save %) vs actual SV%
+- ${awayTeam} goalie xSV% vs actual SV%
+- Any player with a significant gap between GOALS and ixG (in either direction)?
+- What is the size of that gap?
 
 == SECTION 9: BETTING MARKET SIGNALS ==
 SUPPLEMENTARY DATA ONLY - not decisive:
@@ -282,13 +281,13 @@ CRITICAL RULES:
 == SECTION 5: WEATHER IMPACT (CRITICAL FOR OUTDOOR GAMES) ==
 - STADIUM TYPE: Is this a dome or outdoor stadium?
 - FORECAST: Temperature, wind speed, precipitation chance at game time
-- WIND IMPACT: Is wind 15+ mph? (affects passing, FG accuracy)
-- COLD WEATHER: Is it below 35°F? (affects grip, passing games)
-- RAIN/SNOW: Any precipitation expected? (favors run game)
+- WIND IMPACT: Is wind 15+ mph? What is the exact wind speed?
+- COLD WEATHER: Is it below 35 F? What is the exact temperature?
+- RAIN/SNOW: Any precipitation expected? What type and intensity?
 - PLAYER WEATHER HISTORY: How do the QBs perform in similar conditions?
   * ${homeTeam} QB: Career stats in cold/wind/rain if relevant
   * ${awayTeam} QB: Career stats in cold/wind/rain if relevant
-- WEATHER EDGE: Does either team have a significant weather advantage? (dome team in cold, etc.)
+- WEATHER CONTEXT: Is either team a dome team playing outdoors, or vice versa?
 
 == SECTION 6: PLAYER-SPECIFIC CONTEXT ==
 For TOP skill players (QB, RB1, WR1, TE1):
@@ -303,13 +302,13 @@ For TOP skill players (QB, RB1, WR1, TE1):
 **Team Red Zone Efficiency (ANYTIME TD):**
 - ${homeTeam}: Red zone TD % (how often do they score TDs vs FGs when inside 20?)
 - ${awayTeam}: Red zone TD % (how often do they score TDs vs FGs when inside 20?)
-- ${homeTeam}: Red zone DEFENSE - TD % allowed (do they bend but don't break, or give up TDs?)
+- ${homeTeam}: Red zone DEFENSE - TD % allowed
 - ${awayTeam}: Red zone DEFENSE - TD % allowed
 
 **Red Zone Target/Touch Leaders for ${homeTeam}:**
-- Who leads in RED ZONE TARGETS? (often different than overall target share)
-- Who gets GOAL LINE CARRIES? (inside 5 yards - is there a "vulture"?)
-- Who is the preferred red zone TE? (TEs often spike in red zone usage)
+- Who leads in RED ZONE TARGETS?
+- Who gets GOAL LINE CARRIES (inside 5 yards)?
+- Who is the preferred red zone TE?
 
 **Red Zone Target/Touch Leaders for ${awayTeam}:**
 - Who leads in RED ZONE TARGETS?
@@ -317,8 +316,8 @@ For TOP skill players (QB, RB1, WR1, TE1):
 - Who is the preferred red zone TE?
 
 **TD Rate Context:**
-- Any players with unusually HIGH TD rate that may regress? (lucky TDs)
-- Any players with unusually LOW TD rate despite high usage? (unlucky, due for TDs)
+- Any players whose TD rate diverges significantly from their red zone usage volume?
+- What are the specific TD rate vs red zone target/touch numbers?
 - Goal line back vs committee situation for each team
 
 **FIRST TD SCORER DATA (CRITICAL FOR 1ST TD PROPS):**
@@ -334,42 +333,42 @@ For TOP skill players (QB, RB1, WR1, TE1):
 == SECTION 8: INJURY CONTEXT (BEYOND REPORT) ==
 - Players returning from multi-week absences?
 - Players "questionable" who are expected to play?
-- Any injuries that affect other players' usage (e.g., WR1 out = WR2 boost)?
+- Any injuries that change usage distribution for remaining players?
 
 == SECTION 9: TEAM TRENDS ==
 - WIN/LOSE STREAKS: Current streak with context
 - HOME/ROAD SPLITS: Significant home/road performance difference?
 - DIVISION RIVALRY: Are these division rivals?
 
-== SECTION 10: GAME ENVIRONMENT (AFFECTS PROP CEILINGS) ==
-- GAME TOTAL (O/U): What is the over/under? (High O/U 48+ = shootout, more pass yards)
-- SPREAD & GAME SCRIPT: What is the spread? Large favorites (-10+) may run clock late, affecting pass yards.
-- PROJECTED GAME FLOW: Will trailing team need to throw more? (Good for pass/receiving props)
-- PRIMETIME FACTOR: Is this SNF/MNF/TNF? National TV can affect player performance.
+== SECTION 10: GAME ENVIRONMENT ==
+- GAME TOTAL (O/U): What is the over/under?
+- SPREAD: What is the spread?
+- PROJECTED GAME FLOW: Which team is favored to lead and by how much?
+- PRIMETIME FACTOR: Is this SNF/MNF/TNF?
 
 == SECTION 11: HISTORICAL PATTERNS (PLAYER-SPECIFIC) ==
 - PLAYER VS OPPONENT: Any notable player vs this defense history?
-- CONSISTENCY: Which players have high floor (reliable) vs boom-or-bust (high variance)?
+- VARIANCE DATA: Which players have high game-to-game variance vs consistent outputs?
 
 == SECTION 12: NFL NEXT GEN STATS (PREDICTIVE METRICS) ==
 Search nextgenstats.nfl.com for player tracking data that PREDICTS future performance:
 
 **For WRs/TEs on ${homeTeam} and ${awayTeam}:**
-- SEPARATION: Average yards of separation from defenders (higher = more open targets)
-- CATCH RATE OVER EXPECTED (CROE): Are they elite at contested catches?
-- AVERAGE DEPTH OF TARGET (aDOT): Deep threat (15+ yards) vs possession/slot (under 10)?
+- SEPARATION: Average yards of separation from defenders
+- CATCH RATE OVER EXPECTED (CROE): Difference between actual and expected catch rate
+- AVERAGE DEPTH OF TARGET (aDOT): Average depth of targets in yards
 - CUSHION: How much space do defenders give them at snap?
-- TARGET SHARE: % of team targets - who is the alpha?
+- TARGET SHARE: % of team targets for each pass catcher
 
 **For RBs on ${homeTeam} and ${awayTeam}:**
 - YARDS BEFORE CONTACT: How much is O-line creating vs RB creating?
-- EXPECTED RUSHING YARDS: Based on blockers and defenders - are they over/under-performing?
-- RUSH YARDS OVER EXPECTED (RYOE): Positive = creating, Negative = scheme-dependent
+- EXPECTED RUSHING YARDS: Expected yards based on blocker and defender positioning
+- RUSH YARDS OVER EXPECTED (RYOE): Difference between actual and expected rushing yards
 - 8+ DEFENDERS IN BOX %: How often are defenses stacking against them?
 
 **For QBs on ${homeTeam} and ${awayTeam}:**
-- COMPLETION % OVER EXPECTED (CPOE): Positive = accurate, Negative = inflated by scheme
-- TIME TO THROW: Quick release (<2.5s) vs deep passer (>3.0s)?
+- COMPLETION % OVER EXPECTED (CPOE): Difference between actual and expected completion %
+- TIME TO THROW: Average time to throw in seconds
 - AGGRESSIVENESS: % of throws into tight windows
 - PRESSURE RATE: How often is the O-line giving them time?
 - CLEAN POCKET PASSER RATING vs UNDER PRESSURE RATING
@@ -850,11 +849,7 @@ export function addMovement(movements, player, prop, open, current, direction) {
       current,
       direction,
       magnitude,
-      signal: Math.abs(magnitude) >= 2.0 ? `MOVED_${direction}` : 'STABLE',
-      killCondition: {
-        triggered: false,
-        reason: null
-      }
+      signal: Math.abs(magnitude) >= 2.0 ? `MOVED_${direction}` : 'STABLE'
     };
 
     console.log(`[Line Movement] Found: ${player} ${prop}: ${open} → ${current} (${direction} ${Math.abs(magnitude)})`);

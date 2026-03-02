@@ -196,13 +196,15 @@ struct SettingsView: View {
 // MARK: - Settings Link Component
 
 struct SettingsLink: View {
+    static let fallbackURL = URL(string: "https://betwithgary.ai/")!
+
     let title: String
     let icon: String
     let iconColor: Color
     let url: String
-    
+
     var body: some View {
-        Link(destination: URL(string: url) ?? URL(string: "https://betwithgary.ai/")!) {
+        Link(destination: URL(string: url) ?? Self.fallbackURL) {
             HStack(spacing: 14) {
                 Image(systemName: icon)
                     .font(.system(size: 14, weight: .semibold))

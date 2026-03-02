@@ -217,7 +217,7 @@ async function run() {
             ceiling_projection: p.ceilingProjection,
             ownership: p.ownership ?? null,
             valueScore: p.valueScore ?? null,
-            recentForm: p.recentForm ?? null,
+            recentFormRatio: p.recentFormRatio ?? null,
             opponent: p.opponent ?? null,
             pivots: (p.pivots || []).map(pv => ({
               tier: pv.tier,

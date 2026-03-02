@@ -30,7 +30,7 @@ const NFL_DIVISIONS = {
 const NHL_DIVISIONS = {
   atlantic: ['bruins', 'sabres', 'red wings', 'panthers', 'canadiens', 'senators', 'lightning', 'maple leafs'],
   metropolitan: ['hurricanes', 'blue jackets', 'devils', 'islanders', 'rangers', 'flyers', 'penguins', 'capitals'],
-  central: ['coyotes', 'blackhawks', 'avalanche', 'stars', 'wild', 'predators', 'blues', 'jets'],
+  central: ['utah hockey club', 'blackhawks', 'avalanche', 'stars', 'wild', 'predators', 'blues', 'jets'],
   pacific: ['ducks', 'flames', 'oilers', 'kings', 'sharks', 'kraken', 'canucks', 'golden knights']
 };
 
@@ -43,8 +43,7 @@ const COLLEGE_CONFERENCES = {
   pac_12: ['beavers', 'cougars']
 };
 
-// NCAAF uses the shared conferences as-is
-const NCAAF_CONFERENCES = { ...COLLEGE_CONFERENCES };
+// NCAAF uses the shared conferences as-is (no additional conferences)
 
 // NCAAB extends shared conferences with Big East (basketball-only conference)
 const NCAAB_CONFERENCES = {
@@ -169,7 +168,7 @@ function findDivision(teamName, sport) {
     case 'NFL': divisions = NFL_DIVISIONS; break;
     case 'NHL': divisions = NHL_DIVISIONS; break;
     case 'NCAAB': divisions = NCAAB_CONFERENCES; break;
-    case 'NCAAF': divisions = NCAAF_CONFERENCES; break;
+    case 'NCAAF': divisions = COLLEGE_CONFERENCES; break;
     default: return null;
   }
 
@@ -326,10 +325,9 @@ function checkNCAABTournament(game) {
  * @param {Object} game - Game object with home_team, away_team, venue, homeConference, awayConference, date, postseason
  * @param {string} sport - Sport key (NBA, NFL, NHL, NCAAB, NCAAF)
  * @param {Array} standings - Full standings array from BDL
- * @param {number} week - NFL week number (optional)
  * @returns {string|null} - Game significance label or null
  */
-export function generateGameSignificance(game, sport, standings = [], week = null) {
+export function generateGameSignificance(game, sport, standings = []) {
   const homeTeam = game.home_team;
   const awayTeam = game.away_team;
   const venue = game.venue;
@@ -442,4 +440,3 @@ export function generateGameSignificance(game, sport, standings = [], week = nul
   return fallback;
 }
 
-export default { generateGameSignificance };

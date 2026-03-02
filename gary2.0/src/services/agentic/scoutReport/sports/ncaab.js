@@ -1,7 +1,6 @@
 /**
  * NCAAB Scout Report Builder
- * Extracted from scoutReportBuilder.js — handles all NCAAB-specific logic
- * for building the pre-game scout report.
+ * Handles all NCAAB-specific logic for building the pre-game scout report.
  */
 
 import { ballDontLieService } from '../../../ballDontLieService.js';
@@ -31,7 +30,6 @@ import {
   formatInjuryReport,
   formatStartingLineups,
   formatOdds,
-  formatSportsbookComparison,
   formatRestSituation,
   calculateRestSituation,
   formatRecentForm,
@@ -85,7 +83,7 @@ function formatNcaabAdvancedMetrics(data) {
     if (!teamData) return;
     const d = teamData.data;
     if (!d) {
-      lines.push(`[${label}] ${(teamData.team || '').toUpperCase()}: Barttorvik data unavailable. Rely on BDL-calculated stats from your investigation.`);
+      lines.push(`[${label}] ${(teamData.team || '').toUpperCase()}: Barttorvik data unavailable.`);
       lines.push('');
       return;
     }
@@ -693,12 +691,6 @@ function formatNcaabRosterDepth(homeTeam, awayTeam, rosterDepth, injuries) {
     lines.push('');
   }
 
-  // Add context note
-  lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  lines.push('NCAAB ROSTER DEPTH CONTEXT:');
-  lines.push('');
-  lines.push('  NOTE: College rosters change frequently (transfer portal). Listed players may not reflect current roster.');
-  lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   lines.push('');
 
   return lines.join('\n');
@@ -1825,7 +1817,6 @@ ${formatH2HSection(h2hData, homeTeam, awayTeam)}
 BETTING CONTEXT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${formatOdds(game, sportKey)}
-${options.sportsbookOdds ? formatSportsbookComparison(options.sportsbookOdds, game.home_team, game.away_team) : ''}BETTING ODDS COMPARISON:
 `.trim();
 
   // ===================================================================

@@ -117,7 +117,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   let _researchBriefing = null;          // Briefing text from Flash (factual findings)
   const _flashCoverageTokens = [];       // Flash's called tokens — ONLY for pipeline gate coverage, NOT dedup or statsData
 
-  // Pro's Own Assessment — used ONLY for props mode (game picks use Flash's initial read instead)
+  // Pro's Own Assessment — props mode only (game picks get research briefing + Steel Man cases, no separate assessment)
   let _proAssessment = null;            // Pro's honest assessment text (props only)
   let _proAssessmentRequested = false;  // True after we ask Pro for assessment (props only)
 
@@ -279,13 +279,14 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
           if (!sessionResponse.toolCalls && hasQueuedPassMessage) {
             console.log(`[Orchestrator] 📝 Sending queued pass message after function responses`);
             // Send the pass message as follow-up
+            const sentMessage = nextMessageToSend;
             sessionResponse = await sendToSessionWithRetry(currentSession, nextMessageToSend);
-            // Track Pass 2 delivery (not just injection)
-            if (_pass2Injected && !_pass2Delivered && nextMessageToSend.includes('PASS 2') && !nextMessageToSend.includes('PASS 2.5')) {
+            nextMessageToSend = null; // Clear after sending
+            // Track Pass 2 delivery
+            if (_pass2Injected && !_pass2Delivered && sentMessage.includes('PASS 2') && !sentMessage.includes('PASS 2.5')) {
               _pass2Delivered = true;
               console.log(`[Orchestrator] ✅ Pass 2 DELIVERED to session`);
             }
-            nextMessageToSend = null; // Clear after sending
           }
 
         } else {
@@ -295,8 +296,8 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
             nextMessageToSend = `Continue your investigation. Use fetch_stats to gather more data on this matchup.`;
           }
           sessionResponse = await sendToSessionWithRetry(currentSession, nextMessageToSend);
-          // Track Pass 2 delivery (not just injection)
-          if (_pass2Injected && !_pass2Delivered && nextMessageToSend && nextMessageToSend.includes('PASS 2') && !nextMessageToSend.includes('PASS 2.5')) {
+          // Track Pass 2 delivery
+          if (_pass2Injected && !_pass2Delivered && nextMessageToSend.includes('PASS 2') && !nextMessageToSend.includes('PASS 2.5')) {
             _pass2Delivered = true;
             console.log(`[Orchestrator] ✅ Pass 2 DELIVERED to session`);
           }
@@ -328,7 +329,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
           _pass25JustInjected = false;
         }
 
-        // Capture Pro's honest assessment — PROPS MODE ONLY (game picks use Flash's initial read instead)
+        // Capture Pro's honest assessment — PROPS MODE ONLY
         if (isPropsMode && _proAssessmentRequested && !_proAssessment &&
             message.content && (!message.tool_calls || message.tool_calls.length === 0) &&
             message.content.length > 200 && !_pass25Injected) {
@@ -1683,11 +1684,11 @@ Use the fetch_stats tool to request DIFFERENT stat categories you haven't explor
         // ═══════════════════════════════════════════════════════════════════════
 
         if (!isPropsMode) {
-          // Game picks: Flash builds independent cases (Flash's initial read comes from research briefing)
+          // Game picks: Advisor builds bilateral Steel Man cases from Gary's investigation
           spawnFlashAdvisor('investigation complete', `(${categoryCount} categories, ${totalCalls} calls)`);
           _pass2Injected = true;
 
-          // Brief transition — Pro doesn't write its own read (Flash handles that via research briefing)
+          // Brief transition — Gary waits for advisor cases
           messages.push({
             role: 'user',
             content: `Your investigation is complete. An advisor is building bilateral cases from the data. You'll receive those cases along with your research assistant's analysis for evaluation shortly.`

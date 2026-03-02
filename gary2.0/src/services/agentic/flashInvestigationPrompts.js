@@ -273,7 +273,7 @@ Work through each numbered factor below. Check off each one as you complete it. 
 
 ### 16. VARIANCE
 **Tokens:** VARIANCE_CONSISTENCY
-- Consistent performers vs boom-or-bust teams
+- Team variance and consistency patterns
 - One-score game record vs expected
 
 ## DEEP INVESTIGATION — NFL-SPECIFIC
@@ -339,14 +339,14 @@ Work through each numbered factor below. Check off each one as you complete it. 
 
 ### 1. POSSESSION METRICS
 **Tokens:** CORSI_FOR_PCT, EXPECTED_GOALS, SHOT_DIFFERENTIAL, HIGH_DANGER_CHANCES, SHOT_QUALITY
-- Corsi% and xGF% tell different stories — Corsi is volume, xG accounts for shot quality
-- High-danger chance differential is the purest possession metric
+- Corsi% and xGF% measure different aspects of possession
+- High-danger chance differential measures quality scoring chances
 - Compare 5v5 possession metrics for both teams
 
 ### 2. GOALTENDING
 **Tokens:** GOALIE_STATS, SAVE_PCT, GOALS_AGAINST_AVG, GOALIE_MATCHUP, NHL_GSAX, NHL_GOALIE_RECENT_FORM, NHL_HIGH_DANGER_SV_PCT
-- Who starts tonight? Season save% vs L10 save% — is the goalie hot or cold?
-- GSAx (Goals Saved Above Expected) — true skill vs luck
+- Who starts tonight? Compare season save% vs L10 save%.
+- GSAx (Goals Saved Above Expected)
 - High-danger save% — performance on tough shots
 - A streak with one goalie doesn't transfer to a different goalie
 
@@ -366,7 +366,7 @@ Work through each numbered factor below. Check off each one as you complete it. 
 
 ### 6. LUCK & REGRESSION
 **Tokens:** PDO, LUCK_INDICATORS, SHOOTING_REGRESSION, CLOSE_GAME_RECORD, ONE_GOAL_GAMES, OVERTIME_RECORD
-- PDO (shooting% + save%) — values far from 100 regress toward it
+- PDO (shooting% + save%) — check where each team's value sits relative to 100
 - Shooting% regression — is either team's scoring unsustainably high or low?
 - One-goal game record vs expected — luck or clutch?
 
@@ -433,7 +433,7 @@ Hockey outcomes are heavily goaltender-dependent and possession-driven.
 NHL division rivals play 3-4 times per year. When you see a 3-0 or 4-0 sweep developing, investigate:
 - **Opponent quality**: Is the swept team actually an elite-tier team?
 - **Division rival?**: Division games carry extra weight and motivation
-- **Goaltending matchup**: Is tonight's starter the same as previous games? Has either goalie been on a hot/cold streak?
+- **Goaltending matchup**: Is tonight's starter the same as previous games? Compare each goalie's recent save% vs season save%.
 - **How did the sweep happen?**: Close games (1-goal margins) or blowouts?
 - **Line adjustments**: Have coaches shuffled lines after previous meetings?
 - **Playoff seeding**: Are there playoff seeding implications for either team?

@@ -8,8 +8,8 @@ import { ballDontLieOddsService } from './ballDontLieOddsService.js';
 // Track in-flight requests to prevent duplicates
 const inFlightRequests = new Map();
 
-// Helper to extract odds from bookmakers array
-const extractOddsFromBookmakers = (bookmakers, homeTeam, awayTeam) => {
+// Extract odds from a single bookmaker's markets
+const extractFromBookmaker = (bookmaker, homeTeam, awayTeam) => {
   const result = {
     spread_home: null,
     spread_away: null,
@@ -21,29 +21,6 @@ const extractOddsFromBookmakers = (bookmakers, homeTeam, awayTeam) => {
     total_over_odds: null,
     total_under_odds: null
   };
-
-  if (!bookmakers || !bookmakers.length) return result;
-
-  // Prefer FanDuel and DraftKings, but fall back to other sportsbooks if needed
-  const preferredKeys = ['fanduel', 'draftkings', 'betmgm', 'caesars', 'pointsbet', 'betonlineag', 'bovada', 'mybookieag', 'williamhill_us', 'unibet_us'];
-  let bookmaker = null;
-
-  for (const key of preferredKeys) {
-    bookmaker = bookmakers.find(b => b.key?.toLowerCase() === key);
-    if (bookmaker && bookmaker.markets?.length > 0) break;
-  }
-
-  // Final fallback: use ANY bookmaker that has markets
-  if (!bookmaker || !bookmaker.markets?.length) {
-    bookmaker = bookmakers.find(b => b.markets && b.markets.length > 0);
-  }
-
-  if (!bookmaker) {
-    console.warn('[Odds Service] No bookmaker with valid odds found for this game');
-    return result;
-  }
-
-  // Bookmaker selected: ${bookmaker.key || bookmaker.title} (logged once per batch in fetchUpcomingGames)
 
   if (!bookmaker?.markets) return result;
 
@@ -87,6 +64,73 @@ const extractOddsFromBookmakers = (bookmakers, homeTeam, awayTeam) => {
   }
 
   return result;
+};
+
+// Check if spread and moneyline agree on which team is favored
+const validateSpreadMLDirection = (odds, bookmakerKey) => {
+  const { spread_home, moneyline_home } = odds;
+  // Can't validate if either is missing — allow it through
+  if (spread_home == null || moneyline_home == null) return true;
+  // Spread 0 (pick'em) is consistent with any ML
+  if (spread_home === 0) return true;
+
+  // ML < 0 means home favored → spread should be < 0 (home giving points)
+  // ML > 0 means home underdog → spread should be > 0 (home getting points)
+  const mlFavorsHome = moneyline_home < 0;
+  const spreadFavorsHome = spread_home < 0;
+
+  if (mlFavorsHome !== spreadFavorsHome) {
+    console.warn(`[Odds Service] SPREAD/ML MISMATCH from ${bookmakerKey}: spread_home=${spread_home}, ML_home=${moneyline_home} — skipping vendor`);
+    return false;
+  }
+  return true;
+};
+
+// Helper to extract odds from bookmakers array, trying vendors in order with validation
+const extractOddsFromBookmakers = (bookmakers, homeTeam, awayTeam) => {
+  const emptyResult = {
+    spread_home: null, spread_away: null,
+    spread_home_odds: null, spread_away_odds: null,
+    moneyline_home: null, moneyline_away: null,
+    total: null, total_over_odds: null, total_under_odds: null
+  };
+
+  if (!bookmakers || !bookmakers.length) return emptyResult;
+
+  const preferredKeys = ['fanduel', 'draftkings', 'betmgm', 'caesars', 'pointsbet', 'betonlineag', 'bovada', 'mybookieag', 'williamhill_us', 'unibet_us'];
+
+  // Build ordered list: preferred vendors first, then any remaining
+  const orderedBookmakers = [];
+  for (const key of preferredKeys) {
+    const bk = bookmakers.find(b => b.key?.toLowerCase() === key);
+    if (bk && bk.markets?.length > 0) orderedBookmakers.push(bk);
+  }
+  // Add any bookmakers not in the preferred list
+  for (const bk of bookmakers) {
+    if (bk.markets?.length > 0 && !orderedBookmakers.includes(bk)) {
+      orderedBookmakers.push(bk);
+    }
+  }
+
+  if (orderedBookmakers.length === 0) {
+    console.warn('[Odds Service] No bookmaker with valid odds found for this game');
+    return emptyResult;
+  }
+
+  // Try vendors in order — use the first one where spread/ML agree
+  let bestMismatch = null;
+  for (const bookmaker of orderedBookmakers) {
+    const odds = extractFromBookmaker(bookmaker, homeTeam, awayTeam);
+    if (validateSpreadMLDirection(odds, bookmaker.key || bookmaker.title)) {
+      return odds;
+    }
+    // Track first mismatch as fallback
+    if (!bestMismatch) bestMismatch = odds;
+  }
+
+  // ALL vendors had spread/ML mismatch — use first vendor with warning
+  console.warn(`[Odds Service] ALL ${orderedBookmakers.length} vendors have spread/ML mismatch for ${homeTeam} vs ${awayTeam} — using first vendor as fallback`);
+  return bestMismatch || emptyResult;
 };
 
 // NOTE: fetchUpcomingOddsFallback and fetchOddsFromOddsApiByDate removed

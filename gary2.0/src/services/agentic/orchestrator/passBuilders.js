@@ -33,13 +33,7 @@ The Scout Report may include investigation triggers — situations flagged for y
 <spread_investigation>
 ## INTERROGATE THE LINE
 
-Keep these questions in mind throughout your investigation — as you review your research assistant's findings AND as you pull your own stats for deeper investigation. Think about what is driving the line — recent performance, season-long reputation, team standing, public perception — and whether it accurately reflects what is happening with these teams right now:
-
-- What transient factors — rest, travel, injuries, schedule density — might be shifting the line away from where the underlying data says it should be?
-- If you strip away the narratives and just look at the matchup data — efficiency, form, personnel — does the number feel right, too high, or too low?
-${(sport && (sport.includes('nba') || sport.includes('NBA') || sport.includes('ncaab') || sport.includes('NCAAB')))
-  ? '- Now consider everything together — the matchup data AND the situation surrounding this game. Does the number feel too high, too low, or just right?'
-  : ''}
+Lines are shaped by recent performance, season-long reputation, team standing, and public perception. Transient factors — rest, travel, injuries, schedule density — can shift a line away from where the underlying matchup data says it should be. Keep the line in mind throughout your investigation.
 </spread_investigation>
 
 <instructions>
@@ -360,9 +354,9 @@ ${gameSummary ? `<game_summary>\n${gameSummary}\n</game_summary>` : ''}
 
 You just analyzed ${awayTeam} @ ${homeTeam} in depth. Now evaluate PLAYER PROPS using the game dynamics you identified. Your game analysis provides context — but each prop is its own investigation.
 
-Connect your game analysis to individual player production. The line reflects established roles, long-term absences, and recent production patterns. Your edge comes from seeing what the line hasn't fully absorbed yet.
+Connect your game analysis to individual player production. The line reflects established roles, long-term absences, and recent production patterns.
 
-**DIVERSITY CHECK:** If all picks are the same direction or on the most obvious players, re-examine independently. Edge comes from changed situations the line hasn't captured, not from obvious stars.
+**DIVERSITY CHECK:** If all picks are the same direction or on the most obvious players, re-examine independently.
 
 Select your 2 best props from DIFFERENT players. Call finalize_props with your picks. Rationale should read like a game pick rationale — specific stats and matchup reasoning.
 

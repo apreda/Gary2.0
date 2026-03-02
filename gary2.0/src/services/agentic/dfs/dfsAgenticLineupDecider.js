@@ -18,7 +18,7 @@
  */
 
 import { getDFSConstitution } from './constitution/dfsAgenticConstitution.js';
-import { GEMINI_PRO_MODEL, GEMINI_FLASH_MODEL, rotateToBackupKey, isUsingBackupKey, getGeminiClient } from '../modelConfig.js';
+import { GEMINI_PRO_MODEL, rotateToBackupKey, isUsingBackupKey, getGeminiClient } from '../modelConfig.js';
 import { isSlotEligible } from './dfsPositionUtils.js';
 import { getSalaryCap, getRosterSlots } from './dfsSportConfig.js';
 
@@ -148,7 +148,7 @@ Provide your lineup as JSON:
  * @returns {Object} - Gary's lineup decision
  */
 export async function decideLineupWithPro(genAI, slateAnalysis, playerInvestigations, context, options = {}) {
-  const { modelName = GEMINI_PRO_MODEL, thinkingLevel = 'high' } = options;
+  const { modelName = GEMINI_PRO_MODEL } = options;
   const { players, platform, winningTargets } = context;
 
   console.log('[Lineup Decider] Gary Pro deciding lineup with high thinking...');
@@ -172,11 +172,10 @@ export async function decideLineupWithPro(genAI, slateAnalysis, playerInvestigat
     systemInstruction: getLineupDecisionPrompt(platform, context.sport) + '\n\n' + getDFSConstitution(context.sport),
     generationConfig: {
       temperature: 1.0, // Gemini: Keep at 1.0
-      maxOutputTokens: 16384
+      maxOutputTokens: 65536
     },
-    // Extended thinking for lineup decisions
     thinkingConfig: {
-      thinkingBudget: thinkingLevel === 'high' ? 16384 : 8192
+      thinkingBudget: -1 // HIGH — let Pro think as deeply as needed
     }
   });
 
@@ -228,8 +227,8 @@ export async function decideLineupWithPro(genAI, slateAnalysis, playerInvestigat
         const backupModel = backupGenAI.getGenerativeModel({
           model: modelName,
           systemInstruction: getLineupDecisionPrompt(platform, context.sport) + '\n\n' + getDFSConstitution(context.sport),
-          generationConfig: { temperature: 1.0, maxOutputTokens: 16384 },
-          thinkingConfig: { thinkingBudget: thinkingLevel === 'high' ? 16384 : 8192 }
+          generationConfig: { temperature: 1.0, maxOutputTokens: 65536 },
+          thinkingConfig: { thinkingBudget: -1 }
         });
         const backupChat = backupModel.startChat({ history: [] });
         try {
@@ -434,12 +433,17 @@ function buildDecisionRequest(slateAnalysis, playerInvestigations, context, sala
     ? '\nNote: Projected ownership data is UNAVAILABLE for this slate. Use salary and situation data to assess where the field is likely concentrating.\n'
     : '';
 
-  // Slate size awareness
+  // Slate size (raw game count, no methodology directive)
   const slateNote = context.slateSize
-    ? `\nSlate Size: ${context.slateSize} games (${context.slateLabel}). Smaller slates allow more concentrated construction; larger slates require broader exposure.\n`
+    ? `\nSlate Size: ${context.slateSize} games.\n`
     : '';
 
   const objectiveStr = `You're building to WIN FIRST PLACE. Target: ${winningTargets.toWin}+ pts`;
+
+  // Narrative briefing from Phase 2 Flash investigation
+  const briefingSection = slateAnalysis.narrativeBriefing
+    ? `\n## RESEARCH BRIEFING (Flash Investigation)\n${slateAnalysis.narrativeBriefing}\n`
+    : '';
 
   return `
 ## SLATE FINDINGS
@@ -448,7 +452,7 @@ ${injuryLines || 'No injury data'}
 
 Game Environments:
 ${gameLines || 'No game environment data'}
-${slateNote}${ownershipNote}
+${briefingSection}${slateNote}${ownershipNote}
 ## WINNING TARGETS
 - To WIN: ${winningTargets.toWin} pts
 - Top 1%: ${winningTargets.top1Percent} pts
@@ -753,8 +757,6 @@ function parseLineupDecision(text, players, salaryCap, rosterSlots, sport) {
 // POSITION ELIGIBILITY CHECK
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// isSlotEligible imported from dfsPositionUtils.js
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // STRUCTURAL ISSUE DETECTION (triggers self-correction loop)
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -874,12 +876,3 @@ function validateLineup(lineup, salaryCap, rosterSlots, sport) {
   };
 }
 
-// Platform helpers (getSalaryCap, getRosterSlots) imported from dfsSportConfig.js
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// EXPORTS
-// ═══════════════════════════════════════════════════════════════════════════════
-
-export default {
-  decideLineupWithPro
-};

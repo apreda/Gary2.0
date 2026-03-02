@@ -1,4 +1,4 @@
-import { getCurrentSeasonString, sportToBdlKey, normalizeSportName, findTeam, fmtNum, fmtPct, fetchBothTeamSeasonStats, fetchNBATeamScoringStats, fetchNBATeamAdvancedStats, fetchNBALeaders, fetchNBATeamBaseStats, fetchNBATeamOpponentStats, fetchNBATeamDefenseStats, fetchTopPlayersForTeam, formatRecentGames, buildPaceAnalysis, interpretTurnoverMargin, BDL_API_KEY, _nbaBaseStatsCache, _nbaAdvancedStatsCache, _nbaOpponentStatsCache, _nbaDefenseStatsCache, _nbaTeamScoringStatsCache, geminiGroundingSearch } from './statRouterCommon.js';
+import { getCurrentSeasonString, sportToBdlKey, normalizeSportName, findTeam, fmtNum, fmtPct, fetchBothTeamSeasonStats, fetchNBATeamScoringStats, fetchNBATeamAdvancedStats, fetchNBALeaders, fetchNBATeamBaseStats, fetchNBATeamOpponentStats, fetchNBATeamDefenseStats, fetchTopPlayersForTeam, formatRecentGames, buildPaceAnalysis, BDL_API_KEY, _nbaBaseStatsCache, _nbaAdvancedStatsCache, _nbaOpponentStatsCache, _nbaDefenseStatsCache, _nbaTeamScoringStatsCache, geminiGroundingSearch } from './statRouterCommon.js';
 import { ballDontLieService } from '../../../ballDontLieService.js';
 import { getTeamStats as getMoneyPuckTeamStats, getGoalieStats as getMoneyPuckGoalieStats } from '../../../moneyPuckService.js';
 import { getTeamPercentages as getNhlApiPercentages } from '../../../nhlStatsApiService.js';
@@ -26,7 +26,7 @@ export const nhlFetchers = {
         team: away.full_name || away.name,
         power_play_pct: awayRates?.ppPct ? fmtPct(awayRates.ppPct) : 'N/A'
       },
-      note: 'League average PP% is ~20%.'
+      note: 'Power play percentage for both teams.'
     };
   },
 
@@ -49,7 +49,7 @@ export const nhlFetchers = {
         team: away.full_name || away.name,
         penalty_kill_pct: awayRates?.pkPct ? fmtPct(awayRates.pkPct) : 'N/A'
       },
-      note: 'League average PK% is ~80%.'
+      note: 'Penalty kill percentage for both teams.'
     };
   },
 
@@ -99,7 +99,7 @@ export const nhlFetchers = {
         power_play_pct: awayRates?.ppPct ? fmtPct(awayRates.ppPct) : 'N/A',
         penalty_kill_pct: awayRates?.pkPct ? fmtPct(awayRates.pkPct) : 'N/A'
       },
-      interpretation: `Compare ${home.name} PP% vs ${away.name} PK% and vice versa for scoring edges`
+      comparison: 'Power play and penalty kill percentages for both teams.'
     };
   },
 
@@ -144,7 +144,7 @@ export const nhlFetchers = {
         team: away.full_name || away.name,
         goals_against_per_game: fmtNum(awayRates?.goalsAgainstPerGame)
       },
-      note: 'Lower is better for defense'
+      note: 'Goals against per game for both teams.'
     };
   },
 
@@ -220,9 +220,7 @@ export const nhlFetchers = {
         shots_against: fmtNum(awayRates?.shotsAgainstPerGame),
         differential: fmtNum(awayDiff, 1)
       },
-      interpretation: homeDiff > awayDiff 
-        ? `${home.name} controls possession better (+${fmtNum(homeDiff - awayDiff, 1)} shots/game)`
-        : `${away.name} controls possession better (+${fmtNum(awayDiff - homeDiff, 1)} shots/game)`
+      comparison: 'Shot differential data for both teams.'
     };
   },
 
@@ -245,7 +243,7 @@ export const nhlFetchers = {
         team: away.full_name || away.name,
         faceoff_pct: awayRates?.faceoffWinPct ? fmtPct(awayRates.faceoffWinPct) : 'N/A'
       },
-      note: 'Faceoff wins correlate with puck possession and zone time'
+      note: 'Faceoff win percentage for both teams.'
     };
   },
 
@@ -284,7 +282,7 @@ export const nhlFetchers = {
               }))
             : [{ note: 'Goalie data unavailable - check scout report' }]
         },
-        note: 'Compare both goalies\' SV% — league avg is ~.910. Is there a significant gap between the starters?'
+        note: 'Goalie save percentages for both teams.'
       };
     } catch (e) {
       return {
@@ -322,9 +320,7 @@ export const nhlFetchers = {
         goals_against: fmtNum(awayRates?.goalsAgainstPerGame),
         differential: fmtNum(awayDiff, 2)
       },
-      interpretation: homeDiff > awayDiff 
-        ? `${home.name} has stronger goal differential (+${fmtNum(homeDiff - awayDiff, 2)}/game)`
-        : `${away.name} has stronger goal differential (+${fmtNum(awayDiff - homeDiff, 2)}/game)`
+      comparison: 'Goal differential data for both teams.'
     };
   },
 
@@ -363,7 +359,7 @@ export const nhlFetchers = {
         source: 'Ball Don\'t Lie API',
         home: formatStanding(homeStanding, home),
         away: formatStanding(awayStanding, away),
-        note: 'Home/road records and streaks are critical for NHL betting'
+        note: 'Home and road records for both teams.'
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching NHL_STANDINGS:`, error.message);
@@ -383,30 +379,7 @@ export const nhlFetchers = {
       const homeStanding = findTeam(home.id);
       const awayStanding = findTeam(away.id);
       
-      // Parse record strings like "27-13-1"
-      const parseRecord = (recordStr) => {
-        if (!recordStr || recordStr === 'N/A') return { wins: 0, losses: 0, otl: 0 };
-        const parts = recordStr.split('-').map(n => parseInt(n) || 0);
-        return { wins: parts[0] || 0, losses: parts[1] || 0, otl: parts[2] || 0 };
-      };
-      
-      const homeTeamHome = parseRecord(homeStanding?.home_record);
-      const homeTeamRoad = parseRecord(homeStanding?.road_record);
-      const awayTeamHome = parseRecord(awayStanding?.home_record);
-      const awayTeamRoad = parseRecord(awayStanding?.road_record);
-      
-      // Key insight: home team's HOME record vs away team's ROAD record
-      const homeAdvantage = homeTeamHome.wins - homeTeamHome.losses;
-      const awayRoadStruggle = awayTeamRoad.wins - awayTeamRoad.losses;
-      
-      let interpretation = '';
-      if (homeAdvantage > 5 && awayRoadStruggle < 0) {
-        interpretation = `STRONG HOME EDGE: ${home.name} is ${homeStanding?.home_record} at home vs ${away.name}'s ${awayStanding?.road_record} on road`;
-      } else if (awayRoadStruggle > 5) {
-        interpretation = `ROAD WARRIOR: ${away.name} is ${awayStanding?.road_record} on the road - home ice less impactful`;
-      } else {
-        interpretation = `Standard splits - evaluate other factors`;
-      }
+      const interpretation = `${home.name} home: ${homeStanding?.home_record || 'N/A'}, ${away.name} road: ${awayStanding?.road_record || 'N/A'}`;
       
       return {
         category: 'Home/Away Splits',
@@ -424,7 +397,7 @@ export const nhlFetchers = {
           note: 'Playing on ROAD tonight'
         },
         interpretation,
-        note: 'NHL home teams have last change advantage - investigate how each team performs home vs road'
+        note: 'Home and away performance data for both teams.'
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching NHL_HOME_AWAY_SPLITS:`, error.message);
@@ -509,24 +482,14 @@ export const nhlFetchers = {
           const avgGF = gameList.length > 0 ? (goalsFor / gameList.length).toFixed(1) : '0';
           const avgGA = gameList.length > 0 ? (goalsAgainst / gameList.length).toFixed(1) : '0';
           
-          // Calculate opponent quality
+          // Calculate average opponent points
           const avgOppPoints = gameDetails.reduce((sum, g) => sum + (g.opponent_points || 0), 0) / gameDetails.length;
-          let scheduleStrength = 'AVERAGE';
-          if (avgOppPoints > 90) scheduleStrength = 'TOUGH';
-          else if (avgOppPoints < 70) scheduleStrength = 'SOFT';
-          
-          return { record, wins, losses, avgGF, avgGA, scheduleStrength, games: gameDetails };
+
+          return { record, wins, losses, avgGF, avgGA, avg_opponent_points: avgOppPoints.toFixed(0), games: gameDetails };
         };
         
         const l5Analysis = analyzeGames(l5Games);
         const l10Analysis = analyzeGames(l10Games);
-        
-        // Trend analysis
-        let trend = 'STABLE';
-        if (l5Analysis.wins >= 4) trend = 'HOT';
-        else if (l5Analysis.losses >= 4) trend = 'COLD';
-        else if (l5Analysis.wins > l10Analysis.wins / 2) trend = 'IMPROVING';
-        else if (l5Analysis.losses > l10Analysis.losses / 2) trend = 'DECLINING';
         
         return {
           team: teamName,
@@ -534,16 +497,15 @@ export const nhlFetchers = {
             record: l5Analysis.record,
             avg_goals_for: l5Analysis.avgGF,
             avg_goals_against: l5Analysis.avgGA,
-            schedule_strength: l5Analysis.scheduleStrength,
+            avg_opponent_points: l5Analysis.avg_opponent_points,
             recent_games: l5Analysis.games.slice(0, 5)
           },
           l10: {
             record: l10Analysis.record,
             avg_goals_for: l10Analysis.avgGF,
             avg_goals_against: l10Analysis.avgGA,
-            schedule_strength: l10Analysis.scheduleStrength
-          },
-          trend
+            avg_opponent_points: l10Analysis.avg_opponent_points
+          }
         };
       };
       
@@ -555,8 +517,7 @@ export const nhlFetchers = {
         source: 'Ball Don\'t Lie API',
         home: homeForm,
         away: awayForm,
-        interpretation: `${home.name}: ${homeForm.trend} (L5: ${homeForm.l5?.record || 'N/A'}) | ${away.name}: ${awayForm.trend} (L5: ${awayForm.l5?.record || 'N/A'})`,
-        note: 'L5 and L10 trends with opponent quality context provided for comparison.'
+        comparison: 'Recent form (L5 and L10) with opponent quality context for both teams.'
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching NHL_RECENT_FORM:`, error.message);
@@ -651,18 +612,18 @@ export const nhlFetchers = {
         home: {
           team: home.full_name || home.name,
           hot_players: homeHotPlayers.map(formatPlayer),
-          note: homeHotPlayers.length > 0 && parseFloat(homeHotPlayers[0].ppg) >= 1.0
-            ? `${homeHotPlayers[0].name} is HOT (${homeHotPlayers[0].ppg} PPG)`
-            : 'No standout hot players'
+          note: homeHotPlayers.length > 0
+            ? `Top scorer: ${homeHotPlayers[0].name} (${homeHotPlayers[0].ppg} PPG)`
+            : 'No players with 1.0+ PPG in last 14 days'
         },
         away: {
           team: away.full_name || away.name,
           hot_players: awayHotPlayers.map(formatPlayer),
-          note: awayHotPlayers.length > 0 && parseFloat(awayHotPlayers[0].ppg) >= 1.0
-            ? `${awayHotPlayers[0].name} is HOT (${awayHotPlayers[0].ppg} PPG)`
-            : 'No standout hot players'
+          note: awayHotPlayers.length > 0
+            ? `Top scorer: ${awayHotPlayers[0].name} (${awayHotPlayers[0].ppg} PPG)`
+            : 'No players with 1.0+ PPG in last 14 days'
         },
-        note: 'Players with 1.0+ PPG over last 14 days are considered "hot"'
+        note: 'Top scorers over last 14 days for both teams.'
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching NHL_HOT_PLAYERS:`, error.message);
@@ -766,48 +727,19 @@ export const nhlFetchers = {
               const dominantDivision = dominantTeamStanding?.division_name || dominantTeamStanding?.team?.division;
               const isDivisionRival = sweptDivision && dominantDivision && sweptDivision === dominantDivision;
               
-              // NHL Sweep Context thresholds:
-              // - 65%+ points pct: STRONG trap alert
-              // - 58-65% (or 58%+ for division rivals): CAUTION flag
-              const strongThreshold = 65;
-              const cautionThreshold = isDivisionRival ? 58 : 65;
-              
-              // Margin context for NHL (goals, not points)
-              const marginNote = avgMargin >= 3 
-                ? `Dominant margins (avg +${avgMargin.toFixed(1)} goals) — but goaltending variance and line adjustments typically intervene.`
-                : avgMargin >= 1.5
-                ? `Solid margins (avg +${avgMargin.toFixed(1)} goals) — real edge, but NHL games are tight.`
-                : `Close games (avg +${avgMargin.toFixed(1)} goals) — series has been competitive.`;
-              
-              let alertLevel = null;
-              let sweepNote = null;
-              
-              if (sweptPointsPct >= strongThreshold) {
-                alertLevel = 'STRONG';
-                sweepNote = `NHL SWEEP CONTEXT: ${sweptTeamName} is ${sweptRecord} (${sweptPointsPct.toFixed(1)}% points)${isDivisionRival ? ' and a division rival' : ''} but 0-${gamesPlayed} vs ${dominantTeamName}. ${marginNote}`;
-              } else if (sweptPointsPct >= cautionThreshold) {
-                alertLevel = 'CAUTION';
-                sweepNote = `NHL SWEEP CONTEXT: ${sweptTeamName} is ${sweptRecord} (${sweptPointsPct.toFixed(1)}% points)${isDivisionRival ? ' — a division rival' : ''} and 0-${gamesPlayed} vs ${dominantTeamName}. Playoff-caliber teams rarely get swept. ${marginNote}`;
-              }
-              
-              if (alertLevel) {
-                sweepContext = {
-                  triggered: true,
-                  alert_level: alertLevel,
-                  sport: 'NHL',
-                  games_in_sweep: gamesPlayed,
-                  dominant_team: dominantTeamName,
-                  swept_team: sweptTeamName,
-                  swept_team_record: sweptRecord,
-                  swept_team_points_pct: `${sweptPointsPct.toFixed(1)}%`,
-                  is_division_rival: isDivisionRival,
-                  division: isDivisionRival ? sweptDivision : null,
-                  avg_margin: avgMargin.toFixed(1),
-                  margin_context: marginNote,
-                  sweep_note: sweepNote
-                };
-                console.log(`[Stat Router] NHL SWEEP CONTEXT (${alertLevel}): ${dominantTeamName} is ${gamesPlayed}-0 vs ${sweptTeamName} (${sweptPointsPct.toFixed(1)}% points${isDivisionRival ? ', division rival' : ''})`);
-              }
+              sweepContext = {
+                triggered: true,
+                sport: 'NHL',
+                games_in_sweep: gamesPlayed,
+                dominant_team: dominantTeamName,
+                swept_team: sweptTeamName,
+                swept_team_record: sweptRecord,
+                swept_team_points_pct: `${sweptPointsPct.toFixed(1)}%`,
+                is_division_rival: isDivisionRival,
+                division: isDivisionRival ? sweptDivision : null,
+                avg_margin: avgMargin.toFixed(1)
+              };
+              console.log(`[Stat Router] NHL SWEEP CONTEXT: ${dominantTeamName} is ${gamesPlayed}-0 vs ${sweptTeamName} (${sweptPointsPct.toFixed(1)}% points${isDivisionRival ? ', division rival' : ''})`);
             }
           }
         } catch (sweepErr) {
@@ -833,11 +765,7 @@ export const nhlFetchers = {
         recent_meetings: meetings,
         avg_margin: avgMargin.toFixed(1),
         sweep_context: sweepContext,
-        interpretation: homeWins > awayWins
-          ? `${home.name} has won ${homeWins} of last ${meetings.length} meetings`
-          : awayWins > homeWins 
-            ? `${away.name} has won ${awayWins} of last ${meetings.length} meetings`
-            : `Series is even at ${homeWins}-${awayWins}`,
+        comparison: `H2H record: ${home.name} ${homeWins}-${awayWins} ${away.name} in last ${meetings.length} meetings.`,
         note: 'H2H meetings provided for comparison.',
         ANTI_HALLUCINATION: `DATA BOUNDARY: You have ONLY ${meetings.length} verified H2H game(s). You may cite these specific games. DO NOT claim historical streaks or multi-year records beyond this data.`
       };
@@ -900,8 +828,8 @@ export const nhlFetchers = {
         source: 'MoneyPuck / NHL API (5v5)',
         home: formatTeam(homeMP, homeNHL, homeName),
         away: formatTeam(awayMP, awayNHL, awayName),
-        comparison: `Corsi differentials measure puck possession but don't distinguish shot quality from shot volume. What competing scenarios does this possession data support for each team on tonight's moneyline?`,
-        note: 'League average is 50%. CF% is the best possession proxy in hockey.'
+        comparison: '5v5 Corsi and Fenwick percentages for both teams.',
+        note: '5v5 Corsi and Fenwick data from MoneyPuck.'
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching CORSI_FOR_PCT:`, error.message);
@@ -946,7 +874,7 @@ export const nhlFetchers = {
         source: 'MoneyPuck (5v5)',
         home: formatTeam(homeMP, homeName),
         away: formatTeam(awayMP, awayName),
-        comparison: `The gap between expected and actual goals can reflect goaltending, finishing talent, or regression candidates. What competing narratives could this xG data support for each side?`,
+        comparison: 'Expected goals vs actual goals data for both teams.',
         note: 'xG accounts for shot location and type. Season cumulative totals at 5v5.'
       };
     } catch (error) {
@@ -985,11 +913,11 @@ export const nhlFetchers = {
       };
 
       return {
-        category: 'PDO (Luck/Regression Indicator)',
+        category: 'PDO',
         source: 'NHL API (5v5)',
         home: formatTeam(homeNHL, homeName),
         away: formatTeam(awayNHL, awayName),
-        comparison: `PDO extremes can signal regression or genuine talent — elite goalies sustain high save percentages, elite shooters sustain high shooting percentages. What competing interpretations does this PDO data support for each team?`,
+        comparison: 'PDO (shooting% + save%) data for both teams.',
         note: 'PDO baseline is 1.000 (shooting% + save%). Values provided for comparison.'
       };
     } catch (error) {
@@ -1036,7 +964,7 @@ export const nhlFetchers = {
         source: 'MoneyPuck (5v5)',
         home: formatTeam(homeMP, homeName),
         away: formatTeam(awayMP, awayName),
-        comparison: `High-danger chance generation reflects offensive scheme and zone entry, while suppression reflects defensive structure. What competing scenarios does this data support for each team on tonight's moneyline?`,
+        comparison: 'High-danger chance generation and suppression data for both teams.',
         note: 'HDCF% baseline is 50%. Season cumulative totals at 5v5.'
       };
     } catch (error) {
@@ -1083,7 +1011,7 @@ export const nhlFetchers = {
         source: 'MoneyPuck (5v5)',
         home: formatGoalies(homeGoalies, homeName),
         away: formatGoalies(awayGoalies, awayName),
-        comparison: 'GSAx captures goalie performance above or below expected, but sample size and shot quality context matter. What competing narratives could this goalie data support for each side?'
+        comparison: 'Goals saved above expected (GSAx) and save percentages for both teams\' goalies.'
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching NHL_GSAX:`, error.message);
@@ -1207,7 +1135,7 @@ export const nhlFetchers = {
           likely_starter: awayStarterName || 'Unknown',
           goalies: awayTeamGoalies
         },
-        comparison: 'Recent goalie form can reflect hot/cold streaks, workload effects, or opponent quality changes. What competing scenarios does this form data support for each team on tonight\'s moneyline?'
+        comparison: 'Recent goalie starts and performance data for both teams.'
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching NHL_GOALIE_RECENT_FORM:`, error.message);
@@ -1253,7 +1181,7 @@ export const nhlFetchers = {
         source: 'MoneyPuck (5v5)',
         home: formatGoalies(homeGoalies, homeName),
         away: formatGoalies(awayGoalies, awayName),
-        comparison: 'High-danger save percentage isolates goalie performance on the toughest shots, but small samples amplify variance. What competing narratives could this data support for each side?'
+        comparison: 'High-danger save percentage data for both teams\' goalies.'
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching NHL_HIGH_DANGER_SV_PCT:`, error.message);
@@ -1291,7 +1219,7 @@ export const nhlFetchers = {
         home: { team: homeName },
         away: { team: awayName },
         grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
-        comparison: `Line combination stability affects chemistry and deployment predictability, while changes can signal coaching adjustments or injury adaptation. What competing scenarios does this lineup data support for each side?`,
+        comparison: 'Current line combinations and recent changes for both teams.',
         note: 'Projected lineups — confirm with game-day sources.'
       };
     } catch (error) {
@@ -1363,15 +1291,13 @@ export const nhlFetchers = {
         source: 'Ball Don\'t Lie API (calculated)',
         home: {
           team: home.full_name || home.name,
-          ...homeOT,
-          rating: homeOT.ot_wins >= 3 ? 'CLUTCH in extras' : 'Average in extras'
+          ...homeOT
         },
         away: {
           team: away.full_name || away.name,
-          ...awayOT,
-          rating: awayOT.ot_wins >= 3 ? 'CLUTCH in extras' : 'Average in extras'
+          ...awayOT
         },
-        comparison: `OT/SO records reflect 3-on-3 skill depth and goalie shootout performance, but small samples make these volatile. What competing narratives could this extra-time data support for each team?`,
+        comparison: 'OT and shootout records for both teams.',
         note: 'Overtime and shootout records provided for comparison.'
       };
     } catch (error) {
@@ -1407,8 +1333,6 @@ export const nhlFetchers = {
           result.pdo = nhlApi.pdo;
           result.shooting_pct_5v5 = `${nhlApi.shooting_pct_5v5}%`;
           result.save_pct_5v5 = `${nhlApi.save_pct_5v5}%`;
-          // Label for data presentation only
-          result.pdo_zone = nhlApi.pdo > 1.01 ? 'High PDO' : nhlApi.pdo < 0.99 ? 'Low PDO' : 'Neutral';
         }
 
         if (mp) {
@@ -1421,12 +1345,12 @@ export const nhlFetchers = {
       };
 
       return {
-        category: 'Luck Indicators (Regression Watch)',
+        category: 'Luck Indicators',
         source: 'NHL API + MoneyPuck (5v5)',
         home: formatTeam(homeNHL, homeMP, homeName),
         away: formatTeam(awayNHL, awayMP, awayName),
-        comparison: `Combined luck indicators reveal whether a team's results are sustainable or candidates for regression. What competing scenarios does this regression data support for each side on tonight's moneyline?`,
-        note: 'PDO baseline is 1.000. League avg shooting ~9%, save ~91%.'
+        comparison: 'PDO, shooting percentage, save percentage, and close-game record data for both teams.',
+        note: 'PDO, shooting percentage, and save percentage data from BDL and MoneyPuck.'
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching LUCK_INDICATORS:`, error.message);
@@ -1465,8 +1389,7 @@ export const nhlFetchers = {
           games_played: standing.games_played,
           regulation_wins: standing.regulation_wins,
           ot_losses: standing.ot_losses,
-          goal_diff: standing.goal_differential || (standing.goals_for - standing.goals_against),
-          playoff_position: pointsPct >= 0.550 ? 'Playoff pace' : pointsPct >= 0.500 ? 'Bubble' : 'Below playoff line'
+          goal_diff: standing.goal_differential || (standing.goals_for - standing.goals_against)
         };
       };
       
@@ -1475,7 +1398,7 @@ export const nhlFetchers = {
         source: 'Ball Don\'t Lie API',
         home: formatStanding(homeStanding, home),
         away: formatStanding(awayStanding, away),
-        comparison: `Points percentage reflects overall team quality but doesn't distinguish regulation dominance from OT/SO point accumulation. What competing narratives could this standing data support for each team?`,
+        comparison: 'Points percentage and standings data for both teams.',
         note: 'NHL uses points percentage (not win%) due to OT losses worth 1 point.'
       };
     } catch (error) {
@@ -1507,17 +1430,11 @@ export const nhlFetchers = {
         source: 'Ball Don\'t Lie API',
         home: {
           team: home.full_name || home.name,
-          streak: homeStanding?.streak || 'N/A',
-          hot_cold: homeStanding?.streak?.startsWith('W') && parseInt(homeStanding?.streak?.slice(1)) >= 3
-            ? 'HOT' : homeStanding?.streak?.startsWith('L') && parseInt(homeStanding?.streak?.slice(1)) >= 3
-            ? 'COLD' : 'Neutral'
+          streak: homeStanding?.streak || 'N/A'
         },
         away: {
           team: away.full_name || away.name,
-          streak: awayStanding?.streak || 'N/A',
-          hot_cold: awayStanding?.streak?.startsWith('W') && parseInt(awayStanding?.streak?.slice(1)) >= 3
-            ? 'HOT' : awayStanding?.streak?.startsWith('L') && parseInt(awayStanding?.streak?.slice(1)) >= 3
-            ? 'COLD' : 'Neutral'
+          streak: awayStanding?.streak || 'N/A'
         },
         note: 'Current streak data provided for comparison.'
       };
@@ -1565,7 +1482,6 @@ export const nhlFetchers = {
               division: div,
               division_rank: rank,
               points_behind_leader: pointsBehind,
-              playoff_spot: rank <= 3 ? 'Division spot' : rank <= 5 ? 'Wild card race' : 'Outside looking in',
               home_record: team.home_record,
               road_record: team.road_record
             };
@@ -1579,7 +1495,7 @@ export const nhlFetchers = {
         source: 'Ball Don\'t Lie API',
         home: { team: home.full_name || home.name, ...getPlayoffContext(home.id) },
         away: { team: away.full_name || away.name, ...getPlayoffContext(away.id) },
-        comparison: `Playoff positioning affects motivation — desperate teams play harder, but clinched teams may rest starters or experiment. What competing scenarios does this positional context support for each side on tonight's moneyline?`,
+        comparison: 'Playoff positioning, games back, and clinch status for both teams.',
         note: 'Top 3 in each division + 2 wild cards per conference make playoffs.'
       };
     } catch (error) {
@@ -1627,8 +1543,7 @@ export const nhlFetchers = {
         return {
           one_goal_record: `${wins}-${losses}`,
           one_goal_games: total,
-          one_goal_win_pct: `${winPct}%`,
-          clutch_rating: winPct >= 60 ? 'CLUTCH' : winPct <= 40 ? 'Struggles in close games' : 'Average'
+          one_goal_win_pct: `${winPct}%`
         };
       };
       
@@ -1637,8 +1552,8 @@ export const nhlFetchers = {
         source: 'Ball Don\'t Lie API (calculated)',
         home: { team: home.full_name || home.name, ...calcOneGoalRecord(homeGames, home.id) },
         away: { team: away.full_name || away.name, ...calcOneGoalRecord(awayGames, away.id) },
-        comparison: `One-goal game records reflect clutch performance but are highly susceptible to regression — extreme records rarely sustain. What competing narratives could this close-game data support for each team?`,
-        note: 'One-goal game records provided for comparison. 50% is the baseline.'
+        comparison: 'One-goal game records and close-game performance for both teams.',
+        note: 'One-goal game records for both teams.'
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching ONE_GOAL_GAMES:`, error.message);
@@ -1676,9 +1591,7 @@ export const nhlFetchers = {
           regulation_wins: regWins,
           total_wins: totalWins,
           ot_losses: otLosses,
-          reg_win_pct: `${regWinPct}%`,
-          dominance: regWinPct >= 75 ? 'Dominant - wins in regulation' :
-                    regWinPct <= 50 ? 'Relies on extras' : 'Average'
+          reg_win_pct: `${regWinPct}%`
         };
       };
       
@@ -1687,7 +1600,7 @@ export const nhlFetchers = {
         source: 'Ball Don\'t Lie API',
         home: calcRegWinPct(homeStanding, home),
         away: calcRegWinPct(awayStanding, away),
-        comparison: `Regulation win percentage separates dominant teams from those padding records in OT/SO — it's the NHL's truest quality signal. What competing scenarios does this data support for each side?`,
+        comparison: 'Regulation win percentage and regulation wins for both teams.',
         note: 'ROW (Regulation + OT Wins) is used as playoff tiebreaker.'
       };
     } catch (error) {
@@ -1741,9 +1654,7 @@ export const nhlFetchers = {
           std_deviation: stdDev.toFixed(2),
           blowout_wins: blowoutWins,
           blowout_losses: blowoutLosses,
-          games_analyzed: margins.length,
-          profile: stdDev >= 2.5 ? 'HIGH VARIANCE - boom or bust' :
-                  stdDev <= 1.5 ? 'CONSISTENT - tight margins' : 'Average variance'
+          games_analyzed: margins.length
         };
       };
       
@@ -1752,7 +1663,7 @@ export const nhlFetchers = {
         source: 'Ball Don\'t Lie API (calculated)',
         home: { team: home.full_name || home.name, ...calcVariance(homeGames, home.id) },
         away: { team: away.full_name || away.name, ...calcVariance(awayGames, away.id) },
-        comparison: `High variance teams produce unpredictable margins — they can blow out anyone or lose to anyone. Low variance teams play tight games consistently. What competing narratives could this consistency data support for each team on tonight's moneyline?`,
+        comparison: 'Goal differential variance and scoring consistency data for both teams.',
         note: 'Margin variance and standard deviation provided for comparison.'
       };
     } catch (error) {
@@ -1800,12 +1711,12 @@ export const nhlFetchers = {
       };
 
       return {
-        category: 'Shooting % Regression Watch',
+        category: 'Shooting Percentage',
         source: 'NHL API + MoneyPuck (5v5)',
         home: formatTeam(homeMP, homeNHL, homeName),
         away: formatTeam(awayMP, awayNHL, awayName),
-        comparison: `Team shooting percentages above ~9% can reflect elite finishing talent or unsustainable hot streaks. What competing scenarios does this shooting data support for each side?`,
-        note: 'League average 5v5 shooting% is ~9%, save% ~91%.'
+        comparison: 'Team shooting percentage and save percentage data for both teams.',
+        note: 'Team shooting and save percentages for both teams.'
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching SHOOTING_REGRESSION:`, error.message);

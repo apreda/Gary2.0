@@ -273,10 +273,10 @@ async function investigatePositionCandidates(genAI, position, candidates, slateA
     tools: [{ functionDeclarations: DFS_PLAYER_INVESTIGATION_TOOLS }],
     generationConfig: {
       temperature: 1.0, // Gemini: Keep at 1.0
-      maxOutputTokens: 8192
+      maxOutputTokens: 65536
     },
     thinkingConfig: {
-      thinkingBudget: 16384
+      thinkingBudget: -1 // HIGH — let Flash think as deeply as needed
     }
   });
 
@@ -370,6 +370,11 @@ function buildInvestigationRequest(position, candidates, slateAnalysis, context)
     return `${g.awayTeam} @ ${g.homeTeam}: O/U ${g.overUnder || '?'} | Spread ${g.spread || '?'} | Pace: H ${g.homePace || '?'} / A ${g.awayPace || '?'}`;
   }).join('\n');
 
+  // Narrative briefing from Phase 2 Flash investigation
+  const briefingSection = slateAnalysis.narrativeBriefing
+    ? `\n## SLATE RESEARCH BRIEFING (Phase 2 Investigation)\n${slateAnalysis.narrativeBriefing}\n`
+    : '';
+
   return `
 ## SLATE CONTEXT
 Injury Report:
@@ -377,7 +382,7 @@ ${injuryLines || 'No injury data from slate analysis'}
 
 Game Environments:
 ${gameLines || 'No game environment data from slate analysis'}
-
+${briefingSection}
 ## POSITION TO INVESTIGATE: ${position}
 
 ## CANDIDATES (sorted by projected points)
@@ -646,12 +651,3 @@ function formatTeamInjuriesForInvestigation(candidates, context) {
   return lines.length > 0 ? lines.join('\n') : 'No OUT players on candidate teams.';
 }
 
-// Position helpers (getPositionSlots, getPositionCandidates) imported from dfsSportConfig.js
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// EXPORTS
-// ═══════════════════════════════════════════════════════════════════════════════
-
-export default {
-  investigatePlayersForPositions
-};

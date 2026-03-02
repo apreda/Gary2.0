@@ -6,6 +6,3 @@ export { parsePropsResponse, parseGaryResponse, normalizePickFormat } from './re
 export { buildFlashResearchBriefing, extractBilateralCases } from './flashAdvisor.js';
 export { createGeminiSession, sendToSession, sendToSessionWithRetry } from './sessionManager.js';
 export { INVESTIGATION_FACTORS, getInvestigatedFactors, getTokenHints, buildFactorChecklist } from './investigationFactors.js';
-
-import { analyzeGame, buildSystemPrompt } from './orchestratorMain.js';
-export default { analyzeGame, buildSystemPrompt };

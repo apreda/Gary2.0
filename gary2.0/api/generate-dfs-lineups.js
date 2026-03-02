@@ -107,11 +107,11 @@ export default async function handler(req, res) {
   
   // Discovery mode (public)
   if (req.method === 'GET' && req.query.action === 'discover') {
-    const { discoverDFSSlates } = await import('../src/services/agentic/dfsAgenticContext.js');
+    const { discoverDFSSlates } = await import('../src/services/agentic/dfsSlateDiscoveryService.js');
     const dateParam = req.query.date || estToday();
     const platform = req.query.platform || 'draftkings';
     const sport = req.query.sport || 'NBA';
-    
+
     try {
       const slates = await discoverDFSSlates(sport, platform, dateParam);
       return res.status(200).json({
@@ -177,8 +177,8 @@ export default async function handler(req, res) {
     console.log(`[DFS] Sports: ${sports.join(', ')}`);
     console.log(`[DFS] Contest Type: GPP (TOURNAMENT MODE - Ceiling optimization, max upside to WIN)`);
     
-    // Lazy import services - USE NEW AGENTIC SYSTEM (NO FALLBACKS)
-    const { buildDFSContext, discoverDFSSlates } = await import('../src/services/agentic/dfsAgenticContext.js');
+    const { buildDFSContext } = await import('../src/services/agentic/dfsAgenticContext.js');
+    const { discoverDFSSlates } = await import('../src/services/agentic/dfsSlateDiscoveryService.js');
     const { generateAgenticDFSLineup } = await import('../src/services/agentic/dfs/dfsAgenticOrchestrator.js');
     const { PLATFORM_CONSTRAINTS } = await import('../src/services/dfsLineupService.js');
     
@@ -377,111 +377,5 @@ export default async function handler(req, res) {
   }
 }
 
-/**
- * Build Gary's commentary notes for the lineup
- * Includes narrative context - what makes Gary more than just a "math bot"
- * 
- * @param {Object} context - DFS context with narrative data
- * @param {Object} lineup - Generated lineup
- * @param {string} contestType - 'gpp' or 'cash'
- */
-export function buildGaryNotes(context, lineup, contestType = 'gpp') {
-  const notes = [];
-  
-  // GPP Tournament mode - we're here to WIN
-  notes.push(`🎰 TOURNAMENT LINEUP - Optimized for ceiling (max upside to win big)`);
-  if (lineup.ceiling_projection) {
-    notes.push(`📈 Ceiling projection: ${lineup.ceiling_projection} pts | Floor: ${lineup.floor_projection} pts`);
-  }
-  
-  // NFL Stacking info
-  if (lineup.stackInfo?.primaryStack) {
-    const stack = lineup.stackInfo;
-    notes.push(`🏈 Stack: ${stack.primaryStack.qb} + ${stack.primaryStack.receivers?.join(', ')} (${stack.primaryStack.team})`);
-    if (stack.bringback) {
-      notes.push(`↩️ Bringback: ${stack.bringback.player} (${stack.bringback.team})`);
-    }
-  }
-  
-  // Price Lag / Breakout plays
-  const priceLagPlayers = lineup.lineup.filter(p => p.isPriceLag || p.projectionBoosted);
-  if (priceLagPlayers.length > 0) {
-    notes.push(`🚀 Price Lag breakouts: ${priceLagPlayers.map(p => 
-      `${p.player} ($${p.salary?.toLocaleString() || 'N/A'})`
-    ).join(', ')}`);
-  }
-  
-  // Contrarian plays (tournament differentiation)
-  const contrarianPlayers = lineup.lineup.filter(p => p.isContrarian || (p.ownership && p.ownership < 10));
-  if (contrarianPlayers.length > 0) {
-    notes.push(`🎲 Contrarian edge: ${contrarianPlayers.map(p => 
-      `${p.player} (${p.ownership || '<10'}% owned)`
-    ).join(', ')}`);
-  }
-  
-  // Top narrative targets
-  if (context.targetPlayers?.length > 0) {
-    const targets = context.targetPlayers.slice(0, 3);
-    const inLineup = targets.filter(t => 
-      lineup.lineup.some(p => p.player.toLowerCase().includes(t.name?.toLowerCase()))
-    );
-    if (inLineup.length > 0) {
-      notes.push(`🎯 Narrative plays: ${inLineup.map(t => 
-        `${t.name} (${t.reason})`
-      ).join(', ')}`);
-    }
-  }
-  
-  // Players to fade that we avoided
-  if (context.fadePlayers?.length > 0) {
-    const faded = context.fadePlayers.slice(0, 2);
-    notes.push(`⚠️ Fading: ${faded.map(f => 
-      `${f.name} (${f.reason})`
-    ).join(', ')}`);
-  }
-  
-  // Mention late scratches if any
-  if (context.lateScratches?.length > 0) {
-    notes.push(`📝 Late scratches: ${context.lateScratches.join(', ')}`);
-  }
-  
-  // Mention weather if NFL
-  if (context.weatherAlerts?.length > 0) {
-    notes.push(`🌧️ Weather watch: ${context.weatherAlerts.join('; ')}`);
-  }
-  
-  // QB changes (NFL specific)
-  if (context.qbChanges?.length > 0) {
-    notes.push(`🔄 QB changes: ${context.qbChanges.join(', ')}`);
-  }
-  
-  // Game narrative highlights
-  if (context.narratives?.length > 0) {
-    const highTotal = context.narratives.find(n => 
-      (n.vegas_total > 225 && context.sport === 'NBA') || 
-      (n.vegas_total > 50 && context.sport === 'NFL')
-    );
-    if (highTotal) {
-      notes.push(`🔥 Shootout alert: ${highTotal.game} (O/U ${highTotal.vegas_total}) - stack opportunity`);
-    }
-  }
-  
-  // Value play callout
-  const cheapestStarter = lineup.lineup.reduce((min, p) => 
-    p.salary < min.salary ? p : min
-  , lineup.lineup[0]);
-  
-  if (cheapestStarter) {
-    notes.push(`💰 Value play: ${cheapestStarter.player} at $${cheapestStarter.salary?.toLocaleString() || 'N/A'}`);
-  }
-  
-  // Salary remaining
-  const salaryCap = lineup.salary_cap || 50000;
-  const remaining = salaryCap - lineup.total_salary;
-  if (remaining > 0) {
-    notes.push(`📊 $${remaining.toLocaleString()} under cap - room for pivots`);
-  }
-  
-  return notes.join('\n');
-}
+
 

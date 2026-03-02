@@ -44,7 +44,7 @@ export function buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayPro
 
   // Helper to format stat — neutral presentation, no directional arrows
   // Gary compares the numbers himself — we don't pre-digest who's "better"
-  const formatStat = (homeStat, awayStat, higherIsBetter = true) => {
+  const formatStat = (homeStat, awayStat) => {
     return { arrow: '|', home: homeStat || 'N/A', away: awayStat || 'N/A' };
   };
 
@@ -274,7 +274,7 @@ export function buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayPro
     const oppPpg = formatStat(
       homeStats.opp_total_points_per_game?.toFixed?.(1) || homeStats.opp_total_points_per_game,
       awayStats.opp_total_points_per_game?.toFixed?.(1) || awayStats.opp_total_points_per_game,
-      false // Lower is better
+      false
     );
     const rushYpg = formatStat(
       homeStats.rushing_yards_per_game?.toFixed?.(1) || homeStats.rushing_yards_per_game,
@@ -287,11 +287,11 @@ export function buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayPro
       true
     );
 
-    // L5 Form - PRIMARY indicator for recent performance
+    // L5 Form
     const l5Form = formatStat(homeL5, awayL5, true);
 
     rows = [
-      { label: 'L5 Form', ...l5Form },  // L5 FIRST - most important for picking
+      { label: 'L5 Form', ...l5Form },
       { label: 'Record', ...record },
       { label: 'Points/Gm', ...ppg },
       { label: 'Opp Pts/Gm', ...oppPpg },
@@ -325,19 +325,19 @@ export function buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayPro
     const oppPassYds = formatStat(
       homeStats.opp_passing_yards,
       awayStats.opp_passing_yards,
-      false // Lower is better
+      false
     );
     const oppRushYds = formatStat(
       homeStats.opp_rushing_yards,
       awayStats.opp_rushing_yards,
-      false // Lower is better
+      false
     );
 
-    // L5 Form - PRIMARY indicator for recent performance
+    // L5 Form
     const l5Form = formatStat(homeL5, awayL5, true);
 
     rows = [
-      { label: 'L5 Form', ...l5Form },  // L5 FIRST - most important for picking
+      { label: 'L5 Form', ...l5Form },
       { label: 'Record', ...record },
       { label: 'Pass Yds/Gm', ...passYpg },
       { label: 'Rush Yds/Gm', ...rushYpg },
@@ -352,7 +352,7 @@ export function buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayPro
     const record = formatStat(homeProfile?.record, awayProfile?.record, true);
     const l5Form = formatStat(homeL5, awayL5, true);
     rows = [
-      { label: 'L5 Form', ...l5Form },  // L5 FIRST - most important for picking
+      { label: 'L5 Form', ...l5Form },
       { label: 'Record', ...record },
       { label: 'Key Injuries', home: homeInjuries, away: awayInjuries, arrow: '' }
     ];

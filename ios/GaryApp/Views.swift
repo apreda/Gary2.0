@@ -28,7 +28,7 @@ enum PerformanceMode {
     case full
     /// Lighter effects for older/slower devices
     case lite
-    
+
     static var current: PerformanceMode {
         // iOS 18+ devices are generally powerful enough for full effects
         // iOS 17 and below (including iPhone 14 on iOS 17) get lite mode
@@ -38,7 +38,17 @@ enum PerformanceMode {
             return .lite
         }
     }
-    
+
+    /// Variant that also respects the user's Reduce Motion accessibility setting
+    static func current(reduceMotion: Bool) -> PerformanceMode {
+        if reduceMotion { return .lite }
+        if #available(iOS 18.0, *) {
+            return .full
+        } else {
+            return .lite
+        }
+    }
+
     /// Whether to use expensive effects like blend modes and multiple shadows
     var useExpensiveEffects: Bool {
         self == .full
@@ -967,161 +977,170 @@ struct HomeView: View {
             }
         }
         .task {
-            // PARALLEL FETCH: Run all independent API calls simultaneously
-            // This reduces load time from ~600ms to ~200ms
-            
-            let date = SupabaseAPI.todayEST()
-            
-            // Start all fetches in parallel using async let
-            async let recordFetch = SupabaseAPI.fetchYesterdayGameRecord()
-            async let breakdownFetch = SupabaseAPI.fetchYesterdayBySport()
-            async let picksFetch = SupabaseAPI.fetchAllPicks(date: date)
-            async let gameResultsFetch = SupabaseAPI.fetchAllGameResults(since: nil)
-            async let propResultsFetch = SupabaseAPI.fetchPropResults(since: nil)
-            
-            // Wait for performance record first (needed for hero image)
-            if let record = try? await recordFetch {
-                yesterdayRecord = record
-            }
-            
-            // Mark performance as loaded - now safe to show hero image
-            withAnimation(.easeOut(duration: 0.5)) {
-                performanceLoaded = true
-            }
-            
-            // Start main animation after hero image is ready
-            withAnimation(.easeOut(duration: 0.8)) {
-                animateIn = true
-            }
-            
-            // Get the other results (already fetched in parallel, just awaiting)
-            if let breakdown = try? await breakdownFetch {
-                sportBreakdown = breakdown
-            }
+            do {
+                try await withTimeout(seconds: 30) {
+                    // PARALLEL FETCH: Run all independent API calls simultaneously
+                    // This reduces load time from ~600ms to ~200ms
 
-            // Build recent wins ticker from game + prop results
-            let shortDate: (String?) -> String = { dateStr in
-                guard let dateStr = dateStr else { return "" }
-                // Parse "YYYY-MM-DD" and format as "Feb 3"
-                let months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                              "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-                let parts = dateStr.split(separator: "-")
-                if parts.count == 3,
-                   let m = Int(parts[1]), m >= 1, m <= 12,
-                   let d = Int(parts[2]) {
-                    return "\(months[m - 1]) \(d)"
-                }
-                return ""
-            }
-            var wins: [(String, String, String)] = []
-            if let gameResults = try? await gameResultsFetch {
-                let gameWins = gameResults.filter { $0.result == "won" }.prefix(10)
-                for w in gameWins {
-                    let label = w.pick_text ?? w.matchup ?? "Win"
-                    let league = w.effectiveLeague ?? "PICK"
-                    let date = shortDate(w.game_date)
-                    wins.append((label, league, date))
-                }
-            }
-            if let propResults = try? await propResultsFetch {
-                let propWins = propResults.filter { $0.result == "won" }.prefix(10)
-                for w in propWins {
-                    let label = Formatters.propResultTitle(w)
-                    let league = w.effectiveLeague ?? "PROP"
-                    let date = shortDate(w.game_date)
-                    wins.append((label, league, date))
-                }
-            }
-            // Shuffle to mix game and prop wins, take up to 12
-            recentWins = Array(wins.shuffled().prefix(12))
-            // Start timer now that we have data
-            if !recentWins.isEmpty {
-                winTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { _ in
-                    withAnimation {
-                        activeWin = (activeWin + 1) % recentWins.count
+                    let date = SupabaseAPI.todayEST()
+
+                    // Start all fetches in parallel using async let
+                    async let recordFetch = SupabaseAPI.fetchYesterdayGameRecord()
+                    async let breakdownFetch = SupabaseAPI.fetchYesterdayBySport()
+                    async let picksFetch = SupabaseAPI.fetchAllPicks(date: date)
+                    async let gameResultsFetch = SupabaseAPI.fetchAllGameResults(since: nil)
+                    async let propResultsFetch = SupabaseAPI.fetchPropResults(since: nil)
+
+                    // Wait for performance record first (needed for hero image)
+                    if let record = try? await recordFetch {
+                        yesterdayRecord = record
                     }
-                }
-            }
-            
-            // Get picks data (already fetched in parallel)
-            loading = true
-            let allPicks = try? await picksFetch
-            
-            // Filter to TODAY's games, visible until 3am EST the next day
-            // This matches the GaryPicksView logic for consistency
-            let todayOnlyPicks: [GaryPick]? = allPicks?.filter { pick in
-                guard let commenceTime = pick.commence_time else { return true }
 
-                guard let gameDate = parseISO8601(commenceTime) else {
-                    return true
-                }
-                
-                // Get today's date range in EST
-                var estCalendar = Calendar.current
-                estCalendar.timeZone = TimeZone(identifier: "America/New_York") ?? .current
-                let now = Date()
-                let todayStart = estCalendar.startOfDay(for: now)
-                
-                // Calculate 3am EST the next day (the cutoff for "today's" picks)
-                guard let tomorrowEST = estCalendar.date(byAdding: .day, value: 1, to: todayStart),
-                      let cutoffTime = estCalendar.date(bySettingHour: 3, minute: 0, second: 0, of: tomorrowEST) else {
-                    return true
-                }
-                
-                // Get the game's date in EST
-                let gameDayEST = estCalendar.startOfDay(for: gameDate)
-                
-                // Show pick if:
-                // 1. Game is today (in EST), OR
-                // 2. We haven't passed 3am EST yet (for late-night viewing of yesterday's picks)
-                let isGameToday = estCalendar.isDate(gameDate, inSameDayAs: now)
-                let isBeforeCutoff = now < cutoffTime
-                let wasGameYesterday = estCalendar.isDate(gameDayEST, inSameDayAs: estCalendar.date(byAdding: .day, value: -1, to: todayStart) ?? todayStart)
-                
-                return isGameToday || (isBeforeCutoff && wasGameYesterday)
-            }
-            
-            // Select Top Pick: Check for is_top_pick first, then use thesis-based scoring
-            if let picks = todayOnlyPicks, !picks.isEmpty {
-                // 1. Check for manual override (is_top_pick: true)
-                if let manualTopPick = picks.first(where: { $0.is_top_pick == true }) {
-                    freePick = manualTopPick
-                } else {
-                    // 2. Use thesis-based scoring (same as web app)
-                    let scoredPicks = picks.compactMap { pick -> (pick: GaryPick, score: Double)? in
-                        guard let thesisType = pick.thesis_type else {
-                            // Fallback to confidence for old picks
-                            let conf = pick.confidence ?? 0
-                            return (pick, conf * 10)
+                    // Mark performance as loaded - now safe to show hero image
+                    withAnimation(.easeOut(duration: 0.5)) {
+                        performanceLoaded = true
+                    }
+
+                    // Start main animation after hero image is ready
+                    withAnimation(.easeOut(duration: 0.8)) {
+                        animateIn = true
+                    }
+
+                    // Get the other results (already fetched in parallel, just awaiting)
+                    if let breakdown = try? await breakdownFetch {
+                        sportBreakdown = breakdown
+                    }
+
+                    // Build recent wins ticker from game + prop results
+                    let shortDate: (String?) -> String = { dateStr in
+                        guard let dateStr = dateStr else { return "" }
+                        // Parse "YYYY-MM-DD" and format as "Feb 3"
+                        let months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                                      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+                        let parts = dateStr.split(separator: "-")
+                        if parts.count == 3,
+                           let m = Int(parts[1]), m >= 1, m <= 12,
+                           let d = Int(parts[2]) {
+                            return "\(months[m - 1]) \(d)"
                         }
-                        
-                        let majorCount = pick.contradicting_factors?.major?.count ?? 0
-                        let confidence = pick.confidence ?? 0
-                        
-                        var baseScore: Double = 0
-                        if thesisType == "clear_read" {
-                            baseScore = 1000 - (Double(majorCount) * 100)
-                        } else if thesisType == "found_angle" {
-                            baseScore = 700 - (Double(majorCount) * 100)
+                        return ""
+                    }
+                    var wins: [(String, String, String)] = []
+                    if let gameResults = try? await gameResultsFetch {
+                        let gameWins = gameResults.filter { $0.result == "won" }.prefix(10)
+                        for w in gameWins {
+                            let label = w.pick_text ?? w.matchup ?? "Win"
+                            let league = w.effectiveLeague ?? "PICK"
+                            let date = shortDate(w.game_date)
+                            wins.append((label, league, date))
+                        }
+                    }
+                    if let propResults = try? await propResultsFetch {
+                        let propWins = propResults.filter { $0.result == "won" }.prefix(10)
+                        for w in propWins {
+                            let label = Formatters.propResultTitle(w)
+                            let league = w.effectiveLeague ?? "PROP"
+                            let date = shortDate(w.game_date)
+                            wins.append((label, league, date))
+                        }
+                    }
+                    // Shuffle to mix game and prop wins, take up to 12
+                    recentWins = Array(wins.shuffled().prefix(12))
+                    // Start timer now that we have data (invalidate any existing one first)
+                    if !recentWins.isEmpty {
+                        winTimer?.invalidate()
+                        winTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { _ in
+                            withAnimation {
+                                activeWin = (activeWin + 1) % recentWins.count
+                            }
+                        }
+                    }
+
+                    // Get picks data (already fetched in parallel)
+                    loading = true
+                    let allPicks = try? await picksFetch
+
+                    // Filter to TODAY's games, visible until 3am EST the next day
+                    // This matches the GaryPicksView logic for consistency
+                    let todayOnlyPicks: [GaryPick]? = allPicks?.filter { pick in
+                        guard let commenceTime = pick.commence_time else { return true }
+
+                        guard let gameDate = parseISO8601(commenceTime) else {
+                            return true
+                        }
+
+                        // Get today's date range in EST
+                        var estCalendar = Calendar.current
+                        estCalendar.timeZone = TimeZone(identifier: "America/New_York") ?? .current
+                        let now = Date()
+                        let todayStart = estCalendar.startOfDay(for: now)
+
+                        // Calculate 3am EST the next day (the cutoff for "today's" picks)
+                        guard let tomorrowEST = estCalendar.date(byAdding: .day, value: 1, to: todayStart),
+                              let cutoffTime = estCalendar.date(bySettingHour: 3, minute: 0, second: 0, of: tomorrowEST) else {
+                            return true
+                        }
+
+                        // Get the game's date in EST
+                        let gameDayEST = estCalendar.startOfDay(for: gameDate)
+
+                        // Show pick if:
+                        // 1. Game is today (in EST), OR
+                        // 2. We haven't passed 3am EST yet (for late-night viewing of yesterday's picks)
+                        let isGameToday = estCalendar.isDate(gameDate, inSameDayAs: now)
+                        let isBeforeCutoff = now < cutoffTime
+                        let wasGameYesterday = estCalendar.isDate(gameDayEST, inSameDayAs: estCalendar.date(byAdding: .day, value: -1, to: todayStart) ?? todayStart)
+
+                        return isGameToday || (isBeforeCutoff && wasGameYesterday)
+                    }
+
+                    // Select Top Pick: Check for is_top_pick first, then use thesis-based scoring
+                    if let picks = todayOnlyPicks, !picks.isEmpty {
+                        // 1. Check for manual override (is_top_pick: true)
+                        if let manualTopPick = picks.first(where: { $0.is_top_pick == true }) {
+                            freePick = manualTopPick
                         } else {
-                            baseScore = confidence * 10
+                            // 2. Use thesis-based scoring (same as web app)
+                            let scoredPicks = picks.compactMap { pick -> (pick: GaryPick, score: Double)? in
+                                guard let thesisType = pick.thesis_type else {
+                                    // Fallback to confidence for old picks
+                                    let conf = pick.confidence ?? 0
+                                    return (pick, conf * 10)
+                                }
+
+                                let majorCount = pick.contradicting_factors?.major?.count ?? 0
+                                let confidence = pick.confidence ?? 0
+
+                                var baseScore: Double = 0
+                                if thesisType == "clear_read" {
+                                    baseScore = 1000 - (Double(majorCount) * 100)
+                                } else if thesisType == "found_angle" {
+                                    baseScore = 700 - (Double(majorCount) * 100)
+                                } else {
+                                    baseScore = confidence * 10
+                                }
+
+                                return (pick, baseScore + confidence)
+                            }.sorted { $0.score > $1.score }
+
+                            freePick = scoredPicks.first?.pick ?? picks.first
                         }
-                        
-                        return (pick, baseScore + confidence)
-                    }.sorted { $0.score > $1.score }
-                    
-                    freePick = scoredPicks.first?.pick ?? picks.first
+                    } else {
+                        freePick = nil
+                    }
+                    loading = false
                 }
-            } else {
-                freePick = nil
+            } catch {
+                // Timeout or error — stop loading, show whatever we have
+                loading = false
             }
-            loading = false
         }
         .onChange(of: scenePhase) { newPhase in
             if newPhase == .background || newPhase == .inactive {
                 winTimer?.invalidate()
                 winTimer = nil
             } else if newPhase == .active && !recentWins.isEmpty && winTimer == nil {
+                winTimer?.invalidate()
                 winTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { _ in
                     withAnimation {
                         activeWin = (activeWin + 1) % recentWins.count
@@ -1487,14 +1506,8 @@ struct GaryPicksView: View {
     /// Get time slot string for NFL picks (e.g., "Sunday 1:00 PM ET")
     private func getTimeSlot(for pick: GaryPick) -> String? {
         guard let isoTime = pick.commence_time, !isoTime.isEmpty else { return nil }
-
         guard let gameDate = parseISO8601(isoTime) else { return nil }
-        
-        let formatter = DateFormatter()
-        formatter.timeZone = TimeZone(identifier: "America/New_York")
-        formatter.dateFormat = "EEEE h:mm a"
-        
-        return formatter.string(from: gameDate) + " ET"
+        return Formatters.dayTimeFormatterEST.string(from: gameDate) + " ET"
     }
     
     /// Group picks by time slot for section headers (works for all sports)
@@ -1669,7 +1682,7 @@ struct GaryPicksView: View {
         var picks: [GaryPick] = []
         var didFail = false
         do {
-            let arr = try await withTimeout(seconds: 15) {
+            let arr = try await withTimeout(seconds: 30) {
                 try await SupabaseAPI.fetchAllPicks(date: date, forceRefresh: forceRefresh)
             }
             picks = arr.filter { !($0.pick ?? "").isEmpty && !($0.rationale ?? "").isEmpty }
@@ -1762,10 +1775,7 @@ struct GaryPropsView: View {
         // Try commence_time first (ISO format)
         if let isoTime = prop.commence_time, !isoTime.isEmpty {
             if let gameDate = parseISO8601(isoTime) {
-                let formatter = DateFormatter()
-                formatter.timeZone = TimeZone(identifier: "America/New_York")
-                formatter.dateFormat = "EEEE h:mm a"
-                return formatter.string(from: gameDate) + " ET"
+                return Formatters.dayTimeFormatterEST.string(from: gameDate) + " ET"
             }
         }
         
@@ -1997,7 +2007,7 @@ struct GaryPropsView: View {
         var props: [PropPick] = []
         var didFail = false
         do {
-            props = try await withTimeout(seconds: 15) {
+            props = try await withTimeout(seconds: 30) {
                 try await SupabaseAPI.fetchPropPicks(date: date, forceRefresh: forceRefresh)
             }
         } catch {
@@ -2481,30 +2491,49 @@ struct BillfoldView: View {
                 }
                 .padding(.vertical, 40)
             } else if let error = error {
-                Text(error)
-                    .foregroundStyle(.red)
-                    .padding()
-                    .liquidGlass(cornerRadius: 12)
+                VStack(spacing: 12) {
+                    Image(systemName: "wifi.slash")
+                        .font(.title2)
+                        .foregroundStyle(GaryColors.gold)
+                    Text(error)
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.7))
+                    Button {
+                        Task { await loadData() }
+                    } label: {
+                        Text("Tap to Retry")
+                            .font(.subheadline.bold())
+                            .foregroundStyle(GaryColors.gold)
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 10)
+                            .background(GaryColors.gold.opacity(0.15))
+                            .clipShape(Capsule())
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 40)
             } else {
                 let displayResults = selectedTab == 0 ? filteredGameResults : []
                 let displayProps = selectedTab == 1 ? filteredPropResults : []
-                
-                if selectedTab == 0 {
-                    if displayResults.isEmpty {
-                        emptyStateView
-                    } else {
-                        ForEach(Array(displayResults.prefix(50).enumerated()), id: \.offset) { _, result in
-                            GameResultRow(result: result)
-                                .transaction { $0.animation = nil }
+
+                LazyVStack(spacing: 0) {
+                    if selectedTab == 0 {
+                        if displayResults.isEmpty {
+                            emptyStateView
+                        } else {
+                            ForEach(Array(displayResults.prefix(50).enumerated()), id: \.offset) { _, result in
+                                GameResultRow(result: result)
+                                    .transaction { $0.animation = nil }
+                            }
                         }
-                    }
-                } else {
-                    if displayProps.isEmpty {
-                        emptyStateView
                     } else {
-                        ForEach(Array(displayProps.prefix(50).enumerated()), id: \.offset) { _, result in
-                            PropResultRow(result: result)
-                                .transaction { $0.animation = nil }
+                        if displayProps.isEmpty {
+                            emptyStateView
+                        } else {
+                            ForEach(Array(displayProps.prefix(50).enumerated()), id: \.offset) { _, result in
+                                PropResultRow(result: result)
+                                    .transaction { $0.animation = nil }
+                            }
                         }
                     }
                 }
@@ -2534,7 +2563,7 @@ struct BillfoldView: View {
         do {
             let since = sinceDate(for: timeframe)
             // Use the combined fetch that includes NFL results with timeout
-            let (games, props) = try await withTimeout(seconds: 15) {
+            let (games, props) = try await withTimeout(seconds: 30) {
                 async let g = SupabaseAPI.fetchAllGameResults(since: since)
                 async let p = SupabaseAPI.fetchPropResults(since: since)
                 return try await (g, p)
@@ -2592,11 +2621,13 @@ struct BillfoldView: View {
 // MARK: - BetCard View
 
 struct BetCardView: View {
+    private static let fallbackURL = URL(string: "https://betwithgary.ai/")!
+
     var body: some View {
         ZStack {
             LiquidGlassBackground()
-            
-            WebContainer(url: URL(string: "https://www.betwithgary.ai/betcard") ?? URL(string: "https://betwithgary.ai/")!)
+
+            WebContainer(url: URL(string: "https://www.betwithgary.ai/betcard") ?? Self.fallbackURL)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .ignoresSafeArea(edges: .bottom)
@@ -3477,14 +3508,35 @@ struct PerformanceOptimizer: ViewModifier {
 struct SportsbookOddsTable: View {
     let odds: [SportsbookOdds]
 
-    /// Find the best spread odds (highest/least negative)
+    /// Find the best spread value for the bettor (highest number is always best:
+    /// favorites -2.5 > -3.5, underdogs +8.5 > +6.5). Tiebreak by best juice.
     private var bestSpreadBook: String? {
-        odds.compactMap { o -> (String, Int)? in
-            guard let book = o.book, let oddsStr = o.spread_odds else { return nil }
-            let numOdds = Int(oddsStr.replacingOccurrences(of: "+", with: "")) ?? -999
-            return (book, numOdds)
+        let valid = odds.compactMap { o -> (String, Double, Int)? in
+            guard let book = o.book, let spread = o.spread else { return nil }
+            let oddsNum = o.spread_odds.flatMap { Int($0.replacingOccurrences(of: "+", with: "")) } ?? -999
+            return (book, spread, oddsNum)
         }
-        .max(by: { $0.1 < $1.1 })?.0
+        guard let bestSpread = valid.map({ $0.1 }).max() else { return nil }
+        return valid
+            .filter { $0.1 == bestSpread }
+            .max(by: { $0.2 < $1.2 })?.0
+    }
+
+    private static let bookDisplayNames: [String: String] = [
+        "draftkings": "DraftKings",
+        "fanduel": "FanDuel",
+        "betmgm": "BetMGM",
+        "betrivers": "BetRivers",
+        "caesars": "Caesars",
+        "fanatics": "Fanatics",
+        "polymarket": "Polymarket",
+        "kalshi": "Kalshi",
+        "pointsbet": "PointsBet",
+        "bovada": "Bovada",
+    ]
+
+    private func displayName(for book: String) -> String {
+        Self.bookDisplayNames[book.lowercased()] ?? book.prefix(1).uppercased() + book.dropFirst()
     }
 
     /// Find the best ML odds (highest/least negative)
@@ -3519,7 +3571,7 @@ struct SportsbookOddsTable: View {
             // Odds Rows
             ForEach(odds) { o in
                 HStack {
-                    Text(o.book ?? "-")
+                    Text(displayName(for: o.book ?? "-"))
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .foregroundStyle(Color.white.opacity(0.9))
 
@@ -5488,6 +5540,28 @@ struct RoundedCorner: Shape {
 // MARK: - Formatters
 
 enum Formatters {
+    // Cached DateFormatters (expensive to create — reuse across calls)
+    private static let timeFormatterEST: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "h:mm a"
+        f.timeZone = TimeZone(identifier: "America/New_York")
+        return f
+    }()
+
+    static let dayTimeFormatterEST: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "EEEE h:mm a"
+        f.timeZone = TimeZone(identifier: "America/New_York")
+        return f
+    }()
+
+    private static let dateOnlyFormatterEST: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.timeZone = TimeZone(identifier: "America/New_York")
+        return f
+    }()
+
     static func labelEST(_ time: String?) -> String {
         guard let time = time, !time.isEmpty else { return "" }
         return time.uppercased().contains("EST") ? time : "\(time) EST"
@@ -5525,12 +5599,7 @@ enum Formatters {
             return formatGameTime(isoTime)
         }
         
-        // Format to readable time in ET
-        let displayFormatter = DateFormatter()
-        displayFormatter.dateFormat = "h:mm a"
-        displayFormatter.timeZone = TimeZone(identifier: "America/New_York")
-        
-        return displayFormatter.string(from: gameDate) + " ET"
+        return timeFormatterEST.string(from: gameDate) + " ET"
     }
     
     static func confidencePercent(_ confidence: Double?) -> Int {
@@ -6224,7 +6293,7 @@ struct GaryFantasyView: View {
         let date = SupabaseAPI.todayEST()
 
         do {
-            let fetched = try await withTimeout(seconds: 15) {
+            let fetched = try await withTimeout(seconds: 30) {
                 try await SupabaseAPI.fetchDFSLineups(date: date, forceRefresh: forceRefresh)
             }
             await MainActor.run {

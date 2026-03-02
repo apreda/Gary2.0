@@ -441,7 +441,3 @@ export function findPivotAlternatives(starter, playerPool, sport, platform) {
   return pivots;
 }
 
-export default {
-  PLATFORM_CONSTRAINTS,
-  findPivotAlternatives
-};

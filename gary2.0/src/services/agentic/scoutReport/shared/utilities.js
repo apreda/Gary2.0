@@ -1,7 +1,5 @@
 /**
  * Shared Utility Functions for Scout Report Builders
- *
- * Extracted from the monolithic scoutReportBuilder.js.
  * Contains pure utility helpers used across multiple per-sport modules.
  */
 

@@ -1,4 +1,4 @@
-import { getCurrentSeasonString, sportToBdlKey, normalizeSportName, findTeam, fmtNum, fmtPct, fetchBothTeamSeasonStats, fetchNBATeamScoringStats, fetchNBATeamAdvancedStats, fetchNBALeaders, fetchNBATeamBaseStats, fetchNBATeamOpponentStats, fetchNBATeamDefenseStats, fetchTopPlayersForTeam, formatRecentGames, buildPaceAnalysis, interpretTurnoverMargin, BDL_API_KEY, _nbaBaseStatsCache, _nbaAdvancedStatsCache, _nbaOpponentStatsCache, _nbaDefenseStatsCache, _nbaTeamScoringStatsCache, geminiGroundingSearch, getGroundedWeather, isGameCompleted } from './statRouterCommon.js';
+import { getCurrentSeasonString, sportToBdlKey, normalizeSportName, findTeam, fmtNum, fmtPct, fetchBothTeamSeasonStats, fetchNBATeamScoringStats, fetchNBATeamAdvancedStats, fetchNBALeaders, fetchNBATeamBaseStats, fetchNBATeamOpponentStats, fetchNBATeamDefenseStats, fetchTopPlayersForTeam, formatRecentGames, buildPaceAnalysis, BDL_API_KEY, _nbaBaseStatsCache, _nbaAdvancedStatsCache, _nbaOpponentStatsCache, _nbaDefenseStatsCache, _nbaTeamScoringStatsCache, geminiGroundingSearch, getGroundedWeather, isGameCompleted } from './statRouterCommon.js';
 import { ballDontLieService } from '../../../ballDontLieService.js';
 
 export const nflFetchers = {
@@ -180,7 +180,7 @@ export const nflFetchers = {
       error: 'Red zone data unavailable from BDL for this game',
       home: { team: homeName, red_zone_td_pct: 'N/A', red_zone_scores: 'N/A', red_zone_attempts: 'N/A' },
       away: { team: awayName, red_zone_td_pct: 'N/A', red_zone_scores: 'N/A', red_zone_attempts: 'N/A' },
-      note: 'Red zone game data not available. Use Gemini grounding to investigate red zone efficiency if needed.'
+      note: 'Red zone game data not available via BDL.'
     };
   },
 
@@ -569,8 +569,8 @@ export const nflFetchers = {
         home: { team: home.full_name || home.name },
         away: { team: away.full_name || away.name },
         grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
-        comparison: `How do early down success rates compare between these teams?`,
-        note: 'League average early down success rate is ~48%.'
+        comparison: 'Early down success rates for both teams.',
+        note: 'Early down success rate data for both teams.'
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching EARLY_DOWN_SUCCESS:`, error.message);
@@ -607,8 +607,8 @@ export const nflFetchers = {
         fourth_down_att: fmtNum(awayStats?.misc_fourth_down_conv_att, 0),
         fourth_down_made: fmtNum(awayStats?.misc_fourth_down_conv_made, 0)
       },
-      comparison: `How do 3rd down conversion rates compare between these teams?`,
-      note: 'League average 3rd down conversion is ~40%.'
+      comparison: '3rd down conversion rates for both teams.',
+      note: '3rd down conversion data for both teams.'
     };
   },
 
@@ -637,8 +637,8 @@ export const nflFetchers = {
         opp_yards_per_catch: fmtNum(awayStats?.opp_receiving_yards_per_reception, 1),
         opp_yards_per_carry: fmtNum(awayStats?.opp_rushing_yards_per_rush_attempt, 1)
       },
-      comparison: `How do the explosive plays allowed compare between these defenses?`,
-      note: 'Compare to EXPLOSIVE_PLAYS to see offensive vs defensive matchup.'
+      comparison: 'Explosive plays allowed by each defense.',
+      note: 'Explosive plays allowed by each defense.'
     };
   },
 
@@ -677,7 +677,7 @@ export const nflFetchers = {
         off_recovery_rate: fmtPct(homeRecoveryRate),
         def_forced_fumbles: fmtNum(homeDefForcedFumbles, 0),
         def_recoveries: fmtNum(homeDefRecoveries, 0),
-        luck_indicator: homeRecoveryRate > 0.55 ? 'LUCKY (may regress)' : homeRecoveryRate < 0.45 ? 'UNLUCKY (may improve)' : 'Average'
+        recovery_rate: fmtPct(homeRecoveryRate)
       },
       away: {
         team: away.full_name || away.name,
@@ -686,10 +686,10 @@ export const nflFetchers = {
         off_recovery_rate: fmtPct(awayRecoveryRate),
         def_forced_fumbles: fmtNum(awayDefForcedFumbles, 0),
         def_recoveries: fmtNum(awayDefRecoveries, 0),
-        luck_indicator: awayRecoveryRate > 0.55 ? 'LUCKY (may regress)' : awayRecoveryRate < 0.45 ? 'UNLUCKY (may improve)' : 'Average'
+        recovery_rate: fmtPct(awayRecoveryRate)
       },
-      comparison: `How do the fumble recovery rates compare to the ~50% long-term baseline?`,
-      note: 'Long-term fumble recovery rate baseline is ~50%.'
+      comparison: 'Fumble and turnover data for both teams.',
+      note: 'Fumble and turnover data for both teams.'
     };
   },
 
@@ -740,8 +740,8 @@ export const nflFetchers = {
         interceptions: fmtNum(awayStats?.passing_interceptions, 0),
         sacks_allowed: fmtNum(awayStats?.passing_times_sacked, 0)
       },
-      comparison: `QBs' YPA comparison — league avg is ~7.0.`,
-      note: 'Each QB\'s TD%/INT% comparison against the opposing pass defense is relevant.'
+      comparison: 'Passing yards per attempt for both QBs.',
+      note: 'QB passing efficiency data for both teams.'
     };
   },
 
@@ -773,8 +773,8 @@ export const nflFetchers = {
         rush_attempts_per_game: fmtNum(awayStats?.rushing_attempts_per_game, 1),
         longest_rush: fmtNum(awayStats?.rushing_long, 0)
       },
-      comparison: `Teams' YPC comparison — league avg is ~4.3. Each rushing attack vs opposing run defense.`,
-      note: 'High rush volume teams (25+ att/game) have a distinct identity that affects this matchup.'
+      comparison: 'Rushing yards per carry for both teams.',
+      note: 'Rushing efficiency data for both teams.'
     };
   },
 
@@ -810,8 +810,8 @@ export const nflFetchers = {
         home: { team: home.full_name || home.name },
         away: { team: away.full_name || away.name },
         grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
-        comparison: `OL rankings vs opposing DL — mismatches in pass protection or run blocking are relevant.`,
-        note: 'Each OL\'s performance under pressure — sack rate and pressure rate allowed reveal the matchup.'
+        comparison: 'Offensive line rankings and performance data for both teams.',
+        note: 'OL sack rate and pressure rate allowed data.'
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching OL_RANKINGS:`, error.message);
@@ -849,8 +849,8 @@ export const nflFetchers = {
         home: { team: home.full_name || home.name },
         away: { team: away.full_name || away.name },
         grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
-        comparison: `DL pressure rates vs opposing OL — sack rates reveal the trench matchup.`,
-        note: 'Pass rush performance varies against quality OLs vs weak OLs. Pressure rate and sack rate are the metrics.'
+        comparison: 'Defensive line pressure rates and sack data for both teams.',
+        note: 'DL pressure rate and sack rate data.'
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching DL_RANKINGS:`, error.message);
@@ -885,8 +885,8 @@ export const nflFetchers = {
         home: { team: home.full_name || home.name },
         away: { team: away.full_name || away.name },
         grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
-        comparison: `How does each QB's release time interact with the opposing pass rush?`,
-        note: 'League average time to throw is ~2.6 seconds.'
+        comparison: 'QB release time and pressure rate data for both teams.',
+        note: 'QB time to throw and pressure data for both teams.'
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching TIME_TO_THROW:`, error.message);
@@ -923,7 +923,7 @@ export const nflFetchers = {
         home: { team: home.full_name || home.name },
         away: { team: away.full_name || away.name },
         grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
-        comparison: `How do goal line conversion rates compare between these teams?`,
+        comparison: 'Goal line and red zone conversion data for both teams.',
         note: 'Goal line conversion data provided for comparison.'
       };
     } catch (error) {
@@ -961,8 +961,8 @@ export const nflFetchers = {
         home: { team: home.full_name || home.name },
         away: { team: away.full_name || away.name },
         grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
-        comparison: `How do these teams perform in end-of-half situations?`,
-        note: 'Points scored in final 2 minutes often decide games.'
+        comparison: 'End-of-half scoring data for both teams.',
+        note: 'End-of-half scoring data for both teams.'
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching TWO_MINUTE_DRILL:`, error.message);
@@ -1000,7 +1000,7 @@ export const nflFetchers = {
         home: { team: home.full_name || home.name },
         away: { team: away.full_name || away.name },
         grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
-        comparison: `How do the kicking stats compare between these teams?`,
+        comparison: 'Kicking accuracy and field goal data for both teams.',
         note: 'Kicking stats provided for comparison.'
       };
     } catch (error) {
@@ -1039,8 +1039,8 @@ export const nflFetchers = {
         home: { team: home.full_name || home.name },
         away: { team: away.full_name || away.name },
         grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
-        comparison: `Average starting field position comparison — significant gaps affect scoring opportunity.`,
-        note: 'Each team\'s field position correlates with their scoring opportunities.'
+        comparison: 'Average starting field position data for both teams.',
+        note: 'Field position data from special teams and turnover locations.'
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching FIELD_POSITION:`, error.message);
@@ -1077,8 +1077,8 @@ export const nflFetchers = {
         home: { team: home.full_name || home.name },
         away: { team: away.full_name || away.name },
         grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
-        comparison: `What are each team's primetime records and splits?`,
-        note: 'Primetime games have different dynamics - more rest, national audience, different prep time.'
+        comparison: 'Primetime records and performance splits for both teams.',
+        note: 'Primetime record and performance data for both teams.'
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching PRIMETIME_RECORD:`, error.message);
@@ -1103,11 +1103,11 @@ export const nflFetchers = {
         1. 4th down GO rate (how often they go for it vs punt/FG)
         2. 4th down conversion percentage when they go
         3. 4th down attempts inside opponent territory
-        4. Aggressiveness rank compared to league average
+        4. Aggressiveness rank
         5. 4th down behavior when trailing vs leading`;
       
       const groundingResult = await geminiGroundingSearch(query, {
-        systemMessage: 'You are an NFL analyst. Use data from NFL Next Gen Stats, Pro Football Reference, or NFL.com. Provide exact 4th down decision rates and conversion percentages for both teams. Include coaching tendencies on aggressiveness.'
+        systemMessage: 'You are an NFL analyst. Use data from NFL Next Gen Stats, Pro Football Reference, or NFL.com. Provide exact 4th down decision rates and conversion percentages for both teams.'
       });
       
       return {
@@ -1116,8 +1116,8 @@ export const nflFetchers = {
         home: { team: home.full_name || home.name },
         away: { team: away.full_name || away.name },
         grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
-        comparison: `How does each team's 4th down approach compare? What does the data show?`,
-        CONTEXT_NOTE: `League average GO rate is ~20%. Compare each team's tendencies.`
+        comparison: '4th down conversion and attempt data for both teams.',
+        note: '4th down attempt and conversion data for both teams.'
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching FOURTH_DOWN_TENDENCY:`, error.message);
@@ -1146,7 +1146,7 @@ export const nflFetchers = {
         5. Are they playing a much tougher or much weaker opponent next week?`;
       
       const groundingResult = await geminiGroundingSearch(query, {
-        systemMessage: 'You are an NFL schedule analyst. Use ESPN or NFL.com schedule data. Identify if either team has a TRAP GAME scenario (big game next week causing potential look-ahead) or SANDWICH SPOT (between two marquee matchups). Be specific about opponent names and dates.'
+        systemMessage: 'You are an NFL schedule analyst. Use ESPN or NFL.com schedule data. List upcoming and recent opponents for both teams. Be specific about opponent names and dates.'
       });
       
       return {
@@ -1155,13 +1155,7 @@ export const nflFetchers = {
         home: { team: home.full_name || home.name },
         away: { team: away.full_name || away.name },
         grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
-        INVESTIGATION_PROMPTS: {
-          trap_game: `Does either team play a bigger game next week?`,
-          sandwich_spot: `Is this game between two marquee matchups for either team?`,
-          letdown_spot: `Did either team just win a big emotional game last week?`
-        },
-        CONTEXT_NOTE: `Trap games are NOT automatic fades - investigate if RECENT_FORM shows the team actually plays down in these spots.`,
-        AWARENESS: `Schedule context is a SOFT factor. Use it to investigate, not prescribe.`
+        note: 'Schedule context and upcoming/previous opponents for both teams.'
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching SCHEDULE_CONTEXT:`, error.message);
@@ -1197,8 +1191,8 @@ export const nflFetchers = {
         },
         is_division_game: sameDivision,
         comparison: sameDivision
-          ? `Division game. How have these teams performed against each other?`
-          : `Non-division game. How do division records compare?`,
+          ? 'Division game — division and overall records for both teams.'
+          : 'Non-division game — division and overall records for both teams.',
         note: 'Division and overall records provided for comparison.'
       };
     } catch (error) {
@@ -1375,13 +1369,6 @@ export const nflFetchers = {
 
       console.log(`[Stat Router] WEATHER: ${temp}°F, ${wind || 'light'} mph wind, ${conditions}`);
 
-      // Determine forecast certainty based on conditions
-      // Rain/snow forecasts are less reliable than temperature/wind
-      const isPrecipitationForecast = conditions.includes('rain') || conditions.includes('snow') || conditions.includes('storm');
-      const forecastNote = isPrecipitationForecast 
-        ? 'FORECAST UNCERTAINTY: Precipitation forecasts can change. If your analysis relies heavily on rain/snow, acknowledge this uncertainty - conditions may differ at game time.'
-        : 'Current forecast for game time. Temperature and wind forecasts are generally more reliable than precipitation.';
-
       // Return weather data for Gary to evaluate
       return {
         category: 'Weather',
@@ -1389,8 +1376,7 @@ export const nflFetchers = {
         wind_speed: wind ? `${wind} mph` : 'Light',
         conditions: weather.conditions || 'Clear',
         notable_conditions: notableConditions.length > 0 ? notableConditions : null,
-        forecast_reliability: isPrecipitationForecast ? 'UNCERTAIN' : 'MODERATE',
-        note: forecastNote,
+        note: 'Current weather forecast for game time.',
         home: { team: homeName },
         away: { team: awayName }
       };
@@ -1432,7 +1418,7 @@ export const nflFetchers = {
       if (!weather || weather.isDome) {
         return {
           category: 'QB Weather History',
-          note: weather?.isDome ? 'Indoor/dome stadium - weather not a factor' : 'Weather data unavailable',
+          note: weather?.isDome ? 'Indoor/dome stadium.' : 'Weather data unavailable.',
           home: { team: home.full_name || home.name },
           away: { team: away.full_name || away.name },
           weather_conditions: weather?.isDome ? 'Indoor' : 'Unknown'
@@ -1452,7 +1438,7 @@ export const nflFetchers = {
       if (!isAdverse) {
         return {
           category: 'QB Weather History',
-          note: 'Weather conditions are normal - no significant impact expected',
+          note: 'Weather conditions are normal.',
           home: { team: home.full_name || home.name },
           away: { team: away.full_name || away.name },
           weather_conditions: `${temp}°F, ${windStr}, ${weather.conditions}`,
@@ -1470,7 +1456,7 @@ For each team's starting QB:
 2. Career games in similar conditions (cold/snow/rain/wind)
 3. Career record in adverse weather
 4. Completion percentage in cold/adverse weather
-5. Assessment: Does this QB perform better or worse in bad weather?
+5. Stats in adverse conditions vs normal conditions
 
 Be factual with historical stats where available.`;
 

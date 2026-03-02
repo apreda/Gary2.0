@@ -2,8 +2,7 @@
  * DFS Agentic Orchestrator
  *
  * This is the MAIN entry point for Gary's DFS lineup generation.
- * Unlike the old mathematical optimizer, this system has Gary
- * actually REASON about lineup decisions using Gemini.
+ * Gary REASONS about lineup decisions using Gemini.
  *
  * FLOW:
  * 1. Context Building (existing dfsAgenticContext.js)
@@ -43,8 +42,6 @@ function withTimeout(promise, ms, label) {
     )
   ]);
 }
-
-// Model constants & getGeminiClient imported from modelConfig.js
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN ORCHESTRATOR
@@ -105,11 +102,10 @@ export async function generateAgenticDFSLineup(options) {
     const winningTargets = getWinningTargets(platform, sport, slate);
     context.winningTargets = winningTargets;
 
-    // Surface slate size and game count for downstream phases
+    // Surface slate game count for downstream phases (raw number, no label)
     context.slateSize = winningTargets.gameCount;
-    context.slateLabel = winningTargets.gameCount >= 10 ? 'large' : winningTargets.gameCount >= 6 ? 'medium' : winningTargets.gameCount >= 3 ? 'small' : 'showdown';
 
-    console.log(`[Gary DFS] ✓ Target to WIN: ${winningTargets.toWin} pts | Top 1%: ${winningTargets.top1Percent} pts | Slate: ${context.slateLabel} (${winningTargets.gameCount} games)`);
+    console.log(`[Gary DFS] ✓ Target to WIN: ${winningTargets.toWin} pts | Top 1%: ${winningTargets.top1Percent} pts | ${winningTargets.gameCount} games`);
 
     // ═══════════════════════════════════════════════════════════════════════════
     // OWNERSHIP PROXY (GPP only)
@@ -153,10 +149,11 @@ export async function generateAgenticDFSLineup(options) {
     console.log(`[Gary DFS] ✓ Injury report: ${slateAnalysis.injuryReport?.length || 0} teams with injuries`);
     console.log(`[Gary DFS] ✓ Identified ${slateAnalysis.gameProfiles?.length || 0} game profiles`);
     console.log(`[Gary DFS] ✓ Identified ${slateAnalysis.gameEnvironments?.length || 0} game environments`);
+    console.log(`[Gary DFS] ✓ Tool calls: ${slateAnalysis.calledTools?.length || 0} | Narrative briefing: ${slateAnalysis.narrativeBriefing?.length || 0} chars`);
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // OWNERSHIP GROUNDING (non-critical)
-    // Fetch real projected ownership data via Gemini Grounding (Google Search).
+    // OWNERSHIP GROUNDING (supplemental — does not affect player selection)
+    // FTA projected ownership enriches Gary's awareness but lineups are valid without it.
     // Separate from the function-calling session — grounding and FC can't mix.
     // ═══════════════════════════════════════════════════════════════════════════
     try {
@@ -255,8 +252,7 @@ export async function generateAgenticDFSLineup(options) {
     try {
       lineup = await withTimeout(
         decideLineupWithPro(genAI, slateAnalysis, playerInvestigations, context, {
-          modelName: GEMINI_PRO_MODEL,
-          thinkingLevel: 'high'
+          modelName: GEMINI_PRO_MODEL
         }),
         480000, // 8 min wall-clock timeout (deep reasoning on large slates)
         'Phase 4 lineup decision'
@@ -281,43 +277,29 @@ export async function generateAgenticDFSLineup(options) {
     console.log(`[Gary DFS] ✓ Projected Ceiling: ${lineup.ceilingProjection} pts`);
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // PHASE 5: SELF-AUDIT (Gemini) — enrichment, not critical path
-    // The lineup is already decided at Phase 4. Audit adds notes and may swap
-    // players, but a failure here should NOT throw away a valid lineup.
+    // PHASE 5: SELF-AUDIT (Gemini) — REQUIRED. No fallback to unaudited lineup.
+    // Gary audits his own work. If the audit fails, the pipeline fails.
     // ═══════════════════════════════════════════════════════════════════════════
     console.log('\n[Gary DFS] Phase 5: Gary auditing his lineup...');
 
     // Pass investigation data to audit so Gary can evaluate swaps with full context
     context.playerInvestigations = playerInvestigations;
 
-    let auditedLineup;
-    try {
-      auditedLineup = await withTimeout(
-        auditLineupWithPro(genAI, lineup, slateAnalysis, context, {
-          modelName: GEMINI_PRO_MODEL
-        }),
-        180000, // 3 min wall-clock timeout
-        'Phase 5 lineup audit'
-      );
-      if (!auditedLineup || !auditedLineup.players || auditedLineup.players.length === 0) {
-        console.warn('[Gary DFS] Phase 5: Audit returned empty lineup — using pre-audit lineup');
-        auditedLineup = lineup;
-      } else {
-        console.log(`[Gary DFS] ✓ Audit complete`);
-        if (auditedLineup.adjustments?.length > 0) {
-          console.log(`[Gary DFS] ✓ Made ${auditedLineup.adjustments.length} post-audit adjustments`);
-        }
-      }
-    } catch (auditError) {
-      // If Pro is unavailable (429/503), skip audit — pre-audit lineup is fine
-      if (auditError.status === 429 || auditError.status === 503 || auditError.message?.includes('429') || auditError.message?.includes('503') || auditError.message?.includes('quota')) {
-        console.warn(`[Gary DFS] Phase 5: Pro quota exhausted — skipping audit, using pre-audit lineup`);
-        auditedLineup = lineup;
-      } else {
-        console.warn(`[Gary DFS] Phase 5 audit failed: ${auditError.message}`);
-        console.warn('[Gary DFS] Using pre-audit lineup from Phase 4');
-        auditedLineup = lineup;
-      }
+    const auditedLineup = await withTimeout(
+      auditLineupWithPro(genAI, lineup, slateAnalysis, context, {
+        modelName: GEMINI_PRO_MODEL
+      }),
+      180000, // 3 min wall-clock timeout
+      'Phase 5 lineup audit'
+    );
+
+    if (!auditedLineup || !auditedLineup.players || auditedLineup.players.length === 0) {
+      throw new Error('[Gary DFS] Phase 5 FAILED: Audit returned empty lineup');
+    }
+
+    console.log(`[Gary DFS] ✓ Audit complete`);
+    if (auditedLineup.adjustments?.length > 0) {
+      console.log(`[Gary DFS] ✓ Made ${auditedLineup.adjustments.length} post-audit adjustments`);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -463,19 +445,18 @@ function addPivotsToAgenticLineup(lineupPlayers, contextPlayers, sport, platform
     const salK = (slot.salary || 0) / 1000;
     const valueScore = (projPts > 0 && salK > 0) ? Math.round((projPts / salK) * 10) / 10 : null;
 
-    // Recent form: compare L5 DK FPTS avg to season DK FPTS
-    let recentForm = null;
+    // Recent form: L5 DK FPTS avg / season DK FPTS ratio (raw number, no labels)
+    let recentFormRatio = null;
     const l5Fpts = ctxPlayer?.l5Stats?.dkFptsAvg || 0;
     const seasonFpts = ctxPlayer?.seasonStats?.dkFpts || 0;
     if (l5Fpts > 0 && seasonFpts > 0) {
-      const ratio = l5Fpts / seasonFpts;
-      recentForm = ratio >= 1.10 ? 'hot' : ratio <= 0.90 ? 'cold' : 'neutral';
+      recentFormRatio = parseFloat((l5Fpts / seasonFpts).toFixed(2));
     }
 
     // Opponent from context (game matchup)
     const opponent = ctxPlayer?.opponent || ctxPlayer?.game?.opponent || null;
 
-    return { ...slot, pivots, ownership, valueScore, recentForm, opponent };
+    return { ...slot, pivots, ownership, valueScore, recentFormRatio, opponent };
   });
 }
 
@@ -536,9 +517,9 @@ function getWinningTargets(platform, sport, slate) {
  * Gary reasons about these signals himself to assess field concentration.
  *
  * Signals provided:
- * - salaryRankAtPosition: e.g., "1st of 12 PGs" (high salary = high ownership)
- * - recentFormVsSeason: e.g., 1.25 (L5 is 25% above season avg = hot = high ownership)
- * - gamePopularity: e.g., "highest O/U on slate" (popular games draw more ownership)
+ * - salaryRankAtPosition: e.g., "1st of 12 PGs" (salary rank within position group)
+ * - recentFormVsSeason: e.g., 1.25 (L5/season FPTS ratio)
+ * - gamePopularity: e.g., "O/U rank 1 of 8" (game's O/U rank on the slate)
  */
 function computeOwnershipProxy(context) {
   const { players, games, sport } = context;
@@ -554,16 +535,13 @@ function computeOwnershipProxy(context) {
     matchup: `${g.awayTeam || g.visitor_team || g.away_team || ''}@${g.homeTeam || g.home_team || ''}`
   })).filter(g => g.total > 0).sort((a, b) => b.total - a.total);
 
-  // Build team -> O/U rank map
+  // Build team -> O/U rank map (raw rank number + total game count, no labels)
   const teamOURank = new Map();
+  const totalGamesOnSlate = gameTotals.length;
   gameTotals.forEach((g, idx) => {
     const rank = idx + 1;
-    const label = rank === 1 ? 'highest O/U on slate'
-      : rank === 2 ? '2nd highest O/U on slate'
-      : rank <= Math.ceil(gameTotals.length / 2) ? 'top half O/U'
-      : 'bottom half O/U';
     for (const t of g.teams) {
-      if (t) teamOURank.set(t, label);
+      if (t) teamOURank.set(t, `O/U rank ${rank} of ${totalGamesOnSlate}`);
     }
   });
 
@@ -602,10 +580,3 @@ function computeOwnershipProxy(context) {
   console.log(`[Gary DFS] Ownership signals: enriched ${enrichedCount} players with raw salary rank, form ratio, and game popularity`);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// EXPORTS
-// ═══════════════════════════════════════════════════════════════════════════════
-
-export default {
-  generateAgenticDFSLineup
-};

@@ -194,10 +194,3 @@ export const WINNING_SCORE_TARGETS = {
     SHOWDOWN: { games: '1-2', multiplier: 0.55 }
   }
 };
-
-// ============================================================================
-// GARY'S INVESTIGATION FRAMEWORK
-// ============================================================================
-
-// GARY_INVESTIGATION_QUESTIONS, GARY_DFS_PHILOSOPHY removed — only referenced in dead default export (no file uses default import from FIBLE.js)
-// Named export WINNING_SCORE_TARGETS is the only consumed export

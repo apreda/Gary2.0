@@ -1,7 +1,6 @@
 /**
  * shared/dataFetchers.js
  * Core data fetching functions used by ALL sports in scout report generation.
- * Extracted from the monolithic scoutReportBuilder.js.
  */
 
 import { ballDontLieService } from '../../../ballDontLieService.js';
@@ -176,96 +175,11 @@ export async function fetchTeamProfile(teamName, sport) {
       streak: formatStreak(teamStanding),
       seasonStats: seasonStats,
       standing: teamStanding,
-      identity: buildTeamIdentity(seasonStats, sport)
     };
   } catch (error) {
     console.warn(`[Scout Report] Error fetching profile for ${teamName}:`, error.message);
     return createEmptyProfile(teamName);
   }
-}
-
-/**
- * Build team identity string from stats
- */
-export function buildTeamIdentity(stats, sport) {
-  if (!stats) return 'Profile unavailable';
-  
-  const parts = [];
-  
-  if (sport === 'NBA' || sport === 'NCAAB') {
-    // Basketball identity
-    if (stats.points_per_game) {
-      const ppg = parseFloat(stats.points_per_game);
-      if (ppg > 115) parts.push('high-scoring');
-      else if (ppg < 105) parts.push('defensive-minded');
-    }
-    if (stats.pace) {
-      const pace = parseFloat(stats.pace);
-      if (pace > 100) parts.push('fast-paced');
-      else if (pace < 96) parts.push('slow/methodical');
-    }
-    if (stats.three_point_pct && parseFloat(stats.three_point_pct) > 0.37) {
-      parts.push('3PT-heavy');
-    }
-    if (stats.offensive_rating) {
-      const ortg = parseFloat(stats.offensive_rating);
-      if (ortg > 115) parts.push(`elite offense (#${stats.offensive_rating_rank || '?'})`);
-    }
-    if (stats.defensive_rating) {
-      const drtg = parseFloat(stats.defensive_rating);
-      if (drtg < 108) parts.push(`strong defense (#${stats.defensive_rating_rank || '?'})`);
-      else if (drtg > 115) parts.push('leaky defense');
-    }
-  } else if (sport === 'NFL' || sport === 'NCAAF') {
-    // Football identity
-    if (stats.total_points_per_game) {
-      const ppg = parseFloat(stats.total_points_per_game);
-      if (ppg > 28) parts.push('high-powered offense');
-      else if (ppg < 18) parts.push('struggling offense');
-    }
-    if (stats.rushing_yards_per_game && stats.net_passing_yards_per_game) {
-      const rush = parseFloat(stats.rushing_yards_per_game);
-      const pass = parseFloat(stats.net_passing_yards_per_game);
-      if (rush > pass) parts.push('run-heavy');
-      else if (pass > rush * 1.5) parts.push('pass-first');
-      else parts.push('balanced attack');
-    }
-    if (stats.opp_total_points_per_game) {
-      const oppPpg = parseFloat(stats.opp_total_points_per_game);
-      if (oppPpg < 18) parts.push('elite defense');
-      else if (oppPpg > 28) parts.push('porous defense');
-    }
-  } else if (sport === 'NHL') {
-    // Hockey identity
-    if (stats.goals_for_per_game) {
-      const gpg = parseFloat(stats.goals_for_per_game);
-      if (gpg > 3.5) parts.push('high-scoring');
-      else if (gpg < 2.5) parts.push('struggling offensively');
-    }
-    if (stats.goals_against_per_game) {
-      const gaa = parseFloat(stats.goals_against_per_game);
-      if (gaa < 2.5) parts.push('stingy defense');
-      else if (gaa > 3.5) parts.push('leaky defense');
-    }
-    if (stats.power_play_percentage) {
-      const pp = parseFloat(stats.power_play_percentage);
-      if (pp > 0.24) parts.push('elite PP');
-      else if (pp < 0.17) parts.push('weak PP');
-    }
-    if (stats.penalty_kill_percentage) {
-      const pk = parseFloat(stats.penalty_kill_percentage);
-      if (pk > 0.82) parts.push('elite PK');
-      else if (pk < 0.76) parts.push('vulnerable PK');
-    }
-    if (stats.shots_for_per_game && stats.shots_against_per_game) {
-      const sf = parseFloat(stats.shots_for_per_game);
-      const sa = parseFloat(stats.shots_against_per_game);
-      if (sf > sa + 5) parts.push('possession-heavy');
-      else if (sa > sf + 5) parts.push('outshot regularly');
-    }
-  }
-
-  return parts.length > 0 ? parts.join(', ') : 'Profile building...';
 }
 
 /**
@@ -279,18 +193,8 @@ export function createEmptyProfile(teamName) {
     awayRecord: 'N/A',
     streak: 'N/A',
     seasonStats: null,
-    standing: null,
-    identity: 'Profile unavailable'
+    standing: null
   };
-}
-
-/**
- * Format team identity for display
- */
-export function formatTeamIdentity(teamName, profile, homeAway) {
-  const record = profile.record !== 'N/A' ? `(${profile.record})` : '';
-  return `• ${teamName} ${record} [${homeAway}]: ${profile.identity}
-  Home: ${profile.homeRecord} | Away: ${profile.awayRecord} | Streak: ${profile.streak}`;
 }
 
 // ============================================================================
@@ -1559,7 +1463,7 @@ ${availabilityContext ? `\n--- GAME-DAY AVAILABILITY ---\n${availabilityContext}
 Based on the search results above, write the current state report. For EACH team, cover:
 
 **${homeTeam} — What's going on with this team right now?**
-- **RECENT TRAJECTORY:** Record, ranking, how they've looked over the last 5-10 games. Winning streak? Losing streak? Hot or cold?
+- **RECENT TRAJECTORY:** Record, ranking, recent performance over the last 5-10 games. Winning streak? Losing streak?
 - **LAST GAME:** What happened? Score, key performances, beat writer narrative (was it a blowout, comeback, overtime thriller, buzzer beater?).
 - **TOP STORYLINES & HEADLINES:** The big stories around this team RIGHT NOW:
   * Recent trades, acquisitions, roster moves
@@ -2051,7 +1955,7 @@ CRITICAL ANTI-OPINION RULES:
  * Returns: { home: [], away: [], filteredLongTerm: [] } - filteredLongTerm contains names of players
  * filtered out due to 14+ day absence (for narrative scrubbing)
  */
-export function parseGroundingInjuries(content, homeTeam, awayTeam, sport = '') {
+function parseGroundingInjuries(content, homeTeam, awayTeam, sport = '') {
   const injuries = { home: [], away: [], filteredLongTerm: [] };
   const foundPlayers = new Set(); // Prevent duplicates
   
@@ -2128,11 +2032,11 @@ export function parseGroundingInjuries(content, homeTeam, awayTeam, sport = '') 
       if (daysSinceOut >= 45) {
         return { duration: 'SEASON-LONG', isEdge: false, note: `Out since ~${outSinceStr} (${daysSinceOut}+ days)`, outSinceDate: outSinceStr, daysSinceOut };
       } else if (daysSinceOut >= 21) {
-        return { duration: 'MID-SEASON', isEdge: false, note: `Out since ~${outSinceStr} (~${Math.round(daysSinceOut / 7)} weeks)`, outSinceDate: outSinceStr, daysSinceOut };
+        return { duration: 'SHORT-TERM', isEdge: false, note: `Out since ~${outSinceStr} (~${Math.round(daysSinceOut / 7)} weeks)`, outSinceDate: outSinceStr, daysSinceOut };
       } else if (daysSinceOut >= 7) {
-        return { duration: 'MID-SEASON', isEdge: false, note: `Out since ~${outSinceStr} (~${daysSinceOut} days)`, outSinceDate: outSinceStr, daysSinceOut };
+        return { duration: 'SHORT-TERM', isEdge: false, note: `Out since ~${outSinceStr} (~${daysSinceOut} days)`, outSinceDate: outSinceStr, daysSinceOut };
       } else {
-        return { duration: 'RECENT', isEdge: true, note: `Out since ~${outSinceStr} (${daysSinceOut} days)`, outSinceDate: outSinceStr, daysSinceOut };
+        return { duration: 'FRESH', isEdge: true, note: `Out since ~${outSinceStr} (${daysSinceOut} days)`, outSinceDate: outSinceStr, daysSinceOut };
       }
     }
 
@@ -2152,13 +2056,13 @@ export function parseGroundingInjuries(content, homeTeam, awayTeam, sport = '') 
         t.includes('since week 9') || t.includes('since week 10') || t.includes('since week 11') ||
         t.includes('several weeks') || t.includes('multiple weeks') || t.includes('month') ||
         t.includes('extended') || t.includes('prolonged')) {
-      return { duration: 'MID-SEASON', isEdge: false, note: '', outSinceDate: null, daysSinceOut: null };
+      return { duration: 'SHORT-TERM', isEdge: false, note: '', outSinceDate: null, daysSinceOut: null };
     }
     if (t.includes('recent') || t.includes('last week') || t.includes('this week') ||
         t.includes('just') || t.includes('new') || t.includes('since week 14') ||
         t.includes('since week 15') || t.includes('since week 16') ||
         t.includes('day-to-day') || t.includes('game-time')) {
-      return { duration: 'RECENT', isEdge: true, note: '', outSinceDate: null, daysSinceOut: null };
+      return { duration: 'FRESH', isEdge: true, note: '', outSinceDate: null, daysSinceOut: null };
     }
     // Default
     return { duration: 'UNKNOWN', isEdge: null, note: '', outSinceDate: null, daysSinceOut: null };
@@ -2246,10 +2150,10 @@ export function parseGroundingInjuries(content, homeTeam, awayTeam, sport = '') 
       let durationContext = '';
       if (durationInfo.duration === 'SEASON-LONG') {
         durationContext = 'Out For Season';
-      } else if (durationInfo.duration === 'MID-SEASON') {
+      } else if (durationInfo.duration === 'SHORT-TERM') {
         durationContext = `OUT${durationInfo.daysSinceOut ? ` (${durationInfo.daysSinceOut}d)` : ''}`;
-      } else if (durationInfo.duration === 'RECENT') {
-        durationContext = `RECENT${durationInfo.daysSinceOut ? ` (${durationInfo.daysSinceOut}d)` : ''}`;
+      } else if (durationInfo.duration === 'FRESH') {
+        durationContext = `FRESH${durationInfo.daysSinceOut ? ` (${durationInfo.daysSinceOut}d)` : ''}`;
       } else {
         durationContext = 'PENDING_ENRICHMENT';
       }
@@ -2664,7 +2568,7 @@ export function parseGroundingInjuries(content, homeTeam, awayTeam, sport = '') 
           status: normalizedStatus,
           daysSinceReport: daysSinceOut,
           reportDateStr: outSinceStr,
-          duration: daysSinceOut > 45 ? 'SEASON-LONG' : daysSinceOut > 21 ? 'MID-SEASON' : daysSinceOut > 3 ? 'EXTENDED' : 'RECENT',
+          duration: daysSinceOut > 45 ? 'SEASON-LONG' : daysSinceOut > 21 ? 'SHORT-TERM' : daysSinceOut > 3 ? 'EXTENDED' : 'FRESH',
           source: 'rotowire'
         });
       }
@@ -3026,7 +2930,7 @@ export function parseGroundingInjuries(content, homeTeam, awayTeam, sport = '') 
 // EXTRACT TEAM SECTION
 // ============================================================================
 
-export function extractTeamSection(content, teamName, otherTeamName = '') {
+function extractTeamSection(content, teamName, otherTeamName = '') {
   const contentLower = content.toLowerCase();
   const teamLower = teamName.toLowerCase();
   const otherTeamLower = otherTeamName.toLowerCase();
@@ -3102,7 +3006,7 @@ export function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey, roste
 
   // Categorize injuries by importance/duration
   const categorize = (teamInjuries) => {
-    const critical = teamInjuries.filter(i => (i.duration === 'RECENT' || i.duration === 'FRESH' || i.duration === 'SHORT-TERM' || i.isEdge === true) && i.status !== 'Out' && i.status !== 'OFS');
+    const critical = teamInjuries.filter(i => (i.duration === 'FRESH' || i.duration === 'SHORT-TERM' || i.isEdge === true) && i.status !== 'Out' && i.status !== 'OFS');
     // OFS = Out For Season (Rotowire status code)
     const out = teamInjuries.filter(i => i.status === 'Out' || i.status === 'IR' || i.status === 'LTIR' || i.status === 'OFS' || i.status === 'Injured Reserve');
     const seasonal = teamInjuries.filter(i => i.duration === 'SEASON-LONG' && i.status !== 'Out' && i.status !== 'IR' && i.status !== 'OFS' && (i.status || '').toUpperCase() !== 'GTD');
@@ -3184,13 +3088,13 @@ export function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey, roste
       const durationContext = days ? ` - was out ${days}d` : '';
       durationTag = ` [GTD${durationContext}]`;
     } else if (i.duration === 'SEASON-LONG' || i.status === 'Injured Reserve' || i.status === 'IR' || i.status === 'LTIR' || i.status === 'OFS') {
-      durationTag = ` [SEASON-LONG — market fully adjusted, non-factor]`;
+      durationTag = ` [SEASON-LONG]`;
     } else if (i.duration === 'LONG-TERM') {
-      durationTag = ` [LONG-TERM${timeInfo} — market has fully adjusted, injury is no longer relevant to the spread]`;
-    } else if (i.duration === 'FRESH' || i.duration === 'RECENT') {
-      durationTag = ` [FRESH${timeInfo} — injury is recent, market has had limited time to adjust]`;
-    } else if (i.duration === 'SHORT-TERM' || i.duration === 'MID-SEASON') {
-      durationTag = ` [SHORT-TERM${timeInfo} — team has played several games without this player, market adjusting with small sample]`;
+      durationTag = ` [LONG-TERM${timeInfo}]`;
+    } else if (i.duration === 'FRESH') {
+      durationTag = ` [FRESH${timeInfo}]`;
+    } else if (i.duration === 'SHORT-TERM') {
+      durationTag = ` [SHORT-TERM${timeInfo}]`;
     } else if (days !== null && days !== undefined) {
       durationTag = ` [OUT${timeInfo}]`;
     }
@@ -3233,13 +3137,13 @@ export function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey, roste
   // Split injuries into two structural tiers per team
   const splitTeam = (cats) => {
     // Active = new developments that may not be reflected in recent form/line
-    const recentOut = cats.out.filter(i => i.duration === 'RECENT' || i.isEdge === true);
+    const recentOut = cats.out.filter(i => i.duration === 'FRESH' || i.isEdge === true);
     const questionableGtd = cats.others.filter(i => i.status !== 'Prob' && i.status !== 'Probable');
     const probable = cats.others.filter(i => i.status === 'Prob' || i.status === 'Probable');
     const active = [...cats.critical, ...recentOut, ...questionableGtd, ...probable];
 
     // Established = team has been playing without these players
-    const midSeasonOut = cats.out.filter(i => i.duration === 'MID-SEASON');
+    const midSeasonOut = cats.out.filter(i => i.duration === 'SHORT-TERM');
     const seasonLongOut = cats.out.filter(i =>
       i.duration === 'SEASON-LONG' || i.status === 'IR' || i.status === 'LTIR' || i.status === 'OFS' || i.status === 'Injured Reserve'
     );
@@ -3288,7 +3192,7 @@ export function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey, roste
   // ── TIER 2: ESTABLISHED ABSENCES ──
   const hasAnyEstablished = homeSplit.established.length > 0 || awaySplit.established.length > 0;
   if (hasAnyEstablished) {
-    lines.push('ESTABLISHED ABSENCES (team has been playing without these players)');
+    lines.push('ESTABLISHED ABSENCES');
     lines.push('────────────────────────────────────────');
 
     const renderEstablished = (teamName, split, locationTag) => {
@@ -3336,146 +3240,11 @@ export function formatStartingLineups(homeTeam, awayTeam, lineups) {
 }
 
 // ============================================================================
-// FORMAT SITUATIONAL FACTORS, ODDS, MONEYLINE
+// FORMAT ODDS, MONEYLINE
 // ============================================================================
 
-export function formatSituationalFactors(game, injuries, sport) {
-  const factors = [];
-  const sportKey = normalizeSport(sport);
-  
-  // Injuries — include NCAAB statuses (Out (Season), GTD) alongside standard ones
-  const relevantStatuses = ['Out', 'Doubtful', 'Questionable', 'Out (Season)', 'GTD', 'IR', 'LTIR', 'Prob', 'Probable'];
-  const homeInjuries = injuries.home?.filter(i => relevantStatuses.some(s => i.status?.includes(s)));
-  const awayInjuries = injuries.away?.filter(i => relevantStatuses.some(s => i.status?.includes(s)));
-  
-  // Helper to format injury with factual duration tag
-  const formatInjuryWithFreshness = (i) => {
-    let tag = '';
-    const days = i.daysSinceReport;
-    const dateStr = i.reportDateStr;
-    const timeInfo = dateStr && days ? ` - since ${dateStr} (${days}d)` : dateStr ? ` - since ${dateStr}` : days ? ` (${days}d)` : '';
+// formatSituationalFactors removed — Layer 3 violation (told Gary what factors mean)
 
-    if (i.status === 'GTD') {
-      // GTD overrides duration — player might return regardless of how long they were out
-      const durationContext = days ? ` - was out ${days}d` : '';
-      tag = ` [GTD${durationContext}]`;
-    } else if (i.duration === 'SEASON-LONG' || i.status === 'IR' || i.status === 'LTIR' || i.status === 'Out (Season)') {
-      tag = ` [Out For Season${timeInfo}]`;
-    } else if (i.duration === 'RECENT') {
-      tag = ` [RECENT${timeInfo}]`;
-    } else if (i.duration === 'MID-SEASON') {
-      tag = ` [OUT${timeInfo}]`;
-    } else if (timeInfo) {
-      tag = ` [OUT${timeInfo}]`;
-    }
-    // Add freshnessTip for NCAAB injuries (from RotoWire parsing)
-    const tip = i.freshnessTip ? `\n    → ${i.freshnessTip}` : '';
-    return `${i.player?.first_name} ${i.player?.last_name}: ${i.status}${tag}${tip}`;
-  };
-
-  if (homeInjuries?.length > 0) {
-    const injuryList = homeInjuries.slice(0, 5).map(formatInjuryWithFreshness).join('\n  ');
-    factors.push(`• ${game.home_team} Injuries:\n  ${injuryList}`);
-  }
-
-  if (awayInjuries?.length > 0) {
-    const injuryList = awayInjuries.slice(0, 5).map(formatInjuryWithFreshness).join('\n  ');
-    factors.push(`• ${game.away_team} Injuries:\n  ${injuryList}`);
-  }
-  
-  // Rest situation (if available)
-  if (game.home_rest_days !== undefined) {
-    factors.push(`• Rest: ${game.home_team} (${game.home_rest_days} days) vs ${game.away_team} (${game.away_rest_days} days)`);
-  }
-  
-  // Week info for NFL/NCAAF
-  if (game.week && (sport === 'NFL' || sport === 'NCAAF' || sportKey === 'americanfootball_nfl' || sportKey === 'americanfootball_ncaaf')) {
-    const fallbackSeason = nflSeason();
-    factors.push(`• Week ${game.week} of the ${game.season || fallbackSeason} season`);
-  }
-  
-  // Venue
-  if (game.venue) {
-    factors.push(`• Venue: ${game.venue}`);
-  }
-  
-  // ═══════════════════════════════════════════════════════════════════════════
-  // SPORT-SPECIFIC SHARP FACTORS
-  // ═══════════════════════════════════════════════════════════════════════════
-  
-  // NCAAF: CFP & Rematch factors
-  if (sportKey === 'americanfootball_ncaaf') {
-    factors.push('');
-    factors.push('NCAAF CONTEXT NOTES:');
-    factors.push('• QB STATUS: Starting QB for both teams is critical context for all historical records.');
-
-    // CFP-specific context (Dec-Jan games)
-    const currentMonth = new Date().getMonth(); // 0-indexed
-    const isCFPSeason = currentMonth === 11 || currentMonth === 0; // Dec or Jan
-    if (isCFPSeason) {
-      factors.push('');
-      factors.push('CFP PLAYOFF CONTEXT (12-TEAM ERA):');
-      factors.push('• FIRST ROUND: On-campus game at higher seed.');
-      factors.push('• REMATCH: Teams may have played earlier this season.');
-      factors.push('• REST vs RHYTHM: One or both teams may have had a bye.');
-      factors.push('• COACHING: Coaching changes or job acceptances since regular season ended.');
-    } else {
-      factors.push('• REMATCH: Teams may have played earlier this season.');
-    }
-
-    factors.push('• PORTAL DEPTH: Transfer portal additions may affect roster depth.');
-  }
-  
-  // NHL: Goalie & fatigue factors
-  if (sportKey === 'icehockey_nhl') {
-    factors.push('');
-    factors.push('NHL CONTEXT NOTES:');
-    factors.push('• GOALIE MATCHUP: Starting goalie confirmation is critical for NHL analysis.');
-    factors.push('• BACK-TO-BACK: Schedule situation (rest vs fatigue) for both teams.');
-    factors.push('• HDC (High-Danger Chances): Process metric — shot quality generated vs allowed.');
-    factors.push('• GSAx (Goals Saved Above Expected): Goalie performance metric beyond raw SV%.');
-    
-    // Check for goalie injuries
-    const goalieInjuries = [...(homeInjuries || []), ...(awayInjuries || [])].filter(i => 
-      i.player?.position?.toLowerCase() === 'g' || i.player?.position?.toLowerCase() === 'goalie'
-    );
-    if (goalieInjuries.length > 0) {
-      factors.push(`• GOALIE ALERT: ${goalieInjuries.map(i => `${i.player?.last_name} (${i.status})`).join(', ')}`);
-    }
-  }
-  
-  // NCAAB: Context notes (data-only — no investigation directives)
-  if (sportKey === 'basketball_ncaab') {
-    factors.push('');
-    factors.push('NCAAB CONTEXT NOTES:');
-    factors.push('• Tempo differential between teams.');
-    factors.push('• Home/away splits available for both teams.');
-    factors.push('• L5 form and season averages available for comparison.');
-    factors.push('• Rebounding gaps (ORB/g vs DRB/g) from Four Factors available for both teams.');
-  }
-  
-  // NFL: Rest & EPA factors
-  if (sportKey === 'americanfootball_nfl') {
-    factors.push('');
-    factors.push('NFL CONTEXT NOTES:');
-    factors.push('• REST DISPARITY: Rest days and travel distance for both teams.');
-    factors.push('• EPA vs RECORD: EPA efficiency and win-loss record can diverge — both are available.');
-    factors.push('• LATE-GAME PERFORMANCE: Close-game record and clutch metrics are available.');
-    factors.push('• WEATHER: Outdoor game conditions (temperature, wind, precipitation) available.');
-  }
-  
-  if (factors.length === 0) {
-    factors.push('• No significant situational factors identified');
-  }
-  
-  return factors.join('\n');
-}
-
-/**
- * Format odds for display
- * @param {Object} game - Game data with odds
- * @param {string} sport - Sport key (e.g., 'icehockey_nhl')
- */
 export function formatOdds(game, sport = '') {
   const lines = [];
   const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
@@ -3534,36 +3303,7 @@ export function formatOdds(game, sport = '') {
   return lines.join('\n') || 'Odds not available';
 }
 
-/**
- * Format sportsbook odds comparison for scout report
- * Shows lines from multiple books so Gary can reference the best available line
- */
-export function formatSportsbookComparison(oddsArray, homeTeam, awayTeam) {
-  if (!Array.isArray(oddsArray) || oddsArray.length === 0) return '';
-
-  const fmtSpread = (v) => v != null ? (v > 0 ? `+${v}` : `${v}`) : '-';
-  const fmtML = (v) => v != null ? (Number(v) > 0 ? `+${v}` : `${v}`) : '-';
-
-  const lines = [
-    '',
-    'SPORTSBOOK LINE COMPARISON:',
-    '---------------------------------------------------'
-  ];
-  for (const book of oddsArray.slice(0, 8)) {
-    const away = `${fmtSpread(book.spread_away)} (${book.spread_away_odds || '-'}) | ML ${fmtML(book.ml_away)}`;
-    const home = `${fmtSpread(book.spread_home)} (${book.spread_home_odds || '-'}) | ML ${fmtML(book.ml_home)}`;
-    lines.push(`  ${(book.displayName || book.vendor || '?').padEnd(12)} ${awayTeam}: ${away}  |  ${homeTeam}: ${home}`);
-  }
-  lines.push('---------------------------------------------------');
-  lines.push('');
-  lines.push('');
-  return lines.join('\n');
-}
-
-/**
- * Format moneyline number
- */
-export function formatMoneyline(ml) {
+function formatMoneyline(ml) {
   const num = parseFloat(ml);
   return num > 0 ? `+${num}` : num.toString();
 }

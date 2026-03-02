@@ -1,14 +1,12 @@
 /**
  * Shared Grounding Functions for Scout Report Builders
  *
- * Extracted from the monolithic scoutReportBuilder.js.
  * Contains all Gemini grounding-related functions used across
  * multiple per-sport modules and external files.
  */
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { ballDontLieService } from '../../../ballDontLieService.js';
-import { nbaSeason, formatSeason } from '../../../../utils/dateUtils.js';
+import { formatSeason, nbaSeason } from '../../../../utils/dateUtils.js';
 import { seasonForSport, findTeamInStandings, sportToBdlKey } from './utilities.js';
 
 // Lazy-initialize Gemini for grounded searches (supports key rotation)

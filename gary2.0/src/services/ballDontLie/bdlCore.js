@@ -15,21 +15,6 @@ function clearCache() {
   console.log(`[Ball Don't Lie] 🗑️ Cache cleared (${size} entries removed)`);
 }
 
-/**
- * Clear cache entries matching a pattern (e.g., 'injuries' to clear all injury caches)
- */
-function clearCacheByPattern(pattern) {
-  let cleared = 0;
-  for (const key of cacheMap.keys()) {
-    if (key.includes(pattern)) {
-      cacheMap.delete(key);
-      cleared++;
-    }
-  }
-  console.log(`[Ball Don't Lie] 🗑️ Cleared ${cleared} cache entries matching "${pattern}"`);
-  return cleared;
-}
-
 // Base URL for Ball Don't Lie HTTP fallbacks
 const BALLDONTLIE_API_BASE_URL = 'https://api.balldontlie.io';
 
@@ -142,5 +127,5 @@ function normalizeName(value) {
 }
 
 // Re-export for sub-modules
-export { clearCache, clearCacheByPattern, initApi, getCachedOrFetch, buildQuery, getCurrentNhlSeason, normalizeName };
+export { clearCache, initApi, getCachedOrFetch, buildQuery, getCurrentNhlSeason, normalizeName };
 export { axios, BALLDONTLIE_API_BASE_URL, API_KEY, TTL_MINUTES, cacheMap };

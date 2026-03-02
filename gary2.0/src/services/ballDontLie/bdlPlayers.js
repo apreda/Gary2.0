@@ -849,7 +849,7 @@ export const playersMethods = {
             plus_minus: base.plus_minus || 0,
             tov: base.tov || 0,
             oreb: base.oreb || 0,
-            // Advanced stats (TIER 1 PREDICTIVE)
+            // Advanced stats
             efg_pct: efgPct,
             ts_pct: adv.ts_pct || 0,
             off_rating: adv.off_rating || 0,
@@ -1616,18 +1616,6 @@ export const playersMethods = {
                 }
               };
               
-              // Determine form trend (compare L2 vs L5)
-              let formTrend = 'stable';
-              if (gp >= 3) {
-                const l2Total = gameByGame.slice(0, 2).reduce((sum, g) => 
-                  sum + g.pass_yds + g.rush_yds + g.rec_yds, 0);
-                const l5Avg = (totals.pass_yds + totals.rush_yds + totals.rec_yds) / gp;
-                const l2Avg = l2Total / 2;
-                
-                if (l2Avg > l5Avg * 1.15) formTrend = 'hot';
-                else if (l2Avg < l5Avg * 0.85) formTrend = 'cold';
-              }
-              
               // TARGET SHARE TRENDING - Detect usage spikes for WR/TE/RB
               // Compare L2 targets vs L5 average
               let targetTrend = null;
@@ -1701,7 +1689,6 @@ export const playersMethods = {
                 averages,
                 consistency,
                 splits,
-                formTrend,
                 targetTrend, // NEW: Target share trending
                 usageTrend,  // NEW: Usage/touch tracking (snap count proxy)
                 lastGame: gameByGame[0] || null
@@ -2009,17 +1996,6 @@ export const playersMethods = {
           } : null
         };
 
-        // Form trend (L2 vs L5 composite)
-        const formTrend = (() => {
-          if (gameStats.length < 5) return 'neutral';
-          const composite = g => g.pts + g.reb + g.ast;
-          const l2Avg = gameStats.slice(0, 2).reduce((s, g) => s + composite(g), 0) / 2;
-          const l5Avg = gameStats.slice(0, 5).reduce((s, g) => s + composite(g), 0) / 5;
-          if (l2Avg > l5Avg * 1.15) return 'hot';
-          if (l2Avg < l5Avg * 0.85) return 'cold';
-          return 'stable';
-        })();
-
         console.log(`[Ball Don't Lie] Got ${gp} NCAAB game logs for player ${playerId}: ${avgs.pts.toFixed(1)} PPG`);
 
         return {
@@ -2045,8 +2021,7 @@ export const playersMethods = {
           },
           consistency,
           splits,
-          lastGame: gameStats[0] || null,
-          formTrend
+          lastGame: gameStats[0] || null
         };
       }, 15); // Cache for 15 minutes
     } catch (e) {
@@ -2553,9 +2528,7 @@ export const playersMethods = {
               goals_against_average: stats.goals_against_average ? (stats.goals_against_average).toFixed(2) : null,
               shutouts: stats.shutouts || 0,
               saves: stats.saves || 0,
-              shots_against: stats.shots_against || 0,
-              // Likely starter indicator (most games started)
-              isLikelyStarter: gamesStarted > 0
+              shots_against: stats.shots_against || 0
             };
           }).sort((a, b) => b.games_started - a.games_started); // Sort by games started
         }
@@ -2616,10 +2589,7 @@ export const playersMethods = {
             
             playerRankings[pid].rankings[type] = {
               rank: rank + 1, // 1-indexed rank
-              value: entry.value,
-              isTopTen: rank < 10,
-              isTopFive: rank < 5,
-              isLeader: rank === 0
+              value: entry.value
             };
           });
         });
@@ -2817,19 +2787,7 @@ export const playersMethods = {
           consistency,
           splits,
           hitRates,
-          lastGame: gameStats[0] || null,
-          formTrend: (() => {
-            if (gameStats.length < 5) return 'neutral';
-            // Compare L2 composite (pts+reb+ast) vs L5 composite to detect form trend
-            const l2 = gameStats.slice(0, 2);
-            const l5 = gameStats.slice(0, 5);
-            const composite = g => (g.pts || 0) + (g.reb || 0) + (g.ast || 0);
-            const l2Avg = l2.reduce((s, g) => s + composite(g), 0) / l2.length;
-            const l5Avg = l5.reduce((s, g) => s + composite(g), 0) / l5.length;
-            if (l2Avg > l5Avg * 1.15) return 'hot';
-            if (l2Avg < l5Avg * 0.85) return 'cold';
-            return 'stable';
-          })()
+          lastGame: gameStats[0] || null
         };
       }, 15); // Cache for 15 minutes
     } catch (e) {
@@ -3064,10 +3022,7 @@ export const playersMethods = {
           consistency,
           splits,
           hitRates,
-          lastGame: gameStats[0] || null,
-          formTrend: gameStats.length >= 5
-            ? (avgs.sog > (gameStats.slice(-5).reduce((s, g) => s + g.sog, 0) / 5) ? 'hot' : 'cold')
-            : 'neutral'
+          lastGame: gameStats[0] || null
         };
       }, 15); // Cache for 15 minutes
     } catch (e) {

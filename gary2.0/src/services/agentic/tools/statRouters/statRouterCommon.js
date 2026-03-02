@@ -541,17 +541,7 @@ async function fetchNBATeamAdvancedStats(teamId, season = null) {
     const top2Usage = playerUsages.slice(0, 2).reduce((sum, p) => sum + p.usage, 0);
     const top3Usage = playerUsages.slice(0, 3).reduce((sum, p) => sum + p.usage, 0);
 
-    let teamStructure = 'balanced';
-    let structureNote = '';
-    if (top2Usage >= 55) {
-      teamStructure = 'star-heavy';
-      structureNote = `Top 2 players control ${top2Usage.toFixed(0)}% of usage - offense concentrated`;
-    } else if (top3Usage >= 70) {
-      teamStructure = 'top-heavy';
-      structureNote = `Top 3 players control ${top3Usage.toFixed(0)}% of usage`;
-    } else {
-      structureNote = `Balanced attack - top 3 at ${top3Usage.toFixed(0)}% combined usage`;
-    }
+    const structureNote = `Top 2: ${top2Usage.toFixed(0)}%, Top 3: ${top3Usage.toFixed(0)}% combined usage`;
 
     // Scoring profile from REAL team-level BDL endpoint (NOT player weight-averaging)
     const scoringProfile = teamScoringStats ? {
@@ -576,7 +566,6 @@ async function fetchNBATeamAdvancedStats(teamId, season = null) {
       players_sampled: usageStats.length,
       // Player-level: usage concentration
       usage_concentration: {
-        structure: teamStructure,
         top_2_usage: top2Usage.toFixed(1) + '%',
         top_3_usage: top3Usage.toFixed(1) + '%',
         note: structureNote
@@ -1154,22 +1143,17 @@ function formatRecentGames(games, teamName, standingsMap = null) {
       const margin = teamScore - oppScore;
       const absMargin = Math.abs(margin);
       
-      // Classify game type
-      let gameType = 'comfortable';
-      if (absMargin <= 7) gameType = 'CLOSE';
-      else if (absMargin >= 14) gameType = 'BLOWOUT';
-      
       let result = 'T';
       if (teamScore > oppScore) {
         wins++;
         result = 'W';
-        if (gameType === 'CLOSE') closeWins++;
-        else if (gameType === 'BLOWOUT') blowoutWins++;
+        if (absMargin <= 7) closeWins++;
+        else if (absMargin >= 14) blowoutWins++;
       } else if (oppScore > teamScore) {
         losses++;
         result = 'L';
-        if (gameType === 'CLOSE') closeLosses++;
-        else if (gameType === 'BLOWOUT') blowoutLosses++;
+        if (absMargin <= 7) closeLosses++;
+        else if (absMargin >= 14) blowoutLosses++;
       } else {
         ties++;
       }
@@ -1195,7 +1179,6 @@ function formatRecentGames(games, teamName, standingsMap = null) {
         score: `${teamScore}-${oppScore}`,
         margin: margin,
         absMargin: absMargin,
-        gameType: gameType,
         opponent: opponent || 'Unknown',
         opponentRecord: oppRecord,
         opponentWins: oppWins,
@@ -1211,8 +1194,7 @@ function formatRecentGames(games, teamName, standingsMap = null) {
     
     // Build enhanced analysis
     const avgOppWins = oppsWithRecords > 0 ? (totalOppWins / oppsWithRecords).toFixed(1) : null;
-    const playoffCaliberOpps = gameDetails.filter(g => g.opponentWins && g.opponentWins >= 8).length;
-    
+
     return {
       record,
       streak,
@@ -1224,7 +1206,6 @@ function formatRecentGames(games, teamName, standingsMap = null) {
         blowoutWins,
         blowoutLosses,
         avgOpponentWins: avgOppWins,
-        playoffCaliberOpponents: playoffCaliberOpps
       }
     };
   };
@@ -1236,125 +1217,24 @@ function formatRecentGames(games, teamName, standingsMap = null) {
   const l5Data = processGames(l5Games);
   const l10Data = processGames(l10Games);
   
-  // Build narrative context for Gary (based on L5)
-  const narrativeParts = [];
-  const { closeLosses, closeWins, blowoutLosses, losses, wins, avgOpponentWins } = l5Data.analysis;
-  
-  if (closeLosses >= 2) {
-    narrativeParts.push(`${closeLosses} of ${losses} L5 losses were CLOSE (≤7 pts) - NOT a freefall`);
-  }
-  if (closeWins >= 2) {
-    narrativeParts.push(`${closeWins} of ${wins} L5 wins were close - investigate sustainability`);
-  }
-  if (blowoutLosses >= 2) {
-    narrativeParts.push(`${blowoutLosses} BLOWOUT losses (14+ pts) in L5 - concerning trend`);
-  }
-  if (avgOpponentWins && parseFloat(avgOpponentWins) >= 7) {
-    narrativeParts.push(`Tough L5 schedule: avg opponent has ${avgOpponentWins} wins`);
-  }
-  if (avgOpponentWins && parseFloat(avgOpponentWins) <= 4) {
-    narrativeParts.push(`Easy L5 schedule: avg opponent has only ${avgOpponentWins} wins`);
-  }
-  
   // Compare L5 vs L10 trend
   const l5WinPct = l5Data.analysis.wins / (l5Data.analysis.wins + l5Data.analysis.losses) || 0;
   const l10WinPct = l10Data.analysis.wins / (l10Data.analysis.wins + l10Data.analysis.losses) || 0;
   const trendDiff = l5WinPct - l10WinPct;
-  
-  if (trendDiff >= 0.2) {
-    narrativeParts.push(`TRENDING UP: L5 (${l5Data.record}) is better than L10 (${l10Data.record})`);
-  } else if (trendDiff <= -0.2) {
-    narrativeParts.push(`TRENDING DOWN: L5 (${l5Data.record}) is worse than L10 (${l10Data.record})`);
-  }
-  
-  // ===== NEW: LAST 2-3 GAMES MICRO-TREND =====
-  // Games are sorted most recent first, so index 0 is the latest game
+
+  // Last 3 games (most recent first)
   const last3Games = l5Data.games.slice(0, 3);
   const last3Results = last3Games.map(g => g.result).join('');
   const last3Wins = last3Games.filter(g => g.result === 'W').length;
   const last3Losses = last3Games.filter(g => g.result === 'L').length;
-  
-  // Detect "turning the corner" patterns
-  let microTrend = null;
-  if (last3Results === 'WWW') {
-    microTrend = 'HOT: Won last 3 games';
-  } else if (last3Results === 'LLL') {
-    microTrend = 'COLD: Lost last 3 games';
-  } else if (last3Wins >= 2 && l5Data.analysis.losses >= 3) {
-    microTrend = 'TURNING CORNER? Won ' + last3Wins + ' of last 3 despite rough L5';
-  } else if (last3Losses >= 2 && l5Data.analysis.wins >= 3) {
-    microTrend = 'SLIPPING? Lost ' + last3Losses + ' of last 3 despite good L5';
-  }
-  
-  if (microTrend) {
-    narrativeParts.push(microTrend);
-  }
-  
-  // ===== NEW: STREAK SNAP DETECTION =====
-  // Look at L10 to find if they snapped a losing streak
-  const l10Results = l10Data.games.map(g => g.result);
-  let currentStreak = 0;
-  let streakType = l10Results[0]; // W or L
-  for (let i = 0; i < l10Results.length; i++) {
-    if (l10Results[i] === streakType) currentStreak++;
-    else break;
-  }
-  
-  // Check for streak snap pattern: current win streak after losses
-  if (streakType === 'W' && currentStreak >= 2) {
-    // Count consecutive losses after the current wins
-    let priorLosses = 0;
-    for (let i = currentStreak; i < l10Results.length; i++) {
-      if (l10Results[i] === 'L') priorLosses++;
-      else break;
-    }
-    if (priorLosses >= 3) {
-      narrativeParts.push(`STREAK SNAPPED: Won last ${currentStreak} after ${priorLosses}-game losing streak - INVESTIGATE what changed`);
-    }
-  }
-  
-  // Check for opposite: losing after wins
-  if (streakType === 'L' && currentStreak >= 2) {
-    let priorWins = 0;
-    for (let i = currentStreak; i < l10Results.length; i++) {
-      if (l10Results[i] === 'W') priorWins++;
-      else break;
-    }
-    if (priorWins >= 3) {
-      narrativeParts.push(`MOMENTUM LOST: Lost last ${currentStreak} after ${priorWins}-game win streak - INVESTIGATE what changed`);
-    }
-  }
-  
-  // ===== NEW: MARGIN TREND IN LOSSES =====
-  // Are losses getting closer? (sign of improvement even during losing)
-  const recentLosses = l5Data.games.filter(g => g.result === 'L');
-  if (recentLosses.length >= 2) {
-    // Margins are negative for losses, so -3 is "closer" than -15
-    // Games are sorted most recent first
-    const lossMargins = recentLosses.map(g => g.margin); // e.g., [-3, -8, -15] (most recent first)
-    
-    // Check if losses are getting closer (margins trending toward 0)
-    // Compare first half of losses to second half
-    const recentLossAvg = lossMargins.slice(0, Math.ceil(lossMargins.length / 2)).reduce((a, b) => a + b, 0) / Math.ceil(lossMargins.length / 2);
-    const olderLossAvg = lossMargins.slice(Math.ceil(lossMargins.length / 2)).reduce((a, b) => a + b, 0) / Math.floor(lossMargins.length / 2) || recentLossAvg;
-    
-    // If recent losses are closer (less negative), team is improving
-    if (recentLossAvg > olderLossAvg + 3) {
-      narrativeParts.push(`LOSSES GETTING CLOSER: Recent losses avg ${Math.abs(recentLossAvg).toFixed(0)} pts, older losses avg ${Math.abs(olderLossAvg).toFixed(0)} pts - team may be improving`);
-    } else if (olderLossAvg > recentLossAvg + 5) {
-      narrativeParts.push(`LOSSES GETTING WORSE: Recent losses avg ${Math.abs(recentLossAvg).toFixed(0)} pts, older losses avg ${Math.abs(olderLossAvg).toFixed(0)} pts - concerning trend`);
-    }
-  }
-  
+
   return {
-    // L5 Summary (primary)
     record: l5Data.record,
     last_5: l5Data.streak,
     games: l5Data.games,
     summary: l5Data.games.map(g => g.display).join(' | '),
     analysis: l5Data.analysis,
-    
-    // L10 Summary (extended view)
+
     L10: {
       record: l10Data.record,
       streak: l10Data.streak,
@@ -1362,26 +1242,18 @@ function formatRecentGames(games, teamName, standingsMap = null) {
       summary: l10Data.games.slice(0, 10).map(g => g.display).join(' | '),
       analysis: l10Data.analysis
     },
-    
-    // Trend comparison
+
     trend: {
       L5_win_pct: (l5WinPct * 100).toFixed(0) + '%',
       L10_win_pct: (l10WinPct * 100).toFixed(0) + '%',
-      direction: trendDiff >= 0.2 ? 'UP' : trendDiff <= -0.2 ? 'DOWN' : 'STABLE',
-      note: trendDiff >= 0.2 ? 'Recent form better than extended form' : 
-            trendDiff <= -0.2 ? 'Recent form worse than extended form' : 
-            'Consistent performance over L5 and L10'
+      diff: (trendDiff * 100).toFixed(0) + '%'
     },
-    
-    // NEW: Last 2-3 games micro-trend (most recent indicator)
-    micro_trend: {
-      last_3_results: last3Results,
-      last_3_record: `${last3Wins}-${last3Losses}`,
-      last_3_margins: last3Games.map(g => g.margin),
-      signal: microTrend || 'No clear micro-trend',
+
+    last_3: {
+      results: last3Results,
+      record: `${last3Wins}-${last3Losses}`,
+      margins: last3Games.map(g => g.margin),
     },
-    
-    narrative: narrativeParts.length > 0 ? narrativeParts.join('. ') : 'No significant patterns detected.',
   };
 }
 
@@ -1393,24 +1265,10 @@ function buildPaceAnalysis(homeStats, awayStats) {
   return `Pace differential: ${gap.toFixed(1)} possessions. Projected pace: ${projected}`;
 }
 
-function interpretTurnoverMargin(homeStats, awayStats) {
-  const homeDiff = homeStats?.misc_turnover_differential || 0;
-  const awayDiff = awayStats?.misc_turnover_differential || 0;
-  
-  const parts = [];
-  if (Math.abs(homeDiff) > 6) {
-    parts.push(`${homeStats?.team?.name || 'Home'}: turnover differential ${homeDiff > 0 ? '+' : ''}${homeDiff} — investigate`);
-  }
-  if (Math.abs(awayDiff) > 6) {
-    parts.push(`${awayStats?.team?.name || 'Away'}: turnover differential ${awayDiff > 0 ? '+' : ''}${awayDiff} — investigate`);
-  }
-
-  return parts.length > 0 ? parts.join('; ') : 'Both teams near expected turnover rates';
-}
 
 
 
-export { getCurrentSeasonString, sportToBdlKey, normalizeSportName, findTeam, fmtNum, fmtPct, fetchBothTeamSeasonStats, fetchNBATeamScoringStats, fetchNBATeamAdvancedStats, fetchNBALeaders, fetchNBATeamBaseStats, fetchNBATeamOpponentStats, fetchNBATeamDefenseStats, fetchTopPlayersForTeam, formatRecentGames, buildPaceAnalysis, interpretTurnoverMargin, BDL_API_KEY, DEPRECATED_TOKENS, SPORT_SPECIFIC_ROUTING, _nbaBaseStatsCache, _nbaAdvancedStatsCache, _nbaOpponentStatsCache, _nbaDefenseStatsCache, _nbaTeamScoringStatsCache };
+export { getCurrentSeasonString, sportToBdlKey, normalizeSportName, findTeam, fmtNum, fmtPct, fetchBothTeamSeasonStats, fetchNBATeamScoringStats, fetchNBATeamAdvancedStats, fetchNBALeaders, fetchNBATeamBaseStats, fetchNBATeamOpponentStats, fetchNBATeamDefenseStats, fetchTopPlayersForTeam, formatRecentGames, buildPaceAnalysis, BDL_API_KEY, DEPRECATED_TOKENS, SPORT_SPECIFIC_ROUTING, _nbaBaseStatsCache, _nbaAdvancedStatsCache, _nbaOpponentStatsCache, _nbaDefenseStatsCache, _nbaTeamScoringStatsCache };
 
 // Re-export imported dependencies for fetcher sub-modules
 export { geminiGroundingSearch, getGroundedWeather } from '../../scoutReport/scoutReportBuilder.js';

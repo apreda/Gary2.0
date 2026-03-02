@@ -170,7 +170,7 @@ const NFL_PROP_TOOLS = [
     type: 'function',
     function: {
       name: 'fetch_player_vs_opponent',
-      description: 'Fetch a player\'s historical performance against a specific opponent team. Use this to validate revenge game narratives or find matchup-specific edges. Returns stats from past games vs this opponent.',
+      description: 'Fetch a player\'s historical performance against a specific opponent team. Returns stats from past games vs this opponent.',
       parameters: {
         type: 'object',
         properties: {
@@ -309,13 +309,13 @@ const SPORT_CONSTITUTION_KEYS = {
 
 /**
  * Get the appropriate constitution for a sport (WITH BASE_RULES included)
- * This ensures props get the same core identity (INDEPENDENT THINKER), 
- * data source rules, and external betting influence prohibition as game picks.
+ * Returns a sectioned object { baseRules, pass1, pass2, pass25, pass3 }
+ * for phase-aligned delivery during the 4-pass pipeline.
  */
 function getConstitution(sportLabel) {
   const constitutionKey = SPORT_CONSTITUTION_KEYS[sportLabel] || 'NFL_PROPS';
-  let constitution = getConstitutionWithBaseRules(constitutionKey);
-  
+  const constitution = getConstitutionWithBaseRules(constitutionKey);
+
   // Replace date template if present
   const today = new Date().toLocaleDateString('en-US', {
     weekday: 'long',
@@ -323,17 +323,25 @@ function getConstitution(sportLabel) {
     month: 'long',
     day: 'numeric'
   });
-  // Handle both sectioned object and flat string (props are always flat, but future-proofing)
-  if (typeof constitution === 'object' && constitution.full) {
+
+  if (typeof constitution === 'object' && constitution.pass1) {
+    // Sectioned props constitution — replace templates in all sections
+    for (const key of ['baseRules', 'pass1', 'pass2', 'pass25', 'pass3']) {
+      if (constitution[key]) {
+        constitution[key] = constitution[key].replace(/\{\{CURRENT_DATE\}\}/g, today);
+      }
+    }
+  } else if (typeof constitution === 'object' && constitution.full) {
+    // Game pick constitution (shouldn't be used here but handle gracefully)
     for (const key of ['baseRules', 'domainKnowledge', 'guardrails', 'full']) {
       if (constitution[key]) {
         constitution[key] = constitution[key].replace(/\{\{CURRENT_DATE\}\}/g, today);
       }
     }
-  } else {
-    constitution = constitution.replace(/\{\{CURRENT_DATE\}\}/g, today);
+  } else if (typeof constitution === 'string') {
+    return constitution.replace(/\{\{CURRENT_DATE\}\}/g, today);
   }
-  
+
   return constitution;
 }
 
@@ -947,7 +955,6 @@ async function handlePropsToolCall(toolCall, sportKey, sportLabel) {
 
   // ============================================================================
   // FETCH_PLAYER_VS_OPPONENT - NFL Historical Matchup Data
-  // Use this to validate revenge game narratives or find matchup-specific edges
   // ============================================================================
   if (functionName === 'fetch_player_vs_opponent') {
     console.log(`  → [PLAYER_VS_OPPONENT] ${args.player_name} vs ${args.opponent_team}`);
@@ -1082,9 +1089,7 @@ async function handlePropsToolCall(toolCall, sportKey, sportLabel) {
         games_found: gamesVsOpponent.length,
         seasons_searched: `${previousSeason}-${currentSeason}`,
         summary,
-        insight: gamesVsOpponent.length >= 2 
-          ? `${args.player_name} has ${gamesVsOpponent.length} games vs ${opponentTeam.full_name} in the last 2 seasons. Use the summary stats to validate any matchup narrative.`
-          : `Limited sample size (${gamesVsOpponent.length} game). Be cautious with matchup-specific conclusions.`
+        insight: `${args.player_name} has ${gamesVsOpponent.length} game${gamesVsOpponent.length !== 1 ? 's' : ''} vs ${opponentTeam.full_name} in the last 2 seasons.`
       };
     } catch (e) {
       return { error: e.message };
@@ -1237,7 +1242,7 @@ async function handlePropsToolCall(toolCall, sportKey, sportLabel) {
         note: category === 'general' && type === 'usage'
           ? 'Usage % = share of team possessions used. Touches = ball handles. pct_* = share of team totals.'
           : category === 'defense'
-            ? 'Matchup FG%/3PT% = opponent efficiency when guarded (lower = better defender). Contested FG% = skill at making contested shots (higher = better). Use matchup stats for opposing player UNDERs.'
+            ? 'Matchup FG%/3PT% and Contested FG% for the requested matchup.'
             : null
       };
     } catch (e) {
@@ -1333,7 +1338,7 @@ async function handlePropsToolCall(toolCall, sportKey, sportLabel) {
           avg_usage_pct: avgUsage ? avgUsage.toFixed(1) + '%' : 'N/A',
           avg_net_rating: avgNetRtg ? avgNetRtg.toFixed(1) : 'N/A'
         },
-        note: 'Per-game advanced stats show role consistency. High usage variance = unpredictable. Stable usage = reliable volume.'
+        note: 'Per-game advanced stats for the requested time range.'
       };
     } catch (e) {
       console.error(`    ❌ Error:`, e.message);
@@ -1663,44 +1668,21 @@ function validatePropsAgainstToolHistory(picks, toolCallHistory) {
  * @param {string} sportLabel - Sport identifier
  * @returns {string} - The Pass 2 Steel Man prompt
  */
-function buildPropsPass2SteelManMessage(candidates, sportLabel = 'NFL') {
-  // GEMINI 3 OPTIMIZED: Simple, direct prompts work best
-  // "Gemini 3 responds best to direct, clear instructions. It may over-analyze
-  // verbose or overly complex prompt engineering techniques."
-  // "By default, Gemini 3 is less verbose - you must explicitly request detailed output"
-
+function buildPropsPass2SteelManMessage(candidates, sportLabel = 'NFL', pass2Constitution = '') {
   const candidateList = candidates.slice(0, 8).map((p, i) =>
     `${i + 1}. ${p.player} - ${p.props?.map(pr => `${pr.type} ${pr.line}`).join(', ') || 'TBD'}`
   ).join('\n');
 
-  return `STOP. Write detailed bilateral analysis before finalizing.
+  return `## PASS 2 — BILATERAL CASES
+
+${pass2Constitution ? pass2Constitution + '\n\n---\n\n' : ''}STOP. Write detailed bilateral analysis before finalizing.
 
 YOUR CANDIDATES:
 ${candidateList}
 
-REQUIRED OUTPUT FORMAT - Write this for each candidate (give BOTH cases equal depth):
+Write bilateral OVER/UNDER cases for each candidate. Be specific — cite numbers and mechanisms from your investigation. Give both sides equal depth. End each with a verdict.
 
-**[PLAYER NAME] - [PROP] [LINE]**
-
-${Math.random() > 0.5 ? `CASE FOR OVER:
-[Write 3-4 detailed sentences. What specific mechanism pushes production ABOVE the line tonight? Not "his average is higher" - that's what created the line. What's DIFFERENT tonight?]
-
-CASE FOR UNDER:
-[Write 3-4 detailed sentences. What specific mechanism LIMITS production BELOW the line tonight? Not "he might play badly" - what structural factor caps production? Scheme? Game script? Usage change?]` : `CASE FOR UNDER:
-[Write 3-4 detailed sentences. What specific mechanism LIMITS production BELOW the line tonight? Not "he might play badly" - what structural factor caps production? Scheme? Game script? Usage change?]
-
-CASE FOR OVER:
-[Write 3-4 detailed sentences. What specific mechanism pushes production ABOVE the line tonight? Not "his average is higher" - that's what created the line. What's DIFFERENT tonight?]`}
-
-VERDICT: [OVER/UNDER/PASS] because [one sentence explaining which case is stronger]
-
----
-
-IMPORTANT:
-- Write THOROUGH analysis (this is required, not optional)
-- Be SPECIFIC with numbers and mechanisms
-- The UNDER case must be GENUINE, not filler
-- If both cases are equally strong, PASS on that prop
+${Math.random() > 0.5 ? 'Start with CASE FOR OVER, then CASE FOR UNDER.' : 'Start with CASE FOR UNDER, then CASE FOR OVER.'}
 
 DO NOT call any tools. Write text analysis only. Start with ${candidates[0]?.player || 'your first candidate'}.`;
 }
@@ -1709,7 +1691,12 @@ DO NOT call any tools. Write text analysis only. Start with ${candidates[0]?.pla
  * Run full iteration loop for props using PERSISTENT chat session
  * The chat session manages its own history, avoiding thoughtSignature issues
  */
-async function runPropsIterationLoop({ systemPrompt, userMessage, sportKey, sportLabel = 'NFL', maxIterations = 12, regularOnly = false, validatedPlayerNames = null }) {
+async function runPropsIterationLoop({ systemPrompt, userMessage, sportKey, sportLabel = 'NFL', constitution = null, maxIterations = 12, regularOnly = false, validatedPlayerNames = null }) {
+  // Extract constitution sections for phase-aligned injection
+  const constPass2 = (constitution && typeof constitution === 'object') ? (constitution.pass2 || '') : '';
+  const constPass25 = (constitution && typeof constitution === 'object') ? (constitution.pass25 || '') : '';
+  const constPass3 = (constitution && typeof constitution === 'object') ? (constitution.pass3 || '') : '';
+
   const gemini = getGeminiForProps();
   
   // Get sport-specific tools
@@ -1864,7 +1851,7 @@ async function runPropsIterationLoop({ systemPrompt, userMessage, sportKey, spor
           console.log(`[Props] PIPELINE GATE: finalize before Pass 2 — injecting bilateral cases (${playersInvestigated} players investigated)`);
           iteration++;
           console.log(`\n[Props Iteration ${sportLabel}] ${iteration}/${maxIterations} (PASS 2 — bilateral cases)`);
-          result = await chat.sendMessage(buildPropsPass2SteelManMessage(candidates, sportLabel));
+          result = await chat.sendMessage(buildPropsPass2SteelManMessage(candidates, sportLabel, constPass2));
           response = result.response;
         } else if (!_pass2Injected) {
           console.log(`[Props] PIPELINE GATE: finalize too early — only ${playersInvestigated} players investigated (need 3+)`);
@@ -1879,18 +1866,9 @@ async function runPropsIterationLoop({ systemPrompt, userMessage, sportKey, spor
           console.log(`\n[Props Iteration ${sportLabel}] ${iteration}/${maxIterations} (PASS 2.5 — evaluation)`);
           result = await chat.sendMessage(`## PASS 2.5 — EVALUATION
 
-You've written OVER/UNDER cases for your candidates. Now evaluate:
+${constPass25 ? constPass25 + '\n\n---\n\n' : ''}You've written OVER/UNDER cases. Evaluate them honestly.
 
-1. For each candidate, which case was stronger — OVER or UNDER? Be honest about which argument holds up.
-2. Does the DATA from your investigation support your verdict, or are you relying on narrative?
-3. Which 2 props have the CLEAREST statistical edge?
-
-CRITICAL QUESTIONS:
-- Do your picks ALIGN with how you expect this game to play out?
-- What specific mechanism pushes production ABOVE or BELOW the line tonight?
-- Is the line mispriced based on what your investigation revealed?
-
-Identify your 2 BEST picks. Write your evaluation as text. Do NOT call finalize_props yet.`);
+Identify your 2 best picks. Write your evaluation as text. Do NOT call finalize_props yet.`);
           response = result.response;
         } else {
           _pass3Injected = true;
@@ -1899,10 +1877,12 @@ Identify your 2 BEST picks. Write your evaluation as text. Do NOT call finalize_
           console.log(`\n[Props Iteration ${sportLabel}] ${iteration}/${maxIterations} (PASS 3 — finalize)`);
           result = await chat.sendMessage(`## PASS 3 — FINALIZE
 
-Your investigation and evaluation are complete. Call finalize_props NOW with your 2 best picks.
+${constPass3 ? constPass3 + '\n\n---\n\n' : ''}Your investigation and evaluation are complete. Call finalize_props NOW with your 2 best picks.
+
+KEY_STATS must reference actual tool responses.
 
 For each pick provide:
-- player, prop, line, odds, bet (OVER/UNDER), confidence (0.50-0.95 — use precise values like 0.72, 0.81, not round numbers), rationale
+- player, prop, line, odds, bet (OVER/UNDER), confidence (0.50-0.95 — use precise values like 0.72, 0.81, not round numbers), rationale, key_stats
 
 Call finalize_props now.`);
           response = result.response;
@@ -2012,7 +1992,7 @@ Call finalize_props now.`);
           console.log(`[Props] ✓ ${playersInvestigated} players investigated — injecting PASS 2 (bilateral cases)`);
           iteration++;
           console.log(`\n[Props Iteration ${sportLabel}] ${iteration}/${maxIterations} (PASS 2 — bilateral cases)`);
-          result = await chat.sendMessage(buildPropsPass2SteelManMessage(candidates, sportLabel));
+          result = await chat.sendMessage(buildPropsPass2SteelManMessage(candidates, sportLabel, constPass2));
           response = result.response;
         }
       }
@@ -2025,7 +2005,7 @@ Call finalize_props now.`);
           const candidates = buildInvestigatedCandidates();
           iteration++;
           console.log(`\n[Props Iteration ${sportLabel}] ${iteration}/${maxIterations} (PASS 2 — forced by iteration limit)`);
-          result = await chat.sendMessage(buildPropsPass2SteelManMessage(candidates, sportLabel));
+          result = await chat.sendMessage(buildPropsPass2SteelManMessage(candidates, sportLabel, constPass2));
           response = result.response;
         }
       }
@@ -2047,18 +2027,9 @@ Call finalize_props now.`);
           console.log(`\n[Props Iteration ${sportLabel}] ${iteration}/${maxIterations} (PASS 2.5 — evaluation)`);
           result = await chat.sendMessage(`## PASS 2.5 — EVALUATION
 
-You've written OVER/UNDER cases for your candidates. Now evaluate:
+${constPass25 ? constPass25 + '\n\n---\n\n' : ''}You've written OVER/UNDER cases. Evaluate them honestly.
 
-1. For each candidate, which case was stronger — OVER or UNDER? Be honest about which argument holds up.
-2. Does the DATA from your investigation support your verdict, or are you relying on narrative?
-3. Which 2 props have the CLEAREST statistical edge?
-
-CRITICAL QUESTIONS:
-- Do your picks ALIGN with how you expect this game to play out?
-- What specific mechanism pushes production ABOVE or BELOW the line tonight?
-- Is the line mispriced based on what your investigation revealed?
-
-Identify your 2 BEST picks. Write your evaluation as text. Do NOT call finalize_props yet.`);
+Identify your 2 best picks. Write your evaluation as text. Do NOT call finalize_props yet.`);
           response = result.response;
           continue;
         }
@@ -2078,10 +2049,12 @@ Identify your 2 BEST picks. Write your evaluation as text. Do NOT call finalize_
         console.log(`\n[Props Iteration ${sportLabel}] ${iteration}/${maxIterations} (PASS 3 — finalize)`);
         result = await chat.sendMessage(`## PASS 3 — FINALIZE
 
-Your investigation and evaluation are complete. Call finalize_props NOW with your 2 best picks.
+${constPass3 ? constPass3 + '\n\n---\n\n' : ''}Your investigation and evaluation are complete. Call finalize_props NOW with your 2 best picks.
+
+KEY_STATS must reference actual tool responses.
 
 For each pick provide:
-- player, prop, line, odds, bet (OVER/UNDER), confidence (0.50-0.95 — use precise values like 0.72, 0.81, not round numbers), rationale
+- player, prop, line, odds, bet (OVER/UNDER), confidence (0.50-0.95 — use precise values like 0.72, 0.81, not round numbers), rationale, key_stats
 
 Call finalize_props now.`);
         response = result.response;
@@ -2229,37 +2202,40 @@ function formatGameTime(timeString) {
 
 /**
  * Build system prompt for props iteration loop
+ * PHASE-ALIGNED: Only Pass 1 awareness + always-on guardrails go here.
+ * Pass 2/2.5/3 context is injected dynamically at each pass transition.
  */
-function buildPropsIterationPrompt(gameSummary, propCandidates, narrativeContext, sportLabel, regularOnly = false) {
-  const constitution = getConstitution(sportLabel);
-  // Pick count: 2 props per game (quality over quantity)
-  const pickCount = 2;
+function buildPropsIterationPrompt(gameSummary, propCandidates, narrativeContext, sportLabel, regularOnly = false, constitution = null) {
+  // Constitution passed from caller to avoid redundant getConstitution() call
+  if (!constitution) constitution = getConstitution(sportLabel);
 
   const now = new Date();
   const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   const month = now.getMonth() + 1;
   const year = now.getFullYear();
   // NHL/NBA season labels: Jan-Sep 2026 is the 2025-26 season
-  const seasonLabel = (sportLabel === 'NHL' || sportLabel === 'NBA') 
+  const seasonLabel = (sportLabel === 'NHL' || sportLabel === 'NBA')
     ? (month >= 10 ? `${year}-${year + 1}` : `${year - 1}-${year}`)
     : `${year}`;
 
   // Add NFL regular-only restrictions when TDs are handled separately
-  // GEMINI 3 BEST PRACTICE: No emojis in input prompts (causes tokenization fragmentation)
   const nflRegularOnlyInstructions = (regularOnly && sportLabel === 'NFL') ? `
 ## IMPORTANT: REGULAR PROPS ONLY - NO TDs
 TD props (anytime TD, first TD, 2+ TDs) are handled by a SEPARATE process.
 Your picks MUST be from these categories ONLY:
 - Passing yards, passing attempts, passing TDs (QB stats)
-- Rushing yards, rushing attempts  
+- Rushing yards, rushing attempts
 - Receiving yards, receptions
 - Tackles, sacks (defensive props)
 
 DO NOT pick any touchdown scorer props. Focus on yards, attempts, and receptions only.
 ` : '';
 
+  // Constitution is a sectioned object — only pass1 goes in the system prompt
+  const baseRules = (typeof constitution === 'object' && constitution.baseRules) ? constitution.baseRules : '';
+  const pass1Constitution = (typeof constitution === 'object' && constitution.pass1) ? constitution.pass1 : '';
+
   return `
-You are GARY - the grizzled sports betting sharp with 30 years in the game. You're now powered by elite reasoning to find the "hidden angles" in player props.
 ${nflRegularOnlyInstructions}
 
 ## CURRENT DATE & SEASON
@@ -2267,243 +2243,39 @@ Current Date: ${dateStr}
 Current Season: ${seasonLabel}
 (CRITICAL: Ensure you are looking for stats from the ${seasonLabel} season. You are in the middle of the ${seasonLabel} season.)
 
-## WHO YOU ARE
-You are a DATA ANALYST and an INDEPENDENT THINKER. You read numbers and draw statistical conclusions. You investigate, understand, and decide on your own.
+${baseRules}
 
-You do NOT have scheme knowledge, film knowledge, or tactical expertise. You CANNOT predict how plays will unfold or how matchups will play out tactically. You CAN analyze statistical patterns, usage data, game logs, and matchup numbers. If a conclusion requires knowledge beyond the stats (defensive scheme tendencies, coaching adjustments, play-calling), you cannot draw it — stick to what the data shows.
+## YOUR TASK: PASS 1 — INVESTIGATION
 
-You investigate whether recent performance changes reflect structural shifts or variance. You distinguish between narratives and matchup-specific edges. You know when books have set a line based on averages that don't capture TONIGHT'S specific situation. You don't follow consensus—you make YOUR OWN picks.
+Investigate 4-6 players using BDL tools:
+- \`fetch_player_game_logs\` — Recent performance (L5-10 games)
+- \`fetch_player_season_stats\` — Baseline to compare against recency
 
-## YOUR VOICE & TONE
-- **Confident but not cocky**: You've done the work, you trust the data.
-- **Natural**: Sound like a real analyst having a conversation, not an AI with canned phrases.
+Props should reflect your understanding of the GAME — how player opportunities align with the game flow you expect tonight.
 
-## THE FOUR INVESTIGATIONS (Your Core Framework)
+**OUTPUT: 2 PROPS PER GAME** — Quality over quantity. Two confident picks beat five shaky ones.
 
-You are a GAME ANALYST, not a betting market analyst. You investigate GAME INFO.
-Before finalizing ANY prop, run these investigations (in whatever order makes sense):
+The system enforces a 4-pass pipeline. Additional context will be provided at each pass:
+- Pass 2: Bilateral OVER/UNDER cases (injected after investigation)
+- Pass 2.5: Evaluation (injected after bilateral cases)
+- Pass 3: Finalize (injected after evaluation)
 
-**1. INVESTIGATE THE MISMATCH**
-Ask: What structural factor exists tonight that changes this player's expected production — in EITHER direction?
-- Things that might matter: role changes (up OR down), injury cascades, scheme matchups (exploitable OR limiting), minutes situations. Investigate what's real tonight vs what's narrative.
-- If you can't identify a specific mismatch in either direction, you might just be agreeing with the market.
+finalize_props calls are BLOCKED until all passes are complete.
 
-**2. INVESTIGATE THE GAME LOGIC**
-Ask: Why is this line set at this number? What game factors are the books pricing in?
-- Then ask: Do I see game factors the books might have underweighted? This applies to BOTH directions — maybe the UNDER is underpriced because of a defensive matchup the line doesn't capture, or the OVER is underpriced because of a role change.
-- Example: "Murray's line is 8.5 assists. The line respects it's a small sample against weak opponents. MY view is the role change is real."
+${narrativeContext ? `## LIVE CONTEXT (from Gemini Search)\n${narrativeContext}\n` : ''}
 
-**3. INVESTIGATE THE MECHANISM**
-Ask: What is the on-court/on-ice action that drives production ABOVE or BELOW the line tonight?
-- A ranking alone doesn't tell you if it's structural or noise. Investigate the mechanism behind it.
-- OVER mechanism: "They lack a vertical rim protector since the starter went down. He scores 68% of points in the paint."
-- UNDER mechanism: "Their perimeter defense switches everything. His assist rate drops 38% against switching schemes."
-- If your only support is a ranking without an underlying mechanism, dig deeper.
+---
 
-**4. INVESTIGATE THE FLOOR AND CEILING**
-Sharps think about downside AND upside limits before committing.
-- FOR OVERS: "Even if he only plays 28 minutes, at his rate he still projects to..." — if the floor doesn't clear the line, no mismatch saves your OVER.
-- FOR UNDERS: "Even in his BEST scenario tonight, his production projects to..." — if the ceiling still clears the line, your UNDER thesis is weak.
-- This applies to BOTH directions. OVER needs a floor that clears. UNDER needs a ceiling that doesn't.
+## INVESTIGATION AWARENESS
 
-## SHARP WISDOM (How to Think)
+${pass1Constitution}
 
-**MEDIAN VS MEAN TRAP:** Ask: Is this player's average pulled up by 1-2 monster games? If so, does the median production tell a different story than the mean? Investigate which better describes TONIGHT's likely output.
-
-**DERIVATIVE LAZINESS:** Ask: Is THIS player's prop line set with the same modeling care as star props? Books focus sophisticated modeling on high-profile markets — secondary players and backup roles may receive formula adjustments that don't capture game-specific situations. Investigate whether this line reflects tonight's reality.
-
-**DIRECTION CONVICTION CHECK:** For every pick, ask: What specific game factor tonight supports THIS direction? Would your analysis hold up if you argued the opposite side?
-
-**SPECIFICITY OVER GENERALITY:** Sharps have receipts.
-- Hand-wavy: "His role has grown significantly"  
-- Specific: "His usage jumped from 22% to 31% since the trade, and he's seeing 4 more FGA per game"
-
-## THE SELF-EVALUATION MIRROR (Before Finalizing)
-
-Before finalizing ANY pick, hold your reasoning up to this mirror:
-
-**SHARP RATIONALE CHARACTERISTICS:**
-- SPECIFICITY: Did you anchor with specific numbers (rates, minutes, usage shifts)? Not hand-wavy.
-- VOLUME FLOOR ADDRESSED: Did you think through the downside scenario?
-- EDGE IS GAME-SPECIFIC: About TONIGHT's game, not just general ability.
-- MECHANISM IS SPECIFIC: WHY this player produces, not just rankings.
-- LOSS SCENARIO IS CONCRETE: The specific game situation where this loses.
-- GAME LOGIC ADDRESSED: What the line respects and why your view differs.
-
-**RED FLAGS (Lower your conviction if you trigger these):**
-- Your thesis is "average > line" (that's what the line already reflects)
-- Your mechanism is a ranking ("5th most to PGs") without explaining WHY
-- Your evidence is one game from months ago
-- Your loss scenario is generic ("they could play well")
-- You didn't address what the line is respecting
-- You're taking the "sexy" public side without a specific edge
-
-**THE SHARP TEST:** Can you state your mismatch in ONE sentence?
-If you can't, you might not have edge - you might have an opinion that agrees with the market.
-
-## CONFIDENCE
-
-**confidence (0.50-0.95):** Base it on how strong your reasoning is — how clear the data edge was,
-how many factors aligned. Use the FULL range with PRECISE granular values (e.g., 0.72, 0.81, 0.63, 0.58).
-Do NOT round to tier values like 0.65, 0.75, 0.85 — each prop has unique conviction.
-
-## YOUR TASK: THE PROPS WORKFLOW (4-PASS PIPELINE)
-
-Props should reflect your understanding of the GAME. Ask: Do these player opportunities align with the game flow I expect?
-
-**PASS 1: INVESTIGATION**
-1. **INVESTIGATE PLAYERS**: Use BDL tools to examine 4-6 players:
-   - \`fetch_player_game_logs\` - Recent performance (L5-10 games)
-   - \`fetch_player_season_stats\` - Baseline to compare against recency
-   - Ask: Which players see increased opportunity in the expected game script?
-   - Ask: What do these numbers tell you about production potential TONIGHT?
-
-**PASS 2: BILATERAL CASES** (injected after investigation)
-2. **WRITE OVER/UNDER CASES**: For each candidate you investigated, build BOTH cases with equal analytical depth:
-   - CASE FOR OVER: What specific mechanism pushes production ABOVE the line tonight?
-   - CASE FOR UNDER: What specific mechanism LIMITS production BELOW the line tonight?
-   - VERDICT: Which case is stronger based on the data, and why?
-
-**PASS 2.5: EVALUATION** (injected after bilateral cases)
-3. **STRESS TEST**: Evaluate your cases honestly:
-   - Which candidates have the CLEAREST statistical edge?
-   - Does the data support your verdict, or are you relying on narrative?
-   - Identify your 2 BEST picks.
-
-## STAT PHILOSOPHY FOR PROP INVESTIGATION (CRITICAL)
-
-**PREDICTIVE vs DESCRIPTIVE METRICS:**
-- **DESCRIPTIVE (what happened)**: Season averages, career totals, "he's a 20 PPG scorer"
-- **PREDICTIVE (what will happen TONIGHT)**: L5 form, usage rate changes, matchup-specific efficiency
-- Use PREDICTIVE metrics to justify picks. Descriptive stats just describe - they don't predict.
-
-**L5/L10 vs SEASON AVERAGES:**
-- **L5/L10**: Shows CURRENT form, recent role changes, injury adjustments. More predictive for TONIGHT.
-- **Season**: Shows baseline identity, regression targets. Use for context, not primary evidence.
-- Ask: "Is L5 the NEW normal (role change, lineup shift) or just variance that regresses to season?"
-- For props, L5/L10 is usually MORE relevant than season - but investigate WHY the recent form exists.
-
-**INJURY/USAGE AWARENESS:**
-Your constitution includes the full injury investigation framework. Key reminders:
-- Investigate injury DURATION and whether the line has already adjusted before citing any absence.
-- For returning players: Be aware of potential minutes restrictions or conditioning ramp-up. What does the data show?
-- For injured teammates: Investigate the actual usage redistribution in the game logs — don't assume.
-
-**COMMON NARRATIVES — INVESTIGATE WHETHER THEY APPLY:**
-- "He's been hot" — Ask: Is this efficiency variance (regresses) or structural change (sustains)? What changed?
-- "This is a revenge game" — Ask: Do the stats show performance differences vs this team? Or is this narrative noise?
-- "He always performs in primetime" — Ask: Is this real across a large sample? Or narrative selected from variance?
-- "Back-to-back fatigue" — Ask: Does THIS player actually underperform B2B? Check his actual splits.
-
-For props, INVESTIGATE the factor. Don't cite narratives as evidence.
-
-**PHASE 3: PICK YOUR 2 BEST PROPS**
-**PASS 3: FINALIZE** (injected after evaluation)
-4. **CALL finalize_props** with your 2 best picks. Include:
-   - The specific mechanism/edge
-   - Statistical support from your investigation
-   - What could go wrong (the risk)
-
-**OUTPUT: 2 PROPS PER GAME** - Quality over quantity. Two confident picks beat five shaky ones.
-
-The system enforces the 4-pass pipeline. finalize_props calls are BLOCKED until all passes are complete.
-
-## RATIONALE vs KEY_STATS (THE BEST OF BOTH WORLDS)
-To give the user the best experience, we divide your analysis into two parts:
-
-1. **KEY_STATS (The Bullets)**: This is where you are a "Spreadsheet Line Hunter." Put the hard numbers, averages, and dry math here.
-   - Example: "Season avg: 19.3 PPG (from season_stats)"
-   - Example: "L5 avg: 26.5 vs line 24.5 (from game_logs)"
-   - Example: "Shooting: 42.8% 3PT on 3.6 makes (from search_context)"
-   - Example: "NBA Record: Fastest player to 100 3PM (from search_context)"
-
-2. **RATIONALE (The Story)**: This is where you are "Organic Gary." Write 5-7 sentences that tell the story of WHY those numbers happen. Talk about the matchup, the defenders, the motivation, and the flow of the game. NO dry stat-dumps here—make it read like a scouting report.
-
-## FINALIZATION REMINDER
-- Investigate 4-6 players with BDL tools (Pass 1).
-- Write bilateral OVER/UNDER cases for each candidate (Pass 2).
-- Evaluate your cases and identify your 2 best picks (Pass 2.5).
-- Call finalize_props with your 2 picks (Pass 3).
+---
 
 ## ZERO TOLERANCE FOR HALLUCINATION
 
-**THIS IS THE MOST IMPORTANT RULE. VIOLATIONS COST REAL MONEY.**
-
-When you receive tool responses, you MUST **COPY THE EXACT NUMBERS**.
-
-### WHAT YOU MUST DO:
-[DO] Copy numbers VERBATIM from tool responses
-[DO] If tool returns "receptions: 7, 1, 5, 4, 9" then write "7, 1, 5, 4, 9"
-[DO] Calculate averages from ONLY the numbers the tool gave you
-[DO] For names (QBs, players, etc.) use ONLY what search_player_context returns
-[DO] If data is unavailable, say "stats unavailable" - don't fill in gaps
-
-### WHAT IS ABSOLUTELY FORBIDDEN:
-[FORBIDDEN] Writing different numbers than what the tool returned
-[FORBIDDEN] "Rounding" or "estimating" stats (write the exact number)
-[FORBIDDEN] Using your general knowledge to fill in missing data
-[FORBIDDEN] Mixing up player names or team info from your training data
-[FORBIDDEN] Writing ANY statistic not explicitly in a tool response
-
-### KEY_STATS FORMAT (REQUIRED):
-Each key_stat MUST reference its source:
-- "L5 receptions: 7, 1, 5, 4, 9 (from fetch_player_game_logs)"
-- "Season avg: 4.5 rec/game (from fetch_player_season_stats)"
-- "QB: Chris Oladokun starting (from search_player_context)"
-- "Game logs unavailable - using matchup context only"
-
-### VERIFICATION STEP:
-Before calling finalize_props, mentally verify:
-"Is every number in my key_stats an EXACT copy from a tool response?"
-If you can't trace a stat to a specific tool call, DELETE IT.
-
-## RATIONALE STRUCTURE (MANDATORY - FOLLOW THIS ORDER)
-
-Your rationale MUST include these 5 elements in 5-7 sentences:
-
-**1. YOUR PREDICTION** - Start with what YOU expect to happen:
-   "The line of 68.5 is based on his season average, but that includes games with a different QB..."
-
-**2. THE SPECIFIC EDGE** - What YOU see that creates value:
-   "With Wilson at QB, his L5 is 78, 92, 65, 88, 101 yards (84.8 avg)..."
-
-**3. GAME SCRIPT ALIGNMENT** - Use the gameScript data provided:
-   "As +7 underdogs, Pittsburgh's game script projects heavy passing volume..."
-
-**4. THE RISK** - Name what could go wrong (honest assessment):
-   "The risk is if they fall behind 21+ early and abandon balance..."
-
-**5. WHY BET ANYWAY** - Why the edge outweighs the risk:
-   "But the spread suggests a close game, and his target share is locked in at 28%..."
-
-## BANNED PHRASES (Never use these)
-[BANNED] "He should be able to..." / "Look for him to..." / "I expect him to..."
-[BANNED] "Good matchup" (say WHY: "Defense allows X yards, ranked Yth")
-[BANNED] "He's been hot" (say HOW: "L3 avg of 95 vs season 68")
-[BANNED] "Volume play" / "Ceiling game" (explain the SPECIFIC driver)
-[BANNED] "He's due" (gambling fallacy)
-
-## USE THE DATA YOU HAVE
-- Review the game context (matchup, spread, game script) and investigate what it reveals about player opportunity
-- Use \`fetch_player_vs_opponent\` for matchup validation
-
-${narrativeContext ? `\n## LIVE CONTEXT (from Gemini Search)\n${narrativeContext}` : ''}
-
----
-
-## SHARP BETTING FRAMEWORK (READ THIS LAST - THESE ARE YOUR PRINCIPLES)
-
-${constitution}
-
----
-
-## WORKFLOW REMINDER (4-PASS PIPELINE)
-- PASS 1: INVESTIGATE 4-6 players with BDL tools
-- PASS 2: Write bilateral OVER/UNDER cases for each candidate
-- PASS 2.5: EVALUATE your cases — which 2 have the clearest edge?
-- PASS 3: Call finalize_props with your 2 best picks
-
-**THE FLOW:** Investigate → Bilateral Cases → Evaluate → Finalize
+Copy numbers VERBATIM from tool responses. Calculate averages from ONLY the numbers tools gave you.
+If data is unavailable, say "stats unavailable." NEVER use training data for stats, names, or team info.
 `;
 }
 
@@ -2540,12 +2312,14 @@ export async function runAgenticPropsPipeline({
   const modeLabel = regularOnly && sportLabel === 'NFL' ? ' (regular props only - TDs handled separately)' : '';
   console.log(`[Agentic Props][${sportLabel}] Using full iteration loop with BDL MCP tools${modeLabel}`);
 
+  const constitution = getConstitution(sportLabel);
   const systemPrompt = buildPropsIterationPrompt(
     context.gameSummary,
     context.propCandidates,
     context.narrativeContext,
     sportLabel,
-    regularOnly  // Pass through to inform Gary about prop restrictions
+    regularOnly,  // Pass through to inform Gary about prop restrictions
+    constitution  // Pass sectioned constitution to avoid redundant call
   );
 
   // GEMINI 3 BEST PRACTICE: "Final Line Rule" - Put DATA first, INSTRUCTIONS last
@@ -2564,8 +2338,7 @@ export async function runAgenticPropsPipeline({
     props: p.props,
     recentForm: p.recentForm ? {
       targetTrend: p.recentForm.targetTrend,
-      usageTrend: p.recentForm.usageTrend,
-      formTrend: p.recentForm.formTrend
+      usageTrend: p.recentForm.usageTrend
     } : null
   }));
   
@@ -2615,11 +2388,12 @@ CRITICAL CONSTRAINTS (apply these strictly):
 </instructions>`;
 
   const sportKey = SPORT_KEYS[sportLabel] || 'americanfootball_nfl';
-  const result = await runPropsIterationLoop({ 
-    systemPrompt, 
-    userMessage, 
-    sportKey, 
-    sportLabel, 
+  const result = await runPropsIterationLoop({
+    systemPrompt,
+    userMessage,
+    sportKey,
+    sportLabel,
+    constitution,  // Sectioned object for phase-aligned delivery
     // Give room for bilateral analysis + direction-bias recheck pass + finalization
     // Increased from 8 to 10 to allow hard bilateral enforcement without timeout
     maxIterations: 15,
