@@ -1,12 +1,129 @@
-import { getConstitution } from '../constitution/index.js';
+import { getNbaSpreadFactors, getNcaabSpreadFactors, getNhlSpreadFactors, getNflSpreadFactors, getNcaafSpreadFactors, getMlbSpreadFactors, getWbcTournamentAwareness } from './spreadEvaluationFactors.js';
 
 /**
  * Build the PASS 1 user message - Identify battlegrounds, DO NOT pick a side yet
  * Only gives instructions for the FIRST pass to prevent instruction contamination
+ *
+ * NBA, NCAAB, NHL, NFL, and NCAAF use sport-specific evaluation factors.
+ * All other sports use the universal Pass 1 template.
  */
-export function buildPass1Message(scoutReport, homeTeam, awayTeam, today, sport = '') {
-  // Sport-specific context is in the constitution (system prompt).
-  // Pass 1 is a universal process instruction: read the scout report, investigate with tools.
+export function buildPass1Message(scoutReport, homeTeam, awayTeam, today, sport = '', spread = null) {
+  const isNBA = sport === 'basketball_nba' || sport === 'NBA';
+  const isNCAAB = sport === 'basketball_ncaab' || sport === 'NCAAB';
+  const isNFL = sport === 'americanfootball_nfl' || sport === 'NFL';
+  const isNCAAF = sport === 'americanfootball_ncaaf' || sport === 'NCAAF';
+
+  if (isNBA) {
+    return buildNbaPass1(scoutReport, today, homeTeam, awayTeam, spread);
+  }
+
+  if (isNCAAB) {
+    return buildNcaabPass1(scoutReport, today, homeTeam, awayTeam, spread);
+  }
+
+  const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
+  if (isNHL) {
+    return buildNhlPass1(scoutReport, today);
+  }
+
+  if (isNFL) {
+    return buildNflPass1(scoutReport, today);
+  }
+
+  if (isNCAAF) {
+    return buildNcaafPass1(scoutReport, today);
+  }
+
+  const isMLB = sport === 'baseball_mlb' || sport === 'MLB' || sport === 'WBC';
+  if (isMLB) {
+    return buildMlbPass1(scoutReport, today, homeTeam, awayTeam, spread);
+  }
+
+  // All other sports: current universal Pass 1 (unchanged)
+  return `
+<scout_report>
+## MATCHUP BRIEFING (TODAY: ${today})
+
+${scoutReport}
+</scout_report>
+
+<investigation_rules>
+## INVESTIGATION RULES
+
+**THE SYMMETRY RULE:**
+- If you call a stat for Team A, you MUST call the equivalent for Team B
+- Cherry-picking stats for one side = incomplete picture = bad bet
+
+</investigation_rules>
+
+<spread_investigation>
+## INTERROGATE THE LINE
+
+Lines are shaped by recent performance, season-long reputation, team standing, and public perception. Transient factors — rest, travel, injuries, schedule density — can shift a line away from where the underlying matchup data says it should be. Keep the line in mind throughout your investigation.
+</spread_investigation>
+
+<spread_evaluation>
+## THE SPREAD IS A PRICE
+
+The spread is not a prediction — it is a price. Your scout report and research briefing tell you about both teams. Now investigate the price.
+
+**DESCRIPTIVE vs CAUSAL:**
+- **Descriptive factors** (records, rankings, standings, streaks, reputation) explain WHY the line is set where it is. They are already IN the price.
+- **Causal factors** (how each team plays, matchup dynamics, situational context) reveal the actual matchup beneath the price.
+- **The SPOT** (venue, schedule, rest, travel, emotional context) is factored into the price — investigate whether the market adjustment matches the underlying matchup evidence for tonight.
+
+When you cite a record, ranking, or situation — ask yourself: "Is this describing what happened, or explaining what will happen tonight?"
+
+**INVESTIGATE THE PRICE:**
+As you investigate with your tools, keep asking:
+- If the stats show a close matchup but the spread is large — what is driving the spread beyond the stats?
+- If the stats show a clear gap but the spread is small — what might the market be seeing that the stats don't capture?
+- Is the spread being moved by home court, or by travel, rest, and schedule context?
+- For FRESH injuries — is the market over-reacting or under-reacting to this absence?
+- For players with on-and-off injury patterns — has the market already learned this pattern?
+- Are transient factors (rest, travel, injury timing) creating a gap between the data and the number?
+
+Every factor you investigate, ask: "Is this already in the price, or does this change what the price should be?"
+</spread_evaluation>
+
+<instructions>
+## YOUR TASK: PASS 1 - INVESTIGATION
+
+Read the scout report. Investigate this game using your tools. Build the complete picture for both teams equally.
+
+Investigate any flagged triggers in the scout report — do not dismiss them without checking.
+
+Your end goal in this game is to choose the best side at this number. In this pass, stay neutral: verify/disconfirm key claims, pressure-test trap/narrative angles with data, and build decision-ready evidence.
+
+Use the scout report + research briefing as your starting point, then investigate with fetch_stats where you need additional evidence to verify, disconfirm, or clarify critical gaps before synthesis.
+
+TREND AWARENESS (L5/L10): Treat recent trend data as a clue, not a conclusion. Synthesize whether it could continue, regress, or be overvalued/undervalued at this spread number. Use sample context (opponents faced, who played, game-window conditions) to ground that assessment.
+
+Do NOT declare a side, make a pick, or write your final analysis yet. When your Pass 1 synthesis is complete, output this exact line on its own line:
+INVESTIGATION COMPLETE
+
+BEGIN INVESTIGATION NOW.
+</instructions>
+`.trim();
+}
+
+/**
+ * NBA-specific Pass 1 — spread-aware investigation framing
+ * Includes the 7 spread evaluation factors up front so Gary investigates
+ * with explicit spread lenses before synthesis.
+ */
+function buildNbaPass1(scoutReport, today, homeTeam, awayTeam, spread) {
+  const factors = getNbaSpreadFactors();
+  const absSpread = Math.abs(spread || 0);
+
+  let spreadSizeBlock = '';
+  if (absSpread >= 10) {
+    spreadSizeBlock = `\n\n**TONIGHT'S SPREAD SIZE: LARGE (${absSpread} points)**\nAt this spread size, the handicap is large — the market sees significant separation between these teams today. Large spreads are influenced by recent results, public perception, injury news, streaks, home-court narratives, and more — as much as by the underlying matchup data. Season records and team reputation are already baked into the spread.`;
+  } else if (absSpread < 6 && absSpread > 0) {
+    spreadSizeBlock = `\n\n**TONIGHT'S SPREAD SIZE: CLOSE (${absSpread} points)**\nAt this spread size, the handicap is small — the market sees these teams as closely matched or within a few points of each other for this game. The spread still accounts for all the same factors — narratives, rest, injuries, public perception, and more. The market doesn't see much separation between these two teams today.`;
+  } else if (absSpread >= 6) {
+    spreadSizeBlock = `\n\n**TONIGHT'S SPREAD SIZE: MEDIUM (${absSpread} points)**\nAt this spread size, the handicap reflects clear separation between the teams — the market sees one side as meaningfully better for this game. The spread accounts for narratives, rest, injuries, public perception, and more. Season records, reputation, and situational context are already baked into the spread.`;
+  }
 
   return `
 <scout_report>
@@ -22,69 +139,381 @@ ${scoutReport}
 - If you call a stat for Team A, you MUST call the equivalent for Team B
 - Cherry-picking stats for one side = incomplete picture = bad bet
 
-**DO NOT claim "Team X is on a hot streak" without verifying WHO is driving it.**
-**DO NOT cite a recent loss as evidence without knowing WHO PLAYED in that game.**
 </investigation_rules>
 
-<trigger_investigation>
-The Scout Report may include investigation triggers — situations flagged for your attention. These are inputs, not conclusions.
-</trigger_investigation>
+<spread_evaluation>
+## THE SPREAD IS A PRICE
 
-<spread_investigation>
-## INTERROGATE THE LINE
+The spread is not a prediction — it is a price. Lines are shaped by recent performance, reputation, standings, and public perception. Transient factors — rest, travel, injuries, schedule density — can shift a line away from where the underlying matchup data says it should be.
 
-Lines are shaped by recent performance, season-long reputation, team standing, and public perception. Transient factors — rest, travel, injuries, schedule density — can shift a line away from where the underlying matchup data says it should be. Keep the line in mind throughout your investigation.
-</spread_investigation>
+**NARRATIVE FACTORS AND THE PRICE:**
+Narrative factors — rest, back-to-backs, streaks, revenge spots, travel, emotional storylines, hot/cold stretches, head-to-head recent results — shape the price. They move the line in one direction or another, giving one side a bigger number and the other side a smaller number than the matchup data alone would produce.
+
+These factors are part of the number. They can be part of your reasoning — not as evidence that a team will play better or worse, but as context for why each side is getting the number they're getting. A narrative that has moved the line can work in favor of either side of the spread: the favorite may be laying less than expected, or the underdog may be getting more than expected, because of the narratives baked into tonight's price.
+
+When narratives appear in your rationale, use them to explain why the number creates value for the side you're taking — not as standalone reasons for why a team will or won't cover.
+
+Head-to-head recent results are among the loudest narrative factors. A decisive win in the last meeting drives public action toward the winner and moves the line — that result is already in tonight's number.
+
+**DESCRIPTIVE vs CAUSAL:**
+- **Descriptive factors** (records, rankings, standings, streaks, reputation) explain WHY the line is set where it is. They are already IN the price.
+- **Causal factors** (how each team plays, matchup dynamics, situational context) reveal the actual matchup beneath the price.
+- **The SPOT** (venue, schedule, rest, travel, emotional context) is factored into the price — investigate whether the market adjustment matches the underlying matchup evidence for tonight.
+
+**INJURY TIMING IN THIS PRICE:**
+- Use the injury duration tags from the scout report exactly as shown.
+- **FRESH (0-2 games missed):** Investigate replacement role/minutes and whether recent windows still include games with the player.
+- **SHORT-TERM / PRICED IN / LONG-TERM / SEASON-LONG:** Treat as established context; current team baselines usually already reflect these absences.
+- Established absences can explain why a number is where it is, but do not treat them as standalone new evidence without supporting data from this specific matchup.
+
+When you cite a record, ranking, or situation — ask yourself: "Is this describing what happened, or explaining what will happen tonight?"${spreadSizeBlock}
+
+## SPREAD EVALUATION FACTORS
+
+Use these factors as investigation lenses while you evaluate BOTH sides of tonight's spread:
+
+${factors}
+</spread_evaluation>
 
 <instructions>
-## YOUR TASK: PASS 1 - INVESTIGATION
+## YOUR TASK: PASS 1 - INVESTIGATE THE SPREAD
 
-Read the scout report. Investigate this game using your tools. Build the complete picture for both teams equally.
+Your end goal in this game is to choose the best side of this spread. In this pass, stay neutral: verify/disconfirm key claims from the briefing, pressure-test trap/narrative/upset hypotheses with data, and build decision-ready evidence for both teams.
 
-Investigate any flagged triggers in the scout report — do not dismiss them without checking.
+Think of the spread as the market's handicap to make this specific game closer to even at tip-off. During Pass 1, investigate and synthesize whether the number is balancing both teams or leaving one side overvalued or undervalued. Use all available data (scout report, research briefing, and your own calls) and apply spread-factor guidance to judge which signals are meaningful versus already priced in.
 
-Do NOT make a pick or write your final analysis yet. You will be told when it's time to decide. Right now, investigate.
+Some elements require judgment calls on whether trends, narratives, or situational factors will actually matter tonight for ATS outcome.
 
-BEGIN INVESTIGATION NOW.
+Distinguish what explains why the line exists from what could still influence ATS result tonight.
+
+Make reasoned judgment calls where uncertainty exists (trend continuation vs regression, narrative impact vs noise, situational effect vs priced-in context). Final side selection comes later.
+
+Use the scout report + research briefing as your starting point, then investigate with fetch_stats where you need additional evidence to verify, disconfirm, or clarify critical gaps before synthesis.
+
+TREND AWARENESS (L5/L10): Treat recent trend data as a clue, not a conclusion. Synthesize whether it could continue, regress, or be overvalued/undervalued at this spread number. Use sample context (opponents faced, who played, game-window conditions) to ground that assessment.
+
+Before completing Pass 1, include BOTH sections:
+Case for home spread side
+Case for away spread side
+
+Each case should be 2-3 paragraphs, grounded in the data you gathered, and explain why this side of the spread is the better bet at this number tonight. Treat the spread as the market's equalizer price for this game: your job is to explain why this side is advantaged relative to that price.
+
+Do NOT declare a final side, make a pick, or write your final analysis yet. When your Pass 1 synthesis is complete, output this exact line on its own line:
+INVESTIGATION COMPLETE
 </instructions>
 `.trim();
 }
 
+/**
+ * NCAAB-specific Pass 1 — concise spread evaluation factors
+ * 7 named factors tuned to college basketball market dynamics.
+ */
+function buildNcaabPass1(scoutReport, today, homeTeam, awayTeam, spread) {
+  const factors = getNcaabSpreadFactors();
+  const absSpread = Math.abs(spread || 0);
 
+  let spreadSizeBlock = '';
+  if (absSpread >= 10) {
+    spreadSizeBlock = `\n\n**TONIGHT'S SPREAD SIZE: LARGE (${absSpread} points)**\nAt this spread size, the handicap is large — the market sees significant separation between these teams today. Large spreads are influenced by recent results, public perception, injury news, streaks, home-court narratives, and more — as much as by the underlying matchup data. Season records and team reputation are already baked into the spread.`;
+  } else if (absSpread < 5 && absSpread > 0) {
+    spreadSizeBlock = `\n\n**TONIGHT'S SPREAD SIZE: CLOSE (${absSpread} points)**\nAt this spread size, the handicap is small — the market sees these teams as closely matched or within a few points of each other for this game. The spread still accounts for all the same factors — narratives, rest, injuries, public perception, and more. The market doesn't see much separation between these two teams today.`;
+  } else if (absSpread >= 5) {
+    spreadSizeBlock = `\n\n**TONIGHT'S SPREAD SIZE: MEDIUM (${absSpread} points)**\nAt this spread size, the handicap reflects clear separation between the teams — the market sees one side as meaningfully better for this game. The spread accounts for narratives, rest, injuries, public perception, and more. Season records, reputation, and situational context are already baked into the spread.`;
+  }
+
+  return `
+<scout_report>
+## MATCHUP BRIEFING (TODAY: ${today})
+
+${scoutReport}
+</scout_report>
+
+<investigation_rules>
+## INVESTIGATION RULES
+
+**THE SYMMETRY RULE:**
+- If you call a stat for Team A, you MUST call the equivalent for Team B
+- Cherry-picking stats for one side = incomplete picture = bad bet
+
+</investigation_rules>
+
+<spread_evaluation>
+## THE SPREAD IS A PRICE
+
+The spread is not a prediction — it is a price. Lines are shaped by recent performance, reputation, rankings, and public perception. Transient factors — home court, injuries, motivation, tournament context — can shift a line away from where the underlying matchup data says it should be.
+
+**NARRATIVE FACTORS AND THE PRICE:**
+Narrative factors — AP rankings, program reputation, home court mystique, milestone occasions, rivalry history, revenge spots, tournament implications, bubble pressure, upset storylines, conference familiarity, head-to-head results — shape the price. They drive public betting action and move the line in one direction or another, giving one side a bigger number and the other side a smaller number than the matchup data alone would produce.
+
+In college basketball, these narratives are especially loud. A ranked road favorite draws heavy public money that inflates their line. An unranked home underdog in a rivalry spot draws sharp attention that tightens it. Bubble teams and teams playing for seeding carry emotional weight that moves the number. Common opponent results and transitive logic ("they beat the team that beat you") move public perception but do not predict how two teams will match up tonight.
+
+These factors are part of the number. They can be part of your reasoning — not as evidence that a team will play better or worse, but as context for why each side is getting the number they're getting. A narrative that has moved the line can work in favor of either side of the spread: the favorite may be laying less than expected, or the underdog may be getting more than expected, because of the narratives baked into tonight's price.
+
+When narratives appear in your rationale, use them to explain why the number creates value for the side you're taking — not as standalone reasons for why a team will or won't cover.
+
+In conference play, head-to-head results from earlier in the season are especially loud. The first meeting's result drives public expectation for the rematch and moves the line — that result is already in tonight's number.
+
+**DESCRIPTIVE vs CAUSAL:**
+- **Descriptive factors** (records, rankings, standings, streaks, reputation) explain WHY the line is set where it is. They are already IN the price.
+- **Causal factors** (how each team plays, matchup dynamics, situational context) reveal the actual matchup beneath the price.
+- **The SPOT** (venue, home court, tournament context, motivation) is factored into the price — investigate whether the market adjustment matches the underlying matchup evidence for tonight.
+
+When you cite a record, ranking, or situation — ask yourself: "Is this describing what happened, or explaining what will happen tonight?"${spreadSizeBlock}
+
+## SPREAD EVALUATION FACTORS
+
+These factors move public perception and move lines. Most of the time they are noise, not signal. For each one, investigate whether it actually affects the game or whether it just affected the price.
+
+${factors}
+</spread_evaluation>
+
+<instructions>
+## YOUR TASK: PASS 1 - INVESTIGATE THE SPREAD
+
+Think of the spread as the market's handicap to level this matchup on paper. Investigate and synthesize whether the number is balancing both teams or leaving one side overvalued or undervalued.
+
+Your end goal in this game is to choose the best side of this spread. In this pass, stay neutral: verify/disconfirm key claims and build decision-ready evidence through the factors above.
+
+Use the scout report + research briefing as your starting point, then investigate with fetch_stats where you need additional evidence to verify, disconfirm, or clarify critical gaps before synthesis.
+
+TREND AWARENESS (L5/L10): Treat recent trend data as a clue, not a conclusion. Synthesize whether it could continue, regress, or be overvalued/undervalued at this spread number. Use sample context (opponents faced, who played, game-window conditions) to ground that assessment.
+
+Do NOT declare a side, make a pick, or write your final analysis yet. When your Pass 1 synthesis is complete, output this exact line on its own line:
+INVESTIGATION COMPLETE
+</instructions>
+`.trim();
+}
 
 /**
- * Build the PASS 2.5 message - Case Review & Final Decision
- * Injected AFTER the advisor builds bilateral cases
- *
- * FLOW (Gary stays objective until final decision):
- * Step 1: Review cases and research assistant's read (evaluate all inputs)
- * Step 2: Final Decision (make ONE pick based on complete analysis)
+ * NHL-specific Pass 1 — concise moneyline evaluation factors
+ * 7 named factors tuned to hockey market dynamics. NHL is moneyline-only.
+ */
+function buildNhlPass1(scoutReport, today) {
+  const factors = getNhlSpreadFactors();
+
+  return `
+<scout_report>
+## MATCHUP BRIEFING (TODAY: ${today})
+
+${scoutReport}
+</scout_report>
+
+<investigation_rules>
+## INVESTIGATION RULES
+
+**THE SYMMETRY RULE:**
+- If you call a stat for Team A, you MUST call the equivalent for Team B
+- Cherry-picking stats for one side = incomplete picture = bad bet
+
+</investigation_rules>
+
+<spread_evaluation>
+## THE MONEYLINE IS A PRICE
+
+The moneyline is not a prediction — it is a price. Lines are shaped by recent performance, goaltending, reputation, and public perception. Transient factors — rest, travel, back-to-backs, injuries — can shift a line away from where the underlying matchup data says it should be.
+
+**DESCRIPTIVE vs CAUSAL:**
+- **Descriptive factors** (records, standings, streaks, reputation) explain WHY the line is set where it is. They are already IN the price.
+- **Causal factors** (how each team plays, goaltending matchup, special teams dynamics, situational context) reveal the actual matchup beneath the price.
+- **The SPOT** (venue, schedule, rest, travel, emotional context) is factored into the price — investigate whether the market adjustment matches the underlying matchup evidence for tonight.
+
+When you cite a record, ranking, or situation — ask yourself: "Is this describing what happened, or explaining what will happen tonight?"
+
+## MONEYLINE EVALUATION FACTORS
+
+These factors move public perception and move lines. Most of the time they are noise, not signal. For each one, investigate whether it actually affects the game or whether it just affected the price.
+
+${factors}
+</spread_evaluation>
+
+<instructions>
+## YOUR TASK: PASS 1 - INVESTIGATE THE MONEYLINE
+
+Your end goal in this game is to choose the best side of this moneyline price. In this pass, stay neutral: verify/disconfirm key claims and build decision-ready evidence through the factors above.
+
+Use the scout report + research briefing as your starting point, then investigate with fetch_stats where you need additional evidence to verify, disconfirm, or clarify critical gaps before synthesis.
+
+TREND AWARENESS (L5/L10): Treat recent trend data as a clue, not a conclusion. Synthesize whether it could continue, regress, or be overvalued/undervalued at this spread number. Use sample context (opponents faced, who played, game-window conditions) to ground that assessment.
+
+Do NOT declare a side, make a pick, or write your final analysis yet. When your Pass 1 synthesis is complete, output this exact line on its own line:
+INVESTIGATION COMPLETE
+</instructions>
+`.trim();
+}
+
+/**
+ * NFL-specific Pass 1 — concise spread evaluation factors
+ * 7 named factors tuned to NFL market dynamics.
+ */
+function buildNflPass1(scoutReport, today) {
+  const factors = getNflSpreadFactors();
+
+  return `
+<scout_report>
+## MATCHUP BRIEFING (TODAY: ${today})
+
+${scoutReport}
+</scout_report>
+
+<investigation_rules>
+## INVESTIGATION RULES
+
+**THE SYMMETRY RULE:**
+- If you call a stat for Team A, you MUST call the equivalent for Team B
+- Cherry-picking stats for one side = incomplete picture = bad bet
+
+</investigation_rules>
+
+<spread_evaluation>
+## THE SPREAD IS A PRICE
+
+The spread is not a prediction — it is a price. Lines are shaped by recent performance, roster status, standings context, and public perception. Transient factors — rest, travel, weather, and injury timing — can shift a line away from where the underlying matchup data points.
+
+**DESCRIPTIVE vs CAUSAL:**
+- **Descriptive factors** (records, rankings, streaks, reputation) explain WHY the line is set where it is. They are already IN the price.
+- **Causal factors** (unit matchups, efficiency profile, situational context) explain how this specific game is likely to play.
+- **The SPOT** (venue, schedule, weather, travel, stakes) is reflected in pricing — investigate whether the adjustment is proportionate to what the data shows.
+
+When you cite a record, ranking, or situation — ask yourself: "Is this describing what happened, or explaining what matters tonight?"
+
+## SPREAD EVALUATION FACTORS
+
+Use the factors below as investigation lenses. Keep findings factual and symmetric across both teams.
+
+${factors}
+</spread_evaluation>
+
+<instructions>
+## YOUR TASK: PASS 1 - INVESTIGATE THE SPREAD
+
+Your end goal in this game is to choose the best side of this spread. In this pass, stay neutral: verify/disconfirm key claims and build decision-ready evidence through the factors above.
+
+Use the scout report + research briefing as your starting point, then investigate with fetch_stats where you need additional evidence to verify, disconfirm, or clarify critical gaps before synthesis.
+
+TREND AWARENESS (L5/L10): Treat recent trend data as a clue, not a conclusion. Synthesize whether it could continue, regress, or be overvalued/undervalued at this spread number. Use sample context (opponents faced, who played, game-window conditions) to ground that assessment.
+
+Do NOT declare a side, make a pick, or write your final analysis yet. When your Pass 1 synthesis is complete, output this exact line on its own line:
+INVESTIGATION COMPLETE
+</instructions>
+`.trim();
+}
+
+/**
+ * NCAAF-specific Pass 1 — concise spread evaluation factors
+ * 7 named factors tuned to college football market dynamics.
+ */
+function buildNcaafPass1(scoutReport, today) {
+  const factors = getNcaafSpreadFactors();
+
+  return `
+<scout_report>
+## MATCHUP BRIEFING (TODAY: ${today})
+
+${scoutReport}
+</scout_report>
+
+<investigation_rules>
+## INVESTIGATION RULES
+
+**THE SYMMETRY RULE:**
+- If you call a stat for Team A, you MUST call the equivalent for Team B
+- Cherry-picking stats for one side = incomplete picture = bad bet
+
+</investigation_rules>
+
+<spread_evaluation>
+## THE SPREAD IS A PRICE
+
+The spread is not a prediction — it is a price. Lines are shaped by recent performance, rankings, roster status, and public perception. Transient factors — travel, weather, venue environment, and motivation context — can shift a line away from underlying opponent-adjusted evidence.
+
+**DESCRIPTIVE vs CAUSAL:**
+- **Descriptive factors** (records, rankings, streaks, program reputation) explain WHY the line is set where it is. They are already IN the price.
+- **Causal factors** (efficiency profile, trenches, explosiveness, matchup mechanics, situational context) explain how this specific game is likely to play.
+- **The SPOT** (venue, travel, weather, schedule, stakes) is reflected in pricing — investigate whether the adjustment is proportionate to what the data shows.
+
+When you cite a record, ranking, or situation — ask yourself: "Is this describing what happened, or explaining what matters tonight?"
+
+## SPREAD EVALUATION FACTORS
+
+Use the factors below as investigation lenses. Keep findings factual and symmetric across both teams.
+
+${factors}
+</spread_evaluation>
+
+<instructions>
+## YOUR TASK: PASS 1 - INVESTIGATE THE SPREAD
+
+Your end goal in this game is to choose the best side of this spread. In this pass, stay neutral: verify/disconfirm key claims and build decision-ready evidence through the factors above.
+
+Use the scout report + research briefing as your starting point, then investigate with fetch_stats where you need additional evidence to verify, disconfirm, or clarify critical gaps before synthesis.
+
+TREND AWARENESS (L5/L10): Treat recent trend data as a clue, not a conclusion. Synthesize whether it could continue, regress, or be overvalued/undervalued at this spread number. Use sample context (opponents faced, who played, game-window conditions) to ground that assessment.
+
+Do NOT declare a side, make a pick, or write your final analysis yet. When your Pass 1 synthesis is complete, output this exact line on its own line:
+INVESTIGATION COMPLETE
+</instructions>
+`.trim();
+}
+
+/**
+ * Build the PASS 2.5 message - Evaluation & Final Decision
+ * Injected after investigation is sufficient. Includes spread evaluation factors
+ * and the established injury rule, then asks Gary to make his pick.
  *
  * @param {string} homeTeam - Home team name
  * @param {string} awayTeam - Away team name
  * @param {string} sport - Sport identifier for spread context thresholds
  * @param {number} spread - The spread value (e.g., -13.5)
+ * @param {string} decisionGuards - Optional sport-specific Pass 2.5 guard text
  */
-export function buildPass25Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', sport = '', spread = 0) {
-  return `
-<case_review>
-## CASE REVIEW
+export function buildPass25Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', sport = '', spread = 0, decisionGuards = '') {
+  const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
+  const isMLB = sport === 'baseball_mlb' || sport === 'MLB' || sport === 'WBC';
+  const lineLabel = (isNHL || isMLB) ? 'moneyline' : 'spread';
+  const homeSpread = spread >= 0 ? `+${spread.toFixed(1)}` : spread.toFixed(1);
+  const awaySpread = (-spread) >= 0 ? `+${(-spread).toFixed(1)}` : (-spread).toFixed(1);
+  const lineContext = (isNHL || isMLB)
+    ? `Line context: ${homeTeam} (home) vs ${awayTeam} (away) moneyline.`
+    : `Line context: ${homeTeam} ${homeSpread} / ${awayTeam} ${awaySpread}.`;
 
-Your research assistant built the strongest case for each side of this game. Read both carefully. Factor their reasoning into your decision the way a professional gambler weighs trusted opinions before placing a bet.
-</case_review>
+  return `
+<decision_checkpoint>
+## PASS 2.5 - FINAL DECISION CHECKPOINT
+
+You have completed investigation and synthesis in Pass 1. This is the final decision checkpoint.
+${lineContext}
+
+Do NOT restart analysis. Do NOT run a full re-investigation. Only call more tools if a critical factual gap blocks your decision.
+</decision_checkpoint>
 
 <synthesis>
-You've done your own investigation. Your research assistant investigated independently, surfaced their findings, and built the strongest case for each side. You have all the data. If you need more, you can still call tools. Take a moment to sit with everything before you make your pick.
+You've done your own investigation. Your research assistant investigated independently and surfaced their findings. Commit to your final side now and draft the exact rationale that should appear on the pick card.
 </synthesis>
+
+${decisionGuards ? `<sport_decision_guards>\n${decisionGuards}\n</sport_decision_guards>\n` : ''}
 
 <instructions>
 ## YOUR TASK
 
-Make your pick. Write in natural language — do NOT output JSON. The final formatted output comes in the next step.
+Write your FINAL DECISION and FULL CARD RATIONALE DRAFT in natural language. Do NOT output JSON yet.
+
+Use this exact format:
+
+Final Decision: [your side at this ${lineLabel}]
+
+Gary's Take
+
+[3 paragraphs, plain text, ~250-400 words]
+
+This "Gary's Take" draft should be the same rationale carried to final output.
+Opening requirement: start with a brief matchup intro in an announcer-style scene-setter voice (1-2 sentences), then continue with your reasoning naturally.
 
 **PLAYER NAME RULES (HARD RULE - NO EXCEPTIONS):**
 - DO NOT mention any player who hasn't played at all this 2025-2026 season
 - Only mention ACTIVE players or players with RECENT injuries that you investigated
+
+**ESTABLISHED INJURY RULE:**
+If a player has been out for multiple games, that absence is not new information — the line was SET with that absence already factored in. The team's recent stats, form, and record already reflect life without that player. Citing a non-fresh injury as a reason for your pick is the same as citing something the line already knows. The only injuries that can inform your pick are FRESH ones (0-2 games missed) where the market may not have fully adjusted yet. If you name a player listed under ESTABLISHED ABSENCES in your rationale, you are using old news that is already in the price.
 
 Judgment calls informed by data are valid. Do NOT predict your own margin or score.
 
@@ -102,11 +531,8 @@ CRITICAL CONSTRAINTS (all system prompt rules apply — these are reminders of t
 }
 
 /**
- * Build the PASS 2.5 message for PROPS mode — evaluate bilateral OVER/UNDER cases
- *
- * After the advisor builds bilateral OVER/UNDER cases for each prop candidate,
- * this pass asks Gary to evaluate those cases and identify which
- * candidates have the strongest edges before the final selection in Pass 3.
+ * Build the PASS 2.5 message for PROPS mode — evaluation phase.
+ * Gary has completed bilateral OVER/UNDER analysis and now identifies his top picks.
  *
  * @param {string} homeTeam - Home team name
  * @param {string} awayTeam - Away team name
@@ -114,14 +540,8 @@ CRITICAL CONSTRAINTS (all system prompt rules apply — these are reminders of t
  */
 export function buildPass25PropsMessage(homeTeam = '[HOME]', awayTeam = '[AWAY]', sport = '') {
   return `
-<case_review>
-## CASE REVIEW
-
-Your research assistant built the strongest OVER and UNDER case for each prop candidate. Read both sides carefully. Factor their reasoning into your decision the way a professional gambler weighs trusted opinions before placing a bet.
-</case_review>
-
 <synthesis>
-You've done your own investigation. Your research assistant investigated independently, surfaced their findings, and built the strongest OVER and UNDER case for each candidate. You have all the data. If you need more, you can still call tools. Take a moment to sit with everything before you make your picks.
+You've done your own investigation and built OVER/UNDER cases for each candidate. You have all the data. If you need more, you can still call tools. Take a moment to sit with everything before you make your picks.
 </synthesis>
 
 <instructions>
@@ -167,50 +587,24 @@ export function buildPass3Unified(homeTeam = '[HOME]', awayTeam = '[AWAY]', opti
   // ═══════════════════════════════════════════════════════════════════════════
   return `
 <pass_context>
-## PASS 3 - FINAL OUTPUT
+## PASS 3 - FORMAT ONLY
 
-You've reviewed the cases, evaluated the evidence, and made your decision in Pass 2.5.
-You have access to ALL evidence from your investigation - nothing is truncated.
+The decision and full "Gary's Take" rationale were completed in Pass 2.5.
+This pass is formatting-only.
 
-**Your Decision:**
-- **Final Pick:** Your pick${recordsReminder}
-
-**INVESTIGATION OPTION:**
-If you realize you need more data before finalizing, you can still call fetch_stats for additional investigation.
-However, if your analysis is complete, proceed directly to output.
+Carry forward the SAME final decision and rationale from your immediately prior response.
+- You may lightly copyedit grammar/clarity.
+- Do NOT add new facts, numbers, claims, or reasoning.
+- Do NOT change the core reasons for the pick.
+${recordsReminder}
 </pass_context>
-
-<rationale_constraints>
-## RATIONALE CONSTRAINTS
-
-Your final rationale is YOUR DECISION — the real reasons you're making this bet, informed by your investigation.
-- Do NOT fabricate facts or stats you didn't find in your investigation
-- You're making a bet, not writing a research paper. Not every sentence needs a stat — judgment calls informed by data are valid. Lead with why you like this side.
-- **INJURY RULE (HARD):** DO NOT name any player who hasn't played this 2025-26 season. For injuries the market has already absorbed (player out for multiple games, line already reflects their absence), reference the TEAM's current performance instead (e.g., "the current rotation has gone 8-3 over L10" NOT "without Player X who's been out since November"). Only cite an injury by name if it's genuinely new information the line may not fully reflect. If you name a player not in tonight's lineup, your rationale is INVALID.
-
-**IMPORTANT:** All the data from your investigation is available in this conversation. Use it to inform your reasoning.
-
-**RATIONALE FORMAT (CRITICAL - iOS app depends on this):**
-Your rationale MUST start with exactly: "Gary's Take\\n\\n"
-
-**OPENING:** Start with a natural, broadcast-style scene-setter (1-2 sentences) — set the stage for the matchup using the stakes, the setting, the storyline. Then transition into your key factor.
-
-**LENGTH:** 3-4 paragraphs, ~300-400 words. Write like you're explaining your bet to another sharp. No fluff, no fabricated tactics.
-
-**STYLE:** Plain text only. No markdown, no headers, no ALL-CAPS labels, no bullet points. Just natural paragraphs — like you're talking to someone at a sportsbook.
-
-**DATA INTEGRITY:**
-- Do NOT fabricate stats, player names, or facts you didn't find in your investigation.
-- When you cite a specific number, it must be real. But not every opinion needs a stat citation — you're making a betting judgment informed by data.
-
-**NO TRAINING DATA CLAIMS:**
-Only cite facts from the scout report, stats you requested, or grounding search results. Claims from training knowledge about coaching tendencies, player reputations, or team identities are not verifiable — don't write them.
-</rationale_constraints>
 
 <output_requirements>
 ## OUTPUT REQUIREMENTS
 
 **BET TYPE:** You have two options — SPREAD (picking a side to cover) or MONEYLINE (picking a team to win outright). If you believe a team wins, ML often pays better than the spread. Choose the bet type that matches your conviction.
+
+**ML ODDS LIMIT:** You may NOT pick a favorite on the moneyline if the odds are -200 or worse (more negative). Heavy favorites (-250, -500, -2000, etc.) MUST be picked on the spread instead. Underdog ML is always allowed at any odds.
 
 **SPREAD AWARENESS:**
 - Favorites (-X): "Will this team win by MORE than X points?"
@@ -221,8 +615,6 @@ Only cite facts from the scout report, stats you requested, or grounding search 
 2. For ML picks: use "moneylineHome" or "moneylineAway" value (e.g., -192, +160)
 3. For spread picks: use "spreadOdds" value (e.g., -105, -115)
 4. The "final_pick" field MUST include the exact odds: "[Team] ML -192" NOT "[Team] ML -110"
-
-**FORBIDDEN RATIONALE OPENERS:** Do NOT start with "The betting public...", "Sharp money...", "Vegas...", "Looking at this matchup...", or any market commentary.
 
 Output your final pick as JSON:
 
@@ -240,15 +632,8 @@ Output your final pick as JSON:
 <instructions>
 ## YOUR TASK
 
-OUTPUT YOUR FINAL PICK JSON NOW using the format above.
-All analysis is complete - just finalize and output.
-
-<negative_constraints>
-SEASON-LONG injuries: The team has adapted. Focus on current roster performance.
-Missing players' stats have been REDISTRIBUTED to current players.
-If citing "X-Y record without player", investigate the MARGINS - were losses close or blowouts?
-Focus on WHO IS PLAYING and RECENT FORM, not hypotheticals about healthy rosters.
-</negative_constraints>
+Output your final pick JSON now using the exact format above.
+Use the Pass 2.5 decision + rationale draft as source of truth.
 
 Your JSON must include all three fields: "final_pick", "rationale", AND "confidence_score". Missing confidence_score will cause a system error.
 </instructions>
@@ -322,8 +707,8 @@ export function buildPass3Props(homeTeam, awayTeam, propContext = {}) {
 ## PASS 3 - PROPS EVALUATION PHASE
 
 You've completed your full game analysis through Passes 1-2.5. You understand:
-- The game matchup dynamics (from your Steel Man cases)
-- What the data revealed about the matchup (from your case review)
+- The game matchup dynamics (from your investigation)
+- What the data revealed about the matchup (from your evaluation)
 - The key statistical factors you investigated for this game
 
 Now apply that game understanding to evaluate PLAYER PROPS.
@@ -372,3 +757,73 @@ Do NOT include confidence percentages or probability estimates in your rationale
 `.trim();
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// MLB/WBC PASS 1
+// ═══════════════════════════════════════════════════════════════════════════
+
+function buildMlbPass1(scoutReport, today, homeTeam, awayTeam, spread) {
+  const factors = getMlbSpreadFactors();
+  const wbcAwareness = getWbcTournamentAwareness();
+  const absSpread = Math.abs(spread || 0);
+
+  let runLineSizeBlock = '';
+  if (absSpread >= 4.5) {
+    runLineSizeBlock = `\n\n**TONIGHT'S RUN LINE SIZE: LARGE (${absSpread} runs)**\nAt this run line size, the handicap is large — the market sees significant separation between these teams today. Large run lines are influenced by recent results, public perception, pitcher matchup, roster reputation, and more — as much as by the underlying matchup data. Season stats and team reputation are already baked into the run line.`;
+  } else if (absSpread <= 1.5 && absSpread > 0) {
+    runLineSizeBlock = `\n\n**TONIGHT'S RUN LINE SIZE: CLOSE (${absSpread} runs)**\nAt this run line size, the handicap is small — the market sees these teams as closely matched or within a narrow margin for this game. The run line still accounts for all the same factors — narratives, pitcher matchup, bullpen availability, public perception, and more. The market doesn't see much separation between these two teams today.`;
+  } else if (absSpread > 1.5) {
+    runLineSizeBlock = `\n\n**TONIGHT'S RUN LINE SIZE: MEDIUM (${absSpread} runs)**\nAt this run line size, the handicap reflects clear separation between the teams — the market sees one side as meaningfully better for this game. The run line accounts for narratives, pitcher matchup, bullpen availability, public perception, and more. Season stats, reputation, and situational context are already baked into the run line.`;
+  }
+
+  return `
+<scout_report>
+## MATCHUP BRIEFING (TODAY: ${today})
+
+${scoutReport}
+</scout_report>
+
+<tournament_context>
+${wbcAwareness}
+</tournament_context>
+
+<investigation_rules>
+## INVESTIGATION RULES
+
+**THE SYMMETRY RULE:**
+- If you call a stat for Team A, you MUST call the equivalent for Team B
+- Cherry-picking stats for one side = incomplete picture = bad bet
+
+</investigation_rules>
+
+<spread_evaluation>
+## THE RUN LINE IS A PRICE
+
+The run line is not a prediction — it is a price. A -1.5 pick means the team must win by 2+ runs. A +1.5 pick means the team can lose by 1 run and still cover. Lines are shaped by probable pitchers, career stats, recent form, bullpen availability, and public perception.
+
+**DESCRIPTIVE vs CAUSAL:**
+- **Descriptive factors** (records, standings, reputation, public narrative) explain WHY the line is set where it is. They are already IN the run line.
+- **Causal factors** (how each pitcher matches up against the opposing lineup, bullpen depth, platoon advantages) reveal the actual matchup beneath the run line.
+- **The SPOT** (venue, weather, tournament context, rest, bullpen workload) is factored into the run line — investigate whether the market adjustment matches the underlying matchup evidence for this game.
+
+When you cite a record, ranking, or situation — ask yourself: "Is this describing what happened, or explaining what will happen in this game?"${runLineSizeBlock}
+
+## RUN LINE EVALUATION FACTORS
+
+These factors move public perception and move lines. Most of the time they are noise, not signal. For each one, investigate whether it actually affects the game or whether it just affected the price.
+
+${factors}
+</spread_evaluation>
+
+<instructions>
+## YOUR TASK: PASS 1 - INVESTIGATE THE RUN LINE
+
+Think of the run line as baseball's spread — the market's handicap to level this matchup. Investigate and synthesize whether the run line price reflects the actual matchup or leaves one side overvalued or undervalued.
+
+Your end goal in this game is to choose the best side of this run line. In this pass, stay neutral: verify/disconfirm key claims and build decision-ready evidence through the factors above.
+
+Use the scout report as your starting point, then investigate with fetch_stats where you need additional evidence to verify, disconfirm, or clarify critical gaps before synthesis.
+
+Do NOT declare a side, make a pick, or write your final analysis yet. When your Pass 1 synthesis is complete, output this exact line on its own line:
+INVESTIGATION COMPLETE
+</instructions>`.trim();
+}

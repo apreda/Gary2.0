@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Gary 2.0 is an AI sports betting platform (NBA, NFL, NHL, NCAAB, NCAAF) using a 3-model architecture: Gemini 3 Flash (research assistant — investigates with tools), Gemini 3 Pro (advisor — builds bilateral Steel Man cases), and Gemini 3.1 Pro (Gary — evaluates and decides). Core orchestration lives in `src/services/agentic/agenticOrchestrator.js`. Sport-specific awareness in `src/services/agentic/constitution/`. Pick generation scripts in `scripts/`. Database is Supabase. All project context, architecture details, and user preferences are in the auto-memory files at `/Users/adam.preda/.claude/projects/-Users-adam-preda/memory/`.
+Gary 2.0 is an AI sports betting platform (NBA, NFL, NHL, NCAAB, NCAAF) using a 2-model architecture: Gemini 3 Flash (research assistant — investigates with tools before Gary starts) and Gemini 3.1 Pro (Gary — evaluates and decides). Core orchestration lives in `src/services/agentic/orchestrator/agentLoop.js`. Sport-specific awareness in `src/services/agentic/constitution/`. Pick generation scripts in `scripts/`. Database is Supabase. All project context, architecture details, and user preferences are in the auto-memory files at `/Users/adam.preda/.claude/projects/-Users-adam-preda/memory/`.
 
 ## Layer 3 Violations — The Only Rule That Matters
 
@@ -33,6 +33,15 @@ Always double-check with the user before touching ANY injury-related code, label
 ## Clean Up After Yourself
 
 When removing, moving, or renaming code — fix ALL references. Stale comments, orphaned numbering (e.g. "BLOCK 8" when blocks 1-7 were removed), dead imports, outdated file-level docs — all of it gets cleaned up in the same change. Don't leave artifacts from old code structure behind.
+
+## No Edits Without Approval
+
+NEVER make code edits, file changes, or apply fixes without explicit user approval first. When issues are found:
+1. Present the findings and proposed fixes
+2. Wait for the user to approve before making any changes
+3. If the user says "let's discuss" or "let's chat about it" — that means DISCUSS, not implement
+
+This applies to all changes: bug fixes, prompt edits, refactors, new files, config changes. The only exception is if the user explicitly says "go ahead and fix it" or similar direct approval.
 
 ## Communication Rule — No Summaries
 

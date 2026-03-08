@@ -2,8 +2,7 @@ import { ballDontLieService } from '../../ballDontLieService.js';
 
 /**
  * Check if Gary has investigated enough to proceed to bilateral cases.
- * Replaces the old per-factor 100% coverage gate with a simpler mechanism
- * based on tool call breadth and iteration count.
+ * Based on tool call breadth and iteration count.
  *
  * @param {Array} toolCallHistory - Array of tool calls with token property
  * @param {number} iteration - Current iteration number
@@ -78,16 +77,18 @@ export function summarizeStatForContext(statResult, statToken, homeTeam, awayTea
           formatNum(a.def_rating || a.defRating));
 
       case 'RECENT_FORM': {
-        const awayForm = a.summary || a.last_5 || 'N/A';
-        const homeForm = h.summary || h.last_5 || 'N/A';
+        // NHL returns l5/l10 objects; other sports return summary/last_5 strings
+        const awayForm = a.summary || a.last_5 || (a.l5?.record ? `${a.l5.record} (L5)` : 'N/A');
+        const homeForm = h.summary || h.last_5 || (h.l5?.record ? `${h.l5.record} (L5)` : 'N/A');
         return orderTeams('RECENT FORM (Last 5)', homeForm, awayForm);
       }
 
       case 'HOME_AWAY_SPLITS':
         // Records are descriptive — Gary should investigate the causal data behind them
+        // NHL uses road_record; other sports use away_record
         return orderTeams('HOME/AWAY SPLITS',
           `home ${h.home_record || h.record || 'N/A'}`,
-          `road ${a.away_record || a.record || 'N/A'}`);
+          `road ${a.road_record || a.away_record || a.record || 'N/A'}`);
 
       case 'PACE':
         return orderTeams('PACE',
@@ -237,77 +238,6 @@ export function formatNum(val) {
   return String(val);
 }
 
-/**
- * Detect bilateral analysis patterns in assistant content.
- * Used to determine if Steel Man / bilateral cases have been written.
- * Game picks: "Case for [Team]", "Why [Team] covers", "[Team] TO COVER:"
- * Props: "OVER case for [Player]", "UNDER case for [Player]"
- */
-export function detectBilateralAnalysis(content) {
-  const caseForCount = (content.match(/(?:Case for|CASE FOR|case for|Analysis for|ANALYSIS FOR|analysis for)/gi) || []).length;
-  const toCoversCount = (content.match(/(?:TO COVER|to cover|To Cover)[:\s]/gi) || []).length;
-  const whyCoversCount = (content.match(/(?:Why|How)\s+(?:the\s+)?[\w\s]+\s+(?:cover|win)/gi) || []).length;
-  const overUnderCaseCount = (content.match(/(?:OVER|UNDER)\s+(?:case|CASE|Case)/gi) || []).length;
-  const total = caseForCount + toCoversCount + whyCoversCount + overUnderCaseCount;
-  return { caseForCount, toCoversCount, whyCoversCount, overUnderCaseCount, total, hasBilateral: total >= 2 };
-}
-
-/**
- * Build the Flash advisor preamble for Pass 2.5 injection.
- * Includes: full research findings (re-surfaced) + bilateral cases.
- * Gary saw the findings before Pass 1 — this re-surfaces them at the decision point.
- */
-export function buildAdvisorPreamble(homeTeam, awayTeam, flashCases, researchBriefing = null) {
-  const findingsSection = researchBriefing ? `## RESEARCH ASSISTANT'S FACTOR-BY-FACTOR FINDINGS
-
-Your research assistant's per-factor investigation findings (re-surfaced for your final evaluation):
-
-${researchBriefing}
-
----
-
-` : '';
-
-  return `${findingsSection}## ADVISOR ANALYSIS
-
-Your research assistant investigated this game, then built the strongest case for each side.
-
-**CASE FOR ${homeTeam}:**
-${flashCases.homeTeamCase}
-
-**CASE FOR ${awayTeam}:**
-${flashCases.awayTeamCase}
-
----
-
-`;
-}
-
-/**
- * Build the Props advisor preamble for Pass 2.5 injection.
- * Includes Pro's prop landscape assessment (if available) + advisor's bilateral OVER/UNDER cases.
- */
-export function buildAdvisorPropsPreamble(homeTeam, awayTeam, flashCases, proAssessment) {
-  const proSection = proAssessment ? `## YOUR INITIAL READ
-
-You wrote this honest assessment of the prop landscape BEFORE seeing any advisor cases — which players stood out, what game factors matter most for player production tonight, and where your uncertainty lies:
-
-${proAssessment}
-
----
-
-` : '';
-
-  return `${proSection}## ADVISOR ANALYSIS
-
-Your research assistant investigated this game, then built the strongest OVER and UNDER case for each prop candidate.
-
-${flashCases.candidateCases}
-
----
-
-`;
-}
 
 export function formatPct(val) {
   if (val === undefined || val === null) return 'N/A';
@@ -521,11 +451,13 @@ export function normalizeSportToLeague(sport) {
     'icehockey_nhl': 'NHL',
     'basketball_ncaab': 'NCAAB',
     'americanfootball_ncaaf': 'NCAAF',
+    'baseball_mlb': 'WBC',
     'NBA': 'NBA',
     'NFL': 'NFL',
     'NHL': 'NHL',
     'NCAAB': 'NCAAB',
-    'NCAAF': 'NCAAF'
+    'NCAAF': 'NCAAF',
+    'WBC': 'WBC'
   };
   return mapping[sport] || sport;
 }

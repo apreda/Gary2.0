@@ -55,10 +55,10 @@ const NBA_OUTPUT_FORMAT = `
 
 For each pick, provide:
 1. **THE PICK:** Player Name OVER/UNDER Stat Line (Odds)
-2. **THE STRUCTURAL MISMATCH:** One sentence on what the market hasn't priced
+2. **THE KEY FACTOR:** The game-specific evidence supporting your pick
 3. **VOLUME FLOOR CHECK:** MPG, USG%, and how they interact with tonight's matchup
 4. **THE RISK:** Concrete scenario where this loses
-5. **WHY THE MARKET IS WRONG:** Why your mismatch matters tonight
+5. **KEY FACTOR:** The game-specific evidence supporting your pick
 `;
 
 // ── Sectioned export ─────────────────────────────────────────────────

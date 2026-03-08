@@ -917,7 +917,7 @@ function shouldExcludePlayer(status) {
 /**
  * Merge BDL stats with Grounding salary data
  * BDL is SOURCE OF TRUTH for: team, position, stats
- * Grounding provides: salary, ownership, DFS context, injury status
+ * Grounding provides: salary, DFS context, injury status
  * 
  * ⚠️ CRITICAL: Excludes OUT and DOUBTFUL players from lineup consideration
  * 
@@ -952,7 +952,6 @@ function mergePlayerData(bdlPlayers, groundedPlayers) {
       positions: p.positions,
       status: p.status,
       notes: p.notes,
-      ownership: p.ownership,
       dvpRank: p.dvpRank,
       originalName: p.name
     };
@@ -1013,6 +1012,10 @@ function mergePlayerData(bdlPlayers, groundedPlayers) {
         positions: salaryData.positions || [salaryData.position || p.position]
       };
 
+      // Flag Q/GTD players — included in pool but marked for UI label + direct salary swap
+      const upperStatus = (playerStatus || '').toUpperCase();
+      const isQuestionable = upperStatus === 'QUESTIONABLE' || upperStatus.includes('GTD') || upperStatus.includes('DAY-TO-DAY');
+
       merged.push({
         // BDL provides accurate: name, team, seasonStats, l5Stats
         name: p.name,
@@ -1027,8 +1030,8 @@ function mergePlayerData(bdlPlayers, groundedPlayers) {
         // Grounding provides: salary and DFS context
         salary: salaryData.salary,
         status: playerStatus,
+        isQuestionable,
         notes: salaryData.notes || '',
-        ownership: salaryData.ownership,
         dvpRank: salaryData.dvpRank
       });
     }
@@ -1115,6 +1118,9 @@ function mergePlayerData(bdlPlayers, groundedPlayers) {
         foundStats = bdlMatch.seasonStats;
         
         // Add with REAL BDL stats
+        const tank01Status = bdlMatch.status || p.status || 'HEALTHY';
+        const tank01Upper = (tank01Status || '').toUpperCase();
+        const tank01IsQ = tank01Upper === 'QUESTIONABLE' || tank01Upper.includes('GTD') || tank01Upper.includes('DAY-TO-DAY');
         merged.push({
           id: bdlMatch.id,
           name: p.name,
@@ -1122,9 +1128,9 @@ function mergePlayerData(bdlPlayers, groundedPlayers) {
           position: p.position || bdlMatch.position,
           positions: p.positions || [p.position || bdlMatch.position],
           salary: p.salary,
-          status: bdlMatch.status || p.status || 'HEALTHY',
+          status: tank01Status,
+          isQuestionable: tank01IsQ,
           notes: p.notes || '',
-          ownership: p.ownership,
           // ⭐ Use REAL BDL stats
           seasonStats: foundStats || bdlMatch.seasonStats || { mpg: 0, ppg: 0 },
           l5Stats: bdlMatch.l5Stats, // Include L5 if available
@@ -1166,7 +1172,7 @@ function mergePlayerData(bdlPlayers, groundedPlayers) {
     const injuryExcluded = excludedPlayers.filter(p => (p.reason || '').includes('Injury status'));
     const rotationExcluded = excludedPlayers.filter(p => !(p.reason || '').includes('Injury status'));
     if (injuryExcluded.length > 0) {
-      console.log(`[DFS Context] ❌ EXCLUDED ${injuryExcluded.length} players (Injury: OUT/DOUBTFUL/QUESTIONABLE/GTD):`);
+      console.log(`[DFS Context] ❌ EXCLUDED ${injuryExcluded.length} players (Injury: OUT/DOUBTFUL/IR/PUP/SUSPENDED):`);
       injuryExcluded.forEach(p => console.log(`   - ${p.name}: ${p.status}`));
     }
     if (rotationExcluded.length > 0) {
@@ -1619,8 +1625,6 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
     })()
   ]);
   const { salaryData, rosterData, teamDefenseStats, tank01Projections } = tank01Results;
-  // Ownership projections removed — no reliable free source exists.
-  
   const bdlCount = bdlPlayers.length;
   const salaryCount = salaryData.players?.length || 0;
   

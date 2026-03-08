@@ -176,7 +176,7 @@ enum SupabaseAPI {
             case "NCAAB": return "basketball.fill"
             case "NCAAF": return "football.fill"
             case "EPL": return "soccerball"
-            case "MLB": return "baseball.fill"
+            case "WBC": return "baseball.fill"
             default: return "sportscourt.fill"
             }
         }
@@ -189,7 +189,7 @@ enum SupabaseAPI {
             case "NCAAB": return Color(hex: "#F97316")
             case "NCAAF": return Color(hex: "#DC2626")
             case "EPL": return Color(hex: "#8B5CF6")
-            case "MLB": return Color(hex: "#0EA5E9")
+            case "WBC": return Color(hex: "#16A34A")
             default: return GaryColors.gold
             }
         }

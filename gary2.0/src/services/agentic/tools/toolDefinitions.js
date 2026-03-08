@@ -108,6 +108,8 @@ const NCAAB_TOKENS = [
   'SCORING', 'FG_PCT', 'THREE_PT_SHOOTING',
   'TURNOVER_RATE', 'OREB_RATE', 'FT_RATE',
   'REBOUNDS', 'ASSISTS', 'STEALS', 'BLOCKS',
+  // Context + roster/schedule tokens used by NCAAB factor checklist
+  'TOP_PLAYERS', 'INJURIES', 'REST_SITUATION', 'SCHEDULE_STRENGTH',
   // NCAAB-Specific Calculated Stats (from BDL raw box score data)
   'NCAAB_EFG_PCT',           // (FGM + 0.5*FG3M) / FGA
   'NCAAB_TS_PCT',            // PTS / (2*(FGA+0.44*FTA))
@@ -115,6 +117,7 @@ const NCAAB_TOKENS = [
   'NCAAB_OFFENSIVE_RATING',  // (PTS/Poss)*100
   'NCAAB_DEFENSIVE_RATING',  // (OppPTS/Poss)*100 — uses games endpoint for opp points
   'NET_RATING',              // Combined ORtg - DRtg (uses NCAAB calculated ratings)
+  'NCAAB_BARTTORVIK',        // Barttorvik T-Rank / AdjEM / tempo-free profile
   // Bundled investigation tokens
   'NCAAB_FOUR_FACTORS',      // All 4 Dean Oliver factors in one call (eFG%, TOV%, FTA Rate, ORB%)
   'NCAAB_L5_EFFICIENCY',     // L5 eFG%, TS%, ORtg, DRtg from player game logs
@@ -207,13 +210,38 @@ const NHL_TOKENS = [
   'MARGIN_VARIANCE'       // Goal differential variance
 ];
 
+// MLB/WBC Stat Tokens — uses MLB Stats API + Gemini Grounding
+const MLB_TOKENS = [
+  // Pitching
+  'MLB_STARTING_PITCHERS',  // Probable starters + career stats
+  'MLB_BULLPEN',            // Bullpen availability and workload
+  // Hitting
+  'MLB_KEY_HITTERS',        // Top hitters with MLB career stats
+  'MLB_LINEUP',             // Confirmed batting order
+  // Context
+  'STANDINGS',              // WBC pool standings
+  'MLB_WBC_RESULTS',        // Completed WBC game results
+  'MLB_ODDS',               // Current betting odds (via grounding)
+  'REST_SITUATION',          // Days rest between WBC games
+  'RECENT_FORM',            // Team's WBC results so far
+  'H2H_HISTORY',            // Historical WBC matchup record
+  // Players
+  'TOP_PLAYERS',            // Key players with career stats
+  'INJURIES',               // Injury/scratch updates
+  // WBC-specific grounding tools
+  'WBC_GAME_PREVIEW',       // Game preview, projections, expert analysis
+  'WBC_PITCHER_SCOUTING',   // Starting pitcher scouting reports
+  'WBC_TOURNAMENT_FORM',    // Tournament performance and momentum
+];
+
 // Combine all tokens by sport
 const ALL_TOKENS_BY_SPORT = {
   NBA: NBA_TOKENS,
   NFL: NFL_TOKENS,
   NCAAB: NCAAB_TOKENS,
   NCAAF: NCAAF_TOKENS,
-  NHL: NHL_TOKENS
+  NHL: NHL_TOKENS,
+  MLB: MLB_TOKENS
 };
 
 // Get all unique tokens across all sports
@@ -222,7 +250,8 @@ const ALL_TOKENS = [...new Set([
   ...NFL_TOKENS,
   ...NCAAB_TOKENS,
   ...NCAAF_TOKENS,
-  ...NHL_TOKENS
+  ...NHL_TOKENS,
+  ...MLB_TOKENS
 ])];
 
 /**
@@ -243,7 +272,7 @@ Typical analysis needs 2-5 stat categories.`,
         properties: {
           sport: {
             type: "string",
-            enum: ["NBA", "NFL", "NCAAB", "NCAAF", "NHL"],
+            enum: ["NBA", "NFL", "NCAAB", "NCAAF", "NHL", "MLB", "WBC"],
             description: "The sport league"
           },
           token: {
@@ -266,13 +295,13 @@ Typical analysis needs 2-5 stat categories.`,
       name: "fetch_player_game_logs",
       description: `Fetches raw game logs for a specific player (last 5-10 games).
 Use this to identify "Hot Streaks," "Slumps," or consistency issues that season-long stats might mask.
-Available for: NBA, NFL, NHL, NCAAB, NCAAF.`,
+Available for: NBA, NFL, NHL, NCAAB, NCAAF, MLB.`,
       parameters: {
         type: "object",
         properties: {
           sport: {
             type: "string",
-            enum: ["NBA", "NFL", "NHL", "NCAAB", "NCAAF"],
+            enum: ["NBA", "NFL", "NHL", "NCAAB", "NCAAF", "MLB"],
             description: "The sport league"
           },
           player_name: {
@@ -505,4 +534,3 @@ export function formatTokenMenu(sport) {
 }
 
 // Token constants are consumed internally via getTokensForSport() only.
-

@@ -50,7 +50,7 @@ const NFL_SPORT_AWARENESS = `
 - TD props are high-variance binary events
 - Goal-line role and total touches can tell different stories about a player's scoring profile
 
-### [NFL] NFL STRUCTURAL MISMATCH EXAMPLES
+### [NFL] NFL KEY FACTOR EXAMPLES
 
 **Role Changes:**
 - WR injuries redistribute target share among remaining receivers
@@ -103,11 +103,11 @@ const NFL_OUTPUT_FORMAT = `
 
 For each pick, provide:
 1. **THE PICK:** Player Name OVER/UNDER Stat Line (Odds)
-2. **THE STRUCTURAL MISMATCH:** One sentence on what the market hasn't priced
+2. **THE KEY FACTOR:** The game-specific evidence supporting your pick
 3. **VOLUME FLOOR CHECK:** Target share/carry share and projection vs line
 4. **GAME SCRIPT:** Expected game flow and effect on this prop
 5. **THE RISK:** Concrete scenario where this loses
-6. **WHY THE MARKET IS WRONG:** Why your mismatch matters tonight
+6. **KEY FACTOR:** The game-specific evidence supporting your pick
 `;
 
 // ── Sectioned export ─────────────────────────────────────────────────

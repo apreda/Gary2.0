@@ -590,14 +590,14 @@ export async function buildNbaScoutReport(game, options = {}) {
           if (gamesMissed <= STALE_WINDOW_GAMES && daysSince < STALE_DAYS_THRESHOLD) {
             inj.duration = 'FRESH';
             inj.freshness = 'FRESH';
-          } else if (gamesMissed <= 7) {
+          } else if (gamesMissed <= 3) {
             inj.duration = 'SHORT-TERM';
             inj.freshness = 'STALE';
-          } else if (gamesMissed <= 20) {
-            inj.duration = 'LONG-TERM';
+          } else if (gamesMissed >= 20) {
+            inj.duration = 'SEASON-LONG';
             inj.freshness = 'STALE';
           } else {
-            inj.duration = 'SEASON-LONG';
+            inj.duration = 'PRICED IN';
             inj.freshness = 'STALE';
           }
 
@@ -1050,7 +1050,7 @@ VENUE: [arena name, city]
       if (name && name.length > 3) allowedNames.add(name);
     });
 
-    // 4. Add names from starting lineups
+    // 3. Add names from starting lineups
     if (injuries.lineups) {
       if (injuries.lineups.home) injuries.lineups.home.forEach(p => { if (p.name) allowedNames.add(p.name.trim()); });
       if (injuries.lineups.away) injuries.lineups.away.forEach(p => { if (p.name) allowedNames.add(p.name.trim()); });
@@ -1157,10 +1157,10 @@ ${formatRestSituation(homeTeam, awayTeam, calculateRestSituation(recentHome, gam
 
 ${nbaRosterDepth ? formatNbaRosterDepth(homeTeam, awayTeam, nbaRosterDepth, injuries) : ''}
 
-RECENT FORM (Last 3 Games)
+LAST GAME
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${formatRecentFormWithBoxScores(homeTeam, recentHome, recentFormBoxScores, 3)}
-${formatRecentFormWithBoxScores(awayTeam, recentAway, recentFormBoxScores, 3)}
+${formatRecentFormWithBoxScores(homeTeam, recentHome, recentFormBoxScores, 1)}
+${formatRecentFormWithBoxScores(awayTeam, recentAway, recentFormBoxScores, 1)}
 HEAD-TO-HEAD HISTORY (${seasonLabel} SEASON)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${formatH2HSection(h2hData, homeTeam, awayTeam)}

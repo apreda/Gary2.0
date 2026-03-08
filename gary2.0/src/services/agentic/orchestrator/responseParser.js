@@ -37,7 +37,7 @@ export function parsePropsResponse(content, toolCallArgs) {
 
 /**
  * Determine the current pass based on message history
- * Returns: 'investigation', 'steel_man', 'evaluation', 'final_decision', or 'default'
+ * Returns: 'investigation', 'evaluation', 'final_decision', or 'default'
  */
 export function determineCurrentPass(messages) {
   // Check from most recent to oldest
@@ -46,12 +46,9 @@ export function determineCurrentPass(messages) {
   );
   if (hasPass3) return 'final_decision';
 
-  const hasPass25 = messages.some(m => m.content?.includes('PASS 2.5 - CASE REVIEW'));
+  const hasPass25 = messages.some(m => m.content?.includes('PASS 2.5'));
   if (hasPass25) return 'evaluation';
 
-  const hasPass2 = messages.some(m => m.content?.includes('PASS 2 - STEEL MAN') || m.content?.includes('PASS 2 - MATCHUP ANALYSIS'));
-  if (hasPass2) return 'steel_man';
-  
   // Default to investigation (Pass 1)
   return 'investigation';
 }
@@ -275,6 +272,37 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
     }
   }
   
+  // ML ODDS CEILING ENFORCEMENT: If Gary picks ML on a heavy favorite (odds worse than -200),
+  // force the pick to spread instead. The prompt says -200 but Gary sometimes ignores it.
+  // This is the hard enforcement — no ML picks allowed on favorites at -200 or worse.
+  if (parsed.type === 'moneyline' && !isNHL && gameOdds) {
+    const pickLowerML = (parsed.pick || '').toLowerCase();
+    const homeWordsML = (homeTeam || '').toLowerCase().split(/\s+/);
+    const awayWordsML = (awayTeam || '').toLowerCase().split(/\s+/);
+    const pickedHomeML = homeWordsML.some(w => w.length > 2 && pickLowerML.includes(w));
+    const pickedAwayML = awayWordsML.some(w => w.length > 2 && pickLowerML.includes(w));
+
+    const pickedTeamMlOdds = pickedHomeML ? (gameOdds.moneyline_home ?? gameOdds.ml_home)
+      : pickedAwayML ? (gameOdds.moneyline_away ?? gameOdds.ml_away)
+      : null;
+
+    if (pickedTeamMlOdds != null && pickedTeamMlOdds <= -200) {
+      // This team is a heavy favorite — force to spread
+      const spreadVal = pickedHomeML ? gameOdds.spread_home : gameOdds.spread_away;
+      if (spreadVal != null) {
+        const spreadStr = parseFloat(spreadVal) >= 0 ? `+${spreadVal}` : `${spreadVal}`;
+        const teamName = pickedHomeML ? homeTeam : awayTeam;
+        console.log(`[Orchestrator] 🚫 ML ODDS CEILING: ${teamName} ML odds (${pickedTeamMlOdds}) exceed -200 limit — forcing to spread ${spreadStr}`);
+        parsed.type = 'spread';
+        parsed.pick = `${teamName} ${spreadStr}`;
+        parsed.spread = spreadVal;
+      } else {
+        console.error(`[Orchestrator] 🚫 ML ODDS CEILING: ${pickedHomeML ? homeTeam : awayTeam} ML odds (${pickedTeamMlOdds}) exceed -200 limit but no spread available — REJECTING pick`);
+        return null;
+      }
+    }
+  }
+
   // EXTRACT ODDS FROM PICK TEXT if not explicitly provided
   // E.g., "Detroit Red Wings ML -185" → odds = -185
   if (!parsed.odds && parsed.pick) {
@@ -303,6 +331,10 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
 
   // Strip parenthesized odds from pick text — Gary sometimes wraps odds in parens like "(−115)"
   pickText = pickText.replace(/\s*\([+-]\d{3,4}\)\s*$/, '').trim();
+
+  // Strip malformed short odds after "ML" — Gary sometimes truncates odds (e.g., "ML -02" instead of "ML -102")
+  // Valid American odds are always 3+ digits. Short patterns after ML are malformed and should be removed.
+  pickText = pickText.replace(/(\bML)\s+[+-]\d{1,2}\s*$/i, '$1').trim();
 
   // FIX: If pick says "Team spread -110" without actual number, insert the spread value
   if (pickText.toLowerCase().includes(' spread ') && parsed.spread) {
@@ -335,6 +367,7 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
     odds = parsed.odds ?? (pickedHome ? parsed.moneylineHome : parsed.moneylineAway)
       ?? (pickedHome ? gameOdds.moneyline_home : gameOdds.moneyline_away) ?? null;
   }
+
   if (odds == null) {
     console.warn(`[Orchestrator] ⚠️ NO ODDS AVAILABLE for pick "${pickText}" — AI and game data both missing`);
   }
@@ -358,8 +391,21 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
       const pickLower = pickText.toLowerCase();
       const homeWords = (homeTeam || '').toLowerCase().split(/\s+/);
       const awayWords = (awayTeam || '').toLowerCase().split(/\s+/);
-      const pickedHome = homeWords.some(w => w.length > 2 && pickLower.includes(w));
-      const pickedAway = awayWords.some(w => w.length > 2 && pickLower.includes(w));
+      let pickedHome = homeWords.some(w => w.length > 2 && pickLower.includes(w));
+      let pickedAway = awayWords.some(w => w.length > 2 && pickLower.includes(w));
+
+      // Disambiguate when both match (e.g. "Georgia Bulldogs" vs "Mississippi State Bulldogs")
+      if (pickedHome && pickedAway) {
+        const homeFull = (homeTeam || '').toLowerCase();
+        const awayFull = (awayTeam || '').toLowerCase();
+        const homeFullMatch = pickLower.includes(homeFull);
+        const awayFullMatch = pickLower.includes(awayFull);
+        if (homeFullMatch && !awayFullMatch) {
+          pickedAway = false;
+        } else if (awayFullMatch && !homeFullMatch) {
+          pickedHome = false;
+        }
+      }
 
       // Calculate correct spread from picked team's perspective
       const homeSpread = parseFloat(gameOdds.spread_home);

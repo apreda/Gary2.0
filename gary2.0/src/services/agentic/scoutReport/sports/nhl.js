@@ -56,8 +56,6 @@ async function fetchNhlKeyPlayers(homeTeam, awayTeam, sport) {
     // ═══════════════════════════════════════════════════════════════════════════
     console.log(`[Scout Report] Fetching NHL lineups via Gemini Grounding for ${awayTeam} @ ${homeTeam}`);
 
-    const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-
     let rotoWireLineups = null;
     try {
       // Use the correct Rotowire NHL lineups URL - this page shows TODAY's games by default
@@ -925,7 +923,6 @@ export async function buildNhlScoutReport(game, options = {}) {
             inj.duration = 'FRESH';
             inj.freshness = 'FRESH';
             inj.isPricedIn = false;
-            inj.isEdge = true;
           } else if (gamesMissed <= 7) {
             inj.duration = 'SHORT-TERM';
             inj.freshness = 'STALE';
@@ -1101,8 +1098,8 @@ VENUE: [arena name, city]
 
   // =========================================================================
   // Step 3B: Filter STALE injured players from key players list
-  // Players OUT for >2 games have stats that are already priced in.
-  // Keep FRESH injuries (0-2 games) so Gary knows what the team just lost.
+  // Uses duration labels (set during injury enrichment) — only FRESH stays.
+  // SHORT-TERM, LONG-TERM, SEASON-LONG are already reflected in team stats.
   // =========================================================================
   if (nhlKeyPlayers && injuries) {
     const allInjured = [...(injuries.home || []), ...(injuries.away || [])];
@@ -1110,8 +1107,8 @@ VENUE: [arena name, city]
       .filter(inj => {
         const s = (inj.status || '').toLowerCase();
         const isOut = s === 'out' || s.includes('out for season') || s === 'ir' || s === 'ltir' || s === 'ofs';
-        const gamesMissed = inj.gamesMissed ?? 0;
-        return isOut && gamesMissed > 2;
+        const duration = (inj.duration || '').toUpperCase();
+        return isOut && duration && duration !== 'FRESH';
       })
       .map(inj => {
         const name = typeof inj.player === 'string' ? inj.player :
@@ -1127,7 +1124,7 @@ VENUE: [arena name, city]
           const pName = (p.name || '').toLowerCase();
           const isStale = staleOutNames.some(outName => playerNamesMatch(pName, outName));
           if (isStale) {
-            console.log(`[Scout Report] Removed stale injured player from key players: ${p.name} (OUT >2 games)`);
+            console.log(`[Scout Report] Removed stale injured player from key players: ${p.name} (duration: not FRESH)`);
           }
           return !isStale;
         });

@@ -53,6 +53,18 @@ struct ChangelogEntry: Identifiable {
 
 let changelogEntries: [ChangelogEntry] = [
     ChangelogEntry(
+        version: "1.9.92",
+        date: "March 5, 2026",
+        type: .feature,
+        title: "World Baseball Classic",
+        changes: [
+            "WBC game picks and prop bets now live during the tournament",
+            "Improved Tale of the Tape for international matchups",
+            "Better odds parsing for WBC games",
+            "Moneyline picks now capped on heavy favorites — Gary picks the spread instead"
+        ]
+    ),
+    ChangelogEntry(
         version: "1.9.91",
         date: "February 28, 2026",
         type: .improvement,

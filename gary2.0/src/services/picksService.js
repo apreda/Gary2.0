@@ -4,22 +4,10 @@
  */
 import { supabase, storeDailyPicks } from '../supabaseClient.js';
 import { ballDontLieService } from './ballDontLieService.js';
-import { geminiService } from './geminiService.js';
 import { getESTDate } from '../utils/dateUtils.js';
-import { generateNBAPicks } from './nbaPicksHandler.js';
-import { generateNFLPicks } from './nflPicksHandler.js';
-import { generateNCAAFPicks } from './ncaafPicksHandler.js';
-import { generateNCAABPicks } from './ncaabPicksHandler.js';
 
-// Global processing state to prevent multiple simultaneous generations
-let isCurrentlyGeneratingPicks = false;
-let isProcessingNBA = false;
-let isProcessingNFL = false;
-let isProcessingNCAAF = false;
-let isProcessingNCAAB = false;
+// Storage lock to prevent concurrent writes
 let isStoringPicks = false;
-let lastGenerationTime = 0;
-const GENERATION_COOLDOWN = 30 * 1000; // 30 seconds
 
 // Lightweight in-flight locks only (no daily dedupe so repeated runs are allowed)
 const processingLocks = new Map();
@@ -226,6 +214,9 @@ async function storeDailyPicksInDatabase(picks) {
         conference: pick.conference || null,
         homeConference: pick.homeConference || null,
         awayConference: pick.awayConference || null,
+        // NCAAB AP Poll rankings for pick cards
+        homeRanking: pick.homeRanking || null,
+        awayRanking: pick.awayRanking || null,
         supporting_factors: pick.supporting_factors || [],
         contradicting_factors: pick.contradicting_factors || null,
         // Odds data (spread, moneyline, total)
@@ -280,6 +271,9 @@ async function storeDailyPicksInDatabase(picks) {
       conference: pick.conference || null,
       homeConference: pick.homeConference || null,
       awayConference: pick.awayConference || null,
+      // NCAAB AP Poll rankings for pick cards
+      homeRanking: pick.homeRanking || null,
+      awayRanking: pick.awayRanking || null,
       supporting_factors: pick.supporting_factors || [],
       contradicting_factors: pick.contradicting_factors || null,
       // Odds data (spread, moneyline, total)
@@ -451,99 +445,6 @@ async function storeDailyPicksInDatabase(picks) {
     console.log('🔓 Storage lock released');
   }
 }
-
-// Note: Regular season stats removed - playoffs only for NBA and NHL
-
-// The core pick generator function
-async function generateDailyPicks() {
-  // Global deduplication check
-  const now = Date.now();
-  if (isCurrentlyGeneratingPicks) {
-    console.log('🛑 Picks already being generated, skipping duplicate request...');
-    return [];
-  }
-  
-  if (now - lastGenerationTime < GENERATION_COOLDOWN) {
-    console.log(`🛑 Generation cooldown active (${Math.round((GENERATION_COOLDOWN - (now - lastGenerationTime)) / 1000)}s remaining), skipping...`);
-    return [];
-  }
-  
-  isCurrentlyGeneratingPicks = true;
-  lastGenerationTime = now;
-  console.log('🚀 STARTING DAILY PICKS GENERATION - Global lock acquired');
-  
-  try {
-    const sportsToAnalyze = [
-      'basketball_nba',
-      'americanfootball_nfl',
-      'americanfootball_ncaaf',
-      'basketball_ncaab'
-    ];
-    let allPicks = [];
-
-    for (const sport of sportsToAnalyze) {
-      let sportPicks = [];
-      
-      // Sport-specific processing locks to prevent duplication
-      if (sport === 'basketball_nba' && isProcessingNBA) {
-        console.log('🛑 NBA picks already being processed, skipping...');
-        continue;
-      }
-      if (sport === 'americanfootball_nfl' && isProcessingNFL) {
-        console.log('🛑 NFL picks already being processed, skipping...');
-        continue;
-      }
-      if (sport === 'americanfootball_ncaaf' && isProcessingNCAAF) {
-        console.log('🛑 NCAAF picks already being processed, skipping...');
-        continue;
-      }
-      if (sport === 'basketball_ncaab' && isProcessingNCAAB) {
-        console.log('🛑 NCAAB picks already being processed, skipping...');
-        continue;
-      }
-      
-      if (sport === 'basketball_nba') {
-        isProcessingNBA = true;
-        sportPicks = await generateNBAPicks();
-        isProcessingNBA = false;
-      } else if (sport === 'americanfootball_nfl') {
-        isProcessingNFL = true;
-        sportPicks = await generateNFLPicks();
-        isProcessingNFL = false;
-      } else if (sport === 'americanfootball_ncaaf') {
-        isProcessingNCAAF = true;
-        sportPicks = await generateNCAAFPicks();
-        isProcessingNCAAF = false;
-      } else if (sport === 'basketball_ncaab') {
-        isProcessingNCAAB = true;
-        sportPicks = await generateNCAABPicks();
-        isProcessingNCAAB = false;
-      }
-
-      // Add for this sport
-      allPicks.push(...sportPicks);
-      await new Promise(resolve => setTimeout(resolve, 500));
-    }
-
-    // Store and return
-    await storeDailyPicksInDatabase(allPicks);
-    console.log('✅ DAILY PICKS GENERATION COMPLETED - Releasing global lock');
-    return allPicks;
-  } catch (error) {
-    console.error('❌ DAILY PICKS GENERATION FAILED - Releasing global lock:', error);
-    throw error;
-  } finally {
-    isCurrentlyGeneratingPicks = false;
-    // Release all sport-specific locks in case of error
-    isProcessingNBA = false;
-    isProcessingNFL = false;
-    isProcessingNCAAF = false;
-    isProcessingNCAAB = false;
-    isStoringPicks = false;
-    console.log('🔓 All processing locks released');
-  }
-}
-
 
 // ==========================================
 // WEEKLY NFL PICKS (persist all week)
@@ -786,7 +687,6 @@ async function storeTestPicks(picks, testName = null, testNotes = null) {
 
 // Export both styles!
 const picksService = {
-  generateDailyPicks,
   storeDailyPicksInDatabase,
   storeTestPicks,
   storeWeeklyNFLPicks,
@@ -797,5 +697,5 @@ const picksService = {
 };
 
 export { processGameOnce, gameAlreadyHasPick, nflGameAlreadyHasPick };
-export { picksService, generateDailyPicks, storeWeeklyNFLPicks, storeTestPicks };
+export { picksService, storeWeeklyNFLPicks, storeTestPicks };
 export default picksService;

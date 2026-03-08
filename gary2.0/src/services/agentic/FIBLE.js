@@ -80,7 +80,6 @@ export const WINNING_SCORE_TARGETS = {
 
       captainContext: {
         typicalCaptainOutputRange: '55-80 raw points (82.5-120 with 1.5x)',
-        highOwnershipThreshold: 25,
       }
     },
 
@@ -149,41 +148,6 @@ export const WINNING_SCORE_TARGETS = {
     CASH: {
       cashLine: { min: 125, typical: 140 },
       safeTarget: 150,
-    }
-  },
-
-  DRAFTKINGS_NHL: {
-    LARGE_GPP: {
-      firstPlace: { min: 38, typical: 45, ceiling: 55 },
-      top1Percent: { min: 33, typical: 38 },
-      top10Percent: { min: 28, typical: 32 },
-      cashLine: { min: 22, typical: 26 },
-    },
-    SMALL_GPP: {
-      firstPlace: { min: 35, typical: 40 },
-      top1Percent: { min: 30, typical: 35 },
-      cashLine: { min: 20, typical: 24 },
-    },
-    CASH: {
-      cashLine: { min: 20, typical: 24 },
-      safeTarget: 28,
-    }
-  },
-
-  FANDUEL_NHL: {
-    LARGE_GPP: {
-      firstPlace: { min: 55, typical: 65 },
-      top1Percent: { min: 48, typical: 55 },
-      cashLine: { min: 35, typical: 42 }
-    },
-    SMALL_GPP: {
-      firstPlace: { min: 50, typical: 58 },
-      top1Percent: { min: 43, typical: 50 },
-      cashLine: { min: 32, typical: 38 },
-    },
-    CASH: {
-      cashLine: { min: 30, typical: 37 },
-      safeTarget: 42,
     }
   },
 

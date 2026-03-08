@@ -119,6 +119,18 @@ export function formatSeason(seasonYear) {
   return `${seasonYear}-${seasonYear + 1}`;
 }
 
+/**
+ * Get the current MLB season year.
+ * MLB regular season runs April-October. WBC is March.
+ * @returns {number} The MLB season year (e.g., 2025 for the Apr 2025 - Oct 2025 season, or 2026 for WBC March 2026)
+ */
+export function mlbSeason() {
+  const now = getCurrentEST();
+  const year = now.getFullYear();
+  // MLB season = calendar year (2026 games = 2026 season)
+  return year;
+}
+
 // formatGameTime removed — dead export (3 other files define their own local versions)
 
 /**

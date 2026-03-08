@@ -33,19 +33,19 @@ Work through each numbered factor below. Check off each one as you complete it. 
 ### 3. FOUR FACTORS (OFFENSE)
 **Tokens:** EFG_PCT, TURNOVER_RATE, OREB_RATE, FT_RATE
 - Compare all four factors for both teams
-- Which factor shows the biggest gap? Is that gap structural (consistent all season) or recent (L5 divergence)?
-- If eFG% diverges from season in L5, check whether it's volume change (more 3PA) or percentage spike (unsustainable)
+- Compare the gaps across all four factors. Are any gaps consistent across the season or only recent (L5 divergence)?
+- If eFG% diverges from season in L5, check whether it's volume change (more 3PA) or percentage change — and what does the historical variance look like
 
 ### 4. FOUR FACTORS (DEFENSE)
 **Tokens:** OPP_EFG_PCT, OPP_TOV_RATE, OPP_FT_RATE, DREB_RATE
 - Compare defensive four factors for both teams
-- Does one team's offensive strength attack the other's specific defensive weakness?
+- Compare each team's offensive profile to the opponent's defensive profile. Where do they align or diverge?
 
 ### 5. SHOOTING PROFILE
 **Tokens:** THREE_PT_SHOOTING, PAINT_SCORING, THREE_PT_DEFENSE, PAINT_DEFENSE, PERIMETER_DEFENSE, TRANSITION_DEFENSE
 - How does each team score? 3PT-dependent or paint-attack?
 - Compare each team's offensive shooting zones to the opponent's defensive profile in those zones
-- If a team's L5 3P% is 5%+ above season, note this as potential regression risk
+- If a team's L5 3P% is 5%+ above season, note the gap and check what the historical variance and opponent 3P defense look like
 
 ### 6. STANDINGS & CONTEXT
 **Tokens:** STANDINGS, CONFERENCE_STANDING
@@ -70,9 +70,8 @@ The scout report labels each injury with a market-aware duration tag. Use these 
 - Investigate: What is the replacement player's production profile — both in the games since the injury AND their season-long stats?
 - Investigate: How has the team performed in the games without the injured player vs their season average?
 - Investigate: What does the team's roster depth look like behind this player — how many rotation players does the team use, what experience level are the backups, and is there a clear next man up or does the workload get spread across multiple players?
-- For each FRESH or SHORT-TERM injury: How long has the market known about this absence? Has the line had time to fully adjust?
 
-**LONG-TERM and SEASON-LONG injuries — market has fully adjusted:**
+**PRICED IN, LONG-TERM and SEASON-LONG injuries — market has fully adjusted:**
 - The team's current stats already reflect life without this player. Do not treat as new information.
 
 - **If L5/L10 diverges 7+ from season**, pull game logs for top usage players — who's driving it?
@@ -98,31 +97,27 @@ When a player is listed as GTD or Questionable after missing time:
 
 ### 11. CLOSE GAMES & VARIANCE
 **Tokens:** CLUTCH_STATS, BLOWOUT_TENDENCY, LUCK_ADJUSTED, HOME_AWAY_SPLITS
-- Close game record vs expected record — is either team due for regression?
+- Close game record vs expected record — investigate what variance factors explain any gap
 - Home/away efficiency splits — what SPECIFIC metric changes?
-- Investigate whether the spread is being moved by home court or by the travel, rest, and schedule context surrounding this game.
 
 ## DEEP INVESTIGATION — NBA-SPECIFIC
 
-### PROCESS METRICS — WHERE IS THE GAP?
+### PROCESS METRICS
 Investigate the process behind each team's results — shooting efficiency, ball security, second chances, and free throw generation.
-- Where is the biggest process gap between these two teams?
-- Which gap is most relevant given how these teams play against each other?
+- What process gaps exist between these two teams?
+- How do each team's strengths and weaknesses interact in this matchup?
 - Does the matchup amplify or neutralize any of these gaps?
 
 ### QUESTIONABLE / GTD / DOUBTFUL PLAYERS INVESTIGATION
 When a key player is QUESTIONABLE, GTD, or DOUBTFUL:
 - **Check their GP stat:** Compare to team games played. A player with 35 GP when the team has played 55 games has missed 20 games — this is an on-and-off pattern, not a fresh disruption.
-- **On-and-off pattern:** If the player frequently misses games, investigate the team's performance WITH vs WITHOUT them. Has the market already learned this pattern? The spread may already reflect the probability of absence.
+- **On-and-off pattern:** If the player frequently misses games, investigate the team's performance WITH vs WITHOUT them.
 - **Fresh GTD after extended absence:** This could signal a RETURN. Investigate the team's data without this player and what adding them back would mean. Expect potential minutes restriction.
-- **DOUBTFUL players:** Likely absent — investigate how the team has performed without them and whether the spread reflects the absence.
-- **The key question:** Is the market treating this as a fresh injury (big line move) or a known pattern (minimal move)? Pull the data to see which is correct.
+- **DOUBTFUL players:** Likely absent — investigate how the team has performed without them.
 
 ### GAME CONTEXT
-- **Margin check**: Do these teams' styles produce close games or wide margins? What does the Net Rating gap and pace matchup suggest about game flow?
-- **Spread vs stats check**: If the stats show a close matchup but the spread is large, investigate what's driving the spread beyond the stats. If the stats show a clear gap but the spread is small, investigate what the market might be seeing that the stats don't capture.
-- **Injury timing**: How long has each player been out? What do the team's stats look like during the absence? What does the current spread tell you about how the market assessed this roster?
-- **Key numbers**: If this spread sits on a key number, investigate which side benefits most
+- **Margin check**: Do these teams' styles produce close games or wide margins? What does the Net Rating gap and pace matchup tell you about the types of games these teams typically produce?
+- **Injury timing**: How long has each player been out? What do the team's stats look like during the absence?
 
 ### TEAM IDENTITY — UNDERSTAND WHY, NOT JUST WHAT
 - **Shooting identity**: What does the scoring profile show about how this team creates offense?
@@ -139,37 +134,10 @@ When L5/L10 diverges from season baseline:
 - What evidence distinguishes a real shift from variance?
 - Are the key contributors outperforming their baselines, and is that likely to continue?
 - Season avg = baseline identity. L5/L10 = current form. The gap tells the story.
-- Which of this team's strengths are stable vs volatile — and what does that mean for tonight?
+- Which of this team's strengths are consistent across the season vs which show high variance?
 
-### WHAT'S IN THE SPREAD?
-The spread prices in more than raw team quality. Records, rankings, home court, schedule context, and the SPOT all move lines.
-
-**CAUSAL VS DESCRIPTIVE:**
-- Records, rankings, and streaks DESCRIBE — they tell you what happened. They explain why the line is set where it is. But "40-20" can't tell you which side of tonight's spread is the better bet.
-- Stats that measure HOW a team plays EXPLAIN — they reveal what's causing the results and how each team's strengths match up against the opponent's weaknesses.
-- The SPOT — venue, schedule, rest situations, emotional context — creates variance that shapes how tonight plays out.
-- Investigate all three layers: descriptive context (explains the line), causal metrics (explains the matchup), AND situational factors (the spot).
-
-When you cite a record, ranking, or situation — ask: "Is this describing what happened, or explaining what will happen tonight?"
-
-**FOR LARGE SPREADS (8+ points):**
-Large spreads are about MARGIN, not just winning. Investigate:
-- Does the depth comparison for BOTH teams support or undermine this margin?
-- In the NBA, rotation depth and bench quality determine whether a team can sustain a lead. How does rotation depth affect whether a team can extend or close a gap?
-- Which team's depth is the bigger factor — can the deeper team pile on, or can the shorter rotation hold on?
-
-### INJURY MARKET TIMING
-The scout report labels each injury with a market-aware duration tag. Use these to guide your investigation depth:
-
-**FRESH and SHORT-TERM injuries require full investigation:**
-- Investigate: Who is getting the minutes in that player's role since the injury?
-- Investigate: What is the replacement player's production profile — both in the games since the injury AND their season-long stats?
-- Investigate: How has the team performed in the games without the injured player vs their season average?
-- Investigate: What does the team's roster depth look like behind this player — how many rotation players does the team use, what experience level are the backups, and is there a clear next man up or does the workload get spread across multiple players?
-- For each FRESH or SHORT-TERM injury: How long has the market known about this absence? Has the line had time to fully adjust?
-
-**LONG-TERM and SEASON-LONG injuries — market has fully adjusted:**
-- The team's current stats already reflect life without this player. Do not treat as new information.
+### SPREAD AWARENESS
+Report your findings factually. Gary will evaluate which factors matter for this number.
 
 ### YOUR SCOUT REPORT IS YOUR BASELINE
 The scout report provides a starting point — advanced metrics, standings, recent form, H2H history, injuries, and roster depth. This is the BASELINE of who these teams are. You are free to re-fetch any stat for deeper investigation. Your investigation should focus on what's DIFFERENT about THIS game vs the baseline.
@@ -178,9 +146,8 @@ The scout report provides a starting point — advanced metrics, standings, rece
 Watch for these patterns that require deeper investigation:
 - **Schedule Spot**: Back-to-backs, road trips, rest advantages — what does the data show about each team's performance in similar schedule spots this season?
 - **Revenge / Rematch**: NBA teams play 3-4 times per season. What changed since the last meeting — roster health, form, lineup adjustments?
-- **Home Court Factor**: Investigate what the home/away data reveals about venue impact for each team, and what that means relative to the spread.
-- **Regression Check**: When L5/L10 shooting or efficiency diverges from the season baseline, what does the evidence show about sustainability?
-- **Market Efficiency**: NBA lines are heavily bet — investigate whether transient factors (rest, travel, injury timing) are creating a gap between the data and the number.`;
+- **Home Court Factor**: Investigate what the home/away data reveals about venue impact for each team.
+- **Regression Check**: When L5/L10 shooting or efficiency diverges from the season baseline, what does the historical variance and sample size show?`;
 
 // ═══════════════════════════════════════════════════════════════════════
 // NFL INVESTIGATION FACTORS
@@ -204,7 +171,7 @@ Work through each numbered factor below. Check off each one as you complete it. 
 
 ### 3. TRENCHES (O-LINE / D-LINE)
 **Tokens:** OL_RANKINGS, DL_RANKINGS, PRESSURE_RATE, TIME_TO_THROW
-- Pressure rate comparison — can one team's pass rush exploit the other's protection?
+- How does each team's pass rush compare to the opponent's pass protection?
 - Time to throw affects the entire passing game
 - Run blocking affects rushing EPA
 
@@ -221,8 +188,8 @@ Work through each numbered factor below. Check off each one as you complete it. 
 
 ### 6. TURNOVERS
 **Tokens:** TURNOVER_MARGIN, TURNOVER_LUCK, FUMBLE_LUCK
-- Turnover margin vs expected — is either team due for regression?
-- Fumble luck (fumbles lost vs fumbles forced) — unstable metric
+- Turnover margin vs expected — investigate what drives any gap
+- Fumble variance (fumbles lost vs fumbles forced)
 
 ### 7. RED ZONE
 **Tokens:** RED_ZONE_OFFENSE, RED_ZONE_DEFENSE, GOAL_LINE
@@ -288,16 +255,15 @@ NFL games are scarce (17 per team). Every detail matters. Investigate thoroughly
 
 A 5-game NFL sample is 30% of the season. Investigate the WHY behind the numbers, not just the WHAT.
 
-### STRUCTURAL MATCHUP AVENUE
-Sometimes the game is decided by ONE SPECIFIC MATCHUP where a team's strength meets the opponent's weakness.
+### SPECIFIC MATCHUP INVESTIGATION
+Examine specific unit-vs-unit matchups where there's a clear capability gap.
 
 **When to explore:**
 - One team has an elite unit facing a compromised unit
 - A key player is returning/missing that changes how the team operates
 - The styles of play create a specific clash point
-- The spread feels "off" and you're looking for why
 
-**The question:** "Is there a specific unit-vs-unit matchup where one team has a physical advantage that could determine the game's outcome?"
+**The question:** "Are there specific unit-vs-unit matchups with notable capability differences?"
 
 When investigating matchups, consider whether statistical success TRANSLATES to THIS specific opponent. Has this unit/player faced THIS archetype before? What happened?
 
@@ -318,7 +284,7 @@ After identifying each team's style: How do these styles interact? What does eac
 ### TIMEFRAME & REGRESSION
 - L5 EPA above season? Real improvement or weak opponents? Check schedule quality
 - L5 turnover margin extreme? Skill (INTs) or luck (fumbles)? Check the breakdown
-- Which of this team's strengths are built on stable factors vs volatile ones — and what does that mean for tonight?
+- Which of this team's strengths are built on consistent factors vs which show high variance?
 - Compare L5 to season baselines — what does the gap reveal?
 
 ### SITUATIONAL CONTEXT
@@ -352,7 +318,7 @@ Work through each numbered factor below. Check off each one as you complete it. 
 
 ### 3. SPECIAL TEAMS
 **Tokens:** POWER_PLAY_PCT, PENALTY_KILL_PCT, SPECIAL_TEAMS, PP_OPPORTUNITIES
-- PP% vs PK% matchup — does one team's power play exploit the other's PK weakness?
+- PP% vs PK% matchup — how do the PP% and PK% compare in this matchup?
 - PP opportunity volume matters — a team that draws penalties vs one that doesn't
 
 ### 4. SCORING
@@ -367,7 +333,7 @@ Work through each numbered factor below. Check off each one as you complete it. 
 ### 6. LUCK & REGRESSION
 **Tokens:** PDO, LUCK_INDICATORS, SHOOTING_REGRESSION, CLOSE_GAME_RECORD, ONE_GOAL_GAMES, OVERTIME_RECORD
 - PDO (shooting% + save%) — check where each team's value sits relative to 100
-- Shooting% regression — is either team's scoring unsustainably high or low?
+- Shooting% variance — what does the historical rate look like vs current?
 - One-goal game record vs expected — luck or clutch?
 
 ### 7. RECENT FORM
@@ -390,9 +356,8 @@ Work through each numbered factor below. Check off each one as you complete it. 
 - Investigate: What is the replacement player's production profile — both in the games since the injury AND their season-long stats?
 - Investigate: How has the team performed in the games without the injured player vs their season average?
 - Investigate: What does the team's roster depth look like behind this player — how many rotation players does the team use, what experience level are the backups, and is there a clear next man up or does the workload get spread across multiple players?
-- For each FRESH or SHORT-TERM injury: How long has the market known about this absence? Has the line had time to fully adjust?
 
-**LONG-TERM and SEASON-LONG injuries — market has fully adjusted:**
+**PRICED IN, LONG-TERM and SEASON-LONG injuries — market has fully adjusted:**
 - The team's current stats already reflect life without this player. Do not treat as new information.
 
 ### 10. SCHEDULE & REST
@@ -445,7 +410,7 @@ NHL division rivals play 3-4 times per year. When you see a 3-0 or 4-0 sweep dev
 Does THIS team's underlying possession data tell a different story than their record? What's driving any gap?
 
 **PDO Investigation:**
-- Investigate each team's PDO — what does it reveal about the sustainability of their results?
+- Investigate each team's PDO — what does it show about the components driving their results (shooting% and save%)?
 - What's driving the extreme PDO — shooting variance, goalie performance, or both?
 - Is THIS team's starting goalie the same one who drove the PDO? Has the goalie changed?
 - How many games into the streak are they? Has there been any partial correction already?
@@ -459,7 +424,7 @@ Does THIS team's underlying possession data tell a different story than their re
 - **Goaltending stability**: What does the goaltending data show — concentrated in one goalie or shared?
 
 ### STREAK SUSTAINABILITY
-Is this streak backed by possession dominance (CF%, xG) or luck (PDO, OT wins)? Investigate whether the underlying metrics support continuation.
+Is this streak backed by possession dominance (CF%, xG) or luck (PDO, OT wins)? What does the underlying data show?
 
 ### THE TEAM TAKING THE ICE TONIGHT
 - If they've gone 8-4 since losing their top-line center, that's who they are now
@@ -484,7 +449,7 @@ Work through each numbered factor below. Check off each one as you complete it. 
 ### 2. FOUR FACTORS
 **Tokens:** NCAAB_FOUR_FACTORS, NCAAB_EFG_PCT, NCAAB_TS_PCT, TURNOVER_RATE, OREB_RATE, FT_RATE
 - Compare eFG%, TOV%, ORB%, FT Rate for BOTH teams
-- Which factor shows the biggest gap? Is that gap consistent or recent?
+- Compare the gaps across all four factors. Are any gaps consistent or recent?
 - Conference play four factors vs overall — schedule quality affects these
 
 ### 3. SCORING & SHOOTING
@@ -495,7 +460,7 @@ Work through each numbered factor below. Check off each one as you complete it. 
 
 ### 4. DEFENSIVE STATS
 **Tokens:** REBOUNDS, STEALS, BLOCKS
-- Rebounding differential — does one team dominate the glass?
+- Rebounding differential — what does each team's rebounding rate look like on both ends?
 - Turnover forcing vs ball security matchup
 - Shot-blocking presence
 
@@ -533,7 +498,7 @@ Work through each numbered factor below. Check off each one as you complete it. 
 - Home court effects are real and significant in college
 - Home/away efficiency splits — what SPECIFIC metric changes?
 - How does this team play at home vs how do they play on the road?
-- Investigate how much of the spread is driven by home court — is the number reflecting the venue, crowd, and travel dynamics accurately, or is it over or undervaluing either side because of where this game is being played?
+- What does the home/away data show for each team? How does venue factor into this matchup?
 
 ### 11. HEAD-TO-HEAD
 **Tokens:** H2H_HISTORY
@@ -559,24 +524,16 @@ Work through each numbered factor below. Check off each one as you complete it. 
 
 This is the BASELINE — who these teams are. Your investigation should focus on what's DIFFERENT about THIS game vs the baseline.
 
-### WHAT'S IN THE SPREAD?
-The spread prices in more than raw team quality. Records, rankings, home court, conference context, and the SPOT all move lines.
-
-**CAUSAL VS DESCRIPTIVE:**
-- Records, rankings, and streaks DESCRIBE — they tell you what happened. They explain why the line is set where it is. But "9-8" can't tell you which side of tonight's spread is the better bet.
-- Stats that measure HOW a team plays EXPLAIN — they reveal what's causing the results and how each team's strengths match up against the opponent's weaknesses.
-- The SPOT — venue, schedule, conference dynamics, emotional context — creates variance that shapes how tonight plays out.
-- Investigate all three layers: descriptive context (explains the line), causal metrics (explains the matchup), AND situational factors (the spot).
-
-When you cite a record, ranking, or situation — ask: "Is this describing what happened, or explaining what will happen tonight?"
+### SPREAD AWARENESS
+Report your findings factually. Gary will evaluate which factors matter for this number.
 
 ### NCAAB INVESTIGATION TRIGGERS
 Watch for these patterns that require deeper investigation:
 - **Conference vs Non-Conference**: A team's performance in conference play may differ significantly. Which is more relevant?
 - **SOS Filter**: Is either team's record inflated? Refer to the SOS data in your scout report.
 - **Conference Rematch**: Second meeting between rivals. Coaching adjustments may shift dynamics.
-- **Home Court Factor**: Investigate what the home/away data shows about venue impact for each team, and what that means relative to the spread.
-- **Regression Check**: When recent shooting diverges from the season baseline, what does the evidence show about sustainability?
+- **Home Court Factor**: Investigate what the home/away data shows about venue impact for each team.
+- **Regression Check**: When recent shooting diverges from the season baseline, what does the historical variance and sample size show?
 
 ### HOME COURT & VENUE
 College home court effects tend to be larger than pro sports. Investigate what the data shows for THIS matchup:
@@ -595,10 +552,7 @@ College home court effects tend to be larger than pro sports. Investigate what t
 - If the stars are neutralized, what does each team's supporting cast look like?
 
 **FOR LARGE SPREADS (11+ points):**
-Large spreads are about MARGIN, not just winning. Investigate:
-- Does the depth comparison for BOTH teams support or undermine this margin?
-- In NCAAB, benches are shorter (7-8 players). How does rotation depth affect whether a team can sustain a lead?
-- Which team's depth is the bigger factor — can the deeper team pile on, or can the shorter rotation hold on?
+Investigate depth for BOTH teams — in NCAAB, benches are shorter (7-8 players). What does the minutes distribution look like?
 
 ### STRENGTH OF SCHEDULE
 360+ Division I teams with MASSIVE quality variance — SOS is a critical lens.
@@ -611,7 +565,7 @@ Large spreads are about MARGIN, not just winning. Investigate:
 When a conference rival has been swept this season (0-2), investigate:
 - What is the swept team's overall quality (ranking, win rate, AdjEM)?
 - Have there been coaching/scheme adjustments since the last meeting? Conference opponents have film and familiarity
-- Is your thesis built on structural matchup evidence, or just assuming "they've won twice so they'll win again"?
+- Is there evidence of repeatable matchup-specific dynamics, or is it variance? What does the game-by-game data show?
 - Investigate the conditions of each prior meeting — were the margins close or dominant? What's different tonight?
 
 ### INJURY INVESTIGATION (NCAAB-SPECIFIC)
@@ -623,7 +577,6 @@ The scout report labels each injury with a market-aware duration tag. Use these 
   2. What are that replacement player's stats — both in the games since the injury AND their season-long production profile?
   3. How has the team performed in the games without the injured player vs their season average?
   4. What does the team's roster depth look like behind this player — how many rotation players does the team use, what experience level are the backups, and is there a clear next man up or does the workload get spread across multiple players?
-- For each FRESH or SHORT-TERM injury: How long has the market known about this absence? Has the line had time to fully adjust?
 
 **LONG-TERM (20+ days) injuries — market has fully adjusted:**
 - The team's current stats already reflect life without this player. Do not treat as new information.
@@ -653,7 +606,7 @@ Work through each numbered factor below. Check off each one as you complete it. 
 
 ### 3. TRENCHES
 **Tokens:** NCAAF_PASS_EFFICIENCY, NCAAF_RUSH_EFFICIENCY, OL_RANKINGS, DL_RANKINGS, PRESSURE_RATE
-- Line play drives everything in college football
+- Line play is fundamental in college football
 - Pass protection vs pass rush matchup
 - Run blocking vs run defense matchup
 
@@ -693,7 +646,7 @@ Work through each numbered factor below. Check off each one as you complete it. 
 
 ### 11. CLOSE GAMES
 **Tokens:** CLOSE_GAME_RECORD
-- One-score game record vs expected — is this team clutch or lucky?
+- One-score game record vs expected — investigate what drives the gap
 
 ### 12. INJURIES
 **Tokens:** INJURIES, TOP_PLAYERS
@@ -751,7 +704,7 @@ College rosters evolve dramatically through seasons and bowls:
 ### H2H — INVESTIGATE THE CONDITIONS
 Most NCAAF teams play rarely or never. If you have H2H data:
 - **What were the circumstances?** Same venue? Same players available? Different point in the season?
-- **Was the result structural or variance?** Did one team expose a real scheme mismatch, or was there a pick-six or special teams fluke?
+- **Was the result structural or variance?** Did the result reflect a scheme mismatch, or was it driven by high-variance plays?
 - **What's DIFFERENT tonight?** Different venue, different injuries, different opt-outs, different form. A team that lost by 20 in Week 3 may be entirely different by December.
 
 H2H tells you what happened under THOSE specific conditions. Investigate whether those conditions apply tonight.`;
@@ -759,6 +712,63 @@ H2H tells you what happened under THOSE specific conditions. Investigate whether
 // ═══════════════════════════════════════════════════════════════════════
 // FACTOR MAPPING (sport key → factor string)
 // ═══════════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════════
+// MLB/WBC INVESTIGATION FACTORS
+// ═══════════════════════════════════════════════════════════════════════
+
+const MLB_FACTORS = `## INVESTIGATION CHECKLIST — MLB/WBC
+
+Work through each numbered factor below. Check off each one as you complete it. Do NOT skip any. For each factor, investigate BOTH teams and report findings with specific numbers.
+
+### 1. STARTING PITCHER MATCHUP
+**Tokens:** MLB_STARTING_PITCHERS, TOP_PLAYERS
+- Who is starting for each team? What are their MLB career stats (ERA, WHIP, K/9, W-L)?
+- How do they match up against the opposing lineup's handedness and power profile?
+- Any recent performance data or pitch count concerns?
+
+### 2. BULLPEN DEPTH & AVAILABILITY
+**Tokens:** MLB_BULLPEN
+- Who pitched in the last 1-2 games? What was their workload?
+- Which relievers are available and which are likely unavailable?
+- Any elite closers or setup men that shift late-game leverage?
+
+### 3. KEY HITTERS & LINEUP
+**Tokens:** MLB_KEY_HITTERS, MLB_LINEUP
+- Who are the top 3-4 hitters in each lineup? What are their career MLB stats?
+- Are there platoon advantages (LHB vs RHP or vice versa)?
+- Any confirmed batting orders or notable lineup changes?
+
+### 4. WBC TOURNAMENT RESULTS
+**Tokens:** RECENT_FORM, MLB_WBC_RESULTS, STANDINGS
+- What are each team's WBC results so far in this tournament?
+- Pool standings — what's at stake? Must-win? Already clinched?
+- Any momentum or form from earlier WBC games?
+
+### 5. HEAD-TO-HEAD & HISTORY
+**Tokens:** H2H_HISTORY
+- Have these countries played each other in previous WBCs?
+- Any historical pattern (one country dominating the other)?
+
+### 6. REST & SCHEDULE
+**Tokens:** REST_SITUATION
+- How many days since each team's last game?
+- Did either team play a high-stress game (extra innings, long bullpen usage) recently?
+
+### 7. VENUE & CONDITIONS
+- Is this game indoor (Tokyo Dome) or outdoor (Miami, Houston)?
+- Weather conditions for outdoor venues — wind, temperature, humidity
+- Park factor context — how does this venue play?
+
+### 8. INJURIES & ROSTER UPDATES
+**Tokens:** INJURIES
+- Any scratches, day-to-day concerns, or last-minute roster changes?
+- Any players pulled from previous WBC games with undisclosed issues?
+
+### 9. ODDS & PUBLIC PERCEPTION
+**Tokens:** MLB_ODDS
+- What are the current moneyline odds? Is one side getting heavy public action?
+- Is the line moving? In which direction and why?`;
 
 const FLASH_INVESTIGATION_FACTORS = {
   basketball_nba: NBA_FACTORS,
@@ -771,6 +781,9 @@ const FLASH_INVESTIGATION_FACTORS = {
   NCAAB: NCAAB_FACTORS,
   americanfootball_ncaaf: NCAAF_FACTORS,
   NCAAF: NCAAF_FACTORS,
+  baseball_mlb: MLB_FACTORS,
+  MLB: MLB_FACTORS,
+  WBC: MLB_FACTORS,
 };
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -859,9 +872,9 @@ function getNarrativeVerificationMethodology() {
 For narrative-based findings (clutch performance, revenge games, historical dominance, etc.):
 
 **USE fetch_narrative_context TO FIND:**
-- Articles about the player/team's historical performance in similar situations
-- Analyst commentary on the storyline you're considering
-- Verified situational records from sports articles
+- Verified factual updates (injury status, roster moves, schedule context, confirmed quotes, suspension/coaching news)
+- Historical game facts (results, margins, opponent names, venue context)
+- Verifiable situational records from sourced reporting
 
 **IF YOU FIND A SOURCED STAT → REPORT IT WITH CONFIDENCE**
 **IF NO SPECIFIC STAT EXISTS → ACKNOWLEDGE THE GAP AND MOVE ON**
@@ -875,6 +888,29 @@ Focus on what you CAN verify. Don't fill gaps with tactical speculation.
 - Make up "how the game will play out" narratives
 
 **THE RULE:** Stick to what your investigation found. If you have the stat, report it confidently. If you don't, move on.`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// GROUNDING FACT-ONLY RULES (FLASH SEARCH SCOPE)
+// ═══════════════════════════════════════════════════════════════════════
+
+function getGroundingFactOnlyRules() {
+  return `## GROUNDING SEARCH RULES (FACTS ONLY)
+
+When using fetch_narrative_context, use factual information only.
+
+[YES] ALLOWED:
+- Injury status and availability updates (OUT/QUESTIONABLE/RETURNED)
+- Weather conditions, travel/logistics, schedule/venue details
+- Roster transactions and team news (trades, waives, suspensions, coaching changes)
+- Historical game facts (scores, results, margins, opponent names)
+
+[NO] PROHIBITED:
+- Betting picks, expert bets, tipster recommendations
+- Outcome predictions or opinion takes ("Team X will win", "lock", "best bet")
+- Market microstructure claims (sharp/public reports, line-move narratives) unless concrete support exists in provided data
+
+If a source mixes facts and opinions, keep only the factual parts and discard the rest.`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -908,6 +944,30 @@ Your job isn't just to report each factor in isolation — it's to find the conn
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// OBSERVABLE SPREAD DRIVERS (ALL SPORTS)
+// ═══════════════════════════════════════════════════════════════════════
+
+function getObservableSpreadDriversMethodology() {
+  return `## OBSERVABLE SPREAD DRIVERS (FACTUAL AWARENESS)
+
+These are practical drivers that can influence where a spread/price is set. Report facts and evidence only.
+
+- **Schedule load:** Back-to-backs, 3-in-5, travel burden, timezone shifts, altitude, and tip/starting-time context.
+- **Injury timing:** Fresh absences can add uncertainty; long-running absences are often reflected in team baseline performance.
+- **Recency anchoring:** Recent blowout wins/losses and visible streaks can affect perception.
+- **Opponent-quality adjusted form:** Recent results are more informative when adjusted for who those games were against and who played.
+- **Standings/reputation pressure:** Rankings, brand/team reputation, and season record can shape perception.
+- **Home-court / venue narratives:** Senior night, revenge context, must-win framing, and crowd/venue effects can influence price.
+- **Matchup mechanics:** Pace control, shot profile clashes, turnover/rebounding interactions, and style fit can alter expected game shape.
+- **Rotation depth/stability:** Bench depth and role continuity can change how outcomes scale over full game minutes.
+
+When you discuss these drivers:
+- Use concrete evidence from this game context (numbers, named opponents, roster/timeline details).
+- Avoid market microstructure claims unless directly supported by provided data.
+- Keep findings factual; do not make pick directives.`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 // SPREAD-AWARE INVESTIGATION
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -921,17 +981,17 @@ function getSpreadAwareInvestigation(sport, spread) {
   if (sportNorm === 'NBA') {
     if (abs >= 8) {
       return `\n## SPREAD CONTEXT: LARGE SPREAD (${abs} points)
-Large spreads are about MARGIN, not just winning. Investigate:
-- Bench depth and unit efficiency for both teams — can the favorite maintain the margin when starters rest?
-- Does the underdog have a pace or style that compresses margins?
-- Are these teams playing close games or blowouts recently?`;
+At this spread size, the question is which side of the spread is the better bet at this number tonight. Large spreads can be inflated by recent blowouts, injuries, streaks, and public perception. Investigate:
+- Bench depth and unit efficiency for both teams
+- Pace and style matchup — what do scoring patterns look like?
+- Are recent results (blowouts, streaks) driving this number beyond what the matchup data supports?`;
     }
-    if (abs < 5) {
+    if (abs < 4) {
       return `\n## SPREAD CONTEXT: CLOSE SPREAD (${abs} points)
-Close spreads are about WHO WINS as much as margin. Investigate:
-- Close-game performance and clutch metrics for both teams
-- Late-game execution — who do they go to?
-- One-score game record vs expected`;
+At this spread size, covering the spread and winning are nearly the same thing. The question is which side is the better value at this number. Investigate:
+- Close-game performance for both teams
+- How each team performs in one-possession games
+- Whether the number reflects the actual matchup or narrative factors`;
     }
   }
 
@@ -939,26 +999,26 @@ Close spreads are about WHO WINS as much as margin. Investigate:
   if (sportNorm === 'NCAAB') {
     if (abs >= 11) {
       return `\n## SPREAD CONTEXT: LARGE SPREAD (${abs} points)
-Large college spreads ask "is the gap THIS big?" Investigate:
-- Depth and rotation — can the favorite sustain pressure with an 8-man rotation?
-- Does the underdog have any factor (tempo, rebounding, FT rate) that compresses margins?
-- Is this a conference game where familiarity compresses margins?`;
+Large college spreads ask whether the gap is really THIS big at this number. Investigate:
+- Depth and rotation — what does the minutes distribution look like for both teams?
+- Tempo, rebounding, and FT rate matchup
+- Is this a conference rematch? What was the box score last time and how familiar are these two teams with each other?`;
     }
     if (abs < 5) {
       return `\n## SPREAD CONTEXT: CLOSE SPREAD (${abs} points)
-Close college spreads — investigate:
-- Home court factor — is it fully captured in this spread?
+At this spread size, which side is the better value at this number? Investigate:
+- Home court data — what do the home/road splits show for each team?
 - Experience in close games — veteran teams vs young teams
-- Foul shooting — games decided by FTs at the end`;
+- Free throw shooting and late-game execution`;
     }
   }
 
   // NHL spread context (always ML-focused)
   if (sportNorm === 'NHL') {
     return `\n## SPREAD CONTEXT: NHL MONEYLINE
-Moneyline includes OT/SO. Investigate:
+Moneyline includes OT/SO. Which side is the better value at this price? Investigate:
 - Regulation win% for both teams — how often does each team WIN in regulation vs go to OT?
-- Goalie matchup quality — the single biggest factor in NHL betting
+- Goalie matchup quality — what do the save percentages and recent form show?
 - One-goal game record and OT record`;
   }
 
@@ -983,8 +1043,10 @@ export function getFlashInvestigationPrompt(sport, spread = null) {
   const restTravel = getRestTravelInvestigation();
   const injuryTiming = getInjuryTimingAwareness();
   const narrative = getNarrativeVerificationMethodology();
+  const groundingRules = getGroundingFactOnlyRules();
   const playerTeam = getPlayerToTeamMethodology();
   const crossRef = getCrossReferenceMethodology();
+  const spreadDrivers = getObservableSpreadDriversMethodology();
   const spreadContext = getSpreadAwareInvestigation(sport, spread);
   return `${factors}
 
@@ -998,8 +1060,12 @@ ${injuryTiming}
 
 ${narrative}
 
+${groundingRules}
+
 ${playerTeam}
 
 ${crossRef}
+
+${spreadDrivers}
 ${spreadContext}`;
 }

@@ -17,6 +17,7 @@ export function seasonForSport(sport) {
   if (s === 'NHL' || s === 'ICEHOCKEY_NHL') return nhlSeason();
   if (s === 'NCAAB' || s === 'BASKETBALL_NCAAB') return ncaabSeason();
   if (s === 'NCAAF' || s === 'AMERICANFOOTBALL_NCAAF') return nflSeason(); // NCAAF uses same timing as NFL
+  if (s === 'MLB' || s === 'WBC' || s === 'BASEBALL_MLB') return new Date().getFullYear(); // MLB/WBC = calendar year
   // Fallback: Oct+ = current year, else previous year
   return nbaSeason();
 }
@@ -127,11 +128,14 @@ export function normalizeSport(sport) {
     'basketball_ncaab': 'NCAAB',
     'americanfootball_ncaaf': 'NCAAF',
     'icehockey_nhl': 'NHL',
+    'baseball_mlb': 'WBC',
     'nba': 'NBA',
     'nfl': 'NFL',
     'ncaab': 'NCAAB',
     'ncaaf': 'NCAAF',
-    'nhl': 'NHL'
+    'nhl': 'NHL',
+    'mlb': 'WBC',
+    'wbc': 'WBC'
   };
   return mapping[sport?.toLowerCase()] || sport?.toUpperCase() || 'UNKNOWN';
 }

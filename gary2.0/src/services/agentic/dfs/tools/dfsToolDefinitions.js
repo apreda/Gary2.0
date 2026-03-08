@@ -199,6 +199,68 @@ export const DFS_PLAYER_INVESTIGATION_TOOLS = [
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// SUBMIT_LINEUP TOOL (Used by Gary in the agent loop)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export const SUBMIT_LINEUP_TOOL = {
+  name: 'SUBMIT_LINEUP',
+  description: 'Submit your final DFS lineup. Only call when you have decided ALL players and are ready to submit.',
+  parameters: {
+    type: 'object',
+    properties: {
+      players: {
+        type: 'array',
+        description: 'Array of player objects for each roster slot',
+        items: {
+          type: 'object',
+          properties: {
+            position: { type: 'string', description: 'Roster slot (PG, SG, SF, PF, C, G, F, UTIL, QB, RB, WR, TE, FLEX, DST)' },
+            name: { type: 'string', description: 'Player full name' },
+            team: { type: 'string', description: 'Team abbreviation' },
+            salary: { type: 'number', description: 'Player salary' },
+            projectedPoints: { type: 'number', description: 'Your projected fantasy points for this player' },
+            ceilingProjection: { type: 'number', description: 'Ceiling fantasy points projection' },
+            reasoning: { type: 'string', description: 'Your specific reason for this player in THIS lineup' }
+          },
+          required: ['position', 'name', 'team', 'salary']
+        }
+      },
+      totalSalary: { type: 'number', description: 'Total salary of all players' },
+      ceilingProjection: { type: 'number', description: 'Total lineup ceiling projection' },
+      ceilingScenario: { type: 'string', description: 'How this lineup hits the winning score' },
+      garyNotes: { type: 'string', description: 'Gary speaking directly to the user about why this lineup is built to win' },
+      buildThesis: { type: 'string', description: 'The strategic thesis behind this build' }
+    },
+    required: ['players', 'totalSalary']
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MERGED TOOL SETS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * All investigation tools (slate + player), deduplicated.
+ * Used by the DFS agent loop and Flash game research.
+ */
+export const DFS_ALL_TOOLS = (() => {
+  const seen = new Set();
+  const merged = [];
+  for (const tool of [...DFS_SLATE_ANALYSIS_TOOLS, ...DFS_PLAYER_INVESTIGATION_TOOLS]) {
+    if (!seen.has(tool.name)) {
+      seen.add(tool.name);
+      merged.push(tool);
+    }
+  }
+  return merged;
+})();
+
+/**
+ * All tools including SUBMIT_LINEUP — for Gary's agent loop.
+ */
+export const DFS_AGENT_LOOP_TOOLS = [...DFS_ALL_TOOLS, SUBMIT_LINEUP_TOOL];
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // TOOL EXECUTION
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -239,6 +301,11 @@ export async function executeToolCall(toolName, args, context) {
 
       case 'SEARCH_LIVE_NEWS':
         return await searchLiveNews(args.query);
+
+      case 'SUBMIT_LINEUP':
+        // SUBMIT_LINEUP is handled by the agent loop, not executed here.
+        // Return the args so the loop can validate them.
+        return { _submitLineup: true, lineup: args };
 
       default:
         return { error: `Unknown tool: ${toolName}` };
@@ -418,7 +485,6 @@ function getPlayerSalary(playerName, context) {
       projectedPts: player.projected_pts || player.projection,
       dkFpts: player.seasonStats?.dkFpts,
       benchmarkProjection: player.benchmarkProjection,
-      projectedOwnership: player.projectedOwnership || null
     };
   }
 

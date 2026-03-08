@@ -1026,7 +1026,7 @@ export async function buildNcaafScoutReport(game, options = {}) {
   bowlGameContext = await fetchBowlGameContext(homeTeam, awayTeam, game, injuries?.narrativeContext);
 
   // For NCAAF CFP games, fetch each team's road to the championship
-  // This provides full playoff journey context for steel man cases
+  // This provides full playoff journey context for evaluation
   let cfpJourneyContext = '';
   cfpJourneyContext = await fetchCfpJourneyContext(homeTeam, awayTeam, game);
 
@@ -1238,6 +1238,8 @@ ${formatOdds(game, sportKey)}
     tokenMenu: formatTokenMenu(sportKey),
     injuries: injuriesForStorage,
     verifiedTaleOfTape,
+    homeRecord: homeProfile?.record || null,
+    awayRecord: awayProfile?.record || null,
     venue: game.venue || null,
     isNeutralSite: game.isNeutralSite || false,
     tournamentContext: game.tournamentContext || null,

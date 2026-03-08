@@ -22,6 +22,172 @@ const { oddsService } = await import('../src/services/oddsService.js');
 const { picksService } = await import('../src/services/picksService.js');
 const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
 const { getConstitution } = await import('../src/services/agentic/constitution/index.js');
+const { geminiGroundingSearch } = await import('../src/services/agentic/scoutReport/scoutReportBuilder.js');
+
+// Manual WBC spread overrides — grounding can't reliably get WBC game spreads
+// Update these daily before running WBC picks
+const WBC_MANUAL_SPREADS = {
+  'Colombia': 2.5,
+  'Cuba': -2.5,
+  'Kingdom of the Netherlands': 6.5,
+  'Dominican Republic': -6.5,
+  'Great Britain': 4.5,
+  'Italy': -4.5,
+};
+
+/**
+ * Fetch WBC odds — uses manual spread overrides when available, falls back to grounding.
+ * Returns array in same format as fetchSportsbookOdds for seamless integration.
+ */
+async function fetchWbcOddsViaGrounding(homeTeam, awayTeam) {
+  // Return manual spreads immediately if both teams are in the override map
+  const manualHome = WBC_MANUAL_SPREADS[homeTeam];
+  const manualAway = WBC_MANUAL_SPREADS[awayTeam];
+  if (manualHome !== undefined && manualAway !== undefined) {
+    console.log(`[WBC Odds] Using manual spreads: ${awayTeam} ${manualAway > 0 ? '+' : ''}${manualAway} / ${homeTeam} ${manualHome > 0 ? '+' : ''}${manualHome}`);
+    return [{
+      spread_home: manualHome, spread_home_odds: null,
+      spread_away: manualAway, spread_away_odds: null,
+      ml_home: null, ml_away: null,
+      total: null, total_over_odds: null, total_under_odds: null,
+      displayName: 'Manual', vendor: 'Manual'
+    }];
+  }
+
+  const query = `${awayTeam} vs ${homeTeam} WBC World Baseball Classic betting odds today. ` +
+    `Report the EXACT MAIN LINE numbers (not alternate lines) for: ` +
+    `(1) Moneyline for each team (e.g. ${awayTeam} -350, ${homeTeam} +280). ` +
+    `(2) The MAIN run line/spread for each team. ` +
+    `Check multiple credible sportsbooks (e.g. FanDuel, DraftKings, ESPN, BetMGM) and report the consensus main line. Do not report alternate spreads.`;
+  const groundingResult = await geminiGroundingSearch(query, { maxTokens: 1000, thinkingLevel: 'low' });
+  const text = typeof groundingResult === 'string' ? groundingResult : groundingResult?.data || '';
+  if (!text || text.length < 20) {
+    console.error(`[WBC Odds] HARD FAIL: Grounding returned empty/short response for ${awayTeam} @ ${homeTeam}`);
+    return null;
+  }
+
+  console.log(`[WBC Odds] Grounding text (${text.length} chars): ${text.slice(0, 400)}...`);
+
+  // Strip markdown bold/italic, normalize unicode minus signs
+  const cleanText = text.replace(/\*+/g, '').replace(/_+/g, '').replace(/\u2212/g, '-');
+
+  // ── Single parser: scan ALL lines for odds numbers near team names ──
+  // Gemini returns either markdown tables or bullet lists — both have team names near numbers.
+  // We scan every line and match team names to odds on the same line.
+  const homeLastWord = homeTeam.split(' ').pop().toLowerCase();
+  const awayLastWord = awayTeam.split(' ').pop().toLowerCase();
+
+  let mlHome = null, mlAway = null;
+  let rlHome = null, rlAway = null;
+
+  // Which section are we in? Track by scanning for headers/labels.
+  let currentSection = null; // 'ml' or 'rl'
+  // Table column order: track from header rows so data rows use correct mapping
+  let tableHomeCol = -1, tableAwayCol = -1;
+
+  for (const rawLine of cleanText.split('\n')) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const lineLower = line.toLowerCase();
+
+    // Detect section from headers, labels, or table row labels
+    if (lineLower.includes('moneyline') || lineLower === 'ml') currentSection = 'ml';
+    if (lineLower.includes('run line') || lineLower.includes('spread')) currentSection = 'rl';
+
+    // Determine which team this line is about
+    const isHome = lineLower.includes(homeLastWord);
+    const isAway = lineLower.includes(awayLastWord);
+
+    // ── TABLE HEADER: "| Market | Netherlands | Venezuela |" ──
+    // Store column indices for home/away so data rows use correct mapping
+    if (line.includes('|') && isHome && isAway) {
+      const cells = line.split('|').map(c => c.trim()).filter(Boolean);
+      if (cells.length >= 3) {
+        for (let i = 0; i < cells.length; i++) {
+          if (cells[i].toLowerCase().includes(homeLastWord)) tableHomeCol = i;
+          if (cells[i].toLowerCase().includes(awayLastWord)) tableAwayCol = i;
+        }
+      }
+      continue; // Header row — skip to data rows
+    }
+
+    // ── TABLE SEPARATOR: "| --- | --- | --- |" ──
+    if (line.includes('|') && (lineLower.includes('---') || lineLower.includes(':---'))) continue;
+
+    // ── TABLE DATA ROW: "| Moneyline | +360 | -360 |" ──
+    if (line.includes('|') && !isHome && !isAway && currentSection && tableHomeCol >= 0 && tableAwayCol >= 0) {
+      const cells = line.split('|').map(c => c.trim()).filter(Boolean);
+      if (cells.length >= 2) {
+        const homeCell = cells[tableHomeCol] || '';
+        const awayCell = cells[tableAwayCol] || '';
+        if (currentSection === 'ml') {
+          const hMatch = homeCell.match(/([+-]\d{3,5})/);
+          const aMatch = awayCell.match(/([+-]\d{3,5})/);
+          if (hMatch && mlHome == null) mlHome = parseInt(hMatch[1]);
+          if (aMatch && mlAway == null) mlAway = parseInt(aMatch[1]);
+        }
+        if (currentSection === 'rl') {
+          const hMatch = homeCell.match(/([+-]\d+\.5)\s*(?:\(([+-]\d{3,4})\))?/);
+          const aMatch = awayCell.match(/([+-]\d+\.5)\s*(?:\(([+-]\d{3,4})\))?/);
+          if (hMatch && rlHome == null) rlHome = { point: parseFloat(hMatch[1]), odds: hMatch[2] ? parseInt(hMatch[2]) : null };
+          if (aMatch && rlAway == null) rlAway = { point: parseFloat(aMatch[1]), odds: aMatch[2] ? parseInt(aMatch[2]) : null };
+        }
+        continue;
+      }
+    }
+
+    // ── PER-LINE: extract odds number on a line that mentions a team ──
+    if (currentSection === 'ml') {
+      const oddsMatch = line.match(/([+-]\d{3,5})/);
+      if (oddsMatch) {
+        const val = parseInt(oddsMatch[1]);
+        if (isHome && mlHome == null) mlHome = val;
+        if (isAway && mlAway == null) mlAway = val;
+      }
+    }
+
+    if (currentSection === 'rl') {
+      const spreadMatch = line.match(/([+-]\d+\.5)\s*(?:\(([+-]\d{3,4})\))?/);
+      if (spreadMatch) {
+        const point = parseFloat(spreadMatch[1]);
+        const odds = spreadMatch[2] ? parseInt(spreadMatch[2]) : null;
+        if (isHome && rlHome == null) rlHome = { point, odds };
+        if (isAway && rlAway == null) rlAway = { point, odds };
+      }
+    }
+  }
+
+  console.log(`[WBC Odds] Parsed: ML ${awayTeam} ${mlAway} / ${homeTeam} ${mlHome} | RL ${awayTeam} ${rlAway?.point ?? 'null'} / ${homeTeam} ${rlHome?.point ?? 'null'}`);
+
+  // HARD FAIL if we can't parse ML
+  if (mlHome == null && mlAway == null) {
+    console.error(`[WBC Odds] HARD FAIL: Could not parse moneyline for ${awayTeam} @ ${homeTeam}`);
+    console.error(`[WBC Odds] Raw grounding text:\n${cleanText}`);
+    return null;
+  }
+
+  // HARD FAIL if we can't parse run line
+  if (rlHome == null && rlAway == null) {
+    console.error(`[WBC Odds] HARD FAIL: Could not parse run line for ${awayTeam} @ ${homeTeam}`);
+    console.error(`[WBC Odds] Raw grounding text:\n${cleanText}`);
+    return null;
+  }
+
+  return [{
+    spread_home: rlHome?.point ?? null,
+    spread_home_odds: rlHome?.odds ?? null,
+    spread_away: rlAway?.point ?? null,
+    spread_away_odds: rlAway?.odds ?? null,
+    ml_home: mlHome,
+    ml_away: mlAway,
+    total: null,
+    total_over_odds: null,
+    total_under_odds: null,
+    displayName: 'Grounding',
+    vendor: 'Grounding'
+  }];
+}
+
 /**
  * Fetch multi-book sportsbook odds from BDL for a single game.
  * Returns array in the shape formatSportsbookComparison() expects:
@@ -55,13 +221,29 @@ async function fetchSportsbookOdds(sportKey, gameId, homeTeam, awayTeam) {
  * Map multi-book odds to pick-side-specific format for storage & best-line selection.
  * Returns array of { book, spread, spread_odds, ml } from the perspective of the picked team.
  */
+// Prediction markets excluded from odds pipeline (not real sportsbooks)
+const EXCLUDED_VENDORS = new Set(['kalshi', 'polymarket']);
+
 function formatOddsForStorage(oddsArray, pick, homeTeam, awayTeam) {
   if (!Array.isArray(oddsArray) || oddsArray.length === 0) return null;
+  // Filter out prediction markets (Kalshi, Polymarket) — not real sportsbooks
+  oddsArray = oddsArray.filter(row => {
+    const vendor = (row.displayName || row.vendor || '').toLowerCase();
+    return !EXCLUDED_VENDORS.has(vendor);
+  });
   // Determine which side the pick is on (home or away)
   const pickLower = (pick || '').toLowerCase();
   const homeLower = (homeTeam || '').toLowerCase();
   const awayLower = (awayTeam || '').toLowerCase();
-  const isHomePick = homeLower && pickLower.includes(homeLower.split(' ').pop());
+  const homeLastWord = homeLower.split(' ').pop();
+  const awayLastWord = awayLower.split(' ').pop();
+  let isHomePick = homeLastWord && pickLower.includes(homeLastWord);
+  // Disambiguate when both teams share a last word (e.g., "Georgia Bulldogs" vs "Mississippi State Bulldogs")
+  if (isHomePick && awayLastWord && awayLastWord === homeLastWord) {
+    const homeFullMatch = pickLower.includes(homeLower);
+    const awayFullMatch = pickLower.includes(awayLower);
+    if (awayFullMatch && !homeFullMatch) isHomePick = false;
+  }
   return oddsArray.map(row => {
     // BDL returns spread as string ("8.5") — convert to number for consistent storage
     const rawSpread = isHomePick ? row.spread_home : row.spread_away;
@@ -105,8 +287,9 @@ const SPORT_CONFIG = {
   nba: { key: 'basketball_nba', name: 'NBA', emoji: '🏀', useToday: true }, // Today's games (EST)
   nfl: { key: 'americanfootball_nfl', name: 'NFL', emoji: '🏈', daysAhead: 7 }, // NFL is weekly
   nhl: { key: 'icehockey_nhl', name: 'NHL', emoji: '🏒', isBeta: true, useToday: true }, // Today's games (EST)
-  ncaab: { key: 'basketball_ncaab', name: 'NCAAB', emoji: '🏀', minStats: 3, useToday: true }, // Today's games (EST) — scout report pre-loads 14 categories (Barttorvik, Four Factors, splits, L5, roster, injuries, rankings), stat fetches are supplementary deep-dives
-  ncaaf: { key: 'americanfootball_ncaaf', name: 'NCAAF', emoji: '🏈', fbsOnly: true, useToday: true } // Today's games (EST)
+  ncaab: { key: 'basketball_ncaab', name: 'NCAAB', emoji: '🏀', useToday: true }, // Today's games (EST) — Flash pre-investigates 20-30 stat calls per game; Gary's own fetch_stats are supplementary
+  ncaaf: { key: 'americanfootball_ncaaf', name: 'NCAAF', emoji: '🏈', fbsOnly: true, useToday: true }, // Today's games (EST)
+  mlb: { key: 'baseball_mlb', name: 'WBC', emoji: '⚾', useToday: true, isWbc: true } // WBC / MLB games
 };
 
 // FBS Conference IDs from BDL (excludes FCS conferences like Big Sky, SWAC, MEAC, etc.)
@@ -197,6 +380,7 @@ if (runAll) {
   if (args.includes('--nhl')) sportsToRun.push('nhl');
   if (args.includes('--ncaab')) sportsToRun.push('ncaab');
   if (args.includes('--ncaaf')) sportsToRun.push('ncaaf');
+  if (args.includes('--mlb') || args.includes('--wbc')) sportsToRun.push('mlb');
 }
 
 if (sportsToRun.length === 0) {
@@ -307,7 +491,123 @@ async function main() {
     try {
       // Fetch games
       console.log(`[${config.name}] Fetching upcoming games...`);
-      const allGames = await oddsService.getUpcomingGames(config.key, { nocache: true, targetDate: dateFilter });
+
+      // MLB/WBC: Fetch schedule from MLB Stats API, then match BDL odds by team name
+      let allGames;
+      if (config.isWbc) {
+        const { getWbcSchedule, formatWbcGameForPipeline } = await import('../src/services/mlbStatsApiService.js');
+        const today = new Date().toISOString().split('T')[0];
+        // Fetch today + tomorrow to catch games that cross UTC date boundary
+        // (e.g., 10 PM ET = next day UTC)
+        const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+        if (dateFilter) {
+          console.log(`[${config.name}] Fetching WBC games from MLB Stats API for --date ${dateFilter}...`);
+          const wbcGames = await getWbcSchedule(dateFilter);
+          const upcomingWbc = wbcGames.filter(g =>
+            g.status?.statusCode !== 'F' && g.status?.detailedState !== 'Final'
+          );
+          allGames = upcomingWbc.map(formatWbcGameForPipeline);
+        } else {
+          console.log(`[${config.name}] Fetching WBC games from MLB Stats API for ${today} + ${tomorrow}...`);
+          const [todayGames, tomorrowGames] = await Promise.all([
+            getWbcSchedule(today),
+            getWbcSchedule(tomorrow),
+          ]);
+          // Combine and dedupe by gamePk
+          const seen = new Set();
+          const combined = [];
+          for (const g of [...todayGames, ...tomorrowGames]) {
+            if (!seen.has(g.gamePk)) {
+              seen.add(g.gamePk);
+              combined.push(g);
+            }
+          }
+          // Filter to scheduled/pre-game only (not completed)
+          const upcomingWbc = combined.filter(g =>
+            g.status?.statusCode !== 'F' && g.status?.detailedState !== 'Final'
+          );
+          allGames = upcomingWbc.map(formatWbcGameForPipeline);
+        }
+        console.log(`[${config.name}] Found ${allGames.length} upcoming WBC games`);
+
+        // Fetch BDL baseball games + odds to match to WBC games
+        // BDL has mlb/v1/games and mlb/v1/odds — may have WBC games with sportsbook odds
+        try {
+          console.log(`[${config.name}] Fetching BDL baseball odds to match to WBC games...`);
+          const bdlGames = await oddsService.getUpcomingGames('baseball_mlb', { nocache: true, targetDate: dateFilter || `${today},${tomorrow}` });
+          if (bdlGames && bdlGames.length > 0) {
+            console.log(`[${config.name}] BDL returned ${bdlGames.length} baseball games — matching to WBC games...`);
+            // Match BDL games to WBC games by team name (fuzzy: last word match)
+            const normalize = (name) => (name || '').toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
+            const lastWord = (name) => normalize(name).split(' ').pop();
+            for (const wbcGame of allGames) {
+              const wbcHome = normalize(wbcGame.home_team);
+              const wbcAway = normalize(wbcGame.away_team);
+              const match = bdlGames.find(bdl => {
+                const bdlHome = normalize(bdl.home_team);
+                const bdlAway = normalize(bdl.away_team);
+                // Exact or last-word match (e.g., "Czech Republic" ↔ "Czechia" won't match, but "Australia" ↔ "Australia" will)
+                return (bdlHome === wbcHome || bdlHome.includes(wbcHome) || wbcHome.includes(bdlHome) || lastWord(bdl.home_team) === lastWord(wbcGame.home_team)) &&
+                       (bdlAway === wbcAway || bdlAway.includes(wbcAway) || wbcAway.includes(bdlAway) || lastWord(bdl.away_team) === lastWord(wbcGame.away_team));
+              });
+              if (match) {
+                wbcGame.bdl_game_id = match.id;
+                wbcGame.bookmakers = match.bookmakers;
+                // Extract primary odds from bookmakers (FanDuel/DK preferred)
+                if (match.bookmakers?.length > 0) {
+                  const extractOdds = (bookmakers, home, away) => {
+                    const preferred = ['fanduel', 'draftkings', 'betmgm', 'caesars'];
+                    const ordered = [];
+                    for (const key of preferred) {
+                      const bk = bookmakers.find(b => b.key?.toLowerCase() === key);
+                      if (bk?.markets?.length) ordered.push(bk);
+                    }
+                    for (const bk of bookmakers) {
+                      if (bk?.markets?.length && !ordered.includes(bk)) ordered.push(bk);
+                    }
+                    for (const bk of ordered) {
+                      const h2h = bk.markets?.find(m => m.key === 'h2h');
+                      const spreads = bk.markets?.find(m => m.key === 'spreads');
+                      const mlHome = h2h?.outcomes?.find(o => normalize(o.name).includes(normalize(home)))?.price;
+                      const mlAway = h2h?.outcomes?.find(o => normalize(o.name).includes(normalize(away)))?.price;
+                      if (mlHome != null || mlAway != null) {
+                        const spHome = spreads?.outcomes?.find(o => normalize(o.name).includes(normalize(home)));
+                        const spAway = spreads?.outcomes?.find(o => normalize(o.name).includes(normalize(away)));
+                        return {
+                          moneyline_home: mlHome ?? null,
+                          moneyline_away: mlAway ?? null,
+                          spread_home: spHome?.point ?? null,
+                          spread_away: spAway?.point ?? null,
+                          spread_home_odds: spHome?.price ?? null,
+                          spread_away_odds: spAway?.price ?? null,
+                          source: bk.key || bk.title
+                        };
+                      }
+                    }
+                    return null;
+                  };
+                  const odds = extractOdds(match.bookmakers, wbcGame.home_team, wbcGame.away_team);
+                  if (odds) {
+                    wbcGame.moneyline_home = odds.moneyline_home;
+                    wbcGame.moneyline_away = odds.moneyline_away;
+                    wbcGame.spread_home = odds.spread_home;
+                    wbcGame.spread_away = odds.spread_away;
+                    console.log(`   ✓ ${wbcGame.away_team} @ ${wbcGame.home_team}: ML ${odds.moneyline_away}/${odds.moneyline_home}, Run Line ${odds.spread_home} (via ${odds.source})`);
+                  }
+                }
+              } else {
+                console.log(`   ✗ ${wbcGame.away_team} @ ${wbcGame.home_team}: No BDL match found`);
+              }
+            }
+          } else {
+            console.log(`[${config.name}] BDL returned no baseball games — odds from Gemini Grounding only`);
+          }
+        } catch (bdlErr) {
+          console.warn(`[${config.name}] BDL baseball odds fetch failed: ${bdlErr.message} — odds from Gemini Grounding only`);
+        }
+      } else {
+        allGames = await oddsService.getUpcomingGames(config.key, { nocache: true, targetDate: dateFilter });
+      }
 
       // Filter to games within time window
       const now = new Date();
@@ -437,14 +737,15 @@ async function main() {
           // Don't filter by "hasn't started yet" because BDL commence_times are unreliable
           const isNCAAB = config.key === 'basketball_ncaab';
           const isNHL = config.key === 'icehockey_nhl';
+          const isMLB = config.key === 'baseball_mlb';
 
           games = allGames?.filter(g => {
             const gameTime = new Date(g.commence_time);
             const gameDateEST = gameTime.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 
-            if (isNCAAB || isNHL) {
-              // For NCAAB/NHL: Include ALL games for today's EST date, regardless of time
-              // Skip "hasn't started" check since BDL times can be unreliable
+            if (isNCAAB || isNHL || isMLB) {
+              // For NCAAB/NHL/MLB: Include ALL games for today's date, regardless of time
+              // WBC games were pre-filtered to non-completed during fetch
               return gameDateEST === todayEST;
             } else {
               // For other sports: Game is today in EST AND hasn't started yet
@@ -536,26 +837,24 @@ async function main() {
         console.log(`[${config.name}] FBS filter: ${beforeCount} → ${games.length} games (removed ${beforeCount - games.length} FCS games)`);
       }
 
-      // NCAAB: Filter to TOP 7 conferences only (Power 6 + WCC for Gonzaga)
-      // BOTH teams must be from an approved conference
-      // Top 7: ACC, Big Ten, Big 12, SEC, Big East, WCC (Gonzaga), AAC
+      // Conference filter: Power 6 during regular season, all conferences during tournament season
       if (config.key === 'basketball_ncaab') {
-        console.log(`[${config.name}] Filtering to Top 7 conferences only (Power 6 + WCC)...`);
         const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
 
-        // TOP 7 conference IDs from BDL (BOTH teams must be from one of these)
-        // Verified via BDL API:
-        //   1  = ACC (Duke, UNC, etc.)
-        //   4  = AAC (Memphis, Tulane, etc.)
-        //   6  = Big 12 (Kansas, Houston, etc.)
-        //   7  = Big East (Villanova, UConn, etc.)
-        //   10 = Big Ten (Michigan, Purdue, etc.)
-        //   24 = SEC (Kentucky, Auburn, etc.)
-        //   31 = WCC (Gonzaga, Saint Mary's, etc.)
-        // 
-        // REMOVED from previous Top 10:
-        //   5  = A-10 (Dayton, VCU) - good mid-major but not elite
-        //   20 = Mountain West (San Diego State) - solid but outside top 7
+        // Tournament season = NCAA Tournament only (starts ~March 18)
+        // Conference tournaments (early March) still use Power 6 filter
+        const now = new Date();
+        const currentMonth = now.getMonth() + 1; // 1-indexed
+        const currentDay = now.getDate();
+        const isTournamentSeason = (currentMonth === 3 && currentDay >= 18) || currentMonth === 4;
+
+        if (isTournamentSeason) {
+          console.log(`[${config.name}] Tournament season — accepting all conferences`);
+        } else {
+          console.log(`[${config.name}] Regular season — filtering to Power 6 conferences`);
+        }
+
+        // Power 6 conference IDs from BDL (regular season filter)
         const APPROVED_CONFERENCE_IDS = new Set([
           1,   // ACC
           4,   // AAC
@@ -563,14 +862,15 @@ async function main() {
           7,   // Big East
           10,  // Big Ten
           24,  // SEC
-          // WCC removed — only Gonzaga/Saint Mary's are relevant, handled via APPROVED_TEAM_NAMES
         ]);
 
-        // Elite teams from non-approved conferences that should still get picks
-        // NOTE: Entries must be normalized (lowercase, no spaces/special chars) to match normalize()
+        // Elite teams from non-approved conferences that should still get picks (regular season only)
         const APPROVED_TEAM_NAMES = new Set([
           'gonzagabulldogs',
           'saintmarysgaels',
+          'daytonflyers',
+          'miamiohredhawks',
+          'miamiredhawks',       // BDL may omit "(OH)" — cover both normalizations
         ]);
 
         // Conference ID to name mapping for logging and storage
@@ -642,22 +942,21 @@ async function main() {
             game.homeConference = getConfName(homeConfId);
             game.awayConference = getConfName(awayConfId);
 
-            // AT LEAST ONE team must be from an approved conference OR be a named elite team
-            const homeApproved = isApprovedConference(homeConfId) || APPROVED_TEAM_NAMES.has(normalize(game.home_team));
-            const awayApproved = isApprovedConference(awayConfId) || APPROVED_TEAM_NAMES.has(normalize(game.away_team));
+            // During tournament season, accept all conferences
+            // During regular season, at least one team must be from Power 6 or named elite team
+            if (!isTournamentSeason) {
+              const homeApproved = isApprovedConference(homeConfId) || APPROVED_TEAM_NAMES.has(normalize(game.home_team));
+              const awayApproved = isApprovedConference(awayConfId) || APPROVED_TEAM_NAMES.has(normalize(game.away_team));
 
-            if (!homeApproved && !awayApproved) {
-              // Neither team is in Top 7 - skip
-              skippedNonApproved.push({
-                game,
-                reason: `Neither in Top 7: ${game.home_team} (${getConfName(homeConfId)}), ${game.away_team} (${getConfName(awayConfId)})`
-              });
-              continue;
+              if (!homeApproved && !awayApproved) {
+                skippedNonApproved.push({
+                  game,
+                  reason: `Neither in Power 6: ${game.home_team} (${getConfName(homeConfId)}), ${game.away_team} (${getConfName(awayConfId)})`
+                });
+                continue;
+              }
             }
 
-            // Both teams are in approved conferences and exist in BDL — they have data
-            // (Data quality API calls removed — by mid-season every team has 20+ games,
-            //  the check never filters anything and wasted ~42 API calls per run)
             filteredGames.push(game);
           } catch (err) {
             console.warn(`[${config.name}] Could not verify data for ${game.away_team} @ ${game.home_team}: ${err.message}`);
@@ -669,7 +968,7 @@ async function main() {
 
         // Log conference filter results
         if (skippedNonApproved.length > 0) {
-          console.log(`[${config.name}] 🚫 Skipped ${skippedNonApproved.length} games outside Top 7 conferences:`);
+          console.log(`[${config.name}] 🚫 Skipped ${skippedNonApproved.length} games outside Power 6 conferences:`);
           skippedNonApproved.slice(0, 5).forEach(({ game, reason }) => {
             console.log(`   - ${game.away_team} @ ${game.home_team}: ${reason}`);
           });
@@ -687,27 +986,8 @@ async function main() {
             console.log(`   ... and ${skippedGames.length - 5} more`);
           }
         }
-        console.log(`[${config.name}] Top 7 conference + data quality filter: ${beforeCount} → ${games.length} games`);
+        console.log(`[${config.name}] Conference filter: ${beforeCount} → ${games.length} games${isTournamentSeason ? ' (tournament season — all accepted)' : ''}`);
         
-        // SPREAD SIZE FILTER: Remove blowout games (spread >= 15 either direction)
-        // These games have low betting value — Gary shouldn't waste time on them
-        const beforeSpreadFilter = games.length;
-        const skippedSpreads = [];
-        games = games.filter(game => {
-          // Try spread_home first (BDL odds format), then spread (generic)
-          const spreadVal = parseFloat(game.spread_home ?? game.spread_away ?? game.spread);
-          if (isNaN(spreadVal)) return true; // keep games with no spread data
-          if (Math.abs(spreadVal) >= 15) {
-            skippedSpreads.push(`${game.away_team} @ ${game.home_team} (spread: ${spreadVal > 0 ? '+' : ''}${spreadVal})`);
-            return false;
-          }
-          return true;
-        });
-        if (skippedSpreads.length > 0) {
-          console.log(`[${config.name}] 🚫 Filtered ${skippedSpreads.length} blowout games (spread >= 15):`);
-          skippedSpreads.forEach(s => console.log(`   - ${s}`));
-        }
-        console.log(`[${config.name}] Spread filter: ${beforeSpreadFilter} → ${games.length} games`);
       }
 
       // Apply --matchup filter to run a single specific game
@@ -842,14 +1122,33 @@ async function main() {
         processedGamesThisSession.add(gameKey);
 
         // Fetch sportsbook odds BEFORE analysis so Gary sees available lines
+        // MLB/WBC: BDL doesn't have WBC games — use Gemini Grounding for odds
         let preSportsbookOdds = null;
         try {
-          const preGameId = game.id || game.bdl_game_id;
-          if (preGameId) {
-            console.log(`   Fetching sportsbook odds comparison (pre-analysis)...`);
-            preSportsbookOdds = await fetchSportsbookOdds(config.key, preGameId, game.home_team, game.away_team);
+          if (config.isWbc) {
+            // WBC: Fetch odds via Gemini Grounding (BDL has no WBC games)
+            console.log(`   Fetching WBC odds via Gemini Grounding...`);
+            preSportsbookOdds = await fetchWbcOddsViaGrounding(game.home_team, game.away_team);
             if (preSportsbookOdds?.length > 0) {
-              console.log(`   Found odds from ${preSportsbookOdds.length} sportsbooks`);
+              console.log(`   Found WBC odds via grounding: ML ${preSportsbookOdds[0].ml_home}/${preSportsbookOdds[0].ml_away}`);
+              // Also attach parsed odds to game object for scout report
+              if (!game.moneyline_home && preSportsbookOdds[0].ml_home != null) {
+                game.moneyline_home = preSportsbookOdds[0].ml_home;
+                game.moneyline_away = preSportsbookOdds[0].ml_away;
+                game.spread_home = preSportsbookOdds[0].spread_home;
+                game.spread_away = preSportsbookOdds[0].spread_away;
+              }
+            } else {
+              console.log(`   WBC odds grounding returned no parseable odds — Gary will use scout report odds`);
+            }
+          } else {
+            const preGameId = game.bdl_game_id || game.id;
+            if (preGameId) {
+              console.log(`   Fetching sportsbook odds comparison (pre-analysis)...`);
+              preSportsbookOdds = await fetchSportsbookOdds(config.key, preGameId, game.home_team, game.away_team);
+              if (preSportsbookOdds?.length > 0) {
+                console.log(`   Found odds from ${preSportsbookOdds.length} sportsbooks`);
+              }
             }
           }
         } catch (oddsPreErr) {
@@ -880,14 +1179,6 @@ async function main() {
             .map(t => t.token);
           const uniqueTokens = [...new Set(allTokens)];
           const statsCount = uniqueTokens.length;
-          const minStatsRequired = config.minStats || 0;
-
-          if (minStatsRequired > 0 && statsCount < minStatsRequired) {
-            console.log(`\n⏭️  SKIPPED: ${result.pick}`);
-            console.log(`   Reason: Only ${statsCount} stats available (minimum ${minStatsRequired} required)`);
-            console.log(`   Stats: ${result.toolCallHistory?.map(t => t.token).join(', ') || 'none'}`);
-            continue; // Skip this pick
-          }
 
           // For NCAAB: Check that we have real stat values (not 0.0% or 0-0)
           if (config.key === 'basketball_ncaab' && result.toolCallHistory) {
@@ -1301,8 +1592,8 @@ async function main() {
           }
 
           // ALWAYS use verifiedTaleOfTape when available — toolCallHistory is inconsistent
-          if ((config.key === 'icehockey_nhl' || config.key === 'basketball_nba' || config.key === 'basketball_ncaab') && result.verifiedTaleOfTape?.rows) {
-            const sportLabels = { 'icehockey_nhl': 'NHL', 'basketball_nba': 'NBA', 'basketball_ncaab': 'NCAAB' };
+          if ((config.key === 'icehockey_nhl' || config.key === 'basketball_nba' || config.key === 'basketball_ncaab' || config.key === 'baseball_mlb') && result.verifiedTaleOfTape?.rows) {
+            const sportLabels = { 'icehockey_nhl': 'NHL', 'basketball_nba': 'NBA', 'basketball_ncaab': 'NCAAB', 'baseball_mlb': 'WBC' };
             const sportLabel = sportLabels[config.key] || config.key;
             console.log(`   📊 ${sportLabel}: Using verified Tale of Tape (${result.verifiedTaleOfTape.rows.length} rows) for pick card`);
 
@@ -1355,6 +1646,27 @@ async function main() {
               'ADJOE_RANK': 'adjoe_rank',
               'ADJDE_RANK': 'adjde_rank',
               'PROJ_RECORD': 'proj_record',
+              // MLB/WBC stats
+              'POOL_RECORD': 'overall',
+              'SP_ERA': 'sp_era',
+              'SP_WHIP': 'sp_whip',
+              'SP_K9': 'sp_k9',
+              'SP_BB9': 'sp_bb9',
+              'SP_RECORD': 'sp_record',
+              'SP_IP': 'sp_ip',
+              'SP_SO': 'sp_so',
+              'TEAM_AVG': 'team_avg',
+              'TEAM_OBP': 'team_obp',
+              'TEAM_SLG': 'team_slg',
+              'TEAM_OPS': 'team_ops',
+              'TEAM_HR': 'team_hr',
+              // WBC-specific context stats
+              'GAME1_RESULT': 'game1_result',
+              'SP_NAME': 'sp_name',
+              'ML_ODDS': 'ml_odds',
+              'RUN_LINE': 'run_line',
+              'VENUE': 'venue_name',
+              'LAST_PLAYED': 'last_played',
             };
 
             // Clear any toolCallHistory stats and use the verified rows instead
@@ -1536,14 +1848,14 @@ async function main() {
           sportPicks.push(cleanPick);
           picksGenerated += 1;
 
-          // NCAAB: Store each pick immediately so it appears in the app as soon as it's ready
-          if (config.name === 'NCAAB' && shouldStore && cleanPick.type !== 'pass' && cleanPick.pick !== 'PASS') {
+          // Store each pick immediately so it appears in the app as soon as it's ready
+          if (shouldStore && cleanPick.type !== 'pass' && cleanPick.pick !== 'PASS') {
             try {
-              console.log(`\n📤 [NCAAB] Storing pick immediately: ${cleanPick.pick}`);
+              console.log(`\n📤 [${config.name}] Storing pick immediately: ${cleanPick.pick}`);
               await storePicks([cleanPick]);
-              console.log(`✅ [NCAAB] Pick stored to Supabase`);
+              console.log(`✅ [${config.name}] Pick stored to Supabase`);
             } catch (storeErr) {
-              console.log(`⚠️  [NCAAB] Immediate store failed (will retry at end): ${storeErr.message}`);
+              console.log(`⚠️  [${config.name}] Immediate store failed (will retry at end): ${storeErr.message}`);
             }
           }
         } else if (result.error) {

@@ -56,7 +56,7 @@ const NHL_SPORT_AWARENESS = `
 - Own team's PK performance affects shot volume faced
 - Backup goalie starts change the saves landscape
 
-### [NHL] NHL STRUCTURAL MISMATCH EXAMPLES
+### [NHL] NHL KEY FACTOR EXAMPLES
 
 **Role Changes:**
 - PP1 promotions change a player's shot and point opportunity
@@ -115,11 +115,11 @@ const NHL_OUTPUT_FORMAT = `
 For each pick, provide:
 1. **THE PICK:** Player Name OVER/UNDER Stat Line (Odds)
 2. **PP1 STATUS:** Yes/No (critical context)
-3. **THE STRUCTURAL MISMATCH:** One sentence on what the market hasn't priced
+3. **THE KEY FACTOR:** The game-specific evidence supporting your pick
 4. **VOLUME FLOOR CHECK:** TOI, PP TOI, iCF, and projection vs line
 5. **SCHEDULE CONTEXT:** B2B, travel, backup goalie, or N/A
 6. **THE RISK:** Concrete scenario where this loses
-7. **WHY THE MARKET IS WRONG:** Why your mismatch matters tonight
+7. **KEY FACTOR:** The game-specific evidence supporting your pick
 `;
 
 // ── Sectioned export ─────────────────────────────────────────────────

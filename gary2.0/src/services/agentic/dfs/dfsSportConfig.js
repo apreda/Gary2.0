@@ -15,7 +15,6 @@ export function getSalaryCap(platform, sport) {
   const isFD = platform?.toLowerCase() === 'fanduel';
   const s = (sport || 'NBA').toUpperCase();
   if (s === 'NFL') return isFD ? 60000 : 50000;
-  if (s === 'NHL') return isFD ? 55000 : 50000;
   return isFD ? 60000 : 50000; // NBA
 }
 
@@ -31,10 +30,6 @@ export function getRosterSlots(platform, sport) {
     if (isFD) return ['QB', 'RB', 'RB', 'WR', 'WR', 'WR', 'TE', 'FLEX', 'DEF'];
     return ['QB', 'RB', 'RB', 'WR', 'WR', 'WR', 'TE', 'FLEX', 'DST'];
   }
-  if (s === 'NHL') {
-    if (isFD) return ['C', 'C', 'W', 'W', 'W', 'W', 'D', 'D', 'UTIL'];
-    return ['C', 'C', 'W', 'W', 'W', 'D', 'D', 'UTIL', 'G'];
-  }
   // NBA
   if (isFD) return ['PG', 'PG', 'SG', 'SG', 'SF', 'SF', 'PF', 'PF', 'C'];
   return ['PG', 'SG', 'SF', 'PF', 'C', 'G', 'F', 'UTIL'];
@@ -47,7 +42,6 @@ export function getRosterSlots(platform, sport) {
 export function getFlexPositions(sport) {
   const s = (sport || 'NBA').toUpperCase();
   if (s === 'NFL') return new Set(['FLEX']);
-  if (s === 'NHL') return new Set(['UTIL']);
   return new Set(['G', 'F', 'UTIL']); // NBA
 }
 
@@ -79,19 +73,6 @@ export function getPositionCandidates(players, position, sport) {
     });
   }
 
-  if (s === 'NHL') {
-    return players.filter(player => {
-      switch (position) {
-        case 'C': return hasPosition(player, 'C');
-        case 'W': return hasPosition(player, 'W') || hasPosition(player, 'LW') || hasPosition(player, 'RW');
-        case 'D': return hasPosition(player, 'D');
-        case 'UTIL': return !hasPosition(player, 'G'); // Any skater
-        case 'G': return hasPosition(player, 'G');
-        default: return hasPosition(player, position);
-      }
-    });
-  }
-
   // NBA
   return players.filter(player => {
     const playerPositions = player.positions || [player.position];
@@ -107,19 +88,6 @@ export function getPositionCandidates(players, position, sport) {
       default: return playerPositions.includes(position);
     }
   });
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// FORM RATIO FIELDS (for ownership proxy)
-// ═══════════════════════════════════════════════════════════════════════════════
-
-export function getFormRatioFields(sport) {
-  const s = (sport || 'NBA').toUpperCase();
-  // NFL/NHL don't have ppg; use platform FPTS as the form ratio source
-  if (s === 'NFL' || s === 'NHL') {
-    return { l5Field: 'dkFptsAvg', seasonField: 'dkFpts' };
-  }
-  return { l5Field: 'ppg', seasonField: 'ppg' }; // NBA
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -139,16 +107,6 @@ export function getStatDisplayLines(player, sport) {
     let line = `Season: ${passYds?.toFixed(0) || '?'} PassYPG / ${rushYds?.toFixed(0) || '?'} RushYPG / ${recYds?.toFixed(0) || '?'} RecYPG`;
     if (tds != null) line += ` / ${tds.toFixed(1)} TD`;
     if (rec != null) line += ` / ${rec.toFixed(1)} Rec`;
-    return line;
-  }
-
-  if (s === 'NHL') {
-    const goals = ss.goals ?? ss.g;
-    const assists = ss.assists ?? ss.a;
-    const sog = ss.shots_on_goal ?? ss.sog;
-    const ppPts = ss.power_play_points ?? ss.ppp;
-    let line = `Season: ${goals?.toFixed(1) || '?'} G / ${assists?.toFixed(1) || '?'} A / ${sog?.toFixed(1) || '?'} SOG`;
-    if (ppPts != null) line += ` / ${ppPts.toFixed(1)} PPP`;
     return line;
   }
 

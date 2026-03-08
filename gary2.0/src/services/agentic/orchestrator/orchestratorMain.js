@@ -85,7 +85,7 @@ export async function analyzeGame(game, sport, options = {}) {
     let constitution = getConstitution(sport);
     // Replace date template — handle both sectioned object and flat string
     if (typeof constitution === 'object' && constitution.full) {
-      for (const key of ['baseRules', 'domainKnowledge', 'guardrails', 'full']) {
+      for (const key of ['baseRules', 'domainKnowledge', 'guardrails', 'pass1Context', 'pass25DecisionGuards', 'full']) {
         if (constitution[key]) {
           constitution[key] = constitution[key].replace(/{{CURRENT_DATE}}/g, today);
         }
@@ -94,6 +94,9 @@ export async function analyzeGame(game, sport, options = {}) {
       constitution = constitution.replace(/{{CURRENT_DATE}}/g, today);
     }
     let systemPrompt = buildSystemPrompt(constitution, sport);
+    // buildSystemPrompt includes static identity text with {{CURRENT_DATE}}
+    // placeholders, so perform a final pass replacement here.
+    systemPrompt = systemPrompt.replace(/{{CURRENT_DATE}}/g, today);
 
     // In props mode, append props-specific constitution
     if (isPropsMode && propContext?.propsConstitution) {
@@ -102,7 +105,11 @@ export async function analyzeGame(game, sport, options = {}) {
     }
 
     // Step 4: Build the user message
-    let userMessage = buildPass1Message(garyText, homeTeam, awayTeam, today, sport);
+    let userMessage = buildPass1Message(garyText, homeTeam, awayTeam, today, sport, game.spread_home ?? game.spread_away ?? 0);
+    // Optional sport-specific Pass 1 context (phase-aligned, not always-on)
+    if (typeof constitution === 'object' && constitution.pass1Context && !isPropsMode) {
+      userMessage += `\n\n<sport_pass1_context>\n${constitution.pass1Context}\n</sport_pass1_context>`;
+    }
 
     // Log scout report summary (full dump available with VERBOSE_GARY=1)
     if (process.env.VERBOSE_GARY) {
@@ -117,7 +124,7 @@ export async function analyzeGame(game, sport, options = {}) {
     // In props mode, append a note to user message so Gary knows props evaluation comes after game analysis
     if (isPropsMode) {
       userMessage += `\n\n═══════════════════════════════════════════════════════════════════════════════
-PROPS MODE: After completing your game analysis (Steel Man + Case Review),
+PROPS MODE: After completing your game analysis (Investigation + Evaluation),
 you will be asked to evaluate player props for this matchup. Your game analysis provides
 context for player-level evaluation. Investigate the game thoroughly first.
 ═══════════════════════════════════════════════════════════════════════════════`;
@@ -152,7 +159,9 @@ context for player-level evaluation. Investigate the game thoroughly first.
       homeRecord,
       awayRecord,
       // Pass Flash's investigation-ready scout report (includes Tale of Tape + token menu)
-      scoutReport: flashText
+      scoutReport: flashText,
+      // Optional sport-specific Pass 2.5 decision guards (phase-aligned)
+      pass25DecisionGuards: (typeof constitution === 'object' ? constitution.pass25DecisionGuards || '' : '')
     };
     const result = await runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam, enrichedOptions);
     
@@ -237,9 +246,9 @@ ${constitutionText}
 <identity>
 ## WHO YOU ARE
 
-You are Gary — a sports bettor with over 30 years of experience. You are a gambler, not a computer. Gambling is not a math problem or an equation — it's a combination of awareness, insight, luck, and willingness to make decisions based on the evidence in front of you.
+You are Gary — a sports bettor with over 30 years of experience. You are a gambler, not a computer. Gambling is not a math problem or an equation — it's a combination of awareness, insight, luck, and the willingness to trust your read when the time comes.
 
-There is no right or wrong reason for making a bet. Winning and losing will be your feedback. Be willing to take chances, make predictions, go against the grain.
+There is no right or wrong reason for making a bet. Winning and losing will be your feedback. Be willing to go against the grain when your homework tells you to.
 
 You don't copy betting advice. You do your own homework.
 
@@ -254,7 +263,7 @@ If your memory conflicts with provided data, **USE THE DATA**. See constitution 
 ## FACT-CHECKING PROTOCOL (ZERO TOLERANCE)
 
 1. If a stat is NOT in your provided data, do NOT invent it. No fabricated scores, records, or tactical claims.
-2. Check Record and Net Rating before characterizing any team — your 2024 training labels are WRONG.
+2. Before characterizing any team, verify with current provided data (record, efficiency profile, roster/injury status). Your 2024 memory labels can be wrong.
 3. Check the injury report before citing any player as active. If OUT, FORBIDDEN from describing as active.
 4. ONLY cite players in the "CURRENT ROSTERS" section of the scout report. Not in roster = DO NOT MENTION.
 5. "GONE" (not on team) vs "OUT" (injured on team) — if not in roster section, they're GONE. Silence is correct.
@@ -263,7 +272,7 @@ If your memory conflicts with provided data, **USE THE DATA**. See constitution 
 </analysis_framework>
 
 <core_principles>
-Look at everything you have and make the call. No one tells you what matters — you decide. If you cite a stat, it has to be real. Beyond that, make the pick based on whatever you want to. It's completely your decision. Take a swing on a superstition if you want. It's really up to you.
+Do your homework first. Once you've investigated the matchup, make a defensible call from verified data plus your judgment. No one tells you what must matter — you decide what matters. If you cite a stat, it must be real.
 </core_principles>
 
 <formatting_rules>
@@ -278,4 +287,3 @@ Simply focus on the stats you DO have. Never apologize or explain missing data.
 </formatting_rules>
 `.trim();
 }
-

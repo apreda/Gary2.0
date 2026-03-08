@@ -1,11 +1,12 @@
 import { isGeminiToken, getAuthoritativeSource, clearStatRouterCache, DEPRECATED_TOKENS, sportToBdlKey, normalizeSportName, findTeam } from './statRouterCommon.js';
 import { ballDontLieService } from '../../../ballDontLieService.js';
-import { nbaSeason, nhlSeason, nflSeason, ncaabSeason } from '../../../../utils/dateUtils.js';
+import { nbaSeason, nhlSeason, nflSeason, ncaabSeason, mlbSeason } from '../../../../utils/dateUtils.js';
 import { nbaFetchers } from './nbaFetchers.js';
 import { nhlFetchers } from './nhlFetchers.js';
 import { nflFetchers } from './nflFetchers.js';
 import { ncaabFetchers } from './ncaabFetchers.js';
 import { ncaafFetchers } from './ncaafFetchers.js';
+import { mlbFetchers } from './mlbFetchers.js';
 
 // Merge all fetchers into one object
 const FETCHERS = {
@@ -14,6 +15,7 @@ const FETCHERS = {
   ...ncaafFetchers,
   ...nflFetchers,
   ...nhlFetchers,
+  ...mlbFetchers,
 };
 
 // Aliases
@@ -110,6 +112,8 @@ export async function fetchStats(sport, token, homeTeam, awayTeam, options = {})
     defaultSeason = nhlSeason();
   } else if (normalizedSportForSeason.includes('nfl') || normalizedSportForSeason.includes('ncaaf')) {
     defaultSeason = nflSeason();
+  } else if (normalizedSportForSeason.includes('mlb') || normalizedSportForSeason.includes('baseball')) {
+    defaultSeason = mlbSeason();
   } else {
     defaultSeason = nbaSeason();
   }
@@ -149,12 +153,22 @@ export async function fetchStats(sport, token, homeTeam, awayTeam, options = {})
       return { error: `Unknown stat token: ${token}`, token };
     }
 
-    const teams = await ballDontLieService.getTeams(bdlSport);
-    const home = findTeam(teams, homeTeam);
-    const away = findTeam(teams, awayTeam);
+    // MLB/WBC: Skip BDL team lookup — WBC national teams aren't in BDL.
+    // MLB fetchers use their own team finding (MLB Stats API + grounding).
+    const isMLB = bdlSport === 'baseball_mlb';
+    let home, away;
+    if (isMLB) {
+      // Create lightweight team objects with the names — MLB fetchers handle their own lookups
+      home = { full_name: homeTeam, name: homeTeam };
+      away = { full_name: awayTeam, name: awayTeam };
+    } else {
+      const teams = await ballDontLieService.getTeams(bdlSport);
+      home = findTeam(teams, homeTeam);
+      away = findTeam(teams, awayTeam);
 
-    if (!home || !away) {
-      return { error: `Could not find teams: ${homeTeam} or ${awayTeam}`, token };
+      if (!home || !away) {
+        return { error: `Could not find teams: ${homeTeam} or ${awayTeam}`, token };
+      }
     }
 
     const result = await fetcher(bdlSport, home, away, season, options);

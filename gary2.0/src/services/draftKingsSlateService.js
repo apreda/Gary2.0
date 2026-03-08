@@ -29,7 +29,8 @@ const DK_SPORT_MAP = {
   'NBA': 'NBA',
   'NFL': 'NFL',
   'NHL': 'NHL',
-  'MLB': 'MLB'
+  'MLB': 'MLB',
+  'WBC': 'MLB'
 };
 
 // Classic game type IDs (we only want these, not Showdown/Tiers/Snake)

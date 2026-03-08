@@ -696,6 +696,7 @@ struct SportMiniCard: View {
 
 struct HomeView: View {
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage("selectedTab") private var selectedTab: Int = 0
     @State private var freePick: GaryPick?
     @State private var loading = true
     @State private var animateIn = false
@@ -709,7 +710,7 @@ struct HomeView: View {
     // Dynamic hero image based on most recent performance
     private var heroImage: String {
         let total = yesterdayRecord.wins + yesterdayRecord.losses
-        guard total > 0 else { return "GaryCoin" } // Fallback (rarely shown now)
+        guard total > 0 else { return "GaryIconBG" } // Fallback — standard bear logo
         
         let winRate = Double(yesterdayRecord.wins) / Double(total)
         if winRate >= 0.80 { return "GaryFire" }
@@ -881,6 +882,62 @@ struct HomeView: View {
                         .animation(.easeOut(duration: 0.6).delay(0.15), value: animateIn)
                     }
                     
+                    // Featured Event Banner — WBC 2026
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            selectedTab = 1
+                        }
+                    } label: {
+                        HStack(spacing: 12) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("World Baseball Classic")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(.white.opacity(0.95))
+
+                                Text("WBC game picks & HR props are live")
+                                    .font(.system(size: 12, weight: .regular))
+                                    .foregroundStyle(.white.opacity(0.55))
+                            }
+
+                            Spacer()
+
+                            Text("VIEW")
+                                .font(.system(size: 10, weight: .black))
+                                .tracking(1)
+                                .foregroundStyle(.black)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(
+                                    Capsule()
+                                        .fill(GaryColors.gold)
+                                )
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(Color(hex: "#0A0A0C"))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .stroke(
+                                            LinearGradient(
+                                                colors: [GaryColors.gold.opacity(0.5), GaryColors.gold.opacity(0.15)],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            ),
+                                            lineWidth: 1
+                                        )
+                                )
+                        )
+                        .shadow(color: GaryColors.gold.opacity(0.1), radius: 12, x: 0, y: 4)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 16)
+                    .opacity(animateIn ? 1 : 0)
+                    .offset(y: animateIn ? 0 : 25)
+                    .animation(.easeOut(duration: 0.6).delay(0.15), value: animateIn)
+
                     // Today's Free Pick
                     if let pick = freePick {
                         VStack(alignment: .leading, spacing: 12) {
@@ -971,6 +1028,13 @@ struct HomeView: View {
                     .padding(.horizontal, 16)
                     .opacity(animateIn ? 1 : 0)
                     .animation(.easeOut(duration: 0.6).delay(0.4), value: animateIn)
+
+                    // Social / Community Links
+                    SocialLinksBar()
+                        .padding(.horizontal, 16)
+                        .padding(.top, 8)
+                        .opacity(animateIn ? 1 : 0)
+                        .animation(.easeOut(duration: 0.6).delay(0.5), value: animateIn)
                 }
                 .padding(.horizontal, 4) // Ensure content doesn't touch edges
                 .padding(.bottom, 100) // Space for floating tab bar
@@ -1154,7 +1218,7 @@ struct HomeView: View {
 // MARK: - Sport Filter
 
 enum Sport: String, CaseIterable {
-    // Order: ALL → NBA → NFL → NFL TDs → NHL → NCAAB → NCAAF → EPL → MLB → WNBA
+    // Order: ALL → NBA → NFL → NFL TDs → NHL → NCAAB → NCAAF → EPL → WBC → WNBA
     case all = "ALL"
     case nba = "NBA"
     case nfl = "NFL"
@@ -1163,7 +1227,7 @@ enum Sport: String, CaseIterable {
     case ncaab = "NCAAB"
     case ncaaf = "NCAAF"
     case epl = "EPL"
-    case mlb = "MLB"
+    case mlb = "WBC"
     case wnba = "WNBA"
     
     var icon: String {
@@ -1191,11 +1255,31 @@ enum Sport: String, CaseIterable {
         case .ncaab: return Color(hex: "#F97316")    // Orange
         case .ncaaf: return Color(hex: "#DC2626")    // Red
         case .epl: return Color(hex: "#8B5CF6")      // Purple
-        case .mlb: return Color(hex: "#0EA5E9")      // Sky Blue
+        case .mlb: return Color(hex: "#16A34A")      // Baseball Green (grass)
         case .wnba: return Color(hex: "#F97316")     // Orange
         }
     }
     
+    /// Optional gradient for sport border (international/multi-color themes)
+    var accentGradient: LinearGradient? {
+        switch self {
+        case .mlb:
+            // WBC international flag colors: red, blue, gold, green
+            return LinearGradient(
+                colors: [
+                    Color(hex: "#EF4444"),  // Red (Japan, Cuba, DR)
+                    Color(hex: "#3B82F6"),  // Blue (Korea, Italy, Israel)
+                    Color(hex: "#F59E0B"),  // Gold (WBC trophy)
+                    Color(hex: "#16A34A"),  // Green (Mexico, Australia)
+                    Color(hex: "#EF4444"),  // Red (loop back for smooth gradient)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        default: return nil
+        }
+    }
+
     /// Whether this sport is in beta (limited data/analytics)
     var isBeta: Bool {
         switch self {
@@ -1366,6 +1450,12 @@ struct GaryPicksView: View {
     @State private var selectedConference: String = "All"
     @State private var lastUpdated: Date?
 
+    // Yesterday's results fallback (per-sport: sports with no fresh picks today show yesterday's stamped cards)
+    @State private var showingYesterdayResults = false
+    @State private var yesterdayPicks: [GaryPick] = []
+    @State private var yesterdayResultsMap: [String: String] = [:] // matchup key -> "won"/"lost"/"push"
+    @State private var sportsWithFreshPicks: Set<String> = [] // sports that have today's picks
+
     private var filteredPicks: [GaryPick] {
         // Sort picks by game time (commence_time) - earliest games first
         let sortByTime: ([GaryPick]) -> [GaryPick] = { picks in
@@ -1420,15 +1510,25 @@ struct GaryPicksView: View {
             }
         }
         
-        // Apply today's picks filter to all picks
-        let upcomingPicks = filterToTodaysPicks(allPicks)
-        
-        // For "All" tab: interleave picks by sport (NBA, NFL, NCAAB, NHL, NCAAF, EPL, repeat)
-        // This gives users variety as they scroll instead of all picks from one sport first
+        // Apply today's picks filter
+        let todayFiltered = filterToTodaysPicks(allPicks)
+
+        // For "All" tab: show today's picks if any exist, otherwise fall back to yesterday's stamped results
         guard selectedSport != .all else {
-            return interleaveBySport(upcomingPicks)
+            if todayFiltered.isEmpty && showingYesterdayResults {
+                return interleaveBySport(yesterdayPicks)
+            }
+            return interleaveBySport(todayFiltered)
         }
-        var sportFiltered = sortByTime(upcomingPicks.filter { ($0.league ?? "").uppercased() == selectedSport.rawValue })
+
+        // For specific sport tabs: merge in yesterday's picks if that sport has no fresh picks today
+        var mergedPicks = todayFiltered
+        if showingYesterdayResults && !sportsWithFreshPicks.contains(selectedSport.rawValue) {
+            let yesterdayForSport = yesterdayPicks.filter { ($0.league ?? "").uppercased() == selectedSport.rawValue }
+            mergedPicks.append(contentsOf: yesterdayForSport)
+        }
+
+        var sportFiltered = sortByTime(mergedPicks.filter { ($0.league ?? "").uppercased() == selectedSport.rawValue })
 
         // Apply conference filter for NCAAB
         if selectedSport == .ncaab && selectedConference != "All" {
@@ -1445,7 +1545,7 @@ struct GaryPicksView: View {
     /// Interleave picks by sport in round-robin order
     /// Order: NBA, NFL, NCAAB, NHL, NCAAF, EPL (skips sports with no picks)
     private func interleaveBySport(_ picks: [GaryPick]) -> [GaryPick] {
-        let sportOrder = ["NBA", "NFL", "NCAAB", "NHL", "NCAAF", "EPL"]
+        let sportOrder = ["NBA", "NFL", "NCAAB", "NHL", "NCAAF", "EPL", "WBC"]
         
         // Sort each sport's picks by game time first
         var picksBySport: [String: [GaryPick]] = [:]
@@ -1489,7 +1589,14 @@ struct GaryPicksView: View {
     }
     
     private var availableSports: Set<String> {
-        Set(allPicks.compactMap { $0.league?.uppercased() })
+        var sports = Set(allPicks.compactMap { $0.league?.uppercased() })
+        // Include yesterday's sports in filter tabs
+        for pick in yesterdayPicks {
+            if let league = pick.league?.uppercased(), !league.isEmpty {
+                sports.insert(league)
+            }
+        }
+        return sports
     }
 
     /// Available conferences from today's NCAAB picks
@@ -1587,6 +1694,14 @@ struct GaryPicksView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
                 }
 
+                // March Madness Bracket banner (after conference filter)
+                if selectedSport == .ncaab || selectedSport == .all {
+                    MarchMadnessBanner()
+                        .padding(.horizontal, 16)
+                        .padding(.top, 8)
+                        .padding(.bottom, 8)
+                }
+
                 // Content
                 if loading {
                     Spacer()
@@ -1628,27 +1743,51 @@ struct GaryPicksView: View {
                 } else {
                     ScrollView(showsIndicators: false) {
                         LazyVStack(spacing: 16) {
+                            // Yesterday's Results header (only when current filter includes yesterday picks)
+                            if showingYesterdayResults && filteredPicks.contains(where: { isYesterdayPick($0) }) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "clock.arrow.counterclockwise")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundStyle(Color.white.opacity(0.5))
+                                    Text("Yesterday's Results")
+                                        .font(.system(size: 14, weight: .bold))
+                                        .foregroundStyle(Color.white.opacity(0.5))
+                                    Text(yesterdayRecord)
+                                        .font(.system(size: 14, weight: .bold))
+                                        .foregroundStyle(GaryColors.gold)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .padding(.top, 4)
+                            }
+
                             // All sports: Show picks grouped by time slot with headers
                             ForEach(picksByTimeSlot, id: \.timeSlot) { group in
-                                // Time slot header
-                                HStack {
-                                    Rectangle()
-                                        .fill(GaryColors.gold.opacity(0.5))
-                                        .frame(height: 1)
-                                    Text(group.timeSlot)
-                                        .font(.system(size: 14, weight: .bold))
-                                        .foregroundColor(GaryColors.gold)
-                                        .fixedSize()
-                                    Rectangle()
-                                        .fill(GaryColors.gold.opacity(0.5))
-                                        .frame(height: 1)
+                                // Time slot header (hide when showing yesterday's results — all games are finished)
+                                if !filteredPicks.contains(where: { isYesterdayPick($0) }) {
+                                    HStack {
+                                        Rectangle()
+                                            .fill(GaryColors.gold.opacity(0.5))
+                                            .frame(height: 1)
+                                        Text(group.timeSlot)
+                                            .font(.system(size: 14, weight: .bold))
+                                            .foregroundColor(GaryColors.gold)
+                                            .fixedSize()
+                                        Rectangle()
+                                            .fill(GaryColors.gold.opacity(0.5))
+                                            .frame(height: 1)
+                                    }
+                                    .padding(.horizontal, 20)
+                                    .padding(.top, 8)
                                 }
-                                .padding(.horizontal, 20)
-                                .padding(.top, 8)
-                                
+
                                 // Picks in this time slot
                                 ForEach(group.picks) { pick in
-                                    PickCardMobile(pick: pick)
+                                    let isNCAAB = (pick.league ?? "").uppercased() == "NCAAB"
+                                    PickCardMobile(
+                                        pick: pick,
+                                        gameResult: isYesterdayPick(pick) ? resultForPick(pick) : nil
+                                    )
+                                        .modifier(ConditionalMarquee(isActive: isNCAAB))
                                         .padding(.horizontal, 16)
                                         .transaction { $0.animation = nil }
                                 }
@@ -1670,13 +1809,47 @@ struct GaryPicksView: View {
         }
     }
     
+    /// W-L record string for yesterday's picks in the current sport filter
+    private var yesterdayRecord: String {
+        let yPicks = filteredPicks.filter { isYesterdayPick($0) }
+        let wins = yPicks.filter { resultForPick($0)?.lowercased() == "won" }.count
+        let losses = yPicks.filter { resultForPick($0)?.lowercased() == "lost" }.count
+        let pushes = yPicks.filter { resultForPick($0)?.lowercased() == "push" }.count
+        return pushes > 0 ? "\(wins)-\(losses)-\(pushes)" : "\(wins)-\(losses)"
+    }
+
+    /// Check if a pick is from yesterday's fallback
+    private func isYesterdayPick(_ pick: GaryPick) -> Bool {
+        let sport = (pick.league ?? "").uppercased()
+        return showingYesterdayResults && !sportsWithFreshPicks.contains(sport)
+    }
+
+    /// Match a pick to its result from yesterdayResultsMap
+    private func resultForPick(_ pick: GaryPick) -> String? {
+        let home = (pick.homeTeam ?? "").lowercased()
+        let away = (pick.awayTeam ?? "").lowercased()
+        guard !home.isEmpty, !away.isEmpty else { return nil }
+
+        // game_results.matchup is "Away Team @ Home Team"
+        for (matchup, result) in yesterdayResultsMap {
+            if matchup.contains(home) && matchup.contains(away) {
+                return result
+            }
+        }
+        return nil
+    }
+
+    // TEMP DEBUG: Set to true to preview yesterday's results overlay, then set back to false
+    private let debugForceYesterday = false
+
     private func loadPicks(forceRefresh: Bool = false) async {
         await MainActor.run {
             loading = true
             fetchFailed = false
         }
 
-        let date = SupabaseAPI.todayEST()
+        // Debug: use tomorrow's date (no picks) so fallback triggers with today's picks as "yesterday"
+        let date = debugForceYesterday ? "2026-03-07" : SupabaseAPI.todayEST()
 
         // Use a timeout to prevent infinite loading
         var picks: [GaryPick] = []
@@ -1690,9 +1863,45 @@ struct GaryPicksView: View {
             didFail = true
         }
 
+        // Determine which sports have fresh picks today
+        let freshSports = Set(picks.compactMap { ($0.league ?? "").uppercased() }.filter { !$0.isEmpty })
+
+        // Always fetch yesterday's picks + results for sports without fresh picks today
+        var yPicks: [GaryPick] = []
+        var resultsMap: [String: String] = [:]
+        var hasYesterday = false
+        do {
+            let yesterday = SupabaseAPI.yesterdayEST()
+            let fetched = try await withTimeout(seconds: 20) {
+                try await SupabaseAPI.fetchDailyPicks(date: yesterday)
+            }
+            let filtered = fetched.filter { !($0.pick ?? "").isEmpty && !($0.rationale ?? "").isEmpty }
+
+            // Only keep yesterday picks for sports that DON'T have fresh picks today
+            let yesterdaySportsNeeded = filtered.filter { !freshSports.contains(($0.league ?? "").uppercased()) }
+            if !yesterdaySportsNeeded.isEmpty {
+                yPicks = yesterdaySportsNeeded
+                hasYesterday = true
+
+                // Fetch results for yesterday
+                let results = (try? await SupabaseAPI.fetchAllGameResults(since: yesterday, forceRefresh: forceRefresh)) ?? []
+                let yesterdayResults = results.filter { $0.game_date == yesterday }
+                for result in yesterdayResults {
+                    guard let matchup = result.matchup, let outcome = result.result else { continue }
+                    resultsMap[matchup.lowercased()] = outcome.lowercased()
+                }
+            }
+        } catch {
+            // Yesterday fetch failed — just show today's picks
+        }
+
         await MainActor.run {
             allPicks = picks
-            fetchFailed = didFail && picks.isEmpty
+            yesterdayPicks = yPicks
+            sportsWithFreshPicks = freshSports
+            showingYesterdayResults = hasYesterday
+            yesterdayResultsMap = resultsMap
+            fetchFailed = didFail && picks.isEmpty && yPicks.isEmpty
             loading = false
             if !didFail { lastUpdated = Date() }
         }
@@ -2947,6 +3156,7 @@ struct MockPickCard: View {
 
 struct PickCardMobile: View {
     let pick: GaryPick
+    var gameResult: String? = nil // "won", "lost", "push" — nil for live/upcoming picks
     @State private var showAnalysis = false
     @State private var showSportsbookOdds = false
     @State private var isPressed = false
@@ -2977,7 +3187,12 @@ struct PickCardMobile: View {
     private var isCFP: Bool {
         pick.isCFP
     }
-    
+
+    /// Check if this is an NCAAB game
+    private var isNCAAB: Bool {
+        (pick.league ?? "").uppercased() == "NCAAB"
+    }
+
     /// Get CFP round label (First Round, Quarterfinal, Semifinal, Championship)
     private var cfpRoundLabel: String? {
         guard isCFP else { return nil }
@@ -3146,6 +3361,8 @@ struct PickCardMobile: View {
     /// Get appropriate icon for game significance
     private func significanceIcon(for significance: String) -> String {
         let sig = significance.lowercased()
+        // WBC / International tournaments
+        if sig.contains("wbc") || sig.contains("world baseball") { return "globe.americas.fill" }
         // Rivalries and heated matchups
         if sig.contains("rivalry") || sig.contains("battle") || sig.contains("clash") || sig.contains("iron bowl") || sig.contains("the game") { return "flame.fill" }
         // Conference/Division matchups (college and pro)
@@ -3261,10 +3478,14 @@ struct PickCardMobile: View {
     private var teamsSection: some View {
         VStack(spacing: 4) {
             HStack(spacing: 0) {
-                // Away team with optional CFP seed
+                // Away team with optional CFP seed or NCAAB AP ranking
                 HStack(spacing: 4) {
                     if isCFP, let awaySeed = pick.awaySeed {
                         Text("#\(awaySeed)")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(GaryColors.gold)
+                    } else if isNCAAB, let awayRank = pick.awayRanking {
+                        Text("#\(awayRank)")
                             .font(.system(size: 12, weight: .bold))
                             .foregroundStyle(GaryColors.gold)
                     }
@@ -3275,14 +3496,14 @@ struct PickCardMobile: View {
                         .truncationMode(.tail)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                
+
                 // @ sign - fixed width
                 Text(pick.isNeutralSite == true ? "vs" : "@")
                     .font(.caption)
                     .foregroundStyle(Color.white.opacity(0.5))
                     .frame(width: 40)
-                
-                // Home team with optional CFP seed
+
+                // Home team with optional CFP seed or NCAAB AP ranking
                 HStack(spacing: 4) {
                     Text(Formatters.shortTeamName(pick.homeTeam, league: pick.league))
                         .font(.title3.bold())
@@ -3291,6 +3512,10 @@ struct PickCardMobile: View {
                         .truncationMode(.tail)
                     if isCFP, let homeSeed = pick.homeSeed {
                         Text("#\(homeSeed)")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(GaryColors.gold)
+                    } else if isNCAAB, let homeRank = pick.homeRanking {
+                        Text("#\(homeRank)")
                             .font(.system(size: 12, weight: .bold))
                             .foregroundStyle(GaryColors.gold)
                     }
@@ -3456,12 +3681,14 @@ struct PickCardMobile: View {
                     .overlay(
                         RoundedRectangle(cornerRadius: 20)
                             .stroke(
+                                // MLB/WBC: multi-country flag gradient border
+                                Sport.from(league: pick.league).accentGradient ??
                                 LinearGradient(
                                     colors: [accentColor.opacity(0.6), accentColor.opacity(0.2)],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 ),
-                                lineWidth: 2
+                                lineWidth: Sport.from(league: pick.league).accentGradient != nil ? 2.5 : 2
                             )
                     )
                     .shadow(color: accentColor.opacity(0.15), radius: 20, y: 10)
@@ -3472,12 +3699,24 @@ struct PickCardMobile: View {
                     .fill(GaryColors.cardBg)
                     .overlay(
                         RoundedRectangle(cornerRadius: 20)
-                            .stroke(accentColor.opacity(0.4), lineWidth: 1.5)
+                            .stroke(
+                                Sport.from(league: pick.league).accentGradient ??
+                                LinearGradient(colors: [accentColor.opacity(0.4)], startPoint: .top, endPoint: .bottom),
+                                lineWidth: Sport.from(league: pick.league).accentGradient != nil ? 2 : 1.5
+                            )
                     )
                     .shadow(color: .black.opacity(0.2), radius: 6, y: 4)
             }
         }
         .modifier(PerformanceOptimizer()) // Applies drawingGroup only on older iOS
+        .overlay(alignment: .center) {
+            // Result stamp overlay for yesterday's picks
+            if let result = gameResult?.lowercased(), !result.isEmpty {
+                ResultStampOverlay(result: result)
+                    .offset(y: -50)
+            }
+        }
+        .opacity(gameResult != nil ? 0.75 : 1.0)
         .scaleEffect(isPressed ? 0.98 : 1.0)
         .onLongPressGesture(minimumDuration: .infinity, pressing: { pressing in
             withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
@@ -3486,6 +3725,317 @@ struct PickCardMobile: View {
         }, perform: {})
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(pick.league ?? "") pick: \(pick.homeTeam ?? "") vs \(pick.awayTeam ?? ""). \(pick.pick ?? "")")
+    }
+}
+
+/// 3D metallic emblem overlay for yesterday's pick results
+struct ResultStampOverlay: View {
+    let result: String
+
+    private var stampText: String {
+        switch result {
+        case "won": return "WON"
+        case "push": return "PUSH"
+        default: return "LOST"
+        }
+    }
+
+    private var stampColor: Color {
+        switch result {
+        case "won": return GaryColors.gold
+        case "push": return .yellow
+        default: return Color(hex: "#4A4A4C")
+        }
+    }
+
+    var body: some View {
+        Text(stampText)
+            .font(.system(size: 52, weight: .black))
+            .tracking(6)
+            .foregroundStyle(stampColor)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 8)
+            .frame(minWidth: 200)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(stampColor, lineWidth: 4)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(stampColor, lineWidth: 1.5)
+                    .padding(5)
+            )
+            .rotationEffect(.degrees(-18))
+            .opacity(0.85)
+            .allowsHitTesting(false)
+    }
+}
+
+// MARK: - Social Links Bar
+
+struct SocialLinksBar: View {
+    var body: some View {
+        VStack(spacing: 12) {
+            Text("JOIN THE COMMUNITY")
+                .font(.system(size: 11, weight: .bold))
+                .tracking(1.5)
+                .foregroundStyle(.white.opacity(0.3))
+
+            HStack(spacing: 16) {
+                // X / Twitter
+                SocialButton(
+                    label: "Follow on X",
+                    systemIcon: "bird.fill",
+                    url: "twitter://user?screen_name=BetwithGary",
+                    fallbackUrl: "https://x.com/BetwithGary"
+                )
+
+                // Discord
+                SocialButton(
+                    label: "Join Discord",
+                    systemIcon: "bubble.left.and.bubble.right.fill",
+                    url: "https://discord.gg/betwithgary",
+                    fallbackUrl: nil
+                )
+            }
+        }
+    }
+}
+
+struct SocialButton: View {
+    let label: String
+    let systemIcon: String
+    let url: String
+    var fallbackUrl: String?
+
+    var body: some View {
+        Button {
+            if let deepLink = URL(string: url), UIApplication.shared.canOpenURL(deepLink) {
+                UIApplication.shared.open(deepLink)
+            } else if let fallback = fallbackUrl, let fallbackURL = URL(string: fallback) {
+                UIApplication.shared.open(fallbackURL)
+            } else if let primary = URL(string: url) {
+                UIApplication.shared.open(primary)
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: systemIcon)
+                    .font(.system(size: 14, weight: .semibold))
+                Text(label)
+                    .font(.system(size: 12, weight: .semibold))
+            }
+            .foregroundStyle(.white.opacity(0.7))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color.white.opacity(0.06))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - NCAAB March Madness Marquee Border
+
+struct MarqueeLightsModifier: ViewModifier {
+    @State private var phase: CGFloat = 0
+    @State private var spotlightAngle: Double = 0
+
+    func body(content: Content) -> some View {
+        content
+            // Bulb border drawn inset so nothing clips
+            .overlay(
+                MarqueeBulbBorder(cornerRadius: 20, phase: phase, inset: 6)
+                    .allowsHitTesting(false)
+            )
+            // Sweeping spotlight cones
+            .overlay(
+                SpotlightSweep(angle: spotlightAngle)
+                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .allowsHitTesting(false)
+            )
+            .onAppear {
+                withAnimation(.linear(duration: 2.0).repeatForever(autoreverses: false)) {
+                    phase = 1.0
+                }
+                withAnimation(.linear(duration: 4.0).repeatForever(autoreverses: false)) {
+                    spotlightAngle = 360
+                }
+            }
+    }
+}
+
+// MARK: - Spotlight Sweep Animation
+struct SpotlightSweep: View {
+    let angle: Double
+
+    var body: some View {
+        Canvas { context, size in
+            let w = size.width
+            let h = size.height
+
+            // Two spotlights on opposite sides
+            let spots: [(Double, UnitPoint)] = [
+                (angle, .top),
+                (angle + 180, .bottom)
+            ]
+
+            for (deg, _) in spots {
+                let rad = deg * .pi / 180
+                // Spotlight origin orbits the card perimeter
+                let cx = w / 2 + cos(rad) * w * 0.45
+                let cy = h / 2 + sin(rad) * h * 0.45
+
+                let coneRadius: CGFloat = max(w, h) * 0.5
+                let center = CGPoint(x: cx, y: cy)
+
+                context.fill(
+                    Circle().path(in: CGRect(
+                        x: center.x - coneRadius,
+                        y: center.y - coneRadius,
+                        width: coneRadius * 2,
+                        height: coneRadius * 2
+                    )),
+                    with: .radialGradient(
+                        Gradient(colors: [
+                            Color(hex: "#C9A227").opacity(0.10),
+                            Color(hex: "#C9A227").opacity(0.04),
+                            Color.clear
+                        ]),
+                        center: center,
+                        startRadius: 0,
+                        endRadius: coneRadius
+                    )
+                )
+            }
+        }
+    }
+}
+
+struct MarqueeBulbBorder: View {
+    let cornerRadius: CGFloat
+    let phase: CGFloat
+    var inset: CGFloat = 0
+    // Bulb diameter — touching side by side
+    private let bulbSize: CGFloat = 8.5
+
+    var body: some View {
+        Canvas { context, size in
+            let w = size.width
+            let h = size.height
+            // Inset the path so bulbs draw fully inside the view bounds
+            let iw = w - inset * 2
+            let ih = h - inset * 2
+            let r = min(cornerRadius, min(iw, ih) / 2)
+            let perimeter = MarqueeBulbBorder.perimeterLength(w: iw, h: ih, r: r)
+            let count = Int(perimeter / bulbSize)
+            let litOffset = Int(phase * CGFloat(count))
+
+            for i in 0..<count {
+                let t = CGFloat(i) / CGFloat(count)
+                var pos = MarqueeBulbBorder.pointOnRect(t: t, w: iw, h: ih, r: r)
+                // Offset from inset space back to full coordinate space
+                pos.x += inset
+                pos.y += inset
+
+                // Chase pattern: every 3rd bulb is fully lit, others are dim
+                let patternIndex = (i + litOffset) % 4
+                let isLit = patternIndex == 0 || patternIndex == 1
+
+                // Bulb body (dark gold socket)
+                let socketRect = CGRect(x: pos.x - bulbSize / 2, y: pos.y - bulbSize / 2, width: bulbSize, height: bulbSize)
+                context.fill(Circle().path(in: socketRect), with: .color(Color(hex: "#8B6914").opacity(0.9)))
+
+                // Inner glass
+                let glassSize: CGFloat = bulbSize - 2.5
+                let glassRect = CGRect(x: pos.x - glassSize / 2, y: pos.y - glassSize / 2, width: glassSize, height: glassSize)
+
+                if isLit {
+                    // Lit bulb: bright warm white-gold center
+                    context.fill(Circle().path(in: glassRect), with: .color(Color(hex: "#FFEEBB").opacity(0.95)))
+                    // Hot center
+                    let hotSize: CGFloat = glassSize * 0.5
+                    let hotRect = CGRect(x: pos.x - hotSize / 2, y: pos.y - hotSize / 2, width: hotSize, height: hotSize)
+                    context.fill(Circle().path(in: hotRect), with: .color(Color.white.opacity(0.9)))
+                    // Glow halo
+                    let glowSize: CGFloat = bulbSize * 2.2
+                    let glowRect = CGRect(x: pos.x - glowSize / 2, y: pos.y - glowSize / 2, width: glowSize, height: glowSize)
+                    context.fill(Circle().path(in: glowRect), with: .color(Color(hex: "#C9A227").opacity(0.2)))
+                } else {
+                    // Dim bulb: dark amber, glass visible but unlit
+                    context.fill(Circle().path(in: glassRect), with: .color(Color(hex: "#6B4A0A").opacity(0.6)))
+                    // Faint filament
+                    let dotSize: CGFloat = glassSize * 0.3
+                    let dotRect = CGRect(x: pos.x - dotSize / 2, y: pos.y - dotSize / 2, width: dotSize, height: dotSize)
+                    context.fill(Circle().path(in: dotRect), with: .color(Color(hex: "#C9A227").opacity(0.25)))
+                }
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
+    static func perimeterLength(w: CGFloat, h: CGFloat, r: CGFloat) -> CGFloat {
+        let straightW = w - 2 * r
+        let straightH = h - 2 * r
+        let cornerArc: CGFloat = .pi / 2 * r
+        return 2 * straightW + 2 * straightH + 4 * cornerArc
+    }
+
+    static func pointOnRect(t: CGFloat, w: CGFloat, h: CGFloat, r: CGFloat) -> CGPoint {
+        let straightW = w - 2 * r
+        let straightH = h - 2 * r
+        let cornerArc: CGFloat = .pi / 2 * r
+        let perimeter = 2 * straightW + 2 * straightH + 4 * cornerArc
+        var d = t * perimeter
+
+        if d < straightW { return CGPoint(x: r + d, y: 0) }
+        d -= straightW
+        if d < cornerArc {
+            let a = -CGFloat.pi / 2 + (d / r)
+            return CGPoint(x: w - r + r * cos(a), y: r + r * sin(a))
+        }
+        d -= cornerArc
+        if d < straightH { return CGPoint(x: w, y: r + d) }
+        d -= straightH
+        if d < cornerArc {
+            let a = d / r
+            return CGPoint(x: w - r + r * cos(a), y: h - r + r * sin(a))
+        }
+        d -= cornerArc
+        if d < straightW { return CGPoint(x: w - r - d, y: h) }
+        d -= straightW
+        if d < cornerArc {
+            let a = CGFloat.pi / 2 + (d / r)
+            return CGPoint(x: r + r * cos(a), y: h - r + r * sin(a))
+        }
+        d -= cornerArc
+        if d < straightH { return CGPoint(x: 0, y: h - r - d) }
+        d -= straightH
+        let a = CGFloat.pi + (d / r)
+        return CGPoint(x: r + r * cos(a), y: r + r * sin(a))
+    }
+}
+
+extension View {
+    func marqueeLights() -> some View {
+        modifier(MarqueeLightsModifier())
+    }
+}
+
+struct ConditionalMarquee: ViewModifier {
+    let isActive: Bool
+
+    func body(content: Content) -> some View {
+        if isActive {
+            content.modifier(MarqueeLightsModifier())
+        } else {
+            content
+        }
     }
 }
 
@@ -4234,6 +4784,26 @@ struct TaleOfTapeSection: View {
             "ADJOE_RANK": "AdjOE Rank",
             "ADJDE_RANK": "AdjDE Rank",
             "PROJ_RECORD": "Proj Record",
+            // MLB/WBC verified Tale of Tape tokens
+            "POOL_RECORD": "Pool Record",
+            "SP_ERA": "SP ERA",
+            "SP_WHIP": "SP WHIP",
+            "SP_K9": "SP K/9",
+            "SP_BB9": "SP BB/9",
+            "SP_RECORD": "SP W-L",
+            "SP_IP": "SP Innings",
+            "SP_SO": "SP Strikeouts",
+            "TEAM_AVG": "Team AVG",
+            "TEAM_OBP": "Team OBP",
+            "TEAM_SLG": "Team SLG",
+            "TEAM_OPS": "Team OPS",
+            "TEAM_HR": "Career HR",
+            "GAME1_RESULT": "Game 1",
+            "SP_NAME": "Starter",
+            "ML_ODDS": "Moneyline",
+            "RUN_LINE": "Run Line",
+            "VENUE": "Venue",
+            "LAST_PLAYED": "Game 1",
             // NHL verified Tale of Tape tokens
             "GOALS_FOR_GM": "Goals/G",
             "GOALS_AGST_GM": "GA/G",
@@ -4331,11 +4901,13 @@ struct TaleOfTapeSection: View {
                             // Left value (Gary's pick)
                             Text(leftVal)
                                 .font(.subheadline.bold())
+                                .minimumScaleFactor(0.6)
+                                .lineLimit(1)
                                 .foregroundStyle(leftAdvantage ? greenAccent : .white.opacity(0.6))
-                                .frame(width: 70, alignment: .leading)
-                            
-                            Spacer()
-                            
+                                .frame(maxWidth: 100, alignment: .leading)
+
+                            Spacer(minLength: 4)
+
                             // Stat name with arrow
                             HStack(spacing: 4) {
                                 if leftAdvantage {
@@ -4346,20 +4918,24 @@ struct TaleOfTapeSection: View {
                                 Text(displayName(for: token))
                                     .font(.caption)
                                     .foregroundStyle(.white.opacity(0.5))
+                                    .lineLimit(1)
                                 if !leftAdvantage {
                                     Image(systemName: "arrow.right")
                                         .font(.system(size: 8, weight: .bold))
                                         .foregroundStyle(greenAccent)
                                 }
                             }
-                            
-                            Spacer()
-                            
+                            .layoutPriority(1)
+
+                            Spacer(minLength: 4)
+
                             // Right value (opponent)
                             Text(rightVal)
                                 .font(.subheadline.bold())
+                                .minimumScaleFactor(0.6)
+                                .lineLimit(1)
                                 .foregroundStyle(!leftAdvantage ? greenAccent : .white.opacity(0.6))
-                                .frame(width: 70, alignment: .trailing)
+                                .frame(maxWidth: 100, alignment: .trailing)
                         }
                         .padding(.vertical, 8)
                         .padding(.horizontal, 12)
@@ -4526,6 +5102,33 @@ struct TaleOfTapeSection: View {
             let homeWins = Int(home.components(separatedBy: "-").first ?? "0") ?? 0
             let awayWins = Int(away.components(separatedBy: "-").first ?? "0") ?? 0
             return homeWins > awayWins
+        }
+
+        // WBC Game 1 Result — "W 3-0 vs Taipei" vs "L 4-11 vs Korea" — W beats L
+        if token == "GAME1_RESULT" {
+            let homeWin = home.hasPrefix("W")
+            let awayWin = away.hasPrefix("W")
+            return homeWin && !awayWin
+        }
+
+        // WBC text-only stats where comparison doesn't apply — always neutral (no arrow highlight)
+        if token == "SP_NAME" || token == "VENUE" || token == "LAST_PLAYED" {
+            return false
+        }
+
+        // RUN_LINE — more negative spread = bigger favorite = advantage
+        if token == "RUN_LINE" {
+            let homeSpread = Double(home.replacingOccurrences(of: "+", with: "")) ?? 0
+            let awaySpread = Double(away.replacingOccurrences(of: "+", with: "")) ?? 0
+            return homeSpread < awaySpread
+        }
+
+        // ML_ODDS — more negative = bigger favorite = advantage
+        if token == "ML_ODDS" {
+            let homeOdds = Double(home.replacingOccurrences(of: "+", with: "")) ?? 0
+            let awayOdds = Double(away.replacingOccurrences(of: "+", with: "")) ?? 0
+            // Lower (more negative) ML odds = bigger favorite = better
+            return homeOdds < awayOdds
         }
 
         // For Last 5 / RECENT_FORM (e.g., "WWWWW" vs "LLWLL"), count wins

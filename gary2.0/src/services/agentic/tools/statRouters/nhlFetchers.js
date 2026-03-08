@@ -367,7 +367,13 @@ export const nhlFetchers = {
     }
   },
 
-  
+  // NHL Conference Standing — delegates to NHL_STANDINGS
+  NHL_CONFERENCE_STANDING: async (bdlSport, home, away, season) => {
+    if (bdlSport !== 'icehockey_nhl') return null;
+    return nhlFetchers.NHL_STANDINGS(bdlSport, home, away, season);
+  },
+
+
   // NHL Home/Away Splits from standings
   NHL_HOME_AWAY_SPLITS: async (bdlSport, home, away, season) => {
     if (bdlSport !== 'icehockey_nhl') return null;

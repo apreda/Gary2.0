@@ -1,9 +1,10 @@
 /**
  * NBA Constitution - NBA-Specific Context for Gary
  *
- * Three sections for phase-aligned delivery:
- * - domainKnowledge: NBA-specific sport truths + spread awareness
- * - guardrails: H2H zero tolerance (prevents training-data fabrication of H2H records)
+ * Phase-aligned delivery:
+ * - domainKnowledge: always-on only (kept minimal)
+ * - pass1Context: investigation-stage awareness
+ * - guardrails: structural hard rules (minimal)
  *
  * Everything else is covered elsewhere (do NOT duplicate here):
  * - Player universe / roster rules → BASE_RULES + system prompt FACT-CHECKING PROTOCOL
@@ -19,29 +20,58 @@
  * - Ranking gap examples → anchors Gary on specific stats (subtle L3)
  */
 
-import {
-  getH2HZeroTolerance,
-} from './sharedConstitutionBlocks.js';
-
 export const NBA_CONSTITUTION = {
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // SECTION A: DOMAIN KNOWLEDGE — NBA-specific sport truths + spread awareness
-  // Pure awareness statements. No predictions. No methodology.
+  // SECTION A: DOMAIN KNOWLEDGE — always-on only (keep minimal)
   // ═══════════════════════════════════════════════════════════════════════════
   domainKnowledge: ``,
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // SECTION B: REMOVED — Investigation prompts in flashInvestigationPrompts.js
+  // SECTION B: PASS 1 CONTEXT — shown during investigation stage
   // ═══════════════════════════════════════════════════════════════════════════
+  pass1Context: `
+### NBA AWARENESS
+
+- Star player availability, minute restrictions, and rest decisions can materially change game context
+- Back-to-backs, travel burden, and schedule density are widely known and often priced quickly
+- NBA outcomes are volatile game-to-game — separate stable team baseline from short-window noise
+- Public attention concentrates on marquee teams and nationally televised games — narrative pressure can affect how numbers are set
+- Roster depth matters more than casual observers realize — when stars sit, the gap between bench units often determines outcomes
+- Mid-season trades and buyout additions take time to integrate — new players need to learn systems and build chemistry before the addition translates to results
+
+### NBA INJURY LABELS (READ FROM SCOUT REPORT)
+
+Injury duration tags are assigned by the NBA scout-report pipeline and are sport-specific.
+
+- **FRESH** — New absence (0-2 games missed, <5 calendar days). Market may not have fully adjusted.
+- **SHORT-TERM** — Recent absence (≤3 games missed). Line is beginning to reflect the absence.
+- **PRICED IN** — Established absence (4-19 games missed). The team's recent stats, form, and record already reflect life without this player.
+- **SEASON-LONG** — Extended absence (20+ games). Fully baked into every number you see.
+
+Use the exact tag shown in the scout report for this game.
+
+### THE SPREAD
+- NBA spreads move quickly once injury news breaks — by tip-off, most absences are fully reflected in the number
+- Public betting volume in the NBA gravitates toward big-market teams, nationally televised games, and teams on winning streaks — lines for those games reflect different market dynamics than under-the-radar matchups
+- Rest advantages (opponent on a back-to-back, long road trip) are widely known and typically priced — the edge is in HOW a team performs in those spots, not that the spot exists
+- Home court advantage in the NBA is real but varies significantly by arena and team
+
+**NBA GTD NOTE:**
+- GTD means the player's availability is UNCERTAIN — they may or may not play
+- A GTD after weeks of absence could signal a RETURN — a different situation than a day-to-day minor tweak
+`,
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // SECTION C: STRUCTURAL GUARDRAILS (Hard rules — always enforced)
-  // H2H zero tolerance
+  // SECTION C: PASS 2.5 DECISION GUARDS — optional stage-specific reminders
   // ═══════════════════════════════════════════════════════════════════════════
-  guardrails: `
-${getH2HZeroTolerance('NBA')}
-`
+  pass25DecisionGuards: ``,
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SECTION D: STRUCTURAL GUARDRAILS (Hard rules — always enforced)
+  // No NBA-specific hard guards needed here (handled by BASE_RULES + pass stages)
+  // ═══════════════════════════════════════════════════════════════════════════
+  guardrails: ``
 };
 
 

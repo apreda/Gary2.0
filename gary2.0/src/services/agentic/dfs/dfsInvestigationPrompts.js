@@ -20,7 +20,7 @@ Work through each factor below for the ENTIRE SLATE. Do NOT skip any. For each f
 **Tools:** GET_TEAM_INJURIES for EVERY team on the slate
 - Check injury status for ALL teams — document who is OUT, GTD, Questionable
 - Note duration tags: RECENT (0-2 games, <5 days), ESTABLISHED (3-10 games), LONG-TERM (11+ games)
-- RECENT absences are the most DFS-relevant — salaries and ownership may not fully reflect them
+- RECENT absences are the most DFS-relevant — salaries may not fully reflect them
 - ESTABLISHED/LONG-TERM absences are already priced into salaries and teammate production
 
 ### 2. GAME ENVIRONMENTS
@@ -69,7 +69,7 @@ No direct tool — SYNTHESIZE from game environment + injury data
 **Tools:** SEARCH_LIVE_NEWS
 - Search for late scratches, rest decisions, lineup changes for today's slate
 - Focus on news from the last 6 hours — anything not yet reflected in injury reports
-- Late-breaking absences are the highest-value DFS information (ownership hasn't adjusted)
+- Late-breaking absences are the highest-value DFS information (salaries haven't adjusted)
 `;
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -138,6 +138,122 @@ No direct tool — SYNTHESIZE from game environment + injury data
 `;
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// NBA DFS PER-GAME INVESTIGATION FACTORS (Phase 2.5)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const NBA_DFS_GAME_FACTORS = `## DFS PER-GAME RESEARCH CHECKLIST — NBA
+
+For THIS GAME, work through each factor. Report findings with specific numbers for players on BOTH teams.
+
+### 1. INJURY & USAGE REDISTRIBUTION
+**Tools:** GET_TEAM_INJURIES, GET_TEAM_USAGE_STATS for both teams
+- Document who is out and their duration (RECENT/ESTABLISHED/LONG-TERM) for both teams
+- For RECENT absences: pull usage stats to see who is absorbing workload
+- Compare L5 usage/minutes to season averages for key players on both teams
+- Surface the specific players whose roles have changed and by how much
+
+### 2. SALARY-VALUE LANDSCAPE
+**Tools:** GET_PLAYER_SALARY, GET_PLAYER_SEASON_STATS for key players in this game
+- Identify players where L5 production diverges significantly from salary pricing
+- Surface the highest-ceiling players at each price tier ($3K-5K, $5K-7K, $7K+)
+- Note players priced as if nothing changed despite recent role shifts from injuries or lineup changes
+
+### 3. PACE & SCORING ENVIRONMENT
+**Tools:** GET_GAME_ENVIRONMENT
+- Document O/U, spread, implied totals, combined pace for this game
+- Note whether both teams are above-average pace or if one team controls tempo
+- Surface the implied total for each side separately — where does the scoring project?
+
+### 4. PLAYER CEILING SCENARIOS
+**Tools:** GET_PLAYER_GAME_LOGS, GET_PLAYER_SEASON_STATS for top 4-6 DFS-relevant players
+- Pull recent game logs for the highest-salary and highest-upside players in this game
+- Identify ceiling games (best DK FPTS outputs in L5) and what drove them (minutes, usage, opponent)
+- Note minutes patterns — consistent 30+ or volatile?
+
+### 5. POSITIONAL MATCHUP ADVANTAGES
+**Tools:** GET_MATCHUP_DATA for high-salary players in this game
+- Pull DvP data for the highest-salary players at each position in this game
+- Identify where one team has a clear defensive weakness at a position
+- Cross-reference with the players eligible at that position and their recent production
+
+### 6. STACKING CORRELATION PROFILE
+**Tools:** GET_TEAM_USAGE_STATS, GET_GAME_ENVIRONMENT
+- Which 2-3 players on each team share the most combined usage (points, FGA, assists)?
+- Is this game environment suitable for stacking (high O/U + competitive spread)?
+- Note bring-back opportunities — players on the opposing side who benefit from high game total
+
+### 7. BLOWOUT RISK & MINUTES IMPACT
+**Tools:** GET_GAME_ENVIRONMENT
+- Document the spread — larger spreads indicate higher blowout probability
+- For large favorites: starters at risk of reduced Q4 minutes, capping their ceiling
+- For large underdogs: players who might get garbage-time stat inflation but with volatile minutes
+
+### 8. BREAKING CONTEXT
+**Tools:** SEARCH_LIVE_NEWS
+- Search for today's news about both teams in this game
+- Focus on lineup confirmations, rest decisions, late scratches
+- Any information not yet reflected in the injury reports or salary pricing
+`;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// NFL DFS PER-GAME INVESTIGATION FACTORS (Phase 2.5)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const NFL_DFS_GAME_FACTORS = `## DFS PER-GAME RESEARCH CHECKLIST — NFL
+
+For THIS GAME, work through each factor. Report findings with specific numbers for players on BOTH teams.
+
+### 1. INJURY & USAGE REDISTRIBUTION
+**Tools:** GET_TEAM_INJURIES, GET_TEAM_USAGE_STATS for both teams
+- Document who is out and their duration (RECENT/ESTABLISHED/LONG-TERM) for both teams
+- For RECENT absences at skill positions (WR1, RB1, TE1): check target share and snap count redistribution
+- Compare recent target share and rush share to season baselines for key players on both teams
+- Surface specific players whose workload has changed and by how much
+
+### 2. SALARY-VALUE LANDSCAPE
+**Tools:** GET_PLAYER_SALARY, GET_PLAYER_SEASON_STATS for key players in this game
+- Identify players where recent production diverges from salary pricing
+- Surface highest-ceiling players at each price tier ($3K-5K, $5K-7K, $7K+)
+- Note players priced without reflecting recent role changes from injuries or depth chart shifts
+
+### 3. GAME SCRIPT ENVIRONMENT
+**Tools:** GET_GAME_ENVIRONMENT
+- Document O/U, spread, implied totals for this game
+- Note the projected game script: large spread suggests run-heavy favorite vs pass-heavy underdog
+- Competitive games (spread under 3) suggest balanced scripts with more passing volume for both teams
+
+### 4. PLAYER CEILING SCENARIOS
+**Tools:** GET_PLAYER_GAME_LOGS, GET_PLAYER_SEASON_STATS for top 4-6 DFS-relevant players
+- Pull recent game logs for highest-salary and highest-upside players in this game
+- Identify ceiling games and what drove them (targets, carries, touchdowns, yardage)
+- Note snap count trends — consistent 80%+ or volatile?
+
+### 5. TARGET/RUSH SHARE MATCHUP
+**Tools:** GET_MATCHUP_DATA for high-salary players in this game
+- Pull defensive matchup data for key offensive players
+- Identify where one defense allows disproportionate production to a position group
+- Cross-reference with the players eligible at that position and their recent usage
+
+### 6. STACKING CORRELATION PROFILE
+**Tools:** GET_TEAM_USAGE_STATS, GET_GAME_ENVIRONMENT
+- Which QB + pass catchers on each team combine for the most aerial production?
+- Is this game environment suitable for stacking (high O/U + competitive spread)?
+- Note bring-back opportunities on the opposing side
+
+### 7. WEATHER & CONDITIONS
+**Tools:** SEARCH_LIVE_NEWS
+- Search for weather conditions at this game's venue
+- Wind 15+ MPH affects passing; rain/snow creates variable conditions
+- Dome games are weather-neutral
+
+### 8. BREAKING CONTEXT
+**Tools:** SEARCH_LIVE_NEWS
+- Search for today's news about both teams in this game
+- Focus on inactive lists, late scratches, game-time decisions
+- Any information not yet reflected in injury reports or salary pricing
+`;
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // EXPORT
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -146,8 +262,13 @@ const DFS_INVESTIGATION_MAP = {
   NFL: NFL_DFS_FACTORS,
 };
 
+const DFS_GAME_INVESTIGATION_MAP = {
+  NBA: NBA_DFS_GAME_FACTORS,
+  NFL: NFL_DFS_GAME_FACTORS,
+};
+
 /**
- * Get the DFS investigation methodology for a sport.
+ * Get the DFS slate-level investigation methodology for a sport.
  *
  * @param {string} sport - 'NBA', 'NFL', etc.
  * @returns {string} Investigation methodology string, or empty string if sport not supported
@@ -155,4 +276,15 @@ const DFS_INVESTIGATION_MAP = {
 export function getDFSInvestigationPrompt(sport) {
   const key = (sport || '').toUpperCase();
   return DFS_INVESTIGATION_MAP[key] || '';
+}
+
+/**
+ * Get the DFS per-game investigation methodology for a sport (Phase 2.5).
+ *
+ * @param {string} sport - 'NBA', 'NFL', etc.
+ * @returns {string} Per-game investigation methodology string, or empty string if sport not supported
+ */
+export function getDFSGameInvestigationPrompt(sport) {
+  const key = (sport || '').toUpperCase();
+  return DFS_GAME_INVESTIGATION_MAP[key] || '';
 }

@@ -18,26 +18,19 @@ export function getGemini() {
 // ═══════════════════════════════════════════════════════════════════════════
 // ONLY Gemini 3 models are allowed. NEVER use Gemini 1.x or 2.x.
 //
-// DUAL-MODEL (All sports): 3.1 Pro investigates + decides, 3 Pro builds cases
+// 3.1 Pro (main) + Flash (research):
 //   - Gemini 3.1 Pro: Full pipeline (Pass 1 → Pass 2.5 → Pass 3)
-//   - Gemini 3 Pro: Independent Steel Man case builder (spawned at coverage threshold)
-//   - Advisor receives 3.1 Pro's data (text only, no tools) → builds bilateral cases
-//   - 3.1 Pro evaluates advisor's cases (never writes its own cases)
-//   - Eliminates confirmation bias: the investigator is not the case writer
-//
-// IMPORTANT: Advisor and main Pro run as separate sessions (no signature conflicts)
-//   - Advisor session is ephemeral (one API call, then discarded)
-//   - Main Pro session persists throughout (no context loss)
-//   - If advisor fails, the pick fails (no silent fallback to biased cases)
+//   - Gemini 3 Flash: Research assistant (tool-calling investigation before Gary starts)
+//   - Pro session persists throughout (no context loss)
 // ═══════════════════════════════════════════════════════════════════════════
 
 export const GEMINI_PRO_MODEL = 'gemini-3.1-pro-preview';
-export const GEMINI_PRO_FALLBACK = 'gemini-3-pro-preview';  // Also used as independent advisor model
+export const GEMINI_PRO_FALLBACK = 'gemini-3-pro-preview';  // Fallback for 429 cascade
 
 export const ALLOWED_GEMINI_MODELS = [
   'gemini-3-flash-preview',  // Flash: used for scout report tool calling
   GEMINI_PRO_MODEL,          // Primary: Investigation + Evaluation + Final Decision
-  GEMINI_PRO_FALLBACK,       // Advisor: Independent Steel Man case builder + Pro fallback
+  GEMINI_PRO_FALLBACK,       // Pro fallback for 429 cascade
 ];
 
 export function validateGeminiModel(model) {
@@ -75,9 +68,9 @@ export const GEMINI_SAFETY_SETTINGS = [
   { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
 ];
 
-// Flash research needs a longer timeout than advisor Steel Man cases
+// Flash research timeout — generous to accommodate full investigation
 // Flash does 25+ stat calls + 6+ grounding searches (~20s each) + 5+ Gemini API calls
 // Real-world observed: 27 stat + 6 grounding + 5 iterations ≈ 250s
 export const RESEARCH_BRIEFING_TIMEOUT_MS = 300000; // 300 seconds (5 min)
 
-console.log(`[Orchestrator] Gemini 3.1 Pro (main) + 3 Pro (advisor) + Flash (grounding)`);
+console.log(`[Orchestrator] Gemini 3.1 Pro (main) + Flash (research + grounding)`);

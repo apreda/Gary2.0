@@ -1,8 +1,11 @@
 /**
  * DFS Lineup Audit
  *
- * Phase 5 of the Agentic DFS system.
+ * Phase 4 of the Agentic DFS system.
  * Gary Pro reviews his own lineup before submission.
+ *
+ * Receives the lineup from the agent loop (Phase 3) along with
+ * Gary's tool call history and investigation text for context.
  *
  * This is Gary's SELF-CHECK:
  * - Is the ceiling realistic or am I being optimistic?
@@ -123,20 +126,20 @@ If you see issues, you can make 1-2 swaps. Be specific:
  * Gary Pro audits his own lineup
  *
  * @param {GoogleGenerativeAI} genAI - Gemini client
- * @param {Object} lineup - Gary's lineup from Phase 4
- * @param {Object} slateAnalysis - Slate analysis from Phase 2 (injuries, game environments)
+ * @param {Object} lineup - Gary's lineup from the agent loop
  * @param {Object} context - DFS context
+ * @param {Object} loopResult - Agent loop result ({ toolCallHistory, investigationText })
  * @param {Object} options - Model options
  * @returns {Object} - Audited lineup (possibly with adjustments)
  */
-export async function auditLineupWithPro(genAI, lineup, slateAnalysis, context, options = {}) {
+export async function auditLineupWithPro(genAI, lineup, context, loopResult, options = {}) {
   const { modelName = GEMINI_PRO_MODEL } = options;
   const { players, winningTargets, platform, sport } = context;
 
   console.log('[Lineup Audit] Gary Pro auditing lineup...');
 
   // Build audit request
-  const auditRequest = buildAuditRequest(lineup, slateAnalysis, context);
+  const auditRequest = buildAuditRequest(lineup, context, loopResult);
 
   // Create Pro model for audit
   // Note: Not using responseMimeType: 'application/json' as it can cause empty responses
@@ -236,8 +239,8 @@ Include all fields: auditNotes, winConditionAnalysis, adjustments, finalCeilingS
 // BUILD AUDIT REQUEST
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function buildAuditRequest(lineup, slateAnalysis, context) {
-  const { winningTargets, players, platform, playerInvestigations, sport } = context;
+function buildAuditRequest(lineup, context, loopResult) {
+  const { winningTargets, players, platform, sport, games, injuries } = context;
 
   // Format current lineup
   const lineupStr = formatLineupForAudit(lineup);
@@ -245,20 +248,39 @@ function buildAuditRequest(lineup, slateAnalysis, context) {
   // Get available alternates by position
   const alternatesStr = formatAlternatesByPosition(lineup, players);
 
-  // Format top game environments by O/U from slate analysis
-  const topGames = (slateAnalysis.gameEnvironments || [])
-    .sort((a, b) => (b.overUnder || 0) - (a.overUnder || 0))
-    .map(g => `${g.awayTeam} @ ${g.homeTeam}: O/U ${g.overUnder || '?'} | Spread ${g.spread || '?'}`)
+  // Format game environments by O/U from context.games
+  const topGames = (games || [])
+    .sort((a, b) => (b.overUnder || b.total || 0) - (a.overUnder || a.total || 0))
+    .map(g => {
+      const home = g.homeTeam || g.home_team || '';
+      const away = g.awayTeam || g.visitor_team || g.away_team || '';
+      return `${away} @ ${home}: O/U ${g.overUnder || g.total || '?'} | Spread ${g.spread || '?'}`;
+    })
     .join('\n');
 
-  // Format injury context from slate analysis
-  const injuryLines = (slateAnalysis.injuryReport || []).map(report => {
-    const outNames = (report.outPlayers || []).map(p => `${p.player} (${p.duration || '?'})`).join(', ');
-    return outNames ? `${report.team}: ${outNames}` : null;
-  }).filter(Boolean).join('\n');
+  // Format injury highlights from context.injuries
+  const injuryLines = Object.entries(injuries || {})
+    .filter(([_, teamInj]) => teamInj && teamInj.length > 0)
+    .map(([team, teamInj]) => {
+      const outs = teamInj
+        .filter(i => {
+          const st = (i.status || '').toUpperCase();
+          return st.includes('OUT') || st === 'OFS' || st.includes('DOUBTFUL');
+        })
+        .map(i => {
+          const name = i.player?.first_name ? `${i.player.first_name} ${i.player.last_name}` : (i.player || i.name);
+          return `${name} (${i.duration || i.status})`;
+        });
+      return outs.length > 0 ? `${team}: ${outs.join(', ')}` : null;
+    })
+    .filter(Boolean)
+    .join('\n');
 
-  // Format investigation summaries for key alternates (D1: gives audit phase data-backed swap context)
-  const investigationSummary = formatInvestigationSummaryForAudit(playerInvestigations, lineup);
+  // Format Gary's investigation context from the agent loop
+  const investigationSummary = formatLoopInvestigationContext(loopResult);
+
+  // Full injury context for swap decisions (OUT + GTD for all teams, tagged for lineup exposure)
+  const injuryContext = formatInjuryContextForAudit(context, lineup);
 
   const salaryCap = getSalaryCap(platform, sport);
 
@@ -283,12 +305,11 @@ Salary Efficiency: $${lineup.projectedPoints ? (lineup.totalSalary / lineup.proj
 Projected: ${lineup.projectedPoints} pts
 Ceiling: ${lineup.ceilingProjection} pts
 Floor: ${lineup.floorProjection} pts
-${formatOwnershipSummary(lineup)}
 Ceiling Scenario: ${lineup.ceilingScenario || 'Not specified'}
 
-## INVESTIGATION FINDINGS (from Phase 3)
+## GARY'S INVESTIGATION FINDINGS
 ${investigationSummary}
-
+${injuryContext ? `\n## FULL INJURY CONTEXT\n${injuryContext}\n` : ''}
 ## AVAILABLE ALTERNATES (if you want to swap)
 ${alternatesStr}
 
@@ -302,29 +323,73 @@ Output your audit as JSON.
 `;
 }
 
-function formatInvestigationSummaryForAudit(investigations, lineup) {
-  if (!investigations || Object.keys(investigations).length === 0) {
-    return 'No investigation data available';
+/**
+ * Format Gary's investigation context from the agent loop for the audit.
+ * Shows tool calls made and investigation text produced.
+ */
+function formatLoopInvestigationContext(loopResult) {
+  if (!loopResult) return 'No investigation data available';
+
+  const sections = [];
+
+  // Summarize tool calls by type
+  const toolCalls = loopResult.toolCallHistory || [];
+  if (toolCalls.length > 0) {
+    const toolCounts = {};
+    for (const call of toolCalls) {
+      toolCounts[call.tool] = (toolCounts[call.tool] || 0) + 1;
+    }
+    const toolSummary = Object.entries(toolCounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([tool, count]) => `${tool}: ${count}`)
+      .join(', ');
+    sections.push(`Tools used (${toolCalls.length} total): ${toolSummary}`);
   }
 
-  const lineupNames = new Set((lineup.players || []).map(p => p.name?.toLowerCase()));
+  // Include Gary's investigation text (his reasoning and findings)
+  const investigationText = loopResult.investigationText || '';
+  if (investigationText.trim()) {
+    // Truncate if very long — audit doesn't need the full text
+    const maxLen = 4000;
+    const trimmed = investigationText.length > maxLen
+      ? investigationText.slice(0, maxLen) + '\n... [truncated]'
+      : investigationText;
+    sections.push(trimmed);
+  }
+
+  return sections.length > 0 ? sections.join('\n\n') : 'No investigation data available';
+}
+
+/**
+ * Surface full injury context for audit swap decisions.
+ * Shows OUT + GTD/Questionable players for all slate teams,
+ * with tags for teams Gary has exposure to in the lineup.
+ */
+function formatInjuryContextForAudit(context, lineup) {
+  const injuries = context.injuries || {};
+  if (Object.keys(injuries).length === 0) return '';
+
+  const lineupTeams = new Set((lineup.players || []).map(p => p.team));
   const lines = [];
 
-  for (const [position, players] of Object.entries(investigations)) {
-    const summaries = (players || [])
-      .filter(p => !lineupNames.has(p.player?.toLowerCase())) // Only non-lineup players (alternates)
-      .slice(0, 3) // Top 3 alternates per position
-      .map(p => {
-        const findings = p.investigation?.keyFindings || p.investigation?.recentForm || 'No findings';
-        return `  ${p.player} ($${p.salary || '?'}, ${p.team}): ${typeof findings === 'string' ? findings.slice(0, 120) : 'Investigated'}`;
-      });
+  for (const [team, teamInjuries] of Object.entries(injuries)) {
+    if (!Array.isArray(teamInjuries) || teamInjuries.length === 0) continue;
 
-    if (summaries.length > 0) {
-      lines.push(`${position}:\n${summaries.join('\n')}`);
+    const tag = lineupTeams.has(team) ? ' [LINEUP TEAM]' : '';
+    const playerLines = teamInjuries
+      .filter(inj => {
+        const status = (inj.status || '').toUpperCase();
+        return status.includes('OUT') || status.includes('QUESTIONABLE') || status.includes('GTD') || status.includes('DAY-TO-DAY') || status.includes('DOUBTFUL');
+      })
+      .map(inj => `  ${inj.player || inj.name} — ${inj.status}${inj.duration ? ` (${inj.duration})` : ''}`)
+      .join('\n');
+
+    if (playerLines) {
+      lines.push(`${team}${tag}:\n${playerLines}`);
     }
   }
 
-  return lines.length > 0 ? lines.join('\n\n') : 'No alternate investigation data available';
+  return lines.length > 0 ? lines.join('\n') : '';
 }
 
 function formatLineupForAudit(lineup) {
@@ -339,18 +404,6 @@ function formatLineupForAudit(lineup) {
    Projected: ${p.projectedPoints || '?'} pts | Ceiling: ${p.ceilingProjection || '?'} pts
    Reasoning: ${reasoning.slice(0, 100)}...`;
   }).join('\n\n');
-}
-
-function formatOwnershipSummary(lineup) {
-  const ownerships = (lineup.players || [])
-    .map(p => p.projectedOwnership)
-    .filter(o => o != null && o > 0);
-  if (ownerships.length === 0) return '';
-  const total = ownerships.reduce((sum, o) => sum + o, 0);
-  const avg = (total / ownerships.length).toFixed(1);
-  const high = ownerships.filter(o => o >= 20).length;
-  const low = ownerships.filter(o => o < 5).length;
-  return `Aggregate Ownership: ${total.toFixed(1)}% total | ${avg}% avg | ${high} players 20%+ | ${low} players under 5%\n`;
 }
 
 function formatAlternatesByPosition(lineup, players) {

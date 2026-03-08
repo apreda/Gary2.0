@@ -1,41 +1,75 @@
 import { getCachedOrFetch, initApi, buildQuery, normalizeName, getCurrentNhlSeason, axios, BALLDONTLIE_API_BASE_URL, API_KEY } from './bdlCore.js';
 
+/**
+ * Normalize game objects to standard field names.
+ * NBA is the standard shape — all other sports get mapped to match.
+ *
+ * Standard fields: date, status, home_team_score, visitor_team_score,
+ *                  home_team.name, visitor_team
+ */
+function normalizeGame(sportKey, game) {
+  if (!game) return game;
+
+  if (sportKey === 'icehockey_nhl') {
+    game.date = game.game_date;
+    game.status = game.game_state;
+    game.home_team_score = game.home_score;
+    game.visitor_team_score = game.away_score;
+    if (game.away_team && !game.visitor_team) {
+      game.visitor_team = game.away_team;
+    }
+    // NHL teams only have full_name — derive short name
+    for (const team of [game.home_team, game.away_team, game.visitor_team]) {
+      if (team?.full_name && !team.name) {
+        team.name = team.full_name.split(' ').pop();
+      }
+    }
+  }
+
+  if (sportKey === 'basketball_ncaab') {
+    game.home_team_score = game.home_score;
+    game.visitor_team_score = game.away_score;
+  }
+
+  return game;
+}
+
 export const gamesMethods = {
   async getGames(sportKey, params = {}, ttlMinutes = 10) {
     try {
       const cacheKey = `${sportKey}_games_${JSON.stringify(params)}`;
       return await getCachedOrFetch(cacheKey, async () => {
+        let games;
         const sport = this._getSportClient(sportKey);
         if (sport?.getGames) {
           const resp = await sport.getGames(params);
-          return resp?.data || [];
+          games = resp?.data || [];
+        } else {
+          const endpointMap = {
+            icehockey_nhl: 'nhl/v1/games',
+            americanfootball_nfl: 'nfl/v1/games',
+            americanfootball_ncaaf: 'ncaaf/v1/games',
+            basketball_ncaab: 'ncaab/v1/games',
+            basketball_nba: 'nba/v1/games',
+            baseball_mlb: 'mlb/v1/games'
+          };
+          const path = endpointMap[sportKey];
+          if (!path) throw new Error('getGames not supported');
+          const qs = buildQuery(params);
+          const url = `https://api.balldontlie.io/${path}${qs}`;
+          const resp = await fetch(url, { headers: { Authorization: API_KEY } });
+          if (!resp.ok) {
+            const text = await resp.text().catch(() => '');
+            throw new Error(`HTTP ${resp.status} ${text}`);
+          }
+          const json = await resp.json().catch(() => ({}));
+          games = Array.isArray(json?.data) ? json.data : [];
         }
-        // HTTP fallback for sports without SDK getGames
-        const endpointMap = {
-          icehockey_nhl: 'nhl/v1/games',
-          americanfootball_nfl: 'nfl/v1/games',
-          americanfootball_ncaaf: 'ncaaf/v1/games',
-          basketball_ncaab: 'ncaab/v1/games',
-          basketball_nba: 'nba/v1/games',
-          baseball_mlb: 'mlb/v1/games'
-        };
-        const path = endpointMap[sportKey];
-        if (!path) throw new Error('getGames not supported');
-        const qs = buildQuery(params);
-        const url = `https://api.balldontlie.io/${path}${qs}`;
-        const resp = await fetch(url, { headers: { Authorization: API_KEY } });
-        if (!resp.ok) {
-          const text = await resp.text().catch(() => '');
-          throw new Error(`HTTP ${resp.status} ${text}`);
-        }
-        const json = await resp.json().catch(() => ({}));
-        // ⭐ FIX: Return array consistently (matching SDK behavior)
-        // Most code expects getGames to return an array, not {data, meta}
-        return Array.isArray(json?.data) ? json.data : [];
+        return games.map(g => normalizeGame(sportKey, g));
       }, ttlMinutes);
     } catch (e) {
       console.error(`[Ball Don't Lie] ${sportKey} getGames error:`, e.message);
-      throw e; // Don't swallow — let the runner distinguish outages from "no games"
+      throw e;
     }
   },
 
@@ -99,14 +133,14 @@ export const gamesMethods = {
       return await getCachedOrFetch(cacheKey, async () => {
         const url = `${BALLDONTLIE_API_BASE_URL}/nhl/v1/games${buildQuery({ dates: [dateStr], per_page: 50 })}`;
         console.log(`[Ball Don't Lie] Fetching NHL games for ${dateStr}`);
-        
-        const response = await axios.get(url, { 
-          headers: { 'Authorization': API_KEY } 
+
+        const response = await axios.get(url, {
+          headers: { 'Authorization': API_KEY }
         });
-        
+
         const games = response.data?.data || [];
         console.log(`[Ball Don't Lie] Found ${games.length} NHL games for ${dateStr}`);
-        return games;
+        return games.map(g => normalizeGame('icehockey_nhl', g));
       }, 5); // Cache for 5 minutes
     } catch (error) {
       console.error(`[Ball Don't Lie] NHL games error:`, error?.response?.data || error.message);

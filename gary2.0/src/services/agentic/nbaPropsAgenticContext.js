@@ -19,7 +19,7 @@
  */
 import { ballDontLieService } from '../ballDontLieService.js';
 import axios from 'axios';
-// Grounding searches use Gemini 3 Flash; main pick pipeline uses 3.1 Pro + 3 Pro advisor
+// Grounding searches use Gemini 3 Flash; main pick pipeline uses 3.1 Pro + Flash (research)
 import { 
   formatGameTimeEST, 
   buildMarketSnapshot, 

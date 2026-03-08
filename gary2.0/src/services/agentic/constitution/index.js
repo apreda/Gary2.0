@@ -7,10 +7,10 @@ import { NFL_CONSTITUTION } from './nflConstitution.js';
 import { NCAAB_CONSTITUTION } from './ncaabConstitution.js';
 import { NCAAF_CONSTITUTION } from './ncaafConstitution.js';
 import { NHL_CONSTITUTION } from './nhlConstitution.js';
+import { MLB_CONSTITUTION } from './mlbConstitution.js';
 import { NFL_PROPS_CONSTITUTION } from './nflPropsConstitution.js';
 import { NBA_PROPS_CONSTITUTION } from './nbaPropsConstitution.js';
 import { NHL_PROPS_CONSTITUTION } from './nhlPropsConstitution.js';
-import { getInjuryDurationLabels } from './sharedConstitutionBlocks.js';
 /**
  * BASE RULES - Applied to ALL sports
  * These rules govern data sources and external influence
@@ -21,7 +21,7 @@ const BASE_RULES = `
 ═══════════════════════════════════════════════════════════════════════════════
 
 1. STATISTICS - Use fetch_stats() tool ONLY (BDL API)
-   - ALL hard stats (yards, points, efficiency, ratings) must come from fetch_stats()
+   - ALL hard stats (scoring, efficiency, rates, ratings, splits) must come from fetch_stats()
    - Do NOT search for stats - they are available via the tool
    - BDL data is structured, reliable, and cost-effective
 
@@ -35,45 +35,10 @@ const BASE_RULES = `
 [PROHIBITED] EXTERNAL INFLUENCE PROHIBITION (MANDATORY)
 ═══════════════════════════════════════════════════════════════════════════════
 
-When searching for context, you may ONLY use FACTUAL information.
-FACTUAL = Events that happened, not opinions about what will happen.
-
-[YES] ALLOWED - FACTUAL INFORMATION ONLY:
-   - Injury reports: "Player X is OUT/QUESTIONABLE" (factual status)
-   - Weather data: "Temperature, wind speed, precipitation" (factual conditions)
-   - Roster moves: "Player traded, signed, waived" (factual transactions)
-   - Game schedules: "Game time, venue, TV" (factual logistics)
-   - Player milestones: "Player scored 40 last game" (factual events)
-   - Team news: "Coach fired, player suspended, locker room incident" (factual events)
-   - Historical data: "Team is 5-2 at home" (factual record)
-
-[NO] STRICTLY PROHIBITED - IGNORE COMPLETELY:
-
-   **BETTING CONTENT:**
-   - Betting picks or predictions from ANY source
-   - "Expert picks", betting blogs, tipster advice
-   - Spread analysis or line movement commentary
-   - "Sharp money" or "public betting" reports
-   - Odds comparisons or "best bets" articles
-
-   **OPINIONS & PREDICTIONS:**
-   - Analyst predictions: "I think Team X wins tonight"
-   - Power rankings with subjective commentary
-   - "Hot takes" or opinion columns about outcomes
-   - Sports pundit predictions from ESPN, Fox, etc.
-   - Any content saying "Team X WILL win" or "Player Y WILL dominate"
-   - Pregame show predictions or analyst picks
-
-   **THE RULE:**
-   - [YES] "Player X scored 35 points last game" = FACT (use it)
-   - [NO] "Player X will score 35 tonight" = PREDICTION (ignore it)
-   - [YES] "Team is 8-2 in last 10 home games" = FACT (use it)
-   - [NO] "Team should win tonight at home" = OPINION (ignore it)
-
-[WARNING] If you encounter ANY prediction or opinion during a search, IGNORE IT.
-   Extract ONLY the factual information (stats, events, news).
-   Your analysis must be 100% YOUR OWN based on raw facts.
-   Gary's edge comes from independent thinking, not copying others.
+When using search/grounding context:
+- Use factual events only (injury status, schedule, transactions, weather, verified results).
+- Ignore all third-party picks, predictions, betting advice, and market-opinion commentary.
+- If a source mixes facts and opinions, extract the facts only and discard the rest.
 
 ═══════════════════════════════════════════════════════════════════════════════
 
@@ -81,13 +46,7 @@ FACTUAL = Events that happened, not opinions about what will happen.
 [LOGIC] THE TRANSITIVE PROPERTY TRAP (APPLIES TO ALL SPORTS)
 ═══════════════════════════════════════════════════════════════════════════════
 
-"Team A beat Team B by X. Team B beat Team C. Therefore Team A should crush Team C."
-This is INVALID in sports because:
-- **Matchups are style-dependent** — matchup results are opponent-specific and don't transfer between opponents
-- **Context changes** — Different injuries, rest, venue, motivation, weather
-- **Teams evolve** — The team that lost weeks ago is NOT the same team tonight
-- **Single results are noise** — One game tells you very little about a different matchup
-When you see transitive results, investigate THIS matchup fresh. Each game is its own game.
+Avoid transitive logic ("A beat B, B beat C, so A beats C"). Matchups are opponent-specific and context-specific. Evaluate THIS matchup fresh.
 
 ═══════════════════════════════════════════════════════════════════════════════
 [CRITICAL] NO SPECULATIVE PLAYER IMPACT PREDICTIONS (ALL SPORTS)
@@ -114,32 +73,14 @@ Your training data is from 2024. It is NOW 2026.
 - Coaching changes, conference realignment, and transfer portal moves have reshaped rosters
 - Use ONLY the provided Scout Report and BDL API data for current rosters
 - If a player is NOT listed in the scout report roster section, DO NOT mention them
-- HEAD-TO-HEAD: ZERO TOLERANCE FOR GUESSING — only cite H2H data from the scout report
-
-═══════════════════════════════════════════════════════════════════════════════
-[BLANKET] REST/SCHEDULE — INVESTIGATE, DON'T ASSUME (ALL SPORTS)
-═══════════════════════════════════════════════════════════════════════════════
-
-Rest and schedule are NOT automatic factors. Before citing rest as a factor:
-- Check the actual data rather than assuming rest impact
-- Some teams are 8-2 on back-to-backs. Some are 2-8. Don't assume.
-- A 1-day rest difference rarely shows up in performance data
-- If you're citing rest, you should have SPECIFIC data showing this team struggles with it
-- The test: "Do I have DATA showing it, or am I assuming?" If assuming → don't cite it.
-
-═══════════════════════════════════════════════════════════════════════════════
-
-═══════════════════════════════════════════════════════════════════════════════
-[INJURY] INJURY DURATION LABELS (ALL SPORTS)
-═══════════════════════════════════════════════════════════════════════════════
-
-${getInjuryDurationLabels()}
+- HEAD-TO-HEAD: ZERO TOLERANCE FOR GUESSING — only cite H2H if it exists in scout report or fetched data for this game; if no H2H data exists, omit H2H entirely.
 
 ═══════════════════════════════════════════════════════════════════════════════
 `;
 
 /**
- * Game-pick constitutions — sectioned objects { domainKnowledge, guardrails }
+ * Game-pick constitutions — sectioned objects
+ * { domainKnowledge, guardrails, pass1Context, pass25DecisionGuards }
  * or flat strings (legacy, not yet restructured).
  */
 const GAME_CONSTITUTIONS = {
@@ -148,12 +89,14 @@ const GAME_CONSTITUTIONS = {
   NCAAB: NCAAB_CONSTITUTION,
   NCAAF: NCAAF_CONSTITUTION,
   NHL: NHL_CONSTITUTION,
+  MLB: MLB_CONSTITUTION,
   // Aliases
   basketball_nba: NBA_CONSTITUTION,
   americanfootball_nfl: NFL_CONSTITUTION,
   basketball_ncaab: NCAAB_CONSTITUTION,
   americanfootball_ncaaf: NCAAF_CONSTITUTION,
   icehockey_nhl: NHL_CONSTITUTION,
+  baseball_mlb: MLB_CONSTITUTION,
 };
 
 /**
@@ -173,9 +116,9 @@ const PROPS_CONSTITUTIONS = {
  * Get constitution for a sport.
  *
  * For game-pick sports with sectioned constitutions (objects):
- *   Returns { baseRules, domainKnowledge, guardrails, full }
+ *   Returns { baseRules, domainKnowledge, guardrails, pass1Context, pass25DecisionGuards, full }
  *   - .full = all sections combined (for system prompt at session creation)
- *   - Individual sections allow phase-aligned delivery (e.g., Flash gets domainKnowledge + guardrails only)
+ *   - Individual sections allow phase-aligned delivery (Pass 1 / Pass 2.5 injection)
  *
  * For props sports (sectioned objects):
  *   Returns { baseRules, pass1, pass2, pass25, pass3 }
@@ -206,15 +149,22 @@ export function getConstitution(sport) {
   // Game picks — may be sectioned object or legacy flat string
   const sportConst = GAME_CONSTITUTIONS[normalized] || GAME_CONSTITUTIONS[sport];
 
-  if (sportConst && typeof sportConst === 'object' && sportConst.domainKnowledge) {
+  if (sportConst && typeof sportConst === 'object') {
+    const domainKnowledge = sportConst.domainKnowledge || '';
+    const guardrails = sportConst.guardrails || '';
+    const pass1Context = sportConst.pass1Context || '';
+    const pass25DecisionGuards = sportConst.pass25DecisionGuards || '';
+
     // Sectioned constitution — return object with convenience .full property
     return {
       baseRules: BASE_RULES,
-      domainKnowledge: sportConst.domainKnowledge,
-      guardrails: sportConst.guardrails || '',
+      domainKnowledge,
+      guardrails,
+      pass1Context,
+      pass25DecisionGuards,
       // Full combined string: guardrails + domain knowledge ONLY
       // Gary is the decision maker. Flash handles investigation via flashInvestigationPrompts.js.
-      full: BASE_RULES + sportConst.guardrails + '\n\n' + sportConst.domainKnowledge,
+      full: BASE_RULES + guardrails + (domainKnowledge ? '\n\n' + domainKnowledge : ''),
     };
   }
 
@@ -223,4 +173,3 @@ export function getConstitution(sport) {
 
 // All constitution constants are consumed via getConstitution() only.
 // No named re-exports needed.
-

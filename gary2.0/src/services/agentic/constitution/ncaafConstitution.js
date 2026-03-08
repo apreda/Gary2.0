@@ -1,9 +1,10 @@
 /**
  * NCAAF Constitution - NCAAF-Specific Context for Gary
  *
- * Two sections for phase-aligned delivery:
- * - domainKnowledge: NCAAF-specific reference (grounding search sites for stats not in BDL)
- * - guardrails: H2H zero tolerance, sample size + variance awareness
+ * Phase-aligned delivery:
+ * - domainKnowledge: always-on only (kept minimal)
+ * - pass1Context: investigation-stage awareness
+ * - guardrails: structural hard rules (minimal)
  *
  * Covered elsewhere (do NOT duplicate here):
  * - Player universe / roster rules → BASE_RULES + system prompt FACT-CHECKING PROTOCOL
@@ -18,30 +19,38 @@
  * - Opt-outs / portal / motivation / conference strength → Flash investigation prompts + scout report
  */
 
-import {
-  getH2HZeroTolerance,
-} from './sharedConstitutionBlocks.js';
-
 export const NCAAF_CONSTITUTION = {
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // SECTION A: DOMAIN KNOWLEDGE — NCAAF-specific reference material
+  // SECTION A: DOMAIN KNOWLEDGE — always-on only (keep minimal)
   // ═══════════════════════════════════════════════════════════════════════════
   domainKnowledge: ``,
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // SECTION B: REMOVED — Investigation prompts in flashInvestigationPrompts.js
+  // SECTION B: PASS 1 CONTEXT — shown during investigation stage
   // ═══════════════════════════════════════════════════════════════════════════
+  pass1Context: `
+### NCAAF INJURY LABELS (READ FROM SCOUT REPORT)
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // SECTION C: STRUCTURAL GUARDRAILS (Hard rules — always enforced)
-  // H2H zero tolerance, NCAAF sample size + variance
-  // ═══════════════════════════════════════════════════════════════════════════
-  guardrails: `
-${getH2HZeroTolerance('NCAAF')}
+Injury duration tags are assigned by the NCAAF scout-report pipeline and are sport-specific.
 
+- **FRESH** — New absence window
+- **SHORT-TERM / LONG-TERM / SEASON-LONG** — Established absence windows reflected in current team baseline
+
+Use the exact tag shown in the scout report for this game.
+ 
 **NCAAF SAMPLE SIZE:** Only 12 regular season games — single results are noise. A pick-six or blocked punt can swing 14 points with no bearing on team quality. Transfer portal additions take time to integrate.
-`
+`,
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SECTION C: PASS 2.5 DECISION GUARDS — optional stage-specific reminders
+  // ═══════════════════════════════════════════════════════════════════════════
+  pass25DecisionGuards: ``,
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SECTION D: STRUCTURAL GUARDRAILS (Hard rules — always enforced)
+  // ═══════════════════════════════════════════════════════════════════════════
+  guardrails: ``
 };
 
 

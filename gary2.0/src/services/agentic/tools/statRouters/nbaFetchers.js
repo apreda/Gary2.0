@@ -3213,8 +3213,8 @@ export const nbaFetchers = {
       } else if (isNhl) {
         standings = await ballDontLieService.getNhlStandings(season);
       } else {
-        // For college, use getStandings generic
-        standings = await ballDontLieService.getStandings(bdlSport, season);
+        // For college, use generic standings router (sport-aware)
+        standings = await ballDontLieService.getStandingsGeneric(bdlSport, { season });
       }
       
       // Build a map of team ID -> win percentage
@@ -3572,45 +3572,63 @@ export const nbaFetchers = {
     console.log(`[Stat Router] Fetching REST_SITUATION for ${away.name} @ ${home.name}`);
     
     try {
-      // Determine date range - look back 7 days from game date for current rest
+      // Determine date range - look back 10 days from game date for current rest
       const targetDate = gameDate ? new Date(gameDate) : new Date();
       const endDateStr = targetDate.toISOString().split('T')[0];
       const startDate = new Date(targetDate);
       startDate.setDate(startDate.getDate() - 10); // Look back 10 days
       const startDateStr = startDate.toISOString().split('T')[0];
-      
+
       // For B2B history, look back at entire season
       const seasonStart = new Date(season - 1, 9, 1); // Oct 1
       const seasonStartStr = seasonStart.toISOString().split('T')[0];
-      
-      // Fetch recent games AND season games for B2B history
-      const [homeRecentGames, awayRecentGames, homeSeasonGames, awaySeasonGames] = await Promise.all([
-        ballDontLieService.getGames(bdlSport, { 
-          team_ids: [home.id], 
-          start_date: startDateStr,
-          end_date: endDateStr,
-          per_page: 10 
-        }),
-        ballDontLieService.getGames(bdlSport, { 
-          team_ids: [away.id], 
-          start_date: startDateStr,
-          end_date: endDateStr,
-          per_page: 10 
-        }),
-        ballDontLieService.getGames(bdlSport, { 
-          team_ids: [home.id], 
-          start_date: seasonStartStr,
-          end_date: endDateStr,
-          per_page: 60 
-        }),
-        ballDontLieService.getGames(bdlSport, { 
-          team_ids: [away.id], 
-          start_date: seasonStartStr,
-          end_date: endDateStr,
-          per_page: 60 
-        })
-      ]);
-      
+
+      let homeRecentGames, awayRecentGames, homeSeasonGames, awaySeasonGames;
+
+      if (bdlSport === 'icehockey_nhl') {
+        // BDL NHL API ignores start_date/end_date — use dates[] array for recent games
+        const recentDates = [];
+        for (let i = 0; i <= 10; i++) {
+          const d = new Date(targetDate);
+          d.setDate(d.getDate() - i);
+          recentDates.push(d.toISOString().split('T')[0]);
+        }
+        [homeRecentGames, awayRecentGames, homeSeasonGames, awaySeasonGames] = await Promise.all([
+          ballDontLieService.getGames(bdlSport, { team_ids: [home.id], dates: recentDates, per_page: 20 }),
+          ballDontLieService.getGames(bdlSport, { team_ids: [away.id], dates: recentDates, per_page: 20 }),
+          ballDontLieService.getGames(bdlSport, { team_ids: [home.id], seasons: [season], per_page: 100 }),
+          ballDontLieService.getGames(bdlSport, { team_ids: [away.id], seasons: [season], per_page: 100 })
+        ]);
+      } else {
+        // NBA/NFL/NCAAB support start_date/end_date
+        [homeRecentGames, awayRecentGames, homeSeasonGames, awaySeasonGames] = await Promise.all([
+          ballDontLieService.getGames(bdlSport, {
+            team_ids: [home.id],
+            start_date: startDateStr,
+            end_date: endDateStr,
+            per_page: 10
+          }),
+          ballDontLieService.getGames(bdlSport, {
+            team_ids: [away.id],
+            start_date: startDateStr,
+            end_date: endDateStr,
+            per_page: 10
+          }),
+          ballDontLieService.getGames(bdlSport, {
+            team_ids: [home.id],
+            start_date: seasonStartStr,
+            end_date: endDateStr,
+            per_page: 60
+          }),
+          ballDontLieService.getGames(bdlSport, {
+            team_ids: [away.id],
+            start_date: seasonStartStr,
+            end_date: endDateStr,
+            per_page: 60
+          })
+        ]);
+      }
+
       // Use recent games for current rest calculation
       const homeGames = homeRecentGames;
       const awayGames = awayRecentGames;

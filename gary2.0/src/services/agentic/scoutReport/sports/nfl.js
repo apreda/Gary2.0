@@ -1174,8 +1174,7 @@ export async function buildNflScoutReport(game, options = {}) {
     game.venue = homeVenue;
     console.log(`[Scout Report] ✓ NFL Venue (from mapping): ${homeVenue}`);
   }
-  // Game context (TNF/SNF/MNF, divisional, playoff implications) now handled by Gemini Grounding
-  console.log(`[Scout Report] NFL context will be fetched via Gemini Grounding`);
+  // Game context: primetime slots detected from game time, playoff rounds from game name
 
   // ===================================================================
   // Step C: Fetch starting QBs (pass injuries to filter out IR/Out players)
@@ -1535,6 +1534,8 @@ ${formatOdds(game, sportKey)}
     tokenMenu: formatTokenMenu(sportKey),
     injuries: injuriesForStorage,
     verifiedTaleOfTape,
+    homeRecord: homeProfile?.record || null,
+    awayRecord: awayProfile?.record || null,
     venue: game.venue || null,
     isNeutralSite: game.isNeutralSite || false,
     tournamentContext: game.tournamentContext || null,
@@ -1551,8 +1552,4 @@ ${formatOdds(game, sportKey)}
 }
 
 
-// =========================================================================
-// Exports — NCAAF imports fetchStartingQBs, fetchQBStatsByName,
-// fetchNCAAFStartingQBFromStats, and formatStartingQBs from this module
-// =========================================================================
 export { fetchStartingQBs, fetchQBStatsByName, fetchNCAAFStartingQBFromStats, formatStartingQBs };

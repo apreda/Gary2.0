@@ -421,7 +421,7 @@ PICK DECISION:
   "momentum": 0.0–1.0,
   "homeTeam": "Full home team name",
   "awayTeam": "Full away team name", 
-  "league": "NFL" or "NBA" or "MLB" or "NCAAF" or "NCAAB",
+  "league": "NFL" or "NBA" or "WBC" or "NCAAF" or "NCAAB",
   "time": "COPY EXACTLY the game time provided - never use 'TBD' unless no time was given",
   "rationale": "HYPOTHESIS: ...\\nEVIDENCE: ...\\nCONVERGENCE (0.74): ...\\nIF WRONG: ..."
 }
@@ -533,7 +533,7 @@ PICK DECISION:
       }
         
       // 4. Include MLB-specific note if this is MLB data
-      if (gameData?.sport === 'MLB' || gameData?.league === 'MLB' || gameData?.sport === 'baseball_mlb') {
+      if (gameData?.sport === 'MLB' || gameData?.league === 'MLB' || gameData?.league === 'WBC' || gameData?.sport === 'WBC' || gameData?.sport === 'baseball_mlb') {
         statsSection += '**NOTE: All MLB data is from the current 2025 season**\n\n';
       }
       

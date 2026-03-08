@@ -107,6 +107,9 @@ struct GaryPick: Identifiable, Codable {
     let conference: String?  // Conference of the picked team (e.g., "Big Ten", "SEC")
     let homeConference: String?
     let awayConference: String?
+    // NCAAB AP Poll rankings
+    let homeRanking: Int?
+    let awayRanking: Int?
     // Thesis-based classification (new filtering system)
     let thesis_type: String?  // "clear_read", "found_angle", "educated_lean", "coin_flip"
     let thesis_mechanism: String?  // One-sentence explanation of WHY this team wins
@@ -228,6 +231,8 @@ struct ContradictingFactors: Codable {
             conference: dict["conference"] as? String,
             homeConference: dict["homeConference"] as? String,
             awayConference: dict["awayConference"] as? String,
+            homeRanking: (dict["homeRanking"] as? NSNumber)?.intValue,
+            awayRanking: (dict["awayRanking"] as? NSNumber)?.intValue,
             thesis_type: dict["thesis_type"] as? String,
             thesis_mechanism: dict["thesis_mechanism"] as? String,
             supporting_factors: dict["supporting_factors"] as? [String],
@@ -361,6 +366,26 @@ struct StatValues: Codable {
     let adjoeRank: String?
     let adjdeRank: String?
     let projRecord: String?
+    // MLB/WBC stats
+    let spEra: String?
+    let spWhip: String?
+    let spK9: String?
+    let spBb9: String?
+    let spRecord: String?
+    let spIp: String?
+    let spSo: String?
+    let teamAvg: String?
+    let teamObp: String?
+    let teamSlg: String?
+    let teamOps: String?
+    let teamHr: String?
+    // WBC-specific context stats
+    let game1Result: String?
+    let spName: String?
+    let mlOdds: String?
+    let runLine: String?
+    let venueName: String?
+    let lastPlayed: String?
     // NCAAF BDL-specific stats (new format from stat router)
     let totalYpg: String?
     let passingYpg: String?
@@ -476,6 +501,26 @@ struct StatValues: Codable {
             adjoeRank: dict["adjoe_rank"] as? String,
             adjdeRank: dict["adjde_rank"] as? String,
             projRecord: dict["proj_record"] as? String,
+            // MLB/WBC stats
+            spEra: dict["sp_era"] as? String,
+            spWhip: dict["sp_whip"] as? String,
+            spK9: dict["sp_k9"] as? String,
+            spBb9: dict["sp_bb9"] as? String,
+            spRecord: dict["sp_record"] as? String,
+            spIp: dict["sp_ip"] as? String,
+            spSo: dict["sp_so"] as? String,
+            teamAvg: dict["team_avg"] as? String,
+            teamObp: dict["team_obp"] as? String,
+            teamSlg: dict["team_slg"] as? String,
+            teamOps: dict["team_ops"] as? String,
+            teamHr: dict["team_hr"] as? String,
+            // WBC-specific context stats
+            game1Result: dict["game1_result"] as? String,
+            spName: dict["sp_name"] as? String,
+            mlOdds: dict["ml_odds"] as? String,
+            runLine: dict["run_line"] as? String,
+            venueName: dict["venue_name"] as? String,
+            lastPlayed: dict["last_played"] as? String,
             // NCAAF BDL-specific stats (from stat router)
             totalYpg: dict["total_ypg"] as? String ?? (dict["total_ypg"] as? NSNumber)?.stringValue,
             passingYpg: dict["passing_ypg"] as? String ?? (dict["passing_ypg"] as? NSNumber)?.stringValue,
@@ -656,6 +701,26 @@ struct StatValues: Codable {
         case "SHOTS_AGAINST": return shotsAgainst ?? "N/A"
         case "SHOT_DIFFERENTIAL", "SHOT_QUALITY": return shotDifferential ?? shotsFor ?? "N/A"
         case "PDO": return pdoStat ?? "N/A"
+        // MLB/WBC stats
+        case "SP_ERA": return spEra ?? "N/A"
+        case "SP_WHIP": return spWhip ?? "N/A"
+        case "SP_K9": return spK9 ?? "N/A"
+        case "SP_BB9": return spBb9 ?? "N/A"
+        case "SP_RECORD": return spRecord ?? "N/A"
+        case "SP_IP": return spIp ?? "N/A"
+        case "SP_SO": return spSo ?? "N/A"
+        case "POOL_RECORD": return overall ?? "N/A"
+        case "TEAM_AVG": return teamAvg ?? "N/A"
+        case "TEAM_OBP": return teamObp ?? "N/A"
+        case "TEAM_SLG": return teamSlg ?? "N/A"
+        case "TEAM_OPS": return teamOps ?? "N/A"
+        case "TEAM_HR": return teamHr ?? "N/A"
+        case "GAME1_RESULT": return game1Result ?? "N/A"
+        case "SP_NAME": return spName ?? "N/A"
+        case "ML_ODDS": return mlOdds ?? "N/A"
+        case "RUN_LINE": return runLine ?? "N/A"
+        case "VENUE": return venueName ?? "N/A"
+        case "LAST_PLAYED": return lastPlayed ?? "N/A"
         case "EXPECTED_GOALS", "CORSI_FOR_PCT": return corsiPct ?? shotsFor ?? shotDifferential ?? "N/A"
         case "SAVE_PCT", "GOALIE_STATS", "GOALIE_MATCHUP": return savePct ?? goalsAgainstAvg ?? "N/A"
         case "GOALS_AGAINST_AVG": return goalsAgainstAvg ?? "N/A"
@@ -748,7 +813,7 @@ struct PropPick: Identifiable, Codable {
         if normalized.contains("ncaab") || normalized.contains("ncaam") { return "NCAAB" }
         if normalized.contains("ncaaf") { return "NCAAF" }
         if normalized.contains("epl") || normalized.contains("soccer_epl") || normalized.contains("premier") { return "EPL" }
-        if normalized.contains("mlb") { return "MLB" }
+        if normalized.contains("mlb") || normalized.contains("wbc") { return "WBC" }
         if normalized.contains("wnba") { return "WNBA" }
         
         return raw.uppercased()
@@ -823,7 +888,7 @@ struct GameResult: Decodable {
         if normalized.contains("ncaab") || normalized.contains("ncaam") { return "NCAAB" }
         if normalized.contains("ncaaf") { return "NCAAF" }
         if normalized.contains("epl") || normalized.contains("soccer_epl") || normalized.contains("premier") { return "EPL" }
-        if normalized.contains("mlb") { return "MLB" }
+        if normalized.contains("mlb") || normalized.contains("wbc") { return "WBC" }
         if normalized.contains("wnba") { return "WNBA" }
         
         return raw.uppercased()
@@ -894,7 +959,7 @@ struct PropResult: Decodable {
             if normalized.contains("ncaab") || normalized.contains("ncaam") { return "NCAAB" }
             if normalized.contains("ncaaf") { return "NCAAF" }
             if normalized.contains("epl") || normalized.contains("soccer_epl") || normalized.contains("premier") { return "EPL" }
-            if normalized.contains("mlb") { return "MLB" }
+            if normalized.contains("mlb") || normalized.contains("wbc") { return "WBC" }
             if normalized.contains("wnba") { return "WNBA" }
             return raw.uppercased()
         }
@@ -919,10 +984,10 @@ struct PropResult: Decodable {
             return "NHL"
         }
         
-        // MLB props
+        // MLB/WBC props
         if ["hits", "total_bases", "home_runs", "rbis", "runs", "strikeouts", "walks",
             "stolen_bases", "pitching", "earned_runs", "innings"].contains(where: { propType.contains($0) }) {
-            return "MLB"
+            return "WBC"
         }
         
         // EPL/Soccer props

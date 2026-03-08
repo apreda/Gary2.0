@@ -1,31 +1,41 @@
 /**
  * NFL Constitution - NFL-Specific Context for Gary
- * - domainKnowledge: empty (Mar 2026 — thinking model doesn't need awareness hints)
- * - guardrails: H2H zero tolerance
+ * - domainKnowledge: always-on only (kept minimal)
+ * - pass1Context: investigation-stage awareness
+ * - guardrails: structural hard rules (minimal)
  */
-
-import {
-  getH2HZeroTolerance,
-} from './sharedConstitutionBlocks.js';
 
 export const NFL_CONSTITUTION = {
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // SECTION A: DOMAIN KNOWLEDGE — NFL-specific reference material
+  // SECTION A: DOMAIN KNOWLEDGE — always-on only (keep minimal)
   // ═══════════════════════════════════════════════════════════════════════════
   domainKnowledge: ``,
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // SECTION B: REMOVED — Investigation prompts in flashInvestigationPrompts.js
+  // SECTION B: PASS 1 CONTEXT — shown during investigation stage
   // ═══════════════════════════════════════════════════════════════════════════
+  pass1Context: `
+### NFL INJURY LABELS (READ FROM SCOUT REPORT)
+
+Injury duration tags are assigned by the NFL scout-report pipeline and are sport-specific.
+
+- **FRESH** — New absence window
+- **SHORT-TERM / LONG-TERM / SEASON-LONG** — Established absence windows reflected in current team baseline
+
+Use the exact tag shown in the scout report for this game.
+`,
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // SECTION C: STRUCTURAL GUARDRAILS (Hard rules — always enforced)
-  // H2H zero tolerance
+  // SECTION C: PASS 2.5 DECISION GUARDS — optional stage-specific reminders
   // ═══════════════════════════════════════════════════════════════════════════
-  guardrails: `
-${getH2HZeroTolerance('NFL')}
-`
+  pass25DecisionGuards: ``,
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SECTION D: STRUCTURAL GUARDRAILS (Hard rules — always enforced)
+  // No NFL-specific hard guards needed here (handled by BASE_RULES + pass stages)
+  // ═══════════════════════════════════════════════════════════════════════════
+  guardrails: ``
 };
 
 

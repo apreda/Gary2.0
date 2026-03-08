@@ -93,6 +93,15 @@ export function isUsingBackupKey() {
   return _usingBackupKey;
 }
 
+/** Reset to primary API key. Used when falling to a lower model tier. */
+export function resetToPrimaryKey() {
+  if (!_usingBackupKey) return;
+  console.log('[Model Config] 🔄 Resetting to primary API key');
+  _usingBackupKey = false;
+  _client = null;
+  _clientBeta = null;
+}
+
 /**
  * Get (or create) a GoogleGenerativeAI client singleton.
  * @param {{ beta?: boolean }} opts  Pass `{ beta: true }` for the v1beta endpoint.

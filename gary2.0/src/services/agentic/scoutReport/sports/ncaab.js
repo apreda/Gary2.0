@@ -47,7 +47,6 @@ async function fetchNcaabAdvancedMetrics(homeTeamName, awayTeamName) {
   // ═══════════════════════════════════════════════════════════════════════════
   // Barttorvik API: Structured data, no Grounding needed
   // One cached fetch serves ALL NCAAB games (365 teams, 6h cache)
-  // Replaces 2 Gemini Grounding calls per game
   // ═══════════════════════════════════════════════════════════════════════════
   console.log(`[Scout Report] Fetching NCAAB Tier 1 advanced metrics via Barttorvik API for ${awayTeamName} @ ${homeTeamName}...`);
   const startTime = Date.now();
@@ -65,44 +64,6 @@ async function fetchNcaabAdvancedMetrics(homeTeamName, awayTeamName) {
     away: { team: awayTeamName, data: awayData }
   };
 }
-
-/**
- * Format NCAAB Tier 1 Advanced Metrics for the scout report.
- * Now uses structured Barttorvik API data (no Grounding).
- */
-function formatNcaabAdvancedMetrics(data) {
-  if (!data) return '';
-
-  const lines = [];
-  lines.push('');
-  lines.push('NCAAB REFERENCE METRICS (Barttorvik)');
-  lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  lines.push('');
-
-  const formatTeam = (teamData, label) => {
-    if (!teamData) return;
-    const d = teamData.data;
-    if (!d) {
-      lines.push(`[${label}] ${(teamData.team || '').toUpperCase()}: Barttorvik data unavailable.`);
-      lines.push('');
-      return;
-    }
-    lines.push(`[${label}] ${(teamData.team || '').toUpperCase()} (${d.conferenceName || d.conference})`);
-    lines.push(`  Record: ${d.record} | Conf: ${d.confRecord}`);
-    lines.push(`  AdjOE: ${d.adjOE} | AdjDE: ${d.adjDE} | AdjEM: ${d.adjEM > 0 ? '+' : ''}${d.adjEM}`);
-    lines.push(`  Tempo: ${d.tempo} | Barthag: ${d.barthag} | WAB: ${d.wab > 0 ? '+' : ''}${d.wab}`);
-    lines.push('');
-  };
-
-  formatTeam(data.home, 'HOME');
-  formatTeam(data.away, 'AWAY');
-
-  lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  lines.push('');
-
-  return lines.join('\n');
-}
-
 
 // =========================================================================
 // NCAAB AP RANKINGS
@@ -157,11 +118,10 @@ async function fetchNcaabApRankings(homeTeamId, awayTeamId, season, homeTeamName
 
 /**
  * Calculate NCAAB Home/Away splits from recent games.
- * Now computes Season + L10 + L5 breakdowns for trend analysis.
- * No extra API call — uses recentHome/recentAway already fetched (full season via seasons param).
+ * Computes Season + L10 + L5 breakdowns for trend analysis.
+ * No extra API call — uses recentHome/recentAway already fetched.
  */
 function calcNcaabHomeCourt(recentHome, recentAway, homeTeamName, awayTeamName, homeTeamId, awayTeamId) {
-  // Compute home/away splits for a given slice of games
   const calcSplitsForSlice = (games, teamId, teamName) => {
     if (!games || games.length === 0) return null;
 
@@ -174,7 +134,7 @@ function calcNcaabHomeCourt(recentHome, recentAway, homeTeamName, awayTeamName, 
       const teamScore = isHome ? (g.home_team_score ?? g.home_score ?? 0) : (g.visitor_team_score ?? g.away_score ?? 0);
       const oppScore = isHome ? (g.visitor_team_score ?? g.away_score ?? 0) : (g.home_team_score ?? g.home_score ?? 0);
 
-      if (teamScore === 0 && oppScore === 0) continue; // skip unplayed
+      if (teamScore === 0 && oppScore === 0) continue;
 
       if (isHome) {
         homeGames++;
@@ -189,23 +149,18 @@ function calcNcaabHomeCourt(recentHome, recentAway, homeTeamName, awayTeamName, 
       }
     }
 
-    const homeMargin = homeGames > 0 ? ((homePts - homeOppPts) / homeGames).toFixed(1) : 'N/A';
-    const awayMargin = awayGamesCount > 0 ? ((awayPts - awayOppPts) / awayGamesCount).toFixed(1) : 'N/A';
-
     return {
       home_record: `${homeWins}-${homeLosses}`,
       away_record: `${awayWins}-${awayLosses}`,
-      home_margin: homeMargin,
-      away_margin: awayMargin,
+      home_margin: homeGames > 0 ? ((homePts - homeOppPts) / homeGames).toFixed(1) : 'N/A',
+      away_margin: awayGamesCount > 0 ? ((awayPts - awayOppPts) / awayGamesCount).toFixed(1) : 'N/A',
       home_games: homeGames,
       away_games: awayGamesCount
     };
   };
 
-  // Compute splits for a team across Season / L10 / L5
   const calcAllSplits = (games, teamId, teamName) => {
     if (!games || games.length === 0) return null;
-    // games are sorted most-recent-first
     return {
       season: calcSplitsForSlice(games, teamId, teamName),
       l10: calcSplitsForSlice(games.slice(0, 10), teamId, teamName),
@@ -788,6 +743,11 @@ export async function buildNcaabScoutReport(game, options = {}) {
     ncaabRankings = rankingsResult;
   }
 
+  // Calculate home/away splits from already-fetched recent games (no extra API call)
+  const ncaabHomeCourt = (ncaabRosterDepth && recentHome && recentAway)
+    ? calcNcaabHomeCourt(recentHome, recentAway, homeTeam, awayTeam, ncaabRosterDepth.homeTeamId, ncaabRosterDepth.awayTeamId)
+    : null;
+
   // ===================================================================
   // Step B2: Fetch NCAAB game context via Gemini Grounding (tournament, significance)
   // NOTE: Do NOT override venue (already resolved from Highlightly)
@@ -881,44 +841,6 @@ AWAY_SEED: [number or N/A]
   // ===================================================================
   let ncaabKeyPlayers = null;
   ncaabKeyPlayers = await fetchNcaabKeyPlayers(homeTeam, awayTeam, sportKey);
-
-  // ===================================================================
-  // Step C2: Filter STALE injured players from key players list
-  // Players OUT for >2 games have stats that are already priced in.
-  // Keep FRESH injuries (0-2 games) so Gary knows what the team just lost.
-  // ===================================================================
-  if (ncaabKeyPlayers && injuries) {
-    const allInjured = [...(injuries.home || []), ...(injuries.away || [])];
-    const staleOutNames = allInjured
-      .filter(inj => {
-        const s = (inj.status || '').toLowerCase();
-        const isOut = s === 'out' || s.includes('out for season') || s === 'ir' || s === 'ltir' || s === 'ofs';
-        const gamesMissed = inj.gamesMissed ?? 0;
-        return isOut && gamesMissed > 2;
-      })
-      .map(inj => {
-        const name = typeof inj.player === 'string' ? inj.player :
-          `${inj.player?.first_name || ''} ${inj.player?.last_name || ''}`.trim();
-        return name.toLowerCase();
-      })
-      .filter(n => n);
-
-    if (staleOutNames.length > 0) {
-      const filterStaleFromKeyPlayers = (players) => {
-        if (!players || !Array.isArray(players)) return players;
-        return players.filter(p => {
-          const pName = (p.name || '').toLowerCase();
-          const isStale = staleOutNames.some(outName => playerNamesMatch(pName, outName));
-          if (isStale) {
-            console.log(`[Scout Report] Removed stale injured player from key players: ${p.name} (OUT >2 games)`);
-          }
-          return !isStale;
-        });
-      };
-      ncaabKeyPlayers.home = filterStaleFromKeyPlayers(ncaabKeyPlayers.home);
-      ncaabKeyPlayers.away = filterStaleFromKeyPlayers(ncaabKeyPlayers.away);
-    }
-  }
 
   // ===================================================================
   // Step D: Fetch H2H data
@@ -1500,139 +1422,9 @@ CRITICAL: Be precise. Only include what's actually shown on RotoWire. List ALL i
           rotoWireGTD.away = explicitAwayGTD;
           rotoWireGTD.home = explicitHomeGTD;
         } else {
-          // Fallback to legacy parsing formats
-
-        // Parse all GTD players from response, then assign to teams
-        const parseAllGTDPlayers = (text) => {
-          const allGTD = [];
-          const invalidNames = /^(The|This|His|Her|That|None|No|Unknown|It|He|She|Game|Time|Decision|Availability|Status|Out|OFS|Season)$/i;
-
-          // Format 1: "**GTD:** PlayerName is battling..." (with verbs) - capture full name
-          const gtdWithVerbPattern = /\*\*GTD[^*]*\*\*:?\s*([A-Z][a-zA-Z'-]+(?:\s+[A-Z][a-zA-Z'-]+)?(?:\s+Jr\.?)?)\s+(?:is|has|was|remains|dealing|battling|ailing|questionable|uncertain)/gi;
-          let match;
-          while ((match = gtdWithVerbPattern.exec(text)) !== null) {
-            let name = match[1].trim();
-            name = name.replace(/\s+(is|has|was|remains|dealing|battling|ailing|questionable|uncertain)$/i, '');
-            if (name.length > 2 && !name.match(invalidNames)) {
-              const textBefore = text.substring(0, match.index);
-              allGTD.push({ name, status: 'GTD', context: textBefore.slice(-200) });
-            }
-          }
-
-          // Format 2: "**GTD:** PlayerName, PlayerName2, PlayerName3" (comma-separated list)
-          const gtdListPattern = /\*\*GTD:\*\*\s*([^*\n]+?)(?=\n|\*\*Out|\*\*OFS|$)/gi;
-          while ((match = gtdListPattern.exec(text)) !== null) {
-            const listText = match[1].trim();
-            const textBefore = text.substring(0, match.index);
-
-            const names = listText.split(/[,;]/).map(n => n.trim());
-            for (const name of names) {
-              const cleanName = name.split(/\s+(?:is|has|was|-|\()/i)[0].trim();
-              if (cleanName.length > 2 &&
-                  cleanName.match(/^[A-Z]/) &&
-                  !cleanName.match(invalidNames) &&
-                  !allGTD.some(p => p.name.toLowerCase() === cleanName.toLowerCase())) {
-                allGTD.push({ name: cleanName, status: 'GTD', context: textBefore.slice(-200) });
-              }
-            }
-          }
-
-          // Format 3: Sub-bullet format with verbs - capture full name (first + last)
-          const gtdSections = text.split(/\*\*GTD[^*]*\*\*:?/i);
-          for (let i = 1; i < gtdSections.length; i++) {
-            const section = gtdSections[i];
-            const endIdx = section.search(/\*\*Out|\*\*OFS/i);
-            const gtdContent = endIdx > 0 ? section.substring(0, endIdx) : section.substring(0, 500);
-
-            const subPattern = /\*\s*([A-Z][a-zA-Z'-]+(?:\s+[A-Z][a-zA-Z'-]+)?(?:\s+Jr\.?)?)\s+(?:is|has|was|remains|dealing|battling|ailing|questionable|uncertain|It)/gi;
-            while ((match = subPattern.exec(gtdContent)) !== null) {
-              let name = match[1].trim();
-              name = name.replace(/\s+(is|has|was|remains|dealing|battling|ailing|questionable|uncertain)$/i, '');
-              if (name.length > 2 &&
-                  !name.match(invalidNames) &&
-                  !allGTD.some(p => p.name.toLowerCase() === name.toLowerCase())) {
-                const contextStart = Math.max(0, gtdSections.slice(0, i).join('').length - 200);
-                allGTD.push({ name, status: 'GTD', context: text.substring(contextStart, gtdSections.slice(0, i).join('').length) });
-              }
-            }
-          }
-
-          // Format 4: "**PlayerName:** Questionable/uncertain/ailing..." (no GTD header)
-          const playerStatusPattern = /\*\s*\*\*([A-Z][a-zA-Z'-]+(?:\s+[A-Z][a-zA-Z'-]+)?(?:\s+Jr\.?)?):\*\*\s*([^*\n]+)/gi;
-          while ((match = playerStatusPattern.exec(text)) !== null) {
-            const name = match[1].trim();
-            const description = match[2].toLowerCase();
-
-            const isGTD = description.includes('questionable') ||
-                         description.includes('uncertain') ||
-                         description.includes('game-time') ||
-                         description.includes('gtd') ||
-                         (description.includes('ailing') && !description.includes('out'));
-            const isOut = description.includes('out for') ||
-                         description.includes('season') ||
-                         description.includes('no timetable');
-
-            if (isGTD && !isOut && name.length > 2 &&
-                !name.match(invalidNames) &&
-                !allGTD.some(p => p.name.toLowerCase() === name.toLowerCase())) {
-              const textBefore = text.substring(0, match.index);
-              allGTD.push({ name, status: 'GTD', context: textBefore.slice(-200) });
-            }
-          }
-
-          return allGTD;
-        };
-
-        // Get all GTD players from the response
-        const allGTDPlayers = parseAllGTDPlayers(responseText);
-
-        // Assign to home/away based on context
-        for (const player of allGTDPlayers) {
-          const context = (player.context || '').toLowerCase();
-          const awayInContext = context.includes(awayTeam.toLowerCase()) || context.includes(awayShort.toLowerCase());
-          const homeInContext = context.includes(homeTeam.toLowerCase()) || context.includes(homeShort.toLowerCase());
-
-          const awayLastIdx = Math.max(context.lastIndexOf(awayTeam.toLowerCase()), context.lastIndexOf(awayShort.toLowerCase()));
-          const homeLastIdx = Math.max(context.lastIndexOf(homeTeam.toLowerCase()), context.lastIndexOf(homeShort.toLowerCase()));
-
-          if (awayLastIdx > homeLastIdx) {
-            rotoWireGTD.away.push({ name: player.name, status: 'GTD' });
-          } else if (homeLastIdx > awayLastIdx) {
-            rotoWireGTD.home.push({ name: player.name, status: 'GTD' });
-          } else if (awayInContext) {
-            rotoWireGTD.away.push({ name: player.name, status: 'GTD' });
-          } else if (homeInContext) {
-            rotoWireGTD.home.push({ name: player.name, status: 'GTD' });
-          }
+          // No explicit GTD format found — narrative context + BDL injury data fallbacks will handle it
+          console.log(`[Scout Report] No explicit GTD format in RotoWire response — falling back to injury data + narrative context`);
         }
-
-        console.log(`[Scout Report] Parsed ${allGTDPlayers.length} GTD player(s) from response`);
-
-        // Filter out any team names, game descriptions, or invalid entries that got accidentally captured
-        const isTeamNameOrInvalid = (name) => {
-          const nameLower = name.toLowerCase();
-          const mascots = ['bulldogs', 'musketeers', 'bruins', 'nittany', 'hawkeyes', 'boilermakers',
-                          'wildcats', 'friars', 'volunteers', 'aggies', 'tigers', 'lions', 'bears',
-                          'cardinals', 'red storm', 'golden eagles', 'hurricanes', 'seminoles'];
-          const gameWords = ['game', 'january', 'february', 'march', '2026', '2025', 'lineup',
-                            'roster', 'schedule', 'matchup', 'basketball', 'college', 'ncaab',
-                            'vs', 'at', 'home', 'away', 'conference', 'big east', 'sec', 'acc'];
-
-          if (mascots.some(m => nameLower.includes(m))) return true;
-          if (gameWords.some(w => nameLower.includes(w))) return true;
-          if (nameLower === awayTeam.toLowerCase() || nameLower === homeTeam.toLowerCase()) return true;
-          if (nameLower === awayShort.toLowerCase() || nameLower === homeShort.toLowerCase()) return true;
-          if (nameLower.includes(awayShort.toLowerCase()) || nameLower.includes(homeShort.toLowerCase())) return true;
-          const words = name.split(/\s+/);
-          if (words.length > 4) return true;
-          return false;
-        };
-
-        // Remove any team names or invalid entries from the results
-        rotoWireGTD.away = rotoWireGTD.away.filter(p => !isTeamNameOrInvalid(p.name));
-        rotoWireGTD.home = rotoWireGTD.home.filter(p => !isTeamNameOrInvalid(p.name));
-
-        } // End of else block for legacy parsing
 
         if (rotoWireGTD.home.length > 0 || rotoWireGTD.away.length > 0) {
           console.log(`[Scout Report] RotoWire GTD found - ${homeTeam}: ${rotoWireGTD.home.map(p => p.name).join(', ') || 'none'}, ${awayTeam}: ${rotoWireGTD.away.map(p => p.name).join(', ') || 'none'}`);
@@ -1733,6 +1525,46 @@ CRITICAL: Be precise. Only include what's actually shown on RotoWire. List ALL i
     : '';
 
   // ===================================================================
+  // Step I2: Filter STALE injured players from key players list
+  // Runs AFTER duration enrichment (Step H) so inj.duration is populated.
+  // SHORT-TERM, LONG-TERM, SEASON-LONG are already reflected in team stats.
+  // ===================================================================
+  if (ncaabKeyPlayers && injuries) {
+    const allInjured = [...(injuries.home || []), ...(injuries.away || [])];
+    const staleOutNames = allInjured
+      .filter(inj => {
+        const s = (inj.status || '').toLowerCase();
+        const isOut = s === 'out' || s.includes('out for season') || s === 'ir' || s === 'ltir' || s === 'ofs';
+        const duration = (inj.duration || '').toUpperCase();
+        // Keep FRESH injuries — team just lost this player, stats don't reflect it yet
+        // Filter SHORT-TERM, LONG-TERM, SEASON-LONG — team has adapted, stats reflect the absence
+        return isOut && duration && duration !== 'FRESH';
+      })
+      .map(inj => {
+        const name = typeof inj.player === 'string' ? inj.player :
+          `${inj.player?.first_name || ''} ${inj.player?.last_name || ''}`.trim();
+        return name.toLowerCase();
+      })
+      .filter(n => n);
+
+    if (staleOutNames.length > 0) {
+      const filterStaleFromKeyPlayers = (players) => {
+        if (!players || !Array.isArray(players)) return players;
+        return players.filter(p => {
+          const pName = (p.name || '').toLowerCase();
+          const isStale = staleOutNames.some(outName => playerNamesMatch(pName, outName));
+          if (isStale) {
+            console.log(`[Scout Report] Removed stale injured player from key players: ${p.name} (duration: not FRESH)`);
+          }
+          return !isStale;
+        });
+      };
+      ncaabKeyPlayers.home = filterStaleFromKeyPlayers(ncaabKeyPlayers.home);
+      ncaabKeyPlayers.away = filterStaleFromKeyPlayers(ncaabKeyPlayers.away);
+    }
+  }
+
+  // ===================================================================
   // Step J: Assemble report
   // ===================================================================
   let narrativeContext = injuries?.narrativeContext || null;
@@ -1803,7 +1635,7 @@ REST & SCHEDULE SITUATION
 ${formatRestSituation(homeTeam, awayTeam, calculateRestSituation(recentHome, game.commence_time, homeTeam), calculateRestSituation(recentAway, game.commence_time, awayTeam))}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-${ncaabRankings ? formatNcaabRankingsAndHomeCourt(ncaabRankings, null, homeTeam, awayTeam) : ''}${ncaabKeyPlayers ? formatNcaabKeyPlayers(homeTeam, awayTeam, ncaabKeyPlayers) : ''}${ncaabRosterDepth ? formatNcaabRosterDepth(homeTeam, awayTeam, ncaabRosterDepth, injuries) : ''}
+${ncaabRankings || ncaabHomeCourt ? formatNcaabRankingsAndHomeCourt(ncaabRankings, ncaabHomeCourt, homeTeam, awayTeam) : ''}${ncaabKeyPlayers ? formatNcaabKeyPlayers(homeTeam, awayTeam, ncaabKeyPlayers) : ''}${ncaabRosterDepth ? formatNcaabRosterDepth(homeTeam, awayTeam, ncaabRosterDepth, injuries) : ''}
 
 RECENT FORM (Last 3 Games)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1838,6 +1670,9 @@ ${formatOdds(game, sportKey)}
     awaySeed: game.awaySeed || null,
     // NCAAB conference data for app filtering
     homeConference: game.homeConference || null,
-    awayConference: game.awayConference || null
+    awayConference: game.awayConference || null,
+    // AP Poll rankings for pick cards
+    homeRanking: ncaabRankings?.home?.ap?.rank || null,
+    awayRanking: ncaabRankings?.away?.ap?.rank || null
   };
 }

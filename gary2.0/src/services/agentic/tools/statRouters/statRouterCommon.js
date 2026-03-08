@@ -370,7 +370,9 @@ function sportToBdlKey(sport) {
     'NFL': 'americanfootball_nfl',
     'NCAAB': 'basketball_ncaab',
     'NCAAF': 'americanfootball_ncaaf',
-    'NHL': 'icehockey_nhl'
+    'NHL': 'icehockey_nhl',
+    'MLB': 'baseball_mlb',
+    'WBC': 'baseball_mlb'
   };
   return mapping[sport] || sport;
 }
@@ -385,11 +387,14 @@ function normalizeSportName(sport) {
     'basketball_ncaab': 'NCAAB',
     'americanfootball_ncaaf': 'NCAAF',
     'icehockey_nhl': 'NHL',
+    'baseball_mlb': 'WBC',
     'NBA': 'NBA',
     'NFL': 'NFL',
     'NCAAB': 'NCAAB',
     'NCAAF': 'NCAAF',
-    'NHL': 'NHL'
+    'NHL': 'NHL',
+    'MLB': 'WBC',
+    'WBC': 'WBC'
   };
   return mapping[sport] || sport;
 }
@@ -1027,18 +1032,18 @@ async function fetchTopPlayersForTeam(bdlSport, team, season) {
       }
       // Fetch season stats for all skaters (exclude goalies for scoring stats)
       const skaters = roster.filter(p => (p.position || '').toUpperCase() !== 'G').slice(0, 22);
-      const statsPromises = skaters.map(p => ballDontLieService.getNhlPlayerSeasonStats(p.id, season).catch(() => []));
+      const statsPromises = skaters.map(p => ballDontLieService.getNhlPlayerSeasonStats(p.id, season).catch(() => null));
       const allStats = await Promise.all(statsPromises);
       const playerStats = skaters.map((p, i) => {
-        const stats = allStats[i] || [];
-        const statMap = {};
-        for (const s of stats) { if (s.name && s.value != null) statMap[s.name] = s.value; }
+        const stats = allStats[i];
+        if (!stats) return { player: p, goals: 0, assists: 0, points: 0, games: 0 };
+        // getNhlPlayerSeasonStats returns an object with properties directly (goals, assists, etc.)
         return {
           player: p,
-          goals: Number(statMap.goals || 0),
-          assists: Number(statMap.assists || 0),
-          points: Number(statMap.goals || 0) + Number(statMap.assists || 0),
-          games: Number(statMap.games_played || 0)
+          goals: Number(stats.goals || 0),
+          assists: Number(stats.assists || 0),
+          points: Number(stats.goals || 0) + Number(stats.assists || 0),
+          games: Number(stats.games_played || 0)
         };
       }).filter(p => p.games > 0);
       const sorted = playerStats.sort((a, b) => b.points - a.points).slice(0, 12);

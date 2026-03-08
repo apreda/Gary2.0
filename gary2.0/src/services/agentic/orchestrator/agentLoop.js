@@ -1,24 +1,173 @@
-import { CONFIG, GEMINI_PRO_MODEL, GEMINI_PRO_FALLBACK, validateGeminiModel, RESEARCH_BRIEFING_TIMEOUT_MS } from './orchestratorConfig.js';
-import { rotateToBackupKey, isUsingBackupKey } from '../modelConfig.js';
+import { CONFIG, GEMINI_PRO_MODEL, GEMINI_PRO_FALLBACK, validateGeminiModel } from './orchestratorConfig.js';
+import { rotateToBackupKey, isUsingBackupKey, resetToPrimaryKey } from '../modelConfig.js';
 import { createGeminiSession, sendToSession, sendToSessionWithRetry } from './sessionManager.js';
-import { buildFlashSteelManCases, buildFlashSteelManPropsCases, extractTextualSummaryForModelSwitch, ADVISOR_TIMEOUT_MS, buildFlashResearchBriefing } from './flashAdvisor.js';
+import { extractTextualSummaryForModelSwitch, buildFlashResearchBriefing } from './flashAdvisor.js';
 import { buildPass1Message, buildPass25Message, buildPass25PropsMessage, buildPass3Unified, buildPass3Props, FINALIZE_PROPS_TOOL, PROPS_PICK_SCHEMA } from './passBuilders.js';
 import { parseGaryResponse, parsePropsResponse, normalizePickFormat, determineCurrentPass } from './responseParser.js';
-import { isInvestigationSufficient, summarizeStatForContext, formatNum, detectBilateralAnalysis, buildAdvisorPreamble, buildAdvisorPropsPreamble, formatPct, summarizePlayerGameLogs, summarizePlayerStats, summarizeNbaPlayerAdvancedStats, pruneContextIfNeeded, normalizeSportToLeague, MAX_CONTEXT_MESSAGES, PRUNE_AFTER_ITERATION } from './orchestratorHelpers.js';
+import { isInvestigationSufficient, summarizeStatForContext, formatNum, formatPct, summarizePlayerGameLogs, summarizePlayerStats, summarizeNbaPlayerAdvancedStats, pruneContextIfNeeded, normalizeSportToLeague, MAX_CONTEXT_MESSAGES, PRUNE_AFTER_ITERATION } from './orchestratorHelpers.js';
 import { fetchStats, clearStatRouterCache } from '../tools/statRouters/index.js';
 import { getConstitution } from '../constitution/index.js';
 import { ballDontLieService } from '../../ballDontLieService.js';
 import { nbaSeason, nhlSeason, nflSeason, ncaabSeason } from '../../../utils/dateUtils.js';
 import { getTokensForSport, toolDefinitions } from '../tools/toolDefinitions.js';
 
+function hasInvestigationCompleteMarker(text = '') {
+  if (!text || typeof text !== 'string') return false;
+  return /(^|\n)\s*INVESTIGATION COMPLETE\s*($|\n)/i.test(text);
+}
+
+const NBA_CASE_MIN_CHARS = 220;
+
+function normalizeTeamWords(team = '') {
+  return String(team || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .map(w => w.trim())
+    .filter(w => w.length >= 3 && !['the', 'and'].includes(w));
+}
+
+function getTeamMentionScore(line = '', team = '') {
+  const lowerLine = String(line || '').toLowerCase();
+  const words = normalizeTeamWords(team);
+  if (words.length === 0) return 0;
+  return words.reduce((score, w) => (lowerLine.includes(w) ? score + 1 : score), 0);
+}
+
+function parseSpreadFromLine(line = '') {
+  const match = String(line || '').match(/([+-]\d{1,2}(?:\.\d+)?)/);
+  return match ? Number(match[1]) : null;
+}
+
+function classifyNbaCaseHeader(line = '', homeTeam = '', awayTeam = '', spread = null) {
+  const rawLine = String(line || '').trim();
+  if (!rawLine) return { side: null, misaligned: false };
+
+  const lower = rawLine.toLowerCase();
+  const mentionsHomeSide = /\bhome\s+(?:spread\s+)?side\b/.test(lower);
+  const mentionsAwaySide = /\baway\s+(?:spread\s+)?side\b/.test(lower);
+  const hasCaseWord = /\bcase\b/.test(lower);
+  const hasSpreadToken = parseSpreadFromLine(rawLine) != null;
+  const homeScore = getTeamMentionScore(rawLine, homeTeam);
+  const awayScore = getTeamMentionScore(rawLine, awayTeam);
+  const teamNamedHeader = hasSpreadToken && (homeScore > 0 || awayScore > 0);
+  const isCaseLike = hasCaseWord || mentionsHomeSide || mentionsAwaySide || teamNamedHeader;
+  if (!isCaseLike) return { side: null, misaligned: false };
+
+  let side = null;
+  if (/\bhome\s+(?:spread\s+)?side\b|\bhome\s+spread\b/.test(lower)) side = 'home';
+  if (/\baway\s+(?:spread\s+)?side\b|\baway\s+spread\b/.test(lower)) side = side || 'away';
+
+  if (!side && (homeScore > 0 || awayScore > 0)) {
+    side = homeScore >= awayScore ? 'home' : 'away';
+  }
+
+  const lineSpread = parseSpreadFromLine(rawLine);
+  const hasSpread = Number.isFinite(spread);
+  const homeSpread = hasSpread ? Number(spread) : null;
+  const awaySpread = hasSpread ? Number(-spread) : null;
+  if (!side && lineSpread != null && hasSpread) {
+    if (Math.abs(lineSpread - homeSpread) < 0.11) side = 'home';
+    else if (Math.abs(lineSpread - awaySpread) < 0.11) side = 'away';
+  }
+
+  let misaligned = false;
+  if (side && lineSpread != null && hasSpread) {
+    const expected = side === 'home' ? homeSpread : awaySpread;
+    const expectedSign = Math.sign(expected);
+    const actualSign = Math.sign(lineSpread);
+    // Allow magnitude drift (books move from -9.5 to -8.5, etc). Only treat as misaligned
+    // when sign is opposite for an explicitly labeled side.
+    if (expectedSign !== 0 && actualSign !== 0 && expectedSign !== actualSign) misaligned = true;
+  }
+
+  return { side, misaligned };
+}
+
+function validateNbaSpreadCases(text = '', homeTeam = '', awayTeam = '', spread = null) {
+  const input = String(text || '');
+  const headerCandidates = [];
+  let cursor = 0;
+  const lines = input.split('\n');
+  for (const line of lines) {
+    const idx = cursor;
+    const endIdx = idx + line.length;
+    const { side, misaligned } = classifyNbaCaseHeader(line, homeTeam, awayTeam, spread);
+    if (side) {
+      const bodyStart = input[endIdx] === '\n' ? endIdx + 1 : endIdx;
+      headerCandidates.push({ side, misaligned, headerIndex: idx, bodyStart });
+    }
+    cursor = endIdx + 1;
+  }
+
+  const homeHeaders = headerCandidates.filter(h => h.side === 'home').sort((a, b) => a.headerIndex - b.headerIndex);
+  const awayHeaders = headerCandidates.filter(h => h.side === 'away').sort((a, b) => a.headerIndex - b.headerIndex);
+
+  if (homeHeaders.length === 0 || awayHeaders.length === 0) {
+    const reason = (homeHeaders.length > 1 && awayHeaders.length === 0) || (awayHeaders.length > 1 && homeHeaders.length === 0)
+      ? 'duplicate_side'
+      : 'missing_sections';
+    return {
+      valid: false,
+      reason,
+      homeLen: 0,
+      awayLen: 0
+    };
+  }
+
+  const homeHeader = homeHeaders[0];
+  const awayHeader = awayHeaders[0];
+  const firstHeaders = [homeHeader, awayHeader].sort((a, b) => a.headerIndex - b.headerIndex);
+
+  if (homeHeader.misaligned || awayHeader.misaligned) {
+    return {
+      valid: false,
+      reason: 'misaligned_spread_side',
+      homeLen: 0,
+      awayLen: 0
+    };
+  }
+
+  const markerMatch = /(^|\n)\s*INVESTIGATION COMPLETE\s*($|\n)/i.exec(input);
+  const markerStart = markerMatch ? (markerMatch.index ?? input.length) : input.length;
+
+  const sectionBodies = {};
+  for (let i = 0; i < firstHeaders.length; i++) {
+    const current = firstHeaders[i];
+    const next = i + 1 < firstHeaders.length ? firstHeaders[i + 1].headerIndex : markerStart;
+    const end = Math.min(next, markerStart);
+    sectionBodies[current.side] = input.slice(current.bodyStart, end).trim();
+  }
+
+  const homeBody = sectionBodies.home || '';
+  const awayBody = sectionBodies.away || '';
+  const homeLen = homeBody.replace(/\s+/g, ' ').trim().length;
+  const awayLen = awayBody.replace(/\s+/g, ' ').trim().length;
+
+  if (homeLen < NBA_CASE_MIN_CHARS || awayLen < NBA_CASE_MIN_CHARS) {
+    return {
+      valid: false,
+      reason: 'section_too_short',
+      homeLen,
+      awayLen
+    };
+  }
+
+  return {
+    valid: true,
+    reason: '',
+    homeLen,
+    awayLen
+  };
+}
+
 /**
  * Run the agent loop - handles tool calls and conversation flow
  *
  * GEMINI 3 ARCHITECTURE (2026 Update):
  * - Uses PERSISTENT chat sessions for automatic thought signature handling
- * - Flash session for Investigation + Steel Man (Pass 1-2)
- * - Pro session for Grading + Final Decision (Pass 2.5-3) for NBA/NFL/NHL
- * - NCAAB uses Pro for Pass 2.5-3 (same quality as NBA)
+ * - Flash runs research briefing before Gary starts (completes before Pass 1)
+ * - Pro session runs investigation → evaluation → pick (Pass 1 → 2.5 → 3)
  *
  * @param {string} systemPrompt - The system prompt
  * @param {string} userMessage - The user message (scout report + game context)
@@ -33,11 +182,12 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   const isNCAABSport = sport === 'basketball_ncaab' || sport === 'NCAAB';
   const isNBASport = sport === 'basketball_nba' || sport === 'NBA';
   const isNHLSport = sport === 'icehockey_nhl' || sport === 'NHL';
+  const isMLBSport = sport === 'baseball_mlb' || sport === 'MLB' || sport === 'WBC';
 
   // ═══════════════════════════════════════════════════════════════════════════
   // Props mode setup (must be before session creation so activeTools is available)
   const isPropsMode = options.mode === 'props';
-  console.log(`[Orchestrator] Starting ${sport} — 3.1 Pro (main) + Flash (research${isPropsMode ? '' : ' + Steel Man cases'})${isPropsMode ? ' + Flash (props advisor)' : ''}`);
+  console.log(`[Orchestrator] Starting ${sport} — 3.1 Pro (main) + Flash (research)`);
 
   const propContext = options.propContext || null;
   let propsPicks = null; // Store props picks from finalize_props tool call
@@ -54,8 +204,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
 
   // PERSISTENT SESSION SETUP (Gemini 3 Thought Signature Compliance)
   // ═══════════════════════════════════════════════════════════════════════════
-  // DUAL-MODEL: Pro session runs investigation → evaluation → pick. Flash builds Steel Man cases independently.
-  // Pro never writes bilateral cases = no confirmation bias. Flash is also quota-429 fallback.
+  // Pro session runs investigation → evaluation → pick. Flash provides research briefing before Gary starts.
   // SDK automatically handles thought signatures when using persistent sessions.
   // All modes (game picks + props) start with 3.1 Pro + high reasoning
   // Flash is quota fallback only (via model cascade on 429 errors)
@@ -68,7 +217,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   let currentModelName = currentSession.modelName;
   console.log(`[Orchestrator] Pro session created (${currentModelName}, ${sport})`);
 
-  // Messages array for state tracking (pass detection, steel man capture)
+  // Messages array for state tracking (pass detection)
   // Note: For Gemini, actual API calls go through the persistent session
   let messages = [
     { role: 'system', content: systemPrompt },
@@ -78,13 +227,6 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   let iteration = 0;
   const toolCallHistory = [];
 
-  // Store full steel man cases for transparency/debugging
-  let steelManCases = {
-    homeTeamCase: null,
-    awayTeamCase: null,
-    capturedAt: null
-  };
-  
   // ═══════════════════════════════════════════════════════════════════════════
   // PERSISTENT SESSION STATE TRACKING
   // ═══════════════════════════════════════════════════════════════════════════
@@ -94,73 +236,23 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   let nextMessageToSend = userMessage;
   let pendingFunctionResponses = []; // Batched function responses to send
   // Persistent pass-injection flags (survive context pruning)
-  let _pass2Injected = false;
-  let _pass2Delivered = false; // True only when Pass 2 is actually SENT to the Gemini session (not just pushed to messages)
   let _pass25Injected = false;
   let _pass25JustInjected = false; // True for ONE iteration after Pass 2.5 is injected (for response logging)
 
-  // Investigation stall detection — force Pass 2 if investigation stops producing new data
+  // Investigation stall detection — nudge completion marker if investigation loops
   let _lastCategoryCount = 0;
   let _investigationStallCount = 0;
   let _pass3Injected = false;
   let _extraIterationsUsed = 0; // Guard against infinite loop from iteration-- (max 2)
-
-  // Flash Advisor state — independent case builder (eliminates confirmation bias)
-  let _flashCasesPromise = null;     // Promise for Flash's case building
-  let _flashCasesReady = false;      // True when Flash has returned cases (or failed)
-  let _flashCases = null;            // { homeTeamCase, awayTeamCase, flashContent }
-  let _flashStartedAt = null;        // Timestamp for logging
+  let _nbaCaseRetryUsed = false; // One retry for required bilateral spread cases before Pass 2.5
 
   // Flash Research Briefing state — comprehensive pre-game briefing (factual findings only)
-  // Flash completes BEFORE Gary starts. Findings injected before Pass 1 and re-surfaced at Pass 2.5.
+  // Flash completes BEFORE Gary starts. Findings injected before Pass 1.
   let _researchBriefingReady = false;    // True when briefing has returned (or failed)
   let _researchBriefing = null;          // Briefing text from Flash (factual findings)
   const _flashCoverageTokens = [];       // Flash's called tokens — ONLY for pipeline gate coverage, NOT dedup or statsData
 
-  // Pro's Own Assessment — props mode only (game picks get research briefing + Steel Man cases, no separate assessment)
-  let _proAssessment = null;            // Pro's honest assessment text (props only)
-  let _proAssessmentRequested = false;  // True after we ask Pro for assessment (props only)
-
   const effectiveMaxIterations = CONFIG.maxIterations;
-
-  // ═══════════════════════════════════════════════════════════════════════
-  // FLASH ADVISOR HELPER — reusable spawn logic (captures closure variables)
-  // ═══════════════════════════════════════════════════════════════════════
-  function spawnFlashAdvisor(reason, coverageInfo = '') {
-    if (_flashCasesPromise) {
-      console.log(`[Orchestrator] Flash advisor already spawned (${reason})`);
-      return; // Already running
-    }
-
-    console.log(`[Orchestrator] 🎯 Spawning advisor (Gemini 3 Pro): ${reason} ${coverageInfo}`);
-    _flashStartedAt = Date.now();
-
-    _flashCasesPromise = Promise.race([
-      isPropsMode
-        ? buildFlashSteelManPropsCases(systemPrompt, messages, toolCallHistory, sport, homeTeam, awayTeam, propContext)
-        : buildFlashSteelManCases(systemPrompt, messages, toolCallHistory, sport, homeTeam, awayTeam, options.spread ?? null),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Advisor timeout')), ADVISOR_TIMEOUT_MS))
-    ]).then(cases => {
-      _flashCases = cases;
-      _flashCasesReady = true;
-      const elapsed = ((Date.now() - _flashStartedAt) / 1000).toFixed(1);
-      if (cases) {
-        if (isPropsMode) {
-          console.log(`[Advisor] ✅ Props cases received in ${elapsed}s (${cases.candidateCases?.length || 0} chars)`);
-        } else {
-          console.log(`[Advisor] ✅ Cases received in ${elapsed}s (home: ${cases.homeTeamCase?.length || 0} chars, away: ${cases.awayTeamCase?.length || 0} chars)`);
-        }
-      } else {
-        console.log(`[Advisor] ⚠️ Failed after ${elapsed}s — Pro will write its own cases`);
-      }
-      return cases;
-    }).catch(err => {
-      _flashCasesReady = true;
-      _flashCases = null;
-      console.error(`[Advisor] ❌ Error: ${err.message} — pick will fail (no fallback to biased cases)`);
-      return null;
-    });
-  }
 
   // ═══════════════════════════════════════════════════════════════════════
   // AWAIT FLASH RESEARCH BRIEFING — completes BEFORE Gary starts
@@ -168,13 +260,12 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   // Flash reads the scout report, identifies gaps, and uses fetch_stats
   // to investigate deeper. Gary waits for Flash to finish so he has the
   // full per-factor findings from the very first iteration.
-  if (options.scoutReport && !isPropsMode) {
+  if (isMLBSport) {
+    console.log(`[Research Briefing] Skipping Flash for WBC — Gary investigates with grounding tools during Pass 1`);
+  } else if (options.scoutReport && !isPropsMode) {
     console.log(`[Research Briefing] 🔬 Running Flash research briefing (Gemini Flash with tools) — Gary waits for completion`);
     try {
-      const briefingResult = await Promise.race([
-        buildFlashResearchBriefing(options.scoutReport, sport, homeTeam, awayTeam, options),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Research briefing timeout')), RESEARCH_BRIEFING_TIMEOUT_MS))
-      ]);
+      const briefingResult = await buildFlashResearchBriefing(options.scoutReport, sport, homeTeam, awayTeam, options);
       if (briefingResult && typeof briefingResult === 'object') {
         _researchBriefing = briefingResult.briefing;
         _researchBriefingReady = true;
@@ -189,16 +280,6 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
           console.log(`[Research Briefing] Stored ${briefingResult.calledTokens.length} Flash tokens for coverage tracking (separate from Gary's toolCallHistory)`);
         }
         console.log(`[Research Briefing] ✅ Briefing ready (${briefingResult.briefing?.length || 0} chars)`);
-
-        // Store Flash's Steel Man cases (built during research — eliminates separate 3 Pro advisor)
-        if (briefingResult.steelManCases) {
-          _flashCases = briefingResult.steelManCases;
-          _flashCasesReady = true;
-          _flashCasesPromise = Promise.resolve(_flashCases); // Prevent spawnFlashAdvisor from running
-          console.log(`[Orchestrator] ✅ Flash built Steel Man cases during research (home: ${_flashCases.homeTeamCase?.length || 0} chars, away: ${_flashCases.awayTeamCase?.length || 0} chars)`);
-        } else {
-          console.warn(`[Orchestrator] ⚠️ Flash did not produce Steel Man cases — advisor will be spawned as fallback`);
-        }
       } else if (briefingResult && typeof briefingResult === 'string') {
         _researchBriefing = briefingResult;
         _researchBriefingReady = true;
@@ -213,15 +294,22 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
     // Inject Flash's per-factor findings BEFORE Pass 1 + reframe Gary's task as spread investigation
     if (_researchBriefing) {
       const spread = options.spread ?? null;
-      const homeSpread = spread ? `${spread >= 0 ? '+' : ''}${spread.toFixed(1)}` : '';
-      const awaySpread = spread ? `${-spread >= 0 ? '+' : ''}${(-spread).toFixed(1)}` : '';
+      const hasSpread = Number.isFinite(spread);
+      const homeSpread = hasSpread ? `${spread >= 0 ? '+' : ''}${spread.toFixed(1)}` : '';
+      const awaySpread = hasSpread ? `${-spread >= 0 ? '+' : ''}${(-spread).toFixed(1)}` : '';
       const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
+      const isMLB = sport === 'baseball_mlb' || sport === 'MLB' || sport === 'WBC';
 
-      const spreadLine = isNHL
+      const spreadLine = (isNHL || isMLB)
         ? `The line is ${homeTeam} (home) vs ${awayTeam} (away) — moneyline.`
         : `The spread is ${homeTeam} ${homeSpread} / ${awayTeam} ${awaySpread}.`;
 
-      const briefingBlock = `\n\n## RESEARCH BRIEFING (from your research assistant)\n\nYour research assistant investigated this matchup. Here are their findings:\n\n${_researchBriefing}\n\n---\n\nYou now know both teams — their stats, their form, their injuries, their context. You're fully informed. This is the part where you do what a human bettor does: look at the number.\n\n${spreadLine}\n\nEvery bettor looks at the data and then looks at the line. Use your tools to investigate the spread — pull whatever stats help you figure out if this line is right, wrong, or close. This may still require deeper investigation of the teams, players, matchups — use your tools to gather whatever you need.\n\nYour final decision comes later. Right now, investigate.`;
+      const isNCAABSport = sport === 'basketball_ncaab' || sport === 'NCAAB';
+      const nbaCaseReminder = (isNBASport || isNCAABSport)
+        ? `\n\nBefore outputting INVESTIGATION COMPLETE, include both sections in your Pass 1 synthesis:\nCase for home spread side\nCase for away spread side\n(Each case should be 2-3 paragraphs, data-grounded, and explain why that side is advantaged relative to this spread number tonight.)`
+        : '';
+
+      const briefingBlock = `\n\n## RESEARCH BRIEFING (from your research assistant)\n\nYour research assistant investigated every factor with full tool access. These are structured, verified findings — use them as your foundation. If something stands out or needs deeper context, you can investigate further with your own tools.\n\n${_researchBriefing}\n\n---\n\n${spreadLine}\n\nYou MUST still investigate this matchup yourself using fetch_stats. The briefing gives you a head start — now verify key claims, check stats the briefing flagged, and use additional calls only where you need critical evidence to complete your synthesis.${nbaCaseReminder}\n\nWhen your investigation and synthesis are complete, output exactly:\nINVESTIGATION COMPLETE`;
       // Append to the user message Gary receives
       userMessage = userMessage + briefingBlock;
       nextMessageToSend = userMessage;
@@ -243,13 +331,13 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
     iteration++;
     console.log(`\n[Orchestrator] Iteration ${iteration}/${effectiveMaxIterations} (${provider}, ${currentModelName})`);
 
-    // Get the spread for Pass 2/2.5 context injection (available throughout loop)
+    // Get the spread for Pass 2.5 context injection (available throughout loop)
     const spread = options.spread ?? null;
 
     let response;
     let message;
     let finishReason;
-    
+
     if (provider === 'gemini' && currentSession) {
       // ═══════════════════════════════════════════════════════════════════════
       // PERSISTENT SESSION API CALL (Gemini 3 with thought signature handling)
@@ -272,8 +360,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
           // Step 2: Check if Gary responded without tool calls AND we have a pass message queued
           // If so, send the pass message immediately as a follow-up
           const hasQueuedPassMessage = nextMessageToSend && nextMessageToSend !== userMessage &&
-            (nextMessageToSend.includes('PASS 2') || nextMessageToSend.includes('STEEL MAN') ||
-             nextMessageToSend.includes('PASS 2.5') || nextMessageToSend.includes('CASE REVIEW') ||
+            (nextMessageToSend.includes('PASS 2.5') || nextMessageToSend.includes('CASE REVIEW') ||
              nextMessageToSend.includes('CASE EVALUATION') || nextMessageToSend.includes('investigation is complete'));
           
           if (!sessionResponse.toolCalls && hasQueuedPassMessage) {
@@ -282,11 +369,6 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
             const sentMessage = nextMessageToSend;
             sessionResponse = await sendToSessionWithRetry(currentSession, nextMessageToSend);
             nextMessageToSend = null; // Clear after sending
-            // Track Pass 2 delivery
-            if (_pass2Injected && !_pass2Delivered && sentMessage.includes('PASS 2') && !sentMessage.includes('PASS 2.5')) {
-              _pass2Delivered = true;
-              console.log(`[Orchestrator] ✅ Pass 2 DELIVERED to session`);
-            }
           }
 
         } else {
@@ -296,11 +378,6 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
             nextMessageToSend = `Continue your investigation. Use fetch_stats to gather more data on this matchup.`;
           }
           sessionResponse = await sendToSessionWithRetry(currentSession, nextMessageToSend);
-          // Track Pass 2 delivery
-          if (_pass2Injected && !_pass2Delivered && nextMessageToSend.includes('PASS 2') && !nextMessageToSend.includes('PASS 2.5')) {
-            _pass2Delivered = true;
-            console.log(`[Orchestrator] ✅ Pass 2 DELIVERED to session`);
-          }
         }
         
         // Normalize session response format for downstream code
@@ -329,58 +406,18 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
           _pass25JustInjected = false;
         }
 
-        // Capture Pro's honest assessment — PROPS MODE ONLY
-        if (isPropsMode && _proAssessmentRequested && !_proAssessment &&
-            message.content && (!message.tool_calls || message.tool_calls.length === 0) &&
-            message.content.length > 200 && !_pass25Injected) {
-          _proAssessment = message.content;
-          console.log(`[Orchestrator] Pro's props assessment captured (${_proAssessment.length} chars)`);
-        }
-
       } catch (error) {
-        // Handle quota errors with model fallback
-        // Flash -> Pro fallback (Flash hit rate limit, use Pro)
-        if (error.isQuotaError && currentModelName === 'gemini-3-flash-preview') {
-          console.log(`[Orchestrator] ⚠️ Flash quota exceeded - falling back to Pro`);
-
-          // Extract textual context to pass to Pro
-          const textualContext = extractTextualSummaryForModelSwitch(messages, steelManCases, toolCallHistory);
-          if (textualContext.length < 2000) {
-            console.warn(`[Orchestrator] LOW CONTEXT WARNING: Only ${textualContext.length} chars for Flash→Pro switch`);
-          }
-
-          // Create new Pro session for fallback (use 3.1 Pro primary)
-          currentSession = createGeminiSession({
-            modelName: GEMINI_PRO_MODEL,
-            systemPrompt: systemPrompt + '\n\n' + textualContext,
-            tools: currentPass === 'evaluation' ? [] : activeTools,
-            thinkingLevel: 'high'
-          });
-          currentModelName = GEMINI_PRO_MODEL;
-
-          console.log(`[Orchestrator] 🔄 Created fallback Pro session, retrying...`);
-
-          // Retry with new session
-          const retryResponse = await sendToSessionWithRetry(currentSession, nextMessageToSend);
-          message = {
-            role: 'assistant',
-            content: retryResponse.content,
-            tool_calls: retryResponse.toolCalls
-          };
-          finishReason = retryResponse.finishReason;
-
-          if (message.content || message.tool_calls) {
-            messages.push(message);
-          }
-        }
-        // 3.1 Pro -> rotate key -> 3.1 Pro (key 2), or 3 Pro if no backup
-        else if (error.isQuotaError && currentModelName === GEMINI_PRO_MODEL) {
-          const textualContext = extractTextualSummaryForModelSwitch(messages, steelManCases, toolCallHistory);
+        // ═══════════════════════════════════════════════════════════════════
+        // 429 QUOTA CASCADE: Each model tries primary key → backup key before falling
+        // to the next tier. 3.1 Pro → Pro fallback → Flash → HARD FAIL
+        // ═══════════════════════════════════════════════════════════════════
+        // 3.1 Pro 429 → try backup key, else fall to Pro fallback (reset to primary)
+        if (error.isQuotaError && currentModelName === GEMINI_PRO_MODEL) {
+          const textualContext = extractTextualSummaryForModelSwitch(messages, toolCallHistory);
           if (textualContext.length < 2000) {
             console.warn(`[Orchestrator] LOW CONTEXT WARNING: Only ${textualContext.length} chars for model switch`);
           }
 
-          // Try rotating to backup API key first — keeps 3.1 Pro
           if (!isUsingBackupKey() && rotateToBackupKey()) {
             console.log(`[Orchestrator] ⚠️ 3.1 Pro quota exceeded — rotated to backup API key, retrying with 3.1 Pro`);
             currentSession = createGeminiSession({
@@ -389,9 +426,10 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
               tools: currentPass === 'evaluation' ? [] : activeTools,
               thinkingLevel: 'high'
             });
-            // currentModelName stays GEMINI_PRO_MODEL
           } else {
-            console.log(`[Orchestrator] ⚠️ 3.1 Pro quota exceeded - falling back to 3 Pro`);
+            // 3.1 Pro exhausted on both keys — fall to Pro fallback on primary key
+            resetToPrimaryKey();
+            console.log(`[Orchestrator] ⚠️ 3.1 Pro exhausted — falling back to Pro fallback (primary key)`);
             currentSession = createGeminiSession({
               modelName: GEMINI_PRO_FALLBACK,
               systemPrompt: systemPrompt + '\n\n' + textualContext,
@@ -402,8 +440,6 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
           }
 
           console.log(`[Orchestrator] 🔄 Created fallback session, retrying...`);
-
-          // Retry with new session
           const retryResponse = await sendToSessionWithRetry(currentSession, nextMessageToSend);
           message = {
             role: 'assistant',
@@ -411,32 +447,36 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
             tool_calls: retryResponse.toolCalls
           };
           finishReason = retryResponse.finishReason;
-
           if (message.content || message.tool_calls) {
             messages.push(message);
           }
         }
-        // 3 Pro -> rotate key -> 3.1 Pro (key 2), or HARD FAIL if no backup
+        // Pro fallback 429 → try backup key, else fall to Flash (reset to primary)
         else if (error.isQuotaError && currentModelName === GEMINI_PRO_FALLBACK) {
-          const textualContext = extractTextualSummaryForModelSwitch(messages, steelManCases, toolCallHistory);
+          const textualContext = extractTextualSummaryForModelSwitch(messages, toolCallHistory);
 
-          // Try rotating to backup API key — gets us back to 3.1 Pro
           if (!isUsingBackupKey() && rotateToBackupKey()) {
-            console.log(`[Orchestrator] ⚠️ Both Pro models quota exceeded — rotated to backup API key, retrying with 3.1 Pro`);
+            console.log(`[Orchestrator] ⚠️ Pro fallback quota exceeded — rotated to backup key, retrying`);
             currentSession = createGeminiSession({
-              modelName: GEMINI_PRO_MODEL,
+              modelName: GEMINI_PRO_FALLBACK,
               systemPrompt: systemPrompt + '\n\n' + textualContext,
               tools: currentPass === 'evaluation' ? [] : activeTools,
               thinkingLevel: 'high'
             });
-            currentModelName = GEMINI_PRO_MODEL;
           } else {
-            // HARD FAIL — never fall to Flash. A Pro-quality pick or no pick at all.
-            throw new Error(`[Orchestrator] All Pro model quotas exhausted on both API keys. Cannot produce pick — skipping game. (Primary + backup keys both hit daily quota limits for 3.1 Pro and 3 Pro)`);
+            // Pro fallback exhausted on both keys — fall to Flash on primary key
+            resetToPrimaryKey();
+            console.log(`[Orchestrator] ⚠️ All Pro models exhausted — falling back to Flash (primary key)`);
+            currentSession = createGeminiSession({
+              modelName: 'gemini-3-flash-preview',
+              systemPrompt: systemPrompt + '\n\n' + textualContext,
+              tools: currentPass === 'evaluation' ? [] : activeTools,
+              thinkingLevel: 'high'
+            });
+            currentModelName = 'gemini-3-flash-preview';
           }
 
           console.log(`[Orchestrator] 🔄 Created fallback session, retrying...`);
-
           const retryResponse = await sendToSessionWithRetry(currentSession, nextMessageToSend);
           message = {
             role: 'assistant',
@@ -444,7 +484,34 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
             tool_calls: retryResponse.toolCalls
           };
           finishReason = retryResponse.finishReason;
+          if (message.content || message.tool_calls) {
+            messages.push(message);
+          }
+        }
+        // Flash 429 → try backup key, else HARD FAIL (all 6 combos exhausted)
+        else if (error.isQuotaError && currentModelName === 'gemini-3-flash-preview') {
+          const textualContext = extractTextualSummaryForModelSwitch(messages, toolCallHistory);
 
+          if (!isUsingBackupKey() && rotateToBackupKey()) {
+            console.log(`[Orchestrator] ⚠️ Flash quota exceeded — rotated to backup API key, retrying with Flash`);
+            currentSession = createGeminiSession({
+              modelName: 'gemini-3-flash-preview',
+              systemPrompt: systemPrompt + '\n\n' + textualContext,
+              tools: currentPass === 'evaluation' ? [] : activeTools,
+              thinkingLevel: 'high'
+            });
+          } else {
+            throw new Error(`[Orchestrator] All model quotas exhausted on both API keys (3.1 Pro, 3 Pro, Flash). Cannot produce pick.`);
+          }
+
+          console.log(`[Orchestrator] 🔄 Created fallback session, retrying...`);
+          const retryResponse = await sendToSessionWithRetry(currentSession, nextMessageToSend);
+          message = {
+            role: 'assistant',
+            content: retryResponse.content,
+            tool_calls: retryResponse.toolCalls
+          };
+          finishReason = retryResponse.finishReason;
           if (message.content || message.tool_calls) {
             messages.push(message);
           }
@@ -480,101 +547,23 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
       throw new Error('No active Gemini session available');
     }
 
-    // STEEL MAN CAPTURE: Extract and store Gary's bilateral analysis when it appears
-    // Cases can appear in any iteration (typically around iteration 4-5), not just iteration 2
-    // Skip when Flash advisor is building cases — Pro won't write its own bilateral cases
-    if (message.content && !steelManCases.capturedAt && !_flashCasesPromise) {
-      const content = message.content;
-      
-      // Extract FULL "Case for [Team]" sections using improved regex
-      // Match "CASE FOR [Team Name]" followed by content until the next "CASE FOR" or end of string
-      // NOTE: Do NOT use ###/--- as delimiters — Gary's case content can contain markdown subheadings
-      const casePattern = /(?:\*\*)?(?:Case for|CASE FOR|Analysis for|ANALYSIS FOR)[:\s*]+([^\n*]+)[\s\S]*?(?=(?:\*\*)?(?:Case for|CASE FOR|Analysis for|ANALYSIS FOR)|$)/gi;
-      const caseMatches = [...content.matchAll(casePattern)];
-      
-      if (caseMatches.length >= 2) {
-        // Determine which case is home vs away using "CASE FOR [Team]" header
-        // (checking full body fails because bilateral cases mention BOTH teams)
-        const fullCases = caseMatches.slice(0, 2).map(match => match[0].trim());
-
-        const caseForPattern = /case for\s+(.+?)(?:\s*[\(\[-]|\n|$)/i;
-        const case1ForMatch = fullCases[0].match(caseForPattern);
-        const case1ForTeam = case1ForMatch ? case1ForMatch[1].trim().toLowerCase() : '';
-
-        const homeTeamLower = homeTeam.toLowerCase();
-        const awayTeamLower = awayTeam.toLowerCase();
-        const homeLastWord = homeTeamLower.split(' ').pop();
-        const awayLastWord = awayTeamLower.split(' ').pop();
-
-        let case1IsHome;
-        if (case1ForTeam) {
-          const homeMatch = case1ForTeam.includes(homeLastWord);
-          const awayMatch = case1ForTeam.includes(awayLastWord);
-          case1IsHome = homeMatch && !awayMatch;
-          if (homeMatch === awayMatch) {
-            const homeHits = homeTeamLower.split(' ').filter(w => w.length > 3 && case1ForTeam.includes(w)).length;
-            const awayHits = awayTeamLower.split(' ').filter(w => w.length > 3 && case1ForTeam.includes(w)).length;
-            case1IsHome = homeHits > awayHits;
-          }
-        } else {
-          const header = fullCases[0].substring(0, 100).toLowerCase();
-          case1IsHome = header.includes(homeLastWord) && !header.includes(awayLastWord);
-        }
-
-        if (case1IsHome) {
-          steelManCases.homeTeamCase = fullCases[0];
-          steelManCases.awayTeamCase = fullCases[1];
-        } else {
-          steelManCases.awayTeamCase = fullCases[0];
-          steelManCases.homeTeamCase = fullCases[1];
-        }
-        steelManCases.capturedAt = new Date().toISOString();
-        steelManCases.source = 'pro_self'; // Gary wrote these himself (not from advisor)
-
-        const homeChars = steelManCases.homeTeamCase?.length || 0;
-        const awayChars = steelManCases.awayTeamCase?.length || 0;
-        console.log(`[Orchestrator] Steel Man cases captured (iteration ${iteration}, ${homeChars}+${awayChars} chars)`);
-      }
-    }
-
     // Handle empty response from Gemini (common when model is confused)
     if (provider === 'gemini' && !message.content && !message.tool_calls) {
       // Check what pass we're in to provide appropriate nudge
-      const pass2WasInjected = _pass2Injected;
-      const pass25WasInjected = messages.some(m => m.content?.includes('PASS 2.5') || m.content?.includes('CASE REVIEW') || m.content?.includes('CASE EVALUATION'));
-      
       let nudgeContent;
-      
-      if (pass25WasInjected) {
+
+      if (_pass25Injected) {
         // Pass 2.5 already sent - need decision, not stats
         console.log(`[Orchestrator] ⚠️ Gemini returned empty response after Pass 2.5 - requesting decision output`);
-        nudgeContent = `You didn't provide a response. Review the advisor cases and make your pick in natural language. Do NOT output JSON — the final formatted output comes in the next step.`;
-      } else if (pass2WasInjected) {
-        // Pass 2 already sent — investigation is over
-        if (isPropsMode) {
-          console.log(`[Orchestrator] ↩️ Gemini returned empty response after Pass 2 — nudging for bilateral prop cases`);
-          nudgeContent = `You didn't provide a response. You have enough data (${toolCallHistory.length} stats gathered).
-
-**WRITE YOUR BILATERAL PROP CASES NOW:**
-For your top 3-4 prop candidates, build the OVER case and the UNDER case using the data you already have.
-
-Do NOT request more stats. Write your analysis NOW.`;
-        } else {
-          console.log(`[Orchestrator] ↩️ Gemini returned empty response after Pass 2 — nudging for honest assessment (Flash building cases)`);
-          nudgeContent = `You didn't provide a response. You have enough data (${toolCallHistory.length} stats gathered). An advisor is building bilateral Steel Man cases from your investigation data.
-
-Write YOUR honest read on this game — what are the key dynamics, what matters most for how this game plays out tonight? Cite the key findings from your investigation.
-
-Do NOT pick a side. Do NOT request more stats. Do NOT write Steel Man cases — they are being built independently.`;
-        }
+        nudgeContent = `You didn't provide a response. Evaluate both sides and make your pick in natural language. Do NOT output JSON — the final formatted output comes in the next step.`;
       } else {
         // Still in investigation phase — check investigation breadth
         const { sufficient, categoryCount, totalCalls } = isInvestigationSufficient(toolCallHistory, iteration);
 
         if (sufficient) {
-          // Enough investigation — let Gary proceed
+          // Enough investigation — tell Gary to wrap up investigation (NOT to decide)
           console.log(`[Orchestrator] Gary has ${totalCalls} stats across ${categoryCount} categories — pushing to proceed`);
-          nudgeContent = `You have ${totalCalls} stats gathered across ${categoryCount} categories. Proceed to your analysis NOW.`;
+          nudgeContent = `You have ${totalCalls} stats gathered across ${categoryCount} categories. If there are remaining critical factual gaps, request only those stats. Otherwise, finish Pass 1 synthesis and output exactly:\nINVESTIGATION COMPLETE`;
         } else {
           console.log(`[Orchestrator] ⚠️ Gemini returned empty response (${totalCalls} stats, ${categoryCount} categories) — prompting for more stats`);
           nudgeContent = `You didn't respond. Use the fetch_stats tool to request stats for this matchup. You've gathered ${totalCalls} stats across ${categoryCount} categories so far. Continue investigating to build a complete picture of this matchup.`;
@@ -681,49 +670,22 @@ Do NOT pick a side. Do NOT request more stats. Do NOT write Steel Man cases — 
           : `\n\nYou've gathered ${toolCallHistory.length} stats: ${gatheredStats.join(', ')}`;
 
         // Determine what phase we're in
-        const pass2Injected = _pass2Injected;
-        const pass25Injected = messages.some(m => m.content?.includes('PASS 2.5') || m.content?.includes('CASE REVIEW') || m.content?.includes('CASE EVALUATION'));
-
         let nudgeMessage;
-        if (pass25Injected) {
+        if (_pass25Injected) {
           nudgeMessage = `ALL ${message.tool_calls.length} stats you requested were already gathered. DO NOT request more stats.${dataRecap}
 
-Review the advisor cases and make your pick in natural language. Do NOT output JSON — the final formatted output comes in the next step.`;
-        } else if (pass2Injected) {
-          if (isPropsMode) {
-            nudgeMessage = `ALL ${message.tool_calls.length} stats you requested were already gathered. DO NOT request more stats.${dataRecap}
-
-Write your bilateral prop cases NOW using the data above.`;
-          } else {
-            nudgeMessage = `ALL ${message.tool_calls.length} stats you requested were already gathered. DO NOT request more stats.${dataRecap}
-
-An advisor is building bilateral Steel Man cases from your investigation data. Write YOUR honest read on this game — what are the key dynamics and what matters most for tonight? Do NOT pick a side. Do NOT write Steel Man cases yourself.`;
-          }
+Evaluate both sides and make your pick in natural language. Do NOT output JSON — the final formatted output comes in the next step.`;
         } else {
           // Still in investigation phase — check if investigation has stalled
-          const { sufficient, categoryCount, totalCalls } = isInvestigationSufficient(toolCallHistory, iteration);
+          const { categoryCount, totalCalls } = isInvestigationSufficient(toolCallHistory, iteration);
           _investigationStallCount++;
 
           console.log(`[Orchestrator] All-duplicates: ${totalCalls} stats, ${categoryCount} categories, stall=${_investigationStallCount}`);
 
-          // STALL BREAK: If stuck for 3+ iterations with all duplicates and sufficient investigation
-          if (_investigationStallCount >= 3 && sufficient && !_pass2Injected) {
-            console.log(`[Orchestrator] STALL BREAKER (all-dupes): Investigation stalled at ${categoryCount} categories for ${_investigationStallCount} iterations`);
-            spawnFlashAdvisor('stall break (all-dupes)', `(${categoryCount} categories, ${totalCalls} calls)`);
-            _pass2Injected = true;
-            if (isPropsMode) {
-              _proAssessmentRequested = true;
-              messages.push({ role: 'user', content: `Your investigation has gathered ${totalCalls} stats across ${categoryCount} categories. An advisor is building bilateral OVER/UNDER cases from your data. Write YOUR honest assessment of the prop landscape — which prop bets stand out and why? Do NOT pick OVER or UNDER.` });
-            } else {
-              messages.push({ role: 'user', content: `Your investigation has gathered ${totalCalls} stats across ${categoryCount} categories. An advisor is building bilateral cases. Stand by for evaluation.` });
-            }
-            nextMessageToSend = messages[messages.length - 1].content;
-            continue;
-          }
-
           nudgeMessage = `Your stat requests were all duplicates of stats you already gathered. DO NOT re-request the same stats.${dataRecap}
 
-Use the fetch_stats tool to request DIFFERENT stat categories you haven't explored yet. You've covered ${categoryCount} categories — look for angles you haven't investigated.`;
+If you still need more data, request different stats. If your Pass 1 synthesis is complete, output exactly:
+INVESTIGATION COMPLETE`;
         }
 
         messages.push({
@@ -760,13 +722,13 @@ Use the fetch_stats tool to request DIFFERENT stat categories you haven't explor
         // Handle finalize_props tool call (props mode only)
         if (functionName === 'finalize_props' && isPropsMode) {
           // PIPELINE GATE: Block finalize_props until Pass 3 has been injected
-          // Props must go through full pipeline: Pass 1 → Pass 2 → Pass 2.5 → Pass 3 → finalize
+          // Props must go through full pipeline: Pass 1 → Pass 2.5 → Pass 3 → finalize
           if (!_pass3Injected) {
-            const stage = !_pass2Injected ? 'Steel Man cases (Pass 2)' : !_pass25Injected ? 'case evaluation (Pass 2.5)' : 'final props evaluation (Pass 3)';
+            const stage = !_pass25Injected ? 'evaluation (Pass 2.5)' : 'final props evaluation (Pass 3)';
             console.log(`[Orchestrator] ⚠️ finalize_props BLOCKED — ${stage} not yet completed`);
             pendingFunctionResponses.push({
               name: functionName,
-              content: JSON.stringify({ error: `Cannot finalize props yet. You must complete ${stage} first. Continue with your analysis — write your bilateral Steel Man cases for both sides of this matchup, then evaluate them, before selecting your final props.` })
+              content: JSON.stringify({ error: `Cannot finalize props yet. You must complete ${stage} first. Continue your analysis and evaluation before selecting your final props.` })
             });
             continue;
           }
@@ -803,23 +765,20 @@ Use the fetch_stats tool to request DIFFERENT stat categories you haven't explor
             awayTeam,
             sport,
             rawAnalysis: message.content || '',
-            steelManCases,
             isProps: true
           };
         }
 
         // Handle fetch_narrative_context tool (storylines, player news, context)
         if (functionName === 'fetch_narrative_context') {
-          // Block narrative context after Pass 2 — investigation is over, Gary should be building cases
-          if (_pass2Injected) {
-            console.log(`  → [NARRATIVE_CONTEXT] BLOCKED (Pass 2 injected — investigation phase over): "${args.query}"`);
+          // Block narrative context after Pass 2.5 — investigation is over, Gary should be evaluating
+          if (_pass25Injected) {
+            console.log(`  → [NARRATIVE_CONTEXT] BLOCKED (Pass 2.5 injected — investigation phase over): "${args.query}"`);
             messages.push({
               role: 'tool',
               tool_call_id: toolCall.id,
               name: functionName,
-              content: JSON.stringify({ error: isPropsMode
-                ? 'Investigation phase is complete. You have sufficient data. Write your bilateral prop analysis using the stats already gathered. Do NOT request more data.'
-                : 'Investigation phase is complete. You have sufficient data. An advisor is building bilateral cases. Write your honest read on this game — what matters most for tonight. Do NOT pick a side. Do NOT request more data or write Steel Man cases.' })
+              content: JSON.stringify({ error: 'Investigation phase is complete. You have sufficient data. Continue your evaluation and make your pick. Do NOT request more data.' })
             });
             continue;
           }
@@ -1622,7 +1581,7 @@ Use the fetch_stats tool to request DIFFERENT stat categories you haven't explor
       // CONTEXT PRUNING: Prevent attention decay on long investigations
       messages = pruneContextIfNeeded(messages, iteration);
 
-      // INVESTIGATION TRACKING: Monitor tool call breadth for pass transitions
+      // INVESTIGATION TRACKING: Monitor tool-call breadth for logging/guidance
       
       // Count UNIQUE stats for logging — exclude rejected tokens (quality: 'unavailable')
       const uniqueStats = new Set(toolCallHistory.filter(t => t.token && t.quality !== 'unavailable').map(t => t.token));
@@ -1632,34 +1591,17 @@ Use the fetch_stats tool to request DIFFERENT stat categories you haven't explor
       // - INJURIES: Scout report always includes injury data for NFL/NBA/NHL/NCAAB/NCAAF
       // Gary doesn't need to call INJURIES token explicitly - data is already in context
       // ═══════════════════════════════════════════════════════════════════════
-      // INVESTIGATION COMPLETION & PASS INJECTION
+      // INVESTIGATION TRACKING SNAPSHOT (guidance only; no auto-transition)
       // ═══════════════════════════════════════════════════════════════════════
-      // Replaces the old per-factor coverage gate. Investigation sufficiency
-      // is based on tool call breadth + stall detection. Flash research briefing
-      // handles completeness — Gary investigates what matters without a checklist.
-      // ═══════════════════════════════════════════════════════════════════════
-      const { sufficient: investigationSufficient, categoryCount, totalCalls } = isInvestigationSufficient(toolCallHistory, iteration);
+      const { categoryCount, totalCalls } = isInvestigationSufficient(toolCallHistory, iteration);
       const lastResponseWasTextOnly = message.content && (!message.tool_calls || message.tool_calls.length === 0);
 
       // Use persistent flags ONLY (survive context pruning, no false positives from Gemini echoing pass labels)
-      const pass2AlreadyInjected = _pass2Injected;
       const pass25AlreadyInjected = _pass25Injected;
       const pass3AlreadyInjected = _pass3Injected;
 
-      // Check if Steel Man analysis is complete:
-      // - If Flash advisor delivered cases, Steel Man is complete (Flash built them)
-      // - Otherwise, check Pro's recent messages for bilateral case patterns
-      const recentAssistantMessages = messages.filter(m => m.role === 'assistant' && m.content).slice(-5);
-      const steelManCompleted = (_flashCases && _flashCasesReady) || recentAssistantMessages.some(m => {
-        const result = detectBilateralAnalysis(m.content || '');
-        if (result.hasBilateral) {
-          console.log(`[Orchestrator] ✅ Bilateral analysis detected: caseFor=${result.caseForCount}, toCovers=${result.toCoversCount}, whyCovers=${result.whyCoversCount}, overUnder=${result.overUnderCaseCount}`);
-        }
-        return result.hasBilateral;
-      });
-
       // Log investigation status
-      console.log(`[Orchestrator] Investigation: ${categoryCount} categories, ${totalCalls} total calls, sufficient=${investigationSufficient}, textOnly=${lastResponseWasTextOnly}`);
+      console.log(`[Orchestrator] Investigation: ${categoryCount} categories, ${totalCalls} total calls, textOnly=${lastResponseWasTextOnly}`);
 
       // INVESTIGATION STALL DETECTION: Track if investigation stops producing new data
       if (categoryCount <= _lastCategoryCount) {
@@ -1671,264 +1613,35 @@ Use the fetch_stats tool to request DIFFERENT stat categories you haven't explor
 
       // ═══════════════════════════════════════════════════════════════════════
       // NOTE: Flash research briefing is now injected BEFORE Pass 1 (sequential, not parallel).
-      // Full findings are re-surfaced at Pass 2.5 alongside steel man cases.
+      // Gary uses findings from Pass 1 context to inform his decision in Pass 2.5.
       // ═══════════════════════════════════════════════════════════════════════
-      // PHASE TRIGGERS — based on investigation sufficiency, not per-factor coverage
+      // PHASE GUIDANCE — marker-based transition; this section only nudges completion
       // ═══════════════════════════════════════════════════════════════════════
 
-      if (investigationSufficient && lastResponseWasTextOnly && !pass2AlreadyInjected && !steelManCompleted) {
-        // ═══════════════════════════════════════════════════════════════════════
-        // DUAL-MODEL: Gary's investigation is complete — spawn Flash bilateral cases
-        // Gary produced a text-only response with sufficient investigation breadth,
-        // meaning he's transitioning from investigation to synthesis.
-        // ═══════════════════════════════════════════════════════════════════════
+      if (!pass25AlreadyInjected) {
+        if (_investigationStallCount >= 3) {
+          console.log(`[Orchestrator] Pass 1 stall detected at ${categoryCount} categories — waiting for explicit INVESTIGATION COMPLETE marker`);
+          const nbaCasePrompt = isNBASport && !isPropsMode
+            ? `\n\nBefore INVESTIGATION COMPLETE, include:\nCase for home spread side\nCase for away spread side`
+            : '';
+          const completionNudge = `You are still in Pass 1. Do not make your pick yet.
 
-        if (!isPropsMode) {
-          // Game picks: Advisor builds bilateral Steel Man cases from Gary's investigation
-          spawnFlashAdvisor('investigation complete', `(${categoryCount} categories, ${totalCalls} calls)`);
-          _pass2Injected = true;
+Synthesize what you already have from the scout report + research briefing. If you still need more data, call fetch_stats.
+${nbaCasePrompt}
 
-          // Brief transition — Gary waits for advisor cases
-          messages.push({
-            role: 'user',
-            content: `Your investigation is complete. An advisor is building bilateral cases from the data. You'll receive those cases along with your research assistant's analysis for evaluation shortly.`
-          });
-          console.log(`[Orchestrator] Investigation complete — spawned Flash advisor (${categoryCount} categories, ${totalCalls} calls)`);
-        } else {
-          // Props mode: spawn advisor for bilateral OVER/UNDER cases
-          spawnFlashAdvisor('props investigation complete', `(${categoryCount} categories, ${totalCalls} calls)`);
-          _pass2Injected = true;
-          _proAssessmentRequested = true;
-          messages.push({
-            role: 'user',
-            content: `Your investigation data is being analyzed by an advisor who will build bilateral OVER/UNDER cases for the top prop candidates.
-
-**BEFORE you see those cases, write YOUR honest assessment of the prop landscape.** Based on everything you've investigated:
-
-- Which 3-4 prop bets stand out based on your investigation and why?
-- What game factors from your investigation are most relevant to individual player production tonight?
-- What surprised you in the data? What confirmed your expectations?
-- Where is your biggest uncertainty?
-
-Be specific — cite key data points. This is YOUR read before seeing any external analysis. Do NOT pick OVER or UNDER yet.`
-          });
-          console.log(`[Orchestrator] Props investigation complete — spawned advisor + requested Pro assessment (${categoryCount} categories, ${totalCalls} calls)`);
+When your Pass 1 synthesis is complete, output exactly:
+INVESTIGATION COMPLETE`;
+          messages.push({ role: 'user', content: completionNudge });
+          nextMessageToSend = completionNudge;
         }
-      } else if (!pass2AlreadyInjected && !steelManCompleted) {
-        // Investigation not yet triggering bilateral cases
-
-        if (_pass25Injected || steelManCompleted) {
-          // Pipeline past bilateral analysis — pipeline flags handle the rest
-          console.log(`[Orchestrator] Pipeline past bilateral analysis (pass25=${_pass25Injected}, steelMan=${steelManCompleted}) — skipping`);
-        } else if (_investigationStallCount >= 3 && investigationSufficient) {
-          // STALL BREAKER: Investigation stalled with sufficient breadth — force move
-          console.log(`[Orchestrator] STALL BREAKER: Investigation stalled at ${categoryCount} categories for ${_investigationStallCount} iterations`);
-          if (isPropsMode) {
-            spawnFlashAdvisor('props stall break', `(${categoryCount} categories)`);
-            _proAssessmentRequested = true;
-            messages.push({
-              role: 'user',
-              content: `Your investigation has gathered ${totalCalls} stats across ${categoryCount} categories. An advisor is building bilateral OVER/UNDER cases from your data. Write YOUR honest assessment of the prop landscape — which prop bets stand out and why? Do NOT pick OVER or UNDER.`
-            });
-          } else {
-            spawnFlashAdvisor('stall break', `(${categoryCount} categories)`);
-            messages.push({
-              role: 'user',
-              content: `Your investigation has gathered ${totalCalls} stats across ${categoryCount} categories. An advisor is building bilateral cases. Stand by for evaluation.`
-            });
-          }
-          _pass2Injected = true;
-        } else if (_investigationStallCount >= 3 && categoryCount >= 3) {
-          // Investigation stalled early — still force move (enough for a basic analysis)
-          console.log(`[Orchestrator] STALL BREAKER (early): Investigation stalled at ${categoryCount} categories — forcing bilateral cases`);
-          spawnFlashAdvisor('early stall break', `(${categoryCount} categories)`);
-          _pass2Injected = true;
-          if (isPropsMode) {
-            _proAssessmentRequested = true;
-            messages.push({
-              role: 'user',
-              content: `Your investigation has gathered ${totalCalls} stats across ${categoryCount} categories. An advisor is building bilateral OVER/UNDER cases. Write YOUR honest assessment of the prop landscape. Do NOT pick OVER or UNDER.`
-            });
-          } else {
-            messages.push({
-              role: 'user',
-              content: `Your investigation has gathered ${totalCalls} stats across ${categoryCount} categories. An advisor is building bilateral cases. Stand by for evaluation.`
-            });
-          }
-        } else if (lastResponseWasTextOnly && !investigationSufficient && categoryCount < 4 && iteration <= 3) {
-          // Gary stopped investigating too early — gentle nudge to continue
-          messages.push({
-            role: 'user',
-            content: `You've gathered ${totalCalls} stats across ${categoryCount} categories. Continue investigating — use fetch_stats to explore more aspects of this matchup. Look at efficiency, form, matchup factors, and situational context before proceeding to analysis.`
-          });
-          console.log(`[Orchestrator] Gentle nudge — investigation too shallow (${categoryCount} categories, iteration ${iteration})`);
-        }
-        // If Gary is actively making tool calls, let them process naturally (no nudge)
-      } else if (pass2AlreadyInjected && !pass3AlreadyInjected) {
-        // Pass 2 injected — decide between enforcement, Pass 2.5, or Pass 3
-
-        if (!steelManCompleted && _pass2Delivered && !_flashCasesPromise) {
-          // BILATERAL ANALYSIS ENFORCEMENT: Pass 2 delivered but bilateral cases not written yet
-          if (isPropsMode) {
-            messages.push({
-              role: 'user',
-              content: `
-<enforcement_context>
-## BILATERAL PROP ANALYSIS REQUIRED
-
-You have gathered ${totalCalls} stats across ${categoryCount} categories.
-This is SUFFICIENT data to proceed. STOP calling more stats.
-</enforcement_context>
-
-<case_requirements>
-## REQUIRED OUTPUT
-
-For your top 3-4 prop candidates, write BOTH cases:
-
-### OVER CASE for [Player] — [Prop Type] [Line]
-2-3 paragraphs: What game factors support OVER? What does recent form show? Cite specific stats.
-
-### UNDER CASE for [Player] — [Prop Type] [Line]
-2-3 paragraphs: What limits production tonight? What risks exist? Cite specific stats.
-
-**DO NOT call finalize_props yet.** Write bilateral cases for each candidate first.
-</case_requirements>
-
-<instructions>
-## YOUR TASK
-
-Using the data you've gathered, STOP calling more stats and execute NOW:
-
-1. Synthesize game factors that affect player production (1 paragraph)
-2. For each of your top 3-4 candidates, write **OVER CASE** and **UNDER CASE**
-
-BEGIN WRITING YOUR BILATERAL PROP ANALYSIS NOW.
-</instructions>
-`
-            });
-            console.log(`[Orchestrator] BILATERAL PROP ANALYSIS ENFORCEMENT — Gary must write OVER/UNDER cases`);
-          }
-          // Game picks: Flash builds bilateral cases — no enforcement needed for Gary
-        } else if (!steelManCompleted && !_pass2Delivered) {
-          // Pass 2 queued but not delivered — advisor still building cases
-          if (_flashCasesPromise && !_flashCasesReady) {
-            console.log(`[Orchestrator] 🔄 Advisor still building cases — awaiting before next iteration (${iteration}/${effectiveMaxIterations})`);
-            await _flashCasesPromise;
-            console.log(`[Orchestrator] ✅ Advisor returned — will inject Pass 2.5 next iteration`);
-          } else if (pass2AlreadyInjected) {
-            // Pass 2 injected — tell Gary to write his assessment
-            const enforceMsg = isPropsMode
-              ? `You have gathered ${totalCalls} stats across ${categoryCount} categories. This is SUFFICIENT data. An advisor is building bilateral OVER/UNDER cases from your data. Write YOUR honest assessment of the prop landscape — which prop bets stand out based on your investigation and why?`
-              : `You have gathered ${totalCalls} stats across ${categoryCount} categories. This is SUFFICIENT data to proceed. An advisor is building bilateral Steel Man cases from your data. Write YOUR honest read on this game — what are the key dynamics and what matters most for tonight? Do NOT pick a side.`;
-            messages.push({ role: 'user', content: enforceMsg });
-          }
-        } else if (!pass25AlreadyInjected && steelManCompleted) {
-          // ═══════════════════════════════════════════════════════════════════════
-          // PASS 2.5 INJECTION
-          // ═══════════════════════════════════════════════════════════════════════
-          const pass25Content = isPropsMode
-            ? buildPass25PropsMessage(homeTeam, awayTeam, sport)
-            : buildPass25Message(homeTeam, awayTeam, sport, spread);
-
-          messages.push({ role: 'user', content: pass25Content });
-
-          _pass25Injected = true;
-          _pass25JustInjected = true;
-          console.log(`[Orchestrator] Injected Pass 2.5 (Case Evaluation & Decision) — ${categoryCount} categories, Steel Man complete, spread: ${spread}`);
-        } else if (!steelManCompleted && !pass2AlreadyInjected) {
-          // Neither Pass 2 nor Steel Man — spawn Flash advisor (urgent path)
-          spawnFlashAdvisor('urgent (sufficient investigation, no Pass 2)', `(${categoryCount} categories)`);
-          _pass2Injected = true;
-          if (isPropsMode) {
-            _proAssessmentRequested = true;
-            messages.push({ role: 'user', content: `An advisor is building bilateral OVER/UNDER cases from your investigation data. Write YOUR honest assessment of the prop landscape. Do NOT pick OVER or UNDER.` });
-          } else {
-            messages.push({ role: 'user', content: `Your investigation is complete. An advisor is building bilateral cases. Stand by for evaluation.` });
-          }
-          console.log(`[Orchestrator] Flash advisor spawned (urgent) — ${categoryCount} categories, spread: ${spread}`);
-        } else if (pass25AlreadyInjected && !pass3AlreadyInjected) {
-          // Pass 2.5 evaluation done — inject Pass 3 for final output
-          const pass3Content = isPropsMode
-            ? buildPass3Props(homeTeam, awayTeam, propContext)
-            : buildPass3Unified(homeTeam, awayTeam, options);
-          messages.push({ role: 'user', content: pass3Content });
-          _pass3Injected = true;
-          console.log(`[Orchestrator] Injected Pass 3 (${isPropsMode ? 'Props Evaluation' : 'Final Output'})`);
-        }
-      }
-
-      // ═══════════════════════════════════════════════════════════════════════
-      // FLASH ADVISOR: Check if Flash's cases are ready and inject into Pro
-      // ═══════════════════════════════════════════════════════════════════════
-      if (_flashCasesReady && !_pass25Injected && _pass2Injected) {
-        if (_flashCases) {
-          if (isPropsMode) {
-            // PROPS: Inject advisor bilateral OVER/UNDER cases + enhanced Pass 2.5
-            console.log(`[Orchestrator] Props advisor cases received (${(_flashCases.candidateCases || '').length} chars, advisor)`);
-
-            const advisorPreamble = buildAdvisorPropsPreamble(homeTeam, awayTeam, _flashCases, _proAssessment);
-            const pass25Content = advisorPreamble + buildPass25PropsMessage(homeTeam, awayTeam, sport);
-            messages.push({ role: 'user', content: pass25Content });
-            nextMessageToSend = pass25Content;
-
-            _pass25Injected = true;
-            _pass25JustInjected = true;
-            _pass2Delivered = true;
-
-            console.log(`[Orchestrator] Injected Props Pass 2.5 with ${_proAssessment ? 'Pro assessment + ' : ''}advisor cases — Pro evaluates independently`);
-          } else {
-            // GAME PICKS: Flash succeeded — inject cases into Pro as "advisor" input
-            steelManCases.homeTeamCase = _flashCases.homeTeamCase;
-            steelManCases.awayTeamCase = _flashCases.awayTeamCase;
-            steelManCases.capturedAt = new Date().toISOString();
-            steelManCases.source = 'advisor';
-
-            console.log(`[Orchestrator] Flash advisor cases received (${steelManCases.homeTeamCase?.length || 0}+${steelManCases.awayTeamCase?.length || 0} chars, advisor)`);
-
-            const advisorPreamble = buildAdvisorPreamble(homeTeam, awayTeam, _flashCases, _researchBriefing);
-            const pass25Content = advisorPreamble + buildPass25Message(homeTeam, awayTeam, sport, spread);
-            messages.push({ role: 'user', content: pass25Content });
-            nextMessageToSend = pass25Content;
-
-            _pass25Injected = true;
-            _pass25JustInjected = true;
-            _pass2Delivered = true;
-
-            console.log(`[Orchestrator] Injected Pass 2.5 with ${_researchBriefing ? 'full findings + ' : ''}advisor cases`);
-            // TEMP: Dump full Pass 2.5 content to file for inspection
-            if (process.env.VERBOSE_GARY) {
-              const fs = await import('fs');
-              const dumpPath = `/tmp/pass25_${homeTeam.replace(/\s/g,'_')}_${Date.now()}.txt`;
-              fs.writeFileSync(dumpPath, pass25Content);
-              console.log(`[VERBOSE] Pass 2.5 dumped to: ${dumpPath}`);
-            }
-          }
-        } else {
-          // Advisor failed
-          if (isPropsMode) {
-            // Props advisor failed — HARD FAIL (same as game picks — no silent fallback)
-            console.error(`[Orchestrator] ❌ Props advisor FAILED for ${awayTeam} @ ${homeTeam} — props cannot proceed without bilateral cases`);
-            return {
-              error: 'Props advisor failed — cannot produce bilateral OVER/UNDER cases',
-              toolCallHistory,
-              iterations: iteration,
-              homeTeam, awayTeam, sport
-            };
-          } else {
-            // Game picks: Flash advisor failed — HARD FAIL (no silent fallback to biased single-model cases)
-            console.error(`[Orchestrator] ❌ Flash advisor FAILED for ${awayTeam} @ ${homeTeam} — pick cannot proceed without bilateral cases`);
-            return {
-              error: 'Advisor failed — cannot produce bilateral cases',
-              toolCallHistory,
-              iterations: iteration,
-              homeTeam, awayTeam, sport
-            };
-          }
-        }
-
-        // Clear Flash state (one-shot)
-        _flashCasesReady = false;
-        _flashCasesPromise = null;
+      } else if (pass25AlreadyInjected && !pass3AlreadyInjected) {
+        // Pass 2.5 evaluation done — inject Pass 3 for final output
+        const pass3Content = isPropsMode
+          ? buildPass3Props(homeTeam, awayTeam, propContext)
+          : buildPass3Unified(homeTeam, awayTeam, options);
+        messages.push({ role: 'user', content: pass3Content });
+        _pass3Injected = true;
+        console.log(`[Orchestrator] Injected Pass 3 (${isPropsMode ? 'Props Evaluation' : 'Final Output'})`);
       }
 
       // ═══════════════════════════════════════════════════════════════════════
@@ -1969,39 +1682,70 @@ BEGIN WRITING YOUR BILATERAL PROP ANALYSIS NOW.
     // The prompts encourage comprehensive stat gathering naturally
 
     // ═══════════════════════════════════════════════════════════════════════
-    // PIPELINE ENFORCEMENT: Gary MUST go through the full multi-pass pipeline
-    // Pass 1 (Investigation) → Pass 2 (Steel Man) → Pass 2.5 (Evaluation) → Pass 3 (Final Output)
-    // If Gary tries to output a pick before completing these passes, reject it and
-    // force the correct next step. This prevents the model from making picks without completing the full pipeline.
+    // TEXT-ONLY RESPONSE HANDLING / PIPELINE ENFORCEMENT
+    // Pass 2.5 transition is marker-based only:
+    // - inject Pass 2.5 only when Gary outputs INVESTIGATION COMPLETE
+    // - otherwise keep Pass 1 active with a completion reminder
     // ═══════════════════════════════════════════════════════════════════════
-    if (!_pass2Injected && iteration < effectiveMaxIterations) {
-      // Pass 2 hasn't been injected yet — Gary tried to skip investigation
-      const { sufficient: gateSufficient, categoryCount: gateCategories, totalCalls: gateCalls } = isInvestigationSufficient(toolCallHistory, iteration);
+    if (!_pass25Injected && iteration < effectiveMaxIterations) {
+      const { categoryCount: gateCategories, totalCalls: gateCalls } = isInvestigationSufficient(toolCallHistory, iteration);
+      const markedComplete = hasInvestigationCompleteMarker(message.content || '');
 
-      if (gateSufficient) {
-        // Investigation sufficient — spawn Flash and force assessment
-        messages.push({ role: 'assistant', content: message.content });
-        if (isPropsMode) {
-          console.log(`[Orchestrator] ⚠️ PIPELINE GATE: Gary tried to pick before Pass 2 — spawning props advisor (${gateCategories} categories, ${gateCalls} calls)`);
-          spawnFlashAdvisor('props pipeline gate', `(${gateCategories} categories)`);
-          _pass2Injected = true;
-          _proAssessmentRequested = true;
-          messages.push({ role: 'user', content: `An advisor is building bilateral OVER/UNDER cases from your investigation data. Hold your pick — write YOUR honest assessment of which prop bets stand out and why. Do NOT pick OVER or UNDER.` });
-        } else {
-          console.log(`[Orchestrator] ⚠️ PIPELINE GATE: Gary tried to pick before Pass 2 — spawning Flash advisor (${gateCategories} categories, ${gateCalls} calls)`);
-          spawnFlashAdvisor('pipeline gate', `(${gateCategories} categories)`);
-          _pass2Injected = true;
-          messages.push({ role: 'user', content: `Your investigation is complete. An advisor is building bilateral cases. Hold your pick — you'll receive the cases along with your research assistant's analysis for evaluation shortly.` });
+      if (markedComplete) {
+        if (isNBASport && !isPropsMode) {
+          const caseCheck = validateNbaSpreadCases(message.content || '', homeTeam, awayTeam, spread);
+          if (!caseCheck.valid) {
+            if (!_nbaCaseRetryUsed) {
+              _nbaCaseRetryUsed = true;
+              const retryMsg = `You're close, but Pass 1 is not complete yet.
+
+Before INVESTIGATION COMPLETE, include BOTH sections with substantive content:
+Case for home spread side
+Case for away spread side
+
+Each case must be 2-3 paragraphs, grounded in your investigation data, and explain why that side is advantaged relative to this spread number tonight. Focus on price-relative reasoning for this game, not team-quality summaries. Then output:
+INVESTIGATION COMPLETE`;
+              console.log(`[Orchestrator] NBA bilateral case gate retry (${caseCheck.reason}; homeLen=${caseCheck.homeLen}, awayLen=${caseCheck.awayLen})`);
+              messages.push({ role: 'assistant', content: message.content });
+              messages.push({ role: 'user', content: retryMsg });
+              nextMessageToSend = retryMsg;
+              continue;
+            }
+
+            throw new Error(`[HARD FAIL] NBA Pass 1 bilateral spread cases missing or too short after retry (${caseCheck.reason}; homeLen=${caseCheck.homeLen}, awayLen=${caseCheck.awayLen}).`);
+          }
         }
-        nextMessageToSend = messages[messages.length - 1].content;
-        continue;
-      } else {
-        // Investigation too shallow — nudge to continue investigating
-        console.log(`[Orchestrator] ⚠️ PIPELINE GATE: Gary tried to pick with only ${gateCategories} categories — nudging to investigate`);
+
+        // Explicit completion marker (text-only path) — inject Pass 2.5
         messages.push({ role: 'assistant', content: message.content });
-        messages.push({ role: 'user', content: `STOP — you cannot make your pick yet. You've only investigated ${gateCategories} stat categories (${gateCalls} total calls). Continue using fetch_stats to explore more aspects of this matchup — efficiency, form, matchup factors, and situational context. Do NOT write analysis or try to make a pick yet.` });
+        console.log(`[Orchestrator] Pipeline gate: INVESTIGATION COMPLETE received — injecting Pass 2.5 (${gateCategories} categories, ${gateCalls} calls)`);
+        const pass25Content = (isPropsMode
+          ? buildPass25PropsMessage(homeTeam, awayTeam, sport)
+          : buildPass25Message(homeTeam, awayTeam, sport, spread, options.pass25DecisionGuards || ''));
+        messages.push({ role: 'user', content: pass25Content });
+        nextMessageToSend = pass25Content;
+        _pass25Injected = true;
+        _pass25JustInjected = true;
         continue;
       }
+
+      // No completion marker yet — keep Pass 1 active
+      console.log(`[Orchestrator] Pass 1 remains active — waiting for INVESTIGATION COMPLETE (${gateCategories} categories, ${gateCalls} calls)`);
+      messages.push({ role: 'assistant', content: message.content });
+      const nbaCasePrompt = isNBASport && !isPropsMode
+        ? `\n\nBefore INVESTIGATION COMPLETE, include:\nCase for home spread side\nCase for away spread side`
+        : '';
+      messages.push({
+        role: 'user',
+        content: `You are still in Pass 1. Do not make your pick yet.
+
+Synthesize from scout report + research briefing. If you need more data, call fetch_stats.
+${nbaCasePrompt}
+
+When complete, output exactly:
+INVESTIGATION COMPLETE`
+      });
+      continue;
     }
 
     // Use persistent flags (no false positives from message scanning)
@@ -2020,49 +1764,8 @@ BEGIN WRITING YOUR BILATERAL PROP ANALYSIS NOW.
       continue;
     }
 
-    // Gary is done - but check if we need to inject Pass 2.5 first
+    // Gary is done
     console.log(`[Orchestrator] Gary finished analysis (${finishReason})`);
-    
-    // Check if Steel Man was just completed and Pass 2.5 hasn't been done yet
-    const pass25Done = messages.some(m => m.content?.includes('PASS 2.5 - CASE REVIEW'));
-    const pass3Done = messages.some(m => m.content?.includes('PASS 3 - FINAL OUTPUT') || m.content?.includes('PASS 3 - PROPS EVALUATION PHASE'));
-    
-    // Detect Steel Man / bilateral analysis in current response
-    // Game picks: "Case for [Team]", "to cover", "Why/How covers/wins"
-    // Detect bilateral analysis in current response
-    const currentContent = message.content || '';
-    const bilateralResult = detectBilateralAnalysis(currentContent);
-    const steelManJustWritten = bilateralResult.hasBilateral;
-
-    if (steelManJustWritten && !pass25Done && !pass3Done && iteration < effectiveMaxIterations) {
-      // Gary just wrote bilateral analysis! Inject Pass 2.5 before allowing a pick
-      console.log(`[Orchestrator] ✅ Bilateral analysis detected (caseFor=${bilateralResult.caseForCount}, toCovers=${bilateralResult.toCoversCount}, overUnder=${bilateralResult.overUnderCaseCount})`);
-      console.log(`\n📋 GARY'S ${isPropsMode ? 'BILATERAL PROP ANALYSIS' : 'STEEL MAN ANALYSIS'} (Both Sides):\n${'─'.repeat(60)}`);
-      console.log(currentContent);
-      console.log(`${'─'.repeat(60)}\n`);
-      console.log(`[Orchestrator] Injecting Pass 2.5 (${isPropsMode ? 'Prop Case Review' : 'Case Evaluation & Decision'}) - bilateral analysis just completed`);
-
-      messages.push({
-        role: 'assistant',
-        content: message.content
-      });
-
-      // spread already defined at loop scope
-      const pass25Content = isPropsMode
-        ? buildPass25PropsMessage(homeTeam, awayTeam, sport)
-        : buildPass25Message(homeTeam, awayTeam, sport, spread);
-      messages.push({
-        role: 'user',
-        content: pass25Content
-      });
-      
-      // CRITICAL: Set nextMessageToSend so the session knows what to send next
-      nextMessageToSend = pass25Content;
-      _pass25Injected = true;
-      _pass25JustInjected = true;
-
-      continue; // Go back to get Pass 2.5 response
-    }
 
     // ─── Props mode: parse with parsePropsResponse ───────────────────────
     if (isPropsMode) {
@@ -2073,7 +1776,7 @@ BEGIN WRITING YOUR BILATERAL PROP ANALYSIS NOW.
           toolCallHistory, iterations: iteration,
           homeTeam, awayTeam, sport,
           rawAnalysis: message.content,
-          steelManCases, isProps: true
+          isProps: true
         };
       }
       // Props response didn't parse — retry up to 2 times, then let max-iterations fallback handle it
@@ -2091,115 +1794,6 @@ BEGIN WRITING YOUR BILATERAL PROP ANALYSIS NOW.
       // After 2 nudges, skip straight to max-iterations fallback (don't waste iterations)
       console.log(`[Orchestrator] ⚠️ Props finalize_props not called after ${propsRetryCount} retries — jumping to max-iterations fallback`);
       break;
-    }
-
-    // ─── PIPELINE GATE: Don't accept picks before Pass 2.5 + Pass 3 ─────
-    // If Pass 2 was injected (Steel Man phase), Gary MUST go through Pass 2.5 (evaluation)
-    // and Pass 3 (final output) before a pick is accepted. This prevents Gary from
-    // sneaking a pick JSON into his Steel Man analysis and bypassing the evaluation pipeline.
-    if (_pass2Injected && !_pass25Injected && iteration < effectiveMaxIterations) {
-      messages.push({ role: 'assistant', content: message.content });
-
-      // If Flash advisor is still building cases, tell Pro to wait
-      if (_flashCasesPromise && !_flashCasesReady) {
-        console.log(`[Orchestrator] 🔄 PIPELINE GATE: Pro tried to pick but Flash advisor still working — awaiting Flash`);
-        // Await Flash (usually <30s remaining since it started earlier)
-        await _flashCasesPromise;
-        // The .then()/.catch() handler will set _flashCasesReady and _flashCases
-        // The injection check in the coverage block will handle it next iteration
-        messages.push({
-          role: 'user',
-          content: 'Your bilateral cases from the advisor are being prepared. Hold your pick — you will evaluate the advisor\'s cases before making a decision.'
-        });
-        nextMessageToSend = messages[messages.length - 1].content;
-        continue;
-      }
-
-      // Check if bilateral cases were actually written (Pro wrote them, or Flash delivered them)
-      const gateRecentMsgs = messages.filter(m => m.role === 'assistant' && m.content).slice(-5);
-      const gateSteelManDone = (_flashCases && _flashCasesReady) || gateRecentMsgs.some(m => {
-        return detectBilateralAnalysis(m.content || '').hasBilateral;
-      });
-
-      if (!gateSteelManDone) {
-        // Bilateral cases NOT written — re-enforce Pass 2
-        if (isPropsMode) {
-          console.log(`[Orchestrator] 🔄 PIPELINE GATE: Pick attempted but bilateral prop analysis not written — re-enforcing Props Pass 2`);
-          messages.push({
-            role: 'user',
-            content: `**STOP.** You attempted to finalize props without writing your bilateral OVER/UNDER analysis. You MUST build both the OVER case and UNDER case for your top 3-4 prop candidates BEFORE making a selection.
-
-For each candidate, write:
-
-### OVER CASE for [Player] — [Prop Type] [Line]
-[Build the strongest data-backed case for OVER — cite stats from your investigation]
-
-### UNDER CASE for [Player] — [Prop Type] [Line]
-[Build the strongest data-backed case for UNDER — cite stats from your investigation]
-
-Do NOT call finalize_props yet. Write BOTH cases for each candidate first.`
-          });
-        } else {
-          // Game picks: Flash builds cases, not Pro. Await Flash.
-          console.log(`[Orchestrator] 🔄 PIPELINE GATE: Pick attempted but Flash Steel Man cases not ready — awaiting Flash advisor`);
-          if (_flashCasesPromise && !_flashCasesReady) {
-            // Flash is still building — tell Pro to wait
-            messages.push({
-              role: 'user',
-              content: `**STOP.** You attempted to make a pick before the bilateral Steel Man analysis is ready. An advisor is currently building the cases for both sides. Summarize your key investigation findings while the cases are being prepared. Do NOT make a pick yet.`
-            });
-          } else if (!_flashCasesPromise) {
-            // Flash was never spawned — spawn it now
-            console.log(`[Orchestrator] ⚠️ Flash advisor was never spawned — spawning now for pipeline gate`);
-            spawnFlashAdvisor('pipeline gate', '(pre-pick)');
-            messages.push({
-              role: 'user',
-              content: `**STOP.** You attempted to make a pick before the bilateral Steel Man analysis is ready. An advisor is now building the cases for both sides. Summarize your key investigation findings while the cases are being prepared. Do NOT make a pick yet.`
-            });
-          } else {
-            // Flash already completed — cases should be available, something else is wrong
-            // Let the normal Flash injection path handle it on next iteration
-            messages.push({
-              role: 'user',
-              content: `**STOP.** You attempted to make a pick before evaluating the bilateral Steel Man cases. The cases are ready — they will be provided to you for evaluation. Do NOT make a pick yet.`
-            });
-          }
-        }
-        nextMessageToSend = messages[messages.length - 1].content;
-        continue;
-      }
-
-      // Bilateral cases were written — proceed to Pass 2.5
-      console.log(`[Orchestrator] 🔄 PIPELINE GATE: Investigation complete — transitioning to Pass 2.5 evaluation`);
-
-      // Inject Pass 2.5 + Pro switch (same logic as steelManJustWritten path above)
-      // Props: use props-specific Pass 2.5 (evaluates OVER/UNDER cases, not team spread)
-      // Game picks: use Flash advisor cases if available
-      let pass25Content;
-      if (isPropsMode) {
-        pass25Content = buildPass25PropsMessage(homeTeam, awayTeam, sport);
-        console.log(`[Orchestrator] Injecting Props Pass 2.5 (prop case review & evaluation)`);
-      } else if (_flashCases && _flashCases.homeTeamCase && _flashCases.awayTeamCase) {
-        // Flash cases available — include them as advisor preamble
-        steelManCases.homeTeamCase = _flashCases.homeTeamCase;
-        steelManCases.awayTeamCase = _flashCases.awayTeamCase;
-        steelManCases.capturedAt = new Date().toISOString();
-        steelManCases.source = 'advisor';
-
-        const advisorPreamble = buildAdvisorPreamble(homeTeam, awayTeam, _flashCases, _researchBriefing);
-        pass25Content = advisorPreamble + buildPass25Message(homeTeam, awayTeam, sport, spread);
-        console.log(`[Orchestrator] ✅ Flash advisor cases included in pipeline gate Pass 2.5 (${_flashCases.homeTeamCase?.length || 0} + ${_flashCases.awayTeamCase?.length || 0} chars)`);
-      } else {
-        // No Flash cases — use plain Pass 2.5 (Pro will self-synthesize)
-        pass25Content = buildPass25Message(homeTeam, awayTeam, sport, spread);
-        console.log(`[Orchestrator] ⚠️ No Flash advisor cases available — Pro will self-synthesize Steel Man cases`);
-      }
-      messages.push({ role: 'user', content: pass25Content });
-
-      nextMessageToSend = pass25Content;
-      _pass25Injected = true;
-      _pass25JustInjected = true;
-      continue;
     }
 
     if (_pass25Injected && !_pass3Injected && iteration < effectiveMaxIterations) {
@@ -2259,25 +1853,6 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
       pick.iterations = iteration;
       pick.rawAnalysis = message.content;
 
-      // Attach full steel man cases for transparency
-      if (steelManCases.homeTeamCase || steelManCases.awayTeamCase) {
-        pick.steelManCases = {
-          homeTeam: steelManCases.homeTeamCase,
-          awayTeam: steelManCases.awayTeamCase,
-          source: steelManCases.source || 'unknown',
-          capturedAt: steelManCases.capturedAt
-        };
-        console.log(`[Orchestrator] 📝 Steel Man cases attached to pick (source: ${steelManCases.source || 'unknown'})`);
-        console.log(`\n📋 STEEL MAN — CASE FOR ${homeTeam} (${steelManCases.homeTeamCase?.length || 0} chars):`);
-        console.log(`────────────────────────────────────────────────────────────`);
-        console.log(steelManCases.homeTeamCase || '(none)');
-        console.log(`────────────────────────────────────────────────────────────`);
-        console.log(`\n📋 STEEL MAN — CASE FOR ${awayTeam} (${steelManCases.awayTeamCase?.length || 0} chars):`);
-        console.log(`────────────────────────────────────────────────────────────`);
-        console.log(steelManCases.awayTeamCase || '(none)');
-        console.log(`────────────────────────────────────────────────────────────`);
-      }
-
       return pick;
     } else {
       // If no valid JSON after retry, return the raw analysis
@@ -2298,14 +1873,13 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
   // If pipeline didn't reach Pass 2.5, the analysis is incomplete — fail honestly
   if (isPropsMode) {
     if (!_pass25Injected) {
-      const stage = !_pass2Injected ? 'Pass 2 (bilateral cases)' : 'Pass 2.5 (case evaluation)';
-      console.error(`[Orchestrator] ❌ Max iterations reached but pipeline incomplete — ${stage} never completed for ${awayTeam} @ ${homeTeam}`);
-      console.error(`[Orchestrator] Pipeline state: pass2=${_pass2Injected}, pass25=${_pass25Injected}, pass3=${_pass3Injected}`);
+      console.error(`[Orchestrator] ❌ Max iterations reached but pipeline incomplete — Pass 2.5 (evaluation) never completed for ${awayTeam} @ ${homeTeam}`);
+      console.error(`[Orchestrator] Pipeline state: pass25=${_pass25Injected}, pass3=${_pass3Injected}`);
       return {
-        error: `Props pipeline incomplete — ${stage} never completed within max iterations`,
+        error: `Props pipeline incomplete — Pass 2.5 (evaluation) never completed within max iterations`,
         toolCallHistory, iterations: iteration,
         homeTeam, awayTeam, sport, isProps: true,
-        _pipelineState: { pass2: _pass2Injected, pass25: _pass25Injected, pass3: _pass3Injected }
+        _pipelineState: { pass25: _pass25Injected, pass3: _pass3Injected }
       };
     }
     console.log(`[Orchestrator] ⚠️ Max iterations (${effectiveMaxIterations}) reached in props mode - injecting final props prompt...`);
@@ -2339,7 +1913,7 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
               toolCallHistory, iterations: iteration + attempt,
               homeTeam, awayTeam, sport,
               rawAnalysis: finalMessage.content || '',
-              steelManCases, isProps: true
+              isProps: true
             };
           }
         }
@@ -2353,7 +1927,7 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
               toolCallHistory, iterations: iteration + attempt,
               homeTeam, awayTeam, sport,
               rawAnalysis: finalMessage.content,
-              steelManCases, isProps: true
+              isProps: true
             };
           }
           // Add response and retry with explicit instruction
@@ -2374,10 +1948,10 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
   }
 
   // Game mode: Pipeline did not complete within max iterations — NO synthesis fallback
-  // Every pick must come from the real pipeline (Pass 1→2→2.5→3). If the pipeline
+  // Every pick must come from the real pipeline (Pass 1→2.5→3). If the pipeline
   // can't complete, this game is reported as a failure. No fake/synthesized picks.
   console.error(`[Orchestrator] MAX ITERATIONS (${effectiveMaxIterations}) reached without completing pipeline for ${awayTeam} @ ${homeTeam}`);
-  console.error(`[Orchestrator] Pipeline state: pass2=${_pass2Injected}, pass25=${_pass25Injected}, pass3=${_pass3Injected}, steelMan=${steelManCases.capturedAt ? 'captured' : 'missing'}`);
+  console.error(`[Orchestrator] Pipeline state: pass25=${_pass25Injected}, pass3=${_pass3Injected}`);
   console.error(`[Orchestrator] Stats gathered: ${toolCallHistory.length}, iterations: ${iteration}`);
   return {
     error: 'Pipeline did not complete within max iterations — no pick generated',
@@ -2386,7 +1960,7 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
     homeTeam,
     awayTeam,
     sport,
-    _pipelineState: { pass2: _pass2Injected, pass25: _pass25Injected, pass3: _pass3Injected },
+    _pipelineState: { pass25: _pass25Injected, pass3: _pass3Injected },
     _statsGathered: toolCallHistory.length
   };
 }

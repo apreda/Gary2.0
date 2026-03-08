@@ -9,7 +9,6 @@
  *   node scripts/run-dfs-lineups.js --dk               # DraftKings only
  *   node scripts/run-dfs-lineups.js --fd               # FanDuel only
  *   node scripts/run-dfs-lineups.js --nfl              # NFL instead of NBA
- *   node scripts/run-dfs-lineups.js --nhl              # NHL instead of NBA
  *   node scripts/run-dfs-lineups.js --nfl --dk --test  # NFL DraftKings, test table
  *   node scripts/run-dfs-lineups.js --dry-run          # Generate + print only, NO Supabase
  *   node scripts/run-dfs-lineups.js --limit 1          # Limit to first N slates PER PLATFORM
@@ -89,11 +88,14 @@ async function run() {
   const fdOnly = args.includes('--fanduel') || args.includes('--fd');
   const dkOnly = args.includes('--draftkings') || args.includes('--dk');
   const isNFL = args.includes('--nfl');
-  const isNHL = args.includes('--nhl');
   const isDryRun = args.includes('--dry-run');
   const limitIdx = args.indexOf('--limit');
   const slateLimit = limitIdx >= 0 ? parseInt(args[limitIdx + 1], 10) : Infinity;
-  const sport = isNFL ? 'NFL' : isNHL ? 'NHL' : 'NBA';
+  const slateIdx = args.indexOf('--slate');
+  const slateFilter = slateIdx >= 0 ? args[slateIdx + 1] : null;
+  const gamesIdx = args.indexOf('--games');
+  const gamesFilter = gamesIdx >= 0 ? parseInt(args[gamesIdx + 1], 10) : null;
+  const sport = isNFL ? 'NFL' : 'NBA';
   const supabase = isDryRun ? null : getSupabaseAdmin();
   const sportLower = sport.toLowerCase();
   const platforms = fdOnly ? ['fanduel'] : dkOnly ? ['draftkings'] : ['draftkings', 'fanduel'];
@@ -147,7 +149,14 @@ async function run() {
   let slateNum = 0;
 
   for (const platform of platforms) {
-    const platformSlates = (allSlates[platform] || []).slice(0, slateLimit);
+    let platformSlates = allSlates[platform] || [];
+    if (slateFilter) {
+      platformSlates = platformSlates.filter(s => s.name.toLowerCase().includes(slateFilter.toLowerCase()));
+    }
+    if (gamesFilter) {
+      platformSlates = platformSlates.filter(s => s.gameCount === gamesFilter);
+    }
+    platformSlates = platformSlates.slice(0, slateLimit);
     for (const slate of platformSlates) {
       slateNum++;
       console.log(`\n${'─'.repeat(80)}`);
@@ -215,10 +224,11 @@ async function run() {
             projected_pts: p.projectedPoints || p.projected_pts || 0,
             rationale: p.reasoning || p.rationale || null,
             ceiling_projection: p.ceilingProjection,
-            ownership: p.ownership ?? null,
             valueScore: p.valueScore ?? null,
             recentFormRatio: p.recentFormRatio ?? null,
             opponent: p.opponent ?? null,
+            isQuestionable: p.isQuestionable || false,
+            questionableSwap: p.questionableSwap || null,
             pivots: (p.pivots || []).map(pv => ({
               tier: pv.tier,
               tierLabel: pv.tierLabel,

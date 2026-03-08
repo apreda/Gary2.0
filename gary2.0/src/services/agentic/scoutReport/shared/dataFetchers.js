@@ -225,7 +225,7 @@ export async function fetchRecentGames(teamName, sport, count = 5) {
       params = {
         team_ids: [team.id],
         seasons: [season],
-        per_page: 50  // NCAAB teams play ~30 games; 50 covers full season with margin
+        per_page: 100  // NHL plays 82 games; 100 covers full season for all sports
       };
     } else {
       // NBA/etc: Use date range filtering
@@ -246,23 +246,22 @@ export async function fetchRecentGames(teamName, sport, count = 5) {
     const today = new Date();
     const sorted = (recentGames || [])
       .filter(g => {
-        const hasDate = g.date || g.datetime;
-        const gameDateStr = (g.date || g.datetime || '').split('T')[0];
+        const rawDate = g.date || g.datetime;
+        const hasDate = !!rawDate;
+        const gameDateStr = (rawDate || '').split('T')[0];
         const todayStr = today.toISOString().split('T')[0];
-        const isPast = gameDateStr < todayStr; // Date-string compare excludes today's games
-        // For season-based fetch, also check status is Final (if available)
+        const isPast = gameDateStr < todayStr;
         if (usesSeasonParam) {
           const status = (g.status || '').toLowerCase();
           const isFinished = status === 'final' || status === 'post' || status === 'off';
           return hasDate && (isPast || isFinished);
         }
-        // For date-range fetch (NBA), filter out today's unplayed games
         return hasDate && isPast;
       })
       .sort((a, b) => {
         const dateA = new Date(a.date || a.datetime);
         const dateB = new Date(b.date || b.datetime);
-        return dateB - dateA; // Descending (most recent first)
+        return dateB - dateA;
       })
       .slice(0, count);
     
@@ -299,12 +298,11 @@ export function calculateRestSituation(recentGames, gameDate, teamName = null) {
     .filter(g => g.date || g.datetime)
     .map(g => {
       // BDL may return date as full ISO timestamp (e.g., "2025-12-20T05:00:00.000Z") or just "YYYY-MM-DD"
-      // Extract just the date portion (YYYY-MM-DD) from either format
       let rawDate = g.date || g.datetime;
       const dateStr = rawDate ? rawDate.split('T')[0] : null;
       // Check if game has completed (has scores)
-      const homeScore = g.home_team_score || g.home_score || 0;
-      const awayScore = g.visitor_team_score || g.away_score || g.visitor_score || 0;
+      const homeScore = g.home_team_score || 0;
+      const awayScore = g.visitor_team_score || 0;
       const hasCompleted = homeScore > 0 || awayScore > 0;
       return {
         ...g,
@@ -1108,8 +1106,9 @@ export async function fetchInjuries(homeTeam, awayTeam, sport) {
     }
     
     // =============================================================================
-    // NBA/NCAAB: Fetch injuries & lineups from Rotowire via Gemini Grounding
-    // NHL: Injuries from BDL API, goalie/lineup context from Grounding
+    // NBA: Injuries from RapidAPI + starting lineups from RotoWire via Grounding
+    // NCAAB: separate lineup flow in sport builder (RotoWire via Grounding)
+    // NHL: injuries from BDL + goalie/lineup context from Grounding
     // =============================================================================
 
     // OPTIMIZATION: For NCAAB, skip the separate injury grounding call
@@ -1174,8 +1173,27 @@ export async function fetchInjuries(homeTeam, awayTeam, sport) {
         console.log(`[Scout Report] BDL duration enrichment failed: ${e.message}`);
       }
 
-      // NBA & NHL: Skip stale marking — box-score resolution in buildScoutReport() handles duration + freshness
-      if (bdlSport === 'basketball_nba' || bdlSport === 'icehockey_nhl') {
+      // NBA: Skip stale marking — box-score resolution in buildScoutReport() handles duration + freshness.
+      // Also enforce required starting lineups (5 per team).
+      if (bdlSport === 'basketball_nba') {
+        const nbaLineups = groundingInjuries?.lineups || { home: [], away: [] };
+        if (nbaLineups.home.length < 5 || nbaLineups.away.length < 5) {
+          throw new Error(`[Scout Report] CRITICAL: NBA starting lineups missing or incomplete (${awayTeam}: ${nbaLineups.away.length}/5, ${homeTeam}: ${nbaLineups.home.length}/5).`);
+        }
+
+        return {
+          home: enrichedHome,
+          away: enrichedAway,
+          staleInjuries: [], // Computed in buildScoutReport after box-score resolution
+          lineups: nbaLineups,
+          narrativeContext,
+          _homeTeamId: groundingInjuries?._homeTeamId,
+          _awayTeamId: groundingInjuries?._awayTeamId
+        };
+      }
+
+      // NHL: Skip stale marking — box-score resolution in buildScoutReport() handles duration + freshness.
+      if (bdlSport === 'icehockey_nhl') {
         return {
           home: enrichedHome,
           away: enrichedAway,
@@ -1633,6 +1651,158 @@ Cleaned Report:`;
 // GROUNDING INJURIES & PARSING
 // ============================================================================
 
+function parseNbaStartingLineupsFromGrounding(content = '', homeTeam = '', awayTeam = '') {
+  const lineups = { home: [], away: [] };
+  const seen = { home: new Set(), away: new Set() };
+  let section = null; // "home" | "away"
+
+  const cleanName = (raw = '') => raw
+    .replace(/^\s*[-*•\d.)]+\s*/, '')
+    .replace(/\(.*?\)/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+  const pushPlayer = (teamKey, position, nameRaw) => {
+    if (!teamKey || !nameRaw) return;
+    const name = cleanName(nameRaw);
+    if (!name || /unknown/i.test(name)) return;
+    const key = name.toLowerCase();
+    if (seen[teamKey].has(key)) return;
+    seen[teamKey].add(key);
+    lineups[teamKey].push({ name, position: position || '' });
+  };
+
+  const lines = String(content).split('\n');
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const lower = line.toLowerCase();
+
+    if (lower.startsWith('away_starters')) {
+      section = 'away';
+      continue;
+    }
+    if (lower.startsWith('home_starters')) {
+      section = 'home';
+      continue;
+    }
+    if (homeTeam && lower.includes(homeTeam.toLowerCase()) && /starters|lineup|starting/.test(lower)) {
+      section = 'home';
+      continue;
+    }
+    if (awayTeam && lower.includes(awayTeam.toLowerCase()) && /starters|lineup|starting/.test(lower)) {
+      section = 'away';
+      continue;
+    }
+    if (!section) continue;
+
+    const posMatch = line.match(/^(PG|SG|SF|PF|C)\s*[:|-]\s*(.+)$/i);
+    if (posMatch) {
+      pushPlayer(section, posMatch[1].toUpperCase(), posMatch[2]);
+      continue;
+    }
+
+    const posBulletMatch = line.match(/^[-*•]?\s*(PG|SG|SF|PF|C)\s+(.+)$/i);
+    if (posBulletMatch) {
+      pushPlayer(section, posBulletMatch[1].toUpperCase(), posBulletMatch[2]);
+      continue;
+    }
+
+    // Fallback: comma-separated names under an active section
+    if (line.includes(',')) {
+      const parts = line.split(',').map(p => cleanName(p)).filter(Boolean);
+      for (const p of parts) pushPlayer(section, '', p);
+      continue;
+    }
+
+    // Last-resort fallback: plain name line under active section
+    if (/^[A-Za-z'.-]+(?:\s+[A-Za-z'.-]+)+$/.test(line)) {
+      pushPlayer(section, '', line);
+    }
+  }
+
+  if (lineups.home.length > 5) lineups.home = lineups.home.slice(0, 5);
+  if (lineups.away.length > 5) lineups.away = lineups.away.slice(0, 5);
+  return lineups;
+}
+
+async function fetchNbaStartingLineups(homeTeam, awayTeam) {
+  const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+  const buildQuery = (attempt) => {
+    if (attempt === 1) {
+      return `What are the projected starting lineups for the NBA game ${awayTeam} at ${homeTeam} on ${today}?
+
+Return EXACTLY in this format:
+
+AWAY_STARTERS:
+PG: [name]
+SG: [name]
+SF: [name]
+PF: [name]
+C: [name]
+
+HOME_STARTERS:
+PG: [name]
+SG: [name]
+SF: [name]
+PF: [name]
+C: [name]
+
+Rules:
+1. Use player names exactly.
+2. If a starter is unknown, write UNKNOWN.
+3. Do not include injuries, analysis, or extra text.`;
+    }
+    // Retry with different phrasing
+    return `NBA starting lineups for ${today}: ${awayTeam} at ${homeTeam}.
+
+List the projected starting five for BOTH teams. Format:
+
+AWAY_STARTERS (${awayTeam}):
+PG: [name]
+SG: [name]
+SF: [name]
+PF: [name]
+C: [name]
+
+HOME_STARTERS (${homeTeam}):
+PG: [name]
+SG: [name]
+SF: [name]
+PF: [name]
+C: [name]
+
+Only names and positions. No extra text.`;
+  };
+
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const query = buildQuery(attempt);
+    const response = await geminiGroundingSearch(query, { temperature: 1.0, maxTokens: 4000 });
+    if (!response?.success || !response?.data) {
+      if (attempt === 2) throw new Error('NBA lineup grounding returned no data after 2 attempts');
+      console.warn(`[Scout Report] NBA lineup grounding attempt ${attempt} returned no data — retrying`);
+      continue;
+    }
+
+    const lineups = parseNbaStartingLineupsFromGrounding(response.data, homeTeam, awayTeam);
+
+    if (lineups.home.length >= 5 && lineups.away.length >= 5) {
+      return { lineups, groundingRaw: response.data };
+    }
+
+    if (attempt === 1) {
+      console.warn(`[Scout Report] NBA lineup attempt 1 incomplete (${awayTeam}: ${lineups.away.length}/5, ${homeTeam}: ${lineups.home.length}/5) — retrying with different query`);
+      continue;
+    }
+
+    // Return whatever we got on attempt 2 — let the caller decide if it's enough
+    return { lineups, groundingRaw: response.data };
+  }
+
+  throw new Error('NBA lineup grounding failed after 2 attempts');
+}
+
 export async function fetchGroundingInjuries(homeTeam, awayTeam, sport) {
   try {
     const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
@@ -1875,9 +2045,9 @@ CRITICAL ANTI-OPINION RULES:
 4. NO BETTING ADVICE - Gary makes his own picks.`;
 
     } else if (sport === 'NBA' || sport === 'basketball_nba') {
-      // NBA: Use RapidAPI ONLY for injuries (structured JSON, no hallucination)
-      // NO Gemini Grounding for lineups or injuries — if API fails, process FAILS
-      console.log(`[Scout Report] Fetching NBA injuries (RapidAPI only) for ${awayTeam} @ ${homeTeam}`);
+      // NBA: RapidAPI for injuries + RotoWire via Grounding for starting lineups.
+      // Both are required for this pipeline.
+      console.log(`[Scout Report] Fetching NBA injuries (RapidAPI) + starting lineups (RotoWire) for ${awayTeam} @ ${homeTeam}`);
 
       // Generate ISO date (YYYY-MM-DD) for the API — use EST, not UTC
       const isoDate = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
@@ -1902,12 +2072,21 @@ CRITICAL ANTI-OPINION RULES:
             : 'No injuries reported'
         ].join('\n');
 
+        const lineupResult = await fetchNbaStartingLineups(homeTeam, awayTeam);
+        const lineups = lineupResult?.lineups || { home: [], away: [] };
+
+        if (lineups.home.length < 5 || lineups.away.length < 5) {
+          throw new Error(`NBA starting lineups incomplete (${awayTeam}: ${lineups.away.length}/5, ${homeTeam}: ${lineups.home.length}/5)`);
+        }
+
+        console.log(`[Scout Report] NBA lineups parsed: ${awayTeam} ${lineups.away.length}/5, ${homeTeam} ${lineups.home.length}/5`);
         console.log(`[Scout Report] NBA injury context (${groundingRaw.length} chars):\n${groundingRaw}`);
 
         return {
           home: apiInjuries.home,
           away: apiInjuries.away,
-          groundingRaw
+          groundingRaw,
+          lineups
         };
       }
 
@@ -3095,6 +3274,8 @@ export function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey, roste
       durationTag = ` [FRESH${timeInfo}]`;
     } else if (i.duration === 'SHORT-TERM') {
       durationTag = ` [SHORT-TERM${timeInfo}]`;
+    } else if (i.duration === 'PRICED IN') {
+      durationTag = ` [PRICED IN${timeInfo}]`;
     } else if (days !== null && days !== undefined) {
       durationTag = ` [OUT${timeInfo}]`;
     }
@@ -3192,7 +3373,7 @@ export function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey, roste
   // ── TIER 2: ESTABLISHED ABSENCES ──
   const hasAnyEstablished = homeSplit.established.length > 0 || awaySplit.established.length > 0;
   if (hasAnyEstablished) {
-    lines.push('ESTABLISHED ABSENCES');
+    lines.push('ESTABLISHED ABSENCES (already reflected in line + all stats above — do NOT cite these players by name as reasons for your pick)');
     lines.push('────────────────────────────────────────');
 
     const renderEstablished = (teamName, split, locationTag) => {

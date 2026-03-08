@@ -1,7 +1,6 @@
-import { CONFIG, GEMINI_SAFETY_SETTINGS, GEMINI_PRO_MODEL } from './orchestratorConfig.js';
-import { createGeminiSession, sendToSession, sendToSessionWithRetry } from './sessionManager.js';
-import { getConstitution } from '../constitution/index.js';
+import { createGeminiSession, sendToSessionWithRetry } from './sessionManager.js';
 import { getFlashInvestigationPrompt } from '../flashInvestigationPrompts.js';
+import { getWbcTournamentAwareness } from './spreadEvaluationFactors.js';
 import { ballDontLieService } from '../../ballDontLieService.js';
 import { nbaSeason, nhlSeason, nflSeason, ncaabSeason } from '../../../utils/dateUtils.js';
 import { toolDefinitions, getTokensForSport } from '../tools/toolDefinitions.js';
@@ -10,27 +9,401 @@ import { summarizeStatForContext, summarizeNbaPlayerAdvancedStats } from './orch
 import { geminiGroundingSearch } from '../scoutReport/scoutReportBuilder.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
-// FLASH ADVISOR — Independent Steel Man Case Builder
+// FLASH RESEARCH — Research Assistant + Context Extraction
 // ═══════════════════════════════════════════════════════════════════════════
-// INDEPENDENT ADVISOR: Gemini 3 Pro builds bilateral Steel Man cases
-// Advisor receives 3.1 Pro's investigation data (text only, no tools) and builds
-// cases from scratch. This eliminates confirmation bias:
-// 3.1 Pro investigates → 3 Pro builds cases → 3.1 Pro evaluates advisor's cases.
-// Advisor has no investigation lean — it's a fresh analyst reviewing the data.
+// Flash (Gemini 3 Flash) prepares a comprehensive pre-game research briefing.
+// Also provides context extraction for 429 model-switch cascading.
 // ═══════════════════════════════════════════════════════════════════════════
 
-export const ADVISOR_TIMEOUT_MS = 60000; // 60 second timeout for advisor case building
+// Factor headers must be standalone lines.
+// Accept either:
+//   **Factor Name**
+//   ### Factor Name
+const FACTOR_HEADING_REGEX = /^\s*(?:\*\*([^*\n]{3,100})\*\*|#{2,4}\s+([^\n#]{3,100}))\s*$/gm;
+const NON_FACTOR_HEADINGS = new Set([
+  'game',
+  'spread',
+  'scout report data',
+  'your task',
+  'tokens',
+  'key finding',
+  'numbers',
+  'context',
+  'sources called',
+  'spread impact note',
+  'why this could affect the spread/price',
+  'evidence from this game context',
+  'nuance check'
+]);
+
+const TOKEN_LIKE_REGEX = /\b[A-Z][A-Z0-9_]{2,}\b/g;
+const OPPONENT_CONTEXT_CLAIM_REGEX = /(opponent quality|quality of (?:opponents?|competition)|weaker opponents?|stronger opponents?|easy schedule|soft schedule|schedule-adjusted|recency bias|recent blowouts?|visible losses?|inflated (?:by|due to)|distorted (?:by|due to))/i;
+const SCORE_CONTEXT_REGEX = /\b\d{2,3}\s*-\s*\d{2,3}\b/;
+const NAMED_OPPONENT_REGEX = /\b(?:vs\.?|@|at|against|beat|defeated|lost to|fell to|won over)\s+[A-Z][A-Za-z.&'-]+(?:\s+[A-Z][A-Za-z.&'-]+){0,3}\b/;
+const MIN_FACTOR_BLOCKS = 5; // Guardrail only; exhaustive coverage is enforced separately.
+
+function extractFactorBlocks(briefingText = '') {
+  const headingRegex = new RegExp(FACTOR_HEADING_REGEX.source, FACTOR_HEADING_REGEX.flags);
+  const matches = [...briefingText.matchAll(headingRegex)];
+  const headings = matches
+    .map(match => ({
+      title: (match[1] || match[2] || '').trim().replace(/^\d+\.\s*/, '').replace(/[:\s]+$/, ''),
+      trailing: '',
+      index: match.index ?? 0
+    }))
+    .filter(h => h.title.length >= 3)
+    .filter(h => !NON_FACTOR_HEADINGS.has(h.title.toLowerCase()));
+
+  const blocks = [];
+  for (let i = 0; i < headings.length; i++) {
+    const start = headings[i].index;
+    const end = i + 1 < headings.length ? headings[i + 1].index : briefingText.length;
+    const raw = briefingText.slice(start, end).trim();
+    blocks.push({
+      title: headings[i].title,
+      body: raw,
+      trailing: headings[i].trailing
+    });
+  }
+  return blocks;
+}
+
+function isPriceDriverFactor(factorName = '') {
+  const name = String(factorName).toLowerCase();
+  const driverKeywords = [
+    'injur', 'rest', 'schedule', 'travel',
+    'form', 'streak', 'recency',
+    'ranking', 'reputation',
+    'home', 'venue', 'narrative', 'public',
+    'returning', 'trap'
+  ];
+  return driverKeywords.some(k => name.includes(k));
+}
+
+function hasConcreteGameEvidence(text = '') {
+  return SCORE_CONTEXT_REGEX.test(text) || NAMED_OPPONENT_REGEX.test(text);
+}
+
+function normalizeSportForFactorCoverage(sport = '') {
+  if (sport === 'NBA') return 'basketball_nba';
+  if (sport === 'NCAAB') return 'basketball_ncaab';
+  if (sport === 'NHL') return 'icehockey_nhl';
+  if (sport === 'NFL') return 'americanfootball_nfl';
+  if (sport === 'NCAAF') return 'americanfootball_ncaaf';
+  return sport;
+}
+
+function normalizeHeadingLabel(text = '') {
+  return text
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function getExpectedChecklistFactors(sport = '') {
+  const prompt = getFlashInvestigationPrompt(sport, null);
+  const lines = prompt.split('\n');
+  const expected = [];
+  let inChecklist = false;
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (/^##\s+INVESTIGATION CHECKLIST/i.test(line)) {
+      inChecklist = true;
+      continue;
+    }
+    if (inChecklist && /^##\s+DEEP INVESTIGATION/i.test(line)) {
+      break;
+    }
+    if (!inChecklist) continue;
+
+    const match = line.match(/^###\s+\d+\.\s+(.+)$/i);
+    if (match) {
+      expected.push(match[1].trim());
+    }
+  }
+
+  return expected;
+}
+
+function blockCoversExpectedFactor(block, factorName) {
+  const blockText = `${block.title}\n${block.body}`.toLowerCase();
+  const factorNorm = normalizeHeadingLabel(factorName);
+  const blockNorm = normalizeHeadingLabel(block.title);
+
+  if (!factorNorm) return false;
+  if (blockNorm === factorNorm) return true;
+  if (blockNorm.includes(factorNorm) || factorNorm.includes(blockNorm)) return true;
+
+  const factorWords = factorNorm.split(' ').filter(w => w.length >= 4 && !['factors', 'offense', 'defense', 'context', 'stats'].includes(w));
+  if (factorWords.length === 0) return false;
+  return factorWords.every(w => blockText.includes(w));
+}
+
+function validateBriefingStructure(briefingText, sport) {
+  const issues = [];
+  const warnings = [];
+  const blocks = extractFactorBlocks(briefingText);
+
+  if (blocks.length === 0) {
+    return {
+      valid: false,
+      issues: ['No factor blocks found. Use repeated "**[Factor Name]**" sections.'],
+      warnings: [],
+      blockCount: 0
+    };
+  }
+
+  if (blocks.length < MIN_FACTOR_BLOCKS) {
+    issues.push(`Expected at least ${MIN_FACTOR_BLOCKS} factor blocks, found ${blocks.length}.`);
+  }
+
+  for (const block of blocks) {
+    const body = block.body;
+    const label = `[${block.title}]`;
+
+    if (!/key\s*finding\s*:/i.test(body)) {
+      issues.push(`${label} Missing "Key finding:" line.`);
+    }
+
+    const numbersMatch = body.match(/numbers\s*:\s*([^\n]+)/i);
+    if (!numbersMatch) {
+      issues.push(`${label} Missing "Numbers:" line.`);
+    }
+
+    if (!/context\s*:/i.test(body)) {
+      issues.push(`${label} Missing "Context:" line.`);
+    }
+
+    const sourcesMatch = body.match(/sources\s+called\s*:\s*([^\n]+)/i);
+    if (!sourcesMatch) {
+      issues.push(`${label} Missing "Sources called:" line.`);
+    } else {
+      const sourceText = sourcesMatch[1] || '';
+      if (!sourceText.trim()) {
+        issues.push(`${label} "Sources called:" must be non-empty.`);
+      }
+    }
+
+    if (isPriceDriverFactor(block.title)) {
+      if (!/spread\s+impact\s+note\s*:/i.test(body)) {
+        warnings.push(`${label} Price-driver factor is missing "Spread impact note:".`);
+      } else {
+        if (!/why\s+this\s+could\s+affect\s+the\s+(?:spread|price)/i.test(body)) {
+          warnings.push(`${label} Spread impact note missing "Why this could affect the spread/price".`);
+        }
+        if (!/evidence\s+from\s+this\s+game\s+context/i.test(body)) {
+          warnings.push(`${label} Spread impact note missing "Evidence from this game context".`);
+        }
+        if (!/nuance\s+check/i.test(body)) {
+          warnings.push(`${label} Spread impact note missing "Nuance check".`);
+        }
+      }
+    }
+
+    // Opponent-quality / recency-distortion concrete-evidence check:
+    // enforce on spread-impact context (where price-impact claims are asserted),
+    // not on every incidental mention in the factor block.
+    const spreadImpactSectionMatch = body.match(/spread\s+impact\s+note\s*:[\s\S]*/i);
+    const spreadImpactSection = spreadImpactSectionMatch ? spreadImpactSectionMatch[0] : '';
+    if (spreadImpactSection && OPPONENT_CONTEXT_CLAIM_REGEX.test(spreadImpactSection) && !hasConcreteGameEvidence(spreadImpactSection)) {
+      warnings.push(`${label} Opponent-quality/recency claim in spread impact note needs concrete game evidence (opponent names and/or score context).`);
+    }
+  }
+
+  // Exhaustive factor coverage gate: every checklist factor from the investigation prompt
+  // must be represented in the final briefing.
+  const normalizedSport = normalizeSportForFactorCoverage(sport);
+  const expectedFactors = getExpectedChecklistFactors(normalizedSport);
+  if (expectedFactors.length > 0) {
+    const missingFactors = expectedFactors.filter(factorName =>
+      !blocks.some(block => blockCoversExpectedFactor(block, factorName))
+    );
+    if (missingFactors.length > 0) {
+      issues.push(`Missing factor coverage blocks: ${missingFactors.slice(0, 12).join(', ')}${missingFactors.length > 12 ? ` (+${missingFactors.length - 12} more)` : ''}.`);
+    }
+  }
+
+  return {
+    valid: issues.length === 0,
+    issues,
+    warnings,
+    blockCount: blocks.length
+  };
+}
+
+function getStringValue(...values) {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return '';
+}
+
+function extractJsonCandidate(rawText = '') {
+  const text = String(rawText || '').trim();
+  if (!text) return '';
+
+  const fencedJsonMatch = text.match(/```json\s*([\s\S]*?)```/i);
+  if (fencedJsonMatch?.[1]) return fencedJsonMatch[1].trim();
+
+  const fencedAnyMatch = text.match(/```\s*([\s\S]*?)```/i);
+  if (fencedAnyMatch?.[1]) return fencedAnyMatch[1].trim();
+
+  if (text.startsWith('{') && text.endsWith('}')) return text;
+
+  const firstBrace = text.indexOf('{');
+  const lastBrace = text.lastIndexOf('}');
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    return text.slice(firstBrace, lastBrace + 1).trim();
+  }
+
+  return '';
+}
+
+function parseStructuredBriefingPayload(rawText = '') {
+  const candidate = extractJsonCandidate(rawText);
+  if (!candidate) {
+    return { payload: null, error: 'No JSON object found. Return ONLY one JSON object.' };
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(candidate);
+  } catch (error) {
+    return { payload: null, error: `Invalid JSON: ${error.message}` };
+  }
+
+  const root = parsed?.briefing && typeof parsed.briefing === 'object' ? parsed.briefing : parsed;
+  const factors = Array.isArray(root?.factors) ? root.factors : null;
+  if (!factors || factors.length === 0) {
+    return { payload: null, error: 'JSON must include a non-empty "factors" array.' };
+  }
+
+  const normalizedFactors = [];
+  const shapeIssues = [];
+
+  factors.forEach((factor, index) => {
+    const idx = index + 1;
+    const factorName = getStringValue(factor?.factor, factor?.name, factor?.title);
+    const keyFinding = getStringValue(factor?.keyFinding, factor?.key_finding, factor?.finding);
+    const numbers = getStringValue(factor?.numbers, factor?.stats);
+    const context = getStringValue(factor?.context, factor?.sampleContext, factor?.sample_context);
+
+    let sourcesCalled = '';
+    if (Array.isArray(factor?.sourcesCalled)) {
+      sourcesCalled = factor.sourcesCalled.filter(Boolean).map(s => String(s).trim()).filter(Boolean).join(', ');
+    } else {
+      sourcesCalled = getStringValue(factor?.sourcesCalled, factor?.sources_called, factor?.sources);
+    }
+
+    if (!factorName) shapeIssues.push(`Factor ${idx} missing "factor".`);
+    if (!keyFinding) shapeIssues.push(`Factor ${idx} missing "keyFinding".`);
+    if (!numbers) shapeIssues.push(`Factor ${idx} missing "numbers".`);
+    if (!context) shapeIssues.push(`Factor ${idx} missing "context".`);
+    if (!sourcesCalled) shapeIssues.push(`Factor ${idx} missing "sourcesCalled".`);
+
+    const spreadObj = factor?.spreadImpactNote || factor?.spread_impact_note || factor?.spreadImpact;
+    let spreadImpactNote = null;
+    if (spreadObj && typeof spreadObj === 'object') {
+      const why = getStringValue(spreadObj?.why, spreadObj?.whyThisCouldAffectTheSpreadPrice, spreadObj?.why_this_could_affect_the_spread_price);
+      const evidence = getStringValue(spreadObj?.evidence, spreadObj?.evidenceFromThisGameContext, spreadObj?.evidence_from_this_game_context);
+      const nuance = getStringValue(spreadObj?.nuance, spreadObj?.nuanceCheck, spreadObj?.nuance_check);
+      if (why || evidence || nuance) {
+        spreadImpactNote = { why, evidence, nuance };
+      }
+    }
+
+    normalizedFactors.push({
+      factorName: factorName || `Factor ${idx}`,
+      keyFinding,
+      numbers,
+      context,
+      sourcesCalled,
+      spreadImpactNote
+    });
+  });
+
+  if (shapeIssues.length > 0) {
+    return { payload: null, error: `JSON schema issues: ${shapeIssues.slice(0, 10).join(' | ')}` };
+  }
+
+  return { payload: { factors: normalizedFactors }, error: null };
+}
+
+function renderStructuredBriefing(payload) {
+  const blocks = [];
+  for (const factor of payload.factors) {
+    const lines = [
+      `**${factor.factorName}**`,
+      `Key finding: ${factor.keyFinding}`,
+      `Numbers: ${factor.numbers}`,
+      `Context: ${factor.context}`,
+      `Sources called: ${factor.sourcesCalled}`
+    ];
+
+    if (factor.spreadImpactNote && (factor.spreadImpactNote.why || factor.spreadImpactNote.evidence || factor.spreadImpactNote.nuance)) {
+      lines.push('Spread impact note:');
+      lines.push(`Why this could affect the spread/price: ${factor.spreadImpactNote.why || 'N/A'}`);
+      lines.push(`Evidence from this game context: ${factor.spreadImpactNote.evidence || 'N/A'}`);
+      lines.push(`Nuance check: ${factor.spreadImpactNote.nuance || 'N/A'}`);
+    }
+
+    blocks.push(lines.join('\n'));
+  }
+  return blocks.join('\n\n').trim();
+}
+
+function buildFormatRewritePrompt(validationIssues = [], parseError = '') {
+  const issueList = validationIssues.slice(0, 20).map(i => `- ${i}`).join('\n');
+  return `## FORMAT CORRECTION REQUIRED
+
+Your final output is non-compliant. Rewrite your COMPLETE briefing now as ONE JSON object only (no prose outside JSON).
+
+Issues found:
+${issueList || '- Missing required structure.'}
+${parseError ? `- ${parseError}` : ''}
+
+Required JSON schema:
+{
+  "factors": [
+    {
+      "factor": "Factor name",
+      "keyFinding": "1-2 sentence finding",
+      "numbers": "Concrete stats for BOTH teams in one line",
+      "context": "Opponent quality / who played / sample window context",
+      "sourcesCalled": ["TOKEN_A", "TOKEN_B"],
+      "spreadImpactNote": {
+        "why": "Why this could affect the spread/price",
+        "evidence": "Concrete game-context evidence",
+        "nuance": "What could overstate/understate tonight"
+      }
+    }
+  ]
+}
+
+Rules:
+- Include every investigation factor category in "factors".
+- Keep "spreadImpactNote" only on price-driver factors.
+- If claiming opponent-quality or recency distortion, include named opponents and/or score/result details in context/evidence.
+- "numbers" must include concrete stats for BOTH teams.
+- "sourcesCalled" must contain token-like identifiers.
+
+If you reference opponent quality, recency inflation, or schedule-adjusted context, include concrete game evidence (named opponents and/or score/result details), not generic wording.
+
+Do NOT make a pick or recommendation.`;
+}
 
 /**
- * Extract FULL context from a session for model switching
- * Pro needs ALL the data Flash gathered to verify Steel Man claims
+ * Extract FULL context from a session for model switching (429 cascade).
+ * Rebuilds scout report + investigation stats for the fallback model.
  *
  * @param {Array} messages - Gemini-compatible message history
- * @param {Object} steelManCases - Captured steel man cases
  * @param {Array} toolCallHistory - Full history of tool calls and results
- * @returns {string} - Complete context for Pro model
+ * @returns {string} - Complete context for fallback model
  */
-export function extractTextualSummaryForModelSwitch(messages, steelManCases, toolCallHistory = []) {
+export function extractTextualSummaryForModelSwitch(messages, toolCallHistory = []) {
   let summary = '';
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -58,21 +431,6 @@ export function extractTextualSummaryForModelSwitch(messages, steelManCases, too
     summary += '\n';
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // SECTION 3: Steel Man Cases (written by research assistant)
-  // ═══════════════════════════════════════════════════════════════════════════
-  if (steelManCases?.homeTeamCase || steelManCases?.awayTeamCase) {
-    summary += '## STEEL MAN CASES (Written by research assistant)\n\n';
-    summary += 'These cases were built from the stats above by your research assistant.\n\n';
-
-    if (steelManCases.homeTeamCase) {
-      summary += steelManCases.homeTeamCase + '\n\n';
-    }
-    if (steelManCases.awayTeamCase) {
-      summary += steelManCases.awayTeamCase + '\n\n';
-    }
-  }
-
   // Always anchor game identity — prevents wrong-game confusion after model switch
   const matchupMatch = messages[1]?.content?.match(/([\w][\w\s.'&-]+?)\s*(?:@|vs\.?|versus)\s*([\w][\w\s.'&-]+?)(?:\n|$)/);
   if (matchupMatch) {
@@ -82,305 +440,12 @@ export function extractTextualSummaryForModelSwitch(messages, steelManCases, too
   return summary;
 }
 
-/**
- * Extract bilateral cases from a response text.
- * Shared by Flash research briefing (game picks) and advisor (props).
- *
- * @param {string} content - The raw response containing case headers
- * @param {string} homeTeam - Home team name
- * @param {string} awayTeam - Away team name
- * @param {string} logPrefix - Log prefix for console output
- * @returns {{ homeTeamCase: string, awayTeamCase: string, flashContent: string }|null}
- */
-export function extractBilateralCases(content, homeTeam, awayTeam, logPrefix = '[CaseExtractor]') {
-  // Strategy 1: Split on major case headers (more robust than lazy regex)
-  const headerPattern = /(?:^|\n)(?:\*\*)?(?:#{1,3}\s*)?(?:Case for|CASE FOR|Analysis for|ANALYSIS FOR)[:\s*—-]+/gi;
-  const headerMatches = [...content.matchAll(headerPattern)];
-
-  let fullCases = [];
-  if (headerMatches.length >= 2) {
-    const sections = [];
-    for (let i = 0; i < headerMatches.length; i++) {
-      const start = headerMatches[i].index;
-      const end = i + 1 < headerMatches.length ? headerMatches[i + 1].index : content.length;
-      sections.push(content.substring(start, end).trim());
-    }
-    sections.sort((a, b) => b.length - a.length);
-    fullCases = sections.slice(0, 2);
-
-    if (fullCases[1].length < 200 && sections.length > 2) {
-      console.warn(`${logPrefix} ⚠️ Second case too short (${fullCases[1].length} chars) — merging fragments`);
-      const shortIdx = sections.indexOf(fullCases[1]);
-      const remaining = sections.filter((_, i) => i !== 0 && i !== shortIdx);
-      fullCases[1] = fullCases[1] + '\n\n' + remaining.join('\n\n');
-    }
-  }
-
-  // Strategy 2: Fallback — simple split on "---"
-  if (fullCases.length < 2 || fullCases.some(c => c.length < 200)) {
-    console.log(`${logPrefix} Trying fallback split strategy...`);
-    const halves = content.split(/\n---+\n/);
-    if (halves.length >= 2) {
-      const caseHalves = halves.filter(h => h.length > 200);
-      if (caseHalves.length >= 2) {
-        fullCases = caseHalves.slice(0, 2).map(h => h.trim());
-        console.log(`${logPrefix} Fallback split: ${fullCases[0].length} + ${fullCases[1].length} chars`);
-      }
-    }
-  }
-
-  // Final validation
-  if (fullCases.length >= 2 && fullCases[0].length >= 200 && fullCases[1].length >= 200) {
-    const caseForPattern = /case for\s+(.+?)(?:\s*[\(\[-]|\n|$)/i;
-    const case1ForMatch = fullCases[0].match(caseForPattern);
-    const case1ForTeam = case1ForMatch ? case1ForMatch[1].trim().toLowerCase() : '';
-
-    const homeTeamLower = homeTeam.toLowerCase();
-    const awayTeamLower = awayTeam.toLowerCase();
-    const homeLastWord = homeTeamLower.split(' ').pop();
-    const awayLastWord = awayTeamLower.split(' ').pop();
-
-    let case1IsHome;
-    if (case1ForTeam) {
-      const homeMatch = case1ForTeam.includes(homeLastWord);
-      const awayMatch = case1ForTeam.includes(awayLastWord);
-      case1IsHome = homeMatch && !awayMatch;
-      if (homeMatch === awayMatch) {
-        const homeHits = homeTeamLower.split(' ').filter(w => w.length > 3 && case1ForTeam.includes(w)).length;
-        const awayHits = awayTeamLower.split(' ').filter(w => w.length > 3 && case1ForTeam.includes(w)).length;
-        case1IsHome = homeHits > awayHits;
-      }
-    } else {
-      const header = fullCases[0].substring(0, 100).toLowerCase();
-      case1IsHome = header.includes(homeLastWord) && !header.includes(awayLastWord);
-    }
-
-    const result = {
-      homeTeamCase: case1IsHome ? fullCases[0] : fullCases[1],
-      awayTeamCase: case1IsHome ? fullCases[1] : fullCases[0],
-      flashContent: content
-    };
-
-    console.log(`${logPrefix} ✅ Bilateral cases extracted (home: ${result.homeTeamCase.length} chars, away: ${result.awayTeamCase.length} chars)`);
-    return result;
-  }
-
-  console.warn(`${logPrefix} ⚠️ Could not extract bilateral cases (found ${fullCases.length} sections, sizes: ${fullCases.map(c => c.length).join(', ')})`);
-  return null;
-}
-
-/**
- * Build a Steel Man case prompt for Flash to build bilateral cases after research.
- * @private
- */
-function buildSteelManCasePrompt(homeTeam, awayTeam, sport, spread) {
-  const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
-  const homeSpread = spread ? `${spread >= 0 ? '+' : ''}${spread.toFixed(1)}` : '';
-  const awaySpread = spread ? `${-spread >= 0 ? '+' : ''}${(-spread).toFixed(1)}` : '';
-
-  return `## YOUR TASK: BUILD TWO BILATERAL STEEL MAN CASES
-
-Based on ALL your research findings above, write two compelling, data-backed cases — one for each team.
-
-${isNHL ? `This is an NHL game (moneyline only — pick WHO WINS).
-
-### CASE FOR ${homeTeam}
-[Build the strongest possible case for ${homeTeam} to WIN using your research findings. ]
-
-### CASE FOR ${awayTeam}
-[Build the strongest possible case for ${awayTeam} to WIN using your research findings. ]`
-    : `The spread is ${homeTeam} ${homeSpread} / ${awayTeam} ${awaySpread}.
-
-### CASE FOR ${homeTeam} (${homeSpread})
-[Build the strongest possible case for ${homeTeam} to cover ${homeSpread} using your research findings. ]
-
-### CASE FOR ${awayTeam} (${awaySpread})
-[Build the strongest possible case for ${awayTeam} to cover ${awaySpread} using your research findings. ]`}
-
-RULES:
-- Use ONLY data from your research above. Do not invent stats or players.
-- Each case must be 400+ words with specific numbers from your investigation.
-- You MUST use the exact headers above: "### CASE FOR [Team]"
-- Do NOT pick a side. Build TWO separate, genuinely compelling cases.
-- Each case should be genuinely compelling — find the strongest arguments for THAT side.
-- INJURY STATUS RULES: Players listed as "Questionable" or "Probable" = assume they play at full strength. Players listed as "Out" or "Out For Season" = confirmed absent. Players listed as "Doubtful" = likely absent but not confirmed.
-- Team share percentages (pct_pts, pct_reb, pct_ast) describe a player's share of THEIR OWN TEAM's production — not a matchup advantage.`;
-}
-
-export async function buildFlashSteelManCases(systemPrompt, messages, toolCallHistory, sport, homeTeam, awayTeam, spread) {
-  const startTime = Date.now();
-
-  try {
-    // Create Flash session (TEXT ONLY — no tools, just data in → cases out)
-    // Fallback path — game picks normally build cases during Flash research briefing
-    const sportLabel = sport.replace('basketball_', '').replace('americanfootball_', '').replace('icehockey_', '').toUpperCase();
-    const flashConstitution = getConstitution(sport);
-
-    let flashDomainContent = '';
-    if (typeof flashConstitution === 'object' && flashConstitution.domainKnowledge) {
-      flashDomainContent = `\n\n## SPORT-SPECIFIC REFERENCE\n${flashConstitution.domainKnowledge}\n\n## STRUCTURAL RULES\n${flashConstitution.guardrails}`;
-    }
-
-    const advisorSystemPrompt = `You are an independent sports analyst reviewing investigation data for a ${sportLabel} game. Your ONLY task is to build bilateral Steel Man cases — one case for each team. You do NOT have access to any tools or function calls. You receive data as text and write cases from it. Be thorough, specific, and use the data provided. Write in a neutral, analytical tone.${flashDomainContent}`;
-
-    const advisorSession = createGeminiSession({
-      modelName: 'gemini-3-flash-preview',  // Flash — cheaper, faster, no tools needed
-      systemPrompt: advisorSystemPrompt,
-      tools: [],
-      thinkingLevel: 'high'
-    });
-
-    console.log(`[Advisor] Session created (Gemini Flash, text only, no tools)`);
-
-    const investigationContext = extractTextualSummaryForModelSwitch(messages, {}, toolCallHistory);
-    const casePrompt = buildSteelManCasePrompt(homeTeam, awayTeam, sport, spread);
-    const contextMessage = `${investigationContext}\n\n${casePrompt}`;
-    console.log(`[Advisor] Sending ${contextMessage.length} chars to Gemini Flash (scout report + ${toolCallHistory.length} stats + case prompt)`);
-
-    const advisorResponse = await sendToSessionWithRetry(advisorSession, contextMessage);
-    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-
-    if (!advisorResponse.content) {
-      console.warn(`[Advisor] Empty response after ${elapsed}s`);
-      return null;
-    }
-
-    console.log(`[Advisor] Response received in ${elapsed}s (${advisorResponse.content.length} chars)`);
-    return extractBilateralCases(advisorResponse.content, homeTeam, awayTeam, '[Advisor]');
-
-  } catch (error) {
-    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.error(`[Advisor] ❌ Error after ${elapsed}s: ${error.message}`);
-    return null;
-  }
-}
-
-/**
- * Build independent bilateral OVER/UNDER cases for player props via a separate Gemini 3 Pro session.
- * Same architecture as buildFlashSteelManCases() but for props — advisor sees investigation data
- * + prop candidates + available lines and builds OVER/UNDER cases for 3-4 candidates.
- *
- * @returns {{ candidateCases: string, rawContent: string } | null}
- */
-export async function buildFlashSteelManPropsCases(systemPrompt, messages, toolCallHistory, sport, homeTeam, awayTeam, propContext) {
-  const startTime = Date.now();
-
-  try {
-    const sportLabel = sport.replace('basketball_', '').replace('americanfootball_', '').replace('icehockey_', '').toUpperCase();
-    const flashConstitution = getConstitution(sport);
-
-    let flashDomainContent = '';
-    if (typeof flashConstitution === 'object' && flashConstitution.domainKnowledge) {
-      flashDomainContent = `\n\n## SPORT-SPECIFIC REFERENCE\n${flashConstitution.domainKnowledge}\n\n## STRUCTURAL RULES\n${flashConstitution.guardrails}`;
-    }
-
-    const advisorSystemPrompt = `You are an independent sports analyst reviewing investigation data for ${sportLabel} player props. Your ONLY task is to build bilateral OVER/UNDER cases for the top 3-4 prop candidates. You do NOT have access to any tools or function calls. You receive data as text and write cases from it. Be thorough, specific, and use the data provided. Write in a neutral, analytical tone.${flashDomainContent}`;
-
-    const advisorSession = createGeminiSession({
-      modelName: 'gemini-3-flash-preview',  // Flash — cheaper, faster, no tools needed
-      systemPrompt: advisorSystemPrompt,
-      tools: [],  // No tools — advisor writes cases from data
-      thinkingLevel: 'high'
-    });
-
-    console.log(`[Props Advisor] Session created (Gemini Flash, text only, no tools)`);
-
-    // Build context: scout report + investigation stats
-    const investigationContext = extractTextualSummaryForModelSwitch(messages, {}, toolCallHistory);
-
-    // Format available prop lines for the advisor
-    const availableLines = (propContext?.availableLines || []);
-    const linesList = availableLines.map(l =>
-      `- ${l.player} (${l.team || ''}): ${l.prop_type} ${l.line} (O: ${l.over_odds || 'N/A'} / U: ${l.under_odds || 'N/A'})`
-    ).join('\n');
-
-    // Format prop candidates for the advisor
-    const candidatesList = (propContext?.propCandidates || []).map(c => {
-      const propsStr = (c.props || []).map(p => `${p.type || p.prop_type} ${p.line}`).join(', ');
-      return `- ${c.player} (${c.team}): ${propsStr}`;
-    }).join('\n');
-
-    const advisorPropsPrompt = `## AVAILABLE PROP LINES
-
-${linesList || 'No lines provided'}
-
-## PROP CANDIDATES
-
-${candidatesList || 'No candidates provided'}
-
-## YOUR TASK: BUILD BILATERAL OVER/UNDER CASES
-
-Based on ALL the investigation data above and the available prop lines, select your top 3-4 prop candidates — the players where the data reveals something interesting about their production tonight.
-
-For EACH candidate, write:
-
-### [Player Name] — [Prop Type] [Line]
-
-**OVER CASE:**
-[Build the strongest possible case for OVER using the data above. Cite specific stats, game factors, recent form, and matchup evidence. Explain what conditions must be true tonight for the OVER to hit.]
-
-**UNDER CASE:**
-[Build the strongest possible case for UNDER using the data above. Cite specific stats, game factors, recent form, and matchup evidence. Explain what conditions must be true tonight for the UNDER to hit.]
-
-RULES:
-- Use ONLY the data provided above. Do not invent stats or players.
-- Each case must be 300+ words with specific numbers from the data.
-- Build genuinely compelling cases for BOTH directions — the UNDER case is NOT filler.
-- Connect game-level investigation findings (pace, efficiency, defense) to individual player production.
-- The line already reflects the player's established role. Build your case on what makes TONIGHT different.
-- Do NOT pick a side. Do NOT write a general analysis. Build TWO separate cases per candidate.`;
-
-    // Send combined context + advisor prompt (single API call)
-    const contextMessage = `${investigationContext}\n\n${advisorPropsPrompt}`;
-    console.log(`[Props Advisor] Sending ${contextMessage.length} chars to Gemini Flash (scout report + ${toolCallHistory.length} stats + ${availableLines.length} prop lines)`);
-
-    const advisorResponse = await sendToSessionWithRetry(advisorSession, contextMessage);
-    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-
-    if (!advisorResponse.content) {
-      console.warn(`[Props Advisor] Empty response after ${elapsed}s`);
-      return null;
-    }
-
-    console.log(`[Props Advisor] Response received in ${elapsed}s (${advisorResponse.content.length} chars)`);
-
-    const content = advisorResponse.content;
-
-    // Validate: must contain bilateral analysis patterns (OVER/UNDER cases)
-    const overCaseCount = (content.match(/\bOVER\s+CASE\b/gi) || []).length;
-    const underCaseCount = (content.match(/\bUNDER\s+CASE\b/gi) || []).length;
-    const hasBilateral = overCaseCount >= 2 && underCaseCount >= 2;
-
-    if (!hasBilateral) {
-      console.warn(`[Props Advisor] ⚠️ Insufficient bilateral cases (OVER: ${overCaseCount}, UNDER: ${underCaseCount}) — need at least 2 of each`);
-      // Still return if there's substantial content — partial cases are better than none
-      if (content.length < 500) {
-        return null;
-      }
-    }
-
-    console.log(`[Props Advisor] ✅ Bilateral cases extracted (${overCaseCount} OVER + ${underCaseCount} UNDER cases, ${content.length} chars)`);
-    return {
-      candidateCases: content,
-      rawContent: content
-    };
-
-  } catch (error) {
-    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.error(`[Props Advisor] ❌ Error after ${elapsed}s: ${error.message}`);
-    return null;
-  }
-}
-
 // ═══════════════════════════════════════════════════════════════════════════
-// FLASH RESEARCH BRIEFING — Flash handles investigative completeness
+// FLASH RESEARCH BRIEFING
 // ═══════════════════════════════════════════════════════════════════════════
 // Flash (Gemini 3 Flash) prepares a comprehensive pre-game briefing from the
-// scout report. This replaces the old per-factor coverage checklist:
-// - Flash is the research assistant who organizes the homework
-// - Gary reads the briefing and investigates what matters
-// - No more 100% coverage gate — investigation sufficiency is based on
-//   tool call breadth + stall detection
+// scout report. Flash is the research assistant who organizes the homework.
+// Gary reads the briefing and investigates what matters.
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
@@ -389,15 +454,14 @@ RULES:
  * the full per-sport factor checklist, uses tools to investigate every factor,
  * connects dots across findings, and writes an initial assessment.
  *
- * Returns { briefing, calledTokens, steelManCases } — the briefing is factual findings
- * organized by factor; steelManCases are bilateral cases built from Flash's research.
+ * Returns { briefing, calledTokens } — the briefing is factual findings organized by factor.
  *
  * @param {string} scoutReportContent - Full scout report text
  * @param {string} sport - Sport identifier (e.g., 'basketball_nba')
  * @param {string} homeTeam - Home team name
  * @param {string} awayTeam - Away team name
  * @param {Object} options - Game options (passed through to fetchStats)
- * @returns {{ briefing: string, calledTokens: Array, steelManCases: Object|null }|null} - Research briefing + called tokens + Steel Man cases, or null on failure
+ * @returns {{ briefing: string, calledTokens: Array }|null} - Research briefing + called tokens, or null on failure
  */
 export async function buildFlashResearchBriefing(scoutReportContent, sport, homeTeam, awayTeam, options = {}) {
   const startTime = Date.now();
@@ -414,6 +478,8 @@ export async function buildFlashResearchBriefing(scoutReportContent, sport, home
     const researchTools = toolDefinitions;
 
     const isNCAABSport = sport === 'basketball_ncaab' || sport === 'NCAAB';
+    const isMLBSport = sport === 'baseball_mlb' || sport === 'MLB' || sport === 'WBC';
+    const wbcAwarenessBlock = isMLBSport ? `\n\n${getWbcTournamentAwareness()}\n` : '';
 
     const briefingSession = createGeminiSession({
       modelName: 'gemini-3-flash-preview',
@@ -431,25 +497,51 @@ YOUR INVESTIGATION PROCESS:
 5. After completing all research, write your final briefing as structured per-factor findings
 
 ${investigationMethodology}
-
+${wbcAwarenessBlock}
 CRITICAL RULES:
 - Cover every factor category — don't skip any
 - Report specific numbers with context: "Team went 2-4 with -8.3 net rating during games 60-65 when Player X was out — but 3 of those were against top-10 defenses"
 - Connect findings across factors — roster changes to stat shifts, schedule to form, injury timelines to performance windows
+- If you reference opponent quality or recency distortion, include concrete evidence (named opponents and/or score/result context), not generic claims like "weaker opposition"
+- When citing any trend (L5/L10 or recent stretch), include concrete sample context: opponent names/results and who was active/inactive in that window.
+- For search/grounding results, use factual events only. Ignore picks, predictions, and opinion content.
 - Do NOT pick a side or recommend a bet — your job is factual research only
 - Do NOT fabricate stats — only report what comes from the scout report or your tool calls
+- Do NOT rely on opening/closing-line mechanics, market-setter/copy-book mechanics, or sharp/public microstructure unless concrete supporting data exists in your provided context
 
-OUTPUT FORMAT:
-Write your briefing as structured per-factor bullet points. For each factor:
-- **[Factor Name]**: Key finding with specific numbers for both teams. Note any important context (opponent quality, roster changes, sample size concerns).`,
+OUTPUT FORMAT (REQUIRED):
+Return ONLY one JSON object using this schema:
+{
+  "factors": [
+    {
+      "factor": "Factor name",
+      "keyFinding": "...",
+      "numbers": "Concrete stats for BOTH teams",
+      "context": "...",
+      "sourcesCalled": ["TOKEN_A", "TOKEN_B"],
+      "spreadImpactNote": {
+        "why": "...",
+        "evidence": "...",
+        "nuance": "..."
+      }
+    }
+  ]
+}
+
+Rules:
+- Include every investigation factor category in factors[].
+- spreadImpactNote is required only for price-driver factors.
+- Do not add prose before/after JSON.
+- Do NOT make a pick or recommendation.`,
       tools: researchTools,
       thinkingLevel: 'high'
     });
 
+    const hasSpread = Number.isFinite(options.spread);
     const briefingPrompt = `## RESEARCH BRIEFING REQUEST
 
 **Game:** ${homeTeam} vs ${awayTeam} (${sportLabel})
-${options.spread ? `**Spread:** ${options.spread}` : ''}
+${hasSpread ? `**Spread:** ${options.spread}` : ''}
 
 **Scout Report Data:**
 ${scoutReportContent}
@@ -459,16 +551,20 @@ ${scoutReportContent}
 **Your task:** Conduct a comprehensive pre-game investigation using the factor guide in your instructions. For each factor:
 1. Check what the scout report already provides
 2. Use your fetch_stats tools to investigate deeper — pull efficiency data, game logs, splits, matchup data, anything that fills gaps
-3. Use fetch_narrative_context for storylines, news, or context that stat tools can't provide${isNCAABSport ? ' (NCAAB: narrative context is already in the scout report — prefer fetch_stats for BDL data)' : ''}
+3. Use fetch_narrative_context for storylines, news, or context that stat tools can't provide${isNCAABSport ? ' (NCAAB: narrative context is already in the scout report — prefer fetch_stats for BDL data)' : ''}${isMLBSport ? ' (WBC: Use fetch_narrative_context aggressively — tournament storylines, lineup confirmations, bullpen availability, and breaking news are critical. Make multiple grounding calls for different angles: team form, pitching matchup preview, roster/lineup updates)' : ''}
 4. Report findings with specific numbers for both teams
 5. Flag connections between factors (roster changes overlapping form shifts, schedule quality affecting recent stats, etc.)
 
-After completing your research, write your final briefing as structured per-factor bullet points. For each factor, report what you found for both teams with specific numbers and any important context.`;
+After completing your research, output ONLY one JSON object with:
+- factors[] entries containing: factor, keyFinding, numbers, context, sourcesCalled
+- spreadImpactNote { why, evidence, nuance } only for price-driver factors
+
+If you claim opponent-quality effects or recency distortion, include concrete game evidence (opponent names and/or score/result context).`;
 
     console.log(`[Research Briefing] Sending ${briefingPrompt.length} chars to Gemini Flash (with tools, max ${MAX_RESEARCH_ITERATIONS} iterations)`);
 
     // ═══════════════════════════════════════════════════════════════════════
-    // RESEARCH AGENT LOOP: Flash investigates with tools, then writes briefing + Steel Man cases
+    // RESEARCH AGENT LOOP: Flash investigates with tools, then writes briefing
     // ═══════════════════════════════════════════════════════════════════════
     let currentMessage = briefingPrompt;
     let isFunctionResponse = false;
@@ -476,6 +572,7 @@ After completing your research, write your final briefing as structured per-fact
     let groundingCalls = 0;
     const calledTokens = []; // Track which stat tokens Flash called (for factor coverage)
     let coverageRetryDone = false; // Track whether we've already sent the coverage gap message
+    let formatRetryDone = false; // One-shot retry if briefing format is non-compliant
 
     for (let researchIter = 0; researchIter < MAX_RESEARCH_ITERATIONS; researchIter++) {
       const response = await sendToSessionWithRetry(
@@ -523,14 +620,15 @@ After completing your research, write your final briefing as structured per-fact
 
             const totalFactors = Object.keys(factors).filter(f => factors[f] && factors[f].length > 0).length;
             const coveredFactors = totalFactors - missingFactors.length;
-            const coveragePct = totalFactors > 0 ? (coveredFactors / totalFactors) : 1;
 
-            if (coveragePct < 0.8) {
+            // HARD GATE: every factor category with required tokens must be covered.
+            // No partial thresholds (e.g., 80%) are allowed.
+            if (missingFactors.length > 0) {
               coverageRetryDone = true;
               const gapList = missingFactors.map(f =>
                 `- ${f.name}: call ${f.tokens.slice(0, 3).join(' or ')}`
               ).join('\n');
-              console.log(`[Research Briefing] Coverage at ${(coveragePct * 100).toFixed(0)}% (${coveredFactors}/${totalFactors} factors) — need 80%, sending retry pass`);
+              console.log(`[Research Briefing] Coverage incomplete (${coveredFactors}/${totalFactors} factors) — all factors required, sending retry pass`);
 
               // Send Flash back to fill the gaps
               currentMessage = `## COVERAGE GAPS — ADDITIONAL RESEARCH NEEDED
@@ -539,49 +637,64 @@ You missed the following factor categories. Please investigate these NOW using f
 
 ${gapList}
 
-After investigating, rewrite your COMPLETE briefing including ALL factors (both your original findings and these new ones).`;
+After investigating, rewrite your COMPLETE briefing as ONE JSON object including ALL factors (both your original findings and these new ones).`;
               isFunctionResponse = false;
               continue; // Go back to the loop — Flash will make more tool calls
             }
           }
         }
 
-        // Parse briefing from the response (factual findings only — no opinion/assessment)
-        const briefing = response.content.trim();
-        console.log(`[Research Briefing] ✅ Briefing received in ${elapsed}s (${briefing.length} chars, ${totalToolCalls} stat calls + ${groundingCalls} grounding calls across ${researchIter + 1} iterations)`);
+        // Parse structured JSON briefing and render canonical factor blocks.
+        const parsed = parseStructuredBriefingPayload(response.content);
+        if (!parsed.payload) {
+          console.warn(`[Research Briefing] Structured parse failed: ${parsed.error}`);
+          if (!formatRetryDone) {
+            formatRetryDone = true;
+            currentMessage = buildFormatRewritePrompt([], parsed.error);
+            isFunctionResponse = false;
+            console.log('[Research Briefing] Triggering one-shot structured rewrite pass');
+            continue;
+          }
+          console.error(`[Research Briefing] ❌ Structured parse failed after retry: ${parsed.error}`);
+          return null;
+        }
+
+        const briefing = renderStructuredBriefing(parsed.payload);
+        console.log(`[Research Briefing] ✅ Briefing received in ${elapsed}s (${briefing.length} chars rendered, ${totalToolCalls} stat calls + ${groundingCalls} grounding calls across ${researchIter + 1} iterations)`);
+
+        // Format check: enforce concrete per-factor briefing schema with one rewrite retry
+        const validation = validateBriefingStructure(briefing, sport);
+        if (!validation.valid) {
+          console.warn(`[Research Briefing] Format validation failed (${validation.issues.length} issues across ${validation.blockCount} blocks)`);
+          if (!formatRetryDone) {
+            formatRetryDone = true;
+            currentMessage = buildFormatRewritePrompt(validation.issues, '');
+            isFunctionResponse = false;
+            console.log('[Research Briefing] Triggering one-shot format rewrite pass');
+            continue;
+          }
+          // Soft-fail: if the briefing has real substance (5+ blocks with key findings),
+          // use it despite format issues rather than killing the entire game
+          const substantiveBlocks = extractFactorBlocks(briefing).filter(b => /key\s*finding\s*:/i.test(b.body));
+          if (substantiveBlocks.length >= 5) {
+            console.warn(`[Research Briefing] ⚠️ Format issues remain after retry (${validation.issues.length}) but briefing has ${substantiveBlocks.length} substantive blocks — using it`);
+            console.warn(`[Research Briefing] Soft-fail issues: ${validation.issues.slice(0, 8).join(' | ')}`);
+          } else {
+            console.error(`[Research Briefing] ❌ Format validation failed after retry (${validation.issues.length} issues, only ${substantiveBlocks.length} substantive blocks)`);
+            console.error(`[Research Briefing] Issues: ${validation.issues.slice(0, 8).join(' | ')}`);
+            return null;
+          }
+        }
+        if (validation.warnings && validation.warnings.length > 0) {
+          console.warn(`[Research Briefing] Non-blocking format warnings (${validation.warnings.length}): ${validation.warnings.slice(0, 4).join(' | ')}`);
+        }
 
         // Log final coverage diagnostics
         const availableCount = calledTokens.filter(t => t.quality === 'available').length;
         const unavailableCount = calledTokens.filter(t => t.quality === 'unavailable').length;
         console.log(`[Research Briefing] Token coverage: ${availableCount} available, ${unavailableCount} unavailable out of ${calledTokens.length} total calls`);
 
-        // ═══════════════════════════════════════════════════════════════════
-        // STEP 2: Build Steel Man cases from Flash's full investigation
-        // Flash has all tool call results + scout report in its session.
-        // This replaces the separate 3 Pro advisor for game picks.
-        // ═══════════════════════════════════════════════════════════════════
-        let steelManCases = null;
-        try {
-          const casePrompt = buildSteelManCasePrompt(homeTeam, awayTeam, sport, options.spread ?? null);
-          console.log(`[Research Briefing] 📋 Building Steel Man cases from Flash investigation...`);
-          const caseResponse = await sendToSessionWithRetry(briefingSession, casePrompt);
-          const caseElapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-
-          if (caseResponse.content && caseResponse.content.length > 400) {
-            steelManCases = extractBilateralCases(caseResponse.content, homeTeam, awayTeam, '[Research Briefing]');
-            if (steelManCases) {
-              console.log(`[Research Briefing] ✅ Steel Man cases built in ${caseElapsed}s (home: ${steelManCases.homeTeamCase.length} chars, away: ${steelManCases.awayTeamCase.length} chars)`);
-            } else {
-              console.warn(`[Research Briefing] ⚠️ Could not extract cases from Flash response (${caseResponse.content.length} chars)`);
-            }
-          } else {
-            console.warn(`[Research Briefing] ⚠️ Flash case response too short (${caseResponse.content?.length || 0} chars)`);
-          }
-        } catch (caseErr) {
-          console.warn(`[Research Briefing] ⚠️ Case building failed: ${caseErr.message}`);
-        }
-
-        return { briefing, calledTokens, steelManCases };
+        return { briefing, calledTokens };
       }
 
       // Flash wants to call tools — execute them
@@ -770,5 +883,3 @@ After investigating, rewrite your COMPLETE briefing including ALL factors (both 
     return null;
   }
 }
-
-

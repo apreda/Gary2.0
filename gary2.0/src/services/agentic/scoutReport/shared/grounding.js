@@ -8,6 +8,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { formatSeason, nbaSeason } from '../../../../utils/dateUtils.js';
 import { seasonForSport, findTeamInStandings, sportToBdlKey } from './utilities.js';
+import { ballDontLieService } from '../../../ballDontLieService.js';
 
 // Lazy-initialize Gemini for grounded searches (supports key rotation)
 import { isUsingBackupKey } from '../../modelConfig.js';
@@ -44,6 +45,7 @@ export async function fetchStandingsSnapshot(sport, homeTeam = null, awayTeam = 
     if (!bdlSport || sport === 'NCAAF') return '';
 
     const currentSeason = seasonForSport(sport);
+    const seasonLabel = `${currentSeason}-${String(currentSeason + 1).slice(-2)}`;
 
     const standings = await ballDontLieService.getStandingsGeneric(bdlSport, { season: currentSeason });
     if (!standings || standings.length === 0) return '';
@@ -51,20 +53,14 @@ export async function fetchStandingsSnapshot(sport, homeTeam = null, awayTeam = 
     // Sort by conference/division and rank
     const snapshot = [];
 
-    // NBA: Groups by Conference
+    // NBA: Team-specific standings context for tonight's matchup
     if (sport === 'NBA') {
-      const east = standings.filter(s => (s.conference === 'East' || s.team?.conference === 'East')).sort((a, b) => a.conference_rank - b.conference_rank);
-      const west = standings.filter(s => (s.conference === 'West' || s.team?.conference === 'West')).sort((a, b) => a.conference_rank - b.conference_rank);
-
       // Use ?? to coerce null to 0 (BDL can return null for 0 wins/losses)
       const formatRec = (s) => `${s.wins ?? 0}-${s.losses ?? 0}`;
 
       // TONIGHT'S MATCHUP - Team-specific standings with conference_rank
       // This helps Gary understand where each team sits in the league right now
       if (homeTeam && awayTeam) {
-        const homeTeamLower = homeTeam.toLowerCase();
-        const awayTeamLower = awayTeam.toLowerCase();
-
         const homeStanding = findTeamInStandings(standings, homeTeam);
         const awayStanding = findTeamInStandings(standings, awayTeam);
 
@@ -84,13 +80,8 @@ export async function fetchStandingsSnapshot(sport, homeTeam = null, awayTeam = 
         snapshot.push('');
       }
 
-      snapshot.push('EASTERN CONFERENCE TOP 3: ' + east.slice(0, 3).map(s => `${s.team.name} (${formatRec(s)})`).join(', '));
-      snapshot.push('EASTERN CONFERENCE BOTTOM 2: ' + east.slice(-2).map(s => `${s.team.name} (${formatRec(s)})`).join(', '));
-      snapshot.push('WESTERN CONFERENCE TOP 3: ' + west.slice(0, 3).map(s => `${s.team.name} (${formatRec(s)})`).join(', '));
-      snapshot.push('WESTERN CONFERENCE BOTTOM 2: ' + west.slice(-2).map(s => `${s.team.name} (${formatRec(s)})`).join(', '));
-
       return `
-NBA LEAGUE CONTEXT (CURRENT 2025-26 STANDINGS FROM BDL)
+NBA LEAGUE CONTEXT (CURRENT ${seasonLabel} STANDINGS FROM BDL)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${snapshot.join('\n')}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -370,7 +361,7 @@ export async function geminiGroundingSearch(query, options = {}) {
         generationConfig: {
           temperature: 1.0, // Gemini 3: Keep at 1.0 - lower values cause looping/degraded performance
           maxOutputTokens: options.maxTokens ?? 2000,
-          thinkingConfig: { thinkingLevel: 'high' }
+          thinkingConfig: { thinkingLevel: options.thinkingLevel ?? 'high' }
         },
         safetySettings: [
           { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },

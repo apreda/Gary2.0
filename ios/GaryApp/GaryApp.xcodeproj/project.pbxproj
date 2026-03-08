@@ -30,6 +30,13 @@
 		E47A0DFC2EF791B02919F0D0 /* SairaCondensed-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 7CB6FAACF413A4E92F52C8E8 /* SairaCondensed-Bold.ttf */; };
 		F2A5809FF32535CE29C4E79A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26AE11992E449EB95857D6E3 /* SettingsView.swift */; };
 		FAE577A219F049637480970D /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 423887686C6839DEC44C0DEA /* GoogleService-Info.plist */; };
+		AA110001AAAA000100000001 /* Inter-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = BB220001BBBB000100000001 /* Inter-Regular.ttf */; };
+		AA110002AAAA000200000002 /* Inter-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = BB220002BBBB000200000002 /* Inter-Medium.ttf */; };
+		AA110003AAAA000300000003 /* Inter-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = BB220003BBBB000300000003 /* Inter-SemiBold.ttf */; };
+		AA110004AAAA000400000004 /* Inter-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = BB220004BBBB000400000004 /* Inter-Bold.ttf */; };
+		AA110005AAAA000500000005 /* JetBrainsMono-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = BB220005BBBB000500000005 /* JetBrainsMono-Regular.ttf */; };
+		AA110006AAAA000600000006 /* JetBrainsMono-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = BB220006BBBB000600000006 /* JetBrainsMono-Bold.ttf */; };
+		AA110007AAAA000700000007 /* BracketView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB220007BBBB000700000007 /* BracketView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -58,6 +65,13 @@
 		ECE32BA2E5208CC9E994A26A /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		F0616A3C8A2F0268B8A05C4D /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
 		F3971BE744C5F972B9A2C2C3 /* Oswald-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Oswald-Bold.ttf"; sourceTree = "<group>"; };
+		BB220001BBBB000100000001 /* Inter-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Inter-Regular.ttf"; sourceTree = "<group>"; };
+		BB220002BBBB000200000002 /* Inter-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Inter-Medium.ttf"; sourceTree = "<group>"; };
+		BB220003BBBB000300000003 /* Inter-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Inter-SemiBold.ttf"; sourceTree = "<group>"; };
+		BB220004BBBB000400000004 /* Inter-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Inter-Bold.ttf"; sourceTree = "<group>"; };
+		BB220005BBBB000500000005 /* JetBrainsMono-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "JetBrainsMono-Regular.ttf"; sourceTree = "<group>"; };
+		BB220006BBBB000600000006 /* JetBrainsMono-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "JetBrainsMono-Bold.ttf"; sourceTree = "<group>"; };
+		BB220007BBBB000700000007 /* BracketView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BracketView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -84,6 +98,7 @@
 			isa = PBXGroup;
 			children = (
 				04419532DA2B9AE61A7A7B47 /* AccessView.swift */,
+				BB220007BBBB000700000007 /* BracketView.swift */,
 				4D7626B616BEDAF94E8687F9 /* AppStoreMetadata.md */,
 				14B79AC926AD34DD865A8E0D /* Assets.xcassets */,
 				B24536929674F3304E9497C4 /* ChangelogView.swift */,
@@ -125,6 +140,12 @@
 				014B3F10455983B35A7AC820 /* RussoOne-Regular.ttf */,
 				7CB6FAACF413A4E92F52C8E8 /* SairaCondensed-Bold.ttf */,
 				71B2F4F02C72B63F4E81FD2D /* Teko-Bold.ttf */,
+				BB220001BBBB000100000001 /* Inter-Regular.ttf */,
+				BB220002BBBB000200000002 /* Inter-Medium.ttf */,
+				BB220003BBBB000300000003 /* Inter-SemiBold.ttf */,
+				BB220004BBBB000400000004 /* Inter-Bold.ttf */,
+				BB220005BBBB000500000005 /* JetBrainsMono-Regular.ttf */,
+				BB220006BBBB000600000006 /* JetBrainsMono-Bold.ttf */,
 			);
 			path = Fonts;
 			sourceTree = "<group>";
@@ -207,6 +228,12 @@
 				40DAC1759F4F7860F18A04DD /* RussoOne-Regular.ttf in Resources */,
 				E47A0DFC2EF791B02919F0D0 /* SairaCondensed-Bold.ttf in Resources */,
 				96156A39CD944FAC812763CE /* Teko-Bold.ttf in Resources */,
+				AA110001AAAA000100000001 /* Inter-Regular.ttf in Resources */,
+				AA110002AAAA000200000002 /* Inter-Medium.ttf in Resources */,
+				AA110003AAAA000300000003 /* Inter-SemiBold.ttf in Resources */,
+				AA110004AAAA000400000004 /* Inter-Bold.ttf in Resources */,
+				AA110005AAAA000500000005 /* JetBrainsMono-Regular.ttf in Resources */,
+				AA110006AAAA000600000006 /* JetBrainsMono-Bold.ttf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -218,6 +245,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				11082D2682BC0FFD484F133E /* AccessView.swift in Sources */,
+				AA110007AAAA000700000007 /* BracketView.swift in Sources */,
 				0D809CA674D78F140C6117B8 /* ChangelogView.swift in Sources */,
 				CA682CB250F6A7F4462A70B2 /* ContentView.swift in Sources */,
 				40771064325B4E728A735AEA /* GaryApp.swift in Sources */,
@@ -288,7 +316,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				INFOPLIST_FILE = Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				MARKETING_VERSION = 1.9.91;
+				MARKETING_VERSION = 1.9.93;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -369,7 +397,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				INFOPLIST_FILE = Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				MARKETING_VERSION = 1.9.91;
+				MARKETING_VERSION = 1.9.93;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = ai.betwithgary.app;

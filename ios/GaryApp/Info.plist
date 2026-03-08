@@ -13,9 +13,9 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.9.91</string>
+	<string>1.9.93</string>
 	<key>CFBundleVersion</key>
-	<string>1.9.91</string>
+	<string>1.9.93</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>UIApplicationSceneManifest</key>
@@ -52,6 +52,12 @@
 		<string>Fonts/BarlowCondensed-Bold.ttf</string>
 		<string>Fonts/Rajdhani-Bold.ttf</string>
 		<string>Fonts/RacingSansOne.ttf</string>
+		<string>Fonts/Inter-Regular.ttf</string>
+		<string>Fonts/Inter-Medium.ttf</string>
+		<string>Fonts/Inter-SemiBold.ttf</string>
+		<string>Fonts/Inter-Bold.ttf</string>
+		<string>Fonts/JetBrainsMono-Regular.ttf</string>
+		<string>Fonts/JetBrainsMono-Bold.ttf</string>
 	</array>
 </dict>
 </plist>

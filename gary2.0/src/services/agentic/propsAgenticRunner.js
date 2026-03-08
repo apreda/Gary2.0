@@ -1,9 +1,10 @@
 /**
  * Props Agentic Runner
- * Full agentic iteration loop for player prop analysis (like game picks)
- * Gary can call tools mid-analysis to fetch stats organically
+ * Agentic iteration loop for player prop analysis — used by legacy props path.
+ * Main pipeline routes through agenticOrchestrator.js + flashAdvisor.js.
  */
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { getGeminiClient } from './modelConfig.js';
 import { GEMINI_FLASH_MODEL } from '../geminiService.js';
 import { ballDontLieService } from '../ballDontLieService.js';
 import { geminiGroundingSearch } from './scoutReport/scoutReportBuilder.js';
@@ -12,17 +13,15 @@ import { nbaSeason, nhlSeason, nflSeason } from '../../utils/dateUtils.js';
 import { getConstitution as getConstitutionWithBaseRules } from './constitution/index.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
-// PROPS MODEL POLICY — All sports use Gemini 3 Flash + HIGH reasoning
-// (Main game picks use 3.1 Pro; props use Flash for quota management)
+// PROPS MODEL POLICY — NBA uses Flash + HIGH reasoning, other sports use Pro
 // ═══════════════════════════════════════════════════════════════════════════
 const PROPS_MODEL_FLASH = GEMINI_FLASH_MODEL;
 
 function getPropsModelForSport(sportLabel) {
-  console.log(`[Props] Using Gemini 3 Flash for ${sportLabel} props (quota management)`);
+  console.log(`[Props] Using Gemini 3 Flash for ${sportLabel} props`);
   return PROPS_MODEL_FLASH;
 }
 
-// Props uses v1beta client (grounding support)
 const getGeminiForProps = () => getGeminiClient({ beta: true });
 
 // ============================================================================
@@ -286,7 +285,8 @@ const SPORT_PROP_TOOLS = {
   'NBA': NBA_PROP_TOOLS,
   'NHL': NHL_PROP_TOOLS,
   'NCAAB': NBA_PROP_TOOLS,  // College basketball uses NBA-style tools
-  'NCAAF': NFL_PROP_TOOLS   // College football uses NFL-style tools
+  'NCAAF': NFL_PROP_TOOLS,  // College football uses NFL-style tools
+  'WBC': NBA_PROP_TOOLS     // WBC uses NBA-style tools (batter stats like player stats)
 };
 
 // Get tools for a specific sport
@@ -305,6 +305,7 @@ const SPORT_CONSTITUTION_KEYS = {
   'NHL': 'NHL_PROPS',
   'NCAAB': 'NBA_PROPS',   // College basketball → closest analog is NBA props rules
   'NCAAF': 'NFL_PROPS',   // College football → closest analog is NFL props rules
+  'WBC': 'NBA_PROPS',     // WBC uses NBA props rules (closest analog for HR props)
 };
 
 /**
@@ -1666,9 +1667,9 @@ function validatePropsAgainstToolHistory(picks, toolCallHistory) {
  *
  * @param {Array} candidates - The shortlisted prop candidates to analyze
  * @param {string} sportLabel - Sport identifier
- * @returns {string} - The Pass 2 Steel Man prompt
+ * @returns {string} - The Pass 2 bilateral analysis prompt
  */
-function buildPropsPass2SteelManMessage(candidates, sportLabel = 'NFL', pass2Constitution = '') {
+function buildPropsPass2BilateralMessage(candidates, sportLabel = 'NFL', pass2Constitution = '') {
   const candidateList = candidates.slice(0, 8).map((p, i) =>
     `${i + 1}. ${p.player} - ${p.props?.map(pr => `${pr.type} ${pr.line}`).join(', ') || 'TBD'}`
   ).join('\n');
@@ -1691,7 +1692,7 @@ DO NOT call any tools. Write text analysis only. Start with ${candidates[0]?.pla
  * Run full iteration loop for props using PERSISTENT chat session
  * The chat session manages its own history, avoiding thoughtSignature issues
  */
-async function runPropsIterationLoop({ systemPrompt, userMessage, sportKey, sportLabel = 'NFL', constitution = null, maxIterations = 12, regularOnly = false, validatedPlayerNames = null }) {
+async function runPropsIterationLoop({ systemPrompt, userMessage, sportKey, sportLabel = 'NFL', constitution = null, maxIterations = 12, regularOnly = false, validatedPlayerNames = null, minInvestigatedPlayers = 5, maxPicksPerGame = 2 }) {
   // Extract constitution sections for phase-aligned injection
   const constPass2 = (constitution && typeof constitution === 'object') ? (constitution.pass2 || '') : '';
   const constPass25 = (constitution && typeof constitution === 'object') ? (constitution.pass25 || '') : '';
@@ -1722,7 +1723,6 @@ async function runPropsIterationLoop({ systemPrompt, userMessage, sportKey, spor
       temperature: 1.0, // Gemini 3 optimized default - DO NOT lower (causes looping on math tasks)
       topP: 0.95,
       maxOutputTokens: 8000,
-      // Gemini 3 thinkingConfig - use thinkingLevel (replaces legacy thinkingBudget)
       thinkingConfig: {
         includeThoughts: true,
         thinkingLevel: 'high' // "high" = deep reasoning for investigation + evaluation
@@ -1845,19 +1845,19 @@ async function runPropsIterationLoop({ systemPrompt, userMessage, sportKey, spor
         response = result.response;
 
         // Inject the appropriate next pass
-        if (!_pass2Injected && playersInvestigated >= 5) {
+        if (!_pass2Injected && playersInvestigated >= minInvestigatedPlayers) {
           _pass2Injected = true;
           const candidates = buildInvestigatedCandidates();
           console.log(`[Props] PIPELINE GATE: finalize before Pass 2 — injecting bilateral cases (${playersInvestigated} players investigated)`);
           iteration++;
           console.log(`\n[Props Iteration ${sportLabel}] ${iteration}/${maxIterations} (PASS 2 — bilateral cases)`);
-          result = await chat.sendMessage(buildPropsPass2SteelManMessage(candidates, sportLabel, constPass2));
+          result = await chat.sendMessage(buildPropsPass2BilateralMessage(candidates, sportLabel, constPass2));
           response = result.response;
         } else if (!_pass2Injected) {
-          console.log(`[Props] PIPELINE GATE: finalize too early — only ${playersInvestigated} players investigated (need 3+)`);
+          console.log(`[Props] PIPELINE GATE: finalize too early — only ${playersInvestigated} players investigated (need ${minInvestigatedPlayers}+)`);
           iteration++;
           console.log(`\n[Props Iteration ${sportLabel}] ${iteration}/${maxIterations} (need more investigation)`);
-          result = await chat.sendMessage(`You've only investigated ${playersInvestigated} player(s). Investigate at least 3 players before finalizing. Use your tools to investigate more candidates.`);
+          result = await chat.sendMessage(`You've only investigated ${playersInvestigated} player(s). Investigate at least ${minInvestigatedPlayers} players before finalizing. Use your tools to investigate more candidates.`);
           response = result.response;
         } else if (!_pass25Injected) {
           _pass25Injected = true;
@@ -1895,11 +1895,11 @@ Call finalize_props now.`);
       // ═══════════════════════════════════════════════════════════════════
       console.log(`[Props] ✓ Pass 3 complete — accepting ${picks.length} picks`);
 
-      // Trim to top 2 by confidence
-      if (Array.isArray(picks) && picks.length > 2) {
-        console.log(`[Props] Gary submitted ${picks.length} picks — trimming to top 2 by confidence`);
+      // Trim to top N by confidence (default 2 per game, WBC uses higher)
+      if (Array.isArray(picks) && picks.length > maxPicksPerGame) {
+        console.log(`[Props] Gary submitted ${picks.length} picks — trimming to top ${maxPicksPerGame} by confidence`);
         picks.sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
-        picks = picks.slice(0, 2);
+        picks = picks.slice(0, maxPicksPerGame);
         console.log(`[Props] Kept: ${picks.map(p => `${p.player} ${p.prop}`).join(', ')}`);
       }
 
@@ -1992,7 +1992,7 @@ Call finalize_props now.`);
           console.log(`[Props] ✓ ${playersInvestigated} players investigated — injecting PASS 2 (bilateral cases)`);
           iteration++;
           console.log(`\n[Props Iteration ${sportLabel}] ${iteration}/${maxIterations} (PASS 2 — bilateral cases)`);
-          result = await chat.sendMessage(buildPropsPass2SteelManMessage(candidates, sportLabel, constPass2));
+          result = await chat.sendMessage(buildPropsPass2BilateralMessage(candidates, sportLabel, constPass2));
           response = result.response;
         }
       }
@@ -2005,7 +2005,7 @@ Call finalize_props now.`);
           const candidates = buildInvestigatedCandidates();
           iteration++;
           console.log(`\n[Props Iteration ${sportLabel}] ${iteration}/${maxIterations} (PASS 2 — forced by iteration limit)`);
-          result = await chat.sendMessage(buildPropsPass2SteelManMessage(candidates, sportLabel, constPass2));
+          result = await chat.sendMessage(buildPropsPass2BilateralMessage(candidates, sportLabel, constPass2));
           response = result.response;
         }
       }
@@ -2062,11 +2062,12 @@ Call finalize_props now.`);
       }
 
       // Fallback: check for JSON picks in text (after Pass 3)
+      // Search all code-fenced JSON blocks — Flash may output game pick JSON before props JSON
       if (_pass3Injected) {
-        const jsonMatch = textContent.match(/\{[\s\S]*"picks"[\s\S]*\}/);
-        if (jsonMatch) {
+        const codeBlocks = [...textContent.matchAll(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/g)];
+        for (const block of codeBlocks) {
           try {
-            const parsed = JSON.parse(jsonMatch[0]);
+            const parsed = JSON.parse(block[1]);
             if (Array.isArray(parsed.picks)) {
               console.log(`[Props] ✓ Found picks in text response (fallback)`);
               const { validatedPicks, warnings } = validatePropsAgainstToolHistory(parsed.picks, toolCallHistory);
@@ -2082,7 +2083,7 @@ Call finalize_props now.`);
                 garySpecials: 0
               };
             }
-          } catch (e) { console.warn('Props finalize extraction failed:', e?.message); }
+          } catch { /* not valid JSON or no picks array — try next block */ }
         }
       }
 
@@ -2289,7 +2290,8 @@ const SPORT_KEYS = {
   'NBA': 'basketball_nba',
   'NHL': 'icehockey_nhl',
   'NCAAB': 'basketball_ncaab',
-  'NCAAF': 'americanfootball_ncaaf'
+  'NCAAF': 'americanfootball_ncaaf',
+  'WBC': 'baseball_mlb'
 };
 
 export async function runAgenticPropsPipeline({
@@ -2375,9 +2377,9 @@ ${JSON.stringify(availableLinesData, null, 2)}
 <instructions>
 Based on the <game_context>, <prop_candidates>, and <available_lines> above:
 
-1. Scout the prop candidates for edge opportunities
+1. Scout the prop candidates
 2. Investigate at least 6 players with tool calls before shortlisting
-3. Write BILATERAL STEEL MAN analysis (OVER case + UNDER case) for your top picks
+3. Write BILATERAL analysis (OVER case + UNDER case) for your top picks
 4. Call finalize_props ONLY after bilateral analysis is complete
 
 CRITICAL CONSTRAINTS (apply these strictly):
@@ -2396,9 +2398,11 @@ CRITICAL CONSTRAINTS (apply these strictly):
     constitution,  // Sectioned object for phase-aligned delivery
     // Give room for bilateral analysis + direction-bias recheck pass + finalization
     // Increased from 8 to 10 to allow hard bilateral enforcement without timeout
-    maxIterations: 15,
+    maxIterations: options.maxIterations ?? 15,
     regularOnly,  // Pass through for NFL regular-only mode
-    validatedPlayerNames  // Pass validated player names to filter invalid picks
+    validatedPlayerNames,  // Pass validated player names to filter invalid picks
+    minInvestigatedPlayers: options.minInvestigatedPlayers ?? 5,  // WBC uses 0 (data from grounding, not BDL)
+    maxPicksPerGame: options.maxPicksPerGame ?? 2  // WBC HR slate uses 5
   });
 
   console.log(`[Agentic Props][${sportLabel}] Completed: ${result.iterations} iterations, ${result.toolCalls} tool calls`);
