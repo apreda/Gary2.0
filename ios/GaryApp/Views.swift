@@ -1399,36 +1399,30 @@ struct SportFilterBar: View {
                         let isSelected = selected == sport
                         
                         Button {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
                                 selected = sport
                             }
                         } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: sport.icon)
-                                    .font(.system(size: 11, weight: .semibold))
-                                Text(sport.rawValue)
-                                    .font(.caption.bold())
-                            }
-                            .foregroundStyle(isSelected ? .black : (isAvailable ? .white : .gray.opacity(0.5)))
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
-                            .background {
-                                if isSelected {
-                                    Capsule()
-                                        .fill(sport.accentColor)
-                                        .modifier(ConditionalCapsuleShadow(color: sport.accentColor.opacity(0.4)))
-                                } else {
-                                    Capsule()
-                                        .fill(.white.opacity(0.06))
-                                        .overlay(
-                                            Capsule()
-                                                .stroke(.white.opacity(0.1), lineWidth: 0.5)
-                                        )
+                            VStack(spacing: 5) {
+                                HStack(spacing: 5) {
+                                    Image(systemName: sport.icon)
+                                        .font(.system(size: 10, weight: .semibold))
+                                    Text(sport.rawValue)
+                                        .font(.system(size: 12, weight: isSelected ? .bold : .medium))
                                 }
+                                .foregroundStyle(
+                                    isSelected ? .white :
+                                    isAvailable ? .white.opacity(0.4) :
+                                    .white.opacity(0.15)
+                                )
+                                .padding(.horizontal, 8)
+
+                                RoundedRectangle(cornerRadius: 1)
+                                    .fill(isSelected ? sport.accentColor : .clear)
+                                    .frame(height: 2)
                             }
                         }
                         .disabled(!isAvailable)
-                        .scaleEffect(isSelected ? 1.05 : 1.0)
                     }
                 }
             }
@@ -1455,6 +1449,15 @@ struct GaryPicksView: View {
     @State private var yesterdayPicks: [GaryPick] = []
     @State private var yesterdayResultsMap: [String: String] = [:] // matchup key -> "won"/"lost"/"push"
     @State private var sportsWithFreshPicks: Set<String> = [] // sports that have today's picks
+    @State private var selectedPick: GaryPick? = nil
+
+    /// Today's date formatted for the header
+    private var headerDateString: String {
+        let formatter = DateFormatter()
+        formatter.timeZone = TimeZone(identifier: "America/New_York")
+        formatter.dateFormat = "EEEE, MMM d"
+        return formatter.string(from: Date()).uppercased()
+    }
 
     private var filteredPicks: [GaryPick] {
         // Sort picks by game time (commence_time) - earliest games first
@@ -1641,31 +1644,36 @@ struct GaryPicksView: View {
             
             // Content - respects safe area
             VStack(spacing: 0) {
-                // Floating Header
-                Text("GARY'S PICKS")
-                    .font(.system(size: 26, weight: .heavy))
-                    .tracking(1.5)
-                    .foregroundStyle(GaryColors.goldGradient)
-                    .shadow(color: GaryColors.gold.opacity(0.2), radius: 12)
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 20)
-                    .padding(.bottom, 14)
-                    .background(alignment: .leading) {
-                        Image("GaryIconBG")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(height: 81)
-                            .shadow(color: GaryColors.gold.opacity(0.3), radius: 10)
-                            .allowsHitTesting(false)
-                    }
-                    .padding(.horizontal, 16)
+                // Header
+                VStack(spacing: 2) {
+                    Text("GARY'S PICKS")
+                        .font(.system(size: 22, weight: .heavy))
+                        .tracking(2)
+                        .foregroundStyle(GaryColors.goldGradient)
+                    Text(headerDateString)
+                        .font(.system(size: 10, weight: .medium))
+                        .tracking(1)
+                        .foregroundStyle(.white.opacity(0.25))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.top, 14)
+                .padding(.bottom, 8)
+                .background(alignment: .leading) {
+                    Image("GaryIconBG")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(height: 56)
+                        .opacity(0.7)
+                        .allowsHitTesting(false)
+                }
+                .padding(.horizontal, 16)
 
                 // Separator
                 Rectangle()
-                    .fill(LinearGradient(colors: [.clear, GaryColors.gold.opacity(0.25), .clear], startPoint: .leading, endPoint: .trailing))
+                    .fill(LinearGradient(colors: [.clear, GaryColors.gold.opacity(0.15), .clear], startPoint: .leading, endPoint: .trailing))
                     .frame(height: 0.5)
                     .padding(.horizontal, 20)
-                    .padding(.bottom, 16)
+                    .padding(.bottom, 8)
 
                 // Sport Filter
                 SportFilterBar(selected: $selectedSport, availableSports: availableSports, showAll: true)
@@ -1742,73 +1750,83 @@ struct GaryPicksView: View {
                     Spacer()
                 } else {
                     ScrollView(showsIndicators: false) {
-                        LazyVStack(spacing: 16) {
-                            // Yesterday's Results header (only when current filter includes yesterday picks)
+                        LazyVStack(spacing: 6) {
+                            // Yesterday's Results header
                             if showingYesterdayResults && filteredPicks.contains(where: { isYesterdayPick($0) }) {
-                                HStack(spacing: 8) {
+                                HStack(spacing: 6) {
                                     Image(systemName: "clock.arrow.counterclockwise")
-                                        .font(.system(size: 13, weight: .semibold))
-                                        .foregroundStyle(Color.white.opacity(0.5))
+                                        .font(.system(size: 11, weight: .semibold))
+                                        .foregroundStyle(.white.opacity(0.35))
                                     Text("Yesterday's Results")
-                                        .font(.system(size: 14, weight: .bold))
-                                        .foregroundStyle(Color.white.opacity(0.5))
+                                        .font(.system(size: 12, weight: .bold))
+                                        .foregroundStyle(.white.opacity(0.35))
                                     Text(yesterdayRecord)
-                                        .font(.system(size: 14, weight: .bold))
+                                        .font(.system(size: 12, weight: .bold))
                                         .foregroundStyle(GaryColors.gold)
                                 }
                                 .frame(maxWidth: .infinity, alignment: .center)
                                 .padding(.top, 4)
+                                .padding(.bottom, 2)
                             }
 
-                            // All sports: Show picks grouped by time slot with headers
+                            // Picks grouped by time slot
                             ForEach(picksByTimeSlot, id: \.timeSlot) { group in
-                                // Time slot header (hide when showing yesterday's results — all games are finished)
+                                // Time slot header (hide for yesterday)
                                 if !filteredPicks.contains(where: { isYesterdayPick($0) }) {
-                                    HStack {
-                                        Rectangle()
-                                            .fill(GaryColors.gold.opacity(0.5))
-                                            .frame(height: 1)
-                                        Text(group.timeSlot)
-                                            .font(.system(size: 14, weight: .bold))
-                                            .foregroundColor(GaryColors.gold)
-                                            .fixedSize()
-                                        Rectangle()
-                                            .fill(GaryColors.gold.opacity(0.5))
-                                            .frame(height: 1)
-                                    }
-                                    .padding(.horizontal, 20)
-                                    .padding(.top, 8)
+                                    Text(group.timeSlot)
+                                        .font(.system(size: 10, weight: .bold))
+                                        .tracking(0.5)
+                                        .foregroundStyle(.white.opacity(0.25))
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .padding(.horizontal, 18)
+                                        .padding(.top, 10)
+                                        .padding(.bottom, 2)
                                 }
 
-                                // Picks in this time slot
+                                // Compact pick rows
                                 ForEach(group.picks) { pick in
-                                    let isNCAAB = (pick.league ?? "").uppercased() == "NCAAB"
-                                    PickCardMobile(
+                                    CompactPickRow(
                                         pick: pick,
-                                        gameResult: isYesterdayPick(pick) ? resultForPick(pick) : nil
+                                        gameResult: isYesterdayPick(pick) ? resultForPick(pick) : nil,
+                                        showSportBadge: selectedSport == .all
                                     )
-                                        .modifier(ConditionalMarquee(isActive: isNCAAB))
-                                        .padding(.horizontal, 16)
-                                        .transaction { $0.animation = nil }
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                                            selectedPick = pick
+                                        }
+                                    }
+                                    .padding(.horizontal, 12)
+                                    .transaction { $0.animation = nil }
                                 }
                             }
                         }
-                        .padding(.vertical, 8)
+                        .padding(.vertical, 4)
                         .padding(.bottom, 100)
                         .transaction { $0.animation = nil }
                     }
-                    // Pull-to-refresh only on the picks ScrollView, not the filter bar
                     .refreshable {
                         await loadPicks(forceRefresh: true)
                     }
                 }
             }
         }
+        .overlay {
+            if let selected = selectedPick {
+                PickDetailPopup(
+                    pick: selected,
+                    gameResult: isYesterdayPick(selected) ? resultForPick(selected) : nil,
+                    onDismiss: { selectedPick = nil }
+                )
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                .zIndex(100)
+            }
+        }
         .task {
             await loadPicks()
         }
     }
-    
+
     /// W-L record string for yesterday's picks in the current sport filter
     private var yesterdayRecord: String {
         let yPicks = filteredPicks.filter { isYesterdayPick($0) }
@@ -3768,6 +3786,454 @@ struct ResultStampOverlay: View {
             .rotationEffect(.degrees(-18))
             .opacity(0.85)
             .allowsHitTesting(false)
+    }
+}
+
+// MARK: - Pick Text Helper (shared spread-sign fix)
+
+extension GaryPick {
+    /// Formatted pick text with spread sign correction from sportsbook odds
+    var formattedPickParts: (pick: String, odds: String) {
+        var parts = Formatters.splitPickAndOdds(self.pick)
+        // Spread sign fix using sportsbook odds (picked team perspective)
+        if let pickType = self.type, pickType == "spread",
+           let books = self.sportsbook_odds, let firstSpread = books.compactMap({ $0.spread }).first {
+            var text = parts.0
+            if let regex = try? NSRegularExpression(pattern: #"([+-]?)(\d{1,2}\.?\d*)\s*$"#),
+               let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+               let signRange = Range(match.range(at: 1), in: text),
+               let fullRange = Range(match.range(at: 0), in: text) {
+                let sign = String(text[signRange])
+                let correctSign = firstSpread >= 0 ? "+" : "-"
+                if sign.isEmpty || sign != correctSign {
+                    let num = abs(firstSpread)
+                    let s = num.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(num)) : String(num)
+                    text = text.replacingCharacters(in: fullRange, with: "\(correctSign)\(s)")
+                    parts = (text, parts.1)
+                }
+            }
+        }
+        return parts
+    }
+}
+
+// MARK: - Compact Pick Row (Scoreboard-style)
+
+struct CompactPickRow: View {
+    let pick: GaryPick
+    var gameResult: String? = nil
+    var showSportBadge: Bool = false
+
+    private var accentColor: Color { Sport.from(league: pick.league).accentColor }
+    private var awayName: String { Formatters.shortTeamName(pick.awayTeam, league: pick.league) }
+    private var homeName: String { Formatters.shortTeamName(pick.homeTeam, league: pick.league) }
+    private var isNCAAB: Bool { (pick.league ?? "").uppercased() == "NCAAB" }
+    private var isCFP: Bool { pick.isCFP }
+
+    private var formattedTime: String {
+        guard let time = pick.displayTime else { return "" }
+        return Formatters.formatCommenceTime(time)
+    }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            // Left accent bar
+            RoundedRectangle(cornerRadius: 2)
+                .fill(accentColor)
+                .frame(width: 3)
+                .padding(.vertical, 8)
+
+            VStack(alignment: .leading, spacing: 8) {
+                // Row 1: Teams
+                HStack(spacing: 0) {
+                    HStack(spacing: 3) {
+                        if isNCAAB, let rank = pick.awayRanking {
+                            Text("#\(rank)")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(GaryColors.gold)
+                        } else if isCFP, let seed = pick.awaySeed {
+                            Text("#\(seed)")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(GaryColors.gold)
+                        }
+                        Text(awayName)
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Text(pick.isNeutralSite == true ? "vs" : "@")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.white.opacity(0.25))
+                        .frame(width: 24)
+
+                    HStack(spacing: 3) {
+                        Text(homeName)
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                        if isNCAAB, let rank = pick.homeRanking {
+                            Text("#\(rank)")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(GaryColors.gold)
+                        } else if isCFP, let seed = pick.homeSeed {
+                            Text("#\(seed)")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(GaryColors.gold)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                }
+
+                // Row 2: Gary's pick + odds
+                HStack {
+                    Text(pick.formattedPickParts.pick)
+                        .font(.system(size: 13, weight: .heavy))
+                        .foregroundStyle(GaryColors.gold)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.65)
+
+                    Spacer(minLength: 8)
+
+                    if !pick.formattedPickParts.odds.isEmpty {
+                        Text(pick.formattedPickParts.odds)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.45))
+                    }
+                }
+
+                // Row 3: Confidence + time
+                HStack(spacing: 0) {
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            RoundedRectangle(cornerRadius: 1)
+                                .fill(accentColor.opacity(0.12))
+                            RoundedRectangle(cornerRadius: 1)
+                                .fill(accentColor.opacity(0.5))
+                                .frame(width: geo.size.width * CGFloat(pick.confidence ?? 0))
+                        }
+                    }
+                    .frame(height: 2)
+                    .frame(maxWidth: 100)
+
+                    Spacer()
+
+                    Text(formattedTime)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.3))
+                }
+            }
+            .padding(.leading, 10)
+            .padding(.trailing, 8)
+            .padding(.vertical, 10)
+
+            // Chevron
+            Image(systemName: "chevron.right")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.15))
+                .padding(.trailing, 12)
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(GaryColors.cardBg)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(accentColor.opacity(0.1), lineWidth: 0.5)
+                )
+        )
+        .overlay(alignment: .topTrailing) {
+            if showSportBadge, let league = pick.league?.uppercased(), !league.isEmpty {
+                Text(league)
+                    .font(.system(size: 8, weight: .heavy))
+                    .tracking(0.3)
+                    .foregroundStyle(accentColor)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(accentColor.opacity(0.1))
+                    .clipShape(RoundedRectangle(cornerRadius: 3))
+                    .padding(6)
+            }
+        }
+        .overlay(alignment: .trailing) {
+            if let result = gameResult?.lowercased(), !result.isEmpty {
+                Text(result == "won" ? "W" : result == "push" ? "P" : "L")
+                    .font(.system(size: 13, weight: .black))
+                    .foregroundStyle(
+                        result == "won" ? GaryColors.gold :
+                        result == "push" ? Color.yellow :
+                        Color(hex: "#4A4A4C")
+                    )
+                    .frame(width: 26, height: 26)
+                    .background(
+                        Circle()
+                            .fill(Color.black.opacity(0.7))
+                            .overlay(
+                                Circle().stroke(
+                                    result == "won" ? GaryColors.gold.opacity(0.5) :
+                                    result == "push" ? Color.yellow.opacity(0.5) :
+                                    Color(hex: "#4A4A4C").opacity(0.4),
+                                    lineWidth: 1.5
+                                )
+                            )
+                    )
+                    .padding(.trailing, 28)
+            }
+        }
+        .opacity(gameResult != nil ? 0.65 : 1.0)
+    }
+}
+
+// MARK: - Floating Pick Detail Popup
+
+struct PickDetailPopup: View {
+    let pick: GaryPick
+    var gameResult: String? = nil
+    let onDismiss: () -> Void
+
+    @State private var showSportsbookOdds = false
+
+    private var accentColor: Color { Sport.from(league: pick.league).accentColor }
+    private var awayName: String { Formatters.shortTeamName(pick.awayTeam, league: pick.league) }
+    private var homeName: String { Formatters.shortTeamName(pick.homeTeam, league: pick.league) }
+    private var isNCAAB: Bool { (pick.league ?? "").uppercased() == "NCAAB" }
+
+    private var garyPickedHome: Bool {
+        guard let pickText = pick.pick?.lowercased() else { return true }
+        let homeLower = (pick.homeTeam ?? "").lowercased()
+        let homeShort = Formatters.shortTeamName(pick.homeTeam, league: pick.league).lowercased()
+        return pickText.contains(homeLower) || pickText.contains(homeShort)
+    }
+
+    private var narrative: String {
+        guard let rationale = pick.rationale else { return "" }
+        if let range = rationale.range(of: "Gary's Take", options: .caseInsensitive) {
+            return String(rationale[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if let range = rationale.range(of: "\n\n", options: .backwards) {
+            return String(rationale[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return rationale
+    }
+
+    var body: some View {
+        ZStack {
+            // Dimmed backdrop
+            Color.black.opacity(0.7)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { onDismiss() }
+                }
+
+            // Floating card
+            VStack(spacing: 0) {
+                // Header bar
+                HStack {
+                    HStack(spacing: 8) {
+                        Text(pick.league?.uppercased() ?? "")
+                            .font(.system(size: 10, weight: .heavy))
+                            .tracking(0.5)
+                            .foregroundStyle(accentColor)
+                        if let sig = pick.gameSignificance, !sig.isEmpty, sig.count < 30 {
+                            Text(sig)
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.4))
+                        }
+                    }
+                    Spacer()
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { onDismiss() }
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.5))
+                            .padding(8)
+                            .background(Circle().fill(.white.opacity(0.08)))
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
+                .padding(.bottom, 10)
+
+                // Thin accent line
+                Rectangle()
+                    .fill(accentColor.opacity(0.3))
+                    .frame(height: 0.5)
+                    .padding(.horizontal, 16)
+
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 18) {
+                        // Matchup
+                        VStack(spacing: 6) {
+                            HStack(spacing: 0) {
+                                HStack(spacing: 3) {
+                                    if isNCAAB, let rank = pick.awayRanking {
+                                        Text("#\(rank)").font(.system(size: 11, weight: .bold)).foregroundStyle(GaryColors.gold)
+                                    }
+                                    Text(awayName)
+                                        .font(.system(size: 20, weight: .bold))
+                                        .foregroundStyle(.white)
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.7)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+
+                                Text(pick.isNeutralSite == true ? "vs" : "@")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.white.opacity(0.25))
+                                    .frame(width: 30)
+
+                                HStack(spacing: 3) {
+                                    Text(homeName)
+                                        .font(.system(size: 20, weight: .bold))
+                                        .foregroundStyle(.white)
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.7)
+                                    if isNCAAB, let rank = pick.homeRanking {
+                                        Text("#\(rank)").font(.system(size: 11, weight: .bold)).foregroundStyle(GaryColors.gold)
+                                    }
+                                }
+                                .frame(maxWidth: .infinity, alignment: .trailing)
+                            }
+
+                            HStack(spacing: 12) {
+                                if let venue = pick.venue, !venue.isEmpty {
+                                    HStack(spacing: 3) {
+                                        Image(systemName: "mappin.circle.fill").font(.system(size: 10))
+                                        Text(venue).font(.system(size: 10, weight: .medium))
+                                    }
+                                    .foregroundStyle(accentColor.opacity(0.7))
+                                }
+                                if let time = pick.displayTime {
+                                    Text(Formatters.formatCommenceTime(time))
+                                        .font(.system(size: 10, weight: .medium))
+                                        .foregroundStyle(.white.opacity(0.35))
+                                }
+                            }
+                        }
+
+                        // Divider
+                        Rectangle().fill(.white.opacity(0.06)).frame(height: 0.5)
+
+                        // Gary's Pick
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("GARY'S PICK")
+                                .font(.system(size: 9, weight: .heavy))
+                                .tracking(1.2)
+                                .foregroundStyle(.white.opacity(0.3))
+
+                            HStack {
+                                Text(pick.formattedPickParts.pick)
+                                    .font(.system(size: 20, weight: .heavy))
+                                    .foregroundStyle(GaryColors.gold)
+                                    .lineLimit(2)
+                                    .minimumScaleFactor(0.6)
+
+                                Spacer()
+
+                                if !pick.formattedPickParts.odds.isEmpty {
+                                    Text(pick.formattedPickParts.odds)
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundStyle(.white.opacity(0.55))
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 5)
+                                        .background(.white.opacity(0.06))
+                                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                                }
+                            }
+
+                            // Confidence
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack {
+                                    Image(systemName: "chart.line.uptrend.xyaxis").font(.system(size: 9))
+                                    Text("Confidence").font(.system(size: 9, weight: .medium))
+                                    Spacer()
+                                }
+                                .foregroundStyle(.white.opacity(0.3))
+
+                                GeometryReader { geo in
+                                    ZStack(alignment: .leading) {
+                                        RoundedRectangle(cornerRadius: 2)
+                                            .fill(accentColor.opacity(0.12))
+                                        RoundedRectangle(cornerRadius: 2)
+                                            .fill(accentColor)
+                                            .frame(width: geo.size.width * CGFloat(pick.confidence ?? 0))
+                                    }
+                                }
+                                .frame(height: 4)
+                            }
+                        }
+
+                        // Sportsbook Odds
+                        if let odds = pick.sportsbook_odds, !odds.isEmpty {
+                            VStack(spacing: 8) {
+                                Button {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                        showSportsbookOdds.toggle()
+                                    }
+                                } label: {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "chart.bar.doc.horizontal")
+                                            .font(.system(size: 10, weight: .semibold))
+                                        Text("Sportsbook Odds")
+                                            .font(.system(size: 11, weight: .semibold))
+                                        Spacer()
+                                        Image(systemName: showSportsbookOdds ? "chevron.up" : "chevron.down")
+                                            .font(.system(size: 9, weight: .bold))
+                                    }
+                                    .foregroundStyle(accentColor.opacity(0.65))
+                                    .padding(.vertical, 8)
+                                    .padding(.horizontal, 10)
+                                    .background(accentColor.opacity(0.05))
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                                }
+                                .buttonStyle(.plain)
+
+                                if showSportsbookOdds {
+                                    SportsbookOddsTable(odds: odds)
+                                        .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .top)))
+                                }
+                            }
+                        }
+
+                        // Divider
+                        Rectangle().fill(.white.opacity(0.06)).frame(height: 0.5)
+
+                        // Tale of Tape
+                        if let statsData = pick.statsData, !statsData.isEmpty {
+                            TaleOfTapeSection(
+                                homeTeam: homeName,
+                                awayTeam: awayName,
+                                statsData: statsData,
+                                injuries: pick.injuries,
+                                garyPickedHome: garyPickedHome
+                            )
+                        }
+
+                        // Gary's Take
+                        if !narrative.isEmpty {
+                            GaryTakeSection(narrative: narrative, accentColor: accentColor)
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 14)
+                    .padding(.bottom, 30)
+                }
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(Color(hex: "#0C0C0E"))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20)
+                            .stroke(accentColor.opacity(0.2), lineWidth: 1)
+                    )
+                    .shadow(color: accentColor.opacity(0.08), radius: 30, y: 8)
+                    .shadow(color: .black.opacity(0.6), radius: 20, y: 10)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 20))
+            .padding(.horizontal, 16)
+            .padding(.vertical, 50)
+        }
     }
 }
 
