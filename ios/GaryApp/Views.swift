@@ -1935,6 +1935,14 @@ struct GaryPropsView: View {
     @State private var fetchFailed = false
     @State private var selectedSport: Sport = .all
     @State private var lastUpdated: Date?
+    @State private var selectedProp: PropPick?
+
+    private var headerDateString: String {
+        let fmt = DateFormatter()
+        fmt.dateFormat = "EEEE, MMM d"
+        fmt.timeZone = TimeZone(identifier: "America/New_York")
+        return fmt.string(from: Date()).uppercased()
+    }
     
     private var filteredProps: [PropPick] {
         // Sort props by game time (commence_time) - earliest games first
@@ -2059,30 +2067,20 @@ struct GaryPropsView: View {
             // Content - respects safe area
             VStack(spacing: 0) {
                 // Header
-                Text("GARY'S PROPS")
-                    .font(.system(size: 26, weight: .heavy))
-                    .tracking(1.5)
-                    .foregroundStyle(GaryColors.goldGradient)
-                    .shadow(color: GaryColors.gold.opacity(0.2), radius: 12)
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 20)
-                    .padding(.bottom, 14)
-                    .background(alignment: .leading) {
-                        Image("GaryIconBG")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(height: 81)
-                            .shadow(color: GaryColors.gold.opacity(0.3), radius: 10)
-                            .allowsHitTesting(false)
-                    }
-                    .padding(.horizontal, 16)
-
-                // Separator
-                Rectangle()
-                    .fill(LinearGradient(colors: [.clear, GaryColors.gold.opacity(0.25), .clear], startPoint: .leading, endPoint: .trailing))
-                    .frame(height: 0.5)
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 16)
+                VStack(spacing: 2) {
+                    Text("GARY'S PROPS")
+                        .font(.system(size: 18, weight: .heavy))
+                        .tracking(1.5)
+                        .foregroundStyle(GaryColors.goldGradient)
+                    Text(headerDateString)
+                        .font(.system(size: 10, weight: .semibold))
+                        .tracking(0.8)
+                        .foregroundStyle(.white.opacity(0.3))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.top, 12)
+                .padding(.bottom, 8)
+                .padding(.horizontal, 16)
 
                 // Sport Filter (with props-only filters like NFL TDs)
                 SportFilterBar(selected: $selectedSport, availableSports: availableSports, showPropsOnly: true)
@@ -2138,69 +2136,71 @@ struct GaryPropsView: View {
                     Spacer()
                 } else {
                     ScrollView(showsIndicators: false) {
-                        LazyVStack(spacing: 16) {
+                        LazyVStack(spacing: 6) {
                             // NFL TDs: Show with category section headers (Regular / Value)
                             if selectedSport == .nflTDs {
                                 ForEach(tdPicksByCategory, id: \.category) { group in
                                     // Section Header
-                                    HStack {
+                                    HStack(spacing: 6) {
                                         Rectangle()
-                                            .fill(group.category == "standard" ? Color(hex: "#3B82F6").opacity(0.6) : 
-                                                  group.category == "underdog" ? Color(hex: "#22C55E").opacity(0.6) : 
-                                                  Color(hex: "#A855F7").opacity(0.6))  // Purple for first_td
-                                            .frame(width: 30, height: 2)
+                                            .fill(group.category == "standard" ? Color(hex: "#3B82F6").opacity(0.6) :
+                                                  group.category == "underdog" ? Color(hex: "#22C55E").opacity(0.6) :
+                                                  Color(hex: "#A855F7").opacity(0.6))
+                                            .frame(width: 20, height: 1)
 
                                         Text(group.label)
-                                            .font(.system(size: 14, weight: .bold))
-                                            .foregroundStyle(group.category == "standard" ? Color(hex: "#3B82F6") : 
-                                                           group.category == "underdog" ? Color(hex: "#22C55E") : 
-                                                           Color(hex: "#A855F7"))  // Purple for first_td
-                                        
+                                            .font(.system(size: 11, weight: .bold))
+                                            .foregroundStyle(group.category == "standard" ? Color(hex: "#3B82F6") :
+                                                           group.category == "underdog" ? Color(hex: "#22C55E") :
+                                                           Color(hex: "#A855F7"))
+
                                         if group.category == "underdog" {
-                                            Text("• +200 or better")
-                                                .font(.system(size: 11))
+                                            Text("+200+")
+                                                .font(.system(size: 9, weight: .medium))
                                                 .foregroundStyle(.secondary)
                                         }
-                                        
+
                                         Rectangle()
-                                            .fill(group.category == "standard" ? Color(hex: "#3B82F6").opacity(0.6) : 
-                                                  group.category == "underdog" ? Color(hex: "#22C55E").opacity(0.6) : 
-                                                  Color(hex: "#A855F7").opacity(0.6))  // Purple for first_td
-                                            .frame(height: 2)
+                                            .fill(group.category == "standard" ? Color(hex: "#3B82F6").opacity(0.6) :
+                                                  group.category == "underdog" ? Color(hex: "#22C55E").opacity(0.6) :
+                                                  Color(hex: "#A855F7").opacity(0.6))
+                                            .frame(height: 1)
                                     }
                                     .padding(.horizontal, 20)
-                                    .padding(.top, group.category == "standard" ? 4 : 12)
-                                    
+                                    .padding(.top, group.category == "standard" ? 4 : 10)
+
                                     // TD Picks in this category
                                     ForEach(group.picks) { prop in
-                                        PropCardMobile(prop: prop)
-                                            .padding(.horizontal, 16)
+                                        CompactPropRow(prop: prop)
+                                            .padding(.horizontal, 12)
+                                            .onTapGesture { selectedProp = prop }
                                             .transaction { $0.animation = nil }
                                     }
                                 }
                             } else {
                                 // Regular props: Show grouped by matchup with headers
                                 ForEach(propsByMatchup, id: \.matchup) { group in
-                                    // Matchup header (time is shown on each card)
-                                    HStack {
+                                    // Matchup header
+                                    HStack(spacing: 6) {
                                         Rectangle()
-                                            .fill(GaryColors.gold.opacity(0.5))
-                                            .frame(width: 20, height: 1)
+                                            .fill(GaryColors.gold.opacity(0.4))
+                                            .frame(width: 16, height: 1)
                                         Text(group.matchup)
-                                            .font(.system(size: 14, weight: .bold))
-                                            .foregroundColor(GaryColors.gold)
+                                            .font(.system(size: 11, weight: .bold))
+                                            .foregroundColor(GaryColors.gold.opacity(0.7))
                                             .lineLimit(1)
                                         Rectangle()
-                                            .fill(GaryColors.gold.opacity(0.5))
-                                            .frame(width: 20, height: 1)
+                                            .fill(GaryColors.gold.opacity(0.4))
+                                            .frame(height: 1)
                                     }
                                     .padding(.horizontal, 16)
-                                    .padding(.top, 12)
-                                    
+                                    .padding(.top, 10)
+
                                     // Props in this matchup
                                     ForEach(group.props) { prop in
-                                        PropCardMobile(prop: prop, showTimeOnCard: true)
-                                            .padding(.horizontal, 16)
+                                        CompactPropRow(prop: prop, showSportBadge: selectedSport == .all)
+                                            .padding(.horizontal, 12)
+                                            .onTapGesture { selectedProp = prop }
                                             .transaction { $0.animation = nil }
                                     }
                                 }
@@ -2217,11 +2217,19 @@ struct GaryPropsView: View {
                 }
             }
         }
+        .overlay {
+            if let prop = selectedProp {
+                PropDetailPopup(prop: prop) {
+                    selectedProp = nil
+                }
+                .transition(.opacity)
+            }
+        }
         .task {
             await loadProps()
         }
     }
-    
+
     private func loadProps(forceRefresh: Bool = false) async {
         await MainActor.run {
             loading = true
@@ -4779,6 +4787,428 @@ struct PropCardMobile: View {
         }, perform: {})
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(prop.effectiveLeague ?? "") prop: \(prop.player ?? prop.team ?? ""). \(prop.bet ?? "")")
+    }
+}
+
+// MARK: - Compact Prop Row (Redesigned)
+
+struct CompactPropRow: View {
+    let prop: PropPick
+    var showSportBadge: Bool = false
+
+    private var accentColor: Color { Sport.from(league: prop.effectiveLeague).accentColor }
+
+    private var betColor: Color {
+        guard let bet = prop.bet?.lowercased() else { return .white }
+        return bet == "over" ? .green : .red
+    }
+
+    private var formattedTime: String {
+        if let isoTime = prop.commence_time, !isoTime.isEmpty,
+           let gameDate = parseISO8601(isoTime) {
+            return Formatters.dayTimeFormatterEST.string(from: gameDate).replacingOccurrences(of: "^[A-Za-z]+ ", with: "", options: .regularExpression) // just time
+        }
+        if let time = prop.time, !time.isEmpty, time != "TBD" { return time }
+        return ""
+    }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            // Left accent bar
+            RoundedRectangle(cornerRadius: 2)
+                .fill(accentColor)
+                .frame(width: 3)
+                .padding(.vertical, 8)
+
+            VStack(alignment: .leading, spacing: 7) {
+                // Row 1: Player + team
+                HStack {
+                    Text(prop.player ?? prop.team ?? "")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+
+                    if let team = prop.team, prop.player != nil {
+                        Text(team)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.35))
+                            .lineLimit(1)
+                    }
+
+                    Spacer(minLength: 4)
+
+                    Text(Formatters.americanOdds(prop.odds))
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(accentColor)
+                }
+
+                // Row 2: Prop line + bet direction
+                HStack(spacing: 6) {
+                    Text(Formatters.propDisplay(prop.prop, league: prop.effectiveLeague))
+                        .font(.system(size: 13, weight: .heavy))
+                        .foregroundStyle(GaryColors.gold)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.65)
+
+                    if let bet = prop.bet {
+                        Text(bet.uppercased())
+                            .font(.system(size: 10, weight: .heavy))
+                            .foregroundStyle(betColor)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 2)
+                            .background(betColor.opacity(0.12))
+                            .clipShape(Capsule())
+                    }
+
+                    Spacer(minLength: 4)
+
+                    if let ev = Formatters.computeEV(confidence: prop.confidence, american: prop.odds) {
+                        Text(String(format: "+%.0f%%", ev))
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(.green.opacity(0.7))
+                    }
+                }
+
+                // Row 3: Confidence bar + time
+                HStack(spacing: 0) {
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            RoundedRectangle(cornerRadius: 1)
+                                .fill(accentColor.opacity(0.12))
+                            RoundedRectangle(cornerRadius: 1)
+                                .fill(accentColor.opacity(0.5))
+                                .frame(width: geo.size.width * CGFloat(prop.confidence ?? 0))
+                        }
+                    }
+                    .frame(height: 2)
+                    .frame(maxWidth: 100)
+
+                    Spacer()
+
+                    if !formattedTime.isEmpty {
+                        Text(formattedTime)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.3))
+                    }
+                }
+            }
+            .padding(.leading, 10)
+            .padding(.trailing, 8)
+            .padding(.vertical, 10)
+
+            // Chevron
+            Image(systemName: "chevron.right")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.15))
+                .padding(.trailing, 12)
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(GaryColors.cardBg)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(accentColor.opacity(0.1), lineWidth: 0.5)
+                )
+        )
+        .overlay(alignment: .topTrailing) {
+            if showSportBadge, let league = prop.effectiveLeague, !league.isEmpty {
+                Text(league)
+                    .font(.system(size: 8, weight: .heavy))
+                    .tracking(0.3)
+                    .foregroundStyle(accentColor)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(accentColor.opacity(0.1))
+                    .clipShape(RoundedRectangle(cornerRadius: 3))
+                    .padding(6)
+            }
+        }
+    }
+}
+
+// MARK: - Floating Prop Detail Popup
+
+struct PropDetailPopup: View {
+    let prop: PropPick
+    let onDismiss: () -> Void
+
+    private var accentColor: Color {
+        if prop.isTDPick {
+            return prop.tdCategory == "underdog" ? Color(hex: "#22C55E") : Color(hex: "#3B82F6")
+        }
+        return Sport.from(league: prop.effectiveLeague).accentColor
+    }
+
+    private var betColor: Color {
+        guard let bet = prop.bet?.lowercased() else { return .white }
+        return bet == "over" ? .green : .red
+    }
+
+    private var categoryLabel: String? {
+        guard let cat = prop.tdCategory else { return nil }
+        switch cat {
+        case "standard": return "Regular Pick"
+        case "underdog": return "Value Pick (+200+)"
+        case "first_td": return "First TD"
+        default: return nil
+        }
+    }
+
+    /// Clean prop analysis text into paragraphs
+    private func cleanAnalysis(_ text: String) -> [String] {
+        var cleaned = text
+        let labelsToRemove = ["HYPOTHESIS:", "EVIDENCE:", "CONVERGENCE", "IF WRONG:", "THE EDGE:", "THE VERDICT:", "RISK:"]
+        for label in labelsToRemove {
+            if let range = cleaned.range(of: label, options: .caseInsensitive) {
+                let afterLabel = cleaned[range.upperBound...]
+                if afterLabel.hasPrefix(" (") || afterLabel.hasPrefix("(") {
+                    if let closeRange = afterLabel.range(of: "):") {
+                        cleaned.removeSubrange(range.lowerBound...closeRange.upperBound)
+                    } else if let closeRange = afterLabel.range(of: ")") {
+                        cleaned.removeSubrange(range.lowerBound...closeRange.upperBound)
+                    } else {
+                        cleaned.removeSubrange(range)
+                    }
+                } else {
+                    cleaned.removeSubrange(range)
+                }
+            }
+        }
+        return cleaned.components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .map { para in
+                var p = para
+                if let first = p.first, first.isLowercase { p = p.prefix(1).uppercased() + p.dropFirst() }
+                return p
+            }
+    }
+
+    var body: some View {
+        ZStack {
+            // Dimmed backdrop
+            Color.black.opacity(0.7)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { onDismiss() }
+                }
+
+            // Floating card
+            VStack(spacing: 0) {
+                // Header bar
+                HStack {
+                    HStack(spacing: 8) {
+                        if let league = prop.effectiveLeague {
+                            Text(league)
+                                .font(.system(size: 10, weight: .heavy))
+                                .tracking(0.5)
+                                .foregroundStyle(accentColor)
+                        }
+                        if let category = categoryLabel {
+                            Text(category)
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.4))
+                        }
+                    }
+                    Spacer()
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { onDismiss() }
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.5))
+                            .padding(8)
+                            .background(Circle().fill(.white.opacity(0.08)))
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
+                .padding(.bottom, 10)
+
+                // Thin accent line
+                Rectangle()
+                    .fill(accentColor.opacity(0.3))
+                    .frame(height: 0.5)
+                    .padding(.horizontal, 16)
+
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 18) {
+                        // Player info
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(alignment: .top) {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(prop.player ?? "Unknown")
+                                        .font(.system(size: 22, weight: .bold))
+                                        .foregroundStyle(.white)
+
+                                    if let team = prop.team {
+                                        Text(team)
+                                            .font(.system(size: 13, weight: .medium))
+                                            .foregroundStyle(.white.opacity(0.5))
+                                    }
+                                }
+
+                                Spacer()
+
+                                Text(Formatters.americanOdds(prop.odds))
+                                    .font(.system(size: 22, weight: .bold))
+                                    .foregroundStyle(accentColor)
+                            }
+
+                            if let matchup = prop.matchup {
+                                HStack(spacing: 3) {
+                                    Image(systemName: "sportscourt.fill").font(.system(size: 9))
+                                    Text(matchup).font(.system(size: 10, weight: .medium))
+                                }
+                                .foregroundStyle(accentColor.opacity(0.7))
+                            }
+
+                            if let time = prop.time, !time.isEmpty, time != "TBD" {
+                                Text(time)
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundStyle(.white.opacity(0.35))
+                            }
+                        }
+
+                        // Divider
+                        Rectangle().fill(.white.opacity(0.06)).frame(height: 0.5)
+
+                        // Gary's Pick
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("GARY'S PICK")
+                                .font(.system(size: 9, weight: .heavy))
+                                .tracking(1.2)
+                                .foregroundStyle(.white.opacity(0.3))
+
+                            HStack(spacing: 10) {
+                                Text(Formatters.propDisplay(prop.prop, league: prop.effectiveLeague))
+                                    .font(.system(size: 18, weight: .heavy))
+                                    .foregroundStyle(GaryColors.gold)
+                                    .lineLimit(2)
+                                    .minimumScaleFactor(0.6)
+
+                                if let bet = prop.bet {
+                                    Text(bet.uppercased())
+                                        .font(.system(size: 13, weight: .heavy))
+                                        .foregroundStyle(betColor)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 5)
+                                        .background(betColor.opacity(0.12))
+                                        .clipShape(Capsule())
+                                }
+
+                                Spacer()
+                            }
+
+                            // EV
+                            if let ev = Formatters.computeEV(confidence: prop.confidence, american: prop.odds) {
+                                HStack(spacing: 4) {
+                                    Text("EV:")
+                                        .foregroundStyle(.white.opacity(0.4))
+                                    Text(String(format: "+%.1f%%", ev))
+                                        .foregroundStyle(.green)
+                                }
+                                .font(.system(size: 11, weight: .bold))
+                            }
+
+                            // Confidence
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack {
+                                    Image(systemName: "chart.line.uptrend.xyaxis").font(.system(size: 9))
+                                    Text("Confidence").font(.system(size: 9, weight: .medium))
+                                    Spacer()
+                                }
+                                .foregroundStyle(.white.opacity(0.3))
+
+                                GeometryReader { geo in
+                                    ZStack(alignment: .leading) {
+                                        RoundedRectangle(cornerRadius: 2)
+                                            .fill(accentColor.opacity(0.12))
+                                        RoundedRectangle(cornerRadius: 2)
+                                            .fill(accentColor)
+                                            .frame(width: geo.size.width * CGFloat(prop.confidence ?? 0))
+                                    }
+                                }
+                                .frame(height: 4)
+                            }
+                        }
+
+                        // Divider
+                        Rectangle().fill(.white.opacity(0.06)).frame(height: 0.5)
+
+                        // Key Stats
+                        if let keyStats = prop.key_stats, !keyStats.isEmpty {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text("KEY STATS")
+                                    .font(.system(size: 9, weight: .heavy))
+                                    .tracking(1.2)
+                                    .foregroundStyle(.white.opacity(0.3))
+
+                                ForEach(keyStats, id: \.self) { stat in
+                                    HStack(alignment: .top, spacing: 8) {
+                                        Circle()
+                                            .fill(accentColor)
+                                            .frame(width: 4, height: 4)
+                                            .padding(.top, 6)
+                                        Text(stat)
+                                            .font(.system(size: 13))
+                                            .foregroundStyle(.white.opacity(0.85))
+                                            .lineSpacing(3)
+                                    }
+                                }
+                            }
+
+                            Rectangle().fill(.white.opacity(0.06)).frame(height: 0.5)
+                        }
+
+                        // Gary's Take (Analysis)
+                        if let analysis = prop.analysis, !analysis.isEmpty {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text("GARY'S TAKE")
+                                    .font(.system(size: 9, weight: .heavy))
+                                    .tracking(1.2)
+                                    .foregroundStyle(accentColor.opacity(0.7))
+
+                                VStack(alignment: .leading, spacing: 12) {
+                                    ForEach(Array(cleanAnalysis(analysis).enumerated()), id: \.offset) { _, para in
+                                        Text(para)
+                                            .font(.system(size: 13))
+                                            .foregroundStyle(.white.opacity(0.88))
+                                            .lineSpacing(4)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                }
+                                .padding(14)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .fill(.white.opacity(0.03))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 10)
+                                                .stroke(accentColor.opacity(0.15), lineWidth: 0.5)
+                                        )
+                                )
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 14)
+                    .padding(.bottom, 30)
+                }
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(Color(hex: "#0C0C0E"))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20)
+                            .stroke(accentColor.opacity(0.2), lineWidth: 1)
+                    )
+                    .shadow(color: accentColor.opacity(0.08), radius: 30, y: 8)
+                    .shadow(color: .black.opacity(0.6), radius: 20, y: 10)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 20))
+            .padding(.horizontal, 16)
+            .padding(.vertical, 50)
+        }
     }
 }
 
