@@ -184,12 +184,12 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   const isNBASport = sport === 'basketball_nba' || sport === 'NBA';
   const isNHLSport = sport === 'icehockey_nhl' || sport === 'NHL';
   const isMLBSport = sport === 'baseball_mlb' || sport === 'MLB' || sport === 'WBC';
-  const requiresBilateralCases = !isPropsMode;
-  const bilateralFn = options.bilateralCasePrompt || null;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // Props mode setup (must be before session creation so activeTools is available)
   const isPropsMode = options.mode === 'props';
+  const requiresBilateralCases = !isPropsMode;
+  const bilateralFn = options.bilateralCasePrompt || null;
   console.log(`[Orchestrator] Starting ${sport} — 3.1 Pro (main) + Flash (research)`);
 
   const propContext = options.propContext || null;
