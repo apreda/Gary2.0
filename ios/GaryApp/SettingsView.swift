@@ -3,7 +3,10 @@ import SwiftUI
 // MARK: - Settings View
 
 struct SettingsView: View {
+    @EnvironmentObject var authManager: AuthManager
     @State private var animateIn = false
+    @State private var showSignOutConfirm = false
+    @State private var showSignIn = false
     
     var body: some View {
         ZStack {
@@ -34,11 +37,17 @@ struct SettingsView: View {
                             .offset(y: animateIn ? 0 : 20)
                             .animation(.easeOut(duration: 0.5).delay(0.15), value: animateIn)
                         
+                        // Account Section
+                        accountSection
+                            .opacity(animateIn ? 1 : 0)
+                            .offset(y: animateIn ? 0 : 20)
+                            .animation(.easeOut(duration: 0.5).delay(0.2), value: animateIn)
+
                         // Legal Section
                         legalSection
                             .opacity(animateIn ? 1 : 0)
                             .offset(y: animateIn ? 0 : 20)
-                            .animation(.easeOut(duration: 0.5).delay(0.2), value: animateIn)
+                            .animation(.easeOut(duration: 0.5).delay(0.25), value: animateIn)
                     }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 100) // Space for floating tab bar
@@ -139,6 +148,120 @@ struct SettingsView: View {
         }
     }
     
+    // MARK: - Account Section
+
+    private var accountSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "person.circle.fill")
+                    .foregroundStyle(GaryColors.gold)
+                Text("ACCOUNT")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+            }
+
+            VStack(spacing: 2) {
+                if authManager.isAuthenticated {
+                    // User info
+                    HStack(spacing: 14) {
+                        Image(systemName: "envelope.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(GaryColors.gold)
+                            .frame(width: 32, height: 32)
+                            .background(Color(hex: "#1A1A1C"))
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(authManager.currentUser?.displayName ?? "Gary User")
+                                .font(.subheadline)
+                                .foregroundStyle(.white)
+                            if let email = authManager.currentUser?.email {
+                                Text(email)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        Spacer()
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+
+                    Divider()
+                        .background(GaryColors.gold.opacity(0.1))
+                        .padding(.horizontal, 16)
+
+                    // Sign Out
+                    Button {
+                        showSignOutConfirm = true
+                    } label: {
+                        HStack(spacing: 14) {
+                            Image(systemName: "rectangle.portrait.and.arrow.right")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(.red)
+                                .frame(width: 32, height: 32)
+                                .background(Color(hex: "#1A1A1C"))
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                            Text("Sign Out")
+                                .font(.subheadline)
+                                .foregroundStyle(.red)
+
+                            Spacer()
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 14)
+                    }
+                } else {
+                    // Not signed in — show sign in button
+                    Button {
+                        showSignIn = true
+                    } label: {
+                        HStack(spacing: 14) {
+                            Image(systemName: "person.badge.key.fill")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(GaryColors.gold)
+                                .frame(width: 32, height: 32)
+                                .background(Color(hex: "#1A1A1C"))
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                            Text("Sign In")
+                                .font(.subheadline)
+                                .foregroundStyle(.white)
+
+                            Spacer()
+
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(GaryColors.gold.opacity(0.5))
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 14)
+                    }
+                }
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color(hex: "#0D0D0F"))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(GaryColors.gold.opacity(0.15), lineWidth: 0.5)
+                    )
+            )
+        }
+        .alert("Sign Out", isPresented: $showSignOutConfirm) {
+            Button("Cancel", role: .cancel) {}
+            Button("Sign Out", role: .destructive) {
+                authManager.signOut()
+            }
+        } message: {
+            Text("Are you sure you want to sign out?")
+        }
+        .sheet(isPresented: $showSignIn) {
+            AuthView()
+        }
+    }
+
     // MARK: - Legal Section
     
     private var legalSection: some View {
@@ -231,5 +354,6 @@ struct SettingsLink: View {
 
 #Preview {
     SettingsView()
+        .environmentObject(AuthManager.shared)
         .preferredColorScheme(.dark)
 }

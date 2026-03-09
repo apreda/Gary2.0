@@ -59,6 +59,10 @@ firebase-service-account.json
 **/firebase-service-account.json
 *.pem
 
-# iOS Secrets
-ios/GaryApp/Secrets.swift
-ios/GaryApp/GoogleService-Info.plist
+# Claude Code working directories
+.claude/deriveddata*/
+.claude/worktrees/
+
+# iOS build artifacts
+ios/GaryApp/build/
+ios/build/

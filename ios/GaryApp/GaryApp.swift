@@ -108,10 +108,20 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
 @main
 struct GaryApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    
+    @StateObject private var authManager = AuthManager.shared
+    @AppStorage("hasEntered") private var hasEntered: Bool = false
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            Group {
+                if hasEntered {
+                    ContentView()
+                        .environmentObject(authManager)
+                } else {
+                    AccessView()
+                        .environmentObject(authManager)
+                }
+            }
             .preferredColorScheme(.dark)
         }
     }

@@ -3,6 +3,7 @@ import SwiftUI
 // MARK: - Main Tab View with Liquid Glass
 
 struct ContentView: View {
+    @EnvironmentObject var authManager: AuthManager
     @AppStorage("selectedTab") private var selectedTab: Int = 0
     @State private var showingSettings = false
     
@@ -44,6 +45,7 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showingSettings) {
             SettingsSheetView()
+                .environmentObject(authManager)
         }
     }
 }
@@ -247,5 +249,6 @@ extension Color {
 
 #Preview {
     ContentView()
+        .environmentObject(AuthManager.shared)
         .preferredColorScheme(.dark)
 }
