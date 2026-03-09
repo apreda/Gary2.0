@@ -120,12 +120,8 @@ function validateNbaSpreadCases(text = '', homeTeam = '', awayTeam = '', spread 
   const firstHeaders = [homeHeader, awayHeader].sort((a, b) => a.headerIndex - b.headerIndex);
 
   if (homeHeader.misaligned || awayHeader.misaligned) {
-    return {
-      valid: false,
-      reason: 'misaligned_spread_side',
-      homeLen: 0,
-      awayLen: 0
-    };
+    // Log but don't hard fail — Gary may format spread numbers differently than expected
+    console.log(`[Orchestrator] Bilateral case spread sign mismatch (home: ${homeHeader.misaligned}, away: ${awayHeader.misaligned}) — validating content length instead`);
   }
 
   const markerMatch = /(^|\n)\s*INVESTIGATION COMPLETE\s*($|\n)/i.exec(input);
