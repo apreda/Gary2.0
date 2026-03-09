@@ -463,7 +463,7 @@ The direction should come from your analysis, not a default preference. UNDER is
  * Each section is injected at the pass where Gary needs it — not front-loaded.
  *
  * Pass 1: Investigation awareness (what to look for while using tools)
- * Pass 2: Case-building awareness (what to consider while writing bilateral cases)
+ * Pass 2: Case-building awareness (market efficiency + mechanism vs ranking)
  * Pass 2.5: Evaluation awareness (how to evaluate and select picks)
  * Pass 3: Output guardrails (banned phrases, conviction, rationale format)
  */

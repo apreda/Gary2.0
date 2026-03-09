@@ -1622,9 +1622,12 @@ INVESTIGATION COMPLETE`;
           const casePromptStall = (requiresBilateralCases && bilateralFn)
             ? `\n\n${bilateralFn(homeTeam, awayTeam)}`
             : '';
+          const synthesizeFrom = isPropsMode
+            ? 'Synthesize what you already have from the scout report. If you still need more data, call fetch_stats.'
+            : 'Synthesize what you already have from the scout report + research briefing. If you still need more data, call fetch_stats.';
           const completionNudge = `You are still in Pass 1. Do not make your pick yet.
 
-Synthesize what you already have from the scout report + research briefing. If you still need more data, call fetch_stats.
+${synthesizeFrom}
 ${casePromptStall}
 
 When your Pass 1 synthesis is complete, output exactly:
@@ -1715,8 +1718,10 @@ INVESTIGATION COMPLETE`;
         // Explicit completion marker (text-only path) — inject Pass 2.5
         messages.push({ role: 'assistant', content: message.content });
         console.log(`[Orchestrator] Pipeline gate: INVESTIGATION COMPLETE received — injecting Pass 2.5 (${gateCategories} categories, ${gateCalls} calls)`);
+        const propsPass25Constitution = (isPropsMode && typeof propContext?.propsConstitution === 'object')
+          ? propContext.propsConstitution.pass25 || '' : '';
         const pass25Content = (isPropsMode
-          ? buildPass25PropsMessage(homeTeam, awayTeam, sport)
+          ? buildPass25PropsMessage(homeTeam, awayTeam, sport, propsPass25Constitution)
           : buildPass25Message(homeTeam, awayTeam, sport, spread, options.pass25DecisionGuards || ''));
         messages.push({ role: 'user', content: pass25Content });
         nextMessageToSend = pass25Content;
@@ -1731,11 +1736,14 @@ INVESTIGATION COMPLETE`;
       const casePrompt = (requiresBilateralCases && bilateralFn)
         ? `\n\n${bilateralFn(homeTeam, awayTeam)}`
         : '';
+      const synthesizeMsg = isPropsMode
+        ? 'Synthesize from scout report. If you need more data, call fetch_stats.'
+        : 'Synthesize from scout report + research briefing. If you need more data, call fetch_stats.';
       messages.push({
         role: 'user',
         content: `You are still in Pass 1. Do not make your pick yet.
 
-Synthesize from scout report + research briefing. If you need more data, call fetch_stats.
+${synthesizeMsg}
 ${casePrompt}
 
 When complete, output exactly:

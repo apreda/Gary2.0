@@ -107,7 +107,6 @@ For each pick, provide:
 3. **VOLUME FLOOR CHECK:** Target share/carry share and projection vs line
 4. **GAME SCRIPT:** Expected game flow and effect on this prop
 5. **THE RISK:** Concrete scenario where this loses
-6. **KEY FACTOR:** The game-specific evidence supporting your pick
 `;
 
 // ── Sectioned export ─────────────────────────────────────────────────

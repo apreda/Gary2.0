@@ -58,7 +58,6 @@ For each pick, provide:
 2. **THE KEY FACTOR:** The game-specific evidence supporting your pick
 3. **VOLUME FLOOR CHECK:** MPG, USG%, and how they interact with tonight's matchup
 4. **THE RISK:** Concrete scenario where this loses
-5. **KEY FACTOR:** The game-specific evidence supporting your pick
 `;
 
 // ── Sectioned export ─────────────────────────────────────────────────

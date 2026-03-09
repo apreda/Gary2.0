@@ -119,7 +119,6 @@ For each pick, provide:
 4. **VOLUME FLOOR CHECK:** TOI, PP TOI, iCF, and projection vs line
 5. **SCHEDULE CONTEXT:** B2B, travel, backup goalie, or N/A
 6. **THE RISK:** Concrete scenario where this loses
-7. **KEY FACTOR:** The game-specific evidence supporting your pick
 `;
 
 // ── Sectioned export ─────────────────────────────────────────────────

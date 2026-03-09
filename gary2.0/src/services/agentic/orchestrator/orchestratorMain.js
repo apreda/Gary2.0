@@ -9,7 +9,7 @@ import { nbaSeason, nhlSeason, nflSeason, ncaabSeason } from '../../../utils/dat
 import { CONFIG, GEMINI_PRO_MODEL } from './orchestratorConfig.js';
 import { createGeminiSession, sendToSession } from './sessionManager.js';
 import { buildFlashResearchBriefing } from './flashAdvisor.js';
-import { buildPass1Message } from './passBuilders.js';
+import { buildPass1Message, buildPass1PropsMessage } from './passBuilders.js';
 import { runAgentLoop } from './agentLoop.js';
 import { normalizeSportToLeague } from './orchestratorHelpers.js';
 
@@ -98,14 +98,26 @@ export async function analyzeGame(game, sport, options = {}) {
     // placeholders, so perform a final pass replacement here.
     systemPrompt = systemPrompt.replace(/{{CURRENT_DATE}}/g, today);
 
-    // In props mode, append props-specific constitution
+    // In props mode, append props-specific constitution (pass1 + pass2 awareness sections)
     if (isPropsMode && propContext?.propsConstitution) {
-      systemPrompt += '\n\n' + propContext.propsConstitution;
-      console.log(`[Orchestrator] Appended props constitution (${propContext.propsConstitution.length} chars)`);
+      const propsConst = propContext.propsConstitution;
+      if (typeof propsConst === 'object') {
+        const propsText = [propsConst.pass1, propsConst.pass2].filter(Boolean).join('\n\n');
+        systemPrompt += '\n\n' + propsText;
+        console.log(`[Orchestrator] Appended props constitution pass1+pass2 (${propsText.length} chars)`);
+      } else {
+        systemPrompt += '\n\n' + propsConst;
+        console.log(`[Orchestrator] Appended props constitution (${propsConst.length} chars)`);
+      }
     }
 
-    // Step 4: Build the user message
-    let userMessage = buildPass1Message(garyText, homeTeam, awayTeam, today, sport, game.spread_home ?? game.spread_away ?? 0);
+    // Step 4: Build the user message — props mode gets props-specific Pass 1
+    let userMessage;
+    if (isPropsMode) {
+      userMessage = buildPass1PropsMessage(garyText, homeTeam, awayTeam, today, sport);
+    } else {
+      userMessage = buildPass1Message(garyText, homeTeam, awayTeam, today, sport, game.spread_home ?? game.spread_away ?? 0);
+    }
     // Optional sport-specific Pass 1 context (phase-aligned, not always-on)
     if (typeof constitution === 'object' && constitution.pass1Context && !isPropsMode) {
       userMessage += `\n\n<sport_pass1_context>\n${constitution.pass1Context}\n</sport_pass1_context>`;

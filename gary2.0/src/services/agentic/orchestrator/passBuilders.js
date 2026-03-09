@@ -70,7 +70,7 @@ The spread is not a prediction — it is a price. Your scout report and research
 **DESCRIPTIVE vs CAUSAL:**
 - **Descriptive factors** (records, rankings, standings, streaks, reputation) explain WHY the line is set where it is. They are already IN the price.
 - **Causal factors** (how each team plays, matchup dynamics, situational context) reveal the actual matchup beneath the price.
-- **The SPOT** (venue, schedule, rest, travel, emotional context) is factored into the price — investigate whether the market adjustment matches the underlying matchup evidence for tonight.
+- **The SPOT** (venue, schedule, rest, travel, emotional context) is factored into the price — the market adjustment may or may not match the underlying matchup evidence for tonight.
 
 When you cite a record, ranking, or situation — ask yourself: "Is this describing what happened, or explaining what will happen tonight?"
 
@@ -147,22 +147,20 @@ ${scoutReport}
 The spread is not a prediction — it is a price. Lines are shaped by recent performance, reputation, standings, and public perception. Transient factors — rest, travel, injuries, schedule density — can shift a line away from where the underlying matchup data says it should be.
 
 **NARRATIVE FACTORS AND THE PRICE:**
-Narrative factors — rest, back-to-backs, streaks, revenge spots, travel, emotional storylines, hot/cold stretches, head-to-head recent results — shape the price. They move the line in one direction or another, giving one side a bigger number and the other side a smaller number than the matchup data alone would produce.
+Narrative factors — rest vs rust, back-to-backs, streaks, revenge spots, travel, emotional storylines, hot/cold stretches, returning players, head-to-head recent results — move the line. They shift the number away from where the matchup data alone would set it. The market treats rest and returning players as positives — but rest can mean rust, and a returning player can disrupt rotations and chemistry.
 
-These factors are part of the number. They can be part of your reasoning — not as evidence that a team will play better or worse, but as context for why each side is getting the number they're getting. A narrative that has moved the line can work in favor of either side of the spread: the favorite may be laying less than expected, or the underdog may be getting more than expected, because of the narratives baked into tonight's price.
+These factors are already in the price. They can be part of your reasoning — not as evidence that a team will play better or worse, but as context for why each side is getting the number they're getting. A narrative that moved the line can work in favor of either side: the favorite may be laying less than expected, or the underdog may be getting more than expected.
 
-When narratives appear in your rationale, use them to explain why the number creates value for the side you're taking — not as standalone reasons for why a team will or won't cover.
-
-Head-to-head recent results are among the loudest narrative factors. A decisive win in the last meeting drives public action toward the winner and moves the line — that result is already in tonight's number.
+When narratives appear in your rationale, use them to explain why the number creates value for the side you're taking — not as standalone reasons for a team covering or not covering.
 
 **DESCRIPTIVE vs CAUSAL:**
 - **Descriptive factors** (records, rankings, standings, streaks, reputation) explain WHY the line is set where it is. They are already IN the price.
 - **Causal factors** (how each team plays, matchup dynamics, situational context) reveal the actual matchup beneath the price.
-- **The SPOT** (venue, schedule, rest, travel, emotional context) is factored into the price — investigate whether the market adjustment matches the underlying matchup evidence for tonight.
+- **The SPOT** (venue, schedule, rest, travel, emotional context) is factored into the price — the market adjustment may or may not match the underlying matchup evidence for tonight.
 
 **INJURY TIMING IN THIS PRICE:**
 - Use the injury duration tags from the scout report exactly as shown.
-- **FRESH (0-2 games missed):** Investigate replacement role/minutes and whether recent windows still include games with the player.
+- **FRESH (0-2 games missed):** Replacement production and recent stat windows may still include games with this player.
 - **SHORT-TERM / PRICED IN / LONG-TERM / SEASON-LONG:** Treat as established context; current team baselines usually already reflect these absences.
 - Established absences can explain why a number is where it is, but do not treat them as standalone new evidence without supporting data from this specific matchup.
 
@@ -315,7 +313,7 @@ The moneyline is not a prediction — it is a price. Lines are shaped by recent 
 **DESCRIPTIVE vs CAUSAL:**
 - **Descriptive factors** (records, standings, streaks, reputation) explain WHY the line is set where it is. They are already IN the price.
 - **Causal factors** (how each team plays, goaltending matchup, special teams dynamics, situational context) reveal the actual matchup beneath the price.
-- **The SPOT** (venue, schedule, rest, travel, emotional context) is factored into the price — investigate whether the market adjustment matches the underlying matchup evidence for tonight.
+- **The SPOT** (venue, schedule, rest, travel, emotional context) is factored into the price — the market adjustment may or may not match the underlying matchup evidence for tonight.
 
 When you cite a record, ranking, or situation — ask yourself: "Is this describing what happened, or explaining what will happen tonight?"
 
@@ -531,17 +529,53 @@ CRITICAL CONSTRAINTS (all system prompt rules apply — these are reminders of t
 }
 
 /**
+ * Build the PASS 1 message for PROPS mode — game investigation for props context.
+ * Gary investigates the game-level dynamics that inform individual player production.
+ */
+export function buildPass1PropsMessage(scoutReport, homeTeam, awayTeam, today, sport = '') {
+  return `
+<scout_report>
+## MATCHUP BRIEFING (TODAY: ${today})
+
+${scoutReport}
+</scout_report>
+
+<investigation_rules>
+## INVESTIGATION RULES
+
+**THE SYMMETRY RULE:**
+- If you call a stat for Team A, you MUST call the equivalent for Team B
+- Cherry-picking stats for one side = incomplete picture
+
+</investigation_rules>
+
+<instructions>
+## YOUR TASK: PASS 1 - INVESTIGATE THE GAME FOR PROPS
+
+Read the scout report. Investigate this game using your tools. Build a complete picture of both teams — their pace, style, personnel, and matchup dynamics.
+
+Your end goal is to evaluate PLAYER PROPS for this game. In this pass, gather the game-level context that informs individual player production: injuries, role changes, matchup dynamics, pace, and game script expectations.
+
+Use the scout report as your starting point, then investigate with fetch_stats where you need additional evidence.
+
+Do NOT select props or make picks yet. When your investigation is complete, output this exact line on its own line:
+INVESTIGATION COMPLETE
+</instructions>`.trim();
+}
+
+/**
  * Build the PASS 2.5 message for PROPS mode — evaluation phase.
- * Gary has completed bilateral OVER/UNDER analysis and now identifies his top picks.
+ * Gary has completed investigation and now identifies his top picks.
  *
  * @param {string} homeTeam - Home team name
  * @param {string} awayTeam - Away team name
  * @param {string} sport - Sport identifier
+ * @param {string} pass25Constitution - Props constitution pass25 content (evaluation awareness)
  */
-export function buildPass25PropsMessage(homeTeam = '[HOME]', awayTeam = '[AWAY]', sport = '') {
+export function buildPass25PropsMessage(homeTeam = '[HOME]', awayTeam = '[AWAY]', sport = '', pass25Constitution = '') {
   return `
-<synthesis>
-You've done your own investigation and built OVER/UNDER cases for each candidate. You have all the data. If you need more, you can still call tools. Take a moment to sit with everything before you make your picks.
+${pass25Constitution ? `<props_evaluation_framework>\n${pass25Constitution}\n</props_evaluation_framework>\n\n` : ''}<synthesis>
+You've completed your game investigation. You have the full picture — pace, matchups, injuries, role changes, game script expectations. If you need more data, you can still call tools. Take a moment to sit with everything before you make your picks.
 </synthesis>
 
 <instructions>
@@ -686,6 +720,10 @@ export const FINALIZE_PROPS_TOOL = {
 export function buildPass3Props(homeTeam, awayTeam, propContext = {}) {
   const { propCandidates, availableLines, playerStats, propsConstitution, gameSummary } = propContext;
 
+  // Extract pass3 constitution content (output guardrails + sport-specific output format)
+  const pass3Constitution = (typeof propsConstitution === 'object' && propsConstitution.pass3)
+    ? propsConstitution.pass3 : '';
+
   // Format candidates for the prompt
   const candidatesList = (propCandidates || []).map(c => {
     const propsStr = (c.props || []).join(', ');
@@ -703,7 +741,7 @@ export function buildPass3Props(homeTeam, awayTeam, propContext = {}) {
     JSON.stringify(playerStats || {}, null, 1); // Full player stats — no truncation
 
   return `
-<pass_context>
+${pass3Constitution ? `<props_output_framework>\n${pass3Constitution}\n</props_output_framework>\n\n` : ''}<pass_context>
 ## PASS 3 - PROPS EVALUATION PHASE
 
 You've completed your full game analysis through Passes 1-2.5. You understand:
