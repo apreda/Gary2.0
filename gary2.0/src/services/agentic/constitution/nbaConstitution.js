@@ -71,7 +71,16 @@ Use the exact tag shown in the scout report for this game.
   // SECTION D: STRUCTURAL GUARDRAILS (Hard rules — always enforced)
   // No NBA-specific hard guards needed here (handled by BASE_RULES + pass stages)
   // ═══════════════════════════════════════════════════════════════════════════
-  guardrails: ``
+  guardrails: ``,
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SECTION E: BILATERAL CASE PROMPT — injected at end of Pass 1
+  // ═══════════════════════════════════════════════════════════════════════════
+  bilateralCasePrompt: (homeTeam, awayTeam) =>
+    `Before outputting INVESTIGATION COMPLETE, include both sections in your Pass 1 synthesis:
+Case for ${homeTeam} covering the spread
+Case for ${awayTeam} covering the spread
+(Each case should be 3 paragraphs explaining why that side covers this spread number tonight.)`
 };
 
 

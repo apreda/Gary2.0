@@ -161,7 +161,8 @@ context for player-level evaluation. Investigate the game thoroughly first.
       // Pass Flash's investigation-ready scout report (includes Tale of Tape + token menu)
       scoutReport: flashText,
       // Optional sport-specific Pass 2.5 decision guards (phase-aligned)
-      pass25DecisionGuards: (typeof constitution === 'object' ? constitution.pass25DecisionGuards || '' : '')
+      pass25DecisionGuards: (typeof constitution === 'object' ? constitution.pass25DecisionGuards || '' : ''),
+      bilateralCasePrompt: (typeof constitution === 'object' ? constitution.bilateralCasePrompt || null : null)
     };
     const result = await runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam, enrichedOptions);
     

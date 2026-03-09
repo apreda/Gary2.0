@@ -179,10 +179,13 @@ function validateNbaSpreadCases(text = '', homeTeam = '', awayTeam = '', spread 
 export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam, options = {}) {
   const provider = 'gemini';
   const isNFLSport = sport === 'americanfootball_nfl' || sport === 'NFL';
+  const isNCAAFSport = sport === 'americanfootball_ncaaf' || sport === 'NCAAF';
   const isNCAABSport = sport === 'basketball_ncaab' || sport === 'NCAAB';
   const isNBASport = sport === 'basketball_nba' || sport === 'NBA';
   const isNHLSport = sport === 'icehockey_nhl' || sport === 'NHL';
   const isMLBSport = sport === 'baseball_mlb' || sport === 'MLB' || sport === 'WBC';
+  const requiresBilateralCases = !isPropsMode;
+  const bilateralFn = options.bilateralCasePrompt || null;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // Props mode setup (must be before session creation so activeTools is available)
@@ -304,12 +307,11 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
         ? `The line is ${homeTeam} (home) vs ${awayTeam} (away) — moneyline.`
         : `The spread is ${homeTeam} ${homeSpread} / ${awayTeam} ${awaySpread}.`;
 
-      const isNCAABSport = sport === 'basketball_ncaab' || sport === 'NCAAB';
-      const nbaCaseReminder = (isNBASport || isNCAABSport)
-        ? `\n\nBefore outputting INVESTIGATION COMPLETE, include both sections in your Pass 1 synthesis:\nCase for home spread side\nCase for away spread side\n(Each case should be 2-3 paragraphs, data-grounded, and explain why that side is advantaged relative to this spread number tonight.)`
+      const caseReminder = (requiresBilateralCases && bilateralFn)
+        ? `\n\n${bilateralFn(homeTeam, awayTeam)}`
         : '';
 
-      const briefingBlock = `\n\n## RESEARCH BRIEFING (from your research assistant)\n\nYour research assistant investigated every factor with full tool access. These are structured, verified findings — use them as your foundation. If something stands out or needs deeper context, you can investigate further with your own tools.\n\n${_researchBriefing}\n\n---\n\n${spreadLine}\n\nYou MUST still investigate this matchup yourself using fetch_stats. The briefing gives you a head start — now verify key claims, check stats the briefing flagged, and use additional calls only where you need critical evidence to complete your synthesis.${nbaCaseReminder}\n\nWhen your investigation and synthesis are complete, output exactly:\nINVESTIGATION COMPLETE`;
+      const briefingBlock = `\n\n## RESEARCH BRIEFING (from your research assistant)\n\nYour research assistant investigated every factor with full tool access. These are structured, verified findings — use them as your foundation. If something stands out or needs deeper context, you can investigate further with your own tools.\n\n${_researchBriefing}\n\n---\n\n${spreadLine}\n\nYou MUST still investigate this matchup yourself using fetch_stats. The briefing gives you a head start — now verify key claims, check stats the briefing flagged, and use additional calls only where you need critical evidence to complete your synthesis.${caseReminder}\n\nWhen your investigation and synthesis are complete, output exactly:\nINVESTIGATION COMPLETE`;
       // Append to the user message Gary receives
       userMessage = userMessage + briefingBlock;
       nextMessageToSend = userMessage;
@@ -1621,13 +1623,13 @@ INVESTIGATION COMPLETE`;
       if (!pass25AlreadyInjected) {
         if (_investigationStallCount >= 3) {
           console.log(`[Orchestrator] Pass 1 stall detected at ${categoryCount} categories — waiting for explicit INVESTIGATION COMPLETE marker`);
-          const nbaCasePrompt = isNBASport && !isPropsMode
-            ? `\n\nBefore INVESTIGATION COMPLETE, include:\nCase for home spread side\nCase for away spread side`
+          const casePromptStall = (requiresBilateralCases && bilateralFn)
+            ? `\n\n${bilateralFn(homeTeam, awayTeam)}`
             : '';
           const completionNudge = `You are still in Pass 1. Do not make your pick yet.
 
 Synthesize what you already have from the scout report + research briefing. If you still need more data, call fetch_stats.
-${nbaCasePrompt}
+${casePromptStall}
 
 When your Pass 1 synthesis is complete, output exactly:
 INVESTIGATION COMPLETE`;
@@ -1692,27 +1694,25 @@ INVESTIGATION COMPLETE`;
       const markedComplete = hasInvestigationCompleteMarker(message.content || '');
 
       if (markedComplete) {
-        if (isNBASport && !isPropsMode) {
+        if (requiresBilateralCases) {
           const caseCheck = validateNbaSpreadCases(message.content || '', homeTeam, awayTeam, spread);
           if (!caseCheck.valid) {
             if (!_nbaCaseRetryUsed) {
               _nbaCaseRetryUsed = true;
               const retryMsg = `You're close, but Pass 1 is not complete yet.
 
-Before INVESTIGATION COMPLETE, include BOTH sections with substantive content:
-Case for home spread side
-Case for away spread side
+${bilateralFn ? bilateralFn(homeTeam, awayTeam) : `Before INVESTIGATION COMPLETE, include BOTH sections:\nCase for ${homeTeam}\nCase for ${awayTeam}`}
 
-Each case must be 2-3 paragraphs, grounded in your investigation data, and explain why that side is advantaged relative to this spread number tonight. Focus on price-relative reasoning for this game, not team-quality summaries. Then output:
+Each case must be substantive (2-3 paragraphs). Then output:
 INVESTIGATION COMPLETE`;
-              console.log(`[Orchestrator] NBA bilateral case gate retry (${caseCheck.reason}; homeLen=${caseCheck.homeLen}, awayLen=${caseCheck.awayLen})`);
+              console.log(`[Orchestrator] Bilateral case gate retry (${caseCheck.reason}; homeLen=${caseCheck.homeLen}, awayLen=${caseCheck.awayLen})`);
               messages.push({ role: 'assistant', content: message.content });
               messages.push({ role: 'user', content: retryMsg });
               nextMessageToSend = retryMsg;
               continue;
             }
 
-            throw new Error(`[HARD FAIL] NBA Pass 1 bilateral spread cases missing or too short after retry (${caseCheck.reason}; homeLen=${caseCheck.homeLen}, awayLen=${caseCheck.awayLen}).`);
+            throw new Error(`[HARD FAIL] Pass 1 bilateral spread cases missing or too short after retry (${caseCheck.reason}; homeLen=${caseCheck.homeLen}, awayLen=${caseCheck.awayLen}).`);
           }
         }
 
@@ -1732,15 +1732,15 @@ INVESTIGATION COMPLETE`;
       // No completion marker yet — keep Pass 1 active
       console.log(`[Orchestrator] Pass 1 remains active — waiting for INVESTIGATION COMPLETE (${gateCategories} categories, ${gateCalls} calls)`);
       messages.push({ role: 'assistant', content: message.content });
-      const nbaCasePrompt = isNBASport && !isPropsMode
-        ? `\n\nBefore INVESTIGATION COMPLETE, include:\nCase for home spread side\nCase for away spread side`
+      const casePrompt = (requiresBilateralCases && bilateralFn)
+        ? `\n\n${bilateralFn(homeTeam, awayTeam)}`
         : '';
       messages.push({
         role: 'user',
         content: `You are still in Pass 1. Do not make your pick yet.
 
 Synthesize from scout report + research briefing. If you need more data, call fetch_stats.
-${nbaCasePrompt}
+${casePrompt}
 
 When complete, output exactly:
 INVESTIGATION COMPLETE`

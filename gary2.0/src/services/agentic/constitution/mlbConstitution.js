@@ -59,7 +59,13 @@ The World Baseball Classic is a 20-team international baseball tournament held e
   guardrails: `
 - Do not assume all WBC players have MLB careers — many play in NPB, KBO, CPBL, or other international leagues
 - Do not pick ML on heavy favorites (-200 or worse) — use the run line instead
-`
+`,
+
+  bilateralCasePrompt: (homeTeam, awayTeam) =>
+    `Before outputting INVESTIGATION COMPLETE, include both sections in your Pass 1 synthesis:
+Case for ${homeTeam} winning
+Case for ${awayTeam} winning
+(Each case should be 3 paragraphs explaining why that team wins tonight.)`
 };
 
 export default MLB_CONSTITUTION;

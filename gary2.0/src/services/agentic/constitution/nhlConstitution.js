@@ -68,7 +68,13 @@ For NHL game picks, you pick WHO WINS (Moneyline). No puck lines.
   // ═══════════════════════════════════════════════════════════════════════════
   // SECTION D: STRUCTURAL GUARDRAILS (Hard rules — always enforced)
   // ═══════════════════════════════════════════════════════════════════════════
-  guardrails: ``
+  guardrails: ``,
+
+  bilateralCasePrompt: (homeTeam, awayTeam) =>
+    `Before outputting INVESTIGATION COMPLETE, include both sections in your Pass 1 synthesis:
+Case for ${homeTeam} winning
+Case for ${awayTeam} winning
+(Each case should be 3 paragraphs explaining why that team wins tonight.)`
 };
 
 

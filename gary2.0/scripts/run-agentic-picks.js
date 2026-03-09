@@ -27,164 +27,36 @@ const { geminiGroundingSearch } = await import('../src/services/agentic/scoutRep
 // Manual WBC spread overrides — grounding can't reliably get WBC game spreads
 // Update these daily before running WBC picks
 const WBC_MANUAL_SPREADS = {
-  'Colombia': 2.5,
-  'Cuba': -2.5,
-  'Kingdom of the Netherlands': 6.5,
-  'Dominican Republic': -6.5,
-  'Great Britain': 4.5,
-  'Italy': -4.5,
+  'Colombia': 1.5,
+  'Panama': -1.5,
+  'Brazil': 3.5,
+  'Great Britain': -3.5,
+  'Cuba': 2.5,
+  'Puerto Rico': -2.5,
+  'Venezuela': -5.5,
+  'Nicaragua': 5.5,
+  'Mexico': 3.5,
+  'United States': -3.5,
 };
 
 /**
- * Fetch WBC odds — uses manual spread overrides when available, falls back to grounding.
- * Returns array in same format as fetchSportsbookOdds for seamless integration.
+ * Fetch WBC odds — manual spreads only. No grounding, no API lookups.
+ * If a team isn't in WBC_MANUAL_SPREADS, the game is skipped with a hard fail.
  */
 async function fetchWbcOddsViaGrounding(homeTeam, awayTeam) {
-  // Return manual spreads immediately if both teams are in the override map
   const manualHome = WBC_MANUAL_SPREADS[homeTeam];
   const manualAway = WBC_MANUAL_SPREADS[awayTeam];
-  if (manualHome !== undefined && manualAway !== undefined) {
-    console.log(`[WBC Odds] Using manual spreads: ${awayTeam} ${manualAway > 0 ? '+' : ''}${manualAway} / ${homeTeam} ${manualHome > 0 ? '+' : ''}${manualHome}`);
-    return [{
-      spread_home: manualHome, spread_home_odds: null,
-      spread_away: manualAway, spread_away_odds: null,
-      ml_home: null, ml_away: null,
-      total: null, total_over_odds: null, total_under_odds: null,
-      displayName: 'Manual', vendor: 'Manual'
-    }];
-  }
-
-  const query = `${awayTeam} vs ${homeTeam} WBC World Baseball Classic betting odds today. ` +
-    `Report the EXACT MAIN LINE numbers (not alternate lines) for: ` +
-    `(1) Moneyline for each team (e.g. ${awayTeam} -350, ${homeTeam} +280). ` +
-    `(2) The MAIN run line/spread for each team. ` +
-    `Check multiple credible sportsbooks (e.g. FanDuel, DraftKings, ESPN, BetMGM) and report the consensus main line. Do not report alternate spreads.`;
-  const groundingResult = await geminiGroundingSearch(query, { maxTokens: 1000, thinkingLevel: 'low' });
-  const text = typeof groundingResult === 'string' ? groundingResult : groundingResult?.data || '';
-  if (!text || text.length < 20) {
-    console.error(`[WBC Odds] HARD FAIL: Grounding returned empty/short response for ${awayTeam} @ ${homeTeam}`);
+  if (manualHome === undefined || manualAway === undefined) {
+    console.error(`[WBC Odds] HARD FAIL: No manual spreads for ${awayTeam} @ ${homeTeam}. Add them to WBC_MANUAL_SPREADS.`);
     return null;
   }
-
-  console.log(`[WBC Odds] Grounding text (${text.length} chars): ${text.slice(0, 400)}...`);
-
-  // Strip markdown bold/italic, normalize unicode minus signs
-  const cleanText = text.replace(/\*+/g, '').replace(/_+/g, '').replace(/\u2212/g, '-');
-
-  // ── Single parser: scan ALL lines for odds numbers near team names ──
-  // Gemini returns either markdown tables or bullet lists — both have team names near numbers.
-  // We scan every line and match team names to odds on the same line.
-  const homeLastWord = homeTeam.split(' ').pop().toLowerCase();
-  const awayLastWord = awayTeam.split(' ').pop().toLowerCase();
-
-  let mlHome = null, mlAway = null;
-  let rlHome = null, rlAway = null;
-
-  // Which section are we in? Track by scanning for headers/labels.
-  let currentSection = null; // 'ml' or 'rl'
-  // Table column order: track from header rows so data rows use correct mapping
-  let tableHomeCol = -1, tableAwayCol = -1;
-
-  for (const rawLine of cleanText.split('\n')) {
-    const line = rawLine.trim();
-    if (!line) continue;
-    const lineLower = line.toLowerCase();
-
-    // Detect section from headers, labels, or table row labels
-    if (lineLower.includes('moneyline') || lineLower === 'ml') currentSection = 'ml';
-    if (lineLower.includes('run line') || lineLower.includes('spread')) currentSection = 'rl';
-
-    // Determine which team this line is about
-    const isHome = lineLower.includes(homeLastWord);
-    const isAway = lineLower.includes(awayLastWord);
-
-    // ── TABLE HEADER: "| Market | Netherlands | Venezuela |" ──
-    // Store column indices for home/away so data rows use correct mapping
-    if (line.includes('|') && isHome && isAway) {
-      const cells = line.split('|').map(c => c.trim()).filter(Boolean);
-      if (cells.length >= 3) {
-        for (let i = 0; i < cells.length; i++) {
-          if (cells[i].toLowerCase().includes(homeLastWord)) tableHomeCol = i;
-          if (cells[i].toLowerCase().includes(awayLastWord)) tableAwayCol = i;
-        }
-      }
-      continue; // Header row — skip to data rows
-    }
-
-    // ── TABLE SEPARATOR: "| --- | --- | --- |" ──
-    if (line.includes('|') && (lineLower.includes('---') || lineLower.includes(':---'))) continue;
-
-    // ── TABLE DATA ROW: "| Moneyline | +360 | -360 |" ──
-    if (line.includes('|') && !isHome && !isAway && currentSection && tableHomeCol >= 0 && tableAwayCol >= 0) {
-      const cells = line.split('|').map(c => c.trim()).filter(Boolean);
-      if (cells.length >= 2) {
-        const homeCell = cells[tableHomeCol] || '';
-        const awayCell = cells[tableAwayCol] || '';
-        if (currentSection === 'ml') {
-          const hMatch = homeCell.match(/([+-]\d{3,5})/);
-          const aMatch = awayCell.match(/([+-]\d{3,5})/);
-          if (hMatch && mlHome == null) mlHome = parseInt(hMatch[1]);
-          if (aMatch && mlAway == null) mlAway = parseInt(aMatch[1]);
-        }
-        if (currentSection === 'rl') {
-          const hMatch = homeCell.match(/([+-]\d+\.5)\s*(?:\(([+-]\d{3,4})\))?/);
-          const aMatch = awayCell.match(/([+-]\d+\.5)\s*(?:\(([+-]\d{3,4})\))?/);
-          if (hMatch && rlHome == null) rlHome = { point: parseFloat(hMatch[1]), odds: hMatch[2] ? parseInt(hMatch[2]) : null };
-          if (aMatch && rlAway == null) rlAway = { point: parseFloat(aMatch[1]), odds: aMatch[2] ? parseInt(aMatch[2]) : null };
-        }
-        continue;
-      }
-    }
-
-    // ── PER-LINE: extract odds number on a line that mentions a team ──
-    if (currentSection === 'ml') {
-      const oddsMatch = line.match(/([+-]\d{3,5})/);
-      if (oddsMatch) {
-        const val = parseInt(oddsMatch[1]);
-        if (isHome && mlHome == null) mlHome = val;
-        if (isAway && mlAway == null) mlAway = val;
-      }
-    }
-
-    if (currentSection === 'rl') {
-      const spreadMatch = line.match(/([+-]\d+\.5)\s*(?:\(([+-]\d{3,4})\))?/);
-      if (spreadMatch) {
-        const point = parseFloat(spreadMatch[1]);
-        const odds = spreadMatch[2] ? parseInt(spreadMatch[2]) : null;
-        if (isHome && rlHome == null) rlHome = { point, odds };
-        if (isAway && rlAway == null) rlAway = { point, odds };
-      }
-    }
-  }
-
-  console.log(`[WBC Odds] Parsed: ML ${awayTeam} ${mlAway} / ${homeTeam} ${mlHome} | RL ${awayTeam} ${rlAway?.point ?? 'null'} / ${homeTeam} ${rlHome?.point ?? 'null'}`);
-
-  // HARD FAIL if we can't parse ML
-  if (mlHome == null && mlAway == null) {
-    console.error(`[WBC Odds] HARD FAIL: Could not parse moneyline for ${awayTeam} @ ${homeTeam}`);
-    console.error(`[WBC Odds] Raw grounding text:\n${cleanText}`);
-    return null;
-  }
-
-  // HARD FAIL if we can't parse run line
-  if (rlHome == null && rlAway == null) {
-    console.error(`[WBC Odds] HARD FAIL: Could not parse run line for ${awayTeam} @ ${homeTeam}`);
-    console.error(`[WBC Odds] Raw grounding text:\n${cleanText}`);
-    return null;
-  }
-
+  console.log(`[WBC Odds] Using manual spreads: ${awayTeam} ${manualAway > 0 ? '+' : ''}${manualAway} / ${homeTeam} ${manualHome > 0 ? '+' : ''}${manualHome}`);
   return [{
-    spread_home: rlHome?.point ?? null,
-    spread_home_odds: rlHome?.odds ?? null,
-    spread_away: rlAway?.point ?? null,
-    spread_away_odds: rlAway?.odds ?? null,
-    ml_home: mlHome,
-    ml_away: mlAway,
-    total: null,
-    total_over_odds: null,
-    total_under_odds: null,
-    displayName: 'Grounding',
-    vendor: 'Grounding'
+    spread_home: manualHome, spread_home_odds: null,
+    spread_away: manualAway, spread_away_odds: null,
+    ml_home: null, ml_away: null,
+    total: null, total_over_odds: null, total_under_odds: null,
+    displayName: 'Manual', vendor: 'Manual'
   }];
 }
 

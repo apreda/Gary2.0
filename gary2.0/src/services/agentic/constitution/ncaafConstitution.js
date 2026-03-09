@@ -50,7 +50,13 @@ Use the exact tag shown in the scout report for this game.
   // ═══════════════════════════════════════════════════════════════════════════
   // SECTION D: STRUCTURAL GUARDRAILS (Hard rules — always enforced)
   // ═══════════════════════════════════════════════════════════════════════════
-  guardrails: ``
+  guardrails: ``,
+
+  bilateralCasePrompt: (homeTeam, awayTeam) =>
+    `Before outputting INVESTIGATION COMPLETE, include both sections in your Pass 1 synthesis:
+Case for ${homeTeam} covering the spread
+Case for ${awayTeam} covering the spread
+(Each case should be 3 paragraphs explaining why that side covers this spread number tonight.)`
 };
 
 

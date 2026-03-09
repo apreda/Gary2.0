@@ -154,6 +154,7 @@ export function getConstitution(sport) {
     const guardrails = sportConst.guardrails || '';
     const pass1Context = sportConst.pass1Context || '';
     const pass25DecisionGuards = sportConst.pass25DecisionGuards || '';
+    const bilateralCasePrompt = sportConst.bilateralCasePrompt || null;
 
     // Sectioned constitution — return object with convenience .full property
     return {
@@ -162,6 +163,7 @@ export function getConstitution(sport) {
       guardrails,
       pass1Context,
       pass25DecisionGuards,
+      bilateralCasePrompt,
       // Full combined string: guardrails + domain knowledge ONLY
       // Gary is the decision maker. Flash handles investigation via flashInvestigationPrompts.js.
       full: BASE_RULES + guardrails + (domainKnowledge ? '\n\n' + domainKnowledge : ''),
