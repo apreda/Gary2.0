@@ -18,7 +18,7 @@ struct AccessView: View {
                 
                 // Logo - no glow, matches home page
                 VStack(spacing: 0) {
-                    Image("GaryCoin") // Transparent coin image, matches other pages
+                    Image("GaryIconBG")
                         .resizable()
                         .scaledToFit()
                         .frame(width: 260, height: 260)

@@ -1,11 +1,18 @@
 import SwiftUI
 
+// Shared state for pick detail overlay visibility
+class PickDetailState: ObservableObject {
+    static let shared = PickDetailState()
+    @Published var isShowing = false
+}
+
 // MARK: - Main Tab View with Liquid Glass
 
 struct ContentView: View {
     @EnvironmentObject var authManager: AuthManager
     @AppStorage("selectedTab") private var selectedTab: Int = 0
     @State private var showingSettings = false
+    @StateObject private var pickDetailState = PickDetailState.shared
     
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -34,10 +41,12 @@ struct ContentView: View {
                     }
                 }
 
-                // Settings button — floating top right on every page
-                SettingsMenuButton(showingSettings: $showingSettings)
-                    .padding(.top, 12)
-                    .padding(.trailing, 16)
+                // Settings button — floating top right on every page (hidden when pick detail is open)
+                if !pickDetailState.isShowing {
+                    SettingsMenuButton(showingSettings: $showingSettings)
+                        .padding(.top, 4)
+                        .padding(.trailing, 16)
+                }
             }
 
             // Compact Floating Tab Bar
@@ -60,17 +69,9 @@ struct SettingsMenuButton: View {
             showingSettings = true
         } label: {
             Image(systemName: "ellipsis")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(GaryColors.gold)
-                .frame(width: 36, height: 36)
-                .background(
-                    Circle()
-                        .fill(.ultraThinMaterial)
-                        .overlay(
-                            Circle()
-                                .stroke(GaryColors.gold.opacity(0.3), lineWidth: 0.5)
-                        )
-                )
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(GaryColors.gold.opacity(0.6))
+                .frame(width: 28, height: 28)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Settings")
