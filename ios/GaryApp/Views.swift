@@ -5221,29 +5221,18 @@ struct PickDetailPopup: View {
                 }
             }
             .background(
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(
-                        LinearGradient(
-                            colors: [Color(hex: "#10141D"), Color(hex: "#070A10")],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 20)
-                            .stroke(Color.white.opacity(0.08), lineWidth: 0.9)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 20)
-                            .stroke(
-                                accentGradient ?? LinearGradient(colors: [accentColor.opacity(0.2)], startPoint: .top, endPoint: .bottom),
-                                lineWidth: accentGradient != nil ? 1.2 : 1.1
-                            )
-                    )
-                    .shadow(color: accentColor.opacity(0.12), radius: 24, y: 8)
+                ZStack {
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(Color(hex: "#141210"))
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(GaryColors.gold.opacity(0.035))
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(GaryColors.gold.opacity(0.25), lineWidth: 0.8)
+                }
+                    .shadow(color: GaryColors.gold.opacity(0.1), radius: 24, y: 8)
                     .shadow(color: .black.opacity(0.72), radius: 26, y: 12)
             )
-            .clipShape(RoundedRectangle(cornerRadius: 20))
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
             .frame(maxHeight: UIScreen.main.bounds.height * 0.74)
             .padding(.horizontal, 16)
             .padding(.top, 6)
@@ -6299,26 +6288,18 @@ struct PropDetailPopup: View {
                 }
             }
             .background(
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(
-                        LinearGradient(
-                            colors: [Color(hex: "#10141D"), Color(hex: "#070A10")],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 20)
-                            .stroke(Color.white.opacity(0.08), lineWidth: 0.9)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 20)
-                            .stroke(accentColor.opacity(0.2), lineWidth: 1.1)
-                    )
-                    .shadow(color: accentColor.opacity(0.12), radius: 24, y: 8)
+                ZStack {
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(Color(hex: "#141210"))
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(GaryColors.gold.opacity(0.035))
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(GaryColors.gold.opacity(0.25), lineWidth: 0.8)
+                }
+                    .shadow(color: GaryColors.gold.opacity(0.1), radius: 24, y: 8)
                     .shadow(color: .black.opacity(0.72), radius: 26, y: 12)
             )
-            .clipShape(RoundedRectangle(cornerRadius: 20))
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
             .padding(.horizontal, 16)
             .padding(.vertical, 50)
         }
