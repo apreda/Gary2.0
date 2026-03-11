@@ -32,8 +32,8 @@ When a key player returns from absence, the line moves. A return after a longer 
 }
 
 export function getNcaabSpreadFactors() {
-  return `### 1. HOME COURT & UPSET DYNAMICS
-Home underdogs against ranked road favorites is one of the loudest narratives in college basketball — the public bets it heavily in both directions and the line adjusts for the story. Lines also move based on public perception of upset potential, especially in cross-conference and tournament matchups.
+  return `### 1. HOME COURT EFFECTS
+Home court is a significant narrative in NCAAB — bettors naturally factor it into every spread, and lines reflect that. The size of the adjustment varies by venue and matchup.
 
 ### 2. RANKINGS & REPUTATION
 AP rankings and program names drive public betting action and can inflate spreads. A team's poll ranking reflects reputation and record — not necessarily how they match up tonight.
@@ -51,30 +51,30 @@ Coaching reputation and program name recognition move lines in college basketbal
 College rosters are thin — one key absence hits harder than in the pros. Freshman-heavy teams are volatile, and transfer portal turnover means this season's team may look nothing like last year's.
 
 ### 7. VARIANCE & UPSETS
-In NCAAB, upsets happen — top teams win 25+ games a season but still get upset. In tournament settings, the line is not set with upset potential in mind. It's hard to predict which games that will be, but the variance is real and the spread doesn't always account for it.`;
+Upsets are a regular part of NCAAB — thin rosters, tournament pressure, and single-elimination formats all contribute. The spread is a price shaped by public perception, narratives, and betting action — outcomes are volatile game to game.`;
 }
 
 export function getNhlSpreadFactors() {
   return `### 1. GOALTENDING & STARTER CONFIRMATION
 The confirmed starting goalie is the single biggest factor that moves an NHL line. A hot goalie streak or a backup surprise start shifts the price immediately.
 
-### 2. REST & SCHEDULE
+### 2. ML vs PUCK LINE VALUE
+A favorite's moneyline price determines whether ML or puck line (-1.5) is the right bet. At -150 or better, ML is fine. Worse than -150, the puck line gives better odds on the same team — but they need to win by 2+ goals. Investigate margin of victory patterns.
+
+### 3. REST & SCHEDULE
 Back-to-backs and travel are the loudest narrative in hockey — the line always adjusts for them. The size of the adjustment varies.
 
-### 3. STREAKS & FORM
+### 4. STREAKS & FORM
 Hockey streaks can be goalie-driven, special-teams-driven, or process-driven — the market doesn't always distinguish between them.
 
-### 4. INJURY IMPACT ON PRICE
+### 5. INJURY IMPACT ON PRICE
 Established absences are already in the team's stats and the line. FRESH/SHORT-TERM absences may not be fully reflected in the price yet.
 
-### 5. SPECIAL TEAMS MATCHUP
+### 6. SPECIAL TEAMS MATCHUP
 Power play and penalty kill create game-within-a-game dynamics. Special teams performance operates independently of 5v5 play.
 
-### 6. PUCK LUCK & REGRESSION
-Hockey has more single-game variance than any major sport. Teams can sustain shooting percentages, save percentages, and close-game records that the underlying process doesn't support.
-
-### 7. PUBLIC NARRATIVE VS DATA
-Every game has a storyline — rivalry, revenge, milestone chases, trade deadline additions. These narratives drive public betting action and move the line.`;
+### 7. PUCK LUCK & REGRESSION
+Hockey has more single-game variance than any major sport. Teams can sustain shooting percentages, save percentages, and close-game records that the underlying process doesn't support.`;
 }
 
 export function getNflSpreadFactors() {
