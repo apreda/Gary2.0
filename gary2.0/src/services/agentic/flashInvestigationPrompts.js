@@ -373,6 +373,9 @@ Work through each numbered factor below. Check off each one as you complete it. 
 ### 12. H2H & DIVISION
 **Tokens:** H2H_HISTORY, DIVISION_STANDING, FACEOFF_PCT, POSSESSION_METRICS
 - Divisional teams play multiple times — recent meetings are relevant
+- For each H2H meeting this season: who started in net? What were the scores? Were they close games or blowouts?
+- What drove the results in previous meetings — goaltending, special teams, puck luck, or process?
+- Have conditions changed since previous meetings (different goalie, roster changes, schedule context)?
 - Faceoff% affects possession
 
 ### 13. STANDINGS
@@ -443,6 +446,7 @@ Work through each numbered factor below. Check off each one as you complete it. 
 ### 1. EFFICIENCY RATINGS
 **Tokens:** NCAAB_OFFENSIVE_RATING, NCAAB_DEFENSIVE_RATING, NET_RATING, NCAAB_L5_EFFICIENCY, NCAAB_BARTTORVIK
 - AdjO, AdjD, AdjEM (adjusted efficiency margin) — the core metrics
+- Report actual stat values (AdjOE 117.5, AdjDE 98.2) — not ranking ordinals (64th, 103rd). If you include a ranking, always pair it with the actual value.
 - L5 efficiency vs season — has something changed? Conference schedule vs non-conference?
 - Compare efficiency with and without key players
 
@@ -1013,13 +1017,11 @@ At this spread size, which side is the better value at this number? Investigate:
     }
   }
 
-  // NHL spread context (always ML-focused)
+  // NHL: ML or Puck Line
   if (sportNorm === 'NHL') {
-    return `\n## SPREAD CONTEXT: NHL MONEYLINE
-Moneyline includes OT/SO. Which side is the better value at this price? Investigate:
-- Regulation win% for both teams — how often does each team WIN in regulation vs go to OT?
-- Goalie matchup quality — what do the save percentages and recent form show?
-- One-goal game record and OT record`;
+    return `\n## LINE CONTEXT: NHL MONEYLINE / PUCK LINE
+Moneyline includes OT/SO. Puck line (-1.5/+1.5) requires the favorite to win by 2+ goals (regulation + OT only, no shootout).
+Both bet types are available — investigate the matchup to understand which side and which bet type fit the data.`;
   }
 
   return '';

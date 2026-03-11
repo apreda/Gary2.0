@@ -249,11 +249,21 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
     return null; // Triggers retry
   }
   
-  // NHL: ALWAYS moneyline (no puck line, no totals - Gary picks winners)
+  // NHL: Detect ML vs Puck Line from Gary's pick text
   const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
-  if (isNHL) {
+  if (isNHL && parsed.pick) {
+    const pickLowerNHL = parsed.pick.toLowerCase();
+    if (pickLowerNHL.includes('puck line') || pickLowerNHL.includes('pl ') || pickLowerNHL.includes(' pl') ||
+        pickLowerNHL.includes('-1.5') || pickLowerNHL.includes('+1.5')) {
+      parsed.type = 'spread'; // Puck line is a spread
+      console.log(`[Orchestrator] 🏒 NHL: Detected puck line pick`);
+    } else {
+      parsed.type = 'moneyline';
+      console.log(`[Orchestrator] 🏒 NHL: Detected moneyline pick`);
+    }
+  } else if (isNHL) {
     parsed.type = 'moneyline';
-    console.log(`[Orchestrator] 🏒 NHL: Forcing type to moneyline (ML-only sport)`);
+    console.log(`[Orchestrator] 🏒 NHL: Defaulting to moneyline`);
   }
   // DETECT TYPE FROM PICK TEXT if not explicitly provided (non-NHL)
   else if (!parsed.type && parsed.pick) {
@@ -272,10 +282,11 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
     }
   }
   
-  // ML ODDS CEILING ENFORCEMENT: If Gary picks ML on a heavy favorite (odds worse than -200),
-  // force the pick to spread instead. The prompt says -200 but Gary sometimes ignores it.
-  // This is the hard enforcement — no ML picks allowed on favorites at -200 or worse.
-  if (parsed.type === 'moneyline' && !isNHL && gameOdds) {
+  // ML ODDS CEILING:
+  // - NHL: No enforcement — Gary decides ML vs puck line organically. Log for diagnostics only.
+  // - Other sports: Favorite ML worse than -200 → force to spread (safety net)
+  if (parsed.type === 'moneyline' && gameOdds && !isNHL) {
+    const mlCeiling = -200;
     const pickLowerML = (parsed.pick || '').toLowerCase();
     const homeWordsML = (homeTeam || '').toLowerCase().split(/\s+/);
     const awayWordsML = (awayTeam || '').toLowerCase().split(/\s+/);
@@ -286,20 +297,30 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
       : pickedAwayML ? (gameOdds.moneyline_away ?? gameOdds.ml_away)
       : null;
 
-    if (pickedTeamMlOdds != null && pickedTeamMlOdds <= -200) {
-      // This team is a heavy favorite — force to spread
+    if (pickedTeamMlOdds != null && pickedTeamMlOdds <= mlCeiling) {
+      const teamName = pickedHomeML ? homeTeam : awayTeam;
       const spreadVal = pickedHomeML ? gameOdds.spread_home : gameOdds.spread_away;
       if (spreadVal != null) {
         const spreadStr = parseFloat(spreadVal) >= 0 ? `+${spreadVal}` : `${spreadVal}`;
-        const teamName = pickedHomeML ? homeTeam : awayTeam;
-        console.log(`[Orchestrator] 🚫 ML ODDS CEILING: ${teamName} ML odds (${pickedTeamMlOdds}) exceed -200 limit — forcing to spread ${spreadStr}`);
+        console.log(`[Orchestrator] 🚫 ML ODDS CEILING: ${teamName} ML odds (${pickedTeamMlOdds}) exceed ${mlCeiling} limit — forcing to spread ${spreadStr}`);
         parsed.type = 'spread';
         parsed.pick = `${teamName} ${spreadStr}`;
         parsed.spread = spreadVal;
       } else {
-        console.error(`[Orchestrator] 🚫 ML ODDS CEILING: ${pickedHomeML ? homeTeam : awayTeam} ML odds (${pickedTeamMlOdds}) exceed -200 limit but no spread available — REJECTING pick`);
+        console.error(`[Orchestrator] 🚫 ML ODDS CEILING: ${teamName} ML odds (${pickedTeamMlOdds}) exceed ${mlCeiling} limit but no spread available — REJECTING pick`);
         return null;
       }
+    }
+  }
+  // NHL: Log diagnostics only — Gary's organic ML vs puck line choice stands
+  if (isNHL && parsed.type === 'moneyline' && gameOdds) {
+    const pickLowerML = (parsed.pick || '').toLowerCase();
+    const homeWordsML = (homeTeam || '').toLowerCase().split(/\s+/);
+    const pickedHomeML = homeWordsML.some(w => w.length > 2 && pickLowerML.includes(w));
+    const pickedTeamMlOdds = pickedHomeML ? (gameOdds.moneyline_home ?? gameOdds.ml_home)
+      : (gameOdds.moneyline_away ?? gameOdds.ml_away);
+    if (pickedTeamMlOdds != null && pickedTeamMlOdds <= -150) {
+      console.warn(`[Orchestrator] ⚠️ NHL DIAGNOSTIC: Gary picked ML at ${pickedTeamMlOdds} (worse than -150) — review prompts if this recurs`);
     }
   }
 
