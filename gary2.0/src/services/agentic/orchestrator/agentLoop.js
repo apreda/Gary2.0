@@ -259,9 +259,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   // Flash reads the scout report, identifies gaps, and uses fetch_stats
   // to investigate deeper. Gary waits for Flash to finish so he has the
   // full per-factor findings from the very first iteration.
-  if (isMLBSport) {
-    console.log(`[Research Briefing] Skipping Flash for WBC — Gary investigates with grounding tools during Pass 1`);
-  } else if (options.scoutReport && !isPropsMode) {
+  if (options.scoutReport && !isPropsMode) {
     console.log(`[Research Briefing] 🔬 Running Flash research briefing (Gemini Flash with tools) — Gary waits for completion`);
     try {
       const briefingResult = await buildFlashResearchBriefing(options.scoutReport, sport, homeTeam, awayTeam, options);

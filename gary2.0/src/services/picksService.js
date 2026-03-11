@@ -379,14 +379,10 @@ async function storeDailyPicksInDatabase(picks) {
 
       console.log(`Merging ${toAppend.length} new picks into existing ${existingPicks.length}; final size ${mergedPicks.length}`);
 
-      // Try JSON update
-      const { error: updateError } = await supabase
-        .from('daily_picks')
-        .update({ picks: mergedPicks })
-        .eq('id', existing.id);
-
-      if (updateError) {
-        throw new Error(`Failed to append picks: ${updateError.message}`);
+      // Use storeDailyPicks (service role key) to upsert merged picks
+      const storeResult = await storeDailyPicks(currentDateString, mergedPicks);
+      if (!storeResult.success) {
+        throw new Error(`Failed to append picks: ${storeResult.error || 'unknown'}`);
       }
 
       console.log('✅ Successfully appended picks to existing daily_picks row');

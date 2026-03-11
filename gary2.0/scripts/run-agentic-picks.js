@@ -24,37 +24,60 @@ const { ballDontLieService } = await import('../src/services/ballDontLieService.
 const { getConstitution } = await import('../src/services/agentic/constitution/index.js');
 const { geminiGroundingSearch } = await import('../src/services/agentic/scoutReport/scoutReportBuilder.js');
 
-// Manual WBC spread overrides — grounding can't reliably get WBC game spreads
-// Update these daily before running WBC picks
-const WBC_MANUAL_SPREADS = {
-  'Colombia': 1.5,
-  'Panama': -1.5,
-  'Brazil': 3.5,
-  'Great Britain': -3.5,
-  'Cuba': 2.5,
-  'Puerto Rico': -2.5,
-  'Venezuela': -5.5,
-  'Nicaragua': 5.5,
-  'Mexico': 3.5,
-  'United States': -3.5,
-};
+// Manual WBC games + odds — update these daily before running --wbc
+// Each entry: { away, home, spread, spreadOdds, ml }
+const WBC_MANUAL_GAMES = [
+  {
+    away: 'Italy', home: 'Mexico',
+    spread: { away: 1.5, home: -1.5 },
+    spreadOdds: { away: 110, home: -135 },
+    ml: { away: 160, home: -200 },
+  },
+  {
+    away: 'Dominican Republic', home: 'Venezuela',
+    spread: { away: -2.5, home: 2.5 },
+    spreadOdds: { away: 100, home: -120 },
+    ml: { away: -215, home: 170 },
+  },
+];
 
 /**
- * Fetch WBC odds — manual spreads only. No grounding, no API lookups.
- * If a team isn't in WBC_MANUAL_SPREADS, the game is skipped with a hard fail.
+ * Build pipeline-ready game objects from WBC_MANUAL_GAMES.
  */
-async function fetchWbcOddsViaGrounding(homeTeam, awayTeam) {
-  const manualHome = WBC_MANUAL_SPREADS[homeTeam];
-  const manualAway = WBC_MANUAL_SPREADS[awayTeam];
-  if (manualHome === undefined || manualAway === undefined) {
-    console.error(`[WBC Odds] HARD FAIL: No manual spreads for ${awayTeam} @ ${homeTeam}. Add them to WBC_MANUAL_SPREADS.`);
+function getManualWbcGames() {
+  return WBC_MANUAL_GAMES.map((g, i) => ({
+    id: `wbc-manual-${i}`,
+    home_team: g.home,
+    away_team: g.away,
+    home_team_data: { full_name: g.home, name: g.home, abbreviation: '' },
+    away_team_data: { full_name: g.away, name: g.away, abbreviation: '' },
+    commence_time: new Date().toISOString(),
+    start_time: new Date().toISOString(),
+    status: 'Pre-Game',
+    venue: 'WBC Venue',
+    description: 'World Baseball Classic',
+    gameSignificance: 'WBC Pool Play',
+    moneyline_home: g.ml.home,
+    moneyline_away: g.ml.away,
+    spread_home: g.spread.home,
+    spread_away: g.spread.away,
+  }));
+}
+
+/**
+ * Return manual odds for a WBC game in sportsbook format.
+ */
+function fetchWbcOddsManual(homeTeam, awayTeam) {
+  const g = WBC_MANUAL_GAMES.find(m => m.home === homeTeam && m.away === awayTeam);
+  if (!g) {
+    console.error(`[WBC Odds] HARD FAIL: No manual game entry for ${awayTeam} @ ${homeTeam}. Add it to WBC_MANUAL_GAMES.`);
     return null;
   }
-  console.log(`[WBC Odds] Using manual spreads: ${awayTeam} ${manualAway > 0 ? '+' : ''}${manualAway} / ${homeTeam} ${manualHome > 0 ? '+' : ''}${manualHome}`);
+  console.log(`[WBC Odds] Manual: ${g.away} ${g.spread.away > 0 ? '+' : ''}${g.spread.away} (${g.spreadOdds.away}) ML ${g.ml.away} / ${g.home} ${g.spread.home > 0 ? '+' : ''}${g.spread.home} (${g.spreadOdds.home}) ML ${g.ml.home}`);
   return [{
-    spread_home: manualHome, spread_home_odds: null,
-    spread_away: manualAway, spread_away_odds: null,
-    ml_home: null, ml_away: null,
+    spread_home: g.spread.home, spread_home_odds: g.spreadOdds.home,
+    spread_away: g.spread.away, spread_away_odds: g.spreadOdds.away,
+    ml_home: g.ml.home, ml_away: g.ml.away,
     total: null, total_over_odds: null, total_under_odds: null,
     displayName: 'Manual', vendor: 'Manual'
   }];
@@ -364,118 +387,13 @@ async function main() {
       // Fetch games
       console.log(`[${config.name}] Fetching upcoming games...`);
 
-      // MLB/WBC: Fetch schedule from MLB Stats API, then match BDL odds by team name
+      // WBC: Use manually configured games + odds (no API fetch needed)
       let allGames;
       if (config.isWbc) {
-        const { getWbcSchedule, formatWbcGameForPipeline } = await import('../src/services/mlbStatsApiService.js');
-        const today = new Date().toISOString().split('T')[0];
-        // Fetch today + tomorrow to catch games that cross UTC date boundary
-        // (e.g., 10 PM ET = next day UTC)
-        const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
-        if (dateFilter) {
-          console.log(`[${config.name}] Fetching WBC games from MLB Stats API for --date ${dateFilter}...`);
-          const wbcGames = await getWbcSchedule(dateFilter);
-          const upcomingWbc = wbcGames.filter(g =>
-            g.status?.statusCode !== 'F' && g.status?.detailedState !== 'Final'
-          );
-          allGames = upcomingWbc.map(formatWbcGameForPipeline);
-        } else {
-          console.log(`[${config.name}] Fetching WBC games from MLB Stats API for ${today} + ${tomorrow}...`);
-          const [todayGames, tomorrowGames] = await Promise.all([
-            getWbcSchedule(today),
-            getWbcSchedule(tomorrow),
-          ]);
-          // Combine and dedupe by gamePk
-          const seen = new Set();
-          const combined = [];
-          for (const g of [...todayGames, ...tomorrowGames]) {
-            if (!seen.has(g.gamePk)) {
-              seen.add(g.gamePk);
-              combined.push(g);
-            }
-          }
-          // Filter to scheduled/pre-game only (not completed)
-          const upcomingWbc = combined.filter(g =>
-            g.status?.statusCode !== 'F' && g.status?.detailedState !== 'Final'
-          );
-          allGames = upcomingWbc.map(formatWbcGameForPipeline);
-        }
-        console.log(`[${config.name}] Found ${allGames.length} upcoming WBC games`);
-
-        // Fetch BDL baseball games + odds to match to WBC games
-        // BDL has mlb/v1/games and mlb/v1/odds — may have WBC games with sportsbook odds
-        try {
-          console.log(`[${config.name}] Fetching BDL baseball odds to match to WBC games...`);
-          const bdlGames = await oddsService.getUpcomingGames('baseball_mlb', { nocache: true, targetDate: dateFilter || `${today},${tomorrow}` });
-          if (bdlGames && bdlGames.length > 0) {
-            console.log(`[${config.name}] BDL returned ${bdlGames.length} baseball games — matching to WBC games...`);
-            // Match BDL games to WBC games by team name (fuzzy: last word match)
-            const normalize = (name) => (name || '').toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
-            const lastWord = (name) => normalize(name).split(' ').pop();
-            for (const wbcGame of allGames) {
-              const wbcHome = normalize(wbcGame.home_team);
-              const wbcAway = normalize(wbcGame.away_team);
-              const match = bdlGames.find(bdl => {
-                const bdlHome = normalize(bdl.home_team);
-                const bdlAway = normalize(bdl.away_team);
-                // Exact or last-word match (e.g., "Czech Republic" ↔ "Czechia" won't match, but "Australia" ↔ "Australia" will)
-                return (bdlHome === wbcHome || bdlHome.includes(wbcHome) || wbcHome.includes(bdlHome) || lastWord(bdl.home_team) === lastWord(wbcGame.home_team)) &&
-                       (bdlAway === wbcAway || bdlAway.includes(wbcAway) || wbcAway.includes(bdlAway) || lastWord(bdl.away_team) === lastWord(wbcGame.away_team));
-              });
-              if (match) {
-                wbcGame.bdl_game_id = match.id;
-                wbcGame.bookmakers = match.bookmakers;
-                // Extract primary odds from bookmakers (FanDuel/DK preferred)
-                if (match.bookmakers?.length > 0) {
-                  const extractOdds = (bookmakers, home, away) => {
-                    const preferred = ['fanduel', 'draftkings', 'betmgm', 'caesars'];
-                    const ordered = [];
-                    for (const key of preferred) {
-                      const bk = bookmakers.find(b => b.key?.toLowerCase() === key);
-                      if (bk?.markets?.length) ordered.push(bk);
-                    }
-                    for (const bk of bookmakers) {
-                      if (bk?.markets?.length && !ordered.includes(bk)) ordered.push(bk);
-                    }
-                    for (const bk of ordered) {
-                      const h2h = bk.markets?.find(m => m.key === 'h2h');
-                      const spreads = bk.markets?.find(m => m.key === 'spreads');
-                      const mlHome = h2h?.outcomes?.find(o => normalize(o.name).includes(normalize(home)))?.price;
-                      const mlAway = h2h?.outcomes?.find(o => normalize(o.name).includes(normalize(away)))?.price;
-                      if (mlHome != null || mlAway != null) {
-                        const spHome = spreads?.outcomes?.find(o => normalize(o.name).includes(normalize(home)));
-                        const spAway = spreads?.outcomes?.find(o => normalize(o.name).includes(normalize(away)));
-                        return {
-                          moneyline_home: mlHome ?? null,
-                          moneyline_away: mlAway ?? null,
-                          spread_home: spHome?.point ?? null,
-                          spread_away: spAway?.point ?? null,
-                          spread_home_odds: spHome?.price ?? null,
-                          spread_away_odds: spAway?.price ?? null,
-                          source: bk.key || bk.title
-                        };
-                      }
-                    }
-                    return null;
-                  };
-                  const odds = extractOdds(match.bookmakers, wbcGame.home_team, wbcGame.away_team);
-                  if (odds) {
-                    wbcGame.moneyline_home = odds.moneyline_home;
-                    wbcGame.moneyline_away = odds.moneyline_away;
-                    wbcGame.spread_home = odds.spread_home;
-                    wbcGame.spread_away = odds.spread_away;
-                    console.log(`   ✓ ${wbcGame.away_team} @ ${wbcGame.home_team}: ML ${odds.moneyline_away}/${odds.moneyline_home}, Run Line ${odds.spread_home} (via ${odds.source})`);
-                  }
-                }
-              } else {
-                console.log(`   ✗ ${wbcGame.away_team} @ ${wbcGame.home_team}: No BDL match found`);
-              }
-            }
-          } else {
-            console.log(`[${config.name}] BDL returned no baseball games — odds from Gemini Grounding only`);
-          }
-        } catch (bdlErr) {
-          console.warn(`[${config.name}] BDL baseball odds fetch failed: ${bdlErr.message} — odds from Gemini Grounding only`);
+        allGames = getManualWbcGames();
+        console.log(`[${config.name}] Using ${allGames.length} manual WBC games`);
+        for (const g of allGames) {
+          console.log(`   ${g.away_team} @ ${g.home_team}: Spread ${g.spread_away > 0 ? '+' : ''}${g.spread_away} / ${g.spread_home > 0 ? '+' : ''}${g.spread_home}, ML ${g.moneyline_away}/${g.moneyline_home}`);
         }
       } else {
         allGames = await oddsService.getUpcomingGames(config.key, { nocache: true, targetDate: dateFilter });
@@ -994,24 +912,16 @@ async function main() {
         processedGamesThisSession.add(gameKey);
 
         // Fetch sportsbook odds BEFORE analysis so Gary sees available lines
-        // MLB/WBC: BDL doesn't have WBC games — use Gemini Grounding for odds
+        // MLB/WBC: Use manual odds
         let preSportsbookOdds = null;
         try {
           if (config.isWbc) {
-            // WBC: Fetch odds via Gemini Grounding (BDL has no WBC games)
-            console.log(`   Fetching WBC odds via Gemini Grounding...`);
-            preSportsbookOdds = await fetchWbcOddsViaGrounding(game.home_team, game.away_team);
+            console.log(`   Using manual WBC odds...`);
+            preSportsbookOdds = fetchWbcOddsManual(game.home_team, game.away_team);
             if (preSportsbookOdds?.length > 0) {
-              console.log(`   Found WBC odds via grounding: ML ${preSportsbookOdds[0].ml_home}/${preSportsbookOdds[0].ml_away}`);
-              // Also attach parsed odds to game object for scout report
-              if (!game.moneyline_home && preSportsbookOdds[0].ml_home != null) {
-                game.moneyline_home = preSportsbookOdds[0].ml_home;
-                game.moneyline_away = preSportsbookOdds[0].ml_away;
-                game.spread_home = preSportsbookOdds[0].spread_home;
-                game.spread_away = preSportsbookOdds[0].spread_away;
-              }
+              console.log(`   Manual WBC odds: ML ${preSportsbookOdds[0].ml_home}/${preSportsbookOdds[0].ml_away}`);
             } else {
-              console.log(`   WBC odds grounding returned no parseable odds — Gary will use scout report odds`);
+              console.log(`   No manual odds for this game — Gary will use scout report odds`);
             }
           } else {
             const preGameId = game.bdl_game_id || game.id;
