@@ -1516,7 +1516,6 @@ struct GaryPicksView: View {
         
         // Apply today's picks filter
         let todayFiltered = filterToTodaysPicks(allPicks)
-
         // For "All" tab: show today's picks if any exist, otherwise fall back to yesterday's stamped results
         guard selectedSport != .all else {
             if todayFiltered.isEmpty && showingYesterdayResults {
@@ -2337,8 +2336,10 @@ struct BillfoldView: View {
     @State private var lastRefresh: Date?
     @State private var carouselIndex: Int = 0
     @State private var timeframe = "7d"
+    @State private var sportTimeframe = "7d"
     @State private var spreadSport = "NBA"
     @State private var showFilterDrawer = false
+    @State private var dailyPickRows: [DailyPicksRow] = []
 
     private let timeframes = ["7d", "30d", "90d", "ytd", "all"]
     let carouselTimer = Timer.publish(every: 3.5, on: .main, in: .common).autoconnect()
@@ -2350,10 +2351,34 @@ struct BillfoldView: View {
         propResults.filter(isLegitPropResult)
     }
 
+    /// Game results filtered by the global timeframe (client-side)
+    private var timeframeGameResults: [GameResult] {
+        guard let cutoff = sinceDateValue(for: timeframe) else { return gameResults }
+        return gameResults.filter { billfoldDate(from: $0.game_date) >= cutoff }
+    }
+
+    /// Prop results filtered by the global timeframe (client-side)
+    private var timeframePropResults: [PropResult] {
+        guard let cutoff = sinceDateValue(for: timeframe) else { return validPropResults }
+        return validPropResults.filter { billfoldDate(from: $0.game_date) >= cutoff }
+    }
+
+    /// Game results filtered by the By Sport timeframe (independent)
+    private var sportTimeframeGameResults: [GameResult] {
+        guard let cutoff = sinceDateValue(for: sportTimeframe) else { return gameResults }
+        return gameResults.filter { billfoldDate(from: $0.game_date) >= cutoff }
+    }
+
+    /// Prop results filtered by the By Sport timeframe (independent)
+    private var sportTimeframePropResults: [PropResult] {
+        guard let cutoff = sinceDateValue(for: sportTimeframe) else { return validPropResults }
+        return validPropResults.filter { billfoldDate(from: $0.game_date) >= cutoff }
+    }
+
     private var filteredGameResults: [GameResult] {
         let results = selectedSport == .all
-            ? gameResults
-            : gameResults.filter { ($0.effectiveLeague ?? "") == selectedSport.rawValue }
+            ? timeframeGameResults
+            : timeframeGameResults.filter { ($0.effectiveLeague ?? "") == selectedSport.rawValue }
         return results.sorted { billfoldDate(from: $0.game_date) > billfoldDate(from: $1.game_date) }
     }
 
@@ -2361,14 +2386,14 @@ struct BillfoldView: View {
         let results: [PropResult]
         switch selectedSport {
         case .all:
-            results = validPropResults.filter { !$0.isTDResult }
+            results = timeframePropResults.filter { !$0.isTDResult }
         case .nflTDs:
-            results = validPropResults.filter { $0.isTDResult }
+            results = timeframePropResults.filter { $0.isTDResult }
         case .nfl:
-            results = validPropResults
+            results = timeframePropResults
                 .filter { ($0.effectiveLeague ?? "") == "NFL" && !$0.isTDResult }
         default:
-            results = validPropResults
+            results = timeframePropResults
                 .filter { ($0.effectiveLeague ?? "") == selectedSport.rawValue }
         }
         return results.sorted { billfoldDate(from: $0.game_date) > billfoldDate(from: $1.game_date) }
@@ -2376,10 +2401,10 @@ struct BillfoldView: View {
 
     private var availableSports: Set<String> {
         if selectedTab == 0 {
-            return Set(gameResults.compactMap { $0.effectiveLeague })
+            return Set(timeframeGameResults.compactMap { $0.effectiveLeague })
         }
-        var leagues = Set(validPropResults.compactMap { $0.effectiveLeague })
-        if validPropResults.contains(where: { $0.isTDResult }) {
+        var leagues = Set(timeframePropResults.compactMap { $0.effectiveLeague })
+        if timeframePropResults.contains(where: { $0.isTDResult }) {
             leagues.insert("NFL TDs")
         }
         return leagues
@@ -2408,6 +2433,11 @@ struct BillfoldView: View {
     private func signedDollars(_ value: Double) -> String {
         let rounded = Int(abs(value).rounded())
         return value >= 0 ? "+$\(rounded)" : "-$\(rounded)"
+    }
+
+    private func unsignedDollars(_ value: Double) -> String {
+        let rounded = Int(abs(value).rounded())
+        return "$\(rounded)"
     }
 
     private var streakSummary: (label: String, value: String, positive: Bool) {
@@ -2481,9 +2511,9 @@ struct BillfoldView: View {
     private var sportPerformance: [BillfoldSportPoint] {
         var points: [BillfoldSportPoint]
         if selectedTab == 0 {
-            points = groupedSportPerformance(from: gameResults.map { ($0.effectiveLeague, $0.result, $0.odds?.value) })
+            points = groupedSportPerformance(from: sportTimeframeGameResults.map { ($0.effectiveLeague, $0.result, $0.odds?.value) })
         } else {
-            points = groupedSportPerformance(from: validPropResults.map { ($0.effectiveLeague, $0.result, $0.odds?.value) })
+            points = groupedSportPerformance(from: sportTimeframePropResults.map { ($0.effectiveLeague, $0.result, $0.odds?.value) })
         }
         // Ensure NFL and NCAAF always appear (even with 0-0 record)
         let requiredSports = ["NBA", "NHL", "NCAAB", "NFL", "NCAAF"]
@@ -2499,29 +2529,39 @@ struct BillfoldView: View {
         return points.filter { $0.sport == selectedSport.rawValue }
     }
 
-    private var marketPerformance: [BillfoldMarketPoint] {
-        let rows: [(String?, String?, String?)] = selectedTab == 0
-            ? activeGameResults.map { ($0.result, $0.odds?.value, $0.pick_text) }
-            : activePropResults.map { ($0.result, $0.odds?.value, $0.pick_text) }
+    private var topdStats: (wins: Int, losses: Int, pnl: Double) {
+        var wins = 0, losses = 0, pnl = 0.0
 
-        let grouped = Dictionary(grouping: rows) { row -> String in
-            let american = parseAmericanOdds(row.1) ?? 0
-            switch american {
-            case ..<(-150): return "Heavy Fav"
-            case -150..<0: return "Fav"
-            case 0...150: return "Plus Money"
-            default: return "Longshot"
+        for row in dailyPickRows {
+            let picks = SupabaseAPI.parsePicksRow(row.picks)
+            let gamePicks = picks.filter { ($0.type ?? "game") != "prop" }
+            guard !gamePicks.isEmpty else { continue }
+
+            // Manual override or highest confidence
+            let topPick: GaryPick
+            if let manual = gamePicks.first(where: { $0.is_top_pick == true }) {
+                topPick = manual
+            } else if let best = gamePicks.max(by: { ($0.confidence ?? 0) < ($1.confidence ?? 0) }) {
+                topPick = best
+            } else {
+                continue
+            }
+
+            // Match against game results by date + pick text
+            guard let gr = gameResults.first(where: { $0.game_date == row.date && $0.pick_text == topPick.pick }) else { continue }
+
+            switch gr.result {
+            case "won":
+                wins += 1
+                pnl += units(for: "won", odds: gr.odds?.value)
+            case "lost":
+                losses += 1
+                pnl += units(for: "lost", odds: gr.odds?.value)
+            default: break
             }
         }
 
-        return grouped.map { bucket, values in
-            let net = values.reduce(0.0) { $0 + units(for: $1.0, odds: $1.1) }
-            let wins = values.filter { $0.0 == "won" }.count
-            let losses = values.filter { $0.0 == "lost" }.count
-            let pushes = values.filter { $0.0 == "push" }.count
-            return BillfoldMarketPoint(bucket: bucket, netUnits: net, wins: wins, losses: losses, pushes: pushes)
-        }
-        .sorted { $0.netUnits > $1.netUnits }
+        return (wins, losses, pnl)
     }
 
     private var spreadBucketsForSport: [(String, ClosedRange<Double>)] {
@@ -2572,7 +2612,7 @@ struct BillfoldView: View {
     private var spreadSportsAvailable: [String] {
         // No ALL — spread sizes are sport-specific
         var sports = [String]()
-        let leagues = Set(gameResults.compactMap { $0.effectiveLeague })
+        let leagues = Set(timeframeGameResults.compactMap { $0.effectiveLeague })
         for s in ["NBA", "NCAAB", "NFL", "NCAAF", "WBC"] {
             if leagues.contains(s) { sports.append(s) }
         }
@@ -2583,8 +2623,8 @@ struct BillfoldView: View {
 
     private var spreadSizePerformance: [(bucket: String, wins: Int, losses: Int, pushes: Int, net: Double)] {
         guard selectedTab == 0 else { return [] }
-        // Use all game results (respects timeframe via loadData), filter by spread sport picker
-        let results = gameResults.filter { ($0.effectiveLeague ?? "") == spreadSport }
+        // Use timeframe-filtered game results, filter by spread sport picker
+        let results = timeframeGameResults.filter { ($0.effectiveLeague ?? "") == spreadSport }
         guard !results.isEmpty else { return [] }
 
         return spreadBucketsForSport.compactMap { label, range in
@@ -2869,7 +2909,6 @@ struct BillfoldView: View {
                                 ForEach(timeframes, id: \.self) { tf in
                                     Button {
                                         timeframe = tf
-                                        Task { await loadData() }
                                     } label: {
                                         Text(tf.uppercased())
                                             .font(.system(size: 10, weight: .bold))
@@ -3100,16 +3139,43 @@ struct BillfoldView: View {
         HStack(alignment: .top, spacing: 8) {
             // Left column: By Sport
             VStack(alignment: .leading, spacing: 0) {
-                Text("By Sport")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.45))
-                    .padding(.horizontal, 10)
-                    .padding(.top, 10)
-                    .padding(.bottom, 6)
+                HStack(spacing: 4) {
+                    Text("By Sport")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(.white.opacity(0.45))
+                    Spacer()
+                    Menu {
+                        ForEach(timeframes, id: \.self) { tf in
+                            Button(tf.uppercased()) { sportTimeframe = tf }
+                        }
+                    } label: {
+                        HStack(spacing: 2) {
+                            Text(sportTimeframe.uppercased())
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundStyle(GaryColors.gold)
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(GaryColors.gold.opacity(0.6))
+                        }
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(GaryColors.gold.opacity(0.1))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 3)
+                                        .stroke(GaryColors.gold.opacity(0.25), lineWidth: 0.5)
+                                )
+                        )
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.top, 10)
+                .padding(.bottom, 6)
 
                 if sportPerformance.isEmpty {
                     Text("--")
-                        .font(.system(size: 11))
+                        .font(.system(size: 15))
                         .foregroundStyle(.white.opacity(0.2))
                         .frame(maxWidth: .infinity, minHeight: 40)
                 } else {
@@ -3119,20 +3185,20 @@ struct BillfoldView: View {
                         }
                         HStack(spacing: 4) {
                             Text(point.sport)
-                                .font(.system(size: 11, weight: .bold))
+                                .font(.system(size: 15, weight: .bold))
                                 .foregroundStyle(.white.opacity(0.75))
                                 .frame(maxWidth: .infinity, alignment: .leading)
 
                             Text(String(format: "%.0f%%", point.winRate))
-                                .font(.system(size: 10, weight: .bold))
+                                .font(.system(size: 14, weight: .bold))
                                 .foregroundStyle(.white.opacity(0.35))
                                 .monospacedDigit()
 
-                            Text(signedDollars(point.netUnits * 100))
-                                .font(.system(size: 10, weight: .bold))
+                            Text(unsignedDollars(point.netUnits * 100))
+                                .font(.system(size: 14, weight: .bold))
                                 .foregroundStyle(point.netUnits >= 0 ? positiveColor : negativeColor)
                                 .monospacedDigit()
-                                .frame(width: 44, alignment: .trailing)
+                                .frame(width: 57, alignment: .trailing)
                         }
                         .padding(.horizontal, 10)
                         .frame(maxHeight: .infinity)
@@ -3146,49 +3212,43 @@ struct BillfoldView: View {
                 goldGlassCard()
             )
 
-            // Right column: By Market + By Spread stacked
+            // Right column: Top Pick + By Spread stacked
             VStack(spacing: 8) {
-                // By Market
+                // Top Pick of the Day
                 VStack(alignment: .leading, spacing: 0) {
-                    Text("By Odds")
-                        .font(.system(size: 11, weight: .bold))
+                    Text("Top Pick")
+                        .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(.white.opacity(0.45))
                         .padding(.horizontal, 10)
                         .padding(.top, 10)
                         .padding(.bottom, 6)
 
-                    if marketPerformance.isEmpty {
+                    let topd = topdStats
+                    if topd.wins + topd.losses == 0 {
                         Text("--")
-                            .font(.system(size: 11))
+                            .font(.system(size: 15))
                             .foregroundStyle(.white.opacity(0.2))
                             .frame(maxWidth: .infinity, minHeight: 40)
                     } else {
-                        ForEach(Array(marketPerformance.enumerated()), id: \.element.id) { index, point in
-                            if index > 0 {
-                                Rectangle().fill(cardStroke).frame(height: 0.5).padding(.horizontal, 10)
-                            }
-                            HStack(spacing: 4) {
-                                Text(point.bucket)
-                                    .font(.system(size: 11, weight: .bold))
-                                    .foregroundStyle(.white.opacity(0.75))
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.7)
+                        HStack(spacing: 4) {
+                            Text("Record")
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundStyle(.white.opacity(0.75))
+                                .frame(maxWidth: .infinity, alignment: .leading)
 
-                                Text("\(point.wins)-\(point.losses)")
-                                    .font(.system(size: 10, weight: .medium))
-                                    .foregroundStyle(.white.opacity(0.3))
-                                    .monospacedDigit()
+                            Text("\(topd.wins)-\(topd.losses)")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.3))
+                                .monospacedDigit()
 
-                                Text(signedDollars(point.netUnits * 100))
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundStyle(point.netUnits >= 0 ? positiveColor : negativeColor)
-                                    .monospacedDigit()
-                                    .frame(width: 44, alignment: .trailing)
-                            }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 8)
+                            Text(unsignedDollars(topd.pnl * 100))
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(topd.pnl >= 0 ? positiveColor : negativeColor)
+                                .monospacedDigit()
+                                .frame(width: 57, alignment: .trailing)
                         }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
                     }
                 }
                 .padding(.bottom, 6)
@@ -3200,7 +3260,7 @@ struct BillfoldView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(spacing: 4) {
                         Text("By Spread")
-                            .font(.system(size: 11, weight: .bold))
+                            .font(.system(size: 15, weight: .bold))
                             .foregroundStyle(.white.opacity(0.45))
                         Spacer()
                         Menu {
@@ -3210,10 +3270,10 @@ struct BillfoldView: View {
                         } label: {
                             HStack(spacing: 2) {
                                 Text(spreadSport)
-                                    .font(.system(size: 9, weight: .bold))
+                                    .font(.system(size: 13, weight: .bold))
                                     .foregroundStyle(GaryColors.gold)
                                 Image(systemName: "chevron.down")
-                                    .font(.system(size: 7, weight: .bold))
+                                    .font(.system(size: 9, weight: .bold))
                                     .foregroundStyle(GaryColors.gold.opacity(0.6))
                             }
                             .padding(.horizontal, 6)
@@ -3234,7 +3294,7 @@ struct BillfoldView: View {
 
                     if spreadSizePerformance.isEmpty {
                         Text(selectedTab == 0 ? "No spread data" : "Picks only")
-                            .font(.system(size: 10, weight: .medium))
+                            .font(.system(size: 14, weight: .medium))
                             .foregroundStyle(.white.opacity(0.2))
                             .frame(maxWidth: .infinity, minHeight: 30)
                     } else {
@@ -3244,20 +3304,20 @@ struct BillfoldView: View {
                             }
                             HStack(spacing: 4) {
                                 Text(item.bucket)
-                                    .font(.system(size: 11, weight: .bold))
+                                    .font(.system(size: 15, weight: .bold))
                                     .foregroundStyle(.white.opacity(0.75))
                                     .frame(maxWidth: .infinity, alignment: .leading)
 
                                 Text("\(item.wins)-\(item.losses)")
-                                    .font(.system(size: 10, weight: .medium))
+                                    .font(.system(size: 14, weight: .medium))
                                     .foregroundStyle(.white.opacity(0.3))
                                     .monospacedDigit()
 
-                                Text(signedDollars(item.net * 100))
-                                    .font(.system(size: 10, weight: .bold))
+                                Text(unsignedDollars(item.net * 100))
+                                    .font(.system(size: 14, weight: .bold))
                                     .foregroundStyle(item.net >= 0 ? positiveColor : negativeColor)
                                     .monospacedDigit()
-                                    .frame(width: 44, alignment: .trailing)
+                                    .frame(width: 57, alignment: .trailing)
                             }
                             .padding(.horizontal, 10)
                             .padding(.vertical, 8)
@@ -3351,6 +3411,43 @@ struct BillfoldView: View {
         return text
     }
 
+    /// Extract mascot name for compact display (e.g. "Trail Blazers +2.0" from "Portland Trail Blazers +2.0")
+    private func mascotName(_ pickText: String) -> String {
+        // Remove spread/line suffix like "+2.0", "-5.5", "+1.5"
+        var cleaned = pickText
+        let spreadPattern = #"\s+[+-]\d+(?:\.\d+)?$"#
+        if let regex = try? NSRegularExpression(pattern: spreadPattern),
+           let match = regex.firstMatch(in: cleaned, range: NSRange(cleaned.startIndex..., in: cleaned)),
+           let range = Range(match.range, in: cleaned) {
+            cleaned = String(cleaned[cleaned.startIndex..<range.lowerBound])
+        }
+
+        // Two-word mascots that must stay together
+        let twoWordMascots = [
+            "Trail Blazers", "Blue Devils", "Blue Jays", "Red Sox", "White Sox",
+            "Blue Jackets", "Maple Leafs", "Red Wings", "Golden Knights",
+            "Black Hawks", "Timber Wolves", "Yellow Jackets", "Red Raiders",
+            "Horned Frogs", "Sun Devils", "Golden Bears", "Nittany Lions",
+            "Crimson Tide", "Fighting Irish", "Scarlet Knights", "Mean Green",
+            "Golden Gophers", "Demon Deacons", "Orange Men", "Tar Heels",
+            "Mountain Hawks", "Wild Cats", "Golden Eagles", "Screaming Eagles",
+            "Black Bears", "Sea Hawks"
+        ]
+
+        for mascot in twoWordMascots {
+            if cleaned.hasSuffix(mascot) {
+                return mascot
+            }
+        }
+
+        // Default: use last word as mascot
+        let words = cleaned.split(separator: " ")
+        if words.count > 1 {
+            return String(words.last!)
+        }
+        return cleaned
+    }
+
     private func gameCardView(_ result: GameResult) -> some View {
         let sport = Sport.from(league: result.effectiveLeague)
         let isWon = result.result == "won"
@@ -3358,7 +3455,18 @@ struct BillfoldView: View {
         let resultLetter = isWon ? "W" : (isPush ? "P" : "L")
         let resultColor = isWon ? positiveColor : (isPush ? GaryColors.gold : negativeColor)
         let hasGradient = sport.accentGradient != nil
-        let pickText = pickWithoutOdds(result.pick_text ?? result.matchup ?? "Pick")
+        let fullPickText = pickWithoutOdds(result.pick_text ?? result.matchup ?? "Pick")
+        // Extract spread suffix if present, then build "Mascot +2.0"
+        let spreadSuffix: String = {
+            let pattern = #"\s+([+-]\d+(?:\.\d+)?)$"#
+            if let regex = try? NSRegularExpression(pattern: pattern),
+               let match = regex.firstMatch(in: fullPickText, range: NSRange(fullPickText.startIndex..., in: fullPickText)),
+               let range = Range(match.range(at: 1), in: fullPickText) {
+                return " " + String(fullPickText[range])
+            }
+            return ""
+        }()
+        let pickText = mascotName(fullPickText) + spreadSuffix
 
         let oddsStr: String = {
             let fromField = Formatters.americanOdds(result.odds?.value)
@@ -3378,7 +3486,7 @@ struct BillfoldView: View {
             // Row 1: Sport badge + date + odds (right)
             HStack(spacing: 0) {
                 Text(sport.rawValue)
-                    .font(.system(size: 8, weight: .bold))
+                    .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(sport.accentColor)
                     .padding(.horizontal, 4)
                     .padding(.vertical, 2)
@@ -3387,12 +3495,12 @@ struct BillfoldView: View {
                             .fill(sport.accentColor.opacity(0.12))
                     )
                 Text(Formatters.formatDate(result.game_date))
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(.white.opacity(0.3))
                     .padding(.leading, 5)
                 Spacer()
                 Text(oddsStr)
-                    .font(.system(size: 9, weight: .bold))
+                    .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(GaryColors.gold.opacity(0.6))
                     .monospacedDigit()
             }
@@ -3400,21 +3508,21 @@ struct BillfoldView: View {
             // Row 2: Pick text + W/L centered
             HStack(spacing: 0) {
                 Text(pickText)
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 Spacer(minLength: 4)
                 Text(resultLetter)
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.system(size: 19, weight: .bold))
                     .foregroundStyle(resultColor)
             }
 
             // Row 3: Final Score
             if let score = result.final_score, !score.isEmpty {
                 Text("Final Score: \(score)")
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.45))
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(GaryColors.gold)
                     .monospacedDigit()
                     .lineLimit(1)
             }
@@ -3444,7 +3552,7 @@ struct BillfoldView: View {
             // Row 1: Sport badge + date + odds (right)
             HStack(spacing: 0) {
                 Text(sport.rawValue)
-                    .font(.system(size: 8, weight: .bold))
+                    .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(sport.accentColor)
                     .padding(.horizontal, 4)
                     .padding(.vertical, 2)
@@ -3453,12 +3561,12 @@ struct BillfoldView: View {
                             .fill(sport.accentColor.opacity(0.12))
                     )
                 Text(Formatters.formatDate(result.game_date))
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(.white.opacity(0.3))
                     .padding(.leading, 5)
                 Spacer()
                 Text(propOddsStr)
-                    .font(.system(size: 9, weight: .bold))
+                    .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(GaryColors.gold.opacity(0.6))
                     .monospacedDigit()
             }
@@ -3466,13 +3574,13 @@ struct BillfoldView: View {
             // Row 2: Prop title + W/L
             HStack(spacing: 0) {
                 Text(Formatters.propResultTitle(result))
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(.white)
                     .lineLimit(2)
                     .minimumScaleFactor(0.7)
                 Spacer(minLength: 4)
                 Text(resultLetter)
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.system(size: 19, weight: .bold))
                     .foregroundStyle(resultColor)
             }
         }
@@ -3486,7 +3594,7 @@ struct BillfoldView: View {
 
     private var emptyCarousel: some View {
         Text(selectedSport == .all ? "No results yet" : "No \(selectedSport.rawValue) results")
-            .font(.system(size: 11, weight: .medium))
+            .font(.system(size: 15, weight: .medium))
             .foregroundStyle(.white.opacity(0.25))
             .frame(maxWidth: .infinity, minHeight: 80)
     }
@@ -3538,15 +3646,16 @@ struct BillfoldView: View {
             error = nil
         }
         do {
-            let since = sinceDate(for: timeframe)
-            let (games, props) = try await withTimeout(seconds: 30) {
-                async let g = SupabaseAPI.fetchAllGameResults(since: since)
-                async let p = SupabaseAPI.fetchPropResults(since: since)
-                return try await (g, p)
+            let (games, props, picks) = try await withTimeout(seconds: 30) {
+                async let g = SupabaseAPI.fetchAllGameResults(since: nil)
+                async let p = SupabaseAPI.fetchPropResults(since: nil)
+                async let d = SupabaseAPI.fetchAllDailyPicksRaw()
+                return try await (g, p, d)
             }
             await MainActor.run {
                 gameResults = games
                 propResults = props
+                dailyPickRows = picks
                 lastRefresh = Date()
             }
         } catch {
@@ -3661,13 +3770,17 @@ struct BillfoldView: View {
     }
 
     private func sinceDate(for timeframe: String) -> String? {
+        sinceDateValue(for: timeframe).map { formatISO($0) }
+    }
+
+    private func sinceDateValue(for timeframe: String) -> Date? {
         let cal = Calendar.current
         let now = Date()
         switch timeframe {
-        case "7d": return cal.date(byAdding: .day, value: -7, to: now).map { formatISO($0) }
-        case "30d": return cal.date(byAdding: .day, value: -30, to: now).map { formatISO($0) }
-        case "90d": return cal.date(byAdding: .day, value: -90, to: now).map { formatISO($0) }
-        case "ytd": return cal.date(from: DateComponents(year: cal.component(.year, from: now), month: 1, day: 1)).map { formatISO($0) }
+        case "7d": return cal.date(byAdding: .day, value: -7, to: now)
+        case "30d": return cal.date(byAdding: .day, value: -30, to: now)
+        case "90d": return cal.date(byAdding: .day, value: -90, to: now)
+        case "ytd": return cal.date(from: DateComponents(year: cal.component(.year, from: now), month: 1, day: 1))
         default: return nil
         }
     }

@@ -9,8 +9,10 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
-        // Configure Firebase
-        FirebaseApp.configure()
+        // Configure Firebase (guard prevents crash on double-configure in simulator)
+        if FirebaseApp.app() == nil {
+            FirebaseApp.configure()
+        }
         
         // Set messaging delegate
         Messaging.messaging().delegate = self

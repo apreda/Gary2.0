@@ -499,6 +499,18 @@ enum SupabaseAPI {
         return result
     }
     
+    /// Fetch all daily_picks rows (for TOPD matching)
+    static func fetchAllDailyPicksRaw() async throws -> [DailyPicksRow] {
+        let url = buildURL(table: "daily_picks", query: [
+            URLQueryItem(name: "select", value: "picks::text,date"),
+            URLQueryItem(name: "order", value: "date.desc"),
+            URLQueryItem(name: "limit", value: "500")
+        ])
+        let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return [] }
+        return (try? JSONDecoder().decode([DailyPicksRow].self, from: data)) ?? []
+    }
+
     /// Fetch prop results with optional date filter
     /// - Parameter forceRefresh: Set to true for pull-to-refresh to bypass cache
     static func fetchPropResults(since dateFilter: String?, forceRefresh: Bool = false) async throws -> [PropResult] {
@@ -625,7 +637,7 @@ enum SupabaseAPI {
     
     // MARK: - Parsing Helpers
     
-    private static func parsePicksRow(_ picks: PicksValue<GaryPick>?) -> [GaryPick] {
+    static func parsePicksRow(_ picks: PicksValue<GaryPick>?) -> [GaryPick] {
         guard let picks = picks else { return [] }
         
         if let arr = picks.asArray { return arr }

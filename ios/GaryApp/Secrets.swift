@@ -5,14 +5,14 @@ import Foundation
 enum Secrets {
     /// Supabase project URL
     static let supabaseURL: URL = {
-        guard let url = URL(string: "https://***REMOVED***.supabase.co") else {
+        guard let url = URL(string: "https://xuttubsfgdcjfgmskcol.supabase.co") else {
             fatalError("Invalid Supabase URL")
         }
         return url
     }()
 
     /// Supabase anonymous key (public, safe for client)
-    static let supabaseAnonKey = "***REMOVED***"
+    static let supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh1dHR1YnNmZ2RjamZnbXNrY29sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDM4OTY4MDQsImV4cCI6MjA1OTQ3MjgwNH0.wppXQAUHQXoD0z5wbjy93_0KYMREPufl_BCtb4Ugd40"
 
     /// Website base URL for web endpoints
     static let siteBase: URL = {
