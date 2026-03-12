@@ -641,7 +641,7 @@ async function main() {
         if (isTournamentSeason) {
           console.log(`[${config.name}] Tournament season — accepting all conferences`);
         } else {
-          console.log(`[${config.name}] Regular season — filtering to Power 6 conferences`);
+          console.log(`[${config.name}] Regular season — filtering to Power 6 + MAC conferences`);
         }
 
         // Power 6 conference IDs from BDL (regular season filter)
@@ -651,6 +651,7 @@ async function main() {
           6,   // Big 12
           7,   // Big East
           10,  // Big Ten
+          18,  // MAC
           24,  // SEC
         ]);
 
@@ -659,8 +660,6 @@ async function main() {
           'gonzagabulldogs',
           'saintmarysgaels',
           'daytonflyers',
-          'miamiohredhawks',
-          'miamiredhawks',       // BDL may omit "(OH)" — cover both normalizations
         ]);
 
         // Conference ID to name mapping for logging and storage
@@ -669,8 +668,8 @@ async function main() {
           1: 'ACC', 2: 'America East', 3: 'Atlantic 10', 4: 'AAC', 5: 'Atlantic Sun',
           6: 'Big 12', 7: 'Big East', 8: 'Big Sky', 9: 'Big South',
           10: 'Big Ten', 11: 'Big West', 12: 'CAA', 13: 'Conference USA',
-          14: 'Horizon', 15: 'Ivy League', 16: 'MAAC', 17: 'MAC',
-          18: 'MEAC', 19: 'Missouri Valley', 20: 'Mountain West', 21: 'NEC',
+          14: 'Horizon', 15: 'Ivy League', 16: 'MAAC', 17: 'MEAC',
+          18: 'MAC', 19: 'Missouri Valley', 20: 'Mountain West', 21: 'NEC',
           22: 'Ohio Valley', 23: 'Patriot', 24: 'SEC', 25: 'Southern',
           26: 'Southland', 27: 'SWAC', 28: 'Summit', 29: 'Sun Belt',
           30: 'WAC', 31: 'WCC', 32: 'West Coast', 33: 'Pac-12'
@@ -758,7 +757,7 @@ async function main() {
 
         // Log conference filter results
         if (skippedNonApproved.length > 0) {
-          console.log(`[${config.name}] 🚫 Skipped ${skippedNonApproved.length} games outside Power 6 conferences:`);
+          console.log(`[${config.name}] 🚫 Skipped ${skippedNonApproved.length} games outside approved conferences:`);
           skippedNonApproved.slice(0, 5).forEach(({ game, reason }) => {
             console.log(`   - ${game.away_team} @ ${game.home_team}: ${reason}`);
           });
