@@ -1750,7 +1750,7 @@ struct GaryPicksView: View {
                     Spacer()
                 } else {
                     ScrollView(showsIndicators: false) {
-                        LazyVStack(spacing: 9.5) {
+                        LazyVStack(spacing: 5) {
                             // Yesterday's Results header
                             if showingYesterdayResults && filteredPicks.contains(where: { isYesterdayPick($0) }) {
                                 HStack(spacing: 6) {
@@ -2338,8 +2338,22 @@ struct BillfoldView: View {
     @State private var timeframe = "7d"
     @State private var sportTimeframe = "7d"
     @State private var spreadSport = "NBA"
-    @State private var showFilterDrawer = false
+    @State private var topdTimeframe = "7d"
+    @State private var showingSettings = false
     @State private var dailyPickRows: [DailyPicksRow] = []
+
+    // ALL expensive derived data cached here — updated via recomputeCache()
+    @State private var cachedFilteredGames: [GameResult] = []
+    @State private var cachedFilteredProps: [PropResult] = []
+    @State private var cachedRecord: (wins: Int, losses: Int, pushes: Int) = (0, 0, 0)
+    @State private var cachedNetUnits: Double = 0
+    @State private var cachedStreak: (label: String, value: String, positive: Bool) = ("Streak", "--", true)
+    @State private var cachedTrend: [BillfoldTrendPoint] = []
+    @State private var cachedSportPerf: [BillfoldSportPoint] = []
+    @State private var cachedSpreadPerf: [(bucket: String, wins: Int, losses: Int, pushes: Int, net: Double)] = []
+    @State private var cachedTopd: (wins: Int, losses: Int, pnl: Double) = (0, 0, 0)
+    @State private var cachedAvailableSports: Set<String> = []
+    @State private var cachedSortedSports: [Sport] = Sport.allCases
 
     private let timeframes = ["7d", "30d", "90d", "ytd", "all"]
     let carouselTimer = Timer.publish(every: 3.5, on: .main, in: .common).autoconnect()
@@ -2399,36 +2413,16 @@ struct BillfoldView: View {
         return results.sorted { billfoldDate(from: $0.game_date) > billfoldDate(from: $1.game_date) }
     }
 
-    private var availableSports: Set<String> {
-        if selectedTab == 0 {
-            return Set(timeframeGameResults.compactMap { $0.effectiveLeague })
-        }
-        var leagues = Set(timeframePropResults.compactMap { $0.effectiveLeague })
-        if timeframePropResults.contains(where: { $0.isTDResult }) {
-            leagues.insert("NFL TDs")
-        }
-        return leagues
-    }
-
-    private var activeGameResults: [GameResult] { filteredGameResults }
-    private var activePropResults: [PropResult] { filteredPropResults }
-    private var settledCount: Int { record.wins + record.losses + record.pushes }
-    private var record: (wins: Int, losses: Int, pushes: Int) { calculateRecord() }
-
+    private var activeGameResults: [GameResult] { cachedFilteredGames }
+    private var activePropResults: [PropResult] { cachedFilteredProps }
+    private var settledCount: Int { cachedRecord.wins + cachedRecord.losses + cachedRecord.pushes }
+    private var record: (wins: Int, losses: Int, pushes: Int) { cachedRecord }
     private var winRate: Double {
-        let decisive = max(1, record.wins + record.losses)
-        return Double(record.wins) / Double(decisive) * 100
+        let decisive = max(1, cachedRecord.wins + cachedRecord.losses)
+        return Double(cachedRecord.wins) / Double(decisive) * 100
     }
-
-    private var netUnits: Double {
-        if selectedTab == 0 {
-            return activeGameResults.reduce(0) { $0 + units(for: $1.result, odds: $1.odds?.value) }
-        }
-        return activePropResults.reduce(0) { $0 + units(for: $1.result, odds: $1.odds?.value) }
-    }
-
-    /// Net profit/loss in dollars assuming $100 per bet
-    private var netDollars: Double { netUnits * 100 }
+    private var netUnits: Double { cachedNetUnits }
+    private var netDollars: Double { cachedNetUnits * 100 }
 
     private func signedDollars(_ value: Double) -> String {
         let rounded = Int(abs(value).rounded())
@@ -2440,53 +2434,10 @@ struct BillfoldView: View {
         return "$\(rounded)"
     }
 
-    private var streakSummary: (label: String, value: String, positive: Bool) {
-        // Filter to settled results only, sorted by date descending
-        let settled = selectedTab == 0
-            ? activeGameResults.compactMap { $0.result }.filter { ["won", "lost", "push"].contains($0) }
-            : activePropResults.compactMap { $0.result }.filter { ["won", "lost", "push"].contains($0) }
-        guard let first = settled.first else {
-            return ("Streak", "--", true)
-        }
-        let count = settled.prefix { $0 == first }.count
-        switch first {
-        case "won": return ("Streak", "\(count)W", true)
-        case "lost": return ("Streak", "\(count)L", false)
-        case "push": return ("Streak", "\(count)P", true)
-        default: return ("Streak", "--", true)
-        }
-    }
-
-    private var trendPoints: [BillfoldTrendPoint] {
-        if selectedTab == 0 {
-            return dailyTrend(
-                items: activeGameResults.map { ($0.game_date, units(for: $0.result, odds: $0.odds?.value)) }
-            )
-        }
-        return dailyTrend(
-            items: activePropResults.map { ($0.game_date, units(for: $0.result, odds: $0.odds?.value)) }
-        )
-    }
-
-    private var sortedSportsForBillfold: [Sport] {
-        Sport.allCases
-            .filter { sport in
-                if selectedTab == 0 && sport.isPropsOnly { return false }
-                return true
-            }
-            .sorted { a, b in
-                if a == .all { return true }
-                if b == .all { return false }
-                let aAvailable = availableSports.contains(a.rawValue)
-                let bAvailable = availableSports.contains(b.rawValue)
-                if aAvailable && !bAvailable { return true }
-                if !aAvailable && bAvailable { return false }
-                let allCases = Sport.allCases
-                let aIndex = allCases.firstIndex(of: a) ?? 0
-                let bIndex = allCases.firstIndex(of: b) ?? 0
-                return aIndex < bIndex
-            }
-    }
+    private var streakSummary: (label: String, value: String, positive: Bool) { cachedStreak }
+    private var trendPoints: [BillfoldTrendPoint] { cachedTrend }
+    private var sortedSportsForBillfold: [Sport] { cachedSortedSports }
+    private var availableSports: Set<String> { cachedAvailableSports }
 
     private var recentGameCards: [GameResult] { Array(activeGameResults.prefix(20)) }
     private var recentPropCards: [PropResult] { Array(activePropResults.prefix(20)) }
@@ -2508,14 +2459,15 @@ struct BillfoldView: View {
         "\(record.wins)-\(record.losses)-\(record.pushes)"
     }
 
-    private var sportPerformance: [BillfoldSportPoint] {
+    private var sportPerformance: [BillfoldSportPoint] { cachedSportPerf }
+
+    private func computeSportPerformance() -> [BillfoldSportPoint] {
         var points: [BillfoldSportPoint]
         if selectedTab == 0 {
             points = groupedSportPerformance(from: sportTimeframeGameResults.map { ($0.effectiveLeague, $0.result, $0.odds?.value) })
         } else {
             points = groupedSportPerformance(from: sportTimeframePropResults.map { ($0.effectiveLeague, $0.result, $0.odds?.value) })
         }
-        // Ensure NFL and NCAAF always appear (even with 0-0 record)
         let requiredSports = ["NBA", "NHL", "NCAAB", "NFL", "NCAAF"]
         for sport in requiredSports {
             if !points.contains(where: { $0.sport == sport }) {
@@ -2529,38 +2481,36 @@ struct BillfoldView: View {
         return points.filter { $0.sport == selectedSport.rawValue }
     }
 
-    private var topdStats: (wins: Int, losses: Int, pnl: Double) {
-        var wins = 0, losses = 0, pnl = 0.0
+    private var topdStats: (wins: Int, losses: Int, pnl: Double) { cachedTopd }
 
+    private func computeTopdStats() -> (wins: Int, losses: Int, pnl: Double) {
+        let cutoff = sinceDateValue(for: topdTimeframe)
+        // Build lookup dict for O(1) game result matching
+        var grLookup: [String: GameResult] = [:]
+        for gr in gameResults {
+            if let date = gr.game_date, let pick = gr.pick_text {
+                grLookup["\(date)|\(pick)"] = gr
+            }
+        }
+        var wins = 0, losses = 0, pnl = 0.0
         for row in dailyPickRows {
+            if let cutoff = cutoff, billfoldDate(from: row.date) < cutoff { continue }
             let picks = SupabaseAPI.parsePicksRow(row.picks)
             let gamePicks = picks.filter { ($0.type ?? "game") != "prop" }
             guard !gamePicks.isEmpty else { continue }
-
-            // Manual override or highest confidence
             let topPick: GaryPick
             if let manual = gamePicks.first(where: { $0.is_top_pick == true }) {
                 topPick = manual
             } else if let best = gamePicks.max(by: { ($0.confidence ?? 0) < ($1.confidence ?? 0) }) {
                 topPick = best
-            } else {
-                continue
-            }
-
-            // Match against game results by date + pick text
-            guard let gr = gameResults.first(where: { $0.game_date == row.date && $0.pick_text == topPick.pick }) else { continue }
-
+            } else { continue }
+            guard let gr = grLookup["\(row.date)|\(topPick.pick ?? "")"] else { continue }
             switch gr.result {
-            case "won":
-                wins += 1
-                pnl += units(for: "won", odds: gr.odds?.value)
-            case "lost":
-                losses += 1
-                pnl += units(for: "lost", odds: gr.odds?.value)
+            case "won": wins += 1; pnl += units(for: "won", odds: gr.odds?.value)
+            case "lost": losses += 1; pnl += units(for: "lost", odds: gr.odds?.value)
             default: break
             }
         }
-
         return (wins, losses, pnl)
     }
 
@@ -2621,30 +2571,34 @@ struct BillfoldView: View {
         return sports
     }
 
-    private var spreadSizePerformance: [(bucket: String, wins: Int, losses: Int, pushes: Int, net: Double)] {
+    private var spreadSizePerformance: [(bucket: String, wins: Int, losses: Int, pushes: Int, net: Double)] { cachedSpreadPerf }
+
+    private func computeSpreadPerf() -> [(bucket: String, wins: Int, losses: Int, pushes: Int, net: Double)] {
         guard selectedTab == 0 else { return [] }
-        // Use timeframe-filtered game results, filter by spread sport picker
         let results = timeframeGameResults.filter { ($0.effectiveLeague ?? "") == spreadSport }
         guard !results.isEmpty else { return [] }
-
+        // Pre-compile regex once
+        guard let regex = try? NSRegularExpression(pattern: #"[+-]\d{1,2}(?:\.\d)?"#) else { return [] }
+        // Pre-extract spread values for each result
+        let withSpreads: [(GameResult, Double)] = results.compactMap { result in
+            guard let pickText = result.pick_text else { return nil }
+            let matches = regex.matches(in: pickText, range: NSRange(pickText.startIndex..., in: pickText))
+            guard let match = matches.first, let swiftRange = Range(match.range, in: pickText) else { return nil }
+            let num = abs(Double(pickText[swiftRange]) ?? 0)
+            return num > 0 ? (result, num) : nil
+        }
         return spreadBucketsForSport.compactMap { label, range in
-            let matching = results.filter { result in
-                guard let pickText = result.pick_text else { return false }
-                // Match spread: +/- followed by 1-2 digits with optional .5 (not 3+ digit odds)
-                let pattern = #"[+-]\d{1,2}(?:\.\d)?"#
-                guard let regex = try? NSRegularExpression(pattern: pattern) else { return false }
-                let matches = regex.matches(in: pickText, range: NSRange(pickText.startIndex..., in: pickText))
-                // Use first match (spread comes before odds in pick_text)
-                guard let match = matches.first,
-                      let swiftRange = Range(match.range, in: pickText) else { return false }
-                let num = abs(Double(pickText[swiftRange]) ?? 0)
-                return num > 0 && range.contains(num)
-            }
+            let matching = withSpreads.filter { range.contains($0.1) }.map { $0.0 }
             guard !matching.isEmpty else { return nil }
-            let wins = matching.filter { $0.result == "won" }.count
-            let losses = matching.filter { $0.result == "lost" }.count
-            let pushes = matching.filter { $0.result == "push" }.count
-            let net = matching.reduce(0.0) { $0 + units(for: $1.result, odds: $1.odds?.value) }
+            var wins = 0, losses = 0, pushes = 0, net = 0.0
+            for r in matching {
+                switch r.result {
+                case "won": wins += 1; net += units(for: "won", odds: r.odds?.value)
+                case "lost": losses += 1; net += units(for: "lost", odds: r.odds?.value)
+                case "push": pushes += 1
+                default: break
+                }
+            }
             return (label, wins, losses, pushes, net)
         }
     }
@@ -2704,6 +2658,7 @@ struct BillfoldView: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 8) {
                     headerBar
+                    billfoldTopBar
 
                     if loading && settledCount == 0 {
                         loadingState
@@ -2718,24 +2673,101 @@ struct BillfoldView: View {
                 }
                 .padding(.bottom, 90)
             }
-            .allowsHitTesting(!showFilterDrawer)
 
-            // Filter drawer overlay
-            if showFilterDrawer {
-                filterDrawerOverlay
-            }
+
         }
         .task { await loadData() }
+        .onChange(of: selectedTab) { _ in recomputeCache() }
+        .onChange(of: selectedSport) { _ in recomputeCache() }
+        .onChange(of: timeframe) { _ in recomputeCache() }
+        .onChange(of: sportTimeframe) { _ in recomputeCache() }
+        .onChange(of: spreadSport) { _ in recomputeCache() }
+        .onChange(of: topdTimeframe) { _ in recomputeCache() }
+        .sheet(isPresented: $showingSettings) {
+            SettingsSheetView()
+        }
+    }
+
+    private func recomputeCache() {
+        // 1. Filtered results
+        let tfGames = timeframeGameResults
+        let tfProps = timeframePropResults
+        let fGames: [GameResult]
+        if selectedSport == .all {
+            fGames = tfGames.sorted { billfoldDate(from: $0.game_date) > billfoldDate(from: $1.game_date) }
+        } else {
+            fGames = tfGames.filter { ($0.effectiveLeague ?? "") == selectedSport.rawValue }
+                .sorted { billfoldDate(from: $0.game_date) > billfoldDate(from: $1.game_date) }
+        }
+        let fProps: [PropResult]
+        switch selectedSport {
+        case .all: fProps = tfProps.filter { !$0.isTDResult }.sorted { billfoldDate(from: $0.game_date) > billfoldDate(from: $1.game_date) }
+        case .nflTDs: fProps = tfProps.filter { $0.isTDResult }.sorted { billfoldDate(from: $0.game_date) > billfoldDate(from: $1.game_date) }
+        case .nfl: fProps = tfProps.filter { ($0.effectiveLeague ?? "") == "NFL" && !$0.isTDResult }.sorted { billfoldDate(from: $0.game_date) > billfoldDate(from: $1.game_date) }
+        default: fProps = tfProps.filter { ($0.effectiveLeague ?? "") == selectedSport.rawValue }.sorted { billfoldDate(from: $0.game_date) > billfoldDate(from: $1.game_date) }
+        }
+        cachedFilteredGames = fGames
+        cachedFilteredProps = fProps
+
+        // 2. Record
+        let active = selectedTab == 0 ? fGames.map { $0.result ?? "" } : fProps.map { $0.result ?? "" }
+        cachedRecord = active.reduce(into: (wins: 0, losses: 0, pushes: 0)) { acc, r in
+            switch r { case "won": acc.wins += 1; case "lost": acc.losses += 1; case "push": acc.pushes += 1; default: break }
+        }
+
+        // 3. Net units
+        if selectedTab == 0 {
+            cachedNetUnits = fGames.reduce(0) { $0 + units(for: $1.result, odds: $1.odds?.value) }
+        } else {
+            cachedNetUnits = fProps.reduce(0) { $0 + units(for: $1.result, odds: $1.odds?.value) }
+        }
+
+        // 4. Streak
+        let settled = active.filter { ["won", "lost", "push"].contains($0) }
+        if let first = settled.first {
+            let count = settled.prefix { $0 == first }.count
+            switch first {
+            case "won": cachedStreak = ("Streak", "\(count)W", true)
+            case "lost": cachedStreak = ("Streak", "\(count)L", false)
+            case "push": cachedStreak = ("Streak", "\(count)P", true)
+            default: cachedStreak = ("Streak", "--", true)
+            }
+        } else {
+            cachedStreak = ("Streak", "--", true)
+        }
+
+        // 5. Trend
+        if selectedTab == 0 {
+            cachedTrend = dailyTrend(items: fGames.map { ($0.game_date, units(for: $0.result, odds: $0.odds?.value)) })
+        } else {
+            cachedTrend = dailyTrend(items: fProps.map { ($0.game_date, units(for: $0.result, odds: $0.odds?.value)) })
+        }
+
+        // 6. Available sports + sorted sports
+        if selectedTab == 0 {
+            cachedAvailableSports = Set(tfGames.compactMap { $0.effectiveLeague })
+        } else {
+            var leagues = Set(tfProps.compactMap { $0.effectiveLeague })
+            if tfProps.contains(where: { $0.isTDResult }) { leagues.insert("NFL TDs") }
+            cachedAvailableSports = leagues
+        }
+        let avail = cachedAvailableSports
+        cachedSortedSports = Sport.allCases
+            .filter { sport in selectedTab == 0 && sport.isPropsOnly ? false : true }
+            .sorted { a, b in
+                if a == .all { return true }; if b == .all { return false }
+                let aA = avail.contains(a.rawValue); let bA = avail.contains(b.rawValue)
+                if aA && !bA { return true }; if !aA && bA { return false }
+                return (Sport.allCases.firstIndex(of: a) ?? 0) < (Sport.allCases.firstIndex(of: b) ?? 0)
+            }
+
+        // 7. Sport perf, spread perf, topd
+        cachedSportPerf = computeSportPerformance()
+        cachedSpreadPerf = computeSpreadPerf()
+        cachedTopd = computeTopdStats()
     }
 
     // MARK: - Header Bar
-
-    /// Summary of active filters for the header chip
-    private var filterSummaryText: String {
-        let tab = selectedTab == 0 ? "Picks" : "Props"
-        let sport = selectedSport == .all ? "All" : selectedSport.rawValue
-        return "\(tab) · \(sport) · \(timeframe.uppercased())"
-    }
 
     private var headerBar: some View {
         HStack(alignment: .center, spacing: 8) {
@@ -2752,251 +2784,126 @@ struct BillfoldView: View {
 
             Spacer()
 
-            // Filter chip — shows active filters, tapping opens drawer
             Button {
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    showFilterDrawer.toggle()
-                }
+                showingSettings = true
             } label: {
-                HStack(spacing: 5) {
-                    Image(systemName: "slider.horizontal.3")
-                        .font(.system(size: 10, weight: .bold))
-                    Text(filterSummaryText)
-                        .font(.system(size: 9, weight: .bold))
-                        .lineLimit(1)
-                }
-                .foregroundStyle(GaryColors.gold)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(
-                    RoundedRectangle(cornerRadius: cr)
-                        .fill(GaryColors.gold.opacity(0.08))
-                )
-            }
-
-            Button {
-                Task { await loadData() }
-            } label: {
-                Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.4))
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(GaryColors.gold.opacity(0.6))
                     .frame(width: 28, height: 28)
             }
-            .padding(.leading, 8)
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, 16)
         .padding(.top, 14)
     }
 
-    // MARK: - Filter Drawer (premium slide-out)
+    // MARK: - Sport Tabs + Picks/Props + Timeframe
 
-    private var filterDrawerOverlay: some View {
-        ZStack(alignment: .trailing) {
-            // Dim background — tap to dismiss
-            Color.black.opacity(0.6)
-                .ignoresSafeArea()
-                .onTapGesture {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                        showFilterDrawer = false
-                    }
-                }
+    private var billfoldTopBar: some View {
+        HStack(spacing: 6) {
+            // Left: Sport tabs (scrollable)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(sortedSportsForBillfold, id: \.self) { sport in
+                        let isAvailable = sport == .all || availableSports.contains(sport.rawValue)
+                        let isSelected = selectedSport == sport
+                        let dotColor: Color = sport == .all ? GaryColors.gold : sport.accentColor
 
-            // Drawer panel
-            VStack(alignment: .leading, spacing: 0) {
-                // Header with close
-                HStack(alignment: .center) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("FILTERS")
-                            .font(.system(size: 11, weight: .bold))
-                            .tracking(2)
-                            .foregroundStyle(GaryColors.gold)
-                        Text("Customize your view")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.3))
-                    }
-                    Spacer()
-                    Button {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                            showFilterDrawer = false
-                        }
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(.white.opacity(0.4))
-                            .frame(width: 28, height: 28)
-                            .background(
-                                RoundedRectangle(cornerRadius: 4)
-                                    .fill(GaryColors.gold.opacity(0.06))
-                            )
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 20)
-                .padding(.bottom, 16)
-
-                // Thin separator
-                Rectangle().fill(GaryColors.gold.opacity(0.08)).frame(height: 0.5)
-
-                ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 24) {
-                        // Type: Picks / Props
-                        VStack(alignment: .leading, spacing: 10) {
-                            drawerSectionLabel("TYPE", icon: "rectangle.stack")
-                            HStack(spacing: 0) {
-                                ForEach(0..<2) { index in
-                                    Button {
-                                        selectedTab = index
-                                        selectedSport = .all
-                                    } label: {
-                                        Text(index == 0 ? "Picks" : "Props")
-                                            .font(.system(size: 13, weight: .bold))
-                                            .foregroundStyle(selectedTab == index ? .black : .white.opacity(0.45))
-                                            .frame(maxWidth: .infinity)
-                                            .padding(.vertical, 11)
-                                            .background(
-                                                RoundedRectangle(cornerRadius: 4)
-                                                    .fill(selectedTab == index ? GaryColors.gold : .clear)
-                                            )
-                                    }
+                        Button {
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                                selectedSport = sport
+                            }
+                        } label: {
+                            VStack(spacing: 4) {
+                                HStack(spacing: 4) {
+                                    RoundedRectangle(cornerRadius: 1)
+                                        .fill(dotColor)
+                                        .frame(width: 5, height: 5)
+                                    Text(sport.rawValue)
+                                        .font(.system(size: 11, weight: isSelected ? .bold : .medium))
                                 }
-                            }
-                            .background(
-                                RoundedRectangle(cornerRadius: 4)
-                                    .fill(GaryColors.gold.opacity(0.04))
-                            )
-                        }
+                                .foregroundStyle(
+                                    isSelected ? .white
+                                    : isAvailable ? .white.opacity(0.45)
+                                    : .white.opacity(0.15)
+                                )
 
-                        // Sport — grid with accent color indicators
-                        VStack(alignment: .leading, spacing: 10) {
-                            drawerSectionLabel("SPORT", icon: "sportscourt")
-                            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 6) {
-                                ForEach(sortedSportsForBillfold, id: \.self) { sport in
-                                    let isAvailable = sport == .all || availableSports.contains(sport.rawValue)
-                                    let isSelected = selectedSport == sport
-                                    Button {
-                                        selectedSport = sport
-                                    } label: {
-                                        HStack(spacing: 6) {
-                                            if sport != .all {
-                                                RoundedRectangle(cornerRadius: 1)
-                                                    .fill(sport.accentColor)
-                                                    .frame(width: 5, height: 5)
-                                            }
-                                            Text(sport.rawValue)
-                                                .font(.system(size: 11, weight: isSelected ? .bold : .medium))
-                                        }
-                                        .foregroundStyle(
-                                            isSelected ? .black
-                                            : isAvailable ? .white.opacity(0.55)
-                                            : .white.opacity(0.15)
-                                        )
-                                        .frame(maxWidth: .infinity)
-                                        .padding(.vertical, 9)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: 4)
-                                                .fill(isSelected ? GaryColors.gold : GaryColors.gold.opacity(0.04))
-                                        )
-                                    }
-                                    .disabled(!isAvailable)
-                                }
+                                RoundedRectangle(cornerRadius: 1)
+                                    .fill(isSelected ? dotColor : .clear)
+                                    .frame(height: 2)
                             }
+                            .padding(.horizontal, 6)
                         }
-
-                        // Timeframe
-                        VStack(alignment: .leading, spacing: 10) {
-                            drawerSectionLabel("TIMEFRAME", icon: "calendar")
-                            HStack(spacing: 4) {
-                                ForEach(timeframes, id: \.self) { tf in
-                                    Button {
-                                        timeframe = tf
-                                    } label: {
-                                        Text(tf.uppercased())
-                                            .font(.system(size: 10, weight: .bold))
-                                            .foregroundStyle(timeframe == tf ? .black : .white.opacity(0.45))
-                                            .frame(maxWidth: .infinity)
-                                            .padding(.vertical, 10)
-                                            .background(
-                                                RoundedRectangle(cornerRadius: 4)
-                                                    .fill(timeframe == tf ? GaryColors.gold : GaryColors.gold.opacity(0.04))
-                                            )
-                                    }
-                                }
-                            }
-                        }
-
-                        // Quick stats summary
-                        VStack(alignment: .leading, spacing: 10) {
-                            drawerSectionLabel("SNAPSHOT", icon: "chart.bar")
-                            VStack(spacing: 8) {
-                                drawerStatRow("Record", recordText)
-                                drawerStatRow("Win Rate", String(format: "%.1f%%", winRate))
-                                drawerStatRow("Profit", signedDollars(netDollars))
-                                drawerStatRow("Settled", "\(settledCount)")
-                            }
-                            .padding(12)
-                            .background(
-                                RoundedRectangle(cornerRadius: 4)
-                                    .fill(GaryColors.gold.opacity(0.035))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 4)
-                                            .stroke(GaryColors.gold.opacity(0.08), lineWidth: 0.5)
-                                    )
-                            )
-                        }
+                        .disabled(!isAvailable)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 20)
-                    .padding(.bottom, 40)
                 }
             }
-            .frame(width: 270)
-            .background(
-                ZStack {
-                    // Same warm dark as Billfold page background
-                    Color(hex: "#0A0908")
-                        .ignoresSafeArea()
-                    // Match the gold wash from Billfold cards
-                    GaryColors.gold.opacity(0.02)
-                        .ignoresSafeArea()
-                    // Gold accent line on left edge
-                    HStack {
-                        Rectangle()
-                            .fill(GaryColors.gold.opacity(0.15))
-                            .frame(width: 0.5)
-                        Spacer()
+
+            // Right: 7D above Picks, stacked vertically
+            VStack(spacing: 4) {
+                // Timeframe dropdown
+                Menu {
+                    ForEach(timeframes, id: \.self) { tf in
+                        Button {
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                                timeframe = tf
+                            }
+                        } label: {
+                            Label(tf.uppercased(), systemImage: timeframe == tf ? "checkmark" : "")
+                        }
                     }
-                    .ignoresSafeArea()
+                } label: {
+                    HStack(spacing: 3) {
+                        Text(timeframe.uppercased())
+                            .font(.system(size: 11, weight: .bold))
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 7, weight: .bold))
+                    }
+                    .foregroundStyle(GaryColors.gold)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(GaryColors.gold.opacity(0.08))
+                    )
                 }
-            )
-            .transition(.move(edge: .trailing))
+
+                // Picks / Props dropdown
+                Menu {
+                    Button {
+                        selectedTab = 0
+                        selectedSport = .all
+                    } label: {
+                        Label("Picks", systemImage: selectedTab == 0 ? "checkmark" : "")
+                    }
+                    Button {
+                        selectedTab = 1
+                        selectedSport = .all
+                    } label: {
+                        Label("Props", systemImage: selectedTab == 1 ? "checkmark" : "")
+                    }
+                } label: {
+                    HStack(spacing: 3) {
+                        Text(selectedTab == 0 ? "Picks" : "Props")
+                            .font(.system(size: 11, weight: .bold))
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 7, weight: .bold))
+                    }
+                    .foregroundStyle(GaryColors.gold)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(GaryColors.gold.opacity(0.08))
+                    )
+                }
+            }
         }
-        .transition(.opacity)
+        .padding(.horizontal, 16)
     }
 
-    private func drawerSectionLabel(_ text: String, icon: String) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.system(size: 9, weight: .bold))
-                .foregroundStyle(GaryColors.gold.opacity(0.5))
-            Text(text)
-                .font(.system(size: 9, weight: .bold))
-                .tracking(1.5)
-                .foregroundStyle(.white.opacity(0.3))
-        }
-    }
 
-    private func drawerStatRow(_ label: String, _ value: String) -> some View {
-        HStack {
-            Text(label)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.white.opacity(0.4))
-            Spacer()
-            Text(value)
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(.white.opacity(0.7))
-                .monospacedDigit()
-        }
-    }
 
     // MARK: - Stats Strip (compact horizontal)
 
@@ -3214,14 +3121,41 @@ struct BillfoldView: View {
 
             // Right column: Top Pick + By Spread stacked
             VStack(spacing: 8) {
-                // Top Pick of the Day
+                // Daily Top Pick
                 VStack(alignment: .leading, spacing: 0) {
-                    Text("Top Pick")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(.white.opacity(0.45))
-                        .padding(.horizontal, 10)
-                        .padding(.top, 10)
-                        .padding(.bottom, 6)
+                    HStack(spacing: 4) {
+                        Text("Daily Top Pick")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.45))
+                        Spacer()
+                        Menu {
+                            ForEach(timeframes, id: \.self) { tf in
+                                Button(tf.uppercased()) { topdTimeframe = tf }
+                            }
+                        } label: {
+                            HStack(spacing: 2) {
+                                Text(topdTimeframe.uppercased())
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundStyle(GaryColors.gold)
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundStyle(GaryColors.gold.opacity(0.6))
+                            }
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(
+                                RoundedRectangle(cornerRadius: 3)
+                                    .fill(GaryColors.gold.opacity(0.1))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 3)
+                                            .stroke(GaryColors.gold.opacity(0.25), lineWidth: 0.5)
+                                    )
+                            )
+                        }
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.top, 10)
+                    .padding(.bottom, 6)
 
                     let topd = topdStats
                     if topd.wins + topd.losses == 0 {
@@ -3308,7 +3242,9 @@ struct BillfoldView: View {
                                     .foregroundStyle(.white.opacity(0.75))
                                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                                Text("\(item.wins)-\(item.losses)")
+                                let total = item.wins + item.losses + item.pushes
+                                let pct = total > 0 ? Int(round(Double(item.wins) / Double(total) * 100)) : 0
+                                Text("\(pct)%")
                                     .font(.system(size: 14, weight: .medium))
                                     .foregroundStyle(.white.opacity(0.3))
                                     .monospacedDigit()
@@ -3413,8 +3349,15 @@ struct BillfoldView: View {
 
     /// Extract mascot name for compact display (e.g. "Trail Blazers +2.0" from "Portland Trail Blazers +2.0")
     private func mascotName(_ pickText: String) -> String {
-        // Remove spread/line suffix like "+2.0", "-5.5", "+1.5"
+        // Handle ML picks: strip "ML" suffix, get mascot, then append "ML"
+        var mlSuffix = ""
         var cleaned = pickText
+        if cleaned.hasSuffix(" ML") {
+            mlSuffix = " ML"
+            cleaned = String(cleaned.dropLast(3))
+        }
+
+        // Remove spread/line suffix like "+2.0", "-5.5", "+1.5"
         let spreadPattern = #"\s+[+-]\d+(?:\.\d+)?$"#
         if let regex = try? NSRegularExpression(pattern: spreadPattern),
            let match = regex.firstMatch(in: cleaned, range: NSRange(cleaned.startIndex..., in: cleaned)),
@@ -3436,16 +3379,16 @@ struct BillfoldView: View {
 
         for mascot in twoWordMascots {
             if cleaned.hasSuffix(mascot) {
-                return mascot
+                return mascot + mlSuffix
             }
         }
 
         // Default: use last word as mascot
         let words = cleaned.split(separator: " ")
         if words.count > 1 {
-            return String(words.last!)
+            return String(words.last!) + mlSuffix
         }
-        return cleaned
+        return cleaned + mlSuffix
     }
 
     private func gameCardView(_ result: GameResult) -> some View {
@@ -3640,16 +3583,16 @@ struct BillfoldView: View {
 
     // MARK: - Data Loading
 
-    private func loadData() async {
+    private func loadData(forceRefresh: Bool = false) async {
         await MainActor.run {
             if settledCount == 0 { loading = true }
             error = nil
         }
         do {
             let (games, props, picks) = try await withTimeout(seconds: 30) {
-                async let g = SupabaseAPI.fetchAllGameResults(since: nil)
-                async let p = SupabaseAPI.fetchPropResults(since: nil)
-                async let d = SupabaseAPI.fetchAllDailyPicksRaw()
+                async let g = SupabaseAPI.fetchAllGameResults(since: nil, forceRefresh: forceRefresh, billfold: true)
+                async let p = SupabaseAPI.fetchPropResults(since: nil, forceRefresh: forceRefresh, billfold: true)
+                async let d = SupabaseAPI.fetchAllDailyPicksRaw(forceRefresh: forceRefresh, billfold: true)
                 return try await (g, p, d)
             }
             await MainActor.run {
@@ -3657,6 +3600,7 @@ struct BillfoldView: View {
                 propResults = props
                 dailyPickRows = picks
                 lastRefresh = Date()
+                recomputeCache()
             }
         } catch {
             await MainActor.run { self.error = "Failed to load data" }
@@ -4945,70 +4889,58 @@ struct CompactPickRow: View {
 
                     Spacer(minLength: 8)
 
-                    Text(pick.isNeutralSite == true ? "vs" : "@")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.12))
+                    VStack(alignment: .trailing, spacing: 3) {
+                        HStack(spacing: 5) {
+                            Text(pickParts.pick)
+                                .font(.system(size: 22, weight: .bold))
+                                .foregroundStyle(GaryColors.gold)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.85)
 
-                    Spacer(minLength: 8)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 8, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.14))
+                        }
 
-                    HStack(spacing: 5) {
-                        Text(pickParts.pick)
-                            .font(.system(size: 20, weight: .bold))
-                            .foregroundStyle(GaryColors.gold)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.85)
-
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 8, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.14))
                     }
                 }
                 .padding(.horizontal, 10)
                 .padding(.top, 8)
 
-                HStack {
+                HStack(alignment: .bottom) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Gary's Confidence")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(GaryColors.gold.opacity(0.7))
+
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                                    .fill(Color(hex: "#1A1A1E"))
+                                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                                    .fill(accentGradient)
+                                    .frame(width: geo.size.width * confidenceValue)
+                            }
+                        }
+                        .frame(height: 2)
+                    }
+
+                    Spacer(minLength: 8)
+
                     if let venue = pick.venue, !venue.isEmpty {
-                        HStack(spacing: 5) {
+                        HStack(spacing: 4) {
                             Image(systemName: "mappin.circle.fill")
-                                .font(.system(size: 10.5))
+                                .font(.system(size: 11))
                             Text(venue)
-                                .font(.system(size: 11.5, weight: .medium))
+                                .font(.system(size: 12, weight: .medium))
                                 .lineLimit(1)
                         }
                         .foregroundStyle(.white.opacity(0.42))
                     }
-
-                    Spacer(minLength: 4)
-
-                    if !pickParts.odds.isEmpty {
-                        HStack(spacing: 4) {
-                            if let book = bestBookName {
-                                Text(book)
-                                    .font(.system(size: 10, weight: .medium))
-                                    .foregroundStyle(.white.opacity(0.35))
-                            }
-                            Text(pickParts.odds)
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundStyle(Color(hex: "#D6C392"))
-                        }
-                    }
                 }
                 .padding(.horizontal, 10)
-                .padding(.top, 5)
-
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                            .fill(Color(hex: "#1A1A1E"))
-                        RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                            .fill(accentGradient)
-                            .frame(width: geo.size.width * confidenceValue)
-                    }
-                }
-                .frame(height: 2)
-                .padding(.horizontal, 10)
-                .padding(.top, 5)
-                .padding(.bottom, 7)
+                .padding(.top, 6)
+                .padding(.bottom, 6)
             }
             .opacity(gameResult != nil ? 0.72 : 1.0)
 
@@ -5048,9 +4980,9 @@ struct CompactPickRow: View {
     private func tag(text: String, tint: Color, icon: String) -> some View {
         HStack(spacing: 3.5) {
             Image(systemName: icon)
-                .font(.system(size: 8.5, weight: .bold))
+                .font(.system(size: 11, weight: .bold))
             Text(text)
-                .font(.system(size: 9.5, weight: .bold))
+                .font(.system(size: 12, weight: .bold))
                 .lineLimit(1)
         }
         .foregroundStyle(tint)
@@ -5059,14 +4991,10 @@ struct CompactPickRow: View {
     }
 
     private func timeTag(text: String) -> some View {
-        HStack(spacing: 3.5) {
-            Image(systemName: "clock")
-                .font(.system(size: 8.5, weight: .semibold))
-            Text(text)
-                .font(.system(size: 9.5, weight: .semibold))
-                .lineLimit(1)
-        }
-        .foregroundStyle(GaryColors.gold.opacity(0.95))
+        Text(text)
+            .font(.system(size: 13.5, weight: .semibold))
+            .lineLimit(1)
+        .foregroundStyle(.white.opacity(0.63))
         .padding(.horizontal, 7)
         .padding(.vertical, 3.5)
     }
@@ -5300,12 +5228,12 @@ struct PickDetailPopup: View {
                         .padding(16)
                         .background(
                             ZStack {
-                                RoundedRectangle(cornerRadius: 4)
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
                                     .fill(Color(hex: "#141210"))
-                                RoundedRectangle(cornerRadius: 4)
-                                    .fill(GaryColors.gold.opacity(0.035))
-                                RoundedRectangle(cornerRadius: 4)
-                                    .stroke(GaryColors.gold.opacity(0.15), lineWidth: 0.5)
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(accentColor.opacity(0.03))
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(accentColor.opacity(0.6), lineWidth: 1.2)
                             }
                         )
 

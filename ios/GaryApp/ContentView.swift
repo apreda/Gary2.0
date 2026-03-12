@@ -41,8 +41,8 @@ struct ContentView: View {
                     }
                 }
 
-                // Settings button — floating top right on every page (hidden when pick detail is open)
-                if !pickDetailState.isShowing {
+                // Settings button — floating top right on every page (hidden on Billfold which has its own, and when pick detail is open)
+                if !pickDetailState.isShowing && selectedTab != 3 {
                     SettingsMenuButton(showingSettings: $showingSettings)
                         .padding(.top, 4)
                         .padding(.trailing, 16)
