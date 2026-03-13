@@ -2,19 +2,21 @@ import Foundation
 import SwiftUI
 
 // MARK: - Smart Cache for Performance
-// Caches data for 60 seconds to make tab switching instant
+// Default: 60s for picks (need to stay fresh)
+// Billfold: 4 hours — results update once daily, no need to re-fetch
 // Pull-to-refresh always bypasses cache for fresh data
-// Manual Supabase edits appear after 60s OR on pull-to-refresh
 
 actor APICache {
     static let shared = APICache()
 
     private var cache: [String: (data: Any, timestamp: Date)] = [:]
-    private let ttl: TimeInterval = 60 // 60 second cache
+    private let ttl: TimeInterval = 60 // 60 second default
+    static let billfoldTTL: TimeInterval = 14400 // 4 hours for billfold data
 
-    func get<T>(_ key: String) -> T? {
+    func get<T>(_ key: String, ttl override: TimeInterval? = nil) -> T? {
+        let effectiveTTL = override ?? ttl
         guard let entry = cache[key],
-              Date().timeIntervalSince(entry.timestamp) < ttl,
+              Date().timeIntervalSince(entry.timestamp) < effectiveTTL,
               let data = entry.data as? T else {
             return nil
         }
@@ -475,11 +477,12 @@ enum SupabaseAPI {
     
     /// Fetch all game results (game_results + nfl_results combined)
     /// - Parameter forceRefresh: Set to true for pull-to-refresh to bypass cache
-    static func fetchAllGameResults(since dateFilter: String?, forceRefresh: Bool = false) async throws -> [GameResult] {
+    static func fetchAllGameResults(since dateFilter: String?, forceRefresh: Bool = false, billfold: Bool = false) async throws -> [GameResult] {
         let cacheKey = "gameResults_\(dateFilter ?? "all")"
+        let cacheTTL: TimeInterval? = billfold ? APICache.billfoldTTL : nil
 
         // Check cache first (unless forcing refresh)
-        if !forceRefresh, let cached: [GameResult] = await APICache.shared.get(cacheKey) {
+        if !forceRefresh, let cached: [GameResult] = await APICache.shared.get(cacheKey, ttl: cacheTTL) {
             return cached
         }
 
@@ -499,13 +502,35 @@ enum SupabaseAPI {
         return result
     }
     
+    /// Fetch all daily_picks rows (for TOPD matching)
+    static func fetchAllDailyPicksRaw(forceRefresh: Bool = false, billfold: Bool = false) async throws -> [DailyPicksRow] {
+        let cacheKey = "dailyPicksRaw"
+        let cacheTTL: TimeInterval? = billfold ? APICache.billfoldTTL : nil
+
+        if !forceRefresh, let cached: [DailyPicksRow] = await APICache.shared.get(cacheKey, ttl: cacheTTL) {
+            return cached
+        }
+
+        let url = buildURL(table: "daily_picks", query: [
+            URLQueryItem(name: "select", value: "picks::text,date"),
+            URLQueryItem(name: "order", value: "date.desc"),
+            URLQueryItem(name: "limit", value: "500")
+        ])
+        let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return [] }
+        let result = (try? JSONDecoder().decode([DailyPicksRow].self, from: data)) ?? []
+        await APICache.shared.set(cacheKey, value: result)
+        return result
+    }
+
     /// Fetch prop results with optional date filter
     /// - Parameter forceRefresh: Set to true for pull-to-refresh to bypass cache
-    static func fetchPropResults(since dateFilter: String?, forceRefresh: Bool = false) async throws -> [PropResult] {
+    static func fetchPropResults(since dateFilter: String?, forceRefresh: Bool = false, billfold: Bool = false) async throws -> [PropResult] {
         let cacheKey = "propResults_\(dateFilter ?? "all")"
+        let cacheTTL: TimeInterval? = billfold ? APICache.billfoldTTL : nil
 
         // Check cache first (unless forcing refresh)
-        if !forceRefresh, let cached: [PropResult] = await APICache.shared.get(cacheKey) {
+        if !forceRefresh, let cached: [PropResult] = await APICache.shared.get(cacheKey, ttl: cacheTTL) {
             return cached
         }
 
@@ -625,7 +650,7 @@ enum SupabaseAPI {
     
     // MARK: - Parsing Helpers
     
-    private static func parsePicksRow(_ picks: PicksValue<GaryPick>?) -> [GaryPick] {
+    static func parsePicksRow(_ picks: PicksValue<GaryPick>?) -> [GaryPick] {
         guard let picks = picks else { return [] }
         
         if let arr = picks.asArray { return arr }

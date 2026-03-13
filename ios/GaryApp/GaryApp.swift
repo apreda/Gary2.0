@@ -9,8 +9,10 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
-        // Configure Firebase
-        FirebaseApp.configure()
+        // Configure Firebase (guard prevents crash on double-configure in simulator)
+        if FirebaseApp.app() == nil {
+            FirebaseApp.configure()
+        }
         
         // Set messaging delegate
         Messaging.messaging().delegate = self
@@ -108,15 +110,18 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
 @main
 struct GaryApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @StateObject private var authManager = AuthManager.shared
     @AppStorage("hasEntered") private var hasEntered: Bool = false
-    
+
     var body: some Scene {
         WindowGroup {
             Group {
                 if hasEntered {
                     ContentView()
+                        .environmentObject(authManager)
                 } else {
                     AccessView()
+                        .environmentObject(authManager)
                 }
             }
             .preferredColorScheme(.dark)

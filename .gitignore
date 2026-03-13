@@ -58,3 +58,11 @@ Thumbs.db
 firebase-service-account.json
 **/firebase-service-account.json
 *.pem
+
+# Claude Code working directories
+.claude/deriveddata*/
+.claude/worktrees/
+
+# iOS build artifacts
+ios/GaryApp/build/
+ios/build/
