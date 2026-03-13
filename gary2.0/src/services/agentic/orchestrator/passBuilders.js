@@ -146,12 +146,14 @@ function buildNcaabPass1(scoutReport, today, homeTeam, awayTeam, spread) {
   const absSpread = Math.abs(spread || 0);
 
   let spreadSizeBlock = '';
-  if (absSpread >= 10) {
-    spreadSizeBlock = `\n\n**TONIGHT'S SPREAD SIZE: LARGE (${absSpread} points)**\nAt this spread size, the handicap is large — the market sees significant separation between these teams today. Large spreads are influenced by recent results, public perception, injury news, streaks, home-court narratives, and more — as much as by the underlying matchup data. Season records and team reputation are already baked into the spread.`;
-  } else if (absSpread < 5 && absSpread > 0) {
-    spreadSizeBlock = `\n\n**TONIGHT'S SPREAD SIZE: CLOSE (${absSpread} points)**\nAt this spread size, the handicap is small — the market sees these teams as closely matched or within a few points of each other for this game. The spread still accounts for all the same factors — narratives, rest, injuries, public perception, and more. The market doesn't see much separation between these two teams today.`;
+  if (absSpread >= 15) {
+    spreadSizeBlock = `\n\n**TONIGHT'S SPREAD SIZE: BLOWOUT TERRITORY (${absSpread} points)**\nSpreads this large are rare in tournament play. The market sees a massive quality gap between these teams — seeding, talent, and every available metric point the same direction. Even here, upsets happen in the tournament. The public may be piling on the favorite or actively picking the upset — both sides move this number. The seed gap and season-long metrics are already baked into this spread.`;
+  } else if (absSpread >= 10) {
+    spreadSizeBlock = `\n\n**TONIGHT'S SPREAD SIZE: LARGE (${absSpread} points)**\nA double-digit spread in the tournament — the market sees substantial separation. Tournament spreads this large attract upset-picking public money, which can move the line toward the lower seed. The seed gap, season records, and team reputation are already in this number. Single elimination compresses margins — investigate whether the gap is as wide as the number suggests.`;
   } else if (absSpread >= 5) {
-    spreadSizeBlock = `\n\n**TONIGHT'S SPREAD SIZE: MEDIUM (${absSpread} points)**\nAt this spread size, the handicap reflects clear separation between the teams — the market sees one side as meaningfully better for this game. The spread accounts for narratives, rest, injuries, public perception, and more. Season records, reputation, and situational context are already baked into the spread.`;
+    spreadSizeBlock = `\n\n**TONIGHT'S SPREAD SIZE: MEDIUM (${absSpread} points)**\nThe market sees clear separation between these teams. In the tournament, this is a meaningful number — single elimination, neutral courts, and heightened intensity compress margins. The seed gap and public perception are already baked into this spread. Investigate whether the matchup data supports this level of separation.`;
+  } else if (absSpread > 0) {
+    spreadSizeBlock = `\n\n**TONIGHT'S SPREAD SIZE: CLOSE (${absSpread} points)**\nA tight spread — the market sees these teams as near-even for this game. Tournament games are naturally tighter, and a close number means the market sees a real matchup regardless of seed gap. Public money and narrative can still be disproportionately on one side even in a close game.`;
   }
 
   return `
@@ -176,20 +178,18 @@ ${scoutReport}
 The spread is not a prediction — it is a price. Lines are shaped by recent performance, reputation, rankings, and public perception. Transient factors — home court, injuries, motivation, tournament context — can shift a line away from where the underlying matchup data says it should be.
 
 **NARRATIVE FACTORS AND THE PRICE:**
-Narrative factors — AP rankings, program reputation, home court advantage, milestone occasions, rivalry history, revenge spots, tournament implications, bubble pressure, upset storylines, conference familiarity, head-to-head results — shape the price. They drive public betting action and move the line in one direction or another, giving one side a bigger number and the other side a smaller number than the matchup data alone would produce.
+Narrative factors — seeds, program reputation, upset storylines, cinderella runs, bracket position, historical tournament performance, star power, team brand, rest vs rust — shape tournament prices. They drive public betting action and move the line in one direction or another, giving one side a bigger number and the other side a smaller number than the matchup data alone would produce.
 
-In college basketball, these narratives are especially loud. A ranked road favorite draws heavy public money that inflates their line. An unranked home underdog in a rivalry spot draws sharp attention that tightens it. Bubble teams and teams playing for seeding carry emotional weight that moves the number. Common opponent results and transitive logic ("they beat the team that beat you") move public perception but do not predict how two teams will match up tonight.
+In the tournament, these narratives are especially loud. The public actively tries to pick upsets — sometimes putting so much action on a lower seed that the "underdog" becomes the public side. Seeds and rankings drive public action, but seeds are based on season-long body of work that may or may not reflect how a team is playing right now. Cinderella storylines, defending champion narratives, and breakout star performances from earlier rounds all move public money and move lines.
 
 These factors are part of the number. They can be part of your reasoning — not as evidence that a team will play better or worse, but as context for why each side is getting the number they're getting. A narrative that has moved the line can work in favor of either side of the spread: the favorite may be laying less than expected, or the underdog may be getting more than expected, because of the narratives baked into tonight's price.
 
 When narratives appear in your rationale, use them to explain why the number creates value for the side you're taking — not as standalone reasons for why a team will or won't cover.
 
-In conference play, head-to-head results from earlier in the season are especially loud. The first meeting's result drives public expectation for the rematch and moves the line — that result is already in tonight's number.
-
 **DESCRIPTIVE vs CAUSAL:**
 - **Descriptive factors** (records, rankings, standings, streaks, reputation) explain WHY the line is set where it is. They are already IN the price.
 - **Causal factors** (how each team plays, matchup dynamics, situational context) reveal the actual matchup beneath the price.
-- **The SPOT** (venue, home court, tournament context, motivation) is factored into the price — investigate whether the market adjustment matches the underlying matchup evidence for tonight.
+- **The SPOT** (neutral site, regional proximity, tournament context, single elimination) is factored into the price — investigate whether the market adjustment matches the underlying matchup evidence for tonight.
 
 When you cite a record, ranking, or situation — ask yourself: "Is this describing what happened, or explaining what will happen tonight?"${spreadSizeBlock}
 
@@ -233,7 +233,7 @@ function buildNhlPass1(scoutReport, today, homeTeam, awayTeam, spread) {
   // NHL puck lines are almost always 1.5 — the ML price is what varies
   // We can't derive ML odds from spread alone, but we frame the evaluation
   if (absSpread > 0) {
-    mlPriceBlock = `\n\n**TONIGHT'S LINE:** The puck line is set at ${absSpread}. The moneyline price determines whether ML or puck line is the right bet type for the favorite. Investigate both the ML price and puck line odds in the scout report before choosing a side and bet type.`;
+    mlPriceBlock = `\n\n**TONIGHT'S LINE:** The puck line is set at ${absSpread}. Investigate both the ML price and puck line odds in the scout report.`;
   }
 
   return `
@@ -260,9 +260,6 @@ The moneyline and puck line are not predictions — they are prices. Lines are s
 **MONEYLINE vs PUCK LINE:**
 - **Moneyline (ML):** Pick the winner outright. Includes OT and shootouts.
 - **Puck Line (PL):** Standard hockey spread (usually -1.5 / +1.5). Favorite must win by 2+ goals. Underdog covers if they win or lose by exactly 1. Puck line does NOT include shootouts — regulation + OT only.
-- **Favorite at -110 to -150 ML?** → ML is acceptable. The price is reasonable for a straight win.
-- **Favorite worse than -150 ML?** → The puck line (-1.5) gives better odds on the same team. The ML juice is expensive.
-- **Underdog?** → ML is always an option at plus-odds.
 
 **NARRATIVE FACTORS AND THE PRICE:**
 Narrative factors — winning streaks, goaltender reputation, back-to-back fatigue, rivalry history, revenge spots, playoff race context, trade deadline acquisitions, returning players, head-to-head recent results — move the line. They shift the price away from where the matchup data alone would set it. The market treats rest and confirmed starters as signal — but a rested team can be rusty, and a confirmed starter's recent form may diverge from their season baseline.
@@ -451,7 +448,7 @@ export function buildPass25Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', spo
   const awaySpread = (-spread) >= 0 ? `+${(-spread).toFixed(1)}` : (-spread).toFixed(1);
   let lineContext;
   if (isNHL) {
-    lineContext = `Line context: ${homeTeam} (home) vs ${awayTeam} (away). Choose ML or Puck Line — if picking the favorite and their ML is worse than -150, take the puck line for better value.`;
+    lineContext = `Line context: ${homeTeam} (home) vs ${awayTeam} (away). Choose ML or Puck Line based on your investigation.`;
   } else if (isMLB) {
     lineContext = `Line context: ${homeTeam} (home) vs ${awayTeam} (away) moneyline.`;
   } else {
@@ -622,7 +619,7 @@ ${recordsReminder}
 
 **BET TYPE:** You have two options — SPREAD (picking a side to cover) or MONEYLINE (picking a team to win outright). If you believe a team wins, ML often pays better than the spread. Choose the bet type that matches your conviction.
 
-**ML ODDS LIMIT:** You may NOT pick a favorite on the moneyline if the odds are -200 or worse (more negative). Heavy favorites (-250, -500, -2000, etc.) MUST be picked on the spread instead. Underdog ML is always allowed at any odds.
+**ML VALUE AWARENESS:** Heavy ML favorites return less value per dollar risked. A -200 favorite needs to win 67% of the time just to break even. When the favorite's ML price is steep, consider whether the spread offers better value. Underdog ML is always an option at plus-odds.
 
 **SPREAD AWARENESS:**
 - Favorites (-X): "Will this team win by MORE than X points?"

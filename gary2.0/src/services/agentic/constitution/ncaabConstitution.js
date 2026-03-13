@@ -33,13 +33,19 @@ export const NCAAB_CONSTITUTION = {
   pass1Context: `
 ### NCAAB AWARENESS
 
-- Home court advantage in college basketball is real — younger rosters are more affected by hostile student sections, travel fatigue, and playing in unfamiliar venues than professional athletes
 - The performance gap between a college team's best and worst game is wide — consistency is the exception, not the rule
-- Conference schedules create familiarity that doesn't exist in non-conference play — teams see the same opponents, schemes, and personnel multiple times per season
-- Late-season motivation is a real force — teams fighting for postseason positioning play differently than teams with nothing at stake
 - Tempo in college basketball is dictated by scheme, not talent — a slow-paced team can force a fast-paced team into an unfamiliar rhythm and vice versa
-- Non-conference records can be misleading — the quality of opponents varies dramatically and inflated records often correct during conference play
 - Coaching in college basketball has more impact than at the professional level — preparation time is longer, schematic adjustments matter more, and the gap between elite and average coaching staffs is wider than in the pros
+
+### TOURNAMENT AWARENESS
+
+- Tournament games are played on neutral courts — home court advantage is removed from the equation
+- Single elimination changes everything — variance is at its peak
+- Coaching experience in tournament settings — preparation, in-game adjustments, and managing pressure all carry more weight in a one-and-done format
+- Upsets are a regular part of tournament play — any team can make a run, and the tournament is a brand new season
+- Season stats, records, and rankings are already baked into the seeding and the spread
+- The public actively tries to pick upsets during the tournament — this moves lines, sometimes putting so much action on a lower seed that the "underdog" becomes the public side
+- Cinderella runs happen every tournament — and they come from low seeds in major conferences just as often as mid-majors
 
 ### NCAAB INJURY LABELS (READ FROM SCOUT REPORT)
 
@@ -50,12 +56,21 @@ Injury duration tags are assigned by the NCAAB scout-report pipeline and are spo
 
 Use the exact tag shown in the scout report for this game.
 
-### THE SPREAD
-- Spreads in NCAAB are heavily influenced by home court, with the home team typically receiving a built-in advantage in the number
-- Public betting volume in college basketball is heavily concentrated on ranked teams and nationally televised games — lines for those games reflect different market dynamics than under-the-radar conference matchups
+### REST IN TOURNAMENT PLAY
+- Conference tournament rest differentials (double-byes, back-to-backs) are the most visible scheduling factor in college basketball — the market prices them aggressively and the line already reflects any rest advantage
+- Rest is a descriptive factor: it explains why the spread is set where it is, the same way records and rankings do
+- The market treats rest as a positive — but rest can also mean rust
+
+### INJURIES IN TOURNAMENT PLAY
+- Only FRESH injuries (new since the last game) represent information the market may not have fully absorbed
+- Any absence longer than a few games is already in the team's current stats and in the line — it is the team's baseline, not new information
 - Injuries and lineup changes move college lines more dramatically because roster depth is thinner
-- Conference games and non-conference games are priced differently — the market has more data and sharper numbers in conference play because the opponents are known quantities
- 
+
+### THE SPREAD IN TOURNAMENT PLAY
+- Tournament games are tighter by nature — spreads adjust for this, but the adjustment can be too much or too little in either direction
+- Season stats, efficiency ratings, and records are already baked into the seeding and the spread — citing them confirms what the market already knows
+- The volume of public attention during the tournament means lines can reflect who the public wants to bet more than the actual quality gap between the teams
+
 **NCAAB GTD NOTE:**
 - GTD means the player's availability is UNCERTAIN — they may or may not play
 - A GTD after weeks/months of absence could signal a RETURN — a different situation than a day-to-day minor tweak

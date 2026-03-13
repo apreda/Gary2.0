@@ -32,49 +32,49 @@ When a key player returns from absence, the line moves. A return after a longer 
 }
 
 export function getNcaabSpreadFactors() {
-  return `### 1. HOME COURT EFFECTS
-Home court is a significant narrative in NCAAB — bettors naturally factor it into every spread, and lines reflect that. The size of the adjustment varies by venue and matchup.
+  return `### 1. SEEDING & PUBLIC PERCEPTION
+Seeds and rankings drive public action in the tournament. The spread reflects seed expectations — but seeds are based on season-long body of work that may or may not reflect how a team is playing right now. The public bets seeds, names, and storylines.
 
-### 2. RANKINGS & REPUTATION
-AP rankings and program names drive public betting action and can inflate spreads. A team's poll ranking reflects reputation and record — not necessarily how they match up tonight.
+### 2. TOURNAMENT SPREAD SIZING
+Tournament games are tighter by nature — the single-elimination format, neutral site, and heightened intensity compress margins. Spreads adjust for this, but the adjustment can be too much or too little in either direction. A tight spread on a game between uneven teams and a large spread in a matchup closer than the seeds suggest are both opportunities that cut both ways.
 
-### 3. CONFERENCE FAMILIARITY
-Conference opponents play twice a season and know each other. The familiarity gap between conference and non-conference matchups is real — conference games tend to play tighter.
+### 3. CINDERELLA RUNS & THE UPSET MARKET
+Any team can make a run in the tournament — low seeds from major conferences and mid-majors alike. The public actively tries to pick upsets, which moves lines. Sometimes so much public money lands on a lower seed that the line shifts to even or favors the "underdog." The team the public treats as the upset special is sometimes the public side.
 
-### 4. STRENGTH OF SCHEDULE
-A strong record against a weak schedule and a strong record against elite competition produce very different teams. The line doesn't always separate the record from the quality of competition behind it. When mid-major teams face power conference opponents, the limited cross-conference data makes the spread more of a guess than a precise reflection of the actual gap between the teams.
+### 4. STRENGTH OF SCHEDULE & CONFERENCE QUALITY
+Season records and efficiency ratings are already baked into the seeding and the spread. The question is whether those numbers translate to this specific tournament matchup — a team built against weaker competition faces a different test than a team battle-tested in a power conference.
 
 ### 5. COACHING MATCHUP
-Coaching reputation and program name recognition move lines in college basketball. This is a narrative factor — it can move the line in either direction without being a true reflection of the quality gap between the two teams that year.
+Tournament coaching — preparation, in-game adjustments, timeout usage, and managing pressure — carries more weight in a one-and-done format. Some coaches consistently outperform their seed in tournament play.
 
 ### 6. ROSTER DEPTH & EXPERIENCE
-College rosters are thin — one key absence hits harder than in the pros. Freshman-heavy teams are volatile, and transfer portal turnover means this season's team may look nothing like last year's.
+College rosters are thin — one key absence hits harder than in the pros. Tournament experience matters — teams with players who have been in this environment before can handle the intensity differently than teams here for the first time.
 
-### 7. VARIANCE & UPSETS
-Upsets are a regular part of NCAAB — thin rosters, tournament pressure, and single-elimination formats all contribute. The spread is a price shaped by public perception, narratives, and betting action — outcomes are volatile game to game.`;
+### 7. NEUTRAL SITE & VARIANCE
+All tournament games are on neutral courts. The single-elimination format means variance is at its peak — outcomes are volatile game to game, and the spread is a price shaped by public perception as much as the actual matchup.`;
 }
 
 export function getNhlSpreadFactors() {
-  return `### 1. GOALTENDING & STARTER CONFIRMATION
-The confirmed starting goalie is the single biggest factor that moves an NHL line. A hot goalie streak or a backup surprise start shifts the price immediately.
+  return `### 1. POSSESSION & TERRITORIAL CONTROL
+5-on-5 possession metrics (Corsi, Fenwick, expected goals) reveal how teams control play at even strength. A team can win games while losing the possession battle — but the process tells a different story than the results.
 
-### 2. ML vs PUCK LINE VALUE
-A favorite's moneyline price determines whether ML or puck line (-1.5) is the right bet. At -150 or better, ML is fine. Worse than -150, the puck line gives better odds on the same team — but they need to win by 2+ goals. Investigate margin of victory patterns.
+### 2. SPECIAL TEAMS MATCHUP
+Power play and penalty kill operate independently of 5-on-5 dynamics. A team's special teams profile can shift game outcomes on its own — investigate PP% and PK% for both sides and how they interact.
 
-### 3. REST & SCHEDULE
-Back-to-backs and travel are the loudest narrative in hockey — the line always adjusts for them. The size of the adjustment varies.
+### 3. GOALTENDING & STARTER CONFIRMATION
+The confirmed starting goalie and their current form are significant line-movers. A backup surprise start, a hot streak, or a cold stretch all shift the price. Recent form can diverge from the season baseline.
 
 ### 4. STREAKS & FORM
-Hockey streaks can be goalie-driven, special-teams-driven, or process-driven — the market doesn't always distinguish between them.
+Hockey streaks can be driven by goaltending, special teams, shooting variance, or genuine process improvement. The market reacts to the streak — investigate what's underneath it.
 
-### 5. INJURY IMPACT ON PRICE
-Established absences are already in the team's stats and the line. FRESH/SHORT-TERM absences may not be fully reflected in the price yet.
+### 5. REST & SCHEDULE
+Back-to-backs, travel, and compressed schedules affect NHL pricing. The line adjusts for these — investigate whether the adjustment matches the actual impact on each team's roster and goaltending deployment.
 
-### 6. SPECIAL TEAMS MATCHUP
-Power play and penalty kill create game-within-a-game dynamics. Special teams performance operates independently of 5v5 play.
+### 6. INJURY IMPACT ON PRICE
+Established absences are already in the team's stats and the line. FRESH/SHORT-TERM absences may not be fully reflected in the price yet. Depth matters more in hockey than casual observers assume.
 
-### 7. PUCK LUCK & REGRESSION
-Hockey has more single-game variance than any major sport. Teams can sustain shooting percentages, save percentages, and close-game records that the underlying process doesn't support.`;
+### 7. VARIANCE & CLOSE-GAME RECORDS
+Hockey has more single-game variance than any major sport. Teams can sustain shooting percentages, save percentages, and close-game records that the underlying process doesn't support. PDO (shooting% + save%) shows where results and process diverge.`;
 }
 
 export function getNflSpreadFactors() {
