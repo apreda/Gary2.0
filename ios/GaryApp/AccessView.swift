@@ -4,6 +4,7 @@ import SwiftUI
 
 struct AccessView: View {
     @State private var showDisclaimer = true
+    @State private var showSignIn = false
     @AppStorage("hasEntered") private var hasEntered: Bool = false
     @AppStorage("selectedTab") private var selectedTab: Int = 0
     @State private var animateIn = false
@@ -17,7 +18,7 @@ struct AccessView: View {
                 
                 // Logo - no glow, matches home page
                 VStack(spacing: 0) {
-                    Image("GaryCoin") // Transparent coin image, matches other pages
+                    Image("GaryIconBG")
                         .resizable()
                         .scaledToFit()
                         .frame(width: 260, height: 260)
@@ -118,6 +119,19 @@ struct AccessView: View {
                         .foregroundStyle(GaryColors.gold)
                         .padding(.vertical, 12)
                     }
+
+                    Button {
+                        showSignIn = true
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "person.circle")
+                                .font(.caption)
+                            Text("Sign In")
+                                .font(.caption.bold())
+                        }
+                        .foregroundStyle(.secondary)
+                        .padding(.vertical, 4)
+                    }
                 }
                 .padding(.horizontal, 24)
                 .opacity(animateIn ? 1 : 0)
@@ -134,6 +148,9 @@ struct AccessView: View {
         }
         .sheet(isPresented: $showDisclaimer) {
             DisclaimerSheet(isPresented: $showDisclaimer)
+        }
+        .sheet(isPresented: $showSignIn) {
+            AuthView()
         }
     }
 }

@@ -37,6 +37,9 @@
 		AA110005AAAA000500000005 /* JetBrainsMono-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = BB220005BBBB000500000005 /* JetBrainsMono-Regular.ttf */; };
 		AA110006AAAA000600000006 /* JetBrainsMono-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = BB220006BBBB000600000006 /* JetBrainsMono-Bold.ttf */; };
 		AA110007AAAA000700000007 /* BracketView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB220007BBBB000700000007 /* BracketView.swift */; };
+		DD440008DDDD000800000008 /* AuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC330008CCCC000800000008 /* AuthManager.swift */; };
+		DD440009DDDD000900000009 /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC330009CCCC000900000009 /* AuthView.swift */; };
+		DD44000ADDDD000A0000000A /* AuthenticationServices.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CC33000ACCCC000A0000000A /* AuthenticationServices.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -72,6 +75,9 @@
 		BB220005BBBB000500000005 /* JetBrainsMono-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "JetBrainsMono-Regular.ttf"; sourceTree = "<group>"; };
 		BB220006BBBB000600000006 /* JetBrainsMono-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "JetBrainsMono-Bold.ttf"; sourceTree = "<group>"; };
 		BB220007BBBB000700000007 /* BracketView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BracketView.swift; sourceTree = "<group>"; };
+		CC330008CCCC000800000008 /* AuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthManager.swift; sourceTree = "<group>"; };
+		CC330009CCCC000900000009 /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
+		CC33000ACCCC000A0000000A /* AuthenticationServices.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AuthenticationServices.framework; path = System/Library/Frameworks/AuthenticationServices.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -80,6 +86,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				44FB25CBEB7324D5CDF9CAB7 /* FirebaseMessaging in Frameworks */,
+				DD44000ADDDD000A0000000A /* AuthenticationServices.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -98,6 +105,8 @@
 			isa = PBXGroup;
 			children = (
 				04419532DA2B9AE61A7A7B47 /* AccessView.swift */,
+				CC330008CCCC000800000008 /* AuthManager.swift */,
+				CC330009CCCC000900000009 /* AuthView.swift */,
 				BB220007BBBB000700000007 /* BracketView.swift */,
 				4D7626B616BEDAF94E8687F9 /* AppStoreMetadata.md */,
 				14B79AC926AD34DD865A8E0D /* Assets.xcassets */,
@@ -245,6 +254,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				11082D2682BC0FFD484F133E /* AccessView.swift in Sources */,
+				DD440008DDDD000800000008 /* AuthManager.swift in Sources */,
+				DD440009DDDD000900000009 /* AuthView.swift in Sources */,
 				AA110007AAAA000700000007 /* BracketView.swift in Sources */,
 				0D809CA674D78F140C6117B8 /* ChangelogView.swift in Sources */,
 				CA682CB250F6A7F4462A70B2 /* ContentView.swift in Sources */,
