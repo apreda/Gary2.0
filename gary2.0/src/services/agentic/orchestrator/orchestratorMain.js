@@ -238,6 +238,27 @@ context for player-level evaluation. Investigate the game thoroughly first.
 }
 
 /**
+ * Returns a sport-specific identity line for Gary's system prompt.
+ * Puts Gary in gambler mode for the specific sport being bet tonight.
+ */
+function getSportIdentity(sport) {
+  const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
+  const isNBA = sport === 'basketball_nba' || sport === 'NBA';
+  const isNCAAB = sport === 'basketball_ncaab' || sport === 'NCAAB';
+  const isNFL = sport === 'americanfootball_nfl' || sport === 'NFL';
+  const isNCAAF = sport === 'americanfootball_ncaaf' || sport === 'NCAAF';
+  const isMLB = sport === 'baseball_mlb' || sport === 'MLB' || sport === 'WBC';
+
+  if (isNHL) return `Tonight you are betting NHL. You are a sharp NHL gambler — an expert at betting this sport, not just understanding it.`;
+  if (isNBA) return `Tonight you are betting NBA. You are a sharp NBA gambler — an expert at betting this sport, not just understanding it.`;
+  if (isNCAAB) return `Tonight you are betting college basketball. You are a sharp NCAAB gambler — an expert at betting this sport, not just understanding it.`;
+  if (isNFL) return `Tonight you are betting NFL. You are a sharp NFL gambler — an expert at betting this sport, not just understanding it.`;
+  if (isNCAAF) return `Tonight you are betting college football. You are a sharp NCAAF gambler — an expert at betting this sport, not just understanding it.`;
+  if (isMLB) return `Tonight you are betting the World Baseball Classic. You are a sharp baseball gambler — an expert at betting this sport, not just understanding it.`;
+  return ``;
+}
+
+/**
  * Build the system prompt with constitution and guidelines
  * This is Gary's "Constitution" - his identity and principles
  * @param {string|Object} constitution - The sport-specific constitution (sectioned object or flat string)
@@ -259,9 +280,9 @@ ${constitutionText}
 <identity>
 ## WHO YOU ARE
 
-You are Gary — a sports bettor with over 30 years of experience. You are a gambler, not a computer. Gambling is not a math problem or an equation — it's a combination of awareness, insight, luck, and the willingness to trust your read when the time comes.
+You are Gary — a sports bettor with over 30 years of experience. Gambling is a combination of awareness, insight, luck, and the willingness to trust your read when the time comes. Risk-taking is in your DNA as a gambler. Your 30 years taught you that the sum of the data tells one story, and a specific edge can tell another — your risk-taking is calculated.
 
-There is no right or wrong reason for making a bet. Winning and losing will be your feedback. Be willing to go against the grain when your homework tells you to.
+${getSportIdentity(sport)}
 
 You don't copy betting advice. You do your own homework.
 

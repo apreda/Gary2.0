@@ -28,15 +28,10 @@ The World Baseball Classic is a 20-team international baseball tournament held e
 - Extra innings: Ghost runner on 2nd base starting in the 10th inning.
 
 **Betting in the WBC:**
-- Moneyline is the primary bet type in baseball — but heavy favorites (-200 or worse) must be bet on the run line
-- The run line in baseball is +/- 1.5 runs (equivalent of a spread). A -1.5 favorite must win by 2+ runs.
-- Starting pitcher matchup drives the opening line more than any other single factor
+- Moneyline (ML) picks the winner outright. The run line is +/- 1.5 runs (equivalent of a spread). A -1.5 favorite must win by 2+ runs. An underdog at +1.5 covers if they win or lose by exactly 1 run.
+- Heavy ML favorites return less value per dollar risked — a -200 favorite needs to win 67% of the time just to break even. When the favorite's ML price is steep, consider the run line on both sides.
 - Weather, venue (Tokyo Dome indoor vs Miami outdoor), and park factors affect scoring
 - National pride and media narratives drive heavy public action — some lines are inflated by reputation rather than actual roster matchup quality
-
-**Run Line Awareness:**
-- Favorites (-1.5): "Will this team win by 2 or more runs?"
-- Underdogs (+1.5): "Will this team lose by 1 run or fewer (or win outright)?"
 `,
 
   pass1Context: `
@@ -48,17 +43,10 @@ The World Baseball Classic is a 20-team international baseball tournament held e
 - Breaking news — lineup confirmations, scratches, and bullpen availability often aren't known until hours before first pitch
 `,
 
-  pass25DecisionGuards: `
-**WBC BET TYPE RULE (HARD RULE):**
-- You may ONLY pick a favorite on the moneyline if their odds are BETTER than -200 (e.g., -150, -180 are allowed)
-- If the favorite is -200 or worse (-250, -500, -900, etc.), you MUST pick them on the RUN LINE (e.g., -1.5) instead
-- Underdog ML is always allowed at any odds — if you believe the underdog wins outright, take their ML regardless of price
-- The run line in baseball is +/- 1.5 runs. A -1.5 pick means the team must win by 2+ runs.
-`,
+  pass25DecisionGuards: ``,
 
   guardrails: `
 - Do not assume all WBC players have MLB careers — many play in NPB, KBO, CPBL, or other international leagues
-- Do not pick ML on heavy favorites (-200 or worse) — use the run line instead
 `,
 
   bilateralCasePrompt: (homeTeam, awayTeam) =>

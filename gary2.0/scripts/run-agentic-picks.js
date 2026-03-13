@@ -28,16 +28,16 @@ const { geminiGroundingSearch } = await import('../src/services/agentic/scoutRep
 // Each entry: { away, home, spread, spreadOdds, ml }
 const WBC_MANUAL_GAMES = [
   {
-    away: 'Italy', home: 'Mexico',
-    spread: { away: 1.5, home: -1.5 },
-    spreadOdds: { away: 110, home: -135 },
-    ml: { away: 160, home: -200 },
+    away: 'South Korea', home: 'Dominican Republic',
+    spread: { away: 4.5, home: -4.5 },
+    spreadOdds: { away: 105, home: -130 },
+    ml: { away: 650, home: -1000 },
   },
   {
-    away: 'Dominican Republic', home: 'Venezuela',
-    spread: { away: -2.5, home: 2.5 },
-    spreadOdds: { away: 100, home: -120 },
-    ml: { away: -215, home: 170 },
+    away: 'Canada', home: 'United States',
+    spread: { away: 4.5, home: -4.5 },
+    spreadOdds: { away: 100, home: -125 },
+    ml: { away: 550, home: -900 },
   },
 ];
 
@@ -51,8 +51,8 @@ function getManualWbcGames() {
     away_team: g.away,
     home_team_data: { full_name: g.home, name: g.home, abbreviation: '' },
     away_team_data: { full_name: g.away, name: g.away, abbreviation: '' },
-    commence_time: new Date().toISOString(),
-    start_time: new Date().toISOString(),
+    commence_time: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(), // Future time — manual games always pass time filter
+    start_time: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(),
     status: 'Pre-Game',
     venue: 'WBC Venue',
     description: 'World Baseball Classic',
@@ -522,9 +522,6 @@ async function main() {
           // Default: Get TODAY's games in EST timezone
           const todayEST = now.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); // YYYY-MM-DD format
 
-          // BDL FIX: BDL often returns dates without proper times (midnight UTC = 7 PM EST yesterday)
-          // For NCAAB and NHL, trust the DATE from BDL and include ALL games for today
-          // Don't filter by "hasn't started yet" because BDL commence_times are unreliable
           const isNCAAB = config.key === 'basketball_ncaab';
           const isNHL = config.key === 'icehockey_nhl';
           const isMLB = config.key === 'baseball_mlb';
@@ -533,14 +530,8 @@ async function main() {
             const gameTime = new Date(g.commence_time);
             const gameDateEST = gameTime.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 
-            if (isNCAAB || isNHL || isMLB) {
-              // For NCAAB/NHL/MLB: Include ALL games for today's date, regardless of time
-              // WBC games were pre-filtered to non-completed during fetch
-              return gameDateEST === todayEST;
-            } else {
-              // For other sports: Game is today in EST AND hasn't started yet
-              return gameDateEST === todayEST && gameTime >= now;
-            }
+            // Game must be today in EST AND hasn't started yet
+            return gameDateEST === todayEST && gameTime >= now;
           }) || [];
 
           timeLabel = `today (${todayEST})`;
@@ -627,43 +618,10 @@ async function main() {
         console.log(`[${config.name}] FBS filter: ${beforeCount} → ${games.length} games (removed ${beforeCount - games.length} FCS games)`);
       }
 
-      // Conference filter: Power 6 during regular season, all conferences during tournament season
+      // NCAAB: Attach conference names to games for storage (no conference filtering — Gary picks all games)
       if (config.key === 'basketball_ncaab') {
         const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
 
-        // Tournament season = NCAA Tournament only (starts ~March 18)
-        // Conference tournaments (early March) still use Power 6 filter
-        const now = new Date();
-        const currentMonth = now.getMonth() + 1; // 1-indexed
-        const currentDay = now.getDate();
-        const isTournamentSeason = (currentMonth === 3 && currentDay >= 18) || currentMonth === 4;
-
-        if (isTournamentSeason) {
-          console.log(`[${config.name}] Tournament season — accepting all conferences`);
-        } else {
-          console.log(`[${config.name}] Regular season — filtering to Power 6 + MAC conferences`);
-        }
-
-        // Power 6 conference IDs from BDL (regular season filter)
-        const APPROVED_CONFERENCE_IDS = new Set([
-          1,   // ACC
-          4,   // AAC
-          6,   // Big 12
-          7,   // Big East
-          10,  // Big Ten
-          18,  // MAC
-          24,  // SEC
-        ]);
-
-        // Elite teams from non-approved conferences that should still get picks (regular season only)
-        const APPROVED_TEAM_NAMES = new Set([
-          'gonzagabulldogs',
-          'saintmarysgaels',
-          'daytonflyers',
-        ]);
-
-        // Conference ID to name mapping for logging and storage
-        // Complete mapping of all BDL conference IDs to human-readable names
         const CONF_ID_NAMES = {
           1: 'ACC', 2: 'America East', 3: 'Atlantic 10', 4: 'AAC', 5: 'Atlantic Sun',
           6: 'Big 12', 7: 'Big East', 8: 'Big Sky', 9: 'Big South',
@@ -675,20 +633,10 @@ async function main() {
           30: 'WAC', 31: 'WCC', 32: 'West Coast', 33: 'Pac-12'
         };
 
-        const isApprovedConference = (confId) => {
-          return APPROVED_CONFERENCE_IDS.has(confId);
-        };
-
         const getConfName = (confId) => {
           return CONF_ID_NAMES[confId] || `Conf-${confId}`;
         };
 
-        const beforeCount = games.length;
-        const filteredGames = [];
-        const skippedGames = [];
-        const skippedNonApproved = [];
-
-        // Pre-fetch all teams once to optimize lookup
         const ncaabTeams = await ballDontLieService.getTeams('basketball_ncaab');
         const normalize = (name) => name?.toLowerCase().replace(/[^a-z0-9]/g, '').trim();
 
@@ -698,23 +646,20 @@ async function main() {
           if (t.name) teamMap.set(normalize(t.name), t);
         });
 
-        // Helper to find team by name using the map
         const findTeam = (name) => {
           const norm = normalize(name);
           if (teamMap.has(norm)) return teamMap.get(norm);
-          // Try fuzzy match
           for (const [key, team] of teamMap.entries()) {
             if (key.includes(norm) || norm.includes(key)) return team;
           }
           return null;
         };
 
-        const season = ncaabSeason();
-        console.log(`[${config.name}] Pre-processing ${games.length} games...`);
+        const skippedGames = [];
+        console.log(`[${config.name}] Attaching conference data to ${games.length} games (all conferences accepted)...`);
 
         for (const game of games) {
           try {
-            // Get teams from pre-fetched map
             const homeTeam = findTeam(game.home_team);
             const awayTeam = findTeam(game.away_team);
 
@@ -723,46 +668,10 @@ async function main() {
               continue;
             }
 
-            const homeConfId = homeTeam.conference_id;
-            const awayConfId = awayTeam.conference_id;
-
-            // Attach conference names to game EARLY (before any validation)
-            // This ensures conference data is always available for storage
-            game.homeConference = getConfName(homeConfId);
-            game.awayConference = getConfName(awayConfId);
-
-            // During tournament season, accept all conferences
-            // During regular season, at least one team must be from Power 6 or named elite team
-            if (!isTournamentSeason) {
-              const homeApproved = isApprovedConference(homeConfId) || APPROVED_TEAM_NAMES.has(normalize(game.home_team));
-              const awayApproved = isApprovedConference(awayConfId) || APPROVED_TEAM_NAMES.has(normalize(game.away_team));
-
-              if (!homeApproved && !awayApproved) {
-                skippedNonApproved.push({
-                  game,
-                  reason: `Neither in Power 6: ${game.home_team} (${getConfName(homeConfId)}), ${game.away_team} (${getConfName(awayConfId)})`
-                });
-                continue;
-              }
-            }
-
-            filteredGames.push(game);
+            game.homeConference = getConfName(homeTeam.conference_id);
+            game.awayConference = getConfName(awayTeam.conference_id);
           } catch (err) {
             console.warn(`[${config.name}] Could not verify data for ${game.away_team} @ ${game.home_team}: ${err.message}`);
-            filteredGames.push(game);
-          }
-        }
-
-        games = filteredGames;
-
-        // Log conference filter results
-        if (skippedNonApproved.length > 0) {
-          console.log(`[${config.name}] 🚫 Skipped ${skippedNonApproved.length} games outside approved conferences:`);
-          skippedNonApproved.slice(0, 5).forEach(({ game, reason }) => {
-            console.log(`   - ${game.away_team} @ ${game.home_team}: ${reason}`);
-          });
-          if (skippedNonApproved.length > 5) {
-            console.log(`   ... and ${skippedNonApproved.length - 5} more`);
           }
         }
 
@@ -775,7 +684,7 @@ async function main() {
             console.log(`   ... and ${skippedGames.length - 5} more`);
           }
         }
-        console.log(`[${config.name}] Conference filter: ${beforeCount} → ${games.length} games${isTournamentSeason ? ' (tournament season — all accepted)' : ''}`);
+        console.log(`[${config.name}] Conference data attached to ${games.length} games (all conferences accepted)`);
         
       }
 

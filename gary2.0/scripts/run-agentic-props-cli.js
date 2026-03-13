@@ -50,7 +50,8 @@ export async function runAgenticPropsCli({
   }
 
   const args = parseArgs();
-  const limit = Number.parseInt(args.limit || process.env.AGENTIC_PROPS_LIMIT || String(limitDefault), 10);
+  const parsedLimit = Number.parseInt(args.limit || process.env.AGENTIC_PROPS_LIMIT || String(limitDefault), 10);
+  const limit = Number.isNaN(parsedLimit) ? limitDefault : parsedLimit;
   const nocache = args.nocache === '1' || args.nocache === 'true';
   const shouldStore = args.store !== '0' && args.store !== 'false'; // Default TRUE, pass --store=0 to skip
   const matchupFilter = args.matchup || null;

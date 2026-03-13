@@ -330,11 +330,11 @@ Work through each numbered factor below. Check off each one as you complete it. 
 **Tokens:** SHOTS_FOR, SHOTS_AGAINST, SHOT_METRICS
 - Shot volume vs shot quality — which matters more for this matchup?
 
-### 6. LUCK & REGRESSION
+### 6. VARIANCE & SUSTAINABILITY
 **Tokens:** PDO, LUCK_INDICATORS, SHOOTING_REGRESSION, CLOSE_GAME_RECORD, ONE_GOAL_GAMES, OVERTIME_RECORD
 - PDO (shooting% + save%) — check where each team's value sits relative to 100
 - Shooting% variance — what does the historical rate look like vs current?
-- One-goal game record vs expected — luck or clutch?
+- One-goal game record — investigate what's driving it
 
 ### 7. RECENT FORM
 **Tokens:** RECENT_FORM, HOT_PLAYERS
@@ -390,10 +390,10 @@ Work through each numbered factor below. Check off each one as you complete it. 
 ## DEEP INVESTIGATION — NHL-SPECIFIC
 
 ### KEY INVESTIGATION AREAS
-Hockey outcomes are heavily goaltender-dependent and possession-driven.
-- **Goaltending matchup**: Who is starting? What does recent form reveal vs season baseline?
+Hockey outcomes are shaped by goaltending, possession, and special teams — no single factor consistently dominates.
 - **Possession and shot quality**: What do the 5v5 metrics reveal about territorial control and chance quality?
 - **Special teams**: What does PP% and PK% show? How do they interact in this matchup?
+- **Goaltending matchup**: Who is starting? What does recent form reveal vs season baseline?
 - **Schedule and fatigue**: Rest situation, B2B, compressed schedule? Who's in net on the second night?
 - **Game structure**: Faceoff%, shot volume, close-game data — what does the process look like?
 
@@ -427,7 +427,7 @@ Does THIS team's underlying possession data tell a different story than their re
 - **Goaltending stability**: What does the goaltending data show — concentrated in one goalie or shared?
 
 ### STREAK SUSTAINABILITY
-Is this streak backed by possession dominance (CF%, xG) or luck (PDO, OT wins)? What does the underlying data show?
+What's driving this streak — possession, goaltending, special teams, shooting variance, schedule, or some combination? What does the underlying data show?
 
 ### THE TEAM TAKING THE ICE TONIGHT
 - If they've gone 8-4 since losing their top-line center, that's who they are now
@@ -454,12 +454,12 @@ Work through each numbered factor below. Check off each one as you complete it. 
 **Tokens:** NCAAB_FOUR_FACTORS, NCAAB_EFG_PCT, NCAAB_TS_PCT, TURNOVER_RATE, OREB_RATE, FT_RATE
 - Compare eFG%, TOV%, ORB%, FT Rate for BOTH teams
 - Compare the gaps across all four factors. Are any gaps consistent or recent?
-- Conference play four factors vs overall — schedule quality affects these
+- Tournament opponent quality vs season-long opponents — are the four factors built against comparable competition?
 
 ### 3. SCORING & SHOOTING
 **Tokens:** SCORING, FG_PCT, THREE_PT_SHOOTING
 - Scoring distribution — 3PT-dependent or paint-attack?
-- 3PT shooting in conference play vs overall
+- 3PT shooting against tournament-caliber opponents vs overall
 - Home vs road shooting splits
 
 ### 4. DEFENSIVE STATS
@@ -477,7 +477,7 @@ Work through each numbered factor below. Check off each one as you complete it. 
 ### 6. RECENT FORM
 **Tokens:** RECENT_FORM
 - L5 vs season trends — who was playing during each stretch?
-- Conference play form vs overall — opponent quality matters
+- Recent form against quality opponents vs overall — opponent quality matters
 - Are recent results with the current roster?
 
 ### 7. KEY PLAYER PERFORMANCE
@@ -494,23 +494,31 @@ Work through each numbered factor below. Check off each one as you complete it. 
 
 ### 9. SCHEDULE & REST
 **Tokens:** REST_SITUATION
-- Mid-week vs weekend games — travel and preparation time
-- Conference tournament fatigue or regular season grind?
+- Report the rest situation factually — double-byes, back-to-backs, games played in the last week
+- Conference tournament rest differentials are the most visible scheduling factor in college basketball — the market prices them aggressively and the spread already reflects any rest advantage
+- The market treats rest as a positive — but rest can also mean rust
+- For teams that played yesterday: how did the last game go? Was it close, overtime, or a blowout? How many minutes did key players log?
+- For teams on a bye: how many days since their last competitive game?
 
-### 10. HOME COURT & VENUE
-**Tokens:** HOME_AWAY_SPLITS, NCAAB_VENUE
-- Home court effects are real and significant in college
-- Home/away efficiency splits — what SPECIFIC metric changes?
-- How does this team play at home vs how do they play on the road?
-- What does the home/away data show for each team? How does venue factor into this matchup?
+### 10. TOURNAMENT RUN & STORYLINES
+**Tokens:** GROUNDING_SEARCH
+- Use a grounding search to find each team's tournament run so far — results, margins, key performances, and how they got to this round
+- Report the current storylines and narratives surrounding each team entering this game — momentum, upsets, breakout players, coaching storylines, bracket position
+- This is context Gary cannot get from season-long stats — tournament-specific momentum and narrative are real factors in how the public is betting and how the line is set
 
-### 11. HEAD-TO-HEAD
+### 11. NEUTRAL SITE & VENUE
+**Tokens:** NCAAB_VENUE, GROUNDING_SEARCH
+- Tournament games are on neutral courts — home court advantage is removed
+- Use a grounding search to investigate the venue — arena details, location, regional proximity to either team, whether the crowd is expected to favor one side
+- Investigate each team's tournament history — how have they performed in past tournaments? What round did they reach? How does their program historically handle tournament pressure?
+- What are analysts, media, and the public saying about each team and this matchup heading into tonight?
+
+### 12. HEAD-TO-HEAD
 **Tokens:** H2H_HISTORY
-- Conference teams play twice — the first meeting may be relevant
-- Were conditions similar? Same venue? Same roster health?
-- Non-conference opponents rarely have H2H data
+- Tournament opponents often have limited or no H2H history
+- If a previous meeting exists, were conditions similar? Same roster health?
 
-### 12. ASSISTS & PLAYMAKING
+### 13. ASSISTS & PLAYMAKING
 **Tokens:** ASSISTS
 - Ball movement, assist rate — is the offense flowing or hero-ball?
 - Assist-to-turnover ratio
@@ -531,23 +539,22 @@ This is the BASELINE — who these teams are. Your investigation should focus on
 ### SPREAD AWARENESS
 Report your findings factually. Gary will evaluate which factors matter for this number.
 
-### NCAAB INVESTIGATION TRIGGERS
+### NCAAB TOURNAMENT INVESTIGATION TRIGGERS
 Watch for these patterns that require deeper investigation:
-- **Conference vs Non-Conference**: A team's performance in conference play may differ significantly. Which is more relevant?
-- **SOS Filter**: Is either team's record inflated? Refer to the SOS data in your scout report.
-- **Conference Rematch**: Second meeting between rivals. Coaching adjustments may shift dynamics.
-- **Home Court Factor**: Investigate what the home/away data shows about venue impact for each team.
-- **Regression Check**: When recent shooting diverges from the season baseline, what does the historical variance and sample size show?
+- **SOS Filter**: Strength of schedule varies enormously across 360+ Division I teams. A team's record built against weaker competition may not translate to this tournament opponent. Refer to the SOS data in your scout report.
+- **Seeding Context**: Seeds are assigned by the selection committee based primarily on conference, strength of schedule, and season-long metrics. Seeds are a positioning tool — they are not predictions of tournament performance and spreads are not set based on seeding.
+- **Upset Market**: The public actively tries to pick upsets during the tournament. This moves lines — sometimes putting so much action on a lower seed that the line shifts to even or favors the "underdog." The team the public treats as the upset special is sometimes the public side.
+- **Tournament Experience**: Coaches and players who have been in the tournament before handle the intensity, preparation, and pressure differently. First-time tournament teams and first-time coaches face an environment that regular season and conference tournament games do not replicate.
+- **Regression Check**: When recent shooting diverges from the season baseline, tournament intensity and unfamiliar opponents can amplify or suppress that divergence. Sample size from the tournament itself is small — season-long baselines are the more reliable foundation.
 
-### HOME COURT & VENUE
-College home court effects tend to be larger than pro sports. Investigate what the data shows for THIS matchup:
-- What does each team's home vs road statistical profile show?
-- What does the gap — or lack of one — tell you about the venue factor for this game?
-- Is this a conference game? Familiarity can reduce OR amplify the home court effect — investigate which applies.
-- Does the road team have evidence of performing well in hostile environments?
-- Call NCAAB_VENUE to get the arena name. Cameron Indoor Stadium is different from a neutral-site arena.
+### NEUTRAL SITE & VENUE
+Tournament games are played on neutral courts — home court advantage is removed from the equation. Investigate what the data shows for THIS matchup:
+- Road and neutral-site performance data is more relevant than home splits for tournament games
+- Some "neutral" sites are geographically closer to one team — regional proximity can create a de facto home crowd
+- Investigate each team's performance away from their home court — how do they play when the home crowd is not a factor?
+- Call NCAAB_VENUE to confirm the arena and location
 
-**DO NOT CITE HOME/AWAY RECORDS AS EVIDENCE** — Investigate the data behind them.
+**Road and neutral-site stats are the relevant lens for tournament evaluation.**
 
 ### DEPTH INVESTIGATION — Bench & Rotation
 - Your scout report includes Top 9 players — use this to understand depth
@@ -555,22 +562,21 @@ College home court effects tend to be larger than pro sports. Investigate what t
 - How might foul trouble affect each team differently given their depth?
 - If the stars are neutralized, what does each team's supporting cast look like?
 
-**FOR LARGE SPREADS (11+ points):**
+**FOR LARGE SPREADS (10+ points):**
 Investigate depth for BOTH teams — in NCAAB, benches are shorter (7-8 players). What does the minutes distribution look like?
 
 ### STRENGTH OF SCHEDULE
-360+ Division I teams with MASSIVE quality variance — SOS is a critical lens.
-- Check BOTH teams' SOS rankings — Is one battle-tested while the other padded stats?
-- Look at Quad records — Quad 1 wins are worth more than beating #300 teams
-- Conference context — Big Ten #8 faced tougher opponents than mid-major #8
-- Recent schedule — Has the team played tough opponents RECENTLY? If most L10 opponents were weak, recent numbers may be inflated
+360+ Division I teams with massive quality variance — SOS is a critical lens for tournament evaluation.
+- Check BOTH teams' SOS rankings — a team battle-tested in a power conference faced different opposition than a mid-major with a weaker schedule
+- Look at Quad records — Quad 1 wins carry more weight than volume wins against lower-tier opponents
+- Conference context — the gap between conferences is real, and tournament matchups regularly pit teams from different competitive environments against each other
+- The selection committee already used SOS for seeding — investigate whether the matchup data tells a different story than the seed line suggests
 
-### H2H SWEEP CONTEXT (NCAAB-SPECIFIC)
-When a conference rival has been swept this season (0-2), investigate:
-- What is the swept team's overall quality (ranking, win rate, AdjEM)?
-- Have there been coaching/scheme adjustments since the last meeting? Conference opponents have film and familiarity
-- Is there evidence of repeatable matchup-specific dynamics, or is it variance? What does the game-by-game data show?
-- Investigate the conditions of each prior meeting — were the margins close or dominant? What's different tonight?
+### H2H CONTEXT (NCAAB TOURNAMENT)
+Tournament opponents often have limited or no head-to-head history:
+- If these teams met earlier this season, were conditions similar? Same roster health, same venue type?
+- Cross-conference matchups in the tournament mean most opponents have never played each other — the H2H token may return nothing, and that is expected
+- If a previous meeting exists, the result is already in the public's perception and in the line
 
 ### INJURY INVESTIGATION (NCAAB-SPECIFIC)
 The scout report labels each injury with a market-aware duration tag. Use these to guide your investigation depth:
