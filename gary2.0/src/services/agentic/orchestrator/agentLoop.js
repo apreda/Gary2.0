@@ -1716,10 +1716,6 @@ INVESTIGATION COMPLETE`;
           const allAssistantText = messages.filter(m => m.role === 'assistant').map(m => m.content || '').join('\n\n') + '\n\n' + (message.content || '');
           const caseCheck = validateNbaSpreadCases(allAssistantText, homeTeam, awayTeam, spread);
           if (!caseCheck.valid) {
-            // DEBUG: Log what Gary wrote so we can see why the header isn't detected
-            const lastResp = (message.content || '').substring(0, 800);
-            console.log(`[DEBUG bilateral] homeTeam="${homeTeam}" awayTeam="${awayTeam}" spread=${spread}`);
-            console.log(`[DEBUG bilateral] Last response (first 800 chars):\n${lastResp}\n---END DEBUG---`);
             if (_bilateralRetryCount < 3) {
               _bilateralRetryCount++;
               const missingHome = caseCheck.homeLen === 0;
