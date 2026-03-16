@@ -251,8 +251,7 @@ struct AuthView: View {
     // MARK: - OAuth
 
     private func handleOAuth(provider: OAuthProvider) {
-        let oauthURL = authManager.oauthURL(provider: provider)
-        // Open in ASWebAuthenticationSession
+        guard let oauthURL = authManager.oauthURL(provider: provider) else { return }
         let session = ASWebAuthenticationSession(
             url: oauthURL,
             callbackURLScheme: "com.gary.app"

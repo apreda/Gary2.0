@@ -1,4 +1,4 @@
-import { CONFIG, GEMINI_PRO_MODEL, GEMINI_PRO_FALLBACK, validateGeminiModel } from './orchestratorConfig.js';
+import { CONFIG, GEMINI_PRO_MODEL, GEMINI_PRO_FALLBACK, validateGeminiModel, RESEARCH_BRIEFING_TIMEOUT_MS } from './orchestratorConfig.js';
 import { rotateToBackupKey, isUsingBackupKey, resetToPrimaryKey } from '../modelConfig.js';
 import { createGeminiSession, sendToSession, sendToSessionWithRetry } from './sessionManager.js';
 import { extractTextualSummaryForModelSwitch, buildFlashResearchBriefing } from './flashAdvisor.js';
@@ -8,7 +8,7 @@ import { isInvestigationSufficient, summarizeStatForContext, formatNum, formatPc
 import { fetchStats, clearStatRouterCache } from '../tools/statRouters/index.js';
 import { getConstitution } from '../constitution/index.js';
 import { ballDontLieService } from '../../ballDontLieService.js';
-import { nbaSeason, nhlSeason, nflSeason, ncaabSeason } from '../../../utils/dateUtils.js';
+import { nbaSeason, nhlSeason, nflSeason } from '../../../utils/dateUtils.js';
 import { getTokensForSport, toolDefinitions } from '../tools/toolDefinitions.js';
 
 function hasInvestigationCompleteMarker(text = '') {
@@ -181,12 +181,17 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   const isNHLSport = sport === 'icehockey_nhl' || sport === 'NHL';
   const isMLBSport = sport === 'baseball_mlb' || sport === 'MLB' || sport === 'WBC';
 
+  // Pass sport through options so downstream builders (Pass 3) can use it
+  options.sport = sport;
+
   // ═══════════════════════════════════════════════════════════════════════════
   // Props mode setup (must be before session creation so activeTools is available)
   const isPropsMode = options.mode === 'props';
   const requiresBilateralCases = !isPropsMode;
   const bilateralFn = options.bilateralCasePrompt || null;
-  console.log(`[Orchestrator] Starting ${sport} — 3.1 Pro (main) + Flash (research)`);
+  // Props use Flash (cheaper, 10K RPD, Pro-grade reasoning). Game picks use 3.1 Pro.
+  const primaryModel = isPropsMode ? 'gemini-3-flash-preview' : GEMINI_PRO_MODEL;
+  console.log(`[Orchestrator] Starting ${sport} — ${isPropsMode ? 'Flash (props)' : '3.1 Pro (main)'} + Flash (research)`);
 
   const propContext = options.propContext || null;
   let propsPicks = null; // Store props picks from finalize_props tool call
@@ -203,18 +208,17 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
 
   // PERSISTENT SESSION SETUP (Gemini 3 Thought Signature Compliance)
   // ═══════════════════════════════════════════════════════════════════════════
-  // Pro session runs investigation → evaluation → pick. Flash provides research briefing before Gary starts.
+  // Game picks: 3.1 Pro with high reasoning. Flash is 429 fallback.
+  // Props: Flash with high reasoning (cheaper, 10K RPD, Pro-grade reasoning benchmarks).
   // SDK automatically handles thought signatures when using persistent sessions.
-  // All modes (game picks + props) start with 3.1 Pro + high reasoning
-  // Flash is quota fallback only (via model cascade on 429 errors)
   let currentSession = createGeminiSession({
-    modelName: GEMINI_PRO_MODEL,
+    modelName: primaryModel,
     systemPrompt: systemPrompt,
     tools: activeTools,
     thinkingLevel: 'high'
   });
   let currentModelName = currentSession.modelName;
-  console.log(`[Orchestrator] Pro session created (${currentModelName}, ${sport})`);
+  console.log(`[Orchestrator] ${isPropsMode ? 'Flash' : 'Pro'} session created (${currentModelName}, ${sport})`);
 
   // Messages array for state tracking (pass detection)
   // Note: For Gemini, actual API calls go through the persistent session
@@ -237,19 +241,18 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   // Persistent pass-injection flags (survive context pruning)
   let _pass25Injected = false;
   let _pass25JustInjected = false; // True for ONE iteration after Pass 2.5 is injected (for response logging)
+  // Pass 2.75 (Bracket Advancement) removed — bracket fill handled by run-bracket-fill.js
 
   // Investigation stall detection — nudge completion marker if investigation loops
   let _lastCategoryCount = 0;
   let _investigationStallCount = 0;
   let _pass3Injected = false;
   let _extraIterationsUsed = 0; // Guard against infinite loop from iteration-- (max 2)
-  let _nbaCaseRetryUsed = false; // One retry for required bilateral spread cases before Pass 2.5
+  let _bilateralRetryCount = 0; // Up to 3 retries for required bilateral spread cases before Pass 2.5
 
   // Flash Research Briefing state — comprehensive pre-game briefing (factual findings only)
   // Flash completes BEFORE Gary starts. Findings injected before Pass 1.
-  let _researchBriefingReady = false;    // True when briefing has returned (or failed)
   let _researchBriefing = null;          // Briefing text from Flash (factual findings)
-  const _flashCoverageTokens = [];       // Flash's called tokens — ONLY for pipeline gate coverage, NOT dedup or statsData
 
   const effectiveMaxIterations = CONFIG.maxIterations;
 
@@ -262,24 +265,18 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   if (options.scoutReport && !isPropsMode) {
     console.log(`[Research Briefing] 🔬 Running Flash research briefing (Gemini Flash with tools) — Gary waits for completion`);
     try {
-      const briefingResult = await buildFlashResearchBriefing(options.scoutReport, sport, homeTeam, awayTeam, options);
+      const briefingResult = await Promise.race([
+        buildFlashResearchBriefing(options.scoutReport, sport, homeTeam, awayTeam, options),
+        new Promise((_, reject) => setTimeout(() => reject(new Error(`Flash research timed out after ${RESEARCH_BRIEFING_TIMEOUT_MS / 1000}s`)), RESEARCH_BRIEFING_TIMEOUT_MS))
+      ]);
       if (briefingResult && typeof briefingResult === 'object') {
         _researchBriefing = briefingResult.briefing;
-        _researchBriefingReady = true;
-        // Store Flash's called tokens in separate coverage array — NOT in toolCallHistory
-        // This prevents Flash tracking entries (no homeValue/awayValue) from:
-        // 1. Blocking Gary's dedup (Gary needs to re-fetch stats with actual values)
-        // 2. Polluting statsData with null entries (breaks Tale of the Tape in iOS)
-        if (briefingResult.calledTokens && briefingResult.calledTokens.length > 0) {
-          for (const tokenEntry of briefingResult.calledTokens) {
-            _flashCoverageTokens.push(tokenEntry);
-          }
+        if (briefingResult.calledTokens?.length > 0) {
           console.log(`[Research Briefing] Stored ${briefingResult.calledTokens.length} Flash tokens for coverage tracking (separate from Gary's toolCallHistory)`);
         }
         console.log(`[Research Briefing] ✅ Briefing ready (${briefingResult.briefing?.length || 0} chars)`);
       } else if (briefingResult && typeof briefingResult === 'string') {
         _researchBriefing = briefingResult;
-        _researchBriefingReady = true;
         console.log(`[Research Briefing] ✅ Briefing ready (${briefingResult.length} chars)`);
       } else {
         throw new Error(`[HARD FAIL] Flash Research Assistant returned empty briefing for ${homeTeam} @ ${awayTeam} (${sport}). The research assistant must complete successfully — no fallback to unresearched picks.`);
@@ -405,9 +402,9 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
       } catch (error) {
         // ═══════════════════════════════════════════════════════════════════
         // 429 QUOTA CASCADE: Each model tries primary key → backup key before falling
-        // to the next tier. 3.1 Pro → Pro fallback → Flash → HARD FAIL
+        // to the next tier. 3.1 Pro → Flash → HARD FAIL (Gemini 3 Pro is dead)
         // ═══════════════════════════════════════════════════════════════════
-        // 3.1 Pro 429 → try backup key, else fall to Pro fallback (reset to primary)
+        // 3.1 Pro 429 → try backup key, else fall to Flash (reset to primary)
         if (error.isQuotaError && currentModelName === GEMINI_PRO_MODEL) {
           const textualContext = extractTextualSummaryForModelSwitch(messages, toolCallHistory);
           if (textualContext.length < 2000) {
@@ -422,29 +419,50 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
               tools: currentPass === 'evaluation' ? [] : activeTools,
               thinkingLevel: 'high'
             });
+
+            // Try backup key — if it also 429s, fall to Flash
+            try {
+              console.log(`[Orchestrator] 🔄 Created fallback session (backup key), retrying...`);
+              const retryResponse = await sendToSessionWithRetry(currentSession, nextMessageToSend);
+              message = { role: 'assistant', content: retryResponse.content, tool_calls: retryResponse.toolCalls };
+              finishReason = retryResponse.finishReason;
+              if (message.content || message.tool_calls) { messages.push(message); }
+            } catch (backupError) {
+              if (backupError.isQuotaError || backupError.status === 429) {
+                console.log(`[Orchestrator] ⚠️ Backup key also exhausted — falling back to Flash`);
+                resetToPrimaryKey();
+                currentSession = createGeminiSession({
+                  modelName: 'gemini-3-flash-preview',
+                  systemPrompt: systemPrompt + '\n\n' + textualContext,
+                  tools: currentPass === 'evaluation' ? [] : activeTools,
+                  thinkingLevel: 'high'
+                });
+                currentModelName = 'gemini-3-flash-preview';
+                const flashResponse = await sendToSessionWithRetry(currentSession, nextMessageToSend);
+                message = { role: 'assistant', content: flashResponse.content, tool_calls: flashResponse.toolCalls };
+                finishReason = flashResponse.finishReason;
+                if (message.content || message.tool_calls) { messages.push(message); }
+              } else {
+                throw backupError;
+              }
+            }
           } else {
-            // 3.1 Pro exhausted on both keys — fall to Pro fallback on primary key
+            // Already on backup key or no backup — go straight to Flash
             resetToPrimaryKey();
-            console.log(`[Orchestrator] ⚠️ 3.1 Pro exhausted — falling back to Pro fallback (primary key)`);
+            console.log(`[Orchestrator] ⚠️ 3.1 Pro exhausted on both keys — falling back to Flash (primary key)`);
             currentSession = createGeminiSession({
-              modelName: GEMINI_PRO_FALLBACK,
+              modelName: 'gemini-3-flash-preview',
               systemPrompt: systemPrompt + '\n\n' + textualContext,
               tools: currentPass === 'evaluation' ? [] : activeTools,
               thinkingLevel: 'high'
             });
-            currentModelName = GEMINI_PRO_FALLBACK;
-          }
+            currentModelName = 'gemini-3-flash-preview';
 
-          console.log(`[Orchestrator] 🔄 Created fallback session, retrying...`);
-          const retryResponse = await sendToSessionWithRetry(currentSession, nextMessageToSend);
-          message = {
-            role: 'assistant',
-            content: retryResponse.content,
-            tool_calls: retryResponse.toolCalls
-          };
-          finishReason = retryResponse.finishReason;
-          if (message.content || message.tool_calls) {
-            messages.push(message);
+            console.log(`[Orchestrator] 🔄 Created Flash session, retrying...`);
+            const retryResponse = await sendToSessionWithRetry(currentSession, nextMessageToSend);
+            message = { role: 'assistant', content: retryResponse.content, tool_calls: retryResponse.toolCalls };
+            finishReason = retryResponse.finishReason;
+            if (message.content || message.tool_calls) { messages.push(message); }
           }
         }
         // Pro fallback 429 → try backup key, else fall to Flash (reset to primary)
@@ -1654,10 +1672,12 @@ INVESTIGATION COMPLETE`;
 
           if (toolResponses.length > 0) {
             // Convert to Gemini function response format
-            pendingFunctionResponses = toolResponses.map(tr => ({
+            const newResponses = toolResponses.map(tr => ({
               name: tr.name || 'tool_response',
               content: tr.content
             }));
+            // Preserve any previously pushed responses (e.g., finalize_props block errors)
+            pendingFunctionResponses = [...pendingFunctionResponses, ...newResponses];
             console.log(`[Orchestrator] Prepared ${pendingFunctionResponses.length} function response(s) for session`);
           }
 
@@ -1692,24 +1712,37 @@ INVESTIGATION COMPLETE`;
 
       if (markedComplete) {
         if (requiresBilateralCases) {
-          const caseCheck = validateNbaSpreadCases(message.content || '', homeTeam, awayTeam, spread);
+          // Check ALL assistant messages for bilateral cases (Gary may write each case in separate responses during retries)
+          const allAssistantText = messages.filter(m => m.role === 'assistant').map(m => m.content || '').join('\n\n') + '\n\n' + (message.content || '');
+          const caseCheck = validateNbaSpreadCases(allAssistantText, homeTeam, awayTeam, spread);
           if (!caseCheck.valid) {
-            if (!_nbaCaseRetryUsed) {
-              _nbaCaseRetryUsed = true;
-              const retryMsg = `You're close, but Pass 1 is not complete yet.
+            // DEBUG: Log what Gary wrote so we can see why the header isn't detected
+            const lastResp = (message.content || '').substring(0, 800);
+            console.log(`[DEBUG bilateral] homeTeam="${homeTeam}" awayTeam="${awayTeam}" spread=${spread}`);
+            console.log(`[DEBUG bilateral] Last response (first 800 chars):\n${lastResp}\n---END DEBUG---`);
+            if (_bilateralRetryCount < 3) {
+              _bilateralRetryCount++;
+              const missingHome = caseCheck.homeLen === 0;
+              const missingAway = caseCheck.awayLen === 0;
+              const missingSide = missingHome ? homeTeam : (missingAway ? awayTeam : 'both teams');
+              const retryMsg = `Your investigation is strong but you are missing the bilateral case${missingHome && missingAway ? 's' : ''} for ${missingSide}.
 
-${bilateralFn ? bilateralFn(homeTeam, awayTeam) : `Before INVESTIGATION COMPLETE, include BOTH sections:\nCase for ${homeTeam}\nCase for ${awayTeam}`}
+You MUST include BOTH of these sections before outputting INVESTIGATION COMPLETE:
+Case for ${homeTeam} (2-3 paragraphs)
+Case for ${awayTeam} (2-3 paragraphs)
 
-Each case must be substantive (2-3 paragraphs). Then output:
+${missingHome ? `The case for ${homeTeam} is missing — write it now. You are not arguing that ${homeTeam} is a good team. You are arguing why ${homeTeam} AT THIS SPREAD NUMBER is the right side. Maybe the spread is too large. Maybe they have a matchup advantage in a specific area. Maybe recent schedule, rest, or personnel changes close the gap. Every spread number has two sides — make the case for this one.` : ''}${missingAway ? `The case for ${awayTeam} is missing — write it now. You are not arguing that ${awayTeam} is a good team. You are arguing why ${awayTeam} AT THIS SPREAD NUMBER is the right side. Maybe the spread is too large. Maybe they have a matchup advantage in a specific area. Maybe recent schedule, rest, or personnel changes close the gap. Every spread number has two sides — make the case for this one.` : ''}${!missingHome && !missingAway ? 'Both cases need to be longer — expand each to 2-3 substantive paragraphs.' : ''}
+
+Then output exactly:
 INVESTIGATION COMPLETE`;
-              console.log(`[Orchestrator] Bilateral case gate retry (${caseCheck.reason}; homeLen=${caseCheck.homeLen}, awayLen=${caseCheck.awayLen})`);
+              console.log(`[Orchestrator] Bilateral case gate retry ${_bilateralRetryCount}/3 (${caseCheck.reason}; homeLen=${caseCheck.homeLen}, awayLen=${caseCheck.awayLen})`);
               messages.push({ role: 'assistant', content: message.content });
               messages.push({ role: 'user', content: retryMsg });
               nextMessageToSend = retryMsg;
               continue;
             }
 
-            throw new Error(`[HARD FAIL] Pass 1 bilateral spread cases missing or too short after retry (${caseCheck.reason}; homeLen=${caseCheck.homeLen}, awayLen=${caseCheck.awayLen}).`);
+            throw new Error(`[HARD FAIL] Pass 1 bilateral spread cases missing or too short after 3 retries (${caseCheck.reason}; homeLen=${caseCheck.homeLen}, awayLen=${caseCheck.awayLen}).`);
           }
         }
 
@@ -1737,7 +1770,7 @@ INVESTIGATION COMPLETE`;
       const synthesizeMsg = isPropsMode
         ? 'Synthesize from scout report. If you need more data, call fetch_stats.'
         : 'Synthesize from scout report + research briefing. If you need more data, call fetch_stats.';
-      messages.push({
+      const pass1Reminder = {
         role: 'user',
         content: `You are still in Pass 1. Do not make your pick yet.
 
@@ -1746,13 +1779,16 @@ ${casePrompt}
 
 When complete, output exactly:
 INVESTIGATION COMPLETE`
-      });
+      };
+      messages.push(pass1Reminder);
+      nextMessageToSend = pass1Reminder;
       continue;
     }
 
     // Use persistent flags (no false positives from message scanning)
+
+    // Pass 3 — inject after Pass 2.5 completes
     if (_pass25Injected && !_pass3Injected && iteration < effectiveMaxIterations) {
-      // Gary answered Pass 2.5 — inject Pass 3 for final output directly
       messages.push({ role: 'assistant', content: message.content });
 
       const pass3Content = isPropsMode
@@ -1761,7 +1797,7 @@ INVESTIGATION COMPLETE`
       messages.push({ role: 'user', content: pass3Content });
       nextMessageToSend = pass3Content;
       _pass3Injected = true;
-      console.log(`[Orchestrator] Injected Pass 3 - ${isPropsMode ? 'Props Evaluation' : 'Final Output'} (after Pass 2.5 evaluation)`);
+      console.log(`[Orchestrator] Injected Pass 3 - ${isPropsMode ? 'Props Evaluation' : 'Final Output'}`);
 
       continue;
     }
@@ -1798,6 +1834,7 @@ INVESTIGATION COMPLETE`
       break;
     }
 
+    // Fallback gate: inject Pass 3
     if (_pass25Injected && !_pass3Injected && iteration < effectiveMaxIterations) {
       console.log(`[Orchestrator] ⚠️ PIPELINE GATE: Pick attempted before Pass 3 — injecting ${isPropsMode ? 'props evaluation' : 'final output'} pass`);
       messages.push({ role: 'assistant', content: message.content });
@@ -1854,6 +1891,7 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
       pick.toolCallHistory = toolCallHistory;
       pick.iterations = iteration;
       pick.rawAnalysis = message.content;
+      pick._bracketResponse = options._bracketResponse || null;
 
       return pick;
     } else {
@@ -1861,6 +1899,7 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
       return {
         error: 'Could not parse pick from response',
         rawAnalysis: message.content,
+        _bracketResponse: options._bracketResponse || null,
         toolCallHistory,
         iterations: iteration,
         homeTeam,

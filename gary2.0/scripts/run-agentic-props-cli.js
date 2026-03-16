@@ -10,8 +10,7 @@ import { createClient } from '@supabase/supabase-js';
 // Dynamic imports after env is loaded (so geminiService gets correct proxy URL)
 const { oddsService } = await import('../src/services/oddsService.js');
 const { propOddsService } = await import('../src/services/propOddsService.js');
-const { runAgenticPropsPipeline } = await import('../src/services/agentic/propsAgenticRunner.js');
-const { getPropsConstitution, applyPropsPerGameConstraint } = await import('../src/services/agentic/propsAgenticRunner.js');
+const { getPropsConstitution, applyPropsPerGameConstraint } = await import('../src/services/agentic/propsSharedUtils.js');
 const { analyzeGame } = await import('../src/services/agentic/orchestrator/index.js');
 
 const defaultArgv = process.argv.slice(2);
@@ -57,8 +56,6 @@ export async function runAgenticPropsCli({
   const matchupFilter = args.matchup || null;
   // CLI override for regularOnly: --regular=1 or --no-td=1
   const cliRegularOnly = regularOnly || args.regular === '1' || args['no-td'] === '1';
-  // --legacy flag: use old pipeline (propsAgenticRunner) instead of orchestrator
-  const useLegacy = args.legacy === true || args.legacy === '1' || args.legacy === 'true';
   // --test flag: store to test_prop_picks table instead of production (for testing)
   const useTestTable = args.test === true || args.test === '1' || args.test === 'true';
   const testTableName = useTestTable ? 'test_prop_picks' : 'prop_picks';
@@ -68,7 +65,7 @@ export async function runAgenticPropsCli({
   console.log(`📅 Date: ${getESTDate()}`);
   console.log(`🎯 Sport: ${leagueLabel}`);
   console.log(`📊 Games limit: ${limit}`);
-  console.log(`🔧 Pipeline: ${useLegacy ? 'LEGACY (propsAgenticRunner)' : 'ORCHESTRATOR (multi-pass)'}`);
+  console.log(`🔧 Pipeline: ORCHESTRATOR (multi-pass)`);
   console.log(`💾 Store: ${shouldStore ? 'Yes' : 'No (pass --store=1 to save)'}${useTestTable ? ' (TEST MODE → test_prop_picks)' : ''}`);
   if (cliRegularOnly && leagueLabel === 'NFL') console.log(`🏈 Mode: Regular props only (yards/receptions - TDs handled separately)`);
   if (matchupFilter) console.log(`🔍 Matchup filter: ${matchupFilter}`);
@@ -182,19 +179,7 @@ export async function runAgenticPropsCli({
 
       let result;
 
-      if (useLegacy) {
-        // LEGACY: Use old propsAgenticRunner pipeline
-        result = await runAgenticPropsPipeline({
-          game,
-          playerProps,
-          buildContext,
-          sportLabel: leagueLabel,
-          propsPerGame,
-          options: { nocache },
-          regularOnly: cliRegularOnly
-        });
-      } else {
-        // NEW: Use orchestrator multi-pass pipeline (same as game picks)
+      {
         console.log(`[Orchestrator Props] Building context for ${matchup}...`);
         const context = await buildContext(game, playerProps, { nocache, regularOnly: cliRegularOnly });
 
@@ -277,8 +262,7 @@ export async function runAgenticPropsCli({
               matchup,
               commence_time: game.commence_time,
               bet: pick.bet ? (pick.bet.toLowerCase() === 'yes' ? 'over' : pick.bet.toLowerCase()) : pick.bet,
-              confidence: pick.confidence || null,
-              confidence_tier: pick.confidence_tier || null
+              confidence: pick.confidence || null
             };
           });
 

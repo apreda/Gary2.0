@@ -199,7 +199,7 @@ context for player-level evaluation. Investigate the game thoroughly first.
 
     // Add venue context (for NBA Cup, neutral site games, CFP games, etc.)
     if (venueContext) {
-      result.venue = venueContext.venue;
+      result.venue = venueContext.venue || getHomeVenueFallback(homeTeam);
       result.isNeutralSite = venueContext.isNeutralSite;
       result.tournamentContext = venueContext.tournamentContext || 'Regular Season';
       result.gameSignificance = venueContext.gameSignificance;
@@ -215,6 +215,11 @@ context for player-level evaluation. Investigate the game thoroughly first.
       result.awayConference = venueContext.awayConference;
       // Verified Tale of the Tape (pre-computed BDL stats for pick card display)
       result.verifiedTaleOfTape = venueContext.verifiedTaleOfTape;
+    }
+
+    // Fallback: if venue still missing after venueContext, use home team's known arena
+    if (!result.venue) {
+      result.venue = getHomeVenueFallback(homeTeam);
     }
 
     // Ensure result contains the canonical matchup strings used by the UI
@@ -235,6 +240,40 @@ context for player-level evaluation. Investigate the game thoroughly first.
       sport
     };
   }
+}
+
+/**
+ * Fallback venue lookup — home team's known arena when Grounding search fails.
+ */
+function getHomeVenueFallback(homeTeam) {
+  const venues = {
+    // NBA
+    'Atlanta Hawks': 'State Farm Arena', 'Boston Celtics': 'TD Garden', 'Brooklyn Nets': 'Barclays Center',
+    'Charlotte Hornets': 'Spectrum Center', 'Chicago Bulls': 'United Center', 'Cleveland Cavaliers': 'Rocket Mortgage FieldHouse',
+    'Dallas Mavericks': 'American Airlines Center', 'Denver Nuggets': 'Ball Arena', 'Detroit Pistons': 'Little Caesars Arena',
+    'Golden State Warriors': 'Chase Center', 'Houston Rockets': 'Toyota Center', 'Indiana Pacers': 'Gainbridge Fieldhouse',
+    'LA Clippers': 'Intuit Dome', 'Los Angeles Lakers': 'Crypto.com Arena', 'Memphis Grizzlies': 'FedExForum',
+    'Miami Heat': 'Kaseya Center', 'Milwaukee Bucks': 'Fiserv Forum', 'Minnesota Timberwolves': 'Target Center',
+    'New Orleans Pelicans': 'Smoothie King Center', 'New York Knicks': 'Madison Square Garden',
+    'Oklahoma City Thunder': 'Paycom Center', 'Orlando Magic': 'Kia Center', 'Philadelphia 76ers': 'Wells Fargo Center',
+    'Phoenix Suns': 'Footprint Center', 'Portland Trail Blazers': 'Moda Center', 'Sacramento Kings': 'Golden 1 Center',
+    'San Antonio Spurs': 'Frost Bank Center', 'Toronto Raptors': 'Scotiabank Arena', 'Utah Jazz': 'Delta Center',
+    'Washington Wizards': 'Capital One Arena',
+    // NHL
+    'Anaheim Ducks': 'Honda Center', 'Arizona Coyotes': 'Mullett Arena', 'Boston Bruins': 'TD Garden',
+    'Buffalo Sabres': 'KeyBank Center', 'Calgary Flames': 'Scotiabank Saddledome', 'Carolina Hurricanes': 'PNC Arena',
+    'Chicago Blackhawks': 'United Center', 'Colorado Avalanche': 'Ball Arena', 'Columbus Blue Jackets': 'Nationwide Arena',
+    'Dallas Stars': 'American Airlines Center', 'Detroit Red Wings': 'Little Caesars Arena', 'Edmonton Oilers': 'Rogers Place',
+    'Florida Panthers': 'Amerant Bank Arena', 'Los Angeles Kings': 'Crypto.com Arena', 'Minnesota Wild': 'Xcel Energy Center',
+    'Montréal Canadiens': 'Bell Centre', 'Montreal Canadiens': 'Bell Centre', 'Nashville Predators': 'Bridgestone Arena',
+    'New Jersey Devils': 'Prudential Center', 'New York Islanders': 'UBS Arena', 'New York Rangers': 'Madison Square Garden',
+    'Ottawa Senators': 'Canadian Tire Centre', 'Philadelphia Flyers': 'Wells Fargo Center',
+    'Pittsburgh Penguins': 'PPG Paints Arena', 'San Jose Sharks': 'SAP Center', 'Seattle Kraken': 'Climate Pledge Arena',
+    'St. Louis Blues': 'Enterprise Center', 'Tampa Bay Lightning': 'Amalie Arena', 'Toronto Maple Leafs': 'Scotiabank Arena',
+    'Utah Hockey Club': 'Delta Center', 'Vancouver Canucks': 'Rogers Arena', 'Vegas Golden Knights': 'T-Mobile Arena',
+    'Washington Capitals': 'Capital One Arena', 'Winnipeg Jets': 'Canada Life Centre',
+  };
+  return venues[homeTeam] || null;
 }
 
 /**

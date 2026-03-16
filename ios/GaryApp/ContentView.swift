@@ -10,29 +10,34 @@ class PickDetailState: ObservableObject {
 
 struct ContentView: View {
     @EnvironmentObject var authManager: AuthManager
+    @Environment(\.scenePhase) private var scenePhase
     @AppStorage("selectedTab") private var selectedTab: Int = 0
     @State private var showingSettings = false
     @StateObject private var pickDetailState = PickDetailState.shared
+    @State private var loadedTabs: Set<Int> = []
+
+    @ViewBuilder
+    private func tabPage<Content: View>(_ index: Int, @ViewBuilder content: () -> Content) -> some View {
+        if loadedTabs.contains(index) || selectedTab == index {
+            content()
+                .opacity(selectedTab == index ? 1 : 0)
+                .allowsHitTesting(selectedTab == index)
+                .accessibilityHidden(selectedTab != index)
+                .zIndex(selectedTab == index ? 1 : 0)
+        }
+    }
     
     var body: some View {
         ZStack(alignment: .bottom) {
             // Content Views - Use conditional animation for older iOS
             ZStack(alignment: .topTrailing) {
-                Group {
-                    switch selectedTab {
-                    case 0:
-                        HomeView()
-                    case 1:
-                        GaryPicksView()
-                    case 2:
-                        GaryPropsView()
-                    case 3:
-                        BillfoldView()
-                    case 4:
-                        GaryFantasyView()
-                    default:
-                        HomeView()
-                    }
+                ZStack(alignment: .topTrailing) {
+                    tabPage(0) { HomeView() }
+                    tabPage(1) { GaryPicksView() }
+                    tabPage(2) { GaryPropsView() }
+                    tabPage(3) { MarchMadnessBracketView() }
+                    tabPage(4) { GaryFantasyView() }
+                    tabPage(5) { BillfoldView() }
                 }
                 .transaction { transaction in
                     // Disable animations on older iOS for smoother tab switching
@@ -42,7 +47,7 @@ struct ContentView: View {
                 }
 
                 // Settings button — floating top right on every page (hidden on Billfold which has its own, and when pick detail is open)
-                if !pickDetailState.isShowing && selectedTab != 3 {
+                if !pickDetailState.isShowing && selectedTab != 5 {
                     SettingsMenuButton(showingSettings: $showingSettings)
                         .padding(.top, 4)
                         .padding(.trailing, 16)
@@ -55,6 +60,19 @@ struct ContentView: View {
         .sheet(isPresented: $showingSettings) {
             SettingsSheetView()
                 .environmentObject(authManager)
+        }
+        .task {
+            loadedTabs.insert(selectedTab)
+            await BillfoldSnapshotStore.shared.prewarmIfNeeded()
+        }
+        .onChange(of: selectedTab) { newTab in
+            loadedTabs.insert(newTab)
+        }
+        .onChange(of: scenePhase) { newPhase in
+            guard newPhase == .active else { return }
+            Task(priority: .utility) {
+                await BillfoldSnapshotStore.shared.prewarmIfNeeded()
+            }
         }
     }
 }
@@ -113,8 +131,9 @@ struct CompactTabBar: View {
         ("house.fill", "Home"),
         ("list.bullet.rectangle.fill", "Picks"),
         ("sportscourt.fill", "Props"),
-        ("wallet.pass.fill", "Billfold"),
-        ("trophy.fill", "Fantasy")
+        ("basketball.fill", "Bracket"),
+        ("trophy.fill", "Fantasy"),
+        ("chart.bar.fill", "Billfold")
     ]
 
     var body: some View {
@@ -159,7 +178,7 @@ struct CompactTabBar: View {
                     // 1. Base glass material
                     Capsule()
                         .fill(.ultraThinMaterial)
-                    
+
                     // 2. Gold-tinted overlay
                     Capsule()
                         .fill(
@@ -172,7 +191,7 @@ struct CompactTabBar: View {
                                 endPoint: .bottomTrailing
                             )
                         )
-                    
+
                     // 3. Liquid shine (top highlight)
                     Capsule()
                         .fill(
@@ -183,7 +202,7 @@ struct CompactTabBar: View {
                             )
                         )
                         .blendMode(.overlay)
-                    
+
                     // 4. Premium gold edge
                     Capsule()
                         .strokeBorder(

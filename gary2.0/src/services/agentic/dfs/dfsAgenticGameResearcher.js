@@ -20,6 +20,9 @@ import { DFS_ALL_TOOLS, executeToolCall } from './tools/dfsToolDefinitions.js';
 import { GEMINI_FLASH_MODEL } from '../modelConfig.js';
 import { getDFSGameInvestigationPrompt } from './dfsInvestigationPrompts.js';
 import { getDFSGameResearchFactors, buildDFSGameCoverageGapList } from './dfsInvestigationFactors.js';
+import { createHash } from 'crypto';
+
+const DEFAULT_RESEARCH_CONCURRENCY = 3;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PER-GAME RESEARCH SESSION
@@ -90,6 +93,13 @@ async function researchSingleGame(genAI, scoutReport, context, options = {}) {
   const { modelName = GEMINI_FLASH_MODEL } = options;
   const sport = (context.sport || 'NBA').toUpperCase();
   const gameLabel = `${scoutReport.awayTeam} @ ${scoutReport.homeTeam}`;
+  const cacheKey = buildSharedResearchCacheKey(scoutReport, context);
+  const sharedResearchCache = options.sharedResearchCache;
+
+  if (sharedResearchCache?.has(cacheKey)) {
+    console.log(`[Game Research] Reusing cached research: ${gameLabel}`);
+    return sharedResearchCache.get(cacheKey);
+  }
 
   console.log(`[Game Research] Starting research: ${gameLabel}`);
 
@@ -196,13 +206,19 @@ After investigating the gaps, rewrite your COMPLETE narrative briefing including
 
   console.log(`[Game Research] ${gameLabel}: Complete — ${iterations} iterations, ${calledTools.length} tool calls, ${briefing.length} chars`);
 
-  return {
+  const finalResult = {
     game: gameLabel,
     homeTeam: scoutReport.homeTeam,
     awayTeam: scoutReport.awayTeam,
     briefing,
     calledTools
   };
+
+  if (sharedResearchCache) {
+    sharedResearchCache.set(cacheKey, finalResult);
+  }
+
+  return finalResult;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -227,15 +243,43 @@ export async function researchAllGames(genAI, scoutReports, context, options = {
     return [];
   }
 
-  console.log(`[Game Research] Launching ${scoutReports.length} parallel research sessions...`);
+  const parsedConcurrency = Number.parseInt(process.env.DFS_RESEARCH_CONCURRENCY || '', 10);
+  const concurrency = Math.max(
+    1,
+    Number.isFinite(parsedConcurrency) ? parsedConcurrency : DEFAULT_RESEARCH_CONCURRENCY
+  );
+
+  console.log(`[Game Research] Launching ${scoutReports.length} research sessions (concurrency=${concurrency})...`);
   for (const r of scoutReports) {
     console.log(`[Game Research]   → ${r.game}`);
   }
 
-  // Run all game research sessions in parallel
-  const results = await Promise.all(
-    scoutReports.map(report => researchSingleGame(genAI, report, context, options))
+  const results = new Array(scoutReports.length);
+  let nextIndex = 0;
+
+  async function worker() {
+    while (true) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+      if (currentIndex >= scoutReports.length) return;
+      results[currentIndex] = await researchSingleGame(genAI, scoutReports[currentIndex], context, options);
+    }
+  }
+
+  const workers = Array.from(
+    { length: Math.min(concurrency, scoutReports.length) },
+    () => worker()
   );
+  await Promise.all(workers);
 
   return results;
+}
+
+function buildSharedResearchCacheKey(scoutReport, context) {
+  const sport = (context?.sport || 'NBA').toUpperCase();
+  const platform = (context?.platform || '').toLowerCase();
+  const gameLabel = `${scoutReport?.awayTeam || ''}@${scoutReport?.homeTeam || ''}`;
+  const flashText = scoutReport?.flashText || '';
+  const hash = createHash('sha1').update(flashText).digest('hex');
+  return `${sport}|${platform}|${gameLabel}|${hash}`;
 }

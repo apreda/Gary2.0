@@ -1,18 +1,3 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-
-let gemini;
-
-export function getGemini() {
-  if (!gemini) {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      throw new Error('GEMINI_API_KEY environment variable is required');
-    }
-    gemini = new GoogleGenerativeAI(apiKey, "v1beta");
-  }
-  return gemini;
-}
-
 // ═══════════════════════════════════════════════════════════════════════════
 // GEMINI MODEL POLICY (2026 AGENTIC OPTIMIZATION)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -25,12 +10,12 @@ export function getGemini() {
 // ═══════════════════════════════════════════════════════════════════════════
 
 export const GEMINI_PRO_MODEL = 'gemini-3.1-pro-preview';
-export const GEMINI_PRO_FALLBACK = 'gemini-3-pro-preview';  // Fallback for 429 cascade
+// gemini-3-pro-preview is DEAD (shut down March 9, 2026) — cascade goes 3.1 Pro → Flash
+export const GEMINI_PRO_FALLBACK = 'gemini-3-flash-preview';
 
 export const ALLOWED_GEMINI_MODELS = [
-  'gemini-3-flash-preview',  // Flash: used for scout report tool calling
-  GEMINI_PRO_MODEL,          // Primary: Investigation + Evaluation + Final Decision
-  GEMINI_PRO_FALLBACK,       // Pro fallback for 429 cascade
+  'gemini-3-flash-preview',  // Flash: props, DFS, research, 429 fallback
+  GEMINI_PRO_MODEL,          // Primary: Game picks investigation + evaluation + decision
 ];
 
 export function validateGeminiModel(model) {
@@ -71,6 +56,6 @@ export const GEMINI_SAFETY_SETTINGS = [
 // Flash research timeout — generous to accommodate full investigation
 // Flash does 25+ stat calls + 6+ grounding searches (~20s each) + 5+ Gemini API calls
 // Real-world observed: 27 stat + 6 grounding + 5 iterations ≈ 250s
-export const RESEARCH_BRIEFING_TIMEOUT_MS = 300000; // 300 seconds (5 min)
+export const RESEARCH_BRIEFING_TIMEOUT_MS = 420000; // 420 seconds (7 min) — WBC/international games need more grounding searches
 
 console.log(`[Orchestrator] Gemini 3.1 Pro (main) + Flash (research + grounding)`);

@@ -27,7 +27,7 @@ export function getRosterSlots(platform, sport) {
   const s = (sport || 'NBA').toUpperCase();
 
   if (s === 'NFL') {
-    if (isFD) return ['QB', 'RB', 'RB', 'WR', 'WR', 'WR', 'TE', 'FLEX', 'DEF'];
+    if (isFD) return ['QB', 'RB', 'RB', 'WR', 'WR', 'WR', 'TE', 'FLEX', 'K', 'DST'];
     return ['QB', 'RB', 'RB', 'WR', 'WR', 'WR', 'TE', 'FLEX', 'DST'];
   }
   // NBA

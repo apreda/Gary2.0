@@ -161,8 +161,8 @@
 import { ballDontLieService } from '../../../ballDontLieService.js';
 import { geminiGroundingSearch, getGroundedWeather } from '../../scoutReport/scoutReportBuilder.js';
 import { isGameCompleted, formatStatValue, safeStatValue } from '../../sharedUtils.js';
-// Highlightly stripped to venue-only — H2H now uses BDL directly
-import { getNcaabVenue } from '../../../ncaabVenueService.js';
+// Highlightly API — venue, H2H, last-five-games
+import { getNcaabVenue, getH2H, getLastFiveGames } from '../../../ncaabVenueService.js';
 import { nbaSeason, nhlSeason, nflSeason, ncaabSeason } from '../../../../utils/dateUtils.js';
 import { getTeamRatings as getBarttovikRatings } from '../../../ncaabMetricsService.js';
 

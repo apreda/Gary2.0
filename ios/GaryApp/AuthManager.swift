@@ -25,6 +25,13 @@ final class AuthManager: ObservableObject {
     private var baseURL: String { Secrets.supabaseURL.absoluteString }
     private var apiKey: String { Secrets.supabaseAnonKey }
 
+    private func authURL(_ path: String) throws -> URL {
+        guard let url = URL(string: "\(baseURL)\(path)") else {
+            throw URLError(.badURL)
+        }
+        return url
+    }
+
     // MARK: - Init
 
     private init() {
@@ -71,7 +78,7 @@ final class AuthManager: ObservableObject {
     func signUp(email: String, password: String) async throws {
         errorMessage = nil
 
-        let url = URL(string: "\(baseURL)/auth/v1/signup")!
+        let url = try authURL("/auth/v1/signup")
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -105,7 +112,7 @@ final class AuthManager: ObservableObject {
     func signIn(email: String, password: String) async throws {
         errorMessage = nil
 
-        let url = URL(string: "\(baseURL)/auth/v1/token?grant_type=password")!
+        let url = try authURL("/auth/v1/token?grant_type=password")
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -144,7 +151,7 @@ final class AuthManager: ObservableObject {
             throw AuthError.serverError("Missing Apple identity token")
         }
 
-        let url = URL(string: "\(baseURL)/auth/v1/token?grant_type=id_token")!
+        let url = try authURL("/auth/v1/token?grant_type=id_token")
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -187,15 +194,15 @@ final class AuthManager: ObservableObject {
     // MARK: - OAuth (Google, Facebook) — Opens web flow
 
     /// Returns the OAuth URL to open in a web view / ASWebAuthenticationSession
-    func oauthURL(provider: OAuthProvider) -> URL {
-        let redirectScheme = "com.gary.app" // Must match URL scheme in Info.plist
+    func oauthURL(provider: OAuthProvider) -> URL? {
+        let redirectScheme = "com.gary.app"
         let redirectURL = "\(redirectScheme)://auth-callback"
-        var components = URLComponents(string: "\(baseURL)/auth/v1/authorize")!
+        guard var components = URLComponents(string: "\(baseURL)/auth/v1/authorize") else { return nil }
         components.queryItems = [
             URLQueryItem(name: "provider", value: provider.rawValue),
             URLQueryItem(name: "redirect_to", value: redirectURL)
         ]
-        return components.url!
+        return components.url
     }
 
     /// Handle the OAuth callback URL containing tokens
@@ -232,7 +239,7 @@ final class AuthManager: ObservableObject {
     func resetPassword(email: String) async throws {
         errorMessage = nil
 
-        let url = URL(string: "\(baseURL)/auth/v1/recover")!
+        let url = try authURL("/auth/v1/recover")
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -253,7 +260,7 @@ final class AuthManager: ObservableObject {
     func signOut() {
         // Fire-and-forget server logout
         Task {
-            let url = URL(string: "\(baseURL)/auth/v1/logout")!
+            let url = try authURL("/auth/v1/logout")
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
             request.setValue(apiKey, forHTTPHeaderField: "apikey")
@@ -272,7 +279,7 @@ final class AuthManager: ObservableObject {
     }
 
     private func fetchCurrentUser() async throws -> GaryUser {
-        let url = URL(string: "\(baseURL)/auth/v1/user")!
+        let url = try authURL("/auth/v1/user")
         var request = URLRequest(url: url)
         request.setValue(apiKey, forHTTPHeaderField: "apikey")
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
@@ -287,7 +294,7 @@ final class AuthManager: ObservableObject {
     }
 
     private func refreshSession() async throws {
-        let url = URL(string: "\(baseURL)/auth/v1/token?grant_type=refresh_token")!
+        let url = try authURL("/auth/v1/token?grant_type=refresh_token")
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")

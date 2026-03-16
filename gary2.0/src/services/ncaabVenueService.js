@@ -1,17 +1,24 @@
 /**
- * Highlightly NCAAB Service — Venue Data Only
+ * Highlightly Sports API Service
  *
- * Provides arena/venue names for NCAAB games.
- * BDL handles all stats, H2H, and game data — Highlightly is only used
- * for venue info (arena name, city, state) which BDL doesn't provide.
+ * Provides structured data from the Highlightly (sport-highlights) API:
+ *   - Venue data for NCAAB games
+ *   - Head-to-Head (H2H) matchup history
+ *   - Last Five Games for team form
  *
- * Endpoints used:
- *   GET /teams?league=ncaab              — team ID lookup (for match search)
- *   GET /matches?league=ncaab&date=X     — find today's match ID
- *   GET /matches/{id}                    — get venue from match detail
+ * Sport paths:
+ *   NBA/NCAAB → /nba/ (league param distinguishes)
+ *   NHL       → /nhl/
  *
  * If the API fails or key is not configured, everything returns null (graceful skip).
  */
+
+// Highlightly has two base URLs — NBA/NCAAB and NHL use different RapidAPI hosts
+const SPORT_CONFIG = {
+  nba:   { base: 'https://nba-ncaab-api.p.rapidapi.com', host: 'nba-ncaab-api.p.rapidapi.com', path: '/nba' },
+  ncaab: { base: 'https://nba-ncaab-api.p.rapidapi.com', host: 'nba-ncaab-api.p.rapidapi.com', path: '/nba' },
+  nhl:   { base: 'https://nhl-ncaah-api.p.rapidapi.com', host: 'nhl-ncaah-api.p.rapidapi.com', path: '/nhl' },
+};
 
 const BASE_URL = 'https://nba-ncaab-api.p.rapidapi.com';
 const RAPIDAPI_HOST = 'nba-ncaab-api.p.rapidapi.com';
@@ -32,13 +39,18 @@ function getApiKey() {
 }
 
 /**
- * Generic API call with caching and error handling
+ * Generic API call with caching and error handling.
+ * @param {string} endpoint - API path (e.g., '/teams', '/head-2-head')
+ * @param {object} params - Query parameters
+ * @param {number} cacheTtl - Cache TTL in ms
+ * @param {string} sport - Sport key for routing ('ncaab', 'nba', 'nhl'). Defaults to ncaab.
  */
-async function apiCall(endpoint, params = {}, cacheTtl = CACHE_TTL) {
+async function apiCall(endpoint, params = {}, cacheTtl = CACHE_TTL, sport = 'ncaab') {
   const key = getApiKey();
   if (!key) return null;
 
-  const url = new URL(`${BASE_URL}${endpoint}`);
+  const config = SPORT_CONFIG[sport] || SPORT_CONFIG.ncaab;
+  const url = new URL(`${config.base}${endpoint}`);
   Object.entries(params).forEach(([k, v]) => {
     if (v !== undefined && v !== null) {
       url.searchParams.append(k, String(v));
@@ -54,7 +66,7 @@ async function apiCall(endpoint, params = {}, cacheTtl = CACHE_TTL) {
   const response = await fetch(url.toString(), {
     headers: {
       'x-rapidapi-key': key,
-      'x-rapidapi-host': RAPIDAPI_HOST
+      'x-rapidapi-host': config.host
     }
   });
 
@@ -213,4 +225,153 @@ async function getNcaabVenue(homeTeamName, awayTeamName) {
   }
 }
 
-export { getNcaabVenue };
+// ─────────────────────────────────────────────────────────────
+// Head-to-Head (H2H) — Current Season Matchups
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Get H2H history between two NCAAB teams using Highlightly API.
+ * Returns up to 10 past matchups with scores, filtered to current season.
+ *
+ * @param {string} homeTeamName - Home team name (e.g., "Duke")
+ * @param {string} awayTeamName - Away team name (e.g., "North Carolina")
+ * @returns {{ found: boolean, games: Array, record: string } | null}
+ */
+async function getH2H(homeTeamName, awayTeamName, sport = 'ncaab') {
+  try {
+    const startTime = Date.now();
+
+    const [homeTeam, awayTeam] = await Promise.all([
+      findNcaabTeamId(homeTeamName),
+      findNcaabTeamId(awayTeamName)
+    ]);
+
+    if (!homeTeam?.id || !awayTeam?.id) {
+      console.log(`[Highlightly] H2H: Could not match teams: ${homeTeamName} / ${awayTeamName}`);
+      return null;
+    }
+
+    const data = await apiCall('/head-2-head', {
+      teamIdOne: homeTeam.id,
+      teamIdTwo: awayTeam.id
+    }, CACHE_TTL, sport);
+
+    const games = Array.isArray(data) ? data : (data?.data || []);
+
+    if (!games.length) {
+      console.log(`[Highlightly] H2H: No matchups found for ${homeTeamName} vs ${awayTeamName} (${Date.now() - startTime}ms)`);
+      return { found: false, games: [], message: `No H2H games found between ${homeTeamName} and ${awayTeamName}.` };
+    }
+
+    // Filter to current season only (games from this academic year)
+    const seasonStart = getCurrentSeasonStart();
+    const currentSeasonGames = games.filter(g => {
+      const gameDate = new Date(g.date);
+      return gameDate >= seasonStart && gameDate < new Date();
+    });
+
+    // Format results
+    const homeName = homeTeam.fullName;
+    const awayName = awayTeam.fullName;
+    let homeWins = 0, awayWins = 0;
+
+    const meetings = currentSeasonGames.slice(0, 5).map(game => {
+      // Scores are in state.score.homeTeam / awayTeam as arrays (per-period), sum them
+      const gameHomeTotal = Array.isArray(game.state?.score?.homeTeam)
+        ? game.state.score.homeTeam.reduce((a, b) => a + b, 0)
+        : (game.state?.score?.homeTeam ?? 0);
+      const gameAwayTotal = Array.isArray(game.state?.score?.awayTeam)
+        ? game.state.score.awayTeam.reduce((a, b) => a + b, 0)
+        : (game.state?.score?.awayTeam ?? 0);
+
+      // Map game's home/away to OUR home/away
+      const homeScore = game.homeTeam?.id === homeTeam.id ? gameHomeTotal : gameAwayTotal;
+      const awayScore = game.homeTeam?.id === homeTeam.id ? gameAwayTotal : gameHomeTotal;
+
+      const winner = homeScore > awayScore ? homeName : awayName;
+      const margin = Math.abs(homeScore - awayScore);
+      const gameDate = new Date(game.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+      if (homeScore > awayScore) homeWins++;
+      else awayWins++;
+
+      return {
+        date: gameDate,
+        result: `${winner} won by ${margin}`,
+        score: `${homeName} ${homeScore} - ${awayScore} ${awayName}`,
+        homeBoxLines: [],
+        awayBoxLines: []
+      };
+    });
+
+    console.log(`[Highlightly] H2H: ${currentSeasonGames.length} game(s) this season for ${homeTeamName} vs ${awayTeamName} (${Date.now() - startTime}ms)`);
+
+    return {
+      found: meetings.length > 0,
+      homeName,
+      awayName,
+      gamesFound: currentSeasonGames.length,
+      record: `${homeName} ${homeWins}-${awayWins} ${awayName}`,
+      meetings,
+      season: new Date().getFullYear()
+    };
+  } catch (e) {
+    console.warn(`[Highlightly] H2H fetch failed: ${e.message}`);
+    return null;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Last Five Games — Recent Form
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Get the last 5 finished games for a team.
+ * @param {string} teamName - Team name
+ * @param {string} sport - Sport key ('ncaab', 'nba', 'nhl')
+ * @returns {Array|null} Array of recent game results with scores
+ */
+async function getLastFiveGames(teamName, sport = 'ncaab') {
+  try {
+    const team = await findNcaabTeamId(teamName);
+    if (!team?.id) return null;
+
+    const data = await apiCall('/last-five-games', { teamId: team.id }, CACHE_TTL, sport);
+    const games = Array.isArray(data) ? data : (data?.data || []);
+
+    return games.map(g => {
+      const homeTotal = Array.isArray(g.state?.score?.homeTeam)
+        ? g.state.score.homeTeam.reduce((a, b) => a + b, 0)
+        : (g.state?.score?.homeTeam ?? 0);
+      const awayTotal = Array.isArray(g.state?.score?.awayTeam)
+        ? g.state.score.awayTeam.reduce((a, b) => a + b, 0)
+        : (g.state?.score?.awayTeam ?? 0);
+      return {
+        date: g.date,
+        homeTeam: g.homeTeam?.displayName || g.homeTeam?.name,
+        awayTeam: g.awayTeam?.displayName || g.awayTeam?.name,
+        homeScore: homeTotal,
+        awayScore: awayTotal,
+        state: g.state?.description || 'Finished'
+      };
+    });
+  } catch (e) {
+    console.warn(`[Highlightly] Last 5 games failed for ${teamName}: ${e.message}`);
+    return null;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Get the start date of the current NCAAB season (November 1 of the academic year).
+ */
+function getCurrentSeasonStart() {
+  const now = new Date();
+  const year = now.getMonth() >= 10 ? now.getFullYear() : now.getFullYear() - 1;
+  return new Date(year, 10, 1); // November 1
+}
+
+export { getNcaabVenue, getH2H, getLastFiveGames, findNcaabTeamId };

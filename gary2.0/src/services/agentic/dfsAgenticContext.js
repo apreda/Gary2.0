@@ -82,6 +82,43 @@ function getInjuryByName(playerName) {
   return _injuryNameCache.get(normalizedName);
 }
 
+function restoreInjuryNameCache(entries = []) {
+  _injuryNameCache = new Map(entries || []);
+}
+
+function getSharedCacheBucket(sharedContextCache, bucketName) {
+  if (!sharedContextCache) return null;
+  if (!sharedContextCache[bucketName]) {
+    sharedContextCache[bucketName] = new Map();
+  }
+  return sharedContextCache[bucketName];
+}
+
+async function getOrSetSharedCache(sharedContextCache, bucketName, cacheKey, loader) {
+  const bucket = getSharedCacheBucket(sharedContextCache, bucketName);
+  if (!bucket) return loader();
+
+  if (bucket.has(cacheKey)) {
+    return await bucket.get(cacheKey);
+  }
+
+  const pending = Promise.resolve().then(loader);
+  bucket.set(cacheKey, pending);
+
+  try {
+    const value = await pending;
+    bucket.set(cacheKey, value);
+    return value;
+  } catch (error) {
+    bucket.delete(cacheKey);
+    throw error;
+  }
+}
+
+function buildSlateCacheKey(sport, dateStr, slateTeams = []) {
+  return `${String(sport || '').toUpperCase()}|${dateStr}|${[...slateTeams].map(t => String(t).toUpperCase()).sort().join(',')}`;
+}
+
 
 
 /**
@@ -423,7 +460,9 @@ async function fetchPlayerStatsFromBDL(sport, dateStr, slateTeams = []) {
               dkFptsAvg: Math.round(gameRows.reduce((sum, g) => sum + g.dkFpts, 0) / n * 10) / 10,
               fdFptsAvg: Math.round(gameRows.reduce((sum, g) => sum + g.fdFpts, 0) / n * 10) / 10,
               bestDkFpts: Math.max(...gameRows.map(g => g.dkFpts)),
-              worstDkFpts: Math.min(...gameRows.map(g => g.dkFpts))
+              worstDkFpts: Math.min(...gameRows.map(g => g.dkFpts)),
+              bestFdFpts: Math.max(...gameRows.map(g => g.fdFpts)),
+              worstFdFpts: Math.min(...gameRows.map(g => g.fdFpts))
             };
             l5StatsMap.set(pid, l5);
           }
@@ -1257,8 +1296,9 @@ async function getTeamsPlayingToday(sport, dateStr) {
  * @param {Object} slate - Optional slate info { teams: [], games: [], name: '' }
  * @returns {Object} Complete player pool with salaries and stats
  */
-export async function buildDFSContext(platform, sport, dateStr, slate = null) {
+export async function buildDFSContext(platform, sport, dateStr, slate = null, options = {}) {
   const start = Date.now();
+  const sharedContextCache = options.sharedContextCache || null;
   console.log(`\n[DFS Context] Building ${platform} ${sport} context for ${dateStr} ${slate ? `(${slate.name})` : '(Main Slate)'}`);
   
   // Format date for display
@@ -1318,285 +1358,232 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
   teams = slateTeams;
   console.log(`[DFS Context] ✅ Teams in this slate: ${slateTeams.join(', ')}`);
 
-  // Try to enrich games with O/U and spread from BDL
   const sportKey = sport === 'NBA' ? 'basketball_nba' : 'americanfootball_nfl';
   const oddsDate = dateStr || new Date().toISOString().split('T')[0];
-
-  // BDL odds are keyed by game_id — need to fetch games first to get IDs + team names,
-  // then join with odds rows. Use getGames (date-only format) + getOddsV2.
-  let bdlGameOddsMap = new Map(); // homeTeam+awayTeam → { total, spread }
-  let bdlTeamIdMap = new Map(); // teamAbbr (uppercase) → BDL team ID (for opponent stats fetch)
-  let bdlGameIdMap = new Map(); // teamAbbr (uppercase) → BDL game ID (for player props fetch)
-  try {
-    const [bdlGames, oddsRows] = await Promise.all([
-      ballDontLieService.getGames(sportKey, { dates: [oddsDate] }).catch(() => []),
-      ballDontLieService.getOddsV2({ dates: [oddsDate], per_page: 100 }, sportKey).catch(() => [])
-    ]);
-
-    // Index odds by game_id (pick first vendor per game)
-    const oddsByGameId = new Map();
-    for (const row of (oddsRows || [])) {
-      if (!oddsByGameId.has(row.game_id)) {
-        oddsByGameId.set(row.game_id, row);
-      }
-    }
-
-    // Match games to odds by game_id, index by team abbreviation pair
-    // Also capture team IDs for opponent stats fetching
-    for (const g of (bdlGames || [])) {
-      const home = (g.home_team?.abbreviation || '').toUpperCase();
-      const away = (g.visitor_team?.abbreviation || '').toUpperCase();
-      if (!home || !away) continue;
-
-      // Capture team IDs and game IDs from BDL games
-      if (g.home_team?.id) bdlTeamIdMap.set(home, g.home_team.id);
-      if (g.visitor_team?.id) bdlTeamIdMap.set(away, g.visitor_team.id);
-      if (g.id) {
-        bdlGameIdMap.set(home, g.id);
-        bdlGameIdMap.set(away, g.id);
-      }
-
-      const odds = oddsByGameId.get(g.id);
-      if (odds) {
-        bdlGameOddsMap.set(`${away}@${home}`, {
-          total: odds.total_value != null ? parseFloat(odds.total_value) : null,
-          spread: odds.spread_home_value != null ? parseFloat(odds.spread_home_value) : null
-        });
-      }
-    }
-    if (bdlGameOddsMap.size > 0) {
-      console.log(`[DFS Context] ✅ BDL odds enrichment: ${bdlGameOddsMap.size} games with O/U and spread`);
-    }
-    if (bdlTeamIdMap.size > 0) {
-      console.log(`[DFS Context] ✅ BDL team IDs captured: ${bdlTeamIdMap.size} teams`);
-    }
-  } catch (e) {
-    console.warn(`[DFS Context] BDL odds fetch failed (${e.message}) — games will have no O/U or spread`);
-  }
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // BACK-TO-BACK DETECTION
-  // Teams that played yesterday have fatigue risk — starters may rest or play
-  // fewer minutes. This is awareness for Gary, not a hard rule.
-  // ═══════════════════════════════════════════════════════════════════════════
   const isNBA = sport.toUpperCase() === 'NBA';
-  const b2bTeams = new Set();
-  if (isNBA) {
+  const isNFL = sport.toUpperCase() === 'NFL';
+  const slateCacheKey = buildSlateCacheKey(sport, dateStr, slateTeams);
+
+  const sharedSlateContext = await getOrSetSharedCache(sharedContextCache, 'dfsSlateBaseContext', slateCacheKey, async () => {
+    let bdlGameOddsMap = new Map();
+    let bdlTeamIdMap = new Map();
+    let bdlGameIdMap = new Map();
+
     try {
-      const yesterdayDate = new Date(dateStr + 'T12:00:00');
-      yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-      const yesterdayStr = yesterdayDate.toISOString().split('T')[0];
-      const yesterdayGames = await ballDontLieService.getGames(sportKey, { dates: [yesterdayStr] }).catch(() => []);
-      for (const g of (yesterdayGames || [])) {
-        const home = (g.home_team?.abbreviation || '').toUpperCase();
-        const away = (g.visitor_team?.abbreviation || '').toUpperCase();
-        if (home && slateTeams.includes(home)) b2bTeams.add(home);
-        if (away && slateTeams.includes(away)) b2bTeams.add(away);
-      }
-      if (b2bTeams.size > 0) {
-        console.log(`[DFS Context] ⚠️ B2B teams detected: ${Array.from(b2bTeams).join(', ')}`);
-      }
-    } catch (e) {
-      console.warn(`[DFS Context] B2B detection failed (${e.message}) — skipping`);
-    }
-  }
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // OPPONENT DEFENSE PROFILES (NBA only)
-  // Fetches real BDL opponent stats + advanced stats per team for game environment
-  // ═══════════════════════════════════════════════════════════════════════════
-  let teamDefenseProfiles = new Map(); // teamAbbr → { opp_pts, opp_efg_pct, opp_fg3_pct, opp_ft_rate, pace }
-  if (isNBA && bdlTeamIdMap.size > 0) {
-    try {
-      const now = new Date();
-      const currentYear = now.getFullYear();
-      const currentMonth = now.getMonth() + 1;
-      const season = currentMonth >= 10 ? currentYear : currentYear - 1;
-
-      // Fetch opponent stats + advanced stats for all slate teams in parallel
-      const slateTeamEntries = Array.from(bdlTeamIdMap.entries()).filter(([abbr]) =>
-        games.some(g => g.homeTeam === abbr || g.awayTeam === abbr)
-      );
-
-      const defensePromises = slateTeamEntries.map(async ([abbr, teamId]) => {
-        const [oppStats, advStats] = await Promise.all([
-          ballDontLieService.getTeamOpponentStats(teamId, season).catch(() => null),
-          ballDontLieService.getTeamSeasonAdvanced(teamId, season).catch(() => null)
-        ]);
-        return { abbr, oppStats, advStats };
-      });
-
-      const defenseResults = await Promise.all(defensePromises);
-
-      for (const { abbr, oppStats, advStats } of defenseResults) {
-        if (!oppStats) continue;
-        // Calculate eFG% allowed: (opp_fgm + 0.5 * opp_fg3m) / opp_fga * 100
-        const oppEfgPct = (oppStats.opp_fga > 0)
-          ? ((oppStats.opp_fgm + 0.5 * oppStats.opp_fg3m) / oppStats.opp_fga * 100)
-          : null;
-        // Calculate FT rate allowed: opp_fta / opp_fga
-        const oppFtRate = (oppStats.opp_fga > 0)
-          ? (oppStats.opp_fta / oppStats.opp_fga)
-          : null;
-
-        teamDefenseProfiles.set(abbr, {
-          opp_pts: oppStats.opp_pts ?? null,
-          opp_efg_pct: oppEfgPct != null ? parseFloat(oppEfgPct.toFixed(1)) : null,
-          opp_fg3_pct: oppStats.opp_fg3_pct != null ? parseFloat((oppStats.opp_fg3_pct * 100).toFixed(1)) : null,
-          opp_ft_rate: oppFtRate != null ? parseFloat(oppFtRate.toFixed(3)) : null,
-          pace: advStats?.pace != null ? parseFloat(advStats.pace.toFixed(1)) : null
-        });
-      }
-
-      if (teamDefenseProfiles.size > 0) {
-        console.log(`[DFS Context] ✅ BDL opponent defense profiles: ${teamDefenseProfiles.size} teams`);
-      }
-    } catch (e) {
-      console.warn(`[DFS Context] BDL opponent defense fetch failed (${e.message}) — games will have no defense profiles`);
-    }
-  }
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // TEAM BASE STATS, DEFENSE BREAKDOWN, SCORING PROFILE (NBA only)
-  // Mirrors the game picks pipeline — gives Gary team-level context for DFS
-  // ═══════════════════════════════════════════════════════════════════════════
-  let teamBaseStatsMap = new Map();   // teamAbbr → { pts, reb, ast, fg_pct, fg3_pct, ft_pct, oreb, dreb, tov, blk, stl }
-  let teamDefenseBreakdownMap = new Map(); // teamAbbr → { opp_pts_paint, opp_pts_fb, opp_pts_off_tov, opp_pts_2nd_chance }
-  let teamScoringProfileMap = new Map();   // teamAbbr → { pct_pts_paint, pct_pts_3pt, pct_pts_ft, pct_fga_2pt, pct_fga_3pt, pct_ast_fgm }
-  let standingsData = null;           // Array of team standings
-
-  if (isNBA && bdlTeamIdMap.size > 0) {
-    try {
-      const now = new Date();
-      const currentYear = now.getFullYear();
-      const currentMonth = now.getMonth() + 1;
-      const season = currentMonth >= 10 ? currentYear : currentYear - 1;
-
-      const slateTeamEntries = Array.from(bdlTeamIdMap.entries()).filter(([abbr]) =>
-        games.some(g => g.homeTeam === abbr || g.awayTeam === abbr)
-      );
-
-      // Fetch all three team stat types + standings in parallel using Promise.allSettled
-      const [baseResults, defenseResults, scoringResults, standingsResult] = await Promise.allSettled([
-        // Team Base Stats for all slate teams
-        Promise.all(slateTeamEntries.map(async ([abbr, teamId]) => {
-          const stats = await ballDontLieService.getTeamBaseStats(teamId, season).catch(() => null);
-          return { abbr, stats };
-        })),
-        // Team Defense Breakdown for all slate teams
-        Promise.all(slateTeamEntries.map(async ([abbr, teamId]) => {
-          const stats = await ballDontLieService.getTeamDefenseStats(teamId, season).catch(() => null);
-          return { abbr, stats };
-        })),
-        // Team Scoring Profile for all slate teams
-        Promise.all(slateTeamEntries.map(async ([abbr, teamId]) => {
-          const stats = await ballDontLieService.getTeamScoringStats(teamId, season).catch(() => null);
-          return { abbr, stats };
-        })),
-        // Standings (once, not per team)
-        ballDontLieService.getNbaStandings(season)
+      const [bdlGames, oddsRows] = await Promise.all([
+        ballDontLieService.getGames(sportKey, { dates: [oddsDate] }).catch(() => []),
+        ballDontLieService.getOddsV2({ dates: [oddsDate], per_page: 100 }, sportKey).catch(() => [])
       ]);
 
-      // Process base stats
-      if (baseResults.status === 'fulfilled') {
-        for (const { abbr, stats } of baseResults.value) {
-          if (stats) teamBaseStatsMap.set(abbr, stats);
+      const oddsByGameId = new Map();
+      for (const row of (oddsRows || [])) {
+        if (!oddsByGameId.has(row.game_id)) oddsByGameId.set(row.game_id, row);
+      }
+
+      for (const g of (bdlGames || [])) {
+        const home = (g.home_team?.abbreviation || '').toUpperCase();
+        const away = (g.visitor_team?.abbreviation || '').toUpperCase();
+        if (!home || !away) continue;
+
+        if (g.home_team?.id) bdlTeamIdMap.set(home, g.home_team.id);
+        if (g.visitor_team?.id) bdlTeamIdMap.set(away, g.visitor_team.id);
+        if (g.id) {
+          bdlGameIdMap.set(home, g.id);
+          bdlGameIdMap.set(away, g.id);
         }
-      } else {
-        console.warn('[DFS Context] Team base stats fetch failed:', baseResults.reason?.message);
-      }
 
-      // Process defense breakdown
-      if (defenseResults.status === 'fulfilled') {
-        for (const { abbr, stats } of defenseResults.value) {
-          if (stats) teamDefenseBreakdownMap.set(abbr, stats);
+        const odds = oddsByGameId.get(g.id);
+        if (odds) {
+          bdlGameOddsMap.set(`${away}@${home}`, {
+            total: odds.total_value != null ? parseFloat(odds.total_value) : null,
+            spread: odds.spread_home_value != null ? parseFloat(odds.spread_home_value) : null
+          });
         }
-      } else {
-        console.warn('[DFS Context] Team defense breakdown fetch failed:', defenseResults.reason?.message);
-      }
-
-      // Process scoring profile
-      if (scoringResults.status === 'fulfilled') {
-        for (const { abbr, stats } of scoringResults.value) {
-          if (stats) teamScoringProfileMap.set(abbr, stats);
-        }
-      } else {
-        console.warn('[DFS Context] Team scoring profile fetch failed:', scoringResults.reason?.message);
-      }
-
-      // Process standings
-      if (standingsResult.status === 'fulfilled' && standingsResult.value) {
-        standingsData = standingsResult.value;
-      } else {
-        console.warn('[DFS Context] Standings fetch failed:', standingsResult.reason?.message);
-      }
-
-      console.log(`[DFS Context] Team stats: base ${teamBaseStatsMap.size > 0 ? '\u2713' : '\u2717'}, defense ${teamDefenseBreakdownMap.size > 0 ? '\u2713' : '\u2717'}, scoring ${teamScoringProfileMap.size > 0 ? '\u2713' : '\u2717'}, standings ${standingsData ? '\u2713' : '\u2717'}`);
-    } catch (e) {
-      console.warn(`[DFS Context] BDL team stats fetch failed (${e.message}) — continuing without supplementary team data`);
-    }
-  }
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // NFL STANDINGS (weekly sport — no B2B, no pace, but standings matter)
-  // ═══════════════════════════════════════════════════════════════════════════
-  const isNFL = sport.toUpperCase() === 'NFL';
-  if (isNFL && !standingsData) {
-    try {
-      const now = new Date();
-      const currentYear = now.getFullYear();
-      const currentMonth = now.getMonth() + 1;
-      const nflSeason = currentMonth >= 9 ? currentYear : currentYear - 1;
-      standingsData = await ballDontLieService.getNflStandings(nflSeason);
-      if (standingsData) {
-        console.log(`[DFS Context] NFL standings: ${standingsData.length} teams`);
       }
     } catch (e) {
-      console.warn(`[DFS Context] NFL standings fetch failed (${e.message})`);
+      console.warn(`[DFS Context] BDL odds fetch failed (${e.message}) — games will have no O/U or spread`);
     }
-  }
 
-  // Build game list with O/U, spread, implied totals, blowout risk, and defense enrichment
-  const gameList = games.map(g => {
-    const key = `${g.awayTeam}@${g.homeTeam}`;
-    const odds = bdlGameOddsMap.get(key);
-    const total = odds?.total || null;
-    const spread = odds?.spread || null; // Home spread (negative = home favored)
+    const b2bTeams = new Set();
+    if (isNBA) {
+      try {
+        const yesterdayDate = new Date(dateStr + 'T12:00:00');
+        yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+        const yesterdayStr = yesterdayDate.toISOString().split('T')[0];
+        const yesterdayGames = await ballDontLieService.getGames(sportKey, { dates: [yesterdayStr] }).catch(() => []);
+        for (const g of (yesterdayGames || [])) {
+          const home = (g.home_team?.abbreviation || '').toUpperCase();
+          const away = (g.visitor_team?.abbreviation || '').toUpperCase();
+          if (home && slateTeams.includes(home)) b2bTeams.add(home);
+          if (away && slateTeams.includes(away)) b2bTeams.add(away);
+        }
+      } catch (e) {
+        console.warn(`[DFS Context] B2B detection failed (${e.message}) — skipping`);
+      }
+    }
 
-    // Implied team totals: Home = (Total - Spread) / 2, Away = (Total + Spread) / 2
-    // Spread is home spread (negative = home favored). Subtracting negative increases home total.
-    const impliedHomeTotal = (total != null && spread != null) ? parseFloat(((total - spread) / 2).toFixed(1)) : null;
-    const impliedAwayTotal = (total != null && spread != null) ? parseFloat(((total + spread) / 2).toFixed(1)) : null;
+    let teamDefenseProfiles = new Map();
+    let teamBaseStatsMap = new Map();
+    let teamDefenseBreakdownMap = new Map();
+    let teamScoringProfileMap = new Map();
+    let standingsData = null;
 
-    // Game-level pace: average of both teams' pace (possessions per game)
-    const homePace = teamDefenseProfiles.get(g.homeTeam)?.pace;
-    const awayPace = teamDefenseProfiles.get(g.awayTeam)?.pace;
-    const gamePace = (homePace != null && awayPace != null) ? parseFloat(((homePace + awayPace) / 2).toFixed(1)) : (homePace || awayPace || null);
+    if (isNBA && bdlTeamIdMap.size > 0) {
+      try {
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth() + 1;
+        const season = currentMonth >= 10 ? currentYear : currentYear - 1;
+
+        const slateTeamEntries = Array.from(bdlTeamIdMap.entries()).filter(([abbr]) =>
+          games.some(g => g.homeTeam === abbr || g.awayTeam === abbr)
+        );
+
+        const defenseResults = await Promise.all(
+          slateTeamEntries.map(async ([abbr, teamId]) => {
+            const [oppStats, advStats] = await Promise.all([
+              ballDontLieService.getTeamOpponentStats(teamId, season).catch(() => null),
+              ballDontLieService.getTeamSeasonAdvanced(teamId, season).catch(() => null)
+            ]);
+            return { abbr, oppStats, advStats };
+          })
+        );
+
+        for (const { abbr, oppStats, advStats } of defenseResults) {
+          if (!oppStats) continue;
+          const oppEfgPct = (oppStats.opp_fga > 0)
+            ? ((oppStats.opp_fgm + 0.5 * oppStats.opp_fg3m) / oppStats.opp_fga * 100)
+            : null;
+          const oppFtRate = (oppStats.opp_fga > 0)
+            ? (oppStats.opp_fta / oppStats.opp_fga)
+            : null;
+
+          teamDefenseProfiles.set(abbr, {
+            opp_pts: oppStats.opp_pts ?? null,
+            opp_efg_pct: oppEfgPct != null ? parseFloat(oppEfgPct.toFixed(1)) : null,
+            opp_fg3_pct: oppStats.opp_fg3_pct != null ? parseFloat((oppStats.opp_fg3_pct * 100).toFixed(1)) : null,
+            opp_ft_rate: oppFtRate != null ? parseFloat(oppFtRate.toFixed(3)) : null,
+            pace: advStats?.pace != null ? parseFloat(advStats.pace.toFixed(1)) : null
+          });
+        }
+
+        const [baseResults, defenseBreakdownResults, scoringResults, standingsResult] = await Promise.allSettled([
+          Promise.all(slateTeamEntries.map(async ([abbr, teamId]) => ({ abbr, stats: await ballDontLieService.getTeamBaseStats(teamId, season).catch(() => null) }))),
+          Promise.all(slateTeamEntries.map(async ([abbr, teamId]) => ({ abbr, stats: await ballDontLieService.getTeamDefenseStats(teamId, season).catch(() => null) }))),
+          Promise.all(slateTeamEntries.map(async ([abbr, teamId]) => ({ abbr, stats: await ballDontLieService.getTeamScoringStats(teamId, season).catch(() => null) }))),
+          ballDontLieService.getNbaStandings(season)
+        ]);
+
+        if (baseResults.status === 'fulfilled') {
+          for (const { abbr, stats } of baseResults.value) if (stats) teamBaseStatsMap.set(abbr, stats);
+        }
+        if (defenseBreakdownResults.status === 'fulfilled') {
+          for (const { abbr, stats } of defenseBreakdownResults.value) if (stats) teamDefenseBreakdownMap.set(abbr, stats);
+        }
+        if (scoringResults.status === 'fulfilled') {
+          for (const { abbr, stats } of scoringResults.value) if (stats) teamScoringProfileMap.set(abbr, stats);
+        }
+        if (standingsResult.status === 'fulfilled' && standingsResult.value) {
+          standingsData = standingsResult.value;
+        }
+      } catch (e) {
+        console.warn(`[DFS Context] BDL team stats fetch failed (${e.message}) — continuing without supplementary team data`);
+      }
+    }
+
+    if (isNFL && !standingsData) {
+      try {
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth() + 1;
+        const nflSeason = currentMonth >= 9 ? currentYear : currentYear - 1;
+        standingsData = await ballDontLieService.getNflStandings(nflSeason);
+      } catch (e) {
+        console.warn(`[DFS Context] NFL standings fetch failed (${e.message})`);
+      }
+    }
+
+    const gameList = games.map(g => {
+      const key = `${g.awayTeam}@${g.homeTeam}`;
+      const odds = bdlGameOddsMap.get(key);
+      const total = odds?.total || null;
+      const spread = odds?.spread || null;
+      const impliedHomeTotal = (total != null && spread != null) ? parseFloat(((total - spread) / 2).toFixed(1)) : null;
+      const impliedAwayTotal = (total != null && spread != null) ? parseFloat(((total + spread) / 2).toFixed(1)) : null;
+      const homePace = teamDefenseProfiles.get(g.homeTeam)?.pace;
+      const awayPace = teamDefenseProfiles.get(g.awayTeam)?.pace;
+      const gamePace = (homePace != null && awayPace != null) ? parseFloat(((homePace + awayPace) / 2).toFixed(1)) : (homePace || awayPace || null);
+
+      return {
+        home_team: g.homeTeam,
+        visitor_team: g.awayTeam,
+        away_team: g.awayTeam,
+        total,
+        spread,
+        implied_home_total: impliedHomeTotal,
+        implied_away_total: impliedAwayTotal,
+        game_pace: gamePace,
+        home_b2b: b2bTeams.has(g.homeTeam),
+        away_b2b: b2bTeams.has(g.awayTeam),
+        home_defense: teamDefenseProfiles.get(g.homeTeam) || null,
+        away_defense: teamDefenseProfiles.get(g.awayTeam) || null,
+        home_base_stats: teamBaseStatsMap.get(g.homeTeam) || null,
+        away_base_stats: teamBaseStatsMap.get(g.awayTeam) || null,
+        home_defense_breakdown: teamDefenseBreakdownMap.get(g.homeTeam) || null,
+        away_defense_breakdown: teamDefenseBreakdownMap.get(g.awayTeam) || null,
+        home_scoring_profile: teamScoringProfileMap.get(g.homeTeam) || null,
+        away_scoring_profile: teamScoringProfileMap.get(g.awayTeam) || null
+      };
+    });
+
+    const bdlPlayers = await fetchPlayerStatsFromBDL(sport, dateStr, slateTeams);
 
     return {
-      home_team: g.homeTeam,
-      visitor_team: g.awayTeam,
-      away_team: g.awayTeam,
-      total,
-      spread,
-      implied_home_total: impliedHomeTotal,
-      implied_away_total: impliedAwayTotal,
-      game_pace: gamePace,
-      home_b2b: b2bTeams.has(g.homeTeam),
-      away_b2b: b2bTeams.has(g.awayTeam),
-      home_defense: teamDefenseProfiles.get(g.homeTeam) || null,
-      away_defense: teamDefenseProfiles.get(g.awayTeam) || null,
-      // Team base stats (pts, reb, ast, shooting splits, tov, etc.)
-      home_base_stats: teamBaseStatsMap.get(g.homeTeam) || null,
-      away_base_stats: teamBaseStatsMap.get(g.awayTeam) || null,
-      // Team defense breakdown (paint pts allowed, fast break pts, etc.)
-      home_defense_breakdown: teamDefenseBreakdownMap.get(g.homeTeam) || null,
-      away_defense_breakdown: teamDefenseBreakdownMap.get(g.awayTeam) || null,
-      // Team scoring profile (% pts from paint/3pt/FT, shot distribution)
-      home_scoring_profile: teamScoringProfileMap.get(g.homeTeam) || null,
-      away_scoring_profile: teamScoringProfileMap.get(g.awayTeam) || null
+      bdlPlayers,
+      injuryCacheEntries: Array.from(_injuryNameCache.entries()),
+      bdlGameOddsMap,
+      bdlTeamIdMap,
+      bdlGameIdMap,
+      b2bTeams,
+      teamDefenseProfiles,
+      teamBaseStatsMap,
+      teamDefenseBreakdownMap,
+      teamScoringProfileMap,
+      standingsData,
+      gameList
     };
   });
+
+  restoreInjuryNameCache(sharedSlateContext.injuryCacheEntries);
+  let {
+    bdlPlayers,
+    bdlTeamIdMap,
+    bdlGameIdMap,
+    b2bTeams,
+    teamDefenseProfiles,
+    teamBaseStatsMap,
+    teamDefenseBreakdownMap,
+    teamScoringProfileMap,
+    standingsData,
+    gameList
+  } = sharedSlateContext;
+
+  if (sharedSlateContext.bdlGameOddsMap?.size > 0) {
+    console.log(`[DFS Context] ✅ BDL odds enrichment: ${sharedSlateContext.bdlGameOddsMap.size} games with O/U and spread`);
+  }
+  if (bdlTeamIdMap.size > 0) {
+    console.log(`[DFS Context] ✅ BDL team IDs captured: ${bdlTeamIdMap.size} teams`);
+  }
+  if (b2bTeams.size > 0) {
+    console.log(`[DFS Context] ⚠️ B2B teams detected: ${Array.from(b2bTeams).join(', ')}`);
+  }
+  if (teamDefenseProfiles.size > 0) {
+    console.log(`[DFS Context] ✅ BDL opponent defense profiles: ${teamDefenseProfiles.size} teams`);
+  }
+  console.log(`[DFS Context] Team stats: base ${teamBaseStatsMap.size > 0 ? '\u2713' : '\u2717'}, defense ${teamDefenseBreakdownMap.size > 0 ? '\u2713' : '\u2717'}, scoring ${teamScoringProfileMap.size > 0 ? '\u2713' : '\u2717'}, standings ${standingsData ? '\u2713' : '\u2717'}`);
+  if (isNFL && standingsData) {
+    console.log(`[DFS Context] NFL standings: ${standingsData.length} teams`);
+  }
   
   // ═══════════════════════════════════════════════════════════════════════════
   // STAGGERED FETCH: Tank01 API (rate-limited) + BDL stats + Narrative context
@@ -1606,24 +1593,24 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
   // Wave 2: rosters (batched 4 teams at a time with 300ms delay)
   // Wave 3: defense + projections (2 calls parallel)
   // Non-Tank01 calls (BDL) run in parallel alongside all Tank01 waves.
-  const [bdlPlayers, tank01Results] = await Promise.all([
-    fetchPlayerStatsFromBDL(sport, dateStr, slateTeams),
-    // Tank01 calls in staggered waves to avoid rate limits
-    (async () => {
-      // Wave 1: Salaries first (single call, completes fast)
-      const salaryData = await fetchDfsSalaries(sport, dateStr, platform);
-      // Wave 2: Rosters (batched 4 teams at a time with 300ms delay between batches)
-      const rosterData = isNBA ? await fetchNbaRostersForTeams(slateTeams) : new Map();
-      // Wave 3: Defense + Projections (2 calls parallel, after rosters done)
-      const [teamDefenseStats, tank01Projections] = isNBA
-        ? await Promise.all([
-            fetchNbaTeamDefenseStats(),
-            fetchNbaProjections(dateStr),
-          ])
-        : [new Map(), new Map()];
-      return { salaryData, rosterData, teamDefenseStats, tank01Projections };
-    })()
-  ]);
+  const tank01Results = await (async () => {
+    const salaryCacheKey = `${String(sport || '').toUpperCase()}|${dateStr}|${String(platform || '').toLowerCase()}`;
+    const rosterCacheKey = buildSlateCacheKey(sport, dateStr, slateTeams);
+
+    const salaryData = await getOrSetSharedCache(sharedContextCache, 'dfsSalaryData', salaryCacheKey, () =>
+      fetchDfsSalaries(sport, dateStr, platform)
+    );
+    const rosterData = isNBA
+      ? await getOrSetSharedCache(sharedContextCache, 'dfsRosterData', rosterCacheKey, () => fetchNbaRostersForTeams(slateTeams))
+      : new Map();
+    const [teamDefenseStats, tank01Projections] = isNBA
+      ? await Promise.all([
+          getOrSetSharedCache(sharedContextCache, 'dfsTeamDefenseStats', 'NBA|TEAM_DEFENSE', () => fetchNbaTeamDefenseStats()),
+          getOrSetSharedCache(sharedContextCache, 'dfsProjections', `${String(sport || '').toUpperCase()}|${dateStr}`, () => fetchNbaProjections(dateStr)),
+        ])
+      : [new Map(), new Map()];
+    return { salaryData, rosterData, teamDefenseStats, tank01Projections };
+  })();
   const { salaryData, rosterData, teamDefenseStats, tank01Projections } = tank01Results;
   const bdlCount = bdlPlayers.length;
   const salaryCount = salaryData.players?.length || 0;
@@ -2201,5 +2188,4 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null) {
       : null
   };
 }
-
 

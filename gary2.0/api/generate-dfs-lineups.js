@@ -181,6 +181,8 @@ export default async function handler(req, res) {
     const { discoverDFSSlates } = await import('../src/services/agentic/dfsSlateDiscoveryService.js');
     const { generateAgenticDFSLineup } = await import('../src/services/agentic/dfs/dfsAgenticOrchestrator.js');
     const { PLATFORM_CONSTRAINTS } = await import('../src/services/dfsLineupService.js');
+    const sharedContextCache = {};
+    const sharedResearchCache = new Map();
     
     const results = [];
     const errors = [];
@@ -214,7 +216,7 @@ export default async function handler(req, res) {
               console.log(`[DFS] Games: ${slate.gameCount || 0}, Start: ${slate.startTime || 'TBD'}`);
               
               // Build context for this specific slate
-              const context = await buildDFSContext(platform, sport, dateParam, slate);
+              const context = await buildDFSContext(platform, sport, dateParam, slate, { sharedContextCache });
               
               if (!context.players || context.players.length === 0) {
                 console.log(`[DFS] No players found for ${slate.name}`);
@@ -241,7 +243,9 @@ export default async function handler(req, res) {
                 date: dateParam,
                 slate,
                 contestType,
-                context
+                context,
+                sharedResearchCache,
+                sharedContextCache
               });
 
               // Convert agentic result to expected format
@@ -376,6 +380,4 @@ export default async function handler(req, res) {
     });
   }
 }
-
-
 

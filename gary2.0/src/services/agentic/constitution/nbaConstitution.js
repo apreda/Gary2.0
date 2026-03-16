@@ -57,6 +57,11 @@ Use the exact tag shown in the scout report for this game.
 - Rest advantages (opponent on a back-to-back, long road trip) are widely known and typically priced — the edge is in HOW a team performs in those spots, not that the spot exists
 - Home court advantage in the NBA is real but varies significantly by arena and team
 
+### LARGE-LEAD GAME DYNAMICS
+- NBA games change shape when one team builds a large lead — starters get rest, rotations shift to bench units, pace can change, and the intensity level shifts for both teams
+- A team that leads by 20 after three quarters and wins by 8 had a different 4th quarter than the first three — investigate whether each team's margin profile reflects full-game dominance or lead-then-coast patterns
+- Bench depth and end-of-bench minutes matter more in games with large leads — the gap between each team's starters may be enormous, but the gap between their benches may be much smaller
+
 **NBA GTD NOTE:**
 - GTD means the player's availability is UNCERTAIN — they may or may not play
 - A GTD after weeks of absence could signal a RETURN — a different situation than a day-to-day minor tweak
@@ -78,9 +83,9 @@ Use the exact tag shown in the scout report for this game.
   // ═══════════════════════════════════════════════════════════════════════════
   bilateralCasePrompt: (homeTeam, awayTeam) =>
     `Before outputting INVESTIGATION COMPLETE, include both sections in your Pass 1 synthesis:
-Case for ${homeTeam} covering the spread
-Case for ${awayTeam} covering the spread
-(Each case should be 3 paragraphs explaining why that side covers this spread number tonight.)`
+Case for ${homeTeam}
+Case for ${awayTeam}
+(Each case should be 2-3 paragraphs explaining why that side is the right bet at this spread number tonight. Even for heavy underdogs, there is always a case — the spread may be too large, the matchup may favor them in specific ways, or situational factors may close the gap.)`
 };
 
 

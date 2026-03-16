@@ -53,7 +53,7 @@ Work through each numbered factor below. Check off each one as you complete it. 
 - Is either team in a motivational spot (clinch, elimination, meaningless)?
 
 ### 7. RECENT FORM
-**Tokens:** RECENT_FORM, QUARTER_SCORING, FIRST_HALF_SCORING, SECOND_HALF_SCORING
+**Source:** The scout report already contains L5/L10 game-by-game results with scores, margins, and opponents. Use this data directly — do NOT call RECENT_FORM token (it duplicates the scout report data). Use QUARTER_SCORING, FIRST_HALF_SCORING, or SECOND_HALF_SCORING if you need scoring breakdown by period.
 - L5/L10 performance vs season — what's driving any divergence?
 - WHO was playing during the recent stretch? Is the roster the same as tonight?
 - What do the MARGINS look like? Winning by 2 every game vs winning by 15 tells different stories
@@ -72,9 +72,10 @@ The scout report labels each injury with a market-aware duration tag. Use these 
 - Investigate: What does the team's roster depth look like behind this player — how many rotation players does the team use, what experience level are the backups, and is there a clear next man up or does the workload get spread across multiple players?
 
 **PRICED IN, LONG-TERM and SEASON-LONG injuries — market has fully adjusted:**
-- The team's current stats already reflect life without this player. Do not treat as new information.
+- The team's current stats already reflect life without this player. Do not treat as new information. That player's absence IS the team's baseline — do not cite it as a reason for anything.
 
 - **If L5/L10 diverges 7+ from season**, pull game logs for top usage players — who's driving it?
+- If you cite an injury, you MUST include when it happened (date or "since last game" / "since [specific game]"). If you cannot determine when an injury occurred, do not include it in your findings.
 
 **RETURNING PLAYERS:**
 When a player is listed as GTD or Questionable after missing time:
@@ -84,7 +85,7 @@ When a player is listed as GTD or Questionable after missing time:
 - If they return tonight, expect potential minutes restriction and reintegration effects
 
 ### 9. SCHEDULE & REST
-**Tokens:** REST_SITUATION, BACK_TO_BACK, TRAVEL_SITUATION, SCHEDULE_STRENGTH
+**Source:** The scout report already contains rest days, back-to-back status, and travel context for both teams. Use this data directly — do NOT call REST_SITUATION or BACK_TO_BACK tokens (they duplicate the scout report). Use TRAVEL_SITUATION only if you need time zone details not in the scout report.
 - What is this team's ACTUAL record and efficiency on B2Bs/short rest this season?
 - Is there evidence fatigue affected recent performance, or is it just the schedule narrative?
 - Travel context: time zone shifts, road trip length
@@ -96,7 +97,7 @@ When a player is listed as GTD or Questionable after missing time:
 - What's DIFFERENT tonight? Different roster health, different venue, different form
 
 ### 11. CLOSE GAMES & VARIANCE
-**Tokens:** CLUTCH_STATS, BLOWOUT_TENDENCY, LUCK_ADJUSTED, HOME_AWAY_SPLITS
+**Tokens:** CLUTCH_STATS, LUCK_ADJUSTED, HOME_AWAY_SPLITS
 - Close game record vs expected record — investigate what variance factors explain any gap
 - Home/away efficiency splits — what SPECIFIC metric changes?
 
@@ -119,6 +120,13 @@ When a key player is QUESTIONABLE, GTD, or DOUBTFUL:
 - **Margin check**: Do these teams' styles produce close games or wide margins? What does the Net Rating gap and pace matchup tell you about the types of games these teams typically produce?
 - **Injury timing**: How long has each player been out? What do the team's stats look like during the absence?
 
+### LARGE SPREAD INVESTIGATION (10+ POINT SPREADS)
+When tonight's spread is 10+ points, the matchup gap is obvious — the question shifts from "who wins" to "what does the margin look like." Investigate these additional dimensions:
+- **Margin distribution**: How often does the favorite win by double digits vs single digits? How often does the underdog keep losses within 10? Look at L10 game-by-game margins for both teams.
+- **Bench depth gap**: When starters rest in large-lead situations, what does each team's bench look like? A dominant starting five that rests in the 4th quarter with a weak bench produces different margins than a deep team that maintains intensity.
+- **Closing lineup tendencies**: Does the favorite pull starters early when leading? Does the underdog play harder in the 2nd half of lopsided games?
+- **Quarter scoring patterns**: Call QUARTER_SCORING — do the teams' scoring patterns show margin compression or expansion in 4th quarters of lopsided games?
+
 ### TEAM IDENTITY — UNDERSTAND WHY, NOT JUST WHAT
 - **Shooting identity**: What does the scoring profile show about how this team creates offense?
 - **Ball security**: What does the turnover data reveal?
@@ -137,17 +145,18 @@ When L5/L10 diverges from season baseline:
 - Which of this team's strengths are consistent across the season vs which show high variance?
 
 ### SPREAD AWARENESS
-Report your findings factually. Gary will evaluate which factors matter for this number.
+Report your findings factually. Gary will evaluate which factors matter for this matchup and spread number.
 
 ### YOUR SCOUT REPORT IS YOUR BASELINE
 The scout report provides a starting point — advanced metrics, standings, recent form, H2H history, injuries, and roster depth. This is the BASELINE of who these teams are. You are free to re-fetch any stat for deeper investigation. Your investigation should focus on what's DIFFERENT about THIS game vs the baseline.
 
 ### NBA INVESTIGATION TRIGGERS
 Watch for these patterns that require deeper investigation:
-- **Schedule Spot**: Back-to-backs, road trips, rest advantages — what does the data show about each team's performance in similar schedule spots this season?
+- **Schedule Spot**: Back-to-backs, road trips, rest advantages — what does the data show about each team's performance in similar schedule spots this season? Rest and schedule context affect preparation differently for each team — investigate the specifics rather than assuming generic effects.
 - **Revenge / Rematch**: NBA teams play 3-4 times per season. What changed since the last meeting — roster health, form, lineup adjustments?
-- **Home Court Factor**: Investigate what the home/away data reveals about venue impact for each team.
-- **Regression Check**: When L5/L10 shooting or efficiency diverges from the season baseline, what does the historical variance and sample size show?`;
+- **Home Court Factor**: Don't say "they play well at home" — investigate WHAT they do better at home. What specific metrics change? The answer tells you whether that advantage applies to THIS matchup against THIS opponent.
+- **Regression Check**: When L5/L10 shooting or efficiency diverges from the season baseline, what does the historical variance and sample size show?
+- **Large Spread (10+)**: When the spread is 10+ points, complete the LARGE SPREAD INVESTIGATION section above. The matchup winner is usually obvious — your job is to investigate what the margin looks like.`;
 
 // ═══════════════════════════════════════════════════════════════════════
 // NFL INVESTIGATION FACTORS
@@ -475,7 +484,7 @@ Work through each numbered factor below. Check off each one as you complete it. 
 - A slow-tempo team vs a fast-tempo team — which style prevails?
 
 ### 6. RECENT FORM
-**Tokens:** RECENT_FORM
+**Source:** The scout report already contains L5/L10 game-by-game results with scores and margins. Use this data directly — do NOT call RECENT_FORM token.
 - L5 vs season trends — who was playing during each stretch?
 - Recent form against quality opponents vs overall — opponent quality matters
 - Are recent results with the current roster?
@@ -489,16 +498,19 @@ Work through each numbered factor below. Check off each one as you complete it. 
 ### 8. INJURIES
 **Tokens:** INJURIES
 - College rosters are thin — one injury matters more than in pro sports
-- How long has each player been out? Team performance during absence?
-- Fresh GTD/Questionable — could signal a return
+- Only report injuries that are NEW — occurred in or since the team's last game. Check the date of the article or report. If the injury happened multiple games ago, it is already reflected in the team's current stats and in the spread. That player's absence IS the team's baseline — do not cite it.
+- If you cite an injury, you MUST include when it happened (date or "since last game" / "since [specific game]")
+- Fresh GTD/Questionable — could signal a return. Check whether this is a new development or an ongoing situation.
+- If you cannot determine when an injury occurred, do not include it in your findings
 
 ### 9. SCHEDULE & REST
-**Tokens:** REST_SITUATION
+**Source:** The scout report already contains rest days, back-to-back status, and schedule context. Use this data directly — do NOT call REST_SITUATION token.
 - Report the rest situation factually — double-byes, back-to-backs, games played in the last week
 - Conference tournament rest differentials are the most visible scheduling factor in college basketball — the market prices them aggressively and the spread already reflects any rest advantage
 - The market treats rest as a positive — but rest can also mean rust
 - For teams that played yesterday: how did the last game go? Was it close, overtime, or a blowout? How many minutes did key players log?
 - For teams on a bye: how many days since their last competitive game?
+- Note whether this rest differential is likely already reflected in the current spread
 
 ### 10. TOURNAMENT RUN & STORYLINES
 **Tokens:** GROUNDING_SEARCH
