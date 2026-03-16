@@ -137,7 +137,7 @@ export const mlbFetchers = {
   // STANDINGS & CONTEXT
   // ═══════════════════════════════════════════════════════════════════
 
-  STANDINGS: async (sport, home, away, season, options) => {
+  WBC_STANDINGS: async (sport, home, away, season, options) => {
     const standings = await getWbcStandings();
     if (!standings?.records) return { homeValue: 'N/A', awayValue: 'N/A', comparison: 'Standings unavailable' };
     const lines = [];
@@ -194,7 +194,7 @@ export const mlbFetchers = {
   // GENERIC / SHARED TOKENS
   // ═══════════════════════════════════════════════════════════════════
 
-  INJURIES: async (sport, home, away, season, options) => {
+  WBC_INJURIES: async (sport, home, away, season, options) => {
     const homeTeam = home.full_name || home.name;
     const awayTeam = away.full_name || away.name;
     const result = await geminiGroundingSearch(
@@ -208,7 +208,7 @@ export const mlbFetchers = {
     };
   },
 
-  RECENT_FORM: async (sport, home, away, season, options) => {
+  WBC_RECENT_FORM: async (sport, home, away, season, options) => {
     const schedule = await getWbcFullSchedule();
     const homeTeamName = (home.full_name || home.name || '').toLowerCase();
     const awayTeamName = (away.full_name || away.name || '').toLowerCase();
@@ -242,7 +242,7 @@ export const mlbFetchers = {
     };
   },
 
-  H2H_HISTORY: async (sport, home, away, season, options) => {
+  WBC_H2H_HISTORY: async (sport, home, away, season, options) => {
     const homeTeam = home.full_name || home.name;
     const awayTeam = away.full_name || away.name;
     const result = await geminiGroundingSearch(
@@ -256,7 +256,7 @@ export const mlbFetchers = {
     };
   },
 
-  REST_SITUATION: async (sport, home, away, season, options) => {
+  WBC_REST_SITUATION: async (sport, home, away, season, options) => {
     const schedule = await getWbcFullSchedule();
     const today = new Date().toISOString().split('T')[0];
 
@@ -290,7 +290,7 @@ export const mlbFetchers = {
     };
   },
 
-  TOP_PLAYERS: async (sport, home, away, season, options) => {
+  WBC_TOP_PLAYERS: async (sport, home, away, season, options) => {
     const homeTeam = home.full_name || home.name;
     const awayTeam = away.full_name || away.name;
     const homeLines = [];

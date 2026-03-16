@@ -7,7 +7,6 @@ import { ballDontLieService } from '../../../ballDontLieService.js';
 import { generateGameSignificance } from '../gameSignificanceGenerator.js';
 import { formatTokenMenu } from '../../tools/toolDefinitions.js';
 import { getTeamRatings as getBarttovikRatings } from '../../../ncaabMetricsService.js';
-import { getNcaabVenue } from '../../../ncaabVenueService.js';
 import { ncaabSeason } from '../../../../utils/dateUtils.js';
 import {
   seasonForSport,
@@ -692,8 +691,9 @@ export async function buildNcaabScoutReport(game, options = {}) {
 
   const ncaabSeasonYear = ncaabSeason();
 
-  // Phase 1: Fetch in parallel — BDL roster depth + Gemini grounding + venue
-  const [rosterResult, currentStateResult, venueResult] = await Promise.all([
+  // Phase 1: Fetch in parallel — BDL roster depth + Gemini grounding
+  // Venue is resolved via Gemini Grounding in Step B2 (not Highlightly)
+  const [rosterResult, currentStateResult] = await Promise.all([
     ballDontLieService.getNcaabRosterDepth(homeTeam, awayTeam, ncaabSeasonYear).catch(e => {
       console.warn('[Scout Report] NCAAB roster depth error:', e.message);
       return null;
@@ -701,19 +701,10 @@ export async function buildNcaabScoutReport(game, options = {}) {
     fetchCurrentState(homeTeam, awayTeam, sport).catch(e => {
       console.warn('[Scout Report] NCAAB current state error:', e.message);
       return null;
-    }),
-    getNcaabVenue(homeTeam, awayTeam).catch(e => {
-      console.warn('[Scout Report] NCAAB venue lookup error:', e.message);
-      return null;
     })
   ]);
 
   ncaabRosterDepth = rosterResult;
-
-  // Set venue from Highlightly (arena name, city, state)
-  if (venueResult) {
-    game.venue = venueResult;
-  }
 
   // Set narrative context on injuries so it flows into CURRENT STATE section of report
   if (currentStateResult?.groundedRaw) {
@@ -749,8 +740,7 @@ export async function buildNcaabScoutReport(game, options = {}) {
     : null;
 
   // ===================================================================
-  // Step B2: Fetch NCAAB game context via Gemini Grounding (tournament, significance)
-  // NOTE: Do NOT override venue (already resolved from Highlightly)
+  // Step B2: Fetch NCAAB game context via Gemini Grounding (tournament, significance, venue)
   // ===================================================================
   try {
     let dateStr;
@@ -767,14 +757,18 @@ export async function buildNcaabScoutReport(game, options = {}) {
 Determine what type of game this is and any special significance.
 Search for current information about this specific game.
 Is this a conference tournament game? NCAA Tournament game? NIT game? Regular season?
+If conference tournament: which conference and what round (First Round, Quarterfinal, Semifinal, Final)?
 If NCAA Tournament: what round and what seeds?
 
 After your analysis, include this EXACT summary block at the very end of your response:
 ---GAME_CONTEXT---
 GAME_TYPE: [one of: regular_season, conference_tournament, ncaa_tournament_round_of_64, ncaa_tournament_round_of_32, ncaa_sweet_16, ncaa_elite_8, ncaa_final_four, ncaa_championship, nit]
+CONFERENCE: [conference name abbreviation if conference tournament, e.g. SEC, Big 12, ACC, Big Ten, Big East, AAC, etc. N/A if not conference tournament]
+ROUND_DETAIL: [specific round name, e.g. First Round, Quarterfinal, Semifinal, Championship/Final. N/A if regular season]
 NEUTRAL_SITE: [yes or no]
 HOME_SEED: [number or N/A]
 AWAY_SEED: [number or N/A]
+VENUE: [arena/stadium name where this game is being played, or UNKNOWN if not found]
 ---END_CONTEXT---`;
 
     const contextResult = await geminiGroundingSearch(contextQuery, {
@@ -784,13 +778,14 @@ AWAY_SEED: [number or N/A]
 
     if (contextResult?.success && contextResult?.data) {
       const responseText = contextResult.data;
-      game.gameSignificance = responseText;
 
       const contextMatch = responseText.match(/---GAME_CONTEXT---\s*([\s\S]*?)\s*---END_CONTEXT---/);
       if (contextMatch) {
         const block = contextMatch[1];
         const gameType = block.match(/GAME_TYPE:\s*(.+)/i)?.[1]?.trim().toLowerCase() || '';
         const neutralSite = block.match(/NEUTRAL_SITE:\s*(.+)/i)?.[1]?.trim().toLowerCase() || '';
+        const conferenceName = block.match(/CONFERENCE:\s*(.+)/i)?.[1]?.trim() || '';
+        const roundDetail = block.match(/ROUND_DETAIL:\s*(.+)/i)?.[1]?.trim() || '';
 
         if (gameType.includes('ncaa_championship')) {
           game.tournamentContext = 'NCAA Championship';
@@ -805,7 +800,16 @@ AWAY_SEED: [number or N/A]
         } else if (gameType.includes('ncaa_tournament_round_of_64')) {
           game.tournamentContext = 'NCAA Tournament Round of 64';
         } else if (gameType.includes('conference_tournament')) {
-          game.tournamentContext = 'Conference Tournament';
+          // Build specific label like "SEC Semifinal" or "Big 12 Final"
+          const conf = conferenceName && conferenceName.toLowerCase() !== 'n/a' ? conferenceName : '';
+          const round = roundDetail && roundDetail.toLowerCase() !== 'n/a' ? roundDetail : '';
+          if (conf && round) {
+            game.tournamentContext = `${conf} ${round}`;
+          } else if (conf) {
+            game.tournamentContext = `${conf} Tournament`;
+          } else {
+            game.tournamentContext = 'Conference Tournament';
+          }
         } else if (gameType.includes('nit')) {
           game.tournamentContext = 'NIT';
         } else {
@@ -825,6 +829,18 @@ AWAY_SEED: [number or N/A]
         const awaySeed = block.match(/AWAY_SEED:\s*(\d+)/i)?.[1];
         if (homeSeed) game.homeSeed = parseInt(homeSeed);
         if (awaySeed) game.awaySeed = parseInt(awaySeed);
+
+        // Parse venue from grounding (strip city suffix to match NBA/NHL format)
+        const venueMatch = block.match(/VENUE:\s*(.+)/i)?.[1]?.trim();
+        if (venueMatch && venueMatch.toLowerCase() !== 'unknown' && venueMatch.toLowerCase() !== 'n/a') {
+          game.venue = venueMatch.split(',')[0].trim();
+          console.log(`[Scout Report] Venue: ${game.venue}`);
+        }
+
+        // Set gameSignificance from tournamentContext if it's a tournament game
+        if (game.tournamentContext) {
+          game.gameSignificance = game.tournamentContext;
+        }
       } else {
         console.log('[Scout Report] Regular season NCAAB game (no structured context block)');
       }
@@ -1654,10 +1670,13 @@ ${formatOdds(game, sportKey)}
   // ===================================================================
   // Step K: Return standard object shape
   // ===================================================================
+  // Recalculate injuriesForStorage AFTER RotoWire merge + duration enrichment
+  const finalInjuriesForStorage = formatInjuriesForStorage(injuries);
+
   return {
     text: report,
     tokenMenu: formatTokenMenu(sportKey),
-    injuries: injuriesForStorage,
+    injuries: finalInjuriesForStorage,
     verifiedTaleOfTape,
     homeRecord: homeProfile?.record || null,
     awayRecord: awayProfile?.record || null,

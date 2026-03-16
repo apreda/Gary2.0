@@ -67,14 +67,14 @@ export function summarizeStatForContext(statResult, statToken, homeTeam, awayTea
 
       case 'OFFENSIVE_RATING':
         return orderTeams('OFFENSIVE RATING',
-          formatNum(h.off_rating || h.offRating),
-          formatNum(a.off_rating || a.offRating),
+          formatNum(h.offensive_rating || h.off_rating || h.offRating),
+          formatNum(a.offensive_rating || a.off_rating || a.offRating),
           '(points per 100 possessions)');
 
       case 'DEFENSIVE_RATING':
         return orderTeams('DEFENSIVE RATING',
-          formatNum(h.def_rating || h.defRating),
-          formatNum(a.def_rating || a.defRating));
+          formatNum(h.defensive_rating || h.def_rating || h.defRating),
+          formatNum(a.defensive_rating || a.def_rating || a.defRating));
 
       case 'RECENT_FORM': {
         // NHL returns l5/l10 objects; other sports return summary/last_5 strings
@@ -108,19 +108,22 @@ export function summarizeStatForContext(statResult, statToken, homeTeam, awayTea
 
       case 'OREB_RATE':
         return orderTeams('OFFENSIVE REBOUND RATE',
-          formatPct(h.oreb_rate || h.orebRate),
-          formatPct(a.oreb_rate || a.orebRate));
+          formatPct(h.oreb_pct || h.oreb_rate || h.orebRate),
+          formatPct(a.oreb_pct || a.oreb_rate || a.orebRate));
 
       case 'THREE_PT_SHOOTING':
         return orderTeams('3PT SHOOTING',
-          `${formatPct(h.fg3_pct || h.threePct)} on ${formatNum(h.fg3a || h.threeAttempts)} attempts`,
-          `${formatPct(a.fg3_pct || a.threePct)} on ${formatNum(a.fg3a || a.threeAttempts)} attempts`);
+          `${formatPct(h.three_pct || h.fg3_pct || h.threePct)} on ${formatNum(h.three_attempted_per_game || h.fg3a || h.threeAttempts)} attempts`,
+          `${formatPct(a.three_pct || a.fg3_pct || a.threePct)} on ${formatNum(a.three_attempted_per_game || a.fg3a || a.threeAttempts)} attempts`);
 
       case 'PAINT_SCORING':
+        return orderTeams('PAINT SCORING',
+          `${formatPct(h.pct_paint || h.paint_ppg || h.value)} of scoring in paint`,
+          `${formatPct(a.pct_paint || a.paint_ppg || a.value)} of scoring in paint`);
       case 'PAINT_DEFENSE':
-        return orderTeams(statToken,
-          `${formatNum(h.paint_ppg || h.value)} PPG in paint`,
-          `${formatNum(a.paint_ppg || a.value)} PPG in paint`);
+        return orderTeams('PAINT DEFENSE',
+          `${formatNum(h.opp_pts_paint || h.paint_ppg || h.value)} opp PPG in paint`,
+          `${formatNum(a.opp_pts_paint || a.paint_ppg || a.value)} opp PPG in paint`);
       
       case 'H2H_HISTORY':
         // Preserve FULL context: dates, scores, margins, revenge status, sweep context, PERSONNEL
@@ -169,8 +172,8 @@ export function summarizeStatForContext(statResult, statToken, homeTeam, awayTea
 
       case 'REST_SITUATION':
         return orderTeams('REST',
-          `${h.days_rest || 'N/A'} days rest`,
-          `${a.days_rest || 'N/A'} days rest`);
+          `${h.days_rest ?? 'N/A'} days rest${h.is_b2b ? ' (B2B)' : ''}`,
+          `${a.days_rest ?? 'N/A'} days rest${a.is_b2b ? ' (B2B)' : ''}`);
       
       case 'PLAYER_GAME_LOGS':
         // Preserve FULL game-by-game breakdown for Gary to interpret

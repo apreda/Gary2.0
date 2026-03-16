@@ -215,8 +215,8 @@ function calculateNBAProjection(player, platform) {
   if (platform === 'draftkings') {
     let pts = ppg + (tpm * 0.5) + (rpg * 1.25) + (apg * 1.5) + (spg * 2) + (bpg * 2) - (topg * 0.5);
     const ddCategories = [ppg >= 10, rpg >= 10, apg >= 10, spg >= 10, bpg >= 10].filter(Boolean).length;
-    if (ddCategories >= 2) pts += 1.5;
-    if (ddCategories >= 3) pts += 1.5;
+    if (ddCategories >= 2) pts += 1.5;  // DD bonus: +1.5
+    if (ddCategories >= 3) pts += 3.0;  // TD bonus: +3.0 (total DD+TD = +4.5)
     return Math.round(pts * 10) / 10;
   } else {
     return Math.round((ppg + (rpg * 1.2) + (apg * 1.5) + (spg * 3) + (bpg * 3) - topg) * 10) / 10;

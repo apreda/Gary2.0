@@ -100,6 +100,8 @@ async function run() {
   const sportLower = sport.toLowerCase();
   const platforms = fdOnly ? ['fanduel'] : dkOnly ? ['draftkings'] : ['draftkings', 'fanduel'];
   const tableName = isTestMode ? 'test_dfs_lineups' : 'dfs_lineups';
+  const sharedContextCache = {};
+  const sharedResearchCache = new Map();
 
   console.log(`\n${'═'.repeat(80)}`);
   console.log(`DFS LINEUP GENERATION — ${dateStr} — ${sport}${isTestMode ? ' [TEST MODE]' : ''}`);
@@ -195,7 +197,9 @@ async function run() {
           platform,
           sport,
           date: dateStr,
-          slate
+          slate,
+          sharedResearchCache,
+          sharedContextCache
         });
 
         printLineup(result, platform, slate.name);

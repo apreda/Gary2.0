@@ -68,7 +68,7 @@ struct SettingsView: View {
             Image("GaryIconBG")
                 .resizable()
                 .scaledToFit()
-                .frame(width: 100, height: 100)
+                .frame(width: 94, height: 94)
                 .shadow(color: GaryColors.gold.opacity(0.3), radius: 10, y: 4)
             
             VStack(alignment: .leading, spacing: 6) {

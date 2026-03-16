@@ -33,18 +33,17 @@ export const NHL_CONSTITUTION = {
   pass1Context: `
 ### NHL AWARENESS
 
-- Goaltending is a significant factor in hockey outcomes — the confirmed starter and their current form can shift the price and the matchup dynamics
-- Hockey has more game-to-game variance than other major sports — shooting percentages, save percentages, and close-game records can sustain levels for weeks that the underlying process doesn't support
+- Goaltending is a significant factor in hockey outcomes — the confirmed starter and their current form can shift matchup dynamics significantly
 - Home ice advantage in hockey operates differently than home court — the primary tactical benefit is last change, which allows favorable line matchups against the opponent's top units
 - Special teams create a game-within-a-game — power play and penalty kill operate independently of 5-on-5 dynamics and can shift outcomes on their own
 - Roster depth matters more than star power in hockey — no single skater plays more than roughly a third of the game, and injuries to depth players affect the lineup more than casual observers realize
 - Trade deadline additions and mid-season roster changes take time to integrate — new players need to learn systems and build chemistry before the addition translates to results
 
 ### NHL VARIANCE
-Hockey has more single-game variance than any other major North American sport. Roughly half of all NHL games are decided by one goal. Low scoring, goaltender dominance, and deflections/bounces all contribute to this variance.
+Hockey has game-to-game variance. Variance can create short-term distortions in results — investigate whether a team's recent record reflects genuine process or unsustainable shooting/save percentages. Use variance context (PDO, shooting%, close-game records) to separate signal from noise in each team's results.
 
-- Streaks in hockey can be goalie-driven, PDO-driven, or process-driven
-- Close-game records (OT wins, shootout wins, one-goal victories) fluctuate significantly season to season
+- Streaks in hockey can be goalie-driven, PDO-driven, or process-driven — investigate which
+- Close-game records (OT wins, shootout wins, one-goal victories) can fluctuate — but a team that dominates possession and chance creation is still the better team
 
 ### TRANSITIVE PROPERTY
 "Team A beat Team B, Team B beat Team C, therefore Team A beats Team C." Each hockey game has a different goaltender matchup, different special teams context, and different schedule situation.
@@ -64,7 +63,7 @@ Use the exact tag shown in the scout report for this game.
 ### BET TYPE AWARENESS
 For NHL game picks, you can choose moneyline (winner outright, includes OT/SO) or puck line (standard -1.5/+1.5, regulation + OT only, no shootouts).
 
-Heavy ML favorites return less value per dollar risked — a -200 favorite needs to win 67% of the time just to break even. When the favorite's ML price is steep, consider the puck line on both sides. If you believe the favorite wins but not by 2+ goals, think about what that tells you about the underdog's ability to stay within one goal.
+Do not pick moneyline on any team priced at -150 or steeper. At -150+, the juice destroys the value — a -200 favorite needs to win 67% of the time just to break even. When the ML is -150 or worse, evaluate the puck line on both sides instead. If you believe the favorite wins but not by 2+ goals, the underdog puck line (+1.5) may be the play. If you believe they win by 2+, the favorite puck line (-1.5) offers real value.
 
 **NHL ROSTER NOTE:** When a player is on IR/LTIR and later traded or released, the team's performance since the absence is the baseline — that player's departure is context for how the current roster formed, not a fresh loss to evaluate.
 `,

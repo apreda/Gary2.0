@@ -15,6 +15,8 @@ import { isUsingBackupKey } from '../../modelConfig.js';
 
 let geminiClient = null;
 let _groundingKeyIsBackup = false;
+const GROUNDING_CACHE_TTL_MS = 90 * 1000;
+const _groundingSearchCache = new Map();
 export function getGeminiClient() {
   // Recreate client if key was rotated
   if (geminiClient && isUsingBackupKey() !== _groundingKeyIsBackup) {
@@ -32,6 +34,25 @@ export function getGeminiClient() {
     _groundingKeyIsBackup = isUsingBackupKey();
   }
   return geminiClient;
+}
+
+function buildGroundingCacheKey(query, options = {}) {
+  return JSON.stringify({
+    backupKey: isUsingBackupKey(),
+    query,
+    maxTokens: options.maxTokens ?? 2000,
+    temperature: options.temperature ?? 1.0,
+    thinkingLevel: options.thinkingLevel ?? 'high',
+    useProFallback: !!options._useProFallback
+  });
+}
+
+function pruneGroundingCache(now = Date.now()) {
+  for (const [key, entry] of _groundingSearchCache.entries()) {
+    if ((entry.expiresAt || 0) <= now) {
+      _groundingSearchCache.delete(key);
+    }
+  }
 }
 
 
@@ -286,11 +307,11 @@ Do NOT include ATS records, betting trends, or against-the-spread statistics.`;
       errorMsg.includes('quota');
 
     if (is429) {
-      // On 429: try Pro fallback (both Flash and Pro support google_search grounding)
-      console.warn(`[groundingSearch] Flash 429 - falling back to Pro: ${error.message?.slice(0, 80)}`);
+      // On 429: retry with backup API key on Flash (gemini-3-pro is dead since March 2026)
+      console.warn(`[groundingSearch] Flash 429 - retrying with backup key: ${error.message?.slice(0, 80)}`);
       try {
         const proModel = genAI.getGenerativeModel({
-          model: 'gemini-3-pro-preview',
+          model: 'gemini-3-flash-preview',
           tools: [{ google_search: {} }],
           generationConfig: { temperature: 1.0 },
           safetySettings: [
@@ -315,10 +336,9 @@ Do NOT include ATS records, betting trends, or against-the-spread statistics.`;
 }
 
 // GEMINI MODEL POLICY (HARDCODED - DO NOT CHANGE)
-// ONLY Gemini 3+ allowed for grounding. NEVER use Gemini 1.x or 2.x.
-// Flash is PRIMARY for grounding (cheaper, same quality). Pro kept as 429 fallback only.
+// Flash is PRIMARY for grounding. 2.5 Flash as 429 fallback (gemini-3-pro is dead since March 2026).
 // ═══════════════════════════════════════════════════════════════════════════
-const ALLOWED_GROUNDING_MODELS = ['gemini-3-flash-preview', 'gemini-3-pro-preview']; // Flash primary, Pro 429 fallback
+const ALLOWED_GROUNDING_MODELS = ['gemini-3-flash-preview'];
 
 export function validateGroundingModel(model) {
   if (!ALLOWED_GROUNDING_MODELS.includes(model)) {
@@ -329,6 +349,47 @@ export function validateGroundingModel(model) {
 }
 
 export async function geminiGroundingSearch(query, options = {}) {
+  const now = Date.now();
+  pruneGroundingCache(now);
+  const cacheKey = buildGroundingCacheKey(query, options);
+  const cached = _groundingSearchCache.get(cacheKey);
+  if (cached) {
+    if (cached.value) {
+      console.log('[Grounding Search] Reusing cached grounding result');
+      return cached.value;
+    }
+    if (cached.promise) {
+      console.log('[Grounding Search] Joining in-flight grounding request');
+      return cached.promise;
+    }
+  }
+
+  const requestPromise = runGeminiGroundingSearch(query, options)
+    .then(result => {
+      if (result?.success && result?.data) {
+        _groundingSearchCache.set(cacheKey, {
+          value: result,
+          expiresAt: Date.now() + GROUNDING_CACHE_TTL_MS
+        });
+      } else {
+        _groundingSearchCache.delete(cacheKey);
+      }
+      return result;
+    })
+    .catch(error => {
+      _groundingSearchCache.delete(cacheKey);
+      throw error;
+    });
+
+  _groundingSearchCache.set(cacheKey, {
+    promise: requestPromise,
+    expiresAt: now + GROUNDING_CACHE_TTL_MS
+  });
+
+  return requestPromise;
+}
+
+async function runGeminiGroundingSearch(query, options = {}) {
   const genAI = getGeminiClient();
   if (!genAI) {
     console.warn('[Grounding Search] Gemini not available');
@@ -342,16 +403,9 @@ export async function geminiGroundingSearch(query, options = {}) {
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      // Flash for grounding, Pro as 429 fallback
-      // Both Flash and Pro support Google Search grounding
-      const requestedModel = options._useProFallback
-        ? (process.env.GEMINI_PRO_MODEL || 'gemini-3-pro-preview')
-        : (process.env.GEMINI_FLASH_MODEL || 'gemini-3-flash-preview');
+      // Flash for all grounding (gemini-3-pro is dead since March 2026)
+      const requestedModel = process.env.GEMINI_FLASH_MODEL || 'gemini-3-flash-preview';
       const modelName = validateGroundingModel(requestedModel);
-
-      if (options._useProFallback) {
-        console.log(`[Grounding Search] Using Pro model (${modelName}) as fallback`);
-      }
 
       const model = genAI.getGenerativeModel({
         model: modelName,
@@ -502,7 +556,7 @@ CRITICAL REMINDER: Today is ${todayStr}. Use ONLY fresh search results. Your 202
       if (is429 && !usedProFallback && !options._useProFallback) {
         console.log(`[Grounding Search] ⚠️ Flash quota exceeded (429) - falling back to Pro`);
         // Recursive call with Pro model
-        return geminiGroundingSearch(query, {
+        return runGeminiGroundingSearch(query, {
           ...options,
           _useProFallback: true,
           _usedProFallback: true
@@ -516,7 +570,7 @@ CRITICAL REMINDER: Today is ${todayStr}. Use ONLY fresh search results. Your 202
           if (rotateToBackupKey()) {
             console.log(`[Grounding Search] ⚠️ Pro quota exceeded — rotated to backup API key, retrying`);
             geminiClient = null; // Force client recreation with new key
-            return geminiGroundingSearch(query, {
+            return runGeminiGroundingSearch(query, {
               ...options,
               _useProFallback: false,
               _usedProFallback: false
@@ -524,7 +578,7 @@ CRITICAL REMINDER: Today is ${todayStr}. Use ONLY fresh search results. Your 202
           }
         }
         console.log(`[Grounding Search] ⚠️ Pro also quota exceeded (429) - falling back to Flash`);
-        return geminiGroundingSearch(query, {
+        return runGeminiGroundingSearch(query, {
           ...options,
           _useProFallback: false,
           _usedProFallback: true

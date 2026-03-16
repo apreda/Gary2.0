@@ -28,16 +28,13 @@ const { geminiGroundingSearch } = await import('../src/services/agentic/scoutRep
 // Each entry: { away, home, spread, spreadOdds, ml }
 const WBC_MANUAL_GAMES = [
   {
-    away: 'South Korea', home: 'Dominican Republic',
-    spread: { away: 4.5, home: -4.5 },
-    spreadOdds: { away: 105, home: -130 },
-    ml: { away: 650, home: -1000 },
-  },
-  {
-    away: 'Canada', home: 'United States',
-    spread: { away: 4.5, home: -4.5 },
-    spreadOdds: { away: 100, home: -125 },
-    ml: { away: 550, home: -900 },
+    away: 'Dominican Republic', home: 'United States',
+    spread: { away: 1.5, home: -1.5 },
+    spreadOdds: { away: -150, home: 110 },
+    ml: { away: 130, home: -155 },
+    total: { over: 8.5, overOdds: -110, under: 8.5, underOdds: -110 },
+    time: '8:00 PM ET',
+    pitchers: { away: 'Luis Severino', home: 'Paul Skenes' },
   },
 ];
 
@@ -54,9 +51,9 @@ function getManualWbcGames() {
     commence_time: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(), // Future time — manual games always pass time filter
     start_time: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(),
     status: 'Pre-Game',
-    venue: 'WBC Venue',
+    venue: 'loanDepot Park',
     description: 'World Baseball Classic',
-    gameSignificance: 'WBC Pool Play',
+    gameSignificance: 'WBC Semifinal',
     moneyline_home: g.ml.home,
     moneyline_away: g.ml.away,
     spread_home: g.spread.home,
@@ -1548,6 +1545,8 @@ async function main() {
               console.log(`⚠️  [${config.name}] Immediate store failed (will retry at end): ${storeErr.message}`);
             }
           }
+
+          // Bracket picks handled by run-bracket-fill.js (separate process)
         } else if (result.error) {
           console.log(`\n⚠️  Error: ${result.error}`);
         } else {

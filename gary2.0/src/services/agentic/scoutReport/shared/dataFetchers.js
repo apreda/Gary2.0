@@ -783,7 +783,22 @@ export function formatNhlRecentFormWithBoxScores(teamName, recentGames, boxScore
 export async function fetchH2HData(homeTeam, awayTeam, sport, recentHome, recentAway) {
   try {
     const bdlSport = sportToBdlKey(sport);
-    
+
+    // NCAAB: Use Highlightly H2H API (simpler, more reliable team matching)
+    if (bdlSport === 'basketball_ncaab') {
+      try {
+        const { getH2H } = await import('../../../services/ncaabVenueService.js');
+        const highlightlyH2H = await getH2H(homeTeam, awayTeam, 'ncaab');
+        if (highlightlyH2H) {
+          console.log(`[Scout Report] H2H: Highlightly returned ${highlightlyH2H.gamesFound || 0} game(s) for ${homeTeam} vs ${awayTeam}`);
+          return highlightlyH2H;
+        }
+        console.log(`[Scout Report] H2H: Highlightly returned null, falling back to BDL`);
+      } catch (e) {
+        console.warn(`[Scout Report] H2H: Highlightly failed (${e.message}), falling back to BDL`);
+      }
+    }
+
     // Get team IDs
     const teams = await ballDontLieService.getTeams(bdlSport);
 
@@ -1520,9 +1535,9 @@ RULES:
       const flashMsg = flashError.message?.toLowerCase() || '';
       const isFlash429 = flashError.status === 429 || flashError.message?.includes('429') || flashMsg.includes('quota');
       if (isFlash429) {
-        console.log(`[Scout Report] Flash 429 for narrative — falling back to Pro`);
+        console.log(`[Scout Report] Flash 429 for narrative — retrying with Flash (backup key)`);
         const proModel = genAI.getGenerativeModel({
-          model: 'gemini-3-pro-preview',
+          model: 'gemini-3-flash-preview',
           generationConfig: { temperature: 1.0 },
           safetySettings: [
             { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
@@ -1588,6 +1603,14 @@ RULES:
 export async function scrubNarrative(narrative, allowedPlayers, homeTeam, awayTeam, excludedPlayers = []) {
   if (!narrative || !allowedPlayers || allowedPlayers.length === 0) return narrative;
 
+  const scrubCheck = evaluateNarrativeScrubNeed(narrative, allowedPlayers, homeTeam, awayTeam, excludedPlayers);
+  if (!scrubCheck.shouldScrub) {
+    console.log('[Scout Report] Narrative scrub skipped - no invalid names or betting noise detected');
+    return narrative;
+  }
+
+  console.log(`[Scout Report] Narrative scrub triggered: ${scrubCheck.reasons.join(', ')}`);
+
   const genAI = getGeminiClient();
   if (!genAI) return narrative;
 
@@ -1645,6 +1668,92 @@ Cleaned Report:`;
     console.warn(`[Scout Report] Narrative scrubbing failed: ${e.message}`);
     return narrative;
   }
+}
+
+const NARRATIVE_ATS_PATTERN = /\b(?:ATS|against the spread|cover(?:s|ing| percentage| pct| rate)?|betting trend|public betting|action on)\b/i;
+const NARRATIVE_NAME_PATTERN = /\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2}\b/g;
+const NARRATIVE_IGNORED_PHRASES = new Set([
+  'Recent Trajectory',
+  'Last Game',
+  'Top Storylines',
+  'Top Storylines Headlines',
+  'Todays Matchup News',
+  'Today Matchup News',
+  'Game Context',
+  'Current State',
+  'No Results Found',
+  'Home Team',
+  'Away Team'
+]);
+
+function normalizeNarrativeEntity(value = '') {
+  return String(value || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function buildTeamWordSet(homeTeam = '', awayTeam = '') {
+  return new Set(
+    `${homeTeam} ${awayTeam}`
+      .split(/\s+/)
+      .map(word => word.trim().toLowerCase())
+      .filter(Boolean)
+  );
+}
+
+function isTeamLikePhrase(candidate = '', teamWords = new Set()) {
+  const words = String(candidate || '')
+    .split(/\s+/)
+    .map(word => word.trim().toLowerCase())
+    .filter(Boolean);
+  return words.length > 0 && words.every(word => teamWords.has(word));
+}
+
+function evaluateNarrativeScrubNeed(narrative, allowedPlayers, homeTeam, awayTeam, excludedPlayers = []) {
+  const reasons = [];
+  const normalizedNarrative = String(narrative || '');
+
+  if (NARRATIVE_ATS_PATTERN.test(normalizedNarrative)) {
+    reasons.push('betting-noise');
+  }
+
+  const excluded = excludedPlayers
+    .map(name => normalizeNarrativeEntity(name))
+    .filter(Boolean);
+
+  if (excluded.some(name => normalizedNarrative.toLowerCase().includes(name))) {
+    reasons.push('excluded-player');
+  }
+
+  const allowedSet = new Set(
+    allowedPlayers
+      .map(name => normalizeNarrativeEntity(name))
+      .filter(Boolean)
+  );
+  const teamWords = buildTeamWordSet(homeTeam, awayTeam);
+  const unknownNames = new Set();
+  const matches = normalizedNarrative.match(NARRATIVE_NAME_PATTERN) || [];
+
+  for (const rawMatch of matches) {
+    const candidate = String(rawMatch || '').trim();
+    const normalized = normalizeNarrativeEntity(candidate);
+    if (!normalized) continue;
+    if (allowedSet.has(normalized)) continue;
+    if (normalizeNarrativeEntity(homeTeam) === normalized || normalizeNarrativeEntity(awayTeam) === normalized) continue;
+    if (NARRATIVE_IGNORED_PHRASES.has(candidate)) continue;
+    if (isTeamLikePhrase(candidate, teamWords)) continue;
+    unknownNames.add(candidate);
+  }
+
+  if (unknownNames.size > 0) {
+    reasons.push(`unknown-names:${Array.from(unknownNames).slice(0, 3).join('|')}`);
+  }
+
+  return {
+    shouldScrub: reasons.length > 0,
+    reasons
+  };
 }
 
 // ============================================================================

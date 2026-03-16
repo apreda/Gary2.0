@@ -53,6 +53,25 @@ struct ChangelogEntry: Identifiable {
 
 let changelogEntries: [ChangelogEntry] = [
     ChangelogEntry(
+        version: "2.0",
+        date: "March 15, 2026",
+        type: .feature,
+        title: "Gary 2.0",
+        changes: [
+            "Completely redesigned home page with new performance dashboard",
+            "March Madness bracket with full region navigation and Gary's picks",
+            "New interactive How Gary Works section",
+            "Redesigned Fantasy DFS page with compact toolbar",
+            "Props now run on Gemini Flash — faster analysis, lower cost",
+            "Guard play theory and tournament awareness added to NCAAB analysis",
+            "Improved injury handling — only fresh injuries reported",
+            "Fixed 15+ technical bugs across game picks, props, and DFS pipelines",
+            "Highlightly API integration for NCAAB head-to-head data",
+            "New billfold candlestick chart with pinch-to-zoom",
+            "Lighter, warmer UI throughout the app"
+        ]
+    ),
+    ChangelogEntry(
         version: "1.9.92",
         date: "March 5, 2026",
         type: .feature,

@@ -45,8 +45,6 @@ const NBA_TOKENS = [
   'BENCH_DEPTH',          // Bench contribution
   // History
   'H2H_HISTORY', 'RECENT_FORM', 'HOME_AWAY_SPLITS', 'VS_ELITE_TEAMS',
-  // Patterns
-  'BLOWOUT_TENDENCY',     // Margin patterns - blowouts vs close games (NEW)
   // Quarter/Half Scoring Trends
   'QUARTER_SCORING',      // Q1, Q2, Q3, Q4 scoring breakdown
   'FIRST_HALF_SCORING',   // 1st half scoring patterns

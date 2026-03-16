@@ -47,7 +47,7 @@ import {
  */
 export async function generateAgenticDFSLineup(options) {
   // Support both 'date' and 'slateDate' parameter names
-  const { platform, sport, date, slateDate, slate, context: passedContext } = options;
+  const { platform, sport, date, slateDate, slate, context: passedContext, sharedResearchCache, sharedContextCache } = options;
   const effectiveDate = date || slateDate;
   const startTime = Date.now();
 
@@ -70,7 +70,7 @@ export async function generateAgenticDFSLineup(options) {
       context = passedContext;
     } else {
       console.log('[Gary DFS] Phase 1: Building comprehensive context...');
-      context = await buildDFSContext(platform, sport, effectiveDate, slate);
+      context = await buildDFSContext(platform, sport, effectiveDate, slate, { sharedContextCache });
     }
 
     if (!context.players || context.players.length === 0) {
@@ -118,7 +118,8 @@ export async function generateAgenticDFSLineup(options) {
     let flashResearch;
     try {
       flashResearch = await researchAllGames(genAI, scoutReports, context, {
-        modelName: GEMINI_FLASH_MODEL
+        modelName: GEMINI_FLASH_MODEL,
+        sharedResearchCache
       });
     } catch (flashError) {
       const isRetryable = flashError.status === 429 || flashError.status === 503 || flashError.status === 500 ||
@@ -127,7 +128,8 @@ export async function generateAgenticDFSLineup(options) {
       if (isRetryable) {
         console.warn(`[Gary DFS] Phase 2: Flash failed (${flashError.message}) — retrying once`);
         flashResearch = await researchAllGames(genAI, scoutReports, context, {
-          modelName: GEMINI_FLASH_MODEL
+          modelName: GEMINI_FLASH_MODEL,
+          sharedResearchCache
         });
       } else {
         throw flashError;

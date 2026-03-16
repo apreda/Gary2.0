@@ -18,14 +18,13 @@ export const GEMINI_FLASH_MODEL = 'gemini-3-flash-preview';
 /** Gemini 3.1 Pro — primary model for main picks via orchestrator */
 export const GEMINI_PRO_MODEL = 'gemini-3.1-pro-preview';
 
-/** Gemini 3 Pro — fallback when 3.1 Pro quota is exhausted */
-export const GEMINI_PRO_FALLBACK = 'gemini-3-pro-preview';
+/** Flash — fallback when 3.1 Pro quota is exhausted (gemini-3-pro is dead since March 2026) */
+export const GEMINI_PRO_FALLBACK = 'gemini-3-flash-preview';
 
 /** Models the system is permitted to use */
 const ALLOWED_GEMINI_MODELS = [
   GEMINI_FLASH_MODEL,
   GEMINI_PRO_MODEL,
-  GEMINI_PRO_FALLBACK,
 ];
 
 /**

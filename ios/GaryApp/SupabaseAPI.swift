@@ -3,7 +3,7 @@ import SwiftUI
 
 // MARK: - Smart Cache for Performance
 // Default: 60s for picks (need to stay fresh)
-// Billfold: 4 hours — results update once daily, no need to re-fetch
+// Billfold: day-scoped cache keys plus a longer TTL so the daily snapshot stays hot after preload
 // Pull-to-refresh always bypasses cache for fresh data
 
 actor APICache {
@@ -11,7 +11,9 @@ actor APICache {
 
     private var cache: [String: (data: Any, timestamp: Date)] = [:]
     private let ttl: TimeInterval = 60 // 60 second default
-    static let billfoldTTL: TimeInterval = 14400 // 4 hours for billfold data
+    static let liveContentTTL: TimeInterval = 15 // picks/props/DFS should reflect Supabase edits quickly
+    static let recentResultsTTL: TimeInterval = 20 // recent result surfaces can refresh often
+    static let billfoldTTL: TimeInterval = 60 * 60 * 36 // 36 hours; daily invalidation is handled by a 7am EST cache scope key
 
     func get<T>(_ key: String, ttl override: TimeInterval? = nil) -> T? {
         let effectiveTTL = override ?? ttl
@@ -100,6 +102,28 @@ enum SupabaseAPI {
             return formatDateEST(yesterday)
         }
         return formatDateEST(now)
+    }
+
+    /// Billfold rolls over after the daily 7:00 AM EST results ingest.
+    static func billfoldSnapshotWindowKey(for date: Date = Date()) -> String {
+        guard let tz = TimeZone(identifier: "America/New_York") else {
+            return formatDateEST(date)
+        }
+
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = tz
+
+        let startOfToday = cal.startOfDay(for: date)
+        guard let refreshCutoff = cal.date(byAdding: .hour, value: 7, to: startOfToday) else {
+            return formatDateEST(date)
+        }
+
+        if date >= refreshCutoff {
+            return formatDateEST(refreshCutoff)
+        }
+
+        let previousRefresh = cal.date(byAdding: .day, value: -1, to: refreshCutoff) ?? refreshCutoff
+        return formatDateEST(previousRefresh)
     }
     
     /// Fetch yesterday's game pick record (wins, losses, pushes) - excludes props
@@ -264,6 +288,48 @@ enum SupabaseAPI {
         components.queryItems = query
         return components.url ?? url
     }
+
+    private static func fetchDecodablePage<T: Decodable>(table: String, query: [URLQueryItem]) async throws -> [T] {
+        let url = buildURL(table: table, query: query)
+        let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            print("[SupabaseAPI] \(table) fetch failed: HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1)")
+            return []
+        }
+
+        do {
+            return try JSONDecoder().decode([T].self, from: data)
+        } catch {
+            print("[SupabaseAPI] \(table) decode error: \(error.localizedDescription)")
+            return []
+        }
+    }
+
+    private static func fetchAllPages<T: Decodable>(
+        table: String,
+        baseQuery: [URLQueryItem],
+        pageSize: Int = 500
+    ) async throws -> [T] {
+        var allRows: [T] = []
+        var offset = 0
+
+        while true {
+            var query = baseQuery
+            query.append(URLQueryItem(name: "limit", value: "\(pageSize)"))
+            query.append(URLQueryItem(name: "offset", value: "\(offset)"))
+
+            let page: [T] = try await fetchDecodablePage(table: table, query: query)
+            allRows.append(contentsOf: page)
+
+            if page.count < pageSize {
+                break
+            }
+
+            offset += pageSize
+        }
+
+        return allRows
+    }
     
     // MARK: - Daily Picks (Non-NFL sports)
     
@@ -328,7 +394,7 @@ enum SupabaseAPI {
         let cacheKey = "allPicks_\(date)"
 
         // Check cache first (unless forcing refresh)
-        if !forceRefresh, let cached: [GaryPick] = await APICache.shared.get(cacheKey) {
+        if !forceRefresh, let cached: [GaryPick] = await APICache.shared.get(cacheKey, ttl: APICache.liveContentTTL) {
             return cached
         }
 
@@ -359,7 +425,7 @@ enum SupabaseAPI {
         let cacheKey = "propPicks_\(date)"
 
         // Check cache first (unless forcing refresh)
-        if !forceRefresh, let cached: [PropPick] = await APICache.shared.get(cacheKey) {
+        if !forceRefresh, let cached: [PropPick] = await APICache.shared.get(cacheKey, ttl: APICache.liveContentTTL) {
             return cached
         }
 
@@ -419,67 +485,37 @@ enum SupabaseAPI {
     static func fetchGameResults(since dateFilter: String?) async throws -> [GameResult] {
         var query = [
             URLQueryItem(name: "select", value: "*"),
-            URLQueryItem(name: "order", value: "game_date.desc"),
-            URLQueryItem(name: "limit", value: "500")
+            URLQueryItem(name: "order", value: "game_date.desc")
         ]
         
         if let since = dateFilter, !since.isEmpty {
             query.insert(URLQueryItem(name: "game_date", value: "gte.\(since)"), at: 1)
         }
-        
-        let url = buildURL(table: "game_results", query: query)
-        let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
 
-        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            print("[SupabaseAPI] fetchGameResults failed: HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1)")
-            return []
-        }
-
-        let decoder = JSONDecoder()
-        do {
-            return try decoder.decode([GameResult].self, from: data)
-        } catch {
-            print("[SupabaseAPI] fetchGameResults decode error: \(error.localizedDescription)")
-            return []
-        }
+        return try await fetchAllPages(table: "game_results", baseQuery: query)
     }
     
     /// Fetch NFL results from nfl_results table
     static func fetchNFLResults(since dateFilter: String?) async throws -> [GameResult] {
         var query = [
             URLQueryItem(name: "select", value: "*"),
-            URLQueryItem(name: "order", value: "game_date.desc"),
-            URLQueryItem(name: "limit", value: "500")
+            URLQueryItem(name: "order", value: "game_date.desc")
         ]
         
         if let since = dateFilter, !since.isEmpty {
             query.insert(URLQueryItem(name: "game_date", value: "gte.\(since)"), at: 1)
         }
-        
-        let url = buildURL(table: "nfl_results", query: query)
-        let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
 
-        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            print("[SupabaseAPI] fetchNFLResults failed: HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1)")
-            return []
-        }
-
-        let decoder = JSONDecoder()
-        do {
-            let nflResults = try decoder.decode([NFLResult].self, from: data)
-            // Convert to GameResult for unified display
-            return nflResults.map { $0.toGameResult() }
-        } catch {
-            print("[SupabaseAPI] fetchNFLResults decode error: \(error.localizedDescription)")
-            return []
-        }
+        let nflResults: [NFLResult] = try await fetchAllPages(table: "nfl_results", baseQuery: query)
+        return nflResults.map { $0.toGameResult() }
     }
     
     /// Fetch all game results (game_results + nfl_results combined)
     /// - Parameter forceRefresh: Set to true for pull-to-refresh to bypass cache
     static func fetchAllGameResults(since dateFilter: String?, forceRefresh: Bool = false, billfold: Bool = false) async throws -> [GameResult] {
-        let cacheKey = "gameResults_\(dateFilter ?? "all")"
-        let cacheTTL: TimeInterval? = billfold ? APICache.billfoldTTL : nil
+        let cacheScope = billfold ? "_billfold_\(billfoldSnapshotWindowKey())" : ""
+        let cacheKey = "gameResults_\(dateFilter ?? "all")\(cacheScope)"
+        let cacheTTL: TimeInterval? = billfold ? APICache.billfoldTTL : APICache.recentResultsTTL
 
         // Check cache first (unless forcing refresh)
         if !forceRefresh, let cached: [GameResult] = await APICache.shared.get(cacheKey, ttl: cacheTTL) {
@@ -504,21 +540,19 @@ enum SupabaseAPI {
     
     /// Fetch all daily_picks rows (for TOPD matching)
     static func fetchAllDailyPicksRaw(forceRefresh: Bool = false, billfold: Bool = false) async throws -> [DailyPicksRow] {
-        let cacheKey = "dailyPicksRaw"
+        let cacheScope = billfold ? "_billfold_\(billfoldSnapshotWindowKey())" : ""
+        let cacheKey = "dailyPicksRaw\(cacheScope)"
         let cacheTTL: TimeInterval? = billfold ? APICache.billfoldTTL : nil
 
         if !forceRefresh, let cached: [DailyPicksRow] = await APICache.shared.get(cacheKey, ttl: cacheTTL) {
             return cached
         }
 
-        let url = buildURL(table: "daily_picks", query: [
+        let query = [
             URLQueryItem(name: "select", value: "picks::text,date"),
-            URLQueryItem(name: "order", value: "date.desc"),
-            URLQueryItem(name: "limit", value: "500")
-        ])
-        let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
-        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return [] }
-        let result = (try? JSONDecoder().decode([DailyPicksRow].self, from: data)) ?? []
+            URLQueryItem(name: "order", value: "date.desc")
+        ]
+        let result: [DailyPicksRow] = try await fetchAllPages(table: "daily_picks", baseQuery: query)
         await APICache.shared.set(cacheKey, value: result)
         return result
     }
@@ -526,8 +560,9 @@ enum SupabaseAPI {
     /// Fetch prop results with optional date filter
     /// - Parameter forceRefresh: Set to true for pull-to-refresh to bypass cache
     static func fetchPropResults(since dateFilter: String?, forceRefresh: Bool = false, billfold: Bool = false) async throws -> [PropResult] {
-        let cacheKey = "propResults_\(dateFilter ?? "all")"
-        let cacheTTL: TimeInterval? = billfold ? APICache.billfoldTTL : nil
+        let cacheScope = billfold ? "_billfold_\(billfoldSnapshotWindowKey())" : ""
+        let cacheKey = "propResults_\(dateFilter ?? "all")\(cacheScope)"
+        let cacheTTL: TimeInterval? = billfold ? APICache.billfoldTTL : APICache.recentResultsTTL
 
         // Check cache first (unless forcing refresh)
         if !forceRefresh, let cached: [PropResult] = await APICache.shared.get(cacheKey, ttl: cacheTTL) {
@@ -536,31 +571,16 @@ enum SupabaseAPI {
 
         var query = [
             URLQueryItem(name: "select", value: "*"),
-            URLQueryItem(name: "order", value: "game_date.desc"),
-            URLQueryItem(name: "limit", value: "500")
+            URLQueryItem(name: "order", value: "game_date.desc")
         ]
 
         if let since = dateFilter, !since.isEmpty {
             query.insert(URLQueryItem(name: "game_date", value: "gte.\(since)"), at: 1)
         }
 
-        let url = buildURL(table: "prop_results", query: query)
-        let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
-
-        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            print("[SupabaseAPI] fetchPropResults failed: HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1)")
-            return []
-        }
-
-        let decoder = JSONDecoder()
-        do {
-            let result = try decoder.decode([PropResult].self, from: data)
-            await APICache.shared.set(cacheKey, value: result)
-            return result
-        } catch {
-            print("[SupabaseAPI] fetchPropResults decode error: \(error.localizedDescription)")
-            return []
-        }
+        let result: [PropResult] = try await fetchAllPages(table: "prop_results", baseQuery: query)
+        await APICache.shared.set(cacheKey, value: result)
+        return result
     }
     
     // MARK: - DFS Lineups (Gary's Fantasy)
@@ -572,7 +592,7 @@ enum SupabaseAPI {
         let cacheKey = "dfsLineups_\(date)"
 
         // Check cache first (unless forcing refresh)
-        if !forceRefresh, let cached: [DFSLineup] = await APICache.shared.get(cacheKey) {
+        if !forceRefresh, let cached: [DFSLineup] = await APICache.shared.get(cacheKey, ttl: APICache.liveContentTTL) {
             return cached
         }
 
@@ -601,6 +621,47 @@ enum SupabaseAPI {
         await APICache.shared.set(cacheKey, value: result)
 
         return result
+    }
+
+    static func fetchRecentGameResults(limit: Int = 30, since dateFilter: String? = nil) async throws -> [GameResult] {
+        var gameQuery = [
+            URLQueryItem(name: "select", value: "*"),
+            URLQueryItem(name: "order", value: "game_date.desc"),
+            URLQueryItem(name: "limit", value: "\(limit)")
+        ]
+        var nflQuery = [
+            URLQueryItem(name: "select", value: "*"),
+            URLQueryItem(name: "order", value: "game_date.desc"),
+            URLQueryItem(name: "limit", value: "\(limit)")
+        ]
+
+        if let since = dateFilter, !since.isEmpty {
+            gameQuery.insert(URLQueryItem(name: "game_date", value: "gte.\(since)"), at: 1)
+            nflQuery.insert(URLQueryItem(name: "game_date", value: "gte.\(since)"), at: 1)
+        }
+
+        let finalGameQuery = gameQuery
+        let finalNFLQuery = nflQuery
+
+        async let gameResults: [GameResult] = fetchDecodablePage(table: "game_results", query: finalGameQuery)
+        async let nflResultsRaw: [NFLResult] = fetchDecodablePage(table: "nfl_results", query: finalNFLQuery)
+
+        let combined = try await gameResults + nflResultsRaw.map { $0.toGameResult() }
+        return Array(combined.sorted { ($0.game_date ?? "") > ($1.game_date ?? "") }.prefix(limit))
+    }
+
+    static func fetchRecentPropResults(limit: Int = 30, since dateFilter: String? = nil) async throws -> [PropResult] {
+        var query = [
+            URLQueryItem(name: "select", value: "*"),
+            URLQueryItem(name: "order", value: "game_date.desc"),
+            URLQueryItem(name: "limit", value: "\(limit)")
+        ]
+
+        if let since = dateFilter, !since.isEmpty {
+            query.insert(URLQueryItem(name: "game_date", value: "gte.\(since)"), at: 1)
+        }
+
+        return try await fetchDecodablePage(table: "prop_results", query: query)
     }
     
     /// Fetch DFS lineups for a specific platform
@@ -663,7 +724,7 @@ enum SupabaseAPI {
     
     private static func parsePropPicksRow(_ picks: PicksValue<PropPick>?) -> [PropPick]? {
         guard let picks = picks else { return nil }
-        
+
         if let arr = picks.asArray { return arr }
         if let str = picks.asString, !str.isEmpty, let data = str.data(using: .utf8) {
             let json = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] ?? []
@@ -671,4 +732,67 @@ enum SupabaseAPI {
         }
         return nil
     }
+
+    // MARK: - Bracket Picks
+
+    /// Fetch bracket picks for a tournament (March Madness)
+    /// - Parameter forceRefresh: Set to true for pull-to-refresh to bypass cache
+    static func fetchBracketPicks(tournament: String = "march_madness_2026", forceRefresh: Bool = false) async throws -> [BracketPick] {
+        let cacheKey = "bracketPicks_\(tournament)"
+
+        // Check cache first (unless forcing refresh) — longer TTL since bracket doesn't change often
+        if !forceRefresh, let cached: [BracketPick] = await APICache.shared.get(cacheKey, ttl: 120) {
+            return cached
+        }
+
+        let url = buildURL(table: "bracket_picks", query: [
+            URLQueryItem(name: "select", value: "*"),
+            URLQueryItem(name: "tournament", value: "eq.\(tournament)"),
+            URLQueryItem(name: "order", value: "round.asc,game_number.asc")
+        ])
+
+        let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
+
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            print("[SupabaseAPI] fetchBracketPicks failed: HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1)")
+            return []
+        }
+
+        do {
+            let decoder = JSONDecoder()
+            let result = try decoder.decode([BracketPick].self, from: data)
+            await APICache.shared.set(cacheKey, value: result)
+            return result
+        } catch {
+            print("[SupabaseAPI] fetchBracketPicks decode error: \(error.localizedDescription)")
+            return []
+        }
+    }
+}
+
+// MARK: - Bracket Pick Model
+
+struct BracketPick: Codable, Identifiable {
+    let id: String
+    let created_at: String?
+    let tournament: String
+    let date: String
+    let round: Int
+    let region: String
+    let game_number: Int?
+    let team1: String
+    let team2: String
+    let seed1: Int
+    let seed2: Int
+    let picked_to_advance: String?
+    let picked_seed: Int?
+    let bracket_confidence: Double?
+    let bracket_rationale: String?
+    let is_upset: Bool?
+    let team1_pros: [String]?
+    let team1_cons: [String]?
+    let team2_pros: [String]?
+    let team2_cons: [String]?
+    let actual_winner: String?
+    let correct: Bool?
 }

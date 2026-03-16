@@ -879,7 +879,8 @@ After investigating, rewrite your COMPLETE briefing as ONE JSON object including
 
   } catch (error) {
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.error(`[Research Briefing] ❌ Error after ${elapsed}s: ${error.message}`);
+    const isQuota = error.isQuotaError || error.status === 429 || error.message?.includes('429');
+    console.error(`[Research Briefing] ❌ ${isQuota ? 'QUOTA ERROR' : 'Error'} after ${elapsed}s: ${error.message}`);
     return null;
   }
 }

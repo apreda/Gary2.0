@@ -114,12 +114,15 @@ function formatGameEnvironment(game, home, away) {
   lines.push(`O/U: ${ou || '?'} | Spread: ${sp || '?'} (${home})`);
   lines.push(`Implied Totals: ${home} ${homeImplied} / ${away} ${awayImplied}`);
 
-  if (game.homePace || game.awayPace) {
-    lines.push(`Pace: ${home} ${game.homePace?.toFixed(1) || '?'} / ${away} ${game.awayPace?.toFixed(1) || '?'}${game.gamePace ? ` (Combined: ${game.gamePace.toFixed(1)})` : ''}`);
+  const homePace = game.home_defense?.pace ?? game.homePace ?? null;
+  const awayPace = game.away_defense?.pace ?? game.awayPace ?? null;
+  const gamePace = game.game_pace ?? game.gamePace ?? null;
+  if (homePace || awayPace) {
+    lines.push(`Pace: ${home} ${homePace?.toFixed(1) || '?'} / ${away} ${awayPace?.toFixed(1) || '?'}${gamePace ? ` (Combined: ${gamePace.toFixed(1)})` : ''}`);
   }
 
-  if (game.homeB2B) lines.push(`${home}: BACK-TO-BACK`);
-  if (game.awayB2B) lines.push(`${away}: BACK-TO-BACK`);
+  if (game.home_b2b || game.homeB2B) lines.push(`${home}: BACK-TO-BACK`);
+  if (game.away_b2b || game.awayB2B) lines.push(`${away}: BACK-TO-BACK`);
 
   return lines.join('\n');
 }
