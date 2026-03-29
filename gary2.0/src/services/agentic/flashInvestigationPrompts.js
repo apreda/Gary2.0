@@ -819,7 +819,7 @@ The scout report already includes detailed context from both grounding searches 
 
 ### 13. RUN LINE & TOTAL CONTEXT
 **Tokens:** MLB_RECENT_FORM, MLB_ODDS
-- How often does each team win by 2+ runs vs 1-run games? This affects whether the winning team is likely to cover -1.5.
+- How often does each team win by 2+ runs vs 1-run games? This directly affects run line value.
 - What is each team's scoring output over the last 10 games — trending up or down?
 - What does the runs-per-game average look like for both teams at this venue specifically?
 - How do bullpen state and park factors interact with tonight's total?
