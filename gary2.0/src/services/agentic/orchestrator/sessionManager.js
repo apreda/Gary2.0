@@ -29,7 +29,9 @@ export function createGeminiSession(options = {}) {
     modelName = 'gemini-3-flash-preview',
     systemPrompt = '',
     tools = [],
-    thinkingLevel = 'high'
+    thinkingLevel = 'high',
+    maxOutputTokens = CONFIG.maxTokens,
+    _costTracker = null
   } = options;
   
   const genAI = getGeminiClient({ beta: true });
@@ -59,7 +61,7 @@ export function createGeminiSession(options = {}) {
       temperature: CONFIG.gemini.temperature, // Fixed at 1.0
       topP: CONFIG.gemini.topP,
       topK: 64, // Recommended for Gemini 3
-      maxOutputTokens: CONFIG.maxTokens,
+      maxOutputTokens,
       thinkingConfig: {
         includeThoughts: true,
         thinkingLevel: thinkingLevel
@@ -79,7 +81,8 @@ export function createGeminiSession(options = {}) {
     chat,
     model,
     modelName: validatedModel,
-    thinkingLevel
+    thinkingLevel,
+    _costTracker
   };
 }
 
@@ -187,7 +190,12 @@ export async function sendToSession(session, message, options = {}) {
       completion_tokens: response.usageMetadata?.candidatesTokenCount || 0,
       total_tokens: response.usageMetadata?.totalTokenCount || 0
     };
-    
+
+    // Feed cost tracker if attached to session
+    if (session._costTracker) {
+      session._costTracker.addUsage(session.modelName, usage);
+    }
+
     console.log(`[Session] Response in ${duration}ms (tokens: ${usage.total_tokens})`);
     
     return {
