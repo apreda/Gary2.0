@@ -38,6 +38,9 @@ function _normalizeGame(sportKey, game) {
   if (sportKey === 'basketball_ncaab') {
     game.home_team_score = game.home_score;
     game.visitor_team_score = game.away_score;
+    // BDL NCAAB uses visitor_team, normalize to away_team for consistency
+    if (game.visitor_team && !game.away_team) game.away_team = game.visitor_team;
+    if (game.away_team && !game.visitor_team) game.visitor_team = game.away_team;
   }
   return game;
 }
@@ -175,7 +178,8 @@ const ballDontLieService = {
       icehockey_nhl: 'nhl',
       americanfootball_nfl: 'nfl',
       americanfootball_ncaaf: 'ncaaf',
-      basketball_ncaab: 'ncaab'
+      basketball_ncaab: 'ncaab',
+      baseball_mlb: 'mlb'
     };
     const prop = map[sportKey] || sportKey;
     return client[prop] || null;
@@ -970,7 +974,8 @@ const ballDontLieService = {
           basketball_ncaab: 'ncaab/v1/players',
           icehockey_nhl: 'nhl/v1/players',
           americanfootball_nfl: 'nfl/v1/players',
-          americanfootball_ncaaf: 'ncaaf/v1/players'
+          americanfootball_ncaaf: 'ncaaf/v1/players',
+          baseball_mlb: 'mlb/v1/players'
         };
         const path = endpointMap[sportKey];
         if (!path) return [];
@@ -2991,7 +2996,8 @@ const ballDontLieService = {
           basketball_ncaab: 'ncaab/v1/player_stats',
           americanfootball_nfl: 'nfl/v1/stats',
           americanfootball_ncaaf: 'ncaaf/v1/player_stats',
-          icehockey_nhl: 'nhl/v1/player_stats/leaders' // NHL uses leaders endpoint with type param
+          icehockey_nhl: 'nhl/v1/player_stats/leaders', // NHL uses leaders endpoint with type param
+          baseball_mlb: 'mlb/v1/stats' // MLB per-game stats (AB, H, HR, RBI, K, BB, ERA, IP, etc.)
         };
         const path = endpointMap[sportKey];
         if (!path) {
@@ -3070,6 +3076,28 @@ const ballDontLieService = {
       const data = response.data?.data;
       if (!data || data.length === 0) return null;
       return data[0].stats;
+    }, ttlMinutes);
+  },
+
+  /**
+   * Fetch NCAAB bracket data from BDL.
+   */
+  async getNcaabBracket(season, ttlMinutes = 60) {
+    const cacheKey = `ncaab_bracket_${season}`;
+    return await getCachedOrFetch(cacheKey, async () => {
+      console.log(`🏀 [Ball Don't Lie] Fetching NCAAB bracket for season ${season}`);
+      let allEntries = [];
+      let cursor = null;
+      for (let page = 0; page < 5; page++) {
+        const url = `${BALLDONTLIE_API_BASE_URL}/ncaab/v1/bracket?season=${season}&per_page=100${cursor ? '&cursor=' + cursor : ''}`;
+        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const data = response.data?.data || [];
+        allEntries.push(...data);
+        cursor = response.data?.meta?.next_cursor;
+        if (!cursor) break;
+      }
+      console.log(`🏀 [Ball Don't Lie] NCAAB bracket: ${allEntries.length} total entries`);
+      return allEntries;
     }, ttlMinutes);
   },
 
@@ -3167,19 +3195,41 @@ const ballDontLieService = {
         const possEst = teamTotals.fga + 0.44 * teamTotals.fta - teamTotals.oreb + teamTotals.tov;
         const oppPossEst = oppTotals.fga + 0.44 * oppTotals.fta - oppTotals.oreb + oppTotals.tov;
 
+        // Compute full L-stats from the raw totals (not just efficiency)
+        const t = teamTotals;
+        const o = oppTotals;
+
         return {
           efficiency: {
             games: gp,
-            efg_pct: teamTotals.fga > 0 ? ((teamTotals.fgm + 0.5 * teamTotals.fg3m) / teamTotals.fga * 100).toFixed(1) : null,
-            ts_pct: teamTotals.fga > 0 ? (teamTotals.pts / (2 * (teamTotals.fga + 0.44 * teamTotals.fta)) * 100).toFixed(1) : null,
-            approx_ortg: possEst > 0 ? (teamTotals.pts / possEst * 100).toFixed(1) : null,
-            approx_drtg: oppPossEst > 0 ? (oppTotals.pts / oppPossEst * 100).toFixed(1) : null,
-            approx_net_rtg: (possEst > 0 && oppPossEst > 0) ? ((teamTotals.pts / possEst * 100) - (oppTotals.pts / oppPossEst * 100)).toFixed(1) : null,
-            ppg: (teamTotals.pts / gp).toFixed(1),
-            opp_ppg: (oppTotals.pts / gp).toFixed(1),
-            opp_efg_pct: oppTotals.fga > 0 ? ((oppTotals.fgm + 0.5 * oppTotals.fg3m) / oppTotals.fga * 100).toFixed(1) : null,
-            opp_fg3_pct: oppTotals.fg3a > 0 ? (oppTotals.fg3m / oppTotals.fg3a * 100).toFixed(1) : null,
-            tov_per_game: (teamTotals.tov / gp).toFixed(1)
+            // Shooting
+            efg_pct: t.fga > 0 ? ((t.fgm + 0.5 * t.fg3m) / t.fga * 100).toFixed(1) : null,
+            ts_pct: t.fga > 0 ? (t.pts / (2 * (t.fga + 0.44 * t.fta)) * 100).toFixed(1) : null,
+            fg_pct: t.fga > 0 ? (t.fgm / t.fga * 100).toFixed(1) : null,
+            fg3_pct: t.fg3a > 0 ? (t.fg3m / t.fg3a * 100).toFixed(1) : null,
+            ft_pct: t.fta > 0 ? (t.ftm / t.fta * 100).toFixed(1) : null,
+            // Volume per game
+            ppg: (t.pts / gp).toFixed(1),
+            fga_pg: (t.fga / gp).toFixed(1),
+            fg3a_pg: (t.fg3a / gp).toFixed(1),
+            fta_pg: (t.fta / gp).toFixed(1),
+            oreb_pg: (t.oreb / gp).toFixed(1),
+            tov_pg: (t.tov / gp).toFixed(1),
+            // Four Factors
+            tov_rate: (t.fga + 0.44 * t.fta + t.tov) > 0 ? (t.tov / (t.fga + 0.44 * t.fta + t.tov) * 100).toFixed(1) : null,
+            ft_rate: t.fga > 0 ? (t.fta / t.fga).toFixed(3) : null,
+            // Ratings
+            approx_ortg: possEst > 0 ? (t.pts / possEst * 100).toFixed(1) : null,
+            approx_drtg: oppPossEst > 0 ? (o.pts / oppPossEst * 100).toFixed(1) : null,
+            approx_net_rtg: (possEst > 0 && oppPossEst > 0) ? ((t.pts / possEst * 100) - (o.pts / oppPossEst * 100)).toFixed(1) : null,
+            approx_pace: gp > 0 ? ((possEst + oppPossEst) / 2 / gp).toFixed(1) : null,
+            // Opponent stats
+            opp_ppg: (o.pts / gp).toFixed(1),
+            opp_efg_pct: o.fga > 0 ? ((o.fgm + 0.5 * o.fg3m) / o.fga * 100).toFixed(1) : null,
+            opp_fg_pct: o.fga > 0 ? (o.fgm / o.fga * 100).toFixed(1) : null,
+            opp_fg3_pct: o.fg3a > 0 ? (o.fg3m / o.fg3a * 100).toFixed(1) : null,
+            opp_tov_pg: (o.tov / gp).toFixed(1),
+            opp_fta_pg: (o.fta / gp).toFixed(1),
           },
           playersByGame
         };
@@ -3324,6 +3374,27 @@ const ballDontLieService = {
           const json = await resp.json().catch(() => ({}));
           return Array.isArray(json?.data) ? json.data : [];
         }
+        // MLB team season stats — batting + pitching + fielding aggregates
+        if (sportKey === 'baseball_mlb') {
+          const params = { season };
+          if (teamId) params.team_id = teamId;
+          if (postseason) params.postseason = postseason;
+          const url = `https://api.balldontlie.io/mlb/v1/teams/season_stats${buildQuery(params)}`;
+          const resp = await fetch(url, { headers: { Authorization: API_KEY } });
+          if (!resp.ok) {
+            const text = await resp.text().catch(() => '');
+            throw new Error(`HTTP ${resp.status} ${text}`);
+          }
+          const json = await resp.json().catch(() => ({}));
+          const data = Array.isArray(json?.data) ? json.data : [];
+          // If teamId specified, return the matching team's stats object
+          if (teamId && data.length > 0) {
+            const match = data.find(d => d.team?.id === teamId) || data[0];
+            console.log(`[Ball Don't Lie] MLB team ${teamId} season stats loaded: ${match.gp || 0} GP, batting_avg=${match.batting_avg}, pitching_era=${match.pitching_era}`);
+            return match;
+          }
+          return data;
+        }
         // NBA/NCAAF: fall back to standings/leaders or dedicated season stats
         // NBA: no direct team season stats; caller should use getStandingsGeneric + leaders
         // NCAAF: use dedicated team_season_stats per dev docs
@@ -3421,13 +3492,22 @@ const ballDontLieService = {
     };
   },
 
-  deriveNhlTeamRates(teamSeasonPairs) {
-    // teamSeasonPairs is array of {name,value}; build map
-    if (!Array.isArray(teamSeasonPairs)) return {};
-    const map = {};
-    teamSeasonPairs.forEach(r => {
-      if (r && r.name) map[r.name] = r.value;
-    });
+  deriveNhlTeamRates(teamSeasonStats) {
+    // teamSeasonStats can be either:
+    //   - flat object from getTeamSeasonStats: {goals_for_per_game: 3.1, ...}
+    //   - legacy array of {name, value} pairs (no longer returned, but handle gracefully)
+    if (!teamSeasonStats) return {};
+    let map;
+    if (Array.isArray(teamSeasonStats)) {
+      map = {};
+      teamSeasonStats.forEach(r => {
+        if (r && r.name) map[r.name] = r.value;
+      });
+    } else if (typeof teamSeasonStats === 'object') {
+      map = teamSeasonStats;
+    } else {
+      return {};
+    }
     return {
       ppPct: map.power_play_percentage,
       pkPct: map.penalty_kill_percentage,
@@ -3517,7 +3597,8 @@ const ballDontLieService = {
         const endpointMap = {
           basketball_nba: 'nba/v1/player_injuries',
           americanfootball_nfl: 'nfl/v1/player_injuries',
-          icehockey_nhl: 'nhl/v1/player_injuries'
+          icehockey_nhl: 'nhl/v1/player_injuries',
+          baseball_mlb: 'mlb/v1/player_injuries'
         };
         const path = endpointMap[sportKey];
         if (!path) {
@@ -4609,6 +4690,46 @@ const ballDontLieService = {
     }
   },
 
+  /**
+   * Batch fetch NHL player season stats for multiple players.
+   * Loops over the existing getNhlPlayerSeasonStats singular function.
+   */
+  async getNhlPlayersSeasonStatsBatch(playerIds, season) {
+    if (!playerIds || playerIds.length === 0) return {};
+    const results = {};
+    for (const pid of playerIds) {
+      try {
+        const stats = await this.getNhlPlayerSeasonStats(pid, season);
+        if (stats && (Array.isArray(stats) ? stats.length > 0 : true)) {
+          results[pid] = stats;
+        }
+      } catch (e) {
+        // Skip failed individual fetches
+      }
+    }
+    return results;
+  },
+
+  /**
+   * Batch fetch NHL player game logs for multiple players.
+   * Loops over the existing getNhlPlayerGameLogs singular function.
+   */
+  async getNhlPlayerGameLogsBatch(playerIds, numGames = 10) {
+    if (!playerIds || playerIds.length === 0) return {};
+    const results = {};
+    for (const pid of playerIds) {
+      try {
+        const logs = await this.getNhlPlayerGameLogs(pid, numGames);
+        if (logs) {
+          results[pid] = logs;
+        }
+      } catch (e) {
+        // Skip failed individual fetches
+      }
+    }
+    return results;
+  },
+
   // ═══════════════════════════════════════════════════════════════════════════
   // NFL PLAYER PROPS (Ball Don't Lie API)
   // ═══════════════════════════════════════════════════════════════════════════
@@ -4718,6 +4839,314 @@ const ballDontLieService = {
     } catch (error) {
       console.error(`[Ball Don't Lie] NFL players error:`, error?.response?.data || error.message);
       return {};
+    }
+  },
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // MLB ENDPOINTS (Ball Don't Lie GOAT Tier)
+  // Games, Props, Season Stats, Splits, Player vs Player, Standings, Odds
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Get MLB player props from BDL API (GOAT tier)
+   * Supports: hits, home_runs, total_bases, rbis, stolen_bases, pitcher_strikeouts, etc.
+   */
+  async getMlbPlayerProps(gameId, options = {}) {
+    try {
+      if (!gameId) { console.warn('[BDL] MLB player props requires game_id'); return []; }
+      const cacheKey = `mlb_player_props_${gameId}_${JSON.stringify(options)}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const params = { game_id: gameId };
+        if (options.player_id) params.player_id = options.player_id;
+        if (options.prop_type) params.prop_type = options.prop_type;
+        if (options.vendors) params.vendors = options.vendors;
+        const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/odds/player_props${buildQuery(params)}`;
+        console.log(`[BDL] Fetching MLB player props for game ${gameId}`);
+        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const props = response.data?.data || [];
+        console.log(`[BDL] Retrieved ${props.length} MLB player props for game ${gameId}`);
+        return props;
+      }, 2); // 2min cache — props are live
+    } catch (error) {
+      console.error(`[BDL] MLB player props error: ${error?.response?.status} - ${error?.response?.data?.error || error.message}`);
+      return [];
+    }
+  },
+
+  /**
+   * Get MLB games for a specific date
+   */
+  async getMlbGamesForDate(dateStr) {
+    try {
+      const cacheKey = `mlb_games_${dateStr}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/games${buildQuery({ dates: [dateStr], per_page: 50 })}`;
+        console.log(`[BDL] Fetching MLB games for ${dateStr}`);
+        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const games = response.data?.data || [];
+        console.log(`[BDL] Found ${games.length} MLB games for ${dateStr}`);
+        return games;
+      }, 5);
+    } catch (error) {
+      console.error(`[BDL] MLB games error:`, error?.response?.data || error.message);
+      return [];
+    }
+  },
+
+  /**
+   * Get MLB pre-game lineups (batting order + probable pitchers) from BDL.
+   * Returns { home: { batters: [...], pitcher: {...} }, away: { ... } }
+   * Batters include: name, position, battingOrder, batsThrows
+   * Pitcher includes: name, batsThrows, position
+   */
+  async getMlbLineups(gameId) {
+    if (!gameId) return null;
+    try {
+      const cacheKey = `mlb_lineups_${gameId}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/lineups${buildQuery({ game_ids: [gameId], per_page: 100 })}`;
+        console.log(`[BDL] Fetching MLB lineups for game ${gameId}`);
+        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const entries = response.data?.data || [];
+        if (entries.length === 0) {
+          console.log(`[BDL] No lineup data for game ${gameId} (lineups may not be posted yet)`);
+          return null;
+        }
+
+        // Group by team
+        const teams = {};
+        for (const entry of entries) {
+          const abbr = entry.team?.abbreviation;
+          if (!abbr) continue;
+          if (!teams[abbr]) teams[abbr] = { batters: [], pitcher: null, teamName: entry.team?.display_name || entry.team?.name };
+
+          if (entry.is_probable_pitcher) {
+            teams[abbr].pitcher = {
+              name: entry.player?.full_name || `${entry.player?.first_name} ${entry.player?.last_name}`,
+              position: entry.position,
+              batsThrows: entry.player?.bats_throws || '',
+              playerId: entry.player?.id
+            };
+          } else if (entry.batting_order != null) {
+            teams[abbr].batters.push({
+              name: entry.player?.full_name || `${entry.player?.first_name} ${entry.player?.last_name}`,
+              position: entry.position,
+              battingOrder: entry.batting_order,
+              batsThrows: entry.player?.bats_throws || '',
+              playerId: entry.player?.id
+            });
+          }
+        }
+
+        // Sort batters by order
+        for (const abbr of Object.keys(teams)) {
+          teams[abbr].batters.sort((a, b) => a.battingOrder - b.battingOrder);
+        }
+
+        const teamKeys = Object.keys(teams);
+        console.log(`[BDL] MLB lineups: ${teamKeys.map(k => `${k} ${teams[k].batters.length} batters`).join(', ')}${teamKeys.some(k => teams[k].pitcher) ? ' + pitchers' : ''}`);
+        return teams;
+      }, 10); // 10 min cache
+    } catch (error) {
+      console.error(`[BDL] MLB lineups error for game ${gameId}:`, error?.response?.data || error.message);
+      return null;
+    }
+  },
+
+  /**
+   * Get MLB players by IDs to resolve player names + positions
+   */
+  async getMlbPlayersByIds(playerIds) {
+    try {
+      if (!playerIds || playerIds.length === 0) return {};
+      const cacheKey = `mlb_players_by_ids_${playerIds.sort().join(',')}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/players${buildQuery({ player_ids: playerIds, per_page: 100 })}`;
+        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const players = response.data?.data || [];
+        const playerMap = {};
+        for (const player of players) {
+          playerMap[player.id] = {
+            name: player.full_name || `${player.first_name} ${player.last_name}`,
+            position: player.position,
+            batsThrows: player.bats_throws,
+            team: player.team?.display_name || player.team?.name || 'Unknown',
+            teamAbbr: player.team?.abbreviation || '',
+            teamId: player.team?.id
+          };
+        }
+        console.log(`[BDL] Resolved ${Object.keys(playerMap).length} MLB player names`);
+        return playerMap;
+      }, 60);
+    } catch (error) {
+      console.error(`[BDL] MLB players error:`, error?.response?.data || error.message);
+      return {};
+    }
+  },
+
+  /**
+   * Get MLB player season stats (GOAT tier)
+   * Returns full season: batting_avg, batting_hr, batting_rbi, batting_ops, batting_war,
+   *                       pitching_era, pitching_whip, pitching_k, pitching_k_per_9, pitching_war, etc.
+   */
+  async getMlbPlayerSeasonStats({ season, playerIds, teamId, postseason = false } = {}, ttlMinutes = 30) {
+    try {
+      if (!season) return [];
+      const cacheKey = `mlb_season_stats_${season}_${playerIds?.join(',') || ''}_${teamId || ''}_${postseason}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const params = { season };
+        if (playerIds?.length) params.player_ids = playerIds;
+        if (teamId) params.team_id = teamId;
+        if (postseason) params.postseason = postseason;
+        const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/season_stats${buildQuery(params)}`;
+        console.log(`[BDL] Fetching MLB season stats: season=${season}, players=${playerIds?.length || 'all'}, team=${teamId || 'all'}`);
+        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const stats = response.data?.data || [];
+        console.log(`[BDL] Retrieved ${stats.length} MLB season stat records`);
+        return stats;
+      }, ttlMinutes);
+    } catch (error) {
+      console.error(`[BDL] MLB season stats error:`, error?.response?.data || error.message);
+      return [];
+    }
+  },
+
+  /**
+   * Get MLB player splits (GOAT tier)
+   * Returns splits by: arena, batting order, breakdown (L/R, home/away, day/night),
+   *                     count, opponent, position, situation, day/month
+   */
+  async getMlbPlayerSplits({ playerId, season } = {}, ttlMinutes = 60) {
+    try {
+      if (!playerId || !season) return null;
+      const cacheKey = `mlb_player_splits_${playerId}_${season}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/players/splits${buildQuery({ player_id: playerId, season })}`;
+        console.log(`[BDL] Fetching MLB player splits: player=${playerId}, season=${season}`);
+        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const data = response.data?.data || {};
+        console.log(`[BDL] MLB splits loaded: ${Object.keys(data).length} categories`);
+        return data;
+      }, ttlMinutes);
+    } catch (error) {
+      console.error(`[BDL] MLB player splits error:`, error?.response?.data || error.message);
+      return null;
+    }
+  },
+
+  /**
+   * Get MLB player vs player matchups (GOAT tier)
+   * Batter vs all pitchers on an opponent team (or pitcher vs all batters)
+   */
+  async getMlbPlayerVsPlayer({ playerId, opponentTeamId } = {}, ttlMinutes = 120) {
+    try {
+      if (!playerId || !opponentTeamId) return [];
+      const cacheKey = `mlb_pvp_${playerId}_vs_${opponentTeamId}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/players/versus${buildQuery({ player_id: playerId, opponent_team_id: opponentTeamId })}`;
+        console.log(`[BDL] Fetching MLB player vs player: player=${playerId} vs team=${opponentTeamId}`);
+        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const data = response.data?.data || [];
+        console.log(`[BDL] MLB PvP: ${data.length} matchup records`);
+        return data;
+      }, ttlMinutes);
+    } catch (error) {
+      console.error(`[BDL] MLB player vs player error:`, error?.response?.data || error.message);
+      return [];
+    }
+  },
+
+  /**
+   * Get MLB team standings (GOAT tier)
+   * Returns: W-L, home/away, L10, streak, division GB, wildcard, win%, etc.
+   */
+  async getMlbStandings(season, ttlMinutes = 30) {
+    try {
+      if (!season) season = new Date().getFullYear();
+      const cacheKey = `mlb_standings_${season}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/standings${buildQuery({ season })}`;
+        console.log(`[BDL] Fetching MLB standings for ${season}`);
+        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const standings = response.data?.data || [];
+        console.log(`[BDL] MLB standings: ${standings.length} teams`);
+        return standings;
+      }, ttlMinutes);
+    } catch (error) {
+      console.error(`[BDL] MLB standings error:`, error?.response?.data || error.message);
+      return [];
+    }
+  },
+
+  /**
+   * Get MLB betting odds for specific games (GOAT tier)
+   * Returns: ML, spread (run line), total from DK/FD/BetMGM/Fanatics
+   */
+  async getMlbGameOdds({ gameIds, dates } = {}, ttlMinutes = 5) {
+    try {
+      const params = {};
+      if (gameIds?.length) params.game_ids = gameIds;
+      if (dates?.length) params.dates = dates;
+      if (!gameIds?.length && !dates?.length) return [];
+      const cacheKey = `mlb_odds_${JSON.stringify(params)}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/odds${buildQuery(params)}`;
+        console.log(`[BDL] Fetching MLB odds`);
+        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const odds = response.data?.data || [];
+        console.log(`[BDL] MLB odds: ${odds.length} records`);
+        return odds;
+      }, ttlMinutes);
+    } catch (error) {
+      console.error(`[BDL] MLB odds error:`, error?.response?.data || error.message);
+      return [];
+    }
+  },
+
+  /**
+   * Get MLB per-game player stats (box score data)
+   * Returns: AB, H, HR, RBI, BB, K, AVG, OBP, SLG + pitching stats for pitchers
+   */
+  async getMlbGameStats({ gameIds, playerIds, seasons } = {}, ttlMinutes = 30) {
+    try {
+      const params = {};
+      if (gameIds?.length) params.game_ids = gameIds;
+      if (playerIds?.length) params.player_ids = playerIds;
+      if (seasons?.length) params.seasons = seasons;
+      const cacheKey = `mlb_game_stats_${JSON.stringify(params)}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/stats${buildQuery(params)}`;
+        console.log(`[BDL] Fetching MLB game stats`);
+        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const stats = response.data?.data || [];
+        console.log(`[BDL] MLB game stats: ${stats.length} records`);
+        return stats;
+      }, ttlMinutes);
+    } catch (error) {
+      console.error(`[BDL] MLB game stats error:`, error?.response?.data || error.message);
+      return [];
+    }
+  },
+
+  /**
+   * Get MLB plate appearances with Statcast data (GOAT tier)
+   * Returns: exit_velocity, launch_angle, expected_batting_average, is_barrel, pitch_type, spin_rate, etc.
+   */
+  async getMlbPlateAppearances(gameId, ttlMinutes = 120) {
+    try {
+      if (!gameId) return [];
+      const cacheKey = `mlb_plate_appearances_${gameId}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/plate_appearances${buildQuery({ game_id: gameId })}`;
+        console.log(`[BDL] Fetching MLB plate appearances (Statcast) for game ${gameId}`);
+        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const data = response.data?.data || [];
+        console.log(`[BDL] MLB plate appearances: ${data.length} records`);
+        return data;
+      }, ttlMinutes);
+    } catch (error) {
+      console.error(`[BDL] MLB plate appearances error:`, error?.response?.data || error.message);
+      return [];
     }
   },
 
