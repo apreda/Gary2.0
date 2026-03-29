@@ -115,10 +115,13 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   try { // try/finally ensures cost summary always logs on exit
 
   // Build tools list — add finalize_props when in props mode
-  // NCAAB: Remove fetch_narrative_context (all narrative data is in scout report — Grounding wastes iterations)
-  const baseTools = isNCAABSport
-    ? toolDefinitions.filter(t => t.function?.name !== 'fetch_narrative_context')
-    : toolDefinitions;
+  // Remove fetch_narrative_context (grounding) when it adds no value:
+  // - Props mode: all data is in the pre-built scout report + player stats. No grounding needed.
+  // - NCAAB game picks: narrative data is already in scout report.
+  const needsGrounding = isGamePicksMode && !isNCAABSport;
+  const baseTools = needsGrounding
+    ? toolDefinitions
+    : toolDefinitions.filter(t => t.function?.name !== 'fetch_narrative_context');
   const activeTools = isPropsMode
     ? [...baseTools, getFinalizePropsToolForSport(sport)]
     : baseTools;
