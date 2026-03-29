@@ -465,31 +465,8 @@ export const mlbFetchers = {
       }
     }
 
-    // FALLBACK: MLB Stats API live feed (once game is live / has gamePk)
-    if (gamePk) {
-      try {
-        const lineups = await getConfirmedLineups(gamePk);
-        if (lineups && (lineups.home?.length > 0 || lineups.away?.length > 0)) {
-          const formatLineup = (lineup, teamName) => {
-            if (!lineup || lineup.length === 0) return `${teamName}: Lineup not yet confirmed`;
-            return `${teamName}:\n` + lineup.map(p =>
-              `  ${p.battingOrder}. ${p.name} (${p.position})`
-            ).join('\n');
-          };
-          return {
-            homeValue: formatLineup(lineups.home, homeTeam),
-            awayValue: formatLineup(lineups.away, awayTeam),
-            comparison: `Confirmed lineups for ${awayTeam} @ ${homeTeam} (status: ${lineups.gameStatus})`,
-            source: 'MLB Stats API (live feed)',
-          };
-        }
-      } catch (e) {
-        console.warn(`[MLB Fetchers] MLB Stats API lineup extraction failed: ${e.message}`);
-      }
-    }
-
-    // NO GROUNDING FALLBACK — if both APIs fail, surface the gap
-    console.warn(`[MLB Fetchers] ⚠️ No lineup data from BDL or MLB Stats API for ${awayTeam} @ ${homeTeam} (gameId: ${gameId}, gamePk: ${gamePk})`);
+    // No fallback — BDL is the only pre-game lineup source. If it's empty, lineups aren't posted yet.
+    console.warn(`[MLB Fetchers] ⚠️ No lineup data from BDL for ${awayTeam} @ ${homeTeam} (gameId: ${gameId})`);
     return {
       homeValue: `${homeTeam}: Lineup not yet available (check closer to game time)`,
       awayValue: `${awayTeam}: Lineup not yet available (check closer to game time)`,

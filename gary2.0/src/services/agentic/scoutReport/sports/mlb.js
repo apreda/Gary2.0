@@ -133,20 +133,12 @@ export async function buildMlbScoutReport(game, options = {}) {
       `Include player names, spring training stats where relevant, and concrete details.`,
       groundingOpts
     ).then(r => r?.data || '').catch(() => ''),
-    // Lineups: BDL primary (pre-game, includes handedness), MLB Stats API fallback
+    // Lineups: BDL API (available pre-game, includes handedness + probable pitchers)
     (async () => {
-      // Try BDL first — available pre-game
       const gameId = game.id || game.gameId;
-      if (gameId) {
-        const bdl = await ballDontLieService.getMlbLineups(gameId).catch(() => null);
-        if (bdl) return { source: 'bdl', data: bdl };
-      }
-      // Fallback: MLB Stats API (only works once game is live)
-      if (gamePk) {
-        const live = await getConfirmedLineups(gamePk).catch(() => null);
-        if (live) return { source: 'mlb_stats', data: live };
-      }
-      return null;
+      if (!gameId) return null;
+      const bdl = await ballDontLieService.getMlbLineups(gameId).catch(() => null);
+      return bdl ? { source: 'bdl', data: bdl } : null;
     })(),
   ]);
 
@@ -715,11 +707,10 @@ export async function buildMlbScoutReport(game, options = {}) {
   }
 
   // ═══════════════════════════════════════════════════════════════════
-  // CONFIRMED LINEUPS — BDL (primary, pre-game) or MLB Stats API (fallback)
+  // CONFIRMED LINEUPS — BDL API (pre-game, includes handedness + probable pitchers)
   // ═══════════════════════════════════════════════════════════════════
   let confirmedLineupsSection = 'Lineups not yet posted — check closer to game time.';
   if (confirmedLineups?.source === 'bdl' && confirmedLineups.data) {
-    // BDL lineups: keyed by team abbreviation, includes handedness
     const homeAbbr = game.home_team?.abbreviation || game.home_team_data?.abbreviation || '';
     const awayAbbr = game.away_team?.abbreviation || game.away_team_data?.abbreviation || '';
     const homeData = confirmedLineups.data[homeAbbr] || Object.values(confirmedLineups.data).find(t => t.teamName?.toLowerCase().includes(homeTeam.toLowerCase().split(' ').pop()));
@@ -734,15 +725,6 @@ export async function buildMlbScoutReport(game, options = {}) {
     };
     confirmedLineupsSection = [formatBdl(homeData, homeTeam), formatBdl(awayData, awayTeam)].join('\n\n');
     console.log(`[Scout Report] MLB lineups from BDL: ${homeTeam}=${homeData?.batters?.length || 0} batters, ${awayTeam}=${awayData?.batters?.length || 0} batters`);
-  } else if (confirmedLineups?.source === 'mlb_stats' && confirmedLineups.data) {
-    // MLB Stats API format: { home: [...], away: [...] }
-    const data = confirmedLineups.data;
-    const formatLive = (lineup, teamName) => {
-      if (!lineup || lineup.length === 0) return `${teamName}: Not yet confirmed`;
-      return `${teamName}:\n` + lineup.map(p => `  ${p.battingOrder}. ${p.name} (${p.position})`).join('\n');
-    };
-    confirmedLineupsSection = [formatLive(data.home, homeTeam), formatLive(data.away, awayTeam)].join('\n\n');
-    console.log(`[Scout Report] MLB lineups from Stats API: ${homeTeam}=${data.home?.length || 0}, ${awayTeam}=${data.away?.length || 0}`);
   }
 
   // ═══════════════════════════════════════════════════════════════════
