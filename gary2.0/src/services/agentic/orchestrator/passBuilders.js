@@ -583,13 +583,7 @@ ${recordsReminder}
 <output_requirements>
 ## OUTPUT REQUIREMENTS
 
-${isNHL ? `**BET TYPE:** You have two options — MONEYLINE (picking a team to win outright, includes OT/SO) or PUCK LINE (standard -1.5/+1.5, regulation + OT only). If you believe a team wins, ML is the cleanest expression of that conviction. Choose the bet type that matches your read on the game.` : `**BET TYPE:** You have two options — SPREAD (picking a side to cover) or MONEYLINE (picking a team to win outright). If you believe a team wins, ML often pays better than the spread. Choose the bet type that matches your conviction.
-
-**ML VALUE AWARENESS:** Heavy ML favorites return less value per dollar risked. A -200 favorite needs to win 67% of the time just to break even. When the favorite's ML price is steep, consider whether the spread offers better value. Underdog ML is always an option at plus-odds.
-
-**SPREAD AWARENESS:**
-- Favorites (-X): "Will this team win by MORE than X points?"
-- Underdogs (+X): "Will this team lose by FEWER than X points (or win outright)?"`}
+${isNHL ? `**BET TYPE:** You have two options — MONEYLINE (picking a team to win outright, includes OT/SO) or PUCK LINE (standard -1.5/+1.5, regulation + OT only). Choose the bet type that matches your read on the game.` : `**BET TYPE:** You have two options — SPREAD (picking a side to cover) or MONEYLINE (picking a team to win outright). Choose the bet type that matches your conviction about how this game plays out.`}
 
 **CRITICAL ODDS RULES:**
 1. Use the EXACT odds from the "RAW ODDS VALUES" section of the scout report — do NOT default to -110
@@ -808,20 +802,16 @@ ${mlbAwareness}
 </investigation_rules>
 
 <spread_evaluation>
-## THE RUN LINE IS A PRICE
+## MLB BET TYPES
 
-The run line is not a prediction — it is a price. A -1.5 pick means the team must win by 2+ runs. A +1.5 pick means the team can lose by 1 run and still cover. Lines are shaped by probable pitchers, career stats, recent form, bullpen availability, and public perception.
+- **Moneyline (ML):** Pick a team to win outright. The price reflects the market's view of each team's win probability.
+- **Run Line (RL):** Standard -1.5 / +1.5. Favorite must win by 2+ runs. Underdog covers if they win or lose by exactly 1.
 
-**DESCRIPTIVE vs CAUSAL:**
-- **Descriptive factors** (records, standings, reputation, public narrative) explain WHY the line is set where it is. They are already IN the run line.
-- **Causal factors** (how each pitcher matches up against the opposing lineup, bullpen depth, platoon advantages) reveal the actual matchup beneath the run line.
-- **The SPOT** (venue, weather, tournament context, rest, bullpen workload) is factored into the run line — investigate whether the market adjustment matches the underlying matchup evidence for this game.
-
-When you cite a record, ranking, or situation — ask yourself: "Is this describing what happened, or explaining what will happen in this game?"${runLineSizeBlock}
+Investigate the matchup. Decide who wins and by how much. Then choose ML or RL based on your conviction.${runLineSizeBlock}
 
 ## RUN LINE EVALUATION FACTORS
 
-These factors move public perception and move lines. Most of the time they are noise, not signal. For each one, investigate whether it actually affects the game or whether it just affected the price.
+Use these factors as investigation lenses. Keep findings factual and symmetric across both teams.
 
 ${factors}
 </spread_evaluation>

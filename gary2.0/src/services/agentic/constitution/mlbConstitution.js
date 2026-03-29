@@ -1,59 +1,77 @@
 /**
- * MLB/WBC Constitution - World Baseball Classic Context for Gary
+ * MLB Constitution - MLB-Specific Context for Gary
  *
- * WBC-specific domain knowledge and guardrails.
- * Phase-aligned delivery:
- * - domainKnowledge: always-on awareness (WBC-specific context)
+ * Phase-aligned delivery (matches NBA pattern):
+ * - domainKnowledge: always-on only (kept minimal)
  * - pass1Context: investigation-stage awareness
- * - guardrails: structural hard rules
+ * - guardrails: structural hard rules (minimal)
+ *
+ * Everything else is covered elsewhere (do NOT duplicate here):
+ * - Stat categories / pitcher analysis → Flash investigation prompts + scout report
+ * - Betting theory / market dynamics → model knowledge (Gary already knows MLB betting)
+ * - Data source catalog / token list → Flash investigation prompts + scout report
+ * - Bet type (ML/RL) → system prompt <output_format>
+ * - Transitive property → BASE_RULES
+ * - Anti-hallucination / current season → BASE_RULES
+ * - Detailed situational awareness (streaks, tough spots, pitcher situations) → Flash investigation prompts
  */
 
 export const MLB_CONSTITUTION = {
 
-  domainKnowledge: `
-### WBC DOMAIN KNOWLEDGE
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SECTION A: DOMAIN KNOWLEDGE — always-on only (keep minimal)
+  // ═══════════════════════════════════════════════════════════════════════════
+  domainKnowledge: ``,
 
-The World Baseball Classic is a 20-team international baseball tournament held every four years. National teams are assembled from MLB rosters, international leagues (NPB, KBO, CPBL, etc.), and domestic leagues. Players who normally play on different MLB teams come together for 2-3 weeks.
-
-**What makes WBC unique:**
-- Rosters are assembled for 2 weeks — team chemistry and familiarity with each other is limited compared to MLB clubs that play 162 games together
-- Pool play is round-robin (top 2 advance). Quarterfinals onward are single elimination — completely different stakes and approach.
-- Player quality varies — some countries stack MLB All-Stars at every position, others rely on a few MLB players supplemented by international league talent
-- Limited tournament sample size means career stats and recent regular-season form are the primary quality indicators, not 3-game WBC averages
-
-**WBC-Specific Rules (these are public and the run line attempts to factor them in):**
-- Pitch count limits by round: Pool play 65 pitches, quarterfinals 80 pitches, semifinals/championship 95 pitches. If the limit is reached mid-at-bat, the pitcher can finish that at-bat.
-- Pitcher rest requirements: 50+ pitches thrown = 4 days rest before next appearance. 30+ pitches = 1 day rest. Pitched on consecutive days = 1 day rest.
-- Mercy rule: Pool play and quarterfinals — game ends if a team leads by 15+ runs after 5 innings or 10+ runs after 7 innings.
-- Extra innings: Ghost runner on 2nd base starting in the 10th inning.
-
-**Betting in the WBC:**
-- Moneyline (ML) picks the winner outright. The run line is +/- 1.5 runs (equivalent of a spread). A -1.5 favorite must win by 2+ runs. An underdog at +1.5 covers if they win or lose by exactly 1 run.
-- Heavy ML favorites return less value per dollar risked — a -200 favorite needs to win 67% of the time just to break even. When the favorite's ML price is steep, consider the run line on both sides.
-- Weather, venue (Tokyo Dome indoor vs Miami outdoor), and park factors affect scoring
-- National pride and media narratives drive heavy public action — some lines are inflated by reputation rather than actual roster matchup quality
-`,
-
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SECTION B: PASS 1 CONTEXT — shown during investigation stage
+  // ═══════════════════════════════════════════════════════════════════════════
   pass1Context: `
-### WBC AWARENESS
+### MLB AWARENESS
 
-- In the WBC, platoons are commonly used to make up for talent disparities on paper
-- Starting pitching moves WBC lines more than other factors due to the limited data available on these national team rosters playing together
-- Many WBC players do not have MLB careers — they play in NPB, KBO, CPBL, or domestic leagues. Use grounding tools to research their background and stats
-- Breaking news — lineup confirmations, scratches, and bullpen availability often aren't known until hours before first pitch
+- Starting pitcher matchup is the foundation of any MLB game analysis — investigate both starters' recent outings, pitch count trends, and performance against this specific lineup
+- A pitcher's recent form (last 3-5 starts) can diverge significantly from full-season numbers — investigate the trajectory
+- Bullpen availability changes every day — who pitched last night, who pitched the night before, who is available tonight. This is not a static stat; it is a daily investigation
+- Left/right splits matter in baseball — investigate how each team's lineup is constructed relative to the opposing starter's handedness
+- Lineup construction, rest days, platoon matchups, and injuries to key bats all change how the offense profiles tonight
+- Park factors and weather (wind direction, temperature, humidity) directly affect scoring — investigate the specific venue and conditions
+- MLB outcomes are volatile game-to-game — a team's season averages can look very different from how they play on a given night with a given pitcher in a given park. The best team in baseball loses 4 out of every 10 games.
+- Baseball is a 162-game season with real human dynamics — momentum, streaks, series context, pitcher confidence, team energy, and the grind of the schedule all matter alongside the statistics
+- The moneyline is how MLB games are priced — there is no real spread. Investigate the matchup, decide who wins, then choose ML or run line based on your conviction
+
+### MLB INJURY LABELS (READ FROM SCOUT REPORT)
+
+MLB injuries use a simplified 3-tier system. The key question in baseball is: did this absence change who is pitching tonight?
+
+- **NEW** — Placed on IL or scratched within the last 3 days. This is the only tier that may not be fully reflected in the line. A starting pitcher scratch day-of is the single highest-impact roster change in baseball.
+- **KNOWN** — On IL for 4+ days. The line, the team's recent stats, and the opponent's game plan already account for this absence.
+- **SP SCRATCH** — Special flag: the scheduled starting pitcher was scratched or replaced. This changes the entire game projection and may not be in the posted line yet.
+
+Use the exact tag shown in the scout report for this game.
+
+**MLB GTD/IL NOTE:**
+- A starting pitcher placed on the IL or scratched day-of changes the entire game projection
+- Position player IL stints matter less individually but accumulate
 `,
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SECTION C: PASS 2.5 DECISION GUARDS — optional stage-specific reminders
+  // ═══════════════════════════════════════════════════════════════════════════
   pass25DecisionGuards: ``,
 
-  guardrails: `
-- Do not assume all WBC players have MLB careers — many play in NPB, KBO, CPBL, or other international leagues
-`,
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SECTION D: STRUCTURAL GUARDRAILS (Hard rules — always enforced)
+  // ═══════════════════════════════════════════════════════════════════════════
+  guardrails: ``,
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SECTION E: BILATERAL CASE PROMPT — injected at end of Pass 1
+  // ═══════════════════════════════════════════════════════════════════════════
   bilateralCasePrompt: (homeTeam, awayTeam) =>
     `Before outputting INVESTIGATION COMPLETE, include both sections in your Pass 1 synthesis:
 Case for ${homeTeam} winning
 Case for ${awayTeam} winning
-(Each case should be 3 paragraphs explaining why that team wins tonight.)`
+(Each case should be 2-3 paragraphs explaining why that team wins tonight based on the matchup evidence you investigated.)`
 };
 
 export default MLB_CONSTITUTION;
