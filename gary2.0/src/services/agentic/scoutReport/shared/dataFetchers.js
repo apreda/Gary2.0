@@ -131,39 +131,9 @@ export async function fetchTeamProfile(teamName, sport) {
       console.log(`[Scout Report] ${teamName} record from BDL season stats: ${record}`);
     }
     
-    // Fallback to Gemini grounding if BDL doesn't have record
+    // No grounding fallback — if BDL doesn't have the record, surface the gap
     if (record === 'N/A') {
-      try {
-        const seasonYear = currentSeason;
-        const nextYear = (currentSeason + 1).toString().slice(-2);
-        const seasonStr = `${seasonYear}-${nextYear}`;
-        const sportName = sport === 'NBA' || bdlSport === 'basketball_nba' ? 'NBA' : 
-                         sport === 'NCAAB' || bdlSport === 'basketball_ncaab' ? 'NCAAB' :
-                         isNHL ? 'NHL' : sport;
-        
-        const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-        const formatStr = isNHL ? '"W-L-OTL" (e.g., "28-13-9")' : '"W-L" (e.g., "22-17")';
-        const recordQuery = `What is the current ${seasonStr} ${sportName} season record for the ${teamName} as of ${today}? Return ONLY the record in format ${formatStr}.`;
-        
-        console.log(`[Scout Report] Fetching ${teamName} record via Gemini grounding (BDL unavailable)...`);
-        const recordResult = await geminiGroundingSearch(recordQuery, { temperature: 1.0, maxTokens: 100 });
-        
-        if (recordResult?.success && recordResult?.data) {
-          // Flexible match for X-Y or X-Y-Z
-          const recordMatch = isNHL 
-            ? recordResult.data.match(/(\d{1,2})\s*[-–]\s*(\d{1,2})\s*[-–]\s*(\d{1,2})/)
-            : recordResult.data.match(/(\d{1,2})\s*[-–]\s*(\d{1,2})/);
-            
-          if (recordMatch) {
-            record = isNHL 
-              ? `${recordMatch[1]}-${recordMatch[2]}-${recordMatch[3]}`
-              : `${recordMatch[1]}-${recordMatch[2]}`;
-            console.log(`[Scout Report] ${teamName} record from Gemini grounding: ${record}`);
-          }
-        }
-      } catch (e) {
-        console.warn(`[Scout Report] Gemini grounding fallback for ${teamName} record failed:`, e.message);
-      }
+      console.warn(`[Scout Report] ⚠️ ${teamName} record unavailable from BDL — check standings API. Returning N/A.`);
     }
     
     return {
@@ -787,7 +757,7 @@ export async function fetchH2HData(homeTeam, awayTeam, sport, recentHome, recent
     // NCAAB: Use Highlightly H2H API (simpler, more reliable team matching)
     if (bdlSport === 'basketball_ncaab') {
       try {
-        const { getH2H } = await import('../../../services/ncaabVenueService.js');
+        const { getH2H } = await import('../../../ncaabVenueService.js');
         const highlightlyH2H = await getH2H(homeTeam, awayTeam, 'ncaab');
         if (highlightlyH2H) {
           console.log(`[Scout Report] H2H: Highlightly returned ${highlightlyH2H.gamesFound || 0} game(s) for ${homeTeam} vs ${awayTeam}`);
@@ -1989,7 +1959,14 @@ Report whether the goalie is "Confirmed" or "Expected" based on what RotoWire sh
       ]);
 
       // Build goalie context for narrative (still from Grounding)
-      const goalieRaw = `${awayGoalieResponse?.data || ''}\n\n${homeGoalieResponse?.data || ''}`.trim();
+      const awayGoalieText = typeof awayGoalieResponse === 'string' ? awayGoalieResponse : (awayGoalieResponse?.data || '');
+      const homeGoalieText = typeof homeGoalieResponse === 'string' ? homeGoalieResponse : (homeGoalieResponse?.data || '');
+      const goalieRaw = `${awayGoalieText}\n\n${homeGoalieText}`.trim();
+
+      // HARD FAIL: NHL picks require confirmed/expected starting goalies
+      if (!goalieRaw || goalieRaw.length < 20) {
+        throw new Error(`[HARD FAIL] NHL goalie data unavailable from RotoWire for ${awayTeam} @ ${homeTeam}. Cannot make an accurate NHL pick without knowing who is starting in net.`);
+      }
 
       // Normalize BDL injury status to standard format
       const normalizeNhlStatus = (bdlStatus) => {
