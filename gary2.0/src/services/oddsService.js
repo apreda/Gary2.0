@@ -8,6 +8,24 @@ import { ballDontLieOddsService } from './ballDontLieOddsService.js';
 // Track in-flight requests to prevent duplicates
 const inFlightRequests = new Map();
 
+// Normalize a team name for fuzzy matching (lowercase, strip punctuation, collapse whitespace)
+const normalizeForMatch = (name) => {
+  if (!name) return '';
+  return name.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+};
+
+// Check if two team names match (exact first, then fuzzy includes-based fallback)
+const teamNamesMatch = (outcomeName, targetName) => {
+  if (!outcomeName || !targetName) return false;
+  if (outcomeName === targetName) return true;
+  const normOutcome = normalizeForMatch(outcomeName);
+  const normTarget = normalizeForMatch(targetName);
+  if (normOutcome === normTarget) return true;
+  // Substring match: one contains the other (handles "Auburn" vs "Auburn Tigers", etc.)
+  if (normOutcome.includes(normTarget) || normTarget.includes(normOutcome)) return true;
+  return false;
+};
+
 // Extract odds from a single bookmaker's markets
 const extractFromBookmaker = (bookmaker, homeTeam, awayTeam) => {
   const result = {
@@ -28,12 +46,38 @@ const extractFromBookmaker = (bookmaker, homeTeam, awayTeam) => {
   const spreadsMarket = bookmaker.markets.find(m => m.key === 'spreads');
   if (spreadsMarket?.outcomes) {
     for (const outcome of spreadsMarket.outcomes) {
-      if (outcome.name === homeTeam) {
+      if (teamNamesMatch(outcome.name, homeTeam)) {
         result.spread_home = outcome.point;
         result.spread_home_odds = outcome.price ?? null;
-      } else if (outcome.name === awayTeam) {
+      } else if (teamNamesMatch(outcome.name, awayTeam)) {
         result.spread_away = outcome.point;
         result.spread_away_odds = outcome.price ?? null;
+      }
+    }
+    // Fallback: try mascot-name matching (last word) for spreads
+    if (result.spread_home === null || result.spread_away === null) {
+      const homeLast = normalizeForMatch(homeTeam).split(' ').pop();
+      const awayLast = normalizeForMatch(awayTeam).split(' ').pop();
+      for (const outcome of spreadsMarket.outcomes) {
+        const outcomeLast = normalizeForMatch(outcome.name).split(' ').pop();
+        if (result.spread_home === null && outcomeLast === homeLast) {
+          result.spread_home = outcome.point;
+          result.spread_home_odds = outcome.price ?? null;
+        } else if (result.spread_away === null && outcomeLast === awayLast) {
+          result.spread_away = outcome.point;
+          result.spread_away_odds = outcome.price ?? null;
+        }
+      }
+    }
+    // Last resort: positional fallback
+    if (result.spread_home === null && result.spread_away === null && spreadsMarket.outcomes.length === 2) {
+      const [first, second] = spreadsMarket.outcomes;
+      if (typeof first.point === 'number' && typeof second.point === 'number') {
+        console.warn(`[Odds] ⚠️ Positional fallback used for spreads: ${homeTeam} vs ${awayTeam} — name matching failed for outcomes: ${spreadsMarket.outcomes.map(o => o.name).join(', ')}`);
+        result.spread_home = first.point;
+        result.spread_home_odds = first.price ?? null;
+        result.spread_away = second.point;
+        result.spread_away_odds = second.price ?? null;
       }
     }
   }
@@ -42,10 +86,32 @@ const extractFromBookmaker = (bookmaker, homeTeam, awayTeam) => {
   const h2hMarket = bookmaker.markets.find(m => m.key === 'h2h');
   if (h2hMarket?.outcomes) {
     for (const outcome of h2hMarket.outcomes) {
-      if (outcome.name === homeTeam) {
+      if (teamNamesMatch(outcome.name, homeTeam)) {
         result.moneyline_home = outcome.price;
-      } else if (outcome.name === awayTeam) {
+      } else if (teamNamesMatch(outcome.name, awayTeam)) {
         result.moneyline_away = outcome.price;
+      }
+    }
+    // Fallback: try mascot-name matching (last word) before positional assignment
+    if (result.moneyline_home === null || result.moneyline_away === null) {
+      const homeLast = normalizeForMatch(homeTeam).split(' ').pop();
+      const awayLast = normalizeForMatch(awayTeam).split(' ').pop();
+      for (const outcome of h2hMarket.outcomes) {
+        const outcomeLast = normalizeForMatch(outcome.name).split(' ').pop();
+        if (result.moneyline_home === null && outcomeLast === homeLast) {
+          result.moneyline_home = outcome.price;
+        } else if (result.moneyline_away === null && outcomeLast === awayLast) {
+          result.moneyline_away = outcome.price;
+        }
+      }
+    }
+    // Last resort: positional fallback (BDL typically home first, away second)
+    if (result.moneyline_home === null && result.moneyline_away === null && h2hMarket.outcomes.length === 2) {
+      const [first, second] = h2hMarket.outcomes;
+      if (typeof first.price === 'number' && typeof second.price === 'number') {
+        console.warn(`[Odds] ⚠️ Positional fallback used for ML: ${homeTeam} vs ${awayTeam} — name matching failed for outcomes: ${h2hMarket.outcomes.map(o => o.name).join(', ')}`);
+        result.moneyline_home = first.price;
+        result.moneyline_away = second.price;
       }
     }
   }
@@ -86,6 +152,21 @@ const validateSpreadMLDirection = (odds, bookmakerKey) => {
   return true;
 };
 
+// Vendors to skip entirely — prediction markets, not real sportsbooks
+const BLOCKED_VENDORS = new Set(['polymarket', 'kalshi']);
+
+// Priority order for vendor selection — first match wins
+const VENDOR_PRIORITY = [
+  'fanduel', 'draftkings', 'betrivers', 'caesars', 'betmgm',
+  'fanatics', 'betway', 'ballybet', 'betparx', 'rebet'
+];
+
+// Filter blocked vendors from a bookmakers array
+const filterBlockedVendors = (bookmakers) => {
+  if (!Array.isArray(bookmakers)) return [];
+  return bookmakers.filter(b => !BLOCKED_VENDORS.has(b.key?.toLowerCase()));
+};
+
 // Helper to extract odds from bookmakers array, trying vendors in order with validation
 const extractOddsFromBookmakers = (bookmakers, homeTeam, awayTeam) => {
   const emptyResult = {
@@ -97,16 +178,18 @@ const extractOddsFromBookmakers = (bookmakers, homeTeam, awayTeam) => {
 
   if (!bookmakers || !bookmakers.length) return emptyResult;
 
-  const preferredKeys = ['fanduel', 'draftkings', 'betmgm', 'caesars', 'pointsbet', 'betonlineag', 'bovada', 'mybookieag', 'williamhill_us', 'unibet_us'];
+  // Remove blocked vendors before processing
+  const allowedBookmakers = filterBlockedVendors(bookmakers);
+  if (!allowedBookmakers.length) return emptyResult;
 
-  // Build ordered list: preferred vendors first, then any remaining
+  // Build ordered list: priority vendors first, then any remaining
   const orderedBookmakers = [];
-  for (const key of preferredKeys) {
-    const bk = bookmakers.find(b => b.key?.toLowerCase() === key);
+  for (const key of VENDOR_PRIORITY) {
+    const bk = allowedBookmakers.find(b => b.key?.toLowerCase() === key);
     if (bk && bk.markets?.length > 0) orderedBookmakers.push(bk);
   }
-  // Add any bookmakers not in the preferred list
-  for (const bk of bookmakers) {
+  // Add any bookmakers not in the priority list (but not blocked)
+  for (const bk of allowedBookmakers) {
     if (bk.markets?.length > 0 && !orderedBookmakers.includes(bk)) {
       orderedBookmakers.push(bk);
     }
@@ -304,18 +387,42 @@ export const oddsService = {
           extractedOdds = extractOddsFromBookmakers(game.bookmakers, game.home_team, game.away_team);
         }
 
+        // BDL V1 flat field fallback: BDL NCAAB/NHL/NCAAF odds use field names like
+        // spread_home_value, spread_away_value, moneyline_home_odds, moneyline_away_odds, total_value
+        // If bookmaker extraction returned nulls, try reading these BDL-native fields directly
+        const toNum = (v) => {
+          if (v === null || v === undefined) return null;
+          const n = Number(v);
+          return Number.isFinite(n) ? n : null;
+        };
+        const bdlSpreadHome = toNum(game.spread_home_value);
+        const bdlSpreadAway = toNum(game.spread_away_value);
+        const bdlSpreadHomeOdds = toNum(game.spread_home_odds);
+        const bdlSpreadAwayOdds = toNum(game.spread_away_odds);
+        const bdlMlHome = toNum(game.moneyline_home_odds);
+        const bdlMlAway = toNum(game.moneyline_away_odds);
+        const bdlTotal = toNum(game.total_value);
+        const bdlTotalOver = toNum(game.total_over_odds);
+        const bdlTotalUnder = toNum(game.total_under_odds);
+
+        // Filter blocked vendors from bookmakers before passing downstream to app/UI
+        const cleanBookmakers = filterBlockedVendors(game.bookmakers || []);
+
         return {
           ...game,
+          // Replace bookmakers with filtered list (Polymarket/Kalshi never reach the app)
+          bookmakers: cleanBookmakers,
           // Include extracted odds if they weren't already set
-          moneyline_home: game.moneyline_home ?? extractedOdds.moneyline_home,
-          moneyline_away: game.moneyline_away ?? extractedOdds.moneyline_away,
-          spread_home: game.spread_home ?? extractedOdds.spread_home,
-          spread_away: game.spread_away ?? extractedOdds.spread_away,
-          spread_home_odds: game.spread_home_odds ?? extractedOdds.spread_home_odds,
-          spread_away_odds: game.spread_away_odds ?? extractedOdds.spread_away_odds,
-          total: game.total ?? extractedOdds.total,
-          total_over_odds: game.total_over_odds ?? extractedOdds.total_over_odds,
-          total_under_odds: game.total_under_odds ?? extractedOdds.total_under_odds,
+          // Priority: existing flat field > bookmaker extraction > BDL V1 flat field fallback
+          moneyline_home: game.moneyline_home ?? extractedOdds.moneyline_home ?? bdlMlHome,
+          moneyline_away: game.moneyline_away ?? extractedOdds.moneyline_away ?? bdlMlAway,
+          spread_home: game.spread_home ?? extractedOdds.spread_home ?? bdlSpreadHome,
+          spread_away: game.spread_away ?? extractedOdds.spread_away ?? bdlSpreadAway,
+          spread_home_odds: game.spread_home_odds ?? extractedOdds.spread_home_odds ?? bdlSpreadHomeOdds,
+          spread_away_odds: game.spread_away_odds ?? extractedOdds.spread_away_odds ?? bdlSpreadAwayOdds,
+          total: game.total ?? extractedOdds.total ?? bdlTotal,
+          total_over_odds: game.total_over_odds ?? extractedOdds.total_over_odds ?? bdlTotalOver,
+          total_under_odds: game.total_under_odds ?? extractedOdds.total_under_odds ?? bdlTotalUnder,
         };
       });
 
