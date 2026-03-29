@@ -1038,11 +1038,7 @@ VENUE: [arena/stadium name where this game is being played, or UNKNOWN if not fo
       console.log(`[Scout Report] Excluding ${excludedLongTerm.size} long-term injured players from narrative (gp=0): ${Array.from(excludedLongTerm).join(', ')}`);
     }
 
-    if (allowedNames.size > 0) {
-      console.log(`[Scout Report] Scrubbing ${sportKey} narrative with ${allowedNames.size} allowed player names...`);
-      const scrubbed = await scrubNarrative(injuries.narrativeContext, Array.from(allowedNames), homeTeam, awayTeam, Array.from(excludedLongTerm));
-      injuries.narrativeContext = scrubbed;
-    }
+    // Narrative scrub removed — was calling Flash per game, flagged non-names as unknown players
   }
 
   // ===================================================================
