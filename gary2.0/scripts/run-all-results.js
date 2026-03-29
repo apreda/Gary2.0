@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
  * Ultimate Results Script (Gary 2.0)
- * - Daily picks (NBA, NHL, NFL, NCAAB, NCAAF)
+ * - Daily picks (NBA, NHL, NFL, NCAAB, NCAAF, MLB)
  * - Weekly NFL picks
- * - Prop bets (NBA, NHL, NFL)
+ * - Prop bets (NBA, NHL, NFL, MLB)
  * - Uses BallDontLie (BDL) as primary source
  * - Uses Gemini Grounding (Google Search) as fallback
  * 
@@ -101,7 +101,9 @@ async function getPropGrounding(sport, player, type, date) {
   const query = `In the ${sport} game on ${date}, what was ${player}'s exact total for ${type}? Respond ONLY with the number. If unknown, say "null".`;
   const text = await geminiGrounding(query);
   if (!text || text.toLowerCase().includes('null')) return null;
-  const num = parseFloat(text.replace(/[^0-9.]/g, ''));
+  // Only accept a clean number at the start of the response — prevents date/noise concatenation
+  const match = text.trim().match(/^\d+\.?\d*/);
+  const num = match ? parseFloat(match[0]) : NaN;
   return isNaN(num) ? null : num;
 }
 
@@ -257,29 +259,68 @@ function gradeProp(actual, line, bet) {
  */
 function getStatValue(sport, data, name, type) {
   const target = normalizeName(name), t = type.toLowerCase();
+  if (!data || data.length === 0) return null;
+
+  // Normalize with accent stripping for fuzzy matching (e.g., "Pérez" → "perez")
+  const targetFuzzy = target.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const targetLast = target.split(' ').pop();
+
+  function nameMatches(firstName, lastName) {
+    const full = normalizeName(`${firstName} ${lastName}`);
+    if (full === target) return true;
+    // Fuzzy: strip accents
+    const fuzzy = full.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    if (fuzzy === targetFuzzy) return true;
+    // Last name + first initial match (handles "V. Guerrero Jr." vs "Vladimir Guerrero Jr.")
+    const last = normalizeName(lastName);
+    if (last === targetLast && last.length > 3) return true;
+    return false;
+  }
+
+  // Helper: find player across nested game structures (NBA/MLB style) or flat arrays (NHL/NFL style)
+  function findPlayerInGames(games) {
+    for (const g of games) {
+      const players = [...(g.home_team?.players || []), ...(g.visitor_team?.players || []), ...(g.away_team?.players || [])];
+      const p = players.find(ps => nameMatches(ps.player?.first_name || '', ps.player?.last_name || ''));
+      if (p) return p;
+    }
+    return null;
+  }
+  function findPlayerFlat(arr) {
+    return arr.find(s => nameMatches(s.player?.first_name || '', s.player?.last_name || '')) || null;
+  }
+
   if (sport === 'NBA') {
-    for (const g of data) {
-      const players = [...(g.home_team?.players || []), ...(g.visitor_team?.players || [])];
-      const p = players.find(ps => normalizeName(`${ps.player?.first_name} ${ps.player?.last_name}`) === target);
-      if (p) {
-        if (t.includes('point')) return p.pts ?? p.points ?? 0;
-        if (t.includes('rebound')) return p.reb ?? p.rebounds ?? 0;
-        if (t.includes('assist')) return p.ast ?? p.assists ?? 0;
-        if (t.includes('three')) return p.fg3m ?? 0;
-        if (t.includes('pra')) return (p.pts || 0) + (p.reb || 0) + (p.ast || 0);
-      }
+    const p = findPlayerInGames(data);
+    if (p) {
+      if (t.includes('point') && !t.includes('rebound') && !t.includes('assist')) return p.pts ?? p.points ?? 0;
+      if (t.includes('rebound') && !t.includes('point') && !t.includes('assist')) return p.reb ?? p.rebounds ?? 0;
+      if (t.includes('assist') && !t.includes('point') && !t.includes('rebound')) return p.ast ?? p.assists ?? 0;
+      if (t.includes('three') || t.includes('3pt') || t.includes('threes')) return p.fg3m ?? 0;
+      if (t.includes('steal')) return p.stl ?? p.steals ?? 0;
+      if (t.includes('block')) return p.blk ?? p.blocks ?? 0;
+      if (t.includes('turnover')) return p.turnover ?? p.tov ?? 0;
+      // Combo props — must check AFTER individual props
+      if (t.includes('points_rebounds_assists') || t.includes('pra') || (t.includes('point') && t.includes('rebound') && t.includes('assist'))) return (p.pts || 0) + (p.reb || 0) + (p.ast || 0);
+      if (t.includes('points_rebounds') || (t.includes('point') && t.includes('rebound'))) return (p.pts || 0) + (p.reb || 0);
+      if (t.includes('points_assists') || (t.includes('point') && t.includes('assist'))) return (p.pts || 0) + (p.ast || 0);
+      if (t.includes('rebounds_assists') || (t.includes('rebound') && t.includes('assist'))) return (p.reb || 0) + (p.ast || 0);
+      console.warn(`    [Stat] NBA: Found ${name} but no match for prop type "${type}"`);
     }
   } else if (sport === 'NHL') {
-    const p = data.find(bs => normalizeName(`${bs.player?.first_name} ${bs.player?.last_name}`) === target);
+    // Try nested game format first, then flat
+    const p = findPlayerInGames(data) || findPlayerFlat(data);
     if (p) {
-      if (t.includes('goal')) return p.goals ?? 0;
+      if (t.includes('goal') && !t.includes('shot')) return p.goals ?? 0;
       if (t.includes('assist')) return p.assists ?? 0;
       if (t.includes('point')) return (p.goals || 0) + (p.assists || 0);
-      if (t.includes('shot') || t.includes('sog')) return p.shots_on_goal ?? 0;
+      if (t.includes('shot') || t.includes('sog')) return p.shots_on_goal ?? p.shots ?? 0;
       if (t.includes('save')) return p.saves ?? 0;
+      if (t.includes('block')) return p.blocked_shots ?? p.blocks ?? 0;
+      console.warn(`    [Stat] NHL: Found ${name} but no match for prop type "${type}"`);
     }
   } else if (sport === 'NFL') {
-    const p = data.find(s => normalizeName(`${s.player?.first_name} ${s.player?.last_name}`) === target);
+    const p = findPlayerFlat(data);
     if (p) {
       if (t.includes('passing yard')) return p.passing_yards ?? 0;
       if (t.includes('passing td')) return p.passing_touchdowns ?? 0;
@@ -295,6 +336,35 @@ function getStatValue(sport, data, name, type) {
         if (t.includes('rush')) return p.rushing_attempts ?? 0;
         if (t.includes('pass')) return p.passing_attempts ?? 0;
       }
+    }
+  } else if (sport === 'MLB') {
+    // Try nested game format first, then flat
+    const p = findPlayerInGames(data) || findPlayerFlat(data);
+    if (p) {
+      // Batter props
+      if (t.includes('hit') && !t.includes('run') && !t.includes('allow')) return p.hits ?? 0;
+      if (t.includes('home_run') || t.includes('homer')) return p.hr ?? p.home_runs ?? 0;
+      if (t.includes('total_base')) return p.total_bases ?? 0;
+      if (t.includes('rbi') || t.includes('runs_batted')) return p.rbi ?? p.rbis ?? 0;
+      if (t.includes('runs_scored') || t === 'runs') return p.runs ?? p.runs_scored ?? 0;
+      if (t.includes('walk') || t.includes('bases_on_ball')) return p.bb ?? p.walks ?? 0;
+      if (t.includes('stolen_base') || t.includes('steal')) return p.stolen_bases ?? p.sb ?? 0;
+      if (t.includes('single')) return (p.hits || 0) - (p.doubles || 0) - (p.triples || 0) - (p.hr || p.home_runs || 0);
+      if (t.includes('double') && !t.includes('play')) return p.doubles ?? 0;
+      if (t.includes('hits_runs_rbi') || t.includes('h+r+rbi')) return (p.hits || 0) + (p.runs || 0) + (p.rbi || 0);
+      // Strikeouts — pitcher first (if pitcher stats exist), then batter
+      if (t.includes('strikeout')) {
+        if (p.pitcher_strikeouts != null) return p.pitcher_strikeouts;
+        if (p.p_k != null) return p.p_k;
+        if (p.strikeouts != null) return p.strikeouts;
+        return p.k ?? 0;
+      }
+      // Pitcher props
+      if (t.includes('pitcher_out') || t.includes('outs_recorded')) return p.pitching_outs ?? p.outs ?? 0;
+      if (t.includes('pitcher_earned') || t.includes('earned_run')) return p.er ?? p.earned_runs ?? 0;
+      if (t.includes('pitcher_hit') || t.includes('hits_allowed')) return p.p_hits ?? p.hits_allowed ?? 0;
+      if (t.includes('pitcher_walk')) return p.p_bb ?? p.walks_allowed ?? 0;
+      console.warn(`    [Stat] MLB: Found ${name} but no match for prop type "${type}"`);
     }
   }
   return null;
@@ -409,8 +479,11 @@ async function processPropBets(date) {
   const dates = [date, nextStr];
   const nbaBox = (await Promise.all(dates.map(d => fetchBoxScores('NBA', d)))).flat();
   const nhlBox = (await Promise.all(dates.map(d => fetchBoxScores('NHL', d)))).flat();
+  const mlbBox = (await Promise.all(dates.map(d => fetchBoxScores('MLB', d)))).flat();
   const nflGames = (await Promise.all(dates.map(d => fetchGames('NFL', d)))).flat();
   const nflStats = await fetchNFLStats([...new Set(nflGames.map(g => g.id))]);
+
+  console.log(`  📊 Box scores loaded: NBA=${nbaBox.length} games, NHL=${nhlBox.length}, MLB=${mlbBox.length}, NFL=${nflStats.length} player stats`);
 
   const stats = { w: 0, l: 0 };
   const handled = new Set();
@@ -433,11 +506,19 @@ async function processPropBets(date) {
       }
 
       let actual = null;
+      let source = 'none';
       if (sport === 'NBA') actual = getStatValue('NBA', nbaBox, name, type);
       else if (sport === 'NHL') actual = getStatValue('NHL', nhlBox, name, type);
+      else if (sport === 'MLB') actual = getStatValue('MLB', mlbBox, name, type);
       else if (sport === 'NFL') actual = getStatValue('NFL', nflStats, name, type);
 
-      if (actual === null) actual = await getPropGrounding(sport, name, type, row.date);
+      if (actual !== null) {
+        source = 'api';
+      } else {
+        console.warn(`    [BDL Miss] ${sport}: ${name} "${type}" not found in box scores — trying grounding`);
+        actual = await getPropGrounding(sport, name, type, row.date);
+        if (actual !== null) source = 'grounding';
+      }
 
       if (actual !== null) {
         const res = gradeProp(actual, line, bet);
@@ -451,7 +532,9 @@ async function processPropBets(date) {
           });
         }
         stats[res[0]]++;
-        console.log(`  🎯 ${sport}: ${name} ${type} ${bet} ${line} -> ${res.toUpperCase()} (${actual})`);
+        console.log(`  🎯 ${sport}: ${name} ${type} ${bet} ${line} -> ${res.toUpperCase()} (${actual}) [${source}]`);
+      } else {
+        console.error(`  ❌ ${sport}: ${name} ${type} — NO DATA from API or grounding. Prop not graded.`);
       }
     }
   }
@@ -476,11 +559,91 @@ async function main() {
   
   const props = await processPropBets(targetDate);
   
+  // ════════════════════════════════════════
+  // BRACKET RESULTS — grade bracket picks from completed tournament games
+  // ════════════════════════════════════════
+  let bracketGraded = 0;
+  try {
+    // Fetch all ungraded bracket picks
+    const { data: bracketPicks, error: bpErr } = await supabase
+      .from('bracket_picks')
+      .select('*')
+      .is('actual_winner', null)
+      .eq('tournament', `march_madness_${new Date().getFullYear()}`);
+
+    if (!bpErr && bracketPicks && bracketPicks.length > 0) {
+      console.log(`\n[Bracket] Found ${bracketPicks.length} ungraded bracket picks`);
+
+      // Fetch completed NCAAB games for recent dates
+      const dates = [targetDate];
+      // Also check yesterday and day before (tournament games may have been missed)
+      const d = new Date(targetDate);
+      for (let i = 1; i <= 2; i++) {
+        const prev = new Date(d);
+        prev.setDate(prev.getDate() - i);
+        dates.push(prev.toISOString().split('T')[0]);
+      }
+
+      let allGames = [];
+      for (const date of dates) {
+        const games = await fetchGames('NCAAB', date);
+        if (games) allGames.push(...games);
+      }
+
+      const completedGames = allGames.filter(g =>
+        g.status === 'Final' || g.status === 'post' || g.status?.detailedState === 'Final'
+      );
+
+      for (const bp of bracketPicks) {
+        // Match bracket pick to completed game
+        const result = matchGame(completedGames, bp.team2, bp.team1); // team2=home, team1=away in bracket
+        const resultRev = matchGame(completedGames, bp.team1, bp.team2);
+        const matched = result || resultRev;
+
+        if (matched) {
+          const game = matched.game;
+          const homeScore = game.home_team_score ?? game.home_score ?? 0;
+          const awayScore = game.visitor_team_score ?? game.away_score ?? 0;
+
+          // Determine actual winner
+          const homeName = game.home_team?.full_name || game.home_team?.name || '';
+          const awayName = game.away_team?.full_name || game.away_team?.name || '';
+          const actualWinner = homeScore > awayScore ? homeName : awayName;
+
+          // Check if Gary's bracket pick was correct
+          const normalize = s => (s || '').toLowerCase().trim();
+          const pickedNorm = normalize(bp.picked_to_advance);
+          const winnerNorm = normalize(actualWinner);
+          const correct = winnerNorm.includes(pickedNorm.split(' ').pop()) || pickedNorm.includes(winnerNorm.split(' ').pop());
+
+          // Update bracket pick
+          const { error: updateErr } = await supabase
+            .from('bracket_picks')
+            .update({ actual_winner: actualWinner, correct })
+            .eq('id', bp.id);
+
+          if (!updateErr) {
+            bracketGraded++;
+            console.log(`  [Bracket] ${bp.team1} vs ${bp.team2}: Gary picked ${bp.picked_to_advance}, actual winner: ${actualWinner} — ${correct ? 'CORRECT' : 'WRONG'}`);
+          }
+        }
+      }
+      if (bracketGraded > 0) {
+        console.log(`[Bracket] Graded ${bracketGraded} bracket picks`);
+      } else {
+        console.log(`[Bracket] No completed games matched ungraded bracket picks`);
+      }
+    }
+  } catch (e) {
+    console.log(`[Bracket] Grading error: ${e.message}`);
+  }
+
   console.log(`\n════════════════════════════════════════`);
-  console.log(`🏁 SUMMARY FOR ${targetDate}`);
+  console.log(`SUMMARY FOR ${targetDate}`);
   console.log(`Daily:  ${daily.w}W - ${daily.l}L`);
   console.log(`Weekly: ${weeklyNFL.w}W - ${weeklyNFL.l}L`);
   console.log(`Props:  ${props.w}W - ${props.l}L`);
+  console.log(`Bracket: ${bracketGraded} graded`);
   console.log(`TOTAL:  ${daily.w + weeklyNFL.w + props.w}W - ${daily.l + weeklyNFL.l + props.l}L`);
   console.log(`════════════════════════════════════════\n`);
 }

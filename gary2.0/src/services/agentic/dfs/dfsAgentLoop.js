@@ -19,6 +19,20 @@ import { buildDfsPass1Message, buildDfsPass25Message, buildDfsSubmitNudge } from
 import { isSlotEligible } from './dfsPositionUtils.js';
 import { getSalaryCap, getRosterSlots } from './dfsSportConfig.js';
 import { GEMINI_PRO_MODEL, GEMINI_PRO_FALLBACK, GEMINI_FLASH_MODEL, rotateToBackupKey, isUsingBackupKey, getGeminiClient } from '../modelConfig.js';
+const DFS_MODEL = GEMINI_FLASH_MODEL; // Switched from Pro to Flash for cost savings (Pro output: $12/1M, Flash: $3/1M)
+
+// ─── Shared name normalizer ───────────────────────────────────────────────────
+// Strips periods from initials, apostrophes — "P.J. Washington" → "pj washington",
+// "D'Angelo Russell" → "dangelo russell". Used in enrichment, validation, and Q/GTD checks.
+// Exported so the orchestrator can reuse it for pivot deduplication.
+export function normalizeDFSName(n) {
+  return (n || '').toLowerCase()
+    .replace(/\b([a-z])\.([a-z])\./gi, '$1$2')  // P.J. → PJ
+    .replace(/\./g, '')                            // remaining periods
+    .replace(/['\u2018\u2019\u02BC]/g, '')         // apostrophes: D'Angelo → DAngelo
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // SYSTEM PROMPT
@@ -57,16 +71,15 @@ Do NOT treat roster changes, trades, or team assignments as "new," "surprising,"
 - $1 over cap = invalid lineup
 </salary_cap_rules>
 
-<market_awareness>
-If a player has been out for multiple games, the salaries already reflect their absence. A continued known absence is baseline, not edge.
-ONLY fresh developments (ruled out in the last 1-2 days, surprise return) are new information the salary may not fully reflect.
-</market_awareness>
+<stat_window_flags>
+Your research assistant may include "Stat Window Flags" on findings where L5 data may not reflect tonight's conditions — for example, a key teammate was absent during L5 but returns tonight, or the L5 opponents were unusually strong or weak. These flags are context for your evaluation. Investigate and decide for yourself whether the L5 data or an alternative baseline is more appropriate for each player.
+</stat_window_flags>
 
 ${getDFSConstitution(sport)}
 
 <process>
-1. INVESTIGATE: Read the scouting reports and research findings. Use tools to dig deeper on players, matchups, usage, and injuries.
-2. FORM YOUR THESIS: Decide which games to stack, which players offer ceiling, where the value is.
+1. INVESTIGATE: Read the scouting reports and research findings. Use tools to dig deeper on anything that matters for your decisions.
+2. DECIDE: Form your own view of what each player will produce tonight. Build the best lineup you can within the cap.
 3. SUBMIT: When ready, call SUBMIT_LINEUP with your final lineup.
 </process>`;
 }
@@ -86,8 +99,8 @@ ${getDFSConstitution(sport)}
  * @param {Object} [params.options] - Model options
  * @returns {{ lineup: Object, toolCallHistory: Array, investigationText: string, generationTime: string }}
  */
-export async function runDfsAgentLoop({ genAI, scoutReports, flashResearch, context, options = {} }) {
-  const { modelName = GEMINI_PRO_MODEL } = options;
+export async function runDfsAgentLoop({ genAI, scoutReports, flashResearch, context, _costTracker, options = {} }) {
+  const { modelName = DFS_MODEL } = options;
   const { platform, sport } = context;
   const salaryCap = getSalaryCap(platform, sport);
   const rosterSlots = getRosterSlots(platform, sport);
@@ -106,7 +119,7 @@ export async function runDfsAgentLoop({ genAI, scoutReports, flashResearch, cont
       maxOutputTokens: 65536
     },
     thinkingConfig: {
-      thinkingBudget: -1 // HIGH thinking
+      thinkingBudget: 16384 // Capped — lineup building needs good thinking but not unlimited
     }
   });
 
@@ -121,15 +134,28 @@ export async function runDfsAgentLoop({ genAI, scoutReports, flashResearch, cont
       systemInstruction: systemPrompt,
       tools: [{ functionDeclarations: DFS_AGENT_LOOP_TOOLS }],
       generationConfig: { temperature: 1.0, maxOutputTokens: 65536 },
-      thinkingConfig: { thinkingBudget: -1 }
+      thinkingConfig: { thinkingBudget: 16384 }
     });
     chat = model.startChat({ history: [] });
   }
 
   // Helper: send message with 429 recovery (mid-loop — can only retry same message)
+  function trackUsage(response) {
+    if (!_costTracker) return;
+    const meta = response?.response?.usageMetadata;
+    if (meta) {
+      _costTracker.addUsage(activeModelName, {
+        prompt_tokens: meta.promptTokenCount || 0,
+        completion_tokens: meta.candidatesTokenCount || 0
+      });
+    }
+  }
+
   async function sendWithQuotaRecovery(message) {
     try {
-      return await chat.sendMessage(message);
+      const result = await chat.sendMessage(message);
+      trackUsage(result);
+      return result;
     } catch (err) {
       if (!(err.message?.includes('429') || err.message?.includes('quota'))) throw err;
 
@@ -138,7 +164,9 @@ export async function runDfsAgentLoop({ genAI, scoutReports, flashResearch, cont
         console.warn(`[DFS Agent Loop] 429 on ${activeModelName} — rotated to backup key`);
         genAI = getGeminiClient();
         rebuildModel(activeModelName);
-        return await chat.sendMessage(message);
+        const result = await chat.sendMessage(message);
+        trackUsage(result);
+        return result;
       }
 
       // Backup key exhausted or unavailable — fall back to Flash
@@ -146,7 +174,9 @@ export async function runDfsAgentLoop({ genAI, scoutReports, flashResearch, cont
         console.warn(`[DFS Agent Loop] 429 on ${activeModelName} (both keys exhausted) — falling back to ${GEMINI_FLASH_MODEL}`);
         genAI = getGeminiClient();
         rebuildModel(GEMINI_FLASH_MODEL);
-        return await chat.sendMessage(message);
+        const result = await chat.sendMessage(message);
+        trackUsage(result);
+        return result;
       }
 
       // Already on Flash and still 429 — nothing left
@@ -187,13 +217,16 @@ export async function runDfsAgentLoop({ genAI, scoutReports, flashResearch, cont
     // ─── SUBMIT_LINEUP handling ───
     const submitCall = functionCalls.find(fc => fc.functionCall.name === 'SUBMIT_LINEUP');
     if (submitCall) {
+      const lineupArgs = submitCall.functionCall.args;
+
       // If Pass 2.5 not yet injected, spawn advisor + inject theses NOW, then let Gary revise
       if (!pass25Injected) {
         console.log(`[DFS Agent Loop] Iteration ${iterations}: SUBMIT_LINEUP before theses — spawning advisor now`);
 
         try {
           const advisorResult = await buildDFSAdvisorTheses(genAI, flashResearch, context, {
-            modelName: GEMINI_FLASH_MODEL
+            modelName: GEMINI_FLASH_MODEL,
+            _costTracker
           });
           if (advisorResult) {
             advisorTheses = advisorResult.theses;
@@ -207,10 +240,19 @@ export async function runDfsAgentLoop({ genAI, scoutReports, flashResearch, cont
         const pass25Message = buildDfsPass25Message(advisorTheses, context);
         console.log(`[DFS Agent Loop] Pass 2.5: Injecting theses + submit instructions (${pass25Message.length} chars)`);
 
+        // Check for Q/GTD players in submitted lineup to add targeted reminder
+        const submittedNames = (lineupArgs.players || []).map(p => normalizeDFSName(p.name));
+        const qtdInLineup = (context.players || []).filter(p =>
+          p.isQuestionable && submittedNames.some(n => n === normalizeDFSName(p.name))
+        ).map(p => p.name);
+        const qtdReminder = qtdInLineup.length > 0
+          ? ` Also: ${qtdInLineup.join(', ')} ${qtdInLineup.length === 1 ? 'is' : 'are'} Q/GTD — use SEARCH_LIVE_NEWS to confirm their play status before your final submission.`
+          : ' If any players in your lineup are Questionable or GTD, verify their play status with SEARCH_LIVE_NEWS before your final submission.';
+
         response = await sendWithQuotaRecovery([{
           functionResponse: {
             name: 'SUBMIT_LINEUP',
-            response: { status: 'held', message: 'Your lineup draft is noted. Before finalizing, review the competing theses below and evaluate whether any adjustments improve your build.' }
+            response: { status: 'held', message: `Your lineup draft is noted. Before finalizing, review the competing theses below and evaluate whether any adjustments improve your build.${qtdReminder}` }
           }
         }]);
         // Follow up with Pass 2.5 content
@@ -220,7 +262,6 @@ export async function runDfsAgentLoop({ genAI, scoutReports, flashResearch, cont
       }
 
       submissionAttempts++;
-      const lineupArgs = submitCall.functionCall.args;
       console.log(`[DFS Agent Loop] Iteration ${iterations}: SUBMIT_LINEUP attempt ${submissionAttempts}/${MAX_SUBMISSION_ATTEMPTS}`);
 
       // Validate and enrich
@@ -232,6 +273,16 @@ export async function runDfsAgentLoop({ genAI, scoutReports, flashResearch, cont
           // Valid lineup — done!
           const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
           console.log(`[DFS Agent Loop] ✓ Valid lineup submitted after ${iterations} iterations, ${toolCallHistory.length} tool calls, ${elapsed}s`);
+
+          // ⚠️ INTERNAL FLAG: Warn if Gary picked low-projection players (suggests missing info)
+          // This is NOT shown to Gary — it's for our monitoring to catch potential data gaps
+          for (const lp of (lineup.players || [])) {
+            const poolPlayer = context.players.find(p => p.name?.toLowerCase() === lp.name?.toLowerCase());
+            const benchProj = poolPlayer?.benchmarkProjection || 0;
+            if (benchProj > 0 && benchProj < 10) {
+              console.warn(`[DFS Agent Loop] ⚠️ LOW PROJECTION FLAG: ${lp.name} ($${lp.salary}) has benchmark projection of ${benchProj.toFixed(1)} — Gary may be missing context about this player's expected role`);
+            }
+          }
 
           return {
             lineup,
@@ -411,16 +462,16 @@ function enrichAndValidateLineup(lineupArgs, players, salaryCap, rosterSlots, sp
       continue;
     }
 
-    const pNameLower = p.name.toLowerCase();
+    const pNormalized = normalizeDFSName(p.name);
 
-    // Find player by exact name match first
-    let fullPlayer = players.find(fp => fp.name?.toLowerCase() === pNameLower);
+    // Find player by normalized name match first
+    let fullPlayer = players.find(fp => normalizeDFSName(fp.name) === pNormalized);
 
     // Fuzzy match — require unambiguous
     if (!fullPlayer) {
       const fuzzyMatches = players.filter(fp => {
-        const fpLower = fp.name?.toLowerCase() || '';
-        return fpLower.includes(pNameLower) || pNameLower.includes(fpLower);
+        const fpNorm = normalizeDFSName(fp.name);
+        return fpNorm.includes(pNormalized) || pNormalized.includes(fpNorm);
       });
       if (fuzzyMatches.length === 1) {
         fullPlayer = fuzzyMatches[0];
@@ -445,19 +496,36 @@ function enrichAndValidateLineup(lineupArgs, players, salaryCap, rosterSlots, sp
       console.warn(`[DFS Agent Loop] ${p.name} assigned to ${assignedSlot} but eligible for ${realPositions.join('/')}`);
     }
 
-    // Use ONLY real slate data
-    const realProjection = fullPlayer.benchmarkProjection
-      || fullPlayer.seasonStats?.dkFpts
-      || fullPlayer.l5Stats?.dkFptsAvg
-      || p.projectedPoints;
+    // Calculate projection from real stats: 60% L5 + 40% season DK FPTS
+    // This gives a grounded per-game projection based on actual production data
+    const seasonFpts = fullPlayer.seasonStats?.dkFpts || 0;
+    const l5Fpts = fullPlayer.l5Stats?.dkFptsAvg || 0;
+    let realProjection;
+    if (l5Fpts > 0 && seasonFpts > 0) {
+      realProjection = Math.round((l5Fpts * 0.6 + seasonFpts * 0.4) * 10) / 10;
+    } else if (l5Fpts > 0) {
+      realProjection = l5Fpts;
+    } else if (seasonFpts > 0) {
+      realProjection = seasonFpts;
+    } else {
+      realProjection = p.projectedPoints || 0;
+    }
+
+    // Per-player ceiling: best L5 game or 1.3x projection
+    const bestL5 = fullPlayer.l5Stats?.bestDkFpts || realProjection * 1.3;
+    const playerCeiling = Math.round(Math.max(bestL5, realProjection * 1.2) * 10) / 10;
 
     enrichedPlayers.push({
       ...p,
       id: fullPlayer.id,
+      name: fullPlayer.name,           // Canonical pool name — prevents all downstream mismatches
       team: fullPlayer.team,
       position: isEligible ? assignedSlot : realPositions[0],
       positions: realPositions,
       projectedPoints: realProjection,
+      projected_pts: realProjection,
+      ceiling_projection: playerCeiling,
+      ceilingProjection: playerCeiling, // Both casings so audit display and calculations work
       benchmarkProjection: fullPlayer.benchmarkProjection || null,
       salary: fullPlayer.salary,
       isQuestionable: fullPlayer.isQuestionable || false
@@ -474,9 +542,9 @@ function enrichAndValidateLineup(lineupArgs, players, salaryCap, rosterSlots, sp
   return {
     players: enrichedPlayers,
     totalSalary,
-    projectedPoints: lineupArgs.projectedPoints || projectedPoints,
-    ceilingProjection: lineupArgs.ceilingProjection || projectedPoints * 1.25,
-    floorProjection: lineupArgs.floorProjection || projectedPoints * 0.75,
+    projectedPoints: projectedPoints,
+    ceilingProjection: Math.round(projectedPoints * 1.2 * 10) / 10,
+    floorProjection: Math.round(projectedPoints * 0.75 * 10) / 10,
     ceilingScenario: lineupArgs.ceilingScenario || '',
     garyNotes: lineupArgs.garyNotes || '',
     buildThesis: lineupArgs.buildThesis || ''
@@ -505,13 +573,13 @@ function getStructuralIssues(lineup, players, salaryCap, rosterSlots, sport) {
     issues.push(`All ${lineup.players.length} players are from ${[...teams][0]} — must use players from at least 2 teams`);
   }
 
-  // Players not found on slate (hallucinated)
+  // Players not found on slate (hallucinated) — use normalizeDFSName so "PJ Washington" matches "P.J. Washington"
   const notOnSlate = (lineup.players || []).filter(p => {
-    return !players.find(sp =>
-      sp.name?.toLowerCase() === p.name?.toLowerCase() ||
-      sp.name?.toLowerCase().includes(p.name?.toLowerCase()) ||
-      p.name?.toLowerCase().includes(sp.name?.toLowerCase())
-    );
+    const pNorm = normalizeDFSName(p.name);
+    return !players.find(sp => {
+      const spNorm = normalizeDFSName(sp.name);
+      return spNorm === pNorm || spNorm.includes(pNorm) || pNorm.includes(spNorm);
+    });
   });
   if (notOnSlate.length > 0) {
     issues.push(`Players not on slate: ${notOnSlate.map(p => p.name).join(', ')} — only use players from the player pool`);

@@ -18,145 +18,119 @@ const NBA_FACTORS = `## INVESTIGATION CHECKLIST — NBA
 
 Work through each numbered factor below. Check off each one as you complete it. Do NOT skip any. For each factor, investigate BOTH teams and report findings with specific numbers.
 
+For any factor, you have access to both season-long stats AND recent team stats (fetch_team_recent_stats with num_games 1, 3, or 5). You can use these alongside the season tokens listed per factor whenever comparing recent performance to the season baseline would be useful.
+
 ### 1. EFFICIENCY
 **Tokens:** NET_RATING, OFFENSIVE_RATING, DEFENSIVE_RATING, EFFICIENCY_LAST_10, EFFICIENCY_TREND
-- Compare L5/L10 ratings to season baselines for both teams
-- If there's a gap > 5pts between L5 and season, investigate: did the roster change? Did schedule quality change? Is shooting variance the driver?
-- Cross-reference: do the efficiency trends overlap with any injury timeline?
+- Pull offensive and defensive efficiency ratings for both teams — season and recent
+- Investigate each team's offensive and defensive ratings separately
+- Compare season efficiency to recent (L5) efficiency — investigate any shifts
+- Report findings for both teams
 
 ### 2. PACE & TEMPO
 **Tokens:** PACE, PACE_LAST_10, PACE_HOME_AWAY
-- What's each team's pace? Is there a significant mismatch?
-- Has either team's pace changed recently (L10 vs season)?
-- Does the pace matchup favor either side? Fast team vs slow team — who controls tempo?
+- Pull pace and tempo stats for both teams — season and recent
+- Investigate each team's pace and whether it has changed recently
+- Pull home/away pace splits for both teams
+- Report findings for both teams
 
 ### 3. FOUR FACTORS (OFFENSE)
 **Tokens:** EFG_PCT, TURNOVER_RATE, OREB_RATE, FT_RATE
-- Compare all four factors for both teams
-- Compare the gaps across all four factors. Are any gaps consistent across the season or only recent (L5 divergence)?
-- If eFG% diverges from season in L5, check whether it's volume change (more 3PA) or percentage change — and what does the historical variance look like
+- Pull all four offensive factors for both teams — season and recent
+- Investigate each factor individually for both teams
+- Report findings for both teams
 
 ### 4. FOUR FACTORS (DEFENSE)
 **Tokens:** OPP_EFG_PCT, OPP_TOV_RATE, OPP_FT_RATE, DREB_RATE
-- Compare defensive four factors for both teams
-- Compare each team's offensive profile to the opponent's defensive profile. Where do they align or diverge?
+- Pull all four defensive factors for both teams
+- Investigate each team's defensive stats and what opponents do against them
+- Report findings for both teams
 
 ### 5. SHOOTING PROFILE
-**Tokens:** THREE_PT_SHOOTING, PAINT_SCORING, THREE_PT_DEFENSE, PAINT_DEFENSE, PERIMETER_DEFENSE, TRANSITION_DEFENSE
-- How does each team score? 3PT-dependent or paint-attack?
-- Compare each team's offensive shooting zones to the opponent's defensive profile in those zones
-- If a team's L5 3P% is 5%+ above season, note the gap and check what the historical variance and opponent 3P defense look like
+**Tokens:** THREE_PT_SHOOTING, PAINT_SCORING, THREE_PT_DEFENSE, PAINT_DEFENSE, PERIMETER_DEFENSE, TRANSITION_DEFENSE. Also use fetch_player_game_logs.
+- Pull offensive shooting stats for both teams — 3PT, paint scoring, mid-range
+- Pull defensive shooting stats for both teams — what they allow from 3PT, paint, transition
+- Investigate recent shooting data and compare to season for both teams
+- Pull individual player shooting stats — compare each key player's season shooting percentages to their recent output to see if the team or specific players are in a slump or a hot streak
+- Report findings for both teams
 
-### 6. STANDINGS & CONTEXT
-**Tokens:** STANDINGS, CONFERENCE_STANDING
-- Playoff implications? Seeding battles? Tanking?
-- Is either team in a motivational spot (clinch, elimination, meaningless)?
+### 6. RECENT FORM & GAME CONTEXT
+**Tokens:** RECENT_FORM, QUARTER_SCORING. Also use fetch_player_game_logs and fetch_team_recent_stats.
+- Pull L1 (last game), L3, and L5 team stats for both teams and compare to season baseline
+- Pull game logs for the top players on each team to see their recent individual production
+- Investigate who was playing during the recent stretch — is the roster the same as tonight?
+- Investigate the opponents faced and the margins in the recent stretch
+- Investigate each team's consistency across the season — pull game results and margins for both teams to see how each team has performed against different levels of competition. In the NBA, roster availability changes night to night so also investigate how each team's performance has varied with different lineup combinations and during different stretches of the schedule. Also investigate if recent form (L5, L3, L1) shows a change from those season-long patterns.
+- Compare each key player's season stats to their recent game logs — investigate if any players are performing above or below their season baseline
+- Report findings for both teams
 
-### 7. RECENT FORM
-**Source:** The scout report already contains L5/L10 game-by-game results with scores, margins, and opponents. Use this data directly — do NOT call RECENT_FORM token (it duplicates the scout report data). Use QUARTER_SCORING, FIRST_HALF_SCORING, or SECOND_HALF_SCORING if you need scoring breakdown by period.
-- L5/L10 performance vs season — what's driving any divergence?
-- WHO was playing during the recent stretch? Is the roster the same as tonight?
-- What do the MARGINS look like? Winning by 2 every game vs winning by 15 tells different stories
-- A 4-game win streak with a star back ≠ the same team that lost 5 straight without him
+### 7. INJURIES & ROSTER
+**Tokens:** INJURIES, TOP_PLAYERS, USAGE_RATES, MINUTES_TREND, BENCH_DEPTH
+**Also use:** fetch_depth_chart, fetch_player_game_logs, fetch_team_recent_stats
 
-### 8. INJURIES & ROSTER
-**Tokens:** INJURIES, TOP_PLAYERS, USAGE_RATES, MINUTES_TREND, LINEUP_NET_RATINGS, BENCH_DEPTH
+- Report the injury status for both teams
+- For FRESH and SHORT-TERM injuries: use fetch_depth_chart to see the replacement, pull game logs for the replacement player(s), pull fetch_team_recent_stats to see how the team played without the injured player, and pull usage stats to see how production shifted
+- Investigate the other key players still on the floor and how production is distributed across the roster
+- For PRICED IN, LONG-TERM, and SEASON-LONG injuries: the team's current stats already reflect life without this player — do not treat as new information
+- If you cite an injury, you MUST include when it happened (date or "since last game" / "since [specific game]"). If you cannot determine when an injury occurred, do not include it in your findings
+- Report findings for both teams
 
-**For each injured player listed in the scout report:**
-The scout report labels each injury with a market-aware duration tag. Use these to guide your investigation depth:
-
-**FRESH and SHORT-TERM injuries require full investigation:**
-- Investigate: Who is getting the minutes in that player's role since the injury?
-- Investigate: What is the replacement player's production profile — both in the games since the injury AND their season-long stats?
-- Investigate: How has the team performed in the games without the injured player vs their season average?
-- Investigate: What does the team's roster depth look like behind this player — how many rotation players does the team use, what experience level are the backups, and is there a clear next man up or does the workload get spread across multiple players?
-
-**PRICED IN, LONG-TERM and SEASON-LONG injuries — market has fully adjusted:**
-- The team's current stats already reflect life without this player. Do not treat as new information. That player's absence IS the team's baseline — do not cite it as a reason for anything.
-
-- **If L5/L10 diverges 7+ from season**, pull game logs for top usage players — who's driving it?
-- If you cite an injury, you MUST include when it happened (date or "since last game" / "since [specific game]"). If you cannot determine when an injury occurred, do not include it in your findings.
-
-**RETURNING PLAYERS:**
-When a player is listed as GTD or Questionable after missing time:
-- Check their GP (games played) stat — a low GP relative to team games played means they've been on-and-off
-- Investigate: How does the team perform WITH vs WITHOUT this player?
-- Is this player's absence a pattern the team is accustomed to, or a genuine disruption?
-- If they return tonight, expect potential minutes restriction and reintegration effects
-
-### 9. SCHEDULE & REST
-**Source:** The scout report already contains rest days, back-to-back status, and travel context for both teams. Use this data directly — do NOT call REST_SITUATION or BACK_TO_BACK tokens (they duplicate the scout report). Use TRAVEL_SITUATION only if you need time zone details not in the scout report.
-- What is this team's ACTUAL record and efficiency on B2Bs/short rest this season?
-- Is there evidence fatigue affected recent performance, or is it just the schedule narrative?
-- Travel context: time zone shifts, road trip length
-
-### 10. HEAD-TO-HEAD
+### 8. HEAD-TO-HEAD
 **Tokens:** H2H_HISTORY, VS_ELITE_TEAMS
-- Were those H2H games with same personnel? Same venue? Different point in season?
-- Was the result structural (scheme mismatch) or variance (one team shot 15% from 3)?
-- What's DIFFERENT tonight? Different roster health, different venue, different form
+- Pull any H2H history between these teams
+- Report findings if data exists
 
-### 11. CLOSE GAMES & VARIANCE
+### 10. CLOSE GAMES & VARIANCE
 **Tokens:** CLUTCH_STATS, LUCK_ADJUSTED, HOME_AWAY_SPLITS
-- Close game record vs expected record — investigate what variance factors explain any gap
-- Home/away efficiency splits — what SPECIFIC metric changes?
+- Pull clutch stats, luck-adjusted data, and home/away splits for both teams
+- Report findings for both teams
 
 ## DEEP INVESTIGATION — NBA-SPECIFIC
 
-### PROCESS METRICS
-Investigate the process behind each team's results — shooting efficiency, ball security, second chances, and free throw generation.
-- What process gaps exist between these two teams?
-- How do each team's strengths and weaknesses interact in this matchup?
-- Does the matchup amplify or neutralize any of these gaps?
-
-### QUESTIONABLE / GTD / DOUBTFUL PLAYERS INVESTIGATION
-When a key player is QUESTIONABLE, GTD, or DOUBTFUL:
-- **Check their GP stat:** Compare to team games played. A player with 35 GP when the team has played 55 games has missed 20 games — this is an on-and-off pattern, not a fresh disruption.
-- **On-and-off pattern:** If the player frequently misses games, investigate the team's performance WITH vs WITHOUT them.
-- **Fresh GTD after extended absence:** This could signal a RETURN. Investigate the team's data without this player and what adding them back would mean. Expect potential minutes restriction.
-- **DOUBTFUL players:** Likely absent — investigate how the team has performed without them.
-
 ### GAME CONTEXT
-- **Margin check**: Do these teams' styles produce close games or wide margins? What does the Net Rating gap and pace matchup tell you about the types of games these teams typically produce?
-- **Injury timing**: How long has each player been out? What do the team's stats look like during the absence?
+- Pull margin data for both teams — what do the game-by-game margins look like recently?
+- Pull injury timing data — how long has each injured player been out and what do the team's stats look like during the absence?
+- Report findings for both teams
 
 ### LARGE SPREAD INVESTIGATION (10+ POINT SPREADS)
-When tonight's spread is 10+ points, the matchup gap is obvious — the question shifts from "who wins" to "what does the margin look like." Investigate these additional dimensions:
-- **Margin distribution**: How often does the favorite win by double digits vs single digits? How often does the underdog keep losses within 10? Look at L10 game-by-game margins for both teams.
-- **Bench depth gap**: When starters rest in large-lead situations, what does each team's bench look like? A dominant starting five that rests in the 4th quarter with a weak bench produces different margins than a deep team that maintains intensity.
-- **Closing lineup tendencies**: Does the favorite pull starters early when leading? Does the underdog play harder in the 2nd half of lopsided games?
-- **Quarter scoring patterns**: Call QUARTER_SCORING — do the teams' scoring patterns show margin compression or expansion in 4th quarters of lopsided games?
+When tonight's spread is 10+ points, investigate these additional dimensions:
+- Pull margin distribution data for both teams — L10 game-by-game margins
+- Pull bench depth and bench production stats for both teams
+- Pull quarter scoring data (QUARTER_SCORING) for both teams
+- Report findings for both teams
 
-### TEAM IDENTITY — UNDERSTAND WHY, NOT JUST WHAT
-- **Shooting identity**: What does the scoring profile show about how this team creates offense?
-- **Ball security**: What does the turnover data reveal?
-- **Pace identity**: What does the tempo data show about how this matchup plays out?
-- **Depth**: What does the minutes distribution tell you about roster depth?
+### TEAM IDENTITY
+- Pull scoring profile, turnover, pace, and depth stats for both teams
+- Report findings for both teams on how each team generates offense, protects the ball, and uses its roster
 
-**INSTEAD OF HOME/AWAY RECORDS:**
-- "Their road record is 7-14 — but WHY?" → Investigate what the data shows about their performance splits
-- Don't say "they play well at home" — ask: "WHAT do they do better at home?" The answer tells you if that advantage applies to THIS game
+### RETURNING PLAYERS
+When a key player is listed as GTD or Questionable after missing time:
+- Check their GP stat relative to team games played to understand the pattern
+- Pull the team's stats with and without this player if data is available
+- Report findings
 
 ### REGRESSION & TREND DETECTION
-When L5/L10 diverges from season baseline:
-- What evidence distinguishes a real shift from variance?
-- Are the key contributors outperforming their baselines, and is that likely to continue?
-- Season avg = baseline identity. L5/L10 = current form. The gap tells the story.
-- Which of this team's strengths are consistent across the season vs which show high variance?
+When recent stats diverge from season baseline:
+- Pull the specific stats that are diverging and the context behind the divergence (opponent quality, roster changes, shooting variance)
+- Report findings for both teams
+
+### PROCESS METRICS
+- Pull shooting efficiency, ball security, second-chance points, and free throw generation data for both teams
+- Report findings for both teams
+
+### HOME/AWAY PERFORMANCE
+- Pull home/away performance splits for both teams — report the specific stats, not just the records
+- Report findings for both teams
+
+### SCHEDULE & REMATCH CONTEXT
+- If these teams have played earlier this season, pull data on what changed since the last meeting — roster health, form, lineup changes
+- Report findings if applicable
 
 ### SPREAD AWARENESS
 Report your findings factually. Gary will evaluate which factors matter for this matchup and spread number.
 
 ### YOUR SCOUT REPORT IS YOUR BASELINE
-The scout report provides a starting point — advanced metrics, standings, recent form, H2H history, injuries, and roster depth. This is the BASELINE of who these teams are. You are free to re-fetch any stat for deeper investigation. Your investigation should focus on what's DIFFERENT about THIS game vs the baseline.
-
-### NBA INVESTIGATION TRIGGERS
-Watch for these patterns that require deeper investigation:
-- **Schedule Spot**: Back-to-backs, road trips, rest advantages — what does the data show about each team's performance in similar schedule spots this season? Rest and schedule context affect preparation differently for each team — investigate the specifics rather than assuming generic effects.
-- **Revenge / Rematch**: NBA teams play 3-4 times per season. What changed since the last meeting — roster health, form, lineup adjustments?
-- **Home Court Factor**: Don't say "they play well at home" — investigate WHAT they do better at home. What specific metrics change? The answer tells you whether that advantage applies to THIS matchup against THIS opponent.
-- **Regression Check**: When L5/L10 shooting or efficiency diverges from the season baseline, what does the historical variance and sample size show?
-- **Large Spread (10+)**: When the spread is 10+ points, complete the LARGE SPREAD INVESTIGATION section above. The matchup winner is usually obvious — your job is to investigate what the margin looks like.`;
+The scout report provides the starting point. You are free to re-fetch any stat for deeper investigation.`;
 
 // ═══════════════════════════════════════════════════════════════════════
 // NFL INVESTIGATION FACTORS
@@ -226,13 +200,7 @@ Work through each numbered factor below. Check off each one as you complete it. 
 - QB injuries reshape the entire offense. OL injuries change protection and run lanes
 - How long has each player been out? What's the team's performance since?
 
-### 12. SCHEDULE & REST
-**Tokens:** REST_SITUATION, SCHEDULE_CONTEXT, HOME_AWAY_SPLITS
-- Short week vs long week? Coming off bye?
-- Travel context, time zone shifts
-- Home/away splits
-
-### 13. STANDINGS & DIVISION
+### 12. STANDINGS & DIVISION
 **Tokens:** STANDINGS, DIVISION_RECORD
 - Playoff implications, division race
 - Division games have familiarity factor
@@ -312,137 +280,128 @@ const NHL_FACTORS = `## INVESTIGATION CHECKLIST — NHL
 
 Work through each numbered factor below. Check off each one as you complete it. Do NOT skip any. For each factor, investigate BOTH teams and report findings with specific numbers.
 
-### 1. POSSESSION METRICS
-**Tokens:** CORSI_FOR_PCT, EXPECTED_GOALS, SHOT_DIFFERENTIAL, HIGH_DANGER_CHANCES, SHOT_QUALITY
-- Corsi% and xGF% measure different aspects of possession
-- High-danger chance differential measures quality scoring chances
-- Compare 5v5 possession metrics for both teams
+For any factor, you have access to season-long stats AND recent form data (RECENT_FORM provides L5/L10 with opponent quality). You also have fetch_player_game_logs for individual player recent production. Use these alongside the season tokens whenever comparing recent performance to the season baseline would be useful.
+
+### 1. POSSESSION & SHOT QUALITY
+**Tokens:** CORSI_FOR_PCT, EXPECTED_GOALS, SHOT_DIFFERENTIAL, HIGH_DANGER_CHANCES, SHOTS_FOR, SHOTS_AGAINST
+- Pull 5v5 Corsi%, xGF%, shot differential, and high-danger chance share for both teams — season and recent
+- Investigate each team's possession and shot quality data separately
+- Compare season possession metrics to recent — investigate any shifts
+- Compare shot volume and shot quality separately — how does each team generate and suppress chances?
+- Report findings for both teams
 
 ### 2. GOALTENDING
 **Tokens:** GOALIE_STATS, SAVE_PCT, GOALS_AGAINST_AVG, GOALIE_MATCHUP, NHL_GSAX, NHL_GOALIE_RECENT_FORM, NHL_HIGH_DANGER_SV_PCT
-- Who starts tonight? Compare season save% vs L10 save%.
-- GSAx (Goals Saved Above Expected)
-- High-danger save% — performance on tough shots
-- A streak with one goalie doesn't transfer to a different goalie
+- Pull the confirmed starter for both teams — season save%, L5/L10 save%, GSAx, and high-danger save%
+- Compare both starters' season baseline to their recent form
+- Investigate whether each team's recent results were with tonight's confirmed starter or a different goaltender
+- Report findings for both teams
 
 ### 3. SPECIAL TEAMS
-**Tokens:** POWER_PLAY_PCT, PENALTY_KILL_PCT, SPECIAL_TEAMS, PP_OPPORTUNITIES
-- PP% vs PK% matchup — how do the PP% and PK% compare in this matchup?
-- PP opportunity volume matters — a team that draws penalties vs one that doesn't
+**Tokens:** POWER_PLAY_PCT, PENALTY_KILL_PCT, SPECIAL_TEAMS
+- Pull PP% and PK% for both teams — investigate how each team's power play matches against the opponent's penalty kill
+- Pull penalty drawn/taken rates if available — investigate whether either team generates disproportionate PP opportunities
+- Report findings for both teams
 
-### 4. SCORING
+### 4. SCORING & GOAL DATA
 **Tokens:** GOALS_FOR, GOALS_AGAINST, GOAL_DIFFERENTIAL
-- Goal differential is a baseline. Scoring first affects game script
-- Compare 5v5 goal rates to overall — does special teams inflate the numbers?
+- Pull goals for, goals against, and goal differential for both teams — season and recent
+- Compare 5v5 goal rates to overall rates — investigate whether special teams are inflating or masking the numbers
+- Report findings for both teams
 
-### 5. SHOT VOLUME
-**Tokens:** SHOTS_FOR, SHOTS_AGAINST, SHOT_METRICS
-- Shot volume vs shot quality — which matters more for this matchup?
+### 5. VARIANCE & CLOSE GAMES
+**Tokens:** PDO, LUCK_INDICATORS, CLOSE_GAME_RECORD, ONE_GOAL_GAMES, OVERTIME_RECORD, REGULATION_WIN_PCT
+- Pull PDO for both teams — investigate the shooting% and save% components separately
+- Pull close-game record, one-goal game record, overtime record, and regulation win% for both teams
+- Compare regulation win% to overall win% — investigate any gap
+- Report findings for both teams
 
-### 6. VARIANCE & SUSTAINABILITY
-**Tokens:** PDO, LUCK_INDICATORS, SHOOTING_REGRESSION, CLOSE_GAME_RECORD, ONE_GOAL_GAMES, OVERTIME_RECORD
-- PDO (shooting% + save%) — check where each team's value sits relative to 100
-- Shooting% variance — what does the historical rate look like vs current?
-- One-goal game record — investigate what's driving it
+### 6. RECENT FORM & GAME CONTEXT
+**Tokens:** RECENT_FORM, HOT_PLAYERS. Also use fetch_player_game_logs.
+- Pull L5 and L10 results for both teams and compare to season baseline
+- Investigate who was in net during the recent stretch — is it the same goaltender starting tonight?
+- Investigate the opponents faced and the margins during the recent stretch — were recent games against strong or weak opponents?
+- Pull game logs for key players on each team to see their recent individual production
+- Compare each key player's season stats to their recent game logs — investigate if any players are performing above or below their season baseline
+- Investigate each team's consistency across the season — pull game results and margins for both teams to see how each team has performed against different levels of competition. In the NHL, goaltender rotation and injury availability change game to game, so also investigate how each team's performance has varied with different goaltenders and during different stretches of the schedule. Also investigate if recent form (L5, L10) shows a change from those season-long patterns.
+- Report findings for both teams
 
-### 7. RECENT FORM
-**Tokens:** RECENT_FORM, HOT_PLAYERS
-- L5/L10 results — same goalie? Same lineup? Same opponent quality?
-- Hot players can drive short-term results
-
-### 8. KEY PLAYERS & LINES
+### 7. KEY PLAYERS, LINES & DEPTH
 **Tokens:** TOP_SCORERS, TOP_PLAYERS, LINE_COMBINATIONS
-- Top-6 forward production vs bottom-6 — depth scoring?
-- Defensive pair matchups
+- Pull top-6 forward production and bottom-6 depth scoring for both teams
+- Investigate scoring distribution — is production concentrated or balanced?
+- Pull defensive pair data and minute distribution
+- Report findings for both teams
 
-### 9. INJURIES
+### 8. INJURIES & ROSTER
 **Tokens:** INJURIES
-- Goalie injuries change everything
-- Key forward/defenseman absences — how has the team adapted?
+- Report the injury status for both teams
+- For FRESH and SHORT-TERM injuries: investigate who is filling the role, pull the replacement's production data (since the injury AND season-long), pull team stats during the absence vs season average, and investigate roster depth behind the injured player
+- For LONG-TERM and SEASON-LONG injuries: the team's current stats already reflect life without this player — do not treat as new information
+- If you cite an injury, include when it happened. If you cannot determine when, do not include it
+- Report findings for both teams
 
-**FRESH and SHORT-TERM injuries require full investigation:**
-- Investigate: Who is getting the minutes in that player's role since the injury?
-- Investigate: What is the replacement player's production profile — both in the games since the injury AND their season-long stats?
-- Investigate: How has the team performed in the games without the injured player vs their season average?
-- Investigate: What does the team's roster depth look like behind this player — how many rotation players does the team use, what experience level are the backups, and is there a clear next man up or does the workload get spread across multiple players?
+### 9. HOME ICE & SPLITS
+**Tokens:** HOME_AWAY_SPLITS
+- Pull home/away performance splits for both teams — report specific stats, not just records
+- Report findings for both teams
 
-**PRICED IN, LONG-TERM and SEASON-LONG injuries — market has fully adjusted:**
-- The team's current stats already reflect life without this player. Do not treat as new information.
-
-### 10. SCHEDULE & REST
-**Tokens:** REST_SITUATION, BACK_TO_BACK
-- B2B may mean a different goalie — that changes the matchup entirely
-- Travel burden (cross-country road trips)
-
-### 11. HOME ICE
-**Tokens:** HOME_ICE, ROAD_PERFORMANCE, HOME_AWAY_SPLITS
-- Last change advantage at home — matchup control
-- Home/road splits for both teams
-
-### 12. H2H & DIVISION
+### 11. HEAD-TO-HEAD & DIVISION
 **Tokens:** H2H_HISTORY, DIVISION_STANDING, FACEOFF_PCT, POSSESSION_METRICS
-- Divisional teams play multiple times — recent meetings are relevant
-- For each H2H meeting this season: who started in net? What were the scores? Were they close games or blowouts?
-- What drove the results in previous meetings — goaltending, special teams, puck luck, or process?
-- Have conditions changed since previous meetings (different goalie, roster changes, schedule context)?
-- Faceoff% affects possession
+- Pull H2H history between these teams this season
+- For each meeting: who started in net? What were the scores? Were they close games or blowouts?
+- Investigate whether conditions have changed since previous meetings (different goalie, roster changes, schedule context)
+- Pull faceoff% data for both teams
+- Report findings if data exists
 
-### 13. STANDINGS
+### 12. STANDINGS & PLAYOFF CONTEXT
 **Tokens:** STANDINGS, POINTS_PCT, STREAK, PLAYOFF_POSITION
-- Playoff race context — who needs the points?
-
-### 14. VARIANCE & CONSISTENCY
-**Tokens:** REGULATION_WIN_PCT, MARGIN_VARIANCE
-- Regulation win% strips OT/SO variance
-- Moneyline includes OT/SO — regulation dominance and OT variance are different
+- Pull playoff positioning and points percentage for both teams
+- Use points percentage (not win%) — NHL uses points (OT losses = 1 point)
+- Report findings for both teams
 
 ## DEEP INVESTIGATION — NHL-SPECIFIC
 
-### KEY INVESTIGATION AREAS
-Hockey outcomes are shaped by goaltending, possession, and special teams — no single factor consistently dominates.
-- **Possession and shot quality**: What do the 5v5 metrics reveal about territorial control and chance quality?
-- **Special teams**: What does PP% and PK% show? How do they interact in this matchup?
-- **Goaltending matchup**: Who is starting? What does recent form reveal vs season baseline?
-- **Schedule and fatigue**: Rest situation, B2B, compressed schedule? Who's in net on the second night?
-- **Game structure**: Faceoff%, shot volume, close-game data — what does the process look like?
+### GAME CONTEXT
+- Pull margin data for both teams — what do the game-by-game margins look like recently?
+- Pull injury timing data — how long has each injured player been out and what do the team's stats look like during the absence?
+- Report findings for both teams
 
 ### H2H SWEEP CONTEXT
-NHL division rivals play 3-4 times per year. When you see a 3-0 or 4-0 sweep developing, investigate:
-- **Opponent quality**: Is the swept team actually an elite-tier team?
-- **Division rival?**: Division games carry extra weight and motivation
-- **Goaltending matchup**: Is tonight's starter the same as previous games? Compare each goalie's recent save% vs season save%.
-- **How did the sweep happen?**: Close games (1-goal margins) or blowouts?
-- **Line adjustments**: Have coaches shuffled lines after previous meetings?
-- **Playoff seeding**: Are there playoff seeding implications for either team?
-- Use points percentage (not win%) — NHL uses points (OT losses = 1 point)
+When these teams have met multiple times this season with a lopsided series:
+- Is tonight's starter the same goaltender from previous meetings? Compare each goalie's recent form vs season baseline.
+- Were previous meetings decided by 1 goal or blowouts?
+- Have conditions changed — roster moves, coaching adjustments, schedule context?
+- "What does the current data tell me about THIS game — regardless of H2H record? Investigate whether the conditions from previous meetings still apply tonight."
 
-**The question:** "What does the current data tell me about THIS game — regardless of H2H record? Investigate whether the conditions from previous meetings still apply tonight."
+### PDO & VARIANCE DEEP DIVE
+When either team's PDO is notably above or below 100:
+- Investigate the components — is it driven by shooting%, save%, or both?
+- Is the current starting goaltender the same one who drove the save% component?
+- How many games into the current stretch? Has there been any partial correction?
+- What does the underlying shot quality (CF%, xG) show regardless of PDO?
 
-### POSSESSION & PDO DEEP INVESTIGATION
-Does THIS team's underlying possession data tell a different story than their record? What's driving any gap?
+### STREAK INVESTIGATION
+When either team is on a notable winning or losing streak:
+- Investigate the specific factors driving the streak — which combination of roster, goaltending, opponent quality, schedule, and shooting variance?
+- Were the opponents during the streak strong or weak?
+- Is the same goaltender who drove the streak starting tonight?
 
-**PDO Investigation:**
-- Investigate each team's PDO — what does it show about the components driving their results (shooting% and save%)?
-- What's driving the extreme PDO — shooting variance, goalie performance, or both?
-- Is THIS team's starting goalie the same one who drove the PDO? Has the goalie changed?
-- How many games into the streak are they? Has there been any partial correction already?
-- What's THIS team's underlying shot quality (CF%, xG) — are they generating/allowing good chances regardless of PDO?
-
-### TEAM IDENTITY — NHL-SPECIFIC
-- **Possession identity**: What does the possession data reveal about this team's playing style?
-- **Scoring quality**: What does the shot quality data tell you about how they create offense?
-- **Special teams dependency**: What does the 5v5 vs special teams scoring breakdown reveal?
-- **Depth**: What does the scoring distribution across lines tell you about depth?
-- **Goaltending stability**: What does the goaltending data show — concentrated in one goalie or shared?
-
-### STREAK SUSTAINABILITY
-What's driving this streak — possession, goaltending, special teams, shooting variance, schedule, or some combination? What does the underlying data show?
+### RETURNING PLAYERS
+When a key player is listed as GTD or Questionable after missing time:
+- Pull the team's stats with and without this player if data is available
+- Investigate how the roster structure changes if this player returns
+- Report findings
 
 ### THE TEAM TAKING THE ICE TONIGHT
-- If they've gone 8-4 since losing their top-line center, that's who they are now
-- For long-term injuries (IR/LTIR), investigate: Has the team played enough games without this player that their current stats reflect the adjusted roster?
+- If they've gone 8-4 since losing a key player, that's the team you're analyzing
+- For long-term injuries (IR/LTIR): the team's current stats reflect the adjusted roster
 - Investigate recent line combinations — how does the current structure compare to earlier in the season?
-- "Am I analyzing the team taking the ice tonight, or a version of them from earlier in the season?"`;
+- "Am I analyzing the team taking the ice tonight, or a version of them from earlier in the season?"
+
+### YOUR SCOUT REPORT IS YOUR BASELINE
+The scout report provides the starting point. You are free to re-fetch any stat for deeper investigation.
+Report your findings factually. Gary will evaluate which factors matter for this matchup.`;
 
 // ═══════════════════════════════════════════════════════════════════════
 // NCAAB INVESTIGATION FACTORS
@@ -452,97 +411,98 @@ const NCAAB_FACTORS = `## INVESTIGATION CHECKLIST — NCAAB
 
 Work through each numbered factor below. Check off each one as you complete it. Do NOT skip any. For each factor, investigate BOTH teams and report findings with specific numbers.
 
+For any factor, you have access to both season-long stats AND recent stats (NCAAB_L1_STATS, NCAAB_L3_STATS, NCAAB_L5_EFFICIENCY). You can use these alongside the season tokens listed per factor whenever comparing recent performance to the season baseline would be useful.
+
 ### 1. EFFICIENCY RATINGS
-**Tokens:** NCAAB_OFFENSIVE_RATING, NCAAB_DEFENSIVE_RATING, NET_RATING, NCAAB_L5_EFFICIENCY, NCAAB_BARTTORVIK
-- AdjO, AdjD, AdjEM (adjusted efficiency margin) — the core metrics
-- Report actual stat values (AdjOE 117.5, AdjDE 98.2) — not ranking ordinals (64th, 103rd). If you include a ranking, always pair it with the actual value.
-- L5 efficiency vs season — has something changed? Conference schedule vs non-conference?
-- Compare efficiency with and without key players
+**Tokens:** NCAAB_OFFENSIVE_RATING, NCAAB_DEFENSIVE_RATING, NET_RATING, NCAAB_BARTTORVIK
+- Pull offensive and defensive efficiency ratings for both teams — report actual values, not just rankings
+- Pull Barttorvik data (T-Rank, AdjEM, AdjO, AdjD) for both teams
+- Compare season efficiency to recent efficiency — pull L5 data to see if the ratings have shifted
+- Investigate offensive and defensive efficiency separately for each team
+- Report findings for both teams
 
 ### 2. FOUR FACTORS
 **Tokens:** NCAAB_FOUR_FACTORS, NCAAB_EFG_PCT, NCAAB_TS_PCT, TURNOVER_RATE, OREB_RATE, FT_RATE
-- Compare eFG%, TOV%, ORB%, FT Rate for BOTH teams
-- Compare the gaps across all four factors. Are any gaps consistent or recent?
-- Tournament opponent quality vs season-long opponents — are the four factors built against comparable competition?
+- Pull all four factors (eFG%, TOV%, ORB%, FT Rate) for both teams
+- Investigate each factor individually — pull season and recent data to see if any have shifted
+- Investigate each team's free throw shooting volume and percentage
+- Report findings for both teams
 
 ### 3. SCORING & SHOOTING
-**Tokens:** SCORING, FG_PCT, THREE_PT_SHOOTING
-- Scoring distribution — 3PT-dependent or paint-attack?
-- 3PT shooting against tournament-caliber opponents vs overall
-- Home vs road shooting splits
+**Tokens:** SCORING, FG_PCT, THREE_PT_SHOOTING. Also use fetch_player_game_logs.
+- Pull scoring and shooting stats for both teams — FG%, 3P%, scoring volume, points per game
+- Investigate where each team generates their points — 3PT volume, paint scoring, free throws
+- Pull recent shooting data and compare to season — investigate any divergence
+- Pull individual player shooting stats — compare each key player's season shooting percentages to their recent output to see if the team or specific players are in a slump or a hot streak
+- Report findings for both teams
 
 ### 4. DEFENSIVE STATS
 **Tokens:** REBOUNDS, STEALS, BLOCKS
-- Rebounding differential — what does each team's rebounding rate look like on both ends?
-- Turnover forcing vs ball security matchup
-- Shot-blocking presence
+- Pull rebounding stats for both teams — offensive rebounds, defensive rebounds, total rebounding rate
+- Pull steals, blocks, and forced turnover data for both teams
+- Investigate each team's defensive identity through the stats
+- Report findings for both teams
 
 ### 5. TEMPO
 **Tokens:** NCAAB_TEMPO
-- Pace mismatch — who controls tempo?
-- Does either team play significantly faster or slower?
-- A slow-tempo team vs a fast-tempo team — which style prevails?
+- Pull pace and tempo stats for both teams — season and recent
+- Investigate each team's tempo and how it has changed recently
+- Report findings for both teams
 
-### 6. RECENT FORM
-**Source:** The scout report already contains L5/L10 game-by-game results with scores and margins. Use this data directly — do NOT call RECENT_FORM token.
-- L5 vs season trends — who was playing during each stretch?
-- Recent form against quality opponents vs overall — opponent quality matters
-- Are recent results with the current roster?
+### 6. TEAM PERSONNEL, STYLE & COACHING
+**Tokens:** TOP_PLAYERS, NCAAB_BARTTORVIK. Also use fetch_player_game_logs and fetch_narrative_context for coaching.
+- Investigate the roster build of each team — what positions are their best players, what are their physical attributes, what are their strengths
+- Investigate each team's offensive and defensive identity using the stats
+- Pull game logs for the top players on each team to see their recent and season-long production
+- Investigate the guard play on each team — who are the primary ball handlers and what do they do
+- How deep is each team's rotation? How is production distributed across the roster?
+- Investigate the coaching for both teams — use fetch_narrative_context to find each coach's background, tournament history, and how they have prepared for and adjusted against different styles
+- Report findings for both teams
 
-### 7. KEY PLAYER PERFORMANCE
-**Tokens:** TOP_PLAYERS
-- College basketball has 7-8 man rotations. A single absence changes a team more
-- Top player usage, efficiency, and impact
-- Freshman vs veteran — does experience show up in the data?
+### 7. RECENT FORM & CONSISTENCY
+**Tokens:** NCAAB_L1_STATS, NCAAB_L3_STATS, NCAAB_L5_EFFICIENCY, RECENT_FORM. Also use fetch_player_game_logs for key players.
+- Pull L1 (last game), L3, and L5 team stats for both teams and compare to season baseline
+- Pull game logs for the top players on each team to see their recent individual production
+- Investigate who was playing during the recent stretch — is the roster the same as tonight?
+- Investigate the quality of opponents faced in the recent stretch
+- Investigate each team's consistency across a larger sample — pull season game results and margins to see the full picture of how each team has performed throughout the year. Report losses to weaker opponents, close wins against teams they should have beaten comfortably, blowout losses, and any patterns of playing up or down to the level of competition. Also investigate if recent form (L5, L3, L1) shows a change from those season-long patterns.
+- Report findings for both teams
 
-### 8. INJURIES
+### 8. KEY PLAYER PERFORMANCE
+**Tokens:** TOP_PLAYERS. Also use fetch_player_game_logs.
+- Pull stats and game logs for the top players on each team
+- Investigate the experience level and class year of each team's key contributors
+- Compare each key player's season stats to their recent game logs — investigate if any players are performing above or below their season baseline and report the specific numbers
+- Report findings for both teams
+
+### 9. INJURIES
 **Tokens:** INJURIES
-- College rosters are thin — one injury matters more than in pro sports
-- Only report injuries that are NEW — occurred in or since the team's last game. Check the date of the article or report. If the injury happened multiple games ago, it is already reflected in the team's current stats and in the spread. That player's absence IS the team's baseline — do not cite it.
+- Report the injury status for both teams
+- Only report injuries that are NEW — if an injury happened multiple games ago, that player's absence is already reflected in the team's stats
 - If you cite an injury, you MUST include when it happened (date or "since last game" / "since [specific game]")
-- Fresh GTD/Questionable — could signal a return. Check whether this is a new development or an ongoing situation.
 - If you cannot determine when an injury occurred, do not include it in your findings
 
-### 9. SCHEDULE & REST
-**Source:** The scout report already contains rest days, back-to-back status, and schedule context. Use this data directly — do NOT call REST_SITUATION token.
-- Report the rest situation factually — double-byes, back-to-backs, games played in the last week
-- Conference tournament rest differentials are the most visible scheduling factor in college basketball — the market prices them aggressively and the spread already reflects any rest advantage
-- The market treats rest as a positive — but rest can also mean rust
-- For teams that played yesterday: how did the last game go? Was it close, overtime, or a blowout? How many minutes did key players log?
-- For teams on a bye: how many days since their last competitive game?
-- Note whether this rest differential is likely already reflected in the current spread
-
-### 10. TOURNAMENT RUN & STORYLINES
-**Tokens:** GROUNDING_SEARCH
-- Use a grounding search to find each team's tournament run so far — results, margins, key performances, and how they got to this round
-- Report the current storylines and narratives surrounding each team entering this game — momentum, upsets, breakout players, coaching storylines, bracket position
-- This is context Gary cannot get from season-long stats — tournament-specific momentum and narrative are real factors in how the public is betting and how the line is set
-
-### 11. NEUTRAL SITE & VENUE
-**Tokens:** NCAAB_VENUE, GROUNDING_SEARCH
-- Tournament games are on neutral courts — home court advantage is removed
-- Use a grounding search to investigate the venue — arena details, location, regional proximity to either team, whether the crowd is expected to favor one side
-- Investigate each team's tournament history — how have they performed in past tournaments? What round did they reach? How does their program historically handle tournament pressure?
-- What are analysts, media, and the public saying about each team and this matchup heading into tonight?
-
-### 12. HEAD-TO-HEAD
+### 10. HEAD-TO-HEAD
 **Tokens:** H2H_HISTORY
-- Tournament opponents often have limited or no H2H history
-- If a previous meeting exists, were conditions similar? Same roster health?
+- Pull any H2H history between these teams — tournament opponents often have none
+- Report findings if data exists
 
-### 13. ASSISTS & PLAYMAKING
-**Tokens:** ASSISTS
-- Ball movement, assist rate — is the offense flowing or hero-ball?
-- Assist-to-turnover ratio
+### 12. ASSISTS & PLAYMAKING
+**Tokens:** ASSISTS. Also use fetch_player_game_logs for key playmakers.
+- Pull assist, turnover, and assist-to-turnover ratio data for both teams
+- Investigate how each team distributes the ball — usage concentration and assist rate
+- Investigate and identify who leads each team in assists and whether the assist numbers are concentrated in one player or spread across the team
+- Pull recent and season assist data for the primary playmakers on each team
+- Investigate the offensive and defensive playmakers and their assist profiles
+- Report findings for both teams
 
 ## DEEP INVESTIGATION — NCAAB-SPECIFIC
 
 ### YOUR SCOUT REPORT IS YOUR BASELINE (DO NOT RE-FETCH)
-- **Advanced Metrics (season baseline):** Barttorvik (T-Rank, AdjEM, AdjO, AdjD, Tempo, Barthag), NET ranking, SOS — the spread likely already reflects these
+- **Advanced Metrics (season baseline):** Barttorvik (T-Rank, AdjEM, AdjO, AdjD, Tempo, Barthag, WAB) — these are schedule-adjusted
 - **Rankings:** AP Poll, Coaches Poll
-- **Home Court:** Home/away records, margins, home/away splits
-- **Recent Form:** L5 game-by-game scores, margins, L5 statistical trends
-- **H2H History:** Previous matchups this season
+- **Recent Form:** Last 3 games with scores and opponents
+- **H2H History:** Previous matchups this season (often none in tournament)
 - **Injuries:** Full injury report with freshness labels
 - **Roster Depth:** Top 9 players per team with stats
 
@@ -553,36 +513,21 @@ Report your findings factually. Gary will evaluate which factors matter for this
 
 ### NCAAB TOURNAMENT INVESTIGATION TRIGGERS
 Watch for these patterns that require deeper investigation:
-- **SOS Filter**: Strength of schedule varies enormously across 360+ Division I teams. A team's record built against weaker competition may not translate to this tournament opponent. Refer to the SOS data in your scout report.
-- **Seeding Context**: Seeds are assigned by the selection committee based primarily on conference, strength of schedule, and season-long metrics. Seeds are a positioning tool — they are not predictions of tournament performance and spreads are not set based on seeding.
-- **Upset Market**: The public actively tries to pick upsets during the tournament. This moves lines — sometimes putting so much action on a lower seed that the line shifts to even or favors the "underdog." The team the public treats as the upset special is sometimes the public side.
-- **Tournament Experience**: Coaches and players who have been in the tournament before handle the intensity, preparation, and pressure differently. First-time tournament teams and first-time coaches face an environment that regular season and conference tournament games do not replicate.
-- **Regression Check**: When recent shooting diverges from the season baseline, tournament intensity and unfamiliar opponents can amplify or suppress that divergence. Sample size from the tournament itself is small — season-long baselines are the more reliable foundation.
+- **SOS Filter**: Strength of schedule varies enormously across 360+ Division I teams. A team's stats built against weaker competition may look very different against a tournament opponent from a stronger conference. Use NCAAB_BARTTORVIK data — T-Rank and WAB already account for schedule strength.
+- **Conference quality gap**: When a mid-major faces a power conference team, investigate whether the mid-major's stats were inflated by weaker opponents. The adjusted metrics (T-Rank, AdjEM) already account for this — use the actual values, not the raw records.
 
-### NEUTRAL SITE & VENUE
-Tournament games are played on neutral courts — home court advantage is removed from the equation. Investigate what the data shows for THIS matchup:
-- Road and neutral-site performance data is more relevant than home splits for tournament games
-- Some "neutral" sites are geographically closer to one team — regional proximity can create a de facto home crowd
-- Investigate each team's performance away from their home court — how do they play when the home crowd is not a factor?
-- Call NCAAB_VENUE to confirm the arena and location
-
-**Road and neutral-site stats are the relevant lens for tournament evaluation.**
+### NEUTRAL SITE
+Tournament games are on neutral courts — home court advantage is removed. Home/away records and splits are irrelevant for tournament evaluation. Do NOT investigate or report home/away records for tournament games.
 
 ### DEPTH INVESTIGATION — Bench & Rotation
-- Your scout report includes Top 9 players — use this to understand depth
-- Does one team rely heavily on 2-3 players while the other has balanced scoring?
-- How might foul trouble affect each team differently given their depth?
-- If the stars are neutralized, what does each team's supporting cast look like?
-
-**FOR LARGE SPREADS (10+ points):**
-Investigate depth for BOTH teams — in NCAAB, benches are shorter (7-8 players). What does the minutes distribution look like?
+- Your scout report includes Top 9 players — use this to understand depth and production distribution
 
 ### STRENGTH OF SCHEDULE
-360+ Division I teams with massive quality variance — SOS is a critical lens for tournament evaluation.
-- Check BOTH teams' SOS rankings — a team battle-tested in a power conference faced different opposition than a mid-major with a weaker schedule
-- Look at Quad records — Quad 1 wins carry more weight than volume wins against lower-tier opponents
-- Conference context — the gap between conferences is real, and tournament matchups regularly pit teams from different competitive environments against each other
-- The selection committee already used SOS for seeding — investigate whether the matchup data tells a different story than the seed line suggests
+360+ Division I teams with massive quality variance — schedule strength is critical for tournament evaluation.
+- Use NCAAB_BARTTORVIK data: T-Rank, AdjEM, and WAB (Wins Above Bubble) are schedule-adjusted metrics that account for opponent quality. A team's T-Rank already reflects who they played, not just their record.
+- Conference context — compare each team's conference (from Barttorvik data) and what that means for the competition level they faced all season
+- A mid-major with a high T-Rank earned it against their schedule. A power conference team with a low T-Rank underperformed against theirs.
+- The selection committee already used these metrics for seeding
 
 ### H2H CONTEXT (NCAAB TOURNAMENT)
 Tournament opponents often have limited or no head-to-head history:
@@ -736,61 +681,289 @@ H2H tells you what happened under THOSE specific conditions. Investigate whether
 // ═══════════════════════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════════════════════
-// MLB/WBC INVESTIGATION FACTORS
+// MLB INVESTIGATION FACTORS
 // ═══════════════════════════════════════════════════════════════════════
 
-const MLB_FACTORS = `## INVESTIGATION CHECKLIST — MLB/WBC
+const MLB_FACTORS = `## INVESTIGATION CHECKLIST — MLB
 
 Work through each numbered factor below. Check off each one as you complete it. Do NOT skip any. For each factor, investigate BOTH teams and report findings with specific numbers.
 
+For any factor, you have access to structured season stats via BDL API (fetch_stats tokens). These return real, structured data — not web search results. **Do NOT use fetch_narrative_context to search for stats that a stat token can provide.** Grounding searches are expensive and less reliable than structured API data.
+
+Use fetch_narrative_context ONLY for:
+- Day-of news, lineup confirmations, roster moves, scratches
+- Spring training performance and offseason context
+- Narrative storylines and game previews
+- Things the stat tokens genuinely cannot answer (umpire info, weather details, manager quotes)
+
+Do NOT use fetch_narrative_context for:
+- Player season stats (use MLB_KEY_HITTERS, MLB_PITCHER_SEASON_STATS)
+- L/R splits (use MLB_PLAYER_SPLITS — returns structured BDL data)
+- Batter vs pitcher matchups (use MLB_BATTER_VS_PITCHER)
+- Standings and records (use MLB_STANDINGS, MLB_TEAM_RECORD)
+- Stolen base / baserunning stats (included in MLB_KEY_HITTERS season data)
+
+The scout report already includes detailed context from both grounding searches and BDL structured data. Use it as your baseline before making additional calls.
+
 ### 1. STARTING PITCHER MATCHUP
-**Tokens:** MLB_STARTING_PITCHERS, TOP_PLAYERS
-- Who is starting for each team? What are their MLB career stats (ERA, WHIP, K/9, W-L)?
-- How do they match up against the opposing lineup's handedness and power profile?
-- Any recent performance data or pitch count concerns?
+**Tokens:** MLB_STARTING_PITCHERS, MLB_PITCHER_SEASON_STATS, MLB_PLAYER_SPLITS
+- Who is starting for each team? What are their current season stats (ERA, WHIP, K/9, BB/9, IP, W-L)?
+- How does each starter's pitch mix and velocity profile match up against the opposing lineup's handedness and power profile?
+- Any pitch count concerns or workload management patterns? What has the front office's approach been to this pitcher's innings recently?
+- What is each starter's ground ball rate vs fly ball rate, and does that interact with the park dimensions tonight?
+- What is each starter's FIP vs ERA gap? A large gap (> 0.5 runs) suggests the pitcher is over- or under-performing relative to their true talent — FIP strips out defense and sequencing.
+- How many innings has each starter averaged in recent starts — does their pitch count suggest a short outing (< 5 IP, early bullpen handoff) or a deep outing (6+ IP)?
+- What is each starter's home/away split this season? Some pitchers have large venue-dependent performance gaps.
 
-### 2. BULLPEN DEPTH & AVAILABILITY
-**Tokens:** MLB_BULLPEN
-- Who pitched in the last 1-2 games? What was their workload?
-- Which relievers are available and which are likely unavailable?
-- Any elite closers or setup men that shift late-game leverage?
+### 2. PITCHER RECENT FORM
+**Tokens:** MLB_PITCHER_RECENT_FORM, MLB_PITCHER_SCOUTING
+- What do each starter's last 3-5 outings look like — ERA, innings pitched, pitch count, strikeouts, walks, hits allowed per start?
+- Is the recent trajectory improving or declining? Compare L5 starts to season averages — is there a meaningful divergence?
+- Were recent outings against strong or weak lineups? Context matters: a 2.00 ERA over 5 starts against bottom-tier offenses is different than the same ERA against playoff contenders.
+- Has velocity or command changed in recent starts? Any signs of fatigue or mechanical adjustment?
+- Did any recent starts include rain delays, early exits due to injury scares, or shortened outings that inflate or deflate the stat line?
+- What is the starter's pitch count trajectory — increasing (building up after IL stint or early season) or capped (managed workload, innings limit)?
+- What is the starter's strand rate (LOB%) in recent starts vs season? An extreme LOB% (above 80% or below 65%) suggests regression is likely.
 
-### 3. KEY HITTERS & LINEUP
-**Tokens:** MLB_KEY_HITTERS, MLB_LINEUP
-- Who are the top 3-4 hitters in each lineup? What are their career MLB stats?
-- Are there platoon advantages (LHB vs RHP or vice versa)?
-- Any confirmed batting orders or notable lineup changes?
+### 3. PLATOON SPLITS & BATTER VS PITCHER
+**Tokens:** MLB_PLAYER_SPLITS, MLB_BATTER_VS_PITCHER, MLB_KEY_HITTERS, MLB_LINEUP
+- Call MLB_PLAYER_SPLITS to get L/R splits for top hitters on both teams — what is each hitter's AVG/OPS vs LHP vs RHP?
+- Call MLB_BATTER_VS_PITCHER to get career matchup data: how have each team's top hitters fared against tonight's opposing pitchers specifically?
+- Which hitters have significant platoon vulnerabilities (big gap between L/R OPS)?
+- Are there switch-hitters in the lineup who neutralize the platoon matchup?
+- Check if lineups have been adjusted specifically for this pitching matchup (e.g., resting a LHB against a tough LHP)
+- How does the batter vs pitcher career history compare to overall season stats? (e.g., a .280 hitter who is .150 lifetime against tonight's starter is a different matchup)
+- For the batter vs pitcher matchups, what are the sample sizes? Small samples (< 10 AB) are noise, not signal — flag any matchup data built on fewer than 10 AB.
+- Call MLB_PLAYER_SPLITS for the starting pitcher to see L/R batting splits against them — does the pitcher have a severe platoon weakness that the opposing lineup can exploit?
 
-### 4. WBC TOURNAMENT RESULTS
-**Tokens:** RECENT_FORM, MLB_WBC_RESULTS, STANDINGS
-- What are each team's WBC results so far in this tournament?
-- Pool standings — what's at stake? Must-win? Already clinched?
-- Any momentum or form from earlier WBC games?
+### 4. BULLPEN DEPTH & WORKLOAD
+**Tokens:** MLB_BULLPEN, MLB_BULLPEN_WORKLOAD
+- The scout report's LAST GAME section shows which bullpen arms pitched yesterday and how many outs each recorded — use this to determine who is available tonight
+- Who pitched in the last 1-3 games for each team? What was their pitch count and innings in each appearance?
+- Which high-leverage arms (closer, setup men) are available tonight vs likely unavailable due to recent workload?
+- Has either team played extra innings in the last 3 days, forcing extended bullpen usage?
+- What is each team's bullpen ERA and WHIP over the last 7 and 30 days — is the pen trending up or down?
+- Is the closer available? If not, who handles the 9th and what is their recent conversion rate and save opportunities?
+- Has either team used an opener or bullpen game in the last week? If so, does that shift who is available tonight?
+- What is the bullpen's K/BB ratio over the last 7 days — are the available arms sharp or spraying walks?
 
-### 5. HEAD-TO-HEAD & HISTORY
-**Tokens:** H2H_HISTORY
-- Have these countries played each other in previous WBCs?
-- Any historical pattern (one country dominating the other)?
+### 5. KEY HITTERS & LINEUP
+**Tokens:** MLB_KEY_HITTERS, MLB_LINEUP, MLB_PLAYER_SPLITS
+- Who are the top 3-4 hitters in each lineup? What are their season stats (AVG, OBP, SLG, OPS) and recent form (last 7-14 days)?
+- Are there confirmed batting orders? Any notable lineup changes from the typical alignment?
+- How does the heart of the order (3-4-5 hitters) match up against tonight's opposing starter?
+- Are any key bats in a hot streak or extended slump? What does their recent game log show?
+- What is each team's OPS with RISP (runners in scoring position) over the last 30 days? Teams that hit well with RISP convert baserunners into runs efficiently.
+- Any hitters on notable hot/cold streaks — what does the L7/L15 data show vs their season line? Investigate whether the streak is driven by BABIP luck or a real change in quality of contact.
+- What is the lineup's strikeout rate as a team? A high-K lineup facing a high-K pitcher amplifies the pitcher's dominance.
 
-### 6. REST & SCHEDULE
-**Tokens:** REST_SITUATION
-- How many days since each team's last game?
-- Did either team play a high-stress game (extra innings, long bullpen usage) recently?
+### 6. STANDINGS & DIVISION CONTEXT
+**Tokens:** MLB_TEAM_RECORD, STANDINGS, MLB_RECENT_FORM
+- Where does each team sit in the division standings? Games back from first?
+- What is each team's record over the last 10 games? Any winning or losing streaks?
+- Is this a division rivalry game (19 games/year against division opponents)? Division games carry different intensity and familiarity.
+- Where is each team relative to wild card positioning? Does the playoff race context affect lineup decisions or urgency?
+- What is each team's run differential — does it suggest their record over- or under-represents their true level?
+- Check Pythagorean W-L (expected record based on runs scored/allowed) vs actual record — a team that significantly outperforms its Pythagorean W-L is a regression candidate.
+- What is each team's record vs winning teams (.500+) vs losing teams? This reveals schedule-dependent performance.
 
-### 7. VENUE & CONDITIONS
-- Is this game indoor (Tokyo Dome) or outdoor (Miami, Houston)?
-- Weather conditions for outdoor venues — wind, temperature, humidity
-- Park factor context — how does this venue play?
+### 7. HEAD-TO-HEAD & SEASON SERIES
+**Tokens:** H2H_HISTORY, MLB_H2H
+- How have these teams performed against each other this season? What is the season series record?
+- Were previous meetings with the same starters? Did a specific pitcher dominate or struggle against this lineup?
+- What were the margins and run totals in previous meetings — close games or blowouts?
+- Have conditions changed since last meeting (roster changes, injuries, form shifts)?
+- In previous meetings, what was the bullpen usage pattern? Did either team's pen get exposed or dominate?
+- Were the H2H results driven by a specific player or matchup (e.g., one hitter went 5-for-8 in the series) that may or may not repeat tonight?
 
-### 8. INJURIES & ROSTER UPDATES
-**Tokens:** INJURIES
-- Any scratches, day-to-day concerns, or last-minute roster changes?
-- Any players pulled from previous WBC games with undisclosed issues?
+### 8. PARK & WEATHER
+**Tokens:** MLB_PARK_FACTORS, MLB_WEATHER, MLB_PLAYER_SPLITS
+- What is tonight's ballpark and what are its characteristics? Report the park factor, dimensions, and any notable features neutrally.
+- What is the weather forecast for tonight's game? Report temperature, wind speed, and wind direction.
+- How have the starting pitchers and top 3-4 hitters on each team performed at this specific ballpark? Call MLB_PLAYER_SPLITS to check byArena data — report AVG, OPS, HR, and AB at tonight's venue for key players.
 
-### 9. ODDS & PUBLIC PERCEPTION
+### 10. INJURIES & ROSTER UPDATES
+**Tokens:** INJURIES, MLB_INJURIES
+- Any scratches, day-to-day concerns, or IL returns that affect tonight's lineup or bullpen?
+- Any recent callups or roster moves (September expanded rosters, trade deadline acquisitions)?
+
+**FRESH and SHORT-TERM injuries require full investigation:**
+- Investigate: How does losing this player change the lineup or bullpen depth?
+- Investigate: Who replaces the injured player and what is the replacement's production profile?
+- Investigate: If a pitcher was scratched, who starts instead and what is their recent performance?
+- Investigate: For position player injuries, how does the replacement affect the lineup's overall production? Check the replacement's OPS, plate discipline, and defensive position.
+- Investigate: Has the team's record and run scoring changed since the injury? Pull team stats from games played without the injured player.
+
+**PRICED IN and SEASON-LONG injuries — market has fully adjusted:**
+- The team's current stats already reflect life without this player. Do not treat as new information.
+
+- If you cite an injury, you MUST include when it happened (date or "since last game" / "since [specific date]"). If you cannot determine when an injury occurred, do not include it in your findings.
+
+### 11. MOTIVATION & STAKES
+**Tokens:** STANDINGS, MLB_TEAM_RECORD
+- Is either team in a playoff race where every game matters? Or is a team eliminated/comfortable?
+- Is this a rivalry game (division, interleague tradition, geographic)?
+- Series position: rubber match games carry more intensity than game 1 of a series.
+- Are there any individual milestones in play (milestone win for a pitcher, hitting streak) that could affect lineup decisions?
+- Is either team likely to rest starters or manage workloads given their standings position? Eliminated teams in September often prioritize development over winning.
+- Are either team's starters on an innings limit or pitch count that might cause an early hook regardless of game state?
+
+### 12. ODDS & PUBLIC PERCEPTION
 **Tokens:** MLB_ODDS
-- What are the current moneyline odds? Is one side getting heavy public action?
-- Is the line moving? In which direction and why?`;
+- What are the current moneyline and run line odds? What is the total (over/under)?
+- Is the line moving? In which direction and why? Line movement in MLB often signals sharp action on one side.
+- Is a star pitcher drawing heavy public money on the ML? Public action concentrates on aces and big-market teams.
+- For heavy favorites (-200+): evaluate whether the run line offers better structure than the expensive ML.
+- What is the implied probability from the moneyline for each team? How does that compare to what the stats and matchup data suggest?
+- Has the total moved since open? Total movement often reflects late weather updates, lineup announcements, or sharp betting action on one side.
+
+### 13. RUN LINE & TOTAL CONTEXT
+**Tokens:** MLB_RECENT_FORM, MLB_ODDS
+- How often does each team win by 2+ runs vs 1-run games? This directly affects run line value.
+- What is each team's scoring output over the last 10 games — trending up or down?
+- What does the runs-per-game average look like for both teams at this venue specifically?
+- How do bullpen state and park factors interact with tonight's total?
+- What is each team's record against the run line (ATS equivalent) this season? Do they tend to win/lose by comfortable margins or squeak by?
+- What is the combined ERA of both starters — how does that compare to the posted total? A total of 8.5 with two aces on the mound is different from 8.5 with two back-end starters.
+- What is each team's over/under record this season — do they consistently play in high-scoring or low-scoring games?
+
+### 14. PITCHING MATCHUP DEEP DIVE
+**Tokens:** MLB_PLAYER_SPLITS, MLB_BATTER_VS_PITCHER, MLB_PITCHER_SEASON_STATS, MLB_KEY_HITTERS
+- Call MLB_PLAYER_SPLITS for the starting pitcher to see L/R splits, home/away ERA, day/night splits — where does tonight's context fall?
+- Call MLB_BATTER_VS_PITCHER for the top 4-5 hitters in the opposing lineup vs this pitcher specifically — are there batter-pitcher matchups with large sample sizes (20+ AB) that diverge sharply from the hitter's overall season line?
+- What is the pitcher's opponent AVG and OPS this season — is the underlying contact quality against him sustainable or is he getting lucky/unlucky on balls in play?
+- What is the pitcher's HR/9 rate and HR/FB% — is he suppressing or allowing home runs at an unusual rate relative to the park and his career norms?
+- How does the pitcher perform in different counts? What is his batting average allowed when behind in the count (1-0, 2-0, 2-1, 3-1) vs ahead? A pitcher with poor numbers when behind in the count facing a patient lineup is a different matchup.
+- What is the pitcher's first-inning ERA vs later innings? Some pitchers struggle early before settling in, which affects first-5-inning (F5) lines.
+- **Pitcher situation check:** Is this starter returning from the IL (pitch count likely)? Is this his first start of the season or an MLB debut? Is he facing his former team? How many days rest since his last start — is he on normal rest (5 days), short rest (4), or extended rest (6+)?
+- How does the pitcher perform the third time through the lineup? Most starters see a significant performance drop the third time through the same hitters in a game. Investigate whether the manager tends to pull this pitcher after 5-6 innings or lets him go deep.
+- Is either starter coming off a dominant outing (7+ IP, 0-1 ER) or a blowup (4- IP, 5+ ER)? Recent performance trajectory often carries — investigate whether the trend is mechanical/stuff-related or opponent-quality-related.
+
+### 15. LINEUP DEPTH & OFFENSIVE IDENTITY
+**Tokens:** MLB_KEY_HITTERS, MLB_LINEUP, MLB_PLAYER_SPLITS, MLB_RECENT_FORM
+- Is this team a power-hitting lineup (HR-dependent, high ISO, high fly ball rate) or a contact/manufacturing team (walks, singles, stolen bases, high ground ball rate)?
+- How does the team's offensive identity interact with tonight's opposing pitcher? A high-K pitcher vs a free-swinging lineup amplifies strikeouts; a ground ball pitcher vs a power lineup may suppress HRs.
+- What is the team's AB/HR ratio and BB/K ratio — these define the shape of their offense and how they generate runs.
+- What is the lineup's OBP from the 6-9 hitters (bottom of the order)? Deep lineups turn the order over more often; shallow lineups go quiet after the top 5.
+- What is the team's stolen base frequency and success rate? An aggressive baserunning team can manufacture runs against a pitcher with a slow delivery or a catcher with a poor pop time.
+- How does the team perform with two outs? Teams that extend innings with 2-out hitting create more runs than their overall OPS would suggest.
+
+### 16. REGRESSION & PROCESS INDICATORS
+**Tokens:** MLB_KEY_HITTERS, MLB_PITCHER_SEASON_STATS, MLB_TEAM_RECORD, MLB_RECENT_FORM
+- Check BABIP (batting average on balls in play) for key hitters — extreme values (.350+ or under .250) suggest regression toward career norms is likely. What are the specific BABIP values for the top hitters in each lineup?
+- Check pitcher FIP vs ERA — a large gap (> 0.5 runs) signals the pitcher is over- or under-performing their underlying process. Report the specific FIP and ERA for each starter.
+- Is a team's run differential diverging from their record? Teams that win close games at an unsustainable rate (one-run game record significantly above .500) are regression candidates.
+- One-run game record — what is each team's record in 1-run games? Extreme records in either direction (e.g., 15-5 or 5-15) are candidates for regression toward .500.
+- What is each pitcher's xERA or SIERA if available — how does it compare to their actual ERA? These metrics strip out sequencing and defense.
+- Are any key hitters showing a change in hard-hit rate or barrel rate that diverges from their results? A hitter with an elevated hard-hit rate but low AVG may be due for positive regression (and vice versa).
+
+### 17. GAME ENVIRONMENT & TOTAL CONTEXT
+**Tokens:** MLB_ODDS, MLB_PARK_FACTORS, MLB_WEATHER, MLB_BULLPEN, MLB_RECENT_FORM
+- What is the over/under total for this game? High totals (9+) suggest both offenses are expected to produce; low totals (7 or under) suggest a pitching duel.
+- How does the total compare to each team's recent scoring trends? Is the market projecting higher or lower than their actual recent run output over the last 10 games?
+- Wind and temperature data — specifically, is wind blowing OUT (boosts HR and total bases) or IN (suppresses scoring)? What is the wind speed and temperature?
+- Is this an indoor or outdoor game? Retractable roof open or closed?
+- What is the combined bullpen state for both teams? If both pens are taxed, the late innings could produce more runs than the starters' matchup alone would suggest.
+- How does the game time (day vs night) interact with each starter's day/night splits? Some pitchers have large performance gaps between day and night games.
+- What is the humidity level? High humidity can affect ball flight and pitcher grip, particularly for breaking ball pitchers.
+
+## DEEP INVESTIGATION — MLB-SPECIFIC
+
+### PITCHER INVESTIGATION
+Starting pitching is the single largest variable in any individual MLB game. When evaluating starters:
+- **Recent trajectory matters more than season line:** A pitcher with a 3.50 season ERA who has posted a 5.40 ERA over the last 5 starts is a different pitcher than his season line suggests. Investigate what changed.
+- **Pitch count trends:** Is the front office limiting this pitcher? A starter pulled at 80 pitches in each of his last 3 starts will hand the game to the bullpen earlier.
+- **Quality of competition in recent starts:** Were those recent outings against top-10 or bottom-10 offenses?
+- **Handedness matchup depth:** Count the L/R hitters in the opposing lineup and compare to the starter's platoon splits.
+- **FIP-ERA gap:** What does the gap tell you about how much of the pitcher's results are within his control vs dependent on defense and sequencing?
+- **First-time through the order vs second/third time:** Does this pitcher's data show a significant drop-off later in games? Pitchers who get hit hard the third time through the order will hand the game to the bullpen sooner.
+
+### BULLPEN INVESTIGATION
+After the starter exits, the bullpen takes over. Investigate:
+- **Available high-leverage arms:** Which relievers have NOT pitched in the last 2 days?
+- **Bullpen ERA split:** What does the pen look like in the 7th/8th/9th vs earlier innings?
+- **Closer availability:** If the closer pitched yesterday, who handles the 9th? What is the backup closer's save conversion rate?
+- **Opener/bullpen game impact:** Has either team used an opener in this series or the previous series? That shifts the entire bullpen availability picture.
+- **Bullpen handedness:** What is the L/R composition of available bullpen arms, and how does that match up against the opposing lineup's handedness in the late innings?
+
+### SEASON SAMPLE SIZE
+- In April, team and pitcher stats are built on small samples — career trends and spring training form matter more
+- By June/July, season-long numbers have stabilized — but recent form still matters for pitchers
+- Late-season stats (August-September) carry the most weight for both teams and pitchers
+- Always note the IP and games started count when citing a pitcher's season ERA
+- For batter vs pitcher matchups, always flag the sample size — anything under 10 AB is noise, 20+ AB starts to become meaningful, 50+ AB is a real sample
+
+### TEAM IDENTITY
+- **Offensive identity**: Do they score via power (HRs, XBH) or manufacturing runs (walks, stolen bases, contact)?
+- **Pitching identity**: Is the strength in the rotation or the bullpen? Staff strikeout rate vs contact management?
+- **Run differential**: What does the run differential say about their true level vs their record?
+- **One-run game record**: A team that is 20-8 in one-run games may be overperforming their underlying quality
+- **Defensive quality**: What does the team's defensive runs saved (DRS) or OAA (outs above average) look like? Poor defense behind a ground ball pitcher inflates ERA relative to FIP.
+- **Baserunning**: Is this an aggressive baserunning team (stolen bases, extra bases taken) or station-to-station? Aggressive baserunning creates pressure that does not show up in traditional batting stats.
+
+### REGRESSION & TREND DETECTION
+When recent performance diverges from season baseline:
+- What evidence distinguishes a real shift from variance?
+- Has the roster changed (trade deadline, IL returns)?
+- Is a key pitcher overperforming or underperforming their expected stats (FIP vs ERA gap)?
+- A team's BABIP and HR/FB rate can signal unsustainable performance — investigate the gap
+- Check strand rate (LOB%) for both starters — extreme values (above 80% or below 65%) signal regression independent of talent
+- Investigate each team's record in 1-run games and extra-inning games — extreme records in either direction do not sustain over a 162-game season
+
+### HOME/AWAY PERFORMANCE
+- What are each team's home and road records and run scoring splits?
+- Pull home/away splits for both starters — some pitchers have large venue-dependent gaps
+- How does each team's bullpen perform at home vs on the road? Home bullpens get the crowd energy in late innings; road bullpens face more hostile environments.
+- What is the team's home/road OPS split — do they hit significantly better in their own park?
+
+### CATCHER MATCHUP
+**Tokens:** MLB_CATCHER_DEFENSE, MLB_KEY_HITTERS
+- Who is catching for each team tonight? The catcher's framing ability affects called strikes — elite framers can gain their pitcher 1-2 extra called strikes per game
+- How does the catcher pair with tonight's starter? Some pitcher-catcher batteries have significantly better results together
+- What is the catcher's throwing arm — is the opposing team's stolen base threat neutralized or amplified by the catcher?
+
+### DEFENSIVE QUALITY
+**Tokens:** MLB_TEAM_DEFENSE
+- How does each team rank defensively? Errors, defensive runs saved (DRS), and outs above average (OAA) affect how many runs the pitching staff actually allows
+- Is either team notably weak at a specific defensive position that could be exploited by the opposing lineup's hitting profile?
+- How does the infield defense interact with the starter's ground ball rate? A high-groundball pitcher behind a strong infield defense is a different matchup than behind a weak one
+
+### RUN SCORING PATTERNS
+**Tokens:** MLB_RISP_SITUATIONAL, MLB_PLAYER_SPLITS
+- When do these teams score their runs? Teams that score early put pressure on the opposing starter; teams that score late rely on bullpen matchups
+- What is each team's first-inning scoring rate? Some teams (and pitchers) are more volatile early
+- How do these teams perform with runners in scoring position (RISP)? Clutch hitting with RISP can diverge significantly from overall offensive numbers over short stretches
+
+### MANAGER TENDENCIES
+**Tokens:** MLB_BULLPEN (bullpen usage data reveals manager patterns — no grounding needed)
+- How aggressive is each manager with the bullpen? Does he pull starters early (after 5 IP) or let them work deep? Look at bullpen workload data for patterns.
+- What is the manager's tendency in close games — does he go to his closer in non-save situations? Does he use his best reliever in the highest-leverage spot regardless of inning?
+- How does the manager handle platoon matchups — does he pinch-hit aggressively against opposite-handed relievers?
+
+### BASERUNNING & SPEED
+**Tokens:** MLB_CATCHER_DEFENSE, MLB_KEY_HITTERS (season SB stats)
+- Does either team have a significant baserunning advantage? Speed on the bases creates pressure — stolen base threats can disrupt a pitcher's rhythm and open up hit-and-run opportunities
+- What is each team's stolen base success rate and attempt frequency? An aggressive baserunning team changes how the game is played
+- How do the catchers' pop times and the pitchers' delivery times interact with the opposing team's speed threats?
+
+### MOMENTUM, STREAKS & THE HUMAN GAME
+Baseball is a 162-game marathon with real human dynamics. Beyond the stats, investigate:
+- **Team momentum:** What are each team's last 5 and last 10 results? Is either team riding a hot streak or mired in a losing streak? What is driving it — dominant pitching, timely hitting, bullpen collapses, or close-game variance?
+- **Series context:** What happened earlier in this series? A team that lost the first two games faces a sweep — investigate whether they tend to rally or fold in that situation. A team that took the first two games may rest regulars in Game 3.
+- **Pitcher rhythm:** Is the starting pitcher coming off a gem (confidence, rhythm) or a blowup (mechanical doubt, frustration)? A pitcher's recent trajectory is not just a number — investigate what happened in those starts.
+- **The grind and tough spots:** Is either team in a tough situational spot — long road trip, cross-country travel, day game after night game, coming off a series where the bullpen was heavily used? These accumulate over the season.
+- **Regression awareness:** A good team on a losing streak is more likely to bounce back than to keep losing. A bad team on a winning streak is more likely to cool off. But investigate what's underneath — is the streak driven by a real change (rotation upgrade, key player returning, trade acquisition) or normal variance?
+- **Where the season is:** Early-season uncertainty, trade deadline energy, September urgency for contenders, September indifference for eliminated teams — all affect how teams play on any given night.
+
+### PRICE AWARENESS (MLB-SPECIFIC)
+MLB betting uses moneyline pricing rather than point spreads. The price reflects the market's assessment of win probability.
+- When investigating, note the moneyline price from the scout report. A -170 favorite and a -115 favorite imply different win probabilities — the depth of your investigation should match.
+- Report the implied probability context: -150 implies ~60% win probability, +150 implies ~40%. Compare to what your investigation suggests.
+- Investigate factors that may have shifted since the line was set: confirmed lineups (vs projected), bullpen availability (who pitched last night), day-of weather updates, and any late scratches or IL moves.
+- Report your findings factually. Gary will evaluate which team he believes wins.
+
+### YOUR SCOUT REPORT IS YOUR BASELINE
+The scout report provides the starting point. You are free to re-fetch any stat for deeper investigation.`;
 
 const FLASH_INVESTIGATION_FACTORS = {
   basketball_nba: NBA_FACTORS,
@@ -805,7 +978,6 @@ const FLASH_INVESTIGATION_FACTORS = {
   NCAAF: NCAAF_FACTORS,
   baseball_mlb: MLB_FACTORS,
   MLB: MLB_FACTORS,
-  WBC: MLB_FACTORS,
 };
 
 // ═══════════════════════════════════════════════════════════════════════

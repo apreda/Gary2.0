@@ -2,7 +2,8 @@ import { CONFIG, GEMINI_PRO_MODEL, GEMINI_PRO_FALLBACK, validateGeminiModel, RES
 import { rotateToBackupKey, isUsingBackupKey, resetToPrimaryKey } from '../modelConfig.js';
 import { createGeminiSession, sendToSession, sendToSessionWithRetry } from './sessionManager.js';
 import { extractTextualSummaryForModelSwitch, buildFlashResearchBriefing } from './flashAdvisor.js';
-import { buildPass1Message, buildPass25Message, buildPass25PropsMessage, buildPass3Unified, buildPass3Props, FINALIZE_PROPS_TOOL, PROPS_PICK_SCHEMA } from './passBuilders.js';
+import { createCostTracker } from './costTracker.js';
+import { buildPass1Message, buildPass25Message, buildPass25PropsMessage, buildPass3Unified, buildPass3Props, FINALIZE_PROPS_TOOL, getFinalizePropsToolForSport, PROPS_PICK_SCHEMA } from './passBuilders.js';
 import { parseGaryResponse, parsePropsResponse, normalizePickFormat, determineCurrentPass } from './responseParser.js';
 import { isInvestigationSufficient, summarizeStatForContext, formatNum, formatPct, summarizePlayerGameLogs, summarizePlayerStats, summarizeNbaPlayerAdvancedStats, pruneContextIfNeeded, normalizeSportToLeague, MAX_CONTEXT_MESSAGES, PRUNE_AFTER_ITERATION } from './orchestratorHelpers.js';
 import { fetchStats, clearStatRouterCache } from '../tools/statRouters/index.js';
@@ -16,144 +17,50 @@ function hasInvestigationCompleteMarker(text = '') {
   return /(^|\n)\s*INVESTIGATION COMPLETE\s*($|\n)/i.test(text);
 }
 
-const NBA_CASE_MIN_CHARS = 220;
+const NBA_CASE_MIN_CHARS = 200;
 
-function normalizeTeamWords(team = '') {
-  return String(team || '')
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .split(/\s+/)
-    .map(w => w.trim())
-    .filter(w => w.length >= 3 && !['the', 'and'].includes(w));
-}
+/**
+ * Simple bilateral case validator.
+ * Checks if Gary wrote substantially about both teams — doesn't care about header format.
+ * Counts how many times each team is mentioned and how much text surrounds those mentions.
+ * "Indiana" or "Pacers" both count. "LA" works too. Any word from the team name (2+ chars) works.
+ */
+function validateBilateralCases(text = '', homeTeam = '', awayTeam = '') {
+  const input = String(text || '').replace(/\n?\s*\**INVESTIGATION COMPLETE\**\s*\n?/gi, '\n');
 
-function getTeamMentionScore(line = '', team = '') {
-  const lowerLine = String(line || '').toLowerCase();
-  const words = normalizeTeamWords(team);
-  if (words.length === 0) return 0;
-  return words.reduce((score, w) => (lowerLine.includes(w) ? score + 1 : score), 0);
-}
+  // Get all meaningful words from each team name (2+ chars, skip only filler words)
+  const getWords = (team) => String(team || '').toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ').split(/\s+/)
+    .filter(w => w.length >= 2 && !['the', 'and', 'of'].includes(w));
 
-function parseSpreadFromLine(line = '') {
-  const match = String(line || '').match(/([+-]\d{1,2}(?:\.\d+)?)/);
-  return match ? Number(match[1]) : null;
-}
+  const homeWords = getWords(homeTeam);
+  const awayWords = getWords(awayTeam);
 
-function classifyNbaCaseHeader(line = '', homeTeam = '', awayTeam = '', spread = null) {
-  const rawLine = String(line || '').trim();
-  if (!rawLine) return { side: null, misaligned: false };
+  // Split text into paragraphs and count which team each paragraph discusses
+  const paragraphs = input.split(/\n\s*\n/).filter(p => p.trim().length > 50);
+  let homeChars = 0;
+  let awayChars = 0;
 
-  const lower = rawLine.toLowerCase();
-  const mentionsHomeSide = /\bhome\s+(?:spread\s+)?side\b/.test(lower);
-  const mentionsAwaySide = /\baway\s+(?:spread\s+)?side\b/.test(lower);
-  const hasCaseWord = /\bcase\b/.test(lower);
-  const hasSpreadToken = parseSpreadFromLine(rawLine) != null;
-  const homeScore = getTeamMentionScore(rawLine, homeTeam);
-  const awayScore = getTeamMentionScore(rawLine, awayTeam);
-  const teamNamedHeader = hasSpreadToken && (homeScore > 0 || awayScore > 0);
-  const isCaseLike = hasCaseWord || mentionsHomeSide || mentionsAwaySide || teamNamedHeader;
-  if (!isCaseLike) return { side: null, misaligned: false };
-
-  let side = null;
-  if (/\bhome\s+(?:spread\s+)?side\b|\bhome\s+spread\b/.test(lower)) side = 'home';
-  if (/\baway\s+(?:spread\s+)?side\b|\baway\s+spread\b/.test(lower)) side = side || 'away';
-
-  if (!side && (homeScore > 0 || awayScore > 0)) {
-    side = homeScore >= awayScore ? 'home' : 'away';
+  for (const para of paragraphs) {
+    const lower = para.toLowerCase();
+    const homeMentions = homeWords.reduce((n, w) => n + (lower.includes(w) ? 1 : 0), 0);
+    const awayMentions = awayWords.reduce((n, w) => n + (lower.includes(w) ? 1 : 0), 0);
+    // Attribute paragraph to whichever team is mentioned more (or both if equal)
+    if (homeMentions > awayMentions) homeChars += para.length;
+    else if (awayMentions > homeMentions) awayChars += para.length;
+    else { homeChars += para.length; awayChars += para.length; }
   }
 
-  const lineSpread = parseSpreadFromLine(rawLine);
-  const hasSpread = Number.isFinite(spread);
-  const homeSpread = hasSpread ? Number(spread) : null;
-  const awaySpread = hasSpread ? Number(-spread) : null;
-  if (!side && lineSpread != null && hasSpread) {
-    if (Math.abs(lineSpread - homeSpread) < 0.11) side = 'home';
-    else if (Math.abs(lineSpread - awaySpread) < 0.11) side = 'away';
-  }
-
-  let misaligned = false;
-  if (side && lineSpread != null && hasSpread) {
-    const expected = side === 'home' ? homeSpread : awaySpread;
-    const expectedSign = Math.sign(expected);
-    const actualSign = Math.sign(lineSpread);
-    // Allow magnitude drift (books move from -9.5 to -8.5, etc). Only treat as misaligned
-    // when sign is opposite for an explicitly labeled side.
-    if (expectedSign !== 0 && actualSign !== 0 && expectedSign !== actualSign) misaligned = true;
-  }
-
-  return { side, misaligned };
-}
-
-function validateNbaSpreadCases(text = '', homeTeam = '', awayTeam = '', spread = null) {
-  const input = String(text || '');
-  const headerCandidates = [];
-  let cursor = 0;
-  const lines = input.split('\n');
-  for (const line of lines) {
-    const idx = cursor;
-    const endIdx = idx + line.length;
-    const { side, misaligned } = classifyNbaCaseHeader(line, homeTeam, awayTeam, spread);
-    if (side) {
-      const bodyStart = input[endIdx] === '\n' ? endIdx + 1 : endIdx;
-      headerCandidates.push({ side, misaligned, headerIndex: idx, bodyStart });
-    }
-    cursor = endIdx + 1;
-  }
-
-  const homeHeaders = headerCandidates.filter(h => h.side === 'home').sort((a, b) => a.headerIndex - b.headerIndex);
-  const awayHeaders = headerCandidates.filter(h => h.side === 'away').sort((a, b) => a.headerIndex - b.headerIndex);
-
-  if (homeHeaders.length === 0 || awayHeaders.length === 0) {
-    const reason = (homeHeaders.length > 1 && awayHeaders.length === 0) || (awayHeaders.length > 1 && homeHeaders.length === 0)
-      ? 'duplicate_side'
-      : 'missing_sections';
-    return {
-      valid: false,
-      reason,
-      homeLen: 0,
-      awayLen: 0
-    };
-  }
-
-  const homeHeader = homeHeaders[0];
-  const awayHeader = awayHeaders[0];
-  const firstHeaders = [homeHeader, awayHeader].sort((a, b) => a.headerIndex - b.headerIndex);
-
-  if (homeHeader.misaligned || awayHeader.misaligned) {
-    // Log but don't hard fail — Gary may format spread numbers differently than expected
-    console.log(`[Orchestrator] Bilateral case spread sign mismatch (home: ${homeHeader.misaligned}, away: ${awayHeader.misaligned}) — validating content length instead`);
-  }
-
-  const markerMatch = /(^|\n)\s*INVESTIGATION COMPLETE\s*($|\n)/i.exec(input);
-  const markerStart = markerMatch ? (markerMatch.index ?? input.length) : input.length;
-
-  const sectionBodies = {};
-  for (let i = 0; i < firstHeaders.length; i++) {
-    const current = firstHeaders[i];
-    const next = i + 1 < firstHeaders.length ? firstHeaders[i + 1].headerIndex : markerStart;
-    const end = Math.min(next, markerStart);
-    sectionBodies[current.side] = input.slice(current.bodyStart, end).trim();
-  }
-
-  const homeBody = sectionBodies.home || '';
-  const awayBody = sectionBodies.away || '';
-  const homeLen = homeBody.replace(/\s+/g, ' ').trim().length;
-  const awayLen = awayBody.replace(/\s+/g, ' ').trim().length;
-
-  if (homeLen < NBA_CASE_MIN_CHARS || awayLen < NBA_CASE_MIN_CHARS) {
-    return {
-      valid: false,
-      reason: 'section_too_short',
-      homeLen,
-      awayLen
-    };
+  if (homeChars >= NBA_CASE_MIN_CHARS && awayChars >= NBA_CASE_MIN_CHARS) {
+    return { valid: true, reason: '', homeLen: homeChars, awayLen: awayChars };
   }
 
   return {
-    valid: true,
-    reason: '',
-    homeLen,
-    awayLen
+    valid: false,
+    reason: homeChars < NBA_CASE_MIN_CHARS && awayChars < NBA_CASE_MIN_CHARS ? 'both_teams_thin' :
+      homeChars < NBA_CASE_MIN_CHARS ? 'home_thin' : 'away_thin',
+    homeLen: homeChars,
+    awayLen: awayChars
   };
 }
 
@@ -179,7 +86,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   const isNCAABSport = sport === 'basketball_ncaab' || sport === 'NCAAB';
   const isNBASport = sport === 'basketball_nba' || sport === 'NBA';
   const isNHLSport = sport === 'icehockey_nhl' || sport === 'NHL';
-  const isMLBSport = sport === 'baseball_mlb' || sport === 'MLB' || sport === 'WBC';
+  const isMLBSport = sport === 'baseball_mlb' || sport === 'MLB';
 
   // Pass sport through options so downstream builders (Pass 3) can use it
   options.sport = sport;
@@ -187,15 +94,25 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   // ═══════════════════════════════════════════════════════════════════════════
   // Props mode setup (must be before session creation so activeTools is available)
   const isPropsMode = options.mode === 'props';
-  const requiresBilateralCases = !isPropsMode;
+  const isGamePicksMode = !isPropsMode;
   const bilateralFn = options.bilateralCasePrompt || null;
-  // Props use Flash (cheaper, 10K RPD, Pro-grade reasoning). Game picks use 3.1 Pro.
-  const primaryModel = isPropsMode ? 'gemini-3-flash-preview' : GEMINI_PRO_MODEL;
-  console.log(`[Orchestrator] Starting ${sport} — ${isPropsMode ? 'Flash (props)' : '3.1 Pro (main)'} + Flash (research)`);
+  const modelOverride = process.env.GARY_MODEL_OVERRIDE || null;
+  const primaryModel = modelOverride
+    ? modelOverride
+    : isPropsMode
+      ? 'gemini-3-flash-preview'
+      : GEMINI_PRO_MODEL;
+  const modelLabel = modelOverride ? `OVERRIDE: ${modelOverride}` : (isPropsMode ? 'Flash (props)' : '3.1 Pro (main)');
+  console.log(`[Orchestrator] Starting ${sport} — ${modelLabel} + Flash (research)`);
 
   const propContext = options.propContext || null;
-  let propsPicks = null; // Store props picks from finalize_props tool call
   let propsRetryCount = 0; // Track finalize_props retry attempts
+
+  // Cost tracking — accumulates tokens across all sessions (including 429 cascades)
+  const pipelineType = isPropsMode ? 'Props' : 'Game Picks';
+  const costTracker = createCostTracker(`${pipelineType}: ${awayTeam} @ ${homeTeam} (${sport})`);
+
+  try { // try/finally ensures cost summary always logs on exit
 
   // Build tools list — add finalize_props when in props mode
   // NCAAB: Remove fetch_narrative_context (all narrative data is in scout report — Grounding wastes iterations)
@@ -203,7 +120,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
     ? toolDefinitions.filter(t => t.function?.name !== 'fetch_narrative_context')
     : toolDefinitions;
   const activeTools = isPropsMode
-    ? [...baseTools, FINALIZE_PROPS_TOOL]
+    ? [...baseTools, getFinalizePropsToolForSport(sport)]
     : baseTools;
 
   // PERSISTENT SESSION SETUP (Gemini 3 Thought Signature Compliance)
@@ -211,14 +128,14 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   // Game picks: 3.1 Pro with high reasoning. Flash is 429 fallback.
   // Props: Flash with high reasoning (cheaper, 10K RPD, Pro-grade reasoning benchmarks).
   // SDK automatically handles thought signatures when using persistent sessions.
-  let currentSession = createGeminiSession({
+  let currentSession = createGeminiSession({ _costTracker: costTracker,
     modelName: primaryModel,
     systemPrompt: systemPrompt,
     tools: activeTools,
     thinkingLevel: 'high'
   });
   let currentModelName = currentSession.modelName;
-  console.log(`[Orchestrator] ${isPropsMode ? 'Flash' : 'Pro'} session created (${currentModelName}, ${sport})`);
+  console.log(`[Orchestrator] ${modelLabel} session created (${currentModelName}, ${sport}, thinking: high)`);
 
   // Messages array for state tracking (pass detection)
   // Note: For Gemini, actual API calls go through the persistent session
@@ -247,8 +164,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   let _lastCategoryCount = 0;
   let _investigationStallCount = 0;
   let _pass3Injected = false;
-  let _extraIterationsUsed = 0; // Guard against infinite loop from iteration-- (max 2)
-  let _bilateralRetryCount = 0; // Up to 3 retries for required bilateral spread cases before Pass 2.5
+  let _extraIterationsUsed = 0; // Allow up to 2 iteration rewinds when all stats are already gathered (no new work done)
 
   // Flash Research Briefing state — comprehensive pre-game briefing (factual findings only)
   // Flash completes BEFORE Gary starts. Findings injected before Pass 1.
@@ -266,7 +182,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
     console.log(`[Research Briefing] 🔬 Running Flash research briefing (Gemini Flash with tools) — Gary waits for completion`);
     try {
       const briefingResult = await Promise.race([
-        buildFlashResearchBriefing(options.scoutReport, sport, homeTeam, awayTeam, options),
+        buildFlashResearchBriefing(options.scoutReport, sport, homeTeam, awayTeam, { ...options, _costTracker: costTracker }),
         new Promise((_, reject) => setTimeout(() => reject(new Error(`Flash research timed out after ${RESEARCH_BRIEFING_TIMEOUT_MS / 1000}s`)), RESEARCH_BRIEFING_TIMEOUT_MS))
       ]);
       if (briefingResult && typeof briefingResult === 'object') {
@@ -292,13 +208,15 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
       const homeSpread = hasSpread ? `${spread >= 0 ? '+' : ''}${spread.toFixed(1)}` : '';
       const awaySpread = hasSpread ? `${-spread >= 0 ? '+' : ''}${(-spread).toFixed(1)}` : '';
       const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
-      const isMLB = sport === 'baseball_mlb' || sport === 'MLB' || sport === 'WBC';
+      const isMLB = sport === 'baseball_mlb' || sport === 'MLB';
 
-      const spreadLine = (isNHL || isMLB)
-        ? `The line is ${homeTeam} (home) vs ${awayTeam} (away) — moneyline.`
+      const spreadLine = isNHL
+        ? `The line is ${homeTeam} (home) vs ${awayTeam} (away) — puck line / moneyline.`
+        : isMLB
+        ? `The line is ${homeTeam} (home) vs ${awayTeam} (away) — run line / moneyline.`
         : `The spread is ${homeTeam} ${homeSpread} / ${awayTeam} ${awaySpread}.`;
 
-      const caseReminder = (requiresBilateralCases && bilateralFn)
+      const caseReminder = (isGamePicksMode && bilateralFn)
         ? `\n\n${bilateralFn(homeTeam, awayTeam)}`
         : '';
 
@@ -413,11 +331,11 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
 
           if (!isUsingBackupKey() && rotateToBackupKey()) {
             console.log(`[Orchestrator] ⚠️ 3.1 Pro quota exceeded — rotated to backup API key, retrying with 3.1 Pro`);
-            currentSession = createGeminiSession({
+            currentSession = createGeminiSession({ _costTracker: costTracker,
               modelName: GEMINI_PRO_MODEL,
               systemPrompt: systemPrompt + '\n\n' + textualContext,
               tools: currentPass === 'evaluation' ? [] : activeTools,
-              thinkingLevel: 'high'
+              thinkingLevel: 'medium'
             });
 
             // Try backup key — if it also 429s, fall to Flash
@@ -431,11 +349,11 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
               if (backupError.isQuotaError || backupError.status === 429) {
                 console.log(`[Orchestrator] ⚠️ Backup key also exhausted — falling back to Flash`);
                 resetToPrimaryKey();
-                currentSession = createGeminiSession({
+                currentSession = createGeminiSession({ _costTracker: costTracker,
                   modelName: 'gemini-3-flash-preview',
                   systemPrompt: systemPrompt + '\n\n' + textualContext,
                   tools: currentPass === 'evaluation' ? [] : activeTools,
-                  thinkingLevel: 'high'
+                  thinkingLevel: 'medium'
                 });
                 currentModelName = 'gemini-3-flash-preview';
                 const flashResponse = await sendToSessionWithRetry(currentSession, nextMessageToSend);
@@ -450,11 +368,11 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
             // Already on backup key or no backup — go straight to Flash
             resetToPrimaryKey();
             console.log(`[Orchestrator] ⚠️ 3.1 Pro exhausted on both keys — falling back to Flash (primary key)`);
-            currentSession = createGeminiSession({
+            currentSession = createGeminiSession({ _costTracker: costTracker,
               modelName: 'gemini-3-flash-preview',
               systemPrompt: systemPrompt + '\n\n' + textualContext,
               tools: currentPass === 'evaluation' ? [] : activeTools,
-              thinkingLevel: 'high'
+              thinkingLevel: 'medium'
             });
             currentModelName = 'gemini-3-flash-preview';
 
@@ -471,21 +389,21 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
 
           if (!isUsingBackupKey() && rotateToBackupKey()) {
             console.log(`[Orchestrator] ⚠️ Pro fallback quota exceeded — rotated to backup key, retrying`);
-            currentSession = createGeminiSession({
+            currentSession = createGeminiSession({ _costTracker: costTracker,
               modelName: GEMINI_PRO_FALLBACK,
               systemPrompt: systemPrompt + '\n\n' + textualContext,
               tools: currentPass === 'evaluation' ? [] : activeTools,
-              thinkingLevel: 'high'
+              thinkingLevel: 'medium'
             });
           } else {
             // Pro fallback exhausted on both keys — fall to Flash on primary key
             resetToPrimaryKey();
             console.log(`[Orchestrator] ⚠️ All Pro models exhausted — falling back to Flash (primary key)`);
-            currentSession = createGeminiSession({
+            currentSession = createGeminiSession({ _costTracker: costTracker,
               modelName: 'gemini-3-flash-preview',
               systemPrompt: systemPrompt + '\n\n' + textualContext,
               tools: currentPass === 'evaluation' ? [] : activeTools,
-              thinkingLevel: 'high'
+              thinkingLevel: 'medium'
             });
             currentModelName = 'gemini-3-flash-preview';
           }
@@ -508,11 +426,11 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
 
           if (!isUsingBackupKey() && rotateToBackupKey()) {
             console.log(`[Orchestrator] ⚠️ Flash quota exceeded — rotated to backup API key, retrying with Flash`);
-            currentSession = createGeminiSession({
+            currentSession = createGeminiSession({ _costTracker: costTracker,
               modelName: 'gemini-3-flash-preview',
               systemPrompt: systemPrompt + '\n\n' + textualContext,
               tools: currentPass === 'evaluation' ? [] : activeTools,
-              thinkingLevel: 'high'
+              thinkingLevel: 'medium'
             });
           } else {
             throw new Error(`[Orchestrator] All model quotas exhausted on both API keys (3.1 Pro, 3 Pro, Flash). Cannot produce pick.`);
@@ -768,11 +686,9 @@ INVESTIGATION COMPLETE`;
             continue;
           }
 
-          propsPicks = validPicks;
-
           // Return the props picks immediately
           return {
-            picks: propsPicks,
+            picks: validPicks,
             toolCallHistory,
             iterations: iteration,
             homeTeam,
@@ -1210,6 +1126,43 @@ INVESTIGATION COMPLETE`;
           continue;
         }
 
+        // Handle fetch_depth_chart tool (Tank01 depth charts)
+        if (functionName === 'fetch_depth_chart') {
+          const teamAbv = (args.team || '').toUpperCase().replace(/[^A-Z]/g, '');
+          console.log(`  → [DEPTH_CHART] for ${teamAbv}`);
+          try {
+            const tank01 = (await import('../../tank01DfsService.js')).default;
+            const result = await tank01.fetchDepthChart(teamAbv);
+            const content = JSON.stringify(result);
+            messages.push({ tool_call_id: toolCall.id, role: 'tool', name: functionName, content });
+            console.log(`    [Tool Response] ${functionName}: ${teamAbv} — ${content.slice(0, 200)}...`);
+            toolCallHistory.push({ token: `DEPTH_CHART:${teamAbv}`, timestamp: Date.now() });
+          } catch (error) {
+            messages.push({ tool_call_id: toolCall.id, role: 'tool', name: functionName, content: JSON.stringify({ error: error.message }) });
+          }
+          continue;
+        }
+
+        // Handle fetch_team_recent_stats tool (L1/L3/L5/L10 team stats from Tank01)
+        if (functionName === 'fetch_team_recent_stats') {
+          const numGames = args.num_games || 5;
+          const teamAbv = (args.team || '').toUpperCase().replace(/[^A-Z]/g, '');
+          console.log(`  → [TEAM_L${numGames}_STATS] for ${teamAbv}`);
+          try {
+            const tank01 = (await import('../../tank01DfsService.js')).default;
+            const dateStr = options?.gameDate || new Date().toISOString().split('T')[0];
+            const result = await tank01.fetchTeamLStats(teamAbv, numGames, dateStr);
+            const content = JSON.stringify(result);
+            messages.push({ tool_call_id: toolCall.id, role: 'tool', name: functionName, content });
+            console.log(`    [Tool Response] ${functionName}: L${numGames} ${teamAbv} — ${content.slice(0, 200)}...`);
+            toolCallHistory.push({ token: `TEAM_L${numGames}_STATS:${teamAbv}`, timestamp: Date.now() });
+          } catch (error) {
+            console.error(`[Orchestrator] Error fetching team recent stats: ${error.message}`);
+            messages.push({ tool_call_id: toolCall.id, role: 'tool', name: functionName, content: JSON.stringify({ error: error.message }) });
+          }
+          continue;
+        }
+
         // Handle fetch_nhl_player_stats tool
         if (functionName === 'fetch_nhl_player_stats') {
           console.log(`  → [NHL_PLAYER_STATS:${args.stat_type}] for ${args.team}${args.player_name ? ` (${args.player_name})` : ''}`);
@@ -1635,7 +1588,7 @@ INVESTIGATION COMPLETE`;
       if (!pass25AlreadyInjected) {
         if (_investigationStallCount >= 3) {
           console.log(`[Orchestrator] Pass 1 stall detected at ${categoryCount} categories — waiting for explicit INVESTIGATION COMPLETE marker`);
-          const casePromptStall = (requiresBilateralCases && bilateralFn)
+          const casePromptStall = (isGamePicksMode && bilateralFn)
             ? `\n\n${bilateralFn(homeTeam, awayTeam)}`
             : '';
           const synthesizeFrom = isPropsMode
@@ -1711,34 +1664,15 @@ INVESTIGATION COMPLETE`;
       const markedComplete = hasInvestigationCompleteMarker(message.content || '');
 
       if (markedComplete) {
-        if (requiresBilateralCases) {
-          // Check ALL assistant messages for bilateral cases (Gary may write each case in separate responses during retries)
+        if (isGamePicksMode) {
+          // Soft check: verify bilateral cases exist but don't block/retry if parser can't find them.
+          // Gary writes the analysis — the content is in the conversation history regardless.
           const allAssistantText = messages.filter(m => m.role === 'assistant').map(m => m.content || '').join('\n\n') + '\n\n' + (message.content || '');
-          const caseCheck = validateNbaSpreadCases(allAssistantText, homeTeam, awayTeam, spread);
-          if (!caseCheck.valid) {
-            if (_bilateralRetryCount < 3) {
-              _bilateralRetryCount++;
-              const missingHome = caseCheck.homeLen === 0;
-              const missingAway = caseCheck.awayLen === 0;
-              const missingSide = missingHome ? homeTeam : (missingAway ? awayTeam : 'both teams');
-              const retryMsg = `Your investigation is strong but you are missing the bilateral case${missingHome && missingAway ? 's' : ''} for ${missingSide}.
-
-You MUST include BOTH of these sections before outputting INVESTIGATION COMPLETE:
-Case for ${homeTeam} (2-3 paragraphs)
-Case for ${awayTeam} (2-3 paragraphs)
-
-${missingHome ? `The case for ${homeTeam} is missing — write it now. You are not arguing that ${homeTeam} is a good team. You are arguing why ${homeTeam} AT THIS SPREAD NUMBER is the right side. Maybe the spread is too large. Maybe they have a matchup advantage in a specific area. Maybe recent schedule, rest, or personnel changes close the gap. Every spread number has two sides — make the case for this one.` : ''}${missingAway ? `The case for ${awayTeam} is missing — write it now. You are not arguing that ${awayTeam} is a good team. You are arguing why ${awayTeam} AT THIS SPREAD NUMBER is the right side. Maybe the spread is too large. Maybe they have a matchup advantage in a specific area. Maybe recent schedule, rest, or personnel changes close the gap. Every spread number has two sides — make the case for this one.` : ''}${!missingHome && !missingAway ? 'Both cases need to be longer — expand each to 2-3 substantive paragraphs.' : ''}
-
-Then output exactly:
-INVESTIGATION COMPLETE`;
-              console.log(`[Orchestrator] Bilateral case gate retry ${_bilateralRetryCount}/3 (${caseCheck.reason}; homeLen=${caseCheck.homeLen}, awayLen=${caseCheck.awayLen})`);
-              messages.push({ role: 'assistant', content: message.content });
-              messages.push({ role: 'user', content: retryMsg });
-              nextMessageToSend = retryMsg;
-              continue;
-            }
-
-            throw new Error(`[HARD FAIL] Pass 1 bilateral spread cases missing or too short after 3 retries (${caseCheck.reason}; homeLen=${caseCheck.homeLen}, awayLen=${caseCheck.awayLen}).`);
+          const caseCheck = validateBilateralCases(allAssistantText, homeTeam, awayTeam);
+          if (caseCheck.valid) {
+            console.log(`[Orchestrator] Bilateral cases verified (homeLen=${caseCheck.homeLen}, awayLen=${caseCheck.awayLen})`);
+          } else {
+            console.warn(`[Orchestrator] ⚠️ Bilateral case parser could not confirm both sides (${caseCheck.reason}; homeLen=${caseCheck.homeLen}, awayLen=${caseCheck.awayLen}) — proceeding anyway`);
           }
         }
 
@@ -1760,7 +1694,7 @@ INVESTIGATION COMPLETE`;
       // No completion marker yet — keep Pass 1 active
       console.log(`[Orchestrator] Pass 1 remains active — waiting for INVESTIGATION COMPLETE (${gateCategories} categories, ${gateCalls} calls)`);
       messages.push({ role: 'assistant', content: message.content });
-      const casePrompt = (requiresBilateralCases && bilateralFn)
+      const casePrompt = (isGamePicksMode && bilateralFn)
         ? `\n\n${bilateralFn(homeTeam, awayTeam)}`
         : '';
       const synthesizeMsg = isPropsMode
@@ -2000,6 +1934,10 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
     _pipelineState: { pass25: _pass25Injected, pass3: _pass3Injected },
     _statsGathered: toolCallHistory.length
   };
+
+  } finally {
+    costTracker.logSummary();
+  }
 }
 
 /**

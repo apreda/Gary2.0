@@ -20,7 +20,7 @@
 
 import { isSlotEligible } from './dfsPositionUtils.js';
 import { getSalaryCap } from './dfsSportConfig.js';
-import { GEMINI_PRO_MODEL } from '../modelConfig.js';
+import { GEMINI_FLASH_MODEL } from '../modelConfig.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // AUDIT SYSTEM PROMPT
@@ -52,30 +52,26 @@ If a player was traded in the off-season, the salary already reflects their curr
 
 <audit_checklist>
 1. CEILING CHECK
-   - Evaluate this lineup's realistic ceiling based on the data
-   - Identify what specifically needs to happen for this lineup to reach the winning target
-   - Consider the outcome distribution — how wide is the range?
+   - Evaluate this lineup's ceiling based on the data
+   - What specifically needs to happen for this lineup to win?
+   - How wide is the range of outcomes?
 
 2. CORRELATION CHECK
-   - Evaluate how your players are connected and whether your game correlations tell a coherent story
-   - Verify the correlated situations are supported by tonight's game environments
-   - Consider whether the distribution of players across games serves your lineup's structure
+   - How are your players connected? Are your game correlations supported by tonight's environment data?
+   - Does the distribution of players across games make sense for what you're trying to accomplish?
 
-3. VALUE CHECK
-   - Evaluate your salary allocation against the available alternatives
-   - For each low-salary player, identify the specific data supporting their upside thesis tonight
-   - For each high-salary player, verify tonight's situation justifies the salary allocation
+3. PRODUCTION CHECK
+   - For each player: what specific data from tonight's investigation supports their inclusion?
+   - Is there any player you included without a strong data-backed case?
 
 4. RISK ASSESSMENT
-   - Identify the key risks to this lineup
-   - Evaluate how risk is distributed — what happens if any one player busts?
-   - Consider the floor scenario
+   - What are the key risks to this lineup?
+   - What happens if any one player busts?
 
 5. WIN CONDITION
-   - For EACH player: identify the specific boom scenario and the data supporting it
-   - Identify which boom scenarios must co-occur for the winning score — consider the likelihood of simultaneous hits
-   - Identify the most likely way this lineup disappoints and what the floor looks like if it happens
-   - Evaluate whether this lineup tells a coherent story as a whole
+   - For EACH player: what is the specific scenario where they boom, and what data supports it?
+   - Which of those scenarios must happen simultaneously for this lineup to win?
+   - What is the most likely way this lineup disappoints?
 </audit_checklist>
 
 <adjustments>
@@ -97,7 +93,7 @@ If you see issues, you can make 1-2 swaps. Be specific:
     "boomScenarios": "For each player, what specific scenario makes them boom tonight",
     "requiredCoOccurrences": "Which scenarios must hit simultaneously for this lineup to win",
     "mostLikelyFailure": "How does this lineup most likely disappoint",
-    "coherenceCheck": "Does this lineup tell a coherent story"
+    "overallAssessment": "Is this the best lineup you can build for tonight?"
   },
   "adjustments": [
     {
@@ -107,7 +103,7 @@ If you see issues, you can make 1-2 swaps. Be specific:
     }
   ],
   "finalCeilingScenario": "Updated ceiling scenario after audit",
-  "garyFinalThoughts": "Write 2-3 sentences as Gary speaking directly to the user about why this lineup is built to win tonight. Be confident, conversational, and specific — mention key players by name and their role in the build. Example tone: 'I'm loading up on the DET-CLE game stack tonight. Cade is underpriced against a Cleveland defense missing Allen, and pairing him with Garland on the other side gives us double exposure to what should be a high-scoring affair.'"
+  "garyFinalThoughts": "Write 2-3 sentences as Gary speaking directly to the user about why this lineup is built to win tonight. Be confident, conversational, and specific — mention key players by name and describe what the data shows about their role and production in THIS game. Ground every claim in stats and matchup data from your investigation, not general reputation or past narrative."
 }
 </output_format>
 
@@ -133,7 +129,7 @@ If you see issues, you can make 1-2 swaps. Be specific:
  * @returns {Object} - Audited lineup (possibly with adjustments)
  */
 export async function auditLineupWithPro(genAI, lineup, context, loopResult, options = {}) {
-  const { modelName = GEMINI_PRO_MODEL } = options;
+  const { modelName = GEMINI_FLASH_MODEL, _costTracker } = options;
   const { players, winningTargets, platform, sport } = context;
 
   console.log('[Lineup Audit] Gary Pro auditing lineup...');
@@ -151,20 +147,33 @@ export async function auditLineupWithPro(genAI, lineup, context, loopResult, opt
       maxOutputTokens: 65536
     },
     thinkingConfig: {
-      thinkingBudget: -1 // HIGH — let Pro think as deeply as needed
+      thinkingBudget: 16384 // Capped — audit needs solid reasoning but not unlimited
     }
   });
 
   // Use chat session so we can send correction messages on parse failure
   const chat = model.startChat({ history: [] });
 
+  function trackUsage(result) {
+    if (!_costTracker) return;
+    const meta = result?.response?.usageMetadata;
+    if (meta) {
+      _costTracker.addUsage(modelName, {
+        prompt_tokens: meta.promptTokenCount || 0,
+        completion_tokens: meta.candidatesTokenCount || 0
+      });
+    }
+  }
+
   let responseText;
   try {
     const result = await chat.sendMessage(auditRequest);
+    trackUsage(result);
     responseText = result.response.text() || '';
   } catch (firstErr) {
     console.warn(`[Lineup Audit] First attempt failed (${firstErr.message}) — retrying once`);
     const retryResult = await chat.sendMessage(auditRequest);
+    trackUsage(retryResult);
     responseText = retryResult.response.text() || '';
   }
   if (!responseText) {
@@ -540,6 +549,17 @@ function parseAuditResult(text) {
 // APPLY ADJUSTMENTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// Normalize player names for matching: strips periods from initials, apostrophes
+// Mirrors the normalizeName in dfsAgentLoop.js — must stay in sync
+function normalizeAuditName(n) {
+  return (n || '').toLowerCase()
+    .replace(/\b([a-z])\.([a-z])\./gi, '$1$2')  // P.J. → PJ
+    .replace(/\./g, '')                            // remaining periods
+    .replace(/['\u2018\u2019\u02BC]/g, '')         // apostrophes: D'Angelo → DAngelo
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function applyAdjustments(lineup, adjustments, players, contextPlatform, sport) {
   if (!adjustments || adjustments.length === 0) {
     return { ...lineup, _successfulSwaps: 0 };
@@ -553,9 +573,10 @@ function applyAdjustments(lineup, adjustments, players, contextPlatform, sport) 
   for (const adj of adjustments) {
     const { out: outName, in: inName, reason } = adj;
 
-    // Find player to remove
+    // Find player to remove — use normalized matching so "PJ Washington" matches "P.J. Washington"
+    const outNorm = normalizeAuditName(outName);
     const outIndex = updatedPlayers.findIndex(p =>
-      p.name?.toLowerCase() === outName?.toLowerCase()
+      normalizeAuditName(p.name) === outNorm
     );
 
     if (outIndex === -1) {
@@ -563,9 +584,10 @@ function applyAdjustments(lineup, adjustments, players, contextPlatform, sport) 
       continue;
     }
 
-    // Find player to add from the actual player pool
+    // Find player to add from the actual player pool — normalized matching
+    const inNorm = normalizeAuditName(inName);
     const inPlayer = players.find(p =>
-      p.name?.toLowerCase() === inName?.toLowerCase()
+      normalizeAuditName(p.name) === inNorm
     );
 
     if (!inPlayer) {
@@ -597,6 +619,18 @@ function applyAdjustments(lineup, adjustments, players, contextPlatform, sport) 
       continue;
     }
 
+    // Compute projection and ceiling for incoming player using the same 60/40 blend as enrichment
+    const inSeasonFpts = inPlayer.seasonStats?.dkFpts || 0;
+    const inL5Fpts = inPlayer.l5Stats?.dkFptsAvg || 0;
+    let inProjection;
+    if (inL5Fpts > 0 && inSeasonFpts > 0) {
+      inProjection = Math.round((inL5Fpts * 0.6 + inSeasonFpts * 0.4) * 10) / 10;
+    } else {
+      inProjection = inL5Fpts || inSeasonFpts || inPlayer.benchmarkProjection || 0;
+    }
+    const inBestL5 = inPlayer.l5Stats?.bestDkFpts || 0;
+    const inCeiling = Math.round(Math.max(inBestL5, inProjection * 1.2) * 10) / 10;
+
     // Make the swap — propagate id so downstream phases can look up the player
     updatedPlayers[outIndex] = {
       id: inPlayer.id,
@@ -605,8 +639,9 @@ function applyAdjustments(lineup, adjustments, players, contextPlatform, sport) 
       name: inPlayer.name,
       team: inPlayer.team,
       salary: inPlayer.salary,
-      projectedPoints: inPlayer.benchmarkProjection || inPlayer.seasonStats?.dkFpts || inPlayer.l5Stats?.dkFptsAvg || 0,
-      ceilingProjection: inPlayer.ceilingProjection || outPlayer.ceilingProjection,
+      projectedPoints: inProjection,
+      ceiling_projection: inCeiling,
+      ceilingProjection: inCeiling,
       reasoning: reason || `Swapped in during audit (was ${outName})`
     };
 

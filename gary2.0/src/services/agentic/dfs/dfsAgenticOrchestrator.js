@@ -20,16 +20,18 @@
 
 import { buildDfsScoutReports } from './dfsScoutReportBuilder.js';
 import { researchAllGames } from './dfsAgenticGameResearcher.js';
-import { runDfsAgentLoop } from './dfsAgentLoop.js';
+import { runDfsAgentLoop, normalizeDFSName } from './dfsAgentLoop.js';
 import { auditLineupWithPro } from './dfsAgenticAudit.js';
 import { getRosterSlots } from './dfsSportConfig.js';
 import { WINNING_SCORE_TARGETS } from '../FIBLE.js';
 import { buildDFSContext } from '../dfsAgenticContext.js';
+import { buildMLBDFSContext } from '../mlbDfsContext.js';
 import { findPivotAlternatives } from '../../dfsLineupService.js';
 import {
   GEMINI_FLASH_MODEL, GEMINI_PRO_MODEL,
   getGeminiClient
 } from '../modelConfig.js';
+import { createCostTracker } from '../orchestrator/costTracker.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN ORCHESTRATOR
@@ -57,6 +59,7 @@ export async function generateAgenticDFSLineup(options) {
   console.log('═══════════════════════════════════════════════════════════════════════════════\n');
 
   const genAI = getGeminiClient();
+  const costTracker = createCostTracker(`DFS: ${sport} ${platform} ${slate?.name || 'Main'}`);
 
   try {
     // ═══════════════════════════════════════════════════════════════════════════
@@ -70,7 +73,11 @@ export async function generateAgenticDFSLineup(options) {
       context = passedContext;
     } else {
       console.log('[Gary DFS] Phase 1: Building comprehensive context...');
-      context = await buildDFSContext(platform, sport, effectiveDate, slate, { sharedContextCache });
+      if (sport?.toUpperCase() === 'MLB') {
+        context = await buildMLBDFSContext(platform, effectiveDate, slate, { sharedContextCache });
+      } else {
+        context = await buildDFSContext(platform, sport, effectiveDate, slate, { sharedContextCache });
+      }
     }
 
     if (!context.players || context.players.length === 0) {
@@ -119,7 +126,8 @@ export async function generateAgenticDFSLineup(options) {
     try {
       flashResearch = await researchAllGames(genAI, scoutReports, context, {
         modelName: GEMINI_FLASH_MODEL,
-        sharedResearchCache
+        sharedResearchCache,
+        _costTracker: costTracker
       });
     } catch (flashError) {
       const isRetryable = flashError.status === 429 || flashError.status === 503 || flashError.status === 500 ||
@@ -129,7 +137,8 @@ export async function generateAgenticDFSLineup(options) {
         console.warn(`[Gary DFS] Phase 2: Flash failed (${flashError.message}) — retrying once`);
         flashResearch = await researchAllGames(genAI, scoutReports, context, {
           modelName: GEMINI_FLASH_MODEL,
-          sharedResearchCache
+          sharedResearchCache,
+          _costTracker: costTracker
         });
       } else {
         throw flashError;
@@ -153,7 +162,8 @@ export async function generateAgenticDFSLineup(options) {
       scoutReports,
       flashResearch,
       context,
-      options: { modelName: GEMINI_FLASH_MODEL }
+      _costTracker: costTracker
+      // No modelName override — uses DFS_MODEL = GEMINI_FLASH_MODEL default
     });
 
     if (!loopResult || !loopResult.lineup || !loopResult.lineup.players || loopResult.lineup.players.length === 0) {
@@ -177,9 +187,9 @@ export async function generateAgenticDFSLineup(options) {
     console.log('\n[Gary DFS] Phase 4: Gary auditing his lineup...');
 
     const auditedLineup = await auditLineupWithPro(
-      genAI, loopResult.lineup, context, loopResult, {
-        modelName: GEMINI_FLASH_MODEL
-      }
+      genAI, loopResult.lineup, context, loopResult,
+      { _costTracker: costTracker }
+      // No modelName override — uses GEMINI_FLASH_MODEL default
     );
 
     if (!auditedLineup || !auditedLineup.players || auditedLineup.players.length === 0) {
@@ -242,6 +252,8 @@ export async function generateAgenticDFSLineup(options) {
       throw new Error('[Gary DFS] FINAL CHECK FAILED: Invalid salary total');
     }
 
+    costTracker.logSummary();
+
     console.log('\n═══════════════════════════════════════════════════════════════════════════════');
     console.log(`[Gary DFS] ✅ Lineup complete in ${elapsed}s`);
     console.log(`[Gary DFS] Ceiling: ${result.ceilingProjection} pts`);
@@ -250,6 +262,7 @@ export async function generateAgenticDFSLineup(options) {
     return result;
 
   } catch (error) {
+    costTracker.logSummary();
     console.error('[Gary DFS] ❌ Error generating lineup:', error.message);
     throw error;
   }
@@ -268,11 +281,12 @@ export async function generateAgenticDFSLineup(options) {
  * Mid Value is only included as fallback if no Direct Swap exists.
  */
 function addPivotsToAgenticLineup(lineupPlayers, contextPlayers, sport, platform) {
-  const lineupNames = new Set(lineupPlayers.map(p => (p.name || p.player || '').toLowerCase()));
+  // Use normalizeDFSName so "PJ Washington" and "P.J. Washington" are treated as the same player
+  const lineupNames = new Set(lineupPlayers.map(p => normalizeDFSName(p.name || p.player || '')));
 
   // Build eligible pool in the format findPivotAlternatives expects
   const pool = contextPlayers
-    .filter(p => !lineupNames.has((p.name || '').toLowerCase()) && p.salary > 0)
+    .filter(p => !lineupNames.has(normalizeDFSName(p.name || '')) && p.salary > 0)
     .map(p => ({
       name: p.name,
       team: p.team,
@@ -299,6 +313,10 @@ function addPivotsToAgenticLineup(lineupPlayers, contextPlayers, sport, platform
         // FanDuel NBA has strict positions: PG/SG/SF/PF/C
         return positions.includes(slotPos);
       }
+      if (sport === 'NFL') {
+        if (slotPos === 'FLEX') return positions.some(p => ['RB', 'WR', 'TE'].includes(p));
+        if (slotPos === 'DST' || slotPos === 'DEF') return positions.some(p => p === 'DST' || p === 'DEF');
+      }
       return false;
     });
 
@@ -323,8 +341,8 @@ function addPivotsToAgenticLineup(lineupPlayers, contextPlayers, sport, platform
     }
 
     // ── Enrich with metrics from context ──
-    const ctxName = (slot.name || slot.player || '').toLowerCase();
-    const ctxPlayer = contextPlayers.find(cp => (cp.name || '').toLowerCase() === ctxName);
+    const ctxName = normalizeDFSName(slot.name || slot.player || '');
+    const ctxPlayer = contextPlayers.find(cp => normalizeDFSName(cp.name || '') === ctxName);
 
     // Value score = projected FPTS / (salary / 1000) — 5x baseline, 6x+ elite
     const projPts = slot.projectedPoints || slot.projected_pts || 0;

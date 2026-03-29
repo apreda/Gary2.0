@@ -43,7 +43,7 @@ For each thesis, provide:
 6. **DIFFERENTIATION** — Why this approach is DIFFERENT from the others (not a slight variation)
 
 Each thesis should represent a genuinely different strategic direction:
-- One might be a high-correlation game stack in the highest-total game
+- One might concentrate on a specific game environment where the data supports correlation
 - Another might spread exposure across multiple games for diversification
 - Another might lean into a contrarian spot (underdog game, overlooked value)
 
@@ -123,7 +123,7 @@ Build 2-3 competing lineup theses. Each must be a genuinely different strategic 
  * @returns {{ theses: string, generationTime: string } | null}
  */
 export async function buildDFSAdvisorTheses(genAI, flashResearch, context, options = {}) {
-  const { modelName = GEMINI_FLASH_MODEL } = options;
+  const { modelName = GEMINI_FLASH_MODEL, _costTracker } = options;
   const sport = (context.sport || 'NBA').toUpperCase();
   const startTime = Date.now();
 
@@ -136,7 +136,7 @@ export async function buildDFSAdvisorTheses(genAI, flashResearch, context, optio
         maxOutputTokens: 32768
       },
       thinkingConfig: {
-        thinkingBudget: -1 // HIGH thinking
+        thinkingBudget: 8192 // Capped — advisor theses don't need unlimited reasoning
       }
     });
 
@@ -144,6 +144,10 @@ export async function buildDFSAdvisorTheses(genAI, flashResearch, context, optio
     console.log(`[DFS Advisor] Sending ${advisorInput.length} chars to Flash (text only, no tools)`);
 
     const result = await model.generateContent(advisorInput);
+    if (_costTracker) {
+      const meta = result.response?.usageMetadata;
+      if (meta) _costTracker.addUsage(modelName, { prompt_tokens: meta.promptTokenCount || 0, completion_tokens: meta.candidatesTokenCount || 0 });
+    }
     const theses = result.response.text() || '';
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
