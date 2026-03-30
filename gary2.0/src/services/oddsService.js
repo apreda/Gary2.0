@@ -133,12 +133,15 @@ const extractFromBookmaker = (bookmaker, homeTeam, awayTeam) => {
 };
 
 // Check if spread and moneyline agree on which team is favored
-const validateSpreadMLDirection = (odds, bookmakerKey) => {
+// NOTE: MLB is exempt — run line is always 1.5 regardless of ML favorite
+const validateSpreadMLDirection = (odds, bookmakerKey, sport) => {
   const { spread_home, moneyline_home } = odds;
   // Can't validate if either is missing — allow it through
   if (spread_home == null || moneyline_home == null) return true;
   // Spread 0 (pick'em) is consistent with any ML
   if (spread_home === 0) return true;
+  // MLB: run line is always ±1.5 regardless of who's favored on ML — skip this check
+  if (sport && (sport.includes('baseball') || sport.includes('mlb'))) return true;
 
   // ML < 0 means home favored → spread should be < 0 (home giving points)
   // ML > 0 means home underdog → spread should be > 0 (home getting points)
@@ -168,7 +171,7 @@ const filterBlockedVendors = (bookmakers) => {
 };
 
 // Helper to extract odds from bookmakers array, trying vendors in order with validation
-const extractOddsFromBookmakers = (bookmakers, homeTeam, awayTeam) => {
+const extractOddsFromBookmakers = (bookmakers, homeTeam, awayTeam, sport) => {
   const emptyResult = {
     spread_home: null, spread_away: null,
     spread_home_odds: null, spread_away_odds: null,
@@ -204,7 +207,7 @@ const extractOddsFromBookmakers = (bookmakers, homeTeam, awayTeam) => {
   let bestMismatch = null;
   for (const bookmaker of orderedBookmakers) {
     const odds = extractFromBookmaker(bookmaker, homeTeam, awayTeam);
-    if (validateSpreadMLDirection(odds, bookmaker.key || bookmaker.title)) {
+    if (validateSpreadMLDirection(odds, bookmaker.key || bookmaker.title, sport)) {
       return odds;
     }
     // Track first mismatch as fallback
@@ -384,7 +387,7 @@ export const oddsService = {
         // Extract odds from bookmakers if not already present
         let extractedOdds = {};
         if (game.moneyline_home === undefined && game.bookmakers?.length > 0) {
-          extractedOdds = extractOddsFromBookmakers(game.bookmakers, game.home_team, game.away_team);
+          extractedOdds = extractOddsFromBookmakers(game.bookmakers, game.home_team, game.away_team, sport);
         }
 
         // BDL V1 flat field fallback: BDL NCAAB/NHL/NCAAF odds use field names like
