@@ -167,12 +167,31 @@ async function fetchNFLStats(gameIds) {
   if (!gameIds.length) return [];
   const key = gameIds.join(',');
   if (cache.stats.has(key)) return cache.stats.get(key);
-  
+
   const params = gameIds.map(id => `game_ids[]=${id}`).join('&') + '&per_page=100';
   const data = await bdlFetch('nfl/v1/stats', params);
   const stats = data?.data || [];
   cache.stats.set(key, stats);
   return stats;
+}
+
+async function fetchMLBStats(gameIds) {
+  if (!gameIds.length) return [];
+  const key = `mlb-stats-${gameIds.join(',')}`;
+  if (cache.stats.has(key)) return cache.stats.get(key);
+
+  // BDL has NO /mlb/v1/box_scores — use /mlb/v1/stats with game_ids (same pattern as NFL)
+  let allStats = [];
+  // Batch in groups of 25 game IDs to stay under URL limits
+  for (let i = 0; i < gameIds.length; i += 25) {
+    const batch = gameIds.slice(i, i + 25);
+    const params = batch.map(id => `game_ids[]=${id}`).join('&') + '&per_page=100';
+    const data = await bdlFetch('mlb/v1/stats', params);
+    if (data?.data) allStats.push(...data.data);
+  }
+  console.log(`  📊 MLB stats: ${allStats.length} player entries for ${gameIds.length} games`);
+  cache.stats.set(key, allStats);
+  return allStats;
 }
 
 /**
@@ -338,32 +357,47 @@ function getStatValue(sport, data, name, type) {
       }
     }
   } else if (sport === 'MLB') {
-    // Try nested game format first, then flat
-    const p = findPlayerInGames(data) || findPlayerFlat(data);
+    // BDL /mlb/v1/stats returns flat array with player objects
+    const p = findPlayerFlat(data) || findPlayerInGames(data);
     if (p) {
+      // BDL MLB stats fields: at_bats, runs, hits, rbi, hr, bb, k, avg, obp, slg,
+      // ip, p_hits, p_runs, er, p_bb, p_k, p_hr, pitch_count, strikes, era
+      // NOTE: total_bases and stolen_bases are NOT in BDL — compute or skip
+
       // Batter props
       if (t.includes('hit') && !t.includes('run') && !t.includes('allow')) return p.hits ?? 0;
       if (t.includes('home_run') || t.includes('homer')) return p.hr ?? p.home_runs ?? 0;
-      if (t.includes('total_base')) return p.total_bases ?? 0;
-      if (t.includes('rbi') || t.includes('runs_batted')) return p.rbi ?? p.rbis ?? 0;
-      if (t.includes('runs_scored') || t === 'runs') return p.runs ?? p.runs_scored ?? 0;
-      if (t.includes('walk') || t.includes('bases_on_ball')) return p.bb ?? p.walks ?? 0;
-      if (t.includes('stolen_base') || t.includes('steal')) return p.stolen_bases ?? p.sb ?? 0;
-      if (t.includes('single')) return (p.hits || 0) - (p.doubles || 0) - (p.triples || 0) - (p.hr || p.home_runs || 0);
-      if (t.includes('double') && !t.includes('play')) return p.doubles ?? 0;
+      if (t.includes('total_base')) {
+        // BDL doesn't have total_bases — compute from hits if we have component data
+        if (p.total_bases != null) return p.total_bases;
+        // Can't compute without doubles/triples — return null to try grounding
+        return null;
+      }
+      if (t.includes('rbi') || t.includes('runs_batted')) return p.rbi ?? 0;
+      if (t.includes('runs_scored') || t === 'runs') return p.runs ?? 0;
+      if (t.includes('walk') || t.includes('bases_on_ball')) return p.bb ?? 0;
+      if (t.includes('stolen_base') || t.includes('steal')) {
+        if (p.stolen_bases != null) return p.stolen_bases;
+        if (p.sb != null) return p.sb;
+        return null; // BDL may not have SB — let grounding try
+      }
+      if (t.includes('single')) return null; // Need doubles/triples which BDL may not have
+      if (t.includes('double') && !t.includes('play')) return p.doubles ?? null;
       if (t.includes('hits_runs_rbi') || t.includes('h+r+rbi')) return (p.hits || 0) + (p.runs || 0) + (p.rbi || 0);
-      // Strikeouts — pitcher first (if pitcher stats exist), then batter
+      // Strikeouts — check pitcher stats first (p_k), then batter (k)
       if (t.includes('strikeout')) {
-        if (p.pitcher_strikeouts != null) return p.pitcher_strikeouts;
-        if (p.p_k != null) return p.p_k;
-        if (p.strikeouts != null) return p.strikeouts;
-        return p.k ?? 0;
+        if (p.p_k != null && p.p_k > 0) return p.p_k; // pitcher strikeouts
+        return p.k ?? 0; // batter strikeouts
       }
       // Pitcher props
-      if (t.includes('pitcher_out') || t.includes('outs_recorded')) return p.pitching_outs ?? p.outs ?? 0;
-      if (t.includes('pitcher_earned') || t.includes('earned_run')) return p.er ?? p.earned_runs ?? 0;
-      if (t.includes('pitcher_hit') || t.includes('hits_allowed')) return p.p_hits ?? p.hits_allowed ?? 0;
-      if (t.includes('pitcher_walk')) return p.p_bb ?? p.walks_allowed ?? 0;
+      if (t.includes('pitcher_out') || t.includes('outs_recorded')) {
+        // BDL has ip (innings pitched) — convert to outs: ip * 3
+        if (p.ip != null) return Math.round(parseFloat(p.ip) * 3);
+        return null;
+      }
+      if (t.includes('pitcher_earned') || t.includes('earned_run')) return p.er ?? 0;
+      if (t.includes('pitcher_hit') || t.includes('hits_allowed')) return p.p_hits ?? 0;
+      if (t.includes('pitcher_walk')) return p.p_bb ?? 0;
       console.warn(`    [Stat] MLB: Found ${name} but no match for prop type "${type}"`);
     }
   }
@@ -479,11 +513,13 @@ async function processPropBets(date) {
   const dates = [date, nextStr];
   const nbaBox = (await Promise.all(dates.map(d => fetchBoxScores('NBA', d)))).flat();
   const nhlBox = (await Promise.all(dates.map(d => fetchBoxScores('NHL', d)))).flat();
-  const mlbBox = (await Promise.all(dates.map(d => fetchBoxScores('MLB', d)))).flat();
   const nflGames = (await Promise.all(dates.map(d => fetchGames('NFL', d)))).flat();
+  // MLB: no box_scores endpoint — fetch games then stats by game_ids (same pattern as NFL)
+  const mlbGames = (await Promise.all(dates.map(d => fetchGames('MLB', d)))).flat();
+  const mlbStats = await fetchMLBStats([...new Set(mlbGames.map(g => g.id).filter(Boolean))]);
   const nflStats = await fetchNFLStats([...new Set(nflGames.map(g => g.id))]);
 
-  console.log(`  📊 Box scores loaded: NBA=${nbaBox.length} games, NHL=${nhlBox.length}, MLB=${mlbBox.length}, NFL=${nflStats.length} player stats`);
+  console.log(`  📊 Data loaded: NBA=${nbaBox.length} box scores, NHL=${nhlBox.length} box scores, MLB=${mlbStats.length} player stats, NFL=${nflStats.length} player stats`);
 
   const stats = { w: 0, l: 0 };
   const handled = new Set();
@@ -509,7 +545,7 @@ async function processPropBets(date) {
       let source = 'none';
       if (sport === 'NBA') actual = getStatValue('NBA', nbaBox, name, type);
       else if (sport === 'NHL') actual = getStatValue('NHL', nhlBox, name, type);
-      else if (sport === 'MLB') actual = getStatValue('MLB', mlbBox, name, type);
+      else if (sport === 'MLB') actual = getStatValue('MLB', mlbStats, name, type);
       else if (sport === 'NFL') actual = getStatValue('NFL', nflStats, name, type);
 
       if (actual !== null) {
