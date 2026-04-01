@@ -2180,27 +2180,14 @@ CRITICAL ANTI-OPINION RULES:
       throw new Error(`[Scout Report] CRITICAL: NBA Injuries API failed — cannot proceed without injury data. Gary would analyze the game without knowing who's playing.`);
 
     } else {
-      query = `Current injuries for ${sport} game ${awayTeam} vs ${homeTeam} as of ${today}. List all players OUT, DOUBTFUL, or QUESTIONABLE with their status and injury type.`;
-    }
-    
-    console.log(`[Scout Report] Using Gemini Grounding for injury data: ${homeTeam} vs ${awayTeam}`);
-
-    // Use higher maxTokens to ensure complete response (3500 gives plenty of room)
-    const response = await geminiGroundingSearch(query, { temperature: 1.0, maxTokens: 3500 });
-
-    if (!response?.success || !response?.data) {
-      console.log('[Scout Report] Gemini Grounding returned no injury data');
+      // Non-NBA: BDL has injuries for all sports — no grounding fallback
+      console.warn(`[Scout Report] ⚠️ ${sport} injury data should come from BDL API, not grounding. Returning empty.`);
       return { home: [], away: [], groundingRaw: null };
     }
 
-    // Log first 500 chars of raw response to help debug parsing issues
-    console.log(`[Grounding Search] Response preview (first 500 chars):\n${response.data.substring(0, 500)}`);
-
-    // Parse the grounding response to extract injuries
-    const parsed = parseGroundingInjuries(response.data, homeTeam, awayTeam, sport);
-    parsed.groundingRaw = response.data; // Keep raw for display
-
-    console.log(`[Scout Report] Grounding injuries: ${parsed.home.length} for ${homeTeam}, ${parsed.away.length} for ${awayTeam}`);
+    // This code is only reached if the NBA path somehow falls through (shouldn't happen)
+    console.warn(`[Scout Report] Unexpected injury fetch path for ${sport}`);
+    return { home: [], away: [], groundingRaw: null };
 
     // If parsing found 0 injuries for both teams, log a warning - this might be a parsing issue
     if (parsed.home.length === 0 && parsed.away.length === 0 && sport === 'basketball_nba') {

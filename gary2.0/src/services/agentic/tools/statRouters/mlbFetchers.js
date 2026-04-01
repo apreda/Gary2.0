@@ -737,15 +737,42 @@ export const mlbFetchers = {
   MLB_H2H: async (sport, home, away, season, options) => {
     const homeTeam = home.full_name || home.name;
     const awayTeam = away.full_name || away.name;
-    const currentYear = new Date().getFullYear();
-    const result = await geminiGroundingSearch(
-      `${awayTeam} vs ${homeTeam} MLB head to head season series record ${currentYear}`
-    );
+    // Use BDL game history to compute H2H — no grounding needed
+    try {
+      const homeId = home.id || home.teamId;
+      const awayId = away.id || away.teamId;
+      if (homeId && awayId) {
+        const games = await ballDontLieService.getGames('baseball_mlb', { team_ids: [homeId], seasons: [season || new Date().getFullYear()], per_page: 100 });
+        const h2h = (games || []).filter(g => {
+          const hId = g.home_team?.id || g.home_team_data?.id;
+          const aId = g.visitor_team?.id || g.away_team?.id;
+          return (hId === awayId || aId === awayId) && g.status === 'Final';
+        });
+        if (h2h.length > 0) {
+          let homeWins = 0, awayWins = 0;
+          for (const g of h2h) {
+            const hScore = g.home_team_score ?? g.home_score ?? 0;
+            const vScore = g.visitor_team_score ?? g.away_score ?? 0;
+            const isHomeTeamHome = (g.home_team?.id || g.home_team_data?.id) === homeId;
+            if (isHomeTeamHome ? hScore > vScore : vScore > hScore) homeWins++;
+            else awayWins++;
+          }
+          return {
+            homeValue: `${homeTeam}: ${homeWins}W vs ${awayTeam} this season`,
+            awayValue: `${awayTeam}: ${awayWins}W vs ${homeTeam} this season`,
+            comparison: `Season series: ${h2h.length} games played`,
+            source: 'BDL API (game history)',
+          };
+        }
+      }
+    } catch (e) {
+      console.warn(`[MLB Fetchers] BDL H2H failed: ${e.message}`);
+    }
     return {
-      homeValue: result || 'No H2H data found',
+      homeValue: 'No H2H data available (teams may not have played yet this season)',
       awayValue: '',
-      comparison: `MLB H2H season series: ${awayTeam} vs ${homeTeam}`,
-      source: 'Gemini Grounding',
+      comparison: `MLB H2H: ${awayTeam} vs ${homeTeam}`,
+      source: 'BDL API (no data)',
     };
   },
 
@@ -980,18 +1007,33 @@ export const mlbFetchers = {
   },
 
   MLB_SEASON_FORM: async (sport, home, away, season, options) => {
+    // Use BDL recent games — no grounding needed for L10 data
     const homeTeam = home.full_name || home.name;
     const awayTeam = away.full_name || away.name;
-    const result = await geminiGroundingSearch(
-      `${homeTeam} ${awayTeam} MLB 2026 recent form results performance last 10 games. ` +
-      `How has each team played recently? Key performers, momentum, ` +
-      `offensive and pitching performance, winning or losing streaks.`
-    );
+    const homeLines = [], awayLines = [];
+    for (const [team, teamName, lines] of [[home, homeTeam, homeLines], [away, awayTeam, awayLines]]) {
+      try {
+        const mlbTeam = await findMlbTeamByName(team.full_name || team.name);
+        if (!mlbTeam) { lines.push(`${teamName}: Team not found`); continue; }
+        const games = await getMlbRecentGames(mlbTeam.id, 10).catch(() => []);
+        if (games.length === 0) { lines.push(`${teamName}: No recent games`); continue; }
+        let wins = 0, losses = 0, totalRuns = 0, totalAllowed = 0;
+        for (const g of games) {
+          const h = g.teams?.home, a = g.teams?.away;
+          const isHome = h?.team?.id === mlbTeam.id;
+          const ts = isHome ? h?.score : a?.score;
+          const os = isHome ? a?.score : h?.score;
+          if (ts > os) wins++; else losses++;
+          totalRuns += (ts || 0); totalAllowed += (os || 0);
+        }
+        lines.push(`${teamName}: ${wins}-${losses} L${games.length}, ${(totalRuns/games.length).toFixed(1)} RS/gm, ${(totalAllowed/games.length).toFixed(1)} RA/gm`);
+      } catch (e) { lines.push(`${teamName}: Recent form unavailable`); }
+    }
     return {
-      homeValue: result || 'N/A',
-      awayValue: result || 'N/A',
-      comparison: `Recent season form for ${homeTeam} and ${awayTeam}`,
-      source: 'Gemini Grounding',
+      homeValue: homeLines.join('\n'),
+      awayValue: awayLines.join('\n'),
+      comparison: `Recent form (L10) for ${awayTeam} @ ${homeTeam}`,
+      source: 'BDL API (game history)',
     };
   },
 
@@ -1274,32 +1316,21 @@ export const mlbFetchers = {
       console.warn('[MLB Fetchers] BDL standings for team record failed:', e.message);
     }
 
-    // Fallback: Gemini Grounding — kept for team records (critical context)
-    const result = await geminiGroundingSearch(
-      `${homeTeam} ${awayTeam} MLB ${currentYear} current record wins losses division standings games back wild card position`
-    );
+    // No grounding fallback — if BDL doesn't have standings, surface the gap
+    console.warn(`[MLB Fetchers] ⚠️ BDL standings missing for ${awayTeam} @ ${homeTeam}`);
     return {
-      homeValue: result ? `${result}\n(Note: may reflect 2025 data if 2026 season not yet started)` : 'N/A',
-      awayValue: result ? '' : 'N/A',
-      comparison: `Current MLB records and standings for ${awayTeam} @ ${homeTeam} (2025 data — 2026 season not yet started)`,
-      source: 'Gemini Grounding (fallback — may be stale)',
+      homeValue: 'Team record unavailable — BDL standings returned empty',
+      awayValue: '',
+      comparison: `MLB records for ${awayTeam} @ ${homeTeam}`,
+      source: 'BDL API (no data)',
     };
   },
 
   MLB_RECENT_FORM: async (sport, home, away, season, options) => {
     const homeTeam = home.full_name || home.name;
     const awayTeam = away.full_name || away.name;
-    const currentYear = new Date().getFullYear();
-    const result = await geminiGroundingSearch(
-      `${homeTeam} ${awayTeam} MLB last 10 games results record scores ${currentYear}. ` +
-      `Include win-loss record over last 10, scoring trends, and any streaks.`
-    );
-    return {
-      homeValue: result || 'N/A',
-      awayValue: result || 'N/A',
-      comparison: `Last 10 games form for ${awayTeam} @ ${homeTeam}`,
-      source: 'Gemini Grounding',
-    };
+    // Use BDL recent games — same as MLB_SEASON_FORM, no grounding needed
+    return MLB_FETCHERS.MLB_SEASON_FORM(sport, home, away, season, options);
   },
 
   MLB_PARK_FACTORS: async (sport, home, away, season, options) => {
@@ -1448,18 +1479,8 @@ export const mlbFetchers = {
           }
         }
       } catch (e) {
-        console.warn(`[MLB Fetchers] Bullpen workload API failed for ${teamName}:`, e.message);
-        // Fallback to Grounding for this team
-        try {
-          const result = await geminiGroundingSearch(
-            `${teamName} MLB bullpen usage last 3 days ${new Date().getFullYear()}`
-          );
-          if (result) {
-            lines.push(result);
-            continue;
-          }
-        } catch (_) { /* Grounding also failed */ }
-        lines.push(`${teamName}: Bullpen workload data unavailable`);
+        console.warn(`[MLB Fetchers] ⚠️ Bullpen workload API failed for ${teamName}: ${e.message}`);
+        lines.push(`${teamName}: Bullpen workload data unavailable — check BDL box scores`);
       }
     }
 
@@ -1514,15 +1535,13 @@ export const mlbFetchers = {
       console.warn('[MLB Fetchers] BDL standings failed, trying fallback:', e.message);
     }
 
-    // Fallback: Gemini Grounding — kept for standings (critical context)
-    const result = await geminiGroundingSearch(
-      `MLB ${currentYear} standings ${homeTeam} ${awayTeam} division American League National League wins losses games back wild card`
-    );
+    // No grounding fallback — if BDL standings fail, surface the gap
+    console.warn(`[MLB Fetchers] ⚠️ BDL standings unavailable for ${awayTeam} @ ${homeTeam}`);
     return {
-      homeValue: result ? `${result}\n(Note: may reflect 2025 data if 2026 season not yet started)` : 'N/A',
-      awayValue: result ? '' : 'N/A',
-      comparison: `MLB standings for ${awayTeam} @ ${homeTeam} (2025 data — 2026 season not yet started)`,
-      source: 'Gemini Grounding (fallback — may be stale)',
+      homeValue: 'Standings unavailable — BDL returned empty',
+      awayValue: '',
+      comparison: `MLB standings for ${awayTeam} @ ${homeTeam}`,
+      source: 'BDL API (no data)',
     };
   },
 

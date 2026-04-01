@@ -1,4 +1,4 @@
-import { getCurrentSeasonString, sportToBdlKey, normalizeSportName, findTeam, fmtNum, fmtPct, fetchBothTeamSeasonStats, fetchNBATeamScoringStats, fetchNBATeamAdvancedStats, fetchNBALeaders, fetchNBATeamBaseStats, fetchNBATeamOpponentStats, fetchNBATeamDefenseStats, fetchTopPlayersForTeam, formatRecentGames, buildPaceAnalysis, BDL_API_KEY, _nbaBaseStatsCache, _nbaAdvancedStatsCache, _nbaOpponentStatsCache, _nbaDefenseStatsCache, _nbaTeamScoringStatsCache, geminiGroundingSearch, getGroundedWeather, isGameCompleted } from './statRouterCommon.js';
+import { getCurrentSeasonString, sportToBdlKey, normalizeSportName, findTeam, fmtNum, fmtPct, fetchBothTeamSeasonStats, geminiGroundingSearch, getGroundedWeather, isGameCompleted } from './statRouterCommon.js';
 import { ballDontLieService } from '../../../ballDontLieService.js';
 
 export const nflFetchers = {
@@ -1126,36 +1126,39 @@ export const nflFetchers = {
   },
 
 
-  // SOURCE: ESPN, NFL.com - Upcoming Schedule Context for Trap/Sandwich Game Analysis
+  // SOURCE: BDL NFL schedule — no grounding needed for schedule data
   SCHEDULE_CONTEXT: async (bdlSport, home, away, season) => {
     console.log(`[Stat Router] Fetching SCHEDULE_CONTEXT for ${away.name} @ ${home.name}`);
-    
+
     if (bdlSport !== 'americanfootball_nfl') {
       return { category: 'Schedule Context', note: 'Only available for NFL' };
     }
-    
+
     try {
-      const seasonStr = getCurrentSeasonString();
-      const query = `site:espn.com OR site:nfl.com
-        ${seasonStr} NFL schedule ${home.name} next 2 games upcoming opponents AND ${away.name} next 2 games upcoming opponents.
-        For each team:
-        1. What was their LAST game (opponent, result, was it a big game?)
-        2. What is their NEXT game after this one (opponent, date, significance)
-        3. Is the next game a divisional rivalry or marquee matchup?
-        4. Any bye week coming up soon?
-        5. Are they playing a much tougher or much weaker opponent next week?`;
-      
-      const groundingResult = await geminiGroundingSearch(query, {
-        systemMessage: 'You are an NFL schedule analyst. Use ESPN or NFL.com schedule data. List upcoming and recent opponents for both teams. Be specific about opponent names and dates.'
-      });
-      
+      const homeId = home.id || home.teamId;
+      const awayId = away.id || away.teamId;
+      const homeGames = homeId ? await ballDontLieService.getGames('americanfootball_nfl', { team_ids: [homeId], seasons: [season], per_page: 50 }).catch(() => []) : [];
+      const awayGames = awayId ? await ballDontLieService.getGames('americanfootball_nfl', { team_ids: [awayId], seasons: [season], per_page: 50 }).catch(() => []) : [];
+
+      const today = new Date().toISOString().split('T')[0];
+      const formatSchedule = (games, teamName) => {
+        const sorted = (games || []).sort((a, b) => new Date(a.date || a.datetime) - new Date(b.date || b.datetime));
+        const past = sorted.filter(g => g.status === 'Final').slice(-2);
+        const future = sorted.filter(g => g.status !== 'Final' && (g.date || g.datetime) > today).slice(0, 2);
+        const lines = [`${teamName}:`];
+        if (past.length) lines.push(`  Recent: ${past.map(g => { const opp = g.home_team?.id === (home.id || away.id) ? g.visitor_team?.name || g.away_team?.name : g.home_team?.name; return `vs ${opp} (${g.home_team_score ?? '?'}-${g.visitor_team_score ?? g.away_score ?? '?'})`; }).join(', ')}`);
+        if (future.length) lines.push(`  Upcoming: ${future.map(g => { const opp = g.home_team?.id === (home.id || away.id) ? g.visitor_team?.name || g.away_team?.name : g.home_team?.name; return `vs ${opp} (${(g.date || g.datetime || '').split('T')[0]})`; }).join(', ')}`);
+        return lines.join('\n');
+      };
+
       return {
-        category: 'Schedule Context (Trap/Sandwich Analysis)',
-        source: 'ESPN / NFL.com via Gemini',
+        category: 'Schedule Context',
+        source: 'BDL API (NFL schedule)',
         home: { team: home.full_name || home.name },
         away: { team: away.full_name || away.name },
-        grounding_data: groundingResult?.data || groundingResult?.content || 'Data unavailable',
-        note: 'Schedule context and upcoming/previous opponents for both teams.'
+        homeValue: formatSchedule(homeGames, home.full_name || home.name),
+        awayValue: formatSchedule(awayGames, away.full_name || away.name),
+        note: 'Recent and upcoming opponents from BDL schedule.'
       };
     } catch (error) {
       console.error(`[Stat Router] Error fetching SCHEDULE_CONTEXT:`, error.message);
