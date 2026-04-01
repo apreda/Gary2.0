@@ -9,13 +9,77 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { formatSeason, nbaSeason } from '../../../../utils/dateUtils.js';
 import { seasonForSport, findTeamInStandings, sportToBdlKey } from './utilities.js';
 import { ballDontLieService } from '../../../ballDontLieService.js';
+import { createHash } from 'crypto';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, unlinkSync, statSync } from 'fs';
+import { join } from 'path';
 
 // Lazy-initialize Gemini for grounded searches (supports key rotation)
 import { isUsingBackupKey } from '../../modelConfig.js';
 
 let geminiClient = null;
 let _groundingKeyIsBackup = false;
-const GROUNDING_CACHE_TTL_MS = 90 * 1000;
+const GROUNDING_CACHE_TTL_MS = 90 * 1000; // in-memory: 90s (dedup within single run)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FILE-BASED GROUNDING CACHE — persists across script runs (game picks → props)
+// ═══════════════════════════════════════════════════════════════════════════
+const DISK_CACHE_DIR = join(process.env.TMPDIR || '/tmp', 'gary-grounding-cache');
+const DISK_CACHE_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours
+
+function ensureDiskCacheDir() {
+  if (!existsSync(DISK_CACHE_DIR)) mkdirSync(DISK_CACHE_DIR, { recursive: true });
+}
+
+function diskCacheKey(query) {
+  return createHash('md5').update(query.trim().toLowerCase()).digest('hex');
+}
+
+function readDiskCache(query) {
+  try {
+    const file = join(DISK_CACHE_DIR, `${diskCacheKey(query)}.json`);
+    if (!existsSync(file)) return null;
+    const stat = statSync(file);
+    if (Date.now() - stat.mtimeMs > DISK_CACHE_TTL_MS) {
+      unlinkSync(file);
+      return null;
+    }
+    const data = JSON.parse(readFileSync(file, 'utf8'));
+    if (data?.success && data?.data) {
+      console.log(`[Grounding Search] ♻️ Disk cache hit (saved a grounding call)`);
+      return data;
+    }
+    return null;
+  } catch { return null; }
+}
+
+function writeDiskCache(query, result) {
+  try {
+    ensureDiskCacheDir();
+    const file = join(DISK_CACHE_DIR, `${diskCacheKey(query)}.json`);
+    writeFileSync(file, JSON.stringify(result), 'utf8');
+  } catch (e) {
+    // Non-fatal — just skip caching
+  }
+}
+
+function pruneDiskCache() {
+  try {
+    if (!existsSync(DISK_CACHE_DIR)) return;
+    const files = readdirSync(DISK_CACHE_DIR);
+    const now = Date.now();
+    let pruned = 0;
+    for (const f of files) {
+      const fp = join(DISK_CACHE_DIR, f);
+      try {
+        if (now - statSync(fp).mtimeMs > DISK_CACHE_TTL_MS) { unlinkSync(fp); pruned++; }
+      } catch {}
+    }
+    if (pruned > 0) console.log(`[Grounding Cache] Pruned ${pruned} expired entries`);
+  } catch {}
+}
+
+// Prune on startup
+pruneDiskCache();
 const _groundingSearchCache = new Map();
 export function getGeminiClient() {
   // Recreate client if key was rotated
@@ -352,6 +416,8 @@ export async function geminiGroundingSearch(query, options = {}) {
   const now = Date.now();
   pruneGroundingCache(now);
   const cacheKey = buildGroundingCacheKey(query, options);
+
+  // 1. Check in-memory cache (dedup within single run)
   const cached = _groundingSearchCache.get(cacheKey);
   if (cached) {
     if (cached.value) {
@@ -364,6 +430,14 @@ export async function geminiGroundingSearch(query, options = {}) {
     }
   }
 
+  // 2. Check disk cache (dedup across runs — game picks → props)
+  const diskResult = readDiskCache(query);
+  if (diskResult) {
+    _groundingSearchCache.set(cacheKey, { value: diskResult, expiresAt: now + GROUNDING_CACHE_TTL_MS });
+    return diskResult;
+  }
+
+  // 3. Make the actual grounding call
   const requestPromise = runGeminiGroundingSearch(query, options)
     .then(result => {
       if (result?.success && result?.data) {
@@ -371,6 +445,8 @@ export async function geminiGroundingSearch(query, options = {}) {
           value: result,
           expiresAt: Date.now() + GROUNDING_CACHE_TTL_MS
         });
+        // Write to disk for cross-run sharing
+        writeDiskCache(query, result);
       } else {
         _groundingSearchCache.delete(cacheKey);
       }

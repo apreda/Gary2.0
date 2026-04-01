@@ -113,14 +113,11 @@ export async function buildMlbScoutReport(game, options = {}) {
     gamePk ? getProbablePitchers(gamePk).catch(e => { console.warn(`[Scout Report] Probable pitchers error: ${e.message}`); return null; }) : Promise.resolve(null),
     homeTeamId ? getMlbRecentGames(homeTeamId, 10).catch(e => { console.warn(`[Scout Report] Home recent games error: ${e.message}`); return []; }) : Promise.resolve([]),
     awayTeamId ? getMlbRecentGames(awayTeamId, 10).catch(e => { console.warn(`[Scout Report] Away recent games error: ${e.message}`); return []; }) : Promise.resolve([]),
-    // MEGA-QUERY 1: Game context — odds, preview, pitchers
+    // MEGA-QUERY 1: Game context and preview (odds + lineups come from BDL API now)
     geminiGroundingSearch(
-      `MLB regular season 2026: ${awayTeam} vs ${homeTeam}. ` +
-      `Find ALL of the following for this game: ` +
-      `(1) Current moneyline odds and run line from FanDuel, DraftKings, or any sportsbook. ` +
-      `(2) Starting pitcher matchup and probable lineups. ` +
-      `(3) Game preview and betting analysis. ` +
-      `Report facts only with numbers and names.`,
+      `MLB 2026: ${awayTeam} vs ${homeTeam} game preview today. ` +
+      `Key storylines, series context, and any breaking news for this matchup. ` +
+      `Report facts only with names and details.`,
       groundingOpts
     ).then(r => r?.data || '').catch(() => ''),
     // MEGA-QUERY 2: Current state of each team — offseason moves, spring training, storylines
