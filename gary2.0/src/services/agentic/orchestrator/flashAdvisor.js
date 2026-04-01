@@ -186,6 +186,7 @@ export async function buildFlashResearchBriefing(scoutReportContent, sport, home
 
     const isNCAABSport = sport === 'basketball_ncaab' || sport === 'NCAAB';
     const isMLBSport = sport === 'baseball_mlb' || sport === 'MLB';
+    const isNHLSport = sport === 'icehockey_nhl' || sport === 'NHL';
     const mlbAwarenessBlock = isMLBSport ? `\n\n${getMlbSeasonAwareness()}\n` : '';
 
     // MLB: medium thinking + lower output cap (fact-finding doesn't need deep reasoning or 65K output)
@@ -233,7 +234,7 @@ ${scoutReportContent}
 
 ---
 
-Read the scout report above. I will now ask you to investigate factors one at a time.${isNCAABSport ? ' (NCAAB: narrative context is already in the scout report — prefer fetch_stats for BDL data)' : ''}${isMLBSport ? ' (MLB: The scout report already includes lineup confirmations and breaking news from grounding searches. Prefer fetch_stats for all stat-based investigation. Only use fetch_narrative_context as a last resort for info that no stat token or scout report section covers.)' : ''}`;
+Read the scout report above. I will now ask you to investigate factors one at a time.${isNCAABSport ? ' (NCAAB: narrative context is already in the scout report — prefer fetch_stats for BDL data)' : ''}${isMLBSport ? ' (MLB: The scout report already includes lineup confirmations and breaking news from grounding searches. Prefer fetch_stats for all stat-based investigation. Only use fetch_narrative_context as a last resort for info that no stat token or scout report section covers.)' : ''}${isNHLSport ? ' (NHL: The scout report already includes confirmed starting goalies, lineups, power play units, and injuries from RotoWire. Do NOT use fetch_narrative_context to re-search for goalies, lineups, injuries, or PP/PK stats — all of this is in the scout report. Use grounding ONLY for context not in the scout report like recent player performance narrative or trade news.)' : ''}`;
 
     console.log(`[Research Briefing] Sending scout report to Gemini Flash (factor-by-factor investigation)`);
 
@@ -312,9 +313,10 @@ Read the scout report above. I will now ask you to investigate factors one at a 
                 calledTokens.push({ token, quality: 'unavailable' });
               }
             } else if (functionName === 'fetch_narrative_context') {
-              // Cap grounding calls to control cost — structured BDL data should handle most factors
-              // MLB: tighter cap (scout report already has lineups/news, BDL has all stats)
-              const MAX_GROUNDING_CALLS = isMLBSport ? 4 : 12;
+              // Cap grounding calls to control cost — scout report already has lineups, injuries, goalies
+              // MLB: 4 (BDL has all stats), NHL: 6 (RotoWire data already in scout report), others: 8
+              const isNHLSport = sport === 'icehockey_nhl' || sport === 'NHL';
+              const MAX_GROUNDING_CALLS = isMLBSport ? 4 : isNHLSport ? 6 : 8;
               if (groundingCalls >= MAX_GROUNDING_CALLS) {
                 console.log(`  → [Research Grounding] SKIPPED (cap reached: ${groundingCalls}/${MAX_GROUNDING_CALLS}): "${(args.query || '').slice(0, 80)}"`);
                 functionResponses.push({ name: functionName, content: `Grounding call limit reached (${MAX_GROUNDING_CALLS}). Use available stat tokens and scout report data instead.` });

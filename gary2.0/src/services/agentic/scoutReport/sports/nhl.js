@@ -246,9 +246,8 @@ NO introduction. NO explanation. ONLY the format above with exact player names.`
         homeParsed = retry?.success ? parseTeamLineup(retry.data, homeTeam) : homeParsed;
       }
 
-      // Retry PP grounding up to 2 times if PP1 incomplete
-      // PP1 is critical, PP2 is nice-to-have (PP1 gets 60-70% of PP time)
-      const MAX_PP_RETRIES = 2;
+      // Retry PP grounding once if PP1 incomplete (was 2 — diminishing returns)
+      const MAX_PP_RETRIES = 1;
       const isPP1Complete = (pp) => pp?.pp1Complete === true;
 
       for (let attempt = 1; attempt <= MAX_PP_RETRIES && !isPP1Complete(awayPP); attempt++) {
