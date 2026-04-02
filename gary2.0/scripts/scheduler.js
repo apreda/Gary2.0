@@ -166,7 +166,7 @@ async function runGame(entry) {
     await runScript('scripts/run-agentic-picks.js', [sport.flag, '--matchup', homeMascot, '--limit', '1']);
 
     // Props for this specific game (disk cache populated from game picks)
-    await runScript(`scripts/${sport.propsScript}`, ['--matchup', homeMascot]);
+    await runScript(`scripts/${sport.propsScript}`, [`--matchup=${homeMascot}`]);
 
     const elapsed = ((Date.now() - startTime) / 1000 / 60).toFixed(1);
     log(`✅ ${matchup} complete in ${elapsed} min`);
