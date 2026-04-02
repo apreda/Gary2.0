@@ -348,23 +348,35 @@ NO introduction. NO explanation. ONLY the format above with exact player names.`
         const resolveNhlInjuryDuration = async (injuryLines, teamId, teamName) => {
           if (!teamId || injuryLines.length === 0) return injuryLines;
           try {
-            // Fetch last 10 games for this team
-            const recentGames = await ballDontLieService.getGames(bdlSport, {
-              team_ids: [teamId], seasons: [nhlSeason], per_page: 15
-            });
-            const finishedGames = (recentGames || [])
-              .filter(g => g.status === 'Final')
-              .sort((a, b) => new Date(b.date || b.datetime) - new Date(a.date || a.datetime))
+            // Fetch recent games by date range (not season — season pagination only returns page 1)
+            const today = new Date();
+            const recentDates = [];
+            for (let i = 1; i <= 14; i++) {
+              const d = new Date(today); d.setDate(d.getDate() - i);
+              recentDates.push(d.toISOString().split('T')[0]);
+            }
+            const allGames = (await Promise.all(
+              recentDates.map(d => ballDontLieService.getGames(bdlSport, { dates: [d], per_page: 50 }).catch(() => []))
+            )).flat();
+            // Filter to this team's games only
+            const teamGames = allGames.filter(g =>
+              g.home_team?.id === teamId || g.visitor_team?.id === teamId || g.away_team?.id === teamId
+            );
+            const isFinished = (g) => ['Final', 'OFF', 'STATUS_FINAL'].includes(g.status) || g.home_team_score != null;
+            const finishedGames = teamGames
+              .filter(isFinished)
+              .sort((a, b) => new Date(b.date || b.game_date || b.datetime) - new Date(a.date || a.game_date || a.datetime))
               .slice(0, 10);
+            console.log(`[Scout Report] NHL injury resolution: Found ${finishedGames.length} recent games for ${teamName}`);
 
             if (finishedGames.length === 0) return injuryLines;
 
             const gameIds = finishedGames.map(g => g.id).filter(Boolean);
             const gameDateMap = new Map();
-            finishedGames.forEach(g => gameDateMap.set(g.id, g.date || g.datetime));
+            finishedGames.forEach(g => gameDateMap.set(g.id, g.date || g.game_date || g.datetime));
 
             // Fetch box scores for these games
-            const boxDates = [...new Set(finishedGames.map(g => (g.date || g.datetime || '').split('T')[0]).filter(Boolean))];
+            const boxDates = [...new Set(finishedGames.map(g => (g.date || g.game_date || g.datetime || '').split('T')[0]).filter(Boolean))];
             const boxScores = (await Promise.all(
               boxDates.map(d => ballDontLieService.getNhlRecentBoxScores([d]).catch(() => []))
             )).flat();
@@ -387,11 +399,13 @@ NO introduction. NO explanation. ONLY the format above with exact player names.`
 
               if (playerEntries.length > 0) {
                 // Find most recent game they played
-                playerEntries.sort((a, b) => new Date(b.game?.date || 0) - new Date(a.game?.date || 0));
-                const lastGameDate = new Date(playerEntries[0].game?.date);
+                // BDL NHL box scores use game.game_date (not game.date)
+                const getGameDate = (bs) => bs.game?.game_date || bs.game?.date || bs.game?.start_time_utc;
+                playerEntries.sort((a, b) => new Date(getGameDate(b) || 0) - new Date(getGameDate(a) || 0));
+                const lastGameDate = new Date(getGameDate(playerEntries[0]));
                 const daysSince = Math.floor((Date.now() - lastGameDate) / (1000 * 60 * 60 * 24));
 
-                const gamesMissed = finishedGames.filter(g => new Date(g.date || g.datetime) > lastGameDate).length;
+                const gamesMissed = finishedGames.filter(g => new Date(g.date || g.game_date || g.datetime) > lastGameDate).length;
 
                 let label;
                 if (gamesMissed <= 2 && daysSince < 5) label = 'FRESH';
