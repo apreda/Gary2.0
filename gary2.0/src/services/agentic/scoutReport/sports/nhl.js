@@ -331,8 +331,95 @@ NO introduction. NO explanation. ONLY the format above with exact player names.`
         return normalized;
       };
 
-      const awayInjuries = normalizeInjuryLines(awayInjuriesRaw, awayStatusMap);
-      const homeInjuries = normalizeInjuryLines(homeInjuriesRaw, homeStatusMap);
+      let awayInjuries = normalizeInjuryLines(awayInjuriesRaw, awayStatusMap);
+      let homeInjuries = normalizeInjuryLines(homeInjuriesRaw, homeStatusMap);
+
+      // ═══════════════════════════════════════════════════════════════════
+      // NHL INJURY DURATION RESOLUTION (box-score method — same as NBA)
+      // Uses BDL box scores to determine when each injured player last played.
+      // Labels: FRESH (0-2 games missed), SHORT-TERM (3-5), PRICED IN (6+), SEASON-LONG (20+)
+      // ═══════════════════════════════════════════════════════════════════
+      try {
+        const teams = await ballDontLieService.getTeams(bdlSport);
+        const hTeam = findTeam(teams, homeTeam);
+        const aTeam = findTeam(teams, awayTeam);
+        const nhlSeason = new Date().getMonth() + 1 >= 10 ? new Date().getFullYear() : new Date().getFullYear() - 1;
+
+        const resolveNhlInjuryDuration = async (injuryLines, teamId, teamName) => {
+          if (!teamId || injuryLines.length === 0) return injuryLines;
+          try {
+            // Fetch last 10 games for this team
+            const recentGames = await ballDontLieService.getGames(bdlSport, {
+              team_ids: [teamId], seasons: [nhlSeason], per_page: 15
+            });
+            const finishedGames = (recentGames || [])
+              .filter(g => g.status === 'Final')
+              .sort((a, b) => new Date(b.date || b.datetime) - new Date(a.date || a.datetime))
+              .slice(0, 10);
+
+            if (finishedGames.length === 0) return injuryLines;
+
+            const gameIds = finishedGames.map(g => g.id).filter(Boolean);
+            const gameDateMap = new Map();
+            finishedGames.forEach(g => gameDateMap.set(g.id, g.date || g.datetime));
+
+            // Fetch box scores for these games
+            const boxDates = [...new Set(finishedGames.map(g => (g.date || g.datetime || '').split('T')[0]).filter(Boolean))];
+            const boxScores = (await Promise.all(
+              boxDates.map(d => ballDontLieService.getNhlRecentBoxScores([d]).catch(() => []))
+            )).flat();
+
+            // For each injury line, find the player and check when they last played
+            return injuryLines.map(line => {
+              const nameMatch = line.match(/-\s*([^|]+)/);
+              if (!nameMatch) return line;
+              const playerName = nameMatch[1].trim().toLowerCase();
+
+              // Find this player in box scores
+              const playerEntries = boxScores.filter(bs => {
+                const bsName = `${bs.player?.first_name || ''} ${bs.player?.last_name || ''}`.toLowerCase().trim();
+                return bsName === playerName || bsName.includes(playerName) || playerName.includes(bsName);
+              }).filter(bs => {
+                // Only count entries where they actually played (had time on ice)
+                const toi = bs.time_on_ice || bs.toi || bs.minutes || 0;
+                return typeof toi === 'string' ? toi !== '00:00' && toi !== '0' : toi > 0;
+              });
+
+              if (playerEntries.length > 0) {
+                // Find most recent game they played
+                playerEntries.sort((a, b) => new Date(b.game?.date || 0) - new Date(a.game?.date || 0));
+                const lastGameDate = new Date(playerEntries[0].game?.date);
+                const daysSince = Math.floor((Date.now() - lastGameDate) / (1000 * 60 * 60 * 24));
+
+                const gamesMissed = finishedGames.filter(g => new Date(g.date || g.datetime) > lastGameDate).length;
+
+                let label;
+                if (gamesMissed <= 2 && daysSince < 5) label = 'FRESH';
+                else if (gamesMissed <= 5) label = 'SHORT-TERM';
+                else if (gamesMissed >= 20) label = 'SEASON-LONG';
+                else label = 'PRICED IN';
+
+                console.log(`[Scout Report] NHL injury duration: ${nameMatch[1].trim()} — ${gamesMissed} games missed, ${daysSince} days → ${label}`);
+                return `${line} [${label} — ${gamesMissed} games missed]`;
+              } else {
+                // Not found in any recent box scores — season-long or new player
+                console.log(`[Scout Report] NHL injury duration: ${nameMatch[1].trim()} — not in last ${gameIds.length} box scores → SEASON-LONG`);
+                return `${line} [SEASON-LONG — not in recent games]`;
+              }
+            });
+          } catch (e) {
+            console.warn(`[Scout Report] NHL injury duration resolution failed for ${teamName}: ${e.message}`);
+            return injuryLines;
+          }
+        };
+
+        [awayInjuries, homeInjuries] = await Promise.all([
+          resolveNhlInjuryDuration(awayInjuries, aTeam?.id, awayTeam),
+          resolveNhlInjuryDuration(homeInjuries, hTeam?.id, homeTeam)
+        ]);
+      } catch (e) {
+        console.warn(`[Scout Report] NHL injury duration resolution skipped: ${e.message}`);
+      }
 
       if (awayParsed || homeParsed || awayPP || homePP || awayInjuries.length || homeInjuries.length) {
         const combinedContent = [
