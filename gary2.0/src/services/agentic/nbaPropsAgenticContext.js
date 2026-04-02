@@ -1299,24 +1299,10 @@ export async function buildNbaPropsAgenticContext(game, playerProps, options = {
     // Resolve player IDs from BDL - also validates players are on one of the two teams
     resolvePlayerIds(propCandidates, teamIds, season, game.home_team, game.away_team),
     
-    // COMPREHENSIVE NARRATIVE CONTEXT - Fetches ALL factors UPFRONT:
-    // - Breaking news (last-minute scratches, trades, drama)
-    // - Motivation (revenge games, milestones, contract years)
-    // - Schedule (B2B fatigue, trap games, altitude)
-    // - Player-specific (load management, matchup history, quotes)
-    // - Team trends (streaks, home/away context)
-    // - Betting signals (line movement, public % - MINOR ONLY)
-    fetchComprehensivePropsNarrative(game.home_team, game.away_team, 'NBA', dateStr, { useFlash: true }).catch(e => {
-      console.warn('[NBA Props Context] Comprehensive narrative failed:', e.message);
-      return null;
-    }),
-    
-    // LINE MOVEMENT - Queries ScoresAndOdds/BettingPros for opening vs current lines
-    // This enables Tier 2 Kill Conditions (detecting public chase vs sharp steam)
-    fetchPropLineMovement('NBA', dateStr, game.home_team, game.away_team).catch(e => {
-      console.warn('[NBA Props Context] Line movement fetch failed:', e.message);
-      return { movements: {}, source: 'ERROR' };
-    })
+    // Props narrative removed — scout report from game picks (via disk cache) already has all context.
+    // Line movement removed — no reliable API for opening vs closing lines; grounding data was unreliable.
+    Promise.resolve(null),
+    Promise.resolve({ movements: {}, source: 'DISABLED' })
   ]);
   
   // Log line movement results

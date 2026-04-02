@@ -1119,17 +1119,10 @@ export async function buildNhlPropsAgenticContext(game, playerProps, options = {
     // - Player-specific (line changes, hot/cold streaks)
     // - Team trends (streaks, rivalries)
     // - Betting signals (line movement, public % - MINOR ONLY)
-    fetchComprehensivePropsNarrative(game.home_team, game.away_team, 'NHL', dateStr, { useFlash: true }).catch(e => {
-      console.warn('[NHL Props Context] Comprehensive narrative failed:', e.message);
-      return null;
-    }),
-    
-    // LINE MOVEMENT - Queries ScoresAndOdds/BettingPros for opening vs current lines
-    // This enables Tier 2 Kill Conditions (detecting public chase vs sharp steam)
-    fetchPropLineMovement('NHL', dateStr, game.home_team, game.away_team).catch(e => {
-      console.warn('[NHL Props Context] Line movement fetch failed:', e.message);
-      return { movements: {}, source: 'ERROR' };
-    })
+    // Props narrative removed — scout report from game picks (via disk cache) already has context.
+    // Line movement removed — no reliable API for opening vs closing lines.
+    Promise.resolve(null),
+    Promise.resolve({ movements: {}, source: 'DISABLED' })
   ]);
   
   // Log line movement results
