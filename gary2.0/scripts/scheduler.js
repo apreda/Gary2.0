@@ -1,19 +1,22 @@
 #!/usr/bin/env node
 /**
- * Gary Auto-Scheduler
+ * Gary Auto-Scheduler — Per-Game Scheduling
  *
  * Runs 24/7 on the local Mac. Every night at midnight ET, checks BDL for
- * tomorrow's games, computes trigger times (90 min before first game per sport),
- * and runs game picks → props → DFS sequentially.
+ * tomorrow's games, and schedules EACH GAME individually 90 minutes before
+ * its start time. Game picks run first, then props for the same game.
+ *
+ * This ensures lineups/injuries are as fresh as possible for each game.
  *
  * Usage:
- *   node scripts/scheduler.js          # Run the scheduler
- *   node scripts/scheduler.js --now    # Run all sports immediately (testing)
- *   node scripts/scheduler.js --plan   # Show tomorrow's plan without running
+ *   node scripts/scheduler.js          # Run the 24/7 scheduler
+ *   node scripts/scheduler.js --now    # Run all today's sports immediately
+ *   node scripts/scheduler.js --plan   # Show tomorrow's schedule without running
+ *   node scripts/scheduler.js --plan --today  # Show today's schedule
  */
 
 import '../src/loadEnv.js';
-import { execSync, spawn } from 'child_process';
+import { spawn } from 'child_process';
 import { existsSync, mkdirSync, appendFileSync } from 'fs';
 import { join } from 'path';
 
@@ -24,9 +27,7 @@ if (!existsSync(LOG_DIR)) mkdirSync(LOG_DIR, { recursive: true });
 // ═══════════════════════════════════════════════════════════════════════════
 // CONFIG
 // ═══════════════════════════════════════════════════════════════════════════
-const LEAD_TIME_MINUTES = 90;  // Run picks this many minutes before first game
-const PLAN_CHECK_HOUR = 0;     // Midnight ET — check tomorrow's schedule
-const PLAN_CHECK_MINUTE = 5;   // 12:05 AM ET
+const LEAD_TIME_MINUTES = 90;
 const SPORTS = [
   { key: 'basketball_nba', flag: '--nba', label: 'NBA', propsScript: 'run-agentic-nba-props.js', dfs: true },
   { key: 'icehockey_nhl', flag: '--nhl', label: 'NHL', propsScript: 'run-agentic-nhl-props.js', dfs: false },
@@ -47,7 +48,7 @@ function log(msg) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// BDL: FETCH TOMORROW'S GAMES
+// BDL: FETCH GAMES
 // ═══════════════════════════════════════════════════════════════════════════
 async function fetchGamesForDate(sportKey, dateStr) {
   try {
@@ -60,64 +61,62 @@ async function fetchGamesForDate(sportKey, dateStr) {
   }
 }
 
-function getEarliestGameTime(games) {
-  let earliest = null;
-  for (const g of games) {
-    const dt = g.datetime || g.start_time || g.date;
-    if (!dt) continue;
-    const d = new Date(dt);
-    if (!earliest || d < earliest) earliest = d;
-  }
-  return earliest;
-}
-
 // ═══════════════════════════════════════════════════════════════════════════
-// PLAN: Build tomorrow's schedule
+// PLAN: Build per-game schedule for the day
 // ═══════════════════════════════════════════════════════════════════════════
 async function buildPlan(dateStr) {
   log(`\n═══════════════════════════════════════════════════════════`);
-  log(`🗓️  Building plan for ${dateStr}`);
+  log(`🗓️  Building per-game plan for ${dateStr}`);
   log(`═══════════════════════════════════════════════════════════`);
 
-  const plan = [];
+  const schedule = []; // { sport, game, matchup, startTime, triggerTime }
 
   for (const sport of SPORTS) {
     const games = await fetchGamesForDate(sport.key, dateStr);
     if (games.length === 0) {
-      log(`  ${sport.label}: No games found`);
+      log(`  ${sport.label}: No games`);
       continue;
     }
 
-    const earliest = getEarliestGameTime(games);
-    if (!earliest) {
-      log(`  ${sport.label}: ${games.length} games but no start times — scheduling for 11:00 AM ET`);
-      // Default to 11:00 AM ET if no times available
-      const defaultTime = new Date(dateStr + 'T15:00:00Z'); // 11 AM ET = 3 PM UTC
-      plan.push({ sport, games: games.length, triggerTime: defaultTime });
-      continue;
+    log(`  ${sport.label}: ${games.length} games`);
+
+    for (const game of games) {
+      const homeTeam = game.home_team?.full_name || game.home_team?.name || 'Home';
+      const awayTeam = game.visitor_team?.full_name || game.away_team?.full_name || game.visitor_team?.name || game.away_team?.name || 'Away';
+      const matchup = `${awayTeam} @ ${homeTeam}`;
+
+      const dt = game.datetime || game.start_time || game.date;
+      if (!dt) {
+        log(`    ⚠️ ${matchup}: No start time — skipping`);
+        continue;
+      }
+
+      const startTime = new Date(dt);
+      const triggerTime = new Date(startTime.getTime() - LEAD_TIME_MINUTES * 60 * 1000);
+      const startET = startTime.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
+      const triggerET = triggerTime.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
+
+      // Use home team mascot as matchup filter (reliable for --matchup flag)
+      const homeMascot = homeTeam.split(' ').pop();
+
+      schedule.push({ sport, matchup, homeMascot, startTime, triggerTime, gameId: game.id });
+      log(`    ${matchup} | Game: ${startET} | Trigger: ${triggerET}`);
     }
-
-    const triggerTime = new Date(earliest.getTime() - LEAD_TIME_MINUTES * 60 * 1000);
-    const earliestET = earliest.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
-    const triggerET = triggerTime.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
-
-    log(`  ${sport.label}: ${games.length} games | First game: ${earliestET} ET | Trigger: ${triggerET} ET`);
-    plan.push({ sport, games: games.length, triggerTime, earliestGame: earliest });
   }
 
-  // Sort by trigger time (earliest first)
-  plan.sort((a, b) => a.triggerTime - b.triggerTime);
-  return plan;
+  // Sort by trigger time
+  schedule.sort((a, b) => a.triggerTime - b.triggerTime);
+
+  log(`\n📋 Total: ${schedule.length} games scheduled`);
+  return schedule;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// RUN: Execute picks for a sport (game picks → props → DFS)
+// RUN: Execute a single script
 // ═══════════════════════════════════════════════════════════════════════════
 function runScript(scriptPath, args = []) {
   return new Promise((resolve, reject) => {
-    const logFile = join(LOG_DIR, `${new Date().toISOString().split('T')[0]}-${args[0] || 'run'}.log`);
     log(`  📡 Running: node ${scriptPath} ${args.join(' ')}`);
-
     const proc = spawn('node', [scriptPath, ...args], {
       cwd: PROJECT_DIR,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -127,9 +126,7 @@ function runScript(scriptPath, args = []) {
     let output = '';
     proc.stdout.on('data', (data) => {
       output += data.toString();
-      // Stream key lines to console
-      const lines = data.toString().split('\n');
-      for (const line of lines) {
+      for (const line of data.toString().split('\n')) {
         if (line.includes('[Cost]') || line.includes('Total Picks') || line.includes('✅') || line.includes('❌')) {
           log(`    ${line.trim()}`);
         }
@@ -138,167 +135,224 @@ function runScript(scriptPath, args = []) {
     proc.stderr.on('data', (data) => { output += data.toString(); });
 
     proc.on('close', (code) => {
-      try { appendFileSync(logFile, output); } catch {}
+      try {
+        const logFile = join(LOG_DIR, `${new Date().toISOString().split('T')[0]}-${args.join('-')}.log`);
+        appendFileSync(logFile, output);
+      } catch {}
       if (code === 0) {
-        log(`  ✅ Completed (exit 0)`);
+        log(`  ✅ Done`);
         resolve(output);
       } else {
         log(`  ❌ Failed (exit ${code})`);
-        reject(new Error(`Script exited with code ${code}`));
+        reject(new Error(`Exit code ${code}`));
       }
     });
 
-    // Safety timeout: 30 minutes per script
-    setTimeout(() => {
-      proc.kill('SIGTERM');
-      reject(new Error('Script timed out after 30 minutes'));
-    }, 30 * 60 * 1000);
+    // 30 min safety timeout
+    setTimeout(() => { proc.kill('SIGTERM'); reject(new Error('Timeout 30min')); }, 30 * 60 * 1000);
   });
 }
 
-async function runSport(sport) {
+// ═══════════════════════════════════════════════════════════════════════════
+// RUN: Execute picks + props for a single game
+// ═══════════════════════════════════════════════════════════════════════════
+async function runGame(entry) {
+  const { sport, matchup, homeMascot } = entry;
   const startTime = Date.now();
-  log(`\n🐻 Starting ${sport.label} pipeline`);
-  log(`════════════════════════════════════════`);
+  log(`\n🐻 ${sport.label}: ${matchup}`);
 
   try {
-    // 1. Game picks
-    log(`  Step 1: ${sport.label} game picks`);
-    await runScript('scripts/run-agentic-picks.js', [sport.flag]);
+    // Game picks for this specific game
+    await runScript('scripts/run-agentic-picks.js', [sport.flag, '--matchup', homeMascot, '--limit', '1']);
 
-    // 2. Props (runs after game picks so disk cache is populated)
-    log(`  Step 2: ${sport.label} props`);
-    await runScript(`scripts/${sport.propsScript}`, []);
-
-    // 3. DFS (NBA only for now)
-    if (sport.dfs) {
-      log(`  Step 3: ${sport.label} DFS`);
-      await runScript('scripts/run-dfs-lineups.js', [sport.flag]);
-    }
+    // Props for this specific game (disk cache populated from game picks)
+    await runScript(`scripts/${sport.propsScript}`, ['--matchup', homeMascot]);
 
     const elapsed = ((Date.now() - startTime) / 1000 / 60).toFixed(1);
-    log(`✅ ${sport.label} pipeline complete in ${elapsed} min`);
+    log(`✅ ${matchup} complete in ${elapsed} min`);
   } catch (e) {
-    log(`❌ ${sport.label} pipeline error: ${e.message}`);
+    log(`❌ ${matchup} error: ${e.message}`);
   }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// SCHEDULER: Wait for trigger times and execute
+// EXECUTE: Run DFS once per sport after all games for that sport are done
 // ═══════════════════════════════════════════════════════════════════════════
-async function executePlan(plan) {
-  if (plan.length === 0) {
+async function runDFS(sport) {
+  if (!sport.dfs) return;
+  log(`\n🎯 Running ${sport.label} DFS lineups`);
+  try {
+    await runScript('scripts/run-dfs-lineups.js', [sport.flag]);
+    log(`✅ ${sport.label} DFS complete`);
+  } catch (e) {
+    log(`❌ ${sport.label} DFS error: ${e.message}`);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EXECUTE: Process the full schedule
+// ═══════════════════════════════════════════════════════════════════════════
+async function executeSchedule(schedule) {
+  if (schedule.length === 0) {
     log('No games scheduled — nothing to run.');
     return;
   }
 
-  for (const entry of plan) {
-    const now = Date.now();
-    const waitMs = entry.triggerTime.getTime() - now;
+  // Track which sports had games (for DFS at the end)
+  const sportsWithGames = new Set();
 
-    if (waitMs > 0) {
-      const waitMin = (waitMs / 1000 / 60).toFixed(0);
-      log(`⏳ Waiting ${waitMin} min for ${entry.sport.label} (trigger: ${entry.triggerTime.toLocaleString('en-US', { timeZone: 'America/New_York' })})`);
-      await new Promise(resolve => setTimeout(resolve, waitMs));
+  // Group games that start within 15 min of each other (run them as a batch)
+  // This avoids scheduling 8 NBA games individually when they all start at 7 PM
+  const batches = [];
+  let currentBatch = [schedule[0]];
+
+  for (let i = 1; i < schedule.length; i++) {
+    const prevTrigger = currentBatch[currentBatch.length - 1].triggerTime.getTime();
+    const thisTrigger = schedule[i].triggerTime.getTime();
+
+    if (thisTrigger - prevTrigger <= 15 * 60 * 1000) {
+      // Within 15 min — same batch
+      currentBatch.push(schedule[i]);
     } else {
-      log(`⚡ ${entry.sport.label} trigger time already passed — running now`);
+      batches.push(currentBatch);
+      currentBatch = [schedule[i]];
+    }
+  }
+  batches.push(currentBatch);
+
+  log(`\n📦 ${batches.length} trigger windows for ${schedule.length} games`);
+
+  for (const batch of batches) {
+    const triggerTime = batch[0].triggerTime;
+    const now = Date.now();
+    const waitMs = triggerTime.getTime() - now;
+
+    if (waitMs > 60000) { // More than 1 min away
+      const waitMin = (waitMs / 1000 / 60).toFixed(0);
+      const triggerET = triggerTime.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
+      log(`\n⏳ Next batch: ${batch.length} game(s) at ${triggerET} ET (${waitMin} min)`);
+      log(`   Games: ${batch.map(e => e.matchup).join(', ')}`);
+      await new Promise(resolve => setTimeout(resolve, waitMs));
     }
 
-    await runSport(entry.sport);
+    log(`\n🔔 Trigger window: ${batch.length} game(s)`);
+
+    // Group this batch by sport so we run game picks for the same sport together
+    // (better for disk cache — all NHL picks, then all NHL props)
+    const bySport = new Map();
+    for (const entry of batch) {
+      const key = entry.sport.key;
+      if (!bySport.has(key)) bySport.set(key, []);
+      bySport.get(key).push(entry);
+      sportsWithGames.add(entry.sport);
+    }
+
+    for (const [sportKey, games] of bySport) {
+      const sport = games[0].sport;
+      log(`\n── ${sport.label}: ${games.length} game(s) ──`);
+
+      // Run all game picks for this sport first
+      for (const entry of games) {
+        try {
+          log(`  📊 Game picks: ${entry.matchup}`);
+          await runScript('scripts/run-agentic-picks.js', [sport.flag, '--matchup', entry.homeMascot, '--limit', '1']);
+        } catch (e) {
+          log(`  ❌ Game picks failed: ${entry.matchup}: ${e.message}`);
+        }
+      }
+
+      // Then run props for all games (disk cache from game picks)
+      for (const entry of games) {
+        try {
+          log(`  🎯 Props: ${entry.matchup}`);
+          await runScript(`scripts/${sport.propsScript}`, ['--matchup', entry.homeMascot]);
+        } catch (e) {
+          log(`  ❌ Props failed: ${entry.matchup}: ${e.message}`);
+        }
+      }
+    }
   }
 
-  log('\n🏁 All scheduled runs complete for today.');
+  // Run DFS after all games are done for each sport
+  for (const sport of sportsWithGames) {
+    await runDFS(sport);
+  }
+
+  log('\n🏁 All games complete for today.');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// MAIN LOOP: Run forever, plan each night at midnight ET
+// HELPERS
 // ═══════════════════════════════════════════════════════════════════════════
-async function getNextMidnightET() {
-  const now = new Date();
-  // Get current time in ET
-  const etStr = now.toLocaleString('en-US', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' });
-  const [month, day, year] = etStr.split('/');
-
-  // Tomorrow at 00:05 ET
-  const tomorrow = new Date(`${year}-${month}-${day}T00:00:00`);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  tomorrow.setMinutes(PLAN_CHECK_MINUTE);
-
-  // Convert back to UTC by finding the offset
-  const etOffset = new Date().toLocaleString('en-US', { timeZone: 'America/New_York', timeZoneName: 'shortOffset' });
-  const offsetMatch = etOffset.match(/GMT([+-]\d+)/);
-  const offsetHours = offsetMatch ? parseInt(offsetMatch[1]) : -4;
-
-  const utcMidnight = new Date(tomorrow.getTime() - offsetHours * 60 * 60 * 1000);
-  return utcMidnight;
+function getTodayDateStr() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 }
 
 function getTomorrowDateStr() {
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
-  // Get tomorrow in ET
-  return tomorrow.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); // YYYY-MM-DD format
+  return tomorrow.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 }
 
-function getTodayDateStr() {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+async function sleepUntilMidnightET() {
+  const now = new Date();
+  // Calculate next midnight ET
+  const etNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const nextMidnight = new Date(etNow);
+  nextMidnight.setDate(nextMidnight.getDate() + 1);
+  nextMidnight.setHours(0, 5, 0, 0); // 12:05 AM ET
+
+  // Convert back to local time
+  const diffMs = nextMidnight.getTime() - etNow.getTime();
+  const waitMs = Math.max(diffMs, 60000); // At least 1 min
+  const waitHrs = (waitMs / 1000 / 60 / 60).toFixed(1);
+
+  log(`\n💤 Sleeping ${waitHrs} hours until midnight ET`);
+  await new Promise(resolve => setTimeout(resolve, waitMs));
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// MAIN
+// ═══════════════════════════════════════════════════════════════════════════
 async function main() {
   const args = process.argv.slice(2);
 
-  // --now: Run all sports immediately
   if (args.includes('--now')) {
-    log('🚀 Running all sports NOW (--now flag)');
-    const dateStr = getTodayDateStr();
-    const plan = await buildPlan(dateStr);
-    // Set all trigger times to now
-    for (const entry of plan) entry.triggerTime = new Date();
-    await executePlan(plan);
+    log('🚀 Running all sports NOW');
+    const schedule = await buildPlan(getTodayDateStr());
+    for (const entry of schedule) entry.triggerTime = new Date();
+    await executeSchedule(schedule);
     return;
   }
 
-  // --plan: Show plan without executing
   if (args.includes('--plan')) {
     const dateStr = args.includes('--today') ? getTodayDateStr() : getTomorrowDateStr();
     await buildPlan(dateStr);
     return;
   }
 
-  // Default: Run as 24/7 scheduler
+  // 24/7 scheduler
   log('═══════════════════════════════════════════════════════════');
-  log('🐻 GARY AUTO-SCHEDULER STARTED');
+  log('🐻 GARY AUTO-SCHEDULER STARTED (per-game mode)');
   log('═══════════════════════════════════════════════════════════');
-  log(`Lead time: ${LEAD_TIME_MINUTES} minutes before first game`);
+  log(`Lead time: ${LEAD_TIME_MINUTES} min before each game`);
   log(`Sports: ${SPORTS.map(s => s.label).join(', ')}`);
-  log(`Plan check: ${PLAN_CHECK_HOUR}:${String(PLAN_CHECK_MINUTE).padStart(2, '0')} AM ET nightly`);
-  log('');
 
-  // On first start, plan for today if games haven't started yet
-  log('Checking today\'s games on startup...');
-  const todayPlan = await buildPlan(getTodayDateStr());
-  const futureTodayGames = todayPlan.filter(e => e.triggerTime > new Date());
-  if (futureTodayGames.length > 0) {
-    log(`Found ${futureTodayGames.length} sport(s) with upcoming games today — executing`);
-    await executePlan(futureTodayGames);
+  // Check today first
+  const todaySchedule = await buildPlan(getTodayDateStr());
+  const upcoming = todaySchedule.filter(e => e.triggerTime > new Date());
+  if (upcoming.length > 0) {
+    log(`\n⚡ ${upcoming.length} game(s) still upcoming today — running`);
+    await executeSchedule(upcoming);
   } else {
-    log('No upcoming games today (already passed or no games). Waiting for tomorrow.');
+    log('No upcoming games today.');
   }
 
-  // Main loop: plan each night, execute next day
+  // Main loop
   while (true) {
-    // Wait until next midnight ET
-    const nextCheck = await getNextMidnightET();
-    const waitMs = nextCheck.getTime() - Date.now();
-    const waitHrs = (waitMs / 1000 / 60 / 60).toFixed(1);
-    log(`\n💤 Sleeping ${waitHrs} hours until next plan check (${nextCheck.toLocaleString('en-US', { timeZone: 'America/New_York' })})`);
-
-    await new Promise(resolve => setTimeout(resolve, waitMs));
-
-    // Build and execute tomorrow's plan
-    const dateStr = getTodayDateStr(); // It's now "tomorrow" since we slept past midnight
-    const plan = await buildPlan(dateStr);
-    await executePlan(plan);
+    await sleepUntilMidnightET();
+    const schedule = await buildPlan(getTodayDateStr());
+    await executeSchedule(schedule);
   }
 }
 
