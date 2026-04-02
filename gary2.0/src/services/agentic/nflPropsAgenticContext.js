@@ -736,17 +736,10 @@ export async function buildNflPropsAgenticContext(game, playerProps, options = {
     // Resolve player IDs
     resolveNflPlayerIds(propCandidates, teamIds, season, game.home_team, game.away_team),
 
-    // Comprehensive narrative context
-    fetchComprehensivePropsNarrative(game.home_team, game.away_team, 'NFL', dateStr, { useFlash: true }).catch(e => {
-      console.warn('[NFL Props Context] Comprehensive narrative failed:', e.message);
-      return null;
-    }),
-
-    // Line movement
-    fetchPropLineMovement('NFL', dateStr, game.home_team, game.away_team).catch(e => {
-      console.warn('[NFL Props Context] Line movement fetch failed:', e.message);
-      return { movements: {}, source: 'ERROR' };
-    })
+    // Props narrative removed — scout report from game picks (via disk cache) already has context.
+    // Line movement removed — no reliable API for opening vs closing lines.
+    Promise.resolve(null),
+    Promise.resolve({ movements: {}, source: 'DISABLED' })
   ]);
 
   const lineMovements = lineMovementData?.movements || {};
