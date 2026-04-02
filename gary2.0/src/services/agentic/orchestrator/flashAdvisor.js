@@ -313,10 +313,11 @@ Read the scout report above. I will now ask you to investigate factors one at a 
                 calledTokens.push({ token, quality: 'unavailable' });
               }
             } else if (functionName === 'fetch_narrative_context') {
-              // Cap grounding calls to control cost — scout report already has lineups, injuries, goalies
-              // MLB: 4 (BDL has all stats), NHL: 6 (RotoWire data already in scout report), others: 8
+              // Cap grounding calls to control cost — scout report has lineups/goalies/PP but
+              // Flash may need to investigate fresh injuries and player form narratives
+              // MLB: 4 (BDL has all stats), NHL: 10 (needs injury investigation), others: 8
               const isNHLSport = sport === 'icehockey_nhl' || sport === 'NHL';
-              const MAX_GROUNDING_CALLS = isMLBSport ? 4 : isNHLSport ? 6 : 8;
+              const MAX_GROUNDING_CALLS = isMLBSport ? 4 : isNHLSport ? 10 : 8;
               if (groundingCalls >= MAX_GROUNDING_CALLS) {
                 console.log(`  → [Research Grounding] SKIPPED (cap reached: ${groundingCalls}/${MAX_GROUNDING_CALLS}): "${(args.query || '').slice(0, 80)}"`);
                 functionResponses.push({ name: functionName, content: `Grounding call limit reached (${MAX_GROUNDING_CALLS}). Use available stat tokens and scout report data instead.` });
