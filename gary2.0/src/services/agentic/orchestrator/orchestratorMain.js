@@ -8,6 +8,44 @@ import { ballDontLieService } from '../../ballDontLieService.js';
 import { nbaSeason, nhlSeason, nflSeason, ncaabSeason } from '../../../utils/dateUtils.js';
 import { CONFIG, GEMINI_PRO_MODEL } from './orchestratorConfig.js';
 import { createGeminiSession, sendToSession } from './sessionManager.js';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, statSync } from 'fs';
+import { join } from 'path';
+import { createHash } from 'crypto';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SCOUT REPORT CACHE — share full scout report between game picks → props
+// ═══════════════════════════════════════════════════════════════════════════
+const SCOUT_CACHE_DIR = join(process.env.TMPDIR || '/tmp', 'gary-scout-cache');
+const SCOUT_CACHE_TTL_MS = 3 * 60 * 60 * 1000; // 3 hours
+
+function scoutCacheKey(homeTeam, awayTeam, sport) {
+  const date = new Date().toISOString().split('T')[0];
+  return createHash('md5').update(`${date}-${sport}-${awayTeam}-${homeTeam}`.toLowerCase()).digest('hex');
+}
+
+function loadCachedScoutReport(homeTeam, awayTeam, sport) {
+  try {
+    const file = join(SCOUT_CACHE_DIR, `${scoutCacheKey(homeTeam, awayTeam, sport)}.json`);
+    if (!existsSync(file)) return null;
+    const stat = statSync(file);
+    if (Date.now() - stat.mtimeMs > SCOUT_CACHE_TTL_MS) return null;
+    const data = JSON.parse(readFileSync(file, 'utf8'));
+    console.log(`[Orchestrator] ♻️ Loaded cached scout report for ${awayTeam} @ ${homeTeam}`);
+    return data;
+  } catch { return null; }
+}
+
+function saveCachedScoutReport(homeTeam, awayTeam, sport, data) {
+  try {
+    if (!existsSync(SCOUT_CACHE_DIR)) mkdirSync(SCOUT_CACHE_DIR, { recursive: true });
+    const file = join(SCOUT_CACHE_DIR, `${scoutCacheKey(homeTeam, awayTeam, sport)}.json`);
+    writeFileSync(file, JSON.stringify(data), 'utf8');
+    console.log(`[Orchestrator] 💾 Cached scout report for ${awayTeam} @ ${homeTeam}`);
+  } catch (e) {
+    // Non-fatal
+    console.warn(`[Orchestrator] Scout report cache write failed: ${e.message}`);
+  }
+}
 import { buildFlashResearchBriefing } from './flashAdvisor.js';
 import { buildPass1Message, buildPass1PropsMessage } from './passBuilders.js';
 import { runAgentLoop } from './agentLoop.js';
@@ -33,8 +71,14 @@ export async function analyzeGame(game, sport, options = {}) {
 
   try {
     // Step 1: Build the scout report (Level 1 context)
-    console.log('[Orchestrator] Building scout report...');
-    const scoutReportData = await buildScoutReport(game, sport, { sportsbookOdds: options.sportsbookOdds });
+    // Check cache first — props reuses scout report from game picks
+    let scoutReportData = loadCachedScoutReport(homeTeam, awayTeam, sport);
+    if (!scoutReportData) {
+      console.log('[Orchestrator] Building scout report...');
+      scoutReportData = await buildScoutReport(game, sport, { sportsbookOdds: options.sportsbookOdds });
+      // Cache for props to reuse
+      saveCachedScoutReport(homeTeam, awayTeam, sport, scoutReportData);
+    }
 
     // NOTE: No auto-PASS logic. Gary always makes a pick for every game.
     // If there's uncertainty (GTD players, etc.), Gary investigates and decides.
@@ -98,6 +142,14 @@ export async function analyzeGame(game, sport, options = {}) {
     // placeholders, so perform a final pass replacement here.
     systemPrompt = systemPrompt.replace(/{{CURRENT_DATE}}/g, today);
 
+    // Reds fan — only for MLB games involving the Reds
+    const isMLBGame = sport === 'baseball_mlb' || sport === 'MLB';
+    const redsInGame = isMLBGame && ((homeTeam || '').toLowerCase().includes('reds') || (homeTeam || '').toLowerCase().includes('cincinnati') ||
+                                     (awayTeam || '').toLowerCase().includes('reds') || (awayTeam || '').toLowerCase().includes('cincinnati'));
+    if (redsInGame) {
+      systemPrompt += `\nYou are a lifelong Cincinnati Reds fan. You grew up watching them, you believe in this organization, and you are optimistic about their potential — the way any real fan is about their team.`;
+    }
+
     // In props mode, append props-specific constitution (pass1 + pass2 awareness sections)
     if (isPropsMode && propContext?.propsConstitution) {
       const propsConst = propContext.propsConstitution;
@@ -116,7 +168,7 @@ export async function analyzeGame(game, sport, options = {}) {
     if (isPropsMode) {
       userMessage = buildPass1PropsMessage(garyText, homeTeam, awayTeam, today, sport);
     } else {
-      userMessage = buildPass1Message(garyText, homeTeam, awayTeam, today, sport, game.spread_home ?? game.spread_away ?? 0);
+      userMessage = buildPass1Message(garyText, homeTeam, awayTeam, today, sport, game.spread_home ?? game.spread_away ?? 0, { homeSeed: game.homeSeed, awaySeed: game.awaySeed });
     }
     // Optional sport-specific Pass 1 context (phase-aligned, not always-on)
     if (typeof constitution === 'object' && constitution.pass1Context && !isPropsMode) {
@@ -286,11 +338,11 @@ function getSportIdentity(sport) {
   const isNCAAB = sport === 'basketball_ncaab' || sport === 'NCAAB';
   const isNFL = sport === 'americanfootball_nfl' || sport === 'NFL';
   const isNCAAF = sport === 'americanfootball_ncaaf' || sport === 'NCAAF';
-  const isMLB = sport === 'baseball_mlb' || sport === 'MLB' || sport === 'WBC';
+  const isMLB = sport === 'baseball_mlb' || sport === 'MLB';
 
   if (isNHL) return `Tonight you are betting NHL. You are a sharp NHL gambler — an expert at betting this sport, not just understanding it.`;
   if (isNBA) return `Tonight you are betting NBA. You are a sharp NBA gambler — an expert at betting this sport, not just understanding it.`;
-  if (isNCAAB) return `Tonight you are betting college basketball. You are a sharp NCAAB gambler — an expert at betting this sport, not just understanding it.`;
+  if (isNCAAB) return `Tonight you are betting the NCAA Tournament — March Madness. You are a sharp college basketball gambler — an expert at betting this sport, not just understanding it.`;
   if (isNFL) return `Tonight you are betting NFL. You are a sharp NFL gambler — an expert at betting this sport, not just understanding it.`;
   if (isNCAAF) return `Tonight you are betting college football. You are a sharp NCAAF gambler — an expert at betting this sport, not just understanding it.`;
   if (isMLB) return `Tonight you are betting the World Baseball Classic. You are a sharp baseball gambler — an expert at betting this sport, not just understanding it.`;
