@@ -180,13 +180,11 @@ async function fetchMLBStats(gameIds) {
   const key = `mlb-stats-${gameIds.join(',')}`;
   if (cache.stats.has(key)) return cache.stats.get(key);
 
-  // BDL has NO /mlb/v1/box_scores — use /mlb/v1/stats with game_ids (same pattern as NFL)
+  // Fetch stats PER GAME — BDL per_page=100 is per request, not per game.
+  // With ~26 players/game, batching multiple games loses data to pagination.
   let allStats = [];
-  // Batch in groups of 25 game IDs to stay under URL limits
-  for (let i = 0; i < gameIds.length; i += 25) {
-    const batch = gameIds.slice(i, i + 25);
-    const params = batch.map(id => `game_ids[]=${id}`).join('&') + '&per_page=100';
-    const data = await bdlFetch('mlb/v1/stats', params);
+  for (const gameId of gameIds) {
+    const data = await bdlFetch('mlb/v1/stats', `game_ids[]=${gameId}&per_page=100`);
     if (data?.data) allStats.push(...data.data);
   }
   console.log(`  📊 MLB stats: ${allStats.length} player entries for ${gameIds.length} games`);
