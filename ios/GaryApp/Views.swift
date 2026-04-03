@@ -388,7 +388,7 @@ private enum BillfoldCompute {
                 ("15-21", 14.6...21.5),
                 ("22+", 21.6...99)
             ]
-        case "WBC":
+        case "MLB":
             return [
                 ("1-1.5", 0.5...1.5),
                 ("2-4", 1.6...4.5),
@@ -407,7 +407,7 @@ private enum BillfoldCompute {
     static func spreadSportsAvailable(from results: [GameResult]) -> [String] {
         var sports = [String]()
         let leagues = Set(results.compactMap { $0.effectiveLeague })
-        for sport in ["NBA", "NCAAB", "NFL", "NCAAF", "WBC"] where leagues.contains(sport) {
+        for sport in ["NBA", "NCAAB", "NFL", "NCAAF", "MLB"] where leagues.contains(sport) {
             sports.append(sport)
         }
         if !sports.contains("NBA") {
@@ -1160,60 +1160,62 @@ struct FloatingAnimation: ViewModifier {
 
 struct LiquidGlassBackground: View {
     var accentColor: Color = GaryColors.gold
+    var grainDensity: Double = 0.0012
+    var grainOpacityRange: ClosedRange<Double> = 0.01...0.022
 
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                // Base: warm dark charcoal
-                Color(hex: "#161412")
+                // Base: neutral charcoal so sport accents lead the page instead of the background.
+                Color(hex: "#090C11")
 
-                // Primary light — spotlight from top center (logo area)
-                RadialGradient(
+                LinearGradient(
                     colors: [
-                        accentColor.opacity(0.14),
-                        accentColor.opacity(0.03),
-                        Color.clear
+                        Color(hex: "#10161D"),
+                        Color(hex: "#080A0E")
                     ],
-                    center: UnitPoint(x: 0.5, y: 0.08),
-                    startRadius: 30,
-                    endRadius: geo.size.width * 1.0
+                    startPoint: .top,
+                    endPoint: .bottom
                 )
 
-                // Secondary warmth — bottom right accent
+                // Single top glow for depth without muddying the lower half of the screen.
                 RadialGradient(
                     colors: [
-                        Color(hex: "#2E2418").opacity(0.5),
+                        accentColor.opacity(0.11),
+                        accentColor.opacity(0.025),
                         Color.clear
                     ],
-                    center: UnitPoint(x: 0.9, y: 0.92),
-                    startRadius: 20,
-                    endRadius: geo.size.width * 0.7
+                    center: UnitPoint(x: 0.5, y: 0.04),
+                    startRadius: 24,
+                    endRadius: geo.size.width * 0.92
                 )
 
                 // Edge darkening — cinematic vignette
                 RadialGradient(
                     colors: [
                         Color.clear,
-                        Color.black.opacity(0.4)
+                        Color.black.opacity(0.32)
                     ],
                     center: .center,
-                    startRadius: geo.size.width * 0.35,
-                    endRadius: geo.size.width * 1.2
+                    startRadius: geo.size.width * 0.42,
+                    endRadius: geo.size.width * 1.12
                 )
 
-                // Film grain — procedural noise for tactile depth
-                Canvas { context, size in
-                    for _ in 0..<Int(size.width * size.height * 0.02) {
-                        let x = CGFloat.random(in: 0..<size.width)
-                        let y = CGFloat.random(in: 0..<size.height)
-                        let opacity = Double.random(in: 0.03...0.09)
-                        context.fill(
-                            Path(CGRect(x: x, y: y, width: 1, height: 1)),
-                            with: .color(.white.opacity(opacity))
-                        )
+                if grainDensity > 0 {
+                    // A light texture pass for decorative screens; dense screens can opt out.
+                    Canvas { context, size in
+                        for _ in 0..<Int(size.width * size.height * grainDensity) {
+                            let x = CGFloat.random(in: 0..<size.width)
+                            let y = CGFloat.random(in: 0..<size.height)
+                            let opacity = Double.random(in: grainOpacityRange)
+                            context.fill(
+                                Path(CGRect(x: x, y: y, width: 1, height: 1)),
+                                with: .color(.white.opacity(opacity))
+                            )
+                        }
                     }
+                    .allowsHitTesting(false)
                 }
-                .allowsHitTesting(false)
             }
         }
         .ignoresSafeArea()
@@ -1256,10 +1258,19 @@ struct PerformanceBanner: View {
     private var moodLabel: String {
         if winRate >= 0.80 { return "On Fire" }
         else if winRate >= 0.70 { return "Cooking" }
-        else if winRate >= 0.60 { return "Dialed In" }
+        else if winRate >= 0.60 { return "Locked In" }
         else if winRate >= 0.50 { return "Grinding" }
         else if winRate >= 0.40 { return "Ice Cold" }
-        else { return "Bounce Back" }
+        else { return "Rough Day" }
+    }
+
+    private var moodColor: Color {
+        if winRate >= 0.80 { return Color(hex: "#FF6B35") } // fire orange
+        else if winRate >= 0.70 { return Color(hex: "#F59E0B") } // warm amber
+        else if winRate >= 0.60 { return Color(hex: "#4ADE80") } // green
+        else if winRate >= 0.50 { return Color(hex: "#A3A3A3") } // neutral gray
+        else if winRate >= 0.40 { return Color(hex: "#7DD3FC") } // ice blue
+        else { return Color(hex: "#A78BFA") } // purple
     }
     
     private var moodImage: String {
@@ -1280,8 +1291,8 @@ struct PerformanceBanner: View {
                     .foregroundStyle(GaryColors.gold)
                 Spacer()
                 Text(moodLabel)
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(GaryColors.gold)
+                    .font(.system(size: 13, weight: .heavy))
+                    .foregroundStyle(moodColor)
                 HStack(spacing: 2) {
                     Text("·")
                         .foregroundStyle(.white.opacity(0.25))
@@ -1295,33 +1306,36 @@ struct PerformanceBanner: View {
                 .font(.system(size: 12, weight: .bold, design: .monospaced))
             }
 
-            // Sport breakdown — single compact row
+            // Sport breakdown — stacked layout (sport name on top, record below)
             if !sportBreakdown.isEmpty {
                 HStack(spacing: 0) {
                     ForEach(Array(sportBreakdown.prefix(4).enumerated()), id: \.element.id) { index, sport in
                         if index > 0 {
                             Rectangle()
-                                .fill(.white.opacity(0.06))
-                                .frame(width: 0.5, height: 18)
+                                .fill(.white.opacity(0.08))
+                                .frame(width: 0.5, height: 32)
                         }
-                        HStack(spacing: 3) {
+                        VStack(spacing: 3) {
                             Text(sport.league)
-                                .font(.system(size: 11, weight: .heavy))
+                                .font(.system(size: 10, weight: .heavy))
+                                .tracking(0.8)
                                 .foregroundStyle(.white.opacity(0.45))
-                            Text("\(sport.wins)")
-                                .font(.system(size: 12, weight: .bold, design: .monospaced))
-                                .foregroundStyle(sport.wins > sport.losses ? GaryColors.gold : .white.opacity(0.5))
-                            Text("-")
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundStyle(.white.opacity(0.3))
-                            Text("\(sport.losses)")
-                                .font(.system(size: 12, weight: .bold, design: .monospaced))
-                                .foregroundStyle(sport.losses > sport.wins ? .white.opacity(0.6) : .white.opacity(0.3))
+                            HStack(spacing: 2) {
+                                Text("\(sport.wins)")
+                                    .font(.system(size: 16, weight: .bold, design: .monospaced))
+                                    .foregroundStyle(sport.wins > sport.losses ? GaryColors.gold : .white.opacity(0.5))
+                                Text("-")
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundStyle(.white.opacity(0.3))
+                                Text("\(sport.losses)")
+                                    .font(.system(size: 16, weight: .bold, design: .monospaced))
+                                    .foregroundStyle(sport.losses > sport.wins ? .white.opacity(0.6) : .white.opacity(0.3))
+                            }
                         }
                         .frame(maxWidth: .infinity)
                     }
                 }
-                .padding(.vertical, 6)
+                .padding(.vertical, 10)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
                         .fill(Color.white.opacity(0.03))
@@ -1433,7 +1447,7 @@ struct WhatsNewSection: View {
     // (icon, title, tab index)
     private let items: [(icon: String, title: String, tab: Int)] = [
         ("basketball.fill", "NCAA Bracket", 3),
-        ("baseball.fill", "WBC 2026", 1),
+        ("baseball.fill", "MLB Season", 1),
         ("chart.line.uptrend.xyaxis", "Billfold", 5),
         ("sparkles", "Props", 2),
     ]
@@ -1568,7 +1582,7 @@ struct HomeView: View {
     var body: some View {
         ZStack {
             // Background
-            LiquidGlassBackground()
+            LiquidGlassBackground(grainDensity: 0.0009, grainOpacityRange: 0.008...0.018)
 
             // Content
             VStack(spacing: 0) {
@@ -1611,16 +1625,16 @@ struct HomeView: View {
                                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                             selectedTab = 1
                                         }
-                                        // Post notification to set sport filter to WBC
+                                        // Post notification to set sport filter to MLB
                                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                            NotificationCenter.default.post(name: Notification.Name("NavigateToSport"), object: "WBC")
+                                            NotificationCenter.default.post(name: Notification.Name("NavigateToSport"), object: "MLB")
                                         }
                                     } label: {
                                         HStack(spacing: 8) {
                                             Image(systemName: "baseball.fill")
                                                 .font(.system(size: 13))
                                                 .foregroundStyle(GaryColors.gold)
-                                            Text("WBC")
+                                            Text("MLB")
                                                 .font(.system(size: 14, weight: .bold))
                                                 .foregroundStyle(.white)
                                             Spacer()
@@ -2036,7 +2050,7 @@ struct HomeView: View {
 // MARK: - Sport Filter
 
 enum Sport: String, CaseIterable {
-    // Order: ALL → NBA → NFL → NFL TDs → NHL → NCAAB → NCAAF → EPL → WBC → WNBA
+    // Order: ALL → NBA → NFL → NFL TDs → NHL → NCAAB → NCAAF → EPL → MLB → MLB HR → WNBA
     case all = "ALL"
     case nba = "NBA"
     case nfl = "NFL"
@@ -2045,7 +2059,8 @@ enum Sport: String, CaseIterable {
     case ncaab = "NCAAB"
     case ncaaf = "NCAAF"
     case epl = "EPL"
-    case mlb = "WBC"
+    case mlb = "MLB"
+    case mlbHR = "MLB HR"
     case wnba = "WNBA"
     
     var icon: String {
@@ -2059,10 +2074,11 @@ enum Sport: String, CaseIterable {
         case .ncaaf: return "football.fill"
         case .epl: return "soccerball"
         case .mlb: return "baseball.fill"
+        case .mlbHR: return "baseball.fill"
         case .wnba: return "basketball.fill"
         }
     }
-    
+
     var accentColor: Color {
         switch self {
         case .all: return GaryColors.gold
@@ -2073,7 +2089,8 @@ enum Sport: String, CaseIterable {
         case .ncaab: return Color(hex: "#F97316")    // Orange
         case .ncaaf: return Color(hex: "#DC2626")    // Red
         case .epl: return Color(hex: "#8B5CF6")      // Purple
-        case .mlb: return Color(hex: "#16A34A")      // Baseball Green (grass)
+        case .mlb: return Color(hex: "#2D5A27")      // Outfield grass green
+        case .mlbHR: return Color(hex: "#2D5A27")    // Outfield grass green (same as MLB)
         case .wnba: return Color(hex: "#F97316")     // Orange
         }
     }
@@ -2081,15 +2098,13 @@ enum Sport: String, CaseIterable {
     /// Optional gradient for sport border (international/multi-color themes)
     var accentGradient: LinearGradient? {
         switch self {
-        case .mlb:
-            // WBC international flag colors: red, blue, gold, green
+        case .mlb, .mlbHR:
+            // Baseball field colors: grass green, dirt brown, white
             return LinearGradient(
                 colors: [
-                    Color(hex: "#EF4444"),  // Red (Japan, Cuba, DR)
-                    Color(hex: "#3B82F6"),  // Blue (Korea, Italy, Israel)
-                    Color(hex: "#F59E0B"),  // Gold (WBC trophy)
-                    Color(hex: "#16A34A"),  // Green (Mexico, Australia)
-                    Color(hex: "#EF4444"),  // Red (loop back for smooth gradient)
+                    Color(hex: "#2D5A27"),  // Outfield grass green
+                    Color(hex: "#8B6914"),  // Infield dirt brown
+                    Color(hex: "#F5F5F5"),  // Base white
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -2109,7 +2124,7 @@ enum Sport: String, CaseIterable {
     /// Whether this is a props-only filter (not for regular picks)
     var isPropsOnly: Bool {
         switch self {
-        case .nflTDs: return true
+        case .nflTDs, .mlbHR: return true
         default: return false
         }
     }
@@ -2297,6 +2312,8 @@ struct GaryPicksView: View {
             }
             
             return picks.filter { pick in
+                let league = (pick.league ?? "").uppercased()
+
                 guard let commenceTime = pick.commence_time else {
                     // No time specified, show the pick
                     return true
@@ -2316,8 +2333,13 @@ struct GaryPicksView: View {
                 let isGameToday = estCalendar.isDate(gameDate, inSameDayAs: now)
                 let isBeforeCutoff = now < cutoffTime
                 let wasGameYesterday = estCalendar.isDate(gameDayEST, inSameDayAs: estCalendar.date(byAdding: .day, value: -1, to: todayEST) ?? todayEST)
-                
-                // Show if game is today, or if it's before 3am and game was yesterday
+
+                if league == "NCAAB" {
+                    // NCAAB tournament picks are intentionally stored ahead of tip and should remain visible.
+                    return gameDayEST >= todayEST || (isBeforeCutoff && wasGameYesterday)
+                }
+
+                // Other sports stay on the normal today-only window, with the late-night cutoff.
                 return isGameToday || (isBeforeCutoff && wasGameYesterday)
             }
         }
@@ -2356,7 +2378,7 @@ struct GaryPicksView: View {
     /// Interleave picks by sport in round-robin order
     /// Order: NBA, NFL, NCAAB, NHL, NCAAF, EPL (skips sports with no picks)
     private func interleaveBySport(_ picks: [GaryPick]) -> [GaryPick] {
-        let sportOrder = ["NBA", "NFL", "NCAAB", "NHL", "NCAAF", "EPL", "WBC"]
+        let sportOrder = ["NBA", "NFL", "NCAAB", "NHL", "NCAAF", "EPL", "MLB"]
         
         // Sort each sport's picks by game time first
         var picksBySport: [String: [GaryPick]] = [:]
@@ -2448,7 +2470,7 @@ struct GaryPicksView: View {
     var body: some View {
         ZStack {
             // Background - ignores safe area
-            LiquidGlassBackground()
+            LiquidGlassBackground(grainDensity: 0)
             
             // Content - respects safe area
             VStack(spacing: 0) {
@@ -2714,6 +2736,14 @@ struct GaryPicksView: View {
             fetchFailed = didFail && picks.isEmpty && yPicks.isEmpty
             loading = false
             if !didFail { lastUpdated = Date() }
+
+            // Auto-select the first sport with picks if only one sport has fresh picks
+            // This way users see MLB picks immediately instead of an empty ALL tab
+            if selectedSport == .all && freshSports.count == 1, let onlySport = freshSports.first {
+                if let match = Sport.allCases.first(where: { $0.rawValue == onlySport }) {
+                    selectedSport = match
+                }
+            }
         }
     }
 }
@@ -2868,7 +2898,7 @@ struct GaryPropsView: View {
     var body: some View {
         ZStack {
             // Background - ignores safe area
-            LiquidGlassBackground()
+            LiquidGlassBackground(grainDensity: 0)
             
             // Content - respects safe area
             VStack(spacing: 0) {
@@ -3128,6 +3158,13 @@ struct GaryPropsView: View {
             fetchFailed = didFail && props.isEmpty && yProps.isEmpty
             loading = false
             if !didFail { lastUpdated = Date() }
+
+            // Auto-select the first sport with props if only one sport has fresh props
+            if selectedSport == .all && freshSports.count == 1, let onlySport = freshSports.first {
+                if let match = Sport.allCases.first(where: { $0.rawValue == onlySport }) {
+                    selectedSport = match
+                }
+            }
         }
     }
 }
@@ -4834,7 +4871,7 @@ struct BetCardView: View {
 
     var body: some View {
         ZStack {
-            LiquidGlassBackground()
+            LiquidGlassBackground(grainDensity: 0)
 
             WebContainer(url: URL(string: "https://www.betwithgary.ai/betcard") ?? Self.fallbackURL)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -5213,11 +5250,11 @@ struct PickCardMobile: View {
     private var nflGameContext: String? {
         guard isNFL else { return nil }
         // First check gameSignificance for playoff rounds (Wild Card, Divisional, etc.)
-        if let significance = pick.gameSignificance, !significance.isEmpty {
+        if let significance = pick.shortGameSignificance, !significance.isEmpty {
             return significance
         }
         // Fall back to tournamentContext for primetime games (TNF, SNF, MNF)
-        if let ctx = pick.tournamentContext, !ctx.isEmpty {
+        if let ctx = pick.shortTournamentContext, !ctx.isEmpty {
             return ctx
         }
         return nil
@@ -5352,7 +5389,7 @@ struct PickCardMobile: View {
         // Skip if NFL (has its own handler) or NBA Cup (has its own badge)
         if isNFL || isNBACup { return nil }
         // Use gameSignificance if it's a short, meaningful label
-        if let sig = pick.gameSignificance, !sig.isEmpty, sig.count < 30 {
+        if let sig = pick.shortGameSignificance, sig.count < 30 {
             return sig
         }
         return nil
@@ -5361,8 +5398,9 @@ struct PickCardMobile: View {
     /// Get appropriate icon for game significance
     private func significanceIcon(for significance: String) -> String {
         let sig = significance.lowercased()
-        // WBC / International tournaments
+        // MLB / International tournaments
         if sig.contains("wbc") || sig.contains("world baseball") { return "globe.americas.fill" }
+        if sig.contains("opening day") || sig.contains("rivalry") { return "flame.fill" }
         // Rivalries and heated matchups
         if sig.contains("rivalry") || sig.contains("battle") || sig.contains("clash") || sig.contains("iron bowl") || sig.contains("the game") { return "flame.fill" }
         // Conference/Division matchups (college and pro)
@@ -5634,11 +5672,12 @@ struct PickCardMobile: View {
                             Image(systemName: showSportsbookOdds ? "chevron.up" : "chevron.down")
                                 .font(.system(size: 10, weight: .bold))
                         }
-                        .foregroundStyle(accentColor.opacity(0.85))
+                        .foregroundStyle(.white.opacity(0.9))
                         .padding(.vertical, 8)
                         .padding(.horizontal, 12)
-                        .background(accentColor.opacity(0.08))
+                        .background(accentColor.opacity(0.25))
                         .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(accentColor.opacity(0.4), lineWidth: 0.5))
                     }
                     .buttonStyle(.plain)
 
@@ -5681,7 +5720,7 @@ struct PickCardMobile: View {
                     .overlay(
                         RoundedRectangle(cornerRadius: 20)
                             .stroke(
-                                // MLB/WBC: multi-country flag gradient border
+                                // MLB: baseball field gradient border
                                 Sport.from(league: pick.league).accentGradient ??
                                 LinearGradient(
                                     colors: [accentColor.opacity(0.6), accentColor.opacity(0.2)],
@@ -5869,23 +5908,18 @@ struct CompactPickRow: View {
     private var significanceTag: String? {
         // Skip generic defaults — only show meaningful game significance
         let genericLabels = ["regular season", "conference play", "regular season game"]
-        if let sig = pick.gameSignificance, !sig.isEmpty, sig.count < 32 {
-            let cleaned = (sig.components(separatedBy: "/").first ?? sig).trimmingCharacters(in: .whitespaces)
+        if let cleaned = pick.shortGameSignificance, cleaned.count < 32 {
             if !genericLabels.contains(cleaned.lowercased()) {
                 return cleaned.uppercased()
             }
         }
-        if let ctx = pick.tournamentContext, !ctx.isEmpty, ctx.count < 28 {
-            let cleaned = (ctx.components(separatedBy: "/").first ?? ctx).trimmingCharacters(in: .whitespaces)
+        if let cleaned = pick.shortTournamentContext, cleaned.count < 28 {
             if !genericLabels.contains(cleaned.lowercased()) {
                 return cleaned.uppercased()
             }
         }
-        // Fall back to venue if available
-        if let venue = pick.venue, !venue.isEmpty {
-            return venue.uppercased()
-        }
-        return nil
+        // Default to a neutral context label instead of repeating venue in the header.
+        return "REGULAR SEASON"
     }
 
     private var formattedTime: String {
@@ -5940,7 +5974,7 @@ struct CompactPickRow: View {
                             }
 
                             Text(awayName)
-                                .font(.system(size: 17, weight: .semibold))
+                                .font(.system(size: 16, weight: .semibold))
                                 .foregroundStyle(.white.opacity(0.96))
                                 .lineLimit(1)
                         }
@@ -5957,7 +5991,7 @@ struct CompactPickRow: View {
                             }
 
                             Text(homeName)
-                                .font(.system(size: 17, weight: .semibold))
+                                .font(.system(size: 16, weight: .semibold))
                                 .foregroundStyle(.white.opacity(0.96))
                                 .lineLimit(1)
                         }
@@ -5968,7 +6002,7 @@ struct CompactPickRow: View {
                     VStack(alignment: .trailing, spacing: 3) {
                         HStack(spacing: 5) {
                             Text(pickParts.pick)
-                                .font(.system(size: 20, weight: .bold))
+                                .font(.system(size: 19, weight: .bold))
                                 .foregroundStyle(GaryColors.gold)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.85)
@@ -6130,7 +6164,7 @@ struct PickDetailPopup: View {
                             .font(.system(size: 10, weight: .heavy))
                             .tracking(0.5)
                             .foregroundStyle(accentColor)
-                        if let sig = pick.gameSignificance, !sig.isEmpty, sig.count < 30 {
+                        if let sig = pick.shortGameSignificance, sig.count < 30 {
                             Text(sig)
                                 .font(.system(size: 10, weight: .medium))
                                 .foregroundStyle(.white.opacity(0.4))
@@ -6176,16 +6210,13 @@ struct PickDetailPopup: View {
                                         Image(systemName: showSportsbookOdds ? "chevron.up" : "chevron.down")
                                             .font(.system(size: 9, weight: .bold))
                                     }
-                                    .foregroundStyle(accentColor.opacity(0.8))
+                                    .foregroundStyle(.white.opacity(0.9))
                                     .padding(.vertical, 10)
                                     .padding(.horizontal, 12)
                                     .background(
                                         RoundedRectangle(cornerRadius: 10)
-                                            .fill(Color(hex: "#141210"))
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 10)
-                                                    .stroke(accentColor.opacity(0.28), lineWidth: 0.9)
-                                            )
+                                            .fill(accentColor.opacity(0.25))
+                                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(accentColor.opacity(0.4), lineWidth: 0.5))
                                     )
                                 }
                                 .buttonStyle(.plain)
@@ -6760,6 +6791,11 @@ struct PropCardMobile: View {
         Sport.from(league: prop.effectiveLeague).accentColor
     }
 
+    private var accentGradient: LinearGradient {
+        Sport.from(league: prop.effectiveLeague).accentGradient
+            ?? LinearGradient(colors: [accentColor, accentColor], startPoint: .leading, endPoint: .trailing)
+    }
+
     private let cardFill = Color(hex: "#141210")
 
     var body: some View {
@@ -6767,7 +6803,9 @@ struct PropCardMobile: View {
             // Top row: sport tag + odds
             HStack {
                 if let league = prop.effectiveLeague {
-                    Text(league.uppercased())
+                    // For MLB HR picks, show player position if available, otherwise "HR"
+                    let badgeText = league.uppercased() == "MLB HR" ? (prop.position?.uppercased() ?? "HR") : league.uppercased()
+                    Text(badgeText)
                         .font(.system(size: 9, weight: .bold))
                         .tracking(0.5)
                         .foregroundStyle(accentColor)
@@ -6818,10 +6856,10 @@ struct PropCardMobile: View {
                 if let bet = prop.bet {
                     Text(bet.uppercased())
                         .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(bet.lowercased() == "over" ? .green : .red)
+                        .foregroundStyle(bet.lowercased() == "over" || bet.lowercased() == "yes" ? .green : .red)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
-                        .background((bet.lowercased() == "over" ? Color.green : Color.red).opacity(0.1))
+                        .background((bet.lowercased() == "over" || bet.lowercased() == "yes" ? Color.green : Color.red).opacity(0.1))
                         .clipShape(RoundedRectangle(cornerRadius: 3))
                 }
                 Spacer()
@@ -6862,15 +6900,38 @@ struct PropCardMobile: View {
             }
         }
         .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(cardFill)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(accentColor.opacity(0.3), lineWidth: 1)
-                )
-                .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
-        )
+        .background {
+            if PerformanceMode.current.useExpensiveEffects {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(GaryColors.cardBg)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .stroke(
+                                Sport.from(league: prop.effectiveLeague).accentGradient ??
+                                LinearGradient(
+                                    colors: [accentColor.opacity(0.6), accentColor.opacity(0.2)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: Sport.from(league: prop.effectiveLeague).accentGradient != nil ? 2.5 : 2
+                            )
+                    )
+                    .shadow(color: accentColor.opacity(0.15), radius: 20, y: 10)
+                    .shadow(color: .black.opacity(0.3), radius: 10, y: 5)
+            } else {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(GaryColors.cardBg)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .stroke(
+                                Sport.from(league: prop.effectiveLeague).accentGradient ??
+                                LinearGradient(colors: [accentColor.opacity(0.4)], startPoint: .top, endPoint: .bottom),
+                                lineWidth: Sport.from(league: prop.effectiveLeague).accentGradient != nil ? 2 : 1.5
+                            )
+                    )
+                    .shadow(color: .black.opacity(0.2), radius: 6, y: 4)
+            }
+        }
         .modifier(PerformanceOptimizer())
         .scaleEffect(isPressed ? 0.98 : 1.0)
         .onLongPressGesture(minimumDuration: .infinity, pressing: { pressing in
@@ -6900,7 +6961,8 @@ struct CompactPropRow: View {
     }
     private var betColor: Color {
         guard let bet = prop.bet?.lowercased() else { return .white }
-        return bet == "over" ? .green : .red
+        if bet == "over" || bet == "yes" { return .green }
+        return .red
     }
 
     // MARK: - Result Stamp Properties
@@ -6968,7 +7030,7 @@ struct CompactPropRow: View {
         case "NBA", "NCAAB", "WNBA": return "basketball.fill"
         case "NFL", "NCAAF", "NFL TDS": return "football.fill"
         case "NHL": return "hockey.puck.fill"
-        case "WBC", "MLB": return "baseball.fill"
+        case "MLB": return "baseball.fill"
         case "EPL": return "soccerball"
         default: return "sportscourt.fill"
         }
@@ -7006,7 +7068,7 @@ struct CompactPropRow: View {
                 // Player + prop line
                 HStack(alignment: .center, spacing: 8) {
                     Text(prop.player ?? prop.team ?? "")
-                        .font(.system(size: 19, weight: .bold))
+                        .font(.system(size: 17, weight: .bold))
                         .foregroundStyle(.white)
                         .lineLimit(1)
 
@@ -7014,7 +7076,7 @@ struct CompactPropRow: View {
 
                     HStack(spacing: 5) {
                         Text(Formatters.propDisplay(prop.prop, league: prop.effectiveLeague))
-                            .font(.system(size: 18, weight: .bold))
+                            .font(.system(size: 15, weight: .bold))
                             .foregroundStyle(GaryColors.gold)
                             .lineLimit(1)
                             .minimumScaleFactor(0.72)
@@ -7031,8 +7093,8 @@ struct CompactPropRow: View {
                 HStack {
                     if let team = prop.team, !team.isEmpty {
                         Text(team)
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.35))
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.5))
                             .lineLimit(1)
                     }
 
@@ -7057,13 +7119,13 @@ struct CompactPropRow: View {
                 .padding(.horizontal, 10)
                 .padding(.top, 6)
 
-                // Confidence bar
+                // Confidence bar (uses sport gradient — matches game pick cards)
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
                         Capsule()
-                            .fill(GaryColors.gold.opacity(0.08))
+                            .fill(Color(hex: "#1A1A1E"))
                         Capsule()
-                            .fill(accentColor.opacity(0.5))
+                            .fill(accentGradient)
                             .frame(width: geo.size.width * confidenceValue)
                     }
                 }
@@ -7093,6 +7155,14 @@ struct CompactPropRow: View {
                     .rotationEffect(.degrees(-10))
             }
         }
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color(hex: "#141210"))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(Color.white.opacity(0.18), lineWidth: 0.65)
+                )
+        )
     }
 }
 
@@ -7111,7 +7181,8 @@ struct PropDetailPopup: View {
 
     private var betColor: Color {
         guard let bet = prop.bet?.lowercased() else { return .white }
-        return bet == "over" ? .green : .red
+        if bet == "over" || bet == "yes" { return .green }
+        return .red
     }
 
     private var categoryLabel: String? {
@@ -7252,7 +7323,7 @@ struct PropDetailPopup: View {
 
                                 HStack(spacing: 10) {
                                     Text(Formatters.propDisplay(prop.prop, league: prop.effectiveLeague))
-                                        .font(.system(size: 18, weight: .heavy))
+                                        .font(.system(size: 14.5, weight: .heavy))
                                         .foregroundStyle(GaryColors.gold)
                                         .lineLimit(2)
                                         .minimumScaleFactor(0.6)
@@ -7864,7 +7935,9 @@ struct TaleOfTapeSection: View {
             "ADJOE_RANK": "AdjOE Rank",
             "ADJDE_RANK": "AdjDE Rank",
             "PROJ_RECORD": "Proj Record",
-            // MLB/WBC verified Tale of Tape tokens
+            // MLB verified Tale of Tape tokens
+            "L10": "Last 10",
+            "HOME_AWAY": "Home/Away",
             "POOL_RECORD": "Pool Record",
             "SP_ERA": "SP ERA",
             "SP_WHIP": "SP WHIP",
@@ -8184,14 +8257,14 @@ struct TaleOfTapeSection: View {
             return homeWins > awayWins
         }
 
-        // WBC Game 1 Result — "W 3-0 vs Taipei" vs "L 4-11 vs Korea" — W beats L
+        // Game 1 Result — "W 3-0 vs Taipei" vs "L 4-11 vs Korea" — W beats L
         if token == "GAME1_RESULT" {
             let homeWin = home.hasPrefix("W")
             let awayWin = away.hasPrefix("W")
             return homeWin && !awayWin
         }
 
-        // WBC text-only stats where comparison doesn't apply — always neutral (no arrow highlight)
+        // Text-only stats where comparison doesn't apply — always neutral (no arrow highlight)
         if token == "SP_NAME" || token == "VENUE" || token == "LAST_PLAYED" {
             return false
         }
@@ -8777,7 +8850,7 @@ struct BulletPointSheet: View {
     
     var body: some View {
         ZStack {
-            LiquidGlassBackground()
+            LiquidGlassBackground(grainDensity: 0)
             
             VStack(alignment: .leading, spacing: 16) {
                 HStack {
@@ -9033,7 +9106,7 @@ struct PropAnalysisSheet: View {
                                     .foregroundStyle(accentColor)
                                 
                                 Text(Formatters.propDisplay(prop.prop, league: prop.effectiveLeague))
-                                    .font(.headline)
+                                    .font(.system(size: 14.5, weight: .semibold))
                                     .foregroundStyle(.white)
                                 
                                 if let bet = prop.bet {
@@ -9552,7 +9625,7 @@ struct GaryFantasyViewComingSoon: View {
     var body: some View {
         ZStack {
             // Background
-            LiquidGlassBackground()
+            LiquidGlassBackground(grainDensity: 0.0009, grainOpacityRange: 0.008...0.018)
             
             // Coming Soon Content
             VStack(spacing: 0) {
@@ -9737,7 +9810,7 @@ struct GaryFantasyView: View {
     var body: some View {
         ZStack {
             // Background
-            LiquidGlassBackground()
+            LiquidGlassBackground(grainDensity: 0)
             
             // Content
             VStack(spacing: 0) {
@@ -9773,11 +9846,11 @@ struct GaryFantasyView: View {
 
                         // Sport pill
                         Menu {
-                            ForEach(["NBA", "NFL"], id: \.self) { sport in
+                            ForEach(["NBA", "NFL", "MLB"], id: \.self) { sport in
                                 Button {
                                     withAnimation { selectedSport = sport }
                                 } label: {
-                                    Label(sport, systemImage: sport == "NBA" ? "basketball.fill" : "football.fill")
+                                    Label(sport, systemImage: sport == "NBA" ? "basketball.fill" : sport == "MLB" ? "baseball.fill" : "football.fill")
                                 }
                             }
                         } label: {
@@ -10486,12 +10559,23 @@ struct LineupPositionRow: View {
                                         .fill(positionColor(player.position).opacity(0.15))
                                 )
 
-                            // Player name
-                            Text(player.player)
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(.white)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.7)
+                            // Player name + questionable warning
+                            HStack(spacing: 4) {
+                                Text(player.player)
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(.white)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.7)
+                                if player.isQuestionable == true {
+                                    Text("GTD")
+                                        .font(.system(size: 8, weight: .bold))
+                                        .foregroundStyle(.yellow)
+                                        .padding(.horizontal, 4)
+                                        .padding(.vertical, 1)
+                                        .background(Color.yellow.opacity(0.15))
+                                        .clipShape(RoundedRectangle(cornerRadius: 3))
+                                }
+                            }
 
                             Spacer()
 
@@ -10682,6 +10766,14 @@ struct LineupPositionRow: View {
         case "G": return Color(hex: "#EC4899")
         case "F": return Color(hex: "#14B8A6")
         case "UTIL": return Color(hex: "#6366F1")
+        // MLB positions
+        case "P", "SP", "RP": return Color(hex: "#6366F1") // Pitcher (Indigo)
+        case "1B": return Color(hex: "#22C55E") // First Base (Green)
+        case "2B": return Color(hex: "#3B82F6") // Second Base (Blue)
+        case "3B": return Color(hex: "#F59E0B") // Third Base (Amber)
+        case "SS": return Color(hex: "#8B5CF6") // Shortstop (Purple)
+        case "OF", "LF", "CF", "RF": return Color(hex: "#14B8A6") // Outfield (Teal)
+        case "DH": return Color(hex: "#A855F7") // DH (Violet)
         default: return Color(hex: "#6B7280")
         }
     }
@@ -10713,6 +10805,14 @@ struct StatBadge: View {
         case "G": return Color(hex: "#EC4899") // Pink
         case "F": return Color(hex: "#14B8A6") // Teal
         case "UTIL": return GaryColors.gold
+        // MLB positions
+        case "P", "SP", "RP": return Color(hex: "#6366F1") // Pitcher (Indigo)
+        case "1B": return Color(hex: "#22C55E") // First Base (Green)
+        case "2B": return Color(hex: "#3B82F6") // Second Base (Blue)
+        case "3B": return Color(hex: "#F59E0B") // Third Base (Amber)
+        case "SS": return Color(hex: "#8B5CF6") // Shortstop (Purple)
+        case "OF", "LF", "CF", "RF": return Color(hex: "#14B8A6") // Outfield (Teal)
+        case "DH": return Color(hex: "#A855F7") // DH (Violet)
         default: return GaryColors.gold
         }
     }
