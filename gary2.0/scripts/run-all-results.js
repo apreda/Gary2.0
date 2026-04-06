@@ -452,13 +452,20 @@ async function processGenericGames(table, date, leagueFilter = null) {
       }
 
       if (matchedGame) {
+        // MLB: scores are in scoring_summary (last entry has final scores), not top-level fields
+        let homeScore = matchedGame.home_team_score ?? matchedGame.home_score ?? null;
+        let awayScore = matchedGame.visitor_team_score ?? matchedGame.away_score ?? matchedGame.visitor_score ?? null;
+        if (homeScore == null && Array.isArray(matchedGame.scoring_summary) && matchedGame.scoring_summary.length > 0) {
+          const final = matchedGame.scoring_summary[matchedGame.scoring_summary.length - 1];
+          homeScore = final.home_score ?? null;
+          awayScore = final.away_score ?? null;
+        }
         if (swapped) {
-          // Pick's "home" is actually BDL's visitor and vice versa — swap scores to align with pick
-          hs = matchedGame.visitor_team_score ?? matchedGame.away_score ?? matchedGame.visitor_score ?? null;
-          vs = matchedGame.home_team_score ?? matchedGame.home_score ?? null;
+          hs = awayScore;
+          vs = homeScore;
         } else {
-          hs = matchedGame.home_team_score ?? matchedGame.home_score ?? null;
-          vs = matchedGame.visitor_team_score ?? matchedGame.away_score ?? matchedGame.visitor_score ?? null;
+          hs = homeScore;
+          vs = awayScore;
         }
         // Normalize the game date to ET to ensure it aligns with app's "Yesterday" view
         gameDate = normalizeToETDate(matchedGame) || gameDate;
@@ -636,8 +643,15 @@ async function main() {
 
         if (matched) {
           const game = matched.game;
-          const homeScore = game.home_team_score ?? game.home_score ?? 0;
-          const awayScore = game.visitor_team_score ?? game.away_score ?? 0;
+          let homeScore = game.home_team_score ?? game.home_score ?? null;
+          let awayScore = game.visitor_team_score ?? game.away_score ?? null;
+          if (homeScore == null && Array.isArray(game.scoring_summary) && game.scoring_summary.length > 0) {
+            const final = game.scoring_summary[game.scoring_summary.length - 1];
+            homeScore = final.home_score ?? 0;
+            awayScore = final.away_score ?? 0;
+          }
+          homeScore = homeScore ?? 0;
+          awayScore = awayScore ?? 0;
 
           // Determine actual winner
           const homeName = game.home_team?.full_name || game.home_team?.name || '';
