@@ -23,7 +23,7 @@ import {
   fixBdlInjuryStatus,
   normalizeTeamName
 } from './sharedUtils.js';
-import { fetchComprehensivePropsNarrative, fetchPropLineMovement, getPlayerPropMovement } from './scoutReport/scoutReportBuilder.js';
+import { getPlayerPropMovement } from './scoutReport/scoutReportBuilder.js';
 
 const SPORT_KEY = 'baseball_mlb';
 

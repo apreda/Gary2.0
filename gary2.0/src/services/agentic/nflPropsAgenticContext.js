@@ -21,7 +21,6 @@ import {
   fixBdlInjuryStatus,
   normalizeTeamName
 } from './sharedUtils.js';
-import { fetchComprehensivePropsNarrative, fetchPropLineMovement } from './scoutReport/scoutReportBuilder.js';
 
 const SPORT_KEY = 'americanfootball_nfl';
 

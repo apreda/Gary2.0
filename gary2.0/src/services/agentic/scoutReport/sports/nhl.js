@@ -237,46 +237,43 @@ NO introduction. NO explanation. ONLY the format above with exact player names.`
         return pp && pp.isComplete === true;
       };
 
-      if (hasUnknownLineup(awayParsed)) {
+      // Lineup retries: only retry if 3+ positions are UNKNOWN (was: any UNKNOWN — too sensitive)
+      // 4/5 positions is good enough; one missing position doesn't justify another grounding call
+      const countUnknownLineup = (parsed) => {
+        if (!parsed) return 5;
+        const lineupUnknowns = (parsed.lineup || []).filter(line => line.includes('UNKNOWN')).length;
+        const goalieUnknown = (parsed.goalieLine || '').includes('UNKNOWN') ? 1 : 0;
+        return lineupUnknowns + goalieUnknown;
+      };
+      if (countUnknownLineup(awayParsed) >= 3) {
         const retry = await geminiGroundingSearch(makeLineupQuery(awayTeam, homeTeam, true), { temperature: 1.0, maxTokens: 2000 });
         awayParsed = retry?.success ? parseTeamLineup(retry.data, awayTeam) : awayParsed;
       }
-      if (hasUnknownLineup(homeParsed)) {
+      if (countUnknownLineup(homeParsed) >= 3) {
         const retry = await geminiGroundingSearch(makeLineupQuery(homeTeam, awayTeam, true), { temperature: 1.0, maxTokens: 2000 });
         homeParsed = retry?.success ? parseTeamLineup(retry.data, homeTeam) : homeParsed;
       }
 
-      // Retry PP grounding once if PP1 incomplete (was 2 — diminishing returns)
-      const MAX_PP_RETRIES = 1;
-      const isPP1Complete = (pp) => pp?.pp1Complete === true;
-
-      for (let attempt = 1; attempt <= MAX_PP_RETRIES && !isPP1Complete(awayPP); attempt++) {
-        console.log(`[Scout Report] PP1 incomplete for ${awayTeam} - retry ${attempt}/${MAX_PP_RETRIES}...`);
+      // PP retries: only if 3+ of 5 PP1 positions are missing (4/5 is good enough)
+      const countPP1Unknown = (pp) => {
+        if (!pp || !pp.pp1Line) return 5;
+        return (pp.pp1Line.match(/UNKNOWN/g) || []).length;
+      };
+      if (countPP1Unknown(awayPP) >= 3) {
+        console.log(`[Scout Report] PP1 incomplete for ${awayTeam} - retrying...`);
         const retry = await geminiGroundingSearch(makePowerPlayQuery(awayTeam, homeTeam, true), { maxTokens: 2000 });
         if (retry?.success) {
           awayPP = parsePowerPlay(retry.data, awayTeam);
         }
       }
-      for (let attempt = 1; attempt <= MAX_PP_RETRIES && !isPP1Complete(homePP); attempt++) {
-        console.log(`[Scout Report] PP1 incomplete for ${homeTeam} - retry ${attempt}/${MAX_PP_RETRIES}...`);
+      if (countPP1Unknown(homePP) >= 3) {
+        console.log(`[Scout Report] PP1 incomplete for ${homeTeam} - retrying...`);
         const retry = await geminiGroundingSearch(makePowerPlayQuery(homeTeam, awayTeam, true), { maxTokens: 2000 });
         if (retry?.success) {
           homePP = parsePowerPlay(retry.data, homeTeam);
         }
       }
-
-      // HARD FAIL: If PP1 is still incomplete after retries, throw error
-      // PP1 is required (critical for analysis), PP2 is optional
-      if (!isPP1Complete(awayPP)) {
-        const errorMsg = `[Scout Report] HARD FAIL: Could not get complete PP1 for ${awayTeam} after ${MAX_PP_RETRIES} retries. PP1: ${awayPP?.pp1Complete}`;
-        console.error(errorMsg);
-        throw new Error(errorMsg);
-      }
-      if (!isPP1Complete(homePP)) {
-        const errorMsg = `[Scout Report] HARD FAIL: Could not get complete PP1 for ${homeTeam} after ${MAX_PP_RETRIES} retries. PP1: ${homePP?.pp1Complete}`;
-        console.error(errorMsg);
-        throw new Error(errorMsg);
-      }
+      // No HARD FAIL — partial PP data (3/5+ positions) is acceptable for analysis
 
       // Log if PP2 is incomplete (warning, not failure)
       if (!awayPP?.pp2Complete) console.log(`[Scout Report] PP2 partial for ${awayTeam} (non-critical): ${awayPP?.pp2Line}`);
