@@ -32,7 +32,7 @@ import {
   fixBdlInjuryStatus,
   normalizeTeamName
 } from './sharedUtils.js';
-import { fetchComprehensivePropsNarrative, fetchPropLineMovement, getPlayerPropMovement } from './scoutReport/scoutReportBuilder.js';
+import { getPlayerPropMovement } from './scoutReport/scoutReportBuilder.js';
 import { fetchNbaInjuriesForGame } from '../nbaInjuryReportService.js';
 
 const SPORT_KEY = 'basketball_nba';
