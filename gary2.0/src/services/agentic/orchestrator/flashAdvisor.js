@@ -189,10 +189,10 @@ export async function buildFlashResearchBriefing(scoutReportContent, sport, home
     const isNHLSport = sport === 'icehockey_nhl' || sport === 'NHL';
     const mlbAwarenessBlock = isMLBSport ? `\n\n${getMlbSeasonAwareness()}\n` : '';
 
-    // MLB: medium thinking + lower output cap (fact-finding doesn't need deep reasoning or 65K output)
-    // All other sports: high thinking + full output (unchanged)
-    const flashThinkingLevel = isMLBSport ? 'medium' : 'high';
-    const flashMaxOutput = isMLBSport ? 16384 : undefined; // undefined = use CONFIG.maxTokens default
+    // All sports get high thinking + full output. Baseball especially needs depth
+    // due to high variance, ballpark effects, and pitcher dominance.
+    const flashThinkingLevel = 'high';
+    const flashMaxOutput = undefined; // use CONFIG.maxTokens default
 
     const briefingSession = createGeminiSession({
       _costTracker: options._costTracker || null,
@@ -271,7 +271,7 @@ Read the scout report above. I will now ask you to investigate factors one at a 
       // Flash investigates this factor — may take multiple iterations for tool calls
       let currentMessage = factorPrompt;
       let isFunctionResponse = false;
-      const MAX_FACTOR_ITERATIONS = isMLBSport ? 3 : 5; // MLB: 3 rounds (cost savings), others: 5
+      const MAX_FACTOR_ITERATIONS = 5; // All sports: 5 rounds per factor for full investigation
 
       for (let iter = 0; iter < MAX_FACTOR_ITERATIONS; iter++) {
         const response = await sendToSessionWithRetry(briefingSession, currentMessage, { isFunctionResponse });
@@ -313,11 +313,10 @@ Read the scout report above. I will now ask you to investigate factors one at a 
                 calledTokens.push({ token, quality: 'unavailable' });
               }
             } else if (functionName === 'fetch_narrative_context') {
-              // Cap grounding calls to control cost — scout report has lineups/goalies/PP but
-              // Flash may need to investigate fresh injuries and player form narratives
-              // MLB: 4 (BDL has all stats), NHL: 10 (needs injury investigation), others: 8
+              // Cap grounding calls to control cost
+              // MLB: 8 (needs injury/weather/lineup investigation), NHL: 10 (RotoWire), others: 8
               const isNHLSport = sport === 'icehockey_nhl' || sport === 'NHL';
-              const MAX_GROUNDING_CALLS = isMLBSport ? 4 : isNHLSport ? 10 : 8;
+              const MAX_GROUNDING_CALLS = isNHLSport ? 10 : 8;
               if (groundingCalls >= MAX_GROUNDING_CALLS) {
                 console.log(`  → [Research Grounding] SKIPPED (cap reached: ${groundingCalls}/${MAX_GROUNDING_CALLS}): "${(args.query || '').slice(0, 80)}"`);
                 functionResponses.push({ name: functionName, content: `Grounding call limit reached (${MAX_GROUNDING_CALLS}). Use available stat tokens and scout report data instead.` });
