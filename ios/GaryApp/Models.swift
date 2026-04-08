@@ -79,6 +79,37 @@ struct SportsbookOdds: Codable, Identifiable {
 
 // MARK: - Pick Models
 
+// MARK: - Contradicting Factors (major/minor categorization)
+struct ContradictingFactors: Codable {
+    let major: [String]?
+    let minor: [String]?
+
+    /// Total count of all contradictions
+    var totalCount: Int {
+        (major?.count ?? 0) + (minor?.count ?? 0)
+    }
+
+    /// Parse from dictionary (handles both old array format and new object format)
+    static func from(value: Any?) -> ContradictingFactors? {
+        guard let value = value else { return nil }
+
+        // New format: { major: [...], minor: [...] }
+        if let dict = value as? [String: Any] {
+            return ContradictingFactors(
+                major: dict["major"] as? [String],
+                minor: dict["minor"] as? [String]
+            )
+        }
+
+        // Legacy format: simple array - treat as minor
+        if let array = value as? [String] {
+            return ContradictingFactors(major: nil, minor: array)
+        }
+
+        return nil
+    }
+}
+
 struct GaryPick: Identifiable, Codable {
     let pick_id: String?
     let pick: String?
@@ -120,37 +151,6 @@ struct GaryPick: Identifiable, Codable {
     // Multi-sportsbook odds comparison (ML + Spread)
     let sportsbook_odds: [SportsbookOdds]?
 
-// MARK: - Contradicting Factors (major/minor categorization)
-struct ContradictingFactors: Codable {
-    let major: [String]?
-    let minor: [String]?
-    
-    /// Total count of all contradictions
-    var totalCount: Int {
-        (major?.count ?? 0) + (minor?.count ?? 0)
-    }
-    
-    /// Parse from dictionary (handles both old array format and new object format)
-    static func from(value: Any?) -> ContradictingFactors? {
-        guard let value = value else { return nil }
-        
-        // New format: { major: [...], minor: [...] }
-        if let dict = value as? [String: Any] {
-            return ContradictingFactors(
-                major: dict["major"] as? [String],
-                minor: dict["minor"] as? [String]
-            )
-        }
-        
-        // Legacy format: simple array - treat as minor
-        if let array = value as? [String] {
-            return ContradictingFactors(major: nil, minor: array)
-        }
-        
-        return nil
-    }
-}
-    
     var id: String { pick_id ?? "\(homeTeam ?? "?")-\(awayTeam ?? "?")-\(league ?? "?")-\(type ?? "?")" }
     
     /// Check if this is an NBA Cup game
@@ -184,6 +184,38 @@ struct ContradictingFactors: Codable {
             return ct
         }
         return time
+    }
+
+    private func cleanedContextLabel(_ value: String?) -> String? {
+        guard let value else { return nil }
+
+        let cleaned = (value.components(separatedBy: "/").first ?? value)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleaned.isEmpty else { return nil }
+
+        if (league ?? "").uppercased() == "NCAAB" {
+            let prefixes = [
+                "NCAA Tournament ",
+                "NCAA Men's Basketball Tournament ",
+                "NCAA Men’s Basketball Tournament "
+            ]
+
+            for prefix in prefixes where cleaned.lowercased().hasPrefix(prefix.lowercased()) {
+                let shortened = String(cleaned.dropFirst(prefix.count))
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                return shortened.isEmpty ? cleaned : shortened
+            }
+        }
+
+        return cleaned
+    }
+
+    var shortGameSignificance: String? {
+        cleanedContextLabel(gameSignificance)
+    }
+
+    var shortTournamentContext: String? {
+        cleanedContextLabel(tournamentContext)
     }
     
     /// Parse from dictionary (for manual JSON parsing)
@@ -366,7 +398,9 @@ struct StatValues: Codable {
     let adjoeRank: String?
     let adjdeRank: String?
     let projRecord: String?
-    // MLB/WBC stats
+    // MLB stats
+    let l10: String?
+    let homeAway: String?
     let spEra: String?
     let spWhip: String?
     let spK9: String?
@@ -379,7 +413,7 @@ struct StatValues: Codable {
     let teamSlg: String?
     let teamOps: String?
     let teamHr: String?
-    // WBC-specific context stats
+    // MLB context stats
     let game1Result: String?
     let spName: String?
     let mlOdds: String?
@@ -397,6 +431,122 @@ struct StatValues: Codable {
     let rushingYards: String?
     let totalYards: String?
     let passingInts: String?
+
+    // CodingKeys to map snake_case JSON keys from backend
+    enum CodingKeys: String, CodingKey {
+        case team, overall, pace, tempo, wab, interceptions, sacks, giveaways, takeaways, conditions, impact, temperature
+        case homeRecord = "home_record"
+        case awayRecord = "away_record"
+        case offensiveRating = "offensive_rating"
+        case defensiveRating = "defensive_rating"
+        case netRating = "net_rating"
+        case efgPct = "efg_pct"
+        case threePct = "three_pct"
+        case threeMadePerGame = "three_made_per_game"
+        case threeAttemptedPerGame = "three_attempted_per_game"
+        case gamesPlayed = "games_played"
+        case tovRate = "tov_rate"
+        case turnoversPerGame = "turnovers_per_game"
+        case orebRate = "oreb_rate"
+        case orebPerGame = "oreb_per_game"
+        case ftRate = "ft_rate"
+        case ftPct = "ft_pct"
+        case ftaPerGame = "fta_per_game"
+        case closeGames = "close_games"
+        case closeRecord = "close_record"
+        case closeWinPct = "close_win_pct"
+        case trueShootingPct = "true_shooting_pct"
+        case totalYardsPerGame = "total_yards_per_game"
+        case oppTotalYards = "opp_total_yards"
+        case yardsPerGame = "yards_per_game"
+        case oppYardsPerGame = "opp_yards_per_game"
+        case pointsPerGame = "points_per_game"
+        case oppPointsPerGame = "opp_points_per_game"
+        case turnoverDiff = "turnover_diff"
+        case qbRating = "qb_rating"
+        case completionPct = "completion_pct"
+        case thirdDownPct = "third_down_pct"
+        case fourthDownPct = "fourth_down_pct"
+        case rushingYardsPerGame = "rushing_yards_per_game"
+        case oppRushingYards = "opp_rushing_yards"
+        case yardsPerCarry = "yards_per_carry"
+        case passingTds = "passing_tds"
+        case rushingTds = "rushing_tds"
+        case last5 = "last_5"
+        case last10 = "last_10"
+        case pointDiff = "point_diff"
+        case yardsPerAttempt = "yards_per_attempt"
+        case yardsPerPlay = "yards_per_play"
+        case receivingYardsPerGame = "receiving_yards_per_game"
+        case receivingTds = "receiving_tds"
+        case yardsPerCatch = "yards_per_catch"
+        case longestPass = "longest_pass"
+        case longestRush = "longest_rush"
+        case feelsLike = "feels_like"
+        case windSpeed = "wind_speed"
+        case assistsPerGame = "assists_per_game"
+        case reboundsPerGame = "rebounds_per_game"
+        case stealsPerGame = "steals_per_game"
+        case blocksPerGame = "blocks_per_game"
+        case fgPct = "fg_pct"
+        case fgmPerGame = "fgm_per_game"
+        case fgaPerGame = "fga_per_game"
+        case drebPerGame = "dreb_per_game"
+        case apRank = "ap_rank"
+        case coachesRank = "coaches_rank"
+        case conferenceRecord = "conference_record"
+        case netRank = "net_rank"
+        case sosRank = "sos_rank"
+        case kenpomRank = "kenpom_rank"
+        case goalsForPerGame = "goals_for_per_game"
+        case goalsAgainstPerGame = "goals_against_per_game"
+        case powerPlayPct = "power_play_pct"
+        case penaltyKillPct = "penalty_kill_pct"
+        case shotsFor = "shots_for"
+        case shotsAgainst = "shots_against"
+        case shotDifferential = "shot_differential"
+        case savePct = "save_pct"
+        case goalsAgainstAvg = "goals_against_avg"
+        case faceoffPct = "faceoff_pct"
+        case corsiPct = "corsi_pct"
+        case xgPct = "xg_pct"
+        case pdoStat = "pdo"
+        case shPct5v5 = "sh_pct_5v5"
+        case svPct5v5 = "sv_pct_5v5"
+        case adjoeRank = "adjoe_rank"
+        case adjdeRank = "adjde_rank"
+        case projRecord = "proj_record"
+        case l10 = "l10"
+        case homeAway = "home_away"
+        case spEra = "sp_era"
+        case spWhip = "sp_whip"
+        case spK9 = "sp_k9"
+        case spBb9 = "sp_bb9"
+        case spRecord = "sp_record"
+        case spIp = "sp_ip"
+        case spSo = "sp_so"
+        case teamAvg = "team_avg"
+        case teamObp = "team_obp"
+        case teamSlg = "team_slg"
+        case teamOps = "team_ops"
+        case teamHr = "team_hr"
+        case game1Result = "game1_result"
+        case spName = "sp_name"
+        case mlOdds = "ml_odds"
+        case runLine = "run_line"
+        case venueName = "venue_name"
+        case lastPlayed = "last_played"
+        case totalYpg = "total_ypg"
+        case passingYpg = "passing_ypg"
+        case rushingYpg = "rushing_ypg"
+        case totalTds = "total_tds"
+        case interceptionsThrown = "interceptions_thrown"
+        case oppPassingYards = "opp_passing_yards"
+        case passingYards = "passing_yards"
+        case rushingYards = "rushing_yards"
+        case totalYards = "total_yards"
+        case passingInts = "passing_ints"
+    }
     
     static func from(dict: [String: Any]) -> StatValues {
         StatValues(
@@ -501,7 +651,9 @@ struct StatValues: Codable {
             adjoeRank: dict["adjoe_rank"] as? String,
             adjdeRank: dict["adjde_rank"] as? String,
             projRecord: dict["proj_record"] as? String,
-            // MLB/WBC stats
+            // MLB stats
+            l10: dict["l10"] as? String,
+            homeAway: dict["home_away"] as? String,
             spEra: dict["sp_era"] as? String,
             spWhip: dict["sp_whip"] as? String,
             spK9: dict["sp_k9"] as? String,
@@ -514,7 +666,7 @@ struct StatValues: Codable {
             teamSlg: dict["team_slg"] as? String,
             teamOps: dict["team_ops"] as? String,
             teamHr: dict["team_hr"] as? String,
-            // WBC-specific context stats
+            // MLB context stats
             game1Result: dict["game1_result"] as? String,
             spName: dict["sp_name"] as? String,
             mlOdds: dict["ml_odds"] as? String,
@@ -701,7 +853,9 @@ struct StatValues: Codable {
         case "SHOTS_AGAINST": return shotsAgainst ?? "N/A"
         case "SHOT_DIFFERENTIAL", "SHOT_QUALITY": return shotDifferential ?? shotsFor ?? "N/A"
         case "PDO": return pdoStat ?? "N/A"
-        // MLB/WBC stats
+        // MLB stats
+        case "L10": return l10 ?? last10 ?? "N/A"
+        case "HOME_AWAY": return homeAway ?? "N/A"
         case "SP_ERA": return spEra ?? "N/A"
         case "SP_WHIP": return spWhip ?? "N/A"
         case "SP_K9": return spK9 ?? "N/A"
@@ -777,13 +931,14 @@ struct PropPick: Identifiable, Codable {
     let line: String?
     let time: String?
     let commence_time: String?  // ISO format for sorting/grouping by game time
+    let position: String?    // Player position (e.g., "1B", "OF", "SP") — used for MLB HR badge
     let tdCategory: String?  // "standard" or "underdog" for TD scorer picks
     let matchup: String?     // Game matchup for TD picks
     let key_stats: [String]?  // 3-4 bullet points with key stats supporting the pick
-    
+
     // CodingKeys to map snake_case from JSON
     enum CodingKeys: String, CodingKey {
-        case player, team, prop, bet, odds, confidence, analysis, league, sport, line, time, matchup, key_stats
+        case player, team, prop, bet, odds, confidence, analysis, league, sport, line, time, position, matchup, key_stats
         case commence_time = "commence_time"
         case tdCategory = "td_category"
     }
@@ -803,9 +958,9 @@ struct PropPick: Identifiable, Codable {
         // Get the raw value from league or sport field
         let raw = (league?.isEmpty == false ? league : sport) ?? ""
         guard !raw.isEmpty else { return nil }
-        
+
         let normalized = raw.lowercased()
-        
+
         // Handle API sport keys like "basketball_nba" -> "NBA"
         if normalized.contains("nba") && !normalized.contains("wnba") { return "NBA" }
         if normalized.contains("nfl") { return "NFL" }
@@ -813,9 +968,10 @@ struct PropPick: Identifiable, Codable {
         if normalized.contains("ncaab") || normalized.contains("ncaam") { return "NCAAB" }
         if normalized.contains("ncaaf") { return "NCAAF" }
         if normalized.contains("epl") || normalized.contains("soccer_epl") || normalized.contains("premier") { return "EPL" }
-        if normalized.contains("mlb") || normalized.contains("wbc") { return "WBC" }
+        if normalized == "mlb hr" { return "MLB HR" }
+        if normalized.contains("mlb") || normalized.contains("wbc") { return "MLB" }
         if normalized.contains("wnba") { return "WNBA" }
-        
+
         return raw.uppercased()
     }
     
@@ -843,6 +999,7 @@ struct PropPick: Identifiable, Codable {
             line: dict["line"] as? String,
             time: dict["time"] as? String,
             commence_time: dict["commence_time"] as? String,
+            position: dict["position"] as? String,
             tdCategory: dict["td_category"] as? String,
             matchup: dict["matchup"] as? String,
             key_stats: keyStats
@@ -880,7 +1037,7 @@ struct GameResult: Decodable {
     var effectiveLeague: String? {
         guard let raw = league, !raw.isEmpty else { return nil }
         let normalized = raw.lowercased()
-        
+
         // Handle API sport keys like "basketball_nba" -> "NBA"
         if normalized.contains("nba") && !normalized.contains("wnba") { return "NBA" }
         if normalized.contains("nfl") { return "NFL" }
@@ -888,9 +1045,10 @@ struct GameResult: Decodable {
         if normalized.contains("ncaab") || normalized.contains("ncaam") { return "NCAAB" }
         if normalized.contains("ncaaf") { return "NCAAF" }
         if normalized.contains("epl") || normalized.contains("soccer_epl") || normalized.contains("premier") { return "EPL" }
-        if normalized.contains("mlb") || normalized.contains("wbc") { return "WBC" }
+        if normalized == "mlb hr" { return "MLB HR" }
+        if normalized.contains("mlb") || normalized.contains("wbc") { return "MLB" }
         if normalized.contains("wnba") { return "WNBA" }
-        
+
         return raw.uppercased()
     }
 }
@@ -959,7 +1117,8 @@ struct PropResult: Decodable {
             if normalized.contains("ncaab") || normalized.contains("ncaam") { return "NCAAB" }
             if normalized.contains("ncaaf") { return "NCAAF" }
             if normalized.contains("epl") || normalized.contains("soccer_epl") || normalized.contains("premier") { return "EPL" }
-            if normalized.contains("mlb") || normalized.contains("wbc") { return "WBC" }
+            if normalized == "mlb hr" { return "MLB HR" }
+            if normalized.contains("mlb") || normalized.contains("wbc") { return "MLB" }
             if normalized.contains("wnba") { return "WNBA" }
             return raw.uppercased()
         }
@@ -984,10 +1143,10 @@ struct PropResult: Decodable {
             return "NHL"
         }
         
-        // MLB/WBC props
+        // MLB props
         if ["hits", "total_bases", "home_runs", "rbis", "runs", "strikeouts", "walks",
             "stolen_bases", "pitching", "earned_runs", "innings"].contains(where: { propType.contains($0) }) {
-            return "WBC"
+            return "MLB"
         }
         
         // EPL/Soccer props
@@ -1166,6 +1325,9 @@ struct DFSPlayer: Identifiable, Decodable {
     /// Opponent team abbreviation (e.g. "CLE")
     let opponent: String?
 
+    /// Is this player listed as Questionable/GTD? Shows warning in UI.
+    let isQuestionable: Bool?
+
     var id: String { "\(position)-\(player)-\(team)" }
     
     /// Formatted salary (e.g., "$7,800")
@@ -1273,7 +1435,8 @@ struct DFSPlayer: Identifiable, Decodable {
             targetShare: dict["targetShare"] as? Double,
             redZoneTargets: dict["redZoneTargets"] as? Int,
             weatherImpact: dict["weatherImpact"] as? String,
-            opponent: dict["opponent"] as? String
+            opponent: dict["opponent"] as? String,
+            isQuestionable: dict["isQuestionable"] as? Bool
         )
     }
 }
