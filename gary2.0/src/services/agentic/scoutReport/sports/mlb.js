@@ -160,14 +160,24 @@ export async function buildMlbScoutReport(game, options = {}) {
 
   // ═══════════════════════════════════════════════════════════════════
   // BASEBALL SAVANT xSTATS (expected vs actual — regression indicators)
-  // Cached daily, free CSV, no API key. One call per type covers entire league.
+  // Try CURRENT season first, fall back to PRIOR year only if current is empty
+  // (early in the season before enough samples accumulate).
   // ═══════════════════════════════════════════════════════════════════
-  const xStatsSeason = season > 2025 ? season - 1 : season; // Use prior year if current season hasn't started
-  const [pitcherXStats, batterXStats] = await Promise.all([
-    getPitcherXStats(xStatsSeason).catch(() => []),
-    getBatterXStats(xStatsSeason).catch(() => []),
+  let [pitcherXStats, batterXStats] = await Promise.all([
+    getPitcherXStats(season).catch(() => []),
+    getBatterXStats(season).catch(() => []),
   ]);
-  console.log(`[Scout Report] Savant xStats: ${pitcherXStats.length} pitchers, ${batterXStats.length} batters (${xStatsSeason})`);
+  let xStatsSeason = season;
+  // If current season has insufficient data (early-season cold start), fall back to prior year
+  if (pitcherXStats.length < 50 || batterXStats.length < 100) {
+    console.log(`[Scout Report] Savant xStats ${season} too sparse (${pitcherXStats.length}p / ${batterXStats.length}b) — falling back to ${season - 1}`);
+    [pitcherXStats, batterXStats] = await Promise.all([
+      getPitcherXStats(season - 1).catch(() => []),
+      getBatterXStats(season - 1).catch(() => []),
+    ]);
+    xStatsSeason = season - 1;
+  }
+  console.log(`[Scout Report] Savant xStats: ${pitcherXStats.length} pitchers, ${batterXStats.length} batters (${xStatsSeason} season)`);
 
   // ═══════════════════════════════════════════════════════════════════
   // LAST 4 GAME BOX SCORES (BDL per-game stats for L1-L4 recaps)
