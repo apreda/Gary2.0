@@ -160,23 +160,13 @@ export async function buildMlbScoutReport(game, options = {}) {
 
   // ═══════════════════════════════════════════════════════════════════
   // BASEBALL SAVANT xSTATS (expected vs actual — regression indicators)
-  // Try CURRENT season first, fall back to PRIOR year only if current is empty
-  // (early in the season before enough samples accumulate).
+  // Always use current season — stale prior-year data is misleading.
   // ═══════════════════════════════════════════════════════════════════
-  let [pitcherXStats, batterXStats] = await Promise.all([
-    getPitcherXStats(season).catch(() => []),
-    getBatterXStats(season).catch(() => []),
+  const xStatsSeason = season;
+  const [pitcherXStats, batterXStats] = await Promise.all([
+    getPitcherXStats(xStatsSeason).catch(() => []),
+    getBatterXStats(xStatsSeason).catch(() => []),
   ]);
-  let xStatsSeason = season;
-  // If current season has insufficient data (early-season cold start), fall back to prior year
-  if (pitcherXStats.length < 50 || batterXStats.length < 100) {
-    console.log(`[Scout Report] Savant xStats ${season} too sparse (${pitcherXStats.length}p / ${batterXStats.length}b) — falling back to ${season - 1}`);
-    [pitcherXStats, batterXStats] = await Promise.all([
-      getPitcherXStats(season - 1).catch(() => []),
-      getBatterXStats(season - 1).catch(() => []),
-    ]);
-    xStatsSeason = season - 1;
-  }
   console.log(`[Scout Report] Savant xStats: ${pitcherXStats.length} pitchers, ${batterXStats.length} batters (${xStatsSeason} season)`);
 
   // ═══════════════════════════════════════════════════════════════════
@@ -715,13 +705,16 @@ export async function buildMlbScoutReport(game, options = {}) {
 
   // ═══════════════════════════════════════════════════════════════════
   // CONFIRMED LINEUPS — BDL API (pre-game, includes handedness + probable pitchers)
+  // HARD FAIL if lineups or starting pitchers are missing — Gary cannot pick without them.
   // ═══════════════════════════════════════════════════════════════════
   let confirmedLineupsSection = 'Lineups not yet posted — check closer to game time.';
+  let homeData = null;
+  let awayData = null;
   if (confirmedLineups?.source === 'bdl' && confirmedLineups.data) {
     const homeAbbr = game.home_team?.abbreviation || game.home_team_data?.abbreviation || '';
     const awayAbbr = game.away_team?.abbreviation || game.away_team_data?.abbreviation || '';
-    const homeData = confirmedLineups.data[homeAbbr] || Object.values(confirmedLineups.data).find(t => t.teamName?.toLowerCase().includes(homeTeam.toLowerCase().split(' ').pop()));
-    const awayData = confirmedLineups.data[awayAbbr] || Object.values(confirmedLineups.data).find(t => t.teamName?.toLowerCase().includes(awayTeam.toLowerCase().split(' ').pop()));
+    homeData = confirmedLineups.data[homeAbbr] || Object.values(confirmedLineups.data).find(t => t.teamName?.toLowerCase().includes(homeTeam.toLowerCase().split(' ').pop()));
+    awayData = confirmedLineups.data[awayAbbr] || Object.values(confirmedLineups.data).find(t => t.teamName?.toLowerCase().includes(awayTeam.toLowerCase().split(' ').pop()));
 
     const formatBdl = (teamData, teamName) => {
       if (!teamData || teamData.batters.length === 0) return `${teamName}: Not yet posted`;
@@ -732,6 +725,20 @@ export async function buildMlbScoutReport(game, options = {}) {
     };
     confirmedLineupsSection = [formatBdl(homeData, homeTeam), formatBdl(awayData, awayTeam)].join('\n\n');
     console.log(`[Scout Report] MLB lineups from BDL: ${homeTeam}=${homeData?.batters?.length || 0} batters, ${awayTeam}=${awayData?.batters?.length || 0} batters`);
+  }
+
+  // HARD FAIL: Gary cannot pick MLB without confirmed lineups + starting pitchers
+  const homeHasLineup = homeData?.batters?.length >= 9;
+  const awayHasLineup = awayData?.batters?.length >= 9;
+  const homeHasPitcher = !!homeData?.pitcher?.name;
+  const awayHasPitcher = !!awayData?.pitcher?.name;
+  if (!homeHasLineup || !awayHasLineup || !homeHasPitcher || !awayHasPitcher) {
+    const missing = [];
+    if (!homeHasLineup) missing.push(`${homeTeam} lineup (${homeData?.batters?.length || 0}/9 batters)`);
+    if (!awayHasLineup) missing.push(`${awayTeam} lineup (${awayData?.batters?.length || 0}/9 batters)`);
+    if (!homeHasPitcher) missing.push(`${homeTeam} starting pitcher`);
+    if (!awayHasPitcher) missing.push(`${awayTeam} starting pitcher`);
+    throw new Error(`[Scout Report] HARD FAIL — MLB requires lineups + starting pitchers for ${awayTeam} @ ${homeTeam}. Missing: ${missing.join(', ')}. Run picks closer to game time (lineups typically post 3-4 hours before first pitch).`);
   }
 
   // ═══════════════════════════════════════════════════════════════════
