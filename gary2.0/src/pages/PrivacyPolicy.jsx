@@ -1,4 +1,5 @@
 import '../styles/privacy-policy.css';
+import SEO from '../components/SEO';
 
 export function PrivacyPolicy() {
   const currentDate = new Date();
@@ -6,6 +7,7 @@ export function PrivacyPolicy() {
 
   return (
     <div className="privacy-container">
+      <SEO title="Privacy Policy · Gary AI" description="Gary AI Privacy Policy." path="/privacy" />
       <div className="privacy-card">
         <h1 className="privacy-title">Privacy Policy</h1>
         <p className="privacy-last-updated">Last updated: {formattedDate}</p>

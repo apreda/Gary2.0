@@ -1,3 +1,4 @@
+import SEO from '../components/SEO';
 
 export function TermsOfService() {
   const currentDate = new Date();
@@ -11,6 +12,7 @@ export function TermsOfService() {
       color: '#f1f1f1',
       fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif'
     }}>
+      <SEO title="Terms of Service · Gary AI" description="Gary AI Terms of Service." path="/terms" />
       <div style={{
         backgroundColor: 'rgba(20, 20, 20, 0.9)',
         borderRadius: '8px',

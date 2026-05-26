@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Sparkles, Bug, Zap, Wrench, Gift, Rocket } from 'lucide-react';
+import SEO from '../components/SEO';
 
 const changelogEntries = [
   {
@@ -149,6 +150,7 @@ const getTypeLabel = (type) => {
 export function Changelog() {
   return (
     <div className="min-h-screen relative">
+      <SEO title="Changelog · Gary AI" description="Release notes for Gary AI — model upgrades, new sports, pipeline improvements." path="/changelog" />
       {/* Fixed background with all effects */}
       <div className="fixed inset-0 bg-gradient-to-b from-[#0a0a0c] to-[#18181a] z-0">
         <div className="absolute -top-32 -left-32 w-[500px] h-[500px] rounded-full bg-[#b8953f]/10 blur-3xl" />

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from "../supabaseClient";
 import { getESTDate, getESTHour, nflSeason as getNflSeason } from '../utils/dateUtils';
+import SEO from '../components/SEO';
+import PerformanceStrip from '../components/PerformanceStrip';
 import {
   Syringe,
   Cloud,
@@ -537,9 +539,8 @@ function Home() {
           allPicks = allPicks.concat(nflPicks);
         }
         
-        // If we have picks, get the top one based on thesis quality (new system)
+        // If we have picks, get the top one based on confidence (highest confidence wins)
         // MANUAL OVERRIDE: If a pick has is_top_pick: true, use it first
-        // Otherwise: Priority: clear_read with fewest major contradictions > found_angle > confidence
         if (allPicks.length > 0) {
           // Check for manual override first (checks all picks from both sources)
           const manualTopPick = allPicks.find(pick => pick && pick.is_top_pick === true);
@@ -577,6 +578,11 @@ function Home() {
 
   return (
     <div className="min-h-screen relative flex flex-col">
+      <SEO
+        title="Gary AI — Smarter Sports Bets · NBA, NHL, MLB, NCAAB, NCAAF Picks"
+        description="Daily AI-driven sports betting picks across NBA, NHL, MLB, NCAAB, and NCAAF. Three AI models investigate, debate, and lock the pick. Game lines, player props, full written rationale. Free on iOS."
+        path="/"
+      />
       {/* Fixed background with all effects - spans the entire viewport */}
       <div className="fixed inset-0 bg-gradient-to-b from-[#0a0a0c] to-[#18181a] z-0">
         {/* Gold vignette corners - enhanced with white glow */}
@@ -710,12 +716,12 @@ function Home() {
               
               {/* CTA Button - Download App */}
               <div className="flex flex-col sm:flex-row gap-4 mb-6 justify-center items-center">
-                <a 
+                <a
                   href="https://apps.apple.com/us/app/gary-ai/id6751238914"
                   target="_blank"
-                  rel="noopener noreferrer" 
+                  rel="noopener noreferrer"
                   className="flex items-center gap-3 text-black font-bold rounded-full transition-all duration-300 ease-in-out hover:scale-105"
-                  style={{ 
+                  style={{
                     padding: "14px 32px",
                     background: 'linear-gradient(135deg, #B8953F 0%, #d4af37 50%, #B8953F 100%)',
                     boxShadow: '0 4px 15px rgba(184, 149, 63, 0.4)',
@@ -730,6 +736,10 @@ function Home() {
                 <p className="text-white/50 text-sm">Free • No sign-up required</p>
               </div>
             </div>
+
+            {/* Performance strip: yesterday's record + recent wins.
+                Mirrors iOS PerformanceBanner + RecentWinsTicker. */}
+            <PerformanceStrip />
 
             {/* Featured Pick Card Preview - Single Card Only */}
             <div className="mt-12 mb-24 w-full flex flex-col items-center justify-center">

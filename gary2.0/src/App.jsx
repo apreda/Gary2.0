@@ -6,6 +6,8 @@ import Home from "./pages/Home";
 import { TermsOfService } from "./pages/TermsOfService";
 import { PrivacyPolicy } from "./pages/PrivacyPolicy";
 import { Changelog } from "./pages/Changelog";
+import MobileLanding from "./pages/MobileLanding";
+import { isMobile } from "./utils/isMobile";
 
 import FontLoader from "./components/FontLoader";
 import "./assets/css/animations.css";
@@ -49,11 +51,28 @@ class ErrorBoundary extends React.Component {
 }
 
 function AppContent() {
+  // Mobile devices get a focused App Store landing on every route — the
+  // desktop site is intentionally not designed for small screens. Legal
+  // pages still render normally so they remain accessible everywhere.
+  const mobile = isMobile();
+
+  if (mobile) {
+    return (
+      <Suspense fallback={<div className="flex h-96 items-center justify-center text-white">Loading…</div>}>
+        <Routes>
+          <Route path="/terms" element={<TermsOfService />} />
+          <Route path="/privacy" element={<PrivacyPolicy />} />
+          <Route path="*" element={<MobileLanding />} />
+        </Routes>
+      </Suspense>
+    );
+  }
+
   return (
     <div className="flex flex-col min-h-screen w-full overflow-x-hidden animate-fadeIn" style={{ animationDuration: '0.5s' }}>
       {/* Add the Navbar */}
       <Navbar />
-      
+
       <div className="flex flex-1 relative z-10">
         {/* Main content area */}
         <div className="flex-grow">
@@ -61,19 +80,19 @@ function AppContent() {
             <Routes>
               {/* Main landing page */}
               <Route path="/" element={<Home />} />
-              
+
               {/* Legal pages (required) */}
               <Route path="/terms" element={<TermsOfService />} />
               <Route path="/privacy" element={<PrivacyPolicy />} />
               <Route path="/changelog" element={<Changelog />} />
-              
+
               {/* Redirect all other routes to home (marketing landing page) */}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Suspense>
         </div>
       </div>
-      
+
       {/* Global footer */}
       <div style={{
         borderTop: '1px solid #333',
@@ -90,12 +109,12 @@ function AppContent() {
           <Link to="/privacy" style={{ color: '#b8953f', marginRight: '20px', textDecoration: 'none' }}>Privacy Policy</Link>
           <Link to="/changelog" style={{ color: '#b8953f', textDecoration: 'none' }}>Changelog</Link>
         </div>
-        
+
         <div style={{ fontSize: '0.8rem', maxWidth: '800px', margin: '0 auto', lineHeight: '1.4' }}>
           <p style={{ marginBottom: '12px' }}><strong>DISCLAIMER:</strong> This site is 100% for entertainment purposes only and does not involve real money betting or prizes. You must be 18+ years old to utilize Gary.ai.</p>
-          
+
           <p style={{ marginBottom: '12px' }}>If you or someone you know may have a gambling problem, call 1-800 GAMBLER (1-800-426-2537). For more information and resources, visit our Responsible Gaming page.</p>
-          
+
           <p>Gambling problem? Call 1-800-GAMBLER (Available in the US)<br />
           Call 877-8-HOPENY or text HOPENY (467369) (NY)<br />
           Call 1-800-327-5050 (MA), 1-800-NEXT-STEP (AZ), 1-800-BETS-OFF (IA), 1-800-981-0023 (PR)</p>
