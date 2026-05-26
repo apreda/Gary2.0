@@ -281,7 +281,7 @@ export default async function handler(req, res) {
                 platform,
                 sport,
                 slate_name: slate.name,
-                slate_start_time: slate.startTime,
+                slate_start_time: (() => { const t = slate.startTime; if (!t || t === 'TBD') return null; const d = new Date(t); return isNaN(d.getTime()) ? null : d.toISOString(); })(),
                 slate_game_count: slate.gameCount || 0,
                 contest_type: contestType,
                 salary_cap: salaryCap,
@@ -304,7 +304,7 @@ export default async function handler(req, res) {
               const { error: upsertError } = await supabase
                 .from('dfs_lineups')
                 .upsert(lineupRecord, {
-                  onConflict: ['date', 'platform', 'sport', 'slate_name', 'slate_start_time']
+                  onConflict: 'date,platform,sport,slate_name'
                 });
               
               if (upsertError) {

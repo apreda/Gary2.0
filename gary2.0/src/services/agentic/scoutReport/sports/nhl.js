@@ -237,42 +237,45 @@ NO introduction. NO explanation. ONLY the format above with exact player names.`
         return pp && pp.isComplete === true;
       };
 
-      // Lineup retries: only retry if 3+ positions are UNKNOWN (was: any UNKNOWN — too sensitive)
-      // 4/5 positions is good enough; one missing position doesn't justify another grounding call
+      // Lineup + PP retries: capped at 2 total grounding calls (was 4 — each retry costs ~$0.01).
+      // Prioritize lineup retries over PP retries since lineup gaps are more impactful.
       const countUnknownLineup = (parsed) => {
         if (!parsed) return 5;
         const lineupUnknowns = (parsed.lineup || []).filter(line => line.includes('UNKNOWN')).length;
         const goalieUnknown = (parsed.goalieLine || '').includes('UNKNOWN') ? 1 : 0;
         return lineupUnknowns + goalieUnknown;
       };
-      if (countUnknownLineup(awayParsed) >= 3) {
-        const retry = await geminiGroundingSearch(makeLineupQuery(awayTeam, homeTeam, true), { temperature: 1.0, maxTokens: 2000 });
-        awayParsed = retry?.success ? parseTeamLineup(retry.data, awayTeam) : awayParsed;
-      }
-      if (countUnknownLineup(homeParsed) >= 3) {
-        const retry = await geminiGroundingSearch(makeLineupQuery(homeTeam, awayTeam, true), { temperature: 1.0, maxTokens: 2000 });
-        homeParsed = retry?.success ? parseTeamLineup(retry.data, homeTeam) : homeParsed;
-      }
-
-      // PP retries: only if 3+ of 5 PP1 positions are missing (4/5 is good enough)
       const countPP1Unknown = (pp) => {
         if (!pp || !pp.pp1Line) return 5;
         return (pp.pp1Line.match(/UNKNOWN/g) || []).length;
       };
-      if (countPP1Unknown(awayPP) >= 3) {
+
+      let retriesUsed = 0;
+      const MAX_RETRIES = 2;
+
+      if (retriesUsed < MAX_RETRIES && countUnknownLineup(awayParsed) >= 3) {
+        const retry = await geminiGroundingSearch(makeLineupQuery(awayTeam, homeTeam, true), { temperature: 1.0, maxTokens: 2000 });
+        awayParsed = retry?.success ? parseTeamLineup(retry.data, awayTeam) : awayParsed;
+        retriesUsed++;
+      }
+      if (retriesUsed < MAX_RETRIES && countUnknownLineup(homeParsed) >= 3) {
+        const retry = await geminiGroundingSearch(makeLineupQuery(homeTeam, awayTeam, true), { temperature: 1.0, maxTokens: 2000 });
+        homeParsed = retry?.success ? parseTeamLineup(retry.data, homeTeam) : homeParsed;
+        retriesUsed++;
+      }
+      if (retriesUsed < MAX_RETRIES && countPP1Unknown(awayPP) >= 3) {
         console.log(`[Scout Report] PP1 incomplete for ${awayTeam} - retrying...`);
         const retry = await geminiGroundingSearch(makePowerPlayQuery(awayTeam, homeTeam, true), { maxTokens: 2000 });
-        if (retry?.success) {
-          awayPP = parsePowerPlay(retry.data, awayTeam);
-        }
+        if (retry?.success) { awayPP = parsePowerPlay(retry.data, awayTeam); }
+        retriesUsed++;
       }
-      if (countPP1Unknown(homePP) >= 3) {
+      if (retriesUsed < MAX_RETRIES && countPP1Unknown(homePP) >= 3) {
         console.log(`[Scout Report] PP1 incomplete for ${homeTeam} - retrying...`);
         const retry = await geminiGroundingSearch(makePowerPlayQuery(homeTeam, awayTeam, true), { maxTokens: 2000 });
-        if (retry?.success) {
-          homePP = parsePowerPlay(retry.data, homeTeam);
-        }
+        if (retry?.success) { homePP = parsePowerPlay(retry.data, homeTeam); }
+        retriesUsed++;
       }
+      if (retriesUsed > 0) console.log(`[Scout Report] Used ${retriesUsed}/${MAX_RETRIES} lineup/PP retries`);
       // No HARD FAIL — partial PP data (3/5+ positions) is acceptable for analysis
 
       // Log if PP2 is incomplete (warning, not failure)

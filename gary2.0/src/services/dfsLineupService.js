@@ -46,6 +46,20 @@ export const PLATFORM_CONSTRAINTS = {
         FLEX: { count: 1, eligible: ['RB', 'WR', 'TE'] },
         DST: { count: 1, eligible: ['DST'] }
       }
+    },
+    MLB: {
+      salaryCap: 50000,
+      rosterSize: 10,
+      positions: ['P', 'P', 'C', '1B', '2B', '3B', 'SS', 'OF', 'OF', 'OF'],
+      positionRules: {
+        P: { count: 2, eligible: ['P', 'SP', 'RP'] },
+        C: { count: 1, eligible: ['C'] },
+        '1B': { count: 1, eligible: ['1B'] },
+        '2B': { count: 1, eligible: ['2B'] },
+        '3B': { count: 1, eligible: ['3B'] },
+        SS: { count: 1, eligible: ['SS'] },
+        OF: { count: 3, eligible: ['OF', 'LF', 'CF', 'RF'] }
+      }
     }
   },
     fanduel: {
@@ -74,6 +88,20 @@ export const PLATFORM_CONSTRAINTS = {
         FLEX: { count: 1, eligible: ['RB', 'WR', 'TE'] },
         K: { count: 1, eligible: ['K'] },
         DST: { count: 1, eligible: ['DST'] }
+      }
+    },
+    MLB: {
+      salaryCap: 60000,
+      rosterSize: 9,
+      positions: ['P', 'C/1B', '2B', '3B', 'SS', 'OF', 'OF', 'OF', 'UTIL'],
+      positionRules: {
+        P: { count: 1, eligible: ['P', 'SP', 'RP'] },
+        'C/1B': { count: 1, eligible: ['C', '1B'] },
+        '2B': { count: 1, eligible: ['2B'] },
+        '3B': { count: 1, eligible: ['3B'] },
+        SS: { count: 1, eligible: ['SS'] },
+        OF: { count: 3, eligible: ['OF', 'LF', 'CF', 'RF'] },
+        UTIL: { count: 1, eligible: ['C', '1B', '2B', '3B', 'SS', 'OF', 'LF', 'CF', 'RF', 'DH'] }
       }
     }
   }

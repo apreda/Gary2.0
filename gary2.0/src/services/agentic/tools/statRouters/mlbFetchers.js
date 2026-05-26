@@ -12,14 +12,13 @@ import {
   getMlbRecentGames,
   findMlbTeam,
   getMlbTeams,
-  getTeamRoster,
-  getPlayerCareerStats,
   getPlayerSeasonStats,
   searchPlayer,
   getConfirmedLineups,
   getProbablePitchers,
 } from '../../../mlbStatsApiService.js';
 import { ballDontLieService } from '../../../ballDontLieService.js';
+import { formatSampleSuffix } from './statRouterCommon.js';
 import { geminiGroundingSearch } from '../../scoutReport/shared/grounding.js';
 
 // ═══════════════════════════════════════════════════════════════════
@@ -169,17 +168,6 @@ async function findMlbTeamByName(teamName) {
   return findMlbTeam(teamName);
 }
 
-// Helper: format player career hitting stats
-function formatHittingStats(stats, name) {
-  if (!stats) return `${name}: Career stats unavailable`;
-  return `${name}: .${Math.round((stats.avg || 0) * 1000)} AVG, ${stats.homeRuns || 0} HR, ${stats.rbi || 0} RBI, .${Math.round((stats.ops || 0) * 1000)} OPS (MLB career: ${stats.gamesPlayed || 0} GP)`;
-}
-
-function formatPitchingStats(stats, name) {
-  if (!stats) return `${name}: Career stats unavailable`;
-  return `${name}: ${stats.wins || 0}-${stats.losses || 0}, ${stats.era || '—'} ERA, ${stats.whip || '—'} WHIP, ${stats.strikeOuts || 0} K in ${stats.inningsPitched || 0} IP`;
-}
-
 export const mlbFetchers = {
 
   // ═══════════════════════════════════════════════════════════════════
@@ -310,10 +298,10 @@ export const mlbFetchers = {
                 for (const s of gameStats) {
                   const gId = s.game?.id || s.game_id;
                   if (!gId) continue;
-                  if (s.pitching_ip > 0 && s.pitching_ip < 5) { // Relievers typically pitch < 5 IP
+                  if ((s.ip || 0) > 0 && (s.ip || 0) < 5) { // Relievers typically pitch < 5 IP
                     if (!byGame[gId]) byGame[gId] = [];
                     const name = s.player?.full_name || s.player?.last_name || 'Unknown';
-                    byGame[gId].push(`${name} ${s.pitching_ip?.toFixed(1) || '?'} IP`);
+                    byGame[gId].push(`${name} ${Number(s.ip).toFixed(1)} IP`);
                   }
                 }
                 for (const [gId, pitchers] of Object.entries(byGame)) {
@@ -398,28 +386,15 @@ export const mlbFetchers = {
         }
       }
 
-      // Fallback: legacy MLB Stats API roster + career stats
-      const mlbTeam = await findMlbTeamByName(team.full_name || team.name);
-      if (mlbTeam) {
-        const roster = await getTeamRoster(mlbTeam.id).catch(() => []);
-        const rosterHitters = roster.filter(p => p.positionType !== 'Pitcher').slice(0, 5);
-        let hasAnyMLBStats = false;
-        for (const h of rosterHitters) {
-          const career = await getPlayerCareerStats(h.id, 'hitting').catch(() => null);
-          if (career) hasAnyMLBStats = true;
-          lines.push(formatHittingStats(career, h.name));
-        }
-        if (hasAnyMLBStats) continue;
-      }
-
-      // No BDL or MLB Stats data — return clean no-data instead of expensive Grounding
-      lines.push(`${teamName}: No 2026 season data available yet (season may not have started)`);
+      // BDL had no key hitters for this team — report clearly. No career fallback:
+      // a lifetime average is misleading vs. current-year context.
+      lines.push(`${teamName}: No ${currentYear} hitting data yet`);
     }
     return {
       homeValue: homeLines.join('\n'),
       awayValue: awayLines.join('\n'),
       comparison: `Key hitters (season stats, sorted by OPS)${fallbackNote}`,
-      source: usedBdl ? `BDL API${seasonLabel}` : 'MLB Stats API (no season data yet)',
+      source: usedBdl ? `BDL API${seasonLabel}` : 'BDL (no current-season hitting data)',
     };
   },
 
@@ -951,16 +926,20 @@ export const mlbFetchers = {
             try {
               const splitsResult = await fetchSplitsWithFallback(playerId, seasonResult.season);
               const splits = splitsResult.splits;
-              if (splits && (splits.byBreakdown?.length > 0 || splits.split?.length > 0)) {
-                const breakdowns = splits.byBreakdown || splits.split || [];
-                if (breakdowns.length > 0) {
-                  lines.push(`Splits:`);
-                  for (const b of breakdowns) {
-                    const splitLabel = b.breakdown || b.name || 'Unknown';
-                    const era = b.pitching_era != null ? b.pitching_era.toFixed(2) : (b.batting_avg != null ? `${b.batting_avg.toFixed(3)} opp AVG` : '—');
-                    const ops = b.batting_ops != null ? b.batting_ops.toFixed(3) : '—';
-                    lines.push(`  ${splitLabel}: ${era} ERA, ${ops} opp OPS`);
-                  }
+              if (splits?.byBreakdown?.length > 0) {
+                lines.push(`Splits:`);
+                for (const b of splits.byBreakdown) {
+                  const splitLabel = b.split_name || b.split_abbreviation || 'Unknown';
+                  const era = b.era != null ? Number(b.era).toFixed(2) : (b.avg != null ? `${Number(b.avg).toFixed(3)} opp AVG` : '—');
+                  const ops = b.ops != null ? Number(b.ops).toFixed(3) : '—';
+                  const sample = formatSampleSuffix(b, [
+                    { field: 'innings_pitched', label: 'IP', decimals: 1 },
+                    { field: 'pitching_ip', label: 'IP', decimals: 1 },
+                    { field: 'ip', label: 'IP', decimals: 1 },
+                    { field: 'games', label: 'G' },
+                    { field: 'batters_faced', label: 'BF' },
+                  ]);
+                  lines.push(`  ${splitLabel}: ${era} ERA, ${ops} opp OPS${sample}`);
                 }
               }
             } catch (_) { /* Splits optional */ }
@@ -980,8 +959,8 @@ export const mlbFetchers = {
                   for (const m of bvp.slice(0, 5)) {
                     const batter = m.opponent_player?.full_name || m.opponent_player?.last_name || 'Unknown';
                     const avg = m.avg != null ? (typeof m.avg === 'number' ? m.avg.toFixed(3) : m.avg) : '—';
-                    const ab = m.at_bats ?? m.ab ?? '—';
-                    const hr = m.hr ?? '—';
+                    const ab = m.at_bats ?? '—';
+                    const hr = m.home_runs ?? '—';
                     lines.push(`  ${batter}: ${avg} AVG, ${hr} HR (${ab} AB)`);
                   }
                 }
@@ -1192,14 +1171,11 @@ export const mlbFetchers = {
             seasons: [currentYear],
           }).catch(() => []);
 
-          // Filter to starts (pitcher with IP >= 3 likely a start)
+          // Filter to starts. BDL game stats use flat field names (ip, er, p_k, etc.)
+          // — NOT the pitching_* prefix used by season stats.
           let starts = gameStats
-            .filter(s => s.pitching_ip >= 3)
-            .sort((a, b) => {
-              const dateA = a.game?.date || a.date || '';
-              const dateB = b.game?.date || b.date || '';
-              return dateB.localeCompare(dateA);
-            })
+            .filter(s => (s.ip || 0) >= 3 || (s.games_started || 0) > 0)
+            .sort((a, b) => (b.game_id || 0) - (a.game_id || 0))
             .slice(0, 5);
 
           // If current season empty, try prior season
@@ -1210,12 +1186,8 @@ export const mlbFetchers = {
             }).catch(() => []);
 
             starts = priorStats
-              .filter(s => s.pitching_ip >= 3)
-              .sort((a, b) => {
-                const dateA = a.game?.date || a.date || '';
-                const dateB = b.game?.date || b.date || '';
-                return dateB.localeCompare(dateA);
-              })
+              .filter(s => (s.ip || 0) >= 3 || (s.games_started || 0) > 0)
+              .sort((a, b) => (b.game_id || 0) - (a.game_id || 0))
               .slice(0, 5);
 
             if (starts.length > 0) {
@@ -1228,14 +1200,12 @@ export const mlbFetchers = {
           if (starts.length > 0) {
             usedApi = true;
             for (const s of starts) {
-              const date = (s.game?.date || s.date || '').split('T')[0];
-              const opp = s.game?.opponent?.full_name || s.game?.opponent?.name || '—';
-              const ip = s.pitching_ip?.toFixed(1) ?? '—';
-              const h = s.pitching_h ?? '—';
-              const er = s.pitching_er ?? '—';
-              const k = s.pitching_k ?? '—';
-              const bb = s.pitching_bb ?? '—';
-              lines.push(`  ${date} vs ${opp}: ${ip} IP, ${h} H, ${er} ER, ${k} K, ${bb} BB`);
+              const ip = s.ip != null ? Number(s.ip).toFixed(1) : '—';
+              const h = s.p_hits ?? '—';
+              const er = s.er ?? '—';
+              const k = s.p_k ?? '—';
+              const bb = s.p_bb ?? '—';
+              lines.push(`  ${ip} IP, ${h} H, ${er} ER, ${k} K, ${bb} BB`);
             }
             continue;
           }
@@ -1327,10 +1297,8 @@ export const mlbFetchers = {
   },
 
   MLB_RECENT_FORM: async (sport, home, away, season, options) => {
-    const homeTeam = home.full_name || home.name;
-    const awayTeam = away.full_name || away.name;
     // Use BDL recent games — same as MLB_SEASON_FORM, no grounding needed
-    return MLB_FETCHERS.MLB_SEASON_FORM(sport, home, away, season, options);
+    return mlbFetchers.MLB_SEASON_FORM(sport, home, away, season, options);
   },
 
   MLB_PARK_FACTORS: async (sport, home, away, season, options) => {
@@ -1465,13 +1433,13 @@ export const mlbFetchers = {
           const gamePitchers = gameStats.filter(s => {
             const matchGame = String(s.game?.id || s.game_id) === String(gId);
             // Filter to relievers (pitched < 5 IP in that game, i.e., not the starter)
-            return matchGame && s.pitching_ip > 0 && s.pitching_ip < 5;
+            return matchGame && (s.ip || 0) > 0 && (s.ip || 0) < 5;
           });
 
           if (gamePitchers.length > 0) {
             const pitcherList = gamePitchers.map(s => {
               const name = s.player?.full_name || s.player?.last_name || 'Unknown';
-              return `${name} ${s.pitching_ip?.toFixed(1) || '?'} IP`;
+              return `${name} ${Number(s.ip).toFixed(1)} IP`;
             }).join(', ');
             lines.push(`${date}: ${pitcherList}`);
           } else {
@@ -1602,26 +1570,31 @@ export const mlbFetchers = {
           usedBdl = true;
           lines.push(`--- ${name} ---`);
 
-          // L/R breakdown
+          // L/R breakdown — BDL splits use flat field names (avg, ops, home_runs, at_bats)
           if (splits.byBreakdown && Array.isArray(splits.byBreakdown)) {
             for (const b of splits.byBreakdown) {
-              const label = b.breakdown || b.name || 'Unknown';
-              const avg = b.batting_avg != null ? b.batting_avg.toFixed(3) : '—';
-              const ops = b.batting_ops != null ? b.batting_ops.toFixed(3) : '—';
-              const hr = b.batting_hr ?? '—';
-              const ab = b.batting_ab ?? '—';
+              const label = b.split_name || b.split_abbreviation || 'Unknown';
+              const avg = b.avg != null ? Number(b.avg).toFixed(3) : '—';
+              const ops = b.ops != null ? Number(b.ops).toFixed(3) : '—';
+              const hr = b.home_runs ?? '—';
+              const ab = b.at_bats ?? '—';
               lines.push(`  ${label}: ${avg} AVG, ${ops} OPS, ${hr} HR (${ab} AB)`);
             }
           }
 
-          // Home/Away (also in byBreakdown typically)
+          // Home/Away venue splits
           if (splits.byArena && Array.isArray(splits.byArena)) {
             const topVenues = splits.byArena.slice(0, 3);
             for (const v of topVenues) {
-              const venue = v.arena || v.name || 'Unknown';
-              const avg = v.batting_avg != null ? v.batting_avg.toFixed(3) : '—';
-              const ops = v.batting_ops != null ? v.batting_ops.toFixed(3) : '—';
-              lines.push(`  @ ${venue}: ${avg} AVG, ${ops} OPS`);
+              const venue = v.split_name || v.split_abbreviation || 'Unknown';
+              const avg = v.avg != null ? Number(v.avg).toFixed(3) : '—';
+              const ops = v.ops != null ? Number(v.ops).toFixed(3) : '—';
+              const sample = formatSampleSuffix(v, [
+                { field: 'at_bats', label: 'AB' },
+                { field: 'plate_appearances', label: 'PA' },
+                { field: 'games', label: 'G' },
+              ]);
+              lines.push(`  @ ${venue}: ${avg} AVG, ${ops} OPS${sample}`);
             }
           }
         }
@@ -1688,9 +1661,9 @@ export const mlbFetchers = {
           lines.push(`--- ${name} vs ${opposingName} pitchers ---`);
           for (const m of matchups) {
             const pitcher = m.opponent_player?.full_name || m.opponent_player?.last_name || 'Unknown P';
-            const ab = m.at_bats ?? m.ab ?? '—';
-            const hits = m.hits ?? m.h ?? '—';
-            const hr = m.hr ?? '—';
+            const ab = m.at_bats ?? '—';
+            const hits = m.hits ?? '—';
+            const hr = m.home_runs ?? '—';
             const avg = m.avg != null ? (typeof m.avg === 'number' ? m.avg.toFixed(3) : m.avg) : '—';
             const ops = m.ops != null ? (typeof m.ops === 'number' ? m.ops.toFixed(3) : m.ops) : '—';
             const k = m.strikeouts ?? m.k ?? '—';
@@ -1887,11 +1860,12 @@ export const mlbFetchers = {
 
           const splitsResult = await fetchSplitsWithFallback(playerId, effectiveSeason);
           const splits = splitsResult.splits;
-          if (!splits || !splits.bySituation || !Array.isArray(splits.bySituation)) continue;
+          if (!splits?.bySituation || !Array.isArray(splits.bySituation)) continue;
 
           // Extract situational splits: RISP, Runners On, None On, Bases Loaded
+          // BDL splits use flat field names (avg, ops, home_runs, rbis, at_bats, split_name)
           const situational = splits.bySituation.filter(s => {
-            const label = (s.situation || s.name || '').toLowerCase();
+            const label = (s.split_name || s.split_abbreviation || '').toLowerCase();
             return label.includes('scoring position') || label.includes('runners on') ||
                    label.includes('none on') || label.includes('bases loaded') ||
                    label.includes('risp');
@@ -1902,12 +1876,12 @@ export const mlbFetchers = {
             usedBdl = true;
             lines.push(`--- ${name} ---`);
             for (const s of situational) {
-              const label = s.situation || s.name || 'Unknown';
-              const avg = s.batting_avg != null ? s.batting_avg.toFixed(3) : '—';
-              const ops = s.batting_ops != null ? s.batting_ops.toFixed(3) : '—';
-              const hr = s.batting_hr ?? '—';
-              const rbi = s.batting_rbi ?? '—';
-              const ab = s.batting_ab ?? '—';
+              const label = s.split_name || s.split_abbreviation || 'Unknown';
+              const avg = s.avg != null ? Number(s.avg).toFixed(3) : '—';
+              const ops = s.ops != null ? Number(s.ops).toFixed(3) : '—';
+              const hr = s.home_runs ?? '—';
+              const rbi = s.rbis ?? '—';
+              const ab = s.at_bats ?? '—';
               lines.push(`  ${label}: ${avg} AVG, ${ops} OPS, ${hr} HR, ${rbi} RBI (${ab} AB)`);
             }
           }
@@ -1985,6 +1959,136 @@ export const mlbFetchers = {
       awayValue: awayLines.join('\n'),
       comparison: `Team defense & fielding for ${awayTeam} @ ${homeTeam}${defenseFallbackNote}`,
       source: usedBdl ? `BDL API${defenseSeasonLabel}` : 'BDL (no data)',
+    };
+  },
+
+  // ═══════════════════════════════════════════════════════════════════
+  // STATCAST — CONTACT QUALITY (exit velocity, barrel rate, hard hit)
+  // Uses BDL /mlb/v1/plate_appearances endpoint (pitch-level Statcast)
+  // ═══════════════════════════════════════════════════════════════════
+
+  MLB_STATCAST: async (sport, home, away, season, options) => {
+    const homeTeam = home.full_name || home.name;
+    const awayTeam = away.full_name || away.name;
+    const homeLines = [];
+    const awayLines = [];
+    let usedApi = false;
+
+    // Helper: compute Statcast aggregates from plate appearances
+    function computeStatcast(pas, teamBattingHalf) {
+      const evs = [];
+      let barrels = 0;
+      let totalBIP = 0;
+      for (const pa of pas) {
+        if (pa.half_inning !== teamBattingHalf) continue;
+        const pitches = pa.pitches || [];
+        const last = pitches[pitches.length - 1];
+        if (!last?.exit_velocity) continue;
+        totalBIP++;
+        evs.push(last.exit_velocity);
+        if (last.is_barrel === true) barrels++;
+      }
+      if (totalBIP === 0) return null;
+      const avgEV = evs.reduce((a, b) => a + b, 0) / evs.length;
+      const hardHits = evs.filter(v => v >= 95).length;
+      return {
+        avgEV: avgEV.toFixed(1),
+        hardHitPct: ((hardHits / totalBIP) * 100).toFixed(1),
+        barrelPct: ((barrels / totalBIP) * 100).toFixed(1),
+        bip: totalBIP
+      };
+    }
+
+    for (const [team, teamName, lines, isHomeTeam] of [
+      [home, homeTeam, homeLines, true],
+      [away, awayTeam, awayLines, false]
+    ]) {
+      const bdlTeamId = await resolveBdlTeamId(team);
+      if (!bdlTeamId) { lines.push(`${teamName}: Unable to resolve team`); continue; }
+
+      try {
+        // Get last 5 days of games for this team
+        const dates = [];
+        for (let i = 1; i <= 7; i++) {
+          const d = new Date(); d.setDate(d.getDate() - i);
+          dates.push(d.toISOString().slice(0, 10));
+        }
+        const teamGames = await ballDontLieService.getGames('baseball_mlb', {
+          team_ids: [bdlTeamId], dates, per_page: 50
+        }).catch(() => []);
+
+        const finished = (teamGames || [])
+          .filter(g => g.status === 'STATUS_FINAL')
+          .sort((a, b) => (b.id || 0) - (a.id || 0))
+          .slice(0, 3);
+
+        if (finished.length === 0) {
+          lines.push(`${teamName}: No recent completed games for Statcast`);
+          continue;
+        }
+
+        // Fetch plate appearances for up to 3 recent games
+        const allPAs = [];
+        for (const game of finished) {
+          const gamePAs = await ballDontLieService.getMlbPlateAppearances(game.id).catch(() => []);
+          // Determine which half_inning is this team's batting
+          const isTeamHome = game.home_team?.id === bdlTeamId;
+          const battingHalf = isTeamHome ? 'bottom' : 'top';
+          for (const pa of gamePAs) {
+            pa._teamBattingHalf = battingHalf;
+          }
+          allPAs.push(...gamePAs);
+        }
+
+        if (allPAs.length === 0) {
+          lines.push(`${teamName}: No plate appearance data available`);
+          continue;
+        }
+
+        // Compute batting Statcast for this team
+        const battingHalves = [...new Set(allPAs.map(pa => pa._teamBattingHalf))];
+        const teamHalf = battingHalves[0]; // all PAs for this team share the same batting half per game
+        // Actually need to aggregate across games where half_inning matches per game.
+        // Simpler: just compute for all PAs where half_inning matches the team's batting side.
+        const evs = [], barrels = { count: 0 }, bipCount = { count: 0 };
+        for (const pa of allPAs) {
+          if (pa.half_inning !== pa._teamBattingHalf) continue;
+          const pitches = pa.pitches || [];
+          const last = pitches[pitches.length - 1];
+          if (!last?.exit_velocity) continue;
+          bipCount.count++;
+          evs.push(last.exit_velocity);
+          if (last.is_barrel === true) barrels.count++;
+        }
+
+        if (evs.length === 0) {
+          lines.push(`${teamName}: No Statcast contact data from recent games`);
+          continue;
+        }
+
+        usedApi = true;
+        const avgEV = (evs.reduce((a, b) => a + b, 0) / evs.length).toFixed(1);
+        const hardHits = evs.filter(v => v >= 95).length;
+        const hardHitPct = ((hardHits / bipCount.count) * 100).toFixed(1);
+        const barrelPct = ((barrels.count / bipCount.count) * 100).toFixed(1);
+        const maxEV = Math.max(...evs).toFixed(1);
+
+        lines.push(`${teamName} (last ${finished.length} games, ${bipCount.count} BIP):`);
+        lines.push(`  Avg Exit Velocity: ${avgEV} mph`);
+        lines.push(`  Hard Hit Rate (95+ mph): ${hardHitPct}%`);
+        lines.push(`  Barrel Rate: ${barrelPct}%`);
+        lines.push(`  Max Exit Velocity: ${maxEV} mph`);
+      } catch (e) {
+        console.warn(`[MLB Fetchers] Statcast fetch failed for ${teamName}:`, e.message);
+        lines.push(`${teamName}: Statcast data unavailable`);
+      }
+    }
+
+    return {
+      homeValue: homeLines.join('\n'),
+      awayValue: awayLines.join('\n'),
+      comparison: `Statcast contact quality (last 3 games) for ${awayTeam} @ ${homeTeam}`,
+      source: usedApi ? 'BDL API (Statcast plate appearances)' : 'BDL (no data)',
     };
   },
 

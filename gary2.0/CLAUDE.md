@@ -19,6 +19,14 @@ Examples:
 
 Gary WILL follow explicit if/then rules — he takes instructions literally. If we write "Fast pace helps underdogs stay close," Gary will pick underdogs in fast-paced games without investigating whether it's true for THIS matchup. Never tell Gary what a factor means for the pick. Never assign point values to factors. Never label something as "edge." Gary investigates and concludes on his own.
 
+## LOCKED: March Madness 2026 Bracket
+
+The bracket_picks table for march_madness_2026 is FINAL. All 67 picks are locked in. DO NOT delete, modify, re-run, or overwrite any bracket picks. If ATS daily picks conflict with bracket picks, re-run the ATS pick — never touch the bracket. This bracket is permanent.
+
+## LOCKED: March Madness 2026 Bracket
+
+The bracket_picks table for march_madness_2026 is FINAL. All 63 picks are locked in. DO NOT delete, modify, re-run, or overwrite any bracket picks under any circumstances. If ATS daily picks conflict with bracket picks, fix the ATS pick — never touch the bracket.
+
 ## LOCKED: Injury Handling
 
 DO NOT edit injury handling code without explicit user confirmation. This includes:
@@ -46,6 +54,10 @@ This applies to all changes: bug fixes, prompt edits, refactors, new files, conf
 ## Testing
 
 When running test picks, store results in `test_daily_picks` table (not `daily_picks`). Use the `--test` flag or set the table target accordingly so test runs never pollute production data.
+
+## Language: Say "Stats and Data" Not "Efficiency"
+
+When discussing what Gary should analyze, say "stats and data" — meaning how teams score, defend, rebound, shoot, turn it over. Do NOT default to the word "efficiency" as shorthand. "Efficiency" sounds like one metric when we mean "all the real measurable basketball stuff." Be specific about which stats matter for the context.
 
 ## Communication Rule — No Summaries
 

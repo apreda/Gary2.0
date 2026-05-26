@@ -9,6 +9,7 @@
  */
 
 import { geminiGroundingSearch } from '../../scoutReport/scoutReportBuilder.js';
+import tank01DfsService from '../../../tank01DfsService.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // SLATE ANALYSIS TOOLS (Used by Gemini in Phase 2)
@@ -63,7 +64,7 @@ export const DFS_SLATE_ANALYSIS_TOOLS = [
   },
   {
     name: 'GET_PLAYER_SALARY',
-    description: 'Get DFS salary and projection for a player.',
+    description: 'Get DFS salary and position for a player.',
     parameters: {
       type: 'object',
       properties: {
@@ -236,17 +237,84 @@ export const SUBMIT_LINEUP_TOOL = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// TANK01 ENHANCED TOOLS — Box scores with usage%, schedule lookahead
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const DFS_TANK01_TOOLS = [
+  {
+    name: 'GET_LAST_GAME_BOX_SCORE',
+    description: 'Get full box score from a recent game — includes every player\'s minutes, usage%, plus/minus, shooting splits, and all stats. Use this to see exactly who played and how they performed in a specific game.',
+    parameters: {
+      type: 'object',
+      properties: {
+        gameID: {
+          type: 'string',
+          description: 'Game ID in format YYYYMMDD_AWAY@HOME (e.g., "20260319_CLE@CHI"). Check the scout report for recent game dates and matchups to construct the ID.'
+        }
+      },
+      required: ['gameID']
+    }
+  },
+  {
+    name: 'GET_SCHEDULE_CONTEXT',
+    description: 'Get schedule context for a team — next game opponent, whether they play tomorrow (B2B lookahead), games in last 7 days, and last game result. Useful for understanding rest decisions and look-ahead spots.',
+    parameters: {
+      type: 'object',
+      properties: {
+        team: {
+          type: 'string',
+          description: 'Team abbreviation (e.g., "BOS", "LAL")'
+        }
+      },
+      required: ['team']
+    }
+  },
+  {
+    name: 'GET_DEPTH_CHART',
+    description: 'Get the depth chart for a team — shows starter → backup ordering at each position (PG, SG, SF, PF, C). Use this to see who replaces an injured player and the full position hierarchy.',
+    parameters: {
+      type: 'object',
+      properties: {
+        team: {
+          type: 'string',
+          description: 'Team abbreviation (e.g., "BOS", "DET")'
+        }
+      },
+      required: ['team']
+    }
+  },
+  {
+    name: 'GET_TEAM_RECENT_STATS',
+    description: 'Get team-level stats for last N games — full shooting splits (FG%, 3P%, eFG%), pace (actual possessions), paint scoring, fast break points, turnovers, rebounds, and opponent stats. Compare L1/L3/L5 to see trends. Much more detailed than season averages.',
+    parameters: {
+      type: 'object',
+      properties: {
+        team: {
+          type: 'string',
+          description: 'Team abbreviation (e.g., "BOS", "MIN")'
+        },
+        numGames: {
+          type: 'integer',
+          description: 'Number of recent games to analyze (1, 3, 5, or 10). Use 1 for last game, 5 for recent form.'
+        }
+      },
+      required: ['team', 'numGames']
+    }
+  }
+];
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // MERGED TOOL SETS
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * All investigation tools (slate + player), deduplicated.
+ * All investigation tools (slate + player + Tank01 enhanced), deduplicated.
  * Used by the DFS agent loop and Flash game research.
  */
 export const DFS_ALL_TOOLS = (() => {
   const seen = new Set();
   const merged = [];
-  for (const tool of [...DFS_SLATE_ANALYSIS_TOOLS, ...DFS_PLAYER_INVESTIGATION_TOOLS]) {
+  for (const tool of [...DFS_SLATE_ANALYSIS_TOOLS, ...DFS_PLAYER_INVESTIGATION_TOOLS, ...DFS_TANK01_TOOLS]) {
     if (!seen.has(tool.name)) {
       seen.add(tool.name);
       merged.push(tool);
@@ -302,6 +370,18 @@ export async function executeToolCall(toolName, args, context) {
       case 'SEARCH_LIVE_NEWS':
         return await searchLiveNews(args.query);
 
+      case 'GET_LAST_GAME_BOX_SCORE':
+        return await tank01DfsService.fetchBoxScore(args.gameID);
+
+      case 'GET_SCHEDULE_CONTEXT':
+        return await tank01DfsService.fetchTeamScheduleContext(args.team, context.date || new Date().toISOString().split('T')[0]);
+
+      case 'GET_DEPTH_CHART':
+        return await tank01DfsService.fetchDepthChart(args.team);
+
+      case 'GET_TEAM_RECENT_STATS':
+        return await tank01DfsService.fetchTeamLStats(args.team, args.numGames || 5, context.date || new Date().toISOString().split('T')[0]);
+
       case 'SUBMIT_LINEUP':
         // SUBMIT_LINEUP is handled by the agent loop, not executed here.
         // Return the args so the loop can validate them.
@@ -320,25 +400,35 @@ export async function executeToolCall(toolName, args, context) {
 // STANDARDIZED NAME MATCHING
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// Normalize player names for matching: strip periods from initials, apostrophes
+// Mirrors normalizeName in dfsAgentLoop.js — must stay in sync
+function normalizeName(n) {
+  return (n || '').toLowerCase()
+    .replace(/\b([a-z])\.([a-z])\./gi, '$1$2')  // P.J. → PJ
+    .replace(/\./g, '')                            // remaining periods
+    .replace(/['\u2018\u2019\u02BC]/g, '')         // apostrophes: D'Angelo → DAngelo
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function findPlayerByName(playerName, context) {
   if (!playerName || !context.players) return null;
-  const query = playerName.toLowerCase().trim();
-  // Exact match first — most reliable
-  let match = context.players.find(p => p.name?.toLowerCase() === query);
+  const query = normalizeName(playerName);
+  // Exact normalized match first
+  let match = context.players.find(p => normalizeName(p.name) === query);
   if (match) return match;
-  // Partial match: query contains full name or full name contains query
-  // BUT require the match to be unambiguous (only one result)
+  // Partial match on normalized names — require unambiguous (only one result)
   const partialMatches = context.players.filter(p => {
-    const pName = p.name?.toLowerCase() || '';
-    return pName.includes(query) || query.includes(pName);
+    const pNorm = normalizeName(p.name);
+    return pNorm.includes(query) || query.includes(pNorm);
   });
   if (partialMatches.length === 1) return partialMatches[0];
-  // Last name match — split query into words and match last name
+  // Last name match — split normalized query into words, match last word
   const queryWords = query.split(/\s+/);
   const queryLast = queryWords[queryWords.length - 1];
   if (queryLast && queryLast.length > 2) {
     const lastNameMatches = context.players.filter(p => {
-      const parts = (p.name?.toLowerCase() || '').split(/\s+/);
+      const parts = normalizeName(p.name).split(/\s+/);
       return parts[parts.length - 1] === queryLast;
     });
     if (lastNameMatches.length === 1) return lastNameMatches[0];
@@ -422,7 +512,7 @@ async function getTeamUsageStats(team, context) {
       player: i.player,
       status: i.status,
       duration: i.duration || null,
-      gamesMissed: i.gamesMissed || null
+      gamesMissed: i.gamesMissed ?? null
     }));
 
   return {
@@ -482,9 +572,8 @@ function getPlayerSalary(playerName, context) {
       salary: player.salary,
       position: player.position || player.positions?.join('/'),
       team: player.team,
-      projectedPts: player.projected_pts || player.projection,
+      // NOTE: Projections intentionally excluded — Gary evaluates based on matchups and stats, not projection anchors
       dkFpts: player.seasonStats?.dkFpts,
-      benchmarkProjection: player.benchmarkProjection,
     };
   }
 

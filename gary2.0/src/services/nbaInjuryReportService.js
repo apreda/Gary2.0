@@ -62,13 +62,42 @@ async function fetchAllInjuries(dateStr) {
 
   if (!response.ok) {
     const errorText = await response.text();
-    // If 404, the date may be tomorrow — try today's date instead
-    // Injury reports update 3x daily, today's data is valid for tomorrow's games
     const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+
+    // 404 case A: asked for a future date (e.g., tomorrow's game) but only today exists
     if (response.status === 404 && dateStr !== todayStr) {
       console.warn(`[NBA Injuries API] 404 for ${dateStr} — trying today's date (${todayStr})`);
       return fetchAllInjuries(todayStr);
     }
+
+    // 404 case B: asked for today but provider hasn't published it yet.
+    // The provider's error body lists "Available dates" — pull the most recent
+    // one and use it instead of hard-failing. Tag the data as stale so the
+    // scout report can surface a banner.
+    if (response.status === 404 && dateStr === todayStr) {
+      const availableDates = extractAvailableDates(errorText);
+      if (availableDates.length > 0) {
+        const mostRecent = availableDates[0]; // already sorted desc
+        const ageDays = daysBetween(mostRecent, todayStr);
+        // Only accept if data is 1 day old. Older than that and the lineup
+        // could have meaningfully changed — fail rather than mislead.
+        if (ageDays === 1) {
+          console.warn(`[NBA Injuries API] ⚠️ Today's report unavailable. Falling back to ${mostRecent} (1 day stale) — provider lag.`);
+          const fallbackData = await fetchAllInjuries(mostRecent);
+          // Tag each entry so downstream knows the data is stale
+          if (Array.isArray(fallbackData)) {
+            for (const entry of fallbackData) {
+              entry._isStaleData = true;
+              entry._sourceDate = mostRecent;
+              entry._requestedDate = todayStr;
+            }
+          }
+          return fallbackData;
+        }
+        console.error(`[NBA Injuries API] Today's report unavailable AND most recent (${mostRecent}) is ${ageDays} days old — too stale, failing.`);
+      }
+    }
+
     console.error(`[NBA Injuries API] Error ${response.status}: ${errorText}`);
     throw new Error(`NBA Injuries API error: ${response.status} - ${errorText}`);
   }
@@ -90,6 +119,31 @@ async function fetchAllInjuries(dateStr) {
 
   console.log(`[NBA Injuries API] Fetched ${data.length} entries for ${dateStr}`);
   return data;
+}
+
+/**
+ * Parse "Available dates: ['2026-05-22', '2026-05-21', ...]" from the
+ * provider's 404 response body. Returns an array of YYYY-MM-DD strings,
+ * sorted descending (most recent first). Returns [] if no dates can be
+ * extracted.
+ */
+function extractAvailableDates(errorText) {
+  if (!errorText) return [];
+  // Match anything that looks like YYYY-MM-DD between quotes
+  const matches = errorText.match(/['"](\d{4}-\d{2}-\d{2})['"]/g);
+  if (!matches || matches.length === 0) return [];
+  const dates = matches.map(s => s.replace(/['"]/g, ''));
+  // Dedupe + sort descending
+  return Array.from(new Set(dates)).sort().reverse();
+}
+
+/**
+ * Days between two YYYY-MM-DD strings (b - a). Returns absolute integer days.
+ */
+function daysBetween(a, b) {
+  const da = new Date(`${a}T00:00:00Z`).getTime();
+  const db = new Date(`${b}T00:00:00Z`).getTime();
+  return Math.abs(Math.round((db - da) / 86400000));
 }
 
 /**
@@ -159,6 +213,11 @@ export async function fetchNbaInjuriesForGame(homeTeam, awayTeam, dateStr) {
   try {
     const allEntries = await fetchAllInjuries(dateStr);
 
+    // Detect stale-data fallback (provider lag): every entry will be tagged
+    // _isStaleData by fetchAllInjuries when it served yesterday's report.
+    const isStale = Array.isArray(allEntries) && allEntries.length > 0 && allEntries.every(e => e?._isStaleData);
+    const staleSourceDate = isStale ? allEntries[0]?._sourceDate : null;
+
     const homeInjuries = [];
     const awayInjuries = [];
     const homeRaw = [];
@@ -204,8 +263,18 @@ export async function fetchNbaInjuriesForGame(homeTeam, awayTeam, dateStr) {
       }
     }
 
-    // Build groundingRaw-style text for downstream context
-    const groundingRaw = [
+    // Build groundingRaw-style text for downstream context.
+    // When the provider lagged and we used yesterday's report, prepend a
+    // visible banner so Gary's scout report flags the staleness.
+    const staleBanner = isStale && staleSourceDate
+      ? [
+          `⚠️ INJURY DATA IS FROM ${staleSourceDate} (provider hadn't published today's report yet).`,
+          `Treat status fields as provisional — verify game-day actives via inactives list or pregame news.`,
+          ''
+        ].join('\n')
+      : '';
+
+    const groundingRaw = staleBanner + [
       `=== ${awayTeam} ===`,
       `${awayTeam} INJURY REPORT:`,
       awayRaw.length > 0 ? awayRaw.join('\n') : 'No injuries reported',
@@ -220,11 +289,16 @@ export async function fetchNbaInjuriesForGame(homeTeam, awayTeam, dateStr) {
     const awayOut = awayInjuries.filter(i => i.status === 'Out').length;
     console.log(`[NBA Injuries API] ${homeTeam}: ${homeInjuries.length} injuries (${homeOut} OUT)`);
     console.log(`[NBA Injuries API] ${awayTeam}: ${awayInjuries.length} injuries (${awayOut} OUT)`);
+    if (isStale) {
+      console.warn(`[NBA Injuries API] ⚠️ Returning STALE data from ${staleSourceDate} — provider lag fallback active.`);
+    }
 
     return {
       home: homeInjuries,
       away: awayInjuries,
-      groundingRaw
+      groundingRaw,
+      isStale,
+      sourceDate: staleSourceDate
     };
   } catch (error) {
     console.error(`[NBA Injuries API] Failed: ${error.message}`);

@@ -1,19 +1,17 @@
 /**
- * MLB Stats API Service — WBC + MLB Regular Season Data
+ * MLB Stats API Service — MLB Regular Season
  *
  * Free API, no key required. Uses statsapi.mlb.com for:
- * - WBC schedule, rosters, box scores, standings, player stats
- * - MLB regular season (same endpoints, different sportId)
+ * - MLB regular season: schedule, rosters, standings, box scores, player stats
  *
- * WBC: sportId=51, leagueId=160
- * MLB: sportId=1
+ * MLB: sportId=1, leagueIds: AL=103, NL=104
  */
 
 const BASE_URL = 'https://statsapi.mlb.com/api/v1';
 
-const WBC_SPORT_ID = 51;
-const WBC_LEAGUE_ID = 160;
 const MLB_SPORT_ID = 1;
+const MLB_AL_LEAGUE_ID = 103;
+const MLB_NL_LEAGUE_ID = 104;
 
 // Simple in-memory cache (2hr TTL)
 const cache = new Map();
@@ -36,36 +34,15 @@ async function apiFetch(path) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// SCHEDULE
+// MLB REGULAR SEASON SCHEDULE
 // ═══════════════════════════════════════════════════════════════════════════
 
-export async function getWbcSchedule(date) {
-  const key = `wbc_schedule_${date}`;
+export async function getMlbSchedule(date) {
+  const key = `mlb_schedule_${date}`;
   const cached = getCached(key);
   if (cached) return cached;
 
-  const data = await apiFetch(`/schedule?sportId=${WBC_SPORT_ID}&date=${date}`);
-  const games = [];
-  for (const dateEntry of (data.dates || [])) {
-    for (const game of (dateEntry.games || [])) {
-      // Only WBC games (league 160)
-      if (game.seriesDescription?.includes('World Baseball Classic') ||
-          game.gameType === 'F' ||
-          game.teams?.home?.team?.sport?.id === WBC_SPORT_ID) {
-        games.push(game);
-      }
-    }
-  }
-  setCache(key, games);
-  return games;
-}
-
-export async function getWbcFullSchedule() {
-  const key = 'wbc_full_schedule';
-  const cached = getCached(key);
-  if (cached) return cached;
-
-  const data = await apiFetch(`/schedule?sportId=${WBC_SPORT_ID}&startDate=2026-03-05&endDate=2026-03-17`);
+  const data = await apiFetch(`/schedule?sportId=${MLB_SPORT_ID}&date=${date}&hydrate=probablePitcher,linescore`);
   const games = [];
   for (const dateEntry of (data.dates || [])) {
     for (const game of (dateEntry.games || [])) {
@@ -76,22 +53,66 @@ export async function getWbcFullSchedule() {
   return games;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// TEAMS
-// ═══════════════════════════════════════════════════════════════════════════
-
-export async function getWbcTeams() {
-  const key = 'wbc_teams';
+export async function getMlbRecentGames(teamId, limit = 10) {
+  const key = `mlb_recent_${teamId}_${limit}`;
   const cached = getCached(key);
   if (cached) return cached;
 
-  const data = await apiFetch(`/teams?sportId=${WBC_SPORT_ID}&season=2026`);
-  // Filter to active WBC teams (league 160)
-  const teams = (data.teams || []).filter(t =>
-    t.league?.id === WBC_LEAGUE_ID && t.active
-  );
+  const today = new Date().toISOString().split('T')[0];
+  // Look back 30 days for recent games
+  const startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const data = await apiFetch(`/schedule?sportId=${MLB_SPORT_ID}&teamId=${teamId}&startDate=${startDate}&endDate=${today}`);
+  const games = [];
+  for (const dateEntry of (data.dates || [])) {
+    for (const game of (dateEntry.games || [])) {
+      if (game.status?.detailedState === 'Final') games.push(game);
+    }
+  }
+  const recent = games.slice(-limit);
+  setCache(key, recent);
+  return recent;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MLB REGULAR SEASON TEAMS
+// ═══════════════════════════════════════════════════════════════════════════
+
+export async function getMlbTeams() {
+  const key = 'mlb_teams';
+  const cached = getCached(key);
+  if (cached) return cached;
+
+  const season = new Date().getFullYear();
+  const data = await apiFetch(`/teams?sportId=${MLB_SPORT_ID}&season=${season}`);
+  const teams = (data.teams || []).filter(t => t.active);
   setCache(key, teams);
   return teams;
+}
+
+export async function findMlbTeam(teamName) {
+  const teams = await getMlbTeams();
+  const norm = (teamName || '').toLowerCase().trim();
+  return teams.find(t =>
+    (t.name || '').toLowerCase().includes(norm) ||
+    (t.teamName || '').toLowerCase().includes(norm) ||
+    (t.abbreviation || '').toLowerCase() === norm ||
+    (t.shortName || '').toLowerCase().includes(norm)
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MLB REGULAR SEASON STANDINGS
+// ═══════════════════════════════════════════════════════════════════════════
+
+export async function getMlbStandings(season) {
+  const year = season || new Date().getFullYear();
+  const key = `mlb_standings_${year}`;
+  const cached = getCached(key);
+  if (cached) return cached;
+
+  const data = await apiFetch(`/standings?leagueId=${MLB_AL_LEAGUE_ID},${MLB_NL_LEAGUE_ID}&season=${year}&standingsTypes=regularSeason`);
+  setCache(key, data);
+  return data;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -99,11 +120,12 @@ export async function getWbcTeams() {
 // ═══════════════════════════════════════════════════════════════════════════
 
 export async function getTeamRoster(teamId) {
-  const key = `wbc_roster_${teamId}`;
+  const season = new Date().getFullYear();
+  const key = `roster_${teamId}_${season}`;
   const cached = getCached(key);
   if (cached) return cached;
 
-  const data = await apiFetch(`/teams/${teamId}/roster?season=2026`);
+  const data = await apiFetch(`/teams/${teamId}/roster?season=${season}`);
   const roster = (data.roster || []).map(p => ({
     id: p.person?.id,
     name: p.person?.fullName,
@@ -111,6 +133,7 @@ export async function getTeamRoster(teamId) {
     position: p.position?.abbreviation,
     positionType: p.position?.type,
     status: p.status?.description,
+    ilStatus: p.status?.description, // e.g., "Active", "60-Day Injured List", "10-Day IL"
     parentTeamId: p.parentTeamId,
   }));
   setCache(key, roster);
@@ -118,26 +141,16 @@ export async function getTeamRoster(teamId) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// PLAYER STATS (MLB career / season)
+// PLAYER STATS (MLB season)
 // ═══════════════════════════════════════════════════════════════════════════
 
-export async function getPlayerCareerStats(playerId, group = 'hitting') {
-  const key = `player_career_${playerId}_${group}`;
+export async function getPlayerSeasonStats(playerId, season, group = 'hitting') {
+  const year = season || new Date().getFullYear();
+  const key = `player_season_${playerId}_${year}_${group}`;
   const cached = getCached(key);
   if (cached) return cached;
 
-  const data = await apiFetch(`/people/${playerId}/stats?stats=career&group=${group}`);
-  const splits = data.stats?.[0]?.splits?.[0]?.stat || null;
-  setCache(key, splits);
-  return splits;
-}
-
-export async function getPlayerSeasonStats(playerId, season = 2025, group = 'hitting') {
-  const key = `player_season_${playerId}_${season}_${group}`;
-  const cached = getCached(key);
-  if (cached) return cached;
-
-  const data = await apiFetch(`/people/${playerId}/stats?stats=season&season=${season}&group=${group}`);
+  const data = await apiFetch(`/people/${playerId}/stats?stats=season&season=${year}&group=${group}`);
   const splits = data.stats?.[0]?.splits?.[0]?.stat || null;
   setCache(key, splits);
   return splits;
@@ -157,43 +170,6 @@ export async function getPlayerInfo(playerId) {
 export async function searchPlayer(name) {
   const data = await apiFetch(`/people/search?names=${encodeURIComponent(name)}`);
   return data.people || [];
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// TEAM STATS (career/season aggregates for WBC rosters)
-// ═══════════════════════════════════════════════════════════════════════════
-
-export async function getWbcTeamBattingStats(roster) {
-  if (!roster || roster.length === 0) return null;
-  const hitters = roster.filter(p => p.positionType !== 'Pitcher').slice(0, 5);
-  if (hitters.length === 0) return null;
-
-  const stats = await Promise.all(
-    hitters.map(p => p.id ? getPlayerCareerStats(p.id, 'hitting').catch(() => null) : null)
-  );
-  const valid = stats.filter(Boolean);
-  if (valid.length === 0) return null;
-
-  const avg = (arr, key) => {
-    const vals = arr.map(s => parseFloat(s[key])).filter(v => !isNaN(v));
-    return vals.length > 0 ? (vals.reduce((a, b) => a + b, 0) / vals.length) : null;
-  };
-  const sum = (arr, key) => {
-    const vals = arr.map(s => parseInt(s[key])).filter(v => !isNaN(v));
-    return vals.length > 0 ? vals.reduce((a, b) => a + b, 0) : null;
-  };
-
-  return {
-    avg: avg(valid, 'avg'),
-    obp: avg(valid, 'obp'),
-    slg: avg(valid, 'slg'),
-    ops: avg(valid, 'ops'),
-    homeRuns: sum(valid, 'homeRuns'),
-    rbi: sum(valid, 'rbi'),
-    stolenBases: sum(valid, 'stolenBases'),
-    strikeOuts: sum(valid, 'strikeOuts'),
-    playerCount: valid.length,
-  };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -223,17 +199,47 @@ export async function getGameFeed(gamePk) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// STANDINGS
+// CONFIRMED LINEUPS (extracted from live game feed boxscore)
 // ═══════════════════════════════════════════════════════════════════════════
 
-export async function getWbcStandings() {
-  const key = 'wbc_standings';
-  const cached = getCached(key);
-  if (cached) return cached;
+export async function getConfirmedLineups(gamePk) {
+  try {
+    const feed = await getGameFeed(gamePk);
+    const boxscore = feed?.liveData?.boxscore;
+    if (!boxscore) return null;
 
-  const data = await apiFetch(`/standings?leagueId=${WBC_LEAGUE_ID}&season=2026`);
-  setCache(key, data);
-  return data;
+    const extractLineup = (side) => {
+      const teamData = boxscore.teams?.[side];
+      if (!teamData) return null;
+      const batters = teamData.batters || [];
+      const players = teamData.players || {};
+
+      const lineup = [];
+      for (const playerId of batters) {
+        const player = players[`ID${playerId}`] || {};
+        const person = player.person || {};
+        const battingOrder = player.battingOrder;
+        if (!battingOrder) continue; // Not in batting lineup
+        lineup.push({
+          id: person.id,
+          name: person.fullName || 'Unknown',
+          position: player.position?.abbreviation || '',
+          battingOrder: parseInt(battingOrder) / 100, // "100" = 1st, "200" = 2nd, etc.
+          stats: player.stats?.batting || {},
+        });
+      }
+      return lineup.sort((a, b) => a.battingOrder - b.battingOrder);
+    };
+
+    return {
+      home: extractLineup('home'),
+      away: extractLineup('away'),
+      gameStatus: feed?.gameData?.status?.detailedState || 'Unknown',
+    };
+  } catch (e) {
+    console.warn(`[MLB Stats API] Lineup extraction error: ${e.message}`);
+    return null;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -255,27 +261,15 @@ export async function getProbablePitchers(gamePk) {
 // HELPERS
 // ═══════════════════════════════════════════════════════════════════════════
 
-function formatWbcRound(seriesDescription, description) {
-  const series = (seriesDescription || '').toLowerCase();
-  const desc = description || '';
-  if (series.includes('pool play')) return `WBC Pool Play - ${desc}`;
-  if (series.includes('quarterfinal')) return 'WBC Quarterfinals';
-  if (series.includes('semifinal')) return 'WBC Semifinals';
-  if (series.includes('final') && !series.includes('semi') && !series.includes('quarter')) return 'WBC Finals';
-  return 'World Baseball Classic';
-}
-
-export function formatWbcGameForPipeline(wbcGame) {
-  const home = wbcGame.teams?.home;
-  const away = wbcGame.teams?.away;
+export function formatMlbGameForPipeline(mlbGame) {
+  const home = mlbGame.teams?.home;
+  const away = mlbGame.teams?.away;
   const homeName = home?.team?.name || home?.team?.teamName || 'Home';
   const awayName = away?.team?.name || away?.team?.teamName || 'Away';
   return {
-    id: wbcGame.gamePk,
-    // Pipeline expects strings for home_team/away_team
+    id: mlbGame.gamePk,
     home_team: homeName,
     away_team: awayName,
-    // Full team objects with IDs for scout report data fetching
     home_team_data: {
       id: home?.team?.id,
       full_name: homeName,
@@ -288,33 +282,30 @@ export function formatWbcGameForPipeline(wbcGame) {
       name: away?.team?.teamName || awayName,
       abbreviation: away?.team?.abbreviation || '',
     },
-    // commence_time alias for pipeline compatibility (filtering uses this field)
-    commence_time: wbcGame.gameDate,
-    start_time: wbcGame.gameDate,
-    status: wbcGame.status?.detailedState,
-    venue: wbcGame.venue?.name,
-    description: wbcGame.description || wbcGame.seriesDescription,
-    // Game significance for UI badge (e.g., "WBC Pool Play - Pool C", "WBC Quarterfinals")
-    gameSignificance: formatWbcRound(wbcGame.seriesDescription, wbcGame.description),
-    gamePk: wbcGame.gamePk,
-    _raw: wbcGame,
+    commence_time: mlbGame.gameDate,
+    start_time: mlbGame.gameDate,
+    status: mlbGame.status?.detailedState,
+    venue: mlbGame.venue?.name,
+    description: mlbGame.description || mlbGame.seriesDescription || 'MLB Regular Season',
+    gamePk: mlbGame.gamePk,
+    _raw: mlbGame,
   };
 }
 
 export default {
-  getWbcSchedule,
-  getWbcFullSchedule,
-  getWbcTeams,
+  getMlbSchedule,
+  getMlbRecentGames,
+  getMlbTeams,
+  findMlbTeam,
+  getMlbStandings,
+  formatMlbGameForPipeline,
   getTeamRoster,
-  getPlayerCareerStats,
   getPlayerSeasonStats,
   getPlayerInfo,
   searchPlayer,
-  getWbcTeamBattingStats,
   getGameBoxScore,
   getGameLineScore,
   getGameFeed,
-  getWbcStandings,
+  getConfirmedLineups,
   getProbablePitchers,
-  formatWbcGameForPipeline,
 };

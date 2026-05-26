@@ -15,7 +15,7 @@ import { buildNcaafScoutReport } from './sports/ncaaf.js';
 import { buildMlbScoutReport } from './sports/mlb.js';
 
 // Re-export shared utilities for external consumers
-// (orchestrator/, flashAdvisor, statRouters/, propsAgenticRunner, dfsToolDefinitions, etc.)
+// (orchestrator/, flashAdvisor, statRouters/, dfsToolDefinitions, etc.)
 export { geminiGroundingSearch, getGroundedWeather } from './shared/grounding.js';
 export { fetchPropLineMovement, getPlayerPropMovement, fetchComprehensivePropsNarrative } from './shared/propsUtilities.js';
 export { buildVerifiedTaleOfTape } from './shared/taleOfTape.js';
@@ -31,7 +31,6 @@ const SPORT_BUILDERS = {
   'NCAAB': buildNcaabScoutReport,
   'NCAAF': buildNcaafScoutReport,
   'MLB': buildMlbScoutReport,
-  'WBC': buildMlbScoutReport,
 };
 
 /**

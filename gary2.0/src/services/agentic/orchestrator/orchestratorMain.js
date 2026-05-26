@@ -80,6 +80,15 @@ export async function analyzeGame(game, sport, options = {}) {
       saveCachedScoutReport(homeTeam, awayTeam, sport, scoutReportData);
     }
 
+    // MLB tools need the MLB Stats API gamePk to identify probable pitchers,
+    // recent form, etc. The scout report builder resolves it via schedule lookup
+    // and stores it on the result; thread it onto the game object so the agent
+    // loop's tool router can use it. Without this, every MLB pitcher tool falls
+    // back to BDL game id and gets nothing back from MLB Stats API.
+    if (scoutReportData?.gamePk && !game.gamePk) {
+      game.gamePk = scoutReportData.gamePk;
+    }
+
     // NOTE: No auto-PASS logic. Gary always makes a pick for every game.
     // If there's uncertainty (GTD players, etc.), Gary investigates and decides.
 
@@ -278,6 +287,24 @@ context for player-level evaluation. Investigate the game thoroughly first.
     result.homeTeam = homeTeam;
     result.awayTeam = awayTeam;
 
+    // Attach investigation artifacts so the picks pipeline can persist them to
+    // pick_context for the "Talk to Gary" chat feature. We capture:
+    //   - Gary's data scout report (what he saw)
+    //   - Flash's investigation-ready scout report
+    //   - Flash research briefing (the per-factor findings)
+    //   - Raw analysis (Pass 1 bilateral case + Pass 2.5 synthesis text)
+    //   - Tool call history
+    if (!result.error) {
+      result._context = {
+        scoutReport: garyText || null,
+        flashScout: flashText || null,
+        researchBriefing: result._researchBriefing || null,
+        rawAnalysis: result.rawAnalysis || null,
+        fullAssistantNarrative: result._fullAssistantNarrative || null,
+        toolCallHistory: result.toolCallHistory || null,
+      };
+    }
+
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
     console.log(`\n[Orchestrator] Analysis complete in ${elapsed}s`);
 
@@ -345,7 +372,7 @@ function getSportIdentity(sport) {
   if (isNCAAB) return `Tonight you are betting the NCAA Tournament — March Madness. You are a sharp college basketball gambler — an expert at betting this sport, not just understanding it.`;
   if (isNFL) return `Tonight you are betting NFL. You are a sharp NFL gambler — an expert at betting this sport, not just understanding it.`;
   if (isNCAAF) return `Tonight you are betting college football. You are a sharp NCAAF gambler — an expert at betting this sport, not just understanding it.`;
-  if (isMLB) return `Tonight you are betting the World Baseball Classic. You are a sharp baseball gambler — an expert at betting this sport, not just understanding it.`;
+  if (isMLB) return `Tonight you are betting MLB. You are a sharp MLB gambler — an expert at betting this sport, not just understanding it.`;
   return ``;
 }
 

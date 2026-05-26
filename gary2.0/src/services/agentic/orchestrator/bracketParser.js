@@ -17,17 +17,13 @@ export function parseBracketResponse(responseText, homeTeam, awayTeam) {
     team2_cons: [],
   };
 
-  // Extract bracket pick
+  // Extract bracket pick (strip markdown bold ** if present)
   const pickMatch = responseText.match(/BRACKET PICK:\s*(.+?)(?:\n|$)/i);
   if (pickMatch) {
-    result.picked_to_advance = pickMatch[1].trim();
+    result.picked_to_advance = pickMatch[1].trim().replace(/^\*+\s*/, '').replace(/\s*\*+$/, '');
   }
 
-  // Extract confidence
-  const confMatch = responseText.match(/BRACKET CONFIDENCE:\s*([\d.]+)/i);
-  if (confMatch) {
-    result.bracket_confidence = parseFloat(confMatch[1]);
-  }
+  // Confidence removed — Gary just picks, no self-evaluation
 
   // Extract is_upset
   const upsetMatch = responseText.match(/IS UPSET:\s*(YES|NO)/i);
@@ -35,32 +31,40 @@ export function parseBracketResponse(responseText, homeTeam, awayTeam) {
     result.is_upset = upsetMatch[1].toUpperCase() === 'YES';
   }
 
-  // Extract rationale
-  const ratMatch = responseText.match(/BRACKET RATIONALE:\s*(.+?)(?=\n\n|\n[A-Z])/is);
+  // Extract rationale — capture everything until the next PROS/CONS section or end
+  const ratMatch = responseText.match(/BRACKET RATIONALE:\s*(.+?)(?=\n\s*\S+\s+PROS:)/is);
   if (ratMatch) {
     result.bracket_rationale = ratMatch[1].trim();
+  } else {
+    // Fallback: grab everything after BRACKET RATIONALE until end of text
+    const fallbackMatch = responseText.match(/BRACKET RATIONALE:\s*(.+)/is);
+    if (fallbackMatch) {
+      result.bracket_rationale = fallbackMatch[1].trim();
+    }
   }
 
-  // Extract pros/cons for each team
-  // homeTeam PROS:
-  const homeProMatch = responseText.match(new RegExp(escapeRegex(homeTeam) + '\\s+PROS:\\s*\\n((?:- .+\\n?)+)', 'i'));
-  if (homeProMatch) {
-    result.team1_pros = extractBullets(homeProMatch[1]);
+  // Extract pros/cons — find all PROS/CONS sections and match to teams by proximity
+  const prosSections = [...responseText.matchAll(/(.+?)\s+PROS:\s*\n((?:- .+\n?)+)/gi)];
+  const consSections = [...responseText.matchAll(/(.+?)\s+CONS:\s*\n((?:- .+\n?)+)/gi)];
+
+  const matchesTeam = (header, team) => {
+    const headerLower = header.toLowerCase();
+    const words = team.toLowerCase().split(/\s+/).filter(w => w.length >= 2);
+    return words.some(w => headerLower.includes(w));
+  };
+
+  for (const match of prosSections) {
+    const header = match[1].trim();
+    const bullets = extractBullets(match[2]);
+    if (matchesTeam(header, homeTeam)) result.team1_pros = bullets;
+    else if (matchesTeam(header, awayTeam)) result.team2_pros = bullets;
   }
 
-  const homeConMatch = responseText.match(new RegExp(escapeRegex(homeTeam) + '\\s+CONS:\\s*\\n((?:- .+\\n?)+)', 'i'));
-  if (homeConMatch) {
-    result.team1_cons = extractBullets(homeConMatch[1]);
-  }
-
-  const awayProMatch = responseText.match(new RegExp(escapeRegex(awayTeam) + '\\s+PROS:\\s*\\n((?:- .+\\n?)+)', 'i'));
-  if (awayProMatch) {
-    result.team2_pros = extractBullets(awayProMatch[1]);
-  }
-
-  const awayConMatch = responseText.match(new RegExp(escapeRegex(awayTeam) + '\\s+CONS:\\s*\\n((?:- .+\\n?)+)', 'i'));
-  if (awayConMatch) {
-    result.team2_cons = extractBullets(awayConMatch[1]);
+  for (const match of consSections) {
+    const header = match[1].trim();
+    const bullets = extractBullets(match[2]);
+    if (matchesTeam(header, homeTeam)) result.team1_cons = bullets;
+    else if (matchesTeam(header, awayTeam)) result.team2_cons = bullets;
   }
 
   return result;
@@ -69,10 +73,6 @@ export function parseBracketResponse(responseText, homeTeam, awayTeam) {
 function extractBullets(text) {
   return text
     .split('\n')
-    .map(line => line.replace(/^-\s*/, '').trim())
+    .map(line => line.replace(/^[-*]\s*/, '').trim())
     .filter(Boolean);
-}
-
-function escapeRegex(string) {
-  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

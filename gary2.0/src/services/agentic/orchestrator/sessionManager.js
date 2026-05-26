@@ -1,5 +1,12 @@
 import { CONFIG, GEMINI_SAFETY_SETTINGS, validateGeminiModel } from './orchestratorConfig.js';
 import { getGeminiClient } from '../modelConfig.js';
+import { GoogleAICacheManager } from '@google/generative-ai/server';
+
+// Minimum cacheable content size (Gemini 3 Flash min is 1024 tokens; ~4K chars is safe).
+// Below this we skip caching — break-even doesn't work and the API rejects small caches.
+const MIN_CACHE_CHAR_THRESHOLD = 4000;
+// Cache TTL — single pick run takes 5-7 min, 15 min gives plenty of buffer.
+const CACHE_TTL_SECONDS = 900;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PERSISTENT SESSION MANAGEMENT (Gemini 3 Thought Signatures)
@@ -24,19 +31,20 @@ import { getGeminiClient } from '../modelConfig.js';
  * @param {string} options.thinkingLevel - Thinking level: 'low', 'medium', 'high' (default: 'high')
  * @returns {Object} - { chat, model, modelName } - Chat session and model reference
  */
-export function createGeminiSession(options = {}) {
+export async function createGeminiSession(options = {}) {
   const {
     modelName = 'gemini-3-flash-preview',
     systemPrompt = '',
     tools = [],
     thinkingLevel = 'high',
     maxOutputTokens = CONFIG.maxTokens,
+    enableCache = false,
     _costTracker = null
   } = options;
-  
+
   const genAI = getGeminiClient({ beta: true });
   const validatedModel = validateGeminiModel(modelName);
-  
+
   // Convert tool definitions to Gemini function declarations
   const functionDeclarations = tools
     .filter(tool => tool.type === 'function')
@@ -45,43 +53,94 @@ export function createGeminiSession(options = {}) {
       description: tool.function.description,
       parameters: tool.function.parameters
     }));
-  
+
   // Build tools array (function calling OR grounding, not both)
   const geminiTools = [];
   if (functionDeclarations.length > 0) {
     geminiTools.push({ functionDeclarations });
   }
-  
-  // Create the model with configuration
-  const model = genAI.getGenerativeModel({
-    model: validatedModel,
-    tools: geminiTools.length > 0 ? geminiTools : undefined,
-    safetySettings: GEMINI_SAFETY_SETTINGS,
-    generationConfig: {
-      temperature: CONFIG.gemini.temperature, // Fixed at 1.0
-      topP: CONFIG.gemini.topP,
-      topK: 64, // Recommended for Gemini 3
-      maxOutputTokens,
-      thinkingConfig: {
-        includeThoughts: true,
-        thinkingLevel: thinkingLevel
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CONTEXT CACHING (Gemini explicit cache)
+  // Caches systemInstruction + tools at 90% off input rate. Falls back silently
+  // if cache creation fails — never blocks pick generation.
+  // ═══════════════════════════════════════════════════════════════════════════
+  let cachedContentName = null;
+  if (enableCache && systemPrompt && systemPrompt.length >= MIN_CACHE_CHAR_THRESHOLD) {
+    try {
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) throw new Error('GEMINI_API_KEY not set');
+      const cacheManager = new GoogleAICacheManager(apiKey);
+      const cacheRequest = {
+        model: `models/${validatedModel}`,
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        ttlSeconds: CACHE_TTL_SECONDS,
+      };
+      if (geminiTools.length > 0) {
+        cacheRequest.tools = geminiTools;
       }
+      const cache = await cacheManager.create(cacheRequest);
+      cachedContentName = cache.name;
+      console.log(`[Session] 💾 Cache created (${systemPrompt.length} char system prompt, TTL ${CACHE_TTL_SECONDS}): ${cachedContentName}`);
+    } catch (e) {
+      console.warn(`[Session] ⚠️ Cache creation failed (${e.message}) — proceeding without cache`);
+      cachedContentName = null;
     }
-  });
-  
-  // Start the chat session with system instruction
+  }
+
+  // Create the model — cached path uses cachedContent for systemInstruction;
+  // tools must STILL be passed at model level even when cached (SDK quirk:
+  // cached tools are stored but not auto-activated without explicit tools param).
+  const model = cachedContentName
+    ? genAI.getGenerativeModel(
+        {
+          model: validatedModel,
+          cachedContent: cachedContentName,
+          tools: geminiTools.length > 0 ? geminiTools : undefined,
+          safetySettings: GEMINI_SAFETY_SETTINGS,
+          generationConfig: {
+            temperature: CONFIG.gemini.temperature,
+            topP: CONFIG.gemini.topP,
+            topK: 64,
+            maxOutputTokens,
+            thinkingConfig: {
+              includeThoughts: true,
+              thinkingLevel: thinkingLevel
+            }
+          }
+        },
+        { apiVersion: 'v1beta' }
+      )
+    : genAI.getGenerativeModel({
+        model: validatedModel,
+        tools: geminiTools.length > 0 ? geminiTools : undefined,
+        safetySettings: GEMINI_SAFETY_SETTINGS,
+        generationConfig: {
+          temperature: CONFIG.gemini.temperature,
+          topP: CONFIG.gemini.topP,
+          topK: 64,
+          maxOutputTokens,
+          thinkingConfig: {
+            includeThoughts: true,
+            thinkingLevel: thinkingLevel
+          }
+        }
+      });
+
+  // Start the chat session — when cached, system instruction is already in cache
   const chat = model.startChat({
     history: [],
-    systemInstruction: systemPrompt ? { parts: [{ text: systemPrompt }] } : undefined
+    systemInstruction: cachedContentName ? undefined : (systemPrompt ? { parts: [{ text: systemPrompt }] } : undefined)
   });
-  
-  console.log(`[Session] Created ${validatedModel} session (thinkingLevel: ${thinkingLevel}, tools: ${functionDeclarations.length})`);
-  
+
+  console.log(`[Session] Created ${validatedModel} session (thinkingLevel: ${thinkingLevel}, tools: ${functionDeclarations.length}, cached: ${cachedContentName ? 'yes' : 'no'})`);
+
   return {
     chat,
     model,
     modelName: validatedModel,
     thinkingLevel,
+    cachedContentName, // exposed so callers can delete cache manually if desired
     _costTracker
   };
 }

@@ -9,14 +9,16 @@
 //   - Pro session persists throughout (no context loss)
 // ═══════════════════════════════════════════════════════════════════════════
 
-// TEMPORARY: Using Flash instead of Pro to save money. Revert to 'gemini-3.1-pro-preview' when ready.
+// Primary model for all flows (game picks, props, DFS, research).
+// Flash is fast enough and the reasoning benchmarks are close to Pro — default everywhere.
 export const GEMINI_PRO_MODEL = 'gemini-3-flash-preview';
-// gemini-3-pro-preview is DEAD (shut down March 9, 2026) — cascade goes 3.1 Pro → Flash
-export const GEMINI_PRO_FALLBACK = 'gemini-3-flash-preview';
+// Fallback when Flash 429s or errors — switch to 3.1 Pro so we keep generating picks.
+// (gemini-3-pro-preview was shut down March 9, 2026 — do not reintroduce it.)
+export const GEMINI_PRO_FALLBACK = 'gemini-3.1-pro-preview';
 
 export const ALLOWED_GEMINI_MODELS = [
-  'gemini-3-flash-preview',  // Flash: props, DFS, research, 429 fallback
-  GEMINI_PRO_MODEL,          // Primary: Game picks investigation + evaluation + decision
+  'gemini-3-flash-preview',  // Primary: game picks, props, DFS, research
+  'gemini-3.1-pro-preview',  // Fallback: when Flash is throttled or failing
 ];
 
 export function validateGeminiModel(model) {
@@ -59,4 +61,4 @@ export const GEMINI_SAFETY_SETTINGS = [
 // Real-world observed: 27 stat + 6 grounding + 5 iterations ≈ 250s
 export const RESEARCH_BRIEFING_TIMEOUT_MS = 3600000; // 1 hour — let research finish naturally, never kill due to time
 
-console.log(`[Orchestrator] Gemini 3.1 Pro (main) + Flash (research + grounding)`);
+console.log(`[Orchestrator] Flash primary + 3.1 Pro fallback (research + grounding)`);

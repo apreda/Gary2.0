@@ -82,7 +82,6 @@
  * │                                                                             │
  * │ Calculated from BDL:                                                       │
  * │   - OVERTIME_RECORD (from game data)                                      │
- * │   (SCORING_FIRST removed)                                                 │
  * │   - REST_SITUATION (from game dates)                                      │
  * └─────────────────────────────────────────────────────────────────────────────┘
  * 
@@ -190,7 +189,6 @@ const NHL_GEMINI_TOKENS = [
   // These tokens NOW use MoneyPuck CSV + NHL API (no Grounding needed):
   // CORSI_FOR_PCT, EXPECTED_GOALS, PDO, HIGH_DANGER_CHANCES,
   // NHL_GSAX, NHL_HIGH_DANGER_SV_PCT, LUCK_INDICATORS, SHOOTING_REGRESSION
-  // SCORING_FIRST removed — no API source and not needed
   'LINE_COMBINATIONS',    // Projected lines - site:dailyfaceoff.com
 ];
 
@@ -371,8 +369,7 @@ function sportToBdlKey(sport) {
     'NCAAB': 'basketball_ncaab',
     'NCAAF': 'americanfootball_ncaaf',
     'NHL': 'icehockey_nhl',
-    'MLB': 'baseball_mlb',
-    'WBC': 'baseball_mlb'
+    'MLB': 'baseball_mlb'
   };
   return mapping[sport] || sport;
 }
@@ -387,14 +384,13 @@ function normalizeSportName(sport) {
     'basketball_ncaab': 'NCAAB',
     'americanfootball_ncaaf': 'NCAAF',
     'icehockey_nhl': 'NHL',
-    'baseball_mlb': 'WBC',
+    'baseball_mlb': 'MLB',
     'NBA': 'NBA',
     'NFL': 'NFL',
     'NCAAB': 'NCAAB',
     'NCAAF': 'NCAAF',
     'NHL': 'NHL',
-    'MLB': 'WBC',
-    'WBC': 'WBC'
+    'MLB': 'MLB'
   };
   return mapping[sport] || sport;
 }
@@ -910,6 +906,37 @@ function fmtPct(val) {
   if (val === null || val === undefined || isNaN(val)) return 'N/A';
   const pct = val <= 1 ? val * 100 : val;
   return `${pct.toFixed(1)}%`;
+}
+
+/**
+ * Build an inline sample-size suffix to attach to a rate stat.
+ *
+ * Surface whatever sample-size fields exist on the split/row object so Gary
+ * can naturally weight tiny samples. Does NOT instruct Gary how to interpret
+ * it — just makes the count visible inline.
+ *
+ * Returns "" if no sample fields exist (better silent than misleading).
+ *
+ * Usage:
+ *   formatSampleSuffix(splitRow, ['innings_pitched', 'ip']) -> " (3.2 IP)"
+ *   formatSampleSuffix(splitRow, ['at_bats', 'ab'])         -> " (12 AB)"
+ *
+ * @param {Object} obj  — split row / stats object
+ * @param {Array<{field: string, label: string, decimals?: number}>} candidates
+ *   In order of preference. First field whose value is a finite number wins.
+ * @returns {string}  e.g. " (3.2 IP)" or "" if no sample fields populated
+ */
+export function formatSampleSuffix(obj, candidates) {
+  if (!obj || !Array.isArray(candidates) || candidates.length === 0) return '';
+  const parts = [];
+  for (const { field, label, decimals = 0 } of candidates) {
+    const raw = obj[field];
+    if (raw === null || raw === undefined) continue;
+    const n = Number(raw);
+    if (!Number.isFinite(n)) continue;
+    parts.push(`${n.toFixed(decimals)} ${label}`);
+  }
+  return parts.length ? ` (${parts.join(', ')})` : '';
 }
 
 

@@ -1,4 +1,4 @@
-import { getCurrentSeasonString, sportToBdlKey, normalizeSportName, findTeam, fmtNum, fmtPct, fetchBothTeamSeasonStats, fetchNBATeamScoringStats, fetchNBATeamAdvancedStats, fetchNBALeaders, fetchNBATeamBaseStats, fetchNBATeamOpponentStats, fetchNBATeamDefenseStats, fetchTopPlayersForTeam, formatRecentGames, buildPaceAnalysis, BDL_API_KEY, _nbaBaseStatsCache, _nbaAdvancedStatsCache, _nbaOpponentStatsCache, _nbaDefenseStatsCache, _nbaTeamScoringStatsCache, geminiGroundingSearch, getNcaabVenue, getBarttovikRatings } from './statRouterCommon.js';
+import { getCurrentSeasonString, sportToBdlKey, normalizeSportName, findTeam, fmtNum, fmtPct, fetchBothTeamSeasonStats, geminiGroundingSearch, getNcaabVenue, getBarttovikRatings } from './statRouterCommon.js';
 import { ballDontLieService } from '../../../ballDontLieService.js';
 
 export const ncaabFetchers = {
@@ -312,12 +312,12 @@ export const ncaabFetchers = {
 
 
   // ===== NCAAB L5 EFFICIENCY (Last 5 Games — eFG%, TS%, ORtg, DRtg) =====
-  NCAAB_L5_EFFICIENCY: async (bdlSport, home, away, season) => {
+  // Shared helper for L1/L3/L5 team stats
+  _fetchNcaabLStats: async (bdlSport, home, away, season, numGames) => {
     if (bdlSport !== 'basketball_ncaab') return null;
     try {
-      console.log(`[Stat Router] Fetching NCAAB L5 Efficiency for ${away.name} @ ${home.name}`);
+      console.log(`[Stat Router] Fetching NCAAB L${numGames} Stats for ${away.name} @ ${home.name}`);
 
-      // Fetch recent games to get last 5 game IDs for each team
       const [homeGamesRaw, awayGamesRaw] = await Promise.all([
         ballDontLieService.getGames(bdlSport, { team_ids: [home.id], seasons: [season], per_page: 50 }),
         ballDontLieService.getGames(bdlSport, { team_ids: [away.id], seasons: [season], per_page: 50 })
@@ -330,46 +330,41 @@ export const ncaabFetchers = {
       const homeGames = filterCompleted(homeGamesRaw);
       const awayGames = filterCompleted(awayGamesRaw);
 
-      const homeGameIds = homeGames.slice(0, 5).map(g => g.id);
-      const awayGameIds = awayGames.slice(0, 5).map(g => g.id);
+      const homeGameIds = homeGames.slice(0, numGames).map(g => g.id);
+      const awayGameIds = awayGames.slice(0, numGames).map(g => g.id);
 
-      // Fetch L5 efficiency from BDL player stats
-      const [homeL5, awayL5] = await Promise.all([
+      const [homeData, awayData] = await Promise.all([
         homeGameIds.length > 0 ? ballDontLieService.getTeamL5Efficiency(home.id, homeGameIds, bdlSport) : null,
         awayGameIds.length > 0 ? ballDontLieService.getTeamL5Efficiency(away.id, awayGameIds, bdlSport) : null
       ]);
 
-      const formatL5 = (l5Data) => {
-        if (!l5Data?.efficiency) return { efg_pct: 'N/A', ts_pct: 'N/A', approx_ortg: 'N/A', approx_drtg: 'N/A', approx_net_rtg: 'N/A' };
-        const e = l5Data.efficiency;
-        return {
-          games: e.games || 0,
-          efg_pct: e.efg_pct ? `${e.efg_pct}%` : 'N/A',
-          ts_pct: e.ts_pct ? `${e.ts_pct}%` : 'N/A',
-          approx_ortg: e.approx_ortg || 'N/A',
-          approx_drtg: e.approx_drtg || 'N/A',
-          approx_net_rtg: e.approx_net_rtg || 'N/A',
-          opp_efg_pct: e.opp_efg_pct ? `${e.opp_efg_pct}%` : undefined,
-          opp_ppg: e.opp_ppg || undefined
-        };
+      const formatStats = (data) => {
+        if (!data?.efficiency) return { error: 'Data unavailable' };
+        return data.efficiency;
       };
 
       return {
-        category: 'L5 Efficiency (NCAAB)',
-        source: 'Ball Don\'t Lie API (Player Stats — Last 5 Games)',
-        home: {
-          team: home.full_name || home.name,
-          ...formatL5(homeL5)
-        },
-        away: {
-          team: away.full_name || away.name,
-          ...formatL5(awayL5)
-        }
+        category: `L${numGames} Team Stats (NCAAB)`,
+        source: `Ball Don't Lie API (Player Stats — Last ${numGames} Games)`,
+        home: { team: home.full_name || home.name, ...formatStats(homeData) },
+        away: { team: away.full_name || away.name, ...formatStats(awayData) }
       };
     } catch (error) {
-      console.warn('[Stat Router] NCAAB_L5_EFFICIENCY fetch failed:', error.message);
-      return { category: 'L5 Efficiency (NCAAB)', error: 'Data unavailable' };
+      console.warn(`[Stat Router] NCAAB L${numGames} stats fetch failed:`, error.message);
+      return { category: `L${numGames} Stats (NCAAB)`, error: 'Data unavailable' };
     }
+  },
+
+  NCAAB_L1_STATS: async (bdlSport, home, away, season) => {
+    return ncaabFetchers._fetchNcaabLStats(bdlSport, home, away, season, 1);
+  },
+
+  NCAAB_L3_STATS: async (bdlSport, home, away, season) => {
+    return ncaabFetchers._fetchNcaabLStats(bdlSport, home, away, season, 3);
+  },
+
+  NCAAB_L5_EFFICIENCY: async (bdlSport, home, away, season) => {
+    return ncaabFetchers._fetchNcaabLStats(bdlSport, home, away, season, 5);
   },
 
 
@@ -721,27 +716,28 @@ Quad 4: [W-L]`;
         };
       };
 
-      // Compute Season / L10 / L5 splits for a team
-      const calcAllSplits = (games, teamId, teamName) => {
-        if (!games || games.length === 0) return null;
+      // Standard contract: flat { home_record, away_record, home_margin, away_margin }
+      // L5/L10 added as supplementary fields
+      const buildTeamSplits = (games, teamId, teamName) => {
+        const season = calcSplitsForSlice(games, teamId, teamName);
+        const l5 = calcSplitsForSlice(games.slice(0, 5), teamId, teamName);
+        if (!season) return { team: teamName };
         return {
-          season: calcSplitsForSlice(games, teamId, teamName),
-          l10: calcSplitsForSlice(games.slice(0, 10), teamId, teamName),
-          l5: calcSplitsForSlice(games.slice(0, 5), teamId, teamName)
+          team: teamName,
+          home_record: season.home_record,
+          away_record: season.away_record,
+          home_margin: season.home_margin,
+          away_margin: season.away_margin,
+          l5_home_record: l5?.home_record,
+          l5_away_record: l5?.away_record
         };
       };
 
       return {
         category: 'Home/Away Splits (NCAAB)',
         source: 'Ball Don\'t Lie API (Game Results)',
-        home: {
-          team: homeTeamName,
-          ...calcAllSplits(homeGames, home.id, homeTeamName)
-        },
-        away: {
-          team: awayTeamName,
-          ...calcAllSplits(awayGames, away.id, awayTeamName)
-        }
+        home: buildTeamSplits(homeGames, home.id, homeTeamName),
+        away: buildTeamSplits(awayGames, away.id, awayTeamName)
       };
     } catch (error) {
       console.warn('[Stat Router] NCAAB Home/Away Splits failed:', error.message);

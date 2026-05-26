@@ -9,49 +9,11 @@
  */
 
 export function getNbaSpreadFactors() {
-  return `### 1. STREAKS & FORM
-Streaks move public perception and move lines. What's driving a streak — whether it's sustainable or circumstantial — is not always reflected in the adjustment.
-
-### 2. REST & TRAVEL
-Rest and travel narratives are loud and the line always adjusts for them. The size of the adjustment itself varies.
-
-### 3. INJURY IMPACT ON PRICE
-FRESH injuries (0-2 games missed) may not be fully reflected in the spread. Established absences are already baked into the line and the team's current stats.
-
-### 4. PUBLIC NARRATIVE VS DATA
-Every game has a public storyline that moves betting action and moves lines.
-
-### 5. TRAP AWARENESS
-When one side looks too easy, the public has already bet it and the line has already moved.
-
-### 6. UPSET POTENTIAL
-The spread implies a gap between these teams. The matchup data may or may not support that gap.
-
-### 7. RETURNING PLAYERS
-When a key player returns from absence, the line moves. A return after a longer absence can also change team dynamics in either direction.`;
+  return `Narrative factors — back-to-backs, streaks, rest, travel, revenge spots, hot/cold stretches — are context for the game. They are not edges and they are not reasons by themselves to pick a side. Every bettor in the world can see these factors. Sometimes the favorite is the right side. Sometimes the underdog is. It depends entirely on THIS game, these players, and this matchup.`;
 }
 
 export function getNcaabSpreadFactors() {
-  return `### 1. SEEDING & PUBLIC PERCEPTION
-Seeds and rankings drive public action in the tournament. The spread reflects seed expectations — but seeds are based on season-long body of work that may or may not reflect how a team is playing right now. The public bets seeds, names, and storylines.
-
-### 2. TOURNAMENT SPREAD SIZING
-Tournament games are tighter by nature — the single-elimination format, neutral site, and heightened intensity compress margins. Spreads adjust for this, but the adjustment can be too much or too little in either direction. A tight spread on a game between uneven teams and a large spread in a matchup closer than the seeds suggest are both opportunities that cut both ways.
-
-### 3. CINDERELLA RUNS & THE UPSET MARKET
-Any team can make a run in the tournament — low seeds from major conferences and mid-majors alike. The public actively tries to pick upsets, which moves lines. Sometimes so much public money lands on a lower seed that the line shifts to even or favors the "underdog." The team the public treats as the upset special is sometimes the public side.
-
-### 4. STRENGTH OF SCHEDULE & CONFERENCE QUALITY
-Season records and efficiency ratings are already baked into the seeding and the spread. The question is whether those numbers translate to this specific tournament matchup — a team built against weaker competition faces a different test than a team battle-tested in a power conference.
-
-### 5. COACHING MATCHUP
-Tournament coaching — preparation, in-game adjustments, timeout usage, and managing pressure — carries more weight in a one-and-done format. Some coaches consistently outperform their seed in tournament play.
-
-### 6. ROSTER DEPTH & EXPERIENCE
-College rosters are thin — one key absence hits harder than in the pros. Tournament experience matters — teams with players who have been in this environment before can handle the intensity differently than teams here for the first time.
-
-### 7. NEUTRAL SITE & VARIANCE
-All tournament games are on neutral courts. The single-elimination format means variance is at its peak — outcomes are volatile game to game, and the spread is a price shaped by public perception as much as the actual matchup.`;
+  return `This is a neutral-court tournament game. Home/away records are irrelevant. Both teams in this round are on the same rest schedule. The spread was set AFTER seedings, injuries, and all publicly known information were available — everyone can see the seed gap and the efficiency ratings. Sometimes the favorite is the right side. Sometimes the underdog is. It depends entirely on THIS matchup between THESE teams.`;
 }
 
 export function getNhlSpreadFactors() {
@@ -128,41 +90,39 @@ export function getMlbSpreadFactors() {
 The starting pitcher matchup is the primary driver of the opening line in baseball.
 
 ### 2. BULLPEN AVAILABILITY & WORKLOAD
-Bullpen usage and availability shifts game to game in the WBC due to pitch count limits and rest requirements.
+Bullpen usage over the previous 2-3 games directly affects available arms tonight. Teams playing their 6th or 7th game in a row may have a depleted bullpen.
 
 ### 3. LINEUP CONSTRUCTION & PLATOON ADVANTAGES
-Lineup order and handedness matchups against the opposing starter affect how each lineup profiles against the pitching.
+Lineup order and handedness matchups against the opposing starter affect how each lineup profiles against the pitching. Rest days, platoon splits, and injuries to key bats change the lineup's expected output.
 
-### 4. TOURNAMENT CONTEXT & STAKES
-Pool play games, elimination games, and games where teams have already clinched carry different stakes and can affect how teams manage their pitching and lineup.
+### 4. DIVISION & STANDINGS CONTEXT
+Division games, rivalry matchups, and playoff race implications affect team motivation, lineup decisions, and bullpen usage. Late-season games with playoff implications carry different weight than early-season games.
 
 ### 5. VENUE & CONDITIONS
-Park factors, weather (wind, temperature), and indoor/outdoor environment all affect scoring. Tokyo Dome plays differently from loanDepot Park in Miami.
+Park factors, weather (wind, temperature, humidity), and indoor/outdoor environment all affect scoring. Coors Field plays very differently from Oracle Park or Tropicana Field.
 
-### 6. PUBLIC NARRATIVE VS DATA
-National pride, star power, and country reputation drive public action on WBC games and can move lines.
+### 6. PUBLIC ACTION & LINE MOVEMENT
+Star pitchers, team brands, and winning streaks drive public action and move lines. The line reflects market sentiment as much as matchup data.
 
-### 7. ROSTER FAMILIARITY & DEPTH
-WBC rosters are assembled for 2 weeks — players from different leagues and teams have limited time together.`;
+### 7. REST, TRAVEL & SCHEDULE
+Travel days, day games after night games, and series positioning (game 1 vs game 4) all affect team freshness and preparation.`;
 }
 
 /**
- * WBC Tournament Awareness — injected at Pass 1 and in Flash research briefing.
- * Gives Gary and Flash essential context about the WBC format, data limitations,
- * and where to focus investigation.
+ * MLB Season Awareness — injected at Pass 1 and in Flash research briefing.
  */
-export function getWbcTournamentAwareness() {
-  return `## WBC TOURNAMENT AWARENESS
+export function getMlbSeasonAwareness() {
+  return `## MLB SEASON AWARENESS
 
-The World Baseball Classic (WBC) is an international baseball tournament held every four years. National teams are assembled from MLB rosters, international leagues, and domestic leagues — players who normally play on different MLB teams come together for 2-3 weeks.
+MLB is a 162-game marathon. Unlike short-sample tournaments, you have months of data — but that data needs context. A team's April performance may not reflect who they are in August. Recent form (last 10-15 games) is often more predictive than season-long averages.
 
-**What makes WBC different from regular season sports:**
-- **Small sample size within the tournament.** Pool play is 3-4 games per team. Stats from this tournament alone are extremely limited. MLB career stats and recent MLB season performance are the best available indicators of player quality.
-- **Roster construction matters.** Each country assembles its roster differently — some have deep MLB talent at every position, others rely on a few MLB stars supplemented by minor league or international league players. The gap between the top 4-5 hitters and the bottom of the order can be enormous.
-- **Pitching management is different.** Teams manage pitch counts carefully early in the tournament to preserve arms for elimination rounds. A starter may go only 4-5 innings in pool play even when pitching well. Bullpen depth and availability change game to game.
-- **Narratives, national pride, and tournament storylines carry real weight.** Elimination pressure, historical rivalry, defending champion status, and breakout performances from earlier rounds all shape how teams approach each game. These storylines are not noise — they reflect real motivation and preparation differences.
-- **Breaking news and day-of updates are critical.** Lineup confirmations, scratches, and bullpen availability often aren't known until hours before first pitch. Use grounding/search tools aggressively to get the latest information.
-
-**How to investigate WBC games:**
-Use MLB career stats as your foundation for player quality, but weight tournament context, pitching availability, and storylines more heavily than you would for a regular season MLB game. The line is set with limited data — which means the market may be pricing narratives more than matchup fundamentals, or may be underpricing a team with less star power but better depth and pitching for this specific game.`;
+**What matters most in MLB game analysis:**
+- **Starting pitching is everything.** The starter matchup is the single largest factor in any individual game. Recent form (last 3-5 starts), pitch count trends, and performance against this specific lineup are more predictive than season ERA alone.
+- **Bullpen state changes daily.** A team's closer pitching 3 of the last 4 days, a setup man on a back-to-back, or a bullpen game after extra innings yesterday — these affect how the game plays out from the 6th inning onward. Investigate availability for both teams.
+- **Park factors are real.** Coors Field inflates run totals by 20-30%. Pitcher-friendly parks suppress scoring. Indoor stadiums remove weather variables entirely.
+- **Schedule and rest matter.** Day games after night games, long road trips, cross-country travel, and series positioning (rubber games) all affect performance.
+- **Division familiarity cuts both ways.** Teams in the same division play 19 times per season. Hitters see the same pitchers repeatedly — familiarity can help the offense or the pitcher depending on adjustments.
+- **Baseball has more game-to-game variance than any other major sport.** The best team in baseball wins about 60% of its games — they lose 4 out of every 10. Hot streaks and losing streaks happen to every team multiple times per season. Investigate whether recent form reflects a real trend (pitcher struggles, lineup changes, bullpen fatigue) or normal variance.
+- **One-run games are volatile over small samples.** Teams with extreme records in 1-run games may be overperforming or underperforming their underlying quality. Investigate whether a team's recent results are driven by process or luck.
+- **Baseball is more than numbers — the game has momentum.** Which team is rolling right now? Which pitcher is struggling? What happened in this series so far? A team that just got swept plays differently than a team that just swept. These dynamics are real and worth investigating alongside the statistical matchup.`;
 }

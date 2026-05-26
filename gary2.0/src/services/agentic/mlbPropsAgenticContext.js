@@ -258,6 +258,17 @@ function groupPropsByPlayer(props) {
     if (propType.includes('doubles') && line > 0.5) continue;       // Only 1+ doubles
     if (propType.includes('singles') && line > 1.5) continue;       // Only 1+ or 1.5 singles
 
+    // Odds-range filter: drop props where BOTH sides are outside [-200, +400].
+    // (Juice heavier than -200 has no edge; longer than +400 is pure variance.)
+    // If at least one side falls inside the range, keep the prop so Gary can pick that side.
+    const overOdds = prop.over_odds != null ? Number(prop.over_odds) : null;
+    const underOdds = prop.under_odds != null ? Number(prop.under_odds) : null;
+    const inRange = (o) => o != null && !Number.isNaN(o) && o >= -200 && o <= 400;
+    const hasAnyOdds = overOdds != null || underOdds != null;
+    if (hasAnyOdds && !inRange(overOdds) && !inRange(underOdds)) {
+      continue;
+    }
+
     const playerName = prop.player || 'Unknown';
     const propPlayerId = prop.player_id || prop.playerId || null;
 

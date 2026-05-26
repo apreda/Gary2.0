@@ -76,33 +76,74 @@ function initApi() {
 }
 
 /**
- * Get cached data or fetch new data
+ * Get cached data or fetch new data.
+ *
+ * Two safety mechanisms beyond the basic cache:
+ *
+ *   1. Single-flight dedup. If a fetch for the same key is already in
+ *      progress, subsequent callers share that promise instead of starting
+ *      their own fetch. Avoids the rate-limit storm we saw when the NBA
+ *      scout report ran getTeams() 4× concurrently before the cache had
+ *      time to populate.
+ *
+ *   2. 429 retry with backoff. BDL occasionally throttles bursts. One
+ *      automatic retry after a short delay clears the vast majority of
+ *      transient 429s without bothering the caller.
+ *
  * @param {string} key - Cache key
  * @param {Function} fetchFn - Function to fetch data if cache miss
  * @param {number} ttlMinutes - Cache TTL in minutes
- * @returns {Promise<any>} - Cached or fresh data
  */
+const inflight = new Map(); // key -> Promise<data>
+
 async function getCachedOrFetch(key, fetchFn, ttlMinutes = TTL_MINUTES) {
   const now = Date.now();
-  
-  // Check if data is in cache and not expired
+
+  // Fresh cache hit
   if (cacheMap.has(key)) {
     const { data, expiry } = cacheMap.get(key);
     if (now < expiry) {
-      // console.log(`[Ball Don't Lie] Using cached data for ${key}`);
       return data;
     }
   }
-  
-  // Cache miss or expired
+
+  // Single-flight: if another caller is already fetching the same key,
+  // wait on their promise instead of issuing a duplicate request.
+  if (inflight.has(key)) {
+    return inflight.get(key);
+  }
+
   console.log(`[Ball Don't Lie] Fetching fresh data for ${key}`);
-  const data = await fetchFn();
-  
-  // Store in cache with expiry
-  const expiry = now + (ttlMinutes * 60 * 1000);
-  cacheMap.set(key, { data, expiry });
-  
-  return data;
+
+  const fetchWithRetry = async () => {
+    try {
+      return await fetchFn();
+    } catch (err) {
+      // Retry once on 429 (rate limit). Status surfaces a few ways depending
+      // on whether the call went through axios, fetch, or the BDL SDK.
+      const status = err?.response?.status ?? err?.status;
+      const msg = (err?.message || err?.response?.data?.error || '').toString();
+      const isRateLimit = status === 429 || /too many requests/i.test(msg);
+      if (isRateLimit) {
+        console.warn(`[Ball Don't Lie] 429 on ${key} — retrying in 1.2s`);
+        await new Promise(r => setTimeout(r, 1200));
+        return await fetchFn();
+      }
+      throw err;
+    }
+  };
+
+  const promise = fetchWithRetry()
+    .then(data => {
+      cacheMap.set(key, { data, expiry: now + (ttlMinutes * 60 * 1000) });
+      return data;
+    })
+    .finally(() => {
+      inflight.delete(key);
+    });
+
+  inflight.set(key, promise);
+  return promise;
 }
 
 /**
@@ -4989,17 +5030,17 @@ const ballDontLieService = {
    * Returns full season: batting_avg, batting_hr, batting_rbi, batting_ops, batting_war,
    *                       pitching_era, pitching_whip, pitching_k, pitching_k_per_9, pitching_war, etc.
    */
-  async getMlbPlayerSeasonStats({ season, playerIds, teamId, postseason = false } = {}, ttlMinutes = 30) {
+  async getMlbPlayerSeasonStats({ season, playerIds, teamId, postseason = false, perPage = 100 } = {}, ttlMinutes = 30) {
     try {
       if (!season) return [];
-      const cacheKey = `mlb_season_stats_${season}_${playerIds?.join(',') || ''}_${teamId || ''}_${postseason}`;
+      const cacheKey = `mlb_season_stats_${season}_${playerIds?.join(',') || ''}_${teamId || ''}_${postseason}_${perPage}`;
       return await getCachedOrFetch(cacheKey, async () => {
-        const params = { season };
+        const params = { season, per_page: perPage };
         if (playerIds?.length) params.player_ids = playerIds;
         if (teamId) params.team_id = teamId;
         if (postseason) params.postseason = postseason;
         const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/season_stats${buildQuery(params)}`;
-        console.log(`[BDL] Fetching MLB season stats: season=${season}, players=${playerIds?.length || 'all'}, team=${teamId || 'all'}`);
+        console.log(`[BDL] Fetching MLB season stats: season=${season}, players=${playerIds?.length || 'all'}, team=${teamId || 'all'}, per_page=${perPage}`);
         const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
         const stats = response.data?.data || [];
         console.log(`[BDL] Retrieved ${stats.length} MLB season stat records`);

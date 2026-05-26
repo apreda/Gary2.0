@@ -528,9 +528,10 @@ async function runGeminiGroundingSearch(query, options = {}) {
 
   FRESHNESS RULES:
   1. Initialize Google Search for this query - DO NOT skip the search
-  2. ONLY use search results from the past 7 days (preferably past 24-48 hours)
-  3. If a search result is dated prior to ${new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' })}, flag it as "Historical" and DO NOT use for current analysis
+  2. ONLY use search results from the past 48 hours. Anything older is stale and must be ignored.
+  3. If a search result is dated prior to ${new Date(Date.now() - 48 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}, DO NOT use it for current analysis
   4. EVIDENCE SUPREMACY: Surrender intuition to Search Tool results. Search results ARE the facts.
+  5. NEVER state statistical facts (records, streaks, error counts, win streaks) from articles — these go stale within hours. Only use narrative context (storylines, matchup previews, injury news) from search.
 
   ANTI-LAZY VERIFICATION:
   - Do NOT assume you know current rosters, injuries, or stats from training data

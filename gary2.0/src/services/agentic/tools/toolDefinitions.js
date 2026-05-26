@@ -106,8 +106,8 @@ const NCAAB_TOKENS = [
   'SCORING', 'FG_PCT', 'THREE_PT_SHOOTING',
   'TURNOVER_RATE', 'OREB_RATE', 'FT_RATE',
   'REBOUNDS', 'ASSISTS', 'STEALS', 'BLOCKS',
-  // Context + roster/schedule tokens used by NCAAB factor checklist
-  'TOP_PLAYERS', 'INJURIES', 'REST_SITUATION', 'SCHEDULE_STRENGTH',
+  // Context + roster tokens used by NCAAB factor checklist
+  'TOP_PLAYERS', 'INJURIES',
   // NCAAB-Specific Calculated Stats (from BDL raw box score data)
   'NCAAB_EFG_PCT',           // (FGM + 0.5*FG3M) / FGA
   'NCAAB_TS_PCT',            // PTS / (2*(FGA+0.44*FTA))
@@ -118,9 +118,10 @@ const NCAAB_TOKENS = [
   'NCAAB_BARTTORVIK',        // Barttorvik T-Rank / AdjEM / tempo-free profile
   // Bundled investigation tokens
   'NCAAB_FOUR_FACTORS',      // All 4 Dean Oliver factors in one call (eFG%, TOV%, FTA Rate, ORB%)
-  'NCAAB_L5_EFFICIENCY',     // L5 eFG%, TS%, ORtg, DRtg from player game logs
+  'NCAAB_L1_STATS',          // Last game full team stats (shooting, pace, four factors, opponent stats)
+  'NCAAB_L3_STATS',          // Last 3 games full team stats
+  'NCAAB_L5_EFFICIENCY',     // L5 full team stats (shooting, pace, four factors, opponent stats)
   // Context stats (have dedicated NCAAB fetchers in statRouter)
-  'HOME_AWAY_SPLITS',        // NCAAB_HOME_AWAY_SPLITS fetcher (BDL game results — Season/L10/L5 + margins)
   'NCAAB_VENUE',             // Arena/venue name from Highlightly API (only NCAAB venue source)
   'RECENT_FORM',             // Enhanced recent form with opponent quality
   'H2H_HISTORY'              // Head-to-head history (BDL games)
@@ -172,11 +173,11 @@ const NHL_TOKENS = [
   'STREAK',               // Current win/loss streak from BDL standings
   'PLAYOFF_POSITION',     // Playoff race context from standings
   // Special Teams (critical in hockey)
-  'POWER_PLAY_PCT', 'PENALTY_KILL_PCT', 'SPECIAL_TEAMS', 'PP_OPPORTUNITIES',
+  'POWER_PLAY_PCT', 'PENALTY_KILL_PCT', 'SPECIAL_TEAMS',
   // Scoring
   'GOALS_FOR', 'GOALS_AGAINST', 'GOAL_DIFFERENTIAL',
   // Shot Metrics
-  'SHOTS_FOR', 'SHOTS_AGAINST', 'SHOT_DIFFERENTIAL', 'SHOT_QUALITY',
+  'SHOTS_FOR', 'SHOTS_AGAINST', 'SHOT_DIFFERENTIAL',
   // Advanced Analytics (via Gemini Grounding)
   'CORSI_FOR_PCT',        // Real possession metric (CF%)
   'EXPECTED_GOALS',       // Real xG data
@@ -188,7 +189,7 @@ const NHL_TOKENS = [
   'NHL_GOALIE_RECENT_FORM',   // Goalie L5/L10 computed from BDL box scores
   'NHL_HIGH_DANGER_SV_PCT',   // HDSV% via Gemini Grounding (Natural Stat Trick)
   // Situational
-  'REST_SITUATION', 'BACK_TO_BACK', 'HOME_ICE', 'ROAD_PERFORMANCE',
+  'REST_SITUATION', 'BACK_TO_BACK',
   // Faceoffs & Possession
   'FACEOFF_PCT', 'POSSESSION_METRICS',
   // Players & Lineups (from BDL box_scores and player_season_stats)
@@ -208,28 +209,53 @@ const NHL_TOKENS = [
   'MARGIN_VARIANCE'       // Goal differential variance
 ];
 
-// MLB/WBC Stat Tokens — uses MLB Stats API + Gemini Grounding
+// MLB Stat Tokens — BDL GOAT tier + MLB Stats API + Gemini Grounding
 const MLB_TOKENS = [
   // Pitching
-  'MLB_STARTING_PITCHERS',  // Probable starters + career stats
-  'MLB_BULLPEN',            // Bullpen availability and workload
+  'MLB_STARTING_PITCHERS',       // Probable starters (Grounding)
+  'MLB_PITCHER_SEASON_STATS',    // Starter's current season stats (BDL season stats)
+  'MLB_PITCHER_RECENT_FORM',     // Last 5 starts game log (Grounding)
+  'MLB_BULLPEN',                 // Bullpen availability (Grounding)
+  'MLB_BULLPEN_WORKLOAD',        // Specific bullpen usage last 3 days (Grounding)
   // Hitting
-  'MLB_KEY_HITTERS',        // Top hitters with MLB career stats
-  'MLB_LINEUP',             // Confirmed batting order
-  // Context
-  'STANDINGS',              // WBC pool standings
-  'MLB_WBC_RESULTS',        // Completed WBC game results
-  'MLB_ODDS',               // Current betting odds (via grounding)
-  'REST_SITUATION',          // Days rest between WBC games
-  'RECENT_FORM',            // Team's WBC results so far
-  'H2H_HISTORY',            // Historical WBC matchup record
+  'MLB_KEY_HITTERS',             // Top hitters with season stats (BDL season stats)
+  'MLB_LINEUP',                  // Confirmed batting order (Grounding)
+  // Matchup Data (BDL GOAT)
+  'MLB_PLAYER_SPLITS',           // L/R splits, home/away, by venue (BDL splits)
+  'MLB_BATTER_VS_PITCHER',       // Career batter vs pitcher matchup history (BDL PvP)
+  // Standings & Records
+  'STANDINGS',                   // MLB division standings
+  'MLB_STANDINGS',               // MLB division standings (BDL structured)
+  'MLB_STANDINGS_STRUCTURED',    // MLB division standings (BDL)
+  'MLB_TEAM_RECORD',             // Current W-L, division position (BDL standings)
+  'MLB_RECENT_RESULTS',          // Recent game results with scores
+  // Form & Context
+  'MLB_RECENT_FORM',             // Last 10 games W-L and scoring trends
+  'MLB_RECENT_FORM_STRUCTURED',  // Recent form via API
+  'MLB_SEASON_FORM',             // Season performance and momentum
+  'MLB_ODDS',                    // Current betting odds (Grounding)
+  'REST_SITUATION',              // Days rest / schedule context
+  'MLB_REST_SITUATION',          // Days rest via API
+  'RECENT_FORM',                 // Team's recent results
+  'H2H_HISTORY',                 // Historical matchup record
+  'MLB_H2H',                     // Season series H2H record
+  // Venue & Conditions
+  'MLB_PARK_FACTORS',            // Park factor, dimensions, hitter/pitcher friendly
+  'MLB_WEATHER',                 // Weather at game venue (wind, temp, humidity)
   // Players
-  'TOP_PLAYERS',            // Key players with career stats
-  'INJURIES',               // Injury/scratch updates
-  // WBC-specific grounding tools
-  'WBC_GAME_PREVIEW',       // Game preview, projections, expert analysis
-  'WBC_PITCHER_SCOUTING',   // Starting pitcher scouting reports
-  'WBC_TOURNAMENT_FORM',    // Tournament performance and momentum
+  'MLB_TOP_PLAYERS',             // Key players with season stats (BDL)
+  'TOP_PLAYERS',                 // Key players
+  'MLB_INJURIES',                // Injury/IL/scratch updates (BDL + Grounding)
+  'INJURIES',                    // Injury updates
+  // Game Context
+  'MLB_GAME_PREVIEW',            // Game preview, projections (Grounding)
+  'MLB_PITCHER_SCOUTING',        // Starting pitcher scouting (Grounding)
+  // Defense, Bullpen, Situational (BDL structured + Grounding fallback)
+  'MLB_CLOSER_RELIEVER_STATS',   // Closer + key reliever SV, HLD, ERA, K (BDL season stats)
+  'MLB_CATCHER_DEFENSE',         // Catcher defense: CS%, SBA, PB + batting (BDL season stats)
+  'MLB_RISP_SITUATIONAL',        // RISP & situational splits for top hitters (BDL splits)
+  'MLB_TEAM_DEFENSE',            // Team fielding: errors, FPCT, DP + pitching ERA/WHIP (BDL team stats)
+  'MLB_STATCAST',                // Statcast contact quality: exit velo, hard hit rate, barrel rate (BDL plate appearances)
 ];
 
 // Combine all tokens by sport
@@ -270,7 +296,7 @@ Typical analysis needs 2-5 stat categories.`,
         properties: {
           sport: {
             type: "string",
-            enum: ["NBA", "NFL", "NCAAB", "NCAAF", "NHL", "MLB", "WBC"],
+            enum: ["NBA", "NFL", "NCAAB", "NCAAF", "NHL", "MLB"],
             description: "The sport league"
           },
           token: {
@@ -345,6 +371,47 @@ Available modes:
           }
         },
         required: ["stat_type", "team"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "fetch_depth_chart",
+      description: `Fetches the depth chart for a team — shows starter → backup ordering at each position (PG, SG, SF, PF, C). Use this to see who replaces an injured player and the full position hierarchy.
+Available for: NBA only.`,
+      parameters: {
+        type: "object",
+        properties: {
+          team: {
+            type: "string",
+            description: "Team abbreviation (e.g., 'BOS', 'DET', 'MIN')"
+          }
+        },
+        required: ["team"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "fetch_team_recent_stats",
+      description: `Fetches team-level stats for the last N games — full shooting splits (FG%, 3P%, eFG%), actual pace (possessions), paint scoring, fast break points, turnovers, rebounds, and what opponents did AGAINST this team. Much more detailed than season averages. Use this to compare L1 (last game), L3, L5, or L10 to see real trends.
+Available for: NBA only.`,
+      parameters: {
+        type: "object",
+        properties: {
+          team: {
+            type: "string",
+            description: "Team abbreviation (e.g., 'BOS', 'MIN', 'LAL')"
+          },
+          num_games: {
+            type: "integer",
+            description: "Number of recent games (1, 3, 5, or 10)",
+            default: 5
+          }
+        },
+        required: ["team"]
       }
     }
   },

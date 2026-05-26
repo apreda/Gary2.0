@@ -398,14 +398,33 @@ export const ballDontLieOddsService = {
         };
       }).filter(Boolean);
     }
-    // Fetch games (v1 multi-sport wrapper) and v2 odds (date-based)
-    const games = await ballDontLieService.getGames(sportKey, { dates: [dateStr], per_page: 100 }, 10);
+    // Evening EST games are stored under the NEXT UTC date in BDL
+    // (e.g., 8pm ET March 25 = midnight UTC March 26). Fetch both dates and deduplicate.
+    const isMLBSport = sportKey === 'baseball_mlb';
+    let fetchDates = [dateStr];
+    if (isMLBSport) {
+      const nextDate = new Date(new Date(dateStr).getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      fetchDates = [dateStr, nextDate];
+    }
+
+    // Fetch games and deduplicate by game ID
+    const rawGames = (await Promise.all(
+      fetchDates.map(d => ballDontLieService.getGames(sportKey, { dates: [d], per_page: 100 }, 10).catch(() => []))
+    )).flat();
+    const seenIds = new Set();
+    const games = rawGames.filter(g => {
+      if (!g?.id || seenIds.has(g.id)) return false;
+      seenIds.add(g.id);
+      return true;
+    });
 
     // Use unified helper to get odds appropriate for sport
     // NOTE: NFL v1 odds endpoint does NOT support 'dates', so we skip this initial fetch for NFL.
     let odds = [];
     if (sportKey !== 'americanfootball_nfl') {
-      odds = await ballDontLieService.getOddsV2({ dates: [dateStr], per_page: 100 }, sportKey);
+      odds = (await Promise.all(
+        fetchDates.map(d => ballDontLieService.getOddsV2({ dates: [d], per_page: 100 }, sportKey).catch(() => []))
+      )).flat();
     }
 
     // NBA: If date-based v2 odds are sparse or missing ML/Spreads, fetch v2 odds by game_ids for precision
@@ -641,6 +660,7 @@ export const ballDontLieOddsService = {
         away_team: awayTeamName,
         commence_time: commenceTime,
         estimated_time,
+        venue: g.venue || null,
         bookmakers
       };
       if (sportKey === 'americanfootball_nfl') {

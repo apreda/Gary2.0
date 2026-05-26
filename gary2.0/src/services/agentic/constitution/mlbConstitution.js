@@ -29,13 +29,14 @@ export const MLB_CONSTITUTION = {
   pass1Context: `
 ### MLB AWARENESS
 
+- **Each game is its own event.** A team's 162-game aggregate stats change by less than 1% from one day to the next, but the games themselves swing wildly — the best team in baseball loses 4 of every 10 games. If you find yourself reaching for the same team across multiple games in a series, ask yourself honestly: am I evaluating tonight's specific matchup (this starter, this bullpen state, this lineup vs this handedness, this park tonight) — or am I anchoring on season aggregates that haven't actually moved? Yesterday's pick has no bearing on tonight's analysis. Investigate what is DIFFERENT about tonight, not what's the same.
+- A stat is a description of what happened, not a reason for what will happen. A pitcher's bad ERA is a fact about past games; whether it predicts tonight depends on opponent, ballpark, recent form, bullpen support, and sample size. Cite stats to describe the situation. Reason for yourself about whether they actually matter for THIS specific game.
 - Starting pitcher matchup is the foundation of any MLB game analysis — investigate both starters' recent outings, pitch count trends, and performance against this specific lineup
 - A pitcher's recent form (last 3-5 starts) can diverge significantly from full-season numbers — investigate the trajectory
 - Bullpen availability changes every day — who pitched last night, who pitched the night before, who is available tonight. This is not a static stat; it is a daily investigation
 - Left/right splits matter in baseball — investigate how each team's lineup is constructed relative to the opposing starter's handedness
 - Lineup construction, rest days, platoon matchups, and injuries to key bats all change how the offense profiles tonight
-- Park factors and weather (wind direction, temperature, humidity) directly affect scoring — investigate the specific venue and conditions
-- MLB outcomes are volatile game-to-game — a team's season averages can look very different from how they play on a given night with a given pitcher in a given park. The best team in baseball loses 4 out of every 10 games.
+- Park factors and weather (wind direction, temperature, humidity) are context — investigate the specific venue and conditions and reason about whether tonight's matchup actually interacts with them
 - Baseball is a 162-game season with real human dynamics — momentum, streaks, series context, pitcher confidence, team energy, and the grind of the schedule all matter alongside the statistics
 - The moneyline is how MLB games are priced — there is no real spread. Investigate the matchup, decide who wins, then choose ML or run line based on your conviction
 

@@ -50,29 +50,77 @@ function log(msg) {
 // ═══════════════════════════════════════════════════════════════════════════
 // BDL: FETCH GAMES
 // ═══════════════════════════════════════════════════════════════════════════
-async function fetchGamesForDate(sportKey, dateStr) {
+
+// Per-sport game start time field. Explicit, no fallbacks — if the field is
+// missing the game is broken upstream and we want to know about it.
+function extractStartTimeIso(game, sportKey) {
+  if (sportKey === 'basketball_nba') return game.datetime;
+  if (sportKey === 'icehockey_nhl') return game.start_time_utc;
+  if (sportKey === 'baseball_mlb') return game.date;
+  throw new Error(`extractStartTimeIso: unknown sportKey ${sportKey}`);
+}
+
+function getETDateStr(date) {
+  return date.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+}
+
+function addDaysISO(dateStr, days) {
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+// Fetch games whose ET game-day matches `etDateStr`. We query both the ET date
+// and the next UTC date, because MLB indexes by UTC date — a 9pm ET game lives
+// under tomorrow's UTC date. Then we filter by actual ET start time.
+async function fetchGamesForETDate(sportKey, etDateStr) {
+  const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
+  const dates = [etDateStr, addDaysISO(etDateStr, 1)];
+  let games;
   try {
-    const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
-    const games = await ballDontLieService.getGames(sportKey, { dates: [dateStr], per_page: 50 });
-    return games || [];
+    games = await ballDontLieService.getGames(sportKey, { dates, per_page: 100 });
   } catch (e) {
-    log(`  ⚠️ Failed to fetch ${sportKey} games for ${dateStr}: ${e.message}`);
+    log(`  ❌ ${sportKey}: BDL fetch failed for ${dates.join(',')}: ${e.message}`);
     return [];
   }
+  if (!Array.isArray(games)) return [];
+
+  const filtered = [];
+  for (const g of games) {
+    const startIso = extractStartTimeIso(g, sportKey);
+    if (!startIso) {
+      log(`  ⚠️ ${sportKey} game ${g.id}: missing start time field — skipping`);
+      continue;
+    }
+    const start = new Date(startIso);
+    if (Number.isNaN(start.getTime())) {
+      log(`  ⚠️ ${sportKey} game ${g.id}: unparseable start time "${startIso}" — skipping`);
+      continue;
+    }
+    if (getETDateStr(start) !== etDateStr) continue;
+    filtered.push({ raw: g, startTime: start });
+  }
+  // Dedupe in case a game appears in both UTC date queries (rare but possible)
+  const seen = new Set();
+  return filtered.filter(({ raw }) => {
+    if (seen.has(raw.id)) return false;
+    seen.add(raw.id);
+    return true;
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PLAN: Build per-game schedule for the day
 // ═══════════════════════════════════════════════════════════════════════════
-async function buildPlan(dateStr) {
+async function buildPlan(etDateStr) {
   log(`\n═══════════════════════════════════════════════════════════`);
-  log(`🗓️  Building per-game plan for ${dateStr}`);
+  log(`🗓️  Building per-game plan for ${etDateStr} (ET)`);
   log(`═══════════════════════════════════════════════════════════`);
 
-  const schedule = []; // { sport, game, matchup, startTime, triggerTime }
+  const schedule = [];
 
   for (const sport of SPORTS) {
-    const games = await fetchGamesForDate(sport.key, dateStr);
+    const games = await fetchGamesForETDate(sport.key, etDateStr);
     if (games.length === 0) {
       log(`  ${sport.label}: No games`);
       continue;
@@ -80,33 +128,20 @@ async function buildPlan(dateStr) {
 
     log(`  ${sport.label}: ${games.length} games`);
 
-    for (const game of games) {
+    for (const { raw: game, startTime } of games) {
       const homeTeam = game.home_team?.full_name || game.home_team?.name || 'Home';
       const awayTeam = game.visitor_team?.full_name || game.away_team?.full_name || game.visitor_team?.name || game.away_team?.name || 'Away';
       const matchup = `${awayTeam} @ ${homeTeam}`;
-
-      const dt = game.datetime || game.start_time || game.date;
-      if (!dt) {
-        log(`    ⚠️ ${matchup}: No start time — skipping`);
-        continue;
-      }
-
-      const startTime = new Date(dt);
       const triggerTime = new Date(startTime.getTime() - LEAD_TIME_MINUTES * 60 * 1000);
       const startET = startTime.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
       const triggerET = triggerTime.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
 
-      // Use home team mascot as matchup filter (reliable for --matchup flag)
-      const homeMascot = homeTeam.split(' ').pop();
-
-      schedule.push({ sport, matchup, homeMascot, startTime, triggerTime, gameId: game.id });
-      log(`    ${matchup} | Game: ${startET} | Trigger: ${triggerET}`);
+      schedule.push({ sport, matchup, startTime, triggerTime, gameId: game.id });
+      log(`    ${matchup} | Game: ${startET} | Trigger: ${triggerET} | id: ${game.id}`);
     }
   }
 
-  // Sort by trigger time
   schedule.sort((a, b) => a.triggerTime - b.triggerTime);
-
   log(`\n📋 Total: ${schedule.length} games scheduled`);
   return schedule;
 }
@@ -148,31 +183,9 @@ function runScript(scriptPath, args = []) {
       }
     });
 
-    // 30 min safety timeout
-    setTimeout(() => { proc.kill('SIGTERM'); reject(new Error('Timeout 30min')); }, 30 * 60 * 1000);
+    // 45 min safety timeout — Pro-model game picks with retries can run long
+    setTimeout(() => { proc.kill('SIGTERM'); reject(new Error('Timeout 45min')); }, 45 * 60 * 1000);
   });
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// RUN: Execute picks + props for a single game
-// ═══════════════════════════════════════════════════════════════════════════
-async function runGame(entry) {
-  const { sport, matchup, homeMascot } = entry;
-  const startTime = Date.now();
-  log(`\n🐻 ${sport.label}: ${matchup}`);
-
-  try {
-    // Game picks for this specific game
-    await runScript('scripts/run-agentic-picks.js', [sport.flag, '--matchup', homeMascot, '--limit', '1']);
-
-    // Props for this specific game (disk cache populated from game picks)
-    await runScript(`scripts/${sport.propsScript}`, [`--matchup=${homeMascot}`]);
-
-    const elapsed = ((Date.now() - startTime) / 1000 / 60).toFixed(1);
-    log(`✅ ${matchup} complete in ${elapsed} min`);
-  } catch (e) {
-    log(`❌ ${matchup} error: ${e.message}`);
-  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -232,7 +245,7 @@ async function executeSchedule(schedule) {
       const triggerET = triggerTime.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
       log(`\n⏳ Next batch: ${batch.length} game(s) at ${triggerET} ET (${waitMin} min)`);
       log(`   Games: ${batch.map(e => e.matchup).join(', ')}`);
-      await new Promise(resolve => setTimeout(resolve, waitMs));
+      await sleepUntilWallClock(triggerTime);
     }
 
     log(`\n🔔 Trigger window: ${batch.length} game(s)`);
@@ -251,11 +264,13 @@ async function executeSchedule(schedule) {
       const sport = games[0].sport;
       log(`\n── ${sport.label}: ${games.length} game(s) ──`);
 
-      // Run all game picks for this sport first
+      // Run all game picks for this sport first.
+      // We pass --game-id (BDL game id) so we always target the exact game,
+      // never a substring match (which would collide on Red/White Sox or doubleheaders).
       for (const entry of games) {
         try {
-          log(`  📊 Game picks: ${entry.matchup}`);
-          await runScript('scripts/run-agentic-picks.js', [sport.flag, '--matchup', entry.homeMascot, '--limit', '1']);
+          log(`  📊 Game picks: ${entry.matchup} (id ${entry.gameId})`);
+          await runScript('scripts/run-agentic-picks.js', [sport.flag, '--game-id', String(entry.gameId)]);
         } catch (e) {
           log(`  ❌ Game picks failed: ${entry.matchup}: ${e.message}`);
         }
@@ -264,8 +279,8 @@ async function executeSchedule(schedule) {
       // Then run props for all games (disk cache from game picks)
       for (const entry of games) {
         try {
-          log(`  🎯 Props: ${entry.matchup}`);
-          await runScript(`scripts/${sport.propsScript}`, ['--matchup', entry.homeMascot]);
+          log(`  🎯 Props: ${entry.matchup} (id ${entry.gameId})`);
+          await runScript(`scripts/${sport.propsScript}`, ['--game-id', String(entry.gameId)]);
         } catch (e) {
           log(`  ❌ Props failed: ${entry.matchup}: ${e.message}`);
         }
@@ -284,31 +299,63 @@ async function executeSchedule(schedule) {
 // ═══════════════════════════════════════════════════════════════════════════
 // HELPERS
 // ═══════════════════════════════════════════════════════════════════════════
-function getTodayDateStr() {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+function getTodayETDateStr() {
+  return getETDateStr(new Date());
 }
 
-function getTomorrowDateStr() {
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  return tomorrow.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+function getTomorrowETDateStr() {
+  return addDaysISO(getTodayETDateStr(), 1);
 }
 
-async function sleepUntilMidnightET() {
-  const now = new Date();
-  // Calculate next midnight ET
-  const etNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-  const nextMidnight = new Date(etNow);
-  nextMidnight.setDate(nextMidnight.getDate() + 1);
-  nextMidnight.setHours(0, 5, 0, 0); // 12:05 AM ET
+// Returns the UTC instant for "12:05 AM ET on `etDateStr`". DST-safe: we use
+// formatToParts to read what UTC offset ET has at that civil time, then build
+// the instant from the parts.
+function instantForETDate(etDateStr, hourET, minuteET) {
+  // Start with a candidate UTC instant assuming ET is UTC-5, then correct.
+  let candidate = new Date(`${etDateStr}T${String(hourET).padStart(2, '0')}:${String(minuteET).padStart(2, '0')}:00Z`);
+  // Loop twice to settle DST boundaries (one correction is enough except at
+  // the spring-forward instant; two is bulletproof).
+  for (let i = 0; i < 2; i++) {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      hour12: false
+    }).formatToParts(candidate);
+    const obj = Object.fromEntries(parts.map(p => [p.type, p.value]));
+    const civilET = `${obj.year}-${obj.month}-${obj.day}T${obj.hour === '24' ? '00' : obj.hour}:${obj.minute}:${obj.second}`;
+    const targetCivil = `${etDateStr}T${String(hourET).padStart(2, '0')}:${String(minuteET).padStart(2, '0')}:00`;
+    const driftMs = new Date(targetCivil + 'Z').getTime() - new Date(civilET + 'Z').getTime();
+    if (driftMs === 0) break;
+    candidate = new Date(candidate.getTime() + driftMs);
+  }
+  return candidate;
+}
 
-  // Convert back to local time
-  const diffMs = nextMidnight.getTime() - etNow.getTime();
-  const waitMs = Math.max(diffMs, 60000); // At least 1 min
-  const waitHrs = (waitMs / 1000 / 60 / 60).toFixed(1);
+// Sleep until a wall-clock target, polling every 60s so laptop sleep can't
+// kill a multi-hour setTimeout. The next 60s tick fires the moment macOS
+// resumes the process — naturally self-recovering after sleep.
+async function sleepUntilWallClock(targetDate) {
+  while (Date.now() < targetDate.getTime()) {
+    const remaining = targetDate.getTime() - Date.now();
+    await new Promise(r => setTimeout(r, Math.min(60_000, remaining)));
+  }
+}
 
-  log(`\n💤 Sleeping ${waitHrs} hours until midnight ET`);
-  await new Promise(resolve => setTimeout(resolve, waitMs));
+async function sleepUntilPlanTime() {
+  // Build each day's plan at 5:00 AM ET — early enough that no game trigger
+  // is missed (earliest MLB triggers are ~10:30 AM ET for 12 PM games).
+  const todayET = getTodayETDateStr();
+  let target = instantForETDate(todayET, 5, 0); // 5:00 AM ET today
+  // If 5 AM today has already passed, aim for 5 AM tomorrow
+  if (target.getTime() <= Date.now()) {
+    const tomorrowET = getTomorrowETDateStr();
+    target = instantForETDate(tomorrowET, 5, 0);
+  }
+  const waitMs = Math.max(target.getTime() - Date.now(), 60_000);
+  const waitHrs = (waitMs / 1000 / 60 / 60).toFixed(2);
+  log(`\n💤 Sleeping ${waitHrs} hours until 5:00 AM ET (${target.toISOString()})`);
+  await sleepUntilWallClock(target);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -319,14 +366,14 @@ async function main() {
 
   if (args.includes('--now')) {
     log('🚀 Running all sports NOW');
-    const schedule = await buildPlan(getTodayDateStr());
+    const schedule = await buildPlan(getTodayETDateStr());
     for (const entry of schedule) entry.triggerTime = new Date();
     await executeSchedule(schedule);
     return;
   }
 
   if (args.includes('--plan')) {
-    const dateStr = args.includes('--today') ? getTodayDateStr() : getTomorrowDateStr();
+    const dateStr = args.includes('--today') ? getTodayETDateStr() : getTomorrowETDateStr();
     await buildPlan(dateStr);
     return;
   }
@@ -339,8 +386,10 @@ async function main() {
   log(`Sports: ${SPORTS.map(s => s.label).join(', ')}`);
 
   // Check today first
-  const todaySchedule = await buildPlan(getTodayDateStr());
-  const upcoming = todaySchedule.filter(e => e.triggerTime > new Date());
+  const todaySchedule = await buildPlan(getTodayETDateStr());
+  // Filter by GAME start time, not trigger time — if the game itself hasn't started, run picks
+  // even if the 90-min lead window has already passed (picks just trigger immediately).
+  const upcoming = todaySchedule.filter(e => e.startTime > new Date());
   if (upcoming.length > 0) {
     log(`\n⚡ ${upcoming.length} game(s) still upcoming today — running`);
     await executeSchedule(upcoming);
@@ -348,11 +397,34 @@ async function main() {
     log('No upcoming games today.');
   }
 
-  // Main loop
+  // Main loop — after each day's games complete, check if we've crossed into
+  // a new day (late West Coast games can finish at 1-3 AM ET). If so, build
+  // today's plan immediately instead of sleeping through it.
   while (true) {
-    await sleepUntilMidnightET();
-    const schedule = await buildPlan(getTodayDateStr());
+    const planDateBefore = getTodayETDateStr();
+    await sleepUntilPlanTime();
+    const schedule = await buildPlan(getTodayETDateStr());
     await executeSchedule(schedule);
+
+    // If execution ran past midnight into a new ET day, immediately build
+    // and run that day's plan instead of sleeping past it.
+    let currentDate = getTodayETDateStr();
+    while (currentDate !== planDateBefore && currentDate !== getTomorrowETDateStr()) {
+      log(`\n⚡ Execution spanned into ${currentDate} — building today's plan immediately`);
+      const todaySchedule = await buildPlan(currentDate);
+      // Filter by GAME start time, not trigger time — if the game itself hasn't started, run picks
+  // even if the 90-min lead window has already passed (picks just trigger immediately).
+  const upcoming = todaySchedule.filter(e => e.startTime > new Date());
+      if (upcoming.length > 0) {
+        log(`⚡ ${upcoming.length} game(s) still upcoming — running`);
+        await executeSchedule(upcoming);
+      } else {
+        log('No upcoming games for today.');
+      }
+      currentDate = getTodayETDateStr();
+      // If we're still on the same date after execution, break to normal sleep
+      break;
+    }
   }
 }
 

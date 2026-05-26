@@ -12,19 +12,19 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // ── Model identifiers ───────────────────────────────────────────────────────
 
-/** Gemini 3 Flash — grounding, props, fallback, and lightweight tasks */
+/** Gemini 3 Flash — primary model for all flows (game picks, props, DFS, research) */
 export const GEMINI_FLASH_MODEL = 'gemini-3-flash-preview';
 
-/** Gemini 3.1 Pro — primary model for main picks via orchestrator */
-export const GEMINI_PRO_MODEL = 'gemini-3.1-pro-preview';
+/** Alias kept for callers that still import GEMINI_PRO_MODEL. Flash is primary now. */
+export const GEMINI_PRO_MODEL = 'gemini-3-flash-preview';
 
-/** Flash — fallback when 3.1 Pro quota is exhausted (gemini-3-pro is dead since March 2026) */
-export const GEMINI_PRO_FALLBACK = 'gemini-3-flash-preview';
+/** 3.1 Pro — fallback when Flash is throttled or failing (gemini-3-pro was retired March 9, 2026) */
+export const GEMINI_PRO_FALLBACK = 'gemini-3.1-pro-preview';
 
 /** Models the system is permitted to use */
 const ALLOWED_GEMINI_MODELS = [
   GEMINI_FLASH_MODEL,
-  GEMINI_PRO_MODEL,
+  GEMINI_PRO_FALLBACK,
 ];
 
 /**

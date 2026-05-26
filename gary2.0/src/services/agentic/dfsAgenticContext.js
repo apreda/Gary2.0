@@ -79,7 +79,28 @@ function setInjuryNameCache(injuries) {
 
 function getInjuryByName(playerName) {
   const normalizedName = normalizePlayerName(playerName);
-  return _injuryNameCache.get(normalizedName);
+  // Exact match first
+  const exact = _injuryNameCache.get(normalizedName);
+  if (exact) return exact;
+
+  // Fuzzy match: handles hyphenated name mismatches
+  // e.g., RapidAPI has "Kentavious Pope" but DK has "Kentavious Caldwell-Pope"
+  // Match if first name matches AND the injury last name is contained in the player's last name (or vice versa)
+  const parts = normalizedName.split(' ');
+  if (parts.length >= 2) {
+    const firstName = parts[0];
+    const lastName = parts.slice(1).join(' ');
+    for (const [cachedName, injury] of _injuryNameCache.entries()) {
+      const cachedParts = cachedName.split(' ');
+      if (cachedParts.length < 2) continue;
+      const cachedFirst = cachedParts[0];
+      const cachedLast = cachedParts.slice(1).join(' ');
+      if (cachedFirst === firstName && (lastName.includes(cachedLast) || cachedLast.includes(lastName))) {
+        return injury;
+      }
+    }
+  }
+  return undefined;
 }
 
 function restoreInjuryNameCache(entries = []) {
@@ -255,9 +276,9 @@ async function fetchPlayerStatsFromBDL(sport, dateStr, slateTeams = []) {
         }
         console.log(`[DFS Context] ✅ RapidAPI: ${injuries.length} actionable injuries found`);
       } catch (rapidApiErr) {
-        console.error(`[DFS Context] ❌ RapidAPI injury fetch failed: ${rapidApiErr.message}`);
-        console.error(`[DFS Context] No fallback — BDL injury data is unreliable for DFS status`);
-        // Continue with empty injuries — Gary will see no injury data rather than wrong injury data
+        // HARD FAIL — we cannot build accurate lineups without injury data.
+        // An OUT player slipping into a lineup is worse than no lineup at all.
+        throw new Error(`[DFS Context] ❌ RapidAPI injury fetch failed — aborting DFS run. Cannot build lineups without injury status. Error: ${rapidApiErr.message}`);
       }
 
       // ⭐ CRITICAL: Populate module-level injury cache for use in mergePlayerData
@@ -390,7 +411,11 @@ async function fetchPlayerStatsFromBDL(sport, dateStr, slateTeams = []) {
             per_page: 100
           });
           if (Array.isArray(batchStats)) {
-            allRecentStats.push(...batchStats);
+            // Filter out DNP rows (min: "00" or "0") — only keep games where player actually played.
+            // Including DNPs would skew L5 averages to 0 for benched players and show misleading
+            // "5 recent games, 0 FPTS" data to Gary rather than reflecting actual performance.
+            const playedGames = batchStats.filter(s => (parseFloat(s.min) || 0) > 0);
+            allRecentStats.push(...playedGames);
           }
         }
         
@@ -914,6 +939,8 @@ function checkRotationRisk(p) {
   }
   
   // Case 1: Deep bench player who hasn't played in last 5 games
+  // NOTE: We do NOT exclude all 0-L5 players because returning-from-injury players
+  // would also have 0 L5 games but ARE playing tonight. Only exclude low-MPG players.
   if (l5Games === 0 && seasonMpg < 12 && p.l5Stats != null) {
     return { exclude: true, reason: 'DNP-CD Risk (Out of rotation - 0 games in L5)' };
   }
@@ -934,6 +961,21 @@ function checkRotationRisk(p) {
   // If L5 MPG is significantly less than season MPG, they're being phased out
   if (l5Mpg > 0 && seasonMpg > 0 && l5Mpg < seasonMpg * 0.6 && seasonMpg < 20) {
     return { exclude: true, reason: 'Rotation Shrinking (L5 MPG down 40%+ from season)' };
+  }
+
+  // Case 4b: Player has significant season MPG but ZERO minutes across all L5 games
+  // = Completely benched (healthy scratch — not injured, just dropped from rotation)
+  // Example: Caleb Love (22.2 season MPG, 0 min in 14 straight DNPs since Feb 12)
+  // BDL season averages only count games played, so seasonMpg stays high even while DNPing.
+  // Guard: if player is Q/GTD they may be returning from injury tonight — keep them in pool.
+  if (l5Mpg === 0 && l5Games >= 3 && seasonMpg >= 8) {
+    const injInfo = getInjuryByName(p.name);
+    const isReturning = injInfo && ['QUESTIONABLE', 'GTD', 'DAY-TO-DAY', 'PROBABLE'].some(
+      s => (injInfo.status || '').toUpperCase().includes(s)
+    );
+    if (!isReturning) {
+      return { exclude: true, reason: 'Benched (0 min in last 5 games, not injured - healthy scratch)' };
+    }
   }
 
   return { exclude: false };
@@ -1155,7 +1197,14 @@ function mergePlayerData(bdlPlayers, groundedPlayers) {
         console.log(`[DFS Context] ✅ Found BDL match for ${p.name} → ${bdlMatch.name} (${bdlMatch.team})`);
         validatedTeam = bdlMatch.team || p.team;
         foundStats = bdlMatch.seasonStats;
-        
+
+        // ⭐ ROTATION CHECK: Same check as BDL-first players — catch players not in rotation
+        const tank01RotationRisk = checkRotationRisk({ ...bdlMatch, salary: p.salary });
+        if (tank01RotationRisk.exclude) {
+          excludedPlayers.push({ name: p.name, team: validatedTeam, status: 'HEALTHY', reason: `${tank01RotationRisk.reason} (Tank01 BDL match)` });
+          continue;
+        }
+
         // Add with REAL BDL stats
         const tank01Status = bdlMatch.status || p.status || 'HEALTHY';
         const tank01Upper = (tank01Status || '').toUpperCase();
@@ -1645,6 +1694,23 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null, op
 
   console.log(`[DFS Context] Integrated: ${benchmarkProjections.size} benchmark projections`);
   
+  // ⭐ SUPPLEMENTARY: Feed Tank01 injury statuses into the injury name cache
+  // If RapidAPI failed or missed a player, Tank01's own status field acts as a safety net
+  let tank01InjuriesAdded = 0;
+  for (const p of filteredSalaryPlayers) {
+    if (p.status && p.status !== 'HEALTHY' && p.status !== 'PROBABLE') {
+      const normName = normalizePlayerName(p.name);
+      // Only add if not already in cache (RapidAPI takes priority)
+      if (!_injuryNameCache.has(normName)) {
+        _injuryNameCache.set(normName, { status: p.status.toUpperCase(), description: '', returnDate: null });
+        tank01InjuriesAdded++;
+      }
+    }
+  }
+  if (tank01InjuriesAdded > 0) {
+    console.log(`[DFS Context] 🏥 Tank01 supplemented injury cache with ${tank01InjuriesAdded} additional entries`);
+  }
+
   // Merge data sources (Tank01 salaries + BDL stats)
   // Also get excluded players for teammate opportunity analysis
   const { merged: mergedPlayersRaw, excludedPlayers } = mergePlayerData(filteredBdlPlayers, filteredSalaryPlayers);
@@ -1940,8 +2006,9 @@ export async function buildDFSContext(platform, sport, dateStr, slate = null, op
   // ═══════════════════════════════════════════════════════════════════════════
   const injuryMap = {};
   // Include active players with non-healthy status (QUESTIONABLE, GTD, DOUBTFUL)
+  // PROBABLE players are expected to play — do NOT add them to injury map
   for (const p of mergedPlayers) {
-    if (p.status && p.status !== 'ACTIVE' && p.status !== 'HEALTHY') {
+    if (p.status && p.status !== 'ACTIVE' && p.status !== 'HEALTHY' && p.status !== 'PROBABLE') {
       const team = (p.team || '').toUpperCase();
       if (!team) continue;
       if (!injuryMap[team]) injuryMap[team] = [];

@@ -16,13 +16,27 @@ const { analyzeGame } = await import('../src/services/agentic/orchestrator/index
 const defaultArgv = process.argv.slice(2);
 
 function parseArgs(argv = defaultArgv) {
-  return argv.reduce((acc, arg) => {
-    const [key, value] = arg.split('=');
-    if (!key) return acc;
-    const normalizedKey = key.replace(/^--/, '');
-    acc[normalizedKey] = value ?? true;
-    return acc;
-  }, {});
+  // Supports both `--key=value` and `--key value` styles. Bare flags become true.
+  const acc = {};
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (!arg.startsWith('--')) continue;
+    const eqIdx = arg.indexOf('=');
+    if (eqIdx !== -1) {
+      const key = arg.slice(2, eqIdx);
+      acc[key] = arg.slice(eqIdx + 1);
+      continue;
+    }
+    const key = arg.slice(2);
+    const next = argv[i + 1];
+    if (next != null && !next.startsWith('--')) {
+      acc[key] = next;
+      i++;
+    } else {
+      acc[key] = true;
+    }
+  }
+  return acc;
 }
 
 function getESTDate() {
@@ -42,7 +56,8 @@ export async function runAgenticPropsCli({
   propsPerGame = 5,
   limitDefault = 5,
   useESTDayFiltering = false,  // If true, filter by EST day instead of rolling window
-  regularOnly = false  // If true for NFL, only generate yards/receptions props (no TDs - use when TDs already stored)
+  regularOnly = false,  // If true for NFL, only generate yards/receptions props (no TDs - use when TDs already stored)
+  hrOnly = false         // If true for MLB HR, only include home_runs props
 }) {
   if (!sportKey || !buildContext) {
     throw new Error('runAgenticPropsCli requires sportKey and buildContext');
@@ -54,6 +69,8 @@ export async function runAgenticPropsCli({
   const nocache = args.nocache === '1' || args.nocache === 'true';
   const shouldStore = args.store !== '0' && args.store !== 'false'; // Default TRUE, pass --store=0 to skip
   const matchupFilter = args.matchup || null;
+  // --game-id: exact BDL game id filter (used by scheduler — no substring collisions)
+  const gameIdFilter = args['game-id'] != null ? String(args['game-id']) : null;
   // CLI override for regularOnly: --regular=1 or --no-td=1
   const cliRegularOnly = regularOnly || args.regular === '1' || args['no-td'] === '1';
   // --test flag: store to test_prop_picks table instead of production (for testing)
@@ -69,6 +86,7 @@ export async function runAgenticPropsCli({
   console.log(`💾 Store: ${shouldStore ? 'Yes' : 'No (pass --store=1 to save)'}${useTestTable ? ' (TEST MODE → test_prop_picks)' : ''}`);
   if (cliRegularOnly && leagueLabel === 'NFL') console.log(`🏈 Mode: Regular props only (yards/receptions - TDs handled separately)`);
   if (matchupFilter) console.log(`🔍 Matchup filter: ${matchupFilter}`);
+  if (gameIdFilter) console.log(`🔍 Game ID filter: ${gameIdFilter}`);
   console.log(`${'='.repeat(50)}\n`);
 
   // Fetch upcoming games
@@ -122,6 +140,12 @@ export async function runAgenticPropsCli({
         if (tipOutsideWindow) return false;
       }
 
+      // Apply --game-id filter (exact, no ambiguity)
+      if (gameIdFilter) {
+        const gid = String(game.bdl_game_id ?? game.id ?? '');
+        if (gid !== gameIdFilter) return false;
+      }
+
       // Apply matchup filter if provided
       if (matchupFilter) {
         const matchupLower = matchupFilter.toLowerCase();
@@ -172,8 +196,15 @@ export async function runAgenticPropsCli({
         continue;
       }
 
+      // HR-only mode: filter to home_runs props only
+      if (hrOnly) {
+        const beforeCount = playerProps.length;
+        playerProps = playerProps.filter(p => (p.prop_type || '').toLowerCase().includes('home_run'));
+        console.log(`🏠 HR-only mode: ${beforeCount} total → ${playerProps.length} HR props`);
+      }
+
       if (playerProps.length === 0) {
-        console.log(`⚠️ No props available for this game, skipping...`);
+        console.log(`⚠️ No${hrOnly ? ' HR' : ''} props available for this game, skipping...`);
         continue;
       }
 

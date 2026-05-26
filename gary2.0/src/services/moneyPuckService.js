@@ -129,9 +129,14 @@ function parseCSV(text) {
     const obj = {};
     for (let j = 0; j < headers.length; j++) {
       const val = values[j];
-      // Try to parse as number
-      const num = Number(val);
-      obj[headers[j]] = (val !== '' && !isNaN(num)) ? num : val;
+      // Empty cells → null so downstream `??` coalescing works (previously stored as '').
+      // Numeric cells → Number. Non-numeric string cells → keep raw string.
+      if (val === '' || val == null) {
+        obj[headers[j]] = null;
+      } else {
+        const num = Number(val);
+        obj[headers[j]] = Number.isNaN(num) ? val : num;
+      }
     }
     rows.push(obj);
   }

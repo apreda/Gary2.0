@@ -5,7 +5,7 @@ import { extractTextualSummaryForModelSwitch, buildFlashResearchBriefing } from 
 import { createCostTracker } from './costTracker.js';
 import { buildPass1Message, buildPass25Message, buildPass25PropsMessage, buildPass3Unified, buildPass3Props, FINALIZE_PROPS_TOOL, getFinalizePropsToolForSport, PROPS_PICK_SCHEMA } from './passBuilders.js';
 import { parseGaryResponse, parsePropsResponse, normalizePickFormat, determineCurrentPass } from './responseParser.js';
-import { isInvestigationSufficient, summarizeStatForContext, formatNum, formatPct, summarizePlayerGameLogs, summarizePlayerStats, summarizeNbaPlayerAdvancedStats, pruneContextIfNeeded, normalizeSportToLeague, MAX_CONTEXT_MESSAGES, PRUNE_AFTER_ITERATION } from './orchestratorHelpers.js';
+import { isInvestigationSufficient, summarizeStatForContext, formatNum, formatPct, summarizePlayerGameLogs, summarizeMlbPlayerGameLogs, summarizePlayerStats, summarizeNbaPlayerAdvancedStats, pruneContextIfNeeded, normalizeSportToLeague, MAX_CONTEXT_MESSAGES, PRUNE_AFTER_ITERATION } from './orchestratorHelpers.js';
 import { fetchStats, clearStatRouterCache } from '../tools/statRouters/index.js';
 import { getConstitution } from '../constitution/index.js';
 import { ballDontLieService } from '../../ballDontLieService.js';
@@ -97,12 +97,38 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   const isGamePicksMode = !isPropsMode;
   const bilateralFn = options.bilateralCasePrompt || null;
   const modelOverride = process.env.GARY_MODEL_OVERRIDE || null;
+
+  // NBA/NHL playoff games get upgraded to 3.1 Pro for Gary's reasoning (game picks only,
+  // not props, not the Flash research assistant). Detected via tournamentContext stamped
+  // on the game object by the scout report builder.
+  const tournamentCtx = String(options.game?.tournamentContext || '').toLowerCase();
+  const isPlayoffGame =
+    isGamePicksMode &&
+    (sport === 'basketball_nba' || sport === 'NBA' || sport === 'icehockey_nhl' || sport === 'NHL') &&
+    (tournamentCtx.includes('playoff') || tournamentCtx.includes('stanley cup') || tournamentCtx.includes('conference finals'));
+
+  // MLB game picks run on 3.1 Pro for deeper reasoning about volatility, sample size,
+  // and matchup-specific factors (baseball outcomes are inherently noisy game-to-game).
+  const isMlbGamePicks = isGamePicksMode && (sport === 'baseball_mlb' || sport === 'MLB');
+
+  const shouldUsePro = isPlayoffGame || isMlbGamePicks;
+
   const primaryModel = modelOverride
     ? modelOverride
     : isPropsMode
       ? 'gemini-3-flash-preview'
-      : GEMINI_PRO_MODEL;
-  const modelLabel = modelOverride ? `OVERRIDE: ${modelOverride}` : (isPropsMode ? 'Flash (props)' : '3.1 Pro (main)');
+      : shouldUsePro
+        ? GEMINI_PRO_FALLBACK
+        : GEMINI_PRO_MODEL;
+  const modelLabel = modelOverride
+    ? `OVERRIDE: ${modelOverride}`
+    : isPropsMode
+      ? 'Flash (props)'
+      : isPlayoffGame
+        ? '3.1 Pro (playoff main)'
+        : isMlbGamePicks
+          ? '3.1 Pro (MLB main)'
+          : 'Flash (main)';
   console.log(`[Orchestrator] Starting ${sport} — ${modelLabel} + Flash (research)`);
 
   const propContext = options.propContext || null;
@@ -131,11 +157,12 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   // Game picks: 3.1 Pro with high reasoning. Flash is 429 fallback.
   // Props: Flash with high reasoning (cheaper, 10K RPD, Pro-grade reasoning benchmarks).
   // SDK automatically handles thought signatures when using persistent sessions.
-  let currentSession = createGeminiSession({ _costTracker: costTracker,
+  let currentSession = await createGeminiSession({ _costTracker: costTracker,
     modelName: primaryModel,
     systemPrompt: systemPrompt,
     tools: activeTools,
-    thinkingLevel: 'high'
+    thinkingLevel: 'high',
+    enableCache: true  // Cache system prompt + tools (~10K stable tokens, 90% off on reuse)
   });
   let currentModelName = currentSession.modelName;
   console.log(`[Orchestrator] ${modelLabel} session created (${currentModelName}, ${sport}, thinking: high)`);
@@ -322,10 +349,10 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
 
       } catch (error) {
         // ═══════════════════════════════════════════════════════════════════
-        // 429 QUOTA CASCADE: Each model tries primary key → backup key before falling
-        // to the next tier. 3.1 Pro → Flash → HARD FAIL (Gemini 3 Pro is dead)
+        // 429 QUOTA CASCADE: Each model tries primary key → backup key before
+        // falling to the next tier. Flash (primary) → 3.1 Pro (fallback) → HARD FAIL.
         // ═══════════════════════════════════════════════════════════════════
-        // 3.1 Pro 429 → try backup key, else fall to Flash (reset to primary)
+        // Flash 429 → try backup key, else cascade to 3.1 Pro fallback (reset to primary key)
         if (error.isQuotaError && currentModelName === GEMINI_PRO_MODEL) {
           const textualContext = extractTextualSummaryForModelSwitch(messages, toolCallHistory);
           if (textualContext.length < 2000) {
@@ -333,113 +360,79 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
           }
 
           if (!isUsingBackupKey() && rotateToBackupKey()) {
-            console.log(`[Orchestrator] ⚠️ 3.1 Pro quota exceeded — rotated to backup API key, retrying with 3.1 Pro`);
-            currentSession = createGeminiSession({ _costTracker: costTracker,
+            console.log(`[Orchestrator] ⚠️ Flash quota exceeded — rotated to backup API key, retrying with Flash`);
+            currentSession = await createGeminiSession({ _costTracker: costTracker,
               modelName: GEMINI_PRO_MODEL,
               systemPrompt: systemPrompt + '\n\n' + textualContext,
               tools: currentPass === 'evaluation' ? [] : activeTools,
               thinkingLevel: 'medium'
             });
 
-            // Try backup key — if it also 429s, fall to Flash
+            // Try backup key — if it also 429s, cascade to 3.1 Pro
             try {
-              console.log(`[Orchestrator] 🔄 Created fallback session (backup key), retrying...`);
+              console.log(`[Orchestrator] 🔄 Created Flash session (backup key), retrying...`);
               const retryResponse = await sendToSessionWithRetry(currentSession, nextMessageToSend);
               message = { role: 'assistant', content: retryResponse.content, tool_calls: retryResponse.toolCalls };
               finishReason = retryResponse.finishReason;
               if (message.content || message.tool_calls) { messages.push(message); }
             } catch (backupError) {
               if (backupError.isQuotaError || backupError.status === 429) {
-                console.log(`[Orchestrator] ⚠️ Backup key also exhausted — falling back to Flash`);
+                console.log(`[Orchestrator] ⚠️ Backup key also exhausted — cascading to 3.1 Pro`);
                 resetToPrimaryKey();
-                currentSession = createGeminiSession({ _costTracker: costTracker,
-                  modelName: 'gemini-3-flash-preview',
+                currentSession = await createGeminiSession({ _costTracker: costTracker,
+                  modelName: GEMINI_PRO_FALLBACK,
                   systemPrompt: systemPrompt + '\n\n' + textualContext,
                   tools: currentPass === 'evaluation' ? [] : activeTools,
                   thinkingLevel: 'medium'
                 });
-                currentModelName = 'gemini-3-flash-preview';
-                const flashResponse = await sendToSessionWithRetry(currentSession, nextMessageToSend);
-                message = { role: 'assistant', content: flashResponse.content, tool_calls: flashResponse.toolCalls };
-                finishReason = flashResponse.finishReason;
+                currentModelName = GEMINI_PRO_FALLBACK;
+                const proResponse = await sendToSessionWithRetry(currentSession, nextMessageToSend);
+                message = { role: 'assistant', content: proResponse.content, tool_calls: proResponse.toolCalls };
+                finishReason = proResponse.finishReason;
                 if (message.content || message.tool_calls) { messages.push(message); }
               } else {
                 throw backupError;
               }
             }
           } else {
-            // Already on backup key or no backup — go straight to Flash
+            // Already on backup key or no backup — cascade straight to 3.1 Pro
             resetToPrimaryKey();
-            console.log(`[Orchestrator] ⚠️ 3.1 Pro exhausted on both keys — falling back to Flash (primary key)`);
-            currentSession = createGeminiSession({ _costTracker: costTracker,
-              modelName: 'gemini-3-flash-preview',
+            console.log(`[Orchestrator] ⚠️ Flash exhausted on both keys — cascading to 3.1 Pro (primary key)`);
+            currentSession = await createGeminiSession({ _costTracker: costTracker,
+              modelName: GEMINI_PRO_FALLBACK,
               systemPrompt: systemPrompt + '\n\n' + textualContext,
               tools: currentPass === 'evaluation' ? [] : activeTools,
               thinkingLevel: 'medium'
             });
-            currentModelName = 'gemini-3-flash-preview';
+            currentModelName = GEMINI_PRO_FALLBACK;
 
-            console.log(`[Orchestrator] 🔄 Created Flash session, retrying...`);
+            console.log(`[Orchestrator] 🔄 Created 3.1 Pro session, retrying...`);
             const retryResponse = await sendToSessionWithRetry(currentSession, nextMessageToSend);
             message = { role: 'assistant', content: retryResponse.content, tool_calls: retryResponse.toolCalls };
             finishReason = retryResponse.finishReason;
             if (message.content || message.tool_calls) { messages.push(message); }
           }
         }
-        // Pro fallback 429 → try backup key, else fall to Flash (reset to primary)
+        // 3.1 Pro fallback 429 → try backup key, else HARD FAIL (no tier left)
         else if (error.isQuotaError && currentModelName === GEMINI_PRO_FALLBACK) {
           const textualContext = extractTextualSummaryForModelSwitch(messages, toolCallHistory);
 
           if (!isUsingBackupKey() && rotateToBackupKey()) {
-            console.log(`[Orchestrator] ⚠️ Pro fallback quota exceeded — rotated to backup key, retrying`);
-            currentSession = createGeminiSession({ _costTracker: costTracker,
+            console.log(`[Orchestrator] ⚠️ 3.1 Pro fallback quota exceeded — rotated to backup key, retrying`);
+            currentSession = await createGeminiSession({ _costTracker: costTracker,
               modelName: GEMINI_PRO_FALLBACK,
               systemPrompt: systemPrompt + '\n\n' + textualContext,
               tools: currentPass === 'evaluation' ? [] : activeTools,
               thinkingLevel: 'medium'
             });
           } else {
-            // Pro fallback exhausted on both keys — fall to Flash on primary key
+            // Both tiers on both keys exhausted — nothing left to fall back to
             resetToPrimaryKey();
-            console.log(`[Orchestrator] ⚠️ All Pro models exhausted — falling back to Flash (primary key)`);
-            currentSession = createGeminiSession({ _costTracker: costTracker,
-              modelName: 'gemini-3-flash-preview',
-              systemPrompt: systemPrompt + '\n\n' + textualContext,
-              tools: currentPass === 'evaluation' ? [] : activeTools,
-              thinkingLevel: 'medium'
-            });
-            currentModelName = 'gemini-3-flash-preview';
+            console.error(`[Orchestrator] 🚫 All models exhausted (Flash + 3.1 Pro, both keys) — HARD FAIL`);
+            throw new Error(`[Orchestrator] All model quotas exhausted on both API keys (Flash + 3.1 Pro). Cannot produce pick.`);
           }
 
-          console.log(`[Orchestrator] 🔄 Created fallback session, retrying...`);
-          const retryResponse = await sendToSessionWithRetry(currentSession, nextMessageToSend);
-          message = {
-            role: 'assistant',
-            content: retryResponse.content,
-            tool_calls: retryResponse.toolCalls
-          };
-          finishReason = retryResponse.finishReason;
-          if (message.content || message.tool_calls) {
-            messages.push(message);
-          }
-        }
-        // Flash 429 → try backup key, else HARD FAIL (all 6 combos exhausted)
-        else if (error.isQuotaError && currentModelName === 'gemini-3-flash-preview') {
-          const textualContext = extractTextualSummaryForModelSwitch(messages, toolCallHistory);
-
-          if (!isUsingBackupKey() && rotateToBackupKey()) {
-            console.log(`[Orchestrator] ⚠️ Flash quota exceeded — rotated to backup API key, retrying with Flash`);
-            currentSession = createGeminiSession({ _costTracker: costTracker,
-              modelName: 'gemini-3-flash-preview',
-              systemPrompt: systemPrompt + '\n\n' + textualContext,
-              tools: currentPass === 'evaluation' ? [] : activeTools,
-              thinkingLevel: 'medium'
-            });
-          } else {
-            throw new Error(`[Orchestrator] All model quotas exhausted on both API keys (3.1 Pro, 3 Pro, Flash). Cannot produce pick.`);
-          }
-
-          console.log(`[Orchestrator] 🔄 Created fallback session, retrying...`);
+          console.log(`[Orchestrator] 🔄 Created 3.1 Pro session (backup key), retrying...`);
           const retryResponse = await sendToSessionWithRetry(currentSession, nextMessageToSend);
           message = {
             role: 'assistant',
@@ -496,6 +489,21 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
         const { sufficient, categoryCount, totalCalls } = isInvestigationSufficient(toolCallHistory, iteration);
 
         if (sufficient) {
+          // FORCE-PROGRESSION on empty response: if iterations are running out, inject Pass 2.5 directly.
+          // Empty completion + late iteration = Gary is stuck. Force him to commit instead of looping to MAX.
+          if (iteration >= effectiveMaxIterations - 3) {
+            console.warn(`[Orchestrator] FORCE-PROGRESSION (empty response): iteration ${iteration}/${effectiveMaxIterations} with ${totalCalls} stats across ${categoryCount} categories — injecting Pass 2.5 to avoid pipeline timeout`);
+            const propsPass25Constitution = (isPropsMode && typeof propContext?.propsConstitution === 'object')
+              ? propContext.propsConstitution.pass25 || '' : '';
+            const pass25Content = (isPropsMode
+              ? buildPass25PropsMessage(homeTeam, awayTeam, sport, propsPass25Constitution)
+              : buildPass25Message(homeTeam, awayTeam, sport, spread, options.pass25DecisionGuards || ''));
+            messages.push({ role: 'user', content: pass25Content });
+            nextMessageToSend = pass25Content;
+            _pass25Injected = true;
+            _pass25JustInjected = true;
+            continue;
+          }
           // Enough investigation — tell Gary to wrap up investigation (NOT to decide)
           console.log(`[Orchestrator] Gary has ${totalCalls} stats across ${categoryCount} categories — pushing to proceed`);
           nudgeContent = `You have ${totalCalls} stats gathered across ${categoryCount} categories. If there are remaining critical factual gaps, request only those stats. Otherwise, finish Pass 1 synthesis and output exactly:\nINVESTIGATION COMPLETE`;
@@ -929,7 +937,8 @@ INVESTIGATION COMPLETE`;
               'NFL': 'americanfootball_nfl',
               'NHL': 'icehockey_nhl',
               'NCAAB': 'basketball_ncaab',
-              'NCAAF': 'americanfootball_ncaaf'
+              'NCAAF': 'americanfootball_ncaaf',
+              'MLB': 'baseball_mlb'
             };
             const sportKey = sportMap[args.sport];
             const numGames = args.num_games || 5;
@@ -986,6 +995,14 @@ INVESTIGATION COMPLETE`;
               logs = await ballDontLieService.getNcaabPlayerGameLogs(player.id, numGames);
             } else if (args.sport === 'NHL') {
               logs = await ballDontLieService.getNhlPlayerGameLogs(player.id, numGames);
+            } else if (args.sport === 'MLB') {
+              // BDL exposes per-game stats via /mlb/v1/stats — flat shape
+              // (ip, er, p_k, p_bb, ... for pitchers; at_bats, hits, hr, rbi, ... for batters).
+              const currentYear = new Date().getFullYear();
+              logs = await ballDontLieService.getMlbGameStats({
+                playerIds: [player.id],
+                seasons: [currentYear]
+              });
             } else {
               // NFL / NCAAF
               const season = nflSeason();
@@ -993,14 +1010,12 @@ INVESTIGATION COMPLETE`;
               logs = allLogs[player.id];
             }
 
-            const statResult = {
-              player: args.player_name,
-              sport: args.sport,
-              logs: logs || { message: 'No logs found' }
-            };
-
-            // Summarize player game logs for context efficiency
-            const logSummary = summarizePlayerGameLogs(args.player_name, logs);
+            // Summarize player game logs for context efficiency.
+            // MLB has a different stat shape than basketball, so it uses a
+            // dedicated summarizer that detects pitcher vs batter.
+            const logSummary = args.sport === 'MLB'
+              ? summarizeMlbPlayerGameLogs(args.player_name, logs)
+              : summarizePlayerGameLogs(args.player_name, logs);
             messages.push({
               tool_call_id: toolCall.id,
               role: 'tool',
@@ -1694,6 +1709,25 @@ INVESTIGATION COMPLETE`;
         continue;
       }
 
+      // FORCE-PROGRESSION: Gary is running out of iterations but has plenty of data.
+      // Inject Pass 2.5 directly to prevent MAX_ITERATIONS pipeline failure.
+      // Threshold: within 3 of cap AND >=12 stats gathered.
+      const forceProgress = (iteration >= effectiveMaxIterations - 3) && gateCalls >= 12;
+      if (forceProgress) {
+        console.warn(`[Orchestrator] FORCE-PROGRESSION: iteration ${iteration}/${effectiveMaxIterations} with ${gateCalls} stats across ${gateCategories} categories — injecting Pass 2.5 without INVESTIGATION COMPLETE marker to avoid pipeline timeout`);
+        messages.push({ role: 'assistant', content: message.content });
+        const propsPass25Constitution = (isPropsMode && typeof propContext?.propsConstitution === 'object')
+          ? propContext.propsConstitution.pass25 || '' : '';
+        const pass25Content = (isPropsMode
+          ? buildPass25PropsMessage(homeTeam, awayTeam, sport, propsPass25Constitution)
+          : buildPass25Message(homeTeam, awayTeam, sport, spread, options.pass25DecisionGuards || ''));
+        messages.push({ role: 'user', content: pass25Content });
+        nextMessageToSend = pass25Content;
+        _pass25Injected = true;
+        _pass25JustInjected = true;
+        continue;
+      }
+
       // No completion marker yet — keep Pass 1 active
       console.log(`[Orchestrator] Pass 1 remains active — waiting for INVESTIGATION COMPLETE (${gateCategories} categories, ${gateCalls} calls)`);
       messages.push({ role: 'assistant', content: message.content });
@@ -1825,6 +1859,20 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
       pick.iterations = iteration;
       pick.rawAnalysis = message.content;
       pick._bracketResponse = options._bracketResponse || null;
+
+      // Attach the full assistant-side narrative so the "Talk to Gary" feature
+      // can reference Gary's bilateral case + Pass 2.5 synthesis later. We join
+      // every assistant text turn — that captures the case for each side, the
+      // synthesis, and the final analysis. Tool calls and system noise are skipped.
+      try {
+        pick._fullAssistantNarrative = messages
+          .filter(m => m.role === 'assistant' && m.content && typeof m.content === 'string')
+          .map(m => m.content)
+          .join('\n\n---\n\n');
+        pick._researchBriefing = _researchBriefing || null;
+      } catch {
+        // non-fatal — if we can't attach the narrative, the pick still ships
+      }
 
       return pick;
     } else {

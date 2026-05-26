@@ -54,7 +54,10 @@ async function _fetchPercentagesInner(seasonId) {
   console.log(`[NHL API] Fetching team percentages from api.nhle.com for season ${seasonId}...`);
 
   const raw = await new Promise((resolve, reject) => {
-    const req = https.get(url, { timeout: 15000 }, (res) => {
+    const req = https.get(url, {
+      timeout: 15000,
+      headers: { 'User-Agent': 'Gary2.0/1.0 (NHL Analytics)' }
+    }, (res) => {
       if (res.statusCode !== 200) {
         reject(new Error(`HTTP ${res.statusCode} from api.nhle.com`));
         res.resume();
@@ -102,6 +105,9 @@ async function _fetchPercentagesInner(seasonId) {
       zone_start_pct_5v5: t.zoneStartPct5v5 ? parseFloat((t.zoneStartPct5v5 * 100).toFixed(2)) : null,
       // Goals
       goals_for_pct: t.goalsForPct ? parseFloat((t.goalsForPct * 100).toFixed(2)) : null,
+      // PP%/PK% — merged from powerplay + penaltykill endpoints
+      power_play_pct: null,
+      penalty_kill_pct: null,
     };
 
     // Store under multiple keys for flexible matching
@@ -112,6 +118,42 @@ async function _fetchPercentagesInner(seasonId) {
     if (words.length >= 2) {
       teamMap.set(words[words.length - 1], obj);
     }
+  }
+
+  // Fetch PP% and PK% from separate NHL API endpoints and merge
+  try {
+    const fetchJson = (endpoint) => new Promise((resolve, reject) => {
+      const u = `https://api.nhle.com/stats/rest/en/team/${endpoint}?cayenneExp=seasonId=${seasonId}%20and%20gameTypeId=2`;
+      const req = https.get(u, { timeout: 10000 }, (res) => {
+        if (res.statusCode !== 200) { console.warn(`[NHL API] PP/PK endpoint "${endpoint}" returned HTTP ${res.statusCode}`); res.resume(); resolve([]); return; }
+        let d = '';
+        res.on('data', chunk => d += chunk);
+        res.on('end', () => { try { resolve(JSON.parse(d)?.data || []); } catch { resolve([]); } });
+      });
+      req.on('error', (e) => { console.warn(`[NHL API] PP/PK endpoint error: ${e.message}`); resolve([]); });
+      req.on('timeout', () => { console.warn(`[NHL API] PP/PK endpoint timed out for ${endpoint}`); req.destroy(); resolve([]); });
+    });
+
+    const [ppData, pkData] = await Promise.all([fetchJson('powerplay'), fetchJson('penaltykill')]);
+
+    // Build PP/PK lookup by teamId
+    const ppMap = new Map();
+    for (const t of ppData) { if (t.teamId) ppMap.set(t.teamId, t.powerPlayPct); }
+    const pkMap = new Map();
+    for (const t of pkData) { if (t.teamId) pkMap.set(t.teamId, t.penaltyKillPct); }
+
+    // Merge into existing team objects
+    for (const [, obj] of teamMap) {
+      if (obj.teamId && ppMap.has(obj.teamId)) {
+        obj.power_play_pct = parseFloat((ppMap.get(obj.teamId) * 100).toFixed(1));
+      }
+      if (obj.teamId && pkMap.has(obj.teamId)) {
+        obj.penalty_kill_pct = parseFloat((pkMap.get(obj.teamId) * 100).toFixed(1));
+      }
+    }
+    console.log(`[NHL API] Merged PP%/PK% for ${ppMap.size}/${pkMap.size} teams`);
+  } catch (e) {
+    console.warn(`[NHL API] PP%/PK% merge failed: ${e.message}`);
   }
 
   console.log(`[NHL API] Cached ${teamMap.size} entries (${teams.length} teams) for season ${seasonId}`);

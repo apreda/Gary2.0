@@ -12,12 +12,14 @@ export function parsePropsResponse(content, toolCallArgs) {
   // Fallback: try to extract from text response
   if (!content) return null;
 
-  // Try ALL JSON code blocks (not just the first) — Flash may output game pick JSON before props JSON
+  // Try ALL JSON code blocks (not just the first) — Flash may output game-pick JSON before props JSON.
+  // Require BOTH player + bet on array items so a game-pick JSON that happens to include "player"
+  // (e.g. player-of-the-game rationale) cannot be misidentified as the props array.
   const jsonBlocks = [...content.matchAll(/```json\s*([\s\S]*?)```/g)];
   for (const match of jsonBlocks) {
     try {
       const parsed = JSON.parse(match[1]);
-      if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].player) return parsed;
+      if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].player && parsed[0].bet) return parsed;
       if (parsed.picks && Array.isArray(parsed.picks) && parsed.picks.length > 0) return parsed.picks;
     } catch (e) { /* continue to next block */ }
   }
@@ -256,7 +258,15 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
     if (pickLowerNHL.includes('puck line') || pickLowerNHL.includes('pl ') || pickLowerNHL.includes(' pl') ||
         pickLowerNHL.includes('-1.5') || pickLowerNHL.includes('+1.5')) {
       parsed.type = 'spread'; // Puck line is a spread
-      console.log(`[Orchestrator] 🏒 NHL: Detected puck line pick`);
+      // Clean up pick text: remove "PL" / "puck line" — just show "Team -1.5" or "Team +1.5"
+      parsed.pick = parsed.pick
+        .replace(/\s*puck\s*line\s*/gi, ' ')
+        .replace(/\s+PL\s+/g, ' ')
+        .replace(/\s+PL$/g, '')
+        .replace(/^PL\s+/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      console.log(`[Orchestrator] 🏒 NHL: Detected puck line pick → cleaned to "${parsed.pick}"`);
     } else {
       parsed.type = 'moneyline';
       console.log(`[Orchestrator] 🏒 NHL: Detected moneyline pick`);
@@ -312,15 +322,23 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
       }
     }
   }
-  // NHL: Log diagnostics only — Gary's organic ML vs puck line choice stands
+  // NHL: Favorite ML capped at -149. Heavier lines (-150 or worse) are off the table —
+  // the valid option set becomes underdog ML, underdog +1.5, or favorite -1.5.
+  // We do NOT force-convert (that would misrepresent Gary's pick). We reject so the
+  // caller can re-run with the option-set constraint reinforced.
   if (isNHL && parsed.type === 'moneyline' && gameOdds) {
     const pickLowerML = (parsed.pick || '').toLowerCase();
     const homeWordsML = (homeTeam || '').toLowerCase().split(/\s+/);
+    const awayWordsML = (awayTeam || '').toLowerCase().split(/\s+/);
     const pickedHomeML = homeWordsML.some(w => w.length > 2 && pickLowerML.includes(w));
+    const pickedAwayML = awayWordsML.some(w => w.length > 2 && pickLowerML.includes(w));
     const pickedTeamMlOdds = pickedHomeML ? (gameOdds.moneyline_home ?? gameOdds.ml_home)
-      : (gameOdds.moneyline_away ?? gameOdds.ml_away);
+      : pickedAwayML ? (gameOdds.moneyline_away ?? gameOdds.ml_away)
+      : null;
     if (pickedTeamMlOdds != null && pickedTeamMlOdds <= -150) {
-      console.warn(`[Orchestrator] ⚠️ NHL DIAGNOSTIC: Gary picked ML at ${pickedTeamMlOdds} (worse than -150) — review prompts if this recurs`);
+      const teamName = pickedHomeML ? homeTeam : awayTeam;
+      console.error(`[Orchestrator] 🚫 NHL ML CAP: ${teamName} ML at ${pickedTeamMlOdds} is heavier than -150 — favorite ML is off the table. REJECTING pick.`);
+      return null;
     }
   }
 
@@ -349,6 +367,9 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
     // If spread placeholder, try to determine actual pick from context
     pickText = pickText.replace(/[+-]X\.X/g, 'ML');
   }
+
+  // Strip literal "null" or "undefined" from pick text — Gary sometimes includes null when a value was missing
+  pickText = pickText.replace(/\bnull\b/gi, '').replace(/\bundefined\b/gi, '').replace(/\s{2,}/g, ' ').trim();
 
   // Strip parenthesized odds from pick text — Gary sometimes wraps odds in parens like "(−115)"
   pickText = pickText.replace(/\s*\([+-]\d{3,4}\)\s*$/, '').trim();
@@ -459,23 +480,6 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
     return null;
   }
 
-  // Normalize contradicting_factors to always be { major: [], minor: [] }
-  let contradictions = { major: [], minor: [] };
-  // New flat format: contradicting_factors_major and contradicting_factors_minor
-  if (parsed.contradicting_factors_major || parsed.contradicting_factors_minor) {
-    contradictions.major = parsed.contradicting_factors_major || [];
-    contradictions.minor = parsed.contradicting_factors_minor || [];
-  }
-  // Legacy: nested object format
-  else if (parsed.contradicting_factors && typeof parsed.contradicting_factors === 'object' && !Array.isArray(parsed.contradicting_factors)) {
-    contradictions.major = parsed.contradicting_factors.major || [];
-    contradictions.minor = parsed.contradicting_factors.minor || [];
-  }
-  // Legacy: simple array format (treat as minor)
-  else if (Array.isArray(parsed.contradicting_factors)) {
-    contradictions.minor = parsed.contradicting_factors;
-  }
-
   // Get rationale and validate it - try multiple fields as fallbacks
   let rationale = parsed.rationale || parsed.analysis || parsed.reasoning || '';
 
@@ -490,7 +494,6 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
       rationale = parsed.analysis_summary;
       console.log(`[Orchestrator] Using analysis_summary as rationale fallback (${rationale.length} chars)`);
     }
-    // DO NOT fall back to supporting_factors — "Key factors: x, y, z" is not a proper Gary's Take
     // If we reach here, the rationale is too short and should trigger a retry
   }
 
@@ -545,8 +548,6 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
     odds: odds,
     // CONFIDENCE - Gary's organic conviction in the bet (no fallback — must come from Gary)
     confidence: parsed.confidence ?? null,
-    supporting_factors: parsed.supporting_factors || [],
-    contradicting_factors: contradictions,
     homeTeam: parsed.homeTeam || homeTeam,
     awayTeam: parsed.awayTeam || awayTeam,
     league: normalizeSportToLeague(sport),

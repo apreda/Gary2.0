@@ -72,42 +72,63 @@ async function ensureValidSupabaseSession() {
  * @param {string} awayTeam - Away team name
  * @returns {Promise<{exists: boolean, existingPick: string|null}>}
  */
-async function gameAlreadyHasPick(league, homeTeam, awayTeam) {
-  // EST date for today
-  const now = new Date();
-  const options = { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' };
-  const estDate = new Intl.DateTimeFormat('en-US', options).format(now);
-  const [month, day, year] = estDate.split('/');
-  const currentDateString = `${year}-${month}-${day}`;
+async function gameAlreadyHasPick(league, homeTeam, awayTeam, gameDate = null, gameId = null) {
+  // Use game date if provided, otherwise today's EST date
+  let currentDateString;
+  if (gameDate) {
+    currentDateString = gameDate;
+  } else {
+    const now = new Date();
+    const options = { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' };
+    const estDate = new Intl.DateTimeFormat('en-US', options).format(now);
+    const [month, day, year] = estDate.split('/');
+    currentDateString = `${year}-${month}-${day}`;
+  }
 
   await ensureValidSupabaseSession();
+  // Check both the exact date AND any rows that contain this date (for combined date keys)
   const { data, error } = await supabase
     .from('daily_picks')
     .select('picks')
-    .eq('date', currentDateString)
-    .limit(1);
+    .or(`date.eq.${currentDateString},date.like.%${currentDateString}%`)
+    .limit(5);
 
   if (error || !data || data.length === 0) {
     return { exists: false, existingPick: null };
   }
 
-  const existingPicks = Array.isArray(data[0].picks)
-    ? data[0].picks
-    : (() => { try { return JSON.parse(data[0].picks || '[]'); } catch { return []; } })();
+  // Check ALL returned rows (may have multiple date keys)
+  let allPicks = [];
+  for (const row of data) {
+    const rowPicks = Array.isArray(row.picks)
+      ? row.picks
+      : (() => { try { return JSON.parse(row.picks || '[]'); } catch { return []; } })();
+    allPicks.push(...rowPicks);
+  }
 
   // Normalize team names for comparison (lowercase, trim)
   const normalize = (str) => (str || '').toLowerCase().trim();
   const targetHome = normalize(homeTeam);
   const targetAway = normalize(awayTeam);
   const targetLeague = normalize(league);
+  const targetGameId = gameId != null ? String(gameId) : null;
 
-  // Find any existing pick for this game (non-prop picks only)
-  const existingGamePick = existingPicks.find(p => {
+  // Find any existing pick for this game (non-prop picks only).
+  // When a BDL game id is supplied, we require it to match — this lets MLB
+  // doubleheaders coexist (same teams + date but different game IDs).
+  const existingGamePick = allPicks.find(p => {
     if (p?.type === 'prop' || p?.pickType === 'prop') return false;
     const pickLeague = normalize(p?.league);
     const pickHome = normalize(p?.homeTeam);
     const pickAway = normalize(p?.awayTeam);
-    return pickLeague === targetLeague && pickHome === targetHome && pickAway === targetAway;
+    if (pickLeague !== targetLeague || pickHome !== targetHome || pickAway !== targetAway) return false;
+    if (targetGameId != null) {
+      const pickGameId = p?.game_id != null ? String(p.game_id) : null;
+      // If the existing pick has no game_id, fall through to old teams+date match
+      // (legacy picks). Once they're game-id-stamped, doubleheaders work cleanly.
+      if (pickGameId != null && pickGameId !== targetGameId) return false;
+    }
+    return true;
   });
 
   if (existingGamePick) {
@@ -119,7 +140,7 @@ async function gameAlreadyHasPick(league, homeTeam, awayTeam) {
 }
 
 // Helper: Store picks in database
-async function storeDailyPicksInDatabase(picks) {
+async function storeDailyPicksInDatabase(picks, overrideDate = null) {
   if (!picks || !Array.isArray(picks) || picks.length === 0)
     return { success: false, message: 'No picks provided' };
 
@@ -132,13 +153,18 @@ async function storeDailyPicksInDatabase(picks) {
   isStoringPicks = true;
   console.log(`🗄️ Starting storage operation for ${picks.length} picks`);
 
-  // EST date for today in YYYY-MM-DD
-  const now = new Date();
-  const options = { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' };
-  const estDate = new Intl.DateTimeFormat('en-US', options).format(now);
-  const [month, day, year] = estDate.split('/');
-  const currentDateString = `${year}-${month}-${day}`;
-  
+  // Use override date if provided (e.g., --date 2026-03-19 for advance picks), otherwise today EST
+  let currentDateString;
+  if (overrideDate) {
+    currentDateString = overrideDate;
+  } else {
+    const now = new Date();
+    const options = { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' };
+    const estDate = new Intl.DateTimeFormat('en-US', options).format(now);
+    const [month, day, year] = estDate.split('/');
+    currentDateString = `${year}-${month}-${day}`;
+  }
+
   console.log(`Storing picks for date: ${currentDateString}`);
 
   // Helper to parse confidence safely
@@ -201,6 +227,8 @@ async function storeDailyPicksInDatabase(picks) {
         statsData: pick.statsData || [], // Full stat values for Tale of the Tape
         injuries: pick.injuries || null, // Structured injury data from BDL
         commence_time: pick.commence_time || null,
+        // BDL game id — disambiguates doubleheaders for dedupe
+        game_id: pick.bdl_game_id ?? pick.game_id ?? null,
         // Venue/tournament context (for NBA Cup, neutral site games, CFP games, etc.)
         venue: pick.venue || null,
         isNeutralSite: pick.isNeutralSite || false,
@@ -217,8 +245,6 @@ async function storeDailyPicksInDatabase(picks) {
         // NCAAB AP Poll rankings for pick cards
         homeRanking: pick.homeRanking || null,
         awayRanking: pick.awayRanking || null,
-        supporting_factors: pick.supporting_factors || [],
-        contradicting_factors: pick.contradicting_factors || null,
         // Odds data (spread, moneyline, total)
         spread: pick.spread ?? null,
         spreadOdds: pick.spreadOdds ?? null,
@@ -258,6 +284,8 @@ async function storeDailyPicksInDatabase(picks) {
       injuries: pick.injuries || null, // Structured injury data from BDL
       commence_time: pick.commence_time || null,
       gameTime: pick.gameTime || null,
+      // BDL game id — disambiguates doubleheaders for dedupe
+      game_id: pick.bdl_game_id ?? pick.game_id ?? null,
       // Venue/tournament context (for NBA Cup, neutral site games, CFP games, etc.)
       venue: pick.venue || null,
       isNeutralSite: pick.isNeutralSite || false,
@@ -274,8 +302,6 @@ async function storeDailyPicksInDatabase(picks) {
       // NCAAB AP Poll rankings for pick cards
       homeRanking: pick.homeRanking || null,
       awayRanking: pick.awayRanking || null,
-      supporting_factors: pick.supporting_factors || [],
-      contradicting_factors: pick.contradicting_factors || null,
       // Odds data (spread, moneyline, total)
       spread: pick.spread ?? null,
       spreadOdds: pick.spreadOdds ?? null,
@@ -694,4 +720,81 @@ const picksService = {
 
 export { processGameOnce, gameAlreadyHasPick, nflGameAlreadyHasPick };
 export { picksService, storeWeeklyNFLPicks, storeTestPicks };
+
+/**
+ * Persist the investigation artifacts for a single pick so the
+ * "Talk to Gary" chat feature can speak from real depth.
+ * Non-fatal — failures are logged but don't block the pick itself.
+ *
+ * @param {Object} pick - The cleanPick object from run-agentic-picks.js
+ * @param {Object} context - { scoutReport, flashScout, researchBriefing, rawAnalysis,
+ *                             fullAssistantNarrative, toolCallHistory }
+ */
+export async function storePickContext(pick, context) {
+  if (!pick || !pick.pick_id) {
+    console.warn('[pick_context] Skipping — missing pick or pick_id');
+    return { success: false, reason: 'missing pick_id' };
+  }
+  if (!context || (!context.scoutReport && !context.researchBriefing && !context.fullAssistantNarrative)) {
+    console.warn(`[pick_context] Skipping ${pick.pick_id} — no context to store`);
+    return { success: false, reason: 'no context' };
+  }
+  try {
+    const dateStr = (pick.commence_time
+      ? new Date(pick.commence_time).toISOString().slice(0, 10)
+      : new Date().toISOString().slice(0, 10));
+    const row = {
+      pick_id: pick.pick_id,
+      date: dateStr,
+      league: pick.league || pick.sport || 'UNKNOWN',
+      sport_key: pick.sport || null,
+      home_team: pick.homeTeam || null,
+      away_team: pick.awayTeam || null,
+      pick_text: pick.pick || null,
+      rationale: pick.rationale || null,
+      scout_report: context.scoutReport || null,
+      flash_scout: context.flashScout || null,
+      research_briefing: context.researchBriefing || null,
+      bilateral_case: extractBilateralCase(context.fullAssistantNarrative),
+      raw_analysis: context.fullAssistantNarrative || context.rawAnalysis || null,
+      tool_call_history: context.toolCallHistory ? context.toolCallHistory.slice(0, 100) : null,
+      tale_of_tape: pick.verifiedTaleOfTape || null,
+      game_time: pick.commence_time || null,
+      venue: pick.venue || null,
+      tournament_context: pick.tournamentContext || null,
+      spread: typeof pick.spread === 'number' ? pick.spread : null,
+      moneyline_home: pick.moneylineHome ?? null,
+      moneyline_away: pick.moneylineAway ?? null,
+      total: typeof pick.total === 'number' ? pick.total : null,
+    };
+    const { error } = await supabase
+      .from('pick_context')
+      .upsert(row, { onConflict: 'pick_id' });
+    if (error) {
+      console.warn(`[pick_context] Upsert failed for ${pick.pick_id}: ${error.message}`);
+      return { success: false, error: error.message };
+    }
+    console.log(`[pick_context] ✅ Stored context for ${pick.pick_id} (${row.league})`);
+    return { success: true };
+  } catch (e) {
+    console.warn(`[pick_context] Exception storing ${pick.pick_id}: ${e.message}`);
+    return { success: false, error: e.message };
+  }
+}
+
+/**
+ * Extract the bilateral case section ("Case for HOME / Case for AWAY") from
+ * Gary's joined narrative. Best-effort — returns null if not found.
+ */
+function extractBilateralCase(narrative) {
+  if (!narrative || typeof narrative !== 'string') return null;
+  // Find the first "Case for" and capture from there until INVESTIGATION COMPLETE
+  // (or end of string if that marker isn't present).
+  const match = narrative.match(/Case for [\s\S]*?(?=INVESTIGATION COMPLETE|---|\n\nFinal Decision:|$)/i);
+  if (match && match[0].length > 200) {
+    return match[0].trim().slice(0, 20000);
+  }
+  return null;
+}
+
 export default picksService;

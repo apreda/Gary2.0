@@ -179,20 +179,23 @@ async function getNcaabVenue(homeTeamName, awayTeamName) {
       return null;
     }
 
-    // Search for today's match between these teams
-    const today = new Date().toISOString().split('T')[0];
-    // Also check tomorrow (UTC date may differ from EST game date)
-    const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+    // Search for matches across a date range (today through 5 days out)
+    // Tournament games may be days away when picks are generated in advance
+    const dates = [];
+    for (let i = 0; i < 5; i++) {
+      dates.push(new Date(Date.now() + i * 86400000).toISOString().split('T')[0]);
+    }
 
-    const [todayMatches, tomorrowMatches] = await Promise.all([
-      apiCall('/matches', { league: 'ncaab', date: today, homeTeamId: homeTeam.id, limit: 5 }),
-      apiCall('/matches', { league: 'ncaab', date: tomorrow, homeTeamId: homeTeam.id, limit: 5 })
-    ]);
+    const matchPromises = dates.map(date =>
+      apiCall('/matches', { league: 'ncaab', date, homeTeamId: homeTeam.id, limit: 5 })
+    );
+    // Also search with away team as home (Highlightly may flip home/away for neutral sites)
+    const reversePromises = dates.map(date =>
+      apiCall('/matches', { league: 'ncaab', date, homeTeamId: awayTeam.id, limit: 5 })
+    );
 
-    const allMatches = [
-      ...(todayMatches?.data || []),
-      ...(tomorrowMatches?.data || [])
-    ];
+    const results = await Promise.all([...matchPromises, ...reversePromises]);
+    const allMatches = results.flatMap(r => r?.data || []);
 
     // Find the match with our away team
     const match = allMatches.find(m => {

@@ -146,8 +146,10 @@ function formatInjuryReport(injuries, home, away) {
       const reason = inj.injury || inj.reason || '';
 
       let durationTag = '';
-      if (inj.duration) {
+      if (inj.duration && inj.gamesMissed != null) {
         durationTag = ` [${inj.duration} — ${inj.gamesMissed} team games missed]`;
+      } else if (inj.duration) {
+        durationTag = ' [DURATION UNKNOWN — do not roster this player]';
       }
       parts.push(`  ${name} (${status})${durationTag}${reason ? ` ${reason}` : ''}`);
     }
@@ -182,29 +184,34 @@ function formatTeamRoster(team, teamPlayers, isFD, platformLabel) {
       ? (p.l5Stats?.fdFptsAvg || null)
       : (p.l5Stats?.dkFptsAvg || null);
 
-    // Season averages
+    // Season averages — show all DFS-relevant stats upfront
     const ss = p.seasonStats || {};
     const ppg = ss.ppg?.toFixed(1) || '?';
     const rpg = ss.rpg?.toFixed(1) || '?';
     const apg = ss.apg?.toFixed(1) || '?';
     const mpg = ss.mpg?.toFixed(1) || '?';
+    const spg = ss.spg?.toFixed(1) || '0.0';
+    const bpg = ss.bpg?.toFixed(1) || '0.0';
+    const topg = ss.topg?.toFixed(1) || '0.0';
+    const tpg = ss.tpg?.toFixed(1) || '0.0'; // 3PM per game
+    const l5Mpg = p.l5Stats?.mpg?.toFixed(1) || null;
 
     let line = `  ${p.name} [${pos}] ${salary}`;
-    line += ` | ${ppg}/${rpg}/${apg} (${mpg} MPG)`;
+    line += ` | ${ppg}/${rpg}/${apg}/${spg}stl/${bpg}blk (${mpg} MPG${l5Mpg ? `, L5: ${l5Mpg}` : ''})`;
+    line += ` | 3PM: ${tpg} TOV: ${topg}`;
 
     if (seasonFpts) line += ` | Season ${platformLabel}: ${seasonFpts.toFixed(1)}`;
     if (l5Fpts) line += ` | L5: ${l5Fpts.toFixed(1)}`;
 
     // Status flags
     if (p.isQuestionable) line += ' [Q/GTD]';
-    if (p.status && p.status !== 'ACTIVE' && p.status !== 'HEALTHY' && !p.isQuestionable) {
+    if (p.status && p.status !== 'ACTIVE' && p.status !== 'HEALTHY' && p.status !== 'PROBABLE' && !p.isQuestionable) {
       line += ` [${p.status}]`;
     }
 
-    // Benchmark projection if available
-    if (p.benchmarkProjection) {
-      line += ` | Proj: ${p.benchmarkProjection.toFixed(1)}`;
-    }
+    // NOTE: Benchmark projections are intentionally NOT shown to Gary.
+    // Gary should evaluate players based on matchups, stats, and game context — not anchored to a projection number.
+    // Projections are retained internally for validation flagging only.
 
     lines.push(line);
   }
@@ -304,7 +311,7 @@ Use these tools to investigate this game:
 - GET_TEAM_INJURIES(team) — Injury report with duration tags
 - GET_TEAM_USAGE_STATS(team) — Usage, minutes, and workload data
 - GET_GAME_ENVIRONMENT(homeTeam, awayTeam) — Vegas lines and pace
-- GET_PLAYER_SALARY(playerName) — Salary and projection
+- GET_PLAYER_SALARY(playerName) — Salary and position
 - GET_PLAYER_GAME_LOGS(playerName, games) — Recent game-by-game stats
 - GET_PLAYER_SEASON_STATS(playerName) — Season averages and advanced metrics
 - GET_MATCHUP_DATA(playerName, position, opponent) — DvP matchup data

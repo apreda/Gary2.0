@@ -35,43 +35,26 @@ export const NCAAB_CONSTITUTION = {
 
 - The performance gap between a college team's best and worst game is wide — consistency is the exception, not the rule
 - Tempo in college basketball is dictated by scheme, not talent — a slow-paced team can force a fast-paced team into an unfamiliar rhythm and vice versa
-- Coaching in college basketball has more impact than at the professional level — preparation time is longer, schematic adjustments matter more, and the gap between elite and average coaching staffs is wider than in the pros
+- Coaching in college basketball has more impact than at the professional level — preparation time is longer, schematic adjustments matter more
+- College rosters are thin (7-8 man rotations) — a single key absence changes a team more than in pro sports
 
 ### TOURNAMENT AWARENESS
 
-**The game itself:**
-- Tournament games are played on neutral courts — home court advantage is removed from the equation
-- Single elimination changes everything — variance is at its peak
-- Upsets are a regular part of tournament play — any team can make a run, and the tournament is a brand new season
-- Cinderella runs happen every tournament — and they come from low seeds in major conferences just as often as mid-majors
-- Coaching experience in tournament settings — preparation, in-game adjustments, and managing pressure all carry more weight in a one-and-done format
-
-**Guard play drives tournament outcomes:**
-- Tournament games are played against unfamiliar opponents with limited preparation time — set plays and system offense break down against defenses a team has never seen
-- When games get tight in the final 5 minutes, it becomes an isolation and pick-and-roll game — guards who can create their own shot and break down a defender one-on-one decide tournament outcomes
-- Ball security under pressure is critical — tournament games see more trapping, full-court pressure, and late-game fouling situations that expose teams without reliable ball-handlers
-- Guard-driven teams pull upsets because elite perimeter play translates regardless of opponent — a team with two guards who can score in isolation can hang with anyone for 40 minutes regardless of overall talent gap
-- Big-heavy teams and system-dependent offenses that dominate in conference play are more vulnerable in tournament settings where their schemes get disrupted by unfamiliar defensive looks
-- Late-game free throw shooting correlates heavily with guard play — and late-game free throws decide tight tournament games
-
-**What the market already prices:**
-- Season stats, efficiency ratings, records, and rankings are already baked into the seeding and the spread — citing them confirms what the market already knows
-- Rest differentials (double-byes, back-to-backs) are the most visible scheduling factor in college basketball — the market prices them aggressively and the line already reflects any rest advantage. Rest explains why the spread is set where it is. The market treats rest as a positive — but rest can also mean rust. When evaluating rest: is there evidence the market has mispriced it in this specific game?
-- The public actively tries to pick upsets during the tournament — this moves lines, sometimes putting so much action on a lower seed that the "underdog" becomes the public side
-- Conference tournament favorites laying 10+ points have a historically poor ATS record — the single-elimination format, neutral sites, and heightened intensity compress margins
-- Tournament games are tighter by nature — spreads adjust for this, but the adjustment can be too much or too little in either direction
+- Tournament games are played on neutral courts — home court advantage is removed. Home/away records and splits are irrelevant for tournament games.
+- In the NCAA Tournament, all teams in the same round play on the same schedule — rest is NOT a differentiator between opponents in the same round. A team that played overtime or a close game in the previous round is not meaningfully fatigued compared to a team that won in a blowout — they had the same amount of time between games and are conditioned athletes in a tournament setting. Do not use previous round game flow as a rest or fatigue argument.
+- College basketball has massive talent gaps between conferences — a mid-major's season stats were built against different competition than a power conference team's stats. Adjusted efficiency metrics (T-Rank, AdjEM) account for this.
+- Guard play and tournament experience are factors in NCAA Tournament performance
 
 ### INJURIES IN TOURNAMENT PLAY
-- Only FRESH injuries (new since the last game) represent information the market may not have fully absorbed
-- Any absence longer than a few games is already in the team's current stats and in the line — it is the team's baseline, not new information. This applies to all injuries — including ones you discover through your own research. If a player has been out for multiple games, their absence is already reflected in the team's current stats AND in the spread. The team you are evaluating IS the team without that player.
+- Only FRESH injuries represent information the market may not have fully absorbed
+- Any absence longer than a few games is already in the team's current stats and in the line — the team you are evaluating IS the team without that player
 - Injuries and lineup changes move college lines more dramatically because roster depth is thinner
 
 ### NCAAB INJURY LABELS (READ FROM SCOUT REPORT)
 
-Injury duration tags are assigned by the NCAAB scout-report pipeline and are sport-specific.
-
-- **FRESH** — New absence window
-- **SHORT-TERM / LONG-TERM / SEASON-LONG** — Established absence windows increasingly reflected in current team baseline
+- **FRESH** — New absence. Market may not have fully adjusted.
+- **SHORT-TERM** — Recent absence. Line is beginning to reflect it.
+- **LONG-TERM / SEASON-LONG** — Fully reflected in the team's stats and the spread.
 
 Use the exact tag shown in the scout report for this game.
 

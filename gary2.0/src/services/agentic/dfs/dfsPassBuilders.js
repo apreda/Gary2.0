@@ -38,9 +38,10 @@ Salary Cap: $${salaryCap.toLocaleString()}
 Roster Slots: ${rosterSlots.join(', ')} (${rosterSlots.length} players)
 Games on Slate: ${scoutReports.length}
 
-## WINNING TARGETS
-- To WIN first place: ${winningTargets.toWin} pts
-- Top 1%: ${winningTargets.top1Percent} pts`);
+## CONTEST LANDSCAPE
+- Typical first-place score: ~${winningTargets.toWin} pts
+- Top 1%: ~${winningTargets.top1Percent} pts
+(Context for how much ceiling you need — not a number to engineer toward)`);
 
   // Per-game scouting reports
   sections.push(`\n${'═'.repeat(80)}\nPER-GAME SCOUTING REPORTS\n${'═'.repeat(80)}`);
@@ -54,7 +55,9 @@ Games on Slate: ${scoutReports.length}
       r.homeTeam === report.homeTeam && r.awayTeam === report.awayTeam
     );
     if (research?.briefing) {
-      sections.push(`\n### FLASH RESEARCH FINDINGS — ${report.game}\n${research.briefing}`);
+      sections.push(`\n### FLASH RESEARCH FINDINGS — ${report.game}
+(Per-factor structured findings from your research assistant. Pay close attention to any **Stat Window Flag** entries — these flag L5 data that may be unreliable for tonight.)
+${research.briefing}`);
     }
   }
 
@@ -69,8 +72,8 @@ Your job now is to INVESTIGATE.
 
 1. Read everything above carefully
 2. Use your tools to dig deeper on players, matchups, usage, and injuries that interest you
-3. Investigate salary value — compare each player's recent production and ceiling to what their salary implies. The salary IS the market's price. Where is the market wrong?
-4. Form your thesis for how to attack this slate — which games to stack, which players offer ceiling, and where production exceeds salary pricing
+3. Evaluate each player's production potential tonight — what do their stats, matchup, minutes, and role data show? Compare their recent production and ceiling against their salary cost as one factor in your evaluation.
+4. Form your thesis for how to attack this slate — which games offer the best environments, which players have the strongest production case for tonight specifically
 5. Do NOT submit your lineup yet — investigate first
 
 You have access to tools: GET_PLAYER_GAME_LOGS, GET_TEAM_USAGE_STATS, GET_PLAYER_SEASON_STATS, GET_MATCHUP_DATA, GET_PLAYER_RECENT_VS_OPPONENT, GET_GAME_ENVIRONMENT, GET_TEAM_INJURIES, GET_PLAYER_SALARY, SEARCH_LIVE_NEWS.
@@ -118,7 +121,8 @@ RULES:
 - Salary cap: $${salaryCap.toLocaleString()}
 - Players from at least 2 different teams
 - All players must be from the slate player pool
-- Target: ${winningTargets.toWin}+ pts to win first place
+
+LANDSCAPE: First-place scores for this slate size typically land around ${winningTargets.toWin} pts (top 1%: ~${winningTargets.top1Percent} pts). This is NOT a target to engineer toward — it tells you the caliber of lineup you're competing against. Find the players whose data, matchup, and situation tonight give them the best chance to hit their ceiling. Build a lineup where multiple players have realistic paths to their upside simultaneously.
 
 When you're ready, call SUBMIT_LINEUP with your final lineup.
 You can continue investigating with tools if you need more data before submitting.`);

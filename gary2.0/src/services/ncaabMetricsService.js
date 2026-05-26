@@ -123,6 +123,19 @@ const BDL_TO_BARTTORVIK = {
   'smu mustangs': 'smu',
   'pitt panthers': 'pittsburgh',
   'pitt': 'pittsburgh',
+
+  // Miami disambiguation (Barttorvik uses "Miami FL" vs "Miami OH")
+  'miami hurricanes': 'miami fl',
+  'miami fl hurricanes': 'miami fl',
+  'miami oh redhawks': 'miami oh',
+  'miami redhawks': 'miami oh',
+
+  // Other name mismatches
+  'unc tar heels': 'north carolina',
+  'mcneese cowboys': 'mcneese st',
+  'mcneese state cowboys': 'mcneese st',
+  'long island university sharks': 'liu',
+  'liu sharks': 'liu',
 };
 
 // Conference code → display name mapping

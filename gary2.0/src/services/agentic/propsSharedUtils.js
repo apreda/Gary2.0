@@ -14,9 +14,10 @@ const SPORT_CONSTITUTION_KEYS = {
   'NFL': 'NFL_PROPS',
   'NBA': 'NBA_PROPS',
   'NHL': 'NHL_PROPS',
+  'MLB': 'MLB_PROPS',
+  'MLB HR': 'MLB_PROPS',  // HR picks use same MLB props constitution
   'NCAAB': 'NBA_PROPS',   // College basketball → closest analog is NBA props rules
   'NCAAF': 'NFL_PROPS',   // College football → closest analog is NFL props rules
-  'WBC': 'NBA_PROPS',     // WBC uses NBA props rules (closest analog for HR props)
 };
 
 // ── getPropsConstitution ────────────────────────────────────────────────────

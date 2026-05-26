@@ -9,7 +9,9 @@
  *   node scripts/run-dfs-lineups.js --dk               # DraftKings only
  *   node scripts/run-dfs-lineups.js --fd               # FanDuel only
  *   node scripts/run-dfs-lineups.js --nfl              # NFL instead of NBA
+ *   node scripts/run-dfs-lineups.js --mlb              # MLB instead of NBA
  *   node scripts/run-dfs-lineups.js --nfl --dk --test  # NFL DraftKings, test table
+ *   node scripts/run-dfs-lineups.js --mlb --dk --test  # MLB DraftKings, test table
  *   node scripts/run-dfs-lineups.js --dry-run          # Generate + print only, NO Supabase
  *   node scripts/run-dfs-lineups.js --limit 1          # Limit to first N slates PER PLATFORM
  *   node scripts/run-dfs-lineups.js --force            # Regenerate even if lineup exists (ignored in --dry-run)
@@ -88,6 +90,7 @@ async function run() {
   const fdOnly = args.includes('--fanduel') || args.includes('--fd');
   const dkOnly = args.includes('--draftkings') || args.includes('--dk');
   const isNFL = args.includes('--nfl');
+  const isMLB = args.includes('--mlb');
   const isDryRun = args.includes('--dry-run');
   const limitIdx = args.indexOf('--limit');
   const slateLimit = limitIdx >= 0 ? parseInt(args[limitIdx + 1], 10) : Infinity;
@@ -95,7 +98,7 @@ async function run() {
   const slateFilter = slateIdx >= 0 ? args[slateIdx + 1] : null;
   const gamesIdx = args.indexOf('--games');
   const gamesFilter = gamesIdx >= 0 ? parseInt(args[gamesIdx + 1], 10) : null;
-  const sport = isNFL ? 'NFL' : 'NBA';
+  const sport = isNFL ? 'NFL' : isMLB ? 'MLB' : 'NBA';
   const supabase = isDryRun ? null : getSupabaseAdmin();
   const sportLower = sport.toLowerCase();
   const platforms = fdOnly ? ['fanduel'] : dkOnly ? ['draftkings'] : ['draftkings', 'fanduel'];
@@ -211,7 +214,13 @@ async function run() {
           platform,
           sport,
           slate_name: slate.name,
-          slate_start_time: slate.startTime || null,
+          slate_start_time: (() => {
+            const t = slate.startTime;
+            if (!t || t === 'TBD') return null;
+            // Only pass ISO-parseable values — display strings like "7:00 PM ET" are not valid TIMESTAMPTZ
+            const d = new Date(t);
+            return isNaN(d.getTime()) ? null : d.toISOString();
+          })(),
           slate_game_count: slate.gameCount || 0,
           contest_type: 'gpp',
           salary_cap: salaryCap,
@@ -256,7 +265,7 @@ async function run() {
         } else {
           const { error: upsertError } = await supabase
             .from(tableName)
-            .insert(lineupRecord);
+            .upsert(lineupRecord, { onConflict: 'date,platform,sport,slate_name' });
 
           if (upsertError) {
             console.error(`[SUPABASE] Upsert FAILED: ${upsertError.message}`);

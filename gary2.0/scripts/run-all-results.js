@@ -143,13 +143,42 @@ async function bdlFetch(path, params = '') {
 async function fetchGames(league, date) {
   const key = `${league}-${date}`;
   if (cache.games.has(key)) return cache.games.get(key);
-  
+
   // NBA uses v1/ while others use league/v1/
   const path = league.toUpperCase() === 'NBA' ? 'v1/games' : `${league.toLowerCase()}/v1/games`;
   const data = await bdlFetch(path, `dates[]=${date}`);
   const games = data?.data || [];
   cache.games.set(key, games);
   return games;
+}
+
+// MLB-only: BDL indexes games by UTC date. A 9:38 PM ET game on April 18 starts
+// at 01:38 UTC on April 19, so BDL files it under 2026-04-19. To correctly grade
+// picks for "April 18 ET", we query both UTC dates and filter to games whose ET
+// date matches the target. Prevents grading against the wrong day's game.
+async function fetchMlbGamesForETDate(etDateStr) {
+  const tomorrow = new Date(etDateStr + 'T00:00:00Z');
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+  const tomorrowStr = tomorrow.toISOString().slice(0, 10);
+
+  const [d1, d2] = await Promise.all([
+    fetchGames('MLB', etDateStr),
+    fetchGames('MLB', tomorrowStr)
+  ]);
+
+  const seen = new Set();
+  const filtered = [];
+  for (const g of [...d1, ...d2]) {
+    if (!g || g.id == null) continue;
+    if (seen.has(g.id)) continue;
+    const iso = g.date; // MLB BDL returns a full ISO datetime in `date`
+    if (!iso) continue;
+    const gameETDate = new Date(iso).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    if (gameETDate !== etDateStr) continue;
+    seen.add(g.id);
+    filtered.push(g);
+  }
+  return filtered;
 }
 
 async function fetchBoxScores(league, date) {
@@ -195,10 +224,24 @@ async function fetchMLBStats(gameIds) {
 /**
  * Matching & Grading
  */
-function matchGame(games, h, v) {
+function matchGame(games, h, v, gameId) {
   const hn = normalizeName(h), vn = normalizeName(v);
   const hLast = hn.split(' ').pop(), vLast = vn.split(' ').pop();
 
+  // Prefer exact BDL game_id match when the pick has it stored. This eliminates
+  // all ambiguity — same teams on consecutive nights, UTC bleed, doubleheaders.
+  if (gameId != null) {
+    const byId = games.find(g => String(g.id) === String(gameId));
+    if (byId) {
+      const gh = normalizeName(byId.home_team?.full_name || byId.home_team?.name || '');
+      // If BDL's home team doesn't match the pick's home team, the pick stored
+      // home/away in reversed order — set swapped so score alignment is correct.
+      const swapped = !(gh.includes(hn) || gh.includes(hLast));
+      return { game: byId, swapped };
+    }
+  }
+
+  // Fallback for legacy picks without game_id: match by team names.
   // Try normal match first (pick's home = API's home)
   let match = games.find(g => {
     const gh = normalizeName(g.home_team?.full_name || g.home_team?.name || '');
@@ -427,6 +470,11 @@ async function processGenericGames(table, date, leagueFilter = null) {
       let matchedGame = null;
       let swapped = false;
 
+      // Pick may store the BDL game id as `game_id` or `bdl_game_id` (we add this
+      // at pick-generation time). Match by ID first to avoid grabbing a different
+      // day's same-teams game (UTC bleed) or the wrong half of a doubleheader.
+      const pickGameId = pick.game_id ?? pick.bdl_game_id ?? null;
+
       if (table === 'weekly_nfl_picks') {
         const dateObj = new Date(date);
         for (let i = 0; i <= 7; i++) {
@@ -434,7 +482,7 @@ async function processGenericGames(table, date, leagueFilter = null) {
           checkDate.setDate(dateObj.getDate() + i);
           const dStr = checkDate.toISOString().split('T')[0];
           const games = await fetchGames(league, dStr);
-          const result = matchGame(games, pick.homeTeam, pick.awayTeam);
+          const result = matchGame(games, pick.homeTeam, pick.awayTeam, pickGameId);
           if (result && result.game.status === 'Final') {
             matchedGame = result.game;
             swapped = result.swapped;
@@ -443,8 +491,12 @@ async function processGenericGames(table, date, leagueFilter = null) {
           }
         }
       } else {
-        const games = await fetchGames(league, date);
-        const result = matchGame(games, pick.homeTeam, pick.awayTeam);
+        // MLB: use ET-aware fetch to handle BDL's UTC-based date indexing.
+        // Other sports: single-date fetch is fine (their date field aligns with ET).
+        const games = league === 'MLB'
+          ? await fetchMlbGamesForETDate(date)
+          : await fetchGames(league, date);
+        const result = matchGame(games, pick.homeTeam, pick.awayTeam, pickGameId);
         if (result) {
           matchedGame = result.game;
           swapped = result.swapped;

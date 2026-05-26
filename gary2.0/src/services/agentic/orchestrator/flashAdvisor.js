@@ -194,7 +194,7 @@ export async function buildFlashResearchBriefing(scoutReportContent, sport, home
     const flashThinkingLevel = 'high';
     const flashMaxOutput = undefined; // use CONFIG.maxTokens default
 
-    const briefingSession = createGeminiSession({
+    const briefingSession = await createGeminiSession({
       _costTracker: options._costTracker || null,
       modelName: 'gemini-3-flash-preview',
       systemPrompt: `You are the research assistant for a sports bettor named Gary. Your job is to find the full context and nuance behind the stats — the stuff a human bettor would know but raw numbers don't show.
@@ -220,6 +220,7 @@ OUTPUT FORMAT — for each factor you investigate, write your findings as a JSON
 Do NOT make a pick or recommendation.`,
       tools: researchTools,
       thinkingLevel: flashThinkingLevel,
+      enableCache: true,  // Cache research-assistant system prompt + tools (~5K tokens, reused across 25+ stat calls)
       ...(flashMaxOutput ? { maxOutputTokens: flashMaxOutput } : {})
     });
 

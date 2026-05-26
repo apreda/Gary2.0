@@ -45,12 +45,16 @@
  */
 
 // ============================================================================
-// WINNING SCORE TARGETS (Updated 2024-2025)
+// WINNING SCORE TARGETS (Verified March 2026 against 2024-25 season data)
+// Sources: SI, Fantasy Analyst Substack, Footballguys, OneWeekSeason,
+// RotoGrinders, DailyFantasySports101, DraftKings Network weekly breakdowns
 // ============================================================================
 
 export const WINNING_SCORE_TARGETS = {
 
   DRAFTKINGS_NBA: {
+    // Source: Community consensus (OneWeekSeason, RotoGrinders, DailyFantasySports101)
+    // GPP winning range 360-400+, target ~385. $50K cap, 8 players, full scoring w/ DD/TD bonus.
     LARGE_GPP: {
       firstPlace: { min: 370, typical: 385, ceiling: 420 },
       top1Percent: { min: 340, typical: 355 },
@@ -90,6 +94,8 @@ export const WINNING_SCORE_TARGETS = {
   },
 
   FANDUEL_NBA: {
+    // Source: Community consensus. $60K cap, 9 players, no DD/TD bonus, heavier TO penalty.
+    // 9th player adds ~40-50 FPTS total output vs DK's 8-player format.
     LARGE_GPP: {
       firstPlace: { min: 380, typical: 400 },
       top1Percent: { min: 350, typical: 365 },
@@ -112,15 +118,17 @@ export const WINNING_SCORE_TARGETS = {
   },
 
   DRAFTKINGS_NFL: {
+    // Source: DK Milly Maker 2024 season avg winning score = 229.14 (SI/Fantasy Analyst)
+    // Range: 178-282, median ~225-230. Full PPR scoring.
     LARGE_GPP: {
-      firstPlace: { min: 200, typical: 220, ceiling: 260 },
-      top1Percent: { min: 185, typical: 200 },
-      top10Percent: { min: 160, typical: 175 },
+      firstPlace: { min: 210, typical: 230, ceiling: 280 },
+      top1Percent: { min: 195, typical: 210 },
+      top10Percent: { min: 165, typical: 180 },
       cashLine: { min: 140, typical: 155 },
     },
     SMALL_GPP: {
-      firstPlace: { min: 190, typical: 205 },
-      top1Percent: { min: 175, typical: 190 },
+      firstPlace: { min: 195, typical: 215 },
+      top1Percent: { min: 180, typical: 195 },
       cashLine: { min: 135, typical: 145 },
     },
     SHOWDOWN: {
@@ -135,18 +143,59 @@ export const WINNING_SCORE_TARGETS = {
   },
 
   FANDUEL_NFL: {
+    // Source: FD Sunday Million 2024 — Week 1: 208.62, Week 4: 176.12 (Footballguys)
+    // Half PPR scoring suppresses scores ~15-20 pts below DraftKings full PPR.
     LARGE_GPP: {
-      firstPlace: { min: 195, typical: 215 },
-      top1Percent: { min: 180, typical: 195 },
-      cashLine: { min: 135, typical: 150 }
+      firstPlace: { min: 180, typical: 200, ceiling: 240 },
+      top1Percent: { min: 170, typical: 185 },
+      cashLine: { min: 130, typical: 145 }
     },
     SMALL_GPP: {
-      firstPlace: { min: 185, typical: 200 },
-      top1Percent: { min: 170, typical: 185 },
-      cashLine: { min: 130, typical: 140 },
+      firstPlace: { min: 170, typical: 190 },
+      top1Percent: { min: 160, typical: 175 },
+      cashLine: { min: 125, typical: 135 },
     },
     CASH: {
       cashLine: { min: 125, typical: 140 },
+      safeTarget: 150,
+    }
+  },
+
+  DRAFTKINGS_MLB: {
+    // Source: Community data, LineStar perfect lineups, RotoGrinders
+    // MLB DFS scoring is lower than NBA — 10 roster spots but lower individual ceilings.
+    // $50K cap, 10 players (P, P, C, 1B, 2B, 3B, SS, OF, OF, OF)
+    LARGE_GPP: {
+      firstPlace: { min: 180, typical: 200, ceiling: 250 },
+      top1Percent: { min: 160, typical: 175 },
+      cashLine: { min: 120, typical: 140 },
+    },
+    SMALL_GPP: {
+      firstPlace: { min: 160, typical: 180 },
+      top1Percent: { min: 145, typical: 160 },
+      cashLine: { min: 110, typical: 125 },
+    },
+    CASH: {
+      cashLine: { min: 110, typical: 130 },
+      safeTarget: 140,
+    }
+  },
+
+  FANDUEL_MLB: {
+    // Source: Community data. $60K cap, 9 players (P, C/1B, 2B, 3B, SS, OF, OF, OF, UTIL)
+    // FD scoring values are higher per stat (12 pts/HR vs 10 DK) but fewer roster spots.
+    LARGE_GPP: {
+      firstPlace: { min: 190, typical: 210, ceiling: 260 },
+      top1Percent: { min: 170, typical: 185 },
+      cashLine: { min: 130, typical: 150 },
+    },
+    SMALL_GPP: {
+      firstPlace: { min: 170, typical: 190 },
+      top1Percent: { min: 155, typical: 170 },
+      cashLine: { min: 120, typical: 135 },
+    },
+    CASH: {
+      cashLine: { min: 120, typical: 140 },
       safeTarget: 150,
     }
   },

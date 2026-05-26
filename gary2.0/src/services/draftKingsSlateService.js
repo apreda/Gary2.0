@@ -29,8 +29,7 @@ const DK_SPORT_MAP = {
   'NBA': 'NBA',
   'NFL': 'NFL',
   'NHL': 'NHL',
-  'MLB': 'MLB',
-  'WBC': 'MLB'
+  'MLB': 'MLB'
 };
 
 // Classic game type IDs (we only want these, not Showdown/Tiers/Snake)
@@ -368,6 +367,101 @@ export async function discoverSlatesFromDK(sport) {
   return slates;
 }
 
+// ============================================================================
+// DRAFTABLES — Fetch player salaries for a specific draft group
+// ============================================================================
+
+const _draftablesCache = new Map();
+const DRAFTABLES_CACHE_TTL = 30 * 60 * 1000;
+
+/**
+ * Fetch all draftable players (with salaries) for a DraftKings draft group.
+ * Public API — no auth required.
+ *
+ * @param {number} draftGroupId - The DraftGroupId from slate discovery
+ * @returns {Promise<Array>} Array of { name, team, position, salary, positions, playerId, status }
+ */
+export async function fetchDKDraftables(draftGroupId) {
+  if (!draftGroupId) throw new Error('draftGroupId is required');
+
+  const cacheKey = `dk_draftables_${draftGroupId}`;
+  const cached = _draftablesCache.get(cacheKey);
+  if (cached && (Date.now() - cached.at) < DRAFTABLES_CACHE_TTL) {
+    console.log(`[DK Draftables] Using cached data for DraftGroup ${draftGroupId} (${cached.players.length} players)`);
+    return cached.players;
+  }
+
+  const url = `https://api.draftkings.com/draftgroups/v1/draftgroups/${draftGroupId}/draftables`;
+  console.log(`[DK Draftables] Fetching: ${url}`);
+
+  try {
+    const res = await fetch(url, {
+      headers: { 'Accept': 'application/json' },
+      signal: AbortSignal.timeout(15000)
+    });
+
+    if (!res.ok) {
+      throw new Error(`DK draftables API returned ${res.status}`);
+    }
+
+    const data = await res.json();
+    const raw = data?.draftables || [];
+    console.log(`[DK Draftables] Got ${raw.length} raw draftables`);
+
+    const players = [];
+    const seen = new Set(); // Deduplicate (Showdown formats have duplicates for CAPT/FLEX)
+
+    for (const d of raw) {
+      // Classic slates have salary field; Showdown/pre-season may not
+      const salary = d.salary || 0;
+
+      // Deduplicate by playerId + position
+      const dedupKey = `${d.playerId}-${d.position}`;
+      if (seen.has(dedupKey)) continue;
+      seen.add(dedupKey);
+
+      // Extract handedness from playerAttributes
+      const handedness = (d.playerAttributes || []).find(a => a.name === 'Handedness')?.value || null;
+      const batHand = (d.playerAttributes || []).find(a => a.name === 'Bat-Handedness')?.value || null;
+
+      // Extract opposing pitcher from playerGameAttributes
+      const oppPitcher = (d.playerGameAttributes || []).find(a => a.id === 112)?.value || null;
+
+      // Extract game info from competition
+      const gameInfo = d.competition?.name || null;
+
+      players.push({
+        name: d.displayName || d.shortName || '',
+        team: normalizeTeamAbbreviation(d.teamAbbreviation || ''),
+        position: d.position || '',
+        salary,
+        positions: [d.position],
+        playerId: String(d.playerId || d.draftableId || ''),
+        status: d.status || 'ACTIVE',
+        isDisabled: d.isDisabled || false,
+        newsStatus: d.newsStatus || null,
+        handedness,
+        batHand,
+        oppPitcher,
+        gameInfo,
+        teamId: d.teamId || null,
+      });
+    }
+
+    // Filter out disabled players
+    const active = players.filter(p => !p.isDisabled);
+    console.log(`[DK Draftables] ✅ ${active.length} active players (${players.length - active.length} disabled/excluded)`);
+
+    _draftablesCache.set(cacheKey, { players: active, at: Date.now() });
+    return active;
+
+  } catch (e) {
+    console.error(`[DK Draftables] ❌ Failed: ${e.message}`);
+    throw e;
+  }
+}
+
 export default {
   discoverSlatesFromDK,
+  fetchDKDraftables,
 };

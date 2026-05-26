@@ -18,62 +18,23 @@ const FETCHERS = {
   ...mlbFetchers,
 };
 
-// Aliases
+// Aliases — maps alternate token names to real fetcher names.
+// Only kept where investigation prompts or investigation factors reference the alias name.
 const ALIASES = {
-  // ═══════════════════════════════════════════════════════════════════════════
-  // NHL ALIASES - All advanced stats now have REAL fetchers!
-  // ═══════════════════════════════════════════════════════════════════════════
-  SHOT_METRICS: 'SHOT_DIFFERENTIAL',
-  SHOT_QUALITY: 'HIGH_DANGER_CHANCES',
+  // NHL: goalie aliases (SAVE_PCT, GOALS_AGAINST_AVG, GOALIE_MATCHUP are in investigation factors)
   SAVE_PCT: 'GOALIE_STATS',
   GOALS_AGAINST_AVG: 'GOALIE_STATS',
   GOALIE_MATCHUP: 'GOALIE_STATS',
-  PP_OPPORTUNITIES: 'SPECIAL_TEAMS',
   BACK_TO_BACK: 'REST_SITUATION',
-  HOME_ICE: 'HOME_AWAY_SPLITS',
-  ROAD_PERFORMANCE: 'HOME_AWAY_SPLITS',
-  POSSESSION_METRICS: 'CORSI_FOR_PCT',
-  TOP_SCORERS: 'TOP_PLAYERS',
   DIVISION_STANDING: 'STANDINGS',
-  NHL_HOME_ICE: 'NHL_HOME_AWAY_SPLITS',
-  NHL_ROAD_PERFORMANCE: 'NHL_HOME_AWAY_SPLITS',
-  NHL_BACK_TO_BACK: 'REST_SITUATION',
-  NHL_STREAK: 'NHL_STANDINGS',
-  NHL_RECORD: 'NHL_STANDINGS',
-  NHL_SCORING_LEADERS: 'NHL_HOT_PLAYERS',
-  NHL_POINT_LEADERS: 'NHL_HOT_PLAYERS',
-  NHL_HEAD_TO_HEAD: 'NHL_H2H_HISTORY',
-  NHL_SERIES_HISTORY: 'NHL_H2H_HISTORY',
-  NHL_L5: 'NHL_RECENT_FORM',
-  NHL_L10: 'NHL_RECENT_FORM',
-  NHL_MOMENTUM: 'NHL_RECENT_FORM',
-  // ═══════════════════════════════════════════════════════════════════════════
+  // NBA/shared
   EFFICIENCY_LAST_10: 'EFFICIENCY_TREND',
-  PERIMETER_DEFENSE: 'THREE_PT_DEFENSE',
-  QUARTER_SPLITS: 'QUARTER_SCORING',
-  LINEUP_DATA: 'TOP_PLAYERS',
   FIRST_HALF_SCORING: 'FIRST_HALF_TRENDS',
   SECOND_HALF_SCORING: 'SECOND_HALF_TRENDS',
-  TEMPO_CONTROL: 'PACE',
-  TWO_PT_SHOOTING: 'EFG_PCT',
-  HOME_COURT_VALUE: 'HOME_AWAY_SPLITS',
-  EXPERIENCE: 'TOP_PLAYERS',
-  VS_RANKED: 'VS_ELITE_TEAMS',
   CLOSE_GAME_RECORD: 'CLUTCH_STATS',
-  SP_PLUS_RATINGS: 'NET_RATING',
-  SP_PLUS_TREND: 'NET_RATING',
-  FEI_RATINGS: 'NET_RATING',
-  TALENT_COMPOSITE: 'TOP_PLAYERS',
-  BLUE_CHIP_RATIO: 'TOP_PLAYERS',
-  TRANSFER_PORTAL: 'TOP_PLAYERS',
-  STRENGTH_OF_SCHEDULE: 'NCAAF_STRENGTH_OF_SCHEDULE',
-  OPPONENT_ADJUSTED: 'NCAAF_OPPONENT_ADJUSTED',
-  CONFERENCE_STRENGTH: 'NCAAF_CONFERENCE_STRENGTH',
-  VS_POWER_OPPONENTS: 'NCAAF_VS_POWER_OPPONENTS',
-  TRAVEL_FATIGUE: 'NCAAF_TRAVEL_FATIGUE',
+  // NCAAF: investigation factors reference these names, fetchers use different names
   NCAAF_SP_PLUS_RATINGS: 'NCAAF_SP_PLUS',
   NCAAF_FPI_RATINGS: 'NCAAF_FPI',
-  NCAAF_FEI_RATINGS: 'NCAAF_FPI',
   NCAAF_EPA: 'NCAAF_EPA_ADVANCED',
   NCAAF_SUCCESS_RATE: 'NCAAF_EPA_ADVANCED',
   NCAAF_HAVOC: 'NCAAF_HAVOC_RATE',
@@ -153,8 +114,7 @@ export async function fetchStats(sport, token, homeTeam, awayTeam, options = {})
       return { error: `Unknown stat token: ${token}`, token };
     }
 
-    // MLB/WBC: Skip BDL team lookup — WBC national teams aren't in BDL.
-    // MLB fetchers use their own team finding (MLB Stats API + grounding).
+    // MLB: Skip BDL team lookup — MLB fetchers use MLB Stats API + grounding for team data.
     const isMLB = bdlSport === 'baseball_mlb';
     let home, away;
     if (isMLB) {

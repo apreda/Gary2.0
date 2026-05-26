@@ -1,4 +1,4 @@
-import { getCurrentSeasonString, sportToBdlKey, normalizeSportName, findTeam, fmtNum, fmtPct, fetchBothTeamSeasonStats, fetchNBATeamScoringStats, fetchNBATeamAdvancedStats, fetchNBALeaders, fetchNBATeamBaseStats, fetchNBATeamOpponentStats, fetchNBATeamDefenseStats, fetchTopPlayersForTeam, formatRecentGames, buildPaceAnalysis, BDL_API_KEY, _nbaBaseStatsCache, _nbaAdvancedStatsCache, _nbaOpponentStatsCache, _nbaDefenseStatsCache, _nbaTeamScoringStatsCache, geminiGroundingSearch } from './statRouterCommon.js';
+import { getCurrentSeasonString, sportToBdlKey, normalizeSportName, findTeam, fmtNum, fmtPct, fetchBothTeamSeasonStats, geminiGroundingSearch } from './statRouterCommon.js';
 import { ballDontLieService } from '../../../ballDontLieService.js';
 import { getTeamStats as getMoneyPuckTeamStats, getGoalieStats as getMoneyPuckGoalieStats } from '../../../moneyPuckService.js';
 import { getTeamPercentages as getNhlApiPercentages } from '../../../nhlStatsApiService.js';
@@ -8,48 +8,31 @@ export const nhlFetchers = {
   // ===== NHL SPECIFIC FETCHERS (BETA) =====
   
   POWER_PLAY_PCT: async (bdlSport, home, away, season) => {
-    const [homeStatsArr, awayStatsArr] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+    // Use NHL official API (api.nhle.com) for PP% — now merged into getTeamPercentages
+    const [homeNhl, awayNhl] = await Promise.all([
+      getNhlApiPercentages(home.full_name || home.name),
+      getNhlApiPercentages(away.full_name || away.name)
     ]);
-    const homeRates = ballDontLieService.deriveNhlTeamRates(homeStatsArr);
-    const awayRates = ballDontLieService.deriveNhlTeamRates(awayStatsArr);
-    
+    const fmtPP = (n) => n?.power_play_pct ? `${n.power_play_pct}% (over ${n.games_played ?? '?'} games)` : 'N/A';
     return {
       category: 'Power Play Percentage',
-      source: 'Ball Don\'t Lie API',
-      home: {
-        team: home.full_name || home.name,
-        power_play_pct: homeRates?.ppPct ? fmtPct(homeRates.ppPct) : 'N/A'
-      },
-      away: {
-        team: away.full_name || away.name,
-        power_play_pct: awayRates?.ppPct ? fmtPct(awayRates.ppPct) : 'N/A'
-      },
-      note: 'Power play percentage for both teams.'
+      source: 'NHL Official API (api.nhle.com)',
+      home: { team: home.full_name || home.name, power_play_pct: fmtPP(homeNhl) },
+      away: { team: away.full_name || away.name, power_play_pct: fmtPP(awayNhl) }
     };
   },
 
   PENALTY_KILL_PCT: async (bdlSport, home, away, season) => {
-    const [homeStatsArr, awayStatsArr] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+    const [homeNhl, awayNhl] = await Promise.all([
+      getNhlApiPercentages(home.full_name || home.name),
+      getNhlApiPercentages(away.full_name || away.name)
     ]);
-    const homeRates = ballDontLieService.deriveNhlTeamRates(homeStatsArr);
-    const awayRates = ballDontLieService.deriveNhlTeamRates(awayStatsArr);
-    
+    const fmtPK = (n) => n?.penalty_kill_pct ? `${n.penalty_kill_pct}% (over ${n.games_played ?? '?'} games)` : 'N/A';
     return {
       category: 'Penalty Kill Percentage',
-      source: 'Ball Don\'t Lie API',
-      home: {
-        team: home.full_name || home.name,
-        penalty_kill_pct: homeRates?.pkPct ? fmtPct(homeRates.pkPct) : 'N/A'
-      },
-      away: {
-        team: away.full_name || away.name,
-        penalty_kill_pct: awayRates?.pkPct ? fmtPct(awayRates.pkPct) : 'N/A'
-      },
-      note: 'Penalty kill percentage for both teams.'
+      source: 'NHL Official API (api.nhle.com)',
+      home: { team: home.full_name || home.name, penalty_kill_pct: fmtPK(homeNhl) },
+      away: { team: away.full_name || away.name, penalty_kill_pct: fmtPK(awayNhl) }
     };
   },
 
@@ -78,150 +61,136 @@ export const nhlFetchers = {
       };
     }
 
-    // NHL branch: use deriveNhlTeamRates for PP% and PK%
-    const [homeStatsArr, awayStatsArr] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+    // NHL branch: Use NHL official API for PP%/PK%
+    const [homeNhl, awayNhl] = await Promise.all([
+      getNhlApiPercentages(home.full_name || home.name),
+      getNhlApiPercentages(away.full_name || away.name)
     ]);
-    const homeRates = ballDontLieService.deriveNhlTeamRates(homeStatsArr);
-    const awayRates = ballDontLieService.deriveNhlTeamRates(awayStatsArr);
 
     return {
       category: 'Special Teams (PP% + PK%)',
-      source: 'Ball Don\'t Lie API',
+      source: 'NHL Official API (api.nhle.com)',
       home: {
         team: home.full_name || home.name,
-        power_play_pct: homeRates?.ppPct ? fmtPct(homeRates.ppPct) : 'N/A',
-        penalty_kill_pct: homeRates?.pkPct ? fmtPct(homeRates.pkPct) : 'N/A'
+        power_play_pct: homeNhl?.power_play_pct ? `${homeNhl.power_play_pct}%` : 'N/A',
+        penalty_kill_pct: homeNhl?.penalty_kill_pct ? `${homeNhl.penalty_kill_pct}%` : 'N/A'
       },
       away: {
         team: away.full_name || away.name,
-        power_play_pct: awayRates?.ppPct ? fmtPct(awayRates.ppPct) : 'N/A',
-        penalty_kill_pct: awayRates?.pkPct ? fmtPct(awayRates.pkPct) : 'N/A'
+        power_play_pct: awayNhl?.power_play_pct ? `${awayNhl.power_play_pct}%` : 'N/A',
+        penalty_kill_pct: awayNhl?.penalty_kill_pct ? `${awayNhl.penalty_kill_pct}%` : 'N/A'
       },
       comparison: 'Power play and penalty kill percentages for both teams.'
     };
   },
 
   GOALS_FOR: async (bdlSport, home, away, season) => {
-    const [homeStatsArr, awayStatsArr] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
-    ]);
-    const homeRates = ballDontLieService.deriveNhlTeamRates(homeStatsArr);
-    const awayRates = ballDontLieService.deriveNhlTeamRates(awayStatsArr);
-    
+    const standings = await ballDontLieService.getStandingsGeneric(bdlSport, { season });
+    const findTeam = (teamId) => (standings || []).find(s => s.team?.id === teamId);
+    const homeSt = findTeam(home.id);
+    const awaySt = findTeam(away.id);
+    const homeGP = homeSt?.games_played || homeSt?.wins + homeSt?.losses + (homeSt?.ot_losses || 0) || 1;
+    const awayGP = awaySt?.games_played || awaySt?.wins + awaySt?.losses + (awaySt?.ot_losses || 0) || 1;
     return {
       category: 'Goals For Per Game',
-      source: 'Ball Don\'t Lie API',
-      home: {
-        team: home.full_name || home.name,
-        goals_for_per_game: fmtNum(homeRates?.goalsForPerGame)
-      },
-      away: {
-        team: away.full_name || away.name,
-        goals_for_per_game: fmtNum(awayRates?.goalsForPerGame)
-      }
+      source: 'Ball Don\'t Lie API (Standings)',
+      home: { team: home.full_name || home.name, goals_for_per_game: homeSt?.goals_for ? (homeSt.goals_for / homeGP).toFixed(2) : 'N/A' },
+      away: { team: away.full_name || away.name, goals_for_per_game: awaySt?.goals_for ? (awaySt.goals_for / awayGP).toFixed(2) : 'N/A' }
     };
   },
 
   GOALS_AGAINST: async (bdlSport, home, away, season) => {
-    const [homeStatsArr, awayStatsArr] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
-    ]);
-    const homeRates = ballDontLieService.deriveNhlTeamRates(homeStatsArr);
-    const awayRates = ballDontLieService.deriveNhlTeamRates(awayStatsArr);
-    
+    const standings = await ballDontLieService.getStandingsGeneric(bdlSport, { season });
+    const findTeam = (teamId) => (standings || []).find(s => s.team?.id === teamId);
+    const homeSt = findTeam(home.id);
+    const awaySt = findTeam(away.id);
+    const homeGP = homeSt?.games_played || homeSt?.wins + homeSt?.losses + (homeSt?.ot_losses || 0) || 1;
+    const awayGP = awaySt?.games_played || awaySt?.wins + awaySt?.losses + (awaySt?.ot_losses || 0) || 1;
     return {
       category: 'Goals Against Per Game',
-      source: 'Ball Don\'t Lie API',
-      home: {
-        team: home.full_name || home.name,
-        goals_against_per_game: fmtNum(homeRates?.goalsAgainstPerGame)
-      },
-      away: {
-        team: away.full_name || away.name,
-        goals_against_per_game: fmtNum(awayRates?.goalsAgainstPerGame)
-      },
-      note: 'Goals against per game for both teams.'
+      source: 'Ball Don\'t Lie API (Standings)',
+      home: { team: home.full_name || home.name, goals_against_per_game: homeSt?.goals_against ? (homeSt.goals_against / homeGP).toFixed(2) : 'N/A' },
+      away: { team: away.full_name || away.name, goals_against_per_game: awaySt?.goals_against ? (awaySt.goals_against / awayGP).toFixed(2) : 'N/A' }
     };
   },
 
   SHOTS_FOR: async (bdlSport, home, away, season) => {
-    const [homeStatsArr, awayStatsArr] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+    // BDL standings don't have shots — use MoneyPuck shot_attempts
+    const [homeMP, awayMP] = await Promise.all([
+      getMoneyPuckTeamStats(home.full_name || home.name),
+      getMoneyPuckTeamStats(away.full_name || away.name)
     ]);
-    const homeRates = ballDontLieService.deriveNhlTeamRates(homeStatsArr);
-    const awayRates = ballDontLieService.deriveNhlTeamRates(awayStatsArr);
-    
+    const standings = await ballDontLieService.getStandingsGeneric(bdlSport, { season });
+    const findTeam = (teamId) => (standings || []).find(s => s.team?.id === teamId);
+    const homeSt = findTeam(home.id);
+    const awaySt = findTeam(away.id);
+    const homeGP = homeSt?.games_played || 1;
+    const awayGP = awaySt?.games_played || 1;
     return {
-      category: 'Shots For Per Game (Possession Proxy)',
-      source: 'Ball Don\'t Lie API',
-      home: {
-        team: home.full_name || home.name,
-        shots_for_per_game: fmtNum(homeRates?.shotsForPerGame)
-      },
-      away: {
-        team: away.full_name || away.name,
-        shots_for_per_game: fmtNum(awayRates?.shotsForPerGame)
-      },
-      note: 'Shot volume data provided for comparison.'
+      category: 'Shots For Per Game',
+      source: 'MoneyPuck + BDL Standings',
+      home: { team: home.full_name || home.name, shots_for_per_game: homeMP?.shots_on_goal_for ? (homeMP.shots_on_goal_for / homeGP).toFixed(1) : 'N/A' },
+      away: { team: away.full_name || away.name, shots_for_per_game: awayMP?.shots_on_goal_for ? (awayMP.shots_on_goal_for / awayGP).toFixed(1) : 'N/A' }
     };
   },
 
   SHOTS_AGAINST: async (bdlSport, home, away, season) => {
-    const [homeStatsArr, awayStatsArr] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+    const [homeMP, awayMP] = await Promise.all([
+      getMoneyPuckTeamStats(home.full_name || home.name),
+      getMoneyPuckTeamStats(away.full_name || away.name)
     ]);
-    const homeRates = ballDontLieService.deriveNhlTeamRates(homeStatsArr);
-    const awayRates = ballDontLieService.deriveNhlTeamRates(awayStatsArr);
-    
+    const standings = await ballDontLieService.getStandingsGeneric(bdlSport, { season });
+    const findTeam = (teamId) => (standings || []).find(s => s.team?.id === teamId);
+    const homeSt = findTeam(home.id);
+    const awaySt = findTeam(away.id);
+    const homeGP = homeSt?.games_played || 1;
+    const awayGP = awaySt?.games_played || 1;
     return {
       category: 'Shots Against Per Game',
-      source: 'Ball Don\'t Lie API',
-      home: {
-        team: home.full_name || home.name,
-        shots_against_per_game: fmtNum(homeRates?.shotsAgainstPerGame)
-      },
-      away: {
-        team: away.full_name || away.name,
-        shots_against_per_game: fmtNum(awayRates?.shotsAgainstPerGame)
-      },
-      note: 'Goals against average provided for comparison.'
+      source: 'MoneyPuck + BDL Standings',
+      home: { team: home.full_name || home.name, shots_against_per_game: homeMP?.shots_on_goal_against ? (homeMP.shots_on_goal_against / homeGP).toFixed(1) : 'N/A' },
+      away: { team: away.full_name || away.name, shots_against_per_game: awayMP?.shots_on_goal_against ? (awayMP.shots_on_goal_against / awayGP).toFixed(1) : 'N/A' }
     };
   },
 
   SHOT_DIFFERENTIAL: async (bdlSport, home, away, season) => {
-    const [homeStatsArr, awayStatsArr] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
-    ]);
-    const homeRates = ballDontLieService.deriveNhlTeamRates(homeStatsArr);
-    const awayRates = ballDontLieService.deriveNhlTeamRates(awayStatsArr);
-    
-    const homeDiff = (homeRates?.shotsForPerGame || 0) - (homeRates?.shotsAgainstPerGame || 0);
-    const awayDiff = (awayRates?.shotsForPerGame || 0) - (awayRates?.shotsAgainstPerGame || 0);
-    
-    return {
-      category: 'Shot Differential (Corsi Proxy)',
-      source: 'Ball Don\'t Lie API',
-      home: {
-        team: home.full_name || home.name,
-        shots_for: fmtNum(homeRates?.shotsForPerGame),
-        shots_against: fmtNum(homeRates?.shotsAgainstPerGame),
-        differential: fmtNum(homeDiff, 1)
-      },
-      away: {
-        team: away.full_name || away.name,
-        shots_for: fmtNum(awayRates?.shotsForPerGame),
-        shots_against: fmtNum(awayRates?.shotsAgainstPerGame),
-        differential: fmtNum(awayDiff, 1)
-      },
-      comparison: 'Shot differential data for both teams.'
-    };
+    const homeName = home?.full_name || home?.name || 'Unknown';
+    const awayName = away?.full_name || away?.name || 'Unknown';
+
+    if (bdlSport !== 'icehockey_nhl') {
+      return { category: 'Shot Differential', note: 'Only available for NHL' };
+    }
+
+    try {
+      const [homeMP, awayMP] = await Promise.all([
+        getMoneyPuckTeamStats(homeName),
+        getMoneyPuckTeamStats(awayName),
+      ]);
+
+      const formatTeam = (mp, name) => {
+        if (!mp) return { team: name, error: 'MoneyPuck data unavailable' };
+        const sf = mp.shots_on_goal_for || 0;
+        const sa = mp.shots_on_goal_against || 0;
+        return {
+          team: name,
+          shots_for: sf,
+          shots_against: sa,
+          differential: sf - sa,
+          shot_attempts_for: mp.shot_attempts_for || 0,
+          shot_attempts_against: mp.shot_attempts_against || 0,
+        };
+      };
+
+      return {
+        category: 'Shot Differential',
+        source: 'MoneyPuck (5v5)',
+        home: formatTeam(homeMP, homeName),
+        away: formatTeam(awayMP, awayName),
+      };
+    } catch (error) {
+      console.error(`[Stat Router] Error fetching SHOT_DIFFERENTIAL:`, error.message);
+      return { category: 'Shot Differential', error: 'Data unavailable' };
+    }
   },
 
   FACEOFF_PCT: async (bdlSport, home, away, season) => {
@@ -248,21 +217,43 @@ export const nhlFetchers = {
   },
 
   GOALIE_STATS: async (bdlSport, home, away, season) => {
-    // For NHL, try to get goalie stats from player leaders
+    // Use MoneyPuck goalie data (same source as NHL_GSAX — reliable)
     try {
-      const leaders = await ballDontLieService.getLeadersGeneric(bdlSport, { season, type: 'save_pct' });
-      
-      // Find goalies for each team
-      const homeGoalies = (leaders || []).filter(l => 
-        l.player?.team?.id === home.id || l.team?.id === home.id
-      );
-      const awayGoalies = (leaders || []).filter(l => 
-        l.player?.team?.id === away.id || l.team?.id === away.id
-      );
-      
+      const [homeGoalieData, awayGoalieData] = await Promise.all([
+        getMoneyPuckGoalieStats(home.full_name || home.name),
+        getMoneyPuckGoalieStats(away.full_name || away.name)
+      ]);
+
+      const formatGoalies = (goalies) => {
+        if (!goalies || goalies.length === 0) return [{ note: 'Goalie data unavailable' }];
+        return goalies.slice(0, 2).map(g => ({
+          name: g.name || 'Unknown',
+          save_pct: g.save_pct ? fmtPct(g.save_pct) : 'N/A',
+          games_played: g.games_played || 0,
+          gsax: g.gsax ? fmtNum(g.gsax) : 'N/A'
+        }));
+      };
+
       return {
         category: 'Goaltending Stats',
-        data_scope: 'Save percentage only (GAA not available from BDL player leaders endpoint)',
+        source: 'MoneyPuck (Goalie Data)',
+        home: {
+          team: home.full_name || home.name,
+          goalies: formatGoalies(homeGoalieData)
+        },
+        away: {
+          team: away.full_name || away.name,
+          goalies: formatGoalies(awayGoalieData)
+        }
+      };
+    } catch (e) {
+      // Fallback to BDL leaders
+      const leaders = await ballDontLieService.getLeadersGeneric(bdlSport, { season, type: 'save_pct' });
+      const homeGoalies = (leaders || []).filter(l => l.player?.team?.id === home.id || l.team?.id === home.id);
+      const awayGoalies = (leaders || []).filter(l => l.player?.team?.id === away.id || l.team?.id === away.id);
+
+      return {
+        category: 'Goaltending Stats',
         source: 'Ball Don\'t Lie API (Player Leaders)',
         home: {
           team: home.full_name || home.name,
@@ -280,45 +271,34 @@ export const nhlFetchers = {
                 name: g.player?.full_name || `${g.player?.first_name} ${g.player?.last_name}`,
                 save_pct: g.value ? fmtPct(g.value) : 'N/A'
               }))
-            : [{ note: 'Goalie data unavailable - check scout report' }]
-        },
-        note: 'Goalie save percentages for both teams.'
-      };
-    } catch (e) {
-      return {
-        category: 'Goaltending Stats',
-        error: 'Goalie data unavailable',
-        home: { team: home.full_name || home.name, note: 'Check scout report for goalie info' },
-        away: { team: away.full_name || away.name, note: 'Check scout report for goalie info' }
+            : [{ note: 'Goalie data unavailable' }]
+        }
       };
     }
   },
 
   GOAL_DIFFERENTIAL: async (bdlSport, home, away, season) => {
-    const [homeStatsArr, awayStatsArr] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
-    ]);
-    const homeRates = ballDontLieService.deriveNhlTeamRates(homeStatsArr);
-    const awayRates = ballDontLieService.deriveNhlTeamRates(awayStatsArr);
-    
-    const homeDiff = (homeRates?.goalsForPerGame || 0) - (homeRates?.goalsAgainstPerGame || 0);
-    const awayDiff = (awayRates?.goalsForPerGame || 0) - (awayRates?.goalsAgainstPerGame || 0);
-    
+    const standings = await ballDontLieService.getStandingsGeneric(bdlSport, { season });
+    const findTeam = (teamId) => (standings || []).find(s => s.team?.id === teamId);
+    const homeSt = findTeam(home.id);
+    const awaySt = findTeam(away.id);
+    const homeGP = homeSt?.games_played || 1;
+    const awayGP = awaySt?.games_played || 1;
+
     return {
       category: 'Goal Differential',
-      source: 'Ball Don\'t Lie API',
+      source: 'Ball Don\'t Lie API (Standings)',
       home: {
         team: home.full_name || home.name,
-        goals_for: fmtNum(homeRates?.goalsForPerGame),
-        goals_against: fmtNum(homeRates?.goalsAgainstPerGame),
-        differential: fmtNum(homeDiff, 2)
+        goals_for: homeSt?.goals_for ? (homeSt.goals_for / homeGP).toFixed(2) : 'N/A',
+        goals_against: homeSt?.goals_against ? (homeSt.goals_against / homeGP).toFixed(2) : 'N/A',
+        goal_differential: homeSt?.goal_differential ?? 'N/A'
       },
       away: {
         team: away.full_name || away.name,
-        goals_for: fmtNum(awayRates?.goalsForPerGame),
-        goals_against: fmtNum(awayRates?.goalsAgainstPerGame),
-        differential: fmtNum(awayDiff, 2)
+        goals_for: awaySt?.goals_for ? (awaySt.goals_for / awayGP).toFixed(2) : 'N/A',
+        goals_against: awaySt?.goals_against ? (awaySt.goals_against / awayGP).toFixed(2) : 'N/A',
+        goal_differential: awaySt?.goal_differential ?? 'N/A'
       },
       comparison: 'Goal differential data for both teams.'
     };
@@ -346,7 +326,7 @@ export const nhlFetchers = {
           points: standing.points || 0,
           points_pct: standing.points_pctg ? fmtPct(standing.points_pctg) : 'N/A',
           home_record: standing.home_record || 'N/A',
-          road_record: standing.road_record || 'N/A',
+          away_record: standing.road_record || standing.away_record || 'N/A',
           streak: standing.streak || 'N/A',
           goal_differential: standing.goal_differential || 0,
           division: standing.division_name || 'N/A',
@@ -393,13 +373,13 @@ export const nhlFetchers = {
         home: {
           team: home.full_name || home.name,
           home_record: homeStanding?.home_record || 'N/A',
-          road_record: homeStanding?.road_record || 'N/A',
+          away_record: homeStanding?.road_record || homeStanding?.away_record || 'N/A',
           note: 'Playing at HOME tonight'
         },
         away: {
           team: away.full_name || away.name,
           home_record: awayStanding?.home_record || 'N/A',
-          road_record: awayStanding?.road_record || 'N/A',
+          away_record: awayStanding?.road_record || awayStanding?.away_record || 'N/A',
           note: 'Playing on ROAD tonight'
         },
         interpretation,
@@ -1489,7 +1469,7 @@ export const nhlFetchers = {
               division_rank: rank,
               points_behind_leader: pointsBehind,
               home_record: team.home_record,
-              road_record: team.road_record
+              away_record: team.road_record || team.away_record
             };
           }
         }

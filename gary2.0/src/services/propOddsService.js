@@ -389,9 +389,121 @@ export const propOddsService = {
         }
       }
 
-      // ============ Unsupported sport - BDL does not have props ============
-      // The Odds API has been deprecated - only NHL, NFL, NBA props are supported via BDL
-      console.warn(`[PropOdds] Sport '${sport}' player props not supported. BDL only has NHL, NFL, NBA props.`);
+      // ============ MLB: Use Ball Don't Lie Player Props API (GOAT tier) ============
+      if (sport === 'baseball_mlb') {
+        console.log(`[PropOdds] Using Ball Don't Lie for MLB player props`);
+
+        const dateStr = getGameDateEST();
+        // Dual-date fetch: evening EST games are stored under next UTC date in BDL
+        const nextDate = new Date(new Date(dateStr).getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        console.log(`[PropOdds] MLB: Searching for games on ${dateStr} + ${nextDate}`);
+
+        const [gamesToday, gamesTomorrow] = await Promise.all([
+          ballDontLieService.getMlbGamesForDate(dateStr),
+          ballDontLieService.getMlbGamesForDate(nextDate)
+        ]);
+        // Deduplicate by ID
+        const seenIds = new Set();
+        const mlbGames = [...gamesToday, ...gamesTomorrow].filter(g => {
+          if (!g?.id || seenIds.has(g.id)) return false;
+          seenIds.add(g.id);
+          return true;
+        });
+
+        const matchingGame = mlbGames.find(g => {
+          const homeMatch = normalizeTeamName(g.home_team?.full_name || g.home_team_name || '') === normalizedHomeTeam ||
+                           normalizeTeamName(g.home_team?.full_name || g.home_team_name || '').includes(normalizedHomeTeam) ||
+                           normalizedHomeTeam.includes(normalizeTeamName(g.home_team?.full_name || g.home_team_name || ''));
+          const awayMatch = normalizeTeamName(g.away_team?.full_name || g.away_team_name || '') === normalizedAwayTeam ||
+                           normalizeTeamName(g.away_team?.full_name || g.away_team_name || '').includes(normalizedAwayTeam) ||
+                           normalizedAwayTeam.includes(normalizeTeamName(g.away_team?.full_name || g.away_team_name || ''));
+          return homeMatch && awayMatch;
+        });
+
+        if (!matchingGame) {
+          console.warn(`[PropOdds] No BDL game found for ${homeTeam} vs ${awayTeam}`);
+        } else {
+          console.log(`✅ Found BDL MLB game ID: ${matchingGame.id}`);
+
+          const bdlProps = await ballDontLieService.getMlbPlayerProps(matchingGame.id);
+
+          if (bdlProps && bdlProps.length > 0) {
+            const playerIds = [...new Set(bdlProps.map(p => p.player_id).filter(Boolean))];
+            const playerMap = await ballDontLieService.getMlbPlayersByIds(playerIds);
+
+            const transformedProps = bdlProps.map(prop => {
+              const isOverUnder = prop.market?.type === 'over_under';
+              const isMilestone = prop.market?.type === 'milestone';
+              const playerInfo = playerMap[prop.player_id] || {};
+
+              return {
+                player: playerInfo.name || `Player ${prop.player_id}`,
+                player_id: prop.player_id,
+                team: playerInfo.team || 'MLB',
+                teamAbbr: playerInfo.teamAbbr || '',
+                position: playerInfo.position || '',
+                batsThrows: playerInfo.batsThrows || '',
+                prop_type: prop.prop_type,
+                line: parseFloat(prop.line_value) || 0.5,
+                over_odds: isOverUnder ? prop.market?.over_odds : (isMilestone ? prop.market?.odds : null),
+                under_odds: isOverUnder ? prop.market?.under_odds : null,
+                market_type: prop.market?.type || 'over_under',
+                vendor: prop.vendor
+              };
+            });
+
+            // Group by player and prop type to consolidate odds from different vendors
+            const grouped = {};
+            for (const prop of transformedProps) {
+              const key = `${prop.player}_${prop.prop_type}_${prop.line}`;
+              if (!grouped[key]) {
+                grouped[key] = { ...prop };
+              } else {
+                if (prop.over_odds && (!grouped[key].over_odds || prop.over_odds > grouped[key].over_odds)) {
+                  grouped[key].over_odds = prop.over_odds;
+                }
+                if (prop.under_odds && (!grouped[key].under_odds || prop.under_odds > grouped[key].under_odds)) {
+                  grouped[key].under_odds = prop.under_odds;
+                }
+              }
+            }
+
+            const result = Object.values(grouped);
+
+            // MLB-specific prop type filtering — keep only the core analyzable props
+            const MLB_CORE_PROPS = new Set([
+              'hits', 'home_runs', 'total_bases', 'rbis', 'runs_scored',
+              'walks', 'stolen_bases', 'singles', 'doubles',
+              'pitcher_strikeouts', 'pitcher_outs', 'pitcher_earned_runs',
+              'pitcher_hits_allowed', 'pitcher_walks', 'hits_runs_rbis'
+            ]);
+            // Filter out non-core props and extreme lines
+            const coreFiltered = result.filter(p => {
+              const pt = (p.prop_type || '').toLowerCase();
+              // Must be a core prop type
+              if (!MLB_CORE_PROPS.has(pt)) return false;
+              // Filter out extreme lines (e.g., 2+ steals, 3+ HR)
+              const line = parseFloat(p.line) || 0;
+              if (pt === 'stolen_bases' && line > 0.5) return false;  // Only 1+ steals
+              if (pt === 'home_runs' && line > 1.5) return false;     // Only 1+ or 1.5 HR
+              if (pt === 'doubles' && line > 0.5) return false;       // Only 1+ doubles
+              if (pt === 'singles' && line > 1.5) return false;       // Only 1+ or 1.5 singles
+              return true;
+            });
+
+            const propTypes = {};
+            coreFiltered.forEach(p => { propTypes[p.prop_type] = (propTypes[p.prop_type] || 0) + 1; });
+            console.log(`[PropOdds] BDL MLB props: ${result.length} raw → ${coreFiltered.length} core filtered`);
+            console.log(`[PropOdds] MLB prop types:`, propTypes);
+
+            const filtered = propOddsService.filterPropsByOddsValue(coreFiltered);
+            return filtered;
+          }
+        }
+      }
+
+      // ============ Unsupported sport ============
+      console.warn(`[PropOdds] Sport '${sport}' player props not supported.`);
       console.log(`⚠️ No player props available for ${sport}. Returning empty.`);
       return [];
     } catch (error) {

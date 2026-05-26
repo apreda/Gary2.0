@@ -747,6 +747,76 @@ export function summarizePlayerGameLogs(playerName, logs) {
 }
 
 /**
+ * Summarize MLB player game stats into a natural language line. The basketball
+ * shape (pts/reb/ast) doesn't fit MLB, so we detect pitcher vs batter by which
+ * fields are populated and emit the appropriate stat line.
+ *
+ * @param {string} playerName
+ * @param {Array} stats - Records from BDL getMlbGameStats (flat shape: ip, er,
+ *   p_hits, p_k, p_bb, p_hr, games_started, at_bats, hits, hr, rbi, bb, k, ...)
+ * @returns {string}
+ */
+export function summarizeMlbPlayerGameLogs(playerName, stats) {
+  if (!stats || !Array.isArray(stats) || stats.length === 0) {
+    return `${playerName} GAME LOGS: No 2026 game data found`;
+  }
+
+  // Sort by game_id descending — game IDs increment chronologically, so this
+  // gives us most-recent first without needing a separate game-info fetch.
+  const sorted = [...stats].sort((a, b) => (b.game_id || 0) - (a.game_id || 0));
+
+  // Detect role: starts with games_started > 0 → starting pitcher
+  const startingOutings = sorted.filter(s => (s.games_started || 0) > 0);
+  const battingOutings = sorted.filter(s => (s.at_bats || 0) > 0);
+  const isPitcher = startingOutings.length >= battingOutings.length;
+
+  if (isPitcher) {
+    const recent = startingOutings.slice(0, 5);
+    if (recent.length === 0) {
+      return `${playerName} GAME LOGS: No 2026 starts yet`;
+    }
+    const lines = recent.map(s => {
+      const ip = s.ip != null ? Number(s.ip).toFixed(1) : '—';
+      const h = s.p_hits ?? '—';
+      const er = s.er ?? '—';
+      const k = s.p_k ?? '—';
+      const bb = s.p_bb ?? '—';
+      const hr = s.p_hr ?? '—';
+      return `${ip} IP, ${h} H, ${er} ER, ${k} K, ${bb} BB, ${hr} HR`;
+    });
+    // Totals
+    const totalIp = recent.reduce((acc, s) => acc + (Number(s.ip) || 0), 0);
+    const totalEr = recent.reduce((acc, s) => acc + (s.er || 0), 0);
+    const totalK = recent.reduce((acc, s) => acc + (s.p_k || 0), 0);
+    const totalBb = recent.reduce((acc, s) => acc + (s.p_bb || 0), 0);
+    const era = totalIp > 0 ? ((totalEr * 9) / totalIp).toFixed(2) : '—';
+    return `${playerName} LAST ${recent.length} STARTS: ${era} ERA, ${totalK} K, ${totalBb} BB in ${totalIp.toFixed(1)} IP. Game-by-game: ${lines.join(' | ')}`;
+  }
+
+  // Batter
+  const recent = battingOutings.slice(0, 10);
+  if (recent.length === 0) {
+    return `${playerName} GAME LOGS: No 2026 plate appearances yet`;
+  }
+  const lines = recent.map(s => {
+    const ab = s.at_bats ?? '—';
+    const h = s.hits ?? '—';
+    const hr = s.hr ?? 0;
+    const rbi = s.rbi ?? 0;
+    const bb = s.bb ?? 0;
+    const k = s.k ?? 0;
+    const hrPart = hr > 0 ? `, ${hr} HR` : '';
+    return `${h}-for-${ab}${hrPart}${rbi > 0 ? `, ${rbi} RBI` : ''}${bb > 0 ? `, ${bb} BB` : ''}${k > 0 ? `, ${k} K` : ''}`;
+  });
+  const totalAb = recent.reduce((acc, s) => acc + (s.at_bats || 0), 0);
+  const totalH = recent.reduce((acc, s) => acc + (s.hits || 0), 0);
+  const totalHr = recent.reduce((acc, s) => acc + (s.hr || 0), 0);
+  const totalRbi = recent.reduce((acc, s) => acc + (s.rbi || 0), 0);
+  const avg = totalAb > 0 ? (totalH / totalAb).toFixed(3) : '—';
+  return `${playerName} LAST ${recent.length} GAMES: .${avg.replace(/^0\./, '')} (${totalH}-for-${totalAb}), ${totalHr} HR, ${totalRbi} RBI. Game-by-game: ${lines.join(' | ')}`;
+}
+
+/**
  * Summarize NBA player advanced stats into labeled text (prevents LLM misattribution)
  *
  * When Gary receives raw JSON with 10 players' stats, he misattributes numbers

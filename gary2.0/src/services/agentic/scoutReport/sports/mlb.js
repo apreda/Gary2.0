@@ -17,10 +17,8 @@ import { ballDontLieService } from '../../../ballDontLieService.js';
 import { getPitcherXStats, getBatterXStats } from '../../../baseballSavantService.js';
 import {
   getTeamRoster,
-  getPlayerCareerStats,
   getMlbRecentGames,
   getProbablePitchers,
-  getTeamBattingStats,
   getConfirmedLineups,
   getGameBoxScore,
 } from '../../../mlbStatsApiService.js';
@@ -59,6 +57,15 @@ export async function buildMlbScoutReport(game, options = {}) {
     } catch (e) {
       console.warn(`[Scout Report] gamePk resolution failed: ${e.message}`);
     }
+  }
+
+  // Stamp the resolved gamePk back onto the game object so the agent loop's
+  // tool router can find it. MLB pitcher tools (MLB_PITCHER_SEASON_STATS,
+  // MLB_PITCHER_RECENT_FORM, MLB_STARTING_PITCHERS, etc.) all need this to call
+  // getProbablePitchers() — without it they fall back to BDL game id which
+  // MLB Stats API doesn't recognize, and the tool returns "not identified".
+  if (gamePk && !game.gamePk) {
+    game.gamePk = gamePk;
   }
 
   // ═══════════════════════════════════════════════════════════════════
@@ -142,21 +149,19 @@ export async function buildMlbScoutReport(game, options = {}) {
   console.log(`[Scout Report] BDL standings: ${bdlStandings?.length || 0} teams, BDL injuries: ${bdlInjuries?.length || 0}`);
 
   // ═══════════════════════════════════════════════════════════════════
-  // TEAM BATTING STATS (top 5 position players' MLB career stats)
-  // ═══════════════════════════════════════════════════════════════════
-  const [homeBatting, awayBatting] = await Promise.all([
-    getTeamBattingStats(homeRoster).catch(() => null),
-    getTeamBattingStats(awayRoster).catch(() => null),
-  ]);
-
-  // ═══════════════════════════════════════════════════════════════════
   // TEAM SEASON STATS (BDL GOAT-tier — batting + pitching aggregates)
+  // Player-level season stats (full team) — used to find probable pitcher's
+  // current-year line. No career fallback: if a pitcher has no 2026 starts
+  // we just don't show stats for them.
   // ═══════════════════════════════════════════════════════════════════
-  const [homeTeamStats, awayTeamStats] = await Promise.all([
+  const [homeTeamStats, awayTeamStats, homePlayerSeasonStats, awayPlayerSeasonStats] = await Promise.all([
     homeTeamBdlId ? ballDontLieService.getTeamSeasonStats('baseball_mlb', { teamId: homeTeamBdlId, season }).catch(() => null) : null,
     awayTeamBdlId ? ballDontLieService.getTeamSeasonStats('baseball_mlb', { teamId: awayTeamBdlId, season }).catch(() => null) : null,
+    homeTeamBdlId ? ballDontLieService.getMlbPlayerSeasonStats({ teamId: homeTeamBdlId, season }).catch(() => []) : Promise.resolve([]),
+    awayTeamBdlId ? ballDontLieService.getMlbPlayerSeasonStats({ teamId: awayTeamBdlId, season }).catch(() => []) : Promise.resolve([]),
   ]);
   console.log(`[Scout Report] MLB team season stats: ${homeTeam}=${homeTeamStats ? 'loaded' : 'N/A'}, ${awayTeam}=${awayTeamStats ? 'loaded' : 'N/A'}`);
+  console.log(`[Scout Report] MLB player season stats: ${homeTeam}=${homePlayerSeasonStats.length}, ${awayTeam}=${awayPlayerSeasonStats.length}`);
 
   // ═══════════════════════════════════════════════════════════════════
   // BASEBALL SAVANT xSTATS (expected vs actual — regression indicators)
@@ -188,8 +193,20 @@ export async function buildMlbScoutReport(game, options = {}) {
   console.log(`[Scout Report] Box stats: ${recentBoxStats.length} player records for ${allBoxGameIds.length} games. MLB API box: ${homeTeam}=${lastHomeBoxScore ? 'Y' : 'N'}, ${awayTeam}=${lastAwayBoxScore ? 'Y' : 'N'}`);
 
   // ═══════════════════════════════════════════════════════════════════
-  // PROBABLE PITCHERS + CAREER STATS
+  // PROBABLE PITCHERS — current-season (BDL) only, no career fallback
   // ═══════════════════════════════════════════════════════════════════
+  // Match probable pitchers (from MLB Stats API) into BDL season stats by name.
+  // BDL uses its own player IDs, but full names are stable across both sources.
+  const findBdlPitcherByName = (statsArray, fullName) => {
+    if (!fullName) return null;
+    const normalize = (s) => (s || '').toLowerCase().replace(/[.\-']/g, '').trim();
+    const target = normalize(fullName);
+    return statsArray.find(s => {
+      const candidate = normalize(s.player?.full_name || `${s.player?.first_name || ''} ${s.player?.last_name || ''}`);
+      return candidate === target;
+    }) || null;
+  };
+
   let probablePitchersSection = 'Probable pitchers not yet announced.';
   const pitcherStats = {};
 
@@ -197,19 +214,87 @@ export async function buildMlbScoutReport(game, options = {}) {
     const parts = [];
     for (const [side, label] of [['away', awayTeam], ['home', homeTeam]]) {
       const pitcher = probablePitchersData[side];
-      if (pitcher?.id) {
-        const career = await getPlayerCareerStats(pitcher.id, 'pitching').catch(() => null);
-        const statLine = career
-          ? `${career.wins || 0}-${career.losses || 0}, ${career.era || '—'} ERA, ${career.strikeOuts || 0} K, ${career.whip || '—'} WHIP (MLB career)`
-          : 'Career stats unavailable';
-        parts.push(`${label}: ${pitcher.fullName || 'TBD'} — ${statLine}`);
-        pitcherStats[side] = { name: pitcher.fullName, ...career };
-      } else {
+      if (!pitcher?.fullName) {
         parts.push(`${label}: TBD`);
+        continue;
+      }
+      const pool = side === 'home' ? homePlayerSeasonStats : awayPlayerSeasonStats;
+      const bdlRow = findBdlPitcherByName(pool, pitcher.fullName);
+      if (bdlRow && (bdlRow.pitching_gs || 0) > 0) {
+        const w = bdlRow.pitching_w ?? 0;
+        const l = bdlRow.pitching_l ?? 0;
+        const era = bdlRow.pitching_era != null ? bdlRow.pitching_era.toFixed(2) : '—';
+        const whip = bdlRow.pitching_whip != null ? bdlRow.pitching_whip.toFixed(2) : '—';
+        const k = bdlRow.pitching_k ?? 0;
+        const ip = bdlRow.pitching_ip != null ? bdlRow.pitching_ip.toFixed(1) : '—';
+        const gs = bdlRow.pitching_gs;
+        parts.push(`${label}: ${pitcher.fullName} — ${w}-${l}, ${era} ERA, ${whip} WHIP, ${k} K, ${ip} IP (${gs} ${season} starts)`);
+        pitcherStats[side] = { name: pitcher.fullName, ...bdlRow };
+      } else {
+        parts.push(`${label}: ${pitcher.fullName} — no ${season} starts yet`);
+        pitcherStats[side] = { name: pitcher.fullName };
       }
     }
     probablePitchersSection = parts.join('\n');
   }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // SMALL SAMPLE FLAGS — surface metadata that invalidates "season" stats
+  //   - Pitchers who changed teams mid-season (their splits include data
+  //     from a different team, ballpark, and catcher)
+  //   - Pitchers making their home debut at the current ballpark
+  //
+  // Layer 1 awareness: lay out the facts. Do NOT instruct Gary how to weight
+  // them — he'll read the count and apply normal judgment.
+  // ═══════════════════════════════════════════════════════════════════
+  const smallSampleFlags = [];
+  await Promise.all([['home', homeTeam, homeTeamBdlId], ['away', awayTeam, awayTeamBdlId]].map(async ([side, label, currentTeamBdlId]) => {
+    const pitcher = probablePitchersData?.[side];
+    const stats = pitcherStats?.[side];
+    const pitcherId = stats?.player?.id;
+    if (!pitcher?.fullName || !pitcherId) return;
+
+    let games;
+    try {
+      games = await ballDontLieService.getMlbGameStats({ playerIds: [pitcherId], seasons: [season] });
+    } catch (_) { return; }
+    if (!Array.isArray(games) || games.length === 0) return;
+
+    // Group starts by team_id to detect mid-season changes
+    const teamCounts = new Map();
+    let homeStartsAtCurrentVenue = 0;
+    for (const g of games) {
+      const tid = g.team?.id ?? g.team_id;
+      if (tid == null) continue;
+      teamCounts.set(tid, (teamCounts.get(tid) || 0) + 1);
+      // Detect home starts at current team venue (pitcher pitching at his own home park)
+      const isHome = (g.is_home === true) || (g.home_team_id != null && g.home_team_id === tid);
+      if (isHome && tid === currentTeamBdlId) homeStartsAtCurrentVenue += 1;
+    }
+
+    const totalStarts = games.length;
+    const currentTeamStarts = currentTeamBdlId != null ? (teamCounts.get(currentTeamBdlId) || 0) : 0;
+
+    if (teamCounts.size >= 2 && currentTeamBdlId != null) {
+      const otherStarts = totalStarts - currentTeamStarts;
+      smallSampleFlags.push(
+        `⚠️ ${pitcher.fullName} (${label}): ${currentTeamStarts}/${totalStarts} ${season} starts with ${label}, ${otherStarts} with prior team. ` +
+        `BDL season stats / home-away splits / ERA are aggregated across both teams — most of the sample is NOT from the current team or ballpark.`
+      );
+    }
+
+    // Home-debut / tiny home sample at current venue
+    if (currentTeamBdlId != null && homeStartsAtCurrentVenue <= 1 && currentTeamStarts > 0) {
+      smallSampleFlags.push(
+        `⚠️ ${pitcher.fullName} (${label}): ${homeStartsAtCurrentVenue} home start${homeStartsAtCurrentVenue === 1 ? '' : 's'} at current team venue this season. ` +
+        `Any "home ERA" figure is built on essentially zero sample at this park.`
+      );
+    }
+  })).catch(() => {});
+
+  const smallSampleFlagsSection = smallSampleFlags.length
+    ? smallSampleFlags.join('\n')
+    : 'No small-sample concerns detected for tonight\'s starting pitchers.';
 
   // ═══════════════════════════════════════════════════════════════════
   // ROSTERS — FORMAT KEY PLAYERS
@@ -872,11 +957,13 @@ Venue: ${typeof venue === 'string' ? venue : venue?.name || 'Unknown'}
 ${startTime ? `Start: ${new Date(startTime).toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' })} ET` : ''}
 ${seriesLine ? seriesLine : ''}
 ${weatherSection}
-${season === new Date().getFullYear() && new Date().getMonth() <= 3 ? `\nNOTE: Early season — the ${season} regular season is just beginning. Player and team stats below reflect ${season - 1} season numbers (last year) since no ${season} regular season games have been played yet. These are the same rosters (with offseason moves) but last year's production. Spring training performance and offseason changes are covered in the GAME CONTEXT and SEASON CONTEXT sections via live reporting. Opening Day has inherent uncertainty — no angle is a bad one, and any reasoning is valid.` : ''}
 ══════════════════════════════════════════════════════════════════
 
 ═══ PROBABLE PITCHERS ═══
 ${probablePitchersSection}
+
+═══ ⚠️ SMALL SAMPLE FLAGS ═══
+${smallSampleFlagsSection}
 
 ═══ CONFIRMED LINEUPS ═══
 ${confirmedLineupsSection}
@@ -887,7 +974,7 @@ ${oddsSection}
 ═══ DIVISION STANDINGS (BDL) ═══
 ${standingsSection}
 
-═══ TEAM ${new Date().getMonth() <= 3 ? (season - 1) + ' ' : ''}SEASON STATS (BDL${new Date().getMonth() <= 3 ? ' — last season, similar roster' : ''}) ═══
+═══ TEAM SEASON STATS (BDL) ═══
 ${teamSeasonStatsSection || 'No team season stats available.'}
 
 ═══ EXPECTED VS ACTUAL (Baseball Savant xStats${xStatsSeason !== season ? ` — ${xStatsSeason} season` : ''}) ═══
@@ -971,63 +1058,66 @@ ${formatRoster(awayRoster, awayTeam)}
 
   // NOTE: Moneyline, Run Line, and Venue are shown on the pick card front — not in the tape
 
-  // Starting Pitcher stats — only include rows where BOTH pitchers have that stat
-  // Pitchers without career stats return null; one-sided "—" rows are useless
+  // Starting Pitcher stats — current season (BDL) only.
+  // Skip the row if either pitcher has no current-season starts. We do not
+  // fall back to career: a misleading lifetime average is worse than a blank.
   {
     const awayP = pitcherStats.away || {};
     const homeP = pitcherStats.home || {};
-    const pushIfBoth = (name, token, awayVal, homeVal) => {
-      if (awayVal !== '—' && homeVal !== '—') {
-        tapeRows.push({ name, token, away: { team: awayTeam, value: awayVal }, home: { team: homeTeam, value: homeVal } });
-      }
-    };
-    pushIfBoth('SP ERA', 'SP_ERA', fmtNum(awayP.era, 2), fmtNum(homeP.era, 2));
-    pushIfBoth('SP WHIP', 'SP_WHIP', fmtNum(awayP.whip, 2), fmtNum(homeP.whip, 2));
-    pushIfBoth('SP K/9', 'SP_K9', fmtNum(awayP.strikeoutsPer9Inn, 1), fmtNum(homeP.strikeoutsPer9Inn, 1));
-    pushIfBoth('SP BB/9', 'SP_BB9', fmtNum(awayP.walksPer9Inn, 1), fmtNum(homeP.walksPer9Inn, 1));
-    pushIfBoth('SP Record', 'SP_RECORD',
-      awayP.wins != null ? `${awayP.wins}-${awayP.losses || 0}` : '—',
-      homeP.wins != null ? `${homeP.wins}-${homeP.losses || 0}` : '—');
-    pushIfBoth('SP IP', 'SP_IP', fmtNum(awayP.inningsPitched, 1), fmtNum(homeP.inningsPitched, 1));
-    pushIfBoth('SP SO', 'SP_SO', fmtInt(awayP.strikeOuts), fmtInt(homeP.strikeOuts));
+    const bothHavePitched = (awayP.pitching_gs || 0) > 0 && (homeP.pitching_gs || 0) > 0;
+    if (bothHavePitched) {
+      tapeRows.push({ name: 'SP ERA', token: 'SP_ERA',
+        away: { team: awayTeam, value: fmtNum(awayP.pitching_era, 2) },
+        home: { team: homeTeam, value: fmtNum(homeP.pitching_era, 2) } });
+      tapeRows.push({ name: 'SP WHIP', token: 'SP_WHIP',
+        away: { team: awayTeam, value: fmtNum(awayP.pitching_whip, 2) },
+        home: { team: homeTeam, value: fmtNum(homeP.pitching_whip, 2) } });
+      tapeRows.push({ name: 'SP K/9', token: 'SP_K9',
+        away: { team: awayTeam, value: fmtNum(awayP.pitching_k_per_9, 1) },
+        home: { team: homeTeam, value: fmtNum(homeP.pitching_k_per_9, 1) } });
+      tapeRows.push({ name: 'SP Record', token: 'SP_RECORD',
+        away: { team: awayTeam, value: `${awayP.pitching_w ?? 0}-${awayP.pitching_l ?? 0}` },
+        home: { team: homeTeam, value: `${homeP.pitching_w ?? 0}-${homeP.pitching_l ?? 0}` } });
+      tapeRows.push({ name: 'SP IP', token: 'SP_IP',
+        away: { team: awayTeam, value: fmtNum(awayP.pitching_ip, 1) },
+        home: { team: homeTeam, value: fmtNum(homeP.pitching_ip, 1) } });
+      tapeRows.push({ name: 'SP Starts', token: 'SP_STARTS',
+        away: { team: awayTeam, value: fmtInt(awayP.pitching_gs) },
+        home: { team: homeTeam, value: fmtInt(homeP.pitching_gs) } });
+    }
   }
 
-  // Team Batting (averaged from top 5 position players' MLB career stats)
-  // Only include when BOTH teams have data — one-sided comparisons are useless
-  if (homeBatting && awayBatting) {
-    tapeRows.push({ name: 'Team AVG', token: 'TEAM_AVG', away: { team: awayTeam, value: fmtNum(awayBatting.avg) }, home: { team: homeTeam, value: fmtNum(homeBatting.avg) } });
-    tapeRows.push({ name: 'Team OBP', token: 'TEAM_OBP', away: { team: awayTeam, value: fmtNum(awayBatting.obp) }, home: { team: homeTeam, value: fmtNum(homeBatting.obp) } });
-    tapeRows.push({ name: 'Team SLG', token: 'TEAM_SLG', away: { team: awayTeam, value: fmtNum(awayBatting.slg) }, home: { team: homeTeam, value: fmtNum(homeBatting.slg) } });
-    tapeRows.push({ name: 'Team OPS', token: 'TEAM_OPS', away: { team: awayTeam, value: fmtNum(awayBatting.ops) }, home: { team: homeTeam, value: fmtNum(homeBatting.ops) } });
-    tapeRows.push({ name: 'Career HR', token: 'TEAM_HR', away: { team: awayTeam, value: fmtInt(awayBatting.homeRuns) }, home: { team: homeTeam, value: fmtInt(homeBatting.homeRuns) } });
-  }
-
-  // Team Season Stats (BDL GOAT-tier — team-level batting + pitching aggregates)
-  // Always show in Tale of Tape — if early season with no real data, show 0.00
-  // BDL mirrors prior season stats into 2026 slot — detect via GP >= 100 in March/April
-  const isEarlySeason = new Date().getMonth() <= 4;
-  const homeStatsReal = homeTeamStats && (!isEarlySeason || (homeTeamStats.gp || 0) < 100);
-  const awayStatsReal = awayTeamStats && (!isEarlySeason || (awayTeamStats.gp || 0) < 100);
+  // Team Season Stats (BDL GOAT-tier — team-level batting + pitching aggregates).
+  // These rows are the current-season Team AVG/OBP/SLG/OPS/ERA/Runs view.
+  // Show only when both teams have real current-season data; no fallback.
   {
-    // Use real stats if available, otherwise show 0.00 for current season
-    const hStats = homeStatsReal ? homeTeamStats : null;
-    const aStats = awayStatsReal ? awayTeamStats : null;
-    tapeRows.push({ name: 'Team ERA', token: 'TEAM_ERA',
-      away: { team: awayTeam, value: aStats ? fmtNum(aStats.pitching_era, 2) : '0.00' },
-      home: { team: homeTeam, value: hStats ? fmtNum(hStats.pitching_era, 2) : '0.00' }
-    });
-    tapeRows.push({ name: 'Team OPS', token: 'TEAM_OPS_BDL',
-      away: { team: awayTeam, value: aStats ? fmtNum(aStats.batting_ops) : '0.000' },
-      home: { team: homeTeam, value: hStats ? fmtNum(hStats.batting_ops) : '0.000' }
-    });
-    const homeGp = hStats?.gp || 1;
-    const awayGp = aStats?.gp || 1;
-    const homeRpg = hStats?.batting_r != null ? (parseFloat(hStats.batting_r) / homeGp).toFixed(1) : '0.0';
-    const awayRpg = aStats?.batting_r != null ? (parseFloat(aStats.batting_r) / awayGp).toFixed(1) : '0.0';
-    tapeRows.push({ name: 'Runs/Game', token: 'RUNS_PER_GAME',
-      away: { team: awayTeam, value: awayRpg },
-      home: { team: homeTeam, value: homeRpg }
-    });
+    const hasReal = (s) => s && (s.gp || 0) > 0 && (s.gp || 0) < 100; // gp>=100 in season opener = BDL mirroring last year
+    const hStats = hasReal(homeTeamStats) ? homeTeamStats : null;
+    const aStats = hasReal(awayTeamStats) ? awayTeamStats : null;
+    if (hStats && aStats) {
+      tapeRows.push({ name: 'Team AVG', token: 'TEAM_AVG',
+        away: { team: awayTeam, value: fmtNum(aStats.batting_avg) },
+        home: { team: homeTeam, value: fmtNum(hStats.batting_avg) } });
+      tapeRows.push({ name: 'Team OBP', token: 'TEAM_OBP',
+        away: { team: awayTeam, value: fmtNum(aStats.batting_obp) },
+        home: { team: homeTeam, value: fmtNum(hStats.batting_obp) } });
+      tapeRows.push({ name: 'Team SLG', token: 'TEAM_SLG',
+        away: { team: awayTeam, value: fmtNum(aStats.batting_slg) },
+        home: { team: homeTeam, value: fmtNum(hStats.batting_slg) } });
+      tapeRows.push({ name: 'Team OPS', token: 'TEAM_OPS',
+        away: { team: awayTeam, value: fmtNum(aStats.batting_ops) },
+        home: { team: homeTeam, value: fmtNum(hStats.batting_ops) } });
+      tapeRows.push({ name: 'Team ERA', token: 'TEAM_ERA',
+        away: { team: awayTeam, value: fmtNum(aStats.pitching_era, 2) },
+        home: { team: homeTeam, value: fmtNum(hStats.pitching_era, 2) } });
+      const homeRpg = hStats.batting_r != null ? (parseFloat(hStats.batting_r) / hStats.gp).toFixed(1) : null;
+      const awayRpg = aStats.batting_r != null ? (parseFloat(aStats.batting_r) / aStats.gp).toFixed(1) : null;
+      if (homeRpg && awayRpg) {
+        tapeRows.push({ name: 'Runs/Game', token: 'RUNS_PER_GAME',
+          away: { team: awayTeam, value: awayRpg },
+          home: { team: homeTeam, value: homeRpg } });
+      }
+    }
   }
 
   let verifiedTaleOfTape = null;
@@ -1054,5 +1144,9 @@ ${formatRoster(awayRoster, awayTeam)}
     tokenMenu,
     homeRecord: null,
     awayRecord: null,
+    // Resolved MLB Stats API gamePk — needed by pitcher tools at agent loop time.
+    // Stored here so it survives the scout report disk cache (the game object
+    // mutation above won't be visible on a cache hit).
+    gamePk,
   };
 }

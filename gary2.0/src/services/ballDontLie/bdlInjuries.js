@@ -15,7 +15,8 @@ export const injuriesMethods = {
         const endpointMap = {
           basketball_nba: 'nba/v1/player_injuries',
           americanfootball_nfl: 'nfl/v1/player_injuries',
-          icehockey_nhl: 'nhl/v1/player_injuries'
+          icehockey_nhl: 'nhl/v1/player_injuries',
+          baseball_mlb: 'mlb/v1/player_injuries'
         };
         const path = endpointMap[sportKey];
         if (!path) {

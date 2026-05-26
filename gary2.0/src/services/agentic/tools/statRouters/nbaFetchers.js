@@ -982,7 +982,8 @@ export const nbaFetchers = {
       }
       
       // Get season games for both teams
-      const seasonStart = new Date(season - 1, 9, 1); // Oct 1
+      // BDL season=2025 means 2025-26 season, which starts Oct 2025
+      const seasonStart = new Date(season, 9, 1); // Oct 1 of season year
       const today = new Date();
       
       const [homeGames, awayGames] = await Promise.all([
@@ -1081,12 +1082,23 @@ export const nbaFetchers = {
     console.log(`[Stat Router] Fetching DREB_RATE for ${away.name} @ ${home.name}`);
 
     if (bdlSport !== 'basketball_nba') {
-      return {
-        category: 'Defensive Rebounding',
-        note: 'DREB rate currently only available for NBA',
-        home: { team: home.full_name || home.name },
-        away: { team: away.full_name || away.name }
-      };
+      // NCAAB: Use team_season_stats which has dreb per game
+      try {
+        const [homeStats, awayStats] = await Promise.all([
+          ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
+          ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+        ]);
+        const hs = Array.isArray(homeStats) ? homeStats[0] : homeStats;
+        const as = Array.isArray(awayStats) ? awayStats[0] : awayStats;
+        return {
+          category: 'Defensive Rebounding',
+          source: 'Ball Don\'t Lie API (Team Season Stats)',
+          home: { team: home.full_name || home.name, dreb_per_game: hs?.dreb ? hs.dreb.toFixed(1) : 'N/A', oreb_per_game: hs?.oreb ? hs.oreb.toFixed(1) : 'N/A', reb_per_game: hs?.reb ? hs.reb.toFixed(1) : 'N/A' },
+          away: { team: away.full_name || away.name, dreb_per_game: as?.dreb ? as.dreb.toFixed(1) : 'N/A', oreb_per_game: as?.oreb ? as.oreb.toFixed(1) : 'N/A', reb_per_game: as?.reb ? as.reb.toFixed(1) : 'N/A' }
+        };
+      } catch (e) {
+        return { category: 'Defensive Rebounding', home: { team: home.full_name || home.name }, away: { team: away.full_name || away.name }, note: 'Data unavailable' };
+      }
     }
 
     try {
@@ -1136,7 +1148,8 @@ export const nbaFetchers = {
     
     try {
       // Get season games for point differential trends
-      const seasonStart = new Date(season - 1, 9, 1);
+      // BDL season=2025 means 2025-26 season, which starts Oct 2025
+      const seasonStart = new Date(season, 9, 1);
       const today = new Date();
       
       const [homeGames, awayGames] = await Promise.all([
@@ -1441,7 +1454,7 @@ export const nbaFetchers = {
     }
 
     try {
-      const seasonStart = new Date(season - 1, 9, 1);
+      const seasonStart = new Date(season, 9, 1); // BDL season=2025 means 2025-26
       const today = new Date();
 
       const [homeGames, awayGames, homeAdvanced, awayAdvanced] = await Promise.all([
@@ -1875,7 +1888,7 @@ export const nbaFetchers = {
     console.log(`[Stat Router] Fetching BLOWOUT_TENDENCY for ${away.name} @ ${home.name}`);
     
     try {
-      const seasonStart = new Date(season - 1, 9, 1);
+      const seasonStart = new Date(season, 9, 1); // BDL season=2025 means 2025-26
       const today = new Date();
       
       const [homeGames, awayGames] = await Promise.all([
@@ -3120,7 +3133,7 @@ export const nbaFetchers = {
       const eliteTeamIds = [...eastElite, ...westElite];
       
       // Get games for each team this season
-      const seasonStart = new Date(season - 1, 9, 1); // Oct 1
+      const seasonStart = new Date(season, 9, 1); // Oct 1 of season year (BDL season=2025 means 2025-26)
       const today = new Date();
       
       const [homeGames, awayGames] = await Promise.all([
@@ -3230,7 +3243,7 @@ export const nbaFetchers = {
       }
       
       // Get games for each team this season
-      const seasonStart = new Date(season - 1, 9, 1); // Oct 1
+      const seasonStart = new Date(season, 9, 1); // Oct 1 of season year (BDL season=2025 means 2025-26)
       const today = new Date();
       
       const [homeGames, awayGames] = await Promise.all([
@@ -3391,7 +3404,7 @@ export const nbaFetchers = {
     
     try {
       // Get recent games for both teams (last 10)
-      const seasonStart = new Date(season - 1, 9, 1); // Oct 1
+      const seasonStart = new Date(season, 9, 1); // Oct 1 of season year (BDL season=2025 means 2025-26)
       const today = new Date();
       
       const [homeGames, awayGames] = await Promise.all([
@@ -3580,7 +3593,8 @@ export const nbaFetchers = {
       const startDateStr = startDate.toISOString().split('T')[0];
 
       // For B2B history, look back at entire season
-      const seasonStart = new Date(season - 1, 9, 1); // Oct 1
+      // BDL season=2025 means 2025-26 season, which starts Oct 2025
+      const seasonStart = new Date(season, 9, 1); // Oct 1 of season year
       const seasonStartStr = seasonStart.toISOString().split('T')[0];
 
       let homeRecentGames, awayRecentGames, homeSeasonGames, awaySeasonGames;

@@ -45,19 +45,22 @@ export const INVESTIGATION_FACTORS = {
     ROSTER_CONTEXT: ['BENCH_DEPTH', 'CLUTCH_STATS', 'LUCK_ADJUSTED']
   },
 
-  // NHL: 12 factor categories (trimmed — removed unfetchable/redundant factors that caused Flash timeouts)
+  // NHL: 12 factor categories
+  // BDL has: injuries, game history (H2H), standings, team stats, goalie stats, special teams
+  // Grounding: possession (Corsi/xG), line combos, PDO, high-danger
+  // NOT available: per-player game logs (BDL NHL box scores are empty)
   icehockey_nhl: {
     POSSESSION: ['CORSI_FOR_PCT', 'EXPECTED_GOALS', 'SHOT_DIFFERENTIAL', 'HIGH_DANGER_CHANCES'],
     SPECIAL_TEAMS: ['POWER_PLAY_PCT', 'PENALTY_KILL_PCT', 'SPECIAL_TEAMS'],
     GOALTENDING: ['GOALIE_STATS', 'SAVE_PCT', 'GOALS_AGAINST_AVG', 'GOALIE_MATCHUP'],
     SCORING: ['GOALS_FOR', 'GOALS_AGAINST', 'GOAL_DIFFERENTIAL'],
     LUCK_REGRESSION: ['PDO', 'SHOOTING_REGRESSION'],
-    RECENT_FORM: ['RECENT_FORM', 'PLAYER_GAME_LOGS'],
-    PLAYER_PERFORMANCE: ['PLAYER_GAME_LOGS', 'LINE_COMBINATIONS'],  // TOP_SCORERS/TOP_PLAYERS is in scout report
-    INJURIES: ['INJURIES'],
+    RECENT_FORM: ['RECENT_FORM', 'NHL_RECENT_FORM'],  // Team recent form — no per-player logs (BDL NHL box scores empty)
+    PLAYER_PERFORMANCE: ['LINE_COMBINATIONS', 'NHL_HOT_PLAYERS'],  // Scout report covers top scorers
+    INJURIES: ['INJURIES'],  // BDL has structured NHL injuries
     SCHEDULE: ['REST_SITUATION', 'BACK_TO_BACK'],
-    HOME_AWAY: ['HOME_AWAY_SPLITS'],
-    H2H_DIVISION: ['H2H_HISTORY', 'DIVISION_STANDING'],
+    HOME_AWAY: ['NHL_HOME_AWAY_SPLITS'],  // Use NHL-prefixed token (fetcher exists)
+    H2H_DIVISION: ['DIVISION_STANDING'],  // H2H computed from BDL game history in scout report
     STANDINGS_CONTEXT: ['STANDINGS', 'PLAYOFF_POSITION'],
   },
 
@@ -108,7 +111,7 @@ export const INVESTIGATION_FACTORS = {
     STARTING_PITCHING: ['MLB_STARTING_PITCHERS', 'MLB_PITCHER_SEASON_STATS'],
     PITCHER_RECENT_FORM: ['MLB_PITCHER_RECENT_FORM', 'MLB_PITCHER_SCOUTING'],
     BULLPEN: ['MLB_BULLPEN', 'MLB_BULLPEN_WORKLOAD', 'MLB_CLOSER_RELIEVER_STATS'],
-    HITTING_LINEUP: ['MLB_KEY_HITTERS', 'MLB_LINEUP', 'MLB_RISP_SITUATIONAL', 'MLB_PLAYER_SPLITS'],  // Absorbed RISP + splits
+    HITTING_LINEUP: ['MLB_KEY_HITTERS', 'MLB_LINEUP', 'MLB_RISP_SITUATIONAL', 'MLB_PLAYER_SPLITS', 'MLB_STATCAST'],  // Absorbed RISP + splits + Statcast contact quality
     PLATOON_MATCHUPS: ['MLB_BATTER_VS_PITCHER'],  // BDL GOAT: batter vs pitcher career matchups (splits covered in HITTING)
     CATCHER_DEFENSE: ['MLB_CATCHER_DEFENSE', 'MLB_KEY_HITTERS'],  // Absorbed BASERUNNING (same tokens — SB stats + catcher arm)
     TEAM_DEFENSE: ['MLB_TEAM_DEFENSE'],

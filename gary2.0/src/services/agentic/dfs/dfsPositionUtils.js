@@ -23,6 +23,14 @@ export function isSlotEligible(slot, playerPositions, sport) {
     return poss.includes(s);
   }
 
+  if (sportUpper === 'MLB') {
+    if (s === 'UTIL') return poss.some(p => ['C', '1B', '2B', '3B', 'SS', 'OF', 'LF', 'CF', 'RF', 'DH'].includes(p));
+    if (s === 'C/1B') return poss.some(p => p === 'C' || p === '1B');
+    if (s === 'P') return poss.some(p => p === 'P' || p === 'SP' || p === 'RP');
+    if (s === 'OF') return poss.some(p => p === 'OF' || p === 'LF' || p === 'CF' || p === 'RF');
+    return poss.includes(s);
+  }
+
   // NBA
   if (s === 'UTIL') return true;
   if (s === 'G') return poss.some(p => p === 'PG' || p === 'SG');
