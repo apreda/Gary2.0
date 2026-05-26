@@ -202,7 +202,7 @@ enum SupabaseAPI {
             case "NCAAB": return "basketball.fill"
             case "NCAAF": return "football.fill"
             case "EPL": return "soccerball"
-            case "WBC": return "baseball.fill"
+            case "MLB": return "baseball.fill"
             default: return "sportscourt.fill"
             }
         }
@@ -215,7 +215,7 @@ enum SupabaseAPI {
             case "NCAAB": return Color(hex: "#F97316")
             case "NCAAF": return Color(hex: "#DC2626")
             case "EPL": return Color(hex: "#8B5CF6")
-            case "WBC": return Color(hex: "#16A34A")
+            case "MLB": return Color(hex: "#2D5A27")
             default: return GaryColors.gold
             }
         }
@@ -386,9 +386,37 @@ enum SupabaseAPI {
         return []
     }
     
+    // MARK: - Upcoming NCAAB Tournament Picks
+
+    /// Fetch NCAAB picks for today and future dates (tournament games stored in advance)
+    /// Returns only NCAAB picks with date >= today so all active tournament picks show
+    static func fetchUpcomingNCAABPicks(afterDate: String) async throws -> [GaryPick] {
+        // Fetch daily_picks rows with date > today (today is already fetched by fetchDailyPicks)
+        let url = buildURL(table: "daily_picks", query: [
+            URLQueryItem(name: "select", value: "picks::text,date"),
+            URLQueryItem(name: "date", value: "gt.\(afterDate)"),
+            URLQueryItem(name: "order", value: "date.asc")
+        ])
+
+        let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            return []
+        }
+
+        let rows = try JSONDecoder().decode([DailyPicksRow].self, from: data)
+        var allPicks: [GaryPick] = []
+        for row in rows {
+            let picks = parsePicksRow(row.picks)
+            // Only include NCAAB picks from future dates
+            let ncaabPicks = picks.filter { ($0.league ?? "").uppercased() == "NCAAB" }
+            allPicks.append(contentsOf: ncaabPicks)
+        }
+        return allPicks
+    }
+
     // MARK: - Combined Picks
 
-    /// Fetch all picks: non-NFL from daily_picks + NFL from weekly_nfl_picks
+    /// Fetch all picks: non-NFL from daily_picks + NFL from weekly_nfl_picks + upcoming NCAAB tournament picks
     /// - Parameter forceRefresh: Set to true for pull-to-refresh to bypass cache
     static func fetchAllPicks(date: String, forceRefresh: Bool = false) async throws -> [GaryPick] {
         let cacheKey = "allPicks_\(date)"
@@ -401,14 +429,16 @@ enum SupabaseAPI {
         // Fetch fresh data
         async let dailyTask = fetchDailyPicks(date: date)
         async let nflTask = fetchWeeklyNFLPicks()
+        async let ncaabUpcomingTask = fetchUpcomingNCAABPicks(afterDate: date)
 
         let dailyPicks = (try? await dailyTask) ?? []
         let nflPicks = (try? await nflTask) ?? []
+        let ncaabUpcoming = (try? await ncaabUpcomingTask) ?? []
 
         // Filter out NFL from daily picks (they come from weekly_nfl_picks)
         let nonNFLPicks = dailyPicks.filter { ($0.league ?? "").uppercased() != "NFL" }
 
-        let result = nonNFLPicks + nflPicks
+        let result = nonNFLPicks + nflPicks + ncaabUpcoming
 
         // Store in cache
         await APICache.shared.set(cacheKey, value: result)
@@ -591,8 +621,9 @@ enum SupabaseAPI {
     static func fetchDFSLineups(date: String, forceRefresh: Bool = false) async throws -> [DFSLineup] {
         let cacheKey = "dfsLineups_\(date)"
 
-        // Check cache first (unless forcing refresh)
-        if !forceRefresh, let cached: [DFSLineup] = await APICache.shared.get(cacheKey, ttl: APICache.liveContentTTL) {
+        // DFS lineups: 30-min cache. Lineups are generated once per day across all slates.
+        // Pull-to-refresh bypasses cache if user needs fresh data.
+        if !forceRefresh, let cached: [DFSLineup] = await APICache.shared.get(cacheKey, ttl: 60 * 30) {
             return cached
         }
 
@@ -609,13 +640,15 @@ enum SupabaseAPI {
             return []
         }
 
-        // Parse as array of dictionaries
-        guard let jsonArray = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
-            print("[SupabaseAPI] fetchDFSLineups: failed to parse JSON")
+        // Parse using JSONDecoder (DFSLineup is Decodable)
+        let decoder = JSONDecoder()
+        let result: [DFSLineup]
+        do {
+            result = try decoder.decode([DFSLineup].self, from: data)
+        } catch {
+            print("[SupabaseAPI] fetchDFSLineups: decode failed: \(error)")
             return []
         }
-
-        let result = jsonArray.compactMap { DFSLineup.from(dict: $0) }
 
         // Store in cache
         await APICache.shared.set(cacheKey, value: result)
@@ -795,4 +828,7 @@ struct BracketPick: Codable, Identifiable {
     let team2_cons: [String]?
     let actual_winner: String?
     let correct: Bool?
+    let ats_pick: String?
+    let ats_spread: Double?
+    let ats_rationale: String?
 }

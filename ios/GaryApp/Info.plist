@@ -13,11 +13,15 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>2.0</string>
+	<string>2.12</string>
 	<key>CFBundleVersion</key>
-	<string>2.0</string>
+	<string>2.12</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Gary uses your microphone so you can talk to him about picks, teams, and games.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Gary turns your voice into text so he can hear your question and respond.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

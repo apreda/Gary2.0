@@ -53,6 +53,47 @@ struct ChangelogEntry: Identifiable {
 
 let changelogEntries: [ChangelogEntry] = [
     ChangelogEntry(
+        version: "2.12",
+        date: "April 19, 2026",
+        type: .update,
+        title: "Gary 2.12 — Reliability & Stats Overhaul",
+        changes: [
+            "Fixed MLB results grading — games now matched by game ID (prevents UTC bleed and doubleheader mismatches)",
+            "MLB_STATCAST tool added: exit velocity, hard hit rate, barrel rate from last 3 games",
+            "Fixed 7 broken MLB stat tools (pitcher recent form, splits, RISP, bullpen workload, BvP)",
+            "NHL stat wiring: INJURIES, H2H, HOME_AWAY_SPLITS all now return real BDL data",
+            "Smart sport filter tabs — sports with today's picks sort left, others follow",
+            "Team name display: 'Red Sox' / 'Blue Jays' / 'Trail Blazers' no longer truncate to last word",
+            "Performance-based Gary hero images restored on home page",
+            "Tighter grounding freshness rules (past 48 hours only, no stale stats from articles)",
+            "Daily scheduler auto-restart at 9 AM ET (via cron) — prevents Mac sleep issues"
+        ]
+    ),
+    ChangelogEntry(
+        version: "2.11",
+        date: "March 25, 2026",
+        type: .feature,
+        title: "Gary 2.11 — MLB Opening Day",
+        changes: [
+            "MLB Regular Season game picks, props, and DFS lineups now live",
+            "Full BDL GOAT-tier integration: player stats, splits, batter vs pitcher, standings, injuries, odds from 6 sportsbooks",
+            "Baseball Savant xStats: expected vs actual performance (xERA, xBA, xSLG, xwOBA)",
+            "L1-L4 game recaps with full box scores, L5/L10 trend aggregates",
+            "30 hardcoded park factors, confirmed lineups from MLB Stats API",
+            "Support for 8 sports: NFL, NBA, NCAAF, NCAAB, NHL, MLB, EPL, WNBA"
+        ]
+    ),
+    ChangelogEntry(
+        version: "2.1",
+        date: "March 17, 2026",
+        type: .update,
+        title: "Gary 2.1",
+        changes: [
+            "March Madness bracket improvements and stability fixes",
+            "Version bump for App Store submission"
+        ]
+    ),
+    ChangelogEntry(
         version: "2.0",
         date: "March 15, 2026",
         type: .feature,
@@ -75,11 +116,11 @@ let changelogEntries: [ChangelogEntry] = [
         version: "1.9.92",
         date: "March 5, 2026",
         type: .feature,
-        title: "World Baseball Classic",
+        title: "MLB Regular Season",
         changes: [
-            "WBC game picks and prop bets now live during the tournament",
-            "Improved Tale of the Tape for international matchups",
-            "Better odds parsing for WBC games",
+            "MLB Regular Season game picks, props, and DFS lineups now live",
+            "Improved Tale of the Tape for MLB matchups",
+            "Better odds parsing for MLB games",
             "Moneyline picks now capped on heavy favorites — Gary picks the spread instead"
         ]
     ),
@@ -332,93 +373,107 @@ struct ChangelogView: View {
 
 struct ChangelogEntryCard: View {
     let entry: ChangelogEntry
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Version and type badges
-            HStack(spacing: 8) {
-                // Version badge
-                Text("v\(entry.version)")
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.8))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(Color.white.opacity(0.1))
-                    .clipShape(Capsule())
-                
-                // Type badge
-                HStack(spacing: 4) {
-                    Image(systemName: entry.type.icon)
-                        .font(.system(size: 10, weight: .semibold))
-                    Text(entry.type.label)
-                        .font(.system(size: 11, weight: .semibold))
-                }
-                .foregroundStyle(entry.type == .launch ? .black : entry.type.color)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background(
-                    Group {
-                        if entry.type == .launch {
-                            LinearGradient(
-                                colors: [GaryColors.gold, GaryColors.gold.opacity(0.8)],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        } else {
-                            entry.type.color.opacity(0.2)
-                        }
-                    }
-                )
-                .clipShape(Capsule())
-                .overlay(
-                    Capsule()
-                        .stroke(entry.type.color.opacity(entry.type == .launch ? 0 : 0.3), lineWidth: 1)
-                )
-                
-                Spacer()
-                
-                // Date
-                Text(entry.date)
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-            }
-            
-            // Title
-            Text(entry.title)
-                .font(.system(size: 18, weight: .bold))
-                .foregroundStyle(.white)
-            
-            // Changes list
-            VStack(alignment: .leading, spacing: 6) {
-                ForEach(entry.changes, id: \.self) { change in
-                    HStack(alignment: .top, spacing: 8) {
-                        Text("•")
-                            .foregroundStyle(GaryColors.gold)
-                            .font(.system(size: 14, weight: .bold))
-                        Text(change)
-                            .font(.system(size: 14))
-                            .foregroundStyle(.white.opacity(0.7))
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+            badgeRow
+            titleView
+            changesList
+        }
+        .padding(16)
+        .background(cardBackground)
+    }
+
+    private var badgeRow: some View {
+        HStack(spacing: 8) {
+            versionBadge
+            typeBadge
+            Spacer()
+            Text(entry.date)
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var versionBadge: some View {
+        Text("v\(entry.version)")
+            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+            .foregroundStyle(.white.opacity(0.8))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .background(Color.white.opacity(0.1))
+            .clipShape(Capsule())
+    }
+
+    @ViewBuilder
+    private var typeBadge: some View {
+        let isLaunch = entry.type == .launch
+        HStack(spacing: 4) {
+            Image(systemName: entry.type.icon)
+                .font(.system(size: 10, weight: .semibold))
+            Text(entry.type.label)
+                .font(.system(size: 11, weight: .semibold))
+        }
+        .foregroundStyle(isLaunch ? .black : entry.type.color)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 4)
+        .background(typeBadgeBackground)
+        .clipShape(Capsule())
+        .overlay(
+            Capsule()
+                .stroke(entry.type.color.opacity(isLaunch ? 0 : 0.3), lineWidth: 1)
+        )
+    }
+
+    @ViewBuilder
+    private var typeBadgeBackground: some View {
+        if entry.type == .launch {
+            LinearGradient(
+                colors: [GaryColors.gold, GaryColors.gold.opacity(0.8)],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+        } else {
+            entry.type.color.opacity(0.2)
+        }
+    }
+
+    private var titleView: some View {
+        Text(entry.title)
+            .font(.system(size: 18, weight: .bold))
+            .foregroundStyle(.white)
+    }
+
+    private var changesList: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(entry.changes, id: \.self) { change in
+                HStack(alignment: .top, spacing: 8) {
+                    Text("•")
+                        .foregroundStyle(GaryColors.gold)
+                        .font(.system(size: 14, weight: .bold))
+                    Text(change)
+                        .font(.system(size: 14))
+                        .foregroundStyle(.white.opacity(0.7))
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color(hex: "#0D0D0F"))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(
-                            LinearGradient(
-                                colors: [Color.white.opacity(0.1), Color.white.opacity(0.05)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 0.5
-                        )
-                )
-        )
+    }
+
+    private var cardBackground: some View {
+        RoundedRectangle(cornerRadius: 16, style: .continuous)
+            .fill(Color(hex: "#0D0D0F"))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(
+                        LinearGradient(
+                            colors: [Color.white.opacity(0.1), Color.white.opacity(0.05)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 0.5
+                    )
+            )
     }
 }
 

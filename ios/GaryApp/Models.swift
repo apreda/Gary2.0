@@ -79,37 +79,6 @@ struct SportsbookOdds: Codable, Identifiable {
 
 // MARK: - Pick Models
 
-// MARK: - Contradicting Factors (major/minor categorization)
-struct ContradictingFactors: Codable {
-    let major: [String]?
-    let minor: [String]?
-
-    /// Total count of all contradictions
-    var totalCount: Int {
-        (major?.count ?? 0) + (minor?.count ?? 0)
-    }
-
-    /// Parse from dictionary (handles both old array format and new object format)
-    static func from(value: Any?) -> ContradictingFactors? {
-        guard let value = value else { return nil }
-
-        // New format: { major: [...], minor: [...] }
-        if let dict = value as? [String: Any] {
-            return ContradictingFactors(
-                major: dict["major"] as? [String],
-                minor: dict["minor"] as? [String]
-            )
-        }
-
-        // Legacy format: simple array - treat as minor
-        if let array = value as? [String] {
-            return ContradictingFactors(major: nil, minor: array)
-        }
-
-        return nil
-    }
-}
-
 struct GaryPick: Identifiable, Codable {
     let pick_id: String?
     let pick: String?
@@ -141,11 +110,6 @@ struct GaryPick: Identifiable, Codable {
     // NCAAB AP Poll rankings
     let homeRanking: Int?
     let awayRanking: Int?
-    // Thesis-based classification (new filtering system)
-    let thesis_type: String?  // "clear_read", "found_angle", "educated_lean", "coin_flip"
-    let thesis_mechanism: String?  // One-sentence explanation of WHY this team wins
-    let supporting_factors: [String]?
-    let contradicting_factors: ContradictingFactors?
     // Manual Top Pick override
     let is_top_pick: Bool?
     // Multi-sportsbook odds comparison (ML + Spread)
@@ -265,10 +229,6 @@ struct GaryPick: Identifiable, Codable {
             awayConference: dict["awayConference"] as? String,
             homeRanking: (dict["homeRanking"] as? NSNumber)?.intValue,
             awayRanking: (dict["awayRanking"] as? NSNumber)?.intValue,
-            thesis_type: dict["thesis_type"] as? String,
-            thesis_mechanism: dict["thesis_mechanism"] as? String,
-            supporting_factors: dict["supporting_factors"] as? [String],
-            contradicting_factors: ContradictingFactors.from(value: dict["contradicting_factors"]),
             is_top_pick: dict["is_top_pick"] as? Bool,
             sportsbook_odds: sportsbookOddsArray
         )

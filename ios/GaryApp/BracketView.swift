@@ -38,6 +38,9 @@ struct BracketMatchup: Identifiable {
     var bottomTeamCons: [String]?
     var actualWinner: String?
     var correct: Bool?
+    var atsPick: String?
+    var atsSpread: Double?
+    var atsRationale: String?
 
     var roundName: String {
         switch round {
@@ -92,8 +95,8 @@ enum BracketRegion: String, CaseIterable {
 // MARK: - Layout Constants
 
 private enum BracketLayout {
-    static let cardWidth: CGFloat = 148
-    static let cardHeight: CGFloat = 62
+    static let cardWidth: CGFloat = 170
+    static let cardHeight: CGFloat = 72
     static let cardCorner: CGFloat = 9
     static let roundSpacing: CGFloat = 32
     static let connectorWidth: CGFloat = 30
@@ -106,11 +109,11 @@ private enum BracketLayout {
     static let regionBottomPadding: CGFloat = 8
     static let venueAboveCardOffset: CGFloat = 32
     static let masterRegionGap: CGFloat = 24
-    static let centerStageOuterGap: CGFloat = 88
-    static let centerStageInnerGap: CGFloat = 104
-    static let centerStageBottomPadding: CGFloat = 40
-    static let winnerBadgeGap: CGFloat = 78
-    static let winnerBadgeSize = CGSize(width: 132, height: 94)
+    static let centerStageOuterGap: CGFloat = 96
+    static let centerStageInnerGap: CGFloat = 120
+    static let centerStageBottomPadding: CGFloat = 48
+    static let winnerBadgeGap: CGFloat = 88
+    static let winnerBadgeSize = CGSize(width: 180, height: 130)
     static let regionLabelY: CGFloat = 1
     static let roundHeaderCenterY: CGFloat = 15
     static let regionLabelFontSize: CGFloat = 9.5
@@ -127,6 +130,9 @@ private enum BracketLayout {
     static let cardHighlightBg = GaryColors.elevatedBg
     static let darkBg = Color(hex: "#0C0C0F")
     static let panelBg = Color(hex: "#101014")
+    static let panelText = Color.white.opacity(0.88)
+    static let panelSecondaryText = Color.white.opacity(0.7)
+    static let panelCardBg = Color.white.opacity(0.05)
     static let panelStroke = GaryColors.glassBorder
     static let cardBorder = GaryColors.gold.opacity(0.16)
     static let connectorLine = Color(hex: "#B79D58").opacity(0.76)
@@ -258,8 +264,8 @@ private struct TournamentFact: Identifiable {
 }
 
 private enum FactsDrawerTab: String, CaseIterable {
-    case matchup = "MATCHUP"
     case pick = "PICK"
+    case ats = "ATS PICK"
     case general = "FACTS"
 }
 
@@ -351,15 +357,22 @@ private enum BracketTeamNameFormatter {
     }
 }
 
-private let tournamentFacts: [TournamentFact] = [
-    TournamentFact(icon: "flame.fill", title: "12 vs 5 Upsets", stat: "35.4%", detail: "12-seeds beat 5-seeds over a third of the time since 1985"),
-    TournamentFact(icon: "shield.fill", title: "1-Seed Dominance", stat: "99.4%", detail: "1-seeds have lost in R64 only 4 times in 152 games"),
-    TournamentFact(icon: "arrow.triangle.2.circlepath", title: "11-Seed Cinderellas", stat: "6 Final Fours", detail: "Loyola-Chicago, VCU, George Mason — 11-seeds crash the party"),
-    TournamentFact(icon: "chart.bar.fill", title: "Chalk Wins R64", stat: "73.6%", detail: "Higher seeds win nearly 3 out of 4 first-round games"),
-    TournamentFact(icon: "dollarsign.circle.fill", title: "ATS Sweet 16", stat: "52.1%", detail: "Underdogs cover the spread more often from Sweet 16 on"),
-    TournamentFact(icon: "trophy.fill", title: "1-Seed Champions", stat: "63%", detail: "Since seeding began, most champions have been 1-seeds"),
-    TournamentFact(icon: "exclamationmark.triangle.fill", title: "2 vs 15 Upsets", stat: "6.6%", detail: "15-seeds win about 1 in every 15 matchups vs 2-seeds"),
-    TournamentFact(icon: "sportscourt.fill", title: "Home Court Edge", stat: "+3.2 pts", detail: "Teams playing near their campus get a measurable boost"),
+private let seedingSignals: [TournamentFact] = [
+    TournamentFact(icon: "flame.fill", title: "12 vs 5 Upsets", stat: "35.6%", detail: "At least one 12-over-5 upset in 21 of the last 25 tournaments. THE signature upset spot."),
+    TournamentFact(icon: "shield.fill", title: "1-Seed Dominance", stat: "98.75%", detail: "Only 2 losses in 160 games — UMBC over Virginia (2018) and FDU over Purdue (2023)."),
+    TournamentFact(icon: "arrow.triangle.2.circlepath", title: "11-Seed Cinderellas", stat: "6 Final Fours", detail: "11-seeds have reached the Final Four more than any seed 5 through 10. NC State made the title game in 2024."),
+    TournamentFact(icon: "chart.bar.fill", title: "8 vs 9 Coin Flip", stat: "50.7%", detail: "9-seeds actually have a slight historical edge over 8-seeds. True coin flip every year."),
+    TournamentFact(icon: "exclamationmark.triangle.fill", title: "13-Seed Danger", stat: "20.7%", detail: "13-seeds beat 4-seeds roughly 1 in 5 games. Historically one of the most dangerous matchups."),
+    TournamentFact(icon: "trophy.fill", title: "1-Seed Champions", stat: "63%", detail: "Since seeding began, most champions have been 1-seeds. But a 7-seed and 8-seed have won it all."),
+]
+
+private let tournamentSignals: [TournamentFact] = [
+    TournamentFact(icon: "hand.raised.fill", title: "Turnover Rate", stat: "#1 Predictor", detail: "Harvard research: a 1% decrease in turnover rate increases upset probability by 26%. The single strongest predictor across 144 tournament games."),
+    TournamentFact(icon: "figure.basketball", title: "Free Throw Discipline", stat: "64% ATS", detail: "Teams shooting 77%+ from the line with a spread of 6 or less cover at 64%. Not fouling and making your own FTs decides close tournament games."),
+    TournamentFact(icon: "person.fill", title: "Guard Play in March", stat: "Key Factor", detail: "System offenses break down against unfamiliar defenses. Guards who create their own shot in isolation are the tournament's most valuable commodity."),
+    TournamentFact(icon: "timer", title: "Tempo Mismatch", stat: "Style Clash", detail: "When a slow team forces a fast team to play at their pace, margins compress. Understanding style clash matters more than raw tempo."),
+    TournamentFact(icon: "target", title: "3PT Variance", stat: "47.4%", detail: "Teams attempting nearly half their shots from three create variance. High 3PA rate compresses margins and changes outcomes in a single game."),
+    TournamentFact(icon: "book.fill", title: "Coaching & Narrative", stat: "Real Factor", detail: "Coaching tournament track record, conference tournament momentum, and program history are real forces — even if they don't show up in regression models."),
 ]
 
 // MARK: - Sample Data
@@ -449,7 +462,7 @@ struct BracketData {
                 let topTeam = BracketTeamNameFormatter.team(from: resolvedTeam1, seed: pick.seed1)
                 let bottomTeam = BracketTeamNameFormatter.team(from: resolvedTeam2, seed: pick.seed2)
                 let winner: BracketTeam? = pick.picked_to_advance != nil ? (pick.picked_to_advance == pick.team1 ? topTeam : bottomTeam) : nil
-                matchups.append(BracketMatchup(id: pick.id, round: pick.round, position: pick.game_number ?? 0, topTeam: topTeam, bottomTeam: bottomTeam, winner: winner, location: "", gameTime: pick.date, region: pick.region.uppercased(), confidence: pick.bracket_confidence, rationale: pick.bracket_rationale, isUpset: pick.is_upset, topTeamPros: pick.team1_pros, topTeamCons: pick.team1_cons, bottomTeamPros: pick.team2_pros, bottomTeamCons: pick.team2_cons, actualWinner: pick.actual_winner, correct: pick.correct))
+                matchups.append(BracketMatchup(id: pick.id, round: pick.round, position: pick.game_number ?? 0, topTeam: topTeam, bottomTeam: bottomTeam, winner: winner, location: "", gameTime: pick.date, region: pick.region.uppercased(), confidence: pick.bracket_confidence, rationale: pick.bracket_rationale, isUpset: pick.is_upset, topTeamPros: pick.team1_pros, topTeamCons: pick.team1_cons, bottomTeamPros: pick.team2_pros, bottomTeamCons: pick.team2_cons, actualWinner: pick.actual_winner, correct: pick.correct, atsPick: pick.ats_pick, atsSpread: pick.ats_spread, atsRationale: pick.ats_rationale))
             }
             bracket[region] = matchups.sorted { a, b in
                 if a.round != b.round { return a.round < b.round }
@@ -486,7 +499,11 @@ struct MarchMadnessBracketView: View {
 
     // Sliding facts panel
     @State private var showFactsPanel: Bool = false
-    @State private var selectedFactsTab: FactsDrawerTab = .general
+    @State private var selectedFactsTab: FactsDrawerTab = .pick
+    // ATS daily pick for selected matchup
+    @State private var matchedDailyPick: GaryPick? = nil
+    // Signals sub-tab (seeding vs tournament)
+    @State private var signalsTab: Int = 0
 
     var body: some View {
         ZStack(alignment: .trailing) {
@@ -617,10 +634,49 @@ struct MarchMadnessBracketView: View {
     private func tapMatchup(_ matchup: BracketMatchup) {
         selectedMatchup = matchup
         zoomedMatchup = matchup
+        matchedDailyPick = nil // reset
         withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
             selectedFactsTab = .pick
             showFactsPanel = true
             showGameZoom = false
+        }
+        // Fetch matching daily pick for ATS tab
+        Task {
+            await fetchDailyPickForMatchup(matchup)
+        }
+    }
+
+    private func fetchDailyPickForMatchup(_ matchup: BracketMatchup) async {
+        let topName = matchup.topTeam?.shortName.lowercased() ?? ""
+        let bottomName = matchup.bottomTeam?.shortName.lowercased() ?? ""
+        guard !topName.isEmpty, !bottomName.isEmpty else { return }
+
+        // Search recent daily picks across game dates
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        do {
+            // Try today and next few days
+            var allPicks: [GaryPick] = []
+            for offset in 0..<5 {
+                let date = Calendar.current.date(byAdding: .day, value: offset, to: Date()) ?? Date()
+                let dateStr = formatter.string(from: date)
+                let dayPicks = try await SupabaseAPI.fetchDailyPicks(date: dateStr)
+                allPicks.append(contentsOf: dayPicks)
+            }
+            let picks = allPicks
+            let match = picks.first { pick in
+                guard pick.league?.lowercased().contains("ncaab") == true ||
+                      pick.league?.lowercased().contains("ncaam") == true else { return false }
+                let home = pick.homeTeam?.lowercased() ?? ""
+                let away = pick.awayTeam?.lowercased() ?? ""
+                return (home.contains(topName) || home.contains(bottomName)) &&
+                       (away.contains(topName) || away.contains(bottomName))
+            }
+            await MainActor.run {
+                matchedDailyPick = match
+            }
+        } catch {
+            print("[Bracket] ATS pick fetch error: \(error.localizedDescription)")
         }
     }
 
@@ -638,7 +694,7 @@ struct MarchMadnessBracketView: View {
     // MARK: - Sliding Facts Panel (swipe from right edge)
 
     private var factsDrawer: some View {
-        let panelWidth: CGFloat = 298
+        let panelWidth: CGFloat = 345
 
         return VStack(spacing: 0) {
             factsDrawerHeader
@@ -647,10 +703,10 @@ struct MarchMadnessBracketView: View {
                 .frame(height: 1)
 
             switch selectedFactsTab {
-            case .matchup:
-                matchupFactsDrawerContent
             case .pick:
                 pickFactsDrawerContent
+            case .ats:
+                atsDrawerContent
             case .general:
                 generalFactsDrawerContent
             }
@@ -661,19 +717,21 @@ struct MarchMadnessBracketView: View {
 
     private var factsExtensionDock: some View {
         GeometryReader { geo in
-            let availableHeight = max(360, geo.size.height - 186)
-            let drawerHeight = min(560, availableHeight)
+            let availableHeight = max(360, geo.size.height - 90) // 90 for tab bar
+            let drawerHeight = min(availableHeight, geo.size.height - 90)
 
-            HStack(spacing: 0) {
+            VStack(alignment: .trailing, spacing: 0) {
+                factsDockLauncher
+                    .padding(.trailing, 2)
+
                 if showFactsPanel {
                     factsDrawer
                         .frame(height: drawerHeight)
                         .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
-
-                factsDockLauncher
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+            .offset(y: -119)
             .padding(.trailing, 0)
         }
         .allowsHitTesting(true)
@@ -723,35 +781,15 @@ struct MarchMadnessBracketView: View {
                     Text(factsDrawerTitle)
                         .font(.system(size: 18, weight: .bold))
                         .foregroundStyle(BracketLayout.primaryText)
-                    Text(factsDrawerSubtitle)
-                        .font(.system(size: 10.5, weight: .medium))
-                        .foregroundStyle(BracketLayout.secondaryText)
-                        .lineSpacing(2)
+                    // Subtitle removed for cleaner layout
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
-                Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { showFactsPanel = false }
-                } label: {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(BracketLayout.primaryText.opacity(0.86))
-                        .frame(width: 28, height: 28)
-                        .background(
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .fill(Color.white.opacity(0.04))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                        .stroke(Color.white.opacity(0.08), lineWidth: 0.8)
-                                )
-                        )
-                }
-                .buttonStyle(.plain)
             }
 
             HStack(spacing: 14) {
-                factsTabButton(.matchup)
                 factsTabButton(.pick)
+                factsTabButton(.ats)
                 factsTabButton(.general)
             }
         }
@@ -762,36 +800,20 @@ struct MarchMadnessBracketView: View {
 
     private var factsDrawerTitle: String {
         switch selectedFactsTab {
-        case .matchup:
-            if let matchup = selectedMatchup {
-                return "\(matchup.topTeam?.shortName ?? "TBD") vs \(matchup.bottomTeam?.shortName ?? "TBD")"
-            }
-            return "Matchup Dossier"
         case .pick:
             if let winner = selectedMatchup?.winner {
                 return "\(winner.shortName) To Advance"
             }
             return "Gary's Board"
+        case .ats:
+            return "ATS Game Pick"
         case .general:
             return "Tournament Briefing"
         }
     }
 
     private var factsDrawerSubtitle: String {
-        switch selectedFactsTab {
-        case .matchup:
-            if selectedMatchup != nil {
-                return "Team-vs-team scouting, mascots, and matchup notes."
-            }
-            return "Tap any matchup to load the scouting report here."
-        case .pick:
-            if selectedMatchup != nil {
-                return "Gary's advancement call, confidence, and reasoning."
-            }
-            return "Tap any matchup to load Gary's pick and path here."
-        case .general:
-            return "Pinned notes and signals that stay with you as you move through the bracket."
-        }
+        return "" // Subtitles removed
     }
 
     private func factsTabButton(_ tab: FactsDrawerTab) -> some View {
@@ -824,11 +846,11 @@ struct MarchMadnessBracketView: View {
             Rectangle()
                 .fill(Color.white.opacity(0.08))
                 .frame(width: 1, height: 28)
-            factsSummaryPill(title: "Upsets", value: "\(upsetPicks.count)")
+            factsSummaryPill(title: "Points", value: "\(espnBracketScore)")
             Rectangle()
                 .fill(Color.white.opacity(0.08))
                 .frame(width: 1, height: 28)
-            factsSummaryPill(title: "Top Conf", value: topConfidenceValue)
+            factsSummaryPill(title: "Upsets", value: "\(upsetPicks.count)")
         }
         .padding(.vertical, 4)
         .padding(.horizontal, 2)
@@ -848,37 +870,21 @@ struct MarchMadnessBracketView: View {
                 factsSectionTitle("Board Snapshot", systemImage: "chart.bar.xaxis")
                 factsDrawerMetrics
 
-                if highestConfidenceMatchup != nil || featuredUpsetMatchup != nil {
-                    factsSectionTitle("On Gary's Radar", systemImage: "scope")
-                    drawerModule {
-                        VStack(spacing: 0) {
-                            if let focusMatchup = highestConfidenceMatchup {
-                                factsSpotlightCard(
-                                    matchup: focusMatchup,
-                                    eyebrow: "HIGHEST CONFIDENCE",
-                                    detail: focusMatchup.rationale ?? "The cleanest angle on the board right now."
-                                )
-                            }
-
-                            if highestConfidenceMatchup != nil, featuredUpsetMatchup != nil {
-                                drawerModuleDivider
-                            }
-
-                            if let upsetMatchup = featuredUpsetMatchup {
-                                factsSpotlightCard(
-                                    matchup: upsetMatchup,
-                                    eyebrow: "UPSET RADAR",
-                                    detail: upsetMatchup.rationale ?? "This is the underdog spot Gary is most willing to ride."
-                                )
-                            }
-                        }
-                    }
+                // Mini tab picker for signals
+                HStack(spacing: 0) {
+                    signalsSubTab("Seeding", index: 0)
+                    signalsSubTab("Tournament", index: 1)
                 }
+                .padding(2)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.white.opacity(0.04))
+                )
 
-                factsSectionTitle("Tournament Signals", systemImage: "sparkles")
+                let activeSignals = signalsTab == 0 ? seedingSignals : tournamentSignals
                 drawerModule(accent: Color.white.opacity(0.18)) {
                     VStack(spacing: 0) {
-                        ForEach(Array(tournamentFacts.prefix(6).enumerated()), id: \.element.id) { index, fact in
+                        ForEach(Array(activeSignals.enumerated()), id: \.element.id) { index, fact in
                             if index > 0 {
                                 drawerModuleDivider
                             }
@@ -892,38 +898,113 @@ struct MarchMadnessBracketView: View {
         }
     }
 
+    private func signalsSubTab(_ title: String, index: Int) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) { signalsTab = index }
+        } label: {
+            Text(title.uppercased())
+                .font(.system(size: 10, weight: .heavy))
+                .tracking(1.2)
+                .foregroundStyle(signalsTab == index ? BracketLayout.accentGold : .white.opacity(0.4))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(signalsTab == index ? Color.white.opacity(0.06) : Color.clear)
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - ATS Pick Tab (Pick card + Tale of Tape + Gary's Take)
+    private var atsDrawerContent: some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 12) {
+                if let pick = matchedDailyPick {
+                    // Compact pick card (same design as Picks page)
+                    CompactPickRow(pick: pick, showSportBadge: false)
+
+                    // Tale of the Tape
+                    if let statsData = pick.statsData, !statsData.isEmpty {
+                        factsSectionTitle("Tale of the Tape", systemImage: "chart.bar.fill")
+                        drawerModule {
+                            VStack(spacing: 0) {
+                                ForEach(Array(statsData.prefix(10).enumerated()), id: \.offset) { index, stat in
+                                    if index > 0 { drawerModuleDivider }
+                                    HStack {
+                                        Text(stat.name ?? "")
+                                            .font(.system(size: 11, weight: .semibold))
+                                            .foregroundStyle(BracketLayout.secondaryText)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                        if let token = stat.token {
+                                            Text(stat.away?.getValue(for: token) ?? "-")
+                                                .font(.system(size: 11.5, weight: .bold, design: .monospaced))
+                                                .foregroundStyle(BracketLayout.primaryText)
+                                                .frame(width: 60, alignment: .trailing)
+                                            Text(stat.home?.getValue(for: token) ?? "-")
+                                                .font(.system(size: 11.5, weight: .bold, design: .monospaced))
+                                                .foregroundStyle(BracketLayout.primaryText)
+                                                .frame(width: 60, alignment: .trailing)
+                                        }
+                                    }
+                                    .padding(.vertical, 5)
+                                }
+                            }
+                        }
+                    }
+
+                    // Gary's Take
+                    if let rationale = pick.rationale, !rationale.isEmpty {
+                        factsSectionTitle("Gary's Take", systemImage: "text.quote")
+                        let narrative = extractNarrative(from: rationale)
+                        drawerModule(accent: BracketLayout.accentGold) {
+                            Text(narrative)
+                                .font(.system(size: 13.5, weight: .regular))
+                                .foregroundStyle(.white.opacity(0.88))
+                                .lineSpacing(4)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                } else {
+                    // No daily pick found
+                    VStack(spacing: 12) {
+                        Image(systemName: "calendar.badge.clock")
+                            .font(.system(size: 28))
+                            .foregroundStyle(BracketLayout.secondaryText)
+                        Text("ATS pick coming game day")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(BracketLayout.secondaryText)
+                        Text("Gary generates spread picks daily for each tournament game. Check back on game day.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(BracketLayout.secondaryText.opacity(0.7))
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 40)
+                }
+            }
+            .padding(12)
+            .padding(.bottom, 16)
+        }
+    }
+
+    private func extractNarrative(from rationale: String) -> String {
+        if let range = rationale.range(of: "Gary's Take", options: .caseInsensitive) {
+            return String(rationale[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return rationale
+    }
+
     private var matchupFactsDrawerContent: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 12) {
                 if let matchup = selectedMatchup {
-                    factsSectionTitle("Selected Matchup", systemImage: "scope")
                     matchupFocusCard(matchup)
 
-                    factsSectionTitle("Team Intel", systemImage: "person.2.fill")
-                    drawerModule {
-                        VStack(spacing: 0) {
-                            matchupTeamIntelCard(
-                                team: matchup.topTeam,
-                                pros: matchup.topTeamPros ?? [],
-                                cons: matchup.topTeamCons ?? [],
-                                isWinner: matchup.winner?.id == matchup.topTeam?.id
-                            )
-                            drawerModuleDivider
-                            matchupTeamIntelCard(
-                                team: matchup.bottomTeam,
-                                pros: matchup.bottomTeamPros ?? [],
-                                cons: matchup.bottomTeamCons ?? [],
-                                isWinner: matchup.winner?.id == matchup.bottomTeam?.id
-                            )
-                        }
-                    }
-
                     if let rationale = matchup.rationale, !rationale.isEmpty {
-                        factsSectionTitle("Matchup Note", systemImage: "text.quote")
                         matchupRationaleCard(rationale)
                     }
                 } else {
-                    factsSectionTitle("Selected Matchup", systemImage: "cursorarrow.click.2")
                     matchupEmptyState
                 }
             }
@@ -936,31 +1017,79 @@ struct MarchMadnessBracketView: View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 12) {
                 if let matchup = selectedMatchup {
-                    factsSectionTitle("Gary's Pick", systemImage: "sparkles.rectangle.stack.fill")
-                    pickHeroCard(matchup)
-
+                    // Single combined card: pick + pros/cons + rationale
                     if let winner = matchup.winner {
-                        factsSectionTitle("Ticket To Advance", systemImage: "arrow.up.right")
-                        pickWinnerSummaryCard(matchup, winner: winner)
-
-                        let pickedTeamNotes = pickedTeamBreakdown(for: matchup)
-                        factsSectionTitle("Why He's On \(winner.shortName)", systemImage: "person.crop.rectangle.stack.fill")
                         drawerModule {
-                            matchupTeamIntelCard(
-                                team: pickedTeamNotes.team,
-                                pros: pickedTeamNotes.pros,
-                                cons: pickedTeamNotes.cons,
-                                isWinner: true
-                            )
+                            VStack(alignment: .leading, spacing: 14) {
+                                // Pick header
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("GARY PICKS")
+                                            .font(.system(size: 8.5, weight: .heavy))
+                                            .tracking(1.6)
+                                            .foregroundStyle(BracketLayout.accentGold)
+                                        Text(winner.shortName)
+                                            .font(.system(size: 20, weight: .bold))
+                                            .foregroundStyle(BracketLayout.primaryText)
+                                    }
+                                    Spacer()
+                                    VStack(alignment: .trailing, spacing: 4) {
+                                        if let confidence = matchup.confidence {
+                                            Text("\(Int(confidence))%")
+                                                .font(.system(size: 14, weight: .heavy, design: .monospaced))
+                                                .foregroundStyle(BracketLayout.accentGold)
+                                        }
+                                        if matchup.isUpset == true {
+                                            Text("UPSET")
+                                                .font(.system(size: 8, weight: .heavy))
+                                                .tracking(1)
+                                                .foregroundStyle(BracketLayout.incorrectRed)
+                                        }
+                                    }
+                                }
+
+                                // Compact pros/cons inline
+                                let notes = pickedTeamBreakdown(for: matchup)
+                                if !notes.pros.isEmpty || !notes.cons.isEmpty {
+                                    Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
+                                    HStack(alignment: .top, spacing: 16) {
+                                        if !notes.pros.isEmpty {
+                                            matchupBulletSection("Pros", items: Array(notes.pros.prefix(3)), tint: BracketLayout.correctGreen)
+                                        }
+                                        if !notes.cons.isEmpty {
+                                            matchupBulletSection("Watchouts", items: Array(notes.cons.prefix(2)), tint: BracketLayout.incorrectRed)
+                                        }
+                                    }
+                                }
+
+                                // Rationale as bullets inline
+                                if let rationale = matchup.rationale, !rationale.isEmpty {
+                                    Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("RATIONALE")
+                                            .font(.system(size: 8, weight: .heavy))
+                                            .tracking(1.4)
+                                            .foregroundStyle(BracketLayout.accentGold.opacity(0.7))
+                                    }
+                                    let bullets = rationaleIntoBullets(rationale)
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        ForEach(Array(bullets.prefix(4).enumerated()), id: \.offset) { _, bullet in
+                                            HStack(alignment: .top, spacing: 8) {
+                                                Circle().fill(BracketLayout.accentGold).frame(width: 4, height: 4).padding(.top, 6)
+                                                Text(bullet)
+                                                    .font(.system(size: 13.5, weight: .regular))
+                                                    .foregroundStyle(.white.opacity(0.88))
+                                                    .lineSpacing(4)
+                                                    .fixedSize(horizontal: false, vertical: true)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     } else {
-                        factsSectionTitle("Ticket To Advance", systemImage: "hourglass")
+                        factsSectionTitle("Pending", systemImage: "hourglass")
                         pickPendingState
-                    }
-
-                    if let rationale = matchup.rationale, !rationale.isEmpty {
-                        factsSectionTitle("Why", systemImage: "text.quote")
-                        matchupRationaleCard(rationale)
                     }
 
                     if matchup.correct != nil || matchup.actualWinner != nil {
@@ -983,13 +1112,13 @@ struct MarchMadnessBracketView: View {
         return drawerModule {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .top, spacing: 10) {
-                    VStack(alignment: .leading, spacing: 3) {
+                    VStack(alignment: .leading, spacing: 4) {
                         Text(matchup.roundName)
-                            .font(.system(size: 9, weight: .heavy))
-                            .tracking(1.8)
+                            .font(.system(size: 10.5, weight: .heavy))
+                            .tracking(1.6)
                             .foregroundStyle(BracketLayout.accentGold)
                         Text(matchup.region)
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(BracketLayout.primaryText.opacity(0.9))
                     }
 
@@ -997,7 +1126,7 @@ struct MarchMadnessBracketView: View {
 
                     if let confidence = matchup.confidence {
                         Text("\(Int(confidence))%")
-                            .font(.system(size: 12, weight: .heavy, design: .monospaced))
+                            .font(.system(size: 16, weight: .heavy, design: .monospaced))
                             .foregroundStyle(BracketLayout.accentGold)
                     }
                 }
@@ -1044,13 +1173,13 @@ struct MarchMadnessBracketView: View {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(seed)
                     .font(.system(size: 12.5, weight: .heavy, design: .monospaced))
-                    .foregroundStyle(isWinner ? BracketLayout.accentGold : BracketLayout.secondaryText)
+                    .foregroundStyle(isWinner ? BracketLayout.accentGold : BracketLayout.panelSecondaryText)
                     .frame(width: 28, alignment: .leading)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(school)
                         .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(BracketLayout.primaryText)
+                        .foregroundStyle(BracketLayout.panelText)
                         .lineLimit(1)
                     Text(mascot)
                         .font(.system(size: 9.5, weight: .heavy))
@@ -1088,9 +1217,9 @@ struct MarchMadnessBracketView: View {
     }
 
     private func matchupBulletSection(_ title: String, items: [String], tint: Color) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             Text(title.uppercased())
-                .font(.system(size: 8, weight: .heavy))
+                .font(.system(size: 10, weight: .heavy))
                 .tracking(1.4)
                 .foregroundStyle(tint)
             ForEach(items, id: \.self) { item in
@@ -1098,10 +1227,11 @@ struct MarchMadnessBracketView: View {
                     Rectangle()
                         .fill(tint.opacity(0.9))
                         .frame(width: 5, height: 1.4)
-                        .padding(.top, 4)
+                        .padding(.top, 6)
                     Text(item)
-                        .font(.system(size: 10.5))
-                        .foregroundStyle(BracketLayout.secondaryText)
+                        .font(.system(size: 13))
+                        .foregroundStyle(.white.opacity(0.85))
+                        .lineSpacing(3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -1110,13 +1240,60 @@ struct MarchMadnessBracketView: View {
     }
 
     private func matchupRationaleCard(_ rationale: String) -> some View {
-        drawerModule(accent: Color.white.opacity(0.22)) {
-            Text(rationale)
-                .font(.system(size: 11.5, weight: .medium))
-                .foregroundStyle(BracketLayout.secondaryText)
-                .lineSpacing(3)
-                .fixedSize(horizontal: false, vertical: true)
+        let bullets = rationaleIntoBullets(rationale)
+        return drawerModule(accent: BracketLayout.accentGold) {
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(Array(bullets.prefix(4).enumerated()), id: \.offset) { _, bullet in
+                    HStack(alignment: .top, spacing: 8) {
+                        Circle()
+                            .fill(BracketLayout.accentGold)
+                            .frame(width: 4, height: 4)
+                            .padding(.top, 6)
+                        Text(bullet)
+                            .font(.system(size: 13.5, weight: .regular))
+                            .foregroundStyle(.white.opacity(0.88))
+                            .lineSpacing(4)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
         }
+    }
+
+    private func rationaleIntoBullets(_ text: String) -> [String] {
+        // Strip out PROS/CONS sections — they're shown separately
+        var cleaned = text
+        cleaned = cleaned.replacing(/\n.*PROS:\n(.*\n)*/, with: "\n")
+        cleaned = cleaned.replacing(/\n.*CONS:\n(.*\n)*/, with: "\n")
+        // Also strip lines that start with "- " after a PROS/CONS header
+        let lines = cleaned.components(separatedBy: "\n")
+        var filteredLines: [String] = []
+        var inProsCons = false
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.uppercased().contains("PROS:") || trimmed.uppercased().contains("CONS:") {
+                inProsCons = true
+                continue
+            }
+            if inProsCons && (trimmed.hasPrefix("- ") || trimmed.hasPrefix("– ")) {
+                continue
+            }
+            inProsCons = false
+            if !trimmed.isEmpty { filteredLines.append(trimmed) }
+        }
+        let cleanedText = filteredLines.joined(separator: "\n\n")
+
+        // Split by paragraphs first, then by sentences if needed
+        let paragraphs = cleanedText.components(separatedBy: "\n\n").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        if paragraphs.count >= 3 {
+            return paragraphs.compactMap { para in
+                let sentences = para.components(separatedBy: ". ")
+                let key = sentences.prefix(2).joined(separator: ". ")
+                return key.isEmpty ? nil : (key.hasSuffix(".") ? key : key + ".")
+            }
+        }
+        let sentences = cleanedText.components(separatedBy: ". ").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { $0.count > 20 }
+        return sentences.prefix(4).map { $0.hasSuffix(".") ? $0 : $0 + "." }
     }
 
     private func pickHeroCard(_ matchup: BracketMatchup) -> some View {
@@ -2527,6 +2704,14 @@ struct MarchMadnessBracketView: View {
         allMatchups.filter { $0.isUpset == true }
     }
 
+    // ESPN bracket scoring: 10/20/40/80/160/320 per correct pick by round
+    private var espnBracketScore: Int {
+        let pointsByRound = [1: 10, 2: 20, 3: 40, 4: 80, 5: 160, 6: 320]
+        return allMatchups
+            .filter { $0.correct == true }
+            .reduce(0) { total, m in total + (pointsByRound[m.round] ?? 10) }
+    }
+
     // MARK: - Data Loading
 
     private func loadBracketData() {
@@ -3682,11 +3867,7 @@ struct GameZoomView: View {
                 }
             }
 
-            floatingPickOverlay
-                .padding(.horizontal, 24)
-                .padding(.bottom, 24)
-                .opacity(stageVisible ? 1.0 : 0.0)
-                .offset(y: stageVisible ? 0 : 18)
+            // floatingPickOverlay removed
         }
         .onAppear {
             withAnimation(.spring(response: 0.48, dampingFraction: 0.84)) {

@@ -40,6 +40,12 @@
 		DD440008DDDD000800000008 /* AuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC330008CCCC000800000008 /* AuthManager.swift */; };
 		DD440009DDDD000900000009 /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC330009CCCC000900000009 /* AuthView.swift */; };
 		DD44000ADDDD000A0000000A /* AuthenticationServices.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CC33000ACCCC000A0000000A /* AuthenticationServices.framework */; };
+		EE110010EE110010EE110010 /* GaryOrbView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF220010FF220010FF220010 /* GaryOrbView.swift */; };
+		EE110011EE110011EE110011 /* GaryVoiceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF220011FF220011FF220011 /* GaryVoiceService.swift */; };
+		EE110012EE110012EE110012 /* GaryChatAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF220012FF220012FF220012 /* GaryChatAPI.swift */; };
+		EE110013EE110013EE110013 /* GaryChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF220013FF220013FF220013 /* GaryChatView.swift */; };
+		EE110014EE110014EE110014 /* GaryChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF220014FF220014FF220014 /* GaryChatViewModel.swift */; };
+		EE110015EE110015EE110015 /* GaryOrbShaders.metal in Sources */ = {isa = PBXBuildFile; fileRef = FF220015FF220015FF220015 /* GaryOrbShaders.metal */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -78,6 +84,12 @@
 		CC330008CCCC000800000008 /* AuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthManager.swift; sourceTree = "<group>"; };
 		CC330009CCCC000900000009 /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
 		CC33000ACCCC000A0000000A /* AuthenticationServices.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AuthenticationServices.framework; path = System/Library/Frameworks/AuthenticationServices.framework; sourceTree = SDKROOT; };
+		FF220010FF220010FF220010 /* GaryOrbView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GaryOrbView.swift; sourceTree = "<group>"; };
+		FF220011FF220011FF220011 /* GaryVoiceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GaryVoiceService.swift; sourceTree = "<group>"; };
+		FF220012FF220012FF220012 /* GaryChatAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GaryChatAPI.swift; sourceTree = "<group>"; };
+		FF220013FF220013FF220013 /* GaryChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GaryChatView.swift; sourceTree = "<group>"; };
+		FF220014FF220014FF220014 /* GaryChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GaryChatViewModel.swift; sourceTree = "<group>"; };
+		FF220015FF220015FF220015 /* GaryOrbShaders.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = GaryOrbShaders.metal; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -121,6 +133,12 @@
 				26AE11992E449EB95857D6E3 /* SettingsView.swift */,
 				58C162EF98D65308171329E2 /* SupabaseAPI.swift */,
 				44D1E52AFB4EED7E97F55C36 /* Views.swift */,
+				FF220010FF220010FF220010 /* GaryOrbView.swift */,
+				FF220011FF220011FF220011 /* GaryVoiceService.swift */,
+				FF220012FF220012FF220012 /* GaryChatAPI.swift */,
+				FF220013FF220013FF220013 /* GaryChatView.swift */,
+				FF220014FF220014FF220014 /* GaryChatViewModel.swift */,
+				FF220015FF220015FF220015 /* GaryOrbShaders.metal */,
 				9BF04537F523600B06ACFE41 /* Fonts */,
 			);
 			name = GaryApp;
@@ -265,6 +283,12 @@
 				F2A5809FF32535CE29C4E79A /* SettingsView.swift in Sources */,
 				D810CCA6C81972A7A21BD77F /* SupabaseAPI.swift in Sources */,
 				B313EC36BDDDB18E9F687643 /* Views.swift in Sources */,
+				EE110010EE110010EE110010 /* GaryOrbView.swift in Sources */,
+				EE110011EE110011EE110011 /* GaryVoiceService.swift in Sources */,
+				EE110012EE110012EE110012 /* GaryChatAPI.swift in Sources */,
+				EE110013EE110013EE110013 /* GaryChatView.swift in Sources */,
+				EE110014EE110014EE110014 /* GaryChatViewModel.swift in Sources */,
+				EE110015EE110015EE110015 /* GaryOrbShaders.metal in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -306,7 +330,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = SFBTX6KPLM;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -327,7 +351,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				INFOPLIST_FILE = Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				MARKETING_VERSION = 2.0;
+				MARKETING_VERSION = 2.12;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -393,7 +417,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = SFBTX6KPLM;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -408,7 +432,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				INFOPLIST_FILE = Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				MARKETING_VERSION = 2.0;
+				MARKETING_VERSION = 2.12;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = ai.betwithgary.app;

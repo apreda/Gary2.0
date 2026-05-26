@@ -1445,12 +1445,18 @@ struct WhatsNewSection: View {
     @State private var expanded = true
 
     // (icon, title, tab index)
-    private let items: [(icon: String, title: String, tab: Int)] = [
-        ("basketball.fill", "NCAA Bracket", 3),
-        ("baseball.fill", "MLB Season", 1),
-        ("chart.line.uptrend.xyaxis", "Billfold", 5),
-        ("sparkles", "Props", 2),
-    ]
+    // BRACKET ARCHIVED — re-add ("basketball.fill", "NCAA Bracket", 3) next March
+    // and bump Billfold's tab back to 5.
+    private var items: [(icon: String, title: String, tab: Int)] {
+        var entries: [(icon: String, title: String, tab: Int)] = []
+        if showBracketTab {
+            entries.append(("basketball.fill", "NCAA Bracket", 3))
+        }
+        entries.append(("baseball.fill", "MLB Season", 1))
+        entries.append(("chart.line.uptrend.xyaxis", "Billfold", showBracketTab ? 5 : 4))
+        entries.append(("sparkles", "Props", 2))
+        return entries
+    }
 
     var body: some View {
         VStack(spacing: 8) {
@@ -1550,7 +1556,9 @@ struct HomeView: View {
     @State private var yesterdayTopPickResult: String? = nil
     @State private var yesterdayTopProp: PropPick? = nil
     @State private var yesterdayTopPropResult: String? = nil
-    
+    @State private var selectedPick: GaryPick? = nil
+    @State private var selectedProp: PropPick? = nil
+
     // Dynamic hero image based on most recent performance
     private var heroImage: String {
         let total = yesterdayRecord.wins + yesterdayRecord.losses
@@ -1597,20 +1605,31 @@ struct HomeView: View {
                     VStack(spacing: 0) {
 
                         // ── Hero: Logo + What's New ──
+                        // BRACKET ARCHIVED: when showBracketTab is true (next March),
+                        // restore the GaryMadness logo + Bracket pill in this section.
                         HStack(alignment: .center, spacing: 14) {
-                            // Left: large logo → taps to Bracket
-                            Button {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                    selectedTab = 3
+                            if showBracketTab {
+                                // Left: large logo → taps to Bracket
+                                Button {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                        selectedTab = 3
+                                    }
+                                } label: {
+                                    Image("GaryMadness")
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 194, height: 194)
+                                        .shadow(color: GaryColors.gold.opacity(0.25), radius: 16)
                                 }
-                            } label: {
-                                Image("GaryMadness")
+                                .buttonStyle(.plain)
+                            } else {
+                                // Performance-based Gary image (depends on yesterday's record)
+                                Image(heroImage)
                                     .resizable()
                                     .scaledToFit()
                                     .frame(width: 194, height: 194)
-                                    .shadow(color: GaryColors.gold.opacity(0.25), radius: 16)
+                                    .shadow(color: heroImageGlow.opacity(0.25), radius: 16)
                             }
-                            .buttonStyle(.plain)
 
                             // Right: What's New as compact horizontal pills
                             VStack(alignment: .leading, spacing: 8) {
@@ -1620,7 +1639,9 @@ struct HomeView: View {
                                     .foregroundStyle(GaryColors.gold.opacity(0.4))
 
                                 VStack(spacing: 6) {
-                                    homeNavPill(icon: "basketball.fill", title: "Bracket", tab: 3)
+                                    if showBracketTab {
+                                        homeNavPill(icon: "basketball.fill", title: "Bracket", tab: 3)
+                                    }
                                     Button {
                                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                             selectedTab = 1
@@ -1651,6 +1672,7 @@ struct HomeView: View {
                                     }
                                     .buttonStyle(.plain)
                                     homeNavPill(icon: "sparkles", title: "Props", tab: 2)
+                                    homeNavPill(icon: "chart.bar.fill", title: "Billfold", tab: showBracketTab ? 5 : 4)
                                 }
                             }
                             .offset(y: -18)
@@ -1676,15 +1698,21 @@ struct HomeView: View {
                         }
 
                         // ── Today's Picks ──
-                        VStack(spacing: 10) {
+                        VStack(spacing: 0) {
                             // Top Pick
                             if let pick = freePick {
                                 VStack(alignment: .leading, spacing: 5) {
                                     Text("Today's Top Picks")
                                         .font(.system(size: 12, weight: .bold))
-                                        .foregroundStyle(.white.opacity(0.5))
+                                        .foregroundStyle(GaryColors.gold)
                                         .padding(.leading, 4)
                                     CompactPickRow(pick: pick)
+                                        .contentShape(Rectangle())
+                                        .onTapGesture {
+                                            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                                                selectedPick = pick
+                                            }
+                                        }
                                 }
                             } else if !loading {
                                 // Show yesterday's top results with W/L stamps
@@ -1698,35 +1726,25 @@ struct HomeView: View {
 
                                     if let yPick = yesterdayTopPick {
                                         CompactPickRow(pick: yPick, gameResult: yesterdayTopPickResult)
+                                            .contentShape(Rectangle())
+                                            .onTapGesture {
+                                                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                                                    selectedPick = yPick
+                                                }
+                                            }
                                     }
                                 }
                             }
 
-                            // Top Prop (only shown when available — "Picks drop daily" blur covers both)
+                            // Top Prop — stacked directly below with no gap
                             if let prop = freeProp {
-                                VStack(alignment: .leading, spacing: 5) {
-                                    HStack {
-                                        Text("TODAY'S TOP PROP")
-                                            .font(.system(size: 10, weight: .heavy))
-                                            .tracking(1)
-                                            .foregroundStyle(.white.opacity(0.3))
-                                        Spacer()
-                                        Button {
-                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                                selectedTab = 2
-                                            }
-                                        } label: {
-                                            Text("ALL PROPS")
-                                                .font(.system(size: 9, weight: .black))
-                                                .tracking(0.5)
-                                                .foregroundStyle(GaryColors.gold)
-                                        }
-                                    }
-                                    .padding(.leading, 4)
-                                    CompactPropRow(prop: prop, showSportBadge: true)
-                                }
+                                CompactPropRow(prop: prop, showSportBadge: true)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture { selectedProp = prop }
                             } else if !loading, let yProp = yesterdayTopProp {
                                 CompactPropRow(prop: yProp, gameResult: yesterdayTopPropResult, showSportBadge: true)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture { selectedProp = yProp }
                             }
                         }
                         .padding(.horizontal, 16)
@@ -1735,6 +1753,7 @@ struct HomeView: View {
                         .animation(.easeOut(duration: 0.6).delay(0.15), value: animateIn)
 
                         // ── How Gary Works — Tabbed Feature Display ──
+                        // (Talk to Gary moved to its own primary tab in the nav bar)
                         HowGaryWorksSection()
                         .padding(.horizontal, 16)
                         .padding(.top, 10)
@@ -1751,7 +1770,31 @@ struct HomeView: View {
                     .padding(.bottom, 100)
                 }
             }
-        }.task {
+        }
+        .overlay {
+            if let pick = selectedPick {
+                PickDetailPopup(
+                    pick: pick,
+                    gameResult: yesterdayTopPick?.pick_id == pick.pick_id ? yesterdayTopPickResult : nil,
+                    onDismiss: { selectedPick = nil }
+                )
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                .zIndex(100)
+            }
+        }
+        .overlay {
+            if let prop = selectedProp {
+                PropDetailPopup(prop: prop) {
+                    selectedProp = nil
+                }
+                .transition(.opacity)
+                .zIndex(100)
+            }
+        }
+        .onChange(of: selectedPick?.pick_id) { _ in
+            PickDetailState.shared.isShowing = selectedPick != nil
+        }
+        .task {
             do {
                 try await withTimeout(seconds: 30) {
                     // PARALLEL FETCH: Run all independent API calls simultaneously
@@ -1889,36 +1932,12 @@ struct HomeView: View {
                         return isGameToday || (isBeforeCutoff && wasGameYesterday)
                     }
 
-                    // Select Top Pick: Check for is_top_pick first, then use thesis-based scoring
+                    // Select Top Pick: manual override first, then highest confidence
                     if let picks = todayOnlyPicks, !picks.isEmpty {
-                        // 1. Check for manual override (is_top_pick: true)
                         if let manualTopPick = picks.first(where: { $0.is_top_pick == true }) {
                             freePick = manualTopPick
                         } else {
-                            // 2. Use thesis-based scoring (same as web app)
-                            let scoredPicks = picks.compactMap { pick -> (pick: GaryPick, score: Double)? in
-                                guard let thesisType = pick.thesis_type else {
-                                    // Fallback to confidence for old picks
-                                    let conf = pick.confidence ?? 0
-                                    return (pick, conf * 10)
-                                }
-
-                                let majorCount = pick.contradicting_factors?.major?.count ?? 0
-                                let confidence = pick.confidence ?? 0
-
-                                var baseScore: Double = 0
-                                if thesisType == "clear_read" {
-                                    baseScore = 1000 - (Double(majorCount) * 100)
-                                } else if thesisType == "found_angle" {
-                                    baseScore = 700 - (Double(majorCount) * 100)
-                                } else {
-                                    baseScore = confidence * 10
-                                }
-
-                                return (pick, baseScore + confidence)
-                            }.sorted { $0.score > $1.score }
-
-                            freePick = scoredPicks.first?.pick ?? picks.first
+                            freePick = picks.sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.first
                         }
                     } else {
                         freePick = nil
@@ -2181,28 +2200,27 @@ struct ConferenceFilterBar: View {
 struct SportFilterBar: View {
     @Binding var selected: Sport
     let availableSports: Set<String>
+    var todaySports: Set<String> = []  // Sports with picks TODAY — sorted closest to "All"
     var showAll: Bool = true  // Whether to show the ALL option
     var showPropsOnly: Bool = false  // Whether to show props-only filters (like NFL TDs)
-    
-    // Sort sports: ALL first, then available sports, then unavailable sports (faded)
+
+    // Sort: ALL → sports with today's picks → sports with yesterday data → unavailable (faded)
     private var sortedSports: [Sport] {
         Sport.allCases.sorted { a, b in
-            // ALL always comes first
             if a == .all { return true }
             if b == .all { return false }
-            
+
+            let aToday = todaySports.contains(a.rawValue)
+            let bToday = todaySports.contains(b.rawValue)
+            if aToday && !bToday { return true }
+            if !aToday && bToday { return false }
+
             let aAvailable = availableSports.contains(a.rawValue)
             let bAvailable = availableSports.contains(b.rawValue)
-            
-            // Available sports come before unavailable
             if aAvailable && !bAvailable { return true }
             if !aAvailable && bAvailable { return false }
-            
-            // Within same availability group, maintain original order
-            let allCases = Sport.allCases
-            let aIndex = allCases.firstIndex(of: a) ?? 0
-            let bIndex = allCases.firstIndex(of: b) ?? 0
-            return aIndex < bIndex
+
+            return (Sport.allCases.firstIndex(of: a) ?? 0) < (Sport.allCases.firstIndex(of: b) ?? 0)
         }
     }
     
@@ -2482,7 +2500,7 @@ struct GaryPicksView: View {
                         .frame(height: 74)
                         .offset(y: -10)
 
-                    SportFilterBar(selected: $selectedSport, availableSports: availableSports, showAll: true)
+                    SportFilterBar(selected: $selectedSport, availableSports: availableSports, todaySports: sportsWithFreshPicks, showAll: true)
                         .onChange(of: selectedSport) { _ in
                             selectedConference = "All"
                         }
@@ -2910,7 +2928,7 @@ struct GaryPropsView: View {
                         .frame(height: 74)
                         .offset(y: -10)
 
-                    SportFilterBar(selected: $selectedSport, availableSports: availableSports, showPropsOnly: true)
+                    SportFilterBar(selected: $selectedSport, availableSports: availableSports, todaySports: sportsWithFreshProps, showPropsOnly: true)
                         .offset(x: -4, y: 10)
                 }
                 .padding(.leading, 10)
@@ -5384,10 +5402,25 @@ struct PickCardMobile: View {
     
     // MARK: - Extracted Sub-Views (fixes type-checking timeout)
     
+    /// NBA/NHL playoff label — overrides Gary's freeform gameSignificance when
+    /// tournamentContext indicates the game is part of the playoffs.
+    private var playoffContextLabel: String? {
+        let league = (pick.league ?? "").uppercased()
+        guard league == "NBA" || league == "NHL" else { return nil }
+        guard let ctx = pick.tournamentContext, !ctx.isEmpty else { return nil }
+        let lower = ctx.lowercased()
+        guard lower.contains("playoff") || lower.contains("stanley cup") || lower.contains("conference finals") else { return nil }
+        return ctx.uppercased()
+    }
+
     /// Generic game significance for any sport (Division Rivals, Top 5 Battle, etc.)
     private var genericGameSignificance: String? {
         // Skip if NFL (has its own handler) or NBA Cup (has its own badge)
         if isNFL || isNBACup { return nil }
+        // Playoff tournamentContext wins over Gary's freeform gameSignificance
+        if let playoff = playoffContextLabel {
+            return playoff
+        }
         // Use gameSignificance if it's a short, meaningful label
         if let sig = pick.shortGameSignificance, sig.count < 30 {
             return sig
@@ -9439,21 +9472,34 @@ enum Formatters {
     /// Get short team name for display
     /// - For NCAAB/NCAAF: Returns school name (e.g., "Nebraska" from "Nebraska Cornhuskers")
     /// - For pro sports: Returns mascot (e.g., "Thunder" from "Oklahoma City Thunder")
+    // Multi-word mascots that must stay together when shortening team names
+    private static let twoWordMascots = [
+        "Red Sox", "White Sox", "Blue Jays", "Trail Blazers",
+        "Maple Leafs", "Blue Jackets", "Golden Knights",
+        "Red Wings", "Tar Heels"
+    ]
+
     static func shortTeamName(_ team: String?, league: String? = nil) -> String {
         guard let team = team, !team.isEmpty else { return "" }
         let words = team.split(separator: " ").map(String.init)
-        
+
         guard words.count > 1 else { return team }
-        
+
         // Check if this is a college sport
         let leagueUpper = (league ?? "").uppercased()
         let isCollege = leagueUpper == "NCAAB" || leagueUpper == "NCAAF"
-        
+
         if isCollege {
             // For college: return school name (remove mascot from end)
             return collegeSchoolName(words)
         } else {
-            // For pro sports: return mascot (last word)
+            // For pro sports: return mascot. Check for two-word mascots first.
+            let teamLower = team.lowercased()
+            for mascot in twoWordMascots {
+                if teamLower.hasSuffix(mascot.lowercased()) {
+                    return mascot
+                }
+            }
             return words.last ?? team
         }
     }
