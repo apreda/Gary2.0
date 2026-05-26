@@ -1,24 +1,37 @@
 // ═══════════════════════════════════════════════════════════════════════════
-// GEMINI MODEL POLICY (2026 AGENTIC OPTIMIZATION)
+// GEMINI MODEL POLICY (May 2026 — Gemini 3.5 Flash GA)
 // ═══════════════════════════════════════════════════════════════════════════
-// ONLY Gemini 3 models are allowed. NEVER use Gemini 1.x or 2.x.
+// ONLY Gemini 3.x models are allowed. NEVER use Gemini 1.x or 2.x.
 //
-// 3.1 Pro (main) + Flash (research):
-//   - Gemini 3.1 Pro: Full pipeline (Pass 1 → Pass 2.5 → Pass 3)
-//   - Gemini 3 Flash: Research assistant (tool-calling investigation before Gary starts)
-//   - Pro session persists throughout (no context loss)
+// Tier 1 — Gary's brain (game picks):
+//   gemini-3.5-flash (GA, May 19 2026) — outperforms 3.1 Pro on agentic
+//   + coding benchmarks (Terminal-Bench 2.1: 76.2%, MCP Atlas: 83.6%),
+//   $1.50/$9 vs Pro's $2/$12. Google: "particularly effective for rapid
+//   agentic loops" — that's literally Gary.
+//
+// Tier 2 — Research assistant, props, DFS:
+//   gemini-3-flash-preview ($0.50/$3) — cheap and called many times
+//   per pick. Quality is sufficient for tool-calling research and
+//   constrained prop selection.
+//
+// Tier 3 — Fallback when Tier 1 errors / rate-limits:
+//   gemini-3.1-pro-preview — different model family, similar capability,
+//   keeps the pipeline producing if 3.5 Flash hiccups.
+//
+// Note: gemini-3-pro-preview shut down March 9, 2026 — do not reintroduce.
 // ═══════════════════════════════════════════════════════════════════════════
 
-// Primary model for all flows (game picks, props, DFS, research).
-// Flash is fast enough and the reasoning benchmarks are close to Pro — default everywhere.
-export const GEMINI_PRO_MODEL = 'gemini-3-flash-preview';
-// Fallback when Flash 429s or errors — switch to 3.1 Pro so we keep generating picks.
-// (gemini-3-pro-preview was shut down March 9, 2026 — do not reintroduce it.)
+// Primary "brain" model — used for game picks (the Gary side).
+export const GEMINI_PRO_MODEL = 'gemini-3.5-flash';
+// Fallback when the primary errors / rate-limits.
 export const GEMINI_PRO_FALLBACK = 'gemini-3.1-pro-preview';
+// Cheaper Flash for research, props, DFS, and tool-calling investigation.
+export const GEMINI_FLASH_MODEL = 'gemini-3-flash-preview';
 
 export const ALLOWED_GEMINI_MODELS = [
-  'gemini-3-flash-preview',  // Primary: game picks, props, DFS, research
-  'gemini-3.1-pro-preview',  // Fallback: when Flash is throttled or failing
+  'gemini-3.5-flash',         // Tier 1: Gary's brain — game picks
+  'gemini-3-flash-preview',   // Tier 2: research, props, DFS
+  'gemini-3.1-pro-preview',   // Tier 3: fallback only
 ];
 
 export function validateGeminiModel(model) {
@@ -61,4 +74,4 @@ export const GEMINI_SAFETY_SETTINGS = [
 // Real-world observed: 27 stat + 6 grounding + 5 iterations ≈ 250s
 export const RESEARCH_BRIEFING_TIMEOUT_MS = 3600000; // 1 hour — let research finish naturally, never kill due to time
 
-console.log(`[Orchestrator] Flash primary + 3.1 Pro fallback (research + grounding)`);
+console.log(`[Orchestrator] ${GEMINI_PRO_MODEL} primary + ${GEMINI_FLASH_MODEL} research + ${GEMINI_PRO_FALLBACK} fallback`);

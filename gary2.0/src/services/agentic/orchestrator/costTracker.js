@@ -4,15 +4,17 @@
 // Tracks input/output tokens per model across a pipeline run.
 // Output tokens include thinking tokens (Gemini API bundles them together).
 //
-// Pricing (March 2026, Gemini Developer API):
-//   Pro 3.1:  $2.00/1M input, $12.00/1M output (incl. thinking)
-//   Flash 3:  $0.50/1M input,  $3.00/1M output (incl. thinking)
-//   Grounding: $14.00/1K queries (after 5K free/month)
+// Pricing (May 2026, Gemini Developer API):
+//   Flash 3.5:  $1.50/1M input,  $9.00/1M output — primary brain (GA)
+//   Pro 3.1:    $2.00/1M input, $12.00/1M output — fallback only
+//   Flash 3:    $0.50/1M input,  $3.00/1M output — research + props + DFS
+//   Grounding:  $14.00/1K queries (after 5K free/month)
 // ═══════════════════════════════════════════════════════════════════════════
 
 const MODEL_RATES = {
-  'gemini-3.1-pro-preview': { input: 2.00, output: 12.00 },
-  'gemini-3-flash-preview': { input: 0.50, output: 3.00 },
+  'gemini-3.5-flash':         { input: 1.50, output: 9.00 },
+  'gemini-3.1-pro-preview':   { input: 2.00, output: 12.00 },
+  'gemini-3-flash-preview':   { input: 0.50, output: 3.00 },
 };
 
 export function createCostTracker(pipelineLabel) {
@@ -81,7 +83,9 @@ export function createCostTracker(pipelineLabel) {
 
       console.log(`\n[Cost] ═══ ${pipelineLabel} ═══`);
       for (const b of breakdown) {
-        const shortModel = b.model.includes('pro') ? 'Pro' : 'Flash';
+        let shortModel = 'Flash';
+        if (b.model.includes('3.5-flash')) shortModel = 'Flash 3.5';
+        else if (b.model.includes('pro')) shortModel = 'Pro';
         console.log(`[Cost]   ${shortModel}: ${b.calls} calls, ${(b.inputTokens / 1000).toFixed(1)}K in ($${b.inputCost.toFixed(2)}), ${(b.outputTokens / 1000).toFixed(1)}K out ($${b.outputCost.toFixed(2)}) = $${b.modelCost.toFixed(2)}`);
       }
       if (gc > 0) {

@@ -1,4 +1,4 @@
-import { CONFIG, GEMINI_PRO_MODEL, GEMINI_PRO_FALLBACK, validateGeminiModel, RESEARCH_BRIEFING_TIMEOUT_MS } from './orchestratorConfig.js';
+import { CONFIG, GEMINI_PRO_MODEL, GEMINI_PRO_FALLBACK, GEMINI_FLASH_MODEL, validateGeminiModel, RESEARCH_BRIEFING_TIMEOUT_MS } from './orchestratorConfig.js';
 import { rotateToBackupKey, isUsingBackupKey, resetToPrimaryKey } from '../modelConfig.js';
 import { createGeminiSession, sendToSession, sendToSessionWithRetry } from './sessionManager.js';
 import { extractTextualSummaryForModelSwitch, buildFlashResearchBriefing } from './flashAdvisor.js';
@@ -98,38 +98,25 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   const bilateralFn = options.bilateralCasePrompt || null;
   const modelOverride = process.env.GARY_MODEL_OVERRIDE || null;
 
-  // NBA/NHL playoff games get upgraded to 3.1 Pro for Gary's reasoning (game picks only,
-  // not props, not the Flash research assistant). Detected via tournamentContext stamped
-  // on the game object by the scout report builder.
-  const tournamentCtx = String(options.game?.tournamentContext || '').toLowerCase();
-  const isPlayoffGame =
-    isGamePicksMode &&
-    (sport === 'basketball_nba' || sport === 'NBA' || sport === 'icehockey_nhl' || sport === 'NHL') &&
-    (tournamentCtx.includes('playoff') || tournamentCtx.includes('stanley cup') || tournamentCtx.includes('conference finals'));
-
-  // MLB game picks run on 3.1 Pro for deeper reasoning about volatility, sample size,
-  // and matchup-specific factors (baseball outcomes are inherently noisy game-to-game).
-  const isMlbGamePicks = isGamePicksMode && (sport === 'baseball_mlb' || sport === 'MLB');
-
-  const shouldUsePro = isPlayoffGame || isMlbGamePicks;
-
+  // Model selection (May 2026):
+  //   Game picks  → gemini-3.5-flash (Tier 1 — Gary's brain)
+  //   Props / DFS → gemini-3-flash-preview (Tier 2 — cheaper, sufficient)
+  //   Research assistant is always Tier 2 (separate session, configured below)
+  //
+  // 3.5 Flash outperforms 3.1 Pro on agentic+coding benchmarks while costing
+  // 25% less, so the previous sport-specific "use Pro for MLB / playoffs"
+  // branching is no longer needed — every sport gets the same upgraded brain.
   const primaryModel = modelOverride
     ? modelOverride
     : isPropsMode
-      ? 'gemini-3-flash-preview'
-      : shouldUsePro
-        ? GEMINI_PRO_FALLBACK
-        : GEMINI_PRO_MODEL;
+      ? GEMINI_FLASH_MODEL
+      : GEMINI_PRO_MODEL;
   const modelLabel = modelOverride
     ? `OVERRIDE: ${modelOverride}`
     : isPropsMode
-      ? 'Flash (props)'
-      : isPlayoffGame
-        ? '3.1 Pro (playoff main)'
-        : isMlbGamePicks
-          ? '3.1 Pro (MLB main)'
-          : 'Flash (main)';
-  console.log(`[Orchestrator] Starting ${sport} — ${modelLabel} + Flash (research)`);
+      ? 'Flash 3 (props)'
+      : 'Flash 3.5 (main)';
+  console.log(`[Orchestrator] Starting ${sport} — ${modelLabel} + Flash 3 (research)`);
 
   const propContext = options.propContext || null;
   let propsRetryCount = 0; // Track finalize_props retry attempts
@@ -350,9 +337,9 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
       } catch (error) {
         // ═══════════════════════════════════════════════════════════════════
         // 429 QUOTA CASCADE: Each model tries primary key → backup key before
-        // falling to the next tier. Flash (primary) → 3.1 Pro (fallback) → HARD FAIL.
+        // falling to the next tier. 3.5 Flash (primary) → 3.1 Pro (fallback) → HARD FAIL.
         // ═══════════════════════════════════════════════════════════════════
-        // Flash 429 → try backup key, else cascade to 3.1 Pro fallback (reset to primary key)
+        // Primary 429 → try backup key, else cascade to 3.1 Pro fallback (reset to primary key)
         if (error.isQuotaError && currentModelName === GEMINI_PRO_MODEL) {
           const textualContext = extractTextualSummaryForModelSwitch(messages, toolCallHistory);
           if (textualContext.length < 2000) {
