@@ -1,10 +1,10 @@
-import { getCurrentSeasonString, sportToBdlKey, normalizeSportName, findTeam, fmtNum, fmtPct, fetchBothTeamSeasonStats, fetchNBATeamScoringStats, fetchNBATeamAdvancedStats, fetchNBALeaders, fetchNBATeamBaseStats, fetchNBATeamOpponentStats, fetchNBATeamDefenseStats, fetchTopPlayersForTeam, formatRecentGames, buildPaceAnalysis, BDL_API_KEY, _nbaBaseStatsCache, _nbaAdvancedStatsCache, _nbaOpponentStatsCache, _nbaDefenseStatsCache, _nbaTeamScoringStatsCache, geminiGroundingSearch, isGameCompleted, getBarttovikRatings } from './statRouterCommon.js';
+import { getCurrentSeasonString, sportToBdlKey, normalizeSportName, findTeam, fmtNum, fmtPct, fetchBothTeamSeasonStats, fetchNBATeamScoringStats, fetchNBATeamAdvancedStats, fetchNBALeaders, fetchNBATeamBaseStats, fetchNBATeamOpponentStats, fetchNBATeamDefenseStats, fetchTopPlayersForTeam, formatRecentGames, buildPaceAnalysis, BDL_API_KEY, _nbaBaseStatsCache, _nbaAdvancedStatsCache, _nbaOpponentStatsCache, _nbaDefenseStatsCache, _nbaTeamScoringStatsCache, geminiGroundingSearch, isGameCompleted, getBarttovikRatings, isPostseasonOptions } from './statRouterCommon.js';
 import { ballDontLieService } from '../../../ballDontLieService.js';
 import { ncaabFetchers } from './ncaabFetchers.js';
 
 export const nbaFetchers = {
   // ===== PACE & TEMPO =====
-  PACE: async (bdlSport, home, away, season) => {
+  PACE: async (bdlSport, home, away, season, options) => {
     // For NBA, use BDL Season Averages (Advanced) which includes pace
     if (bdlSport === 'basketball_nba') {
       const [homeStats, awayStats] = await Promise.all([
@@ -35,8 +35,8 @@ export const nbaFetchers = {
     }
     
     const [homeStats, awayStats] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: isPostseasonOptions(options) }),
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: isPostseasonOptions(options) })
     ]);
     
     const homeData = Array.isArray(homeStats) ? homeStats[0] : homeStats;
@@ -58,14 +58,14 @@ export const nbaFetchers = {
     };
   },
 
-  TEMPO: async (bdlSport, home, away, season) => {
+  TEMPO: async (bdlSport, home, away, season, options) => {
     // Alias for PACE in college
     return nbaFetchers.PACE(bdlSport, home, away, season);
   },
 
 
   // ===== EFFICIENCY =====
-  OFFENSIVE_RATING: async (bdlSport, home, away, season) => {
+  OFFENSIVE_RATING: async (bdlSport, home, away, season, options) => {
     // For NBA, use BDL Season Averages (Advanced) - requires GOAT tier
     if (bdlSport === 'basketball_nba') {
       const [homeStats, awayStats] = await Promise.all([
@@ -97,8 +97,8 @@ export const nbaFetchers = {
     
     // For other sports, try BDL team season stats
     const [homeStats, awayStats] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: isPostseasonOptions(options) }),
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: isPostseasonOptions(options) })
     ]);
     
     const homeData = Array.isArray(homeStats) ? homeStats[0] : homeStats;
@@ -119,7 +119,7 @@ export const nbaFetchers = {
     };
   },
 
-  DEFENSIVE_RATING: async (bdlSport, home, away, season) => {
+  DEFENSIVE_RATING: async (bdlSport, home, away, season, options) => {
     // For NBA, use BDL Season Averages (Advanced)
     if (bdlSport === 'basketball_nba') {
       const [homeStats, awayStats] = await Promise.all([
@@ -147,8 +147,8 @@ export const nbaFetchers = {
     
     // For other sports
     const [homeStats, awayStats] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: isPostseasonOptions(options) }),
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: isPostseasonOptions(options) })
     ]);
     
     const homeData = Array.isArray(homeStats) ? homeStats[0] : homeStats;
@@ -169,7 +169,7 @@ export const nbaFetchers = {
     };
   },
 
-  NET_RATING: async (bdlSport, home, away, season) => {
+  NET_RATING: async (bdlSport, home, away, season, options) => {
     // For NBA, use BDL Season Averages (Advanced) with BDL v2 usage/scoring data
     if (bdlSport === 'basketball_nba') {
       const [homeStats, awayStats] = await Promise.all([
@@ -242,8 +242,8 @@ export const nbaFetchers = {
 
     // For other sports (NHL, NFL, NCAAF)
     const [homeStats, awayStats] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: isPostseasonOptions(options) }),
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: isPostseasonOptions(options) })
     ]);
 
     const homeData = Array.isArray(homeStats) ? homeStats[0] : homeStats;
@@ -270,21 +270,21 @@ export const nbaFetchers = {
     };
   },
 
-  ADJ_OFFENSIVE_EFF: async (bdlSport, home, away, season) => {
+  ADJ_OFFENSIVE_EFF: async (bdlSport, home, away, season, options) => {
     return nbaFetchers.OFFENSIVE_RATING(bdlSport, home, away, season);
   },
 
-  ADJ_DEFENSIVE_EFF: async (bdlSport, home, away, season) => {
+  ADJ_DEFENSIVE_EFF: async (bdlSport, home, away, season, options) => {
     return nbaFetchers.DEFENSIVE_RATING(bdlSport, home, away, season);
   },
 
-  ADJ_EFFICIENCY_MARGIN: async (bdlSport, home, away, season) => {
+  ADJ_EFFICIENCY_MARGIN: async (bdlSport, home, away, season, options) => {
     return nbaFetchers.NET_RATING(bdlSport, home, away, season);
   },
 
 
   // ===== FOUR FACTORS =====
-  EFG_PCT: async (bdlSport, home, away, season) => {
+  EFG_PCT: async (bdlSport, home, away, season, options) => {
     // For NBA, use BDL Season Averages (Advanced + Opponent)
     if (bdlSport === 'basketball_nba') {
       const [homeStats, awayStats, homeOpp, awayOpp] = await Promise.all([
@@ -316,8 +316,8 @@ export const nbaFetchers = {
     }
     
     const [homeStats, awayStats] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: isPostseasonOptions(options) }),
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: isPostseasonOptions(options) })
     ]);
     
     const homeData = Array.isArray(homeStats) ? homeStats[0] : homeStats;
@@ -349,7 +349,7 @@ export const nbaFetchers = {
     };
   },
 
-  TURNOVER_RATE: async (bdlSport, home, away, season) => {
+  TURNOVER_RATE: async (bdlSport, home, away, season, options) => {
     // For NBA, use REAL tm_tov_pct from advanced stats + opponent TOV context
     if (bdlSport === 'basketball_nba') {
       const [homeAdvanced, awayAdvanced, homeBase, awayBase, homeOpp, awayOpp] = await Promise.all([
@@ -384,8 +384,8 @@ export const nbaFetchers = {
     
     // For other sports, use getTeamSeasonStats
     const [homeStats, awayStats] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: isPostseasonOptions(options) }),
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: isPostseasonOptions(options) })
     ]);
     
     const homeData = Array.isArray(homeStats) ? homeStats[0] : homeStats;
@@ -415,7 +415,7 @@ export const nbaFetchers = {
     };
   },
 
-  OREB_RATE: async (bdlSport, home, away, season) => {
+  OREB_RATE: async (bdlSport, home, away, season, options) => {
     // For NBA, use REAL oreb_pct from advanced stats + opponent OREB context
     if (bdlSport === 'basketball_nba') {
       const [homeAdvanced, awayAdvanced, homeBase, awayBase, homeOpp, awayOpp] = await Promise.all([
@@ -448,8 +448,8 @@ export const nbaFetchers = {
     
     // For other sports, use getTeamSeasonStats
     const [homeStats, awayStats] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: isPostseasonOptions(options) }),
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: isPostseasonOptions(options) })
     ]);
     
     const homeData = Array.isArray(homeStats) ? homeStats[0] : homeStats;
@@ -483,7 +483,7 @@ export const nbaFetchers = {
     };
   },
 
-  FT_RATE: async (bdlSport, home, away, season) => {
+  FT_RATE: async (bdlSport, home, away, season, options) => {
     // For NBA, use team-level base stats + opponent FT data
     if (bdlSport === 'basketball_nba') {
       const [homeStats, awayStats, homeOpp, awayOpp] = await Promise.all([
@@ -518,8 +518,8 @@ export const nbaFetchers = {
     
     // For other sports, use getTeamSeasonStats
     const [homeStats, awayStats] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: isPostseasonOptions(options) }),
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: isPostseasonOptions(options) })
     ]);
     
     const homeData = Array.isArray(homeStats) ? homeStats[0] : homeStats;
@@ -552,7 +552,7 @@ export const nbaFetchers = {
 
 
   // ===== SHOOTING =====
-  THREE_PT_SHOOTING: async (bdlSport, home, away, season) => {
+  THREE_PT_SHOOTING: async (bdlSport, home, away, season, options) => {
     // For NBA, use player-aggregated base stats (BDL has no team_season_stats for NBA)
     if (bdlSport === 'basketball_nba') {
       const [homeStats, awayStats] = await Promise.all([
@@ -580,8 +580,8 @@ export const nbaFetchers = {
     
     // For other sports, use getTeamSeasonStats
     const [homeStatsArr, awayStatsArr] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: isPostseasonOptions(options) }),
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: isPostseasonOptions(options) })
     ]);
     
     // BDL returns an array - extract first item
@@ -610,7 +610,7 @@ export const nbaFetchers = {
   // ===== NCAAB/NCAAF SPECIFIC STATS =====
   // These provide actual data that BDL has for college sports
   
-  SCORING: async (bdlSport, home, away, season) => {
+  SCORING: async (bdlSport, home, away, season, options) => {
     const { homeData, awayData } = await fetchBothTeamSeasonStats(bdlSport, home, away, season);
     
     return {
@@ -630,7 +630,7 @@ export const nbaFetchers = {
     };
   },
 
-  ASSISTS: async (bdlSport, home, away, season) => {
+  ASSISTS: async (bdlSport, home, away, season, options) => {
     const { homeData, awayData } = await fetchBothTeamSeasonStats(bdlSport, home, away, season);
     
     return {
@@ -646,7 +646,7 @@ export const nbaFetchers = {
     };
   },
 
-  REBOUNDS: async (bdlSport, home, away, season) => {
+  REBOUNDS: async (bdlSport, home, away, season, options) => {
     const { homeData, awayData } = await fetchBothTeamSeasonStats(bdlSport, home, away, season);
     
     return {
@@ -666,7 +666,7 @@ export const nbaFetchers = {
     };
   },
 
-  STEALS: async (bdlSport, home, away, season) => {
+  STEALS: async (bdlSport, home, away, season, options) => {
     const { homeData, awayData } = await fetchBothTeamSeasonStats(bdlSport, home, away, season);
     
     return {
@@ -682,7 +682,7 @@ export const nbaFetchers = {
     };
   },
 
-  BLOCKS: async (bdlSport, home, away, season) => {
+  BLOCKS: async (bdlSport, home, away, season, options) => {
     const { homeData, awayData } = await fetchBothTeamSeasonStats(bdlSport, home, away, season);
     
     return {
@@ -698,7 +698,7 @@ export const nbaFetchers = {
     };
   },
 
-  FG_PCT: async (bdlSport, home, away, season) => {
+  FG_PCT: async (bdlSport, home, away, season, options) => {
     const { homeData, awayData } = await fetchBothTeamSeasonStats(bdlSport, home, away, season);
     
     return {
@@ -721,7 +721,7 @@ export const nbaFetchers = {
 
 
   // ===== PLAYERS =====
-  TOP_PLAYERS: async (bdlSport, home, away, season) => {
+  TOP_PLAYERS: async (bdlSport, home, away, season, options) => {
     // For NBA, use player-aggregated base stats which includes top_players
     if (bdlSport === 'basketball_nba') {
       const [homeStats, awayStats] = await Promise.all([
@@ -798,7 +798,7 @@ export const nbaFetchers = {
 
   // ===== STANDINGS & RECORDS =====
   // ===== STANDINGS & RECORDS =====
-  STANDINGS: async (bdlSport, home, away, season) => {
+  STANDINGS: async (bdlSport, home, away, season, options) => {
     // NCAAF/NCAAB standings require conference_id - skip to avoid 400 errors
     // Standings snapshot is already fetched in scoutReportBuilder with proper conference handling
     if (bdlSport === 'americanfootball_ncaaf' || bdlSport === 'basketball_ncaab') {
@@ -848,17 +848,17 @@ export const nbaFetchers = {
     };
   },
 
-  TEAM_RECORD: async (bdlSport, home, away, season) => {
+  TEAM_RECORD: async (bdlSport, home, away, season, options) => {
     // Alias for STANDINGS
     return nbaFetchers.STANDINGS(bdlSport, home, away, season);
   },
 
-  CONFERENCE_STANDING: async (bdlSport, home, away, season) => {
+  CONFERENCE_STANDING: async (bdlSport, home, away, season, options) => {
     // Alias for STANDINGS
     return nbaFetchers.STANDINGS(bdlSport, home, away, season);
   },
 
-  HOME_AWAY_SPLITS: async (bdlSport, home, away, season) => {
+  HOME_AWAY_SPLITS: async (bdlSport, home, away, season, options) => {
     // NCAAB: BDL standings require conference_id — delegate to Gemini Grounding fetcher
     if (bdlSport === 'basketball_ncaab') {
       return ncaabFetchers.NCAAB_HOME_AWAY_SPLITS(bdlSport, home, away, season);
@@ -898,7 +898,7 @@ export const nbaFetchers = {
 
 
   // ===== CONFERENCE STATS (REAL DATA - from BDL Standings) =====
-  CONFERENCE_STATS: async (bdlSport, home, away, season) => {
+  CONFERENCE_STATS: async (bdlSport, home, away, season, options) => {
     console.log(`[Stat Router] Fetching CONFERENCE_STATS for ${away.name} @ ${home.name}`);
     
     try {
@@ -960,7 +960,7 @@ export const nbaFetchers = {
 
 
   // ===== NON-CONFERENCE STRENGTH (REAL DATA - calculated from games) =====
-  NON_CONF_STRENGTH: async (bdlSport, home, away, season) => {
+  NON_CONF_STRENGTH: async (bdlSport, home, away, season, options) => {
     console.log(`[Stat Router] Fetching NON_CONF_STRENGTH for ${away.name} @ ${home.name}`);
     
     try {
@@ -1078,15 +1078,15 @@ export const nbaFetchers = {
 
 
   // ===== DEFENSIVE REBOUNDING (REAL DATA — DREB% from advanced + opponent OREB context) =====
-  DREB_RATE: async (bdlSport, home, away, season) => {
+  DREB_RATE: async (bdlSport, home, away, season, options) => {
     console.log(`[Stat Router] Fetching DREB_RATE for ${away.name} @ ${home.name}`);
 
     if (bdlSport !== 'basketball_nba') {
       // NCAAB: Use team_season_stats which has dreb per game
       try {
         const [homeStats, awayStats] = await Promise.all([
-          ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-          ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+          ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: isPostseasonOptions(options) }),
+          ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: isPostseasonOptions(options) })
         ]);
         const hs = Array.isArray(homeStats) ? homeStats[0] : homeStats;
         const as = Array.isArray(awayStats) ? awayStats[0] : awayStats;
@@ -1143,7 +1143,7 @@ export const nbaFetchers = {
 
 
   // ===== POINT DIFFERENTIAL TREND (REAL DATA - L5 vs Season) =====
-  EFFICIENCY_TREND: async (bdlSport, home, away, season) => {
+  EFFICIENCY_TREND: async (bdlSport, home, away, season, options) => {
     console.log(`[Stat Router] Fetching EFFICIENCY_TREND (point differential) for ${away.name} @ ${home.name}`);
     
     try {
@@ -1236,7 +1236,7 @@ export const nbaFetchers = {
 
 
   // ===== THREE POINT DEFENSE (REAL DATA — opponent 3PT% + volume from BDL) =====
-  THREE_PT_DEFENSE: async (bdlSport, home, away, season) => {
+  THREE_PT_DEFENSE: async (bdlSport, home, away, season, options) => {
     console.log(`[Stat Router] Fetching THREE_PT_DEFENSE for ${away.name} @ ${home.name}`);
     const [homeOpp, awayOpp] = await Promise.all([
       fetchNBATeamOpponentStats(home.id, season),
@@ -1265,7 +1265,7 @@ export const nbaFetchers = {
 
 
   // ===== OPPONENT FREE THROW RATE (REAL DATA — from BDL opponent stats) =====
-  OPP_FT_RATE: async (bdlSport, home, away, season) => {
+  OPP_FT_RATE: async (bdlSport, home, away, season, options) => {
     console.log(`[Stat Router] Fetching OPP_FT_RATE for ${away.name} @ ${home.name}`);
 
     try {
@@ -1306,7 +1306,7 @@ export const nbaFetchers = {
 
 
   // ===== OPPONENT EFFECTIVE FG% (REAL DATA — from BDL opponent stats) =====
-  OPP_EFG_PCT: async (bdlSport, home, away, season) => {
+  OPP_EFG_PCT: async (bdlSport, home, away, season, options) => {
     console.log(`[Stat Router] Fetching OPP_EFG_PCT for ${away.name} @ ${home.name}`);
     const [homeOpp, awayOpp] = await Promise.all([
       fetchNBATeamOpponentStats(home.id, season),
@@ -1335,7 +1335,7 @@ export const nbaFetchers = {
 
 
   // ===== OPPONENT TURNOVER RATE (REAL DATA — from BDL opponent stats) =====
-  OPP_TOV_RATE: async (bdlSport, home, away, season) => {
+  OPP_TOV_RATE: async (bdlSport, home, away, season, options) => {
     console.log(`[Stat Router] Fetching OPP_TOV_RATE for ${away.name} @ ${home.name}`);
     const [homeOpp, awayOpp] = await Promise.all([
       fetchNBATeamOpponentStats(home.id, season),
@@ -1362,7 +1362,7 @@ export const nbaFetchers = {
 
 
   // ===== PACE LAST 10 GAMES (REAL season pace + L10 scoring trend) =====
-  PACE_LAST_10: async (bdlSport, home, away, season) => {
+  PACE_LAST_10: async (bdlSport, home, away, season, options) => {
     console.log(`[Stat Router] Fetching PACE_LAST_10 for ${away.name} @ ${home.name}`);
 
     if (bdlSport !== 'basketball_nba') {
@@ -1446,7 +1446,7 @@ export const nbaFetchers = {
 
 
   // ===== PACE HOME vs AWAY (REAL season pace + venue scoring splits) =====
-  PACE_HOME_AWAY: async (bdlSport, home, away, season) => {
+  PACE_HOME_AWAY: async (bdlSport, home, away, season, options) => {
     console.log(`[Stat Router] Fetching PACE_HOME_AWAY for ${away.name} @ ${home.name}`);
 
     if (bdlSport !== 'basketball_nba') {
@@ -1545,7 +1545,7 @@ export const nbaFetchers = {
 
 
   // ===== PAINT SCORING (REAL DATA from BDL scoring type breakdown) =====
-  PAINT_SCORING: async (bdlSport, home, away, season) => {
+  PAINT_SCORING: async (bdlSport, home, away, season, options) => {
     console.log(`[Stat Router] Fetching PAINT_SCORING (real zone data) for ${away.name} @ ${home.name}`);
     const [homeAdvanced, awayAdvanced] = await Promise.all([
       fetchNBATeamAdvancedStats(home.id, season),
@@ -1579,7 +1579,7 @@ export const nbaFetchers = {
 
 
   // ===== MIDRANGE SHOOTING (REAL DATA from BDL scoring type breakdown) =====
-  MIDRANGE: async (bdlSport, home, away, season) => {
+  MIDRANGE: async (bdlSport, home, away, season, options) => {
     console.log(`[Stat Router] Fetching MIDRANGE (real zone data) for ${away.name} @ ${home.name}`);
 
     try {
@@ -1624,7 +1624,7 @@ export const nbaFetchers = {
 
 
   // ===== PAINT DEFENSE (REAL DATA — opponent paint pts + fast break pts from BDL defense stats) =====
-  PAINT_DEFENSE: async (bdlSport, home, away, season) => {
+  PAINT_DEFENSE: async (bdlSport, home, away, season, options) => {
     console.log(`[Stat Router] Fetching PAINT_DEFENSE for ${away.name} @ ${home.name}`);
     const [homeAdvanced, awayAdvanced, homeBase, awayBase, homeDefense, awayDefense] = await Promise.all([
       fetchNBATeamAdvancedStats(home.id, season),
@@ -1659,7 +1659,7 @@ export const nbaFetchers = {
 
 
   // ===== TRANSITION DEFENSE (BDL Defense Stats) =====
-  TRANSITION_DEFENSE: async (bdlSport, home, away, season) => {
+  TRANSITION_DEFENSE: async (bdlSport, home, away, season, options) => {
     console.log(`[Stat Router] Fetching TRANSITION_DEFENSE for ${away.name} @ ${home.name}`);
 
     if (bdlSport === 'basketball_nba') {
@@ -1703,7 +1703,7 @@ export const nbaFetchers = {
 
   // KEEP: Grounding required - BDL does not have 5-man lineup data. Unique data not available elsewhere.
   // ===== LINEUP NET RATINGS (First Unit & Second Unit Performance - GROUNDING) =====
-  LINEUP_NET_RATINGS: async (bdlSport, home, away, season) => {
+  LINEUP_NET_RATINGS: async (bdlSport, home, away, season, options) => {
     console.log(`[Stat Router] Fetching LINEUP_NET_RATINGS for ${away.name} @ ${home.name}`);
     
     if (bdlSport !== 'basketball_nba') {
@@ -1810,7 +1810,7 @@ export const nbaFetchers = {
 
 
   // ===== MINUTES TREND (Top 5 MPG per team from BDL season averages) =====
-  MINUTES_TREND: async (bdlSport, home, away, season) => {
+  MINUTES_TREND: async (bdlSport, home, away, season, options) => {
     console.log(`[Stat Router] Fetching MINUTES_TREND for ${away.name} @ ${home.name}`);
 
     if (bdlSport !== 'basketball_nba') {
@@ -1884,7 +1884,7 @@ export const nbaFetchers = {
 
 
   // ===== BLOWOUT TENDENCY (Margin Patterns) =====
-  BLOWOUT_TENDENCY: async (bdlSport, home, away, season) => {
+  BLOWOUT_TENDENCY: async (bdlSport, home, away, season, options) => {
     console.log(`[Stat Router] Fetching BLOWOUT_TENDENCY for ${away.name} @ ${home.name}`);
     
     try {
@@ -1987,7 +1987,7 @@ export const nbaFetchers = {
 
   // ===== RECENT FORM (ENHANCED) =====
   // Now includes margin analysis, opponent quality, and narrative context
-  RECENT_FORM: async (bdlSport, home, away, season) => {
+  RECENT_FORM: async (bdlSport, home, away, season, options) => {
     const homeName = home.full_name || home.name || 'Home';
     const awayName = away.full_name || away.name || 'Away';
     console.log(`[Stat Router] Fetching ENHANCED RECENT_FORM for ${awayName} @ ${homeName} (${bdlSport})`);
@@ -2080,7 +2080,7 @@ export const nbaFetchers = {
 
   // ===== QUARTER SCORING TRENDS (NFL) =====
   // Shows Q1, Q2, Q3, Q4 scoring breakdown - fast starters vs closers
-  QUARTER_SCORING: async (bdlSport, home, away, season) => {
+  QUARTER_SCORING: async (bdlSport, home, away, season, options) => {
     const homeName = home.full_name || home.name || 'Home';
     const awayName = away.full_name || away.name || 'Away';
     console.log(`[Stat Router] Fetching QUARTER_SCORING for ${awayName} @ ${homeName} (${bdlSport})`);
@@ -2184,7 +2184,7 @@ export const nbaFetchers = {
 
   // ===== FIRST HALF TRENDS =====
   // Teams that start hot vs cold - halftime lead %
-  FIRST_HALF_TRENDS: async (bdlSport, home, away, season) => {
+  FIRST_HALF_TRENDS: async (bdlSport, home, away, season, options) => {
     const homeName = home.full_name || home.name || 'Home';
     const awayName = away.full_name || away.name || 'Away';
     console.log(`[Stat Router] Fetching FIRST_HALF_TRENDS for ${awayName} @ ${homeName} (${bdlSport})`);
@@ -2274,7 +2274,7 @@ export const nbaFetchers = {
 
   // ===== SECOND HALF TRENDS =====
   // Closers vs faders - 4th quarter dominance
-  SECOND_HALF_TRENDS: async (bdlSport, home, away, season) => {
+  SECOND_HALF_TRENDS: async (bdlSport, home, away, season, options) => {
     const homeName = home.full_name || home.name || 'Home';
     const awayName = away.full_name || away.name || 'Away';
     console.log(`[Stat Router] Fetching SECOND_HALF_TRENDS for ${awayName} @ ${homeName} (${bdlSport})`);
@@ -2360,7 +2360,7 @@ export const nbaFetchers = {
 
 
   // ===== VARIANCE & CONSISTENCY ANALYSIS =====
-  VARIANCE_CONSISTENCY: async (bdlSport, home, away, season) => {
+  VARIANCE_CONSISTENCY: async (bdlSport, home, away, season, options) => {
     const homeName = home.full_name || home.name || 'Home';
     const awayName = away.full_name || away.name || 'Away';
     console.log(`[Stat Router] Fetching VARIANCE_CONSISTENCY for ${awayName} @ ${homeName} (${bdlSport})`);
@@ -2467,7 +2467,7 @@ export const nbaFetchers = {
 
 
   // ===== HEAD-TO-HEAD HISTORY =====
-  H2H_HISTORY: async (bdlSport, home, away, season) => {
+  H2H_HISTORY: async (bdlSport, home, away, season, options) => {
     const homeName = home.full_name || home.name || 'Home';
     const awayName = away.full_name || away.name || 'Away';
     console.log(`[Stat Router] Fetching H2H_HISTORY for ${awayName} @ ${homeName} (${bdlSport})`);
@@ -2905,7 +2905,7 @@ export const nbaFetchers = {
 
 
   // ===== CLUTCH STATS (Close Game Record) =====
-  CLUTCH_STATS: async (bdlSport, home, away, season) => {
+  CLUTCH_STATS: async (bdlSport, home, away, season, options) => {
     console.log(`[Stat Router] Fetching CLUTCH_STATS for ${away.name} @ ${home.name}`);
 
     try {
@@ -2968,7 +2968,7 @@ export const nbaFetchers = {
 
 
   // ===== LUCK-ADJUSTED (Pythagorean Expected Wins) =====
-  LUCK_ADJUSTED: async (bdlSport, home, away, season) => {
+  LUCK_ADJUSTED: async (bdlSport, home, away, season, options) => {
     console.log(`[Stat Router] Fetching LUCK_ADJUSTED (Pythagorean expected wins) for ${away.name} @ ${home.name}`);
     
     try {
@@ -3064,7 +3064,7 @@ export const nbaFetchers = {
 
 
   // ===== USAGE RATES (Real data from BDL advanced stats — usage concentration + top players) =====
-  USAGE_RATES: async (bdlSport, home, away, season) => {
+  USAGE_RATES: async (bdlSport, home, away, season, options) => {
     console.log(`[Stat Router] Fetching USAGE_RATES for ${away.name} @ ${home.name}`);
 
     try {
@@ -3110,7 +3110,7 @@ export const nbaFetchers = {
 
 
   // ===== VS ELITE TEAMS (Record vs Top 5 teams by conference) =====
-  VS_ELITE_TEAMS: async (bdlSport, home, away, season) => {
+  VS_ELITE_TEAMS: async (bdlSport, home, away, season, options) => {
     console.log(`[Stat Router] Fetching VS_ELITE_TEAMS for ${away.name} @ ${home.name}`);
     
     try {
@@ -3211,7 +3211,7 @@ export const nbaFetchers = {
 
 
   // ===== SCHEDULE STRENGTH (Real SOS - Not an alias!) =====
-  SCHEDULE_STRENGTH: async (bdlSport, home, away, season) => {
+  SCHEDULE_STRENGTH: async (bdlSport, home, away, season, options) => {
     console.log(`[Stat Router] Fetching SCHEDULE_STRENGTH for ${away.name} @ ${home.name}`);
     
     // Works for NBA, NHL, and college sports
@@ -3338,7 +3338,7 @@ export const nbaFetchers = {
 
 
   // ===== BENCH DEPTH (NBA) =====
-  BENCH_DEPTH: async (bdlSport, home, away, season) => {
+  BENCH_DEPTH: async (bdlSport, home, away, season, options) => {
     // NCAAB: Use player season stats to compute depth (starters vs bench contribution)
     if (bdlSport === 'basketball_ncaab') {
       console.log(`[Stat Router] Fetching NCAAB BENCH_DEPTH for ${away.name} @ ${home.name}`);
@@ -3552,10 +3552,10 @@ export const nbaFetchers = {
     return statsArray || {};
   },
 
-  TURNOVER_MARGIN: async (bdlSport, home, away, season) => {
+  TURNOVER_MARGIN: async (bdlSport, home, away, season, options) => {
     const [homeStatsArr, awayStatsArr] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: isPostseasonOptions(options) }),
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: isPostseasonOptions(options) })
     ]);
     const homeStats = Array.isArray(homeStatsArr) ? homeStatsArr[0] : homeStatsArr;
     const awayStats = Array.isArray(awayStatsArr) ? awayStatsArr[0] : awayStatsArr;

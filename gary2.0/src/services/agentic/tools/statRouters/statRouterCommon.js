@@ -909,6 +909,23 @@ function fmtPct(val) {
 }
 
 /**
+ * Detect whether the current game is a playoff game from the fetcher's
+ * options object. Stat routers pass options.game which gets stamped with
+ * tournamentContext by the scout-report builder for NBA/NHL playoffs and
+ * NCAAB tournaments. Returns true if this is a playoff/postseason game,
+ * so callers can request the postseason version of a stat from BDL.
+ */
+export function isPostseasonOptions(options) {
+  const ctx = String(options?.game?.tournamentContext || '').toLowerCase();
+  if (!ctx) return false;
+  return ctx.includes('playoff') ||
+         ctx.includes('stanley cup') ||
+         ctx.includes('conference finals') ||
+         ctx.includes('nba finals') ||
+         ctx.includes('postseason');
+}
+
+/**
  * Build an inline sample-size suffix to attach to a rate stat.
  *
  * Surface whatever sample-size fields exist on the split/row object so Gary
@@ -944,10 +961,15 @@ export function formatSampleSuffix(obj, candidates) {
 // FETCHERS - Each function fetches a specific stat category
 // =============================================================================
 
-async function fetchBothTeamSeasonStats(bdlSport, home, away, season) {
+async function fetchBothTeamSeasonStats(bdlSport, home, away, season, options) {
+  // When in a playoff game (tournamentContext stamped by scout report builder),
+  // request postseason stats from BDL instead of the regular-season baseline.
+  // Regular season is for context; playoff stats reflect the actual sample of
+  // tighter rotations, schemes, and special-teams shifts happening tonight.
+  const postseason = isPostseasonOptions(options);
   const [homeStats, awayStats] = await Promise.all([
-    ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-    ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+    ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason }),
+    ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason })
   ]);
   return {
     homeData: Array.isArray(homeStats) ? homeStats[0] : homeStats,

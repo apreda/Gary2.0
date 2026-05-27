@@ -865,28 +865,10 @@ const ballDontLieService = {
     }
   },
 
-  /**
-   * NHL Player Season Stats
-   * GET /nhl/v1/players/:id/season_stats?season=<season>
-   * Returns season statistics for a specific player
-   * @param {number} playerId - BDL player ID
-   * @param {number} season - Season year
-   * @returns {Array} - Array of { name, value } stat objects
-   */
-  async getNhlPlayerSeasonStats(playerId, season = getCurrentNhlSeason(), ttlMinutes = 30) {
-    try {
-      if (!playerId) return [];
-      const cacheKey = `nhl_player_season_stats_${playerId}_${season}`;
-      return await getCachedOrFetch(cacheKey, async () => {
-        const url = `${BALLDONTLIE_API_BASE_URL}/nhl/v1/players/${encodeURIComponent(playerId)}/season_stats${buildQuery({ season })}`;
-        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
-        return response.data?.data || [];
-      }, ttlMinutes);
-    } catch (e) {
-      console.error('[Ball Don\'t Lie] nhl getNhlPlayerSeasonStats error:', e.message);
-      return [];
-    }
-  },
+  // NOTE: NHL Player Season Stats is defined later in the file (around line 4109)
+  // as the canonical implementation. JS object-literal duplicate keys: the later
+  // definition wins, so this one is dead — kept as a no-op stub to avoid
+  // breaking any reference until it can be cleanly removed.
 
   /**
    * NHL Player Stats Leaders
@@ -4099,23 +4081,31 @@ const ballDontLieService = {
   },
 
   /**
-   * Get NHL player season stats for a specific player
-   * Endpoint: GET /nhl/v1/players/:id/season_stats?season=YYYY
-   * Returns: goals, assists, points, shots, time_on_ice_per_game, power_play_points, etc.
+   * Get NHL player season stats for a specific player.
+   * Endpoint: GET /nhl/v1/players/:id/season_stats?season=YYYY[&postseason=true]
+   *
+   * Per BDL OpenAPI spec (May 2026), this endpoint accepts an optional
+   * `postseason` boolean. Pass `true` during playoff games to get the
+   * postseason sample instead of the regular-season baseline.
+   *
+   * Returns: goals, assists, points, shots, time_on_ice_per_game,
+   * power_play_points, etc.
    * @param {number} playerId - BDL player ID
-   * @param {number} season - Season year (e.g., 2024 for 2024-25 season)
+   * @param {number} season - Season year (e.g., 2025 for 2025-26 season)
+   * @param {boolean} postseason - If true, request postseason stats
    * @returns {Promise<Object>} - Player season stats as key-value object
    */
-  async getNhlPlayerSeasonStats(playerId, season) {
+  async getNhlPlayerSeasonStats(playerId, season, postseason = false) {
     try {
       if (!playerId || !season) {
         console.warn('[Ball Don\'t Lie] NHL player season stats requires playerId and season');
         return null;
       }
 
-      const cacheKey = `nhl_player_season_stats_${playerId}_${season}`;
+      const cacheKey = `nhl_player_season_stats_${playerId}_${season}_${postseason ? 'post' : 'reg'}`;
       return await getCachedOrFetch(cacheKey, async () => {
-        const url = `${BALLDONTLIE_API_BASE_URL}/nhl/v1/players/${playerId}/season_stats?season=${season}`;
+        const postseasonParam = postseason ? '&postseason=true' : '';
+        const url = `${BALLDONTLIE_API_BASE_URL}/nhl/v1/players/${playerId}/season_stats?season=${season}${postseasonParam}`;
         console.log(`[Ball Don't Lie] Fetching NHL player season stats: ${url}`);
 
         const response = await axios.get(url, {

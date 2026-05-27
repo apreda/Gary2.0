@@ -1,4 +1,4 @@
-import { getCurrentSeasonString, sportToBdlKey, normalizeSportName, findTeam, fmtNum, fmtPct, fetchBothTeamSeasonStats, geminiGroundingSearch } from './statRouterCommon.js';
+import { getCurrentSeasonString, sportToBdlKey, normalizeSportName, findTeam, fmtNum, fmtPct, fetchBothTeamSeasonStats, geminiGroundingSearch, isPostseasonOptions } from './statRouterCommon.js';
 import { ballDontLieService } from '../../../ballDontLieService.js';
 import { getTeamStats as getMoneyPuckTeamStats, getGoalieStats as getMoneyPuckGoalieStats } from '../../../moneyPuckService.js';
 import { getTeamPercentages as getNhlApiPercentages } from '../../../nhlStatsApiService.js';
@@ -193,10 +193,11 @@ export const nhlFetchers = {
     }
   },
 
-  FACEOFF_PCT: async (bdlSport, home, away, season) => {
+  FACEOFF_PCT: async (bdlSport, home, away, season, options) => {
+    const postseason = isPostseasonOptions(options);
     const [homeStatsArr, awayStatsArr] = await Promise.all([
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason: false }),
-      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason: false })
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: home.id, season, postseason }),
+      ballDontLieService.getTeamSeasonStats(bdlSport, { teamId: away.id, season, postseason })
     ]);
     const homeRates = ballDontLieService.deriveNhlTeamRates(homeStatsArr);
     const awayRates = ballDontLieService.deriveNhlTeamRates(awayStatsArr);
