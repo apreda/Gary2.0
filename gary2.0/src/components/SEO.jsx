@@ -15,8 +15,8 @@ export default function SEO({
   image = '/coin2.png',
   noindex = false,
 }) {
-  const url = `https://www.gary.ai${path}`;
-  const absImage = image.startsWith('http') ? image : `https://www.gary.ai${image}`;
+  const url = `https://www.betwithgary.ai${path}`;
+  const absImage = image.startsWith('http') ? image : `https://www.betwithgary.ai${image}`;
 
   return (
     <Helmet>

@@ -5,4 +5,4 @@ Allow: /
 Disallow: /api/
 Disallow: /scripts/
 
-Sitemap: https://www.gary.ai/sitemap.xml
+Sitemap: https://www.betwithgary.ai/sitemap.xml
