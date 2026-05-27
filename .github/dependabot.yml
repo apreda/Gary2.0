@@ -1,0 +1,52 @@
+# Dependabot config — groups security + version updates into ONE PR per ecosystem
+# per week so we don't get spammed.
+#
+# Docs: https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+
+version: 2
+updates:
+  # Main web/backend (Vite + React + Node services)
+  - package-ecosystem: "npm"
+    directory: "/gary2.0"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 3
+    groups:
+      # All security patches — one combined PR
+      security-updates:
+        applies-to: security-updates
+        update-types:
+          - "minor"
+          - "patch"
+      # Non-security minor/patch — also one combined PR
+      production-updates:
+        applies-to: version-updates
+        dependency-type: "production"
+        update-types:
+          - "minor"
+          - "patch"
+      development-updates:
+        applies-to: version-updates
+        dependency-type: "development"
+        update-types:
+          - "minor"
+          - "patch"
+    # Major version bumps stay as individual PRs (they're likely to be breaking)
+    ignore:
+      # Don't open PRs for major version bumps automatically — those need manual
+      # review and a real changelog read.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  # GitHub Actions workflows (if any added later)
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 2
