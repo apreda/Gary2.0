@@ -69,3 +69,7 @@ ios/build/
 
 # iOS local secrets — real keys live here, only .example template is committed
 ios/GaryApp/SecretsLocal.swift
+
+# Firebase plist contains an API key (Bundle-ID restricted by Firebase, but
+# still flagged by secret scanners). Keep locally, do not commit.
+ios/GaryApp/GoogleService-Info.plist
