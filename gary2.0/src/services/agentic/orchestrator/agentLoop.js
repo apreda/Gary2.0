@@ -734,7 +734,6 @@ INVESTIGATION COMPLETE`;
             const { geminiGroundingSearch } = await import('../scoutReport/scoutReportBuilder.js');
 
             const searchResult = await geminiGroundingSearch(groundingQuery, {
-              temperature: 1.0,
               maxTokens: 1000
             });
 

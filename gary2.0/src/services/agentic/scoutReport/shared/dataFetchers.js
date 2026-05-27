@@ -1426,7 +1426,7 @@ export async function fetchCurrentState(homeTeam, awayTeam, sport, gameDate) {
     const narrativeModel = genAI.getGenerativeModel({
       model: 'gemini-3-flash-preview',
       generationConfig: {
-        temperature: 1.0,
+        // Gemini 3.x: temperature/topP/topK omitted per Google migration guide
         thinkingConfig: { thinkingLevel: 'high' }
       },
       safetySettings: [
@@ -1508,7 +1508,8 @@ RULES:
         console.log(`[Scout Report] Flash 429 for narrative — retrying with Flash (backup key)`);
         const proModel = genAI.getGenerativeModel({
           model: 'gemini-3-flash-preview',
-          generationConfig: { temperature: 1.0 },
+          // Gemini 3.x: temperature/topP/topK omitted per Google migration guide
+          generationConfig: {},
           safetySettings: [
             { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
             { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
@@ -1857,7 +1858,7 @@ Only names and positions. No extra text.`;
 
   for (let attempt = 1; attempt <= 2; attempt++) {
     const query = buildQuery(attempt);
-    const response = await geminiGroundingSearch(query, { temperature: 1.0, maxTokens: 4000 });
+    const response = await geminiGroundingSearch(query, { maxTokens: 4000 });
     if (!response?.success || !response?.data) {
       if (attempt === 2) throw new Error('NBA lineup grounding returned no data after 2 attempts');
       console.warn(`[Scout Report] NBA lineup grounding attempt ${attempt} returned no data — retrying`);

@@ -339,7 +339,7 @@ export async function groundingSearch(genAI, query, todayFull) {
     model: 'gemini-3-flash-preview',
     tools: [{ google_search: {} }],
     generationConfig: {
-      temperature: 1.0,
+      // Gemini 3.x: temperature/topP/topK omitted per Google migration guide
       thinkingConfig: { thinkingLevel: 'high' }
     },
     safetySettings: [
@@ -377,7 +377,7 @@ Do NOT include ATS records, betting trends, or against-the-spread statistics.`;
         const proModel = genAI.getGenerativeModel({
           model: 'gemini-3-flash-preview',
           tools: [{ google_search: {} }],
-          generationConfig: { temperature: 1.0 },
+          generationConfig: {},
           safetySettings: [
             { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
             { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
@@ -489,7 +489,7 @@ async function runGeminiGroundingSearch(query, options = {}) {
           google_search: {}
         }],
         generationConfig: {
-          temperature: 1.0, // Gemini 3: Keep at 1.0 - lower values cause looping/degraded performance
+          // Gemini 3.x: temperature/topP/topK omitted per Google migration guide
           maxOutputTokens: options.maxTokens ?? 2000,
           thinkingConfig: { thinkingLevel: options.thinkingLevel ?? 'high' }
         },
@@ -744,7 +744,7 @@ Include:
 
 Be specific and factual. Only report what current forecasts actually say.`;
 
-  const result = await geminiGroundingSearch(query, { temperature: 1.0, maxTokens: 1500 });
+  const result = await geminiGroundingSearch(query, { maxTokens: 1500 });
 
   if (result.success && result.data) {
     return parseWeatherFromText(result.data);

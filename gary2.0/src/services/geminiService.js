@@ -65,21 +65,21 @@ const geminiServiceInstance = {
   generateResponse: async function(messages, options = {}) {
     try {
       const provider = options.provider || LLM_PROVIDER;
-      
-      // Gemini 3: Temperature MUST be 1.0 per Google's recommendation
-      // "Changing the temperature (setting it below 1.0) may lead to unexpected 
-      // or degraded performance, particularly in complex mathematical or reasoning tasks."
-      const defaultTemp = provider === 'gemini' ? 1.0 : 0.5;
+
+      // Gemini 3.x (May 2026): per Google's official migration guide, temperature,
+      // top_p, and top_k are no longer recommended — omit and let the model use
+      // its optimized defaults. Non-Gemini providers still honor temperature.
+      const defaultTemp = provider === 'gemini' ? undefined : 0.5;
       const { temperature = defaultTemp, maxTokens = 16000 } = options;
-      
+
       // Allow model override (e.g., props use Flash when Pro has quota issues)
       const modelToUse = options.model || GEMINI_MODEL_DEFAULT;
-      
+
       // Use direct SDK for server/local runs (when GEMINI_API_KEY is available)
       if (USE_DIRECT_SDK && getGeminiClient()) {
         console.log(`Generating response from ${modelToUse} via direct SDK...`);
-        console.log(`Request messages count: ${messages.length}, Temp: ${temperature}, MaxTokens: ${maxTokens}`);
-        
+        console.log(`Request messages count: ${messages.length}, MaxTokens: ${maxTokens}`);
+
         const model = getGeminiClient().getGenerativeModel({
           model: modelToUse,
           safetySettings: [
@@ -88,8 +88,9 @@ const geminiServiceInstance = {
             { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
             { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
           ],
+          // Gemini 3.x: temperature omitted; non-Gemini providers go through
+          // their own request path with explicit temperature elsewhere.
           generationConfig: {
-            temperature,
             maxOutputTokens: maxTokens,
           }
         });
@@ -179,16 +180,19 @@ const geminiServiceInstance = {
       
       // Fallback to proxy for browser/no API key
       console.log(`Generating response from ${provider} via secure proxy...`);
-      console.log(`Request messages count: ${messages.length}, ` + 
-                 `Temp: ${temperature}, MaxTokens: ${maxTokens}, Provider: ${provider}`);
-      
-      // Payload - same format works for both via the proxies
+      console.log(`Request messages count: ${messages.length}, ` +
+                 `MaxTokens: ${maxTokens}, Provider: ${provider}` +
+                 (temperature !== undefined ? `, Temp: ${temperature}` : ''));
+
+      // Payload — Gemini 3.x: temperature omitted when undefined (recommended).
       const requestData = {
         model: options.model || this.DEFAULT_MODEL,
         messages: messages,
-        temperature,
         max_tokens: maxTokens,
       };
+      if (temperature !== undefined) {
+        requestData.temperature = temperature;
+      }
       
       // Use Gemini proxy
       let response;
@@ -1155,9 +1159,9 @@ ${gameData?.realTimeNews || newsData || 'No real-time data available'}
 Provide your betting analysis in the exact JSON format specified. Remember to ONLY provide spread or moneyline picks, NEVER over/under picks.`
       };
       
-      // Use our standard generateResponse method to make the API call
+      // Use our standard generateResponse method to make the API call.
+      // Gemini 3.x: temperature omitted (model uses optimized defaults).
       return await this.generateResponse([systemMessage, userPrompt], {
-        temperature: 1.0, // Gemini 3: MUST be 1.0 per Google recommendation
         maxTokens: options.maxTokens || 3200,
         model: options.model || this.DEFAULT_MODEL
       });
@@ -1256,9 +1260,9 @@ IMPORTANT: Always use the full team name (e.g., 'Cleveland Guardians') rather th
         content: prompt
       };
       
-      // Use our standard generateResponse method to make the API call
+      // Use our standard generateResponse method to make the API call.
+      // Gemini 3.x: temperature omitted (model uses optimized defaults).
       return await this.generateResponse([systemMessage, userMessage], {
-        temperature: 1.0, // Gemini 3: MUST be 1.0 per Google recommendation
         maxTokens: options.maxTokens || 1500,
         model: options.model || this.DEFAULT_MODEL
       });

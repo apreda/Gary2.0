@@ -1118,7 +1118,6 @@ VENUE: [arena name, city]
 ---END_CONTEXT---`;
 
     const contextResult = await geminiGroundingSearch(contextQuery, {
-      temperature: 1.0,
       maxTokens: 1500
     });
 

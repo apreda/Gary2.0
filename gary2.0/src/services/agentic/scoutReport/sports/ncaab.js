@@ -772,7 +772,6 @@ VENUE: [arena/stadium name where this game is being played, or UNKNOWN if not fo
 ---END_CONTEXT---`;
 
     const contextResult = await geminiGroundingSearch(contextQuery, {
-      temperature: 1.0,
       maxTokens: 1500
     });
 

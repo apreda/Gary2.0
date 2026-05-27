@@ -573,7 +573,6 @@ Format as a concise bullet list. If ${teamName} is NOT in the 2025-26 CFP, say "
 ONLY report ACTUAL games that have been PLAYED - do not predict future games.`;
 
     const result = await geminiGroundingSearch(query, {
-      temperature: 1.0,
       maxTokens: 1200
     });
 

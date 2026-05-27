@@ -98,10 +98,9 @@ export async function createGeminiSession(options = {}) {
           cachedContent: cachedContentName,
           tools: geminiTools.length > 0 ? geminiTools : undefined,
           safetySettings: GEMINI_SAFETY_SETTINGS,
+          // Gemini 3.x: temperature / topP / topK omitted per Google's May 2026
+          // migration guide — the model is optimized for its own defaults.
           generationConfig: {
-            temperature: CONFIG.gemini.temperature,
-            topP: CONFIG.gemini.topP,
-            topK: 64,
             maxOutputTokens,
             thinkingConfig: {
               includeThoughts: true,
@@ -116,9 +115,6 @@ export async function createGeminiSession(options = {}) {
         tools: geminiTools.length > 0 ? geminiTools : undefined,
         safetySettings: GEMINI_SAFETY_SETTINGS,
         generationConfig: {
-          temperature: CONFIG.gemini.temperature,
-          topP: CONFIG.gemini.topP,
-          topK: 64,
           maxOutputTokens,
           thinkingConfig: {
             includeThoughts: true,

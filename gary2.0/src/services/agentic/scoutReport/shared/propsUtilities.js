@@ -26,7 +26,8 @@ export async function fetchComprehensivePropsNarrative(homeTeam, awayTeam, sport
     const model = genAI.getGenerativeModel({
       model: modelName,
       tools: [{ google_search: {} }],
-      generationConfig: { temperature: 1.0 },
+      // Gemini 3.x: temperature/topP/topK omitted per Google migration guide
+      generationConfig: {},
       safetySettings: [
         { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
         { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
@@ -541,7 +542,7 @@ export async function fetchPropLineMovement(sport, gameDate, homeTeam, awayTeam,
       model: modelName,
       tools: [{ google_search: {} }],
       generationConfig: {
-        temperature: 1.0, // Gemini 3: Keep at 1.0 - lower values cause looping/degraded performance
+        // Gemini 3.x: temperature/topP/topK omitted per Google migration guide
         maxOutputTokens: 3000
       },
       safetySettings: [

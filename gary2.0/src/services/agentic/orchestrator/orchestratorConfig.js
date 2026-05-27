@@ -51,10 +51,11 @@ export const CONFIG = {
   maxIterations: 15,
   maxTokens: 65536,
   gemini: {
-    // Gemini 3: Temperature MUST be 1.0 per Google recommendation
-    temperature: 1.0,
-    topP: 0.95,
-
+    // Gemini 3.x: per Google's official migration guide (May 2026), temperature,
+    // top_p, and top_k are no longer recommended. The model is optimized for
+    // its own internal defaults — explicit values can hurt reasoning quality.
+    // For determinism, prefer system-instruction rules (which we already do)
+    // over fiddling with sampling parameters.
     grounding: {
       enabled: true
     }
