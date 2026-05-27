@@ -51,3 +51,19 @@ enum SecretsLocal {
 EOF
 
 echo "✅ SecretsLocal.swift written ($(wc -c < "$TARGET_FILE") bytes)"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Pre-resolve Swift Package dependencies. Xcode Cloud occasionally fails on
+# fresh checkouts with "Missing package product 'FirebaseMessaging'" because
+# the SPM graph hasn't been resolved before xcodebuild starts. Running this
+# explicitly here makes that race-free.
+# ─────────────────────────────────────────────────────────────────────────────
+PROJECT_PATH="$REPO_ROOT/ios/GaryApp/GaryApp.xcodeproj"
+if [ -d "$PROJECT_PATH" ]; then
+  echo "▶ Resolving Swift Package dependencies"
+  xcodebuild -resolvePackageDependencies -project "$PROJECT_PATH" 2>&1 | tail -20 || \
+    echo "⚠️  resolvePackageDependencies failed — build will retry"
+  echo "✅ Package resolution step complete"
+else
+  echo "⚠️  $PROJECT_PATH not found — skipping package resolution"
+fi
