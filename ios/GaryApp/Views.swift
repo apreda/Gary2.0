@@ -2782,6 +2782,11 @@ struct GaryPropsView: View {
     @State private var yesterdayResultsMap: [String: String] = [:]
     @State private var sportsWithFreshProps: Set<String> = []
 
+    /// User-facing toggle for card layout. "compact" = classic dense rows,
+    /// "featured" = new vertical player-card design with insight strip.
+    /// Persisted across launches.
+    @AppStorage("propsViewStyle") private var viewStyle: String = "compact"
+
     private var headerDateString: String {
         let fmt = DateFormatter()
         fmt.dateFormat = "EEEE, MMM d"
@@ -2930,6 +2935,29 @@ struct GaryPropsView: View {
 
                     SportFilterBar(selected: $selectedSport, availableSports: availableSports, todaySports: sportsWithFreshProps, showPropsOnly: true)
                         .offset(x: -4, y: 10)
+
+                    // View-style toggle. Compact = dense list, featured = vertical
+                    // player cards with insight strip. Persisted via @AppStorage.
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            viewStyle = (viewStyle == "compact") ? "featured" : "compact"
+                        }
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    } label: {
+                        Image(systemName: viewStyle == "compact" ? "square.grid.2x2.fill" : "list.bullet")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(GaryColors.gold)
+                            .frame(width: 30, height: 30)
+                            .background(
+                                Circle().fill(GaryColors.gold.opacity(0.12))
+                            )
+                            .overlay(
+                                Circle().stroke(GaryColors.gold.opacity(0.35), lineWidth: 0.6)
+                            )
+                    }
+                    .accessibilityLabel(viewStyle == "compact" ? "Switch to featured card view" : "Switch to compact list view")
+                    .padding(.trailing, 10)
+                    .offset(y: 8)
                 }
                 .padding(.leading, 10)
                 .padding(.top, -14)
@@ -3035,29 +3063,41 @@ struct GaryPropsView: View {
                                     .padding(.horizontal, 16)
                                     .padding(.top, 4)
 
-                                    // Props in this matchup — single border around the group
-                                    VStack(spacing: 0) {
-                                        ForEach(Array(group.props.enumerated()), id: \.element.id) { index, prop in
-                                            CompactPropRow(prop: prop, gameResult: resultForProp(prop), showSportBadge: true)
-                                                .onTapGesture { selectedProp = prop }
-                                                .transaction { $0.animation = nil }
-                                            if index < group.props.count - 1 {
-                                                Divider()
-                                                    .background(GaryColors.gold.opacity(0.3))
-                                                    .padding(.horizontal, 12)
+                                    if viewStyle == "featured" {
+                                        // NEW featured layout — vertical player cards with insight strip
+                                        VStack(spacing: 10) {
+                                            ForEach(group.props, id: \.id) { prop in
+                                                PlayerStackCard(prop: prop, gameResult: resultForProp(prop))
+                                                    .onTapGesture { selectedProp = prop }
+                                                    .transaction { $0.animation = nil }
                                             }
                                         }
+                                        .padding(.horizontal, 12)
+                                    } else {
+                                        // Classic compact rows — dense list grouped by matchup
+                                        VStack(spacing: 0) {
+                                            ForEach(Array(group.props.enumerated()), id: \.element.id) { index, prop in
+                                                CompactPropRow(prop: prop, gameResult: resultForProp(prop), showSportBadge: true)
+                                                    .onTapGesture { selectedProp = prop }
+                                                    .transaction { $0.animation = nil }
+                                                if index < group.props.count - 1 {
+                                                    Divider()
+                                                        .background(GaryColors.gold.opacity(0.3))
+                                                        .padding(.horizontal, 12)
+                                                }
+                                            }
+                                        }
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                                .fill(Color(hex: "#141210"))
+                                                .overlay(
+                                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                                        .stroke(GaryColors.gold, lineWidth: 0.5)
+                                                )
+                                        )
+                                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                        .padding(.horizontal, 12)
                                     }
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                            .fill(Color(hex: "#141210"))
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                                    .stroke(GaryColors.gold, lineWidth: 0.5)
-                                            )
-                                    )
-                                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                    .padding(.horizontal, 12)
                                 }
                             }
                         }
@@ -6974,6 +7014,411 @@ struct PropCardMobile: View {
         }, perform: {})
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(prop.effectiveLeague ?? "") prop: \(prop.player ?? prop.team ?? ""). \(prop.bet ?? "")")
+    }
+}
+
+// MARK: - Player Initials Avatar
+//
+// Circular avatar used in PlayerStackCard. Initials-only by design — official
+// player headshots from NBA / MLB / NHL are licensed images we'd need rights
+// for in a commercial app. Stylized initials sidestep that entirely and let
+// us control the look uniformly across sports.
+
+struct PlayerInitialsAvatar: View {
+    let name: String?
+    let sport: Sport
+    let confidence: Double?
+    var size: CGFloat = 72
+
+    private var initials: String {
+        guard let name, !name.isEmpty else { return "?" }
+        let parts = name.split(separator: " ").filter { !$0.isEmpty }
+        if parts.count >= 2 {
+            return String(parts.first!.first!) + String(parts.last!.first!)
+        }
+        return String(parts.first?.first ?? "?")
+    }
+
+    /// Hot picks (>=85% confidence) get a gold halo to draw the eye.
+    private var hasHalo: Bool {
+        (confidence ?? 0) >= 0.85
+    }
+
+    var body: some View {
+        ZStack {
+            // Halo glow for high-confidence picks
+            if hasHalo {
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [GaryColors.gold.opacity(0.45), .clear],
+                            center: .center,
+                            startRadius: 0,
+                            endRadius: size * 0.75
+                        )
+                    )
+                    .frame(width: size * 1.6, height: size * 1.6)
+                    .blur(radius: 8)
+            }
+
+            // Sport-accent ring
+            Circle()
+                .stroke(
+                    LinearGradient(
+                        colors: [sport.accentColor.opacity(0.85), sport.accentColor.opacity(0.35)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1.5
+                )
+                .frame(width: size, height: size)
+
+            // Dark glass body
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(hex: "#1F1B16"),
+                            Color(hex: "#0F0D0A")
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .frame(width: size - 4, height: size - 4)
+                .overlay(
+                    Circle()
+                        .stroke(Color.white.opacity(0.06), lineWidth: 0.5)
+                )
+
+            // Initials
+            Text(initials)
+                .font(.system(size: size * 0.42, weight: .black, design: .rounded))
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [GaryColors.lightGold, GaryColors.gold],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .tracking(-0.5)
+
+            // Sport icon dot, lower-right
+            ZStack {
+                Circle()
+                    .fill(Color(hex: "#0A0907"))
+                    .frame(width: size * 0.32, height: size * 0.32)
+                    .overlay(
+                        Circle()
+                            .stroke(sport.accentColor.opacity(0.6), lineWidth: 1)
+                    )
+                Image(systemName: sport.icon)
+                    .font(.system(size: size * 0.16, weight: .bold))
+                    .foregroundStyle(sport.accentColor)
+            }
+            .offset(x: size * 0.30, y: size * 0.30)
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
+    }
+}
+
+// MARK: - Player Stack Card (Featured prop layout)
+//
+// Vertical card that gives each prop more visual weight than CompactPropRow.
+// Toggleable in GaryPropsView header; both card types render the same PropPick
+// data so we can A/B without backend changes.
+
+struct PlayerStackCard: View {
+    let prop: PropPick
+    var gameResult: String? = nil
+
+    private var sport: Sport { Sport.from(league: prop.effectiveLeague) }
+    private var accentColor: Color { sport.accentColor }
+
+    private var confidencePct: Int {
+        Int(round((prop.confidence ?? 0.72) * 100))
+    }
+    private var confidenceFill: CGFloat {
+        CGFloat(max(0.15, min(1.0, prop.confidence ?? 0.72)))
+    }
+
+    private var betLabel: String {
+        guard let bet = prop.bet?.lowercased() else { return "—" }
+        return bet.uppercased()
+    }
+    private var betColor: Color {
+        guard let bet = prop.bet?.lowercased() else { return .white }
+        if bet == "over" || bet == "yes" { return Color(hex: "#22C55E") }
+        return Color(hex: "#EF4444")
+    }
+
+    /// Prop type without the trailing line value — "total_bases 1.5" → "Total Bases"
+    private var propTypeDisplay: String {
+        let raw = prop.prop ?? ""
+        let typeOnly = raw
+            .replacingOccurrences(of: #"\s+[\d.]+$"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: "_", with: " ")
+            .trimmingCharacters(in: .whitespaces)
+        return typeOnly
+            .split(separator: " ")
+            .map { $0.prefix(1).uppercased() + $0.dropFirst() }
+            .joined(separator: " ")
+    }
+
+    private var lineDisplay: String {
+        if let line = prop.line, !line.isEmpty { return line }
+        // Fallback — try to extract from prop string
+        if let match = (prop.prop ?? "").range(of: #"[\d.]+$"#, options: .regularExpression) {
+            return String((prop.prop ?? "")[match])
+        }
+        return ""
+    }
+
+    private var oddsDisplay: String {
+        guard let raw = prop.odds, !raw.isEmpty else { return "" }
+        if raw.hasPrefix("-") || raw.hasPrefix("+") { return raw }
+        if let n = Int(raw), n > 0 { return "+\(n)" }
+        return raw
+    }
+
+    private var formattedTime: String {
+        if let iso = prop.commence_time, !iso.isEmpty,
+           let d = parseISO8601(iso) {
+            return Formatters.dayTimeFormatterEST.string(from: d)
+        }
+        return prop.time ?? ""
+    }
+
+    private var resolvedResult: String? {
+        guard let r = gameResult?.lowercased(), !r.isEmpty else { return nil }
+        return r
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            // ── Header strip: sport tag + matchup + time ──
+            HStack(spacing: 8) {
+                Text((prop.effectiveLeague ?? "").uppercased())
+                    .font(.system(size: 10, weight: .heavy))
+                    .tracking(0.8)
+                    .foregroundStyle(accentColor)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(
+                        Capsule().fill(accentColor.opacity(0.14))
+                    )
+
+                if let matchup = prop.matchup, !matchup.isEmpty {
+                    Text(matchup)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.55))
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 0)
+
+                if !formattedTime.isEmpty {
+                    Text(formattedTime)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.45))
+                }
+            }
+
+            // ── Hero row: avatar + player meta ──
+            HStack(alignment: .center, spacing: 14) {
+                PlayerInitialsAvatar(
+                    name: prop.player,
+                    sport: sport,
+                    confidence: prop.confidence,
+                    size: 64
+                )
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(prop.player ?? "Unknown Player")
+                        .font(.system(size: 19, weight: .bold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+
+                    HStack(spacing: 6) {
+                        if let team = prop.team, !team.isEmpty {
+                            Text(team)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.55))
+                        }
+
+                        Text("·")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.white.opacity(0.3))
+
+                        Text(propTypeDisplay)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(accentColor.opacity(0.85))
+                    }
+                }
+
+                Spacer(minLength: 0)
+            }
+
+            // ── Pick block ──
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 10) {
+                    // Bet pill
+                    Text(betLabel)
+                        .font(.system(size: 13, weight: .heavy))
+                        .tracking(0.5)
+                        .foregroundStyle(betColor)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(
+                            Capsule().fill(betColor.opacity(0.14))
+                        )
+                        .overlay(
+                            Capsule().stroke(betColor.opacity(0.35), lineWidth: 0.5)
+                        )
+
+                    // Line
+                    Text(lineDisplay)
+                        .font(.system(size: 22, weight: .black, design: .rounded))
+                        .foregroundStyle(.white)
+                        .tracking(-0.5)
+
+                    Spacer()
+
+                    // Odds
+                    if !oddsDisplay.isEmpty {
+                        Text(oddsDisplay)
+                            .font(.system(size: 14, weight: .bold, design: .monospaced))
+                            .foregroundStyle(GaryColors.gold)
+                    }
+                }
+
+                // Confidence bar
+                HStack(spacing: 8) {
+                    Text("CONFIDENCE")
+                        .font(.system(size: 9, weight: .heavy))
+                        .tracking(1.0)
+                        .foregroundStyle(.white.opacity(0.35))
+
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Capsule()
+                                .fill(.white.opacity(0.06))
+                                .frame(height: 4)
+                            Capsule()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [GaryColors.gold, GaryColors.lightGold],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .frame(width: geo.size.width * confidenceFill, height: 4)
+                        }
+                    }
+                    .frame(height: 4)
+
+                    Text("\(confidencePct)%")
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundStyle(GaryColors.gold)
+                        .frame(width: 36, alignment: .trailing)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color.white.opacity(0.025))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(.white.opacity(0.04), lineWidth: 0.5)
+                    )
+            )
+
+            // ── Insight strip: key_stats from the agentic pipeline ──
+            if let stats = prop.key_stats, !stats.isEmpty {
+                VStack(alignment: .leading, spacing: 5) {
+                    ForEach(stats.prefix(3), id: \.self) { stat in
+                        HStack(alignment: .top, spacing: 8) {
+                            Circle()
+                                .fill(accentColor.opacity(0.7))
+                                .frame(width: 4, height: 4)
+                                .offset(y: 5)
+                            Text(stat)
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.78))
+                                .lineLimit(2)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+                .padding(.top, 2)
+            } else {
+                // Legacy picks without key_stats — invite tap
+                Text("Tap for analysis →")
+                    .font(.system(size: 10, weight: .semibold))
+                    .tracking(0.5)
+                    .foregroundStyle(GaryColors.gold.opacity(0.7))
+                    .padding(.top, 2)
+            }
+        }
+        .padding(14)
+        .background(
+            ZStack {
+                // Base
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color(hex: "#141210"))
+
+                // Subtle accent gradient on left edge
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [accentColor.opacity(0.12), .clear],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: 80)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .mask(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    )
+            }
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(
+                    LinearGradient(
+                        colors: [
+                            accentColor.opacity(0.45),
+                            accentColor.opacity(0.10)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 0.8
+                )
+        )
+        .overlay(alignment: .topTrailing) {
+            // Result stamp if the game has been graded
+            if let res = resolvedResult {
+                Text(res == "won" ? "W" : res == "push" ? "P" : "L")
+                    .font(.system(size: 11, weight: .black, design: .rounded))
+                    .foregroundStyle(.black)
+                    .frame(width: 22, height: 22)
+                    .background(
+                        Circle().fill(
+                            res == "won" ? GaryColors.gold :
+                            res == "push" ? Color.yellow :
+                            Color(hex: "#6A6A70")
+                        )
+                    )
+                    .offset(x: -10, y: 10)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(prop.effectiveLeague ?? "") prop: \(prop.player ?? "")  \(betLabel) \(propTypeDisplay) \(lineDisplay)")
     }
 }
 

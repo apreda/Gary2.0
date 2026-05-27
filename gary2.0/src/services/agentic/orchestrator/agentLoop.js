@@ -1606,13 +1606,23 @@ INVESTIGATION COMPLETE`;
         // zero picks. The text-only path has had this force-progression for
         // a while (line ~1730 below); this brings the tool-call path into
         // parity so a stuck tool-calling loop can still escape Pass 1.
+        // Stall-based force-progression applies to BOTH game picks and props.
+        // (Earlier version gated this to game picks only — that left props
+        // stuck on tool-call loops, since props can never benefit from
+        // category-based sufficiency due to PLAYER_GAME_LOGS:* token shape.)
         const stalledWithEnoughData =
-          _investigationStallCount >= 3 && totalCalls >= 10 && isGamePicksMode;
+          _investigationStallCount >= 3 && totalCalls >= 10;
 
         if (stalledWithEnoughData) {
           console.warn(`[Orchestrator] FORCE-PROGRESSION (stall-based, tool-call path): ${_investigationStallCount} stalls, ${totalCalls} stats, ${categoryCount} categories at iter ${iteration}/${effectiveMaxIterations} — injecting Pass 2.5 directly to avoid MAX_ITERATIONS timeout`);
           messages.push({ role: 'assistant', content: message.content });
-          const pass25Content = buildPass25Message(homeTeam, awayTeam, sport, spread, options.pass25DecisionGuards || '');
+          // Use the mode-appropriate Pass 2.5 builder. Props gets the props
+          // evaluation prompt; game picks get the bilateral decision guards.
+          const propsPass25Constitution = (isPropsMode && typeof propContext?.propsConstitution === 'object')
+            ? propContext.propsConstitution.pass25 || '' : '';
+          const pass25Content = isPropsMode
+            ? buildPass25PropsMessage(homeTeam, awayTeam, sport, propsPass25Constitution)
+            : buildPass25Message(homeTeam, awayTeam, sport, spread, options.pass25DecisionGuards || '');
           messages.push({ role: 'user', content: pass25Content });
           nextMessageToSend = pass25Content;
           _pass25Injected = true;
