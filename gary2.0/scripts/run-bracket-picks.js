@@ -12,8 +12,13 @@
  */
 
 import '../src/loadEnv.js';
-// Use specified API key for bracket
-process.env.GEMINI_API_KEY = 'REDACTED_PRE_HISTORY_REWRITE';
+// GEMINI_API_KEY is loaded from .env (see ../.env) — never hardcode the key in
+// committed code. To use a different key for the bracket job, override before
+// running: `GEMINI_API_KEY=... node scripts/run-bracket-picks.js`
+if (!process.env.GEMINI_API_KEY) {
+  console.error('[bracket] GEMINI_API_KEY is not set. Add it to .env or pass via env.');
+  process.exit(1);
+}
 import { createClient } from '@supabase/supabase-js';
 import { ballDontLieService } from '../src/services/ballDontLieService.js';
 import { ncaabSeason } from '../src/utils/dateUtils.js';
