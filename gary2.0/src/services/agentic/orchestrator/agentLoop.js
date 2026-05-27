@@ -286,10 +286,17 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
           pendingFunctionResponses = []; // Clear after sending
           
           // Step 2: Check if Gary responded without tool calls AND we have a pass message queued
-          // If so, send the pass message immediately as a follow-up
+          // If so, send the pass message immediately as a follow-up.
+          //
+          // The Pass 1 stall reminder ("You are still in Pass 1...") was previously
+          // built and queued but never routed because its keyword wasn't in this
+          // filter — see Phillies@Padres incident 2026-05-27. Adding it here so
+          // the existing stall-detection code can actually nudge Gary instead of
+          // logging into the void.
           const hasQueuedPassMessage = nextMessageToSend && nextMessageToSend !== userMessage &&
             (nextMessageToSend.includes('PASS 2.5') || nextMessageToSend.includes('CASE REVIEW') ||
-             nextMessageToSend.includes('CASE EVALUATION') || nextMessageToSend.includes('investigation is complete'));
+             nextMessageToSend.includes('CASE EVALUATION') || nextMessageToSend.includes('investigation is complete') ||
+             nextMessageToSend.includes('You are still in Pass 1'));
           
           if (!sessionResponse.toolCalls && hasQueuedPassMessage) {
             console.log(`[Orchestrator] 📝 Sending queued pass message after function responses`);
@@ -1590,8 +1597,28 @@ INVESTIGATION COMPLETE`;
       // ═══════════════════════════════════════════════════════════════════════
 
       if (!pass25AlreadyInjected) {
-        if (_investigationStallCount >= 3) {
-          console.log(`[Orchestrator] Pass 1 stall detected at ${categoryCount} categories — waiting for explicit INVESTIGATION COMPLETE marker`);
+        // When Gary keeps making tool calls past the stall threshold AND he
+        // already has enough data, force progression to Pass 2.5 directly.
+        // Previously this path only sent a "synthesize and emit the marker"
+        // reminder that Gary often ignored — see Phillies@Padres (5058601)
+        // 2026-05-27, where 8 consecutive PLAYER_GAME_LOGS calls in a row
+        // never broke the category counter and Gary hit MAX_ITERATIONS with
+        // zero picks. The text-only path has had this force-progression for
+        // a while (line ~1730 below); this brings the tool-call path into
+        // parity so a stuck tool-calling loop can still escape Pass 1.
+        const stalledWithEnoughData =
+          _investigationStallCount >= 3 && totalCalls >= 10 && isGamePicksMode;
+
+        if (stalledWithEnoughData) {
+          console.warn(`[Orchestrator] FORCE-PROGRESSION (stall-based, tool-call path): ${_investigationStallCount} stalls, ${totalCalls} stats, ${categoryCount} categories at iter ${iteration}/${effectiveMaxIterations} — injecting Pass 2.5 directly to avoid MAX_ITERATIONS timeout`);
+          messages.push({ role: 'assistant', content: message.content });
+          const pass25Content = buildPass25Message(homeTeam, awayTeam, sport, spread, options.pass25DecisionGuards || '');
+          messages.push({ role: 'user', content: pass25Content });
+          nextMessageToSend = pass25Content;
+          _pass25Injected = true;
+          _pass25JustInjected = true;
+        } else if (_investigationStallCount >= 3) {
+          console.log(`[Orchestrator] Pass 1 stall detected at ${categoryCount} categories — nudging Gary to emit INVESTIGATION COMPLETE marker`);
           const casePromptStall = (isGamePicksMode && bilateralFn)
             ? `\n\n${bilateralFn(homeTeam, awayTeam)}`
             : '';
