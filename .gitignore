@@ -66,3 +66,6 @@ firebase-service-account.json
 # iOS build artifacts
 ios/GaryApp/build/
 ios/build/
+
+# iOS local secrets — real keys live here, only .example template is committed
+ios/GaryApp/SecretsLocal.swift

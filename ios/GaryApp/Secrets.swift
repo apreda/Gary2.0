@@ -23,10 +23,16 @@ enum Secrets {
     static let garyChatEndpoint = URL(string: "https://xuttubsfgdcjfgmskcol.supabase.co/functions/v1/gary-chat")!
 
     /// xAI Grok API key for TTS playback of Gary's voice.
-    /// SECURITY NOTE: Embedding the key in the binary is acceptable for
-    /// TestFlight testing but not for App Store production. For production,
-    /// proxy TTS through the Supabase Edge Function so the key stays server-side.
-    static let xaiAPIKey: String = "REDACTED_PRE_HISTORY_REWRITE"
+    ///
+    /// SETUP: The actual key lives in `SecretsLocal.swift` which is gitignored.
+    /// On a fresh clone you must create that file from `SecretsLocal.swift.example`:
+    ///   cp ios/GaryApp/SecretsLocal.swift.example ios/GaryApp/SecretsLocal.swift
+    /// then paste your key into the `xaiAPIKey` constant inside.
+    ///
+    /// SECURITY: Embedding the key in the binary is acceptable for TestFlight
+    /// testing but not for App Store production. For production, proxy TTS
+    /// through the Supabase Edge Function so the key never leaves the server.
+    static var xaiAPIKey: String { SecretsLocal.xaiAPIKey }
 
     /// xAI TTS voice ID. Pick one from xAI's voice library:
     ///   - "leo" — authoritative, older energy (closest to Gary's bookie character — DEFAULT)

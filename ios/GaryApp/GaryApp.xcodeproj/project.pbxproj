@@ -18,6 +18,7 @@
 		44FB25CBEB7324D5CDF9CAB7 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = 19246C9DB6761505C046FD73 /* FirebaseMessaging */; };
 		5A432D05492831EB727B31A7 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECE32BA2E5208CC9E994A26A /* Models.swift */; };
 		8B47B0D0D084C52747EA7346 /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0616A3C8A2F0268B8A05C4D /* Secrets.swift */; };
+		8B47B0D0D084C52747EA7347 /* SecretsLocal.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0616A3C8A2F0268B8A05C4E /* SecretsLocal.swift */; };
 		8C34DF13E8B667CE889F3001 /* RacingSansOne.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E7DD2F4D55F5FFFEE8EE459E /* RacingSansOne.ttf */; };
 		96156A39CD944FAC812763CE /* Teko-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 71B2F4F02C72B63F4E81FD2D /* Teko-Bold.ttf */; };
 		962A345642B263A7E4B5145D /* ChakraPetch-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 4DB2A6343A5BCF41DD4C3664 /* ChakraPetch-Bold.ttf */; };
@@ -73,6 +74,7 @@
 		E7DD2F4D55F5FFFEE8EE459E /* RacingSansOne.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = RacingSansOne.ttf; sourceTree = "<group>"; };
 		ECE32BA2E5208CC9E994A26A /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		F0616A3C8A2F0268B8A05C4D /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
+		F0616A3C8A2F0268B8A05C4E /* SecretsLocal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecretsLocal.swift; sourceTree = "<group>"; };
 		F3971BE744C5F972B9A2C2C3 /* Oswald-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Oswald-Bold.ttf"; sourceTree = "<group>"; };
 		BB220001BBBB000100000001 /* Inter-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Inter-Regular.ttf"; sourceTree = "<group>"; };
 		BB220002BBBB000200000002 /* Inter-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Inter-Medium.ttf"; sourceTree = "<group>"; };
@@ -130,6 +132,7 @@
 				A6B153703E9F452BFFC5A392 /* Info.plist */,
 				ECE32BA2E5208CC9E994A26A /* Models.swift */,
 				F0616A3C8A2F0268B8A05C4D /* Secrets.swift */,
+				F0616A3C8A2F0268B8A05C4E /* SecretsLocal.swift */,
 				26AE11992E449EB95857D6E3 /* SettingsView.swift */,
 				58C162EF98D65308171329E2 /* SupabaseAPI.swift */,
 				44D1E52AFB4EED7E97F55C36 /* Views.swift */,
@@ -280,6 +283,7 @@
 				40771064325B4E728A735AEA /* GaryApp.swift in Sources */,
 				5A432D05492831EB727B31A7 /* Models.swift in Sources */,
 				8B47B0D0D084C52747EA7346 /* Secrets.swift in Sources */,
+				8B47B0D0D084C52747EA7347 /* SecretsLocal.swift in Sources */,
 				F2A5809FF32535CE29C4E79A /* SettingsView.swift in Sources */,
 				D810CCA6C81972A7A21BD77F /* SupabaseAPI.swift in Sources */,
 				B313EC36BDDDB18E9F687643 /* Views.swift in Sources */,
