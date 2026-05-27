@@ -3042,10 +3042,11 @@ const ballDontLieService = {
    * Returns: { off_rating, def_rating, net_rating, pace, efg_pct, ts_pct, oreb_pct, dreb_pct, tm_tov_pct, gp, w, l, ... }
    * This is the CORRECT source for team ORtg/DRtg/NetRtg (NOT player weight-averaging).
    */
-  async getTeamSeasonAdvanced(teamId, season, ttlMinutes = 30) {
-    const cacheKey = `nba_team_season_advanced_${teamId}_${season}`;
+  async getTeamSeasonAdvanced(teamId, season, postseason = false, ttlMinutes = 30) {
+    const seasonType = postseason ? 'postseason' : 'regular';
+    const cacheKey = `nba_team_season_advanced_${teamId}_${season}_${seasonType}`;
     return await getCachedOrFetch(cacheKey, async () => {
-      const url = `${BALLDONTLIE_API_BASE_URL}/nba/v1/team_season_averages/general?season=${season}&season_type=regular&type=advanced&team_ids[]=${teamId}`;
+      const url = `${BALLDONTLIE_API_BASE_URL}/nba/v1/team_season_averages/general?season=${season}&season_type=${seasonType}&type=advanced&team_ids[]=${teamId}`;
       const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
       const data = response.data?.data;
       if (!data || data.length === 0) return null;
@@ -3059,10 +3060,11 @@ const ballDontLieService = {
    *            opp_pts, opp_reb, opp_oreb, opp_dreb, opp_ast, opp_tov, opp_stl, opp_blk, gp, ... }
    * This is the CORRECT source for opponent shooting/turnover/FT data (NOT proxy via DRtg or steals).
    */
-  async getTeamOpponentStats(teamId, season, ttlMinutes = 30) {
-    const cacheKey = `nba_team_opponent_stats_${teamId}_${season}`;
+  async getTeamOpponentStats(teamId, season, postseason = false, ttlMinutes = 30) {
+    const seasonType = postseason ? 'postseason' : 'regular';
+    const cacheKey = `nba_team_opponent_stats_${teamId}_${season}_${seasonType}`;
     return await getCachedOrFetch(cacheKey, async () => {
-      const url = `${BALLDONTLIE_API_BASE_URL}/nba/v1/team_season_averages/general?season=${season}&season_type=regular&type=opponent&team_ids[]=${teamId}`;
+      const url = `${BALLDONTLIE_API_BASE_URL}/nba/v1/team_season_averages/general?season=${season}&season_type=${seasonType}&type=opponent&team_ids[]=${teamId}`;
       const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
       const data = response.data?.data;
       if (!data || data.length === 0) return null;
@@ -3075,10 +3077,11 @@ const ballDontLieService = {
    * Returns: { opp_pts_paint, opp_pts_fb, opp_pts_off_tov, opp_pts_2nd_chance, ... }
    * This gives paint defense, fast break points allowed, etc.
    */
-  async getTeamDefenseStats(teamId, season, ttlMinutes = 30) {
-    const cacheKey = `nba_team_defense_stats_${teamId}_${season}`;
+  async getTeamDefenseStats(teamId, season, postseason = false, ttlMinutes = 30) {
+    const seasonType = postseason ? 'postseason' : 'regular';
+    const cacheKey = `nba_team_defense_stats_${teamId}_${season}_${seasonType}`;
     return await getCachedOrFetch(cacheKey, async () => {
-      const url = `${BALLDONTLIE_API_BASE_URL}/nba/v1/team_season_averages/general?season=${season}&season_type=regular&type=defense&team_ids[]=${teamId}`;
+      const url = `${BALLDONTLIE_API_BASE_URL}/nba/v1/team_season_averages/general?season=${season}&season_type=${seasonType}&type=defense&team_ids[]=${teamId}`;
       const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
       const data = response.data?.data;
       if (!data || data.length === 0) return null;
@@ -3091,10 +3094,11 @@ const ballDontLieService = {
    * Returns: { pts, reb, ast, fg_pct, fg3_pct, ft_pct, fgm, fga, fg3m, fg3a, ftm, fta, oreb, dreb, tov, blk, stl, pf, gp, ... }
    * This is the CORRECT source for team-level shooting/counting stats (NOT player aggregation).
    */
-  async getTeamBaseStats(teamId, season, ttlMinutes = 30) {
-    const cacheKey = `nba_team_base_stats_${teamId}_${season}`;
+  async getTeamBaseStats(teamId, season, postseason = false, ttlMinutes = 30) {
+    const seasonType = postseason ? 'postseason' : 'regular';
+    const cacheKey = `nba_team_base_stats_${teamId}_${season}_${seasonType}`;
     return await getCachedOrFetch(cacheKey, async () => {
-      const url = `${BALLDONTLIE_API_BASE_URL}/nba/v1/team_season_averages/general?season=${season}&season_type=regular&type=base&team_ids[]=${teamId}`;
+      const url = `${BALLDONTLIE_API_BASE_URL}/nba/v1/team_season_averages/general?season=${season}&season_type=${seasonType}&type=base&team_ids[]=${teamId}`;
       const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
       const data = response.data?.data;
       if (!data || data.length === 0) return null;
@@ -3129,10 +3133,11 @@ const ballDontLieService = {
    * Returns: { pct_pts_paint, pct_pts_3pt, pct_pts_ft, pct_pts_2pt, pct_pts_fb, pct_fga_2pt, pct_fga_3pt, pct_ast_fgm, pct_uast_fgm, ... }
    * This is the CORRECT source for team scoring distribution (NOT player weight-averaging).
    */
-  async getTeamScoringStats(teamId, season, ttlMinutes = 30) {
-    const cacheKey = `nba_team_scoring_stats_${teamId}_${season}`;
+  async getTeamScoringStats(teamId, season, postseason = false, ttlMinutes = 30) {
+    const seasonType = postseason ? 'postseason' : 'regular';
+    const cacheKey = `nba_team_scoring_stats_${teamId}_${season}_${seasonType}`;
     return await getCachedOrFetch(cacheKey, async () => {
-      const url = `${BALLDONTLIE_API_BASE_URL}/nba/v1/team_season_averages/general?season=${season}&season_type=regular&type=scoring&team_ids[]=${teamId}`;
+      const url = `${BALLDONTLIE_API_BASE_URL}/nba/v1/team_season_averages/general?season=${season}&season_type=${seasonType}&type=scoring&team_ids[]=${teamId}`;
       const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
       const data = response.data?.data;
       if (!data || data.length === 0) return null;

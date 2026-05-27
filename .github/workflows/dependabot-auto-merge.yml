@@ -1,0 +1,36 @@
+name: Dependabot auto-merge
+
+# Auto-merges Dependabot PRs that pass CI for patch and minor bumps only.
+# Major version bumps still require manual review (since major bumps often
+# include breaking changes that need a real changelog read).
+#
+# This works in concert with the repo-level "Allow auto-merge" setting and
+# the squash + delete-branch-on-merge defaults.
+
+on: pull_request_target
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  dependabot:
+    runs-on: ubuntu-latest
+    # Only run for Dependabot-opened PRs
+    if: github.actor == 'dependabot[bot]'
+    steps:
+      - name: Inspect Dependabot metadata
+        id: meta
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      # Enable auto-merge for patch + minor security/version updates. Auto-merge
+      # waits for required status checks (Vercel preview + any others) to pass
+      # before completing the merge.
+      - name: Enable auto-merge for safe updates
+        if: steps.meta.outputs.update-type == 'version-update:semver-patch' || steps.meta.outputs.update-type == 'version-update:semver-minor'
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

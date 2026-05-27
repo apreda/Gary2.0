@@ -8,8 +8,8 @@ export const nbaFetchers = {
     // For NBA, use BDL Season Averages (Advanced) which includes pace
     if (bdlSport === 'basketball_nba') {
       const [homeStats, awayStats] = await Promise.all([
-        fetchNBATeamAdvancedStats(home.id, season),
-        fetchNBATeamAdvancedStats(away.id, season)
+        fetchNBATeamAdvancedStats(home.id, season, isPostseasonOptions(options)),
+        fetchNBATeamAdvancedStats(away.id, season, isPostseasonOptions(options))
       ]);
       
       const homePace = homeStats?.pace ? parseFloat(homeStats.pace) : 0;
@@ -69,8 +69,8 @@ export const nbaFetchers = {
     // For NBA, use BDL Season Averages (Advanced) - requires GOAT tier
     if (bdlSport === 'basketball_nba') {
       const [homeStats, awayStats] = await Promise.all([
-        fetchNBATeamAdvancedStats(home.id, season),
-        fetchNBATeamAdvancedStats(away.id, season)
+        fetchNBATeamAdvancedStats(home.id, season, isPostseasonOptions(options)),
+        fetchNBATeamAdvancedStats(away.id, season, isPostseasonOptions(options))
       ]);
       
       return {
@@ -123,8 +123,8 @@ export const nbaFetchers = {
     // For NBA, use BDL Season Averages (Advanced)
     if (bdlSport === 'basketball_nba') {
       const [homeStats, awayStats] = await Promise.all([
-        fetchNBATeamAdvancedStats(home.id, season),
-        fetchNBATeamAdvancedStats(away.id, season)
+        fetchNBATeamAdvancedStats(home.id, season, isPostseasonOptions(options)),
+        fetchNBATeamAdvancedStats(away.id, season, isPostseasonOptions(options))
       ]);
       
       return {
@@ -173,8 +173,8 @@ export const nbaFetchers = {
     // For NBA, use BDL Season Averages (Advanced) with BDL v2 usage/scoring data
     if (bdlSport === 'basketball_nba') {
       const [homeStats, awayStats] = await Promise.all([
-        fetchNBATeamAdvancedStats(home.id, season),
-        fetchNBATeamAdvancedStats(away.id, season)
+        fetchNBATeamAdvancedStats(home.id, season, isPostseasonOptions(options)),
+        fetchNBATeamAdvancedStats(away.id, season, isPostseasonOptions(options))
       ]);
 
       const homeNet = homeStats?.net_rating ? parseFloat(homeStats.net_rating) : 0;
@@ -288,10 +288,10 @@ export const nbaFetchers = {
     // For NBA, use BDL Season Averages (Advanced + Opponent)
     if (bdlSport === 'basketball_nba') {
       const [homeStats, awayStats, homeOpp, awayOpp] = await Promise.all([
-        fetchNBATeamAdvancedStats(home.id, season),
-        fetchNBATeamAdvancedStats(away.id, season),
-        fetchNBATeamOpponentStats(home.id, season),
-        fetchNBATeamOpponentStats(away.id, season)
+        fetchNBATeamAdvancedStats(home.id, season, isPostseasonOptions(options)),
+        fetchNBATeamAdvancedStats(away.id, season, isPostseasonOptions(options)),
+        fetchNBATeamOpponentStats(home.id, season, isPostseasonOptions(options)),
+        fetchNBATeamOpponentStats(away.id, season, isPostseasonOptions(options))
       ]);
 
       return {
@@ -353,12 +353,12 @@ export const nbaFetchers = {
     // For NBA, use REAL tm_tov_pct from advanced stats + opponent TOV context
     if (bdlSport === 'basketball_nba') {
       const [homeAdvanced, awayAdvanced, homeBase, awayBase, homeOpp, awayOpp] = await Promise.all([
-        fetchNBATeamAdvancedStats(home.id, season),
-        fetchNBATeamAdvancedStats(away.id, season),
-        fetchNBATeamBaseStats(home.id, season),
-        fetchNBATeamBaseStats(away.id, season),
-        fetchNBATeamOpponentStats(home.id, season),
-        fetchNBATeamOpponentStats(away.id, season)
+        fetchNBATeamAdvancedStats(home.id, season, isPostseasonOptions(options)),
+        fetchNBATeamAdvancedStats(away.id, season, isPostseasonOptions(options)),
+        fetchNBATeamBaseStats(home.id, season, isPostseasonOptions(options)),
+        fetchNBATeamBaseStats(away.id, season, isPostseasonOptions(options)),
+        fetchNBATeamOpponentStats(home.id, season, isPostseasonOptions(options)),
+        fetchNBATeamOpponentStats(away.id, season, isPostseasonOptions(options))
       ]);
 
       return {
@@ -419,12 +419,12 @@ export const nbaFetchers = {
     // For NBA, use REAL oreb_pct from advanced stats + opponent OREB context
     if (bdlSport === 'basketball_nba') {
       const [homeAdvanced, awayAdvanced, homeBase, awayBase, homeOpp, awayOpp] = await Promise.all([
-        fetchNBATeamAdvancedStats(home.id, season),
-        fetchNBATeamAdvancedStats(away.id, season),
-        fetchNBATeamBaseStats(home.id, season),
-        fetchNBATeamBaseStats(away.id, season),
-        fetchNBATeamOpponentStats(home.id, season),
-        fetchNBATeamOpponentStats(away.id, season)
+        fetchNBATeamAdvancedStats(home.id, season, isPostseasonOptions(options)),
+        fetchNBATeamAdvancedStats(away.id, season, isPostseasonOptions(options)),
+        fetchNBATeamBaseStats(home.id, season, isPostseasonOptions(options)),
+        fetchNBATeamBaseStats(away.id, season, isPostseasonOptions(options)),
+        fetchNBATeamOpponentStats(home.id, season, isPostseasonOptions(options)),
+        fetchNBATeamOpponentStats(away.id, season, isPostseasonOptions(options))
       ]);
 
       return {
@@ -487,10 +487,10 @@ export const nbaFetchers = {
     // For NBA, use team-level base stats + opponent FT data
     if (bdlSport === 'basketball_nba') {
       const [homeStats, awayStats, homeOpp, awayOpp] = await Promise.all([
-        fetchNBATeamBaseStats(home.id, season),
-        fetchNBATeamBaseStats(away.id, season),
-        fetchNBATeamOpponentStats(home.id, season),
-        fetchNBATeamOpponentStats(away.id, season)
+        fetchNBATeamBaseStats(home.id, season, isPostseasonOptions(options)),
+        fetchNBATeamBaseStats(away.id, season, isPostseasonOptions(options)),
+        fetchNBATeamOpponentStats(home.id, season, isPostseasonOptions(options)),
+        fetchNBATeamOpponentStats(away.id, season, isPostseasonOptions(options))
       ]);
 
       return {
@@ -556,8 +556,8 @@ export const nbaFetchers = {
     // For NBA, use player-aggregated base stats (BDL has no team_season_stats for NBA)
     if (bdlSport === 'basketball_nba') {
       const [homeStats, awayStats] = await Promise.all([
-        fetchNBATeamBaseStats(home.id, season),
-        fetchNBATeamBaseStats(away.id, season)
+        fetchNBATeamBaseStats(home.id, season, isPostseasonOptions(options)),
+        fetchNBATeamBaseStats(away.id, season, isPostseasonOptions(options))
       ]);
       
       return {
@@ -725,8 +725,8 @@ export const nbaFetchers = {
     // For NBA, use player-aggregated base stats which includes top_players
     if (bdlSport === 'basketball_nba') {
       const [homeStats, awayStats] = await Promise.all([
-        fetchNBATeamBaseStats(home.id, season),
-        fetchNBATeamBaseStats(away.id, season)
+        fetchNBATeamBaseStats(home.id, season, isPostseasonOptions(options)),
+        fetchNBATeamBaseStats(away.id, season, isPostseasonOptions(options))
       ]);
       
       return {
@@ -1103,12 +1103,12 @@ export const nbaFetchers = {
 
     try {
       const [homeAdvanced, awayAdvanced, homeOpp, awayOpp, homeBase, awayBase] = await Promise.all([
-        fetchNBATeamAdvancedStats(home.id, season),
-        fetchNBATeamAdvancedStats(away.id, season),
-        fetchNBATeamOpponentStats(home.id, season),
-        fetchNBATeamOpponentStats(away.id, season),
-        fetchNBATeamBaseStats(home.id, season),
-        fetchNBATeamBaseStats(away.id, season)
+        fetchNBATeamAdvancedStats(home.id, season, isPostseasonOptions(options)),
+        fetchNBATeamAdvancedStats(away.id, season, isPostseasonOptions(options)),
+        fetchNBATeamOpponentStats(home.id, season, isPostseasonOptions(options)),
+        fetchNBATeamOpponentStats(away.id, season, isPostseasonOptions(options)),
+        fetchNBATeamBaseStats(home.id, season, isPostseasonOptions(options)),
+        fetchNBATeamBaseStats(away.id, season, isPostseasonOptions(options))
       ]);
 
       return {
@@ -1239,8 +1239,8 @@ export const nbaFetchers = {
   THREE_PT_DEFENSE: async (bdlSport, home, away, season, options) => {
     console.log(`[Stat Router] Fetching THREE_PT_DEFENSE for ${away.name} @ ${home.name}`);
     const [homeOpp, awayOpp] = await Promise.all([
-      fetchNBATeamOpponentStats(home.id, season),
-      fetchNBATeamOpponentStats(away.id, season)
+      fetchNBATeamOpponentStats(home.id, season, isPostseasonOptions(options)),
+      fetchNBATeamOpponentStats(away.id, season, isPostseasonOptions(options))
     ]);
     return {
       category: 'Three Point Defense',
@@ -1270,8 +1270,8 @@ export const nbaFetchers = {
 
     try {
       const [homeOpp, awayOpp] = await Promise.all([
-        fetchNBATeamOpponentStats(home.id, season),
-        fetchNBATeamOpponentStats(away.id, season)
+        fetchNBATeamOpponentStats(home.id, season, isPostseasonOptions(options)),
+        fetchNBATeamOpponentStats(away.id, season, isPostseasonOptions(options))
       ]);
 
       return {
@@ -1309,8 +1309,8 @@ export const nbaFetchers = {
   OPP_EFG_PCT: async (bdlSport, home, away, season, options) => {
     console.log(`[Stat Router] Fetching OPP_EFG_PCT for ${away.name} @ ${home.name}`);
     const [homeOpp, awayOpp] = await Promise.all([
-      fetchNBATeamOpponentStats(home.id, season),
-      fetchNBATeamOpponentStats(away.id, season)
+      fetchNBATeamOpponentStats(home.id, season, isPostseasonOptions(options)),
+      fetchNBATeamOpponentStats(away.id, season, isPostseasonOptions(options))
     ]);
     return {
       category: 'Opponent Shooting Efficiency',
@@ -1338,8 +1338,8 @@ export const nbaFetchers = {
   OPP_TOV_RATE: async (bdlSport, home, away, season, options) => {
     console.log(`[Stat Router] Fetching OPP_TOV_RATE for ${away.name} @ ${home.name}`);
     const [homeOpp, awayOpp] = await Promise.all([
-      fetchNBATeamOpponentStats(home.id, season),
-      fetchNBATeamOpponentStats(away.id, season)
+      fetchNBATeamOpponentStats(home.id, season, isPostseasonOptions(options)),
+      fetchNBATeamOpponentStats(away.id, season, isPostseasonOptions(options))
     ]);
     return {
       category: 'Opponent Turnover Rate',
@@ -1387,8 +1387,8 @@ export const nbaFetchers = {
           end_date: today.toISOString().split('T')[0],
           per_page: 15
         }),
-        fetchNBATeamAdvancedStats(home.id, season),
-        fetchNBATeamAdvancedStats(away.id, season)
+        fetchNBATeamAdvancedStats(home.id, season, isPostseasonOptions(options)),
+        fetchNBATeamAdvancedStats(away.id, season, isPostseasonOptions(options))
       ]);
 
       // Calculate L10 scoring trend (recent data, not a proxy)
@@ -1470,8 +1470,8 @@ export const nbaFetchers = {
           end_date: today.toISOString().split('T')[0],
           per_page: 50
         }),
-        fetchNBATeamAdvancedStats(home.id, season),
-        fetchNBATeamAdvancedStats(away.id, season)
+        fetchNBATeamAdvancedStats(home.id, season, isPostseasonOptions(options)),
+        fetchNBATeamAdvancedStats(away.id, season, isPostseasonOptions(options))
       ]);
 
       // Calculate home/away scoring splits (venue-specific data)
@@ -1548,8 +1548,8 @@ export const nbaFetchers = {
   PAINT_SCORING: async (bdlSport, home, away, season, options) => {
     console.log(`[Stat Router] Fetching PAINT_SCORING (real zone data) for ${away.name} @ ${home.name}`);
     const [homeAdvanced, awayAdvanced] = await Promise.all([
-      fetchNBATeamAdvancedStats(home.id, season),
-      fetchNBATeamAdvancedStats(away.id, season)
+      fetchNBATeamAdvancedStats(home.id, season, isPostseasonOptions(options)),
+      fetchNBATeamAdvancedStats(away.id, season, isPostseasonOptions(options))
     ]);
 
     const formatScoringZones = (stats) => {
@@ -1584,8 +1584,8 @@ export const nbaFetchers = {
 
     try {
       const [homeAdvanced, awayAdvanced] = await Promise.all([
-        fetchNBATeamAdvancedStats(home.id, season),
-        fetchNBATeamAdvancedStats(away.id, season)
+        fetchNBATeamAdvancedStats(home.id, season, isPostseasonOptions(options)),
+        fetchNBATeamAdvancedStats(away.id, season, isPostseasonOptions(options))
       ]);
 
       const formatMidrange = (stats) => {
@@ -1627,12 +1627,12 @@ export const nbaFetchers = {
   PAINT_DEFENSE: async (bdlSport, home, away, season, options) => {
     console.log(`[Stat Router] Fetching PAINT_DEFENSE for ${away.name} @ ${home.name}`);
     const [homeAdvanced, awayAdvanced, homeBase, awayBase, homeDefense, awayDefense] = await Promise.all([
-      fetchNBATeamAdvancedStats(home.id, season),
-      fetchNBATeamAdvancedStats(away.id, season),
-      fetchNBATeamBaseStats(home.id, season),
-      fetchNBATeamBaseStats(away.id, season),
-      fetchNBATeamDefenseStats(home.id, season),
-      fetchNBATeamDefenseStats(away.id, season)
+      fetchNBATeamAdvancedStats(home.id, season, isPostseasonOptions(options)),
+      fetchNBATeamAdvancedStats(away.id, season, isPostseasonOptions(options)),
+      fetchNBATeamBaseStats(home.id, season, isPostseasonOptions(options)),
+      fetchNBATeamBaseStats(away.id, season, isPostseasonOptions(options)),
+      fetchNBATeamDefenseStats(home.id, season, isPostseasonOptions(options)),
+      fetchNBATeamDefenseStats(away.id, season, isPostseasonOptions(options))
     ]);
     return {
       category: 'Paint Defense',
@@ -1664,10 +1664,10 @@ export const nbaFetchers = {
 
     if (bdlSport === 'basketball_nba') {
       const [homeDefense, awayDefense, homeAdvanced, awayAdvanced] = await Promise.all([
-        fetchNBATeamDefenseStats(home.id, season),
-        fetchNBATeamDefenseStats(away.id, season),
-        fetchNBATeamAdvancedStats(home.id, season),
-        fetchNBATeamAdvancedStats(away.id, season)
+        fetchNBATeamDefenseStats(home.id, season, isPostseasonOptions(options)),
+        fetchNBATeamDefenseStats(away.id, season, isPostseasonOptions(options)),
+        fetchNBATeamAdvancedStats(home.id, season, isPostseasonOptions(options)),
+        fetchNBATeamAdvancedStats(away.id, season, isPostseasonOptions(options))
       ]);
 
       return {
@@ -3071,8 +3071,8 @@ export const nbaFetchers = {
       // Use fetchNBATeamAdvancedStats which already fetches usage data from BDL
       // season_averages/general?type=scoring (pct_pts_paint, etc.) and type=usage (usg_pct)
       const [homeAdvanced, awayAdvanced] = await Promise.all([
-        fetchNBATeamAdvancedStats(home.id, season),
-        fetchNBATeamAdvancedStats(away.id, season)
+        fetchNBATeamAdvancedStats(home.id, season, isPostseasonOptions(options)),
+        fetchNBATeamAdvancedStats(away.id, season, isPostseasonOptions(options))
       ]);
 
       const formatTeamUsage = (stats) => {

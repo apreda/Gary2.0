@@ -418,19 +418,19 @@ export function clearStatRouterCache() {
  * Returns: { pct_pts_paint, pct_pts_3pt, pct_pts_fb, pct_pts_mid_range_2, pct_fga_2pt, pct_fga_3pt, ... }
  * Session-cached to avoid duplicate BDL calls within a single game analysis.
  */
-async function fetchNBATeamScoringStats(teamId, season = null) {
+async function fetchNBATeamScoringStats(teamId, season = null, postseason = false) {
   if (!season) {
     const month = new Date().getMonth() + 1;
     const year = new Date().getFullYear();
     season = month >= 10 ? year : year - 1;
   }
-  const cacheKey = `${teamId}_${season}`;
+  const cacheKey = `${teamId}_${season}_${postseason ? 'post' : 'reg'}`;
   if (_nbaTeamScoringStatsCache.has(cacheKey)) {
     return _nbaTeamScoringStatsCache.get(cacheKey);
   }
 
   try {
-    const stats = await ballDontLieService.getTeamScoringStats(teamId, season);
+    const stats = await ballDontLieService.getTeamScoringStats(teamId, season, postseason);
     if (!stats) {
       console.warn(`[Stat Router] No team scoring stats found for team ${teamId}`);
       _nbaTeamScoringStatsCache.set(cacheKey, null);
@@ -465,7 +465,7 @@ async function fetchNBATeamScoringStats(teamId, season = null) {
  * Uses REAL team-level advanced + scoring stats from BDL.
  * Player-level data only for usage concentration analysis.
  */
-async function fetchNBATeamAdvancedStats(teamId, season = null) {
+async function fetchNBATeamAdvancedStats(teamId, season = null, postseason = false) {
   // Calculate dynamic default season: NBA starts in October
   if (!season) {
     const month = new Date().getMonth() + 1;
@@ -473,7 +473,7 @@ async function fetchNBATeamAdvancedStats(teamId, season = null) {
     season = month >= 10 ? year : year - 1;
   }
   // Check session cache first (same team+season fetched by multiple tokens)
-  const cacheKey = `${teamId}_${season}`;
+  const cacheKey = `${teamId}_${season}_${postseason ? 'post' : 'reg'}`;
   if (_nbaAdvancedStatsCache.has(cacheKey)) {
     return _nbaAdvancedStatsCache.get(cacheKey);
   }
@@ -502,7 +502,7 @@ async function fetchNBATeamAdvancedStats(teamId, season = null) {
     try {
       const [teamResp, scoringResp, usageResp] = await Promise.all([
         // TEAM-LEVEL advanced stats (real ORtg/DRtg/NetRtg — NOT player-averaged)
-        ballDontLieService.getTeamSeasonAdvanced(teamId, season),
+        ballDontLieService.getTeamSeasonAdvanced(teamId, season, postseason),
         // TEAM-LEVEL scoring profile (real — NOT player weight-averaged)
         fetchNBATeamScoringStats(teamId, season),
         // Player-level usage (for usage concentration analysis)
@@ -621,7 +621,7 @@ async function fetchNBALeaders(statType, season = null) {
  * - general/base: pts, reb, ast, fgm, fga, fg_pct, fg3m, fg3a, fg3_pct, ftm, fta, ft_pct, oreb, dreb, tov
  * - general/advanced: off_rating, def_rating, net_rating, efg_pct, pace, ts_pct, tm_tov_pct, oreb_pct
  */
-async function fetchNBATeamBaseStats(teamId, season = null) {
+async function fetchNBATeamBaseStats(teamId, season = null, postseason = false) {
   // Calculate dynamic default season: NBA starts in October
   if (!season) {
     const month = new Date().getMonth() + 1;
@@ -630,16 +630,16 @@ async function fetchNBATeamBaseStats(teamId, season = null) {
     season = month >= 10 ? year : year - 1;
   }
   // Check session cache first (same team+season fetched by multiple tokens)
-  const cacheKey = `${teamId}_${season}`;
+  const cacheKey = `${teamId}_${season}_${postseason ? 'post' : 'reg'}`;
   if (_nbaBaseStatsCache.has(cacheKey)) {
     return _nbaBaseStatsCache.get(cacheKey);
   }
   try {
     // Fetch REAL team-level base stats + player-level for top_players in parallel
     const [teamBaseStats, advancedStats] = await Promise.all([
-      ballDontLieService.getTeamBaseStats(teamId, season),
+      ballDontLieService.getTeamBaseStats(teamId, season, postseason),
       // Advanced stats already cached by fetchNBATeamAdvancedStats — free call
-      ballDontLieService.getTeamSeasonAdvanced(teamId, season)
+      ballDontLieService.getTeamSeasonAdvanced(teamId, season, postseason)
     ]);
 
     if (!teamBaseStats) {
@@ -731,19 +731,19 @@ async function fetchNBATeamBaseStats(teamId, season = null) {
  * Returns computed opponent efficiency metrics: opp_efg_pct, opp_tov_rate, opp_fg3_pct, etc.
  * Session-cached to avoid duplicate BDL calls within a single game analysis.
  */
-async function fetchNBATeamOpponentStats(teamId, season = null) {
+async function fetchNBATeamOpponentStats(teamId, season = null, postseason = false) {
   if (!season) {
     const month = new Date().getMonth() + 1;
     const year = new Date().getFullYear();
     season = month >= 10 ? year : year - 1;
   }
-  const cacheKey = `${teamId}_${season}`;
+  const cacheKey = `${teamId}_${season}_${postseason ? 'post' : 'reg'}`;
   if (_nbaOpponentStatsCache.has(cacheKey)) {
     return _nbaOpponentStatsCache.get(cacheKey);
   }
 
   try {
-    const stats = await ballDontLieService.getTeamOpponentStats(teamId, season);
+    const stats = await ballDontLieService.getTeamOpponentStats(teamId, season, postseason);
     if (!stats) {
       console.warn(`[Stat Router] No opponent stats found for team ${teamId}`);
       _nbaOpponentStatsCache.set(cacheKey, null);
@@ -799,19 +799,19 @@ async function fetchNBATeamOpponentStats(teamId, season = null) {
  * Returns: opp_pts_paint, opp_pts_fb, opp_pts_off_tov, opp_pts_2nd_chance, etc.
  * Session-cached to avoid duplicate BDL calls within a single game analysis.
  */
-async function fetchNBATeamDefenseStats(teamId, season = null) {
+async function fetchNBATeamDefenseStats(teamId, season = null, postseason = false) {
   if (!season) {
     const month = new Date().getMonth() + 1;
     const year = new Date().getFullYear();
     season = month >= 10 ? year : year - 1;
   }
-  const cacheKey = `${teamId}_${season}`;
+  const cacheKey = `${teamId}_${season}_${postseason ? 'post' : 'reg'}`;
   if (_nbaDefenseStatsCache.has(cacheKey)) {
     return _nbaDefenseStatsCache.get(cacheKey);
   }
 
   try {
-    const stats = await ballDontLieService.getTeamDefenseStats(teamId, season);
+    const stats = await ballDontLieService.getTeamDefenseStats(teamId, season, postseason);
     if (!stats) {
       console.warn(`[Stat Router] No defense stats found for team ${teamId}`);
       _nbaDefenseStatsCache.set(cacheKey, null);
