@@ -3044,8 +3044,17 @@ struct GaryPropsView: View {
                                             .transaction { $0.animation = nil }
                                     }
                                 }
+                            } else if viewStyle == "featured" {
+                                // FEATURED: horizontal swipe carousel. One game per page,
+                                // two PropCardSlate cards side-by-side. Page dots below.
+                                PropGameCarousel(
+                                    groups: propsByMatchup.map { ($0.matchup, $0.props) },
+                                    resultForProp: { resultForProp($0) },
+                                    onTap: { selectedProp = $0 }
+                                )
+                                .padding(.top, 8)
                             } else {
-                                // Regular props: Show grouped by matchup with headers
+                                // Compact: dense rows grouped by matchup with headers
                                 ForEach(propsByMatchup, id: \.matchup) { group in
                                     // Matchup header
                                     HStack(spacing: 6) {
@@ -3063,41 +3072,28 @@ struct GaryPropsView: View {
                                     .padding(.horizontal, 16)
                                     .padding(.top, 4)
 
-                                    if viewStyle == "featured" {
-                                        // NEW featured layout — vertical player cards with insight strip
-                                        VStack(spacing: 10) {
-                                            ForEach(group.props, id: \.id) { prop in
-                                                PlayerStackCard(prop: prop, gameResult: resultForProp(prop))
-                                                    .onTapGesture { selectedProp = prop }
-                                                    .transaction { $0.animation = nil }
+                                    VStack(spacing: 0) {
+                                        ForEach(Array(group.props.enumerated()), id: \.element.id) { index, prop in
+                                            CompactPropRow(prop: prop, gameResult: resultForProp(prop), showSportBadge: true)
+                                                .onTapGesture { selectedProp = prop }
+                                                .transaction { $0.animation = nil }
+                                            if index < group.props.count - 1 {
+                                                Divider()
+                                                    .background(GaryColors.gold.opacity(0.3))
+                                                    .padding(.horizontal, 12)
                                             }
                                         }
-                                        .padding(.horizontal, 12)
-                                    } else {
-                                        // Classic compact rows — dense list grouped by matchup
-                                        VStack(spacing: 0) {
-                                            ForEach(Array(group.props.enumerated()), id: \.element.id) { index, prop in
-                                                CompactPropRow(prop: prop, gameResult: resultForProp(prop), showSportBadge: true)
-                                                    .onTapGesture { selectedProp = prop }
-                                                    .transaction { $0.animation = nil }
-                                                if index < group.props.count - 1 {
-                                                    Divider()
-                                                        .background(GaryColors.gold.opacity(0.3))
-                                                        .padding(.horizontal, 12)
-                                                }
-                                            }
-                                        }
-                                        .background(
-                                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                                .fill(Color(hex: "#141210"))
-                                                .overlay(
-                                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                                        .stroke(GaryColors.gold, lineWidth: 0.5)
-                                                )
-                                        )
-                                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                        .padding(.horizontal, 12)
                                     }
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                            .fill(Color(hex: "#141210"))
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                                    .stroke(GaryColors.gold, lineWidth: 0.5)
+                                            )
+                                    )
+                                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                    .padding(.horizontal, 12)
                                 }
                             }
                         }
@@ -7419,6 +7415,450 @@ struct PlayerStackCard: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(prop.effectiveLeague ?? "") prop: \(prop.player ?? "")  \(betLabel) \(propTypeDisplay) \(lineDisplay)")
+    }
+}
+
+// MARK: - Angular Card Shape (Trading-Card silhouette with corner cut)
+//
+// Distinctive PropCardSlate silhouette — standard rounded rect with the
+// bottom-right corner clipped at 45°. Gives each card a unique outline
+// without sacrificing space or readability.
+
+struct AngularCardShape: Shape {
+    var cornerCut: CGFloat = 16
+    var cornerRadius: CGFloat = 6
+
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        let r = cornerRadius
+        let cc = cornerCut
+        p.move(to: CGPoint(x: r, y: 0))
+        p.addLine(to: CGPoint(x: rect.maxX - r, y: 0))
+        p.addQuadCurve(to: CGPoint(x: rect.maxX, y: r), control: CGPoint(x: rect.maxX, y: 0))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - cc))
+        p.addLine(to: CGPoint(x: rect.maxX - cc, y: rect.maxY))
+        p.addLine(to: CGPoint(x: r, y: rect.maxY))
+        p.addQuadCurve(to: CGPoint(x: 0, y: rect.maxY - r), control: CGPoint(x: 0, y: rect.maxY))
+        p.addLine(to: CGPoint(x: 0, y: r))
+        p.addQuadCurve(to: CGPoint(x: r, y: 0), control: CGPoint(x: 0, y: 0))
+        return p
+    }
+}
+
+// MARK: - Prop Card Slate (Sharp, Portrait, Trading-Card Energy)
+//
+// Narrower portrait card optimized to fit two side-by-side per game in the
+// swipe-paged featured view. Distinct aesthetic from PlayerStackCard:
+//   - Square initials frame (architectural, not friendly)
+//   - Massive line value as the hero element
+//   - Pip-based confidence (●●●○)
+//   - Asymmetric bet pill that breaks the rectangle on top
+//   - Diagonal corner clip on bottom-right
+//   - Single sharp accent line in sport color at the top
+
+struct PropCardSlate: View {
+    let prop: PropPick
+    var gameResult: String? = nil
+
+    private var sport: Sport { Sport.from(league: prop.effectiveLeague) }
+    private var accentColor: Color { sport.accentColor }
+
+    private var confidencePct: Int {
+        Int(round((prop.confidence ?? 0.72) * 100))
+    }
+
+    /// 4-pip confidence indicator: ●●●● for 90+%, ●●●○ for 80-89%, etc.
+    private var confidencePips: Int {
+        let c = prop.confidence ?? 0.72
+        if c >= 0.90 { return 4 }
+        if c >= 0.80 { return 3 }
+        if c >= 0.70 { return 2 }
+        return 1
+    }
+
+    private var betLabel: String { (prop.bet ?? "").uppercased() }
+    private var betColor: Color {
+        let b = prop.bet?.lowercased() ?? ""
+        return (b == "over" || b == "yes") ? Color(hex: "#22C55E") : Color(hex: "#EF4444")
+    }
+
+    private var lineValue: String {
+        if let l = prop.line, !l.isEmpty { return l }
+        if let m = (prop.prop ?? "").range(of: #"[\d.]+$"#, options: .regularExpression) {
+            return String((prop.prop ?? "")[m])
+        }
+        return "—"
+    }
+
+    private var propType: String {
+        (prop.prop ?? "")
+            .replacingOccurrences(of: #"\s+[\d.]+$"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: "_", with: " ")
+            .uppercased()
+    }
+
+    private var oddsDisplay: String {
+        guard let raw = prop.odds, !raw.isEmpty else { return "" }
+        if raw.hasPrefix("-") || raw.hasPrefix("+") { return raw }
+        if let n = Int(raw), n > 0 { return "+\(n)" }
+        return raw
+    }
+
+    private var initials: String {
+        let parts = (prop.player ?? "").split(separator: " ").filter { !$0.isEmpty }
+        if parts.count >= 2 { return String(parts.first!.first!) + String(parts.last!.first!) }
+        return String(parts.first?.first ?? "?")
+    }
+
+    private var resolvedResult: String? {
+        guard let r = gameResult?.lowercased(), !r.isEmpty else { return nil }
+        return r
+    }
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            // ── CARD BODY ──
+            VStack(alignment: .leading, spacing: 0) {
+                // Top accent line in sport color — single sharp stroke
+                Rectangle()
+                    .fill(accentColor)
+                    .frame(height: 2)
+
+                VStack(alignment: .leading, spacing: 10) {
+                    // Square initials frame + sport tag in same row
+                    HStack(alignment: .top, spacing: 8) {
+                        // Square initials frame — bigger initials, tighter fit
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                .fill(Color.black.opacity(0.6))
+                                .frame(width: 46, height: 46)
+
+                            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                .stroke(
+                                    LinearGradient(
+                                        colors: [accentColor.opacity(0.7), accentColor.opacity(0.25)],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    ),
+                                    lineWidth: 1
+                                )
+                                .frame(width: 46, height: 46)
+
+                            Text(initials)
+                                .font(.system(size: 24, weight: .black, design: .rounded))
+                                .foregroundStyle(GaryColors.gold)
+                                .tracking(-0.8)
+                        }
+
+                        Spacer(minLength: 0)
+
+                        // Stacked sport pill + position/team in upper-right
+                        VStack(alignment: .trailing, spacing: 3) {
+                            Text((prop.effectiveLeague ?? "").uppercased())
+                                .font(.system(size: 9, weight: .heavy))
+                                .tracking(0.8)
+                                .foregroundStyle(accentColor)
+
+                            if let team = prop.team, !team.isEmpty {
+                                Text(team.uppercased())
+                                    .font(.system(size: 8, weight: .bold))
+                                    .tracking(0.6)
+                                    .foregroundStyle(.white.opacity(0.4))
+                            }
+                        }
+                    }
+                    .padding(.top, 10)
+
+                    // Player name — compact
+                    Text(prop.player ?? "—")
+                        .font(.system(size: 14, weight: .heavy))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+
+                    // Prop type label
+                    Text(propType)
+                        .font(.system(size: 9, weight: .bold))
+                        .tracking(0.8)
+                        .foregroundStyle(.white.opacity(0.42))
+                        .lineLimit(1)
+
+                    Spacer(minLength: 4)
+
+                    // HERO: massive line value
+                    HStack(alignment: .firstTextBaseline, spacing: 0) {
+                        Text(lineValue)
+                            .font(.system(size: 44, weight: .black, design: .rounded))
+                            .foregroundStyle(.white)
+                            .tracking(-1.5)
+
+                        Spacer()
+                    }
+
+                    // Odds line
+                    HStack(spacing: 8) {
+                        Text(oddsDisplay)
+                            .font(.system(size: 13, weight: .heavy, design: .monospaced))
+                            .foregroundStyle(GaryColors.gold)
+
+                        Spacer()
+
+                        // Pip confidence
+                        HStack(spacing: 2) {
+                            ForEach(0..<4, id: \.self) { i in
+                                Circle()
+                                    .fill(i < confidencePips ? GaryColors.gold : Color.white.opacity(0.12))
+                                    .frame(width: 5, height: 5)
+                            }
+                        }
+                    }
+
+                    // Key stat bullets — 2 max, tight
+                    if let stats = prop.key_stats?.prefix(2), !stats.isEmpty {
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(Array(stats.enumerated()), id: \.offset) { _, stat in
+                                HStack(alignment: .top, spacing: 5) {
+                                    Rectangle()
+                                        .fill(accentColor.opacity(0.55))
+                                        .frame(width: 6, height: 1)
+                                        .offset(y: 6)
+                                    Text(stat)
+                                        .font(.system(size: 9, weight: .medium))
+                                        .foregroundStyle(.white.opacity(0.72))
+                                        .lineLimit(2)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                        }
+                        .padding(.top, 6)
+                    }
+
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 12)
+            }
+            .frame(maxWidth: .infinity)
+            .background(
+                ZStack {
+                    Color(hex: "#0A0907")
+                    LinearGradient(
+                        colors: [accentColor.opacity(0.08), .clear],
+                        startPoint: .top,
+                        endPoint: .center
+                    )
+                }
+            )
+            .overlay(
+                // Border tier varies by confidence:
+                //  - 4 pips (90%+): gold gradient = "premium / play of the day"
+                //  - else:           subtle white-opacity (clean)
+                AngularCardShape(cornerCut: 16, cornerRadius: 6)
+                    .stroke(
+                        confidencePips >= 4
+                            ? LinearGradient(
+                                colors: [
+                                    GaryColors.lightGold,
+                                    GaryColors.gold,
+                                    GaryColors.lightGold.opacity(0.4)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                            : LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.18),
+                                    Color.white.opacity(0.05),
+                                    Color.white.opacity(0.02)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            ),
+                        lineWidth: confidencePips >= 4 ? 1.2 : 0.5
+                    )
+            )
+            .clipShape(AngularCardShape(cornerCut: 16, cornerRadius: 6))
+
+            // ── ASYMMETRIC BET PILL (protrudes above the card) ──
+            Text(betLabel)
+                .font(.system(size: 10, weight: .black))
+                .tracking(0.8)
+                .foregroundStyle(.black)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule().fill(betColor)
+                )
+                .overlay(
+                    Capsule().stroke(Color.black.opacity(0.4), lineWidth: 0.5)
+                )
+                .shadow(color: betColor.opacity(0.4), radius: 6, x: 0, y: 2)
+                .offset(x: 10, y: -8)
+        }
+        .frame(height: 250)
+        .overlay(alignment: .topTrailing) {
+            // Result stamp if graded
+            if let res = resolvedResult {
+                Text(res == "won" ? "W" : res == "push" ? "P" : "L")
+                    .font(.system(size: 10, weight: .black, design: .rounded))
+                    .foregroundStyle(.black)
+                    .frame(width: 20, height: 20)
+                    .background(
+                        Circle().fill(
+                            res == "won" ? GaryColors.gold :
+                            res == "push" ? Color.yellow :
+                            Color(hex: "#6A6A70")
+                        )
+                    )
+                    .offset(x: -8, y: 12)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(prop.player ?? "") \(betLabel) \(propType) \(lineValue), \(confidencePct)% confidence")
+    }
+}
+
+// MARK: - Prop Game Carousel
+//
+// Horizontal swipe-paged container for the featured view. Each page = one
+// game with up to 2 PropCardSlate cards side-by-side. Page dots at bottom
+// for navigation; users can also swipe horizontally between games.
+
+struct PropGameCarousel: View {
+    let groups: [(matchup: String, props: [PropPick])]
+    let resultForProp: (PropPick) -> String?
+    let onTap: (PropPick) -> Void
+
+    @State private var pageIndex = 0
+
+    var body: some View {
+        VStack(spacing: 0) {
+            TabView(selection: $pageIndex) {
+                ForEach(Array(groups.enumerated()), id: \.offset) { idx, group in
+                    PropCarouselPage(
+                        matchup: group.matchup,
+                        props: group.props,
+                        pageNumber: idx + 1,
+                        totalPages: groups.count,
+                        resultForProp: resultForProp,
+                        onTap: onTap
+                    )
+                    .tag(idx)
+                }
+            }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            .indexViewStyle(.page(backgroundDisplayMode: .never))
+            .frame(height: 380)
+
+            // Smart page indicator:
+            //   ≤ 8 games: dot row (gold pill for current)
+            //   > 8 games: numeric "6 / 14" (dots would overflow on narrow screens)
+            if groups.count > 1 {
+                if groups.count <= 8 {
+                    HStack(spacing: 6) {
+                        ForEach(0..<groups.count, id: \.self) { i in
+                            Capsule()
+                                .fill(i == pageIndex ? GaryColors.gold : Color.white.opacity(0.18))
+                                .frame(width: i == pageIndex ? 18 : 5, height: 5)
+                                .animation(.easeInOut(duration: 0.25), value: pageIndex)
+                        }
+                    }
+                    .padding(.top, 6)
+                } else {
+                    HStack(spacing: 6) {
+                        Text("\(pageIndex + 1)")
+                            .font(.system(size: 13, weight: .heavy, design: .rounded))
+                            .foregroundStyle(GaryColors.gold)
+                        Text("/")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.3))
+                        Text("\(groups.count)")
+                            .font(.system(size: 11, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.45))
+                    }
+                    .padding(.top, 6)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Single Page of the Game Carousel
+
+struct PropCarouselPage: View {
+    let matchup: String
+    let props: [PropPick]
+    let pageNumber: Int
+    let totalPages: Int
+    let resultForProp: (PropPick) -> String?
+    let onTap: (PropPick) -> Void
+
+    private var firstPropTime: String {
+        guard let iso = props.first?.commence_time, !iso.isEmpty,
+              let d = parseISO8601(iso) else {
+            return props.first?.time ?? ""
+        }
+        return Formatters.dayTimeFormatterEST.string(from: d)
+    }
+
+    /// Shorter matchup form — last word of each team, e.g.
+    /// "Marlins @ Blue Jays" → "Marlins @ Jays". Falls back to original.
+    private var shortMatchup: String {
+        let parts = matchup.components(separatedBy: " @ ")
+        guard parts.count == 2 else { return matchup }
+        let away = parts[0].components(separatedBy: " ").last ?? parts[0]
+        let home = parts[1].components(separatedBy: " ").last ?? parts[1]
+        return "\(away) @ \(home)"
+    }
+
+    var body: some View {
+        VStack(spacing: 14) {
+            // ── PAGE HEADER ──
+            // Two-row stack — game # + time on top, matchup on its own line below.
+            // Gives the matchup full width so long team names ("Diamondbacks") fit.
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    Text("GAME \(pageNumber) / \(totalPages)")
+                        .font(.system(size: 9, weight: .heavy))
+                        .tracking(1.2)
+                        .foregroundStyle(GaryColors.gold.opacity(0.65))
+
+                    Spacer(minLength: 0)
+
+                    if !firstPropTime.isEmpty {
+                        Text(firstPropTime)
+                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.45))
+                    }
+                }
+
+                Text(shortMatchup.uppercased())
+                    .font(.system(size: 16, weight: .heavy))
+                    .tracking(0.3)
+                    .foregroundStyle(.white.opacity(0.9))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 4)
+
+            // ── TWO CARDS SIDE BY SIDE ──
+            HStack(alignment: .top, spacing: 10) {
+                ForEach(Array(props.prefix(2).enumerated()), id: \.offset) { _, prop in
+                    PropCardSlate(prop: prop, gameResult: resultForProp(prop))
+                        .onTapGesture { onTap(prop) }
+                }
+                // If only one prop, leave the second slot empty but maintain layout
+                if props.count == 1 {
+                    Color.clear
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 280)
+                }
+            }
+            .padding(.horizontal, 16)
+
+            Spacer(minLength: 0)
+        }
     }
 }
 
