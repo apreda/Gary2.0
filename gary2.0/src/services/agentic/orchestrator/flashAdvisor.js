@@ -5,7 +5,7 @@ import { ballDontLieService } from '../../ballDontLieService.js';
 import { nbaSeason, nflSeason } from '../../../utils/dateUtils.js';
 import { toolDefinitions, getTokensForSport } from '../tools/toolDefinitions.js';
 import { fetchStats } from '../tools/statRouters/index.js';
-import { summarizeStatForContext, summarizeNbaPlayerAdvancedStats } from './orchestratorHelpers.js';
+import { summarizeStatForContext, summarizeNbaPlayerAdvancedStats, summarizeMlbPlayerGameLogs } from './orchestratorHelpers.js';
 import { geminiGroundingSearch } from '../scoutReport/scoutReportBuilder.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -170,7 +170,16 @@ export function extractTextualSummaryForModelSwitch(messages, toolCallHistory = 
 export async function buildFlashResearchBriefing(scoutReportContent, sport, homeTeam, awayTeam, options = {}) {
   const startTime = Date.now();
   try {
-    const sportLabel = sport.replace('basketball_', '').replace('americanfootball_', '').replace('icehockey_', '').toUpperCase();
+    // Strip every league-family prefix BDL uses, otherwise sportLabel ends up as
+    // "BASEBALL_MLB" which has no entry in ALL_TOKENS_BY_SPORT — getTokensForSport
+    // returns [], and the token-allowlist check at line ~298 silently passes any
+    // hallucinated token through to the router (e.g. MLB_PLAYER_SEASON_STATS).
+    const sportLabel = sport
+      .replace('basketball_', '')
+      .replace('americanfootball_', '')
+      .replace('icehockey_', '')
+      .replace('baseball_', '')
+      .toUpperCase();
 
     // Flash token dedup cache — prevents re-fetching the same stat within a single game analysis
     const _flashTokenCache = new Map();
@@ -290,8 +299,16 @@ Read the scout report above. I will now ask you to investigate factors one at a 
             const args = JSON.parse(toolCall.function?.arguments || '{}');
 
             if (functionName === 'fetch_stats') {
-              const token = args.token;
+              // Gemini sometimes emits the call with `stat_type` instead of
+              // `token`. agentLoop.js handles this at line ~1468; mirror it
+              // here so Flash doesn't pass `undefined` straight into fetchStats.
+              const token = args.token || args.stat_type;
               totalToolCalls++;
+
+              if (!token) {
+                functionResponses.push({ name: functionName, content: `Error: fetch_stats called without a "token" argument. Re-issue the call with a valid token name (e.g. {"token":"MLB_PITCHER_RECENT_FORM"}).` });
+                continue;
+              }
 
               const menuSport = sportLabel;
               const allowedTokens = getTokensForSport(menuSport);
@@ -343,7 +360,18 @@ Read the scout report above. I will now ask you to investigate factors one at a 
             } else if (functionName === 'fetch_player_game_logs') {
               totalToolCalls++;
               try {
-                const sportKeyMap = { 'NBA': 'basketball_nba', 'NFL': 'americanfootball_nfl', 'NHL': 'icehockey_nhl', 'NCAAB': 'basketball_ncaab', 'NCAAF': 'americanfootball_ncaaf' };
+                // Map LLM-facing sport label → BDL service sport key. MLB was
+                // missing here, so MLB player lookups silently fell into the
+                // NFL else-branch below and hit /nfl/v1/... with 401s for every
+                // pitcher and batter Flash investigated.
+                const sportKeyMap = {
+                  'NBA': 'basketball_nba',
+                  'NFL': 'americanfootball_nfl',
+                  'NHL': 'icehockey_nhl',
+                  'NCAAB': 'basketball_ncaab',
+                  'NCAAF': 'americanfootball_ncaaf',
+                  'MLB': 'baseball_mlb'
+                };
                 const sportKey = sportKeyMap[args.sport] || sport;
                 const numGames = args.num_games || 5;
                 const nameParts = (args.player_name || '').trim().split(' ');
@@ -361,11 +389,39 @@ Read the scout report above. I will now ask you to investigate factors one at a 
                   functionResponses.push({ name: functionName, content: JSON.stringify({ error: `Player "${args.player_name}" not found` }) });
                 } else {
                   let logs;
-                  if (args.sport === 'NBA') logs = await ballDontLieService.getNbaPlayerGameLogs(player.id, numGames);
-                  else if (args.sport === 'NCAAB') logs = await ballDontLieService.getNcaabPlayerGameLogs(player.id, numGames);
-                  else if (args.sport === 'NHL') logs = await ballDontLieService.getNhlPlayerGameLogs(player.id, numGames);
-                  else { const s = nflSeason(); const all = await ballDontLieService.getNflPlayerGameLogsBatch([player.id], s, numGames); logs = all[player.id]; }
-                  const logContent = JSON.stringify({ player: args.player_name, sport: args.sport, logs: logs || [] });
+                  let logContent;
+                  if (args.sport === 'NBA') {
+                    logs = await ballDontLieService.getNbaPlayerGameLogs(player.id, numGames);
+                    logContent = JSON.stringify({ player: args.player_name, sport: 'NBA', logs: logs || [] });
+                  } else if (args.sport === 'NCAAB') {
+                    logs = await ballDontLieService.getNcaabPlayerGameLogs(player.id, numGames);
+                    logContent = JSON.stringify({ player: args.player_name, sport: 'NCAAB', logs: logs || [] });
+                  } else if (args.sport === 'NHL') {
+                    logs = await ballDontLieService.getNhlPlayerGameLogs(player.id, numGames);
+                    logContent = JSON.stringify({ player: args.player_name, sport: 'NHL', logs: logs || [] });
+                  } else if (args.sport === 'MLB') {
+                    // MLB per-game stats use BDL's /mlb/v1/stats — flat shape
+                    // (pitcher: ip/er/p_k/p_bb; batter: at_bats/hits/hr/rbi).
+                    // Mirrors agentLoop.js MLB branch at line ~1016.
+                    const currentYear = new Date().getFullYear();
+                    logs = await ballDontLieService.getMlbGameStats({
+                      playerIds: [player.id],
+                      seasons: [currentYear]
+                    });
+                    // Use the pitcher/batter-aware summarizer instead of raw JSON
+                    // so the briefing gets the same compact format Gary's path does.
+                    logContent = summarizeMlbPlayerGameLogs(args.player_name, logs);
+                  } else if (args.sport === 'NFL' || args.sport === 'NCAAF') {
+                    const s = nflSeason();
+                    const all = await ballDontLieService.getNflPlayerGameLogsBatch([player.id], s, numGames);
+                    logs = all[player.id];
+                    logContent = JSON.stringify({ player: args.player_name, sport: args.sport, logs: logs || [] });
+                  } else {
+                    // Unknown sport — return an explicit error instead of
+                    // silently hitting NFL endpoints (the prior bug).
+                    functionResponses.push({ name: functionName, content: JSON.stringify({ error: `Unknown sport "${args.sport}" — pass one of NBA, NHL, MLB, NFL, NCAAB, NCAAF.` }) });
+                    continue;
+                  }
                   functionResponses.push({ name: functionName, content: logContent });
                   console.log(`    [Tool Response] ${functionName}: ${logContent.slice(0, 200)}...`);
                   calledTokens.push({ token: `PLAYER_GAME_LOGS:${args.player_name}`, quality: 'available' });
