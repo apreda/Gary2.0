@@ -41,7 +41,12 @@ const ALIASES = {
   NCAAF_EXPLOSIVE_PLAYS: 'NCAAF_EXPLOSIVENESS',
   NCAAF_RUSH_EFFICIENCY: 'NCAAF_RUSHING_EFFICIENCY',
   NCAAF_PASS_EFFICIENCY: 'NCAAF_PASSING_EFFICIENCY',
-  NCAAF_REDZONE: 'NCAAF_RED_ZONE'
+  NCAAF_REDZONE: 'NCAAF_RED_ZONE',
+  // MLB: route the generic H2H_HISTORY name to MLB_H2H. Without this, MLB usage
+  // of H2H_HISTORY fell through to the NBA-shaped fetcher which needs home.id
+  // (BDL team id) — MLB code path constructs home with only full_name/name, so
+  // team_ids became [undefined] and the BDL SDK threw on .toString() of null.
+  MLB_H2H_HISTORY: 'MLB_H2H'
 };
 
 // Register aliases

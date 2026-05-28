@@ -1477,6 +1477,7 @@ INVESTIGATION COMPLETE`;
           if (v.includes('nfl')) return 'NFL';
           if (v.includes('nba')) return 'NBA';
           if (v.includes('nhl')) return 'NHL';
+          if (v.includes('mlb') || v.includes('baseball')) return 'MLB';
           // Tool schema uses these values; fall back to NBA
           return 'NBA';
         };

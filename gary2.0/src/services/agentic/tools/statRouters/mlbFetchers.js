@@ -16,6 +16,7 @@ import {
   searchPlayer,
   getConfirmedLineups,
   getProbablePitchers,
+  getGameBoxScore,
 } from '../../../mlbStatsApiService.js';
 import { ballDontLieService } from '../../../ballDontLieService.js';
 import { formatSampleSuffix } from './statRouterCommon.js';
@@ -562,28 +563,37 @@ export const mlbFetchers = {
     const awayTeam = away.full_name || away.name;
     const gameId = options?.game?.bdlGameId || options?.game?.gamePk || options?.game?.id;
 
+    // BDL MLB odds rows are FLAT:
+    //   vendor, moneyline_home_odds, moneyline_away_odds,
+    //   spread_home_value, spread_home_odds, spread_away_value, spread_away_odds,
+    //   total_value, total_over_odds, total_under_odds
+    // The prior implementation read bookOdds.moneyline.home etc. — those keys
+    // don't exist on the BDL payload, so every value rendered as "—" even though
+    // the data was right there. Matches the shape used in ballDontLieOddsService.js.
+    const formatOddsRow = (row, includeRL = true) => {
+      const book = row.vendor || row.sportsbook || row.book || 'Unknown';
+      const homeML = row.moneyline_home_odds ?? '—';
+      const awayML = row.moneyline_away_odds ?? '—';
+      const total = row.total_value ?? '—';
+      const overPrice = row.total_over_odds ?? '—';
+      const underPrice = row.total_under_odds ?? '—';
+      if (includeRL) {
+        const homeRL = row.spread_home_value != null
+          ? `${row.spread_home_value} (${row.spread_home_odds ?? '—'})`
+          : '—';
+        const awayRL = row.spread_away_value != null
+          ? `${row.spread_away_value} (${row.spread_away_odds ?? '—'})`
+          : '—';
+        return `${book}: ML ${awayTeam} ${awayML} / ${homeTeam} ${homeML} | RL ${awayRL} / ${homeRL} | O/U ${total} (O ${overPrice} / U ${underPrice})`;
+      }
+      return `${book}: ML ${awayTeam} ${awayML} / ${homeTeam} ${homeML} | O/U ${total}`;
+    };
+
     if (gameId) {
       try {
         const odds = await ballDontLieService.getMlbGameOdds({ gameIds: [gameId] });
         if (odds && odds.length > 0) {
-          const lines = [];
-          for (const bookOdds of odds) {
-            const book = bookOdds.sportsbook || bookOdds.book || 'Unknown';
-            const ml = bookOdds.moneyline || bookOdds.ml || {};
-            const rl = bookOdds.spread || bookOdds.run_line || {};
-            const ou = bookOdds.total || bookOdds.over_under || {};
-
-            const homeML = ml.home ?? ml.home_odds ?? '—';
-            const awayML = ml.away ?? ml.away_odds ?? '—';
-            const homeRL = rl.home_spread ?? rl.home ?? '—';
-            const awayRL = rl.away_spread ?? rl.away ?? '—';
-            const total = ou.total ?? ou.line ?? '—';
-            const overPrice = ou.over ?? ou.over_odds ?? '—';
-            const underPrice = ou.under ?? ou.under_odds ?? '—';
-
-            lines.push(`${book}: ML ${awayTeam} ${awayML} / ${homeTeam} ${homeML} | RL ${awayRL}/${homeRL} | O/U ${total} (O ${overPrice} / U ${underPrice})`);
-          }
-
+          const lines = odds.map(row => formatOddsRow(row, true));
           return {
             homeValue: lines.join('\n'),
             awayValue: '',
@@ -612,19 +622,7 @@ export const mlbFetchers = {
         });
 
         if (gameOdds.length > 0) {
-          const lines = [];
-          for (const bookOdds of gameOdds) {
-            const book = bookOdds.sportsbook || bookOdds.book || 'Unknown';
-            const ml = bookOdds.moneyline || bookOdds.ml || {};
-            const rl = bookOdds.spread || bookOdds.run_line || {};
-            const ou = bookOdds.total || bookOdds.over_under || {};
-
-            const homeML = ml.home ?? ml.home_odds ?? '—';
-            const awayML = ml.away ?? ml.away_odds ?? '—';
-            const total = ou.total ?? ou.line ?? '—';
-
-            lines.push(`${book}: ML ${awayTeam} ${awayML} / ${homeTeam} ${homeML} | O/U ${total}`);
-          }
+          const lines = gameOdds.map(row => formatOddsRow(row, false));
 
           return {
             homeValue: lines.join('\n'),
@@ -1419,42 +1417,51 @@ export const mlbFetchers = {
           continue;
         }
 
-        const gameIds = recentGames.map(g => g.gamePk).filter(Boolean);
-        if (gameIds.length === 0) {
-          lines.push(`${teamName}: No game IDs found`);
-          continue;
-        }
-
-        const gameStats = await ballDontLieService.getMlbGameStats({ gameIds }).catch(() => []);
-        if (gameStats.length === 0) {
-          lines.push(`${teamName}: No box score data available for recent games`);
-          continue;
-        }
-
+        // recentGames comes from MLB Stats API (each item has a `gamePk`).
+        // The prior implementation passed those gamePks to BDL's
+        // getMlbGameStats expecting them to be BDL game IDs — different
+        // namespaces, so BDL returned 0 records and every team got
+        // "No box score data available". Use the MLB Stats API's own
+        // /game/{gamePk}/boxscore endpoint instead — same namespace,
+        // and the boxscore already includes per-pitcher inningsPitched.
         usedApi = true;
-        // Group reliever appearances by game
         for (const game of recentGames) {
           const date = (game.gameDate || '').split('T')[0];
-          const gId = game.gamePk;
-          const gamePitchers = gameStats.filter(s => {
-            const matchGame = String(s.game?.id || s.game_id) === String(gId);
-            // Filter to relievers (pitched < 5 IP in that game, i.e., not the starter)
-            return matchGame && (s.ip || 0) > 0 && (s.ip || 0) < 5;
-          });
+          const box = await getGameBoxScore(game.gamePk).catch(() => null);
+          if (!box?.teams) {
+            lines.push(`${date}: Box score unavailable`);
+            continue;
+          }
 
-          if (gamePitchers.length > 0) {
-            const pitcherList = gamePitchers.map(s => {
-              const name = s.player?.full_name || s.player?.last_name || 'Unknown';
-              return `${name} ${Number(s.ip).toFixed(1)} IP`;
-            }).join(', ');
-            lines.push(`${date}: ${pitcherList}`);
+          // Identify which side of the box belongs to this team.
+          const homeId = box.teams.home?.team?.id;
+          const sideKey = homeId === mlbTeam.id ? 'home' : 'away';
+          const side = box.teams[sideKey];
+          const players = side?.players || {};
+          const pitcherIds = Array.isArray(side?.pitchers) ? side.pitchers : [];
+
+          const relievers = [];
+          for (const pid of pitcherIds) {
+            const p = players[`ID${pid}`];
+            const ipStr = p?.stats?.pitching?.inningsPitched;
+            if (ipStr == null) continue;
+            // MLB IP is in "outs decimal" form (e.g. "1.2" = 1 inning + 2 outs).
+            // For reliever filtering we just need a coarse number; parseFloat is fine.
+            const ip = parseFloat(ipStr);
+            if (!Number.isFinite(ip) || ip <= 0 || ip >= 5) continue;
+            const name = p?.person?.fullName || 'Unknown';
+            relievers.push(`${name} ${ip.toFixed(1)} IP`);
+          }
+
+          if (relievers.length > 0) {
+            lines.push(`${date}: ${relievers.join(', ')}`);
           } else {
-            lines.push(`${date}: No reliever data available`);
+            lines.push(`${date}: No reliever appearances`);
           }
         }
       } catch (e) {
         console.warn(`[MLB Fetchers] ⚠️ Bullpen workload API failed for ${teamName}: ${e.message}`);
-        lines.push(`${teamName}: Bullpen workload data unavailable — check BDL box scores`);
+        lines.push(`${teamName}: Bullpen workload data unavailable — check MLB Stats API boxscore`);
       }
     }
 

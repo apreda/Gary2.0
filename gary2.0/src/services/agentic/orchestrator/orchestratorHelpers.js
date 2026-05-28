@@ -80,6 +80,15 @@ export function summarizeStatForContext(statResult, statToken, homeTeam, awayTea
           formatNum(a.defensive_rating || a.def_rating || a.defRating));
 
       case 'RECENT_FORM': {
+        // MLB fetchers return homeValue/awayValue as pre-formatted strings
+        // (e.g. "Twins: 7-3 L10, 4.2 RS/gm..."), not objects with l5/summary
+        // fields. Without this check the lookups below all resolve to
+        // undefined → "N/A | N/A" even when the real data is right there.
+        if (typeof h === 'string' || typeof a === 'string') {
+          const hStr = typeof h === 'string' ? h : 'N/A';
+          const aStr = typeof a === 'string' ? a : 'N/A';
+          return `${statToken}: ${hStr} | ${aStr}`;
+        }
         // NHL returns l5/l10 objects; other sports return summary/last_5 strings
         const awayForm = a.summary || a.last_5 || (a.l5?.record ? `${a.l5.record} (L5)` : 'N/A');
         const homeForm = h.summary || h.last_5 || (h.l5?.record ? `${h.l5.record} (L5)` : 'N/A');
@@ -254,6 +263,16 @@ export function summarizeStatForContext(statResult, statToken, homeTeam, awayTea
 
       case 'CONFERENCE_STANDING':
       case 'STANDINGS': {
+        // MLB fetchers return homeValue as the full multi-line standings text
+        // and comparison as just the header "MLB Division Standings". The prior
+        // implementation early-returned on comparison and threw away the real
+        // payload — check for string-shaped homeValue first.
+        if (typeof h === 'string' || typeof a === 'string') {
+          const hStr = typeof h === 'string' ? h : '';
+          const aStr = typeof a === 'string' ? a : '';
+          const combined = [hStr, aStr].filter(Boolean).join('\n');
+          if (combined) return `${statToken}: ${combined}`;
+        }
         // Some fetchers return a top-level context string instead of home/away objects
         if (statResult.context) return `${statToken}: ${statResult.context}`;
         if (statResult.comparison) return `${statToken}: ${statResult.comparison}`;
@@ -519,6 +538,15 @@ export function summarizeStatForContext(statResult, statToken, homeTeam, awayTea
       // CROSS-SPORT TOKENS — field names verified against fetcher output
       // ═══════════════════════════════════════════════════════════
       case 'TOP_PLAYERS': {
+        // MLB returns pre-formatted strings (BA/HR/RBI/OPS for hitters, ERA/K/IP
+        // for pitchers) — the PPG/RPG/APG NBA-only template below is wrong shape.
+        // Without this passthrough, MLB top players renders as "No player data"
+        // even though the homeValue string is right there.
+        if (typeof h === 'string' || typeof a === 'string') {
+          const hStr = typeof h === 'string' ? h : 'No player data';
+          const aStr = typeof a === 'string' ? a : 'No player data';
+          return `${statToken}:\n${hStr}\n${aStr}`;
+        }
         // Fetcher returns: { players: [{ name, position, games, ppg, rpg, apg, fg_pct, fg3_pct, min_pg }] }
         const formatPlayers = (team) => {
           const players = team.players || [];

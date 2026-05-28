@@ -177,12 +177,50 @@ export async function buildMlbScoutReport(game, options = {}) {
   // ═══════════════════════════════════════════════════════════════════
   // LAST 4 GAME BOX SCORES (BDL per-game stats for L1-L4 recaps)
   // ═══════════════════════════════════════════════════════════════════
-  const homeGameIds = (homeRecentGames || []).slice(-4).map(g => g.id).filter(Boolean);
-  const awayGameIds = (awayRecentGames || []).slice(-4).map(g => g.id).filter(Boolean);
-  const allBoxGameIds = [...new Set([...homeGameIds, ...awayGameIds])];
+  // homeRecentGames / awayRecentGames come from MLB Stats API (gamePk-keyed).
+  // BDL box stats need BDL game IDs — different namespace. Prior code did
+  // `(homeRecentGames || []).slice(-4).map(g => g.id)` which is always
+  // undefined → filter(Boolean) emptied the array → zero box stats fetched.
+  // Pull BDL games for each team (1 cached call each) and build a
+  // date→BDL-id lookup so we can resolve real BDL ids for the recap loop.
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const thirtyDaysAgoIso = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const [homeBdlGames, awayBdlGames] = await Promise.all([
+    homeTeamBdlId
+      ? ballDontLieService.getGames('baseball_mlb', { team_ids: [homeTeamBdlId], start_date: thirtyDaysAgoIso, end_date: todayIso, per_page: 50 }).catch(() => [])
+      : [],
+    awayTeamBdlId
+      ? ballDontLieService.getGames('baseball_mlb', { team_ids: [awayTeamBdlId], start_date: thirtyDaysAgoIso, end_date: todayIso, per_page: 50 }).catch(() => [])
+      : []
+  ]);
+  // Date-keyed lookup: each team plays at most one MLB game per calendar date,
+  // so date is a reliable join key between MLB Stats API gamePk and BDL id.
+  const bdlIdByDate = new Map();
+  for (const g of [...(homeBdlGames || []), ...(awayBdlGames || [])]) {
+    const date = String(g.date || g.game_date || '').slice(0, 10);
+    if (date && g.id != null) bdlIdByDate.set(date, g.id);
+  }
+  const collectBdlIds = (games) => (games || [])
+    .slice(-4)
+    .map(g => bdlIdByDate.get(String(g.officialDate || g.gameDate || '').slice(0, 10)))
+    .filter(id => id != null);
+  const allBoxGameIds = [...new Set([...collectBdlIds(homeRecentGames), ...collectBdlIds(awayRecentGames)])];
   const recentBoxStats = allBoxGameIds.length > 0
     ? await ballDontLieService.getMlbGameStats({ gameIds: allBoxGameIds }).catch(e => { console.warn(`[Scout Report] BDL box stats error: ${e.message}`); return []; })
     : [];
+  // Build a reverse lookup so the recap loop can resolve box stats by date.
+  // (recentBoxStats records carry BDL game_id; formatGameRecap iterates over
+  // MLB Stats API game objects — date is the reliable bridge.)
+  const dateByBdlId = new Map();
+  for (const [date, id] of bdlIdByDate.entries()) dateByBdlId.set(id, date);
+  const recentBoxStatsByDate = new Map();
+  for (const s of recentBoxStats) {
+    const d = dateByBdlId.get(s.game_id);
+    if (!d) continue;
+    const list = recentBoxStatsByDate.get(d) || [];
+    list.push(s);
+    recentBoxStatsByDate.set(d, list);
+  }
   // Also fetch last game via MLB Stats API for the detailed box score (SP line, bullpen detail)
   const lastHomeGamePk = homeRecentGames?.[homeRecentGames.length - 1]?.gamePk;
   const lastAwayGamePk = awayRecentGames?.[awayRecentGames.length - 1]?.gamePk;
@@ -367,7 +405,7 @@ export async function buildMlbScoutReport(game, options = {}) {
     const lastWord = (name) => name.toLowerCase().split(' ').pop();
 
     // Build per-game recap from BDL box stats + game result
-    const formatGameRecap = (game, teamName, boxStats) => {
+    const formatGameRecap = (game, teamName, boxStatsByDate) => {
       if (!game) return null;
       const tLast = lastWord(teamName);
       const homeName = (game.teams?.home?.team?.name || '').toLowerCase();
@@ -379,8 +417,10 @@ export async function buildMlbScoutReport(game, options = {}) {
       const date = (game.officialDate || game.gameDate || '').split('T')[0];
       const loc = isHome ? 'vs' : '@';
 
-      // Find box stats for this game
-      const gameStats = boxStats.filter(s => s.game_id === game.id);
+      // Box stats are keyed by date because the array elements use BDL game IDs
+      // while `game` here is an MLB Stats API object (gamePk-keyed). Each team
+      // plays at most one MLB game per calendar day so date is a reliable join.
+      const gameStats = (boxStatsByDate instanceof Map ? boxStatsByDate.get(date) : null) || [];
       let spLine = '';
       let bullpenLines = [];
       let keyHitters = [];
@@ -449,7 +489,7 @@ export async function buildMlbScoutReport(game, options = {}) {
       // L1-L4: individual game recaps (most recent first)
       const last4 = games.slice(-4).reverse();
       for (let i = 0; i < last4.length; i++) {
-        const recap = formatGameRecap(last4[i], teamName, recentBoxStats);
+        const recap = formatGameRecap(last4[i], teamName, recentBoxStatsByDate);
         if (recap) lines.push(`  [L${i + 1}]${recap.trim().startsWith(' ') ? recap : ' ' + recap.trim()}`);
       }
       // L5/L10: aggregates
