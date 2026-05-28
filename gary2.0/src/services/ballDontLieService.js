@@ -5187,6 +5187,78 @@ const ballDontLieService = {
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // MLB PITCH-TYPE STATS (GOAT tier) — per-pitch breakdowns
+  // Returns: pitch_type, pitch_usage_percent, whiff_percent, chase_percent,
+  // command_percent, zone_percent, ba, slg, woba, xwoba — keyed by pitch type
+  // (4-seam, slider, curveball, ...). The pitcher endpoint shows how each
+  // pitch performs (his slider's whiff%, his fastball's xwoba). The hitter
+  // endpoint shows how a batter performs against each pitch type (his
+  // xwoba vs sliders, his ba vs curveballs).
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Pitcher pitch-type stats. Pass season for full-season aggregates,
+   * gameIds for last-N-games breakdowns. Either can be omitted.
+   * @param {Object} opts
+   * @param {Array<number>} opts.playerIds  Pitcher player IDs.
+   * @param {number} [opts.season]          Required for season variant.
+   * @param {Array<number>} [opts.gameIds]  Required for game variant.
+   * @param {number} [opts.perPage=100]
+   */
+  async getMlbPitcherPitchTypeStats({ playerIds = [], season, gameIds, perPage = 100 } = {}, ttlMinutes = 60) {
+    try {
+      if (!Array.isArray(playerIds) || playerIds.length === 0) return [];
+      const useGames = Array.isArray(gameIds) && gameIds.length > 0;
+      const path = useGames
+        ? '/mlb/v1/pitcher_pitch_type_game_stats'
+        : '/mlb/v1/pitcher_pitch_type_season_stats';
+      const params = useGames
+        ? { player_ids: playerIds, game_ids: gameIds, per_page: perPage }
+        : { player_ids: playerIds, season, per_page: perPage };
+      const cacheKey = `mlb_pitcher_pitch_type_${useGames ? 'game' : 'season'}_${JSON.stringify(params)}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const url = `${BALLDONTLIE_API_BASE_URL}${path}${buildQuery(params)}`;
+        console.log(`[BDL] Fetching MLB pitcher pitch-type ${useGames ? 'game' : 'season'} stats for ${playerIds.length} pitcher(s)`);
+        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const data = response.data?.data || [];
+        console.log(`[BDL] MLB pitcher pitch-type ${useGames ? 'game' : 'season'} stats: ${data.length} records`);
+        return data;
+      }, ttlMinutes);
+    } catch (error) {
+      console.error(`[BDL] MLB pitcher pitch-type stats error:`, error?.response?.data || error.message);
+      return [];
+    }
+  },
+
+  /**
+   * Hitter pitch-type stats. Same param shape as the pitcher variant.
+   */
+  async getMlbHitterPitchTypeStats({ playerIds = [], season, gameIds, perPage = 100 } = {}, ttlMinutes = 60) {
+    try {
+      if (!Array.isArray(playerIds) || playerIds.length === 0) return [];
+      const useGames = Array.isArray(gameIds) && gameIds.length > 0;
+      const path = useGames
+        ? '/mlb/v1/hitter_pitch_type_game_stats'
+        : '/mlb/v1/hitter_pitch_type_season_stats';
+      const params = useGames
+        ? { player_ids: playerIds, game_ids: gameIds, per_page: perPage }
+        : { player_ids: playerIds, season, per_page: perPage };
+      const cacheKey = `mlb_hitter_pitch_type_${useGames ? 'game' : 'season'}_${JSON.stringify(params)}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const url = `${BALLDONTLIE_API_BASE_URL}${path}${buildQuery(params)}`;
+        console.log(`[BDL] Fetching MLB hitter pitch-type ${useGames ? 'game' : 'season'} stats for ${playerIds.length} hitter(s)`);
+        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const data = response.data?.data || [];
+        console.log(`[BDL] MLB hitter pitch-type ${useGames ? 'game' : 'season'} stats: ${data.length} records`);
+        return data;
+      }, ttlMinutes);
+    } catch (error) {
+      console.error(`[BDL] MLB hitter pitch-type stats error:`, error?.response?.data || error.message);
+      return [];
+    }
+  },
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // NBA PLAYER PROPS (Ball Don't Lie API)
   // ═══════════════════════════════════════════════════════════════════════════
 

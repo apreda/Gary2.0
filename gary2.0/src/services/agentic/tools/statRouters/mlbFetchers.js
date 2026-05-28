@@ -402,6 +402,188 @@ export const mlbFetchers = {
     };
   },
 
+  // ═══════════════════════════════════════════════════════════════════
+  // PITCH-TYPE BREAKDOWNS (BDL GOAT) — per-pitch stats for SPs and hitters
+  // Replaces blind Gemini Grounding searches like "how does X hit sliders".
+  // These are deterministic, current-season Statcast aggregates from BDL.
+  // ═══════════════════════════════════════════════════════════════════
+
+  /**
+   * Probable SPs' season pitch-type stats.
+   * Per pitch type: usage%, whiff%, chase%, xwOBA, BA against.
+   */
+  MLB_PITCH_TYPES_SP: async (sport, home, away, season, options) => {
+    const homeTeam = home.full_name || home.name;
+    const awayTeam = away.full_name || away.name;
+    const gamePk = options?.game?.gamePk || options?.game?.id;
+    const currentYear = new Date().getFullYear();
+
+    if (!gamePk) {
+      return {
+        homeValue: `${homeTeam}: No gamePk — can't identify SP`,
+        awayValue: `${awayTeam}: No gamePk — can't identify SP`,
+        comparison: 'Probable SP pitch-type breakdown',
+        source: 'No data',
+      };
+    }
+
+    let probable;
+    try {
+      probable = await getProbablePitchers(gamePk);
+    } catch (e) {
+      console.warn(`[MLB Fetchers] PITCH_TYPES_SP: getProbablePitchers failed for ${gamePk}: ${e.message}`);
+      probable = {};
+    }
+
+    // For each side: resolve probable pitcher's BDL player id via team season stats name match.
+    const sides = [
+      { team: home, teamName: homeTeam, pitcher: probable?.home },
+      { team: away, teamName: awayTeam, pitcher: probable?.away },
+    ];
+
+    const resolved = []; // { teamName, name, bdlId }
+    for (const side of sides) {
+      if (!side.pitcher) {
+        resolved.push({ teamName: side.teamName, name: null, bdlId: null });
+        continue;
+      }
+      const name = side.pitcher.fullName || `${side.pitcher.firstName || ''} ${side.pitcher.lastName || ''}`.trim();
+      const bdlTeamId = await resolveBdlTeamId(side.team);
+      let bdlId = null;
+      if (bdlTeamId && name) {
+        try {
+          const result = await fetchSeasonStatsWithFallback({ teamId: bdlTeamId, season: currentYear });
+          const target = name.toLowerCase();
+          const match = (result.stats || []).find(s => {
+            const n = (s.player?.full_name || s.player?.last_name || '').toLowerCase();
+            return (n.includes(target) || target.includes(n)) && (s.pitching_ip || 0) > 0;
+          });
+          bdlId = match?.player?.id || null;
+        } catch { /* fall through with bdlId=null */ }
+      }
+      resolved.push({ teamName: side.teamName, name, bdlId });
+    }
+
+    const playerIds = resolved.map(r => r.bdlId).filter(id => id != null);
+    let records = [];
+    if (playerIds.length > 0) {
+      records = await ballDontLieService.getMlbPitcherPitchTypeStats({
+        playerIds, season: currentYear
+      }).catch(() => []);
+    }
+
+    // Group records by player_id, format per-pitch lines (top 5 pitches by usage).
+    const byPlayer = new Map();
+    for (const r of records) {
+      const pid = r.player_id ?? r.player?.id;
+      if (pid == null) continue;
+      const list = byPlayer.get(pid) || [];
+      list.push(r);
+      byPlayer.set(pid, list);
+    }
+    const fmtPct = (v) => (v != null && Number.isFinite(Number(v))) ? `${Number(v).toFixed(1)}%` : '—';
+    const fmtAvg = (v) => (v != null && Number.isFinite(Number(v))) ? Number(v).toFixed(3) : '—';
+    const formatPitcher = ({ teamName, name, bdlId }) => {
+      if (!name) return `${teamName}: SP not announced`;
+      if (bdlId == null) return `${teamName}: ${name} — not found in BDL season stats`;
+      const list = (byPlayer.get(bdlId) || []).slice();
+      if (list.length === 0) return `${teamName}: ${name} — no pitch-type data yet`;
+      list.sort((a, b) => (Number(b.pitch_usage_percent) || 0) - (Number(a.pitch_usage_percent) || 0));
+      const top = list.slice(0, 5).map(r => {
+        const label = r.pitch_name || r.pitch_type || 'Unknown';
+        return `  ${label} (${fmtPct(r.pitch_usage_percent)}): xwOBA ${fmtAvg(r.xwoba)}, whiff ${fmtPct(r.whiff_percent)}, chase ${fmtPct(r.chase_percent)}, BA ${fmtAvg(r.ba)}`;
+      });
+      return `${teamName}: ${name}\n${top.join('\n')}`;
+    };
+
+    return {
+      homeValue: formatPitcher(resolved[0]),
+      awayValue: formatPitcher(resolved[1]),
+      comparison: `Probable SP pitch-type breakdown (${currentYear} season)`,
+      source: 'BDL API (pitch-type season stats)',
+    };
+  },
+
+  /**
+   * Top hitters' performance against each pitch type.
+   * Per hitter per pitch type: BA, xwOBA, SLG.
+   * Picks top 5 hitters per team by OPS, then fetches pitch-type splits.
+   */
+  MLB_PITCH_TYPES_HITTERS: async (sport, home, away, season, options) => {
+    const homeTeam = home.full_name || home.name;
+    const awayTeam = away.full_name || away.name;
+    const currentYear = new Date().getFullYear();
+
+    // Per side: resolve top hitters by OPS via BDL season stats.
+    const collectTopHitters = async (team, teamName) => {
+      const bdlTeamId = await resolveBdlTeamId(team);
+      if (!bdlTeamId) return { teamName, hitters: [] };
+      try {
+        const result = await fetchSeasonStatsWithFallback({ teamId: bdlTeamId, season: currentYear });
+        const hitters = (result.stats || [])
+          .filter(s => (s.batting_ops > 0 || s.batting_avg > 0) && !s.pitching_era)
+          .sort((a, b) => (b.batting_ops || 0) - (a.batting_ops || 0))
+          .slice(0, 5)
+          .map(s => ({
+            id: s.player?.id,
+            name: s.player?.full_name || s.player?.last_name || 'Unknown',
+          }))
+          .filter(h => h.id != null);
+        return { teamName, hitters };
+      } catch (e) {
+        console.warn(`[MLB Fetchers] PITCH_TYPES_HITTERS: season stats failed for ${teamName}: ${e.message}`);
+        return { teamName, hitters: [] };
+      }
+    };
+
+    const [homeSide, awaySide] = await Promise.all([
+      collectTopHitters(home, homeTeam),
+      collectTopHitters(away, awayTeam),
+    ]);
+
+    const playerIds = [...homeSide.hitters, ...awaySide.hitters].map(h => h.id);
+    let records = [];
+    if (playerIds.length > 0) {
+      records = await ballDontLieService.getMlbHitterPitchTypeStats({
+        playerIds, season: currentYear
+      }).catch(() => []);
+    }
+
+    const byPlayer = new Map();
+    for (const r of records) {
+      const pid = r.player_id ?? r.player?.id;
+      if (pid == null) continue;
+      const list = byPlayer.get(pid) || [];
+      list.push(r);
+      byPlayer.set(pid, list);
+    }
+    const fmtAvg = (v) => (v != null && Number.isFinite(Number(v))) ? Number(v).toFixed(3) : '—';
+    const formatHitter = (h) => {
+      const list = (byPlayer.get(h.id) || []).slice();
+      if (list.length === 0) return `${h.name}: no pitch-type data yet`;
+      // Sort by xwOBA descending so the hitter's best pitches lead.
+      list.sort((a, b) => (Number(b.xwoba) || 0) - (Number(a.xwoba) || 0));
+      const top = list.slice(0, 4).map(r => {
+        const label = r.pitch_name || r.pitch_type || 'Unknown';
+        return `${label}: ${fmtAvg(r.ba)} BA, ${fmtAvg(r.xwoba)} xwOBA, ${fmtAvg(r.slg)} SLG`;
+      });
+      return `${h.name}: ${top.join(' | ')}`;
+    };
+
+    const formatSide = ({ teamName, hitters }) => {
+      if (hitters.length === 0) return `${teamName}: No hitters found`;
+      const lines = hitters.map(formatHitter);
+      return `${teamName}:\n  ${lines.join('\n  ')}`;
+    };
+
+    return {
+      homeValue: formatSide(homeSide),
+      awayValue: formatSide(awaySide),
+      comparison: `Top hitters' pitch-type performance (${currentYear} season, ranked by xwOBA per pitch)`,
+      source: 'BDL API (pitch-type season stats)',
+    };
+  },
+
   MLB_LINEUP: async (sport, home, away, season, options) => {
     const homeTeam = home.full_name || home.name;
     const awayTeam = away.full_name || away.name;
@@ -2058,39 +2240,66 @@ export const mlbFetchers = {
           continue;
         }
 
-        // Compute batting Statcast for this team
-        const battingHalves = [...new Set(allPAs.map(pa => pa._teamBattingHalf))];
-        const teamHalf = battingHalves[0]; // all PAs for this team share the same batting half per game
-        // Actually need to aggregate across games where half_inning matches per game.
-        // Simpler: just compute for all PAs where half_inning matches the team's batting side.
-        const evs = [], barrels = { count: 0 }, bipCount = { count: 0 };
+        // Two aggregations from BDL plate-appearance Statcast:
+        // (1) BIP-level — last pitch of each PA that produced a ball in play.
+        //     Extracts the full Statcast surface (xwOBA, xSLG, xBA, launch
+        //     angle, bat speed, barrel) not just exit velocity. xwOBA is the
+        //     headline regression-aware contact metric — much more predictive
+        //     than raw wOBA or BA, and the metric sharp MLB bettors actually use.
+        // (2) Pitch-level — every pitch in the team's batting PAs, used to
+        //     compute swing decisions (whiff rate, chase rate). Predictive for
+        //     strikeout props and pitcher matchup quality.
+        const bipPitches = [];
+        let pitchTotal = 0, swings = 0, whiffs = 0, oozPitches = 0, chases = 0;
         for (const pa of allPAs) {
           if (pa.half_inning !== pa._teamBattingHalf) continue;
           const pitches = pa.pitches || [];
+          for (const p of pitches) {
+            pitchTotal++;
+            if (p.is_swing === true) swings++;
+            if (p.is_whiff === true) whiffs++;
+            if (p.is_in_zone === false) {
+              oozPitches++;
+              if (p.is_chase === true) chases++;
+            }
+          }
           const last = pitches[pitches.length - 1];
-          if (!last?.exit_velocity) continue;
-          bipCount.count++;
-          evs.push(last.exit_velocity);
-          if (last.is_barrel === true) barrels.count++;
+          if (last && last.exit_velocity != null) bipPitches.push(last);
         }
 
-        if (evs.length === 0) {
+        if (bipPitches.length === 0) {
           lines.push(`${teamName}: No Statcast contact data from recent games`);
           continue;
         }
 
         usedApi = true;
-        const avgEV = (evs.reduce((a, b) => a + b, 0) / evs.length).toFixed(1);
-        const hardHits = evs.filter(v => v >= 95).length;
-        const hardHitPct = ((hardHits / bipCount.count) * 100).toFixed(1);
-        const barrelPct = ((barrels.count / bipCount.count) * 100).toFixed(1);
-        const maxEV = Math.max(...evs).toFixed(1);
+        const nums = (arr, key) => arr.map(p => p[key]).filter(v => v != null && Number.isFinite(Number(v))).map(Number);
+        const avg = (arr) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
+        const fmt = (v, d = 1) => v != null ? v.toFixed(d) : '—';
+        const pct = (num, den) => den > 0 ? `${((num / den) * 100).toFixed(1)}%` : '—';
 
-        lines.push(`${teamName} (last ${finished.length} games, ${bipCount.count} BIP):`);
-        lines.push(`  Avg Exit Velocity: ${avgEV} mph`);
-        lines.push(`  Hard Hit Rate (95+ mph): ${hardHitPct}%`);
-        lines.push(`  Barrel Rate: ${barrelPct}%`);
-        lines.push(`  Max Exit Velocity: ${maxEV} mph`);
+        const evs = nums(bipPitches, 'exit_velocity');
+        const las = nums(bipPitches, 'launch_angle');
+        const xwobas = nums(bipPitches, 'expected_woba');
+        const xslgs = nums(bipPitches, 'expected_slugging');
+        const xbas = nums(bipPitches, 'expected_batting_average');
+        const batSpeeds = nums(bipPitches, 'bat_speed');
+        const barrels = bipPitches.filter(p => p.is_barrel === true).length;
+        const hardHits = evs.filter(v => v >= 95).length;
+        const sweetSpot = las.filter(la => la >= 8 && la <= 32).length;
+        const maxEV = evs.length ? Math.max(...evs) : null;
+
+        lines.push(`${teamName} (last ${finished.length} games, ${bipPitches.length} BIP, ${pitchTotal} pitches):`);
+        lines.push(`  Exit Velo: avg ${fmt(avg(evs))} mph, max ${fmt(maxEV)} mph, hard-hit ${pct(hardHits, evs.length)}`);
+        if (las.length) lines.push(`  Launch Angle: avg ${fmt(avg(las))}°, sweet-spot (8–32°) ${pct(sweetSpot, las.length)}`);
+        if (xwobas.length || xslgs.length || xbas.length) {
+          lines.push(`  Expected: ${fmt(avg(xwobas), 3)} xwOBA, ${fmt(avg(xslgs), 3)} xSLG, ${fmt(avg(xbas), 3)} xBA`);
+        }
+        lines.push(`  Barrels: ${pct(barrels, bipPitches.length)}`);
+        if (batSpeeds.length) lines.push(`  Bat Speed: avg ${fmt(avg(batSpeeds))} mph`);
+        if (swings > 0 || oozPitches > 0) {
+          lines.push(`  Plate discipline: whiff ${pct(whiffs, swings)}, chase ${pct(chases, oozPitches)}`);
+        }
       } catch (e) {
         console.warn(`[MLB Fetchers] Statcast fetch failed for ${teamName}:`, e.message);
         lines.push(`${teamName}: Statcast data unavailable`);

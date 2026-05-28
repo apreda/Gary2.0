@@ -727,8 +727,11 @@ Do NOT use fetch_narrative_context for:
 The scout report already includes detailed context from both grounding searches and BDL structured data. Use it as your baseline before making additional calls.
 
 ### 1. STARTING PITCHER MATCHUP
-**Tokens:** MLB_STARTING_PITCHERS, MLB_PITCHER_SEASON_STATS, MLB_PLAYER_SPLITS
+**Tokens:** MLB_STARTING_PITCHERS, MLB_PITCHER_SEASON_STATS, MLB_PLAYER_SPLITS, MLB_PITCH_TYPES_SP
 - Who is starting for each team? What are their current season stats (ERA, WHIP, K/9, BB/9, IP, W-L)?
+- Call MLB_PITCH_TYPES_SP to get per-pitch breakdown for BOTH probable starters: usage%, whiff%, chase%, xwOBA, BA per pitch type (4-seam, slider, curveball, changeup, etc.). This is the deterministic, sharp-bettor view of pitcher quality — much better than a blanket "his ERA is X."
+- Which pitch is each starter's best (lowest xwOBA, highest whiff%)? Which is the weakest (highest xwOBA)?
+- Does the pitcher rely heavily on one pitch (50%+ usage) — does the opposing lineup's hitters perform well or poorly against that pitch type? (Cross-reference with MLB_PITCH_TYPES_HITTERS in section 3.)
 - How does each starter's pitch mix and velocity profile match up against the opposing lineup's handedness and power profile?
 - Any pitch count concerns or workload management patterns? What has the front office's approach been to this pitcher's innings recently?
 - What is each starter's ground ball rate vs fly ball rate, and does that interact with the park dimensions tonight?
@@ -747,8 +750,9 @@ The scout report already includes detailed context from both grounding searches 
 - What is the starter's strand rate (LOB%) in recent starts vs season? An extreme LOB% (above 80% or below 65%) suggests regression is likely.
 
 ### 3. PLATOON SPLITS & BATTER VS PITCHER
-**Tokens:** MLB_PLAYER_SPLITS, MLB_BATTER_VS_PITCHER, MLB_KEY_HITTERS, MLB_LINEUP
+**Tokens:** MLB_PLAYER_SPLITS, MLB_BATTER_VS_PITCHER, MLB_KEY_HITTERS, MLB_LINEUP, MLB_PITCH_TYPES_HITTERS
 - Call MLB_PLAYER_SPLITS to get L/R splits for top hitters on both teams — what is each hitter's AVG/OPS vs LHP vs RHP?
+- Call MLB_PITCH_TYPES_HITTERS to get how the top hitters on each team perform against each pitch type (BA, xwOBA, SLG per pitch). Cross-reference with the opposing SP's primary pitch mix (from MLB_PITCH_TYPES_SP in section 1): which hitters specifically punish the pitches tonight's starter throws most often?
 - Call MLB_BATTER_VS_PITCHER to get career matchup data: how have each team's top hitters fared against tonight's opposing pitchers specifically?
 - Which hitters have significant platoon vulnerabilities (big gap between L/R OPS)?
 - Are there switch-hitters in the lineup who neutralize the platoon matchup?
@@ -871,8 +875,9 @@ The scout report already includes detailed context from both grounding searches 
 
 ### 16. REGRESSION & PROCESS INDICATORS
 **Tokens:** MLB_KEY_HITTERS, MLB_PITCHER_SEASON_STATS, MLB_TEAM_RECORD, MLB_RECENT_FORM, MLB_STATCAST
-- Call MLB_STATCAST to get each team's recent contact quality (exit velocity, hard hit rate, barrel rate from last 3 games).
-- Are any key hitters showing a change in hard-hit rate or barrel rate that diverges from their results?
+- Call MLB_STATCAST to get each team's recent contact quality from the last 3 games. The token now returns the full Statcast surface: avg exit velocity, launch angle + sweet-spot rate, **xwOBA / xSLG / xBA** (regression-aware expected outcomes), bat speed, barrel rate, and plate-discipline (whiff% + chase%). Use **xwOBA** as the headline contact-quality metric — it's much more predictive than raw wOBA or BA.
+- Are any key hitters' teams showing a change in xwOBA vs their actual results? A team with .380 xwOBA but only .310 actual wOBA is hitting the ball well and getting unlucky (positive regression candidate).
+- How do the two teams' bat-speed and whiff numbers compare? Faster bat speeds with low whiff rates indicate a controlled aggressive offense — a tough lineup for a low-strikeout pitcher.
 - Check BABIP (batting average on balls in play) for key hitters — extreme values (.350+ or under .250) suggest regression toward career norms is likely. What are the specific BABIP values for the top hitters in each lineup?
 - Check pitcher FIP vs ERA — a large gap (> 0.5 runs) signals the pitcher is over- or under-performing their underlying process. Report the specific FIP and ERA for each starter.
 - Is a team's run differential diverging from their record? Teams that win close games at an unsustainable rate (one-run game record significantly above .500) are regression candidates.

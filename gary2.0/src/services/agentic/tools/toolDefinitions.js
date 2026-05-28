@@ -255,7 +255,9 @@ const MLB_TOKENS = [
   'MLB_CATCHER_DEFENSE',         // Catcher defense: CS%, SBA, PB + batting (BDL season stats)
   'MLB_RISP_SITUATIONAL',        // RISP & situational splits for top hitters (BDL splits)
   'MLB_TEAM_DEFENSE',            // Team fielding: errors, FPCT, DP + pitching ERA/WHIP (BDL team stats)
-  'MLB_STATCAST',                // Statcast contact quality: exit velo, hard hit rate, barrel rate (BDL plate appearances)
+  'MLB_STATCAST',                // Statcast contact quality: exit velo, launch angle, xwOBA, xSLG, xBA, bat speed, barrels, whiff/chase rates (BDL plate appearances — full surface)
+  'MLB_PITCH_TYPES_SP',          // Per-pitch breakdown for both probable SPs: usage%, whiff%, chase%, xwOBA, BA per pitch (BDL pitch-type season stats)
+  'MLB_PITCH_TYPES_HITTERS',     // Top hitters' performance vs each pitch type: BA, xwOBA, SLG per pitch type (BDL pitch-type season stats)
 ];
 
 // Combine all tokens by sport

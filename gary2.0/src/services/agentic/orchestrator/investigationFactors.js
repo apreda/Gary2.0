@@ -108,11 +108,11 @@ export const INVESTIGATION_FACTORS = {
   // MLB: 12 factor categories (consolidated from 17 — removed redundant tokens to cut Flash research cost)
   // Merged: STANDINGS 4→1, RECENT_FORM 5→2, BASERUNNING into CATCHER, RISP into HITTING, REST into GAME_CONTEXT
   baseball_mlb: {
-    STARTING_PITCHING: ['MLB_STARTING_PITCHERS', 'MLB_PITCHER_SEASON_STATS'],
+    STARTING_PITCHING: ['MLB_STARTING_PITCHERS', 'MLB_PITCHER_SEASON_STATS', 'MLB_PITCH_TYPES_SP'],  // Per-pitch xwOBA/whiff%/chase% replaces blind grounding for pitcher quality
     PITCHER_RECENT_FORM: ['MLB_PITCHER_RECENT_FORM', 'MLB_PITCHER_SCOUTING'],
     BULLPEN: ['MLB_BULLPEN', 'MLB_BULLPEN_WORKLOAD', 'MLB_CLOSER_RELIEVER_STATS'],
     HITTING_LINEUP: ['MLB_KEY_HITTERS', 'MLB_LINEUP', 'MLB_RISP_SITUATIONAL', 'MLB_PLAYER_SPLITS', 'MLB_STATCAST'],  // Absorbed RISP + splits + Statcast contact quality
-    PLATOON_MATCHUPS: ['MLB_BATTER_VS_PITCHER'],  // BDL GOAT: batter vs pitcher career matchups (splits covered in HITTING)
+    PLATOON_MATCHUPS: ['MLB_BATTER_VS_PITCHER', 'MLB_PITCH_TYPES_HITTERS'],  // BvP career history + per-pitch performance for top hitters
     CATCHER_DEFENSE: ['MLB_CATCHER_DEFENSE', 'MLB_KEY_HITTERS'],  // Absorbed BASERUNNING (same tokens — SB stats + catcher arm)
     TEAM_DEFENSE: ['MLB_TEAM_DEFENSE'],
     STANDINGS_FORM: ['MLB_STANDINGS_STRUCTURED', 'MLB_RECENT_FORM_STRUCTURED', 'MLB_RECENT_RESULTS'],  // Consolidated: 1 standings + 2 form (was 4+5)
