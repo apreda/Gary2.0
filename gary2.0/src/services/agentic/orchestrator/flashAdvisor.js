@@ -176,6 +176,11 @@ export async function buildFlashResearchBriefing(scoutReportContent, sport, home
     const _flashTokenCache = new Map();
     // Accumulated factor findings — Flash writes each factor incrementally
     const _accumulatedFactors = [];
+    // Game date (YYYY-MM-DD) for tools that need it (e.g., fetch_team_recent_stats / Tank01 L-N stats).
+    // Falls back to today if commence_time isn't on the game object.
+    const gameDate = options.gameTime
+      ? new Date(options.gameTime).toISOString().split('T')[0]
+      : new Date().toISOString().split('T')[0];
 
     // Get per-sport investigation methodology (factors + cross-referencing)
     const investigationMethodology = getFlashInvestigationPrompt(sport, options.spread ?? null);

@@ -18,14 +18,23 @@ import { createHash } from 'crypto';
 const SCOUT_CACHE_DIR = join(process.env.TMPDIR || '/tmp', 'gary-scout-cache');
 const SCOUT_CACHE_TTL_MS = 3 * 60 * 60 * 1000; // 3 hours
 
-function scoutCacheKey(homeTeam, awayTeam, sport) {
-  const date = new Date().toISOString().split('T')[0];
-  return createHash('md5').update(`${date}-${sport}-${awayTeam}-${homeTeam}`.toLowerCase()).digest('hex');
+// Game-specific identifier used to distinguish e.g. MLB doubleheaders that share
+// the same date + matchup. Prefers stable IDs and falls back to commence_time so
+// Game 1 and Game 2 hash to different files even when only the start time differs.
+function scoutCacheGameKey(game) {
+  if (!game) return '';
+  return String(game.id || game.bdl_game_id || game.gamePk || game.commence_time || '');
 }
 
-function loadCachedScoutReport(homeTeam, awayTeam, sport) {
+function scoutCacheKey(homeTeam, awayTeam, sport, game) {
+  const date = new Date().toISOString().split('T')[0];
+  const gameKey = scoutCacheGameKey(game);
+  return createHash('md5').update(`${date}-${sport}-${awayTeam}-${homeTeam}-${gameKey}`.toLowerCase()).digest('hex');
+}
+
+function loadCachedScoutReport(homeTeam, awayTeam, sport, game) {
   try {
-    const file = join(SCOUT_CACHE_DIR, `${scoutCacheKey(homeTeam, awayTeam, sport)}.json`);
+    const file = join(SCOUT_CACHE_DIR, `${scoutCacheKey(homeTeam, awayTeam, sport, game)}.json`);
     if (!existsSync(file)) return null;
     const stat = statSync(file);
     if (Date.now() - stat.mtimeMs > SCOUT_CACHE_TTL_MS) return null;
@@ -35,10 +44,10 @@ function loadCachedScoutReport(homeTeam, awayTeam, sport) {
   } catch { return null; }
 }
 
-function saveCachedScoutReport(homeTeam, awayTeam, sport, data) {
+function saveCachedScoutReport(homeTeam, awayTeam, sport, game, data) {
   try {
     if (!existsSync(SCOUT_CACHE_DIR)) mkdirSync(SCOUT_CACHE_DIR, { recursive: true });
-    const file = join(SCOUT_CACHE_DIR, `${scoutCacheKey(homeTeam, awayTeam, sport)}.json`);
+    const file = join(SCOUT_CACHE_DIR, `${scoutCacheKey(homeTeam, awayTeam, sport, game)}.json`);
     writeFileSync(file, JSON.stringify(data), 'utf8');
     console.log(`[Orchestrator] 💾 Cached scout report for ${awayTeam} @ ${homeTeam}`);
   } catch (e) {
@@ -71,13 +80,15 @@ export async function analyzeGame(game, sport, options = {}) {
 
   try {
     // Step 1: Build the scout report (Level 1 context)
-    // Check cache first — props reuses scout report from game picks
-    let scoutReportData = loadCachedScoutReport(homeTeam, awayTeam, sport);
+    // Check cache first — props reuses scout report from game picks.
+    // Game object included in the key so MLB doubleheaders (same matchup, same
+    // date) don't collide on the second game's scout report.
+    let scoutReportData = loadCachedScoutReport(homeTeam, awayTeam, sport, game);
     if (!scoutReportData) {
       console.log('[Orchestrator] Building scout report...');
       scoutReportData = await buildScoutReport(game, sport, { sportsbookOdds: options.sportsbookOdds });
       // Cache for props to reuse
-      saveCachedScoutReport(homeTeam, awayTeam, sport, scoutReportData);
+      saveCachedScoutReport(homeTeam, awayTeam, sport, game, scoutReportData);
     }
 
     // MLB tools need the MLB Stats API gamePk to identify probable pitchers,

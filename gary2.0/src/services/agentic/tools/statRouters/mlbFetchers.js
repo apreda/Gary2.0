@@ -54,7 +54,10 @@ const MLB_PARK_DATA = {
   'Rogers Centre': { type: 'neutral', factor: 1.01, notes: 'Retractable roof. Artificial turf affects ground balls.', teams: ['Toronto Blue Jays'] },
   'Truist Park': { type: 'neutral', factor: 1.02, notes: 'Balanced. Southeast humidity in summer.', teams: ['Atlanta Braves'] },
   'Angel Stadium': { type: 'neutral', factor: 1.00, notes: 'Open-air, mild SoCal weather. Balanced.', teams: ['Los Angeles Angels'] },
-  'Oakland Coliseum': { type: 'pitcher', factor: 0.93, notes: 'Vast foul territory, marine air. Pitcher-friendly.', teams: ['Oakland Athletics'] },
+  // Athletics relocated to Sacramento for the 2025-2027 seasons while Las Vegas park is built.
+  'Sutter Health Park': { type: 'hitter', factor: 1.07, notes: 'Sacramento, CA — Athletics temporary home 2025-2027. Hot dry summers + smaller dimensions favor offense vs the old Coliseum.', teams: ['Athletics', 'Oakland Athletics', 'Sacramento Athletics'] },
+  // Kept for historical games only — A's no longer play here.
+  'Oakland Coliseum': { type: 'pitcher', factor: 0.93, notes: 'HISTORICAL — Athletics relocated to Sutter Health Park for 2025-2027.', teams: [] },
 };
 
 // Helper: find park data by venue name or home team name
@@ -418,35 +421,38 @@ export const mlbFetchers = {
       return out;
     };
 
-    // PRIMARY: BDL lineups API (available pre-game, includes handedness)
-    if (gameId) {
+    // PRIMARY: MLB Stats API boxscore (free, public, returns posted lineups + handedness)
+    // The prior implementation called ballDontLieService.getMlbLineups, but that method
+    // does not exist on the service — every call threw and silently fell through to the
+    // "not available" branch, leaving Gary with zero lineup data for MLB games.
+    if (gamePk) {
       try {
-        const bdlLineups = await ballDontLieService.getMlbLineups(gameId);
-        if (bdlLineups) {
-          // Match home/away by abbreviation
-          const homeData = bdlLineups[homeAbbr] || Object.values(bdlLineups).find(t => t.teamName?.includes(home.name));
-          const awayData = bdlLineups[awayAbbr] || Object.values(bdlLineups).find(t => t.teamName?.includes(away.name));
+        const { getMlbGameLineups } = await import('../../../mlbStatsApiService.js');
+        const mlbLineups = await getMlbGameLineups(gamePk);
+        if (mlbLineups) {
+          const homeData = mlbLineups[homeAbbr] || Object.values(mlbLineups).find(t => t.teamName?.toLowerCase().includes((home.name || '').toLowerCase()));
+          const awayData = mlbLineups[awayAbbr] || Object.values(mlbLineups).find(t => t.teamName?.toLowerCase().includes((away.name || '').toLowerCase()));
           if ((homeData?.batters?.length > 0) || (awayData?.batters?.length > 0)) {
             return {
               homeValue: formatBdlLineup(homeData, homeTeam),
               awayValue: formatBdlLineup(awayData, awayTeam),
               comparison: `Pre-game lineups with batting order + handedness for ${awayTeam} @ ${homeTeam}`,
-              source: 'BDL API (pre-game lineups)',
+              source: 'MLB Stats API (boxscore lineups)',
             };
           }
         }
       } catch (e) {
-        console.warn(`[MLB Fetchers] BDL lineups failed for game ${gameId}: ${e.message}`);
+        console.warn(`[MLB Fetchers] MLB Stats API lineup fetch failed for gamePk ${gamePk}: ${e.message}`);
       }
     }
 
-    // No fallback — BDL is the only pre-game lineup source. If it's empty, lineups aren't posted yet.
-    console.warn(`[MLB Fetchers] ⚠️ No lineup data from BDL for ${awayTeam} @ ${homeTeam} (gameId: ${gameId})`);
+    // Lineups not yet posted (game too far out, or boxscore not populated yet).
+    console.warn(`[MLB Fetchers] ⚠️ No lineup data available for ${awayTeam} @ ${homeTeam} (gamePk: ${gamePk}, gameId: ${gameId})`);
     return {
       homeValue: `${homeTeam}: Lineup not yet available (check closer to game time)`,
       awayValue: `${awayTeam}: Lineup not yet available (check closer to game time)`,
       comparison: `Lineups not yet posted for ${awayTeam} @ ${homeTeam}`,
-      source: 'No data (BDL + MLB Stats API both empty)',
+      source: 'MLB Stats API (no posted lineup)',
     };
   },
 

@@ -17,7 +17,6 @@ runAgenticPropsCli({
   buildContext: buildNhlPropsAgenticContext,
   windowHours: 24,  // Only today's games (props aren't available for tomorrow)
   useESTDayFiltering: true,  // Filter by EST day - only games starting TODAY in EST
-  propsPerGame: 5,  // Gary shortlists 5; 2 survive per game after constraint
   limitDefault: 15
 })
   .then(() => process.exit(0))

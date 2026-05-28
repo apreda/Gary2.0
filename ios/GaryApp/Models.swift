@@ -814,8 +814,8 @@ struct StatValues: Codable {
         case "SHOT_DIFFERENTIAL", "SHOT_QUALITY": return shotDifferential ?? shotsFor ?? "N/A"
         case "PDO": return pdoStat ?? "N/A"
         // MLB stats
-        case "L10": return l10 ?? last10 ?? "N/A"
-        case "HOME_AWAY": return homeAway ?? "N/A"
+        case "L10", "L10_RECORD": return l10 ?? last10 ?? "N/A"
+        case "HOME_AWAY", "HOME_AWAY_RECORD": return homeAway ?? "N/A"
         case "SP_ERA": return spEra ?? "N/A"
         case "SP_WHIP": return spWhip ?? "N/A"
         case "SP_K9": return spK9 ?? "N/A"

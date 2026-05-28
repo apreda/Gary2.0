@@ -19,14 +19,6 @@ Examples:
 
 Gary WILL follow explicit if/then rules — he takes instructions literally. If we write "Fast pace helps underdogs stay close," Gary will pick underdogs in fast-paced games without investigating whether it's true for THIS matchup. Never tell Gary what a factor means for the pick. Never assign point values to factors. Never label something as "edge." Gary investigates and concludes on his own.
 
-## LOCKED: March Madness 2026 Bracket
-
-The bracket_picks table for march_madness_2026 is FINAL. All 67 picks are locked in. DO NOT delete, modify, re-run, or overwrite any bracket picks. If ATS daily picks conflict with bracket picks, re-run the ATS pick — never touch the bracket. This bracket is permanent.
-
-## LOCKED: March Madness 2026 Bracket
-
-The bracket_picks table for march_madness_2026 is FINAL. All 63 picks are locked in. DO NOT delete, modify, re-run, or overwrite any bracket picks under any circumstances. If ATS daily picks conflict with bracket picks, fix the ATS pick — never touch the bracket.
-
 ## LOCKED: Injury Handling
 
 DO NOT edit injury handling code without explicit user confirmation. This includes:

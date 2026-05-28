@@ -260,24 +260,90 @@ function getPaceAndTotalContext(marketSnapshot, homeTeamStats, awayTeamStats) {
 }
 
 /**
- * Group props by player for easier analysis
+ * Group props by player for easier analysis.
+ * FILTERS OUT unpredictable prop types (first basket, quarter/half-specific, etc.)
+ * and lines whose odds are both juicier than -200 or longer than +400 (matches MLB/NHL).
  */
 function groupPropsByPlayer(props) {
   const grouped = {};
-  
+
+  // Props we CAN analyze — core NBA props only (no exotic/long-shot props)
+  const VALID_PROP_TYPES = [
+    'points', 'player_points', 'pts',
+    'rebounds', 'player_rebounds', 'reb',
+    'assists', 'player_assists', 'ast',
+    'threes', 'three_pointers', 'three_pointers_made', 'player_threes', 'player_threes_made', '3pm', 'made_threes',
+    'blocks', 'player_blocks', 'blk',
+    'steals', 'player_steals', 'stl',
+    'turnovers', 'player_turnovers', 'to',
+    'points_rebounds_assists', 'pra', 'player_points_rebounds_assists',
+    'points_rebounds', 'pr', 'player_points_rebounds',
+    'points_assists', 'pa', 'player_points_assists',
+    'rebounds_assists', 'ra', 'player_rebounds_assists',
+    'double_double', 'triple_double',
+    'steals_blocks', 'stl_blk',
+    'alt_points', 'alt_player_points',
+    'alt_rebounds', 'alt_assists',
+    'alt_threes', 'alt_pra'
+  ];
+
+  // Props we CANNOT analyze (random/luck-based OR period-specific)
+  const INVALID_PROP_TYPES = [
+    // First/last scorer — random timing
+    'first_basket', 'first_field_goal', 'first_three', 'first_to_score',
+    'last_basket', 'last_to_score',
+    // Quarter / half-specific — timing is random
+    '_q1', '_q2', '_q3', '_q4',
+    '1q_', '2q_', '3q_', '4q_',
+    '_h1', '_h2', '1h_', '2h_',
+    'first_quarter', 'second_quarter', 'third_quarter', 'fourth_quarter',
+    'first_half', 'second_half',
+    // Race / exact / parlay-style
+    'race_to', 'exact_', 'parlay',
+    // Rare feats
+    'no_assists', 'no_rebounds'
+  ];
+
   for (const prop of props) {
+    const propType = (prop.prop_type || '').toLowerCase();
+
+    // Skip unpredictable prop types (includes period-specific like points_q1)
+    if (INVALID_PROP_TYPES.some(invalid => propType.includes(invalid))) {
+      continue;
+    }
+
+    // Only include if it's a valid analyzable prop type
+    const isValidType = VALID_PROP_TYPES.some(valid => propType.includes(valid));
+    if (!isValidType && propType) {
+      console.log(`[NBA Props] Skipping unknown prop type: ${propType}`);
+      continue;
+    }
+
+    // Odds-range filter: drop props where BOTH sides are outside [-200, +400].
+    // (Juice heavier than -200 has no edge; longer than +400 is pure variance.)
+    // If at least one side falls inside the range, keep the prop so Gary can pick that side.
+    const overOdds = prop.over_odds != null ? Number(prop.over_odds) : null;
+    const underOdds = prop.under_odds != null ? Number(prop.under_odds) : null;
+    const inRange = (o) => o != null && !Number.isNaN(o) && o >= -200 && o <= 400;
+    const hasAnyOdds = overOdds != null || underOdds != null;
+    if (hasAnyOdds && !inRange(overOdds) && !inRange(underOdds)) {
+      continue;
+    }
+
     const playerName = prop.player || 'Unknown';
+    const propPlayerId = prop.player_id || prop.playerId || null;
+
     if (!grouped[playerName]) {
       grouped[playerName] = {
         player: playerName,
         team: prop.team || 'Unknown',
-        playerId: prop.player_id || null,
+        playerId: propPlayerId,
         props: []
       };
     }
-    // Store player_id if available
-    if (prop.player_id && !grouped[playerName].playerId) {
-      grouped[playerName].playerId = prop.player_id;
+    // Store player_id if available (and not already set)
+    if (propPlayerId && !grouped[playerName].playerId) {
+      grouped[playerName].playerId = propPlayerId;
     }
     grouped[playerName].props.push({
       type: prop.prop_type,
@@ -286,7 +352,7 @@ function groupPropsByPlayer(props) {
       under_odds: prop.under_odds
     });
   }
-  
+
   return Object.values(grouped);
 }
 

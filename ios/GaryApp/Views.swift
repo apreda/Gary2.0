@@ -1445,17 +1445,12 @@ struct WhatsNewSection: View {
     @State private var expanded = true
 
     // (icon, title, tab index)
-    // BRACKET ARCHIVED — re-add ("basketball.fill", "NCAA Bracket", 3) next March
-    // and bump Billfold's tab back to 5.
     private var items: [(icon: String, title: String, tab: Int)] {
-        var entries: [(icon: String, title: String, tab: Int)] = []
-        if showBracketTab {
-            entries.append(("basketball.fill", "NCAA Bracket", 3))
-        }
-        entries.append(("baseball.fill", "MLB Season", 1))
-        entries.append(("chart.line.uptrend.xyaxis", "Billfold", showBracketTab ? 5 : 4))
-        entries.append(("sparkles", "Props", 2))
-        return entries
+        [
+            ("baseball.fill", "MLB Season", 1),
+            ("chart.line.uptrend.xyaxis", "Billfold", 4),
+            ("sparkles", "Props", 2)
+        ]
     }
 
     var body: some View {
@@ -1605,31 +1600,13 @@ struct HomeView: View {
                     VStack(spacing: 0) {
 
                         // ── Hero: Logo + What's New ──
-                        // BRACKET ARCHIVED: when showBracketTab is true (next March),
-                        // restore the GaryMadness logo + Bracket pill in this section.
                         HStack(alignment: .center, spacing: 14) {
-                            if showBracketTab {
-                                // Left: large logo → taps to Bracket
-                                Button {
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                        selectedTab = 3
-                                    }
-                                } label: {
-                                    Image("GaryMadness")
-                                        .resizable()
-                                        .scaledToFit()
-                                        .frame(width: 194, height: 194)
-                                        .shadow(color: GaryColors.gold.opacity(0.25), radius: 16)
-                                }
-                                .buttonStyle(.plain)
-                            } else {
-                                // Performance-based Gary image (depends on yesterday's record)
-                                Image(heroImage)
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 194, height: 194)
-                                    .shadow(color: heroImageGlow.opacity(0.25), radius: 16)
-                            }
+                            // Performance-based Gary image (depends on yesterday's record)
+                            Image(heroImage)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 194, height: 194)
+                                .shadow(color: heroImageGlow.opacity(0.25), radius: 16)
 
                             // Right: What's New as compact horizontal pills
                             VStack(alignment: .leading, spacing: 8) {
@@ -1639,9 +1616,6 @@ struct HomeView: View {
                                     .foregroundStyle(GaryColors.gold.opacity(0.4))
 
                                 VStack(spacing: 6) {
-                                    if showBracketTab {
-                                        homeNavPill(icon: "basketball.fill", title: "Bracket", tab: 3)
-                                    }
                                     Button {
                                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                             selectedTab = 1
@@ -1672,7 +1646,7 @@ struct HomeView: View {
                                     }
                                     .buttonStyle(.plain)
                                     homeNavPill(icon: "sparkles", title: "Props", tab: 2)
-                                    homeNavPill(icon: "chart.bar.fill", title: "Billfold", tab: showBracketTab ? 5 : 4)
+                                    homeNavPill(icon: "chart.bar.fill", title: "Billfold", tab: 4)
                                 }
                             }
                             .offset(y: -18)
@@ -2518,14 +2492,6 @@ struct GaryPicksView: View {
                     )
                     .padding(.bottom, 0)
                     .transition(.move(edge: .top).combined(with: .opacity))
-                }
-
-                // March Madness Bracket banner (after conference filter)
-                if selectedSport == .ncaab || selectedSport == .all {
-                    MarchMadnessBanner()
-                        .padding(.horizontal, 16)
-                        .padding(.top, 0)
-                        .padding(.bottom, 2)
                 }
 
                 Spacer().frame(height: 6)

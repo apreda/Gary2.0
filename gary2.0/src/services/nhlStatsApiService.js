@@ -17,11 +17,37 @@
 import https from 'https';
 
 // ═══════════════════════════════════════════════════════════════
-// Cache
+// Cache. Keyed on (seasonId, gameTypeId) so a switch between regular
+// season (2) and playoffs (3) gets its own cache slot.
 // ═══════════════════════════════════════════════════════════════
-let _cache = null;           // { data: Map<normalizedName, teamObj>, ts: number, seasonId: string }
+let _cache = null;           // { data: Map<normalizedName, teamObj>, ts: number, seasonId: string, gameTypeId: number }
 let _fetchPromise = null;
 const CACHE_TTL = 2 * 60 * 60 * 1000; // 2 hours
+
+// NHL Stats API game type IDs: 1=preseason, 2=regular, 3=playoffs
+const GAME_TYPE_REGULAR = 2;
+const GAME_TYPE_PLAYOFFS = 3;
+
+/**
+ * NHL playoff window detection (mirrors moneyPuckService).
+ * Playoffs run from mid-April through mid-June; window is generous
+ * (Apr 12 – Jun 30) to absorb schedule drift year-over-year.
+ */
+function isNhlPlayoffPeriod(date = new Date()) {
+  const month = date.getMonth() + 1; // 1-12
+  const day = date.getDate();
+  if (month === 4) return day >= 12;
+  if (month === 5 || month === 6) return true;
+  return false;
+}
+
+function getCurrentNhlGameTypeId(date = new Date()) {
+  return isNhlPlayoffPeriod(date) ? GAME_TYPE_PLAYOFFS : GAME_TYPE_REGULAR;
+}
+
+function phaseLabel(gameTypeId) {
+  return gameTypeId === GAME_TYPE_PLAYOFFS ? 'playoffs' : 'regular';
+}
 
 /**
  * Normalize team name for matching.
@@ -34,14 +60,14 @@ function normalize(name) {
 /**
  * Fetch all team percentages from the NHL API.
  */
-async function fetchPercentages(seasonId) {
+async function fetchPercentages(seasonId, gameTypeId) {
   const now = Date.now();
-  if (_cache && _cache.seasonId === seasonId && (now - _cache.ts) < CACHE_TTL) {
+  if (_cache && _cache.seasonId === seasonId && _cache.gameTypeId === gameTypeId && (now - _cache.ts) < CACHE_TTL) {
     return _cache.data;
   }
   if (_fetchPromise) return _fetchPromise;
 
-  _fetchPromise = _fetchPercentagesInner(seasonId);
+  _fetchPromise = _fetchPercentagesInner(seasonId, gameTypeId);
   try {
     return await _fetchPromise;
   } finally {
@@ -49,9 +75,9 @@ async function fetchPercentages(seasonId) {
   }
 }
 
-async function _fetchPercentagesInner(seasonId) {
-  const url = `https://api.nhle.com/stats/rest/en/team/percentages?cayenneExp=seasonId=${seasonId}%20and%20gameTypeId=2`;
-  console.log(`[NHL API] Fetching team percentages from api.nhle.com for season ${seasonId}...`);
+async function _fetchPercentagesInner(seasonId, gameTypeId) {
+  const url = `https://api.nhle.com/stats/rest/en/team/percentages?cayenneExp=seasonId=${seasonId}%20and%20gameTypeId=${gameTypeId}`;
+  console.log(`[NHL API] Fetching ${phaseLabel(gameTypeId)} team percentages from api.nhle.com for season ${seasonId}...`);
 
   const raw = await new Promise((resolve, reject) => {
     const req = https.get(url, {
@@ -123,7 +149,7 @@ async function _fetchPercentagesInner(seasonId) {
   // Fetch PP% and PK% from separate NHL API endpoints and merge
   try {
     const fetchJson = (endpoint) => new Promise((resolve, reject) => {
-      const u = `https://api.nhle.com/stats/rest/en/team/${endpoint}?cayenneExp=seasonId=${seasonId}%20and%20gameTypeId=2`;
+      const u = `https://api.nhle.com/stats/rest/en/team/${endpoint}?cayenneExp=seasonId=${seasonId}%20and%20gameTypeId=${gameTypeId}`;
       const req = https.get(u, { timeout: 10000 }, (res) => {
         if (res.statusCode !== 200) { console.warn(`[NHL API] PP/PK endpoint "${endpoint}" returned HTTP ${res.statusCode}`); res.resume(); resolve([]); return; }
         let d = '';
@@ -156,8 +182,8 @@ async function _fetchPercentagesInner(seasonId) {
     console.warn(`[NHL API] PP%/PK% merge failed: ${e.message}`);
   }
 
-  console.log(`[NHL API] Cached ${teamMap.size} entries (${teams.length} teams) for season ${seasonId}`);
-  _cache = { data: teamMap, ts: Date.now(), seasonId };
+  console.log(`[NHL API] Cached ${teamMap.size} entries (${teams.length} teams) for season ${seasonId} (${phaseLabel(gameTypeId)})`);
+  _cache = { data: teamMap, ts: Date.now(), seasonId, gameTypeId };
   return teamMap;
 }
 
@@ -168,11 +194,12 @@ async function _fetchPercentagesInner(seasonId) {
  * @param {string} [seasonId] - NHL season ID (defaults to current, e.g., "20252026")
  * @returns {object|null} Team percentages object or null
  */
-async function getTeamPercentages(teamName, seasonId) {
+async function getTeamPercentages(teamName, seasonId, gameTypeId) {
   if (!seasonId) seasonId = getCurrentNhlSeasonId();
+  if (gameTypeId == null) gameTypeId = getCurrentNhlGameTypeId();
 
   try {
-    const teams = await fetchPercentages(seasonId);
+    const teams = await fetchPercentages(seasonId, gameTypeId);
     const key = normalize(teamName);
 
     // Exact match
@@ -215,4 +242,8 @@ function getCurrentNhlSeasonId() {
 export {
   getTeamPercentages,
   getCurrentNhlSeasonId,
+  getCurrentNhlGameTypeId,
+  isNhlPlayoffPeriod,
+  GAME_TYPE_REGULAR,
+  GAME_TYPE_PLAYOFFS,
 };

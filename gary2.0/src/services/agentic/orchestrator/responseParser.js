@@ -220,6 +220,57 @@ export function parseGaryResponse(content, homeTeam, awayTeam, sport, gameOdds =
 }
 
 /**
+ * Detect which team a pick refers to. Returns 'home', 'away', or null.
+ *
+ * Strategy (in order):
+ *   1. Full team name substring match — most reliable.
+ *   2. Last-word (nickname) word-boundary match — distinguishes same-city
+ *      matchups where a substring approach collides (Lakers vs Clippers,
+ *      Yankees vs Mets, Rangers vs Islanders, Knicks vs Nets, Cubs vs
+ *      White Sox, Dodgers vs Angels, etc.).
+ *   3. Any 3+ char shared word fallback — partial mentions.
+ *
+ * Returns null when truly ambiguous (e.g. NCAA "Bulldogs" vs "Bulldogs" with
+ * no full name in the pick) so the caller can decide how to handle it.
+ */
+export function detectPickedTeam(pickText, homeTeam, awayTeam) {
+  if (!pickText || !homeTeam || !awayTeam) return null;
+  const pick = String(pickText);
+  const pickLower = pick.toLowerCase();
+  const home = String(homeTeam).toLowerCase().trim();
+  const away = String(awayTeam).toLowerCase().trim();
+  if (!home || !away) return null;
+
+  // 1) Full team name substring match
+  const homeFull = home && pickLower.includes(home);
+  const awayFull = away && pickLower.includes(away);
+  if (homeFull && !awayFull) return 'home';
+  if (awayFull && !homeFull) return 'away';
+
+  // 2) Nickname (last word) — word-boundary regex so "Sox" can't match inside
+  //    a longer word and "Nets" can't pull in "Hornets" coincidentally.
+  const homeNick = home.split(/\s+/).pop();
+  const awayNick = away.split(/\s+/).pop();
+  if (homeNick && awayNick && homeNick !== awayNick) {
+    const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const homeNickHit = new RegExp(`\\b${esc(homeNick)}\\b`, 'i').test(pick);
+    const awayNickHit = new RegExp(`\\b${esc(awayNick)}\\b`, 'i').test(pick);
+    if (homeNickHit && !awayNickHit) return 'home';
+    if (awayNickHit && !homeNickHit) return 'away';
+  }
+
+  // 3) Any-significant-word fallback (3+ chars)
+  const homeWords = home.split(/\s+/).filter(w => w.length >= 3);
+  const awayWords = away.split(/\s+/).filter(w => w.length >= 3);
+  const homeAny = homeWords.some(w => pickLower.includes(w));
+  const awayAny = awayWords.some(w => pickLower.includes(w));
+  if (homeAny && !awayAny) return 'home';
+  if (awayAny && !homeAny) return 'away';
+
+  return null;
+}
+
+/**
  * Validate that a pick references one of the two teams in the game
  * Prevents wrong-game picks from being stored (e.g., "Miami Heat" for a Nuggets @ Bulls game)
  */
@@ -297,11 +348,9 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
   // - Other sports: Favorite ML worse than -200 → force to spread (safety net)
   if (parsed.type === 'moneyline' && gameOdds && !isNHL) {
     const mlCeiling = -200;
-    const pickLowerML = (parsed.pick || '').toLowerCase();
-    const homeWordsML = (homeTeam || '').toLowerCase().split(/\s+/);
-    const awayWordsML = (awayTeam || '').toLowerCase().split(/\s+/);
-    const pickedHomeML = homeWordsML.some(w => w.length > 2 && pickLowerML.includes(w));
-    const pickedAwayML = awayWordsML.some(w => w.length > 2 && pickLowerML.includes(w));
+    const sideML = detectPickedTeam(parsed.pick, homeTeam, awayTeam);
+    const pickedHomeML = sideML === 'home';
+    const pickedAwayML = sideML === 'away';
 
     const pickedTeamMlOdds = pickedHomeML ? (gameOdds.moneyline_home ?? gameOdds.ml_home)
       : pickedAwayML ? (gameOdds.moneyline_away ?? gameOdds.ml_away)
@@ -327,11 +376,9 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
   // We do NOT force-convert (that would misrepresent Gary's pick). We reject so the
   // caller can re-run with the option-set constraint reinforced.
   if (isNHL && parsed.type === 'moneyline' && gameOdds) {
-    const pickLowerML = (parsed.pick || '').toLowerCase();
-    const homeWordsML = (homeTeam || '').toLowerCase().split(/\s+/);
-    const awayWordsML = (awayTeam || '').toLowerCase().split(/\s+/);
-    const pickedHomeML = homeWordsML.some(w => w.length > 2 && pickLowerML.includes(w));
-    const pickedAwayML = awayWordsML.some(w => w.length > 2 && pickLowerML.includes(w));
+    const sideNHL = detectPickedTeam(parsed.pick, homeTeam, awayTeam);
+    const pickedHomeML = sideNHL === 'home';
+    const pickedAwayML = sideNHL === 'away';
     const pickedTeamMlOdds = pickedHomeML ? (gameOdds.moneyline_home ?? gameOdds.ml_home)
       : pickedAwayML ? (gameOdds.moneyline_away ?? gameOdds.ml_away)
       : null;
@@ -395,17 +442,15 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
   if (parsed.type === 'spread') {
     // For spread picks: use spreadOdds, then game spread_odds — NEVER ML odds
     // Try parsed odds first, then game odds (field is spread_home_odds, not spread_odds)
-    const pickLowerSpread = (parsed.pick || '').toLowerCase();
-    const homeWordsSpread = (homeTeam || '').toLowerCase().split(/\s+/);
-    const pickedHomeSpread = homeWordsSpread.some(w => w.length > 2 && pickLowerSpread.includes(w));
+    const sideSpread = detectPickedTeam(parsed.pick, homeTeam, awayTeam);
+    const pickedHomeSpread = sideSpread === 'home';
     odds = parsed.odds ?? parsed.spreadOdds
       ?? (pickedHomeSpread ? gameOdds.spread_home_odds : gameOdds.spread_away_odds)
       ?? gameOdds.spread_home_odds ?? null;
   } else {
     // For ML picks: determine which team was picked and use their ML odds
-    const pickLower = (parsed.pick || '').toLowerCase();
-    const homeWords = (homeTeam || '').toLowerCase().split(/\s+/);
-    const pickedHome = homeWords.some(w => w.length > 2 && pickLower.includes(w));
+    const sideOdds = detectPickedTeam(parsed.pick, homeTeam, awayTeam);
+    const pickedHome = sideOdds === 'home';
     odds = parsed.odds ?? (pickedHome ? parsed.moneylineHome : parsed.moneylineAway)
       ?? (pickedHome ? gameOdds.moneyline_home : gameOdds.moneyline_away) ?? null;
   }
@@ -429,25 +474,12 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
       const currentSign = spreadInText[1]; // '+', '-', or '' (missing)
       const spreadNum = parseFloat(spreadInText[2]);
 
-      // Determine if picked team is home or away
-      const pickLower = pickText.toLowerCase();
-      const homeWords = (homeTeam || '').toLowerCase().split(/\s+/);
-      const awayWords = (awayTeam || '').toLowerCase().split(/\s+/);
-      let pickedHome = homeWords.some(w => w.length > 2 && pickLower.includes(w));
-      let pickedAway = awayWords.some(w => w.length > 2 && pickLower.includes(w));
-
-      // Disambiguate when both match (e.g. "Georgia Bulldogs" vs "Mississippi State Bulldogs")
-      if (pickedHome && pickedAway) {
-        const homeFull = (homeTeam || '').toLowerCase();
-        const awayFull = (awayTeam || '').toLowerCase();
-        const homeFullMatch = pickLower.includes(homeFull);
-        const awayFullMatch = pickLower.includes(awayFull);
-        if (homeFullMatch && !awayFullMatch) {
-          pickedAway = false;
-        } else if (awayFullMatch && !homeFullMatch) {
-          pickedHome = false;
-        }
-      }
+      // Determine if picked team is home or away (full-name → nickname → word-fallback,
+      // handling same-city collisions like Lakers vs Clippers and same-mascot NCAA cases
+      // like Georgia Bulldogs vs Mississippi State Bulldogs).
+      const sideSign = detectPickedTeam(pickText, homeTeam, awayTeam);
+      let pickedHome = sideSign === 'home';
+      let pickedAway = sideSign === 'away';
 
       // Calculate correct spread from picked team's perspective
       const homeSpread = parseFloat(gameOdds.spread_home);

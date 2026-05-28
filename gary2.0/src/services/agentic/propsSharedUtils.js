@@ -1,6 +1,5 @@
 /**
  * Props Shared Utilities
- * Extracted from propsAgenticRunner.js during legacy pipeline removal.
  *
  * Used by run-agentic-props-cli.js (orchestrator path) for:
  * - getPropsConstitution(): fetches sectioned props constitution per sport

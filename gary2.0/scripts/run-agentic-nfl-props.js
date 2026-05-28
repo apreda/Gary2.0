@@ -19,7 +19,6 @@ runAgenticPropsCli({
   buildContext: buildNflPropsAgenticContext,
   windowHours: 24 * 7,  // NFL is weekly — look ahead 7 days
   useESTDayFiltering: false,  // Rolling window (NFL games span Thu/Sun/Mon)
-  propsPerGame: 5,  // Gary shortlists 5; 2 survive per game after constraint
   limitDefault: 4,  // Default to 4 games (typical NFL slate focus)
   regularOnly: false  // Set true to skip TDs (--regular=1 flag also works)
 })

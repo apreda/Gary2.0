@@ -18,7 +18,6 @@ runAgenticPropsCli({
   buildContext: buildNbaPropsAgenticContext,
   windowHours: 24,
   useESTDayFiltering: true,
-  propsPerGame: 5,
   limitDefault: 15
 })
   .then(() => process.exit(0))

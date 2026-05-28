@@ -531,12 +531,16 @@ async function processGenericGames(table, date, leagueFilter = null) {
       if (hs !== null) {
         const res = gradeGame(pick.pick, pick.homeTeam, pick.awayTeam, hs, vs);
         
-        // NFL picks go to nfl_results table, others go to game_results
+        // NFL picks go to nfl_results table, others go to game_results.
+        // pick_id resolves to the per-pick UUID from the picks[] JSON (so a future
+        // server-side join can target the specific pick), with the parent daily_picks
+        // row id as a backwards-compatible fallback.
+        const perPickId = pick.pick_id || row.id;
         if (league === 'NFL') {
           const { data: exist } = await supabase.from('nfl_results').select('id').eq('pick_text', pick.pick).eq('game_date', gameDate).maybeSingle();
           if (!exist) {
             await supabase.from('nfl_results').insert({
-              nfl_pick_id: row.id, game_date: gameDate, result: res,
+              nfl_pick_id: perPickId, game_date: gameDate, result: res,
               final_score: `${vs}-${hs}`, pick_text: pick.pick,
               matchup: `${pick.awayTeam} @ ${pick.homeTeam}`
             });
@@ -545,7 +549,7 @@ async function processGenericGames(table, date, leagueFilter = null) {
           const { data: exist } = await supabase.from('game_results').select('id').eq('pick_text', pick.pick).eq('game_date', gameDate).maybeSingle();
           if (!exist) {
             await supabase.from('game_results').insert({
-              pick_id: row.id, game_date: gameDate, league, result: res,
+              pick_id: perPickId, game_date: gameDate, league, result: res,
               final_score: `${vs}-${hs}`, pick_text: pick.pick,
               matchup: `${pick.awayTeam} @ ${pick.homeTeam}`
             });
@@ -651,99 +655,12 @@ async function main() {
   const weeklyNFL = await processGenericGames('weekly_nfl_picks', weekStart, 'NFL');
   
   const props = await processPropBets(targetDate);
-  
-  // ════════════════════════════════════════
-  // BRACKET RESULTS — grade bracket picks from completed tournament games
-  // ════════════════════════════════════════
-  let bracketGraded = 0;
-  try {
-    // Fetch all ungraded bracket picks
-    const { data: bracketPicks, error: bpErr } = await supabase
-      .from('bracket_picks')
-      .select('*')
-      .is('actual_winner', null)
-      .eq('tournament', `march_madness_${new Date().getFullYear()}`);
-
-    if (!bpErr && bracketPicks && bracketPicks.length > 0) {
-      console.log(`\n[Bracket] Found ${bracketPicks.length} ungraded bracket picks`);
-
-      // Fetch completed NCAAB games for recent dates
-      const dates = [targetDate];
-      // Also check yesterday and day before (tournament games may have been missed)
-      const d = new Date(targetDate);
-      for (let i = 1; i <= 2; i++) {
-        const prev = new Date(d);
-        prev.setDate(prev.getDate() - i);
-        dates.push(prev.toISOString().split('T')[0]);
-      }
-
-      let allGames = [];
-      for (const date of dates) {
-        const games = await fetchGames('NCAAB', date);
-        if (games) allGames.push(...games);
-      }
-
-      const completedGames = allGames.filter(g =>
-        g.status === 'Final' || g.status === 'post' || g.status?.detailedState === 'Final'
-      );
-
-      for (const bp of bracketPicks) {
-        // Match bracket pick to completed game
-        const result = matchGame(completedGames, bp.team2, bp.team1); // team2=home, team1=away in bracket
-        const resultRev = matchGame(completedGames, bp.team1, bp.team2);
-        const matched = result || resultRev;
-
-        if (matched) {
-          const game = matched.game;
-          let homeScore = game.home_team_score ?? game.home_score ?? null;
-          let awayScore = game.visitor_team_score ?? game.away_score ?? null;
-          if (homeScore == null && Array.isArray(game.scoring_summary) && game.scoring_summary.length > 0) {
-            const final = game.scoring_summary[game.scoring_summary.length - 1];
-            homeScore = final.home_score ?? 0;
-            awayScore = final.away_score ?? 0;
-          }
-          homeScore = homeScore ?? 0;
-          awayScore = awayScore ?? 0;
-
-          // Determine actual winner
-          const homeName = game.home_team?.full_name || game.home_team?.name || '';
-          const awayName = game.away_team?.full_name || game.away_team?.name || '';
-          const actualWinner = homeScore > awayScore ? homeName : awayName;
-
-          // Check if Gary's bracket pick was correct
-          const normalize = s => (s || '').toLowerCase().trim();
-          const pickedNorm = normalize(bp.picked_to_advance);
-          const winnerNorm = normalize(actualWinner);
-          const correct = winnerNorm.includes(pickedNorm.split(' ').pop()) || pickedNorm.includes(winnerNorm.split(' ').pop());
-
-          // Update bracket pick
-          const { error: updateErr } = await supabase
-            .from('bracket_picks')
-            .update({ actual_winner: actualWinner, correct })
-            .eq('id', bp.id);
-
-          if (!updateErr) {
-            bracketGraded++;
-            console.log(`  [Bracket] ${bp.team1} vs ${bp.team2}: Gary picked ${bp.picked_to_advance}, actual winner: ${actualWinner} — ${correct ? 'CORRECT' : 'WRONG'}`);
-          }
-        }
-      }
-      if (bracketGraded > 0) {
-        console.log(`[Bracket] Graded ${bracketGraded} bracket picks`);
-      } else {
-        console.log(`[Bracket] No completed games matched ungraded bracket picks`);
-      }
-    }
-  } catch (e) {
-    console.log(`[Bracket] Grading error: ${e.message}`);
-  }
 
   console.log(`\n════════════════════════════════════════`);
   console.log(`SUMMARY FOR ${targetDate}`);
   console.log(`Daily:  ${daily.w}W - ${daily.l}L`);
   console.log(`Weekly: ${weeklyNFL.w}W - ${weeklyNFL.l}L`);
   console.log(`Props:  ${props.w}W - ${props.l}L`);
-  console.log(`Bracket: ${bracketGraded} graded`);
   console.log(`TOTAL:  ${daily.w + weeklyNFL.w + props.w}W - ${daily.l + weeklyNFL.l + props.l}L`);
   console.log(`════════════════════════════════════════\n`);
 }

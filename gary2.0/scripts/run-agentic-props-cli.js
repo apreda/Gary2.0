@@ -53,7 +53,6 @@ export async function runAgenticPropsCli({
   leagueLabel,
   buildContext,
   windowHours = 24 * 7,
-  propsPerGame = 5,
   limitDefault = 5,
   useESTDayFiltering = false,  // If true, filter by EST day instead of rolling window
   regularOnly = false,  // If true for NFL, only generate yards/receptions props (no TDs - use when TDs already stored)
@@ -297,8 +296,10 @@ export async function runAgenticPropsCli({
             };
           });
 
-          // Apply 2-per-game constraint for NBA/NHL
-          if (leagueLabel === 'NBA' || leagueLabel === 'NHL') {
+          // Apply 2-per-game cap + Gary Specials correlation for every sport.
+          // Previously this only ran for NBA/NHL — MLB and NFL bypassed the cap
+          // and never got correlation flags. There's no reason to skip it.
+          if (['NBA', 'NHL', 'MLB', 'NFL'].includes(leagueLabel)) {
             const { constrainedPicks } = applyPropsPerGameConstraint(result.picks, `${leagueLabel}-post`);
             result.picks = constrainedPicks;
           }

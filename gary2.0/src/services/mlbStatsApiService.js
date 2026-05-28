@@ -199,6 +199,89 @@ export async function getGameFeed(gamePk) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// PRE-GAME LINEUPS (extracts batting order + handedness from boxscore)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Extract posted lineups (batting order + probable/starting pitcher with handedness)
+ * from the MLB Stats API boxscore for the given gamePk. Returns a map keyed by
+ * team abbreviation so MLB_LINEUP can match it against the home/away abbreviations
+ * we already resolved upstream.
+ *
+ * Returns null if the boxscore call fails (game not found, gamePk missing, etc.).
+ * Returns an empty per-team batters array when the lineup hasn't been posted yet —
+ * the caller renders that as "Lineup not yet posted".
+ */
+export async function getMlbGameLineups(gamePk) {
+  if (!gamePk) return null;
+  const key = `mlb_lineups_${gamePk}`;
+  const cached = getCached(key);
+  if (cached) return cached;
+
+  let box;
+  try {
+    box = await getGameBoxScore(gamePk);
+  } catch (e) {
+    console.warn(`[MLB Stats API] getMlbGameLineups boxscore failed for ${gamePk}: ${e.message}`);
+    return null;
+  }
+
+  const teams = box?.teams;
+  if (!teams) return null;
+
+  const extractSide = (sideData) => {
+    if (!sideData) return null;
+    const players = sideData.players || {};
+    const battingOrderIds = Array.isArray(sideData.battingOrder) ? sideData.battingOrder : [];
+
+    const batters = battingOrderIds.map((rawId, idx) => {
+      const lookupKey = typeof rawId === 'string' ? rawId : `ID${rawId}`;
+      const p = players[lookupKey] || players[`ID${rawId}`] || null;
+      if (!p) return null;
+      const bats = p?.person?.batSide?.code || p?.batSide?.code || '?';
+      const throws = p?.person?.pitchHand?.code || p?.pitchHand?.code || '?';
+      return {
+        battingOrder: idx + 1,
+        name: p?.person?.fullName || 'Unknown',
+        position: p?.position?.abbreviation || '—',
+        batsThrows: `${bats}/${throws}`,
+      };
+    }).filter(Boolean);
+
+    // Probable pitcher (pre-game) lives on the schedule hydrate, but boxscore exposes
+    // currentPitcher / pitchers list once the game starts. Best-effort either way.
+    const probable = sideData.probablePitcher || null;
+    const firstPitcherId = Array.isArray(sideData.pitchers) ? sideData.pitchers[0] : null;
+    const pitcherPlayer = firstPitcherId ? players[`ID${firstPitcherId}`] : null;
+    const pitcher = probable
+      ? {
+          name: probable.fullName || probable.name || 'Unknown',
+          batsThrows: `${probable.batSide?.code || '?'}/${probable.pitchHand?.code || '?'}`,
+        }
+      : pitcherPlayer
+        ? {
+            name: pitcherPlayer.person?.fullName || 'Unknown',
+            batsThrows: `${pitcherPlayer.person?.batSide?.code || '?'}/${pitcherPlayer.person?.pitchHand?.code || '?'}`,
+          }
+        : null;
+
+    const teamAbbr = sideData.team?.abbreviation || sideData.team?.teamCode || '';
+    const teamName = sideData.team?.name || sideData.team?.teamName || '';
+    return { teamName, teamAbbr, batters, pitcher };
+  };
+
+  const homeSide = extractSide(teams.home);
+  const awaySide = extractSide(teams.away);
+
+  const result = {};
+  if (homeSide?.teamAbbr) result[homeSide.teamAbbr] = homeSide;
+  if (awaySide?.teamAbbr) result[awaySide.teamAbbr] = awaySide;
+
+  setCache(key, result);
+  return result;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // CONFIRMED LINEUPS (extracted from live game feed boxscore)
 // ═══════════════════════════════════════════════════════════════════════════
 

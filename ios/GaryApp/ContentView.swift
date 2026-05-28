@@ -6,10 +6,6 @@ class PickDetailState: ObservableObject {
     @Published var isShowing = false
 }
 
-// MARCH MADNESS BRACKET ARCHIVED — set to true next March to re-enable the Bracket tab.
-// All bracket code (MarchMadnessBracketView, BracketView.swift, etc.) remains intact.
-let showBracketTab = false
-
 // MARK: - Main Tab View with Liquid Glass
 
 // New tab layout — Gary is the bigger center tab.
@@ -77,7 +73,7 @@ struct ContentView: View {
                 .environmentObject(authManager)
         }
         .task {
-            // Migrate any out-of-range persisted index (e.g. user was on old Fantasy/Bracket index)
+            // Migrate any out-of-range persisted index (e.g. user was on the old Fantasy index)
             if selectedTab < 0 || selectedTab > lastValidTabIndex { selectedTab = 0 }
             loadedTabs.insert(selectedTab)
             await BillfoldSnapshotStore.shared.prewarmIfNeeded()
@@ -341,17 +337,13 @@ private struct _LegacyCompactTabBar: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var tabs: [(icon: String, label: String)] {
-        var items: [(icon: String, label: String)] = [
+        [
             ("house.fill", "Home"),
             ("list.bullet.rectangle.fill", "Picks"),
-            ("person.text.rectangle", "Props")
+            ("person.text.rectangle", "Props"),
+            ("trophy.fill", "Fantasy"),
+            ("chart.bar.fill", "Billfold")
         ]
-        if showBracketTab {
-            items.append(("basketball.fill", "Bracket"))
-        }
-        items.append(("trophy.fill", "Fantasy"))
-        items.append(("chart.bar.fill", "Billfold"))
-        return items
     }
 
     var body: some View {

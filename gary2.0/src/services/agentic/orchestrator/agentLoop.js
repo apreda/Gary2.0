@@ -22,33 +22,59 @@ const NBA_CASE_MIN_CHARS = 200;
 /**
  * Simple bilateral case validator.
  * Checks if Gary wrote substantially about both teams — doesn't care about header format.
- * Counts how many times each team is mentioned and how much text surrounds those mentions.
- * "Indiana" or "Pacers" both count. "LA" works too. Any word from the team name (2+ chars) works.
+ * Uses nickname (last word) as the primary discriminator so same-city pairings like
+ * Lakers/Clippers or Yankees/Mets don't double-count every "Los Angeles" / "New York"
+ * paragraph as belonging to both teams. Falls back to whole-name word matching for
+ * paragraphs that omit the nickname.
  */
 function validateBilateralCases(text = '', homeTeam = '', awayTeam = '') {
   const input = String(text || '').replace(/\n?\s*\**INVESTIGATION COMPLETE\**\s*\n?/gi, '\n');
 
-  // Get all meaningful words from each team name (2+ chars, skip only filler words)
+  // Nickname extraction (last word of team name)
+  const getNick = (team) => String(team || '').toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ').trim().split(/\s+/).filter(Boolean).pop() || '';
+  const homeNick = getNick(homeTeam);
+  const awayNick = getNick(awayTeam);
+  const distinctNicks = homeNick && awayNick && homeNick !== awayNick;
+  const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const homeNickRe = distinctNicks ? new RegExp(`\\b${esc(homeNick)}\\b`, 'i') : null;
+  const awayNickRe = distinctNicks ? new RegExp(`\\b${esc(awayNick)}\\b`, 'i') : null;
+
+  // Whole-name word fallback (same logic as before — used when paragraph omits nicknames)
   const getWords = (team) => String(team || '').toLowerCase()
     .replace(/[^a-z0-9\s]/g, ' ').split(/\s+/)
     .filter(w => w.length >= 2 && !['the', 'and', 'of'].includes(w));
-
   const homeWords = getWords(homeTeam);
   const awayWords = getWords(awayTeam);
 
-  // Split text into paragraphs and count which team each paragraph discusses
   const paragraphs = input.split(/\n\s*\n/).filter(p => p.trim().length > 50);
   let homeChars = 0;
   let awayChars = 0;
 
   for (const para of paragraphs) {
-    const lower = para.toLowerCase();
-    const homeMentions = homeWords.reduce((n, w) => n + (lower.includes(w) ? 1 : 0), 0);
-    const awayMentions = awayWords.reduce((n, w) => n + (lower.includes(w) ? 1 : 0), 0);
-    // Attribute paragraph to whichever team is mentioned more (or both if equal)
-    if (homeMentions > awayMentions) homeChars += para.length;
-    else if (awayMentions > homeMentions) awayChars += para.length;
-    else { homeChars += para.length; awayChars += para.length; }
+    let homeHit = false;
+    let awayHit = false;
+
+    // Primary: nickname word-boundary match — unambiguous when nicknames differ
+    if (homeNickRe && awayNickRe) {
+      homeHit = homeNickRe.test(para);
+      awayHit = awayNickRe.test(para);
+    }
+
+    // Fallback: whole-name word count for paragraphs with no nickname (or same-nickname NCAA matchups)
+    if (!homeHit && !awayHit) {
+      const lower = para.toLowerCase();
+      const homeMentions = homeWords.reduce((n, w) => n + (lower.includes(w) ? 1 : 0), 0);
+      const awayMentions = awayWords.reduce((n, w) => n + (lower.includes(w) ? 1 : 0), 0);
+      if (homeMentions > awayMentions) homeHit = true;
+      else if (awayMentions > homeMentions) awayHit = true;
+      else if (homeMentions > 0) { homeHit = true; awayHit = true; }
+    }
+
+    if (homeHit && !awayHit) homeChars += para.length;
+    else if (awayHit && !homeHit) awayChars += para.length;
+    else if (homeHit && awayHit) { homeChars += para.length; awayChars += para.length; }
+    // else: generic paragraph that doesn't reference either team — skip
   }
 
   if (homeChars >= NBA_CASE_MIN_CHARS && awayChars >= NBA_CASE_MIN_CHARS) {
@@ -141,8 +167,8 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
 
   // PERSISTENT SESSION SETUP (Gemini 3 Thought Signature Compliance)
   // ═══════════════════════════════════════════════════════════════════════════
-  // Game picks: 3.1 Pro with high reasoning. Flash is 429 fallback.
-  // Props: Flash with high reasoning (cheaper, 10K RPD, Pro-grade reasoning benchmarks).
+  // Game picks: 3.5 Flash (Tier 1 — Gary's brain) with high reasoning. 3.1 Pro is the 429 cascade fallback.
+  // Props: Flash 3 (Tier 2 — cheaper, sufficient) with high reasoning.
   // SDK automatically handles thought signatures when using persistent sessions.
   let currentSession = await createGeminiSession({ _costTracker: costTracker,
     modelName: primaryModel,
@@ -175,7 +201,6 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   // Persistent pass-injection flags (survive context pruning)
   let _pass25Injected = false;
   let _pass25JustInjected = false; // True for ONE iteration after Pass 2.5 is injected (for response logging)
-  // Pass 2.75 (Bracket Advancement) removed — bracket fill handled by run-bracket-fill.js
 
   // Investigation stall detection — nudge completion marker if investigation loops
   let _lastCategoryCount = 0;
@@ -1824,19 +1849,6 @@ INVESTIGATION COMPLETE`
       break;
     }
 
-    // Fallback gate: inject Pass 3
-    if (_pass25Injected && !_pass3Injected && iteration < effectiveMaxIterations) {
-      console.log(`[Orchestrator] ⚠️ PIPELINE GATE: Pick attempted before Pass 3 — injecting ${isPropsMode ? 'props evaluation' : 'final output'} pass`);
-      messages.push({ role: 'assistant', content: message.content });
-      const pass3Content = isPropsMode
-        ? buildPass3Props(homeTeam, awayTeam, propContext)
-        : buildPass3Unified(homeTeam, awayTeam, options);
-      messages.push({ role: 'user', content: pass3Content });
-      nextMessageToSend = pass3Content;
-      _pass3Injected = true;
-      continue;
-    }
-
     // ─── Game mode: check for truncation, then parse ──────────────────────────
     // If response was truncated by MAX_TOKENS, retry immediately — don't parse broken JSON
     if (finishReason === 'max_tokens' && iteration < effectiveMaxIterations) {
@@ -1881,7 +1893,6 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
       pick.toolCallHistory = toolCallHistory;
       pick.iterations = iteration;
       pick.rawAnalysis = message.content;
-      pick._bracketResponse = options._bracketResponse || null;
 
       // Attach the full assistant-side narrative so the "Talk to Gary" feature
       // can reference Gary's bilateral case + Pass 2.5 synthesis later. We join
@@ -1903,7 +1914,6 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
       return {
         error: 'Could not parse pick from response',
         rawAnalysis: message.content,
-        _bracketResponse: options._bracketResponse || null,
         toolCallHistory,
         iterations: iteration,
         homeTeam,
@@ -1930,6 +1940,11 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
     console.log(`[Orchestrator] ⚠️ Max iterations (${effectiveMaxIterations}) reached in props mode - injecting final props prompt...`);
     const pass3PropsContent = buildPass3Props(homeTeam, awayTeam, propContext);
     messages.push({ role: 'user', content: pass3PropsContent });
+    // Flip the pipeline flag so finalize_props is no longer blocked by the gate
+    // at line 688. Previously this fallback path forgot to set the flag and
+    // bypassed the gate by parsing tool_call args directly — two divergent
+    // paths to finalize. Keep the gate authoritative.
+    _pass3Injected = true;
 
     if (!currentSession) {
       throw new Error('No active Gemini session available for props finalization');

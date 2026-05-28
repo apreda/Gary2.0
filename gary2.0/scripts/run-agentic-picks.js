@@ -1371,8 +1371,7 @@ async function main() {
               'ADJOE_RANK': 'adjoe_rank',
               'ADJDE_RANK': 'adjde_rank',
               'PROJ_RECORD': 'proj_record',
-              // MLB stats
-              'RECORD': 'overall',
+              // MLB stats (RECORD already mapped above; do not duplicate)
               'L10_RECORD': 'l10',
               'HOME_AWAY': 'home_away',
               'HOME_AWAY_RECORD': 'home_away',
@@ -1389,11 +1388,13 @@ async function main() {
               'TEAM_OPS': 'team_ops',
               'TEAM_HR': 'team_hr',
               'SP_NAME': 'sp_name',
-              // BDL team season stats
+              // BDL team season stats — TEAM_ERA and RUNS_PER_GAME have no iOS
+              // StatValues field yet, so the data lands in the row dict but
+              // getValue(for:) falls through to the default. Either add iOS cases
+              // or stop emitting these tokens from the scout report.
               'TEAM_ERA': 'team_era',
               'TEAM_OPS_BDL': 'team_ops',
               'RUNS_PER_GAME': 'runs_per_game',
-              'HOME_AWAY_RECORD': 'home_away',
             };
 
             // Clear any toolCallHistory stats and use the verified rows instead
@@ -1422,7 +1423,7 @@ async function main() {
             console.log(`   ✓ ${sportLabel}: Added ${statsData.length} stats from verified Tale of Tape`);
 
             // Per-sport expected row counts — drift is a silent iOS rendering bug
-            const expectedRowCount = { 'NHL': 15, 'NCAAB': 15 }[sportLabel];
+            const expectedRowCount = { 'NHL': 15, 'NCAAB': 15, 'NBA': 15, 'MLB': 14 }[sportLabel];
             if (expectedRowCount && statsData.length !== expectedRowCount) {
               console.warn(`   ⚠️ ${sportLabel}: Expected ${expectedRowCount} Tale of Tape rows, got ${statsData.length} — check scout report builder`);
             }
@@ -1604,8 +1605,6 @@ async function main() {
               console.log(`⚠️  [${config.name}] Immediate store failed (will retry at end): ${storeErr.message}`);
             }
           }
-
-          // Bracket picks handled by run-bracket-fill.js (separate process)
         } else if (result.error) {
           console.log(`\n⚠️  Error: ${result.error}`);
         } else {

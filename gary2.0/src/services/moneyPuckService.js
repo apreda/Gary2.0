@@ -19,13 +19,39 @@
 import https from 'https';
 
 // ═══════════════════════════════════════════════════════════════
-// Cache: full datasets fetched once, reused for every game
+// Cache: full datasets fetched once, reused for every game.
+// Keyed on (year, phase) so a switch between regular season and
+// playoffs gets its own cache slot rather than colliding.
 // ═══════════════════════════════════════════════════════════════
-let _teamsCache = null;      // { data: Map<abbr, { all: obj, '5on5': obj }>, ts: number, year: number }
-let _goaliesCache = null;    // { data: Map<abbr, [goalieObj]>, ts: number, year: number }
+let _teamsCache = null;      // { data: Map<abbr, { all: obj, '5on5': obj }>, ts: number, year: number, phase: string }
+let _goaliesCache = null;    // { data: Map<abbr, [goalieObj]>, ts: number, year: number, phase: string }
 let _teamsFetchPromise = null;
 let _goaliesFetchPromise = null;
 const CACHE_TTL = 2 * 60 * 60 * 1000; // 2 hours
+
+// ═══════════════════════════════════════════════════════════════
+// Season phase detection
+// ═══════════════════════════════════════════════════════════════
+/**
+ * NHL playoff window detection. Playoffs typically run from mid-April
+ * through mid-June; the window is intentionally generous (Apr 12 – Jun 30)
+ * to absorb schedule drift year-over-year.
+ */
+function isNhlPlayoffPeriod(date = new Date()) {
+  const month = date.getMonth() + 1; // 1-12
+  const day = date.getDate();
+  if (month === 4) return day >= 12;
+  if (month === 5 || month === 6) return true;
+  return false;
+}
+
+/**
+ * Returns 'playoffs' during the playoff window, otherwise 'regular'.
+ * MoneyPuck publishes both at /seasonSummary/<year>/<phase>/.
+ */
+function getCurrentNhlPhase(date = new Date()) {
+  return isNhlPlayoffPeriod(date) ? 'playoffs' : 'regular';
+}
 
 // ═══════════════════════════════════════════════════════════════
 // BDL full name → MoneyPuck 3-letter abbreviation
@@ -171,14 +197,14 @@ function fetchCSV(url) {
 // Teams data
 // ═══════════════════════════════════════════════════════════════
 
-async function fetchTeamsData(year) {
+async function fetchTeamsData(year, phase) {
   const now = Date.now();
-  if (_teamsCache && _teamsCache.year === year && (now - _teamsCache.ts) < CACHE_TTL) {
+  if (_teamsCache && _teamsCache.year === year && _teamsCache.phase === phase && (now - _teamsCache.ts) < CACHE_TTL) {
     return _teamsCache.data;
   }
   if (_teamsFetchPromise) return _teamsFetchPromise;
 
-  _teamsFetchPromise = _fetchTeamsDataInner(year);
+  _teamsFetchPromise = _fetchTeamsDataInner(year, phase);
   try {
     return await _teamsFetchPromise;
   } finally {
@@ -186,15 +212,15 @@ async function fetchTeamsData(year) {
   }
 }
 
-async function _fetchTeamsDataInner(year) {
-  const url = `https://moneypuck.com/moneypuck/playerData/seasonSummary/${year}/regular/teams.csv`;
-  console.log(`[MoneyPuck] Fetching teams data from ${url}...`);
+async function _fetchTeamsDataInner(year, phase) {
+  const url = `https://moneypuck.com/moneypuck/playerData/seasonSummary/${year}/${phase}/teams.csv`;
+  console.log(`[MoneyPuck] Fetching ${phase} teams data from ${url}...`);
 
   const raw = await fetchCSV(url);
   const rows = parseCSV(raw);
 
   if (rows.length === 0) {
-    throw new Error('MoneyPuck teams.csv returned empty data');
+    throw new Error(`MoneyPuck ${phase} teams.csv returned empty data`);
   }
 
   // Build map: abbr → { '5on5': row, 'all': row, '5on4': row, '4on5': row }
@@ -209,8 +235,8 @@ async function _fetchTeamsDataInner(year) {
     teamMap.get(abbr)[situation] = row;
   }
 
-  console.log(`[MoneyPuck] Cached ${teamMap.size} teams for ${year}`);
-  _teamsCache = { data: teamMap, ts: Date.now(), year };
+  console.log(`[MoneyPuck] Cached ${teamMap.size} teams for ${year} (${phase})`);
+  _teamsCache = { data: teamMap, ts: Date.now(), year, phase };
   return teamMap;
 }
 
@@ -218,14 +244,14 @@ async function _fetchTeamsDataInner(year) {
 // Goalies data
 // ═══════════════════════════════════════════════════════════════
 
-async function fetchGoaliesData(year) {
+async function fetchGoaliesData(year, phase) {
   const now = Date.now();
-  if (_goaliesCache && _goaliesCache.year === year && (now - _goaliesCache.ts) < CACHE_TTL) {
+  if (_goaliesCache && _goaliesCache.year === year && _goaliesCache.phase === phase && (now - _goaliesCache.ts) < CACHE_TTL) {
     return _goaliesCache.data;
   }
   if (_goaliesFetchPromise) return _goaliesFetchPromise;
 
-  _goaliesFetchPromise = _fetchGoaliesDataInner(year);
+  _goaliesFetchPromise = _fetchGoaliesDataInner(year, phase);
   try {
     return await _goaliesFetchPromise;
   } finally {
@@ -233,15 +259,15 @@ async function fetchGoaliesData(year) {
   }
 }
 
-async function _fetchGoaliesDataInner(year) {
-  const url = `https://moneypuck.com/moneypuck/playerData/seasonSummary/${year}/regular/goalies.csv`;
-  console.log(`[MoneyPuck] Fetching goalies data from ${url}...`);
+async function _fetchGoaliesDataInner(year, phase) {
+  const url = `https://moneypuck.com/moneypuck/playerData/seasonSummary/${year}/${phase}/goalies.csv`;
+  console.log(`[MoneyPuck] Fetching ${phase} goalies data from ${url}...`);
 
   const raw = await fetchCSV(url);
   const rows = parseCSV(raw);
 
   if (rows.length === 0) {
-    throw new Error('MoneyPuck goalies.csv returned empty data');
+    throw new Error(`MoneyPuck ${phase} goalies.csv returned empty data`);
   }
 
   // Build map: team abbr → [goalie objects] (sorted by games_played desc)
@@ -289,8 +315,8 @@ async function _fetchGoaliesDataInner(year) {
     goalies.sort((a, b) => b.games_played - a.games_played);
   }
 
-  console.log(`[MoneyPuck] Cached goalies for ${goalieMap.size} teams for ${year}`);
-  _goaliesCache = { data: goalieMap, ts: Date.now(), year };
+  console.log(`[MoneyPuck] Cached goalies for ${goalieMap.size} teams for ${year} (${phase})`);
+  _goaliesCache = { data: goalieMap, ts: Date.now(), year, phase };
   return goalieMap;
 }
 
@@ -306,17 +332,18 @@ async function _fetchGoaliesDataInner(year) {
  * @param {number} [year] - MoneyPuck year (defaults to current)
  * @returns {object|null} Team stats object or null if not found
  */
-async function getTeamStats(teamName, year) {
+async function getTeamStats(teamName, year, phase) {
   if (!year) year = getCurrentMoneyPuckYear();
+  if (!phase) phase = getCurrentNhlPhase();
 
   try {
-    const teams = await fetchTeamsData(year);
+    const teams = await fetchTeamsData(year, phase);
     const abbr = resolveAbbr(teamName);
     if (!abbr) return null;
 
     const teamData = teams.get(abbr);
     if (!teamData) {
-      console.warn(`[MoneyPuck] No data for team "${teamName}" (abbr: ${abbr})`);
+      console.warn(`[MoneyPuck] No ${phase} data for team "${teamName}" (abbr: ${abbr})`);
       return null;
     }
 
@@ -386,17 +413,18 @@ async function getTeamStats(teamName, year) {
  * @param {number} [year] - MoneyPuck year (defaults to current)
  * @returns {Array|null} Array of goalie stat objects or null
  */
-async function getGoalieStats(teamName, year) {
+async function getGoalieStats(teamName, year, phase) {
   if (!year) year = getCurrentMoneyPuckYear();
+  if (!phase) phase = getCurrentNhlPhase();
 
   try {
-    const goalies = await fetchGoaliesData(year);
+    const goalies = await fetchGoaliesData(year, phase);
     const abbr = resolveAbbr(teamName);
     if (!abbr) return null;
 
     const teamGoalies = goalies.get(abbr);
     if (!teamGoalies || teamGoalies.length === 0) {
-      console.warn(`[MoneyPuck] No goalie data for "${teamName}" (abbr: ${abbr})`);
+      console.warn(`[MoneyPuck] No ${phase} goalie data for "${teamName}" (abbr: ${abbr})`);
       return null;
     }
 
@@ -425,6 +453,8 @@ export {
   getTeamStats,
   getGoalieStats,
   getCurrentMoneyPuckYear,
+  getCurrentNhlPhase,
+  isNhlPlayoffPeriod,
   resolveAbbr,
   BDL_TO_MONEYPUCK,
 };
