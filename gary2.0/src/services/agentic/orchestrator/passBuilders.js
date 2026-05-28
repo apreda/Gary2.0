@@ -400,6 +400,9 @@ export function buildPass25Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', spo
   const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
   const isMLB = sport === 'baseball_mlb' || sport === 'MLB';
   const lineLabel = (isNHL) ? 'moneyline or puck line' : (isMLB ? 'moneyline' : 'spread');
+  const betTypeNote = isNHL
+    ? `**BET TYPE:** You have two options — MONEYLINE (picking a team to win outright, includes OT/SO) or PUCK LINE (standard -1.5/+1.5, regulation + OT only). Choose the bet type that matches your read on the game.`
+    : `**BET TYPE:** You have two options — SPREAD (picking a side to cover) or MONEYLINE (picking a team to win outright). Choose the bet type that matches your conviction about how this game plays out.`;
   const homeSpread = spread >= 0 ? `+${spread.toFixed(1)}` : spread.toFixed(1);
   const awaySpread = (-spread) >= 0 ? `+${(-spread).toFixed(1)}` : (-spread).toFixed(1);
   let lineContext;
@@ -437,7 +440,7 @@ ${decisionGuards ? `<sport_decision_guards>\n${decisionGuards}\n</sport_decision
 <instructions>
 ## YOUR TASK
 
-Write your FINAL DECISION and FULL CARD RATIONALE DRAFT in natural language. Do NOT output JSON yet.
+Write your FINAL DECISION and FULL CARD RATIONALE DRAFT in natural language, THEN append a structured JSON code block with the same decision. The prose is your card rationale; the JSON is the structured output the system stores.
 
 Use this exact format:
 
@@ -447,7 +450,7 @@ Gary's Take
 
 [3 paragraphs, plain text, ~250-400 words]
 
-This "Gary's Take" draft should be the same rationale carried to final output.
+This "Gary's Take" draft is the rationale that appears on the pick card.
 Opening requirement: start with a brief matchup intro in an announcer-style scene-setter voice (1-2 sentences), then continue with your reasoning naturally.
 
 **PLAYER NAME RULES (HARD RULE - NO EXCEPTIONS):**
@@ -468,6 +471,32 @@ CRITICAL CONSTRAINTS (all system prompt rules apply — these are reminders of t
 4. NO FABRICATION: Don't make up stats or facts. If you cite a specific number, it must be from your investigation.
 5. NO EMOJIS. Data analyst reasoning only — no tactical/scheme/film claims.
 </negative_constraints>
+
+## STRUCTURED OUTPUT (REQUIRED AFTER THE PROSE)
+
+After the prose above, append a JSON code block with the structured pick. This carries the same decision and rationale you just wrote — do NOT change the decision, the side, or the reasoning between the prose and the JSON.
+
+${betTypeNote}
+
+**CRITICAL ODDS RULES:**
+1. Use the EXACT odds from the "RAW ODDS VALUES" section of the scout report — do NOT default to -110
+2. For ML picks: use "moneylineHome" or "moneylineAway" value (e.g., -192, +160)
+3. For spread picks: use "spreadOdds" value (e.g., -105, -115)
+4. The "final_pick" field MUST include the exact odds: "[Team] ML -192" NOT "[Team] ML -110"
+
+Format:
+
+\`\`\`json
+{
+  "final_pick": "[Team] [spread/ML] [odds]",
+  "rationale": "Gary's Take\\n\\n[paste the prose Gary's Take above into this field]",
+  "confidence_score": 0.XX
+}
+\`\`\`
+
+**confidence_score (0.50-1.00):** How confident are you in this pick? Set it organically based on the strength of the evidence — do NOT default.
+
+Your JSON must include all three fields: "final_pick", "rationale", AND "confidence_score". Missing confidence_score will cause a system error.
 </instructions>
 `.trim();
 }

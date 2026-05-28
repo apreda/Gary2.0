@@ -211,6 +211,10 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   // Flash Research Briefing state — comprehensive pre-game briefing (factual findings only)
   // Flash completes BEFORE Gary starts. Findings injected before Pass 1.
   let _researchBriefing = null;          // Briefing text from Flash (factual findings)
+  // Tokens Flash already investigated. Seeded into Gary's dedup set so Gary
+  // doesn't pay for round-trips that just return data already in the briefing.
+  // The briefing IS Gary's data for these tokens.
+  const _flashCalledTokens = new Set();
 
   const effectiveMaxIterations = CONFIG.maxIterations;
 
@@ -230,7 +234,17 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
       if (briefingResult && typeof briefingResult === 'object') {
         _researchBriefing = briefingResult.briefing;
         if (briefingResult.calledTokens?.length > 0) {
-          console.log(`[Research Briefing] Stored ${briefingResult.calledTokens.length} Flash tokens for coverage tracking (separate from Gary's toolCallHistory)`);
+          // Seed Gary's dedup set with everything Flash already covered. Each
+          // entry is added in both forms — full token ("PLAYER_GAME_LOGS:Buxton")
+          // and base token ("PLAYER_GAME_LOGS") — to match the existing
+          // alreadyFetchedStats key shape (built per-iteration around line ~546).
+          for (const { token } of briefingResult.calledTokens) {
+            if (!token) continue;
+            _flashCalledTokens.add(token);
+            const base = token.split(':')[0];
+            if (base && base !== token) _flashCalledTokens.add(base);
+          }
+          console.log(`[Research Briefing] Seeded ${_flashCalledTokens.size} Flash-covered tokens into Gary's dedup set`);
         }
         console.log(`[Research Briefing] ✅ Briefing ready (${briefingResult.briefing?.length || 0} chars)`);
       } else if (briefingResult && typeof briefingResult === 'string') {
@@ -542,8 +556,12 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
     // Check if Gary requested tool calls
     if (message.tool_calls && message.tool_calls.length > 0) {
       // Build set of ALREADY FETCHED stats from history (across all iterations)
-      // Include BOTH full tokens and base tokens to catch duplicates properly
-      const alreadyFetchedStats = new Set();
+      // Include BOTH full tokens and base tokens to catch duplicates properly.
+      // Also seed with Flash's calledTokens — the briefing already contains
+      // findings for those tokens, so re-fetching them is wasted spend AND
+      // wasted iteration budget. Gary's gathered-data recap and the briefing
+      // together carry the information forward; the data is identical.
+      const alreadyFetchedStats = new Set(_flashCalledTokens);
       for (const t of toolCallHistory) {
         const token = t.token || '';
         if (token) {
@@ -1805,6 +1823,47 @@ INVESTIGATION COMPLETE`
 
     // Pass 3 — inject after Pass 2.5 completes
     if (_pass25Injected && !_pass3Injected && iteration < effectiveMaxIterations) {
+      // Pass 2.5 now produces BOTH the prose card rationale AND a structured
+      // JSON code block (see buildPass25Message in passBuilders.js). If the
+      // JSON parses cleanly we have everything we need and Pass 3 — labeled
+      // "FORMAT ONLY" in its own prompt — would just re-emit the same JSON.
+      // Skip it. Saves one full round-trip (~25-28K input tokens) per game
+      // without changing Gary's reasoning or the final pick content.
+      //
+      // Props mode keeps the existing Pass 3 path — props use the finalize_props
+      // tool which has its own dedicated gate; this short-circuit is game-pick only.
+      if (!isPropsMode) {
+        let earlyPick = null;
+        try {
+          earlyPick = parseGaryResponse(message.content, homeTeam, awayTeam, sport, options.game || {});
+        } catch (e) {
+          console.warn(`[Orchestrator] Pass 2.5 parse-first attempt threw: ${e.message} — falling through to Pass 3 injection`);
+        }
+        if (earlyPick) {
+          console.log(`[Orchestrator] ✅ Pass 2.5 emitted valid JSON — skipping Pass 3 (saved 1 round-trip)`);
+          earlyPick.toolCallHistory = toolCallHistory;
+          earlyPick.iterations = iteration;
+          earlyPick.rawAnalysis = message.content;
+          // Attach the same narrative + briefing fields the normal final-return
+          // path at the bottom of this loop attaches, so the pick object's
+          // downstream consumers (pick_context / Talk to Gary / cost tracking)
+          // see identical metadata regardless of which path produced the pick.
+          try {
+            earlyPick._fullAssistantNarrative = messages
+              .filter(m => m.role === 'assistant' && m.content && typeof m.content === 'string')
+              .map(m => m.content)
+              .join('\n\n---\n\n');
+            earlyPick._researchBriefing = _researchBriefing || null;
+          } catch {
+            // non-fatal — pick still ships
+          }
+          return earlyPick;
+        }
+        // No valid JSON in Pass 2.5 — fall through to Pass 3 injection as a
+        // safety net. Gary still gets a chance to format properly.
+        console.log(`[Orchestrator] Pass 2.5 did not contain parseable JSON — falling through to Pass 3 injection (safety net)`);
+      }
+
       messages.push({ role: 'assistant', content: message.content });
 
       const pass3Content = isPropsMode

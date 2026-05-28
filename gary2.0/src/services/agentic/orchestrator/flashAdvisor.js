@@ -249,7 +249,31 @@ ${scoutReportContent}
 
 ---
 
-Read the scout report above. I will now ask you to investigate factors one at a time.${isNCAABSport ? ' (NCAAB: narrative context is already in the scout report — prefer fetch_stats for BDL data)' : ''}${isMLBSport ? ' (MLB: The scout report already includes lineup confirmations and breaking news from grounding searches. Prefer fetch_stats for all stat-based investigation. Only use fetch_narrative_context as a last resort for info that no stat token or scout report section covers.)' : ''}${isNHLSport ? ' (NHL: The scout report already includes confirmed starting goalies, lineups, power play units, and injuries from RotoWire. Do NOT use fetch_narrative_context to re-search for goalies, lineups, injuries, or PP/PK stats — all of this is in the scout report. Use grounding ONLY for context not in the scout report like recent player performance narrative or trade news.)' : ''}`;
+Read the scout report above. I will now ask you to investigate factors one at a time.${isNCAABSport ? ' (NCAAB: narrative context is already in the scout report — prefer fetch_stats for BDL data)' : ''}${isMLBSport ? `
+
+(MLB: The scout report above ALREADY contains the following — DO NOT re-fetch these tokens:
+- DIVISION STANDINGS → covers MLB_STANDINGS, MLB_STANDINGS_STRUCTURED, MLB_TEAM_RECORD
+- RECENT PERFORMANCE (L1/L3/L5/L10) + RECENT RESULTS → covers MLB_RECENT_FORM, MLB_RECENT_FORM_STRUCTURED, MLB_SEASON_FORM, MLB_RECENT_RESULTS
+- INJURIES (BDL structured) → covers INJURIES, MLB_INJURIES
+- CONFIRMED LINEUPS → covers MLB_LINEUP
+- PROBABLE PITCHERS → identifies the starters (use MLB_PITCH_TYPES_SP for their per-pitch profile, MLB_PITCHER_RECENT_FORM for last 5 starts)
+- PLAYER SEASON STATS (BDL) → covers MLB_TOP_PLAYERS; for hitters use MLB_KEY_HITTERS only if you need OPS/WAR sorting beyond what's already shown
+- REST & SCHEDULE → covers MLB_REST_SITUATION, REST_SITUATION
+- BETTING CONTEXT → covers MLB_ODDS
+- SAVANT xStats → covers the headline xwOBA/xERA snapshot; use MLB_STATCAST only for last-3-games contact quality detail
+
+Investigate using fetch_stats for tokens that ADD information beyond the scout report:
+- MLB_PITCH_TYPES_SP — per-pitch xwOBA/whiff%/chase% for both probable starters (NEW signal not in scout)
+- MLB_PITCH_TYPES_HITTERS — how top hitters perform vs each pitch type
+- MLB_PLAYER_SPLITS — L/R, day/night, byArena splits
+- MLB_BATTER_VS_PITCHER — career BvP history
+- MLB_BULLPEN, MLB_BULLPEN_WORKLOAD, MLB_CLOSER_RELIEVER_STATS — bullpen depth + day-of availability
+- MLB_PITCHER_RECENT_FORM, MLB_PITCHER_SEASON_STATS — pitcher form not fully covered by scout
+- MLB_CATCHER_DEFENSE, MLB_TEAM_DEFENSE, MLB_RISP_SITUATIONAL — defensive + clutch context
+- MLB_STATCAST — last-3-games contact quality (exit velo, launch angle, xwOBA, bat speed, whiff/chase)
+- MLB_PARK_FACTORS, MLB_WEATHER — venue and conditions
+
+Use fetch_narrative_context ONLY for breaking news or game-thread context that no token covers.)` : ''}${isNHLSport ? ' (NHL: The scout report already includes confirmed starting goalies, lineups, power play units, and injuries from RotoWire. Do NOT use fetch_narrative_context to re-search for goalies, lineups, injuries, or PP/PK stats — all of this is in the scout report. Use grounding ONLY for context not in the scout report like recent player performance narrative or trade news.)' : ''}`;
 
     console.log(`[Research Briefing] Sending scout report to Gemini Flash (factor-by-factor investigation)`);
 
