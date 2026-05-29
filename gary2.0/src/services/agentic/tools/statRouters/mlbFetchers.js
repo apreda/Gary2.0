@@ -743,7 +743,14 @@ export const mlbFetchers = {
   MLB_ODDS: async (sport, home, away, season, options) => {
     const homeTeam = home.full_name || home.name;
     const awayTeam = away.full_name || away.name;
-    const gameId = options?.game?.bdlGameId || options?.game?.gamePk || options?.game?.id;
+    // This is a BDL endpoint, so it needs the BDL game id — NOT the MLB Stats
+    // API gamePk. The previous precedence (bdlGameId || gamePk || id) meant that
+    // once orchestratorMain set game.gamePk (the MLB Stats API id), this used it
+    // for the BDL odds query, which returns 0 records. The fetcher then fell to a
+    // date-based query that dumped ALL of the day's odds across every game,
+    // unfiltered — feeding Gary a mix of multiple games' lines. Prefer the BDL
+    // id (game.id / bdl_game_id); only fall to gamePk as a last resort.
+    const gameId = options?.game?.bdl_game_id || options?.game?.bdlGameId || options?.game?.id || options?.game?.gamePk;
 
     // BDL MLB odds rows are FLAT:
     //   vendor, moneyline_home_odds, moneyline_away_odds,
