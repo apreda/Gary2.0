@@ -170,7 +170,12 @@ async function buildPlan(etDateStr) {
   }
 
   schedule.sort((a, b) => a.triggerTime - b.triggerTime);
-  log(`\n📋 Total: ${schedule.length} games scheduled`);
+  // schedule.length is trigger ENTRIES, not unique games. Each game produces
+  // up to RETRY_LEAD_TIMES_MINUTES.length entries (currently 3: T-90/60/30),
+  // but only the first successful tier actually generates a pick — the rest
+  // hit the picks-script dedup and exit in ~1 second.
+  const uniqueGameIds = new Set(schedule.map(e => e.gameId));
+  log(`\n📋 Total: ${schedule.length} trigger entries across ${uniqueGameIds.size} unique games (up to ${RETRY_LEAD_TIMES_MINUTES.length} retries per game)`);
   return schedule;
 }
 
