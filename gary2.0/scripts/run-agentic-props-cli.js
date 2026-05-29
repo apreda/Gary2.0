@@ -67,6 +67,9 @@ export async function runAgenticPropsCli({
   const limit = Number.isNaN(parsedLimit) ? limitDefault : parsedLimit;
   const nocache = args.nocache === '1' || args.nocache === 'true';
   const shouldStore = args.store !== '0' && args.store !== 'false'; // Default TRUE, pass --store=0 to skip
+  // --force=1 bypasses the early-skip dedup (used when manually re-running a game whose
+  // props you want to regenerate, e.g. after a lineup correction).
+  const forceRun = args.force === '1' || args.force === 'true' || args.force === true;
   const matchupFilter = args.matchup || null;
   // --game-id: exact BDL game id filter (used by scheduler — no substring collisions)
   const gameIdFilter = args['game-id'] != null ? String(args['game-id']) : null;
@@ -166,6 +169,39 @@ export async function runAgenticPropsCli({
 
   const allPropPicks = [];
 
+  // Early-skip dedup so the scheduler's multi-tier retry windows (T-90 / T-60 /
+  // T-30) don't re-spend the full ~$0.07 prop pipeline on a game that already
+  // has props for today. Pulls the existing per-day row once and bails per
+  // game if any of today's prop picks already match this matchup. The existing
+  // upsert path below still handles partial re-runs correctly when force-run
+  // is intended (just run with --force).
+  let existingPropsForToday = [];
+  if (shouldStore && !forceRun) {
+    try {
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+      const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+      if (supabaseUrl && supabaseKey) {
+        const supabase = createClient(supabaseUrl, supabaseKey, {
+          auth: { autoRefreshToken: false, persistSession: false }
+        });
+        const dateParam = getESTDate();
+        const { data } = await supabase
+          .from(testTableName)
+          .select('picks')
+          .eq('date', dateParam)
+          .single();
+        existingPropsForToday = Array.isArray(data?.picks) ? data.picks : [];
+      }
+    } catch (_) { /* non-fatal — fall through to full processing */ }
+  }
+  const existingMatchupsForSport = new Set(
+    existingPropsForToday
+      .filter(p => p?.sport === leagueLabel)
+      .map(p => (p.matchup || '').toLowerCase())
+      .filter(Boolean)
+  );
+
   for (const game of filtered) {
     const matchup = `${game.away_team} @ ${game.home_team}`;
     const gameTime = new Date(game.commence_time).toLocaleString('en-US', {
@@ -177,6 +213,11 @@ export async function runAgenticPropsCli({
       minute: '2-digit',
       hour12: true
     });
+
+    if (existingMatchupsForSport.has(matchup.toLowerCase())) {
+      console.log(`🚫 GAME ALREADY HAS PROPS: ${leagueLabel} ${matchup} — skipping (use --force=1 to override)`);
+      continue;
+    }
 
     console.log(`\n${'='.repeat(50)}`);
     console.log(`🏈 ${matchup}`);

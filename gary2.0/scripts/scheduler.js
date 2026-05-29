@@ -27,7 +27,18 @@ if (!existsSync(LOG_DIR)) mkdirSync(LOG_DIR, { recursive: true });
 // ═══════════════════════════════════════════════════════════════════════════
 // CONFIG
 // ═══════════════════════════════════════════════════════════════════════════
-const LEAD_TIME_MINUTES = 90;
+// Multi-tier retry windows. Most teams post lineups 2-3 hours before first
+// pitch (some — Pirates, Marlins, Rockies — closer to 60-90 min). The scout
+// report HARD FAILs when batting orders aren't posted, so games whose first
+// trigger fires before the team has released get no pick. To catch late
+// posters without sacrificing early picks for on-time teams, we fire up to
+// three triggers per game: T-90, T-60, T-30. The existing dedup in
+// run-agentic-picks.js ("🚫 GAME ALREADY HAS PICK") makes subsequent triggers
+// instant short-circuits once a pick has landed — cost per skip is the script
+// startup overhead (~$0.001).
+const LEAD_TIME_MINUTES = 90;       // Primary trigger (kept for any external reference)
+const RETRY_LEAD_TIMES_MINUTES = [90, 60, 30]; // First → fallback → final
+
 const SPORTS = [
   { key: 'basketball_nba', flag: '--nba', label: 'NBA', propsScript: 'run-agentic-nba-props.js', dfs: true },
   { key: 'icehockey_nhl', flag: '--nhl', label: 'NHL', propsScript: 'run-agentic-nhl-props.js', dfs: false },
@@ -132,12 +143,29 @@ async function buildPlan(etDateStr) {
       const homeTeam = game.home_team?.full_name || game.home_team?.name || 'Home';
       const awayTeam = game.visitor_team?.full_name || game.away_team?.full_name || game.visitor_team?.name || game.away_team?.name || 'Away';
       const matchup = `${awayTeam} @ ${homeTeam}`;
-      const triggerTime = new Date(startTime.getTime() - LEAD_TIME_MINUTES * 60 * 1000);
       const startET = startTime.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
-      const triggerET = triggerTime.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
 
-      schedule.push({ sport, matchup, startTime, triggerTime, gameId: game.id });
-      log(`    ${matchup} | Game: ${startET} | Trigger: ${triggerET} | id: ${game.id}`);
+      // Emit one schedule entry per retry tier. Each fires at startTime - tier.
+      // The pick + props scripts' own dedup ("already has pick" / props) makes
+      // entries after a successful pick into ~instant no-ops.
+      const tierLabels = [];
+      for (let i = 0; i < RETRY_LEAD_TIMES_MINUTES.length; i++) {
+        const leadMin = RETRY_LEAD_TIMES_MINUTES[i];
+        const triggerTime = new Date(startTime.getTime() - leadMin * 60 * 1000);
+        const tier = i + 1; // 1 = primary, 2 = first retry, 3 = final retry
+        schedule.push({
+          sport,
+          matchup,
+          startTime,
+          triggerTime,
+          gameId: game.id,
+          tier,
+          leadMin,
+        });
+        const triggerET = triggerTime.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
+        tierLabels.push(`T${leadMin}=${triggerET}`);
+      }
+      log(`    ${matchup} | Game: ${startET} | ${tierLabels.join(' / ')} | id: ${game.id}`);
     }
   }
 
@@ -268,21 +296,23 @@ async function executeSchedule(schedule) {
       // We pass --game-id (BDL game id) so we always target the exact game,
       // never a substring match (which would collide on Red/White Sox or doubleheaders).
       for (const entry of games) {
+        const tierTag = entry.tier > 1 ? ` [retry T-${entry.leadMin}]` : ` [primary T-${entry.leadMin}]`;
         try {
-          log(`  📊 Game picks: ${entry.matchup} (id ${entry.gameId})`);
+          log(`  📊 Game picks: ${entry.matchup}${tierTag} (id ${entry.gameId})`);
           await runScript('scripts/run-agentic-picks.js', [sport.flag, '--game-id', String(entry.gameId)]);
         } catch (e) {
-          log(`  ❌ Game picks failed: ${entry.matchup}: ${e.message}`);
+          log(`  ❌ Game picks failed: ${entry.matchup}${tierTag}: ${e.message}`);
         }
       }
 
       // Then run props for all games (disk cache from game picks)
       for (const entry of games) {
+        const tierTag = entry.tier > 1 ? ` [retry T-${entry.leadMin}]` : ` [primary T-${entry.leadMin}]`;
         try {
-          log(`  🎯 Props: ${entry.matchup} (id ${entry.gameId})`);
+          log(`  🎯 Props: ${entry.matchup}${tierTag} (id ${entry.gameId})`);
           await runScript(`scripts/${sport.propsScript}`, ['--game-id', String(entry.gameId)]);
         } catch (e) {
-          log(`  ❌ Props failed: ${entry.matchup}: ${e.message}`);
+          log(`  ❌ Props failed: ${entry.matchup}${tierTag}: ${e.message}`);
         }
       }
     }
