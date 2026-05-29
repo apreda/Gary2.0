@@ -730,7 +730,8 @@ The scout report already includes detailed context from both grounding searches 
 **Tokens:** MLB_STARTING_PITCHERS, MLB_PITCHER_SEASON_STATS, MLB_PLAYER_SPLITS, MLB_PITCH_TYPES_SP
 - Who is starting for each team? What are their current season stats (ERA, WHIP, K/9, BB/9, IP, W-L)?
 - Call MLB_PITCH_TYPES_SP to get per-pitch breakdown for BOTH probable starters: usage%, whiff%, chase%, xwOBA, BA per pitch type (4-seam, slider, curveball, changeup, etc.). This is the deterministic, sharp-bettor view of pitcher quality — much better than a blanket "his ERA is X."
-- Which pitch is each starter's best (lowest xwOBA, highest whiff%)? Which is the weakest (highest xwOBA)?
+- **SAMPLE SIZE IS REQUIRED CONTEXT.** Each pitch line shows its pitch count. A pitch type thrown under ~75-100 pitches on the season (or any rate stat off a tiny sample) is NOISE, not a reliable signal — do not treat a flashy whiff% or xwOBA on a rarely-thrown pitch as a real edge. Weight a pitcher's primary pitches (high usage, large sample) heavily and treat his rare pitches as footnotes. Report the sample alongside any pitch stat you cite.
+- Which pitch is each starter's best (lowest xwOBA, highest whiff%)? Which is the weakest (highest xwOBA)? Only draw this conclusion from pitches with a meaningful sample.
 - Does the pitcher rely heavily on one pitch (50%+ usage) — does the opposing lineup's hitters perform well or poorly against that pitch type? (Cross-reference with MLB_PITCH_TYPES_HITTERS in section 3.)
 - How does each starter's pitch mix and velocity profile match up against the opposing lineup's handedness and power profile?
 - Any pitch count concerns or workload management patterns? What has the front office's approach been to this pitcher's innings recently?
@@ -753,6 +754,7 @@ The scout report already includes detailed context from both grounding searches 
 **Tokens:** MLB_PLAYER_SPLITS, MLB_BATTER_VS_PITCHER, MLB_KEY_HITTERS, MLB_LINEUP, MLB_PITCH_TYPES_HITTERS
 - Call MLB_PLAYER_SPLITS to get L/R splits for top hitters on both teams — what is each hitter's AVG/OPS vs LHP vs RHP?
 - Call MLB_PITCH_TYPES_HITTERS to get how the top hitters on each team perform against each pitch type (BA, xwOBA, SLG per pitch). Cross-reference with the opposing SP's primary pitch mix (from MLB_PITCH_TYPES_SP in section 1): which hitters specifically punish the pitches tonight's starter throws most often?
+- **SAMPLE SIZE IS REQUIRED CONTEXT.** Each hitter pitch-type line shows its PA count. A split under ~10 PA against a pitch type is NOISE — a .571 BA or 1.100 xwOBA off 6 PA is not a real "he crushes sliders" signal, it is small-sample variance. Only treat a pitch-type split as meaningful when the PA sample is reasonable (~25+ PA is solid, ~10-25 is suggestive, under 10 is noise). When you cite a hitter's pitch-type performance, state the PA sample and weight it accordingly. Do NOT build a pick around a tiny-sample split.
 - Call MLB_BATTER_VS_PITCHER to get career matchup data: how have each team's top hitters fared against tonight's opposing pitchers specifically?
 - Which hitters have significant platoon vulnerabilities (big gap between L/R OPS)?
 - Are there switch-hitters in the lineup who neutralize the platoon matchup?

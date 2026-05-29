@@ -491,7 +491,9 @@ export const mlbFetchers = {
       list.sort((a, b) => (Number(b.pitch_usage_percent) || 0) - (Number(a.pitch_usage_percent) || 0));
       const top = list.slice(0, 5).map(r => {
         const label = r.pitch_name || r.pitch_type || 'Unknown';
-        return `  ${label} (${fmtPct(r.pitch_usage_percent)}): xwOBA ${fmtAvg(r.xwoba)}, whiff ${fmtPct(r.whiff_percent)}, chase ${fmtPct(r.chase_percent)}, BA ${fmtAvg(r.ba)}`;
+        // Show pitch_count so the reader can weight whiff%/xwOBA by sample.
+        const n = r.pitch_count != null ? `${r.pitch_count} pitches` : '? pitches';
+        return `  ${label} (${fmtPct(r.pitch_usage_percent)}, ${n}): xwOBA ${fmtAvg(r.xwoba)}, whiff ${fmtPct(r.whiff_percent)}, chase ${fmtPct(r.chase_percent)}, BA ${fmtAvg(r.ba)}`;
       });
       return `${teamName}: ${name}\n${top.join('\n')}`;
     };
@@ -561,11 +563,19 @@ export const mlbFetchers = {
     const formatHitter = (h) => {
       const list = (byPlayer.get(h.id) || []).slice();
       if (list.length === 0) return `${h.name}: no pitch-type data yet`;
-      // Sort by xwOBA descending so the hitter's best pitches lead.
-      list.sort((a, b) => (Number(b.xwoba) || 0) - (Number(a.xwoba) || 0));
+      // Sort by SAMPLE SIZE (PA against the pitch type) descending — NOT by
+      // xwOBA. Sorting by xwOBA surfaced tiny-sample outliers first (e.g. a
+      // 1.2 xwOBA on 6 PA against splitters), which reads as a fake "this guy
+      // crushes splitters" edge. The pitches a hitter faces MOST are both the
+      // most reliable signal and the most relevant (they're what the opposing
+      // SP is likely to throw). Each line carries its PA count so the reader
+      // can weight it; the Flash prompt instructs that splits under ~30 pitches
+      // / ~10 PA are noise, not signal.
+      list.sort((a, b) => (Number(b.pa_count) || 0) - (Number(a.pa_count) || 0));
       const top = list.slice(0, 4).map(r => {
         const label = r.pitch_name || r.pitch_type || 'Unknown';
-        return `${label}: ${fmtAvg(r.ba)} BA, ${fmtAvg(r.xwoba)} xwOBA, ${fmtAvg(r.slg)} SLG`;
+        const pa = r.pa_count != null ? `${r.pa_count} PA` : '? PA';
+        return `${label} (${pa}): ${fmtAvg(r.ba)} BA, ${fmtAvg(r.xwoba)} xwOBA, ${fmtAvg(r.slg)} SLG`;
       });
       return `${h.name}: ${top.join(' | ')}`;
     };
