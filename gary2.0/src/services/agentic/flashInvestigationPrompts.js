@@ -705,9 +705,9 @@ H2H tells you what happened under THOSE specific conditions. Investigate whether
 // MLB INVESTIGATION FACTORS
 // ═══════════════════════════════════════════════════════════════════════
 
-const MLB_FACTORS = `## INVESTIGATION CHECKLIST — MLB
+const MLB_FACTORS = `## INVESTIGATION FACTORS — MLB
 
-Work through each numbered factor below. Check off each one as you complete it. Do NOT skip any. For each factor, investigate BOTH teams and report findings with specific numbers.
+Below are the factors worth examining for an MLB game. Investigate the ones that genuinely bear on THIS matchup — not every factor matters in every game, and most individual factors move a single nine-inning, high-variance game far less than they look like they do. Your job is not to fill in all the boxes; it is to find what actually shapes tonight and weight it honestly. For the factors you do investigate, cover BOTH teams symmetrically and report real numbers. As you go, distinguish what is decisive from what is minor — a 0.2-run defensive edge is not the same as a clear pitching-matchup gap or a fresh middle-of-the-order injury, and saying which is which IS the analysis. A flat list of every stat helps no one; a weighted read of the two or three things that decide this game is the goal.
 
 For any factor, you have access to structured season stats via BDL API (fetch_stats tokens). These return real, structured data — not web search results. **Do NOT use fetch_narrative_context to search for stats that a stat token can provide.** Grounding searches are expensive and less reliable than structured API data.
 
@@ -748,7 +748,7 @@ The scout report already includes detailed context from both grounding searches 
 - Has velocity or command changed in recent starts? Any signs of fatigue or mechanical adjustment?
 - Did any recent starts include rain delays, early exits due to injury scares, or shortened outings that inflate or deflate the stat line?
 - What is the starter's pitch count trajectory — increasing (building up after IL stint or early season) or capped (managed workload, innings limit)?
-- What is the starter's strand rate (LOB%) in recent starts vs season? An extreme LOB% (above 80% or below 65%) suggests regression is likely.
+- What is the starter's strand rate (LOB%) in recent starts vs season? An extreme LOB% (above 80% or below 65%) is context for how sustainable his ERA is over time — note it, but it is not a prediction for tonight. A pitcher "due to regress" still throws gems.
 
 ### 3. PLATOON SPLITS & BATTER VS PITCHER
 **Tokens:** MLB_PLAYER_SPLITS, MLB_BATTER_VS_PITCHER, MLB_KEY_HITTERS, MLB_LINEUP, MLB_PITCH_TYPES_HITTERS
@@ -791,7 +791,7 @@ The scout report already includes detailed context from both grounding searches 
 - Is this a division rivalry game (19 games/year against division opponents)? Division games carry different intensity and familiarity.
 - Where is each team relative to wild card positioning? Does the playoff race context affect lineup decisions or urgency?
 - What is each team's run differential — does it suggest their record over- or under-represents their true level?
-- Check Pythagorean W-L (expected record based on runs scored/allowed) vs actual record — a team that significantly outperforms its Pythagorean W-L is a regression candidate.
+- Check Pythagorean W-L (expected record based on runs scored/allowed) vs actual record — a gap describes how sustainable a team's record is over a season, not what happens tonight. Use it as context for whether a team's reputation matches its real level, not as a single-game forecast.
 - What is each team's record vs winning teams (.500+) vs losing teams? This reveals schedule-dependent performance.
 
 ### 7. HEAD-TO-HEAD & SEASON SERIES
@@ -875,9 +875,10 @@ The scout report already includes detailed context from both grounding searches 
 - What is the team's stolen base frequency and success rate? Note the opposing pitcher's delivery time to the plate and the catcher's pop time. Investigate whether tonight's lineup is built to actually leverage that — many teams have raw speed but don't run.
 - How does the team perform with two outs? Teams that extend innings with 2-out hitting create more runs than their overall OPS would suggest.
 
-### 16. REGRESSION & PROCESS INDICATORS
+### 16. CONTACT QUALITY & SUSTAINABILITY
 **Tokens:** MLB_KEY_HITTERS, MLB_PITCHER_SEASON_STATS, MLB_TEAM_RECORD, MLB_RECENT_FORM, MLB_STATCAST
-- Call MLB_STATCAST to get each team's recent contact quality from the last 3 games. The token now returns the full Statcast surface: avg exit velocity, launch angle + sweet-spot rate, **xwOBA / xSLG / xBA** (regression-aware expected outcomes), bat speed, barrel rate, and plate-discipline (whiff% + chase%). Use **xwOBA** as the headline contact-quality metric — it's much more predictive than raw wOBA or BA.
+These metrics describe whether each side's recent results are built on solid or fragile underlying performance — a SEASON-LONG sustainability question, NOT a prediction for tonight. A team "due to regress" can rake tonight; a pitcher "getting lucky" can throw a shutout. Use these to judge whether the price is built on something real or something that may not hold, never as a forecast of this single game.
+- Call MLB_STATCAST to get each team's recent contact quality from the last 3 games. The token returns the full Statcast surface: avg exit velocity, launch angle + sweet-spot rate, **xwOBA / xSLG / xBA** (expected outcomes), bat speed, barrel rate, and plate-discipline (whiff% + chase%). Use **xwOBA** as the headline contact-quality metric — it reflects quality of contact better than raw wOBA or BA.
 - Are any key hitters' teams showing a change in xwOBA vs their actual results? A team with .380 xwOBA but only .310 actual wOBA is hitting the ball well and getting unlucky (positive regression candidate).
 - How do the two teams' bat-speed and whiff numbers compare? Faster bat speeds with low whiff rates indicate a controlled aggressive offense — a tough lineup for a low-strikeout pitcher.
 - Check BABIP (batting average on balls in play) for key hitters — extreme values (.350+ or under .250) suggest regression toward career norms is likely. What are the specific BABIP values for the top hitters in each lineup?
@@ -900,7 +901,7 @@ The scout report already includes detailed context from both grounding searches 
 ## DEEP INVESTIGATION — MLB-SPECIFIC
 
 ### PITCHER INVESTIGATION
-Starting pitching is the single largest variable in any individual MLB game. When evaluating starters:
+The starting pitcher is the biggest single variable in an MLB game, but still only one piece — a starter covers ~6 of 18 half-innings, and the offense across all nine, the bullpen's three, the defense, and variance decide the rest. Investigate the starters thoroughly, then weight them honestly against everything else rather than treating the matchup as the whole game. When evaluating starters:
 - **Recent trajectory matters more than season line:** A pitcher with a 3.50 season ERA who has posted a 5.40 ERA over the last 5 starts is a different pitcher than his season line suggests. Investigate what changed.
 - **Pitch count trends:** Is the front office limiting this pitcher? Note his average pitch count and IP in recent starts. Investigate the bullpen state and reason about how an early exit would actually change the run projection — sometimes the bullpen is the strength.
 - **Quality of competition in recent starts:** Were those recent outings against top-10 or bottom-10 offenses?
@@ -931,14 +932,14 @@ After the starter exits, the bullpen takes over. Investigate:
 - **Defensive quality**: What does the team's defensive runs saved (DRS) or OAA (outs above average) look like? Poor defense behind a ground ball pitcher inflates ERA relative to FIP.
 - **Baserunning**: Is this an aggressive baserunning team (stolen bases, extra bases taken) or station-to-station? Note SB rate, success%, and extra bases taken. Reason about whether that style matters tonight given the matchup and score state — many runs are scored station-to-station.
 
-### REGRESSION & TREND DETECTION
-When recent performance diverges from season baseline:
+### SUSTAINABILITY & TREND DETECTION
+When recent performance diverges from the season baseline, the question is what's real versus noise — and whether the price reflects it. These are season-long sustainability reads, NOT single-game predictions: a pitcher whose results outrun his expected stats can still throw a gem tonight.
 - What evidence distinguishes a real shift from variance?
 - Has the roster changed (trade deadline, IL returns)?
-- Is a key pitcher overperforming or underperforming their expected stats (FIP vs ERA gap)?
-- A team's BABIP and HR/FB rate can signal unsustainable performance — investigate the gap
-- Check strand rate (LOB%) for both starters — extreme values (above 80% or below 65%) signal regression independent of talent
-- Investigate each team's record in 1-run games and extra-inning games — extreme records in either direction do not sustain over a 162-game season
+- Is a key pitcher's ERA outrunning his expected stats (FIP/xERA gap)? Note whether his results look built to last or fragile — context for the price, not a forecast of tonight.
+- A team's BABIP and HR/FB rate can flag an unsustainable hot or cold stretch — investigate the gap as context for whether the price is fair.
+- Strand rate (LOB%) extremes (above 80% or below 65%) describe how sustainable a starter's ERA is over time, not what he does in this start.
+- Extreme 1-run / extra-inning records do not sustain over 162 games — useful for judging a team's true level, not tonight's outcome.
 
 ### HOME/AWAY PERFORMANCE
 - What are each team's home and road records and run scoring splits?

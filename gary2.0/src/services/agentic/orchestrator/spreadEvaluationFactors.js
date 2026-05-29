@@ -87,7 +87,7 @@ Outdoor conditions and venue environment can change play-calling and efficiency 
 
 export function getMlbSpreadFactors() {
   return `### 1. STARTING PITCHER MATCHUP
-The starting pitcher matchup is the primary driver of the opening line in baseball.
+The starting pitcher matchup is one of the inputs the opening line is built around — the biggest single one — but it is one piece of the game, not the whole. The bullpen, the lineups across all nine innings, the park, and variance decide the rest. Investigate the starters thoroughly, then weight them against everything else.
 
 ### 2. BULLPEN AVAILABILITY & WORKLOAD
 Bullpen usage over the previous 2-3 games directly affects available arms tonight. Teams playing their 6th or 7th game in a row may have a depleted bullpen.
@@ -117,12 +117,13 @@ export function getMlbSeasonAwareness() {
 MLB is a 162-game marathon. Unlike short-sample tournaments, you have months of data — but that data needs context. A team's April performance may not reflect who they are in August. Recent form (last 10-15 games) is often more predictive than season-long averages.
 
 **What matters most in MLB game analysis:**
-- **Starting pitching is everything.** The starter matchup is the single largest factor in any individual game. Recent form (last 3-5 starts), pitch count trends, and performance against this specific lineup are more predictive than season ERA alone.
+- **The starting pitcher is the biggest single lever — but it is one lever, not the whole game.** A starter throws roughly 6 of 18 half-innings and faces the lineup only 2-3 times; the offense across all 9 innings, the bullpen's 3 innings, the defense, and plain variance decide the rest. A clear edge on the mound moves the needle, but it rarely settles a game by itself — weigh it honestly against everything else rather than treating it as decisive. Recent form (last 3-5 starts), pitch count trends, and performance against this specific lineup are more telling than season ERA alone.
 - **Bullpen state changes daily.** A team's closer pitching 3 of the last 4 days, a setup man on a back-to-back, or a bullpen game after extra innings yesterday — these affect how the game plays out from the 6th inning onward. Investigate availability for both teams.
 - **Park factors are real.** Coors Field inflates run totals by 20-30%. Pitcher-friendly parks suppress scoring. Indoor stadiums remove weather variables entirely.
 - **Schedule and rest matter.** Day games after night games, long road trips, cross-country travel, and series positioning (rubber games) all affect performance.
 - **Division familiarity cuts both ways.** Teams in the same division play 19 times per season. Hitters see the same pitchers repeatedly — familiarity can help the offense or the pitcher depending on adjustments.
 - **Baseball has more game-to-game variance than any other major sport.** The best team in baseball wins about 60% of its games — they lose 4 out of every 10. Hot streaks and losing streaks happen to every team multiple times per season. Investigate whether recent form reflects a real trend (pitcher struggles, lineup changes, bullpen fatigue) or normal variance.
+- **Expected stats read sustainability and price — not tonight's result.** When a pitcher's ERA outruns his xERA (or a hitter's results outrun their xwOBA), that gap tells you whether the season-long results are built on something solid or fragile, and therefore whether the market price is fair. Treat it as a price question — "is this favorite overpriced because his shiny ERA is fragile?" — not a forecast. Over a single start, variance rules and a pitcher "due to regress" throws gems constantly. Let the gap inform how you read the PRICE, and decide the game itself on the full matchup.
 - **One-run games are volatile over small samples.** Teams with extreme records in 1-run games may be overperforming or underperforming their underlying quality. Investigate whether a team's recent results are driven by process or luck.
 - **Baseball is more than numbers — the game has momentum.** Which team is rolling right now? Which pitcher is struggling? What happened in this series so far? A team that just got swept plays differently than a team that just swept. These dynamics are real and worth investigating alongside the statistical matchup.`;
 }
