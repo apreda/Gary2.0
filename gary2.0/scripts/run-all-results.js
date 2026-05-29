@@ -108,22 +108,36 @@ async function getPropGrounding(sport, player, type, date) {
 }
 
 function normalizeToETDate(matchedGame) {
-  // Prefer the full UTC timestamp if available (datetime)
-  const utcString = matchedGame.datetime;
-  if (utcString) {
-    const date = new Date(utcString);
-    // Convert to America/New_York
-    const etDate = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'America/New_York',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit'
-    }).format(date);
-    return etDate; // format: YYYY-MM-DD
+  // BDL surfaces game timing under several field names depending on sport:
+  //   NBA  → `datetime` or `status` (ISO datetime)
+  //   NHL  → `start_time_utc`
+  //   MLB  → `date` is often a full ISO datetime string ("2026-05-29T00:05:00.000Z")
+  //   Some endpoints  → `commence_time`
+  // Try every plausible field, convert through ET. Only fall back to
+  // matchedGame.date as a literal string if it's already a YYYY-MM-DD form.
+  const candidates = [
+    matchedGame.datetime,
+    matchedGame.start_time_utc,
+    matchedGame.commence_time,
+    matchedGame.date,
+  ];
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    if (typeof candidate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(candidate)) {
+      // Already a plain date — trust it
+      return candidate;
+    }
+    const date = new Date(candidate);
+    if (!isNaN(date.getTime())) {
+      return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/New_York',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(date);
+    }
   }
-  
-  // If no timestamp, trust the API's date string directly
-  return matchedGame.date || null;
+  return null;
 }
 
 /**
@@ -519,8 +533,12 @@ async function processGenericGames(table, date, leagueFilter = null) {
           hs = homeScore;
           vs = awayScore;
         }
-        // Normalize the game date to ET to ensure it aligns with app's "Yesterday" view
-        gameDate = normalizeToETDate(matchedGame) || gameDate;
+        // Normalize the game date to ET to ensure it aligns with app's "Yesterday" view.
+        // Strip any time component — game_results.game_date is a DATE column and existing
+        // rows are stored as YYYY-MM-DD. Passing a full ISO datetime works in Postgres
+        // (it truncates) but produces inconsistent date strings in iOS lookups.
+        const normalized = normalizeToETDate(matchedGame) || gameDate;
+        gameDate = typeof normalized === 'string' ? normalized.slice(0, 10) : normalized;
       }
 
       if (hs === null) {
@@ -535,28 +553,64 @@ async function processGenericGames(table, date, leagueFilter = null) {
         // pick_id resolves to the per-pick UUID from the picks[] JSON (so a future
         // server-side join can target the specific pick), with the parent daily_picks
         // row id as a backwards-compatible fallback.
-        const perPickId = pick.pick_id || row.id;
-        if (league === 'NFL') {
-          const { data: exist } = await supabase.from('nfl_results').select('id').eq('pick_text', pick.pick).eq('game_date', gameDate).maybeSingle();
-          if (!exist) {
-            await supabase.from('nfl_results').insert({
+        // Insert with error handling. Prior version used bare `await
+        // supabase.from(...).insert(...)` with no { error } check, then
+        // unconditionally incremented stats and logged ✅. Silent failures
+        // (RLS, schema mismatch, key expired, etc.) produced summary lines
+        // claiming wins/losses that never actually landed — and the iOS app
+        // showed no W/L badges because game_results was empty. The audit
+        // flagged this as the #1 critical correctness issue; this is the fix.
+        //
+        // pick_id MUST be a UUID — the column is typed UUID. A previous "fix"
+        // tried to use the per-pick slug id from picks[] JSON
+        // ("pick-2026-05-28-mlb-tigers-angelsml112-0"), which Postgres rejected
+        // with code 22P02. The slug isn't a UUID; the daily_picks row PK is.
+        // iOS doesn't read pick_id so storing the parent row id is correct.
+        const perPickId = row.id;
+        const targetTable = league === 'NFL' ? 'nfl_results' : 'game_results';
+        const insertPayload = league === 'NFL'
+          ? {
               nfl_pick_id: perPickId, game_date: gameDate, result: res,
               final_score: `${vs}-${hs}`, pick_text: pick.pick,
-              matchup: `${pick.awayTeam} @ ${pick.homeTeam}`
-            });
-          }
-        } else {
-          const { data: exist } = await supabase.from('game_results').select('id').eq('pick_text', pick.pick).eq('game_date', gameDate).maybeSingle();
-          if (!exist) {
-            await supabase.from('game_results').insert({
+              matchup: `${pick.awayTeam} @ ${pick.homeTeam}`,
+            }
+          : {
               pick_id: perPickId, game_date: gameDate, league, result: res,
               final_score: `${vs}-${hs}`, pick_text: pick.pick,
-              matchup: `${pick.awayTeam} @ ${pick.homeTeam}`
-            });
+              matchup: `${pick.awayTeam} @ ${pick.homeTeam}`,
+            };
+
+        let alreadyExists = false;
+        let insertFailed = false;
+        const { data: exist, error: dedupErr } = await supabase
+          .from(targetTable)
+          .select('id')
+          .eq('pick_text', pick.pick)
+          .eq('game_date', gameDate)
+          .maybeSingle();
+        if (dedupErr) {
+          console.error(`  ❌ DEDUP CHECK FAILED [${targetTable}] ${league} "${pick.pick}" (${gameDate}): ${dedupErr.message}`);
+          insertFailed = true;
+        } else if (exist) {
+          alreadyExists = true;
+        } else {
+          const { error: insertErr } = await supabase.from(targetTable).insert(insertPayload);
+          if (insertErr) {
+            console.error(`  ❌ INSERT FAILED [${targetTable}] ${league} "${pick.pick}" (${gameDate}): ${insertErr.message}${insertErr.code ? ' [code=' + insertErr.code + ']' : ''}${insertErr.details ? ' details=' + insertErr.details : ''}${insertErr.hint ? ' hint=' + insertErr.hint : ''}`);
+            insertFailed = true;
           }
         }
-        stats[res[0]]++; // w, l, or p
-        console.log(`  ✅ ${league}: ${pick.pick} -> ${res.toUpperCase()} (${vs}-${hs}) on ${gameDate}`);
+
+        if (insertFailed) {
+          // Don't fictionalize the W/L count when the row didn't land — iOS
+          // reads game_results directly, so an uncounted stat is more honest
+          // than a counted-but-missing row.
+          console.error(`  ⛔ Skipped stats counter for ${league} "${pick.pick}" due to insert failure (row not in ${targetTable})`);
+        } else {
+          stats[res[0]]++;
+          const tag = alreadyExists ? '⏩ ALREADY' : '✅';
+          console.log(`  ${tag} ${league}: ${pick.pick} -> ${res.toUpperCase()} (${vs}-${hs}) on ${gameDate}`);
+        }
       }
     }
   }
@@ -619,17 +673,40 @@ async function processPropBets(date) {
 
       if (actual !== null) {
         const res = gradeProp(actual, line, bet);
-        const { data: exist } = await supabase.from('prop_results').select('id').eq('player_name', name).eq('prop_type', type).eq('game_date', row.date).maybeSingle();
-        if (!exist) {
-          await supabase.from('prop_results').insert({
+        let propInsertFailed = false;
+        let propAlreadyExists = false;
+        const { data: exist, error: dedupErr } = await supabase
+          .from('prop_results')
+          .select('id')
+          .eq('player_name', name)
+          .eq('prop_type', type)
+          .eq('game_date', row.date)
+          .maybeSingle();
+        if (dedupErr) {
+          console.error(`  ❌ DEDUP CHECK FAILED [prop_results] ${sport} "${name} ${type}" (${row.date}): ${dedupErr.message}`);
+          propInsertFailed = true;
+        } else if (exist) {
+          propAlreadyExists = true;
+        } else {
+          const { error: insertErr } = await supabase.from('prop_results').insert({
             prop_pick_id: row.id, game_date: row.date, player_name: name,
             prop_type: type, line_value: line, actual_value: actual,
             result: res, pick_text: `${name} ${bet} ${line} ${type}`,
-            matchup: p.matchup, bet: bet
+            matchup: p.matchup, bet: bet,
           });
+          if (insertErr) {
+            console.error(`  ❌ INSERT FAILED [prop_results] ${sport} "${name} ${type}" (${row.date}): ${insertErr.message}${insertErr.code ? ' [code=' + insertErr.code + ']' : ''}${insertErr.details ? ' details=' + insertErr.details : ''}${insertErr.hint ? ' hint=' + insertErr.hint : ''}`);
+            propInsertFailed = true;
+          }
         }
-        stats[res[0]]++;
-        console.log(`  🎯 ${sport}: ${name} ${type} ${bet} ${line} -> ${res.toUpperCase()} (${actual}) [${source}]`);
+
+        if (propInsertFailed) {
+          console.error(`  ⛔ Skipped prop stats counter for ${sport} "${name} ${type}" due to insert failure`);
+        } else {
+          stats[res[0]]++;
+          const tag = propAlreadyExists ? '⏩ ALREADY' : '🎯';
+          console.log(`  ${tag} ${sport}: ${name} ${type} ${bet} ${line} -> ${res.toUpperCase()} (${actual}) [${source}]`);
+        }
       } else {
         console.error(`  ❌ ${sport}: ${name} ${type} — NO DATA from API or grounding. Prop not graded.`);
       }
