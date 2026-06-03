@@ -252,6 +252,15 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null) {
         moneylineHome: pick.moneylineHome ?? null,
         moneylineAway: pick.moneylineAway ?? null,
         total: pick.total ?? null,
+        // Soccer (World Cup) fields
+        soccer_match_id: pick.soccer_match_id ?? null,
+        soccer_three_way_ml: pick.soccer_three_way_ml ?? null,
+        soccer_competition: pick.soccer_competition || null,
+        soccer_stage: pick.soccer_stage || null,
+        soccer_round: pick.soccer_round || null,
+        soccer_group: pick.soccer_group || null,
+        goal_line: pick.goal_line ?? null,
+        handicap: pick.handicap ?? null,
         // Multi-book sportsbook odds comparison (for iOS app display)
         sportsbook_odds: pick.sportsbook_odds || null
       };
@@ -309,6 +318,15 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null) {
       moneylineHome: pick.moneylineHome ?? null,
       moneylineAway: pick.moneylineAway ?? null,
       total: pick.total ?? null,
+      // Soccer (World Cup) fields
+      soccer_match_id: pick.soccer_match_id ?? null,
+      soccer_three_way_ml: pick.soccer_three_way_ml ?? null,
+      soccer_competition: pick.soccer_competition || null,
+      soccer_stage: pick.soccer_stage || null,
+      soccer_round: pick.soccer_round || null,
+      soccer_group: pick.soccer_group || null,
+      goal_line: pick.goal_line ?? null,
+      handicap: pick.handicap ?? null,
       // Multi-book sportsbook odds comparison (for iOS app display)
       sportsbook_odds: pick.sportsbook_odds || null
     };
@@ -375,6 +393,11 @@ async function storeDailyPicksInDatabase(picks, overrideDate = null) {
         if (checkIsProp(p)) {
           // Props: allow multiple per game but dedupe by player+prop
           return `prop|${p.league || ''}|${p.player || ''}|${p.prop || p.statType || ''}`;
+        }
+        // Soccer (World Cup): ONE pick per MARKET per match — ML, total, and Asian
+        // handicap can coexist on the same match (rendered as separate cards).
+        if (p.soccer_match_id) {
+          return `soccer|${p.soccer_match_id}|${p.type || 'moneyline'}`;
         }
         // Game picks: ONE per game - use homeTeam/awayTeam regardless of pick direction
         return `game|${p.league || ''}|${p.homeTeam || ''}|${p.awayTeam || ''}`;

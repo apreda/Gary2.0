@@ -1574,6 +1574,15 @@ async function main() {
             // BDL game id — disambiguates doubleheaders for dedupe
             bdl_game_id: game.bdl_game_id ?? game.id ?? null,
             commence_time: game.commence_time,
+            // Soccer (World Cup) context — threaded from the FIFA match game object
+            soccer_match_id: game.soccer_match_id ?? null,
+            soccer_three_way_ml: game.soccer_three_way_ml ?? null,
+            soccer_competition: game.soccer_competition ?? null,
+            soccer_stage: game.soccer_stage ?? null,
+            soccer_round: game.soccer_round ?? null,
+            soccer_group: game.soccer_group ?? null,
+            goal_line: result.goal_line ?? result.total ?? null,
+            handicap: result.handicap ?? null,
             // Venue/tournament context (for NBA Cup, playoffs, NFL primetime, etc.)
             venue: result.venue || null,
             isNeutralSite: result.isNeutralSite || false,
