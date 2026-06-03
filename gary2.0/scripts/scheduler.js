@@ -43,6 +43,7 @@ const SPORTS = [
   { key: 'basketball_nba', flag: '--nba', label: 'NBA', propsScript: 'run-agentic-nba-props.js', dfs: true },
   { key: 'icehockey_nhl', flag: '--nhl', label: 'NHL', propsScript: 'run-agentic-nhl-props.js', dfs: false },
   { key: 'baseball_mlb', flag: '--mlb', label: 'MLB', propsScript: 'run-agentic-mlb-props.js', dfs: false },
+  { key: 'soccer_world_cup', flag: '--wc', label: 'WC', propsScript: null, dfs: false }, // 2026 FIFA World Cup — game picks only
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -85,6 +86,32 @@ function addDaysISO(dateStr, days) {
 // and the next UTC date, because MLB indexes by UTC date — a 9pm ET game lives
 // under tomorrow's UTC date. Then we filter by actual ET start time.
 async function fetchGamesForETDate(sportKey, etDateStr) {
+  // SOCCER (World Cup): fixtures come from the FIFA service, not BDL. Return raw
+  // FIFA matches (shape: { id, datetime, home_team:{name}, away_team:{name} }),
+  // which buildPlan already reads. Skip TBD knockout slots (null teams).
+  if (sportKey === 'soccer_world_cup') {
+    const wc = await import('../src/services/fifaWorldCupService.js');
+    let matches;
+    try {
+      matches = await wc.getMatches({});
+    } catch (e) {
+      log(`  ❌ ${sportKey}: FIFA fetch failed: ${e.message}`);
+      return [];
+    }
+    const out = [];
+    const seen = new Set();
+    for (const m of (Array.isArray(matches) ? matches : [])) {
+      if (!m.home_team || !m.away_team || !m.datetime) continue;
+      const start = new Date(m.datetime);
+      if (Number.isNaN(start.getTime())) continue;
+      if (getETDateStr(start) !== etDateStr) continue;
+      if (seen.has(m.id)) continue;
+      seen.add(m.id);
+      out.push({ raw: m, startTime: start });
+    }
+    return out;
+  }
+
   const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
   const dates = [etDateStr, addDaysISO(etDateStr, 1)];
   let games;
@@ -310,8 +337,10 @@ async function executeSchedule(schedule) {
         }
       }
 
-      // Then run props for all games (disk cache from game picks)
+      // Then run props for all games (disk cache from game picks). Sports with no
+      // propsScript (e.g. World Cup — game picks only) skip this entirely.
       for (const entry of games) {
+        if (!sport.propsScript) break;
         const tierTag = entry.tier > 1 ? ` [retry T-${entry.leadMin}]` : ` [primary T-${entry.leadMin}]`;
         try {
           log(`  🎯 Props: ${entry.matchup}${tierTag} (id ${entry.gameId})`);
