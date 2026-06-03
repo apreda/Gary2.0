@@ -57,6 +57,28 @@ struct WeeklyNFLPicksRow: Decodable {
     let picks: PicksValue<GaryPick>?
 }
 
+// MARK: - Insight Connections ("Today's Edges" hub)
+// The iOS app reads the FLAT `insight_connections` table directly — one row per
+// hub card. Property names match the SQL columns (snake_case) so no custom
+// CodingKeys are needed. Everything optional so a partial row never aborts the
+// whole decode.
+
+struct Connection: Decodable {
+    let date: String?
+    let league: String?          // "MLB" / "NBA"
+    let category: String?        // snake_case lane: heat_check, platoon_edge, ballpark_shift, regression_watch, …
+    let headline: String?
+    let detail: String?
+    let game: String?            // "AWAY @ HOME"
+    let value: String?           // compact right-side token (number → big, else capsule)
+    let tone: String?            // "good" / "bad" / "neutral"
+    let spark: [Double]?         // optional MiniBarChart series
+    let line_val: Double?        // optional reference line for the bars
+    let relevance_score: Double? // 0–100 ranking score
+    let player_id: String?
+    let game_id: String?
+}
+
 // MARK: - Sportsbook Odds (multi-book comparison)
 struct SportsbookOdds: Codable, Identifiable {
     let book: String?
@@ -927,6 +949,7 @@ struct PropPick: Identifiable, Codable {
         if normalized.contains("nhl") { return "NHL" }
         if normalized.contains("ncaab") || normalized.contains("ncaam") { return "NCAAB" }
         if normalized.contains("ncaaf") { return "NCAAF" }
+        if normalized.contains("world_cup") || normalized.contains("worldcup") || normalized == "wc" || normalized.contains("soccer_world_cup") { return "WC" }
         if normalized.contains("epl") || normalized.contains("soccer_epl") || normalized.contains("premier") { return "EPL" }
         if normalized == "mlb hr" { return "MLB HR" }
         if normalized.contains("mlb") || normalized.contains("wbc") { return "MLB" }
@@ -1004,6 +1027,7 @@ struct GameResult: Decodable {
         if normalized.contains("nhl") { return "NHL" }
         if normalized.contains("ncaab") || normalized.contains("ncaam") { return "NCAAB" }
         if normalized.contains("ncaaf") { return "NCAAF" }
+        if normalized.contains("world_cup") || normalized.contains("worldcup") || normalized == "wc" || normalized.contains("soccer_world_cup") { return "WC" }
         if normalized.contains("epl") || normalized.contains("soccer_epl") || normalized.contains("premier") { return "EPL" }
         if normalized == "mlb hr" { return "MLB HR" }
         if normalized.contains("mlb") || normalized.contains("wbc") { return "MLB" }
@@ -1076,6 +1100,7 @@ struct PropResult: Decodable {
             if normalized.contains("nhl") { return "NHL" }
             if normalized.contains("ncaab") || normalized.contains("ncaam") { return "NCAAB" }
             if normalized.contains("ncaaf") { return "NCAAF" }
+            if normalized.contains("world_cup") || normalized.contains("worldcup") || normalized == "wc" || normalized.contains("soccer_world_cup") { return "WC" }
             if normalized.contains("epl") || normalized.contains("soccer_epl") || normalized.contains("premier") { return "EPL" }
             if normalized == "mlb hr" { return "MLB HR" }
             if normalized.contains("mlb") || normalized.contains("wbc") { return "MLB" }
