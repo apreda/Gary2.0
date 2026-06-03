@@ -394,7 +394,8 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
                   'NHL': 'icehockey_nhl',
                   'NCAAB': 'basketball_ncaab',
                   'NCAAF': 'americanfootball_ncaaf',
-                  'MLB': 'baseball_mlb'
+                  'MLB': 'baseball_mlb',
+                  'WC': 'soccer_world_cup'
                 };
                 const sportKey = sportKeyMap[args.sport] || sport;
                 const numGames = args.num_games || 5;

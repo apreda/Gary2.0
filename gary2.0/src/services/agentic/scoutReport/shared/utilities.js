@@ -129,12 +129,14 @@ export function normalizeSport(sport) {
     'americanfootball_ncaaf': 'NCAAF',
     'icehockey_nhl': 'NHL',
     'baseball_mlb': 'MLB',
+    'soccer_world_cup': 'WC',
     'nba': 'NBA',
     'nfl': 'NFL',
     'ncaab': 'NCAAB',
     'ncaaf': 'NCAAF',
     'nhl': 'NHL',
-    'mlb': 'MLB'
+    'mlb': 'MLB',
+    'wc': 'WC'
   };
   return mapping[sport?.toLowerCase()] || sport?.toUpperCase() || 'UNKNOWN';
 }
