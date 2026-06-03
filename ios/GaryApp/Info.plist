@@ -46,22 +46,22 @@
 	<false/>
 	<key>UIAppFonts</key>
 	<array>
-		<string>Fonts/BebasNeue-Regular.ttf</string>
-		<string>Fonts/Anton-Regular.ttf</string>
-		<string>Fonts/Oswald-Bold.ttf</string>
-		<string>Fonts/Teko-Bold.ttf</string>
-		<string>Fonts/SairaCondensed-Bold.ttf</string>
-		<string>Fonts/ChakraPetch-Bold.ttf</string>
-		<string>Fonts/RussoOne-Regular.ttf</string>
-		<string>Fonts/BarlowCondensed-Bold.ttf</string>
-		<string>Fonts/Rajdhani-Bold.ttf</string>
-		<string>Fonts/RacingSansOne.ttf</string>
-		<string>Fonts/Inter-Regular.ttf</string>
-		<string>Fonts/Inter-Medium.ttf</string>
-		<string>Fonts/Inter-SemiBold.ttf</string>
-		<string>Fonts/Inter-Bold.ttf</string>
-		<string>Fonts/JetBrainsMono-Regular.ttf</string>
-		<string>Fonts/JetBrainsMono-Bold.ttf</string>
+		<string>BebasNeue-Regular.ttf</string>
+		<string>Anton-Regular.ttf</string>
+		<string>Oswald-Bold.ttf</string>
+		<string>Teko-Bold.ttf</string>
+		<string>SairaCondensed-Bold.ttf</string>
+		<string>ChakraPetch-Bold.ttf</string>
+		<string>RussoOne-Regular.ttf</string>
+		<string>BarlowCondensed-Bold.ttf</string>
+		<string>Rajdhani-Bold.ttf</string>
+		<string>RacingSansOne.ttf</string>
+		<string>Inter-Regular.ttf</string>
+		<string>Inter-Medium.ttf</string>
+		<string>Inter-SemiBold.ttf</string>
+		<string>Inter-Bold.ttf</string>
+		<string>JetBrainsMono-Regular.ttf</string>
+		<string>JetBrainsMono-Bold.ttf</string>
 	</array>
 </dict>
 </plist>

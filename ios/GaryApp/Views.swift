@@ -2421,30 +2421,65 @@ struct PremiumPicksView: View {
                         }
                         .frame(maxWidth: .infinity).padding(.horizontal, 30).padding(.top, 60)
                     } else {
-                        // The SAME pick card from the Picks page (CompactPickRow).
-                        // Locked (non-members): blurred with a lock overlay.
-                        VStack(spacing: 10) {
-                            ForEach(Array(bestBets.enumerated()), id: \.element.id) { i, pick in
-                                ZStack {
-                                    if isPremium {
-                                        FlippablePickCard(pick: pick, showSportBadge: true)
-                                    } else {
-                                        CompactPickRow(pick: pick, showSportBadge: true)
-                                            .blur(radius: 4.5)
-                                            .opacity(0.7)
-                                            .allowsHitTesting(false)
+                        // Sport Shelves: a horizontal shelf per league, with the
+                        // Scoreboard pick cards. Conviction-ordered within and
+                        // across shelves. Locked (non-members): blurred + lock.
+                        let shelves: [(league: String, picks: [GaryPick])] = {
+                            var order: [String] = []
+                            var groups: [String: [GaryPick]] = [:]
+                            for p in bestBets {
+                                let lg = (p.league ?? "OTHER").uppercased()
+                                if groups[lg] == nil { order.append(lg) }
+                                groups[lg, default: []].append(p)
+                            }
+                            return order.map { ($0, groups[$0] ?? []) }
+                        }()
+
+                        VStack(alignment: .leading, spacing: 22) {
+                            ForEach(shelves, id: \.league) { shelf in
+                                VStack(alignment: .leading, spacing: 10) {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: Sport.from(league: shelf.league).icon)
+                                            .font(.system(size: 12, weight: .semibold))
+                                            .foregroundStyle(Sport.from(league: shelf.league).accentColor)
+                                        Text(shelf.league)
+                                            .font(GaryFonts.mono(12, bold: true))
+                                            .tracking(1.6)
+                                            .foregroundStyle(.white.opacity(0.85))
+                                        Text("\u{00B7} \(shelf.picks.count) play\(shelf.picks.count == 1 ? "" : "s")")
+                                            .font(GaryFonts.mono(11))
+                                            .foregroundStyle(.white.opacity(0.4))
                                     }
-                                    if !isPremium {
-                                        VStack(spacing: 5) {
-                                            Image(systemName: "lock.fill").font(.system(size: 18, weight: .bold)).foregroundStyle(GaryColors.gold)
-                                            Text(i == 0 ? "★ LOCK OF THE DAY" : "MEMBERS ONLY")
-                                                .font(GaryFonts.mono(9, bold: true)).tracking(1.6).foregroundStyle(GaryColors.gold)
+                                    .padding(.horizontal, 16)
+
+                                    ScrollView(.horizontal, showsIndicators: false) {
+                                        HStack(alignment: .top, spacing: 10) {
+                                            ForEach(shelf.picks, id: \.id) { pick in
+                                                ZStack {
+                                                    if isPremium {
+                                                        FlippableScoreboardCard(pick: pick, showSportBadge: false)
+                                                    } else {
+                                                        ScoreboardPickCard(pick: pick, showSportBadge: false)
+                                                            .blur(radius: 4.5)
+                                                            .opacity(0.7)
+                                                            .allowsHitTesting(false)
+                                                    }
+                                                    if !isPremium {
+                                                        VStack(spacing: 5) {
+                                                            Image(systemName: "lock.fill").font(.system(size: 18, weight: .bold)).foregroundStyle(GaryColors.gold)
+                                                            Text(pick.id == bestBets.first?.id ? "★ LOCK OF THE DAY" : "MEMBERS ONLY")
+                                                                .font(GaryFonts.mono(9, bold: true)).tracking(1.6).foregroundStyle(GaryColors.gold)
+                                                        }
+                                                    }
+                                                }
+                                                .frame(width: 308)
+                                            }
                                         }
+                                        .padding(.horizontal, 16)
                                     }
                                 }
                             }
                         }
-                        .padding(.horizontal, 16)
 
                         if !isPremium {
                             PaywallPanel { withAnimation(.easeInOut(duration: 0.3)) { isPremium = true } }
@@ -7264,25 +7299,25 @@ struct CompactPickRow: View {
                 HStack(spacing: 12) {
                     HStack(alignment: .firstTextBaseline, spacing: 7) {
                         Text(pickParts.pick.uppercased())
-                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                            .tracking(1.4)
-                            .foregroundStyle(accentColor)
+                            .font(.system(size: 14, weight: .bold, design: .monospaced))
+                            .tracking(1.2)
+                            .foregroundStyle(.white)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
                         if !pickParts.odds.isEmpty {
                             Text(pickParts.odds)
-                                .font(.system(size: 12, weight: .medium, design: .monospaced))
-                                .foregroundStyle(.white.opacity(0.65))
+                                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                                .foregroundStyle(.white.opacity(0.85))
                         }
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 9)
                     .background(
                         RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(accentColor.opacity(0.10))
+                            .fill(accentColor.opacity(0.18))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .stroke(accentColor.opacity(0.5), lineWidth: 1)
+                                    .stroke(accentColor.opacity(0.65), lineWidth: 1)
                             )
                     )
 
@@ -7336,7 +7371,7 @@ struct CompactPickRow: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(hex: "#141210"))
+                .fill(Color(hex: "#242019"))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .stroke(Color.white.opacity(0.18), lineWidth: 0.65)
@@ -7354,6 +7389,169 @@ struct CompactPickRow: View {
 private struct PickCardHeightKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
+}
+
+// MARK: - Scoreboard Pick Card ("the pick is the headline")
+//
+// Two team rows like a live scoreboard — the picked side is lit, with the
+// call chip anchored to it; the other side is dimmed. Sans-serif throughout.
+// Chosen by the user (June 3 2026) over the serif CompactPickRow for Best Bets.
+struct ScoreboardPickCard: View {
+    let pick: GaryPick
+    var showSportBadge: Bool = true
+
+    private var sport: Sport { Sport.from(league: pick.league) }
+    private var accent: Color { sport.accentColor }
+    private var awayName: String { Formatters.shortTeamName(pick.awayTeam, league: pick.league) }
+    private var homeName: String { Formatters.shortTeamName(pick.homeTeam, league: pick.league) }
+
+    private var pickedHome: Bool {
+        guard let pickText = pick.pick?.lowercased() else { return true }
+        let homeLower = (pick.homeTeam ?? "").lowercased()
+        let homeShort = homeName.lowercased()
+        if pickText.contains(homeLower) || (!homeShort.isEmpty && pickText.contains(homeShort)) { return true }
+        let awayLower = (pick.awayTeam ?? "").lowercased()
+        let awayShort = awayName.lowercased()
+        if pickText.contains(awayLower) || (!awayShort.isEmpty && pickText.contains(awayShort)) { return false }
+        return true
+    }
+
+    /// The call without the team name — "ML −154", "+1.5", "OVER 8.5".
+    private var callText: String {
+        var text = (pick.pick ?? "").trimmingCharacters(in: .whitespaces)
+        let pickedFull = (pickedHome ? pick.homeTeam : pick.awayTeam) ?? ""
+        let pickedShort = pickedHome ? homeName : awayName
+        for name in [pickedFull, pickedShort] where !name.isEmpty {
+            if let r = text.range(of: name, options: .caseInsensitive) {
+                text.removeSubrange(r)
+            }
+        }
+        text = text.trimmingCharacters(in: .whitespaces)
+        return text.isEmpty ? "ML" : text.uppercased()
+    }
+
+    private var confidence: Double { min(max(pick.confidence ?? 0, 0), 1) }
+
+    private func teamRow(name: String, isPicked: Bool) -> some View {
+        HStack(spacing: 8) {
+            RoundedRectangle(cornerRadius: 1)
+                .fill(isPicked ? accent : .clear)
+                .frame(width: 3, height: 16)
+
+            Text(name)
+                .font(.system(size: isPicked ? 17 : 15, weight: isPicked ? .bold : .medium))
+                .foregroundStyle(isPicked ? .white : .white.opacity(0.38))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+
+            Spacer(minLength: 6)
+
+            if isPicked {
+                Text(callText)
+                    .font(.system(size: 13, weight: .bold, design: .monospaced))
+                    .foregroundStyle(accent)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3.5)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(accent.opacity(0.12))
+                            .overlay(RoundedRectangle(cornerRadius: 6).stroke(accent.opacity(0.4), lineWidth: 1))
+                    )
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 5)
+        .background(isPicked ? accent.opacity(0.07) : .clear)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Header: league + significance + time
+            HStack(spacing: 6) {
+                if showSportBadge {
+                    Text(sport.rawValue)
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .tracking(1.2)
+                        .foregroundStyle(accent)
+                }
+                if let sig = pick.shortGameSignificance ?? pick.gameSignificance, !sig.isEmpty {
+                    Text(sig.uppercased())
+                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .tracking(0.8)
+                        .foregroundStyle(.white.opacity(0.35))
+                        .lineLimit(1)
+                }
+                Spacer()
+                Text(Formatters.formatCommenceTime(pick.displayTime))
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.42))
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 11)
+            .padding(.bottom, 9)
+
+            teamRow(name: awayName, isPicked: !pickedHome)
+            teamRow(name: homeName, isPicked: pickedHome)
+
+            // Lean rail
+            HStack(spacing: 8) {
+                Text("GARY'S LEAN")
+                    .font(.system(size: 8.5, weight: .bold, design: .monospaced))
+                    .tracking(1.2)
+                    .foregroundStyle(.white.opacity(0.35))
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Color.white.opacity(0.08))
+                        Capsule().fill(accent).frame(width: geo.size.width * confidence)
+                    }
+                }
+                .frame(height: 3)
+                Text("\(Int(confidence * 100))%")
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundStyle(accent)
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 10)
+            .padding(.bottom, 12)
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.white.opacity(0.04))
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.white.opacity(0.08), lineWidth: 1))
+        )
+    }
+}
+
+/// Flip wrapper: ScoreboardPickCard front ⟷ PickCardBack (Gary's rationale).
+struct FlippableScoreboardCard: View {
+    let pick: GaryPick
+    var showSportBadge: Bool = true
+
+    @State private var flipped = false
+    @State private var frontH: CGFloat = 132
+
+    private var expandedH: CGFloat { max(frontH + 320, 480) }
+
+    var body: some View {
+        ZStack {
+            ScoreboardPickCard(pick: pick, showSportBadge: showSportBadge)
+                .background(GeometryReader { g in
+                    Color.clear.preference(key: PickCardHeightKey.self, value: g.size.height)
+                })
+                .opacity(flipped ? 0 : 1)
+
+            PickCardBack(pick: pick)
+                .opacity(flipped ? 1 : 0)
+                .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
+        }
+        .frame(height: flipped ? expandedH : frontH)
+        .rotation3DEffect(.degrees(flipped ? 180 : 0), axis: (x: 0, y: 1, z: 0), perspective: 0.55)
+        .onPreferenceChange(PickCardHeightKey.self) { h in if h > 1, !flipped { frontH = h } }
+        .animation(.spring(response: 0.6, dampingFraction: 0.82), value: flipped)
+        .contentShape(Rectangle())
+        .onTapGesture { flipped.toggle() }
+        .accessibilityAddTraits(.isButton)
+    }
 }
 
 struct FlippablePickCard: View {
@@ -7520,7 +7718,7 @@ struct PickCardBack: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(hex: "#141210"))
+                .fill(Color(hex: "#242019"))
                 .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(GaryColors.gold.opacity(0.32), lineWidth: 1))
         )
     }
@@ -7655,7 +7853,7 @@ struct PropCardBack: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(hex: "#141210"))
+                .fill(Color(hex: "#242019"))
                 .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(GaryColors.gold.opacity(0.32), lineWidth: 1))
         )
     }
@@ -7800,7 +7998,7 @@ struct PickDetailPopup: View {
             }
             .background(
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(Color(hex: "#141210"))
+                    .fill(Color(hex: "#242019"))
                     .overlay(
                         RoundedRectangle(cornerRadius: 20, style: .continuous)
                             .stroke(Color.white.opacity(0.14), lineWidth: 0.8)
@@ -8308,7 +8506,7 @@ struct SportsbookOddsTable: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(Color(hex: "#141210"))
+                .fill(Color(hex: "#242019"))
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
                         .stroke(Color.white.opacity(0.12), lineWidth: 0.8)
@@ -8844,7 +9042,7 @@ struct PlayerStackCard: View {
             ZStack {
                 // Base
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color(hex: "#141210"))
+                    .fill(Color(hex: "#242019"))
 
                 // Subtle accent gradient on left edge
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -11979,7 +12177,7 @@ struct PropDetailPopup: View {
                         .background(
                             ZStack {
                                 RoundedRectangle(cornerRadius: 4)
-                                    .fill(Color(hex: "#141210"))
+                                    .fill(Color(hex: "#242019"))
                                 RoundedRectangle(cornerRadius: 4)
                                     .fill(GaryColors.gold.opacity(0.035))
                                 RoundedRectangle(cornerRadius: 4)
@@ -12052,7 +12250,7 @@ struct PropDetailPopup: View {
             .background(
                 ZStack {
                     RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(Color(hex: "#141210"))
+                        .fill(Color(hex: "#242019"))
                     RoundedRectangle(cornerRadius: 20, style: .continuous)
                         .fill(GaryColors.gold.opacity(0.035))
                     RoundedRectangle(cornerRadius: 20, style: .continuous)
@@ -12813,7 +13011,7 @@ struct TaleOfTapeSection: View {
             }
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(Color(hex: "#141210"))
+                    .fill(Color(hex: "#242019"))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
@@ -13014,7 +13212,7 @@ struct GaryTakeSection: View {
             .padding(.horizontal, 14)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(Color(hex: "#141210"))
+                    .fill(Color(hex: "#242019"))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
@@ -15854,7 +16052,7 @@ struct AnalysisSectionRow: View {
 enum GaryFonts {
     /// Bundled options: "SairaCondensed-Bold" (default), "BebasNeue-Regular",
     /// "Anton-Regular", "Rajdhani-Bold", "Oswald-Bold", "ChakraPetch-Bold", "BarlowCondensed-Bold".
-    static let displayFace = "SairaCondensed-Bold"
+    static let displayFace = "BarlowCondensed-Bold"
 
     static func display(_ size: CGFloat) -> Font { .custom(displayFace, size: size) }
 
