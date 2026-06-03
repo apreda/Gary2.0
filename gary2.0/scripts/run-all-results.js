@@ -12,8 +12,11 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { gradeSoccerGame } from '../src/services/soccerGrading.js';
 // Load environment variables FIRST (centralized)
 await import('../src/loadEnv.js');
+// FIFA service reads the API key at import — must load AFTER loadEnv.
+const fifaWorldCup = await import('../src/services/fifaWorldCupService.js');
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
@@ -489,7 +492,33 @@ async function processGenericGames(table, date, leagueFilter = null) {
       // day's same-teams game (UTC bleed) or the wrong half of a doubleheader.
       const pickGameId = pick.game_id ?? pick.bdl_game_id ?? null;
 
-      if (table === 'weekly_nfl_picks') {
+      // SOCCER (World Cup): grade from FIFA match data on the 90' REGULATION score
+      // (first half + second half) — NOT BDL (no soccer there) and NOT home_score
+      // (which includes extra time). to_advance uses ET + penalties.
+      let soccerResult = null;
+      const isSoccerPick = pick.league === 'WC' || pick.league === 'soccer_world_cup' || !!pick.soccer_match_id;
+      if (isSoccerPick) {
+        if (!pick.soccer_match_id) continue; // cannot grade without the match id
+        const wcMatches = await fifaWorldCup.getMatches({ matchIds: [pick.soccer_match_id] });
+        const wcMatch = wcMatches[0];
+        if (!wcMatch || wcMatch.status !== 'completed') continue; // not final — leave pending
+        const reg = fifaWorldCup.getRegulationScore(wcMatch);
+        if ((pick.type || '').toLowerCase() === 'to_advance') {
+          const adv = fifaWorldCup.getAdvanceResult(wcMatch);
+          const pickedHome = (pick.pick || '').toLowerCase().includes((wcMatch.home_team?.name || '').toLowerCase());
+          const pickedId = pickedHome ? wcMatch.home_team?.id : wcMatch.away_team?.id;
+          soccerResult = adv ? (adv.teamId === pickedId ? 'won' : 'lost') : null;
+        } else {
+          soccerResult = gradeSoccerGame(
+            { ...pick, homeTeam: wcMatch.home_team?.name, awayTeam: wcMatch.away_team?.name },
+            reg.home, reg.away
+          );
+        }
+        if (soccerResult == null) continue;
+        hs = reg.home; vs = reg.away;
+        const wcDate = (wcMatch.datetime || '').slice(0, 10);
+        if (wcDate) gameDate = wcDate;
+      } else if (table === 'weekly_nfl_picks') {
         const dateObj = new Date(date);
         for (let i = 0; i <= 7; i++) {
           const checkDate = new Date(dateObj);
@@ -546,8 +575,8 @@ async function processGenericGames(table, date, leagueFilter = null) {
         if (g) { hs = g.h; vs = g.v; }
       }
 
-      if (hs !== null) {
-        const res = gradeGame(pick.pick, pick.homeTeam, pick.awayTeam, hs, vs);
+      if (soccerResult != null || hs !== null) {
+        const res = soccerResult != null ? soccerResult : gradeGame(pick.pick, pick.homeTeam, pick.awayTeam, hs, vs);
         
         // NFL picks go to nfl_results table, others go to game_results.
         // pick_id resolves to the per-pick UUID from the picks[] JSON (so a future
