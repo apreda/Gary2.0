@@ -260,6 +260,13 @@ const MLB_TOKENS = [
   'MLB_PITCH_TYPES_HITTERS',     // Top hitters' performance vs each pitch type: BA, xwOBA, SLG per pitch type (BDL pitch-type season stats)
 ];
 
+const SOCCER_WC_TOKENS = [
+  'TEAM_FORM', 'RECENT_FORM', 'GROUP_STANDINGS', 'GROUP_STAGE_CONTEXT',
+  'TEAM_MATCH_STATS', 'POSSESSION_STATS', 'EXPECTED_GOALS',
+  'GOALS_PER_MATCH', 'GOALS_CONCEDED', 'SHOTS_ON_TARGET', 'SET_PIECES',
+  'KEY_PLAYERS', 'INJURIES', 'SUSPENSIONS', 'LINEUP_FORMATION', 'H2H_HISTORY',
+];
+
 // Combine all tokens by sport
 const ALL_TOKENS_BY_SPORT = {
   NBA: NBA_TOKENS,
@@ -267,7 +274,8 @@ const ALL_TOKENS_BY_SPORT = {
   NCAAB: NCAAB_TOKENS,
   NCAAF: NCAAF_TOKENS,
   NHL: NHL_TOKENS,
-  MLB: MLB_TOKENS
+  MLB: MLB_TOKENS,
+  WC: SOCCER_WC_TOKENS
 };
 
 // Get all unique tokens across all sports
