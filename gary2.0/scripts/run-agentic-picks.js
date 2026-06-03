@@ -1340,8 +1340,8 @@ async function main() {
           }
 
           // ALWAYS use verifiedTaleOfTape when available — toolCallHistory is inconsistent
-          if ((config.key === 'icehockey_nhl' || config.key === 'basketball_nba' || config.key === 'basketball_ncaab' || config.key === 'baseball_mlb') && result.verifiedTaleOfTape?.rows) {
-            const sportLabels = { 'icehockey_nhl': 'NHL', 'basketball_nba': 'NBA', 'basketball_ncaab': 'NCAAB', 'baseball_mlb': 'MLB' };
+          if ((config.key === 'icehockey_nhl' || config.key === 'basketball_nba' || config.key === 'basketball_ncaab' || config.key === 'baseball_mlb' || config.key === 'soccer_world_cup') && result.verifiedTaleOfTape?.rows) {
+            const sportLabels = { 'icehockey_nhl': 'NHL', 'basketball_nba': 'NBA', 'basketball_ncaab': 'NCAAB', 'baseball_mlb': 'MLB', 'soccer_world_cup': 'WC' };
             const sportLabel = sportLabels[config.key] || config.key;
             console.log(`   📊 ${sportLabel}: Using verified Tale of Tape (${result.verifiedTaleOfTape.rows.length} rows) for pick card`);
 
@@ -1418,6 +1418,19 @@ async function main() {
               'TEAM_ERA': 'team_era',
               'TEAM_OPS_BDL': 'team_ops',
               'RUNS_PER_GAME': 'runs_per_game',
+              // Soccer / World Cup (tokens auto-derived from Tale-of-Tape row labels)
+              'GROUP_POS': 'group_pos',
+              'POINTS': 'points',
+              'GF_GM': 'goals_for',
+              'GA_GM': 'goals_against',
+              'XG': 'expected_goals',
+              'XGA': 'expected_goals_against',
+              'POSSESSION': 'possession_pct',
+              'SHOTS_GM': 'shots',
+              'SOT_GM': 'shots_on_target',
+              'BIG_CHANCES': 'big_chances',
+              'PASS_ACC': 'pass_accuracy',
+              'CORNERS_GM': 'corners',
             };
 
             // Clear any toolCallHistory stats and use the verified rows instead
@@ -1446,7 +1459,7 @@ async function main() {
             console.log(`   ✓ ${sportLabel}: Added ${statsData.length} stats from verified Tale of Tape`);
 
             // Per-sport expected row counts — drift is a silent iOS rendering bug
-            const expectedRowCount = { 'NHL': 15, 'NCAAB': 15, 'NBA': 15, 'MLB': 14 }[sportLabel];
+            const expectedRowCount = { 'NHL': 15, 'NCAAB': 15, 'NBA': 15, 'MLB': 14, 'WC': 13 }[sportLabel];
             if (expectedRowCount && statsData.length !== expectedRowCount) {
               console.warn(`   ⚠️ ${sportLabel}: Expected ${expectedRowCount} Tale of Tape rows, got ${statsData.length} — check scout report builder`);
             }

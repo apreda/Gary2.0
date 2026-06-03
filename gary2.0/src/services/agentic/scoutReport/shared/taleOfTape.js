@@ -347,6 +347,28 @@ export function buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayPro
       { label: 'Key Injuries', home: homeInjuries, away: awayInjuries, arrow: '' }
     ];
 
+  } else if (sport === 'WC' || sport === 'soccer_world_cup') {
+    // 2026 FIFA World Cup — group standings + match-stat aggregates.
+    // seasonStats is populated by sports/soccer.js (group_standings + team_match_stats).
+    const record = formatStat(homeProfile?.record, awayProfile?.record);
+    const l5Form = formatStat(homeL5, awayL5);
+    rows = [
+      { label: 'Group Pos', ...formatStat(homeStats.group_position, awayStats.group_position) },
+      { label: 'Points', ...formatStat(homeStats.points, awayStats.points) },
+      { label: 'GF/Gm', ...formatStat(fmtNum(homeStats.goals_for), fmtNum(awayStats.goals_for)) },
+      { label: 'GA/Gm', ...formatStat(fmtNum(homeStats.goals_against), fmtNum(awayStats.goals_against)) },
+      { label: 'xG', ...formatStat(fmtNum(homeStats.xg, 2), fmtNum(awayStats.xg, 2)) },
+      { label: 'xGA', ...formatStat(fmtNum(homeStats.xga, 2), fmtNum(awayStats.xga, 2)) },
+      { label: 'Possession', ...formatStat(fmtPct(homeStats.possession_pct, 0), fmtPct(awayStats.possession_pct, 0)) },
+      { label: 'Shots/Gm', ...formatStat(fmtNum(homeStats.shots), fmtNum(awayStats.shots)) },
+      { label: 'SoT/Gm', ...formatStat(fmtNum(homeStats.shots_on_target), fmtNum(awayStats.shots_on_target)) },
+      { label: 'Big Chances', ...formatStat(fmtNum(homeStats.big_chances), fmtNum(awayStats.big_chances)) },
+      { label: 'Pass Acc', ...formatStat(fmtPct(homeStats.pass_accuracy, 0), fmtPct(awayStats.pass_accuracy, 0)) },
+      { label: 'Corners/Gm', ...formatStat(fmtNum(homeStats.corners), fmtNum(awayStats.corners)) },
+      { label: 'L5 Form', ...l5Form },
+      { label: 'Key Injuries', home: homeInjuries, away: awayInjuries, arrow: '' }
+    ];
+
   } else {
     // Generic fallback
     const record = formatStat(homeProfile?.record, awayProfile?.record, true);
