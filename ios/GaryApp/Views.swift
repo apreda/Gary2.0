@@ -26,6 +26,38 @@ private struct BillfoldTopPickCandidate {
     let pickText: String
 }
 
+private struct StitchLine: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: rect.minX, y: rect.midY))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
+        return p
+    }
+}
+
+private struct BillfoldDayRow: Identifiable {
+    let id: Date
+    let label: String   // "JUN 2"
+    let wins: Int
+    let losses: Int
+    let pushes: Int
+    let net: Double     // units
+}
+
+/// Trading-journal stats derived from the same filtered results as the rest
+/// of the page: ROI on flat 1u stakes, last-10 result strip, best/worst day,
+/// max drawdown on the cumulative curve, and a day-by-day session ledger.
+private struct BillfoldJournal {
+    let roiPct: Double
+    let last10: [String]          // oldest → newest ("won"/"lost"/"push")
+    let bestDay: BillfoldDayRow?
+    let worstDay: BillfoldDayRow?
+    let maxDrawdownUnits: Double  // >= 0
+    let days: [BillfoldDayRow]    // newest first, capped
+
+    static let empty = BillfoldJournal(roiPct: 0, last10: [], bestDay: nil, worstDay: nil, maxDrawdownUnits: 0, days: [])
+}
+
 private struct BillfoldDerivedState {
     let filteredGames: [GameResult]
     let filteredProps: [PropResult]
@@ -40,6 +72,7 @@ private struct BillfoldDerivedState {
     let spreadPerformance: [(bucket: String, wins: Int, losses: Int, pushes: Int, net: Double)]
     let topd: (wins: Int, losses: Int, pnl: Double)
     let spreadSportsAvailable: [String]
+    let journal: BillfoldJournal
 }
 
 private struct BillfoldSnapshot {
@@ -573,6 +606,73 @@ private enum BillfoldCompute {
             }
     }
 
+    private static let journalDayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMM d"
+        return f
+    }()
+
+    static func journal(
+        streakItems: [(String?, String?)],
+        trend: [BillfoldTrendPoint],
+        record: (wins: Int, losses: Int, pushes: Int),
+        netUnits: Double
+    ) -> BillfoldJournal {
+        let settled = record.wins + record.losses + record.pushes
+        let roiPct = settled > 0 ? netUnits / Double(settled) * 100 : 0
+
+        // Last 10 individual results, oldest → newest (newest renders rightmost)
+        let sortedResults = streakItems
+            .compactMap { item -> (Date, String)? in
+                guard let r = item.1, r == "won" || r == "lost" || r == "push" else { return nil }
+                return (date(from: item.0), r)
+            }
+            .sorted { $0.0 < $1.0 }
+        let last10 = Array(sortedResults.suffix(10)).map { $0.1 }
+
+        // Per-day W-L-P from the bet results; per-day net from the trend series
+        let cal = Calendar.current
+        var dayRecord: [Date: (w: Int, l: Int, p: Int)] = [:]
+        for item in streakItems {
+            guard let r = item.1, r == "won" || r == "lost" || r == "push" else { continue }
+            let d = cal.startOfDay(for: date(from: item.0))
+            var rec = dayRecord[d] ?? (0, 0, 0)
+            if r == "won" { rec.w += 1 } else if r == "lost" { rec.l += 1 } else { rec.p += 1 }
+            dayRecord[d] = rec
+        }
+        var days: [BillfoldDayRow] = trend.map { point in
+            let d = cal.startOfDay(for: point.date)
+            let rec = dayRecord[d] ?? (0, 0, 0)
+            return BillfoldDayRow(
+                id: d,
+                label: journalDayFormatter.string(from: d).uppercased(),
+                wins: rec.w, losses: rec.l, pushes: rec.p,
+                net: point.units
+            )
+        }
+        days.sort { $0.id > $1.id }
+
+        let bestDay = days.max { $0.net < $1.net }
+        let worstDay = days.min { $0.net < $1.net }
+
+        // Max drawdown over the cumulative curve (peak-to-trough, from 0 start)
+        var peak = 0.0
+        var maxDD = 0.0
+        for p in trend.sorted(by: { $0.date < $1.date }) {
+            peak = max(peak, p.cumulative)
+            maxDD = max(maxDD, peak - p.cumulative)
+        }
+
+        return BillfoldJournal(
+            roiPct: roiPct,
+            last10: last10,
+            bestDay: bestDay,
+            worstDay: worstDay,
+            maxDrawdownUnits: maxDD,
+            days: Array(days.prefix(10))
+        )
+    }
+
     static func deriveState(
         selectedTab: Int,
         selectedSport: Sport,
@@ -631,6 +731,7 @@ private enum BillfoldCompute {
 
         let availableSports = availableSports(selectedTab: selectedTab, gameRows: timeframeGamesAll, propRows: timeframePropsAll)
         let spreadBuckets = spreadBuckets(for: spreadSport)
+        let journalData = journal(streakItems: streakItems, trend: trend, record: record, netUnits: netUnits)
 
         return BillfoldDerivedState(
             filteredGames: filteredGames,
@@ -659,7 +760,8 @@ private enum BillfoldCompute {
                 resultLookup: resultLookup,
                 topPickRows: topPickRows
             ),
-            spreadSportsAvailable: spreadSportsAvailable(from: timeframeGamesAll)
+            spreadSportsAvailable: spreadSportsAvailable(from: timeframeGamesAll),
+            journal: journalData
         )
     }
 }
@@ -2284,26 +2386,26 @@ struct PremiumPicksView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         HStack(spacing: 8) {
                             Text("PREMIUM")
-                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .font(GaryFonts.mono(10, bold: true))
                                 .tracking(2.4)
                                 .foregroundStyle(Color(hex: "#0b0a08"))
                                 .padding(.horizontal, 8).padding(.vertical, 3)
                                 .background(Capsule().fill(GaryColors.gold))
                             Text(headerDate)
-                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                .font(GaryFonts.mono(10))
                                 .tracking(1.6)
                                 .foregroundStyle(.white.opacity(0.42))
                         }
                         Text("Gary's Best Bets")
-                            .font(.system(size: 34, weight: .heavy))
+                            .font(GaryFonts.display(40))
                             .foregroundStyle(.white)
                         Text(isPremium
                              ? "Your \(bestBets.count) highest-conviction plays today."
                              : "The \(bestBets.isEmpty ? "" : "\(bestBets.count) ")plays Gary is most confident in — unlocked for members.")
-                            .font(.system(size: 14))
+                            .font(GaryFonts.text(14))
                             .foregroundStyle(.white.opacity(0.5))
                     }
-                    .padding(.horizontal, 18)
+                    .padding(.horizontal, 16)
                     .padding(.top, 10)
                     .padding(.bottom, 22)
 
@@ -2314,7 +2416,7 @@ struct PremiumPicksView: View {
                         VStack(spacing: 12) {
                             Image(systemName: "lock.badge.clock").font(.system(size: 42)).foregroundStyle(.white.opacity(0.25))
                             Text("Gary's best bets post a few hours before first pitch.")
-                                .font(.system(size: 14)).foregroundStyle(.white.opacity(0.5))
+                                .font(GaryFonts.text(14)).foregroundStyle(.white.opacity(0.5))
                                 .multilineTextAlignment(.center)
                         }
                         .frame(maxWidth: .infinity).padding(.horizontal, 30).padding(.top, 60)
@@ -2336,22 +2438,22 @@ struct PremiumPicksView: View {
                                         VStack(spacing: 5) {
                                             Image(systemName: "lock.fill").font(.system(size: 18, weight: .bold)).foregroundStyle(GaryColors.gold)
                                             Text(i == 0 ? "★ LOCK OF THE DAY" : "MEMBERS ONLY")
-                                                .font(.system(size: 9, weight: .semibold, design: .monospaced)).tracking(1.6).foregroundStyle(GaryColors.gold)
+                                                .font(GaryFonts.mono(9, bold: true)).tracking(1.6).foregroundStyle(GaryColors.gold)
                                         }
                                     }
                                 }
                             }
                         }
-                        .padding(.horizontal, 12)
+                        .padding(.horizontal, 16)
 
                         if !isPremium {
                             PaywallPanel { withAnimation(.easeInOut(duration: 0.3)) { isPremium = true } }
-                                .padding(.horizontal, 14)
+                                .padding(.horizontal, 16)
                                 .padding(.top, 18)
                         } else {
                             Button { withAnimation { isPremium = false } } label: {
                                 Text("✓ Premium active · tap to reset preview")
-                                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                    .font(GaryFonts.mono(10))
                                     .tracking(1)
                                     .foregroundStyle(.white.opacity(0.3))
                             }
@@ -2396,10 +2498,10 @@ struct PaywallPanel: View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 5) {
                 Text("UNLOCK")
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced)).tracking(2.2)
+                    .font(GaryFonts.mono(10, bold: true)).tracking(2.2)
                     .foregroundStyle(GaryColors.gold)
                 Text("Bet with Gary's best.")
-                    .font(.system(size: 26, weight: .heavy))
+                    .font(GaryFonts.display(32))
                     .foregroundStyle(.white)
             }
 
@@ -2407,7 +2509,7 @@ struct PaywallPanel: View {
                 ForEach(benefits, id: \.self) { b in
                     HStack(alignment: .top, spacing: 9) {
                         Image(systemName: "checkmark.circle.fill").font(.system(size: 13)).foregroundStyle(GaryColors.gold)
-                        Text(b).font(.system(size: 14)).foregroundStyle(.white.opacity(0.8)).fixedSize(horizontal: false, vertical: true)
+                        Text(b).font(GaryFonts.text(14)).foregroundStyle(.white.opacity(0.8)).fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
@@ -2419,7 +2521,7 @@ struct PaywallPanel: View {
 
             Button(action: onUnlock) {
                 Text(plan == 1 ? "Start 3-day free trial" : "Unlock Premium")
-                    .font(.system(size: 16, weight: .bold))
+                    .font(GaryFonts.text(16, .bold))
                     .foregroundStyle(Color(hex: "#0b0a08"))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 15)
@@ -2428,14 +2530,14 @@ struct PaywallPanel: View {
 
             HStack(spacing: 16) {
                 Button { onUnlock() } label: {
-                    Text("Restore").font(.system(size: 11, weight: .medium, design: .monospaced)).foregroundStyle(.white.opacity(0.45))
+                    Text("Restore").font(GaryFonts.mono(11)).foregroundStyle(.white.opacity(0.45))
                 }
                 Spacer()
-                Text("Terms · Privacy").font(.system(size: 11, weight: .medium, design: .monospaced)).foregroundStyle(.white.opacity(0.3))
+                Text("Terms · Privacy").font(GaryFonts.mono(11)).foregroundStyle(.white.opacity(0.3))
             }
 
             Text("Auto-renews until canceled. Cancel anytime in Settings. Payment charged to your Apple ID.")
-                .font(.system(size: 9.5)).foregroundStyle(.white.opacity(0.3))
+                .font(GaryFonts.text(9.5)).foregroundStyle(.white.opacity(0.3))
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(18)
@@ -2462,13 +2564,13 @@ private struct PlanRow: View {
                     .font(.system(size: 18)).foregroundStyle(selected ? GaryColors.gold : .white.opacity(0.3))
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 7) {
-                        Text(title).font(.system(size: 16, weight: .semibold)).foregroundStyle(.white)
-                        if let badge { Text(badge).font(.system(size: 8, weight: .bold, design: .monospaced)).tracking(0.8).foregroundStyle(Color(hex: "#0b0a08")).padding(.horizontal, 6).padding(.vertical, 2).background(Capsule().fill(GaryColors.gold)) }
+                        Text(title).font(GaryFonts.text(16, .semibold)).foregroundStyle(.white)
+                        if let badge { Text(badge).font(GaryFonts.mono(8, bold: true)).tracking(0.8).foregroundStyle(Color(hex: "#0b0a08")).padding(.horizontal, 6).padding(.vertical, 2).background(Capsule().fill(GaryColors.gold)) }
                     }
-                    Text(sub).font(.system(size: 10, weight: .medium, design: .monospaced)).foregroundStyle(.white.opacity(0.42))
+                    Text(sub).font(GaryFonts.mono(10)).foregroundStyle(.white.opacity(0.42))
                 }
                 Spacer()
-                Text(price).font(.system(size: 15, weight: .bold)).foregroundStyle(selected ? GaryColors.gold : .white.opacity(0.7))
+                Text(price).font(GaryFonts.text(15, .bold)).foregroundStyle(selected ? GaryColors.gold : .white.opacity(0.7))
             }
             .padding(14)
             .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(selected ? GaryColors.gold.opacity(0.08) : Color.clear).overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(selected ? GaryColors.gold.opacity(0.5) : Color.white.opacity(0.1), lineWidth: 1)))
@@ -4283,7 +4385,6 @@ struct BillfoldView: View {
     @State private var loading = true
     @State private var error: String?
     @State private var lastRefresh: Date?
-    @State private var carouselIndex: Int = 0
     @State private var timeframe = "7d"
     @State private var sportTimeframe = "7d"
     @State private var spreadSport = "NBA"
@@ -4296,7 +4397,7 @@ struct BillfoldView: View {
     @State private var chartZoomScale: CGFloat = 1.0
     @State private var chartZoomAnchor: CGFloat = 1.0
     @State private var cachedCandles: [BillfoldCandlestick] = []
-    @State private var tickerWidth: CGFloat = 0
+    @State private var cachedJournal: BillfoldJournal = .empty
 
     // ALL expensive derived data cached here — updated via recomputeCache()
     @State private var cachedFilteredGames: [GameResult] = []
@@ -4313,10 +4414,9 @@ struct BillfoldView: View {
     @State private var cachedSpreadSportsAvailable: [String] = ["NBA"]
 
     private let timeframes = ["7d", "30d", "90d", "ytd", "all"]
-    let carouselTimer = Timer.publish(every: 3.5, on: .main, in: .common).autoconnect()
 
-    private var positiveColor: Color { Color(hex: "#22C55E") }
-    private var negativeColor: Color { Color(hex: "#EF4444") }
+    private var positiveColor: Color { Color(hex: "#1E7A4C") }   // emerald ink
+    private var negativeColor: Color { Color(hex: "#A33327") }   // crimson ink
 
     private var validPropResults: [PropResult] {
         propResults.filter(isLegitPropResult)
@@ -4386,13 +4486,9 @@ struct BillfoldView: View {
         return value >= 0 ? "+$\(rounded)" : "-$\(rounded)"
     }
 
-    private func unsignedDollars(_ value: Double) -> String {
-        let rounded = Int(abs(value).rounded())
-        return "$\(rounded)"
-    }
-
     private var streakSummary: (label: String, value: String, positive: Bool) { cachedStreak }
     private var trendPoints: [BillfoldTrendPoint] { cachedTrend }
+    private var journal: BillfoldJournal { cachedJournal }
     private var sortedSportsForBillfold: [Sport] { cachedSortedSports }
     private var availableSports: Set<String> { cachedAvailableSports }
 
@@ -4401,10 +4497,6 @@ struct BillfoldView: View {
 
     private var sourceCount: Int {
         selectedTab == 0 ? activeGameResults.count : activePropResults.count
-    }
-
-    private var accentColor: Color {
-        selectedSport == .all ? GaryColors.gold : selectedSport.accentColor
     }
 
     private var updatedLabel: String {
@@ -4481,36 +4573,49 @@ struct BillfoldView: View {
 
     // MARK: - Body
 
-    // Design tokens — gold-tinted dark
-    private var cardFill: Color { Color(hex: "#141210") }
-    private var cardStroke: Color { GaryColors.gold.opacity(0.15) }
-    private var pageBg: Color { Color(hex: "#0A0908") }
-    private let cr: CGFloat = 4
+    // Design tokens — "Passbook": leather ground, cream paper statements, ink text.
+    // Deliberately NOT the app's gold-on-black terminal language — this tab is
+    // a private-banking ledger: dark warm leather, printed paper, brass details.
+    private var leather: Color { Color(hex: "#191009") }
+    private var leatherEdge: Color { Color(hex: "#0D0703") }
+    private var paper: Color { Color(hex: "#F4ECDC") }
+    private var paperShade: Color { Color(hex: "#EADFC8") }
+    private var ink: Color { Color(hex: "#241A10") }
+    private var brass: Color { Color(hex: "#A98B4F") }
+    private var emerald: Color { Color(hex: "#1E7A4C") }
+    private var crimson: Color { Color(hex: "#A33327") }
+    private var cardStroke: Color { Color(hex: "#241A10").opacity(0.14) } // printed hairline rules
+    private var pageBg: Color { leather }
+    private let cr: CGFloat = 8
 
-    /// Gold glass card background — subtle gold tint, soft inner glow
-    private func goldGlassCard(cornerRadius: CGFloat? = nil) -> some View {
-        let r = cornerRadius ?? cr
-        return ZStack {
-            RoundedRectangle(cornerRadius: r)
-                .fill(cardFill)
-            // Subtle gold wash
-            RoundedRectangle(cornerRadius: r)
-                .fill(GaryColors.gold.opacity(0.035))
-            // Soft inner glow at top edge
-            RoundedRectangle(cornerRadius: r)
-                .stroke(GaryColors.gold.opacity(0.06), lineWidth: 1)
-                .blur(radius: 4)
-                .clipShape(RoundedRectangle(cornerRadius: r))
+    /// Leather ground — warm pool of light up top, darkened edges
+    private var leatherBackground: some View {
+        ZStack {
+            leather
+            RadialGradient(
+                colors: [Color(hex: "#26160A").opacity(0.9), leatherEdge],
+                center: .init(x: 0.5, y: 0.18),
+                startRadius: 40,
+                endRadius: 560
+            )
+            .opacity(0.85)
         }
+    }
+
+    /// Paper card — cream statement stock resting on the leather
+    private func paperCard(cornerRadius: CGFloat? = nil) -> some View {
+        let r = cornerRadius ?? cr
+        return RoundedRectangle(cornerRadius: r, style: .continuous)
+            .fill(LinearGradient(colors: [paper, paperShade], startPoint: .top, endPoint: .bottom))
+            .shadow(color: .black.opacity(0.4), radius: 5, y: 3)
     }
 
     var body: some View {
         ZStack {
-            pageBg.ignoresSafeArea()
+            leatherBackground.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Pinned header — the redesigned branding, ticker, and controls
-                // stay visible so the page never opens looking like the old design.
+                // Pinned wallet header + index tabs; the paper statements scroll beneath.
                 headerBar
                 billfoldTopBar
                     .padding(.top, 10)
@@ -4526,11 +4631,11 @@ struct BillfoldView: View {
                 } else {
                     ScrollView(showsIndicators: false) {
                         VStack(spacing: 12) {
-                            heroSummary
-                            softStatCards
+                            balanceBlock
                             performanceChart
                             recentCarousel
-                            twoColumnBreakdown
+                            dailyLedger
+                            performanceLedger
                         }
                         .padding(.top, 14)
                         .padding(.bottom, 90)
@@ -4596,6 +4701,7 @@ struct BillfoldView: View {
                 cachedSpreadPerf = derived.spreadPerformance
                 cachedTopd = derived.topd
                 cachedSpreadSportsAvailable = derived.spreadSportsAvailable
+                cachedJournal = derived.journal
                 loading = false
             }
         }
@@ -4624,6 +4730,7 @@ struct BillfoldView: View {
         cachedSpreadPerf = derived.spreadPerformance
         cachedTopd = derived.topd
         cachedSpreadSportsAvailable = derived.spreadSportsAvailable
+        cachedJournal = derived.journal
         loading = false
     }
 
@@ -4644,163 +4751,82 @@ struct BillfoldView: View {
     // MARK: - Header Bar
 
     private var headerBar: some View {
-        VStack(spacing: 10) {
-            HStack(alignment: .center, spacing: 8) {
-                Image("GaryIconBG")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 26, height: 26)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-
-                Text("BILLFOLD")
-                    .font(.system(size: 18, weight: .bold))
-                    .tracking(2)
-                    .foregroundStyle(GaryColors.gold)
-
-                // Live pulse — terminal "feed is hot" cue
-                Circle()
-                    .fill(positiveColor)
-                    .frame(width: 5, height: 5)
-                    .opacity(0.9)
-                Text("LIVE")
-                    .font(.system(size: 8, weight: .black))
-                    .tracking(1)
-                    .foregroundStyle(positiveColor.opacity(0.8))
-
+        VStack(spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text("Billfold")
+                    .font(.system(size: 27, weight: .semibold, design: .serif))
+                    .italic()
+                    .foregroundStyle(paper)
+                Text(statementDateLabel)
+                    .font(.system(size: 11, weight: .medium, design: .serif))
+                    .italic()
+                    .foregroundStyle(brass.opacity(0.9))
                 Spacer()
-
                 Button {
                     showingSettings = true
                 } label: {
                     Image(systemName: "ellipsis")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(GaryColors.gold.opacity(0.6))
+                        .foregroundStyle(brass.opacity(0.7))
                         .frame(width: 28, height: 28)
                 }
                 .buttonStyle(.plain)
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 20)
 
-            if !sportPerformance.isEmpty {
-                billfoldTicker
-            }
+            // Stitched seam, like the edge of a wallet
+            StitchLine()
+                .stroke(brass.opacity(0.4), style: StrokeStyle(lineWidth: 1, dash: [4, 5]))
+                .frame(height: 1)
+                .padding(.horizontal, 12)
         }
-        .padding(.top, 14)
+        .padding(.top, 12)
     }
 
-    // MARK: - Ticker Tape (Bloomberg-style per-sport P&L marquee)
+    private static let statementDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "EEEE, MMMM d"
+        return f
+    }()
 
-    private func tickerSigned(_ value: Double) -> String {
-        let rounded = Int(abs(value).rounded())
-        return value >= 0 ? "+$\(rounded)" : "-$\(rounded)"
-    }
-
-    private var tickerRow: some View {
-        HStack(spacing: 0) {
-            ForEach(sportPerformance, id: \.id) { p in
-                HStack(spacing: 5) {
-                    Text(p.sport)
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.55))
-                    Text(tickerSigned(p.netUnits * 100))
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .foregroundStyle(p.netUnits >= 0 ? positiveColor : negativeColor)
-                }
-                .padding(.trailing, 10)
-
-                Text("\u{25B8}")
-                    .font(.system(size: 7, weight: .black))
-                    .foregroundStyle(GaryColors.gold.opacity(0.35))
-                    .padding(.trailing, 10)
-            }
-        }
-        .fixedSize()
-    }
-
-    private var billfoldTicker: some View {
-        // Width-constrained base view drives the layout size. The wide marquee
-        // lives in an overlay so its intrinsic width can't blow out the header.
-        Rectangle()
-            .fill(GaryColors.gold.opacity(0.045))
-            .frame(maxWidth: .infinity)
-            .frame(height: 24)
-            .overlay {
-                TimelineView(.animation) { context in
-                    let speed: Double = 32 // points per second
-                    let elapsed = context.date.timeIntervalSinceReferenceDate
-                    let shift: CGFloat = tickerWidth > 1
-                        ? CGFloat((elapsed * speed).truncatingRemainder(dividingBy: Double(tickerWidth)))
-                        : 0
-
-                    HStack(spacing: 0) {
-                        tickerRow
-                        tickerRow // duplicate for seamless wrap-around
-                    }
-                    .offset(x: -shift)
-                    .background(
-                        GeometryReader { geo in
-                            Color.clear
-                                .onAppear { tickerWidth = geo.size.width / 2 }
-                                .onChange(of: sportPerformance.count) { _ in
-                                    tickerWidth = geo.size.width / 2
-                                }
-                        }
-                    )
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
-            .clipped()
-            .overlay(alignment: .top) {
-                Rectangle().fill(GaryColors.gold.opacity(0.12)).frame(height: 0.5)
-            }
-            .overlay(alignment: .bottom) {
-                Rectangle().fill(GaryColors.gold.opacity(0.12)).frame(height: 0.5)
-            }
+    private var statementDateLabel: String {
+        Self.statementDateFormatter.string(from: Date())
     }
 
     // MARK: - Sport Tabs + Picks/Props + Timeframe
 
     private var billfoldTopBar: some View {
-        HStack(spacing: 6) {
-            // Left: Sport tabs (scrollable)
+        HStack(spacing: 8) {
+            // Left: sport index tabs, like a passbook's edge tabs
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
+                HStack(spacing: 14) {
                     ForEach(sortedSportsForBillfold, id: \.self) { sport in
                         let isAvailable = sport == .all || availableSports.contains(sport.rawValue)
                         let isSelected = selectedSport == sport
-                        let dotColor: Color = GaryColors.gold
 
                         Button {
                             selectedSport = sport
                         } label: {
                             VStack(spacing: 4) {
-                                HStack(spacing: 4) {
-                                    RoundedRectangle(cornerRadius: 1)
-                                        .fill(dotColor)
-                                        .frame(width: 5, height: 5)
-                                    Text(sport.rawValue)
-                                        .font(.system(size: 11, weight: isSelected ? .bold : .medium))
-                                }
-                                .foregroundStyle(
-                                    isSelected ? .white
-                                    : isAvailable ? .white.opacity(0.45)
-                                    : .white.opacity(0.15)
-                                )
-
-                                RoundedRectangle(cornerRadius: 1)
-                                    .fill(isSelected ? dotColor : .clear)
-                                    .frame(height: 2)
+                                Text(sport.rawValue)
+                                    .font(.system(size: 12, weight: isSelected ? .bold : .medium, design: .serif))
+                                    .foregroundStyle(
+                                        isSelected ? paper
+                                        : isAvailable ? paper.opacity(0.55)
+                                        : paper.opacity(0.18)
+                                    )
+                                Rectangle()
+                                    .fill(isSelected ? brass : .clear)
+                                    .frame(height: 1.5)
                             }
-                            .padding(.horizontal, 6)
                         }
                         .disabled(!isAvailable)
                     }
                 }
             }
 
-            // Right: Picks/Props + Timeframe inline, same size
-            HStack(spacing: 4) {
-                // Picks / Props dropdown
+            // Right: Picks/Props + period, brass-outlined chips
+            HStack(spacing: 6) {
                 Menu {
                     Button {
                         selectedTab = 0
@@ -4815,22 +4841,9 @@ struct BillfoldView: View {
                         Label("Props", systemImage: selectedTab == 1 ? "checkmark" : "")
                     }
                 } label: {
-                    HStack(spacing: 3) {
-                        Text(selectedTab == 0 ? "Picks" : "Props")
-                            .font(.system(size: 11, weight: .bold))
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 7, weight: .bold))
-                    }
-                    .foregroundStyle(GaryColors.gold)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 6)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(GaryColors.gold.opacity(0.08))
-                    )
+                    passbookChip(selectedTab == 0 ? "Picks" : "Props")
                 }
 
-                // Timeframe dropdown (same size as Picks)
                 Menu {
                     ForEach(timeframes, id: \.self) { tf in
                         Button {
@@ -4840,108 +4853,31 @@ struct BillfoldView: View {
                         }
                     }
                 } label: {
-                    HStack(spacing: 3) {
-                        Text(timeframe.uppercased())
-                            .font(.system(size: 11, weight: .bold))
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 7, weight: .bold))
-                    }
-                    .foregroundStyle(GaryColors.gold)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 6)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(GaryColors.gold.opacity(0.08))
-                    )
+                    passbookChip(timeframe.uppercased())
                 }
             }
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 18)
     }
 
-
-
-    // MARK: - Stats Strip (compact horizontal)
-
-    private var statsStrip: some View {
-        HStack(spacing: 0) {
-            stripStat(
-                value: String(format: "%.1f%%", winRate),
-                label: "Win Rate",
-                color: winRate >= 50 ? positiveColor : negativeColor,
-                large: true
-            )
-
-            stripDivider
-
-            recordStrip
-
-            stripDivider
-
-            stripStat(
-                value: signedDollars(netDollars),
-                label: "Profit",
-                color: netDollars >= 0 ? positiveColor : negativeColor
-            )
-
-            stripDivider
-
-            stripStat(
-                value: streakSummary.value,
-                label: "Streak",
-                color: streakSummary.positive ? positiveColor : negativeColor
-            )
-        }
-        .padding(.vertical, 12)
-        .background(
-            goldGlassCard()
-        )
-        .padding(.horizontal, 16)
-    }
-
-    private func stripStat(value: String, label: String, color: Color, large: Bool = false) -> some View {
-        VStack(spacing: 2) {
-            Text(value)
-                .font(.system(size: large ? 17 : 13, weight: .medium, design: .monospaced))
-                .foregroundStyle(color)
-                .minimumScaleFactor(0.55)
-                .lineLimit(1)
+    private func passbookChip(_ label: String) -> some View {
+        HStack(spacing: 3) {
             Text(label)
-                .font(.system(size: 8, weight: .medium))
-                .foregroundStyle(.white.opacity(0.28))
+                .font(.system(size: 11, weight: .semibold, design: .serif))
+            Image(systemName: "chevron.down")
+                .font(.system(size: 7, weight: .bold))
         }
-        .frame(maxWidth: .infinity)
+        .foregroundStyle(brass)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 5)
+        .background(
+            Capsule().stroke(brass.opacity(0.45), lineWidth: 1)
+        )
     }
 
-    private var stripDivider: some View {
-        Rectangle().fill(cardStroke).frame(width: 0.5, height: 22)
-    }
 
-    private var recordStrip: some View {
-        VStack(spacing: 2) {
-            HStack(spacing: 0) {
-                Text("\(record.wins)")
-                    .foregroundStyle(positiveColor)
-                Text("\u{2013}")
-                    .foregroundStyle(.white.opacity(0.4))
-                Text("\(record.losses)")
-                    .foregroundStyle(negativeColor)
-                Text("\u{2013}")
-                    .foregroundStyle(.white.opacity(0.4))
-                Text("\(record.pushes)")
-                    .foregroundStyle(.white.opacity(0.45))
-            }
-            .font(.system(size: 13, weight: .medium, design: .monospaced))
-            .minimumScaleFactor(0.55)
-            .lineLimit(1)
-            Text("Record")
-                .font(.system(size: 8, weight: .medium))
-                .foregroundStyle(.white.opacity(0.28))
-        }
-        .frame(maxWidth: .infinity)
-    }
 
-    // MARK: - Hero Summary (fintech "portfolio" moment)
+    // MARK: - Balance Block (the wallet's cash window, printed on leather)
 
     private var timeframeLabel: String {
         switch timeframe {
@@ -4953,78 +4889,72 @@ struct BillfoldView: View {
         }
     }
 
-    private var heroSummary: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(selectedTab == 0 ? "NET PROFIT \u{00B7} PICKS" : "NET PROFIT \u{00B7} PROPS")
-                .font(.system(size: 10, weight: .bold))
-                .tracking(1.5)
-                .foregroundStyle(.white.opacity(0.3))
+    private var balanceBlock: some View {
+        VStack(spacing: 7) {
+            Text(selectedTab == 0 ? "NET BALANCE \u{00B7} PICKS" : "NET BALANCE \u{00B7} PROPS")
+                .font(.system(size: 10, weight: .semibold))
+                .tracking(2.2)
+                .foregroundStyle(brass.opacity(0.85))
 
             Text(signedDollars(netDollars))
-                .font(.system(size: 44, weight: .semibold, design: .monospaced))
-                .foregroundStyle(netDollars >= 0 ? positiveColor : negativeColor)
+                .font(.system(size: 46, weight: .medium, design: .serif))
+                .foregroundStyle(paper)
                 .minimumScaleFactor(0.5)
                 .lineLimit(1)
                 .contentTransition(.numericText())
                 .animation(.snappy, value: netDollars)
+                .shadow(color: .black.opacity(0.5), radius: 1, y: 1)
 
-            HStack(spacing: 6) {
-                Image(systemName: netDollars >= 0 ? "arrow.up.right" : "arrow.down.right")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(netDollars >= 0 ? positiveColor : negativeColor)
-                Text(String(format: "%.1f%% win rate", winRate))
-                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.8))
+            HStack(spacing: 8) {
+                Text(String(format: "ROI %+.1f%%", journal.roiPct))
+                    .font(.system(size: 11, weight: .bold, design: .serif))
+                    .foregroundStyle(paper.opacity(0.95))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(journal.roiPct >= 0 ? emerald : crimson))
+
+                Text("\(record.wins)\u{2013}\(record.losses)\u{2013}\(record.pushes)")
+                    .font(.system(size: 13, weight: .semibold, design: .serif))
+                    .foregroundStyle(paper.opacity(0.85))
+
                 Text("\u{00B7}")
-                    .foregroundStyle(.white.opacity(0.25))
+                    .foregroundStyle(brass.opacity(0.5))
+
+                Text(String(format: "%.0f%% win", winRate))
+                    .font(.system(size: 12, weight: .medium, design: .serif))
+                    .italic()
+                    .foregroundStyle(brass)
+
+                Text("\u{00B7}")
+                    .foregroundStyle(brass.opacity(0.5))
+
                 Text(timeframeLabel)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.4))
+                    .font(.system(size: 12, weight: .medium, design: .serif))
+                    .italic()
+                    .foregroundStyle(brass)
             }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 18)
-        .padding(.top, 2)
-    }
 
-    // MARK: - Soft Stat Cards (fintech rounded trio)
-
-    private var softStatCards: some View {
-        HStack(spacing: 8) {
-            softStatCard(
-                value: String(format: "%.0f%%", winRate),
-                label: "WIN RATE",
-                color: winRate >= 50 ? positiveColor : negativeColor
-            )
-            softStatCard(
-                value: "\(record.wins)-\(record.losses)-\(record.pushes)",
-                label: "RECORD",
-                color: .white.opacity(0.85)
-            )
-            softStatCard(
-                value: streakSummary.value,
-                label: "STREAK",
-                color: streakSummary.positive ? positiveColor : negativeColor
-            )
-        }
-        .padding(.horizontal, 16)
-    }
-
-    private func softStatCard(value: String, label: String, color: Color) -> some View {
-        VStack(spacing: 4) {
-            Text(value)
-                .font(.system(size: 18, weight: .semibold, design: .monospaced))
-                .foregroundStyle(color)
-                .minimumScaleFactor(0.5)
-                .lineLimit(1)
-            Text(label)
-                .font(.system(size: 8, weight: .bold))
-                .tracking(0.8)
-                .foregroundStyle(.white.opacity(0.3))
+            // Last-10 punch row — wallet card punches, oldest → newest
+            HStack(spacing: 5) {
+                let dots = journal.last10
+                let pad = 10 - dots.count
+                ForEach(0..<10, id: \.self) { i in
+                    let result: String? = i >= pad && i - pad < dots.count ? dots[i - pad] : nil
+                    Circle()
+                        .fill(
+                            result == "won" ? emerald :
+                            result == "lost" ? crimson :
+                            result == "push" ? brass :
+                            paper.opacity(0.12)
+                        )
+                        .frame(width: 6, height: 6)
+                }
+            }
+            .padding(.top, 2)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 14)
-        .background(goldGlassCard(cornerRadius: 10))
+        .padding(.top, 6)
+        .padding(.bottom, 2)
     }
 
     // MARK: - Performance Chart
@@ -5104,188 +5034,188 @@ struct BillfoldView: View {
         return (ref?.close ?? 0) >= 0 ? positiveColor : negativeColor
     }
 
-    private let candleGreen = Color(hex: "#00D26A")
-    private let candleRed = Color(hex: "#F14A51")
+    private let candleGreen = Color(hex: "#1E7A4C")   // emerald ink
+    private let candleRed = Color(hex: "#A33327")     // crimson ink
 
     private let chartTimeLabels = ["1W", "1M", "3M", "YTD", "ALL"]
     private let chartTimeValues = ["7d", "30d", "90d", "ytd", "all"]
 
-    // MARK: - Interactive P&L Chart
+    // MARK: - Equity Curve (unified chart card: line ⟷ candles)
 
-    // MARK: - Chart Carousel (swipe between Profit/Loss and Interactive)
-
-    @State private var chartPage = 0
+    private enum ChartMode: String, CaseIterable { case line = "LINE", candles = "CANDLES" }
+    @State private var chartMode: ChartMode = .line
 
     private var performanceChart: some View {
-        VStack(spacing: 0) {
-            TabView(selection: $chartPage) {
-                // Page 1: Original Profit / Loss chart
-                profitLossChart
-                    .tag(0)
+        VStack(alignment: .leading, spacing: 0) {
+            chartHeader
 
-                // Page 2: Interactive stock-style chart
-                interactiveStockChart
-                    .tag(1)
-            }
-            .tabViewStyle(.page(indexDisplayMode: .never))
-            .frame(height: 280)
-
-            // Page dots
-            HStack(spacing: 6) {
-                ForEach(0..<2, id: \.self) { i in
-                    Circle()
-                        .fill(chartPage == i ? GaryColors.gold : .white.opacity(0.2))
-                        .frame(width: 5, height: 5)
+            Group {
+                if chartMode == .line {
+                    lineChartBody
+                } else {
+                    candleChartBody
                 }
             }
-            .padding(.bottom, 6)
+            .frame(height: 185)
+            .padding(.horizontal, 10)
+            .padding(.top, 6)
+
+            chartTimeframeRow
         }
+        .background(paperCard(cornerRadius: 6))
         .padding(.horizontal, 16)
     }
 
-    // MARK: - Page 1: Original Profit / Loss (from git)
+    // MARK: - Chart header, bodies, timeframe row
 
-    private var profitLossChart: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Profit / Loss")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.5))
-
-                Text("$100/Bet")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(GaryColors.gold.opacity(0.5))
+    private var chartHeader: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("EQUITY CURVE")
+                    .font(.system(size: 9, weight: .bold))
+                    .tracking(1.6)
+                    .foregroundStyle(ink.opacity(0.55))
+                Text("$100/BET")
+                    .font(.system(size: 9, weight: .bold))
+                    .tracking(1)
+                    .foregroundStyle(ink.opacity(0.38))
 
                 Spacer()
 
-                if let last = trendPoints.last {
-                    Text(signedDollars(last.cumulative * 100))
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(last.cumulative >= 0 ? positiveColor : negativeColor)
-                        .monospacedDigit()
-                }
-            }
-            .padding(.horizontal, 14)
-            .padding(.top, 12)
-
-            if trendPoints.isEmpty {
-                Text("No settled data")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.25))
-                    .frame(maxWidth: .infinity, minHeight: 100)
-            } else {
-                Chart(trendPoints) { point in
-                    AreaMark(
-                        x: .value("Date", point.date),
-                        y: .value("Units", point.cumulative)
-                    )
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [GaryColors.gold.opacity(0.2), .clear],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .interpolationMethod(.catmullRom)
-
-                    LineMark(
-                        x: .value("Date", point.date),
-                        y: .value("Units", point.cumulative)
-                    )
-                    .foregroundStyle(GaryColors.gold)
-                    .lineStyle(StrokeStyle(lineWidth: 1.5))
-                    .interpolationMethod(.catmullRom)
-                }
-                .chartXAxis {
-                    AxisMarks(values: .automatic(desiredCount: 4)) { _ in
-                        AxisValueLabel(format: .dateTime.month(.abbreviated).day())
-                            .foregroundStyle(.white.opacity(0.5))
+                // LINE ⟷ CANDLES — ink-stamped toggle on the statement
+                HStack(spacing: 3) {
+                    ForEach(ChartMode.allCases, id: \.self) { mode in
+                        Button {
+                            withAnimation(.easeOut(duration: 0.15)) { chartMode = mode }
+                            scrubDate = nil
+                        } label: {
+                            Text(mode.rawValue)
+                                .font(.system(size: 8.5, weight: .bold))
+                                .tracking(0.6)
+                                .foregroundStyle(chartMode == mode ? paper : ink.opacity(0.5))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(
+                                    Capsule().fill(chartMode == mode ? ink : Color.clear)
+                                )
+                                .overlay(
+                                    Capsule().stroke(ink.opacity(chartMode == mode ? 0 : 0.3), lineWidth: 1)
+                                )
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
-                .chartYAxis {
-                    AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { _ in
-                        AxisGridLine(stroke: StrokeStyle(lineWidth: 0.3))
-                            .foregroundStyle(.white.opacity(0.08))
-                        AxisValueLabel()
-                            .foregroundStyle(.white.opacity(0.5))
-                    }
-                }
-                .frame(height: 170)
-                .padding(.horizontal, 10)
             }
 
-            Spacer(minLength: 0)
+            // Scrub-aware value line
+            HStack(spacing: 8) {
+                Text(chartMode == .line ? chartDisplayValue : candleDisplayValue)
+                    .font(.system(size: 22, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(chartMode == .line ? chartLineColor : candleLineColor)
+                    .contentTransition(.numericText())
 
-            // Time period selectors
-            HStack(spacing: 0) {
-                ForEach(Array(zip(chartTimeLabels, chartTimeValues)), id: \.1) { label, value in
-                    Button {
+                if scrubDate != nil {
+                    Text(chartMode == .line ? chartDisplayDate : candleDisplayDate)
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundStyle(ink.opacity(0.5))
+                    Text(chartMode == .line ? chartDisplayDaily : candleDisplayDaily)
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundStyle((chartMode == .line ? chartLineColor : candleLineColor).opacity(0.85))
+                }
+            }
+            .animation(.easeOut(duration: 0.1), value: scrubDate)
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, 12)
+    }
+
+    private var chartEmptyState: some View {
+        Text("No settled entries")
+            .font(.system(size: 11, weight: .medium, design: .serif))
+            .italic()
+            .foregroundStyle(ink.opacity(0.4))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    @ViewBuilder
+    private var lineChartBody: some View {
+        if trendPoints.isEmpty {
+            chartEmptyState
+        } else {
+            Chart(trendPoints) { point in
+                AreaMark(
+                    x: .value("Date", point.date),
+                    y: .value("Units", point.cumulative)
+                )
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [chartLineColor.opacity(0.16), .clear],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .interpolationMethod(.catmullRom)
+
+                LineMark(
+                    x: .value("Date", point.date),
+                    y: .value("Units", point.cumulative)
+                )
+                .foregroundStyle(chartLineColor)
+                .lineStyle(StrokeStyle(lineWidth: 1.6))
+                .interpolationMethod(.catmullRom)
+            }
+            .chartXAxis {
+                AxisMarks(values: .automatic(desiredCount: 4)) { _ in
+                    AxisValueLabel(format: .dateTime.month(.abbreviated).day())
+                        .foregroundStyle(ink.opacity(0.45))
+                }
+            }
+            .chartYAxis {
+                AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { _ in
+                    AxisGridLine(stroke: StrokeStyle(lineWidth: 0.3))
+                        .foregroundStyle(ink.opacity(0.12))
+                    AxisValueLabel()
+                        .foregroundStyle(ink.opacity(0.45))
+                }
+            }
+        }
+    }
+
+    private var chartTimeframeRow: some View {
+        HStack(spacing: 0) {
+            ForEach(Array(zip(chartTimeLabels, chartTimeValues)), id: \.1) { label, value in
+                Button {
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
                         timeframe = value
                         chartZoomScale = 1.0
                         chartZoomAnchor = 1.0
                         scrubDate = nil
-                    } label: {
-                        Text(label)
-                            .font(.system(size: 11, weight: timeframe == value ? .bold : .medium))
-                            .foregroundStyle(timeframe == value ? GaryColors.gold : .white.opacity(0.35))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 5)
-                            .background(
-                                timeframe == value
-                                    ? Capsule().fill(GaryColors.gold.opacity(0.12))
-                                    : Capsule().fill(Color.clear)
-                            )
                     }
-                    .buttonStyle(.plain)
+                } label: {
+                    Text(label)
+                        .font(.system(size: 11, weight: timeframe == value ? .bold : .medium, design: .serif))
+                        .foregroundStyle(timeframe == value ? ink : ink.opacity(0.4))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 5)
+                        .background(
+                            timeframe == value
+                                ? Capsule().fill(ink.opacity(0.08))
+                                : Capsule().fill(Color.clear)
+                        )
                 }
+                .buttonStyle(.plain)
             }
-            .padding(.horizontal, 12)
-            .padding(.bottom, 6)
         }
-        .background(goldGlassCard())
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
     }
 
-    // MARK: - Page 2: Interactive Stock Chart
-
-    private var interactiveStockChart: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            // Header — big P&L value, responsive to scrub
-            VStack(alignment: .leading, spacing: 2) {
-                Text(candleDisplayValue)
-                    .font(.system(size: 24, weight: .medium, design: .monospaced))
-                    .foregroundStyle(candleLineColor)
-
-                if scrubDate != nil {
-                    HStack(spacing: 8) {
-                        Text(candleDisplayDate)
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.5))
-                        Text(candleDisplayDaily)
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(candleLineColor.opacity(0.8))
-                    }
-                } else {
-                    HStack(spacing: 6) {
-                        Text("Performance")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.4))
-                        Text("$100/Bet")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(GaryColors.gold.opacity(0.4))
-                    }
-                }
-            }
-            .padding(.horizontal, 14)
-            .padding(.top, 12)
-            .animation(.easeOut(duration: 0.1), value: scrubDate)
-
-            if visibleCandles.isEmpty {
-                Text("No settled data")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.25))
-                    .frame(maxWidth: .infinity, minHeight: 150)
-            } else {
-                Chart {
+    @ViewBuilder
+    private var candleChartBody: some View {
+        if visibleCandles.isEmpty {
+            chartEmptyState
+        } else {
+            Chart {
                     // Candlestick wicks (thin lines: high to low)
                     ForEach(visibleCandles) { candle in
                         RectangleMark(
@@ -5315,13 +5245,13 @@ struct BillfoldView: View {
 
                     // Zero line (break-even)
                     RuleMark(y: .value("Zero", 0))
-                        .foregroundStyle(.white.opacity(0.15))
+                        .foregroundStyle(ink.opacity(0.25))
                         .lineStyle(StrokeStyle(lineWidth: 0.5, dash: [4, 3]))
 
                     // Scrub crosshair
                     if let sd = scrubDate {
                         RuleMark(x: .value("Scrub", sd))
-                            .foregroundStyle(.white.opacity(0.4))
+                            .foregroundStyle(ink.opacity(0.55))
                             .lineStyle(StrokeStyle(lineWidth: 1))
 
                         if let sc = scrubCandle {
@@ -5329,7 +5259,7 @@ struct BillfoldView: View {
                                 x: .value("Date", sc.date),
                                 y: .value("Close", sc.close)
                             )
-                            .foregroundStyle(.white)
+                            .foregroundStyle(ink)
                             .symbolSize(40)
                         }
                     }
@@ -5338,18 +5268,18 @@ struct BillfoldView: View {
                 .chartXAxis {
                     AxisMarks(values: .automatic(desiredCount: chartZoomScale >= 3 ? 5 : 4)) { _ in
                         AxisValueLabel(format: .dateTime.month(.abbreviated).day())
-                            .foregroundStyle(.white.opacity(0.4))
+                            .foregroundStyle(ink.opacity(0.45))
                     }
                 }
                 .chartYAxis {
                     AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
                         AxisGridLine(stroke: StrokeStyle(lineWidth: 0.3))
-                            .foregroundStyle(.white.opacity(0.05))
+                            .foregroundStyle(ink.opacity(0.1))
                         AxisValueLabel {
                             if let v = value.as(Double.self) {
                                 Text(signedDollars(v * 100))
                                     .font(.system(size: 9))
-                                    .foregroundStyle(.white.opacity(0.4))
+                                    .foregroundStyle(ink.opacity(0.45))
                             }
                         }
                     }
@@ -5393,343 +5323,324 @@ struct BillfoldView: View {
                             )
                     }
                 }
-                .frame(height: 170)
-                .padding(.horizontal, 10)
-            }
-
-            // Time period selectors
-            HStack(spacing: 0) {
-                ForEach(Array(zip(chartTimeLabels, chartTimeValues)), id: \.1) { label, value in
-                    Button {
-                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                            timeframe = value
-                            chartZoomScale = 1.0
-                            chartZoomAnchor = 1.0
-                            scrubDate = nil
-                        }
-                    } label: {
-                        Text(label)
-                            .font(.system(size: 11, weight: timeframe == value ? .bold : .medium))
-                            .foregroundStyle(timeframe == value ? GaryColors.gold : .white.opacity(0.35))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 5)
-                            .background(
-                                timeframe == value
-                                    ? Capsule().fill(GaryColors.gold.opacity(0.12))
-                                    : Capsule().fill(Color.clear)
-                            )
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.bottom, 6)
         }
-        .background(goldGlassCard())
     }
 
-    // MARK: - Two-Column Breakdown (Sport + Market side by side)
+    // MARK: - Daily Ledger (trading-journal layer)
 
-    private var twoColumnBreakdown: some View {
-        HStack(alignment: .top, spacing: 8) {
-            // Left column: By Sport
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 4) {
-                    Text("By Sport")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(.white.opacity(0.45))
-                    Spacer()
-                    Menu {
-                        ForEach(timeframes, id: \.self) { tf in
-                            Button(tf.uppercased()) { sportTimeframe = tf }
-                        }
-                    } label: {
-                        HStack(spacing: 2) {
-                            Text(sportTimeframe.uppercased())
-                                .font(.system(size: 13, weight: .bold))
-                                .foregroundStyle(GaryColors.gold)
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundStyle(GaryColors.gold.opacity(0.6))
-                        }
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
-                        .background(
-                            RoundedRectangle(cornerRadius: 3)
-                                .fill(GaryColors.gold.opacity(0.1))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 3)
-                                        .stroke(GaryColors.gold.opacity(0.25), lineWidth: 0.5)
-                                )
-                        )
+    private var dailyLedger: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                ledgerEyebrow("DAILY LEDGER")
+                Spacer()
+                Text(journal.maxDrawdownUnits > 0
+                     ? "MAX DD \(signedDollars(-journal.maxDrawdownUnits * 100))"
+                     : "MAX DD —")
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .foregroundStyle(journal.maxDrawdownUnits > 0 ? negativeColor.opacity(0.85) : ink.opacity(0.45))
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 12)
+            .padding(.bottom, 8)
+
+            if let best = journal.bestDay, let worst = journal.worstDay {
+                HStack(spacing: 0) {
+                    VStack(spacing: 2) {
+                        Text(signedDollars(best.net * 100))
+                            .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(best.net >= 0 ? positiveColor : negativeColor)
+                        Text("BEST \u{00B7} \(best.label)")
+                            .font(.system(size: 8, weight: .bold))
+                            .tracking(0.6)
+                            .foregroundStyle(ink.opacity(0.45))
                     }
+                    .frame(maxWidth: .infinity)
+
+                    Rectangle().fill(cardStroke).frame(width: 0.5, height: 24)
+
+                    VStack(spacing: 2) {
+                        Text(signedDollars(worst.net * 100))
+                            .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(worst.net >= 0 ? positiveColor : negativeColor)
+                        Text("WORST \u{00B7} \(worst.label)")
+                            .font(.system(size: 8, weight: .bold))
+                            .tracking(0.6)
+                            .foregroundStyle(ink.opacity(0.45))
+                    }
+                    .frame(maxWidth: .infinity)
                 }
-                .padding(.horizontal, 10)
-                .padding(.top, 10)
-                .padding(.bottom, 6)
+                .padding(.bottom, 10)
+            }
+
+            if journal.days.isEmpty {
+                Text("--")
+                    .font(.system(size: 14))
+                    .foregroundStyle(ink.opacity(0.35))
+                    .frame(maxWidth: .infinity, minHeight: 36)
+            } else {
+                HStack(spacing: 4) {
+                    Text("DAY").frame(maxWidth: .infinity, alignment: .leading)
+                    Text("RECORD").frame(width: 60, alignment: .trailing)
+                    Text("NET").frame(width: 64, alignment: .trailing)
+                }
+                .font(.system(size: 8, weight: .bold))
+                .tracking(0.5)
+                .foregroundStyle(ink.opacity(0.4))
+                .padding(.horizontal, 12)
+                .padding(.bottom, 5)
+
+                ForEach(Array(journal.days.enumerated()), id: \.element.id) { index, day in
+                    if index > 0 {
+                        Rectangle().fill(cardStroke).frame(height: 0.5).padding(.horizontal, 12)
+                    }
+                    HStack(spacing: 4) {
+                        Text(day.label)
+                            .font(.system(size: 12, weight: .bold, design: .serif))
+                            .foregroundStyle(ink.opacity(0.85))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Text("\(day.wins)-\(day.losses)\(day.pushes > 0 ? "-\(day.pushes)" : "")")
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundStyle(ink.opacity(0.5))
+                            .frame(width: 60, alignment: .trailing)
+                        Text(signedDollars(day.net * 100))
+                            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(day.net >= 0 ? positiveColor : negativeColor)
+                            .frame(width: 64, alignment: .trailing)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                }
+            }
+        }
+        .padding(.bottom, 8)
+        .background(paperCard(cornerRadius: 6))
+        .padding(.horizontal, 16)
+    }
+
+    // MARK: - Performance Ledger (by-sport grid + top pick / by spread)
+
+    private func ledgerEyebrow(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 9, weight: .bold))
+            .tracking(1.6)
+            .foregroundStyle(ink.opacity(0.55))
+    }
+
+    private func ledgerChip(_ label: String, options: [String], uppercase: Bool = true, action: @escaping (String) -> Void) -> some View {
+        Menu {
+            ForEach(options, id: \.self) { opt in
+                Button(uppercase ? opt.uppercased() : opt) { action(opt) }
+            }
+        } label: {
+            HStack(spacing: 3) {
+                Text(uppercase ? label.uppercased() : label)
+                    .font(.system(size: 9, weight: .bold))
+                    .tracking(0.5)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 6, weight: .bold))
+            }
+            .foregroundStyle(ink.opacity(0.7))
+            .padding(.horizontal, 7)
+            .padding(.vertical, 4)
+            .background(Capsule().stroke(ink.opacity(0.3), lineWidth: 1))
+        }
+    }
+
+    private var performanceLedger: some View {
+        VStack(spacing: 10) {
+            // BY SPORT — full-width terminal data grid
+            VStack(alignment: .leading, spacing: 0) {
+                HStack {
+                    ledgerEyebrow("BY SPORT")
+                    Spacer()
+                    ledgerChip(sportTimeframe, options: timeframes) { sportTimeframe = $0 }
+                }
+                .padding(.horizontal, 12)
+                .padding(.top, 12)
+                .padding(.bottom, 8)
 
                 if sportPerformance.isEmpty {
                     Text("--")
-                        .font(.system(size: 15))
-                        .foregroundStyle(.white.opacity(0.2))
-                        .frame(maxWidth: .infinity, minHeight: 40)
+                        .font(.system(size: 14))
+                        .foregroundStyle(ink.opacity(0.35))
+                        .frame(maxWidth: .infinity, minHeight: 44)
                 } else {
-                    // Column header — terminal data-grid feel
                     HStack(spacing: 4) {
-                        Text("SPORT")
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        Text("WIN%")
-                        Text("NET")
-                            .frame(width: 57, alignment: .trailing)
+                        Text("SPORT").frame(maxWidth: .infinity, alignment: .leading)
+                        Text("GP").frame(width: 36, alignment: .trailing)
+                        Text("WIN%").frame(width: 48, alignment: .trailing)
+                        Text("NET").frame(width: 64, alignment: .trailing)
                     }
                     .font(.system(size: 8, weight: .bold))
                     .tracking(0.5)
-                    .foregroundStyle(.white.opacity(0.25))
-                    .padding(.horizontal, 10)
+                    .foregroundStyle(ink.opacity(0.4))
+                    .padding(.horizontal, 12)
                     .padding(.bottom, 5)
 
                     ForEach(Array(sportPerformance.enumerated()), id: \.element.id) { index, point in
                         let isHighlighted = selectedSport != .all && point.sport == selectedSport.rawValue
                         if index > 0 {
-                            Rectangle().fill(cardStroke).frame(height: 0.5).padding(.horizontal, 10)
+                            Rectangle().fill(cardStroke).frame(height: 0.5).padding(.horizontal, 12)
                         }
                         HStack(spacing: 4) {
                             Text(point.sport)
-                                .font(.system(size: 15, weight: .bold))
-                                .foregroundStyle(isHighlighted ? GaryColors.gold : .white.opacity(0.75))
+                                .font(.system(size: 13, weight: .bold, design: .serif))
+                                .foregroundStyle(isHighlighted ? brass : ink.opacity(0.85))
                                 .frame(maxWidth: .infinity, alignment: .leading)
-
+                            Text("\(point.settledCount)")
+                                .font(.system(size: 12, design: .monospaced))
+                                .foregroundStyle(ink.opacity(0.45))
+                                .frame(width: 36, alignment: .trailing)
                             Text(String(format: "%.0f%%", point.winRate))
-                                .font(.system(size: 13, weight: .regular, design: .monospaced))
-                                .foregroundStyle(isHighlighted ? .white.opacity(0.6) : .white.opacity(0.35))
-
-                            Text(unsignedDollars(point.netUnits * 100))
-                                .font(.system(size: 13, weight: .medium, design: .monospaced))
+                                .font(.system(size: 12, design: .monospaced))
+                                .foregroundStyle(point.winRate >= 50 ? positiveColor.opacity(0.9) : ink.opacity(0.45))
+                                .frame(width: 48, alignment: .trailing)
+                            Text(signedDollars(point.netUnits * 100))
+                                .font(.system(size: 12, weight: .semibold, design: .monospaced))
                                 .foregroundStyle(point.netUnits >= 0 ? positiveColor : negativeColor)
-                                .frame(width: 57, alignment: .trailing)
+                                .frame(width: 64, alignment: .trailing)
                         }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, isHighlighted ? 2 : 0)
-                        .background(isHighlighted ? GaryColors.gold.opacity(0.06) : .clear)
-                        .frame(maxHeight: .infinity)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(isHighlighted ? brass.opacity(0.12) : .clear)
                     }
                 }
-
-                Spacer(minLength: 0)
             }
             .padding(.bottom, 6)
-            .background(
-                goldGlassCard()
-            )
+            .background(paperCard(cornerRadius: 6))
 
-            // Right column: Top Pick + By Spread stacked
-            VStack(spacing: 8) {
-                // Daily Top Pick
+            // TOP PICK + BY SPREAD — two-up terminal cards
+            HStack(alignment: .top, spacing: 10) {
                 VStack(alignment: .leading, spacing: 0) {
-                    HStack(spacing: 4) {
-                        Text("Daily Top Pick")
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundStyle(.white.opacity(0.45))
+                    HStack {
+                        ledgerEyebrow("TOP PICK")
                         Spacer()
-                        Menu {
-                            ForEach(timeframes, id: \.self) { tf in
-                                Button(tf.uppercased()) { topdTimeframe = tf }
-                            }
-                        } label: {
-                            HStack(spacing: 2) {
-                                Text(topdTimeframe.uppercased())
-                                    .font(.system(size: 13, weight: .bold))
-                                    .foregroundStyle(GaryColors.gold)
-                                Image(systemName: "chevron.down")
-                                    .font(.system(size: 9, weight: .bold))
-                                    .foregroundStyle(GaryColors.gold.opacity(0.6))
-                            }
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 3)
-                            .background(
-                                RoundedRectangle(cornerRadius: 3)
-                                    .fill(GaryColors.gold.opacity(0.1))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 3)
-                                            .stroke(GaryColors.gold.opacity(0.25), lineWidth: 0.5)
-                                    )
-                            )
-                        }
+                        ledgerChip(topdTimeframe, options: timeframes) { topdTimeframe = $0 }
                     }
-                    .padding(.horizontal, 10)
-                    .padding(.top, 10)
-                    .padding(.bottom, 6)
+                    .padding(.horizontal, 12)
+                    .padding(.top, 12)
+                    .padding(.bottom, 8)
 
                     let topd = topdStats
                     if topd.wins + topd.losses == 0 {
                         Text("--")
-                            .font(.system(size: 15))
-                            .foregroundStyle(.white.opacity(0.2))
+                            .font(.system(size: 14))
+                            .foregroundStyle(ink.opacity(0.35))
                             .frame(maxWidth: .infinity, minHeight: 40)
                     } else {
-                        HStack(spacing: 4) {
-                            Text("Record")
-                                .font(.system(size: 15, weight: .bold))
-                                .foregroundStyle(.white.opacity(0.75))
-                                .frame(maxWidth: .infinity, alignment: .leading)
-
+                        VStack(spacing: 2) {
                             Text("\(topd.wins)-\(topd.losses)")
-                                .font(.system(size: 13, weight: .regular, design: .monospaced))
-                                .foregroundStyle(.white.opacity(0.3))
-
-                            Text(unsignedDollars(topd.pnl * 100))
-                                .font(.system(size: 13, weight: .medium, design: .monospaced))
+                                .font(.system(size: 17, weight: .semibold, design: .serif))
+                                .foregroundStyle(ink.opacity(0.9))
+                            Text(signedDollars(topd.pnl * 100))
+                                .font(.system(size: 13, weight: .semibold, design: .monospaced))
                                 .foregroundStyle(topd.pnl >= 0 ? positiveColor : negativeColor)
-                                .frame(width: 57, alignment: .trailing)
                         }
-                        .padding(.horizontal, 10)
+                        .frame(maxWidth: .infinity)
                         .padding(.vertical, 8)
                     }
-                }
-                .padding(.bottom, 6)
-                .background(
-                    goldGlassCard()
-                )
 
-                // By Spread Size
+                    Spacer(minLength: 0)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.bottom, 8)
+                .background(paperCard(cornerRadius: 6))
+
                 VStack(alignment: .leading, spacing: 0) {
-                    HStack(spacing: 4) {
-                        Text("By Spread")
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundStyle(.white.opacity(0.45))
+                    HStack {
+                        ledgerEyebrow("BY SPREAD")
                         Spacer()
-                        Menu {
-                            ForEach(spreadSportsAvailable, id: \.self) { s in
-                                Button(s) { spreadSport = s }
-                            }
-                        } label: {
-                            HStack(spacing: 2) {
-                                Text(spreadSport)
-                                    .font(.system(size: 13, weight: .bold))
-                                    .foregroundStyle(GaryColors.gold)
-                                Image(systemName: "chevron.down")
-                                    .font(.system(size: 9, weight: .bold))
-                                    .foregroundStyle(GaryColors.gold.opacity(0.6))
-                            }
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 3)
-                            .background(
-                                RoundedRectangle(cornerRadius: 3)
-                                    .fill(GaryColors.gold.opacity(0.1))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 3)
-                                            .stroke(GaryColors.gold.opacity(0.25), lineWidth: 0.5)
-                                    )
-                            )
-                        }
+                        ledgerChip(spreadSport, options: spreadSportsAvailable, uppercase: false) { spreadSport = $0 }
                     }
-                    .padding(.horizontal, 10)
-                    .padding(.top, 10)
+                    .padding(.horizontal, 12)
+                    .padding(.top, 12)
                     .padding(.bottom, 6)
 
                     if spreadSizePerformance.isEmpty {
                         Text(selectedTab == 0 ? "No spread data" : "Picks only")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.2))
-                            .frame(maxWidth: .infinity, minHeight: 30)
+                            .font(.system(size: 11, weight: .medium, design: .serif))
+                            .italic()
+                            .foregroundStyle(ink.opacity(0.4))
+                            .frame(maxWidth: .infinity, minHeight: 36)
                     } else {
                         ForEach(Array(spreadSizePerformance.enumerated()), id: \.offset) { index, item in
                             if index > 0 {
-                                Rectangle().fill(cardStroke).frame(height: 0.5).padding(.horizontal, 10)
+                                Rectangle().fill(cardStroke).frame(height: 0.5).padding(.horizontal, 12)
                             }
                             HStack(spacing: 4) {
                                 Text(item.bucket)
-                                    .font(.system(size: 15, weight: .bold))
-                                    .foregroundStyle(.white.opacity(0.75))
+                                    .font(.system(size: 12, weight: .bold, design: .serif))
+                                    .foregroundStyle(ink.opacity(0.8))
                                     .frame(maxWidth: .infinity, alignment: .leading)
 
                                 let total = item.wins + item.losses + item.pushes
                                 let pct = total > 0 ? Int(round(Double(item.wins) / Double(total) * 100)) : 0
                                 Text("\(pct)%")
-                                    .font(.system(size: 13, weight: .regular, design: .monospaced))
-                                    .foregroundStyle(.white.opacity(0.3))
+                                    .font(.system(size: 10, weight: .regular, design: .monospaced))
+                                    .foregroundStyle(ink.opacity(0.45))
 
-                                Text(unsignedDollars(item.net * 100))
-                                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                                Text(signedDollars(item.net * 100))
+                                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
                                     .foregroundStyle(item.net >= 0 ? positiveColor : negativeColor)
-                                    .frame(width: 57, alignment: .trailing)
                             }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 8)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
                         }
                     }
 
                     Spacer(minLength: 0)
                 }
-                .padding(.bottom, 6)
-                .background(
-                    goldGlassCard()
-                )
+                .frame(maxWidth: .infinity)
+                .padding(.bottom, 8)
+                .background(paperCard(cornerRadius: 6))
             }
         }
         .padding(.horizontal, 16)
     }
 
-    // MARK: - Recent Carousel
+    // MARK: - Recent Results Tape
 
     private var recentCarousel: some View {
-        Group {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Text("RECENT ENTRIES")
+                    .font(.system(size: 9, weight: .semibold))
+                    .tracking(2)
+                    .foregroundStyle(brass.opacity(0.85))
+                Spacer()
+                Text("\(selectedTab == 0 ? recentGameCards.count : recentPropCards.count)")
+                    .font(.system(size: 10, weight: .semibold, design: .serif))
+                    .italic()
+                    .foregroundStyle(paper.opacity(0.5))
+            }
+            .padding(.horizontal, 20)
+
             if selectedTab == 0 {
-                gameCarousel
-            } else {
-                propCarousel
-            }
-        }
-    }
-
-    private var gameCarousel: some View {
-        Group {
-            if recentGameCards.isEmpty {
-                emptyCarousel
-            } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    ScrollViewReader { proxy in
-                        HStack(spacing: 6) {
-                            ForEach(Array(recentGameCards.enumerated()), id: \.offset) { index, result in
-                                gameCardView(result).id(index)
+                if recentGameCards.isEmpty {
+                    emptyCarousel
+                } else {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(Array(recentGameCards.enumerated()), id: \.offset) { _, result in
+                                gameCardView(result)
                             }
                         }
-                        .onReceive(carouselTimer) { _ in
-                            guard !recentGameCards.isEmpty else { return }
-                            withAnimation(.easeInOut(duration: 0.4)) {
-                                carouselIndex = (carouselIndex + 1) % recentGameCards.count
-                                proxy.scrollTo(carouselIndex, anchor: .leading)
-                            }
-                        }
+                        .padding(.horizontal, 16)
                     }
                 }
-                .padding(.horizontal, 16)
-            }
-        }
-    }
-
-    private var propCarousel: some View {
-        Group {
-            if recentPropCards.isEmpty {
-                emptyCarousel
             } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    ScrollViewReader { proxy in
-                        HStack(spacing: 6) {
-                            ForEach(Array(recentPropCards.enumerated()), id: \.offset) { index, result in
-                                propCardView(result).id(index)
+                if recentPropCards.isEmpty {
+                    emptyCarousel
+                } else {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(Array(recentPropCards.enumerated()), id: \.offset) { _, result in
+                                propCardView(result)
                             }
                         }
-                        .onReceive(carouselTimer) { _ in
-                            guard !recentPropCards.isEmpty else { return }
-                            withAnimation(.easeInOut(duration: 0.4)) {
-                                carouselIndex = (carouselIndex + 1) % recentPropCards.count
-                                proxy.scrollTo(carouselIndex, anchor: .leading)
-                            }
-                        }
+                        .padding(.horizontal, 16)
                     }
                 }
-                .padding(.horizontal, 16)
             }
         }
     }
@@ -5794,8 +5705,8 @@ struct BillfoldView: View {
         let sport = Sport.from(league: result.effectiveLeague)
         let isWon = result.result == "won"
         let isPush = result.result == "push"
-        let resultLetter = isWon ? "W" : (isPush ? "P" : "L")
-        let resultColor = isWon ? positiveColor : (isPush ? GaryColors.gold : negativeColor)
+        let stampWord = isWon ? "WON" : (isPush ? "PUSH" : "LOST")
+        let resultColor = isWon ? positiveColor : (isPush ? brass : negativeColor)
         let fullPickText = pickWithoutOdds(result.pick_text ?? result.matchup ?? "Pick")
         // Extract spread suffix if present, then build "Mascot +2.0"
         let spreadSuffix: String = {
@@ -5823,118 +5734,126 @@ struct BillfoldView: View {
             return "-110"
         }()
 
-        return VStack(alignment: .leading, spacing: 2) {
-            // Row 1: Sport badge + date + odds (right)
-            HStack(spacing: 0) {
+        return VStack(alignment: .leading, spacing: 0) {
+            // Perforated receipt edge
+            StitchLine()
+                .stroke(ink.opacity(0.25), style: StrokeStyle(lineWidth: 1, dash: [2, 3]))
+                .frame(height: 1)
+                .padding(.bottom, 6)
+
+            HStack(spacing: 5) {
                 Text(sport.rawValue)
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(sport.accentColor)
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 2)
-                    .background(
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(sport.accentColor.opacity(0.12))
-                    )
+                    .font(.system(size: 8.5, weight: .bold))
+                    .tracking(0.5)
+                    .foregroundStyle(ink.opacity(0.6))
                 Text(Formatters.formatDate(result.game_date))
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.3))
-                    .padding(.leading, 5)
+                    .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                    .foregroundStyle(ink.opacity(0.4))
                 Spacer()
                 Text(oddsStr)
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(GaryColors.gold.opacity(0.6))
-                    .monospacedDigit()
+                    .font(.system(size: 9.5, weight: .bold, design: .monospaced))
+                    .foregroundStyle(ink.opacity(0.55))
             }
 
-            // Row 2: Pick text + W/L centered
-            HStack(spacing: 0) {
+            HStack(spacing: 6) {
                 Text(pickText)
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(.white)
+                    .font(.system(size: 12.5, weight: .bold, design: .serif))
+                    .foregroundStyle(ink)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 Spacer(minLength: 4)
-                Text(resultLetter)
-                    .font(.system(size: 19, weight: .bold))
-                    .foregroundStyle(resultColor)
+                Text(stampWord)
+                    .font(.system(size: 8.5, weight: .heavy, design: .serif))
+                    .tracking(1.2)
+                    .foregroundStyle(resultColor.opacity(0.9))
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 2)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 2)
+                            .stroke(resultColor.opacity(0.75), lineWidth: 1.2)
+                    )
+                    .rotationEffect(.degrees(-7))
             }
+            .padding(.top, 4)
 
-            // Row 3: Final Score
             if let score = result.final_score, !score.isEmpty {
-                Text("Final Score: \(score)")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(GaryColors.gold)
-                    .monospacedDigit()
+                Text(score)
+                    .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                    .foregroundStyle(ink.opacity(0.5))
                     .lineLimit(1)
+                    .padding(.top, 3)
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
-        .frame(width: 170)
-        .background(
-            goldGlassCard()
-        )
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(width: 186)
+        .background(paperCard(cornerRadius: 4))
     }
 
     private func propCardView(_ result: PropResult) -> some View {
         let sport = Sport.from(league: result.effectiveLeague)
         let isWon = result.result == "won"
         let isPush = result.result == "push"
-        let resultLetter = isWon ? "W" : (isPush ? "P" : "L")
-        let resultColor = isWon ? positiveColor : (isPush ? GaryColors.gold : negativeColor)
+        let stampWord = isWon ? "WON" : (isPush ? "PUSH" : "LOST")
+        let resultColor = isWon ? positiveColor : (isPush ? brass : negativeColor)
         let propOddsStr: String = {
             let fromField = Formatters.americanOdds(result.odds?.value)
             return fromField.isEmpty ? "-110" : fromField
         }()
 
-        return VStack(alignment: .leading, spacing: 2) {
-            // Row 1: Sport badge + date + odds (right)
-            HStack(spacing: 0) {
+        return VStack(alignment: .leading, spacing: 0) {
+            // Perforated receipt edge
+            StitchLine()
+                .stroke(ink.opacity(0.25), style: StrokeStyle(lineWidth: 1, dash: [2, 3]))
+                .frame(height: 1)
+                .padding(.bottom, 6)
+
+            HStack(spacing: 5) {
                 Text(sport.rawValue)
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(sport.accentColor)
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 2)
-                    .background(
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(sport.accentColor.opacity(0.12))
-                    )
+                    .font(.system(size: 8.5, weight: .bold))
+                    .tracking(0.5)
+                    .foregroundStyle(ink.opacity(0.6))
                 Text(Formatters.formatDate(result.game_date))
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.3))
-                    .padding(.leading, 5)
+                    .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                    .foregroundStyle(ink.opacity(0.4))
                 Spacer()
                 Text(propOddsStr)
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(GaryColors.gold.opacity(0.6))
-                    .monospacedDigit()
+                    .font(.system(size: 9.5, weight: .bold, design: .monospaced))
+                    .foregroundStyle(ink.opacity(0.55))
             }
 
-            // Row 2: Prop title + W/L
-            HStack(spacing: 0) {
+            HStack(spacing: 6) {
                 Text(Formatters.propResultTitle(result))
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(.white)
+                    .font(.system(size: 11.5, weight: .bold, design: .serif))
+                    .foregroundStyle(ink)
                     .lineLimit(2)
                     .minimumScaleFactor(0.7)
                 Spacer(minLength: 4)
-                Text(resultLetter)
-                    .font(.system(size: 19, weight: .bold))
-                    .foregroundStyle(resultColor)
+                Text(stampWord)
+                    .font(.system(size: 8.5, weight: .heavy, design: .serif))
+                    .tracking(1.2)
+                    .foregroundStyle(resultColor.opacity(0.9))
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 2)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 2)
+                            .stroke(resultColor.opacity(0.75), lineWidth: 1.2)
+                    )
+                    .rotationEffect(.degrees(-7))
             }
+            .padding(.top, 4)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
-        .frame(width: 170)
-        .background(
-            goldGlassCard()
-        )
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(width: 186)
+        .background(paperCard(cornerRadius: 4))
     }
 
     private var emptyCarousel: some View {
-        Text(selectedSport == .all ? "No results yet" : "No \(selectedSport.rawValue) results")
-            .font(.system(size: 15, weight: .medium))
-            .foregroundStyle(.white.opacity(0.25))
+        Text(selectedSport == .all ? "No entries yet" : "No \(selectedSport.rawValue) entries")
+            .font(.system(size: 14, weight: .medium, design: .serif))
+            .italic()
+            .foregroundStyle(paper.opacity(0.4))
             .frame(maxWidth: .infinity, minHeight: 80)
     }
 
@@ -5942,10 +5861,11 @@ struct BillfoldView: View {
 
     private var loadingState: some View {
         VStack(spacing: 12) {
-            ProgressView().tint(GaryColors.gold)
-            Text("Loading...")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.white.opacity(0.35))
+            ProgressView().tint(brass)
+            Text("Opening the books\u{2026}")
+                .font(.system(size: 13, weight: .medium, design: .serif))
+                .italic()
+                .foregroundStyle(paper.opacity(0.55))
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 60)
@@ -5955,21 +5875,21 @@ struct BillfoldView: View {
         VStack(spacing: 12) {
             Image(systemName: "wifi.slash")
                 .font(.system(size: 20))
-                .foregroundStyle(.white.opacity(0.25))
+                .foregroundStyle(paper.opacity(0.35))
             Text(error)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.white.opacity(0.4))
+                .font(.system(size: 12, weight: .medium, design: .serif))
+                .foregroundStyle(paper.opacity(0.55))
             Button {
                 Task { await loadData() }
             } label: {
                 Text("Retry")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(.black)
+                    .font(.system(size: 12, weight: .bold, design: .serif))
+                    .foregroundStyle(leather)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 7)
                     .background(
                         RoundedRectangle(cornerRadius: 6)
-                            .fill(GaryColors.gold)
+                            .fill(brass)
                     )
             }
         }
@@ -15922,5 +15842,39 @@ struct AnalysisSectionRow: View {
                         .stroke(color.opacity(0.1), lineWidth: 0.5)
                 )
         )
+    }
+}
+
+
+// MARK: - Gary Typography
+// Bundled brand faces (Fonts/ + Info.plist UIAppFonts). Inlined here (not a
+// separate file) so it compiles without a project.pbxproj change.
+//   display – hero titles   mono – "Quant Terminal" labels   text – body/UI (Inter)
+// Retune the brand voice by changing the single `displayFace` value.
+enum GaryFonts {
+    /// Bundled options: "SairaCondensed-Bold" (default), "BebasNeue-Regular",
+    /// "Anton-Regular", "Rajdhani-Bold", "Oswald-Bold", "ChakraPetch-Bold", "BarlowCondensed-Bold".
+    static let displayFace = "SairaCondensed-Bold"
+
+    static func display(_ size: CGFloat) -> Font { .custom(displayFace, size: size) }
+
+    static func mono(_ size: CGFloat, bold: Bool = false) -> Font {
+        .custom(bold ? "JetBrainsMono-Bold" : "JetBrainsMono-Regular", size: size)
+    }
+
+    enum TextWeight {
+        case regular, medium, semibold, bold
+        var psName: String {
+            switch self {
+            case .regular:  return "Inter-Regular"
+            case .medium:   return "Inter-Medium"
+            case .semibold: return "Inter-SemiBold"
+            case .bold:     return "Inter-Bold"
+            }
+        }
+    }
+
+    static func text(_ size: CGFloat, _ weight: TextWeight = .regular) -> Font {
+        .custom(weight.psName, size: size)
     }
 }
