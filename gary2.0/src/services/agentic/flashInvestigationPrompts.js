@@ -996,6 +996,46 @@ MLB betting uses moneyline pricing rather than point spreads. The price reflects
 ### YOUR SCOUT REPORT IS YOUR BASELINE
 The scout report provides the starting point. You are free to re-fetch any stat for deeper investigation.`;
 
+const SOCCER_WC_FACTORS = `## INVESTIGATION CHECKLIST — SOCCER (2026 FIFA World Cup)
+
+Work through each factor for BOTH teams and report findings with specific numbers. Do not state what a factor means for the pick — report the facts; Gary decides.
+
+### 1. FORM & RECENT RESULTS
+- Results in this edition and recent matches (last ~5): wins/draws/losses, scorelines, opponent quality.
+- Any momentum or pattern in how results were earned?
+
+### 2. ATTACK & EXPECTED GOALS
+- Goals scored per match; shots and shots on target; expected goals (xG).
+- Is finishing running ahead of or behind chance quality (xG vs actual)?
+- Who creates and converts chances (key players)?
+
+### 3. DEFENSIVE RECORD
+- Goals and shots conceded per match; clean sheets; expected goals against (xGA).
+- How are goals being conceded (open play, set pieces, errors)?
+
+### 4. SET PIECES
+- Corner and free-kick threat for and against; aerial strength.
+
+### 5. LINEUPS, INJURIES & SUSPENSIONS
+- Confirmed XI / formation if available; squad rotation signals.
+- Injuries AND suspensions (including yellow-card accumulation). Distinguish confirmed-out vs doubtful; note the date of the latest update.
+
+### 6. GROUP / TOURNAMENT CONTEXT
+- Current group position, points, goal difference; what result does each side need to advance?
+- Any "already qualified / nothing to play for" rotation risk?
+
+### 7. FATIGUE, REST & TRAVEL
+- Days of rest vs the opponent; travel between host cities; cumulative minutes for key players.
+
+### 8. CONDITIONS
+- Venue, altitude (e.g. Mexico City), heat/weather, kickoff time.
+
+### 9. HEAD-TO-HEAD
+- Prior meetings (this or past editions) and how they played out, if relevant.
+
+### YOUR SCOUT REPORT IS YOUR BASELINE
+The scout report (group standings, form, xG, odds) is your starting point. Re-fetch any stat and use grounding for lineups/injuries/suspensions/weather.`;
+
 const FLASH_INVESTIGATION_FACTORS = {
   basketball_nba: NBA_FACTORS,
   NBA: NBA_FACTORS,
@@ -1009,6 +1049,8 @@ const FLASH_INVESTIGATION_FACTORS = {
   NCAAF: NCAAF_FACTORS,
   baseball_mlb: MLB_FACTORS,
   MLB: MLB_FACTORS,
+  soccer_world_cup: SOCCER_WC_FACTORS,
+  WC: SOCCER_WC_FACTORS,
 };
 
 // ═══════════════════════════════════════════════════════════════════════

@@ -369,7 +369,8 @@ function sportToBdlKey(sport) {
     'NCAAB': 'basketball_ncaab',
     'NCAAF': 'americanfootball_ncaaf',
     'NHL': 'icehockey_nhl',
-    'MLB': 'baseball_mlb'
+    'MLB': 'baseball_mlb',
+    'WC': 'soccer_world_cup'
   };
   return mapping[sport] || sport;
 }
@@ -385,12 +386,14 @@ function normalizeSportName(sport) {
     'americanfootball_ncaaf': 'NCAAF',
     'icehockey_nhl': 'NHL',
     'baseball_mlb': 'MLB',
+    'soccer_world_cup': 'WC',
     'NBA': 'NBA',
     'NFL': 'NFL',
     'NCAAB': 'NCAAB',
     'NCAAF': 'NCAAF',
     'NHL': 'NHL',
-    'MLB': 'MLB'
+    'MLB': 'MLB',
+    'WC': 'WC'
   };
   return mapping[sport] || sport;
 }

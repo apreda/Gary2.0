@@ -304,6 +304,7 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
   
   // NHL: Detect ML vs Puck Line from Gary's pick text
   const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
+  const isSoccer = sport === 'soccer_world_cup' || sport === 'WC';
   if (isNHL && parsed.pick) {
     const pickLowerNHL = parsed.pick.toLowerCase();
     if (pickLowerNHL.includes('puck line') || pickLowerNHL.includes('pl ') || pickLowerNHL.includes(' pl') ||
@@ -326,6 +327,17 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
     parsed.type = 'moneyline';
     console.log(`[Orchestrator] 🏒 NHL: Defaulting to moneyline`);
   }
+  // SOCCER (World Cup): Draw is a valid 3-way selection; keep Gary's explicit
+  // total/asian_handicap type, else default an ML pick to moneyline.
+  else if (isSoccer && parsed.pick) {
+    if (/\b(draw|tie)\b/i.test(parsed.pick)) {
+      parsed.type = 'draw';
+      console.log(`[Orchestrator] ⚽ WC: Detected Draw pick — bypassing ML caps & team check`);
+    } else if (!parsed.type) {
+      parsed.type = 'moneyline';
+      console.log(`[Orchestrator] ⚽ WC: Detected moneyline pick`);
+    }
+  }
   // DETECT TYPE FROM PICK TEXT if not explicitly provided (non-NHL)
   else if (!parsed.type && parsed.pick) {
     const pickLower = parsed.pick.toLowerCase();
@@ -346,7 +358,7 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
   // ML ODDS CEILING:
   // - NHL: No enforcement — Gary decides ML vs puck line organically. Log for diagnostics only.
   // - Other sports: Favorite ML worse than -200 → force to spread (safety net)
-  if (parsed.type === 'moneyline' && gameOdds && !isNHL) {
+  if (parsed.type === 'moneyline' && gameOdds && !isNHL && !isSoccer) {
     const mlCeiling = -200;
     const sideML = detectPickedTeam(parsed.pick, homeTeam, awayTeam);
     const pickedHomeML = sideML === 'home';
@@ -501,13 +513,14 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
   }
 
   // Reject picks with too-short or invalid text — do NOT fabricate picks
-  if (pickText.length < 5 || !pickText.match(/[A-Za-z]{3,}/)) {
+  if ((parsed.type !== 'draw' && pickText.length < 5) || !pickText.match(/[A-Za-z]{3,}/)) {
     console.error(`[Orchestrator] REJECTED: Pick text too short/invalid: "${pickText}" — not fabricating a pick`);
     return null;
   }
 
-  // Validate that the pick references one of the two teams in the game
-  if (!validatePickTeam(pickText, homeTeam, awayTeam)) {
+  // Validate that the pick references one of the two teams in the game.
+  // Soccer Draw picks legitimately name neither team — exempt them.
+  if (parsed.type !== 'draw' && !validatePickTeam(pickText, homeTeam, awayTeam)) {
     console.error(`[Orchestrator] REJECTED: Pick "${pickText}" does not reference ${homeTeam} or ${awayTeam} — wrong game`);
     return null;
   }

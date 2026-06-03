@@ -21,6 +21,7 @@ const { analyzeGame, buildSystemPrompt } = await import('../src/services/agentic
 const { oddsService } = await import('../src/services/oddsService.js');
 const { picksService } = await import('../src/services/picksService.js');
 const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
+const fifaWorldCupService = await import('../src/services/fifaWorldCupService.js');
 const { getConstitution } = await import('../src/services/agentic/constitution/index.js');
 const { geminiGroundingSearch } = await import('../src/services/agentic/scoutReport/scoutReportBuilder.js');
 
@@ -125,7 +126,8 @@ const SPORT_CONFIG = {
   nhl: { key: 'icehockey_nhl', name: 'NHL', emoji: '🏒', isBeta: true, useToday: true }, // Today's games (EST)
   ncaab: { key: 'basketball_ncaab', name: 'NCAAB', emoji: '🏀', useToday: true }, // Today's games (EST) — Flash pre-investigates 20-30 stat calls per game; Gary's own fetch_stats are supplementary
   ncaaf: { key: 'americanfootball_ncaaf', name: 'NCAAF', emoji: '🏈', fbsOnly: true, useToday: true }, // Today's games (EST)
-  mlb: { key: 'baseball_mlb', name: 'MLB', emoji: '⚾', useToday: true }
+  mlb: { key: 'baseball_mlb', name: 'MLB', emoji: '⚾', useToday: true },
+  wc: { key: 'soccer_world_cup', name: 'WC', emoji: '⚽', isBeta: true, useToday: true } // 2026 FIFA World Cup — today's matches (EST window)
 };
 
 // FBS Conference IDs from BDL (excludes FCS conferences like Big Sky, SWAC, MEAC, etc.)
@@ -223,6 +225,7 @@ if (runAll) {
   if (args.includes('--ncaab')) sportsToRun.push('ncaab');
   if (args.includes('--ncaaf')) sportsToRun.push('ncaaf');
   if (args.includes('--mlb')) sportsToRun.push('mlb');
+  if (args.includes('--wc')) sportsToRun.push('wc');
 }
 
 if (sportsToRun.length === 0) {
@@ -237,6 +240,7 @@ if (sportsToRun.length === 0) {
 ║    node scripts/run-agentic-picks.js --nhl   (BETA)              ║
 ║    node scripts/run-agentic-picks.js --ncaab                     ║
 ║    node scripts/run-agentic-picks.js --ncaaf                     ║
+║    node scripts/run-agentic-picks.js --wc    (BETA — 2026 WC)    ║
 ║    node scripts/run-agentic-picks.js --all                       ║
 ║                                                                  ║
 ║  Or combine sports:                                              ║
@@ -334,7 +338,26 @@ async function main() {
       // Fetch games
       console.log(`[${config.name}] Fetching upcoming games...`);
 
-      const allGames = await oddsService.getUpcomingGames(config.key, { nocache: true, targetDate: dateFilter });
+      let allGames;
+      if (config.key === 'soccer_world_cup') {
+        // World Cup: fetch all 2026 matches + consensus odds from the FIFA service
+        // (Plan A). We deliberately fetch the full fixture list and let the
+        // downstream EST `useToday` filter select the slate — that avoids the
+        // UTC→EST bleed where an EST-evening match lands on the next UTC day.
+        const allMatches = await fifaWorldCupService.getMatches({});
+        const oddsRows = await fifaWorldCupService.getOdds({});
+        allGames = allMatches
+          .filter(m => m.home_team && m.away_team) // skip TBD knockout slots
+          .map(m => {
+            const consensus = fifaWorldCupService.selectConsensusOdds(
+              oddsRows.filter(o => o.match_id === m.id)
+            );
+            return fifaWorldCupService.formatMatchForPipeline(m, consensus);
+          });
+        console.log(`[${config.name}] Fetched ${allGames.length} World Cup matches (full 2026 fixture list; EST filter selects today's slate)`);
+      } else {
+        allGames = await oddsService.getUpcomingGames(config.key, { nocache: true, targetDate: dateFilter });
+      }
 
       // Filter to games within time window
       const now = new Date();
@@ -1317,8 +1340,8 @@ async function main() {
           }
 
           // ALWAYS use verifiedTaleOfTape when available — toolCallHistory is inconsistent
-          if ((config.key === 'icehockey_nhl' || config.key === 'basketball_nba' || config.key === 'basketball_ncaab' || config.key === 'baseball_mlb') && result.verifiedTaleOfTape?.rows) {
-            const sportLabels = { 'icehockey_nhl': 'NHL', 'basketball_nba': 'NBA', 'basketball_ncaab': 'NCAAB', 'baseball_mlb': 'MLB' };
+          if ((config.key === 'icehockey_nhl' || config.key === 'basketball_nba' || config.key === 'basketball_ncaab' || config.key === 'baseball_mlb' || config.key === 'soccer_world_cup') && result.verifiedTaleOfTape?.rows) {
+            const sportLabels = { 'icehockey_nhl': 'NHL', 'basketball_nba': 'NBA', 'basketball_ncaab': 'NCAAB', 'baseball_mlb': 'MLB', 'soccer_world_cup': 'WC' };
             const sportLabel = sportLabels[config.key] || config.key;
             console.log(`   📊 ${sportLabel}: Using verified Tale of Tape (${result.verifiedTaleOfTape.rows.length} rows) for pick card`);
 
@@ -1395,6 +1418,19 @@ async function main() {
               'TEAM_ERA': 'team_era',
               'TEAM_OPS_BDL': 'team_ops',
               'RUNS_PER_GAME': 'runs_per_game',
+              // Soccer / World Cup (tokens auto-derived from Tale-of-Tape row labels)
+              'GROUP_POS': 'group_pos',
+              'POINTS': 'points',
+              'GF_GM': 'goals_for',
+              'GA_GM': 'goals_against',
+              'XG': 'expected_goals',
+              'XGA': 'expected_goals_against',
+              'POSSESSION': 'possession_pct',
+              'SHOTS_GM': 'shots',
+              'SOT_GM': 'shots_on_target',
+              'BIG_CHANCES': 'big_chances',
+              'PASS_ACC': 'pass_accuracy',
+              'CORNERS_GM': 'corners',
             };
 
             // Clear any toolCallHistory stats and use the verified rows instead
@@ -1423,7 +1459,7 @@ async function main() {
             console.log(`   ✓ ${sportLabel}: Added ${statsData.length} stats from verified Tale of Tape`);
 
             // Per-sport expected row counts — drift is a silent iOS rendering bug
-            const expectedRowCount = { 'NHL': 15, 'NCAAB': 15, 'NBA': 15, 'MLB': 14 }[sportLabel];
+            const expectedRowCount = { 'NHL': 15, 'NCAAB': 15, 'NBA': 15, 'MLB': 14, 'WC': 13 }[sportLabel];
             if (expectedRowCount && statsData.length !== expectedRowCount) {
               console.warn(`   ⚠️ ${sportLabel}: Expected ${expectedRowCount} Tale of Tape rows, got ${statsData.length} — check scout report builder`);
             }
@@ -1538,6 +1574,15 @@ async function main() {
             // BDL game id — disambiguates doubleheaders for dedupe
             bdl_game_id: game.bdl_game_id ?? game.id ?? null,
             commence_time: game.commence_time,
+            // Soccer (World Cup) context — threaded from the FIFA match game object
+            soccer_match_id: game.soccer_match_id ?? null,
+            soccer_three_way_ml: game.soccer_three_way_ml ?? null,
+            soccer_competition: game.soccer_competition ?? null,
+            soccer_stage: game.soccer_stage ?? null,
+            soccer_round: game.soccer_round ?? null,
+            soccer_group: game.soccer_group ?? null,
+            goal_line: result.goal_line ?? result.total ?? null,
+            handicap: result.handicap ?? null,
             // Venue/tournament context (for NBA Cup, playoffs, NFL primetime, etc.)
             venue: result.venue || null,
             isNeutralSite: result.isNeutralSite || false,

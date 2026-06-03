@@ -7,6 +7,7 @@ import { nflFetchers } from './nflFetchers.js';
 import { ncaabFetchers } from './ncaabFetchers.js';
 import { ncaafFetchers } from './ncaafFetchers.js';
 import { mlbFetchers } from './mlbFetchers.js';
+import { soccerFetchers } from './soccerFetchers.js';
 
 // Merge all fetchers into one object
 const FETCHERS = {
@@ -16,6 +17,7 @@ const FETCHERS = {
   ...nflFetchers,
   ...nhlFetchers,
   ...mlbFetchers,
+  ...soccerFetchers,
 };
 
 // Aliases — maps alternate token names to real fetcher names.

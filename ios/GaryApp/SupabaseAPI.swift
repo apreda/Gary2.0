@@ -202,6 +202,7 @@ enum SupabaseAPI {
             case "NCAAB": return "basketball.fill"
             case "NCAAF": return "football.fill"
             case "EPL": return "soccerball"
+            case "WC": return "trophy.fill"
             case "MLB": return "baseball.fill"
             default: return "sportscourt.fill"
             }
@@ -352,7 +353,35 @@ enum SupabaseAPI {
 
         return parsePicksRow(row.picks)
     }
-    
+
+    // MARK: - Insight Connections ("Today's Edges" hub)
+
+    /// Fetch hub connections for a specific date + league (e.g. "MLB" / "NBA").
+    /// Mirrors `fetchDailyPicks`: anon headers, dual `eq.` filter, 2xx guard
+    /// returning [] (never throws on HTTP/decode failure), `rows.first` unwrap.
+    /// Returns [] when nothing exists so callers can fall back to the mock hub.
+    static func fetchInsightConnections(date: String, league: String) async throws -> [Connection] {
+        let url = buildURL(table: "insight_connections", query: [
+            URLQueryItem(name: "select", value: "date,league,category,headline,detail,game,value,tone,spark,line_val,relevance_score,player_id,game_id"),
+            URLQueryItem(name: "date", value: "eq.\(date)"),
+            URLQueryItem(name: "league", value: "eq.\(league)"),
+            URLQueryItem(name: "order", value: "relevance_score.desc")
+        ])
+
+        let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            print("[SupabaseAPI] fetchInsightConnections failed: HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1)")
+            return []
+        }
+        do {
+            // Flat table — one row per connection.
+            return try JSONDecoder().decode([Connection].self, from: data)
+        } catch {
+            print("[SupabaseAPI] fetchInsightConnections decode error: \(error.localizedDescription)")
+            return []
+        }
+    }
+
     // MARK: - Weekly NFL Picks
     
     /// Fetch NFL picks for the current week
