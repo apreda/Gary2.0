@@ -905,7 +905,7 @@ This confirms the wrappers work end-to-end against GOAT-tier data. Requires `BAL
 Run:
 ```bash
 cd gary2.0 && node --input-type=module -e "
-import 'dotenv/config';
+import './src/loadEnv.js';
 import wc from './src/services/fifaWorldCupService.js';
 const today = new Date().toISOString().slice(0,10);
 const teams = await wc.getTeams([2026]);
