@@ -39,6 +39,11 @@ export function buildPass1Message(scoutReport, homeTeam, awayTeam, today, sport 
     return buildMlbPass1(scoutReport, today, homeTeam, awayTeam, spread);
   }
 
+  const isSoccer = sport === 'soccer_world_cup' || sport === 'WC';
+  if (isSoccer) {
+    return buildSoccerPass1(scoutReport, today, homeTeam, awayTeam, spread);
+  }
+
   throw new Error(`[Pass 1] No sport-specific builder for "${sport}" — add one to passBuilders.js`);
 }
 
@@ -399,9 +404,12 @@ INVESTIGATION COMPLETE
 export function buildPass25Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', sport = '', spread = 0, decisionGuards = '') {
   const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
   const isMLB = sport === 'baseball_mlb' || sport === 'MLB';
-  const lineLabel = (isNHL) ? 'moneyline or puck line' : (isMLB ? 'moneyline' : 'spread');
+  const isSoccer = sport === 'soccer_world_cup' || sport === 'WC';
+  const lineLabel = (isNHL) ? 'moneyline or puck line' : (isMLB ? 'moneyline' : (isSoccer ? '3-way moneyline, totals, or Asian handicap' : 'spread'));
   const betTypeNote = isNHL
     ? `**BET TYPE:** You have two options — MONEYLINE (picking a team to win outright, includes OT/SO) or PUCK LINE (standard -1.5/+1.5, regulation + OT only). Choose the bet type that matches your read on the game.`
+    : isSoccer
+    ? `**BET TYPE:** You have three options — 3-WAY MONEYLINE (Home win, Draw, or Away win — three separately priced outcomes, settles on 90 minutes), TOTALS (Over/Under match goals), or ASIAN HANDICAP (team ±0.5/1.0/1.5 goals). Use only markets present in the odds. Backing the Draw is allowed when it is the value play.`
     : `**BET TYPE:** You have two options — SPREAD (picking a side to cover) or MONEYLINE (picking a team to win outright). Choose the bet type that matches your conviction about how this game plays out.`;
   const homeSpread = spread >= 0 ? `+${spread.toFixed(1)}` : spread.toFixed(1);
   const awaySpread = (-spread) >= 0 ? `+${(-spread).toFixed(1)}` : (-spread).toFixed(1);
@@ -410,6 +418,8 @@ export function buildPass25Message(homeTeam = '[HOME]', awayTeam = '[AWAY]', spo
     lineContext = `Line context: ${homeTeam} (home) vs ${awayTeam} (away). Choose ML or Puck Line based on your investigation.`;
   } else if (isMLB) {
     lineContext = `Line context: ${homeTeam} (home) vs ${awayTeam} (away) moneyline.`;
+  } else if (isSoccer) {
+    lineContext = `Line context: ${homeTeam} (home) vs Draw vs ${awayTeam} (away). Pick the market your investigation supports (3-way ML, Totals, or Asian handicap).`;
   } else {
     lineContext = `Line context: ${homeTeam} ${homeSpread} / ${awayTeam} ${awaySpread}.`;
   }
@@ -587,6 +597,7 @@ export function buildPass3Unified(homeTeam = '[HOME]', awayTeam = '[AWAY]', opti
 
   const sport = options.sport || '';
   const isNHL = sport === 'icehockey_nhl' || sport === 'NHL';
+  const isSoccer = sport === 'soccer_world_cup' || sport === 'WC';
 
   // Build records reminder if available (anti-hallucination for Pass 3)
   const homeRecord = options.homeRecord;
@@ -616,7 +627,7 @@ ${recordsReminder}
 <output_requirements>
 ## OUTPUT REQUIREMENTS
 
-${isNHL ? `**BET TYPE:** You have two options — MONEYLINE (picking a team to win outright, includes OT/SO) or PUCK LINE (standard -1.5/+1.5, regulation + OT only). Choose the bet type that matches your read on the game.` : `**BET TYPE:** You have two options — SPREAD (picking a side to cover) or MONEYLINE (picking a team to win outright). Choose the bet type that matches your conviction about how this game plays out.`}
+${isNHL ? `**BET TYPE:** You have two options — MONEYLINE (picking a team to win outright, includes OT/SO) or PUCK LINE (standard -1.5/+1.5, regulation + OT only). Choose the bet type that matches your read on the game.` : isSoccer ? `**BET TYPE:** You have three options — 3-WAY MONEYLINE (Home / Draw / Away — settles on 90 minutes), TOTALS (Over/Under match goals), or ASIAN HANDICAP (team ±0.5/1.0/1.5 goals). Report the EXACT odds from the scout report for your chosen market.` : `**BET TYPE:** You have two options — SPREAD (picking a side to cover) or MONEYLINE (picking a team to win outright). Choose the bet type that matches your conviction about how this game plays out.`}
 
 **CRITICAL ODDS RULES:**
 1. Use the EXACT odds from the "RAW ODDS VALUES" section of the scout report — do NOT default to -110
@@ -864,6 +875,34 @@ Before completing Pass 1, include BOTH sections:
 Case for ${homeTeam} winning tonight
 Case for ${awayTeam} winning tonight
 (Each case should be 2-3 paragraphs explaining why that team wins. Use whatever reasoning you find most compelling — stats, matchup data, momentum, series context, pitcher feel, team energy, or any combination. There is no required formula. Some nights one factor dominates; other nights it's the full picture. If one side is a heavy favorite, note the price.)
+
+Do NOT declare a side, make a pick, or write your final analysis yet. When your Pass 1 synthesis is complete, output this exact line on its own line:
+INVESTIGATION COMPLETE
+</instructions>`.trim();
+}
+
+function buildSoccerPass1(scoutReport, today, homeTeam, awayTeam, spread) {
+  return `
+<scout_report>
+## MATCHUP BRIEFING (TODAY: ${today})
+${scoutReport}
+</scout_report>
+
+<bet_type_menu>
+This is a 3-way soccer match. Pick from whichever markets the scout report shows odds for:
+**Moneyline (3-way):** ${homeTeam} to win, Draw, or ${awayTeam} to win — three separately priced outcomes (settles on 90 minutes). Backing the Draw is allowed when it is the value.
+**Totals (O/U goals):** Over/Under total match goals, when a line is shown.
+**Asian Handicap:** team ±0.5/1.0/1.5 goals, when a line is shown.
+Use only markets present in the scout report odds, and transcribe the exact odds.
+</bet_type_menu>
+
+<instructions>
+Investigate BOTH teams across the soccer factors (form, attack/xG, defense, set pieces, availability/injuries/suspensions, group/tournament context, fatigue/rest/travel, weather/altitude). Report findings with specific numbers — do not state what any factor means for the pick.
+
+Before finishing, include three short cases (2-3 sentences each), grounded only in what you investigated:
+Case for ${homeTeam} winning tonight
+Case for a Draw
+Case for ${awayTeam} winning tonight
 
 Do NOT declare a side, make a pick, or write your final analysis yet. When your Pass 1 synthesis is complete, output this exact line on its own line:
 INVESTIGATION COMPLETE
