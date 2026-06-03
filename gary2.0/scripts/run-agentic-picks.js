@@ -21,6 +21,7 @@ const { analyzeGame, buildSystemPrompt } = await import('../src/services/agentic
 const { oddsService } = await import('../src/services/oddsService.js');
 const { picksService } = await import('../src/services/picksService.js');
 const { ballDontLieService } = await import('../src/services/ballDontLieService.js');
+const fifaWorldCupService = await import('../src/services/fifaWorldCupService.js');
 const { getConstitution } = await import('../src/services/agentic/constitution/index.js');
 const { geminiGroundingSearch } = await import('../src/services/agentic/scoutReport/scoutReportBuilder.js');
 
@@ -125,7 +126,8 @@ const SPORT_CONFIG = {
   nhl: { key: 'icehockey_nhl', name: 'NHL', emoji: '🏒', isBeta: true, useToday: true }, // Today's games (EST)
   ncaab: { key: 'basketball_ncaab', name: 'NCAAB', emoji: '🏀', useToday: true }, // Today's games (EST) — Flash pre-investigates 20-30 stat calls per game; Gary's own fetch_stats are supplementary
   ncaaf: { key: 'americanfootball_ncaaf', name: 'NCAAF', emoji: '🏈', fbsOnly: true, useToday: true }, // Today's games (EST)
-  mlb: { key: 'baseball_mlb', name: 'MLB', emoji: '⚾', useToday: true }
+  mlb: { key: 'baseball_mlb', name: 'MLB', emoji: '⚾', useToday: true },
+  wc: { key: 'soccer_world_cup', name: 'WC', emoji: '⚽', isBeta: true, useToday: true } // 2026 FIFA World Cup — today's matches (EST window)
 };
 
 // FBS Conference IDs from BDL (excludes FCS conferences like Big Sky, SWAC, MEAC, etc.)
@@ -223,6 +225,7 @@ if (runAll) {
   if (args.includes('--ncaab')) sportsToRun.push('ncaab');
   if (args.includes('--ncaaf')) sportsToRun.push('ncaaf');
   if (args.includes('--mlb')) sportsToRun.push('mlb');
+  if (args.includes('--wc')) sportsToRun.push('wc');
 }
 
 if (sportsToRun.length === 0) {
@@ -237,6 +240,7 @@ if (sportsToRun.length === 0) {
 ║    node scripts/run-agentic-picks.js --nhl   (BETA)              ║
 ║    node scripts/run-agentic-picks.js --ncaab                     ║
 ║    node scripts/run-agentic-picks.js --ncaaf                     ║
+║    node scripts/run-agentic-picks.js --wc    (BETA — 2026 WC)    ║
 ║    node scripts/run-agentic-picks.js --all                       ║
 ║                                                                  ║
 ║  Or combine sports:                                              ║
@@ -334,7 +338,26 @@ async function main() {
       // Fetch games
       console.log(`[${config.name}] Fetching upcoming games...`);
 
-      const allGames = await oddsService.getUpcomingGames(config.key, { nocache: true, targetDate: dateFilter });
+      let allGames;
+      if (config.key === 'soccer_world_cup') {
+        // World Cup: fetch all 2026 matches + consensus odds from the FIFA service
+        // (Plan A). We deliberately fetch the full fixture list and let the
+        // downstream EST `useToday` filter select the slate — that avoids the
+        // UTC→EST bleed where an EST-evening match lands on the next UTC day.
+        const allMatches = await fifaWorldCupService.getMatches({});
+        const oddsRows = await fifaWorldCupService.getOdds({});
+        allGames = allMatches
+          .filter(m => m.home_team && m.away_team) // skip TBD knockout slots
+          .map(m => {
+            const consensus = fifaWorldCupService.selectConsensusOdds(
+              oddsRows.filter(o => o.match_id === m.id)
+            );
+            return fifaWorldCupService.formatMatchForPipeline(m, consensus);
+          });
+        console.log(`[${config.name}] Fetched ${allGames.length} World Cup matches (full 2026 fixture list; EST filter selects today's slate)`);
+      } else {
+        allGames = await oddsService.getUpcomingGames(config.key, { nocache: true, targetDate: dateFilter });
+      }
 
       // Filter to games within time window
       const now = new Date();
