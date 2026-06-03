@@ -136,8 +136,18 @@ struct GaryPick: Identifiable, Codable {
     let is_top_pick: Bool?
     // Multi-sportsbook odds comparison (ML + Spread)
     let sportsbook_odds: [SportsbookOdds]?
+    // Soccer / World Cup context
+    let soccerStage: String?
+    let soccerGroup: String?
+    let soccerRound: String?
 
     var id: String { pick_id ?? "\(homeTeam ?? "?")-\(awayTeam ?? "?")-\(league ?? "?")-\(type ?? "?")" }
+
+    /// Compact tournament context line for World Cup pick cards (e.g. "Group A · Group Stage", "Round of 16").
+    var soccerContext: String? {
+        let parts = [soccerGroup, soccerRound ?? soccerStage].compactMap { $0 }.filter { !$0.isEmpty }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
     
     /// Check if this is an NBA Cup game
     var isNBACup: Bool {
@@ -252,7 +262,10 @@ struct GaryPick: Identifiable, Codable {
             homeRanking: (dict["homeRanking"] as? NSNumber)?.intValue,
             awayRanking: (dict["awayRanking"] as? NSNumber)?.intValue,
             is_top_pick: dict["is_top_pick"] as? Bool,
-            sportsbook_odds: sportsbookOddsArray
+            sportsbook_odds: sportsbookOddsArray,
+            soccerStage: dict["soccer_stage"] as? String,
+            soccerGroup: dict["soccer_group"] as? String,
+            soccerRound: dict["soccer_round"] as? String
         )
     }
 }

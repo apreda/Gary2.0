@@ -7549,6 +7549,14 @@ struct PickCardBack: View {
                     .foregroundStyle(.white.opacity(0.55))
             }
 
+            // World Cup tournament context (e.g. "Group A · Group Stage"); nil for other sports
+            if let wcContext = pick.soccerContext {
+                Text(wcContext)
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(Color(hex: "#16A34A").opacity(0.9))
+                    .lineLimit(1)
+            }
+
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 1.5).fill(Color(hex: "#1A1A1E"))
