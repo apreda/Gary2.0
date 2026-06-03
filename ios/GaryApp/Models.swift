@@ -376,6 +376,19 @@ struct StatValues: Codable {
     let pdoStat: String?
     let shPct5v5: String?
     let svPct5v5: String?
+    // Soccer / World Cup
+    let groupPos: String?
+    let points: String?
+    let goalsFor: String?
+    let goalsAgainst: String?
+    let expectedGoals: String?
+    let expectedGoalsAgainst: String?
+    let possessionPct: String?
+    let shots: String?
+    let shotsOnTarget: String?
+    let bigChances: String?
+    let passAccuracy: String?
+    let corners: String?
     // NCAAB Barttorvik rankings
     let adjoeRank: String?
     let adjdeRank: String?
@@ -427,6 +440,19 @@ struct StatValues: Codable {
         case threeMadePerGame = "three_made_per_game"
         case threeAttemptedPerGame = "three_attempted_per_game"
         case gamesPlayed = "games_played"
+        // Soccer / World Cup
+        case groupPos = "group_pos"
+        case points
+        case goalsFor = "goals_for"
+        case goalsAgainst = "goals_against"
+        case expectedGoals = "expected_goals"
+        case expectedGoalsAgainst = "expected_goals_against"
+        case possessionPct = "possession_pct"
+        case shots
+        case shotsOnTarget = "shots_on_target"
+        case bigChances = "big_chances"
+        case passAccuracy = "pass_accuracy"
+        case corners
         case tovRate = "tov_rate"
         case turnoversPerGame = "turnovers_per_game"
         case orebRate = "oreb_rate"
@@ -629,6 +655,19 @@ struct StatValues: Codable {
             pdoStat: dict["pdo"] as? String ?? (dict["pdo"] as? NSNumber)?.stringValue,
             shPct5v5: dict["sh_pct_5v5"] as? String ?? (dict["sh_pct_5v5"] as? NSNumber)?.stringValue,
             svPct5v5: dict["sv_pct_5v5"] as? String ?? (dict["sv_pct_5v5"] as? NSNumber)?.stringValue,
+            // Soccer / World Cup
+            groupPos: dict["group_pos"] as? String ?? (dict["group_pos"] as? NSNumber)?.stringValue,
+            points: dict["points"] as? String ?? (dict["points"] as? NSNumber)?.stringValue,
+            goalsFor: dict["goals_for"] as? String ?? (dict["goals_for"] as? NSNumber)?.stringValue,
+            goalsAgainst: dict["goals_against"] as? String ?? (dict["goals_against"] as? NSNumber)?.stringValue,
+            expectedGoals: dict["expected_goals"] as? String ?? (dict["expected_goals"] as? NSNumber)?.stringValue,
+            expectedGoalsAgainst: dict["expected_goals_against"] as? String ?? (dict["expected_goals_against"] as? NSNumber)?.stringValue,
+            possessionPct: dict["possession_pct"] as? String ?? (dict["possession_pct"] as? NSNumber)?.stringValue,
+            shots: dict["shots"] as? String ?? (dict["shots"] as? NSNumber)?.stringValue,
+            shotsOnTarget: dict["shots_on_target"] as? String ?? (dict["shots_on_target"] as? NSNumber)?.stringValue,
+            bigChances: dict["big_chances"] as? String ?? (dict["big_chances"] as? NSNumber)?.stringValue,
+            passAccuracy: dict["pass_accuracy"] as? String ?? (dict["pass_accuracy"] as? NSNumber)?.stringValue,
+            corners: dict["corners"] as? String ?? (dict["corners"] as? NSNumber)?.stringValue,
             // NCAAB Barttorvik rankings
             adjoeRank: dict["adjoe_rank"] as? String,
             adjdeRank: dict["adjde_rank"] as? String,
@@ -864,6 +903,19 @@ struct StatValues: Codable {
         case "HOME_ICE", "REST_SITUATION", "BACK_TO_BACK": return overall ?? "N/A"
         case "HIGH_DANGER_CHANCES": return shotsFor ?? "N/A"
         case "TOP_SCORERS", "LINE_COMBINATIONS": return overall ?? "N/A"
+        // Soccer / World Cup (tokens auto-derived from Tale-of-Tape row labels)
+        case "GROUP_POS": return groupPos ?? "N/A"
+        case "POINTS": return points ?? "N/A"
+        case "GF_GM": return goalsFor ?? "N/A"
+        case "GA_GM": return goalsAgainst ?? "N/A"
+        case "XG": return expectedGoals ?? "N/A"
+        case "XGA": return expectedGoalsAgainst ?? "N/A"
+        case "POSSESSION": return possessionPct ?? "N/A"
+        case "SHOTS_GM": return shots ?? "N/A"
+        case "SOT_GM": return shotsOnTarget ?? "N/A"
+        case "BIG_CHANCES": return bigChances ?? "N/A"
+        case "PASS_ACC": return passAccuracy ?? "N/A"
+        case "CORNERS_GM": return corners ?? "N/A"
         default: return offensiveRating ?? defensiveRating ?? netRating ?? overall ?? totalYardsPerGame ?? pointsPerGame ?? goalsForPerGame ?? "N/A"
         }
     }
