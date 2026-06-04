@@ -12156,44 +12156,12 @@ struct CompactPropRow: View {
         guard let result = gameResult?.lowercased(), !result.isEmpty else { return nil }
         return result
     }
-    private var resultStampText: String {
-        switch resolvedResult {
-        case "won": return "W"
-        case "push": return "P"
-        case "lost": return "L"
-        default: return "L"
-        }
-    }
     private var resultStampColor: Color {
         switch resolvedResult {
         case "won": return Color(hex: "#3FB950")
         case "push": return GaryColors.gold
         case "lost": return Color(hex: "#E5484D")
         default: return Color(hex: "#E5484D")
-        }
-    }
-    private var resultStampTextOpacity: Double {
-        switch resolvedResult {
-        case "lost": return 1.0
-        case "won": return 0.85
-        case "push": return 0.9
-        default: return 0.85
-        }
-    }
-    private var resultStampRingOpacity: Double {
-        switch resolvedResult {
-        case "lost": return 0.94
-        case "won": return 0.79
-        case "push": return 0.84
-        default: return 0.79
-        }
-    }
-    private var resultStampShadowOpacity: Double {
-        switch resolvedResult {
-        case "lost": return 0.34
-        case "won": return 0.25
-        case "push": return 0.28
-        default: return 0.25
         }
     }
 
@@ -12377,26 +12345,6 @@ struct CompactPropRow: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 12)
-            .opacity(gameResult != nil ? 0.72 : 1.0)
-
-            if resolvedResult != nil {
-                Text(resultStampText)
-                    .font(.system(size: 29, weight: .black, design: .default))
-                    .fontWidth(.compressed)
-                    .tracking(0.5)
-                    .foregroundStyle(resultStampColor.opacity(resultStampTextOpacity))
-                    .frame(width: 62, height: 62)
-                    .background(
-                        Circle()
-                            .fill(Color.black.opacity(0.64))
-                            .overlay(
-                                Circle()
-                                    .stroke(resultStampColor.opacity(resultStampRingOpacity), lineWidth: 1.8)
-                            )
-                    )
-                    .shadow(color: resultStampColor.opacity(resultStampShadowOpacity), radius: 6, y: 0)
-                    .rotationEffect(.degrees(-10))
-            }
         }
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)

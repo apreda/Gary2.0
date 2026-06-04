@@ -55,6 +55,12 @@ import { computeWcPreviewGroups } from './computers/wcPreviewGroups.js';
 import { computeWcPedigree } from './computers/wcPedigree.js';
 import { computeWcOpeners } from './computers/wcOpeners.js';
 
+// Sharp-angle WC lanes (research-backed: rest differentials, venue altitude/
+// heat, group-winner market value) — run in BOTH preview and match-day modes.
+import { computeWcRestEdge } from './computers/wcRestEdge.js';
+import { computeWcVenueEdge } from './computers/wcVenueEdge.js';
+import { computeWcGroupValue } from './computers/wcGroupValue.js';
+
 /**
  * Registry of computers per league. Each entry is an async fn:
  *   (ctx) => Promise<row[]>
@@ -84,12 +90,18 @@ const WC_COMPUTERS = [
   computeWcForm,
   computeWcH2h,
   computeWcStakes,
+  computeWcRestEdge,
+  computeWcVenueEdge,
+  computeWcGroupValue,
 ];
 
 const WC_PREVIEW_COMPUTERS = [
   computeWcPreviewGroups,
   computeWcPedigree,
   computeWcOpeners,
+  computeWcRestEdge,
+  computeWcVenueEdge,
+  computeWcGroupValue,
 ];
 
 const COMPUTERS_BY_LEAGUE = {
