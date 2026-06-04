@@ -7902,6 +7902,14 @@ struct CompactPickRow: View {
         return Formatters.formatCommenceTime(time)
     }
 
+    /// Live/final state for THIS matchup (shared cache; nil when scheduled
+    /// or unknown). Only consulted when the card has no settled result.
+    @ObservedObject private var liveCache = LiveScoreCache.shared
+    private var liveStatus: LiveScore? {
+        guard resolvedResult == nil else { return nil }
+        return liveCache.status(forMatchup: "\(pick.awayTeam ?? "") @ \(pick.homeTeam ?? "")")
+    }
+
     private static let bookDisplayNames: [String: String] = [
         "draftkings": "DraftKings",
         "fanduel": "FanDuel",
@@ -7975,6 +7983,18 @@ struct CompactPickRow: View {
                                 Capsule().fill(resultStampColor.opacity(0.16))
                                     .overlay(Capsule().stroke(resultStampColor.opacity(0.4), lineWidth: 0.8))
                             )
+                    } else if let live = liveStatus, live.isLive {
+                        Text("LIVE")
+                            .font(GaryFonts.mono(11, bold: true))
+                            .tracking(1)
+                            .foregroundStyle(.white.opacity(0.75))
+                            .lineLimit(1)
+                    } else if let live = liveStatus, live.isFinal {
+                        Text("FINAL")
+                            .font(GaryFonts.mono(11, bold: false))
+                            .tracking(1)
+                            .foregroundStyle(.white.opacity(0.5))
+                            .lineLimit(1)
                     } else if !formattedTime.isEmpty {
                         Text(formattedTime.uppercased())
                             .font(GaryFonts.mono(11, bold: false))
@@ -8056,6 +8076,7 @@ struct CompactPickRow: View {
                 )
                 .shadow(color: .black.opacity(0.45), radius: 14, y: 6)
         )
+        .onAppear { LiveScoreCache.shared.startIfNeeded() }
     }
 }
 
@@ -10150,6 +10171,35 @@ struct PropCardSlate: View {
     }
 }
 
+// MARK: - Shared Live Score Cache
+//
+// One app-wide fetch loop for live_scores so the pick/prop cards can show
+// LIVE / FINAL in their time slot wherever they appear (Home, Picks, Winners).
+// Consumers call startIfNeeded() (idempotent) and look up by matchup.
+@MainActor
+final class LiveScoreCache: ObservableObject {
+    static let shared = LiveScoreCache()
+    @Published private(set) var scores: [LiveScore] = []
+    private var started = false
+
+    func startIfNeeded() {
+        guard !started else { return }
+        started = true
+        Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                self.scores = await SupabaseAPI.fetchLiveScores(date: SupabaseAPI.todayEST())
+                try? await Task.sleep(nanoseconds: 90_000_000_000)
+            }
+        }
+    }
+
+    func status(forMatchup matchup: String) -> LiveScore? {
+        guard !matchup.isEmpty else { return nil }
+        return scores.first { abbrGameMatches($0.abbrGame, matchup: matchup) }
+    }
+}
+
 // MARK: - Shared Props Slate Store
 //
 // One @MainActor ObservableObject that owns the props + game-picks network
@@ -12199,12 +12249,19 @@ struct CompactPropRow: View {
     }
 
     private var formattedTime: String {
-        if let isoTime = prop.commence_time, !isoTime.isEmpty,
-           let gameDate = parseISO8601(isoTime) {
-            return Formatters.dayTimeFormatterEST.string(from: gameDate).replacingOccurrences(of: "^[A-Za-z]+ ", with: "", options: .regularExpression) // just time
-        }
+        // Same formatter as the game card so both read "1:35 PM ET".
+        let viaCommence = Formatters.formatCommenceTime(prop.commence_time)
+        if !viaCommence.isEmpty { return viaCommence }
         if let time = prop.time, !time.isEmpty, time != "TBD" { return time }
         return ""
+    }
+
+    /// Live/final state for THIS matchup (shared cache; nil when scheduled
+    /// or unknown). Only consulted when the card has no settled result.
+    @ObservedObject private var liveCache = LiveScoreCache.shared
+    private var liveStatus: LiveScore? {
+        guard resolvedResult == nil else { return nil }
+        return liveCache.status(forMatchup: prop.matchup ?? "")
     }
 
     /// The actual line value (e.g. "24.5") for use inside the bet pill so
@@ -12296,6 +12353,18 @@ struct CompactPropRow: View {
                                 Capsule().fill(resultStampColor.opacity(0.16))
                                     .overlay(Capsule().stroke(resultStampColor.opacity(0.4), lineWidth: 0.8))
                             )
+                    } else if let live = liveStatus, live.isLive {
+                        Text("LIVE")
+                            .font(GaryFonts.mono(11, bold: true))
+                            .tracking(1)
+                            .foregroundStyle(.white.opacity(0.75))
+                            .lineLimit(1)
+                    } else if let live = liveStatus, live.isFinal {
+                        Text("FINAL")
+                            .font(GaryFonts.mono(11, bold: false))
+                            .tracking(1)
+                            .foregroundStyle(.white.opacity(0.5))
+                            .lineLimit(1)
                     } else if !formattedTime.isEmpty {
                         Text(formattedTime.uppercased())
                             .font(GaryFonts.mono(11, bold: false))
@@ -12348,7 +12417,7 @@ struct CompactPropRow: View {
                         .fill(Color(hex: "#1C1F26"))
                         .overlay(
                             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .stroke(GaryColors.gold.opacity(0.7), lineWidth: 1)
+                                .stroke(GaryColors.silver.opacity(0.55), lineWidth: 1)
                         )
                 )
 
@@ -12365,6 +12434,7 @@ struct CompactPropRow: View {
                 )
                 .shadow(color: .black.opacity(0.45), radius: 14, y: 6)
         )
+        .onAppear { LiveScoreCache.shared.startIfNeeded() }
     }
 }
 
