@@ -10332,6 +10332,9 @@ struct Signal: Identifiable {
     /// BDL player id when the edge is player-backed — unlocks the full
     /// Player Insights breakdown from the card back.
     var playerId: String? = nil
+    /// Structured player-swap payload (beneficiary lane) for the
+    /// transaction-style OUT → IN row.
+    var swap: SwapMeta? = nil
 }
 
 // MARK: - Picks Tab (per-game swipe carousel: Today's Top + game-by-game)
@@ -10894,7 +10897,8 @@ extension Connection {
             tone: HubTone.from(tone),
             spark: spark ?? [],
             lineVal: line_val,
-            playerId: player_id
+            playerId: player_id,
+            swap: (meta?.kind == "swap") ? meta : nil
         )
     }
 }
@@ -11010,11 +11014,22 @@ struct PropsHubView: View {
                         VStack(spacing: 0) { ForEach(items(.h2h)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
                             .quantPanel().padding(.horizontal, 14)
                     }
-                    // THE BENEFICIARY — who absorbs a missing player's role
+                    // THE BENEFICIARY — transaction-style OUT → IN swap rows;
+                    // tapping a row opens the replacement's full player insights.
                     if !items(.injury).isEmpty {
                         HubSectionHeader(eyebrow: "THE BENEFICIARY", sub: "Who absorbs the missing volume")
-                        VStack(spacing: 0) { ForEach(items(.injury)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
-                            .quantPanel().padding(.horizontal, 14)
+                        VStack(spacing: 0) {
+                            ForEach(items(.injury)) { s in
+                                if s.swap != nil {
+                                    BeneficiarySwapRow(s: s) {
+                                        if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s }
+                                    }
+                                } else {
+                                    SignalRow(s: s) { _ in selectedSignal = s }
+                                }
+                            }
+                        }
+                        .quantPanel().padding(.horizontal, 14)
                     }
                     // REST & FATIGUE — schedule spots and bullpen workload
                     if !items(.situational).isEmpty {
@@ -11748,6 +11763,79 @@ struct PlayerInsightSheet: View {
             }
         }
         .quantPanel()
+    }
+}
+
+/// ESPN-transaction-style injury swap row: the OUT player struck through on
+/// top (red), tonight's replacement below (green) with his slot + season line.
+/// Tapping anywhere opens the replacement's full Player Insights.
+struct BeneficiarySwapRow: View {
+    let s: Signal
+    let onTap: () -> Void
+
+    var body: some View {
+        guard let swap = s.swap else { return AnyView(EmptyView()) }
+        return AnyView(
+            Button(action: onTap) {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        Text([swap.team, swap.position].compactMap { $0 }.joined(separator: " · "))
+                            .font(.system(size: 9, weight: .semibold, design: .monospaced)).tracking(1.2)
+                            .foregroundStyle(GaryColors.gold.opacity(0.85))
+                        Spacer()
+                        Text(s.game.uppercased())
+                            .font(.system(size: 8, weight: .medium, design: .monospaced)).tracking(0.6)
+                            .foregroundStyle(.white.opacity(0.3)).lineLimit(1)
+                    }
+
+                    // OUT
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 9, weight: .heavy))
+                            .foregroundStyle(HubPalette.red)
+                            .frame(width: 14)
+                        Text(swap.out_name ?? "—")
+                            .font(.system(size: 15, weight: .semibold))
+                            .strikethrough(true, color: HubPalette.red.opacity(0.7))
+                            .foregroundStyle(.white.opacity(0.55))
+                            .lineLimit(1)
+                        Spacer(minLength: 6)
+                        if let note = swap.out_note, !note.isEmpty {
+                            Text(note.uppercased())
+                                .font(.system(size: 8, weight: .semibold, design: .monospaced)).tracking(0.4)
+                                .foregroundStyle(HubPalette.red.opacity(0.8))
+                                .lineLimit(1).minimumScaleFactor(0.8)
+                        }
+                    }
+
+                    // IN
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 9, weight: .heavy))
+                            .foregroundStyle(HubPalette.green)
+                            .frame(width: 14)
+                        Text(swap.in_name ?? "—")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                        Spacer(minLength: 6)
+                        if let note = swap.in_note, !note.isEmpty {
+                            Text(note)
+                                .font(.system(size: 8.5, weight: .semibold, design: .monospaced)).tracking(0.4)
+                                .foregroundStyle(HubPalette.green)
+                                .lineLimit(1).minimumScaleFactor(0.8)
+                        }
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.25))
+                    }
+                }
+                .padding(.vertical, 11)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .overlay(Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1), alignment: .bottom)
+        )
     }
 }
 

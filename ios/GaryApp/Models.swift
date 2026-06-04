@@ -65,7 +65,7 @@ struct WeeklyNFLPicksRow: Decodable {
 
 struct Connection: Decodable {
     let date: String?
-    let league: String?          // "MLB" / "NBA"
+    let league: String?          // "MLB" / "NBA" / "WC"
     let category: String?        // snake_case lane: heat_check, platoon_edge, ballpark_shift, regression_watch, …
     let headline: String?
     let detail: String?
@@ -77,6 +77,19 @@ struct Connection: Decodable {
     let relevance_score: Double? // 0–100 ranking score
     let player_id: String?
     let game_id: String?
+    let meta: SwapMeta?          // structured lane payload (beneficiary swap rows)
+}
+
+/// Structured player-swap payload on beneficiary rows (kind == "swap"):
+/// the OUT player, why, and tonight's replacement with his slot + line.
+struct SwapMeta: Decodable {
+    let kind: String?
+    let team: String?
+    let position: String?
+    let out_name: String?
+    let out_note: String?    // "Oblique · On the injury report for 4 days"
+    let in_name: String?
+    let in_note: String?     // "BATS 1ST · .794 OPS · .284 AVG"
 }
 
 // MARK: - Live Scores (2-minute poller snapshots)

@@ -63,6 +63,9 @@ export function makeRow(o) {
   if (o.player_id != null) row.player_id = o.player_id;
   if (o.team_id != null) row.team_id = o.team_id;
   if (o.game_id != null) row.game_id = o.game_id;
+  // Optional structured payload for lanes whose cards render more than prose
+  // (e.g. beneficiary's player-swap rows). Plain JSON object, stored as jsonb.
+  if (o.meta != null && typeof o.meta === 'object') row.meta = o.meta;
   return row;
 }
 

@@ -177,6 +177,21 @@ export async function computeBeneficiary(ctx) {
       player_id: replacement.playerId,
       team_id: teamId,
       game_id: gameId,
+      // Structured swap payload for the iOS transaction-style row
+      // (OUT player on top, IN replacement below; prose stays the fallback).
+      meta: {
+        kind: 'swap',
+        team: abbr || null,
+        position,
+        out_name: starName,
+        out_note: [injType || null, recencyClause || null].filter(Boolean).join(' · '),
+        in_name: repName,
+        in_note: [
+          batsTop6 || (Number.isFinite(order) && order > 0) ? `BATS ${ordinal(order).toUpperCase()}` : null,
+          benOps != null ? `${pct3(benOps)} OPS` : null,
+          benAvg != null ? `${pct3(benAvg)} AVG` : null,
+        ].filter(Boolean).join(' · '),
+      },
     }));
   }
 

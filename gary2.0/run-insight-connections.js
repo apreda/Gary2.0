@@ -152,6 +152,7 @@ function toRow(connection, league, date) {
     player_id: connection.player_id != null ? String(connection.player_id) : null,
     team_id: connection.team_id != null ? String(connection.team_id) : null,
     game_id: connection.game_id != null ? String(connection.game_id) : null,
+    meta: connection.meta ?? null,
   };
 }
 
