@@ -1410,6 +1410,14 @@ enum GaryColors {
     
     // NFL Green (same as prop picks)
     static let nflAccent = Color(hex: "#22C55E")
+
+    // Lightened baseball-field accent for MLB card eyebrows — the dark #2D5A27
+    // grass green is hard to read on small text. Grass -> infield dirt -> base white.
+    static let mlbGrass = Color(hex: "#7BC267")
+    static let mlbFieldText = LinearGradient(
+        colors: [Color(hex: "#7BC267"), Color(hex: "#C9A66B"), Color(hex: "#EDEDE6")],
+        startPoint: .leading, endPoint: .trailing
+    )
 }
 
 // MARK: - Immersive Background
@@ -2554,9 +2562,37 @@ struct PremiumPicksView: View {
     @State private var propShelves: [PropShelf] = []
     @State private var gameResultsMap: [String: String] = [:]   // "away@home" -> won/lost/push
 
+    // Terminal Tape: GAMES <-> PROPS mode (props are a peer, one tap away — not buried below games).
+    enum Mode { case games, props }
+    @State private var mode: Mode = .games
+    @Namespace private var tabNS
+
     // In-season / imminent sports shown as rows (placeholders when a sport has no pick yet).
     // Any extra league present in the data is appended automatically.
     private let canonicalSports = ["MLB", "NBA", "NHL", "WC"]
+
+    // MARK: - Terminal status / tab counts (all derived from loaded view state)
+
+    private var gameCount: Int { gameShelves.filter { !$0.settled }.reduce(0) { $0 + $1.picks.count } }
+    private var propCount: Int { propShelves.reduce(0) { $0 + $1.props.count } }
+    private var liveCount: Int { gameCount + propCount }
+
+    /// Today's settled record from gameResultsMap -> (wins, losses, win%). nil if nothing settled.
+    private var settledRecord: (wins: Int, losses: Int, pct: Int)? {
+        let vals = gameResultsMap.values.map { $0.lowercased() }
+        let w = vals.filter { $0 == "won" }.count
+        let l = vals.filter { $0 == "lost" }.count
+        guard w + l > 0 else { return nil }
+        return (w, l, Int((Double(w) / Double(w + l) * 100).rounded()))
+    }
+
+    /// League codes that have content today, canonical order first, extras appended.
+    private var liveLeagues: [String] {
+        let present = Set(gameShelves.filter { !$0.picks.isEmpty }.map { $0.league })
+            .union(propShelves.filter { !$0.props.isEmpty }.map { $0.league })
+        return canonicalSports.filter { present.contains($0) }
+            + present.subtracting(canonicalSports).sorted()
+    }
 
     struct GameShelf: Identifiable {
         let league: String
@@ -2586,7 +2622,7 @@ struct PremiumPicksView: View {
             LiquidGlassBackground(grainDensity: 0)
 
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 0) {
+                LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
                     header
 
                     if loading {
@@ -2595,10 +2631,15 @@ struct PremiumPicksView: View {
                     } else if !hasContent {
                         emptyState
                     } else {
-                        content
+                        Section {
+                            modeContent
+                                .padding(.top, 14)
+                                .padding(.bottom, 120)
+                        } header: {
+                            toggleBar
+                        }
                     }
                 }
-                .padding(.bottom, 120)
             }
         }
         .task { await load() }
@@ -2615,23 +2656,54 @@ struct PremiumPicksView: View {
                     .foregroundStyle(Color(hex: "#0b0a08"))
                     .padding(.horizontal, 8).padding(.vertical, 3)
                     .background(Capsule().fill(GaryColors.gold))
+                Rectangle().fill(Color.white.opacity(0.10)).frame(width: 1, height: 11)
                 Text(headerDate)
                     .font(GaryFonts.mono(10))
                     .tracking(1)
                     .foregroundStyle(.white.opacity(0.42))
             }
             Text("Gary's Best Bets")
-                .font(GaryFonts.display(40))
+                .font(GaryFonts.display(28))
                 .foregroundStyle(.white)
-            Text(isPremium
-                 ? "Gary's top game picks & props across every sport."
-                 : "Gary's most confident plays across every sport — unlocked for members.")
-                .font(GaryFonts.text(14))
-                .foregroundStyle(.white.opacity(0.5))
+                .padding(.top, 1)
+            statusLine
         }
         .padding(.horizontal, 16)
-        .padding(.top, 10)
-        .padding(.bottom, 22)
+        .padding(.top, 6)
+        .padding(.bottom, 14)
+    }
+
+    // Terminal status line: today's record / win% | live play count | sports in play.
+    private var statusLine: some View {
+        HStack(spacing: 8) {
+            HStack(spacing: 5) {
+                Text("REC").font(GaryFonts.mono(11, bold: true)).foregroundStyle(.white.opacity(0.40))
+                if let rec = settledRecord {
+                    Text("\(rec.wins)-\(rec.losses)").font(GaryFonts.mono(11)).foregroundStyle(.white.opacity(0.78))
+                    Text("·").font(GaryFonts.mono(11)).foregroundStyle(.white.opacity(0.30))
+                    Text("\(rec.pct)%").font(GaryFonts.mono(11, bold: true)).foregroundStyle(GaryColors.gold)
+                } else {
+                    Text("—").font(GaryFonts.mono(11)).foregroundStyle(.white.opacity(0.40))
+                }
+            }
+            statusPipe
+            Text(liveCount == 0 ? "AWAITING SLATE" : (liveCount == 1 ? "1 PLAY LIVE" : "\(liveCount) PLAYS LIVE"))
+                .font(GaryFonts.mono(11, bold: true)).foregroundStyle(.white.opacity(0.55))
+            if !liveLeagues.isEmpty {
+                statusPipe
+                HStack(spacing: 6) {
+                    ForEach(liveLeagues, id: \.self) { code in
+                        Text(code).font(GaryFonts.mono(11, bold: true))
+                            .foregroundStyle(Sport.from(league: code).accentColor)
+                    }
+                }
+            }
+        }
+        .lineLimit(1)
+        .padding(.top, 3)
+    }
+    private var statusPipe: some View {
+        Rectangle().fill(Color.white.opacity(0.12)).frame(width: 1, height: 10)
     }
 
     private var emptyState: some View {
@@ -2646,16 +2718,66 @@ struct PremiumPicksView: View {
 
     // MARK: - Content
 
-    private var content: some View {
-        VStack(alignment: .leading, spacing: 22) {
-            ForEach(gameShelves) { shelf in
-                gameShelfView(shelf)
-            }
+    // MARK: - Toggle bar (Terminal Tape) + mode content
 
-            if propShelves.contains(where: { !$0.props.isEmpty }) {
-                sectionDivider("PREMIUM PROPS")
-                ForEach(propShelves.filter { !$0.props.isEmpty }) { shelf in
-                    propShelfView(shelf)
+    private var toggleBar: some View {
+        HStack(spacing: 0) {
+            tabSegment("GAMES", count: gameCount, active: mode == .games) { mode = .games }
+            Spacer().frame(width: 28)
+            tabSegment("PROPS", count: propCount, active: mode == .props) { mode = .props }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 10)
+        .padding(.bottom, 11)
+        .background(
+            ZStack(alignment: .bottom) {
+                Color(hex: "#090C11")
+                Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1)
+            }
+        )
+    }
+
+    private func tabSegment(_ label: String, count: Int, active: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { action() }
+        } label: {
+            VStack(alignment: .leading, spacing: 7) {
+                HStack(spacing: 6) {
+                    Text(label)
+                        .font(GaryFonts.mono(13, bold: true))
+                        .foregroundStyle(active ? .white : .white.opacity(0.45))
+                    Text("\(count)")
+                        .font(GaryFonts.mono(13, bold: true))
+                        .foregroundStyle(active ? GaryColors.gold : .white.opacity(0.3))
+                }
+                Group {
+                    if active {
+                        Capsule().fill(GaryColors.gold).frame(height: 2)
+                            .matchedGeometryEffect(id: "tabUnderline", in: tabNS)
+                    } else {
+                        Capsule().fill(Color.clear).frame(height: 2)
+                    }
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder private var modeContent: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            if mode == .games {
+                ForEach(gameShelves) { shelf in
+                    gameShelfView(shelf)
+                }
+            } else {
+                let shelves = propShelves.filter { !$0.props.isEmpty }
+                if shelves.isEmpty {
+                    propsEmptyState
+                } else {
+                    ForEach(shelves) { shelf in
+                        propShelfView(shelf)
+                    }
                 }
             }
 
@@ -2673,15 +2795,13 @@ struct PremiumPicksView: View {
         }
     }
 
-    private func sectionDivider(_ title: String) -> some View {
-        HStack(spacing: 10) {
-            Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1)
-            Text(title).font(GaryFonts.mono(11, bold: true)).tracking(1)
-                .foregroundStyle(.white.opacity(0.55)).fixedSize()
-            Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1)
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 6)
+    private var propsEmptyState: some View {
+        Text("No props posted yet — they'll appear here with the slate.")
+            .font(GaryFonts.text(13))
+            .foregroundStyle(.white.opacity(0.4))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 28)
     }
 
     private func shelfHeader(_ league: String, status: String) -> some View {
@@ -7664,6 +7784,29 @@ struct CompactPickRow: View {
     private var isNCAAB: Bool { (pick.league ?? "").uppercased() == "NCAAB" }
     private var isCFP: Bool { pick.isCFP }
     private var pickParts: (pick: String, odds: String) { pick.formattedPickParts }
+
+    /// Picked team's standard abbreviation (PHI, NYK, ...) via the MLB/NBA keyword
+    /// maps, with a mascot-initials fallback for other leagues.
+    private func teamAbbrev(_ shortName: String) -> String {
+        let lower = shortName.lowercased()
+        let lg = (pick.league ?? "").uppercased()
+        let maps: [[String: [String]]] = lg == "NBA" ? [nbaTeamKeywords]
+            : lg == "MLB" ? [mlbTeamKeywords]
+            : [mlbTeamKeywords, nbaTeamKeywords]
+        for map in maps {
+            for (abbr, kws) in map where kws.contains(where: { lower.contains($0) }) { return abbr }
+        }
+        let last = lower.split(separator: " ").last.map(String.init) ?? lower
+        return String(last.prefix(3)).uppercased()
+    }
+    /// The pick with the team name collapsed to its abbreviation (e.g. "PHI ML").
+    private var compactPick: String {
+        let raw = pickParts.pick
+        let pickedShort = homeIsPicked ? homeName : (awayIsPicked ? awayName : "")
+        guard !pickedShort.isEmpty else { return raw.uppercased() }
+        return raw.replacingOccurrences(of: pickedShort, with: teamAbbrev(pickedShort), options: .caseInsensitive).uppercased()
+    }
+
     private var confidenceValue: CGFloat {
         CGFloat(max(0.18, min(1.0, pick.confidence ?? 0.72)))
     }
@@ -7783,12 +7926,12 @@ struct CompactPickRow: View {
                 HStack(spacing: 8) {
                     Image(systemName: sport.icon)
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(accentColor)
+                        .foregroundStyle((sport == .mlb || sport == .mlbHR) ? GaryColors.mlbGrass : accentColor)
                     if let significance = significanceTag {
                         Text(significance)
                             .font(.system(size: 11, weight: .semibold, design: .monospaced))
                             .tracking(1)
-                            .foregroundStyle(accentColor)
+                            .foregroundStyle((sport == .mlb || sport == .mlbHR) ? AnyShapeStyle(GaryColors.mlbFieldText) : AnyShapeStyle(accentColor))
                             .lineLimit(1)
                     }
                     Spacer(minLength: 6)
@@ -7814,6 +7957,9 @@ struct CompactPickRow: View {
                             .foregroundStyle(.white.opacity(0.34))
                             .lineLimit(1)
                     }
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.28))
                 }
 
                 // Matchup hero — serif "Away @ Home", picked side bright, the
@@ -7826,10 +7972,10 @@ struct CompactPickRow: View {
                             .foregroundStyle(GaryColors.gold)
                     }
                     Text(awayName)
-                        .font(.system(size: 21, weight: awayIsPicked ? .semibold : .regular, design: .serif))
+                        .font(GaryFonts.text(21, awayIsPicked ? .medium : .regular))
                         .foregroundStyle(.white.opacity(awayIsPicked ? 1.0 : 0.42))
                     Text("@")
-                        .font(.system(size: 13, weight: .regular, design: .serif))
+                        .font(GaryFonts.text(13))
                         .foregroundStyle(.white.opacity(0.3))
                     if let s = homeSeedTag {
                         Text(s)
@@ -7837,26 +7983,28 @@ struct CompactPickRow: View {
                             .foregroundStyle(GaryColors.gold)
                     }
                     Text(homeName)
-                        .font(.system(size: 21, weight: homeIsPicked ? .semibold : .regular, design: .serif))
+                        .font(GaryFonts.text(21, homeIsPicked ? .medium : .regular))
                         .foregroundStyle(.white.opacity(homeIsPicked ? 1.0 : 0.42))
                     Spacer(minLength: 0)
                 }
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
 
-                // Bottom — the PICK, stretched full-width: this card's product.
+                // Bottom — the PICK (abbreviated, gold) stretched full-width: this card's product.
+                // Gold text (image 2 treatment) on the full-width layout (image 1) — muted fill
+                // + thin border so the gold letters stay the hero.
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(pickParts.pick.uppercased())
+                    Text(compactPick)
                         .font(.system(size: 17, weight: .heavy, design: .monospaced))
                         .tracking(0.8)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(GaryColors.gold)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                     Spacer(minLength: 8)
                     if !pickParts.odds.isEmpty {
                         Text(pickParts.odds)
                             .font(.system(size: 15, weight: .semibold, design: .monospaced))
-                            .foregroundStyle(.white.opacity(0.9))
+                            .foregroundStyle(GaryColors.gold.opacity(0.72))
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -7864,10 +8012,10 @@ struct CompactPickRow: View {
                 .padding(.vertical, 12)
                 .background(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(GaryColors.gold.opacity(0.20))
+                        .fill(Color(hex: "#1C1F26"))
                         .overlay(
                             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .stroke(GaryColors.gold.opacity(0.7), lineWidth: 1.2)
+                                .stroke(GaryColors.gold.opacity(0.7), lineWidth: 1)
                         )
                 )
             }
@@ -10891,12 +11039,12 @@ struct LiveScoreStrip: View {
             if let line = score.scoreLine {
                 Text(line)
                     .font(.system(size: 13, weight: .bold, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.92))
+                    .foregroundStyle(GaryColors.gold)
             }
             if score.isLive, let det = score.detail, !det.isEmpty {
                 Text(det)
                     .font(.system(size: 10, weight: .semibold, design: .monospaced)).tracking(0.6)
-                    .foregroundStyle(.white.opacity(0.45))
+                    .foregroundStyle(GaryColors.gold.opacity(0.6))
             }
             Spacer()
         }
@@ -11056,7 +11204,7 @@ struct PropsHubView: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 22) {
-                header.padding(.horizontal, 14)
+                header
                 searchBar.padding(.horizontal, 14)
 
                 if !searchText.isEmpty {
@@ -11281,17 +11429,18 @@ struct PropsHubView: View {
                         let on = l == sel
                         Button { withAnimation(.easeInOut(duration: 0.2)) { sel = l } } label: {
                             Text(l.label)
-                                .font(.system(size: 14, weight: .heavy)).tracking(0.5)
+                                .font(.system(size: 11, weight: .bold, design: .monospaced)).tracking(0.8)
                                 .foregroundStyle(on ? Color.black.opacity(0.85) : Color.white.opacity(0.5))
-                                .padding(.horizontal, 13).padding(.vertical, 5)
-                                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(on ? GaryColors.gold : Color.clear)
-                                    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(on ? Color.clear : Color.white.opacity(0.1), lineWidth: 1)))
+                                .padding(.horizontal, 11).padding(.vertical, 5)
+                                .background(
+                                    Capsule().fill(on ? GaryColors.gold : Color.white.opacity(0.05))
+                                        .overlay(Capsule().stroke(on ? Color.clear : Color.white.opacity(0.08), lineWidth: 1))
+                                )
                         }.buttonStyle(.plain)
                     }
                 }
             }
         }
-        .padding(.bottom, 2)
     }
 }
 
@@ -11956,6 +12105,10 @@ struct CompactPropRow: View {
     var showSportBadge: Bool = false
 
     private var accentColor: Color { Sport.from(league: prop.effectiveLeague).accentColor }
+    private var isMLBProp: Bool {
+        let s = Sport.from(league: prop.effectiveLeague)
+        return s == .mlb || s == .mlbHR
+    }
     private var accentGradient: LinearGradient {
         Sport.from(league: prop.effectiveLeague).accentGradient
             ?? LinearGradient(colors: [accentColor, accentColor], startPoint: .leading, endPoint: .trailing)
@@ -12064,12 +12217,15 @@ struct CompactPropRow: View {
                 // header already shows the matchup + time, so this row is
                 // suppressed to avoid the duplicate league/time/chevron.
                 if showSportBadge {
-                    HStack(spacing: 10) {
+                    HStack(spacing: 8) {
                         if let league = leagueTag {
+                            Image(systemName: leagueIcon)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(isMLBProp ? GaryColors.mlbGrass : accentColor)
                             Text(league)
                                 .font(.system(size: 10, weight: .semibold, design: .monospaced))
                                 .tracking(1)
-                                .foregroundStyle(GaryColors.gold.opacity(0.9))
+                                .foregroundStyle(isMLBProp ? AnyShapeStyle(GaryColors.mlbFieldText) : AnyShapeStyle(accentColor))
                         }
                         if !formattedTime.isEmpty {
                             Text(formattedTime.uppercased())
