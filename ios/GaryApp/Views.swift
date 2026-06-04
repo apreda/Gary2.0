@@ -10787,11 +10787,7 @@ struct PicksCarouselView: View {
                 content
             }
         }
-        .overlay {
-            if let prop = selectedProp {
-                PropDetailPopup(prop: prop) { selectedProp = nil }.transition(.opacity)
-            }
-        }
+        .sheet(item: $selectedProp) { PropTakeSheet(prop: $0) }
         .task {
             await store.loadIfNeeded()
             consumeFocus()
@@ -11027,7 +11023,11 @@ struct PicksTodayPage: View {
                 FlippablePickCard(pick: gp, gameResult: nil, showSportBadge: true)
                     .padding(.horizontal, 10)
             }
-            if !topProps.isEmpty {
+            if topProps.count == 1, let only = topProps.first {
+                // A single prop wears the full locked card (Home's design).
+                FlippablePropCard(prop: only, gameResult: resultForProp(only), showSportBadge: true)
+                    .padding(.horizontal, 10)
+            } else if !topProps.isEmpty {
                 PropSlipCard(props: topProps, resultForProp: resultForProp, onTapProp: onTapProp)
                     .padding(.horizontal, 10)
             }
@@ -11079,7 +11079,11 @@ struct PicksGamePage: View {
                     .padding(.horizontal, 16)
             }
 
-            if !topProps.isEmpty {
+            if topProps.count == 1, let only = topProps.first {
+                // A single prop wears the full locked card (Home's design).
+                FlippablePropCard(prop: only, gameResult: resultForProp(only), showSportBadge: true)
+                    .padding(.horizontal, 10)
+            } else if !topProps.isEmpty {
                 PropSlipCard(props: topProps, resultForProp: resultForProp, onTapProp: onTapProp)
                     .padding(.horizontal, 10)
             }
@@ -11093,6 +11097,126 @@ struct PicksGamePage: View {
 /// then the gold pick + odds), with a W/L letter rail that fills in as props
 /// settle. Replaces stacked prop cards anywhere a game carries 1–5 props.
 /// Locked-card language throughout: same frame, fonts, and gold-only-pick rule.
+/// Condensed Gary's Take for a slip row — props lead with the NUMBERS
+/// (key stats), then the read. Medium sheet, silver family, gold pick only.
+struct PropTakeSheet: View {
+    let prop: PropPick
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    Text("Gary's Take")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(GaryColors.heroAccent.opacity(0.85))
+                    Spacer()
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 22)).foregroundStyle(.white.opacity(0.3))
+                    }.buttonStyle(.plain)
+                }
+                .padding(.top, 18)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(prop.player ?? "")
+                        .font(GaryFonts.display(26))
+                        .foregroundStyle(.white)
+                    HStack(spacing: 6) {
+                        if let team = prop.team, !team.isEmpty {
+                            Text(team.uppercased())
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(GaryColors.silver.opacity(0.8))
+                        }
+                        if let m = prop.matchup, !m.isEmpty {
+                            Text(m.uppercased())
+                                .font(GaryFonts.mono(9.5, bold: false))
+                                .foregroundStyle(.white.opacity(0.34))
+                                .lineLimit(1)
+                        }
+                    }
+                }
+
+                // The pick — the locked chip, full size.
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(prop.slipPickText)
+                        .font(GaryFonts.mono(16, bold: true))
+                        .tracking(0.8)
+                        .foregroundStyle(GaryColors.heroAccent)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.65)
+                    Spacer(minLength: 6)
+                    Text(Formatters.americanOdds(prop.odds))
+                        .font(GaryFonts.mono(13, bold: true))
+                        .foregroundStyle(GaryColors.silver.opacity(0.8))
+                }
+                .padding(.horizontal, 13).padding(.vertical, 11)
+                .frame(maxWidth: .infinity)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Color(hex: "#1C1F26"))
+                        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(GaryColors.silver.opacity(0.55), lineWidth: 1))
+                )
+
+                // Numbers first — props are a stats product.
+                if let stats = prop.key_stats, !stats.isEmpty {
+                    VStack(alignment: .leading, spacing: 7) {
+                        Text("The Numbers")
+                            .font(GaryFonts.display(15))
+                            .foregroundStyle(GaryColors.sectionHead)
+                        ForEach(Array(stats.prefix(4).enumerated()), id: \.offset) { _, s in
+                            HStack(alignment: .top, spacing: 8) {
+                                Circle().fill(GaryColors.silver.opacity(0.7))
+                                    .frame(width: 4, height: 4).padding(.top, 6)
+                                Text(s)
+                                    .font(.system(size: 13.5)).foregroundStyle(.white.opacity(0.85))
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+                }
+
+                // Then the read.
+                if let a = prop.analysis, !a.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("The Read")
+                            .font(GaryFonts.display(15))
+                            .foregroundStyle(GaryColors.sectionHead)
+                        Text(cleanPropAnalysis(a))
+                            .font(.system(size: 14)).foregroundStyle(.white.opacity(0.75))
+                            .lineSpacing(3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 26)
+        }
+        .background(GaryColors.darkBg.ignoresSafeArea())
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+}
+
+extension PropPick {
+    /// "TOTAL BASES OVER 1.5" — the locked card's pick composition, shared by
+    /// the slip rows and the condensed Take sheet.
+    var slipPickText: String {
+        var words = Formatters.propDisplay(prop, league: effectiveLeague)
+            .split(separator: " ").map(String.init)
+        if let last = words.last, Double(last) != nil { words.removeLast() }
+        var name = words.joined(separator: " ").uppercased()
+        name = CompactPropRow.marketAbbrevShared[name] ?? name
+        var call = (bet ?? "").uppercased()
+        if let raw = line?.trimmingCharacters(in: .whitespaces), !raw.isEmpty {
+            let lineText = Double(raw).map { $0.truncatingRemainder(dividingBy: 1) == 0 ? String(format: "%g", $0) : String(format: "%.1f", $0) } ?? raw
+            call = call.isEmpty ? lineText : "\(call) \(lineText)"
+        }
+        return [name, call].filter { !$0.isEmpty }.joined(separator: " ")
+    }
+}
+
 struct PropSlipCard: View {
     let props: [PropPick]
     let resultForProp: (PropPick) -> String?
@@ -11113,42 +11237,25 @@ struct PropSlipCard: View {
     private var isMLB: Bool { (props.first?.effectiveLeague ?? "").uppercased() == "MLB" }
     private var accent: Color { Sport.from(league: props.first?.effectiveLeague).accentColor }
 
-    /// "TOTAL BASES OVER 1.5" — same composition the locked prop card uses.
-    private func pickText(_ p: PropPick) -> String {
-        var words = Formatters.propDisplay(p.prop, league: p.effectiveLeague)
-            .split(separator: " ").map(String.init)
-        if let last = words.last, Double(last) != nil { words.removeLast() }
-        var name = words.joined(separator: " ").uppercased()
-        name = CompactPropRow.marketAbbrevShared[name] ?? name
-        var call = (p.bet ?? "").uppercased()
-        if let raw = p.line?.trimmingCharacters(in: .whitespaces), !raw.isEmpty {
-            let line = Double(raw).map { $0.truncatingRemainder(dividingBy: 1) == 0 ? String(format: "%g", $0) : String(format: "%.1f", $0) } ?? raw
-            call = call.isEmpty ? line : "\(call) \(line)"
+
+    /// Colored W/L/P letter once graded (inlined before the name).
+    private func resultLetter(_ p: PropPick) -> (String, Color)? {
+        switch resultForProp(p)?.lowercased() {
+        case "won": return ("W", Color(hex: "#3FB950"))
+        case "lost": return ("L", Color(hex: "#E5484D"))
+        case "push": return ("P", GaryColors.gold)
+        default: return nil
         }
-        return [name, call].filter { !$0.isEmpty }.joined(separator: " ")
     }
 
-    /// Per-row status line — the locked card's header-state slot, row-sized:
-    /// graded -> colored W/L/P + FINAL · score; final -> FINAL · score;
-    /// live -> LIVE score · detail; else the start time.
-    private func statusLine(_ p: PropPick) -> (letter: String?, letterColor: Color, text: String) {
-        let ls = liveCache.status(forMatchup: p.matchup ?? "")
-        let score: String? = {
-            guard let a = ls?.away_score, let h = ls?.home_score else { return nil }
-            return "\(a)–\(h)"
-        }()
-        switch resultForProp(p)?.lowercased() {
-        case "won":  return ("W", Color(hex: "#3FB950"), score.map { "FINAL · \($0)" } ?? "FINAL")
-        case "lost": return ("L", Color(hex: "#E5484D"), score.map { "FINAL · \($0)" } ?? "FINAL")
-        case "push": return ("P", GaryColors.gold, score.map { "FINAL · \($0)" } ?? "FINAL")
-        default: break
-        }
-        if let ls {
-            if ls.isLive { return (nil, .clear, liveSlotText(ls, label: "LIVE")) }
-            if ls.isFinal { return (nil, .clear, liveSlotText(ls, label: "FINAL")) }
-        }
-        let t = Formatters.formatCommenceTime(p.commence_time)
-        return (nil, .clear, t.isEmpty ? "" : t.uppercased())
+    /// Slip-level game state — only when every prop shares one matchup.
+    private var sharedStatusText: String? {
+        let matchups = Set(props.compactMap { $0.matchup })
+        guard matchups.count == 1, let m = matchups.first,
+              let ls = liveCache.status(forMatchup: m) else { return nil }
+        if ls.isLive { return liveSlotText(ls, label: "LIVE") }
+        if ls.isFinal { return liveSlotText(ls, label: "FINAL") }
+        return nil
     }
 
     var body: some View {
@@ -11166,6 +11273,15 @@ struct PropSlipCard: View {
                     .font(GaryFonts.mono(11, bold: false))
                     .foregroundStyle(.white.opacity(0.34))
                 Spacer()
+                // One game state for the whole slip (game pages); mixed-game
+                // slips (Today) stay quiet — their chips carry state up top.
+                if let shared = sharedStatusText {
+                    Text(shared)
+                        .font(GaryFonts.mono(9.5, bold: false))
+                        .tracking(0.5)
+                        .foregroundStyle(.white.opacity(0.34))
+                        .lineLimit(1)
+                }
             }
             .padding(.bottom, 9)
 
@@ -11183,23 +11299,12 @@ struct PropSlipCard: View {
                 }
                 Button { onTapProp(p) } label: {
                     VStack(alignment: .leading, spacing: 6) {
-                        let status = statusLine(p)
-                        if status.letter != nil || !status.text.isEmpty {
-                            HStack(spacing: 6) {
-                                if let letter = status.letter {
-                                    Text(letter)
-                                        .font(GaryFonts.mono(10, bold: true))
-                                        .foregroundStyle(status.letterColor)
-                                }
-                                Spacer()
-                                Text(status.text)
-                                    .font(GaryFonts.mono(9.5, bold: false))
-                                    .tracking(0.5)
-                                    .foregroundStyle(.white.opacity(0.34))
-                                    .lineLimit(1)
-                            }
-                        }
                         HStack(alignment: .firstTextBaseline, spacing: 7) {
+                            if let r = resultLetter(p) {
+                                Text(r.0)
+                                    .font(GaryFonts.mono(11, bold: true))
+                                    .foregroundStyle(r.1)
+                            }
                             Text(p.player ?? p.team ?? "")
                                 .font(GaryFonts.text(18, .semibold))
                                 .foregroundStyle(.white.opacity(0.94))
@@ -11222,7 +11327,7 @@ struct PropSlipCard: View {
                             }
                         }
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Text(pickText(p))
+                            Text(p.slipPickText)
                                 .font(GaryFonts.mono(15, bold: true))
                                 .tracking(0.8)
                                 .foregroundStyle(GaryColors.heroAccent)
