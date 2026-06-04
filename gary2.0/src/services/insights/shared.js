@@ -161,16 +161,58 @@ export function venueFirstWord(venue) {
 
 /**
  * Map an absolute "edge" magnitude onto a relevance band with a floor/ceiling.
+ *
+ * The curve is linear near zero (slope = scale) but eases asymptotically toward
+ * `cap` instead of clamping, so big edges keep their ORDERING instead of all
+ * pinning at the cap. (The old hard `min(cap, base + m*scale)` saturated at a
+ * 0.25 OPS edge, which made every hot bat score an identical 95 and turned the
+ * hub's relevance ranking into a coin flip.)
+ *
  * @param {number} magnitude   the raw edge (e.g. OPS delta, ERA-xERA gap)
  * @param {object} opts
  * @param {number} opts.scale  multiplier applied to magnitude
  * @param {number} [opts.base] floor score for any surfaced row (default 40)
- * @param {number} [opts.cap]  ceiling (default 95)
+ * @param {number} [opts.cap]  ceiling approached asymptotically (default 95)
  * @returns {number}
  */
 export function scoreFromEdge(magnitude, { scale, base = 40, cap = 95 }) {
   const m = Math.abs(Number(magnitude) || 0);
-  return clampScore(Math.min(cap, base + m * scale));
+  const range = Math.max(1, cap - base);
+  const eased = range * (1 - Math.exp(-(m * scale) / range));
+  return clampScore(base + eased);
+}
+
+/**
+ * Find a batting split entry on a getMlbPlayerSplits() byBreakdown array.
+ * Centralized so every computer matches the same way: case/punctuation-tolerant
+ * ("vs. Left" == "vs Left"), and a missing `category` is treated as batting
+ * rather than failing a strict equality check.
+ * @param {object} splits     getMlbPlayerSplits() result
+ * @param {string} splitName  e.g. "vs. Left"
+ * @returns {object|null}
+ */
+export function getBreakdownSplit(splits, splitName) {
+  const rows = splits?.byBreakdown;
+  if (!Array.isArray(rows)) return null;
+  const want = nameKey(splitName);
+  return rows.find((s) => {
+    if (!s || typeof s.split_name !== 'string') return false;
+    if (s.category != null && s.category !== 'batting') return false;
+    return nameKey(s.split_name) === want;
+  }) || null;
+}
+
+/**
+ * Deterministically pick one of `variants` from a stable key (player_id, name…)
+ * so card copy varies across a slate without reshuffling between idempotent
+ * re-runs of the same day. No randomness on purpose.
+ */
+export function pickVariant(variants, key) {
+  if (!Array.isArray(variants) || variants.length === 0) return '';
+  const s = String(key ?? '');
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return variants[h % variants.length];
 }
 
 /** Round a number to n decimals, returning a Number (not string). */

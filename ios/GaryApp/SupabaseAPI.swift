@@ -356,10 +356,42 @@ enum SupabaseAPI {
 
     // MARK: - Insight Connections ("Today's Edges" hub)
 
+    /// Yesterday relative to `todayEST()` (the hub's grading day).
+    static func yesterdayEST() -> String {
+        guard let tz = TimeZone(identifier: "America/New_York") else { return todayEST() }
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = tz
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.timeZone = tz
+        guard let today = formatter.date(from: todayEST()),
+              let yesterday = cal.date(byAdding: .day, value: -1, to: today) else { return todayEST() }
+        return formatter.string(from: yesterday)
+    }
+
+    /// Graded-edge tally for a date: how many hub edges hit vs were graded
+    /// (hit + miss; pushes excluded). Powers the hub's track-record line.
+    /// Returns nil on any failure or when nothing is graded yet.
+    static func fetchInsightHitRate(date: String) async -> (hit: Int, graded: Int)? {
+        struct ResultRow: Decodable { let result: String? }
+        let url = buildURL(table: "insight_connections", query: [
+            URLQueryItem(name: "select", value: "result"),
+            URLQueryItem(name: "date", value: "eq.\(date)"),
+            URLQueryItem(name: "result", value: "not.is.null")
+        ])
+        guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
+              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let rows = try? JSONDecoder().decode([ResultRow].self, from: data) else { return nil }
+        let hit = rows.filter { $0.result == "hit" }.count
+        let miss = rows.filter { $0.result == "miss" }.count
+        let graded = hit + miss
+        return graded > 0 ? (hit, graded) : nil
+    }
+
     /// Fetch hub connections for a specific date + league (e.g. "MLB" / "NBA").
     /// Mirrors `fetchDailyPicks`: anon headers, dual `eq.` filter, 2xx guard
-    /// returning [] (never throws on HTTP/decode failure), `rows.first` unwrap.
-    /// Returns [] when nothing exists so callers can fall back to the mock hub.
+    /// returning [] (never throws on HTTP/decode failure). Returns [] when
+    /// nothing exists; the hub renders an honest empty state.
     static func fetchInsightConnections(date: String, league: String) async throws -> [Connection] {
         let url = buildURL(table: "insight_connections", query: [
             URLQueryItem(name: "select", value: "date,league,category,headline,detail,game,value,tone,spark,line_val,relevance_score,player_id,game_id"),

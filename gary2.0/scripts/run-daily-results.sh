@@ -19,3 +19,9 @@ cd "$PROJECT_DIR"
 echo "[$(date)] Starting daily results grading..."
 node scripts/run-all-results.js "$@"
 echo "[$(date)] Results grading complete."
+
+# Grade yesterday's insight_connections (Today's Edges hub) against actual results.
+# Non-fatal: a grader failure must NOT fail the critical results job above.
+echo "[$(date)] Grading insight connections..."
+node run-grade-insights.js || echo "insight grading failed (non-fatal)"
+echo "[$(date)] Insight grading complete."

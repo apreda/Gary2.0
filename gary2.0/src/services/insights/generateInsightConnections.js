@@ -35,6 +35,12 @@ import { computeRestFatigue } from './computers/restFatigue.js';
 import { computeOwned } from './computers/owned.js';
 import { computeCoolingOff } from './computers/coolingOff.js';
 
+// NBA connection computers.
+import { computeNbaRestFatigue } from './computers/nbaRestFatigue.js';
+import { computeNbaStreak } from './computers/nbaStreak.js';
+import { computeNbaBeneficiary } from './computers/nbaBeneficiary.js';
+import { computeNbaOwned } from './computers/nbaOwned.js';
+
 /**
  * Registry of computers per league. Each entry is an async fn:
  *   (ctx) => Promise<row[]>
@@ -52,8 +58,16 @@ const MLB_COMPUTERS = [
   computeCoolingOff,
 ];
 
+const NBA_COMPUTERS = [
+  computeNbaRestFatigue,
+  computeNbaStreak,
+  computeNbaBeneficiary,
+  computeNbaOwned,
+];
+
 const COMPUTERS_BY_LEAGUE = {
   mlb: MLB_COMPUTERS,
+  nba: NBA_COMPUTERS,
 };
 
 /**
@@ -63,8 +77,10 @@ const COMPUTERS_BY_LEAGUE = {
  * @param {string} [args.date]   YYYY-MM-DD. Defaults to today (local tz).
  * @param {string} [args.league] e.g. 'mlb'. Defaults to 'mlb'.
  * @param {object} [args.options]
- * @param {number} [args.options.maxRows]       cap on returned rows (default 60)
- * @param {number} [args.options.minRelevance]  drop rows below this (default 35)
+ * @param {number} [args.options.maxRows]         cap on returned rows (default 120)
+ * @param {number} [args.options.minRelevance]    drop rows below this (default 35)
+ * @param {number} [args.options.maxPerCategory]  cap rows per category so one hot
+ *                                                lane can't flood the hub (default 8)
  * @returns {Promise<object>} { date, league, season, gameCount, connections: row[] }
  */
 export async function generateInsightConnections({ date, league = 'mlb', options = {} } = {}) {
@@ -72,19 +88,23 @@ export async function generateInsightConnections({ date, league = 'mlb', options
   const leagueKey = String(league || 'mlb').toLowerCase();
   const maxRows = Number.isFinite(options.maxRows) ? options.maxRows : 120;
   const minRelevance = Number.isFinite(options.minRelevance) ? options.minRelevance : 35;
+  const maxPerCategory = Number.isFinite(options.maxPerCategory) ? options.maxPerCategory : 8;
 
   const computers = COMPUTERS_BY_LEAGUE[leagueKey];
   if (!computers) {
     console.warn(`[insights] No computers registered for league "${leagueKey}" — returning empty.`);
-    return { date: dateStr, league: leagueKey, season: seasonForDate(dateStr), gameCount: 0, connections: [] };
+    return { date: dateStr, league: leagueKey, season: seasonForDate(dateStr, leagueKey), gameCount: 0, connections: [] };
   }
 
   // 1. Resolve today's slate ONCE. Every computer scores ONLY against games
   //    on this slate; an empty slate short-circuits everything.
-  //    "getMlbGamesForDate(dateStr) — single positional arg (YYYY-MM-DD)."
+  //    MLB: "getMlbGamesForDate(dateStr) — single positional arg (YYYY-MM-DD)."
+  //    NBA: getNbaGamesForDate(dateStr) — same contract.
   let games = [];
   try {
-    games = (await ballDontLieService.getMlbGamesForDate(dateStr)) || [];
+    games = leagueKey === 'nba'
+      ? (await ballDontLieService.getNbaGamesForDate(dateStr)) || []
+      : (await ballDontLieService.getMlbGamesForDate(dateStr)) || [];
   } catch (err) {
     console.error('[insights] Failed to load slate:', err?.message || err);
     games = [];
@@ -92,11 +112,12 @@ export async function generateInsightConnections({ date, league = 'mlb', options
 
   if (!Array.isArray(games) || games.length === 0) {
     console.log(`[insights] No ${leagueKey.toUpperCase()} games found for ${dateStr} — nothing to compute.`);
-    return { date: dateStr, league: leagueKey, season: seasonForDate(dateStr), gameCount: 0, connections: [] };
+    return { date: dateStr, league: leagueKey, season: seasonForDate(dateStr, leagueKey), gameCount: 0, connections: [] };
   }
 
-  // BDL MLB game objects expose `away_team`; the computers read `visitor_team`.
-  // Alias both directions so team abbr/id lookups and gameLabel resolve (no 'AWY').
+  // BDL game objects expose `away_team` (MLB) or `visitor_team` (NBA); the
+  // computers read either. Alias both directions so team abbr/id lookups and
+  // gameLabel resolve (no 'AWY').
   for (const g of games) {
     if (g && typeof g === 'object') {
       if (g.away_team && !g.visitor_team) g.visitor_team = g.away_team;
@@ -104,7 +125,7 @@ export async function generateInsightConnections({ date, league = 'mlb', options
     }
   }
 
-  const season = seasonForDate(dateStr);
+  const season = seasonForDate(dateStr, leagueKey);
 
   // Shared, read-only context handed to every computer. The set of BDL game
   // ids on the slate lets each computer enforce "only games on today's slate".
@@ -125,6 +146,10 @@ export async function generateInsightConnections({ date, league = 'mlb', options
       const name = fn.name || 'computer';
       try {
         const rows = await fn(ctx);
+        // Per-lane diagnostics: a 0-row lane should be visible in the log, not
+        // silently absorbed into the aggregate (a 157-line lane once shipped 0
+        // rows for weeks because nothing surfaced which gate killed it).
+        console.log(`[insights]   ${name}: ${Array.isArray(rows) ? rows.length : 0} row(s)`);
         return Array.isArray(rows) ? rows : [];
       } catch (err) {
         // Defensive contract: a throwing computer is logged and dropped, never fatal.
@@ -140,7 +165,7 @@ export async function generateInsightConnections({ date, league = 'mlb', options
     if (r.status === 'fulfilled' && Array.isArray(r.value)) raw.push(...r.value);
   }
 
-  const connections = postProcess(raw, { slateGameIds, minRelevance, maxRows });
+  const connections = postProcess(raw, { slateGameIds, minRelevance, maxRows, maxPerCategory });
 
   console.log(
     `[insights] ${leagueKey.toUpperCase()} ${dateStr}: ${games.length} games, ` +
@@ -152,10 +177,11 @@ export async function generateInsightConnections({ date, league = 'mlb', options
 
 /**
  * Validate rows against the table contract, enforce slate membership when a
- * game_id is present, drop low-relevance noise, sort best-edge-first, and
- * de-dupe near-identical rows (same category + game + value).
+ * game_id is present, drop low-relevance noise, sort best-edge-first, de-dupe
+ * near-identical rows (same category + game + value), and cap each category so
+ * one prolific lane (25 hot bats on a full slate) can't crowd out the others.
  */
-function postProcess(rows, { slateGameIds, minRelevance, maxRows }) {
+function postProcess(rows, { slateGameIds, minRelevance, maxRows, maxPerCategory = 8 }) {
   const seen = new Set();
   const out = [];
 
@@ -176,7 +202,18 @@ function postProcess(rows, { slateGameIds, minRelevance, maxRows }) {
   }
 
   out.sort((a, b) => b.relevance_score - a.relevance_score);
-  return out.slice(0, maxRows);
+
+  // Keep only the strongest N per category (list is already best-first).
+  const perCategory = new Map();
+  const capped = [];
+  for (const row of out) {
+    const n = perCategory.get(row.category) ?? 0;
+    if (n >= maxPerCategory) continue;
+    perCategory.set(row.category, n + 1);
+    capped.push(row);
+  }
+
+  return capped.slice(0, maxRows);
 }
 
 /** Minimal table-contract validation. */
@@ -195,13 +232,20 @@ function isValidRow(row) {
 }
 
 /**
- * MLB "season" for a date string. The BDL season is the calendar year of the
- * regular season; getMlbStandings / getMlbPlayerSeasonStats / splits / xStats
- * all key on this. Default to the YYYY of the date.
+ * BDL "season" for a date string, per league.
+ * MLB: the calendar year of the regular season (getMlbStandings /
+ *      getMlbPlayerSeasonStats / splits / xStats all key on this).
+ * NBA: the season's START year — a June 2026 Finals game belongs to season
+ *      2025 (the 2025-26 season). Sept (mo 9) is the cutover.
  */
-function seasonForDate(dateStr) {
+function seasonForDate(dateStr, leagueKey = 'mlb') {
   const y = Number(String(dateStr).slice(0, 4));
-  return Number.isFinite(y) ? y : new Date().getFullYear();
+  const year = Number.isFinite(y) ? y : new Date().getFullYear();
+  if (leagueKey === 'nba') {
+    const mo = Number(String(dateStr).slice(5, 7)) || 1;
+    return mo >= 9 ? year : year - 1;
+  }
+  return year;
 }
 
 export default { generateInsightConnections };

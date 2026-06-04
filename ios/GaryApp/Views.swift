@@ -1702,7 +1702,7 @@ struct WhatsNewSection: View {
 
                     Text("GARY A.I.")
                         .font(.system(size: 11, weight: .heavy))
-                        .tracking(3)
+                        .tracking(1)
                         .foregroundStyle(GaryColors.gold.opacity(0.5))
 
                     // Compact preview pills when collapsed
@@ -1839,7 +1839,7 @@ struct HomeView: View {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("WHAT'S NEW")
                                     .font(.system(size: 11, weight: .heavy))
-                                    .tracking(1.5)
+                                    .tracking(1)
                                     .foregroundStyle(GaryColors.gold.opacity(0.4))
 
                                 VStack(spacing: 6) {
@@ -2554,13 +2554,13 @@ struct PremiumPicksView: View {
             HStack(spacing: 8) {
                 Text("PREMIUM")
                     .font(GaryFonts.mono(10, bold: true))
-                    .tracking(2.4)
+                    .tracking(1)
                     .foregroundStyle(Color(hex: "#0b0a08"))
                     .padding(.horizontal, 8).padding(.vertical, 3)
                     .background(Capsule().fill(GaryColors.gold))
                 Text(headerDate)
                     .font(GaryFonts.mono(10))
-                    .tracking(1.6)
+                    .tracking(1)
                     .foregroundStyle(.white.opacity(0.42))
             }
             Text("Gary's Best Bets")
@@ -2619,7 +2619,7 @@ struct PremiumPicksView: View {
     private func sectionDivider(_ title: String) -> some View {
         HStack(spacing: 10) {
             Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1)
-            Text(title).font(GaryFonts.mono(11, bold: true)).tracking(2)
+            Text(title).font(GaryFonts.mono(11, bold: true)).tracking(1)
                 .foregroundStyle(.white.opacity(0.55)).fixedSize()
             Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1)
         }
@@ -2633,7 +2633,7 @@ struct PremiumPicksView: View {
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(Sport.from(league: league).accentColor)
             Text(league)
-                .font(GaryFonts.mono(12, bold: true)).tracking(1.6)
+                .font(GaryFonts.mono(12, bold: true)).tracking(1)
                 .foregroundStyle(.white.opacity(0.85))
             Text(status)
                 .font(GaryFonts.mono(11)).foregroundStyle(.white.opacity(0.4))
@@ -2700,7 +2700,7 @@ struct PremiumPicksView: View {
         VStack(spacing: 5) {
             Image(systemName: "lock.fill").font(.system(size: 18, weight: .bold)).foregroundStyle(GaryColors.gold)
             Text("MEMBERS ONLY")
-                .font(GaryFonts.mono(9, bold: true)).tracking(1.6).foregroundStyle(GaryColors.gold)
+                .font(GaryFonts.mono(9, bold: true)).tracking(1).foregroundStyle(GaryColors.gold)
         }
     }
 
@@ -2851,7 +2851,7 @@ struct PaywallPanel: View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 5) {
                 Text("UNLOCK")
-                    .font(GaryFonts.mono(10, bold: true)).tracking(2.2)
+                    .font(GaryFonts.mono(10, bold: true)).tracking(1)
                     .foregroundStyle(GaryColors.gold)
                 Text("Bet with Gary's best.")
                     .font(GaryFonts.display(32))
@@ -2926,7 +2926,7 @@ private struct PlanRow: View {
                 Text(price).font(GaryFonts.text(15, .bold)).foregroundStyle(selected ? GaryColors.gold : .white.opacity(0.7))
             }
             .padding(14)
-            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(selected ? GaryColors.gold.opacity(0.08) : Color.clear).overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(selected ? GaryColors.gold.opacity(0.5) : Color.white.opacity(0.1), lineWidth: 1)))
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(selected ? GaryColors.gold.opacity(0.08) : Color.clear).overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(selected ? GaryColors.gold.opacity(0.3) : Color.white.opacity(0.1), lineWidth: 1)))
         }
         .buttonStyle(.plain)
     }
@@ -3816,7 +3816,7 @@ struct GaryPropsView: View {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(headerDateString)
-                        .font(.system(size: 9.5, weight: .semibold, design: .monospaced)).tracking(2.2)
+                        .font(.system(size: 9.5, weight: .semibold, design: .monospaced)).tracking(1)
                         .foregroundStyle(GaryColors.gold.opacity(0.9))
                     Text("PROPS BOARD")
                         .font(.system(size: 24, weight: .bold, design: .monospaced)).tracking(0.5)
@@ -3825,10 +3825,10 @@ struct GaryPropsView: View {
                 Spacer()
                 if isRecapMode {
                     Text("RECAP")
-                        .font(.system(size: 9, weight: .bold, design: .monospaced)).tracking(1.6)
+                        .font(.system(size: 9, weight: .bold, design: .monospaced)).tracking(1)
                         .foregroundStyle(GaryColors.gold)
                         .padding(.horizontal, 9).padding(.vertical, 5)
-                        .background(Capsule().stroke(GaryColors.gold.opacity(0.5), lineWidth: 1))
+                        .background(Capsule().stroke(GaryColors.gold.opacity(0.25), lineWidth: 1))
                 }
             }
 
@@ -4011,7 +4011,7 @@ struct GaryPropsView: View {
                         .font(.system(size: 10, weight: .bold, design: .monospaced)).tracking(1)
                         .foregroundStyle(GaryColors.gold)
                         .padding(.horizontal, 14).padding(.vertical, 8)
-                        .background(Capsule().stroke(GaryColors.gold.opacity(0.5), lineWidth: 1))
+                        .background(Capsule().stroke(GaryColors.gold.opacity(0.25), lineWidth: 1))
                 }
             }
             .frame(maxWidth: .infinity).padding(.top, 50)
@@ -4100,7 +4100,7 @@ struct GaryPropsView: View {
 
     private func sectionLabel(_ text: String, accent: Bool = false) -> some View {
         Text(text)
-            .font(.system(size: 9.5, weight: .semibold, design: .monospaced)).tracking(1.8)
+            .font(.system(size: 9.5, weight: .semibold, design: .monospaced)).tracking(1)
             .foregroundStyle(accent ? GaryColors.gold.opacity(0.9) : .white.opacity(0.4))
             .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -4113,7 +4113,7 @@ struct GaryPropsView: View {
             .font(.system(size: 9, weight: .bold, design: .monospaced))
             .foregroundStyle(col)
             .padding(.horizontal, 6).padding(.vertical, 2)
-            .background(Capsule().fill(col.opacity(0.14)).overlay(Capsule().stroke(col.opacity(0.5), lineWidth: 1)))
+            .background(Capsule().fill(col.opacity(0.14)).overlay(Capsule().stroke(col.opacity(0.3), lineWidth: 1)))
     }
 
     private var rowDivider: some View {
@@ -5247,7 +5247,7 @@ struct BillfoldView: View {
         VStack(spacing: 7) {
             Text(selectedTab == 0 ? "NET BALANCE \u{00B7} PICKS" : "NET BALANCE \u{00B7} PROPS")
                 .font(.system(size: 10, weight: .semibold))
-                .tracking(2.2)
+                .tracking(1)
                 .foregroundStyle(brass.opacity(0.85))
 
             Text(signedDollars(netDollars))
@@ -5453,7 +5453,7 @@ struct BillfoldView: View {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(chartMode == .sports ? "BY SPORT \u{00B7} NET" : "EQUITY CURVE")
                     .font(.system(size: 9, weight: .bold))
-                    .tracking(1.6)
+                    .tracking(1)
                     .foregroundStyle(ink.opacity(0.55))
                 Text("$100/BET")
                     .font(.system(size: 9, weight: .bold))
@@ -5668,7 +5668,7 @@ struct BillfoldView: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(Capsule().fill(isFocus ? color.opacity(0.14) : Color.white.opacity(0.045)))
-                        .overlay(Capsule().stroke(isFocus ? color.opacity(0.55) : Color.white.opacity(0.09), lineWidth: 1))
+                        .overlay(Capsule().stroke(isFocus ? color.opacity(0.35) : Color.white.opacity(0.09), lineWidth: 1))
                     }
                     .buttonStyle(.plain)
                 }
@@ -5918,7 +5918,7 @@ struct BillfoldView: View {
     private func ledgerEyebrow(_ text: String) -> some View {
         Text(text)
             .font(.system(size: 9, weight: .bold))
-            .tracking(1.6)
+            .tracking(1)
             .foregroundStyle(ink.opacity(0.55))
     }
 
@@ -6158,9 +6158,9 @@ struct BillfoldView: View {
     private var recentCarousel: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                Text("RECENT ENTRIES")
+                Text("Gary's Recent Picks")
                     .font(.system(size: 9, weight: .semibold))
-                    .tracking(2)
+                    .tracking(1)
                     .foregroundStyle(brass.opacity(0.85))
                 Spacer()
                 Text("\(selectedTab == 0 ? recentGameCards.count : recentPropCards.count)")
@@ -6256,87 +6256,42 @@ struct BillfoldView: View {
     }
 
     private func gameCardView(_ result: GameResult) -> some View {
-        let sport = Sport.from(league: result.effectiveLeague)
-        let isWon = result.result == "won"
-        let isPush = result.result == "push"
-        let stampWord = isWon ? "WON" : (isPush ? "PUSH" : "LOST")
-        let resultColor = isWon ? positiveColor : (isPush ? brass : negativeColor)
-        let fullPickText = pickWithoutOdds(result.pick_text ?? result.matchup ?? "Pick")
-        // Extract spread suffix if present, then build "Mascot +2.0"
-        let spreadSuffix: String = {
-            let pattern = #"\s+([+-]\d+(?:\.\d+)?)$"#
-            if let regex = try? NSRegularExpression(pattern: pattern),
-               let match = regex.firstMatch(in: fullPickText, range: NSRange(fullPickText.startIndex..., in: fullPickText)),
-               let range = Range(match.range(at: 1), in: fullPickText) {
-                return " " + String(fullPickText[range])
-            }
-            return ""
-        }()
-        let pickText = mascotName(fullPickText) + spreadSuffix
-
-        let oddsStr: String = {
-            let fromField = Formatters.americanOdds(result.effectiveOdds)
-            return fromField.isEmpty ? "-110" : fromField
-        }()
-
-        return VStack(alignment: .leading, spacing: 0) {
-            // Perforated receipt edge
-            StitchLine()
-                .stroke(ink.opacity(0.25), style: StrokeStyle(lineWidth: 1, dash: [2, 3]))
-                .frame(height: 1)
-                .padding(.bottom, 6)
-
-            HStack(spacing: 5) {
-                Text(sport.rawValue)
-                    .font(.system(size: 8.5, weight: .bold))
-                    .tracking(0.5)
-                    .foregroundStyle(ink.opacity(0.6))
-                Text(Formatters.formatDate(result.game_date))
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundStyle(ink.opacity(0.6))
-                Spacer()
-                Text(oddsStr)
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .foregroundStyle(ink.opacity(0.65))
-            }
-
-            HStack(spacing: 6) {
-                Text(pickText)
-                    .font(.system(size: 12.5, weight: .bold, design: .default))
-                    .foregroundStyle(ink)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                Spacer(minLength: 4)
-                Text(stampWord)
-                    .font(.system(size: 8.5, weight: .heavy, design: .default))
-                    .tracking(1.2)
-                    .foregroundStyle(resultColor.opacity(0.9))
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 2)
-                    .background(
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(resultColor.opacity(0.14))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 2)
-                            .stroke(resultColor.opacity(0.75), lineWidth: 1.2)
-                    )
-                    .rotationEffect(.degrees(-7))
-            }
-            .padding(.top, 4)
-
-            if let score = result.final_score, !score.isEmpty {
-                Text(score)
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundStyle(ink.opacity(0.6))
-                    .lineLimit(1)
-                    .padding(.top, 3)
+        Group {
+            if let pick = garyPick(from: result) {
+                FlippablePickCard(pick: pick,
+                                  gameResult: result.result,
+                                  finalScore: result.final_score,
+                                  showSportBadge: true)
+                    .frame(width: 300)
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .frame(width: 186)
-        .background(paperCard(cornerRadius: 4))
+    }
+
+    /// Build a GaryPick from a settled GameResult so Billfold's recent entries
+    /// render in the standard flippable game-pick card. Results carry no pre-game
+    /// reasoning/confidence — the front shows the final score in place of the lean,
+    /// and the flip-back is brief (matchup + pick + odds).
+    private func garyPick(from r: GameResult) -> GaryPick? {
+        var away = "", home = ""
+        if let m = r.matchup {
+            let parts = m.components(separatedBy: " @ ")
+            if parts.count == 2 {
+                away = parts[0].trimmingCharacters(in: .whitespaces)
+                home = parts[1].trimmingCharacters(in: .whitespaces)
+            }
+        }
+        let rword = (r.result ?? "").uppercased()
+        var recap: [String] = []
+        if !rword.isEmpty { recap.append("Graded \(rword)") }
+        if let s = r.final_score, !s.isEmpty { recap.append("final \(s)") }
+        if let pt = r.pick_text, !pt.isEmpty { recap.append(pt) }
+        return GaryPick.from(dict: [
+            "pick": r.pick_text ?? r.matchup ?? "",
+            "league": r.effectiveLeague ?? r.league ?? "",
+            "homeTeam": home,
+            "awayTeam": away,
+            "rationale": recap.isEmpty ? "Settled pick." : recap.joined(separator: " \u{00B7} ")
+        ])
     }
 
     private func propCardView(_ result: PropResult) -> some View {
@@ -6390,7 +6345,7 @@ struct BillfoldView: View {
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 2)
-                            .stroke(resultColor.opacity(0.75), lineWidth: 1.2)
+                            .stroke(resultColor.opacity(0.4), lineWidth: 1.2)
                     )
                     .rotationEffect(.degrees(-7))
             }
@@ -6716,7 +6671,7 @@ struct HeroBenefitCard: View {
             // Badge at top
             Text(badge)
                 .font(.system(size: 11, weight: .bold))
-                .tracking(1.5)
+                .tracking(1)
                 .foregroundStyle(GaryColors.gold.opacity(0.7))
             
             // Title
@@ -6748,8 +6703,8 @@ struct HeroBenefitCard: View {
                         )
                 )
         )
-        .shadow(color: GaryColors.gold.opacity(0.15), radius: 16, x: 0, y: 4)
-        .shadow(color: GaryColors.gold.opacity(0.08), radius: 32, x: 0, y: 8)
+        .shadow(color: .black.opacity(0.45), radius: 16, x: 0, y: 4)
+        .shadow(color: .black.opacity(0.35), radius: 32, x: 0, y: 8)
     }
 }
 
@@ -7524,7 +7479,7 @@ struct PickCardMobile: View {
                                 lineWidth: Sport.from(league: pick.league).accentGradient != nil ? 2.5 : 2
                             )
                     )
-                    .shadow(color: accentColor.opacity(0.15), radius: 20, y: 10)
+                    .shadow(color: .black.opacity(0.45), radius: 20, y: 10)
                     .shadow(color: .black.opacity(0.3), radius: 10, y: 5)
             } else {
                 // Lighter version for iOS 15 and below
@@ -7637,6 +7592,7 @@ extension GaryPick {
 struct CompactPickRow: View {
     let pick: GaryPick
     var gameResult: String? = nil
+    var finalScore: String? = nil   // settled cards: shown in place of GARY'S LEAN
     var showSportBadge: Bool = false
 
     private var sport: Sport { Sport.from(league: pick.league) }
@@ -7769,20 +7725,30 @@ struct CompactPickRow: View {
                 // Eyebrow row — gold mono significance (or sport accent dot) + time.
                 HStack(spacing: 8) {
                     Circle()
-                        .fill(accentColor)
+                        .fill(GaryColors.gold)
                         .frame(width: 5, height: 5)
                     if let significance = significanceTag {
                         Text(significance)
                             .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
-                            .tracking(1.8)
+                            .tracking(1)
                             .foregroundStyle(GaryColors.gold.opacity(0.85))
                             .lineLimit(1)
                     }
                     Spacer(minLength: 6)
-                    if !formattedTime.isEmpty {
+                    if resolvedResult != nil {
+                        Text(resolvedResult == "won" ? "WON" : (resolvedResult == "push" ? "PUSH" : "LOST"))
+                            .font(.system(size: 9, weight: .heavy, design: .monospaced))
+                            .tracking(0.8)
+                            .foregroundStyle(resultStampColor)
+                            .padding(.horizontal, 8).padding(.vertical, 3)
+                            .background(
+                                Capsule().fill(resultStampColor.opacity(0.16))
+                                    .overlay(Capsule().stroke(resultStampColor.opacity(0.4), lineWidth: 0.8))
+                            )
+                    } else if !formattedTime.isEmpty {
                         Text(formattedTime.uppercased())
                             .font(.system(size: 9.5, weight: .medium, design: .monospaced))
-                            .tracking(1.6)
+                            .tracking(1)
                             .foregroundStyle(.white.opacity(0.34))
                             .lineLimit(1)
                     }
@@ -7838,68 +7804,62 @@ struct CompactPickRow: View {
                     .padding(.vertical, 9)
                     .background(
                         RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(accentColor.opacity(0.18))
+                            .fill(GaryColors.gold.opacity(0.18))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .stroke(accentColor.opacity(0.65), lineWidth: 1)
+                                    .stroke(GaryColors.gold.opacity(0.65), lineWidth: 1)
                             )
                     )
 
                     Spacer(minLength: 0)
 
-                    VStack(alignment: .trailing, spacing: 5) {
-                        HStack(spacing: 6) {
-                            Text("GARY'S LEAN")
+                    if let finalScore, !finalScore.isEmpty {
+                        VStack(alignment: .trailing, spacing: 3) {
+                            Text("FINAL")
                                 .font(.system(size: 9.5, weight: .medium, design: .monospaced))
-                                .tracking(1.6)
+                                .tracking(1)
                                 .foregroundStyle(GaryColors.gold.opacity(0.9))
-                            Text("\(Int(confidenceValue * 100))%")
-                                .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
-                                .tracking(1.0)
-                                .foregroundStyle(GaryColors.gold.opacity(0.9))
+                            Text(finalScore)
+                                .font(.system(size: 14, weight: .bold, design: .monospaced))
+                                .foregroundStyle(.white.opacity(0.9))
+                                .lineLimit(1).minimumScaleFactor(0.7)
                         }
-                        GeometryReader { geo in
-                            ZStack(alignment: .leading) {
-                                Capsule().fill(Color.white.opacity(0.06))
-                                Capsule().fill(accentGradient)
-                                    .frame(width: geo.size.width * confidenceValue)
+                        .frame(width: 116)
+                    } else {
+                        VStack(alignment: .trailing, spacing: 5) {
+                            HStack(alignment: .firstTextBaseline, spacing: 5) {
+                                Text("GARY'S LEAN")
+                                    .font(.system(size: 8.5, weight: .semibold, design: .monospaced))
+                                    .tracking(0.8)
+                                    .foregroundStyle(.white.opacity(0.45))
+                                Text("\(Int(confidenceValue * 100))%")
+                                    .font(.system(size: 13, weight: .heavy))
+                                    .foregroundStyle(GaryColors.gold)
                             }
+                            GeometryReader { geo in
+                                ZStack(alignment: .leading) {
+                                    Capsule().fill(Color.white.opacity(0.07))
+                                    Capsule().fill(GaryColors.gold)
+                                        .frame(width: geo.size.width * confidenceValue)
+                                }
+                            }
+                            .frame(height: 3.5)
                         }
-                        .frame(height: 2.5)
+                        .frame(width: 124)
                     }
-                    .frame(width: 116)
                 }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 12)
-            .opacity(gameResult != nil ? 0.72 : 1.0)
-
-            if resolvedResult != nil {
-                Text(resultStampText)
-                    .font(.system(size: 29, weight: .black, design: .default))
-                    .fontWidth(.compressed)
-                    .tracking(0.5)
-                    .foregroundStyle(resultStampColor.opacity(resultStampTextOpacity))
-                    .frame(width: 62, height: 62)
-                    .background(
-                        Circle()
-                            .fill(Color.black.opacity(0.64))
-                            .overlay(
-                                Circle()
-                                    .stroke(resultStampColor.opacity(resultStampRingOpacity), lineWidth: 1.8)
-                            )
-                    )
-                    .shadow(color: resultStampColor.opacity(resultStampShadowOpacity), radius: 6, y: 0)
-                    .rotationEffect(.degrees(-10))
-            }
         }
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(hex: "#242019"))
+                .fill(Color(hex: "#15171C"))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(Color.white.opacity(0.18), lineWidth: 0.65)
+                        .stroke(GaryColors.gold.opacity(0.4), lineWidth: 1.0)
                 )
+                .shadow(color: .black.opacity(0.45), radius: 14, y: 6)
         )
     }
 }
@@ -8151,6 +8111,7 @@ struct FlippableScoreboardCard: View {
 struct FlippablePickCard: View {
     let pick: GaryPick
     var gameResult: String? = nil
+    var finalScore: String? = nil
     var showSportBadge: Bool = false
 
     @State private var flipped = false
@@ -8160,7 +8121,7 @@ struct FlippablePickCard: View {
 
     var body: some View {
         ZStack {
-            CompactPickRow(pick: pick, gameResult: gameResult, showSportBadge: showSportBadge)
+            CompactPickRow(pick: pick, gameResult: gameResult, finalScore: finalScore, showSportBadge: showSportBadge)
                 .background(GeometryReader { g in
                     Color.clear.preference(key: PickCardHeightKey.self, value: g.size.height)
                 })
@@ -8243,7 +8204,7 @@ struct PickCardBack: View {
         VStack(alignment: .leading, spacing: 9) {
             HStack {
                 Text("GARY'S CASE")
-                    .font(.system(size: 10, weight: .bold, design: .monospaced)).tracking(1.6)
+                    .font(.system(size: 10, weight: .bold, design: .monospaced)).tracking(1)
                     .foregroundStyle(GaryColors.gold)
                 Spacer()
                 Text("\(pick.awayTeam ?? "") @ \(pick.homeTeam ?? "")")
@@ -8256,9 +8217,11 @@ struct PickCardBack: View {
                     .font(.system(size: 18, weight: .heavy))
                     .foregroundStyle(GaryColors.gold).lineLimit(1).minimumScaleFactor(0.7)
                 Spacer()
-                Text("\(Int(confidence * 100))% CONF")
-                    .font(.system(size: 11, weight: .bold, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.55))
+                if pick.confidence != nil {
+                    Text("\(Int(confidence * 100))% CONF")
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.55))
+                }
             }
 
             // World Cup tournament context (e.g. "Group A · Group Stage"); nil for other sports
@@ -8269,13 +8232,15 @@ struct PickCardBack: View {
                     .lineLimit(1)
             }
 
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 1.5).fill(Color(hex: "#1A1A1E"))
-                    RoundedRectangle(cornerRadius: 1.5).fill(GaryColors.gold).frame(width: geo.size.width * confidence)
+            if pick.confidence != nil {
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 1.5).fill(Color(hex: "#1A1A1E"))
+                        RoundedRectangle(cornerRadius: 1.5).fill(GaryColors.gold).frame(width: geo.size.width * confidence)
+                    }
                 }
+                .frame(height: 2)
             }
-            .frame(height: 2)
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 12) {
@@ -8312,7 +8277,7 @@ struct PickCardBack: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(hex: "#242019"))
+                .fill(Color(hex: "#1A1C22"))
                 .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(GaryColors.gold.opacity(0.32), lineWidth: 1))
         )
     }
@@ -8388,7 +8353,7 @@ struct PropCardBack: View {
         VStack(alignment: .leading, spacing: 9) {
             HStack {
                 Text("GARY'S READ")
-                    .font(.system(size: 10, weight: .bold, design: .monospaced)).tracking(1.6)
+                    .font(.system(size: 10, weight: .bold, design: .monospaced)).tracking(1)
                     .foregroundStyle(GaryColors.gold)
                 Spacer()
                 if let m = prop.matchup, !m.isEmpty {
@@ -8447,7 +8412,7 @@ struct PropCardBack: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(hex: "#242019"))
+                .fill(Color(hex: "#1A1C22"))
                 .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(GaryColors.gold.opacity(0.32), lineWidth: 1))
         )
     }
@@ -8592,7 +8557,7 @@ struct PickDetailPopup: View {
             }
             .background(
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(Color(hex: "#242019"))
+                    .fill(Color(hex: "#1A1C22"))
                     .overlay(
                         RoundedRectangle(cornerRadius: 20, style: .continuous)
                             .stroke(Color.white.opacity(0.14), lineWidth: 0.8)
@@ -9100,7 +9065,7 @@ struct SportsbookOddsTable: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(Color(hex: "#242019"))
+                .fill(Color(hex: "#1A1C22"))
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
                         .stroke(Color.white.opacity(0.12), lineWidth: 0.8)
@@ -9257,7 +9222,7 @@ struct PropCardMobile: View {
                                 lineWidth: Sport.from(league: prop.effectiveLeague).accentGradient != nil ? 2.5 : 2
                             )
                     )
-                    .shadow(color: accentColor.opacity(0.15), radius: 20, y: 10)
+                    .shadow(color: .black.opacity(0.45), radius: 20, y: 10)
                     .shadow(color: .black.opacity(0.3), radius: 10, y: 5)
             } else {
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
@@ -9378,7 +9343,7 @@ struct PlayerInitialsAvatar: View {
                     .frame(width: size * 0.32, height: size * 0.32)
                     .overlay(
                         Circle()
-                            .stroke(sport.accentColor.opacity(0.6), lineWidth: 1)
+                            .stroke(sport.accentColor.opacity(0.35), lineWidth: 1)
                     )
                 Image(systemName: sport.icon)
                     .font(.system(size: size * 0.16, weight: .bold))
@@ -9636,7 +9601,7 @@ struct PlayerStackCard: View {
             ZStack {
                 // Base
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color(hex: "#242019"))
+                    .fill(Color(hex: "#1A1C22"))
 
                 // Subtle accent gradient on left edge
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -9964,7 +9929,7 @@ struct PropCardSlate: View {
                 .overlay(
                     Capsule().stroke(Color.black.opacity(0.4), lineWidth: 0.5)
                 )
-                .shadow(color: betColor.opacity(0.4), radius: 6, x: 0, y: 2)
+                .shadow(color: .black.opacity(0.45), radius: 6, x: 0, y: 2)
                 .offset(x: 10, y: -8)
         }
         .frame(height: 250)
@@ -9994,12 +9959,11 @@ struct PropCardSlate: View {
 //
 // One @MainActor ObservableObject that owns the props + game-picks network
 // fetch AND all the matchup/result matching helpers that used to live as
-// `private` methods on `GaryPropsView`. Both `GaryPropsView` and the new
-// `SwipeableGameView` read from the SAME store instance, so there is exactly
+// `private` methods on `GaryPropsView`. Every consumer (GaryPropsView,
+// PicksCarouselView) reads from the SAME store instance, so there is exactly
 // ONE network fetch — no duplication. The helpers (groupByMatchup,
 // gamePickEntry, resultForProp, isYesterdayProp, gamePickResult, …) are the
-// canonical copies; `GaryPropsView` can delegate to these when it adopts the
-// store. They are kept logic-identical to the originals so behavior is byte-
+// canonical copies, kept logic-identical to the originals so behavior is byte-
 // for-byte the same (per-sport yesterday-recap gate, W/L only on yesterday's
 // fallback, precise line+matchup result keys).
 @MainActor
@@ -10268,369 +10232,11 @@ final class PropsSlateStore: ObservableObject {
     }
 }
 
-// MARK: - Swipeable Game View
+// MARK: - Hub shared palette / tone / league types
 //
-// Horizontal, one-matchup-per-page swipe view. Each page shows that game's
-// FlippablePickCard (the game pick) on top, then a stacked CompactPropRow list
-// of its player props (the row style the user likes), with W/L stamps surfaced
-// automatically on yesterday-recap items via the store's helpers. This mirrors
-// `GaryPropsView.gameSection` per page — no second network fetch (reuses the
-// shared `PropsSlateStore`).
-struct SwipeableGameView: View {
-    @ObservedObject var store: PropsSlateStore
-    /// The matchup that should be focused (page 0 lands here). Hub passes the
-    /// tapped signal's game string; we resolve it to a page index.
-    var focusMatchup: String? = nil
-    /// "Back to Edges" affordance.
-    var onBack: (() -> Void)? = nil
-
-    @State private var pageIndex = 0
-    @State private var selectedProp: PropPick?
-    @State private var didFocus = false
-
-    private var games: [(matchup: String, time: String, props: [PropPick])] { store.slateGames }
-
-    var body: some View {
-        ZStack {
-            LiquidGlassBackground(grainDensity: 0)
-
-            VStack(spacing: 0) {
-                header
-
-                if store.loading && games.isEmpty {
-                    Spacer()
-                    ProgressView().tint(GaryColors.gold)
-                    Spacer()
-                } else if games.isEmpty {
-                    Spacer()
-                    VStack(spacing: 10) {
-                        Text(store.fetchFailed ? "COULDN'T LOAD PICKS" : "NO GAMES TO SHOW")
-                            .font(.system(size: 11, weight: .semibold, design: .monospaced)).tracking(1.2)
-                            .foregroundStyle(.white.opacity(0.55))
-                        Button { Task { await store.refresh() } } label: {
-                            Text("RETRY")
-                                .font(.system(size: 10, weight: .bold, design: .monospaced)).tracking(1)
-                                .foregroundStyle(GaryColors.gold)
-                                .padding(.horizontal, 14).padding(.vertical, 8)
-                                .background(Capsule().stroke(GaryColors.gold.opacity(0.5), lineWidth: 1))
-                        }.buttonStyle(.plain)
-                    }
-                    Spacer()
-                } else {
-                    pager
-                }
-            }
-        }
-        .overlay {
-            if let prop = selectedProp {
-                PropDetailPopup(prop: prop) { selectedProp = nil }
-                    .transition(.opacity)
-            }
-        }
-        .task {
-            await store.loadIfNeeded()
-            focusIfNeeded()
-        }
-        .onChange(of: games.count) { _ in focusIfNeeded() }
-    }
-
-    private func focusIfNeeded() {
-        guard !didFocus, !games.isEmpty else { return }
-        if let target = focusMatchup, let idx = store.pageIndex(forMatchup: target) {
-            pageIndex = idx
-        }
-        didFocus = true
-    }
-
-    private var header: some View {
-        HStack(spacing: 8) {
-            if let onBack {
-                Button(action: onBack) {
-                    HStack(spacing: 5) {
-                        Image(systemName: "chevron.left").font(.system(size: 13, weight: .bold))
-                        Text("Edges").font(.system(size: 14, weight: .semibold))
-                    }
-                    .foregroundStyle(GaryColors.gold)
-                }.buttonStyle(.plain)
-            }
-            Spacer()
-            if games.count > 1 {
-                Text("\(min(pageIndex, max(games.count - 1, 0)) + 1) / \(games.count)")
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.4))
-            }
-        }
-        .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 4)
-    }
-
-    private var pager: some View {
-        VStack(spacing: 0) {
-            TabView(selection: $pageIndex) {
-                ForEach(Array(games.enumerated()), id: \.offset) { idx, group in
-                    ScrollView(showsIndicators: false) {
-                        SwipeableGamePage(
-                            group: group,
-                            pageNumber: idx + 1,
-                            totalPages: games.count,
-                            entry: store.gamePickEntry(forMatchup: group.matchup),
-                            gamePickResult: store.gamePickResult,
-                            resultForProp: store.resultForProp,
-                            onTapProp: { selectedProp = $0 }
-                        )
-                        .padding(.bottom, 120)
-                    }
-                    .tag(idx)
-                }
-            }
-            .tabViewStyle(.page(indexDisplayMode: .never))
-
-            if games.count > 1 && games.count <= 10 {
-                HStack(spacing: 6) {
-                    ForEach(0..<games.count, id: \.self) { i in
-                        Capsule()
-                            .fill(i == pageIndex ? GaryColors.gold : Color.white.opacity(0.18))
-                            .frame(width: i == pageIndex ? 18 : 5, height: 5)
-                            .animation(.easeInOut(duration: 0.25), value: pageIndex)
-                    }
-                }
-                .padding(.vertical, 8)
-            }
-        }
-    }
-}
-
-// MARK: - Single Swipe Page (game pick + stacked prop rows)
-
-struct SwipeableGamePage: View {
-    let group: (matchup: String, time: String, props: [PropPick])
-    let pageNumber: Int
-    let totalPages: Int
-    let entry: (pick: GaryPick, isYesterday: Bool)?
-    let gamePickResult: (GaryPick) -> String?
-    let resultForProp: (PropPick) -> String?
-    let onTapProp: (PropPick) -> Void
-
-    private var shortMatchup: String {
-        let parts = group.matchup.components(separatedBy: " @ ")
-        guard parts.count == 2 else { return group.matchup }
-        let away = parts[0].components(separatedBy: " ").last ?? parts[0]
-        let home = parts[1].components(separatedBy: " ").last ?? parts[1]
-        return "\(away) @ \(home)"
-    }
-
-    private func sectionLabel(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 9.5, weight: .semibold, design: .monospaced)).tracking(1.8)
-            .foregroundStyle(.white.opacity(0.4))
-            .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var rowDivider: some View {
-        Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1).padding(.horizontal, 16)
-    }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            // ── PAGE HEADER ──
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 8) {
-                    Text("GAME \(pageNumber) / \(totalPages)")
-                        .font(.system(size: 9, weight: .heavy)).tracking(1.2)
-                        .foregroundStyle(GaryColors.gold.opacity(0.65))
-                    Spacer(minLength: 0)
-                    if !group.time.isEmpty {
-                        Text(group.time)
-                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                            .foregroundStyle(.white.opacity(0.45))
-                    }
-                }
-                Text(shortMatchup.uppercased())
-                    .font(.system(size: 18, weight: .heavy)).tracking(0.3)
-                    .foregroundStyle(.white.opacity(0.92))
-                    .lineLimit(1).minimumScaleFactor(0.7)
-            }
-            .padding(.horizontal, 18).padding(.top, 6).padding(.bottom, 10)
-
-            // ── GAME PICK (top) ──
-            if let entry {
-                FlippablePickCard(
-                    pick: entry.pick,
-                    gameResult: entry.isYesterday ? gamePickResult(entry.pick) : nil,
-                    showSportBadge: false
-                )
-                .padding(.horizontal, 14)
-
-                sectionLabel("PLAYER PROPS")
-                    .padding(.horizontal, 18).padding(.top, 14).padding(.bottom, 4)
-            }
-
-            // ── PLAYER PROPS (stacked CompactPropRow) ──
-            VStack(spacing: 0) {
-                ForEach(Array(group.props.enumerated()), id: \.element.id) { i, prop in
-                    if i > 0 { rowDivider }
-                    CompactPropRow(prop: prop, gameResult: resultForProp(prop), showSportBadge: false)
-                        .onTapGesture { onTapProp(prop) }
-                }
-            }
-            .padding(.vertical, 4)
-            .quantPanel()
-            .padding(.horizontal, 14)
-            .padding(.top, entry == nil ? 4 : 0)
-        }
-    }
-}
-
-// MARK: - Prop Game Carousel
-//
-// Horizontal swipe-paged container for the featured view. Each page = one
-// game with up to 2 PropCardSlate cards side-by-side. Page dots at bottom
-// for navigation; users can also swipe horizontally between games.
-
-struct PropGameCarousel: View {
-    let groups: [(matchup: String, props: [PropPick])]
-    let resultForProp: (PropPick) -> String?
-    let onTap: (PropPick) -> Void
-
-    @State private var pageIndex = 0
-
-    var body: some View {
-        VStack(spacing: 0) {
-            TabView(selection: $pageIndex) {
-                ForEach(Array(groups.enumerated()), id: \.offset) { idx, group in
-                    PropCarouselPage(
-                        matchup: group.matchup,
-                        props: group.props,
-                        pageNumber: idx + 1,
-                        totalPages: groups.count,
-                        resultForProp: resultForProp,
-                        onTap: onTap
-                    )
-                    .tag(idx)
-                }
-            }
-            .tabViewStyle(.page(indexDisplayMode: .never))
-            .indexViewStyle(.page(backgroundDisplayMode: .never))
-            .frame(height: 380)
-
-            // Smart page indicator:
-            //   ≤ 8 games: dot row (gold pill for current)
-            //   > 8 games: numeric "6 / 14" (dots would overflow on narrow screens)
-            if groups.count > 1 {
-                if groups.count <= 8 {
-                    HStack(spacing: 6) {
-                        ForEach(0..<groups.count, id: \.self) { i in
-                            Capsule()
-                                .fill(i == pageIndex ? GaryColors.gold : Color.white.opacity(0.18))
-                                .frame(width: i == pageIndex ? 18 : 5, height: 5)
-                                .animation(.easeInOut(duration: 0.25), value: pageIndex)
-                        }
-                    }
-                    .padding(.top, 6)
-                } else {
-                    HStack(spacing: 6) {
-                        Text("\(pageIndex + 1)")
-                            .font(.system(size: 13, weight: .heavy))
-                            .foregroundStyle(GaryColors.gold)
-                        Text("/")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.3))
-                        Text("\(groups.count)")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.45))
-                    }
-                    .padding(.top, 6)
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Single Page of the Game Carousel
-
-struct PropCarouselPage: View {
-    let matchup: String
-    let props: [PropPick]
-    let pageNumber: Int
-    let totalPages: Int
-    let resultForProp: (PropPick) -> String?
-    let onTap: (PropPick) -> Void
-
-    private var firstPropTime: String {
-        guard let iso = props.first?.commence_time, !iso.isEmpty,
-              let d = parseISO8601(iso) else {
-            return props.first?.time ?? ""
-        }
-        return Formatters.dayTimeFormatterEST.string(from: d)
-    }
-
-    /// Shorter matchup form — last word of each team, e.g.
-    /// "Marlins @ Blue Jays" → "Marlins @ Jays". Falls back to original.
-    private var shortMatchup: String {
-        let parts = matchup.components(separatedBy: " @ ")
-        guard parts.count == 2 else { return matchup }
-        let away = parts[0].components(separatedBy: " ").last ?? parts[0]
-        let home = parts[1].components(separatedBy: " ").last ?? parts[1]
-        return "\(away) @ \(home)"
-    }
-
-    var body: some View {
-        VStack(spacing: 14) {
-            // ── PAGE HEADER ──
-            // Two-row stack — game # + time on top, matchup on its own line below.
-            // Gives the matchup full width so long team names ("Diamondbacks") fit.
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 8) {
-                    Text("GAME \(pageNumber) / \(totalPages)")
-                        .font(.system(size: 9, weight: .heavy))
-                        .tracking(1.2)
-                        .foregroundStyle(GaryColors.gold.opacity(0.65))
-
-                    Spacer(minLength: 0)
-
-                    if !firstPropTime.isEmpty {
-                        Text(firstPropTime)
-                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                            .foregroundStyle(.white.opacity(0.45))
-                    }
-                }
-
-                Text(shortMatchup.uppercased())
-                    .font(.system(size: 16, weight: .heavy))
-                    .tracking(0.3)
-                    .foregroundStyle(.white.opacity(0.9))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-            }
-            .padding(.horizontal, 18)
-            .padding(.top, 4)
-
-            // ── TWO CARDS SIDE BY SIDE ──
-            HStack(alignment: .top, spacing: 10) {
-                ForEach(Array(props.prefix(2).enumerated()), id: \.offset) { _, prop in
-                    PropCardSlate(prop: prop, gameResult: resultForProp(prop))
-                        .onTapGesture { onTap(prop) }
-                }
-                // If only one prop, leave the second slot empty but maintain layout
-                if props.count == 1 {
-                    Color.clear
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 280)
-                }
-            }
-            .padding(.horizontal, 16)
-
-            Spacer(minLength: 0)
-        }
-    }
-}
-
-// MARK: - Props / Info Hub (inline-dropdown command center)
-//
-// The Props tab's default ("HUB") view. Everything expands in place — league
-// (MLB/NBA) tabs, a Game/Props mode switch, an L5/L10/L20 form-window slider,
-// and game panels that open inline into nested category dropdowns (pitching,
-// bullpen, park & weather, umpire, splits, trends…). No pop-ups, no view swaps.
-// Mock data for now; each module maps to a real BDL/Supabase source.
+// Shared types for the Hub ("Today's Edges") and its Signal cards. The league
+// set is data-driven: PropsHubView only offers leagues that actually have
+// insight_connections rows today.
 
 enum HubPalette {
     static let green = Color(hex: "#9cc88a")
@@ -10648,250 +10254,17 @@ enum HubTone {
     }
 }
 
-enum HubMode { case games, players }
-enum HubLeagueSel { case mlb, nba }
-
-enum HubWin: String, CaseIterable {
-    case l5 = "L5", l10 = "L10", l20 = "L20"
-    var idx: Int { HubWin.allCases.firstIndex(of: self)! }
-    static func from(_ i: Int) -> HubWin { allCases[min(2, max(0, i))] }
+enum HubLeagueSel {
+    case mlb, nba, wc
+    /// Short display label for the league toggle / empty state.
+    var label: String {
+        switch self {
+        case .mlb: return "MLB"
+        case .nba: return "NBA"
+        case .wc: return "WORLD CUP"
+        }
+    }
 }
-
-// ---- data models ----
-
-struct HubGameLine {
-    let away, home, awayAbbr, homeAbbr, time, venue: String
-    let mlAway, mlHome: String
-    let spreadLabel, spreadAway, spreadHome: String
-    let totalLine, totalOver, totalUnder: String
-}
-struct HubFormWindow { let record, metric, diff: String; let tone: HubTone }
-struct HubStarter { let team, name, hand: String; let era, whip, k9: Double; let l3, note: String }
-struct HubBullpen { let team: String; let ip3d: Double; let rank, armsDown: String; let tone: HubTone }
-struct HubSplit { let team, vs: String; let wrc: Int; let note: String }
-struct HubHomeRoad { let team, split, note: String }
-struct HubTeamForm {
-    let team: String; let l5, l10, l20: HubFormWindow
-    func w(_ win: HubWin) -> HubFormWindow { win == .l5 ? l5 : win == .l10 ? l10 : l20 }
-}
-struct HubPark { let name: String; let runIndex, hrIndex: Int; let note: String }
-struct HubWeather { let temp, wind, condition, lean: String; let tone: HubTone }
-struct HubUmpire { let name, kBoost, runEnv, note: String }
-struct HubTrend2 { let label, value: String; let tone: HubTone }
-
-struct HubMlbGame: Identifiable {
-    let id: String
-    let line: HubGameLine
-    let starters: [HubStarter]
-    let bullpen: [HubBullpen]
-    let splitsVsHand: [HubSplit]
-    let homeRoad: [HubHomeRoad]
-    let form: [HubTeamForm]
-    let park: HubPark
-    let weather: HubWeather
-    let umpire: HubUmpire
-    let situational: [String]
-    let trends: [HubTrend2]
-}
-
-struct HubRating { let team: String; let off, def, net, pace: Double }
-struct HubRest { let team, days, note: String; let tone: HubTone }
-struct HubInjury { let team, player, status, impact: String }
-struct HubShooting { let team, threePctL5, note: String; let tone: HubTone }
-
-struct HubNbaGame: Identifiable {
-    let id: String
-    let line: HubGameLine
-    let ratings: [HubRating]
-    let rest: [HubRest]
-    let form: [HubTeamForm]
-    let injuries: [HubInjury]
-    let shooting: [HubShooting]
-    let matchup: [String]
-    let trends: [HubTrend2]
-}
-
-struct HubStreakRow: Identifiable { let id = UUID(); let player, team, unit, detail, game: String; let count: Int }
-struct HubFormRow: Identifiable {
-    let id = UUID(); let player, team, market, line, game: String
-    let l5, l10, l20: String; let spark: [Double]; let lineVal: Double
-    func hit(_ w: HubWin) -> String { w == .l5 ? l5 : w == .l10 ? l10 : l20 }
-}
-struct HubBvpRow: Identifiable { let id = UUID(); let batter, batterTeam, pitcher, stat, verdict, game: String; let hitterFavored: Bool }
-struct HubKVRow: Identifiable { let id = UUID(); let label, value, sub, game: String; let tone: HubTone }
-
-// ---- mock data ----
-
-let hubMlbGames: [HubMlbGame] = [
-    HubMlbGame(
-        id: "nyy-bal",
-        line: HubGameLine(away: "Yankees", home: "Orioles", awayAbbr: "NYY", homeAbbr: "BAL", time: "7:05 PM ET", venue: "Camden Yards",
-                          mlAway: "-128", mlHome: "+118", spreadLabel: "Run line", spreadAway: "-1.5 (+135)", spreadHome: "+1.5 (-155)",
-                          totalLine: "9.0", totalOver: "-105", totalUnder: "-115"),
-        starters: [
-            HubStarter(team: "NYY", name: "Gerrit Cole", hand: "RHP", era: 2.94, whip: 1.02, k9: 10.4, l3: "1.93 ERA · 0.88 WHIP · 31 K in 23.1 IP", note: "Owns BAL: 0.91 WHIP across last 4 vs them"),
-            HubStarter(team: "BAL", name: "Dean Kremer", hand: "RHP", era: 4.12, whip: 1.28, k9: 7.6, l3: "5.06 ERA · 1.41 WHIP · HR in each", note: "Home-run prone at Camden lately"),
-        ],
-        bullpen: [
-            HubBullpen(team: "NYY", ip3d: 4.1, rank: "5th-best ERA", armsDown: "none — rested", tone: .good),
-            HubBullpen(team: "BAL", ip3d: 11.0, rank: "gassed", armsDown: "Bautista, Cano unavailable", tone: .bad),
-        ],
-        splitsVsHand: [
-            HubSplit(team: "NYY", vs: "vs RHP", wrc: 112, note: "Top-8 vs RHP"),
-            HubSplit(team: "BAL", vs: "vs RHP", wrc: 96, note: "Below average vs RHP"),
-        ],
-        homeRoad: [
-            HubHomeRoad(team: "NYY", split: "Road: 24-18, 5.1 R/G", note: "Travels well"),
-            HubHomeRoad(team: "BAL", split: "Home: 26-16", note: "Strong at Camden"),
-        ],
-        form: [
-            HubTeamForm(team: "NYY", l5: HubFormWindow(record: "4-1", metric: "6.0 R/G", diff: "+11", tone: .good), l10: HubFormWindow(record: "7-3", metric: "5.6 R/G", diff: "+18", tone: .good), l20: HubFormWindow(record: "12-8", metric: "5.2 R/G", diff: "+22", tone: .good)),
-            HubTeamForm(team: "BAL", l5: HubFormWindow(record: "2-3", metric: "3.4 R/G", diff: "-6", tone: .bad), l10: HubFormWindow(record: "4-6", metric: "3.9 R/G", diff: "-9", tone: .bad), l20: HubFormWindow(record: "9-11", metric: "4.3 R/G", diff: "-4", tone: .neutral)),
-        ],
-        park: HubPark(name: "Camden Yards", runIndex: 103, hrIndex: 109, note: "Hitter-friendly, esp. to RF"),
-        weather: HubWeather(temp: "74°F", wind: "11 mph out to RF", condition: "Clear", lean: "Wind aids the over", tone: .good),
-        umpire: HubUmpire(name: "Mark Carlson", kBoost: "+4% K", runEnv: "-0.2 R vs avg", note: "Slightly pitcher-friendly zone"),
-        situational: ["Game 1 of 3 — both off a travel day", "BAL on the back end of a 12-inning loss last night", "Cole on extra rest (6 days)"],
-        trends: [
-            HubTrend2(label: "NYY run line (road fav)", value: "18-9 ATS", tone: .good),
-            HubTrend2(label: "BAL last 10 first-5 (F5)", value: "3-7", tone: .bad),
-            HubTrend2(label: "Total: NYY @ BAL L5", value: "Over 4-1", tone: .neutral),
-        ]
-    ),
-    HubMlbGame(
-        id: "sd-lad",
-        line: HubGameLine(away: "Padres", home: "Dodgers", awayAbbr: "SD", homeAbbr: "LAD", time: "10:10 PM ET", venue: "Dodger Stadium",
-                          mlAway: "+146", mlHome: "-172", spreadLabel: "Run line", spreadAway: "+1.5 (-118)", spreadHome: "-1.5 (-102)",
-                          totalLine: "8.5", totalOver: "-110", totalUnder: "-110"),
-        starters: [
-            HubStarter(team: "SD", name: "Blake Snell", hand: "LHP", era: 3.41, whip: 1.19, k9: 11.1, l3: "4.02 ERA · 1.30 WHIP · walk-prone", note: "Road ERA 5.04 vs 2.81 at Petco"),
-            HubStarter(team: "LAD", name: "Yoshinobu Yamamoto", hand: "RHP", era: 2.71, whip: 1.04, k9: 9.6, l3: "1.92 ERA · 0.89 WHIP · 11 days rest", note: "Rested & fully stretched"),
-        ],
-        bullpen: [
-            HubBullpen(team: "SD", ip3d: 7.2, rank: "middle", armsDown: "Suarez unavailable", tone: .neutral),
-            HubBullpen(team: "LAD", ip3d: 3.0, rank: "top-3 ERA", armsDown: "none", tone: .good),
-        ],
-        splitsVsHand: [
-            HubSplit(team: "SD", vs: "vs RHP", wrc: 101, note: "Average vs RHP"),
-            HubSplit(team: "LAD", vs: "vs LHP", wrc: 118, note: "Crush lefties — top-3"),
-        ],
-        homeRoad: [
-            HubHomeRoad(team: "SD", split: "Road: 2-9 L11 night", note: "Slumping on the road"),
-            HubHomeRoad(team: "LAD", split: "Home: .682 win%", note: "Elite at home"),
-        ],
-        form: [
-            HubTeamForm(team: "SD", l5: HubFormWindow(record: "1-4", metric: "2.8 R/G", diff: "-9", tone: .bad), l10: HubFormWindow(record: "4-6", metric: "3.6 R/G", diff: "-5", tone: .bad), l20: HubFormWindow(record: "10-10", metric: "4.1 R/G", diff: "+1", tone: .neutral)),
-            HubTeamForm(team: "LAD", l5: HubFormWindow(record: "4-1", metric: "5.8 R/G", diff: "+13", tone: .good), l10: HubFormWindow(record: "8-2", metric: "5.9 R/G", diff: "+24", tone: .good), l20: HubFormWindow(record: "14-6", metric: "5.5 R/G", diff: "+31", tone: .good)),
-        ],
-        park: HubPark(name: "Dodger Stadium", runIndex: 97, hrIndex: 104, note: "Plays bigger at night"),
-        weather: HubWeather(temp: "68°F", wind: "5 mph in from LF", condition: "Clear, dry", lean: "Neutral-to-under", tone: .neutral),
-        umpire: HubUmpire(name: "Angel Hernandez", kBoost: "+6% K", runEnv: "-0.4 R vs avg", note: "Wide zone — Ks up, runs down"),
-        situational: ["Yamamoto on 11 days rest — watch pitch count", "SD finishing a 10-game road trip", "Late west-coast window — cool air leans under"],
-        trends: [
-            HubTrend2(label: "LAD home fav -1.5", value: "21-14 ATS", tone: .good),
-            HubTrend2(label: "SD road night L11", value: "2-9 SU", tone: .bad),
-            HubTrend2(label: "Yamamoto starts: total", value: "Under 7-3", tone: .neutral),
-        ]
-    ),
-]
-
-let hubNbaGames: [HubNbaGame] = [
-    HubNbaGame(
-        id: "den-min",
-        line: HubGameLine(away: "Nuggets", home: "Timberwolves", awayAbbr: "DEN", homeAbbr: "MIN", time: "8:00 PM ET", venue: "Target Center",
-                          mlAway: "+104", mlHome: "-124", spreadLabel: "Spread", spreadAway: "+1.5 (-110)", spreadHome: "-1.5 (-110)",
-                          totalLine: "223.5", totalOver: "-110", totalUnder: "-110"),
-        ratings: [HubRating(team: "DEN", off: 119.4, def: 114.1, net: 5.3, pace: 99.1), HubRating(team: "MIN", off: 116.8, def: 110.2, net: 6.6, pace: 97.4)],
-        rest: [HubRest(team: "DEN", days: "2nd of B2B", note: "Played in Chicago last night", tone: .bad), HubRest(team: "MIN", days: "3 days rest", note: "Rested & home", tone: .good)],
-        form: [
-            HubTeamForm(team: "DEN", l5: HubFormWindow(record: "3-2 ATS", metric: "+2.1 margin", diff: "", tone: .neutral), l10: HubFormWindow(record: "6-4 ATS", metric: "+3.4", diff: "", tone: .good), l20: HubFormWindow(record: "12-8 ATS", metric: "+4.0", diff: "", tone: .good)),
-            HubTeamForm(team: "MIN", l5: HubFormWindow(record: "4-1 ATS", metric: "+6.8 margin", diff: "", tone: .good), l10: HubFormWindow(record: "7-3 ATS", metric: "+5.1", diff: "", tone: .good), l20: HubFormWindow(record: "13-7 ATS", metric: "+4.6", diff: "", tone: .good)),
-        ],
-        injuries: [
-            HubInjury(team: "DEN", player: "Aaron Gordon", status: "QUESTIONABLE", impact: "If out, more minutes for Braun + spacing hit"),
-            HubInjury(team: "MIN", player: "Full strength", status: "HEALTHY", impact: "No notable absences"),
-        ],
-        shooting: [
-            HubShooting(team: "DEN", threePctL5: "39.8% (hot)", note: "Above season 36.1% — regression risk", tone: .bad),
-            HubShooting(team: "MIN", threePctL5: "33.1% (cold)", note: "Below season 36.8% — positive regression due", tone: .good),
-        ],
-        matchup: ["MIN top-3 defense vs Jokić — half-court grind", "DEN on a B2B — late legs a concern", "Pace 99 vs 97 — total leans under"],
-        trends: [HubTrend2(label: "MIN as home favorite", value: "14-6 ATS", tone: .good), HubTrend2(label: "DEN 2nd night of B2B", value: "4-9 ATS", tone: .bad), HubTrend2(label: "DEN @ MIN total", value: "Under 6-2", tone: .neutral)]
-    ),
-    HubNbaGame(
-        id: "sas-uta",
-        line: HubGameLine(away: "Spurs", home: "Jazz", awayAbbr: "SAS", homeAbbr: "UTA", time: "9:00 PM ET", venue: "Delta Center",
-                          mlAway: "-150", mlHome: "+130", spreadLabel: "Spread", spreadAway: "-3.0 (-108)", spreadHome: "+3.0 (-112)",
-                          totalLine: "231.5", totalOver: "-110", totalUnder: "-110"),
-        ratings: [HubRating(team: "SAS", off: 114.0, def: 112.3, net: 1.7, pace: 100.8), HubRating(team: "UTA", off: 113.1, def: 118.9, net: -5.8, pace: 101.5)],
-        rest: [HubRest(team: "SAS", days: "2 days rest", note: "Rested", tone: .good), HubRest(team: "UTA", days: "1 day rest", note: "Normal", tone: .neutral)],
-        form: [
-            HubTeamForm(team: "SAS", l5: HubFormWindow(record: "3-2 ATS", metric: "+1.2 margin", diff: "", tone: .neutral), l10: HubFormWindow(record: "5-5 ATS", metric: "+0.4", diff: "", tone: .neutral), l20: HubFormWindow(record: "11-9 ATS", metric: "+1.1", diff: "", tone: .neutral)),
-            HubTeamForm(team: "UTA", l5: HubFormWindow(record: "1-4 ATS", metric: "-8.2 margin", diff: "", tone: .bad), l10: HubFormWindow(record: "3-7 ATS", metric: "-6.0", diff: "", tone: .bad), l20: HubFormWindow(record: "7-13 ATS", metric: "-4.4", diff: "", tone: .bad)),
-        ],
-        injuries: [
-            HubInjury(team: "SAS", player: "Victor Wembanyama", status: "ACTIVE", impact: "Faces a bottom-5 rim defense"),
-            HubInjury(team: "UTA", player: "Lauri Markkanen", status: "OUT", impact: "Usage + rebounds open up for Kessler"),
-        ],
-        shooting: [
-            HubShooting(team: "SAS", threePctL5: "37.2%", note: "Steady", tone: .neutral),
-            HubShooting(team: "UTA", threePctL5: "40.4% (hot)", note: "Unsustainable for a 35% team — fade", tone: .bad),
-        ],
-        matchup: ["UTA bottom-5 D + fast pace = elite total spot", "Wemby vs UTA interior — blocks & boards", "Markkanen out — Jazz ceiling lowered"],
-        trends: [HubTrend2(label: "UTA home as dog", value: "Over 13-5", tone: .neutral), HubTrend2(label: "SAS road favorite", value: "9-12 ATS", tone: .bad), HubTrend2(label: "Wemby vs UTA", value: "4.0 blk L3", tone: .good)]
-    ),
-]
-
-// player-level
-let hubMlbStreaks: [HubStreakRow] = [
-    HubStreakRow(player: "Bobby Witt Jr.", team: "KC", unit: "GAME HIT STREAK", detail: ".362 AVG in span", game: "Royals @ Guardians", count: 13),
-    HubStreakRow(player: "Aaron Judge", team: "NYY", unit: "GAME ON-BASE", detail: "1.4 total bases/g", game: "Yankees @ Orioles", count: 8),
-    HubStreakRow(player: "Mookie Betts", team: "LAD", unit: "GAME RUN STREAK", detail: "scored in 6 straight", game: "Padres @ Dodgers", count: 6),
-]
-let hubMlbForm: [HubFormRow] = [
-    HubFormRow(player: "Aaron Judge", team: "NYY", market: "Total bases", line: "o1.5", game: "Yankees @ Orioles", l5: "5/5", l10: "9/10", l20: "16/20", spark: [2,3,1,2,4,2,0,3,2,1,3], lineVal: 1.5),
-    HubFormRow(player: "Gunnar Henderson", team: "BAL", market: "Hits", line: "o0.5", game: "Yankees @ Orioles", l5: "4/5", l10: "8/10", l20: "15/20", spark: [1,2,0,1,1,2,1,0,1,1], lineVal: 0.5),
-    HubFormRow(player: "Mookie Betts", team: "LAD", market: "Runs", line: "o0.5", game: "Padres @ Dodgers", l5: "5/5", l10: "7/10", l20: "13/20", spark: [1,0,2,1,1,0,1,1], lineVal: 0.5),
-]
-let hubMlbBvp: [HubBvpRow] = [
-    HubBvpRow(batter: "Gunnar Henderson", batterTeam: "BAL", pitcher: "Gerrit Cole", stat: "8-for-17 (.471) · 2 HR · 1 BB", verdict: "EDGE: HITTER", game: "Yankees @ Orioles", hitterFavored: true),
-    HubBvpRow(batter: "Juan Soto", batterTeam: "NYM", pitcher: "Zack Wheeler", stat: "2-for-19 (.105) · 9 K", verdict: "EDGE: PITCHER", game: "Phillies @ Mets", hitterFavored: false),
-    HubBvpRow(batter: "Manny Machado", batterTeam: "SD", pitcher: "Yoshinobu Yamamoto", stat: "5-for-11 (.455) · 1 HR", verdict: "EDGE: HITTER", game: "Padres @ Dodgers", hitterFavored: true),
-]
-let hubMlbPark: [HubKVRow] = [
-    HubKVRow(label: "Anthony Santander @ Camden", value: ".312 AVG", sub: "14 HR career at home vs short RF · Yankees @ Orioles", game: "Yankees @ Orioles", tone: .good),
-    HubKVRow(label: "Freddie Freeman @ Dodger Stadium", value: "1.012 OPS", sub: "Elite home hitter · Padres @ Dodgers", game: "Padres @ Dodgers", tone: .good),
-]
-let hubMlbHand: [HubKVRow] = [
-    HubKVRow(label: "Teoscar Hernández vs LHP", value: ".318", sub: ".980 OPS — faces Snell · Padres @ Dodgers", game: "Padres @ Dodgers", tone: .good),
-    HubKVRow(label: "Anthony Volpe vs RHP", value: ".248", sub: ".690 OPS — faces Kremer · Yankees @ Orioles", game: "Yankees @ Orioles", tone: .bad),
-]
-let hubMlbK: [HubKVRow] = [
-    HubKVRow(label: "Gerrit Cole · Ks o6.5", value: "24% BAL K-rate", sub: "High-K arm vs a whiff-prone lineup · Yankees @ Orioles", game: "Yankees @ Orioles", tone: .good),
-    HubKVRow(label: "Blake Snell · Ks o6.5", value: "19% LAD K-rate", sub: "Ceiling high but walks cap innings · Padres @ Dodgers", game: "Padres @ Dodgers", tone: .neutral),
-]
-
-let hubNbaStreaks: [HubStreakRow] = [
-    HubStreakRow(player: "Anthony Edwards", team: "MIN", unit: "STRAIGHT 30-PT", detail: "22+ FGA each", game: "Nuggets @ Timberwolves", count: 5),
-    HubStreakRow(player: "Nikola Jokić", team: "DEN", unit: "STRAIGHT TRIPLE-DBL", detail: "10+ ast each", game: "Nuggets @ Timberwolves", count: 9),
-]
-let hubNbaForm: [HubFormRow] = [
-    HubFormRow(player: "Nikola Jokić", team: "DEN", market: "Assists", line: "o9.5", game: "Nuggets @ Timberwolves", l5: "4/5", l10: "8/9", l20: "15/19", spark: [11,9,12,10,8,13,10,7,12], lineVal: 9.5),
-    HubFormRow(player: "Anthony Edwards", team: "MIN", market: "Points", line: "o27.5", game: "Nuggets @ Timberwolves", l5: "5/5", l10: "7/10", l20: "13/20", spark: [31,34,30,38,33,26,29,31,24,30], lineVal: 27.5),
-    HubFormRow(player: "Victor Wembanyama", team: "SAS", market: "Blocks", line: "o2.5", game: "Spurs @ Jazz", l5: "5/5", l10: "8/10", l20: "16/20", spark: [5,3,4,4,4,3,2,5,3,4], lineVal: 2.5),
-]
-let hubNbaUsage: [HubKVRow] = [
-    HubKVRow(label: "Walker Kessler — Markkanen OUT", value: "USG ↑", sub: "14 reb last game without Lauri · Spurs @ Jazz", game: "Spurs @ Jazz", tone: .good),
-    HubKVRow(label: "Christian Braun — Gordon QUES", value: "USG ↑", sub: "34+ min if AG sits · Nuggets @ Timberwolves", game: "Nuggets @ Timberwolves", tone: .good),
-]
-let hubNbaPos: [HubKVRow] = [
-    HubKVRow(label: "Wembanyama (C) vs UTA", value: "27.4 PRA", sub: "3rd-most allowed to centers · Spurs @ Jazz", game: "Spurs @ Jazz", tone: .good),
-    HubKVRow(label: "Edwards (SG) vs DEN", value: "24.1 pts", sub: "8th-most allowed to wings · Nuggets @ Timberwolves", game: "Nuggets @ Timberwolves", tone: .good),
-]
-let hubNbaPace: [HubKVRow] = [
-    HubKVRow(label: "Spurs @ Jazz", value: "100.8 / 101.5", sub: "Both top-8 pace + UTA bottom-5 D → total 231.5", game: "Spurs @ Jazz", tone: .good),
-    HubKVRow(label: "Nuggets @ Timberwolves", value: "99.1 / 97.4", sub: "Slower, elite D → total leans under", game: "Nuggets @ Timberwolves", tone: .bad),
-]
 
 // ---- shared mini chart ----
 struct MiniBarChart: View {
@@ -10900,13 +10273,23 @@ struct MiniBarChart: View {
     var tint: Color = GaryColors.gold
     var height: CGFloat = 24
     var body: some View {
-        let maxV = max(values.max() ?? 1, line ?? 0, 1)
+        // OPS-style values never hit 0, so scale from a floor below the min —
+        // otherwise [.779, 1.181] renders as two near-equal bars (66% vs 100%).
+        let maxV = max(values.max() ?? 1, line ?? 0, 0.001)
+        // Equal pairs get no floor (it would collapse both bars to the 3pt stub).
+        let isPair = values.count == 2 && line == nil
+        let minV = isPair ? (values.min() ?? 0) : 0
+        let floor = (isPair && maxV - minV > 0.0001) ? max(0, minV - (maxV - minV)) : 0
+        let span = max(maxV - floor, 0.001)
         HStack(alignment: .bottom, spacing: 3) {
-            ForEach(Array(values.enumerated()), id: \.offset) { _, v in
-                let over = line == nil ? true : v >= (line ?? 0)
+            ForEach(Array(values.enumerated()), id: \.offset) { i, v in
+                // 2-bar series = [baseline, current]: mute the baseline, tint the
+                // current bar (same idiom as RegressionBoard.gapBar). Otherwise
+                // tint bars at/over the reference line.
+                let on = isPair ? (i == 1) : (line == nil ? true : v >= (line ?? 0))
                 RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                    .fill(over ? tint : Color.white.opacity(0.16))
-                    .frame(width: 5, height: max(3, CGFloat(v / maxV) * height))
+                    .fill(on ? tint : Color.white.opacity(0.22))
+                    .frame(width: isPair ? 14 : 5, height: max(3, CGFloat((v - floor) / span) * height))
             }
         }
         .frame(height: height, alignment: .bottom)
@@ -10929,7 +10312,7 @@ struct MiniBarChart: View {
 // (getMlbLineups). Mock data here; wiring is a follow-up.
 
 enum SignalKind {
-    case streak, h2h, hot, cold, injury, debut, situational, platoon, ballpark, regression
+    case streak, h2h, hot, cold, injury, debut, situational, platoon, ballpark, regression, tournament
     var icon: String {
         switch self {
         case .streak: return "flame.fill"
@@ -10942,6 +10325,7 @@ enum SignalKind {
         case .platoon: return "arrow.left.arrow.right"
         case .ballpark: return "mappin.and.ellipse"
         case .regression: return "chart.line.downtrend.xyaxis"
+        case .tournament: return "trophy.fill"
         }
     }
     var tint: Color {
@@ -10964,6 +10348,7 @@ enum SignalKind {
         case .platoon: return "PLATOON EDGE"
         case .ballpark: return "BALLPARK"
         case .regression: return "REGRESSION"
+        case .tournament: return "TOURNAMENT"
         }
     }
 }
@@ -10998,7 +10383,7 @@ struct EdgesSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
-                .font(.system(size: 9.5, weight: .semibold, design: .monospaced)).tracking(1.8)
+                .font(.system(size: 9.5, weight: .semibold, design: .monospaced)).tracking(1)
                 .foregroundStyle(.white.opacity(0.4))
                 .padding(.horizontal, 16).padding(.top, 4)
             if edges.isEmpty {
@@ -11028,8 +10413,38 @@ let mlbTeamKeywords: [String: [String]] = [
     "TOR": ["blue jays", "toronto"], "WSH": ["nationals", "washington"],
 ]
 
+/// NBA BDL team abbreviation -> name keywords (same role as mlbTeamKeywords).
+let nbaTeamKeywords: [String: [String]] = [
+    "ATL": ["hawks"], "BOS": ["celtics"], "BKN": ["nets", "brooklyn"], "CHA": ["hornets", "charlotte"],
+    "CHI": ["bulls"], "CLE": ["cavaliers", "cavs"], "DAL": ["mavericks", "mavs"], "DEN": ["nuggets"],
+    "DET": ["pistons"], "GSW": ["warriors", "golden state"], "HOU": ["rockets"], "IND": ["pacers", "indiana"],
+    "LAC": ["clippers"], "LAL": ["lakers"], "MEM": ["grizzlies", "memphis"], "MIA": ["heat"],
+    "MIL": ["bucks"], "MIN": ["timberwolves", "wolves"], "NOP": ["pelicans", "new orleans"], "NYK": ["knicks"],
+    "OKC": ["thunder", "oklahoma"], "ORL": ["magic", "orlando"], "PHI": ["76ers", "sixers"], "PHX": ["suns", "phoenix"],
+    "POR": ["trail blazers", "blazers", "portland"], "SAC": ["kings", "sacramento"], "SAS": ["spurs"],
+    "TOR": ["raptors"], "UTA": ["jazz", "utah"], "WAS": ["wizards"],
+]
+
+/// Match an "AWY @ HOM" abbreviation label (a hub edge's `game`) against a
+/// full-team-name matchup string. Both abbreviations must resolve (via the MLB
+/// or NBA keyword maps) to a name present in the matchup — location collisions
+/// (MIN Twins vs MIN Timberwolves) sort themselves out because BOTH sides must
+/// match the same matchup.
+func abbrGameMatches(_ abbrGame: String, matchup: String) -> Bool {
+    let hay = matchup.lowercased()
+    let abbrevs = abbrGame.uppercased()
+        .components(separatedBy: CharacterSet(charactersIn: " @/"))
+        .filter { $0.count >= 2 }
+    guard abbrevs.count >= 2 else { return false }
+    return abbrevs.allSatisfy { ab in
+        let kws = (mlbTeamKeywords[ab] ?? []) + (nbaTeamKeywords[ab] ?? [])
+        return kws.contains { hay.contains($0) }
+    }
+}
+
 struct PicksCarouselView: View {
     @StateObject private var store = PropsSlateStore()
+    @StateObject private var focusState = PicksFocusState.shared
     @State private var connections: [Signal] = []
     @State private var connLoaded = false
     @State private var sport = "ALL"
@@ -11076,9 +10491,32 @@ struct PicksCarouselView: View {
         }
         .task {
             await store.loadIfNeeded()
+            consumeFocus()
             if !connLoaded { await loadConnections() }
         }
         .onChange(of: sport) { _ in page = 0 }
+        .onChange(of: focusState.focusGame) { _ in consumeFocus() }
+        .onChange(of: store.loading) { loading in if !loading { consumeFocus() } }
+    }
+
+    /// Land on the matchup the Hub deep-linked ("LAD @ ARI"). Leaves the
+    /// request pending while the slate is still loading; clears it once a
+    /// match attempt has been made.
+    private func consumeFocus() {
+        guard let focus = focusState.focusGame, !games.isEmpty else { return }
+        focusState.focusGame = nil
+        let apply = {
+            if let idx = games.firstIndex(where: { abbrGameMatches(focus, matchup: $0.matchup) }) {
+                withAnimation(.easeInOut(duration: 0.25)) { page = idx + 1 }
+            }
+        }
+        if sport != "ALL" {
+            // Widen the filter first; apply after the sport-change page reset.
+            sport = "ALL"
+            DispatchQueue.main.async { apply() }
+        } else {
+            apply()
+        }
     }
 
     @ViewBuilder private var content: some View {
@@ -11197,27 +10635,17 @@ struct PicksCarouselView: View {
     }
 
     /// Best-effort: surface edges whose "ABBR @ ABBR" shares a team token with
-    /// this game's matchup or its prop teams.
+    /// this game's matchup or its prop teams. abbrGameMatches resolves both MLB
+    /// and NBA abbreviations, so either league's edges attach to their game.
     private func edges(for g: (matchup: String, time: String, props: [PropPick])) -> [Signal] {
-        let hay = (g.matchup + " " + g.props.compactMap { $0.team }.joined(separator: " ")).lowercased()
-        return connections.filter { sig in
-            // sig.game is "ABBR @ ABBR"; it belongs to this game when BOTH abbrevs
-            // map (via mlbTeamKeywords) to a team name present in the matchup.
-            let abbrevs = sig.game.uppercased()
-                .components(separatedBy: CharacterSet(charactersIn: " @/"))
-                .filter { $0.count >= 2 }
-            guard !abbrevs.isEmpty else { return false }
-            return abbrevs.allSatisfy { ab in
-                guard let kws = mlbTeamKeywords[ab] else { return false }
-                return kws.contains { hay.contains($0) }
-            }
-        }
+        let hay = g.matchup + " " + g.props.compactMap { $0.team }.joined(separator: " ")
+        return connections.filter { abbrGameMatches($0.game, matchup: hay) }
     }
 
     private func loadConnections() async {
         let date = SupabaseAPI.todayEST()
         var out: [Signal] = []
-        for lg in ["MLB", "NBA"] {
+        for lg in ["MLB", "NBA", "WC"] {
             if let conns = try? await SupabaseAPI.fetchInsightConnections(date: date, league: lg) {
                 out.append(contentsOf: conns.compactMap { $0.toSignal() })
             }
@@ -11238,7 +10666,7 @@ struct PicksTodayPage: View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("TODAY'S TOP")
-                    .font(.system(size: 9.5, weight: .semibold, design: .monospaced)).tracking(1.8)
+                    .font(.system(size: 9.5, weight: .semibold, design: .monospaced)).tracking(1)
                     .foregroundStyle(GaryColors.gold.opacity(0.9))
                 Text("The day's highest-confidence plays")
                     .font(.system(size: 19, weight: .semibold)).foregroundStyle(.white.opacity(0.92))
@@ -11254,7 +10682,7 @@ struct PicksTodayPage: View {
             if !topProps.isEmpty {
                 VStack(spacing: 0) {
                     Text("TOP PROPS")
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced)).tracking(1.6)
+                        .font(.system(size: 9, weight: .semibold, design: .monospaced)).tracking(1)
                         .foregroundStyle(.white.opacity(0.4))
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 14).padding(.top, 10).padding(.bottom, 2)
@@ -11293,7 +10721,7 @@ struct PicksGamePage: View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(group.time.isEmpty ? "MATCHUP" : group.time.uppercased())
-                    .font(.system(size: 9.5, weight: .semibold, design: .monospaced)).tracking(1.6)
+                    .font(.system(size: 9.5, weight: .semibold, design: .monospaced)).tracking(1)
                     .foregroundStyle(GaryColors.gold.opacity(0.8))
                 Text(shortMatchup)
                     .font(.system(size: 22, weight: .heavy)).tracking(0.3).foregroundStyle(.white)
@@ -11314,7 +10742,7 @@ struct PicksGamePage: View {
             if !topProps.isEmpty {
                 VStack(spacing: 0) {
                     Text("PLAYER PROPS")
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced)).tracking(1.6)
+                        .font(.system(size: 9, weight: .semibold, design: .monospaced)).tracking(1)
                         .foregroundStyle(.white.opacity(0.4))
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 14).padding(.top, 10).padding(.bottom, 2)
@@ -11336,8 +10764,8 @@ struct PicksGamePage: View {
 
 extension SignalKind {
     /// Map a stored category string onto an existing SignalKind case.
-    /// Returns nil for unrecognized kinds so the row can be dropped (and the
-    /// caller can fall back to mock) rather than mis-bucketed.
+    /// Returns nil for unrecognized kinds so the row is dropped rather than
+    /// mis-bucketed.
     static func from(_ raw: String?) -> SignalKind? {
         switch (raw ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
         case "streak": return .streak
@@ -11346,10 +10774,11 @@ extension SignalKind {
         case "cold", "cooling", "cooling off", "cooling_off": return .cold
         case "injury", "replacement", "beneficiary": return .injury
         case "debut": return .debut
-        case "situational", "rest", "fatigue", "rest & fatigue": return .situational
+        case "situational", "rest", "fatigue", "rest & fatigue", "rest_fatigue": return .situational
         case "platoon", "platoon edge", "platoon_edge": return .platoon
         case "ballpark", "ballpark shift", "ballpark_shift": return .ballpark
         case "regression", "regression watch", "regression_watch": return .regression
+        case "tournament", "stakes", "group", "tournament_stakes": return .tournament
         default: return nil
         }
     }
@@ -11360,6 +10789,7 @@ extension HubLeagueSel {
         switch (raw ?? "").trimmingCharacters(in: .whitespacesAndNewlines).uppercased() {
         case "MLB": return .mlb
         case "NBA": return .nba
+        case "WC", "WORLD CUP", "SOCCER_WORLD_CUP": return .wc
         default: return nil
         }
     }
@@ -11399,150 +10829,40 @@ extension Connection {
     }
 }
 
-let allSignals: [Signal] = [
-    // ---------------- MLB ----------------
-    Signal(league: .mlb, kind: .streak, headline: "Dodgers have won 8 straight at home", detail: "Outscoring opponents 61–29 during the run.", game: "Padres @ Dodgers", value: "W8", tone: .good),
-    Signal(league: .mlb, kind: .streak, headline: "Orioles have dropped 5 of 6 at Camden", detail: "Bats gone quiet — 2.8 runs per game in the slide.", game: "Yankees @ Orioles", value: "1-5", tone: .bad),
-
-    Signal(league: .mlb, kind: .h2h, headline: "Orioles own the Yankees lately — 9-3 in the last 12", detail: "Including 5-1 at Camden Yards.", game: "Yankees @ Orioles", value: "9-3", tone: .good),
-    Signal(league: .mlb, kind: .h2h, headline: "Dodgers have taken 7 straight from the Padres at home", detail: "Series swing has been pitching-driven.", game: "Padres @ Dodgers", value: "W7", tone: .good),
-
-    Signal(league: .mlb, kind: .hot, headline: "Bobby Witt Jr. is on a 13-game hit streak", detail: ".362 with 5 extra-base hits in the span.", game: "Royals @ Guardians", value: "13", tone: .good, spark: [2,1,1,3,2,1,2,1,1,2,1,2,1], lineVal: 0.5),
-    Signal(league: .mlb, kind: .hot, headline: "Aaron Judge has gone deep 6 times in his last 9", detail: "Averaging 1.4 total bases per game.", game: "Yankees @ Orioles", value: "6 HR", tone: .good),
-
-    Signal(league: .mlb, kind: .cold, headline: "Rafael Devers is 3-for-31 over his last 8", detail: "Chasing out of the zone at a 41% clip.", game: "Red Sox @ Rays", value: ".097", tone: .bad),
-    Signal(league: .mlb, kind: .cold, headline: "Mookie Betts has no extra-base hits in 5 games", detail: "Still scoring runs atop the order, though.", game: "Padres @ Dodgers", value: "0 XBH", tone: .neutral),
-
-    Signal(league: .mlb, kind: .injury, headline: "Royals' Vinnie Pasquantino (wrist) is OUT", detail: "Nick Pratto takes over at 1B — 4 RBI in 2 games filling in.", game: "Royals @ Guardians", value: "FILL-IN", tone: .neutral),
-    Signal(league: .mlb, kind: .injury, headline: "Adley Rutschman is back in Baltimore's lineup", detail: "First game off the IL — restores the catching + framing edge.", game: "Yankees @ Orioles", value: "RETURN", tone: .good),
-
-    Signal(league: .mlb, kind: .debut, headline: "RHP Chase Petty makes his MLB debut start", detail: "No big-league book on him — hitters and books flying blind.", game: "Reds @ Cubs", value: "DEBUT", tone: .neutral),
-    Signal(league: .mlb, kind: .debut, headline: "Lefty recalled from Triple-A for a spot start", detail: "26 strikeouts across his last 3 minor-league outings.", game: "Marlins @ Nationals", value: "CALL-UP", tone: .neutral),
-
-    Signal(league: .mlb, kind: .situational, headline: "Tigers are 14-4 at home after an off day", detail: "Detroit had Monday off — rested arms and bats.", game: "White Sox @ Tigers", value: "14-4", tone: .good),
-    Signal(league: .mlb, kind: .situational, headline: "Padres are 2-9 in road night games this month", detail: "Late west-coast starts have been rough.", game: "Padres @ Dodgers", value: "2-9", tone: .bad),
-
-    // ---------------- NBA ----------------
-    Signal(league: .nba, kind: .streak, headline: "Timberwolves have won 9 straight at home", detail: "Holding teams to 106 a night at Target Center.", game: "Nuggets @ Timberwolves", value: "W9", tone: .good),
-    Signal(league: .nba, kind: .streak, headline: "Jazz have lost 7 of their last 8", detail: "Allowing 121 per 100 possessions in the slide.", game: "Spurs @ Jazz", value: "1-7", tone: .bad),
-
-    Signal(league: .nba, kind: .h2h, headline: "Nuggets have won 6 in a row over the Wolves", detail: "Jokić has averaged a triple-double in the series.", game: "Nuggets @ Timberwolves", value: "W6", tone: .good),
-    Signal(league: .nba, kind: .h2h, headline: "Spurs are 3-0 vs the Jazz this season", detail: "Wembanyama has feasted on Utah's interior D.", game: "Spurs @ Jazz", value: "3-0", tone: .good),
-
-    Signal(league: .nba, kind: .hot, headline: "Anthony Edwards has 30+ points in 5 straight", detail: "On 22+ shot attempts each night.", game: "Nuggets @ Timberwolves", value: "5", tone: .good, spark: [31,34,30,38,33], lineVal: 29.5),
-    Signal(league: .nba, kind: .hot, headline: "Jokić has a triple-double in 9 straight games", detail: "10+ assists in every one.", game: "Nuggets @ Timberwolves", value: "9", tone: .good),
-
-    Signal(league: .nba, kind: .cold, headline: "Jazz are shooting 31% from three over their last 5", detail: "Well below their 36.8% season mark — tonight they're hot at 40% (fade risk).", game: "Spurs @ Jazz", value: "31%", tone: .bad),
-    Signal(league: .nba, kind: .cold, headline: "Collin Sexton is 4-of-22 from deep over 4 games", detail: "Defenses sagging off — driving lanes open instead.", game: "Spurs @ Jazz", value: "18%", tone: .bad),
-
-    Signal(league: .nba, kind: .injury, headline: "Lauri Markkanen (back) is OUT for Utah", detail: "Walker Kessler absorbs the usage & glass — 14 rebounds last game without him.", game: "Spurs @ Jazz", value: "FILL-IN", tone: .neutral),
-    Signal(league: .nba, kind: .injury, headline: "Aaron Gordon is QUESTIONABLE for Denver", detail: "If he sits, Christian Braun jumps to 34+ minutes and a usage bump.", game: "Nuggets @ Timberwolves", value: "WATCH", tone: .neutral),
-
-    Signal(league: .nba, kind: .situational, headline: "Timberwolves are 14-3 at home after a loss", detail: "One of the league's best bounce-back teams.", game: "Nuggets @ Timberwolves", value: "14-3", tone: .good),
-    Signal(league: .nba, kind: .situational, headline: "Nuggets are 4-9 ATS on the 2nd night of a B2B", detail: "They played in Chicago last night.", game: "Nuggets @ Timberwolves", value: "4-9", tone: .bad),
-    Signal(league: .nba, kind: .situational, headline: "Spurs are just 9-12 as a road favorite", detail: "Young team has struggled to close on the road.", game: "Spurs @ Jazz", value: "9-12", tone: .bad),
-
-    // ---------------- NEW CONNECTION LANES (the "I wish I knew that" cards) ----------------
-    // HEAT CHECK — form vs. where the book set the line
-    Signal(league: .mlb, kind: .hot, headline: "Bobby Witt Jr. is hitting .380 over his last 10", detail: "Up from .290 on the season — yet his total-bases line is still priced at his season pace.", game: "Royals @ Guardians", value: ".380", tone: .good, spark: [2,1,3,2,1,2,3,2,1,2], lineVal: 1.5),
-
-    // PLATOON EDGE — batter handedness × tonight's starter × lineup spot
-    Signal(league: .mlb, kind: .platoon, headline: "Teoscar Hernández mashes lefties — .320, .610 SLG", detail: "Draws LHP Blake Snell tonight and bats cleanup. His hits & total-bases props are live.", game: "Giants @ Dodgers", value: ".610", tone: .good),
-    Signal(league: .mlb, kind: .platoon, headline: "The Mariners are bottom-5 vs left-handed pitching", detail: "Hitting just .221 as a team against LHP — and they face a sharp southpaw tonight.", game: "Mariners @ Astros", value: ".221", tone: .bad),
-
-    // BALLPARK SHIFT — a different player in this venue
-    Signal(league: .mlb, kind: .ballpark, headline: "Logan Gilbert's ERA nearly doubles in hitter's parks", detail: "5.10 in launch pads vs 2.90 everywhere else — tonight he's pitching in one.", game: "Mariners @ Reds", value: "5.10", tone: .bad),
-    Signal(league: .mlb, kind: .ballpark, headline: "A pull-happy lefty walks into the short porch", detail: "This park lifts his HR rate ~25% for his swing path. HR & total-bases value.", game: "Red Sox @ Yankees", value: "+25%", tone: .good),
-
-    // REGRESSION WATCH — luck vs. skill, the smoke detector
-    Signal(league: .mlb, kind: .regression, headline: "The Tigers are 9-2 in one-run games", detail: "Least sustainable record in baseball — run differential says a .500 team. Fade the heater.", game: "Twins @ Tigers", value: "9-2", tone: .bad),
-    Signal(league: .mlb, kind: .regression, headline: "His 2.10 ERA hides a 4.30 expected ERA", detail: "Statcast says he's been getting away with loud contact — regression is coming.", game: "Cubs @ Cardinals", value: "4.30", tone: .bad),
-    Signal(league: .nba, kind: .regression, headline: "The Jazz are 8-1 in games decided by 3 or fewer", detail: "Clutch record well ahead of their net rating — late-game luck tends to even out.", game: "Spurs @ Jazz", value: "8-1", tone: .bad),
-]
-
-/// The Pix tab shell: the Hub ("Today's Edges") is the default landing. Tapping
-/// an edge (or, later, a matchup) drops into the game view — for now the existing
-/// props board — with a back affordance up to the hub.
-struct PixHubContainer: View {
-    @State private var focusedGame: String? = nil
-    // One shared store for the whole tab: the swipe view reads from it, so
-    // there is exactly ONE props/game-picks network fetch regardless of how
-    // many times the user bounces between Edges and a focused matchup.
-    @StateObject private var store = PropsSlateStore()
-
-    var body: some View {
-        ZStack {
-            LiquidGlassBackground(grainDensity: 0)
-
-            if focusedGame == nil {
-                PropsHubView(league: "MLB") { game in
-                    withAnimation(.easeInOut(duration: 0.25)) { focusedGame = game }
-                }
-            } else {
-                // Tapping a hub lane's game opens the horizontal swipe-between-games
-                // view focused on the tapped matchup (initial page = that game).
-                // SwipeableGameView carries its own "Edges" back affordance + page
-                // indicator, so no extra chrome is needed here.
-                SwipeableGameView(
-                    store: store,
-                    focusMatchup: focusedGame,
-                    onBack: { withAnimation(.easeInOut(duration: 0.25)) { focusedGame = nil } }
-                )
-                .id(focusedGame)   // re-resolve the focused page when the tapped game changes
-            }
-        }
-    }
-}
 
 struct PropsHubView: View {
     let league: String
     var onSelectGame: (String) -> Void = { _ in }
 
     @State private var sel: HubLeagueSel = .mlb
-    @State private var open: Set<String> = ["s0"]
-    @State private var seeAll: HubSeeAll? = nil
     @State private var selectedSignal: Signal? = nil
 
     // Real connections fetched from Supabase (insight_connections), mapped to
-    // Signals. Empty until a successful, non-empty fetch — until then (or on any
-    // failure) the hub renders `allSignals` so it is never blank.
+    // Signals. Real data only — no mock fallback; empty -> honest empty state.
     @State private var fetched: [Signal] = []
     @State private var didLoad = false
+    /// Yesterday's graded-edge tally (hit, graded) for the track-record line.
+    @State private var hitRate: (hit: Int, graded: Int)? = nil
 
-    /// The source the lanes filter. Prefers real data; falls back to the mock
-    /// whenever the fetch is empty or failed.
-    // Real connections only — no mock fallback. Empty -> honest empty state.
     private var source: [Signal] { fetched }
-
-    // How many signals a lane peeks before the rest collapse behind "See all".
-    private let lanePeekLimit = 3
-
-    private func isOpen(_ k: String) -> Bool { open.contains(k) }
-    private func toggle(_ k: String) {
-        withAnimation(.easeInOut(duration: 0.28)) { open.formSymmetricDifference([k]) }
-    }
-
-    private let sections: [(kind: SignalKind, eyebrow: String, title: String)] = [
-        (.hot, "HEAT CHECK", "Hot bats the line hasn't caught"),
-        (.platoon, "PLATOON EDGE", "Handedness matchups tonight"),
-        (.ballpark, "BALLPARK SHIFT", "A different player in this park"),
-        (.regression, "REGRESSION WATCH", "Luck vs. skill — the smoke detector"),
-        (.injury, "THE BENEFICIARY", "Who absorbs the missing volume"),
-        (.situational, "REST & FATIGUE", "Spots, rest & schedule angles"),
-        (.h2h, "OWNED", "Head-to-head history that pops"),
-        (.cold, "COOLING OFF", "Slumps worth fading"),
-    ]
 
     private func items(_ k: SignalKind) -> [Signal] { source.filter { $0.league == sel && $0.kind == k } }
 
-    /// Fetch today's connections for both leagues so the in-app MLB/NBA toggle
-    /// works without a refetch. Maps Connection -> Signal, drops unmappable rows,
-    /// and only commits to `fetched` when we actually got usable signals.
-    /// On empty/failure `fetched` stays empty and `source` falls back to mock.
+    /// Leagues that actually have rows today — drives the toggle so we never
+    /// show a tab that can only render an empty state.
+    private var availableLeagues: [HubLeagueSel] {
+        let present = [HubLeagueSel.mlb, .nba, .wc].filter { lg in source.contains { $0.league == lg } }
+        return present.isEmpty ? [.mlb] : present
+    }
+
+    /// Fetch today's connections for both leagues so the in-app league toggle
+    /// works without a refetch. Maps Connection -> Signal, drops unmappable
+    /// rows. If the selected league came back empty but the other didn't,
+    /// switch to the one with content.
     private func load() async {
         let date = SupabaseAPI.todayEST()
         var collected: [Signal] = []
-        for lg in ["MLB", "NBA"] {
+        for lg in ["MLB", "NBA", "WC"] {
             do {
                 let conns = try await SupabaseAPI.fetchInsightConnections(date: date, league: lg)
                 collected.append(contentsOf: conns.compactMap { $0.toSignal() })
@@ -11550,14 +10870,34 @@ struct PropsHubView: View {
                 print("[PropsHubView] fetchInsightConnections(\(lg)) error: \(error.localizedDescription)")
             }
         }
+        let rate = await SupabaseAPI.fetchInsightHitRate(date: SupabaseAPI.yesterdayEST())
         await MainActor.run {
             didLoad = true
-            // Only swap in real data when it produced something renderable.
+            hitRate = rate
             if !collected.isEmpty { fetched = collected }
+            if !leagueSignals.isEmpty { return }
+            if let withContent = availableLeagues.first(where: { lg in collected.contains { $0.league == lg } }) {
+                sel = withContent
+            }
         }
     }
 
     private var leagueSignals: [Signal] { source.filter { $0.league == sel } }
+
+    /// FEATURED picks the highest-relevance signals but caps each kind at 2 so
+    /// the strip mixes lanes instead of showing six near-identical cards.
+    private var featured: [Signal] {
+        var counts: [SignalKind: Int] = [:]
+        var out: [Signal] = []
+        for s in leagueSignals {           // already relevance-ordered by the fetch
+            let c = counts[s.kind] ?? 0
+            guard c < 2 else { continue }
+            counts[s.kind] = c + 1
+            out.append(s)
+            if out.count == 6 { break }
+        }
+        return out
+    }
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -11567,9 +10907,9 @@ struct PropsHubView: View {
                 if leagueSignals.isEmpty {
                     hubEmptyState
                 } else {
-                    // FEATURED — horizontal carousel of the sharpest reads (alive/moving)
+                    // FEATURED — highest relevance, max 2 per lane so the strip mixes kinds
                     HubSectionHeader(eyebrow: "FEATURED", sub: "Tonight's sharpest reads")
-                    EdgeFeatureStrip(signals: Array(leagueSignals.prefix(6))) { selectedSignal = $0 }
+                    EdgeFeatureStrip(signals: featured) { selectedSignal = $0 }
 
                     // REGRESSION BOARD — a ranked leaderboard with ERA→xERA gap bars
                     if !items(.regression).isEmpty {
@@ -11596,11 +10936,41 @@ struct PropsHubView: View {
                         HubSectionHeader(eyebrow: "COOLING OFF", sub: "Slumps the line may not reflect")
                         EdgeScroller(signals: items(.cold)) { selectedSignal = $0 }
                     }
+                    // OWNED — career batter-vs-pitcher history (NBA: season series)
+                    if !items(.h2h).isEmpty {
+                        HubSectionHeader(eyebrow: "OWNED", sub: "Head-to-head history that pops")
+                        VStack(spacing: 0) { ForEach(items(.h2h)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
+                            .quantPanel().padding(.horizontal, 14)
+                    }
+                    // THE BENEFICIARY — who absorbs a missing player's role
+                    if !items(.injury).isEmpty {
+                        HubSectionHeader(eyebrow: "THE BENEFICIARY", sub: "Who absorbs the missing volume")
+                        VStack(spacing: 0) { ForEach(items(.injury)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
+                            .quantPanel().padding(.horizontal, 14)
+                    }
+                    // REST & FATIGUE — schedule spots and bullpen workload
+                    if !items(.situational).isEmpty {
+                        HubSectionHeader(eyebrow: "REST & FATIGUE", sub: "Schedule spots & workload")
+                        VStack(spacing: 0) { ForEach(items(.situational)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
+                            .quantPanel().padding(.horizontal, 14)
+                    }
+                    // STREAKS — team runs worth knowing
+                    if !items(.streak).isEmpty {
+                        HubSectionHeader(eyebrow: "STREAKS", sub: "Runs and slides coming in")
+                        VStack(spacing: 0) { ForEach(items(.streak)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
+                            .quantPanel().padding(.horizontal, 14)
+                    }
+                    // TOURNAMENT STAKES — group standings, title odds, market context (World Cup)
+                    if !items(.tournament).isEmpty {
+                        HubSectionHeader(eyebrow: "TOURNAMENT STAKES", sub: "What this match decides")
+                        VStack(spacing: 0) { ForEach(items(.tournament)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
+                            .quantPanel().padding(.horizontal, 14)
+                    }
                     // Anything else → a compact list
-                    let extras = leagueSignals.filter { ![.regression, .platoon, .ballpark, .hot, .cold].contains($0.kind) }
+                    let extras = leagueSignals.filter { ![.regression, .platoon, .ballpark, .hot, .cold, .h2h, .injury, .situational, .streak, .tournament].contains($0.kind) }
                     if !extras.isEmpty {
                         HubSectionHeader(eyebrow: "MORE EDGES", sub: "Other angles tonight")
-                        VStack(spacing: 0) { ForEach(extras) { SignalRow(s: $0, onTap: onSelectGame) } }
+                        VStack(spacing: 0) { ForEach(extras) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
                             .quantPanel().padding(.horizontal, 14)
                     }
                 }
@@ -11616,7 +10986,7 @@ struct PropsHubView: View {
     private var hubEmptyState: some View {
         VStack(spacing: 10) {
             Image(systemName: "sparkles").font(.system(size: 26)).foregroundStyle(GaryColors.gold.opacity(0.5))
-            Text("NO \(sel == .mlb ? "MLB" : "NBA") EDGES YET")
+            Text("NO \(sel.label) EDGES YET")
                 .font(.system(size: 11, weight: .bold, design: .monospaced)).tracking(1).foregroundStyle(.white.opacity(0.55))
             Text("Tonight's connections post as lineups and matchups firm up.")
                 .font(.system(size: 12)).foregroundStyle(.white.opacity(0.4))
@@ -11629,23 +10999,33 @@ struct PropsHubView: View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("TODAY'S EDGES")
-                    .font(.system(size: 9.5, weight: .semibold, design: .monospaced)).tracking(1.8)
+                    .font(.system(size: 9.5, weight: .semibold, design: .monospaced)).tracking(1)
                     .foregroundStyle(GaryColors.gold.opacity(0.9))
                 Text("Connections worth knowing tonight")
                     .font(.system(size: 19, weight: .semibold)).foregroundStyle(.white.opacity(0.92))
+                // Track record: yesterday's graded edges (hidden under a 5-edge sample).
+                if let r = hitRate, r.graded >= 5 {
+                    Text("YESTERDAY: \(r.hit) OF \(r.graded) EDGES HIT")
+                        .font(.system(size: 9, weight: .semibold, design: .monospaced)).tracking(1.2)
+                        .foregroundStyle((Double(r.hit) / Double(r.graded) >= 0.5 ? HubPalette.green : Color.white).opacity(0.65))
+                        .padding(.top, 2)
+                }
             }
             Spacer()
-            HStack(spacing: 6) {
-                ForEach([HubLeagueSel.mlb, .nba], id: \.self) { l in
-                    let on = l == sel
-                    Button { withAnimation(.easeInOut(duration: 0.2)) { sel = l; open = ["s0"] } } label: {
-                        Text(l == .mlb ? "MLB" : "NBA")
-                            .font(.system(size: 14, weight: .heavy)).tracking(0.5)
-                            .foregroundStyle(on ? Color.black.opacity(0.85) : Color.white.opacity(0.5))
-                            .padding(.horizontal, 13).padding(.vertical, 5)
-                            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(on ? GaryColors.gold : Color.clear)
-                                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(on ? Color.clear : Color.white.opacity(0.1), lineWidth: 1)))
-                    }.buttonStyle(.plain)
+            // Only leagues with rows today — no toggle into a guaranteed empty state.
+            if availableLeagues.count > 1 {
+                HStack(spacing: 6) {
+                    ForEach(availableLeagues, id: \.self) { l in
+                        let on = l == sel
+                        Button { withAnimation(.easeInOut(duration: 0.2)) { sel = l } } label: {
+                            Text(l.label)
+                                .font(.system(size: 14, weight: .heavy)).tracking(0.5)
+                                .foregroundStyle(on ? Color.black.opacity(0.85) : Color.white.opacity(0.5))
+                                .padding(.horizontal, 13).padding(.vertical, 5)
+                                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(on ? GaryColors.gold : Color.clear)
+                                    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(on ? Color.clear : Color.white.opacity(0.1), lineWidth: 1)))
+                        }.buttonStyle(.plain)
+                    }
                 }
             }
         }
@@ -11662,7 +11042,7 @@ struct HubSectionHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
             Text(eyebrow)
-                .font(.system(size: 9.5, weight: .semibold, design: .monospaced)).tracking(1.8)
+                .font(.system(size: 9.5, weight: .semibold, design: .monospaced)).tracking(1)
                 .foregroundStyle(GaryColors.gold.opacity(0.9))
             Text(sub).font(.system(size: 13)).foregroundStyle(.white.opacity(0.45))
         }
@@ -11886,7 +11266,7 @@ struct SignalRow: View {
                         } else {
                             Text(s.value).font(.system(size: 8.5, weight: .semibold, design: .monospaced)).tracking(1).foregroundStyle(s.tone.color)
                                 .padding(.horizontal, 7).padding(.vertical, 3)
-                                .overlay(Capsule().stroke(s.tone.color.opacity(0.5), lineWidth: 1))
+                                .overlay(Capsule().stroke(s.tone.color.opacity(0.28), lineWidth: 1))
                         }
                     }
                 }
@@ -11898,432 +11278,6 @@ struct SignalRow: View {
         .overlay(Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1), alignment: .bottom)
     }
 }
-
-// ---- "see all" slide-over ----
-//
-// Each hub lane (HubDrop) peeks only the first `lanePeekLimit` signals; the rest
-// live behind a "See all (N) >" footer that presents this sheet. The sheet shows
-// the FULL ranked list for that lane (clean header = lane eyebrow + title +
-// subtitle, then a SignalRow list), and is dismissible.
-
-// Identifiable payload that drives the `.sheet(item:)` presentation in PropsHubView.
-// `id` keys off the lane's section kind so SwiftUI re-presents cleanly per lane.
-struct HubSeeAll: Identifiable {
-    let id: Int                 // section index (stable per lane)
-    let eyebrow: String
-    let title: String
-    let subtitle: String
-    let accent: Color
-    let signals: [Signal]
-}
-
-// Footer affordance shown at the bottom of an expanded lane when it has more
-// signals than the peek limit. Tapping it presents `HubSeeAll`.
-struct SeeAllFooter: View {
-    let total: Int
-    var accent: Color = GaryColors.gold
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                Text("See all \(total)")
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced)).tracking(0.8)
-                Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold))
-            }
-            .foregroundStyle(accent)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.top, 10)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-// The full-list slide-over. Mirrors the lane's visual language: a mono eyebrow,
-// serif title, gray subtitle, then every signal rendered with the same SignalRow.
-struct SeeAllSheet: View {
-    let payload: HubSeeAll
-    var onSelectGame: (String) -> Void = { _ in }
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        ZStack {
-            GaryColors.darkBg.ignoresSafeArea()
-            LiquidGlassBackground(grainDensity: 0).opacity(0.6).ignoresSafeArea()
-
-            VStack(spacing: 0) {
-                header
-                Divider().overlay(Color.white.opacity(0.08))
-                ScrollView(showsIndicators: false) {
-                    LazyVStack(spacing: 0) {
-                        ForEach(payload.signals) { s in
-                            SignalRow(s: s) { game in
-                                dismiss()
-                                onSelectGame(game)
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 18)
-                    .padding(.top, 4)
-                    .padding(.bottom, 40)
-                }
-            }
-        }
-        .presentationDragIndicator(.visible)
-        .presentationDetents([.large])
-    }
-
-    private var header: some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(payload.eyebrow)
-                    .font(.system(size: 9.5, weight: .semibold, design: .monospaced)).tracking(1.7)
-                    .foregroundStyle(payload.accent)
-                Text(payload.title)
-                    .font(.system(size: 22, weight: .regular, design: .serif)).foregroundStyle(.white)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text("\(payload.signals.count) connection\(payload.signals.count == 1 ? "" : "s") tonight")
-                    .font(.system(size: 12)).foregroundStyle(.white.opacity(0.5))
-            }
-            Spacer(minLength: 8)
-            Button { dismiss() } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.7))
-                    .frame(width: 30, height: 30)
-                    .background(Circle().fill(Color.white.opacity(0.08)))
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.horizontal, 18)
-        .padding(.top, 18)
-        .padding(.bottom, 14)
-    }
-}
-
-private func lastName(_ n: String) -> String { n.split(separator: " ").last.map(String.init) ?? n }
-private func lastNameOf(_ label: String) -> String { lastName(String(label.split(separator: " ").prefix(2).joined(separator: " "))) }
-
-// ---- generic dropdown ----
-struct HubDrop<Content: View>: View {
-    let eyebrow: String
-    let title: String
-    var teaser: String = ""
-    var accent: Color = GaryColors.gold
-    var depth: Int = 0
-    let isOpen: Bool
-    let onToggle: () -> Void
-    @ViewBuilder let content: () -> Content
-
-    var body: some View {
-        VStack(spacing: 0) {
-            Button(action: onToggle) {
-                HStack(alignment: .top, spacing: 10) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(eyebrow).font(.system(size: 9.5, weight: .semibold, design: .monospaced)).tracking(1.7).foregroundStyle(accent)
-                        Text(title).font(.system(size: depth == 0 ? 19 : 16, weight: .regular, design: .serif)).foregroundStyle(.white)
-                        if !isOpen && !teaser.isEmpty {
-                            Text(teaser).font(.system(size: 12)).foregroundStyle(.white.opacity(0.5)).lineLimit(1)
-                        }
-                    }
-                    Spacer(minLength: 8)
-                    Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(accent)
-                        .rotationEffect(.degrees(isOpen ? 90 : 0))
-                }
-                .padding(.horizontal, 14).padding(.vertical, 12).contentShape(Rectangle())
-            }.buttonStyle(.plain)
-
-            if isOpen {
-                VStack(spacing: 0) { content() }
-                    .padding(.horizontal, 14).padding(.bottom, 12)
-            }
-        }
-        .background(
-            RoundedRectangle(cornerRadius: depth == 0 ? 16 : 12, style: .continuous)
-                .fill(depth == 0 ? Color.white.opacity(0.022) : Color.clear)
-                .overlay(RoundedRectangle(cornerRadius: depth == 0 ? 16 : 12, style: .continuous).stroke(isOpen ? GaryColors.gold.opacity(0.2) : Color.white.opacity(0.08), lineWidth: 1))
-        )
-    }
-}
-
-// ---- shared small views ----
-private struct HubLineBox: View {
-    let label, main, sub: String
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(label).font(.system(size: 8, weight: .medium, design: .monospaced)).tracking(1).foregroundStyle(.white.opacity(0.4))
-            Text(main).font(.system(size: 16, weight: .semibold)).foregroundStyle(.white)
-            Text(sub).font(.system(size: 9, weight: .medium, design: .monospaced)).foregroundStyle(.white.opacity(0.5))
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 9).padding(.vertical, 8)
-        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Color.white.opacity(0.08), lineWidth: 1))
-    }
-}
-private struct HubMini: View {
-    let label, value: String
-    var body: some View {
-        VStack(spacing: 2) {
-            Text(label).font(.system(size: 8, weight: .medium, design: .monospaced)).tracking(1).foregroundStyle(.white.opacity(0.4))
-            Text(value).font(.system(size: 18, weight: .semibold)).foregroundStyle(GaryColors.gold)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 6)
-        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(Color.white.opacity(0.08), lineWidth: 1))
-    }
-}
-private struct HubDataRow: View {
-    let label, value: String
-    var sub: String = ""
-    var tone: HubTone? = nil
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(label).font(.system(size: 15)).foregroundStyle(.white).lineLimit(1)
-                if !sub.isEmpty { Text(sub).font(.system(size: 9, weight: .medium, design: .monospaced)).foregroundStyle(.white.opacity(0.4)).lineLimit(1) }
-            }
-            Spacer(minLength: 6)
-            Text(value).font(.system(size: 17, weight: .semibold)).foregroundStyle(tone?.color ?? .white)
-        }
-        .padding(.vertical, 7)
-        .overlay(Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1), alignment: .bottom)
-    }
-}
-private struct HubBullet: View {
-    let text: String
-    var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            Text("◆").font(.system(size: 10, design: .monospaced)).foregroundStyle(GaryColors.gold)
-            Text(text).font(.system(size: 14)).foregroundStyle(Color.white.opacity(0.82))
-        }.padding(.vertical, 4)
-    }
-}
-
-private func GameHeaderBoxes(_ line: HubGameLine) -> some View {
-    HStack(spacing: 8) {
-        HubLineBox(label: "MONEYLINE", main: "\(line.awayAbbr) \(line.mlAway)", sub: "\(line.homeAbbr) \(line.mlHome)")
-        HubLineBox(label: line.spreadLabel.uppercased(), main: "\(line.awayAbbr) \(line.spreadAway)", sub: "\(line.homeAbbr) \(line.spreadHome)")
-        HubLineBox(label: "TOTAL", main: "O \(line.totalLine)", sub: "\(line.totalOver) / \(line.totalUnder)")
-    }
-}
-
-// ---- game panels ----
-struct MlbGamePanel: View {
-    let game: HubMlbGame
-    let gi: Int
-    let win: HubWin
-    let isOpen: (String) -> Bool
-    let toggle: (String) -> Void
-    var onSelectGame: (String) -> Void
-
-    var body: some View {
-        let gk = "g\(gi)"
-        let gOpen = isOpen(gk)
-        VStack(spacing: 0) {
-            Button { toggle(gk) } label: {
-                VStack(spacing: 10) {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text("\(game.line.away) @ \(game.line.home)").font(.system(size: 22, weight: .regular, design: .serif)).foregroundStyle(.white)
-                        Spacer()
-                        Text(game.line.time).font(.system(size: 9, weight: .medium, design: .monospaced)).foregroundStyle(.white.opacity(0.4))
-                    }
-                    HStack {
-                        Text(game.line.venue.uppercased()).font(.system(size: 9, weight: .medium, design: .monospaced)).tracking(1).foregroundStyle(.white.opacity(0.4))
-                        Spacer()
-                        Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).foregroundStyle(GaryColors.gold).rotationEffect(.degrees(gOpen ? 90 : 0))
-                    }
-                    GameHeaderBoxes(game.line)
-                }
-                .padding(14).contentShape(Rectangle())
-            }.buttonStyle(.plain)
-
-            if gOpen {
-                VStack(spacing: 8) {
-                    drop("c0", "PITCHING MATCHUP", "On the mound", "\(game.starters[0].name) (\(s2(game.starters[0].era))) vs \(game.starters[1].name) (\(s2(game.starters[1].era)))") {
-                        ForEach(game.starters, id: \.name) { s in
-                            VStack(alignment: .leading, spacing: 6) {
-                                HStack { Text(s.name).font(.system(size: 18, weight: .regular, design: .serif)).foregroundStyle(.white); Spacer(); Text("\(s.team) · \(s.hand)").font(.system(size: 9, design: .monospaced)).foregroundStyle(.white.opacity(0.4)) }
-                                HStack(spacing: 8) { HubMini(label: "ERA", value: s2(s.era)); HubMini(label: "WHIP", value: s2(s.whip)); HubMini(label: "K/9", value: s1(s.k9)) }
-                                Text("L3  \(s.l3)").font(.system(size: 12)).foregroundStyle(.white.opacity(0.55))
-                                HubBullet(text: s.note)
-                            }.padding(.vertical, 6).overlay(Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1), alignment: .bottom)
-                        }
-                    }
-                    drop("c1", "BULLPEN STATUS", "Who's available late", "\(game.bullpen[1].team) \(game.bullpen[1].armsDown)") {
-                        ForEach(game.bullpen, id: \.team) { b in HubDataRow(label: "\(b.team) bullpen", value: "\(s1(b.ip3d)) IP/3d", sub: "\(b.rank) · \(b.armsDown)", tone: b.tone) }
-                    }
-                    drop("c2", "FORM & SPLITS · \(win.rawValue)", "How they're swinging", "\(game.form[0].team) \(game.form[0].w(win).record) · \(game.form[1].team) \(game.form[1].w(win).record)") {
-                        ForEach(game.form, id: \.team) { f in HubDataRow(label: "\(f.team) (\(win.rawValue))", value: f.w(win).record, sub: "\(f.w(win).metric) · \(f.w(win).diff) diff", tone: f.w(win).tone) }
-                        ForEach(game.splitsVsHand, id: \.team) { sp in HubDataRow(label: "\(sp.team) \(sp.vs)", value: "\(sp.wrc) wRC+", sub: sp.note, tone: sp.wrc >= 105 ? .good : sp.wrc <= 97 ? .bad : .neutral) }
-                    }
-                    drop("c3", "PARK & WEATHER", "The environment", "\(game.park.name) · \(game.weather.wind)") {
-                        HubDataRow(label: "Park run index", value: "\(game.park.runIndex)", sub: game.park.note, tone: game.park.runIndex >= 102 ? .good : .neutral)
-                        HubDataRow(label: "Park HR index", value: "\(game.park.hrIndex)", sub: "100 = league avg", tone: game.park.hrIndex >= 105 ? .good : .neutral)
-                        HubDataRow(label: "Weather", value: game.weather.temp, sub: "\(game.weather.condition) · \(game.weather.wind)")
-                        HubDataRow(label: "Wind lean", value: game.weather.lean.contains("over") ? "OVER" : "—", sub: game.weather.lean, tone: game.weather.tone)
-                    }
-                    drop("c4", "HOME PLATE UMPIRE", game.umpire.name, "\(game.umpire.kBoost) · \(game.umpire.runEnv)") {
-                        HubDataRow(label: "Strikeout impact", value: game.umpire.kBoost, sub: "vs league-average zone")
-                        HubDataRow(label: "Run environment", value: game.umpire.runEnv, sub: game.umpire.note)
-                    }
-                    drop("c5", "SITUATIONAL", "Spots & scheduling", game.situational[0]) {
-                        ForEach(Array(game.situational.enumerated()), id: \.offset) { _, s in HubBullet(text: s) }
-                    }
-                    drop("c6", "BETTING TRENDS", "The angles", "\(game.trends.count) trends · ML / RL / total") {
-                        ForEach(Array(game.trends.enumerated()), id: \.offset) { _, t in HubDataRow(label: t.label, value: t.value, tone: t.tone) }
-                    }
-                }
-                .padding(.horizontal, 10).padding(.bottom, 10)
-            }
-        }
-        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(gOpen ? Color(hex: "#D4A33A").opacity(0.045) : Color.white.opacity(0.022)).overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(gOpen ? GaryColors.gold.opacity(0.2) : Color.white.opacity(0.08), lineWidth: 1)))
-    }
-
-    @ViewBuilder private func drop<C: View>(_ c: String, _ e: String, _ t: String, _ teaser: String, @ViewBuilder _ content: @escaping () -> C) -> some View {
-        HubDrop(eyebrow: e, title: t, teaser: teaser, depth: 1, isOpen: isOpen("g\(gi)\(c)"), onToggle: { toggle("g\(gi)\(c)") }, content: content)
-    }
-}
-
-struct NbaGamePanel: View {
-    let game: HubNbaGame
-    let gi: Int
-    let win: HubWin
-    let isOpen: (String) -> Bool
-    let toggle: (String) -> Void
-    var onSelectGame: (String) -> Void
-
-    var body: some View {
-        let gk = "g\(gi)"
-        let gOpen = isOpen(gk)
-        VStack(spacing: 0) {
-            Button { toggle(gk) } label: {
-                VStack(spacing: 10) {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text("\(game.line.away) @ \(game.line.home)").font(.system(size: 22, weight: .regular, design: .serif)).foregroundStyle(.white)
-                        Spacer()
-                        Text(game.line.time).font(.system(size: 9, weight: .medium, design: .monospaced)).foregroundStyle(.white.opacity(0.4))
-                    }
-                    HStack {
-                        Text(game.line.venue.uppercased()).font(.system(size: 9, weight: .medium, design: .monospaced)).tracking(1).foregroundStyle(.white.opacity(0.4))
-                        Spacer()
-                        Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).foregroundStyle(GaryColors.gold).rotationEffect(.degrees(gOpen ? 90 : 0))
-                    }
-                    GameHeaderBoxes(game.line)
-                }
-                .padding(14).contentShape(Rectangle())
-            }.buttonStyle(.plain)
-
-            if gOpen {
-                VStack(spacing: 8) {
-                    drop("c0", "RATINGS & PACE", "The matchup math", "Net \(s1(game.ratings[0].net)) vs \(s1(game.ratings[1].net)) · pace \(s1(game.ratings[0].pace))/\(s1(game.ratings[1].pace))") {
-                        ForEach(game.ratings, id: \.team) { r in
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text(r.team).font(.system(size: 17, weight: .regular, design: .serif)).foregroundStyle(.white)
-                                HStack(spacing: 8) { HubMini(label: "OFF", value: s1(r.off)); HubMini(label: "DEF", value: s1(r.def)); HubMini(label: "NET", value: (r.net > 0 ? "+" : "") + s1(r.net)); HubMini(label: "PACE", value: s1(r.pace)) }
-                            }.padding(.vertical, 6).overlay(Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1), alignment: .bottom)
-                        }
-                    }
-                    drop("c1", "REST & SCHEDULE", "Legs in the tank", "\(game.rest[0].team) \(game.rest[0].days) · \(game.rest[1].team) \(game.rest[1].days)") {
-                        ForEach(game.rest, id: \.team) { r in HubDataRow(label: "\(r.team) rest", value: r.days, sub: r.note, tone: r.tone) }
-                    }
-                    drop("c2", "INJURIES & USAGE", "Who's in, who absorbs it", game.injuries.map { $0.player }.joined(separator: " · ")) {
-                        ForEach(Array(game.injuries.enumerated()), id: \.offset) { _, inj in
-                            VStack(alignment: .leading, spacing: 2) {
-                                HStack { Text(inj.player).font(.system(size: 16, weight: .regular, design: .serif)).foregroundStyle(.white); Spacer(); Text(inj.status).font(.system(size: 9, design: .monospaced)).foregroundStyle(inj.status.contains("OUT") ? HubPalette.red : inj.status.contains("QUES") ? GaryColors.gold : HubPalette.green) }
-                                Text(inj.impact).font(.system(size: 12)).foregroundStyle(.white.opacity(0.55))
-                            }.padding(.vertical, 6).overlay(Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1), alignment: .bottom)
-                        }
-                    }
-                    drop("c3", "FORM · \(win.rawValue)", "Recent trend", "\(game.form[0].team) \(game.form[0].w(win).record) · \(game.form[1].team) \(game.form[1].w(win).record)") {
-                        ForEach(game.form, id: \.team) { f in HubDataRow(label: "\(f.team) (\(win.rawValue))", value: f.w(win).record, sub: f.w(win).metric, tone: f.w(win).tone) }
-                    }
-                    drop("c4", "SHOOTING / REGRESSION", "Hot & cold hands", "\(game.shooting[0].team) \(game.shooting[0].threePctL5)") {
-                        ForEach(game.shooting, id: \.team) { sh in HubDataRow(label: "\(sh.team) 3P% (L5)", value: sh.threePctL5, sub: sh.note, tone: sh.tone) }
-                    }
-                    drop("c5", "MATCHUP NOTES", "What to watch", game.matchup[0]) {
-                        ForEach(Array(game.matchup.enumerated()), id: \.offset) { _, m in HubBullet(text: m) }
-                    }
-                    drop("c6", "BETTING TRENDS", "The angles", "\(game.trends.count) trends · spread / total") {
-                        ForEach(Array(game.trends.enumerated()), id: \.offset) { _, t in HubDataRow(label: t.label, value: t.value, tone: t.tone) }
-                    }
-                }
-                .padding(.horizontal, 10).padding(.bottom, 10)
-            }
-        }
-        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(gOpen ? Color(hex: "#D4A33A").opacity(0.045) : Color.white.opacity(0.022)).overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(gOpen ? GaryColors.gold.opacity(0.2) : Color.white.opacity(0.08), lineWidth: 1)))
-    }
-
-    @ViewBuilder private func drop<C: View>(_ c: String, _ e: String, _ t: String, _ teaser: String, @ViewBuilder _ content: @escaping () -> C) -> some View {
-        HubDrop(eyebrow: e, title: t, teaser: teaser, depth: 1, isOpen: isOpen("g\(gi)\(c)"), onToggle: { toggle("g\(gi)\(c)") }, content: content)
-    }
-}
-
-private func s1(_ d: Double) -> String { String(format: "%.1f", d) }
-private func s2(_ d: Double) -> String { String(format: "%.2f", d) }
-
-// ---- player row views ----
-struct StreakRowView: View {
-    let row: HubStreakRow
-    var body: some View {
-        HStack(spacing: 12) {
-            Text("🔥").font(.system(size: 14))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(row.player).font(.system(size: 17, weight: .regular, design: .serif)).foregroundStyle(.white)
-                Text("\(row.team) · \(row.detail)").font(.system(size: 9, design: .monospaced)).foregroundStyle(.white.opacity(0.4))
-            }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 1) {
-                Text("\(row.count)").font(.system(size: 22, weight: .bold)).foregroundStyle(GaryColors.gold)
-                Text(row.unit).font(.system(size: 7.5, weight: .medium, design: .monospaced)).foregroundStyle(.white.opacity(0.4))
-            }
-        }.padding(.vertical, 8).overlay(Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1), alignment: .bottom)
-    }
-}
-struct FormRowView: View {
-    let row: HubFormRow
-    let win: HubWin
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(row.player).font(.system(size: 17, weight: .regular, design: .serif)).foregroundStyle(.white)
-                Spacer()
-                Text(row.hit(win)).font(.system(size: 17, weight: .bold)).foregroundStyle(HubPalette.green)
-            }
-            HStack {
-                Text("\(row.team) · \(row.market) \(row.line)").font(.system(size: 9, design: .monospaced)).foregroundStyle(.white.opacity(0.4))
-                Spacer()
-                MiniBarChart(values: row.spark, line: row.lineVal, tint: HubPalette.green, height: 22)
-            }
-        }.padding(.vertical, 8).overlay(Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1), alignment: .bottom)
-    }
-}
-struct BvpRowView: View {
-    let row: HubBvpRow
-    var body: some View {
-        let tint = row.hitterFavored ? HubPalette.green : HubPalette.red
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                Text(row.batter).font(.system(size: 16, weight: .regular, design: .serif)).foregroundStyle(.white)
-                Image(systemName: "arrow.right").font(.system(size: 10, weight: .bold)).foregroundStyle(tint)
-                Text(row.pitcher).font(.system(size: 13)).foregroundStyle(.white.opacity(0.55))
-                Spacer(minLength: 0)
-            }
-            Text(row.stat).font(.system(size: 14)).foregroundStyle(.white.opacity(0.8))
-            Text(row.verdict).font(.system(size: 8.5, weight: .semibold, design: .monospaced)).tracking(1.2).foregroundStyle(tint)
-                .padding(.horizontal, 8).padding(.vertical, 3)
-                .overlay(Capsule().stroke(tint.opacity(0.5), lineWidth: 1))
-        }
-        .padding(11).frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(tint.opacity(0.25), lineWidth: 1))
-        .padding(.vertical, 5)
-    }
-}
-struct KVRowView: View {
-    let row: HubKVRow
-    var body: some View { HubDataRow(label: row.label, value: row.value, sub: row.sub, tone: row.tone) }
-}
-
 
 // MARK: - Compact Prop Row (Redesigned)
 
@@ -12445,13 +11399,13 @@ struct CompactPropRow: View {
                         if let league = leagueTag {
                             Text(league)
                                 .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                                .tracking(2)
+                                .tracking(1)
                                 .foregroundStyle(GaryColors.gold.opacity(0.9))
                         }
                         if !formattedTime.isEmpty {
                             Text(formattedTime.uppercased())
                                 .font(.system(size: 10, weight: .medium, design: .monospaced))
-                                .tracking(1.8)
+                                .tracking(1)
                                 .foregroundStyle(.white.opacity(0.32))
                         }
                         Spacer()
@@ -12472,7 +11426,7 @@ struct CompactPropRow: View {
                         if let team = prop.team, !team.isEmpty {
                             Text(team.uppercased())
                                 .font(.system(size: 9.5, weight: .medium, design: .monospaced))
-                                .tracking(1.6)
+                                .tracking(1)
                                 .foregroundStyle(GaryColors.gold.opacity(0.85))
                                 .lineLimit(1)
                         }
@@ -12480,7 +11434,7 @@ struct CompactPropRow: View {
                     Spacer(minLength: 8)
                     Text(Formatters.propDisplay(prop.prop, league: prop.effectiveLeague).uppercased())
                         .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
-                        .tracking(1.8)
+                        .tracking(1)
                         .foregroundStyle(GaryColors.gold)
                         .multilineTextAlignment(.trailing)
                         .lineLimit(2)
@@ -12495,7 +11449,7 @@ struct CompactPropRow: View {
                     HStack(alignment: .firstTextBaseline, spacing: 7) {
                         Text((prop.bet ?? "").uppercased())
                             .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                            .tracking(2)
+                            .tracking(1)
                             .foregroundStyle(.white)
                         if let lineText = formattedLineText {
                             Text(lineText)
@@ -12524,7 +11478,7 @@ struct CompactPropRow: View {
                     HStack {
                         Text("GARY'S LEAN")
                             .font(.system(size: 9.5, weight: .medium, design: .monospaced))
-                            .tracking(1.6)
+                            .tracking(1)
                             .foregroundStyle(GaryColors.gold.opacity(0.9))
                         Spacer()
                         Text("\(Int(confidenceValue * 100))%")
@@ -12780,7 +11734,7 @@ struct PropDetailPopup: View {
                         .background(
                             ZStack {
                                 RoundedRectangle(cornerRadius: 4)
-                                    .fill(Color(hex: "#242019"))
+                                    .fill(Color(hex: "#1A1C22"))
                                 RoundedRectangle(cornerRadius: 4)
                                     .fill(GaryColors.gold.opacity(0.035))
                                 RoundedRectangle(cornerRadius: 4)
@@ -12853,13 +11807,13 @@ struct PropDetailPopup: View {
             .background(
                 ZStack {
                     RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(Color(hex: "#242019"))
+                        .fill(Color(hex: "#1A1C22"))
                     RoundedRectangle(cornerRadius: 20, style: .continuous)
                         .fill(GaryColors.gold.opacity(0.035))
                     RoundedRectangle(cornerRadius: 20, style: .continuous)
                         .stroke(GaryColors.gold.opacity(0.25), lineWidth: 0.8)
                 }
-                    .shadow(color: GaryColors.gold.opacity(0.1), radius: 24, y: 8)
+                    .shadow(color: .black.opacity(0.45), radius: 24, y: 8)
                     .shadow(color: .black.opacity(0.72), radius: 26, y: 12)
             )
             .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
@@ -13614,7 +12568,7 @@ struct TaleOfTapeSection: View {
             }
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(Color(hex: "#242019"))
+                    .fill(Color(hex: "#1A1C22"))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
@@ -13815,7 +12769,7 @@ struct GaryTakeSection: View {
             .padding(.horizontal, 14)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(Color(hex: "#242019"))
+                    .fill(Color(hex: "#1A1C22"))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
@@ -15424,7 +14378,7 @@ struct GaryFantasyView: View {
                             VStack(spacing: 6) {
                                 Text("WHAT YOU GET")
                                     .font(.system(size: 10, weight: .heavy))
-                                    .tracking(1.5)
+                                    .tracking(1)
                                     .foregroundStyle(GaryColors.gold.opacity(0.4))
                                     .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -15449,7 +14403,7 @@ struct GaryFantasyView: View {
                             VStack(spacing: 6) {
                                 Text("LINEUP PREVIEW")
                                     .font(.system(size: 10, weight: .heavy))
-                                    .tracking(1.5)
+                                    .tracking(1)
                                     .foregroundStyle(GaryColors.gold.opacity(0.4))
                                     .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -16473,7 +15427,7 @@ struct GaryNotesCard: View {
                                     .foregroundStyle(GaryColors.gold)
                                 Text("GARY'S TAKE")
                                     .font(.system(size: 11, weight: .heavy))
-                                    .tracking(1.5)
+                                    .tracking(1)
                                     .foregroundStyle(GaryColors.gold)
 
                                 if let info = archetypeInfo {
@@ -16549,7 +15503,7 @@ struct GaryNotesCard: View {
                                     .foregroundStyle(Color(hex: "#22C55E"))
                                 Text("CEILING SCENARIO")
                                     .font(.system(size: 11, weight: .heavy))
-                                    .tracking(1.5)
+                                    .tracking(1)
                                     .foregroundStyle(Color(hex: "#22C55E"))
 
                                 Spacer()

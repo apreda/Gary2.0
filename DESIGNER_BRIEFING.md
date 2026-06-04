@@ -113,6 +113,20 @@ The app uses the system font (SF Pro) across the board:
 - Shadow: Dual shadow system — accent color glow (subtle) + black depth shadow
 - Background: `#121214` card fill
 
+### What to steer clear of (the dark-mode monoculture)
+Most AI / dev-tool apps have converged on the same dark look. None of these are
+banned — used sparingly and on purpose they're fine — but lean away from them as
+*defaults* so Gary doesn't blend into the template crowd:
+- **Glowing colored accent lines on card edges.** Make a card the hero through depth
+  (elevation / soft shadow) and a slightly lifted surface, not a lit-up border.
+- **Uppercase labels with heavy letter-spacing.** Keep tracking subtle; let the data
+  (the number, the pick) carry the emphasis.
+- **The glowing-green-dot "LIVE" pill.** Use status colour sparingly, no glow.
+- **Purple / indigo gradient background glows.** Gary's palette is black + gold + sport
+  accents — no radial haze.
+
+Rule of thumb: build hierarchy with type weight, spacing, and elevation — not glow.
+
 ### Pick Cards Show:
 - Sport badge (icon + color)
 - Team names (away @ home)

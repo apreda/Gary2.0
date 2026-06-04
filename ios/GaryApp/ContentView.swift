@@ -6,6 +6,14 @@ class PickDetailState: ObservableObject {
     @Published var isShowing = false
 }
 
+// Deep-link target from the Hub into the Picks tab: the Hub stores the tapped
+// edge's game label ("LAD @ ARI") here and switches tabs; PicksCarouselView
+// consumes it once its slate is loaded and pages to that matchup.
+class PicksFocusState: ObservableObject {
+    static let shared = PicksFocusState()
+    @Published var focusGame: String? = nil
+}
+
 // MARK: - Main Tab View with Liquid Glass
 
 // New tab layout — Gary is the bigger center tab.
@@ -113,8 +121,10 @@ struct GaryPage: View {
                 Group {
                     if mode == .hub {
                         // Start at the hub; tapping a connection moves the user
-                        // over to that game's picks on the Picks tab.
-                        PropsHubView(league: "MLB") { _ in
+                        // over to that game's picks on the Picks tab, focused on
+                        // the tapped matchup (via PicksFocusState).
+                        PropsHubView(league: "MLB") { game in
+                            PicksFocusState.shared.focusGame = game
                             selectedTab = 3
                         }
                     } else {

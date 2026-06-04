@@ -83,10 +83,10 @@ struct GaryChatView: View {
             Circle()
                 .fill(statusDotColor)
                 .frame(width: 7, height: 7)
-                .shadow(color: statusDotColor.opacity(0.7), radius: 3)
+                .shadow(color: statusDotColor.opacity(0.25), radius: 2)
             Text("GARY")
                 .font(.system(size: 11, weight: .heavy))
-                .tracking(2.2)
+                .tracking(1)
                 .foregroundStyle(.white.opacity(0.75))
         }
         .padding(.horizontal, 14)
@@ -168,7 +168,7 @@ struct GaryChatView: View {
         VStack(spacing: 12) {
             Text(statusEyebrow)
                 .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                .tracking(3.2)
+                .tracking(1)
                 .foregroundStyle(GaryColors.gold.opacity(0.9))
 
             Text(statusLine)

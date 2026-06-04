@@ -33,9 +33,9 @@ const { generateInsightConnections } = await import('./src/services/insights/gen
 // Config
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Leagues we currently generate insight connections for. MLB is the only active
-// league right now; add others here as they come online.
-const ACTIVE_LEAGUES = ['MLB'];
+// Leagues we currently generate insight connections for. Add others here as
+// they come online (each needs a computer registry in generateInsightConnections).
+const ACTIVE_LEAGUES = ['MLB', 'NBA'];
 
 // Resolve Supabase config exactly like src/supabaseClient.js does for Node scripts.
 const supabaseUrl =
