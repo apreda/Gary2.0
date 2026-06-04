@@ -92,6 +92,9 @@ struct ContentView: View {
         .onChange(of: selectedTab) { newTab in
             loadedTabs.insert(newTab)
             maybeShowGaryIntro(for: newTab)
+            // Tab pages stay alive (opacity-hidden), so an active text field
+            // would keep its keyboard up across tabs — resign it on any switch.
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         }
         .sheet(isPresented: $showingGaryIntro, onDismiss: { hasSeenGaryIntro = true }) {
             GaryIntroSheet { showingGaryIntro = false }
