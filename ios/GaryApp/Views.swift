@@ -11028,18 +11028,8 @@ struct PicksTodayPage: View {
                     .padding(.horizontal, 10)
             }
             if !topProps.isEmpty {
-                VStack(spacing: 0) {
-                    Text("TOP PROPS")
-                        .font(GaryFonts.mono(9, bold: true)).tracking(1)
-                        .foregroundStyle(.white.opacity(0.4))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 14).padding(.top, 10).padding(.bottom, 2)
-                    ForEach(Array(topProps.enumerated()), id: \.element.id) { i, p in
-                        if i > 0 { Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1) }
-                        FlippablePropCard(prop: p, gameResult: resultForProp(p), showSportBadge: true)
-                    }
-                }
-                .quantPanel().padding(.horizontal, 14)
+                PropSlipCard(props: topProps, resultForProp: resultForProp, onTapProp: onTapProp)
+                    .padding(.horizontal, 10)
             }
             EdgesSection(title: "TODAY'S EDGES", edges: edges)
         }
@@ -11055,7 +11045,8 @@ struct PicksGamePage: View {
     let onTapProp: (PropPick) -> Void
 
     private var topProps: [PropPick] {
-        Array(group.props.sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.prefix(2))
+        // The slip scales — show up to 5, strongest first.
+        Array(group.props.sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.prefix(5))
     }
     private var shortMatchup: String {
         let parts = group.matchup.components(separatedBy: " @ ")
@@ -11089,21 +11080,152 @@ struct PicksGamePage: View {
             }
 
             if !topProps.isEmpty {
-                VStack(spacing: 0) {
-                    Text("PLAYER PROPS")
-                        .font(GaryFonts.mono(9, bold: true)).tracking(1)
-                        .foregroundStyle(.white.opacity(0.4))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 14).padding(.top, 10).padding(.bottom, 2)
-                    ForEach(Array(topProps.enumerated()), id: \.element.id) { i, p in
-                        if i > 0 { Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1) }
-                        FlippablePropCard(prop: p, gameResult: resultForProp(p), showSportBadge: false)
-                    }
-                }
-                .quantPanel().padding(.horizontal, 14)
+                PropSlipCard(props: topProps, resultForProp: resultForProp, onTapProp: onTapProp)
+                    .padding(.horizontal, 10)
             }
             EdgesSection(title: "GAME INTEL", edges: edges)
         }
+    }
+}
+
+
+/// The Prop Slip — one silver card, one two-line row per prop (name + team,
+/// then the gold pick + odds), with a W/L letter rail that fills in as props
+/// settle. Replaces stacked prop cards anywhere a game carries 1–5 props.
+/// Locked-card language throughout: same frame, fonts, and gold-only-pick rule.
+struct PropSlipCard: View {
+    let props: [PropPick]
+    let resultForProp: (PropPick) -> String?
+    let onTapProp: (PropPick) -> Void
+
+    private var leagueIcon: String {
+        switch (props.first?.effectiveLeague ?? "").uppercased() {
+        case "NBA", "NCAAB", "WNBA": return "basketball.fill"
+        case "NFL", "NCAAF": return "football.fill"
+        case "NHL": return "hockey.puck.fill"
+        case "MLB": return "baseball.fill"
+        case "EPL", "WC": return "soccerball"
+        default: return "sportscourt.fill"
+        }
+    }
+    private var isMLB: Bool { (props.first?.effectiveLeague ?? "").uppercased() == "MLB" }
+    private var accent: Color { Sport.from(league: props.first?.effectiveLeague).accentColor }
+
+    private func railLetter(_ result: String?) -> (String, Color) {
+        switch result?.lowercased() {
+        case "won": return ("W", Color(hex: "#3FB950"))
+        case "lost": return ("L", Color(hex: "#E5484D"))
+        case "push": return ("P", GaryColors.gold)
+        default: return ("·", .white.opacity(0.25))
+        }
+    }
+
+    /// "TOTAL BASES OVER 1.5" — same composition the locked prop card uses.
+    private func pickText(_ p: PropPick) -> String {
+        var words = Formatters.propDisplay(p.prop, league: p.effectiveLeague)
+            .split(separator: " ").map(String.init)
+        if let last = words.last, Double(last) != nil { words.removeLast() }
+        var name = words.joined(separator: " ").uppercased()
+        name = CompactPropRow.marketAbbrevShared[name] ?? name
+        var call = (p.bet ?? "").uppercased()
+        if let raw = p.line?.trimmingCharacters(in: .whitespaces), !raw.isEmpty {
+            let line = Double(raw).map { $0.truncatingRemainder(dividingBy: 1) == 0 ? String(format: "%g", $0) : String(format: "%.1f", $0) } ?? raw
+            call = call.isEmpty ? line : "\(call) \(line)"
+        }
+        return [name, call].filter { !$0.isEmpty }.joined(separator: " ")
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Header — locked card's eyebrow anatomy, with the prop count.
+            HStack(spacing: 8) {
+                Image(systemName: leagueIcon)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(isMLB ? GaryColors.mlbGrass : accent)
+                Text("PROPS")
+                    .font(GaryFonts.mono(11, bold: true))
+                    .tracking(1)
+                    .foregroundStyle(isMLB ? AnyShapeStyle(GaryColors.mlbFieldText) : AnyShapeStyle(accent))
+                Text("· \(props.count)")
+                    .font(GaryFonts.mono(11, bold: false))
+                    .foregroundStyle(.white.opacity(0.34))
+                Spacer()
+            }
+            .padding(.bottom, 9)
+
+            StitchLine()
+                .stroke(GaryColors.gold.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [4, 5]))
+                .frame(height: 1)
+
+            ForEach(Array(props.enumerated()), id: \.element.id) { i, p in
+                if i > 0 {
+                    StitchLine()
+                        .stroke(Color.white.opacity(0.12), style: StrokeStyle(lineWidth: 1, dash: [4, 5]))
+                        .frame(height: 1)
+                }
+                Button { onTapProp(p) } label: {
+                    HStack(alignment: .top, spacing: 9) {
+                        let rail = railLetter(resultForProp(p))
+                        Text(rail.0)
+                            .font(GaryFonts.mono(11, bold: true))
+                            .foregroundStyle(rail.1)
+                            .frame(width: 13, alignment: .leading)
+                            .padding(.top, 3)
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack(alignment: .firstTextBaseline, spacing: 7) {
+                                Text(p.player ?? p.team ?? "")
+                                    .font(GaryFonts.text(16, .semibold))
+                                    .foregroundStyle(.white.opacity(0.92))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.75)
+                                if let team = p.team, !team.isEmpty {
+                                    Text(team.uppercased())
+                                        .font(.system(size: 9, weight: .semibold))
+                                        .foregroundStyle(GaryColors.silver.opacity(0.8))
+                                        .lineLimit(1)
+                                }
+                                Spacer(minLength: 6)
+                                HStack(spacing: 3) {
+                                    Text("Take")
+                                        .font(.system(size: 10, weight: .semibold))
+                                        .foregroundStyle(GaryColors.heroAccent.opacity(0.85))
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 7.5, weight: .bold))
+                                        .foregroundStyle(GaryColors.heroAccent.opacity(0.6))
+                                }
+                            }
+                            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                Text(pickText(p))
+                                    .font(GaryFonts.mono(12.5, bold: true))
+                                    .tracking(0.5)
+                                    .foregroundStyle(GaryColors.heroAccent)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.65)
+                                Spacer(minLength: 6)
+                                Text(Formatters.americanOdds(p.odds))
+                                    .font(GaryFonts.mono(11.5, bold: true))
+                                    .foregroundStyle(GaryColors.silver.opacity(0.8))
+                            }
+                        }
+                    }
+                    .padding(.vertical, 9)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 12)
+        .padding(.bottom, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color(hex: "#15171C"))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(GaryColors.silver.opacity(0.4), lineWidth: 1.0)
+                )
+                .shadow(color: .black.opacity(0.45), radius: 14, y: 6)
+        )
     }
 }
 
@@ -12315,9 +12437,9 @@ struct CompactPropRow: View {
             .split(separator: " ").map(String.init)
         if let last = words.last, Double(last) != nil { words.removeLast() }
         let name = words.joined(separator: " ").uppercased()
-        return Self.marketAbbrev[name] ?? name
+        return Self.marketAbbrevShared[name] ?? name
     }
-    private static let marketAbbrev: [String: String] = [
+    static let marketAbbrevShared: [String: String] = [
         "STRIKEOUTS": "K'S", "HOME RUNS": "HR", "STOLEN BASES": "SB",
         "PITCHING OUTS": "OUTS", "HITS + RUNS + RBI": "H+R+RBI",
         "POINTS + REBOUNDS + ASSISTS": "PRA", "REBOUNDS + ASSISTS": "R+A",
