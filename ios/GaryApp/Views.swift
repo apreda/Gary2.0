@@ -10499,7 +10499,6 @@ struct PicksCarouselView: View {
 
     private var pager: some View {
         VStack(spacing: 0) {
-            if store.showingYesterdayResults { recapBanner }
             TabView(selection: $page) {
                 ScrollView(showsIndicators: false) {
                     PicksTodayPage(topProps: topProps, topGamePick: topGamePick,
@@ -10525,18 +10524,22 @@ struct PicksCarouselView: View {
 
     private var sportBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 ForEach(sports, id: \.self) { s in
                     let on = (s == sport)
                     Button { withAnimation(.easeInOut(duration: 0.2)) { sport = s } } label: {
-                        Text(s).font(.system(size: 13, weight: .heavy))
+                        Text(s)
+                            .font(.system(size: 11, weight: .bold, design: .monospaced)).tracking(0.8)
                             .foregroundStyle(on ? Color.black.opacity(0.85) : .white.opacity(0.5))
-                            .padding(.horizontal, 14).padding(.vertical, 9)
-                            .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(on ? GaryColors.gold : Color.white.opacity(0.06)))
+                            .padding(.horizontal, 12).padding(.vertical, 7)
+                            .background(
+                                Capsule().fill(on ? GaryColors.gold : Color.white.opacity(0.05))
+                                    .overlay(Capsule().stroke(on ? Color.clear : Color.white.opacity(0.08), lineWidth: 1))
+                            )
                     }.buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 2)
+            .padding(.horizontal, 16).padding(.top, 10)
         }
     }
 
@@ -10549,7 +10552,7 @@ struct PicksCarouselView: View {
                         chip(idx + 1, shortMatchup(g.matchup))
                     }
                 }
-                .padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 12)
+                .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 10)
             }
             .onChange(of: page) { p in withAnimation { proxy.scrollTo(p, anchor: .center) } }
         }
@@ -10569,15 +10572,6 @@ struct PicksCarouselView: View {
         }
         .buttonStyle(.plain)
         .id(index)
-    }
-
-    private var recapBanner: some View {
-        Text("YESTERDAY'S RESULTS")
-            .font(.system(size: 9, weight: .medium, design: .monospaced)).tracking(0.5)
-            .foregroundStyle(.white.opacity(0.4))
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 16)
-            .padding(.bottom, 8)
     }
 
     private var emptyState: some View {
