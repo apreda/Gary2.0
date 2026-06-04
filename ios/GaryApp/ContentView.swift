@@ -153,32 +153,30 @@ struct GaryPage: View {
         }
     }
 
+    // Primary nav (Hub ⟷ Talk to Gary) — an underline tab, deliberately distinct
+    // from the gold filter-pills used elsewhere. Role differentiation, not another
+    // gold capsule. (DESIGNER_BRIEFING: differentiate button roles.)
     private var modeSwitch: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 28) {
             ForEach(GaryPageMode.allCases, id: \.self) { m in
                 let on = m == mode
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) { mode = m }
                 } label: {
-                    Text(m.rawValue)
-                        .font(.system(size: 13, weight: .heavy))
-                        .tracking(0.3)
-                        .foregroundStyle(on ? Color.black.opacity(0.85) : .white.opacity(0.55))
-                        .padding(.horizontal, 16).padding(.vertical, 7)
-                        .background(
-                            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                .fill(on ? GaryColors.gold : Color.clear)
-                        )
+                    VStack(spacing: 6) {
+                        Text(m.rawValue)
+                            .font(GaryFonts.text(15, on ? .semibold : .regular))
+                            .foregroundStyle(on ? .white : .white.opacity(0.45))
+                        Rectangle()
+                            .fill(on ? GaryColors.gold : Color.clear)
+                            .frame(height: 2)
+                    }
                 }
                 .buttonStyle(.plain)
             }
+            Spacer()
         }
-        .padding(4)
-        .background(
-            Capsule()
-                .fill(Color(hex: "#161618"))
-                .overlay(Capsule().stroke(Color.white.opacity(0.08), lineWidth: 1))
-        )
+        .padding(.horizontal, 16)
     }
 }
 
