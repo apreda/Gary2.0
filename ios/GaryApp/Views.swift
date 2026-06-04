@@ -7892,8 +7892,9 @@ struct CompactPickRow: View {
                 return cleaned.uppercased()
             }
         }
-        // Default to a neutral context label instead of repeating venue in the header.
-        return "REGULAR SEASON"
+        // Regular games just say the sport ("MLB") — the tag only earns words
+        // when the game is special (playoffs, finals, tournament rounds).
+        return (pick.league ?? "").uppercased()
     }
 
     private var formattedTime: String {
@@ -11398,12 +11399,12 @@ struct PropsHubView: View {
                     let on = lane == activeLane
                     Button { withAnimation(.easeInOut(duration: 0.2)) { laneTab = lane } } label: {
                         Text(laneTitle(lane))
-                            .font(GaryFonts.mono(10.5, bold: true)).tracking(0.8)
-                            .foregroundStyle(on ? GaryColors.gold : .white.opacity(0.45))
+                            .font(.system(size: 11, weight: on ? .heavy : .semibold))
+                            .foregroundStyle(on ? GaryColors.selectedText : .white.opacity(0.45))
                             .padding(.horizontal, 12).padding(.vertical, 7)
                             .background(
-                                Capsule().fill(on ? GaryColors.gold.opacity(0.14) : Color.white.opacity(0.05))
-                                    .overlay(Capsule().stroke(on ? GaryColors.gold.opacity(0.5) : Color.clear, lineWidth: 1))
+                                Capsule().fill(on ? GaryColors.selectedFill : Color.white.opacity(0.05))
+                                    .overlay(Capsule().stroke(on ? Color.white.opacity(0.25) : Color.clear, lineWidth: 1))
                             )
                     }.buttonStyle(.plain)
                 }
@@ -11474,8 +11475,8 @@ struct PropsHubView: View {
     private var hubEmptyState: some View {
         VStack(spacing: 10) {
             Image(systemName: "sparkles").font(.system(size: 26)).foregroundStyle(GaryColors.gold.opacity(0.5))
-            Text("NO \(sel.label) EDGES YET")
-                .font(GaryFonts.mono(11, bold: true)).tracking(1).foregroundStyle(.white.opacity(0.55))
+            Text("No \(sel.label.capitalized) edges yet")
+                .font(.system(size: 13, weight: .semibold)).foregroundStyle(.white.opacity(0.55))
             Text("Tonight's connections post as lineups and matchups firm up.")
                 .font(.system(size: 12)).foregroundStyle(.white.opacity(0.4))
                 .multilineTextAlignment(.center).padding(.horizontal, 40)
@@ -11499,12 +11500,12 @@ struct PropsHubView: View {
                         let on = l == sel
                         Button { withAnimation(.easeInOut(duration: 0.2)) { sel = l } } label: {
                             Text(l.label)
-                                .font(GaryFonts.mono(11, bold: true)).tracking(0.8)
-                                .foregroundStyle(on ? Color.black.opacity(0.85) : Color.white.opacity(0.5))
+                                .font(.system(size: 11, weight: on ? .heavy : .semibold))
+                                .foregroundStyle(on ? GaryColors.selectedText : Color.white.opacity(0.5))
                                 .padding(.horizontal, 11).padding(.vertical, 5)
                                 .background(
-                                    Capsule().fill(on ? GaryColors.gold : Color.white.opacity(0.05))
-                                        .overlay(Capsule().stroke(on ? Color.clear : Color.white.opacity(0.08), lineWidth: 1))
+                                    Capsule().fill(on ? GaryColors.selectedFill : Color.white.opacity(0.05))
+                                        .overlay(Capsule().stroke(on ? Color.white.opacity(0.25) : Color.white.opacity(0.08), lineWidth: 1))
                                 )
                         }.buttonStyle(.plain)
                     }
@@ -11523,9 +11524,9 @@ struct HubSectionHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
             Text(eyebrow)
-                .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
-                .foregroundStyle(GaryColors.gold.opacity(0.9))
-            Text(sub).font(.system(size: 13)).foregroundStyle(.white.opacity(0.45))
+                .font(GaryFonts.display(17))
+                .foregroundStyle(GaryColors.sectionHead)
+            Text(sub).font(.system(size: 12)).foregroundStyle(GaryColors.sectionSub)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 16)
@@ -11766,7 +11767,7 @@ struct EdgeDetailSheet: View {
                     }.buttonStyle(.plain)
                 }
                 Text(signal.game.uppercased()).font(GaryFonts.mono(11, bold: false)).foregroundStyle(.white.opacity(0.4))
-                Text(signal.headline).font(GaryFonts.text(24)).foregroundStyle(.white).fixedSize(horizontal: false, vertical: true)
+                Text(signal.headline).font(GaryFonts.display(25)).foregroundStyle(.white).fixedSize(horizontal: false, vertical: true)
                 if !signal.value.isEmpty || !signal.spark.isEmpty {
                     HStack(alignment: .bottom, spacing: 16) {
                         if !signal.value.isEmpty {
@@ -11837,11 +11838,11 @@ struct PlayerInsightSheet: View {
     private var headerView: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 3) {
-                Text("PLAYER BREAKDOWN")
-                    .font(GaryFonts.mono(9, bold: true)).tracking(1)
-                    .foregroundStyle(GaryColors.gold.opacity(0.9))
+                Text("Player Breakdown")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(GaryColors.sectionSub)
                 Text(pack?.name ?? fallbackName)
-                    .font(GaryFonts.text(26, .semibold)).foregroundStyle(.white)
+                    .font(GaryFonts.display(28)).foregroundStyle(.white)
                 HStack(spacing: 6) {
                     if let meta = identityLine {
                         Text(meta).font(GaryFonts.mono(11, bold: false))
@@ -11959,9 +11960,9 @@ struct PlayerInsightSheet: View {
     }
 
     private func insightEyebrow(_ t: String) -> some View {
-        Text(t)
-            .font(GaryFonts.mono(9, bold: true)).tracking(1)
-            .foregroundStyle(GaryColors.gold.opacity(0.85))
+        Text(t.capitalized)
+            .font(GaryFonts.display(15))
+            .foregroundStyle(GaryColors.sectionHead)
             .padding(.top, 4)
     }
 
@@ -12065,8 +12066,8 @@ struct BeneficiarySwapRow: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 8) {
                         Text([swap.team, swap.position].compactMap { $0 }.joined(separator: " · "))
-                            .font(GaryFonts.mono(9, bold: true)).tracking(1.2)
-                            .foregroundStyle(GaryColors.gold.opacity(0.85))
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(GaryColors.sectionSub)
                         Spacer()
                         Text(s.game.uppercased())
                             .font(GaryFonts.mono(8, bold: false)).tracking(0.6)
@@ -12307,39 +12308,37 @@ struct CompactPropRow: View {
                         .foregroundStyle(.white.opacity(0.28))
                 }
 
-                // Hero — player name where the gold card shows the matchup
-                // (same face/size). Second line: team · market, in the same
-                // mono secondary-label style the gold card uses (silver).
-                VStack(alignment: .leading, spacing: 3) {
+                // Hero — player name at game-card presence, team small and
+                // baseline-aligned beside it (frees the second line entirely).
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(prop.player ?? prop.team ?? "")
-                        .font(GaryFonts.text(21, .medium))
+                        .font(GaryFonts.text(25, .medium))
                         .foregroundStyle(.white)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.7)
+                        .minimumScaleFactor(0.65)
                     if let team = prop.team, !team.isEmpty {
                         Text(team.uppercased())
-                            .font(GaryFonts.mono(11, bold: true))
-                            .tracking(1)
-                            .foregroundStyle(GaryColors.silver.opacity(0.85))
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(GaryColors.silver.opacity(0.8))
                             .lineLimit(1)
-                            .minimumScaleFactor(0.7)
                     }
+                    Spacer(minLength: 0)
                 }
 
-                // Bottom — the whole pick in the box, GOLD like the game
-                // card's chip: "TOTAL BASES OVER 1.5  ·  +100". The market name
-                // abbreviates (marketAbbrev) and scales before it ever wraps.
+                // Bottom — silver box, and the ONLY gold on the card is the
+                // pick itself: "TOTAL BASES OVER 1.5". Odds and border are
+                // silver (the card's metal); gold marks exactly what Gary says.
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text("\(marketName) \(compactCall)")
                         .font(GaryFonts.mono(17, bold: true))
                         .tracking(0.8)
-                        .foregroundStyle(GaryColors.gold)
+                        .foregroundStyle(GaryColors.heroAccent)
                         .lineLimit(1)
                         .minimumScaleFactor(0.6)
                     Spacer(minLength: 8)
                     Text(Formatters.americanOdds(prop.odds))
                         .font(GaryFonts.mono(15, bold: true))
-                        .foregroundStyle(GaryColors.gold.opacity(0.72))
+                        .foregroundStyle(GaryColors.silver.opacity(0.8))
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, 14)
@@ -16466,17 +16465,20 @@ enum GaryFonts {
 
     enum TextWeight {
         case regular, medium, semibold, bold
-        var psName: String {
+        var sfWeight: Font.Weight {
             switch self {
-            case .regular:  return "Inter-Regular"
-            case .medium:   return "Inter-Medium"
-            case .semibold: return "Inter-SemiBold"
-            case .bold:     return "Inter-Bold"
+            case .regular:  return .regular
+            case .medium:   return .medium
+            case .semibold: return .semibold
+            case .bold:     return .bold
             }
         }
     }
 
+    /// Body/text face = SF Pro (system) per the June 2026 type decision —
+    /// native rendering + the Dynamic Type path for the accessibility track.
+    /// (Inter stays bundled but unused; remap here if that ever changes.)
     static func text(_ size: CGFloat, _ weight: TextWeight = .regular) -> Font {
-        .custom(weight.psName, size: size)
+        .system(size: size, weight: weight.sfWeight)
     }
 }
