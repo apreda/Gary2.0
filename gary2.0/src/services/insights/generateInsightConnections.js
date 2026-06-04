@@ -48,6 +48,13 @@ import { computeWcForm } from './computers/wcForm.js';
 import { computeWcH2h } from './computers/wcH2h.js';
 import { computeWcStakes } from './computers/wcStakes.js';
 
+// World Cup PREVIEW computers — pre-tournament / rest-day content (groups,
+// pedigree, upcoming-opener history) shown whenever no WC match plays today
+// but future fixtures exist. Hands off to the normal lanes on match days.
+import { computeWcPreviewGroups } from './computers/wcPreviewGroups.js';
+import { computeWcPedigree } from './computers/wcPedigree.js';
+import { computeWcOpeners } from './computers/wcOpeners.js';
+
 /**
  * Registry of computers per league. Each entry is an async fn:
  *   (ctx) => Promise<row[]>
@@ -79,6 +86,12 @@ const WC_COMPUTERS = [
   computeWcStakes,
 ];
 
+const WC_PREVIEW_COMPUTERS = [
+  computeWcPreviewGroups,
+  computeWcPedigree,
+  computeWcOpeners,
+];
+
 const COMPUTERS_BY_LEAGUE = {
   mlb: MLB_COMPUTERS,
   nba: NBA_COMPUTERS,
@@ -105,7 +118,7 @@ export async function generateInsightConnections({ date, league = 'mlb', options
   const minRelevance = Number.isFinite(options.minRelevance) ? options.minRelevance : 35;
   const maxPerCategory = Number.isFinite(options.maxPerCategory) ? options.maxPerCategory : 8;
 
-  const computers = COMPUTERS_BY_LEAGUE[leagueKey];
+  let computers = COMPUTERS_BY_LEAGUE[leagueKey];
   if (!computers) {
     console.warn(`[insights] No computers registered for league "${leagueKey}" — returning empty.`);
     return { date: dateStr, league: leagueKey, season: seasonForDate(dateStr, leagueKey), gameCount: 0, connections: [] };
@@ -119,9 +132,26 @@ export async function generateInsightConnections({ date, league = 'mlb', options
   //         objects (home_team/away_team are team objects with `abbreviation`
   //         = the 3-letter FIFA code); the WC computers own that shape.
   let games = [];
+  let preview = false;
   try {
     if (leagueKey === 'wc') {
       games = (await fifaWorldCupService.getMatchesForDate(dateStr)) || [];
+      if (games.length === 0) {
+        // PREVIEW MODE: no WC match today. If future fixtures still exist
+        // (pre-tournament look-ahead, or a knockout rest day), run the
+        // preview lanes against the FULL fixture list instead. After the
+        // final, no future fixtures remain and this self-terminates.
+        const all = (await fifaWorldCupService.getMatches({ seasons: [2026] })) || [];
+        const hasFuture = all.some((m) =>
+          String(m?.status || '').toLowerCase() === 'scheduled'
+          && String(m?.datetime || '').slice(0, 10) >= dateStr);
+        if (hasFuture) {
+          games = all;
+          computers = WC_PREVIEW_COMPUTERS;
+          preview = true;
+          console.log(`[insights] WC preview mode — no match today, ${all.length} fixtures in scope.`);
+        }
+      }
     } else if (leagueKey === 'nba') {
       games = (await ballDontLieService.getNbaGamesForDate(dateStr)) || [];
     } else {
@@ -161,6 +191,7 @@ export async function generateInsightConnections({ date, league = 'mlb', options
     league: leagueKey,
     games,
     slateGameIds,
+    preview,
     bdl: ballDontLieService,
     helpers: { gameLabel },
   };

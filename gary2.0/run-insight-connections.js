@@ -288,7 +288,10 @@ async function run() {
     console.log(`\n── ${league} ──`);
     let connections;
     try {
-      connections = await generateInsightConnections({ date: targetDate, league });
+      // WC preview mode emits one 'tournament' row per group (12) — lift the
+      // per-category cap so the whole group picture fits.
+      const options = league === 'WC' ? { maxPerCategory: 12 } : undefined;
+      connections = await generateInsightConnections({ date: targetDate, league, options });
     } catch (err) {
       hadError = true;
       console.error(`❌ [${league}] generateInsightConnections failed: ${err.message}`);
