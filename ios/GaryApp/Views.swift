@@ -2551,6 +2551,7 @@ struct PremiumPicksView: View {
     @State private var gameShelves: [GameShelf] = []
     @State private var propShelves: [PropShelf] = []
     @State private var gameResultsMap: [String: String] = [:]   // "away@home" -> won/lost/push
+    @State private var liveScores: [LiveScore] = []
 
     // Terminal Tape: GAMES <-> PROPS mode (props are a peer, one tap away — not buried below games).
     enum Mode { case games, props }
@@ -2808,6 +2809,14 @@ struct PremiumPicksView: View {
         .padding(.horizontal, 16)
     }
 
+    /// Live (in-progress) score for a pick's game — drives the on-card LiveScoreStrip
+    /// (score + base diamond). Settled games show their result in the eyebrow, so only
+    /// LIVE games surface the strip here.
+    private func liveScore(for pick: GaryPick) -> LiveScore? {
+        let matchup = "\(pick.awayTeam ?? "") @ \(pick.homeTeam ?? "")"
+        return liveScores.first { $0.isLive && abbrGameMatches($0.abbrGame, matchup: matchup) }
+    }
+
     private func gameShelfView(_ shelf: GameShelf) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             shelfHeader(shelf.league,
@@ -2820,15 +2829,20 @@ struct PremiumPicksView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(alignment: .top, spacing: 10) {
                         ForEach(shelf.picks, id: \.id) { pick in
-                            ZStack {
-                                if isPremium {
-                                    FlippablePickCard(pick: pick,
-                                                            gameResult: shelf.settled ? gamePickResult(pick) : nil,
-                                                            showSportBadge: false)
-                                } else {
-                                    CompactPickRow(pick: pick, showSportBadge: false)
-                                        .blur(radius: 4.5).opacity(0.7).allowsHitTesting(false)
-                                    lockBadge
+                            VStack(alignment: .leading, spacing: 6) {
+                                if let ls = liveScore(for: pick) {
+                                    LiveScoreStrip(score: ls)
+                                }
+                                ZStack {
+                                    if isPremium {
+                                        FlippablePickCard(pick: pick,
+                                                                gameResult: shelf.settled ? gamePickResult(pick) : nil,
+                                                                showSportBadge: false)
+                                    } else {
+                                        CompactPickRow(pick: pick, showSportBadge: false)
+                                            .blur(radius: 4.5).opacity(0.7).allowsHitTesting(false)
+                                        lockBadge
+                                    }
                                 }
                             }
                             .frame(width: 308)
@@ -2994,7 +3008,9 @@ struct PremiumPicksView: View {
             }
         }
 
+        let live = await SupabaseAPI.fetchLiveScores(date: SupabaseAPI.todayEST())
         await MainActor.run {
+            liveScores = live
             gameResultsMap = rMap
             gameShelves = gShelves
             propShelves = pShelves
