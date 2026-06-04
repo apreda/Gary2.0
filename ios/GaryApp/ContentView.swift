@@ -27,7 +27,9 @@ struct ContentView: View {
     @EnvironmentObject var authManager: AuthManager
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("selectedTab") private var selectedTab: Int = 0
+    @AppStorage("hasSeenGaryIntro") private var hasSeenGaryIntro: Bool = false
     @State private var showingSettings = false
+    @State private var showingGaryIntro = false
     @StateObject private var pickDetailState = PickDetailState.shared
     @State private var loadedTabs: Set<Int> = []
 
@@ -84,10 +86,15 @@ struct ContentView: View {
             // Migrate any out-of-range persisted index (e.g. user was on the old Fantasy index)
             if selectedTab < 0 || selectedTab > lastValidTabIndex { selectedTab = 0 }
             loadedTabs.insert(selectedTab)
+            maybeShowGaryIntro(for: selectedTab)
             await BillfoldSnapshotStore.shared.prewarmIfNeeded()
         }
         .onChange(of: selectedTab) { newTab in
             loadedTabs.insert(newTab)
+            maybeShowGaryIntro(for: newTab)
+        }
+        .sheet(isPresented: $showingGaryIntro, onDismiss: { hasSeenGaryIntro = true }) {
+            GaryIntroSheet { showingGaryIntro = false }
         }
         .onChange(of: scenePhase) { newPhase in
             guard newPhase == .active else { return }
@@ -95,6 +102,13 @@ struct ContentView: View {
                 await BillfoldSnapshotStore.shared.prewarmIfNeeded()
             }
         }
+    }
+
+    /// One-time intro: shown the first time the user lands on a picks page
+    /// (Winners = 1, Picks = 3). Replaces the old persistent "~90 min" banners.
+    private func maybeShowGaryIntro(for tab: Int) {
+        guard !hasSeenGaryIntro, tab == 1 || tab == 3 else { return }
+        showingGaryIntro = true
     }
 }
 
@@ -162,6 +176,63 @@ struct GaryPage: View {
                 .fill(Color(hex: "#161618"))
                 .overlay(Capsule().stroke(Color.white.opacity(0.08), lineWidth: 1))
         )
+    }
+}
+
+// MARK: - First-launch "How Gary Works" sheet
+
+struct GaryIntroSheet: View {
+    let onDone: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            Text("HOW GARY WORKS")
+                .font(.system(size: 10, weight: .semibold, design: .monospaced)).tracking(2)
+                .foregroundStyle(GaryColors.gold.opacity(0.9))
+                .padding(.top, 28)
+
+            introRow(icon: "magnifyingglass",
+                     title: "The research comes first",
+                     text: "Before every pick, Gary's research assistant digs through stats, injuries, form, and matchups for each game on the slate.")
+            introRow(icon: "clock",
+                     title: "Picks drop near game time",
+                     text: "Each game's pick lands about 90 minutes before first pitch or tip-off, once lineups are confirmed. The board fills in as the day goes on.")
+            introRow(icon: "checkmark.seal",
+                     title: "Everything gets graded",
+                     text: "Results are stamped on every pick and every Hub edge the next morning — wins, losses, and the track record, all visible.")
+
+            Spacer()
+
+            Button(action: onDone) {
+                Text("GOT IT")
+                    .font(.system(size: 13, weight: .bold, design: .monospaced)).tracking(1)
+                    .foregroundStyle(.black.opacity(0.85))
+                    .frame(maxWidth: .infinity).padding(.vertical, 14)
+                    .background(Capsule().fill(GaryColors.gold))
+            }
+            .buttonStyle(.plain)
+            .padding(.bottom, 18)
+        }
+        .padding(.horizontal, 24)
+        .background(GaryColors.darkBg.ignoresSafeArea())
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    private func introRow(icon: String, title: String, text: String) -> some View {
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: icon)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(GaryColors.gold)
+                .frame(width: 28)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 16, weight: .semibold)).foregroundStyle(.white)
+                Text(text)
+                    .font(.system(size: 13)).foregroundStyle(.white.opacity(0.6))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 }
 

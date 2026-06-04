@@ -2655,11 +2655,11 @@ struct PremiumPicksView: View {
                         ForEach(shelf.picks, id: \.id) { pick in
                             ZStack {
                                 if isPremium {
-                                    FlippableScoreboardCard(pick: pick,
+                                    FlippablePickCard(pick: pick,
                                                             gameResult: shelf.settled ? gamePickResult(pick) : nil,
                                                             showSportBadge: false)
                                 } else {
-                                    ScoreboardPickCard(pick: pick, showSportBadge: false)
+                                    CompactPickRow(pick: pick, showSportBadge: false)
                                         .blur(radius: 4.5).opacity(0.7).allowsHitTesting(false)
                                     lockBadge
                                 }
@@ -7724,20 +7724,20 @@ struct CompactPickRow: View {
             VStack(alignment: .leading, spacing: 11) {
                 // Eyebrow row — gold mono significance (or sport accent dot) + time.
                 HStack(spacing: 8) {
-                    Circle()
-                        .fill(GaryColors.gold)
-                        .frame(width: 5, height: 5)
+                    Image(systemName: sport.icon)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(accentColor)
                     if let significance = significanceTag {
                         Text(significance)
-                            .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
+                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
                             .tracking(1)
-                            .foregroundStyle(GaryColors.gold.opacity(0.85))
+                            .foregroundStyle(accentColor)
                             .lineLimit(1)
                     }
                     Spacer(minLength: 6)
                     if resolvedResult != nil {
                         Text(resolvedResult == "won" ? "WON" : (resolvedResult == "push" ? "PUSH" : "LOST"))
-                            .font(.system(size: 9, weight: .heavy, design: .monospaced))
+                            .font(.system(size: 10, weight: .heavy, design: .monospaced))
                             .tracking(0.8)
                             .foregroundStyle(resultStampColor)
                             .padding(.horizontal, 8).padding(.vertical, 3)
@@ -7747,7 +7747,7 @@ struct CompactPickRow: View {
                             )
                     } else if !formattedTime.isEmpty {
                         Text(formattedTime.uppercased())
-                            .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                            .font(.system(size: 11, weight: .medium, design: .monospaced))
                             .tracking(1)
                             .foregroundStyle(.white.opacity(0.34))
                             .lineLimit(1)
@@ -7764,7 +7764,7 @@ struct CompactPickRow: View {
                             .foregroundStyle(GaryColors.gold)
                     }
                     Text(awayName)
-                        .font(.system(size: 21, weight: .regular, design: .serif))
+                        .font(.system(size: 21, weight: awayIsPicked ? .semibold : .regular, design: .serif))
                         .foregroundStyle(.white.opacity(awayIsPicked ? 1.0 : 0.42))
                     Text("@")
                         .font(.system(size: 13, weight: .regular, design: .serif))
@@ -7775,7 +7775,7 @@ struct CompactPickRow: View {
                             .foregroundStyle(GaryColors.gold)
                     }
                     Text(homeName)
-                        .font(.system(size: 21, weight: .regular, design: .serif))
+                        .font(.system(size: 21, weight: homeIsPicked ? .semibold : .regular, design: .serif))
                         .foregroundStyle(.white.opacity(homeIsPicked ? 1.0 : 0.42))
                     Spacer(minLength: 0)
                 }
@@ -7789,25 +7789,25 @@ struct CompactPickRow: View {
                 HStack(spacing: 12) {
                     HStack(alignment: .firstTextBaseline, spacing: 7) {
                         Text(pickParts.pick.uppercased())
-                            .font(.system(size: 14, weight: .bold, design: .monospaced))
-                            .tracking(1.2)
+                            .font(.system(size: 17, weight: .heavy, design: .monospaced))
+                            .tracking(0.8)
                             .foregroundStyle(.white)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
                         if !pickParts.odds.isEmpty {
                             Text(pickParts.odds)
-                                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                                .font(.system(size: 15, weight: .semibold, design: .monospaced))
                                 .foregroundStyle(.white.opacity(0.85))
                         }
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 9)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 11)
                     .background(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(GaryColors.gold.opacity(0.18))
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .fill(GaryColors.gold.opacity(0.20))
                             .overlay(
-                                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .stroke(GaryColors.gold.opacity(0.65), lineWidth: 1)
+                                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                    .stroke(GaryColors.gold.opacity(0.7), lineWidth: 1.2)
                             )
                     )
 
@@ -7839,7 +7839,8 @@ struct CompactPickRow: View {
                             GeometryReader { geo in
                                 ZStack(alignment: .leading) {
                                     Capsule().fill(Color.white.opacity(0.07))
-                                    Capsule().fill(GaryColors.gold)
+                                    Capsule()
+                                        .fill(LinearGradient(colors: [GaryColors.gold, accentColor], startPoint: .leading, endPoint: .trailing))
                                         .frame(width: geo.size.width * confidenceValue)
                                 }
                             }
@@ -10364,6 +10365,9 @@ struct Signal: Identifiable {
     let tone: HubTone
     var spark: [Double] = []
     var lineVal: Double? = nil
+    /// BDL player id when the edge is player-backed — unlocks the full
+    /// Player Insights breakdown from the card back.
+    var playerId: String? = nil
 }
 
 // MARK: - Picks Tab (per-game swipe carousel: Today's Top + game-by-game)
@@ -10604,7 +10608,7 @@ struct PicksCarouselView: View {
     }
 
     private var recapBanner: some View {
-        Text("YESTERDAY'S RESULTS · TODAY'S PICKS DROP ~90 MIN BEFORE FIRST PITCH")
+        Text("YESTERDAY'S RESULTS")
             .font(.system(size: 9, weight: .medium, design: .monospaced)).tracking(0.5)
             .foregroundStyle(.white.opacity(0.4))
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -10616,10 +10620,10 @@ struct PicksCarouselView: View {
         VStack(spacing: 12) {
             Spacer()
             Image(systemName: "clock.arrow.circlepath").font(.system(size: 30)).foregroundStyle(GaryColors.gold.opacity(0.6))
-            Text("PICKS DROP ~90 MIN BEFORE FIRST PITCH")
+            Text("TODAY'S PICKS ARE ON THE WAY")
                 .font(.system(size: 11, weight: .bold, design: .monospaced)).tracking(1)
                 .foregroundStyle(.white.opacity(0.6)).multilineTextAlignment(.center)
-            Text("Check back closer to game time for today's props and game picks.")
+            Text("Gary releases picks as lineups are confirmed. Check back closer to game time.")
                 .font(.system(size: 12)).foregroundStyle(.white.opacity(0.4))
                 .multilineTextAlignment(.center).padding(.horizontal, 44)
             Spacer(); Spacer()
@@ -10664,14 +10668,10 @@ struct PicksTodayPage: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("TODAY'S TOP")
-                    .font(.system(size: 9.5, weight: .semibold, design: .monospaced)).tracking(1)
-                    .foregroundStyle(GaryColors.gold.opacity(0.9))
-                Text("The day's highest-confidence plays")
-                    .font(.system(size: 19, weight: .semibold)).foregroundStyle(.white.opacity(0.92))
-            }
-            .padding(.horizontal, 16).padding(.top, 8)
+            Text("FREE PICK")
+                .font(.system(size: 9.5, weight: .semibold, design: .monospaced)).tracking(1.8)
+                .foregroundStyle(GaryColors.gold.opacity(0.9))
+                .padding(.horizontal, 16).padding(.top, 8)
 
             if let gp = topGamePick {
                 // topGamePick is always TODAY's live pick — never stamp a W/L
@@ -10824,7 +10824,8 @@ extension Connection {
             value: value ?? "",
             tone: HubTone.from(tone),
             spark: spark ?? [],
-            lineVal: line_val
+            lineVal: line_val,
+            playerId: player_id
         )
     }
 }
@@ -10836,6 +10837,11 @@ struct PropsHubView: View {
 
     @State private var sel: HubLeagueSel = .mlb
     @State private var selectedSignal: Signal? = nil
+    /// Player whose full breakdown sheet is open (card-back CTA / board row).
+    @State private var breakdownSignal: Signal? = nil
+    @State private var searchText: String = ""
+    /// Selected lane in the PLAYER EDGES tab strip; nil = first non-empty lane.
+    @State private var laneTab: SignalKind? = nil
 
     // Real connections fetched from Supabase (insight_connections), mapped to
     // Signals. Real data only — no mock fallback; empty -> honest empty state.
@@ -10870,7 +10876,7 @@ struct PropsHubView: View {
                 print("[PropsHubView] fetchInsightConnections(\(lg)) error: \(error.localizedDescription)")
             }
         }
-        let rate = await SupabaseAPI.fetchInsightHitRate(date: SupabaseAPI.yesterdayEST())
+        let rate = await SupabaseAPI.fetchInsightHitRate(date: SupabaseAPI.hubGradedDateEST())
         await MainActor.run {
             didLoad = true
             hitRate = rate
@@ -10903,38 +10909,30 @@ struct PropsHubView: View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 22) {
                 header.padding(.horizontal, 14)
+                searchBar.padding(.horizontal, 14)
 
-                if leagueSignals.isEmpty {
+                if !searchText.isEmpty {
+                    searchResults
+                } else if leagueSignals.isEmpty {
                     hubEmptyState
                 } else {
                     // FEATURED — highest relevance, max 2 per lane so the strip mixes kinds
                     HubSectionHeader(eyebrow: "FEATURED", sub: "Tonight's sharpest reads")
-                    EdgeFeatureStrip(signals: featured) { selectedSignal = $0 }
+                    EdgeFeatureStrip(signals: featured) { breakdownSignal = $0 }
 
                     // REGRESSION BOARD — a ranked leaderboard with ERA→xERA gap bars
                     if !items(.regression).isEmpty {
                         HubSectionHeader(eyebrow: "REGRESSION BOARD", sub: "Biggest ERA vs xERA gaps tonight")
-                        RegressionBoard(signals: items(.regression)) { selectedSignal = $0 }
+                        RegressionBoard(signals: items(.regression)) { s in
+                            if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s }
+                        }
                     }
-                    // PLATOON EDGES — horizontal scroller of player cards
-                    if !items(.platoon).isEmpty {
-                        HubSectionHeader(eyebrow: "PLATOON EDGES", sub: "Handedness matchups tonight")
-                        EdgeScroller(signals: items(.platoon)) { selectedSignal = $0 }
-                    }
-                    // BALLPARK SHIFTS — horizontal scroller
-                    if !items(.ballpark).isEmpty {
-                        HubSectionHeader(eyebrow: "BALLPARK SHIFTS", sub: "A different pitcher in this park")
-                        EdgeScroller(signals: items(.ballpark)) { selectedSignal = $0 }
-                    }
-                    // HEAT CHECK — hot hitters scroller
-                    if !items(.hot).isEmpty {
-                        HubSectionHeader(eyebrow: "HEAT CHECK", sub: "Hot bats the line hasn't caught")
-                        EdgeScroller(signals: items(.hot)) { selectedSignal = $0 }
-                    }
-                    // COOLING OFF — slumping bats (mirror of Heat Check)
-                    if !items(.cold).isEmpty {
-                        HubSectionHeader(eyebrow: "COOLING OFF", sub: "Slumps the line may not reflect")
-                        EdgeScroller(signals: items(.cold)) { selectedSignal = $0 }
+                    // PLAYER EDGES — one section, lane tabs instead of four
+                    // stacked scrollers (platoon / heat / ballpark / cooling).
+                    if !playerEdgeLanes.isEmpty {
+                        HubSectionHeader(eyebrow: "PLAYER EDGES", sub: laneSub(activeLane))
+                        laneTabBar
+                        EdgeScroller(signals: items(activeLane)) { breakdownSignal = $0 }
                     }
                     // OWNED — career batter-vs-pitcher history (NBA: season series)
                     if !items(.h2h).isEmpty {
@@ -10981,6 +10979,114 @@ struct PropsHubView: View {
             .task { if !didLoad { await load() } }
         }
         .sheet(item: $selectedSignal) { EdgeDetailSheet(signal: $0, onSelectGame: onSelectGame) }
+        .sheet(item: $breakdownSignal) { PlayerInsightSheet(signal: $0) }
+    }
+
+    // ---- Player-edge lane tabs (platoon / heat / ballpark / cooling) ----
+
+    /// The four player-stat lanes, filtered to lanes that have rows tonight.
+    private var playerEdgeLanes: [SignalKind] {
+        [SignalKind.platoon, .hot, .ballpark, .cold].filter { !items($0).isEmpty }
+    }
+    /// The lane the tab strip is showing: the user's choice when still valid,
+    /// else the first lane with content.
+    private var activeLane: SignalKind {
+        if let t = laneTab, playerEdgeLanes.contains(t) { return t }
+        return playerEdgeLanes.first ?? .platoon
+    }
+    private func laneTitle(_ k: SignalKind) -> String {
+        switch k {
+        case .platoon: return "PLATOON"
+        case .hot: return "HEAT CHECK"
+        case .ballpark: return "BALLPARK"
+        case .cold: return "COOLING"
+        default: return k.chip
+        }
+    }
+    private func laneSub(_ k: SignalKind) -> String {
+        switch k {
+        case .platoon: return "Handedness matchups tonight"
+        case .hot: return "Hot bats the line hasn't caught"
+        case .ballpark: return "A different pitcher in this park"
+        case .cold: return "Slumps the line may not reflect"
+        default: return ""
+        }
+    }
+    private var laneTabBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(playerEdgeLanes, id: \.self) { lane in
+                    let on = lane == activeLane
+                    Button { withAnimation(.easeInOut(duration: 0.2)) { laneTab = lane } } label: {
+                        Text(laneTitle(lane))
+                            .font(.system(size: 10.5, weight: .bold, design: .monospaced)).tracking(0.8)
+                            .foregroundStyle(on ? GaryColors.gold : .white.opacity(0.45))
+                            .padding(.horizontal, 12).padding(.vertical, 7)
+                            .background(
+                                Capsule().fill(on ? GaryColors.gold.opacity(0.14) : Color.white.opacity(0.05))
+                                    .overlay(Capsule().stroke(on ? GaryColors.gold.opacity(0.5) : Color.clear, lineWidth: 1))
+                            )
+                    }.buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+    }
+
+    // ---- Search ----
+
+    private var searchBar: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.35))
+            TextField("Search players, teams, edges", text: $searchText)
+                .font(.system(size: 14))
+                .foregroundStyle(.white)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+            if !searchText.isEmpty {
+                Button { searchText = "" } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 14)).foregroundStyle(.white.opacity(0.3))
+                }.buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 12).padding(.vertical, 9)
+        .background(
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .fill(Color.white.opacity(0.05))
+                .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).stroke(Color.white.opacity(0.08), lineWidth: 1))
+        )
+    }
+
+    /// Flat ranked list of edges matching the search text — searches the
+    /// SELECTED league's signals across headline, detail, game, and value.
+    private var searchResults: some View {
+        let q = searchText.lowercased()
+        let matches = leagueSignals.filter {
+            $0.headline.lowercased().contains(q)
+                || $0.detail.lowercased().contains(q)
+                || $0.game.lowercased().contains(q)
+                || $0.value.lowercased().contains(q)
+                || $0.kind.chip.lowercased().contains(q)
+        }
+        return Group {
+            if matches.isEmpty {
+                VStack(spacing: 8) {
+                    Text("NO MATCHES")
+                        .font(.system(size: 11, weight: .bold, design: .monospaced)).tracking(1)
+                        .foregroundStyle(.white.opacity(0.5))
+                    Text("Try a player, a team, or a lane like \"platoon\".")
+                        .font(.system(size: 12)).foregroundStyle(.white.opacity(0.35))
+                }
+                .frame(maxWidth: .infinity).padding(.top, 36)
+            } else {
+                HubSectionHeader(eyebrow: "RESULTS", sub: "\(matches.count) edge\(matches.count == 1 ? "" : "s") match")
+                VStack(spacing: 0) { ForEach(matches) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
+                    .quantPanel().padding(.horizontal, 14)
+            }
+        }
     }
 
     private var hubEmptyState: some View {
@@ -11054,16 +11160,91 @@ struct HubSectionHeader: View {
 /// Horizontal carousel of large "featured" edge cards.
 struct EdgeFeatureStrip: View {
     let signals: [Signal]
+    /// Called from the card BACK's "Full breakdown" button (cards flip on tap).
     let onTap: (Signal) -> Void
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 12) {
                 ForEach(signals) { s in
-                    FeatureEdgeCard(s: s).onTapGesture { onTap(s) }
+                    FlippableEdgeCard(s: s, width: 232, height: 162, cornerRadius: 16, onBreakdown: onTap) {
+                        FeatureEdgeCard(s: s)
+                    }
                 }
             }
             .padding(.horizontal, 16)
         }
+    }
+}
+
+/// Hub edge card flip wrapper: front (the stat card) ⟷ back (full edge text +
+/// a Full Breakdown CTA when the edge is player-backed). Same idiom as
+/// FlippableScoreboardCard, fixed-size so scroller rows stay aligned.
+struct FlippableEdgeCard<Front: View>: View {
+    let s: Signal
+    let width: CGFloat
+    let height: CGFloat
+    let cornerRadius: CGFloat
+    let onBreakdown: (Signal) -> Void
+    @ViewBuilder let front: () -> Front
+
+    @State private var flipped = false
+
+    var body: some View {
+        ZStack {
+            front().opacity(flipped ? 0 : 1)
+            EdgeCardBack(s: s, cornerRadius: cornerRadius, onBreakdown: onBreakdown)
+                .opacity(flipped ? 1 : 0)
+                .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
+        }
+        .frame(width: width, height: height)
+        .rotation3DEffect(.degrees(flipped ? 180 : 0), axis: (x: 0, y: 1, z: 0), perspective: 0.55)
+        .animation(.spring(response: 0.55, dampingFraction: 0.82), value: flipped)
+        .contentShape(Rectangle())
+        .onTapGesture { flipped.toggle() }
+        .accessibilityAddTraits(.isButton)
+    }
+}
+
+struct EdgeCardBack: View {
+    let s: Signal
+    let cornerRadius: CGFloat
+    let onBreakdown: (Signal) -> Void
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: s.kind.icon).font(.system(size: 9, weight: .bold)).foregroundStyle(s.kind.tint)
+                Text(s.kind.chip).font(.system(size: 8.5, weight: .semibold, design: .monospaced)).tracking(1).foregroundStyle(s.kind.tint)
+                Spacer()
+                Text(s.game.uppercased()).font(.system(size: 8, weight: .medium, design: .monospaced)).foregroundStyle(.white.opacity(0.3)).lineLimit(1)
+            }
+            Text(s.detail)
+                .font(.system(size: 11)).foregroundStyle(.white.opacity(0.78))
+                .lineSpacing(1.5)
+                .fixedSize(horizontal: false, vertical: true)
+                .lineLimit(8)
+                .minimumScaleFactor(0.85)
+            Spacer(minLength: 0)
+            if s.playerId != nil {
+                Button { onBreakdown(s) } label: {
+                    HStack(spacing: 4) {
+                        Text("FULL BREAKDOWN")
+                        Image(systemName: "arrow.right")
+                    }
+                    .font(.system(size: 9.5, weight: .bold, design: .monospaced)).tracking(0.8)
+                    .foregroundStyle(.black.opacity(0.85))
+                    .frame(maxWidth: .infinity).padding(.vertical, 8)
+                    .background(Capsule().fill(GaryColors.gold))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(Color.white.opacity(0.06))
+                .overlay(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous).stroke(s.kind.tint.opacity(0.35), lineWidth: 1))
+        )
     }
 }
 
@@ -11148,12 +11329,15 @@ struct RegressionBoard: View {
 /// Horizontal scroller of compact player/edge cards.
 struct EdgeScroller: View {
     let signals: [Signal]
+    /// Called from the card BACK's "Full breakdown" button (cards flip on tap).
     let onTap: (Signal) -> Void
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
                 ForEach(signals) { s in
-                    MiniEdgeCard(s: s).onTapGesture { onTap(s) }
+                    FlippableEdgeCard(s: s, width: 170, height: 152, cornerRadius: 14, onBreakdown: onTap) {
+                        MiniEdgeCard(s: s)
+                    }
                 }
             }
             .padding(.horizontal, 16)
@@ -11233,6 +11417,262 @@ struct EdgeDetailSheet: View {
         .background(GaryColors.darkBg.ignoresSafeArea())
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+    }
+}
+
+// MARK: - Player Insights (full breakdown behind a hub card)
+//
+// Fetches the pre-computed player_insight_cards pack for the tapped player and
+// renders the betting breakdown: strengths/weaknesses, the pitch-type matchup
+// vs tonight's starter, splits, BvP, Statcast truth-check, and tonight's lines.
+
+struct PlayerInsightSheet: View {
+    let signal: Signal
+    @Environment(\.dismiss) private var dismiss
+    @State private var pack: PlayerInsightPack? = nil
+    @State private var loading = true
+
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 20) {
+                headerView
+                if loading {
+                    ProgressView().tint(GaryColors.gold)
+                        .frame(maxWidth: .infinity).padding(.top, 60)
+                } else if let p = pack {
+                    packView(p)
+                } else {
+                    fallbackView
+                }
+            }
+            .padding(20)
+            .padding(.bottom, 30)
+        }
+        .background(GaryColors.darkBg.ignoresSafeArea())
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+        .task {
+            if let pid = signal.playerId {
+                pack = await SupabaseAPI.fetchPlayerInsightCard(date: SupabaseAPI.todayEST(), playerId: pid)
+            }
+            loading = false
+        }
+    }
+
+    private var headerView: some View {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("PLAYER BREAKDOWN")
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced)).tracking(1.8)
+                    .foregroundStyle(GaryColors.gold.opacity(0.9))
+                Text(pack?.name ?? fallbackName)
+                    .font(.system(size: 26, weight: .semibold, design: .serif)).foregroundStyle(.white)
+                HStack(spacing: 6) {
+                    if let meta = identityLine {
+                        Text(meta).font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.45))
+                    }
+                }
+            }
+            Spacer()
+            Button { dismiss() } label: {
+                Image(systemName: "xmark.circle.fill").font(.system(size: 24)).foregroundStyle(.white.opacity(0.3))
+            }.buttonStyle(.plain)
+        }
+        .padding(.top, 22)
+    }
+
+    private var fallbackName: String {
+        (signal.headline.components(separatedBy: CharacterSet(charactersIn: "(:'")).first ?? signal.headline)
+            .trimmingCharacters(in: .whitespaces)
+    }
+
+    private var identityLine: String? {
+        guard let p = pack else { return signal.game.uppercased() }
+        var bits: [String] = []
+        if let t = p.team { bits.append(t.uppercased()) }
+        if let pos = p.position { bits.append(pos) }
+        if let h = p.hand { bits.append(p.type == "pitcher" ? "throws \(h)" : "bats \(h)") }
+        if let g = p.game { bits.append(g.uppercased()) }
+        return bits.isEmpty ? nil : bits.joined(separator: " · ")
+    }
+
+    private var fallbackView: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(signal.detail)
+                .font(.system(size: 15)).foregroundStyle(.white.opacity(0.75)).lineSpacing(3)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("The full breakdown for this player isn't available yet — it posts with the day's edge refresh.")
+                .font(.system(size: 12)).foregroundStyle(.white.opacity(0.4))
+        }
+    }
+
+    @ViewBuilder
+    private func packView(_ p: PlayerInsightPack) -> some View {
+        // Tonight's opponent context
+        if let opp = p.opponent, let oppName = opp.name {
+            insightEyebrow("TONIGHT")
+            Text(p.type == "pitcher" ? "Faces \(oppName)" : "Faces \(oppName)\(opp.hand.map { " (\($0)HP)" } ?? "")")
+                .font(.system(size: 15, weight: .semibold)).foregroundStyle(.white.opacity(0.9))
+        }
+
+        // Strengths / weaknesses
+        if let s = p.strengths, !s.isEmpty {
+            insightEyebrow("STRENGTHS")
+            bulletList(s, color: HubPalette.green)
+        }
+        if let w = p.weaknesses, !w.isEmpty {
+            insightEyebrow("WEAKNESSES")
+            bulletList(w, color: HubPalette.red)
+        }
+
+        // Pitch-type matchup vs tonight's starter (the centerpiece)
+        if let rows = p.pitchMatchup, !rows.isEmpty {
+            insightEyebrow(p.type == "pitcher" ? "ARSENAL" : "VS TONIGHT'S ARSENAL")
+            pitchTable(rows, isPitcher: p.type == "pitcher")
+        }
+
+        // Splits + form + BvP + venue
+        if let splits = p.splits, !splits.isEmpty {
+            insightEyebrow("SPLITS")
+            VStack(spacing: 0) { ForEach(Array(splits.enumerated()), id: \.offset) { _, row in labeledRow(row) } }
+                .quantPanel()
+        }
+        if let form = p.form {
+            insightEyebrow(form.label ?? "RECENT FORM")
+            VStack(spacing: 0) { labeledRow(form, hideLabel: true) }.quantPanel()
+        }
+        if let bvp = p.bvp {
+            insightEyebrow("HEAD-TO-HEAD")
+            VStack(spacing: 0) { labeledRow(bvp) }.quantPanel()
+        }
+        if let venue = p.venue {
+            insightEyebrow("THIS PARK")
+            VStack(spacing: 0) { labeledRow(venue) }.quantPanel()
+        }
+
+        // Statcast truth-check
+        if let xs = p.xstats, !xs.isEmpty {
+            insightEyebrow("STATCAST CHECK")
+            VStack(spacing: 0) { ForEach(Array(xs.enumerated()), id: \.offset) { _, row in xstatRow(row) } }
+                .quantPanel()
+        }
+
+        // Season + tonight's lines
+        if let season = p.season {
+            insightEyebrow("SEASON")
+            VStack(alignment: .leading, spacing: 2) {
+                if let l1 = season.line1 { Text(l1).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white.opacity(0.9)) }
+                if let l2 = season.line2 { Text(l2).font(.system(size: 12)).foregroundStyle(.white.opacity(0.5)) }
+            }
+        }
+        if let props = p.props, !props.isEmpty {
+            insightEyebrow("TONIGHT'S LINES")
+            HStack(spacing: 8) {
+                ForEach(Array(props.prefix(4).enumerated()), id: \.offset) { _, pr in
+                    VStack(spacing: 2) {
+                        Text(pr.label ?? "").font(.system(size: 8.5, weight: .semibold, design: .monospaced)).tracking(0.5)
+                            .foregroundStyle(.white.opacity(0.45))
+                        Text("\(pr.line ?? "")\(pr.odds.map { " (\($0))" } ?? "")")
+                            .font(.system(size: 13, weight: .bold)).foregroundStyle(GaryColors.gold)
+                    }
+                    .padding(.horizontal, 10).padding(.vertical, 8)
+                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.05)))
+                }
+            }
+        }
+    }
+
+    private func insightEyebrow(_ t: String) -> some View {
+        Text(t)
+            .font(.system(size: 9, weight: .semibold, design: .monospaced)).tracking(1.6)
+            .foregroundStyle(GaryColors.gold.opacity(0.85))
+            .padding(.top, 4)
+    }
+
+    private func bulletList(_ items: [String], color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                HStack(alignment: .top, spacing: 8) {
+                    Circle().fill(color).frame(width: 5, height: 5).padding(.top, 6)
+                    Text(item).font(.system(size: 13.5)).foregroundStyle(.white.opacity(0.85))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+
+    private func labeledRow(_ row: PlayerInsightPack.LabeledStat, hideLabel: Bool = false) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            if !hideLabel, let l = row.label {
+                Text(l).font(.system(size: 12, weight: .semibold)).foregroundStyle(.white.opacity(0.6))
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 1) {
+                if let v = row.value { Text(v).font(.system(size: 14, weight: .bold)).foregroundStyle(.white.opacity(0.92)) }
+                if let d = row.detail { Text(d).font(.system(size: 10.5)).foregroundStyle(.white.opacity(0.4)) }
+            }
+        }
+        .padding(.vertical, 8).padding(.horizontal, 12)
+    }
+
+    private func xstatRow(_ row: PlayerInsightPack.XStatRow) -> some View {
+        let verdictColor: Color = row.verdict == "overperforming" ? HubPalette.red
+            : row.verdict == "underperforming" ? HubPalette.green : Color.white.opacity(0.55)
+        return HStack {
+            Text(row.label ?? "").font(.system(size: 12, weight: .semibold)).foregroundStyle(.white.opacity(0.6))
+            Spacer()
+            Text("\(row.actual ?? "—") → \(row.expected ?? "—")")
+                .font(.system(size: 13, weight: .bold, design: .monospaced)).foregroundStyle(.white.opacity(0.9))
+            if let v = row.verdict {
+                Text(v.uppercased())
+                    .font(.system(size: 7.5, weight: .semibold, design: .monospaced)).tracking(0.6)
+                    .foregroundStyle(verdictColor)
+                    .padding(.horizontal, 6).padding(.vertical, 3)
+                    .overlay(Capsule().stroke(verdictColor.opacity(0.5), lineWidth: 1))
+            }
+        }
+        .padding(.vertical, 8).padding(.horizontal, 12)
+    }
+
+    /// Pitch | usage | BA | SLG | whiff table with grade tinting.
+    private func pitchTable(_ rows: [PlayerInsightPack.PitchRow], isPitcher: Bool) -> some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("PITCH").frame(maxWidth: .infinity, alignment: .leading)
+                Text("USE%").frame(width: 44, alignment: .trailing)
+                Text("BA").frame(width: 44, alignment: .trailing)
+                Text("SLG").frame(width: 44, alignment: .trailing)
+                Text("WHIFF").frame(width: 48, alignment: .trailing)
+            }
+            .font(.system(size: 8, weight: .semibold, design: .monospaced)).tracking(0.5)
+            .foregroundStyle(.white.opacity(0.35))
+            .padding(.horizontal, 12).padding(.vertical, 7)
+
+            ForEach(Array(rows.enumerated()), id: \.offset) { i, r in
+                let tint: Color = r.grade == "strong" ? (isPitcher ? HubPalette.green : HubPalette.green)
+                    : r.grade == "weak" ? HubPalette.red
+                    : r.grade == "thin" ? Color.white.opacity(0.35) : Color.white.opacity(0.75)
+                HStack {
+                    Text(r.pitch ?? "—")
+                        .font(.system(size: 12.5, weight: .semibold)).foregroundStyle(tint)
+                        .frame(maxWidth: .infinity, alignment: .leading).lineLimit(1)
+                    Text(r.usagePct.map { String(format: "%.0f%%", $0) } ?? "—")
+                        .frame(width: 44, alignment: .trailing)
+                    Text(r.ba ?? "—").frame(width: 44, alignment: .trailing)
+                    Text(r.slg ?? "—").frame(width: 44, alignment: .trailing)
+                    Text(r.whiffPct.map { String(format: "%.0f%%", $0) } ?? "—")
+                        .frame(width: 48, alignment: .trailing)
+                }
+                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.8))
+                .padding(.horizontal, 12).padding(.vertical, 7)
+                if i < rows.count - 1 {
+                    Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 12)
+                }
+            }
+        }
+        .quantPanel()
     }
 }
 

@@ -356,6 +356,36 @@ enum SupabaseAPI {
 
     // MARK: - Insight Connections ("Today's Edges" hub)
 
+    /// The day before `todayEST()` — the hub's "yesterday" for the graded-edge
+    /// track record. Rollover-aware: between midnight and 3am EST, todayEST()
+    /// is already yesterday's slate, so this returns two calendar days back
+    /// (unlike the plain-calendar `yesterdayEST()` used elsewhere).
+    static func hubGradedDateEST() -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.timeZone = TimeZone(identifier: "America/New_York")
+        var cal = Calendar(identifier: .gregorian)
+        if let tz = TimeZone(identifier: "America/New_York") { cal.timeZone = tz }
+        guard let hubToday = formatter.date(from: todayEST()),
+              let prior = cal.date(byAdding: .day, value: -1, to: hubToday) else { return yesterdayEST() }
+        return formatter.string(from: prior)
+    }
+
+    /// Fetch a player's full insight pack for a date (the Hub breakdown view).
+    /// Returns nil when no pack exists or on any failure — the card back
+    /// simply hides the breakdown affordance gracefully.
+    static func fetchPlayerInsightCard(date: String, playerId: String) async -> PlayerInsightPack? {
+        let url = buildURL(table: "player_insight_cards", query: [
+            URLQueryItem(name: "select", value: "player_id,player_name,payload"),
+            URLQueryItem(name: "date", value: "eq.\(date)"),
+            URLQueryItem(name: "player_id", value: "eq.\(playerId)")
+        ])
+        guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
+              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let rows = try? JSONDecoder().decode([PlayerInsightCardRow].self, from: data) else { return nil }
+        return rows.first?.payload
+    }
+
     /// Graded-edge tally for a date: how many hub edges hit vs were graded
     /// (hit + miss; pushes excluded). Powers the hub's track-record line.
     /// Returns nil on any failure or when nothing is graded yet.
