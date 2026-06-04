@@ -10742,7 +10742,7 @@ struct PicksTodayPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("FREE PICK")
-                .font(.system(size: 9.5, weight: .semibold, design: .monospaced)).tracking(1.8)
+                .font(.system(size: 9.5, weight: .semibold, design: .monospaced)).tracking(1)
                 .foregroundStyle(GaryColors.gold.opacity(0.9))
                 .padding(.horizontal, 16).padding(.top, 8)
 
@@ -11585,7 +11585,7 @@ struct PlayerInsightSheet: View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 3) {
                 Text("PLAYER BREAKDOWN")
-                    .font(.system(size: 9, weight: .semibold, design: .monospaced)).tracking(1.8)
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced)).tracking(1)
                     .foregroundStyle(GaryColors.gold.opacity(0.9))
                 Text(pack?.name ?? fallbackName)
                     .font(.system(size: 26, weight: .semibold, design: .serif)).foregroundStyle(.white)
@@ -11707,7 +11707,7 @@ struct PlayerInsightSheet: View {
 
     private func insightEyebrow(_ t: String) -> some View {
         Text(t)
-            .font(.system(size: 9, weight: .semibold, design: .monospaced)).tracking(1.6)
+            .font(.system(size: 9, weight: .semibold, design: .monospaced)).tracking(1)
             .foregroundStyle(GaryColors.gold.opacity(0.85))
             .padding(.top, 4)
     }

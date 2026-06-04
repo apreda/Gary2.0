@@ -190,7 +190,7 @@ struct GaryIntroSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
             Text("HOW GARY WORKS")
-                .font(.system(size: 10, weight: .semibold, design: .monospaced)).tracking(2)
+                .font(.system(size: 10, weight: .semibold, design: .monospaced)).tracking(1)
                 .foregroundStyle(GaryColors.gold.opacity(0.9))
                 .padding(.top, 28)
 
