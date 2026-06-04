@@ -427,12 +427,10 @@ Use fetch_narrative_context ONLY for breaking news or game-thread context that n
                   } else if (args.sport === 'MLB') {
                     // MLB per-game stats use BDL's /mlb/v1/stats — flat shape
                     // (pitcher: ip/er/p_k/p_bb; batter: at_bats/hits/hr/rbi).
-                    // Mirrors agentLoop.js MLB branch at line ~1016.
+                    // Mirrors agentLoop.js MLB branch. Chrono helper joins
+                    // real game dates + drops spring/in-progress rows.
                     const currentYear = new Date().getFullYear();
-                    logs = await ballDontLieService.getMlbGameStats({
-                      playerIds: [player.id],
-                      seasons: [currentYear]
-                    });
+                    logs = await ballDontLieService.getMlbPlayerGameRowsChrono(player.id, currentYear);
                     // Use the pitcher/batter-aware summarizer instead of raw JSON
                     // so the briefing gets the same compact format Gary's path does.
                     logContent = summarizeMlbPlayerGameLogs(args.player_name, logs);

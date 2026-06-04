@@ -789,9 +789,16 @@ export function summarizeMlbPlayerGameLogs(playerName, stats) {
     return `${playerName} GAME LOGS: No 2026 game data found`;
   }
 
-  // Sort by game_id descending — game IDs increment chronologically, so this
-  // gives us most-recent first without needing a separate game-info fetch.
-  const sorted = [...stats].sort((a, b) => (b.game_id || 0) - (a.game_id || 0));
+  // Most-recent first. Rows from getMlbPlayerGameRowsChrono carry a joined
+  // `_game.date` — use it (game_id is NOT reliably chronological; June 3 2026
+  // audit caught stale rows jumping the order). Fall back to game_id only
+  // for legacy callers that didn't join dates.
+  const sorted = [...stats].sort((a, b) => {
+    if (a._game?.date && b._game?.date) {
+      return String(b._game.date).localeCompare(String(a._game.date));
+    }
+    return (b.game_id || 0) - (a.game_id || 0);
+  });
 
   // Detect role: starts with games_started > 0 → starting pitcher
   const startingOutings = sorted.filter(s => (s.games_started || 0) > 0);
@@ -812,13 +819,22 @@ export function summarizeMlbPlayerGameLogs(playerName, stats) {
       const hr = s.p_hr ?? '—';
       return `${ip} IP, ${h} H, ${er} ER, ${k} K, ${bb} BB, ${hr} HR`;
     });
-    // Totals
-    const totalIp = recent.reduce((acc, s) => acc + (Number(s.ip) || 0), 0);
+    // Totals. MLB innings-pitched uses baseball notation: 5.2 = 5⅔ innings
+    // (the digit after the point is OUTS, not tenths). Sum outs, not decimals,
+    // or a 5-start ERA drifts by several points (June 3 2026 audit).
+    const ipToOuts = (ip) => {
+      const n = Number(ip) || 0;
+      const whole = Math.trunc(n);
+      const outs = Math.round((n - whole) * 10);
+      return whole * 3 + Math.min(Math.max(outs, 0), 2);
+    };
+    const totalOuts = recent.reduce((acc, s) => acc + ipToOuts(s.ip), 0);
     const totalEr = recent.reduce((acc, s) => acc + (s.er || 0), 0);
     const totalK = recent.reduce((acc, s) => acc + (s.p_k || 0), 0);
     const totalBb = recent.reduce((acc, s) => acc + (s.p_bb || 0), 0);
-    const era = totalIp > 0 ? ((totalEr * 9) / totalIp).toFixed(2) : '—';
-    return `${playerName} LAST ${recent.length} STARTS: ${era} ERA, ${totalK} K, ${totalBb} BB in ${totalIp.toFixed(1)} IP. Game-by-game: ${lines.join(' | ')}`;
+    const era = totalOuts > 0 ? ((totalEr * 27) / totalOuts).toFixed(2) : '—';
+    const ipDisplay = `${Math.floor(totalOuts / 3)}.${totalOuts % 3}`;
+    return `${playerName} LAST ${recent.length} STARTS: ${era} ERA, ${totalK} K, ${totalBb} BB in ${ipDisplay} IP. Game-by-game: ${lines.join(' | ')}`;
   }
 
   // Batter

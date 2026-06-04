@@ -991,13 +991,13 @@ export const nbaFetchers = {
           team_ids: [home.id],
           start_date: seasonStart.toISOString().split('T')[0],
           end_date: today.toISOString().split('T')[0],
-          per_page: 50
+          per_page: 100
         }),
         ballDontLieService.getGames(bdlSport, {
           team_ids: [away.id],
           start_date: seasonStart.toISOString().split('T')[0],
           end_date: today.toISOString().split('T')[0],
-          per_page: 50
+          per_page: 100
         })
       ]);
       
@@ -1147,25 +1147,42 @@ export const nbaFetchers = {
     console.log(`[Stat Router] Fetching EFFICIENCY_TREND (point differential) for ${away.name} @ ${home.name}`);
     
     try {
-      // Get season games for point differential trends
-      // BDL season=2025 means 2025-26 season, which starts Oct 2025
+      // Two windows per team: a 45-day recent window whose single page is
+      // guaranteed to contain the LATEST games (honest L5/L10), plus the
+      // season window for the season average — merged and deduped. The old
+      // single full-season fetch with per_page:30 returned the FIRST 30
+      // games (Oct-Dec) and labeled them "L5/L10" (June 3 2026 audit).
+      // BDL season=2025 means 2025-26 season, which starts Oct 2025.
       const seasonStart = new Date(season, 9, 1);
       const today = new Date();
-      
-      const [homeGames, awayGames] = await Promise.all([
-        ballDontLieService.getGames(bdlSport, {
-          team_ids: [home.id],
-          start_date: seasonStart.toISOString().split('T')[0],
-          end_date: today.toISOString().split('T')[0],
-          per_page: 30
-        }),
-        ballDontLieService.getGames(bdlSport, {
-          team_ids: [away.id],
-          start_date: seasonStart.toISOString().split('T')[0],
-          end_date: today.toISOString().split('T')[0],
-          per_page: 30
-        })
+      const recentStart = new Date();
+      recentStart.setDate(recentStart.getDate() - 45);
+      const fmt = (d) => d.toISOString().split('T')[0];
+
+      const fetchGames = (teamId, from) => ballDontLieService.getGames(bdlSport, {
+        team_ids: [teamId],
+        start_date: fmt(from),
+        end_date: fmt(today),
+        per_page: 100
+      });
+
+      const [homeRecent, awayRecent, homeSeason, awaySeason] = await Promise.all([
+        fetchGames(home.id, recentStart),
+        fetchGames(away.id, recentStart),
+        fetchGames(home.id, seasonStart),
+        fetchGames(away.id, seasonStart)
       ]);
+
+      const mergeGames = (a, b) => {
+        const seen = new Set();
+        return [...(a || []), ...(b || [])].filter(g => {
+          if (!g?.id || seen.has(g.id)) return false;
+          seen.add(g.id);
+          return true;
+        });
+      };
+      const homeGames = mergeGames(homeRecent, homeSeason);
+      const awayGames = mergeGames(awayRecent, awaySeason);
       
       // Calculate efficiency trend (point differential)
       const calcEfficiencyTrend = (games, teamId) => {
@@ -1462,13 +1479,13 @@ export const nbaFetchers = {
           team_ids: [home.id],
           start_date: seasonStart.toISOString().split('T')[0],
           end_date: today.toISOString().split('T')[0],
-          per_page: 50
+          per_page: 100
         }),
         ballDontLieService.getGames(bdlSport, {
           team_ids: [away.id],
           start_date: seasonStart.toISOString().split('T')[0],
           end_date: today.toISOString().split('T')[0],
-          per_page: 50
+          per_page: 100
         }),
         fetchNBATeamAdvancedStats(home.id, season, isPostseasonOptions(options)),
         fetchNBATeamAdvancedStats(away.id, season, isPostseasonOptions(options))
@@ -2537,7 +2554,7 @@ export const nbaFetchers = {
       const homeGames = await ballDontLieService.getGames(bdlSport, {
         team_ids: [home.id],
         seasons: [currentSeason],
-        per_page: 50
+        per_page: 100
       });
 
       // Filter to only COMPLETED games against the away team
@@ -3141,13 +3158,13 @@ export const nbaFetchers = {
           team_ids: [home.id],
           start_date: seasonStart.toISOString().split('T')[0],
           end_date: today.toISOString().split('T')[0],
-          per_page: 50
+          per_page: 100
         }),
         ballDontLieService.getGames(bdlSport, {
           team_ids: [away.id],
           start_date: seasonStart.toISOString().split('T')[0],
           end_date: today.toISOString().split('T')[0],
-          per_page: 50
+          per_page: 100
         })
       ]);
       
@@ -3251,13 +3268,13 @@ export const nbaFetchers = {
           team_ids: [home.id],
           start_date: seasonStart.toISOString().split('T')[0],
           end_date: today.toISOString().split('T')[0],
-          per_page: 50
+          per_page: 100
         }),
         ballDontLieService.getGames(bdlSport, {
           team_ids: [away.id],
           start_date: seasonStart.toISOString().split('T')[0],
           end_date: today.toISOString().split('T')[0],
-          per_page: 50
+          per_page: 100
         })
       ]);
       
@@ -3403,22 +3420,26 @@ export const nbaFetchers = {
     console.log(`[Stat Router] Fetching BENCH_DEPTH for ${away.name} @ ${home.name}`);
     
     try {
-      // Get recent games for both teams (last 10)
-      const seasonStart = new Date(season, 9, 1); // Oct 1 of season year (BDL season=2025 means 2025-26)
+      // Recent window (last 45 days) sized so a single page contains every
+      // recent game — the old full-season window with per_page:15 returned
+      // the FIRST 15 games of the season (October) and labeled them
+      // "Last 10 Games" (June 3 2026 audit).
+      const windowStart = new Date();
+      windowStart.setDate(windowStart.getDate() - 45);
       const today = new Date();
-      
+
       const [homeGames, awayGames] = await Promise.all([
         ballDontLieService.getGames(bdlSport, {
           team_ids: [home.id],
-          start_date: seasonStart.toISOString().split('T')[0],
+          start_date: windowStart.toISOString().split('T')[0],
           end_date: today.toISOString().split('T')[0],
-          per_page: 15
+          per_page: 100
         }),
         ballDontLieService.getGames(bdlSport, {
           team_ids: [away.id],
-          start_date: seasonStart.toISOString().split('T')[0],
+          start_date: windowStart.toISOString().split('T')[0],
           end_date: today.toISOString().split('T')[0],
-          per_page: 15
+          per_page: 100
         })
       ]);
       

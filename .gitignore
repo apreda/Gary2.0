@@ -73,3 +73,10 @@ ios/GaryApp/SecretsLocal.swift
 # Firebase plist contains an API key (Bundle-ID restricted by Firebase, but
 # still flagged by secret scanners). Keep locally, do not commit.
 ios/GaryApp/GoogleService-Info.plist
+
+# Build caches, derived data & generated output (large/ephemeral — never commit)
+tmp/
+gary2.0/tmp/
+gary2.0/logs/
+outputs/
+tmp_*.png

@@ -30,38 +30,13 @@ public struct GaryOrbView: View {
     }
 
     public var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: false)) { context in
-            let t = context.date.timeIntervalSinceReferenceDate
-            GeometryReader { geo in
-                let size = min(geo.size.width, geo.size.height)
-                ZStack {
-                    OuterHalo(size: size, t: t, state: state, amplitude: amplitude)
-                    ParticleField(size: size, t: t, state: state)
-                    if state == .thinking {
-                        GalacticSwirl(size: size, t: t)
-                    }
-                    if state == .speaking {
-                        SpeakingRipples(size: size, t: t, amplitude: amplitude)
-                    }
-
-                    // SwiftUI core orb — base render for iOS 16 and the foundation
-                    // for the Metal plasma shader to layer on top of (iOS 17+)
-                    OrbCore(size: size, t: t, state: state, amplitude: amplitude)
-
-                    // ── Metal plasma layer (iOS 17+) — paints fluid energy inside the orb ──
-                    metalPlasmaLayer(size: size, t: t)
-
-                    SpecularSheen(size: size, t: t, state: state, amplitude: amplitude)
-                    if state == .listening {
-                        ListeningRing(size: size, t: t, amplitude: amplitude)
-                        WaveformBase(size: size, t: t, amplitude: amplitude)
-                    }
-                }
-                .frame(width: size, height: size)
-                .compositingGroup() // ensures blendModes work cleanly
-                .modifier(MetalEdgeEffects(state: state, t: t, amplitude: amplitude))
-            }
-        }
+        // Gary as the character — the bear himself, animated by state.
+        // Breathes when idle, leans in when listening (sonar rings ripple
+        // outward), ponders side-to-side when thinking (gold particles drift
+        // up), mouth-area glows rhythmically when speaking. Halo intensifies
+        // with state. The previous "agent field" composition and the older
+        // multi-layer orb remain as dead code in this file for easy revert.
+        GaryCharacterView(state: state, amplitude: amplitude)
     }
 
     // ── Metal plasma layer (color effect) ──
@@ -526,6 +501,323 @@ private struct WaveformBase: View {
         }
         .frame(width: size * 0.78)
         .offset(y: size * 0.38)
+    }
+}
+
+// MARK: - Orbital agents (the "agent field" overlay — tilted orbits + hairline links)
+
+private struct OrbitalAgents: View {
+    let size: CGFloat
+    let t: TimeInterval
+    let state: GaryOrbState
+    let amplitude: CGFloat
+
+    /// Pre-baked, deterministic parameters per agent — no per-frame randomness.
+    private struct Agent {
+        let rx: Double       // orbit x-radius (fraction of orb radius)
+        let ry: Double       // orbit y-radius
+        let phase: Double    // starting angle (radians)
+        let speed: Double    // angular speed (rad / unit-time at base)
+        let tilt: Double     // rotation of the elliptical orbit
+        let baseSize: Double // dot diameter in points (pre-amplitude)
+        let isAccent: Bool   // accent (state-colored) vs gold
+    }
+
+    private static let agents: [Agent] = [
+        Agent(rx: 0.50, ry: 0.40, phase: 0.00, speed:  0.18, tilt: -0.25, baseSize: 4.2, isAccent: true),
+        Agent(rx: 0.62, ry: 0.50, phase: 1.70, speed: -0.13, tilt:  0.40, baseSize: 3.4, isAccent: false),
+        Agent(rx: 0.72, ry: 0.58, phase: 3.10, speed:  0.10, tilt: -0.50, baseSize: 2.8, isAccent: false),
+        Agent(rx: 0.80, ry: 0.72, phase: 4.60, speed: -0.08, tilt:  0.15, baseSize: 4.0, isAccent: true),
+        Agent(rx: 0.56, ry: 0.66, phase: 5.50, speed:  0.16, tilt:  0.70, baseSize: 2.5, isAccent: false),
+        Agent(rx: 0.83, ry: 0.46, phase: 2.30, speed:  0.07, tilt: -0.80, baseSize: 3.0, isAccent: false),
+        Agent(rx: 0.68, ry: 0.78, phase: 0.80, speed: -0.12, tilt:  0.95, baseSize: 2.7, isAccent: false),
+    ]
+
+    var body: some View {
+        Canvas { ctx, sz in
+            let cx = sz.width / 2
+            let cy = sz.height / 2
+            let r = min(sz.width, sz.height) / 2
+            let amp = max(0, min(1, Double(amplitude)))
+            let speedMul = stateSpeed * (1.0 + amp * 0.4)
+            let accent = accentColor
+
+            // Faint outer ring — just enough hint of structure
+            var outer = Path()
+            outer.addEllipse(in: CGRect(
+                x: cx - r * 0.94, y: cy - r * 0.94,
+                width: r * 1.88, height: r * 1.88
+            ))
+            ctx.stroke(outer, with: .color(GaryColors.gold.opacity(0.08)), lineWidth: 1)
+
+            // Live positions for this frame
+            let points: [(x: CGFloat, y: CGFloat, isAccent: Bool, size: Double)] = Self.agents.map { a in
+                let theta = a.phase + t * a.speed * speedMul
+                let ex = cos(theta) * a.rx * Double(r)
+                let ey = sin(theta) * a.ry * Double(r)
+                let c = cos(a.tilt)
+                let s = sin(a.tilt)
+                let x = cx + CGFloat(ex * c - ey * s)
+                let y = cy + CGFloat(ex * s + ey * c)
+                return (x, y, a.isAccent, a.baseSize)
+            }
+
+            // Faint orbit rings
+            for a in Self.agents {
+                var ring = Path()
+                let steps = 72
+                for i in 0...steps {
+                    let th = Double(i) / Double(steps) * 2 * .pi
+                    let ex = cos(th) * a.rx * Double(r)
+                    let ey = sin(th) * a.ry * Double(r)
+                    let c = cos(a.tilt)
+                    let s = sin(a.tilt)
+                    let x = cx + CGFloat(ex * c - ey * s)
+                    let y = cy + CGFloat(ex * s + ey * c)
+                    if i == 0 {
+                        ring.move(to: CGPoint(x: x, y: y))
+                    } else {
+                        ring.addLine(to: CGPoint(x: x, y: y))
+                    }
+                }
+                ctx.stroke(ring, with: .color(GaryColors.gold.opacity(0.06)), lineWidth: 0.8)
+            }
+
+            // Hairline links between nearby agents — agents "communicating"
+            let linkDist = r * 0.66
+            for i in 0..<points.count {
+                for j in (i + 1)..<points.count {
+                    let dx = points[i].x - points[j].x
+                    let dy = points[i].y - points[j].y
+                    let d = hypot(dx, dy)
+                    if d < linkDist {
+                        let alpha = (1 - Double(d / linkDist)) * 0.22
+                        var p = Path()
+                        p.move(to: CGPoint(x: points[i].x, y: points[i].y))
+                        p.addLine(to: CGPoint(x: points[j].x, y: points[j].y))
+                        ctx.stroke(p, with: .color(GaryColors.gold.opacity(alpha)), lineWidth: 0.7)
+                    }
+                }
+            }
+
+            // Central core — soft gold glow into a small accent bead
+            let coreR = r * (0.16 + CGFloat(amp) * 0.03)
+            let coreCenter = CGPoint(x: cx, y: cy)
+            let glowGrad = Gradient(stops: [
+                .init(color: accent.opacity(0.5 + amp * 0.2), location: 0),
+                .init(color: GaryColors.gold.opacity(0.18 + amp * 0.1), location: 0.55),
+                .init(color: GaryColors.gold.opacity(0), location: 1),
+            ])
+            let glowRect = CGRect(
+                x: cx - coreR * 3, y: cy - coreR * 3,
+                width: coreR * 6, height: coreR * 6
+            )
+            ctx.fill(
+                Path(ellipseIn: glowRect),
+                with: .radialGradient(glowGrad, center: coreCenter, startRadius: 0, endRadius: coreR * 3)
+            )
+            ctx.fill(
+                Path(ellipseIn: CGRect(
+                    x: cx - coreR * 0.55, y: cy - coreR * 0.55,
+                    width: coreR * 1.1, height: coreR * 1.1
+                )),
+                with: .color(accent.opacity(0.95))
+            )
+
+            // The agents themselves — gold dots, accent ones get a soft glow
+            for p in points {
+                let dotSize = CGFloat(p.size) * (1.0 + CGFloat(amp) * 0.25)
+                if p.isAccent {
+                    let glowR = dotSize * 2.6
+                    let glow = Path(ellipseIn: CGRect(
+                        x: p.x - glowR, y: p.y - glowR,
+                        width: glowR * 2, height: glowR * 2
+                    ))
+                    ctx.fill(glow, with: .color(accent.opacity(0.18)))
+                }
+                let rect = CGRect(
+                    x: p.x - dotSize / 2, y: p.y - dotSize / 2,
+                    width: dotSize, height: dotSize
+                )
+                let color = p.isAccent ? accent : GaryColors.gold.opacity(0.88)
+                ctx.fill(Path(ellipseIn: rect), with: .color(color))
+            }
+        }
+        .frame(width: size, height: size)
+        .blendMode(.screen)
+        .allowsHitTesting(false)
+    }
+
+    private var stateSpeed: Double {
+        switch state {
+        case .idle: return 0.8
+        case .listening: return 1.4
+        case .thinking: return 1.9
+        case .speaking: return 1.2
+        }
+    }
+
+    private var accentColor: Color {
+        switch state {
+        case .listening: return Color(red: 0.55, green: 0.95, blue: 1.00)
+        case .thinking:  return Color(red: 0.90, green: 0.70, blue: 1.00)
+        case .speaking:  return Color(red: 1.00, green: 0.72, blue: 0.45)
+        case .idle:      return GaryColors.gold
+        }
+    }
+}
+
+// MARK: - Gary, the character (the bear himself, animated by state)
+
+private struct GaryCharacterView: View {
+    let state: GaryOrbState
+    let amplitude: CGFloat
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: false)) { context in
+            let t = context.date.timeIntervalSinceReferenceDate
+            GeometryReader { geo in
+                let size = min(geo.size.width, geo.size.height)
+                let amp = max(0, min(1, Double(amplitude)))
+
+                ZStack {
+                    // ── Halo behind Gary — intensity scales with state ──
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: [
+                                    GaryColors.gold.opacity(haloOpacity(amp: amp)),
+                                    Color.clear,
+                                ],
+                                center: .center,
+                                startRadius: 0,
+                                endRadius: size * 0.55
+                            )
+                        )
+                        .frame(width: size, height: size)
+                        .blur(radius: 8)
+
+                    // ── Listening sonar rings ──
+                    if state == .listening {
+                        ForEach(0..<3, id: \.self) { i in
+                            let cycle = ((t * 0.42) + Double(i) * 0.33).truncatingRemainder(dividingBy: 1.0)
+                            let scale = 0.78 + cycle * 0.78
+                            let opacity = (1.0 - cycle) * 0.55
+                            Circle()
+                                .stroke(GaryColors.gold.opacity(opacity), lineWidth: 1.4)
+                                .frame(width: size * 0.7, height: size * 0.7)
+                                .scaleEffect(scale)
+                        }
+                    }
+
+                    // ── Thinking particles — gold dots drift up + fade ──
+                    if state == .thinking {
+                        Canvas { ctx, sz in
+                            let cx = sz.width / 2
+                            let baseY = sz.height * 0.68
+                            for i in 0..<6 {
+                                let phase = (t * 0.55 + Double(i) * 0.4)
+                                let cycle = phase.truncatingRemainder(dividingBy: 1.0)
+                                let drift = CGFloat(sin(t * 1.1 + Double(i))) * sz.width * 0.04
+                                let x = cx + CGFloat(i - 3) * sz.width * 0.04 + drift
+                                let y = baseY - CGFloat(cycle) * sz.height * 0.42
+                                let opacity = sin(cycle * .pi) * 0.85
+                                ctx.fill(
+                                    Path(ellipseIn: CGRect(x: x - 1.7, y: y - 1.7, width: 3.4, height: 3.4)),
+                                    with: .color(GaryColors.gold.opacity(opacity))
+                                )
+                            }
+                        }
+                        .frame(width: size, height: size)
+                    }
+
+                    // ── Gary himself — transparent floating head (GaryHead asset).
+                    // No squircle clipping: he's already a clean cut-out, so let him
+                    // float against the dark Talk-to-Gary tab background.
+                    Image("GaryHead")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: size * 0.78, height: size * 0.78)
+                        .shadow(color: GaryColors.gold.opacity(0.45), radius: size * 0.07, x: 0, y: size * 0.02)
+                        .scaleEffect(characterScale(t: t, amp: amp))
+                        .rotationEffect(.degrees(characterRotation(t: t)))
+                        .offset(y: characterFloat(t: t))
+                        .overlay(
+                            // ── Speaking mouth glow — pulses over Gary's lower half ──
+                            Group {
+                                if state == .speaking {
+                                    Ellipse()
+                                        .fill(
+                                            RadialGradient(
+                                                colors: [
+                                                    GaryColors.gold.opacity(0.85),
+                                                    GaryColors.gold.opacity(0.25),
+                                                    GaryColors.gold.opacity(0),
+                                                ],
+                                                center: .center,
+                                                startRadius: 0,
+                                                endRadius: size * 0.18
+                                            )
+                                        )
+                                        .frame(width: size * 0.42, height: size * 0.24)
+                                        .offset(y: size * 0.14)
+                                        .blendMode(.screen)
+                                        .blur(radius: size * 0.025)
+                                        .opacity(0.45 + (sin(t * 9.0) * 0.5 + 0.5) * (0.4 + amp * 0.15))
+                                }
+                            }
+                        )
+                }
+                .frame(width: size, height: size)
+            }
+        }
+    }
+
+    private func haloOpacity(amp: Double) -> Double {
+        switch state {
+        case .idle: return 0.14 + amp * 0.05
+        case .listening: return 0.30 + amp * 0.10
+        case .thinking: return 0.22
+        case .speaking: return 0.42 + amp * 0.15
+        }
+    }
+
+    private func characterScale(t: TimeInterval, amp: Double) -> CGFloat {
+        // Base scale per state + an animation component
+        let base: CGFloat = {
+            switch state {
+            case .idle: return 1.0
+            case .listening: return 1.04
+            case .thinking: return 1.0
+            case .speaking: return 1.02
+            }
+        }()
+        let breath: CGFloat = {
+            switch state {
+            case .idle: return CGFloat(sin(t * 1.5)) * 0.012
+            case .listening: return CGFloat(sin(t * 3.8)) * 0.014
+            case .thinking: return CGFloat(sin(t * 2.2)) * 0.008
+            case .speaking: return CGFloat(sin(t * 8.5)) * 0.013 + CGFloat(amp) * 0.025
+            }
+        }()
+        return base + breath
+    }
+
+    private func characterRotation(t: TimeInterval) -> Double {
+        // Thinking pondering wobble — gentle side-to-side
+        switch state {
+        case .thinking: return sin(t * 1.4) * 1.6
+        default: return 0
+        }
+    }
+
+    private func characterFloat(t: TimeInterval) -> CGFloat {
+        switch state {
+        case .idle: return CGFloat(sin(t * 1.1)) * 4
+        case .listening: return -3
+        case .thinking: return CGFloat(sin(t * 0.9)) * 2 - 1
+        case .speaking: return CGFloat(sin(t * 6.5)) * 2
+        }
     }
 }
 

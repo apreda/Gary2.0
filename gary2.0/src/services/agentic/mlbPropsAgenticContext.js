@@ -141,21 +141,23 @@ function formatStatcastContext(summaries) {
 function calculateMlbHitRate(games, propType, line) {
   if (!games || games.length === 0 || line == null) return null;
 
-  // Map prop types to game log fields
-  // Batters: hr, h, tb, rbi, r, sb, bb
-  // Pitchers: so (strikeouts), er (earned runs), ha (hits allowed)
+  // Map prop types to the REAL flat field names on BDL /mlb/v1/stats rows
+  // (hits, total_bases, runs, k, stolen_bases; pitchers use p_k/p_bb/p_hits/er).
+  // The old map used invented shorthand (h/tb/so/r/sb/ha) that doesn't exist
+  // on the rows — every hit-rate silently returned null (June 3 2026 audit).
   const propToField = {
     'home_runs': 'hr', 'player_home_runs': 'hr', 'hrs': 'hr',
-    'hits': 'h', 'player_hits': 'h', 'hits_allowed': 'ha', 'player_hits_allowed': 'ha',
-    'total_bases': 'tb', 'player_total_bases': 'tb',
+    'hits': 'hits', 'player_hits': 'hits',
+    'hits_allowed': 'p_hits', 'player_hits_allowed': 'p_hits', 'pitcher_hits_allowed': 'p_hits',
+    'total_bases': 'total_bases', 'player_total_bases': 'total_bases',
     'rbis': 'rbi', 'player_rbis': 'rbi', 'rbi': 'rbi', 'runs_batted_in': 'rbi',
-    'runs': 'r', 'player_runs': 'r', 'runs_scored': 'r',
-    'strikeouts': 'so', 'player_strikeouts': 'so', 'pitcher_strikeouts': 'so', 'ks': 'so',
-    'walks': 'bb', 'player_walks': 'bb', 'bases_on_balls': 'bb',
-    'stolen_bases': 'sb', 'player_stolen_bases': 'sb', 'steals': 'sb',
+    'runs': 'runs', 'player_runs': 'runs', 'runs_scored': 'runs',
+    'strikeouts': 'p_k', 'player_strikeouts': 'p_k', 'pitcher_strikeouts': 'p_k', 'ks': 'p_k',
+    'batter_strikeouts': 'k',
+    'walks': 'bb', 'player_walks': 'bb', 'bases_on_balls': 'bb', 'pitcher_walks': 'p_bb',
+    'stolen_bases': 'stolen_bases', 'player_stolen_bases': 'stolen_bases', 'steals': 'stolen_bases',
     'batting_average': 'avg',
-    'pitcher_earned_runs': 'er', 'earned_runs': 'er', 'player_earned_runs': 'er',
-    'pitcher_hits_allowed': 'ha', 'hits_allowed': 'ha'
+    'pitcher_earned_runs': 'er', 'earned_runs': 'er', 'player_earned_runs': 'er'
   };
 
   const field = propToField[propType?.toLowerCase()] || propType;
@@ -538,9 +540,12 @@ async function fetchPlayerSeasonStats(playerIdMap, season) {
     const promises = playerEntries.map(async ([name, data]) => {
       const playerId = data?.id || data;
       try {
-        const stats = await ballDontLieService.getPlayerStats(SPORT_KEY, {
-          player_ids: [playerId],
-          season
+        // Real season aggregates from /mlb/v1/season_stats (batting_*/
+        // pitching_* fields). The old getPlayerStats call returned ONE
+        // arbitrary box-score row labeled as "Season" (June 3 2026 audit).
+        const stats = await ballDontLieService.getMlbPlayerSeasonStats({
+          season,
+          playerIds: [playerId]
         });
         if (stats && stats.length > 0) {
           statsMap[playerId] = stats[0];
@@ -604,7 +609,7 @@ async function fetchPlayerSplits(playerIdMap, season, venueName) {
  * Fetch game logs for all prop candidates (last 10 games)
  * Includes consistency metrics and recent form
  */
-async function fetchPlayerGameLogs(playerIdMap) {
+async function fetchPlayerGameLogs(playerIdMap, season) {
   const playerEntries = Object.entries(playerIdMap);
 
   if (playerEntries.length === 0) {
@@ -620,13 +625,14 @@ async function fetchPlayerGameLogs(playerIdMap) {
     const promises = playerEntries.map(async ([name, data]) => {
       const playerId = data?.id || data;
       try {
-        const stats = await ballDontLieService.getPlayerStats(SPORT_KEY, {
-          player_ids: [playerId],
-          per_mode: 'game'
-        });
-        if (stats && stats.length > 0) {
-          // Structure as game logs with analysis
-          const games = stats.slice(0, 10);
+        // True chronological completed-game rows for THIS season (real game
+        // dates joined; spring/in-progress excluded). The old path returned
+        // the player's EARLIEST rows from the wrong season and called them
+        // "recent" (June 3 2026 audit). Newest-first so slice(0,5) below is
+        // genuinely the last 5.
+        const rows = await ballDontLieService.getMlbPlayerGameRowsChrono(playerId, season);
+        if (rows && rows.length > 0) {
+          const games = rows.slice(-10).reverse();
           logsMap[playerId] = {
             games,
             gamesAnalyzed: games.length
@@ -794,15 +800,15 @@ function buildPlayerStatsText(homeTeam, awayTeam, advancedStats, propCandidates,
 
         if (isPitcher(candidate)) {
           // Pitcher stats
-          statsText += `  Season: ${stats.games_played || stats.gs || 0} GP, ERA ${stats.era || 'N/A'}, K/9 ${stats.k_per_9 || stats.so_per_9 || 'N/A'}, WHIP ${stats.whip || 'N/A'}, IP ${stats.ip || stats.innings_pitched || 'N/A'}, K ${stats.so || stats.strikeouts || 'N/A'}, BB ${stats.bb || 'N/A'}\n`;
+          statsText += `  Season: ${stats.pitching_gp ?? 0} GP (${stats.pitching_gs ?? 0} GS), ERA ${stats.pitching_era != null ? Number(stats.pitching_era).toFixed(2) : 'N/A'}, K/9 ${stats.pitching_k_per_9 != null ? Number(stats.pitching_k_per_9).toFixed(1) : 'N/A'}, WHIP ${stats.pitching_whip != null ? Number(stats.pitching_whip).toFixed(2) : 'N/A'}, IP ${stats.pitching_ip ?? 'N/A'}, K ${stats.pitching_k ?? 'N/A'}, BB ${stats.pitching_bb ?? 'N/A'}\n`;
           if (logs) {
-            statsText += `  Recent: K ${formatRecentGames(logs, 'so')} | ER ${formatRecentGames(logs, 'er')} | IP ${formatRecentGames(logs, 'ip')}\n`;
+            statsText += `  Recent: K ${formatRecentGames(logs, 'p_k')} | ER ${formatRecentGames(logs, 'er')} | IP ${formatRecentGames(logs, 'ip')}\n`;
           }
         } else {
           // Batter stats
-          statsText += `  Season: ${stats.games_played || 0} GP, AVG ${stats.avg || stats.batting_average || 'N/A'}, HR ${stats.hr || stats.home_runs || 'N/A'}, H ${stats.h || stats.hits || 'N/A'}, RBI ${stats.rbi || 'N/A'}, R ${stats.r || stats.runs || 'N/A'}, SB ${stats.sb || stats.stolen_bases || 'N/A'}, OPS ${stats.ops || 'N/A'}, AB ${stats.ab || stats.at_bats || 'N/A'}\n`;
+          statsText += `  Season: ${stats.batting_gp ?? 0} GP, AVG ${stats.batting_avg != null ? Number(stats.batting_avg).toFixed(3) : 'N/A'}, HR ${stats.batting_hr ?? 'N/A'}, H ${stats.batting_h ?? 'N/A'}, RBI ${stats.batting_rbi ?? 'N/A'}, R ${stats.batting_r ?? 'N/A'}, SB ${stats.batting_sb ?? 'N/A'}, OPS ${stats.batting_ops != null ? Number(stats.batting_ops).toFixed(3) : 'N/A'}, AB ${stats.batting_ab ?? 'N/A'}\n`;
           if (logs) {
-            statsText += `  Recent: H ${formatRecentGames(logs, 'h')} | HR ${formatRecentGames(logs, 'hr')} | RBI ${formatRecentGames(logs, 'rbi')} | TB ${formatRecentGames(logs, 'tb')} | R ${formatRecentGames(logs, 'r')}\n`;
+            statsText += `  Recent: H ${formatRecentGames(logs, 'hits')} | HR ${formatRecentGames(logs, 'hr')} | RBI ${formatRecentGames(logs, 'rbi')} | TB ${formatRecentGames(logs, 'total_bases')} | R ${formatRecentGames(logs, 'runs')}\n`;
           }
           // Venue-specific + L/R splits from BDL
           const splitsData = getPlayerSplitsData(candidate.player);
@@ -854,14 +860,14 @@ function buildPlayerStatsText(homeTeam, awayTeam, advancedStats, propCandidates,
         statsText += `- **${candidate.player}**${injuryFlag}:\n`;
 
         if (isPitcher(candidate)) {
-          statsText += `  Season: ${stats.games_played || stats.gs || 0} GP, ERA ${stats.era || 'N/A'}, K/9 ${stats.k_per_9 || stats.so_per_9 || 'N/A'}, WHIP ${stats.whip || 'N/A'}, IP ${stats.ip || stats.innings_pitched || 'N/A'}, K ${stats.so || stats.strikeouts || 'N/A'}, BB ${stats.bb || 'N/A'}\n`;
+          statsText += `  Season: ${stats.pitching_gp ?? 0} GP (${stats.pitching_gs ?? 0} GS), ERA ${stats.pitching_era != null ? Number(stats.pitching_era).toFixed(2) : 'N/A'}, K/9 ${stats.pitching_k_per_9 != null ? Number(stats.pitching_k_per_9).toFixed(1) : 'N/A'}, WHIP ${stats.pitching_whip != null ? Number(stats.pitching_whip).toFixed(2) : 'N/A'}, IP ${stats.pitching_ip ?? 'N/A'}, K ${stats.pitching_k ?? 'N/A'}, BB ${stats.pitching_bb ?? 'N/A'}\n`;
           if (logs) {
-            statsText += `  Recent: K ${formatRecentGames(logs, 'so')} | ER ${formatRecentGames(logs, 'er')} | IP ${formatRecentGames(logs, 'ip')}\n`;
+            statsText += `  Recent: K ${formatRecentGames(logs, 'p_k')} | ER ${formatRecentGames(logs, 'er')} | IP ${formatRecentGames(logs, 'ip')}\n`;
           }
         } else {
-          statsText += `  Season: ${stats.games_played || 0} GP, AVG ${stats.avg || stats.batting_average || 'N/A'}, HR ${stats.hr || stats.home_runs || 'N/A'}, H ${stats.h || stats.hits || 'N/A'}, RBI ${stats.rbi || 'N/A'}, R ${stats.r || stats.runs || 'N/A'}, SB ${stats.sb || stats.stolen_bases || 'N/A'}, OPS ${stats.ops || 'N/A'}, AB ${stats.ab || stats.at_bats || 'N/A'}\n`;
+          statsText += `  Season: ${stats.batting_gp ?? 0} GP, AVG ${stats.batting_avg != null ? Number(stats.batting_avg).toFixed(3) : 'N/A'}, HR ${stats.batting_hr ?? 'N/A'}, H ${stats.batting_h ?? 'N/A'}, RBI ${stats.batting_rbi ?? 'N/A'}, R ${stats.batting_r ?? 'N/A'}, SB ${stats.batting_sb ?? 'N/A'}, OPS ${stats.batting_ops != null ? Number(stats.batting_ops).toFixed(3) : 'N/A'}, AB ${stats.batting_ab ?? 'N/A'}\n`;
           if (logs) {
-            statsText += `  Recent: H ${formatRecentGames(logs, 'h')} | HR ${formatRecentGames(logs, 'hr')} | RBI ${formatRecentGames(logs, 'rbi')} | TB ${formatRecentGames(logs, 'tb')} | R ${formatRecentGames(logs, 'r')}\n`;
+            statsText += `  Recent: H ${formatRecentGames(logs, 'hits')} | HR ${formatRecentGames(logs, 'hr')} | RBI ${formatRecentGames(logs, 'rbi')} | TB ${formatRecentGames(logs, 'total_bases')} | R ${formatRecentGames(logs, 'runs')}\n`;
           }
         }
 
@@ -951,36 +957,35 @@ function buildPropsTokenSlices(playerStats, propCandidates, injuries, marketSnap
       team: p.team,
       props: propsWithContext,
       seasonStats: stats ? {
-        gamesPlayed: stats.games_played,
-        avg: stats.avg || stats.batting_average,
-        hr: stats.hr || stats.home_runs,
-        hits: stats.h || stats.hits,
-        rbi: stats.rbi,
-        runs: stats.r || stats.runs,
-        sb: stats.sb || stats.stolen_bases,
-        ops: stats.ops,
+        gamesPlayed: stats.batting_gp ?? stats.pitching_gp ?? 0,
+        avg: stats.batting_avg,
+        hr: stats.batting_hr,
+        hits: stats.batting_h,
+        rbi: stats.batting_rbi,
+        runs: stats.batting_r,
+        sb: stats.batting_sb,
+        ops: stats.batting_ops,
         // Pitcher-specific
-        era: stats.era,
-        whip: stats.whip,
-        strikeouts: stats.so || stats.strikeouts,
-        ip: stats.ip || stats.innings_pitched
+        era: stats.pitching_era,
+        whip: stats.pitching_whip,
+        strikeouts: stats.pitching_k,
+        ip: stats.pitching_ip
       } : null,
-      // Recent form data
+      // Recent form data (rows use BDL's real flat field names)
       recentForm: logs ? {
         gamesAnalyzed: logs.gamesAnalyzed,
         last5Games: logs.games?.slice(0, 5).map(g => ({
-          h: g.h,
+          hits: g.hits,
           hr: g.hr,
           rbi: g.rbi,
-          r: g.r,
-          tb: g.tb,
-          sb: g.sb,
-          so: g.so,
+          runs: g.runs,
+          totalBases: g.total_bases,
+          sb: g.stolen_bases,
+          k: g.k,
+          pK: g.p_k,
           bb: g.bb,
           er: g.er,
-          ip: g.ip,
-          opponent: g.opponent,
-          isHome: g.isHome
+          ip: g.ip
         }))
       } : null
     };
@@ -1153,7 +1158,7 @@ export async function buildMlbPropsAgenticContext(game, playerProps, options = {
   console.log(`[MLB Props Context] Fetching BDL player season stats, game logs, and splits (venue: ${venueName})...`);
   const [playerSeasonStats, playerGameLogs, playerSplits] = await Promise.all([
     fetchPlayerSeasonStats(playerIdMap, season),
-    fetchPlayerGameLogs(playerIdMap),
+    fetchPlayerGameLogs(playerIdMap, season),
     fetchPlayerSplits(playerIdMap, season, venueName)
   ]);
 

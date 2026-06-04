@@ -44,6 +44,17 @@ private struct BillfoldDayRow: Identifiable {
     let net: Double     // units
 }
 
+/// One bucket of the conviction-calibration table: picks where Gary stated a
+/// lean in this range, vs how often those picks actually won.
+private struct BillfoldCalibrationBucket: Identifiable {
+    let id: String
+    let label: String     // "75+"
+    let claimed: Double   // mean stated lean in the bucket (0-1)
+    let n: Int            // settled W/L count
+    let wins: Int
+    var hitRate: Double { n > 0 ? Double(wins) / Double(n) : 0 }
+}
+
 /// Trading-journal stats derived from the same filtered results as the rest
 /// of the page: ROI on flat 1u stakes, last-10 result strip, best/worst day,
 /// max drawdown on the cumulative curve, and a day-by-day session ledger.
@@ -66,6 +77,7 @@ private struct BillfoldDerivedState {
     let streak: (label: String, value: String, positive: Bool)
     let trend: [BillfoldTrendPoint]
     let candles: [BillfoldCandlestick]
+    let sportSeries: [BillfoldSportSeries]
     let availableSports: Set<String>
     let sortedSports: [Sport]
     let sportPerformance: [BillfoldSportPoint]
@@ -73,6 +85,7 @@ private struct BillfoldDerivedState {
     let topd: (wins: Int, losses: Int, pnl: Double)
     let spreadSportsAvailable: [String]
     let journal: BillfoldJournal
+    let calibration: [BillfoldCalibrationBucket]
 }
 
 private struct BillfoldSnapshot {
@@ -82,6 +95,7 @@ private struct BillfoldSnapshot {
     let props: [PropResult]
     let resultLookup: [String: GameResult]
     let topPickRows: [BillfoldTopPickCandidate]
+    let confidenceIndex: [String: Double]
     let defaultDerivedState: BillfoldDerivedState
 }
 
@@ -133,6 +147,7 @@ final class BillfoldSnapshotStore {
 
             let resultLookup = BillfoldCompute.gameResultLookup(from: games)
             let topPickRows = BillfoldCompute.topPickCandidates(from: picks)
+            let confidenceIndex = BillfoldCompute.confidenceIndex(from: picks)
             let defaultDerivedState = BillfoldCompute.deriveState(
                 selectedTab: 0,
                 selectedSport: .all,
@@ -143,7 +158,8 @@ final class BillfoldSnapshotStore {
                 gameResults: games,
                 propResults: props,
                 resultLookup: resultLookup,
-                topPickRows: topPickRows
+                topPickRows: topPickRows,
+                confidenceIndex: confidenceIndex
             )
 
             return BillfoldSnapshot(
@@ -153,6 +169,7 @@ final class BillfoldSnapshotStore {
                 props: props,
                 resultLookup: resultLookup,
                 topPickRows: topPickRows,
+                confidenceIndex: confidenceIndex,
                 defaultDerivedState: defaultDerivedState
             )
         }
@@ -271,6 +288,82 @@ private enum BillfoldCompute {
         }
     }
 
+    /// Pick text+date -> Gary's stated confidence, from the raw daily-picks
+    /// rows the snapshot already downloads. Two key styles per pick: the
+    /// exact "date|pick" used by the Top-Pick grader, plus a normalized
+    /// odds-stripped variant for results whose pick_text drops the price.
+    static func confidenceIndex(from rows: [DailyPicksRow]) -> [String: Double] {
+        var index: [String: Double] = [:]
+        for row in rows {
+            for pick in SupabaseAPI.parsePicksRow(row.picks) {
+                guard let text = pick.pick, !text.isEmpty,
+                      let rawConf = pick.confidence, rawConf > 0 else { continue }
+                let conf = rawConf > 1 ? rawConf / 100 : rawConf
+                index["\(row.date)|\(text)"] = conf
+                index[normalizedPickKey(date: row.date, pick: text)] = conf
+            }
+        }
+        return index
+    }
+
+    static func normalizedPickKey(date: String, pick: String) -> String {
+        var t = pick.lowercased().trimmingCharacters(in: .whitespaces)
+        if let regex = try? NSRegularExpression(pattern: #"\s+[+-]\d{3,}$"#),
+           let m = regex.firstMatch(in: t, range: NSRange(t.startIndex..., in: t)),
+           let r = Range(m.range, in: t) {
+            t = String(t[t.startIndex..<r.lowerBound])
+        }
+        t = t.split(separator: " ").joined(separator: " ")
+        return "n|\(date)|\(t)"
+    }
+
+    /// Conviction calibration: bucket settled W/L results by Gary's stated
+    /// lean and compare claimed lean to actual hit rate. Game picks join to
+    /// confidence via the index; prop results carry their own confidence.
+    static func calibration(
+        selectedTab: Int,
+        games: [GameResult],
+        props: [PropResult],
+        confidenceIndex: [String: Double]
+    ) -> [BillfoldCalibrationBucket] {
+        var pairs: [(conf: Double, won: Bool)] = []
+        if selectedTab == 0 {
+            for g in games {
+                guard let r = g.result, r == "won" || r == "lost",
+                      let date = g.game_date, let text = g.pick_text else { continue }
+                let raw = confidenceIndex["\(date)|\(text)"]
+                    ?? confidenceIndex[normalizedPickKey(date: date, pick: text)]
+                guard let c = raw, c > 0 else { continue }
+                pairs.append((c > 1 ? c / 100 : c, r == "won"))
+            }
+        } else {
+            for p in props {
+                guard let r = p.result, r == "won" || r == "lost",
+                      let c = p.confidence, c > 0 else { continue }
+                pairs.append((c > 1 ? c / 100 : c, r == "won"))
+            }
+        }
+
+        let defs: [(label: String, range: Range<Double>)] = [
+            ("<65", 0.0..<0.65),
+            ("65\u{2013}69", 0.65..<0.70),
+            ("70\u{2013}74", 0.70..<0.75),
+            ("75+", 0.75..<1.01)
+        ]
+        return defs.compactMap { def in
+            let inBucket = pairs.filter { def.range.contains($0.conf) }
+            guard !inBucket.isEmpty else { return nil }
+            let claimed = inBucket.reduce(0.0) { $0 + $1.conf } / Double(inBucket.count)
+            return BillfoldCalibrationBucket(
+                id: def.label,
+                label: def.label,
+                claimed: claimed,
+                n: inBucket.count,
+                wins: inBucket.filter { $0.won }.count
+            )
+        }
+    }
+
     static func gameResultLookup(from rows: [GameResult]) -> [String: GameResult] {
         var lookup: [String: GameResult] = [:]
         lookup.reserveCapacity(rows.count)
@@ -289,7 +382,7 @@ private enum BillfoldCompute {
     ) -> [BillfoldSportPoint] {
         var points: [BillfoldSportPoint]
         if selectedTab == 0 {
-            points = groupedSportPerformance(from: gameRows.map { ($0.effectiveLeague, $0.result, $0.odds?.value) })
+            points = groupedSportPerformance(from: gameRows.map { ($0.effectiveLeague, $0.result, $0.effectiveOdds) })
         } else {
             points = groupedSportPerformance(from: propRows.map { ($0.effectiveLeague, $0.result, $0.odds?.value) })
         }
@@ -333,10 +426,10 @@ private enum BillfoldCompute {
             switch result.result {
             case "won":
                 wins += 1
-                pnl += units(for: "won", odds: result.odds?.value)
+                pnl += units(for: "won", odds: result.effectiveOdds)
             case "lost":
                 losses += 1
-                pnl += units(for: "lost", odds: result.odds?.value)
+                pnl += units(for: "lost", odds: result.effectiveOdds)
             default:
                 break
             }
@@ -377,10 +470,10 @@ private enum BillfoldCompute {
                 switch result.result {
                 case "won":
                     wins += 1
-                    net += units(for: "won", odds: result.odds?.value)
+                    net += units(for: "won", odds: result.effectiveOdds)
                 case "lost":
                     losses += 1
-                    net += units(for: "lost", odds: result.odds?.value)
+                    net += units(for: "lost", odds: result.effectiveOdds)
                 case "push":
                     pushes += 1
                 default:
@@ -497,6 +590,38 @@ private enum BillfoldCompute {
         }
     }
 
+    /// Per-sport cumulative equity lines: group the active window's rows by
+    /// league and run the daily trend per group. Only leagues with at least
+    /// one settled result draw a line.
+    static func sportSeries(
+        selectedTab: Int,
+        games: [GameResult],
+        props: [PropResult]
+    ) -> [BillfoldSportSeries] {
+        let items: [(league: String?, date: String?, units: Double, result: String?)]
+        if selectedTab == 0 {
+            items = games.map { ($0.effectiveLeague, $0.game_date, units(for: $0.result, odds: $0.effectiveOdds), $0.result) }
+        } else {
+            items = props.map { ($0.effectiveLeague, $0.game_date, units(for: $0.result, odds: $0.odds?.value), $0.result) }
+        }
+
+        let grouped = Dictionary(grouping: items) { $0.league ?? "OTHER" }
+        var series: [BillfoldSportSeries] = grouped.compactMap { league, rows in
+            let settled = rows.filter { $0.result == "won" || $0.result == "lost" || $0.result == "push" }.count
+            guard settled > 0 else { return nil }
+            let trend = dailyTrend(items: rows.map { ($0.date, $0.units) })
+            guard !trend.isEmpty else { return nil }
+            return BillfoldSportSeries(
+                league: league,
+                points: trend,
+                netUnits: trend.last?.cumulative ?? 0,
+                settled: settled
+            )
+        }
+        series.sort { abs($0.netUnits) > abs($1.netUnits) }
+        return series
+    }
+
     static func streakSummary(from items: [(String?, String?)]) -> (label: String, value: String, positive: Bool) {
         var dayOrder: [String] = []
         var dayResults: [String: [String]] = [:]
@@ -593,17 +718,13 @@ private enum BillfoldCompute {
     }
 
     static func sortedSports(selectedTab: Int, availableSports: Set<String>) -> [Sport] {
-        Sport.allCases
-            .filter { sport in !(selectedTab == 0 && sport.isPropsOnly) }
-            .sorted { a, b in
-                if a == .all { return true }
-                if b == .all { return false }
-                let aAvailable = availableSports.contains(a.rawValue)
-                let bAvailable = availableSports.contains(b.rawValue)
-                if aAvailable && !bAvailable { return true }
-                if !aAvailable && bAvailable { return false }
-                return (Sport.allCases.firstIndex(of: a) ?? 0) < (Sport.allCases.firstIndex(of: b) ?? 0)
-            }
+        // Only ALL + sports that actually have entries in the active window/tab.
+        // Ghost tabs for dormant sports read as inaccurate; the row stays honest.
+        Sport.allCases.filter { sport in
+            if sport == .all { return true }
+            if selectedTab == 0 && sport.isPropsOnly { return false }
+            return availableSports.contains(sport.rawValue)
+        }
     }
 
     private static let journalDayFormatter: DateFormatter = {
@@ -683,7 +804,8 @@ private enum BillfoldCompute {
         gameResults: [GameResult],
         propResults: [PropResult],
         resultLookup: [String: GameResult],
-        topPickRows: [BillfoldTopPickCandidate]
+        topPickRows: [BillfoldTopPickCandidate],
+        confidenceIndex: [String: Double]
     ) -> BillfoldDerivedState {
         let timeframeCutoff = BillfoldView.sinceDateValueStatic(for: timeframe)
         let sportTimeframeCutoff = BillfoldView.sinceDateValueStatic(for: sportTimeframe)
@@ -717,9 +839,9 @@ private enum BillfoldCompute {
         let streakItems: [(String?, String?)]
         let trendItems: [(String?, Double)]
         if selectedTab == 0 {
-            netUnits = filteredGames.reduce(0) { $0 + units(for: $1.result, odds: $1.odds?.value) }
+            netUnits = filteredGames.reduce(0) { $0 + units(for: $1.result, odds: $1.effectiveOdds) }
             streakItems = filteredGames.map { ($0.game_date, $0.result) }
-            trendItems = filteredGames.map { ($0.game_date, units(for: $0.result, odds: $0.odds?.value)) }
+            trendItems = filteredGames.map { ($0.game_date, units(for: $0.result, odds: $0.effectiveOdds)) }
         } else {
             netUnits = filteredProps.reduce(0) { $0 + units(for: $1.result, odds: $1.odds?.value) }
             streakItems = filteredProps.map { ($0.game_date, $0.result) }
@@ -732,6 +854,7 @@ private enum BillfoldCompute {
         let availableSports = availableSports(selectedTab: selectedTab, gameRows: timeframeGamesAll, propRows: timeframePropsAll)
         let spreadBuckets = spreadBuckets(for: spreadSport)
         let journalData = journal(streakItems: streakItems, trend: trend, record: record, netUnits: netUnits)
+        let calib = calibration(selectedTab: selectedTab, games: filteredGames, props: filteredProps, confidenceIndex: confidenceIndex)
 
         return BillfoldDerivedState(
             filteredGames: filteredGames,
@@ -741,6 +864,7 @@ private enum BillfoldCompute {
             streak: streakSummary(from: streakItems),
             trend: trend,
             candles: candles,
+            sportSeries: sportSeries(selectedTab: selectedTab, games: timeframeGamesAll, props: timeframePropsAll),
             availableSports: availableSports,
             sortedSports: sortedSports(selectedTab: selectedTab, availableSports: availableSports),
             sportPerformance: sportPerformance(
@@ -761,7 +885,8 @@ private enum BillfoldCompute {
                 topPickRows: topPickRows
             ),
             spreadSportsAvailable: spreadSportsAvailable(from: timeframeGamesAll),
-            journal: journalData
+            journal: journalData,
+            calibration: calib
         )
     }
 }
@@ -2366,8 +2491,31 @@ struct PremiumPicksView: View {
     // TODO(RevenueCat): drive this from Purchases.shared entitlement "premium".
     @AppStorage("isPremiumUnlocked") private var isPremium: Bool = false
 
-    @State private var bestBets: [GaryPick] = []
     @State private var loading = true
+    // Per-sport shelves: each sport shows TODAY's pick if it has one, else its last graded result.
+    @State private var gameShelves: [GameShelf] = []
+    @State private var propShelves: [PropShelf] = []
+    @State private var gameResultsMap: [String: String] = [:]   // "away@home" -> won/lost/push
+
+    // In-season / imminent sports shown as rows (placeholders when a sport has no pick yet).
+    // Any extra league present in the data is appended automatically.
+    private let canonicalSports = ["MLB", "NBA", "NHL", "WC"]
+
+    struct GameShelf: Identifiable {
+        let league: String
+        let picks: [GaryPick]   // empty => placeholder row
+        let settled: Bool       // true => last result (show W/L stamps)
+        var id: String { league }
+    }
+    struct PropShelf: Identifiable {
+        let league: String
+        let props: [PropPick]
+        var id: String { league }
+    }
+
+    private var hasContent: Bool {
+        gameShelves.contains { !$0.picks.isEmpty } || propShelves.contains { !$0.props.isEmpty }
+    }
 
     private var headerDate: String {
         let f = DateFormatter()
@@ -2382,119 +2530,15 @@ struct PremiumPicksView: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 0) {
-                    // header
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack(spacing: 8) {
-                            Text("PREMIUM")
-                                .font(GaryFonts.mono(10, bold: true))
-                                .tracking(2.4)
-                                .foregroundStyle(Color(hex: "#0b0a08"))
-                                .padding(.horizontal, 8).padding(.vertical, 3)
-                                .background(Capsule().fill(GaryColors.gold))
-                            Text(headerDate)
-                                .font(GaryFonts.mono(10))
-                                .tracking(1.6)
-                                .foregroundStyle(.white.opacity(0.42))
-                        }
-                        Text("Gary's Best Bets")
-                            .font(GaryFonts.display(40))
-                            .foregroundStyle(.white)
-                        Text(isPremium
-                             ? "Your \(bestBets.count) highest-conviction plays today."
-                             : "The \(bestBets.isEmpty ? "" : "\(bestBets.count) ")plays Gary is most confident in — unlocked for members.")
-                            .font(GaryFonts.text(14))
-                            .foregroundStyle(.white.opacity(0.5))
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 10)
-                    .padding(.bottom, 22)
+                    header
 
                     if loading {
                         HStack { Spacer(); ProgressView().tint(GaryColors.gold).scaleEffect(1.2); Spacer() }
                             .padding(.top, 80)
-                    } else if bestBets.isEmpty {
-                        VStack(spacing: 12) {
-                            Image(systemName: "lock.badge.clock").font(.system(size: 42)).foregroundStyle(.white.opacity(0.25))
-                            Text("Gary's best bets post a few hours before first pitch.")
-                                .font(GaryFonts.text(14)).foregroundStyle(.white.opacity(0.5))
-                                .multilineTextAlignment(.center)
-                        }
-                        .frame(maxWidth: .infinity).padding(.horizontal, 30).padding(.top, 60)
+                    } else if !hasContent {
+                        emptyState
                     } else {
-                        // Sport Shelves: a horizontal shelf per league, with the
-                        // Scoreboard pick cards. Conviction-ordered within and
-                        // across shelves. Locked (non-members): blurred + lock.
-                        let shelves: [(league: String, picks: [GaryPick])] = {
-                            var order: [String] = []
-                            var groups: [String: [GaryPick]] = [:]
-                            for p in bestBets {
-                                let lg = (p.league ?? "OTHER").uppercased()
-                                if groups[lg] == nil { order.append(lg) }
-                                groups[lg, default: []].append(p)
-                            }
-                            return order.map { ($0, groups[$0] ?? []) }
-                        }()
-
-                        VStack(alignment: .leading, spacing: 22) {
-                            ForEach(shelves, id: \.league) { shelf in
-                                VStack(alignment: .leading, spacing: 10) {
-                                    HStack(spacing: 6) {
-                                        Image(systemName: Sport.from(league: shelf.league).icon)
-                                            .font(.system(size: 12, weight: .semibold))
-                                            .foregroundStyle(Sport.from(league: shelf.league).accentColor)
-                                        Text(shelf.league)
-                                            .font(GaryFonts.mono(12, bold: true))
-                                            .tracking(1.6)
-                                            .foregroundStyle(.white.opacity(0.85))
-                                        Text("\u{00B7} \(shelf.picks.count) play\(shelf.picks.count == 1 ? "" : "s")")
-                                            .font(GaryFonts.mono(11))
-                                            .foregroundStyle(.white.opacity(0.4))
-                                    }
-                                    .padding(.horizontal, 16)
-
-                                    ScrollView(.horizontal, showsIndicators: false) {
-                                        HStack(alignment: .top, spacing: 10) {
-                                            ForEach(shelf.picks, id: \.id) { pick in
-                                                ZStack {
-                                                    if isPremium {
-                                                        FlippableScoreboardCard(pick: pick, showSportBadge: false)
-                                                    } else {
-                                                        ScoreboardPickCard(pick: pick, showSportBadge: false)
-                                                            .blur(radius: 4.5)
-                                                            .opacity(0.7)
-                                                            .allowsHitTesting(false)
-                                                    }
-                                                    if !isPremium {
-                                                        VStack(spacing: 5) {
-                                                            Image(systemName: "lock.fill").font(.system(size: 18, weight: .bold)).foregroundStyle(GaryColors.gold)
-                                                            Text(pick.id == bestBets.first?.id ? "★ LOCK OF THE DAY" : "MEMBERS ONLY")
-                                                                .font(GaryFonts.mono(9, bold: true)).tracking(1.6).foregroundStyle(GaryColors.gold)
-                                                        }
-                                                    }
-                                                }
-                                                .frame(width: 308)
-                                            }
-                                        }
-                                        .padding(.horizontal, 16)
-                                    }
-                                }
-                            }
-                        }
-
-                        if !isPremium {
-                            PaywallPanel { withAnimation(.easeInOut(duration: 0.3)) { isPremium = true } }
-                                .padding(.horizontal, 16)
-                                .padding(.top, 18)
-                        } else {
-                            Button { withAnimation { isPremium = false } } label: {
-                                Text("✓ Premium active · tap to reset preview")
-                                    .font(GaryFonts.mono(10))
-                                    .tracking(1)
-                                    .foregroundStyle(.white.opacity(0.3))
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.top, 20)
-                        }
+                        content
                     }
                 }
                 .padding(.bottom, 120)
@@ -2503,16 +2547,290 @@ struct PremiumPicksView: View {
         .task { await load() }
     }
 
-    private func load() async {
-        let date = SupabaseAPI.todayEST()
-        let picks = (try? await SupabaseAPI.fetchAllPicks(date: date)) ?? []
-        let sorted = picks.sorted { a, b in
+    // MARK: - Header / states
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Text("PREMIUM")
+                    .font(GaryFonts.mono(10, bold: true))
+                    .tracking(2.4)
+                    .foregroundStyle(Color(hex: "#0b0a08"))
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .background(Capsule().fill(GaryColors.gold))
+                Text(headerDate)
+                    .font(GaryFonts.mono(10))
+                    .tracking(1.6)
+                    .foregroundStyle(.white.opacity(0.42))
+            }
+            Text("Gary's Best Bets")
+                .font(GaryFonts.display(40))
+                .foregroundStyle(.white)
+            Text(isPremium
+                 ? "Gary's top game picks & props across every sport."
+                 : "Gary's most confident plays across every sport — unlocked for members.")
+                .font(GaryFonts.text(14))
+                .foregroundStyle(.white.opacity(0.5))
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 10)
+        .padding(.bottom, 22)
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "lock.badge.clock").font(.system(size: 42)).foregroundStyle(.white.opacity(0.25))
+            Text("Gary's best bets post a few hours before first pitch.")
+                .font(GaryFonts.text(14)).foregroundStyle(.white.opacity(0.5))
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity).padding(.horizontal, 30).padding(.top, 60)
+    }
+
+    // MARK: - Content
+
+    private var content: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            ForEach(gameShelves) { shelf in
+                gameShelfView(shelf)
+            }
+
+            if propShelves.contains(where: { !$0.props.isEmpty }) {
+                sectionDivider("PREMIUM PROPS")
+                ForEach(propShelves.filter { !$0.props.isEmpty }) { shelf in
+                    propShelfView(shelf)
+                }
+            }
+
+            if !isPremium {
+                PaywallPanel { withAnimation(.easeInOut(duration: 0.3)) { isPremium = true } }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 6)
+            } else {
+                Button { withAnimation { isPremium = false } } label: {
+                    Text("✓ Premium active · tap to reset preview")
+                        .font(GaryFonts.mono(10)).tracking(1).foregroundStyle(.white.opacity(0.3))
+                }
+                .frame(maxWidth: .infinity).padding(.top, 12)
+            }
+        }
+    }
+
+    private func sectionDivider(_ title: String) -> some View {
+        HStack(spacing: 10) {
+            Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1)
+            Text(title).font(GaryFonts.mono(11, bold: true)).tracking(2)
+                .foregroundStyle(.white.opacity(0.55)).fixedSize()
+            Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 6)
+    }
+
+    private func shelfHeader(_ league: String, status: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: Sport.from(league: league).icon)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Sport.from(league: league).accentColor)
+            Text(league)
+                .font(GaryFonts.mono(12, bold: true)).tracking(1.6)
+                .foregroundStyle(.white.opacity(0.85))
+            Text(status)
+                .font(GaryFonts.mono(11)).foregroundStyle(.white.opacity(0.4))
+        }
+        .padding(.horizontal, 16)
+    }
+
+    private func gameShelfView(_ shelf: GameShelf) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            shelfHeader(shelf.league,
+                        status: shelf.picks.isEmpty
+                            ? "·  —"
+                            : (shelf.settled ? "·  LAST RESULT" : "·  \(shelf.picks.count) play\(shelf.picks.count == 1 ? "" : "s")"))
+            if shelf.picks.isEmpty {
+                placeholderRow(for: shelf.league)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .top, spacing: 10) {
+                        ForEach(shelf.picks, id: \.id) { pick in
+                            ZStack {
+                                if isPremium {
+                                    FlippableScoreboardCard(pick: pick,
+                                                            gameResult: shelf.settled ? gamePickResult(pick) : nil,
+                                                            showSportBadge: false)
+                                } else {
+                                    ScoreboardPickCard(pick: pick, showSportBadge: false)
+                                        .blur(radius: 4.5).opacity(0.7).allowsHitTesting(false)
+                                    lockBadge
+                                }
+                            }
+                            .frame(width: 308)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                }
+            }
+        }
+    }
+
+    private func propShelfView(_ shelf: PropShelf) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            shelfHeader(shelf.league, status: "·  \(shelf.props.count) prop\(shelf.props.count == 1 ? "" : "s")")
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: 10) {
+                    ForEach(shelf.props) { prop in
+                        ZStack {
+                            if isPremium {
+                                FlippablePropCard(prop: prop, showSportBadge: false)
+                            } else {
+                                CompactPropRow(prop: prop, showSportBadge: false)
+                                    .blur(radius: 4.5).opacity(0.7).allowsHitTesting(false)
+                                lockBadge
+                            }
+                        }
+                        .frame(width: 308)
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+        }
+    }
+
+    private var lockBadge: some View {
+        VStack(spacing: 5) {
+            Image(systemName: "lock.fill").font(.system(size: 18, weight: .bold)).foregroundStyle(GaryColors.gold)
+            Text("MEMBERS ONLY")
+                .font(GaryFonts.mono(9, bold: true)).tracking(1.6).foregroundStyle(GaryColors.gold)
+        }
+    }
+
+    private func placeholderRow(for league: String) -> some View {
+        let msg: String = (league == "WC")
+            ? "World Cup kicks off June 11 — picks drop with the slate."
+            : "No \(league) pick yet — next slate posts ~90 min before tip."
+        return Text(msg)
+            .font(GaryFonts.text(13))
+            .foregroundStyle(.white.opacity(0.4))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16).padding(.vertical, 18)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.white.opacity(0.03))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .strokeBorder(Color.white.opacity(0.1), style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
+                    )
+            )
+            .padding(.horizontal, 16)
+    }
+
+    // MARK: - Data
+
+    private func sortedBest(_ picks: [GaryPick]) -> [GaryPick] {
+        picks.sorted { a, b in
             let at = a.is_top_pick ?? false, bt = b.is_top_pick ?? false
             if at != bt { return at }
             return (a.confidence ?? 0) > (b.confidence ?? 0)
         }
+    }
+
+    /// W/L for a settled (last-result) game pick, matched by normalized teams.
+    private func gamePickResult(_ pick: GaryPick) -> String? {
+        let away = gpTeamKey(pick.awayTeam), home = gpTeamKey(pick.homeTeam)
+        guard !away.isEmpty, !home.isEmpty else { return nil }
+        return gameResultsMap["\(away)@\(home)"]
+    }
+    private func gpTeamKey(_ value: String?) -> String {
+        (value ?? "").lowercased().components(separatedBy: CharacterSet.alphanumerics.inverted).joined()
+    }
+    private func gpKey(from matchup: String?) -> String? {
+        guard let matchup else { return nil }
+        for sep in [" @ ", " vs ", " v "] {
+            let parts = matchup.components(separatedBy: sep)
+            if parts.count == 2 {
+                let a = gpTeamKey(parts[0]), h = gpTeamKey(parts[1])
+                if !a.isEmpty && !h.isEmpty { return "\(a)@\(h)" }
+            }
+        }
+        return nil
+    }
+
+    private func leagueKey(_ p: GaryPick) -> String { (p.league ?? "OTHER").uppercased() }
+    private func propLeagueKey(_ p: PropPick) -> String {
+        (p.effectiveLeague ?? p.sport ?? p.league ?? "OTHER").uppercased()
+    }
+
+    /// Premium props: the single highest-confidence prop per game, capped at 4 per sport.
+    private func selectPremiumProps(_ props: [PropPick]) -> [PropPick] {
+        var bestByGame: [String: PropPick] = [:]
+        for p in props {
+            let key = p.matchup ?? p.commence_time ?? p.id
+            if let cur = bestByGame[key] {
+                if (p.confidence ?? 0) > (cur.confidence ?? 0) { bestByGame[key] = p }
+            } else {
+                bestByGame[key] = p
+            }
+        }
+        return bestByGame.values
+            .sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }
+            .prefix(4)
+            .map { $0 }
+    }
+
+    private func load() async {
+        let today = SupabaseAPI.todayEST()
+        let yesterday = SupabaseAPI.yesterdayEST()
+
+        async let todayGameF = SupabaseAPI.fetchAllPicks(date: today)
+        async let yGameF = SupabaseAPI.fetchDailyPicks(date: yesterday)
+        async let resultsF = SupabaseAPI.fetchAllGameResults(since: yesterday)
+        async let todayPropsF = SupabaseAPI.fetchPropPicks(date: today)
+
+        let todayGame = (try? await todayGameF) ?? []
+        let yGame = (try? await yGameF) ?? []
+        let results = (try? await resultsF) ?? []
+        let todayProps = (try? await todayPropsF) ?? []
+
+        // Yesterday's result map for settled (last-result) shelves.
+        var rMap: [String: String] = [:]
+        for r in results.filter({ $0.game_date == yesterday }) {
+            guard let k = gpKey(from: r.matchup), let outcome = r.result else { continue }
+            rMap[k] = outcome.lowercased()
+        }
+
+        let todayByLeague = Dictionary(grouping: todayGame, by: { leagueKey($0) })
+        let yByLeague = Dictionary(grouping: yGame, by: { leagueKey($0) })
+
+        // Sport order: canonical sports first, then any extra league that has data.
+        var order = canonicalSports
+        for lg in (Array(todayByLeague.keys) + Array(yByLeague.keys)) where !order.contains(lg) {
+            order.append(lg)
+        }
+
+        var gShelves: [GameShelf] = []
+        for lg in order {
+            if let tp = todayByLeague[lg], !tp.isEmpty {
+                gShelves.append(GameShelf(league: lg, picks: Array(sortedBest(tp).prefix(3)), settled: false))
+            } else if let yp = yByLeague[lg], !yp.isEmpty {
+                gShelves.append(GameShelf(league: lg, picks: Array(sortedBest(yp).prefix(3)), settled: true))
+            } else {
+                gShelves.append(GameShelf(league: lg, picks: [], settled: false))
+            }
+        }
+
+        // Premium props from today's slate: best prop per game, capped at 4 per sport.
+        let propsByLeague = Dictionary(grouping: todayProps, by: { propLeagueKey($0) })
+        var pShelves: [PropShelf] = []
+        for lg in order {
+            if let ps = propsByLeague[lg], !ps.isEmpty {
+                pShelves.append(PropShelf(league: lg, props: selectPremiumProps(ps)))
+            }
+        }
+
         await MainActor.run {
-            bestBets = Array(sorted.prefix(4))
+            gameResultsMap = rMap
+            gameShelves = gShelves
+            propShelves = pShelves
             loading = false
         }
     }
@@ -4433,6 +4751,8 @@ struct BillfoldView: View {
     @State private var chartZoomAnchor: CGFloat = 1.0
     @State private var cachedCandles: [BillfoldCandlestick] = []
     @State private var cachedJournal: BillfoldJournal = .empty
+    @State private var cachedCalibration: [BillfoldCalibrationBucket] = []
+    @State private var pickConfidenceIndex: [String: Double] = [:]
 
     // ALL expensive derived data cached here — updated via recomputeCache()
     @State private var cachedFilteredGames: [GameResult] = []
@@ -4441,17 +4761,18 @@ struct BillfoldView: View {
     @State private var cachedNetUnits: Double = 0
     @State private var cachedStreak: (label: String, value: String, positive: Bool) = ("Streak", "--", true)
     @State private var cachedTrend: [BillfoldTrendPoint] = []
+    @State private var cachedSportSeries: [BillfoldSportSeries] = []
     @State private var cachedSportPerf: [BillfoldSportPoint] = []
     @State private var cachedSpreadPerf: [(bucket: String, wins: Int, losses: Int, pushes: Int, net: Double)] = []
     @State private var cachedTopd: (wins: Int, losses: Int, pnl: Double) = (0, 0, 0)
     @State private var cachedAvailableSports: Set<String> = []
-    @State private var cachedSortedSports: [Sport] = Sport.allCases
+    @State private var cachedSortedSports: [Sport] = [.all]
     @State private var cachedSpreadSportsAvailable: [String] = ["NBA"]
 
     private let timeframes = ["7d", "30d", "90d", "ytd", "all"]
 
-    private var positiveColor: Color { Color(hex: "#1E7A4C") }   // emerald ink
-    private var negativeColor: Color { Color(hex: "#A33327") }   // crimson ink
+    private var positiveColor: Color { Color(hex: "#22C55E") }
+    private var negativeColor: Color { Color(hex: "#EF4444") }
 
     private var validPropResults: [PropResult] {
         propResults.filter(isLegitPropResult)
@@ -4524,6 +4845,7 @@ struct BillfoldView: View {
     private var streakSummary: (label: String, value: String, positive: Bool) { cachedStreak }
     private var trendPoints: [BillfoldTrendPoint] { cachedTrend }
     private var journal: BillfoldJournal { cachedJournal }
+    private var calibration: [BillfoldCalibrationBucket] { cachedCalibration }
     private var sortedSportsForBillfold: [Sport] { cachedSortedSports }
     private var availableSports: Set<String> { cachedAvailableSports }
 
@@ -4592,7 +4914,7 @@ struct BillfoldView: View {
             if selectedTab == 0 {
                 let subset = gameResults.filter { $0.effectiveLeague == sport }
                 guard !subset.isEmpty else { return nil }
-                let net = subset.reduce(0) { $0 + units(for: $1.result, odds: $1.odds?.value) }
+                let net = subset.reduce(0) { $0 + units(for: $1.result, odds: $1.effectiveOdds) }
                 return (sport, net)
             } else {
                 let subset = validPropResults.filter { $0.effectiveLeague == sport }
@@ -4608,41 +4930,35 @@ struct BillfoldView: View {
 
     // MARK: - Body
 
-    // Design tokens — "Passbook": leather ground, cream paper statements, ink text.
-    // Deliberately NOT the app's gold-on-black terminal language — this tab is
-    // a private-banking ledger: dark warm leather, printed paper, brass details.
-    private var leather: Color { Color(hex: "#191009") }
-    private var leatherEdge: Color { Color(hex: "#0D0703") }
-    private var paper: Color { Color(hex: "#F4ECDC") }
-    private var paperShade: Color { Color(hex: "#EADFC8") }
-    private var ink: Color { Color(hex: "#241A10") }
-    private var brass: Color { Color(hex: "#A98B4F") }
-    private var emerald: Color { Color(hex: "#1E7A4C") }
-    private var crimson: Color { Color(hex: "#A33327") }
-    private var cardStroke: Color { Color(hex: "#241A10").opacity(0.14) } // printed hairline rules
+    // Design tokens — house dark/gold language matching Winners + the
+    // Scoreboard cards. (Passbook leather/paper experiment reverted June 3
+    // at the user's request; token NAMES kept transitional to avoid a
+    // 100-site rename — `paper` = primary light text, `ink` = card text,
+    // `brass` = gold accent. Rename lands with the next structural pass.)
+    private var leather: Color { Color(hex: "#0A0908") }
+    private var paper: Color { Color.white }
+    private var ink: Color { Color.white }
+    private var brass: Color { GaryColors.gold }
+    private var emerald: Color { Color(hex: "#22C55E") }
+    private var crimson: Color { Color(hex: "#EF4444") }
+    private var cardStroke: Color { Color.white.opacity(0.08) }
     private var pageBg: Color { leather }
-    private let cr: CGFloat = 8
+    private let cr: CGFloat = 14
 
-    /// Leather ground — warm pool of light up top, darkened edges
+    /// Page ground — same liquid-glass backdrop the rest of the app uses
     private var leatherBackground: some View {
-        ZStack {
-            leather
-            RadialGradient(
-                colors: [Color(hex: "#26160A").opacity(0.9), leatherEdge],
-                center: .init(x: 0.5, y: 0.18),
-                startRadius: 40,
-                endRadius: 560
-            )
-            .opacity(0.85)
-        }
+        LiquidGlassBackground(grainDensity: 0)
     }
 
-    /// Paper card — cream statement stock resting on the leather
+    /// Card surface — same recipe as the Scoreboard pick cards
     private func paperCard(cornerRadius: CGFloat? = nil) -> some View {
         let r = cornerRadius ?? cr
         return RoundedRectangle(cornerRadius: r, style: .continuous)
-            .fill(LinearGradient(colors: [paper, paperShade], startPoint: .top, endPoint: .bottom))
-            .shadow(color: .black.opacity(0.4), radius: 5, y: 3)
+            .fill(Color.white.opacity(0.055))
+            .overlay(
+                RoundedRectangle(cornerRadius: r, style: .continuous)
+                    .stroke(Color.white.opacity(0.10), lineWidth: 1)
+            )
     }
 
     var body: some View {
@@ -4665,7 +4981,7 @@ struct BillfoldView: View {
                     Spacer(minLength: 0)
                 } else {
                     ScrollView(showsIndicators: false) {
-                        VStack(spacing: 12) {
+                        VStack(spacing: 26) {
                             balanceBlock
                             performanceChart
                             recentCarousel
@@ -4706,6 +5022,7 @@ struct BillfoldView: View {
         let propResultsSnapshot = propResults
         let gameLookupSnapshot = gameResultLookup
         let topPickSnapshot = topPickCandidates
+        let confidenceIndexSnapshot = pickConfidenceIndex
 
         DispatchQueue.global(qos: .userInitiated).async {
             let derived = BillfoldCompute.deriveState(
@@ -4718,7 +5035,8 @@ struct BillfoldView: View {
                 gameResults: gameResultsSnapshot,
                 propResults: propResultsSnapshot,
                 resultLookup: gameLookupSnapshot,
-                topPickRows: topPickSnapshot
+                topPickRows: topPickSnapshot,
+                confidenceIndex: confidenceIndexSnapshot
             )
 
             DispatchQueue.main.async {
@@ -4730,13 +5048,19 @@ struct BillfoldView: View {
                 cachedStreak = derived.streak
                 cachedTrend = derived.trend
                 cachedCandles = derived.candles
+                cachedSportSeries = derived.sportSeries
                 cachedAvailableSports = derived.availableSports
                 cachedSortedSports = derived.sortedSports
+                if selectedSport != .all, !derived.availableSports.isEmpty,
+                   !derived.availableSports.contains(selectedSport.rawValue) {
+                    selectedSport = .all   // selection no longer exists in this window
+                }
                 cachedSportPerf = derived.sportPerformance
                 cachedSpreadPerf = derived.spreadPerformance
                 cachedTopd = derived.topd
                 cachedSpreadSportsAvailable = derived.spreadSportsAvailable
                 cachedJournal = derived.journal
+                cachedCalibration = derived.calibration
                 loading = false
             }
         }
@@ -4759,6 +5083,7 @@ struct BillfoldView: View {
         cachedStreak = derived.streak
         cachedTrend = derived.trend
         cachedCandles = derived.candles
+        cachedSportSeries = derived.sportSeries
         cachedAvailableSports = derived.availableSports
         cachedSortedSports = derived.sortedSports
         cachedSportPerf = derived.sportPerformance
@@ -4766,6 +5091,7 @@ struct BillfoldView: View {
         cachedTopd = derived.topd
         cachedSpreadSportsAvailable = derived.spreadSportsAvailable
         cachedJournal = derived.journal
+        cachedCalibration = derived.calibration
         loading = false
     }
 
@@ -4774,6 +5100,7 @@ struct BillfoldView: View {
         propResults = snapshot.props
         gameResultLookup = snapshot.resultLookup
         topPickCandidates = snapshot.topPickRows
+        pickConfidenceIndex = snapshot.confidenceIndex
         lastRefresh = snapshot.refreshedAt
 
         if usesDefaultSnapshotControls {
@@ -4789,12 +5116,10 @@ struct BillfoldView: View {
         VStack(spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text("Billfold")
-                    .font(.system(size: 27, weight: .semibold, design: .serif))
-                    .italic()
+                    .font(GaryFonts.display(30))
                     .foregroundStyle(paper)
                 Text(statementDateLabel)
-                    .font(.system(size: 11, weight: .medium, design: .serif))
-                    .italic()
+                    .font(GaryFonts.mono(10))
                     .foregroundStyle(brass.opacity(0.9))
                 Spacer()
                 Button {
@@ -4836,7 +5161,6 @@ struct BillfoldView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 14) {
                     ForEach(sortedSportsForBillfold, id: \.self) { sport in
-                        let isAvailable = sport == .all || availableSports.contains(sport.rawValue)
                         let isSelected = selectedSport == sport
 
                         Button {
@@ -4844,18 +5168,13 @@ struct BillfoldView: View {
                         } label: {
                             VStack(spacing: 4) {
                                 Text(sport.rawValue)
-                                    .font(.system(size: 12, weight: isSelected ? .bold : .medium, design: .serif))
-                                    .foregroundStyle(
-                                        isSelected ? paper
-                                        : isAvailable ? paper.opacity(0.55)
-                                        : paper.opacity(0.18)
-                                    )
+                                    .font(.system(size: 12, weight: isSelected ? .bold : .medium, design: .default))
+                                    .foregroundStyle(isSelected ? paper : paper.opacity(0.55))
                                 Rectangle()
                                     .fill(isSelected ? brass : .clear)
                                     .frame(height: 1.5)
                             }
                         }
-                        .disabled(!isAvailable)
                     }
                 }
             }
@@ -4898,7 +5217,7 @@ struct BillfoldView: View {
     private func passbookChip(_ label: String) -> some View {
         HStack(spacing: 3) {
             Text(label)
-                .font(.system(size: 11, weight: .semibold, design: .serif))
+                .font(.system(size: 11, weight: .semibold, design: .default))
             Image(systemName: "chevron.down")
                 .font(.system(size: 7, weight: .bold))
         }
@@ -4932,7 +5251,7 @@ struct BillfoldView: View {
                 .foregroundStyle(brass.opacity(0.85))
 
             Text(signedDollars(netDollars))
-                .font(.system(size: 46, weight: .medium, design: .serif))
+                .font(.system(size: 46, weight: .medium, design: .default))
                 .foregroundStyle(paper)
                 .minimumScaleFactor(0.5)
                 .lineLimit(1)
@@ -4942,30 +5261,35 @@ struct BillfoldView: View {
 
             HStack(spacing: 8) {
                 Text(String(format: "ROI %+.1f%%", journal.roiPct))
-                    .font(.system(size: 11, weight: .bold, design: .serif))
+                    .font(.system(size: 11, weight: .bold, design: .default))
                     .foregroundStyle(paper.opacity(0.95))
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
                     .background(Capsule().fill(journal.roiPct >= 0 ? emerald : crimson))
 
                 Text("\(record.wins)\u{2013}\(record.losses)\u{2013}\(record.pushes)")
-                    .font(.system(size: 13, weight: .semibold, design: .serif))
+                    .font(.system(size: 13, weight: .semibold, design: .default))
                     .foregroundStyle(paper.opacity(0.85))
 
                 Text("\u{00B7}")
                     .foregroundStyle(brass.opacity(0.5))
 
+                Text(String(format: "%+.1fu", netUnits))
+                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(paper.opacity(0.75))
+
+                Text("\u{00B7}")
+                    .foregroundStyle(brass.opacity(0.5))
+
                 Text(String(format: "%.0f%% win", winRate))
-                    .font(.system(size: 12, weight: .medium, design: .serif))
-                    .italic()
+                    .font(.system(size: 12, weight: .medium, design: .default))
                     .foregroundStyle(brass)
 
                 Text("\u{00B7}")
                     .foregroundStyle(brass.opacity(0.5))
 
                 Text(timeframeLabel)
-                    .font(.system(size: 12, weight: .medium, design: .serif))
-                    .italic()
+                    .font(.system(size: 12, weight: .medium, design: .default))
                     .foregroundStyle(brass)
             }
 
@@ -5069,16 +5393,32 @@ struct BillfoldView: View {
         return (ref?.close ?? 0) >= 0 ? positiveColor : negativeColor
     }
 
-    private let candleGreen = Color(hex: "#1E7A4C")   // emerald ink
-    private let candleRed = Color(hex: "#A33327")     // crimson ink
+    private let candleGreen = Color(hex: "#00D26A")
+    private let candleRed = Color(hex: "#F14A51")
 
     private let chartTimeLabels = ["1W", "1M", "3M", "YTD", "ALL"]
     private let chartTimeValues = ["7d", "30d", "90d", "ytd", "all"]
 
     // MARK: - Equity Curve (unified chart card: line ⟷ candles)
 
-    private enum ChartMode: String, CaseIterable { case line = "LINE", candles = "CANDLES" }
+    private enum ChartMode: String, CaseIterable { case line = "LINE", candles = "CANDLES", sports = "SPORTS" }
     @State private var chartMode: ChartMode = .line
+
+    private var chartHeaderValue: String {
+        switch chartMode {
+        case .line: return chartDisplayValue
+        case .candles: return candleDisplayValue
+        case .sports: return signedDollars(sportSeries.reduce(0) { $0 + $1.netUnits } * 100)
+        }
+    }
+
+    private var chartHeaderColor: Color {
+        switch chartMode {
+        case .line: return chartLineColor
+        case .candles: return candleLineColor
+        case .sports: return sportSeries.reduce(0) { $0 + $1.netUnits } >= 0 ? positiveColor : negativeColor
+        }
+    }
 
     private var performanceChart: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -5087,17 +5427,22 @@ struct BillfoldView: View {
             Group {
                 if chartMode == .line {
                     lineChartBody
-                } else {
+                } else if chartMode == .candles {
                     candleChartBody
+                } else {
+                    sportsChartBody
                 }
             }
             .frame(height: 185)
             .padding(.horizontal, 10)
             .padding(.top, 6)
 
+            if chartMode == .sports {
+                sportsLegend
+            }
+
             chartTimeframeRow
         }
-        .background(paperCard(cornerRadius: 6))
         .padding(.horizontal, 16)
     }
 
@@ -5106,7 +5451,7 @@ struct BillfoldView: View {
     private var chartHeader: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text("EQUITY CURVE")
+                Text(chartMode == .sports ? "BY SPORT \u{00B7} NET" : "EQUITY CURVE")
                     .font(.system(size: 9, weight: .bold))
                     .tracking(1.6)
                     .foregroundStyle(ink.opacity(0.55))
@@ -5127,11 +5472,11 @@ struct BillfoldView: View {
                             Text(mode.rawValue)
                                 .font(.system(size: 8.5, weight: .bold))
                                 .tracking(0.6)
-                                .foregroundStyle(chartMode == mode ? paper : ink.opacity(0.5))
+                                .foregroundStyle(chartMode == mode ? Color.black : ink.opacity(0.5))
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
                                 .background(
-                                    Capsule().fill(chartMode == mode ? ink : Color.clear)
+                                    Capsule().fill(chartMode == mode ? brass : Color.clear)
                                 )
                                 .overlay(
                                     Capsule().stroke(ink.opacity(chartMode == mode ? 0 : 0.3), lineWidth: 1)
@@ -5144,12 +5489,12 @@ struct BillfoldView: View {
 
             // Scrub-aware value line
             HStack(spacing: 8) {
-                Text(chartMode == .line ? chartDisplayValue : candleDisplayValue)
+                Text(chartHeaderValue)
                     .font(.system(size: 22, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(chartMode == .line ? chartLineColor : candleLineColor)
+                    .foregroundStyle(chartHeaderColor)
                     .contentTransition(.numericText())
 
-                if scrubDate != nil {
+                if scrubDate != nil && chartMode != .sports {
                     Text(chartMode == .line ? chartDisplayDate : candleDisplayDate)
                         .font(.system(size: 11, weight: .medium, design: .monospaced))
                         .foregroundStyle(ink.opacity(0.5))
@@ -5166,8 +5511,7 @@ struct BillfoldView: View {
 
     private var chartEmptyState: some View {
         Text("No settled entries")
-            .font(.system(size: 11, weight: .medium, design: .serif))
-            .italic()
+            .font(GaryFonts.mono(10))
             .foregroundStyle(ink.opacity(0.4))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -5216,6 +5560,124 @@ struct BillfoldView: View {
         }
     }
 
+    // MARK: - By-Sport equity lines (one line per league, league accent color)
+
+    @State private var isolatedSportLine: String? = nil
+
+    private var sportSeries: [BillfoldSportSeries] { cachedSportSeries }
+
+    /// Manual legend isolation wins; otherwise the active sport tab highlights
+    /// its own line. Either only counts while that league is on the board.
+    private var effectiveIsolatedLine: String? {
+        if let iso = isolatedSportLine, sportSeries.contains(where: { $0.id == iso }) { return iso }
+        if selectedSport != .all, sportSeries.contains(where: { $0.id == selectedSport.rawValue }) {
+            return selectedSport.rawValue
+        }
+        return nil
+    }
+
+    /// Sport accent, lifted where the brand color is too dark for the near-black ground
+    private func sportLineColor(_ league: String) -> Color {
+        let sport = Sport.from(league: league)
+        if sport == .mlb || sport == .mlbHR { return Color(hex: "#4E9C44") }
+        if sport == .all { return brass }
+        return sport.accentColor
+    }
+
+    @ViewBuilder
+    private var sportsChartBody: some View {
+        if sportSeries.isEmpty {
+            chartEmptyState
+        } else {
+            Chart {
+                RuleMark(y: .value("Zero", 0))
+                    .foregroundStyle(ink.opacity(0.22))
+                    .lineStyle(StrokeStyle(lineWidth: 0.5, dash: [4, 3]))
+
+                ForEach(sportSeries) { s in
+                    let color = sportLineColor(s.league)
+                    let dimmed = effectiveIsolatedLine != nil && effectiveIsolatedLine != s.id
+                    ForEach(s.points) { point in
+                        LineMark(
+                            x: .value("Date", point.date),
+                            y: .value("Net", point.cumulative),
+                            series: .value("Sport", s.league)
+                        )
+                        .foregroundStyle(color.opacity(dimmed ? 0.22 : 1))
+                        .lineStyle(StrokeStyle(lineWidth: effectiveIsolatedLine == s.id ? 2.4 : 1.7))
+                        .interpolationMethod(.linear)
+                    }
+
+                    // Marker at every data point — classic multi-series read,
+                    // and single-day sports stay visible
+                    ForEach(s.points) { point in
+                        PointMark(
+                            x: .value("Date", point.date),
+                            y: .value("Net", point.cumulative)
+                        )
+                        .foregroundStyle(color.opacity(dimmed ? 0.22 : 1))
+                        .symbolSize(effectiveIsolatedLine == s.id ? 30 : 22)
+                    }
+                }
+            }
+            .chartXAxis {
+                AxisMarks(values: .automatic(desiredCount: 4)) { _ in
+                    AxisValueLabel(format: .dateTime.month(.abbreviated).day())
+                        .foregroundStyle(ink.opacity(0.45))
+                }
+            }
+            .chartYAxis {
+                AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
+                    AxisGridLine(stroke: StrokeStyle(lineWidth: 0.3))
+                        .foregroundStyle(ink.opacity(0.1))
+                    AxisValueLabel {
+                        if let v = value.as(Double.self) {
+                            Text(signedDollars(v * 100))
+                                .font(.system(size: 9))
+                                .foregroundStyle(ink.opacity(0.45))
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Tappable legend — one chip per sport; tap to isolate its line
+    private var sportsLegend: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 7) {
+                ForEach(sportSeries) { s in
+                    let color = sportLineColor(s.league)
+                    let isFocus = effectiveIsolatedLine == s.id
+                    Button {
+                        withAnimation(.easeOut(duration: 0.18)) {
+                            isolatedSportLine = isFocus ? nil : s.id
+                        }
+                    } label: {
+                        HStack(spacing: 5) {
+                            Capsule()
+                                .fill(color)
+                                .frame(width: 13, height: 3)
+                            Text(s.league)
+                                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                .foregroundStyle(paper.opacity(isFocus ? 1 : 0.75))
+                            Text(signedDollars(s.netUnits * 100))
+                                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                                .foregroundStyle(s.netUnits >= 0 ? emerald : crimson)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(isFocus ? color.opacity(0.14) : Color.white.opacity(0.045)))
+                        .overlay(Capsule().stroke(isFocus ? color.opacity(0.55) : Color.white.opacity(0.09), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 14)
+        }
+        .padding(.top, 8)
+    }
+
     private var chartTimeframeRow: some View {
         HStack(spacing: 0) {
             ForEach(Array(zip(chartTimeLabels, chartTimeValues)), id: \.1) { label, value in
@@ -5228,13 +5690,13 @@ struct BillfoldView: View {
                     }
                 } label: {
                     Text(label)
-                        .font(.system(size: 11, weight: timeframe == value ? .bold : .medium, design: .serif))
-                        .foregroundStyle(timeframe == value ? ink : ink.opacity(0.4))
+                        .font(.system(size: 11, weight: timeframe == value ? .bold : .medium))
+                        .foregroundStyle(timeframe == value ? brass : ink.opacity(0.4))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 5)
                         .background(
                             timeframe == value
-                                ? Capsule().fill(ink.opacity(0.08))
+                                ? Capsule().fill(brass.opacity(0.12))
                                 : Capsule().fill(Color.clear)
                         )
                 }
@@ -5430,7 +5892,7 @@ struct BillfoldView: View {
                     }
                     HStack(spacing: 4) {
                         Text(day.label)
-                            .font(.system(size: 12, weight: .bold, design: .serif))
+                            .font(.system(size: 12, weight: .bold, design: .default))
                             .foregroundStyle(ink.opacity(0.85))
                             .frame(maxWidth: .infinity, alignment: .leading)
                         Text("\(day.wins)-\(day.losses)\(day.pushes > 0 ? "-\(day.pushes)" : "")")
@@ -5448,7 +5910,6 @@ struct BillfoldView: View {
             }
         }
         .padding(.bottom, 8)
-        .background(paperCard(cornerRadius: 6))
         .padding(.horizontal, 16)
     }
 
@@ -5519,7 +5980,7 @@ struct BillfoldView: View {
                         }
                         HStack(spacing: 4) {
                             Text(point.sport)
-                                .font(.system(size: 13, weight: .bold, design: .serif))
+                                .font(.system(size: 13, weight: .bold, design: .default))
                                 .foregroundStyle(isHighlighted ? brass : ink.opacity(0.85))
                                 .frame(maxWidth: .infinity, alignment: .leading)
                             Text("\(point.settledCount)")
@@ -5542,7 +6003,69 @@ struct BillfoldView: View {
                 }
             }
             .padding(.bottom, 6)
-            .background(paperCard(cornerRadius: 6))
+
+            // CONVICTION CALIBRATION — Gary's stated lean vs how those picks
+            // actually hit. The honesty chart: gold tick = claimed, bar = real.
+            if !calibration.isEmpty {
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack {
+                        ledgerEyebrow("CONVICTION CALIBRATION")
+                        Spacer()
+                        Text("TICK = CLAIMED")
+                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                            .tracking(0.6)
+                            .foregroundStyle(brass.opacity(0.7))
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.top, 12)
+                    .padding(.bottom, 10)
+
+                    ForEach(Array(calibration.enumerated()), id: \.element.id) { index, bucket in
+                        if index > 0 {
+                            Rectangle().fill(cardStroke).frame(height: 0.5).padding(.horizontal, 12)
+                        }
+                        HStack(spacing: 10) {
+                            Text(bucket.label)
+                                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                                .foregroundStyle(ink.opacity(0.8))
+                                .frame(width: 52, alignment: .leading)
+
+                            GeometryReader { geo in
+                                ZStack(alignment: .leading) {
+                                    Capsule().fill(Color.white.opacity(0.08))
+                                    Capsule()
+                                        .fill(bucket.hitRate >= bucket.claimed ? emerald : crimson)
+                                        .frame(width: max(geo.size.width * min(bucket.hitRate, 1), 2))
+                                    Rectangle()
+                                        .fill(brass)
+                                        .frame(width: 2, height: 11)
+                                        .offset(x: geo.size.width * min(bucket.claimed, 1) - 1)
+                                }
+                            }
+                            .frame(height: 5)
+
+                            Text(String(format: "%.0f%%", bucket.hitRate * 100))
+                                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                                .foregroundStyle(bucket.hitRate >= bucket.claimed ? emerald : crimson)
+                                .frame(width: 42, alignment: .trailing)
+                            Text("n=\(bucket.n)")
+                                .font(.system(size: 10, design: .monospaced))
+                                .foregroundStyle(ink.opacity(0.4))
+                                .frame(width: 40, alignment: .trailing)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 9)
+                        .opacity(bucket.n < 5 ? 0.55 : 1)
+                    }
+
+                    Text("Stated lean (gold tick) vs actual hit rate \u{00B7} settled W/L only \u{00B7} faded = small sample")
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundStyle(ink.opacity(0.35))
+                        .padding(.horizontal, 12)
+                        .padding(.top, 8)
+                }
+                .padding(.bottom, 6)
+            }
 
             // TOP PICK + BY SPREAD — two-up terminal cards
             HStack(alignment: .top, spacing: 10) {
@@ -5565,7 +6088,7 @@ struct BillfoldView: View {
                     } else {
                         VStack(spacing: 2) {
                             Text("\(topd.wins)-\(topd.losses)")
-                                .font(.system(size: 17, weight: .semibold, design: .serif))
+                                .font(.system(size: 17, weight: .semibold, design: .default))
                                 .foregroundStyle(ink.opacity(0.9))
                             Text(signedDollars(topd.pnl * 100))
                                 .font(.system(size: 13, weight: .semibold, design: .monospaced))
@@ -5579,7 +6102,6 @@ struct BillfoldView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.bottom, 8)
-                .background(paperCard(cornerRadius: 6))
 
                 VStack(alignment: .leading, spacing: 0) {
                     HStack {
@@ -5593,8 +6115,7 @@ struct BillfoldView: View {
 
                     if spreadSizePerformance.isEmpty {
                         Text(selectedTab == 0 ? "No spread data" : "Picks only")
-                            .font(.system(size: 11, weight: .medium, design: .serif))
-                            .italic()
+                            .font(GaryFonts.mono(10))
                             .foregroundStyle(ink.opacity(0.4))
                             .frame(maxWidth: .infinity, minHeight: 36)
                     } else {
@@ -5604,7 +6125,7 @@ struct BillfoldView: View {
                             }
                             HStack(spacing: 4) {
                                 Text(item.bucket)
-                                    .font(.system(size: 12, weight: .bold, design: .serif))
+                                    .font(.system(size: 12, weight: .bold, design: .default))
                                     .foregroundStyle(ink.opacity(0.8))
                                     .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -5627,7 +6148,6 @@ struct BillfoldView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.bottom, 8)
-                .background(paperCard(cornerRadius: 6))
             }
         }
         .padding(.horizontal, 16)
@@ -5644,8 +6164,7 @@ struct BillfoldView: View {
                     .foregroundStyle(brass.opacity(0.85))
                 Spacer()
                 Text("\(selectedTab == 0 ? recentGameCards.count : recentPropCards.count)")
-                    .font(.system(size: 10, weight: .semibold, design: .serif))
-                    .italic()
+                    .font(.system(size: 10, weight: .semibold, design: .default))
                     .foregroundStyle(paper.opacity(0.5))
             }
             .padding(.horizontal, 20)
@@ -5756,17 +6275,8 @@ struct BillfoldView: View {
         let pickText = mascotName(fullPickText) + spreadSuffix
 
         let oddsStr: String = {
-            let fromField = Formatters.americanOdds(result.odds?.value)
-            if !fromField.isEmpty { return fromField }
-            if let pt = result.pick_text {
-                let pattern = #"([+-]\d{3,})$"#
-                if let regex = try? NSRegularExpression(pattern: pattern),
-                   let match = regex.firstMatch(in: pt, range: NSRange(pt.startIndex..., in: pt)),
-                   let range = Range(match.range(at: 1), in: pt) {
-                    return String(pt[range])
-                }
-            }
-            return "-110"
+            let fromField = Formatters.americanOdds(result.effectiveOdds)
+            return fromField.isEmpty ? "-110" : fromField
         }()
 
         return VStack(alignment: .leading, spacing: 0) {
@@ -5782,27 +6292,31 @@ struct BillfoldView: View {
                     .tracking(0.5)
                     .foregroundStyle(ink.opacity(0.6))
                 Text(Formatters.formatDate(result.game_date))
-                    .font(.system(size: 9.5, weight: .medium, design: .monospaced))
-                    .foregroundStyle(ink.opacity(0.4))
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundStyle(ink.opacity(0.6))
                 Spacer()
                 Text(oddsStr)
-                    .font(.system(size: 9.5, weight: .bold, design: .monospaced))
-                    .foregroundStyle(ink.opacity(0.55))
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundStyle(ink.opacity(0.65))
             }
 
             HStack(spacing: 6) {
                 Text(pickText)
-                    .font(.system(size: 12.5, weight: .bold, design: .serif))
+                    .font(.system(size: 12.5, weight: .bold, design: .default))
                     .foregroundStyle(ink)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 Spacer(minLength: 4)
                 Text(stampWord)
-                    .font(.system(size: 8.5, weight: .heavy, design: .serif))
+                    .font(.system(size: 8.5, weight: .heavy, design: .default))
                     .tracking(1.2)
                     .foregroundStyle(resultColor.opacity(0.9))
                     .padding(.horizontal, 4)
                     .padding(.vertical, 2)
+                    .background(
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(resultColor.opacity(0.14))
+                    )
                     .overlay(
                         RoundedRectangle(cornerRadius: 2)
                             .stroke(resultColor.opacity(0.75), lineWidth: 1.2)
@@ -5813,8 +6327,8 @@ struct BillfoldView: View {
 
             if let score = result.final_score, !score.isEmpty {
                 Text(score)
-                    .font(.system(size: 9.5, weight: .medium, design: .monospaced))
-                    .foregroundStyle(ink.opacity(0.5))
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundStyle(ink.opacity(0.6))
                     .lineLimit(1)
                     .padding(.top, 3)
             }
@@ -5849,27 +6363,31 @@ struct BillfoldView: View {
                     .tracking(0.5)
                     .foregroundStyle(ink.opacity(0.6))
                 Text(Formatters.formatDate(result.game_date))
-                    .font(.system(size: 9.5, weight: .medium, design: .monospaced))
-                    .foregroundStyle(ink.opacity(0.4))
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundStyle(ink.opacity(0.6))
                 Spacer()
                 Text(propOddsStr)
-                    .font(.system(size: 9.5, weight: .bold, design: .monospaced))
-                    .foregroundStyle(ink.opacity(0.55))
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundStyle(ink.opacity(0.65))
             }
 
             HStack(spacing: 6) {
                 Text(Formatters.propResultTitle(result))
-                    .font(.system(size: 11.5, weight: .bold, design: .serif))
+                    .font(.system(size: 11.5, weight: .bold, design: .default))
                     .foregroundStyle(ink)
                     .lineLimit(2)
                     .minimumScaleFactor(0.7)
                 Spacer(minLength: 4)
                 Text(stampWord)
-                    .font(.system(size: 8.5, weight: .heavy, design: .serif))
+                    .font(.system(size: 8.5, weight: .heavy, design: .default))
                     .tracking(1.2)
                     .foregroundStyle(resultColor.opacity(0.9))
                     .padding(.horizontal, 4)
                     .padding(.vertical, 2)
+                    .background(
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(resultColor.opacity(0.14))
+                    )
                     .overlay(
                         RoundedRectangle(cornerRadius: 2)
                             .stroke(resultColor.opacity(0.75), lineWidth: 1.2)
@@ -5886,8 +6404,7 @@ struct BillfoldView: View {
 
     private var emptyCarousel: some View {
         Text(selectedSport == .all ? "No entries yet" : "No \(selectedSport.rawValue) entries")
-            .font(.system(size: 14, weight: .medium, design: .serif))
-            .italic()
+            .font(.system(size: 14, weight: .medium, design: .default))
             .foregroundStyle(paper.opacity(0.4))
             .frame(maxWidth: .infinity, minHeight: 80)
     }
@@ -5898,8 +6415,7 @@ struct BillfoldView: View {
         VStack(spacing: 12) {
             ProgressView().tint(brass)
             Text("Opening the books\u{2026}")
-                .font(.system(size: 13, weight: .medium, design: .serif))
-                .italic()
+                .font(.system(size: 13, weight: .medium, design: .default))
                 .foregroundStyle(paper.opacity(0.55))
         }
         .frame(maxWidth: .infinity)
@@ -5912,13 +6428,13 @@ struct BillfoldView: View {
                 .font(.system(size: 20))
                 .foregroundStyle(paper.opacity(0.35))
             Text(error)
-                .font(.system(size: 12, weight: .medium, design: .serif))
+                .font(.system(size: 12, weight: .medium, design: .default))
                 .foregroundStyle(paper.opacity(0.55))
             Button {
                 Task { await loadData() }
             } label: {
                 Text("Retry")
-                    .font(.system(size: 12, weight: .bold, design: .serif))
+                    .font(.system(size: 12, weight: .bold, design: .default))
                     .foregroundStyle(leather)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 7)
@@ -6100,6 +6616,14 @@ private struct BillfoldCandlestick: Identifiable {
     let low: Double    // lowest intraday cumulative
     var id: TimeInterval { date.timeIntervalSince1970 }
     var isGreen: Bool { close >= open }
+}
+
+private struct BillfoldSportSeries: Identifiable {
+    let league: String
+    let points: [BillfoldTrendPoint]
+    let netUnits: Double
+    let settled: Int
+    var id: String { league }
 }
 
 private struct BillfoldSportPoint: Identifiable {
@@ -7398,6 +7922,7 @@ private struct PickCardHeightKey: PreferenceKey {
 // Chosen by the user (June 3 2026) over the serif CompactPickRow for Best Bets.
 struct ScoreboardPickCard: View {
     let pick: GaryPick
+    var gameResult: String? = nil
     var showSportBadge: Bool = true
 
     private var sport: Sport { Sport.from(league: pick.league) }
@@ -7432,6 +7957,52 @@ struct ScoreboardPickCard: View {
 
     private var confidence: Double { min(max(pick.confidence ?? 0, 0), 1) }
 
+    // W/L result stamp (shown for settled, e.g. yesterday's, picks). Mirrors CompactPickRow.
+    private var resolvedResult: String? {
+        guard let result = gameResult?.lowercased(), !result.isEmpty else { return nil }
+        return result
+    }
+    private var resultStampText: String {
+        switch resolvedResult {
+        case "won": return "W"
+        case "push": return "P"
+        case "lost": return "L"
+        default: return "L"
+        }
+    }
+    private var resultStampColor: Color {
+        switch resolvedResult {
+        case "won": return GaryColors.gold
+        case "push": return Color.yellow
+        case "lost": return Color(hex: "#6A6A70")
+        default: return Color(hex: "#6A6A70")
+        }
+    }
+    private var resultStampTextOpacity: Double {
+        switch resolvedResult {
+        case "lost": return 1.0
+        case "won": return 0.85
+        case "push": return 0.9
+        default: return 0.85
+        }
+    }
+    private var resultStampRingOpacity: Double {
+        switch resolvedResult {
+        case "lost": return 0.94
+        case "won": return 0.79
+        case "push": return 0.84
+        default: return 0.79
+        }
+    }
+    private var resultStampShadowOpacity: Double {
+        switch resolvedResult {
+        case "lost": return 0.34
+        case "won": return 0.25
+        case "push": return 0.28
+        default: return 0.25
+        }
+    }
+
     private func teamRow(name: String, isPicked: Bool) -> some View {
         HStack(spacing: 8) {
             RoundedRectangle(cornerRadius: 1)
@@ -7465,66 +8036,89 @@ struct ScoreboardPickCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Header: league + significance + time
-            HStack(spacing: 6) {
-                if showSportBadge {
-                    Text(sport.rawValue)
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+        ZStack {
+            VStack(alignment: .leading, spacing: 0) {
+                // Header: league + significance + time
+                HStack(spacing: 6) {
+                    if showSportBadge {
+                        Text(sport.rawValue)
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .tracking(1.2)
+                            .foregroundStyle(accent)
+                    }
+                    if let sig = pick.shortGameSignificance ?? pick.gameSignificance, !sig.isEmpty {
+                        Text(sig.uppercased())
+                            .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                            .tracking(0.8)
+                            .foregroundStyle(.white.opacity(0.35))
+                            .lineLimit(1)
+                    }
+                    Spacer()
+                    Text(Formatters.formatCommenceTime(pick.displayTime))
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.42))
+                }
+                .padding(.horizontal, 12)
+                .padding(.top, 11)
+                .padding(.bottom, 9)
+
+                teamRow(name: awayName, isPicked: !pickedHome)
+                teamRow(name: homeName, isPicked: pickedHome)
+
+                // Lean rail
+                HStack(spacing: 8) {
+                    Text("GARY'S LEAN")
+                        .font(.system(size: 8.5, weight: .bold, design: .monospaced))
                         .tracking(1.2)
+                        .foregroundStyle(.white.opacity(0.35))
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(Color.white.opacity(0.08))
+                            Capsule().fill(accent).frame(width: geo.size.width * confidence)
+                        }
+                    }
+                    .frame(height: 3)
+                    Text("\(Int(confidence * 100))%")
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
                         .foregroundStyle(accent)
                 }
-                if let sig = pick.shortGameSignificance ?? pick.gameSignificance, !sig.isEmpty {
-                    Text(sig.uppercased())
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                        .tracking(0.8)
-                        .foregroundStyle(.white.opacity(0.35))
-                        .lineLimit(1)
-                }
-                Spacer()
-                Text(Formatters.formatCommenceTime(pick.displayTime))
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.42))
+                .padding(.horizontal, 12)
+                .padding(.top, 10)
+                .padding(.bottom, 12)
             }
-            .padding(.horizontal, 12)
-            .padding(.top, 11)
-            .padding(.bottom, 9)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.white.opacity(0.04))
+                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.white.opacity(0.08), lineWidth: 1))
+            )
+            .opacity(gameResult != nil ? 0.72 : 1.0)
 
-            teamRow(name: awayName, isPicked: !pickedHome)
-            teamRow(name: homeName, isPicked: pickedHome)
-
-            // Lean rail
-            HStack(spacing: 8) {
-                Text("GARY'S LEAN")
-                    .font(.system(size: 8.5, weight: .bold, design: .monospaced))
-                    .tracking(1.2)
-                    .foregroundStyle(.white.opacity(0.35))
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(Color.white.opacity(0.08))
-                        Capsule().fill(accent).frame(width: geo.size.width * confidence)
-                    }
-                }
-                .frame(height: 3)
-                Text("\(Int(confidence * 100))%")
-                    .font(.system(size: 11, weight: .bold, design: .monospaced))
-                    .foregroundStyle(accent)
+            if resolvedResult != nil {
+                Text(resultStampText)
+                    .font(.system(size: 29, weight: .black, design: .default))
+                    .fontWidth(.compressed)
+                    .tracking(0.5)
+                    .foregroundStyle(resultStampColor.opacity(resultStampTextOpacity))
+                    .frame(width: 62, height: 62)
+                    .background(
+                        Circle()
+                            .fill(Color.black.opacity(0.64))
+                            .overlay(
+                                Circle()
+                                    .stroke(resultStampColor.opacity(resultStampRingOpacity), lineWidth: 1.8)
+                            )
+                    )
+                    .shadow(color: resultStampColor.opacity(resultStampShadowOpacity), radius: 6, y: 0)
+                    .rotationEffect(.degrees(-10))
             }
-            .padding(.horizontal, 12)
-            .padding(.top, 10)
-            .padding(.bottom, 12)
         }
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.white.opacity(0.04))
-                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.white.opacity(0.08), lineWidth: 1))
-        )
     }
 }
 
 /// Flip wrapper: ScoreboardPickCard front ⟷ PickCardBack (Gary's rationale).
 struct FlippableScoreboardCard: View {
     let pick: GaryPick
+    var gameResult: String? = nil
     var showSportBadge: Bool = true
 
     @State private var flipped = false
@@ -7534,7 +8128,7 @@ struct FlippableScoreboardCard: View {
 
     var body: some View {
         ZStack {
-            ScoreboardPickCard(pick: pick, showSportBadge: showSportBadge)
+            ScoreboardPickCard(pick: pick, gameResult: gameResult, showSportBadge: showSportBadge)
                 .background(GeometryReader { g in
                     Color.clear.preference(key: PickCardHeightKey.self, value: g.size.height)
                 })
@@ -10449,7 +11043,14 @@ struct PicksCarouselView: View {
     private var filteredProps: [PropPick] {
         sport == "ALL" ? store.slateProps : store.slateProps.filter { ($0.effectiveLeague ?? "").uppercased() == sport }
     }
-    private var games: [(matchup: String, time: String, props: [PropPick])] { store.groupByMatchup(filteredProps) }
+    private var games: [(matchup: String, time: String, props: [PropPick])] {
+        // Games with a TODAY pick/prop sort first; settled (W/L-only) games follow.
+        store.groupByMatchup(filteredProps).sorted { gameIsFresh($0) && !gameIsFresh($1) }
+    }
+    private func gameIsFresh(_ g: (matchup: String, time: String, props: [PropPick])) -> Bool {
+        if let e = store.gamePickEntry(forMatchup: g.matchup), !e.isYesterday { return true }
+        return g.props.contains { !store.isYesterdayProp($0) }
+    }
     private var topProps: [PropPick] {
         Array(filteredProps.sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.prefix(2))
     }
@@ -10518,31 +11119,31 @@ struct PicksCarouselView: View {
 
     private var sportBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
                 ForEach(sports, id: \.self) { s in
                     let on = (s == sport)
                     Button { withAnimation(.easeInOut(duration: 0.2)) { sport = s } } label: {
-                        Text(s).font(.system(size: 12, weight: .heavy))
+                        Text(s).font(.system(size: 13, weight: .heavy))
                             .foregroundStyle(on ? Color.black.opacity(0.85) : .white.opacity(0.5))
-                            .padding(.horizontal, 12).padding(.vertical, 6)
-                            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(on ? GaryColors.gold : Color.white.opacity(0.06)))
+                            .padding(.horizontal, 14).padding(.vertical, 9)
+                            .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(on ? GaryColors.gold : Color.white.opacity(0.06)))
                     }.buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal, 14).padding(.top, 8)
+            .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 2)
         }
     }
 
     private var matchupBar: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
+                HStack(spacing: 10) {
                     chip(0, "TODAY")
                     ForEach(Array(games.enumerated()), id: \.offset) { idx, g in
                         chip(idx + 1, shortMatchup(g.matchup))
                     }
                 }
-                .padding(.horizontal, 14).padding(.vertical, 8)
+                .padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 12)
             }
             .onChange(of: page) { p in withAnimation { proxy.scrollTo(p, anchor: .center) } }
         }
@@ -10552,9 +11153,9 @@ struct PicksCarouselView: View {
         let on = (index == page)
         return Button { withAnimation(.easeInOut(duration: 0.25)) { page = index } } label: {
             Text(label)
-                .font(.system(size: 11, weight: .bold, design: .monospaced)).tracking(0.5)
+                .font(.system(size: 12, weight: .bold, design: .monospaced)).tracking(0.5)
                 .foregroundStyle(on ? GaryColors.gold : .white.opacity(0.5))
-                .padding(.horizontal, 12).padding(.vertical, 7)
+                .padding(.horizontal, 14).padding(.vertical, 10)
                 .background(
                     Capsule().fill(on ? GaryColors.gold.opacity(0.14) : Color.white.opacity(0.05))
                         .overlay(Capsule().stroke(on ? GaryColors.gold.opacity(0.5) : Color.clear, lineWidth: 1))
@@ -10566,11 +11167,11 @@ struct PicksCarouselView: View {
 
     private var recapBanner: some View {
         Text("YESTERDAY'S RESULTS · TODAY'S PICKS DROP ~90 MIN BEFORE FIRST PITCH")
-            .font(.system(size: 8.5, weight: .semibold, design: .monospaced)).tracking(0.6)
-            .foregroundStyle(.white.opacity(0.45))
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 6)
-            .background(Color.white.opacity(0.03))
+            .font(.system(size: 9, weight: .medium, design: .monospaced)).tracking(0.5)
+            .foregroundStyle(.white.opacity(0.4))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 8)
     }
 
     private var emptyState: some View {
@@ -10645,7 +11246,9 @@ struct PicksTodayPage: View {
             .padding(.horizontal, 16).padding(.top, 8)
 
             if let gp = topGamePick {
-                FlippablePickCard(pick: gp, gameResult: gamePickResult(gp), showSportBadge: true)
+                // topGamePick is always TODAY's live pick — never stamp a W/L
+                // (the same matchup may have settled yesterday; that's not this game).
+                FlippablePickCard(pick: gp, gameResult: nil, showSportBadge: true)
                     .padding(.horizontal, 10)
             }
             if !topProps.isEmpty {
@@ -12278,7 +12881,7 @@ struct GameResultRow: View {
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.5))
                 Spacer()
-                Text(Formatters.americanOdds(result.odds?.value))
+                Text(Formatters.americanOdds(result.effectiveOdds))
                     .font(.subheadline.bold())
                     .foregroundStyle(GaryColors.gold)
             }

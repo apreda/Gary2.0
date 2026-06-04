@@ -1034,11 +1034,10 @@ INVESTIGATION COMPLETE`;
             } else if (args.sport === 'MLB') {
               // BDL exposes per-game stats via /mlb/v1/stats — flat shape
               // (ip, er, p_k, p_bb, ... for pitchers; at_bats, hits, hr, rbi, ... for batters).
+              // Chrono helper joins real game dates + filters to completed
+              // regular/postseason games so "last N" is provably the last N.
               const currentYear = new Date().getFullYear();
-              logs = await ballDontLieService.getMlbGameStats({
-                playerIds: [player.id],
-                seasons: [currentYear]
-              });
+              logs = await ballDontLieService.getMlbPlayerGameRowsChrono(player.id, currentYear);
             } else {
               // NFL / NCAAF
               const season = nflSeason();

@@ -18,6 +18,14 @@ function clearCache() {
 // Base URL for Ball Don't Lie HTTP fallbacks
 export const BALLDONTLIE_API_BASE_URL = 'https://api.balldontlie.io';
 
+// All BDL HTTP calls share a hard 12s deadline so a stalled connection
+// surfaces as a transient error (retried by getCachedOrFetch) instead of
+// hanging on the ~75-120s OS TCP timeout. Every other outbound service in
+// this repo (gemini, moneyPuck, nhlStatsApi, draftKings) already sets one;
+// BDL was the outlier (June 3 2026 hardening).
+const BDL_TIMEOUT_MS = 12000;
+const bdlHttp = axios.create({ timeout: BDL_TIMEOUT_MS });
+
 /**
  * Normalize game objects to standard field names.
  * NBA is the standard shape — all other sports get mapped to match.
@@ -90,13 +98,35 @@ function initApi() {
  *      automatic retry after a short delay clears the vast majority of
  *      transient 429s without bothering the caller.
  *
+ *   3. Transient-network retry with backoff. Intermittent DNS/socket
+ *      failures (getaddrinfo ENOTFOUND, ECONNRESET, undici "fetch failed")
+ *      silently zeroed out entire pick runs with no retry (June 2-3 2026:
+ *      NHL wiped, Tigers @ Rays lost). Up to 3 retries (~7s worst case).
+ *      Non-transient HTTP errors still rethrow immediately.
+ *
  * @param {string} key - Cache key
  * @param {Function} fetchFn - Function to fetch data if cache miss
  * @param {number} ttlMinutes - Cache TTL in minutes
  */
 const inflight = new Map(); // key -> Promise<data>
 
-async function getCachedOrFetch(key, fetchFn, ttlMinutes = TTL_MINUTES) {
+// Transient network failures — DNS blips, connection resets, timeouts.
+// undici's fetch throws TypeError("fetch failed") with the real code on
+// err.cause; axios puts it on err.code; some libs only carry the message.
+const TRANSIENT_NETWORK_RE = /ENOTFOUND|EAI_AGAIN|ECONNRESET|ECONNREFUSED|ETIMEDOUT|ECONNABORTED|EPIPE|ENETDOWN|ENETUNREACH|EHOSTUNREACH|UND_ERR_CONNECT_TIMEOUT|UND_ERR_SOCKET|fetch failed|socket hang up|TimeoutError|timeout/i;
+
+export function isTransientNetworkError(err) {
+  const haystack = [err?.message, err?.code, err?.name, err?.cause?.message, err?.cause?.code, err?.cause?.name]
+    .filter(Boolean)
+    .join(' ');
+  return TRANSIENT_NETWORK_RE.test(haystack);
+}
+
+function describeNetworkError(err) {
+  return String(err?.cause?.code || err?.code || err?.cause?.message || err?.message || err);
+}
+
+export async function getCachedOrFetch(key, fetchFn, ttlMinutes = TTL_MINUTES) {
   const now = Date.now();
 
   // Fresh cache hit
@@ -116,20 +146,35 @@ async function getCachedOrFetch(key, fetchFn, ttlMinutes = TTL_MINUTES) {
   console.log(`[Ball Don't Lie] Fetching fresh data for ${key}`);
 
   const fetchWithRetry = async () => {
-    try {
-      return await fetchFn();
-    } catch (err) {
-      // Retry once on 429 (rate limit). Status surfaces a few ways depending
-      // on whether the call went through axios, fetch, or the BDL SDK.
-      const status = err?.response?.status ?? err?.status;
-      const msg = (err?.message || err?.response?.data?.error || '').toString();
-      const isRateLimit = status === 429 || /too many requests/i.test(msg);
-      if (isRateLimit) {
-        console.warn(`[Ball Don't Lie] 429 on ${key} — retrying in 1.2s`);
-        await new Promise(r => setTimeout(r, 1200));
+    // 429: one retry (unchanged behavior). Transient network errors: up to
+    // 3 retries with short backoff — a DNS blip usually clears in seconds.
+    // Status surfaces a few ways depending on whether the call went through
+    // axios, fetch, or the BDL SDK.
+    const NETWORK_BACKOFF_MS = [800, 2000, 4500];
+    let rateLimitRetried = false;
+    let netAttempt = 0;
+    for (;;) {
+      try {
         return await fetchFn();
+      } catch (err) {
+        const status = err?.response?.status ?? err?.status;
+        const msg = (err?.message || err?.response?.data?.error || '').toString();
+        const isRateLimit = status === 429 || /too many requests/i.test(msg);
+        if (isRateLimit && !rateLimitRetried) {
+          rateLimitRetried = true;
+          console.warn(`[Ball Don't Lie] 429 on ${key} — retrying in 1.2s`);
+          await new Promise(r => setTimeout(r, 1200));
+          continue;
+        }
+        if (!isRateLimit && isTransientNetworkError(err) && netAttempt < NETWORK_BACKOFF_MS.length) {
+          const delay = NETWORK_BACKOFF_MS[netAttempt];
+          netAttempt += 1;
+          console.warn(`[Ball Don't Lie] transient network error on ${key} (${describeNetworkError(err)}) — retry ${netAttempt}/${NETWORK_BACKOFF_MS.length} in ${delay}ms`);
+          await new Promise(r => setTimeout(r, delay));
+          continue;
+        }
+        throw err;
       }
-      throw err;
     }
   };
 
@@ -273,7 +318,7 @@ const ballDontLieService = {
             
             try {
               console.log(`[Ball Don't Lie] GET ${fullUrl} (Page ${pageCount + 1})`);
-              const resp = await axios.get(fullUrl, {
+              const resp = await bdlHttp.get(fullUrl, {
                 headers: { Authorization: API_KEY }
               });
               
@@ -333,7 +378,7 @@ const ballDontLieService = {
       const key = `nfl_player_game_stats_${playerId}_${gameIds.slice(0, 10).join(',')}`;
       return await getCachedOrFetch(key, async () => {
         const url = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/stats${buildQuery({ player_ids: [playerId], game_ids: gameIds.slice(0, 50), per_page: 100 })}`;
-        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
         return response.data?.data || [];
       }, ttlMinutes);
     } catch (e) {
@@ -392,7 +437,7 @@ const ballDontLieService = {
             const httpParams = { season, postseason, per_page: 100, week: omitWeek ? undefined : 0, cursor };
             if (cursor) httpParams.cursor = cursor;
             try {
-              const resp = await axios.get(endpoint, { headers: { Authorization: API_KEY }, params: httpParams });
+              const resp = await bdlHttp.get(endpoint, { headers: { Authorization: API_KEY }, params: httpParams });
               const rows = Array.isArray(resp?.data?.data) ? resp.data.data : [];
               all.push(...rows);
               cursor = resp?.data?.meta?.next_cursor;
@@ -410,7 +455,7 @@ const ballDontLieService = {
         };
         const httpFetch = async (params) => {
           try {
-            const resp = await axios.get(endpoint, { headers: { Authorization: API_KEY }, params });
+            const resp = await bdlHttp.get(endpoint, { headers: { Authorization: API_KEY }, params });
             const rows = Array.isArray(resp?.data?.data) ? resp.data.data : [];
             return rows || [];
           } catch (err) {
@@ -510,7 +555,7 @@ const ballDontLieService = {
         // Direct HTTP fetch helper (handles pagination via cursor)
         const httpFetch = async (params) => {
           try {
-            const resp = await axios.get(endpoint, { headers: { Authorization: API_KEY }, params });
+            const resp = await bdlHttp.get(endpoint, { headers: { Authorization: API_KEY }, params });
             const rows = Array.isArray(resp?.data?.data) ? resp.data.data : [];
             return rows || [];
           } catch (err) {
@@ -541,7 +586,7 @@ const ballDontLieService = {
             const httpParams = { season, per_page: 100, week: omitWeek ? undefined : 0, ...(postseason ? { postseason } : {}) };
             if (cursor) httpParams.cursor = cursor;
             try {
-              const resp = await axios.get(endpoint, { headers: { Authorization: API_KEY }, params: httpParams });
+              const resp = await bdlHttp.get(endpoint, { headers: { Authorization: API_KEY }, params: httpParams });
               const rows = Array.isArray(resp?.data?.data) ? resp.data.data : [];
               all.push(...rows);
               cursor = resp?.data?.meta?.next_cursor;
@@ -645,7 +690,7 @@ const ballDontLieService = {
         // Direct HTTP fetch helper (handles pagination via cursor)
         const httpFetch = async (params) => {
           try {
-            const resp = await axios.get(endpoint, { headers: { Authorization: API_KEY }, params });
+            const resp = await bdlHttp.get(endpoint, { headers: { Authorization: API_KEY }, params });
             const rows = Array.isArray(resp?.data?.data) ? resp.data.data : [];
             return rows || [];
           } catch (err) {
@@ -676,7 +721,7 @@ const ballDontLieService = {
             const httpParams = { season, per_page: 100, week: omitWeek ? undefined : 0, ...(postseason ? { postseason } : {}) };
             if (cursor) httpParams.cursor = cursor;
             try {
-              const resp = await axios.get(endpoint, { headers: { Authorization: API_KEY }, params: httpParams });
+              const resp = await bdlHttp.get(endpoint, { headers: { Authorization: API_KEY }, params: httpParams });
               const rows = Array.isArray(resp?.data?.data) ? resp.data.data : [];
               all.push(...rows);
               cursor = resp?.data?.meta?.next_cursor;
@@ -768,7 +813,7 @@ const ballDontLieService = {
       const cacheKey = `nfl_team_roster_${teamId}_${season}`;
       return await getCachedOrFetch(cacheKey, async () => {
         const url = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/teams/${encodeURIComponent(teamId)}/roster${buildQuery({ season })}`;
-        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
         return response.data?.data || [];
       }, ttlMinutes);
     } catch (e) {
@@ -803,7 +848,7 @@ const ballDontLieService = {
           postseason,
           per_page: 100
         })}`;
-        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
         return response.data?.data || [];
       }, ttlMinutes);
     } catch (e) {
@@ -839,7 +884,7 @@ const ballDontLieService = {
           }
 
           const url = `${BALLDONTLIE_API_BASE_URL}/nhl/v1/players${buildQuery(params)}`;
-          const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+          const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
 
           const players = response.data?.data || [];
           allPlayers = allPlayers.concat(players);
@@ -883,7 +928,7 @@ const ballDontLieService = {
       const cacheKey = `nhl_player_stats_leaders_${season}_${type}`;
       return await getCachedOrFetch(cacheKey, async () => {
         const url = `${BALLDONTLIE_API_BASE_URL}/nhl/v1/player_stats/leaders${buildQuery({ season, type })}`;
-        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
         return response.data?.data || [];
       }, ttlMinutes);
     } catch (e) {
@@ -908,7 +953,7 @@ const ballDontLieService = {
           team_ids: [teamId],
           per_page: 100
         })}`;
-        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
         return response.data?.data || [];
       }, ttlMinutes);
     } catch (e) {
@@ -941,7 +986,7 @@ const ballDontLieService = {
           season,
           per_page: 100
         })}`;
-        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
         return response.data?.data || [];
       }, ttlMinutes);
     } catch (e) {
@@ -971,7 +1016,7 @@ const ballDontLieService = {
         const params = { season };
         if (week) params.week = week;
         const url = `${BALLDONTLIE_API_BASE_URL}/ncaaf/v1/rankings${buildQuery(params)}`;
-        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
         return response.data?.data || [];
       }, ttlMinutes);
     } catch (e) {
@@ -1003,7 +1048,7 @@ const ballDontLieService = {
         const path = endpointMap[sportKey];
         if (!path) return [];
         const url = `${BALLDONTLIE_API_BASE_URL}/${path}${buildQuery(params)}`;
-        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
         // ⭐ FIX: Return BOTH data and meta for pagination support
         return { 
           data: response.data?.data || [],
@@ -1043,7 +1088,7 @@ const ballDontLieService = {
         const path = endpointMap[sportKey];
         if (!path) throw new Error('getPlayersActive not supported');
         const url = `${BALLDONTLIE_API_BASE_URL}/${path}${buildQuery(params)}`;
-        const resp = await fetch(url, { headers: { Authorization: API_KEY } });
+        const resp = await fetch(url, { headers: { Authorization: API_KEY }, signal: AbortSignal.timeout(BDL_TIMEOUT_MS) });
         if (!resp.ok) {
           const text = await resp.text().catch(() => '');
           throw new Error(`HTTP ${resp.status} ${text}`);
@@ -1072,7 +1117,7 @@ const ballDontLieService = {
       const cacheKey = `leaders_${params.stat_type}_${params.season}_${JSON.stringify({ ...params, stat_type: undefined, season: undefined })}`;
       return await getCachedOrFetch(cacheKey, async () => {
         const url = `${BALLDONTLIE_API_BASE_URL}/v1/leaders${buildQuery(params)}`;
-        const resp = await fetch(url, { headers: { Authorization: API_KEY } });
+        const resp = await fetch(url, { headers: { Authorization: API_KEY }, signal: AbortSignal.timeout(BDL_TIMEOUT_MS) });
         if (!resp.ok) {
           const text = await resp.text().catch(() => '');
           throw new Error(`HTTP ${resp.status} ${text}`);
@@ -1101,7 +1146,7 @@ const ballDontLieService = {
           params['player_ids[]'] = player_ids.slice(0, 100);
         }
         const url = `${BALLDONTLIE_API_BASE_URL}/${path}${buildQuery(params)}`;
-        const resp = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const resp = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
         return Array.isArray(resp?.data?.data) ? resp.data.data : [];
       }, ttlMinutes);
     } catch (e) {
@@ -1142,8 +1187,8 @@ const ballDontLieService = {
         console.log(`🏀 [Ball Don't Lie] Fetching active players...`);
 
         const [homePlayersResp, awayPlayersResp] = await Promise.all([
-          axios.get(`${BALLDONTLIE_API_BASE_URL}/nba/v1/players/active?team_ids[]=${homeTeam.id}&per_page=15`, { headers: { 'Authorization': API_KEY } }),
-          axios.get(`${BALLDONTLIE_API_BASE_URL}/nba/v1/players/active?team_ids[]=${awayTeam.id}&per_page=15`, { headers: { 'Authorization': API_KEY } })
+          bdlHttp.get(`${BALLDONTLIE_API_BASE_URL}/nba/v1/players/active?team_ids[]=${homeTeam.id}&per_page=15`, { headers: { 'Authorization': API_KEY } }),
+          bdlHttp.get(`${BALLDONTLIE_API_BASE_URL}/nba/v1/players/active?team_ids[]=${awayTeam.id}&per_page=15`, { headers: { 'Authorization': API_KEY } })
         ]);
 
         const homePlayers = Array.isArray(homePlayersResp?.data?.data) ? homePlayersResp.data.data : [];
@@ -1399,7 +1444,7 @@ const ballDontLieService = {
             batch.map(async (playerId) => {
               try {
                 const url = `${BALLDONTLIE_API_BASE_URL}/nhl/v1/players/${playerId}/season_stats?season=${season}`;
-                const resp = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+                const resp = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
                 const statsArray = resp.data?.data || [];
                 // Convert array to object
                 const stats = {};
@@ -1517,7 +1562,7 @@ const ballDontLieService = {
       return await getCachedOrFetch(cacheKey, async () => {
         const url = `${BALLDONTLIE_API_BASE_URL}/ncaab/v1/standings?conference_id=${conferenceId}&season=${season}`;
         console.log(`🏀 [Ball Don't Lie] Fetching NCAAB standings for conference ${conferenceId}, season ${season}`);
-        const resp = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const resp = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
         return resp.data?.data || [];
       }, ttlMinutes);
     } catch (e) {
@@ -1555,7 +1600,7 @@ const ballDontLieService = {
       return await getCachedOrFetch(cacheKey, async () => {
         // Fetch active players for both teams (limit to 25 total, we only need top 9 per team)
         const activePlayersUrl = `${BALLDONTLIE_API_BASE_URL}/ncaab/v1/players/active?team_ids[]=${homeTeam.id}&team_ids[]=${awayTeam.id}&per_page=25`;
-        const playersResp = await axios.get(activePlayersUrl, { headers: { 'Authorization': API_KEY } });
+        const playersResp = await bdlHttp.get(activePlayersUrl, { headers: { 'Authorization': API_KEY } });
         const allPlayers = Array.isArray(playersResp?.data?.data) ? playersResp.data.data : [];
         
         if (allPlayers.length === 0) {
@@ -1706,7 +1751,7 @@ const ballDontLieService = {
       return await getCachedOrFetch(cacheKey, async () => {
         const url = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/standings?season=${season}`;
         console.log(`🏈 [Ball Don't Lie] Fetching NFL standings for ${season} season`);
-        const resp = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const resp = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
         return resp.data?.data || [];
       }, ttlMinutes);
     } catch (e) {
@@ -1748,7 +1793,7 @@ const ballDontLieService = {
         const fetchRoster = async (teamId) => {
           try {
             const url = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/teams/${teamId}/roster?season=${season}`;
-            const resp = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+            const resp = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
             return resp.data?.data || [];
           } catch (e) {
             console.warn(`[Ball Don't Lie] Could not fetch roster for team ${teamId}:`, e.message);
@@ -1837,7 +1882,7 @@ const ballDontLieService = {
         params.append('per_page', '20');
         
         const url = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/games?${params.toString()}`;
-        const resp = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const resp = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
         const games = resp.data?.data || [];
         
         // Filter to completed games only (status === 'Final')
@@ -1897,7 +1942,7 @@ const ballDontLieService = {
         params.append('per_page', '100');
         
         const url = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/team_stats?${params.toString()}`;
-        const resp = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const resp = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
         const stats = resp.data?.data || [];
         
         // Group by game_id -> { home, away }
@@ -1947,7 +1992,7 @@ const ballDontLieService = {
         params.append('per_page', '100');
         
         const url = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/stats?${params.toString()}`;
-        const resp = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const resp = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
         const stats = resp.data?.data || [];
         
         // Group by game_id -> team_id -> key players
@@ -2123,7 +2168,7 @@ const ballDontLieService = {
         const url = `${BALLDONTLIE_API_BASE_URL}/nba/v1/box_scores?date=${date}`;
         console.log(`[Ball Don't Lie] Fetching NBA box scores for ${date}`);
         
-        const resp = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const resp = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
         return Array.isArray(resp?.data?.data) ? resp.data.data : [];
       }, ttlMinutes);
     } catch (e) {
@@ -2269,7 +2314,7 @@ const ballDontLieService = {
       const cacheKey = `nfl_player_season_stats_${playerId}_${season}_${postseason}`;
       return await getCachedOrFetch(cacheKey, async () => {
         const url = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/season_stats${buildQuery({ player_ids: [playerId], season, postseason })}`;
-        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
         return response.data?.data || [];
       }, ttlMinutes);
     } catch (e) {
@@ -2318,7 +2363,7 @@ const ballDontLieService = {
                 per_page: 25 // Fetch full season (17 regular + some extra) to ensure we get ALL games
               })}`;
               
-              const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+              const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
               // CRITICAL: BDL returns stats oldest-first, so we MUST sort by date DESCENDING
               // to get the actual most recent games (Dec games, not Sept games)
               const allStats = (response.data?.data || [])
@@ -2660,7 +2705,7 @@ const ballDontLieService = {
         if (Array.isArray(pidArr) && pidArr.length) query['player_ids[]'] = pidArr.slice(0, 100);
         if (Array.isArray(tidArr) && tidArr.length) query['team_ids[]'] = tidArr.slice(0, 100);
         const url = `${BALLDONTLIE_API_BASE_URL}/ncaab/v1/player_season_stats${buildQuery(query)}`;
-        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
         return response.data?.data || [];
       }, ttlMinutes);
     } catch (e) {
@@ -2694,7 +2739,7 @@ const ballDontLieService = {
           per_page: 50
         })}`;
 
-        const response = await axios.get(url, {
+        const response = await bdlHttp.get(url, {
           headers: { 'Authorization': API_KEY }
         });
 
@@ -2851,7 +2896,7 @@ const ballDontLieService = {
           query['team_ids[]'] = tidArr.slice(0, 100);
         }
         const url = `${BALLDONTLIE_API_BASE_URL}/ncaaf/v1/player_season_stats${buildQuery(query)}`;
-        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
         return response.data?.data || [];
       }, ttlMinutes);
     } catch (e) {
@@ -2887,7 +2932,8 @@ const ballDontLieService = {
         const qs = Object.keys(params).length > 0 ? buildQuery(params) : '';
         const url = `https://api.balldontlie.io/${path}${qs}`;
         const resp = await fetch(url, {
-          headers: { Authorization: API_KEY }
+          headers: { Authorization: API_KEY },
+          signal: AbortSignal.timeout(BDL_TIMEOUT_MS)
         });
         if (!resp.ok) {
           const text = await resp.text().catch(() => '');
@@ -2921,7 +2967,7 @@ const ballDontLieService = {
         const path = endpointMap[sportKey];
         if (path) {
           const url = `https://api.balldontlie.io/${path}`;
-          const resp = await fetch(url, { headers: { Authorization: API_KEY } });
+          const resp = await fetch(url, { headers: { Authorization: API_KEY }, signal: AbortSignal.timeout(BDL_TIMEOUT_MS) });
           if (resp.ok) {
             const json = await resp.json().catch(() => ({}));
             teams = Array.isArray(json?.data) ? json.data : [];
@@ -2933,28 +2979,42 @@ const ballDontLieService = {
         const byId = teams.find(t => t.id === idNum);
         if (byId) return byId;
       }
-      // Enhanced matching across common fields + normalization
+      // Enhanced matching across common fields + normalization.
+      // MLB/NHL payloads use display_name + location (no full_name/city), so
+      // both must be in the exact pass — otherwise every MLB lookup fell
+      // through to the partial matcher, whose raw substring check let short
+      // abbreviations hide inside other cities ("phiLADelphia".includes("lad")
+      // resolved the Phillies to the Dodgers; June 3 2026 audit).
       const target = normalizeName(nameOrId);
       const exact = teams.find(t => {
         const fields = [
           t.name,
           t.full_name,
+          t.display_name,
           t.abbreviation,
           t.city,
+          t.location,
           t.college
         ].filter(Boolean).map(normalizeName);
         return fields.includes(target);
       });
       if (exact) return exact;
+      // Partial pass: word-anchored subset matching only. Never matches on
+      // abbreviations (substring traps) or bare city/location (NY ambiguity).
+      const targetWords = target.split(' ').filter(Boolean);
       const partial = teams.find(t => {
         const fields = [
           t.name,
           t.full_name,
-          t.abbreviation,
-          t.city,
+          t.display_name,
           t.college
         ].filter(Boolean).map(normalizeName);
-        return fields.some(f => f.includes(target) || target.includes(f));
+        return fields.some(f => {
+          const fWords = f.split(' ').filter(Boolean);
+          if (fWords.length === 0) return false;
+          return fWords.every(w => targetWords.includes(w)) ||
+                 targetWords.every(w => fWords.includes(w));
+        });
       });
       return partial || null;
     } catch (e) {
@@ -2985,7 +3045,7 @@ const ballDontLieService = {
           if (!path) throw new Error('getGames not supported');
           const qs = buildQuery(params);
           const url = `https://api.balldontlie.io/${path}${qs}`;
-          const resp = await fetch(url, { headers: { Authorization: API_KEY } });
+          const resp = await fetch(url, { headers: { Authorization: API_KEY }, signal: AbortSignal.timeout(BDL_TIMEOUT_MS) });
           if (!resp.ok) {
             const text = await resp.text().catch(() => '');
             throw new Error(`HTTP ${resp.status} ${text}`);
@@ -3027,7 +3087,7 @@ const ballDontLieService = {
           throw new Error('player stats not supported for this sport');
         }
         const url = `${BALLDONTLIE_API_BASE_URL}/${path}${buildQuery(params)}`;
-        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
         // ⭐ FIX: Always return data array, not object with data/meta
         return response.data?.data || [];
       }, ttlMinutes);
@@ -3047,7 +3107,7 @@ const ballDontLieService = {
     const cacheKey = `nba_team_season_advanced_${teamId}_${season}_${seasonType}`;
     return await getCachedOrFetch(cacheKey, async () => {
       const url = `${BALLDONTLIE_API_BASE_URL}/nba/v1/team_season_averages/general?season=${season}&season_type=${seasonType}&type=advanced&team_ids[]=${teamId}`;
-      const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+      const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
       const data = response.data?.data;
       if (!data || data.length === 0) return null;
       return data[0].stats;
@@ -3065,7 +3125,7 @@ const ballDontLieService = {
     const cacheKey = `nba_team_opponent_stats_${teamId}_${season}_${seasonType}`;
     return await getCachedOrFetch(cacheKey, async () => {
       const url = `${BALLDONTLIE_API_BASE_URL}/nba/v1/team_season_averages/general?season=${season}&season_type=${seasonType}&type=opponent&team_ids[]=${teamId}`;
-      const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+      const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
       const data = response.data?.data;
       if (!data || data.length === 0) return null;
       return data[0].stats;
@@ -3082,7 +3142,7 @@ const ballDontLieService = {
     const cacheKey = `nba_team_defense_stats_${teamId}_${season}_${seasonType}`;
     return await getCachedOrFetch(cacheKey, async () => {
       const url = `${BALLDONTLIE_API_BASE_URL}/nba/v1/team_season_averages/general?season=${season}&season_type=${seasonType}&type=defense&team_ids[]=${teamId}`;
-      const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+      const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
       const data = response.data?.data;
       if (!data || data.length === 0) return null;
       return data[0].stats;
@@ -3099,7 +3159,7 @@ const ballDontLieService = {
     const cacheKey = `nba_team_base_stats_${teamId}_${season}_${seasonType}`;
     return await getCachedOrFetch(cacheKey, async () => {
       const url = `${BALLDONTLIE_API_BASE_URL}/nba/v1/team_season_averages/general?season=${season}&season_type=${seasonType}&type=base&team_ids[]=${teamId}`;
-      const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+      const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
       const data = response.data?.data;
       if (!data || data.length === 0) return null;
       return data[0].stats;
@@ -3117,7 +3177,7 @@ const ballDontLieService = {
       let cursor = null;
       for (let page = 0; page < 5; page++) {
         const url = `${BALLDONTLIE_API_BASE_URL}/ncaab/v1/bracket?season=${season}&per_page=100${cursor ? '&cursor=' + cursor : ''}`;
-        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
         const data = response.data?.data || [];
         allEntries.push(...data);
         cursor = response.data?.meta?.next_cursor;
@@ -3138,7 +3198,7 @@ const ballDontLieService = {
     const cacheKey = `nba_team_scoring_stats_${teamId}_${season}_${seasonType}`;
     return await getCachedOrFetch(cacheKey, async () => {
       const url = `${BALLDONTLIE_API_BASE_URL}/nba/v1/team_season_averages/general?season=${season}&season_type=${seasonType}&type=scoring&team_ids[]=${teamId}`;
-      const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+      const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
       const data = response.data?.data;
       if (!data || data.length === 0) return null;
       return data[0].stats;
@@ -3171,7 +3231,7 @@ const ballDontLieService = {
           const params = { game_ids: gameIds, per_page: 100 };
           if (cursor) params.cursor = cursor;
           const url = `${BALLDONTLIE_API_BASE_URL}/${endpoint}${buildQuery(params)}`;
-          const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+          const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
           const pageData = response.data?.data || [];
           stats = stats.concat(pageData);
           cursor = response.data?.meta?.next_cursor;
@@ -3289,7 +3349,8 @@ const ballDontLieService = {
         const qs = buildQuery(params);
         const url = `https://api.balldontlie.io/${path}${qs}`;
         const resp = await fetch(url, {
-          headers: { Authorization: API_KEY }
+          headers: { Authorization: API_KEY },
+          signal: AbortSignal.timeout(BDL_TIMEOUT_MS)
         });
         if (!resp.ok) {
           const text = await resp.text().catch(() => '');
@@ -3330,7 +3391,7 @@ const ballDontLieService = {
         if (!path) throw new Error('getStandings not supported');
         const qs = buildQuery(params);
         const url = `https://api.balldontlie.io/${path}${qs}`;
-        const resp = await fetch(url, { headers: { Authorization: API_KEY } });
+        const resp = await fetch(url, { headers: { Authorization: API_KEY }, signal: AbortSignal.timeout(BDL_TIMEOUT_MS) });
         if (!resp.ok) {
           const text = await resp.text().catch(() => '');
           throw new Error(`HTTP ${resp.status} ${text}`);
@@ -3361,7 +3422,7 @@ const ballDontLieService = {
         // BDL returns array of {name, value} pairs - convert to flat object for consistency
         if (sportKey === 'icehockey_nhl') {
           const url = `https://api.balldontlie.io/nhl/v1/teams/${encodeURIComponent(teamId)}/season_stats${buildQuery({ season, postseason })}`;
-          const resp = await fetch(url, { headers: { Authorization: API_KEY } });
+          const resp = await fetch(url, { headers: { Authorization: API_KEY }, signal: AbortSignal.timeout(BDL_TIMEOUT_MS) });
           if (!resp.ok) {
             const text = await resp.text().catch(() => '');
             throw new Error(`HTTP ${resp.status} ${text}`);
@@ -3383,7 +3444,7 @@ const ballDontLieService = {
         // NFL team season stats
         if (sportKey === 'americanfootball_nfl') {
           const url = `https://api.balldontlie.io/nfl/v1/team_season_stats${buildQuery({ season, team_ids: [teamId], postseason })}`;
-          const resp = await fetch(url, { headers: { Authorization: API_KEY } });
+          const resp = await fetch(url, { headers: { Authorization: API_KEY }, signal: AbortSignal.timeout(BDL_TIMEOUT_MS) });
           if (!resp.ok) {
             const text = await resp.text().catch(() => '');
             throw new Error(`HTTP ${resp.status} ${text}`);
@@ -3394,7 +3455,7 @@ const ballDontLieService = {
         // NCAAB team season stats
         if (sportKey === 'basketball_ncaab') {
           const url = `https://api.balldontlie.io/ncaab/v1/team_season_stats${buildQuery({ season, team_ids: [teamId] })}`;
-          const resp = await fetch(url, { headers: { Authorization: API_KEY } });
+          const resp = await fetch(url, { headers: { Authorization: API_KEY }, signal: AbortSignal.timeout(BDL_TIMEOUT_MS) });
           if (!resp.ok) {
             const text = await resp.text().catch(() => '');
             throw new Error(`HTTP ${resp.status} ${text}`);
@@ -3408,7 +3469,7 @@ const ballDontLieService = {
           if (teamId) params.team_id = teamId;
           if (postseason) params.postseason = postseason;
           const url = `https://api.balldontlie.io/mlb/v1/teams/season_stats${buildQuery(params)}`;
-          const resp = await fetch(url, { headers: { Authorization: API_KEY } });
+          const resp = await fetch(url, { headers: { Authorization: API_KEY }, signal: AbortSignal.timeout(BDL_TIMEOUT_MS) });
           if (!resp.ok) {
             const text = await resp.text().catch(() => '');
             throw new Error(`HTTP ${resp.status} ${text}`);
@@ -3428,7 +3489,7 @@ const ballDontLieService = {
         // NCAAF: use dedicated team_season_stats per dev docs
         if (sportKey === 'americanfootball_ncaaf') {
           const url = `https://api.balldontlie.io/ncaaf/v1/team_season_stats${buildQuery({ season, team_ids: [teamId], per_page: 100 })}`;
-          const resp = await fetch(url, { headers: { Authorization: API_KEY } });
+          const resp = await fetch(url, { headers: { Authorization: API_KEY }, signal: AbortSignal.timeout(BDL_TIMEOUT_MS) });
           if (!resp.ok) {
             const text = await resp.text().catch(() => '');
             throw new Error(`HTTP ${resp.status} ${text}`);
@@ -3462,7 +3523,7 @@ const ballDontLieService = {
         if (!path && sportKey === 'icehockey_nhl_team') path = endpointMap.icehockey_nhl_team;
         if (!path) return [];
         const url = `https://api.balldontlie.io/${path}${buildQuery({ season, type, postseason })}`;
-        const resp = await fetch(url, { headers: { Authorization: API_KEY } });
+        const resp = await fetch(url, { headers: { Authorization: API_KEY }, signal: AbortSignal.timeout(BDL_TIMEOUT_MS) });
         if (!resp.ok) {
           const text = await resp.text().catch(() => '');
           throw new Error(`HTTP ${resp.status} ${text}`);
@@ -3492,7 +3553,7 @@ const ballDontLieService = {
         const params = { season };
         if (week) params.week = week;
         const url = `https://api.balldontlie.io/ncaab/v1/rankings${buildQuery(params)}`;
-        const resp = await fetch(url, { headers: { Authorization: API_KEY } });
+        const resp = await fetch(url, { headers: { Authorization: API_KEY }, signal: AbortSignal.timeout(BDL_TIMEOUT_MS) });
         if (!resp.ok) {
           const text = await resp.text().catch(() => '');
           throw new Error(`HTTP ${resp.status} ${text}`);
@@ -3635,7 +3696,7 @@ const ballDontLieService = {
         }
         const qs = buildQuery(params);
         const url = `https://api.balldontlie.io/${path}${qs}`;
-        const resp = await fetch(url, { headers: { Authorization: API_KEY } });
+        const resp = await fetch(url, { headers: { Authorization: API_KEY }, signal: AbortSignal.timeout(BDL_TIMEOUT_MS) });
         if (!resp.ok) {
           const text = await resp.text().catch(() => '');
           throw new Error(`HTTP ${resp.status} ${text}`);
@@ -3775,7 +3836,7 @@ const ballDontLieService = {
           const url = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/player_injuries?${params.toString()}`;
           console.log(`🏈 Fetching NFL player injuries (page ${page})`);
 
-          const response = await axios.get(url, {
+          const response = await bdlHttp.get(url, {
             headers: { 'Authorization': API_KEY }
           });
 
@@ -3846,7 +3907,7 @@ const ballDontLieService = {
           const url = `${BALLDONTLIE_API_BASE_URL}/nhl/v1/player_injuries?${params.toString()}`;
           console.log(`🏒 Fetching NHL player injuries (page ${page})`);
 
-          const response = await axios.get(url, {
+          const response = await bdlHttp.get(url, {
             headers: { 'Authorization': API_KEY }
           });
 
@@ -3964,7 +4025,7 @@ const ballDontLieService = {
         console.log(`🏒 Fetching NHL standings for ${season} season`);
         
         const url = `${BALLDONTLIE_API_BASE_URL}/nhl/v1/standings${buildQuery({ season })}`;
-        const response = await axios.get(url, { headers: { Authorization: API_KEY } });
+        const response = await bdlHttp.get(url, { headers: { Authorization: API_KEY } });
         
         return response.data?.data || [];
       }, 60); // Cache for 60 minutes
@@ -4000,7 +4061,7 @@ const ballDontLieService = {
         const url = `${BALLDONTLIE_API_BASE_URL}/nhl/v1/odds/player_props${buildQuery(params)}`;
         console.log(`[Ball Don't Lie] Fetching NHL player props: ${url}`);
         
-        const response = await axios.get(url, { 
+        const response = await bdlHttp.get(url, { 
           headers: { 'Authorization': API_KEY } 
         });
         
@@ -4028,7 +4089,7 @@ const ballDontLieService = {
         const url = `${BALLDONTLIE_API_BASE_URL}/nhl/v1/games${buildQuery({ dates: [dateStr], per_page: 50 })}`;
         console.log(`[Ball Don't Lie] Fetching NHL games for ${dateStr}`);
         
-        const response = await axios.get(url, { 
+        const response = await bdlHttp.get(url, { 
           headers: { 'Authorization': API_KEY } 
         });
         
@@ -4059,7 +4120,7 @@ const ballDontLieService = {
         const url = `${BALLDONTLIE_API_BASE_URL}/nhl/v1/players${buildQuery({ player_ids: uniqueIds, per_page: 100 })}`;
         console.log(`[Ball Don't Lie] Fetching ${uniqueIds.length} NHL players`);
         
-        const response = await axios.get(url, { 
+        const response = await bdlHttp.get(url, { 
           headers: { 'Authorization': API_KEY } 
         });
         
@@ -4113,7 +4174,7 @@ const ballDontLieService = {
         const url = `${BALLDONTLIE_API_BASE_URL}/nhl/v1/players/${playerId}/season_stats?season=${season}${postseasonParam}`;
         console.log(`[Ball Don't Lie] Fetching NHL player season stats: ${url}`);
 
-        const response = await axios.get(url, {
+        const response = await bdlHttp.get(url, {
           headers: { 'Authorization': API_KEY }
         });
 
@@ -4170,7 +4231,7 @@ const ballDontLieService = {
         // Fetch players for each team
         for (const teamId of teamIds) {
           const url = `${BALLDONTLIE_API_BASE_URL}/nhl/v1/players?team_ids[]=${teamId}&seasons[]=${season}&per_page=100`;
-          const response = await axios.get(url, {
+          const response = await bdlHttp.get(url, {
             headers: { 'Authorization': API_KEY }
           });
 
@@ -4194,7 +4255,7 @@ const ballDontLieService = {
           for (const goalieId of allGoalieIds) {
             try {
               const statsUrl = `${BALLDONTLIE_API_BASE_URL}/nhl/v1/players/${goalieId}/season_stats?season=${season}`;
-              const statsResp = await axios.get(statsUrl, {
+              const statsResp = await bdlHttp.get(statsUrl, {
                 headers: { 'Authorization': API_KEY }
               });
 
@@ -4277,7 +4338,7 @@ const ballDontLieService = {
             if (cursor) params.cursor = cursor;
 
             const url = `${BALLDONTLIE_API_BASE_URL}/nhl/v1/box_scores${buildQuery(params)}`;
-            const response = await axios.get(url, {
+            const response = await bdlHttp.get(url, {
               headers: { 'Authorization': API_KEY }
             });
 
@@ -4402,7 +4463,7 @@ const ballDontLieService = {
           per_page: 25
         })}`;
 
-        const response = await axios.get(url, {
+        const response = await bdlHttp.get(url, {
           headers: { 'Authorization': API_KEY }
         });
 
@@ -4794,7 +4855,7 @@ const ballDontLieService = {
         const url = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/odds/player_props${buildQuery(params)}`;
         console.log(`[Ball Don't Lie] Fetching NFL player props: ${url}`);
 
-        const response = await axios.get(url, {
+        const response = await bdlHttp.get(url, {
           headers: { 'Authorization': API_KEY }
         });
 
@@ -4822,7 +4883,7 @@ const ballDontLieService = {
         const url = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/games${buildQuery({ dates: [dateStr], per_page: 50 })}`;
         console.log(`[Ball Don't Lie] Fetching NFL games for ${dateStr}`);
 
-        const response = await axios.get(url, {
+        const response = await bdlHttp.get(url, {
           headers: { 'Authorization': API_KEY }
         });
 
@@ -4852,7 +4913,7 @@ const ballDontLieService = {
         const url = `${BALLDONTLIE_API_BASE_URL}/nfl/v1/players${buildQuery({ player_ids: uniqueIds, per_page: 100 })}`;
         console.log(`[Ball Don't Lie] Fetching ${uniqueIds.length} NFL players`);
 
-        const response = await axios.get(url, {
+        const response = await bdlHttp.get(url, {
           headers: { 'Authorization': API_KEY }
         });
 
@@ -4898,7 +4959,7 @@ const ballDontLieService = {
         if (options.vendors) params.vendors = options.vendors;
         const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/odds/player_props${buildQuery(params)}`;
         console.log(`[BDL] Fetching MLB player props for game ${gameId}`);
-        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
         const props = response.data?.data || [];
         console.log(`[BDL] Retrieved ${props.length} MLB player props for game ${gameId}`);
         return props;
@@ -4918,7 +4979,7 @@ const ballDontLieService = {
       return await getCachedOrFetch(cacheKey, async () => {
         const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/games${buildQuery({ dates: [dateStr], per_page: 50 })}`;
         console.log(`[BDL] Fetching MLB games for ${dateStr}`);
-        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
         const games = response.data?.data || [];
         console.log(`[BDL] Found ${games.length} MLB games for ${dateStr}`);
         return games;
@@ -4942,7 +5003,7 @@ const ballDontLieService = {
       return await getCachedOrFetch(cacheKey, async () => {
         const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/lineups${buildQuery({ game_ids: [gameId], per_page: 100 })}`;
         console.log(`[BDL] Fetching MLB lineups for game ${gameId}`);
-        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
         const entries = response.data?.data || [];
         if (entries.length === 0) {
           console.log(`[BDL] No lineup data for game ${gameId} (lineups may not be posted yet)`);
@@ -4998,7 +5059,7 @@ const ballDontLieService = {
       const cacheKey = `mlb_players_by_ids_${playerIds.sort().join(',')}`;
       return await getCachedOrFetch(cacheKey, async () => {
         const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/players${buildQuery({ player_ids: playerIds, per_page: 100 })}`;
-        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
         const players = response.data?.data || [];
         const playerMap = {};
         for (const player of players) {
@@ -5036,7 +5097,7 @@ const ballDontLieService = {
         if (postseason) params.postseason = postseason;
         const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/season_stats${buildQuery(params)}`;
         console.log(`[BDL] Fetching MLB season stats: season=${season}, players=${playerIds?.length || 'all'}, team=${teamId || 'all'}, per_page=${perPage}`);
-        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
         const stats = response.data?.data || [];
         console.log(`[BDL] Retrieved ${stats.length} MLB season stat records`);
         return stats;
@@ -5059,7 +5120,7 @@ const ballDontLieService = {
       return await getCachedOrFetch(cacheKey, async () => {
         const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/players/splits${buildQuery({ player_id: playerId, season })}`;
         console.log(`[BDL] Fetching MLB player splits: player=${playerId}, season=${season}`);
-        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
         const data = response.data?.data || {};
         console.log(`[BDL] MLB splits loaded: ${Object.keys(data).length} categories`);
         return data;
@@ -5081,7 +5142,7 @@ const ballDontLieService = {
       return await getCachedOrFetch(cacheKey, async () => {
         const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/players/versus${buildQuery({ player_id: playerId, opponent_team_id: opponentTeamId })}`;
         console.log(`[BDL] Fetching MLB player vs player: player=${playerId} vs team=${opponentTeamId}`);
-        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
         const data = response.data?.data || [];
         console.log(`[BDL] MLB PvP: ${data.length} matchup records`);
         return data;
@@ -5103,7 +5164,7 @@ const ballDontLieService = {
       return await getCachedOrFetch(cacheKey, async () => {
         const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/standings${buildQuery({ season })}`;
         console.log(`[BDL] Fetching MLB standings for ${season}`);
-        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
         const standings = response.data?.data || [];
         console.log(`[BDL] MLB standings: ${standings.length} teams`);
         return standings;
@@ -5128,7 +5189,7 @@ const ballDontLieService = {
       return await getCachedOrFetch(cacheKey, async () => {
         const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/odds${buildQuery(params)}`;
         console.log(`[BDL] Fetching MLB odds`);
-        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
         const odds = response.data?.data || [];
         console.log(`[BDL] MLB odds: ${odds.length} records`);
         return odds;
@@ -5151,10 +5212,24 @@ const ballDontLieService = {
       if (seasons?.length) params.seasons = seasons;
       const cacheKey = `mlb_game_stats_${JSON.stringify(params)}`;
       return await getCachedOrFetch(cacheKey, async () => {
-        const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/stats${buildQuery(params)}`;
+        // Cursor-paginate the full result set. BDL defaults to 25 rows/page:
+        // a hitter's season is ~70 games and a single game's box is ~30 rows,
+        // so a page-1-only fetch truncated everything downstream — most
+        // painfully feeding "LAST 10 GAMES" windows from April (June 3 2026
+        // incident: James Wood reported .114 vs his real hot recent form).
+        // The page cap is a runaway guard (~1000 rows covers any sane query).
         console.log(`[BDL] Fetching MLB game stats`);
-        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
-        const stats = response.data?.data || [];
+        const stats = [];
+        let cursor;
+        for (let page = 0; page < 10; page++) {
+          const pageParams = { ...params, per_page: 100 };
+          if (cursor != null) pageParams.cursor = cursor;
+          const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/stats${buildQuery(pageParams)}`;
+          const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
+          stats.push(...(response.data?.data || []));
+          cursor = response.data?.meta?.next_cursor;
+          if (cursor == null) break;
+        }
         console.log(`[BDL] MLB game stats: ${stats.length} records`);
         return stats;
       }, ttlMinutes);
@@ -5162,6 +5237,64 @@ const ballDontLieService = {
       console.error(`[BDL] MLB game stats error:`, error?.response?.data || error.message);
       return [];
     }
+  },
+
+  /**
+   * Season game index: game_id -> { date, status, seasonType, postseason }.
+   * /mlb/v1/stats rows carry only game_id (no date), and /mlb/v1/games
+   * IGNORES ids[] filters (verified live June 3 2026 — it returned year-2000
+   * spring games), so chronology joins go through this one cached index.
+   */
+  async getMlbSeasonGameIndex(season, ttlMinutes = 60) {
+    try {
+      const cacheKey = `mlb_game_index_${season}`;
+      return await getCachedOrFetch(cacheKey, async () => {
+        const index = new Map();
+        let cursor;
+        for (let page = 0; page < 40; page++) {
+          const params = { seasons: [season], per_page: 100 };
+          if (cursor != null) params.cursor = cursor;
+          const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/games${buildQuery(params)}`;
+          const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
+          for (const g of (response.data?.data || [])) {
+            index.set(g.id, {
+              date: g.date,
+              status: g.status,
+              seasonType: g.season_type,
+              postseason: !!g.postseason
+            });
+          }
+          cursor = response.data?.meta?.next_cursor;
+          if (cursor == null) break;
+        }
+        console.log(`[BDL] MLB game index ${season}: ${index.size} games`);
+        return index;
+      }, ttlMinutes);
+    } catch (error) {
+      console.error(`[BDL] MLB game index error:`, error?.response?.data || error.message);
+      return new Map();
+    }
+  },
+
+  /**
+   * A player's completed-game stat rows in TRUE chronological order
+   * (oldest → newest). Joins real game dates via the season index, keeps
+   * only STATUS_FINAL non-spring games — so "last N" windows can never
+   * include spring training, in-progress games, or mis-ordered rows
+   * (game_id is NOT monotonic with date; June 3 2026 audit).
+   * Each row gains `_game: { date, status, seasonType, postseason }`.
+   */
+  async getMlbPlayerGameRowsChrono(playerId, season) {
+    const [rows, index] = await Promise.all([
+      this.getMlbGameStats({ playerIds: [playerId], seasons: [season] }),
+      this.getMlbSeasonGameIndex(season)
+    ]);
+    return (rows || [])
+      .map(r => ({ ...r, _game: index.get(r.game_id) }))
+      .filter(r => r._game
+        && r._game.status === 'STATUS_FINAL'
+        && r._game.seasonType !== 'spring_training')
+      .sort((a, b) => String(a._game.date).localeCompare(String(b._game.date)));
   },
 
   /**
@@ -5175,7 +5308,7 @@ const ballDontLieService = {
       return await getCachedOrFetch(cacheKey, async () => {
         const url = `${BALLDONTLIE_API_BASE_URL}/mlb/v1/plate_appearances${buildQuery({ game_id: gameId })}`;
         console.log(`[BDL] Fetching MLB plate appearances (Statcast) for game ${gameId}`);
-        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
         const data = response.data?.data || [];
         console.log(`[BDL] MLB plate appearances: ${data.length} records`);
         return data;
@@ -5219,7 +5352,7 @@ const ballDontLieService = {
       return await getCachedOrFetch(cacheKey, async () => {
         const url = `${BALLDONTLIE_API_BASE_URL}${path}${buildQuery(params)}`;
         console.log(`[BDL] Fetching MLB pitcher pitch-type ${useGames ? 'game' : 'season'} stats for ${playerIds.length} pitcher(s)`);
-        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
         const data = response.data?.data || [];
         console.log(`[BDL] MLB pitcher pitch-type ${useGames ? 'game' : 'season'} stats: ${data.length} records`);
         return data;
@@ -5247,7 +5380,7 @@ const ballDontLieService = {
       return await getCachedOrFetch(cacheKey, async () => {
         const url = `${BALLDONTLIE_API_BASE_URL}${path}${buildQuery(params)}`;
         console.log(`[BDL] Fetching MLB hitter pitch-type ${useGames ? 'game' : 'season'} stats for ${playerIds.length} hitter(s)`);
-        const response = await axios.get(url, { headers: { 'Authorization': API_KEY } });
+        const response = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
         const data = response.data?.data || [];
         console.log(`[BDL] MLB hitter pitch-type ${useGames ? 'game' : 'season'} stats: ${data.length} records`);
         return data;
@@ -5297,7 +5430,7 @@ const ballDontLieService = {
           const url = `${baseUrl}${buildQuery(currentParams)}`;
           console.log(`[Ball Don't Lie] Fetching NBA player props: ${url} (Page ${pageCount + 1})`);
 
-          const response = await axios.get(url, {
+          const response = await bdlHttp.get(url, {
             headers: { 'Authorization': API_KEY }
           });
 
@@ -5330,7 +5463,7 @@ const ballDontLieService = {
         const url = `${BALLDONTLIE_API_BASE_URL}/nba/v1/games${buildQuery({ dates: [dateStr], per_page: 50 })}`;
         console.log(`[Ball Don't Lie] Fetching NBA games for ${dateStr}`);
 
-        const response = await axios.get(url, {
+        const response = await bdlHttp.get(url, {
           headers: { 'Authorization': API_KEY }
         });
 
@@ -5360,7 +5493,7 @@ const ballDontLieService = {
         const url = `${BALLDONTLIE_API_BASE_URL}/nba/v1/players${buildQuery({ player_ids: uniqueIds, per_page: 100 })}`;
         console.log(`[Ball Don't Lie] Fetching ${uniqueIds.length} NBA players`);
 
-        const response = await axios.get(url, {
+        const response = await bdlHttp.get(url, {
           headers: { 'Authorization': API_KEY }
         });
 

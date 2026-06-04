@@ -15,7 +15,7 @@
 - **TEXT-ONLY tweets** — no images. Data shows text gets 10-20x more impressions (138-211 vs 10)
 - Links hurt impressions — use "betwithgary.ai" as plain text only when needed
 - Don't copy mood words from app screenshots
-- For POTD tweets: 3 bullet points with ACTUAL REASONS from Supabase rationale
+- For pick tweets: 3-tweet THREAD (hook → paragraph reasoning → app CTA), NOT bullet points. Paragraph reasoning with 4-6 deep stats from the Supabase rationale. See `SESSION_HANDOFF.md` for the canonical format. (Superseded the old "3 bullet points" rule on June 3, 2026.)
 - For recap tweets: Vary creative style daily, own the losses with transparency
 
 ### Branding & Logo (MANDATORY)

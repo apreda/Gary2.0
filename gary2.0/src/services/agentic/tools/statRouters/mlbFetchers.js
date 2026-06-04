@@ -1368,30 +1368,27 @@ export const mlbFetchers = {
 
       if (pitcherId) {
         try {
-          // Get pitcher's game-by-game stats from BDL
-          const gameStats = await ballDontLieService.getMlbGameStats({
-            playerIds: [pitcherId],
-            seasons: [currentYear],
-          }).catch(() => []);
+          // Get pitcher's game-by-game stats in TRUE chronological order
+          // (real game dates joined; spring/in-progress rows excluded —
+          // game_id is not reliably chronological, June 3 2026 audit).
+          const gameStats = await ballDontLieService.getMlbPlayerGameRowsChrono(pitcherId, currentYear).catch(() => []);
 
           // Filter to starts. BDL game stats use flat field names (ip, er, p_k, etc.)
-          // — NOT the pitching_* prefix used by season stats.
+          // — NOT the pitching_* prefix used by season stats. Rows arrive
+          // oldest→newest, so the last 5 entries are the latest 5 starts.
           let starts = gameStats
             .filter(s => (s.ip || 0) >= 3 || (s.games_started || 0) > 0)
-            .sort((a, b) => (b.game_id || 0) - (a.game_id || 0))
-            .slice(0, 5);
+            .slice(-5)
+            .reverse();
 
           // If current season empty, try prior season
           if (starts.length === 0) {
-            const priorStats = await ballDontLieService.getMlbGameStats({
-              playerIds: [pitcherId],
-              seasons: [currentYear - 1],
-            }).catch(() => []);
+            const priorStats = await ballDontLieService.getMlbPlayerGameRowsChrono(pitcherId, currentYear - 1).catch(() => []);
 
             starts = priorStats
               .filter(s => (s.ip || 0) >= 3 || (s.games_started || 0) > 0)
-              .sort((a, b) => (b.game_id || 0) - (a.game_id || 0))
-              .slice(0, 5);
+              .slice(-5)
+              .reverse();
 
             if (starts.length > 0) {
               lines.push(`${pitcherName} — Last 5 starts (${currentYear - 1} season):`);

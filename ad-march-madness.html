@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gary A.I. — March Madness Ad</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #08080A;
+    color: white;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    overflow: hidden;
+  }
+
+  .ad-container {
+    width: 1080px;
+    height: 1920px;
+    background: #08080A;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Ambient glow effects */
+  .glow-top {
+    position: absolute;
+    top: -200px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 800px;
+    height: 600px;
+    background: radial-gradient(ellipse, rgba(201, 162, 39, 0.15) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .glow-bottom {
+    position: absolute;
+    bottom: -100px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 600px;
+    height: 400px;
+    background: radial-gradient(ellipse, rgba(249, 115, 22, 0.1) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  /* Header */
+  .header {
+    position: relative;
+    z-index: 2;
+    text-align: center;
+    padding: 80px 60px 20px;
+  }
+
+  .logo-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
+  .logo-img {
+    width: 80px;
+    height: 80px;
+    border-radius: 20px;
+  }
+
+  .brand-name {
+    font-size: 42px;
+    font-weight: 900;
+    background: linear-gradient(135deg, #E8D48B, #C9A227, #8B6914);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -0.5px;
+  }
+
+  .tournament-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: linear-gradient(135deg, rgba(249, 115, 22, 0.2), rgba(249, 115, 22, 0.08));
+    border: 1px solid rgba(249, 115, 22, 0.4);
+    border-radius: 100px;
+    padding: 10px 24px;
+    margin-top: 16px;
+    margin-bottom: 8px;
+  }
+
+  .tournament-badge span {
+    font-size: 15px;
+    font-weight: 700;
+    color: #F97316;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+  }
+
+  .tournament-badge .dot {
+    width: 6px;
+    height: 6px;
+    background: #F97316;
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* Hero section */
+  .hero {
+    position: relative;
+    z-index: 2;
+    text-align: center;
+    padding: 20px 60px 30px;
+  }
+
+  .hero-title {
+    font-size: 52px;
+    font-weight: 900;
+    line-height: 1.1;
+    letter-spacing: -1px;
+    margin-bottom: 12px;
+  }
+
+  .hero-title .gold {
+    background: linear-gradient(135deg, #E8D48B, #C9A227);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .hero-subtitle {
+    font-size: 20px;
+    color: rgba(255,255,255,0.55);
+    font-weight: 500;
+    line-height: 1.5;
+  }
+
+  /* Gary Madness image */
+  .gary-madness {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    justify-content: center;
+    padding: 10px 0 0;
+  }
+
+  .gary-madness img {
+    width: 280px;
+    height: 280px;
+    filter: drop-shadow(0 0 40px rgba(201, 162, 39, 0.3));
+  }
+
+  /* Pick cards */
+  .picks-section {
+    position: relative;
+    z-index: 2;
+    padding: 10px 50px 30px;
+  }
+
+  .picks-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: rgba(255,255,255,0.4);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    text-align: center;
+  }
+
+  .picks-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+
+  .pick-card {
+    background: #121214;
+    border-radius: 16px;
+    padding: 18px;
+    position: relative;
+    overflow: hidden;
+    border: 1.5px solid rgba(249, 115, 22, 0.3);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4), 0 0 30px rgba(249, 115, 22, 0.05);
+  }
+
+  .pick-card .seeds {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+
+  .seed-badge {
+    font-size: 10px;
+    font-weight: 800;
+    color: #F97316;
+    background: rgba(249, 115, 22, 0.12);
+    padding: 3px 7px;
+    border-radius: 4px;
+    letter-spacing: 0.3px;
+  }
+
+  .vs-text {
+    font-size: 9px;
+    color: rgba(255,255,255,0.3);
+    font-weight: 600;
+  }
+
+  .pick-card .teams {
+    margin-bottom: 10px;
+  }
+
+  .team-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: white;
+    line-height: 1.4;
+  }
+
+  .team-name.away {
+    color: rgba(255,255,255,0.5);
+    font-weight: 500;
+    font-size: 12px;
+  }
+
+  .pick-text {
+    font-size: 13px;
+    font-weight: 800;
+    color: #C9A227;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .pick-text .chevron {
+    font-size: 10px;
+    color: rgba(255,255,255,0.3);
+  }
+
+  .confidence-bar {
+    height: 2px;
+    background: rgba(249, 115, 22, 0.1);
+    border-radius: 2px;
+    margin-top: 12px;
+    overflow: hidden;
+  }
+
+  .confidence-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #F97316, rgba(249, 115, 22, 0.5));
+    border-radius: 2px;
+  }
+
+  /* Bottom CTA */
+  .cta-section {
+    position: relative;
+    z-index: 2;
+    text-align: center;
+    padding: 30px 60px 60px;
+  }
+
+  .cta-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: linear-gradient(135deg, #C9A227, #8B6914);
+    color: #08080A;
+    font-size: 20px;
+    font-weight: 800;
+    padding: 18px 48px;
+    border-radius: 100px;
+    letter-spacing: 0.5px;
+    box-shadow: 0 4px 30px rgba(201, 162, 39, 0.3);
+    margin-bottom: 16px;
+  }
+
+  .cta-sub {
+    font-size: 15px;
+    color: rgba(255,255,255,0.4);
+    font-weight: 500;
+  }
+
+  .cta-sub .gold {
+    color: #C9A227;
+    font-weight: 700;
+  }
+
+  /* Features row */
+  .features {
+    display: flex;
+    justify-content: center;
+    gap: 32px;
+    margin-top: 20px;
+  }
+
+  .feature {
+    text-align: center;
+  }
+
+  .feature-icon {
+    font-size: 24px;
+    margin-bottom: 4px;
+  }
+
+  .feature-text {
+    font-size: 11px;
+    color: rgba(255,255,255,0.45);
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+
+<div class="ad-container">
+  <!-- Ambient glows -->
+  <div class="glow-top"></div>
+  <div class="glow-bottom"></div>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="logo-row">
+      <img src="tmp_gary_logo.png" class="logo-img" alt="Gary A.I.">
+      <div class="brand-name">Gary A.I.</div>
+    </div>
+    <div class="tournament-badge">
+      <div class="dot"></div>
+      <span>March Madness 2026</span>
+    </div>
+  </div>
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="hero-title">
+      <span class="gold">Every Game.</span><br>
+      Every Round.<br>
+      <span class="gold">Covered.</span>
+    </div>
+    <div class="hero-subtitle">
+      AI-powered picks for every NCAA Tournament game.<br>
+      Research. Analysis. Gary's Take.
+    </div>
+  </div>
+
+  <!-- Gary Madness Bear -->
+  <div class="gary-madness">
+    <img src="tmp_gary_madness.png" alt="Gary March Madness">
+  </div>
+
+  <!-- Pick Cards -->
+  <div class="picks-section">
+    <div class="picks-label">Today's Round of 32 Picks</div>
+    <div class="picks-grid">
+
+      <!-- Pick 1: Gonzaga -->
+      <div class="pick-card">
+        <div class="seeds">
+          <span class="seed-badge">#3</span>
+          <span class="vs-text">vs</span>
+          <span class="seed-badge">#11</span>
+        </div>
+        <div class="teams">
+          <div class="team-name">Gonzaga Bulldogs</div>
+          <div class="team-name away">Texas Longhorns</div>
+        </div>
+        <div class="pick-text">Gonzaga -6 <span class="chevron">›</span></div>
+        <div class="confidence-bar"><div class="confidence-fill" style="width: 72%"></div></div>
+      </div>
+
+      <!-- Pick 2: Houston -->
+      <div class="pick-card">
+        <div class="seeds">
+          <span class="seed-badge">#2</span>
+          <span class="vs-text">vs</span>
+          <span class="seed-badge">#10</span>
+        </div>
+        <div class="teams">
+          <div class="team-name">Houston Cougars</div>
+          <div class="team-name away">Texas A&M Aggies</div>
+        </div>
+        <div class="pick-text">Houston -10.5 <span class="chevron">›</span></div>
+        <div class="confidence-bar"><div class="confidence-fill" style="width: 78%"></div></div>
+      </div>
+
+      <!-- Pick 3: Illinois -->
+      <div class="pick-card">
+        <div class="seeds">
+          <span class="seed-badge">#3</span>
+          <span class="vs-text">vs</span>
+          <span class="seed-badge">#11</span>
+        </div>
+        <div class="teams">
+          <div class="team-name">Illinois Fighting Illini</div>
+          <div class="team-name away">VCU Rams</div>
+        </div>
+        <div class="pick-text">Illinois -10.5 <span class="chevron">›</span></div>
+        <div class="confidence-bar"><div class="confidence-fill" style="width: 75%"></div></div>
+      </div>
+
+      <!-- Pick 4: High Point upset -->
+      <div class="pick-card">
+        <div class="seeds">
+          <span class="seed-badge">#4</span>
+          <span class="vs-text">vs</span>
+          <span class="seed-badge">#12</span>
+        </div>
+        <div class="teams">
+          <div class="team-name">Arkansas Razorbacks</div>
+          <div class="team-name away">High Point Panthers</div>
+        </div>
+        <div class="pick-text">High Point +12 <span class="chevron">›</span></div>
+        <div class="confidence-bar"><div class="confidence-fill" style="width: 65%"></div></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- CTA -->
+  <div class="cta-section">
+    <div class="cta-button">Download Free on iOS</div>
+    <div class="cta-sub">
+      Every game. Every round. <span class="gold">Always free.</span>
+    </div>
+    <div class="features">
+      <div class="feature">
+        <div class="feature-icon">🏀</div>
+        <div class="feature-text">Game Picks</div>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">📊</div>
+        <div class="feature-text">Props</div>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">💰</div>
+        <div class="feature-text">DFS</div>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🏆</div>
+        <div class="feature-text">Bracket</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

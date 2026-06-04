@@ -162,27 +162,55 @@ struct GaryChatView: View {
         }
     }
 
-    // MARK: - Primary status text (right under orb)
+    // MARK: - Primary status text (under orb) — three-line typographic stack
 
     private var primaryStatusText: some View {
-        Text(primaryLabel)
-            .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(.white.opacity(0.65))
-            .textCase(.uppercase)
-            .tracking(1.4)
-            .animation(.easeOut(duration: 0.25), value: primaryLabel)
+        VStack(spacing: 12) {
+            Text(statusEyebrow)
+                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .tracking(3.2)
+                .foregroundStyle(GaryColors.gold.opacity(0.9))
+
+            Text(statusLine)
+                .font(.system(size: 32, weight: .regular, design: .serif))
+                .foregroundStyle(.white)
+                .multilineTextAlignment(.center)
+
+            Text(statusHelper)
+                .font(.system(size: 13, weight: .regular))
+                .foregroundStyle(.white.opacity(0.42))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+        }
+        .id(vm.orbState) // re-mount on state change so the copy fades in cleanly
+        .transition(.opacity)
+        .animation(.easeOut(duration: 0.35), value: vm.orbState)
     }
 
-    private var primaryLabel: String {
+    private var statusEyebrow: String {
         switch vm.orbState {
-        case .idle:
-            return "Tap to talk to Gary"
-        case .listening:
-            return "Listening — tap when done"
-        case .thinking:
-            return "Gary's thinking…"
-        case .speaking:
-            return "Tap to interrupt"
+        case .idle: return "READY"
+        case .listening: return "LISTENING"
+        case .thinking: return "THINKING"
+        case .speaking: return "GARY"
+        }
+    }
+
+    private var statusLine: String {
+        switch vm.orbState {
+        case .idle: return "Tap to ask Gary."
+        case .listening: return "Listening."
+        case .thinking: return "Reading the lines."
+        case .speaking: return "Here's the read —"
+        }
+    }
+
+    private var statusHelper: String {
+        switch vm.orbState {
+        case .idle: return "He'll hear you out — no menus, no buttons."
+        case .listening: return "Take your time. Tap again when you're done."
+        case .thinking: return "Pulling stats, injuries, weather, and the market."
+        case .speaking: return "Tap to stop."
         }
     }
 

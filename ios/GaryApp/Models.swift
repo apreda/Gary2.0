@@ -1100,6 +1100,21 @@ struct GameResult: Decodable {
 
         return raw.uppercased()
     }
+
+    private static let oddsTailRegex = try? NSRegularExpression(pattern: "[+-]\\d{3,}\\s*$")
+
+    /// The game_results table has no odds column — the line lives at the tail
+    /// of pick_text ("Knicks ML +154"). Prefer the column if it ever appears,
+    /// else extract from the pick text. Used for payout math AND display so
+    /// both always agree.
+    var effectiveOdds: String? {
+        if let v = odds?.value, !v.trimmingCharacters(in: .whitespaces).isEmpty { return v }
+        guard let text = pick_text,
+              let regex = GameResult.oddsTailRegex,
+              let m = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+              let r = Range(m.range, in: text) else { return nil }
+        return text[r].trimmingCharacters(in: .whitespaces)
+    }
 }
 
 struct NFLResult: Decodable {

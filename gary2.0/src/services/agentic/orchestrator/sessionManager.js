@@ -285,32 +285,26 @@ export async function sendToSession(session, message, options = {}) {
  * @returns {Object} - Response from sendToSession
  */
 export async function sendToSessionWithRetry(session, message, options = {}, maxRetries = 3) {
-  let lastError;
+  // Transient network failures get extra attempts beyond maxRetries: local
+  // DNS blips (getaddrinfo ENOTFOUND) outlasted the original ~7s retry
+  // window and killed a full analysis (June 3 2026 — Tigers @ Rays lost its
+  // pick to a mid-analysis "fetch failed"). 5 attempts ≈ 52s of cover.
+  const NETWORK_MAX_ATTEMPTS = Math.max(maxRetries, 5);
 
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+  for (let attempt = 1; ; attempt++) {
     try {
       return await sendToSession(session, message, options);
     } catch (error) {
-      lastError = error;
-
       // Don't retry quota errors - they need manual intervention or fallback
+      // (the model cascade handles 429s).
       if (error.isQuotaError) {
         throw error;
       }
 
-      // Retry on server errors (500, 503), blocked responses, malformed function calls, AND network failures
-      // MALFORMED_FUNCTION_CALL: Model generated invalid function call JSON - transient, retry usually succeeds
-      // Network failures include: fetch failed, ECONNRESET, ETIMEDOUT, ENOTFOUND, socket hang up
+      // Network-level failures: fetch failed, ECONNRESET, ETIMEDOUT,
+      // ENOTFOUND, socket hang up — transient, retried with extra headroom.
       const errorMsg = error.message?.toLowerCase() || '';
-      const isRetryable =
-        error.status >= 500 ||
-        error.message?.includes('500') ||
-        error.message?.includes('503') ||
-        error.message?.includes('blocked') ||
-        error.message?.includes('MALFORMED_FUNCTION_CALL') || // Explicit check for malformed function calls
-        error.message?.includes('UNEXPECTED_TOOL_CALL') || // Model tried to call tools when not expected
-        error.message?.includes('UNAVAILABLE') ||
-        // Network-level failures (transient, should be retried)
+      const isNetworkError =
         errorMsg.includes('fetch failed') ||
         errorMsg.includes('econnreset') ||
         errorMsg.includes('etimedout') ||
@@ -323,19 +317,30 @@ export async function sendToSessionWithRetry(session, message, options = {}, max
         error.code === 'ENOTFOUND' ||
         error.code === 'UND_ERR_CONNECT_TIMEOUT';
 
-      if (!isRetryable || attempt === maxRetries) {
+      // Retry on server errors (500, 503), blocked responses, malformed function calls, AND network failures
+      // MALFORMED_FUNCTION_CALL: Model generated invalid function call JSON - transient, retry usually succeeds
+      const isRetryable =
+        isNetworkError ||
+        error.status >= 500 ||
+        error.message?.includes('500') ||
+        error.message?.includes('503') ||
+        error.message?.includes('blocked') ||
+        error.message?.includes('MALFORMED_FUNCTION_CALL') || // Explicit check for malformed function calls
+        error.message?.includes('UNEXPECTED_TOOL_CALL') || // Model tried to call tools when not expected
+        error.message?.includes('UNAVAILABLE');
+
+      const maxAttempts = isNetworkError ? NETWORK_MAX_ATTEMPTS : maxRetries;
+      if (!isRetryable || attempt >= maxAttempts) {
         throw error;
       }
 
-      // Exponential backoff: 2s, 5s, 15s
-      const backoffDelays = [2000, 5000, 15000];
-      const delay = backoffDelays[attempt - 1] || 60000;
-      console.log(`[Session] ⚠️ Retryable error (attempt ${attempt}/${maxRetries}): ${error.message?.slice(0, 80)}...`);
+      // Exponential backoff: 2s, 5s, 15s, 30s
+      const backoffDelays = [2000, 5000, 15000, 30000];
+      const delay = backoffDelays[attempt - 1] || 30000;
+      console.log(`[Session] ⚠️ Retryable error (attempt ${attempt}/${maxAttempts}): ${error.message?.slice(0, 80)}...`);
       console.log(`[Session] 🔄 Waiting ${delay/1000}s before retry...`);
       await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
-
-  throw lastError;
 }
 

@@ -722,6 +722,7 @@ async function processPropBets(date) {
             prop_type: type, line_value: line, actual_value: actual,
             result: res, pick_text: `${name} ${bet} ${line} ${type}`,
             matchup: p.matchup, bet: bet,
+            odds: p.odds != null ? String(p.odds) : null,
           });
           if (insertErr) {
             console.error(`  ❌ INSERT FAILED [prop_results] ${sport} "${name} ${type}" (${row.date}): ${insertErr.message}${insertErr.code ? ' [code=' + insertErr.code + ']' : ''}${insertErr.details ? ' details=' + insertErr.details : ''}${insertErr.hint ? ' hint=' + insertErr.hint : ''}`);
