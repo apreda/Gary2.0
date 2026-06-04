@@ -10787,7 +10787,7 @@ struct PicksCarouselView: View {
                 content
             }
         }
-        .sheet(item: $selectedProp) { PropTakeSheet(prop: $0) }
+
         .task {
             await store.loadIfNeeded()
             consumeFocus()
@@ -10843,7 +10843,7 @@ struct PicksCarouselView: View {
                 ScrollView(showsIndicators: false) {
                     PicksTodayPage(topProps: topProps, topGamePick: topGamePick,
                                    gamePickResult: store.gamePickResult, resultForProp: store.resultForProp,
-                                   edges: Array(connections.prefix(8)), onTapProp: { selectedProp = $0 })
+                                   edges: Array(sportConnections.prefix(8)), onTapProp: { selectedProp = $0 })
                         .padding(.bottom, 130)
                 }
                 .tag(0)
@@ -10990,6 +10990,14 @@ struct PicksCarouselView: View {
         return connections.filter { abbrGameMatches($0.game, matchup: hay) }
     }
 
+    /// Today-page edges respect the sport filter — an NBA tab must never
+    /// show a Padres edge. Sports without a hub league (NHL) get none.
+    private var sportConnections: [Signal] {
+        guard sport != "ALL" else { return connections }
+        guard let lg = HubLeagueSel.from(sport) else { return [] }
+        return connections.filter { $0.league == lg }
+    }
+
     private func loadConnections() async {
         let date = SupabaseAPI.todayEST()
         var out: [Signal] = []
@@ -11028,7 +11036,7 @@ struct PicksTodayPage: View {
                 FlippablePropCard(prop: only, gameResult: resultForProp(only), showSportBadge: true)
                     .padding(.horizontal, 10)
             } else if !topProps.isEmpty {
-                PropSlipCard(props: topProps, resultForProp: resultForProp, onTapProp: onTapProp)
+                PropSlipCard(props: topProps, resultForProp: resultForProp)
                     .padding(.horizontal, 10)
             }
             EdgesSection(title: "TODAY'S EDGES", edges: edges)
@@ -11084,7 +11092,7 @@ struct PicksGamePage: View {
                 FlippablePropCard(prop: only, gameResult: resultForProp(only), showSportBadge: true)
                     .padding(.horizontal, 10)
             } else if !topProps.isEmpty {
-                PropSlipCard(props: topProps, resultForProp: resultForProp, onTapProp: onTapProp)
+                PropSlipCard(props: topProps, resultForProp: resultForProp)
                     .padding(.horizontal, 10)
             }
             EdgesSection(title: "GAME INTEL", edges: edges)
@@ -11097,108 +11105,6 @@ struct PicksGamePage: View {
 /// then the gold pick + odds), with a W/L letter rail that fills in as props
 /// settle. Replaces stacked prop cards anywhere a game carries 1–5 props.
 /// Locked-card language throughout: same frame, fonts, and gold-only-pick rule.
-/// Condensed Gary's Take for a slip row — props lead with the NUMBERS
-/// (key stats), then the read. Medium sheet, silver family, gold pick only.
-struct PropTakeSheet: View {
-    let prop: PropPick
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    Text("Gary's Take")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(GaryColors.heroAccent.opacity(0.85))
-                    Spacer()
-                    Button { dismiss() } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 22)).foregroundStyle(.white.opacity(0.3))
-                    }.buttonStyle(.plain)
-                }
-                .padding(.top, 18)
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(prop.player ?? "")
-                        .font(GaryFonts.display(26))
-                        .foregroundStyle(.white)
-                    HStack(spacing: 6) {
-                        if let team = prop.team, !team.isEmpty {
-                            Text(team.uppercased())
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundStyle(GaryColors.silver.opacity(0.8))
-                        }
-                        if let m = prop.matchup, !m.isEmpty {
-                            Text(m.uppercased())
-                                .font(GaryFonts.mono(9.5, bold: false))
-                                .foregroundStyle(.white.opacity(0.34))
-                                .lineLimit(1)
-                        }
-                    }
-                }
-
-                // The pick — the locked chip, full size.
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(prop.slipPickText)
-                        .font(GaryFonts.mono(16, bold: true))
-                        .tracking(0.8)
-                        .foregroundStyle(GaryColors.heroAccent)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.65)
-                    Spacer(minLength: 6)
-                    Text(Formatters.americanOdds(prop.odds))
-                        .font(GaryFonts.mono(13, bold: true))
-                        .foregroundStyle(GaryColors.silver.opacity(0.8))
-                }
-                .padding(.horizontal, 13).padding(.vertical, 11)
-                .frame(maxWidth: .infinity)
-                .background(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(Color(hex: "#1C1F26"))
-                        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(GaryColors.silver.opacity(0.55), lineWidth: 1))
-                )
-
-                // Numbers first — props are a stats product.
-                if let stats = prop.key_stats, !stats.isEmpty {
-                    VStack(alignment: .leading, spacing: 7) {
-                        Text("The Numbers")
-                            .font(GaryFonts.display(15))
-                            .foregroundStyle(GaryColors.sectionHead)
-                        ForEach(Array(stats.prefix(4).enumerated()), id: \.offset) { _, s in
-                            HStack(alignment: .top, spacing: 8) {
-                                Circle().fill(GaryColors.silver.opacity(0.7))
-                                    .frame(width: 4, height: 4).padding(.top, 6)
-                                Text(s)
-                                    .font(.system(size: 13.5)).foregroundStyle(.white.opacity(0.85))
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-                    }
-                }
-
-                // Then the read.
-                if let a = prop.analysis, !a.isEmpty {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("The Read")
-                            .font(GaryFonts.display(15))
-                            .foregroundStyle(GaryColors.sectionHead)
-                        Text(cleanPropAnalysis(a))
-                            .font(.system(size: 14)).foregroundStyle(.white.opacity(0.75))
-                            .lineSpacing(3)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 26)
-        }
-        .background(GaryColors.darkBg.ignoresSafeArea())
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
-    }
-}
-
 extension PropPick {
     /// "TOTAL BASES OVER 1.5" — the locked card's pick composition, shared by
     /// the slip rows and the condensed Take sheet.
@@ -11220,9 +11126,14 @@ extension PropPick {
 struct PropSlipCard: View {
     let props: [PropPick]
     let resultForProp: (PropPick) -> String?
-    let onTapProp: (PropPick) -> Void
 
     @ObservedObject private var liveCache = LiveScoreCache.shared
+    // Flip state — game-pick mechanics: tapping a row flips the whole card
+    // to that prop's take; tapping the back flips home.
+    @State private var flipped = false
+    @State private var backProp: PropPick? = nil
+    @State private var frontH: CGFloat = 220
+    private var expandedH: CGFloat { max(frontH + 140, 470) }
 
     private var leagueIcon: String {
         switch (props.first?.effectiveLeague ?? "").uppercased() {
@@ -11259,6 +11170,29 @@ struct PropSlipCard: View {
     }
 
     var body: some View {
+        ZStack {
+            front
+                .background(GeometryReader { g in
+                    Color.clear.preference(key: PickCardHeightKey.self, value: g.size.height)
+                })
+                .opacity(flipped ? 0 : 1)
+
+            if let p = backProp {
+                PropSlipBack(prop: p) {
+                    withAnimation(.spring(response: 0.6, dampingFraction: 0.82)) { flipped = false }
+                }
+                .opacity(flipped ? 1 : 0)
+                .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
+            }
+        }
+        .frame(height: flipped ? expandedH : nil)
+        .rotation3DEffect(.degrees(flipped ? 180 : 0), axis: (x: 0, y: 1, z: 0), perspective: 0.55)
+        .onPreferenceChange(PickCardHeightKey.self) { h in if h > 1, !flipped { frontH = h } }
+        .animation(.spring(response: 0.6, dampingFraction: 0.82), value: flipped)
+        .onAppear { LiveScoreCache.shared.startIfNeeded() }
+    }
+
+    private var front: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Slip header — locked card's eyebrow anatomy + prop count.
             HStack(spacing: 8) {
@@ -11297,7 +11231,10 @@ struct PropSlipCard: View {
                         .stroke(Color.white.opacity(0.12), style: StrokeStyle(lineWidth: 1, dash: [4, 5]))
                         .frame(height: 1)
                 }
-                Button { onTapProp(p) } label: {
+                Button {
+                    backProp = p
+                    withAnimation(.spring(response: 0.6, dampingFraction: 0.82)) { flipped = true }
+                } label: {
                     VStack(alignment: .leading, spacing: 6) {
                         HStack(alignment: .firstTextBaseline, spacing: 7) {
                             if let r = resultLetter(p) {
@@ -11368,7 +11305,100 @@ struct PropSlipCard: View {
                 )
                 .shadow(color: .black.opacity(0.45), radius: 14, y: 6)
         )
-        .onAppear { LiveScoreCache.shared.startIfNeeded() }
+    }
+}
+
+/// The slip's back face — one prop's take in the game-pick back's language:
+/// gold voice header, the pick, THE NUMBERS, THE READ, tap to flip home.
+struct PropSlipBack: View {
+    let prop: PropPick
+    let onFlipBack: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack {
+                Text("GARY'S TAKE")
+                    .font(GaryFonts.mono(10, bold: true)).tracking(1)
+                    .foregroundStyle(GaryColors.gold)
+                Spacer()
+                if let m = prop.matchup, !m.isEmpty {
+                    Text(m.uppercased())
+                        .font(GaryFonts.mono(9, bold: false))
+                        .foregroundStyle(.white.opacity(0.4)).lineLimit(1).minimumScaleFactor(0.7)
+                }
+            }
+
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(prop.player ?? "")
+                    .font(.system(size: 17, weight: .heavy))
+                    .foregroundStyle(GaryColors.silver).lineLimit(1).minimumScaleFactor(0.7)
+                Spacer()
+                if let team = prop.team, !team.isEmpty {
+                    Text(team.uppercased())
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(GaryColors.silver.opacity(0.7))
+                }
+            }
+
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(prop.slipPickText)
+                    .font(GaryFonts.mono(14, bold: true)).tracking(0.6)
+                    .foregroundStyle(GaryColors.heroAccent)
+                    .lineLimit(1).minimumScaleFactor(0.65)
+                Spacer(minLength: 6)
+                Text(Formatters.americanOdds(prop.odds))
+                    .font(GaryFonts.mono(12, bold: true))
+                    .foregroundStyle(GaryColors.silver.opacity(0.8))
+            }
+
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 10) {
+                    if let stats = prop.key_stats, !stats.isEmpty {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("The Numbers")
+                                .font(GaryFonts.display(14))
+                                .foregroundStyle(GaryColors.sectionHead)
+                            ForEach(Array(stats.prefix(4).enumerated()), id: \.offset) { _, s in
+                                HStack(alignment: .top, spacing: 7) {
+                                    Circle().fill(GaryColors.silver.opacity(0.7))
+                                        .frame(width: 4, height: 4).padding(.top, 6)
+                                    Text(s)
+                                        .font(.system(size: 12.5)).foregroundStyle(.white.opacity(0.85))
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                        }
+                    }
+                    if let a = prop.analysis, !a.isEmpty {
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text("The Read")
+                                .font(GaryFonts.display(14))
+                                .foregroundStyle(GaryColors.sectionHead)
+                            Text(cleanPropAnalysis(a))
+                                .font(.system(size: 13)).foregroundStyle(.white.opacity(0.75))
+                                .lineSpacing(2.5)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+            }
+
+            Text("tap to flip back  ↺")
+                .font(GaryFonts.mono(9, bold: false)).tracking(0.6)
+                .foregroundStyle(.white.opacity(0.3))
+                .frame(maxWidth: .infinity, alignment: .center)
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color(hex: "#1A1C22"))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(GaryColors.silver.opacity(0.32), lineWidth: 1)
+                )
+        )
+        .contentShape(Rectangle())
+        .onTapGesture { onFlipBack() }
     }
 }
 
