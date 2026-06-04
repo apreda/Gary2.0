@@ -5,6 +5,7 @@ import { extractTextualSummaryForModelSwitch, buildFlashResearchBriefing } from 
 import { createCostTracker } from './costTracker.js';
 import { buildPass1Message, buildPass25Message, buildPass25PropsMessage, buildPass3Unified, buildPass3Props, FINALIZE_PROPS_TOOL, getFinalizePropsToolForSport, PROPS_PICK_SCHEMA } from './passBuilders.js';
 import { parseGaryResponse, parsePropsResponse, normalizePickFormat, determineCurrentPass } from './responseParser.js';
+import { auditPickRationale, buildStatAuditRetryMessage } from './statAudit.js';
 import { isInvestigationSufficient, summarizeStatForContext, formatNum, formatPct, summarizePlayerGameLogs, summarizeMlbPlayerGameLogs, summarizePlayerStats, summarizeNbaPlayerAdvancedStats, pruneContextIfNeeded, normalizeSportToLeague, MAX_CONTEXT_MESSAGES, PRUNE_AFTER_ITERATION } from './orchestratorHelpers.js';
 import { fetchStats, clearStatRouterCache } from '../tools/statRouters/index.js';
 import { getConstitution } from '../constitution/index.js';
@@ -207,6 +208,7 @@ export async function runAgentLoop(systemPrompt, userMessage, sport, homeTeam, a
   let _investigationStallCount = 0;
   let _pass3Injected = false;
   let _extraIterationsUsed = 0; // Allow up to 2 iteration rewinds when all stats are already gathered (no new work done)
+  let _statAuditRetried = false; // One corrective retry when the rationale cites numbers absent from provided data
 
   // Flash Research Briefing state — comprehensive pre-game briefing (factual findings only)
   // Flash completes BEFORE Gary starts. Findings injected before Pass 1.
@@ -1839,6 +1841,32 @@ INVESTIGATION COMPLETE`
           console.warn(`[Orchestrator] Pass 2.5 parse-first attempt threw: ${e.message} — falling through to Pass 3 injection`);
         }
         if (earlyPick) {
+          // Stat audit: every high-risk number in the rationale must trace to
+          // provided data. The corrective retry fires only for RETRYABLE claims
+          // (stale-memory signatures a re-prompt can fix); windowed/derived
+          // claims get warnings without burning a round-trip — they fire on
+          // ~23% of non-MLB picks and no tool can source them anyway.
+          const audit = auditPickRationale(earlyPick, messages);
+          if (audit.retryable.length > 0 && !_statAuditRetried && iteration < effectiveMaxIterations) {
+            _statAuditRetried = true;
+            console.warn(`[StatAudit] ⚠️ ${audit.unsupported.length}/${audit.checked} numeric claim(s) not found in provided data (${audit.retryable.length} retryable) — requesting corrected rationale:\n  ${audit.unsupported.join('\n  ')}`);
+            messages.push({ role: 'assistant', content: message.content });
+            const retryMsg = buildStatAuditRetryMessage(audit.unsupported);
+            messages.push({ role: 'user', content: retryMsg });
+            nextMessageToSend = retryMsg;
+            continue;
+          }
+          if (audit.unsupported.length > 0) {
+            earlyPick._statAuditWarnings = audit.unsupported;
+            console.warn(`[StatAudit] ⚠️ Shipping with ${audit.unsupported.length} unsupported numeric claim(s)${_statAuditRetried ? ' after corrective retry' : ' (warn-only — windowed/derived)'}:\n  ${audit.unsupported.join('\n  ')}`);
+          } else if (audit.checked > 0) {
+            console.log(`[StatAudit] ✓ All ${audit.checked} numeric claims trace to provided data`);
+          }
+          // Keep the stored narrative consistent with the rationale that ships
+          // (matters after an audit retry, where the flagged draft would
+          // otherwise be the last assistant turn in `messages`).
+          messages.push({ role: 'assistant', content: message.content });
+
           console.log(`[Orchestrator] ✅ Pass 2.5 emitted valid JSON — skipping Pass 3 (saved 1 round-trip)`);
           earlyPick.toolCallHistory = toolCallHistory;
           earlyPick.iterations = iteration;
@@ -1949,6 +1977,29 @@ Output your complete pick JSON with the full rationale in the "rationale" field.
     }
 
     if (pick) {
+      // Stat audit (same contract as the Pass 2.5 short-circuit exit above):
+      // retry only for retryable claims; windowed/derived claims warn-only.
+      const audit = auditPickRationale(pick, messages);
+      if (audit.retryable.length > 0 && !_statAuditRetried && iteration < effectiveMaxIterations) {
+        _statAuditRetried = true;
+        console.warn(`[StatAudit] ⚠️ ${audit.unsupported.length}/${audit.checked} numeric claim(s) not found in provided data (${audit.retryable.length} retryable) — requesting corrected rationale:\n  ${audit.unsupported.join('\n  ')}`);
+        messages.push({ role: 'assistant', content: message.content });
+        const retryMsg = buildStatAuditRetryMessage(audit.unsupported);
+        messages.push({ role: 'user', content: retryMsg });
+        nextMessageToSend = retryMsg;
+        continue;
+      }
+      if (audit.unsupported.length > 0) {
+        pick._statAuditWarnings = audit.unsupported;
+        console.warn(`[StatAudit] ⚠️ Shipping with ${audit.unsupported.length} unsupported numeric claim(s)${_statAuditRetried ? ' after corrective retry' : ' (warn-only — windowed/derived)'}:\n  ${audit.unsupported.join('\n  ')}`);
+      } else if (audit.checked > 0) {
+        console.log(`[StatAudit] ✓ All ${audit.checked} numeric claims trace to provided data`);
+      }
+      // Keep the stored narrative consistent with the rationale that ships
+      // (matters after an audit retry, where the flagged draft would
+      // otherwise be the last assistant turn in `messages`).
+      messages.push({ role: 'assistant', content: message.content });
+
       pick.toolCallHistory = toolCallHistory;
       pick.iterations = iteration;
       pick.rawAnalysis = message.content;
