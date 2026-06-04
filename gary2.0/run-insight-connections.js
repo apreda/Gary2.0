@@ -28,6 +28,8 @@ import { getESTDate } from './src/utils/dateUtils.js';
 
 // Import after env is loaded (services read env at module init time)
 const { generateInsightConnections } = await import('./src/services/insights/generateInsightConnections.js');
+const { buildPlayerInsightCards } = await import('./src/services/insights/playerInsightCards.js');
+const { ballDontLieService } = await import('./src/services/ballDontLieService.js');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Config
@@ -50,6 +52,12 @@ const adminKey = supabaseServiceKey || supabaseAnonKey;
 
 const TABLE = 'insight_connections';
 const REST_URL = supabaseUrl ? `${supabaseUrl}/rest/v1/${TABLE}` : null;
+
+// Per-player breakdown packs (the iOS Hub "full breakdown" view). Built only for
+// MLB after the day's insight_connections insert succeeds; failures here are
+// NON-FATAL to the connections run.
+const CARDS_TABLE = 'player_insight_cards';
+const CARDS_REST_URL = supabaseUrl ? `${supabaseUrl}/rest/v1/${CARDS_TABLE}` : null;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Arg parsing (mirrors getArgValue in scripts/run-agentic-picks.js)
@@ -189,6 +197,80 @@ async function insertRows(rows) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Player Insight Cards write path (same idempotency as the connections write)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** DELETE the day's existing packs for a league (idempotent re-run). */
+async function deleteDayCards(date, league) {
+  await axios({
+    method: 'DELETE',
+    url: CARDS_REST_URL,
+    headers: { ...restHeaders, Prefer: 'return=minimal' },
+    params: {
+      date: `eq.${date}`,
+      league: `eq.${league}`,
+    },
+  });
+}
+
+/** INSERT freshly-built packs (idempotency comes from deleteDayCards first). */
+async function insertCards(rows) {
+  const sanitized = JSON.parse(JSON.stringify(rows));
+  await axios({
+    method: 'POST',
+    url: CARDS_REST_URL,
+    data: sanitized,
+    headers: { ...restHeaders, Prefer: 'return=minimal' },
+  });
+}
+
+/**
+ * Build the day's per-player breakdown packs (MLB only) and write them with the
+ * same DELETE-then-INSERT idempotency. NON-FATAL: any failure here is caught and
+ * warned so it never sinks the connections run. Respects --dry-run (prints the
+ * pack count + one sample payload instead of writing).
+ */
+async function buildAndStoreCards({ date, league, connections }) {
+  if (league !== 'MLB') return;
+  try {
+    // generateInsightConnections returns gameCount but not the slate itself;
+    // re-fetch it here (getMlbGamesForDate is 5-min cached, so this is cheap).
+    const games = (await ballDontLieService.getMlbGamesForDate(date)) || [];
+    const packs = await buildPlayerInsightCards({ date, league, connections, games });
+
+    if (!Array.isArray(packs) || packs.length === 0) {
+      console.log(`   ℹ️  No player insight cards built for ${league} (${date}).`);
+      return;
+    }
+
+    const rows = packs.map((p) => ({
+      date: p.date,
+      league: p.league,
+      player_id: String(p.player_id),
+      player_name: p.player_name ?? null,
+      team_abbr: p.team_abbr ?? null,
+      game_id: p.game_id != null ? String(p.game_id) : null,
+      payload: p.payload,
+      generated_by: 'insights-cli',
+    }));
+
+    if (dryRun) {
+      console.log(`   🧪 Would write ${rows.length} player insight card(s). Sample payload:`);
+      console.log(JSON.stringify(rows[0]?.payload, null, 2));
+      return;
+    }
+
+    await deleteDayCards(date, league);
+    await insertCards(rows);
+    console.log(`   ✅ Stored ${rows.length} player insight card(s) for ${league} (${date}).`);
+  } catch (err) {
+    // NON-FATAL — a pack build/write failure must not fail the connections run.
+    const detail = err.response?.data ? JSON.stringify(err.response.data) : err.message;
+    console.warn(`   ⚠️  [${league}] player insight cards skipped: ${detail}`);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Main
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -234,6 +316,9 @@ async function run() {
     if (dryRun) {
       console.log(`   Would write ${rows.length} row(s):`);
       console.log(JSON.stringify(rows, null, 2));
+      // Player insight cards build on the SAME connections (MLB only); in dry-run
+      // this prints the pack count + one sample payload instead of writing.
+      await buildAndStoreCards({ date: targetDate, league, connections });
       continue;
     }
 
@@ -242,6 +327,9 @@ async function run() {
       await deleteDayRows(targetDate, league);
       await insertRows(rows);
       console.log(`   ✅ Stored ${rows.length} row(s) for ${league} (${targetDate}).`);
+      // After the connections insert succeeds, build + store this league's
+      // per-player breakdown packs (MLB only). NON-FATAL — guarded internally.
+      await buildAndStoreCards({ date: targetDate, league, connections });
     } catch (err) {
       hadError = true;
       const detail = err.response?.data

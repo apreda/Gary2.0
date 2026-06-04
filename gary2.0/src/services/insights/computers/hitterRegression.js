@@ -186,7 +186,9 @@ async function hitterRegressionForGame(game, { bdl, xByName, gameLabel, stats })
   return top.map((c) => {
     const overperforming = c.ba > c.estBa; // surface AVG above expected = flattered
     return makeRow({
-      category: 'hitterRegression',
+      // 'regressionWatch' -> regression_watch: joins the pitcher lane's token so
+      // the iOS Regression Board and the grader's ip>0 disambiguation both work.
+      category: 'regressionWatch',
       headline: buildHeadline(c, overperforming),
       detail: buildDetail(c, overperforming),
       game: label,
