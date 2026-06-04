@@ -8034,6 +8034,16 @@ struct CompactPickRow: View {
 
                 // Bottom — the PICK (abbreviated, gold) stretched full-width: this card's product.
                 // Gold text (image 2 treatment) on the full-width layout (image 1) — muted fill
+                // Flip affordance — names what the tap gives you.
+                HStack(spacing: 3) {
+                    Spacer()
+                    Text("Gary's Take")
+                        .font(.system(size: 10.5, weight: .semibold))
+                        .foregroundStyle(GaryColors.heroAccent.opacity(0.85))
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(GaryColors.heroAccent.opacity(0.6))
+                }
                 // + thin border so the gold letters stay the hero.
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(compactPick)
@@ -8061,16 +8071,6 @@ struct CompactPickRow: View {
                         )
                 )
 
-                // Flip affordance — names what the tap gives you.
-                HStack(spacing: 3) {
-                    Spacer()
-                    Text("Gary's Take")
-                        .font(.system(size: 10.5, weight: .semibold))
-                        .foregroundStyle(GaryColors.heroAccent.opacity(0.85))
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundStyle(GaryColors.heroAccent.opacity(0.6))
-                }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 12)
@@ -12399,6 +12399,16 @@ struct CompactPropRow: View {
                     Spacer(minLength: 0)
                 }
 
+                // Flip affordance — names what the tap gives you.
+                HStack(spacing: 3) {
+                    Spacer()
+                    Text("Gary's Take")
+                        .font(.system(size: 10.5, weight: .semibold))
+                        .foregroundStyle(GaryColors.heroAccent.opacity(0.85))
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(GaryColors.heroAccent.opacity(0.6))
+                }
                 // Bottom — silver box, and the ONLY gold on the card is the
                 // pick itself: "TOTAL BASES OVER 1.5". Odds and border are
                 // silver (the card's metal); gold marks exactly what Gary says.
@@ -12426,16 +12436,6 @@ struct CompactPropRow: View {
                         )
                 )
 
-                // Flip affordance — names what the tap gives you.
-                HStack(spacing: 3) {
-                    Spacer()
-                    Text("Gary's Take")
-                        .font(.system(size: 10.5, weight: .semibold))
-                        .foregroundStyle(GaryColors.heroAccent.opacity(0.85))
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundStyle(GaryColors.heroAccent.opacity(0.6))
-                }
 
             }
             .padding(.horizontal, 12)
