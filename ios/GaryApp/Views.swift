@@ -7984,17 +7984,19 @@ struct CompactPickRow: View {
                                     .overlay(Capsule().stroke(resultStampColor.opacity(0.4), lineWidth: 0.8))
                             )
                     } else if let live = liveStatus, live.isLive {
-                        Text("LIVE")
+                        Text(liveSlotText(live, label: "LIVE"))
                             .font(GaryFonts.mono(11, bold: true))
-                            .tracking(1)
+                            .tracking(0.5)
                             .foregroundStyle(.white.opacity(0.75))
                             .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                     } else if let live = liveStatus, live.isFinal {
-                        Text("FINAL")
+                        Text(liveSlotText(live, label: "FINAL"))
                             .font(GaryFonts.mono(11, bold: false))
-                            .tracking(1)
+                            .tracking(0.5)
                             .foregroundStyle(.white.opacity(0.5))
                             .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                     } else if !formattedTime.isEmpty {
                         Text(formattedTime.uppercased())
                             .font(GaryFonts.mono(11, bold: false))
@@ -10713,6 +10715,15 @@ let wcTeamKeywords: [String: [String]] = [
 /// MLB, NBA, or World Cup keyword maps) to a name present in the matchup —
 /// collisions (MIN Twins vs MIN Timberwolves, COL Rockies vs COL Colombia)
 /// sort themselves out because BOTH sides must match the same matchup.
+/// Compact in-card status text: "LIVE 4–6 · INN 7" / "FINAL · 4–6" (away–home;
+/// the card already names the teams, so no abbreviations).
+func liveSlotText(_ ls: LiveScore, label: String) -> String {
+    var bits: [String] = [label]
+    if let a = ls.away_score, let h = ls.home_score { bits.append("\(a)–\(h)") }
+    if label == "LIVE", let det = ls.detail, !det.isEmpty, det != "LIVE" { bits.append(det) }
+    return bits.joined(separator: " · ")
+}
+
 func abbrGameMatches(_ abbrGame: String, matchup: String) -> Bool {
     let hay = matchup.lowercased()
     let abbrevs = abbrGame.uppercased()
@@ -10836,8 +10847,7 @@ struct PicksCarouselView: View {
                 ScrollView(showsIndicators: false) {
                     PicksTodayPage(topProps: topProps, topGamePick: topGamePick,
                                    gamePickResult: store.gamePickResult, resultForProp: store.resultForProp,
-                                   edges: Array(connections.prefix(8)), onTapProp: { selectedProp = $0 },
-                                   liveScore: topGamePick.flatMap { liveScore(forMatchup: "\($0.awayTeam ?? "") @ \($0.homeTeam ?? "")") })
+                                   edges: Array(connections.prefix(8)), onTapProp: { selectedProp = $0 })
                         .padding(.bottom, 130)
                 }
                 .tag(0)
@@ -10846,8 +10856,7 @@ struct PicksCarouselView: View {
                         PicksGamePage(group: g,
                                       entry: store.gamePickEntry(forMatchup: g.matchup),
                                       gamePickResult: store.gamePickResult, resultForProp: store.resultForProp,
-                                      edges: edges(for: g), onTapProp: { selectedProp = $0 },
-                                      liveScore: liveScore(forMatchup: g.matchup))
+                                      edges: edges(for: g), onTapProp: { selectedProp = $0 })
                             .padding(.bottom, 130)
                     }
                     .tag(idx + 1)
@@ -11004,7 +11013,6 @@ struct PicksTodayPage: View {
     let resultForProp: (PropPick) -> String?
     let edges: [Signal]
     let onTapProp: (PropPick) -> Void
-    var liveScore: LiveScore? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -11014,9 +11022,6 @@ struct PicksTodayPage: View {
                 .padding(.horizontal, 16).padding(.top, 8)
 
             if let gp = topGamePick {
-                if let ls = liveScore, ls.isLive || ls.isFinal {
-                    LiveScoreStrip(score: ls).padding(.horizontal, 16)
-                }
                 // topGamePick is always TODAY's live pick — never stamp a W/L
                 // (the same matchup may have settled yesterday; that's not this game).
                 FlippablePickCard(pick: gp, gameResult: nil, showSportBadge: true)
@@ -11048,7 +11053,6 @@ struct PicksGamePage: View {
     let resultForProp: (PropPick) -> String?
     let edges: [Signal]
     let onTapProp: (PropPick) -> Void
-    var liveScore: LiveScore? = nil
 
     private var topProps: [PropPick] {
         Array(group.props.sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.prefix(2))
@@ -11072,9 +11076,6 @@ struct PicksGamePage: View {
             }
             .padding(.horizontal, 16).padding(.top, 8)
 
-            if let ls = liveScore, ls.isLive || ls.isFinal {
-                LiveScoreStrip(score: ls).padding(.horizontal, 16)
-            }
 
             if let entry {
                 FlippablePickCard(pick: entry.pick,
@@ -12363,17 +12364,19 @@ struct CompactPropRow: View {
                                     .overlay(Capsule().stroke(resultStampColor.opacity(0.4), lineWidth: 0.8))
                             )
                     } else if let live = liveStatus, live.isLive {
-                        Text("LIVE")
+                        Text(liveSlotText(live, label: "LIVE"))
                             .font(GaryFonts.mono(11, bold: true))
-                            .tracking(1)
+                            .tracking(0.5)
                             .foregroundStyle(.white.opacity(0.75))
                             .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                     } else if let live = liveStatus, live.isFinal {
-                        Text("FINAL")
+                        Text(liveSlotText(live, label: "FINAL"))
                             .font(GaryFonts.mono(11, bold: false))
-                            .tracking(1)
+                            .tracking(0.5)
                             .foregroundStyle(.white.opacity(0.5))
                             .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                     } else if !formattedTime.isEmpty {
                         Text(formattedTime.uppercased())
                             .font(GaryFonts.mono(11, bold: false))
