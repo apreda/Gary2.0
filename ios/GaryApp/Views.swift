@@ -7624,10 +7624,10 @@ struct CompactPickRow: View {
     }
     private var resultStampColor: Color {
         switch resolvedResult {
-        case "won": return GaryColors.gold
-        case "push": return Color.yellow
-        case "lost": return Color(hex: "#6A6A70")
-        default: return Color(hex: "#6A6A70")
+        case "won": return Color(hex: "#3FB950")
+        case "push": return GaryColors.gold
+        case "lost": return Color(hex: "#E5484D")
+        default: return Color(hex: "#E5484D")
         }
     }
     private var resultStampTextOpacity: Double {
@@ -7736,6 +7736,11 @@ struct CompactPickRow: View {
                     }
                     Spacer(minLength: 6)
                     if resolvedResult != nil {
+                        if let finalScore, !finalScore.isEmpty {
+                            Text(finalScore)
+                                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                .foregroundStyle(.white.opacity(0.5))
+                        }
                         Text(resolvedResult == "won" ? "WON" : (resolvedResult == "push" ? "PUSH" : "LOST"))
                             .font(.system(size: 10, weight: .heavy, design: .monospaced))
                             .tracking(0.8)
@@ -7782,73 +7787,32 @@ struct CompactPickRow: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
 
-                // Bottom row — accent-tinted pick chip (the call) on the left,
-                // GARY'S LEAN meter on the right. Packed onto one row to hold
-                // the compact ~3-row height. Accent (not gold) keeps the
-                // per-sport color-coding that marks this as a game pick.
-                HStack(spacing: 12) {
-                    HStack(alignment: .firstTextBaseline, spacing: 7) {
-                        Text(pickParts.pick.uppercased())
-                            .font(.system(size: 17, weight: .heavy, design: .monospaced))
-                            .tracking(0.8)
-                            .foregroundStyle(.white)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                        if !pickParts.odds.isEmpty {
-                            Text(pickParts.odds)
-                                .font(.system(size: 15, weight: .semibold, design: .monospaced))
-                                .foregroundStyle(.white.opacity(0.85))
-                        }
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 11)
-                    .background(
-                        RoundedRectangle(cornerRadius: 9, style: .continuous)
-                            .fill(GaryColors.gold.opacity(0.20))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                    .stroke(GaryColors.gold.opacity(0.7), lineWidth: 1.2)
-                            )
-                    )
-
-                    Spacer(minLength: 0)
-
-                    if let finalScore, !finalScore.isEmpty {
-                        VStack(alignment: .trailing, spacing: 3) {
-                            Text("FINAL")
-                                .font(.system(size: 9.5, weight: .medium, design: .monospaced))
-                                .tracking(1)
-                                .foregroundStyle(GaryColors.gold.opacity(0.9))
-                            Text(finalScore)
-                                .font(.system(size: 14, weight: .bold, design: .monospaced))
-                                .foregroundStyle(.white.opacity(0.9))
-                                .lineLimit(1).minimumScaleFactor(0.7)
-                        }
-                        .frame(width: 116)
-                    } else {
-                        VStack(alignment: .trailing, spacing: 5) {
-                            HStack(alignment: .firstTextBaseline, spacing: 5) {
-                                Text("GARY'S LEAN")
-                                    .font(.system(size: 8.5, weight: .semibold, design: .monospaced))
-                                    .tracking(0.8)
-                                    .foregroundStyle(.white.opacity(0.45))
-                                Text("\(Int(confidenceValue * 100))%")
-                                    .font(.system(size: 13, weight: .heavy))
-                                    .foregroundStyle(GaryColors.gold)
-                            }
-                            GeometryReader { geo in
-                                ZStack(alignment: .leading) {
-                                    Capsule().fill(Color.white.opacity(0.07))
-                                    Capsule()
-                                        .fill(LinearGradient(colors: [GaryColors.gold, accentColor], startPoint: .leading, endPoint: .trailing))
-                                        .frame(width: geo.size.width * confidenceValue)
-                                }
-                            }
-                            .frame(height: 3.5)
-                        }
-                        .frame(width: 124)
+                // Bottom — the PICK, stretched full-width: this card's product.
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(pickParts.pick.uppercased())
+                        .font(.system(size: 17, weight: .heavy, design: .monospaced))
+                        .tracking(0.8)
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                    Spacer(minLength: 8)
+                    if !pickParts.odds.isEmpty {
+                        Text(pickParts.odds)
+                            .font(.system(size: 15, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.9))
                     }
                 }
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(GaryColors.gold.opacity(0.20))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .stroke(GaryColors.gold.opacity(0.7), lineWidth: 1.2)
+                        )
+                )
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 12)
@@ -7933,10 +7897,10 @@ struct ScoreboardPickCard: View {
     }
     private var resultStampColor: Color {
         switch resolvedResult {
-        case "won": return GaryColors.gold
-        case "push": return Color.yellow
-        case "lost": return Color(hex: "#6A6A70")
-        default: return Color(hex: "#6A6A70")
+        case "won": return Color(hex: "#3FB950")
+        case "push": return GaryColors.gold
+        case "lost": return Color(hex: "#E5484D")
+        default: return Color(hex: "#E5484D")
         }
     }
     private var resultStampTextOpacity: Double {
@@ -8219,7 +8183,7 @@ struct PickCardBack: View {
                     .foregroundStyle(GaryColors.gold).lineLimit(1).minimumScaleFactor(0.7)
                 Spacer()
                 if pick.confidence != nil {
-                    Text("\(Int(confidence * 100))% CONF")
+                    Text("GARY'S LEAN  \(Int(confidence * 100))%")
                         .font(.system(size: 11, weight: .bold, design: .monospaced))
                         .foregroundStyle(.white.opacity(0.55))
                 }
@@ -10840,6 +10804,7 @@ struct PropsHubView: View {
     /// Player whose full breakdown sheet is open (card-back CTA / board row).
     @State private var breakdownSignal: Signal? = nil
     @State private var searchText: String = ""
+    @FocusState private var searchFocused: Bool
     /// Selected lane in the PLAYER EDGES tab strip; nil = first non-empty lane.
     @State private var laneTab: SignalKind? = nil
 
@@ -10978,6 +10943,8 @@ struct PropsHubView: View {
             .onAppear { if league == "NBA" { sel = .nba } }
             .task { if !didLoad { await load() } }
         }
+        // Let the search keyboard collapse: drag the list, return key, or clear.
+        .scrollDismissesKeyboard(.immediately)
         .sheet(item: $selectedSignal) { EdgeDetailSheet(signal: $0, onSelectGame: onSelectGame) }
         .sheet(item: $breakdownSignal) { PlayerInsightSheet(signal: $0) }
     }
@@ -11045,8 +11012,11 @@ struct PropsHubView: View {
                 .foregroundStyle(.white)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
+                .focused($searchFocused)
+                .submitLabel(.search)
+                .onSubmit { searchFocused = false }
             if !searchText.isEmpty {
-                Button { searchText = "" } label: {
+                Button { searchText = ""; searchFocused = false } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 14)).foregroundStyle(.white.opacity(0.3))
                 }.buttonStyle(.plain)
@@ -11755,10 +11725,10 @@ struct CompactPropRow: View {
     }
     private var resultStampColor: Color {
         switch resolvedResult {
-        case "won": return GaryColors.gold
-        case "push": return Color.yellow
-        case "lost": return Color(hex: "#6A6A70")
-        default: return Color(hex: "#6A6A70")
+        case "won": return Color(hex: "#3FB950")
+        case "push": return GaryColors.gold
+        case "lost": return Color(hex: "#E5484D")
+        default: return Color(hex: "#E5484D")
         }
     }
     private var resultStampTextOpacity: Double {
