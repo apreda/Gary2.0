@@ -909,7 +909,13 @@ VENUE: [arena name, city]
   // ===================================================================
   // Step F: Generate game significance
   // ===================================================================
-  if (!game.gameSignificance || game.gameSignificance === 'Regular season game' || game.gameSignificance.length > 100) {
+  // If Gemini already detected a playoff/tournament round, THAT is the real
+  // significance — never let standings-based regeneration (e.g. "Elite Matchup")
+  // overwrite "NBA Playoffs"/"NBA Finals". The round lives in tournamentContext.
+  if (game.tournamentContext) {
+    game.gameSignificance = game.tournamentContext;
+    console.log(`[Scout Report] Game significance from tournament context: ${game.tournamentContext}`);
+  } else if (!game.gameSignificance || game.gameSignificance === 'Regular season game' || game.gameSignificance.length > 100) {
     try {
       // Fetch standings for significance generation (optional - fallbacks exist)
       const bdlSport = sportToBdlKey(sportKey);
