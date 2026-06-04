@@ -10048,15 +10048,15 @@ final class PropsSlateStore: ObservableObject {
 
     // MARK: Derived data
 
-    /// All non-TD props for the slate, sorted by game time. Falls back to
-    /// yesterday's props when there is nothing fresh today (recap mode).
+    /// All non-TD props for the slate, sorted by game time. Per-sport recap:
+    /// `yesterdayProps` only contains sports with NO fresh props today
+    /// (filtered at load), so mixing them in gives every sport either today's
+    /// slate or yesterday's results — the same rule the rest of the app follows.
     var slateProps: [PropPick] {
         let sortByTime: ([PropPick]) -> [PropPick] = { $0.sorted { ($0.commence_time ?? "") < ($1.commence_time ?? "") } }
         let todayNonTD = allProps.filter { !$0.isTDPick }
-        if todayNonTD.isEmpty && showingYesterdayResults {
-            return sortByTime(yesterdayProps.filter { !$0.isTDPick })
-        }
-        return sortByTime(todayNonTD)
+        let recap = showingYesterdayResults ? yesterdayProps.filter { !$0.isTDPick } : []
+        return sortByTime(todayNonTD + recap)
     }
 
     /// Group props by matchup, preserving first-seen order. Identical logic to
@@ -10419,8 +10419,13 @@ struct PicksCarouselView: View {
     @State private var page = 0
     @State private var selectedProp: PropPick?
 
+    /// Every league with content: today's props/picks plus the per-sport
+    /// yesterday recaps (a sport with no picks today shows its results —
+    /// the same rule the rest of the app follows).
     private var sports: [String] {
-        let s = Set(store.slateProps.compactMap { ($0.effectiveLeague ?? "").uppercased() }.filter { !$0.isEmpty })
+        var s = Set(store.slateProps.compactMap { ($0.effectiveLeague ?? "").uppercased() }.filter { !$0.isEmpty })
+        s.formUnion(store.gamePicks.compactMap { ($0.league ?? "").uppercased() }.filter { !$0.isEmpty })
+        s.formUnion(store.yesterdayGamePicks.compactMap { ($0.league ?? "").uppercased() }.filter { !$0.isEmpty })
         return ["ALL"] + s.sorted()
     }
     private var filteredProps: [PropPick] {
@@ -10435,7 +10440,9 @@ struct PicksCarouselView: View {
         return g.props.contains { !store.isYesterdayProp($0) }
     }
     private var topProps: [PropPick] {
-        Array(filteredProps.sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.prefix(2))
+        // FREE PICK is today-only — never surface a settled recap prop there.
+        Array(filteredProps.filter { !store.isYesterdayProp($0) }
+            .sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.prefix(2))
     }
     private var topGamePick: GaryPick? {
         let p = (sport == "ALL") ? store.gamePicks : store.gamePicks.filter { ($0.league ?? "").uppercased() == sport }
