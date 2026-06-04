@@ -356,19 +356,6 @@ enum SupabaseAPI {
 
     // MARK: - Insight Connections ("Today's Edges" hub)
 
-    /// Yesterday relative to `todayEST()` (the hub's grading day).
-    static func yesterdayEST() -> String {
-        guard let tz = TimeZone(identifier: "America/New_York") else { return todayEST() }
-        var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = tz
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.timeZone = tz
-        guard let today = formatter.date(from: todayEST()),
-              let yesterday = cal.date(byAdding: .day, value: -1, to: today) else { return todayEST() }
-        return formatter.string(from: yesterday)
-    }
-
     /// Graded-edge tally for a date: how many hub edges hit vs were graded
     /// (hit + miss; pushes excluded). Powers the hub's track-record line.
     /// Returns nil on any failure or when nothing is graded yet.

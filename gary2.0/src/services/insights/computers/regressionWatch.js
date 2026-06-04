@@ -239,7 +239,9 @@ async function xeraForGame(game, { season, bdl, xByName, gameLabel }) {
         tone: overperforming ? TONES.CAUTION : TONES.EDGE,
         spark: [round(era, 2), round(xera, 2)],
         relevance_score: scoreFromEdge(gap, { scale: REL_XERA_SCALE, base: 45 }),
-        player_id: x.player_id != null ? x.player_id : undefined,
+        // BDL lineup playerId (NOT the Savant x.player_id, which is the MLBAM
+        // id) — the grading pass joins box rows by BDL id.
+        player_id: pitcher?.playerId != null ? pitcher.playerId : undefined,
         team_id: teamId,
         game_id: gameId,
       }),

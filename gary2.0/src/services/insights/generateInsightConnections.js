@@ -23,6 +23,7 @@
 //    getMlbPlateAppearances all require."
 
 import { ballDontLieService } from '../ballDontLieService.js';
+import fifaWorldCupService from '../fifaWorldCupService.js';
 import { todayStr, gameLabel, clampScore } from './shared.js';
 
 // MLB connection computers (one file per lane under ./computers/).
@@ -30,6 +31,7 @@ import { computeHeatCheck } from './computers/heatCheck.js';
 import { computePlatoonEdge } from './computers/platoonEdge.js';
 import { computeBallparkShift } from './computers/ballparkShift.js';
 import { computeRegressionWatch } from './computers/regressionWatch.js';
+import { computeHitterRegression } from './computers/hitterRegression.js';
 import { computeBeneficiary } from './computers/beneficiary.js';
 import { computeRestFatigue } from './computers/restFatigue.js';
 import { computeOwned } from './computers/owned.js';
@@ -40,6 +42,11 @@ import { computeNbaRestFatigue } from './computers/nbaRestFatigue.js';
 import { computeNbaStreak } from './computers/nbaStreak.js';
 import { computeNbaBeneficiary } from './computers/nbaBeneficiary.js';
 import { computeNbaOwned } from './computers/nbaOwned.js';
+
+// World Cup connection computers (raw FIFA match objects, fifaWorldCupService).
+import { computeWcForm } from './computers/wcForm.js';
+import { computeWcH2h } from './computers/wcH2h.js';
+import { computeWcStakes } from './computers/wcStakes.js';
 
 /**
  * Registry of computers per league. Each entry is an async fn:
@@ -52,6 +59,7 @@ const MLB_COMPUTERS = [
   computePlatoonEdge,
   computeBallparkShift,
   computeRegressionWatch,
+  computeHitterRegression,
   computeBeneficiary,
   computeRestFatigue,
   computeOwned,
@@ -65,9 +73,16 @@ const NBA_COMPUTERS = [
   computeNbaOwned,
 ];
 
+const WC_COMPUTERS = [
+  computeWcForm,
+  computeWcH2h,
+  computeWcStakes,
+];
+
 const COMPUTERS_BY_LEAGUE = {
   mlb: MLB_COMPUTERS,
   nba: NBA_COMPUTERS,
+  wc: WC_COMPUTERS,
 };
 
 /**
@@ -100,11 +115,18 @@ export async function generateInsightConnections({ date, league = 'mlb', options
   //    on this slate; an empty slate short-circuits everything.
   //    MLB: "getMlbGamesForDate(dateStr) — single positional arg (YYYY-MM-DD)."
   //    NBA: getNbaGamesForDate(dateStr) — same contract.
+  //    WC:  fifaWorldCupService.getMatchesForDate(dateStr) — RAW FIFA match
+  //         objects (home_team/away_team are team objects with `abbreviation`
+  //         = the 3-letter FIFA code); the WC computers own that shape.
   let games = [];
   try {
-    games = leagueKey === 'nba'
-      ? (await ballDontLieService.getNbaGamesForDate(dateStr)) || []
-      : (await ballDontLieService.getMlbGamesForDate(dateStr)) || [];
+    if (leagueKey === 'wc') {
+      games = (await fifaWorldCupService.getMatchesForDate(dateStr)) || [];
+    } else if (leagueKey === 'nba') {
+      games = (await ballDontLieService.getNbaGamesForDate(dateStr)) || [];
+    } else {
+      games = (await ballDontLieService.getMlbGamesForDate(dateStr)) || [];
+    }
   } catch (err) {
     console.error('[insights] Failed to load slate:', err?.message || err);
     games = [];
@@ -117,7 +139,10 @@ export async function generateInsightConnections({ date, league = 'mlb', options
 
   // BDL game objects expose `away_team` (MLB) or `visitor_team` (NBA); the
   // computers read either. Alias both directions so team abbr/id lookups and
-  // gameLabel resolve (no 'AWY').
+  // gameLabel resolve (no 'AWY'). WC matches are RAW FIFA shape — the WC
+  // computers read home_team/away_team natively, but the alias is applied for
+  // them too so the postProcess slate filter and any shared helpers see a
+  // consistent pair of keys (it only fills the MISSING alias, never mutates).
   for (const g of games) {
     if (g && typeof g === 'object') {
       if (g.away_team && !g.visitor_team) g.visitor_team = g.away_team;
@@ -237,6 +262,7 @@ function isValidRow(row) {
  *      getMlbPlayerSeasonStats / splits / xStats all key on this).
  * NBA: the season's START year — a June 2026 Finals game belongs to season
  *      2025 (the 2025-26 season). Sept (mo 9) is the cutover.
+ * WC:  the tournament's calendar year (2026) — same as the default.
  */
 function seasonForDate(dateStr, leagueKey = 'mlb') {
   const y = Number(String(dateStr).slice(0, 4));

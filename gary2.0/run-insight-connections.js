@@ -35,7 +35,8 @@ const { generateInsightConnections } = await import('./src/services/insights/gen
 
 // Leagues we currently generate insight connections for. Add others here as
 // they come online (each needs a computer registry in generateInsightConnections).
-const ACTIVE_LEAGUES = ['MLB', 'NBA'];
+// WC = 2026 FIFA World Cup (kicks off June 11; empty slates no-op until then).
+const ACTIVE_LEAGUES = ['MLB', 'NBA', 'WC'];
 
 // Resolve Supabase config exactly like src/supabaseClient.js does for Node scripts.
 const supabaseUrl =
