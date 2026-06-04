@@ -1960,13 +1960,7 @@ struct HomeView: View {
                                         .font(.system(size: 12, weight: .bold))
                                         .foregroundStyle(GaryColors.gold)
                                         .padding(.leading, 4)
-                                    CompactPickRow(pick: pick)
-                                        .contentShape(Rectangle())
-                                        .onTapGesture {
-                                            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                                                selectedPick = pick
-                                            }
-                                        }
+                                    FlippablePickCard(pick: pick, gameResult: nil, showSportBadge: true)
                                 }
                             } else if !loading {
                                 // Show yesterday's top results with W/L stamps
@@ -1979,26 +1973,16 @@ struct HomeView: View {
                                         .padding(.leading, 4)
 
                                     if let yPick = yesterdayTopPick {
-                                        CompactPickRow(pick: yPick, gameResult: yesterdayTopPickResult)
-                                            .contentShape(Rectangle())
-                                            .onTapGesture {
-                                                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                                                    selectedPick = yPick
-                                                }
-                                            }
+                                        FlippablePickCard(pick: yPick, gameResult: yesterdayTopPickResult, showSportBadge: true)
                                     }
                                 }
                             }
 
                             // Top Prop — stacked directly below with no gap
                             if let prop = freeProp {
-                                CompactPropRow(prop: prop, showSportBadge: true)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture { selectedProp = prop }
+                                FlippablePropCard(prop: prop, showSportBadge: true)
                             } else if !loading, let yProp = yesterdayTopProp {
-                                CompactPropRow(prop: yProp, gameResult: yesterdayTopPropResult, showSportBadge: true)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture { selectedProp = yProp }
+                                FlippablePropCard(prop: yProp, gameResult: yesterdayTopPropResult, showSportBadge: true)
                             }
                         }
                         .padding(.horizontal, 16)
