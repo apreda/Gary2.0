@@ -167,12 +167,12 @@ struct GaryChatView: View {
     private var primaryStatusText: some View {
         VStack(spacing: 12) {
             Text(statusEyebrow)
-                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .font(GaryFonts.mono(11, bold: true))
                 .tracking(1)
                 .foregroundStyle(GaryColors.gold.opacity(0.9))
 
             Text(statusLine)
-                .font(.system(size: 32, weight: .regular, design: .serif))
+                .font(GaryFonts.text(32))
                 .foregroundStyle(.white)
                 .multilineTextAlignment(.center)
 

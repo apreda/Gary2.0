@@ -42,8 +42,8 @@ struct GaryPageHeader<Trailing: View>: View {
                     .foregroundStyle(.white.opacity(0.95))
                 if let accent, !accent.isEmpty {
                     Text(accent)
-                        .font(GaryFonts.mono(10))
-                        .foregroundStyle(GaryColors.gold.opacity(0.9))
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(GaryColors.meta)
                 }
                 Spacer()
                 trailing()
@@ -1414,6 +1414,24 @@ enum GaryColors {
     static let silverLight = Color(hex: "#D7DCE4")
     static let silverDim = Color(hex: "#AEB8C4")
 
+    // MARK: - Semantic roles (the gold diet lives here — retune in one place)
+    //
+    // Policy (design review, June 2026): GOLD = the pick + Gary's voice,
+    // nothing else. Labels, toggles, tabs, and section heads are neutral;
+    // green/red only where they carry meaning (win/loss, hot/cold).
+
+    /// THE hero accent — the pick chip and Gary's own voice. Nothing else.
+    static let heroAccent = gold
+    /// Section sub-heads (replaces the gold mono eyebrows).
+    static let sectionHead = Color.white.opacity(0.92)
+    /// Section descriptions and quiet supporting labels.
+    static let sectionSub = Color.white.opacity(0.45)
+    /// Metadata: times, game tags, fine print.
+    static let meta = Color.white.opacity(0.35)
+    /// Selected state for toggles/tabs/chips — bright neutral, never gold.
+    static let selectedText = Color.white.opacity(0.95)
+    static let selectedFill = Color.white.opacity(0.12)
+
     // NFL Green (same as prop picks)
     static let nflAccent = Color(hex: "#22C55E")
 
@@ -1589,7 +1607,7 @@ struct PerformanceBanner: View {
                             .foregroundStyle(.white.opacity(0.4))
                     }
                 }
-                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .font(GaryFonts.mono(12, bold: true))
             }
 
             // Sport breakdown — stacked layout (sport name on top, record below)
@@ -1608,13 +1626,13 @@ struct PerformanceBanner: View {
                                 .foregroundStyle(.white.opacity(0.45))
                             HStack(spacing: 2) {
                                 Text("\(sport.wins)")
-                                    .font(.system(size: 16, weight: .bold, design: .monospaced))
+                                    .font(GaryFonts.mono(16, bold: true))
                                     .foregroundStyle(sport.wins > sport.losses ? GaryColors.gold : .white.opacity(0.5))
                                 Text("-")
                                     .font(.system(size: 14, weight: .bold))
                                     .foregroundStyle(.white.opacity(0.3))
                                 Text("\(sport.losses)")
-                                    .font(.system(size: 16, weight: .bold, design: .monospaced))
+                                    .font(GaryFonts.mono(16, bold: true))
                                     .foregroundStyle(sport.losses > sport.wins ? .white.opacity(0.6) : .white.opacity(0.3))
                             }
                         }
@@ -3999,16 +4017,16 @@ struct GaryPropsView: View {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(headerDateString)
-                        .font(.system(size: 9.5, weight: .semibold, design: .monospaced)).tracking(1)
+                        .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
                         .foregroundStyle(GaryColors.gold.opacity(0.9))
                     Text("PROPS BOARD")
-                        .font(.system(size: 24, weight: .bold, design: .monospaced)).tracking(0.5)
+                        .font(GaryFonts.mono(24, bold: true)).tracking(0.5)
                         .foregroundStyle(.white)
                 }
                 Spacer()
                 if isRecapMode {
                     Text("RECAP")
-                        .font(.system(size: 9, weight: .bold, design: .monospaced)).tracking(1)
+                        .font(GaryFonts.mono(9, bold: true)).tracking(1)
                         .foregroundStyle(GaryColors.gold)
                         .padding(.horizontal, 9).padding(.vertical, 5)
                         .background(Capsule().stroke(GaryColors.gold.opacity(0.25), lineWidth: 1))
@@ -4016,17 +4034,17 @@ struct GaryPropsView: View {
             }
 
             Text("\(visibleProps.count) PROPS    ·    \(distinctSportCount) \(distinctSportCount == 1 ? "SPORT" : "SPORTS")    ·    \(slateGames.count) \(slateGames.count == 1 ? "GAME" : "GAMES")")
-                .font(.system(size: 11, weight: .medium, design: .monospaced)).tracking(1)
+                .font(GaryFonts.mono(11, bold: false)).tracking(1)
                 .foregroundStyle(.white.opacity(0.55))
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text("CONFIDENCE SHAPE")
-                        .font(.system(size: 8.5, weight: .semibold, design: .monospaced)).tracking(1.4)
+                        .font(GaryFonts.mono(8.5, bold: true)).tracking(1.4)
                         .foregroundStyle(.white.opacity(0.4))
                     Spacer()
                     Text("\(Int(round(avgConfidence * 100)))% AVG")
-                        .font(.system(size: 8.5, weight: .semibold, design: .monospaced)).tracking(1)
+                        .font(GaryFonts.mono(8.5, bold: true)).tracking(1)
                         .foregroundStyle(GaryColors.gold.opacity(0.9))
                 }
                 ConfidenceShapeView(values: visibleProps.compactMap { $0.confidence }.sorted(by: >))
@@ -4083,7 +4101,7 @@ struct GaryPropsView: View {
     private func controlChip(_ icon: String, _ text: String, active: Bool = false) -> some View {
         HStack(spacing: 5) {
             Image(systemName: icon).font(.system(size: 9, weight: .semibold))
-            Text(text).font(.system(size: 10.5, weight: .semibold, design: .monospaced)).tracking(0.5)
+            Text(text).font(GaryFonts.mono(10.5, bold: true)).tracking(0.5)
                 .lineLimit(1)
             Image(systemName: "chevron.down").font(.system(size: 7, weight: .bold)).opacity(0.5)
         }
@@ -4163,7 +4181,7 @@ struct GaryPropsView: View {
             }
         } label: {
             HStack(spacing: 5) {
-                Text(label).font(.system(size: 11, weight: .bold, design: .monospaced)).tracking(0.6)
+                Text(label).font(GaryFonts.mono(11, bold: true)).tracking(0.6)
                 if fresh && !on { Circle().fill(GaryColors.gold).frame(width: 4, height: 4) }
             }
             .foregroundStyle(on ? Color.black.opacity(0.9) : .white.opacity(0.6))
@@ -4185,13 +4203,13 @@ struct GaryPropsView: View {
         if visibleProps.isEmpty {
             VStack(spacing: 12) {
                 Text("NO PROPS MATCH THESE FILTERS")
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced)).tracking(1.2)
+                    .font(GaryFonts.mono(10, bold: true)).tracking(1.2)
                     .foregroundStyle(.white.opacity(0.5))
                 Button {
                     withAnimation { ouFilter = .all; propTypeFilter = nil }
                 } label: {
                     Text("CLEAR FILTERS")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced)).tracking(1)
+                        .font(GaryFonts.mono(10, bold: true)).tracking(1)
                         .foregroundStyle(GaryColors.gold)
                         .padding(.horizontal, 14).padding(.vertical, 8)
                         .background(Capsule().stroke(GaryColors.gold.opacity(0.25), lineWidth: 1))
@@ -4236,18 +4254,18 @@ struct GaryPropsView: View {
                 VStack(alignment: .leading, spacing: 5) {
                     HStack(spacing: 8) {
                         Text(prop.player ?? prop.team ?? "")
-                            .font(.system(size: 17, weight: .regular, design: .serif))
+                            .font(GaryFonts.text(17))
                             .foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.8)
                         Spacer(minLength: 4)
                         if let lg = prop.effectiveLeague {
                             Text(lg.uppercased())
-                                .font(.system(size: 8.5, weight: .semibold, design: .monospaced)).tracking(1)
+                                .font(GaryFonts.mono(8.5, bold: true)).tracking(1)
                                 .foregroundStyle(.white.opacity(0.4))
                         }
                         if let r = resultForProp(prop) { resultChip(r) }
                     }
                     Text(betLine(prop))
-                        .font(.system(size: 10.5, weight: .semibold, design: .monospaced)).tracking(0.6)
+                        .font(GaryFonts.mono(10.5, bold: true)).tracking(0.6)
                         .foregroundStyle(GaryColors.gold).lineLimit(1).minimumScaleFactor(0.7)
                     if let take = oneLineTake(prop) {
                         Text(take)
@@ -4275,7 +4293,7 @@ struct GaryPropsView: View {
                 .stroke(GaryColors.gold, style: StrokeStyle(lineWidth: 4, lineCap: .round))
                 .rotationEffect(.degrees(-90))
             Text("\(Int(round(value * 100)))")
-                .font(.system(size: 14, weight: .bold, design: .monospaced))
+                .font(GaryFonts.mono(14, bold: true))
                 .foregroundStyle(.white)
         }
         .frame(width: 48, height: 48)
@@ -4283,7 +4301,7 @@ struct GaryPropsView: View {
 
     private func sectionLabel(_ text: String, accent: Bool = false) -> some View {
         Text(text)
-            .font(.system(size: 9.5, weight: .semibold, design: .monospaced)).tracking(1)
+            .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
             .foregroundStyle(accent ? GaryColors.gold.opacity(0.9) : .white.opacity(0.4))
             .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -4293,7 +4311,7 @@ struct GaryPropsView: View {
         let txt = r == "won" ? "W" : (r == "push" ? "P" : "L")
         let col = r == "won" ? winColor : (r == "push" ? pushColor : loseColor)
         return Text(txt)
-            .font(.system(size: 9, weight: .bold, design: .monospaced))
+            .font(GaryFonts.mono(9, bold: true))
             .foregroundStyle(col)
             .padding(.horizontal, 6).padding(.vertical, 2)
             .background(Capsule().fill(col.opacity(0.14)).overlay(Capsule().stroke(col.opacity(0.3), lineWidth: 1)))
@@ -4349,17 +4367,17 @@ struct GaryPropsView: View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 5) {
                 Text(shortenMatchup(group.matchup))
-                    .font(.system(size: 18, weight: .regular, design: .serif))
+                    .font(GaryFonts.text(18))
                     .foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.8)
                 HStack(spacing: 8) {
                     if !group.time.isEmpty {
                         Text(group.time.uppercased())
-                            .font(.system(size: 9, weight: .medium, design: .monospaced)).tracking(1.2)
+                            .font(GaryFonts.mono(9, bold: false)).tracking(1.2)
                             .foregroundStyle(.white.opacity(0.4))
                     }
                     if let entry, !gamePickSummary(entry.pick).isEmpty {
                         Text(gamePickSummary(entry.pick))
-                            .font(.system(size: 9, weight: .semibold, design: .monospaced)).tracking(0.6)
+                            .font(GaryFonts.mono(9, bold: true)).tracking(0.6)
                             .foregroundStyle(GaryColors.gold.opacity(0.85)).lineLimit(1)
                     }
                 }
@@ -4367,7 +4385,7 @@ struct GaryPropsView: View {
             Spacer(minLength: 8)
             VStack(alignment: .trailing, spacing: 5) {
                 Text("\(group.props.count) \(group.props.count == 1 ? "PROP" : "PROPS")")
-                    .font(.system(size: 9, weight: .semibold, design: .monospaced)).tracking(0.8)
+                    .font(GaryFonts.mono(9, bold: true)).tracking(0.8)
                     .foregroundStyle(.white.opacity(0.45))
                 QuantConfidenceBar(value: avgConf(group.props)).frame(width: 48)
             }
@@ -4390,14 +4408,14 @@ struct GaryPropsView: View {
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 5) {
                         Text(group.label)
-                            .font(.system(size: 18, weight: .regular, design: .serif)).foregroundStyle(.white)
+                            .font(GaryFonts.text(18)).foregroundStyle(.white)
                         Text("NFL TDs · \(group.label.uppercased())\(group.category == "underdog" ? " · +200+" : "")")
-                            .font(.system(size: 9, weight: .medium, design: .monospaced)).tracking(1.2)
+                            .font(GaryFonts.mono(9, bold: false)).tracking(1.2)
                             .foregroundStyle(.white.opacity(0.4))
                     }
                     Spacer(minLength: 8)
                     Text("\(group.picks.count)")
-                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                        .font(GaryFonts.mono(11, bold: true))
                         .foregroundStyle(.white.opacity(0.45))
                     Image(systemName: "chevron.down")
                         .font(.system(size: 11, weight: .bold)).foregroundStyle(.white.opacity(0.4))
@@ -4446,7 +4464,7 @@ struct GaryPropsView: View {
             Text("LEAN").frame(width: 42, alignment: .trailing)
             Text("").frame(width: 22)
         }
-        .font(.system(size: 8, weight: .semibold, design: .monospaced)).tracking(1)
+        .font(GaryFonts.mono(8, bold: true)).tracking(1)
         .foregroundStyle(.white.opacity(0.35))
         .padding(.horizontal, 14).padding(.top, 12).padding(.bottom, 9)
     }
@@ -4461,24 +4479,24 @@ struct GaryPropsView: View {
                         .font(.system(size: 13.5, weight: .medium)).foregroundStyle(.white)
                         .lineLimit(1).minimumScaleFactor(0.8)
                     Text(Formatters.propDisplay(prop.prop, league: prop.effectiveLeague).uppercased())
-                        .font(.system(size: 8.5, weight: .semibold, design: .monospaced)).tracking(0.8)
+                        .font(GaryFonts.mono(8.5, bold: true)).tracking(0.8)
                         .foregroundStyle(GaryColors.gold.opacity(0.85)).lineLimit(1)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
                 Text(betToken(prop))
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .font(GaryFonts.mono(11, bold: true))
                     .foregroundStyle(betColor(prop))
                     .frame(width: 58, alignment: .leading)
 
                 Text(Formatters.americanOdds(prop.odds))
-                    .font(.system(size: 11, weight: .regular, design: .monospaced))
+                    .font(GaryFonts.mono(11, bold: false))
                     .foregroundStyle(.white.opacity(0.6))
                     .frame(width: 44, alignment: .trailing)
 
                 VStack(alignment: .trailing, spacing: 3) {
                     Text("\(Int(round((prop.confidence ?? 0) * 100)))")
-                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        .font(GaryFonts.mono(12, bold: true))
                         .foregroundStyle(GaryColors.gold)
                     QuantConfidenceBar(value: prop.confidence ?? 0, height: 3).frame(width: 38)
                 }
@@ -4503,7 +4521,7 @@ struct GaryPropsView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                     Button { selectedProp = prop } label: {
                         Text("FULL BREAKDOWN  →")
-                            .font(.system(size: 9.5, weight: .semibold, design: .monospaced)).tracking(1)
+                            .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
                             .foregroundStyle(GaryColors.gold)
                     }
                     .buttonStyle(.plain)
@@ -4874,14 +4892,14 @@ struct QuantKpiTile: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             Text(label)
-                .font(.system(size: 8.5, weight: .semibold, design: .monospaced)).tracking(1.4)
+                .font(GaryFonts.mono(8.5, bold: true)).tracking(1.4)
                 .foregroundStyle(.white.opacity(0.4))
             Text(value)
-                .font(.system(size: 21, weight: .bold, design: .monospaced))
+                .font(GaryFonts.mono(21, bold: true))
                 .foregroundStyle(accent).lineLimit(1).minimumScaleFactor(0.55)
             if let sub {
                 Text(sub)
-                    .font(.system(size: 8, weight: .medium, design: .monospaced)).tracking(0.6)
+                    .font(GaryFonts.mono(8, bold: false)).tracking(0.6)
                     .foregroundStyle(.white.opacity(0.32)).lineLimit(1).minimumScaleFactor(0.7)
             }
         }
@@ -5458,7 +5476,7 @@ struct BillfoldView: View {
                     .foregroundStyle(brass.opacity(0.5))
 
                 Text(String(format: "%+.1fu", netUnits))
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .font(GaryFonts.mono(12, bold: true))
                     .foregroundStyle(paper.opacity(0.75))
 
                 Text("\u{00B7}")
@@ -5673,16 +5691,16 @@ struct BillfoldView: View {
             // Scrub-aware value line
             HStack(spacing: 8) {
                 Text(chartHeaderValue)
-                    .font(.system(size: 22, weight: .semibold, design: .monospaced))
+                    .font(GaryFonts.mono(22, bold: true))
                     .foregroundStyle(chartHeaderColor)
                     .contentTransition(.numericText())
 
                 if scrubDate != nil && chartMode != .sports {
                     Text(chartMode == .line ? chartDisplayDate : candleDisplayDate)
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .font(GaryFonts.mono(11, bold: false))
                         .foregroundStyle(ink.opacity(0.5))
                     Text(chartMode == .line ? chartDisplayDaily : candleDisplayDaily)
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .font(GaryFonts.mono(11, bold: true))
                         .foregroundStyle((chartMode == .line ? chartLineColor : candleLineColor).opacity(0.85))
                 }
             }
@@ -5842,10 +5860,10 @@ struct BillfoldView: View {
                                 .fill(color)
                                 .frame(width: 13, height: 3)
                             Text(s.league)
-                                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                .font(GaryFonts.mono(9, bold: true))
                                 .foregroundStyle(paper.opacity(isFocus ? 1 : 0.75))
                             Text(signedDollars(s.netUnits * 100))
-                                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                                .font(GaryFonts.mono(9, bold: true))
                                 .foregroundStyle(s.netUnits >= 0 ? emerald : crimson)
                         }
                         .padding(.horizontal, 8)
@@ -6016,7 +6034,7 @@ struct BillfoldView: View {
                 Text(journal.maxDrawdownUnits > 0
                      ? "MAX DD \(signedDollars(-journal.maxDrawdownUnits * 100))"
                      : "MAX DD —")
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .font(GaryFonts.mono(9, bold: true))
                     .foregroundStyle(journal.maxDrawdownUnits > 0 ? negativeColor.opacity(0.85) : ink.opacity(0.45))
             }
             .padding(.horizontal, 12)
@@ -6027,7 +6045,7 @@ struct BillfoldView: View {
                 HStack(spacing: 0) {
                     VStack(spacing: 2) {
                         Text(signedDollars(best.net * 100))
-                            .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                            .font(GaryFonts.mono(13, bold: true))
                             .foregroundStyle(best.net >= 0 ? positiveColor : negativeColor)
                         Text("BEST \u{00B7} \(best.label)")
                             .font(.system(size: 8, weight: .bold))
@@ -6040,7 +6058,7 @@ struct BillfoldView: View {
 
                     VStack(spacing: 2) {
                         Text(signedDollars(worst.net * 100))
-                            .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                            .font(GaryFonts.mono(13, bold: true))
                             .foregroundStyle(worst.net >= 0 ? positiveColor : negativeColor)
                         Text("WORST \u{00B7} \(worst.label)")
                             .font(.system(size: 8, weight: .bold))
@@ -6079,11 +6097,11 @@ struct BillfoldView: View {
                             .foregroundStyle(ink.opacity(0.85))
                             .frame(maxWidth: .infinity, alignment: .leading)
                         Text("\(day.wins)-\(day.losses)\(day.pushes > 0 ? "-\(day.pushes)" : "")")
-                            .font(.system(size: 12, design: .monospaced))
+                            .font(GaryFonts.mono(12))
                             .foregroundStyle(ink.opacity(0.5))
                             .frame(width: 60, alignment: .trailing)
                         Text(signedDollars(day.net * 100))
-                            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                            .font(GaryFonts.mono(12, bold: true))
                             .foregroundStyle(day.net >= 0 ? positiveColor : negativeColor)
                             .frame(width: 64, alignment: .trailing)
                     }
@@ -6167,15 +6185,15 @@ struct BillfoldView: View {
                                 .foregroundStyle(isHighlighted ? brass : ink.opacity(0.85))
                                 .frame(maxWidth: .infinity, alignment: .leading)
                             Text("\(point.settledCount)")
-                                .font(.system(size: 12, design: .monospaced))
+                                .font(GaryFonts.mono(12))
                                 .foregroundStyle(ink.opacity(0.45))
                                 .frame(width: 36, alignment: .trailing)
                             Text(String(format: "%.0f%%", point.winRate))
-                                .font(.system(size: 12, design: .monospaced))
+                                .font(GaryFonts.mono(12))
                                 .foregroundStyle(point.winRate >= 50 ? positiveColor.opacity(0.9) : ink.opacity(0.45))
                                 .frame(width: 48, alignment: .trailing)
                             Text(signedDollars(point.netUnits * 100))
-                                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                                .font(GaryFonts.mono(12, bold: true))
                                 .foregroundStyle(point.netUnits >= 0 ? positiveColor : negativeColor)
                                 .frame(width: 64, alignment: .trailing)
                         }
@@ -6195,7 +6213,7 @@ struct BillfoldView: View {
                         ledgerEyebrow("CONVICTION CALIBRATION")
                         Spacer()
                         Text("TICK = CLAIMED")
-                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                            .font(GaryFonts.mono(8, bold: true))
                             .tracking(0.6)
                             .foregroundStyle(brass.opacity(0.7))
                     }
@@ -6209,7 +6227,7 @@ struct BillfoldView: View {
                         }
                         HStack(spacing: 10) {
                             Text(bucket.label)
-                                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                                .font(GaryFonts.mono(12, bold: true))
                                 .foregroundStyle(ink.opacity(0.8))
                                 .frame(width: 52, alignment: .leading)
 
@@ -6228,11 +6246,11 @@ struct BillfoldView: View {
                             .frame(height: 5)
 
                             Text(String(format: "%.0f%%", bucket.hitRate * 100))
-                                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                                .font(GaryFonts.mono(12, bold: true))
                                 .foregroundStyle(bucket.hitRate >= bucket.claimed ? emerald : crimson)
                                 .frame(width: 42, alignment: .trailing)
                             Text("n=\(bucket.n)")
-                                .font(.system(size: 10, design: .monospaced))
+                                .font(GaryFonts.mono(10))
                                 .foregroundStyle(ink.opacity(0.4))
                                 .frame(width: 40, alignment: .trailing)
                         }
@@ -6242,7 +6260,7 @@ struct BillfoldView: View {
                     }
 
                     Text("Stated lean (gold tick) vs actual hit rate \u{00B7} settled W/L only \u{00B7} faded = small sample")
-                        .font(.system(size: 9, design: .monospaced))
+                        .font(GaryFonts.mono(9))
                         .foregroundStyle(ink.opacity(0.35))
                         .padding(.horizontal, 12)
                         .padding(.top, 8)
@@ -6274,7 +6292,7 @@ struct BillfoldView: View {
                                 .font(.system(size: 17, weight: .semibold, design: .default))
                                 .foregroundStyle(ink.opacity(0.9))
                             Text(signedDollars(topd.pnl * 100))
-                                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                                .font(GaryFonts.mono(13, bold: true))
                                 .foregroundStyle(topd.pnl >= 0 ? positiveColor : negativeColor)
                         }
                         .frame(maxWidth: .infinity)
@@ -6315,11 +6333,11 @@ struct BillfoldView: View {
                                 let total = item.wins + item.losses + item.pushes
                                 let pct = total > 0 ? Int(round(Double(item.wins) / Double(total) * 100)) : 0
                                 Text("\(pct)%")
-                                    .font(.system(size: 10, weight: .regular, design: .monospaced))
+                                    .font(GaryFonts.mono(10, bold: false))
                                     .foregroundStyle(ink.opacity(0.45))
 
                                 Text(signedDollars(item.net * 100))
-                                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                                    .font(GaryFonts.mono(11, bold: true))
                                     .foregroundStyle(item.net >= 0 ? positiveColor : negativeColor)
                             }
                             .padding(.horizontal, 12)
@@ -6501,11 +6519,11 @@ struct BillfoldView: View {
                     .tracking(0.5)
                     .foregroundStyle(ink.opacity(0.6))
                 Text(Formatters.formatDate(result.game_date))
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .font(GaryFonts.mono(10, bold: false))
                     .foregroundStyle(ink.opacity(0.6))
                 Spacer()
                 Text(propOddsStr)
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .font(GaryFonts.mono(10, bold: true))
                     .foregroundStyle(ink.opacity(0.65))
             }
 
@@ -8155,7 +8173,7 @@ struct ScoreboardPickCard: View {
 
             if isPicked {
                 Text(callText)
-                    .font(.system(size: 13, weight: .bold, design: .monospaced))
+                    .font(GaryFonts.mono(13, bold: true))
                     .foregroundStyle(accent)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3.5)
@@ -8178,20 +8196,20 @@ struct ScoreboardPickCard: View {
                 HStack(spacing: 6) {
                     if showSportBadge {
                         Text(sport.rawValue)
-                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .font(GaryFonts.mono(10, bold: true))
                             .tracking(1.2)
                             .foregroundStyle(accent)
                     }
                     if let sig = pick.shortGameSignificance ?? pick.gameSignificance, !sig.isEmpty {
                         Text(sig.uppercased())
-                            .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                            .font(GaryFonts.mono(9, bold: true))
                             .tracking(0.8)
                             .foregroundStyle(.white.opacity(0.35))
                             .lineLimit(1)
                     }
                     Spacer()
                     Text(Formatters.formatCommenceTime(pick.displayTime))
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .font(GaryFonts.mono(10, bold: false))
                         .foregroundStyle(.white.opacity(0.42))
                 }
                 .padding(.horizontal, 12)
@@ -8204,7 +8222,7 @@ struct ScoreboardPickCard: View {
                 // Lean rail
                 HStack(spacing: 8) {
                     Text("GARY'S LEAN")
-                        .font(.system(size: 8.5, weight: .bold, design: .monospaced))
+                        .font(GaryFonts.mono(8.5, bold: true))
                         .tracking(1.2)
                         .foregroundStyle(.white.opacity(0.35))
                     GeometryReader { geo in
@@ -8215,7 +8233,7 @@ struct ScoreboardPickCard: View {
                     }
                     .frame(height: 3)
                     Text("\(Int(confidence * 100))%")
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .font(GaryFonts.mono(11, bold: true))
                         .foregroundStyle(accent)
                 }
                 .padding(.horizontal, 12)
@@ -8327,10 +8345,10 @@ struct SportsbookLinesDropdown: View {
             Button { withAnimation(.easeInOut(duration: 0.2)) { open.toggle() } } label: {
                 HStack {
                     Text("SPORTSBOOK LINES")
-                        .font(.system(size: 9.5, weight: .bold, design: .monospaced)).tracking(1.4)
+                        .font(GaryFonts.mono(9.5, bold: true)).tracking(1.4)
                         .foregroundStyle(GaryColors.gold)
                     Text("(\(odds.count))")
-                        .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                        .font(GaryFonts.mono(9.5, bold: false))
                         .foregroundStyle(.white.opacity(0.35))
                     Spacer()
                     Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold))
@@ -8347,13 +8365,13 @@ struct SportsbookLinesDropdown: View {
                             Text(o.book ?? "—").font(.system(size: 12, weight: .semibold)).foregroundStyle(.white.opacity(0.85))
                                 .frame(maxWidth: .infinity, alignment: .leading)
                             if let s = o.spread {
-                                Text(String(format: "%+.1f", s)).font(.system(size: 11, weight: .medium, design: .monospaced)).foregroundStyle(.white.opacity(0.6))
+                                Text(String(format: "%+.1f", s)).font(GaryFonts.mono(11, bold: false)).foregroundStyle(.white.opacity(0.6))
                             }
                             if let so = o.spread_odds, !so.isEmpty {
-                                Text(so).font(.system(size: 11, design: .monospaced)).foregroundStyle(.white.opacity(0.4))
+                                Text(so).font(GaryFonts.mono(11)).foregroundStyle(.white.opacity(0.4))
                             }
                             if let ml = o.ml, !ml.isEmpty {
-                                Text("ML \(ml)").font(.system(size: 11, weight: .medium, design: .monospaced)).foregroundStyle(GaryColors.gold.opacity(0.85))
+                                Text("ML \(ml)").font(GaryFonts.mono(11, bold: false)).foregroundStyle(GaryColors.gold.opacity(0.85))
                             }
                         }
                         .padding(.vertical, 5)
@@ -8380,11 +8398,11 @@ struct PickCardBack: View {
         VStack(alignment: .leading, spacing: 9) {
             HStack {
                 Text("GARY'S CASE")
-                    .font(.system(size: 10, weight: .bold, design: .monospaced)).tracking(1)
+                    .font(GaryFonts.mono(10, bold: true)).tracking(1)
                     .foregroundStyle(GaryColors.gold)
                 Spacer()
                 Text("\(pick.awayTeam ?? "") @ \(pick.homeTeam ?? "")")
-                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                    .font(GaryFonts.mono(9, bold: false))
                     .foregroundStyle(.white.opacity(0.4)).lineLimit(1).minimumScaleFactor(0.7)
             }
 
@@ -8395,7 +8413,7 @@ struct PickCardBack: View {
                 Spacer()
                 if pick.confidence != nil {
                     Text("GARY'S LEAN  \(Int(confidence * 100))%")
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .font(GaryFonts.mono(11, bold: true))
                         .foregroundStyle(.white.opacity(0.55))
                 }
             }
@@ -8403,7 +8421,7 @@ struct PickCardBack: View {
             // World Cup tournament context (e.g. "Group A · Group Stage"); nil for other sports
             if let wcContext = pick.soccerContext {
                 Text(wcContext)
-                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .font(GaryFonts.mono(9, bold: true))
                     .foregroundStyle(Color(hex: "#16A34A").opacity(0.9))
                     .lineLimit(1)
             }
@@ -8445,7 +8463,7 @@ struct PickCardBack: View {
             }
 
             Text("tap to flip back  ↺")
-                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                .font(GaryFonts.mono(9, bold: false))
                 .foregroundStyle(.white.opacity(0.35))
                 .frame(maxWidth: .infinity, alignment: .center)
         }
@@ -8529,12 +8547,12 @@ struct PropCardBack: View {
         VStack(alignment: .leading, spacing: 9) {
             HStack {
                 Text("GARY'S READ")
-                    .font(.system(size: 10, weight: .bold, design: .monospaced)).tracking(1)
+                    .font(GaryFonts.mono(10, bold: true)).tracking(1)
                     .foregroundStyle(GaryColors.gold)
                 Spacer()
                 if let m = prop.matchup, !m.isEmpty {
                     Text(m.uppercased())
-                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .font(GaryFonts.mono(9, bold: false))
                         .foregroundStyle(.white.opacity(0.4)).lineLimit(1).minimumScaleFactor(0.7)
                 }
             }
@@ -8545,7 +8563,7 @@ struct PropCardBack: View {
                     .foregroundStyle(GaryColors.silver).lineLimit(1).minimumScaleFactor(0.7)
                 Spacer()
                 Text("\(Int(confidence * 100))% CONF")
-                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .font(GaryFonts.mono(11, bold: true))
                     .foregroundStyle(.white.opacity(0.55))
             }
 
@@ -8580,7 +8598,7 @@ struct PropCardBack: View {
             }
 
             Text("tap to flip back  ↺")
-                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                .font(GaryFonts.mono(9, bold: false))
                 .foregroundStyle(.white.opacity(0.35))
                 .frame(maxWidth: .infinity, alignment: .center)
         }
@@ -9698,7 +9716,7 @@ struct PlayerStackCard: View {
                     // Odds
                     if !oddsDisplay.isEmpty {
                         Text(oddsDisplay)
-                            .font(.system(size: 14, weight: .bold, design: .monospaced))
+                            .font(GaryFonts.mono(14, bold: true))
                             .foregroundStyle(GaryColors.gold)
                     }
                 }
@@ -9729,7 +9747,7 @@ struct PlayerStackCard: View {
                     .frame(height: 4)
 
                     Text("\(confidencePct)%")
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .font(GaryFonts.mono(11, bold: true))
                         .foregroundStyle(GaryColors.gold)
                         .frame(width: 36, alignment: .trailing)
                 }
@@ -10011,7 +10029,7 @@ struct PropCardSlate: View {
                     // Odds line
                     HStack(spacing: 8) {
                         Text(oddsDisplay)
-                            .font(.system(size: 13, weight: .heavy, design: .monospaced))
+                            .font(GaryFonts.mono(13, bold: true))
                             .foregroundStyle(GaryColors.gold)
 
                         Spacer()
@@ -10509,7 +10527,8 @@ enum SignalKind {
         case .hot: return HubPalette.green
         case .cold: return HubPalette.red
         case .regression: return HubPalette.red
-        default: return GaryColors.gold
+        // Gold diet: lane identity is neutral — gold belongs to the pick.
+        default: return Color.white.opacity(0.5)
         }
     }
     var chip: String {
@@ -10565,7 +10584,7 @@ struct EdgesSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
-                .font(.system(size: 9.5, weight: .semibold, design: .monospaced)).tracking(1)
+                .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
                 .foregroundStyle(.white.opacity(0.4))
                 .padding(.horizontal, 16).padding(.top, 4)
             if edges.isEmpty {
@@ -10790,7 +10809,7 @@ struct PicksCarouselView: View {
                             let on = (s == sport)
                             Button { withAnimation(.easeInOut(duration: 0.2)) { sport = s } } label: {
                                 Text(s)
-                                    .font(.system(size: 11, weight: .bold, design: .monospaced)).tracking(0.8)
+                                    .font(GaryFonts.mono(11, bold: true)).tracking(0.8)
                                     .foregroundStyle(on ? Color.black.opacity(0.85) : .white.opacity(0.5))
                                     .padding(.horizontal, 12).padding(.vertical, 7)
                                     .background(
@@ -10821,10 +10840,10 @@ struct PicksCarouselView: View {
         return Button { withAnimation(.easeInOut(duration: 0.25)) { page = index } } label: {
             VStack(alignment: .leading, spacing: 2) {
                 Text(shortMatchup(g.matchup))
-                    .font(.system(size: 12, weight: .bold, design: .monospaced)).tracking(0.5)
+                    .font(GaryFonts.mono(12, bold: true)).tracking(0.5)
                     .foregroundStyle(on ? GaryColors.gold : .white.opacity(0.5))
                 Text(status.text)
-                    .font(.system(size: 9, weight: .semibold, design: .monospaced)).tracking(0.6)
+                    .font(GaryFonts.mono(9, bold: true)).tracking(0.6)
                     .foregroundStyle(status.color)
             }
             .padding(.horizontal, 14).padding(.vertical, 7)
@@ -10864,7 +10883,7 @@ struct PicksCarouselView: View {
         let on = (index == page)
         return Button { withAnimation(.easeInOut(duration: 0.25)) { page = index } } label: {
             Text(label)
-                .font(.system(size: 12, weight: .bold, design: .monospaced)).tracking(0.5)
+                .font(GaryFonts.mono(12, bold: true)).tracking(0.5)
                 .foregroundStyle(on ? GaryColors.gold : .white.opacity(0.5))
                 .padding(.horizontal, 14).padding(.vertical, 10)
                 .background(
@@ -10881,7 +10900,7 @@ struct PicksCarouselView: View {
             Spacer()
             Image(systemName: "clock.arrow.circlepath").font(.system(size: 30)).foregroundStyle(GaryColors.gold.opacity(0.6))
             Text("TODAY'S PICKS ARE ON THE WAY")
-                .font(.system(size: 11, weight: .bold, design: .monospaced)).tracking(1)
+                .font(GaryFonts.mono(11, bold: true)).tracking(1)
                 .foregroundStyle(.white.opacity(0.6)).multilineTextAlignment(.center)
             Text("Gary releases picks as lineups are confirmed. Check back closer to game time.")
                 .font(.system(size: 12)).foregroundStyle(.white.opacity(0.4))
@@ -10930,7 +10949,7 @@ struct PicksTodayPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("FREE PICK")
-                .font(.system(size: 9.5, weight: .semibold, design: .monospaced)).tracking(1)
+                .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
                 .foregroundStyle(GaryColors.gold.opacity(0.9))
                 .padding(.horizontal, 16).padding(.top, 8)
 
@@ -10946,7 +10965,7 @@ struct PicksTodayPage: View {
             if !topProps.isEmpty {
                 VStack(spacing: 0) {
                     Text("TOP PROPS")
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced)).tracking(1)
+                        .font(GaryFonts.mono(9, bold: true)).tracking(1)
                         .foregroundStyle(.white.opacity(0.4))
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 14).padding(.top, 10).padding(.bottom, 2)
@@ -10986,7 +11005,7 @@ struct PicksGamePage: View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(group.time.isEmpty ? "MATCHUP" : group.time.uppercased())
-                    .font(.system(size: 9.5, weight: .semibold, design: .monospaced)).tracking(1)
+                    .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
                     .foregroundStyle(GaryColors.gold.opacity(0.8))
                 Text(shortMatchup)
                     .font(.system(size: 22, weight: .heavy)).tracking(0.3).foregroundStyle(.white)
@@ -11011,7 +11030,7 @@ struct PicksGamePage: View {
             if !topProps.isEmpty {
                 VStack(spacing: 0) {
                     Text("PLAYER PROPS")
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced)).tracking(1)
+                        .font(GaryFonts.mono(9, bold: true)).tracking(1)
                         .foregroundStyle(.white.opacity(0.4))
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 14).padding(.top, 10).padding(.bottom, 2)
@@ -11035,21 +11054,21 @@ struct LiveScoreStrip: View {
             if score.isLive {
                 Circle().fill(GaryColors.gold).frame(width: 6, height: 6)
                 Text("LIVE")
-                    .font(.system(size: 9.5, weight: .bold, design: .monospaced)).tracking(1.4)
+                    .font(GaryFonts.mono(9.5, bold: true)).tracking(1.4)
                     .foregroundStyle(GaryColors.gold)
             } else {
                 Text("FINAL")
-                    .font(.system(size: 9.5, weight: .bold, design: .monospaced)).tracking(1.4)
+                    .font(GaryFonts.mono(9.5, bold: true)).tracking(1.4)
                     .foregroundStyle(.white.opacity(0.5))
             }
             if let line = score.scoreLine {
                 Text(line)
-                    .font(.system(size: 13, weight: .bold, design: .monospaced))
+                    .font(GaryFonts.mono(13, bold: true))
                     .foregroundStyle(GaryColors.gold)
             }
             if score.isLive, let det = score.detail, !det.isEmpty {
                 Text(det)
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced)).tracking(0.6)
+                    .font(GaryFonts.mono(10, bold: true)).tracking(0.6)
                     .foregroundStyle(GaryColors.gold.opacity(0.6))
             }
             if score.hasGameState {
@@ -11064,7 +11083,7 @@ struct LiveScoreStrip: View {
                         }
                     }
                     Text("OUT")
-                        .font(.system(size: 8.5, weight: .bold, design: .monospaced)).tracking(0.5)
+                        .font(GaryFonts.mono(8.5, bold: true)).tracking(0.5)
                         .foregroundStyle(.white.opacity(0.4))
                 }
             }
@@ -11264,12 +11283,12 @@ struct PropsHubView: View {
                     hubEmptyState
                 } else {
                     // FEATURED — highest relevance, max 2 per lane so the strip mixes kinds
-                    HubSectionHeader(eyebrow: "FEATURED", sub: "Tonight's sharpest reads")
+                    HubSectionHeader(eyebrow: "Featured", sub: "Tonight's sharpest reads")
                     EdgeFeatureStrip(signals: featured) { breakdownSignal = $0 }
 
                     // REGRESSION BOARD — a ranked leaderboard with ERA→xERA gap bars
                     if !items(.regression).isEmpty {
-                        HubSectionHeader(eyebrow: "REGRESSION BOARD", sub: "Biggest ERA vs xERA gaps tonight")
+                        HubSectionHeader(eyebrow: "Regression Board", sub: "Biggest ERA vs xERA gaps tonight")
                         RegressionBoard(signals: items(.regression)) { s in
                             if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s }
                         }
@@ -11277,20 +11296,20 @@ struct PropsHubView: View {
                     // PLAYER EDGES — one section, lane tabs instead of four
                     // stacked scrollers (platoon / heat / ballpark / cooling).
                     if !playerEdgeLanes.isEmpty {
-                        HubSectionHeader(eyebrow: "PLAYER EDGES", sub: laneSub(activeLane))
+                        HubSectionHeader(eyebrow: "Player Edges", sub: laneSub(activeLane))
                         laneTabBar
                         EdgeScroller(signals: items(activeLane)) { breakdownSignal = $0 }
                     }
                     // OWNED — career batter-vs-pitcher history (NBA: season series)
                     if !items(.h2h).isEmpty {
-                        HubSectionHeader(eyebrow: "OWNED", sub: "Head-to-head history that pops")
+                        HubSectionHeader(eyebrow: "Owned", sub: "Head-to-head history that pops")
                         VStack(spacing: 0) { ForEach(items(.h2h)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
                             .quantPanel().padding(.horizontal, 14)
                     }
                     // THE BENEFICIARY — transaction-style OUT → IN swap rows;
                     // tapping a row opens the replacement's full player insights.
                     if !items(.injury).isEmpty {
-                        HubSectionHeader(eyebrow: "THE BENEFICIARY", sub: "Who absorbs the missing volume")
+                        HubSectionHeader(eyebrow: "The Beneficiary", sub: "Who absorbs the missing volume")
                         VStack(spacing: 0) {
                             ForEach(items(.injury)) { s in
                                 if s.swap != nil {
@@ -11306,26 +11325,26 @@ struct PropsHubView: View {
                     }
                     // REST & FATIGUE — schedule spots and bullpen workload
                     if !items(.situational).isEmpty {
-                        HubSectionHeader(eyebrow: "REST & FATIGUE", sub: "Schedule spots & workload")
+                        HubSectionHeader(eyebrow: "Rest & Fatigue", sub: "Schedule spots & workload")
                         VStack(spacing: 0) { ForEach(items(.situational)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
                             .quantPanel().padding(.horizontal, 14)
                     }
                     // STREAKS — team runs worth knowing
                     if !items(.streak).isEmpty {
-                        HubSectionHeader(eyebrow: "STREAKS", sub: "Runs and slides coming in")
+                        HubSectionHeader(eyebrow: "Streaks", sub: "Runs and slides coming in")
                         VStack(spacing: 0) { ForEach(items(.streak)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
                             .quantPanel().padding(.horizontal, 14)
                     }
                     // TOURNAMENT STAKES — group standings, title odds, market context (World Cup)
                     if !items(.tournament).isEmpty {
-                        HubSectionHeader(eyebrow: "TOURNAMENT STAKES", sub: "What this match decides")
+                        HubSectionHeader(eyebrow: "Tournament Stakes", sub: "What this match decides")
                         VStack(spacing: 0) { ForEach(items(.tournament)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
                             .quantPanel().padding(.horizontal, 14)
                     }
                     // Anything else → a compact list
                     let extras = leagueSignals.filter { ![.regression, .platoon, .ballpark, .hot, .cold, .h2h, .injury, .situational, .streak, .tournament].contains($0.kind) }
                     if !extras.isEmpty {
-                        HubSectionHeader(eyebrow: "MORE EDGES", sub: "Other angles tonight")
+                        HubSectionHeader(eyebrow: "More Edges", sub: "Other angles tonight")
                         VStack(spacing: 0) { ForEach(extras) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
                             .quantPanel().padding(.horizontal, 14)
                     }
@@ -11379,7 +11398,7 @@ struct PropsHubView: View {
                     let on = lane == activeLane
                     Button { withAnimation(.easeInOut(duration: 0.2)) { laneTab = lane } } label: {
                         Text(laneTitle(lane))
-                            .font(.system(size: 10.5, weight: .bold, design: .monospaced)).tracking(0.8)
+                            .font(GaryFonts.mono(10.5, bold: true)).tracking(0.8)
                             .foregroundStyle(on ? GaryColors.gold : .white.opacity(0.45))
                             .padding(.horizontal, 12).padding(.vertical, 7)
                             .background(
@@ -11438,14 +11457,14 @@ struct PropsHubView: View {
             if matches.isEmpty {
                 VStack(spacing: 8) {
                     Text("NO MATCHES")
-                        .font(.system(size: 11, weight: .bold, design: .monospaced)).tracking(1)
+                        .font(GaryFonts.mono(11, bold: true)).tracking(1)
                         .foregroundStyle(.white.opacity(0.5))
                     Text("Try a player, a team, or a lane like \"platoon\".")
                         .font(.system(size: 12)).foregroundStyle(.white.opacity(0.35))
                 }
                 .frame(maxWidth: .infinity).padding(.top, 36)
             } else {
-                HubSectionHeader(eyebrow: "RESULTS", sub: "\(matches.count) edge\(matches.count == 1 ? "" : "s") match")
+                HubSectionHeader(eyebrow: "Results", sub: "\(matches.count) edge\(matches.count == 1 ? "" : "s") match")
                 VStack(spacing: 0) { ForEach(matches) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
                     .quantPanel().padding(.horizontal, 14)
             }
@@ -11456,7 +11475,7 @@ struct PropsHubView: View {
         VStack(spacing: 10) {
             Image(systemName: "sparkles").font(.system(size: 26)).foregroundStyle(GaryColors.gold.opacity(0.5))
             Text("NO \(sel.label) EDGES YET")
-                .font(.system(size: 11, weight: .bold, design: .monospaced)).tracking(1).foregroundStyle(.white.opacity(0.55))
+                .font(GaryFonts.mono(11, bold: true)).tracking(1).foregroundStyle(.white.opacity(0.55))
             Text("Tonight's connections post as lineups and matchups firm up.")
                 .font(.system(size: 12)).foregroundStyle(.white.opacity(0.4))
                 .multilineTextAlignment(.center).padding(.horizontal, 40)
@@ -11480,7 +11499,7 @@ struct PropsHubView: View {
                         let on = l == sel
                         Button { withAnimation(.easeInOut(duration: 0.2)) { sel = l } } label: {
                             Text(l.label)
-                                .font(.system(size: 11, weight: .bold, design: .monospaced)).tracking(0.8)
+                                .font(GaryFonts.mono(11, bold: true)).tracking(0.8)
                                 .foregroundStyle(on ? Color.black.opacity(0.85) : Color.white.opacity(0.5))
                                 .padding(.horizontal, 11).padding(.vertical, 5)
                                 .background(
@@ -11504,7 +11523,7 @@ struct HubSectionHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
             Text(eyebrow)
-                .font(.system(size: 9.5, weight: .semibold, design: .monospaced)).tracking(1)
+                .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
                 .foregroundStyle(GaryColors.gold.opacity(0.9))
             Text(sub).font(.system(size: 13)).foregroundStyle(.white.opacity(0.45))
         }
@@ -11569,9 +11588,9 @@ struct EdgeCardBack: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 Image(systemName: s.kind.icon).font(.system(size: 9, weight: .bold)).foregroundStyle(s.kind.tint)
-                Text(s.kind.chip).font(.system(size: 8.5, weight: .semibold, design: .monospaced)).tracking(1).foregroundStyle(s.kind.tint)
+                Text(s.kind.chip).font(GaryFonts.mono(8.5, bold: true)).tracking(1).foregroundStyle(s.kind.tint)
                 Spacer()
-                Text(s.game.uppercased()).font(.system(size: 8, weight: .medium, design: .monospaced)).foregroundStyle(.white.opacity(0.3)).lineLimit(1)
+                Text(s.game.uppercased()).font(GaryFonts.mono(8, bold: false)).foregroundStyle(.white.opacity(0.3)).lineLimit(1)
             }
             Text(s.detail)
                 .font(.system(size: 11)).foregroundStyle(.white.opacity(0.78))
@@ -11586,7 +11605,7 @@ struct EdgeCardBack: View {
                         Text("FULL BREAKDOWN")
                         Image(systemName: "arrow.right")
                     }
-                    .font(.system(size: 9.5, weight: .bold, design: .monospaced)).tracking(0.8)
+                    .font(GaryFonts.mono(9.5, bold: true)).tracking(0.8)
                     .foregroundStyle(.black.opacity(0.85))
                     .frame(maxWidth: .infinity).padding(.vertical, 8)
                     .background(Capsule().fill(GaryColors.gold))
@@ -11610,12 +11629,12 @@ struct FeatureEdgeCard: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 Image(systemName: s.kind.icon).font(.system(size: 9, weight: .bold)).foregroundStyle(s.kind.tint)
-                Text(s.kind.chip).font(.system(size: 8.5, weight: .semibold, design: .monospaced)).tracking(1).foregroundStyle(s.kind.tint)
+                Text(s.kind.chip).font(GaryFonts.mono(8.5, bold: true)).tracking(1).foregroundStyle(s.kind.tint)
                 Spacer()
-                Text(s.game.uppercased()).font(.system(size: 8, weight: .medium, design: .monospaced)).foregroundStyle(.white.opacity(0.3)).lineLimit(1)
+                Text(s.game.uppercased()).font(GaryFonts.mono(8, bold: false)).foregroundStyle(.white.opacity(0.3)).lineLimit(1)
             }
             Text(s.headline)
-                .font(.system(size: 15, weight: .regular, design: .serif)).foregroundStyle(.white)
+                .font(GaryFonts.text(15)).foregroundStyle(.white)
                 .lineLimit(3).fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
             HStack(alignment: .bottom) {
@@ -11652,7 +11671,7 @@ struct RegressionBoard: View {
                             .foregroundStyle(.white.opacity(0.3)).frame(width: 18)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(boardName(s)).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white).lineLimit(1)
-                            Text(s.game.uppercased()).font(.system(size: 8, weight: .medium, design: .monospaced)).foregroundStyle(.white.opacity(0.3))
+                            Text(s.game.uppercased()).font(GaryFonts.mono(8, bold: false)).foregroundStyle(.white.opacity(0.3))
                         }
                         Spacer(minLength: 6)
                         if s.spark.count >= 2 { gapBar(s.spark[0], s.spark[1], tint: s.tone.color) }
@@ -11708,7 +11727,7 @@ struct MiniEdgeCard: View {
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(s.game.uppercased()).font(.system(size: 8, weight: .medium, design: .monospaced)).foregroundStyle(.white.opacity(0.3)).lineLimit(1)
+            Text(s.game.uppercased()).font(GaryFonts.mono(8, bold: false)).foregroundStyle(.white.opacity(0.3)).lineLimit(1)
             Text(name).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white).lineLimit(1)
             if !s.value.isEmpty {
                 Text(s.value).font(.system(size: 22, weight: .bold)).foregroundStyle(s.tone.color)
@@ -11739,15 +11758,15 @@ struct EdgeDetailSheet: View {
                 HStack {
                     HStack(spacing: 6) {
                         Image(systemName: signal.kind.icon).font(.system(size: 10, weight: .bold)).foregroundStyle(signal.kind.tint)
-                        Text(signal.kind.chip).font(.system(size: 10, weight: .semibold, design: .monospaced)).tracking(1.2).foregroundStyle(signal.kind.tint)
+                        Text(signal.kind.chip).font(GaryFonts.mono(10, bold: true)).tracking(1.2).foregroundStyle(signal.kind.tint)
                     }
                     Spacer()
                     Button { dismiss() } label: {
                         Image(systemName: "xmark.circle.fill").font(.system(size: 24)).foregroundStyle(.white.opacity(0.3))
                     }.buttonStyle(.plain)
                 }
-                Text(signal.game.uppercased()).font(.system(size: 11, weight: .medium, design: .monospaced)).foregroundStyle(.white.opacity(0.4))
-                Text(signal.headline).font(.system(size: 24, weight: .regular, design: .serif)).foregroundStyle(.white).fixedSize(horizontal: false, vertical: true)
+                Text(signal.game.uppercased()).font(GaryFonts.mono(11, bold: false)).foregroundStyle(.white.opacity(0.4))
+                Text(signal.headline).font(GaryFonts.text(24)).foregroundStyle(.white).fixedSize(horizontal: false, vertical: true)
                 if !signal.value.isEmpty || !signal.spark.isEmpty {
                     HStack(alignment: .bottom, spacing: 16) {
                         if !signal.value.isEmpty {
@@ -11761,7 +11780,7 @@ struct EdgeDetailSheet: View {
                 }
                 Button { dismiss(); onSelectGame(signal.game) } label: {
                     HStack(spacing: 6) { Text("VIEW GAME"); Image(systemName: "arrow.right") }
-                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        .font(GaryFonts.mono(12, bold: true))
                         .foregroundStyle(.black.opacity(0.85))
                         .frame(maxWidth: .infinity).padding(.vertical, 12)
                         .background(Capsule().fill(GaryColors.gold))
@@ -11819,13 +11838,13 @@ struct PlayerInsightSheet: View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 3) {
                 Text("PLAYER BREAKDOWN")
-                    .font(.system(size: 9, weight: .semibold, design: .monospaced)).tracking(1)
+                    .font(GaryFonts.mono(9, bold: true)).tracking(1)
                     .foregroundStyle(GaryColors.gold.opacity(0.9))
                 Text(pack?.name ?? fallbackName)
-                    .font(.system(size: 26, weight: .semibold, design: .serif)).foregroundStyle(.white)
+                    .font(GaryFonts.text(26, .semibold)).foregroundStyle(.white)
                 HStack(spacing: 6) {
                     if let meta = identityLine {
-                        Text(meta).font(.system(size: 11, weight: .medium, design: .monospaced))
+                        Text(meta).font(GaryFonts.mono(11, bold: false))
                             .foregroundStyle(.white.opacity(0.45))
                     }
                 }
@@ -11927,7 +11946,7 @@ struct PlayerInsightSheet: View {
             HStack(spacing: 8) {
                 ForEach(Array(props.prefix(4).enumerated()), id: \.offset) { _, pr in
                     VStack(spacing: 2) {
-                        Text(pr.label ?? "").font(.system(size: 8.5, weight: .semibold, design: .monospaced)).tracking(0.5)
+                        Text(pr.label ?? "").font(GaryFonts.mono(8.5, bold: true)).tracking(0.5)
                             .foregroundStyle(.white.opacity(0.45))
                         Text("\(pr.line ?? "")\(pr.odds.map { " (\($0))" } ?? "")")
                             .font(.system(size: 13, weight: .bold)).foregroundStyle(GaryColors.gold)
@@ -11941,7 +11960,7 @@ struct PlayerInsightSheet: View {
 
     private func insightEyebrow(_ t: String) -> some View {
         Text(t)
-            .font(.system(size: 9, weight: .semibold, design: .monospaced)).tracking(1)
+            .font(GaryFonts.mono(9, bold: true)).tracking(1)
             .foregroundStyle(GaryColors.gold.opacity(0.85))
             .padding(.top, 4)
     }
@@ -11979,10 +11998,10 @@ struct PlayerInsightSheet: View {
             Text(row.label ?? "").font(.system(size: 12, weight: .semibold)).foregroundStyle(.white.opacity(0.6))
             Spacer()
             Text("\(row.actual ?? "—") → \(row.expected ?? "—")")
-                .font(.system(size: 13, weight: .bold, design: .monospaced)).foregroundStyle(.white.opacity(0.9))
+                .font(GaryFonts.mono(13, bold: true)).foregroundStyle(.white.opacity(0.9))
             if let v = row.verdict {
                 Text(v.uppercased())
-                    .font(.system(size: 7.5, weight: .semibold, design: .monospaced)).tracking(0.6)
+                    .font(GaryFonts.mono(7.5, bold: true)).tracking(0.6)
                     .foregroundStyle(verdictColor)
                     .padding(.horizontal, 6).padding(.vertical, 3)
                     .overlay(Capsule().stroke(verdictColor.opacity(0.5), lineWidth: 1))
@@ -12001,7 +12020,7 @@ struct PlayerInsightSheet: View {
                 Text("SLG").frame(width: 44, alignment: .trailing)
                 Text("WHIFF").frame(width: 48, alignment: .trailing)
             }
-            .font(.system(size: 8, weight: .semibold, design: .monospaced)).tracking(0.5)
+            .font(GaryFonts.mono(8, bold: true)).tracking(0.5)
             .foregroundStyle(.white.opacity(0.35))
             .padding(.horizontal, 12).padding(.vertical, 7)
 
@@ -12020,7 +12039,7 @@ struct PlayerInsightSheet: View {
                     Text(r.whiffPct.map { String(format: "%.0f%%", $0) } ?? "—")
                         .frame(width: 48, alignment: .trailing)
                 }
-                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                .font(GaryFonts.mono(12, bold: false))
                 .foregroundStyle(.white.opacity(0.8))
                 .padding(.horizontal, 12).padding(.vertical, 7)
                 if i < rows.count - 1 {
@@ -12046,11 +12065,11 @@ struct BeneficiarySwapRow: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 8) {
                         Text([swap.team, swap.position].compactMap { $0 }.joined(separator: " · "))
-                            .font(.system(size: 9, weight: .semibold, design: .monospaced)).tracking(1.2)
+                            .font(GaryFonts.mono(9, bold: true)).tracking(1.2)
                             .foregroundStyle(GaryColors.gold.opacity(0.85))
                         Spacer()
                         Text(s.game.uppercased())
-                            .font(.system(size: 8, weight: .medium, design: .monospaced)).tracking(0.6)
+                            .font(GaryFonts.mono(8, bold: false)).tracking(0.6)
                             .foregroundStyle(.white.opacity(0.3)).lineLimit(1)
                     }
 
@@ -12068,7 +12087,7 @@ struct BeneficiarySwapRow: View {
                         Spacer(minLength: 6)
                         if let note = swap.out_note, !note.isEmpty {
                             Text(note.uppercased())
-                                .font(.system(size: 8, weight: .semibold, design: .monospaced)).tracking(0.4)
+                                .font(GaryFonts.mono(8, bold: true)).tracking(0.4)
                                 .foregroundStyle(HubPalette.red.opacity(0.8))
                                 .lineLimit(1).minimumScaleFactor(0.8)
                         }
@@ -12087,7 +12106,7 @@ struct BeneficiarySwapRow: View {
                         Spacer(minLength: 6)
                         if let note = swap.in_note, !note.isEmpty {
                             Text(note)
-                                .font(.system(size: 8.5, weight: .semibold, design: .monospaced)).tracking(0.4)
+                                .font(GaryFonts.mono(8.5, bold: true)).tracking(0.4)
                                 .foregroundStyle(HubPalette.green)
                                 .lineLimit(1).minimumScaleFactor(0.8)
                         }
@@ -12114,13 +12133,13 @@ struct SignalRow: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
                     Image(systemName: s.kind.icon).font(.system(size: 9, weight: .bold)).foregroundStyle(s.kind.tint)
-                    Text(s.kind.chip).font(.system(size: 9, weight: .semibold, design: .monospaced)).tracking(1.3).foregroundStyle(s.kind.tint)
+                    Text(s.kind.chip).font(GaryFonts.mono(9, bold: true)).tracking(1.3).foregroundStyle(s.kind.tint)
                     Spacer()
-                    Text(s.game.uppercased()).font(.system(size: 8, weight: .medium, design: .monospaced)).tracking(0.6).foregroundStyle(.white.opacity(0.3)).lineLimit(1)
+                    Text(s.game.uppercased()).font(GaryFonts.mono(8, bold: false)).tracking(0.6).foregroundStyle(.white.opacity(0.3)).lineLimit(1)
                 }
                 HStack(alignment: .top, spacing: 10) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(s.headline).font(.system(size: 16, weight: .regular, design: .serif)).foregroundStyle(.white).fixedSize(horizontal: false, vertical: true)
+                        Text(s.headline).font(GaryFonts.text(16)).foregroundStyle(.white).fixedSize(horizontal: false, vertical: true)
                         if !s.detail.isEmpty {
                             Text(s.detail).font(.system(size: 12.5)).foregroundStyle(.white.opacity(0.55)).fixedSize(horizontal: false, vertical: true)
                         }
@@ -12133,7 +12152,7 @@ struct SignalRow: View {
                         if s.value.contains(where: { $0.isNumber }) {
                             Text(s.value).font(.system(size: 22, weight: .bold)).foregroundStyle(s.tone.color)
                         } else {
-                            Text(s.value).font(.system(size: 8.5, weight: .semibold, design: .monospaced)).tracking(1).foregroundStyle(s.tone.color)
+                            Text(s.value).font(GaryFonts.mono(8.5, bold: true)).tracking(1).foregroundStyle(s.tone.color)
                                 .padding(.horizontal, 7).padding(.vertical, 3)
                                 .overlay(Capsule().stroke(s.tone.color.opacity(0.28), lineWidth: 1))
                         }
@@ -15102,7 +15121,7 @@ struct GaryFantasyView: View {
                                     .font(.system(size: 10, weight: .bold))
                                     .foregroundStyle(.white.opacity(0.3))
                                 Text(lineup.salaryDisplay)
-                                    .font(.system(size: 14, weight: .bold, design: .monospaced))
+                                    .font(GaryFonts.mono(14, bold: true))
                                     .foregroundStyle(GaryColors.gold)
                             }
 
@@ -15114,7 +15133,7 @@ struct GaryFantasyView: View {
                                     .font(.system(size: 10, weight: .bold))
                                     .foregroundStyle(.white.opacity(0.3))
                                 Text(String(format: "%.0f", lineup.projected_points))
-                                    .font(.system(size: 14, weight: .bold, design: .monospaced))
+                                    .font(GaryFonts.mono(14, bold: true))
                                     .foregroundStyle(.white.opacity(0.8))
                             }
 
@@ -15127,7 +15146,7 @@ struct GaryFantasyView: View {
                                         .font(.system(size: 10, weight: .bold))
                                         .foregroundStyle(GaryColors.gold.opacity(0.5))
                                     Text(String(format: "%.0f", ceiling))
-                                        .font(.system(size: 14, weight: .bold, design: .monospaced))
+                                        .font(GaryFonts.mono(14, bold: true))
                                         .foregroundStyle(GaryColors.gold)
                                 }
                             }
@@ -15328,10 +15347,10 @@ struct GaryFantasyView: View {
                 .foregroundStyle(.white.opacity(0.3))
             Spacer()
             Text(salary)
-                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .font(GaryFonts.mono(11, bold: false))
                 .foregroundStyle(.white.opacity(0.25))
             Text(pts)
-                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                .font(GaryFonts.mono(11, bold: true))
                 .foregroundStyle(GaryColors.gold.opacity(0.3))
                 .frame(width: 30, alignment: .trailing)
         }
@@ -15778,7 +15797,7 @@ struct LineupPositionRow: View {
 
                             // Projected points — hero number
                             Text(String(format: "%.1f", player.projected_pts))
-                                .font(.system(size: 18, weight: .bold, design: .monospaced))
+                                .font(GaryFonts.mono(18, bold: true))
                                 .foregroundStyle(GaryColors.gold)
 
                             // Expand Chevron
@@ -15847,13 +15866,13 @@ struct LineupPositionRow: View {
                             if let vs = player.valueScore {
                                 let isElite = vs >= 6.0
                                 Text(String(format: "%.1fx", vs))
-                                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                    .font(GaryFonts.mono(9, bold: true))
                                     .foregroundStyle(isElite ? Color(hex: "#818CF8") : .white.opacity(0.3))
                             }
 
                             // Salary — right-aligned, gold
                             Text(player.salaryFormatted)
-                                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                                .font(GaryFonts.mono(12, bold: false))
                                 .foregroundStyle(GaryColors.gold)
                         }
                     }
@@ -16078,14 +16097,14 @@ struct PivotRow: View {
                                 .font(.system(size: 9, weight: .semibold))
                                 .foregroundStyle(diff < 0 ? Color(hex: "#22C55E") : Color(hex: "#EF4444"))
                             Text(pivot.salaryDiffFormatted)
-                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                .font(GaryFonts.mono(11, bold: true))
                                 .foregroundStyle(.white.opacity(0.5))
                         }
                     }
                     
                     // Salary
                     Text(pivot.salaryFormatted)
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .font(GaryFonts.mono(11, bold: false))
                         .foregroundStyle(.white.opacity(0.7))
                         .frame(width: 50, alignment: .trailing)
                     

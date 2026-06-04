@@ -190,7 +190,7 @@ struct GaryIntroSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
             Text("HOW GARY WORKS")
-                .font(.system(size: 10, weight: .semibold, design: .monospaced)).tracking(1)
+                .font(GaryFonts.mono(10, bold: true)).tracking(1)
                 .foregroundStyle(GaryColors.gold.opacity(0.9))
                 .padding(.top, 28)
 
@@ -208,7 +208,7 @@ struct GaryIntroSheet: View {
 
             Button(action: onDone) {
                 Text("GOT IT")
-                    .font(.system(size: 13, weight: .bold, design: .monospaced)).tracking(1)
+                    .font(GaryFonts.mono(13, bold: true)).tracking(1)
                     .foregroundStyle(.black.opacity(0.85))
                     .frame(maxWidth: .infinity).padding(.vertical, 14)
                     .background(Capsule().fill(GaryColors.gold))

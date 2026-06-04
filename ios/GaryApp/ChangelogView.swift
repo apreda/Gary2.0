@@ -397,7 +397,7 @@ struct ChangelogEntryCard: View {
 
     private var versionBadge: some View {
         Text("v\(entry.version)")
-            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+            .font(GaryFonts.mono(12, bold: true))
             .foregroundStyle(.white.opacity(0.8))
             .padding(.horizontal, 10)
             .padding(.vertical, 4)
