@@ -8002,9 +8002,6 @@ struct CompactPickRow: View {
                             .foregroundStyle(.white.opacity(0.34))
                             .lineLimit(1)
                     }
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.28))
                 }
 
                 // Matchup hero — serif "Away @ Home", picked side bright, the
@@ -8063,6 +8060,17 @@ struct CompactPickRow: View {
                                 .stroke(GaryColors.gold.opacity(0.7), lineWidth: 1)
                         )
                 )
+
+                // Flip affordance — names what the tap gives you.
+                HStack(spacing: 3) {
+                    Spacer()
+                    Text("Gary's Take")
+                        .font(.system(size: 10.5, weight: .semibold))
+                        .foregroundStyle(GaryColors.heroAccent.opacity(0.85))
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(GaryColors.heroAccent.opacity(0.6))
+                }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 12)
@@ -12372,9 +12380,6 @@ struct CompactPropRow: View {
                             .foregroundStyle(.white.opacity(0.34))
                             .lineLimit(1)
                     }
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.28))
                 }
 
                 // Hero — player name at game-card presence, team small and
@@ -12420,6 +12425,17 @@ struct CompactPropRow: View {
                                 .stroke(GaryColors.silver.opacity(0.55), lineWidth: 1)
                         )
                 )
+
+                // Flip affordance — names what the tap gives you.
+                HStack(spacing: 3) {
+                    Spacer()
+                    Text("Gary's Take")
+                        .font(.system(size: 10.5, weight: .semibold))
+                        .foregroundStyle(GaryColors.heroAccent.opacity(0.85))
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(GaryColors.heroAccent.opacity(0.6))
+                }
 
             }
             .padding(.horizontal, 12)
