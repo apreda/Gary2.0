@@ -8526,7 +8526,7 @@ struct PropCardBack: View {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(prop.player ?? "")
                     .font(.system(size: 17, weight: .heavy))
-                    .foregroundStyle(GaryColors.gold).lineLimit(1).minimumScaleFactor(0.7)
+                    .foregroundStyle(GaryColors.silver).lineLimit(1).minimumScaleFactor(0.7)
                 Spacer()
                 Text("\(Int(confidence * 100))% CONF")
                     .font(.system(size: 11, weight: .bold, design: .monospaced))
@@ -8573,7 +8573,7 @@ struct PropCardBack: View {
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color(hex: "#1A1C22"))
-                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(GaryColors.gold.opacity(0.32), lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(GaryColors.silver.opacity(0.32), lineWidth: 1))
         )
     }
 }
@@ -12148,9 +12148,6 @@ struct CompactPropRow: View {
         Sport.from(league: prop.effectiveLeague).accentGradient
             ?? LinearGradient(colors: [accentColor, accentColor], startPoint: .leading, endPoint: .trailing)
     }
-    private var confidenceValue: CGFloat {
-        CGFloat(max(0.18, min(1.0, prop.confidence ?? 0.72)))
-    }
     // MARK: - Result Stamp Properties
     private var resolvedResult: String? {
         guard let result = gameResult?.lowercased(), !result.isEmpty else { return nil }
@@ -12206,15 +12203,24 @@ struct CompactPropRow: View {
         }
     }
 
-    /// Market label for the secondary line (e.g. "TOTAL BASES 1.5"). Mirrors
-    /// the gold card's secondary matchup label slot.
-    private var marketLabel: String {
-        let market = Formatters.propDisplay(prop.prop, league: prop.effectiveLeague).uppercased()
-        if let lineText = formattedLineText {
-            return "\(market) \(lineText)"
-        }
-        return market
+    /// Market name without the line ("TOTAL BASES") — propDisplay carries the
+    /// line when the raw prop type does, so strip a trailing numeric token; the
+    /// chip composes market + call itself. Long names abbreviate so the chip
+    /// stays one line.
+    private var marketName: String {
+        var words = Formatters.propDisplay(prop.prop, league: prop.effectiveLeague)
+            .split(separator: " ").map(String.init)
+        if let last = words.last, Double(last) != nil { words.removeLast() }
+        let name = words.joined(separator: " ").uppercased()
+        return Self.marketAbbrev[name] ?? name
     }
+    private static let marketAbbrev: [String: String] = [
+        "STRIKEOUTS": "K'S", "HOME RUNS": "HR", "STOLEN BASES": "SB",
+        "PITCHING OUTS": "OUTS", "HITS + RUNS + RBI": "H+R+RBI",
+        "POINTS + REBOUNDS + ASSISTS": "PRA", "REBOUNDS + ASSISTS": "R+A",
+        "POINTS + REBOUNDS": "P+R", "POINTS + ASSISTS": "P+A",
+        "GOALS + ASSISTS": "G+A", "SHOTS ON GOAL": "SOG",
+    ]
 
     /// The pick chip's call text — side + line (e.g. "OVER 1.5"). Mirrors the
     /// gold card's abbreviated pick (compactPick), silver instead of gold.
@@ -12275,39 +12281,30 @@ struct CompactPropRow: View {
                         .foregroundStyle(.white)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
-                    HStack(spacing: 6) {
-                        if let team = prop.team, !team.isEmpty {
-                            Text(team.uppercased())
-                                .font(GaryFonts.mono(11, bold: true))
-                                .tracking(1)
-                                .foregroundStyle(GaryColors.silver.opacity(0.85))
-                            Text("·")
-                                .font(GaryFonts.mono(11, bold: true))
-                                .foregroundStyle(.white.opacity(0.3))
-                        }
-                        Text(marketLabel)
-                            .font(GaryFonts.mono(11, bold: false))
+                    if let team = prop.team, !team.isEmpty {
+                        Text(team.uppercased())
+                            .font(GaryFonts.mono(11, bold: true))
                             .tracking(1)
-                            .foregroundStyle(.white.opacity(0.5))
+                            .foregroundStyle(GaryColors.silver.opacity(0.85))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
                     }
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
                 }
 
-                // Bottom — the CALL (side + line, silver) full-width: the
-                // product. Mirrors the gold pick chip exactly; silver text +
-                // silver border on the same muted fill.
+                // Bottom — the whole pick in the box, GOLD like the game
+                // card's chip: "TOTAL BASES OVER 1.5  ·  +100". The market name
+                // abbreviates (marketAbbrev) and scales before it ever wraps.
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(compactCall)
+                    Text("\(marketName) \(compactCall)")
                         .font(GaryFonts.mono(17, bold: true))
                         .tracking(0.8)
-                        .foregroundStyle(GaryColors.silver)
+                        .foregroundStyle(GaryColors.gold)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.7)
+                        .minimumScaleFactor(0.6)
                     Spacer(minLength: 8)
                     Text(Formatters.americanOdds(prop.odds))
                         .font(GaryFonts.mono(15, bold: true))
-                        .foregroundStyle(GaryColors.silver.opacity(0.72))
+                        .foregroundStyle(GaryColors.gold.opacity(0.72))
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, 14)
@@ -12317,31 +12314,10 @@ struct CompactPropRow: View {
                         .fill(Color(hex: "#1C1F26"))
                         .overlay(
                             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .stroke(GaryColors.silver.opacity(0.7), lineWidth: 1)
+                                .stroke(GaryColors.gold.opacity(0.7), lineWidth: 1)
                         )
                 )
 
-                // Gary's lean meter — silver twin of the game card's lean rail.
-                VStack(spacing: 6) {
-                    HStack {
-                        Text("GARY'S LEAN")
-                            .font(GaryFonts.mono(9.5, bold: false))
-                            .tracking(1)
-                            .foregroundStyle(GaryColors.silver.opacity(0.9))
-                        Spacer()
-                        Text("\(Int(confidenceValue * 100))%")
-                            .font(GaryFonts.mono(9.5, bold: true))
-                            .tracking(1)
-                            .foregroundStyle(GaryColors.silver.opacity(0.9))
-                    }
-                    GeometryReader { geo in
-                        ZStack(alignment: .leading) {
-                            Capsule().fill(Color.white.opacity(0.06))
-                            Capsule().fill(GaryColors.silver).frame(width: geo.size.width * confidenceValue)
-                        }
-                    }
-                    .frame(height: 2.5)
-                }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 12)
