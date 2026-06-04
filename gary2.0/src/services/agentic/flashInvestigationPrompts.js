@@ -719,7 +719,9 @@ Use fetch_narrative_context ONLY for:
 
 Do NOT use fetch_narrative_context for:
 - Player season stats (use MLB_KEY_HITTERS, MLB_PITCHER_SEASON_STATS)
-- L/R splits (use MLB_PLAYER_SPLITS — returns structured BDL data)
+- Hitter L/R splits (use MLB_PLAYER_SPLITS — returns structured BDL data; hitters only)
+- Pitcher platoon splits vs LHB/RHB (use MLB_PITCHER_SCOUTING — MLB Stats API data)
+- Pitcher velocity (use MLB_PITCH_TYPES_SP or MLB_PITCHER_SCOUTING — Savant arsenal data)
 - Batter vs pitcher matchups (use MLB_BATTER_VS_PITCHER)
 - Standings and records (use MLB_STANDINGS, MLB_TEAM_RECORD)
 - Stolen base / baserunning stats (included in MLB_KEY_HITTERS season data)
@@ -733,9 +735,9 @@ The scout report already includes detailed context from both grounding searches 
 - **SAMPLE SIZE IS REQUIRED CONTEXT.** Each pitch line shows its pitch count. A pitch type thrown under ~75-100 pitches on the season (or any rate stat off a tiny sample) is NOISE, not a reliable signal — do not treat a flashy whiff% or xwOBA on a rarely-thrown pitch as a real edge. Weight a pitcher's primary pitches (high usage, large sample) heavily and treat his rare pitches as footnotes. Report the sample alongside any pitch stat you cite.
 - Which pitch is each starter's best (lowest xwOBA, highest whiff%)? Which is the weakest (highest xwOBA)? Only draw this conclusion from pitches with a meaningful sample.
 - Does the pitcher rely heavily on one pitch (50%+ usage) — does the opposing lineup's hitters perform well or poorly against that pitch type? (Cross-reference with MLB_PITCH_TYPES_HITTERS in section 3.)
-- How does each starter's pitch mix and velocity profile match up against the opposing lineup's handedness and power profile?
+- How does each starter's pitch mix and velocity profile (per-pitch mph is in the MLB_PITCH_TYPES_SP output and scout report — cite ONLY those figures, never velocity from memory) match up against the opposing lineup's handedness and power profile?
 - Any pitch count concerns or workload management patterns? What has the front office's approach been to this pitcher's innings recently?
-- What is each starter's ground ball rate vs fly ball rate, and does that interact with the park dimensions tonight?
+- What does each starter's contact-quality-allowed profile look like (Barrel% allowed, Hard-hit% allowed, and GO/AO grounder-per-flyout ratio are in MLB_PITCHER_SCOUTING and the scout report)? True GB%/FB% rates are NOT available from our tools — characterize a batted-ball tendency only from the provided GO/AO and Barrel%/Hard-hit% figures; never estimate a GB% from memory.
 - What is each starter's FIP vs ERA gap? A large gap (> 0.5 runs) suggests the pitcher is over- or under-performing relative to their true talent — FIP strips out defense and sequencing.
 - How many innings has each starter averaged in recent starts — does their pitch count suggest a short outing (< 5 IP, early bullpen handoff) or a deep outing (6+ IP)?
 - What is each starter's home/away split this season? Some pitchers have large venue-dependent performance gaps.
@@ -745,7 +747,7 @@ The scout report already includes detailed context from both grounding searches 
 - What do each starter's last 3-5 outings look like — ERA, innings pitched, pitch count, strikeouts, walks, hits allowed per start?
 - Is the recent trajectory improving or declining? Compare L5 starts to season averages — is there a meaningful divergence?
 - Were recent outings against strong or weak lineups? Context matters: a 2.00 ERA over 5 starts against bottom-tier offenses is different than the same ERA against playoff contenders.
-- Has velocity or command changed in recent starts? Any signs of fatigue or mechanical adjustment?
+- Has command changed in recent starts (walks/hits per start are in the game log)? Per-start velocity readings are NOT available from our tools — season-average velocity is in MLB_PITCH_TYPES_SP; do not assert recent velocity changes without a sourced figure.
 - Did any recent starts include rain delays, early exits due to injury scares, or shortened outings that inflate or deflate the stat line?
 - What is the starter's pitch count trajectory — increasing (building up after IL stint or early season) or capped (managed workload, innings limit)?
 - What is the starter's strand rate (LOB%) in recent starts vs season? An extreme LOB% (above 80% or below 65%) is context for how sustainable his ERA is over time — note it, but it is not a prediction for tonight. A pitcher "due to regress" still throws gems.
@@ -761,12 +763,12 @@ The scout report already includes detailed context from both grounding searches 
 - Check if lineups have been adjusted specifically for this pitching matchup (e.g., resting a LHB against a tough LHP)
 - How does the batter vs pitcher career history compare to overall season stats? (e.g., a .280 hitter who is .150 lifetime against tonight's starter is a different matchup)
 - For the batter vs pitcher matchups, what are the sample sizes? Small samples (< 10 AB) are noise, not signal — flag any matchup data built on fewer than 10 AB.
-- Call MLB_PLAYER_SPLITS for the starting pitcher to see L/R batting splits against them — does the pitcher have a severe platoon weakness that the opposing lineup can exploit?
+- Pitcher platoon splits (vs LHB / vs RHB opponent batting lines) are in MLB_PITCHER_SCOUTING (MLB_PLAYER_SPLITS covers hitters only) — does the pitcher have a severe platoon weakness that the opposing lineup can exploit? Use ONLY the fetched vs-LHB/vs-RHB lines; if the scouting output says platoon data is NOT AVAILABLE, report that instead of characterizing the split.
 
 ### 4. BULLPEN DEPTH & WORKLOAD
 **Tokens:** MLB_BULLPEN, MLB_BULLPEN_WORKLOAD
 - The scout report's LAST GAME section shows which bullpen arms pitched yesterday and how many outs each recorded — use this to determine who is available tonight
-- Who pitched in the last 1-3 games for each team? What was their pitch count and innings in each appearance?
+- Who pitched in the last 1-3 games for each team? What was their pitch count and innings in each appearance? (MLB_BULLPEN_WORKLOAD lists IP + actual pitch counts per appearance — characterize workload from those numbers only, e.g. a 15-pitch outing is NOT a heavy load even across 4+ outs.)
 - Which high-leverage arms (closer, setup men) are available tonight vs likely unavailable due to recent workload?
 - Has either team played extra innings in the last 3 days, forcing extended bullpen usage?
 - What is each team's bullpen ERA and WHIP over the last 7 and 30 days — is the pen trending up or down?
@@ -798,7 +800,7 @@ The scout report already includes detailed context from both grounding searches 
 **Tokens:** H2H_HISTORY, MLB_H2H
 - How have these teams performed against each other this season? What is the season series record?
 - Were previous meetings with the same starters? Did a specific pitcher dominate or struggle against this lineup?
-- What were the margins and run totals in previous meetings — close games or blowouts?
+- What were the margins and run totals in previous meetings — close games or blowouts? MLB_H2H returns per-game scores and runs-per-game for the series; cite ONLY those figures. If MLB_H2H reports run totals NOT AVAILABLE, say so — never compute or recall series scoring averages from memory.
 - Have conditions changed since last meeting (roster changes, injuries, form shifts)?
 - In previous meetings, what was the bullpen usage pattern? Did either team's pen get exposed or dominate?
 - Were the H2H results driven by a specific player or matchup (e.g., one hitter went 5-for-8 in the series) that may or may not repeat tonight?
@@ -856,7 +858,7 @@ The scout report already includes detailed context from both grounding searches 
 
 ### 14. PITCHING MATCHUP DEEP DIVE
 **Tokens:** MLB_PLAYER_SPLITS, MLB_BATTER_VS_PITCHER, MLB_PITCHER_SEASON_STATS, MLB_KEY_HITTERS
-- Call MLB_PLAYER_SPLITS for the starting pitcher to see L/R splits, home/away ERA, day/night splits — where does tonight's context fall?
+- Call MLB_PITCHER_SCOUTING for the starting pitcher's platoon splits (vs LHB/RHB), home/away ERA, and day/night splits — where does tonight's context fall? (MLB_PLAYER_SPLITS covers hitters only.)
 - Call MLB_BATTER_VS_PITCHER for the top 4-5 hitters in the opposing lineup vs this pitcher specifically — are there batter-pitcher matchups with large sample sizes (20+ AB) that diverge sharply from the hitter's overall season line?
 - What is the pitcher's opponent AVG and OPS this season — is the underlying contact quality against him sustainable or is he getting lucky/unlucky on balls in play?
 - What is the pitcher's HR/9 rate and HR/FB% — is he suppressing or allowing home runs at an unusual rate relative to the park and his career norms?

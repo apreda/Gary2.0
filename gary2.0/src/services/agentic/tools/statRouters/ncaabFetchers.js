@@ -440,7 +440,16 @@ Only report numbers from ncaa.com. If not found, write "not found".`;
       ]);
 
       const extractNetData = (response) => {
-        const content = (response?.content || response?.choices?.[0]?.message?.content || '').toLowerCase();
+        let content = (response?.content || response?.choices?.[0]?.message?.content || '').toLowerCase();
+        // grounding.js now PRESERVES the model's staleness self-corrections
+        // ("Wait, that NET 45 is from last season" / "(2024 season figure — STALE)")
+        // so downstream prose readers can discount them. This regex extractor
+        // grabs the FIRST number it sees, so drop those flagged sentences
+        // locally before matching — otherwise we'd extract the stale rank.
+        content = content
+          .split(/(?<=[.!?])\s+/)
+          .filter(s => !/\bstale\b|from (?:the )?20\d\d(?:-\d\d)? season|last season|^wait,|^hmm,|^actually,/i.test(s))
+          .join(' ');
         const netMatch = content.match(/net[^\d]*#?\s*(\d{1,3})/i) || content.match(/rank[^\d]*#?\s*(\d{1,3})/i);
         const q1Match = content.match(/quad\s*1[^\d]*(\d+-\d+)/i);
         const q2Match = content.match(/quad\s*2[^\d]*(\d+-\d+)/i);
@@ -554,7 +563,14 @@ Quad 4: [W-L]`;
       const content = response?.data || '';
 
       // Extract Quad records — split by team name to prevent first-match contamination
-      const extractQuads = (text, teamName) => {
+      const extractQuads = (rawText, teamName) => {
+        // Drop staleness-flagged sentences first (grounding.js preserves
+        // self-corrections like "Wait, that Quad record is from last season"
+        // for prose readers — a first-match regex must not extract from them).
+        const text = rawText
+          .split(/(?<=[.!?])\s+/)
+          .filter(s => !/\bstale\b|from (?:the )?20\d\d(?:-\d\d)? season|last season|^wait,|^hmm,|^actually,/i.test(s))
+          .join(' ');
         // Isolate team section: find team name, take everything until the next team header or end
         const teamLower = teamName.toLowerCase();
         const textLower = text.toLowerCase();

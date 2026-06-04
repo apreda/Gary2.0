@@ -532,6 +532,7 @@ async function runGeminiGroundingSearch(query, options = {}) {
   3. If a search result is dated prior to ${new Date(Date.now() - 48 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}, DO NOT use it for current analysis
   4. EVIDENCE SUPREMACY: Surrender intuition to Search Tool results. Search results ARE the facts.
   5. NEVER state statistical facts (records, streaks, error counts, win streaks) from articles — these go stale within hours. Only use narrative context (storylines, matchup previews, injury news) from search.
+  6. DATE-STAMP ANY NUMBER: Rule 5 stands — do not surface stat lines from articles. But when a number is unavoidable in narrative context (an injury date, a posted line/price, a figure the query explicitly demands), you MUST attach its vintage inline — e.g. "94.8 mph (per article dated June 2, 2026)" or "(2024 season figure — STALE, do not treat as current)". A number without a date is unusable downstream. This rule is how stray numbers get discounted; it is NOT a license to report article stats.
 
   ANTI-LAZY VERIFICATION:
   - Do NOT assume you know current rosters, injuries, or stats from training data
@@ -556,21 +557,27 @@ CRITICAL REMINDER: Today is ${todayStr}. Use ONLY fresh search results. Your 202
 
       let text = response.text();
 
-      // Clean up chain-of-thought reasoning that sometimes leaks into responses
-      // This fixes the "Wait, that snippet is from 2025..." issue
+      // Clean up cosmetic chain-of-thought noise that sometimes leaks into responses.
+      //
+      // IMPORTANT: only strip patterns that carry NO factual signal. A previous
+      // version also stripped "Wait, that...", "Hmm...", "Actually...", and
+      // "snippet N is from the last..." — but those are the model CORRECTING
+      // ITSELF about stale data ("Wait, that snippet is from 2025"). Deleting
+      // the correction while keeping the stale sentence laundered outdated
+      // numbers into the briefing looking current. Staleness flags now stay in
+      // the text so downstream consumers can discount the figure.
       if (text) {
-        // Remove internal reasoning patterns
-        const chainOfThoughtPatterns = [
-          /Wait,\s+(?:that|this|I|let me)[^.]*\./gi,           // "Wait, that snippet is from..."
-          /I need to[^.]*\./gi,                                  // "I need to check..."
-          /Let me (?:search|check|look|find)[^.]*\./gi,         // "Let me search for..."
-          /Hmm,?\s+[^.]*\./gi,                                   // "Hmm, this doesn't look right..."
-          /Actually,?\s+(?:I|that|this)[^.]*\./gi,              // "Actually, I should..."
-          /(?:^|\n)\s*\*[^*]+\*\s*(?:$|\n)/gm,                  // Remove asterisk-surrounded thoughts
-          /snippet\s+\d+\.?\d*[^.]*from\s+(?:the\s+)?(?:last|previous)[^.]*\./gi, // "snippet 1.4 in the last search..."
+        // (?:(?!\d)[^.])* = consume up to the period ONLY while no digit appears.
+        // A clause like "Let me check the latest: Rogers throws 93 mph." carries
+        // a fact — the digit guard leaves it intact; pure process noise
+        // ("Let me search for the latest news.") still strips.
+        const cosmeticNoisePatterns = [
+          /I need to (?:search|check|look|find)(?:(?!\d)[^.])*\./gi, // "I need to check..." (digit-free process noise)
+          /Let me (?:search|check|look|find)(?:(?!\d)[^.])*\./gi,    // "Let me search for..." (digit-free process noise)
+          /(?:^|\n)\s*\*[^*\d]+\*\s*(?:$|\n)/gm,                     // Asterisk-surrounded thoughts (no digits)
         ];
 
-        for (const pattern of chainOfThoughtPatterns) {
+        for (const pattern of cosmeticNoisePatterns) {
           text = text.replace(pattern, '');
         }
 
