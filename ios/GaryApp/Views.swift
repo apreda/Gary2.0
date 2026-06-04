@@ -7919,7 +7919,7 @@ struct CompactPickRow: View {
                         .foregroundStyle((sport == .mlb || sport == .mlbHR) ? GaryColors.mlbGrass : accentColor)
                     if let significance = significanceTag {
                         Text(significance)
-                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                            .font(GaryFonts.mono(11, bold: true))
                             .tracking(1)
                             .foregroundStyle((sport == .mlb || sport == .mlbHR) ? AnyShapeStyle(GaryColors.mlbFieldText) : AnyShapeStyle(accentColor))
                             .lineLimit(1)
@@ -7928,11 +7928,11 @@ struct CompactPickRow: View {
                     if resolvedResult != nil {
                         if let finalScore, !finalScore.isEmpty {
                             Text(finalScore)
-                                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                .font(GaryFonts.mono(11, bold: false))
                                 .foregroundStyle(.white.opacity(0.5))
                         }
                         Text(resolvedResult == "won" ? "WON" : (resolvedResult == "push" ? "PUSH" : "LOST"))
-                            .font(.system(size: 10, weight: .heavy, design: .monospaced))
+                            .font(GaryFonts.mono(10, bold: true))
                             .tracking(0.8)
                             .foregroundStyle(resultStampColor)
                             .padding(.horizontal, 8).padding(.vertical, 3)
@@ -7942,7 +7942,7 @@ struct CompactPickRow: View {
                             )
                     } else if !formattedTime.isEmpty {
                         Text(formattedTime.uppercased())
-                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .font(GaryFonts.mono(11, bold: false))
                             .tracking(1)
                             .foregroundStyle(.white.opacity(0.34))
                             .lineLimit(1)
@@ -7958,7 +7958,7 @@ struct CompactPickRow: View {
                 HStack(alignment: .firstTextBaseline, spacing: 7) {
                     if let s = awaySeedTag {
                         Text(s)
-                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .font(GaryFonts.mono(11, bold: true))
                             .foregroundStyle(GaryColors.gold)
                     }
                     Text(awayName)
@@ -7969,7 +7969,7 @@ struct CompactPickRow: View {
                         .foregroundStyle(.white.opacity(0.3))
                     if let s = homeSeedTag {
                         Text(s)
-                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .font(GaryFonts.mono(11, bold: true))
                             .foregroundStyle(GaryColors.gold)
                     }
                     Text(homeName)
@@ -7985,7 +7985,7 @@ struct CompactPickRow: View {
                 // + thin border so the gold letters stay the hero.
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(compactPick)
-                        .font(.system(size: 17, weight: .heavy, design: .monospaced))
+                        .font(GaryFonts.mono(17, bold: true))
                         .tracking(0.8)
                         .foregroundStyle(GaryColors.gold)
                         .lineLimit(1)
@@ -7993,7 +7993,7 @@ struct CompactPickRow: View {
                     Spacer(minLength: 8)
                     if !pickParts.odds.isEmpty {
                         Text(pickParts.odds)
-                            .font(.system(size: 15, weight: .semibold, design: .monospaced))
+                            .font(GaryFonts.mono(15, bold: true))
                             .foregroundStyle(GaryColors.gold.opacity(0.72))
                     }
                 }
@@ -12238,7 +12238,7 @@ struct CompactPropRow: View {
                         .foregroundStyle(isMLBProp ? GaryColors.mlbGrass : accentColor)
                     if let league = leagueTag {
                         Text(league)
-                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                            .font(GaryFonts.mono(11, bold: true))
                             .tracking(1)
                             .foregroundStyle(isMLBProp ? AnyShapeStyle(GaryColors.mlbFieldText) : AnyShapeStyle(accentColor))
                             .lineLimit(1)
@@ -12246,7 +12246,7 @@ struct CompactPropRow: View {
                     Spacer(minLength: 6)
                     if resolvedResult != nil {
                         Text(resolvedResult == "won" ? "WON" : (resolvedResult == "push" ? "PUSH" : "LOST"))
-                            .font(.system(size: 10, weight: .heavy, design: .monospaced))
+                            .font(GaryFonts.mono(10, bold: true))
                             .tracking(0.8)
                             .foregroundStyle(resultStampColor)
                             .padding(.horizontal, 8).padding(.vertical, 3)
@@ -12256,7 +12256,7 @@ struct CompactPropRow: View {
                             )
                     } else if !formattedTime.isEmpty {
                         Text(formattedTime.uppercased())
-                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .font(GaryFonts.mono(11, bold: false))
                             .tracking(1)
                             .foregroundStyle(.white.opacity(0.34))
                             .lineLimit(1)
@@ -12278,15 +12278,15 @@ struct CompactPropRow: View {
                     HStack(spacing: 6) {
                         if let team = prop.team, !team.isEmpty {
                             Text(team.uppercased())
-                                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                                .font(GaryFonts.mono(11, bold: true))
                                 .tracking(1)
                                 .foregroundStyle(GaryColors.silver.opacity(0.85))
                             Text("·")
-                                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                                .font(GaryFonts.mono(11, bold: true))
                                 .foregroundStyle(.white.opacity(0.3))
                         }
                         Text(marketLabel)
-                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .font(GaryFonts.mono(11, bold: false))
                             .tracking(1)
                             .foregroundStyle(.white.opacity(0.5))
                     }
@@ -12299,14 +12299,14 @@ struct CompactPropRow: View {
                 // silver border on the same muted fill.
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(compactCall)
-                        .font(.system(size: 17, weight: .heavy, design: .monospaced))
+                        .font(GaryFonts.mono(17, bold: true))
                         .tracking(0.8)
                         .foregroundStyle(GaryColors.silver)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                     Spacer(minLength: 8)
                     Text(Formatters.americanOdds(prop.odds))
-                        .font(.system(size: 15, weight: .semibold, design: .monospaced))
+                        .font(GaryFonts.mono(15, bold: true))
                         .foregroundStyle(GaryColors.silver.opacity(0.72))
                 }
                 .frame(maxWidth: .infinity)
@@ -12325,12 +12325,12 @@ struct CompactPropRow: View {
                 VStack(spacing: 6) {
                     HStack {
                         Text("GARY'S LEAN")
-                            .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                            .font(GaryFonts.mono(9.5, bold: false))
                             .tracking(1)
                             .foregroundStyle(GaryColors.silver.opacity(0.9))
                         Spacer()
                         Text("\(Int(confidenceValue * 100))%")
-                            .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
+                            .font(GaryFonts.mono(9.5, bold: true))
                             .tracking(1)
                             .foregroundStyle(GaryColors.silver.opacity(0.9))
                     }
