@@ -2359,7 +2359,7 @@ enum Sport: String, CaseIterable {
         case .mlb: return Color(hex: "#2D5A27")      // Outfield grass green
         case .mlbHR: return Color(hex: "#2D5A27")    // Outfield grass green (same as MLB)
         case .wnba: return Color(hex: "#F97316")     // Orange
-        case .worldCup: return Color(hex: "#16A34A") // World Cup green
+        case .worldCup: return Color(hex: "#14B8A6") // World Cup teal — greens belong to NFL/MLB
         }
     }
     
@@ -2373,6 +2373,18 @@ enum Sport: String, CaseIterable {
                     Color(hex: "#2D5A27"),  // Outfield grass green
                     Color(hex: "#8B6914"),  // Infield dirt brown
                     Color(hex: "#F5F5F5"),  // Base white
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        case .worldCup:
+            // 2026 tri-host colors: Mexico green, white, host red, USA blue
+            return LinearGradient(
+                colors: [
+                    Color(hex: "#1FA84F"),  // Mexico green
+                    Color(hex: "#F5F5F5"),  // White
+                    Color(hex: "#D7282F"),  // Canada/USA red
+                    Color(hex: "#1D4ED8"),  // USA blue
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -10441,11 +10453,33 @@ let nbaTeamKeywords: [String: [String]] = [
     "TOR": ["raptors"], "UTA": ["jazz", "utah"], "WAS": ["wizards"],
 ]
 
+/// FIFA country codes -> nation names for the 48 qualified 2026 World Cup
+/// teams (generated from the live FIFA teams endpoint — same source the pick
+/// pipeline names matchups from).
+let wcTeamKeywords: [String: [String]] = [
+    "ALG": ["algeria"], "ARG": ["argentina"], "AUS": ["australia"],
+    "AUT": ["austria"], "BEL": ["belgium"], "BIH": ["bosnia & herzegovina"],
+    "BRA": ["brazil"], "CAN": ["canada"], "CIV": ["côte d'ivoire"],
+    "COD": ["dr congo"], "COL": ["colombia"], "CPV": ["cabo verde"],
+    "CRO": ["croatia"], "CUW": ["curaçao"], "CZE": ["czechia"],
+    "ECU": ["ecuador"], "EGY": ["egypt"], "ENG": ["england"],
+    "ESP": ["spain"], "FRA": ["france"], "GER": ["germany"],
+    "GHA": ["ghana"], "HAI": ["haiti"], "IRN": ["iran"],
+    "IRQ": ["iraq"], "JOR": ["jordan"], "JPN": ["japan"],
+    "KOR": ["south korea"], "KSA": ["saudi arabia"], "MAR": ["morocco"],
+    "MEX": ["mexico"], "NED": ["netherlands"], "NOR": ["norway"],
+    "NZL": ["new zealand"], "PAN": ["panama"], "PAR": ["paraguay"],
+    "POR": ["portugal"], "QAT": ["qatar"], "RSA": ["south africa"],
+    "SCO": ["scotland"], "SEN": ["senegal"], "SUI": ["switzerland"],
+    "SWE": ["sweden"], "TUN": ["tunisia"], "TUR": ["türkiye"],
+    "URU": ["uruguay"], "USA": ["usa"], "UZB": ["uzbekistan"],
+]
+
 /// Match an "AWY @ HOM" abbreviation label (a hub edge's `game`) against a
-/// full-team-name matchup string. Both abbreviations must resolve (via the MLB
-/// or NBA keyword maps) to a name present in the matchup — location collisions
-/// (MIN Twins vs MIN Timberwolves) sort themselves out because BOTH sides must
-/// match the same matchup.
+/// full-team-name matchup string. Both abbreviations must resolve (via the
+/// MLB, NBA, or World Cup keyword maps) to a name present in the matchup —
+/// collisions (MIN Twins vs MIN Timberwolves, COL Rockies vs COL Colombia)
+/// sort themselves out because BOTH sides must match the same matchup.
 func abbrGameMatches(_ abbrGame: String, matchup: String) -> Bool {
     let hay = matchup.lowercased()
     let abbrevs = abbrGame.uppercased()
@@ -10453,7 +10487,7 @@ func abbrGameMatches(_ abbrGame: String, matchup: String) -> Bool {
         .filter { $0.count >= 2 }
     guard abbrevs.count >= 2 else { return false }
     return abbrevs.allSatisfy { ab in
-        let kws = (mlbTeamKeywords[ab] ?? []) + (nbaTeamKeywords[ab] ?? [])
+        let kws = (mlbTeamKeywords[ab] ?? []) + (nbaTeamKeywords[ab] ?? []) + (wcTeamKeywords[ab] ?? [])
         return kws.contains { hay.contains($0) }
     }
 }
