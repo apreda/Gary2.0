@@ -103,6 +103,8 @@ struct LiveScore: Decodable {
     let home_score: Int?
     let status: String?    // scheduled | live | final
     let detail: String?    // "INN 7" / "Q3 4:12" / "FINAL"
+    let outs: Int?         // MLB live: 0-2 during play; nil otherwise
+    let bases: String?     // MLB live: 3-char [first,second,third] occupancy, e.g. "101"
 
     var isLive: Bool { status == "live" }
     var isFinal: Bool { status == "final" }
@@ -113,6 +115,18 @@ struct LiveScore: Decodable {
         guard let a = away_score, let h = home_score else { return nil }
         return "\(away_abbr ?? "AWY") \(a) · \(home_abbr ?? "HOM") \(h)"
     }
+
+    // Live MLB game state — drives the on-card base diamond + outs dots.
+    private var baseFlags: [Bool] {
+        let c = Array(bases ?? "")
+        guard c.count == 3 else { return [false, false, false] }
+        return c.map { $0 == "1" }
+    }
+    var onFirst: Bool { baseFlags[0] }
+    var onSecond: Bool { baseFlags[1] }
+    var onThird: Bool { baseFlags[2] }
+    /// True when there's live MLB state worth drawing (diamond / outs).
+    var hasGameState: Bool { isLive && (outs != nil || bases != nil) }
 }
 
 // MARK: - Player Insight Pack (full breakdown behind a hub card)

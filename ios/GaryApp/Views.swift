@@ -1408,6 +1408,12 @@ enum GaryColors {
         endPoint: .bottom
     )
     
+    // Silver — the prop pick card is the silver twin of the gold game card.
+    // Mirrors gold's role exactly: chip text/border, lean rail, secondary labels.
+    static let silver = Color(hex: "#C7CCD6")
+    static let silverLight = Color(hex: "#D7DCE4")
+    static let silverDim = Color(hex: "#AEB8C4")
+
     // NFL Green (same as prop picks)
     static let nflAccent = Color(hex: "#22C55E")
 
@@ -11030,9 +11036,54 @@ struct LiveScoreStrip: View {
                     .font(.system(size: 10, weight: .semibold, design: .monospaced)).tracking(0.6)
                     .foregroundStyle(GaryColors.gold.opacity(0.6))
             }
+            if score.hasGameState {
+                BaseDiamond(onFirst: score.onFirst, onSecond: score.onSecond, onThird: score.onThird)
+                    .padding(.leading, 2)
+                if let o = score.outs {
+                    HStack(spacing: 3) {
+                        ForEach(0..<2, id: \.self) { i in
+                            Circle()
+                                .fill(i < min(o, 2) ? GaryColors.gold : Color.white.opacity(0.18))
+                                .frame(width: 5, height: 5)
+                        }
+                    }
+                    Text("OUT")
+                        .font(.system(size: 8.5, weight: .bold, design: .monospaced)).tracking(0.5)
+                        .foregroundStyle(.white.opacity(0.4))
+                }
+            }
             Spacer()
         }
         .padding(.vertical, 2)
+    }
+}
+
+/// Tiny baseball diamond — a base fills gold when a runner is on. MLB live cards only.
+struct BaseDiamond: View {
+    let onFirst: Bool
+    let onSecond: Bool
+    let onThird: Bool
+    var size: CGFloat = 20
+
+    private func base(_ on: Bool) -> some View {
+        let s = size * 0.34
+        return RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+            .fill(on ? GaryColors.gold : Color.white.opacity(0.10))
+            .overlay(
+                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                    .stroke(on ? GaryColors.gold : Color.white.opacity(0.3), lineWidth: 0.8)
+            )
+            .frame(width: s, height: s)
+            .rotationEffect(.degrees(45))
+    }
+
+    var body: some View {
+        ZStack {
+            base(onSecond).offset(y: -size * 0.28)
+            base(onThird).offset(x: -size * 0.28)
+            base(onFirst).offset(x: size * 0.28)
+        }
+        .frame(width: size, height: size)
     }
 }
 
@@ -12100,12 +12151,6 @@ struct CompactPropRow: View {
     private var confidenceValue: CGFloat {
         CGFloat(max(0.18, min(1.0, prop.confidence ?? 0.72)))
     }
-    private var betColor: Color {
-        guard let bet = prop.bet?.lowercased() else { return .white }
-        if bet == "over" || bet == "yes" { return .green }
-        return .red
-    }
-
     // MARK: - Result Stamp Properties
     private var resolvedResult: String? {
         guard let result = gameResult?.lowercased(), !result.isEmpty else { return nil }
@@ -12176,7 +12221,9 @@ struct CompactPropRow: View {
     }
 
     private var leagueTag: String? {
-        guard showSportBadge, let league = prop.effectiveLeague, !league.isEmpty else { return nil }
+        // Eyebrow league label — always shown so the header reads like the
+        // gold game card's (sport accent dot + significance tag).
+        guard let league = prop.effectiveLeague, !league.isEmpty else { return nil }
         return league.uppercased()
     }
 
@@ -12191,121 +12238,145 @@ struct CompactPropRow: View {
         }
     }
 
-    private let cardFill = Color(hex: "#141210")
+    /// Market label for the secondary line (e.g. "TOTAL BASES 1.5"). Mirrors
+    /// the gold card's secondary matchup label slot.
+    private var marketLabel: String {
+        let market = Formatters.propDisplay(prop.prop, league: prop.effectiveLeague).uppercased()
+        if let lineText = formattedLineText {
+            return "\(market) \(lineText)"
+        }
+        return market
+    }
+
+    /// The pick chip's call text — side + line (e.g. "OVER 1.5"). Mirrors the
+    /// gold card's abbreviated pick (compactPick), silver instead of gold.
+    private var compactCall: String {
+        let side = (prop.bet ?? "").uppercased()
+        if let lineText = formattedLineText {
+            return side.isEmpty ? lineText : "\(side) \(lineText)"
+        }
+        return side
+    }
 
     var body: some View {
         ZStack {
-            VStack(alignment: .leading, spacing: 14) {
-                // Top meta row — only rendered when the parent asks for the
-                // league badge (Home preview). On the Props tab the section
-                // header already shows the matchup + time, so this row is
-                // suppressed to avoid the duplicate league/time/chevron.
-                if showSportBadge {
-                    HStack(spacing: 8) {
-                        if let league = leagueTag {
-                            Image(systemName: leagueIcon)
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(isMLBProp ? GaryColors.mlbGrass : accentColor)
-                            Text(league)
-                                .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                                .tracking(1)
-                                .foregroundStyle(isMLBProp ? AnyShapeStyle(GaryColors.mlbFieldText) : AnyShapeStyle(accentColor))
-                        }
-                        if !formattedTime.isEmpty {
-                            Text(formattedTime.uppercased())
-                                .font(.system(size: 10, weight: .medium, design: .monospaced))
-                                .tracking(1)
-                                .foregroundStyle(.white.opacity(0.32))
-                        }
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.32))
-                    }
-                }
-
-                // Player + (right-aligned) prop type
-                HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(prop.player ?? prop.team ?? "")
-                            .font(.system(size: 22, weight: .regular, design: .serif))
-                            .foregroundStyle(.white)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.82)
-                        if let team = prop.team, !team.isEmpty {
-                            Text(team.uppercased())
-                                .font(.system(size: 9.5, weight: .medium, design: .monospaced))
-                                .tracking(1)
-                                .foregroundStyle(GaryColors.gold.opacity(0.85))
-                                .lineLimit(1)
-                        }
-                    }
-                    Spacer(minLength: 8)
-                    Text(Formatters.propDisplay(prop.prop, league: prop.effectiveLeague).uppercased())
-                        .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
-                        .tracking(1)
-                        .foregroundStyle(GaryColors.gold)
-                        .multilineTextAlignment(.trailing)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.75)
-                }
-
-                // Bet pill — quiet hairline, gold tint marks Gary's call.
-                // Includes the line value next to the side so the row is
-                // self-contained: "OVER 24.5 ... −110" instead of just
-                // "OVER ... −110" with the line hidden in the detail popup.
-                HStack(spacing: 10) {
-                    HStack(alignment: .firstTextBaseline, spacing: 7) {
-                        Text((prop.bet ?? "").uppercased())
+            VStack(alignment: .leading, spacing: 11) {
+                // Eyebrow row — sport accent dot/icon + league + time + result.
+                // Mirrors CompactPickRow's header exactly; sport identity stays
+                // in the sport accent, only gold→silver is swapped elsewhere.
+                HStack(spacing: 8) {
+                    Image(systemName: leagueIcon)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(isMLBProp ? GaryColors.mlbGrass : accentColor)
+                    if let league = leagueTag {
+                        Text(league)
                             .font(.system(size: 11, weight: .semibold, design: .monospaced))
                             .tracking(1)
-                            .foregroundStyle(.white)
-                        if let lineText = formattedLineText {
-                            Text(lineText)
-                                .font(.system(size: 13, weight: .regular, design: .serif))
-                                .foregroundStyle(.white)
-                        }
+                            .foregroundStyle(isMLBProp ? AnyShapeStyle(GaryColors.mlbFieldText) : AnyShapeStyle(accentColor))
+                            .lineLimit(1)
                     }
-                    Spacer()
-                    Text(Formatters.americanOdds(prop.odds))
-                        .font(.system(size: 12, weight: .medium, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.65))
+                    Spacer(minLength: 6)
+                    if resolvedResult != nil {
+                        Text(resolvedResult == "won" ? "WON" : (resolvedResult == "push" ? "PUSH" : "LOST"))
+                            .font(.system(size: 10, weight: .heavy, design: .monospaced))
+                            .tracking(0.8)
+                            .foregroundStyle(resultStampColor)
+                            .padding(.horizontal, 8).padding(.vertical, 3)
+                            .background(
+                                Capsule().fill(resultStampColor.opacity(0.16))
+                                    .overlay(Capsule().stroke(resultStampColor.opacity(0.4), lineWidth: 0.8))
+                            )
+                    } else if !formattedTime.isEmpty {
+                        Text(formattedTime.uppercased())
+                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .tracking(1)
+                            .foregroundStyle(.white.opacity(0.34))
+                            .lineLimit(1)
+                    }
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.28))
                 }
+
+                // Hero — player name where the gold card shows the matchup
+                // (same face/size). Second line: team · market, in the same
+                // mono secondary-label style the gold card uses (silver).
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(prop.player ?? prop.team ?? "")
+                        .font(GaryFonts.text(21, .medium))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                    HStack(spacing: 6) {
+                        if let team = prop.team, !team.isEmpty {
+                            Text(team.uppercased())
+                                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                                .tracking(1)
+                                .foregroundStyle(GaryColors.silver.opacity(0.85))
+                            Text("·")
+                                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                                .foregroundStyle(.white.opacity(0.3))
+                        }
+                        Text(marketLabel)
+                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .tracking(1)
+                            .foregroundStyle(.white.opacity(0.5))
+                    }
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                }
+
+                // Bottom — the CALL (side + line, silver) full-width: the
+                // product. Mirrors the gold pick chip exactly; silver text +
+                // silver border on the same muted fill.
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(compactCall)
+                        .font(.system(size: 17, weight: .heavy, design: .monospaced))
+                        .tracking(0.8)
+                        .foregroundStyle(GaryColors.silver)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                    Spacer(minLength: 8)
+                    Text(Formatters.americanOdds(prop.odds))
+                        .font(.system(size: 15, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(GaryColors.silver.opacity(0.72))
+                }
+                .frame(maxWidth: .infinity)
                 .padding(.horizontal, 14)
-                .padding(.vertical, 11)
+                .padding(.vertical, 12)
                 .background(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(GaryColors.gold.opacity(0.10))
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Color(hex: "#1C1F26"))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .stroke(GaryColors.gold.opacity(0.55), lineWidth: 1)
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .stroke(GaryColors.silver.opacity(0.7), lineWidth: 1)
                         )
                 )
 
-                // Gary's lean meter — thin gold bar with confidence %
+                // Gary's lean meter — silver twin of the game card's lean rail.
                 VStack(spacing: 6) {
                     HStack {
                         Text("GARY'S LEAN")
                             .font(.system(size: 9.5, weight: .medium, design: .monospaced))
                             .tracking(1)
-                            .foregroundStyle(GaryColors.gold.opacity(0.9))
+                            .foregroundStyle(GaryColors.silver.opacity(0.9))
                         Spacer()
                         Text("\(Int(confidenceValue * 100))%")
                             .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
-                            .tracking(1.4)
-                            .foregroundStyle(GaryColors.gold.opacity(0.9))
+                            .tracking(1)
+                            .foregroundStyle(GaryColors.silver.opacity(0.9))
                     }
                     GeometryReader { geo in
                         ZStack(alignment: .leading) {
                             Capsule().fill(Color.white.opacity(0.06))
-                            Capsule().fill(GaryColors.gold).frame(width: geo.size.width * confidenceValue)
+                            Capsule().fill(GaryColors.silver).frame(width: geo.size.width * confidenceValue)
                         }
                     }
                     .frame(height: 2.5)
                 }
             }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 18)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 12)
             .opacity(gameResult != nil ? 0.72 : 1.0)
 
             if resolvedResult != nil {
@@ -12327,7 +12398,15 @@ struct CompactPropRow: View {
                     .rotationEffect(.degrees(-10))
             }
         }
-        // No card chrome — parent draws the hairline divider between rows
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color(hex: "#15171C"))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(GaryColors.silver.opacity(0.4), lineWidth: 1.0)
+                )
+                .shadow(color: .black.opacity(0.45), radius: 14, y: 6)
+        )
     }
 }
 

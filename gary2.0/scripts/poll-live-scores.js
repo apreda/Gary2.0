@@ -26,6 +26,9 @@ import { getESTDate } from '../src/utils/dateUtils.js';
 
 const { ballDontLieService: bdl } = await import('../src/services/ballDontLieService.js');
 const fifaWorldCup = await import('../src/services/fifaWorldCupService.js');
+// MLB Stats API: BDL has neither outs nor baserunners, so live MLB game state
+// (outs + who's on base) is enriched from statsapi.mlb.com's linescore.
+const mlbStats = await import('../src/services/mlbStatsApiService.js');
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
 const adminKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -59,8 +62,9 @@ function normStatus(raw) {
   return 'live';
 }
 
-function mlbRows() {
-  return bdl.getMlbGamesForDate(targetDate).then((games) => (games || []).map((g) => {
+async function mlbRows() {
+  const games = (await bdl.getMlbGamesForDate(targetDate)) || [];
+  const rows = games.map((g) => {
     const status = normStatus(g.status);
     const detail = status === 'live' && Number.isFinite(Number(g.period))
       ? `INN ${g.period}` : status === 'final' ? 'FINAL' : null;
@@ -73,8 +77,49 @@ function mlbRows() {
       home_score: numOrNull(g.home_team_data?.runs),
       status,
       detail,
+      outs: null,
+      bases: null,
+      _bdl: g,
     };
-  }));
+  });
+
+  // Enrich LIVE games with outs + baserunners from the MLB Stats API linescore.
+  // Match BDL games to statsapi gamePks by normalized team name (abbr formats
+  // diverge between the two feeds; names are stable). Any miss just leaves the
+  // diamond off that card — score + inning still render from BDL.
+  const liveRows = rows.filter((r) => r.status === 'live');
+  if (liveRows.length) {
+    try {
+      const schedule = (await mlbStats.getMlbSchedule(targetDate)) || [];
+      const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z]/g, '');
+      const liveGames = schedule
+        .filter((sg) => sg.status?.abstractGameState === 'Live')
+        .map((sg) => ({
+          away: norm(sg.teams?.away?.team?.name),
+          home: norm(sg.teams?.home?.team?.name),
+          pk: sg.gamePk,
+        }));
+      for (const row of liveRows) {
+        const a = norm(row._bdl?.away_team?.full_name || row._bdl?.away_team?.display_name || row._bdl?.away_team?.name);
+        const h = norm(row._bdl?.home_team?.full_name || row._bdl?.home_team?.display_name || row._bdl?.home_team?.name);
+        const m = liveGames.find((s) =>
+          (s.away.includes(a) || a.includes(s.away)) && (s.home.includes(h) || h.includes(s.home)));
+        if (!m?.pk) continue;
+        try {
+          const ls = await mlbStats.getGameLineScore(m.pk);
+          if (Number.isFinite(Number(ls?.outs))) row.outs = Number(ls.outs);
+          const o = ls?.offense || {};
+          row.bases = `${o.first ? 1 : 0}${o.second ? 1 : 0}${o.third ? 1 : 0}`;
+        } catch (e) {
+          console.warn(`[live-scores] MLB linescore failed for pk ${m.pk}: ${e.message}`);
+        }
+      }
+    } catch (e) {
+      console.warn(`[live-scores] MLB game-state enrich skipped: ${e.message}`);
+    }
+  }
+
+  return rows.map(({ _bdl, ...r }) => r);
 }
 
 function nbaRows() {
@@ -96,6 +141,8 @@ function nbaRows() {
       home_score: numOrNull(g.home_team_score),
       status,
       detail,
+      outs: null,
+      bases: null,
     };
   }));
 }
@@ -113,6 +160,8 @@ function wcRows() {
       home_score: numOrNull(m.home_score),
       status,
       detail: status === 'final' ? 'FINAL' : status === 'live' ? 'LIVE' : null,
+      outs: null,
+      bases: null,
     };
   }));
 }
