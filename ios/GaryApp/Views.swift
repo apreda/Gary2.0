@@ -26,6 +26,51 @@ private struct BillfoldTopPickCandidate {
     let pickText: String
 }
 
+/// The shared page header — Billfold's formula applied app-wide: serif
+/// display title, small mono accent on the same baseline, optional trailing
+/// control, stitched seam. Flat — no containers competing with the content.
+struct GaryPageHeader<Trailing: View>: View {
+    let title: String
+    var accent: String? = nil
+    @ViewBuilder var trailing: () -> Trailing
+
+    var body: some View {
+        VStack(spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(title)
+                    .font(GaryFonts.display(30))
+                    .foregroundStyle(.white.opacity(0.95))
+                if let accent, !accent.isEmpty {
+                    Text(accent)
+                        .font(GaryFonts.mono(10))
+                        .foregroundStyle(GaryColors.gold.opacity(0.9))
+                }
+                Spacer()
+                trailing()
+            }
+            .padding(.horizontal, 20)
+            StitchLine()
+                .stroke(GaryColors.gold.opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [4, 5]))
+                .frame(height: 1)
+                .padding(.horizontal, 12)
+        }
+        .padding(.top, 12)
+    }
+
+    /// "Wednesday, June 4" — the standard header accent.
+    static func dateLabel() -> String {
+        let f = DateFormatter()
+        f.dateFormat = "EEEE, MMMM d"
+        return f.string(from: Date())
+    }
+}
+
+extension GaryPageHeader where Trailing == EmptyView {
+    init(title: String, accent: String? = nil) {
+        self.init(title: title, accent: accent, trailing: { EmptyView() })
+    }
+}
+
 private struct StitchLine: Shape {
     func path(in rect: CGRect) -> Path {
         var p = Path()
@@ -10459,6 +10504,7 @@ struct PicksCarouselView: View {
         ZStack {
             LiquidGlassBackground(grainDensity: 0)
             VStack(spacing: 0) {
+                GaryPageHeader(title: "Picks", accent: GaryPageHeader<EmptyView>.dateLabel())
                 headerBar
                 content
             }
@@ -10820,13 +10866,7 @@ struct LiveScoreStrip: View {
             }
             Spacer()
         }
-        .padding(.horizontal, 12).padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 11, style: .continuous)
-                .fill(score.isLive ? GaryColors.gold.opacity(0.08) : Color.white.opacity(0.04))
-                .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous)
-                    .stroke(score.isLive ? GaryColors.gold.opacity(0.35) : Color.white.opacity(0.07), lineWidth: 1))
-        )
+        .padding(.vertical, 2)
     }
 }
 
@@ -11192,22 +11232,14 @@ struct PropsHubView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("TODAY'S EDGES")
-                    .font(.system(size: 9.5, weight: .semibold, design: .monospaced)).tracking(1)
-                    .foregroundStyle(GaryColors.gold.opacity(0.9))
-                Text("Connections worth knowing tonight")
-                    .font(.system(size: 19, weight: .semibold)).foregroundStyle(.white.opacity(0.92))
-                // Track record: yesterday's graded edges (hidden under a 5-edge sample).
-                if let r = hitRate, r.graded >= 5 {
-                    Text("YESTERDAY: \(r.hit) OF \(r.graded) EDGES HIT")
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced)).tracking(1.2)
-                        .foregroundStyle((Double(r.hit) / Double(r.graded) >= 0.5 ? HubPalette.green : Color.white).opacity(0.65))
-                        .padding(.top, 2)
-                }
-            }
-            Spacer()
+        GaryPageHeader(
+            title: "The Hub",
+            // Track record once graded (>=5 edges), else today's date.
+            accent: {
+                if let r = hitRate, r.graded >= 5 { return "\(r.hit) OF \(r.graded) HIT YDAY" }
+                return GaryPageHeader<EmptyView>.dateLabel()
+            }()
+        ) {
             // Only leagues with rows today — no toggle into a guaranteed empty state.
             if availableLeagues.count > 1 {
                 HStack(spacing: 6) {
