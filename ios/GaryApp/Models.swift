@@ -79,6 +79,29 @@ struct Connection: Decodable {
     let game_id: String?
 }
 
+// MARK: - Live Scores (2-minute poller snapshots)
+
+struct LiveScore: Decodable {
+    let league: String?
+    let game_id: String?
+    let away_abbr: String?
+    let home_abbr: String?
+    let away_score: Int?
+    let home_score: Int?
+    let status: String?    // scheduled | live | final
+    let detail: String?    // "INN 7" / "Q3 4:12" / "FINAL"
+
+    var isLive: Bool { status == "live" }
+    var isFinal: Bool { status == "final" }
+    /// "SD @ PHI" — matches the hub/deep-link abbreviation format.
+    var abbrGame: String { "\(away_abbr ?? "") @ \(home_abbr ?? "")" }
+    /// "SD 4 · PHI 6"
+    var scoreLine: String? {
+        guard let a = away_score, let h = home_score else { return nil }
+        return "\(away_abbr ?? "AWY") \(a) · \(home_abbr ?? "HOM") \(h)"
+    }
+}
+
 // MARK: - Player Insight Pack (full breakdown behind a hub card)
 // Decodes player_insight_cards.payload. Everything optional so a partial pack
 // renders whatever sections it has.

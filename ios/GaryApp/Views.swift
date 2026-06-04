@@ -10418,6 +10418,8 @@ struct PicksCarouselView: View {
     @State private var sport = "ALL"
     @State private var page = 0
     @State private var selectedProp: PropPick?
+    /// Today's live-score snapshots (poller-fed); refreshed every 60s while visible.
+    @State private var liveScores: [LiveScore] = []
 
     /// Every league with content: today's props/picks plus the per-sport
     /// yesterday recaps (a sport with no picks today shows its results —
@@ -10454,8 +10456,7 @@ struct PicksCarouselView: View {
         ZStack {
             LiquidGlassBackground(grainDensity: 0)
             VStack(spacing: 0) {
-                if sports.count > 1 { sportBar }
-                matchupBar
+                headerBar
                 content
             }
         }
@@ -10468,6 +10469,15 @@ struct PicksCarouselView: View {
             await store.loadIfNeeded()
             consumeFocus()
             if !connLoaded { await loadConnections() }
+        }
+        .task {
+            // Live-score loop: refresh every 60s while this tab is on screen
+            // (.task cancels on disappear). The poller updates the table every
+            // 2 minutes, so this keeps chips and score strips current.
+            while !Task.isCancelled {
+                liveScores = await SupabaseAPI.fetchLiveScores(date: SupabaseAPI.todayEST())
+                try? await Task.sleep(nanoseconds: 60_000_000_000)
+            }
         }
         .onChange(of: sport) { _ in page = 0 }
         .onChange(of: focusState.focusGame) { _ in consumeFocus() }
@@ -10510,7 +10520,8 @@ struct PicksCarouselView: View {
                 ScrollView(showsIndicators: false) {
                     PicksTodayPage(topProps: topProps, topGamePick: topGamePick,
                                    gamePickResult: store.gamePickResult, resultForProp: store.resultForProp,
-                                   edges: Array(connections.prefix(8)), onTapProp: { selectedProp = $0 })
+                                   edges: Array(connections.prefix(8)), onTapProp: { selectedProp = $0 },
+                                   liveScore: topGamePick.flatMap { liveScore(forMatchup: "\($0.awayTeam ?? "") @ \($0.homeTeam ?? "")") })
                         .padding(.bottom, 130)
                 }
                 .tag(0)
@@ -10519,7 +10530,8 @@ struct PicksCarouselView: View {
                         PicksGamePage(group: g,
                                       entry: store.gamePickEntry(forMatchup: g.matchup),
                                       gamePickResult: store.gamePickResult, resultForProp: store.resultForProp,
-                                      edges: edges(for: g), onTapProp: { selectedProp = $0 })
+                                      edges: edges(for: g), onTapProp: { selectedProp = $0 },
+                                      liveScore: liveScore(forMatchup: g.matchup))
                             .padding(.bottom, 130)
                     }
                     .tag(idx + 1)
@@ -10529,40 +10541,86 @@ struct PicksCarouselView: View {
         }
     }
 
-    private var sportBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(sports, id: \.self) { s in
-                    let on = (s == sport)
-                    Button { withAnimation(.easeInOut(duration: 0.2)) { sport = s } } label: {
-                        Text(s)
-                            .font(.system(size: 11, weight: .bold, design: .monospaced)).tracking(0.8)
-                            .foregroundStyle(on ? Color.black.opacity(0.85) : .white.opacity(0.5))
-                            .padding(.horizontal, 12).padding(.vertical, 7)
-                            .background(
-                                Capsule().fill(on ? GaryColors.gold : Color.white.opacity(0.05))
-                                    .overlay(Capsule().stroke(on ? Color.clear : Color.white.opacity(0.08), lineWidth: 1))
-                            )
-                    }.buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, 16).padding(.top, 10)
-        }
-    }
-
-    private var matchupBar: some View {
+    /// One merged header row: sport pills · divider · TODAY · status chips.
+    /// Each matchup chip carries a second line — start time, ▶ LIVE + score,
+    /// or FINAL + score (YESTERDAY for recap games).
+    private var headerBar: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
+                HStack(spacing: 8) {
+                    if sports.count > 1 {
+                        ForEach(sports, id: \.self) { s in
+                            let on = (s == sport)
+                            Button { withAnimation(.easeInOut(duration: 0.2)) { sport = s } } label: {
+                                Text(s)
+                                    .font(.system(size: 11, weight: .bold, design: .monospaced)).tracking(0.8)
+                                    .foregroundStyle(on ? Color.black.opacity(0.85) : .white.opacity(0.5))
+                                    .padding(.horizontal, 12).padding(.vertical, 7)
+                                    .background(
+                                        Capsule().fill(on ? GaryColors.gold : Color.white.opacity(0.05))
+                                            .overlay(Capsule().stroke(on ? Color.clear : Color.white.opacity(0.08), lineWidth: 1))
+                                    )
+                            }.buttonStyle(.plain)
+                        }
+                        Rectangle().fill(Color.white.opacity(0.12))
+                            .frame(width: 1, height: 24)
+                            .padding(.horizontal, 4)
+                    }
                     chip(0, "TODAY")
                     ForEach(Array(games.enumerated()), id: \.offset) { idx, g in
-                        chip(idx + 1, shortMatchup(g.matchup))
+                        statusChip(idx + 1, g)
                     }
                 }
-                .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 10)
+                .padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 10)
             }
             .onChange(of: page) { p in withAnimation { proxy.scrollTo(p, anchor: .center) } }
         }
+    }
+
+    /// Two-line matchup chip: matchup on top, live status under it.
+    private func statusChip(_ index: Int, _ g: (matchup: String, time: String, props: [PropPick])) -> some View {
+        let on = (index == page)
+        let status = statusLine(for: g)
+        return Button { withAnimation(.easeInOut(duration: 0.25)) { page = index } } label: {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(shortMatchup(g.matchup))
+                    .font(.system(size: 12, weight: .bold, design: .monospaced)).tracking(0.5)
+                    .foregroundStyle(on ? GaryColors.gold : .white.opacity(0.5))
+                Text(status.text)
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced)).tracking(0.6)
+                    .foregroundStyle(status.color)
+            }
+            .padding(.horizontal, 14).padding(.vertical, 7)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(on ? GaryColors.gold.opacity(0.14) : Color.white.opacity(0.05))
+                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(on ? GaryColors.gold.opacity(0.5) : Color.clear, lineWidth: 1))
+            )
+        }
+        .buttonStyle(.plain)
+        .id(index)
+    }
+
+    /// Live-score row for a matchup (poller snapshots, abbr-matched).
+    func liveScore(forMatchup matchup: String) -> LiveScore? {
+        liveScores.first { abbrGameMatches($0.abbrGame, matchup: matchup) }
+    }
+
+    private func statusLine(for g: (matchup: String, time: String, props: [PropPick])) -> (text: String, color: Color) {
+        if !gameIsFresh(g) {
+            return ("YESTERDAY", .white.opacity(0.3))
+        }
+        if let ls = liveScore(forMatchup: g.matchup) {
+            if ls.isLive {
+                let score = ls.scoreLine.map { " · \($0)" } ?? ""
+                let det = (ls.detail?.isEmpty == false) ? " · \(ls.detail!)" : ""
+                return ("▶ LIVE\(score)\(det)", GaryColors.gold)
+            }
+            if ls.isFinal, let score = ls.scoreLine {
+                return ("FINAL · \(score)", .white.opacity(0.35))
+            }
+        }
+        return (g.time.isEmpty ? "TODAY" : g.time, .white.opacity(0.35))
     }
 
     private func chip(_ index: Int, _ label: String) -> some View {
@@ -10630,6 +10688,7 @@ struct PicksTodayPage: View {
     let resultForProp: (PropPick) -> String?
     let edges: [Signal]
     let onTapProp: (PropPick) -> Void
+    var liveScore: LiveScore? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -10639,6 +10698,9 @@ struct PicksTodayPage: View {
                 .padding(.horizontal, 16).padding(.top, 8)
 
             if let gp = topGamePick {
+                if let ls = liveScore, ls.isLive || ls.isFinal {
+                    LiveScoreStrip(score: ls).padding(.horizontal, 16)
+                }
                 // topGamePick is always TODAY's live pick — never stamp a W/L
                 // (the same matchup may have settled yesterday; that's not this game).
                 FlippablePickCard(pick: gp, gameResult: nil, showSportBadge: true)
@@ -10670,6 +10732,7 @@ struct PicksGamePage: View {
     let resultForProp: (PropPick) -> String?
     let edges: [Signal]
     let onTapProp: (PropPick) -> Void
+    var liveScore: LiveScore? = nil
 
     private var topProps: [PropPick] {
         Array(group.props.sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.prefix(2))
@@ -10693,13 +10756,17 @@ struct PicksGamePage: View {
             }
             .padding(.horizontal, 16).padding(.top, 8)
 
+            if let ls = liveScore, ls.isLive || ls.isFinal {
+                LiveScoreStrip(score: ls).padding(.horizontal, 16)
+            }
+
             if let entry {
                 FlippablePickCard(pick: entry.pick,
                                   gameResult: entry.isYesterday ? gamePickResult(entry.pick) : nil,
                                   showSportBadge: false)
                     .padding(.horizontal, 10)
             } else {
-                Text("Game pick drops ~90 min before first pitch.")
+                Text("Game pick drops closer to game time.")
                     .font(.system(size: 12)).foregroundStyle(.white.opacity(0.4))
                     .padding(.horizontal, 16)
             }
@@ -10720,6 +10787,43 @@ struct PicksGamePage: View {
             }
             EdgesSection(title: "GAME INTEL", edges: edges)
         }
+    }
+}
+
+/// Compact live/final score banner above a game's pick card.
+struct LiveScoreStrip: View {
+    let score: LiveScore
+    var body: some View {
+        HStack(spacing: 8) {
+            if score.isLive {
+                Circle().fill(GaryColors.gold).frame(width: 6, height: 6)
+                Text("LIVE")
+                    .font(.system(size: 9.5, weight: .bold, design: .monospaced)).tracking(1.4)
+                    .foregroundStyle(GaryColors.gold)
+            } else {
+                Text("FINAL")
+                    .font(.system(size: 9.5, weight: .bold, design: .monospaced)).tracking(1.4)
+                    .foregroundStyle(.white.opacity(0.5))
+            }
+            if let line = score.scoreLine {
+                Text(line)
+                    .font(.system(size: 13, weight: .bold, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.92))
+            }
+            if score.isLive, let det = score.detail, !det.isEmpty {
+                Text(det)
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced)).tracking(0.6)
+                    .foregroundStyle(.white.opacity(0.45))
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 12).padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .fill(score.isLive ? GaryColors.gold.opacity(0.08) : Color.white.opacity(0.04))
+                .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .stroke(score.isLive ? GaryColors.gold.opacity(0.35) : Color.white.opacity(0.07), lineWidth: 1))
+        )
     }
 }
 

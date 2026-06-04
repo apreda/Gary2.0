@@ -371,6 +371,19 @@ enum SupabaseAPI {
         return formatter.string(from: prior)
     }
 
+    /// Today's live-score snapshots (status/detail/scores per game), written by
+    /// the 2-minute poller. Returns [] on any failure.
+    static func fetchLiveScores(date: String) async -> [LiveScore] {
+        let url = buildURL(table: "live_scores", query: [
+            URLQueryItem(name: "select", value: "league,game_id,away_abbr,home_abbr,away_score,home_score,status,detail"),
+            URLQueryItem(name: "date", value: "eq.\(date)")
+        ])
+        guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
+              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let rows = try? JSONDecoder().decode([LiveScore].self, from: data) else { return [] }
+        return rows
+    }
+
     /// Fetch a player's full insight pack for a date (the Hub breakdown view).
     /// Returns nil when no pack exists or on any failure — the card back
     /// simply hides the breakdown affordance gracefully.
