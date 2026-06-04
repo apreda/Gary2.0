@@ -17,7 +17,9 @@ import {
   getConfirmedLineups,
   getProbablePitchers,
   getGameBoxScore,
+  getPitcherPlatoonSplits,
 } from '../../../mlbStatsApiService.js';
+import { getPitcherArsenal, getPitcherStatcastProfile } from '../../../baseballSavantService.js';
 import { ballDontLieService } from '../../../ballDontLieService.js';
 import { formatSampleSuffix } from './statRouterCommon.js';
 import { geminiGroundingSearch } from '../../scoutReport/shared/grounding.js';
@@ -286,36 +288,13 @@ export const mlbFetchers = {
           }
         }
 
-        // Get recent workload from last 3 games
-        const mlbTeam = await findMlbTeamByName(team.full_name || team.name);
-        if (mlbTeam) {
-          const recentGames = await getMlbRecentGames(mlbTeam.id, 3).catch(() => []);
-          if (recentGames.length > 0) {
-            const gameIds = recentGames.map(g => g.gamePk).filter(Boolean);
-            if (gameIds.length > 0) {
-              const gameStats = await ballDontLieService.getMlbGameStats({ gameIds }).catch(() => []);
-              if (gameStats.length > 0) {
-                usedApi = true;
-                lines.push(`  Recent Workload (last ${recentGames.length} games):`);
-                // Group by game
-                const byGame = {};
-                for (const s of gameStats) {
-                  const gId = s.game?.id || s.game_id;
-                  if (!gId) continue;
-                  if ((s.ip || 0) > 0 && (s.ip || 0) < 5) { // Relievers typically pitch < 5 IP
-                    if (!byGame[gId]) byGame[gId] = [];
-                    const name = s.player?.full_name || s.player?.last_name || 'Unknown';
-                    byGame[gId].push(`${name} ${Number(s.ip).toFixed(1)} IP`);
-                  }
-                }
-                for (const [gId, pitchers] of Object.entries(byGame)) {
-                  const game = recentGames.find(g => String(g.gamePk) === String(gId));
-                  const date = game ? (game.gameDate || '').split('T')[0] : gId;
-                  lines.push(`    ${date}: ${pitchers.join(', ')}`);
-                }
-              }
-            }
-          }
+        // Recent workload (with pitch counts) lives in MLB_BULLPEN_WORKLOAD,
+        // which reads MLB Stats API boxscores directly. A previous version
+        // here passed MLB gamePks to BDL's getMlbGameStats — different ID
+        // namespaces, so it always returned 0 records. Removed rather than
+        // duplicated; the workload token is wired into the same factor.
+        if (relievers.length > 0) {
+          lines.push(`  Recent per-game workload: see MLB_BULLPEN_WORKLOAD (IP + pitch counts, last 3 games)`);
         }
 
         if (usedApi) continue;
@@ -441,10 +420,10 @@ export const mlbFetchers = {
       { team: away, teamName: awayTeam, pitcher: probable?.away },
     ];
 
-    const resolved = []; // { teamName, name, bdlId }
+    const resolved = []; // { teamName, name, bdlId, mlbamId }
     for (const side of sides) {
       if (!side.pitcher) {
-        resolved.push({ teamName: side.teamName, name: null, bdlId: null });
+        resolved.push({ teamName: side.teamName, name: null, bdlId: null, mlbamId: null });
         continue;
       }
       const name = side.pitcher.fullName || `${side.pitcher.firstName || ''} ${side.pitcher.lastName || ''}`.trim();
@@ -461,7 +440,18 @@ export const mlbFetchers = {
           bdlId = match?.player?.id || null;
         } catch { /* fall through with bdlId=null */ }
       }
-      resolved.push({ teamName: side.teamName, name, bdlId });
+      resolved.push({ teamName: side.teamName, name, bdlId, mlbamId: side.pitcher.id || null });
+    }
+
+    // Per-pitch velocity from Baseball Savant arsenal CSV (BDL carries no pitch speed).
+    // Keyed by MLBAM id with name fallback; null when Savant has no row.
+    const arsenals = new Map(); // resolved index -> arsenal | null
+    for (let i = 0; i < resolved.length; i++) {
+      const r = resolved[i];
+      if (!r.name) { arsenals.set(i, null); continue; }
+      const arsenal = await getPitcherArsenal(r.mlbamId ?? r.name, currentYear).catch(() => null)
+        || await getPitcherArsenal(r.name, currentYear).catch(() => null);
+      arsenals.set(i, arsenal);
     }
 
     const playerIds = resolved.map(r => r.bdlId).filter(id => id != null);
@@ -483,26 +473,36 @@ export const mlbFetchers = {
     }
     const fmtPct = (v) => (v != null && Number.isFinite(Number(v))) ? `${Number(v).toFixed(1)}%` : '—';
     const fmtAvg = (v) => (v != null && Number.isFinite(Number(v))) ? Number(v).toFixed(3) : '—';
-    const formatPitcher = ({ teamName, name, bdlId }) => {
+    const formatPitcher = ({ teamName, name, bdlId }, arsenal) => {
       if (!name) return `${teamName}: SP not announced`;
-      if (bdlId == null) return `${teamName}: ${name} — not found in BDL season stats`;
+      // mph lookup keyed by pitch CODE (FF/SI/FS...) — both sources carry codes
+      // and codes are stable; display-name strings can drift ("4-Seam" vs
+      // "Four-Seam"). Name map kept as fallback for codeless BDL rows.
+      const mphByCode = new Map((arsenal?.pitches || []).map(p => [p.code, p.mph]));
+      const mphByName = new Map((arsenal?.pitches || []).map(p => [p.name.toLowerCase(), p.mph]));
+      const velocityLine = arsenal
+        ? `  Velocity (Savant ${currentYear}): ${arsenal.pitches.map(p => `${p.name} ${p.mph} mph`).join(' | ')}`
+        : `  Velocity: NOT AVAILABLE — do not cite pitch speeds for ${name}`;
+      if (bdlId == null) return `${teamName}: ${name} — not found in BDL season stats\n${velocityLine}`;
       const list = (byPlayer.get(bdlId) || []).slice();
-      if (list.length === 0) return `${teamName}: ${name} — no pitch-type data yet`;
+      if (list.length === 0) return `${teamName}: ${name} — no pitch-type data yet\n${velocityLine}`;
       list.sort((a, b) => (Number(b.pitch_usage_percent) || 0) - (Number(a.pitch_usage_percent) || 0));
       const top = list.slice(0, 5).map(r => {
         const label = r.pitch_name || r.pitch_type || 'Unknown';
         // Show pitch_count so the reader can weight whiff%/xwOBA by sample.
         const n = r.pitch_count != null ? `${r.pitch_count} pitches` : '? pitches';
-        return `  ${label} (${fmtPct(r.pitch_usage_percent)}, ${n}): xwOBA ${fmtAvg(r.xwoba)}, whiff ${fmtPct(r.whiff_percent)}, chase ${fmtPct(r.chase_percent)}, BA ${fmtAvg(r.ba)}`;
+        const mph = mphByCode.get(String(r.pitch_type || '').toUpperCase()) ?? mphByName.get(String(label).toLowerCase());
+        const mphStr = mph != null ? `, avg ${mph} mph` : '';
+        return `  ${label} (${fmtPct(r.pitch_usage_percent)}, ${n}${mphStr}): xwOBA ${fmtAvg(r.xwoba)}, whiff ${fmtPct(r.whiff_percent)}, chase ${fmtPct(r.chase_percent)}, BA ${fmtAvg(r.ba)}`;
       });
-      return `${teamName}: ${name}\n${top.join('\n')}`;
+      return `${teamName}: ${name}\n${top.join('\n')}\n${velocityLine}`;
     };
 
     return {
-      homeValue: formatPitcher(resolved[0]),
-      awayValue: formatPitcher(resolved[1]),
+      homeValue: formatPitcher(resolved[0], arsenals.get(0)),
+      awayValue: formatPitcher(resolved[1], arsenals.get(1)),
       comparison: `Probable SP pitch-type breakdown (${currentYear} season)`,
-      source: 'BDL API (pitch-type season stats)',
+      source: 'BDL API (pitch-type season stats) + Baseball Savant (velocity)',
     };
   },
 
@@ -924,21 +924,41 @@ export const mlbFetchers = {
         const h2h = (games || []).filter(g => {
           const hId = g.home_team?.id || g.home_team_data?.id;
           const aId = g.visitor_team?.id || g.away_team?.id;
-          return (hId === awayId || aId === awayId) && g.status === 'Final';
+          // BDL MLB games report status 'STATUS_FINAL' (not 'Final' — the old
+          // strict check matched ZERO games, so this tool returned "no H2H
+          // data" for every MLB matchup since launch). Also restrict to
+          // regular season: the 2026 season set includes spring_training
+          // games that would contaminate the season-series numbers.
+          const isFinal = /final/i.test(g.status || '');
+          const isRegular = !g.season_type || g.season_type === 'regular';
+          return (hId === awayId || aId === awayId) && isFinal && isRegular;
         });
         if (h2h.length > 0) {
-          let homeWins = 0, awayWins = 0;
+          // Chronological order so the per-game readout reads naturally
+          h2h.sort((a, b) => new Date(a.date || a.game_date || 0) - new Date(b.date || b.game_date || 0));
+          let homeWins = 0, awayWins = 0, homeRuns = 0, awayRuns = 0;
+          const results = [];
           for (const g of h2h) {
-            const hScore = g.home_team_score ?? g.home_score ?? 0;
-            const vScore = g.visitor_team_score ?? g.away_score ?? 0;
-            const isHomeTeamHome = (g.home_team?.id || g.home_team_data?.id) === homeId;
-            if (isHomeTeamHome ? hScore > vScore : vScore > hScore) homeWins++;
+            // BDL MLB game objects carry runs in home/away_team_data.runs
+            // (home_team_data is BOX data — hits/runs/errors — not a team
+            // object, so it has no .id; the team id lives on home_team).
+            const hScore = g.home_team_data?.runs ?? g.home_team_score ?? g.home_score ?? 0;
+            const vScore = g.away_team_data?.runs ?? g.visitor_team_score ?? g.away_score ?? 0;
+            const isHomeTeamHome = g.home_team?.id === homeId;
+            const ourRuns = isHomeTeamHome ? hScore : vScore;     // runs by tonight's home team
+            const theirRuns = isHomeTeamHome ? vScore : hScore;   // runs by tonight's away team
+            homeRuns += ourRuns;
+            awayRuns += theirRuns;
+            if (ourRuns > theirRuns) homeWins++;
             else awayWins++;
+            const date = (g.date || g.game_date || '').split('T')[0];
+            results.push(`${date}: ${homeTeam.split(' ').pop()} ${ourRuns}-${theirRuns}`);
           }
+          const n = h2h.length;
           return {
-            homeValue: `${homeTeam}: ${homeWins}W vs ${awayTeam} this season`,
-            awayValue: `${awayTeam}: ${awayWins}W vs ${homeTeam} this season`,
-            comparison: `Season series: ${h2h.length} games played`,
+            homeValue: `${homeTeam}: ${homeWins}W vs ${awayTeam} this season, ${homeRuns} runs scored (${(homeRuns / n).toFixed(1)}/gm)`,
+            awayValue: `${awayTeam}: ${awayWins}W vs ${homeTeam} this season, ${awayRuns} runs scored (${(awayRuns / n).toFixed(1)}/gm)`,
+            comparison: `Season series: ${n} games played — ${results.join(', ')}`,
             source: 'BDL API (game history)',
           };
         }
@@ -947,7 +967,7 @@ export const mlbFetchers = {
       console.warn(`[MLB Fetchers] BDL H2H failed: ${e.message}`);
     }
     return {
-      homeValue: 'No H2H data available (teams may not have played yet this season)',
+      homeValue: 'No H2H data available (teams may not have played yet this season). Season-series run totals: NOT AVAILABLE — do not cite per-game series scoring averages.',
       awayValue: '',
       comparison: `MLB H2H: ${awayTeam} vs ${homeTeam}`,
       source: 'BDL API (no data)',
@@ -1123,7 +1143,7 @@ export const mlbFetchers = {
             lines.push(`H: ${match.pitching_h} | HBP: ${match.pitching_hbp ?? '—'} | WAR: ${match.pitching_war?.toFixed(1) ?? '—'}`);
           }
 
-          // Try splits (L/R, home/away, day/night)
+          // Try splits (venue/day-night from BDL — BDL has no L/R breakdown for pitchers)
           const playerId = match.player?.id;
           if (playerId) {
             try {
@@ -1147,6 +1167,47 @@ export const mlbFetchers = {
               }
             } catch (_) { /* Splits optional */ }
 
+            // Platoon splits (vs LHB / vs RHB) — MLB Stats API, keyed by the
+            // probable pitcher's MLBAM id. This is the ONLY structured source
+            // for pitcher platoon claims; BDL has no L/R breakdown for pitchers.
+            try {
+              const mlbamId = pitcher?.id;
+              const platoon = mlbamId ? await getPitcherPlatoonSplits(mlbamId, currentYear) : null;
+              if (platoon?.vsLeft || platoon?.vsRight) {
+                lines.push(`Platoon (opponents batting, ${currentYear}):`);
+                for (const [sideLabel, p] of [['vs LHB', platoon.vsLeft], ['vs RHB', platoon.vsRight]]) {
+                  if (!p) { lines.push(`  ${sideLabel}: no data`); continue; }
+                  lines.push(`  ${sideLabel}: ${p.avg ?? '—'} AVG, ${p.ops ?? '—'} OPS, ${p.hr ?? '—'} HR, ${p.bb ?? '—'} BB (${p.ab ?? '—'} AB)`);
+                }
+              } else {
+                lines.push(`Platoon (vs LHB/RHB): NOT AVAILABLE — do not characterize this pitcher's platoon splits`);
+              }
+            } catch (_) {
+              lines.push(`Platoon (vs LHB/RHB): NOT AVAILABLE — do not characterize this pitcher's platoon splits`);
+            }
+
+            // Contact quality allowed + fastball velocity + batted-ball tendency
+            try {
+              const mlbamId = pitcher?.id;
+              const [profile, arsenal, seasonPitching] = await Promise.all([
+                getPitcherStatcastProfile(mlbamId ?? pitcherName, currentYear).catch(() => null),
+                getPitcherArsenal(mlbamId ?? pitcherName, currentYear).catch(() => null),
+                mlbamId ? getPlayerSeasonStats(mlbamId, currentYear, 'pitching').catch(() => null) : Promise.resolve(null),
+              ]);
+              const parts = [];
+              if (profile?.brlPercent != null) parts.push(`Barrel% allowed: ${profile.brlPercent}%`);
+              if (profile?.ev95Percent != null) parts.push(`Hard-hit% allowed: ${profile.ev95Percent}%`);
+              if (arsenal?.fastballMph != null) parts.push(`Fastball velo: ${arsenal.fastballMph} mph`);
+              // GO/AO ratio is the fetchable grounder/flyout tendency proxy
+              // (true GB%/FB% has no source in our stack — never cite one).
+              if (seasonPitching?.groundOutsToAirouts != null) parts.push(`GO/AO: ${seasonPitching.groundOutsToAirouts} (grounders per flyout — above ~1.2 leans ground-ball, below ~0.8 leans fly-ball)`);
+              if (parts.length > 0) {
+                lines.push(`Contact/velocity (${currentYear}): ${parts.join(' | ')}`);
+              } else {
+                lines.push(`Contact/velocity: NOT AVAILABLE — do not cite velocity or batted-ball quality for this pitcher`);
+              }
+            } catch (_) { /* Savant optional */ }
+
             // Try BvP data against opposing team
             const opposingTeam = side === 'home' ? away : home;
             const opposingTeamId = await resolveBdlTeamId(opposingTeam);
@@ -1158,7 +1219,7 @@ export const mlbFetchers = {
                 }).catch(() => []);
                 if (bvp && bvp.length > 0) {
                   const opposingName = opposingTeam.full_name || opposingTeam.name;
-                  lines.push(`vs ${opposingName} hitters:`);
+                  lines.push(`vs ${opposingName} hitters (career, may lag most recent meetings):`);
                   for (const m of bvp.slice(0, 5)) {
                     const batter = m.opponent_player?.full_name || m.opponent_player?.last_name || 'Unknown';
                     const avg = m.avg != null ? (typeof m.avg === 'number' ? m.avg.toFixed(3) : m.avg) : '—';
@@ -1208,7 +1269,11 @@ export const mlbFetchers = {
           if (ts > os) wins++; else losses++;
           totalRuns += (ts || 0); totalAllowed += (os || 0);
         }
-        lines.push(`${teamName}: ${wins}-${losses} L${games.length}, ${(totalRuns/games.length).toFixed(1)} RS/gm, ${(totalAllowed/games.length).toFixed(1)} RA/gm`);
+        // Stamp the window so the number is auditable (which 10 games, exactly)
+        const firstDate = (games[0]?.gameDate || '').split('T')[0];
+        const lastDate = (games[games.length - 1]?.gameDate || '').split('T')[0];
+        const windowLabel = firstDate && lastDate ? ` (${firstDate} → ${lastDate})` : '';
+        lines.push(`${teamName}: ${wins}-${losses} L${games.length}${windowLabel}, ${(totalRuns/games.length).toFixed(1)} RS/gm, ${(totalAllowed/games.length).toFixed(1)} RA/gm`);
       } catch (e) { lines.push(`${teamName}: Recent form unavailable`); }
     }
     return {
@@ -1646,7 +1711,11 @@ export const mlbFetchers = {
             const ip = parseFloat(ipStr);
             if (!Number.isFinite(ip) || ip <= 0 || ip >= 5) continue;
             const name = p?.person?.fullName || 'Unknown';
-            relievers.push(`${name} ${ip.toFixed(1)} IP`);
+            // Pitch count is the real workload signal — IP alone overstates a
+            // 15-pitch four-out save and understates a 30-pitch single inning.
+            const pitches = p?.stats?.pitching?.numberOfPitches;
+            const pitchStr = pitches != null ? `, ${pitches} pitches` : '';
+            relievers.push(`${name} ${ip.toFixed(1)} IP${pitchStr}`);
           }
 
           if (relievers.length > 0) {
@@ -1816,7 +1885,7 @@ export const mlbFetchers = {
     return {
       homeValue: homeLines.join('\n') || 'No player splits data available yet (season may not have started)',
       awayValue: awayLines.join('\n') || 'No player splits data available yet',
-      comparison: `Player splits (L/R, home/away) for ${awayTeam} @ ${homeTeam}${splitsFallbackNote}`,
+      comparison: `Player splits (L/R, home/away) for ${awayTeam} @ ${homeTeam}${splitsFallbackNote} — HITTERS ONLY; pitcher platoon splits (vs LHB/RHB) come from MLB_PITCHER_SCOUTING`,
       source: usedBdl ? `BDL API${splitsSeasonLabel}` : 'BDL (no data)',
     };
   },
@@ -1825,14 +1894,26 @@ export const mlbFetchers = {
     const homeTeam = home.full_name || home.name;
     const awayTeam = away.full_name || away.name;
     const currentYear = new Date().getFullYear();
+    const gamePk = options?.game?.gamePk || options?.game?.id;
     const homeLines = [];
     const awayLines = [];
     let usedBdl = false;
 
+    // Identify today's probable starters so each hitter's line vs THE actual
+    // opposing SP is surfaced explicitly (not buried among 12 career rows).
+    let probable = {};
+    if (gamePk) {
+      try { probable = await getProbablePitchers(gamePk); } catch (_) { /* optional */ }
+    }
+    const spNameFor = (side) => {
+      const p = probable?.[side];
+      return p ? (p.fullName || `${p.firstName || ''} ${p.lastName || ''}`.trim()) : null;
+    };
+
     // For each team's hitters, look up their history vs the opposing team's pitchers
-    for (const [battingTeam, battingName, opposingTeam, opposingName, lines] of [
-      [home, homeTeam, away, awayTeam, homeLines],
-      [away, awayTeam, home, homeTeam, awayLines],
+    for (const [battingTeam, battingName, opposingTeam, opposingName, opposingSpName, lines] of [
+      [home, homeTeam, away, awayTeam, spNameFor('away'), homeLines],
+      [away, awayTeam, home, homeTeam, spNameFor('home'), awayLines],
     ]) {
       const battingTeamId = await resolveBdlTeamId(battingTeam);
       const opposingTeamId = await resolveBdlTeamId(opposingTeam);
@@ -1843,17 +1924,35 @@ export const mlbFetchers = {
       }
 
       try {
-        // Get top hitters for the batting team (with prior-season fallback for player identification)
+        // Get top hitters for the batting team (with prior-season fallback for
+        // player identification). 8 covers the bulk of a lineup — a top-5 cap
+        // previously dropped slumping stars whose BvP the rationale then invented.
         const seasonResult = await fetchSeasonStatsWithFallback({ teamId: battingTeamId, season: currentYear });
         const topHitters = (seasonResult.stats || [])
           .filter(s => (s.batting_ops > 0 || s.batting_avg > 0) && !s.pitching_era)
           .sort((a, b) => (b.batting_ops || 0) - (a.batting_ops || 0))
-          .slice(0, 5);
+          .slice(0, 8);
 
         if (topHitters.length === 0) {
           lines.push(`${battingName}: No hitter data available`);
           continue;
         }
+
+        const fmtRow = (m) => {
+          const ab = m.at_bats ?? '—';
+          const hits = m.hits ?? '—';
+          const hr = m.home_runs ?? '—';
+          const avg = m.avg != null ? (typeof m.avg === 'number' ? m.avg.toFixed(3) : m.avg) : '—';
+          const ops = m.ops != null ? (typeof m.ops === 'number' ? m.ops.toFixed(3) : m.ops) : '—';
+          const k = m.strikeouts ?? m.k ?? '—';
+          const bb = m.walks ?? m.bb ?? '—';
+          return `${avg} AVG, ${ops} OPS, ${hr} HR, ${k} K, ${bb} BB (${ab} AB, ${hits} H)`;
+        };
+        const matchesSp = (m) => {
+          if (!opposingSpName) return false;
+          const p = (m.opponent_player?.full_name || '').toLowerCase();
+          return p && p === opposingSpName.toLowerCase();
+        };
 
         for (const hitter of topHitters) {
           const playerId = hitter.player?.id;
@@ -1862,22 +1961,29 @@ export const mlbFetchers = {
 
           const matchups = await ballDontLieService.getMlbPlayerVsPlayer({ playerId, opponentTeamId: opposingTeamId }).catch(() => []);
           if (!matchups || matchups.length === 0) {
-            lines.push(`${name} vs ${opposingName}: No matchup history`);
+            const spNote = opposingSpName ? ` (incl. no history vs ${opposingSpName})` : '';
+            lines.push(`${name} vs ${opposingName}: No matchup history${spNote}`);
             continue;
           }
 
           usedBdl = true;
           lines.push(`--- ${name} vs ${opposingName} pitchers ---`);
-          for (const m of matchups) {
+          // Today's opposing starter first — that's the matchup that matters tonight.
+          if (opposingSpName) {
+            const spRow = matchups.find(matchesSp);
+            if (spRow) {
+              lines.push(`  vs ${opposingSpName} (TODAY'S SP): ${fmtRow(spRow)}`);
+            } else {
+              lines.push(`  vs ${opposingSpName} (TODAY'S SP): no career history in source`);
+            }
+          }
+          const others = matchups
+            .filter(m => !matchesSp(m))
+            .sort((a, b) => (b.at_bats || 0) - (a.at_bats || 0))
+            .slice(0, 5);
+          for (const m of others) {
             const pitcher = m.opponent_player?.full_name || m.opponent_player?.last_name || 'Unknown P';
-            const ab = m.at_bats ?? '—';
-            const hits = m.hits ?? '—';
-            const hr = m.home_runs ?? '—';
-            const avg = m.avg != null ? (typeof m.avg === 'number' ? m.avg.toFixed(3) : m.avg) : '—';
-            const ops = m.ops != null ? (typeof m.ops === 'number' ? m.ops.toFixed(3) : m.ops) : '—';
-            const k = m.strikeouts ?? m.k ?? '—';
-            const bb = m.walks ?? m.bb ?? '—';
-            lines.push(`  vs ${pitcher}: ${avg} AVG, ${ops} OPS, ${hr} HR, ${k} K, ${bb} BB (${ab} AB, ${hits} H)`);
+            lines.push(`  vs ${pitcher}: ${fmtRow(m)}`);
           }
         }
       } catch (e) {
@@ -1889,7 +1995,7 @@ export const mlbFetchers = {
     return {
       homeValue: homeLines.join('\n') || 'No 2026 batter vs pitcher data available yet (season may not have started)',
       awayValue: awayLines.join('\n') || 'No 2026 batter vs pitcher data available yet',
-      comparison: `Batter vs pitcher matchup history for ${awayTeam} @ ${homeTeam}`,
+      comparison: `Batter vs pitcher matchup history for ${awayTeam} @ ${homeTeam} (career totals; source may lag the most recent meetings — do not cite BvP lines not shown here)`,
       source: usedBdl ? 'BDL API' : 'BDL (no data)',
     };
   },

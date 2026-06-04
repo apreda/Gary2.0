@@ -2,8 +2,9 @@
  * Baseball Savant xStats Service
  *
  * Free public CSV endpoints — no API key needed.
- * Returns expected stats (xBA, xSLG, xWOBA, xERA) for all MLB pitchers and batters.
- * These measure expected performance based on contact quality (exit velo, launch angle)
+ * Returns expected stats (xBA, xSLG, xWOBA, xERA) for all MLB pitchers and batters,
+ * plus per-pitch average velocity arsenals (the one pitcher metric BDL doesn't carry).
+ * Expected stats measure performance based on contact quality (exit velo, launch angle)
  * rather than actual results — the gap between actual and expected signals regression.
  *
  * Cached in memory with 24hr TTL (data changes daily during season).
@@ -11,6 +12,7 @@
  */
 
 const SAVANT_BASE = 'https://baseballsavant.mlb.com/leaderboard/expected_statistics';
+const SAVANT_ARSENAL_BASE = 'https://baseballsavant.mlb.com/leaderboard/pitch-arsenals';
 
 // In-memory cache — one entry per type per year
 const cache = new Map();
@@ -99,6 +101,142 @@ export async function getBatterXStats(year) {
 }
 
 /**
+ * Find a pitcher row by MLBAM id or name. The leading "last_name, first_name"
+ * CSV column splits into last_name + first_name fields (same shift the xStats
+ * lookups rely on), so match against those.
+ * @param {Array} data - parsed CSV rows
+ * @param {string|number} nameOrId - MLBAM id or player name
+ * @param {string} idField - CSV id column ('pitcher' or 'player_id')
+ */
+function findPitcherRow(data, nameOrId, idField) {
+  const search = String(nameOrId).toLowerCase().trim();
+  const byId = data.find(d => String(d[idField]) === search);
+  if (byId) return byId;
+  return data.find(d => {
+    const last = String(d.last_name || '').toLowerCase();
+    const first = String(d.first_name || '').toLowerCase();
+    if (!last) return false;
+    return `${first} ${last}` === search || `${last}, ${first}` === search || search.endsWith(` ${last}`);
+  }) || null;
+}
+
+// Savant arsenal CSV columns are <code>_avg_speed; map codes to display names
+const PITCH_CODE_NAMES = {
+  ff: '4-Seam Fastball', si: 'Sinker', fc: 'Cutter', sl: 'Slider', ch: 'Changeup',
+  cu: 'Curveball', fs: 'Splitter', kn: 'Knuckleball', st: 'Sweeper', sv: 'Slurve',
+};
+
+/**
+ * Fetch per-pitch average velocity for all pitchers for a season (cached daily).
+ * Source: Savant pitch-arsenals leaderboard CSV — keyed by MLBAM pitcher id.
+ * Returns: Array of { 'last_name, first_name', pitcher, ff_avg_speed, si_avg_speed, ... }
+ */
+export async function getPitcherArsenals(year) {
+  const season = year || new Date().getFullYear();
+  const key = `arsenal_${season}`;
+  const cached = getCached(key);
+  if (cached) {
+    console.log(`[Savant] Using cached pitch arsenals for ${season} (${cached.length} pitchers)`);
+    return cached;
+  }
+
+  try {
+    const url = `${SAVANT_ARSENAL_BASE}?year=${season}&min=1&type=avg_speed&hand=&csv=true`;
+    console.log(`[Savant] Fetching pitch arsenals (velocity) for ${season}...`);
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const text = await resp.text();
+    if (text.includes('<!DOCTYPE') || text.includes('<html')) {
+      throw new Error('Got HTML instead of CSV — endpoint may be blocked');
+    }
+    const data = parseCsv(text);
+    console.log(`[Savant] Loaded pitch arsenals for ${data.length} pitchers (${season})`);
+    setCache(key, data);
+    return data;
+  } catch (e) {
+    console.warn(`[Savant] Failed to fetch pitch arsenals: ${e.message}`);
+    return [];
+  }
+}
+
+/**
+ * Look up one pitcher's velocity arsenal by MLBAM id or name.
+ * Returns { pitches: [{ code, name, mph }], fastballMph } or null.
+ * fastballMph prefers 4-seam, falls back to sinker, then cutter.
+ */
+export async function getPitcherArsenal(nameOrId, year) {
+  const data = await getPitcherArsenals(year);
+  if (!data.length) return null;
+
+  const row = findPitcherRow(data, nameOrId, 'pitcher');
+  if (!row) return null;
+
+  const pitches = [];
+  for (const [code, name] of Object.entries(PITCH_CODE_NAMES)) {
+    const mph = row[`${code}_avg_speed`];
+    if (typeof mph === 'number' && mph > 0) pitches.push({ code: code.toUpperCase(), name, mph });
+  }
+  if (!pitches.length) return null;
+
+  const byCode = Object.fromEntries(pitches.map(p => [p.code, p.mph]));
+  const fastballMph = byCode.FF ?? byCode.SI ?? byCode.FC ?? null;
+  return { pitches, fastballMph };
+}
+
+const SAVANT_STATCAST_BASE = 'https://baseballsavant.mlb.com/leaderboard/statcast';
+
+/**
+ * Fetch season contact-quality-allowed profiles for all pitchers (cached daily).
+ * Source: Savant statcast leaderboard CSV — keyed by MLBAM player_id.
+ * Carries barrels allowed (brl_percent of BBE), hard-hit allowed (ev95percent), etc.
+ */
+export async function getPitcherStatcastProfiles(year) {
+  const season = year || new Date().getFullYear();
+  const key = `statcast_pitcher_${season}`;
+  const cached = getCached(key);
+  if (cached) {
+    console.log(`[Savant] Using cached pitcher statcast profiles for ${season} (${cached.length} pitchers)`);
+    return cached;
+  }
+
+  try {
+    const url = `${SAVANT_STATCAST_BASE}?type=pitcher&year=${season}&position=&team=&min=1&csv=true`;
+    console.log(`[Savant] Fetching pitcher statcast profiles for ${season}...`);
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const text = await resp.text();
+    if (text.includes('<!DOCTYPE') || text.includes('<html')) {
+      throw new Error('Got HTML instead of CSV — endpoint may be blocked');
+    }
+    const data = parseCsv(text);
+    console.log(`[Savant] Loaded pitcher statcast profiles for ${data.length} pitchers (${season})`);
+    setCache(key, data);
+    return data;
+  } catch (e) {
+    console.warn(`[Savant] Failed to fetch pitcher statcast profiles: ${e.message}`);
+    return [];
+  }
+}
+
+/**
+ * Look up one pitcher's contact-quality-allowed profile by MLBAM id or name.
+ * Returns { brlPercent, ev95Percent, avgHitSpeed, battedBallEvents } or null.
+ */
+export async function getPitcherStatcastProfile(nameOrId, year) {
+  const data = await getPitcherStatcastProfiles(year);
+  if (!data.length) return null;
+  const row = findPitcherRow(data, nameOrId, 'player_id');
+  if (!row) return null;
+  const num = (v) => (typeof v === 'number' ? v : null);
+  return {
+    brlPercent: num(row.brl_percent),
+    ev95Percent: num(row.ev95percent),
+    avgHitSpeed: num(row.avg_hit_speed),
+    battedBallEvents: num(row.attempts),
+  };
+}
+
+/**
  * Look up a specific player's xStats by name or BDL player_id.
  * @param {'pitcher'|'batter'} type
  * @param {string|number} nameOrId - Player name (partial match) or Savant player_id
@@ -149,4 +287,8 @@ export default {
   getBatterXStats,
   getPlayerXStats,
   getBatchXStats,
+  getPitcherArsenals,
+  getPitcherArsenal,
+  getPitcherStatcastProfiles,
+  getPitcherStatcastProfile,
 };

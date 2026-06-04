@@ -59,15 +59,22 @@ export async function getMlbRecentGames(teamId, limit = 10) {
   if (cached) return cached;
 
   const today = new Date().toISOString().split('T')[0];
-  // Look back 30 days for recent games
-  const startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  // Look back 45 days so the window always covers the last `limit` games played
+  const startDate = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
   const data = await apiFetch(`/schedule?sportId=${MLB_SPORT_ID}&teamId=${teamId}&startDate=${startDate}&endDate=${today}`);
   const games = [];
+  const seenPks = new Set();
   for (const dateEntry of (data.dates || [])) {
     for (const game of (dateEntry.games || [])) {
-      if (game.status?.detailedState === 'Final') games.push(game);
+      if (game.status?.detailedState !== 'Final') continue;
+      // Suspended/resumed games can appear on two dates with the same gamePk — count once
+      if (game.gamePk && seenPks.has(game.gamePk)) continue;
+      if (game.gamePk) seenPks.add(game.gamePk);
+      games.push(game);
     }
   }
+  // Don't rely on API date ordering — sort chronologically before taking the last N
+  games.sort((a, b) => new Date(a.gameDate || a.officialDate || 0) - new Date(b.gameDate || b.officialDate || 0));
   const recent = games.slice(-limit);
   setCache(key, recent);
   return recent;
@@ -170,6 +177,44 @@ export async function getPlayerInfo(playerId) {
 export async function searchPlayer(name) {
   const data = await apiFetch(`/people/search?names=${encodeURIComponent(name)}`);
   return data.people || [];
+}
+
+/**
+ * Pitcher platoon splits — opponent batting line vs LHB and vs RHB.
+ * BDL's splits endpoint carries no L/R breakdown for pitchers, so this is the
+ * structured source for platoon claims about a starter.
+ * Returns { vsLeft: {avg, ops, hr, bb, so, ab}, vsRight: {...} } or null.
+ */
+export async function getPitcherPlatoonSplits(playerId, season) {
+  const year = season || new Date().getFullYear();
+  const key = `pitcher_platoon_${playerId}_${year}`;
+  const cached = getCached(key);
+  if (cached) return cached;
+
+  const data = await apiFetch(
+    `/people/${playerId}?hydrate=stats(group=[pitching],type=[statSplits],sitCodes=[vl,vr],season=${year})`
+  );
+  const stats = data.people?.[0]?.stats || [];
+  const result = { vsLeft: null, vsRight: null };
+  for (const block of stats) {
+    for (const split of (block.splits || [])) {
+      const code = split.split?.code;
+      const st = split.stat || {};
+      const line = {
+        avg: st.avg ?? null,
+        ops: st.ops ?? null,
+        hr: st.homeRuns ?? null,
+        bb: st.baseOnBalls ?? null,
+        so: st.strikeOuts ?? null,
+        ab: st.atBats ?? null,
+      };
+      if (code === 'vl') result.vsLeft = line;
+      if (code === 'vr') result.vsRight = line;
+    }
+  }
+  const final = (result.vsLeft || result.vsRight) ? result : null;
+  setCache(key, final);
+  return final;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -386,6 +431,7 @@ export default {
   getPlayerSeasonStats,
   getPlayerInfo,
   searchPlayer,
+  getPitcherPlatoonSplits,
   getGameBoxScore,
   getGameLineScore,
   getGameFeed,

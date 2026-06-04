@@ -14,13 +14,15 @@ import { geminiGroundingSearch } from '../shared/grounding.js';
 import { formatTokenMenu } from '../../tools/toolDefinitions.js';
 import { buildVerifiedTaleOfTape } from '../shared/taleOfTape.js';
 import { ballDontLieService } from '../../../ballDontLieService.js';
-import { getPitcherXStats, getBatterXStats } from '../../../baseballSavantService.js';
+import { getPitcherXStats, getBatterXStats, getPitcherArsenal, getPitcherStatcastProfile } from '../../../baseballSavantService.js';
 import {
   getTeamRoster,
   getMlbRecentGames,
   getProbablePitchers,
   getConfirmedLineups,
   getGameBoxScore,
+  getPitcherPlatoonSplits,
+  getPlayerSeasonStats,
 } from '../../../mlbStatsApiService.js';
 
 export async function buildMlbScoutReport(game, options = {}) {
@@ -271,6 +273,47 @@ export async function buildMlbScoutReport(game, options = {}) {
       } else {
         parts.push(`${label}: ${pitcher.fullName} — no ${season} starts yet`);
         pitcherStats[side] = { name: pitcher.fullName };
+      }
+
+      // Always-on SP detail: velocity arsenal + platoon splits + contact quality.
+      // These are the stat classes rationales kept inventing when the data
+      // wasn't in context — surface them (or an explicit NOT AVAILABLE) for
+      // every pick so the brain never has to fill the gap from memory.
+      try {
+        const mlbamId = pitcher.id;
+        const [arsenal, platoon, contact, seasonPitching] = await Promise.all([
+          getPitcherArsenal(mlbamId ?? pitcher.fullName, season).catch(() => null),
+          mlbamId ? getPitcherPlatoonSplits(mlbamId, season).catch(() => null) : Promise.resolve(null),
+          getPitcherStatcastProfile(mlbamId ?? pitcher.fullName, season).catch(() => null),
+          mlbamId ? getPlayerSeasonStats(mlbamId, season, 'pitching').catch(() => null) : Promise.resolve(null),
+        ]);
+
+        if (arsenal?.pitches?.length) {
+          parts.push(`  Arsenal velocity (Savant): ${arsenal.pitches.map(p => `${p.name} ${p.mph} mph`).join(' | ')}`);
+        } else {
+          parts.push(`  Arsenal velocity: NOT AVAILABLE — do not cite pitch speeds for ${pitcher.fullName}`);
+        }
+
+        if (platoon?.vsLeft || platoon?.vsRight) {
+          const fmt = (p) => p ? `${p.avg ?? '—'} AVG / ${p.ops ?? '—'} OPS, ${p.hr ?? '—'} HR (${p.ab ?? '—'} AB)` : 'no data';
+          parts.push(`  Platoon (opp batting): vs LHB ${fmt(platoon.vsLeft)} | vs RHB ${fmt(platoon.vsRight)}`);
+        } else {
+          parts.push(`  Platoon (vs LHB/RHB): NOT AVAILABLE — do not characterize ${pitcher.fullName}'s platoon splits`);
+        }
+
+        const goao = seasonPitching?.groundOutsToAirouts;
+        if (contact && (contact.brlPercent != null || contact.ev95Percent != null)) {
+          const bits = [];
+          if (contact.brlPercent != null) bits.push(`Barrel% allowed ${contact.brlPercent}%`);
+          if (contact.ev95Percent != null) bits.push(`Hard-hit% allowed ${contact.ev95Percent}%`);
+          if (contact.battedBallEvents != null) bits.push(`${contact.battedBallEvents} BBE`);
+          if (goao != null) bits.push(`GO/AO ${goao} (grounders per flyout — above ~1.2 leans ground-ball, below ~0.8 leans fly-ball)`);
+          parts.push(`  Contact quality allowed: ${bits.join(', ')}`);
+        } else {
+          parts.push(`  Contact quality allowed: NOT AVAILABLE — do not characterize ${pitcher.fullName}'s batted-ball profile`);
+        }
+      } catch (e) {
+        console.warn(`[Scout Report] SP detail enrichment failed for ${pitcher.fullName}: ${e.message}`);
       }
     }
     probablePitchersSection = parts.join('\n');
