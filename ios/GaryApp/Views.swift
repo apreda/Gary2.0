@@ -37,10 +37,10 @@ struct GaryPageHeader<Trailing: View>: View {
     var body: some View {
         VStack(spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
-                // The wordmark: JetBrains Mono Regular in GOLD — the header
-                // speaks the same terminal language as the app's numerics.
+                // The wordmark: JetBrains Mono Regular in GOLD, ALL CAPS — the
+                // header speaks the same terminal language as the numerics.
                 // Quiet weight + signature color beats bold + white (June 5).
-                Text(title)
+                Text(title.uppercased())
                     .font(GaryFonts.mono(23, bold: false))
                     .foregroundStyle(GaryColors.gold)
                     .lineLimit(1)
@@ -2701,7 +2701,7 @@ struct PremiumPicksView: View {
     // AWAITING SLATE, and league chips all retired: the body owns its states
     // and the shelves announce their own leagues.
     private var header: some View {
-        GaryPageHeader(title: "Gary's Bets", accent: GaryPageHeader<EmptyView>.dateLabel())
+        GaryPageHeader(title: "Bets", accent: GaryPageHeader<EmptyView>.dateLabel())
             .padding(.bottom, 8)
     }
 
@@ -5320,8 +5320,8 @@ struct BillfoldView: View {
     private var headerBar: some View {
         VStack(spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
-                // Matches GaryPageHeader: gold mono wordmark, white date.
-                Text("Billfold")
+                // Matches GaryPageHeader: gold mono wordmark, ALL CAPS, white date.
+                Text("BILLFOLD")
                     .font(GaryFonts.mono(23, bold: false))
                     .foregroundStyle(GaryColors.gold)
                 Text(statementDateLabel)
@@ -11328,10 +11328,18 @@ struct PropSlipCard: View {
                 } label: {
                     VStack(alignment: .leading, spacing: 11) {
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            // Single letter in the game-pick capsule design —
+                            // same spot, same language, less ink.
                             if let r = resultLetter(p) {
                                 Text(r.0)
-                                    .font(GaryFonts.mono(12, bold: true))
+                                    .font(GaryFonts.mono(10, bold: true))
+                                    .tracking(0.5)
                                     .foregroundStyle(r.1)
+                                    .padding(.horizontal, 7).padding(.vertical, 3)
+                                    .background(
+                                        Capsule().fill(r.1.opacity(0.18))
+                                            .overlay(Capsule().stroke(r.1.opacity(0.45), lineWidth: 1))
+                                    )
                             }
                             Text(p.player ?? p.team ?? "")
                                 .font(GaryFonts.text(24, .medium))
@@ -12787,11 +12795,12 @@ struct CompactPropRow: View {
                     }
                     Spacer(minLength: 6)
                     if resolvedResult != nil {
-                        Text(resolvedResult == "won" ? "WON" : (resolvedResult == "push" ? "PUSH" : "LOST"))
+                        // Props wear the single letter in the game-pick capsule.
+                        Text(resolvedResult == "won" ? "W" : (resolvedResult == "push" ? "P" : "L"))
                             .font(GaryFonts.mono(11.5, bold: true))
-                            .tracking(0.8)
+                            .tracking(0.5)
                             .foregroundStyle(resultStampColor)
-                            .padding(.horizontal, 10).padding(.vertical, 4)
+                            .padding(.horizontal, 9).padding(.vertical, 4)
                             .background(
                                 Capsule().fill(resultStampColor.opacity(0.18))
                                     .overlay(Capsule().stroke(resultStampColor.opacity(0.45), lineWidth: 1))
