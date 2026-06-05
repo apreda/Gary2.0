@@ -38,12 +38,16 @@ struct GaryPageHeader<Trailing: View>: View {
         VStack(spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(title)
-                    .font(GaryFonts.display(30))
-                    .foregroundStyle(.white.opacity(0.95))
+                    .font(GaryFonts.masthead(30))
+                    .foregroundStyle(.white.opacity(0.97))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+                    .layoutPriority(1)
                 if let accent, !accent.isEmpty {
                     Text(accent)
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(GaryColors.meta)
+                        .lineLimit(1)
                 }
                 Spacer()
                 trailing()
@@ -2598,6 +2602,7 @@ struct SportFilterBar: View {
 struct PremiumPicksView: View {
     // TODO(RevenueCat): drive this from Purchases.shared entitlement "premium".
     @AppStorage("isPremiumUnlocked") private var isPremium: Bool = false
+    @AppStorage("selectedTab") private var selectedTab: Int = 0
 
     @State private var loading = true
     // Per-sport shelves: each sport shows TODAY's pick if it has one, else its last graded result.
@@ -2622,21 +2627,12 @@ struct PremiumPicksView: View {
 
     private var gameCount: Int { gameShelves.filter { !$0.settled }.reduce(0) { $0 + $1.picks.count } }
     private var propCount: Int { propShelves.reduce(0) { $0 + $1.props.count } }
-    private var liveCount: Int { gameCount + propCount }
 
     /// Yesterday's true game record (same number the Home tape shows) ->
     /// (wins, losses, win%). nil while loading or when nothing graded.
     private var settledRecord: (wins: Int, losses: Int, pct: Int)? {
         guard let r = yesterdayRec, r.wins + r.losses > 0 else { return nil }
         return (r.wins, r.losses, Int((Double(r.wins) / Double(r.wins + r.losses) * 100).rounded()))
-    }
-
-    /// League codes that have content today, canonical order first, extras appended.
-    private var liveLeagues: [String] {
-        let present = Set(gameShelves.filter { !$0.picks.isEmpty }.map { $0.league })
-            .union(propShelves.filter { !$0.props.isEmpty }.map { $0.league })
-        return canonicalSports.filter { present.contains($0) }
-            + present.subtracting(canonicalSports).sorted()
     }
 
     struct GameShelf: Identifiable {
@@ -2653,13 +2649,6 @@ struct PremiumPicksView: View {
 
     private var hasContent: Bool {
         gameShelves.contains { !$0.picks.isEmpty } || propShelves.contains { !$0.props.isEmpty }
-    }
-
-    private var headerDate: String {
-        let f = DateFormatter()
-        f.dateFormat = "EEEE, MMM d"
-        f.timeZone = TimeZone(identifier: "America/New_York")
-        return f.string(from: Date()).uppercased()
     }
 
     var body: some View {
@@ -2692,65 +2681,42 @@ struct PremiumPicksView: View {
 
     // MARK: - Header / states
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                Text("PREMIUM")
-                    .font(GaryFonts.mono(10, bold: true))
-                    .tracking(1)
-                    .foregroundStyle(Color(hex: "#0b0a08"))
-                    .padding(.horizontal, 8).padding(.vertical, 3)
-                    .background(Capsule().fill(GaryColors.gold))
-                Rectangle().fill(Color.white.opacity(0.10)).frame(width: 1, height: 11)
-                Text(headerDate)
-                    .font(GaryFonts.mono(10))
-                    .tracking(1)
-                    .foregroundStyle(.white.opacity(0.42))
-            }
-            Text("Gary's Best Bets")
-                .font(GaryFonts.display(28))
-                .foregroundStyle(.white)
-                .padding(.top, 1)
-            statusLine
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 6)
-        .padding(.bottom, 14)
+    // The locked masthead formula — the last header in the app to adopt it.
+    // One commanding title, the date as quiet meta, yesterday's record as a
+    // single labeled badge (tap -> Billfold), gold stitch. PREMIUM pill,
+    // AWAITING SLATE, and league chips all retired: the body owns its states
+    // and the shelves announce their own leagues.
+    /// "Fri, Jun 5" — the long title needs the short date form.
+    private var shortDateLabel: String {
+        let f = DateFormatter()
+        f.dateFormat = "EEE, MMM d"
+        f.timeZone = TimeZone(identifier: "America/New_York")
+        return f.string(from: Date())
     }
 
-    // Terminal status line: yesterday's record / win% | live play count |
-    // sports in play. The record names its window — unlabeled stats are how
-    // betting apps lose trust.
-    private var statusLine: some View {
-        HStack(spacing: 8) {
-            HStack(spacing: 5) {
-                Text("YDAY").font(GaryFonts.mono(11, bold: true)).foregroundStyle(.white.opacity(0.40))
-                if let rec = settledRecord {
-                    Text("\(rec.wins)-\(rec.losses)").font(GaryFonts.mono(11)).foregroundStyle(.white.opacity(0.78))
-                    Text("·").font(GaryFonts.mono(11)).foregroundStyle(.white.opacity(0.30))
-                    Text("\(rec.pct)%").font(GaryFonts.mono(11, bold: true)).foregroundStyle(GaryColors.gold)
-                } else {
-                    Text("—").font(GaryFonts.mono(11)).foregroundStyle(.white.opacity(0.40))
-                }
-            }
-            statusPipe
-            Text(liveCount == 0 ? "AWAITING SLATE" : (liveCount == 1 ? "1 PLAY LIVE" : "\(liveCount) PLAYS LIVE"))
-                .font(GaryFonts.mono(11, bold: true)).foregroundStyle(.white.opacity(0.55))
-            if !liveLeagues.isEmpty {
-                statusPipe
-                HStack(spacing: 6) {
-                    ForEach(liveLeagues, id: \.self) { code in
-                        Text(code).font(GaryFonts.mono(11, bold: true))
-                            .foregroundStyle(Sport.from(league: code).accentColor)
+    private var header: some View {
+        GaryPageHeader(title: "Gary's Best Bets", accent: shortDateLabel) {
+            if let rec = settledRecord {
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
+                } label: {
+                    HStack(spacing: 5) {
+                        Text("YDAY")
+                            .font(GaryFonts.mono(9.5, bold: true)).tracking(0.8)
+                            .foregroundStyle(.white.opacity(0.45))
+                        Text("\(rec.wins)–\(rec.losses)")
+                            .font(GaryFonts.mono(12, bold: true))
+                            .foregroundStyle(rec.wins >= rec.losses ? GaryColors.gold : .white.opacity(0.72))
                     }
+                    .fixedSize()
+                    .padding(.horizontal, 10).padding(.vertical, 5)
+                    .background(Capsule().stroke(Color.white.opacity(0.18), lineWidth: 1))
+                    .contentShape(Capsule())
                 }
+                .buttonStyle(.plain)
             }
         }
-        .lineLimit(1)
-        .padding(.top, 3)
-    }
-    private var statusPipe: some View {
-        Rectangle().fill(Color.white.opacity(0.12)).frame(width: 1, height: 10)
+        .padding(.bottom, 8)
     }
 
     private var emptyState: some View {
@@ -2794,9 +2760,12 @@ struct PremiumPicksView: View {
                     Text(label)
                         .font(GaryFonts.mono(13, bold: true))
                         .foregroundStyle(active ? .white : .white.opacity(0.45))
-                    Text("\(count)")
-                        .font(GaryFonts.mono(13, bold: true))
-                        .foregroundStyle(active ? GaryColors.gold : .white.opacity(0.3))
+                    // Counts earn their place — a morning of zeros is not a stat.
+                    if count > 0 {
+                        Text("\(count)")
+                            .font(GaryFonts.mono(13, bold: true))
+                            .foregroundStyle(active ? GaryColors.gold : .white.opacity(0.3))
+                    }
                 }
                 Group {
                     if active {
@@ -17001,6 +16970,14 @@ enum GaryFonts {
     static let displayFace = "BarlowCondensed-Bold"
 
     static func display(_ size: CGFloat) -> Font { .custom(displayFace, size: size) }
+
+    /// Page mastheads — SF Pro Display, black weight, condensed width.
+    /// The bundled Google condensed faces read "template" at wordmark sizes
+    /// (June 5 2026 decision); mastheads wear the system's premium display
+    /// face instead.
+    static func masthead(_ size: CGFloat) -> Font {
+        .system(size: size, weight: .black).width(.condensed)
+    }
 
     static func mono(_ size: CGFloat, bold: Bool = false) -> Font {
         .custom(bold ? "JetBrainsMono-Bold" : "JetBrainsMono-Regular", size: size)
