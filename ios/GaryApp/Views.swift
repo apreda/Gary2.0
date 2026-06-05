@@ -1545,7 +1545,10 @@ struct HomeView: View {
     @State private var yesterdayTopProp: PropPick? = nil
     @State private var yesterdayTopPropResult: String? = nil
     // Front-page modules
-    @State private var leadStory: HomeLeadStoryBlock.Story? = nil
+    @State private var marquee: HomeMarqueeHero.Story? = nil
+    @State private var cashRows: [HomeCashesSection.Row] = []
+    @State private var lastNightNet: Double? = nil
+    @State private var lastNightGraded = 0
     @State private var receiptLanes: [HomeReceiptsSection.LaneRecord] = []
     @State private var receiptsSub = "Yesterday's boards, graded"
     @State private var edgesPostedToday = 0
@@ -1561,12 +1564,32 @@ struct HomeView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 22) {
 
-                    // ── ① Masthead — wordmark only. The mood images are
-                    // officially retired (June 4 2026): the app icon and the
-                    // nav-bar bear are Gary enough; the record is the welcome.
-                    GaryPageHeader(title: "Gary", accent: GaryPageHeader<EmptyView>.dateLabel())
-                        .opacity(animateIn ? 1 : 0)
-                        .animation(.easeOut(duration: 0.6), value: animateIn)
+                    // ── ① Masthead — wordmark + the selling point, live. The
+                    // mood images are officially retired (June 4 2026): the app
+                    // icon and the nav-bar bear are Gary enough.
+                    GaryPageHeader(title: "Gary", accent: GaryPageHeader<EmptyView>.dateLabel()) {
+                        if let net = lastNightNet, lastNightGraded > 0 {
+                            Button {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: net >= 0 ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
+                                        .font(.system(size: 7, weight: .bold))
+                                    Text(String(format: "%+.1fu", net))
+                                        .font(GaryFonts.mono(12, bold: true))
+                                }
+                                .foregroundStyle(net >= 0 ? GaryColors.gold : Color(hex: "#E5484D"))
+                                .padding(.horizontal, 10).padding(.vertical, 5)
+                                .background(
+                                    Capsule().stroke((net >= 0 ? GaryColors.gold : Color(hex: "#E5484D")).opacity(0.45), lineWidth: 1)
+                                )
+                                .contentShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .opacity(animateIn ? 1 : 0)
+                    .animation(.easeOut(duration: 0.6), value: animateIn)
 
                     // ── ② The Tape — yesterday, honestly ──
                     if yesterdayRecord.wins + yesterdayRecord.losses > 0 {
@@ -1575,13 +1598,22 @@ struct HomeView: View {
                             .animation(.easeOut(duration: 0.6).delay(0.05), value: animateIn)
                     }
 
-                    // ── ③ Lead story — the cash, or the owned miss ──
-                    if let story = leadStory {
-                        HomeLeadStoryBlock(story: story) {
+                    // ── ③ The Marquee — last night's story, with the receipt ──
+                    if let story = marquee {
+                        HomeMarqueeHero(story: story) {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 1 }
                         }
                         .opacity(animateIn ? 1 : 0)
                         .animation(.easeOut(duration: 0.6).delay(0.1), value: animateIn)
+                    }
+
+                    // ── ③b Biggest cashes — last night's winners, in units ──
+                    if !cashRows.isEmpty {
+                        HomeCashesSection(rows: cashRows, net: lastNightNet ?? 0, graded: lastNightGraded) {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
+                        }
+                        .opacity(animateIn ? 1 : 0)
+                        .animation(.easeOut(duration: 0.6).delay(0.12), value: animateIn)
                     }
 
                     // ── ④ The Receipts — graded lanes route to today's boards ──
@@ -1645,9 +1677,13 @@ struct HomeView: View {
                     let recentGameResults = (try? await gameResultsFetch) ?? []
                     let recentPropResults = (try? await propResultsFetch) ?? []
 
-                    // ③ Lead story — the latest settled day's biggest cash, or
-                    // the owned miss on a losing night. Template-built, no AI.
-                    leadStory = Self.buildLeadStory(recentGameResults)
+                    // ③ The marquee + biggest cashes + masthead units — one
+                    // pass over the latest settled night. Template-built, no AI.
+                    let night = Self.buildLastNight(games: recentGameResults, props: recentPropResults)
+                    marquee = night.story
+                    cashRows = night.cashes
+                    lastNightNet = night.graded > 0 ? night.net : nil
+                    lastNightGraded = night.graded
 
                     // ⑤ Door counts — live games + edges posted tonight.
                     gamesLiveNow = (await liveFetch).filter { $0.isLive }.count
@@ -1850,6 +1886,12 @@ struct HomeView: View {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 2 }
                     }
                 }
+                Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 46)
+                HomeDoorRow(icon: "questionmark.circle",
+                            title: "New here? How Gary works",
+                            destination: "Intro") {
+                    showHowGaryWorks = true
+                }
             }
             .quantPanel()
             .padding(.horizontal, 16)
@@ -1859,25 +1901,8 @@ struct HomeView: View {
     // MARK: - ⑥ Footer
 
     private var footer: some View {
-        VStack(spacing: 16) {
-            Button { showHowGaryWorks = true } label: {
-                HStack(spacing: 5) {
-                    Text("How Gary works")
-                        .font(.system(size: 12.5, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.5))
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundStyle(.white.opacity(0.3))
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .frame(maxWidth: .infinity, alignment: .leading)
+        SocialLinksBar()
             .padding(.horizontal, 16)
-
-            SocialLinksBar()
-                .padding(.horizontal, 16)
-        }
     }
 
     // MARK: - Front-page builders (template-only, no AI)
@@ -1913,43 +1938,137 @@ struct HomeView: View {
         return days > 0 ? days : nil
     }
 
-    /// The latest settled day's biggest cash — or the owned miss on a losing
-    /// night. Honesty is the brand; both leads use the same plain template.
-    private static func buildLeadStory(_ results: [GameResult]) -> HomeLeadStoryBlock.Story? {
-        let settled = results.filter { $0.result == "won" || $0.result == "lost" }
-        guard let day = settled.compactMap({ $0.game_date }).max() else { return nil }
-        let rows = settled.filter { $0.game_date == day }
+    /// Flat-stake units P/L for one graded play (1u to win odds-implied).
+    private static func unitsDelta(odds: Double, result: String) -> Double {
+        switch result {
+        case "won": return odds > 0 ? odds / 100.0 : (odds < 0 ? 100.0 / abs(odds) : 0)
+        case "lost": return -1
+        default: return 0
+        }
+    }
 
-        func odds(_ r: GameResult) -> Double {
-            if let v = Double(r.odds?.value ?? "") { return v }
-            return Double(Formatters.splitPickAndOdds(r.pick_text).1) ?? -110
-        }
-        func pickName(_ r: GameResult) -> String {
-            let p = Formatters.splitPickAndOdds(r.pick_text).0
-            return p.isEmpty ? (r.matchup ?? "The pick") : p
-        }
-        func detailLine(_ r: GameResult, closer: String) -> String {
-            var bits: [String] = []
-            if let fs = r.final_score, !fs.isEmpty { bits.append("Final \(fs)") }
-            if let m = r.matchup, !m.isEmpty { bits.append(m) }
-            let lead = bits.joined(separator: " — ")
-            return lead.isEmpty ? closer : "\(lead). \(closer)"
-        }
+    private static func resultOdds(_ odds: StringOrNumber?, pickText: String?) -> Double {
+        if let v = Double(odds?.value ?? "") { return v }
+        return Double(Formatters.splitPickAndOdds(pickText).1) ?? -110
+    }
 
-        let wins = rows.filter { $0.result == "won" }
-        if let star = wins.max(by: { odds($0) < odds($1) }) {
-            let o = odds(star)
-            let suffix = o > 0 ? " at +\(Int(o))" : ""
-            return .init(eyebrow: "LAST NIGHT",
-                         headline: "\(pickName(star)) cashed\(suffix)",
-                         detail: detailLine(star, closer: "The full card lives in the Billfold."))
+    /// Standard abbreviation for a team name via the league keyword maps.
+    private static func teamAbbrev(_ name: String, league: String?) -> String {
+        let lower = name.lowercased()
+        let maps: [[String: [String]]]
+        switch (league ?? "").uppercased() {
+        case "MLB": maps = [mlbTeamKeywords]
+        case "NBA": maps = [nbaTeamKeywords]
+        case "NHL": maps = [nhlTeamKeywords]
+        case "WC": maps = [wcTeamKeywords]
+        default: maps = [mlbTeamKeywords, nbaTeamKeywords, nhlTeamKeywords, wcTeamKeywords]
         }
-        if let miss = rows.max(by: { abs(odds($0)) < abs(odds($1)) }) {
-            return .init(eyebrow: "LAST NIGHT",
-                         headline: "\(pickName(miss)) didn't land",
-                         detail: detailLine(miss, closer: "We own it — the full card is in the Billfold."))
+        for map in maps {
+            for (ab, kws) in map where kws.contains(where: { lower.contains($0) }) { return ab }
         }
-        return nil
+        let last = lower.split(separator: " ").last.map(String.init) ?? lower
+        return String(last.prefix(3)).uppercased()
+    }
+
+    /// One pass over the latest settled night: the marquee story (biggest
+    /// cash, or the owned miss), the Biggest Cashes rows, and net units.
+    /// All template — honesty is the brand, so the net includes the losses.
+    private static func buildLastNight(games: [GameResult], props: [PropResult])
+        -> (story: HomeMarqueeHero.Story?, cashes: [HomeCashesSection.Row], net: Double, graded: Int) {
+
+        let settledGames = games.filter { $0.result == "won" || $0.result == "lost" || $0.result == "push" }
+        let settledProps = props.filter { $0.result == "won" || $0.result == "lost" || $0.result == "push" }
+        let days = settledGames.compactMap { $0.game_date } + settledProps.compactMap { $0.game_date }
+        guard let night = days.max() else { return (nil, [], 0, 0) }
+        let nightGames = settledGames.filter { $0.game_date == night }
+        let nightProps = settledProps.filter { $0.game_date == night }
+
+        // Net units + cash rows across games AND props.
+        var net = 0.0
+        var cashes: [HomeCashesSection.Row] = []
+        for g in nightGames {
+            let o = resultOdds(g.odds, pickText: g.pick_text)
+            net += unitsDelta(odds: o, result: g.result ?? "")
+            if g.result == "won" {
+                cashes.append(.init(id: "g-\(g.matchup ?? "")-\(g.pick_text ?? "")",
+                                    title: Self.gameCashTitle(g),
+                                    sub: Formatters.splitPickAndOdds(g.pick_text).0,
+                                    units: unitsDelta(odds: o, result: "won")))
+            }
+        }
+        for p in nightProps {
+            let o = resultOdds(p.odds, pickText: p.pick_text)
+            net += unitsDelta(odds: o, result: p.result ?? "")
+            if p.result == "won" {
+                cashes.append(.init(id: "p-\(p.player_name ?? "")-\(p.pick_text ?? "")",
+                                    title: Formatters.propResultTitle(p),
+                                    sub: [p.effectiveLeague, p.player_name].compactMap { $0 }.joined(separator: " · "),
+                                    units: unitsDelta(odds: o, result: "won")))
+            }
+        }
+        cashes.sort { $0.units > $1.units }
+        let graded = nightGames.count + nightProps.count
+
+        // The marquee — biggest-odds game win, or the biggest owned miss.
+        let wins = nightGames.filter { $0.result == "won" }
+        let star = wins.max { resultOdds($0.odds, pickText: $0.pick_text) < resultOdds($1.odds, pickText: $1.pick_text) }
+        let subject = star ?? nightGames.filter { $0.result == "lost" }
+            .max { abs(resultOdds($0.odds, pickText: $0.pick_text)) < abs(resultOdds($1.odds, pickText: $1.pick_text)) }
+        guard let r = subject else { return (nil, Array(cashes.prefix(3)), net, graded) }
+
+        let cashed = r.result == "won"
+        let o = resultOdds(r.odds, pickText: r.pick_text)
+        let pickLine = Formatters.splitPickAndOdds(r.pick_text).0
+        let story = HomeMarqueeHero.Story(
+            league: r.effectiveLeague ?? "",
+            headline: Self.gameHeadline(r, cashed: cashed),
+            sub: Self.gameSubLine(r),
+            receipt: cashed ? "Gary had it · \(pickLine)" : "Gary was on \(pickLine)",
+            verdict: cashed ? (o > 0 ? "CASHED +\(Int(o))" : "CASHED") : "NO CASH",
+            cashed: cashed)
+        return (story, Array(cashes.prefix(3)), net, graded)
+    }
+
+    /// "Knicks over the Spurs, 105–95" — a real game headline from facts.
+    private static func gameHeadline(_ r: GameResult, cashed: Bool) -> String {
+        if let (away, home, a, h) = Self.scoreParts(r) {
+            let winner = a > h ? away : home
+            let loser = a > h ? home : away
+            return "\(winner) over the \(loser), \(max(a, h))–\(min(a, h))"
+        }
+        let pick = Formatters.splitPickAndOdds(r.pick_text).0
+        return cashed ? "\(pick) cashed" : "\(pick) didn't land"
+    }
+
+    /// "Knicks @ Spurs · Final 105–95"
+    private static func gameSubLine(_ r: GameResult) -> String {
+        var bits: [String] = []
+        if let (away, home, _, _) = Self.scoreParts(r) { bits.append("\(away) @ \(home)") }
+        else if let m = r.matchup { bits.append(m) }
+        if let fs = r.final_score, !fs.isEmpty { bits.append("Final \(fs)") }
+        return bits.joined(separator: " · ")
+    }
+
+    /// "PHI 6 – 4 NYM · Final" cash-row title, falling back to short names.
+    private static func gameCashTitle(_ g: GameResult) -> String {
+        if let (away, home, a, h) = Self.scoreParts(g) {
+            let lg = g.effectiveLeague
+            return "\(teamAbbrev(away, league: lg)) \(a) – \(h) \(teamAbbrev(home, league: lg))"
+        }
+        return g.matchup ?? "Graded win"
+    }
+
+    /// Split "Away Team @ Home Team" + "5-4" into short names + scores.
+    private static func scoreParts(_ r: GameResult) -> (away: String, home: String, a: Int, h: Int)? {
+        guard let m = r.matchup else { return nil }
+        let teams = m.components(separatedBy: " @ ")
+        guard teams.count == 2 else { return nil }
+        let away = Formatters.shortTeamName(teams[0], league: r.effectiveLeague)
+        let home = Formatters.shortTeamName(teams[1], league: r.effectiveLeague)
+        let nums = (r.final_score ?? "").components(separatedBy: CharacterSet(charactersIn: "-–"))
+            .compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
+        guard nums.count == 2 else { return nil }
+        return (away, home, nums[0], nums[1])
     }
 
     /// Per-lane records from the graded ledger — HR Threats lead when present
@@ -1992,36 +2111,154 @@ struct HomeView: View {
 
 // MARK: - Front Page Blocks (Home)
 
-/// ③ The lead — one flat editorial block, no box: eyebrow, display headline,
-/// a two-line template story. Taps through to the Winners board.
-struct HomeLeadStoryBlock: View {
+/// ③ The Marquee — last night's story as a static hero (no footage, no
+/// logos: facts are free). League chip up top, the game headline, and the
+/// receipt bar: "Gary had it · Phillies TT over 4.5 — CASHED +145".
+struct HomeMarqueeHero: View {
     struct Story {
-        let eyebrow: String
+        let league: String
         let headline: String
-        let detail: String
+        let sub: String
+        let receipt: String
+        let verdict: String
+        let cashed: Bool
     }
     let story: Story
     let onTap: () -> Void
 
+    private var tint: Color { Sport.from(league: story.league).accentColor }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text(story.eyebrow)
-                .font(GaryFonts.mono(10, bold: true)).tracking(1)
-                .foregroundStyle(GaryColors.gold.opacity(0.85))
+        VStack(alignment: .leading, spacing: 0) {
+            // League chip — the marquee names its sport quietly.
+            HStack(spacing: 6) {
+                Circle().fill(tint.opacity(0.9)).frame(width: 5, height: 5)
+                Text(story.league)
+                    .font(GaryFonts.mono(10, bold: true)).tracking(1)
+                    .foregroundStyle(.white.opacity(0.75))
+                Spacer()
+                Text("LAST NIGHT")
+                    .font(GaryFonts.mono(9, bold: true)).tracking(1)
+                    .foregroundStyle(.white.opacity(0.35))
+            }
+            .padding(.bottom, 26)
+
             Text(story.headline)
-                .font(GaryFonts.display(22))
-                .foregroundStyle(.white.opacity(0.95))
+                .font(GaryFonts.display(26))
+                .foregroundStyle(.white.opacity(0.96))
                 .fixedSize(horizontal: false, vertical: true)
-            Text(story.detail)
-                .font(.system(size: 13.5))
-                .foregroundStyle(.white.opacity(0.6))
-                .lineSpacing(2.5)
-                .fixedSize(horizontal: false, vertical: true)
+            Text(story.sub)
+                .font(.system(size: 12.5))
+                .foregroundStyle(.white.opacity(0.55))
+                .padding(.top, 3)
+                .padding(.bottom, 14)
+
+            // The receipt — gold rule, the pick, the verdict.
+            HStack(spacing: 10) {
+                Rectangle().fill(GaryColors.gold.opacity(0.85)).frame(width: 2)
+                Text(story.receipt)
+                    .font(.system(size: 12.5, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.85))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                Spacer(minLength: 8)
+                Text(story.verdict)
+                    .font(GaryFonts.mono(11, bold: true)).tracking(0.6)
+                    .foregroundStyle(story.cashed ? Color(hex: "#3FB950") : Color(hex: "#E5484D"))
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(Color.black.opacity(0.35))
+            )
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(
+                    LinearGradient(colors: [tint.opacity(0.16), Color(hex: "#101114")],
+                                   startPoint: .topLeading, endPoint: .bottomTrailing)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                )
+        )
         .padding(.horizontal, 16)
         .contentShape(Rectangle())
         .onTapGesture { onTap() }
+    }
+}
+
+/// ③b Biggest cashes — last night's winners in units, with the honest net
+/// in the header (losses are in the number; that's why the wins are real).
+struct HomeCashesSection: View {
+    struct Row: Identifiable {
+        let id: String
+        let title: String
+        let sub: String
+        let units: Double
+    }
+    let rows: [Row]
+    let net: Double
+    let graded: Int
+    let onOpenBillfold: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                HubSectionHeader(eyebrow: "Biggest cashes", sub: "Last night, flat stakes")
+                Text(String(format: "%+.1fu net", net))
+                    .font(GaryFonts.mono(11, bold: true))
+                    .foregroundStyle(net >= 0 ? Color(hex: "#3FB950") : Color(hex: "#E5484D"))
+                    .padding(.trailing, 16)
+            }
+            VStack(spacing: 0) {
+                ForEach(Array(rows.enumerated()), id: \.element.id) { i, row in
+                    Button(action: onOpenBillfold) {
+                        HStack(spacing: 12) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(row.title)
+                                    .font(.system(size: 14.5, weight: .semibold))
+                                    .foregroundStyle(.white.opacity(0.92))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.8)
+                                Text(row.sub)
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.white.opacity(0.4))
+                                    .lineLimit(1)
+                            }
+                            Spacer(minLength: 8)
+                            Text(String(format: "%+.1fu", row.units))
+                                .font(GaryFonts.mono(15, bold: true))
+                                .foregroundStyle(Color(hex: "#3FB950"))
+                        }
+                        .padding(.vertical, 10)
+                        .padding(.horizontal, 14)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 14)
+                }
+                Button(action: onOpenBillfold) {
+                    HStack(spacing: 4) {
+                        Text("See all \(graded) graded")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(GaryColors.heroAccent.opacity(0.85))
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(GaryColors.heroAccent.opacity(0.6))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+            .quantPanel()
+            .padding(.horizontal, 16)
+        }
     }
 }
 
