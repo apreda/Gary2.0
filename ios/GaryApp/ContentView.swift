@@ -113,11 +113,19 @@ struct ContentView: View {
 
 // MARK: - Gary Page (Hub ⟷ Talk to Gary)
 
+/// Ship-level feature switches. Code behind an off flag stays in the
+/// codebase, ready to re-enable — it just loses its entry points.
+enum AppFlags {
+    /// Talk to Gary is parked until v3 — the Gary tab is Hub-only meanwhile.
+    static let talkToGaryEnabled = false
+}
+
 enum GaryPageMode: String, CaseIterable { case hub = "Hub", talk = "Talk to Gary" }
 
 /// The center Gary tab hosts two capabilities behind a segmented switch:
 /// the information "Hub" (Today's Edges) and the "Talk to Gary" voice/chat orb.
 /// Talk is created lazily (only when selected) so the orb/mic isn't live on Hub.
+/// With `AppFlags.talkToGaryEnabled` off, the switch hides and Hub fills the tab.
 struct GaryPage: View {
     @Binding var selectedTab: Int
     @State private var mode: GaryPageMode = .hub
@@ -127,12 +135,14 @@ struct GaryPage: View {
             LiquidGlassBackground(grainDensity: 0)
 
             VStack(spacing: 0) {
-                modeSwitch
-                    .padding(.top, 8)
-                    .padding(.bottom, 6)
+                if AppFlags.talkToGaryEnabled {
+                    modeSwitch
+                        .padding(.top, 8)
+                        .padding(.bottom, 6)
+                }
 
                 Group {
-                    if mode == .hub {
+                    if mode == .hub || !AppFlags.talkToGaryEnabled {
                         // Start at the hub; tapping a connection moves the user
                         // over to that game's picks on the Picks tab, focused on
                         // the tapped matchup (via PicksFocusState).

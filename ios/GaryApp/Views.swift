@@ -2647,22 +2647,33 @@ struct PremiumPicksView: View {
     @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var authManager: AuthManager
     @State private var showAuthSheet = false
+    // Plans sheet (the pricing page). Blurred previews open it focused on
+    // their sport; checkout/auth hand-offs run after it dismisses.
+    @State private var showPlansSheet = false
+    @State private var plansFocus: String? = nil
+    @State private var pendingCheckout: String? = nil
+    @State private var pendingAuth = false
     private func sportUnlocked(_ lg: String) -> Bool {
         isPremium || entitledSports.contains("ALL") || entitledSports.contains(lg)
     }
-    /// Stripe Payment Links (test mode). The install ID rides along as
+    /// Stripe Payment Links (test mode), June 5 pricing: single sport
+    /// $9.99/mo, All-Access $34.99/mo with a 3-day card-required trial,
+    /// WC Pass $14.99 one-time. The signed-in identity rides along as
     /// client_reference_id so the webhook knows who to grant.
     private static let checkoutLinks: [String: String] = [
-        "MLB":   "https://buy.stripe.com/test_eVq28scnq3614OS0lKaIM00",
-        "NBA":   "https://buy.stripe.com/test_5kQ14odrueOJgxA9WkaIM01",
-        "NHL":   "https://buy.stripe.com/test_8x200k5Z26id6X0b0oaIM02",
-        "NFL":   "https://buy.stripe.com/test_00w8wQcnq0XTchkc4saIM03",
-        "NCAAF": "https://buy.stripe.com/test_3cI9AU4UY7mhgxA2tSaIM04",
-        "NCAAB": "https://buy.stripe.com/test_aFa14o2MQ361eps6K8aIM05",
-        "ALL":   "https://buy.stripe.com/test_bJe14o1IMgWR2GKb0oaIM06",
+        "MLB":   "https://buy.stripe.com/test_9B600kcnqgWRa9c3xWaIM08",
+        "NBA":   "https://buy.stripe.com/test_6oUdRa87a0XT6X05G4aIM09",
+        "NHL":   "https://buy.stripe.com/test_8x24gA87a8qldlo9WkaIM0a",
+        "NFL":   "https://buy.stripe.com/test_bJe5kEevyeOJ1CG1pOaIM0b",
+        "NCAAF": "https://buy.stripe.com/test_5kQbJ25Z2gWR6X05G4aIM0c",
+        "NCAAB": "https://buy.stripe.com/test_5kQ3cw1IM7mheps0lKaIM0d",
+        "ALL":   "https://buy.stripe.com/test_00w7sM1IMgWRchk5G4aIM0e",
         "WC":    "https://buy.stripe.com/test_00w28s4UYfSN2GK4C0aIM07",
     ]
     private func openCheckout(_ league: String) {
+        // Subscriptions need an owner — no checkout without an account
+        // (cancel/manage requires identity; device-bound subs are a trap).
+        guard authManager.isAuthenticated else { showAuthSheet = true; return }
         guard let base = Self.checkoutLinks[league],
               let url = URL(string: "\(base)?client_reference_id=\(SupabaseAPI.identityId)") else { return }
         UIApplication.shared.open(url)
@@ -2741,6 +2752,15 @@ struct PremiumPicksView: View {
             Task { entitledSports = await SupabaseAPI.fetchEntitlements() }
         }
         .sheet(isPresented: $showAuthSheet) { AuthView(startInSignUp: true) }
+        .sheet(isPresented: $showPlansSheet, onDismiss: {
+            if pendingAuth { pendingAuth = false; showAuthSheet = true }
+            if let lg = pendingCheckout { pendingCheckout = nil; openCheckout(lg) }
+        }) {
+            PlansSheetView(focus: plansFocus,
+                           signedIn: authManager.isAuthenticated,
+                           onSelect: { lg in pendingCheckout = lg; showPlansSheet = false },
+                           onAccount: { pendingAuth = true; showPlansSheet = false })
+        }
     }
 
     /// Sport chips that jump the page to a league's shelf in the active mode.
@@ -2887,8 +2907,7 @@ struct PremiumPicksView: View {
                 // The whole-house CTA — per-sport sales live in the storefront
                 // rows above; this sells everything at once, for real money.
                 if !entitledSports.contains("ALL") {
-                    PaywallPanel { openCheckout("ALL") }
-                        .padding(.horizontal, 16)
+                    allAccessSection
                         .padding(.top, 6)
                 }
                 accountRow
@@ -2899,6 +2918,76 @@ struct PremiumPicksView: View {
                 }
                 .frame(maxWidth: .infinity).padding(.top, 12)
             }
+        }
+    }
+
+    /// The All-Access upsell in the storefront's own language — a section
+    /// header and panel rows, not a sales poster. The full plan breakdown
+    /// lives on the Plans sheet ("All plans").
+    private var allAccessSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HubSectionHeader(eyebrow: "All-Access", sub: "One plan, every board")
+            VStack(spacing: 0) {
+                Button { openCheckout("ALL") } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "checkmark.seal.fill")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(GaryColors.gold)
+                            .frame(width: 20)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("ALL-ACCESS")
+                                .font(GaryFonts.mono(12, bold: true)).tracking(0.8)
+                                .foregroundStyle(.white.opacity(0.9))
+                            Text("Games & props, every sport · new boards day one")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.white.opacity(0.45))
+                        }
+                        Spacer(minLength: 8)
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text("$34.99/MO")
+                                .font(GaryFonts.mono(13, bold: true))
+                                .foregroundStyle(GaryColors.gold)
+                            Text("3-DAY FREE TRIAL")
+                                .font(.system(size: 8.5, weight: .semibold)).tracking(0.8)
+                                .foregroundStyle(.white.opacity(0.35))
+                        }
+                        Text("Start ›")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(GaryColors.gold)
+                    }
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 14)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 46)
+                Button { plansFocus = nil; showPlansSheet = true } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "list.bullet")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.5))
+                            .frame(width: 20)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("ALL PLANS")
+                                .font(GaryFonts.mono(12, bold: true)).tracking(0.8)
+                                .foregroundStyle(.white.opacity(0.9))
+                            Text("Free plan · single sports from $9.99/mo · bundles")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.white.opacity(0.45))
+                        }
+                        Spacer(minLength: 8)
+                        Text("See ›")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(GaryColors.gold)
+                    }
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 14)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+            .quantPanel()
+            .padding(.horizontal, 16)
         }
     }
 
@@ -2980,8 +3069,9 @@ struct PremiumPicksView: View {
                                                             backHeight: UIScreen.main.bounds.height * 0.68)
                                 } else {
                                     // Blurred preview of the real card — see the
-                                    // board members see, can't read it. Tap buys.
-                                    Button { openCheckout(shelf.league) } label: {
+                                    // board members see, can't read it. Tap opens
+                                    // the Plans page focused on this sport.
+                                    Button { plansFocus = shelf.league; showPlansSheet = true } label: {
                                         ZStack {
                                             CompactPickRow(pick: pick, showSportBadge: false)
                                                 .blur(radius: 4.5).opacity(0.7).allowsHitTesting(false)
@@ -3051,7 +3141,7 @@ struct PremiumPicksView: View {
                                     // Blurred preview — singles and slips keep
                                     // their true shapes so the locked board
                                     // looks exactly like the unlocked one.
-                                    Button { openCheckout(shelf.league) } label: {
+                                    Button { plansFocus = shelf.league; showPlansSheet = true } label: {
                                         ZStack {
                                             if group.count == 1 {
                                                 CompactPropRow(prop: group[0], showSportBadge: false)
@@ -3340,63 +3430,171 @@ struct PremiumPicksView: View {
     }
 }
 
-/// The All-Access upsell — one Stripe pass that unlocks every board.
-/// Per-sport sales happen in the storefront rows; this is the whole house.
-struct PaywallPanel: View {
-    var onUnlock: () -> Void
+/// The pricing page — every plan in one place, in the terminal's own
+/// language. Opened from blurred board previews (focused on that sport)
+/// and from the All-Access section's "All plans" row.
+struct PlansSheetView: View {
+    let focus: String?               // league context from a blurred-board tap
+    let signedIn: Bool
+    var onSelect: (String) -> Void   // league key ("MLB", "ALL", "WC") -> checkout
+    var onAccount: () -> Void        // open sign-in / create account
+    @Environment(\.dismiss) private var dismiss
 
-    private let benefits = [
-        "Every board Gary covers — games and props",
-        "Full reasoning, confidence & the data behind each pick",
-        "Tracked & graded — see the record in the Billfold",
-        "New sports included the day they launch",
-    ]
+    private static let sports = ["MLB", "NBA", "NHL", "NFL", "NCAAF", "NCAAB"]
+    /// Focused sport leads its section.
+    private var orderedSports: [String] {
+        guard let f = focus, Self.sports.contains(f) else { return Self.sports }
+        return [f] + Self.sports.filter { $0 != f }
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text("ALL-ACCESS PASS")
-                    .font(GaryFonts.mono(10, bold: true)).tracking(1)
-                    .foregroundStyle(GaryColors.gold)
-                Text("Every board. One pass.")
-                    .font(GaryFonts.display(32))
-                    .foregroundStyle(.white)
-            }
+        ZStack {
+            LiquidGlassBackground(grainDensity: 0)
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 22) {
+                    HStack {
+                        Text("PLANS")
+                            .font(GaryFonts.mono(23))
+                            .foregroundStyle(GaryColors.gold)
+                        Spacer()
+                        Button { dismiss() } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.45))
+                                .frame(width: 44, height: 44, alignment: .trailing)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.horizontal, 16)
 
-            VStack(alignment: .leading, spacing: 9) {
-                ForEach(benefits, id: \.self) { b in
-                    HStack(alignment: .top, spacing: 9) {
-                        Image(systemName: "checkmark.circle.fill").font(.system(size: 13)).foregroundStyle(GaryColors.gold)
-                        Text(b).font(GaryFonts.text(14)).foregroundStyle(.white.opacity(0.8)).fixedSize(horizontal: false, vertical: true)
+                    section(eyebrow: "All-Access", sub: "The whole house") {
+                        planRow(icon: "checkmark.seal.fill", iconColor: GaryColors.gold,
+                                title: "ALL-ACCESS",
+                                sub: "Games & props, every sport · new boards day one",
+                                price: "$34.99/MO", priceNote: "3-DAY FREE TRIAL",
+                                cta: "Start ›") { onSelect("ALL") }
+                    }
+
+                    section(eyebrow: "Single sport", sub: "One board, $9.99 a month") {
+                        ForEach(Array(orderedSports.enumerated()), id: \.element) { i, lg in
+                            if i > 0 { hairline }
+                            planRow(icon: Sport.from(league: lg).icon,
+                                    iconColor: lg == "MLB" ? GaryColors.mlbGrass : Sport.from(league: lg).accentColor,
+                                    title: "\(lg) PASS",
+                                    sub: "Every \(lg) pick · games & props",
+                                    price: "$9.99/MO", priceNote: nil,
+                                    cta: "Start ›") { onSelect(lg) }
+                        }
+                        hairline
+                        planRow(icon: Sport.from(league: "WC").icon,
+                                iconColor: Sport.from(league: "WC").accentColor,
+                                title: "WORLD CUP PASS",
+                                sub: "All 104 matches · one-time, no renewal",
+                                price: "$14.99", priceNote: "KICKS OFF JUNE 11",
+                                cta: "Pre-order ›") { onSelect("WC") }
+                    }
+
+                    section(eyebrow: "Bundles", sub: "Pick your sports at checkout") {
+                        planRow(icon: "square.grid.2x2", iconColor: .white.opacity(0.5),
+                                title: "TWO SPORTS",
+                                sub: "Any two boards", price: "$17.99/MO",
+                                priceNote: nil, cta: "Soon", enabled: false) {}
+                        hairline
+                        planRow(icon: "square.grid.3x3", iconColor: .white.opacity(0.5),
+                                title: "THREE SPORTS",
+                                sub: "Any three boards", price: "$24.99/MO",
+                                priceNote: nil, cta: "Soon", enabled: false) {}
+                    }
+
+                    section(eyebrow: "Free", sub: "No card, no catch") {
+                        planRow(icon: "rectangle.grid.1x2", iconColor: .white.opacity(0.5),
+                                title: "THE HUB",
+                                sub: "Edges, trends & receipts — graded daily",
+                                price: nil, priceNote: nil, cta: nil) {}
+                        hairline
+                        planRow(icon: "gift", iconColor: .white.opacity(0.5),
+                                title: "FREE PICK",
+                                sub: "One game pick on the house, every day",
+                                price: nil, priceNote: nil, cta: nil) {}
+                        if !signedIn {
+                            hairline
+                            planRow(icon: "person.crop.circle", iconColor: GaryColors.gold,
+                                    title: "CREATE ACCOUNT",
+                                    sub: "Plans and unlocks follow your account",
+                                    price: nil, priceNote: nil, cta: "Sign up ›") { onAccount() }
+                        }
+                    }
+
+                    Text("Plans bill monthly through Stripe and cancel anytime. An account keeps your boards across devices.")
+                        .font(GaryFonts.text(10))
+                        .foregroundStyle(.white.opacity(0.3))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 16)
+                }
+                .padding(.top, 18)
+                .padding(.bottom, 40)
+            }
+        }
+        .preferredColorScheme(.dark)
+    }
+
+    private var hairline: some View {
+        Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 46)
+    }
+
+    private func section(eyebrow: String, sub: String, @ViewBuilder rows: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HubSectionHeader(eyebrow: eyebrow, sub: sub)
+            VStack(spacing: 0) { rows() }
+                .quantPanel()
+                .padding(.horizontal, 16)
+        }
+    }
+
+    private func planRow(icon: String, iconColor: Color, title: String, sub: String,
+                         price: String?, priceNote: String?, cta: String?,
+                         enabled: Bool = true, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(iconColor)
+                    .frame(width: 20)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(GaryFonts.mono(12, bold: true)).tracking(0.8)
+                        .foregroundStyle(.white.opacity(0.9))
+                    Text(sub)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.white.opacity(0.45))
+                }
+                Spacer(minLength: 8)
+                if price != nil || priceNote != nil {
+                    VStack(alignment: .trailing, spacing: 2) {
+                        if let price {
+                            Text(price)
+                                .font(GaryFonts.mono(13, bold: true))
+                                .foregroundStyle(enabled ? GaryColors.gold : .white.opacity(0.45))
+                        }
+                        if let priceNote {
+                            Text(priceNote)
+                                .font(.system(size: 8.5, weight: .semibold)).tracking(0.8)
+                                .foregroundStyle(.white.opacity(0.35))
+                        }
                     }
                 }
-            }
-
-            Button(action: onUnlock) {
-                HStack {
-                    Text("Unlock everything")
-                        .font(GaryFonts.text(16, .bold))
-                    Spacer()
-                    Text("$99.99")
-                        .font(GaryFonts.mono(15, bold: true))
+                if let cta {
+                    Text(cta)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(enabled ? GaryColors.gold : .white.opacity(0.35))
                 }
-                .foregroundStyle(Color(hex: "#0b0a08"))
-                .padding(.horizontal, 18)
-                .padding(.vertical, 15)
-                .background(RoundedRectangle(cornerRadius: 13, style: .continuous).fill(GaryColors.gold))
             }
-            .buttonStyle(.plain)
-
-            Text("One-time payment, handled by Stripe. Sign in first and your unlocks follow your account.")
-                .font(GaryFonts.text(9.5)).foregroundStyle(.white.opacity(0.3))
-                .fixedSize(horizontal: false, vertical: true)
+            .padding(.vertical, 12)
+            .padding(.horizontal, 14)
+            .contentShape(Rectangle())
         }
-        .padding(18)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color(hex: "#0d0b09"))
-                .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(GaryColors.gold.opacity(0.25), lineWidth: 1))
-        )
+        .buttonStyle(.plain)
+        .disabled(!enabled || cta == nil)
     }
 }
 
