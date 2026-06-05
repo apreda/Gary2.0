@@ -36,6 +36,10 @@ describe('unitsFor (iOS Views.swift:273 port — EXACT)', () => {
     expect(unitsFor('push', '-110')).toBe(0);
     expect(unitsFor(null, '-110')).toBe(0);
   });
+  // BUG 1 — mixed-case result strings must normalize before the switch
+  it('Lost (capital L) counts as a loss (-1)', () => {
+    expect(unitsFor('Lost', '-110')).toBe(-1);
+  });
 });
 
 describe('computeRecord', () => {
@@ -53,14 +57,45 @@ describe('computeRecord', () => {
     ]);
     expect(rec.netUnits).toBeCloseTo(1.0);
   });
+  // BUG 1 — mixed-case result from DB must count as loss and contribute -1 netUnits
+  it('counts a result:"Lost" row as a loss with -1 netUnits contribution', () => {
+    const rec = computeRecord([
+      row({ result: 'Lost', pick_text: 'B ML -110' }),
+    ]);
+    expect(rec).toMatchObject({ wins: 0, losses: 1, pushes: 0 });
+    expect(rec.netUnits).toBeCloseTo(-1);
+  });
 });
 
 describe('mergeGameResults (NFL split across two tables)', () => {
-  it('dedupes on lowercased pick_text + game_date', () => {
-    const a = row({ league: 'NFL', pick_text: 'Chiefs -3 -110' });
-    const dupe = row({ league: 'NFL', pick_text: '  chiefs -3 -110 ' });
-    const other = row({ league: 'NFL', pick_text: 'Bills ML -150' });
-    expect(mergeGameResults([a], [dupe, other])).toHaveLength(2);
+  // BUG 2 — off-by-one game_date means the (pick_text|game_date) key NEVER matches
+  // for legacy NFL rows in game_results. Drop all NFL rows from gameRows before
+  // merging; nfl_results is the authoritative source for NFL.
+  it('drops legacy NFL strays from game_results', () => {
+    const nflRow = row({ league: 'NFL', pick_text: 'Chiefs -3 -110', game_date: '2026-01-11' });
+    const legacyNflStray = row({ league: 'NFL', pick_text: 'Chiefs -3 -110', game_date: '2026-01-10' });
+    const mlbRow = row({ league: 'MLB', pick_text: 'Phillies ML -120', game_date: '2026-01-10' });
+    const result = mergeGameResults([nflRow], [legacyNflStray, mlbRow]);
+    expect(result).toHaveLength(2);
+    // nfl_results Chiefs row is present (game_date 2026-01-11)
+    expect(result.some(r => r.game_date === '2026-01-11' && r.pick_text === 'Chiefs -3 -110')).toBe(true);
+    // MLB row is present
+    expect(result.some(r => r.league === 'MLB')).toBe(true);
+    // legacy NFL stray (game_date 2026-01-10, NFL) is NOT present
+    expect(result.some(r => r.game_date === '2026-01-10' && (r.league ?? '').toUpperCase() === 'NFL')).toBe(false);
+  });
+
+  it('dedupes re-grade duplicates within a table', () => {
+    const dup1 = row({ league: 'MLB', pick_text: 'Phillies ML -120', game_date: '2026-01-10' });
+    const dup2 = row({ league: 'MLB', pick_text: 'Phillies ML -120', game_date: '2026-01-10' });
+    const result = mergeGameResults([], [dup1, dup2]);
+    expect(result).toHaveLength(1);
+  });
+
+  it('nfl_results rows stamp league NFL on output', () => {
+    const nflRow = { game_date: '2026-01-11', matchup: 'KC @ BUF', pick_text: 'Chiefs -3 -110', result: 'won', final_score: '27-24', confidence: 0.8 } as GameResultRow;
+    const result = mergeGameResults([nflRow], []);
+    expect(result[0].league).toBe('NFL');
   });
 });
 
@@ -78,6 +113,15 @@ describe('currentStreak', () => {
       row({ game_date: '2026-06-02' }),
     ];
     expect(currentStreak(rows)).toEqual({ kind: 'won', count: 1 });
+  });
+  // BUG 1 — mixed-case results must normalize so streak is not broken by 'Lost'
+  it('treats "Lost" (capital L) as a loss for streak purposes', () => {
+    const rows = [
+      row({ game_date: '2026-06-03', result: 'Lost' }),
+      row({ game_date: '2026-06-02', result: 'Lost' }),
+      row({ game_date: '2026-06-01', result: 'won' }),
+    ];
+    expect(currentStreak(rows)).toEqual({ kind: 'lost', count: 2 });
   });
 });
 

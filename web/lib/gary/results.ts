@@ -4,6 +4,14 @@ import type { GameResultRow, NflResultRow, PropResultRow } from './types';
 const ODDS_TAIL = /[+-]\d{3,}\s*$/;
 
 /**
+ * Normalize a result string to lowercase, trimmed.
+ * The live DB contains rows with mixed-case values (e.g. 'Lost', 'Won').
+ * All comparisons use this helper so 'Lost' and 'lost' are treated identically.
+ * The strict normalized set is: 'won' | 'lost' | 'push'.
+ */
+const normResult = (r: string | null | undefined) => (r ?? '').trim().toLowerCase();
+
+/**
  * Port of iOS GameResult.effectiveOdds (Models.swift:1154).
  * game_results/nfl_results have NO odds column — the line lives at the tail
  * of pick_text ("Knicks ML +154"). Prefer an explicit odds value if present.
@@ -26,7 +34,7 @@ function parseAmericanOdds(odds: string | null | undefined): number | null {
  * 0.9-unit fallback for wins with unparseable odds. 1 unit flat stakes.
  */
 export function unitsFor(result: string | null | undefined, odds: string | null | undefined): number {
-  switch (result) {
+  switch (normResult(result)) {
     case 'won': {
       const american = parseAmericanOdds(odds);
       if (american === null) return 0.9;
@@ -48,11 +56,12 @@ export interface Record_ {
 export function computeRecord(rows: GameResultRow[]): Record_ {
   let wins = 0, losses = 0, pushes = 0, netUnits = 0;
   for (const r of rows) {
-    if (r.result === 'won') wins++;
-    else if (r.result === 'lost') losses++;
-    else if (r.result === 'push') pushes++;
+    const nr = normResult(r.result);
+    if (nr === 'won') wins++;
+    else if (nr === 'lost') losses++;
+    else if (nr === 'push') pushes++;
     else continue;
-    netUnits += unitsFor(r.result, effectiveOdds(r.pick_text));
+    netUnits += unitsFor(nr, effectiveOdds(r.pick_text));
   }
   const decided = wins + losses;
   return {
@@ -66,15 +75,25 @@ const dedupeKey = (r: GameResultRow) =>
   `${(r.pick_text ?? '').trim().toLowerCase()}|${r.game_date ?? ''}`;
 
 /**
- * NFL results live in BOTH nfl_results (majority) and game_results (a few
- * legacy rows). Merge with nfl_results winning on (pick_text, game_date).
- * Also dedupes re-grade duplicates within each table.
+ * NFL results live in BOTH nfl_results (majority) AND game_results (9 legacy
+ * stray rows). The two tables have an off-by-one game_date mismatch (kickoff
+ * date vs grading date), so the (pick_text|game_date) dedupe key is a no-op
+ * for those rows and games would double-count.
+ *
+ * Fix: nfl_results is the authoritative source for NFL. Drop any row from
+ * gameRows whose league is NFL BEFORE merging. The existing key dedupe still
+ * guards against intra-table re-grade duplicates within each table.
+ *
  * NOTE: nfl_results has NO league column — stamp 'NFL' on merge.
  */
 export function mergeGameResults(nflRows: NflResultRow[], gameRows: GameResultRow[]): GameResultRow[] {
+  // Drop legacy NFL strays from game_results — off-by-one dates make key
+  // dedupe a no-op; nfl_results is the authoritative NFL source.
+  const nonNflGameRows = gameRows.filter(r => (r.league ?? '').trim().toUpperCase() !== 'NFL');
+
   const seen = new Set<string>();
   const out: GameResultRow[] = [];
-  for (const r of [...nflRows.map(r => ({ ...r, league: r.league ?? 'NFL' })), ...gameRows]) {
+  for (const r of [...nflRows.map(r => ({ ...r, league: r.league ?? 'NFL' })), ...nonNflGameRows]) {
     const k = dedupeKey(r);
     if (seen.has(k)) continue;
     seen.add(k);
@@ -88,9 +107,10 @@ export function currentStreak(rows: GameResultRow[]): { kind: 'won' | 'lost'; co
   let kind: 'won' | 'lost' | null = null;
   let count = 0;
   for (const r of sorted) {
-    if (r.result !== 'won' && r.result !== 'lost') continue; // skip pushes/ungraded
-    if (kind === null) { kind = r.result; count = 1; continue; }
-    if (r.result === kind) count++;
+    const nr = normResult(r.result);
+    if (nr !== 'won' && nr !== 'lost') continue; // skip pushes/ungraded
+    if (kind === null) { kind = nr; count = 1; continue; }
+    if (nr === kind) count++;
     else break;
   }
   return kind ? { kind, count } : null;
@@ -116,11 +136,12 @@ export function isLegitPropResult(r: PropResultRow): boolean {
 export function computePropsRecord(rows: PropResultRow[]): Record_ {
   let wins = 0, losses = 0, pushes = 0, netUnits = 0;
   for (const r of rows.filter(isLegitPropResult)) {
-    if (r.result === 'won') wins++;
-    else if (r.result === 'lost') losses++;
-    else if (r.result === 'push') pushes++;
+    const nr = normResult(r.result);
+    if (nr === 'won') wins++;
+    else if (nr === 'lost') losses++;
+    else if (nr === 'push') pushes++;
     else continue;
-    netUnits += unitsFor(r.result, effectiveOdds(r.pick_text, r.odds));
+    netUnits += unitsFor(nr, effectiveOdds(r.pick_text, r.odds));
   }
   const decided = wins + losses;
   return {
