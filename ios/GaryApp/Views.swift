@@ -2652,7 +2652,10 @@ struct PremiumPicksView: View {
 
     // In-season / imminent sports shown as rows (placeholders when a sport has no pick yet).
     // Any extra league present in the data is appended automatically.
-    private let canonicalSports = ["MLB", "NBA", "NHL", "WC"]
+    // Every sport Gary actually covers — lanes hold placeholders off-slate.
+    private let canonicalSports = ["MLB", "NBA", "NHL", "WC", "NFL", "NCAAF", "NCAAB"]
+    // Sports with a props product (WC + college are game picks only).
+    private let propSports = ["MLB", "NBA", "NHL", "NFL"]
 
     // MARK: - Terminal status / tab counts (all derived from loaded view state)
 
@@ -2725,12 +2728,8 @@ struct PremiumPicksView: View {
                             .font(GaryFonts.mono(10, bold: true)).tracking(0.8)
                             .foregroundStyle(lg == "MLB" ? AnyShapeStyle(GaryColors.mlbFieldText)
                                                          : AnyShapeStyle(Sport.from(league: lg).accentColor))
-                            .padding(.horizontal, 11).padding(.vertical, 6)
-                            .background(
-                                Capsule().fill(Color.white.opacity(0.05))
-                                    .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 1))
-                            )
-                            .contentShape(Capsule())
+                            .padding(.horizontal, 7).padding(.vertical, 6)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }
@@ -2946,7 +2945,8 @@ struct PremiumPicksView: View {
                                         PropSlipCard(props: group,
                                                      resultForProp: { [settled = shelf.settled] p in
                                                          settled ? self.propResult(for: p) : nil
-                                                     })
+                                                     },
+                                                     resultLetterTrailing: true)
                                     }
                                 } else {
                                     CompactPropRow(prop: group[0], showSportBadge: false)
@@ -3044,23 +3044,11 @@ struct PremiumPicksView: View {
         (p.effectiveLeague ?? p.sport ?? p.league ?? "OTHER").uppercased()
     }
 
-    /// Premium props: the single highest-confidence prop per game, capped at
-    /// 4 games per sport — Winners is the SELECTIVE board. (If two same-game
-    /// props ever both qualify, the renderer merges them into a slip.)
+    /// Premium props: the top 5 by confidence across the sport — no per-game
+    /// cap, so a game whose props BOTH qualify forms a slip and a game with
+    /// one qualifier stands as a single card. The mix falls out of the data.
     private func selectPremiumProps(_ props: [PropPick]) -> [PropPick] {
-        var bestByGame: [String: PropPick] = [:]
-        for p in props {
-            let key = p.matchup ?? p.commence_time ?? p.id
-            if let cur = bestByGame[key] {
-                if (p.confidence ?? 0) > (cur.confidence ?? 0) { bestByGame[key] = p }
-            } else {
-                bestByGame[key] = p
-            }
-        }
-        return bestByGame.values
-            .sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }
-            .prefix(4)
-            .map { $0 }
+        Array(props.sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.prefix(5))
     }
 
     private func load() async {
@@ -3123,9 +3111,9 @@ struct PremiumPicksView: View {
                 pShelves.append(PropShelf(league: lg, props: selectPremiumProps(ps), settled: false))
             } else if let yps = yPropsByLeague[lg], !yps.isEmpty {
                 pShelves.append(PropShelf(league: lg, props: selectPremiumProps(yps), settled: true))
-            } else if ["MLB", "NBA", "NHL"].contains(lg) {
-                // In-season prop sports hold their place with a placeholder
-                // row until their slate posts. (WC is game picks only.)
+            } else if propSports.contains(lg) {
+                // Prop sports hold their lane with a placeholder until their
+                // slate posts. (WC + college are game picks only.)
                 pShelves.append(PropShelf(league: lg, props: [], settled: false))
             }
         }
@@ -11233,6 +11221,9 @@ struct PropSlipCard: View {
     /// Game pages carry the score in the page hero (LiveScoreStrip), so their
     /// slip header keeps the plain start time. The Today slip stays state-aware.
     var liveInHeader: Bool = true
+    /// Winners shows each row's W/L in the row's corner (trailing); the Picks
+    /// pages keep it leading, beside the name.
+    var resultLetterTrailing: Bool = false
 
     @ObservedObject private var liveCache = LiveScoreCache.shared
     // Flip state — game-pick mechanics: tapping a row flips the whole card
@@ -11317,6 +11308,18 @@ struct PropSlipCard: View {
         .onAppear { LiveScoreCache.shared.startIfNeeded() }
     }
 
+    private func resultCapsule(_ r: (String, Color)) -> some View {
+        Text(r.0)
+            .font(GaryFonts.mono(10, bold: true))
+            .tracking(0.5)
+            .foregroundStyle(r.1)
+            .padding(.horizontal, 7).padding(.vertical, 3)
+            .background(
+                Capsule().fill(r.1.opacity(0.18))
+                    .overlay(Capsule().stroke(r.1.opacity(0.45), lineWidth: 1))
+            )
+    }
+
     private var front: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Slip header — locked card's eyebrow anatomy: LEAGUE + prop count.
@@ -11370,17 +11373,9 @@ struct PropSlipCard: View {
                     VStack(alignment: .leading, spacing: 11) {
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
                             // Single letter in the game-pick capsule design —
-                            // same spot, same language, less ink.
-                            if let r = resultLetter(p) {
-                                Text(r.0)
-                                    .font(GaryFonts.mono(10, bold: true))
-                                    .tracking(0.5)
-                                    .foregroundStyle(r.1)
-                                    .padding(.horizontal, 7).padding(.vertical, 3)
-                                    .background(
-                                        Capsule().fill(r.1.opacity(0.18))
-                                            .overlay(Capsule().stroke(r.1.opacity(0.45), lineWidth: 1))
-                                    )
+                            // leading on Picks, trailing corner on Winners.
+                            if !resultLetterTrailing, let r = resultLetter(p) {
+                                resultCapsule(r)
                             }
                             Text(p.player ?? p.team ?? "")
                                 .font(GaryFonts.text(24, .medium))
@@ -11403,6 +11398,9 @@ struct PropSlipCard: View {
                                     .foregroundStyle(GaryColors.heroAccent.opacity(0.6))
                             }
                             .layoutPriority(1)
+                            if resultLetterTrailing, let r = resultLetter(p) {
+                                resultCapsule(r)
+                            }
                         }
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
                             propPickStyled(p.slipPickText)
