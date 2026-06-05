@@ -2658,7 +2658,7 @@ struct PremiumPicksView: View {
         "NCAAF": "https://buy.stripe.com/test_3cI9AU4UY7mhgxA2tSaIM04",
         "NCAAB": "https://buy.stripe.com/test_aFa14o2MQ361eps6K8aIM05",
         "ALL":   "https://buy.stripe.com/test_bJe14o1IMgWR2GKb0oaIM06",
-        // "WC" joins when the pre-order product is approved.
+        "WC":    "https://buy.stripe.com/test_00w28s4UYfSN2GK4C0aIM07",
     ]
     private func openCheckout(_ league: String) {
         guard let base = Self.checkoutLinks[league],
@@ -2848,9 +2848,8 @@ struct PremiumPicksView: View {
                     gameShelfView(shelf)
                         .id("g-\(shelf.league)")
                 }
-                let locked = gameShelves.filter { !sportUnlocked($0.league) && !$0.picks.isEmpty }
-                if !locked.isEmpty {
-                    storefrontTail(locked.map { ($0.league, $0.picks.count, "pick") })
+                if !lockedGameBoards.isEmpty {
+                    storefrontTail(lockedGameBoards)
                 }
             } else {
                 if propShelves.isEmpty {
@@ -3002,10 +3001,22 @@ struct PremiumPicksView: View {
         }
     }
 
-    /// PROTOTYPE — the locked-sports storefront: a contiguous tail below
-    /// everything the user paid for. No blur, no hostage cards — each locked
-    /// board sells itself with its REAL last-10 record (sometimes that means
-    /// admitting 3–7; honesty is the brand).
+    /// Locked game boards for the storefront. WC rides as a pre-order row
+    /// until kickoff (its shelf has no picks yet, so the slate filter would
+    /// otherwise hide it); once WC picks exist it becomes a normal locked board.
+    private var lockedGameBoards: [(league: String, count: Int, unit: String)] {
+        var boards = gameShelves.filter { !sportUnlocked($0.league) && !$0.picks.isEmpty }
+            .map { (league: $0.league, count: $0.picks.count, unit: "pick") }
+        if !sportUnlocked("WC"), !boards.contains(where: { $0.league == "WC" }) {
+            boards.append((league: "WC", count: 0, unit: "pick"))
+        }
+        return boards
+    }
+
+    /// The locked-sports storefront: a contiguous tail below everything the
+    /// user paid for. No blur, no hostage cards — each locked board sells
+    /// itself with its REAL last-10 record (sometimes that means admitting
+    /// 3–7; honesty is the brand).
     private func storefrontTail(_ boards: [(league: String, count: Int, unit: String)]) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HubSectionHeader(eyebrow: "More boards", sub: "Sports you haven't unlocked")
@@ -3025,7 +3036,8 @@ struct PremiumPicksView: View {
     }
 
     private func storefrontRow(_ b: (league: String, count: Int, unit: String)) -> some View {
-                    HStack(spacing: 12) {
+                    let preorder = b.league == "WC" && b.count == 0
+                    return HStack(spacing: 12) {
                         Image(systemName: Sport.from(league: b.league).icon)
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(b.league == "MLB" ? GaryColors.mlbGrass : Sport.from(league: b.league).accentColor)
@@ -3034,7 +3046,7 @@ struct PremiumPicksView: View {
                             Text("\(b.league) BOARD")
                                 .font(GaryFonts.mono(12, bold: true)).tracking(0.8)
                                 .foregroundStyle(.white.opacity(0.9))
-                            Text("\(b.count) \(b.unit)\(b.count == 1 ? "" : "s") tonight")
+                            Text(preorder ? "All 104 matches · kicks off June 11" : "\(b.count) \(b.unit)\(b.count == 1 ? "" : "s") tonight")
                                 .font(.system(size: 11))
                                 .foregroundStyle(.white.opacity(0.45))
                         }
@@ -3049,7 +3061,7 @@ struct PremiumPicksView: View {
                                     .foregroundStyle(.white.opacity(0.35))
                             }
                         }
-                        Text("Unlock ›")
+                        Text(preorder ? "Pre-order ›" : "Unlock ›")
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(GaryColors.gold)
                     }
