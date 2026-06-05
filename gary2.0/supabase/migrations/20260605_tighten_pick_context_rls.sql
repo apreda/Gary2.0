@@ -1,0 +1,27 @@
+-- Tighten RLS on pick_context (2026-06-05)
+--
+-- pick_context held Gary's full internal scout reports, research briefings,
+-- bilateral cases, and raw pre-JSON reasoning under a public SELECT policy
+-- (USING true) — proprietary methodology readable by anyone with the public
+-- anon key shipped in the app/site.
+--
+-- The only reader is the gary-chat edge function, which uses
+-- SUPABASE_SERVICE_ROLE_KEY (bypasses RLS). Pipeline writers also use the
+-- service role. No anon/browser path reads this table. Dropping the public
+-- SELECT policy closes the exposure with zero functional impact.
+--
+-- Verified: after the drop, anon SELECT returns [] and gary-chat (service
+-- role) still reads pick_context normally.
+DROP POLICY IF EXISTS "pick_context read" ON public.pick_context;
+-- keep: "pick_context service write" (ALL, service_role)
+
+-- NOTE — push_tokens was ALSO a candidate (anon could enumerate + mass-update
+-- device tokens). It could NOT be tightened in this pass: the deployed iOS app
+-- registers via on_conflict=device_token + resolution=merge-duplicates, which
+-- Postgres executes as INSERT ... ON CONFLICT DO UPDATE and therefore REQUIRES
+-- an anon SELECT policy (it reads the conflicting row). Removing anon SELECT
+-- broke push registration for every live install (verified 401). Properly
+-- locking push_tokens needs an iOS release that moves registration to a
+-- SECURITY DEFINER RPC (or ignore-duplicates), after which anon SELECT/UPDATE
+-- can be dropped. Tracked as a follow-up. Low residual risk: FCM tokens are
+-- opaque, carry no PII, and can't send pushes without the Firebase server key.
