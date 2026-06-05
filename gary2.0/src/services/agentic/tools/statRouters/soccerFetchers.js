@@ -1,45 +1,225 @@
 /**
- * Soccer (World Cup) stat fetchers. Token → async (ctx) => string finding.
- * ctx provides { matchId, homeTeamId, awayTeamId, seasons }. Backed by
- * fifaWorldCupService. Most game-pick depth comes from the scout report; these
- * give Gary/Flash on-demand pulls for specific factors.
+ * Soccer (World Cup) stat fetchers — backed by fifaWorldCupService.
+ *
+ * Keys are WC_-prefixed (the MLB_ pattern) so they can never shadow other
+ * sports' generic tokens in the merged FETCHERS map. The previous bare-key
+ * version of this file silently overrode NBA's RECENT_FORM and NHL's
+ * EXPECTED_GOALS for EVERY sport (soccer was spread last in index.js).
+ *
+ * Dispatch contract: fetchStats' soccer branch calls each fetcher with a ctx
+ * object { matchId, homeTeamId, awayTeamId, homeTeam, awayTeam, seasons } and
+ * expects a { homeValue, awayValue, comparison, source } result.
+ *
+ * Pre-tournament reality (before June 11, 2026): ZERO 2026 matches are
+ * completed, so every in-tournament aggregate is empty. Fetchers return
+ * explicit NOT-AVAILABLE sentinels instead of soft excuses — the model knows
+ * the 2022 World Cup from training and must never fill 2026 gaps from memory.
  */
 import * as wc from '../../../fifaWorldCupService.js';
 
-async function teamFormSummary(ctx = {}) {
-  const { matchId } = ctx;
-  if (!matchId) return 'No match id available for team form.';
-  const form = await wc.getMatchTeamForm([matchId]);
-  if (!form.length) return 'No pre-match form data available yet.';
-  return form
-    .map(f => `team ${f.team_id}: avg rating ${f.avg_rating ?? 'n/a'}, group pos ${f.position ?? 'n/a'}, recent pts ${f.value ?? 'n/a'}`)
-    .join(' | ');
+const SOURCE = 'FIFA World Cup API (BDL)';
+const PRE_TOURNAMENT = (teamName) =>
+  `${teamName}: no completed 2026 World Cup matches yet (pre-tournament). ` +
+  `In-tournament form/xG/possession figures DO NOT EXIST for 2026 — do not cite any from memory. ` +
+  `Qualifier/friendly data is not in this source; use grounding with explicit dates if needed.`;
+
+// Completed 2026 matches for one team, oldest → newest.
+async function completedMatchesFor(teamId, seasons = [wc.DEFAULT_SEASON]) {
+  if (teamId == null) return [];
+  const matches = await wc.getMatches({ teamIds: [teamId], seasons });
+  return (matches || [])
+    .filter(m => m.status === 'completed')
+    .sort((a, b) => new Date(a.datetime || 0) - new Date(b.datetime || 0));
 }
 
-async function groupStandings() {
-  const rows = await wc.getGroupStandings();
-  if (!rows.length) return 'Group standings not yet available.';
-  return rows
+// "Jun 14: beat South Africa 2-1" — full-time result (incl. ET) for form reading.
+function describeResult(m, teamId) {
+  const isHome = m.home_team?.id === teamId;
+  const us = isHome ? m.home_score : m.away_score;
+  const them = isHome ? m.away_score : m.home_score;
+  const opp = isHome ? m.away_team?.name : m.home_team?.name;
+  const date = (m.datetime || '').split('T')[0];
+  const verb = us > them ? 'beat' : us < them ? 'lost to' : 'drew with';
+  const et = m.has_extra_time ? ' (AET)' : '';
+  const pens = m.has_penalty_shootout ? ' (pens)' : '';
+  return `${date}: ${verb} ${opp} ${us}-${them}${et}${pens}`;
+}
+
+// WC_TEAM_FORM / WC_RECENT_FORM — completed 2026 results per team.
+// (The /match_team_form endpoint returns 0 rows even for completed matches,
+// verified live against 2022 — form is derived from match results instead.)
+async function teamFormSummary(ctx = {}) {
+  const sides = [
+    [ctx.homeTeamId, ctx.homeTeam || 'Home'],
+    [ctx.awayTeamId, ctx.awayTeam || 'Away'],
+  ];
+  const edition = (ctx.seasons && ctx.seasons[0]) || wc.DEFAULT_SEASON;
+  const values = [];
+  for (const [teamId, name] of sides) {
+    const done = await completedMatchesFor(teamId, ctx.seasons).catch(() => []);
+    values.push(done.length === 0
+      ? PRE_TOURNAMENT(name)
+      : `${name} — ${edition} tournament results: ${done.map(m => describeResult(m, teamId)).join(' | ')}`);
+  }
+  return {
+    homeValue: values[0],
+    awayValue: values[1],
+    comparison: `Completed ${edition} World Cup results only (full-time, incl. ET where played)`,
+    source: SOURCE,
+  };
+}
+
+// Shared aggregate over a team's completed matches: goals + match-stat averages.
+async function aggregateTeamStats(teamId, seasons) {
+  const done = await completedMatchesFor(teamId, seasons);
+  if (done.length === 0) return null;
+
+  let gf = 0, ga = 0;
+  for (const m of done) {
+    const isHome = m.home_team?.id === teamId;
+    gf += (isHome ? m.home_score : m.away_score) ?? 0;
+    ga += (isHome ? m.away_score : m.home_score) ?? 0;
+  }
+
+  const rows = await wc.getTeamMatchStats(done.map(m => m.id)).catch(() => []);
+  const ours = (rows || []).filter(r => r.team_id === teamId);
+  const avg = (field) => {
+    const vals = ours.map(r => r[field]).filter(v => typeof v === 'number');
+    return vals.length ? (vals.reduce((s, v) => s + v, 0) / vals.length) : null;
+  };
+
+  return {
+    games: done.length,
+    gfPerGame: gf / done.length,
+    gaPerGame: ga / done.length,
+    xg: avg('expected_goals'),
+    possession: avg('possession_pct'),
+    shots: avg('shots_total'),
+    shotsOnTarget: avg('shots_on_target'),
+    corners: avg('corners'),
+  };
+}
+
+const fmt1 = (v) => (v != null ? v.toFixed(1) : '—');
+const fmt2 = (v) => (v != null ? v.toFixed(2) : '—');
+
+// WC_TEAM_MATCH_STATS / WC_POSSESSION_STATS / WC_EXPECTED_GOALS
+async function teamMatchStatsSummary(ctx = {}) {
+  const sides = [
+    [ctx.homeTeamId, ctx.homeTeam || 'Home'],
+    [ctx.awayTeamId, ctx.awayTeam || 'Away'],
+  ];
+  const values = [];
+  for (const [teamId, name] of sides) {
+    const agg = await aggregateTeamStats(teamId, ctx.seasons).catch(() => null);
+    values.push(!agg
+      ? PRE_TOURNAMENT(name)
+      : `${name} (${agg.games} matches): xG ${fmt2(agg.xg)}/gm, possession ${fmt1(agg.possession)}%, ` +
+        `shots ${fmt1(agg.shots)}/gm (${fmt1(agg.shotsOnTarget)} on target), corners ${fmt1(agg.corners)}/gm`);
+  }
+  return {
+    homeValue: values[0],
+    awayValue: values[1],
+    comparison: '2026 in-tournament per-match averages (completed matches only)',
+    source: SOURCE,
+  };
+}
+
+// WC_GOALS_PER_MATCH / WC_GOALS_CONCEDED
+async function goalsSummary(ctx = {}) {
+  const sides = [
+    [ctx.homeTeamId, ctx.homeTeam || 'Home'],
+    [ctx.awayTeamId, ctx.awayTeam || 'Away'],
+  ];
+  const values = [];
+  for (const [teamId, name] of sides) {
+    const agg = await aggregateTeamStats(teamId, ctx.seasons).catch(() => null);
+    values.push(!agg
+      ? PRE_TOURNAMENT(name)
+      : `${name}: ${fmt2(agg.gfPerGame)} goals scored/gm, ${fmt2(agg.gaPerGame)} conceded/gm (${agg.games} matches)`);
+  }
+  return {
+    homeValue: values[0],
+    awayValue: values[1],
+    comparison: '2026 in-tournament scoring rates (completed matches only)',
+    source: SOURCE,
+  };
+}
+
+// WC_GROUP_STANDINGS / WC_GROUP_STAGE_CONTEXT — scoped to this match's groups.
+async function groupStandings(ctx = {}) {
+  const rows = await wc.getGroupStandings().catch(() => []);
+  if (!rows.length) {
+    return {
+      homeValue: 'Group standings not available from the API.',
+      awayValue: '',
+      comparison: 'Group standings',
+      source: SOURCE,
+    };
+  }
+  const groupOf = (teamId) => rows.find(r => r.team?.id === teamId)?.group?.name ?? null;
+  const relevantGroups = new Set([groupOf(ctx.homeTeamId), groupOf(ctx.awayTeamId)].filter(Boolean));
+  const scoped = relevantGroups.size > 0 ? rows.filter(r => relevantGroups.has(r.group?.name)) : rows;
+  const anyPlayed = scoped.some(r => (r.played ?? 0) > 0);
+  const table = scoped
     .map(r => `${r.group?.name} #${r.position} ${r.team?.name}: ${r.points}pts (GD ${r.goal_difference}, ${r.played}gp)`)
     .join(' | ');
+  const note = anyPlayed ? '' : ' — NOTE: 0 matches played; positions reflect seeding only, not results.';
+  return {
+    homeValue: table + note,
+    awayValue: '',
+    comparison: `Group standings (${[...relevantGroups].join(', ') || 'all groups'})`,
+    source: SOURCE,
+  };
 }
 
-async function teamMatchStatsSummary(ctx = {}) {
-  const { matchId } = ctx;
-  if (!matchId) return 'No match id for team match stats.';
-  const rows = await wc.getTeamMatchStats([matchId]);
-  if (!rows.length) return 'No team match stats yet (match not played).';
-  return rows
-    .map(s => `team ${s.team_id}: poss ${s.possession_pct}%, xG ${s.expected_goals}, shots ${s.shots_total}/${s.shots_on_target} on target, corners ${s.corners}`)
-    .join(' | ');
+// WC_H2H_HISTORY — World Cup finals meetings across 2018/2022/2026 editions.
+async function h2hHistory(ctx = {}) {
+  const { homeTeamId, awayTeamId } = ctx;
+  if (homeTeamId == null || awayTeamId == null) {
+    return {
+      homeValue: 'H2H unavailable — team ids missing.',
+      awayValue: '',
+      comparison: 'World Cup head-to-head',
+      source: SOURCE,
+    };
+  }
+  const editions = [2018, 2022, 2026];
+  const matches = await wc.getMatches({ teamIds: [homeTeamId], seasons: editions }).catch(() => []);
+  const meetings = (matches || [])
+    .filter(m => m.status === 'completed')
+    .filter(m => (m.home_team?.id === awayTeamId || m.away_team?.id === awayTeamId))
+    .sort((a, b) => new Date(a.datetime || 0) - new Date(b.datetime || 0));
+  if (meetings.length === 0) {
+    return {
+      homeValue: `No World Cup meetings between these teams in the ${editions.join('/')} editions. ` +
+        `This source covers World Cup finals matches ONLY — do not cite all-time international H2H from memory; ` +
+        `use grounding with explicit dates if broader history matters.`,
+      awayValue: '',
+      comparison: 'World Cup head-to-head',
+      source: SOURCE,
+    };
+  }
+  return {
+    homeValue: meetings.map(m =>
+      `${(m.datetime || '').split('T')[0]} (${m.stage?.name ?? 'WC'}): ${m.home_team?.name} ${m.home_score}-${m.away_score} ${m.away_team?.name}` +
+      `${m.has_extra_time ? ' AET' : ''}${m.has_penalty_shootout ? ` (pens ${m.home_score_penalties}-${m.away_score_penalties})` : ''}`
+    ).join(' | '),
+    awayValue: '',
+    comparison: `World Cup finals meetings, ${editions.join('/')} editions only`,
+    source: SOURCE,
+  };
 }
 
 export const soccerFetchers = {
-  TEAM_FORM: teamFormSummary,
-  RECENT_FORM: teamFormSummary,
-  GROUP_STANDINGS: groupStandings,
-  GROUP_STAGE_CONTEXT: groupStandings,
-  TEAM_MATCH_STATS: teamMatchStatsSummary,
-  POSSESSION_STATS: teamMatchStatsSummary,
-  EXPECTED_GOALS: teamMatchStatsSummary,
+  WC_TEAM_FORM: teamFormSummary,
+  WC_RECENT_FORM: teamFormSummary,
+  WC_GROUP_STANDINGS: groupStandings,
+  WC_GROUP_STAGE_CONTEXT: groupStandings,
+  WC_TEAM_MATCH_STATS: teamMatchStatsSummary,
+  WC_POSSESSION_STATS: teamMatchStatsSummary,
+  WC_EXPECTED_GOALS: teamMatchStatsSummary,
+  WC_GOALS_PER_MATCH: goalsSummary,
+  WC_GOALS_CONCEDED: goalsSummary,
+  WC_H2H_HISTORY: h2hHistory,
 };

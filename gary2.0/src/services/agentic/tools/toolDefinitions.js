@@ -260,11 +260,15 @@ const MLB_TOKENS = [
   'MLB_PITCH_TYPES_HITTERS',     // Top hitters' performance vs each pitch type: BA, xwOBA, SLG per pitch type (BDL pitch-type season stats)
 ];
 
+// Every token here resolves to a real WC_ fetcher in soccerFetchers.js.
+// Removed (no API source — use fetch_narrative_context grounding instead):
+// SHOTS_ON_TARGET (included in TEAM_MATCH_STATS output), SET_PIECES,
+// KEY_PLAYERS, INJURIES, SUSPENSIONS, LINEUP_FORMATION. Advertising unbacked
+// tokens is the MLB fabrication bug class (prompt asks, no tool answers).
 const SOCCER_WC_TOKENS = [
   'TEAM_FORM', 'RECENT_FORM', 'GROUP_STANDINGS', 'GROUP_STAGE_CONTEXT',
   'TEAM_MATCH_STATS', 'POSSESSION_STATS', 'EXPECTED_GOALS',
-  'GOALS_PER_MATCH', 'GOALS_CONCEDED', 'SHOTS_ON_TARGET', 'SET_PIECES',
-  'KEY_PLAYERS', 'INJURIES', 'SUSPENSIONS', 'LINEUP_FORMATION', 'H2H_HISTORY',
+  'GOALS_PER_MATCH', 'GOALS_CONCEDED', 'H2H_HISTORY',
 ];
 
 // Combine all tokens by sport

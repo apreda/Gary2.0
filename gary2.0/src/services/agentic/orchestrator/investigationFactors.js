@@ -121,20 +121,22 @@ export const INVESTIGATION_FACTORS = {
     INJURIES: ['INJURIES', 'MLB_INJURIES'],
     GAME_CONTEXT: ['MLB_ODDS', 'MLB_GAME_PREVIEW', 'MLB_TOP_PLAYERS', 'REST_SITUATION'],  // Absorbed ODDS + REST
   },
+  // WC AVAILABILITY (injuries/suspensions/lineups) has NO structured API
+  // source — it is investigated via fetch_narrative_context grounding (see the
+  // WC investigation prompts), so it carries no fetch_stats tokens here.
+  // SHOTS_ON_TARGET removed: it is part of TEAM_MATCH_STATS output.
   soccer_world_cup: {
     FORM: ['TEAM_FORM', 'RECENT_FORM'],
-    ATTACK_XG: ['EXPECTED_GOALS', 'TEAM_MATCH_STATS', 'SHOTS_ON_TARGET', 'GOALS_PER_MATCH'],
+    ATTACK_XG: ['EXPECTED_GOALS', 'TEAM_MATCH_STATS', 'GOALS_PER_MATCH'],
     DEFENSE: ['TEAM_MATCH_STATS', 'GOALS_CONCEDED'],
     GROUP_CONTEXT: ['GROUP_STANDINGS', 'GROUP_STAGE_CONTEXT'],
-    AVAILABILITY: ['INJURIES', 'SUSPENSIONS', 'LINEUP_FORMATION'],
     H2H: ['H2H_HISTORY'],
   },
   WC: {
     FORM: ['TEAM_FORM', 'RECENT_FORM'],
-    ATTACK_XG: ['EXPECTED_GOALS', 'TEAM_MATCH_STATS', 'SHOTS_ON_TARGET', 'GOALS_PER_MATCH'],
+    ATTACK_XG: ['EXPECTED_GOALS', 'TEAM_MATCH_STATS', 'GOALS_PER_MATCH'],
     DEFENSE: ['TEAM_MATCH_STATS', 'GOALS_CONCEDED'],
     GROUP_CONTEXT: ['GROUP_STANDINGS', 'GROUP_STAGE_CONTEXT'],
-    AVAILABILITY: ['INJURIES', 'SUSPENSIONS', 'LINEUP_FORMATION'],
     H2H: ['H2H_HISTORY'],
   }
 };

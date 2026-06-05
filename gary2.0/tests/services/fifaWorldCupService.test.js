@@ -77,6 +77,29 @@ describe('getRegulationScore (90 minutes, excludes extra time)', () => {
   it('returns nulls for missing match', () => {
     expect(getRegulationScore(null)).toEqual({ home: null, away: null });
   });
+
+  // ─── 2018-edition data shape (REAL API rows): first_half_* populated,
+  // second_half_* null on EVERY match. The old halves-sum coerced null→0 and
+  // returned the HALFTIME score for the whole tournament. ───
+  it('2018 final shape (partial-null halves, no ET): uses full-time, not halftime (France 4-2 Croatia)', () => {
+    const m = {
+      first_half_home_score: 2, second_half_home_score: null,
+      first_half_away_score: 1, second_half_away_score: null,
+      has_extra_time: false, home_score: 4, away_score: 2,
+    };
+    expect(getRegulationScore(m)).toEqual({ home: 4, away: 2 });
+  });
+
+  it('2018 SF shape (partial-null halves, ET played): returns null instead of a corrupted 90-minute score', () => {
+    // Croatia 2-1 England AET — true 90' was 1-1, but halves are incomplete
+    // so the 90' score is unknowable; null is the only honest answer.
+    const m = {
+      first_half_home_score: 0, second_half_home_score: null,
+      first_half_away_score: 1, second_half_away_score: null,
+      has_extra_time: true, home_score: 2, away_score: 1,
+    };
+    expect(getRegulationScore(m)).toEqual({ home: null, away: null });
+  });
 });
 
 // ─── Task 3: getAdvanceResult ─────────────────────────────────────────
@@ -106,6 +129,18 @@ describe('getAdvanceResult (who advances in a knockout)', () => {
   it('returns null when not completed', () => {
     const m = { ...teams, status: 'scheduled' };
     expect(getAdvanceResult(m)).toBeNull();
+  });
+
+  it('2018 SF shape: ET winner advances via extra_time, never a corrupted "regulation" call', () => {
+    // Croatia (home) 2-1 England AET with second_half_* null — the old code
+    // read reg as 0-1 and wrongly advanced ENGLAND via method:'regulation'.
+    const m = {
+      ...teams, status: 'completed',
+      first_half_home_score: 0, second_half_home_score: null,
+      first_half_away_score: 1, second_half_away_score: null,
+      has_extra_time: true, home_score: 2, away_score: 1,
+    };
+    expect(getAdvanceResult(m)).toEqual({ teamId: 10, method: 'extra_time' });
   });
 
   it('returns null when teams are TBD', () => {

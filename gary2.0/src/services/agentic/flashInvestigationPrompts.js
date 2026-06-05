@@ -1000,43 +1000,42 @@ The scout report provides the starting point. You are free to re-fetch any stat 
 
 const SOCCER_WC_FACTORS = `## INVESTIGATION CHECKLIST — SOCCER (2026 FIFA World Cup)
 
-Work through each factor for BOTH teams and report findings with specific numbers. Do not state what a factor means for the pick — report the facts; Gary decides.
+Work through each factor for BOTH teams and report findings factually. Do not state what a factor means for the pick — report the facts; Gary decides.
+
+### DATA REALITY CHECK (read first)
+Our structured data covers WORLD CUP FINALS MATCHES ONLY (2018/2022/2026 editions). It contains NO qualifiers, NO friendlies, NO club football, NO pre-tournament form of any kind.
+- **Matchday 1 (each team's first match): there are ZERO completed 2026 matches.** In-tournament form, xG, possession, goals-per-match DO NOT EXIST yet — the tools will say so explicitly. Do NOT substitute numbers from the 2022 World Cup, qualifiers, or memory; your training data predates the 2026 squads entirely.
+- What IS real on matchday 1: the 3-way moneyline / handicap / total odds, group seeding, 26-man rosters, World Cup H2H history (WC_H2H_HISTORY), and anything you ground with a dated source.
+- For qualifying form or recent friendlies, use fetch_narrative_context grounding and ALWAYS attach the date and competition of every result you cite. An undated scoreline is unusable.
+- From matchday 2 onward, the in-tournament tools populate with real per-match data — cite ONLY those figures for tournament form/xG.
 
 ### 1. FORM & RECENT RESULTS
-- Results in this edition and recent matches (last ~5): wins/draws/losses, scorelines, opponent quality.
-- Any momentum or pattern in how results were earned?
+- Completed 2026 tournament results (TEAM_FORM): wins/draws/losses, scorelines, opponent quality. If the tool reports pre-tournament, say "no 2026 matches yet" — then optionally ground for qualifying form WITH dates.
 
 ### 2. ATTACK & EXPECTED GOALS
-- Goals scored per match; shots and shots on target; expected goals (xG).
-- Is finishing running ahead of or behind chance quality (xG vs actual)?
-- Who creates and converts chances (key players)?
+- In-tournament goals per match, shots/SoT, xG (TEAM_MATCH_STATS, GOALS_PER_MATCH — completed 2026 matches only).
+- Is finishing running ahead of or behind chance quality (xG vs actual)? Only answerable once matches are played.
 
 ### 3. DEFENSIVE RECORD
-- Goals and shots conceded per match; clean sheets; expected goals against (xGA).
-- How are goals being conceded (open play, set pieces, errors)?
+- In-tournament goals conceded per match and xGA (GOALS_CONCEDED, TEAM_MATCH_STATS). Same rule: tool figures only.
 
-### 4. SET PIECES
-- Corner and free-kick threat for and against; aerial strength.
+### 4. LINEUPS, INJURIES & SUSPENSIONS (grounding only — no structured source)
+- Use fetch_narrative_context for confirmed XI/formation, injuries, and suspensions (including yellow-card accumulation). Distinguish confirmed-out vs doubtful; note the DATE of the latest update. If you cannot date it, do not report it.
 
-### 5. LINEUPS, INJURIES & SUSPENSIONS
-- Confirmed XI / formation if available; squad rotation signals.
-- Injuries AND suspensions (including yellow-card accumulation). Distinguish confirmed-out vs doubtful; note the date of the latest update.
+### 5. GROUP / TOURNAMENT CONTEXT
+- Group position, points, goal difference (GROUP_STANDINGS — note: before any matches, positions are seeding only). What result does each side need? Any "already qualified" rotation risk (later matchdays)?
 
-### 6. GROUP / TOURNAMENT CONTEXT
-- Current group position, points, goal difference; what result does each side need to advance?
-- Any "already qualified / nothing to play for" rotation risk?
+### 6. FATIGUE, REST & TRAVEL
+- Days of rest vs the opponent and travel between host cities — derivable from the match schedule; cite dates.
 
-### 7. FATIGUE, REST & TRAVEL
-- Days of rest vs the opponent; travel between host cities; cumulative minutes for key players.
+### 7. CONDITIONS
+- Venue, altitude (e.g. Mexico City), heat/weather, kickoff time — ground for weather; the venue is in the scout report.
 
-### 8. CONDITIONS
-- Venue, altitude (e.g. Mexico City), heat/weather, kickoff time.
-
-### 9. HEAD-TO-HEAD
-- Prior meetings (this or past editions) and how they played out, if relevant.
+### 8. HEAD-TO-HEAD
+- World Cup meetings from WC_H2H_HISTORY (2018/2022/2026 editions only). Broader all-time H2H requires grounding with dates — never from memory.
 
 ### YOUR SCOUT REPORT IS YOUR BASELINE
-The scout report (group standings, form, xG, odds) is your starting point. Re-fetch any stat and use grounding for lineups/injuries/suspensions/weather.`;
+The scout report (group standings, odds, any in-tournament stats) is your starting point. Re-fetch any stat and use grounding for lineups/injuries/suspensions/weather. Every number in your findings must come from a tool response, the scout report, or a DATED grounding result.`;
 
 const FLASH_INVESTIGATION_FACTORS = {
   basketball_nba: NBA_FACTORS,

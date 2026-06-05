@@ -179,6 +179,7 @@ export async function buildFlashResearchBriefing(scoutReportContent, sport, home
       .replace('americanfootball_', '')
       .replace('icehockey_', '')
       .replace('baseball_', '')
+      .replace('soccer_world_cup', 'WC') // token list is keyed 'WC'; without this the allowlist is empty and ANY token passes
       .toUpperCase();
 
     // Flash token dedup cache — prevents re-fetching the same stat within a single game analysis

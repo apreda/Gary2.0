@@ -1687,8 +1687,11 @@ async function main() {
           console.log(`╚══════════════════════════════════════════════════════════════════╝\n`);
 
           const qualifiedPicks = sportPicks.filter(p => {
-            // Filter out totals (over/under) - game picks are spread/ML only
-            if (p.type === 'total') {
+            // Filter out totals (over/under) - game picks are spread/ML only.
+            // EXCEPT soccer: the WC market is 3-way ML / Asian handicap / total
+            // goals — Gary is explicitly offered totals there and grading
+            // settles them via goal_line (soccerGrading.js).
+            if (p.type === 'total' && config.key !== 'soccer_world_cup') {
               console.log(`  ❌ Filtered: ${p.pick} (totals not included for game picks)`);
               return false;
             }

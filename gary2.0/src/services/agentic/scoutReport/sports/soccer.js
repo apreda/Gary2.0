@@ -7,6 +7,7 @@
  */
 import * as wc from '../../../fifaWorldCupService.js';
 import { buildVerifiedTaleOfTape } from '../shared/taleOfTape.js';
+import { formatTokenMenu } from '../../tools/toolDefinitions.js';
 
 function teamName(side) {
   if (typeof side === 'string') return side;
@@ -22,7 +23,8 @@ async function aggregateRateStats(teamId) {
     const completed = matches.filter(m => m.status === 'completed');
     if (!completed.length) return {};
     const ids = completed.map(m => m.id);
-    const stats = (await wc.getTeamMatchStats(ids)).filter(s => s.team_id === teamId);
+    const allRows = await wc.getTeamMatchStats(ids);
+    const stats = allRows.filter(s => s.team_id === teamId);
     if (!stats.length) return {};
     const avg = (f) => {
       const vals = stats.map(s => s[f]).filter(v => typeof v === 'number');
@@ -31,8 +33,15 @@ async function aggregateRateStats(teamId) {
     const sum = (f) => stats.map(s => s[f]).filter(v => typeof v === 'number').reduce((a, b) => a + b, 0);
     const totalPasses = sum('passes_total');
     const accuratePasses = sum('passes_accurate');
+    // xGA = the OPPONENT's xG in each of this team's matches. The API has no
+    // expected_goals_against field, but the same team_match_stats response
+    // carries the other team's row per match — average those.
+    const oppXg = allRows
+      .filter(s => s.team_id !== teamId && typeof s.expected_goals === 'number')
+      .map(s => s.expected_goals);
     return {
       xg: avg('expected_goals'),
+      xga: oppXg.length ? oppXg.reduce((a, b) => a + b, 0) / oppXg.length : undefined,
       possession_pct: avg('possession_pct'),
       shots: avg('shots_total'),
       shots_on_target: avg('shots_on_target'),
@@ -52,8 +61,10 @@ function standingsFor(standings, teamId) {
   return {
     group_position: row.position ?? undefined,
     points: row.points ?? undefined,
-    goals_for: gp > 0 ? row.goals_for / gp : (row.goals_for ?? undefined),
-    goals_against: gp > 0 ? row.goals_against / gp : (row.goals_against ?? undefined),
+    // Pre-tournament (0 played) GF/GA must read N/A, not "0.0" — a zero reads
+    // as "this team averages 0 goals" and nudges low-total reasoning.
+    goals_for: gp > 0 ? row.goals_for / gp : undefined,
+    goals_against: gp > 0 ? row.goals_against / gp : undefined,
     record: `${row.won ?? 0}-${row.drawn ?? 0}-${row.lost ?? 0}`,
     group: row.group?.name,
     played: gp,
@@ -76,8 +87,8 @@ export async function buildSoccerScoutReport(game, options = {}) {
   const homeStand = standingsFor(standings, homeId);
   const awayStand = standingsFor(standings, awayId);
 
-  const homeProfile = { teamName: homeTeam, record: homeStand.record, seasonStats: { ...homeStand, xga: undefined, ...homeAgg } };
-  const awayProfile = { teamName: awayTeam, record: awayStand.record, seasonStats: { ...awayStand, xga: undefined, ...awayAgg } };
+  const homeProfile = { teamName: homeTeam, record: homeStand.record, seasonStats: { ...homeStand, ...homeAgg } };
+  const awayProfile = { teamName: awayTeam, record: awayStand.record, seasonStats: { ...awayStand, ...awayAgg } };
 
   const stage = game.soccer_stage || 'Group Stage';
   const groupLabel = game.soccer_group ? ` (${game.soccer_group})` : '';
@@ -90,12 +101,19 @@ export async function buildSoccerScoutReport(game, options = {}) {
     `## MATCHUP: ${homeTeam} vs ${awayTeam}`,
     `FIFA World Cup 2026 — ${stage}${groupLabel}. Venue: ${game.venue || 'TBD'}.`,
     groupRows.length ? `\n### GROUP STANDINGS\n${groupRows.join('\n')}` : '',
-    `\n### ODDS (3-way moneyline)\n${ml ? `${homeTeam} ${ml.home} / Draw ${ml.draw} / ${awayTeam} ${ml.away}` : 'Odds pending'}`,
+    `\n### RAW ODDS VALUES (use these EXACT numbers — never approximate odds)`,
+    ml ? `3-way moneyline: ${homeTeam} ${ml.home} / Draw ${ml.draw} / ${awayTeam} ${ml.away}` : '3-way moneyline: pending',
+    game.soccer_spread
+      ? `Asian handicap (main line): ${homeTeam} ${game.soccer_spread.homeValue} @ ${game.soccer_spread.homeOdds} / ${awayTeam} ${game.soccer_spread.awayValue} @ ${game.soccer_spread.awayOdds}`
+      : 'Asian handicap: NOT AVAILABLE — do not pick or cite a handicap line',
+    game.soccer_total
+      ? `Total goals (main line): ${game.soccer_total.line} — Over ${game.soccer_total.over} / Under ${game.soccer_total.under}`
+      : 'Total goals: NOT AVAILABLE — do not pick or cite a total',
     `\n(Injuries, suspensions, confirmed lineups, and weather/altitude come from Flash grounding for this match.)`,
   ].filter(Boolean).join('\n');
 
   const injuries = { home: [], away: [] };
   const verifiedTaleOfTape = buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayProfile, 'WC', injuries, [], []);
 
-  return { text: reportText, verifiedTaleOfTape, injuries, tokenMenu: null };
+  return { text: reportText, verifiedTaleOfTape, injuries, tokenMenu: formatTokenMenu('WC') };
 }

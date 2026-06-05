@@ -41,3 +41,47 @@ describe('soccer pick parsing (3-way + odds-cap bypass)', () => {
     expect(out.type).toBe('spread');
   });
 });
+
+// Totals and Asian handicaps are offered to Gary (consensus odds carry both),
+// so the parser must accept them and extract the line grading reads.
+describe('soccer totals + Asian handicap parsing', () => {
+  it('accepts an Over total without a team name (no "wrong game" rejection) and extracts goal_line', () => {
+    const out = normalizePickFormat(
+      { pick: 'Over 2.5', odds: 105, type: 'total', rationale: RATIONALE },
+      'Mexico', 'South Africa', 'soccer_world_cup', {}
+    );
+    expect(out).not.toBeNull();
+    expect(out.type).toBe('total');
+    expect(out.goal_line).toBe(2.5);
+  });
+
+  it('detects an Under total from pick text alone (no explicit type)', () => {
+    const out = normalizePickFormat(
+      { pick: 'Under 2.5', odds: -145, rationale: RATIONALE },
+      'Mexico', 'South Africa', 'soccer_world_cup', {}
+    );
+    expect(out).not.toBeNull();
+    expect(out.type).toBe('total');
+    expect(out.goal_line).toBe(2.5);
+  });
+
+  it('detects an Asian handicap from pick text and extracts the handicap', () => {
+    const out = normalizePickFormat(
+      { pick: 'Mexico -1.5', odds: 125, rationale: RATIONALE },
+      'Mexico', 'South Africa', 'soccer_world_cup', {}
+    );
+    expect(out).not.toBeNull();
+    expect(out.type).toBe('asian_handicap');
+    expect(out.handicap).toBe(-1.5);
+  });
+
+  it('does NOT mistake American odds for a handicap ("Mexico -230" stays moneyline)', () => {
+    const out = normalizePickFormat(
+      { pick: 'Mexico ML -230', odds: -230, rationale: RATIONALE },
+      'Mexico', 'South Africa', 'soccer_world_cup', {}
+    );
+    expect(out).not.toBeNull();
+    expect(out.type).toBe('moneyline');
+    expect(out.handicap ?? null).toBeNull();
+  });
+});

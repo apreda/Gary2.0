@@ -85,26 +85,34 @@ export async function getMatches({ seasons = [DEFAULT_SEASON], teamIds, matchIds
 }
 
 /**
- * 90-minute regulation score = first half + second half (EXCLUDES extra time).
- * home_score/away_score include ET in knockouts, so never use them directly for
- * 90' settlement. Falls back to home_score/away_score only when half data is
- * absent AND no extra time was played (safe for not-yet-started/partial rows).
+ * 90-minute regulation score (EXCLUDES extra time).
+ * No-ET matches: home_score/away_score IS the 90' result — use it directly.
+ * ET matches: full-time includes ET, so 90' can only be derived from COMPLETE
+ * half data; partial half data returns null rather than a corrupted score.
+ * (The 2018 edition populates first_half_* but leaves second_half_* null on
+ * every row — the previous halves-sum coerced null→0 and returned the
+ * HALFTIME score for the whole tournament; verified live: the 2018 final
+ * France 4-2 Croatia read as 2-1.)
  */
 export function getRegulationScore(match) {
   if (!match) return { home: null, away: null };
-  const halvesMissing =
-    match.first_half_home_score == null && match.second_half_home_score == null &&
-    match.first_half_away_score == null && match.second_half_away_score == null;
-  if (halvesMissing) {
-    if (!match.has_extra_time && match.home_score != null) {
-      return { home: n(match.home_score), away: n(match.away_score) };
-    }
-    return { home: null, away: null };
-  }
-  return {
+  const halvesComplete =
+    match.first_half_home_score != null && match.second_half_home_score != null &&
+    match.first_half_away_score != null && match.second_half_away_score != null;
+  const halvesSum = () => ({
     home: n(match.first_half_home_score) + n(match.second_half_home_score),
     away: n(match.first_half_away_score) + n(match.second_half_away_score),
-  };
+  });
+
+  if (!match.has_extra_time) {
+    if (match.home_score != null && match.away_score != null) {
+      return { home: n(match.home_score), away: n(match.away_score) };
+    }
+    return halvesComplete ? halvesSum() : { home: null, away: null };
+  }
+
+  // Extra time played — only a complete set of half fields can yield the 90' score.
+  return halvesComplete ? halvesSum() : { home: null, away: null };
 }
 
 /**
@@ -179,13 +187,59 @@ export function selectConsensusOdds(oddsRows, vendors = PREFERRED_VENDORS) {
       homeOdds: row.spread_home_odds ?? null,
       awayValue: row.spread_away_value ?? null,
       awayOdds: row.spread_away_odds ?? null,
-    } : null,
+    } : extractMainSpread(row.markets),
     total: row.total_value != null ? {
       line: row.total_value,
       over: row.total_over_odds ?? null,
       under: row.total_under_odds ?? null,
-    } : null,
+    } : extractMainTotal(row.markets),
   };
+}
+
+// The flat spread_*/total_* fields are null on every 2026 row (verified live)
+// while the real ladders live in the nested markets[] — full-match spread
+// markets carry one Asian-handicap line each (home/away outcomes), totals
+// carry Over/Under pairs per goal line. "Main" line = most balanced juice
+// (smallest |homeOdds + awayOdds| in American terms), which lands on the
+// book's true main number (e.g. Total 2.5) rather than a ladder extreme.
+function extractMainSpread(markets) {
+  const lines = [];
+  for (const mkt of (markets || [])) {
+    if (mkt.type !== 'spread' || mkt.period !== 'match' || mkt.scope !== 'match') continue;
+    const home = (mkt.outcomes || []).find(o => o.side === 'home' || o.type === 'home');
+    const away = (mkt.outcomes || []).find(o => o.side === 'away' || o.type === 'away');
+    const value = parseFloat(home?.handicap ?? home?.line_value);
+    if (!home || !away || !Number.isFinite(value)) continue;
+    lines.push({
+      homeValue: value,
+      homeOdds: home.american_odds ?? null,
+      awayValue: parseFloat(away.handicap ?? away.line_value),
+      awayOdds: away.american_odds ?? null,
+    });
+  }
+  if (lines.length === 0) return null;
+  lines.sort((a, b) =>
+    Math.abs((a.homeOdds ?? 0) + (a.awayOdds ?? 0)) - Math.abs((b.homeOdds ?? 0) + (b.awayOdds ?? 0)));
+  return lines[0];
+}
+
+function extractMainTotal(markets) {
+  const byLine = new Map(); // line -> { over, under }
+  for (const mkt of (markets || [])) {
+    if (mkt.type !== 'total' || mkt.period !== 'match' || mkt.scope !== 'match') continue;
+    for (const o of (mkt.outcomes || [])) {
+      const line = parseFloat(o.line_value);
+      if (!Number.isFinite(line)) continue;
+      const entry = byLine.get(line) || { line, over: null, under: null };
+      if (o.type === 'over') entry.over = o.american_odds ?? null;
+      if (o.type === 'under') entry.under = o.american_odds ?? null;
+      byLine.set(line, entry);
+    }
+  }
+  const pairs = [...byLine.values()].filter(e => e.over != null && e.under != null);
+  if (pairs.length === 0) return null;
+  pairs.sort((a, b) => Math.abs(a.over + a.under) - Math.abs(b.over + b.under));
+  return pairs[0];
 }
 
 export async function getStadiums(seasons = [DEFAULT_SEASON]) {
@@ -287,6 +341,8 @@ export function formatMatchForPipeline(match, consensus = null) {
     soccer_round: match.round_name ?? null,
     soccer_group: match.group?.name ?? null,
     soccer_three_way_ml: consensus?.moneyline ?? null,
+    soccer_spread: consensus?.spread ?? null,
+    soccer_total: consensus?.total ?? null,
     description: `FIFA World Cup — ${match.stage?.name ?? ''}${match.group ? ` (${match.group.name})` : ''}`.trim(),
     _raw: match,
   };

@@ -135,6 +135,44 @@ export function extractNumericClaims(text) {
     push(m, m[1], 'sample');
   }
 
+  // ── Soccer claim classes (World Cup) — Gemini knows the 2022 tournament
+  // cold while 2026 squads/form are post-cutoff, so unsourced soccer figures
+  // are the highest-risk stale-memory numbers in the product. ──
+
+  // xG/xGA: "2.3 xG", "xG of 1.8", "1.4 expected goals"
+  for (const m of text.matchAll(/(\d+(?:\.\d+)?)\s*(?:xG\b|xGA\b|expected goals)/gi)) push(m, m[1], 'xg');
+  for (const m of text.matchAll(/(?:xG|xGA)\s*(?:of|:)?\s*(\d+(?:\.\d+)?)/gi)) push(m, m[1], 'xg');
+
+  // Goals per game/match (soccer unit variants of the per-game class)
+  for (const m of text.matchAll(/(\d+(?:\.\d+)?)\s*goals?\s*(?:scored|conceded)?\s*per\s*(?:game|match)/gi)) {
+    push(m, m[1], 'per-game');
+  }
+
+  // Possession percentages, including INTEGER form ("controls 61% of possession")
+  for (const m of text.matchAll(/(\d{1,3}(?:\.\d)?)\s*%[^.]{0,25}possession/gi)) push(m, m[1], 'possession');
+  for (const m of text.matchAll(/possession[^.]{0,25}?(\d{1,3}(?:\.\d)?)\s*%/gi)) push(m, m[1], 'possession');
+
+  // FIFA/world ranking: "ranked 12th", "FIFA ranking of 64", "#3-ranked"
+  for (const m of text.matchAll(/rank(?:ed|ing)?\s*(?:of\s*)?(?:#|No\.?\s*)?(\d{1,3})(?:st|nd|rd|th)?\b/gi)) {
+    push(m, m[1], 'ranking');
+  }
+
+  // Caps/international goals: "9 goals in 14 caps" — pure roster-memory class
+  for (const m of text.matchAll(/(\d{1,3})\s+goals?\s+in\s+(\d{1,3})\s+(?:caps|appearances|internationals)/gi)) {
+    push(m, m[2], 'caps', { requireAll: [canon(m[1]), canon(m[2])] });
+  }
+
+  // Derived match-count claims: "won 3 of the last 4 meetings", "5 clean
+  // sheets", "17 shots, 6 on target" — computable from listed results, so a
+  // corrective retry can't source them as literals; warn-only via windowed.
+  for (const m of text.matchAll(/(?:won|lost|drawn?)\s+(\d{1,2})\s+of\s+(?:the\s+)?last\s+(\d{1,2})\s+(?:meetings|matches|games)/gi)) {
+    push(m, m[1], 'h2h-count', { windowed: true });
+  }
+  for (const m of text.matchAll(/(\d{1,2})\s+clean sheets?/gi)) push(m, m[1], 'clean-sheets', { windowed: true });
+  for (const m of text.matchAll(/(\d{1,3})\s+shots(?:[^.]{0,20}?(\d{1,2})\s+on target)?/gi)) {
+    push(m, m[1], 'shots', { windowed: true });
+  }
+
   return claims;
 }
 

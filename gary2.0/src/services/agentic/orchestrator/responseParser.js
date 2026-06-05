@@ -327,12 +327,29 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
     parsed.type = 'moneyline';
     console.log(`[Orchestrator] 🏒 NHL: Defaulting to moneyline`);
   }
-  // SOCCER (World Cup): Draw is a valid 3-way selection; keep Gary's explicit
-  // total/asian_handicap type, else default an ML pick to moneyline.
+  // SOCCER (World Cup): 3-way market — Draw is a valid selection; totals and
+  // Asian handicaps are also offered to Gary (the consensus odds carry both),
+  // so detect them from the pick text and extract the line so grading
+  // (soccerGrading.js reads pick.goal_line / pick.handicap) can settle them.
   else if (isSoccer && parsed.pick) {
-    if (/\b(draw|tie)\b/i.test(parsed.pick)) {
+    const pickText = parsed.pick;
+    const overUnderMatch = pickText.match(/\b(over|under)\s+(\d+(?:\.\d+)?)/i);
+    // Handicap lines are small (±0.25 to ±4ish); larger signed numbers in the
+    // pick text are odds (e.g. "Mexico -230") and must NOT read as a handicap.
+    const signedNums = [...pickText.matchAll(/([+-]\d+(?:\.\d+)?)/g)].map(m => parseFloat(m[1]));
+    const handicapValue = signedNums.find(v => Math.abs(v) < 10);
+    const handicapMatch = handicapValue != null;
+    if (/\b(draw|tie)\b/i.test(pickText)) {
       parsed.type = 'draw';
       console.log(`[Orchestrator] ⚽ WC: Detected Draw pick — bypassing ML caps & team check`);
+    } else if (parsed.type === 'total' || overUnderMatch) {
+      parsed.type = 'total';
+      parsed.goal_line = parsed.goal_line ?? (overUnderMatch ? parseFloat(overUnderMatch[2]) : null);
+      console.log(`[Orchestrator] ⚽ WC: Detected total pick (line ${parsed.goal_line ?? '?'})`);
+    } else if (parsed.type === 'asian_handicap' || (handicapMatch && !/\bml\b|moneyline/i.test(pickText))) {
+      parsed.type = 'asian_handicap';
+      parsed.handicap = parsed.handicap ?? handicapValue ?? null;
+      console.log(`[Orchestrator] ⚽ WC: Detected Asian handicap pick (${parsed.handicap ?? '?'})`);
     } else if (!parsed.type) {
       parsed.type = 'moneyline';
       console.log(`[Orchestrator] ⚽ WC: Detected moneyline pick`);
@@ -519,8 +536,8 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
   }
 
   // Validate that the pick references one of the two teams in the game.
-  // Soccer Draw picks legitimately name neither team — exempt them.
-  if (parsed.type !== 'draw' && !validatePickTeam(pickText, homeTeam, awayTeam)) {
+  // Soccer Draw picks and totals ("Over 2.5") legitimately name neither team — exempt them.
+  if (parsed.type !== 'draw' && parsed.type !== 'total' && !validatePickTeam(pickText, homeTeam, awayTeam)) {
     console.error(`[Orchestrator] REJECTED: Pick "${pickText}" does not reference ${homeTeam} or ${awayTeam} — wrong game`);
     return null;
   }
@@ -605,6 +622,11 @@ export function normalizePickFormat(parsed, homeTeam, awayTeam, sport, gameOdds 
     moneylineAway: parsed.moneylineAway ?? gameOdds.moneyline_away ?? null,
     total: parsed.total ?? gameOdds.total ?? null,
     totalOdds: parsed.totalOdds ?? gameOdds.total_over_odds ?? null,
+    // Soccer market lines — soccerGrading.js settles totals via goal_line and
+    // Asian handicaps via handicap; without these the pick stores null and
+    // can never be graded.
+    goal_line: parsed.goal_line ?? null,
+    handicap: parsed.handicap ?? null,
     // Additional judge fields
     momentum: parsed.momentum || null,
     agentic: true // Flag to identify agentic picks
