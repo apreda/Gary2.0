@@ -1879,15 +1879,6 @@ struct HomeView: View {
                         .foregroundStyle(GaryColors.gold.opacity(0.9))
                     FlippablePickCard(pick: pick, gameResult: nil, showSportBadge: true)
                 } else if !loading, let yPick = yesterdayTopPick {
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("Last night's top pick")
-                            .font(GaryFonts.display(17))
-                            .foregroundStyle(GaryColors.sectionHead)
-                        Text("Today's board posts closer to game time")
-                            .font(.system(size: 12))
-                            .foregroundStyle(GaryColors.sectionSub)
-                    }
-                    .padding(.bottom, 4)
                     FlippablePickCard(pick: yPick, gameResult: yesterdayTopPickResult, showSportBadge: true)
                 }
                 if let prop = freeProp {
@@ -2648,6 +2639,7 @@ struct PremiumPicksView: View {
     // Terminal Tape: GAMES <-> PROPS mode (props are a peer, one tap away — not buried below games).
     enum Mode { case games, props }
     @State private var mode: Mode = .games
+    @State private var jumpedLeague: String? = nil
     @Namespace private var tabNS
 
     // In-season / imminent sports shown as rows (placeholders when a sport has no pick yet).
@@ -2698,9 +2690,8 @@ struct PremiumPicksView: View {
                         } else {
                             Section {
                                 jumpBar(proxy)
-                                    .padding(.top, 12)
                                 modeContent
-                                    .padding(.top, 14)
+                                    .padding(.top, 16)
                                     .padding(.bottom, 120)
                             } header: {
                                 toggleBar
@@ -2714,28 +2705,36 @@ struct PremiumPicksView: View {
     }
 
     /// Sport chips that jump the page to a league's shelf in the active mode.
+    /// Spread across the full row; a chip wears its sport color only when
+    /// it's the one you jumped to (the Picks chips' behavior), dim otherwise.
     private func jumpBar(_ proxy: ScrollViewProxy) -> some View {
         let leagues = mode == .games ? gameShelves.map(\.league) : propShelves.map(\.league)
-        return ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(leagues, id: \.self) { lg in
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.35)) {
-                            proxy.scrollTo((mode == .games ? "g-" : "p-") + lg, anchor: .top)
-                        }
-                    } label: {
-                        Text(lg)
-                            .font(GaryFonts.mono(10, bold: true)).tracking(0.8)
-                            .foregroundStyle(lg == "MLB" ? AnyShapeStyle(GaryColors.mlbFieldText)
-                                                         : AnyShapeStyle(Sport.from(league: lg).accentColor))
-                            .padding(.horizontal, 7).padding(.vertical, 6)
-                            .contentShape(Rectangle())
+        return HStack(spacing: 0) {
+            ForEach(leagues, id: \.self) { lg in
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) { jumpedLeague = lg }
+                    withAnimation(.easeInOut(duration: 0.35)) {
+                        proxy.scrollTo((mode == .games ? "g-" : "p-") + lg, anchor: .top)
                     }
-                    .buttonStyle(.plain)
+                } label: {
+                    Text(lg)
+                        .font(GaryFonts.mono(12, bold: true)).tracking(0.8)
+                        .foregroundStyle(jumpChipStyle(lg))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
             }
-            .padding(.horizontal, 16)
         }
+        .padding(.horizontal, 10)
+    }
+
+    private func jumpChipStyle(_ lg: String) -> AnyShapeStyle {
+        guard jumpedLeague == lg else { return AnyShapeStyle(Color.white.opacity(0.38)) }
+        if lg == "MLB" { return AnyShapeStyle(GaryColors.mlbFieldText) }
+        return AnyShapeStyle(Sport.from(league: lg).accentColor)
     }
 
     // MARK: - Header / states
@@ -2773,10 +2772,9 @@ struct PremiumPicksView: View {
         }
         .padding(.horizontal, 16)
         .padding(.top, 10)
-        .padding(.bottom, 11)
-        // No fill — the toggle sits directly on the page like every other
-        // component. A hairline underneath is all the structure it needs.
-        .overlay(Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1), alignment: .bottom)
+        .padding(.bottom, 8)
+        // No fill, no hairline — the underline marks the active tab and
+        // proximity does the separating (8 inside the nav group, 24+ after).
     }
 
     private func tabSegment(_ label: String, count: Int, active: Bool, action: @escaping () -> Void) -> some View {
@@ -10949,7 +10947,6 @@ struct PicksCarouselView: View {
                 }
                 .onChange(of: page) { p in withAnimation { proxy.scrollTo(p, anchor: .center) } }
             }
-            Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1)
             if sports.count > 1 {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 18) {
@@ -10959,13 +10956,13 @@ struct PicksCarouselView: View {
                                 Text(s)
                                     .font(GaryFonts.mono(10, bold: true)).tracking(0.8)
                                     .foregroundStyle(sportChipStyle(s, on: on))
+                                    .frame(minHeight: 44)
                                     .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                         }
                     }
                     .padding(.horizontal, 16)
-                    .padding(.vertical, 9)
                 }
             }
         }
@@ -11089,18 +11086,9 @@ struct PicksTodayPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             if let gp = topGamePick {
-                if gp.isYesterday {
-                    // Readable section-header treatment — not 10pt tracked caps.
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("Last night's top pick")
-                            .font(GaryFonts.display(17))
-                            .foregroundStyle(GaryColors.sectionHead)
-                        Text("Today's board posts closer to game time")
-                            .font(.system(size: 12))
-                            .foregroundStyle(GaryColors.sectionSub)
-                    }
-                    .padding(.horizontal, 16).padding(.top, 8)
-                } else {
+                // No recap label — the card's WON/LOST capsule self-describes
+                // ("labels are a last resort"); only a fresh pick earns words.
+                if !gp.isYesterday {
                     Text("FREE PICK")
                         .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
                         .foregroundStyle(GaryColors.gold.opacity(0.9))
