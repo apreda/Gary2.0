@@ -2175,11 +2175,10 @@ struct HomeMarqueeHero: View {
         }
         .padding(14)
         .background(
+            // House charcoal, matte — the sport accent lives ONLY in the
+            // chip dot. No tinted gradients (the AI dark-SaaS wash is banned).
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(
-                    LinearGradient(colors: [tint.opacity(0.16), Color(hex: "#101114")],
-                                   startPoint: .topLeading, endPoint: .bottomTrailing)
-                )
+                .fill(Color(hex: "#15171C"))
                 .overlay(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .stroke(Color.white.opacity(0.08), lineWidth: 1)
