@@ -5752,25 +5752,20 @@ struct BillfoldView: View {
 
                 Spacer()
 
-                // LINE ⟷ CANDLES — ink-stamped toggle on the statement
-                HStack(spacing: 3) {
+                // LINE ⟷ CANDLES — no bubbles: the active mode wears brass,
+                // the rest stay dim (the app-wide colored-when-active rule).
+                HStack(spacing: 14) {
                     ForEach(ChartMode.allCases, id: \.self) { mode in
                         Button {
                             withAnimation(.easeOut(duration: 0.15)) { chartMode = mode }
                             scrubDate = nil
                         } label: {
                             Text(mode.rawValue)
-                                .font(.system(size: 8.5, weight: .bold))
+                                .font(.system(size: 9.5, weight: .bold))
                                 .tracking(0.6)
-                                .foregroundStyle(chartMode == mode ? Color.black : ink.opacity(0.5))
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(
-                                    Capsule().fill(chartMode == mode ? brass : Color.clear)
-                                )
-                                .overlay(
-                                    Capsule().stroke(ink.opacity(chartMode == mode ? 0 : 0.3), lineWidth: 1)
-                                )
+                                .foregroundStyle(chartMode == mode ? brass : ink.opacity(0.45))
+                                .frame(minHeight: 32)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                     }
