@@ -2604,6 +2604,10 @@ struct PremiumPicksView: View {
     @State private var gameShelves: [GameShelf] = []
     @State private var propShelves: [PropShelf] = []
     @State private var gameResultsMap: [String: String] = [:]   // "away@home" -> won/lost/push
+    // Yesterday's TRUE game record — same source of truth as the Home tape
+    // (fetchYesterdayGameRecord). The matchup map above is for stamping cards;
+    // maps dedupe (doubleheaders collide), so it must never be COUNTED.
+    @State private var yesterdayRec: (wins: Int, losses: Int, pushes: Int)? = nil
 
     // Terminal Tape: GAMES <-> PROPS mode (props are a peer, one tap away — not buried below games).
     enum Mode { case games, props }
@@ -2620,13 +2624,11 @@ struct PremiumPicksView: View {
     private var propCount: Int { propShelves.reduce(0) { $0 + $1.props.count } }
     private var liveCount: Int { gameCount + propCount }
 
-    /// Today's settled record from gameResultsMap -> (wins, losses, win%). nil if nothing settled.
+    /// Yesterday's true game record (same number the Home tape shows) ->
+    /// (wins, losses, win%). nil while loading or when nothing graded.
     private var settledRecord: (wins: Int, losses: Int, pct: Int)? {
-        let vals = gameResultsMap.values.map { $0.lowercased() }
-        let w = vals.filter { $0 == "won" }.count
-        let l = vals.filter { $0 == "lost" }.count
-        guard w + l > 0 else { return nil }
-        return (w, l, Int((Double(w) / Double(w + l) * 100).rounded()))
+        guard let r = yesterdayRec, r.wins + r.losses > 0 else { return nil }
+        return (r.wins, r.losses, Int((Double(r.wins) / Double(r.wins + r.losses) * 100).rounded()))
     }
 
     /// League codes that have content today, canonical order first, extras appended.
@@ -2716,11 +2718,13 @@ struct PremiumPicksView: View {
         .padding(.bottom, 14)
     }
 
-    // Terminal status line: today's record / win% | live play count | sports in play.
+    // Terminal status line: yesterday's record / win% | live play count |
+    // sports in play. The record names its window — unlabeled stats are how
+    // betting apps lose trust.
     private var statusLine: some View {
         HStack(spacing: 8) {
             HStack(spacing: 5) {
-                Text("REC").font(GaryFonts.mono(11, bold: true)).foregroundStyle(.white.opacity(0.40))
+                Text("YDAY").font(GaryFonts.mono(11, bold: true)).foregroundStyle(.white.opacity(0.40))
                 if let rec = settledRecord {
                     Text("\(rec.wins)-\(rec.losses)").font(GaryFonts.mono(11)).foregroundStyle(.white.opacity(0.78))
                     Text("·").font(GaryFonts.mono(11)).foregroundStyle(.white.opacity(0.30))
@@ -3010,10 +3014,12 @@ struct PremiumPicksView: View {
         async let yGameF = SupabaseAPI.fetchDailyPicks(date: yesterday)
         async let resultsF = SupabaseAPI.fetchAllGameResults(since: yesterday)
         async let todayPropsF = SupabaseAPI.fetchPropPicks(date: today)
+        async let yRecF = SupabaseAPI.fetchYesterdayGameRecord()
 
         let todayGame = (try? await todayGameF) ?? []
         let yGame = (try? await yGameF) ?? []
         let results = (try? await resultsF) ?? []
+        let yRec = try? await yRecF
         let todayProps = (try? await todayPropsF) ?? []
 
         // Yesterday's result map for settled (last-result) shelves.
@@ -3054,6 +3060,7 @@ struct PremiumPicksView: View {
 
         await MainActor.run {
             gameResultsMap = rMap
+            yesterdayRec = yRec
             gameShelves = gShelves
             propShelves = pShelves
             loading = false
