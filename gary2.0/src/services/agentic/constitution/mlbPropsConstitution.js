@@ -99,9 +99,12 @@ For each pick, provide:
 1. **THE PICK:** Player Name OVER/UNDER Stat Line (Odds)
 2. **MATCHUP:** Opposing pitcher and L/R matchup
 3. **THE KEY FACTOR:** The game-specific evidence supporting your pick
-4. **PARK/WEATHER CHECK:** How venue and conditions affect this prop
+4. **PARK/WEATHER CHECK:** ONLY if park/weather data appears in your provided context — otherwise write exactly "No venue/weather data provided." Never recall a park factor, wind reading, or temperature from memory; an invented "106 park factor" is a fabrication even if it sounds right.
 5. **VOLUME FLOOR:** Expected PA/AB, lineup spot, game total context
 6. **THE RISK:** Concrete scenario where this loses
+
+### [DATA BOUNDARIES — HARD RULE]
+The props pipeline does NOT currently provide: park factors, weather/wind, pitcher pitch-mix percentages, or per-pitch-type batting splits. The awareness sections above explain WHY those factors matter so you can use them WHEN they appear in your context — they are not an invitation to supply values from training memory. If a factor's data is absent, name the factor as unexamined or omit it; never attach a number to it.
 `;
 
 // ── Sectioned export ─────────────────────────────────────────────────

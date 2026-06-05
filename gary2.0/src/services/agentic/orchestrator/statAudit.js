@@ -215,6 +215,35 @@ export function auditPickRationale(pick, messages) {
 }
 
 /**
+ * Audit a props picks array (warn-only — props ship multiple picks per
+ * response, so a corrective retry is structurally messier than for game
+ * picks; phase 1 is visibility). Mutates each pick: attaches
+ * _statAuditWarnings when its rationale cites numbers absent from the
+ * provided data. Returns total unsupported count for logging.
+ *
+ * The June 4 props audit found rationales citing Statcast/pitch-mix/park
+ * figures that no props tool fetched (e.g. '.400 vs four-seam/slider' while
+ * the context logged 'Statcast: NOT AVAILABLE') — this makes that visible.
+ */
+export function auditPropsPicks(picks, messages) {
+  let total = 0;
+  for (const p of (picks || [])) {
+    const rationale = p?.rationale;
+    if (!rationale || typeof rationale !== 'string') continue;
+    const audit = auditPickRationale({ rationale }, messages);
+    if (audit.unsupported.length > 0) {
+      p._statAuditWarnings = audit.unsupported;
+      total += audit.unsupported.length;
+      console.warn(`[StatAudit] ⚠️ Props pick "${p.player ?? p.pick ?? '?'}": ${audit.unsupported.length} numeric claim(s) not in provided data:\n  ${audit.unsupported.join('\n  ')}`);
+    }
+  }
+  if (total === 0 && (picks || []).length > 0) {
+    console.log(`[StatAudit] ✓ Props: all numeric claims across ${picks.length} pick(s) trace to provided data`);
+  }
+  return total;
+}
+
+/**
  * One corrective re-prompt listing the untraceable figures. Process-level
  * instruction only: same decision, same side, same odds — just fix the prose.
  */

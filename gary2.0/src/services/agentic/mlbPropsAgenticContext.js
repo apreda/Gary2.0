@@ -71,23 +71,32 @@ async function getPlayerStatcastSummary(playerId, playerName, playerGameLogs) {
 
     if (allPAs.length === 0) return null;
 
-    // Compute Statcast metrics
-    const exitVelos = allPAs
-      .map(pa => pa.exit_velocity ?? pa.exitVelocity ?? pa.exit_velo)
+    // Batted-ball data lives on the IN-PLAY PITCH inside each PA's pitches[]
+    // array (pitch_call_code 'hit_into_play' carries exit_velocity,
+    // launch_angle, is_barrel). The previous version read these fields off the
+    // PA object where they never existed, so extraction yielded 0 usable rows
+    // on EVERY run and the Statcast section was permanently 'NOT AVAILABLE' —
+    // which the rationale then filled by fabrication (verified live June 4).
+    const inPlayPitches = allPAs
+      .map(pa => (pa.pitches || []).find(p => p.pitch_call_code === 'hit_into_play'))
+      .filter(Boolean);
+
+    const exitVelos = inPlayPitches
+      .map(p => p.exit_velocity)
       .filter(v => v != null && v > 0);
 
-    const launchAngles = allPAs
-      .map(pa => pa.launch_angle ?? pa.launchAngle)
+    const launchAngles = inPlayPitches
+      .map(p => p.launch_angle)
       .filter(v => v != null);
 
-    const barrels = allPAs.filter(pa => pa.is_barrel || pa.isBarrel || pa.barrel === true);
+    const barrels = inPlayPitches.filter(p => p.is_barrel === true);
     const hardHits = exitVelos.filter(v => v >= 95);
 
     // Need at least some exit velocity data for meaningful metrics
     if (exitVelos.length === 0) return null;
 
     const avgExitVelo = exitVelos.reduce((a, b) => a + b, 0) / exitVelos.length;
-    const barrelRate = (barrels.length / allPAs.length) * 100;
+    const barrelRate = (barrels.length / inPlayPitches.length) * 100;
     const hardHitRate = (hardHits.length / exitVelos.length) * 100;
     const avgLaunchAngle = launchAngles.length > 0
       ? launchAngles.reduce((a, b) => a + b, 0) / launchAngles.length

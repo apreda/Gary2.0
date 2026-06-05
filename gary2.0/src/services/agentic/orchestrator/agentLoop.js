@@ -5,7 +5,7 @@ import { extractTextualSummaryForModelSwitch, buildFlashResearchBriefing } from 
 import { createCostTracker } from './costTracker.js';
 import { buildPass1Message, buildPass25Message, buildPass25PropsMessage, buildPass3Unified, buildPass3Props, FINALIZE_PROPS_TOOL, getFinalizePropsToolForSport, PROPS_PICK_SCHEMA } from './passBuilders.js';
 import { parseGaryResponse, parsePropsResponse, normalizePickFormat, determineCurrentPass } from './responseParser.js';
-import { auditPickRationale, buildStatAuditRetryMessage } from './statAudit.js';
+import { auditPickRationale, auditPropsPicks, buildStatAuditRetryMessage } from './statAudit.js';
 import { isInvestigationSufficient, summarizeStatForContext, formatNum, formatPct, summarizePlayerGameLogs, summarizeMlbPlayerGameLogs, summarizePlayerStats, summarizeNbaPlayerAdvancedStats, pruneContextIfNeeded, normalizeSportToLeague, MAX_CONTEXT_MESSAGES, PRUNE_AFTER_ITERATION } from './orchestratorHelpers.js';
 import { fetchStats, clearStatRouterCache } from '../tools/statRouters/index.js';
 import { getConstitution } from '../constitution/index.js';
@@ -735,6 +735,10 @@ INVESTIGATION COMPLETE`;
             });
             continue;
           }
+
+          // Stat audit (warn-only): flag rationale numbers absent from the
+          // provided data. Props previously shipped completely unaudited.
+          auditPropsPicks(validPicks, messages);
 
           // Return the props picks immediately
           return {
@@ -1912,6 +1916,8 @@ INVESTIGATION COMPLETE`
     if (isPropsMode) {
       const propsParsed = parsePropsResponse(message.content, null);
       if (propsParsed && propsParsed.length > 0) {
+        // Stat audit (warn-only) — same contract as the finalize_props path.
+        auditPropsPicks(propsParsed, messages);
         return {
           picks: propsParsed,
           toolCallHistory, iterations: iteration,

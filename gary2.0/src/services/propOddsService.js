@@ -23,14 +23,25 @@ const normalizeTeamName = (name) => _normalizeTeamName(name).replace(/\s+/g, '')
 const MIN_ACCEPTABLE_ODDS = -200;  // -200 OK, -201 filtered
 const MAX_ACCEPTABLE_ODDS = 400;   // +400 OK, +401 filtered
 
+// Per-prop-type upper-bound overrides. Home run props live almost entirely
+// above +400 (typical market +250 to +900) — the universal cap stripped nearly
+// every HR side before the hrOnly runner ever saw them, making HR-picks mode
+// effectively dead. HR overs are intentionally long odds; the break-even math
+// is handled at pick time, not by excluding the market.
+const MAX_ODDS_BY_PROP_TYPE = {
+  home_runs: 900,
+};
+
 /**
  * Check if odds are within acceptable range
  * @param {number} odds - American odds value
+ * @param {string} [propType] - Prop type for per-type upper bounds
  * @returns {boolean} - True if odds are acceptable
  */
-const isOddsAcceptable = (odds) => {
+const isOddsAcceptable = (odds, propType) => {
   if (odds === null || odds === undefined) return false;
-  return odds >= MIN_ACCEPTABLE_ODDS && odds <= MAX_ACCEPTABLE_ODDS;
+  const maxForType = MAX_ODDS_BY_PROP_TYPE[propType] ?? MAX_ACCEPTABLE_ODDS;
+  return odds >= MIN_ACCEPTABLE_ODDS && odds <= maxForType;
 };
 
 export const propOddsService = {
@@ -54,7 +65,7 @@ export const propOddsService = {
     // Process each prop to split into separate over/under entries and filter by odds
     for (const prop of props) {
       // Only include the OVER side if odds are in acceptable range (-200 to +400)
-      if (prop.over_odds !== null && isOddsAcceptable(prop.over_odds)) {
+      if (prop.over_odds !== null && isOddsAcceptable(prop.over_odds, prop.prop_type)) {
         splitProps.push({
           player: prop.player,
           player_id: prop.player_id,  // FIXED: Preserve player_id for context building
@@ -74,7 +85,7 @@ export const propOddsService = {
       }
       
       // Only include the UNDER side if odds are in acceptable range (-200 to +400)
-      if (prop.under_odds !== null && isOddsAcceptable(prop.under_odds)) {
+      if (prop.under_odds !== null && isOddsAcceptable(prop.under_odds, prop.prop_type)) {
         splitProps.push({
           player: prop.player,
           player_id: prop.player_id,  // FIXED: Preserve player_id for context building

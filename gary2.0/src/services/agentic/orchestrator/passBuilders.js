@@ -741,9 +741,18 @@ export function buildPass3Props(homeTeam, awayTeam, propContext = {}) {
     return `- ${c.player} (${c.team}): ${propsStr}${formStr ? ` [${formStr}]` : ''}`;
   }).join('\n');
 
-  // Format available lines
+  // Format available lines — with break-even probability per side so the
+  // model anchors its judgment to the price, not just the narrative.
+  const breakeven = (odds) => {
+    const n = Number(odds);
+    if (!Number.isFinite(n) || n === 0) return null;
+    const p = n < 0 ? (-n / (-n + 100)) : (100 / (n + 100));
+    return `${(p * 100).toFixed(0)}%`;
+  };
   const linesList = (availableLines || []).map(l => {
-    return `- ${l.player}: ${l.prop_type} ${l.line} (O: ${l.over_odds || 'N/A'} / U: ${l.under_odds || 'N/A'})`;
+    const beO = breakeven(l.over_odds);
+    const beU = breakeven(l.under_odds);
+    return `- ${l.player}: ${l.prop_type} ${l.line} (O: ${l.over_odds || 'N/A'}${beO ? ` needs >${beO}` : ''} / U: ${l.under_odds || 'N/A'}${beU ? ` needs >${beU}` : ''})`;
   }).join('\n');
 
   // Format player stats summary
@@ -791,6 +800,10 @@ You just analyzed ${awayTeam} @ ${homeTeam} in depth. Now evaluate PLAYER PROPS 
 
 Connect your game analysis to individual player production. The line reflects established roles, long-term absences, and recent production patterns.
 
+**THE UNDER IS A FIRST-CLASS PICK.** For EVERY prop you seriously consider, evaluate BOTH sides before choosing. The under wins whenever the player falls short — pitching matchups, reduced volume, cold contact quality, and blowout substitutions all pay the under. A prop slate that is all overs means you evaluated only half the market. Historically, graded over-picks in this product have hit far below their break-even while unders have cleared theirs — treat that asymmetry as a standing reason to take the under seriously.
+
+**PRICE ANCHOR (HARD RULE):** Each line above shows the break-even win probability its odds require ("needs >X%"). Only pick a side if your honest estimate of its probability EXCEEDS its break-even number. A +270 over needs to hit just 27% of the time — but if your real estimate is 15%, it is a losing bet at any narrative quality. State the side's break-even % in your key_stats.
+
 **DIVERSITY CHECK:** If all picks are the same direction or on the most obvious players, re-examine independently.
 
 Select your 2 best props from DIFFERENT players. Call finalize_props with your picks. Rationale should read like a game pick rationale — specific stats and matchup reasoning.
@@ -802,6 +815,7 @@ Do NOT select two props from the same player.
 Do NOT fabricate stats or lines not provided in the data.
 Do NOT pick a prop just because the player is "good" — identify a specific edge the line has not absorbed.
 Do NOT include confidence percentages or probability estimates in your rationale.
+Do NOT default to the over — an over pick must beat the under on evidence, not on excitement.
 </negative_constraints>
 </props_instructions>
 `.trim();
