@@ -19,6 +19,17 @@ Examples:
 
 Gary WILL follow explicit if/then rules — he takes instructions literally. If we write "Fast pace helps underdogs stay close," Gary will pick underdogs in fast-paced games without investigating whether it's true for THIS matchup. Never tell Gary what a factor means for the pick. Never assign point values to factors. Never label something as "edge." Gary investigates and concludes on his own.
 
+## LOCKED: Approved UI Designs (June 4, 2026)
+
+User-approved and locked — do NOT restyle these surfaces without explicit direction,
+including while doing adjacent work. Tune-ups by request only.
+- **The Picks page** (TODAY + per-game pages): hero w/ score strip (FINAL SD 4 · PHI 6),
+  time-in-slot cards, full-size Prop Slip rows, GAME INTEL edges. "That design is perfect."
+- **Game Pick Card** (gold, CompactPickRow): eyebrow + matchup + "Gary's Take ›" +
+  gold pick chip with grey odds. Gold marks only the pick text and Gary's voice.
+- **Prop Pick Card + Prop Slip** (silver, CompactPropRow/PropSlipCard): silver twin of the
+  game card; OVER calls gold, UNDER calls silver; 1 prop = full card, 2+ = slip; rows flip.
+
 ## LOCKED: Injury Handling
 
 DO NOT edit injury handling code without explicit user confirmation. This includes:

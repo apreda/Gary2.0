@@ -8332,7 +8332,10 @@ struct FlippableScoreboardCard: View {
 
     var body: some View {
         ZStack {
+            // fixedSize: natural-height layout under the pinned frame (see
+            // FlippablePickCard) — keeps the front from compressing.
             ScoreboardPickCard(pick: pick, gameResult: gameResult, showSportBadge: showSportBadge)
+                .fixedSize(horizontal: false, vertical: true)
                 .background(GeometryReader { g in
                     Color.clear.preference(key: PickCardHeightKey.self, value: g.size.height)
                 })
@@ -8372,7 +8375,12 @@ struct FlippablePickCard: View {
 
     var body: some View {
         ZStack {
+            // fixedSize: the front lays out at its NATURAL height even while the
+            // ZStack frame is pinned to frontH — otherwise the measurement reads
+            // the clamped size, frontH never grows, and minimumScaleFactor texts
+            // (the matchup names) get squeezed to relieve the height pressure.
             CompactPickRow(pick: pick, gameResult: gameResult, finalScore: finalScore, showSportBadge: showSportBadge, liveInSlot: liveInSlot)
+                .fixedSize(horizontal: false, vertical: true)
                 .background(GeometryReader { g in
                     Color.clear.preference(key: PickCardHeightKey.self, value: g.size.height)
                 })
@@ -8597,7 +8605,10 @@ struct FlippablePropCard: View {
 
     var body: some View {
         ZStack {
+            // fixedSize: natural-height layout under the pinned frame (see
+            // FlippablePickCard) — keeps the name from scaling down.
             CompactPropRow(prop: prop, gameResult: gameResult, showSportBadge: showSportBadge, liveInSlot: liveInSlot)
+                .fixedSize(horizontal: false, vertical: true)
                 .background(GeometryReader { g in
                     Color.clear.preference(key: PickCardHeightKey.self, value: g.size.height)
                 })
@@ -11315,7 +11326,10 @@ struct PropSlipCard: View {
 
     var body: some View {
         ZStack {
+            // fixedSize: natural-height layout under the pinned frame (see
+            // FlippablePickCard) — keeps the rows from compressing.
             front
+                .fixedSize(horizontal: false, vertical: true)
                 .background(GeometryReader { g in
                     Color.clear.preference(key: PickCardHeightKey.self, value: g.size.height)
                 })

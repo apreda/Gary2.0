@@ -2,11 +2,11 @@
 /**
  * Live Scores Poller
  *
- * Snapshots today's slate (MLB / NBA / WC) into the `live_scores` Supabase
- * table so the iOS app can show scores while games are in progress. Designed
- * to run every ~2 minutes via launchd (com.gary2.live-scores): one cached BDL
- * call per league, upsert one row per game, exit. When nothing is live the
- * whole run is a couple of cheap cached reads — safe to fire all day.
+ * Snapshots today's slate (MLB / NBA / NHL / WC) into the `live_scores`
+ * Supabase table so the iOS app can show scores while games are in progress.
+ * Designed to run every ~2 minutes via launchd (com.gary2.live-scores): one
+ * cached call per league, upsert one row per game, exit. When nothing is live
+ * the whole run is a couple of cheap cached reads — safe to fire all day.
  *
  * Status normalization: scheduled | live | final. `detail` is a short
  * render-ready string ("INN 7", "Q3 4:12", "64'") composed here so the app
@@ -147,6 +147,44 @@ function nbaRows() {
   }));
 }
 
+// NHL via the league's public score API (no key). gameState values observed
+// live on 2026-06-04: FUT/PRE (scheduled), LIVE/CRIT (in progress),
+// FINAL/OFF (settled). Detail composes "P2 12:51" / "INT1" / "OT 4:31" / "SO".
+async function nhlRows() {
+  const { data } = await axios.get(`https://api-web.nhle.com/v1/score/${targetDate}`, { timeout: 15000 });
+  return (data?.games || [])
+    .filter((g) => g.gameDate === targetDate)
+    .map((g) => {
+      const state = String(g.gameState || '').toUpperCase();
+      const status = ['FINAL', 'OFF'].includes(state) ? 'final'
+        : ['LIVE', 'CRIT'].includes(state) ? 'live' : 'scheduled';
+      let detail = null;
+      if (status === 'live') {
+        const pd = g.periodDescriptor || {};
+        const n = Number(g.period ?? pd.number);
+        const label = pd.periodType === 'SO' ? 'SO'
+          : pd.periodType === 'OT' ? 'OT'
+          : Number.isFinite(n) && n > 0 ? `P${n}` : 'LIVE';
+        detail = g.clock?.inIntermission && Number.isFinite(n) ? `INT${n}`
+          : g.clock?.timeRemaining ? `${label} ${g.clock.timeRemaining}` : label;
+      } else if (status === 'final') {
+        detail = 'FINAL';
+      }
+      return {
+        league: 'NHL',
+        game_id: String(g.id),
+        away_abbr: g.awayTeam?.abbrev ?? null,
+        home_abbr: g.homeTeam?.abbrev ?? null,
+        away_score: numOrNull(g.awayTeam?.score),
+        home_score: numOrNull(g.homeTeam?.score),
+        status,
+        detail,
+        outs: null,
+        bases: null,
+      };
+    });
+}
+
 function wcRows() {
   return fifaWorldCup.getMatchesForDate(targetDate).then((matches) => (matches || []).map((m) => {
     const raw = String(m.status || '').toLowerCase();
@@ -174,7 +212,7 @@ function numOrNull(v) {
 // ── Main ────────────────────────────────────────────────────────────────────
 
 async function run() {
-  const settled = await Promise.allSettled([mlbRows(), nbaRows(), wcRows()]);
+  const settled = await Promise.allSettled([mlbRows(), nbaRows(), nhlRows(), wcRows()]);
   const rows = [];
   for (const r of settled) {
     if (r.status === 'fulfilled' && Array.isArray(r.value)) rows.push(...r.value);
