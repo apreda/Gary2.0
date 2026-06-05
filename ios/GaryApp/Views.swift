@@ -1590,32 +1590,11 @@ struct HomeView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 22) {
 
-                    // ── ① Masthead — wordmark + the selling point, live. The
-                    // mood images are officially retired (June 4 2026): the app
-                    // icon and the nav-bar bear are Gary enough.
-                    GaryPageHeader(title: "Gary", accent: GaryPageHeader<EmptyView>.dateLabel()) {
-                        if let net = lastNightNet, lastNightGraded > 0 {
-                            Button {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Image(systemName: net >= 0 ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
-                                        .font(.system(size: 7, weight: .bold))
-                                    Text(String(format: "%+.1fu", net))
-                                        .font(GaryFonts.mono(12, bold: true))
-                                }
-                                .foregroundStyle(net >= 0 ? GaryColors.gold : Color(hex: "#E5484D"))
-                                .padding(.horizontal, 10).padding(.vertical, 5)
-                                .background(
-                                    Capsule().stroke((net >= 0 ? GaryColors.gold : Color(hex: "#E5484D")).opacity(0.45), lineWidth: 1)
-                                )
-                                .contentShape(Capsule())
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    .opacity(animateIn ? 1 : 0)
-                    .animation(.easeOut(duration: 0.6), value: animateIn)
+                    // ── ① Masthead — wordmark only (the Scorecard below carries
+                    // the numbers; June 5: no badge). Mood images stay retired.
+                    GaryPageHeader(title: "Gary", accent: GaryPageHeader<EmptyView>.dateLabel())
+                        .opacity(animateIn ? 1 : 0)
+                        .animation(.easeOut(duration: 0.6), value: animateIn)
 
                     // ── ② The Scorecard — yesterday in three honest numbers ──
                     if yesterdayRecord.wins + yesterdayRecord.losses > 0 {
@@ -1635,7 +1614,7 @@ struct HomeView: View {
 
                     // ── ③b Biggest cashes — last night's winners, in units ──
                     if !cashRows.isEmpty {
-                        HomeCashesSection(rows: cashRows, net: lastNightNet ?? 0, graded: lastNightGraded) {
+                        HomeCashesSection(rows: cashRows, graded: lastNightGraded) {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
                         }
                         .opacity(animateIn ? 1 : 0)
@@ -2002,6 +1981,11 @@ struct HomeView: View {
         }
     }
 
+    /// "+270" / "-110" — odds as bettors read them.
+    private static func oddsLabel(_ o: Double) -> String {
+        o > 0 ? "+\(Int(o))" : "\(Int(o))"
+    }
+
     private static func resultOdds(_ odds: StringOrNumber?, pickText: String?) -> Double {
         if let v = Double(odds?.value ?? "") { return v }
         return Double(Formatters.splitPickAndOdds(pickText).1) ?? -110
@@ -2050,7 +2034,8 @@ struct HomeView: View {
                 cashes.append(.init(id: "g-\(g.matchup ?? "")-\(g.pick_text ?? "")",
                                     title: Self.gameCashTitle(g),
                                     sub: Formatters.splitPickAndOdds(g.pick_text).0,
-                                    units: unitsDelta(odds: o, result: "won")))
+                                    units: unitsDelta(odds: o, result: "won"),
+                                    odds: Self.oddsLabel(o)))
             }
         }
         for p in nightProps {
@@ -2061,7 +2046,8 @@ struct HomeView: View {
                 cashes.append(.init(id: "p-\(p.player_name ?? "")-\(p.pick_text ?? "")",
                                     title: Formatters.propResultTitle(p),
                                     sub: [p.effectiveLeague, p.player_name].compactMap { $0 }.joined(separator: " · "),
-                                    units: unitsDelta(odds: o, result: "won")))
+                                    units: unitsDelta(odds: o, result: "won"),
+                                    odds: Self.oddsLabel(o)))
             }
         }
         cashes.sort { $0.units > $1.units }
@@ -2255,22 +2241,16 @@ struct HomeCashesSection: View {
         let id: String
         let title: String
         let sub: String
-        let units: Double
+        let units: Double        // sort key (flat stakes)
+        let odds: String         // display — bettors speak odds, not units
     }
     let rows: [Row]
-    let net: Double
     let graded: Int
     let onOpenBillfold: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
-                HubSectionHeader(eyebrow: "Biggest cashes", sub: "Last night, flat stakes")
-                Text(String(format: "%+.1fu net", net))
-                    .font(GaryFonts.mono(11, bold: true))
-                    .foregroundStyle(net >= 0 ? Color(hex: "#3FB950") : Color(hex: "#E5484D"))
-                    .padding(.trailing, 16)
-            }
+            HubSectionHeader(eyebrow: "Biggest cashes", sub: "Last night's winners, by price")
             VStack(spacing: 0) {
                 ForEach(Array(rows.enumerated()), id: \.element.id) { i, row in
                     Button(action: onOpenBillfold) {
@@ -2287,7 +2267,7 @@ struct HomeCashesSection: View {
                                     .lineLimit(1)
                             }
                             Spacer(minLength: 8)
-                            Text(String(format: "%+.1fu", row.units))
+                            Text(row.odds)
                                 .font(GaryFonts.mono(15, bold: true))
                                 .foregroundStyle(Color(hex: "#3FB950"))
                         }
@@ -2897,26 +2877,29 @@ struct PremiumPicksView: View {
             shelfHeader(shelf.league, status: shelf.settled
                             ? "·  LAST RESULT"
                             : "·  \(shelf.props.count) prop\(shelf.props.count == 1 ? "" : "s")")
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 10) {
-                    ForEach(shelf.props) { prop in
-                        ZStack {
-                            if isPremium {
-                                FlippablePropCard(prop: prop,
-                                                  gameResult: shelf.settled ? propResult(for: prop) : nil,
-                                                  showSportBadge: false,
-                                                  backHeight: UIScreen.main.bounds.height * 0.68)
-                            } else {
-                                CompactPropRow(prop: prop, showSportBadge: false)
-                                    .blur(radius: 4.5).opacity(0.7).allowsHitTesting(false)
-                                lockBadge
-                            }
-                        }
-                        .frame(width: 308)
+            // THE prop-card rule, identical on every page: one prop wears the
+            // full card, two or more share ONE slip — same component, same
+            // flip, same back, regardless of which games they come from.
+            ZStack {
+                if isPremium {
+                    if shelf.props.count == 1, let only = shelf.props.first {
+                        FlippablePropCard(prop: only,
+                                          gameResult: shelf.settled ? propResult(for: only) : nil,
+                                          showSportBadge: false,
+                                          backHeight: UIScreen.main.bounds.height * 0.68)
+                    } else {
+                        PropSlipCard(props: shelf.props,
+                                     resultForProp: { [settled = shelf.settled] p in
+                                         settled ? self.propResult(for: p) : nil
+                                     })
                     }
+                } else {
+                    CompactPropRow(prop: shelf.props[0], showSportBadge: false)
+                        .blur(radius: 4.5).opacity(0.7).allowsHitTesting(false)
+                    lockBadge
                 }
-                .padding(.horizontal, 16)
             }
+            .padding(.horizontal, 16)
         }
     }
 
@@ -8663,9 +8646,13 @@ struct FlippablePropCard: View {
                 })
                 .opacity(flipped ? 0 : 1)
 
-            PropCardBack(prop: prop)
-                .opacity(flipped ? 1 : 0)
-                .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
+            // ONE back design for prop cards everywhere — the slip's back
+            // (GARY'S TAKE · The Numbers · The Read). Same cards, every page.
+            PropSlipBack(props: [prop], current: .constant(prop)) {
+                withAnimation(.spring(response: 0.6, dampingFraction: 0.82)) { flipped = false }
+            }
+            .opacity(flipped ? 1 : 0)
+            .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
         }
         .frame(height: flipped ? expandedH : frontH)
         .rotation3DEffect(.degrees(flipped ? 180 : 0), axis: (x: 0, y: 1, z: 0), perspective: 0.55)
@@ -8674,81 +8661,6 @@ struct FlippablePropCard: View {
         .contentShape(Rectangle())
         .onTapGesture { flipped.toggle() }
         .accessibilityAddTraits(.isButton)
-    }
-}
-
-/// The back of a prop card — Gary's read on the prop (key stats + analysis).
-struct PropCardBack: View {
-    let prop: PropPick
-    private var confidence: CGFloat { CGFloat(max(0.1, min(1.0, prop.confidence ?? 0.7))) }
-    private var accent: Color { Sport.from(league: prop.effectiveLeague).accentColor }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            HStack {
-                Text("GARY'S READ")
-                    .font(GaryFonts.mono(11, bold: true)).tracking(1)
-                    .foregroundStyle(GaryColors.gold)
-                Spacer()
-                if let m = prop.matchup, !m.isEmpty {
-                    Text(m.uppercased())
-                        .font(GaryFonts.mono(10, bold: false))
-                        .foregroundStyle(.white.opacity(0.4)).lineLimit(1).minimumScaleFactor(0.7)
-                }
-            }
-
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(prop.player ?? "")
-                    .font(.system(size: 19, weight: .heavy))
-                    .foregroundStyle(GaryColors.silver).lineLimit(1).minimumScaleFactor(0.7)
-                Spacer()
-                Text("\(Int(confidence * 100))% CONF")
-                    .font(GaryFonts.mono(12, bold: true))
-                    .foregroundStyle(.white.opacity(0.55))
-            }
-
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 1.5).fill(Color(hex: "#1A1A1E"))
-                    RoundedRectangle(cornerRadius: 1.5).fill(GaryColors.gold).frame(width: geo.size.width * confidence)
-                }
-            }
-            .frame(height: 2)
-
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 8) {
-                    if let stats = prop.key_stats, !stats.isEmpty {
-                        ForEach(stats, id: \.self) { s in
-                            HStack(alignment: .top, spacing: 6) {
-                                Circle().fill(accent).frame(width: 4, height: 4).padding(.top, 7)
-                                Text(s).font(.system(size: 14)).foregroundStyle(.white.opacity(0.8))
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-                    }
-                    if let a = prop.analysis, !a.isEmpty {
-                        Text(cleanPropAnalysis(a))
-                            .font(.system(size: 14.5)).foregroundStyle(.white.opacity(0.72)).lineSpacing(3)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    } else if (prop.key_stats?.isEmpty ?? true) {
-                        Text("No breakdown available.")
-                            .font(.system(size: 14.5)).foregroundStyle(.white.opacity(0.5))
-                    }
-                }
-            }
-
-            Text("tap to flip back  ↺")
-                .font(GaryFonts.mono(9, bold: false))
-                .foregroundStyle(.white.opacity(0.35))
-                .frame(maxWidth: .infinity, alignment: .center)
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(hex: "#1A1C22"))
-                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(GaryColors.silver.opacity(0.32), lineWidth: 1))
-        )
     }
 }
 
