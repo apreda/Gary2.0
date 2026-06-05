@@ -2609,6 +2609,7 @@ struct PremiumPicksView: View {
     @State private var gameShelves: [GameShelf] = []
     @State private var propShelves: [PropShelf] = []
     @State private var gameResultsMap: [String: String] = [:]   // "away@home" -> won/lost/push
+    @State private var propResultsMap: [String: String] = [:]   // player name -> won/lost/push
     // Yesterday's TRUE game record — same source of truth as the Home tape
     // (fetchYesterdayGameRecord). The matchup map above is for stamping cards;
     // maps dedupe (doubleheaders collide), so it must never be COUNTED.
@@ -2626,7 +2627,7 @@ struct PremiumPicksView: View {
     // MARK: - Terminal status / tab counts (all derived from loaded view state)
 
     private var gameCount: Int { gameShelves.filter { !$0.settled }.reduce(0) { $0 + $1.picks.count } }
-    private var propCount: Int { propShelves.reduce(0) { $0 + $1.props.count } }
+    private var propCount: Int { propShelves.filter { !$0.settled }.reduce(0) { $0 + $1.props.count } }
 
     /// Yesterday's true game record (same number the Home tape shows) ->
     /// (wins, losses, win%). nil while loading or when nothing graded.
@@ -2644,6 +2645,7 @@ struct PremiumPicksView: View {
     struct PropShelf: Identifiable {
         let league: String
         let props: [PropPick]
+        let settled: Bool       // true => yesterday's props (show W/L stamps)
         var id: String { league }
     }
 
@@ -2744,8 +2746,10 @@ struct PremiumPicksView: View {
         .padding(.top, 10)
         .padding(.bottom, 11)
         .background(
+            // Matches the LiquidGlass gradient at this height — the old flat
+            // base hex read as a darker, bluer band across the page.
             ZStack(alignment: .bottom) {
-                Color(hex: "#090C11")
+                Color(hex: "#0D1219")
                 Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1)
             }
         )
@@ -2870,15 +2874,25 @@ struct PremiumPicksView: View {
         }
     }
 
+    /// Yesterday's graded outcome for a prop (player-name keyed), nil pre-grade.
+    private func propResult(for prop: PropPick) -> String? {
+        guard let name = prop.player?.lowercased(), !name.isEmpty else { return nil }
+        return propResultsMap[name]
+    }
+
     private func propShelfView(_ shelf: PropShelf) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            shelfHeader(shelf.league, status: "·  \(shelf.props.count) prop\(shelf.props.count == 1 ? "" : "s")")
+            shelfHeader(shelf.league, status: shelf.settled
+                            ? "·  LAST RESULT"
+                            : "·  \(shelf.props.count) prop\(shelf.props.count == 1 ? "" : "s")")
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 10) {
                     ForEach(shelf.props) { prop in
                         ZStack {
                             if isPremium {
-                                FlippablePropCard(prop: prop, showSportBadge: false,
+                                FlippablePropCard(prop: prop,
+                                                  gameResult: shelf.settled ? propResult(for: prop) : nil,
+                                                  showSportBadge: false,
                                                   backHeight: UIScreen.main.bounds.height * 0.68)
                             } else {
                                 CompactPropRow(prop: prop, showSportBadge: false)
@@ -3018,17 +3032,31 @@ struct PremiumPicksView: View {
             }
         }
 
-        // Premium props from today's slate: best prop per game, capped at 4 per sport.
+        // Premium props from today's slate: best prop per game, capped at 4 per
+        // sport. A league with no props yet falls back to YESTERDAY's props as
+        // LAST RESULT — graded stamps on, flips intact (mirrors the game shelves).
+        let yProps = (try? await SupabaseAPI.fetchPropPicks(date: yesterday)) ?? []
+        let recentPropResults = (try? await SupabaseAPI.fetchRecentPropResults(limit: 60)) ?? []
+        var pMap: [String: String] = [:]
+        for r in recentPropResults where r.game_date == yesterday {
+            if let n = r.player_name?.lowercased(), !n.isEmpty, let res = r.result {
+                pMap[n] = res.lowercased()
+            }
+        }
         let propsByLeague = Dictionary(grouping: todayProps, by: { propLeagueKey($0) })
+        let yPropsByLeague = Dictionary(grouping: yProps, by: { propLeagueKey($0) })
         var pShelves: [PropShelf] = []
         for lg in order {
             if let ps = propsByLeague[lg], !ps.isEmpty {
-                pShelves.append(PropShelf(league: lg, props: selectPremiumProps(ps)))
+                pShelves.append(PropShelf(league: lg, props: selectPremiumProps(ps), settled: false))
+            } else if let yps = yPropsByLeague[lg], !yps.isEmpty {
+                pShelves.append(PropShelf(league: lg, props: selectPremiumProps(yps), settled: true))
             }
         }
 
         await MainActor.run {
             gameResultsMap = rMap
+            propResultsMap = pMap
             yesterdayRec = yRec
             gameShelves = gShelves
             propShelves = pShelves
@@ -6358,15 +6386,15 @@ struct BillfoldView: View {
 
     private var recentCarousel: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text("Gary's Recent Picks")
-                    .font(.system(size: 9, weight: .semibold))
-                    .tracking(1)
-                    .foregroundStyle(brass.opacity(0.85))
+                    .font(.system(size: 15, weight: .semibold))
+                    .tracking(0.2)
+                    .foregroundStyle(brass.opacity(0.95))
                 Spacer()
                 Text("\(selectedTab == 0 ? recentGameCards.count : recentPropCards.count)")
-                    .font(.system(size: 10, weight: .semibold, design: .default))
-                    .foregroundStyle(paper.opacity(0.5))
+                    .font(.system(size: 12, weight: .semibold, design: .default))
+                    .foregroundStyle(paper.opacity(0.55))
             }
             .padding(.horizontal, 20)
 
@@ -11320,7 +11348,7 @@ struct PropSlipCard: View {
                                     .foregroundStyle(r.1)
                             }
                             Text(p.player ?? p.team ?? "")
-                                .font(GaryFonts.text(25, .medium))
+                                .font(GaryFonts.text(24, .medium))
                                 .foregroundStyle(.white)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.65)
@@ -12809,7 +12837,7 @@ struct CompactPropRow: View {
                 // baseline-aligned beside it (frees the second line entirely).
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(prop.player ?? prop.team ?? "")
-                        .font(GaryFonts.text(25, .medium))
+                        .font(GaryFonts.text(24, .medium))
                         .foregroundStyle(.white)
                         .lineLimit(1)
                         .minimumScaleFactor(0.65)
