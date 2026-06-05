@@ -1,7 +1,16 @@
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+function requiredEnv(name: string): string {
+  const v = process.env[name];
+  if (!v) throw new Error(`${name} is not set`);
+  return v;
+}
 
-/** One PostgREST GET. `path` is `table?query` (no leading slash). */
+const SUPABASE_URL = requiredEnv('NEXT_PUBLIC_SUPABASE_URL');
+const ANON_KEY = requiredEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY');
+
+/**
+ * One PostgREST GET. `path` is `table?query` (no leading slash).
+ * Callers must use a consistent revalidate value per path — mixed values on the same URL conflict in the Next.js fetch cache.
+ */
 export async function rest<T>(path: string, opts: { revalidate?: number } = {}): Promise<T> {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
     headers: { apikey: ANON_KEY, Authorization: `Bearer ${ANON_KEY}` },
