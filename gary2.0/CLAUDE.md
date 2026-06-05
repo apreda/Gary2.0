@@ -30,8 +30,10 @@ including while doing adjacent work. Tune-ups by request only.
 - **Prop Pick Card + Prop Slip** (silver, CompactPropRow/PropSlipCard): silver twin of the
   game card; OVER calls gold, UNDER calls silver; rows flip. THE RULE (final, June 5):
   group props BY GAME — 2+ props from the SAME game share ONE slip; a prop alone (or
-  whose game has no sibling) is its own full-width card. Groups stack vertically,
-  full width, on every surface; it must work automatically from the data. One shared
+  whose game has no sibling) is its own card. Groups ride a HORIZONTAL rail per league
+  shelf (slip 344pt / card 308pt); it must work automatically from the data. Selection
+  (selectPremiumProps) keeps whole games — never prune a same-game sibling. Team labels
+  beside player names are mascot-short (Formatters.shortTeamName). One shared
   back app-wide (PropSlipBack: GARY'S TAKE · The Numbers · The Read). The Picks TODAY
   page's combined top-props slip is a user-approved exception (locked page).
 

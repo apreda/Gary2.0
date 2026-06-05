@@ -2723,7 +2723,8 @@ struct PremiumPicksView: View {
                     } label: {
                         Text(lg)
                             .font(GaryFonts.mono(10, bold: true)).tracking(0.8)
-                            .foregroundStyle(Sport.from(league: lg).accentColor)
+                            .foregroundStyle(lg == "MLB" ? AnyShapeStyle(GaryColors.mlbFieldText)
+                                                         : AnyShapeStyle(Sport.from(league: lg).accentColor))
                             .padding(.horizontal, 11).padding(.vertical, 6)
                             .background(
                                 Capsule().fill(Color.white.opacity(0.05))
@@ -10022,7 +10023,7 @@ struct PropCardSlate: View {
                                 .foregroundStyle(accentColor)
 
                             if let team = prop.team, !team.isEmpty {
-                                Text(team.uppercased())
+                                Text(Formatters.shortTeamName(team, league: prop.effectiveLeague).uppercased())
                                     .font(.system(size: 8, weight: .bold))
                                     .tracking(0.6)
                                     .foregroundStyle(.white.opacity(0.4))
@@ -11383,7 +11384,7 @@ struct PropSlipCard: View {
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.65)
                             if let team = p.team, !team.isEmpty {
-                                Text(team.uppercased())
+                                Text(Formatters.shortTeamName(team, league: p.effectiveLeague).uppercased())
                                     .font(.system(size: 10, weight: .semibold))
                                     .foregroundStyle(GaryColors.silver.opacity(0.8))
                                     .lineLimit(1)
@@ -11504,7 +11505,7 @@ struct PropSlipBack: View {
                     .foregroundStyle(GaryColors.silver).lineLimit(1).minimumScaleFactor(0.7)
                 Spacer()
                 if let team = prop.team, !team.isEmpty {
-                    Text(team.uppercased())
+                    Text(Formatters.shortTeamName(team, league: prop.effectiveLeague).uppercased())
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(GaryColors.silver.opacity(0.7))
                 }
@@ -12873,7 +12874,7 @@ struct CompactPropRow: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.65)
                     if let team = prop.team, !team.isEmpty {
-                        Text(team.uppercased())
+                        Text(Formatters.shortTeamName(team, league: prop.effectiveLeague).uppercased())
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(GaryColors.silver.opacity(0.8))
                             .lineLimit(1)
