@@ -61,22 +61,23 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     }
     
     private func sendTokenToBackend(_ token: String) async {
-        // Store token in Supabase for sending push notifications
-        guard let url = URL(string: "\(Secrets.supabaseURL)/rest/v1/push_tokens?on_conflict=device_token") else { return }
-        
+        // Register the device token via the register_push_token RPC (SECURITY
+        // DEFINER, server-side upsert). Replaces the old direct PostgREST upsert
+        // into push_tokens so the table needs NO anon policies — the anon key can
+        // register a token but can't read/enumerate or deactivate tokens.
+        guard let url = URL(string: "\(Secrets.supabaseURL)/rest/v1/rpc/register_push_token") else { return }
+
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(Secrets.supabaseAnonKey, forHTTPHeaderField: "apikey")
         request.setValue("Bearer \(Secrets.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("return=minimal,resolution=merge-duplicates", forHTTPHeaderField: "Prefer")
-        
+
         let body: [String: Any] = [
-            "device_token": token,
-            "platform": "ios",
-            "active": true
+            "p_device_token": token,
+            "p_platform": "ios"
         ]
-        
+
         do {
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
             _ = try await URLSession.shared.data(for: request)
