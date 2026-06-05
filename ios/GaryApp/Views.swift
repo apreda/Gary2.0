@@ -2616,16 +2616,15 @@ struct SportFilterBar: View {
     }
 }
 
-// MARK: - Premium Picks (paywalled "best bets" — the Picks tab)
+// MARK: - Premium Picks (paywalled "best bets" — the Winners tab)
 //
-// Gary's 3-4 highest-conviction plays of the day, gated behind a subscription.
-// The free experience now lives on the Props tab (all props + each game's pick).
-// `isPremium` is the entitlement gate — WIRE TO REVENUECAT: replace the
-// @AppStorage flag with a check on Purchases.shared entitlements ("premium"),
-// and call the purchase flow from PaywallPanel.onUnlock instead of flipping it.
+// Gary's highest-conviction plays, sold per sport through Stripe Payment
+// Links. Entitlements live in Supabase (user_entitlements), keyed to the
+// signed-in auth user — or the anonymous install when nobody's signed in.
+// The storefront tail sells locked boards; PaywallPanel sells All-Access.
 
 struct PremiumPicksView: View {
-    // TODO(RevenueCat): drive this from Purchases.shared entitlement "premium".
+    // Dev/QA all-access preview — overrides entitlements while testing.
     @AppStorage("isPremiumUnlocked") private var isPremium: Bool = false
     @AppStorage("selectedTab") private var selectedTab: Int = 0
 
@@ -2641,10 +2640,13 @@ struct PremiumPicksView: View {
     @State private var mode: Mode = .games
     @State private var jumpedLeague: String? = nil
 
-    // Per-sport entitlements, granted by the Stripe webhook and keyed to this
-    // install's ID. isPremium stays as the all-access dev/QA preview toggle.
+    // Per-sport entitlements, granted by the Stripe webhook and keyed to the
+    // auth user (or this install when signed out). isPremium stays as the
+    // all-access dev/QA preview toggle.
     @State private var entitledSports: Set<String> = []
     @Environment(\.scenePhase) private var scenePhase
+    @EnvironmentObject private var authManager: AuthManager
+    @State private var showAuthSheet = false
     private func sportUnlocked(_ lg: String) -> Bool {
         isPremium || entitledSports.contains("ALL") || entitledSports.contains(lg)
     }
@@ -2662,7 +2664,7 @@ struct PremiumPicksView: View {
     ]
     private func openCheckout(_ league: String) {
         guard let base = Self.checkoutLinks[league],
-              let url = URL(string: "\(base)?client_reference_id=\(SupabaseAPI.installationId)") else { return }
+              let url = URL(string: "\(base)?client_reference_id=\(SupabaseAPI.identityId)") else { return }
         UIApplication.shared.open(url)
     }
     @State private var sportRecords: [String: (w: Int, l: Int)] = [:]
@@ -2734,6 +2736,11 @@ struct PremiumPicksView: View {
                 Task { entitledSports = await SupabaseAPI.fetchEntitlements() }
             }
         }
+        .onChange(of: authManager.isAuthenticated) { _ in
+            // Sign-in/out swaps the identity entitlements key on — refetch.
+            Task { entitledSports = await SupabaseAPI.fetchEntitlements() }
+        }
+        .sheet(isPresented: $showAuthSheet) { AuthView() }
     }
 
     /// Sport chips that jump the page to a league's shelf in the active mode.
@@ -2861,21 +2868,58 @@ struct PremiumPicksView: View {
                     }
                     let locked = propShelves.filter { !sportUnlocked($0.league) && !$0.props.isEmpty }
                     if !locked.isEmpty {
-                        storefrontTail(locked.map { ($0.league, $0.props.count, "prop") })
+                        storefrontTail(locked.map { ($0.league, $0.props.count, "prop", !$0.settled) })
                     }
                 }
             }
 
             if !isPremium {
-                PaywallPanel { withAnimation(.easeInOut(duration: 0.3)) { isPremium = true } }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 6)
+                // The whole-house CTA — per-sport sales live in the storefront
+                // rows above; this sells everything at once, for real money.
+                if !entitledSports.contains("ALL") {
+                    PaywallPanel { openCheckout("ALL") }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 6)
+                }
+                accountRow
             } else {
                 Button { withAnimation { isPremium = false } } label: {
                     Text("✓ Premium active · tap to reset preview")
                         .font(GaryFonts.mono(10)).tracking(1).foregroundStyle(.white.opacity(0.3))
                 }
                 .frame(maxWidth: .infinity).padding(.top, 12)
+            }
+        }
+    }
+
+    /// Quiet account anchor under the sales surfaces: signed out, it routes to
+    /// sign-in (so purchases follow the account, not the phone); signed in,
+    /// it just states who you are. Management lives in Settings.
+    @ViewBuilder private var accountRow: some View {
+        if authManager.isAuthenticated {
+            Text("SIGNED IN AS \((authManager.currentUser?.email ?? "—").uppercased())")
+                .font(GaryFonts.mono(10)).tracking(1)
+                .foregroundStyle(.white.opacity(0.35))
+                .lineLimit(1).minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity)
+                .padding(.top, 4)
+        } else {
+            VStack(spacing: 6) {
+                Button { showAuthSheet = true } label: {
+                    HStack(spacing: 6) {
+                        Text("SIGN IN OR CREATE ACCOUNT")
+                            .font(GaryFonts.mono(11, bold: true)).tracking(1)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 9, weight: .semibold))
+                    }
+                    .foregroundStyle(GaryColors.gold)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.plain)
+                Text("Unlocks follow your account once you're signed in.")
+                    .font(GaryFonts.text(11))
+                    .foregroundStyle(.white.opacity(0.35))
+                    .frame(maxWidth: .infinity)
             }
         }
     }
@@ -3004,11 +3048,13 @@ struct PremiumPicksView: View {
     /// Locked game boards for the storefront. WC rides as a pre-order row
     /// until kickoff (its shelf has no picks yet, so the slate filter would
     /// otherwise hide it); once WC picks exist it becomes a normal locked board.
-    private var lockedGameBoards: [(league: String, count: Int, unit: String)] {
+    /// `live` distinguishes tonight's slate from a settled last result — the
+    /// row copy must not call a graded pick "tonight."
+    private var lockedGameBoards: [(league: String, count: Int, unit: String, live: Bool)] {
         var boards = gameShelves.filter { !sportUnlocked($0.league) && !$0.picks.isEmpty }
-            .map { (league: $0.league, count: $0.picks.count, unit: "pick") }
+            .map { (league: $0.league, count: $0.picks.count, unit: "pick", live: !$0.settled) }
         if !sportUnlocked("WC"), !boards.contains(where: { $0.league == "WC" }) {
-            boards.append((league: "WC", count: 0, unit: "pick"))
+            boards.append((league: "WC", count: 0, unit: "pick", live: true))
         }
         return boards
     }
@@ -3017,7 +3063,7 @@ struct PremiumPicksView: View {
     /// user paid for. No blur, no hostage cards — each locked board sells
     /// itself with its REAL last-10 record (sometimes that means admitting
     /// 3–7; honesty is the brand).
-    private func storefrontTail(_ boards: [(league: String, count: Int, unit: String)]) -> some View {
+    private func storefrontTail(_ boards: [(league: String, count: Int, unit: String, live: Bool)]) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HubSectionHeader(eyebrow: "More boards", sub: "Sports you haven't unlocked")
             VStack(spacing: 0) {
@@ -3035,7 +3081,7 @@ struct PremiumPicksView: View {
         }
     }
 
-    private func storefrontRow(_ b: (league: String, count: Int, unit: String)) -> some View {
+    private func storefrontRow(_ b: (league: String, count: Int, unit: String, live: Bool)) -> some View {
                     let preorder = b.league == "WC" && b.count == 0
                     return HStack(spacing: 12) {
                         Image(systemName: Sport.from(league: b.league).icon)
@@ -3046,7 +3092,9 @@ struct PremiumPicksView: View {
                             Text("\(b.league) BOARD")
                                 .font(GaryFonts.mono(12, bold: true)).tracking(0.8)
                                 .foregroundStyle(.white.opacity(0.9))
-                            Text(preorder ? "All 104 matches · kicks off June 11" : "\(b.count) \(b.unit)\(b.count == 1 ? "" : "s") tonight")
+                            Text(preorder ? "All 104 matches · kicks off June 11"
+                                 : b.live ? "\(b.count) \(b.unit)\(b.count == 1 ? "" : "s") tonight"
+                                 : "Last result posted")
                                 .font(.system(size: 11))
                                 .foregroundStyle(.white.opacity(0.45))
                         }
@@ -3258,24 +3306,25 @@ struct PremiumPicksView: View {
     }
 }
 
+/// The All-Access upsell — one Stripe pass that unlocks every board.
+/// Per-sport sales happen in the storefront rows; this is the whole house.
 struct PaywallPanel: View {
     var onUnlock: () -> Void
-    @State private var plan: Int = 1 // 0 = monthly, 1 = yearly
 
     private let benefits = [
-        "Gary's 3-4 highest-conviction picks, every day",
-        "Full reasoning, confidence & the data behind each",
+        "Every board Gary covers — games and props",
+        "Full reasoning, confidence & the data behind each pick",
         "Tracked & graded — see the record in the Billfold",
-        "Game picks + the best player props, curated",
+        "New sports included the day they launch",
     ]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 5) {
-                Text("UNLOCK")
+                Text("ALL-ACCESS PASS")
                     .font(GaryFonts.mono(10, bold: true)).tracking(1)
                     .foregroundStyle(GaryColors.gold)
-                Text("Bet with Gary's best.")
+                Text("Every board. One pass.")
                     .font(GaryFonts.display(32))
                     .foregroundStyle(.white)
             }
@@ -3289,29 +3338,22 @@ struct PaywallPanel: View {
                 }
             }
 
-            VStack(spacing: 10) {
-                PlanRow(title: "Yearly", price: "$99.99 / yr", sub: "$8.33/mo · best value", badge: "SAVE 58%", selected: plan == 1) { plan = 1 }
-                PlanRow(title: "Monthly", price: "$19.99 / mo", sub: "billed monthly", badge: nil, selected: plan == 0) { plan = 0 }
-            }
-
             Button(action: onUnlock) {
-                Text(plan == 1 ? "Start 3-day free trial" : "Unlock Premium")
-                    .font(GaryFonts.text(16, .bold))
-                    .foregroundStyle(Color(hex: "#0b0a08"))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 15)
-                    .background(RoundedRectangle(cornerRadius: 13, style: .continuous).fill(GaryColors.gold))
-            }
-
-            HStack(spacing: 16) {
-                Button { onUnlock() } label: {
-                    Text("Restore").font(GaryFonts.mono(11)).foregroundStyle(.white.opacity(0.45))
+                HStack {
+                    Text("Unlock everything")
+                        .font(GaryFonts.text(16, .bold))
+                    Spacer()
+                    Text("$99.99")
+                        .font(GaryFonts.mono(15, bold: true))
                 }
-                Spacer()
-                Text("Terms · Privacy").font(GaryFonts.mono(11)).foregroundStyle(.white.opacity(0.3))
+                .foregroundStyle(Color(hex: "#0b0a08"))
+                .padding(.horizontal, 18)
+                .padding(.vertical, 15)
+                .background(RoundedRectangle(cornerRadius: 13, style: .continuous).fill(GaryColors.gold))
             }
+            .buttonStyle(.plain)
 
-            Text("Auto-renews until canceled. Cancel anytime in Settings. Payment charged to your Apple ID.")
+            Text("One-time payment, handled by Stripe. Sign in first and your unlocks follow your account.")
                 .font(GaryFonts.text(9.5)).foregroundStyle(.white.opacity(0.3))
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -3321,36 +3363,6 @@ struct PaywallPanel: View {
                 .fill(Color(hex: "#0d0b09"))
                 .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(GaryColors.gold.opacity(0.25), lineWidth: 1))
         )
-    }
-}
-
-private struct PlanRow: View {
-    let title: String
-    let price: String
-    let sub: String
-    let badge: String?
-    let selected: Bool
-    var onTap: () -> Void
-
-    var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 12) {
-                Image(systemName: selected ? "largecircle.fill.circle" : "circle")
-                    .font(.system(size: 18)).foregroundStyle(selected ? GaryColors.gold : .white.opacity(0.3))
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 7) {
-                        Text(title).font(GaryFonts.text(16, .semibold)).foregroundStyle(.white)
-                        if let badge { Text(badge).font(GaryFonts.mono(8, bold: true)).tracking(0.8).foregroundStyle(Color(hex: "#0b0a08")).padding(.horizontal, 6).padding(.vertical, 2).background(Capsule().fill(GaryColors.gold)) }
-                    }
-                    Text(sub).font(GaryFonts.mono(10)).foregroundStyle(.white.opacity(0.42))
-                }
-                Spacer()
-                Text(price).font(GaryFonts.text(15, .bold)).foregroundStyle(selected ? GaryColors.gold : .white.opacity(0.7))
-            }
-            .padding(14)
-            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(selected ? GaryColors.gold.opacity(0.08) : Color.clear).overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(selected ? GaryColors.gold.opacity(0.3) : Color.white.opacity(0.1), lineWidth: 1)))
-        }
-        .buttonStyle(.plain)
     }
 }
 

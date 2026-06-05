@@ -427,9 +427,8 @@ enum SupabaseAPI {
         let category: String?
         let result: String?
     }
-    /// Anonymous, durable per-install identity — the `client_reference_id` at
-    /// Stripe checkout and the key entitlements are granted to. Migrates to
-    /// auth user IDs when sign-in ships.
+    /// Anonymous, durable per-install identity — what entitlements key on
+    /// when nobody is signed in.
     static var installationId: String {
         let key = "garyInstallationId"
         if let v = UserDefaults.standard.string(forKey: key) { return v }
@@ -438,12 +437,26 @@ enum SupabaseAPI {
         return v
     }
 
-    /// Active Stripe-purchased entitlements for this install ("MLB", "ALL", ...).
+    /// The identity entitlements key on — the signed-in auth user when there
+    /// is one, otherwise the anonymous install. This is the
+    /// `client_reference_id` that rides to Stripe checkout. Reads AuthManager's
+    /// backing store directly (same UserDefaults key) so non-MainActor callers
+    /// stay simple.
+    static var identityId: String {
+        if let uid = UserDefaults.standard.string(forKey: "gary_user_id"), !uid.isEmpty { return uid }
+        return installationId
+    }
+
+    /// Active Stripe-purchased entitlements ("MLB", "ALL", ...). Union of
+    /// account and device grants, so a board bought signed-out (keyed to the
+    /// install) stays unlocked after signing in.
     static func fetchEntitlements() async -> Set<String> {
         struct Row: Decodable { let product_key: String? }
+        let ids = Set([identityId, installationId])
+        let orFilter = ids.map { "installation_id.eq.\($0)" }.joined(separator: ",")
         let url = buildURL(table: "user_entitlements", query: [
             URLQueryItem(name: "select", value: "product_key"),
-            URLQueryItem(name: "installation_id", value: "eq.\(installationId)"),
+            URLQueryItem(name: "or", value: "(\(orFilter))"),
             URLQueryItem(name: "status", value: "eq.active")
         ])
         guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),

@@ -14,6 +14,8 @@ final class AuthManager: ObservableObject {
     @Published var isLoading = true
     @Published var currentUser: GaryUser?
     @Published var errorMessage: String?
+    /// Non-error guidance (e.g. "confirm your email") — shown gold, not red.
+    @Published var infoMessage: String?
 
     // MARK: - Token Storage (Keychain-backed via UserDefaults for now)
 
@@ -77,6 +79,7 @@ final class AuthManager: ObservableObject {
 
     func signUp(email: String, password: String) async throws {
         errorMessage = nil
+        infoMessage = nil
 
         let url = try authURL("/auth/v1/signup")
         var request = URLRequest(url: url)
@@ -97,8 +100,13 @@ final class AuthManager: ObservableObject {
         }
 
         if http.statusCode == 200 || http.statusCode == 201 {
-            let session = try JSONDecoder().decode(AuthResponse.self, from: data)
-            handleAuthResponse(session)
+            if let session = try? JSONDecoder().decode(AuthResponse.self, from: data) {
+                handleAuthResponse(session)
+            } else {
+                // Email confirmations are on: signup returns the bare user with
+                // no session. Tell the user the next step instead of failing.
+                infoMessage = "Account created — confirm via the email we just sent, then sign in."
+            }
         } else {
             let errorBody = try? JSONDecoder().decode(AuthErrorResponse.self, from: data)
             let message = errorBody?.msg ?? errorBody?.error_description ?? "Sign up failed"
@@ -111,6 +119,7 @@ final class AuthManager: ObservableObject {
 
     func signIn(email: String, password: String) async throws {
         errorMessage = nil
+        infoMessage = nil
 
         let url = try authURL("/auth/v1/token?grant_type=password")
         var request = URLRequest(url: url)
@@ -336,6 +345,7 @@ final class AuthManager: ObservableObject {
         userEmail = ""
         currentUser = nil
         isAuthenticated = false
+        infoMessage = nil
     }
 }
 

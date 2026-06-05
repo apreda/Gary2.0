@@ -5,6 +5,7 @@ import AuthenticationServices
 
 struct AuthView: View {
     @ObservedObject var authManager = AuthManager.shared
+    @Environment(\.dismiss) private var dismiss
     @State private var isSignUp = false
     @State private var email = ""
     @State private var password = ""
@@ -31,9 +32,8 @@ struct AuthView: View {
                             .frame(width: 180, height: 180)
 
                         Text("GARY A.I.")
-                            .font(.system(size: 28, weight: .heavy))
-                            .tracking(-0.5)
-                            .foregroundStyle(GaryColors.goldGradient)
+                            .font(GaryFonts.mono(23))
+                            .foregroundStyle(GaryColors.gold)
 
                         Text(isSignUp ? "Create Your Account" : "Welcome Back")
                             .font(.subheadline)
@@ -42,6 +42,29 @@ struct AuthView: View {
                     .opacity(animateIn ? 1 : 0)
                     .scaleEffect(animateIn ? 1 : 0.8)
                     .animation(.easeOut(duration: 0.6).delay(0.1), value: animateIn)
+
+                    // Info Banner (e.g. "confirm your email" after sign-up)
+                    if let info = authManager.infoMessage {
+                        HStack(spacing: 8) {
+                            Image(systemName: "envelope.badge.fill")
+                                .foregroundStyle(GaryColors.gold)
+                            Text(info)
+                                .font(.caption)
+                                .foregroundStyle(.white)
+                        }
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(GaryColors.gold.opacity(0.1))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                        .stroke(GaryColors.gold.opacity(0.3), lineWidth: 0.5)
+                                )
+                        )
+                        .padding(.horizontal, 24)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
 
                     // Error Banner
                     if let error = authManager.errorMessage {
@@ -209,6 +232,10 @@ struct AuthView: View {
             withAnimation(.easeOut(duration: 0.8)) {
                 animateIn = true
             }
+        }
+        .onChange(of: authManager.isAuthenticated) { isAuth in
+            // Signed in — the sheet's job is done.
+            if isAuth { dismiss() }
         }
         .sheet(isPresented: $showForgotPassword) {
             ForgotPasswordSheet(
