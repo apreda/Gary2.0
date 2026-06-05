@@ -64,15 +64,8 @@ struct ContentView: View {
                     }
                 }
 
-                // Settings button — hidden on Gary tab (orb screen is intentionally minimal)
-                // and Billfold (which has its own).
-                if !pickDetailState.isShowing
-                    && selectedTab != billfoldTabIndex
-                    && selectedTab != garyTabIndex {
-                    SettingsMenuButton(showingSettings: $showingSettings)
-                        .padding(.top, 4)
-                        .padding(.trailing, 16)
-                }
+                // Settings now lives in every page header's three-dot button
+                // (GaryPageHeader / Billfold post ShowSettingsMenu).
             }
 
             // Tab bar — Gary is raised + larger center button
@@ -81,6 +74,9 @@ struct ContentView: View {
         .sheet(isPresented: $showingSettings) {
             SettingsSheetView()
                 .environmentObject(authManager)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ShowSettingsMenu"))) { _ in
+            showingSettings = true
         }
         .task {
             // Migrate any out-of-range persisted index (e.g. user was on the old Fantasy index)
@@ -234,26 +230,6 @@ struct GaryIntroSheet: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-    }
-}
-
-// MARK: - Settings Menu Button (Three-dot)
-
-struct SettingsMenuButton: View {
-    @Binding var showingSettings: Bool
-    
-    var body: some View {
-        Button {
-            showingSettings = true
-        } label: {
-            Image(systemName: "ellipsis")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(GaryColors.gold.opacity(0.6))
-                .frame(width: 28, height: 28)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Settings")
-        .accessibilityHint("Opens settings menu")
     }
 }
 

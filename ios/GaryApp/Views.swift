@@ -38,19 +38,31 @@ struct GaryPageHeader<Trailing: View>: View {
         VStack(spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(title)
-                    .font(GaryFonts.masthead(30))
-                    .foregroundStyle(.white.opacity(0.97))
+                    .font(GaryFonts.display(30))
+                    .foregroundStyle(.white.opacity(0.95))
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
                     .layoutPriority(1)
                 if let accent, !accent.isEmpty {
                     Text(accent)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(GaryColors.meta)
+                        .font(GaryFonts.mono(10))
+                        .foregroundStyle(GaryColors.gold.opacity(0.9))
                         .lineLimit(1)
                 }
                 Spacer()
                 trailing()
+                // The three-dot settings button lives in every header's corner
+                // (the Billfold anatomy, app-wide).
+                Button {
+                    NotificationCenter.default.post(name: Notification.Name("ShowSettingsMenu"), object: nil)
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(GaryColors.gold.opacity(0.7))
+                        .frame(width: 28, height: 28)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Settings")
             }
             .padding(.horizontal, 20)
             StitchLine()
@@ -2688,16 +2700,8 @@ struct PremiumPicksView: View {
     // single labeled badge (tap -> Billfold), gold stitch. PREMIUM pill,
     // AWAITING SLATE, and league chips all retired: the body owns its states
     // and the shelves announce their own leagues.
-    /// "Fri, Jun 5" — the long title needs the short date form.
-    private var shortDateLabel: String {
-        let f = DateFormatter()
-        f.dateFormat = "EEE, MMM d"
-        f.timeZone = TimeZone(identifier: "America/New_York")
-        return f.string(from: Date())
-    }
-
     private var header: some View {
-        GaryPageHeader(title: "Gary's Best Bets", accent: shortDateLabel) {
+        GaryPageHeader(title: "Gary's Bets", accent: GaryPageHeader<EmptyView>.dateLabel()) {
             if let rec = settledRecord {
                 Button {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
@@ -16998,14 +17002,6 @@ enum GaryFonts {
     static let displayFace = "BarlowCondensed-Bold"
 
     static func display(_ size: CGFloat) -> Font { .custom(displayFace, size: size) }
-
-    /// Page mastheads — SF Pro Display, black weight, condensed width.
-    /// The bundled Google condensed faces read "template" at wordmark sizes
-    /// (June 5 2026 decision); mastheads wear the system's premium display
-    /// face instead.
-    static func masthead(_ size: CGFloat) -> Font {
-        .system(size: size, weight: .black).width(.condensed)
-    }
 
     static func mono(_ size: CGFloat, bold: Bool = false) -> Font {
         .custom(bold ? "JetBrainsMono-Bold" : "JetBrainsMono-Regular", size: size)
