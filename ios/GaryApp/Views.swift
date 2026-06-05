@@ -2569,7 +2569,6 @@ struct PremiumPicksView: View {
     @State private var gameShelves: [GameShelf] = []
     @State private var propShelves: [PropShelf] = []
     @State private var gameResultsMap: [String: String] = [:]   // "away@home" -> won/lost/push
-    @State private var liveScores: [LiveScore] = []
 
     // Terminal Tape: GAMES <-> PROPS mode (props are a peer, one tap away — not buried below games).
     enum Mode { case games, props }
@@ -2827,14 +2826,6 @@ struct PremiumPicksView: View {
         .padding(.horizontal, 16)
     }
 
-    /// Live (in-progress) score for a pick's game — drives the on-card LiveScoreStrip
-    /// (score + base diamond). Settled games show their result in the eyebrow, so only
-    /// LIVE games surface the strip here.
-    private func liveScore(for pick: GaryPick) -> LiveScore? {
-        let matchup = "\(pick.awayTeam ?? "") @ \(pick.homeTeam ?? "")"
-        return liveScores.first { $0.isLive && abbrGameMatches($0.abbrGame, matchup: matchup) }
-    }
-
     private func gameShelfView(_ shelf: GameShelf) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             shelfHeader(shelf.league,
@@ -2845,23 +2836,21 @@ struct PremiumPicksView: View {
                 placeholderRow(for: shelf.league)
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
+                    // No external score strip here — the card's slot already
+                    // carries LIVE/FINAL state, and a strip above only the live
+                    // card knocked the shelf out of alignment (June 4 fix).
                     HStack(alignment: .top, spacing: 10) {
                         ForEach(shelf.picks, id: \.id) { pick in
-                            VStack(alignment: .leading, spacing: 6) {
-                                if let ls = liveScore(for: pick) {
-                                    LiveScoreStrip(score: ls)
-                                }
-                                ZStack {
-                                    if isPremium {
-                                        FlippablePickCard(pick: pick,
-                                                                gameResult: shelf.settled ? gamePickResult(pick) : nil,
-                                                                showSportBadge: false,
-                                                                backHeight: UIScreen.main.bounds.height * 0.68)
-                                    } else {
-                                        CompactPickRow(pick: pick, showSportBadge: false)
-                                            .blur(radius: 4.5).opacity(0.7).allowsHitTesting(false)
-                                        lockBadge
-                                    }
+                            ZStack {
+                                if isPremium {
+                                    FlippablePickCard(pick: pick,
+                                                            gameResult: shelf.settled ? gamePickResult(pick) : nil,
+                                                            showSportBadge: false,
+                                                            backHeight: UIScreen.main.bounds.height * 0.68)
+                                } else {
+                                    CompactPickRow(pick: pick, showSportBadge: false)
+                                        .blur(radius: 4.5).opacity(0.7).allowsHitTesting(false)
+                                    lockBadge
                                 }
                             }
                             .frame(width: 308)
@@ -3028,9 +3017,7 @@ struct PremiumPicksView: View {
             }
         }
 
-        let live = await SupabaseAPI.fetchLiveScores(date: SupabaseAPI.todayEST())
         await MainActor.run {
-            liveScores = live
             gameResultsMap = rMap
             gameShelves = gShelves
             propShelves = pShelves
@@ -7834,21 +7821,25 @@ struct CompactPickRow: View {
         let last = lower.split(separator: " ").last.map(String.init) ?? lower
         return String(last.prefix(3)).uppercased()
     }
-    /// The pick with the team name collapsed to its abbreviation (e.g. "PHI ML").
-    /// The FULL name goes first so multi-word teams never leave fragments
-    /// behind ("Vegas Golden Knights ML" -> "VGK ML", not "VEGAS GOLDEN ML").
+    /// The pick with the team name collapsed to its abbreviation (e.g. "PHI ML",
+    /// "VGK ML"). The pick text may carry the full name, the short name, or a
+    /// display-truncated fragment ("Vegas Golden ML", "Columbus ML", "Red Wings
+    /// ML") — so strip the LEADING RUN of team-name words and put the standard
+    /// abbreviation in its place; no fragment can survive.
     private var compactPick: String {
-        var raw = pickParts.pick
-        let pickedShort = homeIsPicked ? homeName : (awayIsPicked ? awayName : "")
-        guard !pickedShort.isEmpty else { return raw.uppercased() }
-        let abbrev = teamAbbrev(pickedShort)
+        let raw = pickParts.pick
+        guard homeIsPicked || awayIsPicked else { return raw.uppercased() }
         let pickedFull = homeIsPicked ? (pick.homeTeam ?? "") : (pick.awayTeam ?? "")
-        if !pickedFull.isEmpty, raw.range(of: pickedFull, options: .caseInsensitive) != nil {
-            raw = raw.replacingOccurrences(of: pickedFull, with: abbrev, options: .caseInsensitive)
-        } else {
-            raw = raw.replacingOccurrences(of: pickedShort, with: abbrev, options: .caseInsensitive)
-        }
-        return raw.uppercased()
+        let pickedShort = homeIsPicked ? homeName : awayName
+        let abbrev = teamAbbrev(pickedShort.isEmpty ? pickedFull : pickedShort)
+        var teamWords = Set(pickedFull.lowercased().split(separator: " ").map(String.init))
+        teamWords.formUnion(pickedShort.lowercased().split(separator: " ").map(String.init))
+        var words = raw.split(separator: " ").map(String.init)
+        var lead = 0
+        while lead < words.count, teamWords.contains(words[lead].lowercased()) { lead += 1 }
+        guard lead > 0 else { return raw.uppercased() }
+        words.removeFirst(lead)
+        return ([abbrev] + words).joined(separator: " ").uppercased()
     }
 
     private var confidenceValue: CGFloat {
@@ -7939,13 +7930,23 @@ struct CompactPickRow: View {
     private var pickedSideLower: String {
         pickParts.pick.lowercased()
     }
-    private var awayIsPicked: Bool {
+    /// Short mascot first (the common case), then any distinctive word of the
+    /// full name — display truncation can strip the mascot from the pick text
+    /// ("Vegas Golden Knights ML" arrives as "Vegas Golden ML", "Columbus Blue
+    /// Jackets ML" as "Columbus ML"), so the mascot alone isn't reliable.
+    private func sideIsPicked(full: String?, short: String, otherFull: String?) -> Bool {
         let p = pickedSideLower
-        return !awayName.isEmpty && p.contains(awayName.lowercased())
+        if !short.isEmpty, p.contains(short.lowercased()) { return true }
+        guard let full, !full.isEmpty else { return false }
+        let otherWords = Set((otherFull ?? "").lowercased().split(separator: " ").map(String.init))
+        return full.lowercased().split(separator: " ").map(String.init)
+            .contains { $0.count >= 4 && !otherWords.contains($0) && p.contains($0) }
+    }
+    private var awayIsPicked: Bool {
+        sideIsPicked(full: pick.awayTeam, short: awayName, otherFull: pick.homeTeam)
     }
     private var homeIsPicked: Bool {
-        let p = pickedSideLower
-        return !homeName.isEmpty && p.contains(homeName.lowercased())
+        sideIsPicked(full: pick.homeTeam, short: homeName, otherFull: pick.awayTeam)
     }
 
     private var awaySeedTag: String? {
@@ -11836,6 +11837,13 @@ struct PropsHubView: View {
                             if s.playerId != nil { breakdownSignal = s } else { selectedSignal = s }
                         }
                     }
+                    // GARY HOME RUN THREATS — the players Gary picked to homer
+                    // today, with his two-sentence reason. Fed by gary_hr_threats.
+                    if !items(.hrThreat).isEmpty {
+                        HubSectionHeader(eyebrow: "Gary Home Run Threats", sub: "Who Gary has going deep today")
+                        VStack(spacing: 0) { ForEach(items(.hrThreat)) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
+                            .quantPanel().padding(.horizontal, 14)
+                    }
                     // PLAYER EDGES — one section, lane tabs instead of four
                     // stacked scrollers (platoon / heat / ballpark / cooling).
                     if !playerEdgeLanes.isEmpty {
@@ -11885,7 +11893,7 @@ struct PropsHubView: View {
                             .quantPanel().padding(.horizontal, 14)
                     }
                     // Anything else → a compact list
-                    let extras = leagueSignals.filter { ![.regression, .platoon, .ballpark, .hot, .cold, .h2h, .injury, .situational, .streak, .tournament].contains($0.kind) }
+                    let extras = leagueSignals.filter { ![.regression, .platoon, .ballpark, .hot, .cold, .h2h, .injury, .situational, .streak, .tournament, .hrThreat].contains($0.kind) }
                     if !extras.isEmpty {
                         HubSectionHeader(eyebrow: "More Edges", sub: "Other angles tonight")
                         VStack(spacing: 0) { ForEach(extras) { s in SignalRow(s: s) { _ in selectedSignal = s } } }
