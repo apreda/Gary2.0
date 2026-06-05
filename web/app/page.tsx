@@ -1,65 +1,119 @@
-import Image from "next/image";
+import Image from 'next/image';
+import Link from 'next/link';
+import type { Metadata } from 'next';
+import { AppStoreButton } from '@/components/AppStoreButton';
+import { PickCard } from '@/components/PickCard';
+import { PropCard } from '@/components/PropCard';
+import { RecordTicker } from '@/components/RecordTicker';
+import { Eyebrow } from '@/components/Eyebrow';
+import { fetchTodayGamePicks, fetchTodayPropPicks, selectTopPick, selectTopProps } from '@/lib/gary/picks';
+import { fetchAllGameResults, computeRecord, sinceDate } from '@/lib/gary/results';
+import { estDateStr } from '@/lib/gary/dates';
 
-export default function Home() {
+export const revalidate = 600;
+
+export const metadata: Metadata = {
+  title: 'Gary AI — Free Sports Picks for Every Game, Every Day',
+  description:
+    'Free daily picks with written reasoning across NBA, NFL, NHL, MLB, NCAAB, NCAAF, and the 2026 World Cup. Public track record. Free on iOS.',
+  alternates: { canonical: '/' },
+};
+
+export default async function Home() {
+  const [gamePicks, propPicks, results] = await Promise.all([
+    fetchTodayGamePicks(), fetchTodayPropPicks(), fetchAllGameResults(),
+  ]);
+
+  const topPick = selectTopPick(gamePicks);
+  const topProp = selectTopProps(propPicks, 1)[0] ?? null;
+
+  // Recent wins ticker (last 14 days, latest first)
+  const cutoff = estDateStr(new Date(Date.now() - 14 * 86400000));
+  const recentWins = sinceDate(results, cutoff)
+    .filter(r => r.result === 'won' && (r.pick_text || r.matchup))
+    .slice(0, 10)
+    .map(r => ({ league: (r.league ?? '').toUpperCase(), pick: r.pick_text ?? r.matchup ?? '', date: r.game_date ?? '' }));
+
+  // Last-30-day record for the proof strip
+  const l30 = computeRecord(sinceDate(results, estDateStr(new Date(Date.now() - 30 * 86400000))));
+  const allTime = computeRecord(results);
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <main>
+      <RecordTicker items={recentWins} />
+
+      {/* Hero — the bear hosts */}
+      <section className="mx-auto max-w-6xl px-4 pb-12 pt-16 text-center">
+        <Image src="/brand/GaryIconBG.png" alt="Gary the bear" width={140} height={140} className="mx-auto" priority />
+        <h1 className="mx-auto mt-6 max-w-3xl font-display text-5xl leading-tight text-white/95 md:text-6xl">
+          Every Game. Everyday. Always Free.
+        </h1>
+        <p className="mx-auto mt-4 max-w-xl text-lg text-white/60">
+          Gary covers the full slate — not just best bets. Every pick comes with the
+          reasoning behind it, and every result goes on the record.
+        </p>
+        <div className="mt-8 flex items-center justify-center gap-4">
+          <AppStoreButton />
+          <Link href="/picks" className="rounded-xl border border-white/15 px-5 py-3 text-sm text-white/80 hover:border-white/30">
+            See today&apos;s picks
+          </Link>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+        <p className="mt-6 font-mono text-[12px] text-white/45">
+          LAST 30 DAYS {l30.wins}-{l30.losses} · ALL-TIME {allTime.wins}-{allTime.losses} ({allTime.pct}%) ON {allTime.graded.toLocaleString()} GRADED PICKS
+        </p>
+      </section>
+
+      {/* Today's free pick + prop — the data closes */}
+      <section className="mx-auto max-w-6xl px-4 py-12">
+        <Eyebrow>TODAY&apos;S FREE PICKS</Eyebrow>
+        <div className="mt-4 grid gap-5 md:grid-cols-2">
+          {topPick ? <PickCard pick={topPick} /> : (
+            <div className="rounded-[20px] border border-white/10 bg-card p-8 text-center text-white/45">
+              Today&apos;s slate drops soon. Last night&apos;s results are on the <Link href="/results" className="text-white/75 underline">record</Link>.
+            </div>
+          )}
+          {topProp && <PropCard prop={topProp} />}
         </div>
-      </main>
-    </div>
+        <p className="mt-4 text-sm text-white/55">
+          Full slate of Gary&apos;s picks are live. Every game covered. Completely free.{' '}
+          <Link href="/picks" className="text-white/80 underline">All of today&apos;s picks →</Link>
+        </p>
+      </section>
+
+      {/* How Gary works — honest, 3 steps */}
+      <section className="mx-auto max-w-6xl px-4 py-12">
+        <Eyebrow>HOW GARY WORKS</Eyebrow>
+        <div className="mt-4 grid gap-5 md:grid-cols-3">
+          {[
+            ['Research', 'A research agent investigates every game with live data tools — odds, stats, injuries, splits, weather.'],
+            ['The call', 'Gary weighs the evidence against each sport’s rules and makes the call, with a confidence rating.'],
+            ['On the record', 'Every pick is written up, graded the next morning, and added to the public track record.'],
+          ].map(([title, body], i) => (
+            <div key={title} className="rounded-[12px] border border-white/10 bg-card p-6">
+              <span className="font-mono text-[11px] font-bold text-white/35">0{i + 1}</span>
+              <h3 className="mt-2 font-display text-xl text-white/95">{title}</h3>
+              <p className="mt-2 text-[15px] leading-relaxed text-white/60">{body}</p>
+            </div>
+          ))}
+        </div>
+        <Link href="/how-it-works" className="mt-4 inline-block text-sm text-white/70 underline">The full methodology →</Link>
+      </section>
+
+      {/* App tease — Winners lives in the app */}
+      <section className="mx-auto max-w-6xl px-4 py-12">
+        <div className="rounded-[20px] border border-white/10 bg-elev p-8 md:flex md:items-center md:justify-between">
+          <div className="max-w-xl">
+            <Eyebrow>IN THE APP</Eyebrow>
+            <h2 className="mt-2 font-display text-3xl text-white/95">Gary&apos;s best bets, live scores, and the full Billfold</h2>
+            <p className="mt-2 text-[15px] text-white/60">
+              The website carries the free slate. The app adds Winners — Gary&apos;s
+              highest-conviction board — plus live game tracking and the complete
+              performance ledger.
+            </p>
+          </div>
+          <div className="mt-6 md:mt-0"><AppStoreButton /></div>
+        </div>
+      </section>
+    </main>
   );
 }
