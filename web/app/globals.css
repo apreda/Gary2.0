@@ -1,0 +1,36 @@
+@import "tailwindcss";
+
+@theme {
+  --color-gold: #C9A227;
+  --color-gold-light: #E8D48B;
+  --color-gold-warm: #F4E4BA;
+  --color-gold-dark: #8B6914;
+  --color-silver: #C7CCD6;
+  --color-silver-light: #D7DCE4;
+  --color-silver-dim: #AEB8C4;
+  --color-ink: #08080A;
+  --color-card: #15171C;
+  --color-chip: #1C1F26;
+  --color-elev: #1A1A1E;
+  --color-win: #3FB950;
+  --color-loss: #E5484D;
+  --color-chart-win: #22C55E;
+  --color-chart-loss: #EF4444;
+  --color-nba: #3B82F6;
+  --color-nfl: #22C55E;
+  --color-nhl: #00A3E0;
+  --color-ncaab: #F97316;
+  --color-ncaaf: #DC2626;
+  --color-mlb: #7BC267;
+  --color-wc: #14B8A6;
+  --font-display: var(--font-barlow);
+  --font-body: var(--font-inter);
+  --font-mono: var(--font-jbmono);
+}
+
+html { background: #08080A; }
+body { background: #08080A; color: rgba(255, 255, 255, 0.92); font-family: var(--font-body); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
