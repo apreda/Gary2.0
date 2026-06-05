@@ -1526,535 +1526,88 @@ struct LiquidGlassBackground: View {
     }
 }
 
-// MARK: - Performance Banner (Yesterday's Game Picks Record)
-
-struct PerformanceBanner: View {
-    let wins: Int
-    let losses: Int
-    let pushes: Int
-    let sportBreakdown: [SupabaseAPI.SportRecord]
-    
-    private var total: Int { wins + losses }
-    private var winRate: Double { total > 0 ? Double(wins) / Double(total) : 0 }
-    
-    private var moodGradient: LinearGradient {
-        if winRate >= 0.80 {
-            // Fire - Red/Orange flame
-            return LinearGradient(colors: [Color(hex: "#EF4444"), Color(hex: "#F97316")], startPoint: .topLeading, endPoint: .bottomTrailing)
-        } else if winRate >= 0.70 {
-            // Cooking - Orange/Amber
-            return LinearGradient(colors: [Color(hex: "#F97316"), Color(hex: "#F59E0B")], startPoint: .topLeading, endPoint: .bottomTrailing)
-        } else if winRate >= 0.60 {
-            // Beer - Gold/Green (celebratory)
-            return LinearGradient(colors: [Color(hex: "#F59E0B"), Color(hex: "#10B981")], startPoint: .topLeading, endPoint: .bottomTrailing)
-        } else if winRate >= 0.50 {
-            // Worried - Yellow/Amber (cautious)
-            return LinearGradient(colors: [Color(hex: "#EAB308"), Color(hex: "#CA8A04")], startPoint: .topLeading, endPoint: .bottomTrailing)
-        } else if winRate >= 0.40 {
-            // Ice Cold - Light blue/Cyan
-            return LinearGradient(colors: [Color(hex: "#06B6D4"), Color(hex: "#0891B2")], startPoint: .topLeading, endPoint: .bottomTrailing)
-        } else {
-            // Doomsday - Dark blue/Purple
-            return LinearGradient(colors: [Color(hex: "#6366F1"), Color(hex: "#4F46E5")], startPoint: .topLeading, endPoint: .bottomTrailing)
-        }
-    }
-    
-    private var moodLabel: String {
-        if winRate >= 0.80 { return "On Fire" }
-        else if winRate >= 0.70 { return "Cooking" }
-        else if winRate >= 0.60 { return "Locked In" }
-        else if winRate >= 0.50 { return "Grinding" }
-        else if winRate >= 0.40 { return "Ice Cold" }
-        else { return "Rough Day" }
-    }
-
-    private var moodColor: Color {
-        if winRate >= 0.80 { return Color(hex: "#FF6B35") } // fire orange
-        else if winRate >= 0.70 { return Color(hex: "#F59E0B") } // warm amber
-        else if winRate >= 0.60 { return Color(hex: "#4ADE80") } // green
-        else if winRate >= 0.50 { return Color(hex: "#A3A3A3") } // neutral gray
-        else if winRate >= 0.40 { return Color(hex: "#7DD3FC") } // ice blue
-        else { return Color(hex: "#A78BFA") } // purple
-    }
-    
-    private var moodImage: String {
-        if winRate >= 0.80 { return "GaryFire" }
-        else if winRate >= 0.70 { return "GaryCooking" }
-        else if winRate >= 0.60 { return "GaryBeer" }
-        else if winRate >= 0.50 { return "GaryWorried" }
-        else if winRate >= 0.40 { return "GaryIceCold" }
-        else { return "GaryDoomsday" }
-    }
-    
-    var body: some View {
-        VStack(spacing: 4) {
-            // Header row
-            HStack(alignment: .firstTextBaseline) {
-                Text("YESTERDAY")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(GaryColors.gold)
-                Spacer()
-                Text(moodLabel)
-                    .font(.system(size: 13, weight: .heavy))
-                    .foregroundStyle(moodColor)
-                HStack(spacing: 2) {
-                    Text("·")
-                        .foregroundStyle(.white.opacity(0.25))
-                    Text("\(wins)-\(losses)")
-                        .foregroundStyle(.white.opacity(0.55))
-                    if pushes > 0 {
-                        Text("-\(pushes)")
-                            .foregroundStyle(.white.opacity(0.4))
-                    }
-                }
-                .font(GaryFonts.mono(12, bold: true))
-            }
-
-            // Sport breakdown — stacked layout (sport name on top, record below)
-            if !sportBreakdown.isEmpty {
-                HStack(spacing: 0) {
-                    ForEach(Array(sportBreakdown.prefix(4).enumerated()), id: \.element.id) { index, sport in
-                        if index > 0 {
-                            Rectangle()
-                                .fill(.white.opacity(0.08))
-                                .frame(width: 0.5, height: 32)
-                        }
-                        VStack(spacing: 3) {
-                            Text(sport.league)
-                                .font(.system(size: 10, weight: .heavy))
-                                .tracking(0.8)
-                                .foregroundStyle(.white.opacity(0.45))
-                            HStack(spacing: 2) {
-                                Text("\(sport.wins)")
-                                    .font(GaryFonts.mono(16, bold: true))
-                                    .foregroundStyle(sport.wins > sport.losses ? GaryColors.gold : .white.opacity(0.5))
-                                Text("-")
-                                    .font(.system(size: 14, weight: .bold))
-                                    .foregroundStyle(.white.opacity(0.3))
-                                Text("\(sport.losses)")
-                                    .font(GaryFonts.mono(16, bold: true))
-                                    .foregroundStyle(sport.losses > sport.wins ? .white.opacity(0.6) : .white.opacity(0.3))
-                            }
-                        }
-                        .frame(maxWidth: .infinity)
-                    }
-                }
-                .padding(.vertical, 10)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Color.white.opacity(0.03))
-                )
-            }
-        }
-    }
-}
-
-// MARK: - Sport Mini Card (for breakdown)
-
-struct SportMiniCard: View {
-    let sport: SupabaseAPI.SportRecord
-    
-    var body: some View {
-        VStack(spacing: 5) {
-            // League name as header
-            Text(sport.league)
-                .font(.system(size: 12, weight: .heavy))
-                .foregroundStyle(sport.color)
-                .tracking(0.3)
-            
-            // Record
-            HStack(spacing: 2) {
-                Text("\(sport.wins)")
-                    .font(.system(size: 17, weight: .bold))
-                    .foregroundStyle(sport.wins > 0 ? Color(hex: "#10B981") : .secondary)
-                Text("-")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(.tertiary)
-                Text("\(sport.losses)")
-                    .font(.system(size: 17, weight: .bold))
-                    .foregroundStyle(Color.white.opacity(0.35))
-                if sport.pushes > 0 {
-                    Text("-")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(.tertiary)
-                    Text("\(sport.pushes)")
-                        .font(.system(size: 17, weight: .bold))
-                        .foregroundStyle(Color(hex: "#EAB308")) // Yellow for pushes
-                }
-            }
-        }
-        .padding(.vertical, 6)
-    }
-}
-
-// MARK: - Recent Wins Stock Ticker
-
-struct RecentWinsTicker: View {
-    let wins: [(String, String, String)]
-    @State private var offset: CGFloat = 0
-
-    var body: some View {
-        GeometryReader { geo in
-            let itemWidth: CGFloat = 230
-            let totalWidth = CGFloat(wins.count) * itemWidth
-
-            HStack(spacing: 0) {
-                // Duplicate the content for seamless loop
-                ForEach(0..<2, id: \.self) { _ in
-                    HStack(spacing: 0) {
-                        ForEach(Array(wins.enumerated()), id: \.offset) { _, win in
-                            HStack(spacing: 7) {
-                                Image(systemName: "checkmark")
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundStyle(.green)
-                                Text(win.0)
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .foregroundStyle(.white.opacity(0.8))
-                                    .lineLimit(1)
-                                Text(win.1)
-                                    .font(.system(size: 10, weight: .heavy))
-                                    .foregroundStyle(GaryColors.gold)
-                            }
-                            .frame(width: itemWidth)
-                        }
-                    }
-                }
-            }
-            .offset(x: offset)
-            .onAppear {
-                offset = 0
-                withAnimation(.linear(duration: Double(wins.count) * 4).repeatForever(autoreverses: false)) {
-                    offset = -totalWidth
-                }
-            }
-        }
-        .frame(height: 32)
-        .clipped()
-        .overlay(
-            HStack {
-                LinearGradient(colors: [Color(hex: "#1A1A1C"), .clear], startPoint: .leading, endPoint: .trailing)
-                    .frame(width: 40)
-                Spacer()
-                LinearGradient(colors: [.clear, Color(hex: "#1A1A1C")], startPoint: .leading, endPoint: .trailing)
-                    .frame(width: 40)
-            }
-        )
-    }
-}
-
-// MARK: - What's New Section
-
-struct WhatsNewSection: View {
-    @AppStorage("selectedTab") private var selectedTab: Int = 0
-    @State private var expanded = true
-
-    // (icon, title, tab index)
-    private var items: [(icon: String, title: String, tab: Int)] {
-        [
-            ("baseball.fill", "MLB Season", 1),
-            ("chart.line.uptrend.xyaxis", "Billfold", 4),
-            ("sparkles", "Props", 2)
-        ]
-    }
-
-    var body: some View {
-        VStack(spacing: 8) {
-            // Tappable headline
-            Button {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    expanded.toggle()
-                }
-            } label: {
-                HStack(spacing: 6) {
-                    Text("WHAT'S NEW")
-                        .font(.system(size: 11, weight: .bold))
-                        .tracking(1)
-                        .foregroundStyle(GaryColors.gold)
-
-                    Image(systemName: expanded ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundStyle(GaryColors.gold.opacity(0.5))
-
-                    Spacer()
-
-                    Text("GARY A.I.")
-                        .font(.system(size: 11, weight: .heavy))
-                        .tracking(1)
-                        .foregroundStyle(GaryColors.gold.opacity(0.5))
-
-                    // Compact preview pills when collapsed
-                    if !expanded {
-                        HStack(spacing: 6) {
-                            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-                                HStack(spacing: 4) {
-                                    Image(systemName: item.icon)
-                                        .font(.system(size: 8))
-                                    Text(item.title)
-                                        .font(.system(size: 9, weight: .semibold))
-                                }
-                                .foregroundStyle(.white.opacity(0.45))
-                            }
-                        }
-                    }
-                }
-            }
-            .buttonStyle(.plain)
-
-            // Expandable horizontal buttons
-            if expanded {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-                            Button {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                    selectedTab = item.tab
-                                }
-                            } label: {
-                                HStack(spacing: 8) {
-                                    Image(systemName: item.icon)
-                                        .font(.system(size: 13, weight: .semibold))
-                                        .foregroundStyle(GaryColors.gold)
-
-                                    Text(item.title)
-                                        .font(.system(size: 12, weight: .bold))
-                                        .foregroundStyle(.white)
-                                }
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 9)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                        .fill(Color(hex: "#0A0A0C"))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                                .stroke(GaryColors.gold.opacity(0.12), lineWidth: 0.5)
-                                        )
-                                    )
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-                }
-            }
-        }
-    }
-
 // MARK: - Home View
 
+// The Front Page — yesterday's receipts, today's doors, no boxes.
+// Last night's stories on top (the honest tape + the lead), each one a door
+// to today's version of itself; tonight's board underneath. The only true
+// card on the page is the FREE PICK — it earns its box.
 struct HomeView: View {
     @AppStorage("selectedTab") private var selectedTab: Int = 0
     @State private var freePick: GaryPick?
     @State private var freeProp: PropPick?
     @State private var loading = true
     @State private var animateIn = false
-    @State private var recentWins: [(String, String, String)] = [] // (label, league, date)
     @State private var yesterdayRecord: (wins: Int, losses: Int, pushes: Int) = (0, 0, 0)
     @State private var sportBreakdown: [SupabaseAPI.SportRecord] = []
     @State private var yesterdayTopPick: GaryPick? = nil
     @State private var yesterdayTopPickResult: String? = nil
     @State private var yesterdayTopProp: PropPick? = nil
     @State private var yesterdayTopPropResult: String? = nil
-    @State private var selectedPick: GaryPick? = nil
-    @State private var selectedProp: PropPick? = nil
+    // Front-page modules
+    @State private var leadStory: HomeLeadStoryBlock.Story? = nil
+    @State private var receiptLanes: [HomeReceiptsSection.LaneRecord] = []
+    @State private var receiptsSub = "Yesterday's boards, graded"
+    @State private var edgesPostedToday = 0
+    @State private var playsOnBoard = 0
+    @State private var gamesLiveNow = 0
+    @State private var showHowGaryWorks = false
 
-    // Dynamic hero image based on most recent performance
-    private var heroImage: String {
-        let total = yesterdayRecord.wins + yesterdayRecord.losses
-        guard total > 0 else { return "GaryIconBG" } // Fallback — standard bear logo
-        
-        let winRate = Double(yesterdayRecord.wins) / Double(total)
-        if winRate >= 0.80 { return "GaryFire" }
-        else if winRate >= 0.70 { return "GaryCooking" }
-        else if winRate >= 0.60 { return "GaryBeer" }
-        else if winRate >= 0.50 { return "GaryWorried" }
-        else if winRate >= 0.40 { return "GaryIceCold" }
-        else { return "GaryDoomsday" }
-    }
-    
-    // Glow color for hero image shadow
-    private var heroImageGlow: Color {
-        let total = yesterdayRecord.wins + yesterdayRecord.losses
-        guard total > 0 else { return GaryColors.gold }
-        
-        let winRate = Double(yesterdayRecord.wins) / Double(total)
-        if winRate >= 0.80 { return Color(hex: "#EF4444") } // Red/fire
-        else if winRate >= 0.70 { return Color(hex: "#F97316") } // Orange
-        else if winRate >= 0.60 { return Color(hex: "#10B981") } // Green
-        else if winRate >= 0.50 { return Color(hex: "#EAB308") } // Yellow
-        else if winRate >= 0.40 { return Color(hex: "#06B6D4") } // Cyan
-        else { return Color(hex: "#6366F1") } // Purple
-    }
-    
     var body: some View {
         ZStack {
             // Background
             LiquidGlassBackground(grainDensity: 0.0009, grainOpacityRange: 0.008...0.018)
 
-            // Content
-            VStack(spacing: 0) {
-                // ── Wins Ticker ──
-                if !recentWins.isEmpty {
-                    RecentWinsTicker(wins: recentWins)
-                        .opacity(animateIn ? 1 : 0)
-                        .animation(.easeOut(duration: 0.6).delay(0.1), value: animateIn)
-                }
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 22) {
 
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 0) {
-
-                        // ── Hero: Logo + What's New ──
-                        HStack(alignment: .center, spacing: 14) {
-                            // Performance-based Gary image (depends on yesterday's record)
-                            Image(heroImage)
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 194, height: 194)
-                                .shadow(color: heroImageGlow.opacity(0.25), radius: 16)
-
-                            // Right: What's New as compact horizontal pills
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("WHAT'S NEW")
-                                    .font(.system(size: 11, weight: .heavy))
-                                    .tracking(1)
-                                    .foregroundStyle(GaryColors.gold.opacity(0.4))
-
-                                VStack(spacing: 6) {
-                                    Button {
-                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                            selectedTab = 1
-                                        }
-                                        // Post notification to set sport filter to MLB
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                            NotificationCenter.default.post(name: Notification.Name("NavigateToSport"), object: "MLB")
-                                        }
-                                    } label: {
-                                        HStack(spacing: 8) {
-                                            Image(systemName: "baseball.fill")
-                                                .font(.system(size: 13))
-                                                .foregroundStyle(GaryColors.gold)
-                                            Text("MLB")
-                                                .font(.system(size: 14, weight: .bold))
-                                                .foregroundStyle(.white)
-                                            Spacer()
-                                            Image(systemName: "chevron.right")
-                                                .font(.system(size: 10, weight: .semibold))
-                                                .foregroundStyle(.white.opacity(0.15))
-                                        }
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 10)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                                .fill(Color.white.opacity(0.05))
-                                        )
-                                    }
-                                    .buttonStyle(.plain)
-                                    homeNavPill(icon: "sparkles", title: "Props", tab: 2)
-                                    homeNavPill(icon: "chart.bar.fill", title: "Billfold", tab: 4)
-                                }
-                            }
-                            .offset(y: -18)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.top, 4)
+                    // ── ① Masthead — wordmark only. The mood images are
+                    // officially retired (June 4 2026): the app icon and the
+                    // nav-bar bear are Gary enough; the record is the welcome.
+                    GaryPageHeader(title: "Gary", accent: GaryPageHeader<EmptyView>.dateLabel())
                         .opacity(animateIn ? 1 : 0)
                         .animation(.easeOut(duration: 0.6), value: animateIn)
 
-                        // ── Yesterday's Record ──
-                        if yesterdayRecord.wins + yesterdayRecord.losses > 0 {
-                            PerformanceBanner(
-                                wins: yesterdayRecord.wins,
-                                losses: yesterdayRecord.losses,
-                                pushes: yesterdayRecord.pushes,
-                                sportBreakdown: sportBreakdown
-                            )
-                            .padding(.horizontal, 16)
-                            .padding(.top, 2)
+                    // ── ② The Tape — yesterday, honestly ──
+                    if yesterdayRecord.wins + yesterdayRecord.losses > 0 {
+                        tape
                             .opacity(animateIn ? 1 : 0)
-                            .animation(.easeOut(duration: 0.6).delay(0.1), value: animateIn)
+                            .animation(.easeOut(duration: 0.6).delay(0.05), value: animateIn)
+                    }
+
+                    // ── ③ Lead story — the cash, or the owned miss ──
+                    if let story = leadStory {
+                        HomeLeadStoryBlock(story: story) {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 1 }
                         }
+                        .opacity(animateIn ? 1 : 0)
+                        .animation(.easeOut(duration: 0.6).delay(0.1), value: animateIn)
+                    }
 
-                        // ── Today's Picks ──
-                        VStack(spacing: 0) {
-                            // Top Pick
-                            if let pick = freePick {
-                                VStack(alignment: .leading, spacing: 5) {
-                                    Text("Today's Top Picks")
-                                        .font(.system(size: 12, weight: .bold))
-                                        .foregroundStyle(GaryColors.gold)
-                                        .padding(.leading, 4)
-                                    FlippablePickCard(pick: pick, gameResult: nil, showSportBadge: true)
-                                }
-                            } else if !loading {
-                                // Show yesterday's top results with W/L stamps
-                                VStack(spacing: 6) {
-                                    Text("NEW PICKS COMING SOON")
-                                        .font(.system(size: 9, weight: .heavy))
-                                        .tracking(1)
-                                        .foregroundStyle(GaryColors.gold.opacity(0.4))
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                        .padding(.leading, 4)
-
-                                    if let yPick = yesterdayTopPick {
-                                        FlippablePickCard(pick: yPick, gameResult: yesterdayTopPickResult, showSportBadge: true)
-                                    }
-                                }
-                            }
-
-                            // Top Prop — stacked directly below with no gap
-                            if let prop = freeProp {
-                                FlippablePropCard(prop: prop, showSportBadge: true)
-                            } else if !loading, let yProp = yesterdayTopProp {
-                                FlippablePropCard(prop: yProp, gameResult: yesterdayTopPropResult, showSportBadge: true)
-                            }
+                    // ── ④ The Receipts — graded lanes route to today's boards ──
+                    if !receiptLanes.isEmpty {
+                        HomeReceiptsSection(lanes: receiptLanes, sub: receiptsSub) {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 2 }
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.top, 6)
                         .opacity(animateIn ? 1 : 0)
                         .animation(.easeOut(duration: 0.6).delay(0.15), value: animateIn)
+                    }
 
-                        // ── How Gary Works — Tabbed Feature Display ──
-                        // (Talk to Gary moved to its own primary tab in the nav bar)
-                        HowGaryWorksSection()
-                        .padding(.horizontal, 16)
-                        .padding(.top, 10)
+                    // ── ⑤ Tonight's Board — the free pick + the doors ──
+                    boardSection
+                        .opacity(animateIn ? 1 : 0)
+                        .animation(.easeOut(duration: 0.6).delay(0.2), value: animateIn)
+
+                    // ── ⑥ Footer — quiet ──
+                    footer
                         .opacity(animateIn ? 1 : 0)
                         .animation(.easeOut(duration: 0.6).delay(0.3), value: animateIn)
-
-                        // ── Social Links ──
-                        SocialLinksBar()
-                            .padding(.horizontal, 16)
-                            .padding(.top, 10)
-                            .opacity(animateIn ? 1 : 0)
-                            .animation(.easeOut(duration: 0.6).delay(0.4), value: animateIn)
-                    }
-                    .padding(.bottom, 100)
                 }
+                .padding(.bottom, 110)
             }
         }
-        .overlay {
-            if let pick = selectedPick {
-                PickDetailPopup(
-                    pick: pick,
-                    gameResult: yesterdayTopPick?.pick_id == pick.pick_id ? yesterdayTopPickResult : nil,
-                    onDismiss: { selectedPick = nil }
-                )
-                .transition(.opacity.combined(with: .scale(scale: 0.95)))
-                .zIndex(100)
-            }
-        }
-        .overlay {
-            if let prop = selectedProp {
-                PropDetailPopup(prop: prop) {
-                    selectedProp = nil
-                }
-                .transition(.opacity)
-                .zIndex(100)
-            }
-        }
-        .onChange(of: selectedPick?.pick_id) { _ in
-            PickDetailState.shared.isShowing = selectedPick != nil
+        .sheet(isPresented: $showHowGaryWorks) {
+            GaryIntroSheet { showHowGaryWorks = false }
         }
         .task {
             do {
@@ -2071,6 +1624,8 @@ struct HomeView: View {
                     async let propPicksFetch = SupabaseAPI.fetchPropPicks(date: date)
                     async let gameResultsFetch = SupabaseAPI.fetchRecentGameResults(limit: 30)
                     async let propResultsFetch = SupabaseAPI.fetchRecentPropResults(limit: 30)
+                    async let liveFetch = SupabaseAPI.fetchLiveScores(date: date)
+                    async let todayLedgerFetch = SupabaseAPI.fetchInsightLedger(date: date)
 
                     // Wait for performance record first (needed for hero image)
                     if let record = try? await recordFetch {
@@ -2087,44 +1642,29 @@ struct HomeView: View {
                         sportBreakdown = breakdown
                     }
 
-                    // Build recent wins ticker from game + prop results
-                    let shortDate: (String?) -> String = { dateStr in
-                        guard let dateStr = dateStr else { return "" }
-                        // Parse "YYYY-MM-DD" and format as "Feb 3"
-                        let months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                                      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-                        let parts = dateStr.split(separator: "-")
-                        if parts.count == 3,
-                           let m = Int(parts[1]), m >= 1, m <= 12,
-                           let d = Int(parts[2]) {
-                            return "\(months[m - 1]) \(d)"
-                        }
-                        return ""
-                    }
-                    var wins: [(String, String, String)] = []
                     let recentGameResults = (try? await gameResultsFetch) ?? []
                     let recentPropResults = (try? await propResultsFetch) ?? []
 
-                    if !recentGameResults.isEmpty {
-                        let gameWins = recentGameResults.filter { $0.result == "won" }.prefix(10)
-                        for w in gameWins {
-                            let label = w.pick_text ?? w.matchup ?? "Win"
-                            let league = w.effectiveLeague ?? "PICK"
-                            let date = shortDate(w.game_date)
-                            wins.append((label, league, date))
-                        }
+                    // ③ Lead story — the latest settled day's biggest cash, or
+                    // the owned miss on a losing night. Template-built, no AI.
+                    leadStory = Self.buildLeadStory(recentGameResults)
+
+                    // ⑤ Door counts — live games + edges posted tonight.
+                    gamesLiveNow = (await liveFetch).filter { $0.isLive }.count
+                    edgesPostedToday = (await todayLedgerFetch).count
+
+                    // ④ The Receipts — graded lanes from the hub's graded day,
+                    // walking back one extra day when the grader hasn't run yet.
+                    var gradedDate = SupabaseAPI.hubGradedDateEST()
+                    var ledger = await SupabaseAPI.fetchInsightLedger(date: gradedDate).filter { $0.result != nil }
+                    if ledger.isEmpty, let back = Self.shiftDate(gradedDate, by: -1) {
+                        gradedDate = back
+                        ledger = await SupabaseAPI.fetchInsightLedger(date: back).filter { $0.result != nil }
                     }
-                    if !recentPropResults.isEmpty {
-                        let propWins = recentPropResults.filter { $0.result == "won" }.prefix(10)
-                        for w in propWins {
-                            let label = Formatters.propResultTitle(w)
-                            let league = w.effectiveLeague ?? "PROP"
-                            let date = shortDate(w.game_date)
-                            wins.append((label, league, date))
-                        }
-                    }
-                    // Shuffle to mix game and prop wins, take up to 12
-                    recentWins = Array(wins.shuffled().prefix(12))
+                    receiptLanes = Self.buildReceiptLanes(ledger)
+                    receiptsSub = gradedDate == SupabaseAPI.hubGradedDateEST()
+                        ? "Yesterday's boards, graded"
+                        : "Boards graded \(Self.prettyDate(gradedDate))"
 
                     // Yesterday's top pick & prop (shown when today's aren't ready yet)
                     do {
@@ -2206,9 +1746,12 @@ struct HomeView: View {
                     }
 
                     // Select Top Prop: highest confidence
+                    var propCount = 0
                     if let allProps = try? await propPicksFetch, !allProps.isEmpty {
                         freeProp = allProps.sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.first
+                        propCount = allProps.count
                     }
+                    playsOnBoard = (todayOnlyPicks?.count ?? 0) + propCount
 
                     loading = false
                 }
@@ -2219,110 +1762,366 @@ struct HomeView: View {
         }
     }
 
-    // MARK: - Quick Nav Card
+    // MARK: - ② The Tape
 
-    private func quickNavCard(icon: String, title: String, subtitle: String, tab: Int) -> some View {
+    /// One honest mono line — yesterday's record with the sport splits.
+    /// Losses included; that line is the brand. Taps through to the Billfold.
+    private var tape: some View {
         Button {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                selectedTab = tab
-            }
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
         } label: {
-            VStack(alignment: .leading, spacing: 6) {
-                Image(systemName: icon)
-                    .font(.system(size: 18))
-                    .foregroundStyle(GaryColors.gold)
-
-                Text(title)
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(.white)
-
-                Text(subtitle)
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.35))
-            }
-            .frame(width: 100, alignment: .leading)
-            .padding(12)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color(hex: "#0D0D0F"))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(GaryColors.gold.opacity(0.1), lineWidth: 0.5)
-                    )
-            )
-        }
-        .buttonStyle(.plain)
-    }
-
-    // MARK: - Home Nav Card (full-width variant for home hero)
-
-    private func homeNavCard(icon: String, title: String, subtitle: String, tab: Int) -> some View {
-        Button {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                selectedTab = tab
-            }
-        } label: {
-            HStack(spacing: 11) {
-                Image(systemName: icon)
-                    .font(.system(size: 15))
-                    .foregroundStyle(GaryColors.gold)
-                    .frame(width: 22)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(.white)
-                    Text(subtitle)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.35))
+            HStack(spacing: 12) {
+                Text("YESTERDAY")
+                    .font(GaryFonts.mono(10, bold: true)).tracking(1)
+                    .foregroundStyle(GaryColors.gold.opacity(0.85))
+                Text(Self.recordLine(yesterdayRecord.wins, yesterdayRecord.losses, yesterdayRecord.pushes))
+                    .font(GaryFonts.mono(13, bold: true))
+                    .foregroundStyle(yesterdayRecord.wins >= yesterdayRecord.losses
+                                     ? Color(hex: "#3FB950") : .white.opacity(0.65))
+                ForEach(sportBreakdown.prefix(3)) { s in
+                    HStack(spacing: 5) {
+                        Text(s.league)
+                            .font(GaryFonts.mono(10, bold: true))
+                            .foregroundStyle(.white.opacity(0.4))
+                        Text("\(s.wins)–\(s.losses)")
+                            .font(GaryFonts.mono(11, bold: false))
+                            .foregroundStyle(.white.opacity(0.6))
+                    }
                 }
-
-                Spacer()
-
+                Spacer(minLength: 6)
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.2))
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.25))
             }
-            .padding(.horizontal, 13)
-            .padding(.vertical, 11)
-            .background(
-                RoundedRectangle(cornerRadius: 11, style: .continuous)
-                    .fill(Color(hex: "#0D0D0F"))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 11, style: .continuous)
-                            .stroke(GaryColors.gold.opacity(0.1), lineWidth: 0.5)
-                    )
-            )
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .padding(.horizontal, 16)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
 
-    // MARK: - Home Nav Pill (compact)
+    // MARK: - ⑤ Tonight's Board
 
-    private func homeNavPill(icon: String, title: String, tab: Int) -> some View {
-        Button {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                selectedTab = tab
+    private var boardSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HubSectionHeader(eyebrow: "Tonight's Board", sub: "Where everything lives")
+
+            // The FREE PICK — the page's one true card.
+            VStack(alignment: .leading, spacing: 6) {
+                if let pick = freePick {
+                    Text("FREE PICK")
+                        .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
+                        .foregroundStyle(GaryColors.gold.opacity(0.9))
+                    FlippablePickCard(pick: pick, gameResult: nil, showSportBadge: true)
+                } else if !loading, let yPick = yesterdayTopPick {
+                    Text("LAST NIGHT'S TOP PICK — NEW BOARD SOON")
+                        .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
+                        .foregroundStyle(GaryColors.gold.opacity(0.5))
+                    FlippablePickCard(pick: yPick, gameResult: yesterdayTopPickResult, showSportBadge: true)
+                }
+                if let prop = freeProp {
+                    FlippablePropCard(prop: prop, showSportBadge: true)
+                } else if !loading, freePick == nil, let yProp = yesterdayTopProp {
+                    FlippablePropCard(prop: yProp, gameResult: yesterdayTopPropResult, showSportBadge: true)
+                }
             }
-        } label: {
-            HStack(spacing: 8) {
+            .padding(.horizontal, 16)
+
+            // The doors — live counts, not menu labels.
+            VStack(spacing: 0) {
+                HomeDoorRow(icon: "list.bullet.rectangle",
+                            title: playsOnBoard > 0 ? "\(playsOnBoard) plays on the board" : "Board posts closer to game time",
+                            badge: gamesLiveNow > 0 ? "\(gamesLiveNow) LIVE" : nil,
+                            destination: "Winners") {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 1 }
+                }
+                Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 46)
+                HomeDoorRow(icon: "square.grid.2x2",
+                            title: edgesPostedToday > 0 ? "\(edgesPostedToday) edges posted for tonight" : "Tonight's edges are brewing",
+                            destination: "The Hub") {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 2 }
+                }
+                if let days = Self.daysUntilWorldCup(), days > 0 {
+                    Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 46)
+                    HomeDoorRow(icon: "soccerball",
+                                title: "World Cup kicks off in \(days) day\(days == 1 ? "" : "s")",
+                                destination: "The Hub") {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 2 }
+                    }
+                }
+            }
+            .quantPanel()
+            .padding(.horizontal, 16)
+        }
+    }
+
+    // MARK: - ⑥ Footer
+
+    private var footer: some View {
+        VStack(spacing: 16) {
+            Button { showHowGaryWorks = true } label: {
+                HStack(spacing: 5) {
+                    Text("How Gary works")
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.5))
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(.white.opacity(0.3))
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+
+            SocialLinksBar()
+                .padding(.horizontal, 16)
+        }
+    }
+
+    // MARK: - Front-page builders (template-only, no AI)
+
+    private static func recordLine(_ w: Int, _ l: Int, _ p: Int) -> String {
+        p > 0 ? "\(w)–\(l)–\(p)" : "\(w)–\(l)"
+    }
+
+    /// "2026-06-02" -> "Jun 2"
+    private static func prettyDate(_ s: String) -> String {
+        let months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        let parts = s.split(separator: "-")
+        guard parts.count == 3, let m = Int(parts[1]), (1...12).contains(m), let d = Int(parts[2]) else { return s }
+        return "\(months[m - 1]) \(d)"
+    }
+
+    private static func shiftDate(_ s: String, by days: Int) -> String? {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.timeZone = TimeZone(identifier: "America/New_York")
+        guard let d = f.date(from: s),
+              let shifted = Calendar.current.date(byAdding: .day, value: days, to: d) else { return nil }
+        return f.string(from: shifted)
+    }
+
+    /// Days until the 2026 World Cup opener (June 11, EST). Nil after kickoff.
+    private static func daysUntilWorldCup() -> Int? {
+        var cal = Calendar(identifier: .gregorian)
+        if let tz = TimeZone(identifier: "America/New_York") { cal.timeZone = tz }
+        let kickoff = DateComponents(calendar: cal, year: 2026, month: 6, day: 11).date ?? Date()
+        let days = cal.dateComponents([.day], from: cal.startOfDay(for: Date()), to: kickoff).day ?? 0
+        return days > 0 ? days : nil
+    }
+
+    /// The latest settled day's biggest cash — or the owned miss on a losing
+    /// night. Honesty is the brand; both leads use the same plain template.
+    private static func buildLeadStory(_ results: [GameResult]) -> HomeLeadStoryBlock.Story? {
+        let settled = results.filter { $0.result == "won" || $0.result == "lost" }
+        guard let day = settled.compactMap({ $0.game_date }).max() else { return nil }
+        let rows = settled.filter { $0.game_date == day }
+
+        func odds(_ r: GameResult) -> Double {
+            if let v = Double(r.odds?.value ?? "") { return v }
+            return Double(Formatters.splitPickAndOdds(r.pick_text).1) ?? -110
+        }
+        func pickName(_ r: GameResult) -> String {
+            let p = Formatters.splitPickAndOdds(r.pick_text).0
+            return p.isEmpty ? (r.matchup ?? "The pick") : p
+        }
+        func detailLine(_ r: GameResult, closer: String) -> String {
+            var bits: [String] = []
+            if let fs = r.final_score, !fs.isEmpty { bits.append("Final \(fs)") }
+            if let m = r.matchup, !m.isEmpty { bits.append(m) }
+            let lead = bits.joined(separator: " — ")
+            return lead.isEmpty ? closer : "\(lead). \(closer)"
+        }
+
+        let wins = rows.filter { $0.result == "won" }
+        if let star = wins.max(by: { odds($0) < odds($1) }) {
+            let o = odds(star)
+            let suffix = o > 0 ? " at +\(Int(o))" : ""
+            return .init(eyebrow: "LAST NIGHT",
+                         headline: "\(pickName(star)) cashed\(suffix)",
+                         detail: detailLine(star, closer: "The full card lives in the Billfold."))
+        }
+        if let miss = rows.max(by: { abs(odds($0)) < abs(odds($1)) }) {
+            return .init(eyebrow: "LAST NIGHT",
+                         headline: "\(pickName(miss)) didn't land",
+                         detail: detailLine(miss, closer: "We own it — the full card is in the Billfold."))
+        }
+        return nil
+    }
+
+    /// Per-lane records from the graded ledger — HR Threats lead when present
+    /// (the flagship fun lane), the rest by graded volume. Capped at 4.
+    private static func buildReceiptLanes(_ rows: [SupabaseAPI.InsightLedgerRow]) -> [HomeReceiptsSection.LaneRecord] {
+        let meta: [String: (String, String)] = [
+            "gary_hr_threats": ("HR Threats", "flame"),
+            "heat_check": ("Heat Checks", "chart.line.uptrend.xyaxis"),
+            "platoon_edge": ("Platoon Edges", "arrow.left.arrow.right"),
+            "regression_watch": ("Regression Watch", "chart.line.downtrend.xyaxis"),
+            "ballpark": ("Ballpark Shifts", "building.columns"),
+            "ballpark_shift": ("Ballpark Shifts", "building.columns"),
+            "cooling_off": ("Cooling Off", "snowflake"),
+            "owned": ("Owned Matchups", "person.fill.checkmark"),
+            "beneficiary": ("Beneficiaries", "arrow.triangle.2.circlepath"),
+            "rest_fatigue": ("Rest & Fatigue", "zzz"),
+            "streak": ("Streaks", "bolt"),
+            "tournament": ("Tournament Stakes", "trophy"),
+            "situational": ("Situational", "scope"),
+        ]
+        var agg: [String: (hit: Int, miss: Int)] = [:]
+        for r in rows {
+            guard let c = r.category, let res = r.result else { continue }
+            var a = agg[c] ?? (0, 0)
+            if res == "hit" { a.hit += 1 } else if res == "miss" { a.miss += 1 }
+            agg[c] = a
+        }
+        var lanes: [HomeReceiptsSection.LaneRecord] = agg.compactMap { key, rec in
+            guard rec.hit + rec.miss > 0 else { return nil }
+            let m = meta[key] ?? (key.split(separator: "_").map { $0.capitalized }.joined(separator: " "), "circle.grid.2x2")
+            return .init(id: key, name: m.0, icon: m.1, hits: rec.hit, misses: rec.miss)
+        }
+        lanes.sort { a, b in
+            if (a.id == "gary_hr_threats") != (b.id == "gary_hr_threats") { return a.id == "gary_hr_threats" }
+            return (a.hits + a.misses) > (b.hits + b.misses)
+        }
+        return Array(lanes.prefix(4))
+    }
+}
+
+// MARK: - Front Page Blocks (Home)
+
+/// ③ The lead — one flat editorial block, no box: eyebrow, display headline,
+/// a two-line template story. Taps through to the Winners board.
+struct HomeLeadStoryBlock: View {
+    struct Story {
+        let eyebrow: String
+        let headline: String
+        let detail: String
+    }
+    let story: Story
+    let onTap: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text(story.eyebrow)
+                .font(GaryFonts.mono(10, bold: true)).tracking(1)
+                .foregroundStyle(GaryColors.gold.opacity(0.85))
+            Text(story.headline)
+                .font(GaryFonts.display(22))
+                .foregroundStyle(.white.opacity(0.95))
+                .fixedSize(horizontal: false, vertical: true)
+            Text(story.detail)
+                .font(.system(size: 13.5))
+                .foregroundStyle(.white.opacity(0.6))
+                .lineSpacing(2.5)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 16)
+        .contentShape(Rectangle())
+        .onTapGesture { onTap() }
+    }
+}
+
+/// ④ The Receipts — yesterday's boards, graded. Each lane's record routes to
+/// today's version of itself on the Hub: results are the hook, the Hub is
+/// the destination.
+struct HomeReceiptsSection: View {
+    struct LaneRecord: Identifiable {
+        let id: String
+        let name: String
+        let icon: String
+        let hits: Int
+        let misses: Int
+    }
+    let lanes: [LaneRecord]
+    let sub: String
+    let onOpenHub: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HubSectionHeader(eyebrow: "The Receipts", sub: sub)
+            VStack(spacing: 0) {
+                ForEach(Array(lanes.enumerated()), id: \.element.id) { i, lane in
+                    Button(action: onOpenHub) {
+                        HStack(spacing: 12) {
+                            Image(systemName: lane.icon)
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.55))
+                                .frame(width: 20)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(lane.name)
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(.white.opacity(0.92))
+                                Text("Today's board is live on the Hub")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.white.opacity(0.38))
+                            }
+                            Spacer(minLength: 8)
+                            Text("\(lane.hits)–\(lane.misses)")
+                                .font(GaryFonts.mono(17, bold: true))
+                                .foregroundStyle(lane.hits >= lane.misses
+                                                 ? Color(hex: "#3FB950") : Color(hex: "#E5484D"))
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(.white.opacity(0.25))
+                        }
+                        .padding(.vertical, 11)
+                        .padding(.horizontal, 14)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    if i < lanes.count - 1 {
+                        Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 46)
+                    }
+                }
+            }
+            .quantPanel()
+            .padding(.horizontal, 16)
+        }
+    }
+}
+
+/// ⑤ A flat door — a live count + destination; the menu that earns its words.
+struct HomeDoorRow: View {
+    let icon: String
+    let title: String
+    var badge: String? = nil
+    let destination: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
                 Image(systemName: icon)
-                    .font(.system(size: 13))
-                    .foregroundStyle(GaryColors.gold)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.55))
+                    .frame(width: 20)
                 Text(title)
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(.white)
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.15))
+                    .font(.system(size: 14.5, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                if let badge {
+                    Text(badge)
+                        .font(GaryFonts.mono(9.5, bold: true)).tracking(0.8)
+                        .foregroundStyle(GaryColors.gold)
+                }
+                Spacer(minLength: 8)
+                HStack(spacing: 3) {
+                    Text(destination)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(GaryColors.heroAccent.opacity(0.85))
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(GaryColors.heroAccent.opacity(0.6))
+                }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color.white.opacity(0.05))
-            )
+            .padding(.vertical, 12)
+            .padding(.horizontal, 14)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
@@ -8855,105 +8654,6 @@ struct PickDetailPopup: View {
             .padding(.top, 6)
             .padding(.bottom, 96)
         }
-    }
-}
-
-// MARK: - How Gary Works (Tabbed Feature Display)
-
-struct HowGaryWorksSection: View {
-    @State private var activeIdx: Int? = nil
-
-    private struct Feature: Identifiable {
-        let id: Int
-        let icon: String
-        let label: String
-        let title: String
-        let text: String
-    }
-
-    private let features: [Feature] = [
-        Feature(id: 0, icon: "sportscourt.fill", label: "EDGE", title: "The Edge Finder",
-                text: "Gary doesn't pick winners — the spread already reflects that. He investigates where the number is wrong using matchup data, efficiency gaps, and situational factors the market may have mispriced."),
-        Feature(id: 1, icon: "arrow.left.arrow.right", label: "BOTH", title: "Steel Man Analysis",
-                text: "Before every pick, Gary builds the strongest case FOR and AGAINST each side. Only commits when one side clearly holds up under pressure from the other."),
-        Feature(id: 2, icon: "chart.bar.fill", label: "STATS", title: "Predictive Data",
-                text: "Offensive & defensive efficiency, pace, four factors, shooting quality — the metrics that forecast outcomes. Not box scores, records, or rankings."),
-        Feature(id: 3, icon: "figure.basketball", label: "SPORT", title: "Sport-Specific AI",
-                text: "NBA pace & matchups. NHL Corsi & goaltending. NCAAB guard play & tournament dynamics. Each sport runs its own deep analytical framework."),
-        Feature(id: 4, icon: "exclamationmark.shield.fill", label: "TRAPS", title: "Trap Detection",
-                text: "Every pick is stress-tested: injury overreactions, shooting variance, lookahead spots, public money bias, and narrative-driven line movement."),
-    ]
-
-    var body: some View {
-        VStack(spacing: 8) {
-            // Header
-            Text("HOW GARY WORKS")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(GaryColors.gold)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            // Icon row with labels
-            HStack(spacing: 0) {
-                ForEach(features) { f in
-                    Button {
-                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                            activeIdx = activeIdx == f.id ? nil : f.id
-                        }
-                    } label: {
-                        VStack(spacing: 4) {
-                            Image(systemName: f.icon)
-                                .font(.system(size: 17))
-                                .foregroundStyle(activeIdx == f.id ? GaryColors.gold : .white.opacity(0.55))
-                            Text(f.label)
-                                .font(.system(size: 8, weight: .heavy))
-                                .tracking(0.5)
-                                .foregroundStyle(activeIdx == f.id ? GaryColors.gold : .white.opacity(0.35))
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-
-            // Expanded detail — only shows when an icon is tapped
-            if let idx = activeIdx, idx < features.count {
-                let f = features[idx]
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(f.title)
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(.white)
-                    Text(f.text)
-                        .font(.system(size: 12, weight: .regular))
-                        .foregroundStyle(.white.opacity(0.7))
-                        .lineSpacing(3)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(GaryColors.gold.opacity(0.06))
-                )
-                .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
-            }
-        }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [Color(hex: "#1E1B16"), Color(hex: "#161514")],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(GaryColors.gold.opacity(0.18), lineWidth: 0.5)
-                )
-        )
     }
 }
 

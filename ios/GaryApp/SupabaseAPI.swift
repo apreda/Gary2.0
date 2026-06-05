@@ -419,6 +419,25 @@ enum SupabaseAPI {
         return graded > 0 ? (hit, graded) : nil
     }
 
+    /// One ledger row per insight card (league/category/result) — fuels the
+    /// Home front page: per-lane Receipts records (graded days) and the
+    /// "edges posted tonight" door count (today). Returns [] on any failure.
+    struct InsightLedgerRow: Decodable {
+        let league: String?
+        let category: String?
+        let result: String?
+    }
+    static func fetchInsightLedger(date: String) async -> [InsightLedgerRow] {
+        let url = buildURL(table: "insight_connections", query: [
+            URLQueryItem(name: "select", value: "league,category,result"),
+            URLQueryItem(name: "date", value: "eq.\(date)")
+        ])
+        guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
+              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let rows = try? JSONDecoder().decode([InsightLedgerRow].self, from: data) else { return [] }
+        return rows
+    }
+
     /// Fetch hub connections for a specific date + league (e.g. "MLB" / "NBA").
     /// Mirrors `fetchDailyPicks`: anon headers, dual `eq.` filter, 2xx guard
     /// returning [] (never throws on HTTP/decode failure). Returns [] when
