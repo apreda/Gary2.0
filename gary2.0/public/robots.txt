@@ -1,8 +1,0 @@
-User-agent: *
-Allow: /
-
-# Crawlers don't need these
-Disallow: /api/
-Disallow: /scripts/
-
-Sitemap: https://www.betwithgary.ai/sitemap.xml
