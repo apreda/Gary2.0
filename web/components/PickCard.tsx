@@ -13,6 +13,7 @@ export function PickCard({ pick, expanded = false }: { pick: GaryPick; expanded?
   const rawOdds = pick.odds ?? effectiveOdds(pick.pick);
   const conf = confidencePct(pick.confidence);
   const take = pick.rationale?.replace(/^Gary's Take\s*/i, '').trim();
+  const pickLabel = (pick.pick ?? '').replace(/[+-]\d{3,}\s*$/, '').trim();
 
   return (
     <article className="rounded-[20px] border border-gold/35 bg-card p-5 shadow-[0_8px_24px_rgba(0,0,0,0.45)]">
@@ -29,7 +30,7 @@ export function PickCard({ pick, expanded = false }: { pick: GaryPick; expanded?
         </p>
       )}
       <div className="mt-4 flex items-center justify-between rounded-[10px] border border-gold/60 bg-chip px-4 py-2.5">
-        <span className="font-mono text-sm font-bold text-gold">{pick.pick}</span>
+        <span className="font-mono text-sm font-bold text-gold">{pickLabel}</span>
         {rawOdds != null && (
           <span className="font-mono text-sm text-white/55">
             {typeof rawOdds === 'number' && rawOdds > 0 ? `+${rawOdds}` : rawOdds}

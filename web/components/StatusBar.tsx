@@ -10,7 +10,7 @@ export function StatusBar({
   const pipe = <span className="mx-2 inline-block h-2.5 w-px bg-white/12 align-middle" />;
   return (
     <div className="font-mono text-[11px] leading-none">
-      <span className="font-bold text-white/40">REC </span>
+      <span className="font-bold text-white/55">REC </span>
       {record ? (
         <>
           <span className="text-white/78">{record.wins}-{record.losses}</span>
@@ -18,7 +18,7 @@ export function StatusBar({
           <span className="font-bold text-gold">{record.pct}%</span>
         </>
       ) : (
-        <span className="text-white/40">—</span>
+        <span className="text-white/55">—</span>
       )}
       {pipe}
       <span className="font-bold text-white/55">

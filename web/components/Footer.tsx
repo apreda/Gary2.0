@@ -10,13 +10,13 @@ export function Footer() {
           gambling problem, call 1-800-GAMBLER.
         </p>
         <div className="flex flex-wrap gap-x-5 gap-y-2 text-[13px] text-white/55">
-          <Link href="/terms" className="hover:text-white/90">Terms</Link>
-          <Link href="/privacy" className="hover:text-white/90">Privacy</Link>
-          <Link href="/contact" className="hover:text-white/90">Contact</Link>
-          <Link href="/press" className="hover:text-white/90">Press &amp; Brand</Link>
-          <a href="https://x.com/BetwithGary" className="hover:text-white/90">@BetwithGary</a>
+          <Link href="/terms" className="hover:text-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/70 focus-visible:ring-offset-2 focus-visible:ring-offset-ink">Terms</Link>
+          <Link href="/privacy" className="hover:text-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/70 focus-visible:ring-offset-2 focus-visible:ring-offset-ink">Privacy</Link>
+          <Link href="/contact" className="hover:text-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/70 focus-visible:ring-offset-2 focus-visible:ring-offset-ink">Contact</Link>
+          <Link href="/press" className="hover:text-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/70 focus-visible:ring-offset-2 focus-visible:ring-offset-ink">Press &amp; Brand</Link>
+          <a href="https://x.com/BetwithGary" className="hover:text-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/70 focus-visible:ring-offset-2 focus-visible:ring-offset-ink">@BetwithGary</a>
         </div>
-        <p className="text-[12px] text-white/35">© {new Date().getFullYear()} Gary A.I. LLC · betwithgary.ai</p>
+        <p className="text-[12px] text-white/50">© {new Date().getFullYear()} Gary A.I. LLC · betwithgary.ai</p>
       </div>
     </footer>
   );

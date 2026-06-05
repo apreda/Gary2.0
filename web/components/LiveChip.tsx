@@ -36,7 +36,7 @@ export function LiveChip({ score }: { score: LiveScoreRow }) {
       <span className={isLive ? 'text-white/90' : 'text-white/55'}>
         {score.away_abbr} {score.away_score} · {score.home_abbr} {score.home_score}
       </span>
-      <span className="text-white/45">{score.detail}</span>
+      <span className="text-white/55">{score.detail}</span>
     </span>
   );
 }
