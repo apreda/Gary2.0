@@ -10803,6 +10803,7 @@ struct PicksCarouselView: View {
     @State private var connLoaded = false
     @State private var sport = "ALL"
     @State private var page = 0
+    @Namespace private var pickTabNS
     @State private var selectedProp: PropPick?
     /// Today's live-score snapshots (poller-fed); refreshed every 60s while visible.
     @State private var liveScores: [LiveScore] = []
@@ -10930,61 +10931,76 @@ struct PicksCarouselView: View {
         }
     }
 
-    /// One merged header row: sport pills · divider · TODAY · status chips.
-    /// Each matchup chip carries a second line — start time, ▶ LIVE + score,
-    /// or FINAL + score (YESTERDAY for recap games).
+    /// Winners-anatomy nav: underline tabs for TODAY + each matchup (with a
+    /// live-status second line), a hairline, then plain sport chips — no
+    /// bubbles, no gold-filled filters.
     private var headerBar: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    if sports.count > 1 {
+        VStack(alignment: .leading, spacing: 0) {
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .bottom, spacing: 26) {
+                        gameTab(0, label: "TODAY", status: nil)
+                        ForEach(Array(games.enumerated()), id: \.offset) { idx, g in
+                            gameTab(idx + 1, label: shortMatchup(g.matchup).uppercased(), status: statusLine(for: g))
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 10)
+                }
+                .onChange(of: page) { p in withAnimation { proxy.scrollTo(p, anchor: .center) } }
+            }
+            Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1)
+            if sports.count > 1 {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 18) {
                         ForEach(sports, id: \.self) { s in
                             let on = (s == sport)
                             Button { withAnimation(.easeInOut(duration: 0.2)) { sport = s } } label: {
                                 Text(s)
-                                    .font(GaryFonts.mono(11, bold: true)).tracking(0.8)
-                                    .foregroundStyle(on ? Color.black.opacity(0.85) : .white.opacity(0.5))
-                                    .padding(.horizontal, 12).padding(.vertical, 7)
-                                    .background(
-                                        Capsule().fill(on ? GaryColors.gold : Color.white.opacity(0.05))
-                                            .overlay(Capsule().stroke(on ? Color.clear : Color.white.opacity(0.08), lineWidth: 1))
-                                    )
-                            }.buttonStyle(.plain)
+                                    .font(GaryFonts.mono(10, bold: true)).tracking(0.8)
+                                    .foregroundStyle(sportChipStyle(s, on: on))
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
                         }
-                        Rectangle().fill(Color.white.opacity(0.12))
-                            .frame(width: 1, height: 24)
-                            .padding(.horizontal, 4)
                     }
-                    chip(0, "TODAY")
-                    ForEach(Array(games.enumerated()), id: \.offset) { idx, g in
-                        statusChip(idx + 1, g)
-                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 9)
                 }
-                .padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 10)
             }
-            .onChange(of: page) { p in withAnimation { proxy.scrollTo(p, anchor: .center) } }
         }
     }
 
-    /// Two-line matchup chip: matchup on top, live status under it.
-    private func statusChip(_ index: Int, _ g: (matchup: String, time: String, props: [PropPick])) -> some View {
+    /// Selected chip wears its sport accent (gold for ALL); the rest stay dim.
+    private func sportChipStyle(_ s: String, on: Bool) -> AnyShapeStyle {
+        guard on else { return AnyShapeStyle(Color.white.opacity(0.35)) }
+        if s == "ALL" { return AnyShapeStyle(GaryColors.gold) }
+        if s == "MLB" { return AnyShapeStyle(GaryColors.mlbFieldText) }
+        return AnyShapeStyle(Sport.from(league: s).accentColor)
+    }
+
+    /// Underline tab (the Winners GAMES/PROPS anatomy): matchup label, a
+    /// status second line (LIVE/score/time), gold capsule underline on active.
+    private func gameTab(_ index: Int, label: String, status: (text: String, color: Color)?) -> some View {
         let on = (index == page)
-        let status = statusLine(for: g)
         return Button { withAnimation(.easeInOut(duration: 0.25)) { page = index } } label: {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(shortMatchup(g.matchup))
-                    .font(GaryFonts.mono(12, bold: true)).tracking(0.5)
-                    .foregroundStyle(on ? GaryColors.gold : .white.opacity(0.5))
-                Text(status.text)
-                    .font(GaryFonts.mono(9, bold: true)).tracking(0.6)
-                    .foregroundStyle(status.color)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(label)
+                    .font(GaryFonts.mono(13, bold: true)).tracking(0.5)
+                    .foregroundStyle(on ? .white : .white.opacity(0.45))
+                Text(status?.text ?? " ")
+                    .font(GaryFonts.mono(8.5, bold: true)).tracking(0.5)
+                    .foregroundStyle(status?.color ?? .clear)
+                Group {
+                    if on {
+                        Capsule().fill(GaryColors.gold).frame(height: 2)
+                            .matchedGeometryEffect(id: "pickTabUnderline", in: pickTabNS)
+                    } else {
+                        Capsule().fill(Color.clear).frame(height: 2)
+                    }
+                }
             }
-            .padding(.horizontal, 14).padding(.vertical, 7)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(on ? GaryColors.gold.opacity(0.14) : Color.white.opacity(0.05))
-                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(on ? GaryColors.gold.opacity(0.5) : Color.clear, lineWidth: 1))
-            )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .id(index)
@@ -11010,22 +11026,6 @@ struct PicksCarouselView: View {
             }
         }
         return (g.time.isEmpty ? "TODAY" : g.time, .white.opacity(0.35))
-    }
-
-    private func chip(_ index: Int, _ label: String) -> some View {
-        let on = (index == page)
-        return Button { withAnimation(.easeInOut(duration: 0.25)) { page = index } } label: {
-            Text(label)
-                .font(GaryFonts.mono(12, bold: true)).tracking(0.5)
-                .foregroundStyle(on ? GaryColors.gold : .white.opacity(0.5))
-                .padding(.horizontal, 14).padding(.vertical, 10)
-                .background(
-                    Capsule().fill(on ? GaryColors.gold.opacity(0.14) : Color.white.opacity(0.05))
-                        .overlay(Capsule().stroke(on ? GaryColors.gold.opacity(0.5) : Color.clear, lineWidth: 1))
-                )
-        }
-        .buttonStyle(.plain)
-        .id(index)
     }
 
     private var emptyState: some View {
