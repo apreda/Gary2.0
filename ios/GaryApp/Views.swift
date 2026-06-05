@@ -2641,11 +2641,30 @@ struct PremiumPicksView: View {
     @State private var mode: Mode = .games
     @State private var jumpedLeague: String? = nil
 
-    // PROTOTYPE — per-sport entitlements (pending RevenueCat tiers). Simulates
-    // a user who pays for MLB + NBA: their boards lead, locked sports trail as
-    // a receipts storefront — never a blurred card between unlocked picks.
-    private let demoPaidSports: Set<String> = ["MLB", "NBA"]
-    private func sportUnlocked(_ lg: String) -> Bool { demoPaidSports.contains(lg) }
+    // Per-sport entitlements, granted by the Stripe webhook and keyed to this
+    // install's ID. isPremium stays as the all-access dev/QA preview toggle.
+    @State private var entitledSports: Set<String> = []
+    @Environment(\.scenePhase) private var scenePhase
+    private func sportUnlocked(_ lg: String) -> Bool {
+        isPremium || entitledSports.contains("ALL") || entitledSports.contains(lg)
+    }
+    /// Stripe Payment Links (test mode). The install ID rides along as
+    /// client_reference_id so the webhook knows who to grant.
+    private static let checkoutLinks: [String: String] = [
+        "MLB":   "https://buy.stripe.com/test_eVq28scnq3614OS0lKaIM00",
+        "NBA":   "https://buy.stripe.com/test_5kQ14odrueOJgxA9WkaIM01",
+        "NHL":   "https://buy.stripe.com/test_8x200k5Z26id6X0b0oaIM02",
+        "NFL":   "https://buy.stripe.com/test_00w8wQcnq0XTchkc4saIM03",
+        "NCAAF": "https://buy.stripe.com/test_3cI9AU4UY7mhgxA2tSaIM04",
+        "NCAAB": "https://buy.stripe.com/test_aFa14o2MQ361eps6K8aIM05",
+        "ALL":   "https://buy.stripe.com/test_bJe14o1IMgWR2GKb0oaIM06",
+        // "WC" joins when the pre-order product is approved.
+    ]
+    private func openCheckout(_ league: String) {
+        guard let base = Self.checkoutLinks[league],
+              let url = URL(string: "\(base)?client_reference_id=\(SupabaseAPI.installationId)") else { return }
+        UIApplication.shared.open(url)
+    }
     @State private var sportRecords: [String: (w: Int, l: Int)] = [:]
     @Namespace private var tabNS
 
@@ -2709,6 +2728,12 @@ struct PremiumPicksView: View {
             }
         }
         .task { await load() }
+        .onChange(of: scenePhase) { phase in
+            // Returning from Stripe checkout in Safari — pick up new grants.
+            if phase == .active {
+                Task { entitledSports = await SupabaseAPI.fetchEntitlements() }
+            }
+        }
     }
 
     /// Sport chips that jump the page to a league's shelf in the active mode.
@@ -2824,7 +2849,7 @@ struct PremiumPicksView: View {
                         .id("g-\(shelf.league)")
                 }
                 let locked = gameShelves.filter { !sportUnlocked($0.league) && !$0.picks.isEmpty }
-                if isPremium, !locked.isEmpty {
+                if !locked.isEmpty {
                     storefrontTail(locked.map { ($0.league, $0.picks.count, "pick") })
                 }
             } else {
@@ -2836,7 +2861,7 @@ struct PremiumPicksView: View {
                             .id("p-\(shelf.league)")
                     }
                     let locked = propShelves.filter { !sportUnlocked($0.league) && !$0.props.isEmpty }
-                    if isPremium, !locked.isEmpty {
+                    if !locked.isEmpty {
                         storefrontTail(locked.map { ($0.league, $0.props.count, "prop") })
                     }
                 }
@@ -2986,6 +3011,20 @@ struct PremiumPicksView: View {
             HubSectionHeader(eyebrow: "More boards", sub: "Sports you haven't unlocked")
             VStack(spacing: 0) {
                 ForEach(Array(boards.enumerated()), id: \.offset) { i, b in
+                    Button { openCheckout(b.league) } label: { storefrontRow(b) }
+                        .buttonStyle(.plain)
+                        .disabled(Self.checkoutLinks[b.league] == nil)
+                    if i < boards.count - 1 {
+                        Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 46)
+                    }
+                }
+            }
+            .quantPanel()
+            .padding(.horizontal, 16)
+        }
+    }
+
+    private func storefrontRow(_ b: (league: String, count: Int, unit: String)) -> some View {
                     HStack(spacing: 12) {
                         Image(systemName: Sport.from(league: b.league).icon)
                             .font(.system(size: 13, weight: .semibold))
@@ -3016,14 +3055,7 @@ struct PremiumPicksView: View {
                     }
                     .padding(.vertical, 12)
                     .padding(.horizontal, 14)
-                    if i < boards.count - 1 {
-                        Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 46)
-                    }
-                }
-            }
-            .quantPanel()
-            .padding(.horizontal, 16)
-        }
+                    .contentShape(Rectangle())
     }
 
     private func propPlaceholderRow(for league: String) -> some View {
@@ -3200,12 +3232,15 @@ struct PremiumPicksView: View {
                         last10.filter { $0.result == "lost" }.count)
         }
 
+        let entitlements = await SupabaseAPI.fetchEntitlements()
+
         await MainActor.run {
             gameResultsMap = rMap
             propResultsMap = pMap
             gameShelves = gShelves
             propShelves = pShelves
             sportRecords = sRec
+            entitledSports = entitlements
             loading = false
         }
     }

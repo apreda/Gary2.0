@@ -427,6 +427,31 @@ enum SupabaseAPI {
         let category: String?
         let result: String?
     }
+    /// Anonymous, durable per-install identity — the `client_reference_id` at
+    /// Stripe checkout and the key entitlements are granted to. Migrates to
+    /// auth user IDs when sign-in ships.
+    static var installationId: String {
+        let key = "garyInstallationId"
+        if let v = UserDefaults.standard.string(forKey: key) { return v }
+        let v = UUID().uuidString
+        UserDefaults.standard.set(v, forKey: key)
+        return v
+    }
+
+    /// Active Stripe-purchased entitlements for this install ("MLB", "ALL", ...).
+    static func fetchEntitlements() async -> Set<String> {
+        struct Row: Decodable { let product_key: String? }
+        let url = buildURL(table: "user_entitlements", query: [
+            URLQueryItem(name: "select", value: "product_key"),
+            URLQueryItem(name: "installation_id", value: "eq.\(installationId)"),
+            URLQueryItem(name: "status", value: "eq.active")
+        ])
+        guard let (data, response) = try? await URLSession.shared.data(for: makeRequest(url: url)),
+              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let rows = try? JSONDecoder().decode([Row].self, from: data) else { return [] }
+        return Set(rows.compactMap { $0.product_key })
+    }
+
     static func fetchInsightLedger(date: String) async -> [InsightLedgerRow] {
         let url = buildURL(table: "insight_connections", query: [
             URLQueryItem(name: "select", value: "league,category,result"),
