@@ -28,14 +28,17 @@ including while doing adjacent work. Tune-ups by request only.
 - **Game Pick Card** (gold, CompactPickRow): eyebrow + matchup + "Gary's Take ›" +
   gold pick chip with grey odds. Gold marks only the pick text and Gary's voice.
 - **Prop Pick Card + Prop Slip** (silver, CompactPropRow/PropSlipCard): silver twin of the
-  game card; OVER calls gold, UNDER calls silver; rows flip. THE RULE (final, June 5):
-  group props BY GAME — 2+ props from the SAME game share ONE slip; a prop alone (or
-  whose game has no sibling) is its own card. Groups ride a HORIZONTAL rail per league
-  shelf (slip 344pt / card 308pt); it must work automatically from the data. Selection
-  (selectPremiumProps) keeps whole games — never prune a same-game sibling. Team labels
-  beside player names are mascot-short (Formatters.shortTeamName). One shared
-  back app-wide (PropSlipBack: GARY'S TAKE · The Numbers · The Read). The Picks TODAY
-  page's combined top-props slip is a user-approved exception (locked page).
+  game card; OVER calls gold, UNDER calls silver; rows flip. THE RULE (final, June 5,
+  user-confirmed working): group props BY GAME — 2+ props from the SAME game share ONE
+  slip (scales to any count); a prop alone is its own card. Groups ride a HORIZONTAL
+  rail per league shelf (slip 344pt / card 308pt); automatic from the data. Winners
+  selection (selectPremiumProps) = straight confidence cut, top 5 per sport, NO per-game
+  cap (any per-game cap makes same-game pairs impossible by construction — the bug that
+  caused four rounds of churn). Slip eyebrow names the LEAGUE ("MLB · 2"), never "PROPS".
+  W/L letter capsules: leading (beside name) on Picks, trailing corner on Winners
+  (resultLetterTrailing). Team labels are mascot-short (Formatters.shortTeamName).
+  One shared back app-wide (PropSlipBack: GARY'S TAKE · The Numbers · The Read). The
+  Picks TODAY page's combined top-props slip is a user-approved exception (locked page).
 
 ## LOCKED: Injury Handling
 
