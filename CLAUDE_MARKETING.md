@@ -19,12 +19,11 @@
 - For recap tweets: Vary creative style daily, own the losses with transparency
 
 ### Branding & Logo (MANDATORY)
-- **ALWAYS use the actual Gary logo files** — NEVER let AI generate its own version of the logo
-- **ALWAYS use gary_bg.png** — this is the ONLY logo with a transparent background. It's the Gary lion face without hat.
-- gary-icon.png (with hat, NO transparency), garycigar.png (full body, NO transparency) — these have solid backgrounds, avoid for overlays
-- Other transparent assets in app: cooking.png, fire.png (both RGBA with transparency)
-- For graphics: Generate background/layout with AI, then overlay the REAL Gary logo with Pillow
-- App color palette: Deep black (#0A0A0A), Gold/yellow (#D4AF37), White text, Gray secondary, Green for wins
+- **ALWAYS use the actual Gary logo / character files** — NEVER let AI generate its own version of the bear (Gary is a **bear**, not a lion).
+- **The transparent logo is `GaryIconBG`** — `ios/GaryApp/Assets.xcassets/GaryIconBG.imageset/GaryIconBG.png` (1024×1024, transparent). This is the canonical overlay mark. *(The old `gary_bg.png` reference was wrong — no such file exists in the repo.)*
+- Mood / character assets (`GaryFire`, `GaryCooking`, `GaryBeer`, `GaryCigar`, …) live in the same `Assets.xcassets/` — reference them by their real names, not loose `.png` paths.
+- For graphics: generate the background / layout with AI, then overlay the REAL Gary asset with Pillow.
+- **App color palette: see `DESIGNER_BRIEFING.md` (canonical)** — gold `#C9A227`, near-black `#08080A`, silver `#C7CCD6`, green wins / red losses. Marketing must match it; don't re-list hexes here (copies drift).
 - **NO blue tint** — AI generators default to blue-ish dark tones, always specify warm black/no blue
 
 ### Content Voice
@@ -46,12 +45,4 @@
 - App Store: https://apps.apple.com/us/app/gary-ai/id6751238914
 
 ## POTD Record
-- March 5: Miami Heat -13 CASHED (2-2)
-- March 6: USA -9.5 CASHED (3-2)
-- March 7: Canada -1.5 CASHED (4-2)
-- March 8: Dominican Republic -6.5 CASHED (5-2)
-- March 9: Columbus Blue Jackets ML ❌ (5-3)
-- March 10: Memphis Grizzlies +4.5 ❌ (5-4)
-- March 11: TCU -5.5 (-115) CASHED ✅ (6-4)
-- March 12: Georgia -5.5 (-120) ❌ (6-5)
-- March 15: Vanderbilt -1.5 (-118) — PENDING
+**System of record: the Supabase `social_post_log` table** (see `SESSION_HANDOFF.md`). Don't keep a static log here — it goes stale (this one had stopped at March). Pull the record live from Supabase instead.
