@@ -2740,7 +2740,7 @@ struct PremiumPicksView: View {
             // Sign-in/out swaps the identity entitlements key on — refetch.
             Task { entitledSports = await SupabaseAPI.fetchEntitlements() }
         }
-        .sheet(isPresented: $showAuthSheet) { AuthView() }
+        .sheet(isPresented: $showAuthSheet) { AuthView(startInSignUp: true) }
     }
 
     /// Sport chips that jump the page to a league's shelf in the active mode.

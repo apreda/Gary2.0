@@ -6,8 +6,14 @@ import AuthenticationServices
 struct AuthView: View {
     @ObservedObject var authManager = AuthManager.shared
     @Environment(\.dismiss) private var dismiss
-    @State private var isSignUp = false
+    @State private var isSignUp: Bool
     @State private var email = ""
+
+    /// Settings' "Sign In" row opens in sign-in mode; the Winners paywall
+    /// anchor ("SIGN IN OR CREATE ACCOUNT") opens ready to create one.
+    init(startInSignUp: Bool = false) {
+        _isSignUp = State(initialValue: startInSignUp)
+    }
     @State private var password = ""
     @State private var confirmPassword = ""
     @State private var isSubmitting = false
@@ -151,6 +157,26 @@ struct AuthView: View {
                     .opacity(animateIn ? 1 : 0)
                     .animation(.easeOut(duration: 0.6).delay(0.3), value: animateIn)
 
+                    // Toggle Sign In / Sign Up — directly under the CTA so the
+                    // other path is always visible without scrolling.
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            isSignUp.toggle()
+                            authManager.errorMessage = nil
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(isSignUp ? "Already have an account?" : "Don't have an account?")
+                                .foregroundStyle(.secondary)
+                            Text(isSignUp ? "Sign In" : "Sign Up")
+                                .foregroundStyle(GaryColors.gold)
+                                .bold()
+                        }
+                        .font(.subheadline)
+                    }
+                    .opacity(animateIn ? 1 : 0)
+                    .animation(.easeOut(duration: 0.6).delay(0.3), value: animateIn)
+
                     // Forgot Password (sign-in only)
                     if !isSignUp {
                         Button {
@@ -203,26 +229,6 @@ struct AuthView: View {
                     .opacity(animateIn ? 1 : 0)
                     .offset(y: animateIn ? 0 : 30)
                     .animation(.easeOut(duration: 0.6).delay(0.4), value: animateIn)
-
-                    // Toggle Sign In / Sign Up
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.3)) {
-                            isSignUp.toggle()
-                            authManager.errorMessage = nil
-                        }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Text(isSignUp ? "Already have an account?" : "Don't have an account?")
-                                .foregroundStyle(.secondary)
-                            Text(isSignUp ? "Sign In" : "Sign Up")
-                                .foregroundStyle(GaryColors.gold)
-                                .bold()
-                        }
-                        .font(.subheadline)
-                    }
-                    .padding(.top, 8)
-                    .opacity(animateIn ? 1 : 0)
-                    .animation(.easeOut(duration: 0.6).delay(0.5), value: animateIn)
 
                     Spacer(minLength: 40)
                 }
