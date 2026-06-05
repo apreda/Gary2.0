@@ -5506,18 +5506,17 @@ struct BillfoldView: View {
     }
 
     private func passbookChip(_ label: String) -> some View {
+        // No bubble — brass text + chevron; the chevron alone says "menu".
         HStack(spacing: 3) {
             Text(label)
-                .font(.system(size: 11, weight: .semibold, design: .default))
+                .font(.system(size: 12, weight: .semibold, design: .default))
             Image(systemName: "chevron.down")
                 .font(.system(size: 7, weight: .bold))
         }
         .foregroundStyle(brass)
-        .padding(.horizontal, 9)
-        .padding(.vertical, 5)
-        .background(
-            Capsule().stroke(brass.opacity(0.45), lineWidth: 1)
-        )
+        .padding(.horizontal, 6)
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
     }
 
 
@@ -8091,14 +8090,9 @@ struct CompactPickRow: View {
                                 .foregroundStyle(.white.opacity(0.55))
                         }
                         Text(verdict == "won" ? "WON" : (verdict == "push" ? "PUSH" : "LOST"))
-                            .font(GaryFonts.mono(11.5, bold: true))
+                            .font(GaryFonts.mono(12, bold: true))
                             .tracking(0.8)
                             .foregroundStyle(resultStampColor)
-                            .padding(.horizontal, 10).padding(.vertical, 4)
-                            .background(
-                                Capsule().fill(resultStampColor.opacity(0.18))
-                                    .overlay(Capsule().stroke(resultStampColor.opacity(0.45), lineWidth: 1))
-                            )
                     } else if let live = liveStatus, live.isLive {
                         Text(liveSlotText(live, label: "LIVE"))
                             .font(GaryFonts.mono(11, bold: true))
@@ -10954,7 +10948,7 @@ struct PicksCarouselView: View {
                             let on = (s == sport)
                             Button { withAnimation(.easeInOut(duration: 0.2)) { sport = s } } label: {
                                 Text(s)
-                                    .font(GaryFonts.mono(10, bold: true)).tracking(0.8)
+                                    .font(GaryFonts.mono(12, bold: true)).tracking(0.8)
                                     .foregroundStyle(sportChipStyle(s, on: on))
                                     .frame(minHeight: 44)
                                     .contentShape(Rectangle())
@@ -11297,15 +11291,11 @@ struct PropSlipCard: View {
     }
 
     private func resultCapsule(_ r: (String, Color)) -> some View {
+        // Colored mono letter, no bubble — the app-wide result-tag rule.
         Text(r.0)
-            .font(GaryFonts.mono(10, bold: true))
+            .font(GaryFonts.mono(11, bold: true))
             .tracking(0.5)
             .foregroundStyle(r.1)
-            .padding(.horizontal, 7).padding(.vertical, 3)
-            .background(
-                Capsule().fill(r.1.opacity(0.18))
-                    .overlay(Capsule().stroke(r.1.opacity(0.45), lineWidth: 1))
-            )
     }
 
     private var front: some View {
@@ -12822,16 +12812,11 @@ struct CompactPropRow: View {
                     }
                     Spacer(minLength: 6)
                     if resolvedResult != nil {
-                        // Props wear the single letter in the game-pick capsule.
+                        // Props wear the single letter — colored text, no bubble.
                         Text(resolvedResult == "won" ? "W" : (resolvedResult == "push" ? "P" : "L"))
-                            .font(GaryFonts.mono(11.5, bold: true))
+                            .font(GaryFonts.mono(12, bold: true))
                             .tracking(0.5)
                             .foregroundStyle(resultStampColor)
-                            .padding(.horizontal, 9).padding(.vertical, 4)
-                            .background(
-                                Capsule().fill(resultStampColor.opacity(0.18))
-                                    .overlay(Capsule().stroke(resultStampColor.opacity(0.45), lineWidth: 1))
-                            )
                     } else if let live = liveStatus, live.isLive {
                         Text(liveSlotText(live, label: "LIVE"))
                             .font(GaryFonts.mono(11, bold: true))
