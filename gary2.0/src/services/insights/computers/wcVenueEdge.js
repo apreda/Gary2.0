@@ -161,7 +161,7 @@ function buildVenueRow(match) {
       detail:
         `${venueName} sits ${facts.altitudeM.toLocaleString('en-US')}m above sea level` +
         `${isHighestVenue(facts) ? ', the highest venue of the tournament' : ''}. ` +
-        `Visiting sides historically fade late at altitude.`,
+        `Thinner air at this elevation affects stamina and ball flight.`,
       game: wcGameLabel(match),
       value: `${facts.altitudeM}m`,
       tone: TONES.CAUTION,

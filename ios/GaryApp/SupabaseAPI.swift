@@ -217,6 +217,7 @@ enum SupabaseAPI {
             case "NCAAF": return Color(hex: "#DC2626")
             case "EPL": return Color(hex: "#8B5CF6")
             case "MLB": return Color(hex: "#2D5A27")
+            case "WC": return Color(hex: "#14B8A6")
             default: return GaryColors.gold
             }
         }

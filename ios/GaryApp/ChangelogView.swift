@@ -53,6 +53,19 @@ struct ChangelogEntry: Identifiable {
 
 let changelogEntries: [ChangelogEntry] = [
     ChangelogEntry(
+        version: "2.13",
+        date: "June 2026",
+        type: .feature,
+        title: "Gary 2.13 — 2026 FIFA World Cup",
+        changes: [
+            "World Cup game picks are live for all 104 matches, June 11 – July 19",
+            "Full 3-way market coverage: moneyline (including Draw), Asian handicap, and total goals",
+            "Tale of the Tape for every match: group standing, form, xG and xGA, possession, shots, pass accuracy",
+            "Tournament data from the FIFA World Cup API: fixtures, squads, group tables, head-to-head from past editions",
+            "World Cup lanes in Today's Edges: venue and altitude notes, group-stage stakes, matchup history"
+        ]
+    ),
+    ChangelogEntry(
         version: "2.12",
         date: "April 19, 2026",
         type: .update,
