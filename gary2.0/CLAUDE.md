@@ -28,7 +28,10 @@ including while doing adjacent work. Tune-ups by request only.
 - **Game Pick Card** (gold, CompactPickRow): eyebrow + matchup + "Gary's Take ›" +
   gold pick chip with grey odds. Gold marks only the pick text and Gary's voice.
 - **Prop Pick Card + Prop Slip** (silver, CompactPropRow/PropSlipCard): silver twin of the
-  game card; OVER calls gold, UNDER calls silver; 1 prop = full card, 2+ = slip; rows flip.
+  game card; OVER calls gold, UNDER calls silver; rows flip. THE RULE, unconditional on
+  EVERY surface (Picks, Winners, Home): 1 prop = full card, 2+ shown together = ONE slip —
+  regardless of which games they come from. One shared back app-wide (PropSlipBack:
+  GARY'S TAKE · The Numbers · The Read). Never render 2+ props as separate cards.
 
 ## LOCKED: Injury Handling
 
