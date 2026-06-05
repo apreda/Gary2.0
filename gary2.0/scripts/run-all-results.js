@@ -672,7 +672,12 @@ async function processPropBets(date) {
     const picks = typeof row.props === 'string' ? JSON.parse(row.props) : (row.props || row.picks || []);
     for (const p of picks) {
       const name = p.player || p.player_name, rawProp = p.prop || p.prop_type, type = rawProp?.split(' ')?.[0] || rawProp;
-      const line = p.line || p.line_value, bet = p.bet, sport = p.sport?.toUpperCase();
+      const line = p.line || p.line_value, bet = p.bet;
+      // 'MLB HR' is the dedicated home-run lane's sport label: it keeps its
+      // own label in prop_results (own record, never mixed into the main MLB
+      // props record) but routes to MLB data sources for grading.
+      const sport = p.sport?.toUpperCase();
+      const dataSport = sport === 'MLB HR' ? 'MLB' : sport;
       if (!name || !type || line === undefined) continue;
 
       const key = `${normalizeName(name)}-${type}-${line}-${row.date}`;
@@ -687,16 +692,16 @@ async function processPropBets(date) {
 
       let actual = null;
       let source = 'none';
-      if (sport === 'NBA') actual = getStatValue('NBA', nbaBox, name, type);
-      else if (sport === 'NHL') actual = getStatValue('NHL', nhlBox, name, type);
-      else if (sport === 'MLB') actual = getStatValue('MLB', mlbStats, name, type);
-      else if (sport === 'NFL') actual = getStatValue('NFL', nflStats, name, type);
+      if (dataSport === 'NBA') actual = getStatValue('NBA', nbaBox, name, type);
+      else if (dataSport === 'NHL') actual = getStatValue('NHL', nhlBox, name, type);
+      else if (dataSport === 'MLB') actual = getStatValue('MLB', mlbStats, name, type);
+      else if (dataSport === 'NFL') actual = getStatValue('NFL', nflStats, name, type);
 
       if (actual !== null) {
         source = 'api';
       } else {
         console.warn(`    [BDL Miss] ${sport}: ${name} "${type}" not found in box scores — trying grounding`);
-        actual = await getPropGrounding(sport, name, type, row.date);
+        actual = await getPropGrounding(dataSport, name, type, row.date);
         if (actual !== null) source = 'grounding';
       }
 

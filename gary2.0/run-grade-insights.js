@@ -353,6 +353,14 @@ function gradeCoolingOff(row, box) {
   return { result, note: hitterNote(box) };
 }
 
+function gradeGaryHrThreat(row, box) {
+  // Gary picked this player to homer — binary outcome, no push.
+  const hr = num(box.hr);
+  if (hr == null) return skip('no hr');
+  const result = hr >= 1 ? HIT : MISS;
+  return { result, note: `${hr} HR — ${hitterNote(box)}` };
+}
+
 function gradePlatoonEdge(row, box) {
   const hits = num(box.hits);
   if (hits == null) return skip('no hits');
@@ -481,6 +489,7 @@ const MLB_PLAYER_GRADERS = {
   owned: gradeOwned,
   ballpark_shift: gradeBallparkShift,
   regression_watch: gradeRegressionWatch,
+  gary_hr_threats: gradeGaryHrThreat,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -837,7 +846,7 @@ function playerNameFromHeadline(headline) {
   const h = String(headline || '');
   if (!h) return '';
   let cut = h.length;
-  for (const delim of [':', ' (', ' is ', ' has ', ' draws ']) {
+  for (const delim of [':', ' (', ' is ', ' has ', ' draws ', ' to go deep']) {
     const i = h.indexOf(delim);
     if (i > 0 && i < cut) cut = i;
   }

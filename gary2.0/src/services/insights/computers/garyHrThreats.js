@@ -41,9 +41,38 @@ function fmtOdds(odds) {
   return n > 0 ? `+${n}` : String(n);
 }
 
+// Resolve the slate game a pick belongs to by matching its team name against
+// the game's home/away names. Returns the BDL game object or null.
+function findSlateGame(games, teamName) {
+  if (!teamName) return null;
+  const norm = (s) => String(s || '').toLowerCase();
+  const t = norm(teamName);
+  return (games || []).find(g => {
+    const home = norm(g.home_team?.full_name || g.home_team_name || g.home_team);
+    const away = norm(g.away_team?.full_name || g.away_team_name || g.away_team);
+    return home.includes(t) || t.includes(home) || away.includes(t) || t.includes(away);
+  }) || null;
+}
+
 export async function computeGaryHrThreats(ctx) {
-  const { date } = ctx;
+  const { date, games, season, bdl } = ctx;
   const rows = [];
+  // Per-team season-stats cache for player-id resolution (heatCheck pattern).
+  const teamStatsCache = new Map();
+  async function resolvePlayerId(teamId, playerName) {
+    if (!bdl || teamId == null || !playerName) return null;
+    try {
+      if (!teamStatsCache.has(teamId)) {
+        teamStatsCache.set(teamId, await bdl.getMlbPlayerSeasonStats({ season, teamId }).catch(() => []));
+      }
+      const target = String(playerName).toLowerCase().replace(/[.\-']/g, '').trim();
+      const match = (teamStatsCache.get(teamId) || []).find(s => {
+        const n = String(s.player?.full_name || '').toLowerCase().replace(/[.\-']/g, '').trim();
+        return n === target || n.includes(target) || target.includes(n);
+      });
+      return match?.player?.id ?? null;
+    } catch { return null; }
+  }
   if (!SUPABASE_URL || !SUPABASE_KEY) {
     console.log('[garyHrThreats] missing Supabase config — skipping');
     return rows;
@@ -73,6 +102,16 @@ export async function computeGaryHrThreats(ctx) {
     const detail = twoSentences(p.rationale);
     if (!p.player || !detail) continue; // fail closed — never emit an empty card
     const confidence = Number(p.confidence);
+    // game_id + player_id make the row gradeable (run-grade-insights joins the
+    // box score by player_id within the slate game). Missing ids still emit —
+    // the card is content first; the grader will skip it with a note.
+    const slateGame = findSlateGame(games, p.team);
+    const playerTeamId = slateGame
+      ? (String(slateGame.home_team?.full_name || slateGame.home_team_name || '').toLowerCase().includes(String(p.team).toLowerCase())
+          ? slateGame.home_team?.id
+          : slateGame.away_team?.id)
+      : null;
+    const playerId = await resolvePlayerId(playerTeamId, p.player);
     rows.push(makeRow({
       category: 'garyHrThreats',
       headline: `${p.player} to go deep`,
@@ -83,7 +122,10 @@ export async function computeGaryHrThreats(ctx) {
       // Confidence 0.5→70, 0.85→84 — Gary's HR board should surface above
       // most statistical lanes but below true market-anomaly cards.
       relevance_score: clampScore(Number.isFinite(confidence) ? 50 + confidence * 40 : 65),
-      meta: { line: p.line, odds: p.odds, team: p.team, key_stats: (p.key_stats || []).slice(0, 3) },
+      player_id: playerId ?? undefined,
+      game_id: slateGame?.id ?? undefined,
+      // meta.player powers name-based grading fallback (did this player homer?)
+      meta: { player: p.player, line: p.line, odds: p.odds, team: p.team, key_stats: (p.key_stats || []).slice(0, 3) },
     }));
   }
 

@@ -243,6 +243,18 @@ export async function runAgenticPropsCli({
         console.log(`🏠 HR-only mode: ${beforeCount} total → ${playerProps.length} HR props`);
       }
 
+      // Regular MLB slate: home_runs are clearly-priced lottery tickets that
+      // were dragging the main props record (14.7% lifetime hit rate) — they
+      // belong exclusively to the dedicated MLB HR runner/lane, tracked as
+      // their own for-fun record (prop_type='home_runs' in prop_results).
+      if (!hrOnly && sportKey === 'baseball_mlb') {
+        const beforeCount = playerProps.length;
+        playerProps = playerProps.filter(p => !(p.prop_type || '').toLowerCase().includes('home_run'));
+        if (playerProps.length !== beforeCount) {
+          console.log(`🚫 Excluded ${beforeCount - playerProps.length} home_run props from the regular slate (MLB HR lane owns them)`);
+        }
+      }
+
       if (playerProps.length === 0) {
         console.log(`⚠️ No${hrOnly ? ' HR' : ''} props available for this game, skipping...`);
         continue;
