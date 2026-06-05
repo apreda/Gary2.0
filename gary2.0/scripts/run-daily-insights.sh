@@ -18,6 +18,11 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 cd "$PROJECT_DIR"
 
+echo "[$(date)] Starting Gary HR picks run (feeds the Home Run Threats hub lane)..."
+# HR picks upsert into prop_picks (idempotent per day). A failure must not
+# block the insights pass — the HR lane simply emits 0 rows when no picks exist.
+node scripts/run-mlb-hr-picks.js --store=1 || echo "[$(date)] HR picks run failed (non-fatal) — continuing to insights"
+
 echo "[$(date)] Starting insight connections run..."
 node run-insight-connections.js "$@"
 echo "[$(date)] Insight connections complete."

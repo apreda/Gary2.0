@@ -2856,7 +2856,7 @@ struct PremiumPicksView: View {
                                         FlippablePickCard(pick: pick,
                                                                 gameResult: shelf.settled ? gamePickResult(pick) : nil,
                                                                 showSportBadge: false,
-                                                                backHeight: UIScreen.main.bounds.height * 0.62)
+                                                                backHeight: UIScreen.main.bounds.height * 0.68)
                                     } else {
                                         CompactPickRow(pick: pick, showSportBadge: false)
                                             .blur(radius: 4.5).opacity(0.7).allowsHitTesting(false)
@@ -2882,7 +2882,7 @@ struct PremiumPicksView: View {
                         ZStack {
                             if isPremium {
                                 FlippablePropCard(prop: prop, showSportBadge: false,
-                                                  backHeight: UIScreen.main.bounds.height * 0.62)
+                                                  backHeight: UIScreen.main.bounds.height * 0.68)
                             } else {
                                 CompactPropRow(prop: prop, showSportBadge: false)
                                     .blur(radius: 4.5).opacity(0.7).allowsHitTesting(false)
@@ -6461,10 +6461,13 @@ struct BillfoldView: View {
     private func gameCardView(_ result: GameResult) -> some View {
         Group {
             if let pick = garyPick(from: result) {
-                FlippablePickCard(pick: pick,
-                                  gameResult: result.result,
-                                  finalScore: result.final_score,
-                                  showSportBadge: true)
+                // Billfold's recent picks are receipts, not live cards — static,
+                // no flip, no Take affordance.
+                CompactPickRow(pick: pick,
+                               gameResult: result.result,
+                               finalScore: result.final_score,
+                               showSportBadge: true,
+                               showTakeAffordance: false)
                     .frame(width: 300)
             }
         }
@@ -7800,6 +7803,8 @@ struct CompactPickRow: View {
     /// Game pages carry the score in the page hero (LiveScoreStrip), so their
     /// cards keep the plain start time in the slot. Everywhere else stays state-aware.
     var liveInSlot: Bool = true
+    /// Billfold's recent picks are static (no flip) — they hide the affordance.
+    var showTakeAffordance: Bool = true
 
     private var sport: Sport { Sport.from(league: pick.league) }
     private var accentColor: Color { sport.accentColor }
@@ -7814,14 +7819,15 @@ struct CompactPickRow: View {
     private var isCFP: Bool { pick.isCFP }
     private var pickParts: (pick: String, odds: String) { pick.formattedPickParts }
 
-    /// Picked team's standard abbreviation (PHI, NYK, ...) via the MLB/NBA keyword
-    /// maps, with a mascot-initials fallback for other leagues.
+    /// Picked team's standard abbreviation (PHI, NYK, VGK, ...) via the league
+    /// keyword maps, with a mascot-initials fallback for other leagues.
     private func teamAbbrev(_ shortName: String) -> String {
         let lower = shortName.lowercased()
         let lg = (pick.league ?? "").uppercased()
         let maps: [[String: [String]]] = lg == "NBA" ? [nbaTeamKeywords]
             : lg == "MLB" ? [mlbTeamKeywords]
-            : [mlbTeamKeywords, nbaTeamKeywords]
+            : lg == "NHL" ? [nhlTeamKeywords]
+            : [mlbTeamKeywords, nbaTeamKeywords, nhlTeamKeywords]
         for map in maps {
             for (abbr, kws) in map where kws.contains(where: { lower.contains($0) }) { return abbr }
         }
@@ -7829,11 +7835,20 @@ struct CompactPickRow: View {
         return String(last.prefix(3)).uppercased()
     }
     /// The pick with the team name collapsed to its abbreviation (e.g. "PHI ML").
+    /// The FULL name goes first so multi-word teams never leave fragments
+    /// behind ("Vegas Golden Knights ML" -> "VGK ML", not "VEGAS GOLDEN ML").
     private var compactPick: String {
-        let raw = pickParts.pick
+        var raw = pickParts.pick
         let pickedShort = homeIsPicked ? homeName : (awayIsPicked ? awayName : "")
         guard !pickedShort.isEmpty else { return raw.uppercased() }
-        return raw.replacingOccurrences(of: pickedShort, with: teamAbbrev(pickedShort), options: .caseInsensitive).uppercased()
+        let abbrev = teamAbbrev(pickedShort)
+        let pickedFull = homeIsPicked ? (pick.homeTeam ?? "") : (pick.awayTeam ?? "")
+        if !pickedFull.isEmpty, raw.range(of: pickedFull, options: .caseInsensitive) != nil {
+            raw = raw.replacingOccurrences(of: pickedFull, with: abbrev, options: .caseInsensitive)
+        } else {
+            raw = raw.replacingOccurrences(of: pickedShort, with: abbrev, options: .caseInsensitive)
+        }
+        return raw.uppercased()
     }
 
     private var confidenceValue: CGFloat {
@@ -7843,44 +7858,12 @@ struct CompactPickRow: View {
         guard let result = gameResult?.lowercased(), !result.isEmpty else { return nil }
         return result
     }
-    private var resultStampText: String {
-        switch resolvedResult {
-        case "won": return "W"
-        case "push": return "P"
-        case "lost": return "L"
-        default: return "L"
-        }
-    }
     private var resultStampColor: Color {
-        switch resolvedResult {
+        switch displayResult {
         case "won": return Color(hex: "#3FB950")
         case "push": return GaryColors.gold
         case "lost": return Color(hex: "#E5484D")
         default: return Color(hex: "#E5484D")
-        }
-    }
-    private var resultStampTextOpacity: Double {
-        switch resolvedResult {
-        case "lost": return 1.0
-        case "won": return 0.85
-        case "push": return 0.9
-        default: return 0.85
-        }
-    }
-    private var resultStampRingOpacity: Double {
-        switch resolvedResult {
-        case "lost": return 0.94
-        case "won": return 0.79
-        case "push": return 0.84
-        default: return 0.79
-        }
-    }
-    private var resultStampShadowOpacity: Double {
-        switch resolvedResult {
-        case "lost": return 0.34
-        case "won": return 0.25
-        case "push": return 0.28
-        default: return 0.25
         }
     }
 
@@ -7914,6 +7897,25 @@ struct CompactPickRow: View {
         guard liveInSlot, resolvedResult == nil else { return nil }
         return liveCache.status(forMatchup: "\(pick.awayTeam ?? "") @ \(pick.homeTeam ?? "")")
     }
+
+    /// FINAL board for this matchup with no stored grade yet — feeds the
+    /// client-side verdict so results land the moment the game ends, not the
+    /// next morning. Deliberately ignores liveInSlot: a verdict is the card's
+    /// business everywhere, score-in-slot chrome is not.
+    private var liveFinal: LiveScore? {
+        guard resolvedResult == nil else { return nil }
+        let ls = liveCache.status(forMatchup: "\(pick.awayTeam ?? "") @ \(pick.homeTeam ?? "")")
+        return (ls?.isFinal == true) ? ls : nil
+    }
+    private var liveGraded: String? {
+        guard let ls = liveFinal,
+              let s = orientedFinalScores(ls, awayTeam: pick.awayTeam, homeTeam: pick.homeTeam) else { return nil }
+        return liveGradeGamePick(pickText: pickParts.pick,
+                                 awayPicked: awayIsPicked, homePicked: homeIsPicked,
+                                 away: s.away, home: s.home)
+    }
+    /// Stored grade first (authoritative); else the live verdict on a FINAL board.
+    private var displayResult: String? { resolvedResult ?? liveGraded }
 
     private static let bookDisplayNames: [String: String] = [
         "draftkings": "DraftKings",
@@ -7973,20 +7975,27 @@ struct CompactPickRow: View {
                             .lineLimit(1)
                     }
                     Spacer(minLength: 6)
-                    if resolvedResult != nil {
+                    if let verdict = displayResult {
+                        // Settled (stored grade or live verdict): final score +
+                        // a tinted capsule — louder than the old 10pt whisper,
+                        // still typography, not a billboard.
                         if let finalScore, !finalScore.isEmpty {
                             Text(finalScore)
-                                .font(GaryFonts.mono(11, bold: false))
-                                .foregroundStyle(.white.opacity(0.5))
+                                .font(GaryFonts.mono(11.5, bold: false))
+                                .foregroundStyle(.white.opacity(0.55))
+                        } else if let ls = liveFinal, let a = ls.away_score, let h = ls.home_score {
+                            Text("\(a)–\(h)")
+                                .font(GaryFonts.mono(11.5, bold: false))
+                                .foregroundStyle(.white.opacity(0.55))
                         }
-                        Text(resolvedResult == "won" ? "WON" : (resolvedResult == "push" ? "PUSH" : "LOST"))
-                            .font(GaryFonts.mono(10, bold: true))
+                        Text(verdict == "won" ? "WON" : (verdict == "push" ? "PUSH" : "LOST"))
+                            .font(GaryFonts.mono(11.5, bold: true))
                             .tracking(0.8)
                             .foregroundStyle(resultStampColor)
-                            .padding(.horizontal, 8).padding(.vertical, 3)
+                            .padding(.horizontal, 10).padding(.vertical, 4)
                             .background(
-                                Capsule().fill(resultStampColor.opacity(0.16))
-                                    .overlay(Capsule().stroke(resultStampColor.opacity(0.4), lineWidth: 0.8))
+                                Capsule().fill(resultStampColor.opacity(0.18))
+                                    .overlay(Capsule().stroke(resultStampColor.opacity(0.45), lineWidth: 1))
                             )
                     } else if let live = liveStatus, live.isLive {
                         Text(liveSlotText(live, label: "LIVE"))
@@ -8037,22 +8046,24 @@ struct CompactPickRow: View {
                     Spacer(minLength: 8)
                     // Flip affordance riding the row's empty right side — adds
                     // no vertical space, never moves the names.
-                    HStack(spacing: 3) {
-                        Text("Gary's Take")
-                            .font(.system(size: 10.5, weight: .semibold))
-                            .foregroundStyle(GaryColors.heroAccent.opacity(0.85))
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 8, weight: .bold))
-                            .foregroundStyle(GaryColors.heroAccent.opacity(0.6))
+                    if showTakeAffordance {
+                        HStack(spacing: 3) {
+                            Text("Gary's Take")
+                                .font(.system(size: 10.5, weight: .semibold))
+                                .foregroundStyle(GaryColors.heroAccent.opacity(0.85))
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundStyle(GaryColors.heroAccent.opacity(0.6))
+                        }
+                        .layoutPriority(1)
                     }
-                    .layoutPriority(1)
                 }
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
 
                 // Bottom — the PICK (abbreviated, gold) stretched full-width: this card's product.
-                // Gold text (image 2 treatment) on the full-width layout (image 1) — muted fill
-                // + thin border so the gold letters stay the hero.
+                // Gold marks exactly what Gary says; the odds stand aside in grey
+                // so the call alone carries the color.
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(compactPick)
                         .font(GaryFonts.mono(17, bold: true))
@@ -8064,7 +8075,7 @@ struct CompactPickRow: View {
                     if !pickParts.odds.isEmpty {
                         Text(pickParts.odds)
                             .font(GaryFonts.mono(15, bold: true))
-                            .foregroundStyle(GaryColors.gold.opacity(0.72))
+                            .foregroundStyle(.white.opacity(0.62))
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -8443,22 +8454,22 @@ struct PickCardBack: View {
         VStack(alignment: .leading, spacing: 9) {
             HStack {
                 Text("GARY'S CASE")
-                    .font(GaryFonts.mono(10, bold: true)).tracking(1)
+                    .font(GaryFonts.mono(11, bold: true)).tracking(1)
                     .foregroundStyle(GaryColors.gold)
                 Spacer()
                 Text("\(pick.awayTeam ?? "") @ \(pick.homeTeam ?? "")")
-                    .font(GaryFonts.mono(9, bold: false))
+                    .font(GaryFonts.mono(10, bold: false))
                     .foregroundStyle(.white.opacity(0.4)).lineLimit(1).minimumScaleFactor(0.7)
             }
 
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(pick.pick ?? "")
-                    .font(.system(size: 18, weight: .heavy))
+                    .font(.system(size: 19, weight: .heavy))
                     .foregroundStyle(GaryColors.gold).lineLimit(1).minimumScaleFactor(0.7)
                 Spacer()
                 if pick.confidence != nil {
                     Text("GARY'S LEAN  \(Int(confidence * 100))%")
-                        .font(GaryFonts.mono(11, bold: true))
+                        .font(GaryFonts.mono(12, bold: true))
                         .foregroundStyle(.white.opacity(0.55))
                 }
             }
@@ -8484,9 +8495,9 @@ struct PickCardBack: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 12) {
                     Text(pick.rationale ?? "No rationale available.")
-                        .font(.system(size: 13))
+                        .font(.system(size: 14.5))
                         .foregroundStyle(.white.opacity(0.72))
-                        .lineSpacing(2.5)
+                        .lineSpacing(3)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
                     if let odds = pick.sportsbook_odds, !odds.isEmpty {
@@ -8525,6 +8536,21 @@ struct PickCardBack: View {
 // MARK: - Flippable Prop Card (front = CompactPropRow, back = Gary's read)
 //
 // Mirrors FlippablePickCard exactly so prop cards flip like the game-pick cards.
+
+/// Prop pick text with the call wearing its direction — OVERs stay gold,
+/// UNDERs go silver from the direction word on ("TOTAL BASES" gold ·
+/// "UNDER 1.5" silver). Inherits the surrounding gold otherwise; props only.
+func propPickStyled(_ s: String) -> Text {
+    var out = Text("")
+    var silver = false
+    for (i, word) in s.split(separator: " ").enumerated() {
+        let w = String(word)
+        if w.uppercased() == "UNDER" { silver = true }
+        let piece = silver ? Text(w).foregroundColor(GaryColors.silver) : Text(w)
+        out = i == 0 ? piece : out + Text(" ") + piece
+    }
+    return out
+}
 
 /// Strip labeled section markers (HYPOTHESIS:, THE EDGE:, CONVERGENCE (x):, RISK:…)
 /// out of a prop analysis blob into clean readable paragraphs.
@@ -8600,23 +8626,23 @@ struct PropCardBack: View {
         VStack(alignment: .leading, spacing: 9) {
             HStack {
                 Text("GARY'S READ")
-                    .font(GaryFonts.mono(10, bold: true)).tracking(1)
+                    .font(GaryFonts.mono(11, bold: true)).tracking(1)
                     .foregroundStyle(GaryColors.gold)
                 Spacer()
                 if let m = prop.matchup, !m.isEmpty {
                     Text(m.uppercased())
-                        .font(GaryFonts.mono(9, bold: false))
+                        .font(GaryFonts.mono(10, bold: false))
                         .foregroundStyle(.white.opacity(0.4)).lineLimit(1).minimumScaleFactor(0.7)
                 }
             }
 
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(prop.player ?? "")
-                    .font(.system(size: 17, weight: .heavy))
+                    .font(.system(size: 19, weight: .heavy))
                     .foregroundStyle(GaryColors.silver).lineLimit(1).minimumScaleFactor(0.7)
                 Spacer()
                 Text("\(Int(confidence * 100))% CONF")
-                    .font(GaryFonts.mono(11, bold: true))
+                    .font(GaryFonts.mono(12, bold: true))
                     .foregroundStyle(.white.opacity(0.55))
             }
 
@@ -8633,19 +8659,19 @@ struct PropCardBack: View {
                     if let stats = prop.key_stats, !stats.isEmpty {
                         ForEach(stats, id: \.self) { s in
                             HStack(alignment: .top, spacing: 6) {
-                                Circle().fill(accent).frame(width: 4, height: 4).padding(.top, 6)
-                                Text(s).font(.system(size: 12.5)).foregroundStyle(.white.opacity(0.8))
+                                Circle().fill(accent).frame(width: 4, height: 4).padding(.top, 7)
+                                Text(s).font(.system(size: 14)).foregroundStyle(.white.opacity(0.8))
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                         }
                     }
                     if let a = prop.analysis, !a.isEmpty {
                         Text(cleanPropAnalysis(a))
-                            .font(.system(size: 13)).foregroundStyle(.white.opacity(0.72)).lineSpacing(2.5)
+                            .font(.system(size: 14.5)).foregroundStyle(.white.opacity(0.72)).lineSpacing(3)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     } else if (prop.key_stats?.isEmpty ?? true) {
                         Text("No breakdown available.")
-                            .font(.system(size: 13)).foregroundStyle(.white.opacity(0.5))
+                            .font(.system(size: 14.5)).foregroundStyle(.white.opacity(0.5))
                     }
                 }
             }
@@ -10588,7 +10614,7 @@ struct MiniBarChart: View {
 // (getMlbLineups). Mock data here; wiring is a follow-up.
 
 enum SignalKind {
-    case streak, h2h, hot, cold, injury, debut, situational, platoon, ballpark, regression, tournament
+    case streak, h2h, hot, cold, injury, debut, situational, platoon, ballpark, regression, tournament, hrThreat
     var icon: String {
         switch self {
         case .streak: return "flame.fill"
@@ -10602,11 +10628,13 @@ enum SignalKind {
         case .ballpark: return "mappin.and.ellipse"
         case .regression: return "chart.line.downtrend.xyaxis"
         case .tournament: return "trophy.fill"
+        case .hrThreat: return "baseball.diamond.bases"
         }
     }
     var tint: Color {
         switch self {
         case .hot: return HubPalette.green
+        case .hrThreat: return HubPalette.green
         case .cold: return HubPalette.red
         case .regression: return HubPalette.red
         // Gold diet: lane identity is neutral — gold belongs to the pick.
@@ -10626,6 +10654,7 @@ enum SignalKind {
         case .ballpark: return "BALLPARK"
         case .regression: return "REGRESSION"
         case .tournament: return "TOURNAMENT"
+        case .hrThreat: return "HR THREAT"
         }
     }
 }
@@ -10708,6 +10737,21 @@ let nbaTeamKeywords: [String: [String]] = [
     "TOR": ["raptors"], "UTA": ["jazz", "utah"], "WAS": ["wizards"],
 ]
 
+/// NHL team abbreviation -> name keywords (same role as mlbTeamKeywords).
+let nhlTeamKeywords: [String: [String]] = [
+    "ANA": ["ducks", "anaheim"], "BOS": ["bruins"], "BUF": ["sabres", "buffalo"],
+    "CGY": ["flames", "calgary"], "CAR": ["hurricanes", "carolina"], "CHI": ["blackhawks"],
+    "COL": ["avalanche"], "CBJ": ["blue jackets", "jackets", "columbus"], "DAL": ["stars"],
+    "DET": ["red wings", "wings"], "EDM": ["oilers", "edmonton"], "FLA": ["panthers", "florida"],
+    "LAK": ["kings", "los angeles"], "MIN": ["wild"], "MTL": ["canadiens", "montreal"],
+    "NSH": ["predators", "nashville"], "NJD": ["devils", "new jersey"], "NYI": ["islanders"],
+    "NYR": ["rangers"], "OTT": ["senators", "ottawa"], "PHI": ["flyers"],
+    "PIT": ["penguins"], "SEA": ["kraken"], "SJS": ["sharks", "san jose"],
+    "STL": ["blues"], "TBL": ["lightning", "tampa"], "TOR": ["maple leafs", "leafs"],
+    "UTA": ["mammoth", "utah"], "VAN": ["canucks", "vancouver"], "VGK": ["golden knights", "knights", "vegas"],
+    "WPG": ["jets", "winnipeg"], "WSH": ["capitals"],
+]
+
 /// FIFA country codes -> nation names for the 48 qualified 2026 World Cup
 /// teams (generated from the live FIFA teams endpoint — same source the pick
 /// pipeline names matchups from).
@@ -10751,9 +10795,60 @@ func abbrGameMatches(_ abbrGame: String, matchup: String) -> Bool {
         .filter { $0.count >= 2 }
     guard abbrevs.count >= 2 else { return false }
     return abbrevs.allSatisfy { ab in
-        let kws = (mlbTeamKeywords[ab] ?? []) + (nbaTeamKeywords[ab] ?? []) + (wcTeamKeywords[ab] ?? [])
+        let kws = (mlbTeamKeywords[ab] ?? []) + (nbaTeamKeywords[ab] ?? []) + (nhlTeamKeywords[ab] ?? []) + (wcTeamKeywords[ab] ?? [])
         return kws.contains { hay.contains($0) }
     }
+}
+
+/// Resolve a LiveScore's away/home runs into the orientation of a pick's
+/// matchup. Defensive: live rows and picks come from the same slates so they
+/// should already align, but a verdict grades against NAMES, never positions.
+func orientedFinalScores(_ ls: LiveScore, awayTeam: String?, homeTeam: String?) -> (away: Int, home: Int)? {
+    guard let a = ls.away_score, let h = ls.home_score else { return nil }
+    func matches(_ abbr: String?, _ team: String?) -> Bool {
+        guard let ab = abbr?.uppercased(), let hay = team?.lowercased(), !hay.isEmpty else { return false }
+        let kws = (mlbTeamKeywords[ab] ?? []) + (nbaTeamKeywords[ab] ?? []) + (nhlTeamKeywords[ab] ?? []) + (wcTeamKeywords[ab] ?? [])
+        return kws.contains { hay.contains($0) }
+    }
+    if matches(ls.away_abbr, awayTeam) || matches(ls.home_abbr, homeTeam) { return (a, h) }
+    if matches(ls.away_abbr, homeTeam) || matches(ls.home_abbr, awayTeam) { return (h, a) }
+    return (a, h)
+}
+
+/// Grade a game pick (spread / moneyline / total) against a FINAL score.
+/// Returns "won" / "lost" / "push", or nil when the verdict can't be called
+/// confidently (unparseable side, or a drawn moneyline — soccer three-ways
+/// are the backend grader's call). pickText must already have odds stripped.
+func liveGradeGamePick(pickText: String, awayPicked: Bool, homePicked: Bool, away: Int, home: Int) -> String? {
+    func firstDouble(_ pattern: String, in s: String) -> Double? {
+        guard let rx = try? NSRegularExpression(pattern: pattern),
+              let m = rx.firstMatch(in: s, range: NSRange(s.startIndex..., in: s)),
+              let r = Range(m.range, in: s) else { return nil }
+        return Double(s[r])
+    }
+    let lower = pickText.lowercased()
+    // Totals — "OVER 8.5" / "UNDER 7".
+    if lower.contains("over") || lower.contains("under") {
+        guard let line = firstDouble(#"\d+(?:\.\d+)?"#, in: lower) else { return nil }
+        let total = Double(away + home)
+        if total == line { return "push" }
+        return (total > line) == lower.contains("over") ? "won" : "lost"
+    }
+    // Side picks — need a side to grade.
+    let picked: Int, other: Int
+    if homePicked { picked = home; other = away }
+    else if awayPicked { picked = away; other = home }
+    else { return nil }
+    let margin = Double(picked - other)
+    // Spread — a signed line in the pick ("PHI -1.5", "Jazz +7").
+    if let line = firstDouble(#"[-+]\d+(?:\.\d+)?"#, in: pickText) {
+        let adjusted = margin + line
+        if adjusted == 0 { return "push" }
+        return adjusted > 0 ? "won" : "lost"
+    }
+    // Moneyline.
+    if margin == 0 { return nil }
+    return margin > 0 ? "won" : "lost"
 }
 
 struct PicksCarouselView: View {
@@ -11320,7 +11415,7 @@ struct PropSlipCard: View {
                             .layoutPriority(1)
                         }
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Text(p.slipPickText)
+                            propPickStyled(p.slipPickText)
                                 .font(GaryFonts.mono(17, bold: true))
                                 .tracking(0.8)
                                 .foregroundStyle(GaryColors.heroAccent)
@@ -11384,12 +11479,12 @@ struct PropSlipBack: View {
         VStack(alignment: .leading, spacing: 9) {
             HStack {
                 Text("GARY'S TAKE")
-                    .font(GaryFonts.mono(10, bold: true)).tracking(1)
+                    .font(GaryFonts.mono(11, bold: true)).tracking(1)
                     .foregroundStyle(GaryColors.gold)
                 Spacer()
                 if let m = prop.matchup, !m.isEmpty {
                     Text(m.uppercased())
-                        .font(GaryFonts.mono(9, bold: false))
+                        .font(GaryFonts.mono(10, bold: false))
                         .foregroundStyle(.white.opacity(0.4)).lineLimit(1).minimumScaleFactor(0.7)
                 }
             }
@@ -11420,24 +11515,24 @@ struct PropSlipBack: View {
 
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(prop.player ?? "")
-                    .font(.system(size: 17, weight: .heavy))
+                    .font(.system(size: 19, weight: .heavy))
                     .foregroundStyle(GaryColors.silver).lineLimit(1).minimumScaleFactor(0.7)
                 Spacer()
                 if let team = prop.team, !team.isEmpty {
                     Text(team.uppercased())
-                        .font(.system(size: 9, weight: .semibold))
+                        .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(GaryColors.silver.opacity(0.7))
                 }
             }
 
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(prop.slipPickText)
-                    .font(GaryFonts.mono(14, bold: true)).tracking(0.6)
+                propPickStyled(prop.slipPickText)
+                    .font(GaryFonts.mono(15, bold: true)).tracking(0.6)
                     .foregroundStyle(GaryColors.heroAccent)
                     .lineLimit(1).minimumScaleFactor(0.65)
                 Spacer(minLength: 6)
                 Text(Formatters.americanOdds(prop.odds))
-                    .font(GaryFonts.mono(12, bold: true))
+                    .font(GaryFonts.mono(13, bold: true))
                     .foregroundStyle(GaryColors.silver.opacity(0.8))
             }
 
@@ -11446,14 +11541,14 @@ struct PropSlipBack: View {
                     if let stats = prop.key_stats, !stats.isEmpty {
                         VStack(alignment: .leading, spacing: 6) {
                             Text("The Numbers")
-                                .font(GaryFonts.display(14))
+                                .font(GaryFonts.display(15))
                                 .foregroundStyle(GaryColors.sectionHead)
                             ForEach(Array(stats.prefix(4).enumerated()), id: \.offset) { _, s in
                                 HStack(alignment: .top, spacing: 7) {
                                     Circle().fill(GaryColors.silver.opacity(0.7))
-                                        .frame(width: 4, height: 4).padding(.top, 6)
+                                        .frame(width: 4, height: 4).padding(.top, 7)
                                     Text(s)
-                                        .font(.system(size: 12.5)).foregroundStyle(.white.opacity(0.85))
+                                        .font(.system(size: 14)).foregroundStyle(.white.opacity(0.85))
                                         .fixedSize(horizontal: false, vertical: true)
                                 }
                             }
@@ -11462,11 +11557,11 @@ struct PropSlipBack: View {
                     if let a = prop.analysis, !a.isEmpty {
                         VStack(alignment: .leading, spacing: 5) {
                             Text("The Read")
-                                .font(GaryFonts.display(14))
+                                .font(GaryFonts.display(15))
                                 .foregroundStyle(GaryColors.sectionHead)
                             Text(cleanPropAnalysis(a))
-                                .font(.system(size: 13)).foregroundStyle(.white.opacity(0.75))
-                                .lineSpacing(2.5)
+                                .font(.system(size: 14.5)).foregroundStyle(.white.opacity(0.75))
+                                .lineSpacing(3)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }
@@ -11590,6 +11685,7 @@ extension SignalKind {
         case "ballpark", "ballpark shift", "ballpark_shift": return .ballpark
         case "regression", "regression watch", "regression_watch": return .regression
         case "tournament", "stakes", "group", "tournament_stakes": return .tournament
+        case "gary_hr_threats", "hr_threat", "hr threats": return .hrThreat
         default: return nil
         }
     }
@@ -12744,13 +12840,13 @@ struct CompactPropRow: View {
                     Spacer(minLength: 6)
                     if resolvedResult != nil {
                         Text(resolvedResult == "won" ? "WON" : (resolvedResult == "push" ? "PUSH" : "LOST"))
-                            .font(GaryFonts.mono(10, bold: true))
+                            .font(GaryFonts.mono(11.5, bold: true))
                             .tracking(0.8)
                             .foregroundStyle(resultStampColor)
-                            .padding(.horizontal, 8).padding(.vertical, 3)
+                            .padding(.horizontal, 10).padding(.vertical, 4)
                             .background(
-                                Capsule().fill(resultStampColor.opacity(0.16))
-                                    .overlay(Capsule().stroke(resultStampColor.opacity(0.4), lineWidth: 0.8))
+                                Capsule().fill(resultStampColor.opacity(0.18))
+                                    .overlay(Capsule().stroke(resultStampColor.opacity(0.45), lineWidth: 1))
                             )
                     } else if let live = liveStatus, live.isLive {
                         Text(liveSlotText(live, label: "LIVE"))
@@ -12805,9 +12901,10 @@ struct CompactPropRow: View {
 
                 // Bottom — silver box, and the ONLY gold on the card is the
                 // pick itself: "TOTAL BASES OVER 1.5". Odds and border are
-                // silver (the card's metal); gold marks exactly what Gary says.
+                // silver (the card's metal); gold marks exactly what Gary says,
+                // and the call wears its direction (OVER gold / UNDER silver).
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text("\(marketName) \(compactCall)")
+                    propPickStyled("\(marketName) \(compactCall)")
                         .font(GaryFonts.mono(17, bold: true))
                         .tracking(0.8)
                         .foregroundStyle(GaryColors.heroAccent)
@@ -15122,10 +15219,11 @@ enum Formatters {
     /// - For NCAAB/NCAAF: Returns school name (e.g., "Nebraska" from "Nebraska Cornhuskers")
     /// - For pro sports: Returns mascot (e.g., "Thunder" from "Oklahoma City Thunder")
     // Multi-word mascots that must stay together when shortening team names
+    // NHL two-word mascots intentionally absent — hockey cards collapse to the
+    // single common word (Knights, Leafs, Jackets, Wings) so matchup rows fit
+    // the way the other sports do.
     private static let twoWordMascots = [
-        "Red Sox", "White Sox", "Blue Jays", "Trail Blazers",
-        "Maple Leafs", "Blue Jackets", "Golden Knights",
-        "Red Wings", "Tar Heels"
+        "Red Sox", "White Sox", "Blue Jays", "Trail Blazers", "Tar Heels"
     ]
 
     static func shortTeamName(_ team: String?, league: String? = nil) -> String {

@@ -28,6 +28,7 @@ import { todayStr, gameLabel, clampScore } from './shared.js';
 
 // MLB connection computers (one file per lane under ./computers/).
 import { computeHeatCheck } from './computers/heatCheck.js';
+import { computeGaryHrThreats } from './computers/garyHrThreats.js';
 import { computePlatoonEdge } from './computers/platoonEdge.js';
 import { computeBallparkShift } from './computers/ballparkShift.js';
 import { computeRegressionWatch } from './computers/regressionWatch.js';
@@ -69,6 +70,7 @@ import { computeWcGroupValue } from './computers/wcGroupValue.js';
  */
 const MLB_COMPUTERS = [
   computeHeatCheck,
+  computeGaryHrThreats,
   computePlatoonEdge,
   computeBallparkShift,
   computeRegressionWatch,
