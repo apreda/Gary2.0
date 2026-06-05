@@ -37,28 +37,30 @@ struct GaryPageHeader<Trailing: View>: View {
     var body: some View {
         VStack(spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
+                // The wordmark: JetBrains Mono Regular in GOLD — the header
+                // speaks the same terminal language as the app's numerics.
+                // Quiet weight + signature color beats bold + white (June 5).
                 Text(title)
-                    .font(GaryFonts.display(30))
-                    .foregroundStyle(.white.opacity(0.95))
+                    .font(GaryFonts.mono(23, bold: false))
+                    .foregroundStyle(GaryColors.gold)
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
                     .layoutPriority(1)
                 if let accent, !accent.isEmpty {
                     Text(accent)
                         .font(GaryFonts.mono(10))
-                        .foregroundStyle(GaryColors.gold.opacity(0.9))
+                        .foregroundStyle(.white.opacity(0.55))
                         .lineLimit(1)
                 }
                 Spacer()
                 trailing()
-                // The three-dot settings button lives in every header's corner
-                // (the Billfold anatomy, app-wide).
+                // The three-dot settings button lives in every header's corner.
                 Button {
                     NotificationCenter.default.post(name: Notification.Name("ShowSettingsMenu"), object: nil)
                 } label: {
                     Image(systemName: "ellipsis")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(GaryColors.gold.opacity(0.7))
+                        .foregroundStyle(.white.opacity(0.4))
                         .frame(width: 28, height: 28)
                 }
                 .buttonStyle(.plain)
@@ -77,6 +79,13 @@ struct GaryPageHeader<Trailing: View>: View {
     static func dateLabel() -> String {
         let f = DateFormatter()
         f.dateFormat = "EEEE, MMMM d"
+        return f.string(from: Date())
+    }
+
+    /// "Wed, Jun 4" — for headers whose trailing slot carries a badge.
+    static func shortDateLabel() -> String {
+        let f = DateFormatter()
+        f.dateFormat = "EEE, MMM d"
         return f.string(from: Date())
     }
 }
@@ -2622,10 +2631,6 @@ struct PremiumPicksView: View {
     @State private var propShelves: [PropShelf] = []
     @State private var gameResultsMap: [String: String] = [:]   // "away@home" -> won/lost/push
     @State private var propResultsMap: [String: String] = [:]   // player name -> won/lost/push
-    // Yesterday's TRUE game record — same source of truth as the Home tape
-    // (fetchYesterdayGameRecord). The matchup map above is for stamping cards;
-    // maps dedupe (doubleheaders collide), so it must never be COUNTED.
-    @State private var yesterdayRec: (wins: Int, losses: Int, pushes: Int)? = nil
 
     // Terminal Tape: GAMES <-> PROPS mode (props are a peer, one tap away — not buried below games).
     enum Mode { case games, props }
@@ -2640,13 +2645,6 @@ struct PremiumPicksView: View {
 
     private var gameCount: Int { gameShelves.filter { !$0.settled }.reduce(0) { $0 + $1.picks.count } }
     private var propCount: Int { propShelves.filter { !$0.settled }.reduce(0) { $0 + $1.props.count } }
-
-    /// Yesterday's true game record (same number the Home tape shows) ->
-    /// (wins, losses, win%). nil while loading or when nothing graded.
-    private var settledRecord: (wins: Int, losses: Int, pct: Int)? {
-        guard let r = yesterdayRec, r.wins + r.losses > 0 else { return nil }
-        return (r.wins, r.losses, Int((Double(r.wins) / Double(r.wins + r.losses) * 100).rounded()))
-    }
 
     struct GameShelf: Identifiable {
         let league: String
@@ -2670,7 +2668,9 @@ struct PremiumPicksView: View {
             LiquidGlassBackground(grainDensity: 0)
 
             ScrollView(showsIndicators: false) {
-                LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
+                // Toggle scrolls WITH the page (unpinned) — pinning forced an
+                // opaque fill that could never match the gradient behind it.
+                LazyVStack(alignment: .leading, spacing: 0) {
                     header
 
                     if loading {
@@ -2701,28 +2701,8 @@ struct PremiumPicksView: View {
     // AWAITING SLATE, and league chips all retired: the body owns its states
     // and the shelves announce their own leagues.
     private var header: some View {
-        GaryPageHeader(title: "Gary's Bets", accent: GaryPageHeader<EmptyView>.dateLabel()) {
-            if let rec = settledRecord {
-                Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
-                } label: {
-                    HStack(spacing: 5) {
-                        Text("YDAY")
-                            .font(GaryFonts.mono(9.5, bold: true)).tracking(0.8)
-                            .foregroundStyle(.white.opacity(0.45))
-                        Text("\(rec.wins)–\(rec.losses)")
-                            .font(GaryFonts.mono(12, bold: true))
-                            .foregroundStyle(rec.wins >= rec.losses ? GaryColors.gold : .white.opacity(0.72))
-                    }
-                    .fixedSize()
-                    .padding(.horizontal, 10).padding(.vertical, 5)
-                    .background(Capsule().stroke(Color.white.opacity(0.18), lineWidth: 1))
-                    .contentShape(Capsule())
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.bottom, 8)
+        GaryPageHeader(title: "Gary's Bets", accent: GaryPageHeader<EmptyView>.dateLabel())
+            .padding(.bottom, 8)
     }
 
     private var emptyState: some View {
@@ -2749,14 +2729,9 @@ struct PremiumPicksView: View {
         .padding(.horizontal, 16)
         .padding(.top, 10)
         .padding(.bottom, 11)
-        .background(
-            // Matches the LiquidGlass gradient at this height — the old flat
-            // base hex read as a darker, bluer band across the page.
-            ZStack(alignment: .bottom) {
-                Color(hex: "#0D1219")
-                Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1)
-            }
-        )
+        // No fill — the toggle sits directly on the page like every other
+        // component. A hairline underneath is all the structure it needs.
+        .overlay(Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1), alignment: .bottom)
     }
 
     private func tabSegment(_ label: String, count: Int, active: Bool, action: @escaping () -> Void) -> some View {
@@ -3001,12 +2976,10 @@ struct PremiumPicksView: View {
         async let yGameF = SupabaseAPI.fetchDailyPicks(date: yesterday)
         async let resultsF = SupabaseAPI.fetchAllGameResults(since: yesterday)
         async let todayPropsF = SupabaseAPI.fetchPropPicks(date: today)
-        async let yRecF = SupabaseAPI.fetchYesterdayGameRecord()
 
         let todayGame = (try? await todayGameF) ?? []
         let yGame = (try? await yGameF) ?? []
         let results = (try? await resultsF) ?? []
-        let yRec = try? await yRecF
         let todayProps = (try? await todayPropsF) ?? []
 
         // Yesterday's result map for settled (last-result) shelves.
@@ -3061,7 +3034,6 @@ struct PremiumPicksView: View {
         await MainActor.run {
             gameResultsMap = rMap
             propResultsMap = pMap
-            yesterdayRec = yRec
             gameShelves = gShelves
             propShelves = pShelves
             loading = false
@@ -5348,19 +5320,20 @@ struct BillfoldView: View {
     private var headerBar: some View {
         VStack(spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
+                // Matches GaryPageHeader: gold mono wordmark, white date.
                 Text("Billfold")
-                    .font(GaryFonts.display(30))
-                    .foregroundStyle(paper)
+                    .font(GaryFonts.mono(23, bold: false))
+                    .foregroundStyle(GaryColors.gold)
                 Text(statementDateLabel)
                     .font(GaryFonts.mono(10))
-                    .foregroundStyle(brass.opacity(0.9))
+                    .foregroundStyle(.white.opacity(0.55))
                 Spacer()
                 Button {
                     showingSettings = true
                 } label: {
                     Image(systemName: "ellipsis")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(brass.opacity(0.7))
+                        .foregroundStyle(.white.opacity(0.4))
                         .frame(width: 28, height: 28)
                 }
                 .buttonStyle(.plain)
@@ -10839,13 +10812,21 @@ struct PicksCarouselView: View {
         return g.props.contains { !store.isYesterdayProp($0) }
     }
     private var topProps: [PropPick] {
-        // FREE PICK is today-only — never surface a settled recap prop there.
-        Array(filteredProps.filter { !store.isYesterdayProp($0) }
+        // Today's props lead; until they post, yesterday's top props hold the
+        // page WITH their results (the rule the rest of the app follows).
+        let fresh = filteredProps.filter { !store.isYesterdayProp($0) }
+            .sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.prefix(2)
+        if !fresh.isEmpty { return Array(fresh) }
+        return Array(filteredProps.filter { store.isYesterdayProp($0) }
             .sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.prefix(2))
     }
-    private var topGamePick: GaryPick? {
-        let p = (sport == "ALL") ? store.gamePicks : store.gamePicks.filter { ($0.league ?? "").uppercased() == sport }
-        return p.sorted { ($0.confidence ?? 0) > ($1.confidence ?? 0) }.first
+    /// Today's top pick — or yesterday's, stamped, until the new board posts.
+    private var topGamePick: (pick: GaryPick, isYesterday: Bool)? {
+        let today = (sport == "ALL") ? store.gamePicks : store.gamePicks.filter { ($0.league ?? "").uppercased() == sport }
+        if let p = today.sorted(by: { ($0.confidence ?? 0) > ($1.confidence ?? 0) }).first { return (p, false) }
+        let y = (sport == "ALL") ? store.yesterdayGamePicks : store.yesterdayGamePicks.filter { ($0.league ?? "").uppercased() == sport }
+        if let p = y.sorted(by: { ($0.confidence ?? 0) > ($1.confidence ?? 0) }).first { return (p, true) }
+        return nil
     }
     private var hasContent: Bool { !topProps.isEmpty || topGamePick != nil || !games.isEmpty }
 
@@ -11083,7 +11064,7 @@ struct PicksCarouselView: View {
 
 struct PicksTodayPage: View {
     let topProps: [PropPick]
-    let topGamePick: GaryPick?
+    let topGamePick: (pick: GaryPick, isYesterday: Bool)?
     let gamePickResult: (GaryPick) -> String?
     let resultForProp: (PropPick) -> String?
     let edges: [Signal]
@@ -11091,15 +11072,16 @@ struct PicksTodayPage: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("FREE PICK")
-                .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
-                .foregroundStyle(GaryColors.gold.opacity(0.9))
-                .padding(.horizontal, 16).padding(.top, 8)
-
             if let gp = topGamePick {
-                // topGamePick is always TODAY's live pick — never stamp a W/L
-                // (the same matchup may have settled yesterday; that's not this game).
-                FlippablePickCard(pick: gp, gameResult: nil, showSportBadge: true)
+                Text(gp.isYesterday ? "LAST NIGHT'S TOP PICK — NEW BOARD SOON" : "FREE PICK")
+                    .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
+                    .foregroundStyle(GaryColors.gold.opacity(gp.isYesterday ? 0.55 : 0.9))
+                    .padding(.horizontal, 16).padding(.top, 8)
+                // Yesterday's pick wears its result until the new board posts;
+                // today's pick stays unstamped (live verdicts handle finals).
+                FlippablePickCard(pick: gp.pick,
+                                  gameResult: gp.isYesterday ? gamePickResult(gp.pick) : nil,
+                                  showSportBadge: true)
                     .padding(.horizontal, 10)
             }
             if topProps.count == 1, let only = topProps.first {
