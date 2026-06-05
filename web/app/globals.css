@@ -34,3 +34,5 @@ body { background: #08080A; color: rgba(255, 255, 255, 0.92); font-family: var(-
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+@keyframes ticker { from { transform: translateX(0); } to { transform: translateX(-50%); } }

@@ -3,11 +3,18 @@ import {
   effectiveOdds, unitsFor, computeRecord, mergeGameResults,
   currentStreak, recordByLeague, isLegitPropResult,
 } from '@/lib/gary/results';
-import type { GameResultRow, PropResultRow } from '@/lib/gary/types';
+import type { GameResultRow, NflResultRow, PropResultRow } from '@/lib/gary/types';
 
 const row = (over: Partial<GameResultRow>): GameResultRow => ({
   game_date: '2026-06-03', league: 'MLB', matchup: 'A @ B',
   pick_text: 'B ML -120', result: 'won', final_score: '5-3', confidence: 0.8, ...over,
+});
+
+// nfl_results rows have no league column (arrives undefined) + NFL-only fields.
+const makeNflRow = (over: Partial<NflResultRow>): NflResultRow => ({
+  ...row({}), league: null,
+  week_number: null, season: null, home_team: null, away_team: null,
+  home_score: null, away_score: null, ...over,
 });
 
 describe('effectiveOdds (iOS Models.swift:1154 port)', () => {
@@ -72,7 +79,7 @@ describe('mergeGameResults (NFL split across two tables)', () => {
   // for legacy NFL rows in game_results. Drop all NFL rows from gameRows before
   // merging; nfl_results is the authoritative source for NFL.
   it('drops legacy NFL strays from game_results', () => {
-    const nflRow = row({ league: 'NFL', pick_text: 'Chiefs -3 -110', game_date: '2026-01-11' });
+    const nflRow = makeNflRow({ pick_text: 'Chiefs -3 -110', game_date: '2026-01-11' });
     const legacyNflStray = row({ league: 'NFL', pick_text: 'Chiefs -3 -110', game_date: '2026-01-10' });
     const mlbRow = row({ league: 'MLB', pick_text: 'Phillies ML -120', game_date: '2026-01-10' });
     const result = mergeGameResults([nflRow], [legacyNflStray, mlbRow]);
@@ -93,9 +100,17 @@ describe('mergeGameResults (NFL split across two tables)', () => {
   });
 
   it('nfl_results rows stamp league NFL on output', () => {
-    const nflRow = { game_date: '2026-01-11', matchup: 'KC @ BUF', pick_text: 'Chiefs -3 -110', result: 'won', final_score: '27-24', confidence: 0.8 } as GameResultRow;
+    const nflRow = makeNflRow({ matchup: 'KC @ BUF', pick_text: 'Chiefs -3 -110', game_date: '2026-01-11' });
     const result = mergeGameResults([nflRow], []);
     expect(result[0].league).toBe('NFL');
+  });
+
+  it('sorts merged output by game_date desc (recent first, despite NFL-first concatenation)', () => {
+    const oldNfl = makeNflRow({ pick_text: 'Chiefs -3 -110', game_date: '2026-01-11' });
+    const newMlb = row({ league: 'MLB', pick_text: 'Phillies ML -120', game_date: '2026-06-04' });
+    const midNhl = row({ league: 'NHL', pick_text: 'Panthers ML -135', game_date: '2026-03-15' });
+    const result = mergeGameResults([oldNfl], [newMlb, midNhl]);
+    expect(result.map(r => r.game_date)).toEqual(['2026-06-04', '2026-03-15', '2026-01-11']);
   });
 });
 

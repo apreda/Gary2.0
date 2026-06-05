@@ -85,6 +85,9 @@ const dedupeKey = (r: GameResultRow) =>
  * guards against intra-table re-grade duplicates within each table.
  *
  * NOTE: nfl_results has NO league column — stamp 'NFL' on merge.
+ *
+ * Output is sorted game_date DESC — consumers slice "recent" off the top
+ * (concatenation order would otherwise lead with months-old NFL rows).
  */
 export function mergeGameResults(nflRows: NflResultRow[], gameRows: GameResultRow[]): GameResultRow[] {
   // Drop legacy NFL strays from game_results — off-by-one dates make key
@@ -99,7 +102,7 @@ export function mergeGameResults(nflRows: NflResultRow[], gameRows: GameResultRo
     seen.add(k);
     out.push(r);
   }
-  return out;
+  return out.sort((a, b) => (b.game_date ?? '').localeCompare(a.game_date ?? ''));
 }
 
 export function currentStreak(rows: GameResultRow[]): { kind: 'won' | 'lost'; count: number } | null {
