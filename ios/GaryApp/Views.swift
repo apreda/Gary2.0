@@ -2652,14 +2652,17 @@ struct PremiumPicksView: View {
     @State private var showPlansSheet = false
     @State private var plansFocus: String? = nil
     @State private var pendingCheckout: String? = nil
+    @State private var pendingBundle: [String]? = nil
     @State private var pendingAuth = false
     private func sportUnlocked(_ lg: String) -> Bool {
         isPremium || entitledSports.contains("ALL") || entitledSports.contains(lg)
     }
-    /// Stripe Payment Links (test mode), June 5 pricing: single sport
-    /// $9.99/mo, All-Access $34.99/mo with a 3-day card-required trial,
-    /// WC Pass $14.99 one-time. The signed-in identity rides along as
-    /// client_reference_id so the webhook knows who to grant.
+    /// Stripe Payment Links, June 5 pricing: single sport $9.99/mo,
+    /// All-Access $34.99/mo with a 3-day card-required trial, WC Pass $14.99
+    /// one-time. Debug builds sell TEST links (card 4242 4242 4242 4242);
+    /// Release sells LIVE — real money. Same sports, same prices. The
+    /// signed-in identity rides along as client_reference_id.
+    #if DEBUG
     private static let checkoutLinks: [String: String] = [
         "MLB":   "https://buy.stripe.com/test_9B600kcnqgWRa9c3xWaIM08",
         "NBA":   "https://buy.stripe.com/test_6oUdRa87a0XT6X05G4aIM09",
@@ -2670,6 +2673,18 @@ struct PremiumPicksView: View {
         "ALL":   "https://buy.stripe.com/test_00w7sM1IMgWRchk5G4aIM0e",
         "WC":    "https://buy.stripe.com/test_00w28s4UYfSN2GK4C0aIM07",
     ]
+    #else
+    private static let checkoutLinks: [String: String] = [
+        "MLB":   "https://buy.stripe.com/4gM4gA3N69u1anqaObao800",
+        "NBA":   "https://buy.stripe.com/8x2aEYcjCfSpdzC3lJao801",
+        "NHL":   "https://buy.stripe.com/dRmcN697qfSp9jmf4rao802",
+        "NFL":   "https://buy.stripe.com/8x25kEgzS6hPgLO1dBao803",
+        "NCAAF": "https://buy.stripe.com/bJe7sM97qeOleDG9K7ao804",
+        "NCAAB": "https://buy.stripe.com/dRmeVebfy6hPfHK7BZao805",
+        "ALL":   "https://buy.stripe.com/aFabJ21EY21zgLO8G3ao807",
+        "WC":    "https://buy.stripe.com/14AaEYfvOfSpfHK1dBao806",
+    ]
+    #endif
     private func openCheckout(_ league: String) {
         // Subscriptions need an owner — no checkout without an account
         // (cancel/manage requires identity; device-bound subs are a trap).
@@ -2755,11 +2770,24 @@ struct PremiumPicksView: View {
         .sheet(isPresented: $showPlansSheet, onDismiss: {
             if pendingAuth { pendingAuth = false; showAuthSheet = true }
             if let lg = pendingCheckout { pendingCheckout = nil; openCheckout(lg) }
+            if let bundle = pendingBundle { pendingBundle = nil; openBundleCheckout(bundle) }
         }) {
             PlansSheetView(focus: plansFocus,
                            signedIn: authManager.isAuthenticated,
                            onSelect: { lg in pendingCheckout = lg; showPlansSheet = false },
+                           onBundle: { lgs in pendingBundle = lgs; showPlansSheet = false },
                            onAccount: { pendingAuth = true; showPlansSheet = false })
+        }
+    }
+
+    /// Bundle checkout goes through the create-checkout edge function — the
+    /// picked sports ride in session metadata. Same sign-in gate as links.
+    private func openBundleCheckout(_ leagues: [String]) {
+        guard authManager.isAuthenticated else { showAuthSheet = true; return }
+        Task {
+            if let url = await SupabaseAPI.createCheckout(leagues: leagues) {
+                await MainActor.run { UIApplication.shared.open(url) }
+            }
         }
     }
 
@@ -3437,8 +3465,10 @@ struct PlansSheetView: View {
     let focus: String?               // league context from a blurred-board tap
     let signedIn: Bool
     var onSelect: (String) -> Void   // league key ("MLB", "ALL", "WC") -> checkout
+    var onBundle: ([String]) -> Void // picked bundle sports -> server checkout
     var onAccount: () -> Void        // open sign-in / create account
     @Environment(\.dismiss) private var dismiss
+    @State private var bundlePick: Set<String> = []
 
     private static let sports = ["MLB", "NBA", "NHL", "NFL", "NCAAF", "NCAAB"]
     /// Focused sport leads its section.
@@ -3494,16 +3524,8 @@ struct PlansSheetView: View {
                                 cta: "Pre-order ›") { onSelect("WC") }
                     }
 
-                    section(eyebrow: "Bundles", sub: "Pick your sports at checkout") {
-                        planRow(icon: "square.grid.2x2", iconColor: .white.opacity(0.5),
-                                title: "TWO SPORTS",
-                                sub: "Any two boards", price: "$17.99/MO",
-                                priceNote: nil, cta: "Soon", enabled: false) {}
-                        hairline
-                        planRow(icon: "square.grid.3x3", iconColor: .white.opacity(0.5),
-                                title: "THREE SPORTS",
-                                sub: "Any three boards", price: "$24.99/MO",
-                                priceNote: nil, cta: "Soon", enabled: false) {}
+                    section(eyebrow: "Bundles", sub: "Two sports $17.99/mo · three $24.99/mo") {
+                        bundlePicker
                     }
 
                     section(eyebrow: "Free", sub: "No card, no catch") {
@@ -3540,6 +3562,65 @@ struct PlansSheetView: View {
 
     private var hairline: some View {
         Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 46)
+    }
+
+    /// Pick 2–3 sports, see the bundle price, start checkout. The selection
+    /// rides to a server-created Stripe session (payment links can't carry it).
+    private var bundlePicker: some View {
+        let count = bundlePick.count
+        let price = count == 3 ? "$24.99/MO" : "$17.99/MO"
+        let ready = count == 2 || count == 3
+        return VStack(alignment: .leading, spacing: 0) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 22) {
+                    ForEach(Self.sports, id: \.self) { lg in
+                        let on = bundlePick.contains(lg)
+                        Button {
+                            if on { bundlePick.remove(lg) }
+                            else if bundlePick.count < 3 { bundlePick.insert(lg) }
+                        } label: {
+                            Text(lg)
+                                .font(GaryFonts.mono(12, bold: on))
+                                .tracking(1)
+                                .foregroundStyle(on ? GaryColors.gold : .white.opacity(0.35))
+                                .frame(minHeight: 44)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 14)
+            }
+            hairline
+            Button { onBundle(Array(bundlePick)) } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "square.grid.2x2")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(ready ? GaryColors.gold : .white.opacity(0.5))
+                        .frame(width: 20)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("BUNDLE")
+                            .font(GaryFonts.mono(12, bold: true)).tracking(0.8)
+                            .foregroundStyle(.white.opacity(0.9))
+                        Text(count < 2 ? "Pick two or three sports above"
+                             : bundlePick.sorted().joined(separator: " · "))
+                            .font(.system(size: 11))
+                            .foregroundStyle(.white.opacity(0.45))
+                    }
+                    Spacer(minLength: 8)
+                    Text(price)
+                        .font(GaryFonts.mono(13, bold: true))
+                        .foregroundStyle(ready ? GaryColors.gold : .white.opacity(0.35))
+                    Text("Start ›")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(ready ? GaryColors.gold : .white.opacity(0.35))
+                }
+                .padding(.vertical, 12)
+                .padding(.horizontal, 14)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(!ready)
+        }
     }
 
     private func section(eyebrow: String, sub: String, @ViewBuilder rows: () -> some View) -> some View {

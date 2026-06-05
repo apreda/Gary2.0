@@ -465,6 +465,31 @@ enum SupabaseAPI {
         return Set(rows.compactMap { $0.product_key })
     }
 
+    /// Server-created Stripe Checkout for bundles ("any two sports") — the
+    /// sport selection rides in session metadata, which payment links can't
+    /// carry. Debug builds checkout in Stripe test mode; Release is live.
+    static func createCheckout(leagues: [String]) async -> URL? {
+        guard let url = URL(string: "\(Secrets.supabaseURL)/functions/v1/create-checkout") else { return nil }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(Secrets.supabaseAnonKey, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(Secrets.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
+        #if DEBUG
+        let mode = "test"
+        #else
+        let mode = "live"
+        #endif
+        req.httpBody = try? JSONSerialization.data(withJSONObject: [
+            "leagues": leagues, "identity": identityId, "mode": mode,
+        ])
+        guard let (data, response) = try? await URLSession.shared.data(for: req),
+              let http = response as? HTTPURLResponse, http.statusCode == 200,
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let urlString = obj["url"] as? String else { return nil }
+        return URL(string: urlString)
+    }
+
     static func fetchInsightLedger(date: String) async -> [InsightLedgerRow] {
         let url = buildURL(table: "insight_connections", query: [
             URLQueryItem(name: "select", value: "league,category,result"),
