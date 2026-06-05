@@ -1574,6 +1574,7 @@ struct HomeView: View {
     @State private var cashRows: [HomeCashesSection.Row] = []
     @State private var lastNightNet: Double? = nil
     @State private var lastNightGraded = 0
+    @State private var bestCashOdds: Double? = nil
     @State private var receiptLanes: [HomeReceiptsSection.LaneRecord] = []
     @State private var receiptsSub = "Yesterday's boards, graded"
     @State private var edgesPostedToday = 0
@@ -1616,9 +1617,9 @@ struct HomeView: View {
                     .opacity(animateIn ? 1 : 0)
                     .animation(.easeOut(duration: 0.6), value: animateIn)
 
-                    // ── ② The Tape — yesterday, honestly ──
+                    // ── ② The Scorecard — yesterday in three honest numbers ──
                     if yesterdayRecord.wins + yesterdayRecord.losses > 0 {
-                        tape
+                        scorecard
                             .opacity(animateIn ? 1 : 0)
                             .animation(.easeOut(duration: 0.6).delay(0.05), value: animateIn)
                     }
@@ -1709,6 +1710,7 @@ struct HomeView: View {
                     cashRows = night.cashes
                     lastNightNet = night.graded > 0 ? night.net : nil
                     lastNightGraded = night.graded
+                    bestCashOdds = night.bestOdds
 
                     // ⑤ Door counts — live games + edges posted tonight.
                     gamesLiveNow = (await liveFetch).filter { $0.isLive }.count
@@ -1823,39 +1825,61 @@ struct HomeView: View {
         }
     }
 
-    // MARK: - ② The Tape
+    // MARK: - ② The Scorecard
 
-    /// One honest mono line — yesterday's record with the sport splits.
-    /// Losses included; that line is the brand. Taps through to the Billfold.
-    private var tape: some View {
+    /// Yesterday as three big readable numbers + one honest sentence. The
+    /// caption is TRUE BY CONSTRUCTION (a losing record with positive units
+    /// mathematically means the plus-money winners did the work). No icons,
+    /// no emoji — data graphics and plain language only.
+    private func scoreCell(_ value: String, _ label: String, _ color: Color) -> some View {
+        VStack(spacing: 3) {
+            Text(value)
+                .font(GaryFonts.mono(24, bold: true))
+                .foregroundStyle(color)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text(label)
+                .font(.system(size: 10, weight: .semibold))
+                .tracking(0.8)
+                .foregroundStyle(.white.opacity(0.45))
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var scorecardCaption: String {
+        let net = lastNightNet ?? 0
+        switch (yesterdayRecord.wins >= yesterdayRecord.losses, net >= 0) {
+        case (true, true):   return "A clean night — the card and the money agreed."
+        case (false, true):  return "Losing record, winning night — the dog money did the work."
+        case (true, false):  return "Won the card, lost the math — the juice ate it."
+        case (false, false): return "A rough one. Gary owns it — the full card is in the Billfold."
+        }
+    }
+
+    private var scorecard: some View {
         Button {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
         } label: {
-            HStack(spacing: 12) {
-                Text("YESTERDAY")
-                    .font(GaryFonts.mono(10, bold: true)).tracking(1)
-                    .foregroundStyle(GaryColors.gold.opacity(0.85))
-                Text(Self.recordLine(yesterdayRecord.wins, yesterdayRecord.losses, yesterdayRecord.pushes))
-                    .font(GaryFonts.mono(13, bold: true))
-                    .foregroundStyle(yesterdayRecord.wins >= yesterdayRecord.losses
-                                     ? Color(hex: "#3FB950") : .white.opacity(0.65))
-                ForEach(sportBreakdown.prefix(3)) { s in
-                    HStack(spacing: 5) {
-                        Text(s.league)
-                            .font(GaryFonts.mono(10, bold: true))
-                            .foregroundStyle(.white.opacity(0.4))
-                        Text("\(s.wins)–\(s.losses)")
-                            .font(GaryFonts.mono(11, bold: false))
-                            .foregroundStyle(.white.opacity(0.6))
+            VStack(spacing: 12) {
+                HStack(spacing: 0) {
+                    scoreCell(Self.recordLine(yesterdayRecord.wins, yesterdayRecord.losses, yesterdayRecord.pushes),
+                              "RECORD", .white.opacity(0.92))
+                    if let net = lastNightNet {
+                        Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1, height: 34)
+                        scoreCell(String(format: "%+.1fu", net), "NET, FLAT STAKES",
+                                  net >= 0 ? Color(hex: "#3FB950") : Color(hex: "#E5484D"))
+                    }
+                    if let best = bestCashOdds, best > 0 {
+                        Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1, height: 34)
+                        scoreCell("+\(Int(best))", "BEST CASH", GaryColors.gold)
                     }
                 }
-                Spacer(minLength: 6)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 8, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.25))
+                Text(scorecardCaption)
+                    .font(.system(size: 13))
+                    .foregroundStyle(.white.opacity(0.6))
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
             }
-            .lineLimit(1)
-            .minimumScaleFactor(0.8)
             .padding(.horizontal, 16)
             .contentShape(Rectangle())
         }
@@ -1876,9 +1900,15 @@ struct HomeView: View {
                         .foregroundStyle(GaryColors.gold.opacity(0.9))
                     FlippablePickCard(pick: pick, gameResult: nil, showSportBadge: true)
                 } else if !loading, let yPick = yesterdayTopPick {
-                    Text("LAST NIGHT'S TOP PICK — NEW BOARD SOON")
-                        .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
-                        .foregroundStyle(GaryColors.gold.opacity(0.5))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Last night's top pick")
+                            .font(GaryFonts.display(17))
+                            .foregroundStyle(GaryColors.sectionHead)
+                        Text("Today's board posts closer to game time")
+                            .font(.system(size: 12))
+                            .foregroundStyle(GaryColors.sectionSub)
+                    }
+                    .padding(.bottom, 4)
                     FlippablePickCard(pick: yPick, gameResult: yesterdayTopPickResult, showSportBadge: true)
                 }
                 if let prop = freeProp {
@@ -1999,22 +2029,24 @@ struct HomeView: View {
     /// cash, or the owned miss), the Biggest Cashes rows, and net units.
     /// All template — honesty is the brand, so the net includes the losses.
     private static func buildLastNight(games: [GameResult], props: [PropResult])
-        -> (story: HomeMarqueeHero.Story?, cashes: [HomeCashesSection.Row], net: Double, graded: Int) {
+        -> (story: HomeMarqueeHero.Story?, cashes: [HomeCashesSection.Row], net: Double, graded: Int, bestOdds: Double?) {
 
         let settledGames = games.filter { $0.result == "won" || $0.result == "lost" || $0.result == "push" }
         let settledProps = props.filter { $0.result == "won" || $0.result == "lost" || $0.result == "push" }
         let days = settledGames.compactMap { $0.game_date } + settledProps.compactMap { $0.game_date }
-        guard let night = days.max() else { return (nil, [], 0, 0) }
+        guard let night = days.max() else { return (nil, [], 0, 0, nil) }
         let nightGames = settledGames.filter { $0.game_date == night }
         let nightProps = settledProps.filter { $0.game_date == night }
 
         // Net units + cash rows across games AND props.
         var net = 0.0
+        var bestOdds: Double? = nil
         var cashes: [HomeCashesSection.Row] = []
         for g in nightGames {
             let o = resultOdds(g.odds, pickText: g.pick_text)
             net += unitsDelta(odds: o, result: g.result ?? "")
             if g.result == "won" {
+                bestOdds = max(bestOdds ?? -Double.infinity, o)
                 cashes.append(.init(id: "g-\(g.matchup ?? "")-\(g.pick_text ?? "")",
                                     title: Self.gameCashTitle(g),
                                     sub: Formatters.splitPickAndOdds(g.pick_text).0,
@@ -2025,6 +2057,7 @@ struct HomeView: View {
             let o = resultOdds(p.odds, pickText: p.pick_text)
             net += unitsDelta(odds: o, result: p.result ?? "")
             if p.result == "won" {
+                bestOdds = max(bestOdds ?? -Double.infinity, o)
                 cashes.append(.init(id: "p-\(p.player_name ?? "")-\(p.pick_text ?? "")",
                                     title: Formatters.propResultTitle(p),
                                     sub: [p.effectiveLeague, p.player_name].compactMap { $0 }.joined(separator: " · "),
@@ -2039,7 +2072,7 @@ struct HomeView: View {
         let star = wins.max { resultOdds($0.odds, pickText: $0.pick_text) < resultOdds($1.odds, pickText: $1.pick_text) }
         let subject = star ?? nightGames.filter { $0.result == "lost" }
             .max { abs(resultOdds($0.odds, pickText: $0.pick_text)) < abs(resultOdds($1.odds, pickText: $1.pick_text)) }
-        guard let r = subject else { return (nil, Array(cashes.prefix(3)), net, graded) }
+        guard let r = subject else { return (nil, Array(cashes.prefix(3)), net, graded, bestOdds) }
 
         let cashed = r.result == "won"
         let o = resultOdds(r.odds, pickText: r.pick_text)
@@ -2051,7 +2084,7 @@ struct HomeView: View {
             receipt: cashed ? "Gary had it · \(pickLine)" : "Gary was on \(pickLine)",
             verdict: cashed ? (o > 0 ? "CASHED +\(Int(o))" : "CASHED") : "NO CASH",
             cashed: cashed)
-        return (story, Array(cashes.prefix(3)), net, graded)
+        return (story, Array(cashes.prefix(3)), net, graded, bestOdds)
     }
 
     /// "Knicks over the Spurs, 105–95" — a real game headline from facts.
@@ -11073,10 +11106,23 @@ struct PicksTodayPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             if let gp = topGamePick {
-                Text(gp.isYesterday ? "LAST NIGHT'S TOP PICK — NEW BOARD SOON" : "FREE PICK")
-                    .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
-                    .foregroundStyle(GaryColors.gold.opacity(gp.isYesterday ? 0.55 : 0.9))
+                if gp.isYesterday {
+                    // Readable section-header treatment — not 10pt tracked caps.
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Last night's top pick")
+                            .font(GaryFonts.display(17))
+                            .foregroundStyle(GaryColors.sectionHead)
+                        Text("Today's board posts closer to game time")
+                            .font(.system(size: 12))
+                            .foregroundStyle(GaryColors.sectionSub)
+                    }
                     .padding(.horizontal, 16).padding(.top, 8)
+                } else {
+                    Text("FREE PICK")
+                        .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
+                        .foregroundStyle(GaryColors.gold.opacity(0.9))
+                        .padding(.horizontal, 16).padding(.top, 8)
+                }
                 // Yesterday's pick wears its result until the new board posts;
                 // today's pick stays unstamped (live verdicts handle finals).
                 FlippablePickCard(pick: gp.pick,
