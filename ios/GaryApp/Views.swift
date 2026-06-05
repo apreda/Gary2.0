@@ -2705,30 +2705,32 @@ struct PremiumPicksView: View {
     }
 
     /// Sport chips that jump the page to a league's shelf in the active mode.
-    /// Spread across the full row; a chip wears its sport color only when
-    /// it's the one you jumped to (the Picks chips' behavior), dim otherwise.
+    /// Left-aligned with fixed 24pt gaps (elastic columns made optically
+    /// unequal gaps); rhymes with GAMES/PROPS above. Scrolls if it overflows.
+    /// A chip wears its sport color only when it's the one you jumped to.
     private func jumpBar(_ proxy: ScrollViewProxy) -> some View {
         let leagues = mode == .games ? gameShelves.map(\.league) : propShelves.map(\.league)
-        return HStack(spacing: 0) {
-            ForEach(leagues, id: \.self) { lg in
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) { jumpedLeague = lg }
-                    withAnimation(.easeInOut(duration: 0.35)) {
-                        proxy.scrollTo((mode == .games ? "g-" : "p-") + lg, anchor: .top)
+        return ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 24) {
+                ForEach(leagues, id: \.self) { lg in
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) { jumpedLeague = lg }
+                        withAnimation(.easeInOut(duration: 0.35)) {
+                            proxy.scrollTo((mode == .games ? "g-" : "p-") + lg, anchor: .top)
+                        }
+                    } label: {
+                        Text(lg)
+                            .font(GaryFonts.mono(12, bold: true)).tracking(0.8)
+                            .foregroundStyle(jumpChipStyle(lg))
+                            .lineLimit(1)
+                            .frame(minHeight: 44)
+                            .contentShape(Rectangle())
                     }
-                } label: {
-                    Text(lg)
-                        .font(GaryFonts.mono(12, bold: true)).tracking(0.8)
-                        .foregroundStyle(jumpChipStyle(lg))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .contentShape(Rectangle())
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
+            .padding(.horizontal, 16)
         }
-        .padding(.horizontal, 10)
     }
 
     private func jumpChipStyle(_ lg: String) -> AnyShapeStyle {
