@@ -2640,6 +2640,13 @@ struct PremiumPicksView: View {
     enum Mode { case games, props }
     @State private var mode: Mode = .games
     @State private var jumpedLeague: String? = nil
+
+    // PROTOTYPE — per-sport entitlements (pending RevenueCat tiers). Simulates
+    // a user who pays for MLB + NBA: their boards lead, locked sports trail as
+    // a receipts storefront — never a blurred card between unlocked picks.
+    private let demoPaidSports: Set<String> = ["MLB", "NBA"]
+    private func sportUnlocked(_ lg: String) -> Bool { demoPaidSports.contains(lg) }
+    @State private var sportRecords: [String: (w: Int, l: Int)] = [:]
     @Namespace private var tabNS
 
     // In-season / imminent sports shown as rows (placeholders when a sport has no pick yet).
@@ -2811,19 +2818,26 @@ struct PremiumPicksView: View {
     @ViewBuilder private var modeContent: some View {
         VStack(alignment: .leading, spacing: 22) {
             if mode == .games {
-                ForEach(gameShelves) { shelf in
+                // Paid sports lead; locked sports trail as the storefront.
+                ForEach(gameShelves.filter { sportUnlocked($0.league) }) { shelf in
                     gameShelfView(shelf)
                         .id("g-\(shelf.league)")
+                }
+                let locked = gameShelves.filter { !sportUnlocked($0.league) && !$0.picks.isEmpty }
+                if isPremium, !locked.isEmpty {
+                    storefrontTail(locked.map { ($0.league, $0.picks.count, "pick") })
                 }
             } else {
                 if propShelves.isEmpty {
                     propsEmptyState
                 } else {
-                    // Placeholder shelves render too — every in-season sport
-                    // holds its horizontal rail until its slate posts.
-                    ForEach(propShelves) { shelf in
+                    ForEach(propShelves.filter { sportUnlocked($0.league) }) { shelf in
                         propShelfView(shelf)
                             .id("p-\(shelf.league)")
+                    }
+                    let locked = propShelves.filter { !sportUnlocked($0.league) && !$0.props.isEmpty }
+                    if isPremium, !locked.isEmpty {
+                        storefrontTail(locked.map { ($0.league, $0.props.count, "prop") })
                     }
                 }
             }
@@ -2963,6 +2977,55 @@ struct PremiumPicksView: View {
         }
     }
 
+    /// PROTOTYPE — the locked-sports storefront: a contiguous tail below
+    /// everything the user paid for. No blur, no hostage cards — each locked
+    /// board sells itself with its REAL last-10 record (sometimes that means
+    /// admitting 3–7; honesty is the brand).
+    private func storefrontTail(_ boards: [(league: String, count: Int, unit: String)]) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HubSectionHeader(eyebrow: "More boards", sub: "Sports you haven't unlocked")
+            VStack(spacing: 0) {
+                ForEach(Array(boards.enumerated()), id: \.offset) { i, b in
+                    HStack(spacing: 12) {
+                        Image(systemName: Sport.from(league: b.league).icon)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(b.league == "MLB" ? GaryColors.mlbGrass : Sport.from(league: b.league).accentColor)
+                            .frame(width: 20)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("\(b.league) BOARD")
+                                .font(GaryFonts.mono(12, bold: true)).tracking(0.8)
+                                .foregroundStyle(.white.opacity(0.9))
+                            Text("\(b.count) \(b.unit)\(b.count == 1 ? "" : "s") tonight")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.white.opacity(0.45))
+                        }
+                        Spacer(minLength: 8)
+                        if let rec = sportRecords[b.league], rec.w + rec.l > 0 {
+                            VStack(alignment: .trailing, spacing: 2) {
+                                Text("\(rec.w)–\(rec.l)")
+                                    .font(GaryFonts.mono(15, bold: true))
+                                    .foregroundStyle(rec.w >= rec.l ? Color(hex: "#3FB950") : Color(hex: "#E5484D"))
+                                Text("LAST 10")
+                                    .font(.system(size: 8.5, weight: .semibold)).tracking(0.8)
+                                    .foregroundStyle(.white.opacity(0.35))
+                            }
+                        }
+                        Text("Unlock ›")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(GaryColors.gold)
+                    }
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 14)
+                    if i < boards.count - 1 {
+                        Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.leading, 46)
+                    }
+                }
+            }
+            .quantPanel()
+            .padding(.horizontal, 16)
+        }
+    }
+
     private func propPlaceholderRow(for league: String) -> some View {
         Text("No \(league) props yet — next slate posts ~90 min before tip.")
             .font(GaryFonts.text(13))
@@ -3059,6 +3122,14 @@ struct PremiumPicksView: View {
         async let yGameF = SupabaseAPI.fetchDailyPicks(date: yesterday)
         async let resultsF = SupabaseAPI.fetchAllGameResults(since: yesterday)
         async let todayPropsF = SupabaseAPI.fetchPropPicks(date: today)
+        // Storefront records: a wider graded window, trimmed to last 10 per sport.
+        let recordWindowStart: String = {
+            var cal = Calendar(identifier: .gregorian)
+            if let tz = TimeZone(identifier: "America/New_York") { cal.timeZone = tz }
+            let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = cal.timeZone
+            return f.string(from: cal.date(byAdding: .day, value: -12, to: Date()) ?? Date())
+        }()
+        async let recordResultsF = SupabaseAPI.fetchAllGameResults(since: recordWindowStart)
 
         let todayGame = (try? await todayGameF) ?? []
         let yGame = (try? await yGameF) ?? []
@@ -3118,11 +3189,23 @@ struct PremiumPicksView: View {
             }
         }
 
+        // Last-10 graded record per sport (newest first) for the storefront tail.
+        var sRec: [String: (w: Int, l: Int)] = [:]
+        let recordRows = (try? await recordResultsF) ?? []
+        let byLeague = Dictionary(grouping: recordRows.filter { $0.result == "won" || $0.result == "lost" },
+                                  by: { $0.effectiveLeague ?? "?" })
+        for (lg, rows) in byLeague {
+            let last10 = rows.sorted { ($0.game_date ?? "") > ($1.game_date ?? "") }.prefix(10)
+            sRec[lg] = (last10.filter { $0.result == "won" }.count,
+                        last10.filter { $0.result == "lost" }.count)
+        }
+
         await MainActor.run {
             gameResultsMap = rMap
             propResultsMap = pMap
             gameShelves = gShelves
             propShelves = pShelves
+            sportRecords = sRec
             loading = false
         }
     }
